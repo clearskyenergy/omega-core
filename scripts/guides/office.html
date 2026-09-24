@@ -111,14 +111,21 @@ html,body{margin:0}
 .olg .ahd{display:flex;align-items:center;justify-content:space-between;padding:.03in .09in .05in;border-bottom:1px solid #e1eaee}
 .olg .ahd b{font-size:1.15em;color:#0c2330}
 .olg .ahd span{width:.13in;height:.13in;border:1px solid #cfdde3;border-radius:50%}
-.olg .gate{padding:.16in .1in 0;text-align:center}
-.olg .gate .t1{font-size:1.9em;font-weight:700;color:#0c2330;line-height:1.1}
-.olg .gate .t2{font-size:1.05em;font-weight:700;color:#41606e;margin:.02in 0 .05in}
+/* the Omega Logic sign-in (omega-logic-signin.js), drawn: the mark, "Sign in
+   to Omega Logic", Google, "or with email", Work email + Password, Sign in,
+   Forgot password? */
+.olg .gate{padding:.12in .1in 0;text-align:center}
+.olg .gate .mk{display:block;width:.3in;height:.3in;border-radius:.07in;margin:0 auto .05in}
+.olg .gate .t1{font-size:1.3em;font-weight:700;color:#0c2330;line-height:1.15}
 .olg .gate .gl{height:.035in;background:#e3ebee;border-radius:2px;margin:.025in .05in}
-.olg .gate .btn{display:block;background:#3fafc6;color:#fff;font-weight:700;border-radius:1em;padding:.045in 0;margin:.08in 0 .04in}
-.olg .gate .or{color:#5a7280;font-size:.9em}
-.olg .gate .fld{display:block;border:1px solid #d5e2e7;border-radius:.05in;padding:.035in .05in;text-align:left;color:#8a9ca5;margin:.04in 0}
-.olg .gate .btn2{display:block;border:1px solid #3fafc6;color:#2b8ea5;font-weight:700;border-radius:1em;padding:.04in 0}
+.olg .gate .btn{display:block;background:#0C1824;color:#fff;font-weight:700;border-radius:.06in;padding:.045in 0;margin:.07in 0 .03in}
+.olg .gate .or{display:block;color:#8aa0ab;font-size:.9em}
+.olg .gate .lb{display:block;text-align:left;color:#4b6270;font-size:.85em;margin:.035in 0 0}
+.olg .gate .fld{display:block;border:1px solid #cfdde3;border-radius:.05in;height:.13in;margin:.01in 0 0}
+.olg .gate .btn2{display:block;border:1px solid #0C1824;color:#0C1824;font-weight:700;border-radius:.06in;padding:.035in 0;margin-top:.05in}
+.olg .gate .lk{display:block;color:#0e7c8b;font-size:.9em;margin-top:.04in}
+.olg .ph.big .gate .mk{width:.46in;height:.46in;border-radius:.1in}
+.olg .ph.big .gate .fld{height:.19in}
 /* Safari's bottom bar */
 .olg .sf{position:absolute;left:0;right:0;bottom:0;height:.44in;background:linear-gradient(#fff0,#fff 30%);display:flex;align-items:center;gap:.04in;padding:0 .07in .1in;z-index:3}
 .olg .sf .pill{flex:1;min-width:0;height:.22in;border-radius:.11in;background:#fff;box-shadow:0 0 0 .6pt #c3cdd2;display:flex;align-items:center;padding:0 .05in;gap:.03in;font-size:5.1pt;color:#1d2b33}
@@ -173,6 +180,7 @@ html,body{margin:0}
 .olg .ctb{display:flex;align-items:center;gap:.035in;padding:.02in .06in .05in;border-bottom:1px solid #e3e8ea;background:#fff;position:relative;z-index:3}
 .olg .ctb .om{flex:1;height:.19in;border-radius:.1in;background:#eef1f3;display:flex;align-items:center;gap:.03in;padding:0 .06in;font-size:5.4pt;white-space:nowrap;overflow:hidden}
 .olg .ctb .om svg{width:.08in;height:.08in;flex:none}
+.olg .ctb .om .u{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .olg .ctb .tabs{width:.12in;height:.12in;border:1.2px solid #1d2b33;border-radius:.025in;font-size:4.6pt;font-weight:700;display:grid;place-items:center}
 .olg .ctb .mv{width:.14in;height:.18in;display:grid;place-items:center}
 .olg .ctb .mv svg{width:.12in;height:.12in}
@@ -186,6 +194,21 @@ html,body{margin:0}
 .olg .dlg .btns{display:flex;justify-content:flex-end;gap:.05in;align-items:center}
 .olg .dlg .tb{color:#0b57d0;font-weight:700;font-size:5.6pt;padding:.03in .03in;white-space:nowrap}
 .olg .dlg .fb{background:#0b57d0;color:#fff;font-weight:700;font-size:6pt;padding:.035in .09in;border-radius:.1in}
+/* p3: the whole domain fits in Safari's address bar, an ellipsis if a font
+   ever runs wide; p4 step 3: Chrome's install dialog keeps its text inside */
+.olg .sf{gap:.03in;padding:0 .06in .1in}
+.olg .sf .pill{padding:0 .04in;gap:.015in}
+.olg .sf .pill .d{font-size:4.5pt;text-overflow:ellipsis}
+.olg .sf .circ{width:.2in;height:.2in}
+.olg .dlg{left:.06in;right:.06in;padding-left:.08in;padding-right:.08in}
+.olg .dlg .who>div{min-width:0}
+.olg .dlg .who small{overflow:hidden;text-overflow:ellipsis}
+.olg .dlg .btns{gap:.03in}
+.olg .dlg .tb{font-size:5.2pt}
+/* printed addresses are links (Chromium keeps them in the PDF), same look */
+.olg a{color:inherit;text-decoration:none}
+.olg .strip{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:7px 12px;background:#fff;font-size:10.4pt}
+.olg .strip .addr{font-size:12.5pt;white-space:nowrap}
 
 /* ── a drawn browser window ─────────────────────────────── */
 .olg .win{position:relative;border-radius:9px;border:1px solid #bfcbd1;overflow:hidden;background:#fff;font-size:7pt}
@@ -294,8 +317,8 @@ html,body{margin:0}
       <div>
         <h2>Point your phone's camera here</h2>
         <p>Tap the link that pops up. Then follow the steps for your phone: iPhone on page 3, Android on page 4.</p>
-        <p style="margin:0 0 4px;font-size:9.6pt;color:#5a7280">Or type this into your browser:</p>
-        <span class="typed">silmarillion.clearskyomega.com/logic</span>
+        <p style="margin:0 0 4px;font-size:9.6pt;color:#5a7280">Or type this into your browser. Reading this on your phone? Just tap it.</p>
+        <a class="typed" href="https://silmarillion.clearskyomega.com/logic">silmarillion.clearskyomega.com/logic</a>
       </div>
     </div>
     <div class="by"><b>ClearSky Energy Solutions</b><small>Omega Logic is ClearSky's app. Your company is the workspace inside it.</small></div>
@@ -311,7 +334,7 @@ html,body{margin:0}
 
   <h2>What you need</h2>
   <ul class="hl">
-    <li><span class="hx"><span>✓</span></span><p><b>Your work Google account.</b> The one with your company email, like <span class="addr">you@yourcompany.com</span>. Not a personal Gmail.</p></li>
+    <li><span class="hx"><span>✓</span></span><p><b>Your work account.</b> Google with your company email, or your work email and a password, like <span class="addr">you@yourcompany.com</span>. Not a personal Gmail.</p></li>
     <li><span class="hx"><span>✓</span></span><p><b>A place on your company's workspace.</b> Whoever runs Omega Logic at your company adds you. If your company isn't on Omega Logic yet, ClearSky sets it up.</p></li>
     <li><span class="hx"><span>✓</span></span><p><b>A phone, tablet or computer.</b> iPhone or iPad with Safari, an Android phone with Chrome, or any computer with Chrome, Edge or Safari.</p></li>
     <li><span class="hx"><span>✓</span></span><p><b>Nothing from an app store.</b> You add it straight from the web page. It's free to install, and it updates itself every time you open it.</p></li>
@@ -319,43 +342,43 @@ html,body{margin:0}
 
   <h2 class="mt">Three steps, once</h2>
   <div class="g3">
-    <div class="box"><span class="hx lg"><span>1</span></span><h3 style="margin-top:6px">Open the address</h3><p><span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/logic</span><br>Or scan the code on the front page with your phone's camera.</p></div>
-    <div class="box"><span class="hx lg"><span>2</span></span><h3 style="margin-top:6px">Put it on your phone</h3><p>iPhone and iPad: <b>page 3</b><br>Android: <b>page 4</b><br>A computer: <b>page 5</b></p></div>
-    <div class="box"><span class="hx lg"><span>3</span></span><h3 style="margin-top:6px">Sign in</h3><p>With your work Google account. Your company's workspace opens by itself. <b>Page 6.</b></p></div>
+    <div class="box"><span class="hx lg"><span>1</span></span><h3 style="margin-top:6px">Open the address</h3><p>Type the address below, or tap it if you're reading this on your phone. Or scan the code on the front page with your phone's camera.</p></div>
+    <div class="box"><span class="hx lg"><span>2</span></span><h3 style="margin-top:6px">Get the app</h3><p>iPhone and iPad: <b>page 3</b><br>Android: <b>page 4</b><br>A computer: <b>page 5</b></p></div>
+    <div class="box"><span class="hx lg"><span>3</span></span><h3 style="margin-top:6px">Sign in</h3><p>With your work Google account, or your work email and password. Your company's workspace opens by itself. <b>Page 6.</b></p></div>
   </div>
+  <div class="strip mt"><b>The address</b><a class="addr" href="https://silmarillion.clearskyomega.com/logic">silmarillion.clearskyomega.com/logic</a></div>
 
   <div class="box warn mt">
     <h3>Open it in Safari or Chrome, not inside another app</h3>
     <p>If you tap the link in Gmail, Outlook, Teams, Slack, LinkedIn or WhatsApp, it opens inside that app, and there is no way to add it to your phone from there. Look for <span class="k">Open in Safari</span> or <span class="k">Open in browser</span>, or copy the address and paste it into Safari (iPhone) or Chrome (Android). Use a normal window, not a Private or Incognito one.</p>
   </div>
 
-  <div class="g2 mt">
-    <div><h3>Scanning the code</h3><p style="font-size:10.4pt">iPhone: open the <b>Camera</b>, point it at the code and tap the link that appears at the bottom of the screen. Android: the camera or Google Lens does the same. The page opens in your browser. Carry on from step 2.</p></div>
-    <div><h3>Want to look first?</h3><p style="font-size:10.4pt">A practice copy with made-up data runs at <span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/app-sandbox/office</span>. Nothing you do there is real, and nothing reaches your workspace.</p></div>
+  <div class="mt">
+    <h3>Scanning the code</h3><p style="font-size:10.4pt">iPhone: open the <b>Camera</b>, point it at the code and tap the link that appears at the bottom of the screen. Android: the camera or Google Lens does the same. The page opens in your browser. Carry on from step 2.</p>
   </div>
 </div></section>
 
 <!-- ═══ 3 · IPHONE AND IPAD ═════════════════════════════════════════ -->
 <section class="sheet"><div class="body">
-  <div class="kick">Put it on your phone · 1 of 3</div>
+  <div class="kick">Get the app · 1 of 3</div>
   <h1>iPhone and iPad</h1>
   <div class="rule"></div>
-  <p class="lead" style="margin-bottom:14px">Use <b>Safari</b>. It takes about a minute and you do it once. The <span style="color:var(--tap);font-weight:700">orange ring</span> in each picture is where you tap.</p>
+  <p class="lead" style="margin-bottom:10px">Use <b>Safari</b> and open <a class="addr" style="white-space:nowrap" href="https://silmarillion.clearskyomega.com/logic">silmarillion.clearskyomega.com/logic</a>. About a minute, once. The <span style="color:var(--tap);font-weight:700">orange ring</span> in each picture is where you tap.</p>
 
   <div class="row4">
     <div class="stp">
       <div class="ph"><div class="scr"><div class="isl"></div><div class="sb"><span>9:41</span><i></i></div>
         <div class="ahd"><b>Omega Logic</b><span></span></div>
-        <div class="gate"><div class="t1">Omega Logic</div><div class="t2">sign in with your work account</div><div class="gl"></div><div class="gl"></div><div class="gl" style="width:60%;margin:auto"></div><span class="btn">Continue with Google</span><span class="or">or with any work email</span><span class="fld">you@company.com</span><span class="btn2">Email me a sign-in link</span></div>
+        <div class="gate"><img class="mk" src="../../icons/omega-logic-180.png" alt=""><div class="t1">Sign in to Omega Logic</div><div class="gl"></div><div class="gl" style="width:70%;margin:.025in auto"></div><span class="btn">Continue with Google</span><span class="or">or with email</span><span class="lb">Work email</span><span class="fld"></span><span class="lb">Password</span><span class="fld"></span><span class="btn2">Sign in</span><span class="lk">Forgot password?</span></div>
         <div class="sf"><span class="pill"><svg><use href="#i-pagemenu"/></svg><span class="d">clearskyomega.com</span><svg><use href="#i-reload"/></svg></span><span class="circ"><svg><use href="#i-tabs"/></svg></span></div>
         <div class="gbar"></div></div></div>
       <div class="stx"><span class="hx"><span>1</span></span><h3>Open it in Safari</h3>
-        <p>Type <span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/logic</span> in the address bar and go, or scan the code on the front page.</p></div>
+        <p>Type the address above in the address bar and go, or scan the code on the front page.</p></div>
     </div>
     <div class="stp">
       <div class="ph"><div class="scr"><div class="isl"></div><div class="sb"><span>9:41</span><i></i></div>
         <div class="ahd"><b>Omega Logic</b><span></span></div>
-        <div class="gate"><div class="t1">Omega Logic</div><div class="t2">sign in with your work account</div><div class="gl"></div><div class="gl"></div><span class="btn">Continue with Google</span></div>
+        <div class="gate"><img class="mk" src="../../icons/omega-logic-180.png" alt=""><div class="t1">Sign in to Omega Logic</div><div class="gl"></div><div class="gl" style="width:70%;margin:.025in auto"></div><span class="btn">Continue with Google</span></div>
         <div class="pop" style="left:.07in;bottom:.47in;width:1.05in">
           <div class="r tap"><b>Share</b><svg><use href="#i-share"/></svg></div>
           <div class="r"><span class="bar" style="width:.5in"></span></div>
@@ -391,44 +414,44 @@ html,body{margin:0}
         <div class="kb"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i style="grid-column:span 2"></i><i></i><i></i><i></i><i></i><i></i><i></i><i style="grid-column:span 2"></i><i style="grid-column:span 2"></i><i style="grid-column:span 6"></i><i style="grid-column:span 2"></i></div>
         <div class="gbar"></div></div></div>
       <div class="stx"><span class="hx"><span>4</span></span><h3>Tap Add</h3>
-        <p>The name reads <b>Omega Logic</b>. Leave <span class="k">Open as Web App</span> on (green) and tap <span class="k">Add</span> at the top right.</p></div>
+        <p>Leave <span class="k">Open as Web App</span> on (green) and tap <span class="k">Add</span> at the top right. No switch? Older iOS: just tap <span class="k">Add</span>.</p></div>
     </div>
   </div>
 
   <div class="box navy mt" style="display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;padding:11px 14px">
     <div class="app" style="width:auto;gap:4px"><img src="../../icons/omega-logic-180.png" alt="" style="width:.56in;height:.56in;border-radius:.13in" class="tap"><b style="font-size:8.5pt">Omega Logic</b></div>
-    <p style="margin:0;font-size:10.4pt"><b>Done.</b> From now on, open Omega Logic from its icon on your Home Screen, not from Safari. It opens full screen like any other app. <b>Sign in once more inside it</b>: the app keeps its own sign-in, separate from Safari. The icon is only on the phone or iPad where you added it.</p>
+    <p style="margin:0;font-size:10.4pt"><b>Done.</b> From now on, open Omega Logic from its icon, not from Safari; it opens full screen. <b>Sign in once more inside it</b>: the app keeps its own sign-in. If <span class="k">Continue with Google</span> brings you back still signed out, use your work email and password (page 6). The icon is only on the phone or iPad where you added it.</p>
   </div>
 
-  <div class="g3 mt">
-    <div class="box"><h3>iPad</h3><p>Same steps. <span class="k">Share</span> <svg class="ic"><use href="#i-share"/></svg> is at the top right of Safari. Tap it, then <span class="k">Add to Home Screen</span> (on iPadOS 27 tap <span class="k">View More</span> first), keep <span class="k">Open as Web App</span> on and tap <span class="k">Add</span>.</p></div>
+  <div class="g3 mt" style="grid-template-columns:1.5fr 1fr 1fr">
+    <div class="box"><h3>iPad</h3><p>Tap <span class="k">Share</span> <svg class="ic"><use href="#i-share"/></svg> at the top right of Safari (none there? tap <svg class="ic"><use href="#i-dots"/></svg> or <svg class="ic"><use href="#i-pagemenu"/></svg> beside the address, then Share). Then <span class="k">View More</span> (iPadOS 26: <svg class="ic"><use href="#i-dots"/></svg> More), then <span class="k">Add to Home Screen</span>. Keep <span class="k">Open as Web App</span> on (older iPads have no switch) and tap <span class="k">Add</span>.</p></div>
     <div class="box"><h3>Chrome on iPhone</h3><p>Tap <span class="k">Share</span> <svg class="ic"><use href="#i-share"/></svg> at the right of the address bar, then <span class="k">Add to Home Screen</span>, then <span class="k">Add</span>. It works, but Safari is the surer way.</p></div>
-    <div class="box"><h3>No Add to Home Screen?</h3><p>Scroll to the bottom of the share sheet, tap <span class="k">Edit Actions</span> and add it. Still missing? You're inside another app or a Private tab. Open the address in Safari.</p></div>
+    <div class="box"><h3>No Add to Home Screen?</h3><p>At the bottom of the share sheet, tap <span class="k">Edit Actions</span> and add it. Still missing? You're in another app or a Private tab: use Safari.</p></div>
   </div>
 </div></section>
 
 <!-- ═══ 4 · ANDROID ═════════════════════════════════════════════════ -->
 <section class="sheet"><div class="body">
-  <div class="kick">Put it on your phone · 2 of 3</div>
+  <div class="kick">Get the app · 2 of 3</div>
   <h1>Android phones and tablets</h1>
   <div class="rule"></div>
-  <p class="lead" style="margin-bottom:14px">Use <b>Chrome</b>. About a minute, once. Tap where the <span style="color:var(--tap);font-weight:700">orange ring</span> is.</p>
+  <p class="lead" style="margin-bottom:10px">Use <b>Chrome</b> and open <a class="addr" style="white-space:nowrap" href="https://silmarillion.clearskyomega.com/logic">silmarillion.clearskyomega.com/logic</a>. About a minute, once. Tap where the <span style="color:var(--tap);font-weight:700">orange ring</span> is.</p>
 
   <div class="row4">
     <div class="stp">
       <div class="ph"><div class="scr"><div class="sb" style="padding-left:.12in"><span>9:41</span><i></i></div>
-        <div class="ctb"><span class="om"><svg><use href="#i-lock"/></svg>silmarillion.clearskyomega.com/office/app</span><span class="tabs">1</span><span class="mv"><svg><use href="#i-kebab"/></svg></span></div>
+        <div class="ctb"><span class="om"><svg><use href="#i-lock"/></svg><span class="u">silmarillion.clearskyomega.com/office/app</span></span><span class="tabs">1</span><span class="mv"><svg><use href="#i-kebab"/></svg></span></div>
         <div class="ahd"><b>Omega Logic</b><span></span></div>
-        <div class="gate"><div class="t1">Omega Logic</div><div class="t2">sign in with your work account</div><div class="gl"></div><div class="gl"></div><div class="gl" style="width:60%;margin:auto"></div><span class="btn">Continue with Google</span><span class="or">or with any work email</span><span class="fld">you@company.com</span><span class="btn2">Email me a sign-in link</span></div>
+        <div class="gate"><img class="mk" src="../../icons/omega-logic-180.png" alt=""><div class="t1">Sign in to Omega Logic</div><div class="gl"></div><div class="gl" style="width:70%;margin:.025in auto"></div><span class="btn">Continue with Google</span><span class="or">or with email</span><span class="lb">Work email</span><span class="fld"></span><span class="lb">Password</span><span class="fld"></span><span class="btn2">Sign in</span><span class="lk">Forgot password?</span></div>
         <div class="gbar"></div></div></div>
       <div class="stx"><span class="hx"><span>1</span></span><h3>Open it in Chrome</h3>
-        <p>Type <span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/logic</span> or scan the code on the front page. Opened inside another app? Tap <svg class="ic"><use href="#i-kebab"/></svg> and <span class="k">Open in Chrome</span>.</p></div>
+        <p>Type the address above or scan the code on the front page. Opened inside another app? Tap <svg class="ic"><use href="#i-kebab"/></svg> and <span class="k">Open in Chrome</span>.</p></div>
     </div>
     <div class="stp">
       <div class="ph"><div class="scr"><div class="sb" style="padding-left:.12in"><span>9:41</span><i></i></div>
-        <div class="ctb"><span class="om"><svg><use href="#i-lock"/></svg>silmarillion.clearskyomega.com/office/app</span><span class="tabs">1</span><span class="mv tap tapc"><svg><use href="#i-kebab"/></svg></span></div>
+        <div class="ctb"><span class="om"><svg><use href="#i-lock"/></svg><span class="u">silmarillion.clearskyomega.com/office/app</span></span><span class="tabs">1</span><span class="mv tap tapc"><svg><use href="#i-kebab"/></svg></span></div>
         <div class="ahd"><b>Omega Logic</b><span></span></div>
-        <div class="gate"><div class="t1">Omega Logic</div><div class="gl"></div><div class="gl"></div></div>
+        <div class="gate"><img class="mk" src="../../icons/omega-logic-180.png" alt=""><div class="t1">Sign in to Omega Logic</div><div class="gl"></div><div class="gl" style="width:70%;margin:.025in auto"></div></div>
         <div class="pop" style="right:.05in;top:.5in;width:1.15in;padding:0">
           <div class="icons"><i></i><i></i><i></i><i></i><i></i></div>
           <div class="r"><span class="bar" style="width:.5in"></span></div>
@@ -445,9 +468,9 @@ html,body{margin:0}
     </div>
     <div class="stp">
       <div class="ph"><div class="scr"><div class="sb" style="padding-left:.12in"><span>9:41</span><i></i></div>
-        <div class="ctb"><span class="om"><svg><use href="#i-lock"/></svg>silmarillion.clearskyomega.com/office/app</span><span class="tabs">1</span><span class="mv"><svg><use href="#i-kebab"/></svg></span></div>
+        <div class="ctb"><span class="om"><svg><use href="#i-lock"/></svg><span class="u">silmarillion.clearskyomega.com/office/app</span></span><span class="tabs">1</span><span class="mv"><svg><use href="#i-kebab"/></svg></span></div>
         <div class="ahd"><b>Omega Logic</b><span></span></div>
-        <div class="gate"><div class="t1">Omega Logic</div><div class="gl"></div><div class="gl"></div></div>
+        <div class="gate"><img class="mk" src="../../icons/omega-logic-180.png" alt=""><div class="t1">Sign in to Omega Logic</div><div class="gl"></div><div class="gl" style="width:70%;margin:.025in auto"></div></div>
         <div class="dim"></div>
         <div class="dlg"><div class="who"><img src="../../icons/omega-logic-180.png" alt=""><div><b>Omega Logic</b><small>silmarillion.clearskyomega.com</small></div></div>
           <div class="btns"><span class="tb">Create shortcut</span><span class="fb tap" style="border-radius:.1in">Install</span></div></div>
@@ -465,11 +488,11 @@ html,body{margin:0}
         <div class="apps" style="position:absolute;left:0;right:0;bottom:.2in"><div class="app"><i></i></div><div class="app"><i></i></div><div class="app"><i></i></div><div class="app"><i></i></div></div>
         <div class="gbar lt"></div></div></div>
       <div class="stx"><span class="hx"><span>4</span></span><h3>Open it from the icon</h3>
-        <p>Omega Logic is on your home screen and in your list of apps. Open it from there and sign in. It opens full screen, like any other app.</p></div>
+        <p>It's on your home screen and in your apps. Open it from there, full screen, and sign in: Google, or your work email and password (page 6).</p></div>
     </div>
   </div>
 
-  <div class="g2 mt2">
+  <div class="g2 mt">
     <div class="box"><h3>Chrome offered to install it by itself?</h3><p>If a bar or a pop-up at the bottom of the screen offers to install Omega Logic, tap <span class="k">Install</span>. Same result, one step.</p></div>
     <div class="box"><h3>Samsung phones</h3><p>Chrome gives the cleanest install, so use it if you have it. In Samsung Internet (called <b>Samsung Browser</b>, or just <b>Browser</b>, on newer Galaxy phones): tap the install icon in the address bar if there is one. If not, tap <svg class="ic"><use href="#i-hamb"/></svg> at the bottom right, then <span class="k">Add page to</span>, <span class="k">Home screen</span>, <span class="k">Add</span>.</p></div>
   </div>
@@ -481,10 +504,10 @@ html,body{margin:0}
 
 <!-- ═══ 5 · A COMPUTER ══════════════════════════════════════════════ -->
 <section class="sheet"><div class="body">
-  <div class="kick">Put it on your phone · 3 of 3</div>
+  <div class="kick">Get the app · 3 of 3</div>
   <h1>On a computer</h1>
   <div class="rule"></div>
-  <p class="lead" style="margin-bottom:14px">Nothing to install unless you want to. Open <span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/logic</span> in Chrome, Edge or Safari and sign in. Installing just gives it its own window and an icon on the taskbar or the Dock.</p>
+  <p class="lead" style="margin-bottom:14px">Nothing to install unless you want to. Open <a class="addr" style="white-space:nowrap" href="https://silmarillion.clearskyomega.com/logic">silmarillion.clearskyomega.com/logic</a> in Chrome, Edge or Safari and sign in. Installing gives it its own window and a taskbar or Dock icon.</p>
 
   <div style="display:grid;grid-template-columns:3.55in 1fr;gap:.24in;align-items:start">
     <div>
@@ -512,21 +535,20 @@ html,body{margin:0}
       <p class="small" style="margin-top:6px;text-align:center">Chrome: the Install icon <svg class="ic"><use href="#i-install"/></svg> sits at the right end of the address bar.</p>
     </div>
     <ul class="hl" style="margin-top:2px">
-      <li><span class="hx"><span>C</span></span><p><b>Chrome</b> (Windows, Mac, Chromebook). Click the Install icon <svg class="ic"><use href="#i-install"/></svg> in the address bar, then <span class="k">Install</span>. No icon? <svg class="ic"><use href="#i-kebab"/></svg> → <span class="k">Cast, save, and share</span> → <span class="k">Install page as app…</span> → <span class="k">Install</span>.</p></li>
-      <li><span class="hx"><span>E</span></span><p><b>Microsoft Edge.</b> Click <span class="k">App available</span> in the address bar, then <span class="k">Install</span>. Or <svg class="ic"><use href="#i-dots"/></svg> → <span class="k">More tools</span> → <span class="k">Apps</span> → <span class="k">Install this site as an app</span>. Tick <span class="k">Pin to taskbar</span> if you like.</p></li>
-      <li><span class="hx"><span>S</span></span><p><b>Safari on a Mac</b> (macOS Sonoma 14 or later). <span class="k">File</span> → <span class="k">Add to Dock</span>, then <span class="k">Add</span>. It keeps its own sign-in, so sign in once inside it.</p></li>
+      <li><span class="hx"><span>C</span></span><p><b>Chrome</b> (Windows, Mac, Chromebook). Click the Install icon <svg class="ic"><use href="#i-install"/></svg> in the address bar, then <span class="k">Install</span>. No icon? <svg class="ic"><use href="#i-kebab"/></svg> → <span class="k">Cast, save, and share</span> → <span class="k">Install Omega Logic…</span> (while it loads: <span class="k">Install page as app…</span>; not <span class="k">Create shortcut…</span>) → <span class="k">Install</span>.</p></li>
+      <li><span class="hx"><span>E</span></span><p><b>Microsoft Edge.</b> Click <span class="k">App available</span> in the address bar, then <span class="k">Install</span>. Or <svg class="ic"><use href="#i-dots"/></svg> → <span class="k">More tools</span> → <span class="k">Apps</span> → <span class="k">Install Omega Logic</span> (or <span class="k">Install this site as an app</span>). Tick <span class="k">Pin to taskbar</span> if you like.</p></li>
+      <li><span class="hx"><span>S</span></span><p><b>Safari on a Mac</b> (macOS Sonoma 14 or later). <span class="k">File</span> → <span class="k">Add to Dock</span>, then <span class="k">Add</span>. It keeps its own sign-in, so sign in once inside it (Google, or your work email and password).</p></li>
       <li><span class="hx"><span>F</span></span><p><b>Firefox.</b> On Windows, click <span class="k">Add tab to taskbar</span> in the address bar. On a Mac, bookmark it instead.</p></li>
       <li><span class="hx"><span>☆</span></span><p><b>Or just bookmark it.</b> <span class="k">Ctrl+D</span> on Windows, <span class="k">Cmd+D</span> on a Mac.</p></li>
     </ul>
   </div>
 
-  <h2 class="mt2">The desktop office: more room, same data</h2>
+  <h2 class="mt">The desktop office: more room, same data</h2>
   <div style="display:grid;grid-template-columns:4.3in 1fr;gap:.24in;align-items:start">
-    <figure class="wide"><img src="shots/desktop-office.png" width="1280" height="800" alt="The desktop office in a browser window"><figcaption>The desktop office in a browser window: the same hub, with room for the detail.</figcaption></figure>
+    <figure class="wide"><img src="shots/desktop-office.png" width="1280" height="800" alt="The desktop office in a browser window"><figcaption>The desktop office: the same hub, with room for the detail.</figcaption></figure>
     <div style="font-size:10.4pt">
-      <p>At a desk, use the <b>desktop office</b>. It is the same workspace and the same data, laid out for a big screen: pricing and accepting orders, shipping and receiving, the fleet register, the materials plan and the full reports.</p>
-      <p>Open it from the app: <b>Menu</b>, then any page that isn't in the app, such as <span class="k">Price &amp; accept</span> under Sales.</p>
-      <p style="margin:0">Whatever you save on the phone is on the desktop straight away, and the other way round.</p>
+      <p>At a desk, open <a class="addr" href="https://silmarillion.clearskyomega.com/omega-logic">silmarillion.clearskyomega.com<wbr><span style="white-space:nowrap">/omega-logic</span></a>, the <b>desktop office</b>. Same sign-in, same workspace, laid out for a big screen: pricing and accepting orders, shipping and receiving, the fleet register, the materials plan and the full reports. Bookmark it (<span class="k">Ctrl+D</span> / <span class="k">Cmd+D</span>); it doesn't install.</p>
+      <p style="margin:0">From the app: <b>Menu</b>, then <span class="k">Price &amp; accept</span> under Sales. What you save on either is on the other straight away.</p>
     </div>
   </div>
 </div></section>
@@ -536,39 +558,40 @@ html,body{margin:0}
   <div class="kick">Sign in</div>
   <h1>Sign in and your workspace</h1>
   <div class="rule"></div>
-  <p class="lead">One account, one workspace. Omega Logic works out which company you're with from your work email. There is nothing to choose.</p>
+  <p class="lead">Omega Logic works out your company from the account you sign in with. One company: you go straight in. More than one: you pick it from a list, and <b>Switch</b> at the top changes company later.</p>
 
   <div style="display:grid;grid-template-columns:2.2in 1fr;gap:.3in;align-items:start">
     <div class="ph big"><div class="scr"><div class="isl"></div><div class="sb"><span>9:41</span><i></i></div>
       <div class="ahd"><b>Omega Logic</b><span></span></div>
-      <div class="gate" style="padding-top:.3in"><div class="t1">Omega Logic</div><div class="t2">sign in with your work account</div><div class="gl"></div><div class="gl"></div><div class="gl" style="width:60%;margin:auto"></div>
-        <span class="btn tap" style="margin-top:.12in">Continue with Google</span><span class="or">or with any work email</span><span class="fld">you@company.com</span><span class="btn2">Email me a sign-in link</span></div>
+      <div class="gate" style="padding-top:.22in"><img class="mk" src="../../icons/omega-logic-180.png" alt=""><div class="t1">Sign in to Omega Logic</div><div class="gl"></div><div class="gl" style="width:70%;margin:.025in auto"></div>
+        <span class="btn tap" style="margin-top:.12in">Continue with Google</span><span class="or">or with email</span><span class="lb">Work email</span><span class="fld"></span><span class="lb">Password</span><span class="fld"></span><span class="btn2">Sign in</span><span class="lk">Forgot password?</span></div>
       <div class="gbar"></div></div></div>
     <div>
       <ul class="hl">
         <li><span class="hx"><span>1</span></span><p>Open <b>Omega Logic</b> from its icon and tap <span class="k">Continue with Google</span>.</p></li>
         <li><span class="hx"><span>2</span></span><p>Pick your <b>work</b> account, <span class="addr">you@yourcompany.com</span>. If Google shows a personal account first, choose the work one.</p></li>
-        <li><span class="hx"><span>3</span></span><p>Your company's workspace opens by itself. Its name is at the top of the screen, next to your email.</p></li>
+        <li><span class="hx"><span>3</span></span><p>Your company's workspace opens by itself; its name is at the top, next to your email. With more than one company, tap yours under <span class="k">Choose your company</span>.</p></li>
       </ul>
-      <div class="box" style="margin:4px 0 14px"><p><b>No Google account at work?</b> Type your work email and tap <span class="k">Email me a sign-in link</span>, then tap the link in that email on the same phone or computer. On an iPhone or iPad the link opens in Safari, not in the Home Screen app, so use Omega Logic in Safari.</p></div>
+      <div class="box" style="margin:4px 0 10px"><p><b>No Google account at work?</b> Type your work email and password and tap <span class="k">Sign in</span>. No password yet? Use the link in the email your company sent when it added you, or type your email and tap <span class="k">Forgot password?</span>. Told to confirm your email first? Tap <span class="k">Send the link again</span>, open the link, then sign in again.</p></div>
 
       <h3>What the top of the screen tells you</h3>
       <div style="border:1px solid var(--line);border-radius:10px;padding:8px 11px;display:flex;align-items:center;gap:8px;background:#fff">
         <div style="flex:1;line-height:1.25"><b style="font-size:12pt;color:#0c2330">Omega Logic</b><br><span style="font-size:9.4pt;color:#41606e"><span style="box-shadow:0 0 0 1.2pt var(--tap);border-radius:3px;padding:0 2px">Your Company</span> · you@yourcompany.com</span></div>
+        <span style="border:1px dashed #9fb3bd;border-radius:14px;padding:5px 10px;font-weight:700;font-size:9.6pt">Switch</span>
         <span style="width:.3in;height:.3in;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center"><svg class="ic" style="width:.15in;height:.15in"><use href="#i-reload"/></svg></span>
         <span style="border:1px solid var(--line);border-radius:14px;padding:5px 10px;font-weight:700;font-size:9.6pt">Sign out</span>
       </div>
-      <p style="font-size:10.3pt;margin-top:7px"><b>Your Company</b> is the workspace you're in, then who you're signed in as. <svg class="ic"><use href="#i-reload"/></svg> fetches the latest. <b>Sign out</b> is at the right: use it on a shared computer. The app remembers your workspace, so next time you just sign in.</p>
+      <p style="font-size:10.3pt;margin-top:7px"><b>Your Company</b> is the workspace you're in, then who you're signed in as. <b>Switch</b> shows only if you have more than one company. <svg class="ic"><use href="#i-reload"/></svg> fetches the latest. <b>Sign out</b> is at the right: use it on a shared computer. Signing out also forgets the company; sign in again and it is found again.</p>
     </div>
   </div>
 
-  <div class="g2 mt2">
-    <div class="box warn"><h3>"No workspace at yourcompany.com"</h3><p>You signed in with an account that isn't on a workspace: a personal Gmail, or a work email nobody has added yet. Tap <span class="k">Sign in with another account</span> and use your work account, or ask whoever runs Omega Logic at your company to add you.</p></div>
+  <div class="g2 mt">
+    <div class="box warn"><h3>"Nowhere to go yet"</h3><p>Your email isn't on a workspace yet: a personal Gmail, or a work email nobody has added. Tap <span class="k">Sign in with another account</span> and use your work account, or ask whoever runs Omega Logic at your company to add you.</p></div>
     <div class="box"><h3>Who can change what</h3><p>Everyone on the workspace sees the same data. An <b>administrator</b> approves people, sets payment terms and changes settings. If a button isn't there for you, that's why. Ask your administrator.</p></div>
   </div>
   <div class="g2 mt">
-    <div class="box"><h3>Your phone and your computer</h3><p>Sign in once on each. On an iPhone or iPad, the app on the Home Screen keeps its own sign-in, separate from Safari, so sign in inside the app even if Safari already is.</p></div>
-    <div class="box"><h3>Company not on Omega Logic yet?</h3><p>ClearSky sets up workspaces. Write to <b>dev@clearsky-usa.com</b> and say who should be the first person on it.</p></div>
+    <div class="box"><h3>Your phone and your computer</h3><p>Sign in once on each. An installed app keeps its own sign-in, separate from the browser. If <span class="k">Continue with Google</span> brings you back still signed out, use your work email and password.</p></div>
+    <div class="box"><h3>Company not on Omega Logic yet?</h3><p>ClearSky sets up workspaces. Write to <a href="mailto:dev@clearsky-usa.com"><b>dev@clearsky-usa.com</b></a> and say who should be the first person on it.</p></div>
   </div>
 </div></section>
 
@@ -660,7 +683,7 @@ html,body{margin:0}
 
   <div class="box mt2">
     <h3>What stays on the desktop, on purpose</h3>
-    <p>Approving a price, accepting an order, recording a shipment and settling a wire happen in the desktop office, next to the paperwork. The app shows every one of those results the moment they're saved, and never makes up a number.</p>
+    <p>Approving a price, accepting an order, recording a shipment and settling a wire happen in the desktop office (<a class="addr" href="https://silmarillion.clearskyomega.com/omega-logic">silmarillion.clearskyomega.com<wbr><span style="white-space:nowrap">/omega-logic</span></a>, page 5), next to the paperwork. The app shows every one of those results the moment they're saved, and never makes up a number.</p>
   </div>
 </div></section>
 
@@ -674,8 +697,8 @@ html,body{margin:0}
       <p style="font-size:11.4pt;color:#34505e">Your customers don't get Omega Logic. They get <b>your company's app</b>, with your name and your icon, and everything they do in it lands in your Customers hub.</p>
       <ul>
         <li><b>Send it from their account:</b> <b>Customers</b>, the company, <b>Overview</b>, then <b>Their app</b>. <span class="k">Send the app link</span> opens your phone's share sheet, so you can text or email it. <span class="k">Desktop link</span> is for a computer. Under <b>People</b>, <span class="k">Invite</span> emails a person the link.</li>
-        <li><b>They install it the same way</b> you did: Safari, Share, Add to Home Screen on an iPhone; Chrome, Install on Android.</li>
-        <li><b>In it they can</b> size and design a site, send or upload POs, pay invoices, follow shipping, and keep their fleet and warranties on file.</li>
+        <li><b>They install it the same way</b> you did: Safari, the menu or Share, Add to Home Screen on an iPhone; Chrome, <svg class="ic"><use href="#i-kebab"/></svg>, Install on Android.</li>
+        <li><b>In it they can</b> size and design a site, send or upload POs, pay invoices, follow shipping, and record where each unit went, with its warranty.</li>
         <li><b>You see it all:</b> a PO becomes an order waiting for a price, a question shows on Today, a document lands in Documents.</li>
       </ul>
       <p class="small" style="margin:0">Their guide is under <b>Menu → Help &amp; guides → Customer app guide</b>. Send it with the link.</p>
@@ -686,13 +709,13 @@ html,body{margin:0}
   <h2 class="mt">If something looks wrong</h2>
   <table class="tr">
     <tr><th>No Add to Home Screen, no Install</th><td>The link opened inside another app (Gmail, Outlook, Teams, Slack, LinkedIn, WhatsApp) or a Private tab. Open it in Safari on an iPhone, Chrome on Android. iPhone: swipe up on the share sheet; still missing, <span class="k">Edit Actions</span> at the bottom.</td></tr>
-    <tr><th>The icon is a letter or an old picture</th><td>Remove it (touch and hold the icon, <span class="k">Remove App</span>, <span class="k">Delete App</span>) and add it again from Safari. Android: touch and hold, <span class="k">Uninstall</span>, then install again.</td></tr>
+    <tr><th>The icon is a letter or an old picture</th><td>Remove it (touch and hold the icon, <span class="k">Delete Bookmark</span> or <span class="k">Remove App</span>, then <span class="k">Delete</span>) and add it again from Safari. Android: touch and hold, <span class="k">Uninstall</span>, then install again.</td></tr>
     <tr><th>It looks out of date</th><td>Updates arrive by themselves: the app loads the newest version whenever it opens online. Close it fully and open it again, or tap <svg class="ic"><use href="#i-reload"/></svg>.</td></tr>
     <tr><th>No signal</th><td>The app says it's offline and shows nothing, rather than yesterday's list. Reconnect and tap <svg class="ic"><use href="#i-reload"/></svg>.</td></tr>
-    <tr><th>"No workspace at…"</th><td>You signed in with the wrong account, or nobody has added you yet. See page 6.</td></tr>
+    <tr><th>"Nowhere to go yet"</th><td>You signed in with the wrong account, or nobody has added you yet. See page 6.</td></tr>
     <tr><th>A button says no</th><td>The message says why: a unit can't be commissioned before it has been received, for example. Do the earlier step first. The rules are the same on every screen.</td></tr>
-    <tr><th>Removing it</th><td>iPhone: touch and hold, <span class="k">Remove App</span>, <span class="k">Delete App</span>. Android: touch and hold, <span class="k">Uninstall</span>. Computer: in the app's window, open its menu (<svg class="ic"><use href="#i-kebab"/></svg> or <svg class="ic"><use href="#i-dots"/></svg>) and choose <span class="k">Uninstall</span>. Your data stays in the workspace.</td></tr>
-    <tr><th>Still stuck</th><td>Ask whoever runs Omega Logic at your company. Then ClearSky Energy Solutions: <b>dev@clearsky-usa.com</b>.</td></tr>
+    <tr><th>Removing it</th><td>iPhone: touch and hold the icon, <span class="k">Delete Bookmark</span> (or <span class="k">Remove App</span>), then <span class="k">Delete</span>; no delete option means Screen Time is blocking it. Android: touch and hold, <span class="k">Uninstall</span>. Chrome or Edge: in the app's window, open its menu (<svg class="ic"><use href="#i-kebab"/></svg> or <svg class="ic"><use href="#i-dots"/></svg>), <span class="k">Uninstall Omega Logic…</span>, then <span class="k">Remove</span>. Safari on a Mac: in Finder, open the Applications folder in your home folder and drag <b>Omega Logic</b> to the Trash. Your data stays in the workspace.</td></tr>
+    <tr><th>Still stuck</th><td>Ask whoever runs Omega Logic at your company. Then ClearSky Energy Solutions: <a href="mailto:dev@clearsky-usa.com"><b>dev@clearsky-usa.com</b></a>.</td></tr>
   </table>
 </div></section>
 

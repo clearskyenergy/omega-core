@@ -7,22 +7,33 @@
    guides/Omega-Logic-App.pdf. Screenshots come from the sandboxes (shots/),
    the QR codes from make-qr.js (qr/).
 
-     node scripts/guides/build.js           every picture must be there
-     node scripts/guides/build.js --draft   a missing screenshot is drawn as a
-                                            dashed box with its file name
+     node scripts/guides/build.js           every picture must be there, and
+                                            every screenshot must be one
+                                            shots.js took and checked
+                                            (shots/manifest.json, guard.js)
+     node scripts/guides/build.js --draft   a missing or unchecked screenshot
+                                            is drawn as a dashed box with its
+                                            file name; written to a temp folder
      ... --out DIR                          write somewhere other than guides/
-                                            (a draft never needs to touch the
-                                            PDFs the site serves)
+
+   A draft NEVER lands in guides/, which the site serves: without --out it
+   goes to <tmp>/omega-guides-draft, and --draft --out guides/ is refused.
+
+   Every build refuses a guide whose printed text names a tenant (guard.js
+   LEAK): /guides is public and goes to every subscriber.
 
    A guide laid out as fixed sheets (office.html: <main data-mode="solo">)
    draws its own band and footer and is printed edge to edge; build.js
    refuses a sheet whose content runs past its page. */
 'use strict';
-var fs = require('fs'), path = require('path');
+var fs = require('fs'), path = require('path'), os = require('os'), Guard = require('./guard');
 var PW = (function () { try { return require.resolve('playwright'); } catch (e) { return '/opt/node22/lib/node_modules/playwright'; } })(), chromium = require(PW).chromium;
 var CHROME = fs.existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : chromium.executablePath();
 var DRAFT = process.argv.indexOf('--draft') >= 0;
-var OUT = process.argv.indexOf('--out') > 0 ? path.resolve(process.argv[process.argv.indexOf('--out') + 1]) : path.join(__dirname, '..', '..', 'guides');
+var SERVED = path.resolve(__dirname, '..', '..', 'guides'), SHOTS = path.join(__dirname, 'shots');
+var oi = process.argv.indexOf('--out');
+var OUT = oi > 0 && process.argv[oi + 1] ? path.resolve(process.argv[oi + 1]) : (DRAFT ? path.join(os.tmpdir(), 'omega-guides-draft') : SERVED);
+if (DRAFT && OUT === SERVED) { console.error('guides: a --draft never writes to guides/ (the site serves it); pass --out DIR'); process.exit(1); }
 /* the band's mark is the app icon itself, read at build time (a header
    template cannot load a file, so it goes in as a data URI) */
 var MARK = 'data:image/png;base64,' + fs.readFileSync(path.join(__dirname, '..', '..', 'icons', 'omega-logic-180.png')).toString('base64');
@@ -66,25 +77,33 @@ function assets(html) {
   while ((m = re.exec(html))) { var src = m[1]; if (/^(data:|https?:|#)/.test(src) || seen[src]) continue; seen[src] = 1; out.push(src); }
   return out;
 }
-function missingOf(html) { return assets(html).filter(function (src) { return !fs.existsSync(path.join(__dirname, src)); }); }
-var problems = [], missingShots = {};
+/* A screenshot is printed only if shots.js took it and its bytes match the
+   record (guard.js): 'missing', 'unrecorded' (a leftover or a hand-copied
+   picture) and 'changed' are all unusable, and all name the fix. */
+var MANIFEST = Guard.readManifest(SHOTS);
+function shotState(src) { return Guard.verdict(SHOTS, src.replace(/^shots\//, ''), MANIFEST); }
+function unusableOf(html) { return assets(html).filter(function (src) { return /^shots\//.test(src) && shotState(src) !== 'ok'; }); }
+var problems = [], badShots = {};
 Object.keys(GUIDES).forEach(function (key) {
-  missingOf(sourceOf(key)).forEach(function (src) {
-    if (/^shots\//.test(src)) (missingShots[src] = missingShots[src] || []).push(key);
-    else problems.push(key + ': ' + src + ' does not exist');
+  assets(sourceOf(key)).forEach(function (src) {
+    if (/^shots\//.test(src)) { var st = shotState(src); if (st !== 'ok') (badShots[src] = badShots[src] || { state: st, in: [] }).in.push(key); }
+    else if (!fs.existsSync(path.join(__dirname, src))) problems.push(key + ': ' + src + ' does not exist');
   });
 });
 if (problems.length) { console.error('guides: broken references\n  ' + problems.join('\n  ')); process.exit(1); }
-if (Object.keys(missingShots).length && !DRAFT) {
-  console.error('guides: missing screenshots (capture them into scripts/guides/shots/, or build with --draft to see the layout with a box in their place):\n  '
-    + Object.keys(missingShots).map(function (s) { return s + '  (' + missingShots[s].join(', ') + ')'; }).join('\n  '));
+var WHY = { missing: 'missing', unrecorded: 'not taken by shots.js (a leftover or hand-copied picture)', changed: 'changed since shots.js took it' };
+if (Object.keys(badShots).length && !DRAFT) {
+  console.error('guides: screenshots that cannot be printed:\n  '
+    + Object.keys(badShots).map(function (s) { return s + '  ' + WHY[badShots[s].state] + '  (' + badShots[s].in.join(', ') + ')'; }).join('\n  ')
+    + '\nTake every shot again, from this tree:  node scripts/guides/shots.js\n(or just these:  node scripts/guides/shots.js --only ' + Object.keys(badShots).map(function (s) { return s.replace(/^shots\/|\.png$/g, ''); }).join(',')
+    + ')\nor build with --draft --out DIR to see the layout with a box in their place.');
   process.exit(1);
 }
 (async function () {
   fs.mkdirSync(OUT, { recursive: true });
   var b = await chromium.launch({ executablePath: CHROME });
   for (var key in GUIDES) {
-    var p = await b.newPage(), html = sourceOf(key), missing = missingOf(html).filter(function (s) { return /^shots\//.test(s); });
+    var p = await b.newPage(), html = sourceOf(key), missing = unusableOf(html);
     var tmp = path.join(__dirname, '.' + key + '.build.html');
     fs.writeFileSync(tmp, html);
     try { await p.goto('file://' + tmp, { waitUntil: 'load' }); } finally { fs.unlinkSync(tmp); }
@@ -93,16 +112,19 @@ if (Object.keys(missingShots).length && !DRAFT) {
       /* a neutral dashed box the size the screenshot will be, named */
       await p.evaluate(function (list) {
         Array.prototype.slice.call(document.images).forEach(function (img) {
-          if (list.indexOf(img.getAttribute('src')) < 0) return;
+          if (list.srcs.indexOf(img.getAttribute('src')) < 0) return;
           var w = +img.getAttribute('width') || 780, h = +img.getAttribute('height') || 1560, d = document.createElement('div');
           d.className = 'shot-missing';
           d.style.cssText = 'display:flex;align-items:center;justify-content:center;text-align:center;width:100%;aspect-ratio:' + w + '/' + h + ';border:1.5px dashed #9fb3bd;border-radius:8px;background:#f4f7f8;color:#5a7280;font:8pt "Liberation Mono","DejaVu Sans Mono",monospace;padding:6px;overflow-wrap:anywhere';
-          d.textContent = img.getAttribute('src');
+          d.textContent = img.getAttribute('src') + (list.why[img.getAttribute('src')] === 'missing' ? '' : ' (retake with shots.js)');
           img.parentNode.replaceChild(d, img);
         });
-      }, missing);
+      }, { srcs: missing, why: missing.reduce(function (o, src) { o[src] = shotState(src); return o; }, {}) });
     }
     await p.waitForTimeout(300);
+    /* the printed words, not the source: a tenant's name never ships */
+    var leak = await p.evaluate(function (src) { var m = (document.title + '\n' + document.body.innerText).match(new RegExp(src, 'i')); return m ? m[0] : null; }, Guard.LEAK.source);
+    if (leak) { await b.close(); console.error('guides: ' + GUIDES[key] + ' names a tenant ("' + leak + '"): /guides is public. Say "your company" instead.'); process.exit(1); }
     var sheets = await p.evaluate(function () { return !!document.querySelector('main[data-mode="solo"] .sheet'); });
     var over = await p.evaluate(function () {
       return Array.prototype.map.call(document.querySelectorAll('.olg .sheet'), function (s, i) {
@@ -116,9 +138,10 @@ if (Object.keys(missingShots).length && !DRAFT) {
     else await p.pdf({ path: file, format: 'Letter', printBackground: true, displayHeaderFooter: true, headerTemplate: headerFor(key),
       footerTemplate: footerFor(key),
       margin: { top: '1.05in', bottom: '0.6in', left: '0.55in', right: '0.55in' } });
-    console.log(GUIDES[key] + (missing.length ? '  (draft: ' + missing.length + ' screenshot' + (missing.length === 1 ? '' : 's') + ' missing)' : ''));
+    console.log(GUIDES[key] + (missing.length ? '  (draft: ' + missing.length + ' screenshot' + (missing.length === 1 ? '' : 's') + ' boxed)' : ''));
     (ALSO[key] || []).forEach(function (name) { fs.copyFileSync(file, path.join(OUT, name)); console.log(name + '  (= ' + GUIDES[key] + ')'); });
     await p.close();
   }
   await b.close();
+  if (DRAFT) console.log('draft written to ' + OUT);
 })().catch(function (e) { console.error(e); process.exit(1); });

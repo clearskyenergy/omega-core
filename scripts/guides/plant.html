@@ -1,4 +1,10 @@
 <!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     scripts/guides/plant.html — the Plant app guide (guides/Omega-Logic-Plant-App.pdf,
+     and pages of guides/Omega-Logic-Phone-Apps.pdf). Build: node scripts/guides/build.js
+     PUBLIC (/guides is served) and sent to every workspace: it names no
+     tenant (build.js refuses one, scripts/guides/guard.js). Examples say
+     "your company"; the install steps match the Omega Logic app guide. -->
 <html lang="en"><head><meta charset="utf-8"><title>Omega Logic · Plant app</title>
 <style>
 @page{size:Letter;margin:1.05in 0.55in 0.6in 0.55in}
@@ -27,27 +33,27 @@ code{font:8.6pt "Liberation Mono","DejaVu Sans Mono",monospace;color:#0f2e3f}
 .cover{background:#e8f3f6;border-radius:8px;padding:14px 16px;margin:0 0 12px}.cover h1{font-size:20pt;color:#0f2e3f;margin:0 0 4px;letter-spacing:-.3px}.cover p{margin:0;color:#3f5866;font-size:10pt}.steps li{margin:0 0 5px}
 </style></head><body>
 
-<div class="cover"><h1>The Plant app</h1><p>Omega Logic on the builder's phone: work orders, every unit and its step, the bench scanner, stock, quality holds. Clean Cell USA.</p></div>
+<div class="cover"><h1>The Plant app</h1><p>Omega Logic on the builder's phone: work orders, every unit and its step, the bench scanner, stock, quality holds.</p></div>
 <h2>1. What it is and where it lives</h2>
 <table><tr><th>What</th><th>Address</th><th>Sign in</th></tr>
-<tr><td><b>Plant app</b></td><td><span class="url">silmarillion.clearskyomega.com/plant/app?org=cleancell.us</span></td><td>work Google account of the workspace</td></tr>
+<tr><td><b>Plant app</b></td><td><span class="url">silmarillion.clearskyomega.com/plant/app?org=yourcompany.com</span><br>(<code>?org=</code> is your company's email domain; the link your office sends already has it)</td><td>work Google account of the workspace</td></tr>
 <tr><td><b>Bench scan station</b></td><td><span class="url">silmarillion.clearskyomega.com/plant/station.html</span></td><td>a station credential from Work orders, pasted once</td></tr>
-<tr><td>Try it first (sample data)</td><td><span class="url">silmarillion.clearskyomega.com/app-sandbox/plant</span> · <span class="url">/app-sandbox/bench</span></td><td>any email</td></tr></table>
+</table>
 <p>Nothing lives only on the phone. The app reads and writes the same work orders and unit records as the plant board and the office, through the same signed-in endpoints, so a scan at a bench is on every other screen the moment it is saved.</p>
 
 <h2>2. Put it on your phone</h2>
 <p>It is a web app: nothing to download from a store, and every update reaches the phone the next time it is opened. Open the address once from the link the office sends; the app remembers the workspace after that. Sign in with the work Google account that is a member of the workspace.</p>
 <div class="cols"><div><h3>iPhone or iPad (Safari)</h3><ol class="steps">
-<li>Open <b>Safari</b> and go to the address above.</li>
-<li>Sign in.</li>
-<li>Tap the <b>Share</b> button (the square with the arrow, at the bottom of the screen).</li>
-<li>Scroll the sheet and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li>
-<li>Open it from the home screen from now on. It opens full screen as <b>Omega Logic</b>, ClearSky's app, with your company's workspace shown inside once you sign in.</li></ol></div>
+<li>Open <b>Safari</b> and go to the link your office sent.</li>
+<li>Tap the menu button at the left of the address bar (iOS 27) or <b>···</b> at the right (iOS 26), then <b>Share</b>. See a Share button (the square with the arrow)? Just tap that.</li>
+<li>Swipe up on the sheet or tap <b>View More</b>, then <b>Add to Home Screen</b>.</li>
+<li>Leave <b>Open as Web App</b> on and tap <b>Add</b>. No switch? Older iOS: just tap <b>Add</b>.</li>
+<li>Open it from the Home Screen from now on and sign in there: it keeps its own sign-in, separate from Safari. It opens full screen as <b>Omega Logic</b>, ClearSky's app, with your company's workspace shown inside.</li></ol></div>
 <div><h3>Android (Chrome)</h3><ol class="steps">
-<li>Open <b>Chrome</b> and go to the address above.</li>
-<li>Sign in.</li>
-<li>Tap the Chrome menu (three dots) and choose <b>Install app</b> or <b>Add to Home screen</b>.</li>
-<li>Confirm. The app appears with your other apps, with its own icon.</li></ol></div></div>
+<li>Open <b>Chrome</b> and go to the link your office sent.</li>
+<li>Tap <b>⋮</b> at the right of the address bar, then <b>Install and create shortcut</b> (older Chrome: <b>Install app</b> or <b>Add to Home screen</b>).</li>
+<li>Tap <b>Install</b>, not Create shortcut.</li>
+<li>Open it from its icon, with your other apps, and sign in.</li></ol></div></div>
 
 <h2>3. The five tabs</h2>
 <div class="side two"><div>
@@ -66,12 +72,12 @@ code{font:8.6pt "Liberation Mono","DejaVu Sans Mono",monospace;color:#0f2e3f}
 <li>Serials are registered on the desktop plant board. The builders build bench by bench with the scanner, issuing parts as they go. The materials plan nets what was issued; Stock in the Omega Logic app shows what is short.</li>
 <li>A unit that reaches <b>Ready</b> is finished stock. The office assigns it to an order from the Omega Logic app, or the plant built it for one already.</li>
 <li>The office records the shipment on the desktop. From then on the unit's custody chain starts: in transit, received, assigned to the customer's site, commissioned. The Plant app shows that under <b>After the plant</b> on the unit, and the customer sees it on their phone.</li>
-<li>Every unit's full record — the plant trace, the tests, the scans, the custody chain and the warranty — is one passport on the desktop: <span class="url">silmarillion.clearskyomega.com/logic-custody?org=cleancell.us</span>.</li></ol>
+<li>Every unit's full record — the plant trace, the tests, the scans, the custody chain and the warranty — is one passport on the desktop: <span class="url">silmarillion.clearskyomega.com/logic-custody?org=yourcompany.com</span>.</li></ol>
 <div class="callout"><b>Your apps.</b> Today in the Plant app links to the Omega Logic app and the bench. One account, one record: what you build here is what the office ships and the customer places at a site.</div></div>
 <div class="shot"><img src="shots/plant-unit.png" alt=""><small>A unit: where it is at the plant, steps, scans, quality</small></div></div>
 <h2>5. If something looks wrong</h2>
 <ul>
-<li><b>"Open the app once from your office link so it knows your workspace"</b>: open the address with <code>?org=cleancell.us</code> once; the app remembers it.</li>
+<li><b>"Open the app once from your office link so it knows your workspace"</b>: open the Plant app link your office sent once (it ends in <code>?org=</code> and your company's email domain); the app remembers it.</li>
 <li><b>The app looks stale</b>: close it fully and open it again. Updates arrive on the next open; data is never shown from a cache.</li>
 <li><b>Offline</b>: the app says so and shows nothing rather than yesterday's list.</li>
 <li><b>Questions</b>: ClearSky Energy Solutions. The full manual is in the workspace documentation.</li></ul>
