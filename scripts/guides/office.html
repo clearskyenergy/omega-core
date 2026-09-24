@@ -111,14 +111,21 @@ html,body{margin:0}
 .olg .ahd{display:flex;align-items:center;justify-content:space-between;padding:.03in .09in .05in;border-bottom:1px solid #e1eaee}
 .olg .ahd b{font-size:1.15em;color:#0c2330}
 .olg .ahd span{width:.13in;height:.13in;border:1px solid #cfdde3;border-radius:50%}
-.olg .gate{padding:.16in .1in 0;text-align:center}
-.olg .gate .t1{font-size:1.9em;font-weight:700;color:#0c2330;line-height:1.1}
-.olg .gate .t2{font-size:1.05em;font-weight:700;color:#41606e;margin:.02in 0 .05in}
+/* the Omega Logic sign-in (omega-logic-signin.js), drawn: the mark, "Sign in
+   to Omega Logic", Google, "or with email", Work email + Password, Sign in,
+   Forgot password? */
+.olg .gate{padding:.12in .1in 0;text-align:center}
+.olg .gate .mk{display:block;width:.3in;height:.3in;border-radius:.07in;margin:0 auto .05in}
+.olg .gate .t1{font-size:1.3em;font-weight:700;color:#0c2330;line-height:1.15}
 .olg .gate .gl{height:.035in;background:#e3ebee;border-radius:2px;margin:.025in .05in}
-.olg .gate .btn{display:block;background:#3fafc6;color:#fff;font-weight:700;border-radius:1em;padding:.045in 0;margin:.08in 0 .04in}
-.olg .gate .or{color:#5a7280;font-size:.9em}
-.olg .gate .fld{display:block;border:1px solid #d5e2e7;border-radius:.05in;padding:.035in .05in;text-align:left;color:#8a9ca5;margin:.04in 0}
-.olg .gate .btn2{display:block;border:1px solid #3fafc6;color:#2b8ea5;font-weight:700;border-radius:1em;padding:.04in 0}
+.olg .gate .btn{display:block;background:#0C1824;color:#fff;font-weight:700;border-radius:.06in;padding:.045in 0;margin:.07in 0 .03in}
+.olg .gate .or{display:block;color:#8aa0ab;font-size:.9em}
+.olg .gate .lb{display:block;text-align:left;color:#4b6270;font-size:.85em;margin:.035in 0 0}
+.olg .gate .fld{display:block;border:1px solid #cfdde3;border-radius:.05in;height:.13in;margin:.01in 0 0}
+.olg .gate .btn2{display:block;border:1px solid #0C1824;color:#0C1824;font-weight:700;border-radius:.06in;padding:.035in 0;margin-top:.05in}
+.olg .gate .lk{display:block;color:#0e7c8b;font-size:.9em;margin-top:.04in}
+.olg .ph.big .gate .mk{width:.46in;height:.46in;border-radius:.1in}
+.olg .ph.big .gate .fld{height:.19in}
 /* Safari's bottom bar */
 .olg .sf{position:absolute;left:0;right:0;bottom:0;height:.44in;background:linear-gradient(#fff0,#fff 30%);display:flex;align-items:center;gap:.04in;padding:0 .07in .1in;z-index:3}
 .olg .sf .pill{flex:1;min-width:0;height:.22in;border-radius:.11in;background:#fff;box-shadow:0 0 0 .6pt #c3cdd2;display:flex;align-items:center;padding:0 .05in;gap:.03in;font-size:5.1pt;color:#1d2b33}
@@ -186,6 +193,21 @@ html,body{margin:0}
 .olg .dlg .btns{display:flex;justify-content:flex-end;gap:.05in;align-items:center}
 .olg .dlg .tb{color:#0b57d0;font-weight:700;font-size:5.6pt;padding:.03in .03in;white-space:nowrap}
 .olg .dlg .fb{background:#0b57d0;color:#fff;font-weight:700;font-size:6pt;padding:.035in .09in;border-radius:.1in}
+/* p3: the whole domain fits in Safari's address bar, an ellipsis if a font
+   ever runs wide; p4 step 3: Chrome's install dialog keeps its text inside */
+.olg .sf{gap:.03in;padding:0 .06in .1in}
+.olg .sf .pill{padding:0 .04in;gap:.015in}
+.olg .sf .pill .d{font-size:4.5pt;text-overflow:ellipsis}
+.olg .sf .circ{width:.2in;height:.2in}
+.olg .dlg{left:.06in;right:.06in;padding-left:.08in;padding-right:.08in}
+.olg .dlg .who>div{min-width:0}
+.olg .dlg .who small{overflow:hidden;text-overflow:ellipsis}
+.olg .dlg .btns{gap:.03in}
+.olg .dlg .tb{font-size:5.2pt}
+/* printed addresses are links (Chromium keeps them in the PDF), same look */
+.olg a{color:inherit;text-decoration:none}
+.olg .strip{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:7px 12px;background:#fff;font-size:10.4pt}
+.olg .strip .addr{font-size:12.5pt;white-space:nowrap}
 
 /* ── a drawn browser window ─────────────────────────────── */
 .olg .win{position:relative;border-radius:9px;border:1px solid #bfcbd1;overflow:hidden;background:#fff;font-size:7pt}
@@ -294,8 +316,8 @@ html,body{margin:0}
       <div>
         <h2>Point your phone's camera here</h2>
         <p>Tap the link that pops up. Then follow the steps for your phone: iPhone on page 3, Android on page 4.</p>
-        <p style="margin:0 0 4px;font-size:9.6pt;color:#5a7280">Or type this into your browser:</p>
-        <span class="typed">silmarillion.clearskyomega.com/logic</span>
+        <p style="margin:0 0 4px;font-size:9.6pt;color:#5a7280">Or type this into your browser. Reading this on your phone? Just tap it.</p>
+        <a class="typed" href="https://silmarillion.clearskyomega.com/logic">silmarillion.clearskyomega.com/logic</a>
       </div>
     </div>
     <div class="by"><b>ClearSky Energy Solutions</b><small>Omega Logic is ClearSky's app. Your company is the workspace inside it.</small></div>
@@ -311,7 +333,7 @@ html,body{margin:0}
 
   <h2>What you need</h2>
   <ul class="hl">
-    <li><span class="hx"><span>✓</span></span><p><b>Your work Google account.</b> The one with your company email, like <span class="addr">you@yourcompany.com</span>. Not a personal Gmail.</p></li>
+    <li><span class="hx"><span>✓</span></span><p><b>Your work account.</b> Google with your company email, or your work email and a password, like <span class="addr">you@yourcompany.com</span>. Not a personal Gmail.</p></li>
     <li><span class="hx"><span>✓</span></span><p><b>A place on your company's workspace.</b> Whoever runs Omega Logic at your company adds you. If your company isn't on Omega Logic yet, ClearSky sets it up.</p></li>
     <li><span class="hx"><span>✓</span></span><p><b>A phone, tablet or computer.</b> iPhone or iPad with Safari, an Android phone with Chrome, or any computer with Chrome, Edge or Safari.</p></li>
     <li><span class="hx"><span>✓</span></span><p><b>Nothing from an app store.</b> You add it straight from the web page. It's free to install, and it updates itself every time you open it.</p></li>
@@ -319,19 +341,19 @@ html,body{margin:0}
 
   <h2 class="mt">Three steps, once</h2>
   <div class="g3">
-    <div class="box"><span class="hx lg"><span>1</span></span><h3 style="margin-top:6px">Open the address</h3><p><span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/logic</span><br>Or scan the code on the front page with your phone's camera.</p></div>
-    <div class="box"><span class="hx lg"><span>2</span></span><h3 style="margin-top:6px">Put it on your phone</h3><p>iPhone and iPad: <b>page 3</b><br>Android: <b>page 4</b><br>A computer: <b>page 5</b></p></div>
-    <div class="box"><span class="hx lg"><span>3</span></span><h3 style="margin-top:6px">Sign in</h3><p>With your work Google account. Your company's workspace opens by itself. <b>Page 6.</b></p></div>
+    <div class="box"><span class="hx lg"><span>1</span></span><h3 style="margin-top:6px">Open the address</h3><p>Type the address below, or tap it if you're reading this on your phone. Or scan the code on the front page with your phone's camera.</p></div>
+    <div class="box"><span class="hx lg"><span>2</span></span><h3 style="margin-top:6px">Get the app</h3><p>iPhone and iPad: <b>page 3</b><br>Android: <b>page 4</b><br>A computer: <b>page 5</b></p></div>
+    <div class="box"><span class="hx lg"><span>3</span></span><h3 style="margin-top:6px">Sign in</h3><p>With your work Google account, or your work email and password. Your company's workspace opens by itself. <b>Page 6.</b></p></div>
   </div>
+  <div class="strip mt"><b>The address</b><a class="addr" href="https://silmarillion.clearskyomega.com/logic">silmarillion.clearskyomega.com/logic</a></div>
 
   <div class="box warn mt">
     <h3>Open it in Safari or Chrome, not inside another app</h3>
     <p>If you tap the link in Gmail, Outlook, Teams, Slack, LinkedIn or WhatsApp, it opens inside that app, and there is no way to add it to your phone from there. Look for <span class="k">Open in Safari</span> or <span class="k">Open in browser</span>, or copy the address and paste it into Safari (iPhone) or Chrome (Android). Use a normal window, not a Private or Incognito one.</p>
   </div>
 
-  <div class="g2 mt">
-    <div><h3>Scanning the code</h3><p style="font-size:10.4pt">iPhone: open the <b>Camera</b>, point it at the code and tap the link that appears at the bottom of the screen. Android: the camera or Google Lens does the same. The page opens in your browser. Carry on from step 2.</p></div>
-    <div><h3>Want to look first?</h3><p style="font-size:10.4pt">A practice copy with made-up data runs at <span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/app-sandbox/office</span>. Nothing you do there is real, and nothing reaches your workspace.</p></div>
+  <div class="mt">
+    <h3>Scanning the code</h3><p style="font-size:10.4pt">iPhone: open the <b>Camera</b>, point it at the code and tap the link that appears at the bottom of the screen. Android: the camera or Google Lens does the same. The page opens in your browser. Carry on from step 2.</p>
   </div>
 </div></section>
 

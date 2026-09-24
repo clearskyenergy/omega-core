@@ -26,7 +26,11 @@
    Each shot is a fresh browser context (its own storage, the sample from
    the start), so any one can be retaken alone. Each waits for a concrete
    selector and fails BY NAME if it never appears; the run carries on and
-   exits 1 with the list of failures.
+   exits 1 with the list of failures. Every picture that passes is recorded
+   in <out>/manifest.json (guard.js): build.js prints no picture that is not
+   in it, so a leftover capture from before this script cannot reach a PDF.
+   Retake EVERY shot (no --only) whenever the screens change; --only is for
+   one picture that failed.
 
      node scripts/guides/shots.js                   # every shot → scripts/guides/shots/
      node scripts/guides/shots.js --only office-hub,bench
@@ -39,7 +43,7 @@
    Playwright: $PLAYWRIGHT, else this repo's, else the sandbox's global copy.
    Chromium: $CHROME, else the sandbox's pinned build, else Playwright's. */
 'use strict';
-var fs = require('fs'), path = require('path'), http = require('http');
+var fs = require('fs'), path = require('path'), http = require('http'), cp = require('child_process'), Guard = require('./guard');
 
 var HERE = __dirname, OWN_ROOT = path.resolve(HERE, '..', '..');
 function arg(name) { var i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : null; }
@@ -57,8 +61,8 @@ var NEUTRAL = function (w) {
     ['Amperage Capital', 'Their Company'], ['amperagecapital.com', 'theircompany.com'], ['inchargeus.com', 'theircompany.com'],
     ['InCharge Energy', 'Harbor Charging'], ['InCharge', 'Harbor'], ['incharge.example', 'harbor.example']];
 };
-/* what must never be readable on a published picture */
-var LEAK = /clean\s?cell|cleancell\.us|incharge|amperage|bucher/i;
+/* what must never be readable on a published picture: the one list, in guard.js */
+var LEAK = Guard.LEAK;
 function neutral(s, who) {
   NEUTRAL(WHO[who]).forEach(function (r) { s = s.split(r[0]).join(r[1]); });
   return s.replace(/\bCC(?=-|418-)/g, 'EX');                 /* CC-C215, CC-26-4419, CC418-26-44190 */
@@ -267,6 +271,9 @@ async function signIn(p, h, how) {
   var sb = sandboxFiles(), servers = {}, bases = {};
   console.log('shots: ' + ROOT + ' → ' + OUT + '\n  sandbox ' + sb.from + (/['"]\/api\/crm['"]/.test(sb.files['sandbox.js']) ? '' : '\n  the sandbox has no /api/crm: the account sections use the sample in crmSample()'));
   fs.mkdirSync(OUT, { recursive: true });
+  /* the record of what passed; an --only run keeps every other entry */
+  var manifest = Guard.readManifest(OUT), tree = ROOT === OWN_ROOT ? '.' : ROOT, commit = '';
+  try { commit = cp.execSync('git -C ' + JSON.stringify(ROOT) + ' rev-parse --short HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch (e) {}
   var browser = await chromium.launch({ executablePath: CHROME }), done = [], failed = [];
   for (var i = 0; i < picked.length; i++) {
     var shot = picked[i], v = shot.view || PHONE, ctx = null;
@@ -298,7 +305,10 @@ async function signIn(p, h, how) {
         var hit = bits.join('\n').match(re); return hit ? hit[0] : null;
       }, LEAK.source);
       if (leak) throw new Error('a tenant name is readable on the screen: "' + leak + '" — add it to NEUTRAL');
-      await p.screenshot({ path: path.join(OUT, shot.name + '.png'), animations: 'disabled' });
+      var file = path.join(OUT, shot.name + '.png');
+      await p.screenshot({ path: file, animations: 'disabled' });
+      manifest[shot.name + '.png'] = { sha256: Guard.sha256(file), takenAt: new Date().toISOString(), tree: tree, commit: commit };
+      Guard.writeManifest(OUT, manifest);
       done.push(shot.name); console.log('  ok    ' + shot.name + (errs.length ? '  (page errors: ' + errs.slice(0, 2).join(' | ') + ')' : ''));
     } catch (e) {
       failed.push(shot.name + ': ' + String(e && e.message || e).split('\n')[0]); console.log('  FAIL  ' + failed[failed.length - 1]);
