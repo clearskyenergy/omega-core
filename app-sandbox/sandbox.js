@@ -2825,13 +2825,17 @@ function byDue(x, y) {
   return String(x.at || '').localeCompare(String(y.at || ''));
 }
 /* audience 'office' sees who uploaded; 'customer' sees a colleague's name on
-   their own uploads and never a supplier employee's address. */
+   their own uploads and never a supplier employee's address. The office's
+   NOTE on its own document never leaves the office either: it is typed next
+   to "Share" as an internal remark, not a caption. A customer's own upload
+   keeps its note — they wrote it. */
 function fileView(id, f, audience) {
   var from = f.from === 'customer' ? 'customer' : 'office';
   var out = { id: id, name: f.name || 'document', type: f.type || '', size: Number(f.size) || 0, category: f.category || 'other', note: f.note || '',
     from: from, source: from, shared: from === 'customer' || f.shared === true, uploadedAt: iso(f.uploadedAt) };
   if (audience === 'office') { out.uploadedBy = f.uploadedBy || null; out.sha256 = f.sha256 || null; out.archived = f.archived === true; }
   else if (from === 'customer') out.uploadedBy = f.uploadedBy || null;
+  else out.note = '';
   return out;
 }
 /* An open follow-up, from its index record (api/crm.js writes it with the

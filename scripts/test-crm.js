@@ -335,6 +335,11 @@ async function upload(caller, api, name, base64, extra) {
     assert.deepEqual(sub.map(function (e) { return e.title; }), ['Design tool subscription payment overdue']);
     assert.deepEqual(C.timeline({ orders: [{ id: 'x', createdAt: 'not a date', orderNo: 'N' }] }), [], 'no time on the record: left out, not invented');
   });
+  await test('the office\'s note on a document it shares stays in the office; a customer\'s own note is theirs', async function () {
+    assert.equal(C.fileView('f1', { name: 'a.pdf', from: 'office', shared: true, note: 'floor is $410/kWh' }, 'customer').note, '');
+    assert.equal(C.fileView('f1', { name: 'a.pdf', from: 'office', shared: true, note: 'floor is $410/kWh' }, 'office').note, 'floor is $410/kWh');
+    assert.equal(C.fileView('f2', { name: 'b.pdf', from: 'customer', note: 'our site plan' }, 'customer').note, 'our site plan');
+  });
 
   console.log('\n' + count + ' passed');
 })().catch(function (e) { console.error('FAIL', e && e.stack || e); process.exit(1); });
