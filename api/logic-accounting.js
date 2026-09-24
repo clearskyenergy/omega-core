@@ -32,6 +32,10 @@
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
 var R = require('./_lib/receivables'), W = require('./_lib/logic-workflow');
 function ledgerSync() { return require('./_lib/ledger-sync'); }
+function syncModule() {
+  try { return ledgerSync(); }
+  catch (e) { if (e && e.code === 'MODULE_NOT_FOUND') throw A.httpError(503, 'Ledger sync is not installed on this deployment'); throw e; }
+}
 var PROVIDERS = ['quickbooks', 'stripe'], METHODS = ['card', 'us_bank_account'];
 var ACTIONS = ['sync-choose', 'sync-connect', 'sync-disconnect', 'sync-push', 'sync-link', 'sync-pull'];
 var NOT_TENANT = 'Ledger sync is for workspaces that invoice on their own paper; this workspace is billed through ClearSky QuickBooks';
@@ -156,7 +160,7 @@ module.exports = A.handler(async function (req, res) {
 
   if (b.action === 'sync-connect' || b.action === 'sync-disconnect') {
     if (PROVIDERS.indexOf(b.provider) < 0) throw A.httpError(400, 'provider must be quickbooks or stripe');
-    var LS = ledgerSync(), prov = LS.providers[b.provider];
+    var prov = syncModule().providers[b.provider];
     if (b.action === 'sync-connect') {
       /* the OAuth / Connect round trip is authenticated by a one-time state
          document plus this host-scoped cookie (api/ledger-connect.js) */
@@ -202,8 +206,12 @@ module.exports = A.handler(async function (req, res) {
     });
     limited = targets.length > 25; targets = targets.slice(0, 25);
   }
-  var results = [], counts = { orders: targets.length, recorded: 0, voided: 0, conflicts: 0, errors: 0 };
+  /* bounded by time as well as count: the function has 30 s, the provider
+     is remote, and the rest waits for the next "Sync all" or the worker */
+  var results = [], counts = { orders: 0, recorded: 0, voided: 0, conflicts: 0, errors: 0 }, started = Date.now();
   for (var t of targets) {
+    if (results.length && Date.now() - started > 20000) { limited = true; break; }
+    counts.orders++;
     var row = { orderId: t.id, orderNo: t.data().orderNo || null, stages: {} };
     try {
       var r = await W.syncLedger(t.id, caller, { source: 'accounting' });
@@ -216,5 +224,8 @@ module.exports = A.handler(async function (req, res) {
     results.push(row);
   }
   await audit({ action: 'ledger-sync-pull', provider: provider, orderId: b.orderId ? P.id(b.orderId) : null, counts: counts });
-  return { ok: true, provider: provider, results: results, limited: limited };
+  var out = { ok: true, provider: provider, results: results, limited: limited };
+  /* the provider is not connected (or sync is off): say so once, not per order */
+  if (results.length && results.every(function (r) { return r.skipped && r.skipped === results[0].skipped; })) out.skipped = results[0].skipped;
+  return out;
 });

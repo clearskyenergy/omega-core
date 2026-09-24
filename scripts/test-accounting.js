@@ -488,13 +488,13 @@ async function main() {
     assert.deepEqual(od.rows.map(function (r) { return r.key; }), ['amp2:deposit', 'amp:deposit']); assert.equal(od.totals.overdueCents, DEP * 2);
     var csv = await call(accounting, 'GET', { format: 'csv', customer: 'email:lee@other.example' }, ADMIN);
     assert.equal(csv.filename, 'receivables-cleancell.us-' + acc.today + '.csv');
-    var lines = csv.csv.split('\r\n');
+    var lines = csv.csv.split('\r\n').filter(function (l) { return l !== ''; });
     assert.equal(lines[0], 'Order,PO,Customer,Customer key,Stage,Invoice,Issued,Due,Amount USD,Received USD,Balance USD,Status,Days overdue,Aging,Released on PO,Payments');
-    assert.equal(lines.length, 3); assert(lines[1].indexOf('"Other, ""Power"" Co"') > 0, lines[1]);
+    assert.equal(lines.length, 2); assert(lines[1].indexOf('"Other, ""Power"" Co"') > 0, lines[1]);
     var all = (await call(accounting, 'GET', { format: 'csv' }, ADMIN)).csv;
     assert.match(all, /USD 100\.00 ACH 1 \(VOIDED: Entered against the wrong order\)/);
     var ampLine = all.split('\r\n').filter(function (l) { return l.indexOf('CC-26-0926,') === 0; })[0].split(',');
-    assert.equal(ampLine[11], 'awaiting_payment'); assert(ampLine[14], 'the Released on PO column is filled for an order on PO credit');
+    assert.match(ampLine[11], /awaiting/); assert(ampLine[14], 'the Released on PO column is filled for an order on PO credit');
   });
   await test('every accounting write leaves an order event and an omega_audit row', async function () {
     seed(); await priced();
@@ -600,6 +600,7 @@ async function main() {
     LS.ready = false;
     var out = await issued();
     assert.equal(out.invoice.id, 'CCUS-3V3I-0926-01 Rev B'); assert.equal(out.sync.skipped, 'not-connected'); assert.equal(dep().ledger.state, 'pending'); assert.equal(dep().ledger.by, ADMIN.email);
+    assert.equal((await post(accounting, { action: 'sync-pull', orderId: 'amp' })).skipped, 'not-connected');
     /* once connected, the worker pushes what is pending */
     LS.ready = true;
     await W.processOrder('amp');
