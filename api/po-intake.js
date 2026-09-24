@@ -25,11 +25,12 @@ module.exports=A.handler(async function(req,res){
     var same=await B.findByName(db,org,name);
     if(same&&same.id!==cid){
       var have=same.data.domain||'';
-      if(domain&&!have){var sref=root.collection('customers').doc(same.id),at=new Date().toISOString();
+      /* fill the domain only onto the office's own record of exactly this name (its office key, or a legacy record whose name customers cannot change) */
+      if(domain&&!have&&(!same.data.nameLower||same.data.nameLower===B.nameKey(name))){var sref=root.collection('customers').doc(same.id),at=new Date().toISOString();
         await db.runTransaction(async function(tx){var f=await tx.get(sref);if(f.exists&&!f.data().domain){tx.update(sref,{domain:domain,accountType:'company',updatedAt:at});
           tx.create(db.collection('omega_audit').doc(),{action:'buyer-profile',orgId:org,customerId:same.id,by:c.email,at:at,was:{domain:''},profile:{domain:domain,accountType:'company'}});}});
         return {ok:true,customerId:same.id,duplicate:true,domainSet:domain};}
-      return domain&&have!==domain?{ok:true,customerId:same.id,duplicate:true,domainIgnored:domain,domain:have,note:same.data.name+' already has the email domain '+have+'; '+domain+' was not saved.'}:{ok:true,customerId:same.id,duplicate:true};
+      return domain&&have!==domain?{ok:true,customerId:same.id,duplicate:true,domainIgnored:domain,domain:have,note:same.data.name+' already has the email domain '+have+'; '+domain+' was not saved.'}:{ok:true,customerId:same.id,duplicate:true,status:same.data.status||'active'};
     }
     return db.runTransaction(async function(tx){var s=await tx.get(cref);if(s.exists)return {ok:true,customerId:cid,duplicate:true};
       tx.create(cref,{orgId:org,name:name,nameLower:B.nameKey(name),domain:domain,accountType:'company',status:'active',plan:'free',terms:{},source:'office',rep:companyRep,createdAt:new Date().toISOString()});

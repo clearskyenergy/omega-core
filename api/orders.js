@@ -312,6 +312,9 @@ function create(caller, b) {
          marked hasOrders so an emptiness check cannot miss it. */
       return db.runTransaction(function (tx) {
         return B.stampableAccount(db, orgId, email, tx).then(function (cid) {
+          /* each attempt decides afresh: a retried transaction must not
+             carry a stamp from an attempt that was thrown away */
+          delete doc.customerId;
           if (cid) {
             doc.customerId = String(cid);
             tx.update(db.collection('omega_orgs').doc(orgId).collection('customers').doc(String(cid)), { hasOrders: true });

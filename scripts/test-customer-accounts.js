@@ -296,6 +296,46 @@ function nos(list) { return list.map(function (o) { return o.orderNo; }).sort();
     assert.equal(r.docs[0].id, 'amp2', 'the newest first across the over-fetch'); assert.equal(r.docs.length, 100); assert.equal(r.truncated, true);
   });
 
+  console.log('\nthe second review of those fixes');
+  await test('a customer cannot rename a company the supplier set up (it is what the office matches on)', async function () {
+    seed(); var r = await call(myAccount, 'POST', { company: 'Beta Power' }, SHANNON);
+    assert.deepEqual(r.ignored, ['company']); assert.match(r.note, /supplier keeps the company name/); assert.equal(r.companyLocked, true);
+    assert.equal(db.data.get(O + '/customers/' + AMP).name, 'Amperage Capital');
+    assert.equal(await B.findByName(db, ORG, 'Beta Power'), null);
+    selfAccount('acct_mine', 'me@ownco.example', 'Own Co'); var own = await call(myAccount, 'POST', { company: 'Own Company' }, person('me@ownco.example'));
+    assert.equal(own.ignored, undefined); assert.equal(db.data.get(O + '/customers/acct_mine').name, 'Own Company', 'a self-made account is the customer\'s to name');
+    /* the legacy scan never matches a record that carries the office key */
+    db.seed(O + '/customers/' + AMP, Object.assign(db.data.get(O + '/customers/' + AMP), { name: 'Gamma Grid' }));
+    assert.equal(await B.findByName(db, ORG, 'Gamma Grid'), null);
+  });
+  await test('a company on credit hold is still THE company; nobody makes a second one', async function () {
+    seed(); db.seed(O + '/customers/' + AMP, Object.assign(db.data.get(O + '/customers/' + AMP), { status: 'suspended' }));
+    await rejects(call(buyers, 'POST', { action: 'create', company: 'Amperage Capital', name: 'New', email: 'new@amperagecapital.com' }, OFFICE), 409, /already has an account \(suspended\)/);
+    var po = await call(intake, 'POST', { office: true, action: 'company', name: 'Amperage Capital' }, OFFICE); assert.equal(po.customerId, AMP); assert.equal(po.status, 'suspended');
+    assert.equal(await B.joinRequest(db, ORG, 'ops@amperagecapital.com', { uid: 'o' }), null, 'but nobody joins a suspended company');
+  });
+  await test('a login the office moved away is final on the old account: never turned back on, never reading there', async function () {
+    seed(); var fund2 = person('fund2@amperagecapital.com'); await call(myAccount, 'GET', {}, fund2);
+    await call(myAccount, 'POST', { action: 'user-status', email: 'fund2@amperagecapital.com', status: 'disabled' }, SHANNON);
+    var other = await call(intake, 'POST', { office: true, action: 'company', name: 'Amperage Fund II' }, OFFICE);
+    await call(buyers, 'POST', { action: 'user-add', customerId: other.customerId, email: 'fund2@amperagecapital.com' }, OFFICE);
+    db.seed('orders/emb1', { orgId: ORG, orderNo: 'CC-EMB-1', source: 'embed', createdAt: '2026-09-24T11:00:00Z', customer: { email: 'fund2@amperagecapital.com' }, items: [] });
+    await rejects(call(myAccount, 'POST', { action: 'user-status', email: 'fund2@amperagecapital.com', status: 'active' }, SHANNON), 409, /another customer account/);
+    await rejects(call(buyers, 'POST', { action: 'user-status', customerId: AMP, email: 'fund2@amperagecapital.com', status: 'active' }, OFFICE), 409);
+    assert.ok(nos((await call(myOrders, 'GET', {}, SHANNON)).orders).indexOf('CC-EMB-1') < 0);
+    var owner = await call(myAccount, 'GET', {}, SHANNON); assert.ok(!owner.users.some(function (u) { return u.email === 'fund2@amperagecapital.com'; }), 'not listed on the old account');
+    var hub = await call(buyers, 'GET', { customerId: AMP }, OFFICE); assert.equal(hub.movedPeople[0].email, 'fund2@amperagecapital.com'); assert.ok(!hub.people.some(function (u) { return u.email === 'fund2@amperagecapital.com'; }));
+  });
+  await test('an owner whose own email is at another domain cannot add people', async function () {
+    seed(); await B.addUser(db, ORG, AMP, 'advisor@consultco.example', { role: 'owner' }, 'pm@cleancell.us', { source: 'office' });
+    await rejects(call(myAccount, 'POST', { action: 'add-user', email: 'x@amperagecapital.com' }, person('advisor@consultco.example')), 403, /supplier/);
+  });
+  await test('every admitted person\'s orders reach the account, however many people it has', async function () {
+    seed(); for (var i = 0; i < 45; i++) { await B.addUser(db, ORG, AMP, 'p' + i + '@amperagecapital.com', {}, 'pm@cleancell.us', { source: 'office' }); db.seed('orders/p' + i, { orgId: ORG, orderNo: 'P-' + i, createdAt: '2026-09-2' + (i % 4) + 'T00:00:00Z', customer: { email: 'p' + i + '@amperagecapital.com' }, items: [] }); }
+    var acct = await B.lookup(db, ORG, 'shannon@amperagecapital.com'), r = await B.accountOrders(db, ORG, 'shannon@amperagecapital.com', acct, { limit: 100 });
+    assert.ok(r.docs.some(function (d) { return d.id === 'p44'; }), 'the 45th person is not cut off');
+  });
+
   console.log('\ncustody follows the account');
   function seedUnits() {
     db.seed('plant_units/' + ORG + '__AMP-001', { orgId: ORG, serial: 'AMP-001', rootSerial: 'AMP-001', sku: 'R60', shipUnit: true, orderId: 'amp1', at: 'ready', custody: { status: 'received', receivedAt: '2026-09-23' } });

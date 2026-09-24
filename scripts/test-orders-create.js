@@ -98,6 +98,13 @@ async function post(b) { return orders({ method: 'POST', body: b, caller: rep },
   reset(); account('left@amperagecapital.com', { status: 'disabled', source: 'office', approvedAt: '2026-01-01' });
   await post({ action: 'create', customer: { name: 'Left', email: 'left@amperagecapital.com' }, items: [] });
   ok('a colleague once admitted and since turned off still stamps (the company\'s order)', created().customerId === 'amp1');
+  reset(); account('retry@amperagecapital.com', { status: 'active' });
+  var realRun = db.runTransaction.bind(db), tries = 0;
+  db.runTransaction = function (fn) { tries++; var dry = { get: function (r) { return r.get(); }, set: function () {}, update: function () {} };
+    return Promise.resolve(fn(dry)).then(function () { db.seed('omega_orgs/cleancell.us/customers/amp1', { name: 'Amperage Capital', status: 'suspended' }); return realRun(fn); }); };
+  await post({ action: 'create', customer: { name: 'Retry', email: 'retry@amperagecapital.com' }, items: [] });
+  db.runTransaction = realRun;
+  ok('a retried create does not keep a stamp from the attempt that was thrown away', tries === 1 && created() && !created().customerId);
   reset();
   var slash = await post({ action: 'create', customer: { name: 'West', email: 'ops/west@acme.com' }, items: [] });
   ok("an address with '/' is written without an account, not a 500", slash.ok && created() && !created().customerId);

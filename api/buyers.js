@@ -60,7 +60,10 @@ module.exports = A.handler(async function (req, res) {
     if (req.query.customerId || req.query.email) {
       var acct = await accountOf(req.query);
       if (!acct) throw A.httpError(404, 'Customer not found');
-      var people = await B.people(db, org, acct.id, { all: true, limit: 100 });
+      /* a login the office moved to another company is listed apart: it is
+         not on this account any more and has no controls here */
+      var everyone = await B.people(db, org, acct.id, { all: true, limit: 100 }), people = everyone.filter(function (u) { return !u.movedTo; });
+      var movedPeople = everyone.filter(function (u) { return u.movedTo; }).map(function (u) { return { email: u.email, name: u.name, movedTo: u.movedTo }; });
       var contact = acct.user || people.filter(function (u) { return u.role === 'owner' && u.status === 'active'; })[0] || people[0] || null;
       var got = await B.accountOrders(db, org, contact ? contact.email : null, acct, { limit: 100 });
       var orders = got.docs.map(function (r) { return money(r.id, r.data()); });
@@ -69,7 +72,7 @@ module.exports = A.handler(async function (req, res) {
         /* the person the office opened it from (or the owner), for the older views */
         name: contact ? contact.name || '' : '', email: contact ? contact.email : '', phone: contact ? contact.phone || '' : '',
         activated: !!(contact && contact.activated), lastSeenAt: contact ? contact.lastSeenAt || null : null, contactStatus: contact ? contact.status : null,
-        people: people, address: acct.data.address || null, createdAt: acct.data.createdAt || null,
+        people: people, movedPeople: movedPeople, address: acct.data.address || null, createdAt: acct.data.createdAt || null,
         plan: acct.data.plan || 'free', status: acct.data.status || 'active', terms: P.terms(ctx.config.terms, acct.data.terms),
         portalUrl: portalUrl, appUrl: appUrl, orders: orders, totals: totalsOf(orders), limited: got.truncated };
     }
@@ -77,12 +80,12 @@ module.exports = A.handler(async function (req, res) {
     if (req.query.after) q = q.startAfter(P.id(req.query.after));
     var rows = await q.limit(50).get();
     var customers = await Promise.all(rows.docs.map(async function (r) {
-      var d = r.data(), list = await B.people(db, org, r.id, { all: true, limit: 25 });
+      var d = r.data(), list = (await B.people(db, org, r.id, { all: true, limit: 25 })).filter(function (u) { return !u.movedTo; });
       return { id: r.id, company: d.name || '', status: d.status || 'active', accountType: d.accountType || (d.source === 'office' ? 'company' : 'individual'), terms: P.terms(ctx.config.terms, d.terms),
         supersededBy: d.supersededBy || null, pending: list.filter(function (u) { return u.status === 'pending'; }).length,
         users: list.map(function (u) { return { email: u.email, name: u.name, role: u.role, status: u.status, activated: u.activated }; }), usersLimited: list.length === 25 };
     }));
-    return { org: org, name: ctx.org.name || org, brand: require('./_lib/logic-brand')(ctx.org), owner: X.owner(caller), customers: customers.filter(function (c) { return !c.supersededBy; }),
+    return { org: org, name: ctx.org.name || org, brand: require('./_lib/logic-brand')(ctx.org), owner: X.owner(caller), publicDomains: require('./_lib/public-domains'), customers: customers.filter(function (c) { return !c.supersededBy; }),
       portalUrl: portalUrl, appUrl: appUrl, next: rows.size === 50 ? rows.docs[49].id : null };
   }
   if (b.action === 'editor-trial') {
@@ -121,6 +124,10 @@ module.exports = A.handler(async function (req, res) {
       var uref = person ? found.ref.collection('users').doc(person) : null, us = uref ? await tx.get(uref) : null;
       if (person && !us.exists) throw A.httpError(404, 'That person is not on this account');
       var now = new Date().toISOString();
+      /* verifying pins the office's name key (what findByName matches); un-
+         verifying a self-made account makes it a customer's own again */
+      if (patch.domain && !patch.nameLower && !found.data.nameLower) patch.nameLower = B.nameKey(found.data.name);
+      if (patch.domain === '' && found.data.source === 'self') patch.accountType = null;
       if (Object.keys(patch).length) tx.update(found.ref, Object.assign({ updatedAt: now }, patch));
       if (person) tx.update(uref, { name: B.clean(b.name, 120), phone: B.clean(b.phone, 40), updatedAt: now });
       tx.create(db.collection('omega_audit').doc(), { action: 'buyer-profile', orgId: org, customerId: found.id, by: caller.email, at: now,
@@ -140,7 +147,7 @@ module.exports = A.handler(async function (req, res) {
       /* Only an OFFICE company is "the" company; a self-made account with the
          same name is somebody's own login, which user-add can move. */
       var same = await B.findByName(db, org, b.company);
-      if (same) { var e = A.httpError(409, same.data.name + ' already has an account. Open it and add ' + address + ' to it instead.'); e.existingCustomerId = same.id; throw e; }
+      if (same) { var st = same.data.status && same.data.status !== 'active' ? ' (' + same.data.status + ')' : ''; var e = A.httpError(409, same.data.name + ' already has an account' + st + '. Open it and add ' + address + ' to it instead.'); e.existingCustomerId = same.id; throw e; }
     }
     var account = await B.ensure(db, org, address, { company: b.company, name: b.name, terms: terms, source: 'office', domain: typedDomain }, caller);
     return { ok: true, customerId: account.id, created: account.created, portalUrl: portalUrl, appUrl: appUrl,

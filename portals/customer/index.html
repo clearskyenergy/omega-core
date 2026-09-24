@@ -503,6 +503,8 @@
     var owner = a.you.role === 'owner';
     ['f-name', 'f-phone', 'save'].forEach(function (id) { $(id).disabled = false; });
     ['f-company', 'f-line1', 'f-city', 'f-state'].forEach(function (id) { $(id).disabled = !owner; });
+    /* the supplier keeps the name of a company it set up */
+    if (a.companyLocked) { $('f-company').disabled = true; $('f-company').title = 'Your supplier keeps the company name; ask them to change it.'; }
     $('owner-note').hidden = owner;
     $('f-name').value = a.you.name || '';
     $('f-company').value = a.company || '';
@@ -538,12 +540,12 @@
     $('save-msg').textContent = 'Saving…';
     api('/api/my-account', { method: 'POST', body: JSON.stringify({
       org: ORG,
-      name: $('f-name').value, company: $('f-company').value, phone: $('f-phone').value,
+      name: $('f-name').value, company: $('f-company').disabled ? undefined : $('f-company').value, phone: $('f-phone').value,
       address: { line1: $('f-line1').value, city: $('f-city').value,
                  state: sp[0] || '', zip: sp[1] || '' }
     }) }).then(function (r) {
       if (!r.ok) { $('save-msg').textContent = r.j.error || 'Could not save.'; return; }
-      $('save-msg').textContent = r.j.ignored ? 'Saved your name and phone. Only the account owner changes the company and address.' : 'Saved.';
+      $('save-msg').textContent = r.j.note || (r.j.ignored ? 'Saved your name and phone. Only the account owner changes the company and address.' : 'Saved.');
       drawAccount(r.j);
     })['catch'](function () { $('save-msg').textContent = 'Could not reach the server.'; });
   });

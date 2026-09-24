@@ -145,6 +145,13 @@ inbox's company form, or in the profile — never read off a contact's address
 account as a company (`accountType: 'company'`). `B.findByName`, which stops a
 second "Amperage Capital", matches only office companies (`B.officeCompany`):
 a self-made account's name is whatever its customer typed.
+The name of a company the office set up (or verified) is the office's: the
+customer app and portal show it locked, and `api/my-account.js` reports a
+rename as ignored — otherwise an owner could rename their account to another
+company's name and receive that company's contacts. A company on credit hold
+(suspended) is still that company for this match; nobody joins it while it is
+suspended. `nameLower` is the office's key; the name scan is only for legacy
+records without it.
 
 **Admitted, and the account stamp.** `B.admitted(person)` is everyone except a
 request still waiting or one turned down; a colleague who was active and has
@@ -173,7 +180,9 @@ also move a login whose membership elsewhere was NEVER admitted (a request
 still waiting or declined) and that has no orders here: only the pointer and
 that one person record move (`buyer-request-rehomed`); the other company is
 untouched. Every emptiness check is re-read inside the transaction, so an
-order, site or colleague landing meanwhile aborts the move.
+order, site or colleague landing meanwhile aborts the move. A moved login is final on the account it left
+(`movedTo`): it is not listed there, never admitted there, and neither the
+owner nor the office can turn it back on (`setUser` checks the pointer).
 
 ### Merging is the one dangerous operation
 

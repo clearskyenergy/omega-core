@@ -146,7 +146,8 @@ function countOrders(db, org, email, acct) {
 function peopleFor(db, org, acct) {
   var owner = acct.user && acct.user.role === 'owner';
   return B.people(db, org, acct.id, { all: owner, limit: 50 }).then(function (list) {
-    return list.map(function (u) {
+    /* a login the supplier moved to another company is not on this account */
+    return list.filter(function (u) { return !u.movedTo; }).map(function (u) {
       var out = { email: clean(u.email, 160), name: clean(u.name, 120), role: u.role };
       if (owner) { out.status = u.status; out.activated = u.activated; out.requestedAt = u.requestedAt || null; if (u.declined) out.declined = true; }
       return out;
@@ -173,7 +174,7 @@ async function people(db, org, acct, caller, email, body) {
     return { ok: true, person: r, users: await peopleFor(db, org, acct), note: r.declined ? 'Request declined. They were not added.' : r.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
   }
   var d = acct.data || {}, dom = d.domain || '';
-  if (!dom || (d.source !== 'office' && d.accountType !== 'company')) throw A.httpError(403, 'Ask your supplier to add colleagues to this account.');
+  if (!dom || (d.source !== 'office' && d.accountType !== 'company') || B.companyDomain(email) !== dom) throw A.httpError(403, 'Ask your supplier to add colleagues to this account.');
   if (B.companyDomain(target) !== dom) throw A.httpError(400, 'Add colleagues with an @' + dom + ' email. Anyone else, ask your supplier to add.');
   var had = await db.collection('orders').where('orgId', '==', org).where('customer.email', '==', target).limit(1).get();
   if (!had.empty) throw A.httpError(409, target + ' already has orders with your supplier. Ask your supplier to add them, so their orders move over properly.');
@@ -229,6 +230,8 @@ module.exports = A.handler(function (req, res) {
         return countOrders(db, org, email, acct).then(function (n) {
           var out = project(acct.id, acct.data, acct.user, n, defaults);
           out.createdNow = acct.created;
+          /* the supplier keeps the name of a company it set up */
+          out.companyLocked = B.namedCompany(acct.data);
           /* Colleagues on the same account: the people a buyer already works
              with. Names and addresses only; the owner also sees each
              person's status, because the owner manages them. */
@@ -248,8 +251,13 @@ module.exports = A.handler(function (req, res) {
       var isOwner = String((acct.user && acct.user.role) || 'user') === 'owner' || caller.staff;
       var ignored = [];
       if (!isOwner) { if (body.company !== undefined) ignored.push('company'); if (body.address && typeof body.address === 'object') ignored.push('address'); }
+      /* The name of a company the SUPPLIER set up is the supplier's: it is
+         what the office matches "does this company exist" on
+         (B.findByName), so a customer rename would hand another company's
+         contacts to this account. Said, not silently dropped. */
+      if (isOwner && body.company !== undefined && B.namedCompany(acct.data) && !caller.staff) ignored.push('company');
       if (isOwner) {
-        if (body.company !== undefined) cpatch.name = clean(body.company, 160);
+        if (body.company !== undefined && ignored.indexOf('company') < 0) cpatch.name = clean(body.company, 160);
         if (body.address && typeof body.address === 'object') {
           cpatch.address = {
             line1: clean(body.address.line1, 200), city: clean(body.address.city, 100),
@@ -260,15 +268,16 @@ module.exports = A.handler(function (req, res) {
       if (body.name !== undefined) upatch.name = clean(body.name, 120);
       if (body.phone !== undefined) upatch.phone = clean(body.phone, 40);
 
-      if (!Object.keys(cpatch).length && !Object.keys(upatch).length) {
-        throw A.httpError(400, 'Nothing to change.');
-      }
-      cpatch.updatedAt = new Date().toISOString();
-      upatch.updatedAt = cpatch.updatedAt;
+      var writeC = Object.keys(cpatch).length > 0, writeU = Object.keys(upatch).length > 0;
+      /* only ignored fields sent: nothing to write, but say why */
+      if (!writeC && !writeU && !ignored.length) throw A.httpError(400, 'Nothing to change.');
+      var at = new Date().toISOString();
+      if (writeC) cpatch.updatedAt = at;
+      if (writeU) upatch.updatedAt = at;
 
       var cref = orgRef.collection('customers').doc(acct.id);
-      return cref.set(cpatch, { merge: true })
-        .then(function () { return cref.collection('users').doc(email).set(upatch, { merge: true }); })
+      return (writeC ? cref.set(cpatch, { merge: true }) : Promise.resolve())
+        .then(function () { return writeU ? cref.collection('users').doc(email).set(upatch, { merge: true }) : null; })
         .then(function () { return cref.get(); })
         .then(function (c) { return cref.collection('users').doc(email).get()
           .then(function (u) {
@@ -277,6 +286,8 @@ module.exports = A.handler(function (req, res) {
               /* Said, not silently dropped: only the owner changes the company
                  and the delivery address. */
               if (ignored.length) out.ignored = ignored;
+              out.companyLocked = B.namedCompany(c.exists ? c.data() : acct.data);
+              if (ignored.length) out.note = isOwner ? (writeC || writeU ? 'Saved. ' : '') + 'Your supplier keeps the company name; ask them to change it.' : 'Saved your name and phone. Only the account owner changes the company and address.';
               return peopleFor(db, org, acct).then(function (list) { out.users = list; return out; });
             });
           }); });

@@ -372,7 +372,7 @@
         + (any ? '<h2>Your terms</h2><div class="kv">' + (t.depositPct != null ? '<div><small>Deposit</small><b>' + esc(t.depositPct) + '%</b><small>' + (t.dueDays ? 'due in ' + esc(t.dueDays) + ' days' : 'on receipt') + '</small></div>' : '') + (t.netDays != null ? '<div><small>Payment terms</small><b>Net ' + esc(t.netDays) + '</b></div>' : '') + (t.discountPct != null ? '<div><small>Your discount</small><b>' + esc(t.discountPct) + '%</b></div>' : '') + (t.poRequired ? '<div><small>Purchase order</small><b>Required</b></div>' : '') + '</div><p class="note">Set by ' + esc(a.rep && a.rep.name ? a.rep.name : 'your account manager') + '. Ask them if anything here looks wrong.</p>' : '')
         + peopleHtml(a)
         + '<h2>Your details</h2><input id="f-name" placeholder="Your name" value="' + esc(a.you.name || '') + '"><input id="f-phone" placeholder="Phone" value="' + esc(a.you.phone || '') + '">'
-        + (owner ? '<h2>Company</h2><input id="f-company" placeholder="Company" value="' + esc(a.company || '') + '"><input id="f-line1" placeholder="Delivery address" value="' + esc(ad.line1 || '') + '"><div class="row"><input id="f-city" placeholder="City" value="' + esc(ad.city || '') + '"><input id="f-state" placeholder="State ZIP" value="' + esc([ad.state, ad.zip].filter(Boolean).join(' ')) + '"></div>'
+        + (owner ? '<h2>Company</h2>' + (a.companyLocked ? '<p class="note">Your supplier keeps the company name; ask them to change it.</p>' : '') + '<input id="f-company" placeholder="Company" value="' + esc(a.company || '') + '"' + (a.companyLocked ? ' disabled' : '') + '><input id="f-line1" placeholder="Delivery address" value="' + esc(ad.line1 || '') + '"><div class="row"><input id="f-city" placeholder="City" value="' + esc(ad.city || '') + '"><input id="f-state" placeholder="State ZIP" value="' + esc([ad.state, ad.zip].filter(Boolean).join(' ')) + '"></div>'
           : '<div class="card"><small class="note">Company and delivery address</small><div>' + esc(a.company || '—') + '</div><div class="note">' + esc([ad.line1, ad.city, [ad.state, ad.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'No delivery address yet') + '</div><p class="note">Only the account owner changes these.</p></div>')
         + '<button class="big ghost" id="save">Save</button>'
         + '<p class="note">Signed in as ' + esc(a.you.email) + (owner ? ' · account owner' : '') + '</p>'
@@ -383,9 +383,9 @@
       drawSites();
       $('save').onclick = function () {
         var btn = this, body = { name: $('f-name').value, phone: $('f-phone').value };
-        if (owner) { var sp = String($('f-state').value || '').trim().split(/\s+/); body.company = $('f-company').value; body.address = { line1: $('f-line1').value, city: $('f-city').value, state: sp[0] || '', zip: sp[1] || '' }; }
+        if (owner) { var sp = String($('f-state').value || '').trim().split(/\s+/); if (!ACCT.companyLocked) body.company = $('f-company').value; body.address = { line1: $('f-line1').value, city: $('f-city').value, state: sp[0] || '', zip: sp[1] || '' }; }
         btn.disabled = true; status('Saving…');
-        api('/api/my-account', body).then(function (r) { var j = must(r, 'Could not save.'); j.users = j.users || (ACCT && ACCT.users); ACCT = j; status(ACCT.ignored ? 'Saved your name and phone. Only the account owner changes the company and address.' : 'Saved.'); drawAccount(); })['catch'](fail).then(function () { btn.disabled = false; });
+        api('/api/my-account', body).then(function (r) { var j = must(r, 'Could not save.'); j.users = j.users || (ACCT && ACCT.users); ACCT = j; status(ACCT.note || (ACCT.ignored ? 'Saved your name and phone. Only the account owner changes the company and address.' : 'Saved.')); drawAccount(); })['catch'](fail).then(function () { btn.disabled = false; });
       };
       Array.prototype.forEach.call(document.querySelectorAll('[data-person]'), function (b) {
         b.onclick = function () {

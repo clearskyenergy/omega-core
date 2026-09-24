@@ -52,20 +52,27 @@ var DEAD = ['disabled', 'suspended', 'cancelled'];   // an account that may not 
 function admitted(u) {
   u = u || {};
   var s = u.status || 'active';
-  if (s === 'pending' || u.declined === true) return false;
+  /* a login the office MOVED to another company (movedTo) never belonged
+     here: only never-admitted requests and empty self accounts are moved */
+  if (s === 'pending' || u.declined === true || u.movedTo) return false;
   if (s === 'disabled' && u.source === 'domain-request' && !u.approvedAt) return false;
   return true;
 }
-/* An office company the office may match by name: never one a customer made
-   for themselves (its name is whatever they typed), never a superseded or
-   merged record, never a closed one. Legacy records with no source count,
-   and so does a self-made account the office has since VERIFIED as a
-   company (accountType 'company', set only by the office: api/buyers.js
-   profile with a domain; the customer's own endpoint cannot write it). */
-function officeCompany(v) {
+/* "The company" the office matches by name (namedCompany): never one a
+   customer made for themselves (its name is whatever they typed), never a
+   superseded or merged record. Legacy records with no source count, and so
+   does a self-made account the office has since VERIFIED as a company
+   (accountType 'company', set only by the office: api/buyers.js profile
+   with a domain; the customer's own endpoint cannot write it). Its NAME is
+   the office's too: api/my-account.js refuses a customer rename of one.
+   Status does not matter here — a company on credit hold (suspended) is
+   still that company, not a reason to make a second one.
+   officeCompany is the same, and open: the one colleagues may join. */
+function namedCompany(v) {
   v = v || {};
-  return (v.source !== 'self' || v.accountType === 'company') && !v.supersededBy && !v.mergedInto && DEAD.indexOf(v.status) < 0;
+  return (v.source !== 'self' || v.accountType === 'company') && !v.supersededBy && !v.mergedInto;
 }
+function officeCompany(v) { return namedCompany(v) && DEAD.indexOf((v || {}).status) < 0; }
 async function context(org) {
   var ctx = await X.context(org);
   if (!X.subscribed(ctx)) throw A.httpError(403, 'This customer portal is not active');
@@ -123,7 +130,7 @@ async function ensure(db, org, address, seed, caller) {
 async function people(db, org, customerId, opts) {
   opts = opts || {};
   var s = await db.collection('omega_orgs').doc(org).collection('customers').doc(P.id(customerId)).collection('users').limit(opts.limit || 100).get();
-  return s.docs.map(function (d) { var v = d.data() || {}; return { email: clean(v.email || d.id, 254), name: clean(v.name, 120), phone: clean(v.phone, 40), role: v.role === 'owner' ? 'owner' : 'user', status: v.status || 'active', activated: !!v.uid, lastSeenAt: v.lastSeenAt || null, requestedAt: v.requestedAt || null, approvedAt: v.approvedAt || null, declined: v.declined === true, source: v.source || null }; })
+  return s.docs.map(function (d) { var v = d.data() || {}; return { email: clean(v.email || d.id, 254), name: clean(v.name, 120), phone: clean(v.phone, 40), role: v.role === 'owner' ? 'owner' : 'user', status: v.status || 'active', activated: !!v.uid, lastSeenAt: v.lastSeenAt || null, requestedAt: v.requestedAt || null, approvedAt: v.approvedAt || null, declined: v.declined === true, movedTo: v.movedTo || null, source: v.source || null }; })
     .filter(function (u) { return opts.all || NOT_ACTIVE.indexOf(u.status) < 0; })
     .sort(function (a, b) { return (a.role === 'owner' ? 0 : 1) - (b.role === 'owner' ? 0 : 1) || a.email.localeCompare(b.email); });
 }
@@ -160,14 +167,17 @@ async function accountOrders(db, org, address, account, opts) {
   opts = opts || {};
   var cap = opts.limit || 100, wide = Math.min(Math.max(cap * 4, 200), 500), emails = address ? [email(address)] : [];
   if (account) (await people(db, org, account.id, { all: true, limit: 100 })).forEach(function (u) { if (admitted(u) && emails.indexOf(u.email) < 0) emails.push(u.email); });
-  emails = emails.slice(0, 40);
+  /* every admitted person (up to people()'s 100), in chunks of 30 for an
+     'in' query on the existing (orgId, customer.email, createdAt DESC)
+     composite: newest first per chunk, so no person is cut off the list */
   function q(field, value, n) {
-    var x = db.collection('orders').where('orgId', '==', org).where(field, '==', value);
+    var x = db.collection('orders').where('orgId', '==', org).where(field, Array.isArray(value) ? 'in' : '==', value);
     if (opts.orderNo) x = x.where('orderNo', '==', opts.orderNo);
     else if (field === 'customer.email') x = x.orderBy('createdAt', 'desc');
     return x.limit(n).get().then(function (s) { return { s: s, n: n }; });
   }
-  var jobs = emails.map(function (e) { return q('customer.email', e, cap); });
+  var jobs = [];
+  for (var c = 0; c < emails.length; c += 30) jobs.push(q('customer.email', emails.length === 1 ? emails[0] : emails.slice(c, c + 30), cap));
   if (account) jobs.push(q('customerId', account.id, wide));
   var snaps = await Promise.all(jobs), seen = {}, out = [], truncated = false;
   snaps.forEach(function (r) {
@@ -311,9 +321,12 @@ async function setUser(db, org, customerId, address, change, by, how) {
   if (how.owner && by && String(by).toLowerCase() === address) throw A.httpError(400, 'You cannot change your own access');
   var root = db.collection('omega_orgs').doc(org), cid = P.id(customerId), acctRef = root.collection('customers').doc(cid);
   return db.runTransaction(async function (tx) {
-    var acct = await tx.get(acctRef), uref = acctRef.collection('users').doc(address), u = await tx.get(uref), all = await tx.get(acctRef.collection('users').limit(100));
+    var acct = await tx.get(acctRef), uref = acctRef.collection('users').doc(address), u = await tx.get(uref), all = await tx.get(acctRef.collection('users').limit(100)), ptr = await tx.get(root.collection('customer_index').doc(address));
     if (!acct.exists) throw A.httpError(404, 'Customer account not found');
     if (!u.exists) throw A.httpError(404, 'That person is not on this account');
+    /* A login the supplier moved to another company is final here: turning
+       the old record back on would read the new company's person's orders. */
+    if ((u.data() || {}).movedTo || !ptr.exists || P.id((ptr.data() || {}).customerId) !== cid) throw A.httpError(409, 'This login now belongs to another customer account');
     var cur = u.data() || {}, next = { status: status !== null ? status : (cur.status || 'active'), role: role !== null ? role : (cur.role === 'owner' ? 'owner' : 'user') };
     var owners = all.docs.filter(function (d) { var v = d.data() || {}; var s = d.id === address ? next.status : (v.status || 'active'), r = d.id === address ? next.role : v.role; return r === 'owner' && s === 'active'; });
     /* Refuse only a change that TAKES AWAY the last active owner. An account
@@ -357,15 +370,17 @@ async function findByName(db, org, name) {
   var key = nameKey(name); if (!key) return null;
   var col = db.collection('omega_orgs').doc(org).collection('customers');
   var s = await col.where('nameLower', '==', key).limit(5).get();
-  var hit = s.docs.filter(function (r) { return officeCompany(r.data()); })[0];
+  var hit = s.docs.filter(function (r) { return namedCompany(r.data()); })[0];
   if (hit) return { id: hit.id, data: hit.data() };
+  /* nameLower is the office's key (every office writer sets it); the scan
+     is only for legacy records written before it existed */
   var all = await col.limit(500).get();
-  hit = all.docs.filter(function (r) { var v = r.data() || {}; return nameKey(v.name) === key && officeCompany(v); })[0];
+  hit = all.docs.filter(function (r) { var v = r.data() || {}; return !v.nameLower && nameKey(v.name) === key && namedCompany(v); })[0];
   return hit ? { id: hit.id, data: hit.data() } : null;
 }
 
 module.exports = { email: email, clean: clean, context: context, active: active, lookup: lookup, ensure: ensure,
   people: people, accountOrders: accountOrders, accountOfOrder: accountOfOrder, millis: millis,
   addUser: addUser, setUser: setUser, joinRequest: joinRequest, findByName: findByName,
-  stampableAccount: stampableAccount, admitted: admitted, officeCompany: officeCompany,
+  stampableAccount: stampableAccount, admitted: admitted, officeCompany: officeCompany, namedCompany: namedCompany,
   companyDomain: companyDomain, accountDomain: accountDomain, nameKey: nameKey };
