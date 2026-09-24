@@ -300,7 +300,13 @@ function create(caller, b) {
         updatedAt: FV.serverTimestamp()
       };
 
-      return ref.set(doc).then(function () {
+      /* The customer ACCOUNT this order belongs to, when the email is already
+         on one: a signed-in member of the tenant typed it (canActInOrg), so
+         every person on that account sees the order (buyer-accounts
+         accountOrders). An anonymous public order never gets this stamp. */
+      return db.collection('omega_orgs').doc(orgId).collection('customer_index').doc(email).get().then(function (ptr) {
+        if (ptr && ptr.exists && ptr.data() && ptr.data().customerId) doc.customerId = String(ptr.data().customerId);
+      }, function () {}).then(function () { return ref.set(doc); }).then(function () {
         try {
           var to = process.env.ORDER_NOTIFY || process.env.MAIL_NOTIFY || 'dev@clearsky-usa.com';
           M.send(to, '[OMEGA] New order ' + no + ' — ' + doc.orgName,

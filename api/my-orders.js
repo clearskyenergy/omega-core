@@ -14,7 +14,9 @@
    now every customer read does too.
 
    ── THE TWO AXES, AND WHICH ONE IS THE CONTROL ───────────────────────────
-   Every query is scoped by orgId AND by the caller's VERIFIED email.
+   Every query is scoped by orgId AND by the caller's VERIFIED email — which
+   picks the customer ACCOUNT the person is on (customer_index), and the
+   account's orders are what every active person on it sees.
 
    The email is the control. `org` merely says which tenant's portal the
    customer is looking at — a caller who changes it sees their own orders
@@ -147,9 +149,15 @@ function requestChange(req) {
       if (!address.line1 && !address.city) address = null;
     }
     var db = A.db();
-    var snap = await db.collection('orders').where('orgId', '==', org).where('customer.email', '==', email).where('orderNo', '==', orderNo).limit(1).get();
-    if (snap.empty) throw A.httpError(404, 'We could not find that order on your account.');
-    var ref = snap.docs[0].ref, now = new Date().toISOString();
+    /* Same gate and same scope as the read: a suspended account, a disabled
+       or pending person, or a lapsed portal asks nothing; a colleague on the
+       account may ask about any of the ACCOUNT's orders. */
+    await B.context(org);
+    var account = await B.lookup(db, org, email);
+    if (account) B.active(account);
+    var hit = await B.accountOrders(db, org, email, account, { orderNo: orderNo, limit: 5 });
+    if (!hit.docs.length) throw A.httpError(404, 'We could not find that order on your account.');
+    var ref = hit.docs[0].ref, now = new Date().toISOString();
     var id = 'rq_' + require('crypto').randomBytes(6).toString('hex');
     var entry = await db.runTransaction(async function (tx) {
       var s = await tx.get(ref), o = s.data() || {};
@@ -194,36 +202,20 @@ module.exports = A.handler(function (req, res) {
     if (account) B.active(account);
     var wanted = String((req.query && req.query.orderNo) || '').trim().slice(0, 120);
 
-    /* BOTH AXES. Without the orgId clause a customer who also bought from
-       another OMEGA tenant would see that order on this tenant's branded
-       portal. */
-    var q = db.collection('orders')
-      .where('orgId', '==', org)
-      .where('customer.email', '==', email);
+    /* THE ACCOUNT, NOT THE PERSON. A customer is a company with several people
+       on it; every active one sees the account's orders (its customerId, or
+       billed to one of them — B.accountOrders). With no account, the caller's
+       own email. The orgId clause is inside the helper: without it a customer
+       who also bought from another OMEGA tenant would see that order on this
+       tenant's branded portal. Narrowed by orderNo IN THE QUERY, so a buyer
+       with more than fifty orders can still open one by reference. */
+    var found = B.accountOrders(db, org, email, account, wanted ? { orderNo: wanted, limit: 5 } : { limit: MAX_ORDERS });
 
-    if (wanted) {
-      /* Narrow in the QUERY, not after the limit: filtering a 50-row page in
-         JavaScript meant a customer with more than fifty orders could ask for
-         one by reference and be told it did not exist.
-
-         NO orderBy here. Adding one would make this a four-field query
-         (orgId, customer.email, orderNo, createdAt) and firestore.indexes.json
-         has no such composite — it would throw FAILED_PRECONDITION on every
-         single-order lookup. Sorting one row is pointless anyway. */
-      q = q.where('orderNo', '==', wanted);
-    } else {
-      /* Ordered in the QUERY, against the composite that already exists:
-         orgId ASC, customer.email ASC, createdAt DESC. A JavaScript sort
-         cannot do this job at all — createdAt is a Timestamp object, so every
-         row stringifies identically and the comparator returns 0 throughout. */
-      q = q.orderBy('createdAt', 'desc');
-    }
-
-    return Promise.all([q.limit(MAX_ORDERS).get(), milestoneMapOf(db, org)])
+    return Promise.all([found, milestoneMapOf(db, org)])
       .then(function (r) {
         var snap = r[0], cfg = r[1];
         var rows = [];
-        snap.forEach(function (d) {
+        snap.docs.forEach(function (d) {
           var v = d.data() || {};
           v.id = d.id;
           rows.push(v);
@@ -236,7 +228,7 @@ module.exports = A.handler(function (req, res) {
           /* Reported off the rows actually returned, so a single-order
              lookup never claims the list was cut short. */
           return { orders: orders, count: orders.length,
-                   truncated: !wanted && rows.length >= MAX_ORDERS };
+                   truncated: !wanted && snap.truncated };
         });
       });
   })['catch'](function (e) {

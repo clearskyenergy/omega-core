@@ -21,8 +21,12 @@ t('an attached tenant hostname replaces the open host for org-scoped items only'
   assert.ok(/^https:\/\/silmarillion/.test(k.items.filter(function (i) { return i.key === 'office-app'; })[0].sandbox), 'sandboxes stay on the open host');
 });
 t('the message per audience names each item, how to install it, the sandbox and the guide to attach', function () {
-  var k = K.forOrg('cleancell.us', { name: 'Clean Cell' }), m = K.message(k, 'customer');
-  assert.ok(/^Here is your Clean Cell Omega Logic kit for you\./.test(m)); assert.ok(/Customer app: https/.test(m)); assert.ok(/Add to Home Screen/.test(m)); assert.ok(/app-sandbox\/customer/.test(m)); assert.ok(/Omega-Logic-Customer-App\.pdf/.test(m)); assert.ok(/Sign in: Email login link/.test(m));
+  var k = K.forOrg('cleancell.us', { name: 'Clean Cell', brandName: 'Clean Cell Power Platform' }), m = K.message(k, 'customer');
+  /* the customer's app is the supplier's own: its name, never "Omega Logic" */
+  assert.ok(/^Here is your Clean Cell Power Platform account on your phone\./.test(m), m); assert.ok(!/Omega Logic|main system/.test(m.replace(/Omega-Logic-Customer-App\.pdf/g, '')), m);
+  assert.ok(/Customer app: https/.test(m)); assert.ok(/Add to Home Screen/.test(m)); assert.ok(/app-sandbox\/customer/.test(m)); assert.ok(/Omega-Logic-Customer-App\.pdf/.test(m)); assert.ok(/Sign in: Email login link/.test(m));
+  var other = K.message(K.forOrg('joules.example', { name: 'Joules', brandName: 'Joules Energy' }), 'customer');
+  assert.ok(/^Here is your Joules Energy account/.test(other) && !/app-sandbox\/customer/.test(other), 'another supplier\'s customers are never sent the Clean Cell sample');
   var o = K.message(k, 'office'); assert.ok(/Omega Logic app: https/.test(o) && /Fleet register: https/.test(o) && /Omega-Logic-Office-App\.pdf/.test(o));
   var pl = K.message(k, 'plant'); assert.ok(/Plant app: https/.test(pl) && /Bench scan station: https/.test(pl) && !/Customer app/.test(pl));
 });

@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    GET  /api/my-account?org=<orgId>     — who am I here, and what are my terms
    POST /api/my-account { org, name, phone, company, address }  — edit my own
+   POST /api/my-account { org, action:'add-user'|'user-status', email, … }
+                                          — the account OWNER manages its people
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
    ── THE BUYER CREATES THEIR OWN RECORD; THE TENANT ENRICHES IT ───────────
@@ -112,20 +114,70 @@ function project(customerId, c, userDoc, orderCount, defaults) {
    A pointer is a direct get(): no index, no cross-tenant scan, no prefix
    test. The shared helper creates the pointer, account and contact together
    in ONE transaction. Two sign-ins cannot create duplicate/partial accounts. */
+/* A colleague signing in for the first time is NOT given a company of their
+   own when their company already has an account here: B.joinRequest puts
+   them on it as PENDING (nothing visible until the owner or the supplier
+   approves). Only a stranger with no company account gets a fresh one. */
 function findOrCreate(db, org, email, caller) {
   return B.lookup(db, org, email).then(function (found) {
-    if (found) return B.active(found);
-    return db.collection('orders').where('orgId', '==', org).where('customer.email', '==', email).limit(1).get().then(function (s) {
-      var seed = s.empty ? {} : Object.assign({}, s.docs[0].data().customer, { hasOrders: true });
-      return B.ensure(db, org, email, seed, caller);
+    if (found) return found.user && found.user.status === 'pending' ? found : B.active(found);
+    return B.joinRequest(db, org, email, caller).then(function (joined) {
+      if (joined) return joined;
+      return db.collection('orders').where('orgId', '==', org).where('customer.email', '==', email).limit(1).get().then(function (s) {
+        var seed = s.empty ? {} : Object.assign({}, s.docs[0].data().customer, { hasOrders: true });
+        return B.ensure(db, org, email, seed, caller);
+      });
     });
   });
 }
 
-function countOrders(db, org, email) {
-  return db.collection('orders').where('orgId', '==', org)
-    .where('customer.email', '==', email).limit(50).get()
-    .then(function (s) { return s.size; }, function () { return 0; });
+/* The ACCOUNT's orders, the same set every person on it sees in Orders. */
+function countOrders(db, org, email, acct) {
+  return B.accountOrders(db, org, email, acct, { limit: 50 })
+    .then(function (r) { return r.docs.length; }, function () { return 0; });
+}
+
+/* The people on the account. The owner manages them, so the owner sees
+   everyone with their status (a pending request to approve, a disabled
+   colleague to re-enable); everyone else sees who they work with. */
+function peopleFor(db, org, acct) {
+  var owner = acct.user && acct.user.role === 'owner';
+  return B.people(db, org, acct.id, { all: owner, limit: 50 }).then(function (list) {
+    return list.map(function (u) {
+      var out = { email: clean(u.email, 160), name: clean(u.name, 120), role: u.role };
+      if (owner) { out.status = u.status; out.activated = u.activated; out.requestedAt = u.requestedAt || null; }
+      return out;
+    });
+  }, function () { return []; });
+}
+
+/* ── The account OWNER manages the people on it ────────────────────────
+   add-user     a colleague at the owner's own company (same email domain,
+                never a public mailbox): added as a user, active. A person
+                already on another account stays there — moving them is the
+                supplier's call (B.addUser, office only).
+   user-status  approve a pending request, disable a colleague who left,
+                re-enable them. Roles are the supplier's; nobody may lock
+                the account out of its last active owner.
+   Twenty additions a day per account; every change is audited. */
+async function people(db, org, acct, caller, email, body) {
+  if (!acct.user || acct.user.role !== 'owner') throw A.httpError(403, 'Only the account owner can manage people on it. Ask them, or your supplier.');
+  var target = B.email(body.email);
+  if (body.action === 'user-status') {
+    var r = await B.setUser(db, org, acct.id, target, { status: body.status === 'disabled' ? 'disabled' : 'active' }, email, { owner: true });
+    return { ok: true, person: r, users: await peopleFor(db, org, acct), note: r.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
+  }
+  var mine = B.companyDomain(email);
+  if (!mine || B.companyDomain(target) !== mine) throw A.httpError(400, 'Add colleagues with an @' + (mine || 'company') + ' email. Anyone else, ask your supplier to add.');
+  var ref = db.collection('omega_orgs').doc(org).collection('customers').doc(acct.id), now = new Date().toISOString(), day = now.slice(0, 10);
+  await db.runTransaction(async function (tx) {
+    var s = await tx.get(ref), use = (s.data() || {}).peopleAddUsage || {};
+    if (use.day === day && use.count >= 20) throw A.httpError(429, 'You have added 20 people today. Ask your supplier for more.');
+    tx.update(ref, { peopleAddUsage: { day: day, count: use.day === day ? (use.count || 0) + 1 : 1 } });
+  });
+  var added = await B.addUser(db, org, acct.id, target, { name: body.name, role: 'user', status: 'active' }, email, { source: 'owner' });
+  return { ok: true, person: { email: added.email, role: added.role, status: added.status }, users: await peopleFor(db, org, acct),
+    note: 'Added. They sign in with ' + added.email + ' and see this account.' };
 }
 
 module.exports = A.handler(function (req, res) {
@@ -150,24 +202,29 @@ module.exports = A.handler(function (req, res) {
     var orgRef = db.collection('omega_orgs').doc(org);
 
     return B.context(org).then(function () { return findOrCreate(db, org, email, caller); }).then(async function (acct) {
+      /* Waiting to be let in: say so, and nothing else — no terms, no
+         colleagues, no orders until the owner or the supplier approves. */
+      if (acct.user && acct.user.status === 'pending') {
+        if (method === 'POST') B.active(acct);
+        return { pending: true, customerId: acct.id, company: clean(acct.data && acct.data.name, 160),
+          you: { email: email, name: clean(acct.user.name, 120), role: 'user', status: 'pending' },
+          requestedAt: acct.user.requestedAt || null, createdNow: acct.created === true };
+      }
       var settings = await orgRef.collection('fulfillment').doc('config').get();
       var defaults = settings.exists ? settings.data().terms : null;
+      if (method === 'POST' && (body.action === 'add-user' || body.action === 'user-status')) return people(db, org, acct, caller, email, body);
       if (method === 'GET') {
         /* Touch lastSeenAt; a failure here must never fail the read. */
         orgRef.collection('customers').doc(acct.id).collection('users').doc(email)
           .set({ lastSeenAt: new Date().toISOString(), uid: caller.uid }, { merge: true })
           ['catch'](function () {});
-        return countOrders(db, org, email).then(function (n) {
+        return countOrders(db, org, email, acct).then(function (n) {
           var out = project(acct.id, acct.data, acct.user, n, defaults);
           out.createdNow = acct.created;
           /* Colleagues on the same account: the people a buyer already works
-             with. Names and addresses only; disabled users are omitted. */
-          return orgRef.collection('customers').doc(acct.id).collection('users').limit(50).get()
-            .then(function (users) {
-              out.users = users.docs.filter(function (u) { return ['disabled', 'suspended'].indexOf(u.data().status) < 0; })
-                .map(function (u) { return { email: clean(u.id, 160), name: clean(u.data().name, 120), role: clean(u.data().role, 20) || 'user' }; });
-              return out;
-            }, function () { out.users = []; return out; });
+             with. Names and addresses only; the owner also sees each
+             person's status, because the owner manages them. */
+          return peopleFor(db, org, acct).then(function (list) { out.users = list; return out; });
         });
       }
 
@@ -181,6 +238,8 @@ module.exports = A.handler(function (req, res) {
          company and move the delivery address. Dropped rather than refused,
          so the rest of a well-meant PATCH still applies. */
       var isOwner = String((acct.user && acct.user.role) || 'user') === 'owner' || caller.staff;
+      var ignored = [];
+      if (!isOwner) { if (body.company !== undefined) ignored.push('company'); if (body.address && typeof body.address === 'object') ignored.push('address'); }
       if (isOwner) {
         if (body.company !== undefined) cpatch.name = clean(body.company, 160);
         if (body.address && typeof body.address === 'object') {
@@ -205,8 +264,12 @@ module.exports = A.handler(function (req, res) {
         .then(function () { return cref.get(); })
         .then(function (c) { return cref.collection('users').doc(email).get()
           .then(function (u) {
-            return countOrders(db, org, email).then(function (n) {
-              return project(acct.id, c.exists ? c.data() : {}, u.exists ? u.data() : {}, n, defaults);
+            return countOrders(db, org, email, acct).then(function (n) {
+              var out = project(acct.id, c.exists ? c.data() : {}, u.exists ? u.data() : {}, n, defaults);
+              /* Said, not silently dropped: only the owner changes the company
+                 and the delivery address. */
+              if (ignored.length) out.ignored = ignored;
+              return out;
             });
           }); });
     });

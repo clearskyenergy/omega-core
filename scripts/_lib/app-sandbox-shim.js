@@ -22,7 +22,10 @@
 (function (global) {
   'use strict';
   var F = global.OmegaSandboxFixtures, TENANT = global.OMEGA_SANDBOX_TENANT || {};
-  var KEY = 'omega_sandbox_v1', USER_KEY = 'omega_sandbox_user_v1', ORG = 'cleancell.us';
+  /* the buyer is a different person from the office staff: the customer
+     app keeps its own sign-in, so trying the office sample first does not
+     open the customer app as the office */
+  var KEY = 'omega_sandbox_v1', USER_KEY = 'omega_sandbox_user_v1' + (global.OMEGA_SANDBOX_APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function seedIfMissing(k, v) { try { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }

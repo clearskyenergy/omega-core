@@ -164,7 +164,7 @@ function registerRow(unit, ctx, now) {
   var w = cov.filter(function (x) { return x.type === 'warranty'; })[0] || null, sla = cov.filter(function (x) { return x.type === 'sla'; })[0] || null;
   return { serial: unit.serial, sku: unit.sku, product: p ? p.name : '', unitType: unit.unitType || 'unit', built: String(unit.readyAt || unit.arrivedAt || unit.createdAt || '').slice(0, 10), orderId: unit.orderId || null,
     status: c.status, statusLabel: c.status ? label(c.status) : (unit.at === 'ready' ? 'ready to ship' : 'being built'), state: c.state || '', custodian: c.status ? (CUSTODIAN[c.status] || '') : 'plant', confirmation: c.siteId ? (c.confirmedAt ? 'confirmed ' + String(c.confirmedAt).slice(0, 10) : 'customer says') : '', goingTo: !c.siteId && c.plannedSiteName ? c.plannedSiteName : '',
-    seller: ctx.seller || '', buyer: ctx.buyer || (o && o.customer && o.customer.name) || '', buyerId: unit.customerId || c.customerId || (o && o.customerId) || null, reseller: c.reseller || '', endCustomer: c.endCustomer || '',
+    seller: ctx.seller || '', buyer: ctx.buyer || (o && o.customer && (o.customer.company || o.customer.name)) || '', buyerId: unit.customerId || c.customerId || (o && o.customerId) || null, reseller: c.reseller || '', endCustomer: c.endCustomer || '',
     siteId: c.siteId || null, site: c.siteName || '', position: c.position || '', siteAddress: [a.line1, a.city, a.state, a.zip].filter(Boolean).join(', '), utility: ic.utility || '', poi: ic.poi || '', meter: ic.meterNo || '',
     orderNo: unit.orderNo || (o && o.orderNo) || '', poNumber: (o && ((o.purchaseOrder && o.purchaseOrder.number) || o.poNumber)) || '', load: c.legId || (leg && leg.id) || '', carrier: leg ? leg.carrier || '' : '', tracking: leg ? leg.tracking || '' : '',
     shippedAt: c.shippedAt || (leg && leg.pickedUpAt ? String(leg.pickedUpAt).slice(0, 10) : '') || '', deliveredAt: c.deliveredAt || '', receivedAt: c.receivedAt || '',
@@ -344,16 +344,24 @@ function plan(rows, mapping, ctx, now) {
       var site = null;
       if (r.siteId) { site = ctx.sites[r.siteId]; if (!site) throw fail(404, 'Site id "' + r.siteId + '" not found'); }
       else if (r.siteName) {
-        var key = siteKey(ctx.customerId || (unit.custody && unit.custody.customerId) || unit.customerId || null, r.siteName, r.zip);
+        /* ONE owner for the key and the record: a new site made for a unit
+           already on a customer's account belongs to that account, or no
+           person on it could see the site their unit is at. */
+        var owner = ctx.customerId || (unit.custody && unit.custody.customerId) || unit.customerId || (ctx.accountOf && ctx.accountOf(unit)) || null;
+        var key = siteKey(owner, r.siteName, r.zip);
         site = ctx.byKey[key] || newSites[key];
         if (!site) {
           if (!ctx.allowNewSites) throw fail(400, 'Site "' + r.siteName + '" does not exist; add it first or allow new sites');
           if (!r.line1 && !r.city) throw fail(400, 'A new site needs an address');
-          site = newSites[key] = { id: 'site_' + key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60), name: r.siteName, customerId: ctx.customerId || null, address: { line1: r.line1 || '', city: r.city || '', state: r.state || '', zip: r.zip || '', country: 'US' }, endCustomer: r.endCustomer || '', interconnection: { utility: r.utility || '', meterNo: r.meter || '', poi: r.poi || '' }, isNew: true };
+          site = newSites[key] = { id: 'site_' + key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60), name: r.siteName, customerId: owner, address: { line1: r.line1 || '', city: r.city || '', state: r.state || '', zip: r.zip || '', country: 'US' }, endCustomer: r.endCustomer || '', interconnection: { utility: r.utility || '', meterNo: r.meter || '', poi: r.poi || '' }, isNew: true };
           item.newSite = true;
         }
       }
-      if (site) { item.siteId = site.id; item.siteName = site.name; }
+      if (site) {
+        var siteOwner = ctx.customerId || (unit.custody && unit.custody.customerId) || unit.customerId || (ctx.accountOf && ctx.accountOf(unit)) || null;
+        if (site.customerId && siteOwner && site.customerId !== siteOwner) throw fail(409, 'Site "' + site.name + '" belongs to another customer account');
+        item.siteId = site.id; item.siteName = site.name;
+      }
       var c = custodyOf(unit), sim = JSON.parse(JSON.stringify(unit));
       function step(action, body) { var v = judge(sim, action, body); if (!v.ok) throw fail(409, v.say); if (v.action === 'duplicate') return; var ap = apply(sim, action, body, 'import', now, 'import'); Object.keys(ap.patch).forEach(function (k) { var parts = k.split('.'), t = sim; parts.slice(0, -1).forEach(function (p) { t = t[p] || (t[p] = {}); }); t[parts[parts.length - 1]] = ap.patch[k]; }); item.actions.push(Object.assign({ action: action }, body)); }
       var cond = r.condition ? String(r.condition).toLowerCase() : '';

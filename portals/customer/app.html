@@ -68,6 +68,9 @@
   .big:disabled{opacity:.5}
   input,textarea,select{width:100%;font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;margin:6px 0}
   textarea.sheet{min-height:120px;font-family:'IBM Plex Mono',monospace;font-size:13px}
+  /* a small action beside a person or a unit (Approve, Turn off, Invite) */
+  button.act{flex:none;padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:white;font:600 13px system-ui,sans-serif;color:var(--brand-d);white-space:nowrap}button.act.go{background:var(--brand);border-color:var(--brand);color:white}
+  button.unit{border-radius:0}
   .row{display:flex;gap:8px}.row>*{flex:1;min-width:0}.row button{flex:0 0 auto;padding:0 16px;border:1px solid var(--line);background:white}
   .note{font-size:12px;color:var(--ink2)}
   .rq{border-top:1px solid var(--line);padding:10px 0}.rq p{margin:6px 0;white-space:pre-wrap}
@@ -97,6 +100,7 @@
   <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale.</div>
   <p id="status" class="status"></p>
   <div id="view"></div>
+  <p class="note" id="attribution" data-omega-attribution hidden style="text-align:center;margin:24px 0 8px"></p>
 </main>
 <nav class="bottom" id="nav" hidden>
   <button data-tab="design" aria-current="page"><span>▧</span>Design</button>
@@ -145,6 +149,8 @@
     OmegaLogicTheme.apply(PORTAL.brand);
     $('brand').textContent = PORTAL.brand.name; document.title = PORTAL.brand.name;
     if (PORTAL.brand.logoUrl) { $('mark').src = PORTAL.brand.logoUrl; $('mark').hidden = false; }
+    /* "Powered by …" as the contract says (whiteLabel.attribution); none = nothing */
+    $('attribution').textContent = PORTAL.brand.attribution || ''; $('attribution').hidden = !PORTAL.brand.attribution;
   }
 
   function tok() { var u = auth.currentUser; return u ? u.getIdToken() : Promise.reject(new Error('Sign in first.')); }
@@ -171,6 +177,7 @@
   function draw() {
     Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.setAttribute('aria-current', b.dataset.tab === TAB ? 'page' : 'false'); });
     status('');
+    if (ACCT && ACCT.pending) return drawPending(ACCT);
     if (TAB === 'design') return drawDesign();
     if (TAB === 'orders') return drawOrders();
     if (TAB === 'pos') return drawPos();
@@ -183,7 +190,8 @@
     $('view').innerHTML = '<h1>Design</h1><p class="note">Lay out your own sites with ' + esc(PORTAL ? PORTAL.brand.name : 'your supplier') + '’s equipment, size them, and turn a plan into a quote or a purchase order.</p><div id="design-body"><p class="note">Loading your site plans…</p></div>';
     /* The account record is created on first sign-in by my-account; design
        needs it to exist, so the two load together the first time. */
-    loadAccount()['catch'](function () { return null; }).then(loadDesign).then(function (d) {
+    loadAccount()['catch'](function () { return null; }).then(function (a) { if (a && a.pending) { drawPending(a); return null; } return loadDesign(); }).then(function (d) {
+      if (!d) return;
       var el = $('design-body'); if (!el) return;
       var a = d.access || {}, active = !!a.active, products = (d.designProducts || []).filter(function (p) { return !p.placeholder; }), bess = active && a.modules.indexOf('bess') >= 0;
       var when = a.expiresAt ? new Date(a.expiresAt).toLocaleDateString() : '';
@@ -229,7 +237,7 @@
           + (o.checkout ? '<div class="kv"><div><small>Order total</small><b>' + usd(o.checkout.total) + '</b></div><div><small>Deposit</small><b>' + esc(o.checkout.depositPercent) + '%</b></div></div>' + (o.checkout.invoices || []).map(function (i) { return '<div class="unit"><div>' + esc(i.stage) + ' invoice<small>' + usd(i.amount) + ' · ' + esc(i.status) + '</small></div>' + (i.payUrl && /^https:\/\/([a-z0-9-]+\.)*intuit\.com\//i.test(i.payUrl) ? '<a class="pill" target="_blank" rel="noopener" href="' + esc(i.payUrl) + '">view / pay</a>' : '') + '</div>'; }).join('') : '')
           + (meta.length ? '<p class="note">' + meta.join('<br>') + '</p>' : '')
           + ((o.documents || []).filter(function (d) { return /^https:\/\//i.test(d.url || ''); }).map(function (d) { return '<a class="pill" target="_blank" rel="noopener noreferrer" href="' + esc(d.url) + '">' + esc(d.name || d.kind || 'Document') + '</a> '; }).join(''))
-          + (reqs.length ? reqs.map(function (r) { return '<div class="rq"><b>' + esc(KIND[r.kind] || r.kind) + '</b> <span class="note">' + esc(day(r.at)) + ' · ' + (r.status === 'open' ? 'waiting for an answer' : 'answered') + '</span><p>' + esc(r.message) + '</p>' + (r.address ? '<p class="note">New address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '') + (r.answer ? '<div class="ans"><b>' + esc(o.soldBy || 'Answer') + ':</b> ' + esc(r.answer) + '</div>' : '') + '</div>'; }).join('') : '')
+          + (reqs.length ? reqs.map(function (r) { return '<div class="rq"><b>' + esc(KIND[r.kind] || r.kind) + '</b> <span class="note">' + esc(day(r.at)) + (r.by ? ' · ' + esc(r.by) : '') + ' · ' + (r.status === 'open' ? 'waiting for an answer' : 'answered') + '</span><p>' + esc(r.message) + '</p>' + (r.address ? '<p class="note">New address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '') + (r.answer ? '<div class="ans"><b>' + esc(o.soldBy || 'Answer') + ':</b> ' + esc(r.answer) + '</div>' : '') + '</div>'; }).join('') : '')
           + '<details><summary>Request a change or ask a question</summary><form data-req="' + esc(o.orderNo) + '"><select name="kind"><option value="information">A question</option><option value="shipping">Delivery address or date</option><option value="change">Change the order</option><option value="warranty">Warranty</option></select><div class="addr" hidden><input name="line1" maxlength="200" placeholder="New delivery address"><input name="city" maxlength="100" placeholder="City"><div class="row"><input name="state" maxlength="40" placeholder="State"><input name="zip" maxlength="20" placeholder="ZIP"></div></div><textarea name="message" maxlength="2000" required placeholder="Tell us what you need. We will answer here." style="min-height:80px"></textarea><button class="big ghost" type="submit">Send request</button><span class="note rq-status"></span></form></details></div>';
       }).join('');
       Array.prototype.forEach.call(el.querySelectorAll('form[data-req]'), function (f) {
@@ -271,7 +279,7 @@
           btn.disabled = false;
         })['catch'](function (e) { fail(e); btn.disabled = false; });
       };
-    })['catch'](function (e) { var el = $('pos-body'); if (el) el.innerHTML = '<p class="note err">' + esc(e.message) + '</p><p class="note">Purchase orders need a customer account with this supplier. Open Account first, or ask your supplier to assign your email to your company.</p>'; });
+    })['catch'](function (e) { var el = $('pos-body'); if (el) el.innerHTML = '<p class="note err">' + esc(e.message) + '</p><p class="note">Purchase orders are placed on your company’s customer account. If your company already has one, ask its owner (or your supplier) to add your email; otherwise open Account to start one.</p>'; });
   }
 
   /* ── Sites & equipment: where each unit is and what its warranty is ──
@@ -322,31 +330,72 @@
     })['catch'](function (e) { var el2 = $('sites-body'); if (el2) el2.innerHTML = '<p class="note err">' + esc(e.message) + '</p>'; });
   }
 
-  /* ── Account: who you are here, your terms, your details ─────────────── */
+  /* ── Waiting to be let in ───────────────────────────────────────────────
+     A colleague whose company already has an account here asked to join it
+     on their first sign-in; the owner or the supplier approves. Nothing of
+     the account is shown until then. */
+  function drawPending(a) {
+    $('view').innerHTML = '<h1>Almost there</h1><div class="card"><b>You asked to join ' + esc(a.company || 'your company') + '</b><p class="note">Its account owner, or ' + esc(PORTAL ? PORTAL.brand.name : 'your supplier') + ', approves new people. Once they do, your company’s orders, sites and equipment appear here.</p><p class="note">Signed in as ' + esc(a.you && a.you.email) + (a.requestedAt ? ' · asked ' + esc(day(a.requestedAt)) : '') + '</p></div><button class="big ghost" id="pending-check">Check again</button>';
+    $('pending-check').onclick = function () { refresh(); };
+  }
+
+  /* ── Account: your company, its people, your details ─────────────────── */
+  function peopleHtml(a) {
+    var owner = a.you.role === 'owner', list = a.users || [];
+    var rows = list.map(function (u) {
+      var me = u.email === a.you.email, st = u.status || 'active';
+      var tag = st === 'pending' ? '<span class="pill wait">asked to join</span>' : st === 'disabled' ? '<span class="pill stop">access off</span>' : (u.role === 'owner' ? '<span class="pill go">owner</span>' : '');
+      var act = !owner || me ? '' : st === 'pending' ? '<button class="act go" data-person="' + esc(u.email) + '" data-to="active">Approve</button>' : st === 'disabled' ? '<button class="act" data-person="' + esc(u.email) + '" data-to="active">Turn on</button>' : '<button class="act" data-person="' + esc(u.email) + '" data-to="disabled">Turn off</button>';
+      return '<div class="unit"><div><b>' + esc(u.name || u.email) + (me ? ' (you)' : '') + '</b><small>' + (u.name ? esc(u.email) : '') + (owner && u.activated === false && st === 'active' ? (u.name ? ' · ' : '') + 'not signed in yet' : '') + '</small></div><div style="display:flex;gap:6px;align-items:center;flex:none">' + tag + act + '</div></div>';
+    }).join('');
+    return '<h2>People on this account · ' + list.length + '</h2>' + (rows || '<p class="note">Just you so far.</p>')
+      + (owner ? '<div class="card"><b>Add a colleague</b><p class="note">They sign in with this email and see ' + esc(a.company || 'the account') + '’s orders, sites and equipment.</p><input id="p-email" type="email" placeholder="colleague@' + esc(String(a.you.email).split('@')[1] || 'company.com') + '" autocomplete="off"><input id="p-name" placeholder="Their name"><button class="big" id="p-add">Add to the account</button></div>'
+        : '<p class="note">The account owner adds and removes people. Everyone here sees the same orders, sites and equipment.</p>');
+  }
   function drawAccount() {
     $('view').innerHTML = '<h1>Account</h1><div id="acct-body"><p class="note">Loading…</p></div>';
     loadAccount().then(function (a) {
       var el = $('acct-body'); if (!el) return;
-      var t = a.terms || {}, any = t.depositPct != null || t.netDays != null || t.discountPct != null || t.poRequired, ad = a.address || {}, users = (a.users || []).filter(function (u) { return u.email !== a.you.email; });
-      el.innerHTML = '<div class="kv"><div><small>Account number</small><b class="mono" style="font-size:13px">' + esc(a.customerId || '—') + '</b></div><div><small>Company</small><b style="font-size:15px">' + esc(a.company || '—') + '</b></div><div><small>Your account rep</small><b style="font-size:15px">' + (a.rep && a.rep.name ? esc(a.rep.name) : '<span class="note">not assigned yet</span>') + '</b>' + (a.rep && a.rep.email ? '<small><a href="mailto:' + esc(a.rep.email) + '">' + esc(a.rep.email) + '</a></small>' : '') + '</div><div><small>Orders</small><b>' + esc(a.orders) + '</b></div></div>'
+      if (a.pending) return drawPending(a);
+      var owner = a.you.role === 'owner';
+      var t = a.terms || {}, any = t.depositPct != null || t.netDays != null || t.discountPct != null || t.poRequired, ad = a.address || {};
+      el.innerHTML = '<div class="kv"><div><small>Account number</small><b class="mono" style="font-size:13px">' + esc(a.customerId || '—') + '</b></div><div><small>Company</small><b style="font-size:15px">' + esc(a.company || '—') + '</b></div><div><small>Your account rep</small><b style="font-size:15px">' + (a.rep && a.rep.name ? esc(a.rep.name) : '<span class="note">not assigned yet</span>') + '</b>' + (a.rep && a.rep.email ? '<small><a href="mailto:' + esc(a.rep.email) + '">' + esc(a.rep.email) + '</a></small>' : '') + '</div><div><small>Orders on the account</small><b>' + esc(a.orders) + '</b></div></div>'
         + (any ? '<h2>Your terms</h2><div class="kv">' + (t.depositPct != null ? '<div><small>Deposit</small><b>' + esc(t.depositPct) + '%</b><small>' + (t.dueDays ? 'due in ' + esc(t.dueDays) + ' days' : 'on receipt') + '</small></div>' : '') + (t.netDays != null ? '<div><small>Payment terms</small><b>Net ' + esc(t.netDays) + '</b></div>' : '') + (t.discountPct != null ? '<div><small>Your discount</small><b>' + esc(t.discountPct) + '%</b></div>' : '') + (t.poRequired ? '<div><small>Purchase order</small><b>Required</b></div>' : '') + '</div><p class="note">Set by ' + esc(a.rep && a.rep.name ? a.rep.name : 'your account manager') + '. Ask them if anything here looks wrong.</p>' : '')
-        + '<h2>Your details</h2><input id="f-name" placeholder="Your name" value="' + esc(a.you.name || '') + '"><input id="f-company" placeholder="Company" value="' + esc(a.company || '') + '"><input id="f-phone" placeholder="Phone" value="' + esc(a.you.phone || '') + '"><input id="f-line1" placeholder="Delivery address" value="' + esc(ad.line1 || '') + '"><div class="row"><input id="f-city" placeholder="City" value="' + esc(ad.city || '') + '"><input id="f-state" placeholder="State ZIP" value="' + esc([ad.state, ad.zip].filter(Boolean).join(' ')) + '"></div><button class="big ghost" id="save">Save my details</button>'
-        + '<p class="note">Signed in as ' + esc(a.you.email) + (a.you.role === 'owner' ? ' · account owner' : '') + (users.length ? ' · also on this account: ' + esc(users.map(function (u) { return u.name || u.email; }).join(', ')) : '') + '</p>'
+        + peopleHtml(a)
+        + '<h2>Your details</h2><input id="f-name" placeholder="Your name" value="' + esc(a.you.name || '') + '"><input id="f-phone" placeholder="Phone" value="' + esc(a.you.phone || '') + '">'
+        + (owner ? '<h2>Company</h2><input id="f-company" placeholder="Company" value="' + esc(a.company || '') + '"><input id="f-line1" placeholder="Delivery address" value="' + esc(ad.line1 || '') + '"><div class="row"><input id="f-city" placeholder="City" value="' + esc(ad.city || '') + '"><input id="f-state" placeholder="State ZIP" value="' + esc([ad.state, ad.zip].filter(Boolean).join(' ')) + '"></div>'
+          : '<div class="card"><small class="note">Company and delivery address</small><div>' + esc(a.company || '—') + '</div><div class="note">' + esc([ad.line1, ad.city, [ad.state, ad.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'No delivery address yet') + '</div><p class="note">Only the account owner changes these.</p></div>')
+        + '<button class="big ghost" id="save">Save</button>'
+        + '<p class="note">Signed in as ' + esc(a.you.email) + (owner ? ' · account owner' : '') + '</p>'
         + '<h2>Agreements</h2>' + ((a.agreements || []).map(function (g) { return '<div class="unit"><div>' + esc(g.kind) + '<small>' + esc(g.ref) + ' · ' + esc(day(g.signedAt)) + '</small></div></div>'; }).join('') || '<p class="note">No agreements recorded yet.</p>')
         + '<h2>Sites &amp; equipment</h2><div id="sites-body"><p class="note">Loading…</p></div>'
         + '<h2>This app</h2><p class="note">Add it to your home screen: on iPhone, Share → <b>Add to Home Screen</b>; on Android, the browser’s <b>Install</b>. It opens to your site plans.</p>'
         + (PORTAL && PORTAL.links && PORTAL.links.account ? '<a class="big ghost" href="' + esc(PORTAL.links.account) + '">Full portal on the desktop</a>' : '');
       drawSites();
       $('save').onclick = function () {
-        var sp = String($('f-state').value || '').trim().split(/\s+/), btn = this; btn.disabled = true; status('Saving…');
-        api('/api/my-account', { name: $('f-name').value, company: $('f-company').value, phone: $('f-phone').value, address: { line1: $('f-line1').value, city: $('f-city').value, state: sp[0] || '', zip: sp[1] || '' } })
-          .then(function (r) { ACCT = must(r, 'Could not save.'); status('Saved.'); drawAccount(); })['catch'](fail).then(function () { btn.disabled = false; });
+        var btn = this, body = { name: $('f-name').value, phone: $('f-phone').value };
+        if (owner) { var sp = String($('f-state').value || '').trim().split(/\s+/); body.company = $('f-company').value; body.address = { line1: $('f-line1').value, city: $('f-city').value, state: sp[0] || '', zip: sp[1] || '' }; }
+        btn.disabled = true; status('Saving…');
+        api('/api/my-account', body).then(function (r) { ACCT = must(r, 'Could not save.'); status(ACCT.ignored ? 'Saved your name and phone. Only the account owner changes the company and address.' : 'Saved.'); drawAccount(); })['catch'](fail).then(function () { btn.disabled = false; });
+      };
+      Array.prototype.forEach.call(document.querySelectorAll('[data-person]'), function (b) {
+        b.onclick = function () {
+          var to = b.getAttribute('data-to'), who = b.getAttribute('data-person');
+          if (to === 'disabled' && !window.confirm('Turn off access for ' + who + '? What they did stays on the account.')) return;
+          b.disabled = true; status(to === 'active' ? 'Turning on…' : 'Turning off…');
+          api('/api/my-account', { action: 'user-status', email: who, status: to }).then(function (r) { var j = must(r, 'Could not change access.'); ACCT.users = j.users || ACCT.users; status(j.note || 'Done.'); drawAccount(); })['catch'](function (e) { fail(e); b.disabled = false; });
+        };
+      });
+      if ($('p-add')) $('p-add').onclick = function () {
+        var btn = this, e = String($('p-email').value || '').trim(); if (!e) { status('Enter their work email.'); return; }
+        btn.disabled = true; status('Adding…');
+        api('/api/my-account', { action: 'add-user', email: e, name: $('p-name').value }).then(function (r) { var j = must(r, 'Could not add them.'); ACCT.users = j.users || ACCT.users; status(j.note || 'Added.'); drawAccount(); })['catch'](function (x) { fail(x); btn.disabled = false; });
       };
     })['catch'](function (e) { var el = $('acct-body'); if (el) el.innerHTML = '<p class="note err">' + esc(e.message) + '</p>'; });
   }
 
   /* ── sign in ──────────────────────────────────────────────────────────── */
-  $('g-create').onclick = function () { $('g-h').textContent = 'Create a customer account'; $('g-p').textContent = 'Verify your work email to open a free customer account. If your company already has an account, ask your supplier to assign your email before joining.'; $('g-link').textContent = 'Verify email and continue'; $('g-email').focus(); };
+  $('g-create').onclick = function () { $('g-h').textContent = 'Create a customer account'; $('g-p').textContent = 'Verify your work email. If your company already has an account here, you are asked to join it and its owner lets you in; otherwise a free customer account opens for you.'; $('g-link').textContent = 'Verify email and continue'; $('g-email').focus(); };
   function sendLink() {
     var e = String($('g-email').value || '').trim();
     if (!e || e.indexOf('@') < 0) { $('g-msg').textContent = 'Please enter your email address.'; return; }

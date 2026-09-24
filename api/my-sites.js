@@ -19,8 +19,10 @@
    the phone is the same record the office sees.
 
    Scope, as everywhere on the portal: the VERIFIED email is the control.
-   A unit is theirs when the order it was built for carries their email or
-   their company account; a site is theirs when it carries their account.
+   A unit is theirs when the order it was built for belongs to their
+   company ACCOUNT (B.accountOrders: its customerId, or billed to one of its
+   people); a site is theirs when it carries their account. Every active
+   person on the account works the same sites and units.
    Nothing else is reachable, and a move the rules refuse says why.
    Scrubbed 500s, like api/my-orders.js.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -29,11 +31,10 @@ var A = require('./_lib/admin'), B = require('./_lib/buyer-accounts'), P = requi
 var CUSTOMER_MOVES = { received: 'receive', assign: 'assign', installed: 'install', commissioned: 'commission' };
 
 function root(db, org) { return db.collection('omega_orgs').doc(org); }
-async function myOrders(db, org, email, customerId) {
-  var byEmail = await db.collection('orders').where('orgId', '==', org).where('customer.email', '==', email).limit(100).get(), ids = {}, out = [];
-  byEmail.docs.forEach(function (d) { ids[d.id] = true; out.push(d); });
-  if (customerId) { var byAcct = await db.collection('orders').where('orgId', '==', org).where('customerId', '==', customerId).limit(100).get(); byAcct.docs.forEach(function (d) { if (!ids[d.id]) { ids[d.id] = true; out.push(d); } }); }
-  return out;
+/* The account's orders — B.accountOrders is the one reader: its customerId,
+   or billed to any active person on the account. */
+async function myOrders(db, org, email, acct) {
+  return (await B.accountOrders(db, org, email, acct, { limit: 100 })).docs;
 }
 async function myUnits(db, org, orderIds) {
   var units = [];
@@ -59,7 +60,7 @@ module.exports = A.handler(async function (req, res) {
     if (!org) throw A.httpError(400, 'Valid supplier required');
     if (!caller.claims || caller.claims.email_verified !== true) throw A.httpError(403, 'Please confirm your email address, then sign in again.');
     var ctx = await B.context(org), db = A.db(), email = B.email(caller.email), acct = B.active(await B.lookup(db, org, email)), now = new Date().toISOString();
-    var orders = await myOrders(db, org, email, acct.id), byOrder = {}; orders.forEach(function (d) { byOrder[d.id] = d.data(); });
+    var orders = await myOrders(db, org, email, acct), byOrder = {}; orders.forEach(function (d) { byOrder[d.id] = d.data(); });
     var catalog = await root(db, org).collection('storefront').doc('config').get(), byP = {}; (catalog.exists ? catalog.data().products || [] : []).forEach(function (p) { if (p && p.sku) byP[p.sku] = p; });
     var siteRows = await root(db, org).collection('sites').where('customerId', '==', acct.id).limit(200).get(), mySites = siteRows.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }).filter(function (s) { return s.status !== 'inactive'; });
 
@@ -92,7 +93,7 @@ module.exports = A.handler(async function (req, res) {
       return db.runTransaction(async function (tx) {
         var ds = await tx.get(dref); if (!ds.exists || ds.data().orgId !== org || !byOrder[ds.data().orderId]) throw A.httpError(404, 'That serial is not on one of your orders');
         var dsite = null; if (b.siteId) { dsite = mySites.filter(function (x) { return x.id === P.id(b.siteId); })[0]; if (!dsite) throw A.httpError(404, 'Site not found on your account'); }
-        var dr = C.destination(ds.data(), { siteId: dsite ? dsite.id : '', siteName: dsite ? dsite.name : '', position: b.position, note: b.note }, email, now, 'customer'); dr.event.orderId = ds.data().orderId;
+        var dr = C.destination(ds.data(), { siteId: dsite ? dsite.id : '', siteName: dsite ? dsite.name : '', position: b.position, note: b.note }, email, now, 'customer'); dr.event.orderId = ds.data().orderId; dr.patch['custody.customerId'] = acct.id;
         tx.update(dref, dr.patch); tx.create(dref.collection('custody_events').doc(), Object.assign({ orgId: org, serial: dserial }, dr.event));
         var dafter = JSON.parse(JSON.stringify(ds.data())); Object.keys(dr.patch).forEach(function (k) { var parts = k.split('.'), t = dafter; parts.slice(0, -1).forEach(function (p) { t = t[p] || (t[p] = {}); }); t[parts[parts.length - 1]] = dr.patch[k]; });
         return { ok: true, unit: pub(dafter, byP[dafter.sku], now, byOrder[dafter.orderId]) };

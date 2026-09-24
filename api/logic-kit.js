@@ -18,7 +18,7 @@ module.exports = A.handler(async function (req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') throw A.httpError(405, 'GET or POST only');
   var caller = await A.authenticate(req); X.requireOwner(caller);
   var db = A.db(), b = req.body || {}, org = A.safeOrg(req.method === 'GET' ? req.query.org : b.org), now = new Date().toISOString();
-  function kitOf(id, d) { return K.forOrg(id, { name: d.name || id, host: Array.isArray(d.domains) && d.domains[0] && d.domains[0] !== 'silmarillion.clearskyomega.com' && d.hostAttached === true ? d.domains[0] : null }); }
+  function kitOf(id, d) { return K.forOrg(id, { name: d.name || id, brandName: require('./_lib/logic-brand')(d).name, host: K.hostOf(d) }); }
   if (req.method === 'GET') {
     if (!org) {
       var all = await db.collection('omega_orgs').orderBy('__name__').limit(300).get(), rows = [];

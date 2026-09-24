@@ -40,7 +40,7 @@ r = F.post(s, '/api/logic-plant', '', { action: 'allocate', serial: 'CC418-26-44
 ok('  and not twice', r.status === 409, r);
 r = F.post(s, '/api/po-intake', '', { action: 'submit-many', pos: [{ number: 'INC-1', lines: [{ sku: 'CC-C215', qty: 2 }], destination: { city: 'Fresno' } }, { number: 'RCC-2211', lines: [{ sku: 'CC-C215', qty: 1 }], destination: {} }, { number: 'INC-2', lines: [{ sku: 'CC-MOD-52', qty: 1 }], destination: {} }] }, 'ops@riverside.example');
 ok('a customer\'s stack of POs: one entered, the existing number and the component named', r.created.length === 1 && /already exists/.test(r.skipped[0].error) && /published/.test(r.skipped[1].error), r);
-ok('  and the office sees it as an order to price for that company', V.officeJson().totals.byStage.quote === 2 && V.officeJson().orders[0].customer.name === 'Riverside Cold Chain' && V.intakeJson('', 'ops@riverside.example').orders[0].poNumber === 'INC-1');
+ok('  and the office sees it as an order to price for that company', V.officeJson().totals.byStage.quote === 2 && V.officeJson().orders[0].customer.company === 'Riverside Cold Chain' && V.officeJson().orders[0].customerId === 'company_riverside' && V.intakeJson('', 'ops@riverside.example').orders[0].poNumber === 'INC-1');
 r = F.post(s, '/api/po-intake', '', { action: 'submit-many', office: true, customerId: 'company_incharge', email: 'nobody@incharge.example', pos: [{ number: 'INC-3', lines: [{ sku: 'CC-C215', qty: 1 }], destination: {} }] }, 'pm@cleancell.us');
 ok('the office must name a billing contact on the company', r.status === 400, r);
 r = F.post(s, '/api/my-orders', 'org=cleancell.us', { orderNo: 'CC-26-4419', kind: 'warranty', message: 'Cabinet two shows a BMS fault.' }, 'ops@riverside.example');

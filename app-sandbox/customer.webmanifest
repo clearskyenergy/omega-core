@@ -8,7 +8,7 @@
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#0B2733",
+  "theme_color": "#0E1B24",
   "icons": [
     {
       "src": "/tenants/cleancell/icons/customer-192.png",

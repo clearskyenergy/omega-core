@@ -15,9 +15,14 @@ module.exports=A.handler(async function(req,res){
   }
   if(req.method==='POST'&&b.action==='company'){
     await X.authorize(c,org,true);var name=L.text(b.name,160,true),domain=b.domain?A.safeOrg(b.domain):'';if(b.domain&&!domain)throw A.httpError(400,'Invalid company domain');
+    if(domain&&require('./_lib/public-domains').indexOf(domain)>=0)throw A.httpError(400,domain+' is a public mailbox provider, not a company domain');
     var cid='company_'+P.key(name.toLowerCase()),cref=root.collection('customers').doc(cid),companyRep=b.repId?await I.rep(org,b.repId):null;
+    /* One company, one account: an account made another way (the Customers
+       page, an intake script, a self sign-in named for the company) is the
+       same company, so it is returned rather than duplicated. */
+    var same=await B.findByName(db,org,name);if(same&&same.id!==cid)return {ok:true,customerId:same.id,duplicate:true};
     return db.runTransaction(async function(tx){var s=await tx.get(cref);if(s.exists)return {ok:true,customerId:cid,duplicate:true};
-      tx.create(cref,{orgId:org,name:name,domain:domain,accountType:'company',status:'active',plan:'free',terms:{},source:'office',rep:companyRep,createdAt:new Date().toISOString()});
+      tx.create(cref,{orgId:org,name:name,nameLower:B.nameKey(name),domain:domain,accountType:'company',status:'active',plan:'free',terms:{},source:'office',rep:companyRep,createdAt:new Date().toISOString()});
       tx.create(db.collection('omega_audit').doc(),{action:'buyer-company-created',orgId:org,customerId:cid,by:c.email,at:new Date().toISOString()});return {ok:true,customerId:cid};});
   }
   var customerId=scope.office?(b.customerId?P.id(b.customerId):null):scope.account.id;
@@ -25,13 +30,12 @@ module.exports=A.handler(async function(req,res){
   if(!customerId)throw A.httpError(400,'Select a company');var acct=await I.company(org,customerId);acct.user=scope.account&&scope.account.user;
   if(req.method==='POST'&&b.action==='contact'){
     if(!scope.office)throw A.httpError(403,'Office administrator required');await X.authorize(c,org,true);
+    /* One writer of a person joining an account (api/_lib/buyer-accounts.js
+       addUser): the office may also move a login that signed in before it was
+       added, when that stray account is empty. */
     var email=B.email(b.email),role=b.role==='owner'?'owner':'user',name=L.text(b.name||email,120,true);
-    return db.runTransaction(async function(tx){var ptr=root.collection('customer_index').doc(email),old=await tx.get(ptr),u=acct.ref.collection('users').doc(email),us=await tx.get(u);
-      if(old.exists&&old.data().customerId!==acct.id)throw A.httpError(409,'This email already belongs to another customer account; contact ClearSky for a reviewed account merge');
-      if(us.exists)throw A.httpError(409,'Contact already exists; existing access was preserved');
-      if(!old.exists)tx.create(ptr,{customerId:acct.id,email:email,createdAt:new Date().toISOString()});
-      tx.create(u,{email:email,name:name,role:role,status:'active',source:'office',createdAt:new Date().toISOString()});
-      tx.create(db.collection('omega_audit').doc(),{action:'buyer-company-contact',orgId:org,customerId:acct.id,email:email,role:role,by:c.email,at:new Date().toISOString()});return {ok:true,note:'Contact assigned. They must sign in with their own verified email; no invitation has been sent.'};});
+    var added=await B.addUser(db,org,acct.id,email,{name:name,role:role,status:'active'},c.email,{source:'office',rehome:true});
+    return {ok:true,moved:added.moved,note:(added.moved?'Their earlier login was moved onto this company. ':'Contact assigned. ')+'They must sign in with their own verified email; no invitation has been sent.'};
   }
   if(req.method==='POST'&&b.action==='account'){
     if(!scope.office)throw A.httpError(403,'Office administrator required');await X.authorize(c,org,true);
@@ -81,7 +85,7 @@ module.exports=A.handler(async function(req,res){
     return {ok:true,created:created,skipped:skipped,note:created.length+' purchase order'+(created.length===1?'':'s')+' entered and mapped to the catalog; awaiting pricing. Nothing was accepted or charged.'};
   }
   if(req.method==='GET'&&!b.id){
-    var rows=await db.collection('orders').where('customerId','==',acct.id).limit(200).get();
+    var rows=await db.collection('orders').where('orgId','==',org).where('customerId','==',acct.id).limit(200).get();
     var list=rows.docs.filter(function(s){return s.data().orgId===org;});
     var catalog=await root.collection('storefront').doc('config').get(),contacts=scope.office?await acct.ref.collection('users').limit(100).get():null;
     return {office:scope.office,brand:require('./_lib/logic-brand')(scope.ctx.org),company:{id:acct.id,name:acct.data.name,rep:acct.data.rep||null},reps:scope.office?await I.reps(org):[],

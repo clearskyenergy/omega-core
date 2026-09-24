@@ -38,7 +38,7 @@
    receive, the commissioning engineer commissions); coverage templates are
    catalog fields and change through the catalog endpoint. */
 'use strict';
-var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy'), C = require('./_lib/custody'), Plant = require('./_lib/plant');
+var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy'), C = require('./_lib/custody'), Plant = require('./_lib/plant'), B = require('./_lib/buyer-accounts');
 var UNIT_FIELDS = ['serial', 'sku', 'unitType', 'shipUnit', 'rootSerial', 'woId', 'orderId', 'orderNo', 'customerId', 'at', 'hold', 'inventoryStatus', 'custody', 'createdAt'];
 var MAX_UNITS = 2000;
 
@@ -56,6 +56,20 @@ function view(u, byProduct, now) {
     custody: Object.assign({}, c, { label: C.label(c.status), confirmation: C.confirmation(c) }), coverage: C.coverageWithInheritance(byProduct[u.sku], u, now) };
 }
 function eventDoc(unitRef) { return unitRef.collection('custody_events').doc(); }
+/* Which customer ACCOUNT a unit belongs to: its custody stamp, its own
+   field, else the account of the order it was built for (the order's
+   customerId, or the account of the person it is billed to). Custody follows
+   the account so every person on it sees the unit and its site. `order` may
+   be passed when it is already read (a transaction read must come first). */
+async function accountOfUnit(db, org, u, order) {
+  var c = C.custodyOf(u); if (c.customerId) return c.customerId; if (u.customerId) return u.customerId;
+  if (!u.orderId) return null;
+  var o = order; if (o === undefined) { var os = await db.collection('orders').doc(P.id(u.orderId)).get(); o = os.exists ? os.data() : null; }
+  return o && o.orgId === org ? B.accountOfOrder(db, org, o) : null;
+}
+/* A site on one customer's account never takes another customer's unit: the
+   warranty would start at a site the owner cannot see. */
+function siteFits(site, owner) { if (site && site.customerId && owner && site.customerId !== owner) throw A.httpError(409, 'That site belongs to another customer account'); }
 
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -98,7 +112,7 @@ module.exports = A.handler(async function (req, res) {
       var custRows = await root(db, org).collection('customers').orderBy('__name__').limit(200).get(), custBy = {}; custRows.docs.forEach(function (d) { custBy[d.id] = d.data().name || d.id; });
       var seller = ctx.org.name || org;
       var rows = list.map(function (u) { var c = C.custodyOf(u), o = orders[u.orderId] || null, leg = o ? (((o.delivery || {}).legs || []).filter(function (l) { return l.id === c.legId || (!c.legId && (l.serials || []).indexOf(u.serial) >= 0); })[0] || null) : null;
-        return C.registerRow(u, { product: byP[u.sku] || null, order: o, leg: leg, site: c.siteId ? sitesBy[c.siteId] || null : null, seller: seller, buyer: custBy[u.customerId || c.customerId || (o && o.customerId)] || (o && o.customer && o.customer.name) || '' }, now); });
+        return C.registerRow(u, { product: byP[u.sku] || null, order: o, leg: leg, site: c.siteId ? sitesBy[c.siteId] || null : null, seller: seller, buyer: custBy[u.customerId || c.customerId || (o && o.customerId)] || (o && o.customer && (o.customer.company || o.customer.name)) || '' }, now); });
       return { brand: brand, name: seller, owner: X.owner(caller), columns: C.REGISTER_COLUMNS, rows: rows, sites: siteRows.filter(function (sx) { return sx.status !== 'inactive'; }).map(function (sx) { return { id: sx.id, name: sx.name }; }), products: prods.filter(function (p) { return p && p.sku && (p.kind || 'product') === 'product'; }).map(function (p) { return { sku: p.sku, name: p.name }; }), limited: all.limited, sampled: list.length };
     }
     var counts = {}; C.STATUSES.forEach(function (k) { counts[k || 'plant'] = 0; });
@@ -148,9 +162,11 @@ module.exports = A.handler(async function (req, res) {
     var cserial = C.serial(b.serial), cref = unitRef(db, org, cserial);
     return db.runTransaction(async function (tx) {
       var cs = await tx.get(cref); if (!cs.exists || cs.data().orgId !== org) throw A.httpError(404, 'Serial is not registered');
-      var cu = cs.data(), csite = null;
+      var cu = cs.data(), csite = null, cOwner = null;
       if (action === 'destination' && b.siteId) { var csd = await tx.get(root(db, org).collection('sites').doc(P.id(b.siteId))); if (!csd.exists || csd.data().status === 'inactive') throw A.httpError(404, 'Site not found'); csite = Object.assign({ id: csd.id }, csd.data()); }
+      if (action === 'destination') { var cord = cu.orderId ? await tx.get(db.collection('orders').doc(P.id(cu.orderId))) : null; cOwner = await accountOfUnit(db, org, cu, cord && cord.exists ? cord.data() : null); siteFits(csite, cOwner); }
       var r = action === 'confirm' ? C.confirm(cu, b, by, now) : C.destination(cu, { siteId: csite ? csite.id : '', siteName: csite ? csite.name : '', position: b.position, note: b.note }, by, now, method);
+      if (action === 'destination' && cOwner && !C.custodyOf(cu).customerId) r.patch['custody.customerId'] = cOwner;
       if (r.duplicate) return { ok: true, action: 'duplicate', serial: cserial, say: 'Already confirmed', custody: C.custodyOf(cu) };
       tx.update(cref, r.patch); tx.create(eventDoc(cref), Object.assign({ orgId: org, serial: cserial }, r.event));
       var cafter = JSON.parse(JSON.stringify(cu)); Object.keys(r.patch).forEach(function (k) { var parts = k.split('.'), t = cafter; parts.slice(0, -1).forEach(function (p) { t = t[p] || (t[p] = {}); }); t[parts[parts.length - 1]] = r.patch[k]; });
@@ -165,6 +181,9 @@ module.exports = A.handler(async function (req, res) {
       var s = await tx.get(ref); if (!s.exists || s.data().orgId !== org) throw A.httpError(404, 'Serial is not registered');
       var u = s.data(), site = null;
       if (b.siteId) { var sd = await tx.get(root(db, org).collection('sites').doc(P.id(b.siteId))); if (!sd.exists || sd.data().status === 'inactive') throw A.httpError(404, 'Site not found'); site = Object.assign({ id: sd.id }, sd.data()); }
+      var mord = u.orderId && !C.custodyOf(u).customerId && !u.customerId ? await tx.get(db.collection('orders').doc(P.id(u.orderId))) : null;
+      var mOwner = await accountOfUnit(db, org, u, mord ? (mord.exists ? mord.data() : null) : undefined);
+      if (action === 'move') siteFits(site, mOwner);
       var body = Object.assign({}, b, { siteId: site ? site.id : undefined, siteName: site ? site.name : undefined });
       if (action === 'state') { var st = C.state(u, String(b.state || ''), b, by, now, method); tx.update(ref, st.patch); tx.create(eventDoc(ref), Object.assign({ orgId: org, serial: serial }, st.event)); return { ok: true, serial: serial, state: st.patch['custody.state'] }; }
       if (action === 'replace') {
@@ -185,7 +204,7 @@ module.exports = A.handler(async function (req, res) {
       var v = C.judge(u, what, body); if (!v.ok) throw A.httpError(409, v.say);
       if (v.action === 'duplicate') return { ok: true, action: 'duplicate', serial: serial, say: v.say, custody: C.custodyOf(u) };
       var ap2 = C.apply(u, what, body, by, now, method);
-      if (u.customerId && !C.custodyOf(u).customerId) ap2.patch['custody.customerId'] = u.customerId;
+      if (mOwner && !C.custodyOf(u).customerId) ap2.patch['custody.customerId'] = mOwner;
       tx.update(ref, ap2.patch); tx.create(eventDoc(ref), Object.assign({ orgId: org, serial: serial }, ap2.event));
       var after = JSON.parse(JSON.stringify(u)); Object.keys(ap2.patch).forEach(function (k) { var parts = k.split('.'), t = after; parts.slice(0, -1).forEach(function (p) { t = t[p] || (t[p] = {}); }); t[parts[parts.length - 1]] = ap2.patch[k]; });
       return { ok: true, action: what, serial: serial, say: 'Recorded: ' + C.label(after.custody.status) + (site ? ' at ' + site.name : ''), custody: C.custodyOf(after) };
@@ -198,6 +217,8 @@ module.exports = A.handler(async function (req, res) {
     var leg = ((os.data().delivery || {}).legs || []).filter(function (l) { return l.id === legId; })[0]; if (!leg) throw A.httpError(404, 'Load not found on this order');
     var rec = C.reconcile(leg.serials, list.map(function (r) { return { serial: C.serial(typeof r === 'string' ? r : r.serial), condition: r && r.condition === 'damaged' ? 'damaged' : 'accepted' }; }));
     var siteDoc = b.siteId ? await root(db, org).collection('sites').doc(P.id(b.siteId)).get() : null; if (b.siteId && (!siteDoc.exists)) throw A.httpError(404, 'Site not found');
+    var loadOwner = await B.accountOfOrder(db, org, os.data());
+    if (siteDoc) siteFits(siteDoc.data(), loadOwner);
     var applied = [], damagedApplied = [], refused = [];
     for (var i = 0; i < rec.received.length + rec.damaged.length; i++) {
       var sn = i < rec.received.length ? rec.received[i] : rec.damaged[i - rec.received.length], cond = i < rec.received.length ? 'accepted' : 'damaged';
@@ -205,7 +226,7 @@ module.exports = A.handler(async function (req, res) {
         var ur = unitRef(db, org, sn), us = await tx.get(ur); if (!us.exists) { refused.push({ serial: sn, why: 'not registered' }); return; }
         var uu = us.data(), body = { at: b.at, condition: cond, siteId: siteDoc ? siteDoc.id : undefined, siteName: siteDoc ? siteDoc.data().name : undefined, legId: legId, note: b.note };
         var vv = C.judge(uu, 'receive', body); if (!vv.ok) { refused.push({ serial: sn, why: vv.say }); return; }
-        var ap3 = C.apply(uu, 'receive', body, by, now, method); ap3.event.legId = legId; ap3.event.orderId = oref.id; ap3.patch['custody.legId'] = legId; if (os.data().customerId) ap3.patch['custody.customerId'] = os.data().customerId;
+        var ap3 = C.apply(uu, 'receive', body, by, now, method); ap3.event.legId = legId; ap3.event.orderId = oref.id; ap3.patch['custody.legId'] = legId; if (loadOwner && !C.custodyOf(uu).customerId) ap3.patch['custody.customerId'] = loadOwner;
         tx.update(ur, ap3.patch); tx.create(eventDoc(ur), Object.assign({ orgId: org, serial: sn }, ap3.event)); (cond === 'damaged' ? damagedApplied : applied).push(sn);
       });
     }
@@ -230,7 +251,10 @@ module.exports = A.handler(async function (req, res) {
     var unitsBy = {}; unitDocs.forEach(function (d) { if (d && d.exists && d.data().orgId === org) unitsBy[d.data().serial] = d.data(); });
     var siteRows = await sites(db, org), sitesBy = {}, byKey = {}; siteRows.forEach(function (s) { sitesBy[s.id] = s; byKey[C.siteKey(s.customerId, s.name, s.address && s.address.zip)] = s; });
     var customerId = b.customerId ? P.id(b.customerId) : null;
-    var planned = C.plan(parsed.rows, mapping, { units: unitsBy, sites: sitesBy, byKey: byKey, customerId: customerId, allowNewSites: b.allowNewSites === true }, now);
+    /* each unit's account, from its order when custody has none yet */
+    var ordIds = {}; Object.keys(unitsBy).forEach(function (sn) { var uu0 = unitsBy[sn]; if (uu0.orderId && !C.custodyOf(uu0).customerId && !uu0.customerId) ordIds[uu0.orderId] = true; });
+    var ordAcct = {}; await Promise.all(Object.keys(ordIds).slice(0, 300).map(async function (oid) { var od = await db.collection('orders').doc(P.id(oid)).get(); ordAcct[oid] = od.exists && od.data().orgId === org ? await B.accountOfOrder(db, org, od.data()) : null; }));
+    var planned = C.plan(parsed.rows, mapping, { units: unitsBy, sites: sitesBy, byKey: byKey, customerId: customerId, allowNewSites: b.allowNewSites === true, accountOf: function (uu1) { return ordAcct[uu1.orderId] || null; } }, now);
     if (b.dryRun !== false) return { ok: true, dryRun: true, headers: parsed.headers, mapping: mapping, plan: planned };
     /* commit: sites first, then every row's moves, in one batch per 200 rows */
     var batchRef = root(db, org).collection('custody_imports').doc(), batch = db.batch(), ops = 0, done = { created: 0, updated: 0, skipped: 0 };
@@ -240,7 +264,8 @@ module.exports = A.handler(async function (req, res) {
       if (item.problems.length) return; if (!item.actions.length) { done.skipped++; return; }
       var u = JSON.parse(JSON.stringify(unitsBy[item.serial])), ur = unitRef(db, org, item.serial), patch = {};
       item.actions.forEach(function (a) { var ap = C.apply(u, a.action, a, by, now, 'import'); Object.assign(patch, ap.patch); Object.keys(ap.patch).forEach(function (k) { var parts = k.split('.'), t = u; parts.slice(0, -1).forEach(function (p) { t = t[p] || (t[p] = {}); }); t[parts[parts.length - 1]] = ap.patch[k]; }); ap.event.importBatchId = batchRef.id; if (ops > 380) { batch = db.batch(); batches.push(batch); ops = 0; } batch.create(eventDoc(ur), Object.assign({ orgId: org, serial: item.serial }, ap.event)); ops++; });
-      if (customerId) patch['custody.customerId'] = customerId;
+      var rowOwner = customerId || C.custodyOf(unitsBy[item.serial]).customerId || unitsBy[item.serial].customerId || ordAcct[unitsBy[item.serial].orderId] || null;
+      if (rowOwner) patch['custody.customerId'] = rowOwner;
       batch.update(ur, patch); ops++; done.updated++;
     });
     batch.set(batchRef, { orgId: org, kind: 'assignment', fileName: String(b.fileName || '').slice(0, 200), rowCount: parsed.rows.length, created: done.created, updated: done.updated, skipped: done.skipped, errors: planned.items.filter(function (x) { return x.problems.length; }).map(function (x) { return { row: x.row, serial: x.serial, problems: x.problems }; }).slice(0, 500), mapping: mapping, committedAt: now, by: by });

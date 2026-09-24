@@ -114,6 +114,43 @@ afterwards.
 
 What changes is the shape of the row, not who creates it.
 
+### A colleague joins the company; they do not split it (2026-09-24)
+
+Everyone at a customer company works ONE account. What each person sees is the
+ACCOUNT: `api/_lib/buyer-accounts.js` `accountOrders()` is the one reader, and
+an order is the account's when it carries the account's `customerId` or is
+billed to one of its active people (orders written before the stamp existed,
+and the storefront's). An order stamped for a different account is never
+included, whoever it is billed to. My orders, my sites, the account's order
+count and the customer PO list all read through it; so does the office's
+Customer hub (`api/buyers.js ?customerId=`).
+
+How a person gets onto an account — one writer, `B.addUser` (the pointer and
+the user doc in one transaction, audited):
+
+| Who | How | Lands as |
+|---|---|---|
+| the tenant's office | Customer hub → Add a person (`api/buyers.js` `user-add`; the PO inbox's `contact` is the same writer) | active, owner or user |
+| the account's owner | Account → People → Add a colleague (`api/my-account.js` `add-user`): same company email domain as the owner's, never a public mailbox, 20 a day | active user |
+| the person themselves | first sign-in from the email domain on an office-made company account (`customers.domain`) | **pending** — nothing visible until the owner or the office approves |
+
+A stranger at no known company still gets a self-serve account of their own,
+as before. A public mailbox (`api/_lib/public-domains.js`) never joins anyone.
+
+`B.setUser` is the one writer of a person's access or role: the owner approves
+a request and turns a colleague off and on; the office also changes roles.
+Nobody can leave an account without an active owner, an owner cannot change
+their own access, and nobody is deleted — a turned-off person keeps their
+pointer (their past activity stays on the account).
+
+**The one move a page may make.** A colleague who signed in before being added
+got an account of their own. The office's Add a person may move that login onto
+the company ONLY when the stray account is empty — self-made, no orders (by
+account or by email), sites, designs, terms, agreements or Editor Lite grant,
+and nobody else on it. The stray is suspended with `supersededBy` (never
+`mergedInto`, never deleted) and its user doc turned off. Anything with history
+still returns the 409 and waits for the reviewed merge below.
+
 ### Merging is the one dangerous operation
 
 Three people at Amperage Capital order separately over two months and
@@ -145,7 +182,7 @@ enforced in `api/my-account.js`, not in rules:
 | their own name, phone | write | write | write |
 | the account's company, address | owner only | write | write |
 | terms{}, agreements[], plan, status | — | write | write |
-| other users on the account | owner only | write | write |
+| other users on the account | owner only (add at their own domain, approve, turn off/on) | write (add, move an empty stray login, role, access) | write |
 | uid, source, customerId, createdAt | — | — | system |
 
 A customer who could write their own `terms.discountPct` would be a customer
@@ -542,6 +579,21 @@ the obvious version. Since then, what landed:
 - §11 the tenant page: `admin/tenant.html`, `api/tenant-systems.js`.
 - §12 Editor Lite as a mode: `omega-editor-mode.js`, `shells/cleancell/`.
 
+- §2 people on an account (2026-09-24): `api/_lib/buyer-accounts.js`
+  (`accountOrders`, `addUser`, `setUser`, `joinRequest`), `api/buyers.js`,
+  `api/my-account.js`; tests in `scripts/test-customer-accounts.js`.
+
 Still open: the `designer` upgrade's tenant-vs-`org_members` question (§6),
 the Salesforce sync (§10 item 6), and whether the lite dashboard links the
-finance sizer (§12).
+finance sizer (§12). Also still open from §2:
+- the reviewed, order-moving merge script (`mergedInto`) — only an EMPTY
+  stray login can be moved today, from the office's Add a person;
+- the 2026-09-24 rules (users create-less and delete-less, `editorLite` and
+  `supersededBy` pinned) are in `firestore.rules` and need
+  `firebase deploy --only firestore:rules`; every write this change makes is
+  Admin SDK, so nothing waits on them;
+- existing orders are found by the account's people without a stamp; stamping
+  them for custody and QuickBooks is `scripts/backfill-order-customerid.js
+  --org <org>` (dry run first, `--apply` to write);
+- the sign-in email a customer receives is Firebase's project-wide template,
+  not the supplier's; a supplier-branded sign-in mail is not built.

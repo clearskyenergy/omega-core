@@ -288,6 +288,9 @@ function publicOrder(order, opts) {
   if (o.logic && o.logic.commercial && o.tenantPricing && o.tenantPricing.publishedToCustomer === true) {
     var policy = require('./logic-policy'), commercial = o.logic.commercial;
     out.checkout = { currency: 'USD', base: commercial.baseCents / 100, processingFee: commercial.feeCents / 100,
+      /* who bills: 'tenant' = the supplier invoices and collects on its own
+         paper (no ClearSky fee, no ClearSky collection to mention) */
+      accounting: o.logic.accounting === 'tenant' ? 'tenant' : 'quickbooks',
       total: commercial.totalCents / 100, depositPercent: commercial.terms.depositPct,
       invoices: Object.keys(o.logic.invoices || {}).map(function (stage) {
         var invoice = o.logic.invoices[stage];
@@ -304,7 +307,10 @@ function publicOrder(order, opts) {
      (api/my-orders.js POST). The office's internal notes are not here. */
   out.requests = (Array.isArray(o.requests) ? o.requests : []).slice(-20).map(function (r) {
     r = r || {};
-    return { id: clip(r.id, 40), kind: clip(r.kind, 20), message: clip(r.message, 2000), status: clip(r.status, 20) || 'open',
+    /* `by`: which person on the ACCOUNT asked — everyone on it now sees the
+       account's orders, so an unsigned request would be anybody's. Only a
+       customer writes a request, so this is always one of their own. */
+    return { id: clip(r.id, 40), kind: clip(r.kind, 20), message: clip(r.message, 2000), status: clip(r.status, 20) || 'open', by: clip(r.by, 160),
       at: when(r.at), answer: r.answer ? clip(r.answer, 2000) : null, answeredAt: when(r.answeredAt),
       address: r.address ? { line1: clip(r.address.line1, 200), city: clip(r.address.city, 100), state: clip(r.address.state, 40), zip: clip(r.address.zip, 20) } : null };
   });

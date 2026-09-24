@@ -373,7 +373,13 @@ is not built.
   inside, and so does the desktop office header (`chrome()`; the brand
   helper's `workspace`). Only the CUSTOMER app wears the tenant's name, ink
   and `appIcon.customer` (validated paths under `/tenants/<slug>/icons/`;
-  OMEGA icons as the fallback): it is what the tenant's own customers use. A
+  OMEGA icons as the fallback): it is what the tenant's own customers use,
+  one install per supplier (manifest id carries the org), and it prints the
+  contract's "Powered by …" line (`api/_lib/whitelabel.js` `attributionLine`,
+  the server twin of `omega-whitelabel.js` `attribution()`). Office pages mark
+  their header `data-product-name`, which `OmegaLogicTheme.apply()` never
+  touches; only customer pages use `data-brand-name`. The office does not
+  wear the tenant's colours; those are for its customers' surfaces. A
   tenant's icon set lives in its folder and its `tenant.json`
   (`scripts/make-tenant-icons.js <slug>` renders every `<app>-icon.svg`);
   the seed copies `appIcon` onto the record. Never a script URL in a
@@ -417,6 +423,21 @@ is not built.
   a cell edit is either a `detail` (reseller, end customer, installer,
   notes — links, never moves) or a move through the same `judge`/`apply`.
   Design and what is not built: `docs/LOGISTICS-CUSTODY.md`.
+- **A customer is an ACCOUNT with people on it**, not an email. Each
+  workspace's customers are `omega_orgs/{org}/customers/{id}` with
+  `users/{email}` and the `customer_index` pointer; `api/_lib/buyer-accounts.js`
+  is the ONE reader of an account's orders (`accountOrders`: its customerId,
+  or billed to one of its active people — never an order stamped for another
+  account) and the ONE writer of people (`addUser`, `setUser`, `joinRequest`).
+  Every active person on an account sees the account's orders, POs, sites and
+  units. A first sign-in from the email domain of an office-made company
+  account joins it as `pending` until the owner or the office approves; the
+  owner adds colleagues at their own domain; nobody is deleted and an account
+  always keeps an active owner. The office's Customer hub
+  (`api/buyers.js ?customerId=`, the Omega Logic app's Customers tab,
+  `portals/customer/admin.html`) opens the ACCOUNT. Custody and QuickBooks
+  follow the account too. Design and what is not built:
+  `docs/CUSTOMER-PORTAL.md` §2.
 - **Two ways an order is billed.** `fulfillment/config.accounting` is
   `'quickbooks'` (ClearSky invoices from its QuickBooks, fee added, payments
   reconciled there) or `'tenant'` (the OEM invoices on its own paper: the

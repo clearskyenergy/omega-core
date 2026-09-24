@@ -27,11 +27,16 @@ async function price(orderId, total, caller, accept) {
      total in tenant mode: ClearSky's charge to the OEM is a separate line. */
   if (!tenantBilled && (!conf.realmId || !conf.itemRef || conf.accountingApproved !== true)) throw A.httpError(409, 'Connect ClearSky QuickBooks and approve the installment item/tax treatment first');
   // Terms are keyed by the real customer account, not an arbitrary public form field.
-  var root = A.db().collection('omega_orgs').doc(order.orgId), override = null;
+  var root = A.db().collection('omega_orgs').doc(order.orgId), override = null, stampAccount = null;
   var pointer = await root.collection('customer_index').doc(String(order.customer.email).toLowerCase()).get();
   if (pointer.exists) {
     var cs = await root.collection('customers').doc(P.id(pointer.data().customerId)).get();
     if (cs.exists && cs.data().status !== 'disabled') override = cs.data().terms;
+    /* Pricing is where the office reviews an order: from here it belongs to
+       the customer ACCOUNT, so everyone on it sees it. Not for an order an
+       anonymous visitor typed on the public storefront — their email proves
+       nothing until they sign in. */
+    if (cs.exists && !order.customerId && ['embed', 'config-link'].indexOf(order.source) < 0) stampAccount = cs.id;
   }
   var commercial = P.snapshot(total, conf.terms, override, tenantBilled ? { percent: 0, fixed: 0 } : conf.fee);
   if (tenantBilled) commercial.billing = 'tenant';
@@ -49,12 +54,14 @@ async function price(orderId, total, caller, accept) {
     }
     if (JSON.stringify(o.items) !== JSON.stringify(order.items) || o.customer.email !== order.customer.email) throw A.httpError(409, 'Order changed; reload');
     var firstInvoice = invoicePlan(orderId, 'deposit', commercial.depositCents); if (tenantBilled && firstInvoice.amountCents) firstInvoice.status = 'to_issue';
-    tx.update(ref, { logic: { enabled: true, commercial: commercial, accounting: tenantBilled ? 'tenant' : 'quickbooks', realmId: tenantBilled ? null : String(conf.realmId), itemRef: tenantBilled ? null : String(conf.itemRef),
+    var priced = { logic: { enabled: true, commercial: commercial, accounting: tenantBilled ? 'tenant' : 'quickbooks', realmId: tenantBilled ? null : String(conf.realmId), itemRef: tenantBilled ? null : String(conf.itemRef),
       acceptedAt: accept ? new Date().toISOString() : null, createdAt: new Date().toISOString(), nextRunAt: Date.now(),
       invoices: { deposit: firstInvoice },
       payout: { mode: 'wire', status: 'awaiting_cleared_funds', sentCents: 0 }, leaseUntil: 0 },
       tenantPricing: { total: commercial.totalCents / 100, currency: 'USD', publishedToCustomer: true },
-      status: accept ? 'accepted' : 'quoted', updatedAt: A.FieldValue().serverTimestamp() });
+      status: accept ? 'accepted' : 'quoted', updatedAt: A.FieldValue().serverTimestamp() };
+    if (stampAccount && !o.customerId) priced.customerId = stampAccount;
+    tx.update(ref, priced);
     event(tx, ref, caller.email, tenantBilled ? 'Customer price approved; the OEM issues the deposit invoice on its own paper' : 'Customer price approved; installment invoice queued');
     return { ok: true, commercial: commercial };
   });
@@ -217,12 +224,12 @@ async function finish(orderId, caller, shipment) {
       if (o.delivery) throw A.httpError(409, 'Use Logistics and receiving for orders with a destination plan');
       if (l.commercial.balanceCents && !(l.invoices.balance || {}).satisfied) throw A.httpError(409, 'Final payment must be recorded before shipment');
       if (!shipment.carrier || !shipment.tracking) throw A.httpError(400, 'Carrier and tracking / bill-of-lading number required');
-      var shippedAt = new Date().toISOString();
+      var shippedAt = new Date().toISOString(), shipAcct = await require('./buyer-accounts').accountOfOrder(A.db(), o.orgId, o);
       tx.update(ref, { status: 'shipped', shipment: { carrier: String(shipment.carrier).slice(0, 80), tracking: String(shipment.tracking).slice(0, 120), shippedAt: shippedAt } });
       event(tx, ref, caller.email, 'Shipment recorded with passed serial genealogy');
       /* custody (api/_lib/custody.js): every shipping unit leaves the plant */
       var C = require('./custody');
-      units.docs.forEach(function (d) { var u = d.data(); if (!u.shipUnit) return; var v = C.judge(u, 'ship', {}); if (!v.ok) return; var ap = C.apply(u, 'ship', { at: shippedAt, note: 'Shipped ' + String(shipment.carrier).slice(0, 80) + ' ' + String(shipment.tracking).slice(0, 120) }, caller.email, shippedAt, 'logistics'); if (o.customerId) ap.patch['custody.customerId'] = o.customerId; ap.event.orderId = ref.id; tx.update(d.ref, ap.patch); tx.create(d.ref.collection('custody_events').doc(), Object.assign({ orgId: o.orgId, serial: u.serial }, ap.event)); });
+      units.docs.forEach(function (d) { var u = d.data(); if (!u.shipUnit) return; var v = C.judge(u, 'ship', {}); if (!v.ok) return; var ap = C.apply(u, 'ship', { at: shippedAt, note: 'Shipped ' + String(shipment.carrier).slice(0, 80) + ' ' + String(shipment.tracking).slice(0, 120) }, caller.email, shippedAt, 'logistics'); if (shipAcct && !C.custodyOf(u).customerId) ap.patch['custody.customerId'] = shipAcct; ap.event.orderId = ref.id; tx.update(d.ref, ap.patch); tx.create(d.ref.collection('custody_events').doc(), Object.assign({ orgId: o.orgId, serial: u.serial }, ap.event)); });
     } else if (!l.invoices.balance) {
       var balancePlan = invoicePlan(ref.id, 'balance', l.commercial.balanceCents); if (l.accounting === 'tenant' && balancePlan.amountCents) balancePlan.status = 'to_issue';
       tx.update(ref, { 'logic.invoices.balance': balancePlan, 'logic.readyAt': new Date().toISOString(), 'logic.nextRunAt': Date.now() });
