@@ -2027,6 +2027,8 @@ function finance(orders, owner) {
       if (!i.satisfied) f.receivableCents += Math.max(0, (Number(i.amountCents) || 0) - (Number(i.paidCents) || 0));
     });
     if (key === 'deposit') f.expectedDepositCents += inv.deposit ? Math.max(0, (Number(inv.deposit.amountCents) || 0) - (Number(inv.deposit.paidCents) || 0)) : (Number(c.depositCents) || 0);
+    /* released on PO: the order has moved past 'deposit' but the deposit is still owed */
+    else if (key !== 'cancelled') f.expectedDepositCents += creditOpen(o);
     if (key === 'release' || key === 'production') f.expectedBalanceCents += Math.max(0, (Number(c.totalCents) || 0) - (Number(c.depositCents) || 0));
     if (key === 'balance' && inv.balance) f.expectedBalanceCents += Math.max(0, (Number(inv.balance.amountCents) || 0) - (Number(inv.balance.paidCents) || 0));
     if (f.wire && l.payout) { f.wire.eligibleCents += Number(l.payout.eligibleCents) || 0; f.wire.sentCents += Number(l.payout.sentCents) || 0; f.wire.pendingCents += Number(l.payout.pendingCents) || 0; }
@@ -2311,7 +2313,11 @@ module.exports.iconPath = iconPath;
      path, forever. A reference that was voided is never silently received
      again: the office may reinstate it with a reason (a NEW entry that
      points at the voided one); a provider sync never may. qbo: and stripe:
-     references are the ledger sync's alone.
+     references are the ledger sync's alone — except that the office may
+     take back its own void of one, which stays the provider's entry.
+     ONE invoice takes its payments from ONE place: an invoice in the
+     workspace's QuickBooks refuses a hand entry, and a provider receipt is
+     a conflict while hand-recorded payments stand on the invoice.
    - voidPlan: a payment is VOIDED, never deleted. When the order is in the
      plant on the deposit being voided, the office chooses: keep building on
      the PO (a credit release) or hold (paymentHold + paymentException). A
@@ -2331,6 +2337,7 @@ var S = require('api/_lib/office-stage.js');
 var STAGES = ['deposit', 'balance'], BUCKETS = ['current', '1-30', '31-60', '61-90', '90+'];
 var MSG_PAY = 'This order is billed through QuickBooks; payments are reconciled there';
 var MSG_EDIT = 'This order is billed through QuickBooks; edit the invoice there';
+var NAME = { quickbooks: 'QuickBooks', stripe: 'Stripe' };
 var MSG_REL = 'Release on PO is for orders the OEM invoices itself; a ClearSky-billed order releases on its QuickBooks receipt';
 
 function fail(status, message) { var e = new Error(message); e.status = status; return e; }
@@ -2381,10 +2388,26 @@ function recordPlan(o, stage, p) {
   if (clean(p.bankReference, 500).length < 4) throw fail(400, 'Bank confirmation reference required');
   if (isPlaceholder(ref)) throw fail(400, 'That bank reference is a placeholder (' + ref.slice(0, 40) + '). Record the payment when the money has landed, with the bank\'s own reference for it.');
   var src = p.source || 'office', reserved = reservedSource(ref);
-  if (reserved && src !== reserved) throw fail(400, 'References starting qbo: or stripe: are written by the ledger sync');
   var key = refKey(ref), pays = inv.payments || [];
-  if (pays.some(function (x) { return !x.voidedAt && refKey(x.bankReference) === key; })) return { duplicate: true, invoice: inv };
+  var hasActive = pays.some(function (x) { return !x.voidedAt && refKey(x.bankReference) === key; });
   var vi = -1; pays.forEach(function (x, i) { if (x.voidedAt && refKey(x.bankReference) === key) vi = i; });
+  /* The office may take back its OWN void of a payment the sync recorded
+     (qbo:/stripe:): only a reference that provider wrote and that is now
+     voided, never a new one. The entry it adds is the provider's again —
+     same source, external id and amount — so later pulls match it and a real
+     reversal in the books still voids it. */
+  var provBack = !!reserved && src === 'office' && !hasActive && vi >= 0 && (pays[vi].source || 'office') === reserved;
+  if (reserved && src !== reserved && !provBack) throw fail(400, 'References starting qbo: or stripe: are written by the ledger sync');
+  if (hasActive) return { duplicate: true, invoice: inv };
+  /* ONE invoice takes its payments from ONE place. An invoice that lives in
+     the workspace's QuickBooks (the provider it has chosen) takes them from
+     QuickBooks: a hand entry here would be counted again when the pull reads
+     the same money as qbo:<id>. (A Stripe invoice still takes a wire recorded
+     by hand — the documented path above Stripe's per-payment cap; the check
+     on provider receipts below keeps that from counting twice.) */
+  if (src === 'office' && !provBack && inv.ledger && inv.ledger.invoiceId && inv.ledger.provider === 'quickbooks' && p.ledgerProvider === 'quickbooks') {
+    throw fail(409, 'This invoice is in QuickBooks (' + inv.ledger.invoiceId + '); apply the payment there and sync');
+  }
   var re = null, vdate = null;
   if (vi >= 0) {
     var vd = pays[vi]; vdate = String(vd.voidedAt).slice(0, 10);
@@ -2392,10 +2415,23 @@ function recordPlan(o, stage, p) {
     if (!p.reinstate) throw fail(409, 'Bank reference ' + ref + ' was recorded ' + vd.date + ' and voided ' + vdate + ' (' + clean(vd.voidReason, 80) + '). If that money has really landed, record it again with "reinstate" and say why.');
     var why = clean(p.reason, 500);
     if (why.length < 5) throw fail(400, 'Say why a voided reference is being recorded again');
+    if (provBack && p.amountCents !== vd.amountCents) throw fail(400, ref + ' was recorded from ' + NAME[reserved] + ' as USD ' + usd(vd.amountCents) + '; reinstate it for that amount');
     re = { reinstates: vi, reinstateReason: why };
   }
-  var entry = { amountCents: p.amountCents, date: p.date, bankReference: ref, by: p.by, at: p.at, source: src };
+  /* ...and the other way round: while this invoice carries payments recorded
+     by hand, a provider receipt is a conflict for a person, not a second
+     count of what may be the same money (a hand-recorded part payment, then
+     the invoice linked to books that hold that payment too). */
+  if (src !== 'office') {
+    var hand = pays.filter(function (x) { return !x.voidedAt && (x.source || 'office') === 'office'; });
+    if (hand.length) {
+      throw fail(409, 'This invoice has payments recorded by hand (' + hand.map(function (x) { return x.bankReference; }).join(', ').slice(0, 120) + '), so the ' + NAME[src] +
+        ' payment of USD ' + usd(p.amountCents) + ' is not recorded: one invoice takes its payments from one place. If ' + NAME[src] + ' holds that money, void the hand entry, then sync');
+    }
+  }
+  var entry = { amountCents: p.amountCents, date: p.date, bankReference: ref, by: p.by, at: p.at, source: provBack ? reserved : src };
   if (p.external) entry.external = p.external;
+  else if (provBack && pays[vi].external) entry.external = pays[vi].external;
   if (re) { entry.reinstates = re.reinstates; entry.reinstateReason = re.reinstateReason; }
   var payments = pays.concat([entry]);
   var invoice = Object.assign({}, inv, { payments: payments }, settle({ amountCents: inv.amountCents, id: inv.id, payments: payments }), { checkedAt: p.at });
@@ -2520,7 +2556,8 @@ function rows(entries, today, opts) {
         payUrl: /^https:\/\//.test(inv.payUrl || '') ? inv.payUrl : null, ledger: inv.ledger || null, syncError: l.ledgerSyncError ? l.ledgerSyncError.message : null,
         actions: {
           issue: tenantBilled && !inv.id && !cancelled,
-          record: tenantBilled && !!inv.id && !satisfied && !cancelled && (!l.paymentException || !!l.paymentHold),
+          /* an invoice in the workspace's QuickBooks takes its payments from there (recordPlan) */
+          record: tenantBilled && !!inv.id && !satisfied && !cancelled && (!l.paymentException || !!l.paymentHold) && !(linked && inv.ledger.provider === 'quickbooks' && provider === 'quickbooks'),
           void: tenantBilled && pays.some(function (p) { return !p.voided; }),
           voidNeedsChoice: tenantBilled && stage === 'deposit' && live && !l.creditRelease && !l.paymentHold,
           edit: tenantBilled && !!inv.id && !linked,

@@ -121,7 +121,16 @@ module.exports = A.handler(async function (req) {
       await eref.update({ status: 'ignored', finishedAt: nowIso() });
       return { ok: true, ignored: true };
     }
-    await require('./_lib/logic-workflow').syncLedger(hit.orderId, { email: 'stripe-webhook' }, { source: 'stripe-webhook' });
+    try { await require('./_lib/logic-workflow').syncLedger(hit.orderId, { email: 'stripe-webhook' }, { source: 'stripe-webhook' }); }
+    catch (e) {
+      /* The order's OTHER invoice was refused by Stripe (it is on the order
+         as logic.ledgerSyncError) but the one this event is about synced:
+         the event is done. Retrying it for days would change nothing. */
+      var part = e && e.partial && e.partial.stages && e.partial.stages[hit.stage];
+      if (!part || part.error) throw e;
+      await eref.update({ status: 'done', orderId: hit.orderId, finishedAt: nowIso(), error: String(e.message || e).slice(0, 300) });
+      return { ok: true, orderId: hit.orderId, stage: hit.stage, partial: true };
+    }
     await eref.update({ status: 'done', orderId: hit.orderId, finishedAt: nowIso() });
     return { ok: true, orderId: hit.orderId, stage: hit.stage };
   } catch (e) {

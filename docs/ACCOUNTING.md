@@ -39,7 +39,11 @@ Now there is, and the placeholder cannot happen again.
    reason); that appends a NEW entry (`reinstates: <index>`) and the voided
    one stays. The ledger sync never reinstates: a voided `qbo:` / `stripe:`
    reference that reappears in a pull is reported as a conflict, not
-   recorded.
+   recorded. The office may take back its OWN void of such a reference the
+   same way (reinstate and a reason, for the amount the provider recorded):
+   the new entry is the provider's again (its `source`, `external` id and
+   amount), so later pulls match it and a real reversal in the books still
+   voids it. The office can never type a NEW `qbo:` / `stripe:` reference.
 3. **Placeholders are refused outright** (`isPlaceholder`: `REPLACE`,
    `PLACEHOLDER`, `TBD`, `TODO`, `PENDING`, `NOT (YET) RECEIVED`, `DELETE
    THIS`, `XXXX`, `0000`, `N/A`) on every path, reinstated or not. The intake
@@ -80,6 +84,24 @@ Now there is, and the placeholder cannot happen again.
    automatically** (`ledger.state === 'pending'`). An invoice issued before
    (Amperage's deposit) is pushed or **linked** by an explicit action, so
    nothing is entered twice in books that may already hold it.
+
+10. **One invoice takes its payments from one place.** Bank references
+    from the office and `qbo:` / `stripe:` references from a pull never
+    match, so the same money could otherwise be counted twice — once by
+    hand, once by the pull — and a doubled part payment would release the
+    plant on money that never arrived (the Amperage failure again). So:
+    - an invoice that lives in the workspace's **QuickBooks** (linked or
+      pushed, and QuickBooks is still the chosen provider) refuses a payment
+      recorded by hand — *"This invoice is in QuickBooks (145); apply the
+      payment there and sync"* — and the page does not offer Record payment
+      on it. After the workspace switches to *Off* (or to Stripe) the office
+      records by hand again;
+    - a **Stripe** invoice still takes a wire recorded by hand: that is the
+      path for an installment above Stripe's per-payment cap (Amperage);
+    - either way, while an invoice carries payments recorded by hand, a
+      provider receipt is **not recorded**: the pull reports a conflict
+      naming the hand entries, and a person voids the hand entry the books
+      now hold, then syncs. Nothing is released on it meanwhile.
 
 ## Where it lives
 
@@ -188,9 +210,36 @@ order change and its order event: `ledger-invoice-issued`,
   `charge.dispute`). An open dispute or a partial refund is a warning a
   person reads; a full refund or a lost dispute is a reversal (void + hold).
 - **QuickBooks invoices have a reverse index** like Stripe's
-  (`…/quickbooks_workspaces/orgs/{org}/invoices/{id}`), so one QuickBooks
-  invoice can never be linked to two orders and a push that died after
-  Intuit committed resumes instead of duplicating.
+  (`…/quickbooks_workspaces/orgs/{org}/invoices/{realmId}_{id}`), so one
+  QuickBooks invoice can never be linked to two orders and a push that died
+  after Intuit committed resumes instead of duplicating. It is keyed by
+  company because QuickBooks numbers invoices per company: after a workspace
+  moves to another company, that company's invoice 145 is not the old one's
+  145, and the old company's entries stay as history (never overwritten).
+- **A pull applies reversals before new receipts.** A QuickBooks payment
+  deleted and entered again under a new id (or two merged into one) is then
+  a void followed by a receipt that lifts the hold the void set, in the same
+  pull, instead of a receipt refused as "exceeding the invoice" followed by
+  a void that holds an order whose money never left the books. (The void and
+  the lift are both in the order's events, a moment apart.)
+- **One invoice refused by the provider does not stop the other.** The
+  deposit and the balance are pulled separately; a whole-invoice refusal
+  ("QuickBooks invoice changed; reconcile by hand", a payment customer
+  mismatch, an invoice in a company the workspace is no longer connected
+  to) is kept on that stage, the other stage is still pulled and recorded,
+  and only then does the sync fail — `logic.ledgerSyncError` names the
+  invoice ("deposit invoice: …"). "Sync all now" reports what the other
+  invoice recorded; a Stripe event about the invoice that synced is marked
+  done instead of being retried for days.
+- **Deposits expected** on the dashboard (`S.finance`) includes a deposit
+  still open on an order released on PO, whatever stage the order has moved
+  to, so the Cash flow panel agrees with itself and with "On PO credit".
+- **What an action says is shown where the person is looking**: inside the
+  open drawer (it covers the page on a phone), and a failed push or sync
+  redraws the row so the error kept on the invoice is on screen. A void the
+  server answers with "choose keep building on the PO, or hold" (the order
+  reached the plant after the page loaded) now offers that choice in the
+  dialog. Release on PO says whether the plant has actually started.
 - **"Connected"** means usable: a QuickBooks company whose refresh token has
   expired, or that was connected in the other Intuit environment, shows as
   not connected, with the reason, and the page offers Connect again.
@@ -258,6 +307,11 @@ the deposit and the balance recorded.
   deposit check `finish()` gained, which logistics already applied.
 - **Pushing ClearSky-billed orders** anywhere but ClearSky's QuickBooks
   (unchanged).
+- **Swapping a hand entry for the provider's copy in one step.** When a pull
+  reports that the books hold money already recorded by hand, the office
+  voids the hand entry and syncs; on a released deposit that void asks keep
+  building / hold like any other, and the pull that follows records the
+  provider's entry (lifting a hold).
 - **Entries for this page** in `CLAUDE.md`, `docs/OMEGA-LOGIC-MANUAL.md` and
   `api/_lib/kit.js` are follow-ups: those files were being changed by other
   work when this landed.

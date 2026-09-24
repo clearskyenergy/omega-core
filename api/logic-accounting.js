@@ -220,6 +220,11 @@ module.exports = A.handler(async function (req, res) {
     } catch (e) {
       if (b.orderId) throw e;
       row.error = String(e.message || e).slice(0, 300); counts.errors++;
+      /* one invoice refused by the provider: what the other one recorded is still reported */
+      if (e.partial && e.partial.stages) {
+        row.stages = e.partial.stages;
+        Object.keys(row.stages).forEach(function (k) { var st = row.stages[k]; counts.recorded += st.recorded.length; counts.voided += st.voided.length; counts.conflicts += st.conflicts.length; });
+      }
     }
     results.push(row);
   }

@@ -173,13 +173,24 @@ async function qbResult(org, realm, id, amountCents, customerId) {
 }
 /* Reverse index: which order a workspace QuickBooks invoice belongs to, so
    one QuickBooks invoice can never be linked to two orders (its payments
-   would count twice) and a push that died after Intuit committed resumes. */
+   would count twice) and a push that died after Intuit committed resumes.
+   Keyed by COMPANY and id (`<realmId>_<invoiceId>`): QuickBooks numbers
+   invoices per company, so after a workspace moves to another company its
+   invoice 145 is not the old company's 145. The old company's entries stay
+   as the history of the orders pushed there. A document written under the
+   bare id (before the key carried the company) is honoured only in its own
+   company. */
+function qbIndexRef(org, realm, id) { return qbInvoices(org).doc(String(realm) + '_' + String(id)); }
 async function qbIndex(org, realm, id, view, stage) {
-  var ref = qbInvoices(org).doc(String(id)), s = await ref.get();
-  if (s.exists && (s.data().orderId !== view.id || s.data().stage !== stage)) {
-    throw fail(409, 'QuickBooks invoice ' + id + ' is already linked to another order (' + (s.data().orderNo || s.data().orderId) + ', ' + s.data().stage + ')');
+  var ref = qbIndexRef(org, realm, id), s = await ref.get(), hit = s.exists ? s.data() : null;
+  if (!hit) {
+    var legacy = await qbInvoices(org).doc(String(id)).get();
+    if (legacy.exists && String(legacy.data().realmId) === String(realm)) hit = legacy.data();
   }
-  if (!s.exists) await ref.set({ orderId: view.id, orderNo: view.orderNo || null, stage: stage, number: view.invoice.number || null, realmId: String(realm), createdAt: nowIso() });
+  if (hit && (hit.orderId !== view.id || hit.stage !== stage)) {
+    throw fail(409, 'QuickBooks invoice ' + id + ' is already linked to another order (' + (hit.orderNo || hit.orderId) + ', ' + hit.stage + ')');
+  }
+  if (!s.exists) await ref.set({ orderId: view.id, orderNo: view.orderNo || null, stage: stage, number: view.invoice.number || null, realmId: String(realm), invoiceId: String(id), createdAt: nowIso() });
 }
 
 var quickbooks = {
@@ -231,10 +242,10 @@ var quickbooks = {
     var prior = (await qbInvoices(org).where('orderId', '==', view.id).where('stage', '==', stage).get()).docs
       .filter(function (x) { return String(x.data().realmId) === realm; });
     for (var i = 0; i < prior.length; i++) {
-      var old;
-      try { old = (await Q.request(org, 'invoice/' + encodeURIComponent(prior[i].id))).Invoice || {}; }
+      var old, qid = String(prior[i].data().invoiceId || prior[i].id);   /* a bare-id document is its own id */
+      try { old = (await Q.request(org, 'invoice/' + encodeURIComponent(qid))).Invoice || {}; }
       catch (e) { if (String(e.code) === '610') continue; throw e; }   /* 610: deleted in QuickBooks */
-      if (money(old.TotalAmt) > 0) return qbResult(org, realm, prior[i].id, inv.amountCents, (old.CustomerRef || {}).value);
+      if (money(old.TotalAmt) > 0) return qbResult(org, realm, qid, inv.amountCents, (old.CustomerRef || {}).value);
     }
     var customerId = await qbCustomer(org, realm, view), amount = inv.amountCents / 100;
     var memo = stageWord(stage) + ' — ' + (po ? 'PO ' + po + ' — ' : '') + 'Invoice ' + number;

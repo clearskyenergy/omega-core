@@ -164,6 +164,14 @@ async function recordPayment(orderId, stage, b, caller, opts) {
     var p = { amountCents: amount, date: String(b.date || '').slice(0, 10), bankReference: String(b.bankReference == null ? '' : b.bankReference), by: caller.email, at: at,
       source: opts.source || 'office', reinstate: b.reinstate === true, reason: b.reason };
     if (opts.external) p.external = opts.external;
+    /* a hand entry on an invoice that lives in the workspace's books: which
+       books the workspace keeps NOW decides whether they own its payments
+       (after a switch to "none" the office records by hand again) */
+    var li = ((l.invoices || {})[stage] || {}).ledger;
+    if (p.source === 'office' && li && li.invoiceId && o.orgId) {
+      var cs = await tx.get(db.collection('omega_orgs').doc(o.orgId).collection('fulfillment').doc('config'));
+      p.ledgerProvider = chosenProvider(cs.exists ? cs.data() : {});
+    }
     var plan = R.recordPlan(o, stage, p);
     if (plan.duplicate) return { ok: true, duplicate: true, invoice: plan.invoice };
     var changes = {}; changes['logic.invoices.' + stage] = plan.invoice; changes['logic.nextRunAt'] = Date.now();
@@ -344,8 +352,15 @@ function linkLedgerInvoice(orderId, stage, providerInvoiceId, caller) { return p
 /* Push what is pending, then read the payments back from the provider and
    apply them through recordPayment / voidPayment — the same rules the office
    uses. A provider never re-receives a voided reference (a conflict, not a
-   write) and never reinstates. Only the provider's refusal of the whole
-   invoice throws; one payment that does not fit is a conflict on the stage. */
+   write) and never reinstates. One payment that does not fit is a conflict
+   on the stage. The provider's refusal of a whole invoice is kept on that
+   stage and the OTHER stage is still pulled; only after both have been tried
+   does the sync throw, naming the stage(s) that failed, with what did sync
+   on the error as `partial`.
+   Reversals are applied BEFORE new receipts: a payment deleted and entered
+   again under a new id (or two merged into one) is then a void followed by a
+   receipt, never a receipt refused as exceeding the invoice followed by a
+   void that holds an order whose money never left the books. */
 async function tenantSync(orderId, config) {
   var ref = A.db().collection('orders').doc(P.id(orderId)), snap = await ref.get();
   if (!snap.exists) throw A.httpError(404, 'Order not found');
@@ -356,7 +371,7 @@ async function tenantSync(orderId, config) {
   if (!p) return { ok: true, provider: 'none', skipped: 'none' };
   var provider = ledgerSync().providers[p], sync = { email: p + '-sync' };
   if (!(await provider.ready(o.orgId))) return { ok: true, provider: p, skipped: 'not-connected' };
-  var out = { ok: true, provider: p, stages: {} };
+  var out = { ok: true, provider: p, stages: {} }, failed = [];
   for (var stage of R.STAGES) {
     o = (await ref.get()).data();
     var inv = o.logic.invoices[stage];
@@ -370,8 +385,16 @@ async function tenantSync(orderId, config) {
     }
     if (inv.ledger && inv.ledger.invoiceId && inv.ledger.provider === p) {
       touched = true;
-      var pulled = await provider.pullPayments(o.orgId, await viewOf(o, ref.id, stage, config), stage), note = null;
-      for (var item of pulled || []) {
+      var pulled, note = null;
+      try { pulled = await provider.pullPayments(o.orgId, await viewOf(o, ref.id, stage, config), stage); }
+      catch (e) {
+        st.error = String(e.message || e).slice(0, 300); failed.push({ stage: stage, error: e });
+        out.stages[stage] = st;
+        continue;
+      }
+      /* stable: the provider's own order is kept within reversals and within receipts */
+      pulled = (pulled || []).slice().sort(function (a, b) { return (b.reversed ? 1 : 0) - (a.reversed ? 1 : 0); });
+      for (var item of pulled) {
         var cur = (await ref.get()).data().logic.invoices[stage], key = R.refKey(item.ref), pays = cur.payments || [];
         var active = pays.filter(function (x) { return !x.voidedAt && R.refKey(x.bankReference) === key; })[0];
         var voided = pays.filter(function (x) { return x.voidedAt && R.refKey(x.bankReference) === key; }).pop();
@@ -404,6 +427,11 @@ async function tenantSync(orderId, config) {
       });
     }
     if (touched) out.stages[stage] = st;
+  }
+  if (failed.length) {
+    var agg = A.httpError(failed[0].error.status || 502, failed.map(function (f) { return f.stage + ' invoice: ' + String(f.error.message || f.error); }).join('; ').slice(0, 300));
+    agg.partial = out;
+    throw agg;
   }
   return out;
 }
