@@ -17,8 +17,15 @@ async function price(orderId, total, caller, accept) {
   var order = initial.data(), ctx = await X.context(order.orgId);
   if(order.poIntake&&!order.poIntake.convertedAt)throw A.httpError(409,'Review and map the uploaded PO to catalog items before pricing');
   if (!X.enabled(ctx)) throw A.httpError(409, 'Enable the Omega Logic subscription and fulfillment configuration first');
-  var conf = ctx.config;
-  if (!conf.realmId || !conf.itemRef || conf.accountingApproved !== true) throw A.httpError(409, 'Connect ClearSky QuickBooks and approve the installment item/tax treatment first');
+  var conf = ctx.config, tenantBilled = conf.accounting === 'tenant';
+  /* Two ways an order is billed. QUICKBOOKS (default): ClearSky invoices the
+     customer from its QuickBooks and the workflow reconciles payments there.
+     TENANT: the OEM invoices its own customer on its own paper (its number,
+     its bank); the office records "invoice issued" and "payment received"
+     here (issueInvoice / recordPayment), and the same release, ready and
+     ship machinery follows. No processing fee is added to the customer's
+     total in tenant mode: ClearSky's charge to the OEM is a separate line. */
+  if (!tenantBilled && (!conf.realmId || !conf.itemRef || conf.accountingApproved !== true)) throw A.httpError(409, 'Connect ClearSky QuickBooks and approve the installment item/tax treatment first');
   // Terms are keyed by the real customer account, not an arbitrary public form field.
   var root = A.db().collection('omega_orgs').doc(order.orgId), override = null;
   var pointer = await root.collection('customer_index').doc(String(order.customer.email).toLowerCase()).get();
@@ -26,7 +33,8 @@ async function price(orderId, total, caller, accept) {
     var cs = await root.collection('customers').doc(P.id(pointer.data().customerId)).get();
     if (cs.exists && cs.data().status !== 'disabled') override = cs.data().terms;
   }
-  var commercial = P.snapshot(total, conf.terms, override, conf.fee);
+  var commercial = P.snapshot(total, conf.terms, override, tenantBilled ? { percent: 0, fixed: 0 } : conf.fee);
+  if (tenantBilled) commercial.billing = 'tenant';
   P.quantities(order.items);
   return A.db().runTransaction(async function (tx) {
     var row = await tx.get(ref), o = row.data();
@@ -40,15 +48,60 @@ async function price(orderId, total, caller, accept) {
       return { ok: true, duplicate: true };
     }
     if (JSON.stringify(o.items) !== JSON.stringify(order.items) || o.customer.email !== order.customer.email) throw A.httpError(409, 'Order changed; reload');
-    tx.update(ref, { logic: { enabled: true, commercial: commercial, realmId: String(conf.realmId), itemRef: String(conf.itemRef),
+    var firstInvoice = invoicePlan(orderId, 'deposit', commercial.depositCents); if (tenantBilled && firstInvoice.amountCents) firstInvoice.status = 'to_issue';
+    tx.update(ref, { logic: { enabled: true, commercial: commercial, accounting: tenantBilled ? 'tenant' : 'quickbooks', realmId: tenantBilled ? null : String(conf.realmId), itemRef: tenantBilled ? null : String(conf.itemRef),
       acceptedAt: accept ? new Date().toISOString() : null, createdAt: new Date().toISOString(), nextRunAt: Date.now(),
-      invoices: { deposit: invoicePlan(orderId, 'deposit', commercial.depositCents) },
+      invoices: { deposit: firstInvoice },
       payout: { mode: 'wire', status: 'awaiting_cleared_funds', sentCents: 0 }, leaseUntil: 0 },
       tenantPricing: { total: commercial.totalCents / 100, currency: 'USD', publishedToCustomer: true },
       status: accept ? 'accepted' : 'quoted', updatedAt: A.FieldValue().serverTimestamp() });
-    event(tx, ref, caller.email, 'Customer price approved; installment invoice queued');
+    event(tx, ref, caller.email, tenantBilled ? 'Customer price approved; the OEM issues the deposit invoice on its own paper' : 'Customer price approved; installment invoice queued');
     return { ok: true, commercial: commercial };
   });
+}
+/* TENANT-BILLED: the office records the invoice it issued (number, date) and
+   each payment that landed (amount, date, bank reference). Cumulative and
+   idempotent by bank reference; a stage is satisfied when what was received
+   covers what was invoiced, and release / ready / ship follow exactly as
+   they do from a QuickBooks receipt. */
+function stageOf(l, stage) { if (['deposit', 'balance'].indexOf(stage) < 0) throw A.httpError(400, 'stage must be deposit or balance'); var inv = l.invoices[stage]; if (!inv) throw A.httpError(409, 'No ' + stage + ' invoice on this order yet' + (stage === 'balance' ? ' — verify ready first' : '')); return inv; }
+async function issueInvoice(orderId, stage, b, caller) {
+  var db = A.db(), ref = db.collection('orders').doc(P.id(orderId)), number = String(b && b.number || '').trim().slice(0, 80), date = String(b && b.date || '').slice(0, 10);
+  if (!number) throw A.httpError(400, 'Invoice number required');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) throw A.httpError(400, 'Invoice date must be YYYY-MM-DD');
+  return db.runTransaction(async function (tx) {
+    var s = await tx.get(ref); if (!s.exists) throw A.httpError(404, 'Order not found');
+    var o = s.data(), l = o.logic; if (!l || l.accounting !== 'tenant') throw A.httpError(409, 'This order is billed through QuickBooks; invoices are issued there');
+    var inv = stageOf(l, stage); if (!inv.amountCents) throw A.httpError(409, 'Nothing is due at this stage');
+    if (inv.id && inv.id !== number) throw A.httpError(409, 'Invoice ' + inv.id + ' is already recorded for this stage');
+    var updated = Object.assign({}, inv, { id: number, issuedAt: date, issuedBy: caller.email, status: inv.satisfied ? 'paid' : 'awaiting_payment', paidCents: inv.paidCents || 0 });
+    var changes = {}; changes['logic.invoices.' + stage] = updated; tx.update(ref, changes);
+    if (inv.id !== number) event(tx, ref, caller.email, stage + ' invoice ' + number + ' issued ' + date + ' for USD ' + (inv.amountCents / 100));
+    return { ok: true, duplicate: inv.id === number, invoice: updated };
+  });
+}
+async function recordPayment(orderId, stage, b, caller) {
+  var db = A.db(), ref = db.collection('orders').doc(P.id(orderId)), amount = P.cents(b && b.amount), date = String(b && b.date || '').slice(0, 10), bankRef = String(b && b.bankReference || '').trim().slice(0, 120);
+  if (!amount) throw A.httpError(400, 'Amount received required');
+  if (bankRef.length < 4) throw A.httpError(400, 'Bank confirmation reference required');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) throw A.httpError(400, 'Payment date must be YYYY-MM-DD');
+  var out = await db.runTransaction(async function (tx) {
+    var s = await tx.get(ref); if (!s.exists) throw A.httpError(404, 'Order not found');
+    var o = s.data(), l = o.logic; if (!l || l.accounting !== 'tenant') throw A.httpError(409, 'This order is billed through QuickBooks; payments are reconciled there');
+    if (o.cancelRequested || l.paymentException) throw A.httpError(409, 'Resolve the order exception first');
+    var inv = stageOf(l, stage); if (!inv.id) throw A.httpError(409, 'Record the ' + stage + ' invoice number first');
+    var payments = (inv.payments || []).slice();
+    if (payments.some(function (x) { return x.bankReference === bankRef; })) return { ok: true, duplicate: true, invoice: inv };
+    payments.push({ amountCents: amount, date: date, bankReference: bankRef, by: caller.email, at: new Date().toISOString() });
+    var paid = payments.reduce(function (n, x) { return n + x.amountCents; }, 0);
+    if (paid > inv.amountCents) throw A.httpError(400, 'Payments would exceed the invoice: USD ' + (paid / 100) + ' against ' + (inv.amountCents / 100));
+    var updated = Object.assign({}, inv, { payments: payments, paidCents: paid, satisfied: paid >= inv.amountCents, balanceCents: inv.amountCents - paid, status: paid >= inv.amountCents ? 'paid' : 'part_paid', checkedAt: new Date().toISOString() });
+    var changes = {}; changes['logic.invoices.' + stage] = updated; changes['logic.nextRunAt'] = Date.now(); tx.update(ref, changes);
+    event(tx, ref, caller.email, stage + ' invoice ' + inv.id + ': USD ' + (amount / 100) + ' received ' + date + ' · bank reference ' + bankRef + (updated.satisfied ? ' · paid in full' : ' · USD ' + (updated.balanceCents / 100) + ' outstanding'));
+    return { ok: true, invoice: updated };
+  });
+  if (!out.duplicate) { var run = await processOrder(orderId); out.workflow = run; }
+  return out;
 }
 async function release(ref) {
   var db = A.db();
@@ -102,6 +155,7 @@ async function processOrder(orderId) {
       o = (await ref.get()).data();
       var inv = o.logic.invoices[stage];
       if (!inv || !inv.amountCents) continue;
+      if (o.logic.accounting === 'tenant') continue; /* issued and paid on the OEM's paper: recordPayment() keeps the stage; nothing to reconcile */
       if (!inv.id) {
         var created = await Q.invoice(o, stage), patch = {};
         patch['logic.invoices.' + stage + '.id'] = created.id;
@@ -170,10 +224,11 @@ async function finish(orderId, caller, shipment) {
       var C = require('./custody');
       units.docs.forEach(function (d) { var u = d.data(); if (!u.shipUnit) return; var v = C.judge(u, 'ship', {}); if (!v.ok) return; var ap = C.apply(u, 'ship', { at: shippedAt, note: 'Shipped ' + String(shipment.carrier).slice(0, 80) + ' ' + String(shipment.tracking).slice(0, 120) }, caller.email, shippedAt, 'logistics'); if (o.customerId) ap.patch['custody.customerId'] = o.customerId; ap.event.orderId = ref.id; tx.update(d.ref, ap.patch); tx.create(d.ref.collection('custody_events').doc(), Object.assign({ orgId: o.orgId, serial: u.serial }, ap.event)); });
     } else if (!l.invoices.balance) {
-      tx.update(ref, { 'logic.invoices.balance': invoicePlan(ref.id, 'balance', l.commercial.balanceCents), 'logic.readyAt': new Date().toISOString(), 'logic.nextRunAt': Date.now() });
-      event(tx, ref, caller.email, 'Quality release complete; final invoice queued');
+      var balancePlan = invoicePlan(ref.id, 'balance', l.commercial.balanceCents); if (l.accounting === 'tenant' && balancePlan.amountCents) balancePlan.status = 'to_issue';
+      tx.update(ref, { 'logic.invoices.balance': balancePlan, 'logic.readyAt': new Date().toISOString(), 'logic.nextRunAt': Date.now() });
+      event(tx, ref, caller.email, l.accounting === 'tenant' ? 'Quality release complete; the OEM issues the final invoice' : 'Quality release complete; final invoice queued');
     }
     return { ok: true };
   });
 }
-module.exports = { price: price, release: release, processOrder: processOrder, finish: finish, event: event };
+module.exports = { price: price, release: release, processOrder: processOrder, finish: finish, event: event, issueInvoice: issueInvoice, recordPayment: recordPayment };

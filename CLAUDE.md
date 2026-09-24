@@ -411,6 +411,15 @@ is not built.
   a cell edit is either a `detail` (reseller, end customer, installer,
   notes — links, never moves) or a move through the same `judge`/`apply`.
   Design and what is not built: `docs/LOGISTICS-CUSTODY.md`.
+- **Two ways an order is billed.** `fulfillment/config.accounting` is
+  `'quickbooks'` (ClearSky invoices from its QuickBooks, fee added, payments
+  reconciled there) or `'tenant'` (the OEM invoices on its own paper: the
+  office records `invoice-issued` and `payment-received` on the order via
+  `logic-workflow.issueInvoice/recordPayment`, no fee on the customer total,
+  no QuickBooks; release, ready and ship follow from the recorded payment).
+  `scripts/intake-order.js` runs one order from the paperwork through the
+  real endpoint code (dry run on the double, `--apply` live); the order file
+  is never committed (`docs/order-intake-template.json` is the shape).
 - **Where everything lives is ONE list**: `api/_lib/kit.js` (apps, pages,
   sandboxes, PDF guides, per audience, with the address for a workspace).
   `logic-kit.html` + `api/logic-kit.js` (owner-only) show it per subscriber

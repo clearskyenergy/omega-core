@@ -407,6 +407,29 @@ await check('QuickBooks write contract pins realm, sends request IDs and separat
   global.fetch=async function(url,options){assert(url.startsWith('https://fixture.invalid/'));captured.push({url:url,body:options.body&&JSON.parse(options.body)});return {ok:true,status:200,json:async function(){return url.includes('/query')?{QueryResponse:{Customer:[{Id:'C'}]}}:{Invoice:{Id:'I'}};}};};
   try{await real.invoice(o,'deposit');var call=captured.find(function(c){return c.body&&c.body.Line;});assert(call.url.includes('requestid='));assert.equal(call.body.Line.length,2);assert.equal(P.cents(call.body.Line[0].Amount)+P.cents(call.body.Line[1].Amount),o.logic.commercial.depositCents);assert(call.body.Line[1].Description.includes('processing fee'));await assert.rejects(real.request('invoice/1',null,null,'wrong'),/company does not match/);}finally{global.fetch=savedFetch;}
 });
+await check('a tenant-billed order needs no QuickBooks: the office records its own invoice and the payment that landed, and release, ready and ship follow',async function(){
+  setup();invoiceWrites=0;db.seed('omega_orgs/cleancell.us/fulfillment/config',{enabled:true,accounting:'tenant',terms:{depositPct:90,dueDays:0},fee:{percent:0.25,fixed:0}});
+  db.seed('omega_orgs/cleancell.us/customer_index/buyer@example.com',{customerId:'c1'});db.seed('omega_orgs/cleancell.us/customers/c1',{name:'Buyer Co',status:'active',terms:{depositPct:90,dueDays:0}});
+  var priced=await post(office,{action:'price',orderId:'one',total:1498999,accept:true});var o=db.data.get('orders/one');
+  assert.equal(o.logic.accounting,'tenant');assert.equal(o.logic.commercial.feeCents,0,'no processing fee on the customer total');assert.equal(o.logic.commercial.totalCents,149899900);assert.equal(o.logic.commercial.depositCents,134909910);assert.equal(o.logic.invoices.deposit.status,'to_issue');assert.equal(o.logic.realmId,null);
+  await assert.rejects(post(office,{action:'payment-received',orderId:'one',stage:'deposit',amount:1349099.10,date:'2026-09-24',bankReference:'ACH 4471'}),/invoice number first/);
+  var iss=await post(office,{action:'invoice-issued',orderId:'one',stage:'deposit',number:'CCUS-3V3I-0926-01 Rev B',date:'2026-09-23'},admin);assert.equal(iss.invoice.status,'awaiting_payment');
+  assert.equal((await post(office,{action:'invoice-issued',orderId:'one',stage:'deposit',number:'CCUS-3V3I-0926-01 Rev B',date:'2026-09-23'},admin)).duplicate,true);
+  await assert.rejects(post(office,{action:'invoice-issued',orderId:'one',stage:'deposit',number:'OTHER-1',date:'2026-09-23'},admin),/already recorded/);
+  var part=await post(office,{action:'payment-received',orderId:'one',stage:'deposit',amount:899399.40,date:'2026-09-24',bankReference:'ACH 4471'},admin);assert.equal(part.invoice.status,'part_paid');assert.equal(part.invoice.balanceCents,44969970);assert(!db.data.get('orders/one').logic.releasedAt,'a part payment does not release');
+  assert.equal((await post(office,{action:'payment-received',orderId:'one',stage:'deposit',amount:899399.40,date:'2026-09-24',bankReference:'ACH 4471'},admin)).duplicate,true,'the same bank reference twice is one payment');
+  var full=await post(office,{action:'payment-received',orderId:'one',stage:'deposit',amount:449699.70,date:'2026-09-25',bankReference:'ACH 4472'},admin);assert.equal(full.invoice.status,'paid');assert.equal(full.invoice.satisfied,true);
+  o=db.data.get('orders/one');assert(o.logic.releasedAt,'deposit paid in full releases the order');assert.equal(o.status,'in_fulfilment');assert.equal(invoiceWrites,0,'nothing was written to QuickBooks');
+  await post(factory,{action:'register',workOrderId:'wo_one',requestId:'reg_t1',units:[{serial:'TB-0001',sku:'CAB',unitType:'cabinet',shipUnit:true}]},admin);
+  var u=db.data.get('plant_units/cleancell.us__TB-0001');Object.assign(u,{at:'ready',test:{result:'pass'},hold:null});
+  await post(office,{action:'ready',orderId:'one'});o=db.data.get('orders/one');assert.equal(o.logic.invoices.balance.status,'to_issue');assert.equal(o.logic.invoices.balance.amountCents,14989990);
+  await assert.rejects(post(office,{action:'ship',orderId:'one',shipment:{carrier:'Estes',tracking:'BOL-1'}}),/Final payment/);
+  await post(office,{action:'invoice-issued',orderId:'one',stage:'balance',number:'CCUS-3V3I-0926-02',date:'2026-10-10'},admin);
+  await assert.rejects(post(office,{action:'payment-received',orderId:'one',stage:'balance',amount:200000,date:'2026-10-12',bankReference:'ACH 9'},admin),/exceed the invoice/);
+  await post(office,{action:'payment-received',orderId:'one',stage:'balance',amount:149899.90,date:'2026-10-12',bankReference:'ACH 4490'},admin);
+  await post(office,{action:'ship',orderId:'one',shipment:{carrier:'Estes',tracking:'BOL-1'}});o=db.data.get('orders/one');assert.equal(o.status,'shipped');assert.equal(db.data.get('plant_units/cleancell.us__TB-0001').custody.status,'in_transit');
+  var pub=require('../api/_lib/portal').publicOrder(o);assert.equal(pub.checkout.invoices[0].number,'CCUS-3V3I-0926-01 Rev B');assert.equal(pub.checkout.invoices[0].status,'paid');assert.equal(pub.checkout.processingFee,0);assert.equal(pub.checkout.invoices[0].payUrl,null);
+});
 console.log('\n'+count+' Omega Logic workflow tests passed. No network calls.');
 }
 main().catch(function(e){console.error(e);process.exitCode=1;});

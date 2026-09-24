@@ -72,11 +72,12 @@ module.exports = A.handler(async function (req, res) {
     X.requireOwner(caller);
     var terms = P.terms(b.terms), fee = { percent: Number(b.fee && b.fee.percent), fixed: Number(b.fee && b.fee.fixed || 0) };
     P.snapshot(100, terms, null, fee);
-    var qbo = await Q.load(), realm = qbo && qbo.realmId;
-    if (b.enabled && (!realm || !/^\d+$/.test(String(b.itemRef || '')) || b.accountingApproved !== true)) throw A.httpError(409, 'Connect QuickBooks and confirm an accountant-approved installment item before activating');
+    var accounting = b.accounting === 'tenant' ? 'tenant' : 'quickbooks';
+    var qbo = accounting === 'tenant' ? null : await Q.load(), realm = qbo && qbo.realmId;
+    if (accounting !== 'tenant' && b.enabled && (!realm || !/^\d+$/.test(String(b.itemRef || '')) || b.accountingApproved !== true)) throw A.httpError(409, 'Connect QuickBooks and confirm an accountant-approved installment item before activating');
     var batch = db.batch(), root = db.collection('omega_orgs').doc(org);
-    batch.set(root.collection('fulfillment').doc('config'), { enabled: b.enabled === true, terms: terms, fee: fee,
-      realmId: realm || null, itemRef: clean(b.itemRef, 40), accountingApproved: b.accountingApproved === true,
+    batch.set(root.collection('fulfillment').doc('config'), { enabled: b.enabled === true, terms: terms, fee: fee, accounting: accounting,
+      realmId: realm || null, itemRef: accounting === 'tenant' ? '' : clean(b.itemRef, 40), accountingApproved: accounting === 'tenant' ? false : b.accountingApproved === true,
       payoutMode: 'wire', updatedBy: caller.email, updatedAt: new Date().toISOString() }, { merge: true });
     // Bundle entitlement does not charge a card or invent a subscription price.
     if (b.enabled) batch.set(root.collection('billing').doc('current'), {
@@ -143,6 +144,11 @@ module.exports = A.handler(async function (req, res) {
       return { ok: true };
     });
   }
+  /* Tenant-billed orders: the OEM's office records its own invoice and the
+     money that landed. An active OEM administrator may do this — it is their
+     invoice — as may the ClearSky owner. */
+  if (b.action === 'invoice-issued') return W.issueInvoice(orderId, b.stage, { number: b.number, date: b.date }, caller);
+  if (b.action === 'payment-received') return W.recordPayment(orderId, b.stage, { amount: b.amount, date: b.date, bankReference: b.bankReference }, caller);
   if (b.action === 'cleared' || b.action === 'wire_sent') {
     X.requireOwner(caller);
     var bankRef = clean(b.bankReference, 120);
