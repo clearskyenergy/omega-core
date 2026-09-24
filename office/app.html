@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Omega Logic">
 <link rel="manifest" href="/office/app.webmanifest">
-<link rel="apple-touch-icon" href="/icons/omega-192.png">
+<link rel="apple-touch-icon" href="/icons/omega-logic-180.png">
 <title>Omega Logic</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
@@ -94,7 +94,7 @@
 </style>
 </head>
 <body class="logic-theme">
-<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-product-name>Omega Logic</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
+<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-product-name>Omega Logic</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="switch" hidden title="Open another company">Switch</button><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
 <main>
   <div id="gate"><h1>Omega Logic</h1><p class="note">Orders, purchase orders, customers, the plant, stock and every unit to its site — one app for the people running the business.</p><button class="big" id="signin">Sign in</button><p class="note" id="gate-note"></p></div>
   <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale.</div>
@@ -109,7 +109,7 @@
   <button data-tab="sites"><span>◎</span>Sites</button>
   <button data-tab="menu"><span>⋮⋮</span>Menu</button>
 </nav>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-logic-signin.js"></script>
 <script>
 (function () {
   'use strict';
@@ -119,27 +119,21 @@
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function load(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
-  /* The org comes with the link once and is remembered: an installed app has
-     no query string to carry it. */
+  /* Omega Logic is ClearSky's app and a company is a workspace inside it, so
+     the address carries no company: you sign in to Omega Logic and
+     /api/logic-workspaces says which company is yours (omega-logic-signin.js).
+     The choice is remembered on this device; a link that still carries
+     ?org= (older invitations) preselects it. The home-screen name, colours
+     and icon are Omega Logic's on every phone: the static manifest
+     /office/app.webmanifest, the same for everyone. */
   var ORG = params.get('org') || load('omega_office_app_org', '') || '';
   if (params.get('org')) store('omega_office_app_org', params.get('org'));
-  /* Omega Logic's name, colours and icon on the home screen, the same on
-     every workspace (api/app-manifest.js app=office); the workspace shows
-     inside. The static manifest is the fallback. */
-  if (ORG) {
-    var mfUrl = '/api/app-manifest?org=' + encodeURIComponent(ORG) + '&app=office';
-    var mf = document.querySelector('link[rel="manifest"]'); if (mf) mf.href = mfUrl;
-    fetch(mfUrl).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
-      if (!m) return;
-      var ti = document.querySelector('link[rel="apple-touch-icon"]'); if (ti && m.apple_touch_icon) ti.href = m.apple_touch_icon;
-      var tc = document.querySelector('meta[name="theme-color"]'); if (tc && /^#[0-9a-f]{6}$/i.test(m.theme_color || '')) tc.content = m.theme_color;
-      var tt = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (tt && m.short_name) tt.content = m.short_name;
-    })['catch'](function () {});
-  }
+  var WS = null;
   var TAB = params.get('tab') || 'today', DATA = null, BOARD = null, MAT = null, PICK = null, ORDER_FILTER = load('omega_office_app_filter', 'all');
   var BUYERS = null, CUST = null, COMPANIES = null, COMPANY_ID = load('omega_office_app_company', ''), COMPANY = null, UNITS = null;
   var CUSTODY = null, LOADS = null, SCANS = [], SERIAL = null, camStream = null, camTimer = null;
   var q = '?org=' + encodeURIComponent(ORG);
+  function setOrg(org) { ORG = org || ''; q = '?org=' + encodeURIComponent(ORG); store('omega_office_app_org', ORG || null); }
   var STAGE_PILL = { exception: 'bad', ship: 'ok', shipped: 'ok', complete: 'ok' };
   var FILTERS = [['all', 'All', null], ['attention', 'Needs attention', ['exception']], ['quote', 'To price', ['quote', 'priced']], ['deposit', 'Awaiting deposit', ['deposit']], ['build', 'In build', ['release', 'production', 'balance']], ['ship', 'Ready · shipped', ['ship', 'shipped', 'complete']], ['requests', 'Customer requests', null]];
 
@@ -167,8 +161,13 @@
       /* Omega Logic is ClearSky's app: its own name and colours, with the
          workspace you are in shown under it, as QuickBooks shows the company */
       $('who').textContent = [(DATA.brand && DATA.brand.workspace) || DATA.name || ORG, (auth.currentUser && auth.currentUser.email) || ''].filter(Boolean).join(' · ');
-      status(''); draw();
-    })['catch'](fail);
+      status(''); draw(); showSwitch();
+    })['catch'](function (e) {
+      /* the company remembered on this device is not (or no longer) this
+         person's: forget it and ask Omega Logic where they belong */
+      if (/Not your OEM workspace|An active OEM member is required|not provisioned|subscription is not active/.test(e.message || '')) { setOrg(''); return front(); }
+      fail(e);
+    });
   }
   function loadMaterials() { return MAT ? Promise.resolve(MAT) : api('/api/logic-materials' + q).then(function (m) { MAT = m; return m; }); }
   function loadUnits() { return UNITS ? Promise.resolve(UNITS) : api('/api/logic-plant' + q + '&page=units').then(function (u) { UNITS = u.rows || []; return UNITS; }); }
@@ -592,19 +591,42 @@
   Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; PICK = null; CUST = null; SERIAL = null; closeCam(); if (DATA) draw(); else loadAll(); window.scrollTo(0, 0); }; });
   document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; PICK = null; CUST = null; draw(); window.scrollTo(0, 0); };
   $('refresh').onclick = function () { PICK = null; CUST = null; CUSTODY = null; LOADS = null; loadAll(); };
-  $('signout').onclick = function () { auth.signOut().then(function () { location.reload(); }); };
+  /* signing out forgets the company too: the next person on this phone
+     signs in to Omega Logic and lands in their own */
+  function signOut() { setOrg(''); WS = null; auth.signOut().then(function () { location.replace(location.pathname); }); }
+  $('signout').onclick = signOut;
   $('signin').onclick = function () {
     var p = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(p)['catch'](function () { return auth.signInWithRedirect(p); })['catch'](fail);
   };
+  $('switch').onclick = function () { front(true); };
+  /* The Omega Logic sign-in, then "which company". */
+  function gate(on) { $('gate').hidden = !on; $('nav').hidden = on; $('view').hidden = on; }
+  function enter(org) { setOrg(org); gate(false); TAB = 'today'; loadAll(); }
+  function front(picking) {
+    gate(true); status('');
+    if (!window.OmegaLogicSignIn) { $('gate-note').textContent = 'Could not load the sign-in. Refresh the page.'; return; }
+    $('gate').innerHTML = '<p class="note" style="text-align:center;margin-top:40px">Finding your company…</p>';
+    (WS ? Promise.resolve(WS) : OmegaLogicSignIn.resolve(auth)).then(function (d) {
+      WS = d;
+      if (!picking && !d.owner && d.workspaces.length === 1) return enter(d.workspaces[0].orgId);
+      OmegaLogicSignIn.choose($('gate'), d, enter, signOut, auth);
+    })['catch'](function (e) { $('gate').innerHTML = '<p class="note" style="text-align:center;margin-top:40px;color:#B42318">' + esc(e.message) + '</p>'; });
+  }
+  /* "Switch" appears only for someone with more than one company */
+  function showSwitch() {
+    if (WS) { $('switch').hidden = !(WS.owner || WS.workspaces.length > 1); return; }
+    if (!window.OmegaLogicSignIn || !auth.currentUser) return;
+    OmegaLogicSignIn.resolve(auth).then(function (d) { WS = d; $('switch').hidden = !(d.owner || d.workspaces.length > 1); })['catch'](function () {});
+  }
   $('cam-x').onclick = closeCam;
   function paintNet() { $('offline').hidden = navigator.onLine !== false; }
   window.addEventListener('online', paintNet); window.addEventListener('offline', paintNet); paintNet();
   auth.onAuthStateChanged(function (u) {
-    $('gate').hidden = !!u; $('nav').hidden = !u; $('signout').hidden = !u; $('view').innerHTML = '';
-    if (!u) { $('who').textContent = ''; return; }
-    if (!ORG) { $('gate').hidden = false; $('gate-note').textContent = 'Open the app once from your office link so it knows your workspace.'; $('signin').hidden = true; return; }
-    loadAll();
+    $('signout').hidden = !u; $('view').innerHTML = ''; $('switch').hidden = true;
+    if (!u) { $('who').textContent = ''; gate(true); if (window.OmegaLogicSignIn) OmegaLogicSignIn.signIn($('gate'), { auth: auth }); return; }
+    if (!ORG) return front();
+    gate(false); loadAll();
   });
   if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('/office/app-sw.js', { scope: '/office/app' })['catch'](function () {}); } catch (e) {} }
 })();

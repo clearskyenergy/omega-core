@@ -331,6 +331,16 @@ The manual for the people who use it: `docs/OMEGA-LOGIC-MANUAL.md`. Keep it
 current when a screen changes; its last section is the honest list of what
 is not built.
 
+- **One front door, no company in the address.** You sign in to Omega Logic
+  (like QuickBooks), then open your company: `/office/app` on a phone (short
+  address `/logic`) and `/omega-logic` on a computer both open on
+  `omega-logic-signin.js` (Google or email + password, as on the dashboard),
+  and `api/logic-workspaces.js` lists where this person may go — judged by
+  the SAME `logic-access.authorize` every office endpoint runs (their email
+  domain's workspace, an `org_members` grant; the ClearSky owner sees all).
+  One company: straight in; several: pick; none: said plainly. The phone
+  remembers the choice and forgets it on sign-out; `?org=` in an old link
+  only preselects. `/office/app.webmanifest` is the one office manifest.
 - **One chrome.** `OmegaLogicTheme.chrome()` in `omega-logic-theme.js` paints
   the header (name · who · Sign out) and the left menu on EVERY office page,
   in the order the business runs. A page never builds its own menu; it calls

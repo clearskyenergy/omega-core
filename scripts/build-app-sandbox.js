@@ -62,9 +62,11 @@ var PAGES = [
   { src: 'plant/app.html', out: 'plant.html', app: 'plant', title: 'Omega Logic · Plant', icon: OL_ICON['180'], manifest: '/plant/app.webmanifest',
     runtime: '<script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script>',
     mf: "var mf = document.querySelector('link[rel=\"manifest\"]'); if (mf) mf.href = '/api/app-manifest?org=' + encodeURIComponent(ORG);", sw: "navigator.serviceWorker.register('/plant/app-sw.js', { scope: '/plant/app' })" },
-  { src: 'office/app.html', out: 'office.html', app: 'office', title: 'Omega Logic', icon: OL_ICON['180'], manifest: '/office/app.webmanifest',
+  /* the office app has one static manifest (no company in it) and already
+     wears the Omega Logic icon, so there is no manifest swap to neutralise */
+  { src: 'office/app.html', out: 'office.html', app: 'office', title: 'Omega Logic', icon: OL_ICON['180'], appleSrc: OL_ICON['180'], manifest: '/office/app.webmanifest',
     runtime: '<script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script>',
-    mf: "var mf = document.querySelector('link[rel=\"manifest\"]'); if (mf) mf.href = mfUrl;", sw: "navigator.serviceWorker.register('/office/app-sw.js', { scope: '/office/app' })" },
+    mf: null, sw: "navigator.serviceWorker.register('/office/app-sw.js', { scope: '/office/app' })" },
   { src: 'portals/customer/app.html', out: 'customer.html', app: 'customer', title: 'Your account', icon: TENANT.appIcon.customer['180'], manifest: '/portals/customer/app.webmanifest',
     runtime: '<script src="/config.js"></script>',
     mf: "var mf = document.querySelector('link[rel=\"manifest\"]'); if (mf) mf.href = mfUrl;", sw: "navigator.serviceWorker.register('/portals/customer/app-sw.js', { scope: '/portals/customer/app' })" },
@@ -82,9 +84,9 @@ function page(p) {
   s = s.replace(GSTATIC, ''); if (s === before) throw new Error('build-app-sandbox: ' + p.src + ' — no Firebase scripts to remove');
   s = must(s, p.runtime, SANDBOX_SCRIPT, p.src + ' runtime scripts');
   s = must(s, '<link rel="manifest" href="' + p.manifest + '">', '<link rel="manifest" href="/app-sandbox/' + p.app + '.webmanifest">', p.src + ' manifest');
-  s = must(s, '<link rel="apple-touch-icon" href="/icons/omega-192.png">', '<link rel="apple-touch-icon" href="' + p.icon + '">', p.src + ' apple icon');
+  s = must(s, '<link rel="apple-touch-icon" href="' + (p.appleSrc || '/icons/omega-192.png') + '">', '<link rel="apple-touch-icon" href="' + p.icon + '">', p.src + ' apple icon');
   s = must(s, '<title>' + p.title + '</title>', '<title>' + p.title + ' · sandbox</title>', p.src + ' title');
-  s = must(s, p.mf, '/* sandbox: the manifest link is static */', p.src + ' manifest swap');
+  if (p.mf) s = must(s, p.mf, '/* sandbox: the manifest link is static */', p.src + ' manifest swap');
   s = must(s, p.sw, "navigator.serviceWorker.register('/app-sandbox/sw.js', { scope: '/app-sandbox/' })", p.src + ' service worker');
   if (s.indexOf('/plant/station.html') >= 0) s = s.split('/plant/station.html').join('/app-sandbox/bench');
   if (s.indexOf('/plant/station.html') >= 0) throw new Error('build-app-sandbox: ' + p.src + ' — a bench link survived the rewrite');

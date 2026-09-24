@@ -8,7 +8,7 @@
 <header><div><b>Ω &nbsp; OMEGA LOGIC</b><div class="muted" style="color:#afc4c9">ClearSky · OEM operating system</div></div><nav><a href="/login">Where to?</a> &nbsp; / &nbsp; <a id="mission" href="/mission?view=logic">Jarvis Mission</a> &nbsp; <span id="who"></span></nav></header>
 <main><div id="message" role="status" aria-live="polite"></div><section id="gate"><h1>One order. Every operation.</h1><p class="muted">Sign in to your authorized ClearSky or OEM workspace.</p><button id="signin" class="primary">Sign in with Google</button></section><div id="content" hidden></div><footer>OEM subscription + platform lite + white-label sitemap editor resale. Processing fees apply to orders separately. No AI agent executes this workflow.</footer></main>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script>
-<script src="/omega-logic-theme.js"></script><script>
+<script src="/omega-logic-theme.js"></script><script src="/omega-logic-signin.js"></script><script>
 'use strict';
 var cfg=window.CLEARSKY_CONFIG||{};if(!firebase.apps.length)firebase.initializeApp(cfg.firebase||cfg);
 var auth=firebase.auth(), ORG=new URLSearchParams(location.search).get('org')||'', DATA=null, PICK=new URLSearchParams(location.search).get('order')||'', BUSY=false;
@@ -106,5 +106,19 @@ if(action==='cleared'||action==='wire_sent'){body.amount=$('wireAmount').value;b
 BUSY=true;btn.disabled=true;message('Working…');var work=action==='connect'?api('/api/logic-connect',{}).then(function(d){location.href=d.url;}):api('/api/logic-office',body).then(function(){message('Saved.');return load();});
 work['catch'](error).then(function(){BUSY=false;btn.disabled=false;});});
 $('signin').onclick=function(){auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())['catch'](error);};
-auth.onAuthStateChanged(function(u){$('gate').hidden=!!u;$('content').hidden=!u;if(u){if($('who'))$('who').textContent=u.email;load()['catch'](error);}else{if($('who'))$('who').textContent='';DATA=null;$('content').innerHTML='';}});
+/* ONE Omega Logic sign-in (omega-logic-signin.js), with no company in the
+   address: after it, /api/logic-workspaces says where this person goes. One
+   company: straight in. Several: pick. The ClearSky owner keeps the private
+   directory of every workspace. */
+function goTo(org){location.replace('/omega-logic?org='+encodeURIComponent(org)+location.hash);}
+function signOut(){auth.signOut().then(function(){location.replace('/omega-logic');});}
+function front(){$('gate').hidden=false;$('content').hidden=true;$('gate').innerHTML='<p class="muted" style="text-align:center;margin:60px 0">Finding your company…</p>';
+  OmegaLogicSignIn.resolve(auth).then(function(d){
+    if(d.owner){$('gate').hidden=true;$('content').hidden=false;return load();}
+    if(d.workspaces.length===1)return goTo(d.workspaces[0].orgId);
+    OmegaLogicSignIn.choose($('gate'),d,goTo,signOut,auth);
+  })['catch'](error);}
+auth.onAuthStateChanged(function(u){$('gate').hidden=!!u;$('content').hidden=!u;
+  if(u){if($('who'))$('who').textContent=u.email;if(!ORG&&window.OmegaLogicSignIn)return front();load()['catch'](function(e){if(!ORG||!window.OmegaLogicSignIn||!/Not your OEM workspace|An active OEM member is required|not provisioned/.test(e.message||''))return error(e);front();});}
+  else{if($('who'))$('who').textContent='';DATA=null;$('content').innerHTML='';if(window.OmegaLogicSignIn)OmegaLogicSignIn.signIn($('gate'),{auth:auth,lede:'Your business in one place: orders, customers, the plant, stock and money. Sign in with your work account and you go straight to your company.'});}});
 </script></body></html>

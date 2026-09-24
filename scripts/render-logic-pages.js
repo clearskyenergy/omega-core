@@ -243,7 +243,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var kv = await p.$$eval('#today-kv div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
     var needs = await p.$$eval('#view .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); }); });
     var head = await p.evaluate(function () { return { b: document.querySelector('[data-product-name]').textContent, w: document.getElementById('who').textContent }; });
-    ok('the office app is Omega Logic, ClearSky\'s: its manifest and icon, the workspace shown inside', /app-manifest\?org=cleancell\.us&app=office/.test(manifest.m) && /icons\/omega-logic-180/.test(manifest.i) && head.b === 'Omega Logic' && /^Clean Cell/.test(head.w), [manifest, head]);
+    ok('the office app is Omega Logic, ClearSky\'s: one manifest with no company in it, its icon, the workspace shown inside', manifest.m === '/office/app.webmanifest' && /icons\/omega-logic-180/.test(manifest.i) && head.b === 'Omega Logic' && /^Clean Cell/.test(head.w), [manifest, head]);
     ok('  five tabs, QuickBooks-style: Home, Orders, Customers, Sites, Menu', tabs.join('|') === 'Home|Orders|Customers|Sites|Menu', tabs);
     ok('  today counts the stages and lists who needs a person: the open request and the unpriced order', kv.length === 4 && /To price\s*1/.test(kv[0]) && needs.some(function (t) { return /CC-26-4419.*1 customer request/.test(t); }) && needs.some(function (t) { return /CC-26-4421.*price/.test(t); }), [kv, needs]);
     await p.click('[data-tab="orders"]'); await p.waitForTimeout(300);

@@ -337,6 +337,7 @@
     }
   },
   "redirects": [
+    { "source": "/logic", "destination": "/office/app", "permanent": false },
     {
       "source": "/",
       "has": [
