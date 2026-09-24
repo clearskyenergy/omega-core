@@ -87,6 +87,9 @@
     if (path === '/api/customer-portfolio') return V.portfolioJson();
     if (path === '/api/app-manifest') return V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT);
     if (path === '/api/logic-workspaces') return V.workspacesJson(who());
+    /* whether Google takes an installed app through this host: yes here,
+       unless a check says otherwise (OMEGA_SANDBOX_GOOGLE = false) */
+    if (path === '/api/auth-check') return { google: global.OMEGA_SANDBOX_GOOGLE !== false };
     return { status: 404, error: 'Not in this sandbox: ' + path };
   }
   function respond(json, status) { return Promise.resolve(new Response(JSON.stringify(json), { status: status, headers: { 'Content-Type': 'application/json' } })); }
