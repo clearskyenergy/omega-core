@@ -54,7 +54,8 @@
     if (/popup-closed|cancelled-popup/.test(c)) return '';
     if (/wrong-password|user-not-found|invalid-credential|invalid-login/.test(c)) return 'That email and password do not match. If you have only ever used Google, tap \u201cForgot password?\u201d to set a password, then sign in here.';
     if (/invalid-email/.test(c)) return 'That does not look like an email address.';
-    if (/too-many-requests/.test(c)) return 'Too many tries. Wait a minute, or reset your password.';
+    if (/too-many-requests/.test(c)) return 'Too many tries for this email. Wait a few minutes, or tap \u201cForgot password?\u201d to set a new password.';
+    if (/omega\/no-google-here/.test(c)) return 'Google\u2019s sign-in window can\u2019t open in this browser (an app\u2019s built-in browser, or pop-ups are blocked). Open ' + global.location.host + '/logic in Safari or Chrome, or sign in with your email and password below.';
     if (/network/.test(c)) return 'No connection. Check your signal and try again.';
     if (/popup-blocked/.test(c)) return 'Your browser blocked the Google window. Allow pop-ups for this site, or sign in with email.';
     /* never a raw vendor string on a screen (omega-auth-errors.js) */
@@ -114,7 +115,16 @@
         });
       }
       (installed && auth.signInWithRedirect ? auth.signInWithRedirect(p) : auth.signInWithPopup(p)['catch'](function (e) {
-        if (/popup-blocked|operation-not-supported|web-storage/.test(String(e && e.code)) && auth.signInWithRedirect) return auth.signInWithRedirect(p);
+        /* a redirect only comes back when the auth helper is on THIS site
+           (config.js); through clearsky-portal.firebaseapp.com every current
+           browser loses the result to storage partitioning and the person
+           lands on Google's "missing initial state" page instead. So when
+           the pop-up cannot open and the helper is elsewhere, say so. */
+        if (/popup-blocked|operation-not-supported|web-storage/.test(String(e && e.code))) {
+          var home = auth.app && auth.app.options && auth.app.options.authDomain === global.location.host;
+          if (home && auth.signInWithRedirect) return auth.signInWithRedirect(p);
+          throw { code: 'omega/no-google-here' };
+        }
         throw e;
       }))['catch'](function (e) { say(said(e)); });
     };

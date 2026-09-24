@@ -656,7 +656,7 @@ function registerRow(unit, ctx, now) {
     installedAt: c.installedAt || '', commissionedAt: c.commissionedAt || '', installer: c.installer || '', inServiceAt: c.inServiceAt || '',
     warrantyStatus: w ? w.status + (w.status === 'pending' && w.why ? ' · ' + w.why : '') : '', warrantyFrom: w ? w.startDate || '' : '', warrantyUntil: w ? w.endDate || '' : '', slaStatus: sla ? sla.status : '', slaUntil: sla ? sla.endDate || '' : '', slaUptime: sla && sla.metrics && sla.metrics.uptimePct != null ? sla.metrics.uptimePct : '',
     replacedBy: c.replacedBy || '', replaces: c.replaces || '', rmaOpenedAt: c.rma && c.rma.openedAt ? c.rma.openedAt : '', notes: c.notes || '',
-    can: { assign: judge(unit, 'assign', { siteId: '_' }).ok || c.status === 'assigned', install: judge(unit, 'install', {}).ok, commission: judge(unit, 'commission', {}).ok, destination: ['', 'in_transit', 'delivered', 'received'].indexOf(c.status) >= 0 && !c.siteId && c.state !== 'scrapped' } };
+    can: { assign: judge(unit, 'assign', { siteId: '_' }).ok || c.status === 'assigned', install: judge(unit, 'install', {}).ok, commission: judge(unit, 'commission', {}).ok, destination: plannable(unit).ok } };
 }
 /* what the customer's own record says, for either side to show */
 function confirmation(c) { c = c || {}; return !c.siteId ? null : c.confirmedAt ? 'confirmed' : 'declared'; }
@@ -786,15 +786,25 @@ var COLUMNS = {
 var TEMPLATE_HEADERS = ['serial_number', 'site_id', 'site_name', 'address', 'city', 'state', 'zip', 'end_customer', 'position', 'installer', 'received_date', 'install_date', 'commission_date', 'condition', 'utility', 'meter_number', 'interconnection_point', 'notes'];
 function csvTemplate() { return TEMPLATE_HEADERS.join(',') + '\n' + ['CC418-26-44190', '', 'Bakersfield yard', '1200 Depot Rd', 'Bakersfield', 'CA', '93307', 'InCharge Energy', 'Pad 2', 'Riverside Electric', '2026-11-20', '2026-11-28', '2026-12-04', 'accepted', 'PG&E', '1002233', 'POI-7 480V', ''].join(',') + '\n'; }
 /* RFC-4180 enough: quoted fields, doubled quotes, CRLF; a tab-separated
-   paste from a sheet is accepted too */
-function parseCsv(text) {
-  var s = String(text || '').replace(/^﻿/, ''), rows = [], row = [], field = '', q = false, sep = s.indexOf('\t') >= 0 && s.indexOf(',') < 0 ? '\t' : ',';
+   paste from a sheet is accepted too. csvRows keeps the line each row
+   started on; `sep` is chosen by the caller when it knows better (a site
+   list decides from its header line alone: a tab-separated paste from a
+   sheet has commas INSIDE its address cells). Unchosen, it is the old rule:
+   tab only when the text has no comma at all. */
+function csvRows(text, sep) {
+  var s = String(text || '').replace(/^\uFEFF/, ''), rows = [], row = [], field = '', q = false, line = 1, start = 1;
+  if (sep !== '\t' && sep !== ',') sep = s.indexOf('\t') >= 0 && s.indexOf(',') < 0 ? '\t' : ',';
+  function keep() { if (row.some(function (f) { return f.trim() !== ''; })) rows.push({ line: start, cells: row }); }
   for (var i = 0; i < s.length; i++) {
     var ch = s[i];
-    if (q) { if (ch === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else q = false; } else field += ch; continue; }
-    if (ch === '"') q = true; else if (ch === sep) { row.push(field); field = ''; } else if (ch === '\n' || ch === '\r') { if (ch === '\r' && s[i + 1] === '\n') i++; row.push(field); field = ''; if (row.some(function (f) { return f.trim() !== ''; })) rows.push(row); row = []; } else field += ch;
+    if (q) { if (ch === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else q = false; } else { if (ch === '\n') line++; field += ch; } continue; }
+    if (ch === '"') q = true; else if (ch === sep) { row.push(field); field = ''; } else if (ch === '\n' || ch === '\r') { if (ch === '\r' && s[i + 1] === '\n') i++; row.push(field); field = ''; keep(); row = []; line++; start = line; } else field += ch;
   }
-  row.push(field); if (row.some(function (f) { return f.trim() !== ''; })) rows.push(row);
+  row.push(field); keep();
+  return rows;
+}
+function parseCsv(text, sep) {
+  var rows = csvRows(text, sep).map(function (r) { return r.cells; });
   if (!rows.length) return { headers: [], rows: [] };
   var headers = rows[0].map(function (h) { return h.trim(); });
   return { headers: headers, rows: rows.slice(1).map(function (r) { var o = {}; headers.forEach(function (h, i) { o[h] = (r[i] || '').trim(); }); return o; }) };
@@ -873,22 +883,493 @@ function plan(rows, mapping, ctx, now) {
 function site(input, existing) {
   var b = input || {}, name = clean(b.name, 160); if (!name) throw fail(400, 'Site name required');
   var a = b.address && typeof b.address === 'object' ? b.address : {}, ic = b.interconnection && typeof b.interconnection === 'object' ? b.interconnection : {};
-  var lat = b.lat == null || b.lat === '' ? null : Number(b.lat), lng = b.lng == null || b.lng === '' ? null : Number(b.lng);
+  var address = { line1: clean(a.line1, 200), line2: clean(a.line2, 200), city: clean(a.city, 100), state: clean(a.state, 40), zip: clean(a.zip, 20), country: clean(a.country, 40) || 'US' };
+  /* a pin the edit does not send is kept only while the address is the
+     same place (an edit form that has no map must not wipe a geocoded pin,
+     and must not leave the old address's pin on a new one); '' or null
+     clears it */
+  var keep = !!existing && samePlace(existing.address, address);
+  var lat = b.lat === undefined && existing ? (keep && existing.lat != null ? existing.lat : null) : (b.lat == null || b.lat === '' ? null : Number(b.lat));
+  var lng = b.lng === undefined && existing ? (keep && existing.lng != null ? existing.lng : null) : (b.lng == null || b.lng === '' ? null : Number(b.lng));
   if ((lat != null && !(lat >= -90 && lat <= 90)) || (lng != null && !(lng >= -180 && lng <= 180))) throw fail(400, 'Latitude or longitude out of range');
   var out = { name: name, customerId: clean(b.customerId, 80) || (existing && existing.customerId) || null, endCustomer: clean(b.endCustomer, 160),
-    address: { line1: clean(a.line1, 200), line2: clean(a.line2, 200), city: clean(a.city, 100), state: clean(a.state, 40), zip: clean(a.zip, 20), country: clean(a.country, 40) || 'US' },
+    address: address,
     lat: lat, lng: lng, interconnection: { utility: clean(ic.utility, 120), accountNo: clean(ic.accountNo, 80), meterNo: clean(ic.meterNo, 80), poi: clean(ic.poi, 200), serviceVoltage: clean(ic.serviceVoltage, 40), serviceKw: ic.serviceKw == null || ic.serviceKw === '' ? null : Number(ic.serviceKw), agreementRef: clean(ic.agreementRef, 120) },
     contact: { name: clean(b.contact && b.contact.name, 120), phone: clean(b.contact && b.contact.phone, 40), email: clean(b.contact && b.contact.email, 160) },
-    notes: clean(b.notes, 1000), status: b.status === 'inactive' ? 'inactive' : 'active', lifecycleSiteId: clean(b.lifecycleSiteId, 80) || null };
+    notes: clean(b.notes, 1000), status: b.status === 'inactive' ? 'inactive' : 'active', lifecycleSiteId: clean(b.lifecycleSiteId, 80) || null,
+    /* the customer's own reference for the place (store #, site id), from a
+       site list; an edit that does not send it keeps it */
+    ref: b.ref === undefined ? clean(existing && existing.ref, 80) : clean(b.ref, 80) };
   if (out.interconnection.serviceKw != null && !(out.interconnection.serviceKw >= 0)) throw fail(400, 'Service kW must be a number');
   return out;
 }
 function siteId(customerId, s) { return 'site_' + siteKey(customerId, s.name, s.address && s.address.zip).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60); }
+/* the same place: the street as matched (addressKey), the city and the state */
+function samePlace(a, b) {
+  a = a || {}; b = b || {};
+  return addressKey(a.line1, a.zip) === addressKey(b.line1, b.zip) && String(a.city || '').trim().toLowerCase() === String(b.city || '').trim().toLowerCase()
+    && (stateCode(a.state) || String(a.state || '').trim().toUpperCase()) === (stateCode(b.state) || String(b.state || '').trim().toUpperCase());
+}
+
+/* ── many sites at once: a pasted list, matched, spread over an order ──
+   A customer's PO names its sites as an email list or a sheet. These turn
+   that text into site rows (parseSiteList), say which already exist on the
+   account (matchSites), and spread an order's units over the chosen sites
+   (spread) — all pure, so api/my-sites.js, api/logic-custody.js and the
+   sandbox answer the same way. Nothing here geocodes or writes: geocoding
+   is the endpoints' (api/_lib/geocode.js), and each unit's "going to" is
+   recorded through destination() above, one event per unit.
+
+   A site MATCHES by its address on the same account (the street as
+   normalised by addressKey, plus the 5-digit ZIP), never by its id alone:
+   siteId() cuts at 60 characters and folds capitals, so two places can
+   compute the same id. The endpoints give a new site the next free -2…-9
+   suffix inside the transaction when its id is already taken. */
+var MAX_SITE_ROWS = 200;      // a list, a create call, a plan's sites
+var MAX_PLAN_UNITS = 200;     // units written per plan-apply call (2 writes each)
+/* The text is typed by whoever is signed in — on the customer side, any
+   verified email — so the reader is bounded before any pattern runs: the
+   whole list, and each line (a longer one is not an address and is left
+   out by name). Every pattern below is anchored or runs on a short window,
+   and the right-hand trims are done by hand: /\s+$/ and friends backtrack
+   quadratically on a long run of spaces that does not end the line. */
+var MAX_SITE_TEXT = 100000;   // characters in one pasted list or file
+var MAX_SITE_LINE = 400;      // characters on one address line or sheet cell
+var US_STATES = { AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming', DC: 'District of Columbia', PR: 'Puerto Rico' };
+var STATE_BY_NAME = {}; Object.keys(US_STATES).forEach(function (k) { STATE_BY_NAME[US_STATES[k].toLowerCase()] = k; }); STATE_BY_NAME['washington dc'] = 'DC'; STATE_BY_NAME['washington d.c.'] = 'DC';
+function stateCode(v) { var s = String(v == null ? '' : v).trim().replace(/\.$/, ''); if (!s) return ''; var up = s.toUpperCase().replace(/\./g, ''); if (US_STATES[up]) return up; return STATE_BY_NAME[s.toLowerCase().replace(/\s+/g, ' ')] || ''; }
+/* the street as a matching key: case, punctuation and the usual USPS
+   abbreviations folded, so "16 West Elm Street" and "16 W Elm St." match */
+var ABBR = { street: 'st', avenue: 'ave', av: 'ave', road: 'rd', drive: 'dr', boulevard: 'blvd', lane: 'ln', court: 'ct', place: 'pl', highway: 'hwy', parkway: 'pkwy', square: 'sq', suite: 'ste', circle: 'cir', terrace: 'ter', trail: 'trl', freeway: 'fwy', expressway: 'expy', building: 'bldg', floor: 'fl', north: 'n', south: 's', east: 'e', west: 'w', northeast: 'ne', northwest: 'nw', southeast: 'se', southwest: 'sw' };
+function addressKey(line1, zip) {
+  var words = String(line1 || '').toLowerCase().replace(/[.,#]/g, ' ').replace(/\s+/g, ' ').trim().split(' ').map(function (w) { return ABBR[w] || w; });
+  return words.join(' ') + '|' + String(zip || '').trim().slice(0, 5);
+}
+/* serials in the order a person reads them: …-9 before …-10 */
+function naturalCompare(a, b) {
+  var ax = String(a).match(/\d+|\D+/g) || [], bx = String(b).match(/\d+|\D+/g) || [];
+  for (var i = 0; i < Math.max(ax.length, bx.length); i++) {
+    var x = ax[i], y = bx[i];
+    if (x === undefined) return -1; if (y === undefined) return 1; if (x === y) continue;
+    if (/^\d/.test(x) && /^\d/.test(y)) { var sx = x.replace(/^0+/, ''), sy = y.replace(/^0+/, ''); if (sx.length !== sy.length) return sx.length - sy.length; if (sx !== sy) return sx < sy ? -1 : 1; return x.length - y.length; }
+    return x < y ? -1 : 1;
+  }
+  return 0;
+}
+function bySerial(a, b) { return naturalCompare(a.serial, b.serial); }
+function oneLine(a) { a = a || {}; return [a.line1, a.city, [a.state, a.zip].filter(Boolean).join(' ')].filter(Boolean).join(', '); }
+function defaultName(a) { a = a || {}; return a.city ? a.city + (a.state ? ', ' + a.state : '') : (a.line1 || ''); }
+/* the right-hand end without whitespace (and, with punct, without the full
+   stop or semicolon a formal list ends its lines with), by hand */
+function trimEnd(s, punct) {
+  s = String(s == null ? '' : s); var i = s.length;
+  while (i > 0) { var ch = s.charAt(i - 1); if (/\s/.test(ch) || (punct && (ch === '.' || ch === ';' || ch === ','))) i--; else break; }
+  return s.slice(0, i);
+}
+function isDigit(ch) { return ch >= '0' && ch <= '9'; }
+/* a ZIP at the end of a part, read from the right by hand: the longest run
+   of digits, spaces and dashes that starts and ends with a digit, and what
+   stands before it */
+function zipTail(s) {
+  var n = s.length; if (!n || !isDigit(s.charAt(n - 1))) return null;
+  var i = n; while (i > 0 && /[\d\s-]/.test(s.charAt(i - 1))) i--;
+  while (i < n && !isDigit(s.charAt(i))) i++;
+  return { zip: s.slice(i).replace(/\s+/g, ''), before: trimEnd(s.slice(0, i)) };
+}
+
+/* "Street, City, ST 12345", read from the RIGHT so a ", Suite 100" stays in
+   the street: the last part is the state and ZIP (or the ZIP alone, the
+   state before it), the part before that the city, the rest the street. A
+   trailing full stop or semicolon is not part of the ZIP. */
+function splitAddress(text) {
+  var parts = trimEnd(text, true).split(',').map(function (x) { return x.trim(); }).filter(Boolean), out = { line1: '', city: '', state: '', zip: '' };
+  if (parts.length && /^(u\.?s\.?a?\.?|united states( of america)?)$/i.test(parts[parts.length - 1])) parts.pop();
+  if (!parts.length) return out;
+  var last = parts.pop(), m = zipTail(last), cand;
+  if (m) { out.zip = m.zip; cand = m.before; if (!cand) cand = parts.length > 1 ? parts.pop() : ''; }
+  else cand = last;
+  if (cand && stateCode(cand)) out.state = stateCode(cand);
+  else if (cand) {
+    var words = cand.split(/\s+/), found = false;
+    for (var k = Math.min(4, words.length - 1); k >= 1 && !found; k--) {
+      var tail = words.slice(words.length - k).join(' ');
+      if (stateCode(tail) && (k > 1 || /^[A-Za-z]{2}\.?$/.test(tail) || tail.length > 3)) { out.state = stateCode(tail); parts.push(words.slice(0, words.length - k).join(' ')); found = true; }
+    }
+    /* no state found: a two-letter word, or a word after the city, is a
+       bad state; a lone word after the street is the city */
+    if (!found) { if (/^[A-Za-z]{2}\.?$/.test(cand) || parts.length >= 2) out.state = cand; else parts.push(cand); }
+  }
+  out.city = parts.length ? parts.pop() : '';
+  out.line1 = parts.join(', ');
+  return out;
+}
+/* ONE row validator: the list parser and sites-create both run it, so an
+   edited row from a browser gets exactly the checks a pasted one does. */
+function checkSiteRow(r) {
+  r = r || {}; var a = r.address && typeof r.address === 'object' ? r.address : {}, problems = [];
+  var line1 = clean(a.line1, 200), city = clean(a.city, 100), stRaw = clean(a.state, 40), zip = clean(a.zip, 20), st = stateCode(stRaw);
+  if (!line1) problems.push(city && /^\d/.test(city) ? 'No city, or no comma between the street and the city' : 'No street address');
+  if (!city) problems.push('No city');
+  if (!stRaw) problems.push('No state'); else if (!st) problems.push('"' + stRaw + '" is not a US state');
+  if (!zip) problems.push('No ZIP code'); else if (!/^\d{5}(-\d{4})?$/.test(zip)) problems.push('ZIP "' + zip + '" must be 5 digits, or ZIP+4');
+  var units = r.units == null || r.units === '' ? null : Number(r.units);
+  if (units !== null && !(isFinite(units) && Math.floor(units) === units && units >= 0 && units <= 10000)) { problems.push('Units "' + clean(r.units, 20) + '" must be a whole number from 0 to 10,000'); units = null; }
+  /* not a problem but worth a look: a street with no house number in front
+     is as often the sender's office in an email signature ("Acme Capital,
+     500 Congress Ave…") as a site. The screens start such a row unticked;
+     a grid address (N7W22025 …) is a house number. */
+  var warnings = line1 && !/^(\d|[NSEW]\d)/i.test(line1) ? ['The street does not start with a house number: is this one of the sites, or an office or signature address?'] : [];
+  return { name: clean(r.name, 160), address: { line1: line1, city: city, state: st || stRaw, zip: zip, country: 'US' }, units: units, ref: clean(r.ref, 80), problems: problems, warnings: warnings };
+}
+/* a trailing unit count on a line: " x3", " ×3", " (3 units)", " - 3 units",
+   "; 3", ", 3 units". Run on the last UNIT_WINDOW characters only, so no
+   pattern ever scans a long line (a tab-separated row is read by cells,
+   lineCells below, not by a pattern). */
+var UNIT_TAILS = [/\s[x×]\s?(\d+(?:\.\d+)?)$/i, /\(\s*(\d+(?:\.\d+)?)\s*(?:units?|batter(?:y|ies)|pcs|ea)?\s*\)$/i, /\s[-–—]\s*(\d+(?:\.\d+)?)\s*(?:units?|batter(?:y|ies))$/i, /;\s*(\d+(?:\.\d+)?)\s*(?:units?|batter(?:y|ies))?$/i, /,\s*(\d+(?:\.\d+)?)\s*(?:units?|batter(?:y|ies))$/i];
+var UNIT_WINDOW = 40;
+function unitTail(t) {
+  var off = Math.max(0, t.length - UNIT_WINDOW), w = t.slice(off), out = null;
+  UNIT_TAILS.some(function (re) { var m = re.exec(w); if (m) { out = { units: Number(m[1]), rest: trimEnd(t.slice(0, off + m.index)) }; return true; } return false; });
+  return out;
+}
+function unitCell(v) { var s = String(v == null ? '' : v).trim(), m = /^(\d+(?:\.\d+)?)\s*(?:units?|batter(?:y|ies)|pcs|ea)?$/i.exec(s); return !s ? null : m ? Number(m[1]) : s; }
+/* a cell our own CSV download wrote as text so a spreadsheet keeps its
+   leading zero (="04101") reads back as the text */
+function unText(v) { var s = String(v == null ? '' : v).trim(); return /^="[^"]*"$/.test(s) ? s.slice(2, -1) : s; }
+var LIST_COLUMNS = {
+  name: ['name', 'site', 'site name', 'location', 'location name', 'store', 'store name'],
+  line1: ['address', 'street', 'address 1', 'address line 1', 'street address', 'line1', 'line 1', 'address1', 'addr'],
+  line2: ['address 2', 'address line 2', 'line2', 'line 2', 'address2', 'suite'],
+  city: ['city', 'town'], state: ['state', 'st', 'state/province', 'province'],
+  zip: ['zip', 'zip code', 'zipcode', 'postal code', 'postcode', 'postal'],
+  units: ['units', 'qty', 'quantity', 'count', 'batteries', 'units planned', '# units', 'number of units', 'unit count'],
+  ref: ['ref', 'store #', 'store number', 'store no', 'store no.', 'site id', 'site #', 'site number', 'reference', 'store id', 'location id']
+};
+function listField(h) { var k = String(h || '').trim().toLowerCase().replace(/_+/g, ' ').replace(/\s+/g, ' ').replace(/:$/, ''); var f = null; Object.keys(LIST_COLUMNS).some(function (x) { if (LIST_COLUMNS[x].indexOf(k) >= 0) { f = x; return true; } return false; }); return f; }
+var ZERO_ZIP = ['CT', 'MA', 'ME', 'NH', 'NJ', 'PR', 'RI', 'VT'];
+function tooMany(n) { return fail(400, 'At most ' + MAX_SITE_ROWS + ' sites in one list; this one has ' + n + '. Split it into smaller lists.'); }
+/* a line that is CELLS, not one address: a quoted CSV line (a one-column
+   sheet saved from Excel or Google Sheets quotes every address, since each
+   has commas) or a row copied out of a sheet without its header row
+   (tab-separated). null for a plain line. */
+function lineCells(t) {
+  if (t.charAt(0) === '"') { var r = csvRows(t, ',')[0]; return r ? r.cells : null; }
+  if (t.indexOf('\t') >= 0) return t.split('\t');
+  return null;
+}
+/* cells by position, the state found from the RIGHT: [name…] street, city,
+   state, ZIP [units]. Else one cell that is a whole address (commas and a
+   number), named by the cells before it, counted by a number after it.
+   Else the cells joined as one line (…, city, "ST 12345" [units]). */
+function fromCells(cells) {
+  var c = cells.map(unText).filter(Boolean), n = c.length, i, units = null;
+  function count(v) { return v != null && /^\d/.test(v) ? unitCell(v) : null; }
+  /* "Store 12:" or "Store 12 –" in a name cell: the mark is not the name */
+  function bare(v) { var k = v.length; while (k > 0 && /[\s:\-–—]/.test(v.charAt(k - 1))) k--; return v.slice(0, k); }
+  for (i = n - 1; i >= 1; i--) {
+    if (!stateCode(c[i])) continue;
+    var zip = i + 1 < n && /^\d{3,5}(?:-\d{4})?$/.test(c[i + 1]) ? c[i + 1] : '', after = i + (zip ? 2 : 1);
+    if (/^\d{3,4}$/.test(zip) && ZERO_ZIP.indexOf(stateCode(c[i])) >= 0) zip = ('00' + zip).slice(-5);
+    return { name: i >= 3 ? bare(c.slice(0, i - 2).join(' ')) : '', address: { line1: i >= 2 ? c[i - 2] : '', city: c[i - 1], state: c[i], zip: zip }, units: count(c[after]) };
+  }
+  for (i = 0; i < n; i++) if (c[i].indexOf(',') >= 0 && /\d/.test(c[i])) return { name: bare(c.slice(0, i).join(' ')), text: c[i], units: count(c[i + 1]) };
+  if (n >= 2 && typeof count(c[n - 1]) === 'number' && /\d{5}(?:-\d{4})?$/.test(c[n - 2])) { units = count(c[n - 1]); c = c.slice(0, -1); }
+  return { name: '', text: c.join(', '), units: units };
+}
+/* one address line (bounded, bullet stripped, trimmed) → a row: its cells
+   by position, else a trailing count, a leading "Name: " or "Name — ", and
+   the address read from the right */
+function lineRow(t) {
+  var cells = lineCells(t), got = null, name = '', units = null;
+  if (cells) { got = cells.length > 1 ? fromCells(cells) : { name: '', text: unText(cells[0]), units: null }; if (got.address) return got; t = trimEnd(got.text, true); name = got.name; units = got.units; }
+  if (units == null) { var tail = unitTail(t); if (tail) { units = tail.units; t = tail.rest; } }
+  t = t.trim();
+  if (!name) {
+    /* "Name: street…" always names the site. "Name — street…" only when the
+       name is not itself a street and a house number follows: an emailed
+       "1200 S Hwy 99 – Suite 100" (Outlook turns " - " into " – ") is one
+       street, not a site called "1200 S Hwy 99" */
+    var nm = /^([^,:]{1,120}?)\s*:\s+(\S.*)$/.exec(t), dm = nm ? null : /^(.{1,120}?)\s+[—–]\s+(\S.*)$/.exec(t);
+    if (dm && !/^\d/.test(dm[1]) && /^\d/.test(dm[2])) nm = dm;
+    if (nm && /\d/.test(nm[2])) { name = nm[1].trim(); t = nm[2]; }
+  }
+  return { name: name, address: splitAddress(t), units: units };
+}
+/* a line that is only column names ("Address", a one-column sheet's
+   header): read past without a word */
+function headerLine(t) { var cells = lineCells(t) || t.split(','); return cells.every(function (x) { x = unText(x); return !x || !!listField(x); }) && cells.some(function (x) { return !!unText(x); }); }
+/* the pasted text → site rows. Table mode when the first line is a header
+   with at least two known column names; otherwise one address per line. */
+function parseSiteList(text) {
+  var s = String(text == null ? '' : text);
+  if (s.length > MAX_SITE_TEXT) throw fail(400, 'That list is too long (' + s.length + ' characters). Paste at most ' + MAX_SITE_ROWS + ' sites at a time, or split the file.');
+  s = s.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+  var lines = s.split('\n'), first = -1, top = [], rows = [], format = 'lines';
+  for (var i = 0; i < lines.length; i++) if (lines[i].trim()) { first = i; break; }
+  if (first < 0) return { format: format, rows: [], problems: ['Paste the list of site addresses, one per line, or a sheet with a header row'] };
+  var sep = lines[first].indexOf('\t') >= 0 ? '\t' : ',', head = (csvRows(lines[first], sep)[0] || { cells: [] }).cells, idx = {}, hits = 0;
+  head.forEach(function (h, j) { var f = listField(h); if (f && idx[f] === undefined) { idx[f] = j; hits++; } });
+  if (hits >= 2) {
+    format = 'table';
+    if (idx.line1 === undefined) return { format: format, rows: [], problems: ['The sheet needs an address column (Address, Street or Address line 1)'] };
+    var data = csvRows(s, sep).filter(function (r) { return r.line > first + 1; });
+    if (data.length > MAX_SITE_ROWS) throw tooMany(data.length);
+    data.forEach(function (r) {
+      /* a cell is bounded like a line; our own CSV's ="04101" reads as 04101 */
+      function cell(f) { return idx[f] === undefined ? '' : unText(String(r.cells[idx[f]] == null ? '' : r.cells[idx[f]]).slice(0, MAX_SITE_LINE)); }
+      var street = cell('line1'), a;
+      if (street && !cell('city') && !cell('state') && !cell('zip')) a = splitAddress(street);
+      else a = { line1: street + (cell('line2') ? ', ' + cell('line2') : ''), city: cell('city'), state: cell('state'), zip: cell('zip') };
+      /* a ZIP column Excel read as a number lost its leading zero, in the
+         states whose ZIPs start with one */
+      if (idx.zip !== undefined && /^\d{3,4}$/.test(a.zip) && ZERO_ZIP.indexOf(stateCode(a.state)) >= 0) a.zip = ('00' + a.zip).slice(-5);
+      var row = checkSiteRow({ name: cell('name'), address: a, units: unitCell(cell('units')), ref: cell('ref') });
+      row.line = r.line; row.named = !!row.name; rows.push(row);
+    });
+  } else {
+    var picked = [];
+    lines.forEach(function (raw, n) {
+      if (raw.length > MAX_SITE_LINE) { top.push('Line ' + (n + 1) + ' is too long to be one address (' + raw.length + ' characters) and was left out'); return; }
+      var t = trimEnd(raw.replace(/^\s*(?:>\s*)+/, '').replace(/^\s*(?:[-•*·▪◦‣–—]\s+|\(?\d{1,3}[.)]\s+)/, ''), true);
+      if (!t.trim()) return;
+      t = t.trim();
+      /* an address has a number and a comma (or a ZIP); a greeting, a
+         signature or "Please ship PO 77 to:" has not. A line of column
+         names is a sheet's header, read past. */
+      if (!/\d/.test(t) && headerLine(t)) return;
+      if (!/\d/.test(t) || !(/,|\t/.test(t) || /\b\d{5}\b/.test(t))) { top.push('Line ' + (n + 1) + ' does not look like an address (street, city, state ZIP) and was left out: "' + clean(t, 60) + '"'); return; }
+      picked.push({ line: n + 1, text: t });
+    });
+    if (picked.length > MAX_SITE_ROWS) throw tooMany(picked.length);
+    picked.forEach(function (p) {
+      var got = lineRow(p.text), row = checkSiteRow({ name: got.name, address: got.address, units: got.units });
+      row.line = p.line; row.named = !!row.name; rows.push(row);
+    });
+  }
+  /* the same street and ZIP twice is one place: a problem on the second */
+  var firstAt = {};
+  rows.forEach(function (r) {
+    if (!r.address.line1 || !/^\d{5}/.test(r.address.zip)) return;
+    var k = addressKey(r.address.line1, r.address.zip);
+    if (firstAt[k]) r.problems.push('Listed twice: the same address as line ' + firstAt[k]); else firstAt[k] = r.line;
+  });
+  /* default names: "City, ST", or "City, ST · street" where two rows share
+     the city */
+  var perCity = {}; rows.forEach(function (r) { if (r.address.city) { var k = r.address.city.toLowerCase() + '|' + r.address.state; perCity[k] = (perCity[k] || 0) + 1; } });
+  rows.forEach(function (r) {
+    if (r.name) return;
+    var a = r.address, k = a.city.toLowerCase() + '|' + a.state;
+    r.name = clean(a.city ? defaultName(a) + (perCity[k] > 1 && a.line1 ? ' · ' + a.line1 : '') : (a.line1 || 'Line ' + r.line), 160);
+  });
+  if (!rows.length && !top.length) top.push('No addresses found');
+  return { format: format, rows: rows, problems: top };
+}
+/* which rows are already sites on this account: the same street + 5-digit
+   ZIP. A site with the same NAME and ZIP at another address is a clash to
+   point out, not a match; sites-create names the new one apart. */
+function matchSites(rows, existing, customerId) {
+  var mine = (existing || []).filter(function (x) { return x && x.status !== 'inactive' && (x.customerId || null) === (customerId || null); }), byAddr = {}, byKey = {};
+  mine.forEach(function (x) { var a = x.address || {}; if (a.line1 && a.zip) { var k = addressKey(a.line1, a.zip); if (!byAddr[k]) byAddr[k] = x; } byKey[siteKey(customerId, x.name, a.zip)] = x; });
+  return (rows || []).map(function (r) {
+    var out = Object.assign({}, r), a = r.address || {};
+    out.exists = false; out.existingId = null; out.clash = false;
+    if (r.problems && r.problems.length) { out.status = 'problem'; out.siteId = null; return out; }
+    var hit = byAddr[addressKey(a.line1, a.zip)];
+    if (hit) { out.exists = true; out.existingId = hit.id; out.existingName = hit.name; out.siteId = hit.id; out.status = 'exists'; out.warnings = []; return out; }
+    var k = byKey[siteKey(customerId, r.name, a.zip)];
+    if (k) { out.clash = true; out.note = 'Another site on this account is called "' + k.name + '" at this ZIP; this one will be added as a separate site. Rename one to tell them apart.'; }
+    out.siteId = siteId(customerId, { name: r.name, address: a }); out.status = 'new';
+    return out;
+  });
+}
+function sitesPreview(text, existing, customerId) {
+  var p = parseSiteList(text), rows = matchSites(p.rows, existing, customerId);
+  return { format: p.format, rows: rows, problems: p.problems, summary: { rows: rows.length, new: rows.filter(function (r) { return r.status === 'new'; }).length, existing: rows.filter(function (r) { return r.status === 'exists'; }).length, problems: rows.filter(function (r) { return r.status === 'problem'; }).length } };
+}
+/* the rows a preview would geocode (new ones only), as one-line addresses;
+   withGeo lays the answers back on: a hit is { lat, lng, matchedAddress },
+   a miss null, a row not looked up (over the budget) lookedUp false */
+function toLocate(rows) { var out = []; (rows || []).forEach(function (r, i) { if (r.status === 'new') out.push({ i: i, address: oneLine(r.address) }); }); return out; }
+function withGeo(rows, targets, hits) {
+  (rows || []).forEach(function (r) { r.geo = null; r.lookedUp = false; });
+  (targets || []).forEach(function (t, j) { var h = hits ? hits[j] : undefined, r = rows[t.i]; if (h === undefined) return; r.lookedUp = true; r.geo = h && isFinite(h.lat) && isFinite(h.lng) ? { lat: Number(h.lat), lng: Number(h.lng), matchedAddress: String(h.matched || '') } : null; });
+  return rows;
+}
+/* sites-create's input: each row through the ONE validator and site() */
+function siteListInputs(rows, customerId) {
+  if (!Array.isArray(rows) || !rows.length) throw fail(400, 'No sites to create');
+  if (rows.length > MAX_SITE_ROWS) throw fail(400, 'At most ' + MAX_SITE_ROWS + ' sites at a time');
+  return rows.map(function (r, i) {
+    r = r || {}; var chk = checkSiteRow({ name: r.name, address: r.address, ref: r.ref }), label = 'Row ' + (i + 1) + (chk.name ? ' (' + chk.name + ')' : '') + ': ';
+    if (chk.problems.length) throw fail(400, label + chk.problems.join('; ') + '. Nothing was created.');
+    try { return site({ name: chk.name || defaultName(chk.address), customerId: customerId, address: chk.address, lat: r.lat, lng: r.lng, ref: chk.ref }); }
+    catch (e) { throw fail(e.status || 400, label + e.message + '. Nothing was created.'); }
+  });
+}
+/* which records are already there (by address, on the account) and which
+   to create, each with its id candidates: siteId(), then -2 … -9. The
+   endpoint reads the candidates inside its transaction and takes the first
+   free one — an id taken by another account, another address or an
+   inactive site is never reported as "exists". */
+function placeSites(recs, have, customerId) {
+  var mine = (have || []).filter(function (x) { return x && x.status !== 'inactive' && (x.customerId || null) === (customerId || null); }), byAddr = {}, seen = {}, existing = [], create = [];
+  mine.forEach(function (x) { var a = x.address || {}; if (a.line1 && a.zip) { var k = addressKey(a.line1, a.zip); if (!byAddr[k]) byAddr[k] = x; } });
+  (recs || []).forEach(function (rec, i) {
+    var k = addressKey(rec.address.line1, rec.address.zip), hit = byAddr[k];
+    if (hit) { if (!seen['id:' + hit.id]) { seen['id:' + hit.id] = true; existing.push(hit); } return; }
+    if (seen[k]) return; seen[k] = true;
+    var base = siteId(customerId, rec), ids = [base]; for (var n = 2; n <= 9; n++) ids.push(base + '-' + n);
+    create.push({ row: i, rec: rec, candidates: ids });
+  });
+  return { existing: existing, create: create };
+}
+
+/* ── may this unit be given a destination now? ONE rule for the bulk
+   plan, both GETs, the register and the sample. A received unit is left
+   out: receipt is what honours a plan (apply 'receive'), so a plan on a
+   unit already received would read "going to" forever — it is assigned to
+   its site when it gets there instead. */
+function plannable(unit) {
+  var c = custodyOf(unit);
+  if (!unit || !unit.shipUnit) return { ok: false, why: 'component', say: 'A component travels with its assembly' };
+  if (c.state === 'scrapped') return { ok: false, why: 'scrapped', say: 'Scrapped' };
+  if (c.state === 'lost') return { ok: false, why: 'lost', say: 'Marked lost' };
+  if (c.siteId) return { ok: false, why: 'bound', say: label(c.status).charAt(0).toUpperCase() + label(c.status).slice(1) + ' at ' + (c.siteName || c.siteId) };
+  if (c.status === 'received') return { ok: false, why: 'received', say: 'Received already: assign it to its site when it gets there' };
+  if (['', 'in_transit', 'delivered'].indexOf(c.status) < 0) return { ok: false, why: 'status', say: 'Already ' + label(c.status) };
+  return { ok: true, why: null, say: '' };
+}
+/* the customer account a unit is already stamped for, if any: its custody
+   stamp, else its own field. A unit stamped for another account is left
+   out of a plan on either door (the office: api/logic-custody.js refuse;
+   the customer: api/my-sites.js) and is never re-stamped by one. */
+function stampedAccount(unit) { var c = custodyOf(unit); return c.customerId || (unit && unit.customerId) || null; }
+/* an order's units at a glance, for the order pickers */
+function unitCounts(units) {
+  var o = { units: 0, eligible: 0, building: 0, planned: 0 };
+  (units || []).forEach(function (u) { if (!u || !u.shipUnit) return; var c = custodyOf(u); o.units++; if (plannable(u).ok) o.eligible++; if (!c.status && u.at !== 'ready') o.building++; if (c.plannedSiteId && !c.siteId) o.planned++; });
+  return o;
+}
+/* the sites a plan names, each one that the caller may use; `known` is the
+   list the endpoint has already scoped (the account's sites) */
+function planSites(list, known, notFound) {
+  if (!Array.isArray(list) || !list.length) throw fail(400, 'Choose the sites');
+  if (list.length > MAX_SITE_ROWS) throw fail(400, 'At most ' + MAX_SITE_ROWS + ' sites in one plan');
+  var by = {}; (known || []).forEach(function (x) { if (x && x.status !== 'inactive') by[x.id] = x; });
+  return list.map(function (x) { var id = clean(x && x.siteId, 160), s = by[id]; if (!s) throw fail(404, notFound || 'Site not found'); return { siteId: s.id, name: s.name, units: x.units == null || x.units === '' ? null : x.units }; });
+}
+/* Spread an order's units over sites, in site order, lowest serials first.
+   `sites` [{ siteId, name, units }]: every number given → exactly those
+   (never more than the order has); none → an even spread, one more to the
+   first N mod S; mixed → the numbered first, the rest spread evenly over
+   the others. A site's number counts what is already planned there, and
+   what of this order is already bound there. A re-run is idempotent: what
+   is planned stays; a lowered number keeps the lowest serials and RELEASES
+   the rest (their destination is cleared unless another site takes them).
+   A unit already going to a site NOT on the list is left alone and
+   reported, unless opts.replan. opts.exclude(unit) → a reason refuses a
+   unit the caller may not plan (the office: another account's unit).
+   Pure; the endpoint recomputes it from orderId + sites on apply, so the
+   browser never sends serial → site pairs. */
+function spread(units, sites, opts) {
+  opts = opts || {};
+  var problems = [], list = [], inList = {};
+  (sites || []).forEach(function (x, i) {
+    var id = clean(x && x.siteId, 160), nm = clean(x && x.name, 160) || id;
+    if (!id) { problems.push('Site ' + (i + 1) + ' has no id'); return; }
+    if (inList[id]) { problems.push(nm + ' is listed twice'); return; }
+    var n = x.units == null || x.units === '' ? null : Number(x.units);
+    if (n !== null && !(isFinite(n) && Math.floor(n) === n && n >= 0 && n <= 10000)) { problems.push('Units for ' + nm + ' must be a whole number from 0 to 10,000'); n = null; }
+    inList[id] = { siteId: id, name: nm, asked: n, current: [], placed: 0 }; list.push(inList[id]);
+  });
+  if (!list.length && !problems.length) problems.push('Choose at least one site');
+  if (list.length > MAX_SITE_ROWS) problems.push('At most ' + MAX_SITE_ROWS + ' sites in one plan');
+  var all = (units || []).filter(function (u) { return u && u.shipUnit; }).slice().sort(bySerial), notPlanned = [], elsewhere = [], pool = [];
+  all.forEach(function (u) {
+    var c = custodyOf(u), p = plannable(u), no = p.ok && opts.exclude ? opts.exclude(u) : null;
+    if (!p.ok || no) { if (p.why === 'bound' && inList[c.siteId]) inList[c.siteId].placed++; notPlanned.push({ serial: u.serial, why: no ? 'account' : p.why, say: no || p.say }); return; }
+    if (c.plannedSiteId && inList[c.plannedSiteId]) { inList[c.plannedSiteId].current.push(u); return; }
+    if (c.plannedSiteId && !opts.replan) { elsewhere.push({ serial: u.serial, siteId: c.plannedSiteId, siteName: c.plannedSiteName || c.plannedSiteId }); return; }
+    pool.push(u);
+  });
+  var movable = pool.length, placed = 0; list.forEach(function (s) { movable += s.current.length; placed += s.placed; });
+  var total = movable + placed, askedSum = 0, open = [];
+  list.forEach(function (s) { if (s.asked === null) open.push(s); else { askedSum += s.asked; s.target = s.asked; } });
+  if (askedSum > total) problems.push('The list asks for ' + askedSum + ' unit' + (askedSum === 1 ? '' : 's') + ', but only ' + total + ' of this order’s units can go to these sites' + (elsewhere.length || notPlanned.length ? ' (' + [elsewhere.length ? elsewhere.length + ' already going to other sites' : '', notPlanned.length ? notPlanned.length + ' cannot be planned' : ''].filter(Boolean).join(', ') + ')' : '') + '. Lower the numbers.');
+  var rest = Math.max(0, total - askedSum), each = open.length ? Math.floor(rest / open.length) : 0, extra = open.length ? rest % open.length : 0;
+  open.forEach(function (s, i) { s.target = each + (i < extra ? 1 : 0); });
+  var perSite = function (withPlan) { return list.map(function (s) { return { siteId: s.siteId, name: s.name, asked: s.asked, count: s.target == null ? 0 : s.target, placed: s.placed, planned: withPlan ? s.planned : s.current.length, short: withPlan ? s.short : 0 }; }); };
+  if (problems.length) return { assignments: [], perSite: perSite(false), leftover: [], released: [], elsewhere: elsewhere, notPlanned: notPlanned, problems: problems, eligible: movable, writes: 0, planKey: '' };
+  var free = pool.slice(), back = {};
+  list.forEach(function (s) { var room = Math.max(0, s.target - s.placed); s.keep = s.current.slice(0, room); s.current.slice(room).forEach(function (u) { back[u.serial] = s; free.push(u); }); });
+  free.sort(bySerial);
+  var assignments = [], k = 0;
+  list.forEach(function (s) {
+    var room = Math.max(0, s.target - s.placed), take = room - s.keep.length, got = 0;
+    s.keep.forEach(function (u) { assignments.push({ serial: u.serial, siteId: s.siteId, siteName: s.name, how: 'unchanged', from: s.siteId }); });
+    while (got < take && k < free.length) { var u = free[k++], was = custodyOf(u).plannedSiteId || null; assignments.push({ serial: u.serial, siteId: s.siteId, siteName: s.name, how: !was ? 'new' : was === s.siteId ? 'unchanged' : 'changed', from: was }); got++; }
+    s.planned = s.keep.length + got; s.short = Math.max(0, take - got);
+  });
+  /* what no site took: a unit a lowered number let go is RELEASED (its
+     destination cleared); a unit that was going to a site not on the list
+     (only in the pool with replan) is not touched, so it is reported as
+     still going there, never as "without a site"; the rest is left over */
+  var rem = free.slice(k), released = [], leftover = [];
+  rem.forEach(function (u) {
+    var s = back[u.serial], c = custodyOf(u);
+    if (s) { released.push({ serial: u.serial, siteId: s.siteId, siteName: s.name }); leftover.push(u.serial); }
+    else if (c.plannedSiteId) elsewhere.push({ serial: u.serial, siteId: c.plannedSiteId, siteName: c.plannedSiteName || c.plannedSiteId, unused: true });
+    else leftover.push(u.serial);
+  });
+  var writes = assignments.filter(function (a) { return a.how !== 'unchanged'; }).length + released.length;
+  var out = { assignments: assignments, perSite: perSite(true), leftover: leftover, released: released, elsewhere: elsewhere, notPlanned: notPlanned, problems: [], eligible: movable, writes: writes };
+  out.planKey = planKey(out);
+  return out;
+}
+/* what apply checks against the preview: the same serial → site mapping.
+   The released units are NOT in it: plan-apply writes at most 200 units a
+   call, releases last, and a unit released in one call is (rightly) no
+   longer "released" when the next call recomputes the plan — so a key over
+   them changed between the calls of ONE apply and the second call was
+   refused after the first had written. The assignments are the same on
+   every call of an apply (a written unit is "unchanged" at its site, a
+   released one returns to the pool the others take from in the same
+   order); a release that no longer happens is a write fewer, never one
+   nobody saw, and each unit is re-read in its transaction anyway. */
+function planKey(pl) {
+  var s = (pl.assignments || []).map(function (a) { return a.serial + '>' + a.siteId; }).sort().join('|'), h = 5381;
+  for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return 'p' + h.toString(36) + '.' + (pl.assignments || []).length;
+}
+/* does the recomputed plan still say what the preview said? The body may
+   carry the preview's planKey, or its perSite counts; either one differing
+   is "changed since your preview". Neither sent: nothing to compare. */
+function planMatches(pl, body) {
+  body = body || {};
+  if (body.planKey && body.planKey !== pl.planKey) return false;
+  if (Array.isArray(body.perSite)) { var now = {}; (pl.perSite || []).forEach(function (s) { now[s.siteId] = s.count; }); if (body.perSite.length !== (pl.perSite || []).length || body.perSite.some(function (s) { return !s || now[s.siteId] !== Number(s.count); })) return false; }
+  return true;
+}
+/* what plan-apply writes, in order: new and changed destinations, then the
+   released ones (cleared) — at most MAX_PLAN_UNITS per call */
+function planWrites(pl) {
+  return (pl.assignments || []).filter(function (a) { return a.how !== 'unchanged'; }).map(function (a) { return { serial: a.serial, siteId: a.siteId, siteName: a.siteName, how: a.how }; })
+    .concat((pl.released || []).map(function (r) { return { serial: r.serial, siteId: '', siteName: '', how: 'released', from: r.siteId }; }));
+}
+/* the assignments as they stand after apply: a skipped unit says why, one
+   left for the next call says so */
+function planResult(pl, applied, skipped) {
+  var sk = {}, done = {}; (skipped || []).forEach(function (x) { sk[x.serial] = x.why; }); (applied || []).forEach(function (x) { done[x.serial] = true; });
+  return (pl.assignments || []).map(function (a) { var o = { serial: a.serial, siteId: a.siteId, siteName: a.siteName, how: a.how }; if (sk[a.serial]) { o.how = 'skipped'; o.why = sk[a.serial]; } else if (a.how !== 'unchanged' && !done[a.serial]) o.how = 'pending'; return o; });
+}
 
 module.exports = { STATUSES: STATUSES, STATES: STATES, MOVES: MOVES, LABELS: LABELS, TRIGGERS: TRIGGERS, COLUMNS: COLUMNS, TEMPLATE_HEADERS: TEMPLATE_HEADERS, MAX_ROWS: MAX_ROWS,
   custodyOf: custodyOf, label: label, serial: serial, day: day, judge: judge, apply: apply, state: state, destination: destination, confirm: confirm, confirmation: confirmation, detail: detail, DETAIL_FIELDS: DETAIL_FIELDS, REGISTER_COLUMNS: REGISTER_COLUMNS, registerRow: registerRow,
   templatesOf: templatesOf, template: template, coverageOf: coverageOf, coverageWithInheritance: coverageWithInheritance, inherited: inherited, addMonths: addMonths,
-  exceptions: exceptions, reconcile: reconcile, csvTemplate: csvTemplate, parseCsv: parseCsv, guessMapping: guessMapping, mapRow: mapRow, plan: plan, siteKey: siteKey, site: site, siteId: siteId };
+  exceptions: exceptions, reconcile: reconcile, csvTemplate: csvTemplate, csvRows: csvRows, parseCsv: parseCsv, guessMapping: guessMapping, mapRow: mapRow, plan: plan, siteKey: siteKey, site: site, siteId: siteId,
+  MAX_SITE_ROWS: MAX_SITE_ROWS, MAX_PLAN_UNITS: MAX_PLAN_UNITS, MAX_SITE_TEXT: MAX_SITE_TEXT, MAX_SITE_LINE: MAX_SITE_LINE, US_STATES: US_STATES, stateCode: stateCode, addressKey: addressKey, samePlace: samePlace, naturalCompare: naturalCompare, oneLine: oneLine, splitAddress: splitAddress, checkSiteRow: checkSiteRow,
+  trimEnd: trimEnd, unitTail: unitTail, unText: unText, parseSiteList: parseSiteList, matchSites: matchSites, sitesPreview: sitesPreview, toLocate: toLocate, withGeo: withGeo, siteListInputs: siteListInputs, placeSites: placeSites,
+  plannable: plannable, stampedAccount: stampedAccount, unitCounts: unitCounts, planSites: planSites, spread: spread, planKey: planKey, planMatches: planMatches, planWrites: planWrites, planResult: planResult };
 
   };
   defs['api/_lib/logic-catalog.js'] = function (module, exports, require) {
@@ -3616,9 +4097,9 @@ function initialState() {
       { serial: 'CC418-26-44190', sku: 'CC-C215', shipUnit: true, startedAt: T(0), done: { kit: T(2), module: T(10), rack: T(14), encl: T(16), elec: T(20), bms: T(22), eol: T(23), qa: T(25), pack: T(26) }, at: 'ready', arrivedAt: T(26), inventoryStatus: 'available', unitType: 'cabinet' },
       { serial: 'CC418-26-44191', sku: 'CC-C215', shipUnit: true, startedAt: T(1), done: { kit: T(3), module: T(15), rack: T(18), encl: T(20), elec: T(24), bms: T(26), eol: T(27), qa: T(29), pack: T(30) }, at: 'ready', arrivedAt: T(30), inventoryStatus: 'available', unitType: 'cabinet' },
       { serial: 'CC418-26-44192', sku: 'CC-C215', shipUnit: true, startedAt: T(4), done: { kit: T(6), module: T(40), rack: T(43), encl: T(45), elec: T(49), bms: T(51), eol: T(52), qa: T(54), pack: T(55) }, at: 'ready', arrivedAt: T(55), inventoryStatus: 'allocated', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet', customerId: 'company_riverside', custody: { status: 'in_transit', custodian: 'carrier', shippedAt: '2026-09-10', legId: 'LOAD-1', customerId: 'company_riverside' } },
-      { serial: 'CC418-26-44193', sku: 'CC-C215', shipUnit: true, startedAt: T(60), done: { kit: T(62) }, at: 'module', arrivedAt: T(62), inventoryStatus: 'building', unitType: 'cabinet' },
+      { serial: 'CC418-26-44193', sku: 'CC-C215', shipUnit: true, startedAt: T(60), done: { kit: T(62) }, at: 'module', arrivedAt: T(62), inventoryStatus: 'building', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet' },
       { serial: 'CC418-26-44194', sku: 'CC-C215', shipUnit: true, startedAt: T(70), done: { kit: T(71), module: T(90) }, at: 'rack', arrivedAt: T(90), hold: 'NCR-26-89', inventoryStatus: 'building', unitType: 'cabinet' },
-      { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, at: '', done: {}, inventoryStatus: 'building', unitType: 'cabinet' }
+      { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, at: '', done: {}, inventoryStatus: 'building', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet' }
     ],
     orders: [
       /* billed on the supplier's own paper: no ClearSky fee on the total, the
@@ -3688,7 +4169,10 @@ function initialState() {
     projects: [{ id: 'p1', name: 'Bakersfield yard', module: 'bess', createdAt: '2026-09-15T10:00:00Z', updatedAt: '2026-09-18T10:00:00Z', revision: 3 }],
     benchUnit: { serial: 'CC418-26-44190', sku: 'CC-C215', at: 'rack', work: {}, hold: null },
     /* custody (api/_lib/custody.js): one end site on the customer's account,
-       the load above on its way there, events appended per serial */
+       the load above on its way there, events appended per serial. The
+       sample order has three units: the one on the load and two still on
+       the line (44193, 44195) — what a site list is spread over while the
+       order is being built. */
     sites: [{ id: 'site_company-riverside-riverside-yard-93307', orgId: ORG, name: 'Riverside yard', customerId: 'company_riverside', endCustomer: '', address: { line1: '1200 Depot Rd', line2: '', city: 'Bakersfield', state: 'CA', zip: '93307', country: 'US' }, lat: null, lng: null,
       interconnection: { utility: 'PG&E', accountNo: '', meterNo: '1002233', poi: 'MSB-2, 480 V', serviceVoltage: '480', serviceKw: 500, agreementRef: '' }, contact: { name: 'Dana Ops', phone: '', email: 'ops@riverside.example' }, notes: '', status: 'active', lifecycleSiteId: null, createdAt: '2026-09-01T10:00:00Z', createdBy: 'demo@cleancell.us' }],
     custodyEvents: { 'CC418-26-44192': [{ type: 'ship', from: '', to: 'in_transit', by: 'demo@cleancell.us', at: '2026-09-10T15:00:00Z', method: 'logistics', legId: 'LOAD-1', orderId: 'o1' }] },
@@ -3797,8 +4281,21 @@ function views(state) {
   function unitView(u, now) { var c = Cu.custodyOf(u); return { serial: u.serial, sku: u.sku, unitType: u.unitType || 'unit', orderId: u.orderId || null, orderNo: u.orderNo || null, customerId: u.customerId || c.customerId || null, at: u.at || '', hold: u.hold || null, custody: Object.assign({}, c, { label: Cu.label(c.status), confirmation: Cu.confirmation(c) }), coverage: Cu.coverageWithInheritance(prodOf(u.sku), u, now) }; }
   function shipUnits() { return state.units.filter(function (u) { return u.shipUnit; }); }
   function siteRow(s) { return Object.assign({}, s, { units: shipUnits().filter(function (u) { return Cu.custodyOf(u).siteId === s.id; }).length }); }
+  function poOf(o) { return (o.purchaseOrder && o.purchaseOrder.number) || o.poNumber || null; }
+  /* the "going to" counts from EVERY unit, the ones being built included */
+  function goingTo(units) { var per = {}; units.forEach(function (u) { var c = Cu.custodyOf(u); if (!c.siteId && c.plannedSiteId) per[c.plannedSiteId] = (per[c.plannedSiteId] || 0) + 1; }); return per; }
+  /* GET /api/logic-custody?view=plan&customerId= — one account's sites and
+     its orders with units (api/logic-custody.js) */
+  function planJson(cid) {
+    var cu = state.customers.filter(function (c) { return c.id === cid; })[0]; if (!cu) return { status: cid ? 404 : 400, error: cid ? 'Customer account not found' : 'Choose the customer account' };
+    var units = shipUnits(), per = {}, going = goingTo(units); units.forEach(function (u) { var sid = Cu.custodyOf(u).siteId; if (sid) per[sid] = (per[sid] || 0) + 1; });
+    return { brand: brand, customer: { id: cu.id, name: cu.company, status: cu.status || 'active', open: ['disabled', 'suspended', 'cancelled'].indexOf(cu.status) < 0 },
+      sites: state.sites.filter(function (x) { return x.customerId === cid && x.status !== 'inactive'; }).map(function (x) { return { id: x.id, name: x.name, address: x.address || {}, ref: x.ref || '', lat: x.lat == null ? null : x.lat, lng: x.lng == null ? null : x.lng, units: per[x.id] || 0, planned: going[x.id] || 0 }; }),
+      orders: state.orders.filter(function (o) { return o.customerId === cid && units.some(function (u) { return u.orderId === o.id; }); }).map(function (o) { return Object.assign({ orderId: o.id, orderNo: o.orderNo, po: poOf(o) }, Cu.unitCounts(units.filter(function (u) { return u.orderId === o.id; }))); }) };
+  }
   function custodyJson(q) {
     var now = iso(Date.now()), units = shipUnits(), cat = CATALOG;
+    if (/(^|&)view=plan(&|$)/.test(q)) return planJson(decodeURIComponent((/customerId=([^&]*)/.exec(q) || [])[1] || ''));
     if (/serial=/.test(q)) {
       var serial = decodeURIComponent((/serial=([^&]*)/.exec(q) || [])[1] || ''), u = units.filter(function (x) { return x.serial === serial; })[0]; if (!u) return { status: 404, error: 'Serial not found' };
       var c = Cu.custodyOf(u), site = state.sites.filter(function (s) { return s.id === c.siteId; })[0], rb = units.filter(function (x) { return x.serial === c.replacedBy; })[0], rs = units.filter(function (x) { return x.serial === c.replaces; })[0];
@@ -3814,19 +4311,23 @@ function views(state) {
     }
     var counts = {}; Cu.STATUSES.forEach(function (k) { counts[k || 'plant'] = 0; }); var off = []; units.forEach(function (u) { var c = Cu.custodyOf(u); counts[c.status || 'plant']++; if (c.status) off.push(unitView(u, now)); });
     var cov = { active: 0, pending: 0, expired: 0, expiring: 0 }; off.forEach(function (u) { u.coverage.forEach(function (cv) { if (cov[cv.status] != null) cov[cv.status]++; }); });
-    return { brand: brand, name: 'Clean Cell', owner: false, counts: counts, coverage: cov, units: off, unitsShown: off.length, unitsTotal: off.length, sites: state.sites.map(siteRow), exceptions: Cu.exceptions(units, cat, now),
+    var going = goingTo(units);
+    return { brand: brand, name: 'Clean Cell', owner: false, counts: counts, coverage: cov, units: off, unitsShown: off.length, unitsTotal: off.length, sites: state.sites.map(function (x) { return Object.assign(siteRow(x), { planned: going[x.id] || 0 }); }), exceptions: Cu.exceptions(units, cat, now),
       customers: state.customers.map(function (c) { return { id: c.id, name: c.company }; }), products: cat.filter(function (p) { return (p.kind || 'product') === 'product'; }).map(function (p) { return { sku: p.sku, name: p.name, coverage: Cu.templatesOf(p) }; }),
-      toConfirm: off.filter(function (u) { return u.custody.confirmation === 'declared'; }), planned: off.filter(function (u) { return u.custody.plannedSiteId && !u.custody.siteId; }),
+      toConfirm: off.filter(function (u) { return u.custody.confirmation === 'declared'; }), planned: units.filter(function (u) { var c = Cu.custodyOf(u); return c.plannedSiteId && !c.siteId; }).map(function (u) { return unitView(u, now); }),
       mapping: state.custodyMapping, columns: Cu.TEMPLATE_HEADERS, moves: Cu.MOVES, states: Cu.STATES, limited: false, sampled: units.length };
   }
   function logisticsJson() { return { owner: false, brand: brand, notice: 'Sandbox: one order with one planned load.', limited: false, orders: state.companyOrders.map(function (o) { return { id: o.id, orderNo: o.orderNo, poNumber: o.poNumber, revision: o.revision, destinations: o.destinations, legs: o.legs || [] }; }) }; }
-  function pubSite(s) { return { id: s.id, name: s.name, address: s.address || {}, endCustomer: s.endCustomer || '', interconnection: s.interconnection || {}, contact: s.contact || {}, notes: s.notes || '', status: s.status || 'active' }; }
+  function pubSite(s) { return { id: s.id, name: s.name, address: s.address || {}, endCustomer: s.endCustomer || '', interconnection: s.interconnection || {}, contact: s.contact || {}, notes: s.notes || '', status: s.status || 'active', ref: s.ref || '', lat: s.lat == null ? null : s.lat, lng: s.lng == null ? null : s.lng }; }
   function pubUnit(u) { var c = Cu.custodyOf(u), p = prodOf(u.sku), now = iso(Date.now()); return { serial: u.serial, sku: u.sku, name: p ? p.name : u.sku, orderNo: u.orderNo || null, status: c.status || (u.at === 'ready' ? 'ready to ship' : 'being built'), label: c.status ? Cu.label(c.status) : (u.at === 'ready' ? 'ready to ship' : 'being built'), state: c.state || null,
     siteId: c.siteId || null, siteName: c.siteName || null, position: c.position || '', shippedAt: c.shippedAt || null, receivedAt: c.receivedAt || null, installedAt: c.installedAt || null, commissionedAt: c.commissionedAt || null, replacedBy: c.replacedBy || null, replaces: c.replaces || null, plannedSiteId: c.plannedSiteId || null, plannedSiteName: c.plannedSiteName || null, confirmation: Cu.confirmation(c), confirmedAt: c.confirmedAt || null,
     coverage: Cu.coverageWithInheritance(p, u, now).map(function (cv) { return { id: cv.templateId, type: cv.type, provider: cv.provider, status: cv.status, why: cv.why, from: cv.startDate, until: cv.endDate, termMonths: cv.termMonths, metrics: cv.metrics, docUrl: cv.docUrl }; }) }; }
   function myUnits() { return shipUnits().filter(function (u) { return u.orderId === 'o1'; }); }
-  function mySitesJson() { var units = myUnits(), per = {}; units.forEach(function (u) { var sid = Cu.custodyOf(u).siteId; if (sid) per[sid] = (per[sid] || 0) + 1; });
-    return { org: ORG, brand: brand, customerId: 'company_riverside', sites: state.sites.filter(function (s) { return s.customerId === 'company_riverside' && s.status !== 'inactive'; }).map(function (s) { return Object.assign(pubSite(s), { units: per[s.id] || 0 }); }),
+  function mySitesJson() { var units = myUnits(), per = {}, going = goingTo(units); units.forEach(function (u) { var sid = Cu.custodyOf(u).siteId; if (sid) per[sid] = (per[sid] || 0) + 1; });
+    var o1 = state.orders.filter(function (o) { return o.id === 'o1'; })[0];
+    return { org: ORG, brand: brand, customerId: 'company_riverside', sites: state.sites.filter(function (s) { return s.customerId === 'company_riverside' && s.status !== 'inactive'; }).map(function (s) { return Object.assign(pubSite(s), { units: per[s.id] || 0, planned: going[s.id] || 0 }); }),
+      /* by orderNo only: the order's id never reaches the customer */
+      orders: units.length && o1 ? [Object.assign({ orderNo: o1.orderNo, po: poOf(o1) }, Cu.unitCounts(units))] : [],
       units: units.filter(function (u) { return Cu.custodyOf(u).status || u.at === 'ready'; }).map(pubUnit), moves: { received: ['', 'in_transit', 'delivered'], assign: ['delivered', 'received', 'assigned'], installed: ['assigned', 'received'], commissioned: ['assigned', 'installed', 'received'] } }; }
   function riverside() { return state.customers.filter(function (c) { return c.id === 'company_riverside'; })[0]; }
   function accountJson(who) { var a = clone(state.account); if (who) a.you.email = who; a.users = riverside().users.map(function (u) { return { email: u.email, name: u.name, role: u.role, status: u.status, activated: u.activated, requestedAt: u.requestedAt || null }; }); return a; }
@@ -3928,7 +4429,7 @@ function views(state) {
   /* api/logic-workspaces.js: where the signed-in person may go. The sample
      office login has one company, so the front door goes straight in. */
   function workspacesJson(email) { return { email: email || 'demo@cleancell.us', owner: false, workspaces: [{ orgId: ORG, name: 'Clean Cell', role: 'admin', status: 'active' }] }; }
-  return { workspacesJson: workspacesJson, crmJson: crmJson, myFilesJson: myFilesJson, subJson: subJson, portfolioJson: portfolioJson, accountOrders: accountOrders, materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, accountingJson: accountingJson, accountingCsv: accountingCsv, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
+  return { workspacesJson: workspacesJson, crmJson: crmJson, myFilesJson: myFilesJson, subJson: subJson, portfolioJson: portfolioJson, accountOrders: accountOrders, materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, accountingJson: accountingJson, accountingCsv: accountingCsv, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, myUnits: myUnits, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
 }
 
 /* ── the writes a trial touches ───────────────────────────────────────── */
@@ -4110,6 +4611,7 @@ function post(state, path, query, b, who) {
   function patchUnit(u, patch) { Object.keys(patch).forEach(function (k) { var parts = k.split('.'), t = u; parts.slice(0, -1).forEach(function (p) { t = t[p] || (t[p] = {}); }); t[parts[parts.length - 1]] = patch[k]; }); }
   function logEvent(serial, ev) { (state.custodyEvents[serial] = state.custodyEvents[serial] || []).push(ev); }
   function unitBy(serial) { return state.units.filter(function (x) { return x.serial === serial; })[0]; }
+  function shipOf(orderId) { return state.units.filter(function (x) { return x.shipUnit && x.orderId === orderId; }); }
   function siteBy(id) { return state.sites.filter(function (s) { return s.id === id && s.status !== 'inactive'; })[0]; }
   function moveUnit(u, move, body, method) { var v = Cu.judge(u, move, body); if (!v.ok) return err(409, v.say); if (v.action === 'duplicate') return { ok: true, action: 'duplicate', serial: u.serial, say: v.say, custody: Cu.custodyOf(u) }; var ap = Cu.apply(u, move, body, who, now, method); if (u.customerId && !Cu.custodyOf(u).customerId) ap.patch['custody.customerId'] = u.customerId; patchUnit(u, ap.patch); logEvent(u.serial, ap.event); return { ok: true, action: move, serial: u.serial, say: 'Recorded: ' + Cu.label(Cu.custodyOf(u).status) + (body.siteName ? ' at ' + body.siteName : ''), custody: Cu.custodyOf(u) }; }
   function saveSite(b, forceCustomer) {
@@ -4120,8 +4622,67 @@ function post(state, path, query, b, who) {
     var doc = Object.assign({ orgId: ORG, id: id }, rec, { updatedAt: now, updatedBy: who }); if (existing) Object.assign(existing, doc); else state.sites.push(Object.assign(doc, { createdAt: now, createdBy: who }));
     return { ok: true, siteId: id, site: existing || doc };
   }
+  /* ── many sites at once (api/my-sites.js, api/logic-custody.js): the
+     same pure steps — parse, match, place, spread — with no geocoding in
+     the sample (every row geo null, lookedUp false) ── */
+  function listPreview(text, customerId) {
+    if (String(text == null ? '' : text).length > Cu.MAX_SITE_TEXT) return err(400, 'That list is too long; paste at most ' + Cu.MAX_SITE_ROWS + ' sites at a time.');
+    var pv; try { pv = Cu.sitesPreview(text, state.sites, customerId); } catch (e) { return err(e.status || 400, e.message); }
+    Cu.withGeo(pv.rows, [], []); return Object.assign({ ok: true, geoLimited: false }, pv);
+  }
+  function listCreate(rows, customerId, source) {
+    var recs; try { recs = Cu.siteListInputs(rows, customerId); } catch (e) { return err(e.status || 400, e.message); }
+    var pl = Cu.placeSites(recs, state.sites, customerId), taken = {}, made = [], bad = null;
+    state.sites.forEach(function (x) { taken[x.id] = true; });
+    pl.create.forEach(function (item) { if (bad) return; var id = item.candidates.filter(function (c) { return !taken[c]; })[0]; if (!id) { bad = err(409, 'Row ' + (item.row + 1) + ' (' + item.rec.name + '): too many sites share that name and ZIP. Rename it and try again.'); return; } taken[id] = true; made.push(Object.assign({ orgId: ORG, id: id }, item.rec, { customerId: customerId, source: source, createdAt: now, createdBy: who, updatedAt: now, updatedBy: who })); });
+    if (bad) return bad;
+    made.forEach(function (m) { state.sites.push(m); });
+    return { made: made, existing: pl.existing };
+  }
+  /* one plan, previewed or applied; `stamp(unit)` is the account a written
+     unit is stamped with (or null to leave it), `refuse(unit)` a reason a
+     unit may not be planned */
+  function planRun(units, chosen, orderId, method, stamp, refuse) {
+    var plan = Cu.spread(units, chosen, { replan: b.replan === true, exclude: refuse });
+    if (b.action === 'plan-preview') return plan;
+    if (b.confirm !== true) return err(400, 'Preview the plan, then confirm it');
+    if (plan.problems.length) return err(409, plan.problems[0]);
+    if (!Cu.planMatches(plan, b)) return err(409, 'The order changed since your preview. Preview it again.');
+    var todo = Cu.planWrites(plan), more = todo.length > Cu.MAX_PLAN_UNITS, planId = 'plan_' + hex(12), applied = [], skipped = [];
+    todo.slice(0, Cu.MAX_PLAN_UNITS).forEach(function (a) {
+      var u = unitBy(a.serial), p = u ? Cu.plannable(u) : null, no = u && a.siteId && refuse ? refuse(u) : null;
+      if (!u || u.orderId !== orderId) { skipped.push({ serial: a.serial, why: 'No longer on this order' }); return; }
+      if (!p.ok) { skipped.push({ serial: a.serial, why: p.say }); return; }
+      if (no) { skipped.push({ serial: a.serial, why: no }); return; }
+      var dr = Cu.destination(u, { siteId: a.siteId, siteName: a.siteName }, who, now, method); dr.event.orderId = orderId; dr.event.via = 'site-list'; dr.event.planId = planId;
+      var acct = a.siteId ? stamp(u) : null; if (acct) dr.patch['custody.customerId'] = acct;
+      patchUnit(u, dr.patch); logEvent(u.serial, dr.event); applied.push(a);
+    });
+    return { ok: true, planId: planId, applied: applied.length, skipped: skipped, more: more, perSite: plan.perSite, assignments: Cu.planResult(plan, applied, skipped), released: plan.released, leftover: plan.leftover, elsewhere: plan.elsewhere, notPlanned: plan.notPlanned, planKey: plan.planKey };
+  }
+  function planSitesOr(list, known, say) { try { return Cu.planSites(list, known, say); } catch (e) { return err(e.status || 400, e.message); } }
   if (path === '/api/logic-custody') {
     var method = ['manual', 'scan', 'import'].indexOf(b.method) >= 0 ? b.method : 'manual';
+    if (b.action === 'sites-preview' || b.action === 'sites-create') {
+      var lc = state.customers.filter(function (x) { return x.id === b.customerId; })[0];
+      if (!b.customerId) return err(400, 'Choose the customer account the sites belong to');
+      if (!lc || ['disabled', 'suspended', 'cancelled'].indexOf(lc.status) >= 0) return err(404, 'Customer account not found, or it is closed');
+      if (b.action === 'sites-preview') { var lp = listPreview(b.text, lc.id); return lp.error ? lp : Object.assign({ customerId: lc.id }, lp); }
+      var lm = listCreate(b.rows, lc.id, 'office-list'); if (lm.error) return lm;
+      return { ok: true, customerId: lc.id, created: lm.made, existing: lm.existing };
+    }
+    if (b.action === 'plan-preview' || b.action === 'plan-apply') {
+      if (!b.orderId) return err(400, 'Choose the order');
+      var po = order(b.orderId); if (!po) return err(404, 'Order not found');
+      if (!Array.isArray(b.sites) || !b.sites.length) return err(400, 'Choose the sites');
+      var pchosen = planSitesOr(b.sites, state.sites, 'Site not found'); if (pchosen.error) return pchosen;
+      var powner = po.customerId || null, pby = {}; state.sites.forEach(function (x) { pby[x.id] = x; });
+      if (pchosen.some(function (x) { var sx = pby[x.siteId]; return sx.customerId && powner && sx.customerId !== powner; })) return err(409, 'That site belongs to another customer account');
+      var pownerOf = function (u) { return Cu.stampedAccount(u) || powner; };
+      var prefuse = function (u) { var o = pownerOf(u), bad = pchosen.filter(function (x) { var sx = pby[x.siteId]; return sx.customerId && o && sx.customerId !== o; })[0]; return bad ? 'On another customer account than ' + bad.name : null; };
+      var pr = planRun(shipOf(po.id), pchosen, po.id, 'manual', function (u) { return Cu.custodyOf(u).customerId ? null : pownerOf(u); }, prefuse);
+      return pr.error ? pr : Object.assign({ ok: true, orderId: po.id, orderNo: po.orderNo }, pr);
+    }
     if (b.action === 'site') return saveSite(b, null);
     if (b.action === 'mapping-save') { state.custodyMapping = b.mapping || {}; return { ok: true, mapping: state.custodyMapping }; }
     if (b.action === 'detail') {
@@ -4180,6 +4741,18 @@ function post(state, path, query, b, who) {
   }
   if (path === '/api/my-sites') {
     var CM = { received: 'receive', assign: 'assign', installed: 'install', commissioned: 'commission' };
+    var mine = function () { return state.sites.filter(function (x) { return x.customerId === 'company_riverside' && x.status !== 'inactive'; }); };
+    if (b.action === 'sites-preview') return listPreview(b.text, 'company_riverside');
+    if (b.action === 'sites-create') { var cm = listCreate(b.rows, 'company_riverside', 'customer-list'); return cm.error ? cm : { ok: true, created: cm.made.map(V.pubSite), existing: cm.existing.map(V.pubSite) }; }
+    if (b.action === 'plan-preview' || b.action === 'plan-apply') {
+      /* the sample account has one order with units: CC-26-4419 (o1) */
+      if (String(b.orderNo || '').trim() !== 'CC-26-4419') return err(404, 'That order is not on your account');
+      var cchosen = planSitesOr(b.sites, mine(), 'Site not found on your account'); if (cchosen.error) return cchosen;
+      /* a unit stamped for another account is left out, as on the office's door */
+      var cforeign = function (u) { var a = Cu.stampedAccount(u); return a && a !== 'company_riverside' ? 'On another customer account' : null; };
+      var cr = planRun(V.myUnits(), cchosen, 'o1', 'customer', function (u) { return Cu.custodyOf(u).customerId ? null : 'company_riverside'; }, cforeign);
+      return cr.error ? cr : Object.assign({ ok: true, orderNo: 'CC-26-4419' }, cr);
+    }
     if (b.action === 'site') { var sr = saveSite(b, 'company_riverside'); return sr.error ? sr : { ok: true, site: V.pubSite(sr.site) }; }
     if (b.action === 'destination') {
       var du = unitBy(String(b.serial || '').trim()); if (!du || du.orderId !== 'o1') return err(404, 'That serial is not on one of your orders');
@@ -4356,8 +4929,10 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
      open the customer app as the office (with the owner's controls), and
      signing out of one does not sign the other out */
   /* v2: the sample grew a CRM, documents, a pay link and the design tool's
-     prices; a phone that kept the v1 sample starts over on the new one */
-  var KEY = 'omega_sandbox_v2', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
+     prices; a phone that kept the v1 sample starts over on the new one.
+     v3: the sample order carries the two units still on the line (what a
+     site list is spread over); a phone that kept v2 starts over */
+  var KEY = 'omega_sandbox_v3', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function seedIfMissing(k, v) { try { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
