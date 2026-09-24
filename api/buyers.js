@@ -96,7 +96,7 @@ module.exports = A.handler(async function (req, res) {
       var found = await accountOf(b, tx); if (!found) throw A.httpError(404, 'Customer not found');
       if (['disabled', 'suspended', 'cancelled'].indexOf(found.data.status) >= 0) throw A.httpError(403, 'Customer access is disabled.');
       var prior = found.data.editorLite || {};
-      if (prior.source === 'provider' && prior.status === 'active') throw A.httpError(409, 'Manage the existing paid subscription through its billing provider');
+      if (prior.source === 'provider' && ['active', 'past_due'].indexOf(prior.status) >= 0) throw A.httpError(409, 'Manage the existing paid subscription through its billing provider');
       var now = new Date(), grant = { status: days ? 'trial' : 'inactive', source: 'owner-trial',
         expiresAt: new Date(now.getTime() + days * 86400000).toISOString(), grantedBy: caller.email, grantedAt: now.toISOString() };
       tx.update(found.ref, { editorLite: grant });

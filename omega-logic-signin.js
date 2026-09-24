@@ -10,10 +10,13 @@
      one workspace   straight in
      several         a list to pick from (the ClearSky owner sees them all)
      none            what to do about it, in plain words
-   Sign-in is Google or email + password, as on the dashboard. Nothing here
-   decides access: every office endpoint still runs its own check.
+   Sign-in is Google or email + password, as on the dashboard; a page that
+   passes linkUrl (the phone app) offers a sign-in LINK by email first, as
+   the app guide shows ("or with any work email · Email me a sign-in link"),
+   with the password one tap away. Nothing here decides access: every
+   office endpoint still runs its own check.
 
-     OmegaLogicSignIn.signIn(el, { auth, lede })          draw the sign-in
+     OmegaLogicSignIn.signIn(el, { auth, lede, linkUrl, linkKey })  draw the sign-in
      OmegaLogicSignIn.resolve(auth)                       → Promise<{ owner, workspaces[], reason, note }>
      OmegaLogicSignIn.choose(el, data, onPick, onSignOut) draw the picker / the dead end
 
@@ -40,7 +43,8 @@
     + '.ols .ols-list{display:grid;gap:10px;text-align:left;margin-top:6px}'
     + '.ols .ols-ws{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fff;border:1px solid #cfdde3;padding:12px 14px;text-align:left;cursor:pointer}'
     + '.ols .ols-ws b{display:block;font-size:15.5px;color:#0C1824}.ols .ols-ws small{color:#5a7280;font-size:12.5px}.ols .ols-ws span{color:#0e7c8b;font-size:20px}'
-    + '.ols .ols-fine{color:#6b8290;font-size:12.5px;margin-top:22px}';
+    + '.ols .ols-fine{color:#6b8290;font-size:12.5px;margin-top:22px}'
+    + '.ols .ols-find{margin:4px 0 2px}';
   function style() { if (document.getElementById('ols-css')) return; var s = document.createElement('style'); s.id = 'ols-css'; s.textContent = CSS; document.head.appendChild(s); }
   var G = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.7 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.6 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.2-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
   var MARK = '<img class="ols-mark" src="/icons/omega-logic-192.png" width="84" height="84" alt="">';
@@ -58,17 +62,27 @@
 
   function signIn(el, opts) {
     opts = opts || {}; style();
-    var auth = opts.auth;
+    var auth = opts.auth, canLink = !!(opts.linkUrl && auth && typeof auth.sendSignInLinkToEmail === 'function'), byLink = canLink;
     el.innerHTML = '<div class="ols">' + MARK + '<h1>Sign in to Omega Logic</h1><p class="ols-lede">' + esc(opts.lede || 'Your business in one place. Sign in with your work account and you go straight to your company.') + '</p>'
       + '<button type="button" class="ols-google" id="signin">' + G + 'Continue with Google</button>'
-      + '<div class="ols-or">or with email</div>'
-      + '<form id="ols-form" novalidate><label for="ols-email">Work email</label><input id="ols-email" type="email" autocomplete="username" inputmode="email" autocapitalize="off" required>'
-      + '<label for="ols-pass">Password</label><input id="ols-pass" type="password" autocomplete="current-password" required><button class="ols-submit" type="submit">Sign in</button></form>'
+      + '<div class="ols-or">' + (canLink ? 'or with any work email' : 'or with email') + '</div>'
+      + '<form id="ols-form" novalidate><label for="ols-email">Work email</label><input id="ols-email" type="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" placeholder="you@company.com" required>'
+      + '<label for="ols-pass" class="ols-pw">Password</label><input id="ols-pass" class="ols-pw" type="password" autocomplete="current-password"><button class="ols-submit" type="submit">Sign in</button></form>'
+      + (canLink ? '<button type="button" class="ols-link" id="ols-mode"></button>' : '')
       + '<button type="button" class="ols-link" id="ols-forgot">Forgot password?</button>'
       + '<p class="ols-msg" id="ols-msg" role="status"></p>'
       + '<p class="ols-fine">Omega Logic by ClearSky. Your company is chosen from the account you sign in with.</p></div>';
     var msg = el.querySelector('#ols-msg');
     function say(t, ok) { msg.textContent = t || ''; msg.className = 'ols-msg' + (ok ? ' ok' : ''); }
+    /* the email LINK (no password to remember) or the password: one form */
+    function mode() {
+      Array.prototype.forEach.call(el.querySelectorAll('.ols-pw'), function (x) { x.hidden = byLink; x.style.display = byLink ? 'none' : ''; });
+      el.querySelector('.ols-submit').textContent = byLink ? 'Email me a sign-in link' : 'Sign in';
+      el.querySelector('#ols-forgot').hidden = byLink;
+      var m = el.querySelector('#ols-mode'); if (m) m.textContent = byLink ? 'Use a password instead' : 'Email me a sign-in link instead';
+    }
+    mode();
+    if (canLink) el.querySelector('#ols-mode').onclick = function () { byLink = !byLink; say(''); mode(); };
     el.querySelector('#signin').onclick = function () {
       say('');
       var p = new global.firebase.auth.GoogleAuthProvider();
@@ -84,6 +98,14 @@
     el.querySelector('#ols-form').onsubmit = function (ev) {
       ev.preventDefault();
       var em = el.querySelector('#ols-email').value.trim(), pw = el.querySelector('#ols-pass').value;
+      if (byLink) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return say('Enter your work email.');
+        var lb = el.querySelector('.ols-submit'); lb.disabled = true; say('Sending\u2026', true);
+        try { global.localStorage.setItem(opts.linkKey || 'omega_logic_link_email', JSON.stringify(em)); } catch (e) {}
+        return Promise.resolve().then(function () { return auth.sendSignInLinkToEmail(em, { url: opts.linkUrl, handleCodeInApp: true }); })
+          .then(function () { say('Check your inbox: a sign-in link is on its way to ' + em + '. Open it on this device.', true); }, function (e) { say(said(e)); })
+          .then(function () { lb.disabled = false; });
+      }
       if (!em || !pw) return say('Enter your work email and password.');
       var b = el.querySelector('.ols-submit'); b.disabled = true; say('Signing in\u2026', true);
       Promise.resolve().then(function () { return auth.signInWithEmailAndPassword(em, pw); })['catch'](function (e) { say(said(e)); }).then(function () { b.disabled = false; });
@@ -115,7 +137,8 @@
     style(); data = data || {};
     var list = data.workspaces || [], email = esc(data.email || '');
     if (!list.length && !data.owner) {
-      el.innerHTML = '<div class="ols">' + MARK + '<h1>Nowhere to go yet</h1><p class="ols-lede">' + esc(data.note || 'This email is not on an Omega Logic workspace yet.') + '</p>'
+      var dom = String(data.email || '').split('@')[1] || '';
+      el.innerHTML = '<div class="ols">' + MARK + '<h1>' + (data.reason === 'verify' ? 'Confirm your email first' : dom ? 'No workspace at ' + esc(dom) : 'Nowhere to go yet') + '</h1><p class="ols-lede">' + esc(data.note || 'This email is not on an Omega Logic workspace yet.') + '</p>'
         + '<p class="ols-lede" style="margin-top:-8px">Signed in as <b>' + email + '</b></p>'
         + (data.reason === 'verify' && auth && auth.currentUser && auth.currentUser.sendEmailVerification ? '<button type="button" class="ols-submit" id="ols-verify">Send the link again</button><div style="height:10px"></div>' : '')
         + '<button type="button" class="ols-google" id="ols-out">Sign in with another account</button><p class="ols-msg" id="ols-msg" role="status"></p></div>';
@@ -125,6 +148,7 @@
       return;
     }
     el.innerHTML = '<div class="ols">' + MARK + '<h1>' + (data.owner ? 'Open a workspace' : 'Choose your company') + '</h1><p class="ols-lede">Signed in as <b>' + email + '</b></p>'
+      + (list.length > 8 ? '<input class="ols-find" id="ols-find" type="search" placeholder="Find a workspace" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Find a workspace">' : '')
       + '<div class="ols-list">' + list.map(function (w, i) {
         return '<button type="button" class="ols-ws" data-ws="' + i + '"><div><b>' + esc(w.name || w.orgId) + '</b><small>' + esc(w.orgId) + (w.role && w.role !== 'clearsky' ? ' \u00b7 ' + esc(w.role) : '') + (w.status && w.status !== 'active' ? ' \u00b7 ' + esc(w.status) : '') + '</small></div><span aria-hidden="true">\u203a</span></button>';
       }).join('') + '</div>'
@@ -133,6 +157,11 @@
       + '<button type="button" class="ols-link" id="ols-out">Sign in with another account</button></div>';
     Array.prototype.forEach.call(el.querySelectorAll('[data-ws]'), function (b) { b.onclick = function () { onPick(list[Number(b.getAttribute('data-ws'))].orgId); }; });
     el.querySelector('#ols-out').onclick = onSignOut;
+    var find = el.querySelector('#ols-find');
+    if (find) find.oninput = function () {
+      var f = String(find.value || '').toLowerCase().trim();
+      Array.prototype.forEach.call(el.querySelectorAll('[data-ws]'), function (b) { var w = list[Number(b.getAttribute('data-ws'))]; b.hidden = !!f && (String(w.name || '') + ' ' + w.orgId).toLowerCase().indexOf(f) < 0; b.style.display = b.hidden ? 'none' : ''; });
+    };
   }
 
   global.OmegaLogicSignIn = { signIn: signIn, resolve: resolve, choose: choose };

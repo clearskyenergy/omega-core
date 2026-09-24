@@ -139,7 +139,14 @@ module.exports = A.handler(async function (req, res) {
      X.authorize(caller, org, true) above). The rules are api/_lib/receivables.js;
      the one writer is api/_lib/logic-workflow.js; the accounting page
      (logic-accounting.html) posts these same actions. */
-  if (b.action === 'invoice-issued') return W.issueInvoice(orderId, b.stage, { number: b.number, date: b.date, dueAt: b.dueAt }, caller);
+  /* payUrl: the supplier's own pay link for that invoice (optional; https,
+     checked in logic-workflow). Only passed through when the caller sent
+     the key, so an office that leaves it out keeps the link it has. */
+  if (b.action === 'invoice-issued') {
+    var inv = { number: b.number, date: b.date, dueAt: b.dueAt };
+    if (Object.prototype.hasOwnProperty.call(b, 'payUrl')) inv.payUrl = b.payUrl;
+    return W.issueInvoice(orderId, b.stage, inv, caller);
+  }
   if (b.action === 'payment-received') return W.recordPayment(orderId, b.stage, { amount: b.amount, date: b.date, bankReference: b.bankReference, reinstate: b.reinstate === true, reason: b.reason }, caller);
   /* A recorded payment is never deleted: it is voided with a reason, and the
      invoice goes back to what has really been received. When the order is in

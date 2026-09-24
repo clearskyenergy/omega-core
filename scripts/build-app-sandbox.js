@@ -32,21 +32,29 @@ var ADMIN = path.join(ROOT, 'api/_lib/admin.js');
 var TENANT = JSON.parse(fs.readFileSync(path.join(ROOT, 'tenants/cleancell/tenant.json'), 'utf8'));
 
 /* ── a small CommonJS bundle ─────────────────────────────────────────── */
+/* Node built-ins a bundled library NAMES but the sample never CALLS: the
+   CRM library (api/_lib/crm.js) and the payment policy hash an upload and
+   mint ids with crypto; the fixtures do neither (they validate what a
+   browser can and keep plain ids). The stand-in throws if that changes, so
+   a sandbox never quietly computes something the product would not. Any
+   other node module still fails the build. */
+var NODE_STUBS = { crypto: "module.exports = { createHash: function () { throw new Error('no crypto in the sandbox'); }, randomBytes: function () { throw new Error('no crypto in the sandbox'); } };" };
 function resolveFile(p) { if (fs.existsSync(p) && fs.statSync(p).isFile()) return p; if (fs.existsSync(p + '.js')) return p + '.js'; if (fs.existsSync(p + '.json')) return p + '.json'; throw new Error('cannot resolve ' + p); }
 function bundle(entry) {
-  var mods = {}, order = [];
+  var mods = {}, order = [], stubs = {};
   function id(abs) { return path.relative(ROOT, abs).split(path.sep).join('/'); }
   function visit(abs) {
     if (mods[abs] !== undefined) return;
     if (abs === ADMIN) { mods[abs] = null; order.push(abs); return; }
-    var src = fs.readFileSync(abs, 'utf8');
-    if (/require\((['"])[^.'"]/.test(src)) throw new Error(id(abs) + ' requires a node module; the sandbox cannot bundle it');
+    var src = fs.readFileSync(abs, 'utf8').replace(/require\((['"])(\w+)\1\)/g, function (m, q, name) { if (!NODE_STUBS[name]) return m; stubs[name] = true; return "require('node:" + name + "')"; });
+    if (/require\((['"])(?!\.|node:)/.test(src)) throw new Error(id(abs) + ' requires a node module; the sandbox cannot bundle it');
     mods[abs] = src.replace(/require\((['"])(\.[^'"]+)\1\)/g, function (m, q, rel) { var dep = resolveFile(path.resolve(path.dirname(abs), rel)); visit(dep); return "require('" + id(dep) + "')"; });
     order.push(abs);
   }
   visit(entry);
   var out = '(function () {\n  var defs = {}, cache = {};\n  function req(id) { if (cache[id]) return cache[id].exports; var m = { exports: {} }; cache[id] = m; defs[id](m, m.exports, req); return m.exports; }\n';
   out += "  defs['api/_lib/admin.js'] = function (module) { module.exports = { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; }, db: function () { throw new Error('no Firestore in the sandbox'); }, safeOrg: function (x) { return x; }, FieldValue: function () { return { serverTimestamp: function () { return null; } }; } }; };\n";
+  Object.keys(stubs).forEach(function (name) { out += "  defs['node:" + name + "'] = function (module) { " + NODE_STUBS[name] + " };\n"; });
   order.forEach(function (abs) { if (mods[abs] === null) return; out += "  defs['" + id(abs) + "'] = function (module, exports, require) {\n" + mods[abs] + "\n  };\n"; });
   out += "  window.OmegaSandboxFixtures = req('" + id(entry) + "');\n  window.OMEGA_SANDBOX_TENANT = " + JSON.stringify({ name: TENANT.name, whiteLabel: TENANT.whiteLabel, appIcon: TENANT.appIcon }) + ";\n})();\n";
   return out;
@@ -115,7 +123,7 @@ function build(outDir) {
    own origin, so the strip links out rather than routing). Nothing here is
    committed; scripts/publish-app-sandbox.js hands the folders to the
    Artifact tool. */
-var SHARED = ['omega-logic-theme.css', 'omega-logic-theme.js', 'omega-po-bulk.js', 'omega-logic-signin.js'];
+var SHARED = ['omega-logic-theme.css', 'omega-logic-theme.js', 'omega-po-bulk.js', 'omega-logic-signin.js', 'omega-hexhub.js', 'portals/customer/portfolio.js'];
 var TITLES = { plant: 'Omega Logic Plant', office: 'Omega Logic', customer: 'Clean Cell Account', bench: 'Omega Logic Bench' };
 function artifactPage(p, files, links) {
   var s = files[p.out], icon = p.bench ? null : p.icon;
@@ -137,7 +145,7 @@ function buildArtifacts(outDir, links) {
     var dir = path.join(outDir, p.app); fs.mkdirSync(path.join(dir, 'icons'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'index.html'), artifactPage(p, files, links));
     fs.writeFileSync(path.join(dir, 'sandbox.js'), files['sandbox.js']);
-    SHARED.forEach(function (f) { fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)); });
+    SHARED.forEach(function (f) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)); });
     var set = p.app === 'customer' ? TENANT.appIcon.customer : OL_ICON;
     ['180', '192', '512', 'maskable'].forEach(function (k) { fs.copyFileSync(path.join(ROOT, set[k]), path.join(dir, 'icons', path.basename(set[k]))); });
     if (!p.bench) { var m = JSON.parse(files[p.app + '.webmanifest']); m.id = p.app; m.start_url = '.'; m.scope = './'; m.icons.forEach(function (i) { i.src = 'icons/' + path.basename(i.src); }); m.apple_touch_icon = 'icons/' + path.basename(m.apple_touch_icon); fs.writeFileSync(path.join(dir, 'manifest.webmanifest'), JSON.stringify(m, null, 2) + '\n'); }

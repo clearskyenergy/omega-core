@@ -107,7 +107,20 @@ function stageOf(l, stage) { if (['deposit', 'balance'].indexOf(stage) < 0) thro
    `dueAt` is only set when the office gives one; otherwise the due date is
    derived from the terms (R.dueDate). A second call with the same number is
    a duplicate and changes nothing: corrections go through editInvoice, which
-   keeps their history. */
+   keeps their history — except the pay link, below. */
+/* payUrl (optional): the supplier's own payment page for this invoice, shown
+   to the customer on the Pay hub (api/_lib/portal.js). https only, checked by
+   the ONE test portal.tenantPayLink() also applies on the way out; anything
+   else is refused, not dropped, so the office knows the customer has no
+   link. Recording the same invoice number again with a link ADDS or CHANGES
+   it; null removes it; leaving it out keeps what is there. */
+function payLinkInput(b) {
+  if (!b || !Object.prototype.hasOwnProperty.call(b, 'payUrl') || b.payUrl === undefined || b.payUrl === '') return { keep: true };
+  if (b.payUrl === null) return { value: null };
+  var ok = require('./portal').tenantPayLink(typeof b.payUrl === 'string' ? b.payUrl.trim() : b.payUrl);
+  if (!ok) throw A.httpError(400, 'A pay link must be a full https:// address to a named site (no spaces, no user name or password)');
+  return { value: ok };
+}
 async function issueInvoice(orderId, stage, b, caller) {
   var db = A.db(), ref = db.collection('orders').doc(P.id(orderId)), number = String(b && b.number || '').trim().slice(0, 80), date = String(b && b.date || '').slice(0, 10);
   var dueAt = b && b.dueAt != null ? String(b.dueAt).trim() : '';
@@ -115,6 +128,7 @@ async function issueInvoice(orderId, stage, b, caller) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) throw A.httpError(400, 'Invoice date must be YYYY-MM-DD');
   if (dueAt && !R.isDate(dueAt)) throw A.httpError(400, 'Due date must be YYYY-MM-DD');
   if (dueAt && dueAt < date) throw A.httpError(400, 'The due date cannot be before the invoice date');
+  var link = payLinkInput(b);
   var stamped = false;
   var out = await db.runTransaction(async function (tx) {
     stamped = false; /* a retried transaction starts over */
@@ -122,12 +136,27 @@ async function issueInvoice(orderId, stage, b, caller) {
     var o = s.data(), l = o.logic; if (!l || l.accounting !== 'tenant') throw A.httpError(409, 'This order is billed through QuickBooks; invoices are issued there');
     var inv = stageOf(l, stage); if (!inv.amountCents) throw A.httpError(409, 'Nothing is due at this stage');
     if (inv.id && inv.id !== number) throw A.httpError(409, 'Invoice ' + inv.id + ' is already recorded for this stage');
-    if (inv.id === number) return { ok: true, duplicate: true, invoice: inv };
+    var at = new Date().toISOString();
+    if (inv.id === number) {
+      /* Recorded already: the same call again changes nothing, unless it
+         adds, changes or removes the pay link — the one thing a repeat may
+         carry. Number and dates are corrected by editInvoice. */
+      var sameLink = link.keep || (inv.payUrl || null) === link.value;
+      if (sameLink) return { ok: true, duplicate: true, payLinkChanged: false, invoice: inv };
+      var relinked = Object.assign({}, inv, { payUrl: link.value, payUrlBy: caller.email, payUrlAt: at });
+      var linkChanges = {}; linkChanges['logic.invoices.' + stage] = relinked; tx.update(ref, linkChanges);
+      event(tx, ref, caller.email, stage + ' invoice ' + number + ': pay link ' + (link.value ? (inv.payUrl ? 'changed' : 'added') : 'removed'));
+      audit(tx, { orgId: o.orgId, action: 'ledger-invoice-paylink', orderId: ref.id, orderNo: o.orderNo || null, stage: stage, by: caller.email, at: at,
+        before: { payUrl: inv.payUrl || null }, after: { payUrl: link.value } });
+      return { ok: true, duplicate: false, payLinkChanged: true, invoice: relinked };
+    }
     var other = stage === 'deposit' ? 'balance' : 'deposit';
     if (l.invoices[other] && l.invoices[other].id === number) throw A.httpError(409, 'Invoice ' + number + ' is already the ' + other + ' invoice on this order');
     var conf = await tx.get(db.collection('omega_orgs').doc(o.orgId).collection('fulfillment').doc('config'));
-    var provider = chosenProvider(conf.exists ? conf.data() : {}), at = new Date().toISOString();
+    var provider = chosenProvider(conf.exists ? conf.data() : {});
     var updated = Object.assign({}, inv, { id: number, issuedAt: date, issuedBy: caller.email, dueAt: dueAt || null });
+    var linkChanged = !link.keep && (inv.payUrl || null) !== link.value;
+    if (linkChanged) { updated.payUrl = link.value; updated.payUrlBy = caller.email; updated.payUrlAt = at; }
     if (provider && !inv.ledger) {
       stamped = true;
       updated.ledger = { provider: provider, state: 'pending', invoiceId: null, number: null, customerId: null, company: null, hostedUrl: null, totalCents: null,
@@ -135,10 +164,10 @@ async function issueInvoice(orderId, stage, b, caller) {
     }
     Object.assign(updated, R.settle(updated));
     var changes = {}; changes['logic.invoices.' + stage] = updated; tx.update(ref, changes);
-    event(tx, ref, caller.email, stage + ' invoice ' + number + ' issued ' + date + ' for USD ' + (inv.amountCents / 100) + (dueAt ? ' · due ' + dueAt : ''));
+    event(tx, ref, caller.email, stage + ' invoice ' + number + ' issued ' + date + ' for USD ' + (inv.amountCents / 100) + (dueAt ? ' · due ' + dueAt : '') + (linkChanged && link.value ? ' with a pay link' : ''));
     audit(tx, { orgId: o.orgId, action: 'ledger-invoice-issued', orderId: ref.id, orderNo: o.orderNo || null, stage: stage, by: caller.email, at: at,
-      after: { number: number, issuedAt: date, dueAt: dueAt || null, ledger: stamped ? provider : null } });
-    return { ok: true, duplicate: false, invoice: updated };
+      after: { number: number, issuedAt: date, dueAt: dueAt || null, ledger: stamped ? provider : null, payUrl: linkChanged ? link.value : (inv.payUrl || null) } });
+    return { ok: true, duplicate: false, payLinkChanged: linkChanged, invoice: updated };
   });
   if (stamped) {
     try { out.sync = await syncLedger(orderId, caller); }
@@ -330,13 +359,17 @@ async function putInLedger(mode, orderId, stage, providerInvoiceId, caller) {
        kept apart so a later pull with nothing to say does not erase it */
     ledger.pushWarning = ledger.warning;
     var changes = {}; changes['logic.invoices.' + stage + '.ledger'] = ledger;
-    if (hosted) changes['logic.invoices.' + stage + '.payUrl'] = hosted;
+    /* the provider's hosted page becomes the customer's pay link unless the
+       office gave one of its own (payUrlBy: invoice-issued with payUrl); the
+       hosted page stays on ledger.hostedUrl either way */
+    var officeLink = !!(ci.payUrl && ci.payUrlBy);
+    if (hosted && !officeLink) changes['logic.invoices.' + stage + '.payUrl'] = hosted;
     tx.update(ref, changes);
     event(tx, ref, by, mode === 'link' ? stage + ' invoice ' + ci.id + ' linked to ' + PROVIDER_NAME[p] + ' invoice ' + ledger.invoiceId
       : stage + ' invoice ' + ci.id + ' pushed to ' + PROVIDER_NAME[p] + ' (' + ledger.invoiceId + ')');
     audit(tx, { orgId: cur.orgId, action: mode === 'link' ? 'ledger-invoice-link' : 'ledger-invoice-push', orderId: ref.id, orderNo: cur.orderNo || null, stage: stage, by: by, at: at,
       source: p, after: ledger });
-    return { ok: true, ledger: ledger, payUrl: hosted || ci.payUrl || null };
+    return { ok: true, ledger: ledger, payUrl: officeLink ? ci.payUrl : hosted || ci.payUrl || null };
   });
 }
 function pushLedgerInvoice(orderId, stage, caller) { return putInLedger('push', orderId, stage, null, caller); }

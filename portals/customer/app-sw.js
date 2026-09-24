@@ -6,7 +6,7 @@
    and sign-in are never cached. Scoped to /portals/customer/app so it never
    sits in front of the desktop portal next to it. */
 var SHELL = 'customer-app-shell-v1';
-var FILES = ['/portals/customer/app', '/portals/customer/app.html', '/omega-logic-theme.css', '/omega-logic-theme.js', '/omega-po-bulk.js'];
+var FILES = ['/portals/customer/app', '/portals/customer/app.html', '/omega-logic-theme.css', '/omega-logic-theme.js', '/omega-po-bulk.js', '/omega-hexhub.js', '/portals/customer/portfolio.js'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(SHELL).then(function (c) { return Promise.all(FILES.map(function (f) { return c.add(f)['catch'](function () {}); })); }).then(function () { return self.skipWaiting(); }));
 });

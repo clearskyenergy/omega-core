@@ -608,6 +608,25 @@ async function main() {
     var st = dep('three');
     assert.equal(st.ledger.provider, 'stripe'); assert.equal(st.ledger.state, 'pushed'); assert.match(st.payUrl, /^https:\/\/invoice\.stripe\.com\//); assert.equal(st.payUrl, st.ledger.hostedUrl);
     assert.deepEqual(db.data.get(O + '/fulfillment/config').ledgerSync.stripe, { paymentMethods: ['us_bank_account'], sendEmail: true });
+    /* issued with a due date AND the supplier's own pay link, on the same
+       Stripe workspace: one call records both, pushes to Stripe, and the
+       office's link is what the customer sees (Stripe's page is kept on the
+       ledger) */
+    db.seed('orders/four', { orgId: ORG, orderNo: 'CC-26-0942', status: 'new', createdAt: '2026-09-27T10:00:00Z', customerId: 'c1', customer: { name: 'Shannon Johnson', email: 'shannon@amperagecapital.com' }, items: [{ sku: 'R60', qty: 1 }] });
+    await priced('four');
+    var both = await issued('four', 'deposit', 'D-FOUR', '2026-09-27', { dueAt: '2026-10-27', payUrl: 'https://pay.cleancell.us/inv/D-FOUR' });
+    var f4 = dep('four');
+    assert.equal(both.duplicate, false); assert.equal(both.payLinkChanged, true);
+    assert.equal(f4.dueAt, '2026-10-27'); assert.equal(f4.payUrl, 'https://pay.cleancell.us/inv/D-FOUR'); assert.equal(f4.payUrlBy, ADMIN.email);
+    assert.equal(f4.ledger.state, 'pushed'); assert.match(f4.ledger.hostedUrl, /^https:\/\/invoice\.stripe\.com\//);
+    var issuedRow = audits('ledger-invoice-issued').filter(function (a) { return a.orderId === 'four'; })[0];
+    assert.equal(issuedRow.after.dueAt, '2026-10-27'); assert.equal(issuedRow.after.ledger, 'stripe'); assert.equal(issuedRow.after.payUrl, 'https://pay.cleancell.us/inv/D-FOUR');
+    /* the same number again changes nothing; with a new link it changes only the link */
+    var again = await issued('four', 'deposit', 'D-FOUR', '2026-09-27');
+    assert.equal(again.duplicate, true); assert.equal(dep('four').dueAt, '2026-10-27');
+    var relink = await issued('four', 'deposit', 'D-FOUR', '2026-09-27', { payUrl: 'https://pay.cleancell.us/inv/D-FOUR?v=2' });
+    assert.equal(relink.payLinkChanged, true); assert.equal(dep('four').payUrl, 'https://pay.cleancell.us/inv/D-FOUR?v=2'); assert.equal(dep('four').dueAt, '2026-10-27'); assert.equal(dep('four').ledger.state, 'pushed');
+    assert.equal(audits('ledger-invoice-paylink').length, 1);
   });
   await test('issuing an invoice while a provider is chosen marks it pending and pushes it; a push failure never blocks the issue', async function () {
     seed(); await priced();
