@@ -33,11 +33,27 @@
   bottom tab bar, Omega Logic's manifest and icon on every workspace's phone
   (api/app-manifest.js, app=office), a shell service worker so it opens and says "offline" instead
   of a browser error. Office data is never served from cache.
+
+  THE ECOSYSTEM (docs/OMEGA-LOGIC-ECOSYSTEM.md). Every Omega Logic customer
+  downloads this ONE app. Opened with no ?org= and nothing remembered, it
+  signs in and tries the workspace of the verified email's domain (orgId IS
+  the email domain); ClearSky's owner picks one from /api/logic-kit. Home is
+  the HEX HUB (omega-hexhub.js), the Ω of the app icon: Today in the middle,
+  Sales · Customers · Plant · Deliver · Stock · Money around it, a badge
+  where a person is needed. Customers is the CRM: an account in sections
+  (Overview · People · Activity · Documents · Orders · Sites) through
+  api/buyers.js and api/crm.js; what the customer does in their app lands
+  on the same account.
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="stylesheet" href="/omega-logic-theme.css">
 <style>
-  html,body{margin:0;height:100%}
+  /* body grows with its content (no height:100%), so its bottom padding
+     keeps the last control on a long screen clear of the fixed tab bar;
+     what scrolls into view (a focused field, a form opened) clears the
+     sticky header and the tab bar */
+  html,body{margin:0}html{height:100%}
+  html{scroll-padding-top:72px;scroll-padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}
   body.logic-theme{display:flex;flex-direction:column;min-height:100vh;background:var(--paper);padding-bottom:calc(64px + env(safe-area-inset-bottom,0))}
   header.top{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top,0)) 16px 12px;border-bottom:1px solid var(--line);background:white;position:sticky;top:0;z-index:5}
   header.top b{font-size:17px}header.top small{display:block;color:var(--ink2);font-size:12px}
@@ -64,7 +80,8 @@
   input,textarea,select{width:100%;font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;margin:6px 0}
   textarea{min-height:120px;font-family:'IBM Plex Mono',monospace;font-size:13px}
   /* a small action beside a person or a unit (Approve, Turn off, Invite) */
-  button.act{flex:none;padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:white;font:600 13px system-ui,sans-serif;color:var(--brand-d);white-space:nowrap}button.act.go{background:var(--brand);border-color:var(--brand);color:white}
+  button.act,a.act{flex:none;padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:white;font:600 13px system-ui,sans-serif;color:var(--brand-d);white-space:nowrap}button.act.go{background:var(--brand);border-color:var(--brand);color:white}
+  a.act{display:inline-block;text-decoration:none;line-height:1.4}
   button.unit{border-radius:0}
   .row{display:flex;gap:8px}.row input,.row select{flex:1;min-width:0}.row button{padding:0 16px;border:1px solid var(--line);background:white}
   .back{border:0;background:none;color:var(--brand-d);font:inherit;padding:6px 0;cursor:pointer}
@@ -91,12 +108,40 @@
   .rows{grid-column:1/-1;border:1px solid var(--line);border-radius:16px;background:white;overflow:hidden}
   .rows a,.rows button{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border:0;border-radius:0;border-top:1px solid var(--line);background:none;font:inherit;color:inherit;text-align:left;text-decoration:none}
   .rows a:first-child,.rows button:first-child{border-top:0}.rows small{display:block;color:var(--ink2);font-size:12px}.rows .go{margin-left:auto;color:var(--ink2)}
+
+  /* Home: the hex hub (omega-hexhub.js) on top, the Today list under it.
+     A hub opens its Menu panel, scrolled clear of the sticky header. */
+  #hubs{margin:0 0 4px}
+  #today-needs,.panel,#cn-form{scroll-margin-top:84px}
+  #gate h1 .sub{display:block;font-size:17px;font-weight:600;color:var(--ink2);margin-top:8px;letter-spacing:0}
+  #gate input{max-width:420px}#gate .or{margin:4px 0;color:var(--ink2);font-size:13px}
+
+  /* The Customer hub: one ACCOUNT in sections, as QuickBooks' customer hub */
+  .seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:6px 0 14px}
+  .seg button{border:0;border-radius:0;background:white;padding:10px 4px;font:600 13px system-ui,sans-serif;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .seg button[aria-pressed=true]{background:var(--brand-soft);color:var(--brand-d)}.seg button small{font-weight:500;opacity:.75}
+  @media (min-width:600px){.seg{grid-template-columns:repeat(6,minmax(0,1fr))}}
+  .acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;flex:none;max-width:62%}.acts.start{justify-content:flex-start;max-width:none;margin-top:8px}
+  .tk{display:inline-block;font:600 10.5px/1.7 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--brand-d);background:var(--brand-soft);border-radius:6px;padding:0 6px;vertical-align:1px;white-space:nowrap}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.chips button{padding:8px 13px;border:1px solid var(--line);background:white;font:600 13px system-ui,sans-serif;color:var(--ink2)}.chips button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:white}
+  textarea.plain{font-family:inherit;font-size:15px;min-height:84px}
+  label.check{display:flex;gap:10px;align-items:flex-start;font-size:14px;margin:10px 0;cursor:pointer}label.check input{width:auto;margin:3px 0 0;flex:none}
+  .lbl{display:block;font-size:12px;color:var(--ink2);margin:8px 0 -2px}
+  .card.form{cursor:default}.card.form>b{display:block;font-size:16px;margin-bottom:2px}
+  .row2{display:flex;gap:8px}.row2 .big{margin:10px 0}
+  .linkish{border:0;background:none;padding:6px 0;font:600 13px system-ui,sans-serif;color:#B42318;cursor:pointer}
+  .rq b,.rq small{overflow-wrap:anywhere}.rq small.note{display:block}
+  .tl{align-items:flex-start}.tl b{font-weight:600}
+  /* a row that is a button reads like one that is not: the theme's
+     button weight stays on the title, not the line under it */
+  body.logic-theme button.unit,body.logic-theme button.card{font-weight:400}
+  .unit>div b{overflow-wrap:anywhere}
 </style>
 </head>
 <body class="logic-theme">
 <header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-product-name>Omega Logic</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
 <main>
-  <div id="gate"><h1>Omega Logic</h1><p class="note">Orders, purchase orders, customers, the plant, stock and every unit to its site — one app for the people running the business.</p><button class="big" id="signin">Sign in</button><p class="note" id="gate-note"></p></div>
+  <div id="gate"><h1>Omega Logic <span class="sub">— sign in with your work account</span></h1><p class="note">Orders, purchase orders, customers, the plant, stock and every unit to its site — one app for the people running the business. Your workspace opens from your work email.</p><button class="big" id="signin">Continue with Google</button><p class="or">or with any work email</p><input id="g-email" type="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@company.com"><button class="big ghost" id="g-link">Email me a sign-in link</button><p class="note" id="gate-note"></p></div>
   <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale.</div>
   <p id="status" class="status"></p>
   <div id="view"></div>
@@ -109,7 +154,7 @@
   <button data-tab="sites"><span>◎</span>Sites</button>
   <button data-tab="menu"><span>⋮⋮</span>Menu</button>
 </nav>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-hexhub.js"></script>
 <script>
 (function () {
   'use strict';
@@ -119,14 +164,23 @@
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function load(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
-  /* The org comes with the link once and is remembered: an installed app has
-     no query string to carry it. */
-  var ORG = params.get('org') || load('omega_office_app_org', '') || '';
-  if (params.get('org')) store('omega_office_app_org', params.get('org'));
+  /* ONE download for every workspace. The org comes with a link once and is
+     remembered (an installed app has no query string to carry it); with no
+     link and nothing remembered it is resolved after sign-in from the
+     verified email's domain, and remembered only once it opens. */
+  var ORG = '', q = '';
+  function setOrg(o) { ORG = String(o || '').trim().toLowerCase(); q = '?org=' + encodeURIComponent(ORG); }
+  setOrg(params.get('org') || load('omega_office_app_org', '') || '');
+  if (params.get('org')) store('omega_office_app_org', ORG);
+  /* ClearSky's owner picks a workspace. Showing the picker is not access:
+     /api/logic-kit (logic-access.requireOwner) refuses anyone else, and
+     every workspace endpoint checks membership for itself. */
+  var OWNER_EMAIL = 'tom@clearsky-usa.com', LS_EMAIL = 'omega_office_app_email';
   /* Omega Logic's name, colours and icon on the home screen, the same on
      every workspace (api/app-manifest.js app=office); the workspace shows
      inside. The static manifest is the fallback. */
-  if (ORG) {
+  function paintManifest() {
+    if (!ORG) return;
     var mfUrl = '/api/app-manifest?org=' + encodeURIComponent(ORG) + '&app=office';
     var mf = document.querySelector('link[rel="manifest"]'); if (mf) mf.href = mfUrl;
     fetch(mfUrl).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
@@ -136,18 +190,29 @@
       var tt = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (tt && m.short_name) tt.content = m.short_name;
     })['catch'](function () {});
   }
+  paintManifest();
   var TAB = params.get('tab') || 'today', DATA = null, BOARD = null, MAT = null, PICK = null, ORDER_FILTER = load('omega_office_app_filter', 'all');
   var BUYERS = null, CUST = null, COMPANIES = null, COMPANY_ID = load('omega_office_app_company', ''), COMPANY = null, UNITS = null;
   var CUSTODY = null, LOADS = null, SCANS = [], SERIAL = null, camStream = null, camTimer = null;
-  var q = '?org=' + encodeURIComponent(ORG);
+  /* the CRM (api/crm.js): the open account's contacts, activity, files and
+     timeline; the open follow-ups across every account, for Today */
+  var CRM = null, FOLLOW = null, FOLLOW_ERR = '', HUB_TRIED = {}, WS = null, PO_FROM = null;
   var STAGE_PILL = { exception: 'bad', ship: 'ok', shipped: 'ok', complete: 'ok' };
   var FILTERS = [['all', 'All', null], ['attention', 'Needs attention', ['exception']], ['quote', 'To price', ['quote', 'priced']], ['deposit', 'Awaiting deposit', ['deposit']], ['build', 'In build', ['release', 'production', 'balance']], ['ship', 'Ready · shipped', ['ship', 'shipped', 'complete']], ['requests', 'Customer requests', null]];
 
+  /* Every call carries the bearer token; an error keeps its HTTP status so
+     the workspace resolution can tell "not yours" (403/404) from a fault. */
   function api(path, body) {
     if (!auth.currentUser) return Promise.reject(new Error('Sign in first.'));
     return auth.currentUser.getIdToken().then(function (t) {
       return fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(Object.assign({ org: ORG }, body)) : undefined });
-    }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Request failed'); return d; }); });
+    }).then(function (r) {
+      return r.text().then(function (txt) {
+        var d = null; try { d = txt ? JSON.parse(txt) : {}; } catch (e) { d = null; }
+        if (!r.ok || !d) { var err = new Error((d && d.error) || 'Request failed (' + r.status + ')'); err.status = r.status; throw err; }
+        return d;
+      });
+    });
   }
   function status(t) { $('status').textContent = t || ''; }
   function fail(e) { status(e.message || String(e)); }
@@ -158,23 +223,69 @@
   function stageLabel(o) { return o.stage ? o.stage.label : o.status; }
   function invoiceSums(o) { var inv = 0, pd = 0; Object.keys((o.logic && o.logic.invoices) || {}).forEach(function (k) { var i = o.logic.invoices[k]; inv += i.amountCents || 0; pd += i.paidCents || 0; }); return { invoiced: inv, paid: pd, balance: inv - pd }; }
   function boardFor(o) { if (!BOARD || !o.worksOrderId) return null; return (BOARD.rows || []).filter(function (r) { return r.id === o.worksOrderId; })[0] || null; }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function todayIso() { return ymd(new Date()); }
+  function addDays(s, n) { var d = new Date(String(s).slice(0, 10) + 'T00:00:00Z'); if (isNaN(d.getTime())) return ''; d.setUTCDate(d.getUTCDate() + (Number(n) || 0)); return d.toISOString().slice(0, 10); }
+  /* A time as the endpoints send it: ISO, or a Firestore timestamp that
+     came through JSON as { _seconds } */
+  function toIso(v) {
+    if (!v) return '';
+    if (typeof v === 'string') return v;
+    var s = typeof v._seconds === 'number' ? v._seconds : typeof v.seconds === 'number' ? v.seconds : null;
+    if (s != null) return new Date(s * 1000).toISOString();
+    if (typeof v === 'number') return new Date(v).toISOString();
+    return '';
+  }
+  function when(v) { var s = toIso(v); if (!s || s.length <= 10) return s; var d = new Date(s); return isNaN(d.getTime()) ? s.slice(0, 16).replace('T', ' ') : ymd(d) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function newestFirst(list, key) { return (list || []).slice().sort(function (a, b) { var x = toIso(a[key || 'at']), y = toIso(b[key || 'at']); return x < y ? 1 : x > y ? -1 : 0; }); }
+  function kdollars(c) { var d = Number(c || 0) / 100; return d >= 1e6 ? '$' + (d / 1e6).toFixed(1) + 'M' : d >= 1e3 ? '$' + (d / 1e3).toFixed(1) + 'k' : '$' + Math.round(d); }
+  function cap(n) { n = Number(n) || 0; return n > 99 ? '99+' : n > 0 ? String(n) : ''; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function fileSize(b) { b = Number(b) || 0; return !b ? '' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+  /* Who bills the order: stamped on the order when priced; the office
+     endpoint does not echo it per order, so the workspace setting stands in
+     (and the endpoint refuses, by name, an order billed the other way). */
+  function tenantBilled(l) { return ((l && l.accounting) || (DATA && DATA.config && DATA.config.accounting) || 'quickbooks') === 'tenant'; }
 
   /* ── data ─────────────────────────────────────────────────────────────── */
-  function loadAll() {
-    status('Loading…'); MAT = null; UNITS = null; BUYERS = null; CUST = null; COMPANIES = null; COMPANY = null;
+  /* probe: the workspace was not given by a link or remembered (the email's
+     domain, or one typed in). It is remembered only once it opens; a 403 or
+     404 says plainly that this login has no workspace there. */
+  function loadAll(probe) {
+    status(probe ? 'Opening your workspace…' : 'Loading…'); MAT = null; UNITS = null; BUYERS = null; CUST = null; CRM = null; COMPANIES = null; COMPANY = null; FOLLOW = null; FOLLOW_ERR = ''; HUB_TRIED = {};
+    var tried = ORG;
     return Promise.all([api('/api/logic-office' + q), api('/api/logic-plant' + q + '&page=board')['catch'](function () { return null; })]).then(function (r) {
+      if (ORG !== tried) return;
       DATA = r[0]; BOARD = r[1];
+      if (probe) { store('omega_office_app_org', ORG); paintManifest(); }
+      $('nav').hidden = false;
       /* Omega Logic is ClearSky's app: its own name and colours, with the
          workspace you are in shown under it, as QuickBooks shows the company */
       $('who').textContent = [(DATA.brand && DATA.brand.workspace) || DATA.name || ORG, (auth.currentUser && auth.currentUser.email) || ''].filter(Boolean).join(' · ');
       status(''); draw();
-    })['catch'](fail);
+    })['catch'](function (e) {
+      if (ORG !== tried) return;
+      if (e.status === 403 || e.status === 404) return noWorkspace(e, tried, probe);
+      fail(e);
+    });
   }
   function loadMaterials() { return MAT ? Promise.resolve(MAT) : api('/api/logic-materials' + q).then(function (m) { MAT = m; return m; }); }
   function loadUnits() { return UNITS ? Promise.resolve(UNITS) : api('/api/logic-plant' + q + '&page=units').then(function (u) { UNITS = u.rows || []; return UNITS; }); }
   function loadBuyers() { return BUYERS ? Promise.resolve(BUYERS) : api('/api/buyers' + q).then(function (b) { BUYERS = b; return b; }); }
   function loadCompanies() { return COMPANIES ? Promise.resolve(COMPANIES) : api('/api/po-intake' + q + '&office=1').then(function (c) { COMPANIES = c; return c; }); }
   function loadCompany(id) { return api('/api/po-intake' + q + '&office=1&customerId=' + encodeURIComponent(id)).then(function (c) { COMPANY = c; return c; }); }
+  /* One account's CRM. A failure is carried, not thrown: the logins, orders
+     and sites come from other endpoints and still open. */
+  function loadCrm(id) { return api('/api/crm' + q + '&customerId=' + encodeURIComponent(id))['catch'](function (e) { return { error: e.message || String(e), status: e.status || 0 }; }); }
+  /* Open follow-ups across every account (Today). Tried once per load; a
+     failure is said once on Today instead of retried on every view. */
+  function loadFollowUps() {
+    if (FOLLOW) return Promise.resolve(FOLLOW);
+    return api('/api/crm' + q + '&followUps=1').then(function (d) {
+      FOLLOW = Array.isArray(d) ? d : Array.isArray(d.followUps) ? d.followUps : []; FOLLOW_ERR = ''; return FOLLOW;
+    }, function (e) { FOLLOW = []; FOLLOW_ERR = e.message || String(e); return FOLLOW; });
+  }
 
   /* ── views ────────────────────────────────────────────────────────────── */
   function draw() {
@@ -187,6 +298,7 @@
     if (TAB === 'stock') return drawStock();
     if (TAB === 'sites') return SERIAL ? drawSiteUnit() : drawSites();
     if (TAB === 'menu') return drawMenu();
+    if (TAB === 'workspace') return drawWorkspaces();
   }
 
   /* ── Menu: every function in one place, the way QuickBooks lays it out.
@@ -197,19 +309,86 @@
     var d = '?org=' + encodeURIComponent(ORG);
     return [
       { key: 'sales', icon: '▤', name: 'Sales & orders', rows: [['go', 'orders', 'Orders', 'Every order, its stage, money and requests'], ['go', 'pos', 'PO loads', 'Key in a stack of customer purchase orders'], ['href', '/po-inbox' + d + '&office=1', 'Company POs', 'Uploaded POs to review and map'], ['href', '/omega-logic' + d, 'Price & accept', 'Approve a price, accept, record shipment']] },
-      { key: 'customers', icon: '◉', name: 'Customer hub', rows: [['go', 'customers', 'Customers', 'Accounts, terms, balances, logins'], ['href', '/portals/customer/app' + d, 'Customer app', 'What your customers see and use'], ['href', '/portals/customer/' + d, 'Customer portal', 'The same account on a desktop']] },
+      { key: 'customers', icon: '◉', name: 'Customer hub', rows: [['go', 'customers', 'Customers', 'Accounts: people, calls and notes, documents, orders, sites'],['href', '/portals/customer/app' + d, 'Customer app', 'What your customers see and use'], ['href', '/portals/customer/' + d, 'Customer portal', 'The same account on a desktop']] },
       { key: 'plant', icon: '⚙', name: 'Plant', rows: [['href', '/plant/app' + d, 'Plant app', 'Work orders, units, quality'], ['href', '/plant/station.html', 'Bench scan station', 'Scan a unit in, issue parts, finish steps'], ['href', '/plant/work-orders.html' + d, 'Work orders', 'Progress, holds, what is short'], ['href', '/plant/manager.html' + d, 'Plant board', 'The line, dwell times, the bottleneck']] },
       { key: 'deliver', icon: '◎', name: 'Deliver & sites', rows: [['go', 'sites', 'Sites & custody', 'What the customer says, receive a load, passports'], ['href', '/logic-register.html' + d, 'Fleet register', 'Every unit on one sheet'], ['href', '/logic-logistics.html' + d, 'Shipping & receiving', 'Loads, carriers, BOLs, receipts'], ['href', '/logic-custody.html' + d, 'Sites & imports', 'Sites, spreadsheet import, coverage templates']] },
       { key: 'stock', icon: '▦', name: 'Stock & supply', rows: [['go', 'stock', 'Stock', 'Finished units, parts short, open POs'], ['href', '/logic-materials.html' + d, 'Materials plan', 'What to buy and when'], ['href', '/logic-materials.html' + d + '#po', 'Purchase orders', 'Supplier orders and receipts'], ['href', '/logic-inventory.html' + d, 'Inventory', 'Units on the shelf, assign to orders']] },
       { key: 'money', icon: '$', name: 'Money', rows: [['href', '/omega-logic' + d + '#cash', 'Cash flow', 'Invoiced, received, outstanding'], ['go', 'orders', 'Invoices & payments', 'Record an invoice issued or a payment received on the order']] },
-      { key: 'setup', icon: '✎', name: 'Setup', rows: [['href', '/logic-catalog.html' + d, 'Products & bills', 'Catalog, bills of materials, coverage'], ['href', '/logic-settings.html' + d, 'Settings', 'Terms, billing mode, workspace']] },
+      { key: 'setup', icon: '✎', name: 'Setup', rows: [['href', '/logic-catalog.html' + d, 'Products & bills', 'Catalog, bills of materials, coverage'], ['href', '/logic-settings.html' + d, 'Settings', 'Terms, billing mode, workspace']].concat(DATA && DATA.owner ? [['go', 'workspace', 'Switch workspace', 'ClearSky owner: open another Omega Logic workspace']] : []) },
       { key: 'help', icon: '?', name: 'Help & guides', rows: [['href', '/guides/Omega-Logic-Office-App.pdf', 'Omega Logic app guide', 'Install and use, PDF'], ['href', '/guides/Omega-Logic-Customer-App.pdf', 'Customer app guide', 'Send it to a customer, PDF'], ['href', '/guides/Omega-Logic-Plant-App.pdf', 'Plant app guide', 'For the builders, PDF']] }
     ];
   }
-  /* Home opens on the hubs: sign in, pick where you are working. A hub is a
-     Menu panel; tapping one opens the Menu with its list open. */
-  function hubsHtml() { return '<h1>Where to?</h1><div class="panels" id="hubs">' + menuPanels().map(function (p) { return '<button type="button" class="panel" data-hub="' + p.key + '"><i>' + p.icon + '</i><b>' + esc(p.name) + '</b></button>'; }).join('') + '</div>'; }
-  function bindHubs() { Array.prototype.forEach.call(document.querySelectorAll('[data-hub]'), function (b) { b.onclick = function () { MENU_OPEN = b.dataset.hub; TAB = 'menu'; draw(); window.scrollTo(0, 0); }; }); }
+  /* ── Home: the HEX HUB (omega-hexhub.js), drawn from the Ω in the icon.
+     Today in the middle, the six hubs of the business around it, a badge
+     where a person is needed. The badges are counted from what the app has
+     already loaded; one that has not arrived yet shows no badge rather than
+     a zero it cannot vouch for. Tapping a hub opens it: Customers is the
+     CRM tab; the others open their Menu panel (MENU_OPEN), the same list
+     the Menu shows; Today scrolls to the list under the hub. ──────────── */
+  function summary() {
+    var orders = DATA.orders || [], now = todayIso(), s = { orders: orders, invoiced: 0, paid: 0, depositsOpen: 0, exceptions: 0, toIssue: 0, overdue: 0 };
+    orders.forEach(function (o) {
+      var l = o.logic; if (!l) return;
+      var terms = (l.commercial && l.commercial.terms) || {}, tb = tenantBilled(l);
+      Object.keys(l.invoices || {}).forEach(function (k) {
+        var i = l.invoices[k] || {}, amt = Number(i.amountCents) || 0, pd = Number(i.paidCents) || 0;
+        s.invoiced += amt; s.paid += pd;
+        if (k === 'deposit' && pd < amt) s.depositsOpen += amt - pd;
+        if (!amt || pd >= amt || i.status === 'paid') return;
+        /* tenant-billed: the office issues it on its own paper */
+        if (tb && !i.id) { s.toIssue++; return; }
+        /* overdue against the order's terms, from the date it was issued */
+        var due = i.dueDate || i.dueAt ? day(toIso(i.dueDate || i.dueAt)) : i.issuedAt ? addDays(i.issuedAt, terms.dueDays) : '';
+        if (due && due < now) s.overdue++;
+      });
+      if (l.lastError || l.paymentException) s.exceptions++;
+    });
+    s.withReq = orders.filter(function (o) { return openReq(o).length; });
+    s.attention = orders.filter(function (o) { return stageKey(o) === 'exception'; });
+    s.toPrice = orders.filter(function (o) { return ['quote', 'priced'].indexOf(stageKey(o)) >= 0; });
+    s.rows = BOARD ? (BOARD.rows || []).filter(function (r) { return r.stage !== 'complete'; }) : null;
+    s.late = s.rows ? s.rows.filter(function (r) { return r.late; }) : [];
+    s.held = s.rows ? s.rows.filter(function (r) { return r.progress.held > 0; }) : [];
+    s.heldUnits = s.held.reduce(function (n, r) { return n + (Number(r.progress.held) || 0); }, 0);
+    var intake = DATA.intake || {}; s.review = (intake.review || 0) + (intake.needsInfo || 0);
+    s.needs = [];
+    s.withReq.forEach(function (o) { s.needs.push({ o: o, why: plural(openReq(o).length, 'customer request'), pill: 'answer' }); });
+    s.attention.forEach(function (o) { s.needs.push({ o: o, why: o.stage ? o.stage.next : 'needs attention', pill: 'fix' }); });
+    s.toPrice.forEach(function (o) { s.needs.push({ o: o, why: o.stage ? o.stage.next : 'price it', pill: 'price' }); });
+    s.follow = (FOLLOW || []).filter(function (f) { var d = day(toIso(f.followUpAt)); return d && d <= now; });
+    s.followLater = (FOLLOW || []).length - s.follow.length;
+    s.count = s.needs.length + s.review + s.follow.length;
+    return s;
+  }
+  function hubItems(s) {
+    var pending = BUYERS ? (BUYERS.customers || []).reduce(function (n, c) { return n + (Number(c.pending) || 0); }, 0) : 0;
+    var cu = CUSTODY, toConfirm = cu ? (cu.toConfirm || []).length : 0, transit = cu && cu.counts ? Number(cu.counts.in_transit) || 0 : null;
+    var ms = MAT ? MAT.summary || {} : null, owed = s.invoiced - s.paid;
+    return [
+      { key: 'today', label: 'Today', icon: '◷', badge: cap(s.count), hint: new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) },
+      { key: 'sales', label: 'Sales & orders', icon: '▤', badge: cap(s.toPrice.length + s.review), hint: s.toPrice.length ? s.toPrice.length + ' to price' : s.review ? plural(s.review, 'PO') + ' to review' : plural(s.orders.length, 'order') },
+      { key: 'customers', label: 'Customers', icon: '◉', badge: cap(pending + s.follow.length), hint: s.follow.length ? plural(s.follow.length, 'follow-up') + ' due' : pending ? pending + ' asking to join' : 'CRM' },
+      { key: 'plant', label: 'Plant', icon: '⚙', badge: cap(s.heldUnits), hint: s.rows ? (s.late.length ? s.late.length + ' late' : plural(s.rows.length, 'work order')) : '' },
+      { key: 'deliver', label: 'Deliver & sites', icon: '◎', badge: cap(toConfirm), hint: toConfirm ? toConfirm + ' to confirm' : transit != null ? transit + ' in transit' : '' },
+      { key: 'stock', label: 'Stock & supply', icon: '▦', badge: cap(ms ? ms.short : 0), hint: ms ? (ms.short ? plural(Number(ms.short), 'part') + ' short' : 'nothing short') : '' },
+      { key: 'money', label: 'Money', icon: '$', badge: cap(s.toIssue + s.overdue), hint: s.overdue ? s.overdue + ' overdue' : s.toIssue ? s.toIssue + ' to issue' : owed > 0 ? kdollars(owed) + ' open' : 'nothing open' }
+    ];
+  }
+  function paintHub(s) {
+    var el = $('hubs'); if (!el || !DATA) return;
+    var items = hubItems(s || summary()), caption = (DATA.brand && DATA.brand.workspace) || DATA.name || ORG;
+    if (window.OmegaHexHub && typeof OmegaHexHub.render === 'function') return OmegaHexHub.render(el, { items: items, onPick: pickHub, title: 'Where to?', caption: caption });
+    /* the component did not load: the same hubs, as plain buttons */
+    el.innerHTML = '<h1>Where to?</h1><div class="panels">' + items.map(function (it) { return '<button type="button" class="panel" data-hub="' + esc(it.key) + '"><i>' + esc(it.icon) + '</i><b>' + esc(it.label) + (it.badge ? ' · ' + esc(it.badge) : '') + '</b></button>'; }).join('') + '</div>';
+    Array.prototype.forEach.call(el.querySelectorAll('[data-hub]'), function (b) { b.onclick = function () { pickHub(b.getAttribute('data-hub')); }; });
+  }
+  function pickHub(key) {
+    if (key === 'today') { var t = $('today-needs'); if (t && t.scrollIntoView) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    PICK = null; CUST = null; SERIAL = null;
+    if (key === 'customers') { TAB = 'customers'; draw(); window.scrollTo(0, 0); return; }
+    MENU_OPEN = key; TAB = 'menu'; draw(); window.scrollTo(0, 0);
+    var p = document.querySelector('.panel.open'); if (p && p.scrollIntoView) p.scrollIntoView({ block: 'start' });
+  }
   function rowHtml(r) { var inner = '<div><b>' + esc(r[2]) + '</b><small>' + esc(r[3]) + '</small></div><span class="go">›</span>'; return r[0] === 'go' ? '<button type="button" data-go="' + esc(r[1]) + '">' + inner + '</button>' : '<a href="' + esc(r[1]) + '">' + inner + '</a>'; }
   function drawMenu(filter) {
     var panels = menuPanels(), f = String(filter || '').toLowerCase().trim();
@@ -244,30 +423,49 @@
   function bindOrders() { Array.prototype.forEach.call(document.querySelectorAll('[data-order]'), function (b) { b.onclick = function () { PICK = b.dataset.order; draw(); window.scrollTo(0, 0); }; }); }
 
   function drawToday() {
-    var orders = DATA.orders || [], t = DATA.totals || { byStage: {} }, bs = t.byStage || {};
-    var invoiced = 0, paid = 0, depositsOpen = 0, exceptions = 0;
-    orders.forEach(function (o) { var l = o.logic; if (!l) return; Object.keys(l.invoices || {}).forEach(function (k) { var i = l.invoices[k]; invoiced += i.amountCents || 0; paid += i.paidCents || 0; if (k === 'deposit' && (i.paidCents || 0) < (i.amountCents || 0)) depositsOpen += (i.amountCents || 0) - (i.paidCents || 0); }); if (l.lastError || l.paymentException) exceptions++; });
-    var withReq = orders.filter(function (o) { return openReq(o).length; }), attention = orders.filter(function (o) { return stageKey(o) === 'exception'; }), toPrice = orders.filter(function (o) { return ['quote', 'priced'].indexOf(stageKey(o)) >= 0; });
-    var rows = BOARD ? (BOARD.rows || []).filter(function (r) { return r.stage !== 'complete'; }) : null, late = rows ? rows.filter(function (r) { return r.late; }) : [], held = rows ? rows.filter(function (r) { return r.progress.held > 0; }) : [];
-    var intake = DATA.intake || {}, review = (intake.review || 0) + (intake.needsInfo || 0);
-    var needs = [];
-    withReq.forEach(function (o) { needs.push({ o: o, why: openReq(o).length + ' customer request' + (openReq(o).length === 1 ? '' : 's'), pill: 'answer' }); });
-    attention.forEach(function (o) { needs.push({ o: o, why: o.stage ? o.stage.next : 'needs attention', pill: 'fix' }); });
-    toPrice.forEach(function (o) { needs.push({ o: o, why: o.stage ? o.stage.next : 'price it', pill: 'price' }); });
-    $('view').innerHTML = hubsHtml() + '<h2>Today</h2><p class="note">' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })) + ' · ' + esc(DATA.name) + (DATA.limited ? ' · newest 100 orders' : '') + '</p>'
+    var s = summary(), bs = (DATA.totals || {}).byStage || {}, rows = s.rows, late = s.late, held = s.held;
+    $('view').innerHTML = '<div id="hubs"></div>'
+      + '<h2>Today</h2><p class="note">' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })) + ' · ' + esc(DATA.name) + (DATA.limited ? ' · newest 100 orders' : '') + '</p>'
       + (!DATA.active ? '<div class="warn">Omega Logic is not active on this workspace yet. Orders can be read; pricing and acceptance wait for setup on the desktop.</div>' : '')
-      + '<div class="kv" id="today-kv"><div class="' + ((bs.quote || 0) + (bs.priced || 0) ? '' : '') + '"><small>To price</small><b>' + ((bs.quote || 0) + (bs.priced || 0)) + '</b></div><div><small>Awaiting deposit</small><b>' + (bs.deposit || 0) + '</b></div><div><small>In build</small><b>' + ((bs.release || 0) + (bs.production || 0) + (bs.balance || 0)) + '</b></div><div><small>Ready · shipped</small><b>' + ((bs.ship || 0) + (bs.shipped || 0)) + '</b></div></div>'
-      + '<h2>Needs a person · ' + (needs.length + review) + '</h2>'
-      + (review ? '<button class="unit" id="to-review"><div><b>' + review + ' company PO' + (review === 1 ? '' : 's') + ' to review</b><small>uploaded by customers; map the lines and destinations on the desktop</small></div><span class="pill bad">review</span></button>' : '')
-      + (needs.slice(0, 8).map(function (n) { return '<button class="unit" data-order="' + esc(n.o.id) + '"><div><b>' + esc(n.o.orderNo) + '</b><small>' + esc(n.o.customer.company || n.o.customer.name || n.o.customer.email) + ' · ' + esc(n.why) + '</small></div><span class="pill bad">' + esc(n.pill) + '</span></button>'; }).join('') || (review ? '' : '<p class="note">Nothing waiting on the office. Every order is priced, every request answered.</p>'))
-      + '<h2>Money</h2><div class="kv"><div><small>Invoiced</small><b>' + dollars(invoiced) + '</b></div><div><small>Received</small><b>' + dollars(paid) + '</b></div><div class="' + (invoiced - paid > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(invoiced - paid) + '</b></div><div><small>Deposits awaiting</small><b>' + dollars(depositsOpen) + '</b></div>' + (exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + exceptions + '</b></div>' : '') + '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div></div>'
+      + '<div class="kv" id="today-kv"><div><small>To price</small><b>' + ((bs.quote || 0) + (bs.priced || 0)) + '</b></div><div><small>Awaiting deposit</small><b>' + (bs.deposit || 0) + '</b></div><div><small>In build</small><b>' + ((bs.release || 0) + (bs.production || 0) + (bs.balance || 0)) + '</b></div><div><small>Ready · shipped</small><b>' + ((bs.ship || 0) + (bs.shipped || 0)) + '</b></div></div>'
+      + '<div id="today-needs"></div>'
+      + '<h2>Money</h2><div class="kv"><div><small>Invoiced</small><b>' + dollars(s.invoiced) + '</b></div><div><small>Received</small><b>' + dollars(s.paid) + '</b></div><div class="' + (s.invoiced - s.paid > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(s.invoiced - s.paid) + '</b></div><div><small>Deposits awaiting</small><b>' + dollars(s.depositsOpen) + '</b></div>' + (s.toIssue ? '<div class="bad"><small>Invoices to issue</small><b>' + s.toIssue + '</b></div>' : '') + (s.overdue ? '<div class="bad"><small>Invoices overdue</small><b>' + s.overdue + '</b></div>' : '') + (s.exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + s.exceptions + '</b></div>' : '') + '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div></div>'
       + '<h2>Plant</h2>' + (rows ? '<div class="kv"><div><small>Open work orders</small><b>' + rows.length + '</b></div><div class="' + (late.length ? 'bad' : '') + '"><small>Late</small><b>' + late.length + '</b></div><div class="' + (held.length ? 'bad' : '') + '"><small>With holds</small><b>' + held.length + '</b></div><div><small>Ready to ship</small><b>' + rows.filter(function (r) { return r.stage === 'ready'; }).length + '</b></div></div>' + (late.concat(held.filter(function (r) { return !r.late; })).slice(0, 4).map(function (r) { return '<div class="unit"><div><b>' + esc(r.orderNo) + '</b><small>' + esc(r.stageLabel) + (r.late ? ' · late · due ' + esc(r.due) : '') + (r.progress.held ? ' · ' + r.progress.held + ' on hold' : '') + '</small></div><span class="pill bad">' + (r.late ? 'late' : 'hold') + '</span></div>'; }).join('')) : '<p class="note">Plant board unavailable.</p>')
       + '<h2>' + esc((DATA.brand && DATA.brand.workspace) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record. The plant builds it, the office runs it, the customer places it: each app shows the same unit.</p><div class="kv"><a href="/plant/app' + q + '" style="text-decoration:none;color:inherit"><small>Plant</small><b style="font-size:15px">Work orders &amp; benches</b></a><a href="/plant/station.html" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a><a href="#" id="to-sites" style="text-decoration:none;color:inherit"><small>Sites</small><b style="font-size:15px">What the customer says</b></a><a href="/portals/customer/app' + q + '" style="text-decoration:none;color:inherit"><small>Customer</small><b style="font-size:15px">What they see</b></a></div>';
-    bindOrders(); bindHubs();
+    paintHub(s); paintNeeds(s);
     if ($('to-sites')) $('to-sites').onclick = function (e) { e.preventDefault(); TAB = 'sites'; draw(); window.scrollTo(0, 0); };
-    if ($('to-review')) $('to-review').onclick = function () { TAB = 'pos'; draw(); };
-    loadMaterials().then(function (m) { var s = m.summary || {}, el = $('kv-buy'); if (!el) return; el.innerHTML = '<small>Purchase list value</small><b>' + (s.spend != null ? '$' + Number(s.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '</b><small>' + (s.short || 0) + ' short · ' + (s.late || 0) + ' late</small>'; if (s.late) el.className = 'bad'; })['catch'](function () { if ($('kv-buy')) $('kv-buy').innerHTML = '<small>Purchase list value</small><b>—</b>'; });
+    /* What the hub's badges and the follow-ups need, each once per load.
+       Whatever arrives repaints the hub; nothing waits on the slowest. */
+    function again() { if (TAB === 'today' && !PICK && $('hubs')) { var t = summary(); paintHub(t); paintNeeds(t); } }
+    loadMaterials().then(function (m) { var ms = m.summary || {}, el = $('kv-buy'); again(); if (!el) return; el.innerHTML = '<small>Purchase list value</small><b>' + (ms.spend != null ? '$' + Number(ms.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '</b><small>' + (ms.short || 0) + ' short · ' + (ms.late || 0) + ' late</small>'; if (ms.late) el.className = 'bad'; })['catch'](function () { if ($('kv-buy')) $('kv-buy').innerHTML = '<small>Purchase list value</small><b>—</b>'; });
+    if (!FOLLOW) loadFollowUps().then(again);
+    if (!CUSTODY && !HUB_TRIED.custody) { HUB_TRIED.custody = true; loadCustody().then(again)['catch'](function () {}); }
+    /* people asking to join: the Customer hub list is office-admin data;
+       a member who may not read it simply sees no badge */
+    if (!BUYERS && !HUB_TRIED.buyers) { HUB_TRIED.buyers = true; loadBuyers().then(again)['catch'](function () {}); }
   }
+  /* "Needs a person": customer requests, orders to fix or price, company
+     POs to review, and the CRM follow-ups that are due (api/crm.js). A
+     follow-up opens its account on Activity, where it is marked done. */
+  function paintNeeds(s) {
+    var el = $('today-needs'); if (!el || !DATA) return; s = s || summary();
+    var now = todayIso();
+    el.innerHTML = '<h2>Needs a person · ' + s.count + '</h2>'
+      + (s.review ? '<button class="unit" id="to-review"><div><b>' + plural(s.review, 'company PO') + ' to review</b><small>uploaded by customers; map the lines and destinations on the desktop</small></div><span class="pill bad">review</span></button>' : '')
+      + s.follow.map(function (f) {
+          var due = day(toIso(f.followUpAt)), late = due < now, who = f.company || f.customerName || customerName(f.customerId) || 'A customer';
+          var inner = '<div><b>' + esc(f.subject || typeLabel(f.type)) + '</b><small>' + esc(who) + ' · ' + esc(typeLabel(f.type)) + (f.contactName ? ' · ' + esc(f.contactName) : '') + ' · ' + (late ? 'was due ' : 'due ') + esc(due) + '</small></div><span class="pill bad">' + (late ? 'overdue' : 'follow up') + '</span>';
+          return f.customerId ? '<button class="unit" data-fu-cust="' + esc(f.customerId) + '">' + inner + '</button>' : '<div class="unit">' + inner + '</div>';
+        }).join('')
+      + (s.needs.slice(0, 8).map(function (n) { return '<button class="unit" data-order="' + esc(n.o.id) + '"><div><b>' + esc(n.o.orderNo) + '</b><small>' + esc(n.o.customer.company || n.o.customer.name || n.o.customer.email) + ' · ' + esc(n.why) + '</small></div><span class="pill bad">' + esc(n.pill) + '</span></button>'; }).join(''))
+      + (s.count ? '' : '<p class="note">Nothing waiting on the office. Every order is priced, every request answered' + (FOLLOW && !FOLLOW_ERR ? ', every follow-up done' : '') + '.</p>')
+      + (s.followLater > 0 ? '<p class="note">' + plural(s.followLater, 'more follow-up') + ' scheduled for later; each shows here on its day.</p>' : '')
+      + (FOLLOW_ERR ? '<p class="note">CRM follow-ups could not load: ' + esc(FOLLOW_ERR) + '</p>' : '');
+    bindOrders();
+    if ($('to-review')) $('to-review').onclick = function () { TAB = 'pos'; draw(); };
+    Array.prototype.forEach.call(el.querySelectorAll('[data-fu-cust]'), function (b) { b.onclick = function () { openCustomer(b.getAttribute('data-fu-cust'), 'activity'); }; });
+  }
+  function customerName(id) { var c = BUYERS && (BUYERS.customers || []).filter(function (x) { return x.id === id; })[0]; return c ? c.company || '' : ''; }
 
   function drawOrders() {
     var orders = DATA.orders || [];
@@ -290,8 +488,8 @@
       + (l && (l.lastError || l.paymentException) ? '<div class="warn">' + esc(l.paymentException || l.lastError) + '</div>' : '')
       + '<h2>Lines</h2>' + (o.items || []).map(function (i) { return '<div class="unit"><div>' + esc(i.name || i.sku) + '<small>' + esc(i.sku) + '</small></div><b>' + esc(i.qty) + '</b></div>'; }).join('')
       + (c ? '<h2>Money</h2><div class="kv"><div><small>Customer total</small><b>' + dollars(c.totalCents) + '</b></div><div><small>Deposit</small><b>' + dollars(c.depositCents) + '</b><small>' + esc(c.terms ? c.terms.depositPct + '% · due in ' + c.terms.dueDays + ' days' : '') + '</small></div><div><small>Received</small><b>' + dollars(money.paid) + '</b></div><div class="' + (money.balance > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(money.balance) + '</b></div></div>'
-          + Object.keys(l.invoices || {}).map(function (k) { var i = l.invoices[k]; return '<div class="unit"><div><b>' + esc(k) + ' invoice' + (i.id && l.accounting === 'tenant' ? ' · ' + esc(i.id) : '') + '</b><small>' + dollars(i.amountCents) + ' · ' + esc(String(i.status).replace(/_/g, ' ')) + ' · recorded ' + dollars(i.paidCents || 0) + (i.issuedAt ? ' · issued ' + esc(i.issuedAt) : '') + '</small></div>' + (i.payUrl ? '<a class="pill" target="_blank" rel="noopener" href="' + esc(i.payUrl) + '">open</a>' : '') + '</div>'
-              + (l.accounting === 'tenant' && i.amountCents && i.status !== 'paid' ? (!i.id ? '<div class="row"><input data-inv-no="' + k + '" placeholder="Invoice number"><input data-inv-date="' + k + '" type="date"><button data-issue="' + k + '">Issued</button></div>' : '<div class="row"><input data-pay-amt="' + k + '" type="number" min="0.01" step="0.01" placeholder="USD received"><input data-pay-date="' + k + '" type="date"><input data-pay-ref="' + k + '" placeholder="Bank ref"><button data-paid="' + k + '">Received</button></div>') : ''); }).join('')
+          + Object.keys(l.invoices || {}).map(function (k) { var i = l.invoices[k]; return '<div class="unit"><div><b>' + esc(k) + ' invoice' + (i.id && tenantBilled(l) ? ' · ' + esc(i.id) : '') + '</b><small>' + dollars(i.amountCents) + ' · ' + esc(String(i.status).replace(/_/g, ' ')) + ' · recorded ' + dollars(i.paidCents || 0) + (i.issuedAt ? ' · issued ' + esc(i.issuedAt) : '') + '</small></div>' + (i.payUrl ? '<a class="pill" target="_blank" rel="noopener" href="' + esc(i.payUrl) + '">pay link</a>' : '') + '</div>'
+              + (tenantBilled(l) && i.amountCents && i.status !== 'paid' ? (!i.id ? '<div class="row"><input data-inv-no="' + k + '" placeholder="Invoice number"><input data-inv-date="' + k + '" type="date"></div><div class="row"><input data-inv-pay="' + k + '" type="url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="Pay link (https, optional)"><button data-issue="' + k + '">Issued</button></div><p class="note">The pay link is your own payment page for this invoice; the customer\'s Pay hub opens it.</p>' : '<div class="row"><input data-pay-amt="' + k + '" type="number" min="0.01" step="0.01" placeholder="USD received"><input data-pay-date="' + k + '" type="date"><input data-pay-ref="' + k + '" placeholder="Bank ref"><button data-paid="' + k + '">Received</button></div>') : ''); }).join('')
         : '<h2>Money</h2><p class="note">' + (DATA.owner ? 'Not priced yet. Approve the customer price on the desktop.' : 'Not priced yet. ClearSky approves the customer price.') + '</p>')
       + (b ? '<h2>Build</h2><div class="bar"><i style="width:' + b.progress.percent + '%' + (b.progress.held ? ';background:#B42318' : '') + '"></i></div><div class="kv"><div><small>Built</small><b>' + b.progress.percent + '%</b><small>' + b.progress.done + ' of ' + b.progress.total + ' steps</small></div><div><small>Ready to ship</small><b>' + b.progress.readyRoots + ' / ' + b.progress.expectedRoots + '</b></div><div class="' + (b.progress.held ? 'bad' : '') + '"><small>On hold</small><b>' + b.progress.held + '</b></div><div><small>' + (b.late ? 'Late · due' : 'Target') + '</small><b style="font-size:15px">' + esc(b.due || '—') + '</b></div></div>' + (l && l.allocatedSerials && l.allocatedSerials.length ? '<p class="note">' + l.allocatedSerials.length + ' unit' + (l.allocatedSerials.length === 1 ? '' : 's') + ' assigned from finished stock: ' + esc(l.allocatedSerials.join(', ')) + '</p>' : '') : (l && l.releasedAt ? '<h2>Build</h2><p class="note">Released to the plant ' + esc(day(l.releasedAt)) + '.</p>' : ''))
       + (o.shipment ? '<h2>Shipment</h2><p>' + esc(o.shipment.carrier) + ' · ' + esc(o.shipment.tracking) + (o.shipment.shippedAt ? ' · ' + esc(day(o.shipment.shippedAt)) : '') + '</p>' : '')
@@ -308,7 +506,15 @@
         api('/api/logic-office', { action: 'request-resolve', orderId: o.id, requestId: btn.dataset.resolve, answer: answer }).then(function () { status('Answered. The customer sees it on their order.'); return loadAll(); })['catch'](function (e) { fail(e); btn.disabled = false; });
       };
     });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-issue]'), function (btn) { btn.onclick = function () { var k = btn.getAttribute('data-issue'); btn.disabled = true; status('Recording…'); api('/api/logic-office', { action: 'invoice-issued', orderId: o.id, stage: k, number: document.querySelector('[data-inv-no="' + k + '"]').value, date: document.querySelector('[data-inv-date="' + k + '"]').value }).then(function () { status('Invoice recorded.'); return loadAll(); })['catch'](function (e) { fail(e); btn.disabled = false; }); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-issue]'), function (btn) {
+      btn.onclick = function () {
+        var k = btn.getAttribute('data-issue'), payUrl = document.querySelector('[data-inv-pay="' + k + '"]').value.trim();
+        /* the supplier's own payment page; api/logic-office.js checks it again */
+        if (payUrl && !/^https:\/\/[^\s<>"']+$/i.test(payUrl)) { status('A pay link must be a full https:// address.'); return; }
+        btn.disabled = true; status('Recording…');
+        api('/api/logic-office', { action: 'invoice-issued', orderId: o.id, stage: k, number: document.querySelector('[data-inv-no="' + k + '"]').value, date: document.querySelector('[data-inv-date="' + k + '"]').value, payUrl: payUrl || undefined }).then(function () { status(payUrl ? 'Invoice recorded with its pay link; the customer can pay from their app.' : 'Invoice recorded.'); return loadAll(); })['catch'](function (e) { fail(e); btn.disabled = false; });
+      };
+    });
     Array.prototype.forEach.call(document.querySelectorAll('[data-paid]'), function (btn) { btn.onclick = function () { var k = btn.getAttribute('data-paid'); btn.disabled = true; status('Recording…'); api('/api/logic-office', { action: 'payment-received', orderId: o.id, stage: k, amount: document.querySelector('[data-pay-amt="' + k + '"]').value, date: document.querySelector('[data-pay-date="' + k + '"]').value, bankReference: document.querySelector('[data-pay-ref="' + k + '"]').value }).then(function (r) { status(r.invoice && r.invoice.status === 'paid' ? 'Paid in full' + (r.workflow && r.workflow.ok ? ' · released to the plant.' : '.') : 'Payment recorded.'); return loadAll(); })['catch'](function (e) { fail(e); btn.disabled = false; }); }; });
     if ($('act-ready')) $('act-ready').onclick = function () {
       if (!confirm('Verify every unit passed and invoice the balance for ' + o.orderNo + '?')) return;
@@ -319,10 +525,13 @@
 
   /* ── POs: a stack keyed in from the customer's email ─────────────────── */
   function drawPos() {
-    $('view').innerHTML = '<h1>Purchase orders</h1><p class="note">A fleet customer sends twenty to fifty at a time. Choose the company, paste the lines, and each becomes an order awaiting pricing — nothing is accepted or charged.</p><div id="pos-body"><p class="note">Loading companies…</p></div>';
+    var from = PO_FROM;
+    $('view').innerHTML = (from ? '<button class="back" id="back">‹ ' + esc(from.company || 'The account') + '</button>' : '') + '<h1>Purchase orders</h1><p class="note">A fleet customer sends twenty to fifty at a time. Choose the company, paste the lines, and each becomes an order awaiting pricing — nothing is accepted or charged.</p><div id="pos-body"><p class="note">Loading companies…</p></div>';
+    if ($('back')) $('back').onclick = function () { PO_FROM = null; openCustomer(from.id, 'orders'); };
     loadCompanies().then(function (c) {
       var el = $('pos-body'); if (!el) return;
       var active = (c.companies || []).filter(function (x) { return x.status === 'active'; });
+      if (from && from.id === COMPANY_ID && !active.some(function (x) { return x.id === COMPANY_ID; })) status((from.company || 'That account') + ' is not an active company account, so POs cannot be entered for it. Its access is set on the desktop customer page (Account access).');
       el.innerHTML = '<div class="row"><select id="company"><option value="">Choose a company…</option>' + active.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === COMPANY_ID ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>'
         + '<details><summary class="note">Add a company account</summary><input id="new-company" placeholder="Company name" maxlength="160"><input id="new-domain" placeholder="Email domain, e.g. inchargeus.com (optional)"><button class="big ghost" id="add-company">Create the account</button></details>'
         + '<div id="company-body"></div>';
@@ -394,75 +603,340 @@
       $('c-find').oninput = function () { CUST_FILTER = this.value; paintList(); };
     })['catch'](fail);
   }
-  function openCustomer(id) {
+  /* ── the CRM: one ACCOUNT in sections ────────────────────────────────────
+     QuickBooks' customer hub, on a phone. The account (api/buyers.js) and
+     its CRM (api/crm.js) load together; each section is one screen:
+       Overview   money, open requests, follow-ups, the latest on the
+                  timeline; the account's app link, domain and terms
+       People     the logins (approve, turn off, invite, add) and the
+                  contacts who never log in
+       Activity   log a call, an email, a meeting, a note or a task, with a
+                  follow-up date that shows on Today until it is done
+       Documents  upload, share with the customer, download, archive
+       Orders     every order on the account; enter a PO for it
+       Sites      the account's sites and shipped units
+     What the customer does in their app lands on the same account, so it
+     is here without anyone typing it twice. ──────────────────────────── */
+  var CUST_SEC = 'overview', CONTACT_EDIT = null, ACT_TYPE = 'call', ACT_CONTACT = '', TL_ALL = false;
+  var SECTIONS = [['overview', 'Overview'], ['people', 'People'], ['activity', 'Activity'], ['documents', 'Documents'], ['orders', 'Orders'], ['sites', 'Sites']];
+  var ACT_TYPES = [['call', 'Call'], ['email', 'Email'], ['meeting', 'Meeting'], ['note', 'Note'], ['task', 'Task']];
+  var DOC_CATS = [['contract', 'Contract'], ['drawing', 'Drawing'], ['datasheet', 'Datasheet'], ['site-survey', 'Site survey'], ['po', 'Purchase order'], ['invoice', 'Invoice'], ['photo', 'Photo'], ['other', 'Other']];
+  var MAX_DOC = 2 * 1024 * 1024;
+  function typeLabel(t) { var x = ACT_TYPES.filter(function (a) { return a[0] === t; })[0]; return x ? x[1] : String(t || 'Note'); }
+  function catLabel(k) { var x = DOC_CATS.filter(function (a) { return a[0] === k; })[0]; return x ? x[1] : String(k || ''); }
+  function crmOk() { return !!CRM && !CRM.error; }
+  function crmDown() { return '<div class="warn">The CRM for this account could not load' + (CRM && CRM.error ? ': ' + esc(CRM.error) : '') + '. People, orders and sites still work.</div>'; }
+  function contacts() {
+    if (!crmOk()) return [];
+    return (CRM.contacts || []).filter(function (x) { return !x.archived && x.status !== 'archived'; })
+      .sort(function (a, b) { return (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || String(a.name || '').toLowerCase().localeCompare(String(b.name || '').toLowerCase()); });
+  }
+  function contactOf(id) { return id ? contacts().filter(function (x) { return x.id === id; })[0] || null : null; }
+  function openFollowUp(a) { return !!(a && a.followUpAt) && !a.doneAt && a.done !== true && a.status !== 'done' && !a.archived; }
+  function accountFollowUps() {
+    if (!crmOk()) return [];
+    var list = Array.isArray(CRM.followUps) ? CRM.followUps : (CRM.activity || []);
+    return list.filter(openFollowUp).sort(function (a, b) { var x = toIso(a.followUpAt), y = toIso(b.followUpAt); return x < y ? -1 : x > y ? 1 : 0; });
+  }
+  function nowLocal() { var d = new Date(); return ymd(d) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function appName() { var n = DATA && DATA.brand && DATA.brand.name; return n ? 'the ' + n + ' customer app' : 'the customer app'; }
+
+  /* sec: the section to open ('activity' from a follow-up on Today); keep:
+     stay where the page is scrolled (a change made on this account) */
+  function openCustomer(id, sec, keep) {
     status('Loading account…');
-    return api('/api/buyers' + q + '&customerId=' + encodeURIComponent(id)).then(function (c) { CUST = c; TAB = 'customers'; status(''); draw(); window.scrollTo(0, 0); })['catch'](fail);
+    var same = !!CUST && CUST.customerId === id;
+    return Promise.all([api('/api/buyers' + q + '&customerId=' + encodeURIComponent(id)), loadCrm(id)]).then(function (r) {
+      CUST = r[0]; CRM = r[1]; CUST_SEC = sec || (same ? CUST_SEC : 'overview');
+      if (!same) { CONTACT_EDIT = null; ACT_CONTACT = ''; TL_ALL = false; }
+      TAB = 'customers'; PICK = null; SERIAL = null; PO_FROM = null; status(''); draw(); if (!keep) window.scrollTo(0, 0);
+    })['catch'](fail);
+  }
+  /* after a CRM write: the account's CRM again, and Today's follow-ups */
+  function refreshCrm(note) {
+    var id = CUST && CUST.customerId; if (!id) return Promise.resolve();
+    return loadCrm(id).then(function (d) { FOLLOW = null; if (!CUST || CUST.customerId !== id || TAB !== 'customers') return; CRM = d; drawCustomer(); status(note || ''); });
+  }
+  function crmPost(body, done, btn) {
+    if (btn) btn.disabled = true; status('Saving…');
+    return api('/api/crm', Object.assign({ customerId: CUST.customerId }, body)).then(function (r) {
+      return refreshCrm(typeof done === 'function' ? done(r) : (r.note || done || 'Saved.'));
+    })['catch'](function (e) { fail(e); if (btn) btn.disabled = false; });
   }
   function shareLink(url, title) {
     if (navigator.share) return navigator.share({ title: title, url: url })['catch'](function () {});
     try { navigator.clipboard.writeText(url).then(function () { status('Link copied.'); }, function () { window.prompt('Copy this link', url); }); } catch (e) { window.prompt('Copy this link', url); }
   }
-  function drawCustomer() {
-    var c = CUST, t = c.totals || {}, people = c.people || [];
-    var orderIds = {}; (c.orders || []).forEach(function (o) { orderIds[o.id] = true; });
-    $('view').innerHTML = '<button class="back" id="back">‹ Customers</button><h1>' + esc(c.company || c.email || c.customerId) + '</h1><p class="note">' + esc(c.accountType === 'company' ? 'Company account' : 'Account') + ' · ' + esc(c.status) + (c.createdAt ? ' · since ' + esc(day(c.createdAt)) : '') + (c.rep && c.rep.name ? ' · rep ' + esc(c.rep.name) : '') + '</p>'
-      + '<div class="kv"><div><small>Invoiced</small><b>' + dollars(t.invoicedCents) + '</b></div><div><small>Received</small><b>' + dollars(t.paidCents) + '</b></div><div class="' + (t.balanceCents > 0 ? 'bad' : '') + '"><small>Balance</small><b>' + dollars(t.balanceCents) + '</b></div><div class="' + (t.openRequests ? 'bad' : '') + '"><small>Open requests</small><b>' + (t.openRequests || 0) + '</b></div></div>'
-      + '<h2>People · ' + people.length + '</h2>' + (people.map(function (u) {
+  /* Enter a PO for this account: the PO sheet with the company chosen */
+  function enterPo(c) {
+    COMPANY_ID = c.customerId; store('omega_office_app_company', COMPANY_ID); PO_FROM = { id: c.customerId, company: c.company };
+    COMPANIES = null; CUST = null; CRM = null; TAB = 'pos'; draw(); window.scrollTo(0, 0);
+  }
+  /* A document is served only by the endpoint, with the bearer token, and
+     saved from a blob: there is no URL to it that anyone could forward. */
+  function download(fileId, name, btn) {
+    var id = CUST.customerId; if (btn) btn.disabled = true; status('Downloading…');
+    auth.currentUser.getIdToken().then(function (t) {
+      return fetch('/api/crm' + q + '&customerId=' + encodeURIComponent(id) + '&file=' + encodeURIComponent(fileId), { headers: { Authorization: 'Bearer ' + t } });
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (txt) { var d = null; try { d = JSON.parse(txt); } catch (e) {} throw new Error((d && d.error) || 'Download failed (' + r.status + ')'); });
+      return r.blob();
+    }).then(function (blob) {
+      var url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = name || 'document'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.parentNode.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      status('Saved ' + (name || 'the document') + '.'); if (btn) btn.disabled = false;
+    })['catch'](function (e) { fail(e); if (btn) btn.disabled = false; });
+  }
+
+  /* ── the rows each section is made of ── */
+  function accountOrderRow(o) {
+    return '<button class="unit" data-order="' + esc(o.id) + '"><div><b>' + esc(o.orderNo) + (o.poNumber ? ' · PO ' + esc(o.poNumber) : '') + '</b><small>' + esc(o.stage ? o.stage.label : o.status) + ' · ' + esc((o.items || []).map(function (i) { return i.qty + ' × ' + i.name; }).join(', ')) + (o.billedTo && o.billedTo.name ? ' · ' + esc(o.billedTo.name) : '') + (o.shippedAt ? ' · shipped ' + esc(day(o.shippedAt)) : '') + '</small></div><div style="text-align:right"><b>' + dollars(o.invoicedCents) + '</b><small>' + (o.balanceCents > 0 ? dollars(o.balanceCents) + ' open' : o.invoicedCents ? 'paid' : 'not invoiced') + (o.openRequests ? ' · ' + plural(o.openRequests, 'request') : '') + '</small></div></button>';
+  }
+  function fuLine(a) {
+    var due = day(toIso(a.followUpAt)), now = todayIso(), late = due < now, on = due === now, who = contactOf(a.contactId);
+    return '<div class="unit"><div><b>' + esc(a.subject || typeLabel(a.type)) + '</b><small>' + esc(typeLabel(a.type)) + (who ? ' · ' + esc(who.name) : '') + ' · ' + (late ? 'was due ' : 'due ') + esc(due) + (a.by ? ' · ' + esc(a.by) : '') + '</small></div>'
+      + '<span class="acts"><span class="pill' + (late || on ? ' bad' : '') + '">' + (late ? 'overdue' : on ? 'today' : 'later') + '</span><button type="button" class="act" data-fu-done="' + esc(a.id) + '">Done</button></span></div>';
+  }
+  /* the timeline is the endpoint's: orders placed, priced, invoiced, paid,
+     shipped; POs; requests; people joining; documents; logged activity */
+  function tlLine(t) {
+    var kind = String(t.kind || t.type || 'event').replace(/[_-]+/g, ' '), text = t.say || t.title || t.text || t.summary || t.subject || kind;
+    var sub = [when(t.at), t.by || '', t.detail || (t.body ? String(t.body).slice(0, 160) : '')].filter(Boolean);
+    var inner = '<div><span class="tk">' + esc(kind) + '</span> <b>' + esc(text) + '</b><small>' + sub.map(esc).join(' · ') + '</small></div>';
+    var known = t.orderId && (DATA.orders || []).some(function (o) { return o.id === t.orderId; });
+    return known ? '<button class="unit tl" data-order="' + esc(t.orderId) + '">' + inner + '<span class="go">›</span></button>' : '<div class="unit tl">' + inner + '</div>';
+  }
+  function actLine(a) {
+    var who = contactOf(a.contactId), ord = a.orderId && (CUST.orders || []).filter(function (o) { return o.id === a.orderId; })[0], due = day(toIso(a.followUpAt));
+    return '<div class="rq"><span class="tk">' + esc(typeLabel(a.type)) + '</span> <b>' + esc(a.subject || '') + '</b>'
+      + '<small class="note">' + [when(a.at), a.by || '', who ? 'with ' + who.name : '', ord ? ord.orderNo : ''].filter(Boolean).map(esc).join(' · ') + '</small>'
+      + (a.body && a.body !== a.subject ? '<p>' + esc(a.body) + '</p>' : '')
+      + (a.followUpAt ? '<div class="acts start">' + (openFollowUp(a) ? '<span class="pill' + (due <= todayIso() ? ' bad' : '') + '">follow up ' + esc(due) + '</span><button type="button" class="act" data-fu-done="' + esc(a.id) + '">Done</button>' : '<span class="pill ok">followed up' + (a.doneAt ? ' ' + esc(day(toIso(a.doneAt))) : '') + '</span>') + '</div>' : '')
+      + '</div>';
+  }
+  function contactRow(x) {
+    if (CONTACT_EDIT === x.id) return contactForm(x);
+    var tel = String(x.phone || '').replace(/[^\d+]/g, '');
+    return '<div class="rq"><b>' + esc(x.name || x.email || 'Contact') + '</b>' + (x.primary ? ' <span class="pill ok">primary</span>' : '') + (x.title ? '<small class="note">' + esc(x.title) + '</small>' : '')
+      + (x.email || x.phone ? '<small class="note">' + [x.email || '', x.phone || ''].filter(Boolean).map(esc).join(' · ') + '</small>' : '')
+      + (x.notes ? '<p>' + esc(x.notes) + '</p>' : '')
+      + '<div class="acts start">' + (tel ? '<a class="act" href="tel:' + esc(tel) + '">Call</a>' : '') + (x.email ? '<a class="act" href="mailto:' + esc(x.email) + '">Email</a>' : '') + '<button type="button" class="act" data-cn-log="' + esc(x.id) + '">Log</button><button type="button" class="act" data-cn-edit="' + esc(x.id) + '">Edit</button></div></div>';
+  }
+  function contactForm(x) {
+    x = x || {};
+    return '<div class="card form" id="cn-form"><b>' + (x.id ? 'Edit ' + esc(x.name || 'the contact') : 'Add a contact') + '</b>'
+      + '<input id="cn-name" placeholder="Name" maxlength="120" autocomplete="off" value="' + esc(x.name || '') + '">'
+      + '<input id="cn-title" placeholder="Title, e.g. Site lead" maxlength="120" autocomplete="off" value="' + esc(x.title || '') + '">'
+      + '<input id="cn-email" type="email" placeholder="Email" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(x.email || '') + '">'
+      + '<input id="cn-phone" type="tel" placeholder="Phone" autocomplete="off" value="' + esc(x.phone || '') + '">'
+      + '<textarea id="cn-notes" class="plain" placeholder="Notes" maxlength="2000">' + esc(x.notes || '') + '</textarea>'
+      + '<label class="check"><input type="checkbox" id="cn-primary"' + (x.primary ? ' checked' : '') + '> Primary contact for the account</label>'
+      + '<div class="row2"><button type="button" class="big" id="cn-save" data-id="' + esc(x.id || '') + '">Save contact</button><button type="button" class="big ghost" id="cn-cancel">Cancel</button></div>'
+      + (x.id ? '<button type="button" class="linkish" id="cn-archive" data-id="' + esc(x.id) + '">Archive this contact</button><p class="note">An archived contact leaves the list; what was logged with them stays on the timeline.</p>' : '')
+      + '</div>';
+  }
+  function fromCustomer(f) { return f.source === 'customer' || f.from === 'customer' || f.uploadedByCustomer === true; }
+  function docLine(f) {
+    var theirs = fromCustomer(f);
+    return '<div class="rq"><b>' + esc(f.name || 'document') + '</b><small class="note">' + [catLabel(f.category), fileSize(f.size), theirs ? 'from the customer' : '', when(f.at || f.uploadedAt), f.by || f.uploadedBy || ''].filter(Boolean).map(esc).join(' · ') + '</small>'
+      + (f.note ? '<p>' + esc(f.note) + '</p>' : '')
+      + '<div class="acts start"><span class="pill' + (theirs || f.shared ? ' ok' : '') + '">' + (theirs ? 'theirs' : f.shared ? 'shared' : 'office only') + '</span>'
+      + '<button type="button" class="act" data-doc-get="' + esc(f.id) + '">Download</button>'
+      + (theirs ? '' : '<button type="button" class="act" data-doc-share="' + esc(f.id) + '" data-to="' + (f.shared ? '0' : '1') + '">' + (f.shared ? 'Stop sharing' : 'Share') + '</button>')
+      + '<button type="button" class="act" data-doc-arch="' + esc(f.id) + '">Archive</button></div></div>';
+  }
+
+  /* ── the sections ── */
+  function secOverview(c) {
+    var t = c.totals || {}, reqs = (c.orders || []).filter(function (o) { return o.openRequests; }), fus = accountFollowUps(), tl = crmOk() ? newestFirst(CRM.timeline || []) : [];
+    return '<div class="kv"><div><small>Invoiced</small><b>' + dollars(t.invoicedCents) + '</b></div><div><small>Received</small><b>' + dollars(t.paidCents) + '</b></div><div class="' + (t.balanceCents > 0 ? 'bad' : '') + '"><small>Balance</small><b>' + dollars(t.balanceCents) + '</b></div><div class="' + (t.openRequests ? 'bad' : '') + '"><small>Open requests</small><b>' + (t.openRequests || 0) + '</b></div></div>'
+      + '<div class="freq" id="quick">' + [['call', '✆', 'Log a call'], ['contact', '+', 'Add a contact'], ['upload', '⇪', 'Upload a document'], ['po', '▥', 'Enter a PO']].map(function (x) { return '<button type="button" data-quick="' + x[0] + '"><i>' + x[1] + '</i>' + esc(x[2]) + '</button>'; }).join('') + '</div>'
+      + (reqs.length ? '<h2>Open requests · ' + reqs.length + '</h2>' + reqs.map(accountOrderRow).join('') : '')
+      + '<h2>Follow-ups · ' + fus.length + ' open</h2>' + (crmOk() ? (fus.map(fuLine).join('') || '<p class="note">Nothing to follow up. Log a call with a follow-up date and it shows here and on Today.</p>') : crmDown())
+      + (crmOk() ? '<h2>Latest</h2>' + ((TL_ALL ? tl : tl.slice(0, 10)).map(tlLine).join('') || '<p class="note">Nothing on the timeline yet.</p>') + (tl.length > 10 ? '<button type="button" class="big ghost" id="tl-all">' + (TL_ALL ? 'Only the latest 10' : 'The whole timeline · ' + tl.length) + '</button>' : '') : '')
+      + '<h2>Their app</h2><div class="card form"><b>' + esc((DATA && DATA.brand && DATA.brand.name) || 'Customer app') + '</b><div class="m" style="overflow-wrap:anywhere">' + esc(c.appUrl || '') + '</div><div class="row" style="margin-top:8px"><button id="app-share">Send the app link</button><button id="portal-share">Desktop link</button></div></div>'
+      + '<label class="note" for="c-domain">Company email domain — people who sign in from it ask to join this account</label><div class="row"><input id="c-domain" placeholder="e.g. amperagecapital.com" value="' + esc(c.domain || '') + '" autocomplete="off" autocapitalize="off"><button id="c-domain-save">Save</button></div>'
+      + '<h2>Terms</h2><p class="note">For the whole account; applies to future prices, issued invoices keep theirs.</p><div class="row"><input id="t-dep" type="number" min="0" max="100" value="' + esc(c.terms.depositPct) + '" aria-label="Deposit %"><input id="t-due" type="number" min="0" value="' + esc(c.terms.dueDays) + '" aria-label="Due in days"></div><p class="note">Deposit % · due in days</p><button class="big ghost" id="save-terms">Save terms</button>'
+      + (c.address ? '<h2>Delivery address</h2><p>' + esc([c.address.line1, c.address.city, c.address.state, c.address.zip].filter(Boolean).join(', ')) + '</p>' : '');
+  }
+  function secPeople(c) {
+    var people = c.people || [], list = contacts();
+    return '<h2>People · ' + people.length + '</h2><p class="note">Logins on the account: each signs in to ' + esc(appName()) + ' and sees the whole account.</p>'
+      + (people.map(function (u) {
           var st = u.status || 'active', lastOwner = u.role === 'owner' && st === 'active' && people.filter(function (x) { return x.role === 'owner' && (x.status || 'active') === 'active'; }).length === 1;
           return '<div class="unit"><div><b>' + esc(u.name || u.email) + '</b><small>' + (u.name ? esc(u.email) + ' · ' : '') + esc(u.role) + (st === 'pending' ? ' · asked to join ' + esc(day(u.requestedAt)) : st === 'disabled' ? ' · access off' : u.activated ? '' : ' · not signed in yet') + '</small></div><span style="display:flex;gap:6px;align-items:center;flex:none">'
             + (st === 'pending' ? '<button class="act go" data-pact="active" data-email="' + esc(u.email) + '">Approve</button>' : st === 'disabled' ? '<button class="act" data-pact="active" data-email="' + esc(u.email) + '">Turn on</button>' : lastOwner ? '' : '<button class="act" data-pact="disabled" data-email="' + esc(u.email) + '">Turn off</button>')
             + (st === 'active' ? '<button class="act" data-pinv="' + esc(u.email) + '">Invite</button>' : '') + '</span></div>';
         }).join('') || '<p class="note">Nobody on this account yet.</p>')
-      + '<div class="card"><b>Add a person</b><input id="np-email" type="email" placeholder="Their work email" autocomplete="off"><input id="np-name" placeholder="Their name"><select id="np-role"><option value="user">User</option><option value="owner">Owner (manages the people)</option></select><button class="big" id="np-add">Add to ' + esc(c.company || 'the account') + '</button><p class="note">They sign in to the customer app with this email and see the whole account. Someone at the company who already signed in on their own is moved onto it, when their own account is empty.</p></div>'
-      + '<h2>Their app</h2><div class="card"><b>' + esc((DATA && DATA.brand && DATA.brand.name) || 'Customer app') + '</b><div class="m" style="overflow-wrap:anywhere">' + esc(c.appUrl || '') + '</div><div class="row" style="margin-top:8px"><button id="app-share">Send the app link</button><button id="portal-share">Desktop link</button></div></div>'
-      + '<label class="note" for="c-domain">Company email domain — people who sign in from it ask to join this account</label><div class="row"><input id="c-domain" placeholder="e.g. amperagecapital.com" value="' + esc(c.domain || '') + '" autocomplete="off" autocapitalize="off"><button id="c-domain-save">Save</button></div>'
-      + '<h2>Terms</h2><p class="note">For the whole account; applies to future prices, issued invoices keep theirs.</p><div class="row"><input id="t-dep" type="number" min="0" max="100" value="' + esc(c.terms.depositPct) + '" aria-label="Deposit %"><input id="t-due" type="number" min="0" value="' + esc(c.terms.dueDays) + '" aria-label="Due in days"></div><p class="note">Deposit % · due in days</p><button class="big ghost" id="save-terms">Save terms</button>'
-      + (c.address ? '<h2>Delivery address</h2><p>' + esc([c.address.line1, c.address.city, c.address.state, c.address.zip].filter(Boolean).join(', ')) + '</p>' : '')
-      + '<h2>Orders · ' + (c.orders || []).length + '</h2>' + ((c.orders || []).map(function (o) { return '<button class="unit" data-order="' + esc(o.id) + '"><div><b>' + esc(o.orderNo) + (o.poNumber ? ' · PO ' + esc(o.poNumber) : '') + '</b><small>' + esc(o.stage ? o.stage.label : o.status) + ' · ' + esc(o.items.map(function (i) { return i.qty + ' × ' + i.name; }).join(', ')) + (o.billedTo && o.billedTo.name ? ' · ' + esc(o.billedTo.name) : '') + (o.shippedAt ? ' · shipped ' + esc(day(o.shippedAt)) : '') + '</small></div><div style="text-align:right"><b>' + dollars(o.invoicedCents) + '</b><small>' + (o.balanceCents > 0 ? dollars(o.balanceCents) + ' open' : o.invoicedCents ? 'paid' : 'not invoiced') + (o.openRequests ? ' · ' + o.openRequests + ' request' + (o.openRequests === 1 ? '' : 's') : '') + '</small></div></button>'; }).join('') || '<p class="note">No orders.</p>') + (c.limited ? '<p class="note">Newest 100 shown.</p>' : '')
-      + '<h2>Sites &amp; units</h2><div id="cust-sites"><p class="note">Loading…</p></div>';
-    $('back').onclick = function () { CUST = null; draw(); };
-    function reopen(note) { BUYERS = null; return openCustomer(c.customerId).then(function () { if (note) status(note); }); }
-    $('save-terms').onclick = function () {
-      var btn = this; btn.disabled = true; status('Saving…');
-      api('/api/buyers', { action: 'terms', customerId: c.customerId, terms: { depositPct: Number($('t-dep').value), dueDays: Number($('t-due').value) } }).then(function (r) { return reopen(r.note || 'Saved.'); })['catch'](function (e) { fail(e); btn.disabled = false; });
-    };
-    $('c-domain-save').onclick = function () {
-      var btn = this; btn.disabled = true; status('Saving…');
-      api('/api/buyers', { action: 'profile', customerId: c.customerId, company: c.company, status: c.status === 'suspended' ? 'suspended' : 'active', address: c.address || {}, domain: $('c-domain').value.trim() }).then(function () { return reopen('Saved. People who sign in from that domain now ask to join ' + (c.company || 'this account') + '.'); })['catch'](function (e) { fail(e); btn.disabled = false; });
-    };
-    $('np-add').onclick = function () {
-      var btn = this, e = $('np-email').value.trim(); if (!e) { status('Enter their email.'); return; }
-      btn.disabled = true; status('Adding…');
-      api('/api/buyers', { action: 'user-add', customerId: c.customerId, email: e, name: $('np-name').value, role: $('np-role').value }).then(function (r) { return reopen(r.note || 'Added.'); })['catch'](function (x) { fail(x); btn.disabled = false; });
-    };
-    Array.prototype.forEach.call(document.querySelectorAll('[data-pact]'), function (bt) {
-      bt.onclick = function () {
-        var to = bt.getAttribute('data-pact'), who = bt.getAttribute('data-email');
-        if (to === 'disabled' && !window.confirm('Turn off access for ' + who + '? What they did stays on the account.')) return;
-        bt.disabled = true; status('Saving…');
-        api('/api/buyers', { action: 'user-status', customerId: c.customerId, email: who, status: to }).then(function (r) { return reopen(r.note || 'Saved.'); })['catch'](function (e) { fail(e); bt.disabled = false; });
+      + '<div class="card form"><b>Add a person</b><input id="np-email" type="email" placeholder="Their work email" autocomplete="off"><input id="np-name" placeholder="Their name"><select id="np-role"><option value="user">User</option><option value="owner">Owner (manages the people)</option></select><button class="big" id="np-add">Add to ' + esc(c.company || 'the account') + '</button><p class="note">They sign in to the customer app with this email and see the whole account. Someone at the company who already signed in on their own is moved onto it, when their own account is empty.</p></div>'
+      + '<h2>Contacts · ' + list.length + '</h2><p class="note">People at ' + esc(c.company || 'the company') + ' who never log in — site leads, accounts payable, engineers.</p>'
+      + (crmOk() ? list.map(contactRow).join('') + (list.length || CONTACT_EDIT === 'new' ? '' : '<p class="note">No contacts yet.</p>') + (CONTACT_EDIT === 'new' ? contactForm(null) : '<button type="button" class="big ghost" id="cn-new">Add a contact</button>') : crmDown());
+  }
+  function secActivity(c) {
+    if (!crmOk()) return crmDown();
+    var acts = newestFirst((CRM.activity || []).filter(function (a) { return !a.archived; })), fus = accountFollowUps(), list = contacts();
+    return '<div class="card form" id="log-form"><b>Log it</b><div class="chips" role="group" aria-label="What happened">' + ACT_TYPES.map(function (t) { return '<button type="button" data-atype="' + t[0] + '" aria-pressed="' + (ACT_TYPE === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>'
+      + '<input id="lg-subject" placeholder="Subject, e.g. Fresno delivery window" maxlength="200" autocomplete="off">'
+      + '<textarea id="lg-body" class="plain" placeholder="What was said, what was agreed" maxlength="5000"></textarea>'
+      + '<label class="lbl" for="lg-at">When</label><input id="lg-at" type="datetime-local" value="' + nowLocal() + '">'
+      + '<label class="lbl" for="lg-contact">With</label><select id="lg-contact"><option value="">— no contact —</option>' + list.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === ACT_CONTACT ? ' selected' : '') + '>' + esc(x.name || x.email) + (x.title ? ' · ' + esc(x.title) : '') + '</option>'; }).join('') + '</select>'
+      + '<label class="lbl" for="lg-order">About an order</label><select id="lg-order"><option value="">— no order —</option>' + (c.orders || []).map(function (o) { return '<option value="' + esc(o.id) + '">' + esc(o.orderNo) + (o.poNumber ? ' · PO ' + esc(o.poNumber) : '') + '</option>'; }).join('') + '</select>'
+      + '<label class="lbl" for="lg-fu">Follow up on (optional) — shows on Today that day</label><input id="lg-fu" type="date" min="' + todayIso() + '">'
+      + '<button type="button" class="big" id="lg-go">Log it</button></div>'
+      + '<h2>Follow-ups · ' + fus.length + ' open</h2>' + (fus.map(fuLine).join('') || '<p class="note">No follow-ups open.</p>')
+      + '<h2>Activity · ' + acts.length + '</h2>' + (acts.map(actLine).join('') || '<p class="note">Nothing logged yet. A call, an email or a meeting logged here goes on the account\'s timeline.</p>');
+  }
+  function secDocuments(c) {
+    if (!crmOk()) return crmDown();
+    var files = newestFirst((CRM.files || []).filter(function (f) { return !f.archived; }));
+    return '<div class="card form" id="doc-form"><b>Upload a document</b><p class="note">A contract, a drawing, a datasheet, a site survey — up to 2 MB. What ' + esc(c.company || 'the customer') + ' uploads from their app lands here too.</p>'
+      + '<input type="file" id="doc-file">'
+      + '<select id="doc-cat" aria-label="Category">' + DOC_CATS.map(function (x) { return '<option value="' + x[0] + '">' + esc(x[1]) + '</option>'; }).join('') + '</select>'
+      + '<input id="doc-note" placeholder="Note (optional)" maxlength="500" autocomplete="off">'
+      + '<label class="check"><input type="checkbox" id="doc-share"> Share with the customer — they see it in their app</label>'
+      + '<button type="button" class="big" id="doc-go">Upload</button></div>'
+      + '<h2>Documents · ' + files.length + '</h2>' + (files.map(docLine).join('') || '<p class="note">No documents on this account yet.</p>');
+  }
+  function secOrders(c) {
+    return '<button type="button" class="big" id="c-po">Enter a PO for ' + esc(c.company || 'this customer') + '</button><p class="note">The PO sheet with this company chosen. Each PO becomes an order awaiting pricing; nothing is accepted or charged.</p>'
+      + '<h2>Orders · ' + (c.orders || []).length + '</h2>' + ((c.orders || []).map(accountOrderRow).join('') || '<p class="note">No orders.</p>') + (c.limited ? '<p class="note">Newest 100 shown.</p>' : '');
+  }
+
+  function drawCustomer() {
+    var c = CUST, sec = CUST_SEC, people = c.people || [];
+    var n = { people: people.length + contacts().length, documents: crmOk() ? (CRM.files || []).filter(function (f) { return !f.archived; }).length : 0, orders: (c.orders || []).length };
+    $('view').innerHTML = '<button class="back" id="back">‹ Customers</button><h1>' + esc(c.company || c.email || c.customerId) + '</h1><p class="note">' + esc(c.accountType === 'company' ? 'Company account' : 'Account') + ' · ' + esc(c.status) + (c.createdAt ? ' · since ' + esc(day(toIso(c.createdAt))) : '') + (c.rep && c.rep.name ? ' · rep ' + esc(c.rep.name) : '') + '</p>'
+      + '<div class="seg" id="cust-seg" role="tablist" aria-label="Account sections">' + SECTIONS.map(function (s) { var on = sec === s[0]; return '<button type="button" role="tab" data-sec="' + s[0] + '" aria-pressed="' + on + '" aria-selected="' + on + '">' + esc(s[1]) + (n[s[0]] ? ' <small>' + n[s[0]] + '</small>' : '') + '</button>'; }).join('') + '</div>'
+      + '<div id="cust-body">' + (sec === 'people' ? secPeople(c) : sec === 'activity' ? secActivity(c) : sec === 'documents' ? secDocuments(c) : sec === 'orders' ? secOrders(c) : sec === 'sites' ? '<h2>Sites &amp; units</h2><div id="cust-sites"><p class="note">Loading…</p></div>' : secOverview(c)) + '</div>';
+    $('back').onclick = function () { CUST = null; CRM = null; draw(); };
+    function each(sel, fn) { Array.prototype.forEach.call(document.querySelectorAll(sel), fn); }
+    function reopen(note) { BUYERS = null; return openCustomer(c.customerId, null, true).then(function () { if (note) status(note); }); }
+    each('#cust-seg [data-sec]', function (b) { b.onclick = function () { CUST_SEC = b.getAttribute('data-sec'); CONTACT_EDIT = null; status(''); drawCustomer(); window.scrollTo(0, 0); }; });
+    each('#cust-body [data-order]', function (b) { b.onclick = function () { if ((DATA.orders || []).some(function (o) { return o.id === b.dataset.order; })) { CUST = null; PICK = b.dataset.order; TAB = 'orders'; draw(); window.scrollTo(0, 0); } else status('That order is older than the newest 100; open it on the desktop.'); }; });
+    each('[data-fu-done]', function (b) { b.onclick = function () { crmPost({ action: 'done', id: b.getAttribute('data-fu-done') }, 'Done. It is off Today.', b); }; });
+
+    if (sec === 'overview') {
+      each('[data-quick]', function (b) {
+        b.onclick = function () {
+          var k = b.getAttribute('data-quick');
+          if (k === 'po') return enterPo(c);
+          status('');
+          if (k === 'call') { ACT_TYPE = 'call'; CUST_SEC = 'activity'; }
+          if (k === 'contact') { CONTACT_EDIT = 'new'; CUST_SEC = 'people'; }
+          if (k === 'upload') CUST_SEC = 'documents';
+          drawCustomer(); window.scrollTo(0, 0);
+          if (k === 'contact' && $('cn-form')) $('cn-form').scrollIntoView({ block: 'start' });
+        };
+      });
+      if ($('tl-all')) $('tl-all').onclick = function () { TL_ALL = !TL_ALL; drawCustomer(); };
+      $('save-terms').onclick = function () {
+        var btn = this; btn.disabled = true; status('Saving…');
+        api('/api/buyers', { action: 'terms', customerId: c.customerId, terms: { depositPct: Number($('t-dep').value), dueDays: Number($('t-due').value) } }).then(function (r) { return reopen(r.note || 'Saved.'); })['catch'](function (e) { fail(e); btn.disabled = false; });
       };
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-pinv]'), function (bt) {
-      bt.onclick = function () {
-        var who = bt.getAttribute('data-pinv'); bt.disabled = true; status('Sending…');
-        api('/api/buyers', { action: 'invite', customerId: c.customerId, email: who }).then(function (r) { status(r.note || 'Sent.'); })['catch'](function (e) { status(e.message + ' Sending the link instead.'); shareLink(c.appUrl, c.company || 'Your account'); }).then(function () { bt.disabled = false; });
+      $('c-domain-save').onclick = function () {
+        var btn = this; btn.disabled = true; status('Saving…');
+        api('/api/buyers', { action: 'profile', customerId: c.customerId, company: c.company, status: c.status === 'suspended' ? 'suspended' : 'active', address: c.address || {}, domain: $('c-domain').value.trim() }).then(function () { return reopen('Saved. People who sign in from that domain now ask to join ' + (c.company || 'this account') + '.'); })['catch'](function (e) { fail(e); btn.disabled = false; });
       };
-    });
-    $('app-share').onclick = function () { shareLink(c.appUrl, c.company || 'Your account'); };
-    $('portal-share').onclick = function () { shareLink(c.portalUrl, c.company || 'Your account'); };
-    Array.prototype.forEach.call(document.querySelectorAll('[data-order]'), function (b) { b.onclick = function () { if ((DATA.orders || []).some(function (o) { return o.id === b.dataset.order; })) { CUST = null; PICK = b.dataset.order; TAB = 'orders'; draw(); window.scrollTo(0, 0); } else status('That order is older than the newest 100; open it on the desktop.'); }; });
+      $('app-share').onclick = function () { shareLink(c.appUrl, c.company || 'Your account'); };
+      $('portal-share').onclick = function () { shareLink(c.portalUrl, c.company || 'Your account'); };
+    }
+
+    if (sec === 'people') {
+      $('np-add').onclick = function () {
+        var btn = this, e = $('np-email').value.trim(); if (!e) { status('Enter their email.'); return; }
+        btn.disabled = true; status('Adding…');
+        api('/api/buyers', { action: 'user-add', customerId: c.customerId, email: e, name: $('np-name').value, role: $('np-role').value }).then(function (r) { return reopen(r.note || 'Added.'); })['catch'](function (x) { fail(x); btn.disabled = false; });
+      };
+      each('[data-pact]', function (bt) {
+        bt.onclick = function () {
+          var to = bt.getAttribute('data-pact'), who = bt.getAttribute('data-email');
+          if (to === 'disabled' && !window.confirm('Turn off access for ' + who + '? What they did stays on the account.')) return;
+          bt.disabled = true; status('Saving…');
+          api('/api/buyers', { action: 'user-status', customerId: c.customerId, email: who, status: to }).then(function (r) { return reopen(r.note || 'Saved.'); })['catch'](function (e) { fail(e); bt.disabled = false; });
+        };
+      });
+      each('[data-pinv]', function (bt) {
+        bt.onclick = function () {
+          var who = bt.getAttribute('data-pinv'); bt.disabled = true; status('Sending…');
+          api('/api/buyers', { action: 'invite', customerId: c.customerId, email: who }).then(function (r) { status(r.note || 'Sent.'); })['catch'](function (e) { status(e.message + ' Sending the link instead.'); shareLink(c.appUrl, c.company || 'Your account'); }).then(function () { bt.disabled = false; });
+        };
+      });
+      if ($('cn-new')) $('cn-new').onclick = function () { CONTACT_EDIT = 'new'; drawCustomer(); if ($('cn-form')) $('cn-form').scrollIntoView({ block: 'start' }); };
+      each('[data-cn-edit]', function (b) { b.onclick = function () { CONTACT_EDIT = b.getAttribute('data-cn-edit'); drawCustomer(); if ($('cn-form')) $('cn-form').scrollIntoView({ block: 'start' }); }; });
+      each('[data-cn-log]', function (b) { b.onclick = function () { ACT_CONTACT = b.getAttribute('data-cn-log'); ACT_TYPE = 'call'; CUST_SEC = 'activity'; CONTACT_EDIT = null; drawCustomer(); window.scrollTo(0, 0); }; });
+      if ($('cn-cancel')) $('cn-cancel').onclick = function () { CONTACT_EDIT = null; drawCustomer(); };
+      if ($('cn-save')) $('cn-save').onclick = function () {
+        var id = this.getAttribute('data-id'), name = $('cn-name').value.trim(), email = $('cn-email').value.trim();
+        if (!name && !email) { status('A contact needs a name or an email.'); return; }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status('That email does not look right.'); return; }
+        crmPost({ action: 'contact-save', id: id || undefined, name: name, title: $('cn-title').value.trim(), email: email, phone: $('cn-phone').value.trim(), notes: $('cn-notes').value.trim(), primary: $('cn-primary').checked }, function (r) { CONTACT_EDIT = null; return r.note || (id ? 'Contact saved.' : 'Contact added.'); }, this);
+      };
+      if ($('cn-archive')) $('cn-archive').onclick = function () {
+        var x = contactOf(this.getAttribute('data-id')); if (!x) return;
+        if (!window.confirm('Archive ' + (x.name || x.email) + '? They leave the contact list; the timeline keeps what was logged with them.')) return;
+        crmPost({ action: 'contact-archive', id: x.id }, function (r) { CONTACT_EDIT = null; return r.note || 'Archived.'; }, this);
+      };
+    }
+
+    if (sec === 'activity' && crmOk()) {
+      each('[data-atype]', function (b) { b.onclick = function () { ACT_TYPE = b.getAttribute('data-atype'); each('[data-atype]', function (x) { x.setAttribute('aria-pressed', String(x === b)); }); }; });
+      $('lg-go').onclick = function () {
+        var subject = $('lg-subject').value.trim(), text = $('lg-body').value.trim(), fu = $('lg-fu').value, at = $('lg-at').value ? new Date($('lg-at').value) : null;
+        if (!subject && !text) { status('Say what happened: a subject or a few words.'); return; }
+        if (at && isNaN(at.getTime())) at = null;
+        if (fu && fu < todayIso()) { status('A follow-up is for today or later.'); return; }
+        crmPost({ action: 'log', type: ACT_TYPE, subject: subject || text.split('\n')[0].slice(0, 120), body: text, at: at ? at.toISOString() : undefined, contactId: $('lg-contact').value || undefined, orderId: $('lg-order').value || undefined, followUpAt: fu || undefined },
+          function (r) { ACT_CONTACT = ''; return r.note || (fu ? 'Logged. The follow-up shows on Today on ' + fu + '.' : 'Logged.'); }, this);
+      };
+    }
+
+    if (sec === 'documents' && crmOk()) {
+      $('doc-go').onclick = function () {
+        var btn = this, f = $('doc-file').files && $('doc-file').files[0], shared = $('doc-share').checked;
+        if (!f) { status('Choose a file first.'); return; }
+        if (!f.size) { status(f.name + ' is empty.'); return; }
+        if (f.size > MAX_DOC) { status(f.name + ' is ' + fileSize(f.size) + '; the limit is 2 MB. Send a smaller PDF or compress it.'); return; }
+        if (!window.FileReader) { status('This browser cannot read files; upload it on the desktop.'); return; }
+        btn.disabled = true; status('Reading ' + f.name + '…');
+        var rd = new FileReader();
+        rd.onerror = function () { btn.disabled = false; status('Could not read ' + f.name + '.'); };
+        rd.onload = function () {
+          var s = String(rd.result || ''), b64 = s.slice(s.indexOf(',') + 1);
+          crmPost({ action: 'file-upload', file: { name: f.name, base64: b64 }, category: $('doc-cat').value, note: $('doc-note').value.trim(), shared: shared },
+            function (r) { return r.note || (shared ? 'Uploaded and shared: ' + (c.company || 'the customer') + ' sees it in their app.' : 'Uploaded. Only the office sees it.'); }, btn);
+        };
+        rd.readAsDataURL(f);
+      };
+      each('[data-doc-get]', function (b) { b.onclick = function () { var id = b.getAttribute('data-doc-get'), f = (CRM.files || []).filter(function (x) { return x.id === id; })[0]; download(id, f ? f.name : '', b); }; });
+      each('[data-doc-share]', function (b) {
+        b.onclick = function () { var to = b.getAttribute('data-to') === '1'; crmPost({ action: 'file-share', id: b.getAttribute('data-doc-share'), shared: to }, to ? 'Shared: ' + (c.company || 'the customer') + ' sees it in their app.' : 'No longer shared; only the office sees it.', b); };
+      });
+      each('[data-doc-arch]', function (b) {
+        b.onclick = function () {
+          var id = b.getAttribute('data-doc-arch'), f = (CRM.files || []).filter(function (x) { return x.id === id; })[0];
+          if (!window.confirm('Archive ' + (f ? f.name : 'this document') + '? It leaves the list' + (f && f.shared ? ' and the customer\'s app' : '') + '.')) return;
+          crmPost({ action: 'file-archive', id: id }, 'Archived.', b);
+        };
+      });
+    }
+
+    if (sec === 'orders') $('c-po').onclick = function () { enterPo(c); };
+
     /* Sites and shipped units from the custody overview the Sites tab
        already loads: the account's sites, and any unit on one of its orders
        or bound to it. */
-    loadCustody().then(function (cu) {
-      var el = $('cust-sites'); if (!el || CUST !== c) return;
-      var sites = (cu.sites || []).filter(function (st) { return st.customerId === c.customerId; });
-      var units = (cu.units || []).filter(function (u) { return u.customerId === c.customerId || orderIds[u.orderId]; });
-      el.innerHTML = (sites.map(function (st) { var a = st.address || {}; return '<div class="unit"><div><b>' + esc(st.name) + '</b><small>' + esc([a.city, a.state].filter(Boolean).join(', ')) + '</small></div><span class="pill">' + esc(st.units || 0) + ' unit' + (st.units === 1 ? '' : 's') + '</span></div>'; }).join('') || '<p class="note">No sites on this account yet. The customer adds theirs in the app, or add one on the desktop.</p>')
-        + '<h2>Units shipped · ' + units.length + '</h2>' + (units.slice(0, 60).map(function (u) { return '<button class="unit" data-cunit="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.custody.label) + (u.custody.siteName ? ' · ' + esc(u.custody.siteName) : '') + '</small></div><span class="go">›</span></button>'; }).join('') || '<p class="note">Nothing shipped yet; units still in the plant are on the Plant app.</p>') + (units.length > 60 ? '<p class="note">First 60 shown; the Fleet register has them all.</p>' : '') + (cu.unitsTotal > (cu.units || []).length ? '<p class="note">The newest ' + (cu.units || []).length + ' shipped units in the workspace were checked.</p>' : '');
-      Array.prototype.forEach.call(el.querySelectorAll('[data-cunit]'), function (b) { b.onclick = function () { CUST = null; SERIAL = b.getAttribute('data-cunit'); TAB = 'sites'; draw(); window.scrollTo(0, 0); }; });
-    })['catch'](function () { var el = $('cust-sites'); if (el) el.innerHTML = '<p class="note">Sites unavailable.</p>'; });
+    if (sec === 'sites') {
+      var orderIds = {}; (c.orders || []).forEach(function (o) { orderIds[o.id] = true; });
+      loadCustody().then(function (cu) {
+        var el = $('cust-sites'); if (!el || CUST !== c) return;
+        var sites = (cu.sites || []).filter(function (st) { return st.customerId === c.customerId; });
+        var units = (cu.units || []).filter(function (u) { return u.customerId === c.customerId || orderIds[u.orderId]; });
+        el.innerHTML = (sites.map(function (st) { var a = st.address || {}; return '<div class="unit"><div><b>' + esc(st.name) + '</b><small>' + esc([a.city, a.state].filter(Boolean).join(', ')) + '</small></div><span class="pill">' + esc(st.units || 0) + ' unit' + (st.units === 1 ? '' : 's') + '</span></div>'; }).join('') || '<p class="note">No sites on this account yet. The customer adds theirs in the app, or add one on the desktop.</p>')
+          + '<h2>Units shipped · ' + units.length + '</h2>' + (units.slice(0, 60).map(function (u) { return '<button class="unit" data-cunit="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.custody.label) + (u.custody.siteName ? ' · ' + esc(u.custody.siteName) : '') + '</small></div><span class="go">›</span></button>'; }).join('') || '<p class="note">Nothing shipped yet; units still in the plant are on the Plant app.</p>') + (units.length > 60 ? '<p class="note">First 60 shown; the Fleet register has them all.</p>' : '') + (cu.unitsTotal > (cu.units || []).length ? '<p class="note">The newest ' + (cu.units || []).length + ' shipped units in the workspace were checked.</p>' : '');
+        Array.prototype.forEach.call(el.querySelectorAll('[data-cunit]'), function (b) { b.onclick = function () { CUST = null; SERIAL = b.getAttribute('data-cunit'); TAB = 'sites'; draw(); window.scrollTo(0, 0); }; });
+      })['catch'](function () { var el = $('cust-sites'); if (el) el.innerHTML = '<p class="note">Sites unavailable.</p>'; });
+    }
   }
 
   /* ── Stock: assign a finished unit; what is short ────────────────────── */
@@ -588,23 +1062,108 @@
     })['catch'](function (e) { var el = $('su-body'); if (el) el.innerHTML = '<p class="note" style="color:#B42318">' + esc(e.message) + '</p>'; });
   }
 
+  /* ── one download for every workspace ──────────────────────────────────
+     No link and nothing remembered: the workspace is the verified email's
+     domain (orgId IS the email domain). When that is not a workspace this
+     login can open, ClearSky's owner picks one (api/logic-kit.js, owner
+     only) and anyone else is told plainly how to get added. ───────────── */
+  function emailOf() { return String((auth.currentUser && auth.currentUser.email) || '').toLowerCase(); }
+  function signOut() { auth.signOut().then(function () { location.reload(); }, function () { location.reload(); }); }
+  function resetWorkspace() { DATA = null; BOARD = null; MAT = null; UNITS = null; BUYERS = null; CUST = null; CRM = null; COMPANIES = null; COMPANY = null; CUSTODY = null; LOADS = null; FOLLOW = null; FOLLOW_ERR = ''; HUB_TRIED = {}; PICK = null; SERIAL = null; MENU_OPEN = null; PO_FROM = null; TAB = 'today'; }
+  function resolveWorkspace() {
+    var domain = emailOf().split('@')[1] || '';
+    $('nav').hidden = true;
+    if (!domain) return noWorkspace(null, '', true);
+    setOrg(domain); loadAll(true);
+  }
+  /* a workspace typed in: tried like the email's domain, remembered only
+     if it opens (the endpoints decide who may) */
+  function tryWorkspace(org) {
+    org = String(org || '').trim().toLowerCase().replace(/^@/, '');
+    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(org)) { status('Type the workspace as a domain, e.g. cleancell.us.'); return; }
+    resetWorkspace(); $('view').innerHTML = ''; setOrg(org); loadAll(true);
+  }
+  function openWorkspace(id) {
+    resetWorkspace(); COMPANY_ID = ''; store('omega_office_app_company', null);
+    setOrg(id); store('omega_office_app_org', ORG); paintManifest(); $('view').innerHTML = ''; window.scrollTo(0, 0); loadAll();
+  }
+  function noWorkspace(e, tried, probe) {
+    var email = emailOf(), domain = email.split('@')[1] || '';
+    DATA = null; $('nav').hidden = true; status(''); $('who').textContent = email;
+    if (probe) setOrg('');
+    if (email === OWNER_EMAIL) return drawWorkspaces(tried ? tried + ': ' + (e && e.message ? e.message : 'not a workspace') + '. Choose one below.' : '');
+    var auto = probe && tried && tried === domain;
+    $('view').innerHTML = '<h1>No workspace ' + (tried ? 'at ' + esc(tried) : 'for this login') + '</h1>'
+      + '<div class="warn">' + (auto ? esc(email) + ' is not on an Omega Logic workspace. Omega Logic opens the workspace of your company\'s email domain, and ' + esc(domain) + ' has none this login can open.' : esc(email || 'This login') + ' cannot open ' + (tried ? 'the ' + esc(tried) + ' workspace' : 'a workspace') + '.') + '</div>'
+      + (e && e.message ? '<p class="note">The server said: ' + esc(e.message) + '</p>' : '')
+      + '<h2>How to get in</h2><ul class="plain"><li>Ask whoever runs Omega Logic at your company to add ' + esc(email || 'you') + ' to the workspace.</li><li>If your company\'s workspace is under another domain, open the app once from the link they send you — it carries the workspace, and the app remembers it.</li><li>Not on Omega Logic yet? ClearSky sets workspaces up: <a href="mailto:dev@clearsky-usa.com">dev@clearsky-usa.com</a>.</li></ul>'
+      + '<label class="note" for="ws-org">Or open a workspace by its domain</label><div class="row"><input id="ws-org" placeholder="e.g. cleancell.us" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="ws-open" type="button">Open</button></div>'
+      + (!probe && tried ? '<button class="big" id="ws-retry">Try ' + esc(tried) + ' again</button>' : '')
+      + (domain && domain !== tried ? '<button class="big ghost" id="ws-mine">Open ' + esc(domain) + '</button>' : '')
+      + '<button class="big ghost" id="ws-out">Sign in with another account</button>';
+    $('ws-open').onclick = function () { tryWorkspace($('ws-org').value); };
+    $('ws-org').onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); tryWorkspace($('ws-org').value); } };
+    if ($('ws-retry')) $('ws-retry').onclick = function () { loadAll(); };
+    if ($('ws-mine')) $('ws-mine').onclick = function () { tryWorkspace(domain); };
+    $('ws-out').onclick = signOut;
+  }
+  /* ClearSky's owner: every Omega Logic subscriber (GET /api/logic-kit) */
+  function drawWorkspaces(why) {
+    var back = !!DATA;
+    $('view').innerHTML = (back ? '<button class="back" id="back">‹ Menu</button>' : '') + '<h1>Workspaces</h1>' + (why ? '<p class="note">' + esc(why) + '</p>' : '')
+      + '<p class="note">Every Omega Logic subscriber, for ClearSky\'s owner. The app opens the one you choose and remembers it until you switch.</p><input class="qsearch" id="ws-find" placeholder="Find a workspace" autocomplete="off"><div id="ws-body"><p class="note">Loading…</p></div>'
+      + (back ? '' : '<button class="big ghost" id="ws-out">Sign in with another account</button>');
+    if ($('back')) $('back').onclick = function () { TAB = 'menu'; MENU_OPEN = 'setup'; draw(); };
+    if ($('ws-out')) $('ws-out').onclick = signOut;
+    (WS ? Promise.resolve(WS) : api('/api/logic-kit').then(function (k) { WS = k.subscribers || []; return WS; })).then(function (list) {
+      var el = $('ws-body'); if (!el) return;
+      function paint() {
+        var f = String($('ws-find').value || '').toLowerCase().trim();
+        var rows = list.filter(function (w) { return !f || (String(w.name || '') + ' ' + w.id + ' ' + (w.domains || []).join(' ')).toLowerCase().indexOf(f) >= 0; });
+        el.innerHTML = rows.map(function (w) { return '<button class="unit" data-ws="' + esc(w.id) + '"><div><b>' + esc(w.name || w.id) + '</b><small>' + esc(w.id) + ((w.domains || []).length ? ' · ' + esc(w.domains.join(', ')) : '') + '</small></div><span class="pill' + (w.id === ORG && DATA ? ' ok' : w.status === 'active' ? '' : ' bad') + '">' + esc(w.id === ORG && DATA ? 'open now' : w.status || '—') + '</span></button>'; }).join('')
+          || '<p class="note">' + (f ? 'No workspace matches.' : 'No Omega Logic subscribers yet.') + '</p>';
+        Array.prototype.forEach.call(el.querySelectorAll('[data-ws]'), function (b) { b.onclick = function () { openWorkspace(b.getAttribute('data-ws')); }; });
+      }
+      paint(); $('ws-find').oninput = paint;
+    })['catch'](function (e) { var el = $('ws-body'); if (el) el.innerHTML = '<div class="warn">' + esc(e.message) + '</div>'; });
+  }
+
   /* ── shell ────────────────────────────────────────────────────────────── */
-  Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; PICK = null; CUST = null; SERIAL = null; closeCam(); if (DATA) draw(); else loadAll(); window.scrollTo(0, 0); }; });
-  document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; PICK = null; CUST = null; draw(); window.scrollTo(0, 0); };
-  $('refresh').onclick = function () { PICK = null; CUST = null; CUSTODY = null; LOADS = null; loadAll(); };
-  $('signout').onclick = function () { auth.signOut().then(function () { location.reload(); }); };
+  Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; PICK = null; CUST = null; SERIAL = null; PO_FROM = null; closeCam(); if (DATA) draw(); else if (ORG) loadAll(); window.scrollTo(0, 0); }; });
+  document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; PICK = null; CUST = null; PO_FROM = null; draw(); window.scrollTo(0, 0); };
+  $('refresh').onclick = function () { PICK = null; CUST = null; CUSTODY = null; LOADS = null; WS = null; if (ORG) loadAll(); else if (auth.currentUser) resolveWorkspace(); };
+  $('signout').onclick = signOut;
   $('signin').onclick = function () {
     var p = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(p)['catch'](function () { return auth.signInWithRedirect(p); })['catch'](fail);
+    auth.signInWithPopup(p)['catch'](function () { return auth.signInWithRedirect(p); })['catch'](function (err) { $('gate-note').textContent = (err && err.message) || 'Could not sign in.'; });
   };
+  /* Any work email, not only Google: a sign-in link that comes back into
+     THIS app's scope, carrying the workspace when one is known. */
+  function sendLink() {
+    var e = String($('g-email').value || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) { $('gate-note').textContent = 'Enter your work email.'; return; }
+    if (typeof auth.sendSignInLinkToEmail !== 'function') { $('gate-note').textContent = 'Email sign-in is not available here; continue with Google.'; return; }
+    store(LS_EMAIL, e); $('g-link').disabled = true;
+    auth.sendSignInLinkToEmail(e, { url: location.origin + '/office/app' + (ORG ? q : ''), handleCodeInApp: true })
+      .then(function () { $('gate-note').textContent = 'Check your inbox: a sign-in link is on its way to ' + e + '. Open it on this device.'; }, function (err) { $('gate-note').textContent = (err && err.message) || 'Could not send the link.'; })
+      .then(function () { $('g-link').disabled = false; });
+  }
+  $('g-link').onclick = sendLink;
+  $('g-email').onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); sendLink(); } };
+  try {
+    if (typeof auth.isSignInWithEmailLink === 'function' && auth.isSignInWithEmailLink(location.href)) {
+      var saved = load(LS_EMAIL, '') || window.prompt('Confirm the email address you used') || '';
+      auth.signInWithEmailLink(saved, location.href).then(function () { store(LS_EMAIL, null); history.replaceState(null, '', location.pathname + (ORG ? q : '')); })['catch'](function (err) { $('gate-note').textContent = (err && err.message) || 'That link has expired. Ask for a new one.'; });
+    }
+  } catch (e) {}
   $('cam-x').onclick = closeCam;
   function paintNet() { $('offline').hidden = navigator.onLine !== false; }
   window.addEventListener('online', paintNet); window.addEventListener('offline', paintNet); paintNet();
   auth.onAuthStateChanged(function (u) {
-    $('gate').hidden = !!u; $('nav').hidden = !u; $('signout').hidden = !u; $('view').innerHTML = '';
-    if (!u) { $('who').textContent = ''; return; }
-    if (!ORG) { $('gate').hidden = false; $('gate-note').textContent = 'Open the app once from your office link so it knows your workspace.'; $('signin').hidden = true; return; }
-    loadAll();
+    $('gate').hidden = !!u; $('nav').hidden = !u || !ORG; $('signout').hidden = !u; $('view').innerHTML = '';
+    if (!u) { $('who').textContent = ''; DATA = null; return; }
+    if (ORG) return loadAll();
+    resolveWorkspace();
   });
   if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('/office/app-sw.js', { scope: '/office/app' })['catch'](function () {}); } catch (e) {} }
 })();
