@@ -1944,14 +1944,7 @@ var ORDER = ['exception', 'quote', 'priced', 'deposit', 'release', 'production',
 
 function dollars(c) { return '$' + (Number(c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function text(v, max) { return String(v == null ? '' : v).trim().slice(0, max || 200); }
-/* RELEASED ON PO (logic.creditRelease, api/_lib/receivables.js): the plant
-   may start before the deposit is received. creditOpen() is the deposit
-   still open on such an order — 0 without a credit release, without a
-   deposit, or once the deposit is recorded. While it is open the stage says
-   so and carries `credit: true`; otherwise the stage object is exactly what
-   it always was (no `credit` key). */
-function out(key, next, owner, label, credit) { var r = { key: key, label: label || STAGES[key], next: next, owner: !!owner }; if (credit) r.credit = true; return r; }
-function creditOpen(o) { var l = (o && o.logic) || {}, dep = (l.invoices || {}).deposit; if (!l.creditRelease || !dep || !dep.amountCents || dep.satisfied) return 0; return Math.max(0, (Number(dep.amountCents) || 0) - (Number(dep.paidCents) || 0)); }
+function out(key, next, owner, label) { return { key: key, label: label || STAGES[key], next: next, owner: !!owner }; }
 
 /* `owner` marks a next step only ClearSky can take (price, accept, ship,
    settle); the office shows it as waiting on ClearSky rather than as a
@@ -1975,14 +1968,11 @@ function stageOf(o) {
     var dep = inv.deposit;
     if (!dep) return out('deposit', 'Deposit invoice is being queued', false);
     if (dep.satisfied) return out('release', 'Deposit recorded — releasing to plant', false);
-    if (l.creditRelease) return out('release', 'Released on PO ' + (l.creditRelease.poNumber || '(no PO number)') + ' — releasing to plant', false, 'Releasing on PO', creditOpen(o) > 0);
     return out('deposit', 'Awaiting deposit · ' + dollars(dep.paidCents || 0) + ' of ' + dollars(dep.amountCents) + ' recorded', false);
   }
-  var bal = inv.balance, open = creditOpen(o), po = l.creditRelease ? (l.creditRelease.poNumber || '(no PO number)') : '';
-  if (bal && bal.satisfied && open) return out('balance', 'Balance recorded — the deposit ' + dollars(open) + ' is still open (released on PO); record it before shipment', false, 'Awaiting deposit · on PO', true);
+  var bal = inv.balance;
   if (bal && bal.satisfied) return out('ship', 'Paid in full — record the shipment', true);
-  if (bal) return out('balance', 'Awaiting final payment · ' + dollars(bal.paidCents || 0) + ' of ' + dollars(bal.amountCents) + ' recorded' + (open ? ' · deposit ' + dollars(open) + ' open (released on PO)' : ''), false, null, open > 0);
-  if (open) return out('production', 'Released on PO ' + po + ' · deposit ' + dollars(open) + ' not yet received', false, 'Released on PO', true);
+  if (bal) return out('balance', 'Awaiting final payment · ' + dollars(bal.paidCents || 0) + ' of ' + dollars(bal.amountCents) + ' recorded', false);
   return out('production', 'Building — follow the work order', false);
 }
 
@@ -2034,7 +2024,7 @@ function finance(orders, owner) {
   return f;
 }
 
-module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, creditOpen: creditOpen, totals: totals, finance: finance, dollars: dollars };
+module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, totals: totals, finance: finance, dollars: dollars };
 
   };
   defs['api/_lib/whitelabel.js'] = function (module, exports, require) {
@@ -2290,306 +2280,6 @@ module.exports.OMEGA_LOGIC = OMEGA_LOGIC;
 module.exports.iconPath = iconPath;
 
   };
-  defs['api/_lib/receivables.js'] = function (module, exports, require) {
-/* ═══════════════════════════════════════════════════════════════════════════
-   api/_lib/receivables.js — the rules of a tenant-billed receivable
-   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
-
-   PURE: no Firestore, no clock (callers pass `today` / `at`), no network,
-   and no require but ./office-stage — scripts/build-app-sandbox.js bundles
-   this file into the sandboxes and the render fixture applies it, so the
-   sandbox shows what the product computes.
-
-   What it decides, for an order the OEM invoices on its own paper
-   (logic.accounting === 'tenant'):
-   - settle(inv): paid / balance / satisfied / status, from the payments that
-     are NOT voided. The one recompute; the dashboard's "Received" sums the
-     paidCents it produces.
-   - recordPlan: a payment, idempotent by bank reference (refKey folds case
-     and spacing). A placeholder reference (the intake template's
-     "REPLACE WITH THE BANK REFERENCE…", TBD, N/A…) is refused on every
-     path, forever. A reference that was voided is never silently received
-     again: the office may reinstate it with a reason (a NEW entry that
-     points at the voided one); a provider sync never may. qbo: and stripe:
-     references are the ledger sync's alone.
-   - voidPlan: a payment is VOIDED, never deleted. When the order is in the
-     plant on the deposit being voided, the office chooses: keep building on
-     the PO (a credit release) or hold (paymentHold + paymentException). A
-     provider's void cannot ask, so it holds.
-   - releasePlan: release on PO before the deposit (logic.creditRelease),
-     which release() treats as satisfying the deposit gate — and nothing
-     else: shipment still needs the deposit and the balance recorded.
-   - editPlan: an issued invoice's number / issue date / due date, with the
-     history of what changed. Amounts are never edited here.
-   - rows / filter / totals / ledger / csv: the receivables ledger by
-     customer ACCOUNT with aging (current, 1–30, 31–60, 61–90, 90+).
-   The one writer that applies these plans is api/_lib/logic-workflow.js.
-   ═══════════════════════════════════════════════════════════════════════════ */
-'use strict';
-var S = require('api/_lib/office-stage.js');
-
-var STAGES = ['deposit', 'balance'], BUCKETS = ['current', '1-30', '31-60', '61-90', '90+'];
-var MSG_PAY = 'This order is billed through QuickBooks; payments are reconciled there';
-var MSG_EDIT = 'This order is billed through QuickBooks; edit the invoice there';
-var MSG_REL = 'Release on PO is for orders the OEM invoices itself; a ClearSky-billed order releases on its QuickBooks receipt';
-
-function fail(status, message) { var e = new Error(message); e.status = status; return e; }
-function refKey(ref) { return String(ref || '').trim().replace(/\s+/g, ' ').toUpperCase(); }
-function isPlaceholder(ref) { return /REPLACE|PLACEHOLDER|\bTBD\b|\bTODO\b|\bPENDING\b|NOT\s+(YET\s+)?RECEIVED|DELETE\s+THIS|^X+$|^0+$|^N\/?A$/i.test(String(ref).trim()); }
-function reservedSource(ref) { var s = String(ref || ''); return /^qbo:/i.test(s) ? 'quickbooks' : /^stripe:/i.test(s) ? 'stripe' : null; }
-function isDate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s == null ? '' : s)) && !isNaN(Date.parse(s)); }
-function clean(v, n) { return String(v == null ? '' : v).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, n || 200); }
-function poOf(o) { o = o || {}; return (o.purchaseOrder && o.purchaseOrder.number) || o.poNumber || (o.poIntake && o.poIntake.number) || null; }
-function ms(d) { return Date.parse(String(d).slice(0, 10) + 'T00:00:00Z'); }
-function daysBetween(a, b) { return Math.round((ms(b) - ms(a)) / 86400000); }
-function addDays(d, n) { return new Date(ms(d) + n * 86400000).toISOString().slice(0, 10); }
-function bucket(days) { return days <= 0 ? 'current' : days <= 30 ? '1-30' : days <= 60 ? '31-60' : days <= 90 ? '61-90' : '90+'; }
-function usd(c) { return (Number(c || 0) / 100); }
-
-function settle(inv) {
-  inv = inv || {};
-  var paid = (inv.payments || []).reduce(function (n, p) { return p && !p.voidedAt ? n + (Number(p.amountCents) || 0) : n; }, 0);
-  var amount = Number(inv.amountCents) || 0;
-  var status = amount === 0 ? 'not_required' : paid >= amount ? 'paid' : paid > 0 ? 'part_paid' : inv.id ? 'awaiting_payment' : 'to_issue';
-  return { paidCents: paid, balanceCents: amount - paid, satisfied: paid >= amount, status: status };
-}
-function dueDate(inv, terms) {
-  inv = inv || {};
-  if (inv.dueAt) return inv.dueAt;
-  var base = inv.issuedAt || (inv.id ? inv.date : null);
-  if (!base) return null;
-  return addDays(base, (terms && terms.dueDays) || 0);
-}
-
-function tenant(o, msg) { var l = o && o.logic; if (!l || l.accounting !== 'tenant') throw fail(409, msg); return l; }
-function stageInv(l, stage) {
-  if (STAGES.indexOf(stage) < 0) throw fail(400, 'stage must be deposit or balance');
-  var inv = l.invoices && l.invoices[stage];
-  if (!inv) throw fail(409, 'No ' + stage + ' invoice on this order yet' + (stage === 'balance' ? ' — verify ready first' : ''));
-  return inv;
-}
-function holdMessage(ref, stage, reason) { return 'Payment ' + ref + ' on the ' + stage + ' invoice was voided (' + String(reason).slice(0, 120) + '). Fulfilment is on hold until the payment is recorded or the order is released on its PO.'; }
-
-function recordPlan(o, stage, p) {
-  var l = tenant(o, MSG_PAY);
-  if (o.cancelRequested || (l.paymentException && !l.paymentHold)) throw fail(409, 'Resolve the order exception first');
-  var inv = stageInv(l, stage);
-  if (!inv.id) throw fail(409, 'Record the ' + stage + ' invoice number first');
-  if (!p.amountCents) throw fail(400, 'Amount received required');
-  if (!isDate(p.date)) throw fail(400, 'Payment date must be YYYY-MM-DD');
-  var ref = clean(p.bankReference, 120);
-  if (clean(p.bankReference, 500).length < 4) throw fail(400, 'Bank confirmation reference required');
-  if (isPlaceholder(ref)) throw fail(400, 'That bank reference is a placeholder (' + ref.slice(0, 40) + '). Record the payment when the money has landed, with the bank\'s own reference for it.');
-  var src = p.source || 'office', reserved = reservedSource(ref);
-  if (reserved && src !== reserved) throw fail(400, 'References starting qbo: or stripe: are written by the ledger sync');
-  var key = refKey(ref), pays = inv.payments || [];
-  if (pays.some(function (x) { return !x.voidedAt && refKey(x.bankReference) === key; })) return { duplicate: true, invoice: inv };
-  var vi = -1; pays.forEach(function (x, i) { if (x.voidedAt && refKey(x.bankReference) === key) vi = i; });
-  var re = null, vdate = null;
-  if (vi >= 0) {
-    var vd = pays[vi]; vdate = String(vd.voidedAt).slice(0, 10);
-    if (src !== 'office') throw fail(409, ref + ' was voided in Omega Logic on ' + vdate + '; not recorded again');
-    if (!p.reinstate) throw fail(409, 'Bank reference ' + ref + ' was recorded ' + vd.date + ' and voided ' + vdate + ' (' + clean(vd.voidReason, 80) + '). If that money has really landed, record it again with "reinstate" and say why.');
-    var why = clean(p.reason, 500);
-    if (why.length < 5) throw fail(400, 'Say why a voided reference is being recorded again');
-    re = { reinstates: vi, reinstateReason: why };
-  }
-  var entry = { amountCents: p.amountCents, date: p.date, bankReference: ref, by: p.by, at: p.at, source: src };
-  if (p.external) entry.external = p.external;
-  if (re) { entry.reinstates = re.reinstates; entry.reinstateReason = re.reinstateReason; }
-  var payments = pays.concat([entry]);
-  var invoice = Object.assign({}, inv, { payments: payments }, settle({ amountCents: inv.amountCents, id: inv.id, payments: payments }), { checkedAt: p.at });
-  if (invoice.paidCents > inv.amountCents) throw fail(400, 'Payments would exceed the invoice: USD ' + usd(invoice.paidCents) + ' against ' + usd(inv.amountCents));
-  var liftHold = !!(l.paymentHold && l.paymentHold.stage === stage && invoice.satisfied);
-  var event = stage + ' invoice ' + inv.id + ': USD ' + usd(p.amountCents) + ' received ' + p.date + ' · bank reference ' + ref +
-    (invoice.satisfied ? ' · paid in full' : ' · USD ' + usd(invoice.balanceCents) + ' outstanding') +
-    (src === 'quickbooks' ? ' · from QuickBooks' : src === 'stripe' ? ' · from Stripe' : '') +
-    (re ? ' · reinstated (it was voided ' + vdate + '): ' + re.reinstateReason : '') + (liftHold ? '; hold lifted' : '');
-  return { invoice: invoice, entry: entry, liftHold: liftHold, event: event };
-}
-
-function voidPlan(o, stage, v) {
-  var l = tenant(o, MSG_PAY), inv = stageInv(l, stage);
-  if (!inv.id) throw fail(409, 'Record the ' + stage + ' invoice as issued first');
-  var src = v.source || 'office', reason;
-  if (src === 'office') { reason = clean(v.reason, 500); if (reason.length < 5) throw fail(400, 'Say why this payment is being voided'); }
-  else reason = clean(v.reason, 500) || (src === 'quickbooks' ? 'Reversed in QuickBooks' : 'Refunded or lost dispute in Stripe');
-  var key = refKey(v.bankReference), pays = inv.payments || [], at = -1;
-  pays.forEach(function (x, i) { if (!x.voidedAt && refKey(x.bankReference) === key) at = i; });
-  if (at < 0) {
-    if (pays.some(function (x) { return x.voidedAt && refKey(x.bankReference) === key; })) return { duplicate: true, invoice: inv };
-    throw fail(404, 'No recorded payment with bank reference ' + clean(v.bankReference, 120) + ' on the ' + stage + ' invoice');
-  }
-  var live = !!l.releasedAt && ['shipped', 'complete', 'cancelled'].indexOf(o.status) < 0 && !o.cancelRequested;
-  var needsChoice = stage === 'deposit' && live && !l.creditRelease && !l.paymentHold, keep = v.keepBuilding;
-  if (src !== 'office') { if (needsChoice) keep = false; }
-  else if (needsChoice && typeof keep !== 'boolean') throw fail(409, 'This order is in the plant on this payment: choose keep building on the PO, or hold the order');
-  var ref = pays[at].bankReference, payments = pays.slice();
-  payments[at] = Object.assign({}, pays[at], { voidedAt: v.at, voidedBy: v.by, voidReason: reason, voidSource: src });
-  var invoice = Object.assign({}, inv, { payments: payments }, settle({ amountCents: inv.amountCents, id: inv.id, payments: payments }), { checkedAt: v.at });
-  var po = clean(v.poNumber, 80) || poOf(o);
-  var creditRelease = needsChoice && keep === true ? { by: v.by, at: v.at, reason: reason, poNumber: po || null, basis: 'void', voidedReference: ref, openCents: invoice.balanceCents } : null;
-  var hold = live && keep === false && !l.paymentHold ? { stage: stage, reference: ref, reason: reason, by: v.by, at: v.at, source: src, message: holdMessage(ref, stage, reason) } : null;
-  var event = stage + ' invoice ' + inv.id + ': payment USD ' + usd(pays[at].amountCents) + ' (bank reference ' + ref + ') voided by ' + v.by + ' — ' + reason +
-    (creditRelease ? ' · kept building on PO ' + (po || '(no PO number)') : '') + (hold ? ' · order on hold' : '');
-  return { invoice: invoice, voided: payments[at], creditRelease: creditRelease, hold: hold, needsChoice: needsChoice, event: event };
-}
-
-function releasePlan(o, v) {
-  var l = tenant(o, MSG_REL);
-  if (!l.acceptedAt) throw fail(409, 'Accept the order first');
-  if (o.cancelRequested || o.status === 'cancelled') throw fail(409, 'The order is cancelled or has a cancellation request');
-  if (l.paymentException && !l.paymentHold) throw fail(409, 'Resolve the order exception first');
-  var dep = l.invoices && l.invoices.deposit;
-  if (!dep || !dep.amountCents) throw fail(409, 'No deposit is due on this order; it releases on acceptance');
-  if (l.creditRelease && !l.paymentHold) return { duplicate: true, creditRelease: l.creditRelease };
-  var st = settle(dep);
-  if (st.satisfied && !l.paymentHold) throw fail(409, 'The deposit is recorded; the order releases on it');
-  var reason = clean(v.reason, 500);
-  if (reason.length < 5) throw fail(400, 'Say why the plant may start before the deposit is received');
-  var po = clean(v.poNumber, 80) || poOf(o), liftHold = !!l.paymentHold;
-  var creditRelease = { by: v.by, at: v.at, reason: reason, poNumber: po || null, basis: l.paymentHold ? 'hold-lifted' : 'po', openCents: dep.amountCents - st.paidCents };
-  return { creditRelease: creditRelease, liftHold: liftHold,
-    event: 'Released on PO ' + (po || '(no PO number)') + ' before the deposit was received — ' + reason + (liftHold ? '; hold lifted' : '') };
-}
-
-function editPlan(o, stage, v) {
-  var l = tenant(o, MSG_EDIT), inv = stageInv(l, stage), terms = (l.commercial || {}).terms;
-  if (!inv.id) throw fail(409, 'Record the ' + stage + ' invoice as issued first');
-  if (inv.ledger && inv.ledger.invoiceId) throw fail(409, 'This invoice is in ' + (inv.ledger.provider === 'stripe' ? 'Stripe' : 'QuickBooks') + ' (' + inv.ledger.invoiceId + '); change it there');
-  var cur = { number: inv.id, issuedAt: inv.issuedAt || inv.date || null, dueAt: inv.dueAt || null }, next = Object.assign({}, cur);
-  if (v.number !== undefined) {
-    var n = clean(v.number, 80), other = stage === 'deposit' ? 'balance' : 'deposit', oi = l.invoices[other];
-    if (!n) throw fail(400, 'Invoice number required');
-    if (oi && oi.id && oi.id === n) throw fail(409, 'Invoice ' + n + ' is already the ' + other + ' invoice on this order');
-    next.number = n;
-  }
-  if (v.issuedAt !== undefined) { if (!isDate(v.issuedAt)) throw fail(400, 'Invoice date must be YYYY-MM-DD'); next.issuedAt = v.issuedAt; }
-  if (v.dueAt !== undefined) {
-    if (v.dueAt === '' || v.dueAt === null) next.dueAt = null;
-    else { if (!isDate(v.dueAt)) throw fail(400, 'Due date must be YYYY-MM-DD'); next.dueAt = v.dueAt; }
-  }
-  if (next.dueAt && next.issuedAt && next.dueAt < next.issuedAt) throw fail(400, 'The due date cannot be before the invoice date');
-  var was = {}, now = {};
-  ['number', 'issuedAt', 'dueAt'].forEach(function (k) { if (next[k] !== cur[k]) { was[k] = cur[k]; now[k] = next[k]; } });
-  if (!Object.keys(now).length) return { duplicate: true, invoice: inv };
-  var reason = clean(v.reason, 500);
-  if (reason.length < 5) throw fail(400, 'Say why the invoice is being changed');
-  if ((inv.edits || []).length >= 50) throw fail(409, 'This invoice has been edited 50 times; ask ClearSky');
-  var edit = { at: v.at, by: v.by, reason: reason, was: was, now: now };
-  var invoice = Object.assign({}, inv, { id: next.number, issuedAt: next.issuedAt, dueAt: next.dueAt, edits: (inv.edits || []).concat([edit]) });
-  function due(d, which) { return d || 'terms (' + dueDate(Object.assign({}, which, { dueAt: null }), terms) + ')'; }
-  var parts = [];
-  if ('number' in now) parts.push('number ' + was.number + ' → ' + now.number);
-  if ('issuedAt' in now) parts.push('issued ' + was.issuedAt + ' → ' + now.issuedAt);
-  if ('dueAt' in now) parts.push('due ' + due(was.dueAt, inv) + ' → ' + due(now.dueAt, invoice));
-  return { invoice: invoice, edit: edit, event: stage + ' invoice edited: ' + parts.join('; ') + ' — ' + reason };
-}
-
-function rows(entries, today, opts) {
-  var provider = (opts && opts.provider) || 'none', out = [];
-  (entries || []).forEach(function (e) {
-    var o = (e && e.order) || {}, l = o.logic;
-    if (!l || !l.invoices) return;
-    if (o.poIntake && !o.poIntake.convertedAt) return;
-    var tenantBilled = l.accounting === 'tenant', cancelled = !!(o.cancelRequested || o.status === 'cancelled');
-    var live = !!l.releasedAt && ['shipped', 'complete', 'cancelled'].indexOf(o.status) < 0 && !o.cancelRequested;
-    var c = o.customer || {}, acct = e.account || null, terms = (l.commercial || {}).terms;
-    var customer = { key: acct ? 'account:' + acct.id : 'email:' + String(c.email || '').toLowerCase(), customerId: acct ? acct.id : null,
-      name: (acct && acct.name) || c.company || c.name || c.email || '—', contact: c.name || '', email: c.email || '' };
-    STAGES.forEach(function (stage) {
-      var inv = l.invoices[stage];
-      if (!inv || !(Number(inv.amountCents) > 0)) return;
-      var received, satisfied, status;
-      if (tenantBilled) { var s = settle(inv); received = s.paidCents; satisfied = s.satisfied; status = s.status; }
-      else { received = Number(inv.paidCents) || 0; satisfied = inv.satisfied === true || received >= inv.amountCents; status = satisfied ? 'paid' : received > 0 ? 'part_paid' : inv.id ? 'awaiting_payment' : 'queued'; }
-      var dueAt = dueDate(inv, terms), overdue = false, daysOverdue = 0, bk = null;
-      if (inv.id && !satisfied && dueAt) { var d = daysBetween(dueAt, today); overdue = d > 0; daysOverdue = Math.max(0, d); bk = bucket(d); }
-      var pays = (inv.payments || []).map(function (p, i) {
-        return { index: i, amountCents: p.amountCents, date: p.date, bankReference: p.bankReference, by: p.by, at: p.at, source: p.source || 'office',
-          voided: !!p.voidedAt, voidedAt: p.voidedAt || null, voidedBy: p.voidedBy || null, voidReason: p.voidReason || null, voidSource: p.voidSource || null,
-          reinstates: p.reinstates == null ? null : p.reinstates };
-      });
-      var linked = !!(inv.ledger && inv.ledger.invoiceId);
-      out.push({ key: (e.id || '') + ':' + stage, orderId: e.id, orderNo: o.orderNo, poNumber: poOf(o), customer: customer, stage: stage,
-        billing: tenantBilled ? 'tenant' : 'quickbooks', number: inv.id || null, issuedAt: inv.issuedAt || (inv.id ? inv.date || null : null),
-        dueAt: dueAt, dueAtSet: !!inv.dueAt, amountCents: inv.amountCents, receivedCents: received, balanceCents: inv.amountCents - received,
-        satisfied: satisfied, status: status, overdue: overdue, daysOverdue: daysOverdue, bucket: bk, payments: pays, edits: inv.edits || [],
-        creditRelease: l.creditRelease || null, released: !!l.releasedAt, releasedOnPo: stage === 'deposit' && S.creditOpen(o) > 0,
-        hold: l.paymentHold || null, exception: l.paymentException || l.lastError || null, orderStatus: o.status, orderStage: S.stageOf(o),
-        payUrl: /^https:\/\//.test(inv.payUrl || '') ? inv.payUrl : null, ledger: inv.ledger || null, syncError: l.ledgerSyncError ? l.ledgerSyncError.message : null,
-        actions: {
-          issue: tenantBilled && !inv.id && !cancelled,
-          record: tenantBilled && !!inv.id && !satisfied && !cancelled && (!l.paymentException || !!l.paymentHold),
-          void: tenantBilled && pays.some(function (p) { return !p.voided; }),
-          voidNeedsChoice: tenantBilled && stage === 'deposit' && live && !l.creditRelease && !l.paymentHold,
-          edit: tenantBilled && !!inv.id && !linked,
-          releaseOnPo: tenantBilled && stage === 'deposit' && !!l.acceptedAt && !satisfied && !cancelled && (!l.releasedAt || !!l.paymentHold) &&
-            (!l.creditRelease || !!l.paymentHold) && (!l.paymentException || !!l.paymentHold),
-          push: tenantBilled && !!inv.id && provider !== 'none' && !linked,
-          link: tenantBilled && !!inv.id && provider !== 'none' && !linked,
-          pull: tenantBilled && !!(inv.ledger && inv.ledger.invoiceId && inv.ledger.provider === provider) } });
-    });
-  });
-  return out;
-}
-function filter(list, f) {
-  f = f || {};
-  return (list || []).filter(function (r) {
-    if (f.status === 'open' && ['awaiting_payment', 'part_paid'].indexOf(r.status) < 0) return false;
-    if (f.status === 'to_issue' && ['to_issue', 'queued'].indexOf(r.status) < 0) return false;
-    if (f.status === 'paid' && r.status !== 'paid') return false;
-    if (f.customer && r.customer.key !== f.customer) return false;
-    if (f.overdue && !r.overdue) return false;
-    return true;
-  });
-}
-function totals(list) {
-  var t = { count: 0, invoicedCents: 0, receivedCents: 0, outstandingCents: 0, overdueCents: 0, overdueCount: 0, toIssueCents: 0, voidedCents: 0, creditReleasedCents: 0, aging: {}, byCustomer: [] }, by = {};
-  BUCKETS.forEach(function (k) { t.aging[k] = 0; });
-  (list || []).forEach(function (r) {
-    t.count++;
-    var c = by[r.customer.key] || (by[r.customer.key] = { key: r.customer.key, customerId: r.customer.customerId, name: r.customer.name, count: 0, invoicedCents: 0, receivedCents: 0, outstandingCents: 0, overdueCents: 0 });
-    c.count++;
-    if (r.number) { t.invoicedCents += r.amountCents; c.invoicedCents += r.amountCents; }
-    t.receivedCents += r.receivedCents; c.receivedCents += r.receivedCents;
-    if (r.number && !r.satisfied) { t.outstandingCents += r.balanceCents; c.outstandingCents += r.balanceCents; t.aging[r.bucket || 'current'] += r.balanceCents; }
-    if (r.overdue) { t.overdueCents += r.balanceCents; t.overdueCount++; c.overdueCents += r.balanceCents; }
-    if (r.status === 'to_issue' || r.status === 'queued') t.toIssueCents += r.amountCents;
-    r.payments.forEach(function (p) { if (p.voided) t.voidedCents += p.amountCents; });
-    if (r.releasedOnPo) t.creditReleasedCents += r.balanceCents;
-  });
-  t.byCustomer = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.outstandingCents - a.outstandingCents || String(a.name).localeCompare(String(b.name)); });
-  return t;
-}
-function ledger(entries, today, f, opts) {
-  var all = rows(entries, today, opts), shown = filter(all, f), seen = {}, customers = [];
-  all.forEach(function (r) { if (!seen[r.customer.key]) { seen[r.customer.key] = true; customers.push({ key: r.customer.key, name: r.customer.name }); } });
-  customers.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
-  f = f || {};
-  return { rows: shown, totals: totals(shown), allCount: all.length, filtered: !!((f.status && f.status !== 'all') || f.customer || f.overdue), customers: customers };
-}
-var HEADER = ['Order', 'PO', 'Customer', 'Customer key', 'Stage', 'Invoice', 'Issued', 'Due', 'Amount USD', 'Received USD', 'Balance USD', 'Status', 'Days overdue', 'Aging', 'Released on PO', 'Payments'];
-function cell(v) {
-  var s = v == null ? '' : String(v);
-  if (/^[=+\-@]/.test(s)) s = "'" + s;
-  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
-function money(c) { return (Number(c || 0) / 100).toFixed(2); }
-function csv(list) {
-  var lines = [HEADER.join(',')];
-  (list || []).forEach(function (r) {
-    lines.push([r.orderNo, r.poNumber, r.customer.name, r.customer.key, r.stage, r.number, r.issuedAt, r.dueAt, money(r.amountCents), money(r.receivedCents), money(r.balanceCents),
-      r.status, r.daysOverdue, r.bucket, r.releasedOnPo ? 'yes' : '', r.payments.map(function (p) { return p.date + ' USD ' + money(p.amountCents) + ' ' + p.bankReference + (p.voided ? ' (VOIDED: ' + p.voidReason + ')' : ''); }).join(' | ')].map(cell).join(','));
-  });
-  return lines.join('\r\n') + '\r\n';
-}
-
-module.exports = { STAGES: STAGES, BUCKETS: BUCKETS, refKey: refKey, isPlaceholder: isPlaceholder, reservedSource: reservedSource, isDate: isDate, clean: clean, poOf: poOf,
-  settle: settle, dueDate: dueDate, daysBetween: daysBetween, bucket: bucket, recordPlan: recordPlan, voidPlan: voidPlan, releasePlan: releasePlan, editPlan: editPlan,
-  rows: rows, filter: filter, totals: totals, ledger: ledger, csv: csv };
-
-  };
   defs['scripts/_lib/logic-fixtures.js'] = function (module, exports, require) {
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
@@ -2598,17 +2288,14 @@ module.exports = { STAGES: STAGES, BUCKETS: BUCKETS, refKey: refKey, isPlacehold
 
    A catalog with bills of materials, suppliers and prices, a stock count,
    one work order with six cabinets at real stations with real timings,
-   three orders (one in build with a customer request; one billed on the
-   OEM's own paper and released on a payment that never arrived — the
-   intake template's placeholder bank reference, the Amperage situation the
-   accounting page exists to correct; one to price), a company account with
-   an uploaded PO under review, a customer account with a site plan on
-   trial.
+   three orders (one in build with a customer request, one awaiting its
+   deposit, one to price), a company account with an uploaded PO under
+   review, a customer account with a site plan on trial.
 
    views(state) answers every endpoint the office, plant and customer apps
    read, shaped like api/*.js answers them and computed by the same pure
    libraries (materials, plant-board, plant-stats, plant-work, office-stage,
-   receivables, logic-catalog) — so a sandbox shows what the product computes, not a
+   logic-catalog) — so a sandbox shows what the product computes, not a
    drawing of it. post(state, …) applies the handful of writes a trial
    touches and returns what the endpoint would. State is plain JSON, so the
    sandbox keeps it in localStorage and the render check keeps it in memory.
@@ -2621,9 +2308,6 @@ var M = require('api/_lib/materials.js'), C = require('api/_lib/logic-catalog.js
 var Board = require('api/_lib/plant-board.js'), Ops = require('api/_lib/plant-ops.js'), Attention = require('api/_lib/plant-attention.js');
 var W = require('api/_lib/plant-work.js'), Plant = require('api/_lib/plant.js'), S = require('api/_lib/office-stage.js');
 var Manifest = require('api/app-manifest.js'), Cu = require('api/_lib/custody.js');
-/* the receivables rules (pure): the accounting ledger and the three office
-   corrections below apply them; nothing here re-derives money */
-var R = require('api/_lib/receivables.js');
 
 var ORG = 'cleancell.us';
 var CATALOG = [
@@ -2674,16 +2358,8 @@ function initialState() {
       { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, at: '', done: {}, inventoryStatus: 'building', unitType: 'cabinet' }
     ],
     orders: [
-      { id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', createdAt: '2026-09-01T10:00:00Z', customerId: 'company_riverside', customer: { name: 'Dana Ops', company: 'Riverside Cold Chain', email: 'ops@riverside.example' }, items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], worksOrderId: 'wo_1', logic: { commercial: { baseCents: 50000000, feeCents: 125000, totalCents: 50125000, depositCents: 15037500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 15037500, paidCents: 15037500, status: 'paid', id: 'QB-1041', date: '2026-09-01' }, balance: { amountCents: 35087500, paidCents: 0, status: 'open', id: 'QB-1042', date: '2026-09-15' } }, acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, answer: null }] },
-      /* billed on the OEM's own paper and released on a payment that never
-         arrived: the intake template's placeholder reference was recorded as
-         the deposit (what happened to the Amperage order in production) */
-      { id: 'o2', orderNo: 'CC-26-4420', status: 'in_fulfilment', createdAt: '2026-08-18T10:00:00Z', purchaseOrder: { number: 'SS-PO-5521' }, customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }],
-        logic: { accounting: 'tenant', commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } },
-          invoices: { deposit: { amountCents: 9022500, id: 'SS-1042', issuedAt: '2026-08-20', date: '2026-08-20', status: 'paid', paidCents: 9022500, balanceCents: 0, satisfied: true,
-            payUrl: 'https://invoice.stripe.com/i/acct_1DEMOCLEANCELL/sandbox-ss-1042',
-            payments: [{ amountCents: 9022500, date: '2026-08-22', bankReference: 'REPLACE WITH THE BANK REFERENCE, or delete this payment if not yet received', by: 'intake@cleancell.us', at: '2026-08-22T15:00:00Z' }] } },
-          acceptedAt: '2026-08-19', releasedAt: '2026-08-22', requirements: [], allocatedSerials: [] } },
+      { id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', createdAt: '2026-09-01T10:00:00Z', customerId: 'company_riverside', customer: { name: 'Dana Ops', company: 'Riverside Cold Chain', email: 'ops@riverside.example' }, items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], worksOrderId: 'wo_1', logic: { commercial: { baseCents: 50000000, feeCents: 125000, totalCents: 50125000, depositCents: 15037500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 15037500, paidCents: 15037500, status: 'paid' }, balance: { amountCents: 35087500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, answer: null }] },
+      { id: 'o2', orderNo: 'CC-26-4420', status: 'accepted', createdAt: '2026-09-18T10:00:00Z', customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }], logic: { commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 9022500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-18', requirements: [], allocatedSerials: [] } },
       { id: 'o3', orderNo: 'CC-26-4421', status: 'new', createdAt: '2026-09-20T10:00:00Z', customerId: 'company_incharge', customer: { name: 'Purchasing', company: 'InCharge Energy', email: 'po@incharge.example' }, items: [{ sku: 'CC-C215', name: '215 kWh', qty: 20 }], logic: null }
     ],
     customers: [
@@ -2743,30 +2419,9 @@ function views(state) {
     if (/serial=/.test(q)) { var serial = decodeURIComponent((/serial=([^&]*)/.exec(q) || [])[1] || ''), u = state.units.filter(function (x) { return x.serial === serial; })[0]; if (!u) return { error: 'Unit not found', status: 404 }; return { unit: Object.assign({ orgId: ORG, woId: 'wo_1', orderNo: 'CC-26-4419', work: {} }, u, u.at === 'rack' ? { progress: progressOf(u) } : {}), genealogy: [{ serial: u.serial, unitType: u.unitType, parentSerial: null }], events: [] }; }
     return { name: 'Clean Cell', owner: false, flow: flow, brand: brand, worksOrders: [state.wo], units: unitsWith(), limited: false };
   }
-  function officeJson() { var orders = state.orders.map(function (o) { return Object.assign({}, o, { stage: S.stageOf(o), poNumber: R.poOf(o) }); }); return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
+  function officeJson() { var orders = state.orders.map(function (o) { return Object.assign({}, o, { stage: S.stageOf(o) }); }); return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
     links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
     orders: orders, totals: S.totals(orders), intake: { review: state.intake.filter(function (p) { return !p.convertedAt && p.status === 'po_review'; }).length, needsInfo: 0, declined: 0 }, limited: false }; }
-  /* ── accounting (api/logic-accounting.js GET): the receivables ledger by
-     customer ACCOUNT, built by api/_lib/receivables.js exactly as the
-     endpoint builds it — the page prints it and never sums money. The sync
-     status is a workspace on its own Stripe with QuickBooks not configured
-     on the deployment, so both halves of the card render. ── */
-  var SYNC = { available: true, eligible: true, provider: 'stripe', chosenBy: 'demo@cleancell.us', chosenAt: '2026-09-20T12:00:00Z', since: '2026-09-20T12:00:00Z',
-    quickbooks: { configured: false, missing: ['QBO_CLIENT_ID', 'QBO_CLIENT_SECRET', 'QBO_WORKSPACE_REDIRECT_URI'], env: 'production', connectHost: null, connected: false, realmId: null, companyName: null, connectedAt: null, connectedBy: null, refreshExpiresAt: null, lastError: null, itemRef: '', taxCodeRef: 'NON', approved: false },
-    stripe: { configured: true, missing: [], connectHost: null, connected: true, accountId: 'acct_1DEMOCLEANCELL', livemode: false, connectedAt: '2026-09-20T12:05:00Z', connectedBy: 'demo@cleancell.us', webhook: true, lastError: null, paymentMethods: ['card', 'us_bank_account'], sendEmail: false } };
-  function param(q, k) { var m = new RegExp('(?:^|&)' + k + '=([^&]*)').exec(q || ''); return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''; }
-  function filtersFrom(q) { return { status: param(q, 'status') || 'all', customer: param(q, 'customer'), overdue: param(q, 'overdue') === '1' }; }
-  /* the ACCOUNT an order belongs to: its customerId, else the account one of whose active people it is billed to */
-  function accountOf(o) {
-    var c = o.customerId ? state.customers.filter(function (x) { return x.id === o.customerId; })[0] : state.customers.filter(function (x) { return x.users.some(function (u) { return u.status === 'active' && u.email === (o.customer && o.customer.email); }); })[0];
-    return c ? { id: c.id, name: c.company } : null;
-  }
-  function ledgerEntries() {
-    return state.orders.filter(function (o) { return o.logic && o.logic.invoices; }).slice().sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); })
-      .map(function (o) { return { id: o.id, order: o, account: accountOf(o) }; });
-  }
-  function accountingJson(q) { return Object.assign({ owner: false, org: ORG, name: 'Clean Cell', brand: brand, today: NOW, accounting: 'tenant', sync: clone(SYNC), limited: false }, R.ledger(ledgerEntries(), NOW, filtersFrom(q), { provider: 'stripe' })); }
-  function accountingCsv(q) { return { filename: 'receivables-' + ORG + '-' + NOW + '.csv', csv: R.csv(R.ledger(ledgerEntries(), NOW, filtersFrom(q), { provider: 'stripe' }).rows) }; }
   function money(o) { var inv = 0, pd = 0; Object.keys((o.logic && o.logic.invoices) || {}).forEach(function (k) { inv += o.logic.invoices[k].amountCents || 0; pd += o.logic.invoices[k].paidCents || 0; }); return { id: o.id, orderNo: o.orderNo, status: o.status, stage: S.stageOf(o), poNumber: o.poNumber || null, billedTo: { name: o.customer.name || '', email: o.customer.email || '' }, items: o.items, invoicedCents: inv, paidCents: pd, balanceCents: inv - pd, shippedAt: o.shipment ? o.shipment.shippedAt : null, openRequests: (o.requests || []).filter(function (r) { return r.status === 'open'; }).length }; }
   function customerOf(email) { return state.customers.filter(function (c) { return c.users.some(function (u) { return u.email === email; }); })[0]; }
   var APP_URL = 'https://silmarillion.clearskyomega.com/portals/customer/app?org=cleancell.us', PORTAL_URL = 'https://silmarillion.clearskyomega.com/portals/customer/?org=cleancell.us';
@@ -2876,7 +2531,7 @@ function views(state) {
       workOrder: 'wo_1', product: 'Cabinet', work: W.statusOf(unit, 'rack', steps), instructions: 'Fit modules bottom-up.' };
   }
   function manifest(app, tenant) { return Manifest.manifestFor(ORG, tenant, app); }
-  return { materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, accountingJson: accountingJson, accountingCsv: accountingCsv, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
+  return { materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
 }
 
 /* ── the writes a trial touches ───────────────────────────────────────── */
@@ -2891,34 +2546,6 @@ function post(state, path, query, b, who) {
     if (b.action === 'request-resolve') { var r = (o.requests || []).filter(function (x) { return x.id === b.requestId; })[0]; if (!r || r.status !== 'open') return err(404, 'Open request not found'); if (!String(b.answer || '').trim()) return err(400, 'Write the answer the customer will read'); r.status = 'resolved'; r.answer = String(b.answer).trim().slice(0, 2000); r.answeredAt = now; r.answeredBy = who; return { ok: true }; }
     if (b.action === 'ready') return o.logic && o.logic.releasedAt ? { ok: true, note: 'Every unit passed; the balance invoice is queued.' } : err(409, 'Release the order to the plant first');
     if (b.action === 'cancel') { o.cancelRequested = true; return { ok: true }; }
-    /* the accounting corrections: the same pure plans api/_lib/logic-workflow.js
-       applies, applied the same way (a payment is voided, never deleted) */
-    if (b.action === 'payment-void' || b.action === 'release-on-po' || b.action === 'invoice-edit') {
-      var lg = o.logic; if (!lg || !lg.invoices) return err(409, 'This order has no invoices yet');
-      try {
-        if (b.action === 'payment-void') {
-          var vp = R.voidPlan(o, b.stage, { bankReference: b.bankReference, reason: b.reason, keepBuilding: b.keepBuilding === true || b.keepBuilding === false ? b.keepBuilding : undefined, poNumber: b.poNumber, by: who, at: now, source: 'office' });
-          if (vp.duplicate) return { ok: true, duplicate: true, invoice: vp.invoice };
-          lg.invoices[b.stage] = vp.invoice;
-          if (vp.creditRelease) lg.creditRelease = vp.creditRelease;
-          if (vp.hold) { lg.paymentHold = vp.hold; lg.paymentException = vp.hold.message; }
-          return { ok: true, invoice: vp.invoice, order: { status: o.status, releasedAt: lg.releasedAt || null, creditRelease: lg.creditRelease || null, paymentHold: lg.paymentHold || null, paymentException: lg.paymentException || null } };
-        }
-        if (b.action === 'release-on-po') {
-          var rp = R.releasePlan(o, { reason: b.reason, poNumber: b.poNumber, by: who, at: now });
-          if (rp.duplicate) return { ok: true, duplicate: true, creditRelease: rp.creditRelease };
-          lg.creditRelease = rp.creditRelease;
-          if (rp.liftHold) { lg.paymentHold = null; lg.paymentException = null; }
-          /* standing in for processOrder's release: the plant starts */
-          if (!lg.releasedAt) { lg.releasedAt = now; o.status = 'in_fulfilment'; }
-          return { ok: true, creditRelease: rp.creditRelease, order: { status: o.status, releasedAt: lg.releasedAt, worksOrderId: o.worksOrderId || null } };
-        }
-        var ep = R.editPlan(o, b.stage, { number: b.number, issuedAt: b.issuedAt, dueAt: b.dueAt, reason: b.reason, by: who, at: now });
-        if (ep.duplicate) return { ok: true, duplicate: true, invoice: ep.invoice };
-        lg.invoices[b.stage] = ep.invoice;
-        return { ok: true, invoice: ep.invoice };
-      } catch (e) { return err(e.status || 400, e.message); }
-    }
     return err(400, 'Not in this sandbox: ' + b.action);
   }
   if (path === '/api/buyers') {
