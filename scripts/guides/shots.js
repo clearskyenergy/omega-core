@@ -125,6 +125,15 @@ var SHOTS = [
   { name: 'desktop-office', page: '/omega-logic?org=' + WHO.company.domain, who: 'company', signIn: 'desktop', view: DESKTOP, ready: '#hub [data-hub], .logic-flow a', what: 'the desktop office (omega-logic.html) in a 1280×800 window, hub at the top',
     steps: async function (p, h) { if (await p.evaluate(function () { return !!window.OmegaHexHub; })) await h.wait('#hub .hexhub [data-hub]'); } },
   { name: 'customer-app', page: '/app-sandbox/customer', who: 'company', signIn: 'customer', ready: '#hub .hexhub [data-hub]', what: 'the supplier\'s customer app, home (its hub), as the office sees it' },
+  /* the freight plan on the desktop's Shipping & receiving: signed in on the
+     office first (the sandbox keeps the sign-in for the origin), then the
+     sample's 56-cabinet order opened by link, the lanes table in view */
+  { name: 'desktop-freight', page: '/omega-logic?org=' + WHO.company.domain, who: 'company', signIn: 'desktop', view: DESKTOP, ready: '#fr-lanes tr[data-lane]', what: 'the freight plan (logic-logistics.html#freight) in a 1280×800 window: the lanes table, a row per region',
+    steps: async function (p, h) {
+      await h.wait('#hub [data-hub], .logic-flow a');
+      await p.goto(new URL(p.url()).origin + '/logic-logistics?org=' + WHO.company.domain + '&order=o7#freight', { waitUntil: 'domcontentloaded' });
+      await h.wait('#fr-lanes tr[data-lane]'); await h.settle(); await h.scrollTo('#freight h3', /^Lanes/);
+    } },
 
   /* the plant — guides/Omega-Logic-Plant-App.pdf */
   { name: 'plant-today', page: '/app-sandbox/plant', who: 'company', signIn: 'staff', ready: '#today-kv', what: 'the Plant app, Today' },

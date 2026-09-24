@@ -239,6 +239,246 @@ transaction (`still(tx)`); the office's are `method: 'manual'` with one
 | `plan-apply { …, confirm, planKey }` | as above; a unit stamped for another account is left out (`why: 'account'`) | as above; the same, and a site on another account → 409 |
 | GET | `orders: [{ orderNo, po, units, eligible, building, planned }]`; sites carry `planned` | `?view=plan&customerId=` → the account's sites and its orders with units |
 
+## Freight plan — from sites to priced loads
+
+Written 2026-09-24. The situation it is for: one PO for 56 cabinets going to
+16 sites across the US, the addresses arriving a few at a time, and freight
+quoted by hand, site by site. Once *Many sites at once* has given each unit
+the site it is going to, the order's **freight plan** puts every unit
+against its address, groups the sites into lanes a logistics partner can
+price, builds the two sheets they price from, records the prices they send
+back, and plans the loads from the one the office accepts — on the same
+ledger, through the same code as *Record planned load*.
+
+It is built on what exists, with two small additions:
+
+| What | Where |
+|---|---|
+| Which site a unit goes to | `plant_units/{org__serial}.custody.plannedSiteId` / `siteId` (bulk sites; `siteId` wins) |
+| The site's address, pin, contact, ref | `omega_orgs/{org}/sites/{siteId}` |
+| The loads | the order's `delivery.legs[]` — only `api/logic-logistics.js` writes it |
+| Weight, height, class, stacking, handling | optional fields on the catalog product (below) |
+| The ship-from (**new**) | `omega_orgs/{org}/fulfillment/config.freight.origin` |
+| Carrier quotes (**new**) | `omega_orgs/{org}/freight_quotes/{quoteId}`, append-only |
+
+`api/_lib/freight.js` is the pure library (no Firestore, no network, no
+clock but the `now` handed in; bundled into the public sandbox, so ES5). It
+holds no pricing logic — a quote is a number a carrier gave the office,
+recorded as typed — and it never reads a list price, a supplier, a cost
+basis or a margin.
+
+**Lanes.** One fixed map sends each state to a region; each region is one
+lane, in this order:
+
+| Lane (key) | States |
+|---|---|
+| Northeast (`NORTHEAST`) | CT MA ME NH NJ NY PA RI VT |
+| Mid-Atlantic (`MIDATLANTIC`) | DC DE MD VA WV |
+| Southeast (`SOUTHEAST`) | AL FL GA KY MS NC SC TN |
+| Great Lakes (`GREATLAKES`) | IL IN MI OH WI |
+| Central Plains (`CENTRALPLAINS`) | IA KS MN MO ND NE SD |
+| South Central (`SOUTHCENTRAL`) | AR LA OK TX |
+| Mountain (`MOUNTAIN`) | AZ CO ID MT NM NV UT WY |
+| Pacific (`PACIFIC`) | CA OR WA |
+| Alaska (`ALASKA`) · Hawaii (`HAWAII`), ocean/air · Puerto Rico (`PUERTORICO`), ocean | each alone |
+| Address to check (`CHECK`) | no state, an unknown one, or another country |
+
+A lane key is never a state's two letters (asserted): it is in every load
+id Accept names, which a carrier and the customer read, and a Texas load
+named `…-SC-1` reads as South Carolina.
+
+**Stop order.** Within a lane the stops that still need freight are ordered
+nearest-neighbour from the ship-from, by straight-line (haversine) miles,
+when the ship-from and the stop both have a map pin; ties go to the name as
+a person reads it. A stop with no pin is appended in state, city, name
+order; with no pinned ship-from every stop is in that order and no miles are
+shown. Stops whose units are all booked or shipped follow, unnumbered by
+distance. The lane shows its total straight-line miles only when every point
+has a pin.
+
+**Every unit stays on the plan.** Each shipping unit of the order is in one
+of five states: *Needs freight* (a site, at the plant, on no load), *Booked
+on load* (on a planned leg), *Shipped* (a custody status, or a leg past
+planned), *No site yet*, or *Cannot ship* (scrapped or lost). The last two
+are listed under the lanes and in the master list; nothing is dropped. A
+unit with no site that is already booked or shipped (planned by hand, or
+before bulk sites) is not *No site yet* — there is nothing to assign — and
+is listed apart as *On a load without a site* (`offLane`), with its load;
+the *No site yet* tile counts only the units under that heading.
+
+**Ready** is the pickup gate's ready (`logic-policy.ready`, copied into the
+bundled library and held to the same answers by the tests): at Ready, no
+hold, no NCR and a **passing** test — no test record reads *Awaiting test*
+— and every serialized component of the unit on the order the same (pickup
+checks the rootSerial family; one that is not reads *Component not ready ·
+<serial> …*). A stop is *Ready now*, and the quote request's earliest
+pickup date is today, only when pickup would not refuse it.
+
+**Estimates, from the catalog only.** Per stop and per lane, over the units
+that still need freight: total weight, floor area (W × D, unstacked), the
+tallest unit, whether they stack, the freight classes and the handling
+notes ("Do not stack" is added when any SKU is not stackable). A sum that
+is missing a SKU's value says so — `27500 (not on file: CC-C418)` — and so
+do the class (`85 (not on file: CC-C418)`) and stacking (`no (not on file:
+CC-C418)`; SKUs that differ are named, `yes: A; no: B`, never "mixed"); a
+value nobody entered reads **not on file**. Nothing is guessed.
+
+**Catalog shipping fields** (`api/_lib/shipping-fields.js`, the one
+validator): `weightLb` (1–200,000), `heightFt` (0.5–80, in the footprint's
+`dimUnits`), `freightClass` (an NMFC class, 50 … 500), `stackable` (yes/no;
+blank is *not on file*, never "no"; the importer hands the cell as typed to
+the validator, so `TBD` or `N/A` is a row problem, never a quiet "no") and `handlingNote` (≤ 200 characters),
+flat on a **product** row. `scripts/import-products.js` is still the one
+mapping of the CSV: new columns `weightLb` (alias `weight`,
+`shippingWeight`) with `weightUnits` `lb` or `kg`, `heightFt` (alias
+`height`), `freightClass` (alias `class`, `nmfcClass`), `stackable`,
+`handlingNote` (alias `handling`, `specialHandling`); a bad value makes the
+row a problem, a component or service row carrying them gets a warning, and
+the readiness report counts products with a shipping weight.
+`docs/product-list-template.csv` has the six columns. The catalog writer
+keeps a stored value a save leaves out. `api/embed-config.js` still builds
+its public answer key by key and names none of them (asserted).
+
+**The two sheets.** Built by the library — the ONLY place their columns are
+defined (`MASTER_COLUMNS`, `QUOTE_COLUMNS`) — returned by the GET as
+`exports.master` / `exports.quote` (`{filename, csv}`); the browser only
+makes the file. UTF-8 with a BOM, CRLF, a leading-zero ZIP or ref kept as
+`="07501"`, a `'` before a cell that starts `= + - @`.
+
+- *Master list* (`freight-master-<order>-<day>.csv`): one row per unit —
+  serial, SKU, product, build status, ready since, freight status, lane,
+  stop, site, site ref, going to / assigned, street, street 2, city, state,
+  ZIP, country, latitude, longitude, receiving contact and phone, weight,
+  dimensions, class, stackable, handling, load, carrier, order, customer PO.
+  Sorted by lane, stop and serial; no site, then cannot ship, last.
+- *Quote request* (`freight-quote-request-<order>-<day>.csv`): one row per
+  stop that still needs freight — lane, stop, stops in lane, pick up from
+  (the ship-from), site, ref, the address and pin, miles from the previous
+  stop (straight line), receiving contact and phone, units, SKUs, serials,
+  est. weight, est. floor area, max height, class, stackable, ready
+  ("Ready now", "k of n ready · plant date …" from the works order's due
+  date or the order's promised date), earliest pickup date, special
+  handling, order. The carrier's sheet carries **no customer name, PO,
+  email or price**.
+
+**A quote's life.** `freight-quote` records carrier, amount (USD only, more
+than $0 and at most $10M, kept in cents), transit days (0–90), valid until
+(not already past), the carrier's reference and a note, against the lane
+**as it stands** (`planKey` over the open serial → site-at-its-address
+pairs — the street as matched, city and state, `F.placeKey` — so a lane
+that changed since the page was opened answers 409, and a site whose
+address is corrected after a price makes that price stale). The stored
+document names its stops (with the street, city, state and ZIP priced) and
+serials. "Valid until" is judged against the calendar day in Hawaii
+(`F.quoteDay`, UTC−10), the last US state to finish a day: a quote is good
+through the end of its last day wherever the office is, not until 5pm
+Pacific when UTC rolls over (a few hours' grace after midnight in the east;
+the carrier confirms the rate at booking). The page's date picker uses the
+browser's own day, never earlier. The commercial fields never change; only `status`
+moves — `recorded` → `accepted`, `superseded` (a newer quote that
+`supersedes` it, or another quote accepted for the lane) or `withdrawn`
+(with a 3–300 character reason) — each move on `trail[]` and in
+`omega_audit`. Nothing deletes a quote. An accepted quote cannot be
+withdrawn. *Best* is the lowest recorded, unexpired quote on the lane (ties
+to the earlier) that Accept would take. A quote whose lane has since changed
+is flagged *lane changed*; one past its date, *expired*; one with a stop
+whose address has changed says so, with the address priced and the address
+now, is never *best*, and offers no *Accept*.
+
+**Accept plans the loads.** `freight-accept {orderId, quoteId, revision,
+loadId?, bookingRef?}` runs in one transaction: every stop is planned or
+none is. The `plan` action's checks now live in `L.planLeg()`
+(`api/_lib/order-lifecycle.js`); `plan` calls it once and accept once per
+stop, with the legs planned so far — so the per-destination allowance, the
+100-leg cap and "an unassigned shipping unit on this order" are exactly the
+ledger's. The ledger is one leg per destination, so a lane of N stops is N
+legs under one load id (`FRT-<order>-<lane>-<n>`, or the office's; n is
+one past the lane's loads from a quote however they were named, stepped
+past any leg id the ledger has — `F.nextLoadId`, the ONE rule: the
+endpoint names the load with it and each lane of the plan carries it as
+`nextLoadId`, which is what the Accept step previews):
+`<loadId>-S1 … -SN`, one carrier, one booking reference (the typed one, else
+the quote's). Each leg also records the real drop (`siteId`, `siteName`)
+and `freight{quoteId, laneKey, loadId, stop, stops}` — never the amount.
+Accept refuses (409), naming the serial, a unit that is no longer eligible:
+not on this order, on another load, shipped, scrapped or lost, moved to
+another site, or with no site; also an expired, withdrawn or already
+accepted quote, a stale revision, a cancelled order, a site that is gone or
+inactive, a site whose address changed since the price (naming the address
+priced and the address now), a stop over 100 units or a quote over 400. Units on the lane the
+quote does not cover are reported (`notOnQuote`), never planned. A unit
+still being built is not refused: planning never required *Ready*; pickup
+does. The lane's other open quotes are marked superseded.
+
+**Which order destination a stop plans onto** (`F.destinationFor`): the
+destination at the same address; else, when the order has exactly one
+destination (a PO shipped "per the site list"), that one, with the real
+drop on the leg; else the stop is named and cannot be accepted — plan it on
+the ledger against the right destination. A legacy order with no
+destination plan still gets the plan, the sheets and quotes, but Accept is
+refused with the ledger's own message.
+
+**The ship-from.** `freight-origin` saves name, street, city, state (a US
+state), ZIP (5 or 9 digits), shipping contact and phone, dock hours and
+notes on `fulfillment/config.freight` — a merge of that one key, as
+`logic-accounting` writes `ledgerSync`, audited. It does not go through
+`logic-office` `configure`, which is the ClearSky owner's and rewrites
+terms, fee and QuickBooks settings: an OEM administrator sets their own
+ship-from. A new address is looked up once on the Census geocoder inside
+the office's daily allowance (`api/_lib/site-geo.js`); a miss leaves it
+without a pin (stops then go in state order) and is never a refusal. The
+same address keeps its pin.
+
+**Who.** Every freight read and write is the ledger's own gate:
+`logic-access.authorize(…, write)` — an OEM owner or admin, or the ClearSky
+owner — and the subscription. A member, a customer and another workspace get
+403; another org's order 404. Quotes live off the order because any member
+may read an order from a browser; `freight_quotes` is closed in
+`firestore.rules`. The customer projections (`portal.publicOrder`,
+`L.buyerOrder`) build legs key by key and carry no `freight{}`, site or
+amount (asserted).
+
+| Endpoint (`api/logic-logistics.js`) | |
+|---|---|
+| `GET ?org=&freight=<orderId>` | the plan: `order`, `origin`, `summary`, `rows`, `lanes[]` (stops, estimates, `planKey`, `nextLoadId`, quotes with each stop's `where` and `moved`, best, accepted, loads), `unassigned`, `offLane`, `blocked`, `otherQuotes`, `notice`, `exports` |
+| `POST freight-origin {origin}` | `{ok, origin, geoLimited}` |
+| `POST freight-quote {orderId, laneKey, carrier, amount, …, planKey, supersedes?}` | `{ok, quote}` |
+| `POST freight-withdraw {orderId, quoteId, reason}` | `{ok, quote}` |
+| `POST freight-accept {orderId, quoteId, revision, loadId?, bookingRef?}` | `{ok, revision, loadId, legs, quote, notOnQuote, superseded}` |
+
+**Screens.** *Shipping & receiving* (`/logic-logistics.html`) has a
+**Freight plan** panel under the ledger: the summary (units, sites, lanes,
+need freight, booked, shipped, no site, cannot ship, ready, weight on file),
+the ship-from with its form, *Download master list* and *Download quote
+request*, the lanes table (lane, stops, units open / booked, est. weight,
+best quote, status), and per lane its stops, its loads on the ledger, its
+prices (best, expired, lane changed; withdraw with a reason), *Record price*,
+and *Accept…*, a second step on the page (no browser box) listing the loads
+it will plan before *Plan* sends it; an accepted lane links each load to its
+paragraph on the ledger. `?order=` opens an order and `#freight` scrolls to
+the plan. It is reached from the desktop order (*Freight plan →* and
+*Export master list*, which saves the master list straight away), from the
+Omega Logic app's order (*Freight plan on the desktop*, administrators) and
+from *Many sites at once* after an assignment (*Next: price the freight for
+this order*). Quotes are not in the phone app.
+
+Tests: `scripts/test-freight.js` (library: regions and keys that are never
+a state code, 56 units over 16 fictional sites, stop order and miles by
+hand, estimates with each missing SKU named, the five states and the
+units on a load without a site, ready as the pickup gate's, destinations,
+both sheets' columns and cells, no commercial field in the plan, a moved
+address, the quote day, the next load id; endpoint: the gate, the
+ship-from, quotes append-only, accept's parity with the `plan` action and
+its refusals — a moved address among them — the previewed load id after a
+custom-named load, what customers see, the catalog fields) in `test:logic`;
+`scripts/test-import-products.js` for the new columns and an unrecognised
+stackable; `npm run check:pages` drives the panel on the sample's
+56-cabinet order (order `o7` in `scripts/_lib/logic-fixtures.js`) at 1280px
+and 390px, both downloads, two prices, *Accept* (each load named as the
+ledger names it, each stop at its current address) and the load links, a
+price whose site's address was corrected, a unit on a load without a site,
+and the three links in.
+
 ## The fleet register — the spreadsheet
 
 `/logic-register.html` (Deliver → Fleet register) is one flat row per
@@ -351,6 +591,9 @@ and agrees with the default template.
 
 - **Office → Deliver → Fleet register** (`/logic-register.html`): the
   spreadsheet, above.
+- **Office → Deliver → Shipping & receiving** (`/logic-logistics.html`): the
+  ledger's loads and receiving inspection, and each order's **Freight plan**
+  (above).
 - **Office → Deliver → Sites & custody** (`/logic-custody.html`): where the
   fleet is (counts by status, coverage summary), the unit passport (custody,
   coverage, every event, plant scans, the moves that apply, side states,
@@ -408,6 +651,33 @@ and agrees with the default template.
   the owning org's or the verified customer's).
 - Site-level SLAs, photos and GPS at commissioning, printed labels beyond the
   plant's own, carrier webhooks, offline scanning.
+- Freight plan:
+  - no carrier API, booking, rate shopping or tracking, and no email to
+    carriers: the office sends the quote request and types back the prices;
+  - miles are straight-line, not road miles, and the stop order is
+    nearest-neighbour, not an optimised route;
+  - one leg per stop (the ledger is one leg per destination): a lane is N
+    legs under one load id, not one multi-stop bill of lading;
+  - no pallet, linear-foot or trailer-fit calculation; the estimates are
+    sums of catalog values;
+  - an order's destinations cannot be edited here (a stop with no matching
+    destination on a multi-destination order is planned on the ledger);
+  - the shipping fields come only from the product CSV
+    (`scripts/import-products.js`): the catalog page has no form fields for
+    them yet;
+  - no hazmat inference: a lithium battery's class and handling are what the
+    product row says;
+  - Alaska, Hawaii and Puerto Rico are only flagged as their own lanes
+    (ocean or air), not priced differently;
+  - there is no workspace time zone: a quote's "valid until" is judged on
+    Hawaii's calendar day for every office;
+  - a component's readiness counts only when it is stamped with the order
+    (the plan reads the order's units; pickup reads the rootSerial family);
+  - an accepted quote cannot be withdrawn, and accepting does not cancel or
+    re-plan legs already on the ledger;
+  - quotes are not in the phone app (it links to the desktop plan);
+  - the PDF guides' sources describe it (`scripts/guides/office.html`, shot
+    `desktop-freight`); the PDFs themselves are rebuilt at merge.
 - `firestore.indexes.json` is unchanged: the custody views read the org's
   units by `createdAt` and filter in memory (2,000 newest; older units open
   by serial).

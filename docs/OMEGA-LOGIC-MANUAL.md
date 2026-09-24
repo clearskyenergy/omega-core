@@ -178,6 +178,59 @@ sent still open.
 - **Shipping & receiving.** Destinations, shipment legs with carrier and
   tracking, serials on each load, pickup, delivery and receiving condition.
   An order with more than one destination is shipped leg by leg.
+- **Freight plan** (*Shipping & receiving*, under the ledger; an
+  administrator's): when one order goes to many sites and each needs a
+  freight price. Open it from the order (*Freight plan →*), from the Omega
+  Logic app's order (*Freight plan on the desktop*) or after *Many sites at
+  once* (*Next: price the freight for this order*).
+  1. **Give the units their sites** first (*Many sites at once*, below).
+     Units with no site are listed under *No site yet*, with a link back.
+     A unit already on a load (or shipped) without a site is listed apart,
+     *On a load without a site*, with its load: nothing to do there.
+  2. **Set the ship-from** once for the workspace (*Set the ship-from
+     address*: the plant or yard the loads leave from, contact, dock hours,
+     notes for carriers). It is found on the map when it can be; then the
+     stops in each lane run nearest-first from it, in straight-line miles.
+     Without a pin they go in state order.
+  3. **Read the lanes.** One row per region (Northeast, Mid-Atlantic,
+     Southeast, Great Lakes, Central Plains, South Central, Mountain,
+     Pacific; Alaska, Hawaii and Puerto Rico on their own): stops, units to
+     ship and booked, estimated weight, the best price so far, status. Open
+     a lane for its stops: site, ref, address, receiving contact, miles from
+     the previous stop, units, SKUs, serials, weight and floor area, and
+     whether they are ready (a stop not yet ready shows the plant's date).
+     *Ready* means what pickup will accept: at Ready, tested and passed, no
+     hold, and its components the same — a unit without a passing test
+     says *Awaiting test*. Weights, sizes, freight class and stacking come
+     from the product list; a product without them says *not on file*, by
+     SKU, and is never guessed.
+  4. **Download the sheets.** *Download master list*: one row per unit —
+     serial, SKU, product, build status, lane, stop, site and address,
+     contact, weight, dimensions, class, load, carrier, order and PO.
+     *Download quote request*: one row per stop that still needs freight,
+     the sheet to send to logistics partners — no customer name, PO or
+     price on it. *Export master list* on the order saves the first one
+     without opening the plan.
+  5. **Record each price** on its lane: carrier, amount in USD, transit
+     days, valid until, their reference, a note. The lowest open price is
+     marked *best*. A price is never edited or deleted: record a new one
+     that *Replaces* it, or *Withdraw* it with a reason. A lane whose units
+     or sites changed since a price was recorded flags it *lane changed*;
+     one past its date says *expired* (a price is good through the end of
+     its *valid until* day). If a site's address is corrected after a
+     price, the price says so — the address it was priced for and the
+     address now — and cannot be accepted: record a new price for the lane.
+  6. **Accept.** *Accept…* opens a second step on the page listing the loads
+     it will plan — one per stop, `FRT-<order>-<lane>-1-S1`, `-S2`, …
+     (the lane is a word such as `NORTHEAST`, never a state's letters), the
+     ids the ledger will give them, each stop at its address as it is now —
+     with the booking reference filled from the price. *Plan N loads* puts
+     them on the ledger with the carrier; if any unit has since moved,
+     shipped or gone onto another load it is named and nothing is planned.
+     The lane then links each load to the ledger, where pickup, delivery and
+     receiving are recorded as before. Units the price did not cover stay
+     open. Nothing is booked with the carrier or emailed: do that as usual.
+  Design and the honest list: `docs/LOGISTICS-CUSTODY.md` (*Freight plan*).
 - **Fleet register.** The spreadsheet: one row per serialized unit, at the
   plant or beyond — seller, buyer, reseller, end customer, site and
   position, order and customer PO, load, carrier and BOL, shipped /
@@ -678,20 +731,27 @@ at once**: a PO's list of sites pasted or uploaded, the sites created in one
 go and the order's units spread over them (`api/_lib/custody.js`
 `parseSiteList` · `matchSites` · `spread`, the four list actions on
 `api/my-sites.js` and `api/logic-custody.js`, the customer portal's and
-app's *Sites from a list*, the office's *Many sites at once*).
+app's *Sites from a list*, the office's *Many sites at once*); then the
+**freight plan**: an order's units against their sites, grouped into lanes
+by region, the master list and the quote request, carrier prices recorded
+append-only, and Accept planning the loads through the ledger's own
+planner (`api/_lib/freight.js`, `api/_lib/shipping-fields.js`,
+`L.planLeg` in `api/_lib/order-lifecycle.js`, four actions and a GET on
+`api/logic-logistics.js`, the *Freight plan* panel on Shipping &
+receiving).
 
 Tests: `npm test` (the plant chain runs `test-plant-work`, `test-plant-stats`,
 `test-office-ops`, `test-app-manifest`; the logic chain `test-po-bulk`,
 `tests/tappsandbox` — which fails when `app-sandbox/` is not what
 `npm run build:sandbox` produces — `test-custody`, `test-site-list`,
-`test-crm` and `test-customer-subscribe`);
+`test-freight`, `test-crm` and `test-customer-subscribe`);
 `npm run check:pages` renders the office dashboard, settings, inventory,
 materials, catalog, plant board and map, the bench (tablet and roaming
 phone), the plant app, the office app, the customer app (both at phone and
 desktop width), the desktop CRM, the customer portal and the three
 sandboxes (sign in, change something, reload) in Chromium — and a pasted
 site list end to end on the portal, the customer phone sandbox and Sites &
-custody — and fails on a page error, a console error or an `/api/` call the
+custody, and the freight plan (both downloads, two prices, Accept) — and fails on a page error, a console error or an `/api/` call the
 sample does not answer.
 
 **Needs a person with credentials**
@@ -712,6 +772,12 @@ sample does not answer.
 - Landed cost, inventory valuation, a second stock location, finite-capacity
   scheduling, an RFQ to a supplier.
 - Carrier booking or live tracking (shipping is a manual evidence ledger).
+- In the freight plan: a carrier API, rate shopping or emailing carriers,
+  road miles or route optimisation, one multi-stop bill of lading (a lane
+  is one load per stop), pallet or trailer fit, editing an order's
+  destinations, catalog-page fields for weight and class (they come from
+  the product CSV), hazmat inference, prices in the phone app, and
+  withdrawing an accepted price (`docs/LOGISTICS-CUSTODY.md` has the list).
 - Cash settlement from a bank (QuickBooks records are the source; wires are
   recorded, not sent).
 - Push notifications to the phones; the apps poll when opened.

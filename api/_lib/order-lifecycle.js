@@ -76,6 +76,43 @@ function transition(leg, action, body, by, now) {
   next.lastEvent = ev;
   return { leg: next, event: ev };
 }
+/* ONE way a load is planned on the ledger: the 'plan' action of
+   api/logic-logistics.js calls it once, the freight plan's 'freight-accept'
+   once per stop of the accepted quote (inside one transaction, with the
+   legs planned so far). Pure: the caller reads the units (aligned with
+   `serials`; null = not registered) and applies unitPatches. Every check,
+   its order and its message are the ones the plan action always made; the
+   serial is now named. `extra` ({ siteId, siteName, freight{} }) is copied
+   onto the leg additively — the customer projections (buyerOrder here,
+   portal.publicOrder) build their legs key by key and never carry it. */
+function planLeg(o) {
+  var d = o.delivery || {}, legs = o.legs || [], legId = P.id(o.legId), now = o.now;
+  if (!Array.isArray(d.destinations)) throw A.httpError(409, 'This order needs a reviewed destination plan; legacy orders are not changed automatically');
+  if (legs.some(function (x) { return x.id === legId; })) throw A.httpError(409, 'Shipment leg identifier already exists');
+  if (legs.length >= 100) throw A.httpError(409, 'Order has reached its shipment-leg limit; contact support');
+  var dest = d.destinations.filter(function (x) { return x.id === o.destinationId; })[0];
+  if (!dest) throw A.httpError(400, 'Choose an order destination');
+  var list = serials(o.serials), units = o.units || [];
+  list.forEach(function (sn, i) { if (!units[i]) throw A.httpError(400, 'Serial ' + sn + ' is not registered'); });
+  var counts = Object.create(null);
+  // Prior allocation is distinct by serial, including already delivered loads.
+  var assigned = Object.create(null);
+  legs.forEach(function (x) { (x.serials || []).forEach(function (sn) { assigned[sn] = true; }); });
+  list.forEach(function (sn, i) {
+    var u = units[i];
+    if (u.orgId !== o.org || u.orderId !== o.orderId || !u.shipUnit || assigned[u.serial] || u.logisticsLegId) throw A.httpError(409, 'Serial ' + sn + ' must be an unassigned shipping unit on this order');
+    counts[u.sku] = (counts[u.sku] || 0) + 1;
+  });
+  var allowance = P.quantities(dest.items), prior = Object.create(null);
+  legs.filter(function (x) { return x.destinationId === dest.id; }).forEach(function (x) { (x.items || []).forEach(function (i) { prior[i.sku] = (prior[i.sku] || 0) + i.qty; }); });
+  Object.keys(counts).forEach(function (sku) { if (!allowance[sku] || counts[sku] + (prior[sku] || 0) > allowance[sku]) throw A.httpError(409, 'Shipment exceeds destination allocation'); });
+  var leg = { id: legId, destinationId: dest.id, serials: list, items: Object.keys(counts).map(function (sku) { return { sku: sku, qty: counts[sku] }; }),
+    carrier: text(o.carrier, 120, true), tracking: text(o.tracking, 160, true), status: 'planned', createdAt: now };
+  var ex = o.extra || {};
+  ['siteId', 'siteName', 'freight'].forEach(function (k) { if (ex[k] !== undefined && ex[k] !== null) leg[k] = ex[k]; });
+  var ev = { action: 'plan', at: now, by: o.by, evidence: evidence(o.evidence), source: o.source || 'manual' };
+  return { leg: leg, event: ev, unitPatches: list.map(function (sn) { return { serial: sn, patch: { logisticsLegId: legId, logisticsOrderId: o.orderId } }; }) };
+}
 function buyerOrder(o, id) {
   return { id: id, orderNo: o.orderNo, status: o.status, poNumber: (o.purchaseOrder || {}).number || null,
     items: (o.items || []).map(function (i) { return { sku: i.sku, name: i.name || i.sku, qty: i.qty }; }),
@@ -84,4 +121,4 @@ function buyerOrder(o, id) {
       tracking:l.tracking, serials:l.serials, status:l.status, pickedUpAt:l.pickedUpAt||null, deliveredAt:l.deliveredAt||null,
       lastConfirmedLocation:l.lastConfirmedLocation||null, receipts:l.receipts||[] }; }) };
 }
-module.exports = { text:text, address:address, po:po, serials:serials, evidence:evidence, transition:transition, buyerOrder:buyerOrder };
+module.exports = { text:text, address:address, po:po, serials:serials, evidence:evidence, transition:transition, planLeg:planLeg, buyerOrder:buyerOrder };

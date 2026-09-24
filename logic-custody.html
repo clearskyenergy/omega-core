@@ -262,7 +262,9 @@ function mnDone(){var d=MN.done,sk=d.serials.filter(function(s){return d.by[s].h
   $('mn-done').innerHTML='<div class="step"><p class="sum"><b>'+going+'</b> '+(going===1?'unit':'units')+' of '+esc(d.orderNo||'the order')+' going to <b>'+Object.keys(sites).length+'</b> '+(Object.keys(sites).length===1?'site':'sites')+' · '+d.applied+' saved now'+(sk.length?' · <b class="err-t">'+sk.length+'</b> skipped':'')+(pend.length?' · '+pend.length+' not saved yet':'')+(d.released.length?' · '+d.released.length+' going-to cleared':'')+'</p>'
     +(sk.length?'<ul class="note">'+sk.map(function(s){return '<li><span class="mono">'+esc(s)+'</span> · '+esc(d.by[s].why||'skipped')+'</li>';}).join('')+'</ul>':'')
     +(pend.length?'<p class="note err">Some units were not saved in this pass. Preview again and assign the rest.</p>':'')
-    +'<p class="note">When a unit is received, it is bound to its site. Each unit\'s passport shows where it is going.</p><div class="row"><button type="button" id="mn-csv">Download CSV</button></div></div>';
+    +'<p class="note">When a unit is received, it is bound to its site. Each unit\'s passport shows where it is going.</p><div class="row"><button type="button" id="mn-csv">Download CSV</button></div>'
+    /* next step: the order's freight plan groups these sites into lanes and makes the sheet a logistics partner prices from */
+    +'<p class="note" id="mn-freight">Next: price the freight for this order — <a href="'+esc('/logic-logistics.html'+q+'&order='+encodeURIComponent(d.orderId||'')+'#freight')+'">Freight plan</a></p></div>';
   $('mn-csv').onclick=mnCsv;}
 /* the result as a sheet, made here from what the endpoint answered: a
    cell that starts like a formula is quoted (as api/_lib/receivables.js

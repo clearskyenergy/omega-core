@@ -225,6 +225,64 @@ var HEAD = 'sku,name,kw,kwh,widthFt,depthFt,dimUnits,integratesPcs,integratesXfm
   ok('  and the products file alone still reports two orderable', /2  orderable/.test(out));
 })();
 
+/* ── 8 · Shipping fields (what the freight plan estimates a load from) ───
+   Weight in kg converts to lb, a height in the datasheet's mm converts with
+   the footprint's own dimUnits, a class that is not NMFC is refused, and a
+   blank stays blank — reported, never guessed. */
+(function shippingFields() {
+  function runOut(csv) {
+    var f = path.join(TMP, 'p' + Math.random().toString(36).slice(2) + '.csv'), o = path.join(TMP, 'o' + Math.random().toString(36).slice(2) + '.json');
+    fs.writeFileSync(f, csv);
+    var r = cp.spawnSync(process.execPath, [SCRIPT, '--org', 'test.com', '--file', f, '--out', o], { encoding: 'utf8' });
+    return { out: (r.stdout || '') + (r.stderr || ''), code: r.status, json: fs.existsSync(o) ? JSON.parse(fs.readFileSync(o, 'utf8')) : [] };
+  }
+  var SH = 'sku,name,kind,kw,kwh,widthFt,depthFt,heightFt,dimUnits,integratesPcs,integratesXfmr,integratesDisco,weightLb,weightUnits,freightClass,stackable,handlingNote\n';
+  var r = runOut(SH + 'CAB,Cabinet,product,100,215,2200,1250,2290,mm,yes,no,yes,2500,kg,77.50,no,Forklift from the long side\n');
+  var p = r.json[0] || {};
+  ok('kilograms convert to pounds', p.weightLb === 5511.55, p.weightLb);
+  ok('a height in mm converts with the footprint\'s dimUnits', p.heightFt === 7.51 && p.widthFt === 7.22, [p.heightFt, p.widthFt]);
+  ok('the freight class is normalised (77.50 → 77.5)', p.freightClass === '77.5', p.freightClass);
+  ok('stackable "no" is stored as false', p.stackable === false, p.stackable);
+  ok('the handling note is kept', p.handlingNote === 'Forklift from the long side', p.handlingNote);
+  ok('the readiness report counts the weight', /1  with a shipping weight/.test(r.out) && r.code === 0, r.out.slice(0, 600));
+
+  r = runOut(SH + 'CAB,Cabinet,product,100,215,8,4,7.5,ft,yes,no,yes,5500,lb,80,no,\n');
+  ok('a class that is not an NMFC class is a PROBLEM and the row is not imported', /NMFC class/.test(r.out) && /PROBLEMS/.test(r.out) && !/1  orderable/.test(r.out), r.out.slice(0, 600));
+
+  r = runOut(SH + 'CAB,Cabinet,product,100,215,8,4,7.5,ft,yes,no,yes,,,,,\n');
+  p = r.json[0] || {};
+  ok('a blank stackable is absent, not false', !('stackable' in p) && !('weightLb' in p) && !('freightClass' in p), p);
+  ok('  and it is reported', /stackable is blank/.test(r.out), r.out.slice(0, 600));
+  ok('  and the missing weight is counted', /0  with a shipping weight   ← 1 missing/.test(r.out), r.out.slice(0, 600));
+
+  /* stackable goes to the one validator as typed: anything but yes/no is a
+     PROBLEM, never quietly "no" (that would print "Do not stack" on the
+     carrier's sheet) and never quietly "yes" */
+  ['TBD', 'N/A', 'maybe', '2 high max', 'Yse', 'x'].forEach(function (v) {
+    var b = runOut(SH + 'CAB,Cabinet,product,100,215,8,4,7.5,ft,yes,no,yes,5500,lb,85,' + v + ',\n');
+    ok('stackable "' + v + '" is a PROBLEM and the row is not imported', /Stackable must be yes or no \(got /.test(b.out) && /PROBLEMS/.test(b.out) && !b.json.length && !/1  orderable/.test(b.out), [b.out.slice(0, 400), b.json]);
+  });
+  [['Y', true], ['yes', true], ['TRUE', true], ['1', true], ['N', false], ['0', false], ['False', false]].forEach(function (c) {
+    var b = runOut(SH + 'CAB,Cabinet,product,100,215,8,4,7.5,ft,yes,no,yes,5500,lb,85,' + c[0] + ',\n'), q = b.json[0] || {};
+    ok('stackable "' + c[0] + '" is stored as ' + c[1], q.stackable === c[1] && !/PROBLEMS/.test(b.out), [q.stackable, b.out.slice(0, 300)]);
+  });
+
+  r = runOut(SH + 'CAB,Cabinet,product,100,215,8,4,7.5,ft,yes,no,yes,5500,stone,,,\n');
+  ok('an unknown weight unit is a problem', /weightUnits "stone" is not lb or kg/.test(r.out));
+
+  r = runOut(SH + 'CAB,Cabinet,product,100,215,8,4,2290,ft,yes,no,yes,5500,lb,,,\n');
+  ok('mm pasted into a feet height is refused, not stored', /height works out at 2290 ft/.test(r.out) && !/1  orderable/.test(r.out), r.out.slice(0, 600));
+
+  r = runOut('sku,name,kind,kw,kwh,unit,weightLb,freightClass\nMOD,Module,component,,5.2,ea,40,85\nINSTALL,Commissioning,service,,,,12,\n');
+  ok('a component carrying a weight gets a warning and no weight', /ignored on a component row/.test(r.out) && !('weightLb' in (r.json[0] || {})), r.out.slice(0, 600));
+  ok('  so does a service', /ignored on a service row/.test(r.out) && !('weightLb' in (r.json[1] || {})));
+
+  var t = runOut(fs.readFileSync(path.join(ROOT, 'docs', 'product-list-template.csv'), 'utf8'));
+  var c215 = t.json.filter(function (x) { return x.sku === 'CC-215'; })[0] || {}, c2000 = t.json.filter(function (x) { return x.sku === 'CC-2000'; })[0] || {};
+  ok('the template carries the shipping columns and imports them', c215.weightLb === 5500 && c215.freightClass === '85' && c2000.heightFt === 9.5 && c2000.weightLb === 36001.44 && c2000.stackable === false, [c215, c2000].map(function (x) { return [x.weightLb, x.heightFt, x.freightClass, x.stackable]; }));
+  ok('  and reports both products weighed', /2  with a shipping weight/.test(t.out) && !/stackable is blank/.test(t.out));
+})();
+
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) {}
 console.log('\nproduct import: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

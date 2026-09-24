@@ -454,6 +454,29 @@ is not built.
   the four list actions on `api/my-sites.js` and `api/logic-custody.js` —
   the server recomputes the plan, the preview is the confirmation.
   Design and what is not built: `docs/LOGISTICS-CUSTODY.md`.
+- **An order's freight plan is DERIVED, and Accept plans through the
+  ledger's own planner.** `api/_lib/freight.js` (pure, ES5, bundled) reads
+  the units' sites (`custody.siteId`, else `plannedSiteId`), groups them into
+  lanes by ONE fixed state→region map (lane keys are words, never a state
+  code: they are in the load ids a carrier reads), orders stops nearest-first
+  from the ship-from (`fulfillment/config.freight.origin`, straight-line
+  miles) and
+  builds the master list and the carrier's quote request — the ONLY place
+  their columns live; the carrier's sheet carries no customer, PO or price.
+  Quotes are `omega_orgs/{org}/freight_quotes/` (closed in the rules, never
+  on the order a member may read), append-only: amounts never change, only
+  status; a lane's key covers each site's ADDRESS, so a corrected address
+  makes a price stale and Accept refuses it. "Ready" is the pickup gate's
+  (`logic-policy.ready`, components included), and a blank load id is
+  `F.nextLoadId` — the one rule the Accept step previews. `freight-accept`
+  calls `L.planLeg` (`api/_lib/order-lifecycle.js`)
+  once per stop in one transaction — the SAME function the `plan` action
+  calls — so a lane is one leg per stop; a leg carries the quote id, never
+  the amount. Catalog shipping fields (`weightLb`, `heightFt`,
+  `freightClass`, `stackable`, `handlingNote`) have ONE validator,
+  `api/_lib/shipping-fields.js`; a missing one reads "not on file", never a
+  guess, and none is ever public. Office admins only (the ledger's gate).
+  Design and what is not built: `docs/LOGISTICS-CUSTODY.md` (*Freight plan*).
 - **A customer is an ACCOUNT with people on it**, not an email. Each
   workspace's customers are `omega_orgs/{org}/customers/{id}` with
   `users/{email}` and the `customer_index` pointer; `api/_lib/buyer-accounts.js`
