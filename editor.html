@@ -146,6 +146,7 @@ function openFinancingApply(){
      needs the grid fetched rather than read. Same client the site finder uses. -->
 <script src="/omega-grid-atlas-client.js"></script>
 <script src="/omega-compute-lease.js"></script>
+<script src="/omega-bess-result.js"></script>
 <script src="/omega-parcel-report.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
@@ -16294,12 +16295,31 @@ function parseUtilityBill(text){
 
 /* Battery derates. Nameplate kWh is not usable kWh: usable capacity is
    limited by depth of discharge, and energy delivered to the meter is
-   further reduced by round-trip efficiency. Sizing straight off the raw
-   energy above the shave line - which is what this did before - undersizes
-   the battery by roughly 16%. */
-var BESS_DOD = 0.95;
+   further reduced by the DISCHARGE half of the round trip.
+
+   That last word matters and this used to get it wrong. Round-trip
+   efficiency is the product of BOTH legs - what goes in to charge and what
+   comes out to discharge - so the discharge leg alone is its square root.
+   Applying the whole round trip to the discharge charged the losses twice
+   and over-sized the pack by about 6.6%.
+
+   Depth of discharge drops from 0.95 to 0.90 to match the shared engine's
+   default and most containerised LFP warranties; 0.95 was carried over
+   from the retired bess-engine, which could never read a caller's value at
+   all. The two corrections pull in opposite directions and very nearly
+   cancel - the derate moves from 0.836 to 0.844, about 1% - so this is a
+   consistency fix rather than a repricing. It matters because these
+   constants feed the browser-side shave estimates in the bill importer,
+   and those write into the project alongside results from the shared
+   engine. Two derates in one project is how a drawing and its own sizing
+   come to disagree.
+
+   THE AUTHORITY IS api/_lib/bess-capacity.js. These constants exist for
+   the quick client-side estimates only; anything that reaches a customer
+   should come from /api/bess-size, which uses that module. */
+var BESS_DOD = 0.90;
 var BESS_RTE = 0.88;
-var BESS_DERATE = BESS_DOD * BESS_RTE;
+var BESS_DERATE = BESS_DOD * Math.sqrt(BESS_RTE);
 
 /* Estimate a BESS demand-shaving target from parsed bill fields.
    A single monthly bill carries no load SHAPE, so this returns a
@@ -116703,16 +116723,30 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
  * ====================================================================== */
 (function () {
 'use strict';
+  /* These are the inputs to the ONE sizing engine, shared with the
+     standalone Battery Sizer. The financial fields used to be absent
+     here, which meant this screen reported payback on GROSS cost with no
+     incentive, no O&M and no discounting, while the other screen reported
+     it net of all four. Same site, two answers. They are on the form now
+     because a hidden assumption that moves payback by three years is not
+     a default, it is a finding waiting to happen. */
   function defaultTariff() {
     return {
       demandChargePerKw: 18,      /* $/kW-month                            */
-      energyRate: 0.11,           /* $/kWh flat, used only for arbitrage   */
+      energyRate: 0.11,           /* $/kWh, prices round-trip losses        */
       touSpread: 0,               /* $/kWh on-peak minus off-peak          */
       ratchetPct: 0,              /* 0 = no ratchet; 0.8 = 80% of 11-mo max */
-      capexPerKwh: 400,           /* installed $/kWh                        */
+      capexPerKwh: 400,           /* installed $/kWh of NAMEPLATE           */
       capexPerKw: 250,            /* installed $/kW of power                */
       maxC: 0.5,                  /* power / energy limit, 0.5C = 2 h min   */
-      targetPaybackYr: 7
+      targetPaybackYr: 7,
+      dodPct: 90,                 /* usable depth of discharge              */
+      rtePct: 88,                 /* round-trip; its SQUARE ROOT is the     */
+                                  /* discharge leg that sets nameplate      */
+      itcPct: 30,                 /* investment tax credit                  */
+      omPerKwYr: 10,              /* O&M, $/kW-yr                           */
+      termYr: 10,                 /* analysis term                          */
+      discountPct: 8              /* discount rate for NPV                  */
     };
   }
 
@@ -116812,8 +116846,40 @@ function request(mode, data, opts) {
 function send(user, mode, data, opts) {
  return user.getIdToken().then(function(token){return fetch('/api/bess-size',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({mode:mode,data:data,opts:opts})});}).then(function(r){return r.json().then(function(j){if(!r.ok) throw new Error(j.error||'Sizing service unavailable');return j;});});
 }
+/* The engineering design is a second engine behind a second endpoint. Same
+   reason as the first: the standard-size tables, the derating method and the
+   degradation schedule are the product, and this file is public. */
+function designRequest(payload) {
+ var user=window.firebase && firebase.auth().currentUser;
+ if(!user) return Promise.reject(new Error('Sign in to run the engineering design.'));
+ return user.getIdToken().then(function(token){return fetch('/api/bess-design',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(payload)});}).then(function(r){return r.json().then(function(j){if(!r.ok) throw new Error(j.error||'Design service unavailable');return j;});});
+}
+
+/* Turn a sizing answer into the design engine's inputs. The sizer speaks kW
+   and kWh at the meter; the design engine speaks MW of duty and hours of
+   duration, which is the same system stated the way an engineer states it.
+   Container and converter block sizes are chosen so the schedule does not
+   come back asking for three hundred skids or a third of a container. */
+function designDefaults(res) {
+  var s = summarize(res) || { kw: 0, kwh: 0, durationH: 4 };
+  var mw = (s.kw || 0) / 1000, mwh = (s.kwh || 0) / 1000;
+  return {
+    loadMw: +mw.toFixed(4),
+    durationH: s.durationH || 4,
+    unitMwh: mwh <= 0.6 ? 0.1 : (mwh <= 3 ? 0.5 : (mwh <= 12 ? 5 : 20)),
+    pcsUnitMw: mw <= 0.3 ? 0.06 : (mw <= 1.5 ? 0.135 : (mw <= 6 ? 0.5 : 2.5)),
+    dodPct: 92, rtePct: 88, cRate: 0.5, powerFactor: 0.9,
+    pcsOutputKv: 0.48, systemKv: 13.8,
+    chargeGridMw: +(mw * 0.5).toFixed(4), chargeWindowH: 16,
+    capex: Math.round(s.capex || 0),
+    demandRatePerKw: 18.5, analysisYears: 20
+  };
+}
+
 window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],defaultTariff:defaultTariff,parseInterval:parseInterval,splitRow:splitRow,detectInterval:detectInterval,roundProduct:roundProduct,summarize:summarize,
- sizeFromInterval:function(v,o){return request('interval',v,o);},sizeFromMonthly:function(v,o){return request('monthly',v,o);}};
+ designDefaults:designDefaults,
+ sizeFromInterval:function(v,o){return request('interval',v,o);},sizeFromMonthly:function(v,o){return request('monthly',v,o);},
+ design:function(p){return designRequest(p);}};
 })();
 /* ====================================================================== *
  *  OMEGA BESS SIZER  —  UI layer                                         *
@@ -116834,7 +116900,11 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     intervalText: '',
     tariff: E.defaultTariff(),
     result: null,
-    peakHours: null
+    peakHours: null,
+    design: null,              /* last /api/bess-design answer      */
+    designIn: null,            /* the inputs it was computed from   */
+    designBusy: false,
+    designErr: null
   };
 
   function blankRows() {
@@ -116890,13 +116960,15 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
   }
 
   var TABS = [['input', 'Utility Data'], ['analysis', 'Analysis'],
-              ['size', 'Recommended Size'], ['handoff', 'Hand Off']];
+              ['size', 'Recommended Size'], ['engineering', 'Engineering'],
+              ['handoff', 'Hand Off']];
 
   function render() {
     var h = host();
     var body = S.tab === 'input' ? viewInput()
              : S.tab === 'analysis' ? viewAnalysis()
-             : S.tab === 'size' ? viewSize() : viewHandoff();
+             : S.tab === 'size' ? viewSize()
+             : S.tab === 'engineering' ? viewEngineering() : viewHandoff();
     var tabs = TABS.map(function (t) {
       return '<div class="e3-tab' + (S.tab === t[0] ? ' on' : '') +
              '" data-sz-tab="' + t[0] + '">' + t[1] + '</div>';
@@ -116969,12 +117041,25 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         fld('Max C-rate', 'maxC', 0.05) +
         fld('Target payback yr', 'targetPaybackYr', 0.5) +
       '</div>' +
+      '<div class="d4-grp" style="margin-top:12px">Battery and finance</div>' +
+      '<div class="e3-facets">' +
+        fld('Usable DoD %', 'dodPct', 1) +
+        fld('Round-trip %', 'rtePct', 1) +
+        fld('ITC %', 'itcPct', 1) +
+        fld('O&M $/kW-yr', 'omPerKwYr', 1) +
+        fld('Term yr', 'termYr', 1) +
+        fld('Discount %', 'discountPct', 0.5) +
+      '</div>' +
       '<div class="e3-facets" style="margin-top:10px">' +
         '<div style="flex:1"></div>' +
         '<button class="e3-btn pri" data-sz-act="run">Size the battery</button>' +
       '</div>' +
       '<div class="e3-note warn" style="margin-top:8px">A ratchet clause means one un-shaved peak ' +
-      'sets the billed floor for a year. Leave it at 0 only if the tariff genuinely has none.</div>';
+      'sets the billed floor for a year. Leave it at 0 only if the tariff genuinely has none.</div>' +
+      '<div class="e3-note info" style="margin-top:6px">Installed $/kWh is priced against ' +
+      '<b>nameplate</b>, not usable energy. Nameplate is the usable figure divided by depth of ' +
+      'discharge and again by the square root of round-trip efficiency — the discharge half of ' +
+      'the trip — so at 90% and 88% a 1,000 kWh duty is a 1,185 kWh pack.</div>';
   }
 
   function fld(label, key, step) {
@@ -117089,6 +117174,224 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
       'degradation, escalation or O&amp;M. Run the proforma for an investment case.</div>';
   }
 
+  /* ---- Engineering ------------------------------------------------- *
+   *  Sizing stops at kW and kWh. Nobody can order that. This step turns
+   *  it into containers, converters, a transformer, a breaker, a cable
+   *  and a fault duty, and says whether the result is buildable.
+   * ------------------------------------------------------------------ */
+  var DESIGN_FIELDS = [
+    ['loadMw',         'Load to support',   'MW',      0.01],
+    ['durationH',      'Duration',          'h',       0.5],
+    ['unitMwh',        'Container size',    'MWh',     0.1],
+    ['pcsUnitMw',      'Converter block',   'MW',      0.005],
+    ['dodPct',         'Usable DoD',        '%',       1],
+    ['rtePct',         'Round-trip',        '%',       1],
+    ['cRate',          'Max C-rate',        'C',       0.05],
+    ['powerFactor',    'Power factor',      '',        0.01],
+    ['pcsOutputKv',    'Converter bus',     'kV',      0.01],
+    ['systemKv',       'System voltage',    'kV',      0.1],
+    ['chargeGridMw',   'Grid charge power', 'MW',      0.05],
+    ['chargeWindowH',  'Charge window',     'h',       1],
+    ['capex',          'Installed cost',    '$',       1000],
+    ['demandRatePerKw','Demand charge',     '$/kW-mo', 0.5],
+    ['analysisYears',  'Analysis term',     'yr',      1]
+  ];
+
+  function designInputs() {
+    if (!S.designIn) S.designIn = E.designDefaults(S.result);
+    return S.designIn;
+  }
+
+  function dFld(key, label, unit, step) {
+    var v = designInputs()[key];
+    /* Same markup as fld() above, so the two forms line up. */
+    return '<div><label class="pm-l">' + esc(label) +
+      (unit ? ' <span style="opacity:.65">' + esc(unit) + '</span>' : '') + '</label> ' +
+      '<input type="number" step="' + step + '" data-dsn="' + key + '" value="' +
+      esc(v == null ? '' : v) + '" style="width:96px"></div>';
+  }
+
+  function statusChip(st) {
+    var c = st === 'FAIL' ? '#EF4444'
+          : (st === 'REVIEW' ? '#F59E0B' : (st === 'N/A' ? '#64748B' : '#22C55E'));
+    return '<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.5px;' +
+           'padding:2px 6px;border-radius:3px;background:' + c + '22;color:' + c + '">' +
+           esc(st) + '</span>';
+  }
+
+  function viewEngineering() {
+    if (!S.result || !S.result.ok) return notYet();
+
+    var form = '<div class="d4-grp">Design inputs</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:8px">' +
+      DESIGN_FIELDS.map(function (f) { return dFld(f[0], f[1], f[2], f[3]); }).join('') +
+      '</div>' +
+      '<div style="margin-top:12px;display:flex;gap:8px;align-items:center">' +
+        '<button class="e3-btn pri" data-sz-act="design"' + (S.designBusy ? ' disabled' : '') + '>' +
+          (S.designBusy ? 'Running…' : 'Run engineering design') + '</button>' +
+        '<button class="e3-btn" data-sz-act="designReset">Reset to sizing</button>' +
+      '</div>';
+
+    if (S.designErr) {
+      form += '<div class="e3-note warn" style="margin-top:12px">' + esc(S.designErr) + '</div>';
+    }
+    if (!S.design) {
+      return form + '<div class="e3-note info" style="margin-top:12px">' +
+        'The sizing sweep says how many kW and kWh the bills justify. It cannot say how many ' +
+        'containers that is, what transformer it needs, what the fault current at the converter ' +
+        'bus will be, or whether the battery can be recharged before the peak period comes round ' +
+        'again. Run the design and it answers all four, with the checks that decide whether the ' +
+        'result is buildable.</div>';
+    }
+
+    var d = S.design, c = d.capacity, p = d.pcs, t = d.transformer, el = d.electrical;
+    var L = d.economics.lifecycle;
+    var h = form;
+
+    h += '<div class="e3-note ' + (d.checks.overall === 'OK' ? 'info' : 'warn') +
+         '" style="margin-top:14px">' + statusChip(d.checks.overall) +
+         ' <b style="margin-left:6px">' + esc(d.checks.summary) + '</b></div>';
+
+    h += '<div class="e5-grid" style="grid-template-columns:repeat(4,1fr);margin-top:10px">' +
+      '<div class="e5-stat"><label>Containers</label><b>' + c.units + '<span>× ' +
+        n0(c.unitMwh * 1000) + ' kWh</span></b></div>' +
+      '<div class="e5-stat"><label>Installed</label><b>' + c.installedMwh + '<span>MWh</span></b></div>' +
+      '<div class="e5-stat"><label>Converters</label><b>' + p.units + '<span>× ' +
+        n0(p.unitMw * 1000) + ' kW</span></b></div>' +
+      '<div class="e5-stat"><label>Transformer</label><b>' +
+        (t.needed ? t.ratingMva + '<span>MVA × ' + t.units + '</span>'
+                  : 'None<span>not required</span>') + '</b></div>' +
+      '</div>';
+
+    /* Why the pack is bigger than the customer's own arithmetic. */
+    h += '<div class="d4-grp" style="margin-top:12px">How the capacity got there</div>';
+    h += '<div style="font-family:var(--font-mono,monospace);font-size:10.5px;color:var(--sub);' +
+         'line-height:1.9;margin-top:6px">' +
+      c.loadMw + ' MW × ' + c.durationH + ' h = ' + c.initialMwh + ' MWh' +
+      ' → ÷' + c.dodPct + '% DoD = ' + c.afterDodMwh +
+      ' → ÷√' + c.rtePct + '% = ' + c.afterRteMwh +
+      ' → C-rate floor ' + c.cRateFloorMwh +
+      ' → <b>required ' + c.requiredMwh + ' MWh</b></div>';
+    h += '<div class="e3-note ' + (c.cRateBound ? 'warn' : 'info') + '">' +
+      (c.cRateBound
+        ? '<b>Power-limited.</b> A ' + c.cRate + 'C battery cannot deliver ' + c.loadMw +
+          ' MW out of less than ' + c.cRateFloorMwh + ' MWh, so the C-rate sets the size, not the ' +
+          'energy the duty needs. The extra capacity is bought for power and sits unused every cycle.'
+        : '<b>Energy-limited.</b> The duty needs ' + c.afterOtherMwh + ' MWh in the pack, above the ' +
+          c.cRateFloorMwh + ' MWh the ' + c.cRate + 'C limit would force.') +
+      ' Quantised to ' + c.units + ' unit' + (c.units > 1 ? 's' : '') + ', leaving ' +
+      c.spareMwh + ' MWh spare.</div>';
+
+    /* Electrical schedule. */
+    h += '<div class="d4-grp" style="margin-top:12px">Electrical schedule</div>';
+    h += '<div class="e3-tblwrap"><table class="e3-tbl"><tbody>' +
+      '<tr><td>Design current</td><td class="e3-num">' + n0(el.primaryBreaker.designA) + ' A</td>' +
+        '<td>' + n0(el.primaryCurrentA) + ' A continuous × ' + el.necBuffer +
+        ' (NEC 125% continuous-duty rule)</td></tr>' +
+      '<tr><td>Primary breaker</td><td class="e3-num">' + esc(el.primaryBreaker.spec) + '</td>' +
+        '<td>at ' + t.primaryKv + ' kV</td></tr>' +
+      (el.primaryCable.valid
+        ? '<tr><td>AC cable</td><td class="e3-num">' + esc(el.primaryCable.spec) + '</td><td>' +
+          'table ampacity ' + n0(el.primaryCable.requiredAmpacity) + ' A after derating ' +
+          el.primaryCable.totalDerating + ', drop ' + el.primaryCable.dropPct + '%</td></tr>'
+        : '<tr><td>AC cable</td><td class="e3-num">invalid</td><td>' +
+          esc(el.primaryCable.note) + '</td></tr>') +
+      '<tr><td>Busduct alternative</td><td class="e3-num">' + n0(el.busduct.ratingA) + ' A</td>' +
+        '<td>drop ' + el.busduct.dropPct + '%' +
+        (el.busduct.requiredIcwKa != null
+          ? ', needs Icw ≥ ' + el.busduct.requiredIcwKa + ' kA for ' +
+            el.busduct.faultDurationS + ' s' : '') + '</td></tr>' +
+      (t.needed
+        ? '<tr><td>Transformer</td><td class="e3-num">' + t.ratingMva + ' MVA × ' + t.units +
+          '</td><td>' + t.primaryKv + '/' + t.secondaryKv + ' kV ' + esc(t.category) + ', ' +
+          esc(t.vectorGroup) + ', %Z=' + t.impedancePct + ', duty ' + n0(t.requiredKva) +
+          ' kVA</td></tr>' : '') +
+      (el.fault.applicable
+        ? '<tr><td>Fault at ' + esc(el.fault.busLabel) + '</td><td class="e3-num">' +
+          el.fault.iscKa + ' kA</td><td>grid ' + el.fault.gridSideKa + ' kA + converters ' +
+          el.fault.inverterKa + ' kA, peak make ' + el.fault.peakKa + ' kA</td></tr>' +
+          (el.switchgear
+            ? '<tr><td>Switchgear Icu</td><td class="e3-num">' + el.switchgear.icuKa + ' kA</td>' +
+              '<td>' + el.switchgear.faultKa + ' kA × ' + el.switchgear.margin +
+              ' margin, on the ' + esc(el.switchgear.bus) + '</td></tr>' : '')
+        : '') +
+      '<tr><td>Metering CT</td><td class="e3-num">' + esc(el.ct.ratio) + '</td><td>burden ' +
+        el.ct.totalBurdenVa + ' VA → ' + el.ct.burdenRatingVa + ' VA, class ' +
+        esc(el.ct.accuracyClass) + '</td></tr>' +
+      '<tr><td>Charging</td><td class="e3-num">' +
+        (p.solarOnly ? 'solar only' : p.fullChargeH + ' h') + '</td><td>' +
+        (p.solarOnly ? 'no grid or generator charging power set'
+                     : 'limited by ' + esc(p.chargeLimitedBy) + ', against a ' +
+                       p.chargeWindowH + ' h window') + '</td></tr>' +
+      '</tbody></table></div>';
+
+    /* Checks. */
+    h += '<div class="d4-grp" style="margin-top:12px">Design checks</div>';
+    h += '<div class="e3-tblwrap"><table class="e3-tbl"><tbody>' +
+      d.checks.checks.map(function (ck) {
+        return '<tr><td>' + esc(ck.name) + '</td><td>' + statusChip(ck.status) + '</td>' +
+               '<td style="font-size:10px">' + esc(ck.detail) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+
+    /* Bill of quantities. */
+    h += '<div class="d4-grp" style="margin-top:12px">Bill of quantities</div>';
+    h += '<div class="e3-tblwrap"><table class="e3-tbl"><thead><tr><th>Equipment</th>' +
+      '<th>Qty</th><th>Specification</th></tr></thead><tbody>' +
+      d.boq.map(function (b) {
+        return '<tr><td>' + esc(b.item) + '</td><td class="e3-num">' + b.qty + '</td>' +
+               '<td style="font-size:10px">' + esc(b.remark) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+
+    /* Lifecycle. */
+    h += '<div class="d4-grp" style="margin-top:12px">' + L.years + '-year lifecycle</div>';
+    h += '<div class="e5-grid" style="grid-template-columns:repeat(4,1fr);margin-top:8px">' +
+      '<div class="e5-stat"><label>Payback</label><b>' +
+        (L.paybackYears != null ? L.paybackYears + '<span>yr</span>'
+                                : '&gt;' + L.years + '<span>yr</span>') + '</b></div>' +
+      '<div class="e5-stat"><label>Discounted</label><b>' +
+        (L.discountedPaybackYears != null ? L.discountedPaybackYears + '<span>yr</span>'
+                                          : '&gt;' + L.years + '<span>yr</span>') + '</b></div>' +
+      '<div class="e5-stat"><label>NPV</label><b>' + money(L.npv) + '</b></div>' +
+      '<div class="e5-stat"><label>IRR</label><b>' +
+        (L.irr != null ? (L.irr * 100).toFixed(1) + '<span>%</span>' : '—') + '</b></div>' +
+      '</div>';
+    if (L.replacements) {
+      h += '<div class="e3-note warn">The pack drops below the minimum state of health in year ' +
+        L.firstReplacementYear + '. ' + L.replacements + ' replacement' +
+        (L.replacements > 1 ? 's are' : ' is') + ' booked inside the ' + L.years +
+        '-year term, and the payback above already carries the cost.</div>';
+    }
+    h += '<div class="e3-tblwrap"><table class="e3-tbl"><thead><tr><th>Yr</th><th>SOH</th>' +
+      '<th>kW cut</th><th>Net</th><th>Cumulative</th></tr></thead><tbody>' +
+      L.rows.map(function (r) {
+        return '<tr' + (r.replacementCapex < 0 ? ' style="background:rgba(239,68,68,.10)"' : '') +
+          '><td>' + r.year + '</td><td class="e3-num">' + r.sohPct + '%</td>' +
+          '<td class="e3-num">' + n0(r.mdReductionKw) + '</td>' +
+          '<td class="e3-num">' + money(r.net) + '</td>' +
+          '<td class="e3-num">' + money(r.cumulative) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+
+    h += '<div class="e3-note info">Standard sizes are IEC 60076 for transformers plus common ' +
+      'breaker, busduct and CT ranges; cable ampacities assume direct burial and must be rechecked ' +
+      'against the installation method actually used. Impedance, X/R, busduct impedance and CT ' +
+      'winding resistance are placeholders until the equipment is selected, and every one of them ' +
+      'moves the fault duty. This is a design basis for a quotation, not a stamped drawing.</div>';
+    return h;
+  }
+
+  async function runDesign() {
+    if (!S.result || !S.result.ok) return;
+    S.designBusy = true; S.designErr = null; render();
+    try {
+      S.design = await E.design(designInputs());
+    } catch (e) {
+      S.design = null;
+      S.designErr = (e && e.message) || 'Design run failed.';
+    }
+    S.designBusy = false;
+    render();
+  }
+
   /* ---- Hand off ----------------------------------------------------- */
   function viewHandoff() {
     var r = S.result;
@@ -117137,6 +117440,16 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         S.tariff[el.getAttribute('data-tar')] = +el.value || 0;
       });
     });
+    h.querySelectorAll('[data-dsn]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        var k = el.getAttribute('data-dsn');
+        /* An emptied field means "fall back to the engine default", not zero:
+           a zero power factor or a zero container size is a divide by nothing. */
+        designInputs()[k] = el.value === '' ? null : +el.value;
+        /* The schedule on screen was computed from the value just replaced. */
+        if (S.design) { S.design = null; render(); }
+      });
+    });
     var ta = h.querySelector('[data-sz="intervalText"]');
     if (ta) ta.addEventListener('change', function () { S.intervalText = ta.value; render(); });
   }
@@ -117167,6 +117480,10 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         S.result = await E.sizeFromMonthly(rows, { tariff: S.tariff, peakHours: S.peakHours });
       }
       if (!S.result.ok) { alert(S.result.error || 'Could not size from this data.'); return; }
+      /* A new size makes the old schedule wrong, not merely stale. Drop it
+         and re-seed the design inputs from the answer just computed. */
+      S.design = null; S.designErr = null;
+      S.designIn = E.designDefaults(S.result);
       S.tab = 'size';
       render();
     } catch (e) {
@@ -117205,6 +117522,20 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         annualDemandSave: s.savingsYr, monthlyDemandSave: Math.round(s.savingsYr / 12),
         basis: s.basis, confidence: s.confidence, fromSizer: true, at: Date.now()
       };
+      /* billBessHint is this editor's own shorthand and other parts of the
+         drawing read it. The RECORD is what leaves the editor: the
+         financing application and the deal room read it, so it carries the
+         basis and the assumptions rather than four loose numbers. Both are
+         written because they answer different questions. */
+      if (window.OmegaBessResult) {
+        var rec = window.OmegaBessResult.fromApi(S.result, {
+          source: 'editor-sizer',
+          by: (window.firebase && firebase.auth().currentUser &&
+               firebase.auth().currentUser.email) || null,
+          projectId: (window.S && (window.S.projectId || window.S.id)) || null
+        });
+        if (rec) window.S[window.OmegaBessResult.FIELD] = rec;
+      }
       if (typeof window.pushHist === 'function') window.pushHist();
       if (typeof window.showBanner === 'function') {
         window.showBanner('cal', '  Sized ' + n0(s.kw) + ' kW / ' + n0(s.kwh) +
@@ -117241,6 +117572,12 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     if (a === 'toConfig') return toConfig();
     if (a === 'save') { saveToProject(); return render(); }
     if (a === 'csv') return csv();
+    if (a === 'design') return runDesign();
+    if (a === 'designReset') {
+      S.designIn = E.designDefaults(S.result);
+      S.design = null; S.designErr = null;
+      return render();
+    }
   }
 
   function open() {

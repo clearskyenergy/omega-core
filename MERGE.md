@@ -1598,3 +1598,495 @@ Connections, Agent activity, with the window onto the core last instead of
 first. Task rows wrap: title, reason, then DO / done / edit / dismiss as a
 full-width row of 40px buttons; chips and panel buttons are 36–40px; rows
 read at 15px; the brain shows the graph first. Header is sticky. Desktop unchanged.
+
+---
+
+---
+
+## Battery Sizer — engineering design engine (2026-09-20)
+
+Three ClearSky electrical-engineering workbooks were ported into omega-core:
+*Electrical Engineering Design Calculator R3.0i*, *BESS Sizing Calculator
+R2.3+* and *Payback Period Table Rev.0*.
+
+### Why it exists
+
+The Battery Sizer answered one question well — **how many kW and kWh does the
+utility bill justify** — and then stopped. Nobody can order kW and kWh. The
+questions that follow it are the ones the workbooks answer: how many
+containers is that, how many converters, what transformer, what breaker, what
+cable after derating, what is the fault current at the bus the gear is bolted
+to, can the pack actually be recharged before the peak period comes round
+again, and does it reach end of cycle life before the end of the analysis.
+
+### Logic moved to `/api/` (per the IP-protection rule)
+
+**None of this shipped to the browser.** Both new files are server-side from
+the start:
+
+| file | what it holds |
+|---|---|
+| `api/_lib/bess-design-engine.js` | the whole engine: capacity chain, converter count, charge-window feasibility, transformer selection, breaker/cable/busduct sizing with derating and voltage drop, IEC 60909 fault level, switchgear Icu, metering and protection CT sizing, solar string limits, the 20-year degradation/replacement lifecycle, scenario sensitivity, design checks, bill of quantities |
+| `api/bess-design.js` | auth + the same tier gate as `api/bess-size.js` (`standard`+ tier, the `engineering` addon, or a `batterysizer` override), plus per-field range validation and two cross-field rules |
+
+The standard-size tables (IEC 60076 kVA, breaker frames, busduct ampacity, CT
+ratios, Icu steps, cable ampacity and mV/A/m) live in the engine, not in the
+page. They are the product.
+
+### Verification
+
+The engine reproduces the R3.0i workbook cell for cell on its own example:
+
+| figure | workbook | engine |
+|---|---|---|
+| capacity after DoD / after RTE | 4.4445 / 4.6088 MWh | 4.4445 / 4.6088 MWh |
+| converter count | 8 × 135 kW | 8 × 135 kW |
+| transformer duty → rating | 1,589 kVA → 1.6 MVA | 1,589 kVA → 1.6 MVA |
+| primary current / breaker | 1,834 A → 2,500 A | 1,834 A → 2,500 A |
+| AC cable after derating | 300 mm², 9 runs | 300 mm², 9 runs |
+| full charge time | 9.4 h | 9.4 h |
+| payback / discounted payback | 3.91 / 4.86 yr | 3.91 / 4.86 yr |
+| NPV / IRR | 1,422,244 / 26.11% | 1,422,244 / 26.11% |
+
+### Two places the port deliberately departs from the workbook
+
+1. **The fault level is taken at the bus the gear sits on.** The workbook
+   computes one fault figure and warns, in prose, when the busduct and
+   switchgear sheets are pointed at a different voltage. For a step-up BESS
+   that is not a footnote: the same transformer impedance referred to 0.4 kV
+   and to 33 kV differs by the square of the turns ratio, so a figure taken at
+   the wrong bus is two orders of magnitude out and still looks plausible. The
+   engine computes the fault at the converter bus and at the system bus and
+   reports both; the breaker, cable, busduct and CTs are checked against the
+   one they are bolted to.
+
+2. **Converter fault contribution is included.** A battery converter is a
+   fault source, firmware-limited to a fixed multiple of rated current
+   (default 1.2×). On the low-voltage bus it is not small, and LV switchgear
+   sized on the grid contribution alone is under-rated. It is reported as its
+   own column, not folded silently into the total.
+
+A third, smaller correction: the workbook's *Payback Period Table Rev.0*
+divides by round-trip efficiency where *R3.0i* takes its square root. The
+square root is right — only the discharge half of the round trip is spent
+getting energy to the meter — so the engine follows R3.0i.
+
+### Surfaces
+
+- `battery-sizer.html` — step 5, "Engineering design". **Pull from sizing**
+  carries the recommended system across; the schedule invalidates itself when
+  the sizing changes rather than sitting stale beside a new number.
+- `editor.html` — a fifth tab, "Engineering", on `OmegaBessSizer`, between
+  *Recommended Size* and *Hand Off*. Same engine, same endpoint.
+- `tenants/cleancell/tenant.json` — `batterysizer` added to `requiredTools`
+  so it is pinned on the Clean Cell dashboard. Visibility only; the gate is
+  still the serverless function. Takes effect on the next
+  `scripts/seed-omega-orgs.js --apply`.
+
+### Open
+
+- The workbook's *Hourly Dispatch (Off Grid)* sheet (520 rows of an 8760-style
+  dispatch) was **not** ported. `api/_lib/battery-tool-engine.js` already
+  simulates dispatch against real interval data, which is a better answer than
+  a modelled day; porting the sheet would give the tool two dispatch engines
+  that disagree.
+- %Z, X/R, busduct impedance per metre and CT winding resistance are
+  placeholders until equipment is selected, and every one of them moves the
+  fault duty. The UI says so on every run; it is not a stamped drawing.
+- Cable ampacities are the direct-burial table. Tray, conduit and free-air
+  installations need their own table before the schedule is trustworthy for
+  those methods; today they are approximated through the Ci derating factor.
+
+---
+
+## Battery sizing: one engine (2026-09-20)
+
+### The finding
+
+`battery-sizer.html` and the site-map editor's BESS Sizer both POST to
+`/api/bess-size`. They sent different `mode` values, and the endpoint forked
+on that into two entirely separate engines. On identical input:
+
+| | battery-sizer | editor | gap |
+|---|---|---|---|
+| 12 bills — nameplate | 1,306 kWh | 1,726 kWh | 24% |
+| 12 bills — payback | 3.85 yr | 6.47 yr | 68% |
+| real 8760 — nameplate | 259 kWh | 539 kWh | **52%** |
+| real 8760 — savings/yr | $21,302 | $34,871 | 39% |
+
+The editor's answer is written to `S.billBessHint`, so it reaches pre-qual
+and the proposal. The same site could be quoted two ways depending on which
+screen it was sized from, and — since the design engine consumes whichever
+sizer ran — two different bills of quantities: 3 containers against 6, a
+250 A breaker against 400 A.
+
+### Which logic was better, dimension by dimension
+
+Neither engine was wholly right. This is what each one won:
+
+| dimension | winner | why |
+|---|---|---|
+| load shape from bills | `battery-tool-engine` | builds a load duration curve from load factor and solves the achievable shave against it, and carries a P50 and a flat-top P90 shape; the other assumed one duration |
+| interval dispatch | `battery-tool-engine` | hour-by-hour simulation carrying state of charge across the whole year |
+| savings credited | tie | both bill the peak the meter ACTUALLY saw, not the shave the sweep asked for |
+| ratchet | tie | both apply a trailing 11-month floor |
+| time-of-use, subscription tariffs | `battery-tool-engine` | the other has neither |
+| **nameplate conversion** | **workbook** | both browser engines were wrong — see below |
+| **C-rate floor on capacity** | **workbook** | `bess-engine` applied it to the sweep, `battery-tool-engine` not at all |
+| economics | `battery-tool-engine` | ITC, O&M, fade, escalation, discounting, IRR. `bess-engine` did `gross capex / savings` and nothing else |
+| degradation / replacement | workbook | year-by-year state of health against a minimum, with the replacement booked |
+| depth of discharge | `battery-tool-engine` | `bess-engine` read `window.BESS_DOD` in a file whose first line is `var window = {}`, so it could never resolve and the engine always ran at a hardcoded 95% |
+
+### The nameplate bug
+
+Both browser engines computed `nameplate = usable / DoD`. That skips the
+**discharge half of the round trip**. Round-trip efficiency is the product of
+both legs, so one leg is its square root, and the workbook's chain is:
+
+```
+nameplate = usable / DoD / sqrt(RTE) / otherEfficiency
+```
+
+At 88% RTE the omitted term is 1/sqrt(0.88) = 1.066 — the pack was under-sized
+and under-priced by 6.6%. Small enough to read as rounding, large enough to
+under-price every project the tool has ever priced. `$/kWh` is quoted against
+nameplate, so the error lands directly on capex.
+
+### What was built
+
+- **`api/_lib/bess-capacity.js`** — the chain, the C-rate floor and container
+  quantisation, in one place. The design engine and the sizing engine both
+  call it, so the sizer and the equipment schedule cannot disagree about what
+  "nameplate" means. Reproduces R3.0i cell for cell (4.4445 / 4.6088 MWh).
+- **`api/_lib/bess-size-adapter.js`** — translates the editor's request into
+  the shared engine's vocabulary and the answer back into the result shape the
+  editor's four tabs already read. A translation, not a second model: every
+  field is a rename, a unit change or a restatement.
+- **`api/bess-size.js`** — both editor modes now run `battery-tool-engine`.
+- **`api/_lib/bess-engine.js`** — retired, with a header saying so. Kept
+  because its 29 tests are the behavioural reference the replacement had to
+  match, and because a project quoted before this date was sized there.
+
+### Two other defects found and fixed on the way
+
+1. **"Nothing pencils" recommended a token system.** On a flat demand tariff
+   the return per dollar is constant across most of the sweep, so when it sits
+   below the hurdle every size is equally unviable and NPV just approaches
+   zero from below as the battery approaches nothing. Ranking by NPV returned
+   17 kW; ranking by payback returned much the same. Neither is an answer.
+   When no size clears the hurdle the engine now reports the DEEPEST size that
+   still holds the best available return, beside the banner saying none of
+   them pay back. The render-contract test was silently exercising this: its
+   recommendation went from 5.5 kW to 820 kW.
+2. **`breakEven()` derived a second, lower nameplate** than the one the
+   economics were priced against, so the break-even installed cost came out
+   optimistic. It reads the priced figure now.
+
+### What this changes for people already using the editor
+
+| | before | now |
+|---|---|---|
+| power | 641 kW | 516 kW |
+| nameplate | 1,686 kWh | 1,223 kWh |
+| installed | $758,579 | $550,485 |
+| payback | 6.28 yr, gross | 3.65 yr, net of ITC |
+
+The direction is favourable because the ITC was previously ignored, so the
+editor UNDERSTATED returns. Sizes fall because the hardcoded 95% depth of
+discharge is gone. **Any quote produced from the editor before this date used
+the old engine and will not reproduce.**
+
+The editor's tariff form now carries DoD, round-trip, ITC, O&M, term and
+discount rate. They were hidden defaults; an assumption that moves payback by
+three years is not a default.
+
+### Still open
+
+- Four browser-side sizers remain in `editor.html` — the Solar→BESS sizer
+  (`ceThruSizerCalc`), the 8760 bill-import shave (`shaveKw*3/BESS_DERATE`,
+  a flat 3-hour event assumption) and `shaveAnalysis`. All compute in the
+  browser, all write `S.billBessHint`, so all reach the proposal without
+  passing through the shared engine. That is both an accuracy gap and a
+  violation of the IP rule in CLAUDE.md. They should move to `/api/`.
+- `touSpread` on the editor's tariff form is carried but not yet priced; the
+  shared engine prices time-of-use per month from parsed bill data, which the
+  editor does not supply.
+
+---
+
+## Sizing reaches the marketplace, and units (2026-09-20)
+
+### Every surface that sizes from energy usage
+
+| surface | before | now |
+|---|---|---|
+| `battery-sizer.html` | shared engine | shared engine |
+| `editor.html` BESS Sizer | its own engine | shared engine |
+| `portals/finance/battery-sizer.html` | **whole engine inline, in the browser** | redirect to the canonical tool |
+| `editor.html` bill-import 8760 shave | `BESS_DERATE`, a third derate | corrected derate, flagged as an estimate |
+| `editor.html` `shaveAnalysis` | same | same |
+| `site-optimizer.html` | **already correct** | unchanged |
+
+`site-optimizer.html` was checked and left alone deliberately. It splits
+round-trip efficiency correctly across both legs (`out = min(kW, soc*√RTE)`,
+`soc -= out/√RTE`) and its objective — co-optimising storage, solar and EV
+against three value streams — is a different question from peak shaving.
+Forcing it onto the shaving engine would lose function and gain nothing.
+
+### The finance portal's sizer
+
+`portals/finance/battery-sizer.html` was a copy of the root tool taken before
+the engine moved server-side, and `vercel.json` served it on
+`finance.csebuilders.com` and `financing.csebuilders.com`. It carried the
+whole engine inline — load duration curve, dispatch, sweep, economics — so the
+logic shipped to every browser that opened it, and it still computed
+`nameplate = usable / DoD`, under-sizing by ~6.6% against the canonical tool
+on the same bills. A finance partner and a developer looking at the same meter
+got different numbers, on two customer-facing hostnames.
+
+Nothing in it was finance-specific. The four host rewrites are removed — the
+default route already resolves `/battery-sizer` on every host — and the file is
+a redirect that carries the query string through.
+
+### The editor's derate constant
+
+`BESS_DERATE` was `DoD × RTE` = 0.836. Round-trip efficiency is the product of
+both legs, so the discharge leg alone is its square root; applying the whole
+round trip charged the losses twice and **over-sized** by ~6.6% — the opposite
+of the engines' error. Depth of discharge also drops 0.95 → 0.90 to match the
+shared default. The two corrections nearly cancel (0.836 → 0.844, ~1%), so this
+is a consistency fix rather than a repricing. It matters because these
+constants feed the bill importer's quick estimates, which write into the
+project alongside results from the shared engine.
+
+### kW and MW
+
+`api/_lib/bess-units.js` normalises at the boundary. The engine only ever sees
+kW and kWh; the caller states a unit and the answer echoes it back.
+
+- `/api/bess-size` takes `unit: 'kw' | 'mw'` and scales **measured site data
+  only**. Rates are never scaled — a demand charge is quoted per kW at every
+  site size, so scaling it alongside the load turns $18.50/kW-mo into
+  $18,500/MW-mo and the savings with it.
+- `/api/bess-design` takes kW aliases (`loadKw`, `unitKwh`, `pcsUnitKw`,
+  `chargeGridKw`, `chargeOtherKw`). The unit is in the field **name**, not a
+  flag: a flag that changes what `loadMw` means leaves the field still called
+  `Mw` while holding kW. Sending both forms of one quantity is refused.
+- `battery-sizer.html` has an input scale and a display scale. Different
+  concerns: the first is accuracy (pasting MW into a kW field is a 1000× error
+  that computes happily and looks reasonable), the second is presentation.
+
+### The sizing record
+
+`omega-bess-result.js` is the shape a sizing run leaves behind. Written by both
+sizers onto `projects/{id}.bessSizing`; read by `financing.html` and by the two
+deal-room paths.
+
+It is a **record, not a model** — every field comes from an `/api/` response,
+and the only arithmetic is unit conversion and multiplying a percentage out.
+Anything else would be a way to smuggle a second opinion into the browser.
+
+It carries its **basis**. A megawatt figure alone tells a capital partner
+nothing about whether it came from a year of interval data or one bill and an
+assumption, and those underwrite differently. Every record states the engine,
+the kind of data, the number of months, and a grade — `measured`,
+`twelve bills`, `partial year`, `single bill` — which the consumers print
+beside the figure rather than under a tooltip.
+
+| consumer | what it takes |
+|---|---|
+| `financing.html` | financed amount, annual throughput, year-1 savings, ITC % and amount, term in months, a scope line stating the basis — and a banner that warns when the grade is soft. Never overwrites a field the person has already filled, and fills nothing it cannot know (no legal entity, industry or address). |
+| `api/dealroom-refer.js` | project → marketplace. Fills `mw`, `mwh` and `capexUsd` only when nobody typed them, so a project sized in the tool does not reach the market as 0 MW. |
+| `api/dealroom-open.js` | deal → marketplace. The record lives on the project, so this follows `projectId` rather than looking on the deal; a deal with no project named simply carries no sizing. |
+
+### Still open
+
+- `ceThruSizerCalc` (Solar → BESS) sizes from generation rather than usage, so
+  it is a different question and was not migrated. It still computes in the
+  browser.
+- `touSpread` on the editor's tariff form is carried but not priced.
+
+---
+
+## Accuracy pass on the sizing engine (2026-09-20)
+
+Four findings, each measured before it was changed.
+
+### 1. The C-rate floor priced a pack it refused to use
+
+Adding the floor created a case the engine had never had: when the floor
+binds, the pack you must buy holds more energy than the duty asked for. The
+engine kept dispatching with the requested figure while pricing the
+floor-sized pack — **69% more battery than it credited**, on every
+short-duration candidate.
+
+A 409 kW / 1-hour request at 0.5C forces an 818 kWh pack, which delivers
+~691 kWh, i.e. 1.69 hours. The engine now sizes the pack from the request and
+then dispatches with what *that pack* delivers. Energy-limited candidates are
+unaffected — the chain and its inverse round-trip. On the reference profile
+this moved the recommendation from 2 h to 1 h, correctly: the 1-hour system
+gets 1.69 h of real energy for the price of its floor pack.
+
+`effDur` and `cRateForced` are reported so the buyer can see they are paying
+for duration they did not ask for.
+
+### 2. Degradation was scaled off savings, not measured against the load
+
+`econ` applied `(1-fade)^(y-1)` to **savings**. Capacity fades; savings come
+from shave *depth*, and the load duration curve is concave, so the first kWh
+lost costs far less depth than the last. Measured on the reference profile:
+
+| state of health | linear model | actually earns |
+|---|---|---|
+| 95% | 95.0% | 99.8% |
+| 85% | 85.0% | 98.2% |
+| 70% | 70.0% | 98.1% |
+
+Year-eight savings were understated by 13%, end-of-life by 29% — always in
+the conservative direction, which is why it never looked wrong.
+
+The engine now measures the curve by **re-solving the shave at each state of
+health**, samples it on SOH (not on year, so a replacement can reset it),
+re-prices the whole sweep with it and re-picks — iterating until the pick
+stops moving, because a size with energy headroom fades more gently and
+should be allowed to win on that. The distinction is real: on a bill-sized
+system with headroom the year-20 retention is 88%, on an energy-limited
+4-hour interval-sized system it is 75%. The linear model could not tell them
+apart.
+
+### 3. No battery replacement was ever booked
+
+The design engine books one; the sizer did not. A 20-year NPV with no
+replacement tells a funder the cells are free after year ten. At 2%/yr a pack
+crosses 70% in year 18; at 4%/yr it needs two replacements inside the term.
+
+Replacement is charged against **nameplate and the energy side only** —
+replacing cells is not rebuilding the plant, so the converters, pad,
+switchgear and interconnection are not bought again — and the ITC is not
+assumed to be available a second time. `minSoh` and `replKwh` are on the form.
+On the reference 20-year case this took NPV from $843,982 to $685,563.
+
+### 4. The integrator was the slowest and least accurate part of the engine
+
+`energyAbove` was a 1,200-slice midpoint sum carrying up to **0.06% of
+quadrature error at shallow shaves** — exactly where a demand charge is most
+sensitive. The curve `p(x) = pmin + (ppk-pmin)(1-x)^k` has a closed form:
+
+```
+u   = (T - pmin) / (ppk - pmin)
+x_T = 1 - u^(1/k)
+A   = (pmin - T)*x_T + (ppk - pmin)*(1 - u^((k+1)/k)) / (k+1)
+```
+
+Checked against a four-million-slice integration across k from 0.05 to 60 and
+every threshold from base to peak: agrees to **3×10⁻⁷%**, and is ~4,700×
+faster. That speed is what makes re-solving the shave at twenty states of
+health affordable in the first place.
+
+A 20-year, four-duration bill run went from **6,871 ms to 177 ms**; a
+35,040-point interval year with the measured fade curve runs in 621 ms.
+
+### Net effect
+
+The first three corrections pull in different directions and do not cancel:
+crediting the floor pack and measuring degradation both raise returns,
+booking the replacement lowers them. The engine is more accurate in both
+directions rather than uniformly more optimistic — and it is now fast enough
+that the accurate method is the affordable one.
+
+---
+
+## Tariff engine (2026-09-20)
+
+### The gap this closes
+
+Benchmarked against EnergyToolbase, whose moat is precise tariff modelling.
+OMEGA valued **every shaved kW at one `$/kW-mo`**. Almost no commercial
+schedule works that way. A typical C&I tariff bills:
+
+- a **facility** (non-coincident) demand charge on the month's highest kW,
+- an **on-peak** demand charge on the highest kW *during* its window,
+- sometimes a part-peak charge on a third window,
+- energy at a different price in each window,
+- all of it seasonal,
+- and a ratchet on some components and not others.
+
+Those are different determinants, and a battery cannot shave them all at
+once — shaving the 4pm coincident peak and the 11am facility peak are
+different dispatches worth different money.
+
+**Measured, on a summer-only demand charge** ($6.10/kW all year + $28.10/kW
+on-peak, Jun–Sep), for the same 250 kW battery:
+
+| how the flat rate was chosen | claims | error |
+|---|---|---|
+| read off a July bill | $102,600 | **+54%** |
+| read off a January bill | $18,300 | **−73%** |
+| a correct 12-month blend | $46,400 | **−31%** |
+| exact, billed per determinant | **$66,825** | — |
+
+Even the *right* blended rate is 31% out, because the battery earns the
+summer rate on the summer peak and the blend averages it across months where
+it earns less. Run through the sizing engine end to end, the flat model
+overstated annual savings by 32% and payback by 28%.
+
+That is larger than every other correction in this codebase combined.
+
+### `api/_lib/bess-tariff.js`
+
+Exact, line-item billing from either an interval profile or month
+aggregates. Every figure in the tests is hand-computed and written out.
+
+**The schema is OpenEI URDB's, deliberately.** URDB is public, free and
+carries thousands of US tariffs; building to anything else would mean
+writing an importer later and getting the edge cases wrong. A URDB record
+drops in essentially as-is — which is the answer to the one thing ETB has
+that we do not, a rate library.
+
+Handles: tiered energy and demand (cumulative, with the marginal rate
+reported — what a battery actually saves on the margin), 12×24 weekday and
+weekend period schedules, seasonal facility charges via `flatdemandmonths`,
+coincident TOU demand, ratchets on the trailing 11 months, fixed charges,
+per-kWh riders and tax.
+
+A flat rate is expressed in the same schema and reproduces the old
+arithmetic exactly, so there is one billing path rather than two.
+
+### Wired in
+
+`/api/bess-size` takes an optional `tariff`, bounded before the engine sees
+it (periods, tiers, schedule shape, rate ranges — a negative rate is a
+sell-back price this engine does not model, and a rate above $1,000 is a
+misplaced decimal). With no tariff the engine is byte-identical to before.
+
+`battery-sizer.html` gains a third rate mode. It takes pasted URDB JSON and
+**reads back a plain-English summary of what it understood** — grouped by
+season, with non-contiguous windows described as such, because an off-peak
+period is usually the night *plus* the evening and printing "0:00–24:00" for
+it says the opposite of the truth.
+
+### Honest limits
+
+- **A monthly bill cannot carry a coincident demand figure.** On the Utility
+  bills tab only the facility determinant is priced, and the summary says so
+  rather than quietly understating what a well-targeted battery is worth.
+  Interval data prices everything.
+- **The dispatch is not yet tariff-aware.** It still shaves the monthly
+  maximum. Pricing is now exact; *targeting* the highest-value determinant is
+  the next step and is where the remaining value sits.
+- **No rate library.** The schema makes URDB import a mapping rather than a
+  rewrite, but the import is not built. Pasting a schedule is manual today.
+- The template button ships a **shape, not a real schedule** — every number
+  is a placeholder. Shipping a real utility's rates would be shipping numbers
+  that go stale silently.
+
+### Also fixed
+
+`ES_TAX = 0.0635` was hardcoded in the shared engine — a Massachusetts
+utility tax applied to every site in the country, including the ones in
+California. It is an input now, defaulting to zero.
+
+Zero-rate demand periods no longer emit a `$0.00` line. That was not
+cosmetic: a caller reading the first demand line got the period that never
+moves, so a battery shaving the window that *is* billed looked like it
+achieved nothing.

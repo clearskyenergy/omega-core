@@ -29,6 +29,21 @@
    retry after a timeout should not either. */
 'use strict';
 var A = require('./_lib/admin');
+/* The field the sizers write on the project. Named once, here and in
+   omega-bess-result.js, so a rename cannot half-land. */
+var RESULT_FIELD = 'bessSizing';
+
+/* How much a reader should trust the number, in words they already use. A
+   single bill is a screening estimate however good the engine is, and a
+   deal room has to say so next to the figure rather than under it. */
+function sizingGrade(rec) {
+  if (!rec) return null;
+  if (rec.basis === 'interval') return 'measured';
+  var m = +rec.monthsAnalyzed || 0;
+  if (m >= 12) return 'twelve bills';
+  if (m > 1) return 'partial year';
+  return 'single bill';
+}
 
 /* Mirrors STAGES in tenants/osa/portfolio-data.js. Duplicated deliberately:
    the client list is UI vocabulary and this is a gate, and a gate that reads
@@ -90,10 +105,23 @@ module.exports = A.handler(function (req) {
             + 'to fund. It is at ' + (d.stage || 'an unknown stage') + '.');
         }
 
+        /* One extra read, and only when the deal names a project. Failure
+           here is not failure of the deal room: a sizing that cannot be
+           fetched means the room opens without it, which is exactly what
+           happened before this existed. */
+        var linkedProjectId = String(d.projectId || d.sourceProjectId || '').trim();
+
         var jvName = String(b.jvName || 'OSA').trim() || 'OSA';
         var jvKey  = String(b.jvKey  || 'osa').trim().toLowerCase() || 'osa';
         var forOrgName = String(b.forOrgName || forOrgId).trim();
         var now = Date.now();
+
+        return (linkedProjectId
+          ? db.collection('projects').doc(linkedProjectId).get()
+              .then(function (ps) { return ps.exists ? (ps.data() || {})[RESULT_FIELD] : null; })
+              .catch(function () { return null; })
+          : Promise.resolve(null)
+        ).then(function (sizing) {
 
         var payload = {
           name:        d.name || dealId,
@@ -130,6 +158,37 @@ module.exports = A.handler(function (req) {
           updatedAt: FV.serverTimestamp()
         };
 
+        /* Carry the sizing across, WITH ITS BASIS. A megawatt figure on
+           its own tells a capital partner nothing about whether it came
+           from a year of interval data or one bill and an assumption, and
+           those two underwrite differently.
+
+           The record is written onto the PROJECT by whichever sizer ran, so
+           this path has to follow the link rather than look on the deal.
+           A deal with no project named simply carries no sizing - the
+           marketplace shows what a human typed, as it always did, and
+           nothing is invented to fill the gap.
+
+           It only ever FILLS. A figure already on the deal was put there by
+           a person and a stored sizing does not get to overrule it. */
+        if (sizing && +sizing.powerKw > 0) {
+          payload.bessKw           = +sizing.powerKw || null;
+          payload.bessKwh          = +sizing.nameplateKwh || null;
+          payload.bessDurationH    = +sizing.durationH || null;
+          payload.sizingBasis      = sizing.basis || null;
+          payload.sizingGrade      = sizingGrade(sizing);
+          payload.sizingConfidence = sizing.confidence || null;
+          payload.sizingMonths     = +sizing.monthsAnalyzed || null;
+          payload.sizingEngine     = sizing.engine || null;
+          payload.sizingAt         = +sizing.at || null;
+          if (sizing.annualSavings != null) payload.annualSavingsUsd = +sizing.annualSavings;
+          if (sizing.paybackYr != null)     payload.paybackYr = +sizing.paybackYr;
+          if (!payload.mw && sizing.powerKw) {
+            payload.mw = Math.round(sizing.powerKw / 1000 * 1000) / 1000;
+          }
+          if (!payload.capexUsd && sizing.capex) payload.capexUsd = +sizing.capex;
+        }
+
         var projRef = db.collection('fin_projects').doc();
         /* One batch: a room with no link back, or a deal pointing at a room
            that was never made, are both worse than a clean failure. */
@@ -141,7 +200,9 @@ module.exports = A.handler(function (req) {
           dealRoomAt:  FV.serverTimestamp()
         });
         return batch.commit().then(function () {
-          return { ok: true, projectId: projRef.id, sponsor: jvName, forOrg: forOrgName };
+          return { ok: true, projectId: projRef.id, sponsor: jvName, forOrg: forOrgName,
+                   sizingCarried: !!(sizing && +sizing.powerKw > 0) };
+        });
         });
       });
     });

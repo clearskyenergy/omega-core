@@ -222,26 +222,6 @@
       "destination": "/portals/finance/dealroom"
     },
     {
-      "source": "/battery-sizer",
-      "has": [
-        {
-          "type": "host",
-          "value": "finance.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance/battery-sizer"
-    },
-    {
-      "source": "/battery-sizer.html",
-      "has": [
-        {
-          "type": "host",
-          "value": "finance.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance/battery-sizer"
-    },
-    {
       "source": "/dealroom",
       "has": [
         {
@@ -260,26 +240,6 @@
         }
       ],
       "destination": "/portals/finance/dealroom"
-    },
-    {
-      "source": "/battery-sizer",
-      "has": [
-        {
-          "type": "host",
-          "value": "financing.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance/battery-sizer"
-    },
-    {
-      "source": "/battery-sizer.html",
-      "has": [
-        {
-          "type": "host",
-          "value": "financing.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance/battery-sizer"
     },
     {
       "source": "/finance",

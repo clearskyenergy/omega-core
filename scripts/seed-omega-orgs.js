@@ -86,7 +86,13 @@ function plan(t) {
      includes", which is every tenant seeded so far — an empty array would
      mean NO tools, and omega-tools.js now reads it that way on purpose. */
   if (Array.isArray(t.toolAccess) && t.toolAccess.length) billing.toolAccess = t.toolAccess;
-  var pub = { orgId: t.orgId, name: t.name, logoUrl: t.logoUrl || '', colors: t.colors || null, exportBrand: org.exportBrand, tier: TIER_PUBLIC[billing.tier] || 'standard',
+  if (!TIER_PUBLIC[billing.tier]) {
+    throw new Error('tenants/' + t.slug + '/tenant.json has tier "' + billing.tier +
+      '", which is not a tier this script knows how to publish. Add it to ' +
+      'TIER_PUBLIC (and check api/bess-size.js agrees it is a paid tier) ' +
+      'rather than letting it fall through to standard.');
+  }
+  var pub = { orgId: t.orgId, name: t.name, logoUrl: t.logoUrl || '', colors: t.colors || null, exportBrand: org.exportBrand, tier: TIER_PUBLIC[billing.tier],
     vertical: org.vertical, shell: org.shell, domains: org.domains, requiredTools: t.requiredTools || null, allowedEmails: t.allowedEmails || [],
     whiteLabel: pickPublicWL(t.whiteLabel) };
   return { orgId: t.orgId, org: org, billing: billing, pub: pub, storefront: planStorefront(t), owner: t.ownerEmail || null };

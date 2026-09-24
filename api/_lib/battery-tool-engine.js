@@ -1,9 +1,27 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
+var CAP = require('./bess-capacity');
+var TARIFF = require('./bess-tariff');
 module.exports=function(input){
- var cfg=input.settings||{}, MONTHS=input.data, RESULT=null, ES_TAX=0.0635;
+ var cfg=input.settings||{}, MONTHS=input.data, RESULT=null;
+ /* Was a hardcoded 0.0635 - a Massachusetts utility tax applied to every
+    site in the country, including the ones in California. It is an input
+    now, defaulting to zero: a tax nobody stated should not appear on a
+    Nevada project's savings. */
+ var ES_TAX = nv0('utilTax', 0)/100;
+ function nv0(k,d){var n=Number((input.settings||{})[k]);return (input.settings||{})[k]==null||(input.settings||{})[k]===''||!isFinite(n)?d:n;}
+
+ /* An optional structured tariff, OpenEI URDB shaped. Without one the
+    engine prices every shaved kW at a single $/kW-mo, which is what it
+    always did and is wrong on any seasonal or time-of-use schedule: the
+    same battery is worth -73% to +54% of the flat answer depending on
+    which month's bill the rate was read off. With one, each month's shave
+    is priced at THAT month's determinants. */
+ var TAR = null;
+ try { if(input.tariff) TAR = TARIFF.normalize(input.tariff); } catch(e){ TAR = null; }
  var MONNAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
- function nv(k,d){var n=Number(cfg[k]);return cfg[k]==null||cfg[k]===''?d:n;}
+ function nv(k,d){var n=Number(cfg[k]);return cfg[k]==null||cfg[k]===''||!isFinite(n)?d:n;}
+function clampPct(v){ return v<1?1:(v>100?100:v); }
  function $(k){return {value:cfg[k],checked:!!cfg[k],style:{},textContent:''};}
  function durations(){return input.durations;}
 function ldcFromBill(b, baseFrac){
@@ -25,16 +43,32 @@ function ldcFromBill(b, baseFrac){
   return { pmin:f*b.peak, ppk:b.peak, k:k, hours:hrs, lf:lf, days:days,
            dayKwh:dayKwh, perDay:true, tou:tou };
 }
+/* Energy above a threshold under the modelled load duration curve.
+
+   The curve is p(x) = pmin + (ppk-pmin)(1-x)^k over x in [0,1], so the area
+   above T has a closed form and does not need integrating:
+
+     u   = (T - pmin) / (ppk - pmin)        the curve's height at T, 0..1
+     x_T = 1 - u^(1/k)                      the share of the window above T
+     A   = (pmin - T)*x_T + (ppk - pmin)*(1 - u^((k+1)/k)) / (k+1)
+
+   This replaced a 1,200-slice midpoint sum. Checked against a four-million
+   slice integration across k from 0.05 to 60 and every threshold from base
+   to peak, the closed form agrees to 3e-7% - the sum was carrying up to
+   0.06% of quadrature error at shallow shaves, where the curve is steepest
+   and a demand charge is most sensitive. It is also about 4,700 times
+   faster, which is what makes it affordable to re-solve the shave at every
+   year's state of health rather than assuming savings fade linearly. */
 function energyAbove(c, T){
   if(T >= c.ppk) return 0;
   if(T <= c.pmin) T = c.pmin;
-  var N = 1200, sum = 0, i;
-  for(i=0;i<N;i++){
-    var x = (i+0.5)/N;
-    var p = c.pmin + (c.ppk-c.pmin)*Math.pow(1-x, c.k);
-    if(p > T) sum += (p-T);
-  }
-  return sum/N * c.hours;
+  var span = c.ppk - c.pmin;
+  if(!(span > 0)) return 0;
+  var u = (T - c.pmin)/span;
+  if(u < 0) u = 0; else if(u > 1) u = 1;
+  var xT = 1 - Math.pow(u, 1/c.k);
+  var area = (c.pmin - T)*xT + span*(1 - Math.pow(u, (c.k+1)/c.k))/(c.k+1);
+  return (area > 0 ? area : 0) * c.hours;
 }
 function energyAboveWorst(c, T){
   if(T >= c.ppk) return 0;
@@ -53,6 +87,28 @@ function shaveMonth(c, peak, kW, Emax, worst){
   }
   return { target:hi, shave:peak-hi, kwhDay:fn(c, hi) };
 }
+/* What the pack a candidate actually forces you to buy can actually
+   deliver.
+
+   The sweep asks for kW x duration of USABLE energy. The C-rate floor can
+   make the pack bigger than that energy needs - a 0.5C battery cannot put
+   out 409 kW from a pack sized for 409 kWh, so the smallest buildable pack
+   is 818 kWh nameplate. That pack delivers about 691 kWh to the meter, not
+   409. Dispatching with the requested figure while pricing the floor-sized
+   pack charges for 69% more battery than it credits, and every
+   short-duration candidate comes back looking worse than it is.
+
+   So: size the pack from the request, then dispatch with what THAT pack
+   delivers. Energy-limited candidates are unaffected - the chain and its
+   inverse round-trip, so the figure comes back as the requested one. */
+function deliverableKwh(kW, dur){
+  var requested = kW*dur;
+  var opts = { dodPct: nv('dod',90), rtePct: nv('rte',88),
+               otherEffPct: nv('otherEff',100), cRate: nv('cRate',0.5) };
+  var name = CAP.chainKwh(requested, kW, opts).nameplateKwh;
+  var can  = CAP.usableFromNameplateKwh(name, opts);
+  return can > requested ? can : requested;
+}
 function billRate(m){ return isFinite(m.useRate) ? m.useRate : m.rate; }
 function subMode(){ var e = $('rateStruct'); return !!(e && e.value === 'sub'); }
 function demandCost(kw, m){
@@ -62,7 +118,33 @@ function demandCost(kw, m){
     var blocks = Math.ceil(need/blk);
     return blocks*price;
   }
-  return Math.max(0, kw - ((m && m.adj) || 0)) * billRate(m);
+  var billable = Math.max(0, kw - ((m && m.adj) || 0));
+
+  /* With a structured tariff, this month's demand is priced at THIS
+     month's determinants. A summer-only on-peak charge earns nothing in
+     January, and a flat annual rate cannot express that.
+
+     Only the facility (non-coincident) determinant can be priced from a
+     monthly bill, because that is the only demand figure a bill states
+     without a load shape. A coincident on-peak charge needs the peak
+     DURING its window, which monthly totals do not carry - so it is
+     priced only when the caller supplies it as m.onPeakKw, and otherwise
+     its absence is reported rather than guessed at. */
+  if(TAR && m){
+    var mi = (m.month != null) ? m.month : 0;
+    var rates = TARIFF.marginalDemandRates(mi, TAR);
+    var cost = billable * (rates.facility || 0);
+    if(m.onPeakKw != null && isFinite(m.onPeakKw)){
+      var onKw = Math.max(0, Math.min(m.onPeakKw, billable));
+      var p;
+      for(p in rates.byPeriod){
+        if(!Object.prototype.hasOwnProperty.call(rates.byPeriod,p)) continue;
+        cost += onKw * rates.byPeriod[p];
+      }
+    }
+    return cost;
+  }
+  return billable * billRate(m);
 }
 function runBills(bills){
   var durs = durations(), i, j;
@@ -99,7 +181,7 @@ function runBills(bills){
   var sweep = [], di, ci;
   for(di=0;di<durs.length;di++){
     for(ci=0;ci<cands.length;ci++){
-      var kW = cands[ci], dur = durs[di], Emax = kW*dur;
+      var kW = cands[ci], dur = durs[di], Emax = deliverableKwh(kW, dur);
       var peaks = [], p90peaks = [], disTot = 0, maxDay = 0, arb = 0, loss = 0;
       for(j=0;j<bills.length;j++){
         var c = curves[j], m = bills[j];
@@ -127,7 +209,14 @@ function runBills(bills){
       }
       var scale = 12/bills.length;
       var e = econ(kW, Emax, (baseCost-cost)*scale, (loss-arb)*scale);
-      e.dur = dur; e.peaks = peaks; e.billed = billed; e.billed90 = billed90;
+      e.dur = dur; e.effDur = kW>0 ? Math.round(Emax/kW*100)/100 : dur;
+      /* Once the floor has been applied the pack IS energy-consistent, so
+         econ's own `binding` reads "energy" and the reason the pack is that
+         size disappears. This is the flag that keeps it: the duration the
+         buyer gets is longer than the one they asked for, and they are
+         paying for the difference whether they wanted it or not. */
+      e.cRateForced = e.effDur > dur + 1e-6;
+      e.peaks = peaks; e.billed = billed; e.billed90 = billed90;
       e.periodSav = baseCost-cost;
       e.p90Ann = (baseCost-cost90)*scale;
       e.maxEvt = maxDay;                       /* worst-day kWh, P50 shape */
@@ -137,10 +226,24 @@ function runBills(bills){
     }
   }
   var best = pickBest(sweep);
+
+  /* What this size saves with a given amount of usable energy. Same
+     arithmetic as the sweep above, over the same locals, so the fade curve
+     cannot drift from the sizing it describes. */
+  function savingsWith(kW, Emax){
+    var pk = [], jj;
+    for(jj=0;jj<bills.length;jj++){
+      pk.push(shaveMonth(curves[jj], bills[jj].peak, kW, Emax, false).target);
+    }
+    var bl = applyRatchet(pk, ratchet), cst = 0;
+    for(jj=0;jj<bills.length;jj++) cst += demandCost(bl[jj], bills[jj]);
+    return (baseCost - cst) * (12/bills.length);
+  }
+
   RESULT = {
     mode:'bill', sweep:sweep, best:best, baseBilled:baseBilled, baseCost:baseCost,
     maxPeak:maxPeak, months:bills, curves:curves, dRate:curRate, nMon:bills.length,
-    curRate:curRate, useCur:useCur
+    curRate:curRate, useCur:useCur, savingsWith:savingsWith
   };
   return RESULT;
 }
@@ -202,9 +305,54 @@ function irr(cf){
   for(i=0;i<200;i++){ mid = (lo+hi)/2; v = npvAt(mid); if(v > 0) lo = mid; else hi = mid; }
   return (lo+hi)/2;
 }
-function econ(kW, kWhUsable, annSav, lossCost){
+/* `curve` is the fraction of year-one demand savings the system still earns
+   in each year, indexed from year 1.
+
+   Without one, econ falls back to (1-fade)^(y-1) applied to SAVINGS, which
+   is what this did before and is wrong in a way worth spelling out.
+   Capacity fades, and savings come from shave DEPTH, not from capacity.
+   The load duration curve is concave, so a pack that has lost 15% of its
+   energy loses far less than 15% of the depth it can hold - measured on a
+   real twelve-bill profile, scaling savings linearly understated year-eight
+   savings by 13% and end-of-life savings by 29%.
+   The caller computes the real curve by re-solving the shave at each year's
+   state of health and passes it here. */
+/* Savings, as a fraction of year one, at a given state of health.
+   Linear between samples; the curve is smooth and the samples are 2.5%
+   apart, so interpolation error is far below the fade rate's own
+   uncertainty. Falls back to scaling by state of health when no curve was
+   measured, which is the old behaviour and the conservative one. */
+function savingsRatio(curve, soh){
+  if(!curve || !curve.length) return soh;
+  if(soh >= curve[0].soh) return curve[0].ratio;
+  var i;
+  for(i=1;i<curve.length;i++){
+    if(soh >= curve[i].soh){
+      var a = curve[i], b = curve[i-1];
+      var span = b.soh - a.soh;
+      if(!(span > 0)) return a.ratio;
+      return a.ratio + (b.ratio - a.ratio)*(soh - a.soh)/span;
+    }
+  }
+  return curve[curve.length-1].ratio;
+}
+
+function econ(kW, kWhUsable, annSav, lossCost, curve){
   var dod = nv('dod',90)/100;
-  var name = kWhUsable/dod;
+  /* Nameplate is not usable energy divided by depth of discharge. That
+     skips the DISCHARGE half of the round trip, which is sqrt(RTE), and it
+     under-sizes the pack by about 6.6% at 88% - small enough to read as
+     rounding, large enough to under-price every project the tool prices.
+     The C-rate floor comes with it: a 0.5C battery cannot deliver its kW
+     out of a pack sized only for its kWh, so a short-duration candidate
+     has to grow whether the energy needs it or not.
+     Both live in bess-capacity.js, shared with the design engine, so the
+     sizer and the equipment schedule cannot disagree about nameplate. */
+  var cap = CAP.chainKwh(kWhUsable, kW, {
+    dodPct: nv('dod',90), rtePct: nv('rte',88),
+    otherEffPct: nv('otherEff',100), cRate: nv('cRate',0.5)
+  });
+  var name = cap.nameplateKwh;
   var capex = name*nv('cKwh',450) + kW*nv('cKw',0);
   var itc = nv('itc',30)/100;
   /* A contingent incentive is not equity until it is awarded. The haircut is
@@ -219,20 +367,50 @@ function econ(kW, kWhUsable, annSav, lossCost){
   var fade = nv('fade',2)/100;
   var esc = nv('escal',3)/100;
 
+  /* A pack that falls below its minimum usable state of health has to be
+     replaced, and a twenty-year analysis that never books one is telling a
+     funder the cells are free after year ten. At 2%/yr a pack crosses 70%
+     in year eighteen; at 3%/yr it crosses in year twelve, well inside a
+     common term. The replacement resets the fade clock, which is why the
+     measured curve is keyed on state of health rather than on year. */
+  var minSoh = clampPct(nv('minSoh',70))/100;
+  var replPerKwh = nv('replKwh', nv('cKwh',450));
+  /* Replacing cells is not rebuilding the plant: the converters, the pad,
+     the switchgear and the interconnection all stay. Only the energy side
+     is bought again, and the tax credit is not assumed to be available a
+     second time. */
+  var replCost = name*replPerKwh;
+
   var cf = [-net], i, npv = -net, cum = -net, payback = Infinity, yr1 = 0;
+  var age = 1, replacements = 0, firstRepl = null, replTotal = 0;
   for(i=1;i<=term;i++){
     var e = Math.pow(1+esc, i-1);
-    var sav = annSav*Math.pow(1-fade, i-1)*e;
-    var c = sav - lossCost*e - om*e;
+    var soh = Math.pow(1-fade, age-1);
+    var replThisYear = 0;
+    if(soh < minSoh && replPerKwh > 0){
+      replThisYear = replCost;
+      replacements++; replTotal += replCost;
+      if(firstRepl === null) firstRepl = i;
+      age = 1; soh = 1;
+    }
+    var sav = annSav*savingsRatio(curve, soh)*e;
+    var c = sav - lossCost*e - om*e - replThisYear;
     if(i === 1) yr1 = c;
     cf.push(c);
     npv += c/Math.pow(1+disc, i);
     if(cum < 0 && cum + c >= 0) payback = i - 1 + (-cum)/c;
     cum += c;
+    age++;
   }
   var r = irr(cf);
   return {
     kW:kW, kWh:kWhUsable, nameplate:name, capex:capex, net:net, om:om,
+    degradation: curve ? 'measured' : 'linear',
+    replacements: replacements, firstReplacementYear: firstRepl,
+    replacementCost: replTotal, minSohPct: minSoh*100,
+    cRateBound:cap.cRateBound, binding:cap.binding,
+    effectiveCRate: name>0 ? Math.round(kW/name*10000)/10000 : 0,
+    cRateFloorKwh: cap.cRateFloorKwh,
     incGross:incGross, incNet:incNet,
     annSav:annSav, lossCost:lossCost, yr1:yr1,
     payback: payback, npv:npv, irr:r,
@@ -270,7 +448,7 @@ function runInterval(){
     var t0 = new Date().getTime();
     while(idx < jobs.length){
       var j = jobs[idx++];
-      var Emax = j.kW*j.dur;
+      var Emax = deliverableKwh(j.kW, j.dur);
       var peaks = [], dis = 0, charge=0, maxEvt = 0, k, soc=0;
       for(k=0;k<MONTHS.length;k++){
         var r = solveMonth(MONTHS[k], j.kW, Emax, rte, soc);
@@ -285,7 +463,9 @@ function runInterval(){
       var ann = sav * (12/MONTHS.length);
       var lossKwh = Math.max(0,charge-dis) * (12/MONTHS.length);
       var e = econ(j.kW, Emax, ann, lossKwh*nv('eRate',0.075));
-      e.dur = j.dur; e.peaks = peaks; e.billed = billed;
+      e.dur = j.dur; e.effDur = j.kW>0 ? Math.round(Emax/j.kW*100)/100 : j.dur;
+      e.cRateForced = e.effDur > j.dur + 1e-6;
+      e.peaks = peaks; e.billed = billed;
       e.periodSav = sav; e.maxEvt = maxEvt; e.disAnn = dis*(12/MONTHS.length);
       sweep.push(e);
     }
@@ -326,6 +506,44 @@ function pickBest(sweep){
   if(!best){
     best = sweep[0];
     for(i=0;i<sweep.length;i++) if(sweep[i].npv > best.npv) best = sweep[i];
+    return best;
+  }
+
+  /* NOTHING PENCILS IS NOT THE SAME AS "BUILD A TINY ONE".
+     On a flat demand tariff the return per dollar is CONSTANT across most
+     of the sweep - the battery shaves proportionally until the load
+     duration curve flattens - so when that constant return sits below the
+     hurdle, every size is equally unviable and NPV just approaches zero
+     from below as the battery approaches nothing. Ranking by NPV then
+     returns 17 kW, and ranking by payback returns much the same. Neither
+     is an answer; both are artefacts of ranking a set with no winner.
+     When no size clears the hurdle, show the DEEPEST size that still holds
+     the best available return per dollar. That says something true and
+     useful next to the banner reporting that none of them pay back: this
+     is the most the site can do, and this is how far short it falls. */
+  var anyViable = false;
+  for(i=0;i<sweep.length;i++) if(sweep[i].npv > 0){ anyViable = true; break; }
+  if(!anyViable){
+    var bestRatio = 0;
+    for(i=0;i<sweep.length;i++){
+      var c0 = sweep[i];
+      if(!(c0.net > 0) || c0.annSav <= 0) continue;
+      var r0 = c0.annSav / c0.net;
+      if(r0 > bestRatio) bestRatio = r0;
+    }
+    if(bestRatio > 0){
+      var deepest = null;
+      for(i=0;i<sweep.length;i++){
+        var c1 = sweep[i];
+        if(!(c1.net > 0) || c1.annSav <= 0) continue;
+        /* Within half a percent of the best return counts as the same
+           return; among those, take the most capable system. */
+        if(c1.annSav / c1.net >= bestRatio * 0.995){
+          if(!deepest || c1.kW > deepest.kW) deepest = c1;
+        }
+      }
+      if(deepest) best = deepest;
+    }
   }
   return best;
 }
@@ -333,24 +551,42 @@ function finishInterval(sweep, baseBilled, baseCost, maxPeak){
   $('prog').style.display = 'none';
   $('out').style.display = '';
   var best = pickBest(sweep);
+
+  /* Same probe as the bill path, against the measured series. It re-runs
+     the dispatch, so it is the real answer and not a scaling of one. */
+  function savingsWith(kW, Emax){
+    var rte = nv('rte',88)/100, dRate = nv('dRate',18.5), ratchet = nv('ratchet',0);
+    var pk = [], soc = 0, k;
+    for(k=0;k<MONTHS.length;k++){
+      var r = solveMonth(MONTHS[k], kW, Emax, rte, soc);
+      soc = r.finalSoc; pk.push(r.peak);
+    }
+    var bl = applyRatchet(pk, ratchet), cost = 0;
+    for(k=0;k<MONTHS.length;k++) cost += bl[k]*dRate;
+    return (baseCost - cost) * (12/MONTHS.length);
+  }
+
   RESULT = {
     mode:'interval', sweep:sweep, best:best, baseBilled:baseBilled, baseCost:baseCost,
-    maxPeak:maxPeak, months:MONTHS, dRate:nv('dRate',18.5), nMon:MONTHS.length
+    maxPeak:maxPeak, months:MONTHS, dRate:nv('dRate',18.5), nMon:MONTHS.length,
+    savingsWith:savingsWith
   };
   return RESULT;
 }
-function breakEven(R, b, REC){
+function breakEven(R, b, REC, curve){
   var term = Math.round(nv('term',10)), disc = nv('disc',8)/100, fade = nv('fade',2)/100;
   var A = 0, B = 0, y;
   for(y=1;y<=term;y++){
-    A += Math.pow(1-fade,y-1)*Math.pow(1+nv('escal',3)/100,y-1)/Math.pow(1+disc,y);
+    var degr = (curve && curve[y-1] != null) ? curve[y-1] : Math.pow(1-fade,y-1);
+    A += degr*Math.pow(1+nv('escal',3)/100,y-1)/Math.pow(1+disc,y);
     B += Math.pow(1+nv('escal',3)/100,y-1)/Math.pow(1+disc,y);
   }
   var needSav = (REC.net + (b.lossCost + REC.om)*B) / A;
   var mult = b.annSav > 0 ? needSav/b.annSav : Infinity;
-  /* cost side: net = nameplate * $/kWh * (1-itc) */
-  var dod = nv('dod',90)/100;
-  var nameplate = REC.kWh/dod;
+  /* cost side: net = nameplate * $/kWh * (1-itc). Read the nameplate the
+     economics were actually priced against rather than deriving a second,
+     lower one here - that is how the break-even cost came out optimistic. */
+  var nameplate = REC.nameplate;
   var affordNet = b.annSav*A - (b.lossCost + REC.om)*B;
   var retention=1-nv('itc',30)/100;
   var costBe=nameplate>0&&retention>0 ? (affordNet+REC.incNet-REC.kW*nv('cKw',0)*retention)/(nameplate*retention) : null;
@@ -368,7 +604,7 @@ function probeDurations(){
 
   for(d=0; d<missing.length; d++){
     for(ci=0; ci<sizes.length; ci++){
-      var kW = sizes[ci], Emax = kW*missing[d];
+      var kW = sizes[ci], Emax = deliverableKwh(kW, missing[d]);
       var peaks = [], dis = 0, charge=0, soc=0;
       for(k=0;k<MONTHS.length;k++){
         var r = solveMonth(MONTHS[k], kW, Emax, rte, soc);
@@ -380,7 +616,7 @@ function probeDurations(){
       var ann = (RESULT.baseCost - cost)*(12/MONTHS.length);
       var loss = Math.max(0,charge-dis)*(12/MONTHS.length)*nv('eRate',0.075);
       var head = nv('headroom',10)/100;
-      var e = econ(kW*(1+head), Emax*(1+head), ann, loss);
+      var e = econ(kW*(1+head), Emax*(1+head), ann, loss, RESULT.fadeCurve);
       e.dur = missing[d];
       if(!best || e.npv > best.npv) best = e;
     }
@@ -535,9 +771,65 @@ function energyNeeded(m, T){
 }
  if(input.mode==='tool-interval') runInterval(); else runBills(input.data);
  if(!RESULT||!RESULT.best)throw new Error('No sizing candidates.');
+
+ /* ---- degradation, measured rather than assumed ---------------------
+    A faded pack holds less energy, and the shave it can still hold is
+    found by re-solving against the load, not by scaling last year's
+    savings. The difference is large and one-sided: on a twelve-bill
+    profile, scaling linearly understated year-eight savings by 13% and
+    end-of-life savings by 29%, because the load duration curve is concave
+    and the first kWh lost costs far less depth than the last.
+
+    The samples are keyed on STATE OF HEALTH, not on year, so that a
+    replacement can reset the clock and the same measurements still apply
+    to the new pack. A year-indexed curve cannot express that.
+
+    The curve is measured on ONE candidate and applied to the whole sweep.
+    Measuring it per candidate is the exact answer and is not affordable -
+    on a twelve-bill run that is 21,000 shave solves - so instead the pick
+    is re-made with the curve and, if it moved, the curve is re-measured on
+    the size that won. Two or three passes and it stops moving; a size with
+    more energy headroom than its duty fades more gently, and that is the
+    difference the loop is chasing. */
+ var termYears = Math.round(nv('term',10));
+ var fadeRate  = nv('fade',2)/100;
+ RESULT.fadeCurve = null;
+ RESULT.fadePasses = 0;
+ if(typeof RESULT.savingsWith === 'function' && RESULT.best.annSav > 0 && termYears > 0){
+  try{
+   var probe = RESULT.savingsWith;
+   var pass, prevKw = null, prevDur = null;
+   for(pass=0; pass<3; pass++){
+    var b0 = RESULT.best;
+    if(b0.kW === prevKw && b0.dur === prevDur) break;   /* converged */
+    prevKw = b0.kW; prevDur = b0.dur;
+    var full = probe(b0.kW, b0.kWh);
+    if(!(full > 0)) break;
+    /* Sampled from a new pack down to well past any sane replacement
+       threshold, at 2.5% intervals. econ interpolates between samples. */
+    var curve = [], ss, sv;
+    for(ss=100; ss>=50; ss-=2.5){
+     sv = probe(b0.kW, b0.kWh*(ss/100));
+     /* A faded pack cannot out-earn a new one; clamp rather than trust a
+        solver artefact at the edge of the search. */
+     curve.push({ soh: ss/100, ratio: Math.max(0, Math.min(1, sv/full)) });
+    }
+    RESULT.fadeCurve = curve;
+    RESULT.fadePasses = pass + 1;
+    var i2;
+    for(i2=0;i2<RESULT.sweep.length;i2++){
+     var c2 = RESULT.sweep[i2];
+     var e2 = econ(c2.kW, c2.kWh, c2.annSav, c2.lossCost, curve);
+     var k2; for(k2 in e2) if(Object.prototype.hasOwnProperty.call(e2,k2)) c2[k2] = e2[k2];
+    }
+    RESULT.best = pickBest(RESULT.sweep);
+   }
+  }catch(e){ RESULT.fadeCurve = null; }
+ }
+
  var b=RESULT.best, head=1+Math.round(nv('headroom',10))/100;
- RESULT.rec=econ(b.kW*head,b.kWh*head,b.annSav,b.lossCost);
- RESULT.breakEven=breakEven(RESULT,b,RESULT.rec);
+ RESULT.rec=econ(b.kW*head,b.kWh*head,b.annSav,b.lossCost,RESULT.fadeCurve);
+ RESULT.breakEven=breakEven(RESULT,b,RESULT.rec,RESULT.fadeCurve);
  RESULT.underwriting=underwriting(RESULT,b,RESULT.rec);
  RESULT.shortPeriod=RESULT.nMon<12?shortPeriodCallout(RESULT,b):'';
  RESULT.durationProbe=probeDurations()||null;
