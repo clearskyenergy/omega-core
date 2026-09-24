@@ -58,6 +58,7 @@ var CUSTOMER = 'ops@riverside.example';                      /* the sample's buy
 var NEUTRAL = function (w) {
   return [['Clean Cell Power Platform', w.brand], ['Clean Cell', w.brand], ['Cleancell', w.brand],
     ['robert.bucher@cleancell.us', 'support@' + w.domain], ['cleancell.us', w.domain],
+    ['/cleancell/', '/' + w.domain.split('.')[0] + '/'], ['DEMOCLEANCELL', 'DEMO'],   /* the sample's pay links */
     ['Amperage Capital', 'Their Company'], ['amperagecapital.com', 'theircompany.com'], ['inchargeus.com', 'theircompany.com'],
     ['InCharge Energy', 'Harbor Charging'], ['InCharge', 'Harbor'], ['incharge.example', 'harbor.example']];
 };
@@ -84,6 +85,16 @@ async function customerSites(p, h) {
   await h.click('#nav [data-tab="' + (fleet ? 'fleet' : 'account') + '"]');
   await h.wait('#sites-body [data-dest="0"]');
 }
+/* The customer names the site its unit is going to and records it
+   received: the state the office then sees under "The customer says" */
+async function customerDeclares(p, h) {
+  await customerSites(p, h);
+  var site = await p.$eval('#sites-body [data-dest="0"]', function (s) { var o = Array.prototype.filter.call(s.options, function (x) { return x.value; })[0]; return o ? o.value : ''; });
+  if (!site) throw new Error('no site in the sample to send the unit to');
+  await p.selectOption('#sites-body [data-dest="0"]', site);
+  await h.click('#sites-body [data-act="destination"]'); await h.text('#status', /is going to/);
+  await h.click('#sites-body [data-act="received"]'); await h.text('#status', /^Recorded/);
+}
 var SHOTS = [
   /* the Omega Logic app — guides/Omega-Logic-App.pdf */
   { name: 'office-hub', page: '/app-sandbox/office', who: 'company', signIn: 'staff', ready: '#hubs .hexhub [data-hub="sales"]', what: 'Home: the hex hub with its badges, top of the page',
@@ -100,8 +111,15 @@ var SHOTS = [
     steps: async function (p, h) { await openAccount(p, h, 'documents'); await h.soft('#cust-body [data-doc-get]'); await h.settle(); await h.scrollTo('#doc-note'); } },
   { name: 'office-order', page: '/app-sandbox/office', who: 'company', signIn: 'staff', ready: '#back', what: 'the Orders tab with one order open',
     steps: async function (p, h) { await h.click('#nav [data-tab="orders"]'); await h.click('#view [data-order="o1"]'); await h.soft('#view [data-resolve]'); } },
-  { name: 'office-sites', page: '/app-sandbox/office', who: 'company', signIn: 'staff', ready: '#su-serial', what: 'the Sites tab',
-    steps: async function (p, h) { await h.click('#nav [data-tab="sites"]'); } },
+  /* the customer places its unit first (same browser, same sample), so the
+     office's Sites tab has one to Confirm, as the guide describes */
+  { name: 'office-sites', page: '/app-sandbox/customer', who: 'company', signIn: 'customer', ready: '#su-serial', what: 'the Sites tab: a unit the customer placed, waiting for Confirm',
+    steps: async function (p, h) {
+      await customerDeclares(p, h);
+      await p.goto(new URL(p.url()).origin + '/app-sandbox/office', { waitUntil: 'domcontentloaded' });
+      await signIn(p, h, 'staff');
+      await h.click('#nav [data-tab="sites"]'); await h.wait('[data-confirm]');
+    } },
   { name: 'office-menu', page: '/app-sandbox/office', who: 'company', signIn: 'staff', ready: '#qsearch', what: 'the Menu, Sales panel open',
     steps: async function (p, h) { await h.click('#nav [data-tab="menu"]'); await h.click('#view [data-panel="sales"]'); } },
   { name: 'desktop-office', page: '/omega-logic?org=' + WHO.company.domain, who: 'company', signIn: 'desktop', view: DESKTOP, ready: '#hub [data-hub], .logic-flow a', what: 'the desktop office (omega-logic.html) in a 1280×800 window, hub at the top',
@@ -127,13 +145,8 @@ var SHOTS = [
     steps: async function (p, h) { await customerSites(p, h); await h.settle(); await h.scrollTo('#view h2', /^Sites/); } },
   { name: 'customer-sites-2', page: '/app-sandbox/customer', who: 'supplier', signIn: 'customer', ready: '#sites-body h2', what: 'the same unit after the customer names its site and records it received',
     steps: async function (p, h) {
-      await customerSites(p, h);
-      var site = await p.$eval('#sites-body [data-dest="0"]', function (s) { var o = Array.prototype.filter.call(s.options, function (x) { return x.value; })[0]; return o ? o.value : ''; });
-      if (!site) throw new Error('no site in the sample to send the unit to');
-      await p.selectOption('#sites-body [data-dest="0"]', site);
-      await h.click('#sites-body [data-act="destination"]'); await h.text('#status', /is going to/);
-      await h.click('#sites-body [data-act="received"]'); await h.text('#status', /^Recorded/);
-      await h.settle(); await h.scrollTo('#sites-body h2', /^Your units/);
+      await customerDeclares(p, h);
+      await h.settle(); await h.scrollTo('#view [data-go="warranty"]');   /* the page ends before "Your units" reaches the top: start at the whole row of buttons, not a sliver of it */
     } }
 ];
 
