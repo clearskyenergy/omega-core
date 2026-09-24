@@ -65,6 +65,9 @@ fieldset .chk{margin:6px 16px 6px 0!important}
 .pays li button{padding:4px 12px;margin-left:8px;font-size:13px}
 s.voided{color:var(--ink3)}
 .dacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.paystate{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-radius:10px;margin:12px 0;background:#FFF5DE;color:#4D3A0B}
+.paystate.ok{background:#E6F6EE;color:#12462D}.paystate small{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.8}.paystate b{display:block;font-size:17px}.paystate .sub{display:block;font-size:13px;opacity:.85}
+.paystate .pbtn{display:flex;flex-wrap:wrap;gap:8px}
 /* dialogs: an overlay with a card, no <dialog> element */
 .logic-dialog{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(11,39,51,.45);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;z-index:60;overflow-y:auto}
 .logic-dialog .box{background:white;border-radius:14px;padding:22px 24px;width:520px;max-width:100%;box-shadow:0 20px 50px rgba(11,39,51,.25)}
@@ -302,6 +305,19 @@ s.voided{color:var(--ink3)}
     if (r.syncError) h += '<p class="alert">Ledger sync: ' + esc(r.syncError) + '</p>';
     return h;
   }
+  /* whether the money is in, said at the top, with the one tap that changes
+     it: "not received" voids the payment (kept, struck through, with the
+     reason; the release on PO is offered there), "received" records one */
+  function stateHtml(r) {
+    if (!r.number && !r.issuedAt) return '';
+    var live = active(r), a = r.actions || {}, got = Number(r.receivedCents) || 0, full = got > 0 && Number(r.balanceCents) <= 0, last = live[live.length - 1];
+    var label = full ? 'Received' : got > 0 ? 'Part received: ' + usd(got) + ' of ' + usd(r.amountCents) : 'Not received yet';
+    var sub = full && last ? usd(last.amountCents) + ' on ' + last.date + ' · ' + last.bankReference : got > 0 ? usd(r.balanceCents) + ' still to come' : (r.releasedOnPo ? 'The order keeps building on its PO while this is collected' : 'Nothing recorded as received');
+    var btn = '';
+    if (last && a['void']) btn += '<button type="button" data-act="void" data-ref="' + esc(last.bankReference) + '">' + (live.length > 1 ? 'Last payment not received' : 'Mark as not received') + '</button>';
+    if (Number(r.balanceCents) > 0 && a.record) btn += '<button type="button" class="primary" data-act="record" data-fill="balance">Mark as received</button>';
+    return '<div class="paystate' + (full ? ' ok' : '') + '" id="paystate"><div><small>Payment</small><b>' + esc(label) + '</b><span class="sub">' + esc(sub) + '</span></div>' + (btn ? '<div class="pbtn">' + btn + '</div>' : '') + '</div>';
+  }
   function drawerHtml(r) {
     var a = r.actions || {}, P = prov(D.sync && D.sync.provider), cr = r.creditRelease, h = '';
     h += '<div class="eyebrow">' + esc(r.orderNo) + (r.poNumber ? ' · PO ' + esc(r.poNumber) : '') + '</div>';
@@ -310,6 +326,7 @@ s.voided{color:var(--ink3)}
     h += '<p>' + esc(r.customer.name) + (who ? '<span class="sub">' + esc(who) + '</span>' : '') + '</p>';
     if (r.orderStage) h += '<p><span class="tag' + (r.orderStage.credit ? ' onpo' : '') + '">' + esc(r.orderStage.label) + '</span> <span class="hint">' + esc(r.orderStage.next) + '</span></p>';
     if (r.billing === 'quickbooks') h += '<p class="hint">Billed through ClearSky QuickBooks; payments reconcile there.</p>';
+    h += stateHtml(r);
     h += '<div class="facts"><div><small>Invoice</small>' + esc(r.number || 'not issued yet') + '</div><div><small>Status</small>' + esc(words(r.status)) + (r.overdue ? ' · ' + esc(r.daysOverdue) + ' day' + (r.daysOverdue === 1 ? '' : 's') + ' overdue' : '') + '</div>'
       + '<div><small>Issued</small>' + esc(r.issuedAt || '—') + '</div><div><small>Due</small>' + esc(r.dueAt || '—') + (dueNote(r) ? '<span class="sub">' + esc(dueNote(r)) + '</span>' : '') + '</div>'
       + '<div><small>Amount</small>' + dollars(r.amountCents) + '</div><div><small>Received</small>' + dollars(r.receivedCents) + '</div><div><small>Balance</small><b>' + dollars(r.balanceCents) + '</b></div></div>';
@@ -394,9 +411,9 @@ s.voided{color:var(--ink3)}
     var p = D.sync && D.sync.provider; $('is-sync').hidden = !(p && p !== 'none'); $('is-sync').textContent = p && p !== 'none' ? 'It will also be created in your ' + prov(p) + '.' : '';
     openDialog('dlg-issue', r, opener);
   }
-  function openPay(r, opener) {
+  function openPay(r, opener, fill) {
     $('pay-summary').textContent = r.orderNo + ' · ' + r.stage + ' invoice ' + (r.number || '') + ' · balance ' + usd(r.balanceCents);
-    $('pay-amount').value = ''; $('pay-date').value = D.today || ''; $('pay-ref').value = ''; $('pay-re').hidden = true; $('pay-reinstate').checked = false; $('pay-reason').value = '';
+    $('pay-amount').value = fill && Number(r.balanceCents) > 0 ? (Number(r.balanceCents) / 100).toFixed(2) : ''; $('pay-date').value = D.today || ''; $('pay-ref').value = ''; $('pay-re').hidden = true; $('pay-reinstate').checked = false; $('pay-reason').value = '';
     openDialog('dlg-pay', r, opener);
   }
   function openLink(r, opener) {
@@ -500,7 +517,7 @@ s.voided{color:var(--ink3)}
     var r = rowBy(ROW), a = b.getAttribute('data-act'); if (!r) return;
     if (a === 'void') openVoid(r, b.getAttribute('data-ref'), b);
     else if (a === 'issue') openIssue(r, b);
-    else if (a === 'record') openPay(r, b);
+    else if (a === 'record') openPay(r, b, b.getAttribute('data-fill') === 'balance');
     else if (a === 'edit') openEdit(r, b);
     else if (a === 'release') openRelease(r, b);
     else if (a === 'link') openLink(r, b);
