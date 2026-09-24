@@ -175,7 +175,14 @@ under `/guides/` built from `scripts/guides/`.
 
 ### The office app (`/office/app`)
 
-The office in a pocket, for whoever is not at the desk. Six tabs:
+**The Omega Logic app** — one app for the whole business, laid out the way
+QuickBooks lays out its app: four tabs for the daily work and a **Menu**
+that holds everything else. The Menu has a search box, a row of
+*frequently used* circles (Orders, PO loads, Customers, Sites, Stock,
+Register, Plant), and panels that open to their list: Sales & orders,
+Customer hub, Plant, Deliver & sites, Stock & supply, Money, Setup, Help &
+guides. A screen the app has opens in the app; the rest open their page.
+Bottom tabs: Home, Orders, Customers, Sites, Menu. The screens:
 
 - **Today** — the stage counts (to price, awaiting deposit, in build,
   ready · shipped); **needs a person**: company POs to review, orders with

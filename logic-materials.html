@@ -11,7 +11,7 @@ function $(id){return document.getElementById(id);}function esc(s){return String
 function n(v,d){v=Number(v);if(!isFinite(v))return '—';return v.toLocaleString(undefined,{maximumFractionDigits:d==null?4:d});}
 function usd(v){v=Number(v);if(!isFinite(v))return '—';return '$'+v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
 function supName(id){var s=(data&&data.suppliers||[]).filter(function(x){return x.id===id;})[0];return s?s.name:id;}
-$('office').href='/omega-logic'+base;$('catalog').href='/logic-catalog.html'+base;$('manager').href='/plant/manager.html'+base;
+($('office')||{}).href='/omega-logic'+base;($('catalog')||{}).href='/logic-catalog.html'+base;($('manager')||{}).href='/plant/manager.html'+base;
 function api(body){if(!auth.currentUser)return Promise.reject(new Error('Sign in through your office account.'));return auth.currentUser.getIdToken().then(function(t){return fetch('/api/logic-materials'+(body?'':base),{method:body?'POST':'GET',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:body?JSON.stringify(Object.assign({org:org},body)):undefined});}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error);return d;});});}
 function error(e){$('status').textContent=e.message;}
 function firm(r){return r.net.committed+r.net.pipeline+(r.net.buffer||0);}

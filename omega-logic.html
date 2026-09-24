@@ -37,7 +37,7 @@ function app(href,title,note){return href?'<a class="app-link" href="'+esc(href)
 function office(d){var paid=0,invoiced=0,held=0,depositsOpen=0,cnt={quote:0,deposit:0,build:0,ready:0,shipped:0};
 d.orders.forEach(function(o){var l=o.logic;if(l){Object.keys(l.invoices||{}).forEach(function(k){var i=l.invoices[k];invoiced+=i.amountCents||0;paid+=i.paidCents||0;if(k==='deposit'&&(i.paidCents||0)<(i.amountCents||0))depositsOpen+=(i.amountCents||0)-(i.paidCents||0);});if(l.lastError||l.paymentException)held++;}
   if(o.status==='shipped')cnt.shipped++;else if(o.status==='complete')cnt.ready++;else if(o.status==='in_fulfilment')cnt.build++;else if(o.status==='accepted')cnt.deposit++;else if(o.status!=='cancelled')cnt.quote++;});
-if($('mission'))$('mission').href=d.links.mission;
+if($('mission'))($('mission')||{}).href=d.links.mission;
 var q='?org='+encodeURIComponent(ORG);
 $('content').innerHTML='<div class="top"><div><div class="eyebrow">'+(d.owner?'<a href="/omega-logic">All OEM customers</a> / ':'')+esc(d.org)+'</div><h1>'+esc(d.name)+'</h1><p class="muted">Every order, from the customer’s request to the serial number on their site.</p></div><span class="tag">'+(d.active?'Omega Logic enabled':'Setup required')+'</span></div>'+
 (!d.active&&d.owner?'<p class="warn">Automation is not active. Configure QuickBooks and the Omega Logic subscription before accepting orders into this workflow.</p>':'')+(!d.products?'<p class="warn">The product list is empty. Add your products and their bills of materials under <a href="/logic-catalog.html'+q+'">Products &amp; bills</a> before taking priced orders.</p>':'')+

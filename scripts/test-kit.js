@@ -23,7 +23,7 @@ t('an attached tenant hostname replaces the open host for org-scoped items only'
 t('the message per audience names each item, how to install it, the sandbox and the guide to attach', function () {
   var k = K.forOrg('cleancell.us', { name: 'Clean Cell' }), m = K.message(k, 'customer');
   assert.ok(/^Here is your Clean Cell Omega Logic kit for you\./.test(m)); assert.ok(/Customer app: https/.test(m)); assert.ok(/Add to Home Screen/.test(m)); assert.ok(/app-sandbox\/customer/.test(m)); assert.ok(/Omega-Logic-Customer-App\.pdf/.test(m)); assert.ok(/Sign in: Email login link/.test(m));
-  var o = K.message(k, 'office'); assert.ok(/Office app: https/.test(o) && /Fleet register: https/.test(o) && /Omega-Logic-Office-App\.pdf/.test(o));
+  var o = K.message(k, 'office'); assert.ok(/Omega Logic app: https/.test(o) && /Fleet register: https/.test(o) && /Omega-Logic-Office-App\.pdf/.test(o));
   var pl = K.message(k, 'plant'); assert.ok(/Plant app: https/.test(pl) && /Bench scan station: https/.test(pl) && !/Customer app/.test(pl));
 });
 console.log('\n' + n + ' kit checks passed');
