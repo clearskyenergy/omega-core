@@ -907,6 +907,21 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     if (shotsAt) await ip.screenshot({ path: path.join(shotsAt, name + '.png'), fullPage: true });
     await ictx.close();
   }
+  /* A browser where Google's pop-up cannot open (an app's built-in browser,
+     pop-ups blocked): a redirect through another site's auth helper never
+     comes back ("missing initial state"), so the page says what to do
+     instead; only a helper on this very site may take the redirect. */
+  var bctx = await b.newContext({ viewport: { width: 390, height: 844 } }), bp = await bctx.newPage();
+  bp.on('pageerror', function (e) { errs.push('popup-blocked: ' + e.message); });
+  await bp.goto(base + '/app-sandbox/office', { waitUntil: 'domcontentloaded' }); await bp.waitForTimeout(500);
+  await bp.evaluate(function () { var a = firebase.auth(); window.__redir = 0; a.signInWithPopup = function () { return Promise.reject({ code: 'auth/popup-blocked' }); }; a.signInWithRedirect = function () { window.__redir++; return Promise.resolve(); }; });
+  await bp.click('#signin'); await bp.waitForTimeout(400);
+  var blocked = await bp.evaluate(function () { return { msg: document.getElementById('ols-msg').textContent, redir: window.__redir }; });
+  await bp.evaluate(function () { firebase.auth().app = { options: { authDomain: location.host } }; });
+  await bp.click('#signin'); await bp.waitForTimeout(400);
+  var home = await bp.evaluate(function () { return window.__redir; });
+  ok('Google\'s pop-up blocked: no redirect through another site\'s helper, the person is told to use Safari/Chrome or email; with the helper on this site the redirect is taken', blocked.redir === 0 && /can\u2019t open in this browser/.test(blocked.msg) && /\/logic in Safari or Chrome/.test(blocked.msg) && home === 1, [blocked, home]);
+  await bctx.close();
   ok('no JS errors', errs.length === 0, errs);
   ok('every /api/ route a page called is one the stub answers', missing.length === 0, missing);
   await b.close(); srv.close();
