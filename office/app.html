@@ -205,11 +205,11 @@
   <button data-tab="sites"><span>◎</span>Sites</button>
   <button data-tab="menu"><span>⋮⋮</span>Menu</button>
 </nav>
-<script>window.OMEGA_NO_HUB_ROUTE = true; /* Omega Logic resolves its own workspace (omega-logic-signin.js) */</script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-logic-signin.js"></script><script src="/omega-hexhub.js"></script>
+<script>window.OMEGA_NO_HUB_ROUTE = true; /* Omega Logic resolves its own workspace (omega-logic-signin.js) */</script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-auth-errors.js"></script><script src="/omega-logic-signin.js"></script><script src="/omega-hexhub.js"></script>
 <script>
 (function () {
   'use strict';
-  var cfg = window.CLEARSKY_CONFIG || {}; if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg);
+  var cfg = window.CLEARSKY_CONFIG || {}; if (!firebase.apps.length) firebase.initializeApp(window.OmegaLogicSignIn ? OmegaLogicSignIn.config(cfg.firebase || cfg) : (cfg.firebase || cfg));
   var auth = firebase.auth(), params = new URLSearchParams(location.search);
   function $(id) { return document.getElementById(id); }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }

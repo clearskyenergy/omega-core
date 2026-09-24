@@ -34,7 +34,7 @@
     + '.ols button,.ols input{font:inherit;width:100%;min-height:48px;border-radius:12px;box-sizing:border-box}'
     + '.ols .ols-google{background:#0C1824;color:#fff;border:0;font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer}'
     + '.ols .ols-google svg{width:20px;height:20px;background:#fff;border-radius:50%;padding:2px}'
-    + '.ols .ols-or{display:flex;align-items:center;gap:10px;color:#8aa0ab;font-size:12.5px;margin:16px 0}.ols .ols-or:before,.ols .ols-or:after{content:"";flex:1;height:1px;background:#dbe6ea}'
+    + '.ols .ols-or{display:flex;align-items:center;gap:10px;color:#5a7280;font-size:12.5px;margin:16px 0}.ols .ols-or:before,.ols .ols-or:after{content:"";flex:1;height:1px;background:#dbe6ea}'
     + '.ols form{display:grid;gap:10px;text-align:left}.ols label{font-size:12.5px;color:#4b6270;margin-bottom:-6px}'
     + '.ols input{border:1px solid #cfdde3;padding:0 14px;background:#fff}.ols input:focus{outline:2px solid #1fb6c9;border-color:#1fb6c9}'
     + '.ols .ols-submit{background:#fff;border:1.5px solid #0C1824;color:#0C1824;font-weight:700;cursor:pointer}'
@@ -43,7 +43,7 @@
     + '.ols .ols-list{display:grid;gap:10px;text-align:left;margin-top:6px}'
     + '.ols .ols-ws{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fff;border:1px solid #cfdde3;padding:12px 14px;text-align:left;cursor:pointer}'
     + '.ols .ols-ws b{display:block;font-size:15.5px;color:#0C1824}.ols .ols-ws small{color:#5a7280;font-size:12.5px}.ols .ols-ws span{color:#0e7c8b;font-size:20px}'
-    + '.ols .ols-fine{color:#6b8290;font-size:12.5px;margin-top:22px}'
+    + '.ols .ols-fine{color:#5a7280;font-size:12.5px;margin-top:22px}'
     + '.ols .ols-find{margin:4px 0 2px}';
   function style() { if (document.getElementById('ols-css')) return; var s = document.createElement('style'); s.id = 'ols-css'; s.textContent = CSS; document.head.appendChild(s); }
   var G = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.7 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.6 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.2-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
@@ -57,7 +57,8 @@
     if (/too-many-requests/.test(c)) return 'Too many tries. Wait a minute, or reset your password.';
     if (/network/.test(c)) return 'No connection. Check your signal and try again.';
     if (/popup-blocked/.test(c)) return 'Your browser blocked the Google window. Allow pop-ups for this site, or sign in with email.';
-    return (e && e.message) || 'Could not sign in. Try again.';
+    /* never a raw vendor string on a screen (omega-auth-errors.js) */
+    return global.OmegaAuthError ? global.OmegaAuthError.text(e) : 'Sign-in didn\u2019t work. Contact your account administrator.';
   }
 
   function signIn(el, opts) {
@@ -89,7 +90,13 @@
       p.setCustomParameters && p.setCustomParameters({ prompt: 'select_account' });
       /* an app installed on the home screen cannot show Google's pop-up (iOS
          never even reports it blocked): go by redirect there */
-      var installed = global.navigator.standalone === true || (global.matchMedia && global.matchMedia('(display-mode: standalone)').matches);
+      /* an iPhone home-screen app (navigator.standalone) cannot use Google's
+         pop-up, and a redirect through clearsky-portal.firebaseapp.com loses
+         the result to Safari's storage partitioning: the pages switch the
+         auth domain to this site there (OmegaLogicSignIn.authDomain, served
+         by the /__/auth proxy in vercel.json), and the redirect is
+         same-origin. Everywhere else: pop-up first, redirect if blocked. */
+      var installed = global.navigator.standalone === true;
       (installed && auth.signInWithRedirect ? auth.signInWithRedirect(p) : auth.signInWithPopup(p)['catch'](function (e) {
         if (/popup-blocked|operation-not-supported|web-storage/.test(String(e && e.code)) && auth.signInWithRedirect) return auth.signInWithRedirect(p);
         throw e;
@@ -144,7 +151,7 @@
         + '<button type="button" class="ols-google" id="ols-out">Sign in with another account</button><p class="ols-msg" id="ols-msg" role="status"></p></div>';
       el.querySelector('#ols-out').onclick = onSignOut;
       var v = el.querySelector('#ols-verify');
-      if (v) v.onclick = function () { v.disabled = true; auth.currentUser.sendEmailVerification().then(function () { el.querySelector('#ols-msg').className = 'ols-msg ok'; el.querySelector('#ols-msg').textContent = 'Sent. Open the link, then sign in again.'; }, function (e) { v.disabled = false; el.querySelector('#ols-msg').textContent = e.message; }); };
+      if (v) v.onclick = function () { v.disabled = true; auth.currentUser.sendEmailVerification().then(function () { el.querySelector('#ols-msg').className = 'ols-msg ok'; el.querySelector('#ols-msg').textContent = 'Sent. Open the link, then sign in again.'; }, function (e) { v.disabled = false; el.querySelector('#ols-msg').textContent = said(e) || 'Could not send the link. Try again in a few minutes.'; }); };
       return;
     }
     el.innerHTML = '<div class="ols">' + MARK + '<h1>' + (data.owner ? 'Open a workspace' : 'Choose your company') + '</h1><p class="ols-lede">Signed in as <b>' + email + '</b></p>'
@@ -164,5 +171,17 @@
     };
   }
 
-  global.OmegaLogicSignIn = { signIn: signIn, resolve: resolve, choose: choose };
+  /* the Firebase config for this page: on an iPhone home-screen app the
+     auth helper is served from this site (vercel.json proxies /__/auth and
+     /__/firebase to the project's firebaseapp.com), so the sign-in result
+     is not lost to Safari's storage partitioning. Needs
+     https://<this host>/__/auth/handler among the Google OAuth client's
+     authorised redirect URIs. */
+  function config(cfg) {
+    cfg = cfg || {};
+    if (global.navigator.standalone !== true || !cfg.authDomain) return cfg;
+    var out = {}; for (var k in cfg) if (Object.prototype.hasOwnProperty.call(cfg, k)) out[k] = cfg[k];
+    out.authDomain = global.location.host; return out;
+  }
+  global.OmegaLogicSignIn = { signIn: signIn, resolve: resolve, choose: choose, config: config };
 })(window);

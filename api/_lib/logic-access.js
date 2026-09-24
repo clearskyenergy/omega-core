@@ -26,7 +26,7 @@ async function authorize(c, org, write) {
   var m = await A.db().doc('omega_orgs/' + ctx.orgId + '/members/' + c.uid).get();
   var d = m.exists ? m.data() : {};
   if (d.status === 'disabled' || !d.role || (write && ['owner', 'admin'].indexOf(d.role) < 0)) throw A.httpError(403, 'An active OEM ' + (write ? 'administrator' : 'member') + ' is required');
-  if (!subscribed(ctx)) throw A.httpError(403, 'Omega Logic subscription is not active');
+  if (!subscribed(ctx)) { var ie = A.httpError(403, 'Omega Logic subscription is not active'); ie.reason = 'inactive'; throw ie; }
   return ctx;
 }
 module.exports = { owner: owner, requireOwner: requireOwner, context: context, subscribed: subscribed, enabled: enabled, authorize: authorize };

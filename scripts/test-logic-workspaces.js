@@ -44,7 +44,9 @@ function seed() {
     assert.equal(none.workspaces.length, 0); assert.equal(none.reason, 'none'); assert.match(none.note, /administrator/);
     assert.equal((await get(who('gone@cleancell.us'))).workspaces.length, 0, 'a disabled member is not listed');
     db.seed('omega_orgs/cleancell.us/billing/current', { addons: [], status: 'active' });
-    assert.equal((await get(who('ops@cleancell.us'))).workspaces.length, 0, 'no Omega Logic subscription, not listed');
+    var closed = await get(who('ops@cleancell.us'));
+    assert.equal(closed.workspaces.length, 0, 'no Omega Logic subscription, not listed');
+    assert.equal(closed.reason, 'inactive'); assert.match(closed.note, /subscription is not active/, 'and it says so, not "not on a workspace"');
     assert.equal((await get(who('ops@gmail.com'))).workspaces.length, 0);
   });
   await test('an unverified email is asked to verify, and nothing is listed', async function () {
@@ -64,10 +66,13 @@ function seed() {
     var d = await get(who('tom@clearsky-usa.com'));
     assert.ok(d.workspaces.some(function (w) { return w.orgId === 'zz-late.example'; }), 'a workspace sorting after 650 others is listed'); assert.equal(d.limited, false);
   });
+  function v0() { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8')); }
   await test('both office pages open on the one sign-in, and the app address carries no company', async function () {
     var root = path.join(__dirname, '..'), app = fs.readFileSync(path.join(root, 'office/app.html'), 'utf8'), desk = fs.readFileSync(path.join(root, 'omega-logic.html'), 'utf8');
     assert.ok(/src="\/omega-logic-signin\.js"/.test(app) && /src="\/omega-logic-signin\.js"/.test(desk));
     assert.ok(!/Open the app once from your office link/.test(app), 'the old dead end is gone');
+    assert.ok(/src="\/omega-auth-errors\.js"><\/script><script src="\/omega-logic-signin\.js"/.test(app) && /src="\/omega-auth-errors\.js"><\/script><script src="\/omega-logic-signin\.js"/.test(desk), 'no raw vendor error text: the mapper loads first');
+    assert.ok(v0().rewrites.some(function (r) { return r.source === '/__/auth/:path*' && /firebaseapp\.com\/__\/auth/.test(r.destination); }), 'the auth helper is served from this site for the installed iPhone app');
     var mf = JSON.parse(fs.readFileSync(path.join(root, 'office/app.webmanifest'), 'utf8')); assert.equal(mf.start_url, '/office/app'); assert.equal(mf.id, '/office/app');
     var v = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'utf8')); assert.ok(v.redirects.some(function (r) { return r.source === '/logic' && r.destination === '/office/app'; }));
   });
