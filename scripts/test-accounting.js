@@ -62,7 +62,7 @@ function provider(name) {
   function result(view, id) {
     return { provider: name, invoiceId: id, number: name === 'stripe' ? 'CCUS-' + id : view.invoice.number, customerId: name === 'stripe' ? 'cus_AMP' : '58',
       company: name === 'stripe' ? 'acct_1WORKSPACE' : '9130', hostedUrl: name === 'stripe' ? 'https://invoice.stripe.com/i/acct_1WORKSPACE/' + id : null,
-      totalCents: view.invoice.amountCents, warning: null };
+      totalCents: view.invoice.amountCents, warning: LS.pushWarning || null };
   }
   return {
     missing: function () { return []; },
@@ -520,6 +520,21 @@ async function main() {
   });
 
   /* ───────────────────────── the workspace's own books ─────────────────── */
+  await test('a void that leaves the owner\'s confirmed cleared receipts above what is recorded is flagged for review, never rewritten', async function () {
+    seed(); await priced(); await issued(); await paid('ACH 4471');
+    var cl = await post(office, { action: 'cleared', orderId: 'amp', amount: DEP / 100, bankReference: 'CLEARED 4471' }, OWNER);
+    assert.equal(cl.payout.clearedCents, DEP);
+    var payout = FD.clone(order().logic.payout);
+    await post(office, { action: 'payment-void', orderId: 'amp', stage: 'deposit', bankReference: 'ACH 4471', reason: 'The wire was recalled by the sender', keepBuilding: true });
+    assert.deepEqual(order().logic.payout, payout, 'the owner\'s settlement ledger is not rewritten by a void');
+    assert(events().some(function (e) { return /cleared receipts confirmed earlier \(USD 1349099\.10\) now exceed what is recorded \(USD 0\.00\); the owner reviews the wire settlement/.test(e); }), events());
+    assert.deepEqual(audits('ledger-payment-void')[0].after.payoutReview, { clearedCents: DEP, recordedCents: 0 });
+    /* nothing confirmed, nothing flagged */
+    seed(); await priced(); await issued(); await paid('ACH 4471');
+    await post(office, { action: 'payment-void', orderId: 'amp', stage: 'deposit', bankReference: 'ACH 4471', reason: 'The wire was recalled by the sender', keepBuilding: true });
+    assert.equal(audits('ledger-payment-void')[0].after.payoutReview, null);
+    assert(!events().some(function (e) { return /wire settlement/.test(e); }));
+  });
   await test('sync actions go through ledger-sync and write only through the workflow', async function () {
     seed(); await priced(); await issued();
     await rejects(post(accounting, { action: 'sync-choose', provider: 'xero' }), 400, /provider must be none, quickbooks or stripe/);
@@ -619,6 +634,20 @@ async function main() {
     seed(); await priced(); await issued();
     await post(accounting, { action: 'sync-choose', provider: 'stripe' }); await W.processOrder('amp');
     assert.equal(dep().ledger || null, null); assert.equal(LS_CALLS.filter(function (c) { return c.fn === 'push'; }).length, 0);
+    /* what the provider warned about when the invoice went in (Stripe's
+       per-payment cap on a USD 1.35 M deposit) survives every later pull
+       that has nothing to say; a pull's own conflict shows first */
+    seed(); await priced(); await post(accounting, { action: 'sync-choose', provider: 'stripe' });
+    LS.pushWarning = 'Above USD 999,999.99 Stripe may refuse a single card or bank payment unless the account has a raised limit'; LS.pull = [];
+    out = await issued();
+    assert.equal(dep().ledger.state, 'pushed'); assert.equal(dep().ledger.warning, LS.pushWarning, 'the pull right after the push keeps the push warning');
+    assert(dep().ledger.lastPullAt, 'and it did pull');
+    await W.processOrder('amp'); assert.equal(dep().ledger.warning, LS.pushWarning, 'and so does the worker');
+    LS.pull = [{ ref: 'stripe:ch_9', amountCents: DEP, date: '2026-10-01', reversed: false, external: { invoiceId: 'in_x', chargeId: 'ch_9' }, warning: 'Disputed in Stripe; funds withheld until it is decided' }];
+    await W.processOrder('amp'); assert.equal(dep().ledger.warning, 'Disputed in Stripe; funds withheld until it is decided');
+    LS.pull = [{ ref: 'stripe:ch_9', amountCents: DEP, date: '2026-10-01', reversed: false, external: { invoiceId: 'in_x', chargeId: 'ch_9' } }];
+    await post(accounting, { action: 'sync-pull', orderId: 'amp' }); assert.equal(dep().ledger.warning, LS.pushWarning);
+    LS.pushWarning = null; LS.pull = [];
   });
   await test('processOrder syncs tenant orders, and a sync failure is logic.ledgerSyncError, never an order exception', async function () {
     seed(); await priced();

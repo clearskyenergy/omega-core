@@ -201,12 +201,19 @@ async function voidPayment(orderId, stage, b, caller, opts) {
     var changes = {}; changes['logic.invoices.' + stage] = plan.invoice; changes['logic.nextRunAt'] = Date.now();
     if (plan.creditRelease) changes['logic.creditRelease'] = plan.creditRelease;
     if (plan.hold) { changes['logic.paymentHold'] = plan.hold; changes['logic.paymentException'] = plan.hold.message; }
+    /* The owner's "cleared receipts" (logic.payout, owner-only) was confirmed
+       against what was recorded then. It is ClearSky's own settlement ledger
+       and is never rewritten from here; when a void leaves it above what is
+       now recorded, the event and the audit row say so, and the owner
+       reviews it. */
+    var recorded = Object.keys(l.invoices).reduce(function (n, k) { return n + (k === stage ? plan.invoice.paidCents : Number(l.invoices[k].paidCents) || 0); }, 0);
+    var cleared = Number((l.payout || {}).clearedCents) || 0, payoutReview = cleared > recorded ? { clearedCents: cleared, recordedCents: recorded } : null;
     tx.update(ref, changes);
-    event(tx, ref, caller.email, plan.event);
+    event(tx, ref, caller.email, plan.event + (payoutReview ? ' · cleared receipts confirmed earlier (USD ' + usd(cleared) + ') now exceed what is recorded (USD ' + usd(recorded) + '); the owner reviews the wire settlement' : ''));
     audit(tx, { orgId: o.orgId, action: 'ledger-payment-void', orderId: ref.id, orderNo: o.orderNo || null, stage: stage, by: caller.email, at: at,
       reason: plan.voided.voidReason, source: v.source,
       before: { entry: before, status: prev.status || null, paidCents: prev.paidCents || 0 },
-      after: { status: plan.invoice.status, paidCents: plan.invoice.paidCents, creditRelease: plan.creditRelease || null, hold: plan.hold || null } });
+      after: { status: plan.invoice.status, paidCents: plan.invoice.paidCents, creditRelease: plan.creditRelease || null, hold: plan.hold || null, payoutReview: payoutReview } });
     var after = Object.assign({}, o, { logic: Object.assign({}, l, plan.creditRelease ? { creditRelease: plan.creditRelease } : {},
       plan.hold ? { paymentHold: plan.hold, paymentException: plan.hold.message } : {}) });
     return { ok: true, invoice: plan.invoice, order: orderView(after) };
@@ -318,6 +325,10 @@ async function putInLedger(mode, orderId, stage, providerInvoiceId, caller) {
     var ledger = { provider: p, state: mode === 'link' ? 'linked' : 'pushed', invoiceId: String(got.invoiceId), number: got.number == null ? null : String(got.number),
       customerId: got.customerId == null ? null : String(got.customerId), company: got.company == null ? null : String(got.company), hostedUrl: hosted,
       totalCents: got.totalCents == null ? null : Number(got.totalCents), at: at, by: by, error: null, warning: got.warning ? String(got.warning).slice(0, 300) : null, lastPullAt: null };
+    /* what the provider said when the invoice went in (a QuickBooks total
+       that differs, Stripe's per-payment cap) is a fact about that invoice:
+       kept apart so a later pull with nothing to say does not erase it */
+    ledger.pushWarning = ledger.warning;
     var changes = {}; changes['logic.invoices.' + stage + '.ledger'] = ledger;
     if (hosted) changes['logic.invoices.' + stage + '.payUrl'] = hosted;
     tx.update(ref, changes);
@@ -382,10 +393,13 @@ async function tenantSync(orderId, config) {
       }
       st.warning = st.conflicts.length ? st.conflicts[st.conflicts.length - 1] : note;
       await A.db().runTransaction(async function (tx) {
-        var c = (await tx.get(ref)).data(), changes = {};
-        if (!((c.logic.invoices[stage] || {}).ledger)) return;
+        var c = (await tx.get(ref)).data(), changes = {}, lg = (c.logic.invoices[stage] || {}).ledger;
+        if (!lg) return;
         changes['logic.invoices.' + stage + '.ledger.lastPullAt'] = new Date().toISOString();
-        changes['logic.invoices.' + stage + '.ledger.warning'] = st.warning ? String(st.warning).slice(0, 300) : null;
+        /* the pull's own conflict or warning first; with none, the warning
+           the invoice was pushed with stands */
+        var w = st.warning || lg.pushWarning || null;
+        changes['logic.invoices.' + stage + '.ledger.warning'] = w ? String(w).slice(0, 300) : null;
         tx.update(ref, changes);
       });
     }

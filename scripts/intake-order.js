@@ -75,6 +75,7 @@ function call(api, body, caller, query) {
 }
 var report = { org: org, mode: APPLY ? 'applied' : 'dry-run', at: new Date().toISOString(), steps: [] };
 function step(name, out) { report.steps.push({ step: name, result: out }); console.log('  ✓ ' + name + (out && out.note ? ' — ' + out.note : '')); }
+function skip(name, what) { report.steps.push({ step: name, result: Object.assign({ skipped: true }, what) }); console.log('  ! ' + name); }
 function money(n) { return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 }); }
 
 (async function () {
@@ -127,7 +128,19 @@ function money(n) { return '$' + Number(n).toLocaleString('en-US', { minimumFrac
   /* 5. invoices issued and payments received */
   for (var i = 0; i < (ORDER.invoices || []).length; i++) {
     var inv = ORDER.invoices[i]; var r = await call(office, { action: 'invoice-issued', orderId: orderId, stage: inv.stage, number: inv.number, date: inv.date }); step(inv.stage + ' invoice ' + inv.number + ' issued ' + inv.date + (r.duplicate ? ' (already)' : ''), null);
-    for (var j = 0; j < (inv.payments || []).length; j++) { var pay = inv.payments[j]; var pr = await call(office, { action: 'payment-received', orderId: orderId, stage: inv.stage, amount: pay.amount, date: pay.date, bankReference: pay.bankReference }); step('payment ' + money(pay.amount) + ' on ' + pay.date + ' (' + pay.bankReference + ')' + (pr.duplicate ? ' (already)' : '') + ' → ' + pr.invoice.status, { workflow: pr.workflow || null }); }
+    for (var j = 0; j < (inv.payments || []).length; j++) {
+      var pay = inv.payments[j];
+      /* A payment is recorded only when the money has landed, with the
+         bank's own reference. The template's "REPLACE WITH THE BANK
+         REFERENCE…" (or TBD, N/A…) is refused by api/_lib/receivables.js on
+         every path; here that refusal is reported and the run goes on — an
+         order whose PO arrived before its money is not a failed intake. That
+         placeholder once released a live order to the plant (docs/ACCOUNTING.md). */
+      var pr = await call(office, { action: 'payment-received', orderId: orderId, stage: inv.stage, amount: pay.amount, date: pay.date, bankReference: pay.bankReference })
+        .catch(function (e) { if (e.status === 400 && /placeholder/.test(e.message)) return { skipped: e.message }; throw e; });
+      if (pr.skipped) { skip('payment NOT recorded — ' + pr.skipped, { stage: inv.stage, amount: pay.amount, date: pay.date }); continue; }
+      step('payment ' + money(pay.amount) + ' on ' + pay.date + ' (' + pay.bankReference + ')' + (pr.duplicate ? ' (already)' : '') + ' → ' + pr.invoice.status, { workflow: pr.workflow || null });
+    }
   }
   o = (await A.db().collection('orders').doc(orderId).get()).data();
   step('order status ' + o.status + (o.worksOrderId ? ' · works order ' + o.worksOrderId : ' · not released (deposit not satisfied)'), { status: o.status, worksOrderId: o.worksOrderId || null });

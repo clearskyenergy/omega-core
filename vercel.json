@@ -313,6 +313,8 @@
     "api/comed-proxy.js": { "maxDuration": 30 },
     "api/logic-worker.js": { "maxDuration": 60 },
     "api/logic-office.js": { "maxDuration": 60 },
+    "api/logic-accounting.js": { "maxDuration": 60 },
+    "api/ledger-webhook.js": { "maxDuration": 60 },
     "api/lite-atlas.js": { "maxDuration": 60 },
     "api/grid-atlas.js": {
       "maxDuration": 60
