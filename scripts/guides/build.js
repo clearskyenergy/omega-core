@@ -95,7 +95,7 @@ var WHY = { missing: 'missing', unrecorded: 'not taken by shots.js (a leftover o
 if (Object.keys(badShots).length && !DRAFT) {
   console.error('guides: screenshots that cannot be printed:\n  '
     + Object.keys(badShots).map(function (s) { return s + '  ' + WHY[badShots[s].state] + '  (' + badShots[s].in.join(', ') + ')'; }).join('\n  ')
-    + '\nTake every shot again, from this tree:  node scripts/guides/shots.js\n(or one:  node scripts/guides/shots.js --only ' + Object.keys(badShots).map(function (s) { return s.replace(/^shots\/|\.png$/g, ''); }).join(',')
+    + '\nTake every shot again, from this tree:  node scripts/guides/shots.js\n(or just these:  node scripts/guides/shots.js --only ' + Object.keys(badShots).map(function (s) { return s.replace(/^shots\/|\.png$/g, ''); }).join(',')
     + ')\nor build with --draft --out DIR to see the layout with a box in their place.');
   process.exit(1);
 }
