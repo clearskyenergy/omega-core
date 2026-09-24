@@ -65,8 +65,14 @@ if (!APPLY) {
     var store = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.config/configstore/firebase-tools.json'), 'utf8'));
     var tokens = store.tokens || (store.activeAccounts && store.activeAccounts[0] && store.activeAccounts[0].tokens);
     if (!tokens || !tokens.refresh_token) throw new Error('Not signed in: run `firebase login` (or set FIREBASE_SERVICE_ACCOUNT)');
+    /* Firestore accepts the CLI account only as an application-default
+       credential: an authorized_user file, written to the OS temp dir for
+       this run and removed on exit, never into the repo. */
+    var adcPath = path.join(os.tmpdir(), 'omega-intake-adc-' + process.pid + '.json');
+    fs.writeFileSync(adcPath, JSON.stringify({ type: 'authorized_user', client_id: '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com', client_secret: 'j9iVZfS8kkCEFUPaAeJV0sAi', refresh_token: tokens.refresh_token }), { mode: 384 });
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = adcPath; process.on('exit', function () { try { fs.unlinkSync(adcPath); } catch (e) {} });
     var admin = require('firebase-admin');
-    admin.initializeApp({ credential: admin.credential.refreshToken({ type: 'authorized_user', client_id: '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com', client_secret: 'j9iVZfS8kkCEFUPaAeJV0sAi', refresh_token: tokens.refresh_token }), projectId: 'clearsky-portal' });
+    admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId: 'clearsky-portal' });
     A.init = function () { return admin; }; A.db = function () { return admin.firestore(); };
   }
   A.authenticate = async function (req) { return req.caller || OWNER; };
@@ -88,6 +94,8 @@ function money(n) { return '$' + Number(n).toLocaleString('en-US', { minimumFrac
 
 (async function () {
   console.log((APPLY ? 'APPLYING' : 'DRY RUN') + ' · ' + org + ' · ' + ORDER.order.poNumber);
+  /* 0. the tenant's billing mode and terms, so the price step can run */
+  if (APPLY && ORDER.fulfillmentConfig) { var fc = ORDER.fulfillmentConfig; var cfg = await call(office, { action: 'configure', enabled: fc.enabled !== false, accounting: fc.accounting || 'quickbooks', terms: fc.terms, fee: fc.fee || { percent: 0.25, fixed: 0 }, itemRef: '', accountingApproved: false }); step('fulfillment configured: ' + (fc.accounting || 'quickbooks') + ' billing, deposit ' + (fc.terms || {}).depositPct + '%', cfg); }
   /* 1. product */
   var cat = await call(catalog, null, OWNER), existing = (cat.products || []).filter(function (p) { return p.sku === ORDER.product.sku; })[0];
   var product = Object.assign({}, existing || {}, ORDER.product);
