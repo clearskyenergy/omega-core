@@ -2,7 +2,7 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
    make-omega-logic-icons.js — the Omega Logic app's home-screen icons from
-   icons/omega-logic.svg (ClearSky's mark; the same on every tenant's phone):
+   icons/omega-logic.svg (ClearSky's mark, the Hex grid Ω; the same on every tenant's phone):
    omega-logic-512.png, -192.png, -180.png and -maskable-512.png. The SVG is
    a full-bleed square tile, so iOS rounds it and Android masks it; the
    maskable copy is the same tile, which already keeps the mark in the
