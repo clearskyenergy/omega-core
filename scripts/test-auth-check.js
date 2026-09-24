@@ -28,8 +28,8 @@ function fake(google, opts) {
 }
 function res() { var r = { headers: {}, statusCode: 0, body: '' }; r.setHeader = function (k, v) { r.headers[k.toLowerCase()] = v; }; r.end = function (b) { r.body = b; return r; }; return r; }
 function req(host, method) { return { method: method || 'GET', headers: { host: host } }; }
-function configFor(pathname, standalone) {
-  var w = {}, ctx = { window: w, location: { pathname: pathname, host: 'silmarillion.clearskyomega.com' }, navigator: { standalone: standalone } };
+function configFor(pathname, standalone, host) {
+  var w = {}, ctx = { window: w, location: { pathname: pathname, host: host || 'app.example-tenant.clearskyomega.com' }, navigator: { standalone: standalone } };
   vm.createContext(ctx); vm.runInContext(fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8'), ctx);
   return w.CLEARSKY_CONFIG.firebase.authDomain;
 }
@@ -37,10 +37,15 @@ function configFor(pathname, standalone) {
 (async function () {
   console.log('\nthe installed app\'s Google sign-in');
   await test('config.js: an Omega Logic app on an iPhone home screen signs in through its own host, decided before any script can start Firebase', async function () {
-    ['/office/app', '/office/app.html', '/omega-logic', '/plant/app', '/portals/customer/app'].forEach(function (p) { assert.equal(configFor(p, true), 'silmarillion.clearskyomega.com', p); });
+    ['/office/app', '/office/app.html', '/omega-logic', '/plant/app', '/portals/customer/app'].forEach(function (p) { assert.equal(configFor(p, true), 'app.example-tenant.clearskyomega.com', p); });
     assert.equal(configFor('/office/app', false), 'clearsky-portal.firebaseapp.com', 'in a browser tab: the project domain, pop-up as before');
     assert.equal(configFor('/office/app', undefined), 'clearsky-portal.firebaseapp.com');
     ['/projects', '/', '/editor', '/office/apps', '/mission'].forEach(function (p) { assert.equal(configFor(p, true), 'clearsky-portal.firebaseapp.com', 'not an Omega Logic app: ' + p); });
+  });
+  await test('on a host whose handler Google accepts (silmarillion), every Omega Logic sign-in goes through it, installed or not; other pages keep the project domain', async function () {
+    var S = 'silmarillion.clearskyomega.com';
+    ['/office/app', '/omega-logic', '/plant/app', '/portals/customer/app'].forEach(function (p) { assert.equal(configFor(p, false, S), S, p); assert.equal(configFor(p, undefined, S), S, p); });
+    ['/projects', '/', '/editor', '/mission'].forEach(function (p) { assert.equal(configFor(p, false, S), 'clearsky-portal.firebaseapp.com', p); });
   });
   await test('the page start-up no longer decides it (omega-tenant.js starts Firebase first, so a later switch never took effect)', async function () {
     var src = fs.readFileSync(path.join(ROOT, 'omega-logic-signin.js'), 'utf8');

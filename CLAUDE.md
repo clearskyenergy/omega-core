@@ -344,7 +344,9 @@ is not built.
   remembers the choice and forgets it on sign-out; `?org=` in an old link
   only preselects. `/office/app.webmanifest` is the one office manifest.
   An app installed on an iPhone home screen signs in THROUGH ITS OWN HOST
-  (the `/__/auth` proxy in vercel.json): `config.js` decides that, because
+  (the `/__/auth` proxy in vercel.json), and on silmarillion — whose
+  handler IS registered with Google — so does every Omega Logic sign-in,
+  installed or not: `config.js` decides that, because
   `omega-tenant.js` starts Firebase the moment it loads and the first start
   fixes the auth domain. Google needs `https://<host>/__/auth/handler` on
   the OAuth client's redirect URIs; `api/auth-check.js` asks Google whether
