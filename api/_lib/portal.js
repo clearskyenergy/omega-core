@@ -122,6 +122,26 @@ function when(v) {
 function clip(v, n) { return v == null ? null : String(v).slice(0, n || 400); }
 function numOrNull(v) { var n = Number(v); return isFinite(n) ? n : null; }
 
+/* A TENANT-BILLED invoice's pay link: the supplier's own payment page (its
+   bank's, its processor's), entered by its office with the invoice. It is
+   not a QuickBooks link, so logic-policy.paymentLink()'s intuit.com pin
+   cannot be the test; this one is, and it is the ONE check — the workflow
+   refuses a link that fails it before storing, and this projection runs it
+   again on the way out, so a record written some other way still cannot
+   put a javascript: or credentialed URL in front of a customer.
+   https only, no user/password, a named host (not an IP literal or a bare
+   name), and a length a real payment page never needs to exceed. */
+var PAY_LINK_MAX = 1000;
+function tenantPayLink(value) {
+  if (typeof value !== 'string' || !value || value.length > PAY_LINK_MAX || /[\s<>"'`]/.test(value)) return null;
+  try {
+    var u = new URL(value), host = u.hostname;
+    if (u.protocol !== 'https:' || u.username || u.password) return null;
+    if (host.indexOf('.') < 0 || /^[\d.]+$/.test(host) || host.charAt(0) === '[') return null;
+    return u.href;
+  } catch (e) { return null; }
+}
+
 function ladderIndex(key) {
   for (var i = 0; i < LADDER.length; i++) if (LADDER[i].key === key) return i;
   return -1;
@@ -286,7 +306,7 @@ function publicOrder(order, opts) {
     };
   }
   if (o.logic && o.logic.commercial && o.tenantPricing && o.tenantPricing.publishedToCustomer === true) {
-    var policy = require('./logic-policy'), commercial = o.logic.commercial;
+    var policy = require('./logic-policy'), commercial = o.logic.commercial, byTenant = o.logic.accounting === 'tenant';
     out.checkout = { currency: 'USD', base: commercial.baseCents / 100, processingFee: commercial.feeCents / 100,
       /* who bills: 'tenant' = the supplier invoices and collects on its own
          paper (no ClearSky fee, no ClearSky collection to mention) */
@@ -295,7 +315,10 @@ function publicOrder(order, opts) {
       invoices: Object.keys(o.logic.invoices || {}).map(function (stage) {
         var invoice = o.logic.invoices[stage];
         return { stage: stage, amount: invoice.amountCents / 100, recorded: (invoice.paidCents || 0) / 100,
-          status: invoice.status, payUrl: o.cancelRequested || o.logic.paymentException ? null : policy.paymentLink(invoice.payUrl), dueDays: commercial.terms.dueDays,
+          /* QuickBooks-billed: QuickBooks' own invoice link (intuit.com only).
+             Tenant-billed: the supplier's pay link, once the invoice is issued. */
+          status: invoice.status, payUrl: o.cancelRequested || o.logic.paymentException ? null
+            : byTenant ? (invoice.id ? tenantPayLink(invoice.payUrl) : null) : policy.paymentLink(invoice.payUrl), dueDays: commercial.terms.dueDays,
           /* tenant-billed: the OEM's own invoice number and date, so the customer can match it to what they were sent */
           number: o.logic.accounting === 'tenant' && invoice.id ? clip(invoice.id, 80) : null, issuedAt: o.logic.accounting === 'tenant' && invoice.issuedAt ? clip(invoice.issuedAt, 10) : null };
       }) };
@@ -362,5 +385,6 @@ module.exports = {
   ladderIndex: ladderIndex,
   stationMilestone: stationMilestone,
   milestoneOf: milestoneOf,
-  publicOrder: publicOrder
+  publicOrder: publicOrder,
+  tenantPayLink: tenantPayLink
 };

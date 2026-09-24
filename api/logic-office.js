@@ -135,7 +135,10 @@ module.exports = A.handler(async function (req, res) {
   /* Tenant-billed orders: the OEM's office records its own invoice and the
      money that landed. An active OEM administrator may do this — it is their
      invoice — as may the ClearSky owner. */
-  if (b.action === 'invoice-issued') return W.issueInvoice(orderId, b.stage, { number: b.number, date: b.date }, caller);
+  /* payUrl: the supplier's own pay link for that invoice (optional; https,
+     checked in logic-workflow). Only passed through when the caller sent
+     the key, so an office that leaves it out keeps the link it has. */
+  if (b.action === 'invoice-issued') { var inv = { number: b.number, date: b.date }; if (Object.prototype.hasOwnProperty.call(b, 'payUrl')) inv.payUrl = b.payUrl; return W.issueInvoice(orderId, b.stage, inv, caller); }
   if (b.action === 'payment-received') return W.recordPayment(orderId, b.stage, { amount: b.amount, date: b.date, bankReference: b.bankReference }, caller);
   if (b.action === 'cleared' || b.action === 'wire_sent') {
     X.requireOwner(caller);

@@ -25,9 +25,12 @@
    that is not switched on yet, while commissioning it, as api/buyers.js
    allows.
 
-   Where: omega_orgs/{org}/customers/{id}/contacts|activity|files and the
-   follow-up index omega_orgs/{org}/crm_followups — all Admin SDK only in the
-   rules. A document's bytes are in PRIVATE Storage at
+   Where: omega_orgs/{org}/customers/{id}/contacts|activity|files, the
+   follow-up index omega_orgs/{org}/crm_followups and the customer's daily
+   upload count omega_orgs/{org}/crm_upload_usage/{customerId__day} — all
+   Admin SDK only in the rules. The count is NOT a field on the customer
+   record: a tenant admin may update that record from a browser, and could
+   then reset their customer's allowance. A document's bytes are in PRIVATE Storage at
    crm/{org}/{customerId}/{fileId}, never behind a URL: the path is not in
    any response, and the bytes come back only through this endpoint (or
    api/my-files.js for the customer), as an attachment with nosniff.
@@ -39,7 +42,7 @@
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), B = require('./_lib/buyer-accounts'), C = require('./_lib/crm'), I = require('./_lib/po-intake');
 
 var EDITORS = ['owner', 'admin', 'member'], ADMINS = ['owner', 'admin'];
-var LIST_CAP = 200, FOLLOW_SCAN = 500, FOLLOW_CAP = 200;
+var LIST_CAP = 200, FOLLOW_SCAN = 500, FOLLOW_CAP = 200, SCAN = 500, UNIT_ORDERS = 100;
 
 /* level: 'read' | 'write' | 'admin'. authorize() already refuses a lapsed
    subscription to everyone but ClearSky's owner; the role decides the rest. */
@@ -65,18 +68,23 @@ function audit(tx, db, action, org, customerId, by, at, extra) {
      file     C.fileInput(...)             bytes already decided
      meta     { from: 'office'|'customer', shared, category, note, by,
                 customerEmail?, dailyLimit?, audience }
-   Reserve the record, then write the bytes, then mark it stored — so a
-   failed write leaves a record that says so (and that no list shows), not
-   bytes nobody can find. The same bytes and name uploaded again from the
-   same side (a retry on a phone) return the stored document instead of a
-   second copy. A customer's person and account are re-checked inside the
-   transaction, and the daily allowance is counted there. */
+   Reserve the record, then write the bytes, then mark it stored and audit
+   it in one write — so a failed write leaves a record that says so (and
+   that no list shows), not bytes nobody can find, and the audit never says
+   "uploaded" for bytes that are not there. The same bytes and name
+   uploaded again from the same side (a retry on a phone) return the stored
+   document instead of a second copy, and do not spend the allowance. A
+   customer's person and account are re-checked inside the transaction, and
+   the daily allowance is counted there (a failed store still spends it:
+   the allowance bounds attempts, not successes). */
 async function store(db, org, account, file, meta) {
   var files = account.ref.collection('files'), ref = files.doc(C.newId('f_')), path = 'crm/' + org + '/' + account.id + '/' + ref.id;
   var now = new Date().toISOString(), customer = meta.from === 'customer';
+  var usageRef = meta.dailyLimit ? db.collection('omega_orgs').doc(org).collection('crm_upload_usage').doc(account.id + '__' + now.slice(0, 10)) : null;
   var reserved = await db.runTransaction(async function (tx) {
     var fresh = await tx.get(account.ref), same = await tx.get(files.where('sha256', '==', file.sha256).limit(10));
     var person = customer ? await tx.get(account.ref.collection('users').doc(meta.customerEmail)) : null;
+    var usage = usageRef ? await tx.get(usageRef) : null;
     if (!fresh.exists) throw A.httpError(404, 'Customer not found');
     var acct = fresh.data() || {};
     if (customer) {
@@ -84,16 +92,16 @@ async function store(db, org, account, file, meta) {
     }
     var dup = same.docs.filter(function (d) { var v = d.data() || {}; return v.uploadState === 'stored' && v.archived !== true && (v.from === 'customer') === customer && v.name === file.name; })[0];
     if (dup) return { duplicate: true, id: dup.id, record: dup.data() };
-    if (meta.dailyLimit) {
-      var usage = acct.crmUploadUsage || {}, day = now.slice(0, 10), count = usage.day === day ? Number(usage.count) || 0 : 0;
+    if (usageRef) {
+      var count = usage.exists ? Number((usage.data() || {}).count) || 0 : 0;
       if (count >= meta.dailyLimit) throw A.httpError(429, 'Your account has uploaded ' + meta.dailyLimit + ' documents today. Please send the rest tomorrow.');
-      tx.update(account.ref, { crmUploadUsage: { day: day, count: count + 1 } });
+      if (usage.exists) tx.update(usageRef, { count: count + 1, lastAt: now });
+      else tx.create(usageRef, { orgId: org, customerId: account.id, day: now.slice(0, 10), count: 1, lastAt: now });
     }
     var record = { orgId: org, customerId: account.id, name: file.name, type: file.type, size: file.size, sha256: file.sha256, path: path,
       category: meta.category, note: meta.note, shared: customer ? true : meta.shared === true, from: customer ? 'customer' : 'office',
       uploadedBy: meta.by, uploadedAt: now, archived: false, uploadState: 'pending' };
     tx.create(ref, record);
-    audit(tx, db, 'crm-file-upload', org, account.id, meta.by, now, { fileId: ref.id, name: file.name, type: file.type, size: file.size, sha256: file.sha256, from: record.from, shared: record.shared, category: record.category });
     return { duplicate: false, id: ref.id, record: record };
   });
   if (reserved.duplicate) return { ok: true, duplicate: true, id: reserved.id, file: C.fileView(reserved.id, reserved.record, meta.audience) };
@@ -104,7 +112,11 @@ async function store(db, org, account, file, meta) {
     try { await ref.update({ uploadState: 'failed', failedAt: new Date().toISOString() }); } catch (x) { console.error('[crm store mark]', x); }
     throw A.httpError(502, 'The document could not be stored. Nothing was saved; please try again.');
   }
-  await ref.update({ uploadState: 'stored', storedAt: new Date().toISOString() });
+  var stored = new Date().toISOString(), r = reserved.record;
+  await db.runTransaction(async function (tx) {
+    tx.update(ref, { uploadState: 'stored', storedAt: stored });
+    audit(tx, db, 'crm-file-upload', org, account.id, meta.by, stored, { fileId: ref.id, name: r.name, type: r.type, size: r.size, sha256: r.sha256, from: r.from, shared: r.shared, category: r.category });
+  });
   reserved.record.uploadState = 'stored';
   return { ok: true, duplicate: false, id: ref.id, file: C.fileView(ref.id, reserved.record, meta.audience) };
 }
@@ -135,8 +147,7 @@ var handler = A.handler(async function (req, res) {
   if (req.method === 'GET' && (b.followUps === '1' || b.followUps === 'true' || b.followUps === true)) {
     await access(caller, org, 'read');
     var open = await root.collection('crm_followups').where('open', '==', true).limit(FOLLOW_SCAN).get();
-    var rows = open.docs.map(function (d) { return d.data() || {}; }).filter(function (d) { return d.activityId && d.customerId; })
-      .sort(function (x, y) { return String(x.followUpAt || '').localeCompare(String(y.followUpAt || '')) || String(x.at || '').localeCompare(String(y.at || '')); });
+    var rows = open.docs.map(function (d) { return d.data() || {}; }).filter(function (d) { return d.activityId && d.customerId; }).sort(C.byDue);
     var shown = rows.slice(0, FOLLOW_CAP), ids = [];
     shown.forEach(function (d) { if (ids.indexOf(d.customerId) < 0) ids.push(d.customerId); });
     var names = {};
@@ -160,31 +171,52 @@ var handler = A.handler(async function (req, res) {
   }
 
   if (req.method === 'GET') {
+    /* Lists are equality queries on `archived` (every record is written
+       with it), so an archived row never takes a live one's place under the
+       cap; the newest-first order is applied here. The timeline reads the
+       newest documents INCLUDING archived ones — they were uploaded. */
+    var audits = db.collection('omega_audit').where('orgId', '==', org).where('customerId', '==', cid);
     var got = await Promise.all([
-      contactsCol.limit(LIST_CAP).get(),
+      contactsCol.where('archived', '==', false).limit(LIST_CAP + 1).get(),
       activityCol.orderBy('at', 'desc').limit(LIST_CAP).get(),
-      filesCol.orderBy('uploadedAt', 'desc').limit(LIST_CAP).get(),
+      filesCol.where('archived', '==', false).limit(SCAN).get(),
       followCol.where('customerId', '==', cid).where('open', '==', true).limit(FOLLOW_CAP).get(),
       acctRef.collection('users').limit(100).get(),
-      B.accountOrders(db, org, null, acct, { limit: LIST_CAP, includeIntake: true })
+      B.accountOrders(db, org, null, acct, { limit: LIST_CAP, includeIntake: true }),
+      filesCol.orderBy('uploadedAt', 'desc').limit(LIST_CAP).get(),
+      root.collection('sites').where('customerId', '==', cid).limit(LIST_CAP).get(),
+      acctRef.collection('projects').orderBy('updatedAt', 'desc').limit(50).get(),
+      audits.where('action', '==', 'buyer-editor-trial').limit(50).get(),
+      audits.where('action', '==', 'customer-editor-lite').limit(50).get()
     ]);
     var contactNames = {}, contacts = [];
     got[0].docs.forEach(function (d) { var v = d.data() || {}; contactNames[d.id] = v.name || v.email || ''; if (v.archived !== true) contacts.push(C.contactView(d.id, v)); });
     contacts.sort(function (x, y) { return (y.primary ? 1 : 0) - (x.primary ? 1 : 0) || x.name.toLowerCase().localeCompare(y.name.toLowerCase()); });
+    contacts = contacts.slice(0, LIST_CAP);
     var orders = got[5].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); }), orderNos = {};
     orders.forEach(function (o) { orderNos[o.id] = o.orderNo || o.id; });
     var activityRaw = got[1].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); });
-    var filesRaw = got[2].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); });
+    var live = got[2].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); }).filter(function (x) { return x.uploadState === 'stored'; })
+      .sort(function (x, y) { return C.millis(y.uploadedAt) - C.millis(x.uploadedAt); });
+    var filesRaw = got[6].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); });
+    /* The units bought on the account's newest orders (the same query
+       api/my-sites.js makes), for the custody lines on the timeline. */
+    var unitIds = orders.slice(0, UNIT_ORDERS).map(function (o) { return o.id; }), units = [];
+    var chunks = []; for (var i = 0; i < unitIds.length; i += 10) chunks.push(unitIds.slice(i, i + 10));
+    (await Promise.all(chunks.map(function (ids) { return db.collection('plant_units').where('orgId', '==', org).where('orderId', 'in', ids).limit(400).get(); })))
+      .forEach(function (s) { s.docs.forEach(function (d) { var u = d.data() || {}; if (u.shipUnit && u.custody) units.push(u); }); });
+    var editorEvents = got[9].docs.concat(got[10].docs).map(function (d) { return d.data() || {}; });
     return {
       customerId: cid, company: acct.data.name || '', status: acct.data.status || 'active',
       contacts: contacts,
       activity: activityRaw.map(function (a) { return C.activityView(a.id, a, contactNames, orderNos); }),
-      followUps: got[3].docs.map(function (d) { return C.followUpView(d.data() || {}, acct.data.name || '', contactNames); })
-        .sort(function (x, y) { return String(x.followUpAt || '').localeCompare(String(y.followUpAt || '')); }),
-      files: filesRaw.filter(function (x) { return x.uploadState === 'stored' && x.archived !== true; }).map(function (x) { return C.fileView(x.id, x, 'office'); }),
-      timeline: C.timeline({ orders: orders, people: got[4].docs.map(function (d) { var v = d.data() || {}; v.email = v.email || d.id; return v; }), files: filesRaw, activity: activityRaw, contactNames: contactNames }),
+      followUps: got[3].docs.map(function (d) { return C.followUpView(d.data() || {}, acct.data.name || '', contactNames); }).sort(C.byDue),
+      files: live.slice(0, LIST_CAP).map(function (x) { return C.fileView(x.id, x, 'office'); }),
+      timeline: C.timeline({ orders: orders, people: got[4].docs.map(function (d) { var v = d.data() || {}; v.email = v.email || d.id; return v; }), files: filesRaw, activity: activityRaw, contactNames: contactNames,
+        units: units, sites: got[7].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); }), designs: got[8].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); }),
+        editorEvents: editorEvents, editorLite: acct.data.editorLite || null }),
       canEdit: who.edit, canArchive: who.admin,
-      limited: got[0].size >= LIST_CAP || got[1].size >= LIST_CAP || got[2].size >= LIST_CAP || got[5].truncated === true
+      limited: got[0].size > LIST_CAP || got[1].size >= LIST_CAP || got[2].size >= SCAN || live.length > LIST_CAP || got[5].truncated === true
     };
   }
 
@@ -192,7 +224,7 @@ var handler = A.handler(async function (req, res) {
   if (action === 'contact-save') {
     var input = C.contactInput(b), id = b.id ? C.recordId(b.id, 'Contact') : null, cref = id ? contactsCol.doc(id) : contactsCol.doc();
     return db.runTransaction(async function (tx) {
-      var all = await tx.get(contactsCol.limit(LIST_CAP + 1)), cur = id ? await tx.get(cref) : null;
+      var all = await tx.get(contactsCol.where('archived', '==', false).limit(LIST_CAP + 1)), cur = id ? await tx.get(cref) : null;
       if (id && !cur.exists) throw A.httpError(404, 'That contact is not on this account');
       if (id && (cur.data() || {}).archived === true) throw A.httpError(409, 'That contact is archived');
       var live = all.docs.filter(function (d) { return (d.data() || {}).archived !== true; });
@@ -236,14 +268,16 @@ var handler = A.handler(async function (req, res) {
     }
     var lref = activityCol.doc();
     return db.runTransaction(async function (tx) {
-      var rec = Object.assign({ orgId: org, customerId: cid }, entry, { by: by, loggedAt: now, done: false, doneAt: null, doneBy: null });
+      /* The contact's name and the order number go on the record, so the
+         entry still says who and which after the contact is archived. */
+      var rec = Object.assign({ orgId: org, customerId: cid }, entry, { contactName: contactName, orderNo: orderNo, by: by, loggedAt: now, done: false, doneAt: null, doneBy: null });
       tx.create(lref, rec);
-      if (entry.followUpAt) tx.create(followCol.doc(cid + '__' + lref.id), { orgId: org, customerId: cid, company: acct.data.name || '', activityId: lref.id, type: entry.type, subject: entry.subject,
+      if (C.isOpen(rec)) tx.create(followCol.doc(cid + '__' + lref.id), { orgId: org, customerId: cid, company: acct.data.name || '', activityId: lref.id, type: entry.type, subject: entry.subject,
         followUpAt: entry.followUpAt, contactId: entry.contactId, contactName: contactName, orderId: entry.orderId, by: by, at: entry.at, open: true, createdAt: now });
       audit(tx, db, 'crm-log', org, cid, by, now, { activityId: lref.id, type: entry.type, subject: entry.subject, followUpAt: entry.followUpAt, contactId: entry.contactId, orderId: entry.orderId });
       var names = {}, nos = {}; if (entry.contactId) names[entry.contactId] = contactName; if (entry.orderId) nos[entry.orderId] = orderNo;
       return { ok: true, id: lref.id, activity: C.activityView(lref.id, rec, names, nos),
-        note: C.TYPE_LABEL[entry.type] + ' logged' + (entry.followUpAt ? '; follow up ' + entry.followUpAt + ' is on Today.' : '.') };
+        note: C.TYPE_LABEL[entry.type] + ' logged' + (entry.followUpAt ? '; follow up ' + entry.followUpAt + ' is on Today.' : entry.type === 'task' ? '; it is on Today until done.' : '.') };
     });
   }
   if (action === 'done') {

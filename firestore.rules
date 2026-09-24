@@ -2191,6 +2191,13 @@ service cloud.firestore {
     /* What ClearSky sent each subscriber (api/logic-kit.js): the log of app
        links and guides that went out, owner-only through the endpoint. */
     match /omega_orgs/{orgId}/kit_sends/{sendId} { allow read, write: if false; }
+    /* The CRM's open follow-ups across every account (the Today hub) and a
+       customer account's daily document allowance (api/crm.js, api/my-files.js).
+       The allowance is its own record, not a field on the customer, because
+       a tenant admin may update the customer record from a browser and
+       would then reset it. Stated, like the two lines above. */
+    match /omega_orgs/{orgId}/crm_followups/{followId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/crm_upload_usage/{usageId} { allow read, write: if false; }
 
     /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
        From docs/firestore.rules.plant.addendum, applied 2026-09-20 and
@@ -2829,6 +2836,18 @@ service cloud.firestore {
         match /projects/{projectId} {
           allow read, write: if false;
         }
+
+        /* The supplier's CRM on the account (api/crm.js; the customer's side
+           is api/my-files.js). Contacts, the activity log and the documents
+           are read and written only through those endpoints: a document is
+           visible to the customer only when the office shared it, which is
+           a field on the record — a browser that could read the record
+           could read an office-only one, and one that could write `shared`
+           or `path` could show the customer anything, or point a record at
+           another account's bytes. The endpoints check who, key by key. */
+        match /contacts/{contactId} { allow read, write: if false; }
+        match /activity/{activityId} { allow read, write: if false; }
+        match /files/{fileId}       { allow read, write: if false; }
       }
 
       /* ── THE POINTER ──  omega_orgs/{orgId}/customer_index/{emailLower}

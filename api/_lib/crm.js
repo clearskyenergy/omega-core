@@ -22,7 +22,9 @@
    This file has no Firestore and no Admin SDK in it: validation of what the
    office and the customer send (contacts, activity, the file bytes) and the
    TIMELINE — the account's history merged from the records that already
-   exist (orders, requests, PO intake, people, documents, activity). Nothing
+   exist (orders, requests, PO intake, people, documents, activity, the
+   custody of the units it bought, its sites, its designs and the design
+   tool's trial or subscription). Nothing
    on the timeline is stored twice; it is derived on every read, so it cannot
    drift from the orders it describes. api/crm.js and api/my-files.js read and
    write; this decides.
@@ -213,9 +215,20 @@ function contactView(id, c) {
 function activityView(id, a, names, orderNos) {
   names = names || {}; orderNos = orderNos || {};
   return { id: id, type: a.type, subject: a.subject || '', body: a.body || '', at: iso(a.at), followUpAt: a.followUpAt || null,
-    contactId: a.contactId || null, contactName: a.contactId ? names[a.contactId] || null : null,
-    orderId: a.orderId || null, orderNo: a.orderId ? orderNos[a.orderId] || null : null,
-    by: a.by || null, loggedAt: iso(a.loggedAt), done: a.done === true, doneAt: iso(a.doneAt), doneBy: a.doneBy || null };
+    contactId: a.contactId || null, contactName: a.contactId ? names[a.contactId] || a.contactName || null : null,
+    orderId: a.orderId || null, orderNo: a.orderId ? orderNos[a.orderId] || a.orderNo || null : null,
+    by: a.by || null, loggedAt: iso(a.loggedAt), done: a.done === true, doneAt: iso(a.doneAt), doneBy: a.doneBy || null,
+    open: isOpen(a) };
+}
+/* Owed: a follow-up date, or a task (which is owed whether or not anybody
+   gave it a day). Open until marked done; this is what shows a Done button
+   and what the follow-up index holds. */
+function isOpen(a) { return !!a && a.done !== true && (!!a.followUpAt || a.type === 'task'); }
+/* Earliest due first; a task with no day comes after every dated one. */
+function byDue(x, y) {
+  var a = x.followUpAt || '', b = y.followUpAt || '';
+  if (a !== b) return !a ? 1 : !b ? -1 : a < b ? -1 : 1;
+  return String(x.at || '').localeCompare(String(y.at || ''));
 }
 /* audience 'office' sees who uploaded; 'customer' sees a colleague's name on
    their own uploads and never a supplier employee's address. */
@@ -244,7 +257,10 @@ function customerMaySee(f) { return !!f && f.uploadState === 'stored' && f.archi
    record is left out rather than given one.
 
    input: { orders: [{ id, ...order }], people: [user records], files:
-   [{ id, ...file }], activity: [{ id, ...activity }], contactNames: {id:name} } */
+   [{ id, ...file }], activity: [{ id, ...activity }], contactNames: {id:name},
+   units: [plant_units records], sites: [{ id, ...site }], designs: [{ id,
+   ...project }], editorEvents: [omega_audit rows], editorLite: the account's
+   current grant } */
 function dollars(c) {
   var n = Math.round(Number(c) || 0), neg = n < 0; n = Math.abs(n);
   var whole = String(Math.floor(n / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ','), cents = String(n % 100);
@@ -282,9 +298,16 @@ function timeline(input, cap) {
     } else {
       add(o.createdAt, 'order-placed', 'Order ' + no + ' placed' + (po ? ' · PO ' + po : ''), items(o), c.email || (o.purchaseOrder || {}).submittedBy, id);
     }
+    /* Priced, then accepted: two moments, unless the acceptance came with
+       the price (the office recording a signed quote), which is one. */
     if (l.commercial || l.acceptedAt) {
-      var total = l.commercial && l.commercial.totalCents ? dollars(l.commercial.totalCents) : '';
-      add(l.acceptedAt || l.createdAt, 'order-priced', 'Order ' + no + ' priced' + (l.acceptedAt ? ' and accepted' : ''), total ? 'Total ' + total : '', null, id);
+      var total = l.commercial && l.commercial.totalCents ? 'Total ' + dollars(l.commercial.totalCents) : '';
+      var together = l.acceptedAt && (!l.createdAt || Math.abs(millis(l.acceptedAt) - millis(l.createdAt)) < 60000);
+      if (together) add(l.acceptedAt, 'order-priced', 'Order ' + no + ' priced and accepted', total, null, id);
+      else {
+        add(l.createdAt, 'order-priced', 'Order ' + no + ' priced', total, null, id);
+        if (l.acceptedAt) add(l.acceptedAt, 'order-accepted', 'Order ' + no + ' accepted', total, null, id);
+      }
     }
     Object.keys(l.invoices || {}).forEach(function (stage) {
       var inv = l.invoices[stage] || {}, label = STAGE[stage] || stage;
@@ -329,8 +352,73 @@ function timeline(input, cap) {
     add(a.at, 'activity-' + a.type, (TYPE_LABEL[a.type] || 'Note') + withWho + ': ' + (a.subject || ''), String(a.body || '').slice(0, 200), a.by, a.orderId);
     if (a.done && a.doneAt) add(a.doneAt, 'follow-up-done', 'Followed up: ' + (a.subject || TYPE_LABEL[a.type] || ''), '', a.doneBy, a.orderId);
   });
+  custodyTimeline(input.units || [], add);
+  (input.sites || []).forEach(function (st) {
+    if (!st) return;
+    var theirs = st.source === 'customer';
+    add(st.createdAt, 'site-added', 'Site ' + (st.name || st.id) + ' added' + (theirs ? ' by the customer' : ''),
+      [[(st.address || {}).city, (st.address || {}).state].filter(Boolean).join(', '), st.endCustomer ? 'for ' + st.endCustomer : '', st.status === 'inactive' ? 'since closed' : ''].filter(Boolean).join(' · '), st.createdBy);
+  });
+  (input.designs || []).forEach(function (p) {
+    if (!p) return;
+    var nm = String(p.name || 'A design').slice(0, 120);
+    add(p.createdAt, 'design-started', 'Design ' + nm + ' started by the customer', '', null);
+    if (Number(p.revision) > 1 && millis(p.updatedAt) > millis(p.createdAt)) add(p.updatedAt, 'design-saved', 'Design ' + nm + ' saved by the customer', 'revision ' + Number(p.revision), null);
+  });
+  editorTimeline(input.editorEvents || [], input.editorLite, add);
   out.sort(function (a, b) { return b._t - a._t; });
   return out.slice(0, cap).map(function (e) { delete e._t; return e; });
+}
+
+/* The units the account bought, past the plant: grouped by what happened,
+   on which day, at which site, so fifty-six skids received together are one
+   line, not fifty-six. Read off the unit record's custody{} (the one status
+   machine in api/_lib/custody.js writes it); shipping is the ORDER's line. */
+function custodyTimeline(units, add) {
+  var groups = {}, order = [];
+  function put(kind, at, site, title, extra, serial, orderId) {
+    if (!at) return;
+    var key = kind + '|' + String(at).slice(0, 10) + '|' + (site || '') + '|' + (extra || '');
+    var g = groups[key];
+    if (!g) { g = groups[key] = { kind: kind, at: at, site: site, title: title, extra: extra, serials: [], orderIds: [] }; order.push(key); }
+    if (serial && g.serials.indexOf(serial) < 0) g.serials.push(serial);
+    if (orderId && g.orderIds.indexOf(orderId) < 0) g.orderIds.push(orderId);
+  }
+  units.forEach(function (u) {
+    if (!u || !u.custody) return;
+    var c = u.custody, s = u.serial || '', site = c.siteName || c.siteId || '', theirs = c.declaredBy === 'customer';
+    if (c.plannedAt && (c.plannedSiteName || c.plannedSiteId)) put('unit-destination', c.plannedAt, c.plannedSiteName || c.plannedSiteId, 'going to', c.plannedBy === 'customer' ? 'by the customer' : '', s, u.orderId);
+    if (c.receivedAt) put('unit-received', c.receivedAt, '', 'received', c.state === 'damaged' ? 'damaged' : '', s, u.orderId);
+    if (c.assignedAt && site) put('unit-assigned', c.assignedAt, site, 'assigned to', theirs ? 'by the customer' : '', s, u.orderId);
+    if (c.commissionedAt) put('unit-commissioned', c.commissionedAt, site, 'commissioned', theirs ? 'declared by the customer' : '', s, u.orderId);
+    if (theirs && c.confirmedAt && site) put('unit-confirmed', c.confirmedAt, site, 'confirmed at', 'by the office', s, u.orderId);
+  });
+  order.forEach(function (k) {
+    var g = groups[k], n = g.serials.length || 1, what = n === 1 ? 'Unit ' + (g.serials[0] || '') : n + ' units';
+    var title = what + ' ' + g.title + (g.site && /to$|at$/.test(g.title) ? ' ' + g.site : g.site ? ' at ' + g.site : '') + (g.extra ? ' ' + g.extra : '');
+    add(g.at, g.kind, title.replace(/\s+/g, ' '), n > 1 ? g.serials.slice(0, 5).join(', ') + (n > 5 ? ' and ' + (n - 5) + ' more' : '') : '', null, g.orderIds.length === 1 ? g.orderIds[0] : null);
+  });
+}
+/* The design tool on the account: every trial the supplier's owner granted
+   or revoked and every subscription change, from the audit (history), and
+   when there is none yet, the account's current grant. */
+function editorTimeline(events, current, add) {
+  var seen = 0;
+  events.forEach(function (e) {
+    if (!e) return;
+    var g = e.grant || {};
+    if (e.action === 'buyer-editor-trial') {
+      seen++;
+      add(e.at, 'design-trial', g.status === 'trial' ? 'Design tool trial granted' : 'Design tool trial ended by the supplier', g.status === 'trial' && g.expiresAt ? 'until ' + String(g.expiresAt).slice(0, 10) : '', e.by);
+    } else if (e.action === 'customer-editor-lite') {
+      seen++;
+      add(e.at, 'design-subscription', 'Design tool subscription ' + (g.status === 'active' ? 'active' : g.status === 'past_due' ? 'payment overdue' : 'ended'),
+        [g.plan === 'year' ? 'yearly' : g.plan === 'month' ? 'monthly' : '', g.expiresAt ? 'paid to ' + String(g.expiresAt).slice(0, 10) : ''].filter(Boolean).join(' · '), e.by);
+    }
+  });
+  if (seen || !current || typeof current !== 'object') return;
+  if (current.source === 'provider') add(current.updatedAt || current.grantedAt, 'design-subscription', 'Design tool subscription ' + (current.status === 'active' ? 'active' : current.status || 'recorded'), current.plan ? (current.plan === 'year' ? 'yearly' : 'monthly') : '', null);
+  else if (current.grantedAt) add(current.grantedAt, 'design-trial', current.status === 'trial' ? 'Design tool trial granted' : 'Design tool trial ended by the supplier', current.status === 'trial' && current.expiresAt ? 'until ' + String(current.expiresAt).slice(0, 10) : '', current.grantedBy);
 }
 
 function newId(prefix) { return prefix + crypto.randomBytes(9).toString('hex'); }
@@ -338,4 +426,5 @@ function newId(prefix) { return prefix + crypto.randomBytes(9).toString('hex'); 
 module.exports = { TYPES: TYPES, TYPE_LABEL: TYPE_LABEL, CATEGORIES: CATEGORIES, MIME: MIME, MAX_BYTES: MAX_BYTES, TIMELINE_CAP: TIMELINE_CAP,
   fail: fail, text: text, email: email, bool: bool, recordId: recordId, realDate: realDate, when: when, followUpDay: followUpDay, millis: millis, iso: iso,
   contactInput: contactInput, activityInput: activityInput, category: category, fileInput: fileInput, safeName: safeName, disposition: disposition,
-  contactView: contactView, activityView: activityView, fileView: fileView, followUpView: followUpView, customerMaySee: customerMaySee, timeline: timeline, dollars: dollars, newId: newId };
+  contactView: contactView, activityView: activityView, fileView: fileView, followUpView: followUpView, customerMaySee: customerMaySee, timeline: timeline, dollars: dollars, newId: newId,
+  isOpen: isOpen, byDue: byDue };

@@ -72,19 +72,36 @@ async function price(orderId, total, caller, accept) {
    covers what was invoiced, and release / ready / ship follow exactly as
    they do from a QuickBooks receipt. */
 function stageOf(l, stage) { if (['deposit', 'balance'].indexOf(stage) < 0) throw A.httpError(400, 'stage must be deposit or balance'); var inv = l.invoices[stage]; if (!inv) throw A.httpError(409, 'No ' + stage + ' invoice on this order yet' + (stage === 'balance' ? ' — verify ready first' : '')); return inv; }
+/* payUrl (optional): the supplier's own payment page for this invoice, shown
+   to the customer on the Pay hub (api/_lib/portal.js). https only, checked by
+   the ONE test portal.tenantPayLink() also applies on the way out; anything
+   else is refused, not dropped, so the office knows the customer has no
+   link. Recording the same invoice number again with a link ADDS or CHANGES
+   it; null removes it; leaving it out keeps what is there. */
+function payLinkInput(b) {
+  if (!b || !Object.prototype.hasOwnProperty.call(b, 'payUrl') || b.payUrl === undefined || b.payUrl === '') return { keep: true };
+  if (b.payUrl === null) return { value: null };
+  var ok = require('./portal').tenantPayLink(typeof b.payUrl === 'string' ? b.payUrl.trim() : b.payUrl);
+  if (!ok) throw A.httpError(400, 'A pay link must be a full https:// address to a named site (no spaces, no user name or password)');
+  return { value: ok };
+}
 async function issueInvoice(orderId, stage, b, caller) {
   var db = A.db(), ref = db.collection('orders').doc(P.id(orderId)), number = String(b && b.number || '').trim().slice(0, 80), date = String(b && b.date || '').slice(0, 10);
   if (!number) throw A.httpError(400, 'Invoice number required');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) throw A.httpError(400, 'Invoice date must be YYYY-MM-DD');
+  var link = payLinkInput(b);
   return db.runTransaction(async function (tx) {
     var s = await tx.get(ref); if (!s.exists) throw A.httpError(404, 'Order not found');
     var o = s.data(), l = o.logic; if (!l || l.accounting !== 'tenant') throw A.httpError(409, 'This order is billed through QuickBooks; invoices are issued there');
     var inv = stageOf(l, stage); if (!inv.amountCents) throw A.httpError(409, 'Nothing is due at this stage');
     if (inv.id && inv.id !== number) throw A.httpError(409, 'Invoice ' + inv.id + ' is already recorded for this stage');
     var updated = Object.assign({}, inv, { id: number, issuedAt: date, issuedBy: caller.email, status: inv.satisfied ? 'paid' : 'awaiting_payment', paidCents: inv.paidCents || 0 });
+    var linkChanged = !link.keep && (inv.payUrl || null) !== link.value;
+    if (linkChanged) { updated.payUrl = link.value; updated.payUrlBy = caller.email; updated.payUrlAt = new Date().toISOString(); }
     var changes = {}; changes['logic.invoices.' + stage] = updated; tx.update(ref, changes);
-    if (inv.id !== number) event(tx, ref, caller.email, stage + ' invoice ' + number + ' issued ' + date + ' for USD ' + (inv.amountCents / 100));
-    return { ok: true, duplicate: inv.id === number, invoice: updated };
+    if (inv.id !== number) event(tx, ref, caller.email, stage + ' invoice ' + number + ' issued ' + date + ' for USD ' + (inv.amountCents / 100) + (linkChanged && link.value ? ' with a pay link' : ''));
+    else if (linkChanged) event(tx, ref, caller.email, stage + ' invoice ' + number + ': pay link ' + (link.value ? (inv.payUrl ? 'changed' : 'added') : 'removed'));
+    return { ok: true, duplicate: inv.id === number && !linkChanged, payLinkChanged: linkChanged, invoice: updated };
   });
 }
 async function recordPayment(orderId, stage, b, caller) {

@@ -29,7 +29,9 @@
    HOW MUCH. 2 MB a file, the types api/_lib/crm.js fileInput() decides by
    the bytes, and 20 uploads a day per ACCOUNT (not per person — a company
    with five logins does not get a hundred), counted on the account in the
-   same transaction that reserves the record.
+   same transaction that reserves the record, on a record of its own
+   (omega_orgs/{org}/crm_upload_usage/{customerId__day}, Admin SDK only)
+   rather than a field on the account a tenant admin could reset.
 
    Scrubs its own 500s, like api/my-orders.js and for the same reason: a
    helper's message must never reach a battery customer's screen.
@@ -37,7 +39,7 @@
 'use strict';
 var A = require('./_lib/admin'), B = require('./_lib/buyer-accounts'), C = require('./_lib/crm'), CRM = require('./crm');
 
-var DAILY_UPLOADS = 20, LIST_CAP = 200;
+var DAILY_UPLOADS = 20, LIST_CAP = 200, SCAN = 500;
 
 /* Every reader proves the address (api/my-orders.js). */
 function requireVerified(caller) {
@@ -66,10 +68,14 @@ module.exports = A.handler(function (req, res) {
       return CRM.stream(res, org, account.id, f);
     }
     if (req.method === 'GET') {
-      var rows = await files.orderBy('uploadedAt', 'desc').limit(LIST_CAP).get();
-      return { company: account.data.name || '', dailyUploads: DAILY_UPLOADS,
-        files: rows.docs.filter(function (d) { return C.customerMaySee(d.data()); }).map(function (d) { return C.fileView(d.id, d.data() || {}, 'customer'); }),
-        limited: rows.size >= LIST_CAP };
+      /* Every document the customer may see is stored shared (their own
+         uploads are shared by definition), so the query asks for exactly
+         those — an office-only or archived record never takes a place under
+         the cap. Two equalities: no composite index; newest first here. */
+      var rows = await files.where('shared', '==', true).where('archived', '==', false).limit(SCAN).get();
+      var mine = rows.docs.filter(function (d) { return C.customerMaySee(d.data()); }).map(function (d) { return C.fileView(d.id, d.data() || {}, 'customer'); })
+        .sort(function (x, y) { return C.millis(y.uploadedAt) - C.millis(x.uploadedAt); });
+      return { company: account.data.name || '', dailyUploads: DAILY_UPLOADS, files: mine.slice(0, LIST_CAP), limited: rows.size >= SCAN || mine.length > LIST_CAP };
     }
     if (b.action !== 'upload') throw A.httpError(400, 'Unknown documents action');
     var file = C.fileInput(b.file);

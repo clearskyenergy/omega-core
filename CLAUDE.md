@@ -466,6 +466,22 @@ is not built.
   lands in `omega_orgs/{org}/admin_audit` with what changed and what it was.
   Tests: `scripts/test-logic-admin.js` on the shared
   `scripts/_lib/firestore-double.js`.
+- **The ecosystem is one map**: `docs/OMEGA-LOGIC-ECOSYSTEM.md` (who uses
+  which app, the hubs, the API contracts, what is not built). Both apps and
+  both desktops open on the HEX HUB (`omega-hexhub.js`, `OmegaHexHub.render`;
+  items[0] is the centre): the office's Today ringed by Sales · Customers ·
+  Plant · Deliver · Stock · Money, the customer's Fleet ringed by Size ·
+  Design · POs · Pay · Shipping · Warranty. The supplier's CRM is
+  `api/crm.js` on the ACCOUNT (contacts, activity and follow-ups on Today,
+  documents, a timeline DERIVED from the records by `api/_lib/crm.js`,
+  never stored); the customer's side of the same documents is
+  `api/my-files.js`; the customer's design subscription is
+  `api/customer-subscribe.js` (metadata `org`, never `orgId`, so it cannot
+  reach the tenant's billing); a tenant-billed invoice's pay link has ONE
+  check, `api/_lib/portal.js tenantPayLink`. All Admin SDK; the rules deny
+  browsers. The sample tenant in `scripts/_lib/logic-fixtures.js` answers
+  every one of these routes, so `check:pages` and the sandboxes exercise
+  them.
 - Chromium render checks for all of it: `npm run check:pages`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)

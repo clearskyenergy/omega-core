@@ -25,7 +25,9 @@
   /* the buyer is a different person from the office staff: the customer
      app keeps its own sign-in, so trying the office sample first does not
      open the customer app as the office */
-  var KEY = 'omega_sandbox_v1', USER_KEY = 'omega_sandbox_user_v1' + (global.OMEGA_SANDBOX_APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
+  /* v2: the sample grew a CRM, documents, a pay link and the design tool's
+     prices; a phone that kept the v1 sample starts over on the new one */
+  var KEY = 'omega_sandbox_v2', USER_KEY = 'omega_sandbox_user_v1' + (global.OMEGA_SANDBOX_APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function seedIfMissing(k, v) { try { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -71,10 +73,27 @@
     if (path === '/api/logic-custody') return V.custodyJson(q);
     if (path === '/api/logic-logistics') return V.logisticsJson();
     if (path === '/api/customer-design') return V.designJson();
+    if (path === '/api/crm') return V.crmJson(q);
+    if (path === '/api/my-files') return V.myFilesJson(q);
+    if (path === '/api/customer-subscribe') return V.subJson(who());
+    if (path === '/api/customer-portfolio') return V.portfolioJson();
     if (path === '/api/app-manifest') return V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT);
     return { status: 404, error: 'Not in this sandbox: ' + path };
   }
   function respond(json, status) { return Promise.resolve(new Response(JSON.stringify(json), { status: status, headers: { 'Content-Type': 'application/json' } })); }
+  /* a document, as the endpoints hand one over: bytes, an attachment */
+  function bytes(d) { return Promise.resolve(new Response(new Blob([d.body], { type: 'application/octet-stream' }), { status: 200, headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="' + String(d.name || 'document').replace(/["\\\r\n]/g, '_') + '"', 'X-Content-Type-Options': 'nosniff' } })); }
+  /* Stripe's two pages are not in a sandbox. Checkout: the sample granted
+     the subscription, so make the trip back Stripe would (…&checkout=done
+     on this page), which the app says the way the product does — over
+     https; a page opened over plain http refuses any non-https link, as
+     the real page does. The billing page: said plainly. */
+  function stripe(path, out) {
+    if (path !== '/api/customer-subscribe' || !out || typeof out.url !== 'string') return out;
+    if (out.url === '#manage') return { status: 409, error: 'Manage subscription opens Stripe’s billing page — not part of this sandbox. Nothing is charged here.' };
+    if (out.url !== '#subscribed') return out;
+    try { var back = new URL(location.href); back.searchParams.set('tab', 'design'); back.searchParams.set('checkout', 'done'); back.hash = ''; return { url: back.href }; } catch (e) { return out; }
+  }
   var realFetch = global.fetch ? global.fetch.bind(global) : null;
   global.fetch = function (input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || '', a = document.createElement('a'); a.href = url;
@@ -82,9 +101,10 @@
     var method = ((init && init.method) || 'GET').toUpperCase(), body = {};
     try { body = init && init.body ? JSON.parse(init.body) : {}; } catch (e) {}
     var out;
-    try { out = method === 'GET' ? get(a.pathname, a.search.slice(1)) : F.post(state, a.pathname, a.search.slice(1), body, who()); } catch (e) { out = { status: 500, error: e.message }; }
+    try { out = method === 'GET' ? get(a.pathname, a.search.slice(1)) : stripe(a.pathname, F.post(state, a.pathname, a.search.slice(1), body, who())); } catch (e) { out = { status: 500, error: e.message }; }
     save(KEY, state);
     if (out && out.error && out.status) return respond({ error: out.error }, out.status);
+    if (out && out.download) return bytes(out.download);
     return respond(out, 200);
   };
 

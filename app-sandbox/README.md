@@ -6,7 +6,7 @@ Four pages, one sample Clean Cell, kept on the phone:
 
 - `/app-sandbox/plant` — the plant app (the two builders)
 - `/app-sandbox/office` — the office app (project manager, procurement, commissioning)
-- `/app-sandbox/customer` — the customer app (the buyer; Editor Lite first)
+- `/app-sandbox/customer` — the customer app (the buyer; opens on its hub)
 - `/app-sandbox/bench` — the bench screen the plant app's *Scan* opens
 
 On an iPhone: open one in Safari, Share → **Add to Home Screen**. On Android
@@ -19,16 +19,23 @@ apps sign you in as `demo@cleancell.us`; the customer app as whatever you
 type, and `ops@riverside.example` is the account with the history). The
 sample — a catalog with bills of materials, one work order with six
 cabinets on the floor, three orders, a company account with a PO under
-review, a customer with a site plan on trial — lives in this browser's
-localStorage. What you do (answer a request, assign a unit, key in a stack
-of POs, issue parts at the bench, size a system, send a PO) changes it, on
-this phone only. **Reset** in the purple strip starts the sample over.
+review, a customer with a site plan on trial, an open invoice with the
+supplier's pay link, and the account's CRM (contacts, calls and follow-ups,
+documents both ways) — lives in this browser's localStorage. What you do
+(answer a request, assign a unit, key in a stack of POs, issue parts at the
+bench, size a system, send a PO, log a call, upload a document, issue an
+invoice with a pay link, subscribe to the design tool) changes it, on this
+phone only. **Reset** in the purple strip starts the sample over.
 
 What IS real: the pages are the product's pages, unmodified in their logic,
 and every number is computed by the product's own libraries (the board, the
 map, the materials plan, the bench steps, the sizing), bundled — not copied
 — into `sandbox.js`. What is NOT: the endpoints (answered on the page), the
-desktop pages the apps link to (a tap says so), pricing, invoices, e-mail.
+desktop pages the apps link to (a tap says so), pricing, e-mail, payment
+(a pay link opens a placeholder page; subscribing grants the design tool at
+once and comes back as Stripe would, over https; Manage says it is Stripe's
+page), and documents (the kind is judged by the name, and a download is a
+one-page sample PDF — no bytes are kept).
 
 The bench is pre-paired as a **roaming phone** (`st-phone`); pair it to any
 other ID with any token and it is Bay 2 · Rack assembly. The unit to scan is
