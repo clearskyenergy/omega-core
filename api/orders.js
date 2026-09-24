@@ -45,6 +45,7 @@
 'use strict';
 var A = require('./_lib/admin');
 var M = require('./_lib/mail');
+var B = require('./_lib/buyer-accounts');
 
 /* The lifecycle, in order. Not a free-text field: a queue where one person
    types 'in progress' and another types 'In Progress' cannot be counted. */
@@ -300,13 +301,24 @@ function create(caller, b) {
         updatedAt: FV.serverTimestamp()
       };
 
-      /* The customer ACCOUNT this order belongs to, when the email is already
-         on one: a signed-in member of the tenant typed it (canActInOrg), so
-         every person on that account sees the order (buyer-accounts
-         accountOrders). An anonymous public order never gets this stamp. */
-      return db.collection('omega_orgs').doc(orgId).collection('customer_index').doc(email).get().then(function (ptr) {
-        if (ptr && ptr.exists && ptr.data() && ptr.data().customerId) doc.customerId = String(ptr.data().customerId);
-      }, function () {}).then(function () { return ref.set(doc); }).then(function () {
+      /* The customer ACCOUNT this order belongs to, when the email is on one
+         that ADMITTED that person (B.stampableAccount: never a join request
+         still waiting or turned down): a signed-in member of the tenant typed
+         it (canActInOrg), so every person on that account sees the order
+         (buyer-accounts accountOrders). An anonymous public order never gets
+         this stamp. The pointer is read in the SAME transaction as the
+         write, so an office move of that login (buyers user-add rehome)
+         and this order are serialised instead of racing; the account is
+         marked hasOrders so an emptiness check cannot miss it. */
+      return db.runTransaction(function (tx) {
+        return B.stampableAccount(db, orgId, email, tx).then(function (cid) {
+          if (cid) {
+            doc.customerId = String(cid);
+            tx.update(db.collection('omega_orgs').doc(orgId).collection('customers').doc(String(cid)), { hasOrders: true });
+          }
+          tx.set(ref, doc);
+        });
+      }).then(function () {
         try {
           var to = process.env.ORDER_NOTIFY || process.env.MAIL_NOTIFY || 'dev@clearsky-usa.com';
           M.send(to, '[OMEGA] New order ' + no + ' — ' + doc.orgName,

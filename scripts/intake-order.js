@@ -89,12 +89,13 @@ function money(n) { return '$' + Number(n).toLocaleString('en-US', { minimumFrac
   /* The customer is a company ACCOUNT with people on it: a new contact at a
      company that already has an account joins it rather than splitting it. */
   var c = ORDER.customer, acct;
-  try { acct = await call(buyers, { action: 'create', email: c.email, company: c.company, name: c.contact, terms: c.terms }); }
+  try { acct = await call(buyers, { action: 'create', email: c.email, company: c.company, name: c.contact, terms: c.terms, domain: c.domain || undefined }); }
   catch (e) {
     if (e.status !== 409 || !/already has an account/.test(e.message)) throw e;
     var same = await require(path.join(ROOT, 'api/_lib/buyer-accounts')).findByName(A.db(), org, c.company);
+    if (!same) throw e;
     await call(buyers, { action: 'user-add', customerId: same.id, email: c.email, name: c.contact, role: 'user' });
-    acct = { customerId: same.id, created: false, note: c.email + ' added to the existing ' + c.company + ' account' };
+    acct = { customerId: same.id, created: false, note: c.email + ' added to the existing ' + c.company + ' account (' + same.id + ', made by ' + (same.data.source || 'legacy') + ')' };
   }
   step('customer account ' + acct.customerId + (acct.created ? ' created' : ' existed'), { note: acct.note });
   if (c.terms) { var t = await call(buyers, { action: 'terms', customerId: acct.customerId, terms: c.terms }); step('terms ' + JSON.stringify(t.terms), null); }

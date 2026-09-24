@@ -832,8 +832,13 @@ function plan(rows, mapping, ctx, now) {
            already on a customer's account belongs to that account, or no
            person on it could see the site their unit is at. */
         var owner = ctx.customerId || (unit.custody && unit.custody.customerId) || unit.customerId || (ctx.accountOf && ctx.accountOf(unit)) || null;
-        var key = siteKey(owner, r.siteName, r.zip);
-        site = ctx.byKey[key] || newSites[key];
+        /* An UNOWNED site with that name and ZIP (the office made it without
+           choosing a customer, or an earlier import did) is the same place:
+           adopt it rather than refusing the row or making a duplicate and
+           moving the unit onto it. It stays shared — the unit's own
+           custody.customerId is what puts it on the account. */
+        var key = siteKey(owner, r.siteName, r.zip), anyKey = siteKey(null, r.siteName, r.zip);
+        site = ctx.byKey[key] || newSites[key] || (owner ? (ctx.byKey[anyKey] || newSites[anyKey]) : null);
         if (!site) {
           if (!ctx.allowNewSites) throw fail(400, 'Site "' + r.siteName + '" does not exist; add it first or allow new sites');
           if (!r.line1 && !r.city) throw fail(400, 'A new site needs an address');
@@ -2555,10 +2560,12 @@ function post(state, path, query, b, who) {
     if (b.action === 'user-status') {
       var ax = acctOf(), p = ax && ax.users.filter(function (u) { return u.email === b.email; })[0]; if (!p) return err(404, 'That person is not on this account');
       var next = { status: b.status || p.status, role: b.role || p.role };
-      if (!ax.users.some(function (u) { return (u.email === p.email ? next.role : u.role) === 'owner' && (u.email === p.email ? next.status : u.status) === 'active'; })) return err(409, 'An account needs at least one active owner; make someone else the owner first');
-      p.status = next.status; p.role = next.role; return { ok: true, person: { email: p.email, status: p.status, role: p.role }, note: p.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
+      var wasOwner = p.role === 'owner' && p.status === 'active';
+      if (wasOwner && !(next.role === 'owner' && next.status === 'active') && !ax.users.some(function (u) { return u.email !== p.email && u.role === 'owner' && u.status === 'active'; })) return err(409, 'An account needs at least one active owner; make someone else the owner first');
+      var declined = p.status === 'pending' && next.status === 'disabled'; if (declined) p.declined = true; else if (next.status === 'active') delete p.declined;
+      p.status = next.status; p.role = next.role; return { ok: true, person: { email: p.email, status: p.status, role: p.role, declined: declined }, note: declined ? 'Request declined. They were not added.' : p.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
     }
-    if (b.action === 'profile') { var ap = acctOf(); if (!ap) return err(404, 'Customer not found'); ap.company = String(b.company || ap.company); ap.status = b.status === 'suspended' ? 'suspended' : 'active'; if (b.domain !== undefined) ap.domain = String(b.domain || ''); return { ok: true, note: 'Customer profile saved. Existing orders, invoices and subscription billing were not changed.' }; }
+    if (b.action === 'profile') { var ap = acctOf(); if (!ap) return err(404, 'Customer not found'); if (b.company !== undefined) ap.company = String(b.company || ap.company); if (b.status !== undefined) ap.status = b.status === 'suspended' ? 'suspended' : 'active'; if (b.domain !== undefined) ap.domain = String(b.domain || ''); return { ok: true, note: 'Customer profile saved. Existing orders, invoices and subscription billing were not changed.' }; }
     if (b.action === 'invite') return err(409, 'Customer email delivery is not configured. Share the customer app link instead.');
     if (b.action === 'terms') { var c = acctOf(); if (!c) return err(404, 'Create this customer first'); var t = { depositPct: Number(b.terms.depositPct), dueDays: Number(b.terms.dueDays) }; if (!(t.depositPct >= 0 && t.depositPct <= 100)) return err(400, 'Deposit must be 0–100%'); c.terms = t; if (state.account.customerId === c.id) state.account.terms = Object.assign({}, state.account.terms, t); return { ok: true, terms: t, note: 'Applies to future prices. Existing invoices retain their agreed terms.' }; }
     return err(400, 'Not in this sandbox: ' + b.action);
@@ -2712,8 +2719,9 @@ function post(state, path, query, b, who) {
     if (b.action === 'user-status') {
       var pu = rv.users.filter(function (u) { return u.email === b.email; })[0]; if (!pu) return err(404, 'That person is not on this account');
       if (pu.email === (who || state.account.you.email)) return err(400, 'You cannot change your own access');
+      var dec = pu.status === 'pending' && b.status === 'disabled'; if (dec) pu.declined = true;
       pu.status = b.status === 'disabled' ? 'disabled' : 'active';
-      return { ok: true, person: { email: pu.email, status: pu.status, role: pu.role }, users: V.accountJson(who).users, note: pu.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
+      return { ok: true, person: { email: pu.email, status: pu.status, role: pu.role }, users: V.accountJson(who).users, note: dec ? 'Request declined. They were not added.' : pu.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
     }
     var a = state.account; a.you.name = String(b.name || a.you.name).slice(0, 120); a.company = String(b.company || a.company).slice(0, 160); a.you.phone = String(b.phone || '').slice(0, 40);
     if (b.address) a.address = { line1: String(b.address.line1 || ''), city: String(b.address.city || ''), state: String(b.address.state || ''), zip: String(b.address.zip || '') };

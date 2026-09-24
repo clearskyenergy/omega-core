@@ -27,10 +27,14 @@ async function price(orderId, total, caller, accept) {
      total in tenant mode: ClearSky's charge to the OEM is a separate line. */
   if (!tenantBilled && (!conf.realmId || !conf.itemRef || conf.accountingApproved !== true)) throw A.httpError(409, 'Connect ClearSky QuickBooks and approve the installment item/tax treatment first');
   // Terms are keyed by the real customer account, not an arbitrary public form field.
+  /* The account is the order's stamp, else the account that ADMITTED the
+     person it is billed to (B.stampableAccount): a join request still
+     waiting or turned down neither gets the company's negotiated terms nor
+     puts the order on the company. */
   var root = A.db().collection('omega_orgs').doc(order.orgId), override = null, stampAccount = null;
-  var pointer = await root.collection('customer_index').doc(String(order.customer.email).toLowerCase()).get();
-  if (pointer.exists) {
-    var cs = await root.collection('customers').doc(P.id(pointer.data().customerId)).get();
+  var acctId = order.customerId ? P.id(order.customerId) : await require('./buyer-accounts').stampableAccount(A.db(), order.orgId, order.customer.email);
+  if (acctId) {
+    var cs = await root.collection('customers').doc(acctId).get();
     if (cs.exists && cs.data().status !== 'disabled') override = cs.data().terms;
     /* Pricing is where the office reviews an order: from here it belongs to
        the customer ACCOUNT, so everyone on it sees it. Not for an order an

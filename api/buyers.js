@@ -103,26 +103,29 @@ module.exports = A.handler(async function (req, res) {
   }
   if (b.action === 'profile') {
     /* The COMPANY's details (name, address, access, email domain) by account;
-       a person's name and phone only when a person is named. */
-    if (!B.clean(b.company)) throw A.httpError(400, 'Company name is required');
-    if (['active', 'suspended'].indexOf(b.status) < 0) throw A.httpError(400, 'Choose active or suspended access');
-    var ad = b.address || {}, company = B.clean(b.company), shipping = { line1: B.clean(ad.line1, 200), city: B.clean(ad.city, 100), state: B.clean(ad.state, 40), zip: B.clean(ad.zip, 20) };
-    var domain = b.domain === undefined ? undefined : (b.domain ? A.safeOrg(String(b.domain).toLowerCase()) : '');
-    if (b.domain && !domain) throw A.httpError(400, 'Invalid company email domain');
-    if (domain && require('./_lib/public-domains').indexOf(domain) >= 0) throw A.httpError(400, domain + ' is a public mailbox provider, not a company domain');
-    var person = b.email && (b.name !== undefined || b.phone !== undefined) ? B.email(b.email) : null;
+       a person's name and phone only when a person is named. A PARTIAL patch:
+       a field that is not sent is not touched, so the phone's domain-only
+       Save cannot revert an address or re-open a suspended account. */
+    var patch = {}, person = b.email && (b.name !== undefined || b.phone !== undefined) ? B.email(b.email) : null;
+    if (b.company !== undefined) { if (!B.clean(b.company)) throw A.httpError(400, 'Company name is required'); patch.name = B.clean(b.company); patch.nameLower = B.nameKey(patch.name); }
+    if (b.status !== undefined) { if (['active', 'suspended'].indexOf(b.status) < 0) throw A.httpError(400, 'Choose active or suspended access'); patch.status = b.status; }
+    if (b.address && typeof b.address === 'object') { var ad = b.address; patch.address = { line1: B.clean(ad.line1, 200), city: B.clean(ad.city, 100), state: B.clean(ad.state, 40), zip: B.clean(ad.zip, 20) }; }
+    /* Typing the company's email domain is the office VERIFYING the
+       account as a company: colleagues from that domain may then ask to
+       join it, and its owner may add them. */
+    if (b.domain !== undefined) { patch.domain = B.accountDomain(b.domain); if (patch.domain) patch.accountType = 'company'; }
+    if (!Object.keys(patch).length && !person) throw A.httpError(400, 'Nothing to change');
     return db.runTransaction(async function (tx) {
       var found = await accountOf(b, tx);
       if (!found) throw A.httpError(404, 'Customer not found');
       var uref = person ? found.ref.collection('users').doc(person) : null, us = uref ? await tx.get(uref) : null;
       if (person && !us.exists) throw A.httpError(404, 'That person is not on this account');
-      var now = new Date().toISOString(), patch = { name: company, nameLower: B.nameKey(company), address: shipping, status: b.status, updatedAt: now };
-      if (domain !== undefined) patch.domain = domain;
-      tx.update(found.ref, patch);
+      var now = new Date().toISOString();
+      if (Object.keys(patch).length) tx.update(found.ref, Object.assign({ updatedAt: now }, patch));
       if (person) tx.update(uref, { name: B.clean(b.name, 120), phone: B.clean(b.phone, 40), updatedAt: now });
       tx.create(db.collection('omega_audit').doc(), { action: 'buyer-profile', orgId: org, customerId: found.id, by: caller.email, at: now,
         was: { name: found.data.name || '', address: found.data.address || null, status: found.data.status || 'active', domain: found.data.domain || '' },
-        profile: { name: company, address: shipping, status: b.status, domain: domain === undefined ? (found.data.domain || '') : domain, person: person } });
+        profile: Object.assign({ person: person }, patch) });
       return { ok: true, note: 'Customer profile saved. Existing orders, invoices and subscription billing were not changed.' };
     });
   }
@@ -132,11 +135,14 @@ module.exports = A.handler(async function (req, res) {
     /* One company, one account: a second "Amperage Capital" splits its
        orders, balance and people in two. Add the person to the one that
        exists instead. */
+    var typedDomain = B.accountDomain(b.domain);
     if (!(await B.lookup(db, org, address))) {
+      /* Only an OFFICE company is "the" company; a self-made account with the
+         same name is somebody's own login, which user-add can move. */
       var same = await B.findByName(db, org, b.company);
       if (same) { var e = A.httpError(409, same.data.name + ' already has an account. Open it and add ' + address + ' to it instead.'); e.existingCustomerId = same.id; throw e; }
     }
-    var account = await B.ensure(db, org, address, { company: b.company, name: b.name, terms: terms, source: 'office' }, caller);
+    var account = await B.ensure(db, org, address, { company: b.company, name: b.name, terms: terms, source: 'office', domain: typedDomain }, caller);
     return { ok: true, customerId: account.id, created: account.created, portalUrl: portalUrl, appUrl: appUrl,
       note: account.created ? 'Customer record created. They activate their login using their own verified email.' : 'Customer already exists. Existing terms and identity were preserved.' };
   }
@@ -153,7 +159,8 @@ module.exports = A.handler(async function (req, res) {
     });
   }
   /* A person joins the account (the office may move a login that signed in
-     before it was added, when that stray account is empty), or a person's
+     before it was added, when that stray account is empty, or a join request
+     that another account never admitted), or a person's
      access or role changes. B.addUser / B.setUser are the one writer. */
   if (b.action === 'user-add') {
     if (!b.customerId) throw A.httpError(400, 'Which account?');
@@ -164,7 +171,7 @@ module.exports = A.handler(async function (req, res) {
   if (b.action === 'user-status') {
     if (!b.customerId) throw A.httpError(400, 'Which account?');
     var changed = await B.setUser(db, org, b.customerId, b.email, { status: b.status == null ? null : b.status, role: b.role == null ? null : b.role }, caller.email, {});
-    return { ok: true, person: changed, note: changed.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
+    return { ok: true, person: changed, note: changed.declined ? 'Request declined. They were not added.' : changed.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
   }
   if (b.action === 'invite') {
     var address2 = B.email(b.email), target = B.active(await B.lookup(db, org, address2)), mail = require('./_lib/mail');

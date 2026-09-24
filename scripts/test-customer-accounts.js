@@ -198,6 +198,104 @@ function nos(list) { return list.map(function (o) { return o.orderNo; }).sort();
     await rejects(call(intake, 'POST', { office: true, action: 'contact', customerId: AMP, email: 'cfo@amperagecapital.com' }, OFFICE), 409);
   });
 
+  console.log('\nwho may put whom on an account');
+  function selfAccount(id, email, name) {
+    db.seed(O + '/customers/' + id, { orgId: ORG, name: name || email, status: 'active', source: 'self', terms: {}, agreements: [] });
+    db.seed(O + '/customers/' + id + '/users/' + email, { email: email, role: 'owner', status: 'active' });
+    db.seed(O + '/customer_index/' + email, { customerId: id });
+  }
+  await test('a self-made account whose name a customer typed is never "the company" to the office', async function () {
+    seed(); selfAccount('acct_squat', 'intern@bigcorp.example', 'BigCorp');
+    assert.equal(await B.findByName(db, ORG, 'BigCorp'), null);
+    var made = await call(buyers, 'POST', { action: 'create', company: 'BigCorp', name: 'Buyer', email: 'buyer@bigcorp.example', domain: 'bigcorp.example' }, OFFICE);
+    assert.notEqual(made.customerId, 'acct_squat'); assert.equal(db.data.get(O + '/customers/' + made.customerId).domain, 'bigcorp.example');
+    var po = await call(intake, 'POST', { office: true, action: 'company', name: 'Squat Co' }, OFFICE); selfAccount('acct_sq2', 'x@squat.example', 'Squat Two');
+    assert.notEqual((await call(intake, 'POST', { office: true, action: 'company', name: 'Squat Two' }, OFFICE)).customerId, 'acct_sq2');
+    assert.ok(po.customerId);
+  });
+  await test('a typed domain is never silently dropped when the company already exists', async function () {
+    seed(); db.seed(O + '/customers/legacy', { orgId: ORG, name: 'Legacy Buyer Inc', status: 'active', source: 'office' });
+    var set = await call(intake, 'POST', { office: true, action: 'company', name: 'Legacy Buyer Inc', domain: 'legacybuyer.example' }, OFFICE);
+    assert.equal(set.domainSet, 'legacybuyer.example'); assert.equal(db.data.get(O + '/customers/legacy').domain, 'legacybuyer.example'); assert.equal(db.data.get(O + '/customers/legacy').accountType, 'company');
+    var ign = await call(intake, 'POST', { office: true, action: 'company', name: 'Amperage Capital', domain: 'other.example' }, OFFICE);
+    assert.equal(ign.customerId, AMP); assert.equal(ign.domainIgnored, 'other.example'); assert.equal(db.data.get(O + '/customers/' + AMP).domain, 'amperagecapital.com');
+  });
+  await test('the office company domain is what the office TYPED, never read off the contact', async function () {
+    seed(); var c = await call(buyers, 'POST', { action: 'create', company: 'Consulted Co', name: 'Advisor', email: 'advisor@bigconsulting.example' }, OFFICE);
+    assert.equal(db.data.get(O + '/customers/' + c.customerId).domain, undefined);
+    await rejects(call(buyers, 'POST', { action: 'create', company: 'Mailbox Co', name: 'X', email: 'x@mailbox.example', domain: 'gmail.com' }, OFFICE), 400, /public mailbox/);
+    ['rr.com', 'optonline.net', 'frontier.com', 'juno.com', 'btinternet.com', 'yahoo.fr'].forEach(function (d) { assert.equal(B.companyDomain('a@' + d), '', d); });
+  });
+  await test('an owner of a self-made account cannot pull anybody in; an owner never adds someone with orders here', async function () {
+    seed(); selfAccount('acct_intern', 'intern@bigcorp.example', 'BigCorp');
+    await rejects(call(myAccount, 'POST', { action: 'add-user', email: 'ceo@bigcorp.example' }, person('intern@bigcorp.example')), 403, /supplier/);
+    assert.equal(db.data.get(O + '/customer_index/ceo@bigcorp.example'), undefined);
+    db.seed('orders/ap1', { orgId: ORG, orderNo: 'AP-1', createdAt: '2026-09-01T00:00:00Z', customer: { email: 'ap@amperagecapital.com' }, items: [] });
+    await rejects(call(myAccount, 'POST', { action: 'add-user', email: 'ap@amperagecapital.com' }, SHANNON), 409, /already has orders/);
+  });
+  await test('someone with orders here signs in: their own account, not a join request that would fold their history in', async function () {
+    seed(); db.seed('orders/ops1', { orgId: ORG, orderNo: 'OPS-1', createdAt: '2026-09-01T00:00:00Z', customer: { email: 'ops@amperagecapital.com', name: 'Ops' }, items: [] });
+    var me = await call(myAccount, 'GET', {}, person('ops@amperagecapital.com'));
+    assert.equal(me.pending, undefined); assert.notEqual(me.customerId, AMP);
+  });
+  await test('an order is stamped for an account only for a person it admitted; a turned-off colleague\'s past orders stay the account\'s', async function () {
+    seed(); await call(myAccount, 'GET', {}, JANE);
+    assert.equal(await B.stampableAccount(db, ORG, 'jane@amperagecapital.com'), null, 'pending never stamps');
+    assert.equal(await B.accountOfOrder(db, ORG, { customer: { email: 'jane@amperagecapital.com' } }), null);
+    assert.equal(await B.accountOfOrder(db, ORG, { source: 'embed', customer: { email: 'shannon@amperagecapital.com' } }), null, 'a public page proves nothing');
+    assert.equal(await B.accountOfOrder(db, ORG, { customer: { email: 'shannon@amperagecapital.com' } }), AMP);
+    await B.addUser(db, ORG, AMP, 'cfo@amperagecapital.com', {}, 'pm@cleancell.us', { source: 'office' });
+    db.seed('orders/cfo1', { orgId: ORG, orderNo: 'CFO-1', createdAt: '2026-09-24T09:00:00Z', customer: { email: 'cfo@amperagecapital.com' }, items: [] });
+    await B.setUser(db, ORG, AMP, 'cfo@amperagecapital.com', { status: 'disabled' }, 'pm@cleancell.us', {});
+    var seen = await call(myOrders, 'GET', {}, SHANNON); assert.ok(nos(seen.orders).indexOf('CFO-1') >= 0, 'a departed colleague\'s order stays on the account');
+    db.seed('orders/jane1', { orgId: ORG, orderNo: 'JANE-1', createdAt: '2026-09-24T09:00:00Z', customer: { email: 'jane@amperagecapital.com' }, items: [] });
+    assert.ok(nos((await call(myOrders, 'GET', {}, SHANNON)).orders).indexOf('JANE-1') < 0, 'a request still waiting does not bring its orders');
+  });
+  await test('declining a request is its own state; the office can then move that login to the right company', async function () {
+    seed(); await call(myAccount, 'GET', {}, JANE);
+    var d = await call(myAccount, 'POST', { action: 'user-status', email: 'jane@amperagecapital.com', status: 'disabled' }, SHANNON);
+    assert.match(d.note, /declined/i); var u = db.data.get(O + '/customers/' + AMP + '/users/jane@amperagecapital.com'); assert.equal(u.declined, true); assert.equal(u.status, 'disabled');
+    assert.equal(d.users.filter(function (x) { return x.email === 'jane@amperagecapital.com'; })[0].declined, true);
+    var other = await call(intake, 'POST', { office: true, action: 'company', name: 'Amperage Holdings' }, OFFICE);
+    var moved = await call(buyers, 'POST', { action: 'user-add', customerId: other.customerId, email: 'jane@amperagecapital.com' }, OFFICE);
+    assert.equal(moved.moved, AMP); assert.equal(db.data.get(O + '/customer_index/jane@amperagecapital.com').customerId, other.customerId);
+    assert.equal(db.data.get(O + '/customers/' + AMP).status, 'active', 'the company she was turned away from is untouched');
+    assert.equal(db.data.get(O + '/customers/' + AMP + '/users/jane@amperagecapital.com').movedTo, other.customerId);
+    assert.ok(Array.from(db.data.keys()).some(function (k) { return /^omega_audit\//.test(k) && db.data.get(k).action === 'buyer-request-rehomed'; }));
+    /* a colleague who WAS admitted is never moved by a page */
+    await B.addUser(db, ORG, AMP, 'cfo@amperagecapital.com', {}, 'pm@cleancell.us', { source: 'office' });
+    await rejects(call(buyers, 'POST', { action: 'user-add', customerId: other.customerId, email: 'cfo@amperagecapital.com' }, OFFICE), 409);
+  });
+  await test('an account with no owner yet: the office still approves a request and turns people off', async function () {
+    seed(); var c = await call(intake, 'POST', { office: true, action: 'company', name: 'Acme Solar', domain: 'acmesolar.example' }, OFFICE);
+    await call(intake, 'POST', { office: true, action: 'contact', customerId: c.customerId, email: 'buyer@acmesolar.example', role: 'user' }, OFFICE);
+    var me = await call(myAccount, 'GET', {}, person('ops@acmesolar.example')); assert.equal(me.pending, true);
+    await call(buyers, 'POST', { action: 'user-status', customerId: c.customerId, email: 'ops@acmesolar.example', status: 'active' }, OFFICE);
+    await call(buyers, 'POST', { action: 'user-status', customerId: c.customerId, email: 'buyer@acmesolar.example', status: 'disabled' }, OFFICE);
+    assert.equal(db.data.get(O + '/customers/' + c.customerId + '/users/ops@acmesolar.example').status, 'active');
+  });
+  await test('the move of a stray login re-checks INSIDE the transaction: an order landing meanwhile aborts it', async function () {
+    seed(); db.seed(O + '/customers/' + AMP, Object.assign(db.data.get(O + '/customers/' + AMP), { domain: '' }));
+    var solo = await call(myAccount, 'GET', {}, JANE);
+    var run = db.runTransaction.bind(db);
+    db.runTransaction = function (fn) { db.seed('orders/race', { orgId: ORG, orderNo: 'R-1', customerId: solo.customerId, customer: { email: 'jane@amperagecapital.com' }, items: [] }); db.runTransaction = run; return run(fn); };
+    await rejects(call(buyers, 'POST', { action: 'user-add', customerId: AMP, email: 'jane@amperagecapital.com' }, OFFICE), 409, /changed while it was being moved/);
+    assert.equal(db.data.get(O + '/customer_index/jane@amperagecapital.com').customerId, solo.customerId); assert.equal(db.data.get(O + '/customers/' + solo.customerId).status, 'active');
+  });
+  await test('the phone\'s domain-only Save touches only the domain; a save returns the people', async function () {
+    seed(); db.seed(O + '/customers/' + AMP, Object.assign(db.data.get(O + '/customers/' + AMP), { status: 'suspended', address: { line1: '9 New Ave' } }));
+    await call(buyers, 'POST', { action: 'profile', customerId: AMP, domain: 'amperage.example' }, OFFICE);
+    var a = db.data.get(O + '/customers/' + AMP); assert.equal(a.status, 'suspended'); assert.equal(a.address.line1, '9 New Ave'); assert.equal(a.name, 'Amperage Capital'); assert.equal(a.domain, 'amperage.example');
+    await rejects(call(buyers, 'POST', { action: 'profile', customerId: AMP }, OFFICE), 400, /Nothing to change/);
+    seed(); await call(myAccount, 'GET', {}, JANE);
+    var saved = await call(myAccount, 'POST', { phone: '555-0100' }, SHANNON); assert.equal(saved.users.length, 2);
+  });
+  await test('an order with no stamp is found by the account\'s admitted people even past the first page of stamped ones', async function () {
+    seed(); for (var i = 0; i < 120; i++) db.seed('orders/bulk' + i, { orgId: ORG, orderNo: 'B-' + i, createdAt: '2026-01-01T00:00:' + String(i % 60).padStart(2, '0') + 'Z', customerId: AMP, customer: { email: 'ap@amperagecapital.com' }, items: [] });
+    var acct = await B.lookup(db, ORG, 'shannon@amperagecapital.com'), r = await B.accountOrders(db, ORG, 'shannon@amperagecapital.com', acct, { limit: 100 });
+    assert.equal(r.docs[0].id, 'amp2', 'the newest first across the over-fetch'); assert.equal(r.docs.length, 100); assert.equal(r.truncated, true);
+  });
+
   console.log('\ncustody follows the account');
   function seedUnits() {
     db.seed('plant_units/' + ORG + '__AMP-001', { orgId: ORG, serial: 'AMP-001', rootSerial: 'AMP-001', sku: 'R60', shipUnit: true, orderId: 'amp1', at: 'ready', custody: { status: 'received', receivedAt: '2026-09-23' } });

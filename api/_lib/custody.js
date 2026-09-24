@@ -348,8 +348,13 @@ function plan(rows, mapping, ctx, now) {
            already on a customer's account belongs to that account, or no
            person on it could see the site their unit is at. */
         var owner = ctx.customerId || (unit.custody && unit.custody.customerId) || unit.customerId || (ctx.accountOf && ctx.accountOf(unit)) || null;
-        var key = siteKey(owner, r.siteName, r.zip);
-        site = ctx.byKey[key] || newSites[key];
+        /* An UNOWNED site with that name and ZIP (the office made it without
+           choosing a customer, or an earlier import did) is the same place:
+           adopt it rather than refusing the row or making a duplicate and
+           moving the unit onto it. It stays shared — the unit's own
+           custody.customerId is what puts it on the account. */
+        var key = siteKey(owner, r.siteName, r.zip), anyKey = siteKey(null, r.siteName, r.zip);
+        site = ctx.byKey[key] || newSites[key] || (owner ? (ctx.byKey[anyKey] || newSites[anyKey]) : null);
         if (!site) {
           if (!ctx.allowNewSites) throw fail(400, 'Site "' + r.siteName + '" does not exist; add it first or allow new sites');
           if (!r.line1 && !r.city) throw fail(400, 'A new site needs an address');

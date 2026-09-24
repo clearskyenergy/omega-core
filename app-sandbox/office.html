@@ -410,7 +410,7 @@
       + '<h2>People · ' + people.length + '</h2>' + (people.map(function (u) {
           var st = u.status || 'active', lastOwner = u.role === 'owner' && st === 'active' && people.filter(function (x) { return x.role === 'owner' && (x.status || 'active') === 'active'; }).length === 1;
           return '<div class="unit"><div><b>' + esc(u.name || u.email) + '</b><small>' + (u.name ? esc(u.email) + ' · ' : '') + esc(u.role) + (st === 'pending' ? ' · asked to join ' + esc(day(u.requestedAt)) : st === 'disabled' ? ' · access off' : u.activated ? '' : ' · not signed in yet') + '</small></div><span style="display:flex;gap:6px;align-items:center;flex:none">'
-            + (st === 'pending' ? '<button class="act go" data-pact="active" data-email="' + esc(u.email) + '">Approve</button>' : st === 'disabled' ? '<button class="act" data-pact="active" data-email="' + esc(u.email) + '">Turn on</button>' : lastOwner ? '' : '<button class="act" data-pact="disabled" data-email="' + esc(u.email) + '">Turn off</button>')
+            + (st === 'pending' ? '<button class="act go" data-pact="active" data-email="' + esc(u.email) + '">Approve</button><button class="act" data-pact="disabled" data-email="' + esc(u.email) + '">Decline</button>' : st === 'disabled' ? '<button class="act" data-pact="active" data-email="' + esc(u.email) + '">Turn on</button>' : lastOwner ? '' : '<button class="act" data-pact="disabled" data-email="' + esc(u.email) + '">Turn off</button>')
             + (st === 'active' ? '<button class="act" data-pinv="' + esc(u.email) + '">Invite</button>' : '') + '</span></div>';
         }).join('') || '<p class="note">Nobody on this account yet.</p>')
       + '<div class="card"><b>Add a person</b><input id="np-email" type="email" placeholder="Their work email" autocomplete="off"><input id="np-name" placeholder="Their name"><select id="np-role"><option value="user">User</option><option value="owner">Owner (manages the people)</option></select><button class="big" id="np-add">Add to ' + esc(c.company || 'the account') + '</button><p class="note">They sign in to the customer app with this email and see the whole account. Someone at the company who already signed in on their own is moved onto it, when their own account is empty.</p></div>'
@@ -428,7 +428,7 @@
     };
     $('c-domain-save').onclick = function () {
       var btn = this; btn.disabled = true; status('Saving…');
-      api('/api/buyers', { action: 'profile', customerId: c.customerId, company: c.company, status: c.status === 'suspended' ? 'suspended' : 'active', address: c.address || {}, domain: $('c-domain').value.trim() }).then(function () { return reopen('Saved. People who sign in from that domain now ask to join ' + (c.company || 'this account') + '.'); })['catch'](function (e) { fail(e); btn.disabled = false; });
+      api('/api/buyers', { action: 'profile', customerId: c.customerId, domain: $('c-domain').value.trim() }).then(function () { return reopen('Saved. People who sign in from that domain now ask to join ' + (c.company || 'this account') + '.'); })['catch'](function (e) { fail(e); btn.disabled = false; });
     };
     $('np-add').onclick = function () {
       var btn = this, e = $('np-email').value.trim(); if (!e) { status('Enter their email.'); return; }

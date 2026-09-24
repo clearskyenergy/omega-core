@@ -60,6 +60,15 @@ var NOW = '2026-09-05T12:00:00Z';
     assert.throws(function () { C.apply(unit('X', { custody: { status: 'assigned' } }), 'commission', { at: '12-04-2026' }, 'pm', NOW); }, /YYYY-MM-DD/);
     assert.equal(C.day('8/20/2026'), '2026-08-20');
   });
+  await test('import adopts an UNOWNED site by name + ZIP for a unit on an account, never a duplicate', function () {
+    var joliet = { id: 'site_none-joliet-yard-60431', name: 'Joliet yard', customerId: null, address: { zip: '60431' } };
+    var map = { Serial: 'serial', Site: 'siteName', ZIP: 'zip', Received: 'receivedDate', Address: 'line1', Commissioned: 'commissionDate' };
+    function ctx(u) { return { units: { A001: u }, sites: { 'site_none-joliet-yard-60431': joliet }, byKey: { 'none:joliet yard:60431': joliet }, accountOf: function () { return 'amp1'; }, allowNewSites: true }; }
+    var a = C.plan([{ Serial: 'A001', Site: 'Joliet yard', ZIP: '60431', Received: '2026-09-01' }], map, ctx(unit('A001', { orderId: 'amp-o1', custody: { status: 'delivered' } })), NOW);
+    assert.deepEqual(a.items[0].problems, []); assert.equal(a.items[0].siteId, joliet.id); assert.equal(a.summary.newSites, 0);
+    var b = C.plan([{ Serial: 'A001', Site: 'Joliet yard', ZIP: '60431', Address: '1 Yard Rd', Commissioned: '2026-09-10' }], map, ctx(unit('A001', { orderId: 'amp-o1', custody: { status: 'assigned', siteId: joliet.id, customerId: 'amp1' } })), NOW);
+    assert.equal(b.summary.newSites, 0); assert.equal(b.items[0].siteId, joliet.id); assert.deepEqual(b.items[0].actions.map(function (x) { return x.action; }), ['commission']);
+  });
   await test('coverage: pending until a site AND the trigger; earliest_of caps at ship + months; expiry', function () {
     var p215 = { warrantyYears: 10 }, u = unit('X', { custody: { status: 'received', shippedAt: '2026-08-01', receivedAt: '2026-08-20' } });
     assert.equal(C.coverageOf(p215, u, NOW)[0].status, 'pending'); assert.equal(C.coverageOf(p215, u, NOW)[0].why, 'no site assigned');

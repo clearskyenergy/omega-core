@@ -14,11 +14,14 @@
      - it was not typed by an anonymous visitor (source 'embed' or
        'config-link': an email typed on a public page proves nothing),
      - its customer.email has a customer_index pointer in the same org,
-     - that account exists and is not suspended or superseded.
+     - that account exists and is not suspended or superseded,
+     - the account ADMITTED that person (B.admitted: not a join request still
+       waiting or turned down) — the same rule api/orders.js stamps by.
    Everything else is reported and left alone. Never deletes; every write is
-   recorded in omega_audit. Reading needs no stamp at all — the portal's
-   account reader already finds these orders by the account's people — so
-   this is for custody and for the account's own completeness. */
+   recorded in omega_audit. The portal's account reader also finds unstamped
+   orders by the account's admitted people, but custody, QuickBooks and the
+   office's account view follow the stamp: run this once per workspace after
+   deploying account stamping. */
 'use strict';
 var path = require('path'), ROOT = path.join(__dirname, '..');
 var args = process.argv.slice(2), APPLY = args.indexOf('--apply') >= 0, org = String(args[args.indexOf('--org') + 1] || '').toLowerCase();
@@ -28,7 +31,8 @@ require('./_lib/live-admin')(A);
 
 (async function () {
   var db = A.db(), root = db.collection('omega_orgs').doc(org), rows = await db.collection('orders').where('orgId', '==', org).limit(2000).get();
-  var plan = [], skipped = { stamped: 0, anonymous: 0, noEmail: 0, noAccount: 0, inactive: 0 };
+  var B = require(path.join(ROOT, 'api/_lib/buyer-accounts'));
+  var plan = [], skipped = { stamped: 0, anonymous: 0, noEmail: 0, noAccount: 0, inactive: 0, notAdmitted: 0 };
   for (var i = 0; i < rows.docs.length; i++) {
     var d = rows.docs[i], o = d.data() || {}, e = String((o.customer || {}).email || '').trim().toLowerCase();
     if (o.customerId) { skipped.stamped++; continue; }
@@ -37,7 +41,9 @@ require('./_lib/live-admin')(A);
     var ptr = await root.collection('customer_index').doc(e).get();
     if (!ptr.exists) { skipped.noAccount++; continue; }
     var cid = String(ptr.data().customerId || ''), acct = cid ? await root.collection('customers').doc(cid).get() : null;
-    if (!acct || !acct.exists || acct.data().supersededBy || ['suspended', 'disabled', 'cancelled'].indexOf(acct.data().status) >= 0) { skipped.inactive++; continue; }
+    if (!acct || !acct.exists || acct.data().supersededBy || acct.data().mergedInto || ['suspended', 'disabled', 'cancelled'].indexOf(acct.data().status) >= 0) { skipped.inactive++; continue; }
+    var person = await root.collection('customers').doc(cid).collection('users').doc(e).get();
+    if (!person.exists || !B.admitted(person.data())) { skipped.notAdmitted++; continue; }
     plan.push({ id: d.id, orderNo: o.orderNo || d.id, email: e, customerId: cid, company: acct.data().name || '' });
   }
   console.log((APPLY ? 'APPLYING' : 'DRY RUN') + ' · ' + org + ' · ' + rows.size + ' orders read' + (rows.size === 2000 ? ' (first 2000)' : ''));

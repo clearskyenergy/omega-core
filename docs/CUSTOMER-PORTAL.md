@@ -131,17 +131,36 @@ the user doc in one transaction, audited):
 | Who | How | Lands as |
 |---|---|---|
 | the tenant's office | Customer hub → Add a person (`api/buyers.js` `user-add`; the PO inbox's `contact` is the same writer) | active, owner or user |
-| the account's owner | Account → People → Add a colleague (`api/my-account.js` `add-user`): same company email domain as the owner's, never a public mailbox, 20 a day | active user |
-| the person themselves | first sign-in from the email domain on an office-made company account (`customers.domain`) | **pending** — nothing visible until the owner or the office approves |
+| the account's owner | Account → People → Add a colleague (`api/my-account.js` `add-user`): only on an account the office VERIFIED as a company (`customers.domain` typed by the office), only at that domain, never someone who already has orders here, 20 a day. A self-made account's owner asks the supplier. | active user |
+| the person themselves | first sign-in from the email domain on an office-verified company account (`customers.domain`), when they have no orders here yet | **pending** — nothing visible until the owner or the office approves (or declines) |
 
 A stranger at no known company still gets a self-serve account of their own,
-as before. A public mailbox (`api/_lib/public-domains.js`) never joins anyone.
+as before, and so does anybody with orders already billed to their email (the
+office merges on review). A public mailbox (`api/_lib/public-domains.js`, which
+now lists the ISP and regional mailboxes too) never joins anyone.
+
+`customers.domain` is only ever what the OFFICE typed — on create, on the PO
+inbox's company form, or in the profile — never read off a contact's address
+(a consultant's domain would pull strangers in). Typing it verifies the
+account as a company (`accountType: 'company'`). `B.findByName`, which stops a
+second "Amperage Capital", matches only office companies (`B.officeCompany`):
+a self-made account's name is whatever its customer typed.
+
+**Admitted, and the account stamp.** `B.admitted(person)` is everyone except a
+request still waiting or one turned down; a colleague who was active and has
+left stays admitted, so their orders stay the company's. It decides both which
+unstamped orders an account reads and which new orders are stamped with its
+`customerId` (`B.stampableAccount`, used by `api/orders.js` create — in the same
+transaction as the order write — `logic-workflow` `price()`, including the
+account's negotiated terms, `accountOfOrder`, and the backfill script).
 
 `B.setUser` is the one writer of a person's access or role: the owner approves
 a request and turns a colleague off and on; the office also changes roles.
-Nobody can leave an account without an active owner, an owner cannot change
-their own access, and nobody is deleted — a turned-off person keeps their
-pointer (their past activity stays on the account).
+Nobody can remove an account's LAST active owner (an account the office made
+with no owner yet can still approve and turn people off), an owner cannot
+change their own access, and nobody is deleted — a turned-off person keeps
+their pointer (their past activity stays on the account). Turning a waiting
+request down (Decline) marks the person `declined`: never admitted.
 
 **The one move a page may make.** A colleague who signed in before being added
 got an account of their own. The office's Add a person may move that login onto
@@ -149,7 +168,12 @@ the company ONLY when the stray account is empty — self-made, no orders (by
 account or by email), sites, designs, terms, agreements or Editor Lite grant,
 and nobody else on it. The stray is suspended with `supersededBy` (never
 `mergedInto`, never deleted) and its user doc turned off. Anything with history
-still returns the 409 and waits for the reviewed merge below.
+still returns the 409 and waits for the reviewed merge below. The office may
+also move a login whose membership elsewhere was NEVER admitted (a request
+still waiting or declined) and that has no orders here: only the pointer and
+that one person record move (`buyer-request-rehomed`); the other company is
+untouched. Every emptiness check is re-read inside the transaction, so an
+order, site or colleague landing meanwhile aborts the move.
 
 ### Merging is the one dangerous operation
 

@@ -14,6 +14,8 @@ class DB {
   constructor() { this.rows = new Map(); this.seq = 0; }
   seed(path, d) { this.rows.set(path, clone(d)); }
   collection(path) { return new Query(this, path); }
+  runTransaction(fn) { var db = this, w = []; var tx = { get: function (r) { return r.get(); }, set: function (r, d) { w.push(function () { db.seed(r.path, d); }); }, update: function (r, d) { w.push(function () { if (!db.rows.has(r.path)) throw new Error('no doc ' + r.path); db.seed(r.path, Object.assign(clone(db.rows.get(r.path)), d)); }); } };
+    return Promise.resolve(fn(tx)).then(function (out) { w.forEach(function (f) { f(); }); return out; }); }
 }
 class Ref {
   constructor(db, path) { this.db = db; this.path = path; this.id = path.split('/').pop(); }
@@ -74,6 +76,31 @@ async function post(b) { return orders({ method: 'POST', body: b, caller: rep },
   o = created();
   ok('no rep note means no second history entry', o.history.length === 1);
   ok('  and customer.notes is an empty string, not undefined', o.customer.notes === '');
+
+  /* The ACCOUNT stamp: only an account that ADMITTED the person it is
+     billed to, and a '/' in an address is 'no account', never a 500. */
+  function account(email, user) {
+    db.seed('omega_orgs/cleancell.us/customer_index/' + email, { customerId: 'amp1' });
+    db.seed('omega_orgs/cleancell.us/customers/amp1', { name: 'Amperage Capital', status: 'active' });
+    db.seed('omega_orgs/cleancell.us/customers/amp1/users/' + email, user);
+  }
+  reset(); account('shannon@amperagecapital.com', { status: 'active', role: 'owner' });
+  await post({ action: 'create', customer: { name: 'Shannon Johnson', email: 'shannon@amperagecapital.com' }, items: [] });
+  o = created();
+  ok('an order for an active person on an account carries its customerId', o.customerId === 'amp1');
+  ok('  and the account is marked hasOrders in the same write', db.rows.get('omega_orgs/cleancell.us/customers/amp1').hasOrders === true);
+  reset(); account('ops@amperagecapital.com', { status: 'pending', source: 'domain-request' });
+  await post({ action: 'create', customer: { name: 'Ops', email: 'ops@amperagecapital.com' }, items: [] });
+  ok('a join request still waiting does NOT put the order on the company', created() && !created().customerId);
+  reset(); account('gone@amperagecapital.com', { status: 'disabled', declined: true });
+  await post({ action: 'create', customer: { name: 'Gone', email: 'gone@amperagecapital.com' }, items: [] });
+  ok('nor does a request that was turned down', created() && !created().customerId);
+  reset(); account('left@amperagecapital.com', { status: 'disabled', source: 'office', approvedAt: '2026-01-01' });
+  await post({ action: 'create', customer: { name: 'Left', email: 'left@amperagecapital.com' }, items: [] });
+  ok('a colleague once admitted and since turned off still stamps (the company\'s order)', created().customerId === 'amp1');
+  reset();
+  var slash = await post({ action: 'create', customer: { name: 'West', email: 'ops/west@acme.com' }, items: [] });
+  ok("an address with '/' is written without an account, not a 500", slash.ok && created() && !created().customerId);
 
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);

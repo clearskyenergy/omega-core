@@ -427,13 +427,15 @@ is not built.
   workspace's customers are `omega_orgs/{org}/customers/{id}` with
   `users/{email}` and the `customer_index` pointer; `api/_lib/buyer-accounts.js`
   is the ONE reader of an account's orders (`accountOrders`: its customerId,
-  or billed to one of its active people — never an order stamped for another
+  or billed to one of the people it ADMITTED (`B.admitted`) — never an order stamped for another
   account) and the ONE writer of people (`addUser`, `setUser`, `joinRequest`).
   Every active person on an account sees the account's orders, POs, sites and
-  units. A first sign-in from the email domain of an office-made company
-  account joins it as `pending` until the owner or the office approves; the
-  owner adds colleagues at their own domain; nobody is deleted and an account
-  always keeps an active owner. The office's Customer hub
+  units. `customers.domain` is only what the office typed; a first sign-in
+  from it joins as `pending` until the owner or the office approves or
+  declines; only an owner of an office-verified company adds colleagues, at
+  that domain; a new order is stamped only for an admitted person
+  (`B.stampableAccount`); nobody is deleted and nobody removes an account's
+  last active owner. The office's Customer hub
   (`api/buyers.js ?customerId=`, the Omega Logic app's Customers tab,
   `portals/customer/admin.html`) opens the ACCOUNT. Custody and QuickBooks
   follow the account too. Design and what is not built:

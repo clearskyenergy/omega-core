@@ -32,9 +32,10 @@ small.mono{font:11px 'IBM Plex Mono',monospace;color:var(--ink3);display:block;m
 @media(max-width:1100px){.board.open{grid-template-columns:230px minmax(0,1fr)}.detail{position:fixed;inset:0;max-height:none;z-index:10;border:0}#back{display:inline-block;margin-bottom:8px}#close{display:none}}
 @media(max-width:760px){.board,.board.open{grid-template-columns:1fr}.tree{display:flex;gap:6px;overflow:auto;padding:8px;border-right:0;border-bottom:1px solid var(--line)}.tree .eyebrow{display:none}.tree button{width:auto;white-space:nowrap}main{padding:14px}.detail{padding:16px}
  .grid thead{display:none}.grid tbody tr{display:block;border:1px solid var(--line);border-radius:12px;margin:10px 0;padding:6px 4px}.grid td{display:flex;justify-content:space-between;gap:12px;border:0;padding:5px 8px;align-items:center}.grid td::before{content:attr(data-label);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink3);flex:none}.grid td.wo{display:block}.grid td.wo::before{display:none}.grid td .v{text-align:right}.bar{min-width:140px}}
-@media print{header,.tree,.toolbar,#count,.filters,#back,#close,.detail form,.detail .row{display:none!important}.board,.board.open{display:block}.detail{position:static;max-height:none;border:0}.grid tbody tr{break-inside:avoid}.grid th{position:static}}
+@media print{.logic-nav,header,.tree,.toolbar,#count,.filters,#back,#close,.detail form,.detail .row{display:none!important}.logic-shell,.board,.board.open{display:block}.detail{position:static;max-height:none;border:0}.grid tbody tr{break-inside:avoid}.grid th{position:static}}
 </style></head><body class="logic-theme">
 <header><a id="home" style="color:inherit;text-decoration:none"><b data-product-name>Work orders</b></a><nav><a id="office">Home</a><a id="manager">Plant manager</a><a id="factory">Serial records</a></nav></header>
+<div class="logic-shell"><nav class="logic-nav" aria-label="Office"></nav>
 <div class="board" id="board">
 <aside class="tree" id="tree" aria-label="Filter by"></aside>
 <main>
@@ -47,7 +48,7 @@ small.mono{font:11px 'IBM Plex Mono',monospace;color:var(--ink3);display:block;m
 <p class="note" id="count"></p>
 </main>
 <section class="detail" id="detail" hidden aria-live="polite"></section>
-</div>
+</div></div>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script>
 (function(){'use strict';
 var cfg=window.CLEARSKY_CONFIG||{};if(!firebase.apps.length)firebase.initializeApp(cfg.firebase||cfg);var auth=firebase.auth();

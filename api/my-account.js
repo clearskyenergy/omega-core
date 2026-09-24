@@ -117,15 +117,18 @@ function project(customerId, c, userDoc, orderCount, defaults) {
 /* A colleague signing in for the first time is NOT given a company of their
    own when their company already has an account here: B.joinRequest puts
    them on it as PENDING (nothing visible until the owner or the supplier
-   approves). Only a stranger with no company account gets a fresh one. */
+   approves). Only a stranger with no company account gets a fresh one.
+   Someone who already has orders billed to their email in this workspace
+   is NOT sent into a join request: approving it would fold their history
+   into the company unreviewed. They get their own account as before, and
+   the office merges it if it should be merged. */
 function findOrCreate(db, org, email, caller) {
   return B.lookup(db, org, email).then(function (found) {
     if (found) return found.user && found.user.status === 'pending' ? found : B.active(found);
-    return B.joinRequest(db, org, email, caller).then(function (joined) {
-      if (joined) return joined;
-      return db.collection('orders').where('orgId', '==', org).where('customer.email', '==', email).limit(1).get().then(function (s) {
-        var seed = s.empty ? {} : Object.assign({}, s.docs[0].data().customer, { hasOrders: true });
-        return B.ensure(db, org, email, seed, caller);
+    return db.collection('orders').where('orgId', '==', org).where('customer.email', '==', email).limit(1).get().then(function (s) {
+      if (!s.empty) return B.ensure(db, org, email, Object.assign({}, s.docs[0].data().customer, { hasOrders: true }), caller);
+      return B.joinRequest(db, org, email, caller).then(function (joined) {
+        return joined || B.ensure(db, org, email, {}, caller);
       });
     });
   });
@@ -145,17 +148,19 @@ function peopleFor(db, org, acct) {
   return B.people(db, org, acct.id, { all: owner, limit: 50 }).then(function (list) {
     return list.map(function (u) {
       var out = { email: clean(u.email, 160), name: clean(u.name, 120), role: u.role };
-      if (owner) { out.status = u.status; out.activated = u.activated; out.requestedAt = u.requestedAt || null; }
+      if (owner) { out.status = u.status; out.activated = u.activated; out.requestedAt = u.requestedAt || null; if (u.declined) out.declined = true; }
       return out;
     });
   }, function () { return []; });
 }
 
 /* ── The account OWNER manages the people on it ────────────────────────
-   add-user     a colleague at the owner's own company (same email domain,
-                never a public mailbox): added as a user, active. A person
-                already on another account stays there — moving them is the
-                supplier's call (B.addUser, office only).
+   add-user     a colleague at the company's email domain, on an account
+                the SUPPLIER set up as a company with that domain — never a
+                self-made account (anyone can make one and type any name) and
+                never somebody who already has orders here (that is a
+                reviewed merge). A person already on another account stays
+                there; moving them is the supplier's call (office only).
    user-status  approve a pending request, disable a colleague who left,
                 re-enable them. Roles are the supplier's; nobody may lock
                 the account out of its last active owner.
@@ -165,10 +170,13 @@ async function people(db, org, acct, caller, email, body) {
   var target = B.email(body.email);
   if (body.action === 'user-status') {
     var r = await B.setUser(db, org, acct.id, target, { status: body.status === 'disabled' ? 'disabled' : 'active' }, email, { owner: true });
-    return { ok: true, person: r, users: await peopleFor(db, org, acct), note: r.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
+    return { ok: true, person: r, users: await peopleFor(db, org, acct), note: r.declined ? 'Request declined. They were not added.' : r.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
   }
-  var mine = B.companyDomain(email);
-  if (!mine || B.companyDomain(target) !== mine) throw A.httpError(400, 'Add colleagues with an @' + (mine || 'company') + ' email. Anyone else, ask your supplier to add.');
+  var d = acct.data || {}, dom = d.domain || '';
+  if (!dom || (d.source !== 'office' && d.accountType !== 'company')) throw A.httpError(403, 'Ask your supplier to add colleagues to this account.');
+  if (B.companyDomain(target) !== dom) throw A.httpError(400, 'Add colleagues with an @' + dom + ' email. Anyone else, ask your supplier to add.');
+  var had = await db.collection('orders').where('orgId', '==', org).where('customer.email', '==', target).limit(1).get();
+  if (!had.empty) throw A.httpError(409, target + ' already has orders with your supplier. Ask your supplier to add them, so their orders move over properly.');
   var ref = db.collection('omega_orgs').doc(org).collection('customers').doc(acct.id), now = new Date().toISOString(), day = now.slice(0, 10);
   await db.runTransaction(async function (tx) {
     var s = await tx.get(ref), use = (s.data() || {}).peopleAddUsage || {};
@@ -269,7 +277,7 @@ module.exports = A.handler(function (req, res) {
               /* Said, not silently dropped: only the owner changes the company
                  and the delivery address. */
               if (ignored.length) out.ignored = ignored;
-              return out;
+              return peopleFor(db, org, acct).then(function (list) { out.users = list; return out; });
             });
           }); });
     });

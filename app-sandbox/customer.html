@@ -171,7 +171,16 @@
   function loadDesign() { return DESIGN ? Promise.resolve(DESIGN) : api('/api/customer-design' + q).then(function (r) { DESIGN = must(r, 'Could not load your site plans.'); return DESIGN; }); }
   function loadPo() { return PO ? Promise.resolve(PO) : api('/api/po-intake' + q).then(function (r) { PO = must(r, 'Could not load your purchase orders.'); return PO; }); }
   function loadSites() { return SITES ? Promise.resolve(SITES) : api('/api/my-sites' + q).then(function (r) { SITES = must(r, 'Could not load your sites.'); return SITES; }); }
-  function refresh() { ACCT = null; ORDERS = null; DESIGN = null; PO = null; SIZE = null; SITES = null; draw(); }
+  /* A person waiting to be let in (or not loaded yet) is re-checked BEFORE a
+     tab draws, so Check again and ↻ show the waiting screen on every tab —
+     and the tab itself once the owner or the supplier approves. */
+  function refresh() {
+    var recheck = !ACCT || ACCT.pending;
+    ACCT = null; ORDERS = null; DESIGN = null; PO = null; SIZE = null; SITES = null;
+    if (!recheck) return draw();
+    $('view').innerHTML = '<p class="note">Loading…</p>';
+    loadAccount()['catch'](function () { return null; }).then(function () { draw(); });
+  }
 
   /* ── views ────────────────────────────────────────────────────────────── */
   function draw() {
@@ -345,7 +354,7 @@
     var rows = list.map(function (u) {
       var me = u.email === a.you.email, st = u.status || 'active';
       var tag = st === 'pending' ? '<span class="pill wait">asked to join</span>' : st === 'disabled' ? '<span class="pill stop">access off</span>' : (u.role === 'owner' ? '<span class="pill go">owner</span>' : '');
-      var act = !owner || me ? '' : st === 'pending' ? '<button class="act go" data-person="' + esc(u.email) + '" data-to="active">Approve</button>' : st === 'disabled' ? '<button class="act" data-person="' + esc(u.email) + '" data-to="active">Turn on</button>' : '<button class="act" data-person="' + esc(u.email) + '" data-to="disabled">Turn off</button>';
+      var act = !owner || me ? '' : st === 'pending' ? '<button class="act go" data-person="' + esc(u.email) + '" data-to="active">Approve</button><button class="act" data-person="' + esc(u.email) + '" data-to="disabled">Decline</button>' : st === 'disabled' ? '<button class="act" data-person="' + esc(u.email) + '" data-to="active">Turn on</button>' : '<button class="act" data-person="' + esc(u.email) + '" data-to="disabled">Turn off</button>';
       return '<div class="unit"><div><b>' + esc(u.name || u.email) + (me ? ' (you)' : '') + '</b><small>' + (u.name ? esc(u.email) : '') + (owner && u.activated === false && st === 'active' ? (u.name ? ' · ' : '') + 'not signed in yet' : '') + '</small></div><div style="display:flex;gap:6px;align-items:center;flex:none">' + tag + act + '</div></div>';
     }).join('');
     return '<h2>People on this account · ' + list.length + '</h2>' + (rows || '<p class="note">Just you so far.</p>')
@@ -376,7 +385,7 @@
         var btn = this, body = { name: $('f-name').value, phone: $('f-phone').value };
         if (owner) { var sp = String($('f-state').value || '').trim().split(/\s+/); body.company = $('f-company').value; body.address = { line1: $('f-line1').value, city: $('f-city').value, state: sp[0] || '', zip: sp[1] || '' }; }
         btn.disabled = true; status('Saving…');
-        api('/api/my-account', body).then(function (r) { ACCT = must(r, 'Could not save.'); status(ACCT.ignored ? 'Saved your name and phone. Only the account owner changes the company and address.' : 'Saved.'); drawAccount(); })['catch'](fail).then(function () { btn.disabled = false; });
+        api('/api/my-account', body).then(function (r) { var j = must(r, 'Could not save.'); j.users = j.users || (ACCT && ACCT.users); ACCT = j; status(ACCT.ignored ? 'Saved your name and phone. Only the account owner changes the company and address.' : 'Saved.'); drawAccount(); })['catch'](fail).then(function () { btn.disabled = false; });
       };
       Array.prototype.forEach.call(document.querySelectorAll('[data-person]'), function (b) {
         b.onclick = function () {

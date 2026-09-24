@@ -14,13 +14,23 @@ module.exports=A.handler(async function(req,res){
       tx.create(db.collection('omega_audit').doc(),{action:'rep-'+(s.exists?'updated':'created'),orgId:org,repId:repId,before:s.exists?s.data():null,after:doc,by:c.email,at:now});return {ok:true,repId:repId,note:'Rep saved.'};});
   }
   if(req.method==='POST'&&b.action==='company'){
-    await X.authorize(c,org,true);var name=L.text(b.name,160,true),domain=b.domain?A.safeOrg(b.domain):'';if(b.domain&&!domain)throw A.httpError(400,'Invalid company domain');
-    if(domain&&require('./_lib/public-domains').indexOf(domain)>=0)throw A.httpError(400,domain+' is a public mailbox provider, not a company domain');
+    await X.authorize(c,org,true);var name=L.text(b.name,160,true),domain=B.accountDomain(b.domain);
     var cid='company_'+P.key(name.toLowerCase()),cref=root.collection('customers').doc(cid),companyRep=b.repId?await I.rep(org,b.repId):null;
-    /* One company, one account: an account made another way (the Customers
-       page, an intake script, a self sign-in named for the company) is the
-       same company, so it is returned rather than duplicated. */
-    var same=await B.findByName(db,org,name);if(same&&same.id!==cid)return {ok:true,customerId:same.id,duplicate:true};
+    /* One company, one account: an OFFICE account made another way (the
+       Customers page, an intake script) is the same company, so it is
+       returned rather than duplicated. A self sign-in that happens to carry
+       the name is not "the company" (B.officeCompany): its owner typed that
+       name. A typed domain is never silently dropped: it fills an existing
+       account that has none, and is reported when that account has another. */
+    var same=await B.findByName(db,org,name);
+    if(same&&same.id!==cid){
+      var have=same.data.domain||'';
+      if(domain&&!have){var sref=root.collection('customers').doc(same.id),at=new Date().toISOString();
+        await db.runTransaction(async function(tx){var f=await tx.get(sref);if(f.exists&&!f.data().domain){tx.update(sref,{domain:domain,accountType:'company',updatedAt:at});
+          tx.create(db.collection('omega_audit').doc(),{action:'buyer-profile',orgId:org,customerId:same.id,by:c.email,at:at,was:{domain:''},profile:{domain:domain,accountType:'company'}});}});
+        return {ok:true,customerId:same.id,duplicate:true,domainSet:domain};}
+      return domain&&have!==domain?{ok:true,customerId:same.id,duplicate:true,domainIgnored:domain,domain:have,note:same.data.name+' already has the email domain '+have+'; '+domain+' was not saved.'}:{ok:true,customerId:same.id,duplicate:true};
+    }
     return db.runTransaction(async function(tx){var s=await tx.get(cref);if(s.exists)return {ok:true,customerId:cid,duplicate:true};
       tx.create(cref,{orgId:org,name:name,nameLower:B.nameKey(name),domain:domain,accountType:'company',status:'active',plan:'free',terms:{},source:'office',rep:companyRep,createdAt:new Date().toISOString()});
       tx.create(db.collection('omega_audit').doc(),{action:'buyer-company-created',orgId:org,customerId:cid,by:c.email,at:new Date().toISOString()});return {ok:true,customerId:cid};});

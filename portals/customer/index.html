@@ -438,7 +438,7 @@
     $('acct').innerHTML = '<div style="grid-column:1/-1"><div class="k">Waiting for approval</div><div class="v">You asked to join ' + esc(a.company || 'your company') + '.</div><p class="muted">Its account owner, or your supplier, approves new people. Once they do, your company’s orders, sites and equipment appear here. <button type="button" class="btn" id="pending-check">Check again</button></p></div>';
     $('people').innerHTML = ''; $('terms-wrap').hidden = true;
     ['f-name', 'f-company', 'f-phone', 'f-line1', 'f-city', 'f-state', 'save'].forEach(function (id) { if ($(id)) $(id).disabled = true; });
-    $('pending-check').onclick = loadAccount;
+    $('pending-check').onclick = function () { loadAccount(); loadOrders(); };
   }
   /* The people on the account; the owner adds, approves and turns access
      off and on (api/my-account.js add-user · user-status). */
@@ -446,7 +446,7 @@
     var owner = a.you.role === 'owner', list = a.users || [];
     $('people').innerHTML = '<h2>People on this account · ' + list.length + '</h2>' + list.map(function (u) {
       var me = u.email === a.you.email, st = u.status || 'active';
-      var act = !owner || me ? '' : st === 'pending' ? '<button type="button" class="btn p" data-person="' + esc(u.email) + '" data-to="active">Approve</button>' : st === 'disabled' ? '<button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="active">Turn on</button>' : '<button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="disabled">Turn off</button>';
+      var act = !owner || me ? '' : st === 'pending' ? '<button type="button" class="btn p" data-person="' + esc(u.email) + '" data-to="active">Approve</button> <button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="disabled">Decline</button>' : st === 'disabled' ? '<button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="active">Turn on</button>' : '<button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="disabled">Turn off</button>';
       return '<div class="ord" style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><b>' + esc(u.name || u.email) + (me ? ' (you)' : '') + '</b> <span class="muted">' + esc(u.email) + (u.role === 'owner' ? ' · owner' : '') + (st === 'pending' ? ' · asked to join' : st === 'disabled' ? ' · access off' : '') + (owner && u.activated === false && st === 'active' ? ' · not signed in yet' : '') + '</span></div><div>' + act + '</div></div>';
     }).join('')
       + (owner ? '<div class="row2" style="margin-top:10px"><div><label for="p-email">Add a colleague (work email)</label><input id="p-email" type="email" placeholder="colleague@' + esc(String(a.you.email).split('@')[1] || 'company.com') + '"></div><div><label for="p-name">Their name</label><input id="p-name"></div></div><div class="actions"><button type="button" class="btn p" id="p-add">Add to the account</button><span class="muted" id="p-msg" style="align-self:center;font-size:13.5px"></span></div>'

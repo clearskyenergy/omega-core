@@ -73,9 +73,18 @@ module.exports = A.handler(async function (req, res) {
         moves: { received: ['', 'in_transit', 'delivered'], assign: ['delivered', 'received', 'assigned'], installed: ['assigned', 'received'], commissioned: ['assigned', 'installed', 'received'] } };
     }
 
+    /* Re-read the login's pointer inside every write: if the office moved
+       this login to another company meanwhile (buyers user-add rehome),
+       the move and this write conflict instead of a site or custody stamp
+       landing on the account that was just emptied and suspended. */
+    var still = async function (tx) {
+      var p = await tx.get(root(db, org).collection('customer_index').doc(email));
+      if (!p.exists || P.id(p.data().customerId) !== acct.id) throw A.httpError(409, 'Your login was just moved to another account. Reload and try again.');
+    };
     if (b.action === 'site') {
       var id = b.id ? P.id(b.id) : null;
       return db.runTransaction(async function (tx) {
+        await still(tx);
         var existing = id ? await tx.get(root(db, org).collection('sites').doc(id)) : null;
         if (id && (!existing.exists || existing.data().customerId !== acct.id)) throw A.httpError(404, 'Site not found on your account');
         var rec = C.site(Object.assign({}, b, { customerId: acct.id, lifecycleSiteId: existing && existing.exists ? existing.data().lifecycleSiteId : null }), existing && existing.exists ? existing.data() : null);
@@ -91,6 +100,7 @@ module.exports = A.handler(async function (req, res) {
     if (b.action === 'destination') {
       var dserial = C.serial(b.serial), dref = db.collection('plant_units').doc(org + '__' + dserial);
       return db.runTransaction(async function (tx) {
+        await still(tx);
         var ds = await tx.get(dref); if (!ds.exists || ds.data().orgId !== org || !byOrder[ds.data().orderId]) throw A.httpError(404, 'That serial is not on one of your orders');
         var dsite = null; if (b.siteId) { dsite = mySites.filter(function (x) { return x.id === P.id(b.siteId); })[0]; if (!dsite) throw A.httpError(404, 'Site not found on your account'); }
         var dr = C.destination(ds.data(), { siteId: dsite ? dsite.id : '', siteName: dsite ? dsite.name : '', position: b.position, note: b.note }, email, now, 'customer'); dr.event.orderId = ds.data().orderId; dr.patch['custody.customerId'] = acct.id;
@@ -102,6 +112,7 @@ module.exports = A.handler(async function (req, res) {
     var move = CUSTOMER_MOVES[b.action]; if (!move) throw A.httpError(400, 'Unsupported action');
     var serial = C.serial(b.serial), ref = db.collection('plant_units').doc(org + '__' + serial);
     return db.runTransaction(async function (tx) {
+      await still(tx);
       var s = await tx.get(ref); if (!s.exists || s.data().orgId !== org || !byOrder[s.data().orderId]) throw A.httpError(404, 'That serial is not on one of your orders');
       var u = s.data(), site = null;
       if (b.siteId) { site = mySites.filter(function (x) { return x.id === P.id(b.siteId); })[0]; if (!site) throw A.httpError(404, 'Site not found on your account'); }
