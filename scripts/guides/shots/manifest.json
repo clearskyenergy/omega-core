@@ -1,0 +1,86 @@
+{
+  "bench.png": {
+    "sha256": "6690cd97fada05362bd4a7f5b54715f66b868996a6155d321f0eff0d084a1159",
+    "takenAt": "2026-09-24T15:41:53.761Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "customer-design.png": {
+    "sha256": "7e52beb4478665128ef43a5c2c3164099a28efd43e6a26f1c90883df4b33e3af",
+    "takenAt": "2026-09-24T15:41:54.504Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "customer-orders.png": {
+    "sha256": "6a77b9a634758a0d628da29fce0305787be392c0c8fe7a781c641a403ce80887",
+    "takenAt": "2026-09-24T15:41:55.390Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "customer-pos.png": {
+    "sha256": "acf177c9fb0933491084413c04c426ecf955ff158d0450570e533fa8ec86fed1",
+    "takenAt": "2026-09-24T15:41:56.302Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "customer-sites-2.png": {
+    "sha256": "d1f2a64a90ad04746179e76dad215c525f57dd0f5d7b90eff3a5e3c0d2bbee19",
+    "takenAt": "2026-09-24T15:41:59.427Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "customer-sites.png": {
+    "sha256": "551400c99a56ffe8864d2f5f6f50716756de6989211849bb1391f5980e8abdac",
+    "takenAt": "2026-09-24T15:41:57.811Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "desktop-office.png": {
+    "sha256": "a791acaaa3e6faec1ad77f0af83856db3e7cc4d2516ff90efdd6eecc89bc7924",
+    "takenAt": "2026-09-24T15:41:40.080Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "office-customers.png": {
+    "sha256": "5af285966506aeac767d2d22129c486c9024f360da982e7bebe137a50d2407a8",
+    "takenAt": "2026-09-24T15:41:05.440Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "office-menu.png": {
+    "sha256": "bc85d6023639dec4368ebb1306ba9e9b72e76e8fb9809cd9eadb6a8ba2fce8f0",
+    "takenAt": "2026-09-24T15:41:39.217Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "office-order.png": {
+    "sha256": "9aa17a98f456b8e370921a7e1c616f745c3daecd368ba3a42eda8b1a22545ce3",
+    "takenAt": "2026-09-24T15:41:37.577Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "office-sites.png": {
+    "sha256": "1406d29dd1dc23ca1292b1f67c698ea9ffe6284b1bf4676881dc2fd1398ba6d0",
+    "takenAt": "2026-09-24T15:41:38.405Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "plant-today.png": {
+    "sha256": "e3532e9bf9ae2b886be1ae5266bcb4a5fcae9190ed711ff80883cfbd3d77b072",
+    "takenAt": "2026-09-24T15:41:51.157Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "plant-unit.png": {
+    "sha256": "4bbf646359e86782a5862e237ac9cdeca51d04a444f0780692e0ed5d204779e1",
+    "takenAt": "2026-09-24T15:41:52.895Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  },
+  "plant-work.png": {
+    "sha256": "82d2265c462708dee37915924f5051d202b57c0a8c1b64f8ed9d867f39cb99e3",
+    "takenAt": "2026-09-24T15:41:52.164Z",
+    "tree": ".",
+    "commit": "cc4603e"
+  }
+}

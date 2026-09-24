@@ -24,7 +24,14 @@ var ORDER = ['exception', 'quote', 'priced', 'deposit', 'release', 'production',
 
 function dollars(c) { return '$' + (Number(c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function text(v, max) { return String(v == null ? '' : v).trim().slice(0, max || 200); }
-function out(key, next, owner, label) { return { key: key, label: label || STAGES[key], next: next, owner: !!owner }; }
+/* RELEASED ON PO (logic.creditRelease, api/_lib/receivables.js): the plant
+   may start before the deposit is received. creditOpen() is the deposit
+   still open on such an order — 0 without a credit release, without a
+   deposit, or once the deposit is recorded. While it is open the stage says
+   so and carries `credit: true`; otherwise the stage object is exactly what
+   it always was (no `credit` key). */
+function out(key, next, owner, label, credit) { var r = { key: key, label: label || STAGES[key], next: next, owner: !!owner }; if (credit) r.credit = true; return r; }
+function creditOpen(o) { var l = (o && o.logic) || {}, dep = (l.invoices || {}).deposit; if (!l.creditRelease || !dep || !dep.amountCents || dep.satisfied) return 0; return Math.max(0, (Number(dep.amountCents) || 0) - (Number(dep.paidCents) || 0)); }
 
 /* `owner` marks a next step only ClearSky can take (price, accept, ship,
    settle); the office shows it as waiting on ClearSky rather than as a
@@ -48,11 +55,14 @@ function stageOf(o) {
     var dep = inv.deposit;
     if (!dep) return out('deposit', 'Deposit invoice is being queued', false);
     if (dep.satisfied) return out('release', 'Deposit recorded — releasing to plant', false);
+    if (l.creditRelease) return out('release', 'Released on PO ' + (l.creditRelease.poNumber || '(no PO number)') + ' — releasing to plant', false, 'Releasing on PO', creditOpen(o) > 0);
     return out('deposit', 'Awaiting deposit · ' + dollars(dep.paidCents || 0) + ' of ' + dollars(dep.amountCents) + ' recorded', false);
   }
-  var bal = inv.balance;
+  var bal = inv.balance, open = creditOpen(o), po = l.creditRelease ? (l.creditRelease.poNumber || '(no PO number)') : '';
+  if (bal && bal.satisfied && open) return out('balance', 'Balance recorded — the deposit ' + dollars(open) + ' is still open (released on PO); record it before shipment', false, 'Awaiting deposit · on PO', true);
   if (bal && bal.satisfied) return out('ship', 'Paid in full — record the shipment', true);
-  if (bal) return out('balance', 'Awaiting final payment · ' + dollars(bal.paidCents || 0) + ' of ' + dollars(bal.amountCents) + ' recorded', false);
+  if (bal) return out('balance', 'Awaiting final payment · ' + dollars(bal.paidCents || 0) + ' of ' + dollars(bal.amountCents) + ' recorded' + (open ? ' · deposit ' + dollars(open) + ' open (released on PO)' : ''), false, null, open > 0);
+  if (open) return out('production', 'Released on PO ' + po + ' · deposit ' + dollars(open) + ' not yet received', false, 'Released on PO', true);
   return out('production', 'Building — follow the work order', false);
 }
 
@@ -104,4 +114,4 @@ function finance(orders, owner) {
   return f;
 }
 
-module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, totals: totals, finance: finance, dollars: dollars };
+module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, creditOpen: creditOpen, totals: totals, finance: finance, dollars: dollars };

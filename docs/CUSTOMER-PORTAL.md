@@ -257,11 +257,18 @@ maps to which field.
 
 | Page | Who | What |
 |---|---|---|
-| `portals/customer/index.html` | a buyer | Sign in, orders, status, documents, terms |
-| `portals/customer/admin.html` | Clean Cell admin, ClearSky staff | Manage buyers, terms, plan |
-| `api/my-orders.js` | a buyer's token | Projects orders key by key |
+| `portals/customer/index.html` | a buyer | Opens on the customer hub (Fleet; Size · Design · POs · Pay · Shipping · Warranty): orders, pay, loads, warranty, fleet & sites, documents, design, terms |
+| `portals/customer/app.html` | a buyer, on a phone | The same hub and account; five tabs (Home · Orders · POs · Fleet · Account) |
+| `portals/customer/admin.html` | Clean Cell admin, ClearSky staff | The CRM: follow-ups across accounts; an account in sections (Overview · People & contacts · Activity · Documents · Orders & POs · Sites · Timeline · Details); `?customer=<id>#section` |
+| `api/my-orders.js` | a buyer's token | Projects orders key by key (invoices with number, due terms and the pay link) |
 | `api/my-account.js` | a buyer's token | Creates the record on first sign-in; PATCHes own profile |
-| `api/buyers.js` | tenant admin / staff | Terms, plan and status on any buyer |
+| `api/my-files.js` | a buyer's token | The account's documents: what the supplier shared, and the account's own uploads (20 a day per account) |
+| `api/customer-subscribe.js` | a buyer's token | The design tool: monthly or yearly checkout, Manage (owner or subscriber) |
+| `api/buyers.js` | tenant admin / staff | Terms, plan, status, domain and people on any account |
+| `api/crm.js` | workspace members (archive: admin) | Contacts, activity and follow-ups, documents, the timeline |
+
+The contracts for the last four and the hub itself are in
+`docs/OMEGA-LOGIC-ECOSYSTEM.md`.
 
 ### This page must NOT load `omega-tenant.js`
 
@@ -615,6 +622,19 @@ the obvious version. Since then, what landed:
 - §2 people on an account (2026-09-24): `api/_lib/buyer-accounts.js`
   (`accountOrders`, `addUser`, `setUser`, `joinRequest`), `api/buyers.js`,
   `api/my-account.js`; tests in `scripts/test-customer-accounts.js`.
+- The ecosystem (2026-09-24, `docs/OMEGA-LOGIC-ECOSYSTEM.md`): the portal
+  and the customer app open on the hex hub; the supplier's CRM on the
+  ACCOUNT (`api/crm.js`, `api/_lib/crm.js` — contacts, activity with
+  follow-ups on the office's Today, documents both ways through
+  `api/my-files.js`, a timeline derived from the records); the supplier's
+  own pay link on a tenant-billed invoice (`api/_lib/portal.js
+  tenantPayLink`); the customer's Editor Lite subscription, monthly or
+  yearly, granted to the account by the Stripe webhook
+  (`api/customer-subscribe.js`). §6's `plan: 'designer'` question is not
+  what this answers: a subscription is `customers/{id}.editorLite` (source
+  `provider`), the design tool on the customer's own account, not a
+  workspace. Tests: `scripts/test-crm.js`, `scripts/test-customer-subscribe.js`;
+  `npm run check:pages` renders `index.html`, `app.html` and `admin.html`.
 
 Still open: the `designer` upgrade's tenant-vs-`org_members` question (§6),
 the Salesforce sync (§10 item 6), and whether the lite dashboard links the
@@ -629,4 +649,13 @@ finance sizer (§12). Also still open from §2:
   them for custody and QuickBooks is `scripts/backfill-order-customerid.js
   --org <org>` (dry run first, `--apply` to write);
 - the sign-in email a customer receives is Firebase's project-wide template,
-  not the supplier's; a supplier-branded sign-in mail is not built.
+  not the supplier's; a supplier-branded sign-in mail is not built;
+- a workspace member cannot open `admin.html`: `api/buyers.js` GET is an
+  administrator's (the CRM, `api/crm.js`, is a member's; the Omega Logic app
+  opens an account for a member from the company record) — whether members
+  may read accounts is a decision not yet taken;
+- paying a tenant-billed invoice inside the portal (the Pay hub opens the
+  supplier's own payment page), paying the supplier its share of a design
+  subscription (Stripe Connect), and design access while a subscription is
+  past due;
+- editing an existing site from the customer app (the endpoint takes it).

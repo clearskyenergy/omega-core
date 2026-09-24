@@ -3,6 +3,7 @@
   var defs = {}, cache = {};
   function req(id) { if (cache[id]) return cache[id].exports; var m = { exports: {} }; cache[id] = m; defs[id](m, m.exports, req); return m.exports; }
   defs['api/_lib/admin.js'] = function (module) { module.exports = { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; }, db: function () { throw new Error('no Firestore in the sandbox'); }, safeOrg: function (x) { return x; }, FieldValue: function () { return { serverTimestamp: function () { return null; } }; } }; };
+  defs['node:crypto'] = function (module) { module.exports = { createHash: function () { throw new Error('no crypto in the sandbox'); }, randomBytes: function () { throw new Error('no crypto in the sandbox'); } }; };
   defs['api/_lib/materials.js'] = function (module, exports, require) {
 /* ═══════════════════════════════════════════════════════════════════════════
    api/_lib/materials.js — bills of materials, and the materials plan
@@ -1944,7 +1945,14 @@ var ORDER = ['exception', 'quote', 'priced', 'deposit', 'release', 'production',
 
 function dollars(c) { return '$' + (Number(c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function text(v, max) { return String(v == null ? '' : v).trim().slice(0, max || 200); }
-function out(key, next, owner, label) { return { key: key, label: label || STAGES[key], next: next, owner: !!owner }; }
+/* RELEASED ON PO (logic.creditRelease, api/_lib/receivables.js): the plant
+   may start before the deposit is received. creditOpen() is the deposit
+   still open on such an order — 0 without a credit release, without a
+   deposit, or once the deposit is recorded. While it is open the stage says
+   so and carries `credit: true`; otherwise the stage object is exactly what
+   it always was (no `credit` key). */
+function out(key, next, owner, label, credit) { var r = { key: key, label: label || STAGES[key], next: next, owner: !!owner }; if (credit) r.credit = true; return r; }
+function creditOpen(o) { var l = (o && o.logic) || {}, dep = (l.invoices || {}).deposit; if (!l.creditRelease || !dep || !dep.amountCents || dep.satisfied) return 0; return Math.max(0, (Number(dep.amountCents) || 0) - (Number(dep.paidCents) || 0)); }
 
 /* `owner` marks a next step only ClearSky can take (price, accept, ship,
    settle); the office shows it as waiting on ClearSky rather than as a
@@ -1968,11 +1976,14 @@ function stageOf(o) {
     var dep = inv.deposit;
     if (!dep) return out('deposit', 'Deposit invoice is being queued', false);
     if (dep.satisfied) return out('release', 'Deposit recorded — releasing to plant', false);
+    if (l.creditRelease) return out('release', 'Released on PO ' + (l.creditRelease.poNumber || '(no PO number)') + ' — releasing to plant', false, 'Releasing on PO', creditOpen(o) > 0);
     return out('deposit', 'Awaiting deposit · ' + dollars(dep.paidCents || 0) + ' of ' + dollars(dep.amountCents) + ' recorded', false);
   }
-  var bal = inv.balance;
+  var bal = inv.balance, open = creditOpen(o), po = l.creditRelease ? (l.creditRelease.poNumber || '(no PO number)') : '';
+  if (bal && bal.satisfied && open) return out('balance', 'Balance recorded — the deposit ' + dollars(open) + ' is still open (released on PO); record it before shipment', false, 'Awaiting deposit · on PO', true);
   if (bal && bal.satisfied) return out('ship', 'Paid in full — record the shipment', true);
-  if (bal) return out('balance', 'Awaiting final payment · ' + dollars(bal.paidCents || 0) + ' of ' + dollars(bal.amountCents) + ' recorded', false);
+  if (bal) return out('balance', 'Awaiting final payment · ' + dollars(bal.paidCents || 0) + ' of ' + dollars(bal.amountCents) + ' recorded' + (open ? ' · deposit ' + dollars(open) + ' open (released on PO)' : ''), false, null, open > 0);
+  if (open) return out('production', 'Released on PO ' + po + ' · deposit ' + dollars(open) + ' not yet received', false, 'Released on PO', true);
   return out('production', 'Building — follow the work order', false);
 }
 
@@ -2024,7 +2035,7 @@ function finance(orders, owner) {
   return f;
 }
 
-module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, totals: totals, finance: finance, dollars: dollars };
+module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, creditOpen: creditOpen, totals: totals, finance: finance, dollars: dollars };
 
   };
   defs['api/_lib/whitelabel.js'] = function (module, exports, require) {
@@ -2280,6 +2291,1229 @@ module.exports.OMEGA_LOGIC = OMEGA_LOGIC;
 module.exports.iconPath = iconPath;
 
   };
+  defs['api/_lib/receivables.js'] = function (module, exports, require) {
+/* ═══════════════════════════════════════════════════════════════════════════
+   api/_lib/receivables.js — the rules of a tenant-billed receivable
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   PURE: no Firestore, no clock (callers pass `today` / `at`), no network,
+   and no require but ./office-stage — scripts/build-app-sandbox.js bundles
+   this file into the sandboxes and the render fixture applies it, so the
+   sandbox shows what the product computes.
+
+   What it decides, for an order the OEM invoices on its own paper
+   (logic.accounting === 'tenant'):
+   - settle(inv): paid / balance / satisfied / status, from the payments that
+     are NOT voided. The one recompute; the dashboard's "Received" sums the
+     paidCents it produces.
+   - recordPlan: a payment, idempotent by bank reference (refKey folds case
+     and spacing). A placeholder reference (the intake template's
+     "REPLACE WITH THE BANK REFERENCE…", TBD, N/A…) is refused on every
+     path, forever. A reference that was voided is never silently received
+     again: the office may reinstate it with a reason (a NEW entry that
+     points at the voided one); a provider sync never may. qbo: and stripe:
+     references are the ledger sync's alone.
+   - voidPlan: a payment is VOIDED, never deleted. When the order is in the
+     plant on the deposit being voided, the office chooses: keep building on
+     the PO (a credit release) or hold (paymentHold + paymentException). A
+     provider's void cannot ask, so it holds.
+   - releasePlan: release on PO before the deposit (logic.creditRelease),
+     which release() treats as satisfying the deposit gate — and nothing
+     else: shipment still needs the deposit and the balance recorded.
+   - editPlan: an issued invoice's number / issue date / due date, with the
+     history of what changed. Amounts are never edited here.
+   - rows / filter / totals / ledger / csv: the receivables ledger by
+     customer ACCOUNT with aging (current, 1–30, 31–60, 61–90, 90+).
+   The one writer that applies these plans is api/_lib/logic-workflow.js.
+   ═══════════════════════════════════════════════════════════════════════════ */
+'use strict';
+var S = require('api/_lib/office-stage.js');
+
+var STAGES = ['deposit', 'balance'], BUCKETS = ['current', '1-30', '31-60', '61-90', '90+'];
+var MSG_PAY = 'This order is billed through QuickBooks; payments are reconciled there';
+var MSG_EDIT = 'This order is billed through QuickBooks; edit the invoice there';
+var MSG_REL = 'Release on PO is for orders the OEM invoices itself; a ClearSky-billed order releases on its QuickBooks receipt';
+
+function fail(status, message) { var e = new Error(message); e.status = status; return e; }
+function refKey(ref) { return String(ref || '').trim().replace(/\s+/g, ' ').toUpperCase(); }
+function isPlaceholder(ref) { return /REPLACE|PLACEHOLDER|\bTBD\b|\bTODO\b|\bPENDING\b|NOT\s+(YET\s+)?RECEIVED|DELETE\s+THIS|^X+$|^0+$|^N\/?A$/i.test(String(ref).trim()); }
+function reservedSource(ref) { var s = String(ref || ''); return /^qbo:/i.test(s) ? 'quickbooks' : /^stripe:/i.test(s) ? 'stripe' : null; }
+function isDate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s == null ? '' : s)) && !isNaN(Date.parse(s)); }
+function clean(v, n) { return String(v == null ? '' : v).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, n || 200); }
+function poOf(o) { o = o || {}; return (o.purchaseOrder && o.purchaseOrder.number) || o.poNumber || (o.poIntake && o.poIntake.number) || null; }
+function ms(d) { return Date.parse(String(d).slice(0, 10) + 'T00:00:00Z'); }
+function daysBetween(a, b) { return Math.round((ms(b) - ms(a)) / 86400000); }
+function addDays(d, n) { return new Date(ms(d) + n * 86400000).toISOString().slice(0, 10); }
+function bucket(days) { return days <= 0 ? 'current' : days <= 30 ? '1-30' : days <= 60 ? '31-60' : days <= 90 ? '61-90' : '90+'; }
+function usd(c) { return (Number(c || 0) / 100); }
+
+function settle(inv) {
+  inv = inv || {};
+  var paid = (inv.payments || []).reduce(function (n, p) { return p && !p.voidedAt ? n + (Number(p.amountCents) || 0) : n; }, 0);
+  var amount = Number(inv.amountCents) || 0;
+  var status = amount === 0 ? 'not_required' : paid >= amount ? 'paid' : paid > 0 ? 'part_paid' : inv.id ? 'awaiting_payment' : 'to_issue';
+  return { paidCents: paid, balanceCents: amount - paid, satisfied: paid >= amount, status: status };
+}
+function dueDate(inv, terms) {
+  inv = inv || {};
+  if (inv.dueAt) return inv.dueAt;
+  var base = inv.issuedAt || (inv.id ? inv.date : null);
+  if (!base) return null;
+  return addDays(base, (terms && terms.dueDays) || 0);
+}
+
+function tenant(o, msg) { var l = o && o.logic; if (!l || l.accounting !== 'tenant') throw fail(409, msg); return l; }
+function stageInv(l, stage) {
+  if (STAGES.indexOf(stage) < 0) throw fail(400, 'stage must be deposit or balance');
+  var inv = l.invoices && l.invoices[stage];
+  if (!inv) throw fail(409, 'No ' + stage + ' invoice on this order yet' + (stage === 'balance' ? ' — verify ready first' : ''));
+  return inv;
+}
+function holdMessage(ref, stage, reason) { return 'Payment ' + ref + ' on the ' + stage + ' invoice was voided (' + String(reason).slice(0, 120) + '). Fulfilment is on hold until the payment is recorded or the order is released on its PO.'; }
+
+function recordPlan(o, stage, p) {
+  var l = tenant(o, MSG_PAY);
+  if (o.cancelRequested || (l.paymentException && !l.paymentHold)) throw fail(409, 'Resolve the order exception first');
+  var inv = stageInv(l, stage);
+  if (!inv.id) throw fail(409, 'Record the ' + stage + ' invoice number first');
+  if (!p.amountCents) throw fail(400, 'Amount received required');
+  if (!isDate(p.date)) throw fail(400, 'Payment date must be YYYY-MM-DD');
+  var ref = clean(p.bankReference, 120);
+  if (clean(p.bankReference, 500).length < 4) throw fail(400, 'Bank confirmation reference required');
+  if (isPlaceholder(ref)) throw fail(400, 'That bank reference is a placeholder (' + ref.slice(0, 40) + '). Record the payment when the money has landed, with the bank\'s own reference for it.');
+  var src = p.source || 'office', reserved = reservedSource(ref);
+  if (reserved && src !== reserved) throw fail(400, 'References starting qbo: or stripe: are written by the ledger sync');
+  var key = refKey(ref), pays = inv.payments || [];
+  if (pays.some(function (x) { return !x.voidedAt && refKey(x.bankReference) === key; })) return { duplicate: true, invoice: inv };
+  var vi = -1; pays.forEach(function (x, i) { if (x.voidedAt && refKey(x.bankReference) === key) vi = i; });
+  var re = null, vdate = null;
+  if (vi >= 0) {
+    var vd = pays[vi]; vdate = String(vd.voidedAt).slice(0, 10);
+    if (src !== 'office') throw fail(409, ref + ' was voided in Omega Logic on ' + vdate + '; not recorded again');
+    if (!p.reinstate) throw fail(409, 'Bank reference ' + ref + ' was recorded ' + vd.date + ' and voided ' + vdate + ' (' + clean(vd.voidReason, 80) + '). If that money has really landed, record it again with "reinstate" and say why.');
+    var why = clean(p.reason, 500);
+    if (why.length < 5) throw fail(400, 'Say why a voided reference is being recorded again');
+    re = { reinstates: vi, reinstateReason: why };
+  }
+  var entry = { amountCents: p.amountCents, date: p.date, bankReference: ref, by: p.by, at: p.at, source: src };
+  if (p.external) entry.external = p.external;
+  if (re) { entry.reinstates = re.reinstates; entry.reinstateReason = re.reinstateReason; }
+  var payments = pays.concat([entry]);
+  var invoice = Object.assign({}, inv, { payments: payments }, settle({ amountCents: inv.amountCents, id: inv.id, payments: payments }), { checkedAt: p.at });
+  if (invoice.paidCents > inv.amountCents) throw fail(400, 'Payments would exceed the invoice: USD ' + usd(invoice.paidCents) + ' against ' + usd(inv.amountCents));
+  var liftHold = !!(l.paymentHold && l.paymentHold.stage === stage && invoice.satisfied);
+  var event = stage + ' invoice ' + inv.id + ': USD ' + usd(p.amountCents) + ' received ' + p.date + ' · bank reference ' + ref +
+    (invoice.satisfied ? ' · paid in full' : ' · USD ' + usd(invoice.balanceCents) + ' outstanding') +
+    (src === 'quickbooks' ? ' · from QuickBooks' : src === 'stripe' ? ' · from Stripe' : '') +
+    (re ? ' · reinstated (it was voided ' + vdate + '): ' + re.reinstateReason : '') + (liftHold ? '; hold lifted' : '');
+  return { invoice: invoice, entry: entry, liftHold: liftHold, event: event };
+}
+
+function voidPlan(o, stage, v) {
+  var l = tenant(o, MSG_PAY), inv = stageInv(l, stage);
+  if (!inv.id) throw fail(409, 'Record the ' + stage + ' invoice as issued first');
+  var src = v.source || 'office', reason;
+  if (src === 'office') { reason = clean(v.reason, 500); if (reason.length < 5) throw fail(400, 'Say why this payment is being voided'); }
+  else reason = clean(v.reason, 500) || (src === 'quickbooks' ? 'Reversed in QuickBooks' : 'Refunded or lost dispute in Stripe');
+  var key = refKey(v.bankReference), pays = inv.payments || [], at = -1;
+  pays.forEach(function (x, i) { if (!x.voidedAt && refKey(x.bankReference) === key) at = i; });
+  if (at < 0) {
+    if (pays.some(function (x) { return x.voidedAt && refKey(x.bankReference) === key; })) return { duplicate: true, invoice: inv };
+    throw fail(404, 'No recorded payment with bank reference ' + clean(v.bankReference, 120) + ' on the ' + stage + ' invoice');
+  }
+  var live = !!l.releasedAt && ['shipped', 'complete', 'cancelled'].indexOf(o.status) < 0 && !o.cancelRequested;
+  var needsChoice = stage === 'deposit' && live && !l.creditRelease && !l.paymentHold, keep = v.keepBuilding;
+  if (src !== 'office') { if (needsChoice) keep = false; }
+  else if (needsChoice && typeof keep !== 'boolean') throw fail(409, 'This order is in the plant on this payment: choose keep building on the PO, or hold the order');
+  var ref = pays[at].bankReference, payments = pays.slice();
+  payments[at] = Object.assign({}, pays[at], { voidedAt: v.at, voidedBy: v.by, voidReason: reason, voidSource: src });
+  var invoice = Object.assign({}, inv, { payments: payments }, settle({ amountCents: inv.amountCents, id: inv.id, payments: payments }), { checkedAt: v.at });
+  var po = clean(v.poNumber, 80) || poOf(o);
+  var creditRelease = needsChoice && keep === true ? { by: v.by, at: v.at, reason: reason, poNumber: po || null, basis: 'void', voidedReference: ref, openCents: invoice.balanceCents } : null;
+  var hold = live && keep === false && !l.paymentHold ? { stage: stage, reference: ref, reason: reason, by: v.by, at: v.at, source: src, message: holdMessage(ref, stage, reason) } : null;
+  var event = stage + ' invoice ' + inv.id + ': payment USD ' + usd(pays[at].amountCents) + ' (bank reference ' + ref + ') voided by ' + v.by + ' — ' + reason +
+    (creditRelease ? ' · kept building on PO ' + (po || '(no PO number)') : '') + (hold ? ' · order on hold' : '');
+  return { invoice: invoice, voided: payments[at], creditRelease: creditRelease, hold: hold, needsChoice: needsChoice, event: event };
+}
+
+function releasePlan(o, v) {
+  var l = tenant(o, MSG_REL);
+  if (!l.acceptedAt) throw fail(409, 'Accept the order first');
+  if (o.cancelRequested || o.status === 'cancelled') throw fail(409, 'The order is cancelled or has a cancellation request');
+  if (l.paymentException && !l.paymentHold) throw fail(409, 'Resolve the order exception first');
+  var dep = l.invoices && l.invoices.deposit;
+  if (!dep || !dep.amountCents) throw fail(409, 'No deposit is due on this order; it releases on acceptance');
+  if (l.creditRelease && !l.paymentHold) return { duplicate: true, creditRelease: l.creditRelease };
+  var st = settle(dep);
+  if (st.satisfied && !l.paymentHold) throw fail(409, 'The deposit is recorded; the order releases on it');
+  var reason = clean(v.reason, 500);
+  if (reason.length < 5) throw fail(400, 'Say why the plant may start before the deposit is received');
+  var po = clean(v.poNumber, 80) || poOf(o), liftHold = !!l.paymentHold;
+  var creditRelease = { by: v.by, at: v.at, reason: reason, poNumber: po || null, basis: l.paymentHold ? 'hold-lifted' : 'po', openCents: dep.amountCents - st.paidCents };
+  return { creditRelease: creditRelease, liftHold: liftHold,
+    event: 'Released on PO ' + (po || '(no PO number)') + ' before the deposit was received — ' + reason + (liftHold ? '; hold lifted' : '') };
+}
+
+function editPlan(o, stage, v) {
+  var l = tenant(o, MSG_EDIT), inv = stageInv(l, stage), terms = (l.commercial || {}).terms;
+  if (!inv.id) throw fail(409, 'Record the ' + stage + ' invoice as issued first');
+  if (inv.ledger && inv.ledger.invoiceId) throw fail(409, 'This invoice is in ' + (inv.ledger.provider === 'stripe' ? 'Stripe' : 'QuickBooks') + ' (' + inv.ledger.invoiceId + '); change it there');
+  var cur = { number: inv.id, issuedAt: inv.issuedAt || inv.date || null, dueAt: inv.dueAt || null }, next = Object.assign({}, cur);
+  if (v.number !== undefined) {
+    var n = clean(v.number, 80), other = stage === 'deposit' ? 'balance' : 'deposit', oi = l.invoices[other];
+    if (!n) throw fail(400, 'Invoice number required');
+    if (oi && oi.id && oi.id === n) throw fail(409, 'Invoice ' + n + ' is already the ' + other + ' invoice on this order');
+    next.number = n;
+  }
+  if (v.issuedAt !== undefined) { if (!isDate(v.issuedAt)) throw fail(400, 'Invoice date must be YYYY-MM-DD'); next.issuedAt = v.issuedAt; }
+  if (v.dueAt !== undefined) {
+    if (v.dueAt === '' || v.dueAt === null) next.dueAt = null;
+    else { if (!isDate(v.dueAt)) throw fail(400, 'Due date must be YYYY-MM-DD'); next.dueAt = v.dueAt; }
+  }
+  if (next.dueAt && next.issuedAt && next.dueAt < next.issuedAt) throw fail(400, 'The due date cannot be before the invoice date');
+  var was = {}, now = {};
+  ['number', 'issuedAt', 'dueAt'].forEach(function (k) { if (next[k] !== cur[k]) { was[k] = cur[k]; now[k] = next[k]; } });
+  if (!Object.keys(now).length) return { duplicate: true, invoice: inv };
+  var reason = clean(v.reason, 500);
+  if (reason.length < 5) throw fail(400, 'Say why the invoice is being changed');
+  if ((inv.edits || []).length >= 50) throw fail(409, 'This invoice has been edited 50 times; ask ClearSky');
+  var edit = { at: v.at, by: v.by, reason: reason, was: was, now: now };
+  var invoice = Object.assign({}, inv, { id: next.number, issuedAt: next.issuedAt, dueAt: next.dueAt, edits: (inv.edits || []).concat([edit]) });
+  function due(d, which) { return d || 'terms (' + dueDate(Object.assign({}, which, { dueAt: null }), terms) + ')'; }
+  var parts = [];
+  if ('number' in now) parts.push('number ' + was.number + ' → ' + now.number);
+  if ('issuedAt' in now) parts.push('issued ' + was.issuedAt + ' → ' + now.issuedAt);
+  if ('dueAt' in now) parts.push('due ' + due(was.dueAt, inv) + ' → ' + due(now.dueAt, invoice));
+  return { invoice: invoice, edit: edit, event: stage + ' invoice edited: ' + parts.join('; ') + ' — ' + reason };
+}
+
+function rows(entries, today, opts) {
+  var provider = (opts && opts.provider) || 'none', out = [];
+  (entries || []).forEach(function (e) {
+    var o = (e && e.order) || {}, l = o.logic;
+    if (!l || !l.invoices) return;
+    if (o.poIntake && !o.poIntake.convertedAt) return;
+    var tenantBilled = l.accounting === 'tenant', cancelled = !!(o.cancelRequested || o.status === 'cancelled');
+    var live = !!l.releasedAt && ['shipped', 'complete', 'cancelled'].indexOf(o.status) < 0 && !o.cancelRequested;
+    var c = o.customer || {}, acct = e.account || null, terms = (l.commercial || {}).terms;
+    var customer = { key: acct ? 'account:' + acct.id : 'email:' + String(c.email || '').toLowerCase(), customerId: acct ? acct.id : null,
+      name: (acct && acct.name) || c.company || c.name || c.email || '—', contact: c.name || '', email: c.email || '' };
+    STAGES.forEach(function (stage) {
+      var inv = l.invoices[stage];
+      if (!inv || !(Number(inv.amountCents) > 0)) return;
+      var received, satisfied, status;
+      if (tenantBilled) { var s = settle(inv); received = s.paidCents; satisfied = s.satisfied; status = s.status; }
+      else { received = Number(inv.paidCents) || 0; satisfied = inv.satisfied === true || received >= inv.amountCents; status = satisfied ? 'paid' : received > 0 ? 'part_paid' : inv.id ? 'awaiting_payment' : 'queued'; }
+      var dueAt = dueDate(inv, terms), overdue = false, daysOverdue = 0, bk = null;
+      if (inv.id && !satisfied && dueAt) { var d = daysBetween(dueAt, today); overdue = d > 0; daysOverdue = Math.max(0, d); bk = bucket(d); }
+      var pays = (inv.payments || []).map(function (p, i) {
+        return { index: i, amountCents: p.amountCents, date: p.date, bankReference: p.bankReference, by: p.by, at: p.at, source: p.source || 'office',
+          voided: !!p.voidedAt, voidedAt: p.voidedAt || null, voidedBy: p.voidedBy || null, voidReason: p.voidReason || null, voidSource: p.voidSource || null,
+          reinstates: p.reinstates == null ? null : p.reinstates };
+      });
+      var linked = !!(inv.ledger && inv.ledger.invoiceId);
+      out.push({ key: (e.id || '') + ':' + stage, orderId: e.id, orderNo: o.orderNo, poNumber: poOf(o), customer: customer, stage: stage,
+        billing: tenantBilled ? 'tenant' : 'quickbooks', number: inv.id || null, issuedAt: inv.issuedAt || (inv.id ? inv.date || null : null),
+        dueAt: dueAt, dueAtSet: !!inv.dueAt, amountCents: inv.amountCents, receivedCents: received, balanceCents: inv.amountCents - received,
+        satisfied: satisfied, status: status, overdue: overdue, daysOverdue: daysOverdue, bucket: bk, payments: pays, edits: inv.edits || [],
+        creditRelease: l.creditRelease || null, released: !!l.releasedAt, releasedOnPo: stage === 'deposit' && S.creditOpen(o) > 0,
+        hold: l.paymentHold || null, exception: l.paymentException || l.lastError || null, orderStatus: o.status, orderStage: S.stageOf(o),
+        payUrl: /^https:\/\//.test(inv.payUrl || '') ? inv.payUrl : null, ledger: inv.ledger || null, syncError: l.ledgerSyncError ? l.ledgerSyncError.message : null,
+        actions: {
+          issue: tenantBilled && !inv.id && !cancelled,
+          record: tenantBilled && !!inv.id && !satisfied && !cancelled && (!l.paymentException || !!l.paymentHold),
+          void: tenantBilled && pays.some(function (p) { return !p.voided; }),
+          voidNeedsChoice: tenantBilled && stage === 'deposit' && live && !l.creditRelease && !l.paymentHold,
+          edit: tenantBilled && !!inv.id && !linked,
+          releaseOnPo: tenantBilled && stage === 'deposit' && !!l.acceptedAt && !satisfied && !cancelled && (!l.releasedAt || !!l.paymentHold) &&
+            (!l.creditRelease || !!l.paymentHold) && (!l.paymentException || !!l.paymentHold),
+          push: tenantBilled && !!inv.id && provider !== 'none' && !linked,
+          link: tenantBilled && !!inv.id && provider !== 'none' && !linked,
+          pull: tenantBilled && !!(inv.ledger && inv.ledger.invoiceId && inv.ledger.provider === provider) } });
+    });
+  });
+  return out;
+}
+function filter(list, f) {
+  f = f || {};
+  return (list || []).filter(function (r) {
+    if (f.status === 'open' && ['awaiting_payment', 'part_paid'].indexOf(r.status) < 0) return false;
+    if (f.status === 'to_issue' && ['to_issue', 'queued'].indexOf(r.status) < 0) return false;
+    if (f.status === 'paid' && r.status !== 'paid') return false;
+    if (f.customer && r.customer.key !== f.customer) return false;
+    if (f.overdue && !r.overdue) return false;
+    return true;
+  });
+}
+function totals(list) {
+  var t = { count: 0, invoicedCents: 0, receivedCents: 0, outstandingCents: 0, overdueCents: 0, overdueCount: 0, toIssueCents: 0, voidedCents: 0, creditReleasedCents: 0, aging: {}, byCustomer: [] }, by = {};
+  BUCKETS.forEach(function (k) { t.aging[k] = 0; });
+  (list || []).forEach(function (r) {
+    t.count++;
+    var c = by[r.customer.key] || (by[r.customer.key] = { key: r.customer.key, customerId: r.customer.customerId, name: r.customer.name, count: 0, invoicedCents: 0, receivedCents: 0, outstandingCents: 0, overdueCents: 0 });
+    c.count++;
+    if (r.number) { t.invoicedCents += r.amountCents; c.invoicedCents += r.amountCents; }
+    t.receivedCents += r.receivedCents; c.receivedCents += r.receivedCents;
+    if (r.number && !r.satisfied) { t.outstandingCents += r.balanceCents; c.outstandingCents += r.balanceCents; t.aging[r.bucket || 'current'] += r.balanceCents; }
+    if (r.overdue) { t.overdueCents += r.balanceCents; t.overdueCount++; c.overdueCents += r.balanceCents; }
+    if (r.status === 'to_issue' || r.status === 'queued') t.toIssueCents += r.amountCents;
+    r.payments.forEach(function (p) { if (p.voided) t.voidedCents += p.amountCents; });
+    if (r.releasedOnPo) t.creditReleasedCents += r.balanceCents;
+  });
+  t.byCustomer = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.outstandingCents - a.outstandingCents || String(a.name).localeCompare(String(b.name)); });
+  return t;
+}
+function ledger(entries, today, f, opts) {
+  var all = rows(entries, today, opts), shown = filter(all, f), seen = {}, customers = [];
+  all.forEach(function (r) { if (!seen[r.customer.key]) { seen[r.customer.key] = true; customers.push({ key: r.customer.key, name: r.customer.name }); } });
+  customers.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+  f = f || {};
+  return { rows: shown, totals: totals(shown), allCount: all.length, filtered: !!((f.status && f.status !== 'all') || f.customer || f.overdue), customers: customers };
+}
+var HEADER = ['Order', 'PO', 'Customer', 'Customer key', 'Stage', 'Invoice', 'Issued', 'Due', 'Amount USD', 'Received USD', 'Balance USD', 'Status', 'Days overdue', 'Aging', 'Released on PO', 'Payments'];
+function cell(v) {
+  var s = v == null ? '' : String(v);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function money(c) { return (Number(c || 0) / 100).toFixed(2); }
+function csv(list) {
+  var lines = [HEADER.join(',')];
+  (list || []).forEach(function (r) {
+    lines.push([r.orderNo, r.poNumber, r.customer.name, r.customer.key, r.stage, r.number, r.issuedAt, r.dueAt, money(r.amountCents), money(r.receivedCents), money(r.balanceCents),
+      r.status, r.daysOverdue, r.bucket, r.releasedOnPo ? 'yes' : '', r.payments.map(function (p) { return p.date + ' USD ' + money(p.amountCents) + ' ' + p.bankReference + (p.voided ? ' (VOIDED: ' + p.voidReason + ')' : ''); }).join(' | ')].map(cell).join(','));
+  });
+  return lines.join('\r\n') + '\r\n';
+}
+
+module.exports = { STAGES: STAGES, BUCKETS: BUCKETS, refKey: refKey, isPlaceholder: isPlaceholder, reservedSource: reservedSource, isDate: isDate, clean: clean, poOf: poOf,
+  settle: settle, dueDate: dueDate, daysBetween: daysBetween, bucket: bucket, recordPlan: recordPlan, voidPlan: voidPlan, releasePlan: releasePlan, editPlan: editPlan,
+  rows: rows, filter: filter, totals: totals, ledger: ledger, csv: csv };
+
+  };
+  defs['api/_lib/crm.js'] = function (module, exports, require) {
+/* ═══════════════════════════════════════════════════════════════════════════
+   api/_lib/crm.js — the supplier's CRM, pure: what may be written and what
+   the timeline says
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   The Customer hub of Omega Logic opens an ACCOUNT (Amperage Capital), not a
+   person. Under it the office keeps three things no other record held:
+
+     omega_orgs/{org}/customers/{customerId}/contacts/{id}   people who never log in
+     omega_orgs/{org}/customers/{customerId}/activity/{id}   calls, emails, meetings,
+                                                             notes, tasks; follow-ups
+     omega_orgs/{org}/customers/{customerId}/files/{id}      documents, both ways
+     omega_orgs/{org}/crm_followups/{customerId__activityId} the open follow-ups
+                                                             across every account
+
+   The follow-up index exists for the same reason customer_index does: the
+   alternative is a collectionGroup('activity') query, whose index Firestore
+   does not auto-create, and a query that fails on a missing index is the
+   one that gets swallowed into "nothing due today". It is written in the
+   SAME transaction as the activity and closed (open:false), never deleted.
+
+   This file has no Firestore and no Admin SDK in it: validation of what the
+   office and the customer send (contacts, activity, the file bytes) and the
+   TIMELINE — the account's history merged from the records that already
+   exist (orders, requests, PO intake, people, documents, activity, the
+   custody of the units it bought, its sites, its designs and the design
+   tool's trial or subscription). Nothing
+   on the timeline is stored twice; it is derived on every read, so it cannot
+   drift from the orders it describes. api/crm.js and api/my-files.js read and
+   write; this decides.
+   ═══════════════════════════════════════════════════════════════════════════ */
+'use strict';
+var crypto = require('node:crypto');
+
+var TYPES = ['call', 'email', 'meeting', 'note', 'task'];
+var TYPE_LABEL = { call: 'Call', email: 'Email', meeting: 'Meeting', note: 'Note', task: 'Task' };
+/* What a document is. Both apps offer a subset; 'po' is the office app's
+   older key for the same thing and is stored as 'purchase-order'. */
+var CATEGORIES = ['contract', 'drawing', 'datasheet', 'site-survey', 'purchase-order', 'invoice', 'photo', 'utility-bill', 'warranty', 'other'];
+var CATEGORY_ALIAS = { po: 'purchase-order' };
+var MAX_BYTES = 2 * 1024 * 1024;
+var MAX_BASE64 = 2800000;            /* 2 MB of bytes is 2,796,204 characters of base64 */
+var TIMELINE_CAP = 200;
+var MIME = {
+  pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  csv: 'text/csv', txt: 'text/plain'
+};
+var ACCEPTED = 'PDF, PNG, JPEG, XLSX, DOCX, CSV or TXT';
+
+/* The same shape A.httpError makes, without requiring the Admin SDK here. */
+function fail(status, message) { var e = new Error(message); e.status = status; return e; }
+
+/* ── text ────────────────────────────────────────────────────────────────
+   Control characters are stripped (a pasted email carries them and they
+   are never meaningful); a value longer than its field is REFUSED with the
+   field's name rather than silently cut — the office would not know the
+   end of their call note was lost. */
+function text(v, max, label, opts) {
+  opts = opts || {};
+  if (v == null) v = '';
+  if (typeof v !== 'string' && typeof v !== 'number') throw fail(400, label + ' must be text');
+  var s = String(v).replace(opts.multiline ? /\r\n?/g : /[\r\n\t]+/g, opts.multiline ? '\n' : ' ')
+    .replace(opts.multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g : /[\u0000-\u001f\u007f]/g, '').trim();
+  if (s.length > max) throw fail(400, label + ' is limited to ' + max + ' characters');
+  if (opts.required && !s) throw fail(400, label + ' is required');
+  return s;
+}
+function email(v, label) {
+  var s = text(v, 254, label || 'Email').toLowerCase();
+  if (s && !/^[^@\s/]+@[^@\s/]+\.[^@\s/]+$/.test(s)) throw fail(400, (label || 'Email') + ' is not a valid address');
+  return s;
+}
+function bool(v) { return v === true || v === 'true' || v === 1 || v === '1'; }
+function recordId(v, label) {
+  var s = String(v == null ? '' : v);
+  if (!/^[A-Za-z0-9_-]{1,120}$/.test(s)) throw fail(400, (label || 'Record') + ' id is not valid');
+  return s;
+}
+
+/* ── time ────────────────────────────────────────────────────────────────
+   A DATE is YYYY-MM-DD and must be a real one: Date.parse('2026-02-30')
+   quietly rolls over to 2 March, so every date round-trips before it is
+   accepted. */
+var YEAR_MS = 366 * 86400000;
+function realDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  var t = Date.parse(s + 'T00:00:00Z');
+  return isFinite(t) && new Date(t).toISOString().slice(0, 10) === s;
+}
+/* When a thing happened. A bare date stays a bare date — nobody said what
+   time the meeting was, so none is invented; a date-time is normalised to
+   ISO. Empty is now. Not before 2000, not more than a year ahead. */
+function when(v, now, label) {
+  label = label || 'Date';
+  var s = text(v, 40, label);
+  if (!s) return now;
+  var t;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { if (!realDate(s)) throw fail(400, label + ' is not a real date'); t = Date.parse(s + 'T00:00:00Z'); }
+  else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && realDate(s.slice(0, 10))) { t = Date.parse(s); if (!isFinite(t)) throw fail(400, label + ' must be YYYY-MM-DD or an ISO date-time'); s = new Date(t).toISOString(); }
+  else throw fail(400, label + ' must be YYYY-MM-DD or an ISO date-time');
+  if (t < Date.UTC(2000, 0, 1) || t > Date.parse(now) + YEAR_MS) throw fail(400, label + ' is out of range');
+  return s;
+}
+/* A follow-up is a DAY. An ISO date-time keeps the calendar date the person
+   typed (its first ten characters), not its UTC date. Up to five years out. */
+function followUpDay(v, now) {
+  var s = text(v, 40, 'Follow-up date');
+  if (!s) return null;
+  var d = s.slice(0, 10);
+  if (!realDate(d) || (s.length > 10 && !(/^T\d{2}:\d{2}/.test(s.slice(10)) && isFinite(Date.parse(s))))) throw fail(400, 'Follow-up date must be YYYY-MM-DD');
+  var t = Date.parse(d + 'T00:00:00Z');
+  if (t < Date.UTC(2000, 0, 1) || t > Date.parse(now) + 5 * YEAR_MS) throw fail(400, 'Follow-up date is out of range');
+  return d;
+}
+function millis(v) {
+  if (!v) return 0;
+  if (typeof v.toMillis === 'function') return v.toMillis();
+  if (typeof v.toDate === 'function') return v.toDate().getTime();
+  if (typeof v === 'number') return v;
+  if (typeof v === 'object' && typeof v._seconds === 'number') return v._seconds * 1000;
+  if (typeof v === 'object' && typeof v.seconds === 'number') return v.seconds * 1000;
+  var t = Date.parse(v); return isFinite(t) ? t : 0;
+}
+/* A time as the pages read it: a bare date stays a date; everything else
+   becomes ISO; nothing parseable is null (and never invented). */
+function iso(v) {
+  if (typeof v === 'string' && realDate(v)) return v;
+  var t = millis(v); return t ? new Date(t).toISOString() : null;
+}
+
+/* ── contacts ──────────────────────────────────────────────────────────── */
+function contactInput(b) {
+  b = b || {};
+  var out = { name: text(b.name, 120, 'Name'), title: text(b.title, 120, 'Title'), email: email(b.email), phone: text(b.phone, 40, 'Phone'),
+    notes: text(b.notes, 2000, 'Notes', { multiline: true }), primary: bool(b.primary) };
+  if (!out.name && !out.email) throw fail(400, 'A contact needs a name or an email');
+  if (!out.name) out.name = out.email;
+  return out;
+}
+
+/* ── activity ──────────────────────────────────────────────────────────── */
+function activityInput(b, now) {
+  b = b || {};
+  var type = String(b.type || '').trim().toLowerCase();
+  if (TYPES.indexOf(type) < 0) throw fail(400, 'Choose call, email, meeting, note or task');
+  var body = text(b.body, 4000, 'Details', { multiline: true }), subject = text(b.subject, 160, 'Subject');
+  if (!subject && !body) throw fail(400, 'Say what the ' + TYPE_LABEL[type].toLowerCase() + ' was about');
+  if (!subject) subject = body.split('\n')[0].slice(0, 160).trim();
+  return { type: type, subject: subject, body: body, at: when(b.at, now, 'When'), followUpAt: followUpDay(b.followUpAt, now),
+    contactId: b.contactId ? recordId(b.contactId, 'Contact') : null, orderId: b.orderId ? recordId(b.orderId, 'Order') : null };
+}
+function category(v) {
+  var k = String(v == null ? '' : v).trim().toLowerCase();
+  if (!k) return 'other';
+  k = CATEGORY_ALIAS[k] || k;
+  if (CATEGORIES.indexOf(k) < 0) throw fail(400, 'Choose a document category');
+  return k;
+}
+
+/* ── the file ─────────────────────────────────────────────────────────────
+   Decided by the BYTES, never by the name or a declared type: a PDF, PNG or
+   JPEG by its signature; an XLSX or DOCX is a zip (PK) that must also carry
+   the Office manifest and its own part folder and be named for what it is —
+   a plain .zip, or a .docx that is really a spreadsheet, is refused; CSV and
+   TXT have no signature, so they must be named so and contain no binary
+   control bytes (an executable renamed .txt is full of NULs). The stored
+   name gets the extension of what the bytes ARE. Served back only as an
+   attachment with nosniff, so even a text file is never rendered. */
+function extOf(name) { var m = /\.([A-Za-z0-9]{1,8})$/.exec(String(name || '').trim()); return m ? m[1].toLowerCase() : ''; }
+function safeName(name, ext) {
+  var base = String(name || '').split(/[\\/]/).pop().replace(/\.[^.]*$/, '').replace(/[^A-Za-z0-9._ -]/g, '_').replace(/^[.\s]+/, '').trim().slice(0, 120);
+  return (base || 'document') + '.' + ext;
+}
+function isText(bytes) {
+  for (var i = 0; i < bytes.length; i++) { var c = bytes[i]; if (c < 32 && c !== 9 && c !== 10 && c !== 12 && c !== 13) return false; }
+  return true;
+}
+function fileInput(input) {
+  if (!input || typeof input !== 'object') throw fail(400, 'Choose a file to upload');
+  var name = text(input.name, 200, 'File name', { required: true });
+  var b64 = typeof input.base64 === 'string' ? input.base64 : '';
+  if (/^data:[^,]{0,120},/.test(b64)) b64 = b64.slice(b64.indexOf(',') + 1);
+  if (!b64 || b64.length > MAX_BASE64 || !/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) throw fail(400, 'The file must be ' + ACCEPTED + ', up to 2 MB');
+  var bytes = Buffer.from(b64, 'base64');
+  if (!bytes.length) throw fail(400, 'The file is empty');
+  if (bytes.length > MAX_BYTES) throw fail(400, 'The file is larger than 2 MB');
+  var ext = extOf(name), kind = '';
+  if (bytes.length >= 5 && bytes.subarray(0, 5).toString('latin1') === '%PDF-') kind = 'pdf';
+  else if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) kind = 'png';
+  else if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) kind = 'jpg';
+  else if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) {
+    /* Part names sit uncompressed in the zip's headers and directory. */
+    var s = bytes.toString('latin1'), office = s.indexOf('[Content_Types].xml') >= 0;
+    if (ext === 'xlsx' && office && s.indexOf('xl/') >= 0) kind = 'xlsx';
+    else if (ext === 'docx' && office && s.indexOf('word/') >= 0) kind = 'docx';
+    else throw fail(400, 'Only Excel (.xlsx) and Word (.docx) files are accepted from zip-based formats');
+  } else if ((ext === 'csv' || ext === 'txt') && isText(bytes)) kind = ext;
+  if (!kind) throw fail(400, 'Only ' + ACCEPTED + ' documents are accepted');
+  return { bytes: bytes, ext: kind, type: MIME[kind], name: safeName(name, kind), size: bytes.length,
+    sha256: crypto.createHash('sha256').update(bytes).digest('hex') };
+}
+/* The header value for a download: the stored name, quote- and
+   newline-proof. */
+function disposition(name) { return 'attachment; filename="' + String(name || 'document').replace(/["\\\r\n]/g, '_') + '"'; }
+
+/* ── projections ─────────────────────────────────────────────────────────
+   What leaves the endpoint. A file's storage path never does: the bytes are
+   served by the endpoint that checked who is asking. */
+function contactView(id, c) {
+  return { id: id, name: c.name || '', title: c.title || '', email: c.email || '', phone: c.phone || '', notes: c.notes || '', primary: c.primary === true,
+    archived: c.archived === true, createdAt: iso(c.createdAt), createdBy: c.createdBy || null, updatedAt: iso(c.updatedAt) };
+}
+function activityView(id, a, names, orderNos) {
+  names = names || {}; orderNos = orderNos || {};
+  return { id: id, type: a.type, subject: a.subject || '', body: a.body || '', at: iso(a.at), followUpAt: a.followUpAt || null,
+    contactId: a.contactId || null, contactName: a.contactId ? names[a.contactId] || a.contactName || null : null,
+    orderId: a.orderId || null, orderNo: a.orderId ? orderNos[a.orderId] || a.orderNo || null : null,
+    by: a.by || null, loggedAt: iso(a.loggedAt), done: a.done === true, doneAt: iso(a.doneAt), doneBy: a.doneBy || null,
+    open: isOpen(a) };
+}
+/* Owed: a follow-up date, or a task (which is owed whether or not anybody
+   gave it a day). Open until marked done; this is what shows a Done button
+   and what the follow-up index holds. */
+function isOpen(a) { return !!a && a.done !== true && (!!a.followUpAt || a.type === 'task'); }
+/* Earliest due first; a task with no day comes after every dated one. */
+function byDue(x, y) {
+  var a = x.followUpAt || '', b = y.followUpAt || '';
+  if (a !== b) return !a ? 1 : !b ? -1 : a < b ? -1 : 1;
+  return String(x.at || '').localeCompare(String(y.at || ''));
+}
+/* audience 'office' sees who uploaded; 'customer' sees a colleague's name on
+   their own uploads and never a supplier employee's address. The office's
+   NOTE on its own document never leaves the office either: it is typed next
+   to "Share" as an internal remark, not a caption. A customer's own upload
+   keeps its note — they wrote it. */
+function fileView(id, f, audience) {
+  var from = f.from === 'customer' ? 'customer' : 'office';
+  var out = { id: id, name: f.name || 'document', type: f.type || '', size: Number(f.size) || 0, category: f.category || 'other', note: f.note || '',
+    from: from, source: from, shared: from === 'customer' || f.shared === true, uploadedAt: iso(f.uploadedAt) };
+  if (audience === 'office') { out.uploadedBy = f.uploadedBy || null; out.sha256 = f.sha256 || null; out.archived = f.archived === true; }
+  else if (from === 'customer') out.uploadedBy = f.uploadedBy || null;
+  else out.note = '';
+  return out;
+}
+/* An open follow-up, from its index record (api/crm.js writes it with the
+   activity). `id` is the ACTIVITY's id: it is what `done` takes. */
+function followUpView(d, company, names) {
+  names = names || {};
+  return { id: d.activityId, activityId: d.activityId, customerId: d.customerId, company: company != null ? company : d.company || '',
+    type: d.type, subject: d.subject || '', followUpAt: d.followUpAt || null, contactId: d.contactId || null,
+    contactName: d.contactId ? names[d.contactId] || d.contactName || null : null, orderId: d.orderId || null, by: d.by || null, at: iso(d.at) };
+}
+/* May the customer see this record at all? */
+function customerMaySee(f) { return !!f && f.uploadState === 'stored' && f.archived !== true && (f.from === 'customer' || f.shared === true); }
+
+/* ── the timeline ────────────────────────────────────────────────────────
+   Everything that happened on the account, newest first, capped. Each entry
+   { at, kind, title, detail, by, orderId? }. An entry with no time on its
+   record is left out rather than given one.
+
+   input: { orders: [{ id, ...order }], people: [user records], files:
+   [{ id, ...file }], activity: [{ id, ...activity }], contactNames: {id:name},
+   units: [plant_units records], sites: [{ id, ...site }], designs: [{ id,
+   ...project }], editorEvents: [omega_audit rows], editorLite: the account's
+   current grant } */
+function dollars(c) {
+  var n = Math.round(Number(c) || 0), neg = n < 0; n = Math.abs(n);
+  var whole = String(Math.floor(n / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ','), cents = String(n % 100);
+  return (neg ? '-$' : '$') + whole + '.' + (cents.length < 2 ? '0' + cents : cents);
+}
+function items(o) {
+  var list = (Array.isArray(o.items) ? o.items : []).filter(function (i) { return i && (i.sku || i.name); });
+  var head = list.slice(0, 3).map(function (i) { return (Number(i.qty) || 0) + ' × ' + String(i.name || i.sku).slice(0, 60); }).join(', ');
+  return head + (list.length > 3 ? ' and ' + (list.length - 3) + ' more' : '');
+}
+var STAGE = { deposit: 'Deposit', balance: 'Balance' };
+function sourceSays(s) {
+  s = String(s || '');
+  if (/customer/.test(s)) return 'from the customer' + (/bulk/.test(s) ? ' in a batch' : '');
+  if (/office/.test(s)) return 'entered by the office' + (/bulk/.test(s) ? ' in a batch' : '');
+  return s ? 'via ' + s.slice(0, 40) : '';
+}
+function timeline(input, cap) {
+  input = input || {}; cap = cap || TIMELINE_CAP;
+  var out = [];
+  function add(at, kind, title, detail, by, orderId) {
+    var t = millis(at); if (!t) return;
+    var e = { at: iso(at), kind: kind, title: String(title).slice(0, 200), detail: String(detail || '').slice(0, 300), by: by ? String(by).slice(0, 254) : null, _t: t };
+    if (orderId) e.orderId = orderId;
+    out.push(e);
+  }
+  (input.orders || []).forEach(function (o) {
+    if (!o) return;
+    var id = o.id, no = o.orderNo || id, po = (o.purchaseOrder || {}).number || '', pi = o.poIntake, l = o.logic || {}, c = o.customer || {};
+    if (pi) {
+      var num = pi.number || po || no, same = pi.convertedAt && pi.convertedAt === pi.createdAt;
+      add(pi.createdAt, 'po-received', same ? 'PO ' + num + ' entered as order ' + no : 'PO ' + num + ' received',
+        [sourceSays(pi.source), same ? items(o) : String(pi.notes || '').slice(0, 160), o.status === 'po_declined' ? 'declined' : ''].filter(Boolean).join(' · '), pi.submittedBy, id);
+      if (pi.convertedAt && !same) add(pi.convertedAt, 'order-placed', 'PO ' + num + ' became order ' + no, items(o), null, id);
+    } else {
+      add(o.createdAt, 'order-placed', 'Order ' + no + ' placed' + (po ? ' · PO ' + po : ''), items(o), c.email || (o.purchaseOrder || {}).submittedBy, id);
+    }
+    /* Priced, then accepted: two moments, unless the acceptance came with
+       the price (the office recording a signed quote), which is one. */
+    if (l.commercial || l.acceptedAt) {
+      var total = l.commercial && l.commercial.totalCents ? 'Total ' + dollars(l.commercial.totalCents) : '';
+      var together = l.acceptedAt && (!l.createdAt || Math.abs(millis(l.acceptedAt) - millis(l.createdAt)) < 60000);
+      if (together) add(l.acceptedAt, 'order-priced', 'Order ' + no + ' priced and accepted', total, null, id);
+      else {
+        add(l.createdAt, 'order-priced', 'Order ' + no + ' priced', total, null, id);
+        if (l.acceptedAt) add(l.acceptedAt, 'order-accepted', 'Order ' + no + ' accepted', total, null, id);
+      }
+    }
+    Object.keys(l.invoices || {}).forEach(function (stage) {
+      var inv = l.invoices[stage] || {}, label = STAGE[stage] || stage;
+      if (!inv.amountCents) return;
+      var issued = inv.issuedAt || (inv.id ? inv.date : null);
+      if (issued) add(issued, 'invoice-issued', label + ' invoice' + (inv.id ? ' ' + inv.id : '') + ' issued · order ' + no, dollars(inv.amountCents), inv.issuedBy, id);
+      var pays = Array.isArray(inv.payments) ? inv.payments : [], running = 0;
+      pays.forEach(function (p) {
+        running += Number(p && p.amountCents) || 0;
+        add(p && (p.date || p.at), 'invoice-paid', label + ' invoice' + (inv.id ? ' ' + inv.id : '') + (running >= inv.amountCents ? ' paid' : ' part paid') + ' · order ' + no,
+          dollars(p && p.amountCents) + (running >= inv.amountCents ? ' · paid in full' : ' · ' + dollars(inv.amountCents - running) + ' outstanding'), null, id);
+      });
+      /* QuickBooks reconciles a paid invoice without a dated payment list:
+         the time is when the reconciliation saw it paid. */
+      if (!pays.length && inv.satisfied === true) add(inv.checkedAt || issued, 'invoice-paid', label + ' invoice' + (inv.id ? ' ' + inv.id : '') + ' paid · order ' + no, dollars(inv.paidCents || inv.amountCents), null, id);
+    });
+    if (o.shipment && o.shipment.shippedAt) add(o.shipment.shippedAt, 'order-shipped', 'Order ' + no + ' shipped', [o.shipment.carrier, o.shipment.tracking ? 'tracking ' + o.shipment.tracking : ''].filter(Boolean).join(' · '), null, id);
+    (Array.isArray(o.requests) ? o.requests : []).forEach(function (r) {
+      if (!r) return;
+      add(r.at, 'request-asked', 'Asked about order ' + no + ' (' + (r.kind || 'request') + ')', String(r.message || '').slice(0, 200), r.by, id);
+      if (r.answeredAt) add(r.answeredAt, 'request-answered', 'Answered the ' + (r.kind || '') + ' request on order ' + no, String(r.answer || '').slice(0, 200), r.answeredBy, id);
+    });
+  });
+  (input.people || []).forEach(function (u) {
+    if (!u) return;
+    var who = u.name ? u.name + ' (' + u.email + ')' : u.email;
+    if (u.requestedAt) {
+      add(u.requestedAt, 'person-requested', who + ' asked to join the account', '', u.email);
+      if (u.approvedAt) add(u.approvedAt, 'person-approved', who + ' was approved', '', u.approvedBy);
+    } else add(u.createdAt, 'person-joined', who + (u.addedBy ? ' was added to the account' : ' joined the account'), u.role === 'owner' ? 'owner' : '', u.addedBy || u.email);
+  });
+  (input.files || []).forEach(function (f) {
+    if (!f || f.uploadState !== 'stored') return;
+    var theirs = f.from === 'customer';
+    add(f.uploadedAt, 'file-uploaded', (f.name || 'A document') + ' uploaded' + (theirs ? ' by the customer' : ''),
+      [f.category, f.note, !theirs && f.shared ? 'shared with the customer' : '', f.archived ? 'since archived' : ''].filter(Boolean).join(' · '), f.uploadedBy);
+  });
+  var names = input.contactNames || {};
+  (input.activity || []).forEach(function (a) {
+    if (!a) return;
+    var withWho = a.contactId && names[a.contactId] ? ' with ' + names[a.contactId] : '';
+    add(a.at, 'activity-' + a.type, (TYPE_LABEL[a.type] || 'Note') + withWho + ': ' + (a.subject || ''), String(a.body || '').slice(0, 200), a.by, a.orderId);
+    if (a.done && a.doneAt) add(a.doneAt, 'follow-up-done', 'Followed up: ' + (a.subject || TYPE_LABEL[a.type] || ''), '', a.doneBy, a.orderId);
+  });
+  custodyTimeline(input.units || [], add);
+  (input.sites || []).forEach(function (st) {
+    if (!st) return;
+    var theirs = st.source === 'customer';
+    add(st.createdAt, 'site-added', 'Site ' + (st.name || st.id) + ' added' + (theirs ? ' by the customer' : ''),
+      [[(st.address || {}).city, (st.address || {}).state].filter(Boolean).join(', '), st.endCustomer ? 'for ' + st.endCustomer : '', st.status === 'inactive' ? 'since closed' : ''].filter(Boolean).join(' · '), st.createdBy);
+  });
+  (input.designs || []).forEach(function (p) {
+    if (!p) return;
+    var nm = String(p.name || 'A design').slice(0, 120);
+    add(p.createdAt, 'design-started', 'Design ' + nm + ' started by the customer', '', null);
+    if (Number(p.revision) > 1 && millis(p.updatedAt) > millis(p.createdAt)) add(p.updatedAt, 'design-saved', 'Design ' + nm + ' saved by the customer', 'revision ' + Number(p.revision), null);
+  });
+  editorTimeline(input.editorEvents || [], input.editorLite, add);
+  out.sort(function (a, b) { return b._t - a._t; });
+  return out.slice(0, cap).map(function (e) { delete e._t; return e; });
+}
+
+/* The units the account bought, past the plant: grouped by what happened,
+   on which day, at which site, so fifty-six skids received together are one
+   line, not fifty-six. Read off the unit record's custody{} (the one status
+   machine in api/_lib/custody.js writes it); shipping is the ORDER's line. */
+function custodyTimeline(units, add) {
+  var groups = {}, order = [];
+  function put(kind, at, site, title, extra, serial, orderId) {
+    if (!at) return;
+    var key = kind + '|' + String(at).slice(0, 10) + '|' + (site || '') + '|' + (extra || '');
+    var g = groups[key];
+    if (!g) { g = groups[key] = { kind: kind, at: at, site: site, title: title, extra: extra, serials: [], orderIds: [] }; order.push(key); }
+    if (serial && g.serials.indexOf(serial) < 0) g.serials.push(serial);
+    if (orderId && g.orderIds.indexOf(orderId) < 0) g.orderIds.push(orderId);
+  }
+  units.forEach(function (u) {
+    if (!u || !u.custody) return;
+    var c = u.custody, s = u.serial || '', site = c.siteName || c.siteId || '', theirs = c.declaredBy === 'customer';
+    if (c.plannedAt && (c.plannedSiteName || c.plannedSiteId)) put('unit-destination', c.plannedAt, c.plannedSiteName || c.plannedSiteId, 'going to', c.plannedBy === 'customer' ? 'by the customer' : '', s, u.orderId);
+    if (c.receivedAt) put('unit-received', c.receivedAt, '', 'received', c.state === 'damaged' ? 'damaged' : '', s, u.orderId);
+    if (c.assignedAt && site) put('unit-assigned', c.assignedAt, site, 'assigned to', theirs ? 'by the customer' : '', s, u.orderId);
+    if (c.commissionedAt) put('unit-commissioned', c.commissionedAt, site, 'commissioned', theirs ? 'declared by the customer' : '', s, u.orderId);
+    if (theirs && c.confirmedAt && site) put('unit-confirmed', c.confirmedAt, site, 'confirmed at', 'by the office', s, u.orderId);
+  });
+  order.forEach(function (k) {
+    var g = groups[k], n = g.serials.length || 1, what = n === 1 ? 'Unit ' + (g.serials[0] || '') : n + ' units';
+    var title = what + ' ' + g.title + (g.site && /to$|at$/.test(g.title) ? ' ' + g.site : g.site ? ' at ' + g.site : '') + (g.extra ? ' ' + g.extra : '');
+    add(g.at, g.kind, title.replace(/\s+/g, ' '), n > 1 ? g.serials.slice(0, 5).join(', ') + (n > 5 ? ' and ' + (n - 5) + ' more' : '') : '', null, g.orderIds.length === 1 ? g.orderIds[0] : null);
+  });
+}
+/* The design tool on the account: every trial the supplier's owner granted
+   or revoked and every subscription change, from the audit (history), and
+   when there is none yet, the account's current grant. */
+function editorTimeline(events, current, add) {
+  var seen = 0;
+  events.forEach(function (e) {
+    if (!e) return;
+    var g = e.grant || {};
+    if (e.action === 'buyer-editor-trial') {
+      seen++;
+      add(e.at, 'design-trial', g.status === 'trial' ? 'Design tool trial granted' : 'Design tool trial ended by the supplier', g.status === 'trial' && g.expiresAt ? 'until ' + String(g.expiresAt).slice(0, 10) : '', e.by);
+    } else if (e.action === 'customer-editor-lite') {
+      seen++;
+      add(e.at, 'design-subscription', 'Design tool subscription ' + (g.status === 'active' ? 'active' : g.status === 'past_due' ? 'payment overdue' : 'ended'),
+        [g.plan === 'year' ? 'yearly' : g.plan === 'month' ? 'monthly' : '', g.expiresAt ? 'paid to ' + String(g.expiresAt).slice(0, 10) : ''].filter(Boolean).join(' · '), e.by);
+    }
+  });
+  if (seen || !current || typeof current !== 'object') return;
+  if (current.source === 'provider') add(current.updatedAt || current.grantedAt, 'design-subscription', 'Design tool subscription ' + (current.status === 'active' ? 'active' : current.status || 'recorded'), current.plan ? (current.plan === 'year' ? 'yearly' : 'monthly') : '', null);
+  else if (current.grantedAt) add(current.grantedAt, 'design-trial', current.status === 'trial' ? 'Design tool trial granted' : 'Design tool trial ended by the supplier', current.status === 'trial' && current.expiresAt ? 'until ' + String(current.expiresAt).slice(0, 10) : '', current.grantedBy);
+}
+
+function newId(prefix) { return prefix + crypto.randomBytes(9).toString('hex'); }
+
+module.exports = { TYPES: TYPES, TYPE_LABEL: TYPE_LABEL, CATEGORIES: CATEGORIES, MIME: MIME, MAX_BYTES: MAX_BYTES, TIMELINE_CAP: TIMELINE_CAP,
+  fail: fail, text: text, email: email, bool: bool, recordId: recordId, realDate: realDate, when: when, followUpDay: followUpDay, millis: millis, iso: iso,
+  contactInput: contactInput, activityInput: activityInput, category: category, fileInput: fileInput, safeName: safeName, disposition: disposition,
+  contactView: contactView, activityView: activityView, fileView: fileView, followUpView: followUpView, customerMaySee: customerMaySee, timeline: timeline, dollars: dollars, newId: newId,
+  isOpen: isOpen, byDue: byDue };
+
+  };
+  defs['api/_lib/logic-policy.js'] = function (module, exports, require) {
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+'use strict';
+var crypto = require('node:crypto');
+function fail(message) { var e = new Error(message); e.status = 400; throw e; }
+function id(value) {
+  var s = String(value || '');
+  if (!/^[a-zA-Z0-9_-]{1,120}$/.test(s)) fail('Invalid record identifier');
+  return s;
+}
+function cents(value) {
+  if (value === null || value === '' || typeof value === 'boolean') fail('Amount required');
+  var n = Number(value);
+  if (!isFinite(n) || n < 0 || n > 100000000) fail('Invalid amount');
+  return Math.round(n * 100);
+}
+function terms(defaults, overrides) {
+  var out = { depositPct: 30, dueDays: 0 };
+  [defaults, overrides].forEach(function (v) {
+    if (v && v.dueDays == null && v.netDays != null) out.dueDays = Number(v.netDays);
+    ['depositPct', 'dueDays'].forEach(function (k) {
+      if (v && v[k] != null) out[k] = Number(v[k]);
+    });
+  });
+  if (!isFinite(out.depositPct) || out.depositPct < 0 || out.depositPct > 100) fail('Deposit must be 0–100%');
+  if (!Number.isInteger(out.dueDays) || out.dueDays < 0 || out.dueDays > 365) fail('Due days must be 0–365');
+  return out;
+}
+function snapshot(total, defaults, overrides, fee) {
+  var base = cents(total), t = terms(defaults, overrides);
+  if (!base) fail('An approved customer price greater than zero is required');
+  var rate = fee && fee.percent != null ? Number(fee.percent) : 0.25;
+  var fixed = fee && fee.fixed != null ? cents(fee.fixed) : 0;
+  if (rate != null && (!isFinite(rate) || rate < 0 || rate > 100)) fail('Fee must be 0–100%');
+  var retained = Math.round(base * rate / 100) + fixed, amount = base + retained;
+  var down = Math.round(amount * t.depositPct / 100);
+  return { baseCents: base, totalCents: amount, depositCents: down, balanceCents: amount - down, currency: 'USD',
+    terms: t, feeCents: retained, feePolicy: { percent: rate, fixedCents: fixed, mode: 'added_to_price' } };
+}
+function key(value) { return crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 40); }
+function paymentLink(value) {
+  try { var u = new URL(value); return u.protocol === 'https:' && /(^|\.)intuit\.com$/.test(u.hostname) && !u.username && !u.password ? u.href : null; }
+  catch (e) { return null; }
+}
+function receipt(invoice, payments, expected, customerId) {
+  if (!invoice || cents(invoice.TotalAmt) !== expected || String((invoice.CustomerRef || {}).value) !== String(customerId) ||
+      ((invoice.CurrencyRef || {}).value || 'USD') !== 'USD') fail('QuickBooks invoice changed; reconciliation needs review');
+  var paid = 0, ids = [];
+  (payments || []).forEach(function (p) {
+    if (!p || !p.Id || ids.indexOf(String(p.Id)) >= 0) return;
+    if (String((p.CustomerRef || {}).value) !== String(customerId)) fail('Payment customer mismatch');
+    if (((p.CurrencyRef || {}).value || 'USD') !== 'USD') fail('Payment currency mismatch');
+    var applied = 0;
+    (p.Line || []).forEach(function (line) {
+      var links = line.LinkedTxn || [];
+      if (links.some(function (l) { return l.TxnType === 'Invoice' && String(l.TxnId) === String(invoice.Id); })) {
+        // Ambiguous split lines cannot prove this invoice's allocation.
+        if (links.length !== 1) fail('Ambiguous QuickBooks payment allocation');
+        applied += cents(line.Amount);
+      }
+    });
+    if (applied > cents(p.TotalAmt)) fail('Invalid QuickBooks payment allocation');
+    paid += applied; ids.push(String(p.Id));
+  });
+  paid = Math.min(expected, paid);
+  return { paidCents: paid, paymentIds: ids, satisfied: paid >= expected && cents(invoice.Balance) === 0,
+    balanceCents: cents(invoice.Balance), payUrl: paymentLink(invoice.InvoiceLink || invoice.invoiceLink) };
+}
+function quantities(items) {
+  var out = Object.create(null);
+  (items || []).forEach(function (it) {
+    var sku = String(it.sku || ''), n = Number(it.qty);
+    if (!/^[A-Za-z0-9._-]{1,100}$/.test(sku) || ['__proto__', 'constructor', 'prototype'].indexOf(sku) >= 0 || !Number.isInteger(n) || n <= 0 || n > 10000) fail('Each item needs a SKU and whole-unit quantity (1–10000)');
+    out[sku] = (out[sku] || 0) + n;
+  });
+  if (!Object.keys(out).length) fail('Add catalog items before accepting an order');
+  return out;
+}
+function ready(unit) { return unit && unit.at === 'ready' && !unit.hold && !unit.ncr && unit.test && unit.test.result === 'pass'; }
+function rootSerial(unit, units) {
+  var current = unit, seen = {};
+  while (current.parentSerial) {
+    if (seen[current.serial]) fail('Genealogy cycle');
+    seen[current.serial] = true;
+    current = units.filter(function (u) { return u.serial === current.parentSerial; })[0];
+    if (!current) fail('Missing component parent');
+  }
+  return current.serial;
+}
+module.exports = { id: id, cents: cents, terms: terms, snapshot: snapshot, key: key, paymentLink: paymentLink,
+  receipt: receipt, quantities: quantities, ready: ready, rootSerial: rootSerial };
+
+  };
+  defs['api/_lib/portal.js'] = function (module, exports, require) {
+/* ═══════════════════════════════════════════════════════════════════════════
+   api/_lib/portal.js — what a BUYER may see of their own order
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   PURE. No Firestore, no network, no clock it does not receive. Two jobs:
+
+     milestoneOf()  the order's eight internal statuses and the floor's ten
+                    stations, collapsed into the six words a customer reads
+     publicOrder()  the order document, rebuilt key by key for its customer
+
+   ── WHY THE PROJECTION IS AN ALLOWLIST AND NOT A DENYLIST ────────────────
+   An `orders` document carries `pricing`, `cost`, `margin`, `tenantPricing`,
+   `provenance` and a `history[]` stamped with staff emails. A denylist is a
+   list somebody has to remember to extend every time a field is added, and
+   the failure is silent and points at the customer. So nothing here forwards
+   a document: every key in the output is named in this file, which is the
+   same discipline api/embed-config.js is built on and the reason its header
+   warns never to replace it with a spread.
+
+   scripts/test-portal.js poisons an order with a cost basis and a margin and
+   then searches the serialised output for them. "The author remembered" is
+   not a control.
+
+   ── THREE FIELDS THAT LOOK SAFE AND ARE NOT ──────────────────────────────
+   Established by reading api/orders.js and api/embed-order.js end to end
+   rather than by assuming:
+
+     fulfilledBy   is literally the string 'clearsky'. The whole white-label
+                   deal is that the tenant sells and we fulfil invisibly —
+                   api/embed-order.js turns OFF the customer receipt email
+                   purely because a support@csebuilders.com From line would
+                   give it away. Echoing the field in JSON does the same
+                   thing more quietly.
+
+     customer.notes LOOKED like the customer's own words and was not.
+                   api/orders.js used to write it as
+                   `clean(customer.notes || b.note, 2000)` — so when a
+                   customer left it blank, the REP'S OWN note landed there. A
+                   rep typing "shopping us against Tesla, do not go below X"
+                   would have it handed back to that customer as "what you
+                   told us". The write is fixed (the rep's note now goes on
+                   the history thread), but every row created BEFORE the fix
+                   still carries the alias and nothing on the record says
+                   which ones. So the exclusion stays: an old order with a
+                   rep's deal commentary in this field is one order too many.
+
+     status        'quoted' means CLEARSKY has priced it to the TENANT. A
+                   customer seeing that before their own reseller has quoted
+                   them is a leak of an internal step, not just jargon.
+
+   There are also THREE writers to an order, not two — api/embed-layout.js
+   adds a siteStudy block — which is the argument for an allowlist rather
+   than a denylist: writer number four is safe by default.
+
+   ── WHY THE CUSTOMER DOES NOT SEE THE STATIONS ───────────────────────────
+   The scan data is right there and it is tempting to show "Rack assembly,
+   bench 3". The routing is the TENANT'S internal process, and whether their
+   customers see bench-level detail is a commercial decision that belongs to
+   them, not to us. So ten stations collapse into three public words and the
+   map is overridable per tenant.
+
+   What is actually valuable is not the label: it is that the milestone MOVES
+   ON ITS OWN as scans arrive, so nobody at Clean Cell is emailing
+   reassurance and no customer is phoning to ask.
+   ═══════════════════════════════════════════════════════════════════════════ */
+'use strict';
+
+/* The public ladder. `cancelled` is off the ladder on purpose — it is a
+   terminal state, not a step, and giving it an index would put it "after"
+   shipped in any progress bar drawn from this. */
+var LADDER = [
+  { key: 'received',  label: 'Received',          say: 'We have your order and are confirming it.' },
+  { key: 'confirmed', label: 'Confirmed',         say: 'Confirmed and scheduled into production.' },
+  { key: 'production',label: 'In production',     say: 'Your units are being built.' },
+  { key: 'testing',   label: 'Inspection & test', say: 'Built — now under inspection and end-of-line test.' },
+  { key: 'ready',     label: 'Ready to ship',     say: 'Packed and staged for collection.' },
+  { key: 'shipped',   label: 'Shipped',           say: 'On its way to you.' }
+];
+var CANCELLED = { key: 'cancelled', label: 'Cancelled', say: 'This order was cancelled.' };
+
+/* status → milestone, for the statuses that decide on their own. */
+var BY_STATUS = {
+  'new':           'received',
+  'confirmed':     'confirmed',
+  'quoted':        'confirmed',   /* commercial states the customer need not parse */
+  'accepted':      'confirmed',
+  'in_fulfilment': null,          /* the floor decides — see stationMilestone */
+  'shipped':       'shipped',
+  'complete':      'shipped',
+  'cancelled':     'cancelled'
+};
+
+/* station → milestone. The default BESS routing in api/_lib/plant.js. */
+var BY_STATION = {
+  kit: 'production', module: 'production', rack: 'production',
+  encl: 'production', elec: 'production',
+  bms: 'testing', eol: 'testing', qa: 'testing',
+  pack: 'ready', ready: 'ready'
+};
+
+function norm(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+
+/* Firestore writes createdAt with FieldValue.serverTimestamp(), so what comes
+   back is a TIMESTAMP OBJECT, not a string. String()-ing it yields
+   "[object Object]" — which is what a customer would have seen as their order
+   date, and what would have silently defeated the newest-first sort in
+   api/my-orders.js, because every row compares equal. Accepts a Timestamp, a
+   Date, epoch millis or an ISO string; returns an ISO string or null. */
+function when(v) {
+  if (v == null) return null;
+  try {
+    if (typeof v.toDate === 'function') return v.toDate().toISOString();
+    if (v instanceof Date) return isFinite(v.getTime()) ? v.toISOString() : null;
+    if (typeof v === 'number' && isFinite(v)) return new Date(v).toISOString();
+    if (typeof v === 'object' && typeof v._seconds === 'number') {
+      return new Date(v._seconds * 1000).toISOString();
+    }
+    var s = String(v).trim();
+    return s && s.indexOf('[object') !== 0 ? s.slice(0, 40) : null;
+  } catch (e) { return null; }
+}
+function clip(v, n) { return v == null ? null : String(v).slice(0, n || 400); }
+function numOrNull(v) { var n = Number(v); return isFinite(n) ? n : null; }
+
+/* A TENANT-BILLED invoice's pay link: the supplier's own payment page (its
+   bank's, its processor's), entered by its office with the invoice. It is
+   not a QuickBooks link, so logic-policy.paymentLink()'s intuit.com pin
+   cannot be the test; this one is, and it is the ONE check — the workflow
+   refuses a link that fails it before storing, and this projection runs it
+   again on the way out, so a record written some other way still cannot
+   put a javascript: or credentialed URL in front of a customer.
+   https only, no user/password, a named host (not an IP literal or a bare
+   name), and a length a real payment page never needs to exceed. */
+var PAY_LINK_MAX = 1000;
+function tenantPayLink(value) {
+  if (typeof value !== 'string' || !value || value.length > PAY_LINK_MAX || /[\s<>"'`]/.test(value)) return null;
+  try {
+    var u = new URL(value), host = u.hostname;
+    if (u.protocol !== 'https:' || u.username || u.password) return null;
+    if (host.indexOf('.') < 0 || /^[\d.]+$/.test(host) || host.charAt(0) === '[') return null;
+    return u.href;
+  } catch (e) { return null; }
+}
+
+function ladderIndex(key) {
+  for (var i = 0; i < LADDER.length; i++) if (LADDER[i].key === key) return i;
+  return -1;
+}
+function step(key) {
+  var i = ladderIndex(key);
+  return i < 0 ? null : LADDER[i];
+}
+
+/* The FURTHEST-BEHIND unit decides, not the furthest ahead. An order of six
+   units where five are packed and one is still at Electrical is "in
+   production": telling a customer their order is ready when a sixth of it is
+   on a bench is the kind of true-ish answer that costs a delivery date.
+
+   A UNIT ON HOLD IS NOT PROGRESSING. It may be sitting at QA with a failed
+   capacity test against it, and its station alone would report "Inspection &
+   test" as though the line were moving. A held unit is pinned to the last
+   milestone it genuinely completed, so the order cannot read further ahead
+   than its most stuck unit. The customer is not told WHY — an NCR number is
+   the tenant's business — only that it has not moved on. */
+function stationMilestone(units) {
+  if (!units || !units.length) return null;
+  var worst = null, worstRank = 99;
+  for (var i = 0; i < units.length; i++) {
+    var u = units[i] || {};
+    var at = norm(u.at);
+    /* hasOwnProperty, not a bare lookup: norm() lets 'constructor' and
+       '__proto__' through, and both would otherwise resolve to something
+       inherited from Object.prototype rather than to undefined. */
+    var m = Object.prototype.hasOwnProperty.call(BY_STATION, at) ? BY_STATION[at] : null;
+    if (!m) {
+      /* Not yet kitted, OR at a station this routing does not know. Both
+         pin the order to the floor. The unknown-station case used to
+         `continue` without touching worstRank, so that unit stopped
+         participating in the furthest-behind decision entirely — a tenant
+         who renames one station would have had orders reported by their
+         REMAINING units, which is exactly the over-reporting this function
+         exists to prevent.
+
+         Ranked AT 'production' rather than at 0: pinning it to zero made it
+         unbeatable, so a unit held back at Kitting could never be recognised
+         as the furthest behind. */
+      var pr = ladderIndex('production');
+      if (pr < worstRank) { worstRank = pr; worst = 'production'; }
+      continue;
+    }
+    var r = ladderIndex(m);
+    /* Held: do not credit the station it is stuck AT. */
+    if (u.hold) r = Math.max(0, r - 1);
+    if (r < worstRank) { worstRank = r; worst = LADDER[r] ? LADDER[r].key : m; }
+  }
+  return worst;
+}
+
+/* unit, order, tenant map → the one word the customer reads.
+   `map` lets a tenant rename or re-group the public ladder without a deploy;
+   an unknown key in it is ignored rather than obeyed, because a typo in a
+   config document should not invent a milestone. */
+function milestoneOf(order, units, map) {
+  var status = norm(order && order.status) || 'new';
+  var key = Object.prototype.hasOwnProperty.call(BY_STATUS, status) ? BY_STATUS[status] : 'received';
+
+  if (key === 'cancelled') {
+    return { key: CANCELLED.key, label: CANCELLED.label, say: CANCELLED.say, index: null, of: LADDER.length };
+  }
+  if (key === null) {
+    key = stationMilestone(units) || 'production';
+  }
+  // Some items may be allocated ready stock while other items are not yet
+  // serialized. Those ready units cannot speak for an incomplete order.
+  if (order && order.logic && key === 'ready' && !order.logic.readyAt) key = 'production';
+  if (order && order.logic && (order.cancelRequested || order.logic.paymentException) && key !== 'shipped') key = 'confirmed';
+
+  var s = step(key) || LADDER[0];
+  var label = s.label, say = s.say;
+  if (map && typeof map === 'object' && map[s.key]) {
+    var o = map[s.key];
+    if (typeof o === 'string') label = o;
+    else { if (o.label) label = String(o.label); if (o.say) say = String(o.say); }
+  }
+  return { key: s.key, label: label, say: say, index: ladderIndex(s.key), of: LADDER.length };
+}
+
+/* ── the projection ──────────────────────────────────────────────────────
+   Every key named. `tenantPricing` is the TENANT's price to their customer
+   and is the only money that may appear here — and only when the tenant has
+   published it. ClearSky's `pricing`, `cost` and `margin` never do. */
+function publicOrder(order, opts) {
+  var o = order || {};
+  var op = opts || {};
+  var ms = milestoneOf(o, op.units, op.milestoneMap);
+
+  var items = [];
+  var src = Array.isArray(o.items) ? o.items : [];
+  for (var i = 0; i < src.length && i < 100; i++) {
+    var it = src[i] || {};
+    items.push({
+      sku: clip(it.sku, 80),
+      name: clip(it.name, 160),
+      qty: numOrNull(it.qty),
+      kw: numOrNull(it.kw),
+      kwh: numOrNull(it.kwh)
+    });
+  }
+
+  var docs = [];
+  var ds = Array.isArray(o.documents) ? o.documents : [];
+  for (var j = 0; j < ds.length && j < 50; j++) {
+    var d = ds[j] || {};
+    /* Only documents the tenant marked customer-facing. An internal FAT
+       report or a supplier invoice attached to the same order is not the
+       customer's to read because it shares a parent. */
+    if (d.audience !== 'customer') continue;
+    docs.push({ kind: clip(d.kind, 60), name: clip(d.name, 160),
+                url: clip(d.url, 600), at: clip(d.at, 40) });
+  }
+
+  var out = {
+    /* orderNo is the server-generated customer-facing reference —
+       <ORGSLUG>-<YYYYMMDD>-<doc-id tail>. The tail is deliberately not a
+       sequence, so it does not leak how many orders the tenant has taken.
+       The raw document id is NOT echoed: it is a handle into a collection
+       the customer has no read path to. */
+    orderNo: clip(o.orderNo, 120),
+    /* The brand they think they bought from — the white-label seller's own
+       name, never orgId, which is an internal partition key. */
+    soldBy: clip(o.orgName, 160),
+    placedAt: when(o.createdAt),
+    milestone: ms,
+    /* The internal status is NOT echoed. 'quoted' and 'accepted' are
+       commercial states and 'in_fulfilment' tells a customer nothing. */
+    items: items,
+    documents: docs,
+    /* The delivery address, from the customer's own submission. Address
+       subfields only — customer.notes is excluded, see the header. */
+    site: (function () {
+      var a = (o.customer && o.customer.address) || o.site || null;
+      if (!a) return null;
+      return { line1: clip(a.line1, 200), city: clip(a.city, 100),
+               state: clip(a.state, 40), zip: clip(a.zip, 20) };
+    })(),
+    /* Their own contact details, so they can see what we will deliver
+       against and tell the tenant it is wrong. Name, company, email, phone —
+       and deliberately NOT notes. */
+    contact: o.customer ? {
+      name: clip(o.customer.name, 120), company: clip(o.customer.company, 160),
+      email: clip(o.customer.email, 160), phone: clip(o.customer.phone, 40)
+    } : null,
+    system: o.system ? {
+      kw: numOrNull(o.system.kw), kwh: numOrNull(o.system.kwh),
+      durationH: numOrNull(o.system.durationH)
+    } : null,
+    promisedShipAt: when(o.promisedShipAt),
+    cancelRequested: !!o.cancelRequested
+  };
+
+  /* The tenant's own price to their own customer, only once published. */
+  if (op.showPrice && o.tenantPricing && o.tenantPricing.publishedToCustomer === true) {
+    out.price = {
+      total: numOrNull(o.tenantPricing.total),
+      currency: clip(o.tenantPricing.currency || 'USD', 8)
+    };
+  }
+  if (o.logic && o.logic.commercial && o.tenantPricing && o.tenantPricing.publishedToCustomer === true) {
+    var policy = require('api/_lib/logic-policy.js'), commercial = o.logic.commercial, byTenant = o.logic.accounting === 'tenant';
+    out.checkout = { currency: 'USD', base: commercial.baseCents / 100, processingFee: commercial.feeCents / 100,
+      /* who bills: 'tenant' = the supplier invoices and collects on its own
+         paper (no ClearSky fee, no ClearSky collection to mention) */
+      accounting: o.logic.accounting === 'tenant' ? 'tenant' : 'quickbooks',
+      total: commercial.totalCents / 100, depositPercent: commercial.terms.depositPct,
+      invoices: Object.keys(o.logic.invoices || {}).map(function (stage) {
+        var invoice = o.logic.invoices[stage];
+        return { stage: stage, amount: invoice.amountCents / 100, recorded: (invoice.paidCents || 0) / 100,
+          /* QuickBooks-billed: QuickBooks' own invoice link (intuit.com only).
+             Tenant-billed: the supplier's pay link, once the invoice is issued. */
+          status: invoice.status, payUrl: o.cancelRequested || o.logic.paymentException ? null
+            : byTenant ? (invoice.id ? tenantPayLink(invoice.payUrl) : null) : policy.paymentLink(invoice.payUrl), dueDays: commercial.terms.dueDays,
+          /* tenant-billed: the OEM's own invoice number and date, so the customer can match it to what they were sent */
+          number: o.logic.accounting === 'tenant' && invoice.id ? clip(invoice.id, 80) : null, issuedAt: o.logic.accounting === 'tenant' && invoice.issuedAt ? clip(invoice.issuedAt, 10) : null };
+      }) };
+  }
+  if (o.shipment) out.shipment = { carrier: clip(o.shipment.carrier, 80), tracking: clip(o.shipment.tracking, 120), shippedAt: when(o.shipment.shippedAt) };
+
+  /* The customer's own requests on this order and the tenant's answers —
+     the one thing the customer writes onto an order after placing it
+     (api/my-orders.js POST). The office's internal notes are not here. */
+  out.requests = (Array.isArray(o.requests) ? o.requests : []).slice(-20).map(function (r) {
+    r = r || {};
+    /* `by`: which person on the ACCOUNT asked — everyone on it now sees the
+       account's orders, so an unsigned request would be anybody's. Only a
+       customer writes a request, so this is always one of their own. */
+    return { id: clip(r.id, 40), kind: clip(r.kind, 20), message: clip(r.message, 2000), status: clip(r.status, 20) || 'open', by: clip(r.by, 160),
+      at: when(r.at), answer: r.answer ? clip(r.answer, 2000) : null, answeredAt: when(r.answeredAt),
+      address: r.address ? { line1: clip(r.address.line1, 200), city: clip(r.address.city, 100), state: clip(r.address.state, 40), zip: clip(r.address.zip, 20) } : null };
+  });
+
+  /* Warranty per line, DERIVED: the product's warranty years from the day
+     the order shipped. There is no separate warranty record to drift from
+     the catalog or the shipment; if either changes, this changes with it. */
+  var shippedIso = o.shipment && o.shipment.shippedAt ? when(o.shipment.shippedAt) : null;
+  if (op.catalogBy && shippedIso && !isNaN(Date.parse(shippedIso))) {
+    out.items.forEach(function (it) {
+      var p = it.sku && Object.prototype.hasOwnProperty.call(op.catalogBy, it.sku) ? op.catalogBy[it.sku] : null;
+      var yrs = p ? Number(p.warrantyYears) : 0;
+      if (!(yrs > 0)) return;
+      var d = new Date(shippedIso); d.setUTCFullYear(d.getUTCFullYear() + Math.floor(yrs)); d.setUTCMonth(d.getUTCMonth() + Math.round((yrs % 1) * 12));
+      it.warranty = { years: yrs, from: String(shippedIso).slice(0, 10), until: d.toISOString().slice(0, 10) };
+    });
+  }
+  /* Their own purchase order number, and where each part of the order is
+     going and how it is travelling — the columns any industrial supplier's
+     account page shows. Destination names, cities and carrier references
+     only; serials, evidence text and staff identities stay internal. */
+  if (o.purchaseOrder && o.purchaseOrder.number) out.poNumber = clip(o.purchaseOrder.number, 80);
+  var dl = o.delivery || {};
+  if (Array.isArray(dl.destinations) && dl.destinations.length) {
+    out.destinations = dl.destinations.slice(0, 50).map(function (d) {
+      d = d || {}; var a = d.address || {};
+      return { id: clip(d.id, 40), name: clip(a.name, 160), city: clip(a.city, 100), state: clip(a.state, 40),
+        items: (Array.isArray(d.items) ? d.items : []).slice(0, 50).map(function (i) { return { sku: clip(i && i.sku, 80), qty: numOrNull(i && i.qty) }; }) };
+    });
+  }
+  if (Array.isArray(dl.legs) && dl.legs.length) {
+    out.loads = dl.legs.slice(0, 50).map(function (l) {
+      l = l || {};
+      return { id: clip(l.id, 120), destinationId: clip(l.destinationId, 40), carrier: clip(l.carrier, 120), tracking: clip(l.tracking, 160),
+        status: clip(l.status, 40), units: Array.isArray(l.serials) ? l.serials.length : 0,
+        pickedUpAt: when(l.pickedUpAt), deliveredAt: when(l.deliveredAt),
+        lastConfirmed: l.lastConfirmedLocation && l.lastConfirmedLocation.label ? { label: clip(l.lastConfirmedLocation.label, 200), at: when(l.lastConfirmedLocation.at) } : null };
+    });
+  }
+  return out;
+}
+
+module.exports = {
+  LADDER: LADDER,
+  when: when,
+  CANCELLED: CANCELLED,
+  BY_STATUS: BY_STATUS,
+  BY_STATION: BY_STATION,
+  ladderIndex: ladderIndex,
+  stationMilestone: stationMilestone,
+  milestoneOf: milestoneOf,
+  publicOrder: publicOrder,
+  tenantPayLink: tenantPayLink
+};
+
+  };
   defs['scripts/_lib/logic-fixtures.js'] = function (module, exports, require) {
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
@@ -2288,26 +3522,53 @@ module.exports.iconPath = iconPath;
 
    A catalog with bills of materials, suppliers and prices, a stock count,
    one work order with six cabinets at real stations with real timings,
-   three orders (one in build with a customer request, one awaiting its
-   deposit, one to price), a company account with an uploaded PO under
-   review, a customer account with a site plan on trial.
+   three orders (one in build with a customer request; one billed on the
+   OEM's own paper and released on a payment that never arrived — the
+   intake template's placeholder bank reference, the Amperage situation the
+   accounting page exists to correct; one to price), a company account with
+   an uploaded PO under review, a customer account with a site plan on
+   trial.
+
+   The workspace bills on its own paper (fulfillment/config.accounting
+   'tenant'): the order in build has its deposit paid and its balance
+   invoice open with the supplier's pay link; the accepted order's deposit
+   is still to issue. The CRM (docs/OMEGA-LOGIC-ECOSYSTEM.md) has contacts,
+   logged activity with a follow-up that is overdue, a later one and an undated
+   task on the other account, documents the office shared and one it did
+   not, and one the customer uploaded from their app. The customer's design
+   tool is on a trial from the supplier, with monthly and yearly prices to
+   subscribe at.
 
    views(state) answers every endpoint the office, plant and customer apps
    read, shaped like api/*.js answers them and computed by the same pure
    libraries (materials, plant-board, plant-stats, plant-work, office-stage,
-   logic-catalog) — so a sandbox shows what the product computes, not a
-   drawing of it. post(state, …) applies the handful of writes a trial
-   touches and returns what the endpoint would. State is plain JSON, so the
-   sandbox keeps it in localStorage and the render check keeps it in memory.
+   receivables, logic-catalog, custody, crm — its projections and its
+   TIMELINE — and the portal's pay-link check) — so a sandbox shows what the
+   product computes, not a drawing of it. post(state, …) applies the writes a
+   trial touches and returns what the endpoint would. State is plain JSON, so
+   the sandbox keeps it in localStorage and the render check keeps it in
+   memory.
 
-   Pure: no admin SDK, no network, no clock except Date.now() for dwell.
-   scripts/build-app-sandbox.js bundles this file and the libraries it
-   requires into app-sandbox/sandbox.js. */
+   What the sample cannot do the product's way it says so here: a document's
+   type is judged by its NAME (api/_lib/crm.js fileInput() reads the bytes
+   with Node's Buffer), its bytes are not kept (a download is a one-page
+   sample PDF or a line of text), and checkout and the billing page answer
+   '#subscribed' / '#manage' — the render check and the sandbox shim turn
+   those into the trip Stripe would make. Nothing reaches Stripe.
+
+   Pure: no admin SDK, no network, no clock except Date.now() for dwell and
+   for dates relative to today (a follow-up that is due, an invoice issued
+   last week). scripts/build-app-sandbox.js bundles this file and the
+   libraries it requires into app-sandbox/sandbox.js. */
 'use strict';
 var M = require('api/_lib/materials.js'), C = require('api/_lib/logic-catalog.js'), Stats = require('api/_lib/plant-stats.js');
 var Board = require('api/_lib/plant-board.js'), Ops = require('api/_lib/plant-ops.js'), Attention = require('api/_lib/plant-attention.js');
 var W = require('api/_lib/plant-work.js'), Plant = require('api/_lib/plant.js'), S = require('api/_lib/office-stage.js');
 var Manifest = require('api/app-manifest.js'), Cu = require('api/_lib/custody.js');
+/* the receivables rules (pure): the accounting ledger and the three office
+   corrections below apply them; nothing here re-derives money */
+var R = require('api/_lib/receivables.js');
+var CRM = require('api/_lib/crm.js'), Portal = require('api/_lib/portal.js'), Policy = require('api/_lib/logic-policy.js');
 
 var ORG = 'cleancell.us';
 var CATALOG = [
@@ -2343,10 +3604,55 @@ function fullRouting() { return Plant.DEFAULT_ROUTING.map(function (s) { return 
 function iso(d) { return new Date(d).toISOString(); }
 function hex(n) { var s = ''; for (var i = 0; i < n; i++) s += Math.floor(Math.random() * 16).toString(16); return s; }
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
+var DAY_MS = 86400000;
+/* The design tool's prices for this supplier's customers
+   (billing/current.customerEditorLite) and the supplier's Editor Lite. */
+var EDITOR_LITE = { enabled: true, modules: ['bess'] }, CUSTOMER_PRICES = { monthlyPriceCents: 79900, yearlyPriceCents: 799000 };
+/* api/_lib/buyer-design.js entitlement(), for the account's grant: a paid
+   subscription, or a trial the supplier's owner granted, unexpired. */
+function entitlement(grant) {
+  grant = grant || {}; var expiry = Date.parse(grant.expiresAt || '');
+  var active = EDITOR_LITE.enabled && ['active', 'trial'].indexOf(grant.status) >= 0 && isFinite(expiry) && expiry > Date.now() && (grant.source === 'provider' || (grant.status === 'trial' && grant.source === 'owner-trial'));
+  return { active: active, status: active ? grant.status : 'inactive', expiresAt: grant.expiresAt || null, modules: EDITOR_LITE.modules.slice() };
+}
+/* A document as the sample can judge it without Node: base64 that fits in
+   2 MB and a name of an accepted kind. The product decides by the BYTES
+   (api/_lib/crm.js fileInput); the error words are the same. */
+var DOC_EXT = { pdf: 'pdf', png: 'png', jpg: 'jpg', jpeg: 'jpg', xlsx: 'xlsx', docx: 'docx', csv: 'csv', txt: 'txt' };
+function fileLike(f) {
+  if (!f || typeof f !== 'object') throw CRM.fail(400, 'Choose a file to upload');
+  var name = CRM.text(f.name, 200, 'File name', { required: true }), b64 = typeof f.base64 === 'string' ? f.base64.replace(/^data:[^,]{0,120},/, '') : '';
+  if (!b64 || b64.length > 2800000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) throw CRM.fail(400, 'The file must be PDF, PNG, JPEG, XLSX, DOCX, CSV or TXT, up to 2 MB');
+  var size = Math.floor(b64.length * 3 / 4) - (/==$/.test(b64) ? 2 : /=$/.test(b64) ? 1 : 0);
+  if (!size) throw CRM.fail(400, 'The file is empty');
+  if (size > CRM.MAX_BYTES) throw CRM.fail(400, 'The file is larger than 2 MB');
+  var m = /\.([A-Za-z0-9]{1,8})$/.exec(name), kind = m ? DOC_EXT[m[1].toLowerCase()] : null;
+  if (!kind) throw CRM.fail(400, /\.zip$/i.test(name) ? 'Only Excel (.xlsx) and Word (.docx) files are accepted from zip-based formats' : 'Only PDF, PNG, JPEG, XLSX, DOCX, CSV or TXT documents are accepted');
+  return { name: CRM.safeName(name, kind), type: CRM.MIME[kind], size: size };
+}
+/* What a download hands over in the sample: a one-page PDF naming the
+   document (so Open shows a page), or a line of text. The product serves
+   the stored bytes; the sample keeps none. ASCII only, so the byte offsets
+   in the cross-reference table are the string offsets. */
+function sampleBytes(f) {
+  var name = String(f.name || 'document').replace(/[^\x20-\x7e]/g, '?');
+  if (f.type !== 'application/pdf') return 'Sandbox sample of ' + name + '. Nothing here is real.\n';
+  var line = function (s) { return '(' + s.replace(/[()\\]/g, ' ').slice(0, 90) + ')'; };
+  var stream = 'BT /F1 18 Tf 72 720 Td ' + line(name) + ' Tj 0 -30 Td /F1 12 Tf ' + line('Sandbox sample document. Nothing here is real.') + ' Tj ET';
+  var objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    '<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  var out = '%PDF-1.4\n', offs = [];
+  objs.forEach(function (o, i) { offs.push(out.length); out += (i + 1) + ' 0 obj\n' + o + '\nendobj\n'; });
+  var xref = out.length;
+  return out + 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n' + offs.map(function (n) { return ('0000000000' + n).slice(-10) + ' 00000 n \n'; }).join('')
+    + 'trailer\n<< /Size ' + (objs.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n';
+}
 
 /* ── the sample, as plain JSON ────────────────────────────────────────── */
 function initialState() {
   var base = Date.now(); function T(h) { return new Date(base - (200 - h) * 3600000).toISOString(); }
+  /* days before now (negative: after), as an ISO time and as a day */
+  function ago(d) { return new Date(base - d * DAY_MS).toISOString(); } function dayAgo(d) { return ago(d).slice(0, 10); }
   return {
     org: ORG, brand: brand, flow: flow, wo: wo,
     units: [
@@ -2358,22 +3664,71 @@ function initialState() {
       { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, at: '', done: {}, inventoryStatus: 'building', unitType: 'cabinet' }
     ],
     orders: [
-      { id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', createdAt: '2026-09-01T10:00:00Z', customerId: 'company_riverside', customer: { name: 'Dana Ops', company: 'Riverside Cold Chain', email: 'ops@riverside.example' }, items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], worksOrderId: 'wo_1', logic: { commercial: { baseCents: 50000000, feeCents: 125000, totalCents: 50125000, depositCents: 15037500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 15037500, paidCents: 15037500, status: 'paid' }, balance: { amountCents: 35087500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, answer: null }] },
-      { id: 'o2', orderNo: 'CC-26-4420', status: 'accepted', createdAt: '2026-09-18T10:00:00Z', customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }], logic: { commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 9022500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-18', requirements: [], allocatedSerials: [] } },
+      /* billed on the supplier's own paper: no ClearSky fee on the total, the
+         deposit paid against its invoice, the balance invoice issued last
+         week with the supplier's pay link, due on the account's 30 days */
+      { id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', createdAt: '2026-09-01T10:00:00Z', poNumber: 'RCC-2200', customerId: 'company_riverside', customer: { name: 'Dana Ops', company: 'Riverside Cold Chain', email: 'ops@riverside.example' }, items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], worksOrderId: 'wo_1',
+        logic: { accounting: 'tenant', commercial: { baseCents: 50125000, feeCents: 0, totalCents: 50125000, depositCents: 15037500, terms: { depositPct: 30, dueDays: 30 } },
+          invoices: { deposit: { id: 'CC-INV-1031', issuedAt: '2026-09-01', issuedBy: 'sam@cleancell.us', amountCents: 15037500, paidCents: 15037500, status: 'paid', satisfied: true, balanceCents: 0, payments: [{ amountCents: 15037500, date: '2026-09-02', bankReference: 'WIRE-88213', by: 'sam@cleancell.us', at: '2026-09-02T16:00:00Z' }] },
+            balance: { id: 'CC-INV-1058', issuedAt: dayAgo(9), issuedBy: 'sam@cleancell.us', amountCents: 35087500, paidCents: 0, status: 'awaiting_payment', payUrl: 'https://pay.example.com/cleancell/CC-INV-1058', payUrlBy: 'sam@cleancell.us', payUrlAt: ago(9) } },
+          acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, answer: null }] },
+      /* billed on the OEM's own paper and released on a payment that never
+         arrived: the intake template's placeholder reference was recorded as
+         the deposit (what happened to the Amperage order in production) */
+      { id: 'o2', orderNo: 'CC-26-4420', status: 'in_fulfilment', createdAt: '2026-08-18T10:00:00Z', purchaseOrder: { number: 'SS-PO-5521' }, customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }],
+        logic: { accounting: 'tenant', commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } },
+          invoices: { deposit: { amountCents: 9022500, id: 'SS-1042', issuedAt: '2026-08-20', date: '2026-08-20', status: 'paid', paidCents: 9022500, balanceCents: 0, satisfied: true,
+            payUrl: 'https://invoice.stripe.com/i/acct_1DEMOCLEANCELL/sandbox-ss-1042',
+            payments: [{ amountCents: 9022500, date: '2026-08-22', bankReference: 'REPLACE WITH THE BANK REFERENCE, or delete this payment if not yet received', by: 'intake@cleancell.us', at: '2026-08-22T15:00:00Z' }] } },
+          acceptedAt: '2026-08-19', releasedAt: '2026-08-22', requirements: [], allocatedSerials: [] } },
+      /* accepted; the deposit invoice is the supplier's to issue */
+      { id: 'o4', orderNo: 'CC-26-4422', status: 'accepted', createdAt: '2026-09-18T10:00:00Z', customer: { name: 'Mesa Microgrid', email: 'buy@mesa.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }], logic: { accounting: 'tenant', commercial: { baseCents: 30075000, feeCents: 0, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 9022500, paidCents: 0, status: 'to_issue' } }, acceptedAt: '2026-09-18', requirements: [], allocatedSerials: [] } },
       { id: 'o3', orderNo: 'CC-26-4421', status: 'new', createdAt: '2026-09-20T10:00:00Z', customerId: 'company_incharge', customer: { name: 'Purchasing', company: 'InCharge Energy', email: 'po@incharge.example' }, items: [{ sku: 'CC-C215', name: '215 kWh', qty: 20 }], logic: null }
     ],
     customers: [
       { id: 'company_riverside', company: 'Riverside Cold Chain', accountType: 'company', domain: 'riverside.example', status: 'active', terms: { depositPct: 40, dueDays: 0 }, usersLimited: false, users: [
-        { email: 'ops@riverside.example', name: 'Dana Ops', role: 'owner', status: 'active', activated: true },
-        { email: 'finance@riverside.example', name: 'Riley Finance', role: 'user', status: 'active', activated: false },
-        { email: 'new.hire@riverside.example', name: '', role: 'user', status: 'pending', activated: true, requestedAt: '2026-09-23T15:00:00Z' }] },
+        { email: 'ops@riverside.example', name: 'Dana Ops', role: 'owner', status: 'active', activated: true, createdAt: '2026-08-01T15:00:00Z' },
+        { email: 'finance@riverside.example', name: 'Riley Finance', role: 'user', status: 'active', activated: false, createdAt: '2026-08-05T15:00:00Z', addedBy: 'ops@riverside.example' },
+        { email: 'new.hire@riverside.example', name: '', role: 'user', status: 'pending', activated: true, requestedAt: '2026-09-23T15:00:00Z' }],
+        /* the design tool: a trial the supplier's owner granted a week ago */
+        editorLite: { status: 'trial', source: 'owner-trial', expiresAt: ago(-7), grantedBy: 'sam@cleancell.us', grantedAt: ago(7) } },
       { id: 'company_incharge', company: 'InCharge Energy', accountType: 'company', domain: '', status: 'active', terms: { depositPct: 30, dueDays: 0 }, users: [], usersLimited: false }
     ],
+    /* the CRM (api/crm.js): per account, the contacts who never log in,
+       what was logged, and the documents both ways. A call with a
+       follow-up that fell due two days ago (overdue in any time zone), a
+       meeting to follow up in ten days, a note, an email already followed
+       up; an undated task on the other account (owed until done). Two
+       office documents (one shared, one not) and a site survey the customer
+       uploaded from their app. */
+    crm: {
+      company_riverside: {
+        contacts: [
+          { id: 'ct_dana', orgId: ORG, customerId: 'company_riverside', name: 'Dana Ops', title: 'Operations lead', email: 'ops@riverside.example', phone: '+1 661 555 0142', notes: 'Text before a delivery; the yard gate closes at 4 pm.', primary: true, archived: false, createdAt: '2026-08-01T16:00:00Z', createdBy: 'sam@cleancell.us' },
+          { id: 'ct_pat', orgId: ORG, customerId: 'company_riverside', name: 'Pat Nguyen', title: 'Accounts payable', email: 'ap@riverside.example', phone: '', notes: 'Send every invoice here as well as to Dana.', primary: false, archived: false, createdAt: '2026-08-02T16:00:00Z', createdBy: 'sam@cleancell.us' }],
+        activity: [
+          { id: 'ac_call', orgId: ORG, customerId: 'company_riverside', type: 'call', subject: 'Bakersfield delivery window', body: 'Dana wants the load on site before the 15th. Checking the ship date with the plant.', at: ago(3), followUpAt: dayAgo(2), contactId: 'ct_dana', contactName: 'Dana Ops', orderId: 'o1', orderNo: 'CC-26-4419', by: 'sam@cleancell.us', loggedAt: ago(3), done: false, doneAt: null, doneBy: null },
+          { id: 'ac_meet', orgId: ORG, customerId: 'company_riverside', type: 'meeting', subject: 'Second site for 2027', body: 'Fresno cold store, about 1 MWh. Wants a portfolio sizing in the new year.', at: ago(4), followUpAt: dayAgo(-10), contactId: 'ct_dana', contactName: 'Dana Ops', orderId: null, orderNo: null, by: 'sam@cleancell.us', loggedAt: ago(4), done: false, doneAt: null, doneBy: null },
+          { id: 'ac_note', orgId: ORG, customerId: 'company_riverside', type: 'note', subject: 'Invoices go to AP too', body: 'Pat in accounts payable wants a copy of every invoice.', at: ago(20), followUpAt: null, contactId: 'ct_pat', contactName: 'Pat Nguyen', orderId: null, orderNo: null, by: 'sam@cleancell.us', loggedAt: ago(20), done: false, doneAt: null, doneBy: null },
+          { id: 'ac_mail', orgId: ORG, customerId: 'company_riverside', type: 'email', subject: 'Countersigned MSA sent', body: '', at: '2026-08-02T16:30:00Z', followUpAt: '2026-08-09', contactId: 'ct_dana', contactName: 'Dana Ops', orderId: null, orderNo: null, by: 'sam@cleancell.us', loggedAt: '2026-08-02T16:30:00Z', done: true, doneAt: '2026-08-08T15:00:00Z', doneBy: 'sam@cleancell.us' }],
+        files: [
+          { id: 'f_msa', orgId: ORG, customerId: 'company_riverside', name: 'Riverside-MSA-2026.pdf', type: 'application/pdf', size: 184320, sha256: null, category: 'contract', note: 'Countersigned', shared: true, from: 'office', uploadedBy: 'sam@cleancell.us', uploadedAt: '2026-08-02T16:00:00Z', archived: false, uploadState: 'stored' },
+          { id: 'f_sheet', orgId: ORG, customerId: 'company_riverside', name: 'Riverside-pricing-worksheet.xlsx', type: CRM.MIME.xlsx, size: 48213, sha256: null, category: 'other', note: 'Office only: the margin sheet', shared: false, from: 'office', uploadedBy: 'sam@cleancell.us', uploadedAt: '2026-08-20T16:00:00Z', archived: false, uploadState: 'stored' },
+          { id: 'f_survey', orgId: ORG, customerId: 'company_riverside', name: 'Bakersfield-site-survey.pdf', type: 'application/pdf', size: 912384, sha256: null, category: 'site-survey', note: 'Pad and MSB photos', shared: true, from: 'customer', uploadedBy: 'ops@riverside.example', uploadedAt: ago(3), archived: false, uploadState: 'stored' }] },
+      company_incharge: {
+        contacts: [{ id: 'ct_morgan', orgId: ORG, customerId: 'company_incharge', name: 'Morgan Lee', title: 'Procurement', email: 'po@incharge.example', phone: '', notes: '', primary: true, archived: false, createdAt: '2026-09-20T12:00:00Z', createdBy: 'sam@cleancell.us' }],
+        activity: [{ id: 'ac_task', orgId: ORG, customerId: 'company_incharge', type: 'task', subject: 'Ask InCharge for the site survey', body: 'Needed before the 20-cabinet order can be priced.', at: ago(1), followUpAt: null, contactId: 'ct_morgan', contactName: 'Morgan Lee', orderId: 'o3', orderNo: 'CC-26-4421', by: 'sam@cleancell.us', loggedAt: ago(1), done: false, doneAt: null, doneBy: null }],
+        files: [] }
+    },
+    /* omega_audit rows the CRM timeline reads (the design tool's history) */
+    audit: [{ action: 'buyer-editor-trial', orgId: ORG, customerId: 'company_riverside', by: 'sam@cleancell.us', at: ago(7), grant: { status: 'trial', source: 'owner-trial', expiresAt: ago(-7) } }],
+    /* the customer's uploads today, per account (crm_upload_usage) */
+    uploads: {},
     intake: [{ id: 'po_x', orderNo: 'PO-IN-X', customerId: 'company_riverside', poNumber: 'RCC-2211', status: 'po_review', source: 'customer', notes: 'see attached', createdAt: '2026-09-19T10:00:00Z', reviewNote: '', convertedAt: null, rep: null, files: [] }],
     companyOrders: [{ id: 'o1', customerId: 'company_riverside', orderNo: 'CC-26-4419', status: 'in_fulfilment', poNumber: 'RCC-2200', items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], destinations: [{ id: 'd1', address: { name: 'Riverside yard', city: 'Bakersfield', state: 'CA' }, items: [{ sku: 'CC-C215', qty: 5 }] }], revision: 1, legs: [{ id: 'LOAD-1', status: 'in_transit', carrier: 'Estes', tracking: 'BOL-771', destinationId: 'd1', serials: ['CC418-26-44192'], lastConfirmedLocation: { label: 'Fresno, CA' } }] }],
     account: { customerId: 'company_riverside', company: 'Riverside Cold Chain', accountType: 'company', since: '2026-08-01T00:00:00Z', rep: { name: 'Sam Rep', email: 'sam@cleancell.us' }, plan: 'free', status: 'active',
       you: { email: 'ops@riverside.example', name: 'Dana Ops', phone: '', role: 'owner' }, address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, terms: { depositPct: 40, dueDays: 0, netDays: 30 }, users: null, agreements: [{ kind: 'MSA', ref: 'MSA-2026-04', signedAt: '2026-08-02' }], orders: 1 },
-    projects: [{ id: 'p1', name: 'Bakersfield yard', module: 'bess', updatedAt: '2026-09-18T10:00:00Z', revision: 3 }],
+    projects: [{ id: 'p1', name: 'Bakersfield yard', module: 'bess', createdAt: '2026-09-15T10:00:00Z', updatedAt: '2026-09-18T10:00:00Z', revision: 3 }],
     benchUnit: { serial: 'CC418-26-44190', sku: 'CC-C215', at: 'rack', work: {}, hold: null },
     /* custody (api/_lib/custody.js): one end site on the customer's account,
        the load above on its way there, events appended per serial */
@@ -2419,9 +3774,30 @@ function views(state) {
     if (/serial=/.test(q)) { var serial = decodeURIComponent((/serial=([^&]*)/.exec(q) || [])[1] || ''), u = state.units.filter(function (x) { return x.serial === serial; })[0]; if (!u) return { error: 'Unit not found', status: 404 }; return { unit: Object.assign({ orgId: ORG, woId: 'wo_1', orderNo: 'CC-26-4419', work: {} }, u, u.at === 'rack' ? { progress: progressOf(u) } : {}), genealogy: [{ serial: u.serial, unitType: u.unitType, parentSerial: null }], events: [] }; }
     return { name: 'Clean Cell', owner: false, flow: flow, brand: brand, worksOrders: [state.wo], units: unitsWith(), limited: false };
   }
-  function officeJson() { var orders = state.orders.map(function (o) { return Object.assign({}, o, { stage: S.stageOf(o) }); }); return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
+  function officeJson() { var orders = state.orders.map(function (o) { return Object.assign({}, o, { stage: S.stageOf(o), poNumber: R.poOf(o) }); }); return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 }, accounting: 'tenant' }, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
     links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
     orders: orders, totals: S.totals(orders), intake: { review: state.intake.filter(function (p) { return !p.convertedAt && p.status === 'po_review'; }).length, needsInfo: 0, declined: 0 }, limited: false }; }
+  /* ── accounting (api/logic-accounting.js GET): the receivables ledger by
+     customer ACCOUNT, built by api/_lib/receivables.js exactly as the
+     endpoint builds it — the page prints it and never sums money. The sync
+     status is a workspace on its own Stripe with QuickBooks not configured
+     on the deployment, so both halves of the card render. ── */
+  var SYNC = { available: true, eligible: true, provider: 'stripe', chosenBy: 'demo@cleancell.us', chosenAt: '2026-09-20T12:00:00Z', since: '2026-09-20T12:00:00Z',
+    quickbooks: { configured: false, missing: ['QBO_CLIENT_ID', 'QBO_CLIENT_SECRET', 'QBO_WORKSPACE_REDIRECT_URI'], env: 'production', connectHost: null, connected: false, realmId: null, companyName: null, connectedAt: null, connectedBy: null, refreshExpiresAt: null, lastError: null, itemRef: '', taxCodeRef: 'NON', approved: false },
+    stripe: { configured: true, missing: [], connectHost: null, connected: true, accountId: 'acct_1DEMOCLEANCELL', livemode: false, connectedAt: '2026-09-20T12:05:00Z', connectedBy: 'demo@cleancell.us', webhook: true, lastError: null, paymentMethods: ['card', 'us_bank_account'], sendEmail: false } };
+  function param(q, k) { var m = new RegExp('(?:^|&)' + k + '=([^&]*)').exec(q || ''); return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''; }
+  function filtersFrom(q) { return { status: param(q, 'status') || 'all', customer: param(q, 'customer'), overdue: param(q, 'overdue') === '1' }; }
+  /* the ACCOUNT an order belongs to: its customerId, else the account one of whose active people it is billed to */
+  function accountOf(o) {
+    var c = o.customerId ? state.customers.filter(function (x) { return x.id === o.customerId; })[0] : state.customers.filter(function (x) { return x.users.some(function (u) { return u.status === 'active' && u.email === (o.customer && o.customer.email); }); })[0];
+    return c ? { id: c.id, name: c.company } : null;
+  }
+  function ledgerEntries() {
+    return state.orders.filter(function (o) { return o.logic && o.logic.invoices; }).slice().sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); })
+      .map(function (o) { return { id: o.id, order: o, account: accountOf(o) }; });
+  }
+  function accountingJson(q) { return Object.assign({ owner: false, org: ORG, name: 'Clean Cell', brand: brand, today: NOW, accounting: 'tenant', sync: clone(SYNC), limited: false }, R.ledger(ledgerEntries(), NOW, filtersFrom(q), { provider: 'stripe' })); }
+  function accountingCsv(q) { return { filename: 'receivables-' + ORG + '-' + NOW + '.csv', csv: R.csv(R.ledger(ledgerEntries(), NOW, filtersFrom(q), { provider: 'stripe' }).rows) }; }
   function money(o) { var inv = 0, pd = 0; Object.keys((o.logic && o.logic.invoices) || {}).forEach(function (k) { inv += o.logic.invoices[k].amountCents || 0; pd += o.logic.invoices[k].paidCents || 0; }); return { id: o.id, orderNo: o.orderNo, status: o.status, stage: S.stageOf(o), poNumber: o.poNumber || null, billedTo: { name: o.customer.name || '', email: o.customer.email || '' }, items: o.items, invoicedCents: inv, paidCents: pd, balanceCents: inv - pd, shippedAt: o.shipment ? o.shipment.shippedAt : null, openRequests: (o.requests || []).filter(function (r) { return r.status === 'open'; }).length }; }
   function customerOf(email) { return state.customers.filter(function (c) { return c.users.some(function (u) { return u.email === email; }); })[0]; }
   var APP_URL = 'https://silmarillion.clearskyomega.com/portals/customer/app?org=cleancell.us', PORTAL_URL = 'https://silmarillion.clearskyomega.com/portals/customer/?org=cleancell.us';
@@ -2432,7 +3808,7 @@ function views(state) {
     var emails = c.users.filter(function (u) { return u.status === 'active'; }).map(function (u) { return u.email; });
     var orders = state.orders.filter(function (o) { return o.customerId === c.id || (!o.customerId && emails.indexOf(o.customer.email) >= 0); }).map(money);
     var contact = c.users.filter(function (u) { return u.role === 'owner' && u.status === 'active'; })[0] || c.users[0] || null;
-    return { customerId: c.id, company: c.company, accountType: c.accountType || 'company', domain: c.domain || '', rep: null, owner: false, editorAccess: { status: 'none' },
+    return { customerId: c.id, company: c.company, accountType: c.accountType || 'company', domain: c.domain || '', rep: null, owner: false, editorAccess: entitlement(c.editorLite),
       name: contact ? contact.name : '', email: contact ? contact.email : '', phone: '', activated: !!(contact && contact.activated), contactStatus: contact ? contact.status : null,
       people: clone(c.users), address: state.account.customerId === c.id ? state.account.address : null, createdAt: '2026-08-01T00:00:00Z', plan: 'free', status: c.status, terms: c.terms, portalUrl: PORTAL_URL, appUrl: APP_URL,
       orders: orders, totals: orders.reduce(function (t, m) { t.invoicedCents += m.invoicedCents; t.paidCents += m.paidCents; t.balanceCents += m.balanceCents; t.openRequests += m.openRequests; return t; }, { invoicedCents: 0, paidCents: 0, balanceCents: 0, openRequests: 0 }), limited: false };
@@ -2504,12 +3880,21 @@ function views(state) {
       var ms = { received: { label: 'Received', index: 0, say: 'We have your order and will confirm it shortly.' }, confirmed: { label: 'Confirmed', index: 1, say: 'Confirmed. Building starts when the deposit is in.' }, building: { label: 'Building', index: 2, say: 'Your units are on the line.' }, shipped: { label: 'Shipped', index: 5, say: 'On its way.' } }[key];
       return { orderNo: o.orderNo, soldBy: 'Clean Cell', placedAt: o.createdAt, poNumber: o.id === 'o1' ? 'RCC-2200' : (o.poNumber || null), milestone: Object.assign({ key: key, of: 6 }, ms),
         items: o.items.map(function (i) { var p = benchBy[i.sku] || {}; return { sku: i.sku, name: i.name || i.sku, qty: i.qty, kw: p.kw || null, kwh: p.kwh || null, warranty: o.shipment && p.warrantyYears ? { years: p.warrantyYears, from: o.shipment.shippedAt.slice(0, 10), until: String(Number(o.shipment.shippedAt.slice(0, 4)) + p.warrantyYears) + o.shipment.shippedAt.slice(4, 10) } : null }; }),
-        checkout: c ? { currency: 'USD', total: c.totalCents / 100, processingFee: c.feeCents / 100, accounting: (l && l.accounting) === 'tenant' ? 'tenant' : 'quickbooks', depositPercent: c.terms.depositPct, invoices: Object.keys(l.invoices).map(function (k) { return { stage: k, amount: l.invoices[k].amountCents / 100, status: l.invoices[k].status, payUrl: null }; }) } : null,
-        documents: [], destinations: o.id === 'o1' ? [{ id: 'd1', name: 'Riverside yard', city: 'Bakersfield', state: 'CA', items: [{ sku: 'CC-C215', qty: 5 }] }] : [], loads: [], shipment: o.shipment || null, cancelRequested: !!o.cancelRequested,
+        /* api/_lib/portal.js publicOrder's checkout: a tenant-billed
+           invoice carries its number, date and the supplier's pay link
+           (tenantPayLink, once issued); a QuickBooks one QuickBooks' link */
+        checkout: c ? { currency: 'USD', base: c.baseCents / 100, total: c.totalCents / 100, processingFee: c.feeCents / 100, accounting: l.accounting === 'tenant' ? 'tenant' : 'quickbooks', depositPercent: c.terms.depositPct, invoices: Object.keys(l.invoices).map(function (k) {
+          var inv = l.invoices[k], byTenant = l.accounting === 'tenant';
+          return { stage: k, amount: inv.amountCents / 100, recorded: (inv.paidCents || 0) / 100, status: inv.status,
+            payUrl: o.cancelRequested || l.paymentException ? null : byTenant ? (inv.id ? Portal.tenantPayLink(inv.payUrl) : null) : Policy.paymentLink(inv.payUrl), dueDays: c.terms.dueDays,
+            number: byTenant && inv.id ? String(inv.id).slice(0, 80) : null, issuedAt: byTenant && inv.issuedAt ? String(inv.issuedAt).slice(0, 10) : null }; }) } : null,
+        documents: [], destinations: o.id === 'o1' ? [{ id: 'd1', name: 'Riverside yard', city: 'Bakersfield', state: 'CA', items: [{ sku: 'CC-C215', qty: 5 }] }] : [],
+        loads: ((state.companyOrders.filter(function (co) { return co.id === o.id; })[0] || {}).legs || []).map(function (lg) { return { id: lg.id, destinationId: lg.destinationId || null, carrier: lg.carrier || null, tracking: lg.tracking || null, status: lg.status || null, units: (lg.serials || []).length, pickedUpAt: lg.pickedUpAt || null, deliveredAt: lg.deliveredAt || null, lastConfirmed: lg.lastConfirmedLocation && lg.lastConfirmedLocation.label ? { label: lg.lastConfirmedLocation.label, at: lg.lastConfirmedLocation.at || null } : null }; }),
+        shipment: o.shipment || null, cancelRequested: !!o.cancelRequested,
         requests: (o.requests || []).map(function (r) { return { id: r.id, kind: r.kind, message: r.message, by: r.by || null, status: r.status, at: r.at, address: r.address || null, answer: r.answer || null }; }) };
     }), limited: false };
   }
-  function designJson() { return { org: ORG, customerId: 'company_riverside', brand: brand, access: { active: true, status: 'trial', expiresAt: iso(Date.now() + 7 * 86400000), modules: ['bess'] }, designProducts: C.designs({ products: CATALOG }), products: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet' }, { sku: 'CC-C418', name: '418 kWh outdoor cabinet' }], projects: clone(state.projects), limited: false }; }
+  function designJson() { return { org: ORG, customerId: 'company_riverside', brand: brand, access: entitlement(riverside().editorLite), designProducts: C.designs({ products: CATALOG }), products: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet' }, { sku: 'CC-C418', name: '418 kWh outdoor cabinet' }], projects: clone(state.projects), limited: false }; }
   function designPost(b) {
     if (b.action === 'size') { try { return C.select({ products: CATALOG }, b.sku, { module: 'bess', kw: Number(b.kw), hours: Number(b.hours), kwh: Number(b.kw) * Number(b.hours), conceptOnly: true }); } catch (e) { return { error: e.message, status: e.status || 400 }; } }
     if (b.action === 'save') { var id = b.projectId || ('p_' + hex(8)), p = state.projects.filter(function (x) { return x.id === id; })[0]; if (!p) { p = { id: id, name: '', module: 'bess', revision: 0 }; state.projects.unshift(p); } p.name = String(b.name || p.name || 'Untitled site plan').slice(0, 120); p.revision++; p.updatedAt = iso(Date.now()); return { ok: true, id: id, revision: p.revision, updatedAt: p.updatedAt }; }
@@ -2530,8 +3915,63 @@ function views(state) {
     return { ok: true, action: 'duplicate', say: 'Already at Rack assembly.', serial: serial, station: 'rack', unit: { serial: serial, at: 'rack', wo: 'wo_1' }, routing: routing,
       workOrder: 'wo_1', product: 'Cabinet', work: W.statusOf(unit, 'rack', steps), instructions: 'Fit modules bottom-up.' };
   }
+  /* ── the CRM (api/crm.js), the customer's documents (api/my-files.js)
+     and the design tool (api/customer-subscribe.js): the records above,
+     projected by api/_lib/crm.js itself, the timeline included ── */
+  function param(q, k) { var m = new RegExp('(?:^|&)' + k + '=([^&]*)').exec(q || ''); return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''; }
+  function crmOf(id) { return state.crm[id] || { contacts: [], activity: [], files: [] }; }
+  function namesOf(r) { var n = {}; r.contacts.forEach(function (x) { n[x.id] = x.name || x.email || ''; }); return n; }
+  /* api/_lib/buyer-accounts.js accountOrders: stamped for the account, or
+     billed to one of its active people */
+  function accountOrders(c) { var emails = c.users.filter(function (u) { return u.status === 'active'; }).map(function (u) { return u.email; }); return state.orders.filter(function (o) { return o.customerId === c.id || (!o.customerId && emails.indexOf(o.customer.email) >= 0); }); }
+  function stored(f) { return f.uploadState === 'stored' && f.archived !== true; }
+  function newest(key) { return function (a, b) { return CRM.millis(b[key]) - CRM.millis(a[key]); }; }
+  function timelineOf(c, r) {
+    var orders = accountOrders(c).map(function (o) { return Object.assign({}, o, { purchaseOrder: o.poNumber ? { number: o.poNumber } : o.purchaseOrder }); });
+    var ids = orders.map(function (o) { return o.id; });
+    state.intake.filter(function (p) { return p.customerId === c.id; }).forEach(function (p) { orders.push({ id: p.id, orderNo: p.orderNo, status: p.status, items: [], poIntake: { number: p.poNumber, createdAt: p.createdAt, source: p.source === 'customer' ? 'customer-upload' : p.source, notes: p.notes, convertedAt: p.convertedAt || null } }); });
+    return CRM.timeline({ orders: orders, people: c.users, files: r.files, activity: r.activity, contactNames: namesOf(r),
+      units: shipUnits().filter(function (u) { return u.custody && ids.indexOf(u.orderId) >= 0; }), sites: state.sites.filter(function (x) { return x.customerId === c.id; }),
+      designs: c.id === 'company_riverside' ? state.projects : [], editorEvents: state.audit.filter(function (e) { return e.customerId === c.id; }), editorLite: c.editorLite || null });
+  }
+  function download(f) { return { download: { name: f.name, body: sampleBytes(f) } }; }
+  function crmJson(q) {
+    if (param(q, 'followUps') === '1') {
+      var rows = [];
+      state.customers.forEach(function (c) { var r = crmOf(c.id), names = namesOf(r); r.activity.forEach(function (a) { if (CRM.isOpen(a)) rows.push(CRM.followUpView({ activityId: a.id, customerId: c.id, company: c.company, type: a.type, subject: a.subject, followUpAt: a.followUpAt, contactId: a.contactId, contactName: a.contactName, orderId: a.orderId, by: a.by, at: a.at }, c.company, names)); }); });
+      return { followUps: rows.sort(CRM.byDue), limited: false };
+    }
+    var c = state.customers.filter(function (x) { return x.id === param(q, 'customerId'); })[0]; if (!c) return { status: 404, error: 'Customer not found' };
+    var r = crmOf(c.id), names = namesOf(r), nos = {};
+    if (param(q, 'file')) { var f = r.files.filter(function (x) { return x.id === param(q, 'file'); })[0]; return f && stored(f) ? download(f) : { status: 404, error: 'Document not found' }; }
+    accountOrders(c).forEach(function (o) { nos[o.id] = o.orderNo; });
+    return { customerId: c.id, company: c.company, status: c.status,
+      contacts: r.contacts.filter(function (x) { return x.archived !== true; }).map(function (x) { return CRM.contactView(x.id, x); }).sort(function (a, b) { return (b.primary ? 1 : 0) - (a.primary ? 1 : 0) || a.name.toLowerCase().localeCompare(b.name.toLowerCase()); }),
+      activity: r.activity.slice().sort(newest('at')).map(function (a) { return CRM.activityView(a.id, a, names, nos); }),
+      followUps: r.activity.filter(CRM.isOpen).map(function (a) { return CRM.followUpView({ activityId: a.id, customerId: c.id, company: c.company, type: a.type, subject: a.subject, followUpAt: a.followUpAt, contactId: a.contactId, contactName: a.contactName, orderId: a.orderId, by: a.by, at: a.at }, c.company, names); }).sort(CRM.byDue),
+      files: r.files.filter(stored).sort(newest('uploadedAt')).map(function (x) { return CRM.fileView(x.id, x, 'office'); }),
+      timeline: timelineOf(c, r), canEdit: true, canArchive: true, limited: false };
+  }
+  function myFilesJson(q) {
+    var c = riverside(), r = crmOf(c.id);
+    if (param(q, 'file')) { var f = r.files.filter(function (x) { return x.id === param(q, 'file'); })[0]; return CRM.customerMaySee(f) ? download(f) : { status: 404, error: 'We could not find that document on your account.' }; }
+    return { company: c.company, dailyUploads: 20, files: r.files.filter(CRM.customerMaySee).sort(newest('uploadedAt')).map(function (x) { return CRM.fileView(x.id, x, 'customer'); }), limited: false };
+  }
+  /* api/customer-subscribe.js view(): the offer, and the ACCOUNT's grant.
+     The sample's customer is the account's owner, so may manage it. */
+  function subJson(who) {
+    var grant = riverside().editorLite || {}, ent = entitlement(grant), provider = grant.source === 'provider', paid = ['active', 'past_due'];
+    return { available: EDITOR_LITE.enabled && !!(CUSTOMER_PRICES.monthlyPriceCents || CUSTOMER_PRICES.yearlyPriceCents), monthlyPriceCents: CUSTOMER_PRICES.monthlyPriceCents, yearlyPriceCents: CUSTOMER_PRICES.yearlyPriceCents, currency: 'USD',
+      status: provider ? (paid.indexOf(grant.status) >= 0 ? grant.status : 'inactive') : ent.status, expiresAt: provider || ent.active ? grant.expiresAt || null : null,
+      plan: provider && ['month', 'year'].indexOf(grant.plan) >= 0 ? grant.plan : null, entitled: ent.active, canManage: provider && !!grant.stripeCustomerId && (state.account.you.role === 'owner' || grant.subscribedBy === who) };
+  }
+  /* api/customer-portfolio.js: no portfolio in the sample yet */
+  function portfolioJson() { return { portfolios: [], limited: false }; }
   function manifest(app, tenant) { return Manifest.manifestFor(ORG, tenant, app); }
-  return { materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
+  /* api/logic-workspaces.js: where the signed-in person may go. The sample
+     office login has one company, so the front door goes straight in. */
+  function workspacesJson(email) { return { email: email || 'demo@cleancell.us', owner: false, workspaces: [{ orgId: ORG, name: 'Clean Cell', role: 'admin', status: 'active' }] }; }
+  return { workspacesJson: workspacesJson, crmJson: crmJson, myFilesJson: myFilesJson, subJson: subJson, portfolioJson: portfolioJson, accountOrders: accountOrders, materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, accountingJson: accountingJson, accountingCsv: accountingCsv, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
 }
 
 /* ── the writes a trial touches ───────────────────────────────────────── */
@@ -2546,6 +3986,74 @@ function post(state, path, query, b, who) {
     if (b.action === 'request-resolve') { var r = (o.requests || []).filter(function (x) { return x.id === b.requestId; })[0]; if (!r || r.status !== 'open') return err(404, 'Open request not found'); if (!String(b.answer || '').trim()) return err(400, 'Write the answer the customer will read'); r.status = 'resolved'; r.answer = String(b.answer).trim().slice(0, 2000); r.answeredAt = now; r.answeredBy = who; return { ok: true }; }
     if (b.action === 'ready') return o.logic && o.logic.releasedAt ? { ok: true, note: 'Every unit passed; the balance invoice is queued.' } : err(409, 'Release the order to the plant first');
     if (b.action === 'cancel') { o.cancelRequested = true; return { ok: true }; }
+    /* the accounting corrections: the same pure plans api/_lib/logic-workflow.js
+       applies, applied the same way (a payment is voided, never deleted) */
+    if (b.action === 'payment-void' || b.action === 'release-on-po' || b.action === 'invoice-edit') {
+      var lg = o.logic; if (!lg || !lg.invoices) return err(409, 'This order has no invoices yet');
+      try {
+        if (b.action === 'payment-void') {
+          var vp = R.voidPlan(o, b.stage, { bankReference: b.bankReference, reason: b.reason, keepBuilding: b.keepBuilding === true || b.keepBuilding === false ? b.keepBuilding : undefined, poNumber: b.poNumber, by: who, at: now, source: 'office' });
+          if (vp.duplicate) return { ok: true, duplicate: true, invoice: vp.invoice };
+          lg.invoices[b.stage] = vp.invoice;
+          if (vp.creditRelease) lg.creditRelease = vp.creditRelease;
+          if (vp.hold) { lg.paymentHold = vp.hold; lg.paymentException = vp.hold.message; }
+          return { ok: true, invoice: vp.invoice, order: { status: o.status, releasedAt: lg.releasedAt || null, creditRelease: lg.creditRelease || null, paymentHold: lg.paymentHold || null, paymentException: lg.paymentException || null } };
+        }
+        if (b.action === 'release-on-po') {
+          var rp = R.releasePlan(o, { reason: b.reason, poNumber: b.poNumber, by: who, at: now });
+          if (rp.duplicate) return { ok: true, duplicate: true, creditRelease: rp.creditRelease };
+          lg.creditRelease = rp.creditRelease;
+          if (rp.liftHold) { lg.paymentHold = null; lg.paymentException = null; }
+          /* standing in for processOrder's release: the plant starts */
+          if (!lg.releasedAt) { lg.releasedAt = now; o.status = 'in_fulfilment'; }
+          return { ok: true, creditRelease: rp.creditRelease, order: { status: o.status, releasedAt: lg.releasedAt, worksOrderId: o.worksOrderId || null } };
+        }
+        var ep = R.editPlan(o, b.stage, { number: b.number, issuedAt: b.issuedAt, dueAt: b.dueAt, reason: b.reason, by: who, at: now });
+        if (ep.duplicate) return { ok: true, duplicate: true, invoice: ep.invoice };
+        lg.invoices[b.stage] = ep.invoice;
+        return { ok: true, invoice: ep.invoice };
+      } catch (e) { return err(e.status || 400, e.message); }
+    }
+    /* logic-workflow issueInvoice / recordPayment, tenant-billed: the
+       number, date and optional due date; a pay link added, changed (a new
+       one) or removed (null), kept when not sent — the only thing a repeat
+       of the same number may change; a payment by its bank reference, on
+       the receivables rules (a placeholder refused, a voided one reinstated
+       only on purpose) */
+    if (b.action === 'invoice-issued' || b.action === 'payment-received') {
+      var lg2 = o.logic, stage = String(b.stage || ''), inv = lg2 && lg2.invoices ? lg2.invoices[stage] : null, date = String(b.date || '').slice(0, 10);
+      if (!lg2 || lg2.accounting !== 'tenant') return err(409, 'This order is billed through QuickBooks; ' + (b.action === 'invoice-issued' ? 'invoices are issued there' : 'payments are reconciled there'));
+      if (!inv || !inv.amountCents) return err(409, 'Nothing is due at this stage');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) return err(400, (b.action === 'invoice-issued' ? 'Invoice' : 'Payment') + ' date must be YYYY-MM-DD');
+      if (b.action === 'invoice-issued') {
+        var number = String(b.number || '').trim().slice(0, 80); if (!number) return err(400, 'Invoice number required');
+        var dueAt = b.dueAt != null ? String(b.dueAt).trim() : '';
+        if (dueAt && !R.isDate(dueAt)) return err(400, 'Due date must be YYYY-MM-DD');
+        if (dueAt && dueAt < date) return err(400, 'The due date cannot be before the invoice date');
+        var keep = !Object.prototype.hasOwnProperty.call(b, 'payUrl') || b.payUrl === undefined || b.payUrl === '', link = keep ? null : b.payUrl === null ? null : Portal.tenantPayLink(typeof b.payUrl === 'string' ? b.payUrl.trim() : b.payUrl);
+        if (!keep && b.payUrl !== null && !link) return err(400, 'A pay link must be a full https:// address to a named site (no spaces, no user name or password)');
+        if (inv.id && inv.id !== number) return err(409, 'Invoice ' + inv.id + ' is already recorded for this stage');
+        var changed = !keep && (inv.payUrl || null) !== link;
+        if (inv.id === number) {
+          if (!changed) return { ok: true, duplicate: true, payLinkChanged: false, invoice: clone(inv) };
+          inv.payUrl = link; inv.payUrlBy = who; inv.payUrlAt = now;
+          return { ok: true, duplicate: false, payLinkChanged: true, invoice: clone(inv) };
+        }
+        var other = stage === 'deposit' ? 'balance' : 'deposit';
+        if (lg2.invoices[other] && lg2.invoices[other].id === number) return err(409, 'Invoice ' + number + ' is already the ' + other + ' invoice on this order');
+        Object.assign(inv, { id: number, issuedAt: date, issuedBy: who, dueAt: dueAt || null });
+        if (changed) { inv.payUrl = link; inv.payUrlBy = who; inv.payUrlAt = now; }
+        Object.assign(inv, R.settle(inv));
+        return { ok: true, duplicate: false, payLinkChanged: changed, invoice: clone(inv) };
+      }
+      try {
+        var rp2 = R.recordPlan(o, stage, { amountCents: Math.round(Number(b.amount) * 100) || 0, date: date, bankReference: b.bankReference, by: who, at: now, source: 'office', reinstate: b.reinstate === true, reason: b.reason });
+        if (rp2.duplicate) return { ok: true, duplicate: true, invoice: clone(rp2.invoice) };
+        lg2.invoices[stage] = rp2.invoice;
+        if (rp2.liftHold) { lg2.paymentHold = null; lg2.paymentException = null; }
+        return { ok: true, invoice: clone(rp2.invoice) };
+      } catch (e) { return err(e.status || 400, e.message); }
+    }
     return err(400, 'Not in this sandbox: ' + b.action);
   }
   if (path === '/api/buyers') {
@@ -2562,10 +4070,29 @@ function post(state, path, query, b, who) {
       var next = { status: b.status || p.status, role: b.role || p.role };
       var wasOwner = p.role === 'owner' && p.status === 'active';
       if (wasOwner && !(next.role === 'owner' && next.status === 'active') && !ax.users.some(function (u) { return u.email !== p.email && u.role === 'owner' && u.status === 'active'; })) return err(409, 'An account needs at least one active owner; make someone else the owner first');
-      var declined = p.status === 'pending' && next.status === 'disabled'; if (declined) p.declined = true; else if (next.status === 'active') delete p.declined;
+      var declined = p.status === 'pending' && next.status === 'disabled'; if (declined) p.declined = true;
+      else if (next.status === 'active' && (p.status === 'pending' || p.declined)) { delete p.declined; p.approvedAt = now; p.approvedBy = who; }
       p.status = next.status; p.role = next.role; return { ok: true, person: { email: p.email, status: p.status, role: p.role, declined: declined }, note: declined ? 'Request declined. They were not added.' : p.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
     }
-    if (b.action === 'profile') { var ap = acctOf(); if (!ap) return err(404, 'Customer not found'); if (b.company !== undefined) ap.company = String(b.company || ap.company); if (b.status !== undefined) ap.status = b.status === 'suspended' ? 'suspended' : 'active'; if (b.domain !== undefined) ap.domain = String(b.domain || ''); return { ok: true, note: 'Customer profile saved. Existing orders, invoices and subscription billing were not changed.' }; }
+    /* only the fields it is sent: the office app saves the domain alone */
+    if (b.action === 'profile') {
+      var ap = acctOf(); if (!ap) return err(404, 'Customer not found');
+      if (b.company !== undefined) { if (!String(b.company || '').trim()) return err(400, 'Company name is required'); ap.company = String(b.company).trim().slice(0, 160); }
+      if (b.status !== undefined) { if (['active', 'suspended'].indexOf(b.status) < 0) return err(400, 'Choose active or suspended access'); ap.status = b.status; }
+      if (b.domain !== undefined) ap.domain = String(b.domain || '').trim().toLowerCase();
+      if (b.address && state.account.customerId === ap.id) state.account.address = { line1: String(b.address.line1 || ''), city: String(b.address.city || ''), state: String(b.address.state || ''), zip: String(b.address.zip || '') };
+      if (state.account.customerId === ap.id) state.account.company = ap.company;
+      return { ok: true, note: 'Customer profile saved. Existing orders, invoices and subscription billing were not changed.' };
+    }
+    /* a trial of the design tool, from the supplier's owner: 0 revokes */
+    if (b.action === 'editor-trial') {
+      var at = acctOf(), days = Number(b.days); if (!at) return err(404, 'Customer not found');
+      if (!(days >= 0 && days <= 14 && Math.floor(days) === days)) return err(400, 'Choose zero to revoke, or 1–14 trial days');
+      var prior = at.editorLite || {}; if (prior.source === 'provider' && ['active', 'past_due'].indexOf(prior.status) >= 0) return err(409, 'Manage the existing paid subscription through its billing provider');
+      at.editorLite = { status: days ? 'trial' : 'inactive', source: 'owner-trial', expiresAt: new Date(Date.now() + days * DAY_MS).toISOString(), grantedBy: who, grantedAt: now };
+      state.audit.push({ action: 'buyer-editor-trial', orgId: ORG, customerId: at.id, by: who, at: now, was: prior, grant: clone(at.editorLite) });
+      return { ok: true, note: days ? 'Time-limited Editor Lite trial granted. No subscription or charge was created.' : 'Trial access revoked. Saved projects were retained.' };
+    }
     if (b.action === 'invite') return err(409, 'Customer email delivery is not configured. Share the customer app link instead.');
     if (b.action === 'terms') { var c = acctOf(); if (!c) return err(404, 'Create this customer first'); var t = { depositPct: Number(b.terms.depositPct), dueDays: Number(b.terms.dueDays) }; if (!(t.depositPct >= 0 && t.depositPct <= 100)) return err(400, 'Deposit must be 0–100%'); c.terms = t; if (state.account.customerId === c.id) state.account.terms = Object.assign({}, state.account.terms, t); return { ok: true, terms: t, note: 'Applies to future prices. Existing invoices retain their agreed terms.' }; }
     return err(400, 'Not in this sandbox: ' + b.action);
@@ -2676,7 +4203,9 @@ function post(state, path, query, b, who) {
       var rec = Cu.reconcile(leg.serials, (b.received || []).map(function (r) { return { serial: String(typeof r === 'string' ? r : r.serial).trim(), condition: r && r.condition === 'damaged' ? 'damaged' : 'accepted' }; })), rsite = b.siteId ? siteBy(b.siteId) : null; if (b.siteId && !rsite) return err(404, 'Site not found');
       var applied = [], damagedApplied = [], refused = [];
       rec.received.concat(rec.damaged).forEach(function (sn, i) { var uu = unitBy(sn); if (!uu) { refused.push({ serial: sn, why: 'not registered' }); return; } var body = { at: b.at, condition: i < rec.received.length ? 'accepted' : 'damaged', siteId: rsite ? rsite.id : undefined, siteName: rsite ? rsite.name : undefined, legId: leg.id, note: b.note }; var r = moveUnit(uu, 'receive', body, method); if (r.error) { refused.push({ serial: sn, why: r.error }); return; } (body.condition === 'damaged' ? damagedApplied : applied).push(sn); });
-      if (rec.complete && !refused.length) leg.status = 'received';
+      /* the load's own status is the logistics ledger's (delivered is
+         recorded there, api/logic-logistics.js); a custody receipt moves
+         the units, not the load — as api/logic-custody.js does */
       return { ok: true, legId: leg.id, received: applied, damaged: damagedApplied, short: rec.short, overage: rec.overage, duplicate: rec.duplicate, refused: refused, complete: rec.complete && !refused.length, note: rec.short.length ? rec.short.length + ' expected serial' + (rec.short.length === 1 ? '' : 's') + ' did not arrive; the load stays partial until they do or Shipping records them missing.' : (rec.overage.length ? rec.overage.length + ' serial' + (rec.overage.length === 1 ? ' was' : 's were') + ' not on this load and not received; check the load they belong to.' : 'Every expected serial was received.') };
     }
     if (b.action === 'import') {
@@ -2720,6 +4249,7 @@ function post(state, path, query, b, who) {
       var pu = rv.users.filter(function (u) { return u.email === b.email; })[0]; if (!pu) return err(404, 'That person is not on this account');
       if (pu.email === (who || state.account.you.email)) return err(400, 'You cannot change your own access');
       var dec = pu.status === 'pending' && b.status === 'disabled'; if (dec) pu.declined = true;
+      else if (pu.status === 'pending' && b.status !== 'disabled') { pu.approvedAt = now; pu.approvedBy = who; }
       pu.status = b.status === 'disabled' ? 'disabled' : 'active';
       return { ok: true, person: { email: pu.email, status: pu.status, role: pu.role }, users: V.accountJson(who).users, note: dec ? 'Request declined. They were not added.' : pu.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
     }
@@ -2727,6 +4257,105 @@ function post(state, path, query, b, who) {
     if (b.address) a.address = { line1: String(b.address.line1 || ''), city: String(b.address.city || ''), state: String(b.address.state || ''), zip: String(b.address.zip || '') };
     return V.accountJson(who);
   }
+  /* ── the CRM: api/crm.js, validated by api/_lib/crm.js itself ── */
+  function stored(f) { return f.uploadState === 'stored' && f.archived !== true; }
+  if (path === '/api/crm') {
+    var cc = state.customers.filter(function (x) { return x.id === b.customerId; })[0]; if (!b.customerId) return err(400, 'Which customer?'); if (!cc) return err(404, 'Customer not found');
+    var rec = state.crm[cc.id] || (state.crm[cc.id] = { contacts: [], activity: [], files: [] });
+    function one(list, id, what) { var x = list.filter(function (y) { return y.id === id; })[0]; if (!x) throw CRM.fail(404, what); return x; }
+    try {
+      if (b.action === 'contact-save') {
+        var input = CRM.contactInput(b), cid = b.id ? CRM.recordId(b.id, 'Contact') : null, cur = cid ? one(rec.contacts, cid, 'That contact is not on this account') : null;
+        if (cur && cur.archived) return err(409, 'That contact is archived');
+        var live = rec.contacts.filter(function (x) { return x.archived !== true; });
+        if (!cur && live.length >= 200) return err(409, 'This account has 200 contacts; archive some before adding more');
+        if (input.email && live.some(function (x) { return x.id !== cid && String(x.email || '').toLowerCase() === input.email; })) return err(409, input.email + ' is already a contact on this account');
+        if (input.primary) live.forEach(function (x) { if (x.id !== cid) x.primary = false; });
+        if (cur) Object.assign(cur, input, { updatedAt: now, updatedBy: who });
+        else { cur = Object.assign({ id: 'ct_' + hex(10), orgId: ORG, customerId: cc.id }, input, { archived: false, createdAt: now, createdBy: who }); rec.contacts.push(cur); }
+        return { ok: true, id: cur.id, contact: CRM.contactView(cur.id, cur), note: cid ? 'Contact saved.' : 'Contact added.' };
+      }
+      if (b.action === 'contact-archive') {
+        var ca = one(rec.contacts, CRM.recordId(b.id, 'Contact'), 'That contact is not on this account');
+        if (ca.archived) return { ok: true, duplicate: true, note: 'Already archived.' };
+        ca.archived = true; ca.primary = false; ca.archivedAt = now; ca.archivedBy = who;
+        return { ok: true, note: 'Contact archived. Logged activity with them keeps their name.' };
+      }
+      if (b.action === 'log') {
+        var entry = CRM.activityInput(b, now), cn = null, ono = null;
+        if (entry.contactId) { var ct = rec.contacts.filter(function (x) { return x.id === entry.contactId; })[0]; if (!ct) return err(400, 'That contact is not on this account'); if (ct.archived) return err(400, 'That contact is archived'); cn = ct.name || ct.email || null; }
+        if (entry.orderId) { var ord = V.accountOrders(cc).filter(function (o) { return o.id === entry.orderId; })[0]; if (!ord) return err(400, 'That order is not on this account'); ono = ord.orderNo; }
+        var act = Object.assign({ id: 'ac_' + hex(10), orgId: ORG, customerId: cc.id }, entry, { contactName: cn, orderNo: ono, by: who, loggedAt: now, done: false, doneAt: null, doneBy: null });
+        rec.activity.push(act);
+        var nm = {}, on = {}; if (entry.contactId) nm[entry.contactId] = cn; if (entry.orderId) on[entry.orderId] = ono;
+        return { ok: true, id: act.id, activity: CRM.activityView(act.id, act, nm, on), note: CRM.TYPE_LABEL[entry.type] + ' logged' + (entry.followUpAt ? '; follow up ' + entry.followUpAt + ' is on Today.' : entry.type === 'task' ? '; it is on Today until done.' : '.') };
+      }
+      if (b.action === 'done') {
+        var da = one(rec.activity, CRM.recordId(b.id, 'Activity'), 'That entry is not on this account');
+        if (!da.followUpAt && da.type !== 'task') return err(400, 'Only a follow-up or a task can be marked done');
+        if (da.done) return { ok: true, duplicate: true, note: 'Already done.' };
+        da.done = true; da.doneAt = now; da.doneBy = who;
+        return { ok: true, note: 'Done. It is off Today.' };
+      }
+      if (b.action === 'file-upload') {
+        var up = fileLike(b.file), meta = { category: CRM.category(b.category), note: CRM.text(b.note, 500, 'Note', { multiline: true }), shared: CRM.bool(b.shared) };
+        var dup = rec.files.filter(function (x) { return stored(x) && x.from !== 'customer' && x.name === up.name && x.size === up.size; })[0];
+        if (dup) return { ok: true, duplicate: true, id: dup.id, file: CRM.fileView(dup.id, dup, 'office'), note: 'That document is already on the account.' };
+        var fr = Object.assign({ id: 'f_' + hex(18), orgId: ORG, customerId: cc.id }, up, { sha256: null, category: meta.category, note: meta.note, shared: meta.shared, from: 'office', uploadedBy: who, uploadedAt: now, archived: false, uploadState: 'stored', storedAt: now });
+        rec.files.push(fr);
+        return { ok: true, duplicate: false, id: fr.id, file: CRM.fileView(fr.id, fr, 'office'), note: 'Uploaded. ' + (fr.shared ? 'The customer sees it in their app.' : 'Only the office sees it until you share it.') };
+      }
+      if (b.action === 'file-share' || b.action === 'file-archive') {
+        var fx = rec.files.filter(function (x) { return x.id === CRM.recordId(b.id, 'Document'); })[0]; if (!fx || fx.uploadState !== 'stored') return err(404, 'Document not found');
+        if (b.action === 'file-archive') { if (fx.archived) return { ok: true, duplicate: true, note: 'Already archived.' }; fx.archived = true; fx.archivedAt = now; fx.archivedBy = who; return { ok: true, note: 'Archived. It is kept on record and is no longer listed' + (fx.from === 'customer' || fx.shared ? ', here or in the customer\'s app.' : '.') }; }
+        var share = b.shared === true || b.shared === 'true' ? true : b.shared === false || b.shared === 'false' ? false : null;
+        if (share === null) return err(400, 'Say whether the customer sees it: shared true or false');
+        if (fx.archived) return err(404, 'Document not found');
+        if (fx.from === 'customer') return err(409, 'The customer uploaded this; it is already on their account');
+        if ((fx.shared === true) === share) return { ok: true, duplicate: true, shared: share, note: share ? 'Already shared.' : 'Already office only.' };
+        fx.shared = share; fx.sharedAt = now; fx.sharedBy = who;
+        return { ok: true, shared: share, note: share ? 'Shared. The customer sees it in their app.' : 'No longer shared. The customer no longer sees it.' };
+      }
+    } catch (e) { return err(e.status || 400, e.message); }
+    return err(400, 'Unknown CRM action');
+  }
+  /* ── the customer's documents: api/my-files.js, 20 a day per ACCOUNT ── */
+  if (path === '/api/my-files') {
+    if (b.action !== 'upload') return err(400, 'Unknown documents action');
+    var ra = state.customers.filter(function (x) { return x.id === 'company_riverside'; })[0], rr = state.crm[ra.id] || (state.crm[ra.id] = { contacts: [], activity: [], files: [] });
+    try {
+      var mf = fileLike(b.file), mcat = CRM.category(b.category), mnote = CRM.text(b.note, 500, 'Note', { multiline: true });
+      var mdup = rr.files.filter(function (x) { return stored(x) && x.from === 'customer' && x.name === mf.name && x.size === mf.size; })[0];
+      if (mdup) return { ok: true, duplicate: true, id: mdup.id, file: CRM.fileView(mdup.id, mdup, 'customer'), note: 'That document is already on your account.' };
+      var key = ra.id + '__' + now.slice(0, 10); state.uploads = state.uploads || {};
+      if ((state.uploads[key] || 0) >= 20) return err(429, 'Your account has uploaded 20 documents today. Please send the rest tomorrow.');
+      state.uploads[key] = (state.uploads[key] || 0) + 1;
+      var mr = Object.assign({ id: 'f_' + hex(18), orgId: ORG, customerId: ra.id }, mf, { sha256: null, category: mcat, note: mnote, shared: true, from: 'customer', uploadedBy: who, uploadedAt: now, archived: false, uploadState: 'stored', storedAt: now });
+      rr.files.push(mr);
+      return { ok: true, duplicate: false, id: mr.id, file: CRM.fileView(mr.id, mr, 'customer'), note: 'Uploaded. Your supplier sees it on your account.' };
+    } catch (e) { return err(e.status || 400, e.message); }
+  }
+  /* ── the design tool: api/customer-subscribe.js. The sample grants the
+     subscription at once (in the product the webhook does, after Stripe's
+     checkout) and answers placeholders for Stripe's two pages; the render
+     check and the sandbox shim turn them into the trip back. ── */
+  if (path === '/api/customer-subscribe') {
+    var sa = state.customers.filter(function (x) { return x.id === 'company_riverside'; })[0], g = sa.editorLite || {}, sv = V.subJson(who);
+    if (b.action === 'manage') {
+      if (g.source !== 'provider' || !g.stripeCustomerId) return err(409, 'There is no Editor Lite subscription on this account yet.');
+      if (!sv.canManage) return err(403, 'Only the owner of this account, or the person who subscribed, can manage the subscription.');
+      return { url: '#manage' };
+    }
+    if (b.action !== undefined && b.action !== 'subscribe') return err(400, 'Unknown subscription action');
+    if (['month', 'year'].indexOf(b.plan) < 0) return err(400, 'Choose monthly or yearly.');
+    var amount2 = b.plan === 'year' ? sv.yearlyPriceCents : sv.monthlyPriceCents;
+    if (!sv.available || !amount2) return err(409, 'Your supplier does not offer ' + (b.plan === 'year' ? 'a yearly' : 'a monthly') + ' Editor Lite subscription here yet. Ask your account rep for a trial.');
+    if (g.source === 'provider' && ['active', 'past_due'].indexOf(g.status) >= 0) return err(409, 'This account already has an Editor Lite subscription. Use Manage subscription to change it.');
+    sa.editorLite = { source: 'provider', status: 'active', plan: b.plan, expiresAt: new Date(Date.now() + (b.plan === 'year' ? 365 : 30) * DAY_MS).toISOString(), stripeCustomerId: 'cus_sandbox', stripeSubscriptionId: 'sub_sandbox', subscribedBy: who, updatedAt: now, stripeEventAt: now };
+    state.audit.push({ action: 'customer-editor-lite', orgId: ORG, customerId: sa.id, by: 'stripe', at: now, was: g, grant: { status: 'active', plan: b.plan, expiresAt: sa.editorLite.expiresAt } });
+    return { url: '#subscribed' };
+  }
+  if (path === '/api/customer-portfolio') return err(400, 'A portfolio upload is not part of this sandbox.');
   return err(404, 'Not in this sandbox: ' + path);
 }
 
@@ -2763,7 +4392,9 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
   /* the buyer is a different person from the office staff: the customer
      app keeps its own sign-in, so trying the office sample first does not
      open the customer app as the office */
-  var KEY = 'omega_sandbox_v1', USER_KEY = 'omega_sandbox_user_v1' + (global.OMEGA_SANDBOX_APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
+  /* v2: the sample grew a CRM, documents, a pay link and the design tool's
+     prices; a phone that kept the v1 sample starts over on the new one */
+  var KEY = 'omega_sandbox_v2', USER_KEY = 'omega_sandbox_user_v1' + (global.OMEGA_SANDBOX_APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function seedIfMissing(k, v) { try { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -2811,10 +4442,28 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
     if (path === '/api/logic-custody') return V.custodyJson(q);
     if (path === '/api/logic-logistics') return V.logisticsJson();
     if (path === '/api/customer-design') return V.designJson();
+    if (path === '/api/crm') return V.crmJson(q);
+    if (path === '/api/my-files') return V.myFilesJson(q);
+    if (path === '/api/customer-subscribe') return V.subJson(who());
+    if (path === '/api/customer-portfolio') return V.portfolioJson();
     if (path === '/api/app-manifest') return V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT);
+    if (path === '/api/logic-workspaces') return V.workspacesJson(who());
     return { status: 404, error: 'Not in this sandbox: ' + path };
   }
   function respond(json, status) { return Promise.resolve(new Response(JSON.stringify(json), { status: status, headers: { 'Content-Type': 'application/json' } })); }
+  /* a document, as the endpoints hand one over: bytes, an attachment */
+  function bytes(d) { return Promise.resolve(new Response(new Blob([d.body], { type: 'application/octet-stream' }), { status: 200, headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="' + String(d.name || 'document').replace(/["\\\r\n]/g, '_') + '"', 'X-Content-Type-Options': 'nosniff' } })); }
+  /* Stripe's two pages are not in a sandbox. Checkout: the sample granted
+     the subscription, so make the trip back Stripe would (…&checkout=done
+     on this page), which the app says the way the product does — over
+     https; a page opened over plain http refuses any non-https link, as
+     the real page does. The billing page: said plainly. */
+  function stripe(path, out) {
+    if (path !== '/api/customer-subscribe' || !out || typeof out.url !== 'string') return out;
+    if (out.url === '#manage') return { status: 409, error: 'Manage subscription opens Stripe’s billing page — not part of this sandbox. Nothing is charged here.' };
+    if (out.url !== '#subscribed') return out;
+    try { var back = new URL(location.href); back.searchParams.set('tab', 'design'); back.searchParams.set('checkout', 'done'); back.hash = ''; return { url: back.href }; } catch (e) { return out; }
+  }
   var realFetch = global.fetch ? global.fetch.bind(global) : null;
   global.fetch = function (input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || '', a = document.createElement('a'); a.href = url;
@@ -2822,9 +4471,10 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
     var method = ((init && init.method) || 'GET').toUpperCase(), body = {};
     try { body = init && init.body ? JSON.parse(init.body) : {}; } catch (e) {}
     var out;
-    try { out = method === 'GET' ? get(a.pathname, a.search.slice(1)) : F.post(state, a.pathname, a.search.slice(1), body, who()); } catch (e) { out = { status: 500, error: e.message }; }
+    try { out = method === 'GET' ? get(a.pathname, a.search.slice(1)) : stripe(a.pathname, F.post(state, a.pathname, a.search.slice(1), body, who())); } catch (e) { out = { status: 500, error: e.message }; }
     save(KEY, state);
     if (out && out.error && out.status) return respond({ error: out.error }, out.status);
+    if (out && out.download) return bytes(out.download);
     return respond(out, 200);
   };
 

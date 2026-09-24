@@ -2170,6 +2170,30 @@ service cloud.firestore {
 
     // Omega Logic accounting credentials and commercial configuration are
     // Admin SDK only. Tenant branding permissions do not extend to these paths.
+    //
+    // Ledger sync (2026-09-24, api/_lib/ledger-sync.js): a tenant-billed
+    // workspace's OWN QuickBooks company or Stripe account. Every new path
+    // lives under integrations/** and is covered by the two lines below —
+    // no new match block, no new top-level collection:
+    //   integrations/quickbooks_workspaces/orgs/{org}            the workspace's QuickBooks tokens
+    //   integrations/quickbooks_workspaces/orgs/{org}/customers/{key}
+    //   integrations/quickbooks_workspaces/orgs/{org}/invoices/{id}
+    //   integrations/stripe_connect/orgs/{org}                   its connected Stripe account id (no token stored)
+    //   integrations/stripe_connect/orgs/{org}/customers/{key}
+    //   integrations/stripe_connect/orgs/{org}/invoices/{in_id}  reverse index for the webhook
+    //   integrations/stripe_connect/accounts/{acct_id}           reverse index: account -> workspace
+    //   integrations/stripe_connect/events/{evt_id}              webhook dedupe
+    //   integrations/ledger_oauth/states/{state}                 one-time OAuth state, both providers
+    // The workspace's choice (fulfillment/config.ledgerSync) sits in the
+    // fulfillment line below, equally closed.
+    // Why no browser may read them, not even the workspace's own admin:
+    // QuickBooks refresh tokens ROTATE on every use, so a browser copy goes
+    // stale the first time the server refreshes and two writers racing a
+    // rotating credential kill the connection; and a connected Stripe
+    // account id plus the platform key can issue invoices on that account,
+    // so the pairing is the server's alone. The accounting page gets status
+    // from api/logic-accounting.js: env var NAMES that are missing, connected
+    // or not, never a token, key or code.
     match /integrations/{integrationId}/{document=**} { allow read, write: if false; }
     match /integrations/{integrationId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/fulfillment/{configId} { allow read, write: if false; }
@@ -2191,6 +2215,13 @@ service cloud.firestore {
     /* What ClearSky sent each subscriber (api/logic-kit.js): the log of app
        links and guides that went out, owner-only through the endpoint. */
     match /omega_orgs/{orgId}/kit_sends/{sendId} { allow read, write: if false; }
+    /* The CRM's open follow-ups across every account (the Today hub) and a
+       customer account's daily document allowance (api/crm.js, api/my-files.js).
+       The allowance is its own record, not a field on the customer, because
+       a tenant admin may update the customer record from a browser and
+       would then reset it. Stated, like the two lines above. */
+    match /omega_orgs/{orgId}/crm_followups/{followId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/crm_upload_usage/{usageId} { allow read, write: if false; }
 
     /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
        From docs/firestore.rules.plant.addendum, applied 2026-09-20 and
@@ -2829,6 +2860,18 @@ service cloud.firestore {
         match /projects/{projectId} {
           allow read, write: if false;
         }
+
+        /* The supplier's CRM on the account (api/crm.js; the customer's side
+           is api/my-files.js). Contacts, the activity log and the documents
+           are read and written only through those endpoints: a document is
+           visible to the customer only when the office shared it, which is
+           a field on the record — a browser that could read the record
+           could read an office-only one, and one that could write `shared`
+           or `path` could show the customer anything, or point a record at
+           another account's bytes. The endpoints check who, key by key. */
+        match /contacts/{contactId} { allow read, write: if false; }
+        match /activity/{activityId} { allow read, write: if false; }
+        match /files/{fileId}       { allow read, write: if false; }
       }
 
       /* ── THE POINTER ──  omega_orgs/{orgId}/customer_index/{emailLower}

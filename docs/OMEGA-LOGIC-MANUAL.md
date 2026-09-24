@@ -28,13 +28,15 @@ Three places to be:
 | **Plant app** | the two builders | `/plant/app?org=<org>` — install it from the browser menu |
 | **Bench screen** | a tablet bolted to a bench, or a builder's phone | `/plant/station.html` — paired once |
 | **Customer portal** | the customer | `/portals/customer/?org=<org>` |
-| **Customer app** | the customer, on a phone | `/portals/customer/app?org=<org>` — Editor Lite first |
+| **Customer app** | the customer, on a phone | `/portals/customer/app?org=<org>` — opens on its hub |
 
 **Try them first, with nothing behind them.** `/app-sandbox/plant`,
 `/app-sandbox/office`, `/app-sandbox/customer` and `/app-sandbox/bench` are
 the same four pages with a sample Clean Cell on the phone instead of the
 platform: sign in with any email, answer a request, assign a unit, key in a
-stack of POs, issue parts at the bench, size a system; **Reset** in the
+stack of POs, issue parts at the bench, size a system, log a call on a
+customer's account, upload a document from either side, subscribe to the
+design tool; **Reset** in the
 purple strip starts the sample over. Install them the same way. What they
 compute is the product's own arithmetic; what they show is not real.
 `app-sandbox/README.md` says exactly what is and is not.
@@ -47,6 +49,14 @@ named inside; only the customer app wears the tenant's own name and icon
 (`omega_orgs/{org}.appIcon`, or a set under `appIcon.customer`), because the
 tenant's customers use it. Each opens offline and says so, and never shows
 yesterday's data — the shell is cached, the data never is.
+
+**Both apps open on the hex hub** (`omega-hexhub.js`): seven cells in a
+honeycomb, the way the Ω in the app icon holds seven lit cells — one hub of
+the business in the middle, six around it, a red badge where a person is
+needed, and under it a panel per hub listing what is in it now. The office
+dashboard and the customer's desktop portal show the same hub at the top of
+their home page. The map of who uses what, and the endpoints behind it:
+`docs/OMEGA-LOGIC-ECOSYSTEM.md`.
 
 Sign out is top right on every office page. The left menu runs in the order
 the business runs: **Run the business** (Dashboard, Orders, Company POs,
@@ -65,7 +75,14 @@ guide with its address; a message per audience (customer, office, plant)
 ready for Jarvis or a person to send with the guide attached; and the log
 of what was sent to whom. `/api/logic-kit?org=` returns the same as JSON
 for Jarvis. The list is one file, `api/_lib/kit.js`; the guides are PDFs
-under `/guides/` built from `scripts/guides/`.
+under `/guides/` built from `scripts/guides/` by `build.js`, with the
+screenshots retaken from the sandboxes by `shots.js` (the sample workspace
+shows as "Your Company", so no public guide names a tenant). The office's
+guide is `/guides/Omega-Logic-App.pdf`, the Omega Logic app guide: getting
+the app on a phone or a computer, signing in, the hub, customers, orders,
+sites, and the customers' own app. The build also writes it as the old
+`Omega-Logic-Office-App.pdf`, which the app's Help menu and links already
+sent still open.
 
 0. **Commission the subscriber** from *Subscribers & commissioning*
    (`/logic-admin.html`, the ClearSky group of every office menu, or the
@@ -113,7 +130,13 @@ under `/guides/` built from `scripts/guides/`.
 
 ### Project manager — orders and customers
 
-- **Dashboard.** The five stages with counts (requests & quotes → awaiting
+- **Dashboard.** The hex hub (Today in the middle; Sales, Customers,
+  Plant, Deliver, Stock, Money around it) beside a **Today** list: company
+  POs to review, the CRM follow-ups that are due (*Open* goes to the
+  account's Activity, *Done* takes it off), customer requests, orders to
+  fix or price. Sales, Money and Today scroll to this page's own sections;
+  Customers, Plant, Deliver and Stock open their pages. Then the five
+  stages with counts (requests & quotes → awaiting
   deposit → in build → ready to ship → shipped), cash flow (invoiced,
   received, outstanding, deposits awaiting, purchase list value, payment
   exceptions) and the floor (open work orders, units on the floor, on hold,
@@ -131,9 +154,27 @@ under `/guides/` built from `scripts/guides/`.
   becomes an order awaiting pricing, mapped to the catalog, with its
   destination. Nothing is accepted or charged. A PO number that already
   exists is skipped and named.
-- **Customers.** Each account: contacts, terms, and the money — orders with
-  invoiced, paid, balance and shipped date, totals, open requests. Terms set
-  here win for that customer's future orders.
+- **Customers** (`/portals/customer/admin.html`) — the CRM. The follow-ups
+  due across every account sit at the top. Opening a customer opens the
+  ACCOUNT in sections, the way QuickBooks' customer hub does: **Overview**
+  (orders, invoiced, received, balance, open requests, the follow-ups, the
+  latest on the timeline, Editor Lite), **People & contacts** (the logins —
+  approve, turn off, make owner, invite, add — and the contacts who never
+  log in: add, edit, archive, *Log* against one), **Activity** (log a call,
+  email, meeting, note or task, with a contact, an order and a follow-up
+  date; *Done* on any open one — a task with no date is on Today until
+  done), **Documents** (upload up to 2 MB of PDF, PNG, JPEG, XLSX, DOCX, CSV
+  or TXT; *Share* shows it to the customer, *Stop sharing* hides it; open a
+  PDF or a photo, save anything; what the customer uploads from their app
+  is here, marked *from them*), **Orders & POs** (every order on the
+  account, and *Enter a PO* with the company chosen), **Sites** (their
+  sites and shipped units, each to its passport), **Timeline** (everything
+  on the account, newest first — what the customer did in their app
+  included) and **Details** (company, delivery address, email domain,
+  access, terms). `?customer=<id>#activity` opens an account straight on a
+  section; the dashboard's Today links there. Terms set here win for that
+  customer's future orders. Nothing is deleted: a contact or a document is
+  archived (an administrator's action).
 - **Shipping & receiving.** Destinations, shipment legs with carrier and
   tracking, serials on each load, pickup, delivery and receiving condition.
   An order with more than one destination is shipped leg by leg.
@@ -180,51 +221,104 @@ under `/guides/` built from `scripts/guides/`.
 **The Omega Logic app** — ClearSky's app, with your company as the
 workspace inside it (QuickBooks is the app, your company is what you sign
 into): its name and icon are Omega Logic on every phone, and the workspace
-name shows under it once signed in. One app for the whole business, laid
-out the way QuickBooks lays out its app: four tabs for the daily work and a **Menu**
-that holds everything else. The Menu has a search box, a row of
-*frequently used* circles (Orders, PO loads, Customers, Sites, Stock,
-Register, Plant), and panels that open to their list: Sales & orders,
-Customer hub, Plant, Deliver & sites, Stock & supply, Money, Setup, Help &
-guides. A screen the app has opens in the app; the rest open their page.
-Bottom tabs: Home, Orders, Customers, Sites, Menu. The screens:
+name shows under it once signed in. Every Omega Logic customer downloads the
+same app: you sign in to Omega Logic (Google, a sign-in link by email, or a
+password) and it opens your company; if you work for more than one, you
+choose, and **Switch** on the company line of the header changes it. It is
+laid out the way QuickBooks lays out its app:
+five tabs — **Home, Orders, Customers, Sites, Menu** — and a Menu that holds
+everything else. The Menu has a search box, a row of *frequently used*
+circles (Orders, PO loads, Customers, Sites, Stock, Invoices, Register,
+Plant), and panels that open to their list: Sales, Customers, Plant,
+Deliver, Stock, Money, Setup, Help & guides. A screen the app has opens in
+the app; the rest open their page. The screens:
 
-- **Today** — the stage counts (to price, awaiting deposit, in build,
-  ready · shipped); **needs a person**: company POs to review, orders with
-  an open customer request, orders that need attention, orders to price
-  (tap one to open it); money (invoiced, received, outstanding, deposits
-  awaiting, payment exceptions, purchase list value); the plant (open, late,
-  with holds, ready) with the late and held work orders named.
+- **Home** — the **hex hub**: **Today** in the middle; **Sales** (orders to
+  price, POs to review, open requests), **Customers** (follow-ups due,
+  people asking to join), **Plant** (units on hold), **Deliver** (units to
+  ship, placements the customer declared that you have not confirmed),
+  **Stock** (parts short) and **Money** (invoices to issue, overdue) around
+  it. A badge is what needs a person; a hub whose data has not arrived shows
+  no badge rather than a zero. Under the hub, a tile per hub: tap a cell or
+  a tile and its panel opens under it — what is in that hub now (the orders,
+  the follow-ups, the people waiting, the work orders, the units, the parts,
+  the invoices), then *Work it*, the screens and pages that run it. Tapping
+  Today goes to **Needs a person**: company POs to review, the CRM
+  follow-ups due (a task with no date is here until done; *Done* right on
+  the row, or tap it for the account's Activity), orders with an open
+  customer request, orders that need attention, orders to price. Then the
+  stage counts, money (invoiced, received, outstanding, deposits awaiting,
+  invoices to issue and overdue, purchase list value) and the plant (open,
+  late, with holds, ready).
 - **Orders** — every order with **All / Needs attention / To price /
   Awaiting deposit / In build / Ready · shipped / Customer requests**
   filters; each card carries the customer, lines, total and balance, and the
   work order's built % when it is on the floor. Tap one: lines, money and
   invoices, build progress and the units assigned from stock, shipment, and
-  the customer's requests — **answer & close** a request here. *Verify ready
-  · invoice the balance* is on an order in production; pricing, acceptance,
-  shipment and wires stay on the desktop, next to the QuickBooks evidence.
+  the customer's requests — **answer & close** a request here. On a
+  tenant-billed order: record an invoice **issued** (number, date, and your
+  own **pay link** if you have one — https only), add, change or remove the
+  pay link of an invoice already issued, and record a **payment received**.
+  *Verify ready · invoice the balance* is on an order in production;
+  pricing, acceptance, shipment and wires stay on the desktop, next to the
+  QuickBooks evidence.
+- **Money** (Menu → Invoices) — every invoice with money owed on it, in
+  three groups: **To issue** (billed on your paper and not issued yet),
+  **Overdue** (past the order's terms from the day it was issued) and
+  **Open**, each with its pay link or *Add pay link*, each opening its
+  order.
 - **POs** — PO loads: choose the company (or add one), the billing contact,
   paste the lines — same sheet as Company POs — and *Enter these purchase
   orders*. The company's uploaded POs under review and its orders are
   listed beneath.
-- **Customers** — the Customer hub. A customer is a COMPANY ACCOUNT with
-  its people on it (Amperage Capital: Shannon and his colleagues), so each
-  card is a company — how many people, the owner, the deposit, anyone
-  *asking to join* — with a search box and *Load more*. Open one for
-  invoiced, received, balance and open requests across the whole account;
-  **People** — each person, their role and whether they have signed in:
-  *Approve* someone who asked to join, *Turn off* someone who left (never the
-  last owner), *Invite*; **Add a person** (their work email, user or owner —
-  a colleague who already signed in on their own is moved onto the company
-  when that account is empty); **Their app** — the customer app link to send,
-  and the desktop link; the **company email domain** (people who sign in
-  from it ask to join); the terms for the whole account; every order on the
-  account and who it is billed to; and the account's sites and shipped
-  units, each opening its passport. An order opens its account too.
+- **Customers** — the CRM. A customer is a COMPANY ACCOUNT with its people
+  on it (Amperage Capital: Shannon and his colleagues), so each card is a
+  company — how many people, the owner, the deposit, anyone *asking to
+  join* — with a search box and *Load more*. Open one and it opens in
+  sections:
+  - **Overview** — invoiced, received, balance and open requests across the
+    whole account; quick actions (log a call, add a contact, upload a
+    document, enter a PO); the follow-ups; the latest on the timeline;
+    **Their app** — the customer app link to send, and the desktop link; the
+    **company email domain** (people who sign in from it ask to join; saving
+    it changes nothing else); the terms for the whole account.
+  - **People** — each login, their role and whether they have signed in:
+    *Approve* someone who asked to join, *Turn off* someone who left (never
+    the last owner), *Invite*; **Add a person** (their work email, user or
+    owner — a colleague who already signed in on their own is moved onto the
+    company when that account is empty). Then the **contacts** who never log
+    in — site leads, accounts payable, engineers — with *Call*, *Email*,
+    *Log* and *Edit*.
+  - **Activity** — log a call, an email, a meeting, a note or a task: a
+    subject, what was said, when, with which contact, about which order,
+    and a follow-up day. A follow-up is on Today from its day, a task with
+    no day at once, until *Done*.
+  - **Documents** — upload from the phone (the camera roll or files; PDF,
+    PNG, JPEG, XLSX, DOCX, CSV or TXT, up to 2 MB), choose what it is, tick
+    *Share with the customer* to put it in their app; *Open* a PDF or a
+    photo, *Save* anything else; share or stop sharing later. What the
+    customer uploads from their app is here, marked *theirs*.
+  - **Orders** — every order on the account and who it is billed to, and
+    **Enter a PO for** the company (the PO sheet with the company chosen;
+    *Back* returns to the account).
+  - **Sites** — the account's sites and shipped units, each opening its
+    passport.
+  - **Timeline** — everything on the account, newest first: orders placed,
+    priced, invoiced, paid and shipped; POs; requests asked and answered;
+    people who joined; documents both ways; logged activity; units received,
+    assigned and commissioned; sites; designs; the design tool's trial or
+    subscription. Nothing on it is typed twice.
+
+  What a login may press follows its role in the workspace: a **viewer**
+  reads the CRM and sees no forms; a **member** logs, uploads and keeps
+  contacts, and opens an account with its logins read-only — approving
+  people, changing terms and the domain, recording invoices and payments and
+  answering requests are an **administrator's**, and archiving a contact or
+  a document is an administrator's too. The endpoints refuse the rest
+  whatever is drawn.
 - **Stock** — finished units by product with **assign to an order** on each
   available serial, the parts short for the open work, and the supplier
   purchase orders still open.
-
 - **Sites** — mirrors *Deliver → Sites & custody* on the desktop: **the
   customer says** (each unit the customer placed at a site from their
   phone, with *Confirm*), **going to** (destinations named before arrival),
@@ -234,6 +328,7 @@ Bottom tabs: Home, Orders, Customers, Sites, Menu. The screens:
   the moves that apply: received, assign to the site, going to, installed,
   commissioned, in service), the sites with their unit counts, and the
   exceptions. Imports and coverage templates stay on the desktop.
+
 ### Procurement — stock, materials, vendors
 
 - **Materials plan.** What to buy, what to build, twelve weeks ahead,
@@ -278,7 +373,13 @@ stage is paid when what was received covers what was invoiced; release to
 the plant, ready and shipment then follow exactly as they do from a
 QuickBooks receipt. No processing fee is added to the customer's total;
 ClearSky's charge to the OEM is a separate line. The customer sees the
-invoice number and status on their order. QuickBooks is not needed.
+invoice number, the date it falls due on their terms, and its status on
+their order and in their **Pay** hub. Record the invoice with your own
+**pay link** (your bank's or your processor's payment page for that
+invoice, https only) and the customer's Pay hub opens it; add, change or
+remove it later from the order (the same number and date, a new link — an
+empty field removes it). No link: the customer is told you will send
+payment instructions. QuickBooks is not needed.
 
 **Bringing an order in from the paperwork.** `scripts/intake-order.js`
 runs one order through the same endpoint code the office uses — product on
@@ -370,16 +471,21 @@ invented; the label printer's sheet is the source.
 
 ## 5. The customer portal and the customer app
 
-Orders with a six-step milestone track, invoices with a QuickBooks pay link,
-documents the tenant marked customer-facing, shipment carrier and tracking,
-**warranty** on each line from the ship date for the product's warranty
-years, and **Request a change or ask a question** on any order (delivery
-address or date, a question, a change, a warranty claim). Requests and the
-tenant's answers stay on the order.
+The customer's account, on a computer (`/portals/customer/?org=<org>`) and
+on a phone (`/portals/customer/app?org=<org>`), in the supplier's name. Both
+open on the same **hex hub**: **Fleet** in the middle — every unit on the
+account, where it is and the site it runs at — and **Size · Design · POs ·
+Pay · Shipping · Warranty** around it, a badge only where the account is
+needed (a unit to receive, place or commission; an invoice to pay; a load
+on its way; a warranty pending until its unit has a site; a PO the supplier
+asked about; the design subscription's payment due). Under the hub:
+**Arriving**, **To pay** and **Needs you**. Everything the customer does
+here is on the account in the supplier's CRM as it happens.
 
-**Size a system** is the first entry in the portal nav. *Single site* frames
-the supplier's battery sizer (the same one the public site carries, in its
-plain mode). *Portfolio upload* takes a ZIP, CSV or XLSX of many sites —
+**Size a system.** *One site* — quick size against the supplier's own
+catalog (kW and hours, sized on the platform, with *Lay it out* and *Send
+as a PO*), or the supplier's battery sizer from the site's address and
+utility data. *Portfolio* takes a ZIP, CSV or XLSX of many sites —
 site list, bills, interval files, drawings — matches every document to a
 site by ID then address, and screens and sizes each site on its own with the
 data it actually has: a detailed size from a full year of interval data, a
@@ -389,6 +495,63 @@ carries where it came from. Results export to CSV, an executive report and
 per-site reports; a sized site can be added to the customer's projects and
 opened in Design Studio. Design, statuses and the honest list of what is not
 built: `docs/PORTFOLIO-SCREENING.md`.
+
+**Design** — Site Map · Editor Lite: its status (a trial from the supplier
+to a date, subscribed, or payment due), a new site plan from an address,
+every site plan to reopen, and the **subscription**: monthly or yearly at
+the supplier's prices (the yearly saving is shown), paid by card on
+Stripe's secure page, for everyone on the account. The page it comes back
+to says so once. **Manage subscription** (the account owner, or whoever
+subscribed) opens Stripe's billing page to change the card or cancel; a
+failed payment shows *Update payment*.
+
+**Pay** — every open invoice on the account, overdue first: its number,
+amount, the date it falls due on the account's terms, and **Pay** — the
+supplier's own payment page when there is one, QuickBooks' invoice page for
+a QuickBooks-billed order, otherwise *your supplier will send payment
+instructions*. Invoices being prepared and the paid ones below. Nothing is
+charged in the app.
+
+**Shipping** — the loads on their way (carrier, tracking, where each was
+last confirmed), orders getting ready with their ship-by date, and what was
+delivered.
+
+**Warranty** — coverage per unit, from when to when, *pending* until the
+unit is bound to a site; *Ask about this warranty* puts a warranty question
+on the unit's order, and the supplier's answer shows on the unit.
+
+**Orders** — each order with its six-step milestone, lines with the
+warranty date, order total and invoices by number, destinations and loads,
+documents, the requests and answers, and **Request a change or ask a
+question** (delivery address or date, a question, a change, a warranty
+claim). Requests and the tenant's answers stay on the order.
+
+**POs** — PO loads: paste the sheet (`PO number, SKU, qty, ship-to name,
+address, city, state, ZIP, requested date, notes`) and *Send these purchase
+orders*; each is received for pricing and nothing is charged. A PO number
+that already exists is named, never overwritten; fifty per day from a
+customer login. **Upload a PO document** (a signed PDF, a scan or a
+spreadsheet) — it lands on the account for the supplier to enter. Beneath:
+the POs under review (with the supplier's note where it asked for
+information) and the orders the POs became, with loads.
+
+**Fleet** (*Fleet & sites* on the desktop) — their sites (with the point of
+interconnection) and every unit on their orders with where it is and its
+warranty or SLA; *Going to* — name the site while the unit is still in
+transit, and receiving it binds it there; *Received* (in good order or
+damaged), *Assign* to a site, *Commissioned* (date and by whom), *Add a
+site*. What the customer places is marked *awaiting your supplier's
+confirmation* until the office confirms it, then *confirmed by your
+supplier* with the date.
+
+**Account** — account number, company, rep, the account's orders; the
+terms the supplier set; **People on this account** — the OWNER adds a
+colleague at the company's own email domain, approves someone who asked to
+join, and turns access off and on; their own details; **Documents** — what
+the supplier shared with the company and what anyone on it uploaded, in two
+lists, with an upload (PDF, PNG, JPEG, XLSX, DOCX, CSV or TXT, up to 2 MB;
+twenty a day for the account); agreements; how to install the app. On the
+desktop, Documents and Terms & agreements are their own views.
 
 ### One account, three apps
 
@@ -402,49 +565,20 @@ custody passport.
 
 ### The customer app (`/portals/customer/app`)
 
-The customer's account on their phone, and **Design is the home tab**
-because Site Map · Editor Lite is the thing that earns the next sale. It
-signs in the way the portal does (email link or Google; the link comes back
-into the app), loads no workspace runtime, and reads the same customer
-endpoints as the desktop portal. Four tabs:
+The same account on a phone, with five tabs — **Home** (the hub), **Orders**,
+**POs**, **Fleet**, **Account** — and the other hubs reached from Home, each
+with a way back. It signs in the way the portal does (email link or Google;
+the link comes back into the app), loads no workspace runtime, and reads the
+same customer endpoints as the desktop portal; it computes no price, size,
+coverage or eligibility itself.
 
-- **Design** — Editor Lite's status (trial to a date, active, or the price
-  and what it includes, with the account rep to ask); **new site plan** from
-  a site address; **quick size** — kW and hours against the supplier's own
-  design catalog, sized on the platform, with *Lay it out* (Editor Lite) and
-  *Send as a PO* (lands on the PO sheet with the line filled in); every site
-  plan with a tap to open it in Editor Lite; the supplier's bill-based sizer.
-- **Orders** — each order with its six-step milestone, lines with the
-  warranty date, order total and invoices with the pay link, destinations
-  and loads, documents, the requests and answers, and *Request a change or
-  ask a question*.
-- **POs** — PO loads for the customer: paste the same sheet (`PO number,
-  SKU, qty, ship-to name, address, city, state, ZIP, requested date,
-  notes`) and *Send these purchase orders*; each is received for pricing and
-  nothing is charged. A PO number that already exists is named, never
-  overwritten; fifty per day from a customer login. Beneath: their uploaded
-  POs under review and the orders their POs became, with loads. Links for
-  one PO to several sites and for uploading a PO document.
-- **Account** — account number, company, rep, the account's orders; the
-  terms the supplier set; **People on this account** — everyone on the
-  company's account; the OWNER adds a colleague at the company's own email
-  domain, approves someone who asked to join, and turns access off and on;
-  their own details to edit (name, phone; the owner also the company and
-  delivery address); **Sites & equipment** — their sites (with the point of
-  interconnection) and every unit on their orders with where it is and its
-  warranty or SLA (pending until the unit is bound to a site, then the
-  dates); *Going to* — name the site while the unit is still in transit, and
-  receiving it binds it there; *Received*, *Assign* to a site, *Commissioned*
-  (date and by whom), *Add a site*. What the customer places is marked
-  *awaiting your supplier's confirmation* until the office confirms it, then
-  *confirmed by your supplier* with the date; agreements; how to install the app; the desktop portal.
-
-Everyone on a customer's account sees the same orders, sites and units: the
-account is what is shown, not the person. Someone signing in for the first
-time from the email domain of a company the office set up asks to join it and
-sees *Almost there* until the owner or the office approves. A stranger at no
-known company gets an account of their own, as its owner. The customer app
-prints the supplier's *Powered by …* line when the contract keeps ClearSky's
+Everyone on a customer's account sees the same orders, sites, units and
+documents: the account is what is shown, not the person. Someone signing in
+for the first time from the email domain of a company the office set up asks
+to join it and sees *Almost there* until the owner or the office approves
+(*Check again* opens the account the moment they do). A stranger at no known
+company gets an account of their own, as its owner. The customer surfaces
+print the supplier's *Powered by …* line when the contract keeps ClearSky's
 name (`whiteLabel.attribution`, default on).
 
 ## 6. Build notes — what landed in this pass, and what did not
@@ -462,16 +596,24 @@ for its own company, and Clean Cell's office and customer icons
 (`scripts/make-tenant-icons.js` renders a tenant's `<app>-icon.svg` set);
 then **custody**: the status machine and coverage engine
 (`api/_lib/custody.js`), Sites & custody in the office, Sites & equipment
-in the customer app, receipt and shipment hooks in the logistics ledger.
+in the customer app, receipt and shipment hooks in the logistics ledger;
+then the **ecosystem** (`docs/OMEGA-LOGIC-ECOSYSTEM.md`): the hex hub on
+both apps and both desktops, the CRM (`api/crm.js` — contacts, activity and
+follow-ups, documents both ways, the derived timeline), the customer's
+documents (`api/my-files.js`), the supplier's pay link on a tenant-billed
+invoice, and the customer's Editor Lite subscription
+(`api/customer-subscribe.js`, the Stripe webhook's grant).
 
 Tests: `npm test` (the plant chain runs `test-plant-work`, `test-plant-stats`,
-`test-office-ops`, `test-app-manifest`; the logic chain `test-po-bulk` and
-`tests/tappsandbox`, which fails when `app-sandbox/` is not what
-`npm run build:sandbox` produces);
+`test-office-ops`, `test-app-manifest`; the logic chain `test-po-bulk`,
+`tests/tappsandbox` — which fails when `app-sandbox/` is not what
+`npm run build:sandbox` produces — `test-crm` and `test-customer-subscribe`);
 `npm run check:pages` renders the office dashboard, settings, inventory,
 materials, catalog, plant board and map, the bench (tablet and roaming
-phone), the plant app, the office app, the customer app and the three
-sandboxes (sign in, change something, reload) in Chromium.
+phone), the plant app, the office app, the customer app (both at phone and
+desktop width), the desktop CRM, the customer portal and the three
+sandboxes (sign in, change something, reload) in Chromium, and fails on a
+page error, a console error or an `/api/` call the sample does not answer.
 
 **Needs a person with credentials**
 
@@ -498,8 +640,16 @@ sandboxes (sign in, change something, reload) in Chromium.
   (desktop only, on purpose: the QuickBooks evidence is there).
 - Editor Lite's canvas on a phone (the app opens it in the browser; it lays
   out at desktop width and folds below 760 px, but it is a drawing tool).
-- A customer subscribing to Editor Lite from the app (checkout is not
-  enabled anywhere yet; the supplier grants a trial).
+- Paying the supplier its share of a customer's Editor Lite subscription
+  (Stripe Connect): checkout runs on ClearSky's Stripe account at the
+  supplier's prices. Design access while that subscription is past due.
+- Paying a tenant-billed invoice by card or ACH inside the apps (the Pay hub
+  opens the supplier's own payment page).
+- Email or calendar sync into the CRM (calls and meetings are logged by
+  hand), rescheduling a follow-up, a daily upload cap for the office.
+- A workspace member opening a customer account on the desktop CRM
+  (`api/buyers.js` GET is an administrator's; the Omega Logic app opens it
+  for a member from the company record, logins read-only).
 - Icons for tenants other than Clean Cell (each needs a mark of its own).
 - Time per step (the map times stations from arrival to arrival; issues are
   logged with a time but not yet summarised per step).

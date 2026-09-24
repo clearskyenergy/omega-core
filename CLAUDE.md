@@ -334,13 +334,19 @@ is not built.
 - **One front door, no company in the address.** You sign in to Omega Logic
   (like QuickBooks), then open your company: `/office/app` on a phone (short
   address `/logic`) and `/omega-logic` on a computer both open on
-  `omega-logic-signin.js` (Google or email + password, as on the dashboard),
-  and `api/logic-workspaces.js` lists where this person may go — judged by
+  `omega-logic-signin.js` (Google or email + password, as on the dashboard;
+  the phone app passes `linkUrl` and offers a sign-in link by email first, as
+  the app guide shows), and `api/logic-workspaces.js` lists where this person
+  may go — judged by
   the SAME `logic-access.authorize` every office endpoint runs (their email
   domain's workspace, an `org_members` grant; the ClearSky owner sees all).
   One company: straight in; several: pick; none: said plainly. The phone
   remembers the choice and forgets it on sign-out; `?org=` in an old link
   only preselects. `/office/app.webmanifest` is the one office manifest.
+  The phone header is the guide's: Omega Logic over "Company · email"
+  (the email ellipsizes), Switch as a small link on that line for someone
+  with more than one company, a round ↻ and a Sign out pill — it fits a
+  360px phone (`check:pages` office-app-header).
 - **One chrome.** `OmegaLogicTheme.chrome()` in `omega-logic-theme.js` paints
   the header (name · who · Sign out) and the left menu on EVERY office page,
   in the order the business runs. A page never builds its own menu; it calls
@@ -465,7 +471,9 @@ is not built.
   with a ready message and log each send under `omega_orgs/{org}/kit_sends`
   (Admin-SDK-only). Jarvis reads `/api/logic-kit?org=`. The guides are
   built by `scripts/guides/build.js` into `/guides/*.pdf` (served; `docs/`
-  is not). Add an app there, not in a page.
+  is not) from screenshots `scripts/guides/shots.js` takes of the sandboxes
+  (tenant names neutralised: a public PDF names no tenant); the office's is
+  `guides/Omega-Logic-App.pdf`. Add an app there, not in a page.
 - **ClearSky commissions and controls Logic subscribers from
   `/logic-admin.html`** (`api/logic-admin.js`, owner-only through
   `logic-access.requireOwner`). It owns only what no other endpoint did —
@@ -478,6 +486,22 @@ is not built.
   lands in `omega_orgs/{org}/admin_audit` with what changed and what it was.
   Tests: `scripts/test-logic-admin.js` on the shared
   `scripts/_lib/firestore-double.js`.
+- **The ecosystem is one map**: `docs/OMEGA-LOGIC-ECOSYSTEM.md` (who uses
+  which app, the hubs, the API contracts, what is not built). Both apps and
+  both desktops open on the HEX HUB (`omega-hexhub.js`, `OmegaHexHub.render`;
+  items[0] is the centre): the office's Today ringed by Sales · Customers ·
+  Plant · Deliver · Stock · Money, the customer's Fleet ringed by Size ·
+  Design · POs · Pay · Shipping · Warranty. The supplier's CRM is
+  `api/crm.js` on the ACCOUNT (contacts, activity and follow-ups on Today,
+  documents, a timeline DERIVED from the records by `api/_lib/crm.js`,
+  never stored); the customer's side of the same documents is
+  `api/my-files.js`; the customer's design subscription is
+  `api/customer-subscribe.js` (metadata `org`, never `orgId`, so it cannot
+  reach the tenant's billing); a tenant-billed invoice's pay link has ONE
+  check, `api/_lib/portal.js tenantPayLink`. All Admin SDK; the rules deny
+  browsers. The sample tenant in `scripts/_lib/logic-fixtures.js` answers
+  every one of these routes, so `check:pages` and the sandboxes exercise
+  them.
 - Chromium render checks for all of it: `npm run check:pages`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)

@@ -27,7 +27,7 @@ ok('  the customer app carries the tenant\'s name and icons', (function () { var
 
 console.log('\nthe sample answers a trial');
 var F = require('../_lib/logic-fixtures'), s = F.initialState(), V = F.views(s);
-ok('the office sees three orders, one to price, one request open', V.officeJson().orders.length === 3 && V.officeJson().totals.byStage.quote === 1 && V.officeJson().orders[0].requests[0].status === 'open');
+ok('the office sees four orders, one to price, one request open', V.officeJson().orders.length === 4 && V.officeJson().totals.byStage.quote === 1 && V.officeJson().orders[0].requests[0].status === 'open');
 var r = F.post(s, '/api/logic-office', '', { action: 'request-resolve', orderId: 'o1', requestId: 'r1', answer: '' }, 'pm@cleancell.us');
 ok('an answer needs words', r.status === 400, r);
 r = F.post(s, '/api/logic-office', '', { action: 'request-resolve', orderId: 'o1', requestId: 'r1', answer: 'Re-routed.' }, 'pm@cleancell.us');
@@ -53,6 +53,6 @@ var bench = V.benchJson({ action: 'issue', code: 'CC-MOD-52' });
 ok('the bench issues a part off the sample bill', /Issued 2 ea/.test(bench.say) && bench.work.steps[0].done);
 var size = V.designPost({ action: 'size', module: 'bess', kw: 400, hours: 2, sku: 'CC-C215' });
 ok('quick size runs the catalog selection', size.qty === 4 && size.selectedKwh === 860, size);
-ok('state survives JSON: what localStorage keeps is enough to rebuild every view', F.views(JSON.parse(JSON.stringify(s))).officeJson().orders.length === 4);
+ok('state survives JSON: what localStorage keeps is enough to rebuild every view', F.views(JSON.parse(JSON.stringify(s))).officeJson().orders.length === 5);
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);
