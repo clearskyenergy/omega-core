@@ -58,12 +58,19 @@ a third party's, not the customer's calculation data.
 
 Order matters: nothing emits until step 7, and step 6 must come before it.
 
+**Done 2026-09-23.** Every step below was run and the layer is enabled
+(`sampleRate: 0.25`), with the Fenecon and OSA exclusions written and read
+back first. The topic already existed (the `eventsIngest` deploy creates it).
+The lifecycle command takes a real file: gcloud cannot read a `<(…)`
+process substitution ("Bad file descriptor").
+
 1. **Rules.** Deploy `firestore.rules` (adds `event_config`, `event_exclusions`).
 2. **Topic and bucket.**
    ```
    gcloud pubsub topics create omega-events --project clearsky-portal
    gcloud storage buckets create gs://clearsky-portal-twin-events --project clearsky-portal --location us-central1 --uniform-bucket-level-access
-   gcloud storage buckets update gs://clearsky-portal-twin-events --lifecycle-file=<(echo '{"rule":[{"action":{"type":"Delete"},"condition":{"age":90}}]}')
+   echo '{"rule":[{"action":{"type":"Delete"},"condition":{"age":90}}]}' > lifecycle.json
+   gcloud storage buckets update gs://clearsky-portal-twin-events --lifecycle-file=lifecycle.json
    gcloud firestore fields ttls update expireAt --collection-group=twin_events --enable-ttl --project clearsky-portal
    ```
 3. **Workload Identity Federation (IAM — the security-sensitive step).**
