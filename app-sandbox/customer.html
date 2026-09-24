@@ -47,11 +47,11 @@
   header.top img{height:26px;width:auto;display:block}
   header.top b{font-size:17px}header.top small{display:block;color:var(--ink2);font-size:12px;overflow-wrap:anywhere}
   header.top .sp{flex:1}
-  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px}
+  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px;white-space:nowrap;flex:none}header.top>div{min-width:0}
   main{flex:1;padding:14px 16px;max-width:720px;width:100%;margin:0 auto;min-width:0}
   main>*{min-width:0}
   h1{font-size:24px;margin:6px 0 10px}h2{font-size:18px;margin:18px 0 8px}h3{font-size:16px;margin:12px 0 6px}
-  .status{font-size:13px;color:var(--ink2);min-height:18px}
+  .status{font-size:13px;color:var(--ink2);margin:0 0 10px}.status:empty{display:none}
   .card{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:14px;background:white;padding:14px;margin:10px 0;font:inherit;color:inherit}
   .card.hero{background:var(--brand-soft);border-color:var(--brand)}
   .card .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.card .h b{font-size:16px}

@@ -81,8 +81,14 @@
 
   function chrome(o) {
     o = o || {};
-    var org = String(o.org || ''), owner = ownerFlag(o.owner), name = (o.brand && o.brand.name) || o.name || 'Office';
-    if (o.brand) apply(o.brand);
+    var org = String(o.org || ''), owner = ownerFlag(o.owner), name = 'Omega Logic';
+    /* Omega Logic is ClearSky's product and the tenant is a workspace in it
+       (as QuickBooks is the app and the company is what you sign into): the
+       header is always Omega Logic in its own colours, and says whose
+       workspace this is. The tenant's white label is for what ITS customers
+       see — the storefront, the customer portal and app, the editor. */
+    var workspace = (o.brand && o.brand.workspace) || o.workspace || o.name || org;
+    document.body.classList.add('logic-theme');
     /* header */
     var header = document.querySelector('header');
     if (header) {
@@ -91,7 +97,7 @@
          site anyone has used; Home in the account nav says the same thing in words. An OEM's
          home is its dashboard; ClearSky's, with no org in the URL, is the directory of accounts. */
       var home = org ? '/omega-logic?org=' + encodeURIComponent(org) : '/omega-logic';
-      header.innerHTML = '<div><a class="logic-home" href="' + esc(home) + '" title="Home"><b data-brand-name>' + esc(name) + '</b></a><div class="muted logic-sub">' + esc(o.subtitle || (owner ? 'ClearSky · managing this OEM' : 'Office workspace')) + '</div></div>'
+      header.innerHTML = '<div><a class="logic-home" href="' + esc(home) + '" title="Home"><b data-brand-name>' + esc(name) + '</b></a><div class="muted logic-sub">' + esc([workspace, o.subtitle || (owner ? 'managed by ClearSky' : 'office workspace')].filter(Boolean).join(' · ')) + '</div></div>'
         + '<nav class="logic-who" aria-label="Account"><a href="' + esc(home) + '">Home</a><span id="who">' + esc(o.who || '') + '</span>'
         + (owner ? '<a href="/login">Where to?</a>' : '')
         + '<button type="button" id="signout" class="logic-signout">Sign out</button></nav>';

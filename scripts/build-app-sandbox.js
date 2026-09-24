@@ -55,11 +55,14 @@ function bundle(entry) {
 /* ── the pages ───────────────────────────────────────────────────────── */
 function must(s, old, neu, label) { if (s.indexOf(old) < 0) throw new Error('build-app-sandbox: ' + label + ' — expected to find: ' + old.slice(0, 80)); return s.split(old).join(neu); }
 var GSTATIC = /<script src="https:\/\/www\.gstatic\.com\/firebasejs\/[^"]+"><\/script>/g;
+/* The plant and office apps are ClearSky's Omega Logic (api/app-manifest.js);
+   only the customer app wears the tenant's icon. */
+var OL_ICON = { '180': '/icons/omega-logic-180.png', '192': '/icons/omega-logic-192.png', '512': '/icons/omega-logic-512.png', maskable: '/icons/omega-logic-maskable-512.png' };
 var PAGES = [
-  { src: 'plant/app.html', out: 'plant.html', app: 'plant', title: 'Plant', icon: TENANT.appIcon['180'], manifest: '/plant/app.webmanifest',
+  { src: 'plant/app.html', out: 'plant.html', app: 'plant', title: 'Omega Logic · Plant', icon: OL_ICON['180'], manifest: '/plant/app.webmanifest',
     runtime: '<script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script>',
     mf: "var mf = document.querySelector('link[rel=\"manifest\"]'); if (mf) mf.href = '/api/app-manifest?org=' + encodeURIComponent(ORG);", sw: "navigator.serviceWorker.register('/plant/app-sw.js', { scope: '/plant/app' })" },
-  { src: 'office/app.html', out: 'office.html', app: 'office', title: 'Office', icon: TENANT.appIcon.office['180'], manifest: '/office/app.webmanifest',
+  { src: 'office/app.html', out: 'office.html', app: 'office', title: 'Omega Logic', icon: OL_ICON['180'], manifest: '/office/app.webmanifest',
     runtime: '<script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script>',
     mf: "var mf = document.querySelector('link[rel=\"manifest\"]'); if (mf) mf.href = mfUrl;", sw: "navigator.serviceWorker.register('/office/app-sw.js', { scope: '/office/app' })" },
   { src: 'portals/customer/app.html', out: 'customer.html', app: 'customer', title: 'Your account', icon: TENANT.appIcon.customer['180'], manifest: '/portals/customer/app.webmanifest',
@@ -111,7 +114,7 @@ function build(outDir) {
    committed; scripts/publish-app-sandbox.js hands the folders to the
    Artifact tool. */
 var SHARED = ['omega-logic-theme.css', 'omega-logic-theme.js', 'omega-po-bulk.js'];
-var TITLES = { plant: 'Clean Cell Plant', office: 'Clean Cell Office', customer: 'Clean Cell Account', bench: 'Clean Cell Bench' };
+var TITLES = { plant: 'Omega Logic Plant', office: 'Omega Logic', customer: 'Clean Cell Account', bench: 'Omega Logic Bench' };
 function artifactPage(p, files, links) {
   var s = files[p.out], icon = p.bench ? null : p.icon;
   s = must(s, SANDBOX_SCRIPT, '<script>window.OMEGA_SANDBOX_APP=' + JSON.stringify(p.app) + ';window.OMEGA_SANDBOX_LINKS=' + JSON.stringify(links) + ';</script><script src="sandbox.js"></script>', p.out + ' sandbox script');
@@ -133,7 +136,7 @@ function buildArtifacts(outDir, links) {
     fs.writeFileSync(path.join(dir, 'index.html'), artifactPage(p, files, links));
     fs.writeFileSync(path.join(dir, 'sandbox.js'), files['sandbox.js']);
     SHARED.forEach(function (f) { fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)); });
-    var iconApp = p.bench ? 'plant' : p.app, set = iconApp === 'plant' ? TENANT.appIcon : TENANT.appIcon[iconApp];
+    var set = p.app === 'customer' ? TENANT.appIcon.customer : OL_ICON;
     ['180', '192', '512', 'maskable'].forEach(function (k) { fs.copyFileSync(path.join(ROOT, set[k]), path.join(dir, 'icons', path.basename(set[k]))); });
     if (!p.bench) { var m = JSON.parse(files[p.app + '.webmanifest']); m.id = p.app; m.start_url = '.'; m.scope = './'; m.icons.forEach(function (i) { i.src = 'icons/' + path.basename(i.src); }); m.apple_touch_icon = 'icons/' + path.basename(m.apple_touch_icon); fs.writeFileSync(path.join(dir, 'manifest.webmanifest'), JSON.stringify(m, null, 2) + '\n'); }
     made[p.app] = dir;

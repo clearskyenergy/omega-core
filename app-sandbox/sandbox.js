@@ -2023,6 +2023,10 @@ module.exports = function (org) {
   var wl = org.whiteLabel || {}, em = wl.embed || {}, c = org.colors || {};
   var logo = String(org.logoUrl || '');
   return { name: String(wl.platformName || org.name || 'Customer portal').slice(0, 160),
+    /* the tenant's own name, for ClearSky's Omega Logic product to say whose
+       workspace it has open (the white-label `name` above is what the
+       tenant's CUSTOMERS see) */
+    workspace: String(org.name || '').slice(0, 120),
     logoUrl: /^(https:\/\/|\/(?!\/))/.test(logo) ? logo : '',
     primary: color(c.primary || em.accent || wl.accent, '#3FAFC6'),
     accent: color(c.accent, '#EE5A4F'), ink: color(c.ink || em.ink, '#0B2733') };
@@ -2036,12 +2040,11 @@ module.exports = function (org) {
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
    A web manifest is a static file, and a static file cannot know which
-   tenant's phone it is being installed on. This endpoint hands each of the
-   three phone apps — the PLANT app for the builders, the OFFICE app for the
-   people running the business, the CUSTOMER app for the buyer — the
-   tenant's own name, colours and icon, so what lands on a home screen is
-   the tenant's mark, not ours — the same rule as the login page and the
-   storefront. Presentation only: no account, no keys, no terms, nothing a
+   tenant's phone it is being installed on. The OFFICE app (Omega Logic) and
+   the PLANT app are ClearSky's product and wear ClearSky's name and icon on
+   every tenant's phone; the CUSTOMER app is the tenant's own, opened by the
+   tenant's customers, so it wears the tenant's name, colours and icon — the
+   same rule as the login page and the storefront. Presentation only: no account, no keys, no terms, nothing a
    stranger could not already see on the tenant's pages. (The customer app
    is opened by people who are not tenant members, which is why this stays
    unauthenticated.)
@@ -2056,6 +2059,20 @@ module.exports = function (org) {
 'use strict';
 var A = require('api/_lib/admin.js'), brand = require('api/_lib/logic-brand.js');
 
+/* Omega Logic is ClearSky's product and a tenant is a workspace inside it,
+   the way QuickBooks is the app and the company is what you sign into. So
+   the OFFICE app (the Omega Logic app) and the PLANT app (its plant hub)
+   carry ClearSky's name and icon on every tenant's phone; the tenant's name
+   shows inside, once signed in. Only the CUSTOMER app is the tenant's: it
+   is what the tenant's own customers use, and to them it IS the tenant. */
+var OMEGA_LOGIC = {
+  icons: [
+    { src: '/icons/omega-logic-192.png', sizes: '192x192', type: 'image/png' },
+    { src: '/icons/omega-logic-512.png', sizes: '512x512', type: 'image/png' },
+    { src: '/icons/omega-logic-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+  ],
+  apple: '/icons/omega-logic-180.png', theme: '#0C1824'
+};
 var FALLBACK = [
   { src: '/icons/omega-192.png', sizes: '192x192', type: 'image/png' },
   { src: '/icons/omega-512.png', sizes: '512x512', type: 'image/png' },
@@ -2074,10 +2091,10 @@ function iconPath(v) {
    app carries the platform name alone, because to the buyer that IS the
    product. `id` keeps the three installs distinct on one phone. */
 var APPS = {
-  plant: { suffix: ' · Plant', start: '/plant/app', scope: '/plant/',
-    description: 'Work orders, the bench scanner, stock and quality for the people building the units.' },
-  office: { suffix: ' · Office', start: '/office/app', scope: '/office/',
-    description: 'Orders, purchase orders, customers and stock for the people running the business.' },
+  plant: { product: 'Omega Logic · Plant', short: 'OL Plant', start: '/plant/app', scope: '/plant/',
+    description: 'Omega Logic for the plant: work orders, the bench scanner, stock and quality for the people building the units.' },
+  office: { product: 'Omega Logic', short: 'Omega Logic', start: '/office/app', scope: '/office/',
+    description: 'Omega Logic by ClearSky: orders, purchase orders, customers, the plant, stock and every unit to its site.' },
   customer: { suffix: '', start: '/portals/customer/app', scope: '/portals/customer/',
     description: 'Design your sites, place purchase orders and follow every order from your supplier.' }
 };
@@ -2094,16 +2111,18 @@ function iconSet(ai) {
 /* Pure, so a test can hand it a record. */
 function manifestFor(org, record, app) {
   record = record || {}; app = appKey(app);
-  var A2 = APPS[app], b = brand(record), wl = record.whiteLabel || {}, base = record.appIcon && typeof record.appIcon === 'object' ? record.appIcon : {};
+  var A2 = APPS[app], b = brand(record), wl = record.whiteLabel || {};
+  if (A2.product) return { id: A2.start, name: A2.product, short_name: A2.short, description: A2.description,
+    start_url: A2.start + '?org=' + encodeURIComponent(org), scope: A2.scope, display: 'standalone', orientation: 'portrait',
+    background_color: '#ffffff', theme_color: OMEGA_LOGIC.theme, icons: OMEGA_LOGIC.icons, apple_touch_icon: OMEGA_LOGIC.apple };
+  var base = record.appIcon && typeof record.appIcon === 'object' ? record.appIcon : {};
   /* A per-app set wins in full when it has any usable icon; otherwise the
      shared set, so one mark serves all three until a tenant draws more. */
   var own = base[app] && typeof base[app] === 'object' ? base[app] : null;
   var ai = own && iconSet(own).length ? own : base;
   var icons = iconSet(ai);
   var short = String(wl.shortName || record.name || 'Plant').slice(0, 12);
-  var name = app === 'customer'
-    ? (String(wl.platformName || wl.shortName || record.name || '').slice(0, 40) || short)
-    : (String(wl.shortName || wl.platformName || record.name || '').slice(0, 40) || 'Plant') + A2.suffix;
+  var name = String(wl.platformName || wl.shortName || record.name || '').slice(0, 40) || short;
   return {
     id: A2.start,
     name: name,
@@ -2133,6 +2152,7 @@ module.exports = A.handler(async function (req, res) {
 });
 module.exports.manifestFor = manifestFor;
 module.exports.APPS = APPS;
+module.exports.OMEGA_LOGIC = OMEGA_LOGIC;
 module.exports.iconPath = iconPath;
 
   };
