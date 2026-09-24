@@ -100,6 +100,7 @@ var srv = http.createServer(function (req, res) {
   if (u.indexOf('/api/customer-design') === 0) return json(V.designJson());
   if (u.indexOf('/api/app-manifest') === 0) return json(V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT));
   if (u === '/api/logic-workspaces') return json(WORKSPACES || V.workspacesJson(OFFICE));
+  if (u === '/api/auth-check') return json({ google: true });
   if (u === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.CLEARSKY_CONFIG={firebase:{}};'); }
   if (u === '/omega-brand.js' || u === '/omega-tenant.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('/* stub */'); }
   var f = path.join(ROOT, u === '/' ? 'index.html' : u);
@@ -885,6 +886,24 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('  the account\'s documents: what the supplier shared, and an upload from the phone joins the company\'s', lists.join('|') === 'From Clean Cell · 1|From your company · 2', lists);
     return { who: who, result: result.slice(0, 40) };
   });
+  /* The installed iPhone app (navigator.standalone) signs in through its
+     own host. Until Google accepts that host's /__/auth/handler
+     (api/auth-check), a tap on Google must not strand the person on
+     Google's "Access blocked" page: they are told, and pointed at email
+     and password. Once Google accepts it, the tap goes on by redirect. */
+  for (var gi = 0; gi < 2; gi++) {
+    var accepts = gi === 1, ictx = await b.newContext({ viewport: { width: 390, height: 844 } });
+    await ictx.addInitScript(function (g) { Object.defineProperty(Navigator.prototype, 'standalone', { get: function () { return true; } }); window.OMEGA_SANDBOX_GOOGLE = g; }, accepts);
+    var ip = await ictx.newPage(), name = 'installed-app-google-' + (accepts ? 'on' : 'off');
+    ip.on('pageerror', function (e) { errs.push(name + ': ' + e.message); });
+    await ip.goto(base + '/app-sandbox/office', { waitUntil: 'domcontentloaded' }); await ip.waitForTimeout(500);
+    await ip.click('#signin'); await ip.waitForTimeout(900);
+    var st = await ip.evaluate(function () { var g = document.getElementById('gate'), vis = function (id) { var e = document.getElementById(id); return !!e && !e.hidden && e.offsetParent !== null; }; return { gate: !g.hidden, msg: (document.getElementById('ols-msg') || {}).textContent || '', focus: document.activeElement && document.activeElement.id, who: (document.getElementById('who') || {}).textContent || '', sw: document.documentElement.scrollWidth, pass: vis('ols-pass'), forgot: vis('ols-forgot'), linkMode: !!document.getElementById('ols-mode'), submit: (document.querySelector('.ols-submit') || {}).textContent || '' }; });
+    if (!accepts) ok('the installed app with Google not yet accepted for this host: no trip to Google\'s error page; email and password on screen (an emailed link would open Safari, so none is offered), how to set a password, Safari as the other way, and nothing overflows at 390px', st.gate && /not switched on for the installed app/.test(st.msg) && /Forgot password/.test(st.msg) && /\/logic in Safari/.test(st.msg) && st.focus === 'ols-email' && st.pass && st.forgot && !st.linkMode && st.submit === 'Sign in' && st.sw <= 390, st);
+    else ok('the installed app with Google accepted: the tap goes on to Google by redirect and signs in', !st.gate && /demo@cleancell\.us/.test(st.who), st);
+    if (shotsAt) await ip.screenshot({ path: path.join(shotsAt, name + '.png'), fullPage: true });
+    await ictx.close();
+  }
   ok('no JS errors', errs.length === 0, errs);
   ok('every /api/ route a page called is one the stub answers', missing.length === 0, missing);
   await b.close(); srv.close();
