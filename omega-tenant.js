@@ -725,7 +725,10 @@
 
   function loadEntitlements(user) {
     var d = db(); if (!d || !user) return;
-    if (T.hub) { routeFromHub(user); return; }
+    /* a page that is its own front door (Omega Logic: /office/app, /logic,
+       /omega-logic) sets OMEGA_NO_HUB_ROUTE: it resolves the workspace
+       itself, including cross-company grants the hub would send to signup */
+    if (T.hub) { if (!global.OMEGA_NO_HUB_ROUTE) routeFromHub(user); return; }
     var org = orgIdFor(user); if (!org) return;
     var uid = user.uid;
     var ref = d.collection('omega_orgs').doc(org);

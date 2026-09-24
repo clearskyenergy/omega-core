@@ -109,7 +109,7 @@
   <button data-tab="sites"><span>◎</span>Sites</button>
   <button data-tab="menu"><span>⋮⋮</span>Menu</button>
 </nav>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-logic-signin.js"></script>
+<script>window.OMEGA_NO_HUB_ROUTE = true; /* Omega Logic resolves its own workspace (omega-logic-signin.js) */</script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-logic-signin.js"></script>
 <script>
 (function () {
   'use strict';
@@ -126,8 +126,12 @@
      ?org= (older invitations) preselects it. The home-screen name, colours
      and icon are Omega Logic's on every phone: the static manifest
      /office/app.webmanifest, the same for everyone. */
-  var ORG = params.get('org') || load('omega_office_app_org', '') || '';
-  if (params.get('org')) store('omega_office_app_org', params.get('org'));
+  var HINT = params.get('org') || '', ORG = load('omega_office_app_org', '') || HINT;
+  if (HINT) {
+    if (!load('omega_office_app_org', '')) store('omega_office_app_org', HINT);
+    /* the hint is used once; the address goes back to having no company */
+    params.delete('org'); try { history.replaceState(null, '', location.pathname + (String(params) ? '?' + params : '') + location.hash); } catch (e) {}
+  }
   var WS = null, REFUSED = {}, UID = null;
   var TAB = params.get('tab') || 'today', DATA = null, BOARD = null, MAT = null, PICK = null, ORDER_FILTER = load('omega_office_app_filter', 'all');
   var BUYERS = null, CUST = null, COMPANIES = null, COMPANY_ID = load('omega_office_app_company', ''), COMPANY = null, UNITS = null;
