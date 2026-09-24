@@ -84,25 +84,35 @@
       var em = el.querySelector('#ols-email').value.trim(), pw = el.querySelector('#ols-pass').value;
       if (!em || !pw) return say('Enter your work email and password.');
       var b = el.querySelector('.ols-submit'); b.disabled = true; say('Signing in\u2026', true);
-      auth.signInWithEmailAndPassword(em, pw)['catch'](function (e) { say(said(e)); }).then(function () { b.disabled = false; });
+      Promise.resolve().then(function () { return auth.signInWithEmailAndPassword(em, pw); })['catch'](function (e) { say(said(e)); }).then(function () { b.disabled = false; });
     };
     el.querySelector('#ols-forgot').onclick = function () {
       var em = el.querySelector('#ols-email').value.trim();
       if (!em) { say('Type your work email above, then tap \u201cForgot password?\u201d again.'); el.querySelector('#ols-email').focus(); return; }
-      auth.sendPasswordResetEmail(em).then(function () { say('If that email has a password here, a reset link is on its way.', true); }, function (e) { say(said(e)); });
+      var sent = function () { say('If that email has a password here, a reset link is on its way.', true); };
+      /* the same answer whether or not the email has an account */
+      Promise.resolve().then(function () { return auth.sendPasswordResetEmail(em); }).then(sent, function (e) { if (/user-not-found/.test(String(e && e.code))) return sent(); say(said(e)); });
     };
   }
 
+  function ask(auth, fresh) {
+    return auth.currentUser.getIdToken(!!fresh).then(function (t) { return fetch('/api/logic-workspaces', { headers: { Authorization: 'Bearer ' + t } }); })
+      .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Could not find your company.'); return d; }); });
+  }
   function resolve(auth) {
     if (!auth.currentUser) return Promise.reject(new Error('Sign in first.'));
-    return auth.currentUser.getIdToken().then(function (t) { return fetch('/api/logic-workspaces', { headers: { Authorization: 'Bearer ' + t } }); })
-      .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Could not find your company.'); return d; }); });
+    return ask(auth).then(function (d) {
+      /* just clicked the verification link? the cached token still says
+         unverified for up to an hour: reload the user and ask once more */
+      if (d.reason !== 'verify' || !auth.currentUser.reload) return d;
+      return auth.currentUser.reload().then(function () { return auth.currentUser.emailVerified ? ask(auth, true) : d; }, function () { return d; });
+    });
   }
 
   function choose(el, data, onPick, onSignOut, auth) {
     style(); data = data || {};
     var list = data.workspaces || [], email = esc(data.email || '');
-    if (!list.length) {
+    if (!list.length && !data.owner) {
       el.innerHTML = '<div class="ols">' + MARK + '<h1>Nowhere to go yet</h1><p class="ols-lede">' + esc(data.note || 'This email is not on an Omega Logic workspace yet.') + '</p>'
         + '<p class="ols-lede" style="margin-top:-8px">Signed in as <b>' + email + '</b></p>'
         + (data.reason === 'verify' && auth && auth.currentUser && auth.currentUser.sendEmailVerification ? '<button type="button" class="ols-submit" id="ols-verify">Send the link again</button><div style="height:10px"></div>' : '')
@@ -116,6 +126,8 @@
       + '<div class="ols-list">' + list.map(function (w, i) {
         return '<button type="button" class="ols-ws" data-ws="' + i + '"><div><b>' + esc(w.name || w.orgId) + '</b><small>' + esc(w.orgId) + (w.role && w.role !== 'clearsky' ? ' \u00b7 ' + esc(w.role) : '') + (w.status && w.status !== 'active' ? ' \u00b7 ' + esc(w.status) : '') + '</small></div><span aria-hidden="true">\u203a</span></button>';
       }).join('') + '</div>'
+      + (data.owner && !list.length ? '<p class="ols-lede">No Omega Logic workspaces yet.</p>' : '')
+      + (data.limited ? '<p class="ols-fine">Showing the first ' + list.length + '. Open the desktop directory for the rest.</p>' : '')
       + '<button type="button" class="ols-link" id="ols-out">Sign in with another account</button></div>';
     Array.prototype.forEach.call(el.querySelectorAll('[data-ws]'), function (b) { b.onclick = function () { onPick(list[Number(b.getAttribute('data-ws'))].orgId); }; });
     el.querySelector('#ols-out').onclick = onSignOut;

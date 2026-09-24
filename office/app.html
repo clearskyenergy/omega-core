@@ -128,7 +128,7 @@
      /office/app.webmanifest, the same for everyone. */
   var ORG = params.get('org') || load('omega_office_app_org', '') || '';
   if (params.get('org')) store('omega_office_app_org', params.get('org'));
-  var WS = null;
+  var WS = null, REFUSED = {}, UID = null;
   var TAB = params.get('tab') || 'today', DATA = null, BOARD = null, MAT = null, PICK = null, ORDER_FILTER = load('omega_office_app_filter', 'all');
   var BUYERS = null, CUST = null, COMPANIES = null, COMPANY_ID = load('omega_office_app_company', ''), COMPANY = null, UNITS = null;
   var CUSTODY = null, LOADS = null, SCANS = [], SERIAL = null, camStream = null, camTimer = null;
@@ -141,7 +141,7 @@
     if (!auth.currentUser) return Promise.reject(new Error('Sign in first.'));
     return auth.currentUser.getIdToken().then(function (t) {
       return fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(Object.assign({ org: ORG }, body)) : undefined });
-    }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Request failed'); return d; }); });
+    }).then(function (r) { return r.json().then(function (d) { if (!r.ok) { var e = new Error(d.error || 'Request failed'); e.status = r.status; throw e; } return d; }); });
   }
   function status(t) { $('status').textContent = t || ''; }
   function fail(e) { status(e.message || String(e)); }
@@ -165,7 +165,7 @@
     })['catch'](function (e) {
       /* the company remembered on this device is not (or no longer) this
          person's: forget it and ask Omega Logic where they belong */
-      if (/Not your OEM workspace|An active OEM member is required|not provisioned|subscription is not active/.test(e.message || '')) { setOrg(''); return front(); }
+      if ([400, 403, 404].indexOf(e.status) >= 0) { REFUSED[ORG] = true; setOrg(''); WS = null; return front(); }
       fail(e);
     });
   }
@@ -602,14 +602,19 @@
   $('switch').onclick = function () { front(true); };
   /* The Omega Logic sign-in, then "which company". */
   function gate(on) { $('gate').hidden = !on; $('nav').hidden = on; $('view').hidden = on; }
-  function enter(org) { setOrg(org); gate(false); TAB = 'today'; loadAll(); }
+  function enter(org) { setOrg(org); resetCaches(); gate(false); TAB = 'today'; loadAll(); }
+  /* everything drawn for one workspace (or one person) is dropped before
+     another is opened, so Switch never shows the last company's units */
+  function resetCaches() { DATA = null; BOARD = null; MAT = null; UNITS = null; BUYERS = null; CUST = null; COMPANIES = null; COMPANY = null; CUSTODY = null; LOADS = null; SCANS = []; SERIAL = null; PICK = null; closeCam(); }
   function front(picking) {
     gate(true); status('');
     if (!window.OmegaLogicSignIn) { $('gate-note').textContent = 'Could not load the sign-in. Refresh the page.'; return; }
     $('gate').innerHTML = '<p class="note" style="text-align:center;margin-top:40px">Finding your company…</p>';
     (WS ? Promise.resolve(WS) : OmegaLogicSignIn.resolve(auth)).then(function (d) {
       WS = d;
-      if (!picking && !d.owner && d.workspaces.length === 1) return enter(d.workspaces[0].orgId);
+      var open = d.workspaces.filter(function (w) { return !REFUSED[w.orgId]; });
+      if (!picking && !d.owner && open.length === 1) return enter(open[0].orgId);
+      if (!picking && !d.owner && d.workspaces.length && !open.length) d = { email: d.email, workspaces: [], reason: 'none', note: 'Your company refused this sign-in just now. Ask its Omega Logic administrator to check your access.' };
       OmegaLogicSignIn.choose($('gate'), d, enter, signOut, auth);
     })['catch'](function (e) { $('gate').innerHTML = '<p class="note" style="text-align:center;margin-top:40px;color:#B42318">' + esc(e.message) + '</p>'; });
   }
@@ -623,6 +628,11 @@
   function paintNet() { $('offline').hidden = navigator.onLine !== false; }
   window.addEventListener('online', paintNet); window.addEventListener('offline', paintNet); paintNet();
   auth.onAuthStateChanged(function (u) {
+    /* a different person (or nobody) on this page: nothing of the last
+       person's survives — their company, their list, their data */
+    var uid = u ? u.uid || u.email : null;
+    if (UID !== null && uid !== UID) { WS = null; REFUSED = {}; setOrg(''); resetCaches(); }
+    UID = uid;
     $('signout').hidden = !u; $('view').innerHTML = ''; $('switch').hidden = true;
     if (!u) { $('who').textContent = ''; gate(true); if (window.OmegaLogicSignIn) OmegaLogicSignIn.signIn($('gate'), { auth: auth }); return; }
     if (!ORG) return front();

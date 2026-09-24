@@ -50,6 +50,8 @@
   auth.sendSignInLinkToEmail = function (email) { return become(email).then(function () { return undefined; }); };
   auth.isSignInWithEmailLink = function () { return false; };
   auth.signInWithEmailLink = function (email) { return become(email); };
+  auth.signInWithEmailAndPassword = function (email) { return become(email); };
+  auth.sendPasswordResetEmail = function () { return Promise.resolve(); };
   function GoogleAuthProvider() {}
   var fb = { apps: [1], initializeApp: function () {}, auth: function () { return auth; } };
   fb.auth.GoogleAuthProvider = GoogleAuthProvider;

@@ -58,6 +58,12 @@ function seed() {
     seed(); var d = await get(who('tom@clearsky-usa.com'));
     assert.equal(d.owner, true); assert.deepEqual(d.workspaces.map(function (w) { return w.orgId; }).sort(), ['cleancell.us', 'joules.example']);
   });
+  await test('the owner\'s list is every Omega Logic workspace, however many other company records there are', async function () {
+    seed(); for (var i = 0; i < 650; i++) db.seed('omega_orgs/a' + String(i).padStart(4, '0') + '.example', { name: 'Signup ' + i, status: 'pending' });
+    workspace('zz-late.example', 'Late Logic Co');
+    var d = await get(who('tom@clearsky-usa.com'));
+    assert.ok(d.workspaces.some(function (w) { return w.orgId === 'zz-late.example'; }), 'a workspace sorting after 650 others is listed'); assert.equal(d.limited, false);
+  });
   await test('both office pages open on the one sign-in, and the app address carries no company', async function () {
     var root = path.join(__dirname, '..'), app = fs.readFileSync(path.join(root, 'office/app.html'), 'utf8'), desk = fs.readFileSync(path.join(root, 'omega-logic.html'), 'utf8');
     assert.ok(/src="\/omega-logic-signin\.js"/.test(app) && /src="\/omega-logic-signin\.js"/.test(desk));
