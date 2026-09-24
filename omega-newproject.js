@@ -300,6 +300,7 @@
       updatedAt: FV.serverTimestamp(),
       elements: [], conduits: [], bessList: [], annotations: []
     }).then(function (ref) {
+      try { if (global.OmegaEvents) global.OmegaEvents.emit('project.created', { projectId: ref.id, vertical: String(primaryType() || '').toLowerCase() || null, source: 'new-project' }); } catch (e) {}
       close();
       if (typeof CFG.afterCreate === 'function') CFG.afterCreate(ref.id);
       else global.location.href = '/editor.html?id=' + encodeURIComponent(ref.id);

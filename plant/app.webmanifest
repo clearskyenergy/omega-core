@@ -1,0 +1,29 @@
+{
+  "name": "Omega Logic · Plant",
+  "short_name": "OL Plant",
+  "description": "Omega Logic for the plant: work orders, the bench scanner, stock and quality.",
+  "start_url": "/plant/app",
+  "scope": "/plant/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0C1824",
+  "icons": [
+    {
+      "src": "/icons/omega-logic-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/omega-logic-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/omega-logic-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

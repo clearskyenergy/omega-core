@@ -39,7 +39,14 @@
 
   /* Bump this to re-prompt every user on their next page load. Date form keeps
      it self-documenting; any string works as long as it changes. */
-  var TERMS_VERSION = '2026-08-08';
+  /* 2026-09-23: §4 amended ("solely" removed), §4a Service Data and §4b
+     Privacy and sub-processors added, for the Event Layer (usage telemetry
+     across every tenant). Decided 2026-09-11: bump now, counsel reviews after.
+     A clickwrap bump binds click-through users only; it does NOT amend a
+     separately signed agreement (Fenecon, the OSA JV). Those tenants are held
+     out of telemetry by api/_lib/events.js's exclusion list until counsel
+     clears each one. */
+  var TERMS_VERSION = '2026-09-23';
 
   var PLATFORM = 'ClearSky-OMEGA';
   var COMPANY  = 'ClearSky Energy Solutions LLC';
@@ -74,10 +81,36 @@
        'You retain ownership of the project data, site information, customer records and other '
        + 'content you upload or enter ("Customer Data"), and of the specific project deliverables the '
        + 'Platform generates from it for you. We claim no ownership of Customer Data. You grant us a '
-       + 'limited licence to host, process, transmit and display Customer Data solely to provide, '
-       + 'secure and support the Platform. Your ownership of a generated deliverable does not extend '
+       + 'limited licence to host, process, transmit and display Customer Data to provide, secure and '
+       + 'support the Platform, and to use it as Service Data as described in section 4a. Your '
+       + 'ownership of a generated deliverable does not extend '
        + 'to the underlying templates, calculation methods or software that produced it, which remain '
        + 'ours under section 3.'],
+
+      ['4a. Service Data and product improvement',
+       'We collect and process technical and usage data about how the Platform is operated — '
+       + 'including feature and tool usage, the inputs supplied to and results produced by the '
+       + 'Platform’s calculation methods, performance timings, and error diagnostics ("Service '
+       + 'Data"). Service Data may include Customer Data that you supply to those calculations, such '
+       + 'as site locations, load profiles and system sizes. Each record identifies the user account '
+       + 'and organisation it came from. We use Service Data to operate, secure, troubleshoot and '
+       + 'improve the Platform, including to evaluate and improve the accuracy of the calculation '
+       + 'methods described in section 3, and to develop new features. This use is not limited to your '
+       + 'own instance: we may use Service Data derived from your use of the Platform to improve the '
+       + 'Platform for all customers. We will not sell Service Data, disclose it to third parties except '
+       + 'sub-processors acting on our instructions, or use it to identify or target your customers. '
+       + 'Statistical and aggregated insights we derive from Service Data are owned by us. This does not '
+       + 'affect your ownership of Customer Data under section 4.'],
+
+      ['4b. Privacy, retention and sub-processors',
+       'Service Data is stored in Google Cloud (Firebase, Firestore, Pub/Sub and Cloud Storage) and '
+       + 'passes through our hosting provider, Vercel. We may analyse it with AI models provided by '
+       + 'Anthropic, under terms that do not permit the provider to train on it. Individual Service Data '
+       + 'records are deleted after ninety (90) days; aggregated statistics may be kept longer. A '
+       + 'representative of your organisation may ask us at the contact address in section 15 to '
+       + 'export or delete the Service Data recorded for your organisation, or to stop collecting it, '
+       + 'and we will do so within thirty (30) days. We will update this list before adding a '
+       + 'sub-processor that receives Service Data.'],
 
       ['5. Restrictions',
        'You will not, and will not permit anyone else to: (a) copy, modify, translate or create '
@@ -133,7 +166,7 @@
        'We may suspend or terminate access immediately for breach of these terms, for non-payment, or '
        + 'where continued access poses a security or legal risk. You may stop using the Platform at any '
        + 'time. On termination your licence ends and you must stop using the Platform; sections 3, 4, '
-       + '5, 6, 8, 9, 10, 11 and 13 survive. We will make Customer Data available for export for a '
+       + '4a, 4b, 5, 6, 8, 9, 10, 11 and 13 survive. We will make Customer Data available for export for a '
        + 'reasonable period after termination unless prohibited by law.'],
 
       ['13. Governing law',   /* REVIEW: confirm state and venue with counsel. */
@@ -255,6 +288,8 @@
         accept.textContent = 'Recording\u2026';
         err.textContent = '';
         record(opts.user).then(function () {
+          /* omega-events.js may have cached "not accepted" for this tab. */
+          try { sessionStorage.removeItem('omega-ev-cfg'); } catch (e) {}
           close();
           if (opts.onAccept) opts.onAccept();
         })['catch'](function (e) {

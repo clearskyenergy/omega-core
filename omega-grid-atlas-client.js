@@ -186,6 +186,15 @@
     opts = opts || {};
     var body = { lat: site && site.lat != null ? +site.lat : null,
                  lng: site && site.lng != null ? +site.lng : (site && site.lon != null ? +site.lon : null) };
+    /* Optional site boundary. When the editor can anchor the parcel to the
+       world it sends the ring, and the service measures fiber from the site
+       EDGE instead of its centre — on a 200-acre parcel those differ by half
+       a mile, and the edge is the one a lateral is built to. When it cannot,
+       it sends nothing and the response says the measurement was from the
+       point. It is never silently substituted. */
+    if (site && site.boundary) body.boundary = site.boundary;
+    if (opts.requestedCapacityGbps != null && isFinite(+opts.requestedCapacityGbps))
+      body.requestedCapacityGbps = +opts.requestedCapacityGbps;
     if (body.lat == null || body.lng == null || !isFinite(body.lat) || !isFinite(body.lng))
       return Promise.reject(new Error('No coordinates \u2014 place or lock the satellite view first.'));
     return idToken().then(function (tok) {

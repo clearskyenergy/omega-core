@@ -55,13 +55,67 @@ function fromProject(p, id) {
     address: addr,
     city: clean(p.city, 80), state: clean(p.state || p.stateCode, 20),
     utility: clean(p.utility, 120),
-    mw: num(p.sizeMw != null ? p.sizeMw : p.mw),
-    mwh: num(p.sizeMwh != null ? p.sizeMwh : p.mwh),
-    capexUsd: num(p.capexUsd),
+    /* A typed figure wins; the sizing fills the gap when nobody typed one,
+       so a project sized in the tool and never hand-entered does not reach
+       the market as 0 MW. */
+    mw: num(p.sizeMw != null ? p.sizeMw : p.mw) || sizedMw(p),
+    mwh: num(p.sizeMwh != null ? p.sizeMwh : p.mwh) || sizedMwh(p),
+    capexUsd: num(p.capexUsd) || sizedCapex(p),
     developer: clean(p.developer || p.orgName || p.orgId, 120),
     developerUid: clean(p.ownerUid || p.createdByUid, 128) || null,
     orgKey: clean(p.orgId, 120),
-    projectId: id
+    projectId: id,
+    /* The sizing the Battery Sizer or the site-map editor left on this
+       project, WITH ITS BASIS. A megawatt figure on its own tells a capital
+       partner nothing about whether it came from a year of interval data or
+       one bill and an assumption, and those two underwrite differently.
+       It is read, never recomputed, so the deal room cannot disagree with
+       the tool the developer was looking at when they sent it. */
+    sizing: sizingOf(p)
+  };
+}
+
+var RESULT_FIELD = 'bessSizing';
+
+function sizedMw(p) {
+  var r = p && p[RESULT_FIELD];
+  return r && num(r.powerKw) > 0 ? Math.round(num(r.powerKw) / 1000 * 1000) / 1000 : null;
+}
+function sizedMwh(p) {
+  var r = p && p[RESULT_FIELD];
+  return r && num(r.nameplateKwh) > 0 ? Math.round(num(r.nameplateKwh) / 1000 * 1000) / 1000 : null;
+}
+function sizedCapex(p) {
+  var r = p && p[RESULT_FIELD];
+  return r && num(r.capex) > 0 ? num(r.capex) : null;
+}
+
+/* How far a reader should trust the number, in words they already use. */
+function sizingGrade(rec) {
+  if (!rec) return null;
+  if (rec.basis === 'interval') return 'measured';
+  var m = num(rec.monthsAnalyzed) || 0;
+  if (m >= 12) return 'twelve bills';
+  if (m > 1) return 'partial year';
+  return 'single bill';
+}
+
+function sizingOf(p) {
+  var rec = p && p[RESULT_FIELD];
+  if (!rec || !(num(rec.powerKw) > 0)) return null;
+  return {
+    bessKw:        num(rec.powerKw),
+    bessKwh:       num(rec.nameplateKwh),
+    bessDurationH: num(rec.durationH),
+    capexUsd:      num(rec.capex),
+    annualSavingsUsd: num(rec.annualSavings),
+    paybackYr:     num(rec.paybackYr),
+    basis:         clean(rec.basis, 24),
+    grade:         sizingGrade(rec),
+    confidence:    clean(rec.confidence, 80),
+    months:        num(rec.monthsAnalyzed),
+    engine:        clean(rec.engine, 60),
+    at:            num(rec.at)
   };
 }
 

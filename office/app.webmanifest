@@ -1,0 +1,30 @@
+{
+  "id": "/office/app",
+  "name": "Omega Logic",
+  "short_name": "Omega Logic",
+  "description": "Omega Logic by ClearSky: orders, purchase orders, customers, the plant, stock and every unit to its site.",
+  "start_url": "/office/app",
+  "scope": "/office/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0C1824",
+  "icons": [
+    {
+      "src": "/icons/omega-logic-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/omega-logic-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/omega-logic-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

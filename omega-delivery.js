@@ -560,6 +560,7 @@
          arrives missing them is obviously second-class the moment it opens. */
       elements: [], conduits: [], bessList: [], annotations: []
     }).then(function (ref) {
+      try { if (global.OmegaEvents) global.OmegaEvents.emit('project.created', { projectId: ref.id, vertical: (t === 'ev') ? 'ev' : 'bess', source: 'referral' }); } catch (e) {}
       return patch(r.id, { editorProjectId: ref.id, status: 'in_production' })
         .then(function () { return ref; })
         ['catch'](function () { return ref; });

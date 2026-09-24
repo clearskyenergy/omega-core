@@ -1,0 +1,312 @@
+<!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customers · Omega Logic</title>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     portals/customer/admin.html — the supplier's CRM on the desktop
+
+     The Customer hub of the Omega Logic app (office/app.html), with more
+     room. Every customer is an ACCOUNT with people on it; opening one opens
+     it in sections, the way QuickBooks' customer hub does:
+       Overview           money, open requests, follow-ups due, the latest
+                          on the timeline, Editor Lite
+       People & contacts  the logins (approve, turn off, invite, add) and
+                          the CRM contacts who never log in
+       Activity           log a call, email, meeting, note or task, with a
+                          follow-up date that is on Today until done
+       Documents          upload, share with the customer, open, archive;
+                          what the customer uploads from their app is here
+       Orders & POs       every order on the account; enter a PO for it
+       Sites              their sites and shipped units, each to its passport
+       Timeline           everything on the account, newest first
+       Details            the company, its address, domain, access and terms
+     The account and its people come from api/buyers.js (the one writer of
+     people is api/_lib/buyer-accounts.js); contacts, activity, documents
+     and the timeline from api/crm.js (docs/OMEGA-LOGIC-ECOSYSTEM.md). A
+     document is fetched with the token and handed over as bytes, never as a
+     URL. The CRM answers canEdit / canArchive and the page draws only what
+     this login may press; the endpoints refuse the rest whatever is drawn.
+     ══════════════════════════════════════════════════════════════════════ -->
+<link rel="stylesheet" href="/omega-logic-theme.css"><style>body{margin:0}header{padding:20px 30px;display:flex;gap:18px;justify-content:space-between;align-items:center}header small{display:block}.contact{display:block;font-size:12px}.back{margin-right:14px}#gate{padding:40px;max-width:700px}button:disabled{opacity:.5;cursor:wait}
+.seg{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 8px;padding-bottom:12px;border-bottom:1px solid var(--line)}.logic-main .seg button{padding:7px 14px;font-size:14px;border-radius:999px}.logic-main .seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}.seg small{opacity:.75;margin-left:4px;font-weight:500}
+.rowline{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;border-top:1px solid var(--line);padding:12px 0;min-width:0}.rowline>div:first-child{min-width:0;flex:1}.rowline small{display:block;color:var(--ink2);overflow-wrap:anywhere}.rowline p{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-items:center;max-width:60%}.logic-main .acts button,.logic-main .acts .button{padding:7px 12px;font-size:13px}
+.pill{display:inline-block;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;background:var(--sunk);color:var(--ink2);white-space:nowrap}.pill.bad{background:#FDEBE9;color:#B42318}.pill.ok{background:#E6F5EC;color:#1B7F4B}
+.tk{font:600 10.5px/1.4 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--ink3)}
+.crm-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:28px;align-items:start}@media(max-width:1100px){.crm-grid{grid-template-columns:minmax(0,1fr)}}
+.logic-main textarea{width:100%;min-height:96px;resize:vertical}.logic-main select{width:100%}.check{display:flex!important;gap:10px;align-items:flex-start;font-size:14px!important;color:var(--ink)!important}.check input{width:auto!important;margin-top:4px}
+.box{border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0;background:var(--sunk)}.box h3{margin-top:0}
+#detail h3{margin:24px 0 8px}@media(max-width:760px){.rowline{flex-direction:column}.acts{max-width:none;justify-content:flex-start}}
+/* the one status line stays in view: a section opens scrolled to the account, so a note written at the top of main (Choose a file first, Call logged) would land off-screen */
+#message{position:sticky;top:12px;z-index:5;box-shadow:0 4px 14px rgba(20,30,50,.12)}</style></head>
+<body class="logic-theme"><header><div><b data-product-name>Omega Logic</b><small class="muted">Customer accounts</small></div><div><span id="who"></span></div></header>
+<section id="gate"><h1>Customer accounts</h1><p>Sign in with your authorized office account. Customer logins cannot enter this workspace.</p><a href="/login">Sign in →</a></section>
+<div id="workspace" class="logic-shell" hidden><nav class="logic-nav" aria-label="Office"><p class="eyebrow">Sales</p><a id="orders-link">Orders</a><a aria-current="page">Customers</a><p class="eyebrow">Production</p><a id="plant-link">Works orders</a><a href="/plant/station.html">Bench tablet</a></nav>
+<main class="logic-main"><h1>Customers</h1><p class="muted">Each customer is a company account with its people on it: the people, the contacts who never log in, what was said and agreed, the documents, every order and site. These are not platform users or plant operators.</p><div id="message" class="logic-status" role="status" aria-live="polite"></div>
+<section id="followups" class="panel" hidden><h2>Follow-ups</h2><div id="fu-rows"></div></section>
+<details class="panel"><summary>Create a NEW customer company</summary><p class="muted">To give someone at an existing customer access, open that customer below and add them there — a second account for the same company splits its orders and balance in two.</p><form id="create"><div class="form-grid"><div><label for="company">Company</label><input id="company" required maxlength="160"></div><div><label for="name">Contact name</label><input id="name" required maxlength="120"></div><div><label for="email">Their work email (the account owner)</label><input id="email" required type="email" maxlength="254" autocomplete="off"></div><div><label for="domain">Company email domain (colleagues who sign in from it ask to join)</label><input id="domain" maxlength="120" autocomplete="off" autocapitalize="off" placeholder="e.g. amperagecapital.com"></div><div><label for="deposit">Deposit %</label><input id="deposit" type="number" min="0" max="100" value="30" required></div><div><label for="due">Payment due in days (0 = on receipt)</label><input id="due" type="number" min="0" max="365" step="1" value="0" required></div></div><p class="muted">The customer proves their email when they sign in. No shared password, staff role, or paid editor subscription is created.</p><button class="primary" type="submit">Create the company account</button></form></details>
+<section class="panel"><div class="logic-scroll"><table class="logic-table"><thead><tr><th>Company · people</th><th>Access</th><th>Terms</th><th>Actions</th></tr></thead><tbody id="rows"></tbody></table></div><button id="more" hidden>Load more</button></section>
+<section id="detail" class="panel" hidden></section>
+<section class="panel"><h2>Customer sign-in</h2><p>Customers sign in to the customer app (or the same account on a desktop) with their own verified email. Everyone on an account sees its orders, sites and equipment; someone who signs in from the company's email domain asks to join and the owner or you approve.</p><a id="app" target="_blank" rel="noopener">Open the customer app →</a> · <a id="portal" target="_blank" rel="noopener">Desktop portal →</a><p class="muted">An invitation email is sent only when a verified tenant sender is configured. The portal link itself is not a login token.</p></section>
+</main></div>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script>
+<script>
+(function(){'use strict';
+var cfg=window.CLEARSKY_CONFIG||{};if(!firebase.apps.length)firebase.initializeApp(cfg.firebase||cfg);
+function usd(c){return '$'+(Number(c||0)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+var params=new URLSearchParams(location.search);
+var auth=firebase.auth(),org=params.get('org')||'',next=null,busy=false;
+/* ?customer=<id>#activity opens that account on that section: Today's
+   follow-ups on the office dashboard link here */
+var WANT=params.get('customer')||'';
+var SECTIONS=[['overview','Overview'],['people','People & contacts'],['activity','Activity'],['documents','Documents'],['orders','Orders & POs'],['sites','Sites'],['timeline','Timeline'],['details','Details']];
+var SEC=secOf(location.hash.slice(1))||'overview',CUR=null,CRM=null,CONTACT_EDIT=null,ACT_CONTACT='',ACT_TYPE='call',TL_SHOW=50,FOLLOW=null;
+var ACT_TYPES=[['call','Call'],['email','Email'],['meeting','Meeting'],['note','Note'],['task','Task']];
+/* api/_lib/crm.js CATEGORIES; what the endpoint accepts is decided there */
+var DOC_CATS=[['contract','Contract'],['drawing','Drawing'],['datasheet','Datasheet'],['site-survey','Site survey'],['purchase-order','Purchase order'],['invoice','Invoice'],['photo','Photo'],['utility-bill','Utility bill'],['warranty','Warranty'],['other','Other']];
+var DOC_ACCEPT='.pdf,.png,.jpg,.jpeg,.xlsx,.docx,.csv,.txt',MAX_DOC=2*1024*1024,VIEWABLE={'application/pdf':1,'image/png':1,'image/jpeg':1};
+function secOf(k){for(var i=0;i<SECTIONS.length;i++)if(SECTIONS[i][0]===k)return k;return '';}
+function $(id){return document.getElementById(id);}function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function message(text,bad){$('message').textContent=text;$('message').className='logic-status'+(bad?' error':'');}
+/* One reader for every endpoint: a JSON error says what it says; a route
+   this deployment does not have is said plainly, never as a parse error. */
+function call(path,body,suffix){return auth.currentUser.getIdToken().then(function(t){return fetch(path+(body?'':'?org='+encodeURIComponent(org)+(suffix||'')),{method:body?'POST':'GET',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:body?JSON.stringify(Object.assign({org:org},body)):undefined});}).then(function(r){return r.json().then(function(d){if(!r.ok){var e=new Error(d.error||'Request failed ('+r.status+')');e.status=r.status;throw e;}return d;},function(){var e=new Error(r.status===404?'That is not on this deployment yet.':'Request failed ('+r.status+')');e.status=r.status;throw e;});});}
+function api(body,suffix){return call('/api/buyers',body,suffix);}
+function crm(body,suffix){return call('/api/crm',body,suffix);}
+function fail(e){message(e.message||'Could not reach the server.',true);}
+function pad(n){return (n<10?'0':'')+n;}
+function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function todayIso(){return ymd(new Date());}
+function day(v){return v?String(v).slice(0,10):'';}
+/* ISO as a local date and time; a bare date stays a date */
+function when(v){var s=String(v||'');if(!s||s.length<=10)return s;var d=new Date(s);return isNaN(d.getTime())?s.slice(0,16).replace('T',' '):ymd(d)+' '+pad(d.getHours())+':'+pad(d.getMinutes());}
+function nowLocal(){var d=new Date();return ymd(d)+'T'+pad(d.getHours())+':'+pad(d.getMinutes());}
+function plural(n,one,many){return n+' '+(n===1?one:(many||one+'s'));}
+function fileSize(b){b=Number(b)||0;return !b?'':b>=1048576?(b/1048576).toFixed(1)+' MB':Math.max(1,Math.round(b/1024))+' KB';}
+function typeLabel(t){for(var i=0;i<ACT_TYPES.length;i++)if(ACT_TYPES[i][0]===t)return ACT_TYPES[i][1];return String(t||'Note');}
+function catLabel(k){if(k==='po')k='purchase-order';for(var i=0;i<DOC_CATS.length;i++)if(DOC_CATS[i][0]===k)return DOC_CATS[i][1];return String(k||'');}
+function crmOk(){return !!CRM&&!CRM.error;}
+function canEdit(){return crmOk()&&CRM.canEdit!==false;}
+function canArchive(){return crmOk()&&CRM.canArchive===true;}
+function crmDown(){return '<p class="logic-status error">The CRM for this account could not load'+(CRM&&CRM.error?': '+esc(CRM.error):'')+'. People, terms and orders still work.</p>';}
+function contacts(){return crmOk()?(CRM.contacts||[]).filter(function(x){return !x.archived;}):[];}
+function contactOf(id){return contacts().filter(function(x){return x.id===id;})[0]||null;}
+function fileOf(id){return crmOk()?(CRM.files||[]).filter(function(x){return x.id===id;})[0]||null:null;}
+function fromCustomer(f){return f.from==='customer'||f.source==='customer';}
+/* owed: a follow-up date, or a task (owed with or without a day) */
+function isOpen(a){return typeof a.open==='boolean'?a.open:a.done!==true&&(!!a.followUpAt||a.type==='task');}
+function fuDue(f){var d=day(f.followUpAt);return d?d<=todayIso():f.type==='task';}
+function byDue(a,b){var x=a.followUpAt||'9',y=b.followUpAt||'9';return x<y?-1:x>y?1:0;}
+function openFollowUps(){if(!crmOk())return [];return (Array.isArray(CRM.followUps)?CRM.followUps.map(function(f){return Object.assign({open:true},f);}):(CRM.activity||[])).filter(isOpen).sort(byDue);}
+
+/* the ONE list of public mailbox providers, from the server (api/_lib/public-domains.js) */
+var PUBLIC=[];
+function load(append){return api(null,append&&next?'&after='+encodeURIComponent(next):'').then(function(d){PUBLIC=d.publicDomains||PUBLIC;OmegaLogicTheme.chrome({org:org,current:'customers',owner:d.owner,brand:d.brand,who:firebase.auth().currentUser&&firebase.auth().currentUser.email});
+  $('gate').hidden=true;$('workspace').hidden=false;$('portal').href=d.portalUrl;$('app').href=d.appUrl||d.portalUrl;
+  /* one row per ACCOUNT, including a company nobody has signed in to yet */
+  var rows=d.customers.map(function(c){var owner=c.users.filter(function(u){return u.role==='owner'&&u.status==='active';})[0]||c.users[0];
+    return '<tr><td><b>'+esc(c.company||c.id)+'</b><span class="contact">'+c.users.length+' '+(c.users.length===1?'person':'people')+(owner?' · '+esc(owner.name||owner.email)+' ('+esc(owner.email)+')':' · nobody on it yet')+'</span></td><td>'+esc(c.status)+(c.pending?'<span class="contact" style="color:#A26718">'+esc(c.pending)+' asking to join</span>':'')+'</td><td>'+esc(c.terms.depositPct)+'% down · '+esc(c.terms.dueDays)+' days</td><td><button data-open="'+esc(c.id)+'">Open</button></td></tr>';}).join('');
+  if(append)$('rows').insertAdjacentHTML('beforeend',rows);else $('rows').innerHTML=rows||'<tr><td colspan="4">No customer accounts yet. Create one above, or customers can sign up through the customer app.</td></tr>';
+  next=d.next;$('more').hidden=!next;
+});}
+function run(fn){if(busy)return;busy=true;message('Working…');Promise.resolve().then(fn).catch(fail).then(function(){busy=false;});}
+
+/* ── follow-ups across every account (api/crm.js ?followUps=1) ───────────
+   The ones due today or earlier, and tasks with no day; the rest are
+   counted. A role that may not read the CRM sees no panel. */
+function loadFollowUps(){return crm(null,'&followUps=1').then(function(d){FOLLOW=d.followUps||[];},function(){FOLLOW=[];}).then(drawFollowUps);}
+function drawFollowUps(){var due=(FOLLOW||[]).filter(fuDue),later=(FOLLOW||[]).length-due.length,now=todayIso();
+  $('followups').hidden=!due.length&&!later;
+  $('fu-rows').innerHTML='<p class="muted">'+(due.length?plural(due.length,'follow-up')+' due':'Nothing due today')+(later?' · '+later+' more scheduled for later':'')+'. Each is on the office’s Today until it is marked done.</p>'
+    +due.map(function(f){var d=day(f.followUpAt),late=!!d&&d<now;return '<div class="rowline"><div><b>'+esc(f.company||'A customer')+' · '+esc(f.subject||typeLabel(f.type))+'</b><small>'+esc([typeLabel(f.type),f.contactName||'',!d?'no date':(late?'was due ':'due ')+d,f.by||''].filter(Boolean).join(' · '))+'</small></div><div class="acts">'+(late?'<span class="pill bad">overdue</span>':'')+'<button type="button" data-open="'+esc(f.customerId)+'" data-open-sec="activity">Open</button><button type="button" data-fu-done="'+esc(f.id)+'" data-fu-of="'+esc(f.customerId)+'">Done</button></div></div>';}).join('');}
+
+/* ── one ACCOUNT: api/buyers.js + api/crm.js, loaded together. A CRM that
+   does not load is carried, not thrown: the people, terms and orders still
+   open. The same account opened again keeps its section. ─────────────── */
+function openAccount(id,sec){var same=!!CUR&&CUR.customerId===id;
+  return Promise.all([api(null,'&customerId='+encodeURIComponent(id)),crm(null,'&customerId='+encodeURIComponent(id))['catch'](function(e){return {error:e.message||String(e)};})]).then(function(r){
+    CUR=r[0];CRM=r[1];if(!CUR.company&&crmOk())CUR.company=CRM.company;
+    if(sec&&secOf(sec))SEC=sec;else if(!same)SEC='overview';
+    if(!same){CONTACT_EDIT=null;ACT_CONTACT='';TL_SHOW=50;}
+    $('detail').hidden=false;drawAccount();
+  });}
+/* after a CRM write: this account's CRM again, and the follow-ups panel */
+function refreshCrm(note){var id=CUR&&CUR.customerId;if(!id)return Promise.resolve();
+  return crm(null,'&customerId='+encodeURIComponent(id))['catch'](function(e){return {error:e.message||String(e)};}).then(function(d){if(!CUR||CUR.customerId!==id)return;CRM=d;drawAccount();message(note||'Saved.');return loadFollowUps();});}
+function crmPost(body,note){return crm(Object.assign({customerId:CUR.customerId},body)).then(function(r){return refreshCrm(typeof note==='function'?note(r):(r.note||note));});}
+
+function companyForm(d){var a=d.address||{};return '<h3>Company</h3><form id="profile"><div class="form-grid">'+
+  '<div><label for="profile-company">Company</label><input id="profile-company" required maxlength="160" value="'+esc(d.company)+'"></div><div><label for="profile-status">Account access</label><select id="profile-status"><option value="active"'+(d.status==='active'?' selected':'')+'>Active</option><option value="suspended"'+(d.status!=='active'?' selected':'')+'>Suspended</option></select></div>'+
+  '<div><label for="profile-domain">Company email domain</label><input id="profile-domain" maxlength="120" placeholder="e.g. amperagecapital.com" value="'+esc(d.domain||'')+'"></div>'+
+  '<div><label for="profile-street">Delivery street</label><input id="profile-street" maxlength="200" value="'+esc(a.line1)+'"></div><div><label for="profile-city">City</label><input id="profile-city" maxlength="100" value="'+esc(a.city)+'"></div>'+
+  '<div><label for="profile-state">State / province</label><input id="profile-state" maxlength="40" value="'+esc(a.state)+'"></div><div><label for="profile-zip">Postal code</label><input id="profile-zip" maxlength="20" value="'+esc(a.zip)+'"></div></div><p class="muted">People who sign in from the company email domain ask to join this account, and you or its owner approve them. Suspending access blocks the customer app and portal for everyone on the account; it does not cancel orders, refund payments or cancel a subscription.</p><button class="primary">Save company</button></form>';}
+function peopleHtml(d){return '<h3>People · '+d.people.length+'</h3><p class="muted">Logins on the account: each signs in to the customer app or portal and sees the whole account.</p><div class="logic-scroll"><table class="logic-table"><thead><tr><th>Person</th><th>Role</th><th>Access</th><th>Actions</th></tr></thead><tbody>'+(d.people.map(function(u){var st=u.status||'active';
+    if(u.movedTo)return '<tr><td><b>'+esc(u.name||u.email)+'</b><span class="contact">'+esc(u.email)+'</span></td><td>'+esc(u.role)+'</td><td>moved to another account</td><td></td></tr>';
+    return '<tr><td><b>'+esc(u.name||u.email)+'</b><span class="contact">'+esc(u.email)+'</span></td><td>'+esc(u.role)+'</td><td>'+(st==='pending'?'<b style="color:#A26718">asked to join</b>'+(u.requestedAt?'<span class="contact">'+esc(String(u.requestedAt).slice(0,10))+'</span>':''):st==='disabled'?'access off':(u.activated?'signed in'+(u.lastSeenAt?'<span class="contact">last '+esc(String(u.lastSeenAt).slice(0,10))+'</span>':''):'not signed in yet'))+'</td><td>'
+      +(st==='pending'?'<button data-person="'+esc(u.email)+'" data-status="active">Approve</button> <button data-person="'+esc(u.email)+'" data-status="disabled">Decline</button> ':st==='disabled'?'<button data-person="'+esc(u.email)+'" data-status="active">Turn on</button> ':'<button data-person="'+esc(u.email)+'" data-status="disabled">Turn off</button> ')
+      +(st==='active'?(u.role==='owner'?'<button data-person="'+esc(u.email)+'" data-role="user">Make user</button> ':'<button data-person="'+esc(u.email)+'" data-role="owner">Make owner</button> ')+'<button data-invite="'+esc(u.email)+'">Send invitation</button>':'')+'</td></tr>';}).join('')||'<tr><td colspan="4">Nobody on this account yet.</td></tr>')+'</tbody></table></div>'
+  +'<form id="add-person"><div class="form-grid"><div><label for="ap-email">Add a person (work email)</label><input id="ap-email" type="email" required maxlength="254" autocomplete="off"></div><div><label for="ap-name">Their name</label><input id="ap-name" maxlength="120"></div><div><label for="ap-role">Role</label><select id="ap-role"><option value="user">User</option><option value="owner">Owner (manages the people)</option></select></div></div><p class="muted">They sign in with this email and see the whole account. Someone at the company who already signed in on their own is moved onto it when their own account is empty.</p><button class="primary">Add to '+esc(d.company||'the account')+'</button></form>';}
+
+/* ── the rows each section is made of ── */
+function fuLine(a){var due=day(a.followUpAt),now=todayIso(),late=!!due&&due<now,on=!due||due===now;
+  return '<div class="rowline"><div><b>'+esc(a.subject||typeLabel(a.type))+'</b><small>'+esc([typeLabel(a.type),a.contactName||'',!due?'no date':(late?'was due ':'due ')+due,a.by||''].filter(Boolean).join(' · '))+'</small></div><div class="acts"><span class="pill'+(late||on?' bad':'')+'">'+(late?'overdue':!due?'to do':on?'today':'later')+'</span>'+(canEdit()?'<button type="button" data-fu-done="'+esc(a.id)+'">Done</button>':'')+'</div></div>';}
+function actLine(a){var owed=isOpen(a),due=day(a.followUpAt);
+  return '<div class="rowline"><div><span class="tk">'+esc(typeLabel(a.type))+'</span> <b>'+esc(a.subject||'')+'</b><small>'+esc([when(a.at),a.by||'',a.contactName?'with '+a.contactName:'',a.orderNo||''].filter(Boolean).join(' · '))+'</small>'+(a.body&&a.body!==a.subject?'<p>'+esc(a.body)+'</p>':'')+'</div>'
+    +(a.followUpAt||a.type==='task'?'<div class="acts">'+(owed?'<span class="pill'+(!due||due<=todayIso()?' bad':'')+'">'+(due?'follow up '+esc(due):'to do')+'</span>'+(canEdit()?'<button type="button" data-fu-done="'+esc(a.id)+'">Done</button>':''):'<span class="pill ok">'+(a.followUpAt?'followed up':'done')+(a.doneAt?' '+esc(day(a.doneAt)):'')+'</span>')+'</div>':'')+'</div>';}
+function tlLine(t){var kind=String(t.kind||'event').replace(/[_-]+/g,' ');
+  return '<div class="rowline"><div><span class="tk">'+esc(kind)+'</span> <b>'+esc(t.title||kind)+'</b><small>'+esc([when(t.at),t.by||'',t.detail||''].filter(Boolean).join(' · '))+'</small></div>'+(t.orderId?'<div class="acts"><a class="button" href="/omega-logic?org='+encodeURIComponent(org)+'&order='+encodeURIComponent(t.orderId)+'#orders">Order ›</a></div>':'')+'</div>';}
+function contactRow(x){if(CONTACT_EDIT===x.id)return contactForm(x);var tel=String(x.phone||'').replace(/[^\d+]/g,'');
+  return '<div class="rowline"><div><b>'+esc(x.name||x.email||'Contact')+'</b>'+(x.primary?' <span class="pill ok">primary</span>':'')+(x.title?'<small>'+esc(x.title)+'</small>':'')
+    +(x.email||x.phone?'<small>'+(x.email?'<a href="mailto:'+esc(x.email)+'">'+esc(x.email)+'</a>':'')+(x.email&&x.phone?' · ':'')+(tel?'<a href="tel:'+esc(tel)+'">'+esc(x.phone)+'</a>':esc(x.phone||''))+'</small>':'')+(x.notes?'<p>'+esc(x.notes)+'</p>':'')+'</div>'
+    +'<div class="acts">'+(canEdit()?'<button type="button" data-cn-log="'+esc(x.id)+'">Log</button><button type="button" data-cn-edit="'+esc(x.id)+'">Edit</button>':'')+(canArchive()?'<button type="button" data-cn-arch="'+esc(x.id)+'">Archive</button>':'')+'</div></div>';}
+function contactForm(x){x=x||{};return '<form id="cn-form" class="box"><h3>'+(x.id?'Edit '+esc(x.name||'the contact'):'Add a contact')+'</h3><div class="form-grid">'
+  +'<div><label for="cn-name">Name</label><input id="cn-name" maxlength="120" autocomplete="off" value="'+esc(x.name||'')+'"></div><div><label for="cn-title">Title</label><input id="cn-title" maxlength="120" placeholder="e.g. Site lead" autocomplete="off" value="'+esc(x.title||'')+'"></div>'
+  +'<div><label for="cn-email">Email</label><input id="cn-email" type="email" maxlength="254" autocomplete="off" spellcheck="false" value="'+esc(x.email||'')+'"></div><div><label for="cn-phone">Phone</label><input id="cn-phone" type="tel" maxlength="40" autocomplete="off" value="'+esc(x.phone||'')+'"></div></div>'
+  +'<label for="cn-notes">Notes</label><textarea id="cn-notes" maxlength="2000">'+esc(x.notes||'')+'</textarea><label class="check"><input type="checkbox" id="cn-primary"'+(x.primary?' checked':'')+'> Primary contact for the account</label>'
+  +'<div class="actions"><button class="primary" id="cn-save" data-id="'+esc(x.id||'')+'">Save contact</button><button type="button" id="cn-cancel">Cancel</button></div></form>';}
+function docLine(f){var theirs=fromCustomer(f),viewable=!!VIEWABLE[f.type];
+  return '<div class="rowline"><div><b>'+esc(f.name||'document')+'</b><small>'+esc([catLabel(f.category),fileSize(f.size),theirs?'from the customer':'',when(f.uploadedAt),f.uploadedBy||''].filter(Boolean).join(' · '))+'</small>'+(f.note?'<p>'+esc(f.note)+'</p>':'')+'</div>'
+    +'<div class="acts"><span class="pill'+(theirs||f.shared?' ok':'')+'">'+(theirs?'from them':f.shared?'shared':'office only')+'</span>'
+    +(viewable?'<button type="button" data-doc-open="'+esc(f.id)+'">Open</button>':'')+'<button type="button" data-doc-get="'+esc(f.id)+'">'+(viewable?'Save':'Download')+'</button>'
+    +(theirs||!canEdit()?'':'<button type="button" data-doc-share="'+esc(f.id)+'" data-to="'+(f.shared?'0':'1')+'">'+(f.shared?'Stop sharing':'Share')+'</button>')
+    +(canArchive()?'<button type="button" data-doc-arch="'+esc(f.id)+'">Archive</button>':'')+'</div></div>';}
+
+/* ── the sections ── */
+function secOverview(d){var t=d.totals||{invoicedCents:0,paidCents:0,balanceCents:0,openRequests:0},reqs=d.orders.filter(function(o){return o.openRequests;}),fus=openFollowUps(),tl=crmOk()?(CRM.timeline||[]):[],grant=d.editorAccess||{};
+  return '<div class="logic-kv"><div><small>Orders</small><b>'+d.orders.length+'</b></div><div><small>Invoiced</small><b>'+usd(t.invoicedCents)+'</b></div><div><small>Received</small><b>'+usd(t.paidCents)+'</b></div><div class="'+(t.balanceCents>0?'bad':'')+'"><small>Balance</small><b>'+usd(t.balanceCents)+'</b></div><div class="'+(t.openRequests?'bad':'')+'"><small>Open requests</small><b>'+esc(t.openRequests)+'</b></div></div>'
+    +(reqs.length?'<h3>Open requests · '+reqs.length+'</h3>'+reqs.map(function(o){return '<div class="rowline"><div><b>'+esc(o.orderNo)+'</b><small>'+plural(o.openRequests,'open request')+' · '+esc(o.stage?o.stage.label:o.status)+'</small></div><div class="acts"><a class="button" href="/omega-logic?org='+encodeURIComponent(org)+'&order='+encodeURIComponent(o.id)+'#orders">Answer ›</a></div></div>';}).join(''):'')
+    +'<div class="crm-grid"><div><h3>Follow-ups · '+fus.length+' open</h3>'+(crmOk()?(fus.map(fuLine).join('')||'<p class="muted">Nothing to follow up. Log a call with a follow-up date and it shows here and on Today.</p>')+(canEdit()?'<p><button type="button" data-sec-go="activity">Log a call, email or meeting</button></p>':''):crmDown())+'</div>'
+    +'<div><h3>Latest</h3>'+(crmOk()?(tl.slice(0,5).map(tlLine).join('')||'<p class="muted">Nothing on the timeline yet.</p>')+(tl.length>5?'<p><button type="button" data-sec-go="timeline">The whole timeline · '+tl.length+'</button></p>':''):'<p class="muted">—</p>')+'</div></div>'
+    +'<h3>Editor Lite</h3><p>'+esc(grant.status||'inactive')+(grant.expiresAt?' · access through '+esc(new Date(grant.expiresAt).toLocaleString()):'')+'</p>'
+    +(d.owner?'<p class="muted">ClearSky support: grant a time-limited evaluation without creating a paid subscription, for everyone on the account. Zero revokes an existing trial.</p><form id="trial"><label for="trial-days">Trial days (0–14)</label><input id="trial-days" type="number" min="0" max="14" value="7" required style="max-width:160px"><div class="actions"><button>Set trial access</button></div></form>':'')
+    +'<p class="muted" style="overflow-wrap:anywhere">Customer app: <a href="'+esc(d.appUrl)+'" target="_blank" rel="noopener">'+esc(d.appUrl)+'</a></p>';}
+function secPeople(d){var list=contacts();
+  return peopleHtml(d)
+    +'<h3>Contacts · '+list.length+'</h3><p class="muted">People at '+esc(d.company||'the company')+' who never log in — site leads, accounts payable, engineers.</p>'
+    +(crmOk()?list.map(contactRow).join('')+(list.length||CONTACT_EDIT==='new'?'':'<p class="muted">No contacts yet.</p>')+(!canEdit()?'':CONTACT_EDIT==='new'?contactForm(null):'<p><button type="button" id="cn-new">Add a contact</button></p>'):crmDown());}
+function secActivity(d){if(!crmOk())return crmDown();
+  var acts=(CRM.activity||[]).slice(),fus=openFollowUps(),list=contacts();
+  return '<div class="crm-grid"><div>'+(canEdit()?'<form id="log-form" class="box"><h3>Log it</h3><div class="form-grid">'
+      +'<div><label for="lg-type">What</label><select id="lg-type">'+ACT_TYPES.map(function(t){return '<option value="'+t[0]+'"'+(t[0]===ACT_TYPE?' selected':'')+'>'+esc(t[1])+'</option>';}).join('')+'</select></div>'
+      +'<div><label for="lg-at">When</label><input id="lg-at" type="datetime-local" value="'+nowLocal()+'"></div></div>'
+      +'<label for="lg-subject">Subject</label><input id="lg-subject" maxlength="160" autocomplete="off" placeholder="e.g. Fresno delivery window">'
+      +'<label for="lg-body">What was said, what was agreed</label><textarea id="lg-body" maxlength="4000"></textarea><div class="form-grid">'
+      +'<div><label for="lg-contact">With</label><select id="lg-contact"><option value="">— no contact —</option>'+list.map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===ACT_CONTACT?' selected':'')+'>'+esc(x.name||x.email)+(x.title?' · '+esc(x.title):'')+'</option>';}).join('')+'</select></div>'
+      +'<div><label for="lg-order">About an order</label><select id="lg-order"><option value="">— no order —</option>'+d.orders.map(function(o){return '<option value="'+esc(o.id)+'">'+esc(o.orderNo)+(o.poNumber?' · PO '+esc(o.poNumber):'')+'</option>';}).join('')+'</select></div></div>'
+      +'<label for="lg-fu">Follow up on (optional)</label><input id="lg-fu" type="date" min="'+todayIso()+'"><p class="muted">A follow-up is on Today from its day until it is marked done; a task with no day is on Today until done.</p>'
+      +'<div class="actions"><button class="primary">Log it</button></div></form>':'<p class="muted">Your role in this workspace can read the CRM but not add to it.</p>')
+    +'<h3>Follow-ups · '+fus.length+' open</h3>'+(fus.map(fuLine).join('')||'<p class="muted">No follow-ups open.</p>')+'</div>'
+    +'<div><h3>Activity · '+acts.length+'</h3>'+(acts.map(actLine).join('')||'<p class="muted">Nothing logged yet. A call, an email or a meeting logged here goes on the account’s timeline.</p>')+(CRM.limited?'<p class="muted">The newest records are shown.</p>':'')+'</div></div>';}
+function secDocuments(d){if(!crmOk())return crmDown();var files=(CRM.files||[]).filter(function(f){return !f.archived;});
+  return '<div class="crm-grid"><div>'+(canEdit()?'<form id="doc-form" class="box"><h3>Upload a document</h3><p class="muted">A contract, a drawing, a datasheet, a site survey — PDF, PNG, JPEG, XLSX, DOCX, CSV or TXT, up to 2 MB. What '+esc(d.company||'the customer')+' uploads from their app lands here too.</p>'
+      +'<label for="doc-file">File</label><input type="file" id="doc-file" accept="'+esc(DOC_ACCEPT)+'"><div class="form-grid"><div><label for="doc-cat">What it is</label><select id="doc-cat">'+DOC_CATS.map(function(x){return '<option value="'+x[0]+'">'+esc(x[1])+'</option>';}).join('')+'</select></div>'
+      +'<div><label for="doc-note">Note (optional)</label><input id="doc-note" maxlength="500" autocomplete="off"></div></div>'
+      +'<label class="check"><input type="checkbox" id="doc-share"> Share with the customer — everyone on the account sees it in their app and portal</label><div class="actions"><button class="primary">Upload</button></div></form>':'')+'</div>'
+    +'<div><h3>Documents · '+files.length+'</h3>'+(files.map(docLine).join('')||'<p class="muted">No documents on this account yet.</p>')+'<p class="muted">A document opens only through this page, signed in; there is no link to it anyone could forward. Nothing is deleted: an archived document is kept on record.</p></div></div>';}
+function secOrders(d){var q='?org='+encodeURIComponent(org);
+  return '<p><a class="button" href="/po-inbox'+q+'&office=1&customerId='+encodeURIComponent(d.customerId)+'">Enter a PO for '+esc(d.company||'this customer')+' →</a></p><p class="muted">The company PO desk with this account chosen: key in or upload their purchase orders. Each PO becomes an order awaiting pricing; nothing is accepted or charged.</p>'
+    +'<h3>Orders on the account · '+d.orders.length+'</h3>'+(d.orders.length?'<div class="logic-scroll"><table class="logic-table"><thead><tr><th>Order</th><th>Billed to</th><th>Stage</th><th>Placed</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Balance</th><th>Shipped</th></tr></thead><tbody>'+d.orders.map(function(o){return '<tr><td><a href="/omega-logic'+q+'&order='+encodeURIComponent(o.id)+'#orders">'+esc(o.orderNo)+'</a>'+(o.poNumber?'<br><small>PO '+esc(o.poNumber)+'</small>':'')+(o.openRequests?'<br><small style="color:#B42318">'+esc(o.openRequests)+' open request'+(o.openRequests===1?'':'s')+'</small>':'')+'</td><td>'+esc((o.billedTo&&(o.billedTo.name||o.billedTo.email))||'')+'</td><td>'+esc(o.stage?o.stage.label:o.status)+'</td><td>'+esc(String(o.placedAt||'').slice(0,10))+'</td><td class="num">'+(o.totalCents==null?'—':usd(o.totalCents))+'</td><td class="num">'+usd(o.paidCents)+'</td><td class="num">'+(o.balanceCents?'<b>'+usd(o.balanceCents)+'</b>':'—')+'</td><td>'+(o.shippedAt?esc(String(o.shippedAt).slice(0,10)):'—')+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="muted">No orders on this account yet.</p>')+(d.limited?'<p class="muted">Newest 100 orders shown.</p>':'')+'<p class="muted">Totals are what has been invoiced and recorded; a recorded payment is not bank clearance. Warranty on each shipped unit runs from its ship date and shows on the customer’s app.</p>';}
+function secSites(){var q='?org='+encodeURIComponent(org);return '<div id="acct-sites"><p class="muted">Loading sites and units…</p></div><p class="muted"><a href="/logic-custody.html'+q+'">Sites &amp; custody</a> · <a href="/logic-register.html'+q+'">Fleet register</a></p>';}
+function secTimeline(){if(!crmOk())return crmDown();var tl=CRM.timeline||[];
+  return '<p class="muted">Everything on the account, newest first: orders placed, priced, invoiced, paid and shipped; POs; requests asked and answered; people who joined; documents; units received and commissioned; sites; logged activity. What the customer does in their app is here as it happens.</p>'
+    +(tl.slice(0,TL_SHOW).map(tlLine).join('')||'<p class="muted">Nothing on the timeline yet.</p>')+(tl.length>TL_SHOW?'<p><button type="button" id="tl-more">Show more · '+(tl.length-TL_SHOW)+' older</button></p>':'');}
+function secDetails(d){return companyForm(d)+'<h3>Terms for the whole account</h3><form id="terms"><div class="form-grid"><div><label for="term-deposit">Deposit %</label><input id="term-deposit" type="number" min="0" max="100" required value="'+esc(d.terms.depositPct)+'"></div><div><label for="term-due">Payment due days</label><input id="term-due" type="number" min="0" max="365" step="1" required value="'+esc(d.terms.dueDays)+'"></div></div><p class="muted">Applies to future prices; issued invoices keep theirs.</p><div class="actions"><button class="primary">Save future-order terms</button></div></form>';}
+
+function drawAccount(){var d=CUR,fus=openFollowUps();
+  var n={people:d.people.length+contacts().length,activity:fus.length,documents:crmOk()?(CRM.files||[]).filter(function(f){return !f.archived;}).length:0,orders:d.orders.length};
+  var body=SEC==='people'?secPeople(d):SEC==='activity'?secActivity(d):SEC==='documents'?secDocuments(d):SEC==='orders'?secOrders(d):SEC==='sites'?secSites():SEC==='timeline'?secTimeline():SEC==='details'?secDetails(d):secOverview(d);
+  $('detail').innerHTML='<h2>'+esc(d.company)+'</h2><p class="muted">'+(d.accountType==='company'?'Company account':'Account')+' · '+esc(d.status)+(d.createdAt?' · since '+esc(String(d.createdAt).slice(0,10)):'')+(d.rep&&d.rep.name?' · rep '+esc(d.rep.name):'')+'</p>'
+    +'<div class="seg" id="acct-seg" role="tablist" aria-label="Account sections">'+SECTIONS.map(function(s){var on=SEC===s[0];return '<button type="button" role="tab" data-sec="'+s[0]+'" aria-pressed="'+on+'" aria-selected="'+on+'">'+esc(s[1])+(n[s[0]]?'<small>'+n[s[0]]+'</small>':'')+'</button>';}).join('')+'</div>'
+    +'<div id="acct-body">'+body+'</div>';
+  try{history.replaceState(null,'','?org='+encodeURIComponent(org)+'&customer='+encodeURIComponent(d.customerId)+'#'+SEC);}catch(e){}
+  bindAccount(d);}
+function each(sel,fn){Array.prototype.forEach.call($('detail').querySelectorAll(sel),fn);}
+function toSec(k){SEC=k;CONTACT_EDIT=null;drawAccount();$('acct-seg').scrollIntoView({block:'start'});}
+function bindAccount(d){
+  each('[data-sec]',function(b){b.onclick=function(){message('');toSec(b.getAttribute('data-sec'));};});
+  each('[data-sec-go]',function(b){b.onclick=function(){toSec(b.getAttribute('data-sec-go'));};});
+  if($('trial'))$('trial').onsubmit=function(e){e.preventDefault();if(!confirm('Set '+$('trial-days').value+' days of Editor Lite trial access for '+d.company+'? No payment will be taken.'))return;run(function(){return api({action:'editor-trial',customerId:d.customerId,days:Number($('trial-days').value)}).then(function(r){message(r.note);return openAccount(d.customerId);});});};
+  if($('terms'))$('terms').onsubmit=function(ev){ev.preventDefault();run(function(){return api({action:'terms',customerId:d.customerId,terms:{depositPct:$('term-deposit').value,dueDays:$('term-due').value}}).then(function(r){message(r.note);return load().then(function(){return openAccount(d.customerId);});});});};
+  if($('profile'))$('profile').onsubmit=function(e){e.preventDefault();if($('profile-status').value!==d.status&&!confirm('Change '+d.company+' to '+$('profile-status').value+'? This changes app and portal access for everyone on the account.'))return;run(function(){return api({action:'profile',customerId:d.customerId,company:$('profile-company').value,status:$('profile-status').value,domain:$('profile-domain').value.trim(),address:{line1:$('profile-street').value,city:$('profile-city').value,state:$('profile-state').value,zip:$('profile-zip').value}}).then(function(r){message(r.note);return load().then(function(){return openAccount(d.customerId);});});});};
+  if($('add-person'))$('add-person').onsubmit=function(e){e.preventDefault();run(function(){return api({action:'user-add',customerId:d.customerId,email:$('ap-email').value,name:$('ap-name').value,role:$('ap-role').value}).then(function(r){message(r.note);return load().then(function(){return openAccount(d.customerId);});});});};
+  /* a person's access or role: the list's "asking to join" count changes
+     too, so the list reloads with the account */
+  each('[data-person]',function(b){b.onclick=function(){var who=b.getAttribute('data-person'),st=b.getAttribute('data-status'),role=b.getAttribute('data-role');
+    if(st==='disabled'&&!confirm('Turn off access for '+who+'? What they did stays on the account.'))return;
+    run(function(){return api({action:'user-status',customerId:d.customerId,email:who,status:st||undefined,role:role||undefined}).then(function(r){message(r.note);return load().then(function(){return openAccount(d.customerId);});});});};});
+  /* contacts */
+  if($('cn-new'))$('cn-new').onclick=function(){CONTACT_EDIT='new';drawAccount();if($('cn-form'))$('cn-form').scrollIntoView({block:'center'});};
+  each('[data-cn-edit]',function(b){b.onclick=function(){CONTACT_EDIT=b.getAttribute('data-cn-edit');drawAccount();if($('cn-form'))$('cn-form').scrollIntoView({block:'center'});};});
+  each('[data-cn-log]',function(b){b.onclick=function(){ACT_CONTACT=b.getAttribute('data-cn-log');ACT_TYPE='call';toSec('activity');};});
+  if($('cn-cancel'))$('cn-cancel').onclick=function(){CONTACT_EDIT=null;drawAccount();};
+  if($('cn-form'))$('cn-form').onsubmit=function(e){e.preventDefault();var id=$('cn-save').getAttribute('data-id'),name=$('cn-name').value.trim(),email=$('cn-email').value.trim();
+    if(!name&&!email){message('A contact needs a name or an email.',true);return;}
+    run(function(){return crmPost({action:'contact-save',id:id||undefined,name:name,title:$('cn-title').value.trim(),email:email,phone:$('cn-phone').value.trim(),notes:$('cn-notes').value.trim(),primary:$('cn-primary').checked},function(r){CONTACT_EDIT=null;return r.note||(id?'Contact saved.':'Contact added.');});});};
+  each('[data-cn-arch]',function(b){b.onclick=function(){var x=contactOf(b.getAttribute('data-cn-arch'));if(!x)return;if(!confirm('Archive '+(x.name||x.email)+'? They leave the contact list; the timeline keeps what was logged with them.'))return;
+    run(function(){return crmPost({action:'contact-archive',id:x.id},'Contact archived.');});};});
+  /* activity */
+  if($('log-form'))$('log-form').onsubmit=function(e){e.preventDefault();var subject=$('lg-subject').value.trim(),text=$('lg-body').value.trim(),fu=$('lg-fu').value,at=$('lg-at').value?new Date($('lg-at').value):null,type=$('lg-type').value;
+    if(!subject&&!text){message('Say what happened: a subject or a few words.',true);return;}
+    if(at&&isNaN(at.getTime()))at=null;
+    if(fu&&fu<todayIso()){message('A follow-up is for today or later.',true);return;}
+    ACT_TYPE=type;
+    run(function(){return crmPost({action:'log',type:type,subject:subject||text.split('\n')[0].slice(0,160),body:text,at:at?at.toISOString():undefined,contactId:$('lg-contact').value||undefined,orderId:$('lg-order').value||undefined,followUpAt:fu||undefined},function(r){ACT_CONTACT='';return r.note||'Logged.';});});};
+  /* documents */
+  if($('doc-form'))$('doc-form').onsubmit=function(e){e.preventDefault();var f=$('doc-file').files&&$('doc-file').files[0],shared=$('doc-share').checked;
+    if(!f){message('Choose a file first.',true);return;}
+    if(!f.size){message(f.name+' is empty.',true);return;}
+    if(f.size>MAX_DOC){message(f.name+' is '+fileSize(f.size)+'; the limit is 2 MB. Send a smaller PDF or compress it.',true);return;}
+    if(!/\.(pdf|png|jpe?g|xlsx|docx|csv|txt)$/i.test(f.name)){message('PDF, PNG, JPEG, XLSX, DOCX, CSV or TXT only.',true);return;}
+    run(function(){return readBase64(f).then(function(b64){message('Uploading '+f.name+'…');return crmPost({action:'file-upload',file:{name:f.name,base64:b64},category:$('doc-cat').value,note:$('doc-note').value.trim(),shared:shared},function(r){return r.note||'Uploaded.';});});});};
+  each('[data-doc-open]',function(b){b.onclick=function(){download(b.getAttribute('data-doc-open'),b,true);};});
+  each('[data-doc-get]',function(b){b.onclick=function(){download(b.getAttribute('data-doc-get'),b,false);};});
+  each('[data-doc-share]',function(b){b.onclick=function(){var to=b.getAttribute('data-to')==='1',f=fileOf(b.getAttribute('data-doc-share'));
+    if(to&&!confirm('Share '+(f?f.name:'this document')+' with '+(d.company||'the customer')+'? Everyone on the account sees it in their app and portal.'))return;
+    run(function(){return crmPost({action:'file-share',id:b.getAttribute('data-doc-share'),shared:to},to?'Shared: '+(d.company||'the customer')+' sees it in their app.':'No longer shared; only the office sees it.');});};});
+  each('[data-doc-arch]',function(b){b.onclick=function(){var id=b.getAttribute('data-doc-arch'),f=fileOf(id);
+    if(!confirm('Archive '+(f?f.name:'this document')+'? It leaves the list'+(f&&(f.shared||fromCustomer(f))?' and the customer’s app':'')+'. It is kept on record.'))return;
+    run(function(){return crmPost({action:'file-archive',id:id},'Archived.');});};});
+  if($('tl-more'))$('tl-more').onclick=function(){TL_SHOW+=50;drawAccount();};
+  if(SEC==='sites')loadSites(d);}
+function readBase64(file){return new Promise(function(resolve,reject){if(!window.FileReader){reject(new Error('This browser cannot read files.'));return;}var r=new FileReader();r.onload=function(){var s=String(r.result||'');resolve(s.slice(s.indexOf(',')+1));};r.onerror=function(){reject(new Error('Could not read '+file.name+'.'));};r.readAsDataURL(file);});}
+/* A document is served only by the endpoint, with the bearer token, and
+   handed over from a blob. A PDF or an image opens in a tab, typed from
+   what the endpoint decided the bytes are; anything else is saved. */
+function download(id,btn,view){var f=fileOf(id),name=(f&&f.name)||'document',type=f&&VIEWABLE[f.type]?f.type:'',win=null,cid=CUR.customerId;
+  if(view&&type){try{win=window.open('','_blank');}catch(e){win=null;}}
+  btn.disabled=true;message(view?'Opening…':'Downloading…');
+  auth.currentUser.getIdToken().then(function(t){return fetch('/api/crm?org='+encodeURIComponent(org)+'&customerId='+encodeURIComponent(cid)+'&file='+encodeURIComponent(id),{headers:{Authorization:'Bearer '+t}});}).then(function(r){
+    if(!r.ok)return r.text().then(function(txt){var j=null;try{j=JSON.parse(txt);}catch(e){}throw new Error((j&&j.error)||'Download failed ('+r.status+')');});
+    return r.blob();
+  }).then(function(blob){var url=URL.createObjectURL(type?new Blob([blob],{type:type}):blob);
+    if(win){win.location.href=url;message('');}
+    else{var a=document.createElement('a');a.href=url;a.download=name;a.rel='noopener';document.body.appendChild(a);a.click();a.parentNode.removeChild(a);message('Saved '+name+'.');}
+    setTimeout(function(){URL.revokeObjectURL(url);},60000);btn.disabled=false;
+  })['catch'](function(e){if(win)try{win.close();}catch(x){}fail(e);btn.disabled=false;});}
+/* Sites and shipped units: the custody overview, narrowed to this account
+   (its sites, and any unit on one of its orders or bound to it); each
+   unit opens its passport. */
+function loadSites(d){var orderIds={};d.orders.forEach(function(o){orderIds[o.id]=true;});
+  call('/api/logic-custody',null,'').then(function(cu){var el=$('acct-sites');if(!el||!CUR||CUR.customerId!==d.customerId||SEC!=='sites')return;
+    var sites=(cu.sites||[]).filter(function(s){return s.customerId===d.customerId;}),units=(cu.units||[]).filter(function(u){return u.customerId===d.customerId||(u.custody&&u.custody.customerId===d.customerId)||orderIds[u.orderId];});
+    el.innerHTML='<h3>Sites · '+sites.length+'</h3>'+(sites.map(function(s){var a=s.address||{};return '<div class="rowline"><div><b>'+esc(s.name)+'</b><small>'+esc([a.line1,a.city,a.state,a.zip].filter(Boolean).join(', '))+'</small></div><div class="acts"><span class="pill">'+plural(Number(s.units)||0,'unit')+'</span></div></div>';}).join('')||'<p class="muted">No sites on this account yet. The customer adds theirs in the app, or add one under Sites &amp; custody.</p>')
+      +'<h3>Units shipped · '+units.length+'</h3>'+(units.slice(0,100).map(function(u){var c=u.custody||{},cov=(u.coverage||[]).map(function(x){return x.status;});return '<div class="rowline"><div><b style="font-family:\'IBM Plex Mono\',monospace">'+esc(u.serial)+'</b><small>'+esc([u.sku,c.label||c.status||'',c.siteName?'at '+c.siteName:'',u.orderNo||'',cov.length?'coverage '+cov.join(', '):''].filter(Boolean).join(' · '))+'</small></div><div class="acts"><a class="button" href="/logic-custody.html?org='+encodeURIComponent(org)+'&serial='+encodeURIComponent(u.serial)+'">Passport ›</a></div></div>';}).join('')||'<p class="muted">Nothing shipped yet.</p>')+(units.length>100?'<p class="muted">First 100 shown; the Fleet register has them all.</p>':'');
+  })['catch'](function(e){var el=$('acct-sites');if(el)el.innerHTML='<p class="muted">Sites unavailable: '+esc(e.message)+'</p>';});}
+
+/* The company's email domain, offered from the owner's email so the office sees and confirms it; a public mailbox is never offered (the server refuses it too). */
+$('email').onchange=function(){if($('domain').value)return;var d=(String(this.value).split('@')[1]||'').toLowerCase();if(d&&PUBLIC.indexOf(d)<0)$('domain').value=d;};
+$('create').onsubmit=function(e){e.preventDefault();run(function(){return api({action:'create',email:$('email').value,name:$('name').value,company:$('company').value,domain:$('domain').value.trim(),terms:{depositPct:$('deposit').value,dueDays:$('due').value}}).then(function(d){message(d.note);$('create').reset();return load();});});};
+$('more').onclick=function(){run(function(){return load(true).then(function(){message('');});});};
+document.addEventListener('click',function(e){var b=e.target.closest('[data-open],[data-invite],[data-fu-done]');if(!b)return;
+  if(b.hasAttribute('data-invite')){var who=b.getAttribute('data-invite');if(!confirm('Send a customer app invitation to '+who+'?'))return;run(function(){return api({action:'invite',email:who,customerId:CUR?CUR.customerId:undefined}).then(function(d){message(d.note);});});return;}
+  /* a follow-up done, from the panel or the account: off Today, and the
+     account's CRM again when it is the one open */
+  if(b.hasAttribute('data-fu-done')){var cid=b.getAttribute('data-fu-of')||(CUR&&CUR.customerId),aid=b.getAttribute('data-fu-done');if(!cid)return;
+    run(function(){return crm({action:'done',customerId:cid,id:aid}).then(function(r){FOLLOW=(FOLLOW||[]).filter(function(f){return f.id!==aid;});drawFollowUps();if(CUR&&CUR.customerId===cid)return refreshCrm(r.note||'Done. It is off Today.');message(r.note||'Done. It is off Today.');});});return;}
+  var id=b.getAttribute('data-open'),sec=b.getAttribute('data-open-sec')||'';
+  run(function(){return openAccount(id,sec).then(function(){message('');$('detail').scrollIntoView({block:'start'});});});
+});
+$('orders-link').href='/omega-logic?org='+encodeURIComponent(org);$('plant-link').href='/plant/?org='+encodeURIComponent(org);
+auth.onAuthStateChanged(function(u){$('who').textContent=u?u.email:'';if(!u){$('gate').hidden=false;$('workspace').hidden=true;return;}
+  load().then(function(){loadFollowUps();if(WANT){var w=WANT;WANT='';return openAccount(w,SEC).then(function(){$('detail').scrollIntoView({block:'start'});})['catch'](fail);}}).catch(function(e){$('gate').hidden=false;$('workspace').hidden=true;$('gate').textContent=e.message;});});
+})();
+</script></body></html>

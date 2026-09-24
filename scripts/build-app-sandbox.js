@@ -1,0 +1,240 @@
+#!/usr/bin/env node
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   build-app-sandbox.js — the three phone apps as sandboxes, for a phone.
+
+   Produces app-sandbox/ (committed, like portals/skyfund-sandbox/):
+     plant.html, office.html, customer.html, bench.html   the REAL pages,
+         with the Firebase SDK and the workspace runtime replaced by
+         sandbox.js, their manifests and service worker pointed here, and
+         the bench link pointed at the sandbox bench
+     sandbox.js   scripts/_lib/logic-fixtures.js and every pure library it
+         requires (materials, plant-board, plant-stats, plant-work,
+         office-stage, logic-catalog, receivables, custody, crm, portal, the
+         manifest builder), bundled with a forty-line CommonJS loader, then
+         scripts/_lib/app-sandbox-shim.js — and NEVER the server-only
+         commercial logic (SERVER_ONLY below: the build fails first)
+     <app>.webmanifest, sw.js, README.md
+
+   Every rewrite is an asserted string replacement: if a page changes shape
+   the build fails loudly instead of shipping a sandbox that half works.
+   scripts/tests/tappsandbox.js rebuilds to a temp folder and diffs it
+   against the committed one, so the sandbox cannot go stale unnoticed.
+
+     node scripts/build-app-sandbox.js            # writes app-sandbox/
+     node scripts/build-app-sandbox.js /tmp/out   # elsewhere
+     node scripts/build-app-sandbox.js --artifacts <dir> ['{"plant":"https://…"}']
+                                                  # one relative-path folder
+                                                  # per app, for private
+                                                  # test links              */
+'use strict';
+var fs = require('fs'), path = require('path'), vm = require('vm');
+var ROOT = path.join(__dirname, '..');
+var ADMIN = path.join(ROOT, 'api/_lib/admin.js');
+var TENANT = JSON.parse(fs.readFileSync(path.join(ROOT, 'tenants/cleancell/tenant.json'), 'utf8'));
+function idOf(abs) { return path.relative(ROOT, abs).split(path.sep).join('/'); }
+function stubAdmin() { require.cache[require.resolve(ADMIN)] = { id: ADMIN, filename: ADMIN, loaded: true, exports: { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; }, db: function () { throw new Error('no db'); }, safeOrg: function (x) { return x; } } }; }
+
+/* ── what the public sandbox never carries ───────────────────────────── */
+/* app-sandbox/ is a static folder: anybody can fetch sandbox.js without
+   signing in. Pricing, the fee and deposit snapshot, the QuickBooks rules,
+   the order machine and site pricing and scoring run in /api/ and never in
+   a browser (CLAUDE.md, IP protection), so a bundled library that requires
+   one of these modules FAILS THE BUILD — unless every name it takes is on
+   that module's list here. Then the bundle carries those functions alone,
+   lifted out of the real file at build time (no second copy), refused if
+   they lean on anything else in it, and checked against the real export on
+   PROBES before they ship. The one such name today is paymentLink, the
+   intuit.com pin on a QuickBooks pay link, which the fixtures and portal.js
+   use to drop a link that is not QuickBooks'. */
+var SERVER_ONLY = {
+  'api/_lib/logic-policy.js': ['paymentLink'],
+  'api/_lib/qbo.js': [], 'api/_lib/qbo-sales.js': [], 'api/_lib/logic-workflow.js': [], 'api/_lib/order-lifecycle.js': [],
+  'api/_lib/value-stack.js': [], 'api/_lib/cost-model.js': [], 'api/_lib/site-score.js': [], 'api/_lib/project-cost.js': [], 'api/_lib/site-lease.js': []
+};
+var PROBES = {
+  paymentLink: [['https://app.qbo.intuit.com/app/invoice?txnId=1'], ['https://intuit.com/pay'], ['http://intuit.com/pay'], ['https://evilintuit.com/pay'],
+    ['https://intuit.com.evil.example/pay'], ['https://u:p@intuit.com/pay'], ['javascript:alert(1)'], ['not a url'], [''], [null], [undefined], [42]]
+};
+/* the named top-level function's source, braces balanced (strings skipped) */
+function liftFunction(src, name, file) {
+  var m = new RegExp('(^|\\n)function ' + name + '\\s*\\(').exec(src);
+  if (!m) throw new Error('build-app-sandbox: ' + file + ' has no top-level function ' + name + ' to lift');
+  var start = m.index + m[1].length, i = src.indexOf('{', start), depth = 0, quote = null, c;
+  for (; i < src.length; i++) {
+    c = src.charAt(i);
+    if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; continue; }
+    if (c === "'" || c === '"' || c === '`') quote = c;
+    else if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) return src.slice(start, i + 1);
+  }
+  throw new Error('build-app-sandbox: could not find the end of ' + file + ' ' + name);
+}
+function lift(abs) {
+  var file = idOf(abs), names = SERVER_ONLY[file], src = fs.readFileSync(abs, 'utf8'), real;
+  stubAdmin(); real = require(abs);
+  var tops = []; src.replace(/(^|\n)(?:function|var)\s+(\w+)/g, function (m, nl, n) { tops.push(n); return m; });
+  var parts = names.map(function (name) {
+    var text = liftFunction(src, name, file), fn, probes = PROBES[name];
+    tops.forEach(function (t) { if (names.indexOf(t) < 0 && new RegExp('\\b' + t + '\\b').test(text)) throw new Error('build-app-sandbox: ' + file + ' ' + name + ' uses ' + t + ', which the sandbox must not carry'); });
+    if (!probes || !probes.length) throw new Error('build-app-sandbox: add PROBES for ' + name + ' before lifting it into the sandbox');
+    fn = vm.runInContext('(' + text + ')', vm.createContext({ URL: URL }));
+    probes.forEach(function (args) {
+      var got = JSON.stringify(fn.apply(null, args)), want = JSON.stringify(real[name].apply(null, args));
+      if (got !== want) throw new Error('build-app-sandbox: the lifted ' + name + '(' + JSON.stringify(args).slice(1, -1) + ') gives ' + got + ', the real one ' + want);
+    });
+    return text;
+  });
+  return '/* sandbox: ' + file + ' is server-only commercial logic. The bundle carries\n   only ' + names.join(', ') + ', lifted from it by scripts/build-app-sandbox.js. */\n'
+    + parts.join('\n') + '\nmodule.exports = { ' + names.map(function (n) { return n + ': ' + n; }).join(', ') + ' };';
+}
+/* what a bundled library takes from a server-only module it requires: every
+   use of the binding must be `.name` with the name on the list */
+function takesOnly(src, at, call, dep, from) {
+  /* `name = require(…)` binds it (never `a.b = require(…)`, which exports
+     the whole module); `require(…).name` takes one name directly */
+  var allowed = SERVER_ONLY[dep], used = [], direct = /^\s*\.\s*(\w+)/.exec(src.slice(at + call.length)), bound = /(?:^|[^.\w$])(\w+)(\s*=\s*)$/.exec(src.slice(0, at));
+  if (direct) used.push(direct[1]);
+  else if (bound) {
+    var re = new RegExp('\\b' + bound[1] + '\\b', 'g'), declAt = at - bound[2].length - bound[1].length, hit, after, prop;
+    while ((hit = re.exec(src))) {
+      if (hit.index === declAt) continue;
+      after = src.slice(hit.index + bound[1].length); prop = /^\s*\.\s*(\w+)/.exec(after);
+      if (prop) used.push(prop[1]); else if (/^\s*[\[(),;=}:?]/.test(after)) used.push('the whole module');
+    }
+  } else used.push('the whole module');
+  var bad = used.filter(function (n) { return allowed.indexOf(n) < 0; });
+  if (bad.length) throw new Error('build-app-sandbox: ' + from + ' takes ' + bad.join(', ') + ' from ' + dep + ', which is server-only commercial logic; the public sandbox must not bundle it' + (allowed.length ? ' (only ' + allowed.join(', ') + ' may be lifted)' : ''));
+}
+
+/* ── a small CommonJS bundle ─────────────────────────────────────────── */
+/* Node built-ins a bundled library NAMES but the sample never CALLS: the
+   CRM library (api/_lib/crm.js) hashes an upload and mints ids with
+   crypto; the fixtures do neither (they validate what a
+   browser can and keep plain ids). The stand-in throws if that changes, so
+   a sandbox never quietly computes something the product would not. Any
+   other node module still fails the build. */
+var NODE_STUBS = { crypto: "module.exports = { createHash: function () { throw new Error('no crypto in the sandbox'); }, randomBytes: function () { throw new Error('no crypto in the sandbox'); } };" };
+function resolveFile(p) { if (fs.existsSync(p) && fs.statSync(p).isFile()) return p; if (fs.existsSync(p + '.js')) return p + '.js'; if (fs.existsSync(p + '.json')) return p + '.json'; throw new Error('cannot resolve ' + p); }
+function bundle(entry) {
+  var mods = {}, order = [], stubs = {}, id = idOf;
+  function visit(abs) {
+    if (mods[abs] !== undefined) return;
+    if (abs === ADMIN) { mods[abs] = null; order.push(abs); return; }
+    if (SERVER_ONLY[id(abs)]) {
+      if (!SERVER_ONLY[id(abs)].length) throw new Error('build-app-sandbox: ' + id(abs) + ' is server-only commercial logic; the public sandbox must not bundle it');
+      mods[abs] = lift(abs); order.push(abs); return;
+    }
+    var src = fs.readFileSync(abs, 'utf8').replace(/require\((['"])(\w+)\1\)/g, function (m, q, name) { if (!NODE_STUBS[name]) return m; stubs[name] = true; return "require('node:" + name + "')"; });
+    if (/require\((['"])(?!\.|node:)/.test(src)) throw new Error(id(abs) + ' requires a node module; the sandbox cannot bundle it');
+    mods[abs] = src.replace(/require\((['"])(\.[^'"]+)\1\)/g, function (m, q, rel, at) { var dep = resolveFile(path.resolve(path.dirname(abs), rel)); if (SERVER_ONLY[id(dep)]) takesOnly(src, at, m, id(dep), id(abs)); visit(dep); return "require('" + id(dep) + "')"; });
+    order.push(abs);
+  }
+  visit(entry);
+  var out = '(function () {\n  var defs = {}, cache = {};\n  function req(id) { if (cache[id]) return cache[id].exports; var m = { exports: {} }; cache[id] = m; defs[id](m, m.exports, req); return m.exports; }\n';
+  out += "  defs['api/_lib/admin.js'] = function (module) { module.exports = { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; }, db: function () { throw new Error('no Firestore in the sandbox'); }, safeOrg: function (x) { return x; }, FieldValue: function () { return { serverTimestamp: function () { return null; } }; } }; };\n";
+  Object.keys(stubs).forEach(function (name) { out += "  defs['node:" + name + "'] = function (module) { " + NODE_STUBS[name] + " };\n"; });
+  order.forEach(function (abs) { if (mods[abs] === null) return; out += "  defs['" + id(abs) + "'] = function (module, exports, require) {\n" + mods[abs] + "\n  };\n"; });
+  out += "  window.OmegaSandboxFixtures = req('" + id(entry) + "');\n  window.OMEGA_SANDBOX_TENANT = " + JSON.stringify({ name: TENANT.name, whiteLabel: TENANT.whiteLabel, appIcon: TENANT.appIcon }) + ";\n})();\n";
+  return out;
+}
+
+/* ── the pages ───────────────────────────────────────────────────────── */
+function must(s, old, neu, label) { if (s.indexOf(old) < 0) throw new Error('build-app-sandbox: ' + label + ' — expected to find: ' + old.slice(0, 80)); return s.split(old).join(neu); }
+var GSTATIC = /<script src="https:\/\/www\.gstatic\.com\/firebasejs\/[^"]+"><\/script>/g;
+/* The plant and office apps are ClearSky's Omega Logic (api/app-manifest.js);
+   only the customer app wears the tenant's icon. */
+var OL_ICON = { '180': '/icons/omega-logic-180.png', '192': '/icons/omega-logic-192.png', '512': '/icons/omega-logic-512.png', maskable: '/icons/omega-logic-maskable-512.png' };
+var PAGES = [
+  { src: 'plant/app.html', out: 'plant.html', app: 'plant', title: 'Omega Logic · Plant', icon: OL_ICON['180'], manifest: '/plant/app.webmanifest',
+    runtime: '<script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script>',
+    mf: "var mf = document.querySelector('link[rel=\"manifest\"]'); if (mf) mf.href = '/api/app-manifest?org=' + encodeURIComponent(ORG);", sw: "navigator.serviceWorker.register('/plant/app-sw.js', { scope: '/plant/app' })" },
+  /* the office app has one static manifest (no company in it) and already
+     wears the Omega Logic icon, so there is no manifest swap to neutralise */
+  { src: 'office/app.html', out: 'office.html', app: 'office', title: 'Omega Logic', icon: OL_ICON['180'], appleSrc: OL_ICON['180'], manifest: '/office/app.webmanifest',
+    runtime: '<script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script>',
+    mf: null, sw: "navigator.serviceWorker.register('/office/app-sw.js', { scope: '/office/app' })" },
+  { src: 'portals/customer/app.html', out: 'customer.html', app: 'customer', title: 'Your account', icon: TENANT.appIcon.customer['180'], manifest: '/portals/customer/app.webmanifest',
+    runtime: '<script src="/config.js"></script>',
+    mf: "var mf = document.querySelector('link[rel=\"manifest\"]'); if (mf) mf.href = mfUrl;", sw: "navigator.serviceWorker.register('/portals/customer/app-sw.js', { scope: '/portals/customer/app' })" },
+  { src: 'plant/station.html', out: 'bench.html', app: 'bench', title: 'Station — scan in', bench: true }
+];
+var SANDBOX_SCRIPT = '<script src="/app-sandbox/sandbox.js"></script>';
+function page(p) {
+  var s = fs.readFileSync(path.join(ROOT, p.src), 'utf8');
+  if (p.bench) {
+    s = must(s, '<script src="/omega-logic-theme.js"></script>', SANDBOX_SCRIPT + '<script src="/omega-logic-theme.js"></script>', p.src + ' theme script');
+    s = must(s, '<title>' + p.title + '</title>', '<title>' + p.title + ' · sandbox</title>', p.src + ' title');
+    return s;
+  }
+  var before = s;
+  s = s.replace(GSTATIC, ''); if (s === before) throw new Error('build-app-sandbox: ' + p.src + ' — no Firebase scripts to remove');
+  s = must(s, p.runtime, SANDBOX_SCRIPT, p.src + ' runtime scripts');
+  s = must(s, '<link rel="manifest" href="' + p.manifest + '">', '<link rel="manifest" href="/app-sandbox/' + p.app + '.webmanifest">', p.src + ' manifest');
+  s = must(s, '<link rel="apple-touch-icon" href="' + (p.appleSrc || '/icons/omega-192.png') + '">', '<link rel="apple-touch-icon" href="' + p.icon + '">', p.src + ' apple icon');
+  s = must(s, '<title>' + p.title + '</title>', '<title>' + p.title + ' · sandbox</title>', p.src + ' title');
+  if (p.mf) s = must(s, p.mf, '/* sandbox: the manifest link is static */', p.src + ' manifest swap');
+  s = must(s, p.sw, "navigator.serviceWorker.register('/app-sandbox/sw.js', { scope: '/app-sandbox/' })", p.src + ' service worker');
+  if (s.indexOf('/plant/station.html') >= 0) s = s.split('/plant/station.html').join('/app-sandbox/bench');
+  if (s.indexOf('/plant/station.html') >= 0) throw new Error('build-app-sandbox: ' + p.src + ' — a bench link survived the rewrite');
+  return s;
+}
+function manifest(app) {
+  stubAdmin();
+  var m = require('../api/app-manifest').manifestFor('cleancell.us', TENANT, app);
+  m.id = '/app-sandbox/' + app; m.start_url = '/app-sandbox/' + app; m.scope = '/app-sandbox/'; m.description = 'Sandbox — ' + m.description + ' Nothing is real.';
+  return JSON.stringify(m, null, 2) + '\n';
+}
+var SW = "/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.\n   app-sandbox/sw.js — one worker for the three sandboxes. Network first,\n   same-origin only, never /api/ (the sandbox answers those on the page and\n   they never reach the network), so a rebuild is picked up on the next\n   open and the pages still open with no signal.  ES5. */\nvar VERSION = 'app-sandbox-v2';\nself.addEventListener('install', function () { self.skipWaiting(); });\nself.addEventListener('activate', function (e) { e.waitUntil(caches.keys().then(function (keys) { return Promise.all(keys.filter(function (k) { return k !== VERSION; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); })); });\nself.addEventListener('fetch', function (e) {\n  var req = e.request; if (req.method !== 'GET') return;\n  var url; try { url = new URL(req.url); } catch (err) { return; }\n  if (url.origin !== self.location.origin || url.pathname.indexOf('/api/') === 0) return;\n  e.respondWith(fetch(req).then(function (res) {\n    if (res && res.ok && res.type === 'basic') { var copy = res.clone(); caches.open(VERSION).then(function (c) { c.put(req, copy); })['catch'](function () {}); }\n    return res;\n  })['catch'](function () { return caches.match(req).then(function (hit) { return hit || (req.mode === 'navigate' ? caches.match('/app-sandbox/plant') : undefined); }); }));\n});\n";
+var README = fs.readFileSync(path.join(__dirname, '_lib/app-sandbox-README.md'), 'utf8');
+
+function build(outDir) {
+  var files = {};
+  files['sandbox.js'] = '/* Omega Logic phone sandboxes — generated by scripts/build-app-sandbox.js. Do not edit; edit scripts/_lib/logic-fixtures.js or scripts/_lib/app-sandbox-shim.js and rebuild. */\n' + bundle(path.join(ROOT, 'scripts/_lib/logic-fixtures.js')) + fs.readFileSync(path.join(__dirname, '_lib/app-sandbox-shim.js'), 'utf8');
+  PAGES.forEach(function (p) { files[p.out] = page(p); if (!p.bench) files[p.app + '.webmanifest'] = manifest(p.app); });
+  files['sw.js'] = SW; files['README.md'] = README;
+  if (outDir) { if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true }); Object.keys(files).forEach(function (f) { fs.writeFileSync(path.join(outDir, f), files[f]); }); }
+  return files;
+}
+/* ── the same four pages as private test links ─────────────────────────
+   One folder per app, every reference relative, no service worker (the
+   frame has none), the other apps' links written in (each artifact is its
+   own origin, so the strip links out rather than routing). Nothing here is
+   committed; scripts/publish-app-sandbox.js hands the folders to the
+   Artifact tool. */
+var SHARED = ['omega-logic-theme.css', 'omega-logic-theme.js', 'omega-po-bulk.js', 'omega-auth-errors.js', 'omega-logic-signin.js', 'omega-hexhub.js', 'omega-scan.js', 'portals/customer/portfolio.js'];
+var TITLES = { plant: 'Omega Logic Plant', office: 'Omega Logic', customer: 'Clean Cell Account', bench: 'Omega Logic Bench' };
+function artifactPage(p, files, links) {
+  var s = files[p.out], icon = p.bench ? null : p.icon;
+  s = must(s, SANDBOX_SCRIPT, '<script>window.OMEGA_SANDBOX_APP=' + JSON.stringify(p.app) + ';window.OMEGA_SANDBOX_LINKS=' + JSON.stringify(links) + ';</script><script src="sandbox.js"></script>', p.out + ' sandbox script');
+  SHARED.forEach(function (f) { s = s.split('"/' + f + '"').join('"' + f + '"'); });
+  if (!p.bench) {
+    s = must(s, '<link rel="manifest" href="/app-sandbox/' + p.app + '.webmanifest">', '<link rel="manifest" href="manifest.webmanifest">', p.out + ' manifest');
+    s = must(s, '<link rel="apple-touch-icon" href="' + icon + '">', '<link rel="apple-touch-icon" href="icons/' + path.basename(icon) + '">', p.out + ' apple icon');
+    s = must(s, "if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('/app-sandbox/sw.js', { scope: '/app-sandbox/' })['catch'](function () {}); } catch (e) {} }", '/* sandbox link: no service worker in this frame */', p.out + ' service worker');
+    s = s.split("'/app-sandbox/bench'").join(JSON.stringify(links.bench || '#')).split('href="/app-sandbox/bench"').join('href="' + (links.bench || '#') + '"');
+  }
+  s = must(s, '<title>' + p.title + ' · sandbox</title>', '<title>' + TITLES[p.app] + '</title>', p.out + ' title');
+  if (/\/app-sandbox\//.test(s)) throw new Error('build-app-sandbox: ' + p.out + ' — an /app-sandbox/ path survived the artifact rewrite');
+  return s;
+}
+function buildArtifacts(outDir, links) {
+  links = links || {}; var files = build(null), made = {};
+  PAGES.forEach(function (p) {
+    var dir = path.join(outDir, p.app); fs.mkdirSync(path.join(dir, 'icons'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'index.html'), artifactPage(p, files, links));
+    fs.writeFileSync(path.join(dir, 'sandbox.js'), files['sandbox.js']);
+    SHARED.forEach(function (f) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)); });
+    var set = p.app === 'customer' ? TENANT.appIcon.customer : OL_ICON;
+    ['180', '192', '512', 'maskable'].forEach(function (k) { fs.copyFileSync(path.join(ROOT, set[k]), path.join(dir, 'icons', path.basename(set[k]))); });
+    if (!p.bench) { var m = JSON.parse(files[p.app + '.webmanifest']); m.id = p.app; m.start_url = '.'; m.scope = './'; m.icons.forEach(function (i) { i.src = 'icons/' + path.basename(i.src); }); m.apple_touch_icon = 'icons/' + path.basename(m.apple_touch_icon); fs.writeFileSync(path.join(dir, 'manifest.webmanifest'), JSON.stringify(m, null, 2) + '\n'); }
+    made[p.app] = dir;
+  });
+  return made;
+}
+module.exports = { build: build, buildArtifacts: buildArtifacts, bundle: bundle, PAGES: PAGES, TITLES: TITLES, SERVER_ONLY: SERVER_ONLY };
+if (require.main === module) {
+  var ai = process.argv.indexOf('--artifacts');
+  if (ai > 0) { var linksArg = process.argv[ai + 2] ? JSON.parse(process.argv[ai + 2]) : {}; var made = buildArtifacts(path.resolve(process.argv[ai + 1]), linksArg); console.log('artifact folders: ' + Object.keys(made).map(function (k) { return k + ' → ' + made[k]; }).join('\n                  ')); }
+  else { var out = process.argv[2] ? path.resolve(process.argv[2]) : path.join(ROOT, 'app-sandbox'); var files = build(out); console.log('app-sandbox: ' + Object.keys(files).length + ' files written to ' + path.relative(ROOT, out) + '/ (sandbox.js ' + Math.round(files['sandbox.js'].length / 1024) + ' KB)'); }
+}

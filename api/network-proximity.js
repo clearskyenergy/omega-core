@@ -44,9 +44,20 @@
                          intersect the site, walked for polyline sublayers.
                          Hundreds of cities publish this pattern; hardcoding
                          them rots, so they are discovered per request.
-     Long-haul conduits  the published InterTubes conduit subset (Durairajan
-                         et al., SIGCOMM 2015) — a proxy for backbone reach,
-                         scored as a bonus because the subset is partial.
+     Long-haul corridors data/us-longhaul-fiber.geojson — 317 intercity
+                         corridors routed over the road network at build time,
+                         because US long-haul fiber is laid in transportation
+                         rights-of-way (Durairajan et al., SIGCOMM 2015). 53 of
+                         them carry that paper's citation and carrier count;
+                         the rest assert a corridor and nothing about who is
+                         in it. Local, so it cannot fail.
+     Operating compute   api/_lib/datacenters.js — 3,100+ US facilities merged
+                         from Compute Atlas (CC BY 4.0), the Global Data Center
+                         Map and the CYBR capstone. An operating facility is
+                         proof carrier fiber reaches an address. Local.
+     Carrier directory   data/us-fiber-carriers.json — who publishes a route
+                         map for this region, from the Telecom Ramblings index.
+                         A call list, not geometry.
 
    Every source reports ok / empty / failed and how long it took, in the
    response. An empty answer from a source that failed is the failure mode
@@ -63,15 +74,17 @@
 
    ENVIRONMENT — all optional
      FCC_BB_KEY           broadbandmap.com API key (100 req/day/IP on alpha)
-     OSRM_BASE            unused here on purpose: routing 53 conduits per
-                          request is a page concern, not a function's
+     OSRM_BASE            not read here: corridors are routed once, at build
+                          time, by scripts/build-fiber-backbone.js. Routing
+                          317 corridors per request would be a page's mistake
+                          to make, not a function's.
      GRID_ATLAS_ORIGINS   extra CORS origins, comma separated
    ═══════════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var auth = require('./_lib/verify-token');
 
-var BUILD = '2026-09-17.first';
-var MODEL = 'network-proximity-v1';
+var BUILD = '2026-09-18.public-fiber';
+var MODEL = 'network-proximity-v3';
 
 /* ── PLANNING CONSTANTS — argue with these here, not in the code below ───── */
 var ROUTE_FACTOR = 1.4;            /* built route vs great circle, typical */
@@ -153,101 +166,97 @@ function extentContains(meta, lat, lon) {
   return lon >= lo[0] - pad && lon <= hi[0] + pad && lat >= lo[1] - pad && lat <= hi[1] + pad;
 }
 
-/* ── long-haul conduits (InterTubes subset, from grid-atlas-national.js) ── */
-var LH_CITY = {
-  'Albuquerque, NM': [35.0844, -106.6504], 'Allentown, PA': [40.6084, -75.4902],
-  'Amarillo, TX': [35.2220, -101.8313], 'Anaheim, CA': [33.8366, -117.9143],
-  'Atlanta, GA': [33.7490, -84.3880], 'Bakersfield, CA': [35.3733, -119.0187],
-  'Baltimore, MD': [39.2904, -76.6122], 'Baton Rouge, LA': [30.4515, -91.1871],
-  'Battle Creek, MI': [42.3211, -85.1797], 'Billings, MT': [45.7833, -108.5007],
-  'Boca Raton, FL': [26.3683, -80.1289], 'Boise, ID': [43.6150, -116.2023],
-  'Bozeman, MT': [45.6770, -111.0429], 'Bryan, TX': [30.6744, -96.3698],
-  'Camp Verde, AZ': [34.5636, -111.8543], 'Casper, WY': [42.8666, -106.3131],
-  'Charlottesville, VA': [38.0293, -78.4767], 'Cheyenne, WY': [41.1400, -104.8202],
-  'Chicago, IL': [41.8781, -87.6298], 'Chico, CA': [39.7285, -121.8375],
-  'Dallas, TX': [32.7767, -96.7970], 'Denver, CO': [39.7392, -104.9903],
-  'Detroit, MI': [42.3314, -83.0458], 'Eau Claire, WI': [44.8113, -91.4985],
-  'Edison, NJ': [40.5187, -74.4121], 'El Paso, TX': [31.7619, -106.4850],
-  'Eugene, OR': [44.0521, -123.0868], 'Fort Worth, TX': [32.7555, -97.3308],
-  'Gainesville, FL': [29.6516, -82.3248], 'Hillsboro, OR': [45.5229, -122.9898],
-  'Houston, TX': [29.7604, -95.3698], 'Kalamazoo, MI': [42.2917, -85.5872],
-  'Kansas City, MO': [39.0997, -94.5786], 'Lansing, MI': [42.7325, -84.5555],
-  'Las Vegas, NV': [36.1699, -115.1398], 'Laurel, MS': [31.6948, -89.1306],
-  'Lincoln, NE': [40.8136, -96.7026], 'Livonia, MI': [42.3684, -83.3527],
-  'Lompoc, CA': [34.6391, -120.4579], 'Los Angeles, CA': [34.0522, -118.2437],
-  'Lynchburg, VA': [37.4138, -79.1422], 'Madison, WI': [43.0731, -89.4012],
-  'New Orleans, LA': [29.9511, -90.0715], 'New York, NY': [40.7128, -74.0060],
-  'Ocala, FL': [29.1872, -82.1401], 'Oklahoma City, OK': [35.4676, -97.5164],
-  'Palo Alto, CA': [37.4419, -122.1430], 'Philadelphia, PA': [39.9526, -75.1652],
-  'Phoenix, AZ': [33.4484, -112.0740], 'Portland, OR': [45.5152, -122.6784],
-  'Provo, UT': [40.2338, -111.6585], 'Sacramento, CA': [38.5816, -121.4944],
-  'Salt Lake City, UT': [40.7608, -111.8910], 'San Francisco, CA': [37.7749, -122.4194],
-  'San Luis Obispo, CA': [35.2828, -120.6596], 'Santa Barbara, CA': [34.4208, -119.6982],
-  'Santa Clara, CA': [37.3541, -121.9552], 'Seattle, WA': [47.6062, -122.3321],
-  'Sedona, AZ': [34.8697, -111.7610], 'Shreveport, LA': [32.5252, -93.7502],
-  'South Bend, IN': [41.6764, -86.2520], 'Southfield, MI': [42.4734, -83.2219],
-  'Spokane, WA': [47.6588, -117.4260], 'Stamford, CT': [41.0534, -73.5387],
-  'Topeka, KS': [39.0473, -95.6752], 'Towson, MD': [39.4015, -76.6019],
-  'Trenton, NJ': [40.2206, -74.7597], 'Tucson, AZ': [32.2226, -110.9747],
-  'Wells, NV': [41.1116, -114.9647], 'West Palm Beach, FL': [26.7153, -80.0534],
-  'White Plains, NY': [41.0340, -73.7629], 'Wichita Falls, TX': [33.9137, -98.4934],
-  'Wichita, KS': [37.6872, -97.3301]
+/* ── long-haul corridors, data centers and the carrier directory ───────────
+   All three are generated or curated files, required rather than fetched, so
+   a corridor measurement costs no network call and cannot fail.
+
+     api/_lib/longhaul-corridors.js   scripts/build-fiber-backbone.js
+     api/_lib/datacenters.js          scripts/build-fiber-facilities.js
+     data/us-fiber-carriers.json      hand-maintained from the Telecom
+                                      Ramblings network-map index
+
+   The corridors used to be straight chords between city pairs. They are now
+   routed over the road network at build time, because long-haul fiber is laid
+   in transportation rights-of-way (InterTubes, SIGCOMM 2015) and a chord
+   crosses country no conduit crosses. A corridor whose build could not be
+   routed carries routed:false and says so in its evidence line. */
+/* ── THE SHARED FIBER-EVIDENCE LIBRARY ────────────────────────────────────
+   api/_lib/fiber-evidence.js is the ONE interpreter of the bundled public
+   route inventory (195 OSM optical routes, 1,681 unknown-medium telecom
+   routes, 5,996 telecom facilities, 2,473 California MMBI design/status
+   parts). Grid Atlas reaches it through /api/fiber-screen; this function
+   reaches it directly. Same library, same classifier, same nulls — which is
+   the entire point: the two tools must not disagree about one location.
+
+   It is reported BESIDE the existing analysis and folded into NO existing
+   score. score(), verdict(), capacity() and dcSuitability() are untouched by
+   it on purpose. Those numbers are already published on saved rows and in
+   the screening register, and silently moving them because a new dataset
+   arrived would be the worst kind of change: invisible, and wrong in a
+   direction nobody asked for. */
+var fiberEvidence = require('./_lib/fiber-evidence.js');
+var CORRIDORS  = require('./_lib/longhaul-corridors.js');
+var DCS        = require('./_lib/datacenters.js');
+var CARRIERS   = require('../data/us-fiber-carriers.json');
+
+/* How far a corridor still matters. Beyond 50 mi the lateral dominates every
+   other consideration and the corridor is context, not an option. */
+var CORRIDOR_RADIUS_MI = 50;
+/* Two corridors count as independent paths only if they leave the site in
+   materially different directions. Two readings of the same I-80 conduit
+   30 miles apart is one path, and calling it two is how a single backhoe
+   takes out a "redundant" site. */
+var DIVERSITY_BEARING_DEG = 40;
+/* Data centers worth reporting as comparables and as evidence of plant. */
+var DC_RADIUS_MI = 50;
+
+/* Planning bands for fiber count in a corridor of each class. These are
+   ORDER-OF-MAGNITUDE PLANNING FIGURES for a first conversation, not counts:
+   real strand counts are per-cable, per-carrier, and sold as licensed data.
+   A long-haul ROW typically carries several carriers' cables at 144–864
+   strands each; metro distribution is an order smaller; a rural edge lateral
+   smaller again. Quoted as a range with the basis attached, always. */
+var STRAND_BAND = {
+  backbone: { low: 432,  high: 3456, basis: 'several carriers’ long-haul cables sharing one ROW, 144–864 strands each' },
+  regional: { low: 144,  high: 864,  basis: 'regional long-haul or middle-mile cable, typically 144–864 strands' },
+  metro:    { low: 48,   high: 288,  basis: 'metro distribution cable, typically 48–288 strands' },
+  edge:     { low: 12,   high: 96,   basis: 'edge or last-mile cable, typically 12–96 strands' }
 };
-var LH_CONDUITS = [
-  { a: 'Phoenix, AZ', b: 'Tucson, AZ', isps: 19, cite: '§4.2 extreme sharing' },
-  { a: 'Salt Lake City, UT', b: 'Denver, CO', isps: 19, cite: '§4.2 extreme sharing' },
-  { a: 'Philadelphia, PA', b: 'New York, NY', isps: 19, cite: '§4.2 extreme sharing' },
-  { a: 'Portland, OR', b: 'Seattle, WA', isps: 31, probes: 8094, cite: '§4.3 — 18 in physical map, 13 more inferred from traceroute' },
-  { a: 'Los Angeles, CA', b: 'San Francisco, CA', isps: 5, cite: '§2.4 coastal route — AT&T, Sprint, CenturyLink, Level 3, Verizon' },
-  { a: 'Houston, TX', b: 'Dallas, TX', isps: 2, cite: '§2.4 CenturyLink + Verizon' },
-  { a: 'Denver, CO', b: 'El Paso, TX', isps: 2, cite: '§2.4 CenturyLink + Verizon' },
-  { a: 'Santa Clara, CA', b: 'Salt Lake City, UT', isps: 2, cite: '§2.4 CenturyLink + Verizon' },
-  { a: 'Wells, NV', b: 'Salt Lake City, UT', isps: 2, cite: '§2.4 CenturyLink + Verizon' },
-  { a: 'Salt Lake City, UT', b: 'Sacramento, CA', isps: 2, cite: '§4.1 risk matrix example' },
-  { a: 'Sacramento, CA', b: 'Palo Alto, CA', isps: 1, cite: '§4.1 risk matrix example' },
-  { a: 'Ocala, FL', b: 'Gainesville, FL', isps: 3, cite: '§2.4 Level 3 fibre used by Cox and Comcast' },
-  { a: 'Anaheim, CA', b: 'Las Vegas, NV', isps: 1, row: 'pipeline', cite: '§3 — co-located with refined-products pipeline, not road or rail' },
-  { a: 'Houston, TX', b: 'Atlanta, GA', isps: 1, row: 'pipeline', cite: '§3 — deployed along NGL pipelines' },
-  { a: 'Trenton, NJ', b: 'Edison, NJ', probes: 78402, cite: 'Table 2' },
-  { a: 'Kalamazoo, MI', b: 'Battle Creek, MI', probes: 78384, cite: 'Table 2' },
-  { a: 'Dallas, TX', b: 'Fort Worth, TX', probes: 56233, cite: 'Table 2' },
-  { a: 'Baltimore, MD', b: 'Towson, MD', probes: 46336, cite: 'Table 2' },
-  { a: 'Baton Rouge, LA', b: 'New Orleans, LA', probes: 46328, cite: 'Table 2' },
-  { a: 'Livonia, MI', b: 'Southfield, MI', probes: 46287, cite: 'Table 2' },
-  { a: 'Topeka, KS', b: 'Lincoln, NE', probes: 46275, cite: 'Table 2' },
-  { a: 'Spokane, WA', b: 'Boise, ID', probes: 44461, cite: 'Table 2' },
-  { a: 'Dallas, TX', b: 'Atlanta, GA', probes: 41008, cite: 'Table 2' },
-  { a: 'Dallas, TX', b: 'Bryan, TX', probes: 39232, cite: 'Table 2' },
-  { a: 'Shreveport, LA', b: 'Dallas, TX', probes: 39210, cite: 'Table 2' },
-  { a: 'Wichita Falls, TX', b: 'Dallas, TX', probes: 39180, cite: 'Table 2 and 3' },
-  { a: 'San Luis Obispo, CA', b: 'Lompoc, CA', probes: 32381, cite: 'Table 2' },
-  { a: 'San Francisco, CA', b: 'Las Vegas, NV', probes: 22986, cite: 'Table 2' },
-  { a: 'Wichita, KS', b: 'Las Vegas, NV', probes: 22169, cite: 'Table 2' },
-  { a: 'Las Vegas, NV', b: 'Salt Lake City, UT', probes: 22094, cite: 'Table 2' },
-  { a: 'Battle Creek, MI', b: 'Lansing, MI', probes: 15027, cite: 'Table 2' },
-  { a: 'South Bend, IN', b: 'Battle Creek, MI', probes: 14795, cite: 'Table 2' },
-  { a: 'Philadelphia, PA', b: 'Allentown, PA', probes: 12905, cite: 'Table 2' },
-  { a: 'Philadelphia, PA', b: 'Edison, NJ', probes: 12901, cite: 'Table 2' },
-  { a: 'West Palm Beach, FL', b: 'Boca Raton, FL', probes: 155774, cite: 'Table 3' },
-  { a: 'Lynchburg, VA', b: 'Charlottesville, VA', probes: 155079, cite: 'Table 3' },
-  { a: 'Sedona, AZ', b: 'Camp Verde, AZ', probes: 54067, cite: 'Table 3' },
-  { a: 'Bozeman, MT', b: 'Billings, MT', probes: 50879, cite: 'Table 3' },
-  { a: 'Billings, MT', b: 'Casper, WY', probes: 50818, cite: 'Table 3' },
-  { a: 'Casper, WY', b: 'Cheyenne, WY', probes: 50817, cite: 'Table 3' },
-  { a: 'White Plains, NY', b: 'Stamford, CT', probes: 25784, cite: 'Table 3' },
-  { a: 'Amarillo, TX', b: 'Wichita Falls, TX', probes: 16354, cite: 'Table 3' },
-  { a: 'Eugene, OR', b: 'Chico, CA', probes: 12234, cite: 'Table 3' },
-  { a: 'Phoenix, AZ', b: 'Dallas, TX', probes: 9725, cite: 'Table 3' },
-  { a: 'Salt Lake City, UT', b: 'Provo, UT', probes: 9433, cite: 'Table 3' },
-  { a: 'Salt Lake City, UT', b: 'Los Angeles, CA', probes: 8921, cite: 'Table 3' },
-  { a: 'Dallas, TX', b: 'Oklahoma City, OK', probes: 8242, cite: 'Table 3' },
-  { a: 'Eau Claire, WI', b: 'Madison, WI', probes: 7476, cite: 'Table 3' },
-  { a: 'Salt Lake City, UT', b: 'Cheyenne, WY', probes: 7380, cite: 'Table 3' },
-  { a: 'Bakersfield, CA', b: 'Los Angeles, CA', probes: 6874, cite: 'Table 3' },
-  { a: 'Seattle, WA', b: 'Hillsboro, OR', probes: 6854, cite: 'Table 3' },
-  { a: 'Santa Barbara, CA', b: 'Los Angeles, CA', probes: 6641, cite: 'Table 3' },
-  { a: 'Kansas City, MO', b: 'Denver, CO', isps: 2, cite: '§2.5 parallel deployments' }
-];
+
+/* Which region's carrier shortlist to offer, from the site's coordinates.
+   Coarse on purpose: this picks who to phone, and a carrier one region over
+   still sells transport. */
+function regionOf(lat, lon) {
+  if (lon < -115) return lat > 42 ? 'Pacific Northwest' : 'California';
+  if (lon < -104) return 'Mountain West';
+  if (lon < -94)  return lat > 40 ? 'Great Plains' : 'South Central';
+  if (lon < -85)  return lat > 38.5 ? 'Midwest' : 'Southeast';
+  /* The VA/NC line sits at 36.54°N and it is the boundary that matters here:
+     everything from Richmond up through Ashburn is Mid-Atlantic, and Ashburn
+     is the single most important fiber address in the country. A 40°N cut put
+     it in the Southeast and offered a Cox and Spectrum call list for Data
+     Center Alley. Above 41°N this band is Great Lakes, which is why Cleveland
+     and Pittsburgh come back Midwest rather than Mid-Atlantic. */
+  if (lon < -77)  return lat > 41 ? 'Midwest' : lat > 36.5 ? 'Mid-Atlantic' : 'Southeast';
+  return lat > 40.5 ? 'Northeast' : lat > 36.5 ? 'Mid-Atlantic' : 'Southeast';
+}
+function carriersFor(lat, lon) {
+  var region = regionOf(lat, lon);
+  var ids = (CARRIERS.regionHints || {})[region] || [];
+  var byId = {};
+  (CARRIERS.carriers || []).forEach(function (c) { byId[c.id] = c; });
+  var out = [];
+  for (var i = 0; i < ids.length; i++) {
+    var c = byId[ids[i]];
+    if (!c) continue;
+    out.push({ id: c.id, name: c.name, reach: c.reach,
+               mapUrl: c.mapUrl || null, mapKind: c.mapKind || 'none',
+               note: c.note || null });
+  }
+  return { region: region, carriers: out,
+           source: CARRIERS.source,
+           basis: 'carriers that publish a network map covering this region — a call list, not a statement that any of them is on this corridor' };
+}
 
 var OVERPASS = [
   'https://overpass-api.de/api/interpreter',
@@ -607,21 +616,296 @@ function harvest(lat, lon) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SOURCE 6 · LONG-HAUL CONDUITS — local, no network
-   Distance to the straight chord between the two cities. The atlas page
-   routes the pair along roads before measuring; a function answering in
-   seconds does not, and says so ("direct-line estimate").
+   SOURCE 6 · LONG-HAUL CORRIDORS — local, no network
+
+   Every corridor within CORRIDOR_RADIUS_MI, not just the closest one, because
+   the second corridor is the whole question for a data load. One corridor is
+   a single point of failure no matter how close it is; two corridors leaving
+   in different directions is a protected ring, and that difference is worth
+   more to a hyperscaler than five miles of lateral.
+
+   Corridor geometry is routed over the road network at build time. Distance
+   is measured to the routed polyline, so it is a distance to where the
+   conduit plausibly runs — not to a chord drawn across open country.
    ═══════════════════════════════════════════════════════════════════════════ */
-function longhaul(lat, lon) {
+
+/* Bearing from the site to the closest point on a corridor, degrees from
+   north. Two corridors sharing a bearing are the same path twice. */
+function bearingTo(lat, lon, toLat, toLon) {
+  var p = Math.PI / 180;
+  var y = Math.sin((toLon - lon) * p) * Math.cos(toLat * p);
+  var x = Math.cos(lat * p) * Math.sin(toLat * p) -
+          Math.sin(lat * p) * Math.cos(toLat * p) * Math.cos((toLon - lon) * p);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+/* Closest point on a corridor's polyline, with the distance to it. Geometry
+   is [lon, lat]; the local planar projection is the same one nearestLineMi
+   uses, which keeps one convention for measuring in this file. */
+function closestOnCorridor(g, lat, lon) {
   var best = null;
-  for (var i = 0; i < LH_CONDUITS.length; i++) {
-    var c = LH_CONDUITS[i], A = LH_CITY[c.a], B = LH_CITY[c.b];
-    if (!A || !B) continue;
-    var d = segDistMi([0, 0], xyMi(lat, lon, A[0], A[1]), xyMi(lat, lon, B[0], B[1]));
-    if (!best || d < best.mi) best = { mi: Math.round(d * 10) / 10, conduit: c };
+  for (var i = 1; i < g.length; i++) {
+    var a = xyMi(lat, lon, g[i - 1][1], g[i - 1][0]);
+    var b = xyMi(lat, lon, g[i][1], g[i][0]);
+    var d = segDistMi([0, 0], a, b);
+    if (best && d >= best.mi) continue;
+    /* Re-find the parameter along the segment so the bearing points at the
+       actual nearest vertex pair, not at an endpoint of the whole line. */
+    var vx = b[0] - a[0], vy = b[1] - a[1], len2 = vx * vx + vy * vy;
+    var t = len2 ? Math.max(0, Math.min(1, (-a[0] * vx + -a[1] * vy) / len2)) : 0;
+    best = {
+      mi: d,
+      lat: g[i - 1][1] + (g[i][1] - g[i - 1][1]) * t,
+      lon: g[i - 1][0] + (g[i][0] - g[i - 1][0]) * t
+    };
   }
-  return best ? { status: 'ok', mi: best.mi, conduit: best.conduit, basis: 'direct-line estimate between the published endpoints, not a routed path' }
-              : { status: 'empty' };
+  return best;
+}
+
+function longhaul(lat, lon) {
+  var near = [];
+  for (var i = 0; i < CORRIDORS.length; i++) {
+    var c = CORRIDORS[i];
+    if (!c.g || c.g.length < 2) continue;
+    var hit = closestOnCorridor(c.g, lat, lon);
+    if (!hit || hit.mi > CORRIDOR_RADIUS_MI) continue;
+    near.push({
+      a: c.a, b: c.b, name: c.a + ' ↔ ' + c.b,
+      mi: Math.round(hit.mi * 10) / 10,
+      bearing: Math.round(bearingTo(lat, lon, hit.lat, hit.lon)),
+      src: c.src, routed: !!c.routed, row: c.row || null,
+      isps: c.isps, probes: c.probes, cite: c.cite, corridorMi: c.miles
+    });
+  }
+  near.sort(function (x, y) { return x.mi - y.mi; });
+
+  /* Independent paths: walk the list nearest-first and keep a corridor only
+     when it leaves the site on a bearing no kept corridor already covers.
+     A corridor and its reciprocal (north vs south along the same I-80) are
+     the same ditch, so bearings are folded to a 180° axis before comparing. */
+  var axes = [], independent = [];
+  for (var j = 0; j < near.length; j++) {
+    var ax = near[j].bearing % 180, novel = true;
+    for (var k = 0; k < axes.length; k++) {
+      var diff = Math.abs(ax - axes[k]);
+      if (diff > 90) diff = 180 - diff;
+      if (diff < DIVERSITY_BEARING_DEG) { novel = false; break; }
+    }
+    if (novel) { axes.push(ax); independent.push(near[j]); }
+  }
+
+  if (!near.length) {
+    return { status: 'empty', mi: null, corridors: [], independent: 0,
+             basis: 'no long-haul corridor within ' + CORRIDOR_RADIUS_MI + ' mi of this point' };
+  }
+  return {
+    status: 'ok', mi: near[0].mi, conduit: near[0],
+    corridors: near.slice(0, 8),
+    independent: independent.length,
+    independentPaths: independent.slice(0, 4),
+    unrouted: near.filter(function (c) { return !c.routed; }).length,
+    basis: 'distance to a corridor routed over the road network at build time, ' +
+           'because long-haul fiber is laid in transportation rights-of-way. ' +
+           'Not a carrier route map and not a survey.'
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SOURCE 7 · EXISTING COMPUTE — local, no network
+
+   An operating data center is the strongest free evidence that carrier-grade
+   fiber was pulled to an address and that somebody is selling capacity on it.
+   It is also the comparable a developer is actually asking for: if there are
+   eleven facilities and 900 MW inside fifty miles, the utility and the
+   carriers have both done this before.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function datacenters(lat, lon) {
+  var rows = DCS.ROWS, near = [], gen = [], mw25 = 0, mw50 = 0, n25 = 0, n50 = 0, genMw = 0;
+  /* A degree of latitude is ~69 mi, so nothing beyond this box can be inside
+     the radius. Skipping on it first turns 3,000 haversines into ~50. */
+  var dLat = DC_RADIUS_MI / 69, dLon = DC_RADIUS_MI / (69 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (Math.abs(r[0] - lat) > dLat || Math.abs(r[1] - lon) > dLon) continue;
+    var mi = distMi(lat, lon, r[0], r[1]);
+    if (mi > DC_RADIUS_MI) continue;
+    var mw = r[4], kind = r[6] || 0;
+    var rec = { name: r[2], operator: r[3], mi: Math.round(mi * 10) / 10,
+                mw: mw, operational: r[5] === 1, kind: DCS.KIND[kind] || 'data_center' };
+    /* Generation is tracked because it was built to feed these campuses, and
+       a 300 MW plant next door is a real siting fact. It is NOT evidence of
+       fiber and must never answer "nearest operating compute facility" — a
+       wind farm has a SCADA link, not a carrier hotel. */
+    if (kind === 2) { gen.push(rec); if (mw) genMw += mw; continue; }
+    n50++; if (mw) mw50 += mw;
+    if (mi <= 25) { n25++; if (mw) mw25 += mw; }
+    near.push(rec);
+  }
+  near.sort(function (a, b) { return a.mi - b.mi; });
+  gen.sort(function (a, b) { return a.mi - b.mi; });
+  return {
+    status: near.length ? 'ok' : 'empty',
+    nearest: near.slice(0, 8),
+    within25: n25, within50: n50,
+    mwWithin25: Math.round(mw25), mwWithin50: Math.round(mw50),
+    generation: gen.slice(0, 5), generationCount: gen.length, generationMw: Math.round(genMw),
+    attrib: DCS.ATTRIB,
+    basis: 'operating and under-construction COMPUTE only \u2014 data centers and ' +
+           'crypto mines. Dedicated generation is counted separately under ' +
+           '`generation`, because a power plant is a power fact. A proposed ' +
+           'campus is excluded: an announcement is not fiber in the ground. ' +
+           'Capacity is stated only where a source stated it.'
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOW MUCH FIBER IS HERE — the question a developer actually asks
+
+   There is no honest single number. What there is: a class, a route-diversity
+   count, the carrier presences the registries know about, and a planning band
+   for strand count with its basis attached. Every one of those is reported
+   with where it came from, and the band is never presented as a measurement.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function capacity(d, lat, lon) {
+  var lh = d.lh || {}, near = (lh.corridors || [])[0] || null;
+  var nets = d.netsWithin80 || 0;
+
+  /* Class is set by the best evidence, in the order that a carrier would
+     actually sell against it. */
+  var cls, why;
+  if (near && near.mi <= 2 && near.src === 'intertubes') {
+    cls = 'backbone'; why = 'on a published long-haul conduit (' + near.name + ')';
+  } else if (near && near.mi <= 2) {
+    cls = 'backbone'; why = 'on a long-haul corridor (' + near.name + ')';
+  } else if (near && near.mi <= 15 && nets >= 100) {
+    cls = 'regional'; why = 'within ' + fmtMi(near.mi) + ' of a long-haul corridor in a dense carrier market';
+  } else if (near && near.mi <= 15) {
+    cls = 'regional'; why = 'within ' + fmtMi(near.mi) + ' of a long-haul corridor';
+  } else if (nets >= 50 || d.fccFiber === true) {
+    cls = 'metro'; why = nets >= 50 ? nets.toLocaleString('en-US') + ' carrier presences within 80 mi'
+                                    : 'business fiber reported at the location';
+  } else if (near && (lh.independent || 0) >= 2) {
+    /* Reachable long-haul on more than one bearing. The build is a real
+       lateral and should be priced as one, but calling this 'edge' would
+       say the capacity is not there, and it is. */
+    cls = 'regional';
+    why = (lh.independent) + ' long-haul corridors within ' + CORRIDOR_RADIUS_MI +
+          ' mi on independent bearings; nearest is ' + fmtMi(near.mi) + ' away (' + near.name + ')';
+  } else {
+    cls = 'edge'; why = near ? 'nearest corridor is ' + fmtMi(near.mi) + ' away'
+                             : 'no long-haul corridor within ' + CORRIDOR_RADIUS_MI + ' mi';
+  }
+
+  var band = STRAND_BAND[cls];
+  var paths = lh.independent || 0;
+  var diversity = paths >= 3 ? 'meshed' : paths === 2 ? 'dual-path' : paths === 1 ? 'single-threaded' : 'none mapped';
+
+  var notes = [];
+  if (diversity === 'single-threaded')
+    notes.push('One corridor within ' + CORRIDOR_RADIUS_MI + ' mi. A single cut takes the site off the network; ' +
+               'a protected ring would have to be built, not bought.');
+  if (diversity === 'dual-path')
+    notes.push('Two corridors on independent bearings within ' + CORRIDOR_RADIUS_MI + ' mi — a protected ring is buyable in principle.');
+  if (diversity === 'meshed')
+    notes.push(paths + ' corridors on independent bearings — route diversity is a procurement question here, not an engineering one.');
+  if (lh.unrouted)
+    notes.push(lh.unrouted + ' of the corridors measured here fell back to a straight line at build time; treat their distances as coarse.');
+  if ((cls === 'regional' || cls === 'edge') && near && near.mi > 15)
+    notes.push('The nearest corridor is ' + fmtMi(near.mi) + ' away. At the planning band of $' +
+               (LATERAL_COST_PER_MI.low / 1000) + 'k\u2013$' + (LATERAL_COST_PER_MI.high / 1000) +
+               'k per mile that is roughly $' +
+               Math.round(near.mi * LATERAL_COST_PER_MI.low / 100000) / 10 + 'M\u2013$' +
+               Math.round(near.mi * LATERAL_COST_PER_MI.high / 100000) / 10 +
+               'M of build before the first splice. Ask about an existing regional route ' +
+               'before pricing a new one \u2014 the ILEC and the electric cooperative both own ' +
+               'fiber that is on no public map.');
+  if (cls === 'edge')
+    notes.push('Nothing in the public record puts long-haul capacity near this point. That is a gap in the record as often as it is a gap in the ground — ask the incumbent ILEC and the nearest electric cooperative, both of which own fiber that is on no public map.');
+
+  return {
+    class: cls, classWhy: why,
+    routeDiversity: diversity, independentPaths: paths,
+    corridorsWithin: (lh.corridors || []).length, corridorRadiusMi: CORRIDOR_RADIUS_MI,
+    nearestCorridor: near,
+    carrierPresences: nets,
+    exchanges: d.ixWithin80 || 0,
+    litService: d.fccFiber === true ? 'reported' : d.fccFiber === false ? 'none reported' : 'not checked',
+    strandBand: { low: band.low, high: band.high, basis: band.basis,
+                  caveat: 'PLANNING BAND, NOT A COUNT. Strand counts are per-cable and per-carrier ' +
+                          'and are sold as licensed data. Use this to size a conversation, never a design.' },
+    calls: carriersFor(lat, lon),
+    notes: notes
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   IS THIS A DATA-CENTER SITE — the connectivity half of that question
+
+   Power, water, land and tax are answered elsewhere (/api/grid-atlas and the
+   screening register). This grades the half this function can see, and says
+   plainly that it is a half. A site that fails here fails outright; a site
+   that passes here has cleared one gate of four.
+   ═══════════════════════════════════════════════════════════════════════════ */
+var DC_W = { corridor: 30, diversity: 25, carriers: 20, exchange: 10, comparables: 15 };
+
+function dcSuitability(d, cap, dc) {
+  var parts = [], s = 0;
+
+  var cMi = cap.nearestCorridor ? cap.nearestCorridor.mi : null;
+  var p1 = cMi === null ? 0 : clamp(DC_W.corridor - cMi * 0.9, 0, DC_W.corridor);
+  s += p1; parts.push({ key: 'corridor', points: Math.round(p1 * 10) / 10, max: DC_W.corridor,
+    note: cMi === null ? 'no long-haul corridor within ' + CORRIDOR_RADIUS_MI + ' mi'
+                       : fmtMi(cMi) + ' to ' + cap.nearestCorridor.name });
+
+  var paths = cap.independentPaths || 0;
+  var p2 = paths >= 3 ? DC_W.diversity : paths === 2 ? 18 : paths === 1 ? 7 : 0;
+  s += p2; parts.push({ key: 'diversity', points: p2, max: DC_W.diversity,
+    note: cap.routeDiversity + ' — ' + paths + ' independent corridor bearing' + (paths === 1 ? '' : 's') });
+
+  var nets = d.netsWithin80 || 0;
+  var p3 = nets <= 0 ? 0 : clamp(Math.log(nets + 1) / Math.log(600) * DC_W.carriers, 0, DC_W.carriers);
+  s += p3; parts.push({ key: 'carriers', points: Math.round(p3 * 10) / 10, max: DC_W.carriers,
+    note: nets ? nets.toLocaleString('en-US') + ' carrier presences within 80 mi' : 'no registered carriers within 80 mi' });
+
+  var ix = d.ixWithin80 || 0;
+  var p4 = ix <= 0 ? 0 : clamp(4 + ix * 2, 0, DC_W.exchange);
+  s += p4; parts.push({ key: 'exchange', points: Math.round(p4 * 10) / 10, max: DC_W.exchange,
+    note: ix ? ix + ' Internet Exchange' + (ix > 1 ? 's' : '') + ' within 80 mi'
+             : 'no Internet Exchange within 80 mi — peering is a backhaul cost here' });
+
+  /* Comparables cut both ways and the note says which way. Existing capacity
+     proves the market works; it also competes for the same substation. */
+  var n50 = dc.within50 || 0;
+  var p5 = n50 <= 0 ? 0 : clamp(Math.log(n50 + 1) / Math.log(40) * DC_W.comparables, 0, DC_W.comparables);
+  s += p5; parts.push({ key: 'comparables', points: Math.round(p5 * 10) / 10, max: DC_W.comparables,
+    note: n50 ? n50 + ' operating facilit' + (n50 === 1 ? 'y' : 'ies') + ' within 50 mi' +
+                (dc.mwWithin50 ? ', ' + dc.mwWithin50.toLocaleString('en-US') + ' MW where capacity is stated' : '')
+              : 'no operating compute within 50 mi' });
+
+  var sc = Math.round(clamp(s, 0, 100));
+  var v = sc >= 70 ? 'strong' : sc >= 50 ? 'workable' : sc >= 30 ? 'marginal' : 'poor';
+
+  var flags = [];
+  if (paths <= 1)
+    flags.push({ severity: 'risk', text: 'Route diversity is the finding here: ' + cap.routeDiversity +
+      '. A tenant with an uptime SLA will ask for two physically diverse entrances on day one.' });
+  if (ix === 0)
+    flags.push({ severity: 'note', text: 'No Internet Exchange within 80 mi. Every bit leaves on transit, ' +
+      'which is a permanent line item rather than a one-off build.' });
+  if (n50 === 0)
+    flags.push({ severity: 'note', text: 'No operating compute within 50 mi. Greenfield for the carriers too — ' +
+      'expect longer quotes and a build contribution.' });
+  if (cap.class === 'edge')
+    flags.push({ severity: 'blocker', text: 'No long-haul capacity in the public record near this point. ' +
+      'For a data load this is a fatal-flaw finding until a carrier says otherwise.' });
+  if (dc.within25 >= 5 && (dc.mwWithin25 || 0) >= 200)
+    flags.push({ severity: 'risk', text: dc.within25 + ' facilities and ~' + dc.mwWithin25.toLocaleString('en-US') +
+      ' MW already inside 25 mi. Connectivity is proven; the constraint has almost certainly moved to the substation.' });
+
+  return {
+    score: sc, verdict: v, components: parts, flags: flags,
+    scope: 'CONNECTIVITY ONLY. Power, water, land, tax and latency-to-market are not in this number. ' +
+           'A strong score here means the fiber gate is clear, not that the site is buildable.'
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -645,10 +929,20 @@ function score(d) {
   var p4 = ix <= 0 ? 0 : clamp(5 + ix * 3.5, 0, W.exchange);
   s += p4; parts.push({ key: 'exchange', points: Math.round(p4 * 10) / 10, max: W.exchange,
     note: ix > 0 ? ix + ' Internet Exchange' + (ix > 1 ? 's' : '') + ' within 80 mi' : 'no IXP within 80 mi' });
+  /* The long-haul bonus used to be distance alone. Distance to ONE corridor
+     overstates a site that is on a stub: half the bonus is now the second
+     independent path, because that is what a tenant with an SLA is buying. */
   if (d.longhaulMi != null) {
-    var bonus = clamp(W.longhaulBonus - d.longhaulMi * 0.35, 0, W.longhaulBonus);
+    var half = W.longhaulBonus / 2;
+    var bNear = clamp(half - d.longhaulMi * 0.2, 0, half);
+    var paths = d.independentPaths || 0;
+    var bDiv  = paths >= 3 ? half : paths === 2 ? half * 0.7 : 0;
+    var bonus = bNear + bDiv;
     s += bonus; parts.push({ key: 'longhaul', points: Math.round(bonus * 10) / 10, max: W.longhaulBonus,
-      note: fmtMi(d.longhaulMi) + ' to ' + d.longhaul.a + ' ↔ ' + d.longhaul.b + (d.longhaul.isps ? ' (' + d.longhaul.isps + ' ISPs)' : '') + ' · bonus, not weighted' });
+      note: fmtMi(d.longhaulMi) + ' to ' + d.longhaul.a + ' \u2194 ' + d.longhaul.b +
+            (d.longhaul.isps ? ' (' + d.longhaul.isps + ' ISPs)' : '') +
+            ' \u00b7 ' + paths + ' independent corridor' + (paths === 1 ? '' : 's') +
+            ' within ' + CORRIDOR_RADIUS_MI + ' mi \u00b7 bonus, not weighted' });
   }
   return { score: Math.round(clamp(s, 0, 100)), parts: parts };
 }
@@ -668,6 +962,19 @@ function verdict(d) {
      buildings), so they count as evidence, one notch softer than plant. */
   if (d.osmExchangeMi != null) hard.push({ kind: 'exchange', mi: d.osmExchangeMi + 0.25, label: 'telephone exchange / central office (OpenStreetMap)' });
   if (d.osmDataCenterMi != null) hard.push({ kind: 'data_center', mi: d.osmDataCenterMi + 0.25, label: 'data centre (OpenStreetMap)' });
+  /* An operating facility in one of the merged registries is the same class
+     of evidence as an OSM data centre and usually better placed, because the
+     record carries a street address. Same 0.25 mi penalty: it says fiber
+     reaches the building, not that it reaches this parcel. */
+  if (d.dcMi != null) hard.push({ kind: 'facility', mi: d.dcMi + 0.25,
+    label: 'operating compute facility (' + d.dcName + ')' });
+  /* A routed corridor is a corridor, not a cable: the conduit is somewhere in
+     that right-of-way, within a margin the routing itself cannot resolve. It
+     counts as evidence only when the site is effectively on it, and carries a
+     0.5 mi penalty to keep it behind anything actually surveyed. */
+  if (d.longhaulMi != null && d.longhaulMi <= 3) hard.push({ kind: 'corridor', mi: d.longhaulMi + 0.5,
+    label: 'long-haul corridor ' + d.longhaul.a + ' \u2194 ' + d.longhaul.b +
+           (d.longhaul.src === 'intertubes' ? ' (published conduit)' : ' (routed corridor)') });
   hard.sort(function (a, b) { return a.mi - b.mi; });
   var nearest = hard[0] || null;
   var fac = d.nearestCarrier ? d.nearestCarrier.mi : null;
@@ -732,7 +1039,50 @@ function applyCors(req, res) {
   res.setHeader('Access-Control-Max-Age', '86400');
 }
 
-function analyse(lat, lon) {
+/* Public-evidence screen. Boundary when the editor could give us one, point
+   otherwise, and the response always says which — a centroid distance and a
+   boundary distance are different measurements and must never be compared as
+   though they were the same number. Never throws: a failure here must not
+   take down the rest of the analysis, because everything else in it is
+   independent of this dataset. */
+function publicFiber(lat, lon, boundary, gbps) {
+  try {
+    var opts = { radius_km: 25, limit: 10 };
+    if (gbps != null && isFinite(gbps) && gbps > 0) opts.requested_capacity_gbps = gbps;
+    if (boundary) {
+      try {
+        opts.boundary = boundary;
+        var area = fiberEvidence.screenArea(opts);
+        area.status = 'ok';
+        area.measured_from = 'site_boundary';
+        return area;
+      } catch (be) {
+        /* A malformed ring must degrade to the point answer, clearly labelled,
+           rather than leaving the panel with nothing. */
+        delete opts.boundary;
+        var fb = fiberEvidence.screen(Object.assign(opts, { lat: lat, lon: lon }));
+        fb.status = 'ok';
+        fb.measured_from = 'site_point';
+        fb.boundary_note = 'A site boundary was supplied but could not be read (' +
+          (be.message || 'invalid ring') + '), so this is measured from the site point.';
+        return fb;
+      }
+    }
+    var pt = fiberEvidence.screen({ lat: lat, lon: lon, radius_km: 25, limit: 10,
+      requested_capacity_gbps: (gbps != null && isFinite(gbps) && gbps > 0) ? gbps : undefined });
+    pt.status = 'ok';
+    pt.measured_from = 'site_point';
+    pt.measurement_method = 'great_circle_distance_from_site_point_to_published_geometry';
+    return pt;
+  } catch (e) {
+    return { status: 'failed', error: String((e && e.message) || e).slice(0, 200),
+             measured_from: boundary ? 'site_boundary' : 'site_point',
+             note: 'The bundled public fiber inventory could not be read. This is NOT evidence that ' +
+                   'no fiber exists — it is a failure to look.' };
+  }
+}
+
+function analyse(lat, lon, boundary, gbps) {
   var t0 = Date.now();
   return Promise.all([
     timed('facilities', function () { return facilities(lat, lon); }),
@@ -740,9 +1090,11 @@ function analyse(lat, lon) {
     timed('osm',        function () { return osmTelecom(lat, lon); }),
     timed('plant',      function () { return surveyedPlant(lat, lon); }),
     timed('harvest',    function () { return harvest(lat, lon); }),
-    timed('longhaul',   function () { return longhaul(lat, lon); })
+    timed('longhaul',   function () { return longhaul(lat, lon); }),
+    timed('datacenters',function () { return datacenters(lat, lon); }),
+    timed('publicFiber', function () { return publicFiber(lat, lon, boundary, gbps); })
   ]).then(function (r) {
-    var fac = r[0], fcc = r[1], osm = r[2], plant = r[3], hv = r[4], lh = r[5];
+    var fac = r[0], fcc = r[1], osm = r[2], plant = r[3], hv = r[4], lh = r[5], dc = r[6], pf = r[7];
     var d = {
       nearestCarrier: fac.nearestCarrier || null, nearestMajor: fac.nearestMajor || null,
       netsWithin80: fac.netsWithin80 || 0, ixWithin80: fac.ixWithin80 || 0,
@@ -752,8 +1104,13 @@ function analyse(lat, lon) {
       osmLineMi: osm.nearestLine ? osm.nearestLine.mi : null,
       osmExchangeMi: osm.nearestExchange ? osm.nearestExchange.mi : null,
       osmDataCenterMi: osm.nearestDataCenter ? osm.nearestDataCenter.mi : null,
-      longhaulMi: lh.status === 'ok' ? lh.mi : null, longhaul: lh.conduit || null
+      longhaulMi: lh.status === 'ok' ? lh.mi : null, longhaul: lh.conduit || null,
+      independentPaths: lh.independent || 0, lh: lh,
+      dcMi: (dc.nearest[0] && dc.nearest[0].operational) ? dc.nearest[0].mi : null,
+      dcName: dc.nearest[0] ? dc.nearest[0].name : ''
     };
+    var cap = capacity(d, lat, lon);
+    var dcFit = dcSuitability(d, cap, dc);
     var sc = score(d), vd = verdict(d);
     var findings = [];
     if (fac.status === 'failed') findings.push({ severity: 'note', text: 'PeeringDB did not answer (' + fac.error + ') — facility distance, density and exchanges are unscored, not zero.' });
@@ -765,12 +1122,20 @@ function analyse(lat, lon) {
     if (!d.nearestCarrier) findings.push({ severity: 'blocker', text: 'No PeeringDB facility with ' + CARRIER_NETS + '+ networks within ' + FACILITY_RADIUS_MI + ' mi. For a latency-sensitive load this is a fatal-flaw finding, not a detail.' });
     else if (d.nearestCarrier.mi > 40) findings.push({ severity: 'risk', text: 'Nearest carrier facility is ' + fmtMi(d.nearestCarrier.mi) + ' away — a long haul before the first cross-connect.' });
     if (vd.verdict === 'unlikely') findings.push({ severity: 'blocker', text: 'Fiber to support a data load is unlikely from the public record: ' + vd.reasons.join('; ') + '.' });
+    /* The data-center read produces findings the fiber verdict does not:
+       route diversity, peering, and whether the neighbours already took the
+       substation. They are about siting, so they are merged here rather than
+       left inside a block a caller has to know to open. */
+    for (var fi = 0; fi < dcFit.flags.length; fi++) findings.push(dcFit.flags[fi]);
 
     var nm = d.nearestMajor || d.nearestCarrier;
-    var summary = vd.verdict === 'likely' ? 'Fiber likely — ' + vd.reasons[0]
-                : vd.verdict === 'plausible' ? 'Fiber plausible — ' + vd.reasons[0]
-                : vd.verdict === 'unlikely' ? 'Fiber unlikely — ' + vd.reasons[0]
-                : 'Fiber uncertain — ' + vd.reasons[0];
+    var head = vd.verdict === 'likely' ? 'Fiber likely' : vd.verdict === 'plausible' ? 'Fiber plausible'
+             : vd.verdict === 'unlikely' ? 'Fiber unlikely' : 'Fiber uncertain';
+    var summary = head + ' \u2014 ' + vd.reasons[0] +
+      '. ' + cap.class.charAt(0).toUpperCase() + cap.class.slice(1) + ' connectivity, ' +
+      cap.routeDiversity + ' (' + cap.independentPaths + ' independent corridor' +
+      (cap.independentPaths === 1 ? '' : 's') + ' within ' + CORRIDOR_RADIUS_MI + ' mi). ' +
+      'Data-center fit on connectivity alone: ' + dcFit.verdict + ' (' + dcFit.score + '/100).';
     return {
       build: BUILD, model: MODEL, lat: lat, lng: lon,
       routeFactor: ROUTE_FACTOR, usPerKm: US_PER_KM,
@@ -790,8 +1155,30 @@ function analyse(lat, lon) {
              nearestLine: osm.nearestLine || null, nearestExchange: osm.nearestExchange || null, nearestDataCenter: osm.nearestDataCenter || null },
       plant: { status: plant.status, ms: plant.ms, nearest: plant.nearest || null, layers: plant.layers || [] },
       harvest: { status: hv.status, ms: hv.ms, error: hv.error, services: hv.services || [], nearest: hv.nearest || null },
-      longhaul: lh.status === 'ok' ? { mi: lh.mi, conduit: lh.conduit, basis: lh.basis } : null,
-      sources: { peeringdb: fac.status, fcc: fcc.status, osm: osm.status, plant: plant.status, harvest: hv.status, longhaul: lh.status },
+      longhaul: { status: lh.status, mi: lh.mi, conduit: lh.conduit || null,
+                  corridors: lh.corridors || [], independent: lh.independent || 0,
+                  independentPaths: lh.independentPaths || [], unrouted: lh.unrouted || 0, basis: lh.basis },
+      /* HOW MUCH FIBER IS HERE — class, route diversity, a strand planning
+         band with its caveat, and the carriers to call. Read `capacity.notes`
+         before quoting any of it. */
+      capacity: cap,
+      /* IS THIS A DATA-CENTER SITE — the connectivity half only, and it says
+         so in `datacenter.scope`. Power and land come from /api/grid-atlas. */
+      datacenter: { score: dcFit.score, verdict: dcFit.verdict, components: dcFit.components,
+                    scope: dcFit.scope,
+                    nearest: dc.nearest, within25: dc.within25, within50: dc.within50,
+                    mwWithin25: dc.mwWithin25, mwWithin50: dc.mwWithin50,
+                    attrib: dc.attrib, basis: dc.basis },
+      /* PUBLIC ROUTE EVIDENCE — the shared dataset, identical to what
+         /api/fiber-screen returns for the same place. Deliberately NOT merged
+         into `evidence`, `score` or `verdict`: those already treat some
+         absences as low values, and admitting a second dataset into them
+         would move published numbers without anyone asking. Read it as its
+         own section. */
+      publicFiber: pf,
+      sources: { peeringdb: fac.status, fcc: fcc.status, osm: osm.status, plant: plant.status,
+                 harvest: hv.status, longhaul: lh.status, datacenters: dc.status,
+                 publicFiber: pf.status },
       findings: findings,
       elapsedMs: Date.now() - t0
     };
@@ -809,7 +1196,26 @@ module.exports = function handler(req, res) {
     return Promise.all([
       timed('peeringdb', function () { return facilities(41.8781, -87.6298).then(function (f) { return { status: f.status, within80: f.within80, nearestMajor: f.nearestMajor && f.nearestMajor.name }; }); }),
       timed('plant', function () { return arcQuery(FIBER_PLANT[0].u, bboxFor(42.2711, -89.0940, 5), 8000).then(function (f) { return { status: f.length ? 'ok' : 'empty', segments: f.length, layer: FIBER_PLANT[0].n }; }); }),
-      timed('agol', function () { return getJson(AGOL + '/search?f=json&num=1&q=' + encodeURIComponent(HARVEST_QUERIES[0]), null, 8000).then(function (j) { return { status: j && j.total ? 'ok' : 'empty', total: j && j.total }; }); })
+      timed('agol', function () { return getJson(AGOL + '/search?f=json&num=1&q=' + encodeURIComponent(HARVEST_QUERIES[0]), null, 8000).then(function (j) { return { status: j && j.total ? 'ok' : 'empty', total: j && j.total }; }); }),
+      timed('publicFiber', function () {
+        try {
+          var base = fiberEvidence.load();
+          /* Chicago: both inventories have records there, so a zero from
+             either one is a bundling failure rather than a quiet map. */
+          var box = fiberEvidence.boxAround(41.8781, -87.6298, 25);
+          var inv = fiberEvidence.usaCandidates(box);
+          return {
+            status: base.features.length && inv.length ? 'ok' : 'empty',
+            osmAndCa: base.features.length,
+            publishedInventoryNearChicago: inv.length,
+            builtAt: base.manifest && base.manifest.built_at
+          };
+        } catch (e) {
+          return { status: 'failed', error: String((e && e.message) || e).slice(0, 160),
+                   note: 'The bundled route data is not readable from the deployed function. ' +
+                         'Check includeFiles in vercel.json.' };
+        }
+      })
     ]).then(function (p) {
       return res.status(200).json({
         ok: true, build: BUILD, model: MODEL,
@@ -817,10 +1223,26 @@ module.exports = function handler(req, res) {
         sources: {
           peeringdb: 'live, keyless', fcc: process.env.FCC_BB_KEY ? 'FCC_BB_KEY set' : 'NOT CHECKED — set FCC_BB_KEY',
           osm: OVERPASS.length + ' Overpass mirrors, out center', plant: FIBER_PLANT.length + ' verified layers',
-          harvest: HARVEST_QUERIES.length + ' AGOL searches, ≤' + HARVEST_MAX_SERVICES + ' services', longhaul: LH_CONDUITS.length + ' published conduits'
+          harvest: HARVEST_QUERIES.length + ' AGOL searches, \u2264' + HARVEST_MAX_SERVICES + ' services',
+          longhaul: CORRIDORS.length + ' routed long-haul corridors, ' +
+                    CORRIDORS.filter(function (c) { return c.src === 'intertubes'; }).length + ' of them cited, local',
+          datacenters: DCS.ROWS.length + ' operating/under-construction US facilities, local \u2014 ' + DCS.ATTRIB,
+          carriers: (CARRIERS.carriers || []).length + ' carrier network maps indexed',
+          publicFiber: 'bundled route inventory, local \u2014 see probe.publicFiber for whether this ' +
+                       'deployment can actually read it'
         },
-        constants: { ROUTE_FACTOR: ROUTE_FACTOR, US_PER_KM: US_PER_KM, CARRIER_NETS: CARRIER_NETS, MAJOR_NETS: MAJOR_NETS, LATERAL_COST_PER_MI: LATERAL_COST_PER_MI, weights: W },
-        probe: { peeringdb: p[0], plant: p[1], agol: p[2] }
+        constants: { ROUTE_FACTOR: ROUTE_FACTOR, US_PER_KM: US_PER_KM, CARRIER_NETS: CARRIER_NETS, MAJOR_NETS: MAJOR_NETS,
+                     LATERAL_COST_PER_MI: LATERAL_COST_PER_MI, weights: W,
+                     CORRIDOR_RADIUS_MI: CORRIDOR_RADIUS_MI, DIVERSITY_BEARING_DEG: DIVERSITY_BEARING_DEG,
+                     DC_RADIUS_MI: DC_RADIUS_MI, dcWeights: DC_W, STRAND_BAND: STRAND_BAND },
+        /* PROVES THE DATA SHIPPED. fiber-evidence.js builds its paths at
+           runtime, which @vercel/nft cannot trace, so the datasets only reach
+           the deployed function because vercel.json declares includeFiles.
+           Get that wrong and every fiber answer is an ENOENT that no local
+           test can catch — the files are right there on a developer's disk.
+           This actually reads both inventories and reports what it found, so
+           a deployment can be checked from outside without a token. */
+        probe: { peeringdb: p[0], plant: p[1], agol: p[2], publicFiber: p[3] }
       });
     });
   }
@@ -832,7 +1254,12 @@ module.exports = function handler(req, res) {
     var lat = Number(body.lat), lon = Number(body.lng != null ? body.lng : body.lon);
     if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0))
       throw auth.httpError(400, 'lat and lng are required.');
-    return analyse(lat, lon).then(function (out) { return res.status(200).json(out); });
+    /* Optional. The editor sends a ring when the parcel is anchored to the
+       world; when it cannot, it sends none and the answer says point. */
+    var boundary = body.boundary || null;
+    var gbps = Number(body.requestedCapacityGbps);
+    return analyse(lat, lon, boundary, isFinite(gbps) ? gbps : null)
+      .then(function (out) { return res.status(200).json(out); });
   }).catch(function (e) {
     var status = (e && e.status) || 502;
     return res.status(status).json({ build: BUILD, error: status === 502 ? 'Network proximity failed.' : e.message,
@@ -842,4 +1269,11 @@ module.exports = function handler(req, res) {
 
 /* Exported for scripts/test-network-proximity.js — pure pieces only. */
 module.exports._test = { distMi: distMi, bboxFor: bboxFor, nearestLineMi: nearestLineMi, nearestFrom: nearestFrom, normGeom: normGeom, webMercToWgs: webMercToWgs,
-                         longhaul: longhaul, score: score, verdict: verdict, constants: { ROUTE_FACTOR: ROUTE_FACTOR, US_PER_KM: US_PER_KM, W: W, LATERAL_COST_PER_MI: LATERAL_COST_PER_MI } };
+                         longhaul: longhaul, score: score, verdict: verdict,
+                         datacenters: datacenters, capacity: capacity, dcSuitability: dcSuitability,
+                         bearingTo: bearingTo, closestOnCorridor: closestOnCorridor,
+                         regionOf: regionOf, carriersFor: carriersFor,
+                         corridors: CORRIDORS, dcRows: DCS.ROWS,
+                         constants: { ROUTE_FACTOR: ROUTE_FACTOR, US_PER_KM: US_PER_KM, W: W, DC_W: DC_W,
+                                      LATERAL_COST_PER_MI: LATERAL_COST_PER_MI,
+                                      CORRIDOR_RADIUS_MI: CORRIDOR_RADIUS_MI, DC_RADIUS_MI: DC_RADIUS_MI } };

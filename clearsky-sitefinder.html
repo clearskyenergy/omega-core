@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <!--
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
   ClearSky-OMEGA · Site Finder  (listings v1)
   ---------------------------------------------------------------------------
   A Zillow-shaped browser over C&I property, where the headline number is not
@@ -36,14 +37,14 @@
   a{color:var(--accent)}
 
   /* ------------------------------------------------------------ top bar */
-  #top{position:absolute;top:0;left:0;right:0;height:var(--topH);z-index:1300;display:flex;
-    align-items:center;gap:14px;padding:0 16px;background:#fff;border-bottom:1px solid var(--line)}
+  #top{position:absolute;top:0;left:0;right:0;min-height:56px;z-index:1300;display:flex;
+    flex-wrap:wrap;align-items:center;gap:10px;padding:10px 16px;background:#fff;border-bottom:1px solid var(--line)}
   .logo{display:flex;align-items:center;gap:9px;text-decoration:none;flex:none}
   .logo img{height:26px;border-radius:6px}
   .logo .t{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap}
   .logo .t span{color:var(--accent)}
   .seprt{width:1px;height:22px;background:var(--line);flex:none}
-  #search{position:relative;flex:1;max-width:460px}
+  #search{position:relative;flex:1 1 250px;max-width:460px;min-width:180px}
   #search input{width:100%;height:34px;border:1px solid var(--line);background:var(--panel2);
     color:var(--ink);border-radius:8px;padding:0 66px 0 34px;font-size:13px;outline:none}
   #search input:focus{border-color:var(--accent);background:#fff}
@@ -52,7 +53,7 @@
     color:#fff;border-radius:6px;padding:0 11px;font-size:12px;font-weight:600;cursor:pointer}
 
   .views{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
-    padding:2px;gap:2px;flex:none}
+    padding:2px;gap:2px;flex:0 1 auto;flex-wrap:wrap;max-width:100%}
   .views button{border:0;background:transparent;color:var(--muted);font-size:12px;font-weight:600;
     padding:6px 13px;border-radius:6px;cursor:pointer;white-space:nowrap}
   .views button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(26,39,51,.12)}
@@ -68,11 +69,20 @@
     color:var(--amber);background:#fdf6e8;border:1px solid #f0dcb4;border-radius:5px;padding:3px 7px;flex:none}
 
   /* ---------------------------------------------------------- filter bar */
-  #filters{position:absolute;top:var(--topH);left:0;right:0;height:var(--filtH);z-index:1250;
-    display:flex;align-items:center;gap:8px;padding:0 16px;background:#fff;
-    border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden;white-space:nowrap;
+  #filters{position:absolute;top:var(--topH);left:0;right:0;z-index:1250;
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 16px;background:#fff;
+    border-bottom:1px solid var(--line);overflow-x:hidden;overflow-y:auto;max-height:42vh;
     box-shadow:0 1px 3px rgba(26,39,51,.05)}
-  #filters::-webkit-scrollbar{height:0}
+  #filters .f{height:44px;border-radius:8px;flex:1 1 205px;min-width:0;max-width:300px}
+  #filters .f label{text-transform:none;letter-spacing:0;font-size:12px;white-space:normal}
+  #filters .f select,#filters .f input{min-width:0;max-width:100%;flex:1;font-size:14px}
+  #filters .btn{height:40px;font-size:13px}
+  #filters .extraFilter{display:none}
+  #filters.filtersExpanded .extraFilter{display:flex}
+  #filters .spacer{display:none}
+  #filterHelp{flex:1 0 100%;margin:0;color:var(--muted);font-size:12px}
+  #filters::-webkit-scrollbar{height:5px}
+  #filters::-webkit-scrollbar-thumb{background:#c3cdd7;border-radius:4px}
   /* ── FILTERS AS PILLS ──────────────────────────────────────────────
      The bar was five stranded labels beside five bare controls, reading as
      a form to be filled rather than a set of choices already made. Every
@@ -173,12 +183,47 @@
   .card .kw{font-size:21px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
   .card .kw small{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:0}
   .card .kwsub{font-size:11px;color:var(--muted);margin-top:2px}
+  .energyLead{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #cbdedc;
+    border-radius:10px;background:#f1f8f7;margin:0 0 12px}
+  .energyLead .energyNumber{font-size:30px;font-weight:750;color:#12675d;line-height:1}
+  .energyLead .energyNumber small{font-size:12px;color:var(--muted)}
+  .energyLead .energyLabel{font-size:12px;font-weight:700}
+  .energyLead .energyBasis{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
+  .siteMetrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+  .siteMetrics div{background:var(--panel2);border-radius:7px;padding:9px;font-size:11px;color:var(--muted)}
+  .siteMetrics strong{display:block;color:var(--ink);font-size:15px;margin-top:3px}
+  .siteSteps{display:flex;gap:6px;flex-wrap:wrap;padding:12px 16px;background:#f7f9fb;
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:4}
+  .siteSteps button{border:1px solid var(--line);background:white;border-radius:6px;padding:7px 9px;
+    color:var(--ink);font:600 11px var(--sans);cursor:pointer}
+  .siteSteps button:hover{border-color:var(--accent);color:var(--accent)}
+  .sec[id]{scroll-margin-top:68px}
   .card .ad{font-size:14px;font-weight:600;margin-top:7px;line-height:1.25}
   .card .ad a{color:inherit;text-decoration:none;border-bottom:1px dotted var(--dim)}
   .card .ad a:hover{color:var(--accent);border-bottom-color:var(--accent)}
   .card .mt{font-size:12px;color:var(--muted);margin-top:3px}
   .card .own{font-size:11px;color:var(--dim);margin-top:4px;overflow:hidden;text-overflow:ellipsis;
     white-space:nowrap}
+  /* Property facts on a listing card. A missing figure says WHY it is
+     missing — the Crexi data connection is not live yet — rather than
+     leaving a blank that reads as "nothing to know". */
+  .card .facts{display:grid;grid-template-columns:auto 1fr;gap:2px 9px;font-size:11px;margin-top:6px;
+    color:var(--muted);line-height:1.35}
+  .card .facts b{color:var(--dim);font-weight:600;white-space:nowrap}
+  .pend{color:#8a94a0;font-style:italic}
+  .cardLease,.cardProject,.cardCall{margin-left:6px}
+  .callWho{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:12px;margin:8px 0}
+  .callWho b{color:var(--dim);font-weight:600;white-space:nowrap}
+  .callScript{width:100%;min-height:150px;font:12px/1.45 inherit;padding:8px;border:1px solid var(--line);border-radius:8px;resize:vertical;box-sizing:border-box}
+  .callLog{font-size:12px;margin:6px 0 0;padding:0;list-style:none}
+  .callLog li{padding:5px 0;border-top:1px solid var(--line)}
+  .callLog small{color:var(--dim)}
+  .leaseTiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+  .leaseTiles div{border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:11px;color:var(--muted)}
+  .leaseTiles b{display:block;font-size:17px;color:var(--ink);letter-spacing:-.01em;margin-bottom:2px}
+  .leaseForm{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:end;margin:8px 0}
+  .leaseForm label{font-size:11px;color:var(--dim);display:flex;flex-direction:column;gap:3px}
+  .leaseForm input{width:84px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;font:inherit}
   .card .warn{margin-top:9px;background:#fdf1ef;border:1px solid #f3d3cc;border-radius:8px;
     padding:7px 9px;font-size:11px;color:#a3372a;line-height:1.35}
   .card .warn b{color:#8c2d21}
@@ -300,6 +345,19 @@
     #listPane{width:100%;border-right:0}
     body.v-split #mapPane{display:none}
     .logo .t{display:none}
+  }
+  @media (max-width:650px){
+    :root{--topH:96px;--filtH:54px}
+    #top{flex-wrap:wrap;gap:6px;padding:8px 10px;align-content:center}
+    #search{max-width:none;min-width:180px}
+    #top .views{order:5;width:100%;overflow:visible;justify-content:space-between}
+    #top .views button{padding:6px 9px}
+    #filters{padding:8px;gap:6px}
+    #filters .f{flex-basis:calc(50% - 6px);max-width:none;flex-direction:column;align-items:stretch;height:62px;gap:2px;padding:5px 8px}
+    #filters .f input[type=number]{width:100%}
+    #top .srcTag,#top .seprt,#top .spacer,#repChip{display:none}
+    #drawer{width:100vw}
+    body.v-list #cards,body.v-saved #cards{grid-template-columns:minmax(0,1fr)}
   }
   @media (prefers-reduced-motion:reduce){
     *{transition:none!important;animation:none!important}
@@ -582,21 +640,38 @@
     <button type="button" data-view="split" class="on">Split</button>
     <button type="button" data-view="map">Map</button>
     <button type="button" data-view="list">List</button>
-    <button type="button" data-view="saved">Starred <span id="savedN"></span></button>
+    <button type="button" data-view="catalog">Crexi listings</button>
+    <button type="button" data-view="saved">Starred sites <span id="savedN"></span></button>
     <button type="button" data-view="ledger">Circuit ledger</button>
   </div>
   <div class="spacer"></div>
-  <span class="srcTag" id="srcTag">Sample data</span>
+  <span class="srcTag" id="srcTag" role="status">Connecting ledger</span>
   <div class="chip" id="repChip"><span class="av" id="repAv">—</span><span id="repName">Set your name</span></div>
 </div>
 
 <div id="filters">
-  <div class="f">
-    <label for="fKw">kW</label>
-    <input id="fKw" type="number" min="0" step="50" value="250">
+  <div class="f extraFilter" id="filterBattery">
+    <label for="fKw">Min. battery (kW)</label>
+    <input id="fKw" type="number" min="0" step="50" value="0">
   </div>
   <div class="f">
-    <label for="fType">Use</label>
+    <label for="fScore">Min. energy score</label>
+    <input id="fScore" type="number" min="0" max="100" step="5" value="0">
+  </div>
+  <div class="f">
+    <label for="fHost">Min. hosting (kW)</label>
+    <input id="fHost" type="number" min="0" step="100" value="0">
+  </div>
+  <div class="f extraFilter" id="filterHostMax">
+    <label for="fHostMax">Max. hosting (kW)</label>
+    <input id="fHostMax" type="number" min="0" step="100" placeholder="Any">
+  </div>
+  <div class="f extraFilter" id="filterEvidence">
+    <label for="fEnergy">Load evidence</label>
+    <select id="fEnergy"><option value="">Any</option><option value="metered">Metered</option><option value="modelled">Modelled / proxy</option><option value="unknown">Unknown</option></select>
+  </div>
+  <div class="f">
+    <label for="fType">Property type</label>
     <select id="fType">
       <option value="">Any</option>
       <option value="__ci">Industrial &amp; warehouse</option>
@@ -604,12 +679,12 @@
       <option value="__vacant">Vacant land only</option>
     </select>
   </div>
-  <div class="f">
-    <label for="fSqft">Size</label>
+  <div class="f extraFilter" id="filterSize">
+    <label for="fSqft">Min. area (sq ft)</label>
     <input id="fSqft" type="number" min="0" step="5000" value="20000">
   </div>
-  <div class="f">
-    <label for="fCirc">Circuit</label>
+  <div class="f extraFilter" id="filterCircuit">
+    <label for="fCirc">Circuit status</label>
     <select id="fCirc">
       <option value="">Any status</option>
       <option value="sellable">Has capacity left</option>
@@ -620,21 +695,24 @@
     </select>
   </div>
   <div class="f">
-    <label for="fSort">Sort</label>
+    <label for="fSort">Sort results</label>
     <select id="fSort">
+      <option value="score">Energy score · battery</option>
       <option value="kw">Deliverable kW</option>
-      <option value="score">Deal score · battery</option>
       <option value="loadScore">Deal score · large load</option>
       <option value="head">Circuit headroom</option>
       <option value="sqft">Building size</option>
       <option value="load">Peak load</option>
     </select>
   </div>
+  <button class="btn" id="moreFilters" type="button" aria-expanded="false" aria-controls="filterBattery filterHostMax filterEvidence filterSize filterCircuit">More filters</button>
   <label class="toggle mapOnly"><input type="checkbox" id="fFollow" checked> Search as I move</label>
   <button class="btn pri mapOnly" id="run" type="button">Search this area</button>
   <div class="spacer"></div>
   <button class="btn ghost" id="setOpen" type="button">Settings</button>
   <button class="btn ghost" id="expCsv" type="button">Export</button>
+  <button class="btn ghost" id="clearFilters" type="button">Reset filters</button>
+  <p id="filterHelp">Use the main filters to narrow sites. More filters includes building area and circuit status.</p>
 </div>
 
 <div id="stage">
@@ -642,6 +720,41 @@
     <div class="resHead">
       <div class="n" id="resN">Pan the map, then search</div>
       <div class="s" id="resS">Every result is scored on what the circuit will still accept, not on what the building could theoretically host.</div>
+      <div class="s" id="energyFilterStatus" role="status"></div>
+      <div class="s" id="savedSyncStatus" role="status">Sign in to save sites to your workspace.</div>
+      <div id="legacyStars" hidden>
+        <span id="legacyStarsInfo"></span>
+        <button type="button" class="btn ghost" id="backupLegacyStars">Download original cards</button>
+        <button type="button" class="btn ghost" id="restoreLegacyStars">Restore original stars</button>
+      </div>
+    </div>
+    <div id="catalogBar" hidden style="padding:12px;border-bottom:1px solid #dce2eb">
+      <label for="catalogQuery">Search imported listings</label>
+      <input id="catalogQuery" type="search" placeholder="Address, city, or property type" style="width:100%;margin:6px 0">
+      <button id="catalogSearch" type="button">Search listings</button>
+      <button id="catalogPrev" type="button">Previous</button>
+      <button id="catalogNext" type="button">Next</button>
+      <p id="catalogStatus" role="status">Sign in to browse your workspace's imported listings.</p>
+      <details id="catalogImport" hidden><summary>Staff: import verified listing snapshot</summary>
+        <label for="catalogFile">Prepared catalog JSON</label><input id="catalogFile" type="file" accept="application/json,.json">
+        <button id="catalogUpload" type="button">Import into this workspace</button>
+        <p style="margin:10px 0 4px"><button id="catalogMatch" type="button">Match remaining locations</button>
+          <small>Runs the Census geocoder over every listing without a pin, trying several spellings of each address, then places what is left at the centre of its ZIP. The scheduled worker does this on its own within the hour of an import; press it for an immediate run.</small></p>
+      </details>
+      <details id="catalogDetails" hidden><summary>Staff: capture listing details from Crexi</summary>
+        <p style="margin:6px 0"><small>The snapshot holds what the search cards showed. A listing page adds days on market, NOI, cap rate, tenancy, lease expiry, year built and the brokers. Three steps:</small></p>
+        <ol style="margin:4px 0 8px 18px;padding:0;font-size:12px;line-height:1.5">
+          <li>Drag this to your bookmarks bar: <a id="captureBookmarklet" href="#" title="Drag me to the bookmarks bar" style="font-weight:700;padding:3px 8px;border:1px solid #c9d2de;border-radius:6px;background:#f4f7fb;text-decoration:none">OMEGA capture</a></li>
+          <li>Open a listing on Crexi (the card's <b>Open Crexi listing</b> link), then click the bookmark once. Repeat for each listing you want. Click <b>View phone number</b> first if you want the number captured.<br>
+            <b>Or a whole page at once:</b> <button id="catalogLinks" type="button">Copy listing links for this page</button> <span id="catalogLinksInfo"></span>
+            <textarea id="catalogLinksOut" rows="2" readonly hidden style="width:100%;font-size:11px;margin-top:4px"></textarea>
+            <small>Then on any Crexi page click the bookmark, press <b>Capture a list</b> and paste. It walks the listings one by one in a second window (about five seconds each) and downloads the file when it finishes.</small></li>
+          <li>Click the bookmark on any Crexi page and press <b>Download file</b>, then import that file here:
+            <input id="captureFile" type="file" accept="application/json,.json" style="display:block;margin:4px 0"><button id="captureUpload" type="button">Import captured listing details</button></li>
+        </ol>
+        <p style="margin:4px 0"><small>Owner and sale history are on Crexi's Record tab behind the Intelligence subscription and are not on the listing page; those lines stay "pending API integration". One page per click, for listings you are reviewing; a bulk crawl waits for the Crexi data agreement.</small></p>
+        <p>Creates a shared listing snapshot. Does not modify starred sites or holds.</p>
+      </details>
     </div>
     <div id="cards"></div>
   </div>
@@ -794,13 +907,12 @@
 
     <section>
       <h5>What makes a good site</h5>
-      <p>The weights behind the two scores. Change them and every card
-         re-scores immediately. They are points out of 100 &mdash; the battery
-         score and the large-load score are kept separate because a site can
-         be strong as one and worthless as the other.</p>
+      <p>Battery and large-load scores use your workspace policy on the
+         scoring service. Scores and suggested sizes appear when it responds.
+         Site details remain available while waiting.</p>
       <div id="setWeights"></div>
       <div class="setKeyRow">
-        <button id="setWeightsReset" style="background:var(--panel2);color:var(--ink)">Reset to defaults</button>
+        <button id="setWeightsReset" style="background:var(--panel2);color:var(--ink)">Retry scoring</button>
       </div>
       <p id="setWeightsMsg" class="setKeyMsg"></p>
     </section>
@@ -835,19 +947,18 @@
 <script src="/config.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="omega-capacity-ledger.js"></script>
+<script src="omega-site-saves.js"></script>
+<script src="omega-site-score.js"></script>
 <script src="omega-comed-layers.js"></script>
 <script src="omega-listings-source.js"></script>
 <script src="omega-comed-listings.js"></script>
-<!-- The cost model. "Price this site" prices in place against this file, and
-     without it computeEstimate() returns null and every press falls back to
-     opening the estimator in another tab — which is the exact behaviour the
-     inline pricing was built to remove. It was missing. -->
+<script src="omega-site-market.js"></script>
+<!-- Input labels only; prices and financial results come from /api/price-site. -->
 <script src="/omega-cost-model.js"></script>
-<!-- What the battery earns, and the incentives against it. Same discipline as
-     the cost model: every figure declares its source. -->
-<script src="/omega-value-stack.js"></script>
 <!-- Published product datasheets. Specs ship; prices never do. -->
 <script src="/omega-bess-catalog.js"></script>
+<script src="/omega-site-lease.js"></script>
+<script src="/omega-project-cost.js"></script>
 <script>
 /* ==========================================================================
    Site Finder — application layer
@@ -856,6 +967,37 @@
   "use strict";
 
   var L = window.OmegaLedger, SRC = window.OmegaListings;
+  /* Measure wrapped controls instead of assuming one fixed-height row. */
+  var filterBar = document.getElementById('filters'), topBar = document.getElementById('top');
+  var moreFilters = document.getElementById('moreFilters');
+  function layoutControls() {
+    document.documentElement.style.setProperty('--topH', topBar.offsetHeight + 'px');
+    document.documentElement.style.setProperty('--filtH', filterBar.offsetHeight + 'px');
+    if (typeof map !== 'undefined' && map && map.invalidateSize) map.invalidateSize({pan:false});
+  }
+  function filterDisclosure() {
+    var count = ['fKw','fHostMax','fEnergy','fSqft','fCirc'].filter(function(id) {
+      var value = document.getElementById(id).value;
+      return value !== '' && value !== '0';
+    }).length;
+    var expanded = moreFilters.getAttribute('aria-expanded') === 'true';
+    moreFilters.textContent = (expanded ? 'Fewer filters' : 'More filters') + (count ? ' (' + count + ' active)' : '');
+  }
+  moreFilters.onclick = function () {
+    var expanded = moreFilters.getAttribute('aria-expanded') !== 'true';
+    moreFilters.setAttribute('aria-expanded', String(expanded));
+    filterBar.classList.toggle('filtersExpanded', expanded);
+    filterDisclosure(); layoutControls();
+  };
+  filterBar.addEventListener('input', filterDisclosure);
+  filterBar.addEventListener('change', filterDisclosure);
+  filterBar.addEventListener('click', function(){setTimeout(filterDisclosure,0);});
+  window.addEventListener('resize', layoutControls);
+  if (window.ResizeObserver) {
+    var controlsObserver = new ResizeObserver(layoutControls);
+    controlsObserver.observe(topBar); controlsObserver.observe(filterBar);
+  }
+  filterDisclosure(); layoutControls();
   /* One duration default for the whole page, read from the shared cost model
      where it is available so the finder and the estimator cannot drift. The
      literal is the fallback for the moment before that script loads. */
@@ -879,12 +1021,297 @@
     /* Sites uploaded from a CSV. Persisted, and treated exactly like any
        other record once they have coordinates. */
     imported: [],
+    catalog: [],
     byId: {},
     view: "split",
     sel: null,
     busy: false,
     lastKey: "",
     rep: ""
+  };
+
+  var catalogPage = 0, catalogEpoch = 0, catalogMore = false;
+  function loadCatalog(page) {
+    var el = document.getElementById('catalogStatus');
+    var user = window.firebase && firebase.auth().currentUser;
+    var epoch = ++catalogEpoch, org = ORG;
+    if (!user) { el.textContent = 'Sign in to browse the shared listing catalog.'; return; }
+    el.textContent = 'Loading shared listings…';
+    user.getIdToken().then(function (token) {
+      return fetch('/api/site-catalog', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({orgId:org,page:page,q:document.getElementById('catalogQuery').value}) });
+    }).then(function (res) { return res.json().then(function (data) { if (!res.ok) throw new Error(data.error || 'Catalog unavailable'); return data; }); })
+    .then(function (data) {
+      if (epoch !== catalogEpoch || org !== ORG || firebase.auth().currentUser !== user) return;
+      catalogPage = page; catalogMore = data.hasMore;
+      ST.catalog = (data.rows || []).map(function (r) { return enrich(catalogRow(r)); });
+      el.textContent = data.manifest ? data.total.toLocaleString() + ' listings · page ' + (page+1) +
+        ' · snapshot, not a live Crexi feed. ' + catalogCoverage(data.manifest) + ' Energy filters apply to this page.' : 'No listing snapshot imported for this workspace.';
+      var matchBtn = document.getElementById('catalogMatch');
+      if (matchBtn && data.manifest) matchBtn.disabled = !(data.manifest.count - data.manifest.located > 0);
+      document.getElementById('catalogPrev').disabled = page === 0;
+      document.getElementById('catalogNext').disabled = !catalogMore;
+      render();
+    })['catch'](function (err) { if(epoch===catalogEpoch) el.textContent = err.message; });
+  }
+  /* A listing row from the shared snapshot. A Census match is a street
+     position; an "approximate" row was placed at the centre of the matched
+     listings in its ZIP (api/_lib/geocode-listings.js) so it can be found on
+     the map at all. That is the same standing as a ZIP-centroid search pin,
+     so it takes the same flags: the circuit is not attributed, capacity
+     cannot be held, and opening the card tries to fix the pin first. */
+  function catalogRow(r) {
+    if (r && r.lat != null && r.geocode && r.geocode.status === 'approximate') {
+      r.approx = true; r.approxKind = 'area centre';
+    }
+    return r;
+  }
+  function catalogCoverage(m) {
+    var approx = m.approximate || 0, matched = m.located - approx, left = m.count - m.located;
+    return matched.toLocaleString() + ' of ' + m.count.toLocaleString() + ' have Census street positions' +
+      (approx ? ', ' + approx.toLocaleString() + ' sit at the centre of their ZIP' : '') +
+      (left ? ', ' + left.toLocaleString() + ' still need a location.' : '. Every listing is on the map.') +
+      (m.detailed ? ' ' + m.detailed.toLocaleString() + ' carry listing page details.' : '') +
+      (m.circuitsTried ? ' ' + (m.circuits || 0).toLocaleString() + ' of ' + m.circuitsTried.toLocaleString() + ' asked sit on a published ComEd circuit.' : '');
+  }
+  /* Staff: finish placing the catalogue. One call does as much as fits in
+     the function's time ceiling and publishes; this loops until the server
+     says it is done, so a closed tab loses nothing already placed. */
+  var matchRunning = false;
+  document.getElementById('catalogMatch').onclick = function () {
+    var user = window.firebase && firebase.auth().currentUser, status = document.getElementById('catalogStatus'), org = ORG, btn = this;
+    if (!user) { status.textContent = 'Sign in first.'; return; }
+    if (matchRunning) return;
+    matchRunning = true; btn.disabled = true;
+    var rounds = 0, placed = 0;
+    function round(reset) {
+      rounds++;
+      status.textContent = 'Matching listings to the map… round ' + rounds + (placed ? ', ' + placed.toLocaleString() + ' placed so far' : '');
+      return user.getIdToken().then(function (token) {
+        return fetch('/api/site-catalog', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+          body:JSON.stringify({action:'geocode',orgId:org,reset:!!reset}) });
+      }).then(function (res) { return res.json().then(function (d) { if (!res.ok) throw Error(d.error || 'Matching failed'); return d; }); })
+      .then(function (d) {
+        placed += (d.matched || 0) + (d.approximate || 0);
+        if (d.transportError) throw Error('The Census geocoder did not answer (' + d.transportError + '). ' + placed + ' placed; run again to continue.');
+        if (!d.done && rounds < 60) return round(false);
+        matchRunning = false;
+        status.textContent = 'Matching finished: ' + placed.toLocaleString() + ' placed this run. ' + catalogCoverage({count:d.count, located:d.located, approximate:d.approximate}) +
+          (d.unmatched ? ' The remaining ' + d.unmatched + ' have no ZIP or city that any matched listing shares; they stay searchable by address.' : '');
+        if (ORG === org) loadCatalog(0);
+      })['catch'](function (e) { matchRunning = false; btn.disabled = false; status.textContent = 'Matching stopped: ' + e.message; });
+    }
+    round(false);
+  };
+  /* THE CAPTURE BOOKMARKLET. Runs on crexi.com when a staff member clicks
+     it: on a listing page it saves that page's visible text under the
+     listing id in the browser's own storage, and shows a small panel with
+     the count and a Download button. The file it downloads is what the
+     import control below sends to /api/site-catalog {action:'details'}.
+     Kept as a real function so it is parsed with the page; the href is
+     built from its source at boot. No line comments inside it — a
+     javascript: URL loses its newlines when it is dragged to a bookmark. */
+  function crexiCaptureBookmarklet() {
+    var K = 'omegaCrexiCaptures', m = location.pathname.match(/^\/properties\/(\d+)\//), s = [];
+    try { s = JSON.parse(localStorage.getItem(K) || '[]'); } catch (e) { s = []; }
+    if (!/crexi\.com$/.test(location.hostname)) { alert('Open a Crexi listing page first.'); return; }
+    if (m) {
+      var t = document.body.innerText.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').slice(0, 30000);
+      s = s.filter(function (x) { return x.listingId !== m[1]; });
+      s.push({ listingId: m[1], url: location.origin + location.pathname, title: document.title, text: t, capturedAt: new Date().toISOString() });
+      try { localStorage.setItem(K, JSON.stringify(s)); } catch (e) { alert('This browser is full. Download the file, press Clear, then continue.'); return; }
+    }
+    var id = 'omegaCapturePanel', p = document.getElementById(id);
+    if (p) p.parentNode.removeChild(p);
+    p = document.createElement('div'); p.id = id;
+    p.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;background:#0f1b2a;color:#fff;padding:12px 14px;border-radius:10px;font:13px/1.45 -apple-system,Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.35);max-width:300px';
+    p.innerHTML = '<b>OMEGA listing capture</b><br><span id="omegaMsg">' + (m ? 'Saved this listing. ' : 'Not a listing page. ') + s.length + ' captured on this browser.' +
+      (s.length >= 200 ? '<br><b>Download and clear now</b> \u2014 the browser holds about 250.' : '') + '</span>' +
+      '<br><button id="omegaDl" style="margin:8px 6px 0 0">Download file</button><button id="omegaList" style="margin-right:6px">Capture a list</button><button id="omegaClr" style="margin-right:6px">Clear</button><button id="omegaX">\u00d7</button>';
+    document.body.appendChild(p);
+    function say(t) { var e = document.getElementById('omegaMsg'); if (e) e.innerHTML = t; }
+    function download() {
+      var b = new Blob([JSON.stringify({ kind: 'crexi-detail-capture', capturedFrom: location.hostname, count: s.length, captures: s })], { type: 'application/json' });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'crexi-listing-details-' + new Date().toISOString().slice(0, 10) + '-' + s.length + '.json';
+      document.body.appendChild(a); a.click(); a.parentNode.removeChild(a);
+    }
+    document.getElementById('omegaDl').onclick = download;
+    document.getElementById('omegaClr').onclick = function () { if (confirm('Clear ' + s.length + ' captured listings from this browser? Download first if you have not.')) { localStorage.removeItem(K); p.parentNode.removeChild(p); } };
+    document.getElementById('omegaX').onclick = function () { p.parentNode.removeChild(p); };
+    document.getElementById('omegaList').onclick = function () {
+      var raw = prompt('Paste the listing links copied from the site finder (Copy listing links for this page):'), q;
+      if (!raw) return;
+      try { q = JSON.parse(raw); } catch (e) { alert('That is not the copied list.'); return; }
+      if (!q || q.kind !== 'crexi-capture-queue' || !q.urls || !q.urls.length) { alert('That is not the copied list.'); return; }
+      var urls = q.urls.filter(function (u) { return /^https:\/\/www\.crexi\.com\/properties\/\d+\//.test(u); }).slice(0, 150);
+      var done = {}; s.forEach(function (x) { done[x.listingId] = 1; });
+      urls = urls.filter(function (u) { return !done[u.split('/')[4]]; });
+      if (!urls.length) { say('Every listing in that list is already captured here. Press Download file.'); return; }
+      var w = window.open('about:blank', 'omegaCaptureWindow', 'width=1200,height=900');
+      if (!w) { alert('Allow pop-ups for crexi.com, then try again.'); return; }
+      var i = 0, stopped = false, failed = [];
+      var stop = document.createElement('button'); stop.textContent = 'Stop'; stop.style.marginLeft = '6px';
+      document.getElementById('omegaList').parentNode.appendChild(stop);
+      stop.onclick = function () { stopped = true; };
+      function finish() {
+        try { w.close(); } catch (e) {}
+        stop.parentNode.removeChild(stop);
+        say('Captured ' + i + ' of ' + urls.length + (failed.length ? ' (' + failed.length + ' did not load: ' + failed.slice(0, 5).join(', ') + ')' : '') + '. ' + s.length + ' on this browser. Downloading the file now \u2014 import it in the site finder, then press Clear.');
+        download();
+      }
+      function capture(u, cb) {
+        var id = u.split('/')[4], started = Date.now();
+        try { w.location.href = u; } catch (e) { failed.push(id); cb(); return; }
+        function poll() {
+          if (stopped) { cb(); return; }
+          var ready = false, text = '';
+          try {
+            if (w.location.href.indexOf('/properties/' + id + '/') >= 0 && w.document.readyState === 'complete') {
+              text = w.document.body.innerText || '';
+              ready = /\bDetails\b/.test(text) && /on market|Unpriced|\$[\d,]{4,}/i.test(text);
+            }
+          } catch (e) { ready = false; }
+          if (ready) {
+            setTimeout(function () {
+              try { text = w.document.body.innerText || text; } catch (e) {}
+              text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').slice(0, 30000);
+              s = s.filter(function (x) { return x.listingId !== id; });
+              s.push({ listingId: id, url: u.split('?')[0], title: '', text: text, capturedAt: new Date().toISOString() });
+              try { localStorage.setItem(K, JSON.stringify(s)); } catch (e) { stopped = true; alert('This browser is full. The file will download now; import it, press Clear, and run the rest.'); }
+              cb();
+            }, 1500);
+            return;
+          }
+          if (Date.now() - started > 25000) { failed.push(id); cb(); return; }
+          setTimeout(poll, 500);
+        }
+        setTimeout(poll, 1500);
+      }
+      function next() {
+        if (stopped || i >= urls.length) { finish(); return; }
+        say('Capturing ' + (i + 1) + ' of ' + urls.length + '\u2026 ' + s.length + ' on this browser. Leave both windows open.');
+        var startedAt = Date.now();
+        capture(urls[i], function () {
+          i++;
+          var wait = Math.max(0, 4000 - (Date.now() - startedAt));
+          setTimeout(next, wait);
+        });
+      }
+      next();
+    };
+  }
+  (function () {
+    var a = document.getElementById('captureBookmarklet');
+    if (a) a.href = 'javascript:(' + crexiCaptureBookmarklet.toString() + ')()';
+    if (a) a.onclick = function (e) { e.preventDefault(); alert('Drag this link to your bookmarks bar, then click it on a Crexi listing page.'); };
+  })();
+  /* The listings on this catalogue page that have no captured detail yet,
+     as the list the bookmarklet's "Capture a list" walks. Copied to the
+     clipboard where the browser allows it and always shown in the box, so
+     it can be selected by hand. */
+  document.getElementById('catalogLinks').onclick = function () {
+    var rows = ST.catalog.filter(function (r) { return !r.detail && r.listed && /^https:\/\/www\.crexi\.com\/properties\/\d+\//.test(r.listed.url || ''); });
+    var info = document.getElementById('catalogLinksInfo'), out = document.getElementById('catalogLinksOut');
+    if (!rows.length) { info.textContent = 'Every listing on this page already has its details.'; out.hidden = true; return; }
+    var text = JSON.stringify({ kind: 'crexi-capture-queue', orgId: ORG, urls: rows.map(function (r) { return r.listed.url; }) });
+    out.value = text; out.hidden = false;
+    info.textContent = rows.length + ' listings on this page without details.';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { info.textContent = rows.length + ' listing links copied. Now click the bookmark on Crexi and press Capture a list.'; }, function () {});
+    }
+  };
+  document.getElementById('captureUpload').onclick = function () {
+    var file = document.getElementById('captureFile').files[0], user = window.firebase && firebase.auth().currentUser;
+    var status = document.getElementById('catalogStatus'), org = ORG, btn = this;
+    if (!file || !user) { status.textContent = 'Choose the downloaded capture file and sign in first.'; return; }
+    var reader = new FileReader(); reader.onload = function () {
+      var data; try { data = JSON.parse(reader.result); } catch (e) { status.textContent = 'Invalid JSON'; return; }
+      var caps = data && data.kind === 'crexi-detail-capture' && Array.isArray(data.captures) ? data.captures : null;
+      if (!caps || !caps.length) { status.textContent = 'That is not a capture file from the OMEGA bookmarklet.'; return; }
+      btn.disabled = true;
+      var CHUNK = 100, at = 0, applied = 0, unknown = [], fields = {}, detailed = 0;
+      function next() {
+        if (at >= caps.length) {
+          btn.disabled = false;
+          var top = Object.keys(fields).sort(function (a, b) { return fields[b] - fields[a]; }).slice(0, 6).map(function (k) { return k + ' ' + fields[k]; }).join(', ');
+          status.textContent = 'Imported ' + applied + ' listing pages (' + detailed.toLocaleString() + ' listings now carry page details).' +
+            (unknown.length ? ' ' + unknown.length + ' captured pages are not in this catalogue and were skipped.' : '') + (top ? ' Fields read: ' + top + '.' : '');
+          if (ORG === org) loadCatalog(catalogPage);
+          return;
+        }
+        var slice = caps.slice(at, at + CHUNK); at += CHUNK;
+        status.textContent = 'Importing listing details… ' + Math.min(at, caps.length) + ' of ' + caps.length;
+        user.getIdToken().then(function (token) {
+          return fetch('/api/site-catalog', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+            body:JSON.stringify({action:'details',orgId:org,captures:slice}) });
+        }).then(function (res) { return res.json().then(function (d) { if (!res.ok) throw Error(d.error || 'Import failed'); return d; }); })
+        .then(function (d) {
+          applied += d.applied || 0; unknown = unknown.concat(d.unknown || []); detailed = d.detailed || detailed;
+          Object.keys(d.fields || {}).forEach(function (k) { fields[k] = (fields[k] || 0) + d.fields[k]; });
+          next();
+        })['catch'](function (e) { btn.disabled = false; status.textContent = 'Import stopped at ' + applied + ' pages: ' + e.message; });
+      }
+      next();
+    }; reader.readAsText(file);
+  };
+  document.getElementById('catalogSearch').onclick = function () { loadCatalog(0); };
+  document.getElementById('catalogQuery').onkeydown = function (e) { if(e.key === 'Enter')loadCatalog(0); };
+  document.getElementById('catalogPrev').onclick = function () { if(catalogPage>0)loadCatalog(catalogPage-1); };
+  document.getElementById('catalogNext').onclick = function () { if(catalogMore)loadCatalog(catalogPage+1); };
+  document.getElementById('catalogUpload').onclick = function () {
+    var file = document.getElementById('catalogFile').files[0], user = window.firebase && firebase.auth().currentUser;
+    var status = document.getElementById('catalogStatus'), org = ORG;
+    if (!file || !user) { status.textContent = 'Select the prepared JSON file and sign in first.'; return; }
+    if(file.size>4400000){status.textContent='File too large. Use compact prepared JSON under 4.4 MB.';return;}
+    if (!window.confirm('Import this listing snapshot into '+org+'? Existing starred sites and holds will not be changed.')) return;
+    var reader=new FileReader();reader.onload=function(){
+      var data;try{data=JSON.parse(reader.result);}catch(e){status.textContent='Invalid JSON';return;}
+      if(!data.manifest||data.manifest.orgId!==org){status.textContent='The file belongs to a different workspace.';return;}
+      status.textContent='Importing and verifying shared listing snapshot…';
+      user.getIdToken().then(function(token){return fetch('/api/site-catalog',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'import',orgId:org,catalog:data})});})
+        .then(function(res){return res.json().then(function(d){if(!res.ok)throw Error(d.error||'Import failed');return d;});})
+        .then(function(d){if(ORG!==org)return;status.textContent='Verified '+d.imported+' imported listings. Starred sites unchanged.';loadCatalog(0);})
+        ['catch'](function(e){status.textContent='Import not confirmed: '+e.message;});
+    };reader.readAsText(file);
+  };
+
+  window.onOmegaSiteSavesStatus = function (err, state) {
+    var el = document.getElementById('savedSyncStatus');
+    if (!el) return;
+    el.textContent = err && err.code !== 'LOCAL_ONLY' ? 'Save not confirmed: ' + err.message :
+      state && state.mode === 'shared' ? 'Saved sites synced to ' + state.orgId :
+      state && state.mode === 'local' ? 'Saved on this browser only; not shared with your team.' :
+      'Sign in to save sites to your workspace.';
+    var legacyBox = document.getElementById('legacyStars');
+    try {
+      var legacy = window.OmegaSiteSaves.legacyList();
+      legacyBox.hidden = !legacy.length;
+      document.getElementById('legacyStarsInfo').textContent = legacy.length +
+        ' original starred cards remain on this browser. Originals are kept unchanged.';
+      document.getElementById('restoreLegacyStars').disabled = !state || state.mode !== 'shared';
+    } catch (e) {
+      legacyBox.hidden = false;
+      document.getElementById('legacyStarsInfo').textContent = 'Original stars could not be read. Download the original data before recovery.';
+      document.getElementById('restoreLegacyStars').disabled = true;
+    }
+  };
+  document.getElementById('backupLegacyStars').onclick = function () {
+    try {
+      var url = URL.createObjectURL(new Blob([window.OmegaSiteSaves.legacyBackup()], { type: 'application/json' }));
+      var a = document.createElement('a'); a.href = url; a.download = 'original-starred-sites.json';
+      document.body.appendChild(a); a.click(); a.parentNode.removeChild(a);
+      window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    } catch (e) { window.alert('Backup could not be downloaded: ' + e.message); }
+  };
+  document.getElementById('restoreLegacyStars').onclick = function () {
+    var saves = window.OmegaSiteSaves, state = saves.state();
+    if (!window.confirm('Restore these browser cards to ' + state.orgId + ', where your team can see them? Existing sites will not be overwritten. The originals and a backup will be retained.')) return;
+    this.disabled = true;
+    saves.restoreLegacy(state.orgId, function (err, result) {
+      syncSavedView();
+      window.alert((result ? result.created + ' restored; ' + result.skipped + ' already saved. ' : '') +
+        (err ? err.message : 'Original card data and browser backup retained.'));
+    });
   };
 
   /* ------------------------------------------------------------------ map */
@@ -1124,7 +1551,6 @@
       }
       var st = L.feederState(fid);
       var cs = L.circuitStatus(st);
-      var sz = L.sizeAt({ feederId: fid, hours: ST.hours || 2 });
 
       cb({
         ok: st.known && st.sellable > 0 && res.addressResolved,
@@ -1133,7 +1559,7 @@
         layerId: res.layerId, grain: res.grain,
         addressResolved: res.addressResolved,
         covering: res.rows.length, rows: res.rows,
-        state: st, size: sz, status: cs,
+        state: st, status: cs,
         headline: !st.known
           ? "Circuit found, capacity not published"
           : st.sellable > 0
@@ -1281,12 +1707,12 @@
         var f = SRC.demoFeederFor(r.lat, r.lon);
         r.feederId = f.feederId; r.sub = r.sub || f.sub;
       }
-      if (!r.feederId) { r.feederId = "\u2014"; r.noCircuit = true; }
+      if (!r.feederId || r.feederId === "\u2014") { r.feederId = ""; r.noCircuit = true; }
       if (L.getFeeder(r.feederId) == null && !r.noCircuit) {
         var cap = r.nameplate != null
           ? { nameplate: r.nameplate, queue: r.queue || 0 }
-          : SRC.demoCapacityFor(r.feederId);
-        L.setFeeder(r.feederId, { nameplate: cap.nameplate, queue: cap.queue, sub: r.sub });
+          : isSample() ? SRC.demoCapacityFor(r.feederId) : null;
+        if (cap) L.setFeeder(r.feederId, { nameplate: cap.nameplate, queue: cap.queue, sub: r.sub });
       }
       enrich(r);
       ST.rows.push(r);
@@ -1321,14 +1747,6 @@
 
      Collapsing them into one number is how a proposal ends up promising
      900 kW on a circuit with 200 kW left. */
-  /* Load factors come from the shared table so the page, the demo provider
-     and the ComEd provider cannot disagree about how a type converts annual
-     kWh into a peak. The local literal is only a fallback for a host that has
-     an older omega-listings-source.js on it. */
-  var EUI_LF = (window.OmegaListings && window.OmegaListings.EUI_LF) ||
-               { "Warehouse":0.38,"Industrial":0.55,"Manufacturing":0.60,"Cold Storage":0.72,
-                 "Flex":0.50,"Retail":0.45,"Office":0.50,"Data Center":0.85,
-                 "Institutional":0.42,"Multifamily":0.55,"Vacant Land":0,"Other":0.50 };
   var DEMAND_LO = 8, DEMAND_HI = 14;   /* $/kW-month, ComEd C&I delivery + capacity */
 
   /* ══════════════════════════════════════════════════════════════════════
@@ -1501,206 +1919,125 @@
     return hit;
   }
 
-  function enrich(r) {
-    /* Re-register the circuit before asking the ledger about it.
-
-       The ledger's feeder registry is in-memory: it is populated when a
-       viewport search or a point lookup runs. A SAVED site restored from
-       localStorage after a reload arrives with its own nameplate and queue
-       but the ledger has never heard of its feeder, so feederState() came
-       back `known: false` and the card read "Circuit unknown" while still
-       printing the feeder id underneath — a card that knows which circuit it
-       is on and claims not to know its capacity.
-
-       The record carries the figures ComEd published; hand them back. Only
-       when the ledger has nothing, so a live search always wins over a
-       possibly stale saved copy. */
-    if (r.feederId && r.nameplate != null) {
-      var known = L.getFeeder && L.getFeeder(r.feederId);
-      if (!known || known.nameplate == null) {
-        L.setFeeder(r.feederId, {
-          nameplate: r.nameplate, queue: r.queue || 0, sub: r.sub || ""
+  var scoreRenderTimer = null, scoreDrawerRow = null, scoreDrawerWaiting = false;
+  function refreshScoredDrawer(r) {
+    var body = document.getElementById("dBody"), drawer = document.getElementById("drawer");
+    var selectedId = ST.sel && typeof ST.sel === "object" ? ST.sel.id : ST.sel;
+    if (!r || selectedId !== r.id || !body || !drawer || drawer.className !== "open") return;
+    var active = document.activeElement;
+    if (active && body.contains(active) &&
+        (/^(INPUT|SELECT|TEXTAREA)$/.test(active.tagName) || active.isContentEditable)) {
+      scoreDrawerRow = r;
+      if (!scoreDrawerWaiting) {
+        scoreDrawerWaiting = true;
+        body.addEventListener("focusout", function afterEdit() {
+          body.removeEventListener("focusout", afterEdit);
+          scoreDrawerWaiting = false;
+          setTimeout(function () {
+            var pending = scoreDrawerRow; scoreDrawerRow = null;
+            refreshScoredDrawer(pending);
+          }, 0);
         });
       }
+      return;
     }
-
-    var lf = r.loadFactor || EUI_LF[r.type] || 0.5;
-    var kwh = r.annualKwh ? r.annualKwh.value : null;
-    var peakKw = (kwh && lf) ? (kwh / 8760) / lf : null;
-    /* 15% of peak at the default duration is the standard opening screen for a C&I
-       demand-charge deal. Going deeper needs interval data we do not have. */
-    var loadKw = peakKw ? peakKw * 0.15 : null;
-
-    var sz = L.sizeAt({ feederId: r.feederId, siteId: r.id, loadKw: loadKw, hours: DEFAULT_HOURS });
-    r.peakKw = peakKw;
-    r.lf = lf;
-    r.sz = sz;
-    r.circ = sz.state;   /* circuit state. NOT r.state — that is the postal state. */
-
-    /* THE RECORD IS THE FALLBACK, not a contradiction to be printed.
-
-       A card was showing "Circuit unknown" while printing its own feeder id
-       underneath and while the header showed that circuit's capacity. The
-       ledger is the source of truth when it has the feeder, but when it does
-       not — a reload, a cache miss, a record saved before the feeder was
-       registered — the record's OWN published figures are better than a
-       dash. ComEd gave us those numbers; refusing to show them because an
-       in-memory registry has not caught up is worse than useless.
-
-       Anything reconstructed this way is marked so the card can say where it
-       came from rather than implying the ledger confirmed it. */
-    /* THE RECORD IS THE FALLBACK, but only when it names a circuit.
-
-       An earlier version tested `nameplate != null` alone. That let a record
-       with capacity but NO feederId produce a complete-looking circuit
-       state — headroom, queue, a suggested hold size — attached to a circuit
-       nobody could name. The panel then said "No circuit is attributed to
-       this site" and "100 kW is already held on this circuit" six lines
-       apart, and the Hold button failed with "a reservation needs a circuit
-       and a site" only after the rep had typed a note.
-
-       Capacity without an identity is not a circuit. It cannot be claimed,
-       cannot be compared against a colleague's hold, and cannot be quoted to
-       ComEd. So it stays unknown, and the panel says why. */
-    if (!r.circ.known && r.nameplate != null && r.feederId) {
-      var np = +r.nameplate, q = +(r.queue || 0);
-      var after = Math.max(0, np - q);
-      r.circ = {
-        feederId: r.feederId, sub: r.sub || "", known: true,
-        nameplate: np, queue: q, firm: 0, soft: 0, lapsed: 0, mine: 0,
-        committed: q, firmAvailable: after, sellable: after,
-        oversubscribed: false, overBy: 0,
-        pctUsed: np > 0 ? q / np : 0,
-        allocations: [], fromRecord: true
-      };
-      r.sz = {
-        kw: loadKw == null ? Math.round(after) : Math.round(Math.min(loadKw, after)),
-        hours: DEFAULT_HOURS,
-        loadCeiling: loadKw == null ? null : Math.round(loadKw),
-        circuitCeiling: Math.round(after),
-        state: r.circ
-      };
-      r.sz.kwh = r.sz.kw * DEFAULT_HOURS;
-      r.sz.circuitLimited = loadKw == null || after <= loadKw;
-      r.sz.binds = r.sz.circuitLimited ? "circuit" : "load";
+    var saved = [], controls = body.querySelectorAll("input,select,textarea");
+    for (var i = 0; i < controls.length; i++) {
+      var el = controls[i], dirty = el.value !== el.defaultValue;
+      if (el.tagName === "SELECT") {
+        dirty = false;
+        for (var j = 0; j < el.options.length; j++) {
+          if (el.options[j].selected !== el.options[j].defaultSelected) dirty = true;
+        }
+      }
+      if (el.type === "checkbox" || el.type === "radio") dirty = el.checked !== el.defaultChecked;
+      if (el.id && dirty) saved.push({ id: el.id, value: el.value, checked: el.checked });
     }
+    var top = drawer.scrollTop, bodyTop = body.scrollTop;
+    var focusId = active && body.contains(active) ? active.id : null;
+    redrawDrawer(r);
+    for (var k = 0; k < saved.length; k++) {
+      var field = document.getElementById(saved[k].id);
+      if (field && field.type !== "file") { field.value = saved[k].value; field.checked = saved[k].checked; }
+    }
+    var focus = focusId && document.getElementById(focusId);
+    if (focus) { try { focus.focus({ preventScroll: true }); } catch (e) { focus.focus(); } }
+    drawer.scrollTop = top; body.scrollTop = bodyTop;
+  }
+  /* Only input changes or an explicit retry schedule scoring. Rendering a
+     completed or failed request never schedules the same request again. */
+  function enrich(r) {
+    if (r.feederId && r.nameplate != null) {
+      var known = L.getFeeder && L.getFeeder(r.feederId);
+      if (!known || known.nameplate == null) L.setFeeder(r.feederId, {
+        nameplate: r.nameplate, queue: r.queue || 0, sub: r.sub || ""
+      });
+    }
+    r.circ = L.feederState(r.feederId, r.id);
     r.cst = L.circuitStatus(r.circ);
     r.claims = L.neighbourClaims(r.feederId, r.id);
     r.mine = L.allocationsForSite(r.id);
-    r.saveLo = sz.kw ? sz.kw * DEMAND_LO * 12 : null;
-    r.saveHi = sz.kw ? sz.kw * DEMAND_HI * 12 : null;
     r.grainFactor = grainFactor();
-    r.score = score(r);
-    r.loadScore = loadScore(r);
+    var client = window.OmegaSiteScore;
+    var opts = { orgId: ORG === "demo" ? undefined : ORG, hours: DEFAULT_HOURS, use: "bess" };
+    var hash = client ? client.hashFor(r, null, opts) : "unavailable";
+    if (r._scoreHash !== hash) {
+      r._scoreHash = hash;
+      r.scoreState = client ? "pending" : "error";
+      r.scoreError = client ? "" : "Scoring unavailable. Sites remain available.";
+      r.scoreResult = null;
+      /* Discard persisted/previous model output until this input is scored.
+         The client hashes measured energy only, so display updates cannot
+         trigger another scoring request. A late meter join still does. */
+      if (!r.annualKwh || r.annualKwh.src !== "metered") r.annualKwh = null;
+      r.peakKw = null; r.lf = null; r.saveLo = null; r.saveHi = null;
+      r.score = null; r.loadScore = null;
+      r.sz = { kw: null, kwh: null, hours: DEFAULT_HOURS, loadCeiling: null,
+        circuitCeiling: null, circuitLimited: null, binds: null, state: r.circ };
+      if (client) client.score([r], null, opts, function (err, result) {
+        if (r._scoreHash !== hash || client.hashFor(r, null, {
+          orgId: ORG === "demo" ? undefined : ORG, hours: DEFAULT_HOURS, use: "bess"
+        }) !== hash) return;
+        var rec = result && result.byId && result.byId[r.id];
+        if (err || !rec) {
+          r.scoreState = "error";
+          r.scoreError = err ? err.message : "This site could not be scored.";
+        } else {
+          r.scoreState = "ready"; r.scoreError = ""; r.scoreResult = rec;
+          if (!r.annualKwh || r.annualKwh.src !== "metered") {
+            r.annualKwh = rec.annualKwh || null;
+          }
+          r.peakKw = rec.peakKw;
+          r.lf = rec.basis && rec.basis.loadFactor;
+          r.sz = { kw: rec.kw, kwh: rec.kwh, hours: rec.hours,
+            loadCeiling: rec.loadCeiling, circuitCeiling: rec.circuitCeiling,
+            circuitLimited: rec.circuitLimited, binds: rec.binds, state: r.circ,
+            circuitSrc: rec.circuitSrc, why: rec.why };
+          r.saveLo = rec.saveLo == null ? null : rec.saveLo;
+          r.saveHi = rec.saveHi == null ? null : rec.saveHi;
+          r.score = score(r); r.loadScore = loadScore(r);
+        }
+        var msg = document.getElementById("setWeightsMsg");
+        if (msg) msg.textContent = r.scoreError ||
+          "Scoring policy: " + (rec.weightsSource || "source not stated") + ".";
+        refreshScoredDrawer(r);
+        if (!scoreRenderTimer) scoreRenderTimer = setTimeout(function () {
+          scoreRenderTimer = null; render();
+        }, 0);
+      });
+    }
+    r.sz.state = r.circ;
     return r;
   }
 
-  /* Weighted on what can actually be delivered and sold, not on how big the
-     building is. A large load on a full circuit is not a deal, and neither
-     is an empty circuit next to a small load.
-
-     GRAIN CAPS THE SCORE. ComEd publishes the same capacity at five grains
-     and only layer 75 is the circuit serving a parcel; 71-74 report the best
-     circuit anywhere in a block up to 36 square miles. A 900 kW figure read
-     off a section block is not this site's 900 kW, so it cannot produce a
-     qualified score. Without this cap a rep zoomed out to the metro sees a
-     screen of high scores that are block maxima, calls the top ten, and
-     finds the capacity belongs to a substation two miles away. */
-  /* Circuits are now attributed from layer 75 only, so a record either has a
-     real feeder or has none — the old case of a card carrying a block
-     maximum cannot arise. What remains is truncation: if the service capped
-     the layer-75 fetch, some parcels in view silently have no circuit, and
-     the ones that do are still correct. Nothing is scaled down for that; it
-     is surfaced in the header instead. */
-  /* ══════════════════════════════════════════════════════════════════════
-     WHAT MAKES A GOOD SITE
-
-     These weights were hardcoded, which meant the tool's opinion of a good
-     site was mine rather than the team's. They are points out of 100 and
-     they are editable in Settings.
-
-     `cap` is the value at which a component earns full marks — 1,200 kW
-     deliverable scores the whole 45 by default. Raising a cap makes the
-     score harsher; lowering it makes more sites look good. That is a
-     commercial judgement, not a technical one, which is exactly why it
-     belongs in the hands of whoever owns the pipeline.
-     ══════════════════════════════════════════════════════════════════════ */
-  var WEIGHT_DEFAULTS = {
-    battery: {
-      deliverable:  { pts: 45, cap: 1200, label: "Deliverable kW now",
-                      note: "After ComEd's queue and your team's claims." },
-      peak:         { pts: 20, cap: 2000, label: "Customer's peak load",
-                      note: "What there is to shave. Needs a building." },
-      headroom:     { pts: 15, cap: 4000, label: "Room left on the circuit",
-                      note: "Space to grow, or to sell a second site." },
-      notCapped:    { pts: 10, cap: 0,    label: "Load binds, not the wire",
-                      note: "Awarded when the circuit is not the constraint." },
-      useType:      { pts: 10, cap: 0,    label: "Industrial use class",
-                      note: "Warehouse, industrial, manufacturing, cold storage, flex." }
-    },
-    load: {
-      headroom:     { pts: 55, cap: 10000, label: "Raw headroom on the circuit",
-                      note: "A large load only draws. Megawatts are the point." },
-      land:         { pts: 20, cap: 20,    label: "Lot acreage",
-                      note: "Room to build. The existing building may be demolished." },
-      useType:      { pts: 15, cap: 0,     label: "Industrial or vacant land",
-                      note: "Zoning that will accept a large load." },
-      service:      { pts: 10, cap: 0,     label: "Existing large service",
-                      note: "1 MVA or more already at the site." }
-    },
-    modelledPenalty: 0.85
-  };
-
-  function loadWeights() {
-    try {
-      var raw = window.localStorage.getItem("cs.scoreWeights");
-      if (!raw) return JSON.parse(JSON.stringify(WEIGHT_DEFAULTS));
-      var w = JSON.parse(raw), k, g;
-      /* Merge over the defaults so a weight added in a later build does not
-         vanish for anyone who has saved settings. */
-      var out = JSON.parse(JSON.stringify(WEIGHT_DEFAULTS));
-      for (g in out) {
-        if (g === "modelledPenalty") { if (w[g] != null) out[g] = w[g]; continue; }
-        for (k in out[g]) {
-          if (w[g] && w[g][k]) {
-            if (w[g][k].pts != null) out[g][k].pts = +w[g][k].pts;
-            if (w[g][k].cap != null) out[g][k].cap = +w[g][k].cap;
-          }
-        }
-      }
-      return out;
-    } catch (e) { return JSON.parse(JSON.stringify(WEIGHT_DEFAULTS)); }
-  }
-  function persistWeights() {
-    try { window.localStorage.setItem("cs.scoreWeights", JSON.stringify(WEIGHTS)); }
-    catch (e) {}
-  }
-  var WEIGHTS = loadWeights();
-
   function grainFactor() { return 1; }
-
   function score(r) {
-    var W = WEIGHTS.battery, s = 0;
-    s += Math.min((r.sz.kw || 0) / W.deliverable.cap, 1) * W.deliverable.pts;
-    s += Math.min((r.peakKw || 0) / W.peak.cap, 1) * W.peak.pts;
-    s += Math.min((r.circ.sellable || 0) / W.headroom.cap, 1) * W.headroom.pts;
-    s += r.sz.circuitLimited ? 0 : W.notCapped.pts;
-    s += /Warehouse|Industrial|Manufacturing|Cold Storage|Flex/.test(r.type)
-           ? W.useType.pts : Math.round(W.useType.pts * 0.3);
-    /* A modelled load is a guess and a metered one is a measurement. Scoring
-       them identically is how an estimate gets quoted as a reading. */
-    if (r.annualKwh && r.annualKwh.src !== "metered") s *= WEIGHTS.modelledPenalty;
-    return Math.round(s * r.grainFactor);
+    return r.scoreResult && typeof r.scoreResult.score === "number"
+      ? r.scoreResult.score : null;
   }
-
   function loadScore(r) {
-    var W = WEIGHTS.load, s = 0;
-    s += Math.min((r.circ.sellable || 0) / W.headroom.cap, 1) * W.headroom.pts;
-    s += Math.min((r.lotAcres || 0) / W.land.cap, 1) * W.land.pts;
-    s += /Industrial|Manufacturing|Vacant Land|Flex/.test(r.type)
-           ? W.useType.pts : Math.round(W.useType.pts * 0.27);
-    s += (r.service && r.service.kva >= 1000) ? W.service.pts : 0;
-    return Math.round(s * r.grainFactor);
+    return r.scoreResult && typeof r.scoreResult.loadScore === "number"
+      ? r.scoreResult.loadScore : null;
   }
 
   /* A SECOND score, deliberately not merged with the first.
@@ -2068,65 +2405,22 @@
       })();
     };
 
-    /* ---- score weights ----------------------------------------------- */
-    function paintWeights() {
-      var wrap = document.getElementById("setWeights");
-      var html = "", g, k, w;
-      var titles = { battery: "Battery deal score", load: "Large load score" };
-      for (g in titles) {
-        html += '<h5 style="margin:10px 0 4px">' + titles[g] + '</h5>';
-        var total = 0;
-        for (k in WEIGHTS[g]) total += +WEIGHTS[g][k].pts || 0;
-        for (k in WEIGHTS[g]) {
-          w = WEIGHTS[g][k];
-          html += '<div style="margin:7px 0">' +
-            '<div style="display:flex;gap:8px;align-items:center">' +
-            '<label style="flex:1;font-size:12.5px">' + esc(w.label) + '</label>' +
-            '<input type="number" min="0" max="100" step="1" value="' + w.pts +
-              '" data-wg="' + g + '" data-wk="' + k + '" data-wf="pts" ' +
-              'style="width:62px" title="points">' +
-            (w.cap ? '<input type="number" min="1" step="1" value="' + w.cap +
-              '" data-wg="' + g + '" data-wk="' + k + '" data-wf="cap" ' +
-              'style="width:86px" title="value that earns full points">' : '<span style="width:86px"></span>') +
-            '</div><div class="setKeyMsg">' + esc(w.note) + '</div></div>';
-        }
-        html += '<div class="setKeyMsg' + (total === 100 ? " good" : " bad") + '">' +
-          'Total ' + total + ' points.' +
-          (total === 100 ? "" : " Not 100 \u2014 scores will not be out of 100, " +
-            "which makes them hard to compare against a target.") + '</div>';
-      }
-      html += '<div style="margin:10px 0"><div style="display:flex;gap:8px;align-items:center">' +
-        '<label style="flex:1;font-size:12.5px">Modelled-load penalty</label>' +
-        '<input type="number" min="0" max="1" step="0.05" value="' + WEIGHTS.modelledPenalty +
-        '" data-wg="modelledPenalty" style="width:62px"></div>' +
-        '<div class="setKeyMsg">A modelled consumption figure is a guess and a metered ' +
-        'one is a measurement. 1 would score them identically.</div></div>';
-      wrap.innerHTML = html;
-
-      var ins = wrap.querySelectorAll("input[data-wg]");
-      for (var i = 0; i < ins.length; i++) {
-        ins[i].onchange = function () {
-          var g = this.getAttribute("data-wg"), k = this.getAttribute("data-wk"),
-              f = this.getAttribute("data-wf"), v = parseFloat(this.value);
-          if (isNaN(v)) return;
-          if (g === "modelledPenalty") WEIGHTS.modelledPenalty = v;
-          else WEIGHTS[g][k][f] = v;
-          persistWeights();
-          paintWeights();
-          render();
-          document.getElementById("setWeightsMsg").className = "setKeyMsg good";
-          document.getElementById("setWeightsMsg").textContent =
-            "Saved. Every card re-scored.";
-        };
-      }
-    }
+    /* Scoring policy is server-managed; no per-browser weight overrides. */
+    document.getElementById("setWeights").textContent =
+      "Battery and large-load scores use the workspace policy applied by the scoring service.";
     document.getElementById("setWeightsReset").onclick = function () {
-      WEIGHTS = JSON.parse(JSON.stringify(WEIGHT_DEFAULTS));
-      persistWeights(); paintWeights(); render();
-      document.getElementById("setWeightsMsg").className = "setKeyMsg";
-      document.getElementById("setWeightsMsg").textContent = "Back to defaults.";
+      var client = window.OmegaSiteScore;
+      if (!client) return;
+      client.reset();
+      for (var si = 0; si < ST.rows.length; si++) enrich(ST.rows[si]);
+      document.getElementById("setWeightsMsg").textContent = "Refreshing scores\u2026";
+      client.weights({ orgId: ORG === "demo" ? undefined : ORG }, function (err, meta) {
+        document.getElementById("setWeightsMsg").textContent = err ? err.message :
+          "Scoring policy: " + (meta.weightsSource || "source not stated") +
+          (meta.asOf ? " · " + meta.asOf : "") + ".";
+      });
+      render();
     };
-    paintWeights();
 
     document.getElementById("setBuild").textContent = CS_BUILD;
     document.getElementById("setDiagRefresh").onclick = paintDiag;
@@ -2265,6 +2559,11 @@
 
   function filtered() {
     var minKw = +document.getElementById("fKw").value || 0;
+    var minScore = +document.getElementById("fScore").value || 0;
+    var minHost = +document.getElementById("fHost").value || 0;
+    var maxHostText = document.getElementById("fHostMax").value;
+    var maxHost = maxHostText === "" ? null : +maxHostText;
+    var evidence = document.getElementById("fEnergy").value;
     var minSf = +document.getElementById("fSqft").value || 0;
     var type = document.getElementById("fType").value;
     var circ = document.getElementById("fCirc").value;
@@ -2272,9 +2571,9 @@
 
     /* Why rows were dropped, so "0 of 15" can explain itself instead of
        looking like an empty corridor. */
-    var cut = { kw: 0, sf: 0, type: 0, circ: 0, sfUnknown: 0 };
+    var cut = { kw: 0, sf: 0, type: 0, circ: 0, sfUnknown: 0, energy: 0 };
 
-    var out = ST.rows.filter(function (r) {
+    var out = (ST.view === 'catalog' ? ST.catalog : ST.rows).filter(function (r) {
       /* A DELIBERATE KEEP OUTRANKS A FILTER. A rep who starred this site
          did so knowing what it is; hiding it again behind a minimum kW they
          set for prospecting means the one site they are working disappears
@@ -2283,6 +2582,14 @@
          every screen — it only stops a filter deleting a site the rep
          already chose. It is not counted as a cut either: it was not. */
       if (isSaved(r.id)) return true;
+      if ((minScore && (r.score == null || r.score < minScore)) ||
+          ((minHost || maxHost != null) && (!r.circ.known || r.circ.sellable == null ||
+            r.circ.sellable < minHost || (maxHost != null && r.circ.sellable > maxHost))) ||
+          (evidence === "metered" && (!r.annualKwh || r.annualKwh.src !== "metered")) ||
+          (evidence === "modelled" && (!r.annualKwh || r.annualKwh.src === "metered")) ||
+          (evidence === "unknown" && r.annualKwh && r.annualKwh.value != null)) {
+        cut.energy++; return false;
+      }
       if ((r.sz.kw || 0) < minKw) { cut.kw++; return false; }
       /* UNKNOWN IS NOT ZERO. Parcels carry acreage, never building area —
          estimateSqftFromAcres is off precisely so a modelled figure is not
@@ -2316,16 +2623,22 @@
       return true;
     });
     ST.cut = cut;
+    var energyStatus = document.getElementById("energyFilterStatus");
+    if (energyStatus) energyStatus.textContent = (maxHost != null && maxHost < minHost)
+      ? "Maximum hosting capacity must be at least the minimum."
+      : (minScore || minHost || maxHost != null || evidence)
+        ? cut.energy + " sites excluded by energy filters. Unknown values do not meet a numeric threshold. Saved sites remain visible."
+        : "Filter by energy score or available hosting capacity. Saved sites remain visible.";
 
     /* An unknown building size sorts to the BOTTOM rather than being treated
        as zero, but the rows above it are still ordered by real size. Using 0
        for unknown puts every real parcel below every demo record, which is
        the same unknown-is-zero mistake the filter used to make. */
     var K = { kw: function (r) { return r.sz.kw || 0; },
-              score: function (r) { return r.score; },
+              score: function (r) { return r.score == null ? -1 : r.score; },
               head: function (r) { return r.circ.sellable || 0; },
               sqft: function (r) { return r.sqft == null ? -1 : r.sqft; },
-              loadScore: function (r) { return r.loadScore; },
+              loadScore: function (r) { return r.loadScore == null ? -1 : r.loadScore; },
               load: function (r) { return r.peakKw || 0; } }[sort];
     out.sort(function (a, b) { return K(b) - K(a); });
     return out;
@@ -2347,20 +2660,7 @@
      a refresh is not acceptable.
      ══════════════════════════════════════════════════════════════════════ */
   function loadSaved() {
-    try {
-      var raw = window.localStorage.getItem("cs.savedSites");
-      var list = raw ? JSON.parse(raw) : [];
-      /* An earlier build auto-saved EVERY lookup, so existing installs have a
-         search history sitting in storage that the rep never chose to keep.
-         Anything stored before starring existed is dropped once, and only
-         once — deliberately starred sites carry a flag and survive. */
-      if (!window.localStorage.getItem("cs.savedMigrated")) {
-        list = list.filter(function (s) { return s && s.starred === true; });
-        window.localStorage.setItem("cs.savedMigrated", "1");
-        window.localStorage.setItem("cs.savedSites", JSON.stringify(list));
-      }
-      return list;
-    } catch (e) { return []; }
+    return window.OmegaSiteSaves ? window.OmegaSiteSaves.list() : [];
   }
   /* ══════════════════════════════════════════════════════════════════════
      SERVICE PHASE — and whether anybody has actually checked it
@@ -2403,7 +2703,8 @@
     for (var i = 0; i < ST.saved.length; i++) {
       if (ST.saved[i].id === id) { ST.saved[i].service = r.service; break; }
     }
-    persistSaved();
+    if (isSaved(id) && window.OmegaSiteSaves)
+      window.OmegaSiteSaves.patch(id, { phase: r.service }, savedWriteDone);
     redrawDrawer(r);
     try { render(); } catch (e) {}
   }
@@ -2420,10 +2721,73 @@
       (p.confirmed ? 'confirmed' : 'unconfirmed') + '</span>';
   }
 
+  var _savedBaseline = {}, _savedUnsubscribe = null, _savedAuth = "";
+  var _savedViewContext = "", _savedViewMode = "";
+  function savedWriteDone(err) {
+    if (err && err.code === "SESSION_CHANGED") return;
+    window.OMEGA_SITE_SAVES_ERROR = err || null;
+    if (err && window.console) window.console.warn("Saved sites:", err.message);
+    if (err && err.code !== "LOCAL_ONLY") syncSavedView();
+    if (err && err.code === "NOT_SCOPED")
+      window.alert("Sign in to save sites. Saved sites belong to your organisation and account; " +
+        "this page has not established a signed-in saved-sites session yet.");
+    /* Main UI can render persistence status without coupling it to ledger status. */
+    if (typeof window.onOmegaSiteSavesStatus === "function")
+      window.onOmegaSiteSavesStatus(err || null, window.OmegaSiteSaves.state());
+  }
+  function syncSavedView() {
+    var saves = window.OmegaSiteSaves;
+    if (!saves) return;
+    var state = saves.state(), previous = ST.saved || [];
+    var context = state.orgId + "|" + state.repEmail;
+    var resetContext = context !== _savedViewContext ||
+      (state.mode === "blocked" && _savedViewMode !== "blocked");
+    _savedViewContext = context; _savedViewMode = state.mode;
+    if (resetContext) window.OMEGA_SITE_SAVES_ERROR = null;
+    ST.saved = loadSaved();
+    _savedBaseline = {};
+    ST.saved.forEach(function (row) {
+      _savedBaseline[row.id] = JSON.stringify(row);
+      if (row.estimate && typeof _estimates !== "undefined") _estimates[row.id] = row.estimate;
+      else if (row.estimate === null && typeof _estimates !== "undefined") delete _estimates[row.id];
+      var current = ST.current && ST.current.id === row.id ? ST.current : null;
+      if (current) {
+        current.service = row.service; current.sizePick = row.sizePick;
+        current.estimate = row.estimate;
+      }
+    });
+    if (resetContext) {
+      previous.forEach(function (row) { delete ST.byId[row.id]; });
+      ST.current = null;
+      if (typeof _estimates !== "undefined") _estimates = {};
+      var drawer = document.getElementById("drawer");
+      if (drawer) drawer.className = "";
+    }
+    /* Read-only hydration: never call persistSaved/save/patch from this handler. */
+    if (typeof window.onOmegaSiteSavesStatus === "function")
+      window.onOmegaSiteSavesStatus(window.OMEGA_SITE_SAVES_ERROR || null, state);
+    try { render(); } catch (e) {}
+  }
   function persistSaved() {
-    try {
-      window.localStorage.setItem("cs.savedSites", JSON.stringify(ST.saved));
-    } catch (e) { /* private mode; the session still works */ }
+    var saves = window.OmegaSiteSaves;
+    if (!saves) return;
+    ST.saved.slice().forEach(function (row) {
+      var old = _savedBaseline[row.id];
+      if (old === JSON.stringify(row)) return;
+      var before = old ? JSON.parse(old) : null;
+      /* A refreshed lookup has source facts but no saved decisions. Keep
+         those on its current object as well as on the durable record. */
+      if (before) {
+        if (row.service === undefined) row.service = before.service;
+        if (row.sizePick === undefined) row.sizePick = before.sizePick;
+        if (row.estimate === undefined && before.estimate) row.estimate = before.estimate;
+      }
+      if (before && row.sizePick === null && before.sizePick !== null) {
+        saves.patch(row.id, { size: null }, savedWriteDone);
+      } else {
+        saves.save(JSON.parse(JSON.stringify(row)), savedWriteDone);
+      }
+    });
   }
 
   /* Build a record from a lookup. Deliberately the SAME shape a harvested
@@ -2523,12 +2887,12 @@
      no double row to avoid. The star is a keep, not a filing-away. */
   function starSite(rec) {
     if (!rec || isSaved(rec.id)) return;
-    rec.starred = true;          /* marks a deliberate keep, not a lookup */
-    rec.starredAt = new Date().toISOString();
-    /* One object in both places on purpose: a refresh of the lookup then
-       updates the starred copy's circuit and capacity too. */
-    ST.saved.unshift(rec);
-    persistSaved();
+    if (window.OmegaSiteSaves) {
+      var record = JSON.parse(JSON.stringify(rec));
+      if (typeof _estimates !== "undefined" && _estimates[rec.id])
+        record.estimate = _estimates[rec.id];
+      window.OmegaSiteSaves.save(record, savedWriteDone);
+    }
   }
 
   /* ══════════════════════════════════════════════════════════════════════
@@ -2570,8 +2934,7 @@
   function unhideAll() { ST.hidden = []; persistHidden(); }
 
   function unsaveSite(id) {
-    ST.saved = ST.saved.filter(function (s) { return s.id !== id; });
-    persistSaved();
+    if (window.OmegaSiteSaves) window.OmegaSiteSaves.remove(id, savedWriteDone);
   }
   function isSaved(id) {
     for (var i = 0; i < ST.saved.length; i++) if (ST.saved[i].id === id) return true;
@@ -2866,6 +3229,7 @@
     var vb = map.getBounds();
     rows = rows.filter(function (r) {
       if (isHidden(r.id)) return false;     /* dismissed by the rep */
+      if (ST.view === 'catalog') return true;
       /* Starred sites are NOT excluded here any more. One that genuinely
          sits in this viewport belongs in the list like anything else; it is
          only the unconditional pinning to the top that was wrong. */
@@ -2908,7 +3272,7 @@
       rows = rows.filter(function (r) { return r.id !== current.id; });
       imported = imported.filter(function (r) { return r.id !== current.id; });
     }
-    rows = (ST.view === "saved")
+    rows = ST.view === 'catalog' ? rows : (ST.view === "saved")
       ? saved
       : (current ? [current] : []).concat(imported, rows);
     /* Index everything on screen so the star can find a record by id
@@ -2922,7 +3286,12 @@
        six of them does not mean this viewport has anything in it, and
        pretending otherwise is how the panel used to look busy while showing
        nothing relevant. They are one click away and the message says so. */
-    if (!ST.rows.length && !current && !imported.length) {
+    if (ST.view === 'catalog' && !rows.length) {
+      head('Imported Crexi listings', 'Search the shared catalog above. Try Reset filters if the current page is filtered out.');
+      wrap.innerHTML = '<div class="empty"><h3>No listings on this page match</h3><p>Listings without verified coordinates remain searchable; they do not get guessed map pins.</p></div>';
+      drawMarkers([]); return;
+    }
+    if (ST.view !== 'catalog' && ST.view !== "saved" && !ST.rows.length && !current && !imported.length) {
       head("Search an address, or search this area",
            "Every result is scored on what the circuit will still accept, not on " +
            "what the building could theoretically host.");
@@ -2957,6 +3326,7 @@
       if (c.sf > n) { n = c.sf; worst = "the minimum building size"; }
       if (c.type > n) { n = c.type; worst = "the use type"; }
       if (c.circ > n) { n = c.circ; worst = "the circuit filter"; }
+      if (c.energy > n) { n = c.energy; worst = "the energy filters"; }
       var why = worst
         ? worst.charAt(0).toUpperCase() + worst.slice(1) + " dropped " + n +
           " of " + ST.rows.length + ". Widen it to see them."
@@ -2972,7 +3342,7 @@
     var claimed = 0, blocked = 0, i;
     for (i = 0; i < rows.length; i++) {
       if (rows[i].claims.length) claimed++;
-      if ((rows[i].circ.sellable || 0) <= 0) blocked++;
+      if (rows[i].circ.known && (rows[i].circ.sellable || 0) <= 0) blocked++;
     }
     head(rows.length.toLocaleString() + (rows.length === 1 ? " site" : " sites") +
          (rows.length < ST.rows.length ? " of " + ST.rows.length : ""),
@@ -3144,9 +3514,20 @@
       'reach is settled by the interconnection study.</p>';
   }
 
+  function energyLeadHtml(r) {
+    return '<div class="energyLead"><div class="energyNumber">' +
+      (r.score == null ? '&mdash;' : esc(String(r.score))) + '<small> / 100</small></div>' +
+      '<div><div class="energyLabel">Energy score · battery</div><div class="energyBasis">' +
+      (r.scoreState === 'error' ? esc(r.scoreError || 'Energy assessment unavailable') :
+       r.score == null ? 'Awaiting energy assessment' : 'Screening score') +
+      ' · ' + (r.annualKwh ? esc(r.annualKwh.src || 'Source unknown') + ' load' : 'Load not yet known') +
+      '</div></div></div>';
+  }
+
   function reportCardForRecord(r) {
+    var lead = '<div class="sec" id="siteEnergy"><h4>Energy assessment</h4>' + energyLeadHtml(r);
     if (r.offTerritory) {
-      return '<div class="sec"><h4>Site report card</h4><p class="note">' +
+      return lead + '<p class="note">' +
         '<b>No utility is mapped at this address.</b> This tool currently ' +
         'carries one hosting-capacity layer \u2014 ComEd, in northern Illinois ' +
         '\u2014 so there is no circuit to read here and no battery to size. ' +
@@ -3154,20 +3535,19 @@
         'and whatever the county publishes about the parcel.</p></div>';
     }
     if (!r.feederId || !r.circ || !r.circ.known) {
-      return '<div class="sec"><h4>Site report card</h4><p class="note">' +
+      return lead + '<p class="note">' +
         'No circuit is attributed to this site yet, so there is nothing to size ' +
         'a battery against. Zoom to 14+ so circuits resolve, or search the ' +
         'address to ask ComEd about this exact point.</p></div>';
     }
     var st = r.circ;
     var maxByWire = Math.max(0, Math.round(st.sellable));
-    var maxByLoad = r.peakKw ? Math.round(r.peakKw * 0.15) : null;
-    var maxBess = maxByLoad == null ? maxByWire : Math.min(maxByWire, maxByLoad);
+    var maxByLoad = r.sz && r.sz.loadCeiling != null ? r.sz.loadCeiling : null;
+    var maxBess = r.sz && r.sz.kw != null ? r.sz.kw : null;
 
-    var h = '<div class="sec"><h4>Site report card</h4>' +
-      '<div class="hero"><div class="big">' + fmt(maxBess) +
-      ' <small>kW</small></div><div class="cap">largest battery this site ' +
-      'supports' + (maxByLoad != null && maxByLoad < maxByWire
+    var h = lead +
+      '<div class="hero"><div class="big">' + (maxBess == null ? '&mdash;' : fmt(maxBess)) +
+      ' <small>kW</small></div><div class="cap">Battery screening size' + (maxByLoad != null && maxByLoad < maxByWire
         ? " \u2014 limited by the customer\u2019s peak"
         : " \u2014 limited by the circuit") + '</div></div>' +
       '<div class="grid2">' +
@@ -3183,9 +3563,9 @@
       g("Ceiling from the wire", fmt(maxByWire) + " kW") +
       g("Ceiling from the load", maxByLoad == null
         ? "N/A \u2014 no building load known" : fmt(maxByLoad) + " kW") +
-      g("At " + DEFAULT_HOURS + " hours", fmt(maxBess * DEFAULT_HOURS) + " kWh") +
-      g("Battery deal score", '<b>' + r.score + '</b> / 100') +
-      g("Large load score", '<b>' + r.loadScore + '</b> / 100') +
+      g("At " + DEFAULT_HOURS + " hours", maxBess == null ? 'Pending' : fmt(maxBess * DEFAULT_HOURS) + " kWh") +
+      g("Battery score", r.score == null ? 'Pending' : '<b>' + r.score + '</b> / 100') +
+      g("Large load score", r.loadScore == null ? 'Pending' : '<b>' + r.loadScore + '</b> / 100') +
       '</div>';
 
     if (maxByLoad == null) {
@@ -3274,6 +3654,64 @@
     a.title = "Back to " + u.host;
   })();
 
+  /* ── WHAT A BUYER ASKS FIRST ─────────────────────────────────────────
+     Price, value, when it last sold, how long it has sat, who owns it and
+     who to call. The imported Crexi snapshot carries the asking price and
+     the size; the rest arrives with the Crexi data agreement (README:
+     "Crexi data agreement, currently in progress"). Until then every
+     missing figure says "pending API integration" so a rep reads a
+     status, not a blank — and a figure that IS on file, from the assessor
+     layer or a paid lookup, is shown with its source. */
+  var PENDING_API = '<i class="pend">pending API integration</i>';
+  function propertyFactsHtml(r) {
+    if (!r || !(r.listed || r.src === 'crexi-import' || r.src === 'crexi')) return '';
+    var mk = (window.OmegaSiteMarket && OmegaSiteMarket.cached(r.id)) || {};
+    /* Three sources, in order: the captured Crexi listing page (staff
+       bookmarklet), the row's own fields, then the market lookup. */
+    var d = r.detail || {};
+    var listing = mk.listing || {}, owner = r.owner && r.owner.name ? r.owner : (mk.owner || {}),
+        broker = r.broker && r.broker.name ? r.broker : (mk.broker || {}), listed = r.listed || {};
+    function pick(a, b, c) { return a != null && a !== '' ? a : (b != null && b !== '' ? b : (c != null && c !== '' ? c : null)); }
+    function has(v) { return v != null && v !== ''; }
+    var ask = pick(d.askPrice, listed.askPrice, listing.askPrice);
+    var value = has(r.assessedValue) ? r.assessedValue : null;
+    var sold = d.lastSalePrice != null ? { price: d.lastSalePrice, date: d.lastSaleDate } : (r.lastSale && has(r.lastSale.price) ? r.lastSale : null);
+    var dom = pick(d.daysOnMarket, listed.daysOnMarket, listing.daysOnMarket);
+    var cap = pick(d.capRate, listed.capRate, listing.capRate);
+    var contact = null;
+    if (d.brokers && d.brokers.length) {
+      contact = d.brokers.map(function (b) {
+        return esc(b.name) + (b.firm ? ', ' + esc(b.firm) : '') +
+          (b.phone ? ' \u00b7 <a data-noselect="1" href="tel:' + esc(String(b.phone).replace(/[^+0-9]/g, '')) + '">' + esc(b.phone) + '</a>' : '') +
+          (b.email ? ' \u00b7 <a data-noselect="1" href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a>' : '');
+      }).join('<br>');
+    } else if (has(broker.name)) {
+      contact = esc(broker.name) + (broker.firm ? ', ' + esc(broker.firm) : '') +
+        (broker.phone ? ' \u00b7 <a data-noselect="1" href="tel:' + esc(String(broker.phone).replace(/[^+0-9]/g, '')) + '">' + esc(broker.phone) + '</a>' : '') +
+        (broker.email ? ' \u00b7 <a data-noselect="1" href="mailto:' + esc(broker.email) + '">' + esc(broker.email) + '</a>' : '');
+    } else if (d.listedBy) contact = 'Listed by ' + esc(d.listedBy);
+    var ownerTxt = has(d.ownerName) ? esc(d.ownerName) : has(owner.name) ? esc(owner.name) + (owner.phone ? ' \u00b7 ' + esc(owner.phone) : '') : null;
+    var tenancy = [];
+    if (d.tenant || d.headline) tenancy.push(esc(d.tenant || d.headline));
+    if (d.occupancy != null) tenancy.push(fmt(d.occupancy) + '% occupied');
+    if (d.leaseType) tenancy.push(esc(d.leaseType) + ' lease');
+    if (d.leaseExpiration) tenancy.push('expires ' + esc(d.leaseExpiration));
+    var captured = d.capturedAt ? '<small>Listing page captured ' + esc(String(d.capturedAt).slice(0, 10)) + '</small>' : '';
+    return '<div class="facts">' +
+      '<b>Asking</b><span>' + (has(ask) ? money(ask) : d.unpriced ? 'Unpriced \u00b7 call for offers' : PENDING_API) + '</span>' +
+      '<b>Value</b><span>' + (value != null ? money(value) + ' <small>assessed</small>' : PENDING_API) + '</span>' +
+      '<b>Last sold</b><span>' + (sold ? money(sold.price) + (sold.date ? ' \u00b7 ' + esc(sold.date) : '') : PENDING_API) + '</span>' +
+      '<b>Days on market</b><span>' + (has(dom) ? fmt(dom) + (d.updated ? ' <small>\u00b7 ' + esc(d.updated).toLowerCase() + '</small>' : '') : PENDING_API) + '</span>' +
+      (has(cap) ? '<b>Cap rate</b><span>' + esc(cap) + (/%/.test(String(cap)) ? '' : '%') + '</span>' : '') +
+      (d.noi != null ? '<b>NOI</b><span>' + money(d.noi) + '/yr</span>' : '') +
+      (tenancy.length ? '<b>Tenant</b><span>' + tenancy.join(' \u00b7 ') + '</span>' : '') +
+      (d.yearBuilt ? '<b>Built</b><span>' + esc(d.yearBuilt) + (d.zoning ? ' \u00b7 zoned ' + esc(d.zoning) : '') + '</span>' : '') +
+      '<b>Owner</b><span>' + (ownerTxt || PENDING_API) + '</span>' +
+      '<b>Contact</b><span>' + (contact || PENDING_API) + '</span>' +
+      (captured ? '<span></span><span>' + captured + '</span>' : '') +
+      '</div>';
+  }
+
   function cardHtml(r) {
     var blockedBy = liveClaims(r);
     var warn = "";
@@ -3321,7 +3759,7 @@
               ? "Circuit-capped \u00b7 load supports " + fmt(r.sz.loadCeiling) + " kW"
               : "Load-sized \u00b7 circuit allows " + fmt(r.sz.circuitCeiling) + " kW";
 
-    return '<article class="card' + ((r.circ.sellable || 0) <= 0 ? ' blocked' : '') +
+    return '<article class="card' + (r.circ.known && (r.circ.sellable || 0) <= 0 ? ' blocked' : '') +
       '" tabindex="0" role="button" data-id="' + esc(r.id) + '">' +
       '<div class="ph">' + photo(r) +
         '<span class="badge">' +
@@ -3346,8 +3784,21 @@
               : r.offTerritory ? "No utility mapped" : r.cst.label) + '</span>' +
       '</div>' +
       '<div class="bd">' +
+        energyLeadHtml(r) +
+        (r.listed && /^https:\/\/www\.crexi\.com\/properties\/\d+\//.test(r.listed.url || '')
+          ? '<p><a data-noselect="1" href="' + esc(r.listed.url) + '" target="_blank" rel="noopener noreferrer"><b>Open Crexi listing &amp; photos ↗</b></a>' +
+            (r.listed.askPrice != null ? ' · ' + money(r.listed.askPrice) : '') +
+            '<br><small>Listing snapshot ' + esc((r.observedAt || '').slice(0,10)) + ' · availability not reverified</small>' +
+            (r.geocode ? '<br><small>' + (r.lat == null ? 'Location unresolved — no map pin'
+              : r.approx && r.approxKind === 'area centre' ? 'Pin is the centre of ' + esc(r.geocode.area || 'its ZIP') + ', not the parcel — open the card to place it'
+              : esc(r.geocode.accuracy)) + '</small>' : '') + '</p>' : '') +
+        propertyFactsHtml(r) +
         '<div class="kw">' + kwTxt + ' <small>kW deliverable</small></div>' +
         '<div class="kwsub">' + sub + '</div>' +
+        '<div class="siteMetrics"><div>Available hosting<strong>' +
+          (r.circ.known ? fmt(r.circ.sellable) + ' kW' : 'Unknown') + '</strong></div>' +
+          '<div>Selected battery<strong>' + (sizePick(r).kw == null ? 'Not sized' :
+            fmt(sizePick(r).kw) + ' kW / ' + fmt(sizePick(r).kwh) + ' kWh') + '</strong></div></div>' +
         decisionHtml(r) +
         /* The address is the link. A rep reads the address first and wants
            to see the roof; making them open the card and find a button is a
@@ -3363,7 +3814,7 @@
            here changes a filter, a score or what was loaded. */
         (shows("size") || shows("type")
           ? '<div class="mt">' +
-            (shows("size") ? (r.sqft ? fmt(r.sqft) + " SF" : "Land, " + (r.lotAcres || "?") + " ac") : "") +
+            (shows("size") ? (r.sqft ? fmt(r.sqft) + " SF" : "Building size unknown · " + (r.lotAcres || "?") + " ac") : "") +
             (shows("size") && shows("type") ? ' &middot; ' : '') +
             (shows("type") ? esc(r.subtype || r.type) +
               (r.yearBuilt ? ' &middot; built ' + r.yearBuilt : '') : '') + '</div>'
@@ -3371,7 +3822,7 @@
         /* Owner, or the listing contact clearly labelled as one. Never the
            contact silently occupying the owner line. */
         (shows("owner")
-          ? '<div class="own">' + (r.owner.name
+          ? '<div class="own">' + (r.owner && r.owner.name
               ? esc(r.owner.name)
               : (r.listingContact && r.listingContact.name
                   ? "Listing contact: " + esc(r.listingContact.name)
@@ -3393,7 +3844,7 @@
           ? '<div class="mt" style="margin-top:7px;font-family:var(--mono);font-size:11px">' +
             (shows("feeder") ? esc(r.feederId) + (r.sub ? ' \u00b7 ' + esc(r.sub) : '') : '') +
             (shows("feeder") && shows("score") ? ' &middot; ' : '') +
-            (shows("score") ? 'score ' + r.score +
+            (shows("score") ? 'score ' + (r.score == null ? 'pending' : r.score) +
               /* A capped score has to say it is capped, or it reads as a poor
                  site rather than an unresolved one — and those get worked
                  very differently. */
@@ -3410,6 +3861,16 @@
             'title="Price it here \u2014 sized against this circuit, priced from the same cost model the estimator uses">' +
             'Price this site' +
           '</button>' +
+          (sizePick(r).kw != null
+            ? '<button class="cardLease" data-noselect="1" data-lease-id="' + esc(r.id) + '" ' +
+              'title="Prepare the host lease offer: rent us the pad for this battery and we pay you a fixed rent over the term">' +
+              'Lease offer' + '</button>' +
+              '<button class="cardProject" data-noselect="1" data-project-id="' + esc(r.id) + '" ' +
+              'title="What it costs us to deploy here: the build, plus buy the building at its asking price or lease the pad at the host rent">' +
+              'Cost to us' + '</button>'
+            : '') +
+          '<button class="cardCall" data-noselect="1" data-call-id="' + esc(r.id) + '" ' +
+            'title="Who to call, what to say, and a place to log the call">Call</button>' +
           (_estimates[r.id]
             ? '<span class="cardCostVal" title="' +
               esc(_estimates[r.id].estimateClassPlain || _estimates[r.id].estimateClass) + '">'
@@ -3448,6 +3909,12 @@
      return no photo at all, and an empty grey box on every card makes the
      whole list read as broken. */
   function photo(r) {
+    var photos = r.photos || [], photoUrl = photos.length ? photos[0] : '';
+    if (photoUrl && typeof photoUrl === 'object') photoUrl = photoUrl.url || photoUrl.src;
+    if (typeof photoUrl === 'string' && /^https:\/\//i.test(photoUrl)) {
+      return '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(photoUrl) + '" alt="Property photo: ' + esc(r.addr) + '">';
+    }
+    if (r.src === 'crexi-import') return '<div style="padding:24px;text-align:center;color:#53647a">Listing photo not supplied<br><small>Open the Crexi listing for photographs</small></div>';
     var pal = { "Warehouse":["#e6ecf2","#b9c8d6","#8fa2b4"], "Industrial":["#e9eae6","#c2c7bf","#98a094"],
                 "Manufacturing":["#ece7e1","#cbc0b2","#a2947f"], "Cold Storage":["#e2eef4","#b4cfdd","#87aabf"],
                 "Flex":["#eae8ef","#c6c0d5","#9a92b3"], "Retail":["#f0e6e2","#d5bdb4","#b0938a"],
@@ -3532,7 +3999,8 @@
       '<stop offset="1" stop-color="' + pal[0] + '"/></linearGradient></defs>' +
       '<rect width="320" height="132" fill="url(#sky' + esc(r.id) + ')"/>' +
       art +
-      '<rect y="118" width="320" height="14" fill="' + dark + '" opacity=".28"/></svg>';
+      '<rect y="118" width="320" height="14" fill="' + dark + '" opacity=".28"/></svg>' +
+      '<span style="position:absolute;bottom:5px;left:8px;background:#fff;padding:2px 5px;font-size:10px">Illustration · property photo unavailable</span>';
   }
 
   /* --------------------------------------------------------------- map */
@@ -3967,7 +4435,7 @@
     var kw = r.sz.kw;
     var cls = "mkb" + (state || "") +
               (SEEN[r.id] ? " seen" : "") +
-              ((r.circ.sellable || 0) <= 0 ? " blocked" : "");
+              (r.circ.known && (r.circ.sellable || 0) <= 0 ? " blocked" : "");
     return '<div class="' + cls + '">' +
              '<i style="background:' + (r.offTerritory ? "#8a94a0" : r.cst.color) + '"></i>' +
              esc(pinLabel(kw)) +
@@ -3995,6 +4463,7 @@
     var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
+      if (r.lat == null || r.lon == null) continue;
       var m = window.L.marker([r.lat, r.lon], {
         icon: markerIcon(r, r.id === selId ? " sel" : ""),
         riseOnHover: true
@@ -4187,11 +4656,16 @@
   }
 
   function verifyRecord(r) {
+    if (r.lat == null || r.lon == null) {
+      var unplaced = document.getElementById('dVerify');
+      if(unplaced)unplaced.innerHTML = '<h4>Location not verified</h4><p>No circuit or parcel lookup was made. Confirm this listing address before sizing or holding grid capacity.</p>';
+      return;
+    }
     var live = { covering: 0 }, pending = 2;
     function done() {
       if (--pending) return;
       var el = document.getElementById("dVerify");
-      if (el && ST.sel && ST.sel.id === r.id) {
+      if (el && (ST.sel && ST.sel.id ? ST.sel.id : ST.sel) === r.id) {
         el.outerHTML = verifyBlock("done", r, live) +
           /* The county's own record for this point, on the card panel too.
              verifyRecord already fetched it to compare against; showing it
@@ -4218,12 +4692,39 @@
     SRC.parcelAt(r.lat, r.lon, function (e, p) { live.parcel = p || null; done(); });
   }
 
+  var marketBusy = {};
+  function marketHtml(r) {
+    return window.OmegaSiteMarket ? window.OmegaSiteMarket.html(r, !!marketBusy[r.id]) : '';
+  }
+  function lookupMarket(r, spend) {
+    var market = window.OmegaSiteMarket;
+    if (!market || marketBusy[r.id]) return;
+    marketBusy[r.id] = true;
+    function paint() {
+      var host = document.getElementById('siteMarket');
+      var content = host && host.querySelector('[data-site-id]');
+      if (content && content.getAttribute('data-site-id') === String(r.id)) host.innerHTML = marketHtml(r);
+    }
+    paint();
+    var marketOrg = ORG, marketUser = _savedAuth;
+    market.forSite(r, { spend: spend === true, force: spend === true }, function (err, details) {
+      if (marketOrg !== ORG || marketUser !== _savedAuth) return;
+      delete marketBusy[r.id];
+      if (details) {
+        r.market = details;
+        if (isSaved(r.id) && window.OmegaSiteSaves)
+          window.OmegaSiteSaves.patch(r.id, { market: details }, savedWriteDone);
+      }
+      paint();
+    });
+  }
+
   function openDrawer(r) {
     document.getElementById("dAddr").textContent = r.addr;
     document.getElementById("dSub").textContent =
       r.city + ", " + r.state + " " + r.zip + "  \u00b7  " + (r.subtype || r.type);
     document.getElementById("dBody").innerHTML =
-      verifyBlock("busy", r, {}) + drawerHtml(r);
+      drawerHtml(r) + verifyBlock("busy", r, {});
     document.getElementById("drawer").className = "open";
     wireDrawer(r);
     /* One lookup, for the one site being opened. If this record was pinned to
@@ -4231,13 +4732,15 @@
        verified — otherwise the verification confirms a circuit for the middle
        of a postcode. */
     fixOnePin(r, function (moved) {
+      if ((ST.sel && ST.sel.id ? ST.sel.id : ST.sel) !== r.id) return;
       if (moved) {
         document.getElementById("dBody").innerHTML =
-          verifyBlock("busy", r, {}) + drawerHtml(r);
+          drawerHtml(r) + verifyBlock("busy", r, {});
         wireDrawer(r);
         render();
       }
       verifyRecord(r);
+      lookupMarket(r, SET.enrich === true);
     });
   }
   /* Renders a searched ADDRESS in the same drawer a parcel uses, so a rep
@@ -4335,88 +4838,6 @@
     return out;
   }
 
-  function reportCardHtml(v, lat, lon) {
-    if (!v.feederId || !v.state || !v.state.known) return "";
-    var st = v.state, sz = v.size;
-    var near = nearestKnown(lat, lon);
-    var r = near ? near.row : null;
-
-    /* The headline number, and what limits it. */
-    var maxByWire = Math.max(0, Math.round(st.sellable));
-    var maxByLoad = r && r.peakKw ? Math.round(r.peakKw * 0.15) : null;
-    var maxBess = maxByLoad == null ? maxByWire : Math.min(maxByWire, maxByLoad);
-    var binds = maxByLoad == null ? "circuit"
-              : (maxByLoad < maxByWire ? "load" : "circuit");
-
-    var h = '<div class="sec"><h4>Site report card</h4>';
-
-    h += '<div class="hero"><div class="big">' + fmt(maxBess) +
-         ' <small>kW</small></div><div class="cap">' +
-         'largest battery this site supports' +
-         (binds === "circuit" ? " \u2014 limited by the circuit"
-                              : " \u2014 limited by the customer\u2019s peak") +
-         '</div></div>';
-
-    h += '<div class="grid2">' +
-      g("Circuit", esc(v.feederId)) +
-      g("Substation", v.sub ? esc(v.sub) : "N/A") +
-      productRowsHtml(v.rows && v.rows[0] ? v.rows[0].a : null) +
-      g("ComEd queue on this feeder", fmt(st.queue) + " kW") +
-      g("Queue refreshed", (v.rows && v.rows[0] && v.rows[0].refreshed)
-        ? esc(String(v.rows[0].refreshed)) : "N/A") +
-      g("Buffer distance", (v.rows && v.rows[0] && v.rows[0].buff != null)
-        ? fmt(v.rows[0].buff) + " ft" : "N/A") +
-      g("Your team\u2019s firm claims", fmt(st.firm) + " kW") +
-      g("Your team\u2019s soft holds", fmt(st.soft) + " kW") +
-      g("Left to sell", '<b>' + fmt(st.sellable) + ' kW</b>') +
-      g("Ceiling from the wire", fmt(maxByWire) + " kW") +
-      g("Ceiling from the load",
-        maxByLoad == null ? "N/A \u2014 no building load known" : fmt(maxByLoad) + " kW") +
-      g("At " + DEFAULT_HOURS + " hours", fmt(maxBess * DEFAULT_HOURS) + " kWh") +
-      '</div>';
-
-    /* Interconnections, in order of authority. */
-    var lines = [];
-    if (st.queue > 0) {
-      lines.push("<b>" + fmt(st.queue) + " kW</b> of other developers\u2019 " +
-        "interconnection applications are already in ComEd\u2019s queue for " +
-        esc(v.feederId) + (v.rows && v.rows[0] && v.rows[0].refreshed
-          ? ", as of " + esc(String(v.rows[0].refreshed)) : "") +
-        ". That comes off before anything you size.");
-    } else {
-      lines.push("ComEd shows <b>nothing filed</b> in the interconnection queue " +
-        "on " + esc(v.feederId) + ".");
-    }
-    if (st.allocations && st.allocations.length) {
-      lines.push("<b>" + st.allocations.length + "</b> claim" +
-        (st.allocations.length === 1 ? "" : "s") + " from your own team on this " +
-        "circuit, already netted off the figure above.");
-    }
-    if (v.covering > 1) {
-      lines.push(v.covering + " circuits cover this point \u2014 the buffers overlap. " +
-        "This is the one with the most headroom; which you can physically reach " +
-        "is settled by the interconnection study.");
-    }
-
-    /* Illinois Shines, deliberately separated and qualified. */
-    var ils = ilsNearby(lat, lon, 1600);
-    if (ils.n) {
-      lines.push("<b>" + ils.n + "</b> Illinois Shines solar project" +
-        (ils.n === 1 ? "" : "s") + " within a mile" +
-        (ils.mw ? ", " + ils.mw.toFixed(2) + " MW total" : "") +
-        (ils.live ? ", " + ils.live + " energised" : "") +
-        ". <b>These are NOT attributed to this circuit</b> \u2014 Illinois Shines " +
-        "publishes ZIP centroids, not sited coordinates, so a project cannot be " +
-        "placed on a feeder from one. Read it as area activity, not as queue.");
-    } else if (ils.loaded) {
-      lines.push("No Illinois Shines projects within a mile of this point.");
-    }
-
-    h += coveringRowsHtml(v.rows);
-    h += '<h4 style="margin-top:12px">Other interconnections</h4>' +
-         '<p class="note">' + lines.join("<br>") + '</p></div>';
-    return h;
-  }
 
   /* ══════════════════════════════════════════════════════════════════════
      THE SITE PACKET — the handoff to the cost estimator
@@ -4507,7 +4928,10 @@
         buildingSqft: prov(r.sqft, "county assessor"),
         yearBuilt: prov(r.yearBuilt, "county assessor"),
         useClass: prov(r.clsLabel || r.type, "county assessor"),
-        owner: prov(r.owner && r.owner.name, "county assessor")
+        owner: prov(r.ownerOfRecord || (r.market && r.market.owner && r.market.owner.name) ||
+          (!r.businessSrc && r.owner && r.owner.name) || null,
+          r.ownerOfRecord ? "county assessor" : r.market && r.market.owner ?
+            r.market.owner.src || "market source" : "property source; unverified")
       },
 
       utility: {
@@ -4520,6 +4944,8 @@
         capacityAsOf: r.queueRefreshed || null,
         bufferFt: r.buffFt != null ? r.buffFt : null
       },
+
+      market: r.market || (window.OmegaSiteMarket && window.OmegaSiteMarket.cached(r.id)) || null,
 
       capacity: {
         /* Every figure the utility published, not just the product currently
@@ -4545,7 +4971,7 @@
         batteryKw: (function () { var q = sizePick(r); return q.kw != null ? q.kw : (sz.kw != null ? sz.kw : null); })(),
         batteryKwh: (function () { var q = sizePick(r); return q.kwh != null ? q.kwh : (sz.kwh != null ? sz.kwh : null); })(),
         assumedHours: (function () { var q = sizePick(r); return q.hours || sz.hours || DEFAULT_HOURS; })(),
-        sizedBy: (function () { var q = sizePick(r); return q.custom ? "chosen in the site finder" : "circuit maximum at " + DEFAULT_HOURS + " h (default)"; })(),
+        sizedBy: (function () { var q = sizePick(r); return q.custom ? "chosen in the site finder" : "server screening size at " + DEFAULT_HOURS + " h (default)"; })(),
         circuitCeilingKw: (function () { return sizeCap(r); })(),
         bindingConstraint: sz.binds || null,
         customerPeakKw: r.peakKw != null ? Math.round(r.peakKw) : null,
@@ -4563,10 +4989,11 @@
         var d = _estimates[r.id];
         if (!d) return null;
         return {
-          basis: d.pricedBy === "sitefinder"
+          basis: d.basis || (d.pricedBy === 'api/price-site'
+            ? 'Priced by the authenticated server pricing service.' : d.pricedBy === "sitefinder"
             ? "Priced in the site finder against omega-cost-model.js, the same "
               + "model and the same tables the cost estimator runs."
-            : "Returned by the cost estimator.",
+            : "Returned by the cost estimator."),
           pricedAt: d.at || null,
           kw: d.kw, kwh: d.kwh,
           sizeWasAssumed: !!d.assumedSize,
@@ -4631,8 +5058,8 @@
        "no estimate" because a button went unpressed is a packet that gets
        priced in a spreadsheet instead. */
     if (!_estimates[r.id]) {
-      var e0 = computeEstimate(r);
-      if (e0) _estimates[r.id] = e0;
+      priceInPlace(r).then(function(est){ if(est) downloadPacket(r); });
+      return;
     }
     var name = (r.addr || r.id).replace(/[^A-Za-z0-9]+/g, "-")
                  .replace(/^-|-$/g, "").slice(0, 60).toLowerCase();
@@ -4763,7 +5190,7 @@
         var id;
         for (id in _estimates) if (_estimates.hasOwnProperty(id)) {
           var rec = ST.byId[id];
-          if (rec) { var e = computeEstimate(rec); if (e) _estimates[id] = e; }
+          if (rec) priceInPlace(rec);
         }
         try { renderCostBack(ST.sel && ST.sel.id ? ST.sel.id : ST.sel); } catch (e2) {}
         try { render(); } catch (e3) {}
@@ -4870,8 +5297,8 @@
       var prods = productsOf(v);
       if (!priced && !prods.length) continue;
 
-      var base = { key:k, name:v.name, priced:priced,
-                   tier: OmegaCostModel.vendorTier(v),
+      var base = { key:k, name:v.name, priced:priced, hasPrice:priced,
+                   tier: null,
                    stale: OmegaCostModel.quoteStale(v),
                    /* Whether this came from the shipped datasheet or from
                       something the organisation entered. The card needs to
@@ -4885,44 +5312,36 @@
                                   hours:pick.hours, units:0 }, v, priced));
         continue;
       }
-      for (var pi = 0; pi < prods.length; pi++) {
-        var P = prods[pi];
-        var unit = +P.kwh;
-        if (!isFinite(unit) || unit <= 0) continue;
-        /* ── SIZED TO THE TARGET, NOT TO THE CEILING ──────────────────
-           This used to take the most energy that fitted under the 8-hour
-           cap, which is what "the maximum" literally asks for and is not
-           what anybody wants to build. On an 826 kW circuit it proposed
-           two containers for 6.5 hours when one 3.4 MWh unit gives 4.1 —
-           a second container is more land, more interconnection work and
-           roughly twice the hardware, to buy duration nobody asked for.
+      /* ── SIZED TO THE TARGET, NOT TO THE CEILING ────────────────────
+         The pick is the configuration closest to the DEFAULT DURATION at
+         this circuit's kW; the 8-hour ceiling survives only as a bound and
+         the maximum is computed separately below, because "how big could
+         this go" is a real question — just not the one the card answers.
 
-           So the recommendation is the configuration closest to the
-           DEFAULT DURATION, and the ceiling survives only as a bound. The
-           maximum is still computed and still shown in the list, because
-           "how big could this go" is a real question — it is just not the
-           question the card is answering. */
-        var n = Math.round(targetKwh / unit);
-        if (n < 1) n = 1;                    /* one unit is the minimum sale */
-        if (n > MAX_FIT_UNITS) n = MAX_FIT_UNITS;
-        var kwh = n * unit;
+         The rule itself lives in OmegaBessCatalog.fit so it can be tested
+         without a browser: FEWEST UNITS FIRST, then closest. It used to
+         rank by kWh closeness alone, and a stack of the smallest cabinet
+         won almost every time — a 3 MWh need came back as four 760 kWh
+         cabinets with a single 3.4 MWh container on the same sheet. */
+      var fits = OmegaBessCatalog.fit(prods, pick.kw, targetKwh, { maxUnits: MAX_FIT_UNITS });
+      for (var fi = 0; fi < fits.length; fi++) {
+        var F = fits[fi];
         out.push(mergeOpt(base, {
-          model: P.model || "", units: n, unitKwh: unit,
-          usableKwh: (typeof P.usableKwh === "number") ? P.usableKwh * n : null,
-          form: P.form || "", acKw: P.acKw || null,
-          kwh: kwh, hours: kwh / pick.kw,
-          overCeiling: kwh > ceilKwh
+          model: F.model, units: F.units, unitKwh: F.unitKwh,
+          usableKwh: F.usableKwh, form: F.form, acKw: F.acKw,
+          kwh: F.kwh, hours: F.kwh / pick.kw, under: F.under, ratio: F.ratio,
+          overCeiling: F.kwh > ceilKwh
         }, v, priced));
       }
     }
-    /* CLOSEST TO THE TARGET FIRST, then fewest units. One container beats
-       two cabinets at the same energy, every time — a second enclosure is
-       a second foundation, a second set of terminations and a second thing
-       to maintain, and none of that shows up in a kWh comparison. */
+    /* Across suppliers the same order holds: fewest enclosures, then the
+       nearest to the need, a shortfall counting one and a half times. */
     out.sort(function (a, b) {
-      var da = Math.abs(a.kwh - targetKwh), db = Math.abs(b.kwh - targetKwh);
+      if ((a.units || 0) !== (b.units || 0)) return (a.units || 0) - (b.units || 0);
+      var da = a.ratio == null ? 0 : (a.ratio >= 1 ? a.ratio - 1 : (1 - a.ratio) * 1.5);
+      var db = b.ratio == null ? 0 : (b.ratio >= 1 ? b.ratio - 1 : (1 - b.ratio) * 1.5);
       if (da !== db) return da - db;
-      return (a.units || 0) - (b.units || 0);
+      return a.kwh - b.kwh;
     });
     /* The largest that would still fit under the ceiling, kept separate so
        the panel can answer "how big could this go" without the card
@@ -4949,7 +5368,8 @@
     var out = {}, kk;
     for (kk in base) if (base.hasOwnProperty(kk)) out[kk] = base[kk];
     for (kk in o) if (o.hasOwnProperty(kk)) out[kk] = o[kk];
-    if (priced) out.usd = v.dcPerKwh * out.kwh;
+    /* Product sizing is presentation only; installed pricing comes from the server. */
+    out.priced = false;
     return out;
   }
 
@@ -5036,11 +5456,11 @@
      caught, and the ones that are not caught are worse. The card says the
      C&I programme is not on file rather than borrowing a residential one.
      ══════════════════════════════════════════════════════════════════ */
-  var ITC_RATE = 0.30;
+  /* Incentive rates are owned by /api/price-site. */
   /* ComEd's VPP programme rate. A planning figure carried by this platform,
      not a published tariff — Rider VPP / BYODLR is still before the ICC —
      so the stack labels it as such rather than as revenue. */
-  var VPP_PER_KW_YEAR = 150;
+  /* Value-stack rates are owned by /api/price-site. */
   var _cardFlag = "";
 
   /* "$1.0M", "$715k" — a customer reads magnitude, not digits. */
@@ -5115,46 +5535,20 @@
             (Math.round((pk.hours || 0) * 10) / 10) + ' hours \u00b7 no product picked yet')]);
     }
     if (est) {
-      var VS = window.OmegaValueStack;
-      var cost = est.total.base;
-      var kwhFit = fit ? fit.kwh : est.kwh;
-      var inc = VS ? VS.incentives({ capexUsd: cost, kwh: kwhFit, itcRate: ITC_RATE,
-                                     rebatePerKwh: VS.COMED_REBATE.perKwh,
-                                     rebateName: "ComEd storage rebate" })
-                   : { items: [], total: cost * ITC_RATE, flags: [] };
-      var net = Math.max(0, cost - inc.total);
-
-      rows.push(["Cost to build", plainMoney(cost), inst ? esc(inst.name) : ""]);
-      for (var ii = 0; ii < inc.items.length; ii++) {
-        rows.push([inc.items[ii].name === "Federal investment tax credit"
-                     ? "Federal tax credit" : "ComEd rebate",
-                   "\u2212" + plainMoney(inc.items[ii].usd),
-                   esc(inc.items[ii].short || inc.items[ii].how || "")]);
+      var cost = est.total.base, financial = est.financial;
+      rows.push(['Cost to build', plainMoney(cost), inst ? esc(inst.name) : '']);
+      if (financial) {
+        var inc = financial.incentives, vs = financial.stack;
+        for(var ii=0; inc && ii<inc.items.length; ii++) {
+          rows.push([esc(inc.items[ii].name), '\u2212' + plainMoney(inc.items[ii].usd),
+            esc(inc.items[ii].short || inc.items[ii].how || '')]);
+        }
+        rows.push(['Net cost', plainMoney(financial.netCostUsd), '']);
+        if(vs && vs.perYear > 0) rows.push(['Earns', plainMoney(vs.perYear) + '/yr', vs.streams.length + ' revenue streams']);
+        var yr = financial.paybackYears;
+        if(yr != null) rows.push(['Pays back in', yr < 1 ? 'under a year' : (Math.round(yr*10)/10) + ' years', 'across the whole stack']);
+        if(inc && inc.flags && inc.flags.length) _cardFlag = inc.flags[0];
       }
-      rows.push(["Net cost", plainMoney(net), net === 0 ? "incentives cover it" : ""]);
-
-      /* Payback now runs on the WHOLE stack, not demand charges alone — the
-         capacity and VPP streams are the reason a site like this pencils, and
-         leaving them out understated it as badly as inventing one would
-         overstate it. Each stream still carries its own source. */
-      var vs = VS ? VS.stack({ kw: sizePick(r).kw,
-                               hours: fit ? fit.hours : sizePick(r).hours,
-                               demandLoPerKwMonth: DEMAND_LO,
-                               demandHiPerKwMonth: DEMAND_HI,
-                               vppPerKwYear: VPP_PER_KW_YEAR }) : null;
-      if (vs && vs.perYear > 0) {
-        rows.push(["Earns", plainMoney(vs.perYear) + "/yr",
-                   vs.streams.length + " revenue streams"]);
-        var yr = net / vs.perYear;
-        rows.push(["Pays back in",
-          (yr < 1 ? "under a year" : (Math.round(yr * 10) / 10) + " years"),
-          "across the whole stack"]);
-      } else if (r.saveHi) {
-        var yrLo = (cost - inc.total) / r.saveHi;
-        rows.push(["Pays back in", Math.max(0, Math.round(yrLo)) + " years",
-                   "on demand charges alone"]);
-      }
-      if (inc.flags.length) _cardFlag = inc.flags[0];
     }
     for (var i = 0; i < rows.length; i++) {
       h += '<div class="dcnRow"><span class="dcnK">' + rows[i][0] + '</span>' +
@@ -5193,15 +5587,10 @@
      The streams that are MISSING are listed too. A total that silently
      omits two of five reads like a complete answer. */
   function valueStackHtml(r) {
-    var VS = window.OmegaValueStack;
-    if (!VS) return "";
-    var pick = sizePick(r);
-    if (pick.kw == null) return "";
-    var fit = fitBest(r);
-    var vs = VS.stack({ kw: pick.kw, hours: fit ? fit.hours : pick.hours,
-                        demandLoPerKwMonth: DEMAND_LO, demandHiPerKwMonth: DEMAND_HI,
-                        vppPerKwYear: VPP_PER_KW_YEAR });
-    if (!vs) return "";
+    var est = _estimates[r.id], financial = est && est.financial;
+    var vs = financial && financial.stack;
+    if (!vs) return '<div class="sec"><h4>Value stack</h4><p class="note">' +
+      (_priceRequests[r.id] ? 'Calculating the value stack…' : 'Price this site to see its value stack.') + '</p></div>';
 
     var h = '<div class="sec"><h4>Value stack</h4>' +
       '<p class="note">What this battery earns in a year, stream by stream, with ' +
@@ -5229,9 +5618,7 @@
 
     /* What the utility charges, both ways. A pro forma carrying only the
        one-off cost is wrong every year after the first. */
-    var uc = VS.utilityCost({ kw: pick.kw,
-                              upgradeUsd: null, upgradeCarried: true,
-                              standbyPerKwMonth: null });
+    var uc = financial.utility;
     h += '<p class="note"><b>Utility cost \u2014 one-off:</b> ' + esc(uc.capexNote) +
          '<br><b>Utility cost \u2014 every year:</b> ' + esc(uc.opexNote) + '</p>';
     return h + '</div>';
@@ -5255,10 +5642,10 @@
         'none, because somebody will quote it.</p></div>';
     }
     var h = head + '<p class="note">The circuit allows <b>' + fmt(f.kw) + ' kW</b>, which ' +
-      'at ' + f.hours + ' h is <b>' + fmt(Math.round(f.target)) + ' kWh</b>. Closest ' +
-      'to that first \u2014 a second enclosure is a second foundation, a second set ' +
-      'of terminations and a second thing to maintain, none of which shows up in a ' +
-      'kWh comparison.' +
+      'at ' + f.hours + ' h is <b>' + fmt(Math.round(f.target)) + ' kWh</b>. One unit of ' +
+      'the closest product first, then stacks \u2014 a second enclosure is a second ' +
+      'foundation, a second set of terminations and a second thing to maintain, none ' +
+      'of which shows up in a kWh comparison.' +
       (f.biggest && f.biggest.kwh > f.target * 1.2
         ? ' The circuit caps power, not energy \u2014 so if you want the most that ' +
           'would fit rather than the right size, it is <b>' + f.biggest.units +
@@ -5294,11 +5681,16 @@
           ? '<div class="fitNote">One unit already exceeds the ' + f.maxHours +
             ' h cap at this kW. It is shown because you cannot buy less than one.</div>'
           : '') +
+        (o.under
+          ? '<div class="fitNote">' + Math.round((1 - o.ratio) * 100) + '% short of the ' +
+            fmt(Math.round(f.target)) + ' kWh target \u2014 ' + (o.units === 1 ? 'the closest single product' : 'one unit fewer than full coverage') + ', at ' +
+            (Math.round(o.hours * 10) / 10) + ' h rather than ' + f.hours + '.</div>'
+          : '') +
         '<div class="fitPrice">' +
           (o.priced
             ? '$' + fmt(Math.round(o.usd)) + '<small> DC block' +
               (o.stale ? ' \u00b7 quote stale' : '') + '</small>'
-            : '<span class="fitNoPrice">no price on file</span>') +
+            : '<span class="fitNoPrice">' + (o.hasPrice ? 'see installed estimate' : 'no price on file') + '</span>') +
         '</div></div>';
     }
     return h + '</div><p class="note">DC block only, at the supplier\u2019s own terms. ' +
@@ -5310,89 +5702,76 @@
            : '') + '</p></div>';
   }
 
-  function computeEstimate(r) {
-    var CM = window.OmegaCostModel;
-    if (!CM || typeof CM.price !== "function") return null;
-
-    var pick = sizePick(r);
-    var assumed = pick.kw == null;
-    var kw = assumed ? ASSUMED_KW : pick.kw;
-    var hours = pick.hours || ASSUMED_HOURS;
-
-    /* Only what this tool actually knows. Everything else stays unanswered
-       so the estimate classes itself honestly instead of inheriting
-       defaults nobody chose. */
-    /* PHASE IS NOT VOLTAGE. This used to test for a phase key of "3p480",
-       which is not one of the three this tool stores ('1', 'split', '3'), so
-       the branch never fired and the voltage was always unknown. Removing it
-       rather than repairing it: three-phase service can be 208 V, 480 V or a
-       primary tie, and the interconnection voltage is a separate question
-       the estimator asks on its own. Guessing it from phase would have put a
-       480 V regime on sites that are nothing of the kind. */
-    /* The org's quote, translated by the shared model — the same function
-       the estimator uses, so the two pages cannot drift. */
-    var rates = CM.ratesFromVendor ? CM.ratesFromVendor(_orgPricing) : null;
-
-    var est = CM.price({
-      rates: rates,
-      kw: kw, hours: hours,
-      volt: "",
-      poiFt: null, padArea: null,
-      soil: "", ahj: "", labor: "",
-      utilityUpgrade: "", carryUpgrade: false,
-      quoteDate: ""
-    });
-    if (!est) return null;
-
-    /* Same shape the estimator posts back, so renderCostBack is unchanged. */
-    return {
-      type: COST_IN, siteId: r.id,
-      total: est.total, perKwh: est.perKwh, perKw: est.perKw,
-      kw: est.kw, kwh: est.kwh,
-      /* Priced from this page, so nothing here has been walked, quoted or
-         answered. That is a Class 5 screen and it should say Class 5 — in
-         the packet, which goes to an engineer or a lender who needs the
-         AACE class to place the number.
-
-         It should NOT say Class 5 to a building owner. "Class 5 — concept
-         screening" is a true statement that carries no meaning outside
-         cost engineering, and a card that has to be translated before it
-         can be used has failed. The plain version travels beside it and is
-         what the card shows; both mean exactly the same thing. */
-      estimateClass: "Class 5 — concept screening",
-      estimateClassPlain: "Early estimate, before anyone has visited. "
-        + "The real number usually lands between 30% below and 50% above this.",
-      estimateClassWhy: assumed
-        ? "No circuit is attributed to this site, so it is priced at an assumed "
-          + ASSUMED_KW.toLocaleString() + " kW for " + ASSUMED_HOURS
-          + " hours. Attribute a circuit and this re-prices against what the feeder will take."
-        : "Priced from the circuit's available " + Math.round(kw).toLocaleString()
-          + " kW at " + hours + " hours, with the site's own drivers still unanswered.",
-      accuracyLow: -0.30, accuracyHigh: 0.50,
-      unanswered: ["interconnection voltage", "distance to the POI",
-                   "utility-side upgrade", "equipment yard", "ground conditions",
-                   "AHJ", "labour basis", "equipment quote date", "duration"],
-      assumedSize: assumed, at: new Date().toISOString(), pricedBy: "sitefinder",
-      /* Costs that are real and NOT in the total — a supplier's block size,
-         a price quoted at their gate. They travel with the estimate into
-         the packet, because a total handed on without them is a number
-         somebody will treat as complete. */
-      exposures: est.exposures || []
-    };
+  var _priceRequests = {};
+  function pricingRequest(r) {
+    var pick = sizePick(r), fit = fitBest(r);
+    return { orgId:ORG === 'demo' ? undefined : ORG,
+      kw:pick.kw == null ? ASSUMED_KW : pick.kw,
+      hours:fit ? fit.hours : (pick.hours || ASSUMED_HOURS),
+      assumedSize:pick.kw == null, volt:'', poiFt:null, padArea:null,
+      soil:'', ahj:'', labor:'', utilityUpgrade:'', carryUpgrade:false, quoteDate:'',
+      site:{id:r.id, address:r.addr || '', feederId:r.feederId || '', positionIsBuilding:!r.approx} };
   }
-
+  function computeEstimate(r) {
+    var user = window.firebase && firebase.auth().currentUser;
+    if (!user) return Promise.reject(new Error('Sign in to price this site.'));
+    var input = pricingRequest(r);
+    return user.getIdToken().then(function(token){
+      return fetch('/api/price-site', {method:'POST', headers:{'Content-Type':'application/json',
+        Authorization:'Bearer ' + token}, body:JSON.stringify(input)});
+    }).then(function(response){
+      return response.json().then(function(est){
+        if (!response.ok) throw new Error(est.error && (est.error.message || est.error) || 'Pricing request failed.');
+        if (!est.total || !est.accuracy || !est.estimateClass) throw new Error('Incomplete pricing response.');
+        est.type = COST_IN; est.siteId = r.id; est.at = est.at || new Date().toISOString();
+        return est;
+      });
+    });
+  }
+  function persistEstimate(id, est) {
+    var saves = window.OmegaSiteSaves;
+    if (saves && saves.isSaved(id)) saves.patch(id, {estimate:est}, function(err){
+      if (err) {
+        var host = document.getElementById('costBack');
+        if(host && host.getAttribute('data-id') === id) host.innerHTML +=
+          '<p class="note">Estimate calculated; shared save not confirmed: ' + esc(err.message || err) + '</p>';
+      }
+    });
+  }
   function priceInPlace(r) {
-    var est = computeEstimate(r);
-    /* No model on the page — the old route still works, and a rep who
-       needs a number today should get one. */
-    if (!est) { costInEstimator(r); return; }
-    _estimates[r.id] = est;
-    var host = document.getElementById("costBack");
-    if (host) host.setAttribute("data-id", r.id);
-    renderCostBack(r.id);
-    /* The card carries the figure too, so a priced site stays marked in the
-       list after the drawer is closed. */
-    try { render(); } catch (e) {}
+    var key = JSON.stringify(pricingRequest(r)), org = ORG;
+    var user = window.firebase && firebase.auth().currentUser;
+    var uid = user && user.uid;
+    var existing = _priceRequests[r.id];
+    if(existing && existing.key === key && existing.uid === uid) return existing.promise;
+    var req = {key:key, uid:uid};
+    _priceRequests[r.id] = req;
+    delete _estimates[r.id];
+    var host = document.getElementById('costBack');
+    if(host && host.getAttribute('data-id') === r.id) host.innerHTML = '<p class="note">Pricing this site…</p>';
+    req.promise = computeEstimate(r).then(function(est){
+      var current = window.firebase && firebase.auth().currentUser;
+      if(_priceRequests[r.id] !== req) return null;
+      if(ORG !== org || !current || current.uid !== uid || JSON.stringify(pricingRequest(r)) !== key) {
+        delete _priceRequests[r.id]; return null;
+      }
+      delete _priceRequests[r.id];
+      _estimates[r.id] = est;
+      try { render(); } catch(e) {}
+      if(ST.sel === r.id || (ST.sel && ST.sel.id === r.id)) { try { openDrawer(r); } catch(e2) {} }
+      var host = document.getElementById('costBack');
+      if(host && host.getAttribute('data-id') === r.id) renderCostBack(r.id);
+      persistEstimate(r.id, est);
+      return est;
+    })['catch'](function(err){
+      if(_priceRequests[r.id] !== req) return null;
+      delete _priceRequests[r.id];
+      var host = document.getElementById('costBack');
+      if(host && host.getAttribute('data-id') === r.id) host.innerHTML =
+        '<p class="note">Estimate unavailable: ' + esc(err.message || err) + '. Press Price this site to retry.</p>';
+      return null;
+    });
+    return req.promise;
   }
 
   /* The old route, kept for the cases the inline path cannot serve: the
@@ -5472,6 +5851,7 @@
     var d = ev.data;
     if (!d || d.type !== COST_IN || !d.siteId) return;
     _estimates[d.siteId] = d;
+    persistEstimate(d.siteId, d);
     var host = document.getElementById("costBack");
     if (host && host.getAttribute("data-id") === d.siteId) renderCostBack(d.siteId);
   });
@@ -5676,7 +6056,8 @@
   function sizePick(r) {
     var cap = sizeCap(r);
     if (cap == null) return { kw: null, kwh: null, hours: DEFAULT_HOURS, cap: null, custom: false };
-    var pickKw = cap, hours = DEFAULT_HOURS, custom = false;
+    var pickKw = r.sz && r.sz.kw > 0 ? Math.min(cap, r.sz.kw) : cap;
+    var hours = DEFAULT_HOURS, custom = false;
     var v = r.sizePick;
     if (v) {
       if (v.kw != null) { pickKw = Math.max(1, Math.min(cap, Math.round(v.kw))); custom = true; }
@@ -5688,14 +6069,17 @@
   function setSize(id, kw, hours) {
     var r = ST.byId[id]; if (!r) return;
     var cap = sizeCap(r);
+    delete _estimates[id];
+    r.estimate = null;
     r.sizePick = {
       kw: kw == null ? null : Math.max(1, Math.min(cap || kw, Math.round(kw))),
-      hours: hours || 2
+      hours: hours || DEFAULT_HOURS
     };
     for (var i = 0; i < ST.saved.length; i++) {
       if (ST.saved[i].id === id) { ST.saved[i].sizePick = r.sizePick; break; }
     }
-    persistSaved();
+    if (isSaved(id) && window.OmegaSiteSaves)
+      window.OmegaSiteSaves.patch(id, { size: r.sizePick, estimate: null }, savedWriteDone);
     redrawDrawer(r);
     try { render(); } catch (e) {}
   }
@@ -5708,7 +6092,7 @@
     var body = document.getElementById("dBody");
     var dw = document.getElementById("drawer");
     if (!body || !dw || dw.className !== "open") return;
-    body.innerHTML = verifyBlock("done", r, {}) + drawerHtml(r);
+    body.innerHTML = drawerHtml(r) + verifyBlock("done", r, {});
     wireDrawer(r);
   }
 
@@ -5878,8 +6262,251 @@
         'team\u2019s holds. Duration is an equipment choice and is not capped: an 8-hour ' +
         'system at this kW still draws this kW.' +
         (pick.custom ? ' <a href="#" data-noselect="1" data-szreset="' + esc(r.id) +
-          '">Reset to the full circuit at ' + DEFAULT_HOURS + ' h</a>' : '') +
+          '">Reset to suggested size at ' + DEFAULT_HOURS + ' h</a>' : '') +
       '</div></div>';
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     CALL THE OWNER
+     Who to call (every number the record knows, each labelled with what
+     it is), what to say (a talk track built from this site's numbers and
+     the lease offer when one has been priced), and where the call went
+     (appended to the saved site's notes, so the next rep sees it). A
+     found owner name or number is saved onto the site record. Nothing
+     here dials: the numbers are tel: links for the phone in the rep's
+     hand.
+     ══════════════════════════════════════════════════════════════════ */
+  function brandName() {
+    var t = window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.tenant;
+    return (t && (t.name || t.brand)) || (ORG === 'demo' ? 'our team' : ORG);
+  }
+  function callContacts(r) {
+    var mk = (window.OmegaSiteMarket && OmegaSiteMarket.cached(r.id)) || {}, saved = window.OmegaSiteSaves ? OmegaSiteSaves.get(r.id) : null;
+    var d = r.detail || {}, out = [], seen = {};
+    function add(role, name, phone, email, note) {
+      name = name || ''; phone = phone || ''; email = email || '';
+      if (!name && !phone && !email) return;
+      var key = (name + '|' + phone).toLowerCase(); if (seen[key]) return; seen[key] = 1;
+      out.push({ role: role, name: name, phone: phone, email: email, note: note || '' });
+    }
+    add('Owner', (saved && saved.ownerName) || (r.owner && r.owner.name) || d.ownerName || (mk.owner && mk.owner.name), (saved && saved.ownerPhone) || (r.owner && r.owner.phone) || (mk.owner && mk.owner.phone), (r.owner && r.owner.email) || (mk.owner && mk.owner.email));
+    if (mk.occupant) add('Business on site', mk.occupant.name, mk.occupant.phone, mk.occupant.email, mk.occupant.kind);
+    (d.brokers || []).forEach(function (b) { add('Listing broker', b.name + (b.firm ? ', ' + b.firm : ''), b.phone, b.email, b.phone ? '' : 'number masked on Crexi \u2014 open the listing and press View phone number'); });
+    if (mk.broker) add('Listing broker', mk.broker.name + (mk.broker.firm ? ', ' + mk.broker.firm : ''), mk.broker.phone, mk.broker.email);
+    if (r.broker && r.broker.name) add('Listing broker', r.broker.name + (r.broker.firm ? ', ' + r.broker.firm : ''), r.broker.phone, r.broker.email);
+    if (r.listingContact && r.listingContact.name) add('Listing contact', r.listingContact.name, r.listingContact.phone, r.listingContact.email);
+    if (!out.length && d.listedBy) add('Listing firm', d.listedBy, '', '', 'main line not on the listing page');
+    return out;
+  }
+  function callScriptText(r) {
+    var pick = sizePick(r), lease = _leases[r.id] && _leases[r.id].result, o = lease && lease.offer, who = callContacts(r);
+    var first = who.length ? who[0] : null, greet = first && first.name ? first.name.split(',')[0].split(' ')[0] : 'there';
+    var lines = [];
+    lines.push('Hi ' + greet + ', this is ' + (ST.rep || '[your name]') + ' with ' + brandName() + '. I\u2019m calling about ' + (r.addr || 'your property') + (r.city ? ' in ' + r.city : '') + '.');
+    lines.push('We develop battery storage on commercial sites in Cook County, and this property has a strong grid position' +
+      (r.circ && r.circ.known && r.circ.sellable > 0 ? ' \u2014 the circuit serving it has about ' + fmt(r.circ.sellable) + ' kW available today.' : '.'));
+    if (pick.kw != null) lines.push('We would like to lease a small fenced pad' + (o ? ', about ' + o.leasedAcres + ' acres,' : '') + ' for a ' + fmt(pick.kw) + ' kW / ' + fmt(pick.kwh) + ' kWh battery. We pay for the equipment, the interconnection, the permits and the insurance; you keep title and your own meter, and nothing changes on your power bill.');
+    else lines.push('We would like to lease a small fenced pad for a battery. We pay for the equipment, the interconnection, the permits and the insurance; you keep title and your own meter, and nothing changes on your power bill.');
+    if (o) lines.push('You would receive about ' + money(o.monthly.base) + ' a month, rising ' + o.escalatorPct.base + '% a year, for ' + o.termYears + ' years \u2014 around ' + money(o.termTotal.base) + ' over the term.');
+    else lines.push('You would receive a fixed monthly rent, escalating, over a 15-year term. I can send the numbers today.');
+    if (first && /broker/i.test(first.role)) lines.push('I know the property is listed. A ground lease can run alongside a sale and adds income to the asset; would the owner take a 20-minute call about it?');
+    else lines.push('Would you be open to a 20-minute walk of the site next week? I will bring a one-page proposal.');
+    lines.push('If not now: who else should I speak to about the property, and is there a better time?');
+    return lines.join('\n\n');
+  }
+  function callSheetHtml(r) {
+    var who = callContacts(r), saved = window.OmegaSiteSaves ? OmegaSiteSaves.get(r.id) : null;
+    var notes = (saved && saved.notes && Object.prototype.toString.call(saved.notes) === '[object Array]') ? saved.notes.filter(function (n) { return n && /^Call\b/.test(n.t || ''); }).slice(-6).reverse() : [];
+    var h = '<div class="sec"><h4>Call the owner</h4>';
+    if (who.length) {
+      h += '<div class="callWho">' + who.map(function (c) {
+        return '<b>' + esc(c.role) + '</b><span>' + (c.name ? esc(c.name) : '<i class="pend">name unknown</i>') +
+          (c.phone ? ' \u00b7 <a data-noselect="1" href="tel:' + esc(String(c.phone).replace(/[^+0-9]/g, '')) + '">' + esc(c.phone) + '</a>' : '') +
+          (c.email ? ' \u00b7 <a data-noselect="1" href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a>' : '') +
+          (c.note ? ' <small>' + esc(c.note) + '</small>' : '') + '</span>';
+      }).join('') + '</div>';
+    } else {
+      h += '<p class="note">No name or number on file for this site yet.</p>';
+    }
+    var ownerKnown = who.some(function (c) { return c.role === 'Owner' && c.phone; });
+    if (!ownerKnown) h += '<p class="note">' + (who.some(function (c) { return c.role === 'Owner'; }) ? 'The owner\u2019s number is not on file' : 'The owner is not on file') +
+      ' \u2014 owner identity and phone are <i class="pend">pending API integration</i> (Crexi Intelligence, county records). ' +
+      (who.some(function (c) { return /broker/i.test(c.role); }) ? 'Call the listing broker: they represent the seller and can carry a ground-lease conversation to them.' : 'A listing broker, if there is one, is the fastest route to the owner.') +
+      '</p>';
+    h += '<div class="leaseForm"><label>Owner name<input id="callOwnerName" type="text" placeholder="found elsewhere?" style="width:150px"></label>' +
+      '<label>Owner phone<input id="callOwnerPhone" type="tel" placeholder="(312) 555-0100" style="width:130px"></label>' +
+      '<button type="button" id="callOwnerSave">Save to this site</button></div>';
+    h += '<p class="note" style="margin-top:10px"><b>What to say</b> \u2014 built from this site\u2019s numbers' + (_leases[r.id] && _leases[r.id].result ? ' and the lease offer you priced' : '; price the lease offer (step 7) to put the rent in it') + '.</p>' +
+      '<textarea id="callScript" class="callScript" readonly>' + esc(callScriptText(r)) + '</textarea>' +
+      '<p><button type="button" id="callCopy">Copy script</button></p>';
+    h += '<p class="note" style="margin-top:10px"><b>Log the call</b> \u2014 goes on the site\u2019s notes for the team' + (isSaved(r.id) ? '' : '; logging stars the site') + '.</p>' +
+      '<div class="leaseForm"><label>Outcome<select id="callOutcome"><option>Left a message</option><option>Spoke \u2014 interested</option><option>Spoke \u2014 call back</option><option>Spoke \u2014 not interested</option><option>Wrong number</option><option>No answer</option></select></label>' +
+      '<label>Who<input id="callWho" type="text" placeholder="name" style="width:130px" value="' + esc(who.length ? who[0].name.split(',')[0] : '') + '"></label></div>' +
+      '<textarea id="callNote" rows="2" placeholder="What they said, what happens next" style="width:100%;box-sizing:border-box;font:12px/1.4 inherit;padding:6px;border:1px solid var(--line);border-radius:6px"></textarea>' +
+      '<p><button type="button" id="callLogSave">Log call</button></p>';
+    if (notes.length) h += '<ul class="callLog">' + notes.map(function (n) {
+      var when = typeof n.ts === 'number' ? new Date(n.ts).toISOString() : String(n.ts || '');
+      return '<li>' + esc(n.t) + '<br><small>' + esc(when.slice(0, 10)) + (n.rep ? ' \u00b7 ' + esc(n.rep) : '') + '</small></li>';
+    }).join('') + '</ul>';
+    return h + '</div>';
+  }
+  function redrawCall(r) {
+    var host = document.getElementById("siteCall");
+    if (host && (ST.sel && ST.sel.id ? ST.sel.id : ST.sel) === r.id) { host.innerHTML = callSheetHtml(r); wireDrawer(r); }
+  }
+  /* Owner details and call notes live on the saved site. An unsaved site is
+     starred first, with the fields on the create, so the note is never lost. */
+  function persistCallFields(r, fields, cb) {
+    if (!window.OmegaSiteSaves) { cb(); return; }
+    if (!isSaved(r.id)) {
+      var record = JSON.parse(JSON.stringify(r)), k;
+      for (k in fields) if (fields.hasOwnProperty(k)) record[k] = fields[k];
+      if (fields.ownerName) record.owner = { name: fields.ownerName, phone: fields.ownerPhone || '' };
+      OmegaSiteSaves.save(record, function (err) { savedWriteDone(err); try { render(); } catch (e) {} cb(err); });
+      return;
+    }
+    OmegaSiteSaves.patch(r.id, fields, function (err) { savedWriteDone(err); cb(err); });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     THE HOST LEASE OFFER
+     "Rent us the corner of your lot for this battery and we pay you X a
+     month for N years." The size comes from the sizer above; the rent
+     comes from /api/site-lease, where the rate card lives (CLAUDE.md, IP
+     protection: pricing never runs in the browser). The offer is cached
+     per site against the inputs that produced it, so re-opening the
+     drawer never re-asks and changing the size always does.
+     ══════════════════════════════════════════════════════════════════ */
+  var _leases = {}, _leaseBusy = {};
+  function leaseInputs(r) {
+    var pick = sizePick(r), acresEl = document.getElementById("leaseAcres"), termEl = document.getElementById("leaseTerm");
+    var acres = acresEl && acresEl.value !== '' ? Number(acresEl.value) : (r.leaseAcres || null);
+    var term = termEl && termEl.value !== '' ? Number(termEl.value) : (r.leaseTerm || 15);
+    return { orgId: ORG === 'demo' ? undefined : ORG, kw: pick.kw, kwh: pick.kwh,
+      acres: acres > 0 ? acres : undefined, termYears: term > 0 ? term : 15,
+      site: { id: r.id, addr: r.addr || '', city: r.city || '', owner: (r.owner && r.owner.name) || '',
+              feederId: r.feederId || '', type: r.type || '', lotAcres: r.lotAcres || null } };
+  }
+  function leaseHtml(r) {
+    var pick = sizePick(r), lease = _leases[r.id], busy = _leaseBusy[r.id];
+    var h = '<div class="sec"><h4>Host lease offer</h4>';
+    if (pick.kw == null) {
+      return h + '<p class="note">Size the battery first. The lease offer prices the pad and the interconnected kW, so it needs a system to price.</p></div>';
+    }
+    h += '<p class="note">What you can offer the owner to host <b>' + fmt(pick.kw) + ' kW / ' + fmt(pick.kwh) + ' kWh</b> here: ' +
+      'a fenced pad on their lot, a fixed monthly rent, escalating, over the term. They own nothing, buy nothing and keep their meter.</p>' +
+      '<div class="leaseForm">' +
+        '<label>Pad acres<input id="leaseAcres" type="number" min="0.1" step="0.05" placeholder="auto" value="' + (r.leaseAcres != null ? esc(r.leaseAcres) : '') + '"></label>' +
+        '<label>Term (years)<input id="leaseTerm" type="number" min="5" max="30" step="1" value="' + esc(r.leaseTerm || 15) + '"></label>' +
+        '<button type="button" id="leaseQuote"' + (busy ? ' disabled' : '') + '>' + (lease ? 'Re-price offer' : 'Prepare offer') + '</button>' +
+      '</div>';
+    if (busy) h += '<p class="note" role="status">Pricing the lease\u2026</p>';
+    else if (lease && lease.error) h += '<p class="note bad">' + esc(lease.error) + '</p>';
+    else if (lease && lease.result) {
+      var o = lease.result.offer;
+      /* The size or the inputs moved since this was priced: say so above
+         the old numbers rather than letting a stale rent read as current. */
+      if (lease.key !== JSON.stringify(leaseInputs(r)))
+        h += '<p class="note bad">The battery size or the lease inputs changed since this offer was priced. Re-price before opening the proposal.</p>';
+      h += '<div class="leaseTiles">' +
+        '<div><b>' + money(o.monthly.base) + '</b>per month, year one</div>' +
+        '<div><b>' + money(o.annual.base) + '</b>per year, escalating ' + o.escalatorPct.base + '%</div>' +
+        '<div><b>' + money(o.termTotal.base) + '</b>over ' + o.termYears + ' years</div></div>' +
+        '<p class="note">Open with the base figure. Walk-away <b>' + money(o.monthly.low) + '</b>/mo; a site with a confirmed feeder and clean title can command <b>' +
+        money(o.monthly.high) + '</b>/mo. About ' + o.leasedAcres + ' acres' + (o.acresDerived ? ' (estimated from the system size)' : '') + '. ' +
+        (o.floored && o.floored.length ? 'Small system: the floor rent applies. ' : '') + esc(lease.result.disclaimer) + '</p>' +
+        '<p><button type="button" id="leaseOpen">Open the proposal</button> ' +
+        '<button type="button" id="leaseCopy">Copy summary</button></p>';
+    }
+    return h + '</div>';
+  }
+  function redrawLease(r) {
+    var host = document.getElementById("siteLease");
+    if (host && (ST.sel && ST.sel.id ? ST.sel.id : ST.sel) === r.id) { host.innerHTML = leaseHtml(r); wireDrawer(r); }
+  }
+  function leaseInPlace(r, opts) {
+    opts = opts || {};
+    if (!window.OmegaSiteLease) return;
+    var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+    if (selId !== r.id) select(r.id);
+    var input = leaseInputs(r), key = JSON.stringify(input), cached = _leases[r.id];
+    if (input.acres) r.leaseAcres = input.acres; r.leaseTerm = input.termYears;
+    if (cached && cached.key === key && cached.result) {
+      if (opts.open) OmegaSiteLease.openProposal(cached.result, { host: (r.owner && r.owner.name) || '', rep: ST.rep || '', address: r.addr });
+      else redrawLease(r);
+      return;
+    }
+    if (_leaseBusy[r.id]) return;
+    _leaseBusy[r.id] = true; redrawLease(r);
+    var org = ORG;
+    OmegaSiteLease.quote(input, function (err, result) {
+      delete _leaseBusy[r.id];
+      if (org !== ORG) return;
+      _leases[r.id] = err ? { key: key, error: err.message } : { key: key, result: result };
+      redrawLease(r);
+      if (!err && opts.open) OmegaSiteLease.openProposal(result, { host: (r.owner && r.owner.name) || '', rep: ST.rep || '', address: r.addr });
+      if (err && opts.open) { var st = document.getElementById("leaseQuote"); if (!st) alert(err.message); }
+    });
+  }
+
+  /* ── COST TO US: the company's own deployment cost, both routes ────────
+     The build (the same cost model as Price this site), plus site control:
+     buy the building at the asking price, or lease the pad at the host rent
+     the section above offers the owner. /api/project-cost composes it; this
+     shows it and never adds a number of its own. */
+  var _projects = {}, _projectBusy = {};
+  function askOf(r) {
+    var d = r.detail || {};
+    if (typeof d.askPrice === 'number' && isFinite(d.askPrice)) return d.askPrice;
+    if (r.listed && typeof r.listed.askPrice === 'number' && isFinite(r.listed.askPrice)) return r.listed.askPrice;
+    return null;
+  }
+  function projectInputs(r) {
+    var body = pricingRequest(r), askEl = document.getElementById("projectAsk");
+    var ask = askEl && askEl.value !== '' ? Number(askEl.value) : (r.askOverride != null ? r.askOverride : askOf(r));
+    body.orgId = ORG === 'demo' ? undefined : ORG;
+    body.askPrice = ask != null && isFinite(ask) && ask >= 0 ? ask : null;
+    body.termYears = r.leaseTerm || 15; body.acres = r.leaseAcres || undefined; body.sqft = r.sqft || undefined;
+    return body;
+  }
+  function projectHtml(r) {
+    var pick = sizePick(r), pj = _projects[r.id], busy = _projectBusy[r.id];
+    var h = '<div class="sec"><h4>Cost to us</h4>';
+    if (pick.kw == null) return h + '<p class="note">Size the battery first. The deployment cost prices the build for a system, then the building or the pad.</p></div>';
+    h += '<p class="note">What it costs <b>us</b> to put <b>' + fmt(pick.kw) + ' kW / ' + fmt(pick.kwh) + ' kWh</b> here: the build, plus the building at its asking price, or the pad at the rent offered above over ' + esc(r.leaseTerm || 15) + ' years.</p>' +
+      '<div class="leaseForm">' +
+        '<label>Asking price $<input id="projectAsk" type="number" min="0" step="1000" placeholder="pending API integration" value="' + (r.askOverride != null ? esc(r.askOverride) : (askOf(r) != null ? esc(askOf(r)) : '')) + '"></label>' +
+        '<button type="button" id="projectQuote"' + (busy ? ' disabled' : '') + '>' + (pj && pj.result ? 'Re-cost' : 'Cost this project') + '</button>' +
+      '</div>';
+    if (busy) h += '<p class="note" role="status">Costing the project…</p>';
+    else if (pj && pj.error) h += '<p class="note bad">' + esc(pj.error) + '</p>';
+    else if (pj && pj.result) {
+      if (pj.key !== JSON.stringify(projectInputs(r))) h += '<p class="note bad">The battery size or the inputs changed since this was costed. Re-cost before quoting it.</p>';
+      h += OmegaProjectCost.html(pj.result, { tiles: 'leaseTiles' }) + '<p><button type="button" id="projectCopy">Copy summary</button></p>';
+    }
+    return h + '</div>';
+  }
+  function redrawProject(r) {
+    var host = document.getElementById("siteProject");
+    if (host && (ST.sel && ST.sel.id ? ST.sel.id : ST.sel) === r.id) { host.innerHTML = projectHtml(r); wireDrawer(r); }
+  }
+  function projectInPlace(r) {
+    if (!window.OmegaProjectCost) return;
+    var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+    if (selId !== r.id) select(r.id);
+    var input = projectInputs(r), key = JSON.stringify(input), cached = _projects[r.id];
+    if (input.askPrice != null) r.askOverride = input.askPrice;
+    if (cached && cached.key === key && cached.result) { redrawProject(r); return; }
+    if (_projectBusy[r.id]) return;
+    _projectBusy[r.id] = true; redrawProject(r);
+    var org = ORG;
+    OmegaProjectCost.quote(input, function (err, result) {
+      delete _projectBusy[r.id];
+      if (org !== ORG) return;
+      _projects[r.id] = err ? { key: key, error: err.message } : { key: key, result: result };
+      redrawProject(r);
+      setTimeout(function () { var sec = document.getElementById('siteProject'); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 30);
+    });
   }
 
   function packetBlockHtml(r) {
@@ -5939,47 +6566,6 @@
       '</p></div>';
   }
 
-  function scoreBlockHtml(v, lat, lon) {
-    if (!v.feederId || !v.state || !v.state.known) return "";
-    var near = nearestKnown(lat, lon);
-    var r = near ? near.row : null;
-
-    /* A record shaped like a card, from the circuit plus whatever building
-       is known at this point. */
-    var pseudo = {
-      type: r ? r.type : "Industrial",
-      sqft: r ? r.sqft : null,
-      lotAcres: (v.parcel && v.parcel.acres) || (r ? r.lotAcres : null),
-      peakKw: r ? r.peakKw : null,
-      annualKwh: r ? r.annualKwh : null,
-      sz: v.size, circ: v.state,
-      grainFactor: 1
-    };
-    var battery = score(pseudo);
-    var large = loadScore(pseudo);
-
-    var why = [];
-    why.push("<b>" + fmt(v.state.sellable) + " kW</b> deliverable after ComEd\u2019s " +
-             "queue and your team\u2019s claims.");
-    if (!pseudo.peakKw) {
-      why.push("No building load is known at this point, so the battery score " +
-               "reflects the CIRCUIT only. A real peak usually lowers it \u2014 " +
-               "the load is normally the smaller of the two ceilings.");
-    } else {
-      why.push("Modelled peak <b>" + fmt(pseudo.peakKw) + " kW</b>" +
-               (pseudo.annualKwh && pseudo.annualKwh.src === "metered"
-                 ? " from metered consumption." : ", estimated from floor area."));
-    }
-    if (!v.addressResolved) {
-      why.push("Read from " + esc(v.grain) + ", not the circuit itself, so treat " +
-               "both scores as indicative.");
-    }
-
-    return '<div class="sec"><h4>Score</h4><div class="grid2">' +
-      g("Battery deal", '<b>' + battery + '</b> / 100') +
-      g("Large load / data centre", '<b>' + large + '</b> / 100') +
-      '</div><p class="note">' + why.join(" ") + '</p></div>';
-  }
 
   /* FOUR DIFFERENT ANSWERS, NOT TWO.
 
@@ -6025,139 +6611,16 @@
   }
 
   function showViability(v, lat, lon) {
-    var short = String(v.label).split(",").slice(0, 2).join(",");
     head(v.headline, v.why);
-    if (!v.feederId) {
-      document.getElementById("dAddr").textContent = short;
-      document.getElementById("dSub").textContent =
-        v.key === "serviceerror" ? "Lookup failed \u2014 not a verdict"
-                                 : "No circuit published here";
-      document.getElementById("dBody").innerHTML =
-        '<div class="sec"><p class="note">' + esc(v.why) + '</p></div>' +
-        (v.probeUrl ? '<div class="sec"><h4>The request that was sent</h4>' +
-          '<pre class="diagBox">' + esc(v.probeUrl) + '</pre>' +
-          '<p class="note"><a href="' + esc(v.probeUrl) + '" target="_blank" ' +
-          'rel="noopener"><b>Open this request in a new tab</b></a>. If ComEd ' +
-          'returns features, the bug is in how this page reads the answer. If ' +
-          'it returns none, the request is wrong.</p></div>' : '') +
-        /* WHAT EVERY LAYER ACTUALLY SAID.
-           These were being collected and thrown away unless every single
-           layer failed. A mixed result — some layers erroring, some genuinely
-           empty — fell through to the generic "no capacity published" message
-           and hid the errors completely, which is how a broken lookup has
-           been reading as a dead site. */
-        ((v.errors && v.errors.length) || (v.empties && v.empties.length)
-          ? '<div class="sec"><h4>What each layer said</h4><pre class="diagBox">' +
-            esc(
-              (v.errors || []).join("\n") +
-              ((v.errors || []).length && (v.empties || []).length ? "\n" : "") +
-              ((v.empties || []).length
-                ? "0 features on: L" + v.empties.join(", L") : "")
-            ) + '</pre>' +
-            '<p class="note">An ERROR line is the service refusing or ' +
-            'rejecting the query \u2014 that is a broken lookup, not an empty ' +
-            'site. A "0 features" line is a real answer. If they are mixed, ' +
-            'the errors are the thing to fix first.</p></div>'
-          : '') +
-        (v.key === "serviceerror" || v.key === "suspicious" ? '' :
-        '<div class="sec"><h4>What to do with this</h4>' +
-        '<p class="note">ComEd was asked directly about this point and returned ' +
-        'nothing on any published layer. Two things to check before concluding ' +
-        'there is no service: whether the address geocoded to the right building, ' +
-        'and whether the site is inside ComEd territory at all. If both hold, ' +
-        'this circuit simply is not in the published set \u2014 ask ComEd for the ' +
-        'feeder serving the meter.</p></div>');
-      document.getElementById("drawer").className = "open";
-      return;
-    }
-    var rec = {
-      id: "addr:" + lat.toFixed(5) + "," + lon.toFixed(5),
-      addr: short, city: "", state: "", zip: "",
-      lat: lat, lon: lon,
-      type: "Site lookup", subtype: "Address search \u00b7 no building record",
-      sqft: null, lotAcres: null, annualKwh: null,
-      owner: { name: "", phone: "", email: "", mailing: "" },
-      photos: [], assessedValue: null, lastSale: { date: "", price: null },
-      feederId: v.feederId, sub: v.sub,
-      nameplate: v.state.nameplate, queue: v.state.queue,
-      circ: v.state, sz: v.size, src: "lookup"
-    };
-    /* ── THE LOOKUP RECORD IS A RECORD LIKE ANY OTHER ──────────────────
-       It was built by hand and handed straight to drawerHtml, which expects
-       what enrich() produces. So it crashed on the first derived field it
-       met — r.claims.length, and once that was guarded, r.cst.note — and
-       the drawer rendered its header and nothing else. Address search is
-       the front door of this tool and it was throwing every time.
-
-       Guarding fields one at a time is losing: the next field added to the
-       drawer breaks it again. It goes through enrich() now, the same path
-       every searched row takes, so it HAS cst, claims, mine and whatever is
-       added next. enrich re-registers the feeder from the record's own
-       published figures first, which this record carries, so nothing is
-       lost by the round trip.
-
-       Wrapped, because a lookup that renders a plainer drawer is worth more
-       than one that renders none. */
-    try { rec = enrich(rec); }
-    catch (eEnrich) {
-      rec.cst = rec.cst || (L.circuitStatus ? L.circuitStatus(rec.circ) : { label: "", color: "#8a94a0", note: "" });
-      rec.claims = rec.claims || [];
-      rec.mine = rec.mine || [];
-      if (window.console) console.warn("lookup record could not be enriched", eEnrich);
-    }
+    var id = 'site:' + lat.toFixed(5) + ',' + lon.toFixed(5);
+    var rec = ST.current && ST.current.id === id ? ST.current : recordFromLookup(v, lat, lon);
+    rec.lookupNote = v.why || '';
+    rec.lookupFailed = v.key === 'serviceerror' || v.key === 'suspicious';
+    rec = enrich(rec);
+    ST.current = rec;
     ST.byId[rec.id] = rec;
     ST.sel = rec;
-    document.getElementById("dAddr").textContent = short;
-    document.getElementById("dSub").textContent =
-      "Circuit " + v.feederId + (v.sub ? "  \u00b7  " + v.sub : "") +
-      (v.addressResolved ? "" : "  \u00b7  layer " + v.layerId + ", not address-resolved");
-    document.getElementById("dBody").innerHTML =
-      '<div class="sec">' +
-        '<div class="hero"><div class="big">' +
-          (v.size.kw == null ? "&mdash;" : fmt(v.size.kw)) + ' <small>kW</small></div>' +
-        '<div class="cap">' + esc(v.headline) + '</div></div>' +
-        '<p class="note">This is what the circuit will accept, not a sized ' +
-        'battery. There is no building record at this address, so nothing here ' +
-        'accounts for the customer\u2019s own peak demand \u2014 which is usually ' +
-        'the smaller of the two and usually the one that binds. Pull a bill or ' +
-        'an interval file before quoting.</p>' +
-      '</div>' +
-      '<div class="sec"><h4>How this circuit was matched</h4>' +
-        '<p class="note">' + esc(matchLine(v)) + '</p></div>' +
-      reportCardHtml(v, lat, lon) +
-      saveBlockHtml(v, lat, lon) +
-      mapsLinksHtml({ lat: lat, lon: lon, approx: v.approxPin,
-                      geoStreet: v.geoStreet, geoInterp: v.geoInterp }) +
-      scoreBlockHtml(v, lat, lon) +
-      comedRecordHtml(v.rows && v.rows[0] ? v.rows[0].a : null, v.covering) +
-      parcelBlockHtml(v.parcel) +
-      loadBlockHtml(lat, lon) +
-      '<div class="sec"><h4>Other developers in the queue</h4>' +
-        '<p class="note">' + esc(queueLine(v.state)) + '</p></div>' +
-      '<div class="sec"><h4>Your team\u2019s claims on this circuit</h4>' +
-        '<p class="note">' + esc(ourClaimsLine(v.state)) + '</p></div>' +
-      '<div class="sec"><h4>Nearest substation</h4>' +
-        '<p class="note">' + (v.sub
-          ? esc(v.sub) + ' feeds this circuit. ComEd publishes the substation ' +
-            'name but not its location, so the distance to it is not something ' +
-            'this map can measure yet.'
-          : 'ComEd does not name a substation for this circuit.') + '</p></div>' +
-      drawerHtml(rec);
-    document.getElementById("drawer").className = "open";
-    wireDrawer(rec);
-
-    var sb = document.getElementById("dSave");
-    if (sb) sb.onclick = function () {
-      var id = "site:" + lat.toFixed(5) + "," + lon.toFixed(5);
-      if (isSaved(id)) unsaveSite(id);
-      else starSite(ST.current && ST.current.id === id
-                      ? ST.current : recordFromLookup(v, lat, lon));
-      /* Re-render both: the button label and the list have to agree, and the
-         saved site should appear in the list immediately rather than after
-         the next pan. */
-      showViability(v, lat, lon);
-      render();
-    };
+    openDrawer(rec);
   }
 
   function closeDrawer() {
@@ -6209,18 +6672,27 @@
     var st = r.circ, sz = r.sz, h = [];
     var live = liveClaims(r);
 
+    h.push('<nav class="siteSteps" aria-label="Site workflow">' +
+      '<button type="button" data-site-section="siteEnergy">1. Energy</button>' +
+      '<button type="button" data-site-section="siteBattery">2. Size battery</button>' +
+      '<button type="button" data-site-section="siteCircuit">3. Feeder</button>' +
+      '<button type="button" data-site-section="siteHold">4. Hold</button>' +
+      '<button type="button" data-site-section="siteCall">5. Call &amp; contacts</button>' +
+      '<button type="button" data-site-section="siteEstimate">6. Estimate</button>' +
+      '<button type="button" data-site-section="siteLease">7. Lease offer</button>' +
+      '<button type="button" data-site-section="siteProject">8. Cost to us</button></nav>');
+
     /* The report card leads, then the save control, then the detail. A rep
        opening a card wants the verdict first and the paperwork after. */
     h.push(reportCardForRecord(r));
-    h.push(gridAtlasHtml(r));
-    h.push(phaseBlockHtml(r));
-    h.push(packetBlockHtml(r));
-    h.push(mapsLinksHtml(r));
+    if (r.lookupNote) h.push('<div class="sec"><p class="note">' +
+      (r.lookupFailed ? '<b>Capacity lookup failed; this is not a verdict on the site.</b> ' : '') +
+      esc(r.lookupNote) + '</p></div>');
     h.push(saveRowHtml(r));
 
     /* -- headline ------------------------------------------------------- */
     var pick = sizePick(r);
-    h.push('<div class="sec"><div class="hero">' +
+    h.push('<div class="sec" id="siteBattery"><h4>Size the battery</h4><div class="hero">' +
       '<div class="big" id="szBig">' + (pick.kw == null ? "&mdash;" : fmt(pick.kw)) +
         ' <small>kW</small> &nbsp;/&nbsp; ' + (pick.kwh == null ? "&mdash;" : fmt(pick.kwh)) + ' <small>kWh</small></div>' +
       '<div class="cap">' + (sz.kw == null
@@ -6243,8 +6715,17 @@
         '/kW-month. Screening range, not a quote.</div>' : '') +
       '</div>');
 
+    h.push('<div id="siteLease">' + leaseHtml(r) + '</div>');
+    h.push('<div id="siteProject">' + projectHtml(r) + '</div>');
+    h.push('<div id="siteEstimate">' + packetBlockHtml(r) + '</div>');
+    h.push('<div id="siteCall">' + callSheetHtml(r) + '</div>');
+    h.push('<div id="siteMarket">' + marketHtml(r) + '</div>');
+    h.push(phaseBlockHtml(r));
+    h.push(mapsLinksHtml(r));
+    h.push(gridAtlasHtml(r));
+
     /* -- circuit -------------------------------------------------------- */
-    h.push('<div class="sec"><h4>Circuit ' + esc(r.feederId) + (r.sub ? ' \u00b7 ' + esc(r.sub) : '') + '</h4>' +
+    h.push('<div class="sec" id="siteCircuit"><h4>Circuit ' + esc(r.feederId || 'not yet identified') + (r.sub ? ' \u00b7 ' + esc(r.sub) : '') + '</h4>' +
       meterHtml(st, true) + keysHtml() +
       '<div class="grid2" style="margin-top:13px">' +
         g("Hosting capacity", st.known ? fmt(st.nameplate) + " kW" : "unknown") +
@@ -6295,7 +6776,7 @@
 
     /* -- claim form ----------------------------------------------------- */
     var own = mineOf(r).length ? mineOf(r)[0] : null;
-    h.push('<div class="sec"><h4>' + (own ? 'Your claim on this site' : 'Claim capacity here') + '</h4>');
+    h.push('<div class="sec" id="siteHold"><h4>' + (own ? 'Your claim on this site' : 'Hold capacity for this site') + '</h4>');
 
     /* NO CIRCUIT, NO FORM.
 
@@ -6327,6 +6808,8 @@
              "could be anywhere along it."
          : r.approxKind === "city and ZIP"
            ? "Only the city and ZIP matched."
+         : r.approxKind === "area centre"
+           ? "The listing address could not be geocoded, so this is the centre of the other listings in its ZIP."
            : "Only the ZIP matched, so this is the centre of a postcode.") +
         ' The circuit shown above is for THIS point, not necessarily for the ' +
         'address you typed \u2014 a hold placed on it would take capacity off ' +
@@ -6334,10 +6817,7 @@
         'are on looking free. Drop a pin on the actual building, or confirm ' +
         'the serving feeder with ComEd, then claim.' +
         '</div></div>');
-      return h.join("");
-    }
-
-    if (!r.feederId) {
+    } else if (!r.feederId) {
       h.push('<div class="warn">' +
         '<b>No circuit is attributed to this site yet, so capacity cannot be ' +
         'held.</b> A hold has to name the wire it is against. Zoom to 14+ so ' +
@@ -6349,8 +6829,7 @@
             'published record below for the identifier they use.'
           : '') +
         '</div></div>');
-      return h.join("");
-    }
+    } else {
 
     /* Say it HERE, where the hold is actually made. A rep about to take
        340 kW off a circuit needs to know whether anyone else will see it.
@@ -6379,7 +6858,7 @@
          trying to claim a circuit. A hold is a number of kilowatts, not a
          multiple of anything. */
       '<div><label for="rKw">Hold (kW)</label><input id="rKw" type="number" min="1" step="1" value="' +
-        (own ? own.kw : Math.max(0, Math.min(sz.kw || 0, st.sellable || 0))) + '"></div>' +
+        (own ? own.kw : Math.max(0, Math.min(sizePick(r).kw || 0, st.sellable || 0))) + '"></div>' +
       '<div><label for="rSt">Stage</label><select id="rSt">' + statusOpts(own && own.status) + '</select></div>' +
       '<div class="full"><label for="rNote">Note</label>' +
         '<input id="rNote" type="text" placeholder="Who you spoke to, what is next" value="' +
@@ -6396,6 +6875,8 @@
         ' days. Filing an application makes it firm with no expiry. Either way it comes off the ' +
         'circuit for everyone on the team immediately.</div>' +
       '</div>');
+
+    }
 
     /* -- property -------------------------------------------------------
        Every row is always present, and a missing value reads "N/A" rather
@@ -6434,6 +6915,8 @@
                  ? "Street matched, not the address \u2014 could be anywhere along it"
                : r.approxKind === "city and ZIP"
                  ? "Only the city and ZIP matched \u2014 not the building"
+               : r.approxKind === "area centre"
+                 ? "Centre of the listings in its ZIP \u2014 not the building"
                  : "ZIP centroid \u2014 not the building") + '</b>'
           : r.geoStreet
               ? '<b style="color:var(--red)">Street-level only</b> \u2014 the ' +
@@ -6479,30 +6962,6 @@
           'not read off a meter. Confirm against twelve months of bills before pricing.</div>' : '') +
       '</div>');
 
-    /* -- owner ----------------------------------------------------------
-       Owner of record and listing contact are different people and are kept
-       apart. Merging them put a development-agency officer in the owner slot
-       on every EDC-sourced card. */
-    h.push('<div class="sec"><h4>Owner</h4><div class="grid2">' +
-      g("Name", esc(r.owner.name || "N/A")) +
-      g("Phone", r.owner.phone ? esc(r.owner.phone) : "N/A") +
-      g("Email", r.owner.email ? esc(r.owner.email) : "N/A") +
-      '</div>' +
-      (r.owner.name ? "" :
-        '<p class="note">No owner of record. Parcel files carry it; this record ' +
-        'came from a listing feed, which does not.</p>') +
-      '</div>');
-
-    if (r.listingContact && r.listingContact.name) {
-      h.push('<div class="sec"><h4>Listing contact</h4><div class="grid2">' +
-        g("Name", esc(r.listingContact.name)) +
-        g("Organisation", esc(r.listingContact.org || "N/A")) +
-        g("Phone", r.listingContact.phone ? esc(r.listingContact.phone) : "N/A") +
-        g("Email", r.listingContact.email ? esc(r.listingContact.email) : "N/A") +
-        '</div><p class="note">Whoever published this site to the Illinois EDC ' +
-        'feed \u2014 usually a broker or an economic-development officer, not the ' +
-        'owner. They can point you at the owner; they are not one.</p></div>');
-    }
 
     return h.join("");
   }
@@ -6528,6 +6987,46 @@
   }
 
   function wireDrawer(r) {
+    var cc = document.getElementById("callCopy");
+    if (cc) cc.onclick = function () {
+      var ta = document.getElementById("callScript");
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(function () { cc.textContent = 'Copied'; }, function () { ta.select(); });
+      else ta.select();
+    };
+    var co = document.getElementById("callOwnerSave");
+    if (co) co.onclick = function () {
+      var name = document.getElementById("callOwnerName").value.trim(), phone = document.getElementById("callOwnerPhone").value.trim();
+      if (!name && !phone) return;
+      r.owner = r.owner || {}; if (name) r.owner.name = name; if (phone) r.owner.phone = phone;
+      r.ownerPhone = phone || r.ownerPhone;
+      var fields = {}; if (name) fields.ownerName = name; if (phone) fields.ownerPhone = phone;
+      persistCallFields(r, fields, function () { redrawCall(r); try { render(); } catch (e) {} });
+    };
+    var cl = document.getElementById("callLogSave");
+    if (cl) cl.onclick = function () {
+      var outcome = document.getElementById("callOutcome").value, who = document.getElementById("callWho").value.trim(), text = document.getElementById("callNote").value.trim();
+      var note = 'Call \u00b7 ' + outcome + (who ? ' \u00b7 ' + who : '') + (text ? ' \u00b7 ' + text : '');
+      cl.disabled = true;
+      persistCallFields(r, { note: note }, function () { cl.disabled = false; redrawCall(r); });
+    };
+    var lq = document.getElementById("leaseQuote");
+    if (lq) lq.onclick = function () { leaseInPlace(r, { open: false }); };
+    var lo = document.getElementById("leaseOpen");
+    if (lo) lo.onclick = function () { leaseInPlace(r, { open: true }); };
+    var lc = document.getElementById("leaseCopy");
+    if (lc) lc.onclick = function () {
+      var lease = _leases[r.id];
+      if (!lease || !navigator.clipboard) return;
+      navigator.clipboard.writeText(OmegaSiteLease.summary(lease.result) + ' ' + r.addr).then(function () { lc.textContent = 'Copied'; });
+    };
+    var pq = document.getElementById("projectQuote");
+    if (pq) pq.onclick = function () { projectInPlace(r); };
+    var pc = document.getElementById("projectCopy");
+    if (pc) pc.onclick = function () {
+      var pj = _projects[r.id];
+      if (!pj || !pj.result || !navigator.clipboard) return;
+      navigator.clipboard.writeText(OmegaProjectCost.summary(pj.result) + ' ' + r.addr).then(function () { pc.textContent = 'Copied'; });
+    };
     /* Save/remove, from the card's own panel. Re-opens so the button label
        and the list agree immediately. */
     var pk = document.getElementById("dPacket");
@@ -6631,11 +7130,18 @@
       var status = document.getElementById("rSt").value;
       var note = document.getElementById("rNote").value;
       if (!ST.rep) { say("Set your name in the top right first \u2014 a claim with no owner is not a claim.", "err"); return; }
+      if (!isFinite(kw) || kw <= 0 || !r.feederId || r.approx) {
+        say("Choose a positive battery size and resolve the site's feeder before holding capacity.", "err"); return;
+      }
+      save.disabled = true;
       L.reserve({
         feederId: r.feederId, siteId: r.id, address: r.addr, lat: r.lat, lon: r.lon,
         kw: kw, status: status, note: note, rep: ST.rep, hours: sizePick(r).hours
       }, function (err) {
+        save.disabled = false;
         if (err) { say(err.message, "err"); return; }
+        if (sizePick(r).kw !== kw) setSize(r.id, kw, sizePick(r).hours);
+        if (!isSaved(r.id)) starSite(r); else persistSaved();
         say(status === "prospect"
           ? "Saved as a prospect. No capacity is held \u2014 " + r.feederId +
             " is still open to the rest of the team."
@@ -6663,6 +7169,7 @@
      whole list is re-enriched, not just the row that was edited — that is
      the entire point of the ledger. */
   function refreshAll(keepId) {
+    keepId = keepId && keepId.id ? keepId.id : keepId;
     for (var i = 0; i < ST.rows.length; i++) enrich(ST.rows[i]);
     render();
     if (keepId && ST.byId[keepId]) openDrawer(ST.byId[keepId]);
@@ -6784,6 +7291,21 @@
      Anything added to the drawer from here gets a working click for free,
      which is the property this file did not have five minutes ago. */
   function onDelegatedClick(e) {
+    var sectionButton = e.target.closest && e.target.closest('[data-site-section]');
+    if (sectionButton) {
+      e.preventDefault(); e.stopPropagation();
+      var section = document.getElementById(sectionButton.getAttribute('data-site-section'));
+      if (section) section.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      return;
+    }
+    var marketButton = e.target.closest && e.target.closest('[data-market-id]');
+    if (marketButton) {
+      e.preventDefault(); e.stopPropagation();
+      var marketId = marketButton.getAttribute('data-market-id');
+      var marketRow = ST.byId[marketId] || (ST.sel && ST.sel.id === marketId ? ST.sel : null);
+      if (marketRow) lookupMarket(marketRow, true);
+      return;
+    }
     /* The star must not also open the card — a rep flagging three sites in a
        row should not have three panels open behind them. */
     /* The address is a link to satellite view. Clicking it must open Google,
@@ -6807,12 +7329,38 @@
     if (rs) {
       e.preventDefault(); e.stopPropagation();
       var rr = ST.byId[rs.getAttribute("data-szreset")];
-      if (rr) { rr.sizePick = null;
+      if (rr) { rr.sizePick = null; rr.estimate = null; delete _estimates[rr.id];
         for (var si = 0; si < ST.saved.length; si++)
           if (ST.saved[si].id === rr.id) { ST.saved[si].sizePick = null; break; }
-        persistSaved();
+        if (isSaved(rr.id) && window.OmegaSiteSaves)
+          window.OmegaSiteSaves.patch(rr.id, { size: null, estimate: null }, savedWriteDone);
         redrawDrawer(rr); try { render(); } catch (er) {}
       }
+      return;
+    }
+    var callb = e.target.closest && e.target.closest("[data-call-id]");
+    if (callb) {
+      e.preventDefault(); e.stopPropagation();
+      var callr = ST.byId[callb.getAttribute("data-call-id")];
+      if (callr) {
+        var selNow = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+        if (selNow !== callr.id) select(callr.id);
+        setTimeout(function () { var sec = document.getElementById('siteCall'); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60);
+      }
+      return;
+    }
+    var lb = e.target.closest && e.target.closest("[data-lease-id]");
+    if (lb) {
+      e.preventDefault(); e.stopPropagation();
+      var lr = ST.byId[lb.getAttribute("data-lease-id")];
+      if (lr) leaseInPlace(lr, { open: true });
+      return;
+    }
+    var pb = e.target.closest && e.target.closest("[data-project-id]");
+    if (pb) {
+      e.preventDefault(); e.stopPropagation();
+      var pr = ST.byId[pb.getAttribute("data-project-id")];
+      if (pr) projectInPlace(pr);
       return;
     }
     var cb = e.target.closest && e.target.closest("[data-cost-id]");
@@ -6895,6 +7443,8 @@
       this.className = "on";
       document.body.className = "v-" + name;
       ST.view = name;
+      document.getElementById('catalogBar').hidden = name !== 'catalog';
+      if (name === 'catalog') loadCatalog(catalogPage);
       if (name === "ledger") { closeDrawer(); renderLedger(); }
       else {
         /* Starred is the list restricted to sites the rep kept. It reuses
@@ -6906,12 +7456,12 @@
     };
   }
 
-  var fids = ["fKw", "fType", "fSqft", "fCirc", "fSort"];
+  var fids = ["fKw", "fScore", "fHost", "fHostMax", "fEnergy", "fType", "fSqft", "fCirc", "fSort"];
   /* What each pill looks like when nobody has touched it. A pill only
      lights up when it is actually narrowing the search — the commonest way
      to be confused by a search tool is to forget a filter is on, and the
      second commonest is for it to shout about one that is not. */
-  var F_DEFAULT = { fKw:"250", fType:"", fSqft:"20000", fCirc:"", fSort:"kw" };
+  var F_DEFAULT = { fKw:"0", fScore:"0", fHost:"0", fHostMax:"", fEnergy:"", fType:"", fSqft:"20000", fCirc:"", fSort:"score" };
   function paintFilterPills() {
     for (var i = 0; i < fids.length; i++) {
       var el = document.getElementById(fids[i]);
@@ -6922,10 +7472,21 @@
     }
   }
   for (var f = 0; f < fids.length; f++) {
-    document.getElementById(fids[f]).onchange = function () { paintFilterPills(); render(); };
-    document.getElementById(fids[f]).oninput  = function () { paintFilterPills(); render(); };
+    var filterControl = document.getElementById(fids[f]);
+    if (filterControl.tagName === 'SELECT') {
+      filterControl.onchange = function () { paintFilterPills(); render(); };
+    } else {
+      /* A second render on blur replaces the card between pointerdown and
+         click, swallowing the first click after typing a filter. */
+      filterControl.oninput = function () { paintFilterPills(); render(); };
+    }
   }
   paintFilterPills();
+
+  document.getElementById("clearFilters").onclick = function () {
+    for (var i = 0; i < fids.length; i++) document.getElementById(fids[i]).value = F_DEFAULT[fids[i]];
+    paintFilterPills(); render();
+  };
 
   /* Type list is built from what actually came back, so a rep is never
      offered a filter that returns nothing. */
@@ -6944,7 +7505,7 @@
 
   map.on("moveend", function () {
     refreshLayers();
-    if (ST.view === "ledger" || ST.view === "list") return;
+    if (ST.view === 'catalog' || ST.view === "ledger" || ST.view === "list") return;
     /* A pan the TOOL performed is not the rep moving the map. Following a
        card to its pin would otherwise re-run the viewport search, rebuild
        the list under them and quite possibly drop the card they just
@@ -7213,7 +7774,7 @@
           r.score, r.loadScore, r.cst.label,
           r.queueRefreshed || "", r.comedCovering || "",
           r.addressResolved === false ? "no" : "yes",
-          r.approx ? "ZIP centroid" : r.geoStreet ? "street level"
+          r.approx ? (r.approxKind === "area centre" ? "ZIP area centre" : "ZIP centroid") : r.geoStreet ? "street level"
             : r.geoInterp ? "interpolated" : r.geoSrc || "parcel centroid",
           (function () { var ph = phaseOf(r); return ph ? PHASES[ph.phase].label : ""; })(),
           (function () { var ph = phaseOf(r);
@@ -7284,6 +7845,25 @@
     catch (e) { localMode("Firestore unavailable: " + (e.message || e)); return; }
 
     firebase.auth().onAuthStateChanged(function (u) {
+      catalogEpoch++;
+      ST.catalog.forEach(function(r){delete ST.byId[r.id];});
+      if(ST.view === 'catalog') { closeDrawer(); document.getElementById('cards').innerHTML = ''; drawMarkers([]); }
+      ST.catalog = []; catalogPage = 0;
+      document.getElementById('catalogImport').hidden = !(u && /@(clearsky-usa\.com|csebuilders\.com)$/i.test(u.email || ''));
+      document.getElementById('catalogDetails').hidden = document.getElementById('catalogImport').hidden;
+      document.getElementById('catalogStatus').textContent = 'Sign in to browse the shared listing catalog.';
+      L.attach(null, '', function () {});
+      if (L.setIdentity) L.setIdentity('', '');
+      if (window.OmegaSiteScore) window.OmegaSiteScore.reset();
+      if (window.OmegaSiteMarket && window.OmegaSiteMarket.reset) window.OmegaSiteMarket.reset();
+      marketBusy = {};
+      /* Clear the old account before resolving the next namespace, including
+         signed-out and malformed-email paths. Late callbacks are epoch-guarded. */
+      if (window.OmegaSiteSaves) {
+        if (!_savedUnsubscribe) _savedUnsubscribe = window.OmegaSiteSaves.onChange(syncSavedView);
+        window.OmegaSiteSaves.detach();
+      }
+      _savedAuth = u ? u.uid : "";
       if (!u) {
         localMode("Signed out. The shared ledger needs a signed-in user \u2014 " +
                   "claims made now stay on this machine and nobody else can " +
@@ -7325,7 +7905,10 @@
         return;
       }
 
-      if (mine !== ORG) {
+      /* Staff may preview a requested tenant; the server verifies authorization.
+         Ordinary tenant users continue to resolve from their own email domain. */
+      var staffPreview = /^(clearsky-usa\.com|csebuilders\.com)$/.test(mine) && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(ORG);
+      if (mine !== ORG && !staffPreview) {
         var was = ORG;
         ORG = mine;
         attachNow(u, "Opened with ?org=" + was + " but signed in as " +
@@ -7335,6 +7918,13 @@
       }
 
       function attachNow(u2, note) {
+        if (ST.view === 'catalog') loadCatalog(0);
+        if (window.OmegaSiteSaves) {
+          window.OmegaSiteSaves.init(ORG, u2, function (err) {
+            if (_savedAuth !== u2.uid) return;
+            savedWriteDone(err);
+          }, db);
+        }
         /* The ledger stamps every claim with this, and the rules pin it.
            Set BEFORE attach so a claim made in the first second still
            carries an identity. */
@@ -7406,7 +7996,19 @@
     };
   }
 
-  L.onChange(function () { /* stream repaints handled by refreshAll */ });
+  var ledgerRenderTimer = null;
+  L.onChange(function () {
+    if (ledgerRenderTimer) return;
+    ledgerRenderTimer = setTimeout(function () {
+      ledgerRenderTimer = null;
+      refreshAll();
+      var id = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+      if (id && ST.byId[id]) refreshScoredDrawer(ST.byId[id]);
+      if (L.mode() !== 'shared' && !SYNC_NOTE) {
+        localMode('The shared ledger is not confirmed. Holds are not confirmed for the team.');
+      }
+    }, 0);
+  });
 
   /* ---------------------------------------------------------------- boot */
   connect();

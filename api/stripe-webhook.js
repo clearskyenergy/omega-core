@@ -4,9 +4,12 @@
                              only after GRACE_DAYS; a cron or the master
                              console enforces the flip — never on first miss)
    customer.subscription.* → tier from price metadata `tier`, subscriptionDue
+   …except a supplier's CUSTOMER's Editor Lite subscription, which
+   api/customer-subscribe.js webhook() takes first (customers/{id}.editorLite)
    Vercel must NOT parse the body (we need the raw bytes for the signature). */
 'use strict';
 var A = require('./_lib/admin');
+var CustomerLite = require('./customer-subscribe');
 
 function rawBody(req) { return new Promise(function (res, rej) { var c = []; req.on('data', function (d) { c.push(d); }); req.on('end', function () { res(Buffer.concat(c)); }); req.on('error', rej); }); }
 
@@ -17,12 +20,25 @@ module.exports = function (req, res) {
     var evt;
     try { evt = stripe.webhooks.constructEvent(buf, req.headers['stripe-signature'], process.env.STRIPE_WEBHOOK_SECRET); }
     catch (e) { return res.status(400).send('bad signature'); }
+    /* A tenant's CUSTOMER paying for Editor Lite (api/customer-subscribe.js,
+       metadata kind 'customer-editor-lite', or a Stripe customer on the
+       stripe_customers pointer) is answered FIRST and never reaches the
+       tenant branches below: those would patch the SUPPLIER's billing/current
+       and a customer cancelling would set the supplier's tier to 'trial'.
+       Anything else returns null here and runs below exactly as before. */
+    return CustomerLite.webhook(evt, stripe).then(function (lite) {
+    if (lite) return res.status(200).json({ received: true, customerEditorLite: lite });
     var obj = evt.data.object, FV = A.FieldValue(), db = A.db();
     var orgId = (obj.metadata && obj.metadata.orgId) || null;
-    var byCustomer = orgId ? Promise.resolve(orgId)
-      : db.collectionGroup('billing').where('stripeCustomerId', '==', obj.customer).limit(1).get().then(function (q) { return q.empty ? null : q.docs[0].ref.parent.parent.id; });
+    /* Not every event object HAS a `customer` field: a Customer itself
+       (customer.created / .updated from a payment link or the Stripe
+       dashboard) does not, and `where('==', undefined)` throws — a 500 that
+       Stripe retries for days. No customer id, no lookup: acknowledged. */
+    var cus = typeof obj.customer === 'string' && obj.customer ? obj.customer : '';
+    var byCustomer = orgId ? Promise.resolve(orgId) : !cus ? Promise.resolve(null)
+      : db.collectionGroup('billing').where('stripeCustomerId', '==', cus).limit(1).get().then(function (q) { return q.empty ? null : q.docs[0].ref.parent.parent.id; });
     return byCustomer.then(function (org) {
-      if (!org) return res.status(200).json({ ignored: 'no org for ' + obj.customer });
+      if (!org) return res.status(200).json({ ignored: cus ? 'no org for ' + cus : 'no customer on ' + evt.type });
       var ref = db.collection('omega_orgs').doc(org).collection('billing').doc('current');
       var patch = { updatedAt: FV.serverTimestamp(), lastStripeEvent: evt.type };
       if (evt.type === 'invoice.paid') {
@@ -44,6 +60,7 @@ module.exports = function (req, res) {
       }
       return null;
     }).then(function () { res.status(200).json({ received: true }); });
+    });
   }).catch(function (e) { console.error('[stripe-webhook]', e); res.status(500).end(); });
 };
 

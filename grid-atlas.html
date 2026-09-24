@@ -24,11 +24,11 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <style>
   :root{
-    /* SAP-style light theme */
-    --bg:#f5f6f8; --panel:#ffffff; --panel2:#f0f2f5; --line:#dfe3e8;
-    --ink:#1a2733; --muted:#5b6b7b; --dim:#9aa7b4;
-    --amp:#0a6ed1;        /* signature accent — SAP-style blue-grey, calm not gold */
-    --accent:#0a6ed1;
+    /* Full-screen atlas shell: quiet map, one focused inspection drawer. */
+    --bg:#d9e0e6; --panel:#102030; --panel2:#162b3c; --line:#36516a;
+    --ink:#ecf5fb; --muted:#a9bfd0; --dim:#718aa0;
+    --amp:#4ed4d0;
+    --accent:#4ed4d0;
     --tx:#e0533d;         /* transmission */
     --sub:#c98a2b;        /* substations */
     --plant:#1aa39a;      /* generation */
@@ -36,19 +36,20 @@
     --ev:#3d7fd6;         /* ev chargers */
     --bess:#2ea043;       /* storage */
     --ok:#2ea043; --warn:#c98a2b; --bad:#e0533d;
-    --topbar:#ffffff; --topbar-ink:#1a2733;
+    --topbar:#0d1b2a; --topbar-ink:#ecf5fb;
     --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden}
-  #map{position:absolute;top:60px;left:0;right:0;bottom:0;background:#e8ebef}
-  .leaflet-container{background:#e8ebef;font-family:var(--sans)}
+  body{position:fixed;inset:0;width:100%}
+  #map{position:absolute;top:72px;left:330px;right:0;bottom:0;background:#d9e0e6}
+  .leaflet-container{background:#d9e0e6;font-family:var(--sans)}
 
-  /* OMEGA topbar — clean white (SAP style) */
-  #topbar{position:absolute;top:0;left:0;right:0;height:60px;z-index:1200;
-    display:flex;align-items:center;gap:16px;padding:0 20px;
-    background:var(--topbar);border-bottom:1px solid var(--line);box-shadow:0 1px 3px rgba(26,39,51,.06)}
+  /* Compact full-screen atlas header. */
+  #topbar{position:absolute;top:0;left:0;right:0;height:72px;z-index:1200;
+    display:flex;align-items:center;gap:16px;padding:0 28px;
+    background:var(--topbar);border-bottom:1px solid var(--line);box-shadow:0 2px 12px rgba(0,0,0,.28)}
   .tb-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
   .tb-omega{height:30px;width:auto;display:block;border-radius:7px}
   .tb-logo-txt{color:var(--ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
@@ -72,15 +73,23 @@
     border-radius:20px;padding:6px 12px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;user-select:none;white-space:nowrap}
   .modechip.on{background:rgba(255,176,32,.16);border-color:var(--amp)}
 
-  /* Left layer rail */
-  #rail{position:absolute;left:12px;top:72px;z-index:1150;width:216px;
-    background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;
-    box-shadow:0 14px 40px rgba(0,0,0,.5);max-height:calc(100vh - 96px);display:flex;flex-direction:column}
-  #layers{overflow-y:auto;flex:1 1 auto}
-  .rail-h{padding:10px 12px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;
+  /* One left drawer: Project/site inspection first, layer controls in Settings. */
+  #rail{position:absolute;left:0;top:72px;bottom:0;z-index:1150;width:330px;
+    background:var(--panel);border-right:1px solid var(--line);border-radius:0;overflow:hidden;
+    box-shadow:0 14px 40px rgba(0,0,0,.42);display:flex;flex-direction:column}
+  #rail.site-active #settingsShell{display:none}
+  #rail:not(.site-active) #panel{display:none!important}
+  #sideTabs{height:48px;display:flex;align-items:stretch;border-bottom:1px solid var(--line);background:#0d1b2a;flex:0 0 auto}
+  .side-tab{flex:1;border:0;border-right:1px solid var(--line);background:transparent;color:var(--muted);font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+  .side-tab:last-child{border-right:0}.side-tab.on{color:var(--accent);background:rgba(78,212,208,.08)}
+  #settingsShell{display:flex;flex:1;min-height:0;flex-direction:column;overflow-y:auto}
+  #settingsShell #baseSwitch{position:static;flex-wrap:wrap;max-width:none;margin:12px;flex-shrink:0}
+  #settingsShell #eiaPanel{position:static;width:auto;max-height:none;overflow:visible;margin:12px;box-shadow:none;flex-shrink:0}
+  #layers{flex:0 0 auto}
+  .rail-h{padding:10px 14px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;
     text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex:0 0 auto}
   .rail-h .cnt{color:var(--dim)}
-  #presets{flex:0 0 auto;padding:9px 10px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  #presets{display:none}
   .preset-lbl{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
   #presetChips{display:flex;flex-wrap:wrap;gap:5px}
   .pchip{font-size:11px;padding:5px 9px;border-radius:14px;border:1px solid var(--line);background:var(--panel);
@@ -89,12 +98,12 @@
   .pchip.on{background:var(--amp);border-color:var(--amp);color:#fff;font-weight:700}
   .pchip .pi{font-size:11px}
   #railFilter{position:relative;flex:0 0 auto;border-bottom:1px solid var(--line)}
-  #railFilter input{width:100%;height:30px;border:0;background:var(--panel2);color:var(--ink);
+  #railFilter input{width:100%;height:36px;border:0;background:var(--panel2);color:var(--ink);
     padding:0 26px 0 12px;font-size:12px;font-family:var(--sans);outline:none}
   #railFilter input::placeholder{color:var(--dim)}
   #railFilter .fx{position:absolute;right:9px;top:7px;color:var(--dim);font-size:11px;cursor:pointer}
   /* category header (collapsible) */
-  .cat-h{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;
+  .cat-h{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;
     background:var(--panel2);border-bottom:1px solid var(--line);user-select:none}
   .cat-h:hover{background:var(--line)}
   .cat-h .car{font-size:9px;color:var(--muted);transition:transform .15s;width:8px}
@@ -102,7 +111,7 @@
   .cat-h .cnm{flex:1;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
   .cat-h .con{font-family:var(--mono);font-size:9px;color:var(--amp)}
   .cat-body.collapsed{display:none}
-  .lyr{display:flex;align-items:center;gap:10px;padding:8px 12px 8px 20px;cursor:pointer;border-bottom:1px solid rgba(30,43,58,.5)}
+  .lyr{display:flex;align-items:center;gap:10px;padding:9px 14px 9px 22px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.06)}
   .lyr:last-child{border-bottom:0}
   .lyr:hover{background:var(--panel2)}
   .lyr.hidden{display:none}
@@ -116,17 +125,27 @@
   .lyr:not(.off) .tick:after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
     border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
 
-  /* Analysis panel (right) */
-  #panel{position:absolute;right:12px;top:72px;bottom:12px;z-index:1150;width:326px;
-    background:var(--panel);border:1px solid var(--line);border-radius:11px;
-    display:flex;flex-direction:column;box-shadow:0 14px 40px rgba(0,0,0,.5);transform:translateX(360px);
-    transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+  /* Site analysis occupies the same drawer—no competing floating cards. */
+  #panel{display:flex;position:static;z-index:auto;width:auto;min-height:0;flex:1;
+    background:var(--panel);border:0;border-radius:0;flex-direction:column;box-shadow:none;transform:none}
   #panel.open{transform:none}
-  .p-h{padding:13px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+  .p-h{padding:15px 16px 10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
   .p-h .dot{width:8px;height:8px;border-radius:50%;background:var(--amp);box-shadow:0 0 10px var(--amp)}
   .p-h .ti{font-weight:700;font-size:13px}
   .p-h .x{margin-left:auto;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px}
-  .p-b{padding:6px 14px 16px;overflow:auto;flex:1}
+  .p-b{padding:6px 16px 18px;overflow:auto;flex:1}
+  #projectControl{padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.025)}
+  #projectControl label{display:block;font:10px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+  #projectSelect{width:100%;height:38px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--ink);padding:0 10px;font:600 13px var(--sans);outline:0}
+  #fiberRouteControls{padding:12px 16px;border-bottom:1px solid var(--line);font-size:12px;line-height:1.5}
+  #fiberRouteControls h3{margin:0 0 9px;font-size:16px}
+  #fiberRouteControls label{display:block;margin:7px 0 3px;color:var(--muted)}
+  #fiberRouteControls select{width:100%;padding:8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:5px}
+  #fiberRouteControls p{margin:9px 0}#fiberRouteControls a{color:var(--accent)}
+  #fiberRouteControls small{color:var(--muted)}
+  #panel{overflow-y:auto;display:block}#panel .p-b{overflow:visible}#panel .p-h{display:none}
+  #fiberEvidenceHost .omega-fiber-panel{box-shadow:none!important;border-radius:0!important;width:auto!important;max-width:none!important;max-height:none!important}
+  @media(max-width:720px){.tb-logo-txt,.tb-sep,.tb-portal,.tb-badge{display:none}.tb-title{font-size:14px}#search{flex:1;width:auto;min-width:80px}.tb-back{padding:7px}.modechip{padding:6px}.tb-spacer{display:none}}
   .coord{font-family:var(--mono);font-size:11px;color:var(--muted);margin:8px 0 14px;padding:8px 10px;
     background:var(--panel2);border:1px solid var(--line);border-radius:7px}
   .sec{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:16px 0 8px}
@@ -148,7 +167,7 @@
   .empty .t{font-size:13px;color:var(--muted);line-height:1.5}
 
   /* legend / status bottom-left */
-  #status{position:absolute;left:12px;bottom:12px;z-index:1100;font-family:var(--mono);font-size:10px;
+  #status{position:absolute;left:354px;bottom:12px;z-index:1100;font-family:var(--mono);font-size:10px;
     color:var(--muted);background:rgba(15,22,32,.88);border:1px solid var(--line);border-radius:7px;padding:7px 11px;
     display:flex;gap:12px;align-items:center;max-width:calc(100vw - 24px);overflow:hidden}
   #status .d{width:6px;height:6px;border-radius:50%;background:var(--ok)}
@@ -180,11 +199,11 @@
   .leaflet-bar a:hover{background:var(--line)}
 
   @media(max-width:720px){
-    #rail{width:170px;top:60px;left:8px}
-    #panel{width:calc(100vw - 16px);right:8px;top:auto;bottom:8px;height:52vh}
-    #panel.open{transform:none}
+    #topbar{height:60px;padding:0 12px;gap:9px}#map{top:60px;left:0;bottom:46vh}
+    #rail{width:100%;left:0;top:auto;bottom:0;height:46vh}
     #search{width:38vw}
-    .brand .sub{display:none}
+    .brand .sub{display:none}#status{left:12px;bottom:calc(46vh + 12px);max-width:calc(100vw - 24px)}
+    #baseSwitch{bottom:calc(46vh + 52px);left:auto;right:8px;max-width:90vw}
   }
   .pin-drop{cursor:crosshair!important}
   #eiaPanel{position:absolute;left:12px;bottom:52px;z-index:1150;width:236px;
@@ -218,26 +237,32 @@
   <a href="/" id="tb-back-link" class="tb-back">← Platform</a>
 </div>
 
-<div id="rail">
-  <div class="rail-h"><span>Grid Layers</span><span class="cnt" id="railCnt">—</span></div>
-  <div id="presets">
-    <div class="preset-lbl">Quick views</div>
-    <div id="presetChips"></div>
+<div id="rail" class="site-active">
+  <div id="sideTabs" role="tablist" aria-label="Grid Atlas controls">
+    <button class="side-tab on" data-tab="site" role="tab">Project</button>
+    <button class="side-tab" data-tab="settings" role="tab">Settings <span id="railCnt">—</span></button>
   </div>
-  <div id="railFilter"><input id="lyrFilter" placeholder="Filter layers…" autocomplete="off"><span class="fx" id="lyrFilterClear" style="display:none">✕</span></div>
-  <div id="layers"></div>
-  <div class="rail-h" style="border-top:1px solid var(--line)"><span>Voltage</span></div>
-  <div id="voltLegend"></div>
+  <div id="settingsShell">
+    <div class="rail-h"><span>Selected layers</span><span class="cnt">Toggle map data</span></div>
+    <div id="presets"><div id="presetChips"></div></div>
+    <div id="railFilter"><input id="lyrFilter" placeholder="Filter layers…" autocomplete="off"><span class="fx" id="lyrFilterClear" style="display:none">✕</span></div>
+    <div id="layers"></div>
+    <div class="rail-h" style="border-top:1px solid var(--line)"><span>Voltage</span></div>
+    <div id="voltLegend"></div>
+  </div>
 </div>
 
 <div id="eiaPanel" style="display:none"></div>
 
 <div id="panel">
   <div class="p-h"><span class="dot"></span><span class="ti">Site Analysis</span><span class="x" id="pClose">✕</span></div>
+  <div id="projectControl"><label for="projectSelect">Screen for</label><select id="projectSelect" aria-label="Project type"></select></div>
+  <div id="fiberRouteControls"></div>
+  <div id="fiberEvidenceHost"></div>
   <div class="p-b" id="pBody">
     <div class="empty">
       <div class="big">◎</div>
-      <div class="t">Drop a pin anywhere on the map to score interconnection proximity — nearest substation, transmission voltage, generation, data-center clusters, and EV/BESS context.</div>
+      <div class="t">Choose a project type, then drop a pin anywhere on the map. Grid Atlas keeps fiber evidence, interconnection proximity, and data-center context together without implying service availability.</div>
     </div>
   </div>
 </div>
@@ -599,11 +624,131 @@ var LAYERS = {
     label:function(a){return a.name||"Cable landing station";},
     meta:function(a){return a.operator||"submarine cable landing";}
   },
+  /* ── US LONG-HAUL FIBER CORRIDORS — the national backbone layer ───────
+     This pointed at /data/intertubes-backbone.geojson, a file that was never
+     built, so the layer has been silently empty since it was written. It now
+     loads scripts/build-fiber-backbone.js's output: 317 intercity corridors
+     ROUTED OVER THE ROAD NETWORK, because US long-haul fiber is laid in
+     transportation rights-of-way (Durairajan et al., SIGCOMM 2015) and a
+     chord between two cities crosses country no conduit crosses.
+
+     53 of the corridors carry that paper's citation and its count of carriers
+     sharing the conduit. The rest assert a corridor and assert nothing about
+     who is in it — that is a licensed-data question and it belongs in
+     fiber_licensed, not here. */
   backbone: {
-    name:"LH Backbone (InterTubes)", color:"#FF3D9A", on:false, geom:"line", role:"connectivity",
-    url:"__STATIC__", staticFile:"/data/intertubes-backbone.geojson",
-    label:function(a){return a.name||a.link||"Long-haul conduit";},
-    meta:function(a){return (a.owner||a.carriers||"backbone conduit");}
+    name:"Historical road-derived corridors (not fiber evidence)", color:"#FF3D9A", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/us-longhaul-fiber.geojson",
+    label:function(a){return a.name||"Long-haul corridor";},
+    meta:function(a){return 'Historical/synthetic road alignment; not a published cable path. Excluded from site evidence. '+(a.meta||'');},
+    /* Cited conduits draw hot; inferred corridors draw cooler, so the map
+       never lets a corridor pass for a surveyed route at a glance. */
+    styleFor:function(a){
+      return a.src==='intertubes'
+        ? {color:"#FF3D9A", weight:2.0, opacity:0.60, dashArray:"6,5"}
+        : {color:"#C2417A", weight:2.0, opacity:0.50, dashArray:"6,5"};
+    }
+  },
+  /* ── DATA CENTER REGISTRY — where fiber already terminates ────────────
+     3,885 US facilities merged from Compute Atlas (CC BY 4.0), the Global
+     Data Center Map and the CYBR capstone. The `datacenters` layer above is
+     live OpenStreetMap and stays; this is the registry, which has proposed
+     and under-construction sites OSM will never carry and states capacity.
+     ATTRIBUTION IS REQUIRED by two of the three sources and is on every
+     feature as `attrib`; it is rendered in the popup, not just carried. */
+  dc_registry: {
+    name:"Data Centers (registry)", color:"#A78BFA", on:false, geom:"point", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/us-datacenters.geojson",
+    label:function(a){return a.name||a.operator||"Data center";},
+    meta:function(a){return (a.meta||"data center")+(a.attrib?" · "+a.attrib:"");},
+    /* Operating sites read solid; proposed and cancelled read faint, because
+       an announcement is not a building and this dataset carries plenty of
+       both. Radius follows stated capacity where a source stated it. */
+    styleFor:function(a){
+      var live=a.status==='operational', build=a.status==='under_construction';
+      var mw=+a.mw||0;
+      return {
+        color: a.status==='cancelled' ? "#64748B" : live ? "#A78BFA" : build ? "#38BDF8" : "#7C6BA8",
+        radius: mw>0 ? Math.max(4,Math.min(16,Math.sqrt(mw)*0.7)) : 4,
+        opacity: live?0.7:(build?0.6:0.3),
+        weight: live?1.5:1
+      };
+    }
+  },
+  /* ── PUBLIC FIBER EVIDENCE — the bundled inventory, as native layers ──
+     The vendored control has its own checkboxes; these exist as well so the
+     four datasets appear in the Grid Layers rail like everything else AND so
+     analyze() can read them out of `cache` for the Site Analysis section.
+
+     They are DELIBERATELY ABSENT from fiberKeys. Adding them to the nearest-
+     fiber winner would move Fiber Confidence and the DC Site Report on every
+     covered site — published numbers changing because a dataset arrived,
+     which is the thing this integration was told not to do. They get their
+     own section instead, where the source and its limits are stated. */
+  pf_routes: {
+    name:"Fiber routes (public, optical)", color:"#24D6BB", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/fiber/osm-fiber-routes.geojson",
+    label:function(a){return a.name||a.operator||"Optical fiber route";},
+    meta:function(a){return (a.operator||"operator unknown")+" · "+(a.operational_status||"status unknown")+" · OSM";}
+  },
+  pf_unknown: {
+    name:"Telecom lines (medium unknown)", color:"#8292A6", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/fiber/osm-telecom-routes-unknown.geojson",
+    label:function(a){return a.name||"Telecom line";},
+    meta:function(a){return "medium unspecified — optical NOT confirmed · "+(a.operator||"operator unknown");}
+  },
+  pf_design: {
+    name:"CA planning / construction", color:"#F3B650", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/fiber/ca-middle-mile-design.geojson",
+    label:function(a){return a.name||"CA middle-mile record";},
+    meta:function(a){return "planning/design record, not a built route · "+(a.operational_status||"status unknown");}
+  },
+  pf_facilities: {
+    name:"Telecom facilities (public)", color:"#BE9AFF", on:false, geom:"point", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/fiber/osm-telecom-facilities.geojson",
+    label:function(a){return a.name||"Telecom facility";},
+    meta:function(a){return (a.operator||"operator unknown")+" · facility, not a route · OSM";}
+  },
+  /* ── PUBLISHED ROUTE INVENTORY — partial public coverage ──────────────
+     The shared controller loads state overviews and detailed geometry from
+     the same inventory used by /api/fiber-screen and the publicFiber block
+     of /api/network-proximity. Enabled by default; state/source/status
+     filters affect display only, not authenticated site evidence.
+
+     STATUS IS THE STYLING, because it is the finding. A planned route and a
+     built one are different claims and must never draw alike: planned is
+     dashed and amber, inactive is dotted and grey, and a route whose
+     publisher never stated a status is drawn thinner rather than promoted to
+     "existing". Source record counts are not counts of physical cables. */
+  pf_inventory: {
+    name:"Published fiber routes (state detail)", color:"#2DD4BF", on:true, geom:"line", role:"connectivity",
+    url:"__PUBLISHED__",
+    label:function(a){return a.name||a.carrier||"Published fiber route";},
+    meta:function(a){
+      var st=a.routeStatus&&a.routeStatus!=='Unknown'?a.routeStatus:'status not stated by the publisher';
+      return (a.carrier||'operator not published')+" · "+st+
+             (a.states&&a.states.length?" · "+a.states.join(", "):"")+
+             " · capacity unknown";
+    },
+    styleFor:function(a){
+      var c=a.category;
+      if(c==='planned')  return {color:"#F59E0B", weight:1.8, opacity:0.80, dashArray:"7,5"};
+      if(c==='inactive') return {color:"#64748B", weight:1.4, opacity:0.55, dashArray:"2,4"};
+      if(c==='existing') return {color:"#2DD4BF", weight:2.2, opacity:0.90, dashArray:null};
+      return {color:"#5EAAA8", weight:1.3, opacity:0.55, dashArray:null}; /* status unstated */
+    }
+  },
+  /* ── SUBMARINE CABLE LANDINGS — OFF, AND LICENCE UNCLEARED ────────────
+     111 US landing stations. For a coastal site the nearest landing is the
+     difference between a transit bill and a transport bill, which is why it
+     is here at all. The compilation is TeleGeography's commercial research
+     product and the repository it came from mirrors their public API:
+     DO NOT enable this for a tenant until the terms are confirmed. */
+  cable_landings: {
+    name:"Submarine Cable Landings (licence unconfirmed)", color:"#22D3EE", on:false, geom:"point", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/us-cable-landings.geojson",
+    label:function(a){return a.name||"Cable landing";},
+    meta:function(a){return (a.meta||"landing point")+" · TeleGeography";}
   },
   /* ── STATE / REGIONAL OPEN FIBER (add one entry per jurisdiction) ──
      Each is a public ArcGIS FeatureServer of real fiber-route geometry, queried
@@ -731,7 +876,7 @@ var LAYERS = {
     meta:function(a){return (a.TYPEPIPE||a.typepipe||"transmission")+" gas";}
   }
 };
-var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
+var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","cable_landings","dc_registry","pf_inventory","pf_design","pf_unknown","pf_routes","pf_facilities","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
 
 /* ---------- EIA technology taxonomy (matches EIA energy_source_code / technology) ---------- */
 var EIA_TECH={
@@ -1082,6 +1227,13 @@ function renderLayer(key,feats){
   for(var i=0;i<feats.length;i++){
     var f=feats[i], gm=f.geom; if(!gm) continue;
     var col=featColor(L2,f.props);
+    /* Per-feature style hook. A layer that wants one feature to look unlike
+       its neighbour supplies styleFor(props); everything else is unaffected.
+       The fiber corridor layer is the reason it exists: a cited conduit and
+       an inferred corridor are different claims and must not draw the same,
+       or the map quietly upgrades a guess into a survey. */
+    var st=L2.styleFor?(L2.styleFor(f.props)||{}):{};
+    if(st.color) col=st.color;
     if(gm.type==="Point"){
       var c=gm.coordinates;
       if(f.bubbleMw!=null){
@@ -1091,16 +1243,19 @@ function renderLayer(key,feats){
         L.circleMarker([c[1],c[0]],{radius:r,color:bc,weight:1,fillColor:bc,fillOpacity:.4})
           .bindPopup(popup(L2,f.props,bc)).addTo(g);
       } else {
-        L.circleMarker([c[1],c[0]],{radius:L2.geom==="point"?5:4,color:col,weight:1.5,
-          fillColor:col,fillOpacity:.65}).bindPopup(popup(L2,f.props,col)).addTo(g);
+        L.circleMarker([c[1],c[0]],{radius:st.radius!=null?st.radius:(L2.geom==="point"?5:4),
+          color:col,weight:st.weight!=null?st.weight:1.5,
+          fillColor:col,fillOpacity:st.opacity!=null?st.opacity:.65}).bindPopup(popup(L2,f.props,col)).addTo(g);
       }
     } else if(gm.type==="LineString"||gm.type==="MultiLineString"){
       var lines=gm.type==="LineString"?[gm.coordinates]:gm.coordinates;
       // weight scales with voltage for the OIM look
       var kv=osmKv(f.props), w=kv>=220?2.6:kv>=110?2.0:1.6;
+      if(st.weight!=null) w=st.weight;
       for(var j=0;j<lines.length;j++){
         var latlngs=lines[j].map(function(p){return [p[1],p[0]];});
-        L.polyline(latlngs,{color:col,weight:w,opacity:.75}).bindPopup(popup(L2,f.props,col)).addTo(g);
+        L.polyline(latlngs,{color:col,weight:w,opacity:st.opacity!=null?st.opacity:.75,
+          dashArray:st.dashArray||null}).bindPopup(popup(L2,f.props,col)).addTo(g);
       }
     } else if(gm.type==="Polygon"||gm.type==="MultiPolygon"){
       var polys=gm.type==="Polygon"?[gm.coordinates]:gm.coordinates;
@@ -1145,8 +1300,8 @@ var atlasLoadGeneration=0, layerHealth={};
 function loadVisible(){
   var generation=++atlasLoadGeneration;
   if(map.getZoom()<5){ status("Zoom in to load grid features",false); return; }
-  var todo=ORDER.filter(function(k){return LAYERS[k].on;});
-  if(!todo.length){ status("No layers active",false); return; }
+  var todo=ORDER.filter(function(k){return LAYERS[k].on&&k!=='pf_inventory';});
+  if(!todo.length){ status(LAYERS.pf_inventory.on?"Published fiber routes · see state coverage":"No layers active",false); return; }
   var pending=todo.length, any=false;
   status("Loading "+todo.length+" layer"+(todo.length>1?"s":"")+"…",true);
   todo.forEach(function(k){
@@ -1230,10 +1385,13 @@ var PRESETS=[
      "Gas pipeline (microgrid)" row, but not on the preset for the one
      project type that most often needs it — so it had to be switched on by
      hand every time, by somebody who already knew to look. */
-  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","fiber","fiber_licensed","ll_backbone","subsea","water","flood","gas","utility_terr","iso_rto"]},
+  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","pf_inventory","pf_routes","fiber","fiber_licensed","dc_registry","ixp","colo","subsea","water","flood","gas","utility_terr","iso_rto"]},
   {key:"ev", name:"EV Charging", icon:"⌁", layers:["substations","ev","osm_subs","utility_terr"]},
   {key:"der", name:"DER", icon:"◇", layers:["substations","transmission","osm_subs","osm_plants","bess","utility_terr","ba_area"]},
-  {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","fiber","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]}
+  {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","pf_inventory","fiber","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]},
+  /* Connectivity on its own: the question "how much fiber is at this point"
+     without the grid layers competing for the same screen. */
+  {key:"fiber", name:"Fiber", icon:"⌗", layers:["pf_inventory"]}
 ];
 var activePreset=null;
 function applyPreset(p){
@@ -1251,31 +1409,26 @@ function applyPreset(p){
     if(anyOn) catCollapsed[cat.key]=false;
   });
   activePreset=p.key;
-  buildRail(); updateRailCounts(); renderPresetChips();
+  buildRail(); updateRailCounts(); renderProjectSelect();
   loadVisible();
   status("Preset: "+p.name+" — "+p.layers.length+" layers on",false);
 }
-function renderPresetChips(){
-  var el=document.getElementById("presetChips"); if(!el) return;
-  var h="";
+function renderProjectSelect(){
+  var el=document.getElementById("projectSelect"); if(!el) return;
+  var h='<option value="">Choose project profile…</option>';
   for(var i=0;i<PRESETS.length;i++){
     var p=PRESETS[i];
-    h+='<span class="pchip'+(activePreset===p.key?" on":"")+'" data-p="'+p.key+'">'+
-       '<span class="pi">'+p.icon+'</span>'+p.name+'</span>';
+    h+='<option value="'+p.key+'"'+(activePreset===p.key?' selected':'')+'>'+p.icon+'  '+p.name+'</option>';
   }
   el.innerHTML=h;
-  var chips=el.querySelectorAll(".pchip");
-  for(var j=0;j<chips.length;j++){
-    (function(chip){
-      chip.onclick=function(){
-        var key=chip.getAttribute("data-p");
-        var p=null; for(var k=0;k<PRESETS.length;k++){ if(PRESETS[k].key===key) p=PRESETS[k]; }
-        if(p) applyPreset(p);
-      };
-    })(chips[j]);
-  }
+  el.onchange=function(){
+    var key=el.value, p=null;
+    for(var j=0;j<PRESETS.length;j++){ if(PRESETS[j].key===key) p=PRESETS[j]; }
+    if(p) applyPreset(p);
+  };
 }
-function buildPresets(){ renderPresetChips(); }
+function renderPresetChips(){ renderProjectSelect(); }
+function buildPresets(){ renderProjectSelect(); }
 
 function buildRail(){
   layersEl.innerHTML="";
@@ -1308,7 +1461,7 @@ function buildRail(){
         el.className="lyr"+(L2.on?"":" off");
         if(L2.on){ groups[k].addTo(map); loadVisible(); }
         else { map.removeLayer(groups[k]); }
-        if(activePreset){ activePreset=null; renderPresetChips(); } // manual edit breaks preset match
+        if(activePreset){ activePreset=null; renderProjectSelect(); } // manual edit breaks preset match
         updateRailCounts();
       };
       body.appendChild(el);
@@ -1349,10 +1502,12 @@ function buildRail(){
   clr.onclick=function(){ inp.value=""; apply(); inp.focus(); };
 })();
 function updateRailCounts(){
+  var publishedHost=window.OmegaPublishedFiberHost;
+  if(publishedHost&&publishedHost.controller)publishedHost.controller.setVisible(LAYERS.pf_inventory.on);
   var active=0, byCat={};
   ORDER.forEach(function(k){
     var s=layersEl.querySelector('[data-c="'+k+'"]');
-    if(s) s.textContent=cache[k]?cache[k].length:(LAYERS[k].on?"…":"off");
+    if(s) s.textContent=k==='pf_inventory'&&layerHealth[k]&&LAYERS[k].on?layerHealth[k].drawn:(cache[k]?cache[k].length:(LAYERS[k].on?"…":"off"));
     if(LAYERS[k].on){ active++; var r=LAYERS[k].role||"other"; byCat[r]=(byCat[r]||0)+1; }
   });
   CATS.forEach(function(cat){
@@ -1455,7 +1610,11 @@ function analyze(ll){
   var plant=nearestPoint(ll,cache.plants,LAYERS.plants);
   var dcN=within(ll,cache.datacenters,40);
   var evN=within(ll,cache.ev,15);
-  var fiberKeys=['fiber_licensed','fiber_import','backbone','fiber_ca','fiber','fiber_verified','ll_backbone','fiber_estimated'];
+  /* Ordered best-evidence-first: licensed and imported route data, then
+     surveyed state plant, then the national corridor set, then the softer
+     aggregators. The corridor layer sits behind anything surveyed on purpose
+     — it says where a conduit plausibly runs, not where one was walked. */
+  var fiberKeys=['fiber_licensed','fiber_import','fiber','fiber_verified'];
   var fiberSets=fiberKeys.map(function(key){return LAYERS[key] && LAYERS[key].on ? cache[key] : [];});
   var fiber=null;
   for(var fi=0;fi<fiberSets.length;fi++){
@@ -1503,20 +1662,54 @@ function analyze(ll){
     var health=layerHealth[key];
     if(health && health.state!=='loaded') h+='<div class="hint">'+esc(LAYERS[key].name)+': '+esc(health.message||health.state)+'. No route result does not establish absence of fiber.</div>';
   });
+  /* ── UNSCORED IS NOT ZERO ──────────────────────────────────────────────
+     Both scores below used to feed a constant in for every factor whose
+     layer was switched off: fiber route 0, FCC coverage 0, DC fiber 15/100.
+     Those constants were then weighted as though they were measurements, so
+     a site nobody had looked at scored identically to a site that had been
+     looked at and found wanting. Fiber alone is 70% of the confidence score
+     and 24% of the DC score, which is enough to decide both.
+
+     This is the same rule api/grid-atlas.js applies in weightedScore(): a
+     factor that was not measured drops out of the numerator AND the
+     denominator, so the score is a real score of what was actually seen and
+     the caption says how much of the weight that was. A factor whose layer
+     IS on and which found nothing is a genuine low reading and still counts
+     — "looked and found none" and "never looked" are different answers and
+     this is the line between them. */
+  function wScore(parts){
+    var earned=0,total=0,missed=0,missedKeys=[];
+    for(var i=0;i<parts.length;i++){
+      var v=parts[i][1],w=parts[i][2];
+      if(v==null){ missed+=w; missedKeys.push(parts[i][0]); continue; }
+      earned+=v*w; total+=w;
+    }
+    return { score: total?Math.round(earned/total):null,
+             measuredWeight: total, missedWeight: missed, missed: missedKeys };
+  }
+  function anyOn(keys){ for(var i=0;i<keys.length;i++) if(LAYERS[keys[i]]&&LAYERS[keys[i]].on) return true; return false; }
+
   // ── Fiber Confidence — blends every free signal into one screening read ──
-  var fcRoute=fiber?Math.max(0,100-fiber.km*7):0;
+  var fiberLayersOn=anyOn(fiberKeys);
   var ixpN=within(ll,cache.ixp,60), coloN=within(ll,cache.colo,60);
-  var fcInterconnect=Math.min(100,(ixpN*20)+(coloN*12)); // peering/colo nearby = strong
   var fccCov=containingFeature(ll,cache.fcc_fiber);
-  var fcCoverage=fccCov?90:0;
-  // weight: route 45%, interconnect points 30%, FCC coverage 25% (live check adds in bbRow)
-  var haveAny=(fiber||ixpN||coloN||fccCov);
-  var fcScore=Math.round(fcRoute*0.45+fcInterconnect*0.30+fcCoverage*0.25);
-  fcScore=Math.max(haveAny?1:0,Math.min(100,fcScore));
-  var fcBand=fcScore>=65?"var(--ok)":fcScore>=35?"var(--warn)":"var(--bad)";
-  var fcWord=fcScore>=65?"High — multiple fiber signals present":fcScore>=35?"Moderate — some signal, verify":haveAny?"Low — thin fiber signal here":"No fiber layers loaded";
-  h+='<div class="score" style="margin-top:2px"><span class="n" style="color:'+fcBand+';font-size:26px">'+fcScore+'</span><span class="lab">/ 100 fiber confidence</span></div>';
-  h+='<div class="bar"><span style="width:'+fcScore+'%;background:'+fcBand+'"></span></div>';
+  /* null = the source was never consulted. Not a zero. */
+  var fcRoute = !fiberLayersOn ? null : (fiber?Math.max(0,100-fiber.km*7):0);
+  var fcInterconnect = (LAYERS.ixp.on||LAYERS.colo.on) ? Math.min(100,(ixpN*20)+(coloN*12)) : null;
+  var fcCoverage = LAYERS.fcc_fiber.on ? (fccCov?90:0) : null;
+  var fcW=wScore([["mapped route",fcRoute,45],["peering / colo",fcInterconnect,30],["FCC coverage",fcCoverage,25]]);
+  var fcScore=fcW.score;
+  var fcBand=fcScore==null?"var(--muted)":fcScore>=65?"var(--ok)":fcScore>=35?"var(--warn)":"var(--bad)";
+  var fcWord = fcScore==null
+      ? "Not measured — no fiber source is loaded. This is not evidence that no fiber exists."
+      : fcW.missedWeight>=30
+        ? "Partial read — "+fcW.missedWeight+"% of the weight was never measured ("+fcW.missed.join(", ")+")"
+        : fcScore>=65?"High — multiple fiber signals present"
+        : fcScore>=35?"Moderate — some signal, verify"
+        : "Low — the loaded sources show thin signal here";
+  if(fcScore==null){ fcBand="var(--muted)"; }
+  h+='<div class="score" style="margin-top:2px"><span class="n" style="color:'+fcBand+';font-size:26px">'+(fcScore==null?"—":fcScore)+'</span><span class="lab">/ 100 fiber confidence'+(fcW.missedWeight&&fcScore!=null?" · partial":"")+'</span></div>';
+  h+='<div class="bar"><span style="width:'+(fcScore==null?0:fcScore)+'%;background:'+fcBand+'"></span></div>';
   h+='<div class="hint" style="margin:5px 0 8px;color:'+fcBand+'">'+fcWord+'</div>';
   h+=infoRow(LAYERS.fiber.color, fiber?"Nearest fiber route":"No route in view",
         fiber?LAYERS[fiber.sourceKey].name+" · mapped proximity only":"enable fiber layers",
@@ -1528,6 +1721,66 @@ function analyze(ll){
   if(fiber){
     var fv=fiber.km<=2?"Route within 2 km — carrier serviceability unconfirmed":fiber.km<=8?"Mapped route nearby — lateral route and cost unconfirmed":"Fiber build is a cost driver";
     h+='<div class="hint" style="margin:2px 0 0;color:var(--muted)">'+fv+'. Confidence blends routes, peering/colo, and FCC service coverage — screening only; no free source maps every carrier conduit.</div>';
+  }
+
+  /* ── PUBLIC ROUTE EVIDENCE IN SITE DETAILS ────────────────────────────
+     Route distance, operator, source, evidence date and serviceability /
+     capacity status — the five fields the requirement names — read from the
+     bundled inventory. Same records the Site Map Editor sees through
+     /api/network-proximity, and the same classifier: confirmed optical stays
+     apart from unknown-medium lines, from planning records, and from
+     facilities. Merging those four into one "fiber nearby" count is the
+     specific dishonesty this section refuses.
+
+     Scores nothing. See the fiberKeys comment above. */
+  var pfOn=anyOn(['pf_routes','pf_unknown','pf_design','pf_facilities']);
+  if(pfOn){
+    var pfR=nearestLine(ll,cache.pf_routes), pfU=nearestLine(ll,cache.pf_unknown),
+        pfD=nearestLine(ll,cache.pf_design), pfF=nearestPoint(ll,cache.pf_facilities,LAYERS.pf_facilities);
+    h+='<div class="sec">◈ Public route evidence</div>';
+    /* A "nearest" record 2,400 km away is noise, not evidence — the first
+       build cheerfully reported a California planning route as the nearest
+       one for a site in Indiana, because nearestLine has no radius and the
+       CA layer is national. 80 km matches the radius the rest of this panel
+       reasons in, and beyond it the answer is "none in view", which is true
+       and useful, rather than a number that is technically correct and
+       actively misleading. */
+    var PF_MAX_KM=80;
+    var pfNear=function(x){ return (x && x.km<=PF_MAX_KM)?x:null; };
+    var pfDist=function(x){ return x?fmtKm(x.km):"—"; };
+    var pfLine=function(layerKey,hit,what,none){
+      hit=pfNear(hit);
+      /* The two finders return DIFFERENT shapes and always have:
+         nearestLine gives {props, km}, nearestPoint gives {f, km} with the
+         properties one level down on the feature. Reading .props off a
+         nearestPoint result is undefined, and the first thing touched here
+         is .operator — which threw and took the whole Site Analysis panel
+         down with it, because analyze() builds one string and renders once. */
+      var p=hit?(hit.props||(hit.f&&hit.f.props)||{}):null;
+      /* The two inventories name the same facts differently — OSM-derived
+         features use operator/operational_status, the published inventory
+         uses carrier/routeStatus. Read both rather than showing "unknown"
+         for data that is right there under another key. */
+      var sub=hit
+        ? ((p.operator||p.carrier||"operator unknown")
+           +" · "+((p.routeStatus&&p.routeStatus!=='Unknown')?p.routeStatus
+                   :(p.operational_status||"status not stated"))
+           +" · "+(p.source_vintage||p.dataDate||p.metadataModified||p.source_last_edited||p.retrievedAt||p.retrieved_at||"evidence date unknown"))
+        : (LAYERS[layerKey].on?none:"enable "+LAYERS[layerKey].name);
+      h+=infoRow(LAYERS[layerKey].color,what,sub,pfDist(hit));
+    };
+    var pfI=nearestLine(ll,cache.pf_inventory);
+    pfLine('pf_inventory',pfI,"Nearest displayed published route",layerHealth.pf_inventory&&layerHealth.pf_inventory.state==='loaded'?'No matching displayed routes nearby; run the full fiber evidence check.':'Zoom in for detail or run the full fiber evidence check; overview distances are not measured.');
+    pfLine('pf_routes',pfR,"Nearest optical route (OSM)","no mapped optical route within "+PF_MAX_KM+" km");
+    pfLine('pf_facilities',pfF,"Nearest telecom facility","no mapped facility within "+PF_MAX_KM+" km");
+    pfLine('pf_unknown',pfU,"Unknown-medium line","none within "+PF_MAX_KM+" km");
+    pfLine('pf_design',pfD,"CA planning / construction","none within "+PF_MAX_KM+" km");
+    h+='<div class="hint" style="margin:5px 0 8px;color:var(--muted)">'
+      +'Serviceability <b>unconfirmed</b> · available capacity <b>unknown</b> · route diversity <b>unconfirmed</b>. '
+      +'Distance is to published geometry, not a surveyed cable or a constructible lateral. '
+      +(pfNear(pfR)?'':'No mapped evidence found is not evidence that no fiber exists. ')
+      +'Unknown-medium lines and planning records are NOT confirmed optical routes. '
+      +'© OpenStreetMap contributors (ODbL); California Department of Technology MMBI.</div>';
   }
 
   // Market / utility context via point-in-polygon
@@ -1551,15 +1804,23 @@ function analyze(ll){
   var water=nearestLine(ll,cache.water);
   var floodF=containingFeature(ll,cache.flood);
   var inFlood=floodF&&/^(A|AE|AO|AH|AR|A99|V|VE)$/i.test((floodF.props.FLD_ZONE||floodF.props.fld_zone||"").replace(/\s/g,""));
-  var pPower=Math.max(0,100-subKm*12)*0.6 + Math.max(0,100-txKm*16)*0.4;
-  var txV2=tx?(+(tx.props.VOLTAGE||tx.props.VOLT_CLASS||0)):0;
-  if(txV2>=230) pPower=Math.min(100,pPower+12);
-  var pFiber=fiber?Math.max(0,100-fiber.km*8):15;
-  var pWater=water?Math.max(0,100-water.km*10):30;
-  var pFlood=floodF?(inFlood?12:58):85;
-  var pMarket=containingFeature(ll,cache.iso_rto)?100:70;
-  var dcScore=Math.round(pPower*0.42+pFiber*0.24+pWater*0.14+pFlood*0.12+pMarket*0.08);
-  dcScore=Math.max(1,Math.min(100,dcScore));
+  var powerOn=(LAYERS.substations.on||LAYERS.osm_subs.on||LAYERS.transmission.on);
+  var pPower=null;
+  if(powerOn){
+    pPower=Math.max(0,100-subKm*12)*0.6 + Math.max(0,100-txKm*16)*0.4;
+    var txV2=tx?(+(tx.props.VOLTAGE||tx.props.VOLT_CLASS||0)):0;
+    if(txV2>=230) pPower=Math.min(100,pPower+12);
+  }
+  /* The fallback constants are gone. 15/30/85 were reasonable guesses for an
+     unknown and catastrophic as inputs: fiber's 15 dragged the composite
+     roughly twenty points and pushed sites nobody had measured across the
+     "Challenged for DC scale" line. Unmeasured is now null and drops out. */
+  var pFiber = !fiberLayersOn ? null : (fiber?Math.max(0,100-fiber.km*8):20);
+  var pWater = !LAYERS.water.on ? null : (water?Math.max(0,100-water.km*10):35);
+  var pFlood = !LAYERS.flood.on ? null : (floodF?(inFlood?12:58):70);
+  var pMarket = !LAYERS.iso_rto.on ? null : (containingFeature(ll,cache.iso_rto)?100:70);
+  var dcW=wScore([["power",pPower,42],["fiber",pFiber,24],["water",pWater,14],["flood",pFlood,12],["market",pMarket,8]]);
+  var dcScore=dcW.score;
   /* ── A LOW SCORE AND AN UNLOADED LAYER ARE NOT THE SAME THING ──────────
      Each factor falls back to a poor constant when its layer is not loaded:
      fiber to 15, water to 30, power to whatever the missing substation
@@ -1573,15 +1834,13 @@ function analyze(ll){
      The score still computes, because a partial read is useful. It now says
      what it could not see, and it refuses to render a verdict at all when
      the missing weight is enough to change it. */
-  var dcMissing=[];
-  if(!fiber) dcMissing.push("fiber");
-  if(!water) dcMissing.push("water");
-  if(!sub) dcMissing.push("substations");
-  if(!floodF) dcMissing.push("flood zones");
-  var dcMissWeight=(!fiber?24:0)+(!water?14:0)+(!sub?42:0)+(!floodF?12:0);
+  var dcMissing=dcW.missed, dcMissWeight=dcW.missedWeight;
 
-  var dcBand=dcScore>=72?"var(--ok)":dcScore>=50?"var(--warn)":"var(--bad)";
-  var dcVerdict=dcScore>=72?"Strong data-center candidate":dcScore>=50?"Viable — diligence the constraints":"Challenged for DC scale";
+  var dcBand=dcScore==null?"var(--muted)":dcScore>=72?"var(--ok)":dcScore>=50?"var(--warn)":"var(--bad)";
+  var dcVerdict=dcScore==null?"Not measured — no scoring layer is loaded"
+              :dcScore>=72?"Strong data-center candidate"
+              :dcScore>=50?"Viable — diligence the constraints"
+              :"Challenged for DC scale";
   /* THRESHOLD IS 20, NOT 25, so a missing FIBER layer alone trips it. Fiber
      carries 24% and falls back to 15/100, which drags the composite about
      twenty points — enough to move a site across the "Challenged" line on
@@ -1589,8 +1848,8 @@ function analyze(ll){
      have been a threshold in name only. */
   if(dcMissWeight>=20){ dcBand="var(--muted)"; dcVerdict="Partial read — "+dcMissWeight+"% of the weight is unmeasured"; }
   h+='<div class="sec">◆ Data Center Site Report</div>';
-  h+='<div class="score"><span class="n" style="color:'+dcBand+'">'+dcScore+'</span><span class="lab">/ 100 DC suitability'+(dcMissing.length?" · partial":"")+'</span></div>';
-  h+='<div class="bar"><span style="width:'+dcScore+'%;background:'+dcBand+'"></span></div>';
+  h+='<div class="score"><span class="n" style="color:'+dcBand+'">'+(dcScore==null?"—":dcScore)+'</span><span class="lab">/ 100 DC suitability'+(dcMissing.length?" · partial":"")+'</span></div>';
+  h+='<div class="bar"><span style="width:'+(dcScore==null?0:dcScore)+'%;background:'+dcBand+'"></span></div>';
   h+='<div class="hint" style="margin:6px 0 8px;color:'+dcBand+'">'+dcVerdict+'</div>';
   if(dcMissing.length){
     h+='<div class="hint" style="margin:0 0 8px;color:var(--warn)">Not measured here: '+
@@ -1741,9 +2000,28 @@ function fmtKm(km){ return km<1?Math.round(km*1000)+" m":km.toFixed(1)+" km"; }
 function copy(t){ try{var i=document.createElement("textarea");i.value=t;document.body.appendChild(i);i.select();document.execCommand("copy");document.body.removeChild(i);}catch(e){} }
 
 /* ---------- Panel ---------- */
-var panel=document.getElementById("panel");
-function openPanel(){ panel.className="open"; }
-document.getElementById("pClose").onclick=function(){ panel.className=""; };
+var panel=document.getElementById("panel"), rail=document.getElementById("rail");
+/* Keep site analysis in the same left drawer as the selected project. */
+if(rail&&panel) rail.appendChild(panel);
+document.getElementById('settingsShell').appendChild(document.getElementById('baseSwitch'));
+document.getElementById('settingsShell').appendChild(document.getElementById('eiaPanel'));
+function setDrawer(tab){
+  var site=tab!=="settings";
+  rail.className=site?"site-active":"";
+  var tabs=document.querySelectorAll(".side-tab");
+  for(var i=0;i<tabs.length;i++){
+    var selected=tabs[i].getAttribute("data-tab")===tab;
+    tabs[i].className="side-tab"+(selected?" on":"");tabs[i].setAttribute('aria-selected',selected?'true':'false');
+  }
+  if(!site) setTimeout(function(){ map.invalidateSize(); },10);
+}
+function openPanel(){ panel.className="open"; setDrawer("site"); }
+document.getElementById("pClose").onclick=function(){ setDrawer("settings"); };
+(function wireDrawerTabs(){
+  var tabs=document.querySelectorAll(".side-tab");
+  for(var i=0;i<tabs.length;i++) tabs[i].onclick=function(){ setDrawer(this.getAttribute("data-tab")); };
+  setDrawer('site');
+})();
 
 /* ---------- Geocode search (OSM Nominatim) with fallback chain ----------
    Full street addresses often miss in OSM (new industrial streets aren't mapped).
@@ -1808,6 +2086,35 @@ q.addEventListener("keydown",function(e){
 
 buildRail(); updateRailCounts();
 buildPresets();
+// A state deep link opens the requested route map without unrelated grid symbols.
+if(/[?&]state=[a-z]{2}(?:&|$)/i.test(window.location.search))applyPreset(PRESETS.filter(function(p){return p.key==='fiber';})[0]);
+
+/* ── FIBER EVIDENCE CONTROL ───────────────────────────────────────────────
+   Hands the bundled public route inventory to /omega-fiber-atlas.js. Its
+   layers are static public data and need no sign-in; only its site check
+   calls /api/fiber-screen, which does. That split matters here, because this
+   page never initializes Firebase — omega-sso.js and omega-tenant.js are the
+   only files that do and neither is loaded on Grid Atlas — so an
+   authenticated layer would simply never render.
+
+   The control reads the same api/_lib/fiber-evidence.js that the Site Map
+   Editor reaches through /api/network-proximity, so both tools return the
+   same answer for the same coordinates. Its distances are NOT fed into this
+   page's Fiber Confidence or Data Center Site Report scores: both of those
+   score missing fiber as a low number rather than as unknown, so admitting a
+   new dataset would move published figures for reasons no user asked for.
+   See MERGE.md. */
+window.OmegaFiberAtlasHost = { map: map, L: L, element:document.getElementById('fiberEvidenceHost'), nativeLayers:true };
+window.OmegaPublishedFiberHost = {
+  map:map,L:L,element:document.getElementById('fiberRouteControls'),visible:LAYERS.pf_inventory.on,
+  onVisibilityChange:function(on){LAYERS.pf_inventory.on=on;buildRail();},
+  onRender:function(features,detailed,error){
+    // Never use generalized overview coordinates for a site distance.
+    cache.pf_inventory=detailed?features.map(function(f){return {props:f.properties,geom:f.geometry};}):[];
+    layerHealth.pf_inventory={state:error?'unavailable':detailed?'loaded':'overview',drawn:features.length,message:error||'Overview is display-only'};
+    updateRailCounts();if(pinLatLng)analyze(pinLatLng);
+  }
+};
 map.whenReady(function(){
   setTimeout(function(){ map.invalidateSize(); },200);
   setTimeout(loadVisible,400);
@@ -1816,5 +2123,7 @@ window.addEventListener("resize",function(){ map.invalidateSize(); });
 
 })();
 </script>
+<script src="/omega-fiber-atlas.js"></script>
+<script src="/omega-published-fiber.js"></script>
 </body>
 </html>

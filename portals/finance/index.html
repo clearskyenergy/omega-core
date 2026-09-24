@@ -1215,6 +1215,7 @@ input.szr-in[type=number]{font-family:var(--mono)}
   @media (max-width:640px){ .fee-tbl td.fee-note{display:none} }
 </style>
 <script src="/omega-fees.js"></script>
+<script src="/omega-events.js"></script>
 <!-- Cross-tenant originator credit. Shared with the main dashboard so both
      surfaces write the SAME field names; this portal loads none of the other
      omega-*.js runtime, which is exactly why the primitive is its own small
@@ -3770,6 +3771,7 @@ async function setOfferStatus(dealId, partnerUid, status) {
   try {
     await FB.db.collection('fin_projects').doc(d.docId)
       .collection('offers').doc(partnerUid).update({status, decidedAt: Date.now()});
+    try { window.OmegaEvents && OmegaEvents.emit('fin.offer.responded', { finProjectId: d.docId, offerId: partnerUid, outcome: status }); } catch (e) {}
     if (status === 'accepted') {
       /* Awarding closes the deal to further browsing; the rules keep it
          readable for the winning partner through isAwardee(). */
@@ -5756,6 +5758,8 @@ async function saveDeal(asDraft) {
       return;
     }
     btn.disabled = false; btn.textContent = label;
+    try { window.OmegaEvents && OmegaEvents.emit('fin.application.submitted', { finProjectId: d.docId || null,
+      amount: Number(d.ask) || null, stage: intakeStatusFor(d), mw: Number(d.mw) || null, tech: d.tech || null }); } catch (e) {}
     closeModal();
     toast(intakeStatusFor(d) === FS_REVIEW
       ? `${name} filed — it goes to a ClearSky administrator for review before capital partners see it.`

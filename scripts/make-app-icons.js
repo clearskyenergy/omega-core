@@ -15,7 +15,11 @@
    the source is 8-bit RGBA non-interlaced, which is the one case worth
    handling, and zlib is in the standard library.
 
-   Run: node scripts/make-app-icons.js                                      */
+   Run: node scripts/make-app-icons.js
+
+   Also a module: make-jarvis-icons.js composes the same mark over the Jarvis
+   app's own colours through build(src, size, { bg, inset, tint }) so there is
+   one PNG codec in the repo, not two.                                       */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -26,9 +30,9 @@ const SRC  = path.join(ROOT, 'clearsky-omega-mark-white.png');
 const OUT  = path.join(ROOT, 'icons');
 /* The mission console's own --bg. An icon that is not the colour of the app it
    opens reads as somebody else's app. */
-const BG   = [0x02, 0x08, 0x13];
+const DEFAULT_BG   = [0x02, 0x08, 0x13];
 const SIZES = [180, 192, 512];
-const INSET = 0.74;               /* the mask crops the corners; leave room */
+const DEFAULT_INSET = 0.74;       /* the mask crops the corners; leave room */
 
 /* ── decode ──────────────────────────────────────────────────────────────── */
 function decode(buf) {
@@ -113,7 +117,9 @@ function encode(size, rgb) {
 }
 
 /* ── compose ─────────────────────────────────────────────────────────────── */
-function build(src, size) {
+function build(src, size, opts) {
+  opts = opts || {};
+  const BG = opts.bg || DEFAULT_BG, INSET = opts.inset || DEFAULT_INSET, TINT = opts.tint || null;
   const out = Buffer.alloc(size * size * 3);
   for (let i = 0; i < size * size; i++)
     { out[i*3] = BG[0]; out[i*3+1] = BG[1]; out[i*3+2] = BG[2]; }
@@ -135,6 +141,9 @@ function build(src, size) {
         r += src.px[i] * al; g += src.px[i+1] * al; b += src.px[i+2] * al; a += al; n++;
       }
       r /= n; g /= n; b /= n; a /= n;
+      /* A tint recolours the white mark (the source is white-on-transparent,
+         so multiplying by the tint is exactly "the same glyph in that colour"). */
+      if (TINT) { r = r * TINT[0] / 255; g = g * TINT[1] / 255; b = b * TINT[2] / 255; }
       const d = ((oy + y) * size + (ox + x)) * 3;
       out[d]   = Math.round(r + BG[0] * (1 - a));
       out[d+1] = Math.round(g + BG[1] * (1 - a));
@@ -144,11 +153,15 @@ function build(src, size) {
   return encode(size, out);
 }
 
-const src = decode(fs.readFileSync(SRC));
-fs.mkdirSync(OUT, { recursive: true });
-SIZES.forEach(function (s) {
-  const file = path.join(OUT, 'omega-' + s + '.png');
-  fs.writeFileSync(file, build(src, s));
-  console.log('  ' + path.relative(ROOT, file) + '  ' + s + 'x' + s
-              + '  ' + fs.statSync(file).size + ' bytes');
-});
+module.exports = { decode, encode, build, SRC };
+
+if (require.main === module) {
+  const src = decode(fs.readFileSync(SRC));
+  fs.mkdirSync(OUT, { recursive: true });
+  SIZES.forEach(function (s) {
+    const file = path.join(OUT, 'omega-' + s + '.png');
+    fs.writeFileSync(file, build(src, s));
+    console.log('  ' + path.relative(ROOT, file) + '  ' + s + 'x' + s
+                + '  ' + fs.statSync(file).size + ' bytes');
+  });
+}

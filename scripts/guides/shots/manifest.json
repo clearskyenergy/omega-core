@@ -1,0 +1,122 @@
+{
+  "bench.png": {
+    "sha256": "6690cd97fada05362bd4a7f5b54715f66b868996a6155d321f0eff0d084a1159",
+    "takenAt": "2026-09-24T16:45:05.543Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "customer-app.png": {
+    "sha256": "33823ab055223b29ce301ac525968e62f15485465b1d7b49560957701634de20",
+    "takenAt": "2026-09-24T16:45:02.681Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "customer-design.png": {
+    "sha256": "c2d0511accf284845bc61d561c4bca97e4586965ef9cf211c0f394a95a51bc2c",
+    "takenAt": "2026-09-24T16:45:06.266Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "customer-orders.png": {
+    "sha256": "260c25675af31956315fe0b2eedc5358b9947f0a567b701982fb08634a352004",
+    "takenAt": "2026-09-24T16:45:07.077Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "customer-pos.png": {
+    "sha256": "175814f15efab106f02bb8e9a2cd039425bdfd37aa13d01b9c5abe4f381368d6",
+    "takenAt": "2026-09-24T16:45:07.842Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "customer-sites-2.png": {
+    "sha256": "a335dc1b6e060c56d952ef1bec76370120ec621f17c0f5dc53e808072216aebf",
+    "takenAt": "2026-09-24T16:45:11.122Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "customer-sites.png": {
+    "sha256": "16b8da27e35fc60498ae07e59149d03c4722eee497563994c6e236e4a6796c89",
+    "takenAt": "2026-09-24T16:45:09.365Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "desktop-office.png": {
+    "sha256": "66a80c40b36441691ee05255b127f7f874a42261a2fa5800a7701490ab2160ae",
+    "takenAt": "2026-09-24T16:45:01.780Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "office-account.png": {
+    "sha256": "91a673ded067f53e4e0d0fd35198bdeb93174264f1bd7a91b5bdd49d47450067",
+    "takenAt": "2026-09-24T16:44:54.866Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "office-activity.png": {
+    "sha256": "aea1de9c207a1c85c1c246d9d988e1eef9ced2c5ba4feee7adca8f2f332f8177",
+    "takenAt": "2026-09-24T16:44:55.833Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "office-customers.png": {
+    "sha256": "80ea6165a3fbec09502c9bf477d046b01058e71196e32420f0fae1b740c0c9ad",
+    "takenAt": "2026-09-24T16:44:53.802Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "office-documents.png": {
+    "sha256": "ecd925e4a5253b33194e9da5d48dccfb585d4ef9d052188ddd4e89a03fcd7125",
+    "takenAt": "2026-09-24T16:44:57.620Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "office-hub-panels.png": {
+    "sha256": "df8a3f3dbd7c376757ee7a9a763dc9716e9bcacecfa3da01448285f0611d5ba0",
+    "takenAt": "2026-09-24T16:44:52.882Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "office-hub.png": {
+    "sha256": "ae9a5322887d76df03107c1ec9fdd2893174b4c88954d0baa81a0f628bb60bac",
+    "takenAt": "2026-09-24T16:44:51.339Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "office-menu.png": {
+    "sha256": "15089f5f758e0178657ed871e1061f54b226ab211f9ae9448b9d96516c2d4119",
+    "takenAt": "2026-09-24T16:45:00.656Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "office-order.png": {
+    "sha256": "fdde575db75610d15f6b48139f0d96f7a038aa7b83d9bd0f80c2fde580d077d8",
+    "takenAt": "2026-09-24T16:44:58.528Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "office-sites.png": {
+    "sha256": "02fa3801d50dd624f3f396e4e71049cbe99e930a7f38ded33ee30f1b1cc8be29",
+    "takenAt": "2026-09-24T16:44:59.865Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "plant-today.png": {
+    "sha256": "e3532e9bf9ae2b886be1ae5266bcb4a5fcae9190ed711ff80883cfbd3d77b072",
+    "takenAt": "2026-09-24T16:45:03.341Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "plant-unit.png": {
+    "sha256": "4bbf646359e86782a5862e237ac9cdeca51d04a444f0780692e0ed5d204779e1",
+    "takenAt": "2026-09-24T16:45:04.870Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  },
+  "plant-work.png": {
+    "sha256": "82d2265c462708dee37915924f5051d202b57c0a8c1b64f8ed9d867f39cb99e3",
+    "takenAt": "2026-09-24T16:45:04.142Z",
+    "tree": ".",
+    "commit": "b6361ef"
+  }
+}

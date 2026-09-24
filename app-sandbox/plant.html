@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0C1824">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="OL Plant">
+<link rel="manifest" href="/app-sandbox/plant.webmanifest">
+<link rel="apple-touch-icon" href="/icons/omega-logic-180.png">
+<title>Omega Logic · Plant · sandbox</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  plant/app.html — the plant in a pocket
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  Two people build every unit. They do not sit at a desk; they walk between
+  benches with a phone. This is the app they install on it: the work orders
+  they are building, tap into one and see every unit and which step it is
+  on, what is short, what is on hold — and the scanner, one tap away.
+
+  It is the same office data through the same signed-in endpoints
+  (api/logic-plant.js, api/logic-materials.js, api/plant-control.js). The
+  phone adds nothing a browser could not do; it only puts it where the work
+  is. Scanning is NOT here: it is the station screen (plant/station.html),
+  which this app opens. A phone paired as a ROAMING station names the bench
+  on each scan; the routing rules are unchanged.
+
+  Installable (manifest + a shell service worker) so it opens like an app
+  and says "offline" instead of a browser error in the yard. Work-order data
+  is never served from cache: a stale list is worse than a spinner.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="/omega-logic-theme.css">
+<style>
+  html,body{margin:0;height:100%}
+  body.logic-theme{display:flex;flex-direction:column;min-height:100vh;background:var(--paper);padding-bottom:calc(64px + env(safe-area-inset-bottom,0))}
+  header.top{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top,0)) 16px 12px;border-bottom:1px solid var(--line);background:white;position:sticky;top:0;z-index:5}
+  header.top b{font-size:17px}header.top small{display:block;color:var(--ink2);font-size:12px}
+  header.top .sp{flex:1}
+  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px;white-space:nowrap;flex:none}header.top>div{min-width:0}
+  main{flex:1;padding:14px 16px;max-width:720px;width:100%;margin:0 auto}
+  h1{font-size:24px;margin:6px 0 10px}h2{font-size:18px;margin:18px 0 8px}
+  .status{font-size:13px;color:var(--ink2);margin:0 0 10px}.status:empty{display:none}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}.tabs button{flex:1 1 auto;padding:9px;border:1px solid var(--line);background:white;font-size:13px}.tabs button[aria-pressed=true]{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-d);font-weight:600}
+  .card{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:14px;background:white;padding:14px;margin:10px 0;font:inherit;color:inherit;cursor:pointer}
+  .card.urgent{border-left:4px solid #B42318}
+  .card .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.card .h b{font-size:16px}
+  .card .m{color:var(--ink2);font-size:13px;margin-top:2px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid var(--line);white-space:nowrap}
+  .pill.bad{background:#FDEBE9;color:#B42318;border-color:#F4B4AE}.pill.ok{background:#E9F7F0;color:#198764;border-color:#B8E4CD}
+  .bar{height:8px;background:var(--sunk);border-radius:6px;margin-top:10px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand);border-radius:6px}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.kv div{padding:10px 12px;background:var(--sunk);border-radius:10px}.kv small{display:block;color:var(--ink2);font-size:12px}.kv b{font-size:20px}.kv div.bad b{color:#B42318}
+  .unit{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line);width:100%;text-align:left;background:none;border-left:0;border-right:0;border-bottom:0;font:inherit;color:inherit}
+  .unit small{display:block;color:var(--ink2);font-size:12px}.unit .mono{font-family:'IBM Plex Mono',monospace;font-size:14px}
+  .strip{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px}.strip i{flex:none;font-style:normal;font-size:11px;padding:4px 8px;border-radius:7px;border:1px solid var(--line);color:var(--ink2);white-space:nowrap}.strip i.here{background:var(--brand);color:white;border-color:var(--brand)}.strip i.past{color:#198764;border-color:#B8E4CD}
+  .big{display:block;width:100%;padding:16px;border-radius:14px;border:0;background:var(--brand);color:white;font:700 17px 'Poppins',system-ui,sans-serif;margin:12px 0;text-align:center;text-decoration:none}
+  .big.ghost{background:white;color:var(--brand-d);border:1px solid var(--brand)}
+  input,textarea,select{width:100%;font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;margin:6px 0}
+  .row{display:flex;gap:8px}.row input{flex:1}.row button{padding:0 16px;border:1px solid var(--line);background:white}
+  .back{border:0;background:none;color:var(--brand-d);font:inherit;padding:6px 0;cursor:pointer}
+  pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:var(--sunk);padding:10px;border-radius:10px}
+  .note{font-size:12px;color:var(--ink2)}
+  nav.bottom{position:fixed;left:0;right:0;bottom:0;display:flex;background:white;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0);z-index:5}
+  nav.bottom button{flex:1;border:0;background:none;padding:10px 4px 8px;font:600 11px system-ui,sans-serif;color:var(--ink2);display:flex;flex-direction:column;align-items:center;gap:3px}
+  nav.bottom button span{font-size:20px;line-height:1}nav.bottom button[aria-current=page]{color:var(--brand-d)}
+  #gate{text-align:center;padding:40px 16px}#gate button{margin-top:14px}
+  .off{background:#FFF5DD;color:#A26718;font-size:13px;padding:8px 12px;border-radius:10px;margin:8px 0}
+</style>
+</head>
+<body class="logic-theme">
+<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-product-name>Omega Logic</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
+<main>
+  <div id="gate"><h1>Plant</h1><p class="note">Work orders, the bench scanner, stock and quality — for the people building the units.</p><button class="big" id="signin">Sign in</button><p class="note" id="gate-note"></p></div>
+  <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale. The bench scanner keeps its own queue.</div>
+  <p id="status" class="status"></p>
+  <div id="view"></div>
+</main>
+<nav class="bottom" id="nav" hidden>
+  <button data-tab="today" aria-current="page"><span>☀</span>Today</button>
+  <button data-tab="work"><span>▤</span>Work</button>
+  <button data-tab="scan"><span>▣</span>Scan</button>
+  <button data-tab="stock"><span>▦</span>Stock</button>
+  <button data-tab="quality"><span>◈</span>Quality</button>
+</nav>
+<script src="/app-sandbox/sandbox.js"></script><script src="/omega-logic-theme.js"></script>
+<script>
+(function () {
+  'use strict';
+  var cfg = window.CLEARSKY_CONFIG || {}; if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg);
+  var auth = firebase.auth(), params = new URLSearchParams(location.search);
+  function $(id) { return document.getElementById(id); }
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function load(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+  /* The org comes with the link once and is remembered: an installed app has
+     no query string to carry it. */
+  var ORG = params.get('org') || load('omega_plant_app_org', '') || '';
+  if (params.get('org')) store('omega_plant_app_org', params.get('org'));
+  /* Omega Logic's plant app on every workspace's phone (api/app-manifest.js);
+     the static manifest is the fallback. */
+  if (ORG) {
+    /* sandbox: the manifest link is static */
+    fetch('/api/app-manifest?org=' + encodeURIComponent(ORG)).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
+      if (!m) return;
+      var ti = document.querySelector('link[rel="apple-touch-icon"]'); if (ti && m.apple_touch_icon) ti.href = m.apple_touch_icon;
+      var tc = document.querySelector('meta[name="theme-color"]'); if (tc && /^#[0-9a-f]{6}$/i.test(m.theme_color || '')) tc.content = m.theme_color;
+      var tt = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (tt && m.short_name) tt.content = m.short_name;
+    })['catch'](function () {});
+  }
+  var TAB = params.get('tab') || 'today', DATA = null, BOARD = null, ATT = null, OPS = null, WO = null, UNIT = null, LABELS = {}, MATERIALS = null, WORK_FILTER = load('omega_plant_app_filter', 'all');
+  var STAGE_PILL = { on_hold: 'bad', ready: 'ok' };
+  function me() { var e = String((auth.currentUser && auth.currentUser.email) || '').toLowerCase(); return { email: e, name: e.split('@')[0].replace(/[._-]+/g, ' ') }; }
+  function mine(r) { var m = me(), a = String(r.assignee || '').toLowerCase(); if (!a) return false; return a === m.email || (m.name.length > 2 && a.indexOf(m.name) >= 0) || a.indexOf(m.email.split('@')[0]) >= 0; }
+  function hrs(v) { return v == null ? '—' : (v < 1 ? Math.round(v * 60) + ' min' : (v < 48 ? Math.round(v) + ' h' : Math.round(v / 24) + ' d')); }
+  var q = '?org=' + encodeURIComponent(ORG);
+
+  function api(path, body) {
+    if (!auth.currentUser) return Promise.reject(new Error('Sign in first.'));
+    return auth.currentUser.getIdToken().then(function (t) {
+      return fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Request failed'); return d; }); });
+  }
+  function status(t) { $('status').textContent = t || ''; }
+  function fail(e) { status(e.message || String(e)); }
+  function label(key) { return LABELS[key] || key || 'not started'; }
+  function day(s) { return s ? String(s).slice(0, 10) : ''; }
+
+  /* ── data ─────────────────────────────────────────────────────────────── */
+  function loadAll() {
+    status('Loading…'); BOARD = null; ATT = null; OPS = null;
+    return Promise.all([api('/api/logic-plant' + q), api('/api/logic-plant' + q + '&page=board')['catch'](function () { return null; })]).then(function (r) {
+      var d = r[0]; DATA = d; BOARD = r[1]; LABELS = {}; (d.flow && d.flow.routing || []).forEach(function (s) { LABELS[s.key] = s.label; });
+      /* Omega Logic's plant hub: ClearSky's name and colours, the workspace under it */
+      $('who').textContent = [(d.brand && d.brand.workspace) || d.name || ORG, 'Plant', (auth.currentUser && auth.currentUser.email) || ''].filter(Boolean).join(' · ');
+      status(''); draw();
+    })['catch'](fail);
+  }
+  function loadAttention() { return ATT ? Promise.resolve(ATT) : api('/api/logic-plant' + q + '&page=attention').then(function (a) { ATT = a; return a; }); }
+  function loadOps() { return OPS ? Promise.resolve(OPS) : api('/api/logic-plant' + q + '&page=ops').then(function (o) { OPS = o; return o; }); }
+  function openWork(w) { return ['complete', 'shipped', 'cancelled'].indexOf(w.status) < 0; }
+  function totals(w) { var t = 0, done = 0; (w.requirements || []).forEach(function (r) { t += Number(r.qty) || 0; }); Object.keys(w.registeredCounts || {}).forEach(function (k) { t += 0; }); Object.keys(w.readyCounts || {}).forEach(function (k) { done += Number(w.readyCounts[k]) || 0; }); var started = 0; Object.keys(w.registeredCounts || {}).forEach(function (k) { started += Number(w.registeredCounts[k]) || 0; }); var alloc = (w.allocatedSerials || []).length; return { total: t + alloc, done: done + alloc, started: started }; }
+  function sortWork(a, b) { var p = { urgent: 0, normal: 1, low: 2 }; if ((p[a.priority] || 1) !== (p[b.priority] || 1)) return (p[a.priority] || 1) - (p[b.priority] || 1); if ((a.dueDate || '') !== (b.dueDate || '')) { if (!a.dueDate) return 1; if (!b.dueDate) return -1; return a.dueDate < b.dueDate ? -1 : 1; } return 0; }
+
+  /* ── views ────────────────────────────────────────────────────────────── */
+  function draw() {
+    if (!DATA) return;
+    Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.setAttribute('aria-current', b.dataset.tab === TAB ? 'page' : 'false'); });
+    if (TAB === 'today') return UNIT ? drawUnit() : (WO ? drawWorkOrder() : drawToday());
+    if (TAB === 'work') return UNIT ? drawUnit() : (WO ? drawWorkOrder() : drawWork());
+    if (TAB === 'scan') return drawScan();
+    if (TAB === 'stock') return drawStock();
+    if (TAB === 'quality') return UNIT ? drawUnit() : drawQuality();
+  }
+  function boardRows() { return BOARD && BOARD.rows ? BOARD.rows.filter(function (r) { return r.stage !== 'complete'; }) : null; }
+  function workCard(r) {
+    var p = r.progress, sub = [];
+    if (p.units) sub.push(p.readyRoots + ' of ' + p.expectedRoots + ' ready'); else sub.push('awaiting serials');
+    if (p.nextUp) sub.push('next: ' + p.nextUp.label + ' · ' + p.nextUp.count);
+    if (r.lineId) sub.push(r.lineId);
+    return '<button class="card' + (r.priority === 'urgent' || r.late ? ' urgent' : '') + '" data-wo="' + esc(r.id) + '"><div class="h"><b>' + esc(r.orderNo) + (r.inventory ? ' <span class="pill">stock</span>' : '') + '</b><span class="pill' + (r.late ? ' bad' : (STAGE_PILL[r.stage] ? ' ' + STAGE_PILL[r.stage] : '')) + '">' + (r.late ? 'late · ' + esc(r.due) : (r.due ? 'due ' + esc(r.due) : esc(r.stageLabel))) + '</span></div>'
+      + '<div class="m">' + esc(r.requirements.map(function (x) { return x.qty + ' × ' + x.sku; }).join(', ') || r.stageLabel) + (r.assignee ? ' · ' + esc(r.assignee) : '') + (r.priority === 'urgent' ? ' · <b style="color:#B42318">urgent</b>' : '') + '</div>'
+      + '<div class="bar"><i style="width:' + p.percent + '%' + (p.held ? ';background:#B42318' : '') + '"></i></div><div class="m">' + (p.units ? p.percent + '% · ' + p.done + ' of ' + p.total + ' steps' : '') + (p.held ? ' · <b style="color:#B42318">' + p.held + ' on hold</b>' : '') + ' · ' + esc(sub.join(' · ')) + '</div></button>';
+  }
+  function drawWork() {
+    var rows = boardRows();
+    if (!rows) { drawWorkLegacy(); return; }
+    var filters = [['all', 'All'], ['mine', 'Mine'], ['late', 'Late'], ['holds', 'Holds'], ['ready', 'Ready']];
+    var list = rows.filter(function (r) { if (WORK_FILTER === 'mine') return mine(r); if (WORK_FILTER === 'late') return r.late; if (WORK_FILTER === 'holds') return r.progress.held > 0; if (WORK_FILTER === 'ready') return r.stage === 'ready'; return true; });
+    $('view').innerHTML = '<h1>Work</h1><div class="tabs">' + filters.map(function (f) { var n = f[0] === 'all' ? rows.length : rows.filter(function (r) { return f[0] === 'mine' ? mine(r) : f[0] === 'late' ? r.late : f[0] === 'holds' ? r.progress.held > 0 : r.stage === 'ready'; }).length; return '<button type="button" data-filter="' + f[0] + '" aria-pressed="' + (WORK_FILTER === f[0]) + '">' + f[1] + (n ? ' ' + n : '') + '</button>'; }).join('') + '</div>'
+      + '<p class="note">' + list.length + ' work order' + (list.length === 1 ? '' : 's') + ' · late first, then urgent, then by target date.' + (BOARD.limited ? ' Newest 100.' : '') + '</p>'
+      + (list.length ? list.map(workCard).join('') : '<p class="note">' + (WORK_FILTER === 'mine' ? 'Nothing is assigned to you. The plant manager assigns work orders on the board.' : 'Nothing here. A paid order releases a work order automatically; stock builds are registered on the desktop.') + '</p>');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-filter]'), function (b) { b.onclick = function () { WORK_FILTER = b.dataset.filter; store('omega_plant_app_filter', WORK_FILTER); drawWork(); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-wo]'), function (b) { b.onclick = function () { openWorkOrder(b.dataset.wo); }; });
+  }
+  function drawWorkLegacy() {
+    var list = (DATA.worksOrders || []).filter(openWork).sort(sortWork);
+    var today = new Date().toISOString().slice(0, 10);
+    $('view').innerHTML = '<h1>Work</h1><p class="note">' + list.length + ' open work order' + (list.length === 1 ? '' : 's') + ' · urgent first, then by due date.' + (DATA.limited ? ' Newest 100 shown.' : '') + '</p>'
+      + (list.length ? list.map(function (w) { var t = totals(w), pct = t.total ? Math.round(t.done / t.total * 100) : 0, late = w.dueDate && w.dueDate < today && t.done < t.total;
+          return '<button class="card' + (w.priority === 'urgent' ? ' urgent' : '') + '" data-wo="' + esc(w.id) + '"><div class="h"><b>' + esc(w.orderNo || 'Stock build') + '</b><span class="pill' + (late ? ' bad' : '') + '">' + (w.dueDate ? 'due ' + esc(w.dueDate) : esc(w.status)) + '</span></div>'
+            + '<div class="m">' + esc((w.requirements || []).map(function (r) { return r.qty + ' × ' + r.sku; }).join(', ') || (w.allocatedSerials || []).length + ' from stock') + '</div>'
+            + '<div class="bar"><i style="width:' + pct + '%"></i></div><div class="m">' + t.done + ' of ' + t.total + ' finished</div></button>'; }).join('')
+        : '<p class="note">Nothing open.</p>');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-wo]'), function (b) { b.onclick = function () { openWorkOrder(b.dataset.wo); }; });
+  }
+  /* ── Today: what needs a person, my work, and today's numbers ───────── */
+  function drawToday() {
+    var rows = boardRows() || [], my = rows.filter(mine), late = rows.filter(function (r) { return r.late; }), held = rows.filter(function (r) { return r.progress.held > 0; });
+    $('view').innerHTML = '<h1>Today</h1><p class="note" id="today-when">' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })) + '</p>'
+      + '<div class="kv" id="today-kv"><div><small>Open work orders</small><b>' + rows.length + '</b></div><div class="' + (late.length ? 'bad' : '') + '"><small>Late</small><b>' + late.length + '</b></div><div class="' + (held.length ? 'bad' : '') + '"><small>With holds</small><b>' + held.length + '</b></div><div><small>Mine</small><b>' + my.length + '</b></div></div>'
+      + '<div id="today-numbers"><p class="note">Loading today’s scans…</p></div>'
+      + '<h2>Needs a person</h2><div id="today-att"><p class="note">Loading…</p></div>'
+      + '<h2>' + (my.length ? 'My work' : 'Up next') + '</h2>' + ((my.length ? my : rows).slice(0, 5).map(workCard).join('') || '<p class="note">No open work orders.</p>') + (rows.length > 5 ? '<button class="big ghost" id="to-work">All work orders</button>' : '')
+      + '<a class="big" href="' + scannerHref() + '">Scan at a bench</a>';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-wo]'), function (b) { b.onclick = function () { openWorkOrder(b.dataset.wo); }; });
+    if ($('to-work')) $('to-work').onclick = function () { TAB = 'work'; draw(); };
+    loadOps().then(function (o) { var d = o.floor.days[o.floor.days.length - 1], el = $('today-numbers'); if (!el) return;
+      el.innerHTML = '<div class="kv"><div><small>Scans advanced today</small><b>' + d.advances + '</b></div><div><small>Reached Ready today</small><b>' + d.ready + '</b></div><div class="' + (d.refusals ? 'bad' : '') + '"><small>Refused today</small><b>' + d.refusals + '</b></div><div class="' + (d.testFails ? 'bad' : '') + '"><small>Tests · fails</small><b>' + d.tests + ' · ' + d.testFails + '</b></div></div>'
+        + (o.queues.some(function (x) { return x.count; }) ? '<div class="strip">' + o.queues.filter(function (x) { return x.count; }).map(function (x) { return '<i' + (x.held ? ' style="border-color:#F4B4AE;color:#B42318"' : '') + '>' + esc(x.label) + ' · ' + x.count + (x.held ? ' · ' + x.held + ' held' : '') + '</i>'; }).join('') + '</div>' : '');
+    })['catch'](function (e) { if ($('today-numbers')) $('today-numbers').innerHTML = '<p class="note">' + esc(e.message) + '</p>'; });
+    loadAttention().then(function (a) { var el = $('today-att'); if (!el) return; var items = [];
+      a.held.slice(0, 5).forEach(function (u) { items.push('<button class="unit" data-unit="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>on hold ' + (u.hours != null ? hrs(u.hours) : '') + ' · ' + esc(u.hold) + (u.ncr ? ' · ' + esc(u.ncr) : '') + '</small></div><span class="pill bad">hold</span></button>'); });
+      a.stuck.slice(0, 5).forEach(function (u) { items.push('<button class="unit" data-unit="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>' + hrs(u.hours) + ' at ' + esc(u.label) + (u.orderNo ? ' · ' + esc(u.orderNo) : '') + '</small></div><span class="pill bad">stuck</span></button>'); });
+      a.failed.filter(function (u) { return !u.onHold; }).slice(0, 3).forEach(function (u) { items.push('<button class="unit" data-unit="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>failed ' + esc(u.failureCode || 'a test') + ' and is not on hold</small></div><span class="pill bad">review</span></button>'); });
+      a.silent.slice(0, 3).forEach(function (st) { items.push('<div class="unit"><div><b>' + esc(st.label) + '</b><small>' + esc(st.operation) + ' · ' + (st.hoursSince == null ? 'never scanned' : 'quiet ' + hrs(st.hoursSince)) + '</small></div><span class="pill">bench</span></div>'); });
+      el.innerHTML = (items.join('') || '<p class="note">Nothing stuck, held or failed, and every bench has scanned recently.</p>') + '<p class="note">Stuck = over ' + a.thresholds.stuckHours + ' h at one bench. Of the newest ' + a.sampled + ' units.</p>'
+        + '<h2>' + esc((DATA.brand && DATA.brand.workspace) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record: what you build here is what the office ships and the customer places at a site.</p><div class="kv"><a href="/office/app?org=' + encodeURIComponent(ORG) + '" style="text-decoration:none;color:inherit"><small>Office</small><b style="font-size:15px">Orders, POs, sites</b></a><a href="/app-sandbox/bench" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a></div>';
+      Array.prototype.forEach.call(el.querySelectorAll('[data-unit]'), function (b) { b.onclick = function () { WO = null; openUnit(b.dataset.unit); }; });
+    })['catch'](function (e) { if ($('today-att')) $('today-att').innerHTML = '<p class="note">' + esc(e.message) + '</p>'; });
+  }
+  function openWorkOrder(id) {
+    status('Loading work order…'); WO = null; MATERIALS = null;
+    Promise.all([api('/api/logic-plant' + q + '&workOrder=' + encodeURIComponent(id)), api('/api/logic-materials' + q + '&workOrder=' + encodeURIComponent(id))['catch'](function () { return null; })])
+      .then(function (r) { WO = r[0]; MATERIALS = r[1]; status(''); draw(); })['catch'](fail);
+  }
+  function drawWorkOrder() {
+    var w = WO.workOrder, units = WO.units || [], t = totals(w), routing = w.routing || [], r = WO.board, p = r && r.progress;
+    var byAt = {}; units.forEach(function (u) { if (u.shipUnit !== false) byAt[u.at || ''] = (byAt[u.at || ''] || 0) + 1; });
+    $('view').innerHTML = '<button class="back" id="back">‹ Back</button><h1>' + esc(w.orderNo || 'Stock build') + '</h1><p class="note">' + (r ? esc(r.stageLabel) + (r.late ? ' · <b style="color:#B42318">late</b>' : '') : esc(w.status)) + (w.dueDate ? ' · due ' + esc(w.dueDate) : '') + (w.priority && w.priority !== 'normal' ? ' · ' + esc(w.priority) : '') + (w.lineId ? ' · ' + esc(w.lineId) : '') + (w.assignee ? ' · ' + esc(w.assignee) : '') + '</p>'
+      + (p ? '<div class="bar"><i style="width:' + p.percent + '%' + (p.held ? ';background:#B42318' : '') + '"></i></div><div class="kv"><div><small>Built</small><b>' + p.percent + '%</b><small>' + p.done + ' of ' + p.total + ' steps</small></div><div><small>Ready to ship</small><b>' + p.readyRoots + ' / ' + p.expectedRoots + '</b></div><div class="' + (p.held ? 'bad' : '') + '"><small>On hold</small><b>' + p.held + '</b></div><div><small>Next up</small><b style="font-size:15px">' + (p.nextUp ? esc(p.nextUp.label) + ' · ' + p.nextUp.count : (r.stage === 'ready' ? 'Ship' : '—')) + '</b></div></div>'
+           : '<div class="kv"><div><small>Finished</small><b>' + t.done + ' / ' + t.total + '</b></div><div class="' + (units.some(function (u) { return u.hold; }) ? 'bad' : '') + '"><small>On hold</small><b>' + units.filter(function (u) { return u.hold; }).length + '</b></div></div>')
+      + (w.managerNotes ? '<p>' + esc(w.managerNotes) + '</p>' : '')
+      + '<div class="strip">' + routing.map(function (s) { return '<i>' + esc(s.label || s.key) + (byAt[s.key] ? ' · ' + byAt[s.key] : '') + '</i>'; }).join('') + '</div>'
+      + (MATERIALS ? (MATERIALS.short && MATERIALS.short.length ? '<h2>Short of</h2>' + MATERIALS.short.map(function (s) { return '<div class="unit"><div>' + esc(s.name || s.sku) + '<small>' + esc(s.sku) + ' · on hand ' + s.onHand + ' · on order ' + s.onOrder + '</small></div><span class="pill bad">' + Math.ceil(s.short) + ' ' + esc(s.unit) + (s.late ? ' · late' : '') + '</span></div>'; }).join('') : (MATERIALS.hasBom ? '<p class="note">✓ Every part for this work order is on the shelf or on order.</p>' : '')) : '')
+      + '<h2>Units · ' + units.length + '</h2>'
+      + (units.length ? units.filter(function (u) { return u.shipUnit !== false; }).concat(units.filter(function (u) { return u.shipUnit === false; })).map(function (u) { var p = u.progress; return '<button class="unit" data-unit="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.sku) + (u.shipUnit === false ? ' · component' : '') + '</small></div><div style="text-align:right">' + (u.hold ? '<span class="pill bad">hold · ' + esc(u.ncr || '') + '</span>' : '<span class="pill' + (u.at === 'ready' ? ' ok' : '') + '">' + esc(label(u.at)) + '</span>') + (p ? '<small>' + p.done + ' of ' + p.total + ' steps' + (p.complete ? ' ✓' : (p.open.length ? ' · next: ' + esc(p.open[0]) : '')) + '</small>' : '') + '</div></button>'; }).join('') : '<p class="note">No serials registered yet. Register them under Work orders on the desktop, or from the label printer’s sheet.</p>')
+      + (WO.limited ? '<p class="note">First 400 units shown.</p>' : '')
+      + '<a class="big" href="' + scannerHref() + '">Scan at a bench</a><a class="big ghost" href="/plant/' + q + '&wo=' + encodeURIComponent(w.id) + '">Register serials on the desktop</a>';
+    $('back').onclick = function () { WO = null; draw(); };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-unit]'), function (b) { b.onclick = function () { openUnit(b.dataset.unit); }; });
+  }
+  function openUnit(serial) {
+    status('Loading unit…');
+    api('/api/logic-plant' + q + '&serial=' + encodeURIComponent(serial)).then(function (d) { UNIT = d; status(''); draw(); })['catch'](fail);
+  }
+  function drawUnit() {
+    var u = UNIT.unit, routing = (WO && WO.workOrder && WO.workOrder.routing) || (DATA.flow && DATA.flow.routing) || [], ai = -1;
+    routing.forEach(function (s, i) { if (s.key === u.at) ai = i; });
+    var work = u.work || {}, issued = [];
+    Object.keys(work).forEach(function (st) { var w = work[st] || {}; Object.keys(w.issued || {}).forEach(function (sku) { issued.push(label(st) + ': ' + w.issued[sku] + ' × ' + sku + (w.lots && w.lots[sku] ? ' (lot ' + w.lots[sku] + ')' : '')); }); });
+    $('view').innerHTML = '<button class="back" id="back">‹ Back</button><h1 class="mono" style="font-family:\'IBM Plex Mono\',monospace;font-size:20px">' + esc(u.serial) + '</h1><p class="note">' + esc(u.unitType || 'unit') + ' · ' + esc(u.sku) + ' · ' + esc(u.orderNo || 'stock') + '</p>'
+      + (u.hold ? '<div class="off" style="background:#FDEBE9;color:#B42318"><b>On hold:</b> ' + esc(u.hold) + (u.ncr ? ' · ' + esc(u.ncr) : '') + '</div>' : '')
+      + '<div class="strip">' + routing.map(function (s, i) { return '<i class="' + (i < ai ? 'past' : (i === ai ? 'here' : '')) + '">' + esc(s.label) + '</i>'; }).join('') + '</div>'
+      + '<div class="kv"><div><small>At</small><b style="font-size:16px">' + esc(label(u.at)) + '</b>' + (u.arrivedAt ? '<small>since ' + esc(String(u.arrivedAt).slice(0, 16).replace('T', ' ')) + '</small>' : '') + '</div><div><small>Next bench</small><b style="font-size:16px">' + esc(ai >= 0 && routing[ai + 1] ? routing[ai + 1].label : (u.at ? (ai === routing.length - 1 ? 'Finished' : '—') : (routing[0] ? routing[0].label : '—'))) + '</b></div><div><small>Last test</small><b style="font-size:16px">' + esc(u.test && u.test.result ? u.test.result : '—') + '</b>' + (u.test && u.test.failureCode ? '<small>' + esc(u.test.failureCode) + '</small>' : '') + '</div><div><small>Work order</small><b style="font-size:16px">' + esc(u.orderNo || 'stock') + '</b><small>' + esc(u.woId || '') + '</small></div></div>'
+      + (u.progress ? '<h2>Steps at ' + esc(label(u.progress.station)) + '</h2><div class="kv"><div><small>Done</small><b>' + u.progress.done + ' / ' + u.progress.total + '</b></div><div class="' + (u.progress.complete ? '' : 'bad') + '"><small>' + (u.progress.complete ? 'Ready to move on' : 'Still open') + '</small><b style="font-size:14px">' + (u.progress.complete ? '✓' : esc((u.progress.open || []).slice(0, 3).join(' · '))) + '</b></div></div>' : '')
+      + (issued.length ? '<h2>Parts issued</h2>' + issued.map(function (t) { return '<div class="unit"><span>' + esc(t) + '</span></div>'; }).join('') : '')
+      + (UNIT.genealogy && UNIT.genealogy.length > 1 ? '<h2>Assembly</h2>' + UNIT.genealogy.map(function (g) { return '<div class="unit"><span class="mono">' + esc(g.serial) + '</span><small>' + esc(g.unitType) + (g.parentSerial ? ' → ' + esc(g.parentSerial) : ' · root') + '</small></div>'; }).join('') : '')
+      + '<h2>Recent scans</h2>' + ((UNIT.events || []).slice(0, 10).map(function (e) { var v = e.verdict || {}; return '<div class="unit"><div>' + esc(v.say || (e.control && e.control.action) || e.kind || '') + '<small>' + esc(day(e.at)) + ' · ' + esc(label(e.station)) + (e.kind === 'issue' ? ' · issued ' + esc(e.qty) + ' × ' + esc(e.sku) : '') + '</small></div><span class="pill' + (e.ok ? '' : ' bad') + '">' + (e.ok ? 'ok' : 'refused') + '</span></div>'; }).join('') || '<p class="note">No scans yet.</p>')
+      + (u.custody && u.custody.status ? '<h2>After the plant</h2><div class="unit"><div>' + esc(String(u.custody.status).replace(/_/g, ' ')) + (u.custody.siteName ? ' at ' + esc(u.custody.siteName) : (u.custody.plannedSiteName ? ' · going to ' + esc(u.custody.plannedSiteName) : '')) + '<small>' + [u.custody.shippedAt ? 'shipped ' + esc(day(u.custody.shippedAt)) : '', u.custody.receivedAt ? 'received ' + esc(day(u.custody.receivedAt)) : '', u.custody.commissionedAt ? 'commissioned ' + esc(day(u.custody.commissionedAt)) : ''].filter(Boolean).join(' · ') + '</small></div><a href="/logic-custody.html?org=' + encodeURIComponent(ORG) + '&serial=' + encodeURIComponent(u.serial) + '" class="pill">passport</a></div>' : '')
+      + '<h2>Quality</h2><p class="note">A hold stops every scan on this unit until a plant administrator releases it with a disposition. A failed machine test still needs a passing retest.</p>'
+      + (u.hold ? '<textarea id="q-reason" placeholder="Disposition — what was found and what was done"></textarea><button class="big ghost" id="q-release">Release the hold</button>' : '<textarea id="q-reason" placeholder="Why this unit is being held"></textarea><button class="big ghost" id="q-hold">Place a quality hold</button>')
+      + '<a class="big" href="' + scannerHref() + '">Scan at a bench</a>';
+    $('back').onclick = function () { UNIT = null; draw(); };
+    var act = $('q-release') || $('q-hold');
+    act.onclick = function () {
+      var reason = $('q-reason').value.trim(); if (!reason) { status('Write the reason or disposition first.'); return; }
+      act.disabled = true; status('Saving…');
+      var bytes = new Uint8Array(12); crypto.getRandomValues(bytes); var id = Array.prototype.map.call(bytes, function (n) { return ('0' + n.toString(16)).slice(-2); }).join('');
+      api('/api/plant-control', { orgId: ORG, serial: u.serial, action: u.hold ? 'release' : 'hold', reason: reason, actionId: id }).then(function () { status(u.hold ? 'Hold released.' : 'Hold placed.'); return openUnit(u.serial); })['catch'](fail).then(function () { act.disabled = false; });
+    };
+  }
+  function scannerHref() { var st = load('omega_station_v1', null); return '/app-sandbox/bench' + (st && st.stationId ? '' : ''); }
+  function drawScan() {
+    var st = load('omega_station_v1', null);
+    $('view').innerHTML = '<h1>Scan</h1>'
+      + (st ? '<div class="card"><div class="h"><b>' + esc(st.label || st.stationId) + '</b><span class="pill ok">paired</span></div><div class="m">' + (st.roaming ? 'Roaming phone — you pick the bench on each scan.' : 'This phone is paired to one bench.') + '</div></div><a class="big" href="/app-sandbox/bench">Open the scanner</a>'
+           : '<p>This phone is not paired yet. A plant administrator creates a <b>Roaming phone</b> credential under Work orders → Pair a scanner, then you paste the token once on the scanner screen. After that the scanner opens with one tap and you pick the bench you are at on each scan.</p><a class="big" href="/app-sandbox/bench">Open the scanner to pair</a><a class="big ghost" href="/plant/' + q + '">Create a credential (admin)</a>')
+      + '<h2>Find a unit</h2><div class="row"><input id="find" placeholder="Serial, or the label URL" autocapitalize="off" autocorrect="off"><button id="find-go">Look up</button></div><p class="note">Every serial has a history: where it is, what was issued into it, its tests and holds.</p>';
+    $('find-go').onclick = function () { var v = $('find').value.trim(); if (v) { WO = null; TAB = 'quality'; openUnit(v.indexOf('/') >= 0 ? v.split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop() : v); } };
+    $('find').onkeydown = function (e) { if (e.key === 'Enter') $('find-go').click(); };
+  }
+  function drawStock() {
+    status('Loading stock…');
+    Promise.all([api('/api/logic-plant' + q + '&page=units'), api('/api/logic-materials' + q)['catch'](function () { return null; })]).then(function (r) {
+      var units = r[0].rows || [], m = r[1], by = {};
+      units.forEach(function (u) { if (!u.shipUnit) return; var g = by[u.sku] = by[u.sku] || { a: 0, b: 0, c: 0 }; if (u.inventoryStatus === 'available' && u.at === 'ready' && !u.hold) g.a++; else if (u.orderId) g.b++; else g.c++; });
+      var short = m ? (m.rows || []).filter(function (x) { return x.kind === 'component' && !x.make && (x.net.committed + x.net.pipeline + (x.net.buffer || 0)) > 0; }) : [];
+      $('view').innerHTML = '<h1>Stock</h1><h2>Finished units</h2>' + (Object.keys(by).length ? Object.keys(by).sort().map(function (s) { return '<div class="unit"><div><b>' + esc(s) + '</b><small>' + by[s].a + ' available · ' + by[s].b + ' assigned · ' + by[s].c + ' building</small></div><span class="pill' + (by[s].a ? ' ok' : '') + '">' + by[s].a + ' on the shelf</span></div>'; }).join('') : '<p class="note">No finished shipping units in the newest 100.</p>')
+        + '<h2>Parts short</h2>' + (m ? (short.length ? short.map(function (x) { var firm = Math.ceil(x.net.committed + x.net.pipeline + (x.net.buffer || 0)); return '<div class="unit"><div>' + esc(x.name) + '<small>' + esc(x.sku) + ' · on hand ' + x.onHand + ' · on order ' + x.onOrder + (x.orderBy ? ' · order by ' + esc(x.orderBy) : '') + '</small></div><span class="pill bad">' + firm + ' ' + esc(x.unit) + (x.late ? ' · late' : '') + '</span></div>'; }).join('') + '<p class="note">Purchase list value ' + (m.summary && m.summary.spend != null ? '$' + Number(m.summary.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '. The office orders from the materials plan.</p>' : '<p class="note">✓ Nothing short for the open work.</p>') : '<p class="note">Materials plan unavailable.</p>')
+        + '<a class="big ghost" href="/logic-inventory.html' + q + '">Full inventory on the desktop</a>';
+      status('');
+    })['catch'](fail);
+  }
+  function drawQuality() {
+    var held = (DATA.units || []).filter(function (u) { return u.hold; });
+    $('view').innerHTML = '<h1>Quality</h1><p class="note">' + held.length + ' unit' + (held.length === 1 ? '' : 's') + ' on hold' + (DATA.limited ? ' in the newest 100' : '') + '.</p>'
+      + (held.length ? held.map(function (u) { return '<button class="unit" data-unit="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.sku) + ' · ' + esc(u.orderNo || 'stock') + ' · at ' + esc(label(u.at)) + '</small><small>' + esc(u.hold) + (u.ncr ? ' · ' + esc(u.ncr) : '') + '</small></div><span class="pill bad">hold</span></button>'; }).join('') : '<p class="note">Nothing on hold.</p>')
+      + '<h2>Find a unit</h2><div class="row"><input id="find" placeholder="Serial" autocapitalize="off" autocorrect="off"><button id="find-go">Look up</button></div>';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-unit]'), function (b) { b.onclick = function () { WO = null; openUnit(b.dataset.unit); }; });
+    $('find-go').onclick = function () { var v = $('find').value.trim(); if (v) { WO = null; openUnit(v); } };
+    $('find').onkeydown = function (e) { if (e.key === 'Enter') $('find-go').click(); };
+  }
+
+  /* ── shell ────────────────────────────────────────────────────────────── */
+  Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; WO = null; UNIT = null; draw(); window.scrollTo(0, 0); }; });
+  document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; WO = null; UNIT = null; draw(); window.scrollTo(0, 0); };
+  $('refresh').onclick = function () { WO = null; UNIT = null; loadAll(); };
+  $('signout').onclick = function () { auth.signOut().then(function () { location.reload(); }); };
+  $('signin').onclick = function () {
+    var p = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(p)['catch'](function () { return auth.signInWithRedirect(p); })['catch'](fail);
+  };
+  function paintNet() { $('offline').hidden = navigator.onLine !== false; }
+  window.addEventListener('online', paintNet); window.addEventListener('offline', paintNet); paintNet();
+  auth.onAuthStateChanged(function (u) {
+    $('gate').hidden = !!u; $('nav').hidden = !u; $('signout').hidden = !u; $('view').innerHTML = '';
+    if (!u) { $('who').textContent = ''; return; }
+    if (!ORG) { $('gate').hidden = false; $('gate-note').textContent = 'Open the app once from your office link so it knows your workspace.'; $('signin').hidden = true; return; }
+    loadAll();
+  });
+  if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('/app-sandbox/sw.js', { scope: '/app-sandbox/' })['catch'](function () {}); } catch (e) {} }
+})();
+</script>
+</body>
+</html>

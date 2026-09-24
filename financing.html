@@ -168,6 +168,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <script src="/config.js"></script>
 <script src="/omega-brand.js"></script>
 <script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-bess-result.js"></script>
 <script>
 'use strict';
 var cfg = (window.CLEARSKY_CONFIG || {});
@@ -211,18 +213,71 @@ auth.onAuthStateChanged(function(u){
   if (APP_ID) loadApp(); else if (PROJECT_ID) prefillFromProject();
 });
 
-/* Prefill from the project the editor came from. Address and cost only —
-   guessing a customer's legal entity from a project name is the kind of
-   help that produces a wrong name on a credit application. */
+/* Prefill from the project the editor came from. Address, cost, and — when
+   the project carries one — the sizing record the Battery Sizer or the
+   site-map editor left on it.
+
+   Still no legal entity, industry or HQ: guessing a customer's registered
+   name from a project name is the kind of help that puts a wrong name on a
+   credit application. The sizing record fills only what the sizing
+   genuinely determined, and every figure it fills is stated with its basis
+   so the person submitting can see whether it came from a year of interval
+   data or one bill. */
 function prefillFromProject(){
   db.collection('projects').doc(PROJECT_ID).get().then(function(d){
     if(!d.exists) return;
     var v=d.data()||{};
     if(v.address) q('projectAddress').value=v.address;
-    if(v.capex)   q('financedAmount').value=v.capex;
-    if(v.bessKwh) q('annualKwh').placeholder='sized from '+v.bessKwh+' kWh';
+
+    var R = window.OmegaBessResult;
+    var sizing = R && v[R.FIELD];
+    if(sizing && sizing.powerKw){
+      var f = R.toApplicationFields(sizing), k;
+      for(k in f){
+        if(!f.hasOwnProperty(k)) continue;
+        var el = q(k);
+        /* Never overwrite something already on the form. A draft the person
+           has edited beats a prefill, always. */
+        if(el && !el.value) el.value = f[k];
+      }
+      showSizingBanner(sizing);
+    } else if(v.capex){
+      q('financedAmount').value = v.capex;
+    }
+    if(!q('financedAmount').value && v.capex) q('financedAmount').value = v.capex;
   }).catch(function(){});
 }
+
+/* Say where the numbers came from, above the form rather than inside a
+   tooltip. A single-bill estimate and a measured result look identical once
+   they are sitting in an input box. */
+function showSizingBanner(sizing){
+  var R = window.OmegaBessResult;
+  var host = q('msg'); if(!host || !R) return;
+  var grade = R.grade(sizing);
+  var soft  = (grade === 'single bill' || grade === 'partial year');
+  var rows = R.summaryRows(sizing).map(function(r){
+    return '<div style="display:flex;justify-content:space-between;gap:16px;padding:2px 0">'
+      + '<span style="color:#64748B">' + esc(r[0]) + '</span>'
+      + '<span style="font-weight:600;text-align:right">' + esc(String(r[1])) + '</span></div>';
+  }).join('');
+  host.innerHTML =
+    '<div style="border:1px solid ' + (soft ? '#E0B75A' : '#CBD5E1') + ';border-left:3px solid '
+    + (soft ? '#C98A16' : '#0E9E8F') + ';background:' + (soft ? '#FDF8EC' : '#F8FAFC')
+    + ';border-radius:4px;padding:11px 13px;margin:0 0 14px;font-size:12.5px;line-height:1.5">'
+    + '<div style="font-weight:700;margin-bottom:6px">Prefilled from the OMEGA sizing on this project</div>'
+    + rows
+    + (soft
+        ? '<div style="margin-top:8px;color:#8A5B0B">This was sized from '
+          + (sizing.monthsAnalyzed === 1 ? 'a single utility bill'
+                                         : sizing.monthsAnalyzed + ' months of bills')
+          + '. It is a screening estimate, not a measured result — a year of interval '
+          + 'data is what turns it into a number a funder can underwrite.</div>'
+        : '')
+    + '<div style="margin-top:8px;color:#64748B">Every field is editable. Check them against '
+    + 'your quotation before submitting.</div></div>';
+}
+function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function loadApp(){
   db.collection('fin_applications').doc(APP_ID).get().then(function(d){

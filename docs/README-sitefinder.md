@@ -1,8 +1,37 @@
 # Site Finder — property browser with a circuit capacity ledger
 
-A Zillow-shaped browser over C&I property where the headline number is
-**deliverable kW**, not price — and where selling a circuit removes it from
-everyone else's inventory the moment it is saved.
+A property browser over C&I sites, led by energy score, available hosting
+capacity, and a selected battery size. Saving a site keeps it in the workspace;
+placing a hold records the team's allocation against its named feeder.
+
+## September 2026 workflow update
+
+Cards and detail panels lead with the server-calculated energy assessment.
+Filters include minimum energy score, available hosting kW range, battery kW,
+and metered/modelled/unknown load evidence. Saved sites remain visible when
+prospecting filters change. Unknown capacity does not qualify for a numeric
+hosting threshold. ComEd is the fully connected capacity territory; other
+locations retain site and market details without an invented feeder.
+
+The detail workflow connects energy, battery sizing, feeder, hold, contacts,
+and the cost estimator. Address searches use the same canonical saved-site ID
+for both saving and holding. Holds use the selected kW/duration and keep the
+site in the saved list. They are internal team allocations, not utility
+reservations or guarantees of interconnection.
+
+`omega-site-saves.js` stores sites, size, service evidence and estimates in the
+existing `sites` collection; `capacityAllocations` remains the feeder ledger.
+Local fallback requires a resolved org and user and is explicitly labelled.
+Legacy unscoped browser records require explicit migration, and local changes
+are not silently uploaded when connectivity returns.
+
+Scoring, energy modelling, pricing and value-stack arithmetic run in the
+authenticated APIs. Public cost/value-stack files retain presentation metadata
+only. See [server configuration and contracts](sitefinder-server-config.md)
+for deployment, Crexi credentials, field mapping and endpoint verification.
+Crexi owner, occupant and broker roles remain separate; an absent listing is
+not evidence that a property is off market. Live feed verification requires
+the actual access details and a representative response.
 
 ## Files
 
@@ -375,6 +404,181 @@ pins appear. Don't:
 Live per-site enrichment is a real and separate thing, and it belongs on the
 card a rep opens rather than on every pan.
 
+### The imported Crexi snapshot: finishing the map
+
+The Cook County snapshot (3,677 listings for `chileasing.com`) was geocoded
+once, in `scripts/prepare-site-catalog.js`, with the Census batch geocoder —
+and only a batch `Exact` match on a cleanly parsed address was kept. A
+quarter of the catalogue (881 rows: suites, ranges, corner listings, and
+anything the address regex could not split) had no pin and only appeared in
+a text search.
+
+`api/_lib/geocode-listings.js` is the second and third pass, shared by the
+prepare script and the staff **Match remaining locations** button in the
+catalogue panel (`POST /api/site-catalog {action:'geocode'}`, staff only):
+
+1. Census one-line geocoder, several spellings per address (range → first
+   number, suite/unit dropped, `NWC A & B` → each street). A hit is
+   `geocode.status:'matched'`, street-interpolated, never rooftop.
+2. Whatever the geocoder cannot place takes the median position of the
+   MATCHED listings in its ZIP, else its city — `status:'approximate'`,
+   `area:'ZIP 60077'`. The row is on the map and in a bounds search, the
+   card says the pin is an area centre, and it carries the same `approx`
+   flags as a ZIP-centroid search pin: no circuit attributed, capacity
+   cannot be held, and opening the card tries to fix the pin first.
+
+Each server call works for about 38 s, publishes a new catalogue version
+and reports progress; the page loops until `done`. **Nobody has to press
+it:** `api/logic-worker.js` (the five-minute Vercel cron) runs one pass per
+tick for the first workspace whose catalogue is not marked `matchingDone`,
+so a 3,677-row import finishes its own map within the hour. The button
+remains for an immediate run. A row with no ZIP or
+city that any matched listing shares stays unplaced and searchable. The
+manifest now carries `located`, `approximate` and `unmatched`.
+
+### The circuits are read once, on the server
+
+A listing's serving circuit and its published hosting capacity used to be
+read in the browser from the polygons drawn for the map's current view.
+That is fine for a screen of pins and useless for a county: the phone app
+lists a hundred listings across Cook County, the polygon layer refuses an
+extent that wide (`ATTRIB_MAX_DEG`), and every card said "Circuit unknown".
+
+`api/_lib/circuit-attribution.js` asks ComEd once per matched listing (the
+same point query on layer 75 within 46 m the desktop rule uses; the
+service constants live in `api/_lib/comed-service.js`) and writes the
+answer onto the row: `feederId`, `sub`, `nameplate`, `queue` and a
+`circuit{attempted, status:'attributed'|'none', at, service}` record. An
+area-centre pin is never asked. `api/logic-worker.js` runs one pass per
+tick once geocoding is finished (`POST /api/site-catalog
+{action:'circuits'}` runs one now, staff only), the manifest carries
+`circuits` and `circuitsTried`, and a transport or service error stops a
+pass without marking anything, so a rotated service is a constant to fix
+and not 3,000 rows stamped "no circuit".
+
+With the circuits on the rows, `POST /api/site-catalog {sort:'capacity',
+minKw}` sorts the WHOLE catalogue by what is left on the circuit and
+applies the minimum there; the first page is the county's shortlist. A
+staff import strips every circuit (`validate` keeps them only for a server
+re-publish, `opts.keepCircuits`), so an uploaded file cannot name one.
+Holds are still the browser's ledger: `nameplate − queue` is what the server
+sorts by, and the card subtracts the holds it knows about.
+
+**ComEd rotates the service name monthly** (`…_JUN2026` stopped answering
+with a 403 on 22 Sep 2026; `…_SEP2026` is current). Every browser read now
+goes through the same-origin `/comed-proxy` (`api/comed-proxy.js`, edge
+cached an hour, rate-limited per address), which names the service in one
+place. The Cloudflare worker in `workers/` carries the same constant for
+its parcel and Socrata routes and is redeployed with wrangler separately.
+
+### The property card
+
+A listing card leads with what a buyer asks first: asking price, value,
+last sale, days on market, owner and contact. The imported snapshot carries
+the asking price and the size; every other figure prints **pending API
+integration** until the Crexi data agreement is live, at which point
+`omega-site-market.js` fills the same lines from the metered detail lookup
+(and the assessor layer already fills value and owner where a county
+publishes them).
+
+**Capturing the listing page.** The search cards never carried the rest;
+the listing page does. In the catalogue panel, staff drag the **OMEGA
+capture** bookmarklet to the bookmarks bar, open a listing on Crexi (the
+card's link), click the bookmark once per listing, then click it anywhere
+on Crexi and press **Download file**, and import that file with **Import
+captured listing details**. `api/_lib/listing-detail.js` reads the page
+text (the price line "Unpriced | 1 day on market | Updated 1 day ago", the
+Details grid, the broker cards and "Listed by …") into typed fields on the
+row (`detail`, plus the trimmed `detailText` for re-parsing), via `POST
+/api/site-catalog {action:'details'}`, staff only, 100 captures per call.
+A capture for a listing that is not in the catalogue is reported and
+skipped. **A page at a time:** **Copy listing links for this page** puts
+the links of every listing on the current catalogue page that has no
+details yet on the clipboard; on Crexi, the bookmark's **Capture a list**
+takes that paste and walks the listings in a second window, about five
+seconds each (a human pace, at most 150 per run), saving each and
+downloading the file when it finishes. `scripts/test-crexi-capture.js`
+runs the bookmarklet against a stand-in for crexi.com. Owner and sale history live on Crexi's Record tab behind the
+Intelligence subscription and are not on the page, so those lines still
+say "pending API integration". Phone and email are masked until "View
+phone number" is clicked on the page; click first, then capture. One page
+per click for listings under review; a bulk crawl waits for the Crexi data
+agreement. Page documents now hold 50 rows (a captured row is larger).
+
+### Call the owner
+
+**Call** on the card, and step 5 of the drawer: every name and number the
+record knows, each labelled (owner, business on site, listing broker,
+with "number masked on Crexi" where the page hid it); a talk track built
+from this site's circuit, battery size and the priced lease offer, with a
+broker version when the first contact is a broker; a place to save an
+owner name or number found elsewhere (onto the saved site's `ownerName`
+and `ownerPhone`); and a call log that appends to the site's notes so the
+team sees it. Logging a call on an unsaved site stars it first. Nothing
+dials: numbers are tel: links.
+
+### The phone app
+
+`/sitefinder-app` (`portals/sitefinder-app/`) is the same sales process on a
+phone, installable from the home screen like the SkyFund app: Find (near
+me, or a search, sorted by available kW), Site (facts, fit, lease offer and
+proposal, call sheet, star), Saved, Account. Same workspace, same APIs and
+shared runtime files, nothing copied. `scripts/test-sitefinder-app.js`.
+
+The Find list is the county sorted by available kW: the app asks the
+server for `sort:'capacity'` with the Min kW box applied there, so "Min kW
+1000" is every listing in the workspace on a circuit with a megawatt left,
+not the hundred nearest rows filtered. A row that arrived with its circuit
+seeds the ledger and is not asked of the map layer; only a row the worker
+has not reached yet is read from the polygons in view.
+
+### Which product, how many
+
+"What fits here" ranks FEWEST UNITS FIRST, then closest to the need
+(`OmegaBessCatalog.fit`, `scripts/test-catalog-fit.js`). A 3 MWh need is
+one 3.4 MWh container, not four 760 kWh cabinets; a 1,000 kWh ask is one
+760 kWh cabinet at 3 h, flagged as the closest single product. Where the
+sheet states AC kW the count must cover the power too.
+
+### The host lease offer
+
+Step 7 of the drawer, and **Lease offer** on the card: "rent us the pad
+for this battery and we pay you X a month for N years." `POST
+/api/site-lease` prices it from the rate card in
+`api/_lib/site-lease.js` (pad rent per acre plus a capacity rent per kW,
+escalated over the term, floored for small systems). The bands are built
+from published 2024–2026 host-lease benchmarks listed in
+`RATE_CARD.sources` (storage ground leases per acre, rooftop host leases
+per kW) and are tuned per market as signed comps come in. A rep receives
+the low/base/high rent and never the rates; staff see the build-up and
+the sources.
+`omega-site-lease.js` prints the two-page host proposal (Print / Save as
+PDF). It is the battery sibling of the compute land lease
+(`api/compute-lease.js`), which is fiber-gated and prices a different pad.
+
+### Cost to us: buy the building or lease the pad
+
+The lease offer is what we would pay the owner. **Cost to us** (section 8
+on the desktop card, the "Cost to deploy" card in the app) is the
+company's own number: what it costs to put the battery here under either
+route. `POST /api/project-cost` prices the build through the same gate,
+org pricing record and model as `/api/price-site`, prices the rent with
+the site-lease rate card, and `api/_lib/project-cost.js` composes them:
+
+- **Build**: the installed system at the estimate class the model gives it,
+  with the screening incentives shown as a net figure.
+- **Buy the building**: asking price (from the captured listing page, else
+  the listing, else typed on the card) plus the build. No asking price means
+  the route reads "pending API integration"; nothing is made up.
+- **Lease the pad**: rent over the term at the base offer plus the build.
+- **The verdict**: which route costs less over the term, by how much, and
+  the year cumulative rent reaches the asking price. Buying leaves the
+  company owning the building, which the sentence says.
+
+`omega-project-cost.js` renders the block in both products; nothing in the
+browser adds a number. Tests: `tests/project-cost.test.js` and the two
+browser tests.
+
 ### About Crexi
 
 Crexi **does** publish a Listing API, unlike PropertyShark. Two things before
@@ -528,13 +732,12 @@ park.
    here. A withdrawn application that nobody updates blocks a circuit forever.
    A 12- or 18-month review prompt would catch it without weakening the lock.
 
-4. **How does this relate to the `sites` collection?** A claim and a CRM row
-   are both keyed on a parcel and both carry a stage, and right now they are
-   independent. Options: leave them separate (a claim is a grid fact, a site is
-   a sales fact), mirror the stage between them, or fold the ledger fields into
-   `sites`. I kept them separate because the ledger has to be org-wide readable
-   and `sites` is not necessarily, but this is worth a decision before reps
-   start using both.
+4. **Resolved: saved-site persistence.** Saved Site Finder records use the
+   existing `sites` collection; holds remain in `capacityAllocations`, joined
+   by `siteId`. Saving does not change a CRM stage or place a capacity hold.
+   Existing attribution, notes and human edits are preserved. New rows start
+   at the existing `target` stage. Existing county-PIN CRM rows are not merged
+   speculatively into coordinate-keyed records.
 
 5. **Which hosting-capacity field is authoritative for a BESS claim?**
    `BESS_HC` is used as nameplate. If load-side interconnection should net

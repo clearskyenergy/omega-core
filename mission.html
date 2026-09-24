@@ -22,7 +22,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="JARVIS">
 <meta name="theme-color" content="#020813">
-<link rel="apple-touch-icon" href="/icons/omega-180.png">
+<link rel="apple-touch-icon" href="/icons/mission-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/mission-32.png">
 <link rel="manifest" href="/mission.webmanifest">
 <style>
 :root{--bg:#020813;--panel:rgba(6,18,36,.6);--glow-cyan:#00f3ff;--glow-blue:#0044ff;
@@ -91,11 +92,32 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .pill{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--dim);
       background:rgba(0,243,255,.1);border-radius:9px;padding:1px 7px;min-width:20px;text-align:center}
 .navItem.on .pill{color:var(--glow-cyan)}
+/* The one pill that is a state rather than a count. Amber and steady — not
+   flashing, because a thing blinking in the corner of a dashboard he reads
+   all day is a thing he learns to stop seeing. */
+.pill.warn{color:var(--warn);background:rgba(255,176,32,.14)}
+.navItem.on .pill.warn{color:var(--warn)}
 .railFoot{flex:none;border-top:1px solid rgba(0,243,255,.14);padding-top:10px}
 /* Hung off the parent rather than set inline, because this button MOVES: on a
    phone it lives in the talk bar, where full width and a top margin are both
    wrong. An inline style would have followed it there and outranked the fix. */
 .railFoot #micBig{width:100%;margin-top:8px}
+/* THE VOICE ROW WRAPS, because it cannot not.
+   The rail is 196px with 12px of padding — 184px of content. Three buttons at
+   `flex:1` split that into 57px each, and a flex item never shrinks below its
+   own content: "✨ ELEVENLABS" needs about 114px, "🔊 VOICE ON" about 99px.
+   The row was therefore ~150px wider than the rail and overflowed straight
+   across the main column, which is what put the engine button on top of the
+   talk bar's waveform.
+
+   `flex:1 1 auto` + wrap is the fix rather than a fixed two-row layout,
+   because both labels TOGGLE — ON/MUTED, FREE VOICE/ELEVENLABS — and any
+   layout that is hand-fitted to one pair breaks on the other. Each line takes
+   what fits and shares the slack; the ellipsis is the backstop for a narrow
+   rail, not the plan. */
+.railFoot .vRow{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.railFoot .vRow button{flex:1 1 auto;min-width:0;padding:7px 9px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .main{display:flex;flex-direction:column;gap:12px;min-height:0}
 .hDate{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;color:var(--dim)}
@@ -172,7 +194,9 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 /* 150px was a third of the card's height for something that is the same for
    everyone and says nothing about the person. Kept, because it is the
    card's character, at a size that no longer costs the content. */
-.holo{width:100%;height:82px;display:block;margin:-4px 0 6px}
+.holo{width:100%;height:132px;display:block;margin:-4px 0 8px;
+      border:1px solid rgba(0,243,255,.14);border-radius:4px;
+      background:radial-gradient(ellipse at 50% 62%,rgba(0,40,70,.35),rgba(0,0,0,.55) 78%)}
 .cardName{font-family:var(--mono);font-size:20px;letter-spacing:2px;color:var(--glow-cyan);
           text-shadow:0 0 14px rgba(0,243,255,.5)}
 .cardRole{font-size:13px;color:var(--ink);margin-top:4px}
@@ -249,6 +273,77 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .areaHead{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--glow-cyan);
           margin:12px 0 4px;opacity:.75}
 .areaHead:first-child{margin-top:0}
+/* ── OMEGA LOGIC ─────────────────────────────────────────────────────────
+   Tracking and fulfilment. The rail at the top is the pipeline itself and it
+   is the load-bearing part of this view: four of its six stages are not
+   built, and a dashboard that showed only the two that are would read as a
+   complete picture of a complete system. A stage that is `off` is drawn
+   dimmed and struck, never hidden. */
+.logicWrap{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
+.logicGrid{grid-template-columns:minmax(0,1fr) 340px minmax(0,380px)}
+.logicRail{display:flex;gap:0;align-items:stretch;flex-wrap:wrap;flex:none}
+.logicStage{flex:1 1 0;min-width:112px;padding:8px 10px;border:var(--edge);
+            border-right:none;background:rgba(0,0,0,.22);position:relative}
+.logicStage:last-child{border-right:var(--edge)}
+.logicStage .sk{font-family:var(--mono);font-size:8.5px;letter-spacing:1.6px;
+                color:var(--glow-cyan);text-transform:uppercase}
+.logicStage .sv{font-size:12.5px;color:var(--ink);margin-top:3px;overflow-wrap:anywhere}
+.logicStage .sw{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:3px;
+                overflow-wrap:anywhere}
+.logicStage.off{opacity:.42}
+.logicStage.off .sk{color:var(--dim)}
+.logicStage.off .sv{text-decoration:line-through;text-decoration-thickness:1px}
+/* Neither struck nor lit. A partial stage is one whose data moves but whose
+   other half does not — work captured with no read path, or a step that
+   runs but only when a person presses it. Drawn distinctly because "half
+   done" is the state most likely to be misread as done. */
+.logicStage.partial{opacity:.82}
+.logicStage.partial .sk{color:var(--warn)}
+.logicStage.partial .sv{color:var(--ink)}
+.tileRow{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;flex:none}
+.lTile{border:var(--edge);background:rgba(0,0,0,.22);padding:9px 11px}
+.lTile .t{font-family:var(--mono);font-size:8.5px;letter-spacing:1.6px;color:var(--dim);
+          text-transform:uppercase}
+.lTile .v{font-size:21px;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums}
+.lTile .v.sm{font-size:12.5px;line-height:1.5;padding-top:5px}
+.lTile.alarm .v{color:var(--bad)}
+/* The ten benches, as a line. A bench with nothing on it still draws, because
+   an empty Rack assembly next to a full Kitting is the shape of a bottleneck
+   and a list that omitted it would hide exactly that. */
+.benchRow{display:flex;align-items:flex-end;gap:3px;padding:2px 0 0}
+.bench{flex:1 1 0;min-width:0;text-align:center}
+.bench .bar{height:46px;display:flex;flex-direction:column;justify-content:flex-end;gap:1px}
+.bench .fill{background:var(--glow-cyan);opacity:.72;min-height:2px;border-radius:1px}
+.bench .fill.held{background:var(--bad);opacity:.85}
+.bench .bn{font-family:var(--mono);font-size:12px;color:var(--ink);margin-top:4px;
+           font-variant-numeric:tabular-nums}
+/* Short labels, and NO mid-word breaking. Ten benches across a 340px panel
+   gives each one about 30px, and "Enclosure" wrapped to "Enclo / sure" —
+   which reads as a station nobody has heard of. The full name is on hover. */
+.bench .bl{font-family:var(--mono);font-size:8.5px;letter-spacing:.3px;color:var(--dim);
+           margin-top:3px;line-height:1.2;white-space:nowrap;overflow:hidden;
+           text-overflow:ellipsis}
+.bench.empty .bn{color:var(--dim);opacity:.55}
+.oRow{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);
+      cursor:pointer}
+.oRow:hover{background:rgba(255,255,255,.035)}
+.oRow.on{background:rgba(255,255,255,.06)}
+.oRow .no{font-family:var(--mono);font-size:11px;color:var(--glow-cyan);flex:none}
+.oRow .wh{flex:1;min-width:0;font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
+.oRow .wh small{display:block;color:var(--dim);font-size:11px}
+.oRow .ms{flex:none;font-family:var(--mono);font-size:9px;letter-spacing:.8px;color:var(--dim);
+          text-transform:uppercase;text-align:right}
+.oRow .ms b{display:block;color:var(--ink);font-weight:400}
+.oRow.stuck .no{color:var(--bad)}
+.dlGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:11px;margin:9px 0 14px}
+.dlGrid .t{font-family:var(--mono);font-size:8.5px;letter-spacing:1.5px;color:var(--dim);
+           text-transform:uppercase}
+.dlGrid .v{font-size:13px;color:var(--ink);margin-top:3px;overflow-wrap:anywhere}
+.dlGrid .v.gap{color:var(--dim);font-style:italic}
+.logicNote{font-size:12px;color:var(--dim);line-height:1.55;padding:10px 0;overflow-wrap:anywhere}
+.logicNote b{color:var(--ink);font-weight:400}
+@media (max-width:1100px){ .logicGrid{grid-template-columns:minmax(0,1fr)} }
+
 .askBox{width:100%;min-height:92px;background:rgba(0,0,0,.25);border:var(--edge);border-radius:6px;
         color:var(--ink);font-family:var(--ui);font-size:13px;padding:9px 11px;resize:vertical}
 .askBox:focus{outline:none;border-color:var(--glow-cyan)}
@@ -418,6 +513,23 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .coreLayer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;
            transition:opacity .5s ease}
 .coreLayer.on{opacity:1}
+#missionDoom{position:absolute;inset:4% 12% 9%;display:none}
+#missionDoomCredit{display:none;position:absolute;bottom:5%;left:0;right:0;text-align:center;font-size:9px;color:var(--dim);pointer-events:auto}
+.coreLayer.characterReady #arc{visibility:hidden}
+.coreLayer.characterReady #missionDoom{display:block}
+.coreLayer.characterReady #missionDoomCredit{display:block}
+.coreLayer.characterReady .coreLabel{justify-content:flex-end;padding-bottom:2%}
+.characterSettings{padding:14px;display:grid;gap:10px}
+.phoneRows{padding:12px 14px;display:grid;gap:10px}
+.phoneRows .pr{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.phoneRows .pr>span{flex:1;min-width:160px;font-family:var(--ui);font-size:13px;line-height:1.45;color:var(--dim)}
+.phoneRows .pr>span b{color:var(--ink);display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.phoneRows .pr button{min-height:38px}
+.phoneRows .prNote{font-family:var(--ui);font-size:12px;color:var(--dim)}
+.phoneRows .prNote.bad{color:var(--bad)}
+.phoneRows .prNote.good{color:var(--good)}
+.characterSettings select{width:100%;padding:10px;background:#102029;color:#e5f4ee;border:1px solid #44645b;border-radius:5px}
+
 .coreLayer canvas{width:100%;height:100%;display:block}
 /* transform:none matters. The older .coreLabel rule centres a SMALL box with
    translate(-50%,-50%); inherit that on a box stretched to inset:0 and it
@@ -440,6 +552,27 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .main > header,.main > .view,.main > .talkBar,.main > .authFix{position:relative}
 /* The hole the core used to fill: space for the burst to be seen through. */
 .coreHole{flex:1;min-height:180px;pointer-events:none}
+
+/* ── ARRANGING ───────────────────────────────────────────────────────────
+   A panel is dragged by its heading, and the heading only looks draggable
+   when you are over it. A grab cursor on twenty-seven headings at rest says
+   "all of this moves" about a page whose whole job is to hold still. */
+.panel[data-widget] > .ptitle{cursor:grab;position:relative}
+.panel[data-widget] > .ptitle:active{cursor:grabbing}
+.panel[data-widget] > .ptitle::after{content:'\2059';position:absolute;right:0;top:50%;
+  transform:translateY(-50%);font-size:11px;letter-spacing:0;color:var(--dim);
+  opacity:0;transition:opacity .12s;pointer-events:none}
+.panel[data-widget]:hover > .ptitle::after{opacity:.55}
+/* The 62px of right padding the grip sits in is already reserved further up,
+   for the zoom control in the same corner. */
+.panel.dragging{opacity:.38}
+/* The drop target is the COLUMN, so the column is what lights up. Inset, so
+   the outline does not push the grid around at the moment you are aiming. */
+.col.dropOK,.view.dropOK{outline:1px dashed rgba(0,243,255,.45);outline-offset:-3px;
+  border-radius:10px;background:rgba(0,243,255,.03)}
+body.arranging .panel > .ptitle{cursor:grabbing}
+body.arranging .scroll{pointer-events:none}
+#resetLayout[hidden]{display:none}
 
 /* ── minimised panels ────────────────────────────────────────────────────
    A panel you are not reading should not cost a rectangle. Collapsed, it
@@ -628,6 +761,223 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 @keyframes doomBreath{
   0%,100%{box-shadow:0 0 12px rgba(61,220,132,.40) inset}
   50%    {box-shadow:0 0 22px rgba(61,220,132,.70) inset}}
+
+/* ── THE OTHER MASTERS ───────────────────────────────────────────────────
+   Armour, Witch-king and the Ring are doom mode with a different master in
+   the room: same card frame, same 3D layer. The palette and the weather move,
+   keyed by data-figure, so every rule written for doom mode keeps holding.
+   The armour is a lit workshop: red steel, gold trim, no darkened corners.
+   The Witch-king is the dark itself: black, cold grey, the light drained.
+   The Ring is Mount Doom: ember and lava on black, the corners glowing red. */
+:root[data-mode="doom"][data-figure="armour"]{
+  --glow-cyan:#ffcf5a; --glow-blue:#b3170f; --ink:#ffe9d9; --dim:#d29a7e;
+  --panel:rgba(48,9,9,.60); --edge:1px solid rgba(255,207,90,.36); --bg:#160405}
+:root[data-mode="doom"][data-figure="armour"] body::before{
+  background:linear-gradient(rgba(16,18,16,0) 50%,rgba(0,0,0,.10) 50%),
+             linear-gradient(90deg,rgba(255,60,30,.04),rgba(255,207,90,.03),rgba(255,60,30,.04));
+  background-size:100% 4px,6px 100%}
+:root[data-mode="doom"][data-figure="armour"] body::after{
+  background:radial-gradient(118% 88% at 50% 44%,rgba(0,0,0,0) 50%,rgba(60,0,0,.22) 80%,rgba(40,0,0,.40) 100%)}
+:root[data-mode="doom"][data-figure="armour"] .mark{border-color:#ffcf5a;animation:armourBreath 3s ease-in-out infinite}
+@keyframes armourBreath{
+  0%,100%{box-shadow:0 0 12px rgba(255,207,90,.45) inset}
+  50%    {box-shadow:0 0 24px rgba(179,23,15,.85) inset}}
+:root[data-mode="doom"][data-figure="armour"] .talkBar{
+  background:linear-gradient(90deg,rgba(179,23,15,.22),rgba(255,207,90,.10),rgba(179,23,15,.22));
+  box-shadow:inset 0 0 20px rgba(179,23,15,.35)}
+:root[data-mode="doom"][data-figure="armour"] .navItem.on{background:rgba(179,23,15,.28);border-color:rgba(255,207,90,.5)}
+
+:root[data-mode="doom"][data-figure="witchking"]{
+  --glow-cyan:#a6adbb; --glow-blue:#16181f; --ink:#c6cbd4; --dim:#5c6270;
+  --good:#8fa39a; --warn:#b9a47a; --bad:#b86b6b;
+  --panel:rgba(3,3,5,.82); --edge:1px solid rgba(166,173,187,.16); --bg:#000}
+:root[data-mode="doom"][data-figure="witchking"] body::before{
+  background:linear-gradient(rgba(0,0,0,0) 50%,rgba(0,0,0,.28) 50%);
+  background-size:100% 3px}
+:root[data-mode="doom"][data-figure="witchking"] body::after{
+  background:radial-gradient(100% 76% at 50% 44%,rgba(0,0,0,0) 22%,rgba(0,0,0,.55) 62%,rgba(0,0,0,.92) 100%)}
+:root[data-mode="doom"][data-figure="witchking"] .mark{border-color:#5c6270;box-shadow:0 0 10px rgba(166,173,187,.18) inset;animation:none}
+:root[data-mode="doom"][data-figure="witchking"] .talkBar{
+  background:linear-gradient(90deg,rgba(0,0,0,.6),rgba(30,32,40,.5),rgba(0,0,0,.6));
+  box-shadow:inset 0 0 24px rgba(0,0,0,.8)}
+:root[data-mode="doom"][data-figure="witchking"] .panel{box-shadow:0 0 0 1px rgba(0,0,0,.6),0 12px 40px rgba(0,0,0,.7)}
+:root[data-mode="doom"][data-figure="witchking"] .navItem.on{background:rgba(166,173,187,.08);border-color:rgba(166,173,187,.3)}
+:root[data-mode="doom"][data-figure="witchking"] .t.good,:root[data-mode="doom"][data-figure="witchking"] .badge{filter:saturate(.35)}
+
+:root[data-mode="doom"][data-figure="onering"]{
+  --glow-cyan:#ff6a1f; --glow-blue:#7a0e00; --ink:#ffd6bd; --dim:#b9623f;
+  --panel:rgba(28,3,1,.66); --edge:1px solid rgba(255,106,31,.36); --bg:#0a0100}
+:root[data-mode="doom"][data-figure="onering"] body::before{
+  background:linear-gradient(rgba(16,18,16,0) 50%,rgba(0,0,0,.14) 50%),
+             linear-gradient(90deg,rgba(255,80,0,.05),rgba(120,20,0,.02),rgba(255,80,0,.05));
+  background-size:100% 4px,6px 100%}
+:root[data-mode="doom"][data-figure="onering"] body::after{
+  mix-blend-mode:normal;
+  background:radial-gradient(118% 92% at 50% 40%,rgba(0,0,0,0) 30%,rgba(120,18,0,.28) 66%,rgba(255,70,0,.42) 100%),
+             radial-gradient(60% 30% at 50% 108%,rgba(255,120,20,.55),rgba(255,60,0,0) 70%)}
+:root[data-mode="doom"][data-figure="onering"] .mark{border-color:#ff6a1f;animation:emberBreath 4s ease-in-out infinite}
+@keyframes emberBreath{
+  0%,100%{box-shadow:0 0 12px rgba(255,106,31,.45) inset}
+  50%    {box-shadow:0 0 26px rgba(255,170,40,.85) inset}}
+:root[data-mode="doom"][data-figure="onering"] .talkBar{
+  background:linear-gradient(90deg,rgba(122,14,0,.30),rgba(255,106,31,.12),rgba(122,14,0,.30));
+  box-shadow:inset 0 0 22px rgba(255,60,0,.35)}
+:root[data-mode="doom"][data-figure="onering"] .navItem.on{background:rgba(122,14,0,.35);border-color:rgba(255,106,31,.5)}
+
+/* ── DOOM MODE: THE CARD IS A CARD ───────────────────────────────────────
+   In doom mode a person stops being a dossier and becomes a collectible:
+   title bar, art window, type line, text box, flavour, bottom bar. Straight
+   off a Magic card, because that frame has had thirty years of work put into
+   making a small rectangle legible at arm's length, and this card is read at
+   arm's length too.
+
+   IT IS STILL ONLY A SKIN. Every value on it is a value the cyan card
+   already shows — the cost pip is the open-commitment count, the rarity
+   letter is the relationship weight the bar underneath already draws. When
+   the neural link is down and those numbers are unknown, the pip and the
+   rarity are ABSENT rather than zero, the same rule the relationship section
+   is built on. Nothing here invents a number.
+
+   Scoped to .mtgCard, which only showCard adds. The event card and the draft
+   card render into the same element and must not inherit a frame built for a
+   person. */
+:root[data-mode="doom"] .card.mtgCard{
+  width:min(392px,88vw);
+  /* 63:88 is the real trading-card ratio. max-height still wins on a short
+     screen — the text box scrolls, the frame stays a frame. */
+  aspect-ratio:63/88;
+  max-height:min(86vh,660px);
+  padding:13px 13px 11px;
+  border:none;border-radius:17px/15px;
+  background:linear-gradient(170deg,#0a120c,#030805 60%,#010402);
+  box-shadow:0 0 0 1px rgba(61,220,132,.16),
+             0 26px 60px rgba(0,0,0,.72),
+             0 0 40px rgba(61,220,132,.12);
+  gap:0;
+}
+/* The corner brackets are Jarvis chrome. A card has a border, not brackets. */
+:root[data-mode="doom"] .card.mtgCard::before,
+:root[data-mode="doom"] .card.mtgCard::after{display:none}
+
+/* Reading order down a Magic card, imposed with `order` so the cyan card's
+   DOM — art first, then the name — is left exactly as it was. */
+:root[data-mode="doom"] .card.mtgCard .mtgTitle {order:1}
+:root[data-mode="doom"] .card.mtgCard .holo     {order:2}
+:root[data-mode="doom"] .card.mtgCard .mtgType  {order:3}
+:root[data-mode="doom"] .card.mtgCard .cardScroll{order:4}
+:root[data-mode="doom"] .card.mtgCard .cardNote {order:5}
+:root[data-mode="doom"] .card.mtgCard .mtgFoot  {order:6}
+:root[data-mode="doom"] .card.mtgCard .cardActs {order:7}
+
+/* The two engraved bars. One gradient, used twice, so the title and the type
+   line read as the same piece of stamped metal. */
+:root[data-mode="doom"] .card.mtgCard .mtgTitle,
+:root[data-mode="doom"] .card.mtgCard .mtgType{
+  display:flex;align-items:center;gap:8px;flex:none;
+  border:1px solid rgba(0,0,0,.85);border-radius:7px;
+  background:linear-gradient(180deg,#2e4437 0%,#16241b 52%,#0b130e 100%);
+  box-shadow:inset 0 1px 0 rgba(176,226,196,.26),
+             inset 0 -1px 0 rgba(0,0,0,.5),
+             0 1px 3px rgba(0,0,0,.6);
+}
+:root[data-mode="doom"] .card.mtgCard .mtgTitle{padding:6px 9px 6px 11px}
+:root[data-mode="doom"] .card.mtgCard .mtgType {padding:4px 9px 4px 11px;margin-top:6px}
+
+:root[data-mode="doom"] .card.mtgCard .mtgTitle .cardName{
+  flex:1;min-width:0;text-align:left;
+  font-size:14.5px;letter-spacing:.4px;color:#eafff2;
+  text-shadow:0 1px 2px rgba(0,0,0,.9);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* One generic pip carrying a number, the way a converted cost is printed. */
+:root[data-mode="doom"] .card.mtgCard .mtgCost{
+  display:block;flex:none;width:19px;height:19px;border-radius:50%;
+  font-family:var(--mono);font-size:11px;font-weight:700;line-height:19px;
+  text-align:center;color:#0c1a11;
+  background:radial-gradient(circle at 34% 28%,#e8f8ee,#a8c9b5 58%,#5b7a67);
+  box-shadow:0 1px 3px rgba(0,0,0,.8),inset 0 -2px 3px rgba(0,0,0,.28);
+}
+:root[data-mode="doom"] .card.mtgCard .mtgCost[hidden]{display:none}
+
+/* The art window. The hologram was always this card's character; here it is
+   simply given the frame it deserves and room to be looked at. */
+:root[data-mode="doom"] .card.mtgCard .holo{
+  flex:none;width:100%;height:auto;aspect-ratio:5/2.35;margin:7px 0 0;
+  border:1px solid rgba(0,0,0,.9);border-radius:3px;
+  background:radial-gradient(ellipse at 50% 38%,#0f2b1c 0%,#040d08 72%,#010503 100%);
+  box-shadow:inset 0 0 30px rgba(0,0,0,.85),0 0 0 1px rgba(160,210,180,.17);
+}
+
+:root[data-mode="doom"] .card.mtgCard .mtgType .cardOrg{
+  order:1;margin:0;flex:none;max-width:52%;text-align:left;
+  font-size:10px;letter-spacing:1.4px;color:#dff3e6;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+:root[data-mode="doom"] .card.mtgCard .mtgType .cardRole{
+  order:2;margin:0;flex:1;min-width:0;text-align:left;
+  font-size:10.5px;color:#a9cfb9;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* The em dash belongs to the SUBTYPE, so it only exists when both halves do
+   — a type line reading "— Consortium Partner" is a broken card. */
+:root[data-mode="doom"] .card.mtgCard .mtgType[data-both] .cardRole::before{content:'\2014\00a0'}
+:root[data-mode="doom"] .card.mtgCard .mtgRare{
+  display:block;order:3;flex:none;margin-left:auto;
+  font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;
+  text-shadow:0 0 7px currentColor,0 1px 2px rgba(0,0,0,.9);
+}
+:root[data-mode="doom"] .card.mtgCard .mtgRare[hidden]{display:none}
+:root[data-mode="doom"] .card.mtgCard .mtgRare[data-r="M"]{color:#ff8c42}
+:root[data-mode="doom"] .card.mtgCard .mtgRare[data-r="R"]{color:#e8c45a}
+:root[data-mode="doom"] .card.mtgCard .mtgRare[data-r="U"]{color:#b8c6cc}
+:root[data-mode="doom"] .card.mtgCard .mtgRare[data-r="C"]{color:#8fa79a}
+
+/* The text box. The cyan card's scroller bleeds to the padding edge and
+   fades under a pinned name; inside a frame it has to be a box with four
+   sides, so both are undone here. */
+:root[data-mode="doom"] .card.mtgCard .cardScroll{
+  margin:6px 0 0;padding:9px 11px 4px;
+  border:1px solid rgba(0,0,0,.85);border-bottom:none;border-radius:5px 5px 0 0;
+  background:linear-gradient(180deg,rgba(13,28,19,.97),rgba(7,16,10,.97));
+  box-shadow:inset 0 0 22px rgba(0,0,0,.55);font-size:12px;
+  -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 14px),transparent);
+  mask-image:linear-gradient(to bottom,#000 calc(100% - 14px),transparent);
+}
+:root[data-mode="doom"] .card.mtgCard .cardRows{margin-top:0;padding-top:0;border-top:none}
+:root[data-mode="doom"] .card.mtgCard .cardRow{padding:5px 0;font-size:12px}
+:root[data-mode="doom"] .card.mtgCard .relWrap{margin-top:9px;padding-top:8px;
+  border-top-color:rgba(150,200,170,.18)}
+:root[data-mode="doom"] .card.mtgCard .relW{font-size:18px}
+:root[data-mode="doom"] .card.mtgCard .relList{margin-top:8px}
+:root[data-mode="doom"] .card.mtgCard .relItem{font-size:11.5px;line-height:1.45}
+
+/* Flavour text: same box, below the divider, italic. It continues the text
+   box rather than sitting under it, which is why it closes the border the
+   scroller opened. */
+:root[data-mode="doom"] .card.mtgCard .cardNote{
+  flex:none;margin:0;padding:8px 11px 9px;
+  border:1px solid rgba(0,0,0,.85);border-top:1px solid rgba(160,214,184,.38);
+  border-radius:0 0 5px 5px;
+  background:linear-gradient(180deg,rgba(8,18,12,.97),rgba(4,11,7,.97));
+  font-size:10.5px;font-style:italic;line-height:1.5;color:#9dc4ac;
+}
+
+/* The bottom bar: collector line left, illustrator and copyright right. */
+:root[data-mode="doom"] .card.mtgCard .mtgFoot{
+  order:6;flex:none;display:flex;align-items:center;gap:10px;
+  margin-top:5px;padding:0 3px 6px;
+  border-bottom:1px solid rgba(61,220,132,.16);
+  font-family:var(--mono);font-size:8px;letter-spacing:1.1px;color:#6f9a80;
+}
+:root[data-mode="doom"] .card.mtgCard .mtgFoot .r{margin-left:auto;text-align:right}
+
+:root[data-mode="doom"] .card.mtgCard .cardActs{flex:none;margin-top:9px;gap:6px}
+:root[data-mode="doom"] .card.mtgCard .cardActs button{padding:7px 4px;font-size:9px}
+
+/* Outside doom the frame furniture does not exist. The bars are transparent
+   pass-throughs so the cyan card keeps the centred stack it always had. */
+.mtgCost,.mtgRare,.mtgFoot{display:none}
+.mtgTitle,.mtgType{display:block}
 
 /* ── QUANTUM MODE ────────────────────────────────────────────────────────
    The command centre in gold. Same tokens re-pointed, so the chrome follows
@@ -898,11 +1248,20 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
      auto minimum sizes the track to its CONTENT — so one track holding
      something that scrolls sideways grows to the full scroll width and drags
      the whole page with it. */
-  #app{grid-template-columns:minmax(0,1fr)}
+  /* Two rows now, and the spare height goes to the CONTENT row: grid rows
+     default to sharing it, which put a 300px void under the brand on a phone
+     before a single fact. */
+  #app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);align-content:start}
   .rail{flex-direction:row;flex-wrap:wrap;border-right:none;padding-right:0;
         border-bottom:1px solid rgba(0,243,255,.14);padding-bottom:10px}
   #nav{flex-direction:row;flex-wrap:wrap;flex:1}
   .railFoot{border-top:none;padding-top:0;display:flex;gap:6px;align-items:center}
+  /* The rail is a horizontal strip here, so the voice row has the whole width
+     of it and must NOT wrap. Left wrapping on, the row becomes a flex item in
+     a row-direction parent, gets sized to its largest child rather than to the
+     sum of them, and the three buttons stack three deep inside a strip that is
+     one button tall. Wrapping is for the 196px rail above this breakpoint. */
+  .railFoot .vRow{flex-wrap:nowrap;margin-top:0}
   .cmdGrid{grid-template-columns:1fr}
   body{height:auto;min-height:100vh;overflow-y:auto}
   .panel{min-height:180px}
@@ -1038,6 +1397,81 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   .vaultDoc b{color:var(--ink)}
   .vaultDoc .vp{padding:4px 0;opacity:.8}
 :root[data-mode="quantum"] .vaultDoc .vh{color:var(--glow-gold,#ffc35c)}
+/* Messages: thread list left, transcript right, reply box under it. Bubbles
+   are his on the right and theirs on the left — the shape every phone uses,
+   so nobody has to learn which side is which. */
+.msgGrid{grid-template-columns:320px 1fr}
+.msgGrid .panel{display:flex;flex-direction:column;min-height:0}
+.msgRow{display:block;width:100%;text-align:left;padding:8px 9px;margin:0 0 3px;
+  border:1px solid transparent;border-radius:6px;color:var(--ink);font-family:var(--ui)}
+.msgRow:hover{background:rgba(0,243,255,.06)}
+.msgRow.on{background:rgba(0,243,255,.12);border-color:rgba(0,243,255,.35)}
+.msgRow .mt{display:flex;gap:8px;align-items:baseline;font-size:13px}
+.msgRow .mt b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.msgRow .mt i{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--dim)}
+.msgRow .ml{font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.msgRow .mu{font-family:var(--mono);font-size:10px;color:var(--bg);background:var(--glow-cyan);
+  border-radius:9px;padding:0 6px}
+.msgLog{flex:1;min-height:0;display:flex;flex-direction:column;gap:5px;padding:6px 4px 10px}
+.msgB{max-width:72%;padding:7px 11px;border-radius:14px;font-family:var(--ui);font-size:13px;
+  line-height:1.45;white-space:pre-wrap;word-wrap:break-word;align-self:flex-start;
+  background:rgba(255,255,255,.07);color:var(--ink)}
+.msgB.me{align-self:flex-end;background:rgba(0,243,255,.16);border:1px solid rgba(0,243,255,.25)}
+.msgB .who{display:block;font-size:10px;color:var(--dim);margin-bottom:2px;font-family:var(--mono)}
+.msgB.att{font-style:italic;color:var(--dim)}
+.msgDay{align-self:center;font-family:var(--mono);font-size:10px;color:var(--dim);margin:8px 0 2px}
+.msgReply{display:flex;gap:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
+.msgReply textarea{flex:1;min-height:40px;max-height:140px;resize:vertical;font:13px/1.4 var(--ui);
+  color:var(--ink);background:rgba(0,0,0,.35);border:1px solid rgba(0,243,255,.22);border-radius:6px;padding:8px 10px}
+.msgReply textarea:focus{outline:none;border-color:var(--glow-cyan)}
+.msgReply button{min-width:84px}
+.msgNote{font-size:12px;color:var(--dim);padding:4px 2px 0;min-height:18px}
+.msgNote.bad{color:var(--bad)}
+.msgEmpty{padding:18px 6px;color:var(--dim);font-size:13px;line-height:1.5}
+.ccMsg .msgRow{padding:5px 6px}
+/* Proposals: a title he can act on, the reason in one line, the evidence
+   under it, and two buttons — the only two answers the note understands. */
+.propHead{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--glow-cyan);margin:14px 2px 6px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,.09)}
+.propHead:first-child{margin-top:2px}
+.propHead span{color:var(--dim);margin-left:6px}
+.propRow{padding:9px 8px 10px;border-bottom:1px solid rgba(255,255,255,.05);font-family:var(--ui)}
+.propT{font-size:13.5px;color:var(--ink);font-weight:600;line-height:1.4}
+.propW{font-size:12px;color:var(--dim);margin-top:3px;line-height:1.45}
+.propE{margin:6px 0 0 18px;padding:0;font-size:12px;color:var(--ink);opacity:.8;line-height:1.5}
+.propB{display:flex;gap:8px;margin-top:8px}
+.propB button{font-size:11px;padding:4px 12px;min-height:32px}
+.propB button[data-a="dismiss"]{color:var(--dim);border-color:rgba(255,255,255,.14)}
+/* Sessions: one row shape for both agents — who, what, where, state, age. */
+.sessBar{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px}
+.sessBar button{font-size:11px;padding:3px 10px}
+.sessBar button.sel{background:rgba(0,243,255,.14);border-color:var(--glow-cyan)}
+.sessRow{display:grid;grid-template-columns:62px 1fr 200px 70px 78px;gap:10px;align-items:center;
+  padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.05);font-family:var(--ui);font-size:13px}
+.sessRow .ag{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  border-radius:4px;padding:2px 0;text-align:center;background:rgba(0,243,255,.1);color:var(--glow-cyan)}
+.sessRow .ag.codex{background:rgba(61,255,139,.10);color:var(--good)}
+.sessRow .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.sessRow .nm small{color:var(--dim);margin-left:6px;font-size:11px}
+.sessRow .cw{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--dim);font-family:var(--mono);font-size:11px;direction:rtl;text-align:left}
+.sessRow .st{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.sessRow .st::before{content:'\25CF  ';opacity:.5}
+.sessRow .st.busy{color:var(--good)}
+.sessRow .st.busy::before{opacity:1}
+.sessRow .st.blocked,.sessRow .st.waiting{color:var(--warn)}
+.sessRow .st.blocked::before,.sessRow .st.waiting::before,.sessRow .st.failed::before{opacity:1}
+.sessRow .st.failed{color:var(--bad)}
+.sessRow .ago{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right}
+.sessHead{color:var(--dim);font-size:10px;letter-spacing:.12em;text-transform:uppercase;border-bottom-color:rgba(255,255,255,.12)}
+.sessHead .ag{background:none;color:var(--dim)}
+@media(max-width:1100px){
+  .msgGrid{grid-template-columns:minmax(0,1fr)}
+  .msgB{max-width:88%}
+  .sessRow{grid-template-columns:54px 1fr 64px;row-gap:2px}
+  .sessRow .cw{grid-column:2/4;grid-row:2;direction:ltr}
+  .sessRow .ago{display:none}
+}
 /* Installed, there is no browser chrome between the page and the hardware, so
    the page owns the home indicator and the rounded corners. Scoped to
    standalone: in a browser tab Safari still handles all of this, and applying
@@ -1048,16 +1482,104 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
        padding-bottom:max(16px,env(safe-area-inset-bottom))}
 }
 
+/* ── THE PHONE BAR ────────────────────────────────────────────────────────
+   Only under 700px (display:none otherwise, .ptabs{display:flex} above). Fixed
+   to the bottom under the sticky talk bar, so the two never overlap and the
+   caption, which measures the talk bar, clears both. */
+:root{--ptabH:58px}
+.ptabs{display:none;position:fixed;left:0;right:0;bottom:0;z-index:70;height:calc(var(--ptabH) + env(safe-area-inset-bottom));
+       padding:0 4px env(safe-area-inset-bottom);background:var(--bg);border-top:1px solid rgba(0,243,255,.22)}
+.ptabs button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+       background:none;border:none;border-radius:0;padding:6px 2px;color:var(--dim);font-family:var(--mono);
+       font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;position:relative;min-height:0}
+.ptabs button .ic{font-size:18px;line-height:1;font-family:var(--ui)}
+.ptabs button.on{color:var(--glow-cyan)}
+.ptabs button.on::after{content:'';position:absolute;top:0;left:22%;right:22%;height:2px;background:var(--glow-cyan)}
+.ptabs .pill{position:absolute;top:3px;right:12%;margin:0;background:rgba(0,243,255,.16);color:var(--glow-cyan);
+       border-radius:9px;padding:0 5px;font-size:9px;line-height:14px}
+.ptabs .pill:empty{display:none}
+.moreBack{position:fixed;inset:0;background:rgba(2,8,19,.7);z-index:80}
+.moreSheet{position:fixed;left:0;right:0;bottom:0;z-index:81;background:#061224;border-top:var(--edge);
+       border-radius:14px 14px 0 0;padding:10px 10px calc(12px + env(safe-area-inset-bottom));max-height:78vh;overflow-y:auto}
+.moreSheet .ptitle{margin:4px 6px 8px}
+.moreSheet .navItem{display:flex;width:100%;min-height:46px;padding:10px 12px;margin-bottom:4px;
+       border:1px solid rgba(0,243,255,.14);border-radius:8px;font-size:14px;white-space:normal;text-align:left}
+.moreSheet .navItem.on{border-color:var(--glow-cyan);background:rgba(0,243,255,.10)}
+.moreSheet .pill{background:rgba(0,243,255,.16);color:var(--glow-cyan);border-radius:9px;padding:0 6px}
+.moreSheet .pill:empty{display:none}
+.rowClick{cursor:pointer}
+.row.rowClick .k::after{content:'  ›';color:var(--dim)}
+
 @media (max-width:700px){
-  /* HIS RULE, 2026-09-13: on the phone, Jarvis is something you TALK to.
-     Thirteen tabs is thirteen things to poke at on a screen with room for
-     one, and asking for a screen is faster than hunting for it — so the
-     strip goes and navigation becomes a sentence (see viewCommand()). The
-     tabs stay on every larger screen, where there is room for them and a
-     mouse to use them. */
+  /* HIS RULE, 2026-09-13, was: on the phone, Jarvis is something you TALK to,
+     so the strip went and navigation became a sentence (viewCommand()).
+     HIS RULE, 2026-09-23, from the installed app: "I can't access any of the
+     stuff on the command center." A sentence is a fine way to move and a poor
+     way to discover, and an installed app with no visible way to its other
+     screens reads as broken. So the seventeen-button strip stays gone, and in
+     its place: a bottom bar with the four screens he opens most, a MORE sheet
+     that lists every other one (built from #nav, so it is the same list with
+     the same count pills), and Overview rows that open the screen they
+     count. The sentence still works. */
   #nav{display:none}
   .brand{padding-bottom:4px}
   .rail{flex:none;padding-bottom:6px}
+  .ptabs{display:flex}
+  .foot{display:none}
+
+  /* The talk bar is fixed above the tab bar, not sticky at the end of a
+     column: a short screen left it floating mid-page with the tabs a hand's
+     width below. --talkH is still measured from the real bar. */
+  .main > .talkBar{position:fixed;left:0;right:0;margin:0;z-index:60;
+           bottom:calc(var(--ptabH) + env(safe-area-inset-bottom));
+           padding:8px 12px;border-bottom:1px solid rgba(0,243,255,.14)}
+  body{padding-bottom:calc(var(--ptabH) + 72px + env(safe-area-inset-bottom))}
+
+  /* ONE COLUMN, WHATEVER THE MARKUP SAYS. Several views set their columns
+     inline (1fr 320px, 1fr 330px); only !important reaches past that. */
+  .cmdGrid,.platGrid,.logicGrid,.brainGrid,.msgGrid{grid-template-columns:minmax(0,1fr)!important}
+  /* Panels sized for a fixed desktop grid (height:132px, max-height:34%) get
+     their natural height in a scrolling column; a list still caps at .scroll. */
+  .view .panel{height:auto!important;max-height:none!important;flex:none!important}
+  .panel .scroll{max-height:62vh}
+
+  /* THE COMMAND CENTER, IN THE ORDER A PHONE READS IT: what is on your plate,
+     what is waiting on you, the conversation, then the day, the buttons, the
+     feed, and the plumbing last. The three desktop columns dissolve
+     (display:contents) so the panels can be ordered as one list. */
+  .view[data-view="command"] .col{display:contents}
+  .view[data-view="command"] .cmdGrid{display:flex;flex-direction:column;gap:10px}
+  .panel[data-widget="overview"]{order:1}
+  .panel[data-widget="needs"]{order:2}
+  .panel[data-widget="conversation"]{order:3}
+  .panel[data-widget="schedule"]{order:4}
+  .panel[data-widget="quick-commands"]{order:5}
+  .panel[data-widget="feed"]{order:6}
+  .panel[data-widget="messages"]{order:7}
+  .panel[data-widget="conns"]{order:8}
+  .panel[data-widget="agent-activity-last-8-runs"]{order:9}
+  /* The window onto the core sits last: a 180px hole between the header and
+     the first number was the first thing the phone showed. */
+  .view[data-view="command"] .coreHole{order:10;height:120px}
+  .panel[data-widget="conversation"] .scroll{max-height:70vh}
+
+  /* Rows: a title gets the width, the small print wraps under it, and the
+     buttons become a row of their own you can hit with a thumb. */
+  .row{font-size:15px;line-height:1.4;gap:8px 10px;flex-wrap:wrap;align-items:center}
+  .row .v{font-size:12.5px}
+  #todos .row .k{flex:1 1 55%}
+  #todos .row .triWhy{flex:1 1 100%;order:3;font-size:10px}
+  #todos .row .tBtns{flex:1 1 100%!important;order:4;margin-left:0!important;gap:8px!important}
+  #todos .row .tBtns button{flex:1;min-height:40px;font-size:12px!important;padding:6px 8px!important}
+  .ixChip{min-height:36px;display:inline-flex;align-items:center;font-size:10.5px}
+  .quick button,.panel button:not(.capBtn):not(.tBtns button){min-height:40px}
+  .addBar .brainQ{min-width:0;flex:1 1 100%}
+  .addBar button{min-height:40px;font-size:11px!important;padding:8px 14px!important}
+
+  /* The brain: the graph first and tall enough to touch; the lists after. */
+  .brainStage{order:-1;min-height:58vh}
+  .brainGrid{display:flex;flex-direction:column}
+  header{position:sticky;top:0;z-index:30;background:var(--bg);margin:0 -10px;padding:6px 10px 8px}
 }
 </style>
 </head>
@@ -1098,23 +1620,27 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <button class="navItem" data-view="routines">⟳  Routines<span class="pill" id="nRout"></span></button>
       <button class="navItem" data-view="clients">◈  Clients<span class="pill" id="nClients"></span></button>
       <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
+      <button class="navItem" data-view="logic">⬢  Omega Logic<span class="pill" id="nLogic"></span></button>
       <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
       <button class="navItem" data-view="openwork">◎  Open work<span class="pill" id="nWork"></span></button>
+      <button class="navItem" data-view="messages">✆  Messages<span class="pill" id="nMsg"></span></button>
+      <button class="navItem" data-view="sessions">⧉  Sessions<span class="pill" id="nSess"></span></button>
+      <button class="navItem" data-view="proposals">➤  Proposals<span class="pill" id="nProp"></span></button>
       <button class="navItem" data-view="terminal">▮  Terminal<span class="pill" id="nTerm"></span></button>
       <button class="navItem" data-view="index">⊞  Index<span class="pill" id="nIndex"></span></button>
       <button class="navItem" data-view="brain">✦  Brain<span class="pill" id="nBrain"></span></button>
       <button class="navItem" data-view="people">◉  People<span class="pill" id="nPeople"></span></button>
-      <button class="navItem" data-view="system">⚙  System</button>
+      <button class="navItem" data-view="system">⚙  System<span class="pill" id="nSys"></span></button>
     </nav>
 
     <div class="railFoot">
       <div class="ptitle" style="border:none;padding:0;margin-bottom:6px">Voice</div>
       <div class="coreState" id="coreState" style="text-align:left;margin:0">voice off</div>
       <button id="micBig">🎙 TALK</button>
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <button id="focusInput" style="flex:1">⌨ TYPE</button>
-        <button id="mute" style="flex:1">🔊 ON</button>
-        <button id="engine" style="flex:1" title="Free = the browser's own voice, costs nothing. ElevenLabs = the premium voice, spends credits.">🆓 FREE VOICE</button>
+      <div class="vRow">
+        <button id="focusInput">⌨ TYPE</button>
+        <button id="mute">🔊 ON</button>
+        <button id="engine" title="Free = the browser's own voice, costs nothing. ElevenLabs = the premium voice, spends credits.">🆓 FREE VOICE</button>
       </div>
     </div>
   </aside>
@@ -1127,6 +1653,8 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
          is standing in front of something. Only lit on the command view. -->
     <div class="coreLayer" id="coreLayer">
       <canvas id="arc"></canvas>
+      <div id="missionDoom" aria-label="Animated Doom character"></div>
+      <a id="missionDoomCredit" href="https://sketchfab.com/3d-models/dr-doom-v2-4c27ab8143b84f07a39c1639c39757c3" target="_blank" rel="noopener">Dr Doom V2 · Visiion · CC BY 4.0 · animated adaptation</a>
       <div class="coreLabel">
         <div class="cName">J.A.R.V.I.S</div>
         <div class="cSub">AI CORE</div>
@@ -1142,6 +1670,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         <div class="badge" id="badge">CONNECTING</div>
         <button id="mic">🎙 VOICE OFF</button>
         <button id="refresh">REFRESH</button>
+        <button id="resetLayout" hidden title="Put every panel back where the page puts it">↺ LAYOUT</button>
       </div>
     </header>
 
@@ -1150,43 +1679,46 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <div class="cmdGrid">
 
         <div class="col">
-          <div class="panel" style="flex:none">
+          <div class="panel" data-widget="overview" style="flex:none">
             <div class="ptitle">Overview</div>
             <div id="overview"></div>
           </div>
-          <div class="panel" style="flex:1;min-height:0">
+          <div class="panel" data-widget="schedule" style="flex:1;min-height:0">
             <div class="ptitle">Mission timeline — today</div>
             <div id="schedule" class="scroll"></div>
-            <div id="alert"></div>
           </div>
-          <div class="panel" style="flex:none">
+          <div class="panel" data-widget="conns" style="flex:none">
             <div class="ptitle">Connections</div>
             <div id="conns"></div>
+          </div>
+          <div class="panel ccMsg" data-widget="messages" style="flex:none;max-height:190px">
+            <div class="ptitle">Messages<span class="live" id="ccMsgN"></span></div>
+            <div id="ccMsg" class="scroll"></div>
           </div>
         </div>
 
         <div class="col">
           <div class="coreHole"></div>
-          <div class="panel" style="flex:none">
+          <div class="panel" data-widget="quick-commands" style="flex:none">
             <div class="ptitle">Quick commands</div>
             <div class="quick" id="quick"></div>
           </div>
-          <div class="panel" style="flex:none;height:132px">
+          <div class="panel" data-widget="agent-activity-last-8-runs" style="flex:none;height:132px">
             <div class="ptitle">Agent activity — last 8 runs</div>
             <div class="scroll" id="logStream"></div>
           </div>
         </div>
 
         <div class="col">
-          <div class="panel" style="flex:none;max-height:34%">
+          <div class="panel" data-widget="feed" style="flex:none;max-height:34%">
             <div class="ptitle">Live feed<span class="live">● LIVE</span></div>
             <div id="feed" class="scroll"></div>
           </div>
-          <div class="panel" style="flex:none;max-height:26%">
+          <div class="panel" data-widget="needs" style="flex:none;max-height:26%">
             <div class="ptitle">Needs you<span class="live" id="needsN"></span></div>
             <div id="needs" class="scroll"></div>
           </div>
-          <div class="panel" style="flex:1;min-height:0">
+          <div class="panel" data-widget="conversation" style="flex:1;min-height:0">
             <div class="ptitle">Conversation</div>
             <div class="thread scroll" id="thread"></div>
           </div>
@@ -1197,7 +1729,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== TASKS ========== -->
     <section class="view" data-view="tasks">
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="todos" style="flex:1;min-height:0">
         <div class="ptitle">To do — ranked</div>
         <div id="todos" class="scroll"></div>
       </div>
@@ -1205,7 +1737,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== OUTBOX ========== -->
     <section class="view" data-view="outbox">
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="drafts" style="flex:1;min-height:0">
         <div class="ptitle">Waiting to go out — say “execute items 1 through 4”</div>
         <div id="drafts" class="scroll"></div>
       </div>
@@ -1214,11 +1746,11 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
     <!-- ========== CALENDAR ========== -->
     <section class="view" data-view="calendar">
       <div class="cmdGrid" style="grid-template-columns:1fr 320px">
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel" data-widget="week" style="flex:1;min-height:0">
           <div class="ptitle">Today, hour by hour<span class="live" id="dayN"></span></div>
           <div id="week" class="scroll dayGrid"></div>
         </div>
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel" data-widget="dayPlan" style="flex:1;min-height:0">
           <div class="ptitle">What the day could look like</div>
           <div id="dayPlan" class="scroll"></div>
         </div>
@@ -1227,7 +1759,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== ROUTINES ========== -->
     <section class="view" data-view="routines">
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="routines" style="flex:1;min-height:0">
         <div class="ptitle">Routines — say “every weekday at 8am send me my schedule”</div>
         <div id="routines" class="scroll"></div>
       </div>
@@ -1235,7 +1767,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== PEOPLE ========== -->
     <section class="view" data-view="people">
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="people" style="flex:1;min-height:0">
         <div class="ptitle">Who you work with</div>
         <div id="people" class="scroll"></div>
       </div>
@@ -1243,15 +1775,15 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== CLIENTS ========== -->
     <section class="view" data-view="clients">
-      <div class="panel" style="flex:none">
+      <div class="panel" data-widget="bookTotals" style="flex:none">
         <div class="ptitle">The book<span class="live" id="bookAt"></span></div>
         <div id="bookTotals"></div>
       </div>
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="clients" style="flex:1;min-height:0">
         <div class="ptitle">Organisations on the portal</div>
         <div id="clients" class="scroll"></div>
       </div>
-      <div class="panel" style="flex:none;max-height:34%">
+      <div class="panel" data-widget="finance" style="flex:none;max-height:34%">
         <div class="ptitle">Financing &amp; deals</div>
         <div id="finance" class="scroll"></div>
       </div>
@@ -1260,7 +1792,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
     <!-- ========== BOARD ========== -->
     <section class="view" data-view="board">
       <div class="cmdGrid" style="grid-template-columns:1fr 330px">
-      <div class="panel" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
+      <div class="panel" data-widget="whiteboard" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
         <div class="boardBar">
           <span class="ptitle" style="border:none;padding:0;margin:0">Whiteboard</span>
           <button id="bdAdd">+ NOTE</button>
@@ -1278,7 +1810,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         </div>
         <div class="boardSurface" id="boardSurface"></div>
       </div>
-      <div class="panel" style="flex:0 0 330px;min-height:0" id="bdThinkPanel">
+      <div class="panel" data-widget="bdThread" style="flex:0 0 330px;min-height:0" id="bdThinkPanel">
         <div class="ptitle">Think with me<span class="live" id="bdThinkState"></span></div>
         <div id="bdThread" class="scroll bdThread"></div>
         <textarea id="bdAsk" class="askBox"
@@ -1298,14 +1830,77 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
          vault is on the Mac and this page is served from silmarillion. -->
     <section class="view" data-view="openwork">
       <div class="cmdGrid" style="grid-template-columns:1fr 1fr">
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel" data-widget="active-priorities" style="flex:1;min-height:0">
           <div class="ptitle">Active Priorities<span class="live" id="apN"></span></div>
           <div class="scroll vaultDoc" id="apDoc"></div>
         </div>
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel" data-widget="decisions" style="flex:1;min-height:0">
           <div class="ptitle">Decisions<span class="live" id="dcN"></span></div>
           <div class="scroll vaultDoc" id="dcDoc"></div>
         </div>
+      </div>
+    </section>
+
+    <!-- ========== MESSAGES ==========
+         His iMessage threads, read through the neural link's /messages, which
+         is a proxy to the phone line (jarvis_imessage.py, 8796). The phone
+         line is the ONE reader of chat.db; this view and the Messages orb on
+         the glass are two renderings of it, not two copies. Dark when the Mac
+         is asleep, and it says so rather than claiming there is no mail.
+
+         The reply box is Thomas's own hand on send (decided 2026-09-21). The
+         phone line resolves the recipient and refuses an ambiguous name, and
+         logs every send; the model's tool gate is untouched. -->
+    <section class="view" data-view="messages">
+      <div class="cmdGrid msgGrid">
+        <div class="panel" data-widget="msg-threads">
+          <div class="ptitle">Threads<span class="live" id="msgN"></span></div>
+          <input id="msgQ" class="brainQ" placeholder="Filter by name or text…" autocomplete="off">
+          <div class="scroll" id="msgList" style="flex:1;min-height:0;margin-top:6px"></div>
+        </div>
+        <div class="panel" data-widget="msg-thread">
+          <div class="ptitle"><span id="msgTitle">Messages</span><span class="live" id="msgState"></span></div>
+          <div class="scroll msgLog" id="msgLog"><div class="msgEmpty">Pick a thread.</div></div>
+          <form class="msgReply" id="msgReply" hidden>
+            <textarea id="msgText" rows="2" maxlength="2000" placeholder="Reply — Enter sends, Shift+Enter for a new line"></textarea>
+            <button type="submit" id="msgSend">SEND</button>
+          </form>
+          <div class="msgNote" id="msgNote"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== SESSIONS ==========
+         The coding agents running on this Mac, Claude Code and Codex in one
+         list because their row is the same shape. GET /sessions on the neural
+         link; it caches for ten seconds because each read forks the claude
+         CLI. Read-only: nothing here starts, stops or talks to a session. -->
+    <section class="view" data-view="sessions">
+      <div class="panel" data-widget="sessions" style="flex:1;min-height:0">
+        <div class="ptitle">Coding sessions on this Mac<span class="live" id="sessN"></span></div>
+        <div class="sessBar" id="sessBar">
+          <button data-f="all" class="sel">ALL</button>
+          <button data-f="claude">CLAUDE CODE</button>
+          <button data-f="codex">CODEX</button>
+          <button data-f="busy">WORKING NOW</button>
+          <button id="sessRefresh" style="margin-left:auto">REFRESH</button>
+        </div>
+        <div class="scroll" id="sessList" style="flex:1;min-height:0"></div>
+      </div>
+    </section>
+
+    <!-- ========== PROPOSALS ==========
+         L2 of the ladder: what Jarvis thinks he should DO about the people,
+         commitments and questions the meetings, texts and mail have piled up.
+         bin/propose writes them on the Mac (hourly) into the vault note
+         04 - Jarvis/Proposals.md; this reads them through the brain's
+         /proposals. DONE and DISMISS make the same edit as ticking or
+         deleting the line in Obsidian. Nothing here sends, books or changes
+         anything else — acting on a proposal is still his hand. -->
+    <section class="view" data-view="proposals">
+      <div class="panel" data-widget="proposals" style="flex:1;min-height:0">
+        <div class="ptitle">What Jarvis proposes<span class="live" id="propN"></span></div>
+        <div class="scroll" id="propList" style="flex:1;min-height:0"></div>
       </div>
     </section>
 
@@ -1325,7 +1920,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
          the browser asks once per session. That prompt is the point — without
          it any page that could reach the port would be framing a shell. -->
     <section class="view" data-view="terminal">
-      <div class="panel" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
+      <div class="panel" data-widget="termHost" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
         <div class="boardBar">
           <span class="ptitle" style="border:none;padding:0;margin:0">Chat with JARVIS</span>
           <span class="live" id="termState">—</span>
@@ -1338,7 +1933,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== INDEX ========== -->
     <section class="view" data-view="index">
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="brainIns" style="flex:1;min-height:0">
         <div class="ptitle">Everywhere you can go<span class="live" id="ixN"></span></div>
         <div class="ixWrap">
           <div class="ixHead">
@@ -1386,7 +1981,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
     <!-- ========== PLATFORM ========== -->
     <section class="view" data-view="platform">
       <div class="cmdGrid platGrid">
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel" data-widget="platform" style="flex:1;min-height:0">
           <div class="ptitle">OMEGA<span class="live" id="platN"></span></div>
           <div id="platform" class="scroll"></div>
         </div>
@@ -1408,23 +2003,86 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       </div>
     </section>
 
+    <!-- ========== OMEGA LOGIC ==========
+         Tracking and fulfilment, end to end: an order arrives, money clears,
+         units are built and scanned across ten benches, each one carries its
+         own record, it ships, the balance clears. Cross-tenant, staff only,
+         fed by /api/logic-summary.
+
+         FOUR OF THE SIX STAGES DO NOT EXIST YET and the rail at the top says
+         so in as many words. The endpoint returns null for every field they
+         would own rather than zero, and this view renders null as a dash —
+         so an uncollected deposit reads as "not built", never as "$0". -->
+    <section class="view" data-view="logic">
+      <div class="logicWrap">
+        <div class="logicNote"><a href="/omega-logic" id="logicOfficeLink">OPEN OMEGA LOGIC · OEM WORKSPACES ↗</a></div>
+        <div class="logicRail" id="logicStages"></div>
+        <div class="tileRow" id="logicTiles"></div>
+        <div class="cmdGrid logicGrid">
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="ptitle">Orders<span class="live" id="logicN"></span></div>
+            <div id="logicOrders" class="scroll"></div>
+          </div>
+          <div class="col">
+            <div class="panel" data-widget="logicLine" style="flex:none">
+              <div class="ptitle">The line<span class="live" id="logicLineN"></span></div>
+              <div id="logicLine"></div>
+            </div>
+            <div class="panel" style="flex:1;min-height:0">
+              <div class="ptitle">Held<span class="live" id="logicHeldN"></span></div>
+              <div id="logicHolds" class="scroll"></div>
+            </div>
+          </div>
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="ptitle" id="logicDetailTitle">Order</div>
+            <div id="logicDetail" class="scroll"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ========== SYSTEM ========== -->
     <section class="view" data-view="system">
       <div class="cmdGrid">
         <div class="col">
+          <div class="panel" data-widget="pipeline" style="flex:none">
+            <div class="ptitle">Character & appearance</div>
+            <div class="characterSettings">
+              <label for="characterMode">Jarvis character</label>
+              <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="armour">Iron Man · the armour</option><option value="witchking">The Witch-king of Angmar</option><option value="onering">The One Ring</option><option value="quantum">Jarvis · Quantum core</option></select>
+              <div id="doomAppearance" style="display:grid;gap:10px">
+              <label for="doomCharacter">Doom appearance</label>
+              <select id="doomCharacter"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="mask">Doctor Doom's Mask · talking bust</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Classic Doom visual</option></select>
+              </div>
+              <div id="characterStatus" role="status">Saved on this browser. The depth portrait has limited movement.</div>
+            </div>
+          </div>
+          <!-- The phone: install and notifications. Installed to the home
+               screen, /mission opens on the Command Center with no browser
+               chrome, and only then can iOS deliver a push to it. -->
+          <div class="panel" data-widget="phone" style="flex:none">
+            <div class="ptitle">Phone</div>
+            <div class="phoneRows" id="phone"></div>
+          </div>
           <div class="panel" style="flex:none">
             <div class="ptitle">Pipeline</div>
             <div id="pipeline"></div>
+            <!-- The ingest health warning lived on the command view, under the
+                 timeline, where it was the loudest thing on the page for a
+                 condition that is usually somebody else's waiting room. It
+                 belongs with the numbers it is about: LAST INGEST, FETCHED,
+                 MEETINGS SEEN are all right above it. -->
+            <div id="alert"></div>
           </div>
         </div>
         <div class="col">
-          <div class="panel" style="flex:none">
+          <div class="panel" data-widget="spend" style="flex:none">
             <div class="ptitle">Spend</div>
             <div id="spend"></div>
           </div>
         </div>
         <div class="col">
-          <div class="panel" style="flex:1;min-height:0">
+          <div class="panel" data-widget="features" style="flex:1;min-height:0">
             <div class="ptitle">Subsystems</div>
             <div id="features" class="scroll"></div>
           </div>
@@ -1444,6 +2102,17 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   </main>
 
   <div class="foot" id="foot"></div>
+
+  <!-- The phone bar. Hidden above 700px; see THE PHONE BAR in the styles. -->
+  <nav class="ptabs" id="ptabs" aria-label="Screens">
+    <button data-view="command"><span class="ic">◧</span>Home</button>
+    <button data-view="tasks"><span class="ic">▤</span>Tasks<span class="pill" data-for="nTasks"></span></button>
+    <button data-view="outbox"><span class="ic">✉</span>Outbox<span class="pill" data-for="nOut"></span></button>
+    <button data-view="calendar"><span class="ic">▦</span>Calendar<span class="pill" data-for="nCal"></span></button>
+    <button data-view="more" id="moreTab"><span class="ic">⋯</span>More</button>
+  </nav>
+  <div class="moreBack" id="moreBack" hidden></div>
+  <div class="moreSheet" id="moreSheet" hidden><div class="ptitle">Every screen</div><div id="moreList"></div></div>
 </div>
 
 <div class="zoomBack" id="zoomBack" hidden></div>
@@ -1458,6 +2127,13 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   <div id="captext"></div>
 </div>
 
+<script src="assets/vendor/three-r128/three.min.js"></script>
+<script src="assets/vendor/three-r128/GLTFLoader.js"></script>
+<script src="omega-doom.js?v=20260922-figures-8"></script>
+<!-- The phone half: push notifications for the installed app. Self-contained
+     (window.JarvisPush), never asks for permission on its own; the Phone
+     panel on the System view is where he turns it on. -->
+<script src="/mission-push.js"></script>
 <script type="module">
 /* Public web config — the endpoint's allowlist is what gates access. */
 const FIREBASE_CONFIG = {
@@ -1475,6 +2151,14 @@ const [appMod,authMod]=await Promise.all([import(V+'firebase-app.js'),import(V+'
 const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(FIREBASE_CONFIG);
 const auth=authMod.getAuth(app);
 const el=id=>document.getElementById(id);
+/* For the few panels that build HTML from strings they did not write (vault
+   notes, message text, session names). Everything else here uses textContent.
+   It was called before it existed, so the Open work panel printed
+   "esc is not defined" instead of the vault. */
+function esc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 /* Never invent a number. A missing value renders as a dash, so a broken loop
    looks broken instead of looking like 42 degrees. */
@@ -1735,6 +2419,45 @@ function makeCore(id, opts) {
   const ctx = cv.getContext('2d');
   let W = 0, H = 0; const dpr = Math.min(window.devicePixelRatio || 1, 2);
   let energy = 0.15, target = 0.15, t = 0;
+  /* VOICE IS NOT ENERGY. `energy` answers "how much is going on" — it rides
+     the backlog count, it never reaches zero, and it eases at 0.02 a frame,
+     which is most of a second. Ask it to drive a mouth and you get a lamp
+     fading up and down half a syllable late.
+
+     This is a second channel with its own clock, carrying one thing: how loud
+     HE is, right now. Zero when he is not talking, and zero is a real value
+     here rather than a floor. */
+  let voice = 0, voiceTarget = 0, vPrev = 0, yawAcc = 0;
+  /* TALK IS NOT VOICE EITHER. `voice` is per-syllable and spends most of a
+     sentence near zero — the gaps between words are real silence. Drive a
+     POSE with it and he lurches on every consonant.
+
+     `talk` is the slower question: is he speaking at all. It rises quickly
+     when a syllable lands and takes about a second to fall, so it stays up
+     across the gaps and comes down once he has actually finished. The mask
+     pulses on `voice`; the body answers `talk`. */
+  let talk = 0;
+  /* Where the cape HAS got to, as against where the body is. The gap between
+     the two is the whole of the effect: cloth arrives late. */
+  let capeLag = 0;
+  /* Where the shoulders have got to. Same idea as the cape: the body is
+     always catching up with the head. */
+  let headLag = 0;
+  /* THE GESTURE CLOCK. Speech is not a wave, it is beats — a hand goes out on
+     a stressed word and comes back over the next two, and the giveaway that
+     something is animated rather than alive is that its arms move at the same
+     rate as its voice. So a gesture is FIRED on a syllable and then runs on
+     its own clock for the better part of a second, ignoring whatever the
+     voice does in the meantime; the refractory period is what stops a long
+     sentence turning him into a windmill. */
+  let gestT = -1e9, gestDur = 40, gestAmp = 0, gestSgn = 1, gPrev = 0;
+  /* And where the arms WERE, a few frames ago. He is a projection: the parts
+     of him that move fastest are the parts a projection smears. */
+  let armGhostR = 0, armGhostL = 0, armGhostS = 0;
+  /* One ring per syllable, leaving the mask. Spawned on the RISING edge of
+     the envelope rather than on a timer, so the count and the spacing are the
+     speech's, not a decoration's. */
+  const VRING = [];
 
   const LAT = 9, LON = 18, PER_LAT = 96, PER_LON = 64;
   const TILT = -0.42;                         /* the axis leans toward you */
@@ -1890,27 +2613,77 @@ function makeCore(id, opts) {
         x2.drawImage(dep, 0, 0, w, h);
         var ddat = x2.getImageData(0, 0, w, h).data;
 
-        var pos = [], lums = [];
+        /* --- brightness, and why it is not just luminance -----------------
+           MEASURED, in this browser, on this asset (132x218):
+
+             mean luminance      0.106       NOT the 0.35 a previous comment
+             median              0.055       claimed, and the difference is
+             p90                 0.265       the whole bug
+             p99                 0.663
+             max                 0.866
+             background          transparent — there is no white page, so the
+                                 lum > 0.965 test never once fired
+
+           The artwork is 70% shadow: a black cloak, in a hood, in shadow.
+           The old curve was `0.42 + 0.58 * lum^0.55`, which lifts the floor
+           to 0.42 AND crushes the gamma, so seven thousand of the eleven
+           thousand samples came out between 0.53 and 0.62 and the other four
+           thousand between 0.62 and 0.95. Every sample landed in the top
+           alpha buckets. That is why he rendered as a glowing slab with a
+           head on it rather than as a man — the drawing's entire dynamic
+           range had been compressed into the top third of the output.
+
+           So: stretch against the real top of the range instead of the
+           theoretical one, and then ADD A RIM. The depth map's slope is high
+           exactly where the form turns away from the eye — the hood line, the
+           mask ridges, the shoulder plates, the fall of the cape — which is
+           where a projected figure would catch its own light, and which is
+           what makes this man recognisable rather than a silhouette of any
+           man in a cloak. The cloak lands near 0.33, the hood edge near 0.62,
+           the faceplate at 1.0. */
+        /* RAW luminance is kept alongside the rendered one. `lums` below is the
+           drawing brightness — tone stretched, plus a rim term that fires on the
+           depth map's slope. That is the right number to DRAW with and the wrong
+           one to MEASURE with: the rim lights every edge in the picture, so the
+           cloak's outline scores as high as polished steel, and the one thing
+           that separates an arm from a cape in this artwork is that the arm is
+           the only metal below the mask. */
+        var pos = [], lums = [], rawl = [];
+        var dat = function (x, y) {           /* depth, clamped at the border */
+          if (x < 0) x = 0; if (y < 0) y = 0;
+          if (x > w - 1) x = w - 1; if (y > h - 1) y = h - 1;
+          return ddat[(y * w + x) * 4] / 255;
+        };
         for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
           var i = (y * w + x) * 4;
           if (cdat[i + 3] < 40) continue;                /* cut-out background */
+          /* AND the depth map, which has its own clean silhouette. 571 of the
+             11,471 pixels the alpha test keeps are anti-aliased halo that the
+             depth map calls background; left in, they draw a faint fringe a
+             pixel outside him on every edge, and a fringe is what a cut-out
+             looks like when it is pretending to be a projection. */
+          if (ddat[i] < 12) continue;
           var lum = (cdat[i] * 0.299 + cdat[i + 1] * 0.587 + cdat[i + 2] * 0.114) / 255;
-          if (lum > 0.965) continue;                     /* the white page */
-          var dz = (ddat[i] / 255 - 0.5);
+          /* DEPTH, TO SCALE. The map's full range was taken as ±0.5 in the
+             same normalised units as x — that is, the figure was made as deep
+             as it is wide. A man in a cloak is about 0.45 as deep as he is
+             across, so every sample sat two and a bit times too far fore or
+             aft, and any turn at all sheared him. This is the other half of
+             why he looked wrong while rotating, and it is the half that was
+             wrong even standing still under the rim light. */
+          var dz = (ddat[i] / 255 - 0.5) * 0.45;
           pos.push((x / w - 0.5), (y / h - 0.5), dz);
-          /* Keep LUMINANCE, not colour. The drawing is a black cloak and dark
-             armour on white; painted in its own colours on a dark dashboard it
-             vanishes, and only the highlights survive — which is exactly what
-             the first attempt looked like. A hologram is the subject's FORM
-             rendered in the light of the projector, so brightness comes from
-             the artwork and hue comes from the mode. Lifted off the floor so
-             the darkest folds still read as cloth rather than as holes. */
-          /* Measured: the drawing's average luminance is 0.35, so a straight
-             mapping lands the whole figure at about a fifth opacity on a dark
-             panel — technically drawn, practically invisible. Lift the floor
-             and flatten the curve so the cloak reads as cloth and the
-             faceplate still reads as metal. */
-          lums.push(0.42 + 0.58 * Math.pow(lum, 0.55));
+
+          var tone = Math.min(1, lum / 0.70);
+          tone = Math.pow(tone, 0.85);
+          /* p90 of the gradient is 0.169 and p98 is 0.253, so 0.22 puts the
+             rim on the top tenth of slopes and saturates on the edges proper. */
+          var gx = dat(x + 1, y) - dat(x - 1, y);
+          var gy = dat(x, y + 1) - dat(x, y - 1);
+          var rim = Math.pow(Math.min(1, Math.sqrt(gx * gx + gy * gy) / 0.22), 0.8);
+
+          lums.push(Math.min(1, 0.14 + 0.52 * tone + 0.42 * rim));
+          rawl.push(lum);
         }
         /* THE ARTWORK'S OWN ASPECT, carried out of here. Both axes were
            normalised to ±0.5 and then multiplied by ONE scale, which forces
@@ -1918,7 +2691,215 @@ function makeCore(id, opts) {
            came out 1.65× too wide and read as a smear rather than a man.
            Stored rather than hard-coded so replacing the drawing cannot
            reintroduce it. */
-        cloud = { pos: new Float32Array(pos), lum: new Float32Array(lums), n: lums.length, ar: h / w };
+        /* WHERE HIS FACE IS, found in the artwork rather than written down.
+           The voice has to appear to come from the mask, which means something
+           has to know where the mask is — and a constant measured once is a
+           constant that lies the day the drawing is replaced. The aspect ratio
+           two lines up is stored for exactly that reason; this is the same
+           argument about a different number.
+
+           Polished metal is the only thing in this drawing that catches light:
+           the brightest sample anywhere in the head is 0.866 against a figure
+           whose median is 0.055. So the faceplate is a luminance centroid over
+           the top fifth of the silhouette, cubed so the highlights dominate
+           and the hood's shadow does not drag it down the face. */
+        var top = 1, bot = -1, k;
+        for (k = 0; k < lums.length; k++) {
+          var yk = pos[k * 3 + 1];
+          if (yk < top) top = yk;
+          if (yk > bot) bot = yk;
+        }
+        var cut = top + (bot - top) * 0.22;
+        var mx = 0, my = 0, mz = 0, mw = 0;
+        for (k = 0; k < lums.length; k++) {
+          if (pos[k * 3 + 1] >= cut) continue;
+          var wgt = Math.pow(lums[k], 3);
+          mx += pos[k * 3] * wgt; my += pos[k * 3 + 1] * wgt; mz += pos[k * 3 + 2] * wgt;
+          mw += wgt;
+        }
+        /* --- TWO BONES, SOFTLY WEIGHTED ------------------------------------
+           This figure is ONE drawing displaced by a depth map. There are no
+           arms in it — there is a region of samples that looks like arms,
+           welded to the torso, crossed over the chest and occluding each
+           other. Nothing can articulate them, and pretending otherwise tears
+           the cloud along a seam that does not exist.
+
+           What the artwork DOES separate cleanly, measured off its own width
+           profile: the head (2-42% of the frame's width, down to 0.16 of the
+           figure), the shoulders (widest at 0.26, and the deepest part of the
+           whole body at 0.708), and the cape, which flares again to 57% at
+           the hem. So: a head that can turn on its own neck, and a hem that
+           can trail. Those are the two that carry almost all of the life.
+
+           WEIGHTS, NOT REGIONS. A hard cut at a row is a guillotine — the
+           neck would shear off on the first turn. Each sample gets a 0..1
+           influence that ramps across a band, so the transform fades in
+           through the neck and out through the waist and nothing ever
+           separates. This is skinning, with two bones and no skeleton. */
+        var hw = new Float32Array(lums.length);
+        var cw = new Float32Array(lums.length);
+        /* A THIRD BONE: the upper body. Not the arms — those cannot be cut
+           out of this drawing, and it was measured twice rather than assumed.
+           The depth map is a smooth unimodal relief across the arm band
+           (p50 0.71, no valley), so there is no "arm in front of chest" layer
+           to separate; and luminance decays monotonically from 42% of the
+           band below 0.05, so the bright tenth is scattered highlights on
+           armour edges rather than a connected limb. Neither cuts.
+
+           What a band CAN do is what the head already does. The shoulders and
+           chest turning a beat behind the head is most of what reads as a
+           person moving — the head leads, the body follows, and the lag is
+           the tell. */
+        var sw = new Float32Array(lums.length);
+        var span = (bot - top) || 1;
+        for (k = 0; k < lums.length; k++) {
+          var d = (pos[k * 3 + 1] - top) / span;        /* 0 at the crown, 1 at the hem */
+          /* head: full to 0.14, gone by 0.26 — the ramp IS the neck */
+          hw[k] = d <= 0.14 ? 1 : (d >= 0.26 ? 0 : (0.26 - d) / 0.12);
+          /* cape: nothing above the waist, full by the hem, squared so the
+             bottom trails furthest and the top barely moves */
+          var c2 = d <= 0.55 ? 0 : (d >= 0.96 ? 1 : (d - 0.55) / 0.41);
+          cw[k] = c2 * c2;
+          /* shoulders: in from the neck, out again before the cape takes
+             over, so the two never both own a sample at full strength */
+          sw[k] = d <= 0.18 ? 0
+                : d < 0.34  ? (d - 0.18) / 0.16
+                : d <= 0.52 ? 1
+                : d < 0.74  ? (0.74 - d) / 0.22
+                : 0;
+        }
+
+        /* --- A FOURTH BONE: THE FOREARMS, FOUND BY THEIR OWN LIGHT ---------
+           The previous author looked for the arms in the DEPTH map, found a
+           smooth unimodal relief with no valley, and concluded correctly that
+           there is no "arm in front of chest" layer to separate. That is still
+           true and this does not contradict it. The arms are not separable by
+           depth. They are separable by MATERIAL.
+
+           MEASURED on this asset (132x218, 10,919 kept samples): raw luminance
+           has a median of 0.056 and a 90th percentile of 0.263 — the figure is
+           cloth in shadow. The fraction of each row above that p90 has exactly
+           two peaks, and nothing else anywhere on the body:
+
+             d 0.00-0.13   0.15-0.43   the mask. Polished steel, already used
+                                       to find `mask` thirty lines up.
+             d 0.16-0.28   0.26-0.66   the crossed gauntlets. Peak 0.59 at 0.20.
+             d 0.28-0.36   0.000       the belly. Not "low" — zero, for eight
+                                       per cent of his height, on both edges of
+                                       the band at once.
+             d 0.36-0.86   0.00-0.09   cloak, skirt, boots. Scattered.
+
+           A band whose neighbours on both sides are a hard zero is not a
+           threshold that happened to work; it is the armour ending. So the
+           band is found rather than written down — peak below the head, walked
+           outwards while the smoothed fraction holds a third of its peak —
+           and a redrawn figure with its arms somewhere else re-derives it.
+
+           AND THE WEIGHT IS THE BRIGHTNESS, not the band. Inside those rows
+           sit both the gauntlets and the cape behind them. Weighting by light
+           puts most of the motion on the steel and leaves the cloak nearly
+           still, which is what an arm moving in front of a body looks like;
+           a floor of 0.30 keeps the band whole so nothing tears at its edge. */
+        var aw = new Float32Array(lums.length);
+        var elbow = null;
+        (function () {
+          var NB = 48, i, bi;
+          var srt = rawl.slice().sort(function (a, b) { return a - b; });
+          var hi90 = srt[(srt.length * 0.90) | 0];
+          var cnt = new Float32Array(NB), bri = new Float32Array(NB);
+          for (i = 0; i < rawl.length; i++) {
+            bi = ((pos[i * 3 + 1] - top) / span * NB) | 0;
+            if (bi < 0) bi = 0; if (bi > NB - 1) bi = NB - 1;
+            cnt[bi]++; if (rawl[i] > hi90) bri[bi]++;
+          }
+          var f = new Float32Array(NB);
+          for (i = 0; i < NB; i++) f[i] = cnt[i] > 20 ? bri[i] / cnt[i] : 0;
+          var sm = new Float32Array(NB);           /* three bins ~ seven rows */
+          for (i = 0; i < NB; i++) {
+            sm[i] = (f[Math.max(0, i - 1)] + f[i] + f[Math.min(NB - 1, i + 1)]) / 3;
+          }
+          /* the peak BELOW the head, so the mask cannot win its own search */
+          var lo0 = Math.ceil(0.14 * NB), pk = lo0;
+          for (i = lo0; i < NB; i++) if (sm[i] > sm[pk]) pk = i;
+          if (sm[pk] < 0.12) return;               /* no metal down there: no arms */
+          var cutv = sm[pk] * 0.35, a = pk, b = pk;
+          while (a > lo0 && sm[a - 1] > cutv) a--;
+          while (b < NB - 1 && sm[b + 1] > cutv) b++;
+          var d0 = a / NB, d1 = (b + 1) / NB;
+          /* The ramp is as deep as the band itself. It is not a taste: a slab
+             of samples translated against its neighbours tears at its edge,
+             and how far it can move before the tear shows is set by how long
+             the ramp has to hide the difference. Half a band either side
+             turns the edge into a gradient nothing can find. */
+          var pad = (d1 - d0) * 0.60;
+          if (pad < 0.01) return;
+
+          /* the light gate, taken inside the band rather than over the figure:
+             the band is already the brightest part of the body and a global
+             percentile would keep all of it */
+          var inb = [];
+          for (i = 0; i < rawl.length; i++) {
+            var di = (pos[i * 3 + 1] - top) / span;
+            if (di > d0 - pad && di < d1 + pad) inb.push(rawl[i]);
+          }
+          if (inb.length < 60) return;
+          inb.sort(function (x, y) { return x - y; });
+          var glo = inb[(inb.length * 0.62) | 0], ghi = inb[(inb.length * 0.94) | 0];
+          if (ghi - glo < 0.02) return;
+
+          var ex = 0, ey = 0, ew = 0;
+          for (i = 0; i < rawl.length; i++) {
+            var dd = (pos[i * 3 + 1] - top) / span, band;
+            if (dd <= d0 - pad || dd >= d1 + pad) continue;
+            band = dd < d0 ? (dd - (d0 - pad)) / pad
+                 : dd <= d1 ? 1
+                 : ((d1 + pad) - dd) / pad;
+            var g = (rawl[i] - glo) / (ghi - glo);
+            if (g < 0) g = 0; if (g > 1) g = 1;
+            /* SQUARED, AND NO FLOOR. This is the whole difference between an
+               arm and a landslide. Give every sample in the band a share of
+               the movement and the band becomes a slab: it slides as one
+               piece, opens a hole at the shoulder and cuts a straight line
+               across the ribs — measured, and it looks exactly as bad as it
+               sounds. Weight it by light squared and only the gauntlets move.
+               They are the one thing in those rows the eye can see — the
+               cloak behind them is unlit and featureless, so there is nothing
+               there to tear and nothing to notice staying still. */
+            aw[i] = band * g * g;
+            ex += pos[i * 3] * aw[i]; ey += pos[i * 3 + 1] * aw[i]; ew += aw[i];
+          }
+          /* THE ELBOW. Not a joint — this drawing has no joints. It is the
+             point the forearm block turns about, and the block's own centre of
+             light is the only defensible choice: turn it about the body's
+             midline instead and the near arm swings twice as far as the far
+             one for no reason anyone drew. */
+          if (ew > 1) elbow = { x: ex / ew, y: ey / ew };
+        })();
+
+        /* THE NECK, which is what the head turns on. A fifth of the way down
+           is where the width profile stops being hood and starts being
+           shoulder (24% of the frame at 0.11, 42% by 0.16, 52% by 0.21), so
+           that is the joint. Centred in x; z taken from the head band, since
+           a head pivoting about the body's mid-depth swings its face through
+           the chest. */
+        var neckY = top + span * 0.20, nz = 0, nzw = 0;
+        for (k = 0; k < lums.length; k++) {
+          if (hw[k] <= 0) continue;
+          nz += pos[k * 3 + 2] * hw[k]; nzw += hw[k];
+        }
+        var neck = { x: 0, y: neckY, z: nzw ? nz / nzw : 0 };
+        /* The waist, which the upper body turns on. */
+        var waist = { x: 0, y: top + span * 0.52 };
+
+        var mask = mw > 0
+          ? { x: mx / mw, y: my / mw, z: mz / mw }
+          /* No head found is not a reason to fail; it is a reason to aim at
+             the top of whatever was drawn and carry on. */
+          : { x: 0, y: top + (bot - top) * 0.12, z: 0.15 };
+
+        cloud = { pos: new Float32Array(pos), lum: new Float32Array(lums),
+                  n: lums.length, ar: h / w, mask: mask, hw: hw, cw: cw, sw: sw,
+                  neck: neck, waist: waist, arm: elbow ? aw : null, elbow: elbow };
         cloudState = cloud.n > 200 ? 'ready' : 'failed';
       } catch (e) {
         /* A canvas that cannot be read must not take the core down with it —
@@ -1961,10 +2942,107 @@ function makeCore(id, opts) {
     const p = cloud.pos, lu = cloud.lum;
     for (let b = 0; b < _cbk.length; b++) _cbk[b].length = 0;
 
+    /* --- the two bones, per frame ------------------------------------------
+       Cheap enough to sit in the per-sample loop because the angles are tiny.
+       SMALL-ANGLE ROTATION rather than cos/sin: the head never turns past
+       about 0.25 rad, where 1 - a*a/2 and a are within one per cent of the
+       real thing — invisible here, and it keeps a trig pair out of a loop
+       that runs eleven thousand times a frame. */
+    const HW = cloud.hw, CW = cloud.cw, SW = cloud.sw, NK = cloud.neck, WS = cloud.waist;
+    const AW = cloud.arm, EL = cloud.elbow;
+    const hy = o.headYaw || 0, hn = o.headNod || 0, cx2 = o.capeX || 0, hr = o.headRoll || 0;
+    const sr = o.bodyRoll || 0, bz = o.breath || 0;
+    const ga = o.armRoll || 0, gl = o.armLift || 0, gs = o.armSpread || 0;
+    const glit = o.armLit || 0;
+    const gest = !!(AW && EL && (ga || gl || gs));
+    const bones = !!(HW && NK && (hy || hn || cx2 || hr || sr || bz || gest));
+    /* The roll has to be circular ON SCREEN, and x and y are not drawn at the
+       same scale — sy is `ar` times sx. Rotating in the stored units would
+       shear the head into an ellipse. So y is carried into x-proportional
+       units for the rotation and back out again. */
+    const AR = cloud.ar || 1.65;
+
     for (let k = 0; k < cloud.n; k += step) {
       const lum = lu[k];
       if (o.bright && lum < 0.80) continue;       /* the bloom takes highlights only */
-      const px = p[k * 3], py = p[k * 3 + 1], pz = p[k * 3 + 2];
+      /* the ghost pass carries the arms and nothing else */
+      if (o.armOnly && (!AW || AW[k] < 0.22)) continue;
+      let px = p[k * 3], py = p[k * 3 + 1], pz = p[k * 3 + 2];
+
+      if (bones) {
+        const hwk = HW[k];
+        if (hwk > 0) {
+          /* HE TURNS HIS HEAD ON HIS NECK. Weighted, so the transform fades
+             out through the neck instead of shearing it off. */
+          const a = hy * hwk, ca = 1 - a * a * 0.5;
+          const dx = px - NK.x, dz = pz - NK.z;
+          px = NK.x + dx * ca - dz * a;
+          pz = NK.z + dx * a + dz * ca;
+          py += hn * hwk;
+
+          /* AND HE TILTS IT. The yaw above is honest but nearly invisible: a
+             head is about a tenth of the figure wide, and turning a
+             depth-displaced billboard through 0.2 rad moves its samples by at
+             most two per cent of that width. There is no more depth to swing
+             through — the drawing has one face.
+
+             The roll is not depth-limited. It happens in the plane of the
+             image, so three degrees is three degrees, and it is the channel
+             that actually reads as a head moving. */
+          if (hr) {
+            const b = hr * hwk, cb = 1 - b * b * 0.5;
+            const ex = px - NK.x, ey = (py - NK.y) * AR;
+            px = NK.x + ex * cb - ey * b;
+            py = NK.y + (ex * b + ey * cb) / AR;
+          }
+        }
+        /* THE UPPER BODY FOLLOWS, LATE. Same rotation, about the waist, driven
+           by a lagged and inverted copy of the head — which is what a torso
+           does: the head leads, the shoulders come round after it, and the
+           lag between them is the tell that there is a person in there. */
+        if (SW && SW[k] > 0 && (sr || bz)) {
+          const swk = SW[k];
+          if (sr) {
+            const b2 = sr * swk, cb2 = 1 - b2 * b2 * 0.5;
+            const fx = px - WS.x, fy = (py - WS.y) * AR;
+            px = WS.x + fx * cb2 - fy * b2;
+            py = WS.y + (fx * b2 + fy * cb2) / AR;
+          }
+          /* AND HE BREATHES. The chest rises against the waist — a fraction
+             of a per cent, which is all a breath is, and the only motion on
+             this canvas that never stops. */
+          if (bz) py = WS.y + (py - WS.y) * (1 + bz * swk);
+        }
+
+        /* AND HE GESTURES. The forearms turn about their own centre of light,
+           lift, and open — three channels, all in the plane of the image, for
+           the reason the head's roll is: this drawing has one face and no
+           second view to swing through, so anything that tries to move an arm
+           through depth moves it by two per cent of nothing. In-plane, three
+           degrees is three degrees.
+
+           The spread is measured from the elbow and not from the body's
+           midline. His arms are crossed: the hands sit near the centre and the
+           gauntlets run outwards past the ribs, so opening them is the block
+           growing about its own middle, which is what unfolding looks like
+           from the front. */
+        if (gest && AW[k] > 0) {
+          const ak = AW[k];
+          if (ga) {
+            const b3 = ga * ak, cb3 = 1 - b3 * b3 * 0.5;
+            const gx = px - EL.x, gy2 = (py - EL.y) * AR;
+            px = EL.x + gx * cb3 - gy2 * b3;
+            py = EL.y + (gx * b3 + gy2 * cb3) / AR;
+          }
+          if (gs) px = EL.x + (px - EL.x) * (1 + gs * ak);
+          if (gl) py += gl * ak;
+        }
+
+        /* AND THE HEM TRAILS. Cloth follows the body a beat late; a cape that
+           moves with the hips is a painted cape. */
+        if (CW[k] > 0) px += cx2 * CW[k];
+      }
+
       const x = px * c - pz * sn * 0.85;
       const z = px * sn + pz * c;
       /* nearer samples are drawn bigger and brighter — the only parallax cue
@@ -1980,6 +3058,11 @@ function makeCore(id, opts) {
         const d = Math.abs(py - sweep);
         if (d < 0.085) a += (1 - d / 0.085) * 0.60 * lum;
       }
+      /* THE STEEL CATCHES IT. A gesture in a dark room is a shape you have to
+         look for; the same gesture with the light coming up off the armour as
+         it moves is the one thing on this canvas that is unmistakably a limb.
+         Rides `lum` so it lands on the plate and not on the cloth behind it. */
+      if (glit && AW && AW[k] > 0) a += AW[k] * glit * lum;
       if (a < 0.025) continue;                    /* below this nothing lands */
       let ai = (a * CL_A) | 0; if (ai > CL_A - 1) ai = CL_A - 1;
       let si = (Math.max(0, z) * 2.2) | 0; if (si > CL_S - 1) si = CL_S - 1;
@@ -2031,6 +3114,28 @@ function makeCore(id, opts) {
   }
 
   function drawDoom(cx, cy, R, yaw, col) {
+    /* THE FIGURE TURNS; THE SHELLS SPIN. They were handed the same angle, and
+       that angle is `t * rate` — it increases forever. An icosahedron can spin
+       through 360 degrees because it is a real solid and every angle of it is
+       a real view. The figure is NOT: it is one drawing pushed along z by a
+       depth map, so it has a front and nothing else. Carried past about forty
+       degrees it shears, and at ninety it collapses to its own depth and reads
+       as a crumpled sheet — which is what was on screen, twice a revolution,
+       for as long as doom mode has existed.
+
+       The lesson was already learned twenty lines down, where the wireframe
+       figure uses `Math.sin(...)` and the comment says "turns, never spins".
+       The point cloud that replaced it on screen never got the same treatment.
+       ±1.0 here, because drawCloud multiplies by 0.55 internally — so the
+       figure swings ±31°, which is the width of a three-quarter view and the
+       edge of where a depth-displaced billboard still reads as a body. */
+    /* HE TURNS TO FACE YOU WHEN HE SPEAKS. Idle, he drifts through the ±31°
+       the billboard can carry. Talking, `talk` pulls that drift toward zero —
+       square on, looking at the man he is answering. It is one multiply and
+       it is the whole difference between a figure that happens to be lit and
+       one that is addressing you. Eased by `talk` and not by `voice`, or he
+       would snap round on every consonant. */
+    const cyaw = Math.sin(t * 0.0022) * 1.0 * (1 - talk * 0.92);
     /* the smoke it stands in */
     const g = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R * 2.0);
     g.addColorStop(0, 'rgba(' + col + ',' + (0.12 + energy * 0.12).toFixed(3) + ')');
@@ -2055,6 +3160,107 @@ function makeCore(id, opts) {
          too large, and after that the arithmetic below is all zero. */
       const ent = Math.max(0, 1 - (t - doomT0) / 70);
       const bob2 = Math.sin(t * 0.012) * R * 0.03;
+      /* HE SHIFTS HIS WEIGHT. A figure that only bobs on one axis reads as a
+         sprite on a spring; a slow lateral drift at a different period reads
+         as somebody standing. Damped by `talk` for the same reason the turn
+         is — a man delivering a line plants his feet. */
+      const sway = Math.sin(t * 0.0016 + 1.1) * R * 0.045 * (1 - talk * 0.8);
+      /* AND HE STEPS IN. Three and a half per cent, about his own centre.
+         Enough that the room feels him come forward, small enough that it
+         never reads as the canvas resizing. */
+      const lean = 1 + talk * 0.035;
+
+      /* --- WHAT THE TWO BONES DO ------------------------------------------
+         The head is the whole illusion. A body that turns as one piece is a
+         statue on a turntable; a head that moves on its own neck, on its own
+         clock, is a person — and it costs one sine.
+
+         Idle he looks slowly around, ±9°, at a period unrelated to the body's
+         so the two never lock into a single motion. Speaking, that wandering
+         is damped to a third (a man delivering a line is not sightseeing) and
+         a small emphasis movement takes over instead. */
+      const headYaw = Math.sin(t * 0.0009 + 2.3) * 0.16 * (1 - talk * 0.66)
+                    + Math.sin(t * 0.020) * 0.045 * talk;
+      /* The nod is on VOICE, not talk — it lands on the syllable, which is
+         what makes it read as emphasis rather than as a bobbing head. */
+      const headNod = voice * 0.010;
+      /* Idle he inclines slowly, ±3.4°. Speaking, a sharper tilt rides each
+         syllable — the head cocking on a stressed word, which is the single
+         most human thing on this canvas. */
+      const headRoll = Math.sin(t * 0.0013 + 0.7) * 0.060 * (1 - talk * 0.5)
+                     + Math.sin(t * 0.017) * 0.055 * talk
+                     + voice * 0.030;
+
+      /* The hem chases the sway and never catches it. 0.06 is about a fifth
+         of a second behind at 60fps, which is roughly what heavy cloth does. */
+      capeLag += (sway - capeLag) * 0.06;
+      const capeX = (capeLag - sway) / (R * 1.02) * 1.6;
+      /* Every pass gets the same bones, or the reflection and the bloom
+         disagree with the body about where his head is. */
+      /* THE BODY IS ALWAYS CATCHING UP. 0.045 a frame puts the shoulders
+         about a third of a second behind the head; inverted and at 40%,
+         because a torso counter-rotates as the head turns rather than
+         copying it. Take the lag out and he moves as one carved piece. */
+      headLag += (headRoll - headLag) * 0.045;
+      const bodyRoll = -headLag * 0.40;
+      /* Four seconds a cycle, six tenths of a per cent. A breath is not
+         supposed to be noticed — it is supposed to be missed when it stops. */
+      const breath = Math.sin(t * 0.026) * 0.006;
+
+      /* --- HE GESTURES WHILE HE TALKS -------------------------------------
+         Fired on the rising edge of a syllable, the same edge that spawns a
+         ring at the mask, and then let go of: the beat runs half to a whole
+         second on its own clock while the voice does whatever it likes. Only
+         a third of the eligible syllables get one, because a man who gestures
+         on every word is not emphasising anything.
+
+         The envelope is fast out, slow back — 30% of the beat to reach the
+         extent and 70% to return — which is the shape of a hand thrown out on
+         a word and drawn back over the phrase after it. A symmetric envelope
+         reads as a pendulum. */
+      const onset = voice > 0.30 && gPrev <= 0.30;
+      gPrev = voice;
+      if (onset && talk > 0.25 && (t - gestT) > 30 && Math.random() < 0.34) {
+        gestT = t;
+        gestDur = 38 + Math.random() * 30;
+        gestAmp = 0.55 + Math.random() * 0.45;
+        gestSgn = Math.random() < 0.5 ? -1 : 1;
+      }
+      const gp = (t - gestT) / gestDur;
+      const beat = (gp < 0 || gp > 1) ? 0 : gestAmp * (gp < 0.30
+        ? 0.5 - 0.5 * Math.cos(gp / 0.30 * Math.PI)
+        : 0.5 + 0.5 * Math.cos((gp - 0.30) / 0.70 * Math.PI));
+
+      /* IDLE, HE IS NOT A STATUE EITHER. A slow settle at its own period, cut
+         to a fifth while he is speaking so the beats above own the movement.
+         Nothing on this canvas is ever allowed to be perfectly still. */
+      const armRoll   = beat * gestSgn * 0.105
+                      + Math.sin(t * 0.0021 + 0.4) * 0.016 * (1 - talk * 0.8);
+      /* Up is negative y. The lift carries most of the read: a forearm block
+         rising two per cent of his height is a hand coming up to make a
+         point, and it is the channel that survives being watched from across
+         the room. A touch of `voice` on top so the arms tighten on the
+         syllable itself rather than only on the beat. */
+      const armLift   = -(beat * 0.013 + voice * 0.004)
+                      + Math.sin(t * 0.0019 + 2.2) * 0.004;
+      /* And they open. Six per cent about the elbow, never inwards — crossed
+         arms can unfold and cannot fold further. */
+      const armSpread = beat * 0.026;
+      const armLit    = beat * 0.30;
+
+      /* THE GHOST. Three tenths a frame puts it about three frames behind,
+         which is nothing on a body that barely moves and is very visible on
+         the one part of him that snaps. Drawn later, additively, at a fifth
+         of the brightness: a projection whose fast-moving parts arrive late,
+         which is the difference between a figure that gestures and a
+         HOLOGRAM that gestures. */
+      armGhostR += (armRoll - armGhostR) * 0.30;
+      armGhostL += (armLift - armGhostL) * 0.30;
+      armGhostS += (armSpread - armGhostS) * 0.30;
+
+      const BONES = { headYaw: headYaw, headNod: headNod, headRoll: headRoll,
+                      bodyRoll: bodyRoll, breath: breath, capeX: capeX,
+                      armRoll: armRoll, armLift: armLift, armSpread: armSpread };
       const y0 = cy + R * 0.86;                   /* the floor, at the cloak hem */
 
       /* THE ROOM. He was standing in nothing, which is what made him read as
@@ -2077,8 +3283,10 @@ function makeCore(id, opts) {
 
       ctx.save();
       ctx.translate(0, y0); ctx.scale(1, -0.42); ctx.translate(0, -y0);
-      ctx.translate(0, bob2);
-      drawCloud(cx, cy - R * 0.04, R, yaw, col, { step: 3, gain: 0.26 });
+      /* The same sway, or he slides away from his own reflection and the
+         floor stops being a floor. */
+      ctx.translate(sway, bob2);
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ step: 3, gain: 0.26 }, BONES));
       ctx.restore();
 
       if (ent > 0) {
@@ -2093,13 +3301,71 @@ function makeCore(id, opts) {
          is light coming off him, and that ordering is the whole difference
          between a glow and a haze. */
       ctx.save();
-      ctx.translate(0, bob2);
+      ctx.translate(sway, bob2);
+      ctx.translate(cx, cy); ctx.scale(lean, lean); ctx.translate(-cx, -cy);
       if (ent > 0) {
         ctx.translate(cx, cy); ctx.scale(1 + ent * 0.5, 1 + ent * 0.5); ctx.translate(-cx, -cy);
       }
-      drawCloud(cx, cy - R * 0.04, R, yaw, col, { sweep: ((t * 0.0024) % 1.9) - 0.95 });
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ sweep: ((t * 0.0024) % 1.9) - 0.95, armLit: armLit }, BONES));
       ctx.globalCompositeOperation = 'lighter';
-      drawCloud(cx, cy - R * 0.04, R, yaw, col, { step: 2, gain: 0.26, grow: 2.4, bright: true });
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ step: 2, gain: 0.26, grow: 2.4, bright: true }, BONES));
+      /* The arms, where they were three frames ago. Only while they are
+         actually moving — a ghost of a stationary arm is just a second arm in
+         the same place, drawn twice as bright. */
+      if (Math.abs(armRoll - armGhostR) > 0.004 || Math.abs(armLift - armGhostL) > 0.0012) {
+        drawCloud(cx, cy - R * 0.04, R, cyaw, col,
+          Object.assign({ step: 2, gain: 0.50, grow: 1.0, armOnly: true }, BONES,
+            { armRoll: armGhostR, armLift: armGhostL, armSpread: armGhostS, armLit: 0 }));
+      }
+
+      /* ── THE VOICE, AT HIS FACE ──────────────────────────────────────
+         Everything else on this canvas already answers `energy`: the smoke,
+         the embers, the shells. That says the scene got busier. It does not
+         say HE is speaking, because none of it comes from him.
+
+         So the speech is drawn at the mask and nowhere else. The position is
+         `cloud.mask` — found in the artwork at sample time, turned by the
+         same angle the body is turned by, so the light stays on his face
+         through the whole swing instead of hanging in the air beside it.
+         Inside this save(), which already carries the bob and the entry
+         scale: a glow that does not bob with him is a glow that is not
+         attached to him. */
+      /* `talk` is the floor and `voice` is the peak: lit for as long as he is
+         speaking, brightest on each syllable. Driven off `voice` alone the
+         face went dark in every gap between two words, which reads as a fault
+         in the projection rather than as speech. */
+      const lit = Math.max(voice, talk * 0.42);
+      if (lit > 0.02 && cloud && cloud.mask) {
+        const m = cloud.mask;
+        const mc = Math.cos(cyaw * 0.55), msn = Math.sin(cyaw * 0.55);
+        const vsy = R * 1.68, vsx = vsy / (cloud.ar || 1.65);
+        const mX = cx + (m.x * mc - m.z * msn * 0.85) * vsx;
+        const mY = (cy - R * 0.04) + m.y * vsy;
+
+        const bloom = ctx.createRadialGradient(mX, mY, 0, mX, mY, R * (0.11 + lit * 0.20));
+        bloom.addColorStop(0, 'rgba(' + col + ',' + (0.30 + lit * 0.50).toFixed(3) + ')');
+        bloom.addColorStop(0.45, 'rgba(' + col + ',' + (lit * 0.20).toFixed(3) + ')');
+        bloom.addColorStop(1, 'rgba(' + col + ',0)');
+        ctx.fillStyle = bloom;
+        ctx.beginPath(); ctx.arc(mX, mY, R * (0.11 + lit * 0.20), 0, Math.PI * 2); ctx.fill();
+
+        /* The slits. Narrow, brighter than the bloom, and the only part that
+           tracks the peak rather than the envelope — it is what the eye reads
+           as the thing doing the talking. */
+        const sw = R * 0.055 * (0.6 + lit);
+        ctx.fillStyle = 'rgba(' + col + ',' + Math.min(0.95, 0.25 + lit * 0.8).toFixed(3) + ')';
+        ctx.fillRect(mX - sw * 1.5, mY - R * 0.008, sw, R * 0.016);
+        ctx.fillRect(mX + sw * 0.5, mY - R * 0.008, sw, R * 0.016);
+
+        VRING.forEach(function (r2) {
+          if (r2.a <= 0) return;
+          ctx.strokeStyle = 'rgba(' + col + ',' + (r2.a * 0.5).toFixed(3) + ')';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.ellipse(mX, mY, R * r2.r, R * r2.r * 0.62, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+      }
       ctx.globalCompositeOperation = 'source-over';
       ctx.restore();
 
@@ -2114,7 +3380,7 @@ function makeCore(id, opts) {
         ctx.rect(0, cy + (((t * 7) % 100) / 100 - 0.5) * R * 1.6, W, R * 0.14);
         ctx.clip();
         ctx.translate(R * 0.06 * ((t % 2) ? 1 : -1), 0);
-        drawCloud(cx, cy - R * 0.04, R, yaw, col, { step: 2, gain: 0.85 });
+        drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ step: 2, gain: 0.85 }, BONES));
         ctx.restore();
       }
 
@@ -2255,6 +3521,25 @@ function makeCore(id, opts) {
     if (!W || !H) { resize(); requestAnimationFrame(frame); return; }
     t += 1;
     energy += (target - energy) * 0.02;
+    /* ATTACK FAST, RELEASE SLOW — the shape of a mouth rather than a dimmer.
+       0.55 rising is about three frames to the peak, so a consonant lands on
+       the frame you hear it. 0.12 falling is about eight, which holds the
+       shape of a vowel through the gaps in its own waveform instead of
+       strobing on every zero crossing. Symmetric easing gives you one or the
+       other and neither reads as speech. */
+    voice += (voiceTarget - voice) * (voiceTarget > voice ? 0.55 : 0.12);
+    /* Up in ~5 frames, down in ~60. The asymmetry is the point: it must not
+       drop out between two words of the same sentence. */
+    talk += ((voice > 0.08 ? 1 : 0) - talk) * (voice > 0.08 ? 0.22 : 0.016);
+    /* A ring on the way up past a quarter, and only on the way up — without
+       the edge test a held vowel spawns one every frame and the face
+       disappears behind sixty concentric circles. */
+    if (voice > 0.25 && vPrev <= 0.25) VRING.push({ r: 0.06, a: 0.9 });
+    vPrev = voice;
+    for (let vi = VRING.length - 1; vi >= 0; vi--) {
+      VRING[vi].r += 0.010; VRING[vi].a -= 0.035;
+      if (VRING[vi].a <= 0) VRING.splice(vi, 1);
+    }
     const doomNow = document.documentElement.dataset.mode === 'doom';
     /* The arrival is stamped here, where the mode is already being read, so
        the mode is not queried twice a frame for two different reasons. */
@@ -2264,18 +3549,30 @@ function makeCore(id, opts) {
        Doom — and whichever is not on duty returns WITHOUT clearing. Clearing
        is what would make them fight: each would wipe the other's frame and you
        would get a flicker at 60fps rather than a picture. */
-    if (opts.doomOnly && !doomNow) { requestAnimationFrame(frame); return; }
+    if (opts.doomOnly && (!doomNow || el('coreLayer').classList.contains('characterReady'))) { requestAnimationFrame(frame); return; }
     ctx.clearRect(0, 0, W, H);
 
     const cx = W / 2, cy = H / 2;
     const R = Math.min(W, H) * (opts.scale || 0.30);
-    const yaw = t * (0.0022 + energy * 0.0024);
+    /* ACCUMULATED, not `t * rate`. Multiplying the frame count by a rate that
+       itself changes means the ANGLE jumps whenever the rate does — the whole
+       history is re-evaluated at the new speed. It eased slowly enough to read
+       as drift rather than a jerk, which is why it survived; it is still the
+       wrong shape for a thing that is supposed to be turning.
+
+       AND HE STEADIES WHILE HE TALKS. The energy term is scaled by (1 - voice),
+       so the shells fall back to their base rate when he speaks instead of
+       spinning up. A thing that accelerates the moment it opens its mouth
+       reads as agitated. Doom is not agitated — the room should go still and
+       let him talk. */
+    yawAcc += 0.0022 + energy * 0.0024 * (1 - voice);
+    const yaw = yawAcc;
     const doom = doomNow;
     /* Gold on the way in when the saved mode is quantum, or the gate shows a
        cyan globe under a gold name. The command centre has its own sphere;
        this is only the globe agreeing with its label. */
     const quantumNow = document.documentElement.dataset.mode === 'quantum';
-    const cyan = doom ? '61,220,132' : quantumNow ? '255,195,92' : '0,243,255';
+    const cyan = doom ? ((FIGURE_MODES[document.documentElement.dataset.figure]||{}).rgb || '61,220,132') : quantumNow ? '255,195,92' : '0,243,255';
     const hot  = quantumNow ? '255,236,196' : '140,240,255';
     if (doom) { drawDoom(cx, cy, R, yaw, cyan); requestAnimationFrame(frame); return; }
 
@@ -2358,7 +3655,13 @@ function makeCore(id, opts) {
   }
   requestAnimationFrame(frame);
 
-  return { set(v) { target = Math.max(0.12, Math.min(1, v)); }, resize };
+  return {
+    set(v) { target = Math.max(0.12, Math.min(1, v)); },
+    /* Fed only by HIS voice — see meter(). The envelope is shaped there,
+       where the samples are; this just receives it. */
+    say(v) { voiceTarget = Math.max(0, Math.min(1, v || 0)); },
+    resize
+  };
 }
 
 /* The gold sphere. A translucent globe of segmented light — nested bands and
@@ -2702,7 +4005,65 @@ function makeQuantum(id, opts){
    in front of all day is the one that had to come alive. */
 const arc = makeBurst('arc', { scale: 0.60 });
 /* The Doom figure he drew, still on the same canvas, still only in doom mode. */
-const doomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
+const classicDoomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
+let missionDoom = null, characterGeneration = 0, characterState = 'idle';
+let doomCharacter = 'rigged';
+try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','mask','portrait','classic'].includes(saved)) doomCharacter = saved; } catch (_) {}
+/* The masters who stand in the room. Doom keeps his appearance menu; the
+   others ARE their figure. Everything else on this page keys off
+   dataset.mode === 'doom', so each of these runs as doom mode with
+   dataset.figure naming who is standing there. */
+const FIGURE_MODES = {
+  doom:      { figure: null,        name: 'D.O.O.M',      tag: 'SOVEREIGN CORE', line: 'Doom mode. Same numbers, worse manners.' },
+  armour:    { figure: 'ironman',   name: 'S.T.A.R.K',    tag: 'ARMOUR CORE',    rgb: '255,207,90', line: 'Armour mode. Suit is online.' },
+  witchking: { figure: 'witchking', name: 'A.N.G.M.A.R',  tag: 'WITCH-KING CORE', rgb: '166,173,187', line: 'Witch-king mode. No man may close this dashboard.' },
+  onering:   { figure: 'onering',   name: 'THE ONE RING', tag: 'PRECIOUS CORE',  rgb: '255,106,31', line: 'Ring mode. One dashboard to rule them all.' }
+};
+function currentFigure() {
+  const fm = FIGURE_MODES[document.documentElement.dataset.figure || 'doom'] || FIGURE_MODES.doom;
+  return fm.figure || doomCharacter;
+}
+function syncDoomCharacter() {
+  const generation = ++characterGeneration;
+  const layer = el('coreLayer'), host = el('missionDoom');
+  if (missionDoom) { missionDoom.destroy(); missionDoom = null; }
+  layer.classList.remove('characterReady'); host.style.display = 'none';
+  el('doomCharacter').value = doomCharacter;
+  const figureKey = currentFigure();
+  el('doomAppearance').style.display = (document.documentElement.dataset.figure || 'doom') === 'doom' ? 'grid' : 'none';
+  if (document.documentElement.dataset.mode !== 'doom' || figureKey === 'classic') return;
+  host.style.display = 'block';
+  el('characterStatus').textContent = 'Loading character…';
+  try {
+    const actor = figureKey === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.createFigure(host, figureKey);
+    missionDoom = actor;
+    actor.ready.then(() => {
+      if (generation !== characterGeneration) return;
+      actor.setState(characterState); layer.classList.add('characterReady');
+      const credit = el('missionDoomCredit');
+      const figure = OmegaDoom.figures[figureKey];
+      credit.style.visibility = figure ? 'visible' : 'hidden';
+      if (figure) { credit.href = figure.url; credit.textContent = OmegaDoom.credit(figureKey); }
+      el('characterStatus').textContent = 'Character ready. Saved on this browser.';
+    }).catch(() => {
+      if (generation !== characterGeneration) return;
+      actor.destroy(); missionDoom = null; host.style.display = 'none';
+      el('characterStatus').textContent = '3D character unavailable. Showing the classic Doom visual.';
+    });
+  } catch (_) { host.style.display = 'none'; el('characterStatus').textContent = '3D unavailable. Showing the classic Doom visual.'; }
+}
+const doomCore = {
+  set(v) { classicDoomCore.set(v); if (missionDoom) missionDoom.setEnergy(v); },
+  say(v) { classicDoomCore.say(v); characterState = v > 0 ? 'speaking' : 'idle'; if (missionDoom) { missionDoom.setState(characterState); missionDoom.setEnergy(v); } },
+  resize() { classicDoomCore.resize(); }
+};
+el('characterMode').addEventListener('change', e => setMode(e.target.value, false));
+el('doomCharacter').addEventListener('change', e => {
+  doomCharacter = e.target.value;
+  try { localStorage.setItem('jarvisDoomCharacter', doomCharacter); } catch (_) {}
+  if (document.documentElement.dataset.mode !== 'doom') setMode('doom', false); else syncDoomCharacter();
+});
+window.addEventListener('pagehide', () => { ++characterGeneration; if (missionDoom) missionDoom.destroy(); });
 /* The gold sphere for the command centre, same canvas, only in quantum mode. */
 const quantumCore = makeQuantum('arc', { scale: 0.60 });
 const gateCore = makeCore('gateArc', { scale: 0.34 });
@@ -2750,7 +4111,7 @@ let lastStatus={};
 async function load(){
   const u=auth.currentUser; if(!u) return;
   const badge=el('badge');
-  probeBrain().then(relayReminders).catch(()=>{});
+  probeBrain().then(relayReminders).then(relayDrafts).catch(()=>{});
   try{
     const tok=await u.getIdToken();
     const res=await fetch(ENDPOINT,{headers:{Authorization:'Bearer '+tok}});
@@ -2796,8 +4157,18 @@ async function load(){
       ['QUEUE', num(s.counts.queued), (s.counts.queued||0)?'warn':'good']
     ] : [['LAST INGEST','no run recorded','bad']]);
 
+    /* Moved to the System view, beside the ingest numbers it describes. The
+       nav pill is what stops that being the same as hiding it: he is not on
+       System most of the day, and a health warning he never walks past is a
+       health warning that does not exist. A dot, not a number — there is only
+       ever one of these and "1" reads like a count of something. */
     el('alert').textContent='';
-    if(ing&&ing.alert){const d=document.createElement('div');d.className='alert';d.textContent=ing.alert;el('alert').appendChild(d);}
+    const sysPill=el('nSys');
+    if(ing&&ing.alert){
+      const d=document.createElement('div');d.className='alert';d.textContent=ing.alert;
+      el('alert').appendChild(d);
+      if(sysPill){ sysPill.textContent='●'; sysPill.classList.add('warn'); }
+    } else if(sysPill){ sysPill.textContent=''; sysPill.classList.remove('warn'); }
 
     lastStatus=s;
     renderOverview(s); buildFeed(s); renderWeek(s); renderRoutines(s); renderPeople(s);
@@ -3043,7 +4414,15 @@ function ctxOf(){
   if(actx&&actx.state==='suspended') actx.resume().catch(()=>{});
   return actx;
 }
-function meter(node){
+/* WHOSE VOICE IT IS MATTERS. This is called from two places: the reply
+   playing through the speakers, and the microphone. They look identical from
+   inside — both are audio, both should push the core — but only one of them
+   is HIM. Drive the mask from the mic and Doom mouths along to whatever
+   Thomas says, which is not a feature, it is a puppet.
+
+   So `his` is a parameter with no default: the mic path does not pass it and
+   never lights the face. */
+function meter(node, his){
   const c=ctxOf(); if(!c) return null;
   const an=c.createAnalyser(); an.fftSize=1024; node.connect(an);
   const buf=new Uint8Array(an.fftSize); let alive=true; audioOwns=true;
@@ -3053,12 +4432,21 @@ function meter(node){
     let sum=0; for(let i=0;i<buf.length;i++) sum+=Math.abs(buf[i]-128);
     const lvl=Math.min(1,(sum/buf.length)/30);
     arc.set(lvl); try{ doomCore.set(lvl); }catch(_){} try{ quantumCore.set(lvl); }catch(_){}
+    if(his){ try{ doomCore.say(lvl); }catch(_){} }
     requestAnimationFrame(poll);
   })();
-  return ()=>{ alive=false; audioOwns=false; try{node.disconnect(an);}catch(_){} };
+  return ()=>{
+    alive=false; audioOwns=false;
+    /* The mouth closes when the audio stops. Without this the last frame's
+       level is held for good and he finishes every sentence mid-word. */
+    if(his){ try{ doomCore.say(0); }catch(_){} }
+    try{node.disconnect(an);}catch(_){}
+  };
 }
 
 async function token(){ const u=auth.currentUser; return u?u.getIdToken():null; }
+/* mission-push.js runs outside this module and cannot see token(); hand it over. */
+try{ if(window.JarvisPush) window.JarvisPush.setToken(token); }catch(_){}
 
 /* ── getting the RIGHT voice out of a phone ──────────────────────────────
    On a desk Jarvis speaks in the ElevenLabs voice. On a phone he was speaking
@@ -3150,8 +4538,26 @@ async function browserSpeak(text){
       if(pref) u.voice=pref;
       if(pref&&pref.lang) u.lang=pref.lang;
       u.rate=1.02; u.pitch=0.9;
-      u.onend=u.onerror=()=>done();
+
+      /* THE FREE VOICE HAS TO MOVE HIM TOO — and this is the path that
+         matters, because it is the default. SpeechSynthesis plays through the
+         OS, not through WebAudio: there is no node to meter, so the analyser
+         that drives the mask on the ElevenLabs path has nothing to listen to
+         here. Left alone, the whole feature only ever fired on the paid voice
+         Thomas turned off after it burned a month of credits in two days.
+
+         `onboundary` is the signal that exists instead. It fires per word,
+         from the engine actually speaking it, so it is real articulation
+         rather than a timer pretending to be one — one pulse a word, and the
+         release envelope in makeCore carries the shape between them. */
+      const pulse = v => { try{ doomCore.say(v); }catch(_){} };
+      u.onstart = () => pulse(0.5);
+      u.onboundary = () => pulse(0.85);
+      u.onend=u.onerror=()=>{ pulse(0); done(); };
       S.speak(u);
+      /* Cancelled mid-sentence — a new reply, or S.cancel() above — fires no
+         onend in every browser. Closing his mouth is not optional. */
+      setTimeout(()=>pulse(0), 15000);
       setTimeout(done, 15000);          /* never hang the reply on the voice */
     }catch(_){ done(); }
   });
@@ -3191,7 +4597,11 @@ async function speakReply(text){
     const t=await token();
     const r=await fetch(CHAT+'/speak',{method:'POST',
       headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
-      body:JSON.stringify({text})});
+      /* WHICH SKIN IS ON, so he can be given a different voice in doom mode.
+         A WORD, never a voice id — run-chat looks it up in a closed table and
+         the id itself only ever comes from the server's environment. A voice
+         id from here would go straight into the ElevenLabs request path. */
+      body:JSON.stringify({text, mode: document.documentElement.dataset.mode || 'jarvis'})});
     if(!r.ok){
       /* The body names the reason — quota, unknown voice, a key without
          text_to_speech permission. Surfacing it beats a silent assistant,
@@ -3225,7 +4635,7 @@ async function speakReply(text){
           /* createMediaElementSource throws if called twice on one element, so
              the node for the shared element is made once and kept. */
           if(!sndSrc){ sndSrc=c.createMediaElementSource(a); sndSrc.connect(c.destination); }
-          stop=meter(sndSrc);
+          stop=meter(sndSrc, true);       /* his own voice — light the mask */
         }
       }
     }catch(_){}
@@ -3537,19 +4947,23 @@ function confirmCommand(cmd){
    means it is instant and costs nothing.
 
    No number changes. A skin that edits the truth is not a skin. */
-const MODE_CMD = /^(?:hey\s+)?(?:jarvis[,\s]+)?(?:(?:go|switch\s+to|enter|activate)\s+)?(doom|quantum|iron\s*man|ironman|normal|jarvis|standard)(?:\s+mode)?(?:\s+(?:on|please))?$/i;
+const MODE_CMD = /^(?:hey\s+)?(?:jarvis[,\s]+)?(?:(?:go|switch\s+to|enter|activate)\s+)?(doom|quantum|armou?r|suit|stark|witch[\s-]*king|nazgul|(?:the\s+)?(?:one\s+)?ring|precious|iron\s*man|ironman|normal|jarvis|standard)(?:\s+mode)?(?:\s+(?:on|please))?$/i;
+const MODES = ['ironman','doom','armour','witchking','onering','quantum'];
 
 /* Three skins on one page: Iron Man (the burst), Doom (the icosahedron) and
    Quantum (the gold sphere, for the command centre). dataset.mode carries the
    name; '' is Iron Man because that is what every rule written before there
    were modes assumes. */
 function setMode(mode, announce){
-  const m = (mode==='doom'||mode==='quantum') ? mode : 'ironman';   /* anything else is Iron Man mode */
-  const doom = m==='doom', quantum = m==='quantum';
-  document.documentElement.dataset.mode = (doom||quantum) ? m : '';
+  const m = MODES.includes(mode) ? mode : 'ironman';   /* anything else is Iron Man mode */
+  const figureMode = FIGURE_MODES[m], doom = !!figureMode, quantum = m==='quantum';
+  document.documentElement.dataset.mode = doom ? 'doom' : quantum ? m : '';
+  if (doom) document.documentElement.dataset.figure = m; else delete document.documentElement.dataset.figure;
+  el('characterMode').value = m;
+  syncDoomCharacter();
   try{ localStorage.setItem('jarvisMode', m); }catch(_){}
-  const name = doom ? 'D.O.O.M' : 'J.A.R.V.I.S';
-  const tag  = doom ? 'SOVEREIGN CORE' : quantum ? 'QUANTUM CORE' : 'AI CORE';
+  const name = doom ? figureMode.name : 'J.A.R.V.I.S';
+  const tag  = doom ? figureMode.tag : quantum ? 'QUANTUM CORE' : 'AI CORE';
   const n=document.querySelector('.cName'), sub=document.querySelector('.cSub');
   if(n) n.textContent = name;
   if(sub) sub.textContent = tag;
@@ -3565,7 +4979,7 @@ function setMode(mode, announce){
   }catch(_){}
   try{ syncBoardTheme(); }catch(_){}
   if(announce){
-    const line = doom    ? 'Doom mode. Same numbers, worse manners.'
+    const line = doom    ? figureMode.line
                : quantum ? 'Quantum mode. Same numbers, in gold.'
                :           'Iron Man mode.';
     say('jarvis', line, 0);
@@ -3574,7 +4988,7 @@ function setMode(mode, announce){
 }
 try{
   const savedMode = localStorage.getItem('jarvisMode');
-  setMode((savedMode==='doom'||savedMode==='quantum') ? savedMode : 'ironman', false);
+  setMode(MODES.includes(savedMode) ? savedMode : 'ironman', false);
 }catch(_){}
 
 function modeCommand(said){
@@ -3586,7 +5000,15 @@ function modeCommand(said){
   /* Bare "quantum" is a word he might say about something else; it needs
      "mode" or a verb — "go quantum" — to be an order. */
   if(word==='quantum' && !/mode|go|switch|enter|activate/i.test(said)) return null;
-  return (word==='doom') ? 'doom' : (word==='quantum') ? 'quantum' : 'ironman';
+  /* "the ring", "suit", "precious" are words with other lives; they need
+     "mode" or a verb to be an order. */
+  if(/ring|precious|suit|stark|armou?r|nazgul/.test(word) && !/mode|go|switch|enter|activate/i.test(said)) return null;
+  if(word==='doom') return 'doom';
+  if(word==='quantum') return 'quantum';
+  if(/armou?r|suit|stark/.test(word)) return 'armour';
+  if(/witch|nazgul/.test(word)) return 'witchking';
+  if(/ring|precious/.test(word)) return 'onering';
+  return 'ironman';
 }
 
 /* One path for typed and spoken. A second code path for the keyboard is how
@@ -3723,8 +5145,37 @@ async function relayReminders(){
   }catch(_){}
   relaying=false;
 }
+/* ── drafts: prepared on the Mac, carried to the twin ─────────────────────
+   Thomas, 2026-09-23: the dashboard may PREPARE email, not send it. Jarvis
+   writes a draft into the brain's draft inbox (the one write its gate allows
+   for this); this page, signed in as him, carries each to the twin's
+   /draft/new, where it becomes an ordinary twin draft. Sending stays where it
+   was — he reads it and says send. Acked on the brain only after the twin
+   has it; the twin is idempotent on the id, so a lost ack never makes two. */
+let relayingDrafts=false;
+async function relayDrafts(){
+  if(!brainOn||relayingDrafts) return; relayingDrafts=true;
+  try{
+    const r=await fetch(BRAIN+'/drafts',{cache:'no-store'});
+    const j=await r.json().catch(()=>({}));
+    for(const it of (j.items||[])){
+      const t=await token(); if(!t) break;
+      const rr=await fetch(CHAT+'/draft/new',{method:'POST',
+        headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+        body:JSON.stringify({id:it.id,to:it.to||[],cc:it.cc||[],subject:it.subject,body:it.body})});
+      const jj=await rr.json().catch(()=>({}));
+      if(!rr.ok) break;                       /* leave it on the Mac; next poll retries */
+      await fetch(BRAIN+'/drafts/ack',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({id:it.id,twinId:jj.id||''})}).catch(()=>{});
+      say('jarvis',jj.reply||('In your drafts: '+it.subject+'. Nothing has gone out.'),0);
+    }
+  }catch(_){}
+  relayingDrafts=false;
+}
 /* The face follows the voice: this page speaks, so this page says so. */
 function face(state){
+  characterState = state === 'speaking' ? 'speaking' : state === 'listening' ? 'listening' : 'idle';
+  if (missionDoom) missionDoom.setState(characterState);
   if(!brainOn) return;
   try{ fetch(BRAIN+'/face',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state})}).catch(()=>{}); }catch(_){}
 }
@@ -4000,6 +5451,9 @@ const VIEW_WORDS = {
   platform: ['platform','the platform','omega'],
   board:    ['board','the board','whiteboard','white board'],
   openwork: ['open work','openwork','open items','the open work','work'],
+  messages: ['messages','my messages','the messages','texts','my texts','text messages','imessage','imessages'],
+  sessions: ['sessions','my sessions','coding sessions','the sessions','agents','coding agents'],
+  proposals: ['proposals','my proposals','the proposals','suggestions','what should i do','what do you propose'],
   index:    ['index','the index'],
   brain:    ['brain','the brain','brain graph','graph'],
   people:   ['people','contacts','the people'],
@@ -4191,6 +5645,302 @@ function loadOpenWork(){
   loadVaultDoc('07 - Resources/Decisions.md','dcDoc','dcN');
 }
 
+/* ── Messages ────────────────────────────────────────────────────────────
+   Everything comes from the brain's /messages proxy, which passes the phone
+   line's own answer through untouched: titles out of Contacts, group member
+   names, unread counts, the echo on his own thread already collapsed. This
+   page does none of that work, because a second resolver would be a second
+   answer.
+
+   Like loadVaultDoc it asks the brain directly rather than trusting
+   `brainOn`, which is only set once the signed-in status poll has run. */
+const MSG={threads:[], open:null, openGuid:null, sending:false, last:0};
+async function brainJson(path, opts, ms){
+  const c=new AbortController(); const tm=setTimeout(()=>c.abort(), ms||5000);
+  try{
+    const r=await fetch(BRAIN+path, Object.assign({cache:'no-store',signal:c.signal}, opts||{}));
+    let j=null; try{ j=await r.json(); }catch(_){}
+    return {code:r.status, j:j||{}};
+  }finally{ clearTimeout(tm); }
+}
+/* Unreachable brain and a brain whose phone line is down are different
+   problems with different fixes, so they get different sentences. */
+function feedDown(e){
+  return /abort|failed|networkerror|load failed/i.test(String(e&&e.message||e));
+}
+const MAC_ASLEEP='The Mac is not answering — it is asleep, JARVIS is not running on it, '
+  +'or this is not the Mac. Messages are read on the Mac and nowhere else.';
+function msgWhen(sec){ return sec ? ago(new Date(sec*1000)) : ''; }
+function msgText(t){
+  /* U+FFFC is what Messages stores for an attachment with no caption. */
+  const s=String(t||'').replace(/￼/g,'').trim();
+  return s;
+}
+function msgRowHtml(t, compact){
+  const last=msgText(t.last)||(t.last?'[attachment]':'');
+  return '<button class="msgRow'+(MSG.open===t.handle?' on':'')+'" data-h="'+esc(t.handle)+'">'
+    +'<div class="mt"><b>'+esc(t.title||t.handle)+(t.jarvis?' · Jarvis':'')+'</b>'
+    +(t.unread?'<span class="mu">'+t.unread+'</span>':'')
+    +'<i>'+esc(msgWhen(t.at))+'</i></div>'
+    +(compact?'':'<div class="ml">'+esc(last)+'</div>')+'</button>';
+}
+function msgRenderList(){
+  const q=(el('msgQ')&&el('msgQ').value||'').trim().toLowerCase();
+  const rows=MSG.threads.filter(t=>!q
+    || String(t.title||'').toLowerCase().includes(q)
+    || String(t.handle||'').toLowerCase().includes(q)
+    || String(t.last||'').toLowerCase().includes(q));
+  const host=el('msgList');
+  if(host) host.innerHTML=rows.length?rows.map(t=>msgRowHtml(t,false)).join('')
+    :'<div class="msgEmpty">'+(q?'Nothing matches.':'No threads.')+'</div>';
+  const cc=el('ccMsg');
+  if(cc){
+    /* The Command Center only needs "who is waiting on me": unread first,
+       then the most recent, four rows. */
+    const top=MSG.threads.slice().sort((a,b)=>(b.unread>0)-(a.unread>0)||(b.at||0)-(a.at||0)).slice(0,4);
+    cc.innerHTML=top.length?top.map(t=>msgRowHtml(t,true)).join(''):'<div class="msgEmpty">No threads.</div>';
+  }
+}
+function msgPills(){
+  const waiting=MSG.threads.filter(t=>t.unread>0).length;
+  if(el('nMsg')) el('nMsg').textContent=waiting||'';
+  if(el('msgN')) el('msgN').textContent=MSG.threads.length?(MSG.threads.length+' threads'+(waiting?' · '+waiting+' unread':'')):'';
+  if(el('ccMsgN')) el('ccMsgN').textContent=waiting?(waiting+' unread'):'';
+}
+function msgDown(sentence){
+  MSG.threads=[];
+  ['msgList','ccMsg'].forEach(id=>{ const h=el(id); if(h) h.innerHTML='<div class="msgEmpty">'+esc(sentence)+'</div>'; });
+  msgPills();
+}
+async function loadMessages(){
+  MSG.last=Date.now();
+  try{
+    const {code,j}=await brainJson('/messages');
+    if(!j.ok) return msgDown(j.error||('The phone line answered '+code+'.'));
+    MSG.threads=Array.isArray(j.threads)?j.threads:[];
+    msgRenderList(); msgPills();
+    const onMsgs=((document.querySelector('.view.on')||{}).dataset||{}).view==='messages';
+    if(onMsgs && MSG.open) msgLoadThread(MSG.open, true);
+  }catch(e){
+    msgDown(feedDown(e)?MAC_ASLEEP:('Could not read messages: '+(e.message||e)));
+  }
+}
+async function msgLoadThread(handle, quiet){
+  const t=MSG.threads.find(x=>x.handle===handle)||{handle};
+  const opening=MSG.open!==handle;
+  MSG.open=handle; MSG.openGuid=t.chat_guid||null;
+  if(el('msgTitle')) el('msgTitle').textContent=t.title||handle;
+  msgRenderList();
+  const log=el('msgLog'); if(!log) return;
+  if(opening){
+    log.innerHTML='<div class="msgEmpty">Reading…</div>';
+    if(el('msgNote')){ el('msgNote').textContent=''; el('msgNote').className='msgNote'; }
+    if(el('msgText')) el('msgText').value='';
+  }
+  try{
+    const {code,j}=await brainJson('/messages/thread?h='+encodeURIComponent(handle));
+    if(MSG.open!==handle) return;              /* he clicked away mid-read */
+    if(!j.ok){ log.innerHTML='<div class="msgEmpty">'+esc(j.error||('HTTP '+code))+'</div>'; return; }
+    const ms=(j.messages||[]).slice().sort((a,b)=>(a.at||0)-(b.at||0));
+    const stuck=log.scrollHeight-log.scrollTop-log.clientHeight<40;
+    let day='', out='';
+    ms.forEach(m=>{
+      const d=new Date((m.at||0)*1000);
+      const dk=d.toDateString();
+      if(dk!==day){ day=dk; out+='<div class="msgDay">'+esc(d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}))+'</div>'; }
+      const tx=msgText(m.text);
+      const who=(!m.mine && t.group && (m.who||m.name||m.handle))?'<span class="who">'+esc(m.who||m.name||m.handle)+'</span>':'';
+      out+='<div class="msgB'+(m.mine?' me':'')+(tx?'':' att')+'" title="'+esc(d.toLocaleString())+'">'
+        +who+esc(tx||'[attachment]')+'</div>';
+    });
+    log.innerHTML=out||'<div class="msgEmpty">Nothing in this thread yet.</div>';
+    /* After layout, not before: a thread opened from the Command Center
+       widget is rendered while its view is still switching in. */
+    if(opening||stuck){ log.scrollTop=log.scrollHeight;
+      requestAnimationFrame(()=>{ log.scrollTop=log.scrollHeight; }); }
+    if(el('msgReply')) el('msgReply').hidden=false;
+    if(el('msgState')) el('msgState').textContent=t.group?'GROUP':(t.handle||'');
+    if(opening && !quiet && el('msgText') && !phone.matches) el('msgText').focus();
+  }catch(e){
+    if(MSG.open!==handle) return;
+    log.innerHTML='<div class="msgEmpty">'+esc(feedDown(e)?MAC_ASLEEP:('Could not read it: '+(e.message||e)))+'</div>';
+  }
+}
+/* THE REPLY. The recipient is the open thread's handle plus its chat guid,
+   never a name typed here, so there is nothing to resolve and nothing to
+   guess. A 409 (ambiguous) cannot come back for a handle, but if it ever
+   does the candidates are shown and nothing is retried. The text stays in
+   the box until the phone line says it went, so a failure loses nothing. */
+async function msgSend(){
+  const box=el('msgText'), note=el('msgNote'), btn=el('msgSend');
+  const text=(box&&box.value||'').trim();
+  if(!text||!MSG.open||MSG.sending) return;
+  const t=MSG.threads.find(x=>x.handle===MSG.open)||{handle:MSG.open};
+  MSG.sending=true; if(btn){ btn.disabled=true; btn.textContent='SENDING…'; }
+  note.className='msgNote'; note.textContent='Sending to '+(t.title||t.handle)+'…';
+  try{
+    const body={to:t.handle, text};
+    if(MSG.openGuid) body.chat_guid=MSG.openGuid;
+    const {code,j}=await brainJson('/messages/send',{method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}, 35000);
+    if(j.ok){
+      box.value=''; note.textContent='Sent to '+(t.title||t.handle)+'.';
+      setTimeout(()=>msgLoadThread(t.handle, true), 1200);
+    }else{
+      note.className='msgNote bad';
+      note.textContent=code===409&&Array.isArray(j.matches)
+        ? 'Not sent — that matches '+j.matches.map(m=>m.name).join(', ')+'.'
+        : 'Not sent — '+(j.error||j.detail||('the phone line answered '+code))+'.';
+    }
+  }catch(e){
+    note.className='msgNote bad';
+    note.textContent=feedDown(e)
+      ? 'Not confirmed — the Mac stopped answering. Check the thread before sending again; it may have gone.'
+      : 'Not sent — '+(e.message||e)+'.';
+  }finally{
+    MSG.sending=false; if(btn){ btn.disabled=false; btn.textContent='SEND'; }
+  }
+}
+function wireMessages(){
+  const list=el('msgList'), cc=el('ccMsg'), q=el('msgQ'), f=el('msgReply'), tx=el('msgText');
+  if(list && !list.dataset.w){ list.dataset.w='1';
+    list.addEventListener('click',e=>{ const b=e.target.closest('.msgRow'); if(b) msgLoadThread(b.dataset.h); }); }
+  if(cc && !cc.dataset.w){ cc.dataset.w='1';
+    cc.addEventListener('click',e=>{ const b=e.target.closest('.msgRow'); if(!b) return;
+      showView('messages'); msgLoadThread(b.dataset.h); }); }
+  if(q && !q.dataset.w){ q.dataset.w='1'; q.addEventListener('input',msgRenderList); }
+  if(f && !f.dataset.w){ f.dataset.w='1';
+    f.addEventListener('submit',e=>{ e.preventDefault(); msgSend(); }); }
+  if(tx && !tx.dataset.w){ tx.dataset.w='1';
+    tx.addEventListener('keydown',e=>{
+      if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); msgSend(); } }); }
+}
+
+/* ── Sessions ────────────────────────────────────────────────────────────
+   Claude Code (`claude agents --json`) and Codex Desktop (its own sqlite,
+   read-only) in one list, already normalised by the brain to one row shape.
+   The brain caches for ten seconds; REFRESH forces a fresh read. */
+const SESS={rows:[], f:'all'};
+function sessRender(){
+  const host=el('sessList'); if(!host) return;
+  const rows=SESS.rows.filter(r=>SESS.f==='all'||r.agent===SESS.f
+    ||(SESS.f==='busy'&&r.state==='busy'));
+  const home=/^\/Users\/[^/]+/;
+  host.innerHTML='<div class="sessRow sessHead"><span class="ag">agent</span><span>session</span>'
+    +'<span>folder</span><span>state</span><span style="text-align:right">last</span></div>'
+    +(rows.length?rows.map(r=>{
+      const st=String(r.state||'idle').toLowerCase();
+      const when=r.updatedAt||r.startedAt;
+      return '<div class="sessRow" title="'+esc(r.cwd||'')+(r.branch?' · '+esc(r.branch):'')+'">'
+        +'<span class="ag '+esc(r.agent)+'">'+(r.agent==='codex'?'codex':'claude')+'</span>'
+        +'<span class="nm">'+esc(r.name||'(unnamed)')
+          +(r.kind&&r.kind!=='interactive'?'<small>'+esc(r.kind)+'</small>':'')+'</span>'
+        +'<span class="cw"><bdi>'+esc(String(r.cwd||'').replace(home,'~'))+(r.branch?' · '+esc(r.branch):'')+'</bdi></span>'
+        +'<span class="st '+esc(st)+'">'+esc(st)+'</span>'
+        +'<span class="ago">'+(when?esc(ago(new Date(when*1000))):'—')+'</span></div>';
+    }).join(''):'<div class="msgEmpty">Nothing '+(SESS.f==='busy'?'working right now':'here')+'.</div>');
+}
+async function loadSessions(force){
+  const n=el('sessN'), pill=el('nSess');
+  try{
+    const {code,j}=await brainJson('/sessions'+(force?'?force=1':''),null,40000);
+    if(!j.ok) throw new Error(j.error||('HTTP '+code));
+    SESS.rows=Array.isArray(j.sessions)?j.sessions:[];
+    const busy=SESS.rows.filter(r=>r.state==='busy').length;
+    /* One agent failing is not a broken panel: say which one, show the other. */
+    const gone=['claude','codex'].filter(a=>j[a]&&j[a].ok===false)
+      .map(a=>(a==='claude'?'Claude Code':'Codex')+': '+j[a].error);
+    if(n) n.textContent=SESS.rows.length+' sessions'+(busy?' · '+busy+' working':'')
+      +(gone.length?' · '+gone.join(' · '):'');
+    if(pill) pill.textContent=busy||'';
+    sessRender();
+  }catch(e){
+    SESS.rows=[];
+    if(n) n.textContent=''; if(pill) pill.textContent='';
+    const h=el('sessList');
+    if(h) h.innerHTML='<div class="msgEmpty">'+esc(feedDown(e)
+      ?'The Mac is not answering — it is asleep, JARVIS is not running on it, or this is not the Mac. Sessions are read on the Mac.'
+      :'Could not read sessions: '+(e.message||e))+'</div>';
+  }
+}
+function wireSessions(){
+  const bar=el('sessBar'); if(!bar||bar.dataset.w) return; bar.dataset.w='1';
+  bar.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    if(b.id==='sessRefresh'){ loadSessions(true); return; }
+    SESS.f=b.dataset.f||'all';
+    [...bar.querySelectorAll('button[data-f]')].forEach(x=>x.classList.toggle('sel',x===b));
+    sessRender();
+  });
+}
+/* The feeds poll only while the page is looked at: the thread list every
+   30s (it feeds the nav pill and the Command Center widget), the open view
+   every 10s. A hidden tab asks nothing of the Mac. */
+/* ── Proposals ───────────────────────────────────────────────────────────
+   Read through the brain's /proposals, which drops any id already answered
+   in the note, so a DONE from Obsidian and a DONE from here agree. */
+let propRows=[], propSections=[], propLast=0;
+async function loadProposals(){
+  const host=el('propList'), n=el('propN'), pill=el('nProp');
+  propLast=Date.now();
+  try{
+    const {code,j}=await brainJson('/proposals');
+    if(!j.ok) throw new Error(j.error||('HTTP '+code));
+    propRows=j.proposals||[]; propSections=j.sections||[];
+    if(n) n.textContent=(propRows.length||'no')+' open'+(j.builtAt?' · built '+ago(j.builtAt):'');
+    if(pill) pill.textContent=propRows.length||'';
+    propRender();
+  }catch(e){
+    propRows=[]; if(n) n.textContent=''; if(pill) pill.textContent='';
+    if(host) host.innerHTML='<div class="msgEmpty">'+esc(feedDown(e)
+      ?'The Mac is not answering — it is asleep, JARVIS is not running on it, or this is not the Mac. Proposals are made on the Mac.'
+      :'Could not read proposals: '+(e.message||e))+'</div>';
+  }
+}
+function propRender(){
+  const host=el('propList'); if(!host) return;
+  if(!propRows.length){ host.innerHTML='<div class="msgEmpty">Nothing to propose. Every commitment is answered, young, or already followed up.</div>'; return; }
+  host.innerHTML=propSections.map(s=>{
+    const rows=propRows.filter(p=>p.kind===s.kind); if(!rows.length) return '';
+    return '<div class="propHead">'+esc(s.title)+' <span>'+rows.length+'</span></div>'
+      +rows.map(p=>'<div class="propRow" data-id="'+esc(p.id)+'">'
+        +'<div class="propT">'+esc(p.title)+'</div>'
+        +'<div class="propW">'+esc(p.why)+'</div>'
+        +(p.evidence&&p.evidence.length?'<ul class="propE">'+p.evidence.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')
+        +'<div class="propB"><button data-a="done">DONE</button><button data-a="dismiss">DISMISS</button></div>'
+        +'</div>').join('');
+  }).join('');
+}
+function wireProposals(){
+  const host=el('propList'); if(!host||host.dataset.w) return; host.dataset.w='1';
+  host.addEventListener('click',async e=>{
+    const b=e.target.closest('button[data-a]'); if(!b) return;
+    const row=b.closest('.propRow'); const id=row&&row.dataset.id; if(!id) return;
+    row.querySelectorAll('button').forEach(x=>x.disabled=true);
+    try{
+      const {code,j}=await brainJson('/proposals/answer',{method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, answer:b.dataset.a})});
+      if(!j.ok && code!==404) throw new Error(j.error||('HTTP '+code));
+      propRows=propRows.filter(p=>p.id!==id);
+      if(el('nProp')) el('nProp').textContent=propRows.length||'';
+      if(el('propN')) el('propN').textContent=(propRows.length||'no')+' open';
+      propRender();
+    }catch(err){
+      row.querySelectorAll('button').forEach(x=>x.disabled=false);
+      const w=row.querySelector('.propW'); if(w) w.textContent='Not saved — '+(err.message||err);
+    }
+  });
+}
+
+wireMessages(); wireSessions(); wireProposals(); loadMessages(); loadProposals();
+setInterval(()=>{
+  if(document.hidden) return;
+  const v=(document.querySelector('.view.on')||{}).dataset||{};
+  if(v.view==='messages' || Date.now()-MSG.last>30000) loadMessages();
+  if(v.view==='sessions') loadSessions(false);
+  if(v.view==='proposals' && Date.now()-propLast>60000) loadProposals();
+},10000);
+
 /* ── the Terminal view ───────────────────────────────────────────────────
    Claude Code itself, served by ttyd on loopback and framed here.
 
@@ -4245,6 +5995,8 @@ function wireTerm(){
 function showView(name){
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('on', v.dataset.view===name));
   [...document.querySelectorAll('.navItem')].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
+  const inBar=['command','tasks','outbox','calendar'].includes(name);
+  [...document.querySelectorAll('.ptabs button')].forEach(b=>b.classList.toggle('on', b.dataset.view===name || (!inBar && b.dataset.view==='more')));
   try{ localStorage.setItem('jarvisView', name); }catch(_){}
   if(name==='command' && arc && arc.resize) arc.resize();
   if(name==='command') try{ quantumCore.resize(); }catch(_){}
@@ -4255,10 +6007,17 @@ function showView(name){
   if(name==='outbox') loadBook(false).then(()=>{ try{ renderOutbox(); }catch(_){} });
   if(name==='calendar') { try{ renderDay(); }catch(_){} }
   if(name==='platform'){ loadPlatform(); requestAnimationFrame(fitStone); }
+  /* Not forced: the estate does not change between two clicks of the rail,
+     and a refetch on every visit would poll Firestore for free. The panel
+     header carries asOf; a reload of the page is the refresh. */
+  if(name==='logic'){ loadLogic(false); }
   if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
   if(name==='openwork'){ loadOpenWork(); }
+  if(name==='messages'){ wireMessages(); loadMessages(); }
+  if(name==='sessions'){ wireSessions(); loadSessions(false); }
+  if(name==='proposals'){ wireProposals(); loadProposals(); }
   if(name==='terminal'){ wireTerm(); termMount(false); termProbe(); }
   wireZoom();                 /* views built later get the control too */
   applyMin();
@@ -4269,6 +6028,34 @@ function showView(name){
 [...document.querySelectorAll('.navItem')].forEach(b=>{
   b.addEventListener('click',()=>showView(b.dataset.view));
 });
+/* ── THE PHONE BAR ── */
+function moreOpen(open){
+  el('moreBack').hidden=!open; el('moreSheet').hidden=!open;
+  if(!open) return;
+  /* Built from #nav every time it opens: one list, one set of pills, and a
+     screen added to the rail later shows up here without a second edit. */
+  const host=el('moreList'); host.textContent='';
+  const cur=document.querySelector('.view.on')?.dataset.view;
+  [...document.querySelectorAll('#nav .navItem')].forEach(src=>{
+    const b=src.cloneNode(true); b.removeAttribute('id');
+    const pill=b.querySelector('.pill'); if(pill) pill.removeAttribute('id');
+    b.classList.toggle('on', src.dataset.view===cur);
+    b.addEventListener('click',()=>{ moreOpen(false); showView(src.dataset.view); window.scrollTo(0,0); });
+    host.appendChild(b);
+  });
+}
+[...document.querySelectorAll('.ptabs button')].forEach(b=>{
+  b.addEventListener('click',()=>{
+    if(b.dataset.view==='more'){ moreOpen(el('moreSheet').hidden); return; }
+    moreOpen(false); showView(b.dataset.view); window.scrollTo(0,0);
+  });
+});
+el('moreBack').addEventListener('click',()=>moreOpen(false));
+/* The bar's pills mirror the rail's, which several renderers write. */
+function syncPhonePills(){
+  [...document.querySelectorAll('.ptabs .pill[data-for]')].forEach(p=>{ const src=el(p.dataset.for); p.textContent=src?src.textContent:''; });
+}
+if(window.MutationObserver){ const nav=el('nav'); if(nav) new MutationObserver(syncPhonePills).observe(nav,{subtree:true,childList:true,characterData:true}); }
 
 /* ── the microphone, on a phone ──────────────────────────────────────────
    On a narrow screen the rail collapses to a strip of tabs and its voice
@@ -5081,6 +6868,7 @@ function renderDay(){
 /* The detail card, reusing the same beam-up the contact card uses. */
 function showEvent(e, fromEl){
   const back=el('cardBack'), card=el('card');
+  card.classList.remove('mtgCard');
   card.textContent='';
   if(fromEl){
     const r=fromEl.getBoundingClientRect();
@@ -5186,6 +6974,7 @@ function showDraft(d, fromEl){
      string. One string, compared everywhere, or the guards below never match
      and the card sits on "reading it…" for good. */
   const id=String(d.id);
+  card.classList.remove('mtgCard');
   card.textContent='';
   card.classList.add('draft');
   /* Which draft this card is showing, so a body that lands after he has
@@ -5856,7 +7645,7 @@ async function queueBuild(taskId, title, tool, box){
 }
 
 function taskButtons(id, row, titleEl){
-  const bar=document.createElement('span');
+  const bar=document.createElement('span'); bar.className='tBtns';
   bar.style.cssText='display:flex;gap:4px;flex:none;margin-left:6px';
   const mk=(label,title,fn)=>{
     const b=document.createElement('button');
@@ -5893,6 +7682,14 @@ function renderOverview(s){
     ['IN QUEUE', num(c.queued), (c.queued||0)?'warn':'good'],
     ['PEOPLE KNOWN', num(c.people==null?null:c.people)]
   ]);
+  /* Each count is a door to the screen it counts. On the phone this is the
+     shortest path from "143 on your plate" to the plate. */
+  const doors=['tasks','outbox','calendar','system','people'];
+  [...el('overview').querySelectorAll('.row')].forEach((r,i)=>{
+    if(!doors[i]) return;
+    r.classList.add('rowClick'); r.setAttribute('role','link'); r.tabIndex=0;
+    r.addEventListener('click',()=>{ showView(doors[i]); window.scrollTo(0,0); });
+  });
   const set=(id,v)=>{ const e=el(id); if(e) e.textContent=(v==null?'':v); };
   set('nTasks', c.backlog||''); set('nOut', c.drafts||'');
   set('nCal', (s.schedule||[]).length||''); set('nPeople', c.people||'');
@@ -5990,6 +7787,279 @@ async function loadBook(force){
    PROPOSED backlog item — approving it is still a separate act, and the build
    loop still runs the reviewer before anything is pushed. */
 let platform=null, platPick=null;
+
+/* ══ OMEGA LOGIC ═══════════════════════════════════════════════════════════
+   Tracking and fulfilment, fed by /api/logic-summary — same origin, staff
+   token, one call. Everything it draws is arranged server-side in
+   api/_lib/logic.js so the view has no rules of its own to drift from.
+
+   THE ONE RULE HERE: null renders as a dash and never as a number. Four of
+   the six pipeline stages are not built, the endpoint returns null for every
+   field they would own, and an uncollected deposit drawn as "$0" is
+   indistinguishable from one that was genuinely zero. `dash` already exists
+   on this page for exactly that reason.
+
+   Built with createElement and textContent throughout. Customer names and
+   company names on these rows arrive from a PUBLIC storefront a stranger
+   filled in — the one input path on this dashboard that is not Thomas, the
+   twin, or an API we own. */
+const logicParams=new URLSearchParams(location.search);
+let logicData=null, logicPick=logicParams.get('order')||null, logicBusy=false;
+
+function lFmt(n){ return n==null?dash:Number(n).toLocaleString('en-US'); }
+function lMoney(n){ return n==null?dash:'$'+Number(n).toLocaleString('en-US'); }
+function lDay(iso){ const d=new Date(iso); return isNaN(d)?dash:d.toISOString().slice(0,10); }
+
+function lCell(host, cls, text){
+  const d=document.createElement('div'); if(cls) d.className=cls;
+  d.textContent=text==null?dash:String(text); host.appendChild(d); return d;
+}
+
+/* Ten benches across a narrow panel is about 30px each, so the routing's own
+   labels do not fit. Abbreviated HERE and not in api/_lib/plant.js: that file
+   is the tenant's routing and its labels are what the floor tablet prints on
+   a refusal. An unknown key falls through to the full label rather than being
+   blanked, so a tenant with a custom routing gets something readable. */
+const BENCH_SHORT={kit:'Kit',module:'Module',rack:'Rack',encl:'Encl',elec:'Elec',
+                   bms:'BMS',eol:'EOL',qa:'QA',pack:'Pack',ready:'Ready'};
+
+function lBench(host, col){
+  const b=document.createElement('div');
+  b.className='bench'+((col.count||0)?'':' empty');
+  b.title=(col.label||col.key)+' — '+(col.count||0)+' unit'+((col.count===1)?'':'s')
+        +((col.held||0)?', '+col.held+' held':'');
+  const bar=document.createElement('div'); bar.className='bar';
+  const held=col.held||0, free=Math.max(0,(col.count||0)-held);
+  /* Held is drawn on top and in the alarm colour, so a bench that is busy
+     and a bench that is JAMMED are not the same bar. */
+  if(held){ const h=document.createElement('div'); h.className='fill held';
+    h.style.height=Math.round(46*held/col._peak)+'px'; bar.appendChild(h); }
+  if(free){ const f=document.createElement('div'); f.className='fill';
+    f.style.height=Math.round(46*free/col._peak)+'px'; bar.appendChild(f); }
+  b.appendChild(bar);
+  lCell(b,'bn',col.count||0);
+  lCell(b,'bl',BENCH_SHORT[col.key]||col.label||col.key);
+  host.appendChild(b);
+}
+
+function lBenchRow(cols){
+  const peak=Math.max(1,...cols.map(c=>c.count||0));
+  const row=document.createElement('div'); row.className='benchRow';
+  cols.forEach(c=>{ c._peak=peak; lBench(row,c); });
+  return row;
+}
+
+async function loadLogic(force){
+  if(logicBusy) return;
+  if(logicData && !force){ renderLogic(); return; }
+  const host=el('logicOrders'); if(!host) return;
+  logicBusy=true;
+  const u=auth.currentUser;
+  if(!u){ host.textContent=''; lCell(host,'logicNote','Not signed in.'); logicBusy=false; return; }
+  try{
+    const tok=await u.getIdToken();
+    const org=logicParams.get('org')||'';
+    el('logicOfficeLink').href='/omega-logic'+(org?'?org='+encodeURIComponent(org):'');
+    const res=await fetch('/api/logic-summary?limit=60'+(org?'&org='+encodeURIComponent(org):''),{headers:{Authorization:'Bearer '+tok}});
+    if(res.status===403){
+      /* Worth naming precisely. This page signs in with whatever Google
+         account is to hand; /api/ accepts clearsky-usa.com and
+         csebuilders.com only (STAFF_DOMAINS in api/_lib/admin.js). A generic
+         "forbidden" here sends somebody looking for a bug in the endpoint. */
+      host.textContent='';
+      lCell(host,'logicNote','Signed in as '+(u.email||'?')+', which is not a ClearSky staff address. '
+        +'Omega Logic reads the whole estate, so /api/logic-summary accepts clearsky-usa.com and '
+        +'csebuilders.com only. Sign in with the work account.');
+      logicBusy=false; return;
+    }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    logicData=await res.json();
+    logicBusy=false;
+    renderLogic();
+  }catch(e){
+    logicBusy=false;
+    host.textContent='';
+    lCell(host,'logicNote','Could not reach /api/logic-summary — '+(e&&e.message||'unknown error')
+      +'. Nothing is being reported rather than reported as empty.');
+  }
+}
+
+function renderLogic(){
+  const d=logicData; if(!d) return;
+
+  /* ── the pipeline rail ── */
+  const rail=el('logicStages');
+  if(rail){
+    rail.textContent='';
+    /* Three states. The caption is the state's own word rather than a
+       derived one, so a stage added to api/_lib/logic.js with a state this
+       view has never heard of is drawn dimmed and labelled with what it
+       actually said — not silently promoted to "live". */
+    const STATE_WORD={live:'live',partial:'partial',off:'not built'};
+    (d.stages||[]).forEach(s=>{
+      const box=document.createElement('div');
+      box.className='logicStage'+(s.state==='live'?'':(s.state==='partial'?' partial':' off'));
+      lCell(box,'sk',STATE_WORD[s.state]||s.state||'unknown');
+      lCell(box,'sv',s.label||s.key);
+      lCell(box,'sw',s.by||'');
+      box.title=(s.label||s.key)+' — '+(s.by||'');
+      rail.appendChild(box);
+    });
+  }
+
+  /* ── tiles ── */
+  const t=d.totals||{};
+  const tiles=el('logicTiles');
+  if(tiles){
+    tiles.textContent='';
+    const add=(label,value,alarm,small)=>{
+      const b=document.createElement('div'); b.className='lTile'+(alarm?' alarm':'');
+      lCell(b,'t',label);
+      lCell(b,'v'+(small?' sm':''),value);
+      tiles.appendChild(b);
+    };
+    add('Orders', lFmt(t.orders));
+    add('Units on the line', lFmt(t.units));
+    add('Held', lFmt(t.held), (t.held||0)>0);
+    /* null, not 0. Nothing in this codebase has collected a payment against
+       an order yet, and the tile says which stage owes the number. */
+    add('Recorded · shown orders', t.collected==null?'no payment records':lMoney(t.collected), false, t.collected==null);
+    if(t.unknownFloors) add('Floor unread', lFmt(t.unknownFloors), true);
+    add('Tenants', lFmt((d.tenants||[]).length));
+  }
+
+  /* ── the line ── */
+  const line=el('logicLine');
+  if(line){
+    line.textContent='';
+    line.appendChild(lBenchRow(d.stations||[]));
+    const n=el('logicLineN'); if(n) n.textContent=lFmt(t.units)+' UNITS';
+  }
+
+  /* ── holds ── */
+  const hh=el('logicHolds');
+  if(hh){
+    hh.textContent='';
+    const holds=d.holds||[];
+    if(!holds.length){
+      lCell(hh,'logicNote', (t.units||0)
+        ? 'Nothing held. Every unit on the line is moving.'
+        : 'No units on the line. Omega Logic releases accepted orders after a verified deposit, reserves eligible finished stock and sends shortages to the factory. Register actual serials in the factory workspace.');
+    } else holds.forEach(h=>{
+      const r=document.createElement('div'); r.className='oRow stuck';
+      lCell(r,'no',h.serial);
+      const w=document.createElement('div'); w.className='wh';
+      w.textContent=h.hold||'on hold';
+      const s=document.createElement('small');
+      s.textContent=h.station+' · '+h.orderNo+(h.ncr?' · '+h.ncr:'');
+      w.appendChild(s); r.appendChild(w);
+      r.addEventListener('click',()=>{ logicPick=h.orderNo; renderLogic(); });
+      hh.appendChild(r);
+    });
+    const n=el('logicHeldN'); if(n) n.textContent=(holds.length||'')&&holds.length+' HELD';
+  }
+
+  /* ── orders ── */
+  const oh=el('logicOrders');
+  if(oh){
+    oh.textContent='';
+    const orders=d.orders||[];
+    if(!orders.length) lCell(oh,'logicNote','No orders yet. The storefront is live; nothing has come through it.');
+    orders.forEach(o=>{
+      const r=document.createElement('div');
+      r.className='oRow'+(o.orderNo===logicPick?' on':'')+((o.floor&&o.floor.board&&o.floor.board.held)?' stuck':'');
+      lCell(r,'no',o.orderNo);
+      const w=document.createElement('div'); w.className='wh';
+      w.textContent=(o.customer&&(o.customer.company||o.customer.name))||'—';
+      const s=document.createElement('small');
+      s.textContent=(o.orgName||o.orgId||'')+(o.system&&o.system.kwh?' · '+lFmt(o.system.kwh)+' kWh':'');
+      w.appendChild(s); r.appendChild(w);
+      const m=document.createElement('div'); m.className='ms';
+      const b=document.createElement('b'); b.textContent=(o.milestone&&o.milestone.label)||o.status;
+      m.appendChild(b);
+      /* The internal status next to the public word. They are allowed to
+         differ — 'in_fulfilment' is not a word any customer should read —
+         and seeing both is the point of a staff view. */
+      m.appendChild(document.createTextNode(o.status));
+      r.appendChild(m);
+      r.addEventListener('click',()=>{ logicPick=o.orderNo; renderLogic(); });
+      oh.appendChild(r);
+    });
+    const n=el('logicN');
+    if(n) n.textContent=lFmt(orders.length)+' ORDERS'+(d.asOf?' · '+clock(d.asOf):'');
+    const np=el('nLogic'); if(np) np.textContent=t.held?String(t.held):'';
+  }
+
+  renderLogicDetail();
+}
+
+function renderLogicDetail(){
+  const host=el('logicDetail'); if(!host) return;
+  host.textContent='';
+  const d=logicData||{};
+  const o=(d.orders||[]).filter(x=>x.orderNo===logicPick)[0]||(d.orders||[])[0];
+  const title=el('logicDetailTitle');
+  if(!o){ if(title) title.textContent='Order';
+    lCell(host,'logicNote','Nothing to show.'); return; }
+  if(title) title.textContent=o.orderNo;
+  const officeLink=document.createElement('a');
+  officeLink.href='/omega-logic?org='+encodeURIComponent(o.orgId)+'&order='+encodeURIComponent(o.id||'');
+  officeLink.textContent='OPEN THIS ORDER IN OMEGA LOGIC ↗'; host.appendChild(officeLink);
+
+  const g=document.createElement('div'); g.className='dlGrid';
+  const pair=(label,value,gap)=>{
+    const c=document.createElement('div');
+    lCell(c,'t',label);
+    lCell(c,'v'+(gap?' gap':''),value);
+    g.appendChild(c);
+  };
+  pair('Sold by', o.orgName||o.orgId);
+  pair('Customer', (o.customer&&(o.customer.company||o.customer.name))||dash);
+  pair('Contact', (o.customer&&o.customer.email)||dash);
+  pair('System', o.system&&o.system.kwh?lFmt(o.system.kw)+' kW / '+lFmt(o.system.kwh)+' kWh':dash);
+  pair('Placed', o.placedAt?lDay(o.placedAt):dash);
+  pair('Promised', o.promisedShipAt?lDay(o.promisedShipAt):dash);
+  pair('Public milestone', (o.milestone&&o.milestone.label)||dash);
+  pair('Internal status', o.status);
+  host.appendChild(g);
+
+  /* money — every unbuilt stage says so rather than showing a zero */
+  const m=o.money||{};
+  const g2=document.createElement('div'); g2.className='dlGrid';
+  const pair2=(label,value,gap)=>{
+    const c=document.createElement('div'); lCell(c,'t',label); lCell(c,'v'+(gap?' gap':''),value); g2.appendChild(c);
+  };
+  pair2('ClearSky price', lMoney(m.clearskyTotal));
+  pair2('Tenant price', lMoney(m.tenantTotal));
+  pair2('Our cost', lMoney(m.cost));
+  pair2('Deposit', m.depositPaidAt?(lMoney(m.depositAmount)+' · '+lDay(m.depositPaidAt)):'not recorded', !m.depositPaidAt);
+  pair2('Final payment', m.finalPaidAt?lDay(m.finalPaidAt):'not recorded', !m.finalPaidAt);
+  pair2('Shipment', o.shipment&&!o.shipment.pending
+    ? (o.shipment.carrier||'')+' '+(o.shipment.tracking||'') : 'not recorded', !(o.shipment&&!o.shipment.pending));
+  host.appendChild(g2);
+
+  /* the floor, for this order */
+  const f=o.floor||{};
+  const b=f.board||{columns:[],total:0};
+  if(!f.released){
+    lCell(host,'logicNote','Not released to the floor. In Omega Logic, release requires an accepted customer price and verified deposit. Open the order office to inspect its invoice and configuration.');
+  } else if(f.known===false){
+    lCell(host,'logicNote','The floor could not be read for this order. That is NOT the same as an empty floor, and the milestone above falls back to the order status rather than claiming progress.');
+  } else {
+    const head=document.createElement('div'); head.className='areaHead';
+    head.textContent=b.total+' UNITS'+(b.held?' · '+b.held+' HELD':'');
+    host.appendChild(head);
+    host.appendChild(lBenchRow(b.columns));
+    if(b.unstarted) lCell(host,'logicNote',b.unstarted+' not yet kitted.');
+    if(b.offRouting) lCell(host,'logicNote',b.offRouting+' at a station this order’s routing does not list — counted here so the columns do not claim the whole floor.');
+  }
+
+  if(m.legacyDepositFlag && !m.depositPaidAt){
+    lCell(host,'logicNote','This order carries the demo’s deposit:true flag. That is a button press, not a payment, and it is not counted as money anywhere on this page.');
+  }
+  if(o.cancelRequested) lCell(host,'logicNote','The customer has requested cancellation.');
+  if(m.error) lCell(host,'logicNote',m.error);
+}
 
 async function loadPlatform(){
   if(platform) return;
@@ -6207,17 +8277,230 @@ function pickTool(t){
 
    The choice persists per view. Folding six panels away and having them all
    return on the next reload is the feature failing to be a feature. */
+/* ══ THE WIDGET REGISTRY ═════════════════════════════════════════════════
+   Every panel on this page declares an id in the markup — data-widget — and
+   this reads them into one table. Borrowed from jarvisos-app's widget
+   manifest, which is the same problem in a desktop shell: a surface made of
+   independent panes needs a name for each pane that is not its title.
+
+   WHY AN ID AND NOT THE TITLE. panelKey() below used to key a folded panel on
+   the words in its heading, with a comment admitting it: "a stable name for a
+   panel that has no id: its title". It is stable right up until a title is
+   edited, and then every panel Thomas had folded away quietly comes back and
+   the one he wanted back is gone. The titles on this page are sentences —
+   "Waiting to go out — say 'execute items 1 through 4'" — which is exactly the
+   kind of string that gets reworded. An id is the thing that does not move.
+
+   PROVENANCE IS STAMPED HERE, NOT DECLARED. jarvisos-app's scanner fills in
+   whether a widget came from the bundle or from the user's own directory
+   rather than reading it out of the manifest, because a widget that can say
+   where it came from can lie about it. Same rule: `source` is set by this
+   function. Nothing in the markup can set it.
+
+   A MALFORMED WIDGET IS SKIPPED, NOT FATAL. One panel with a blank or
+   duplicated id must not take the other twenty-six down with it — the failure
+   mode of a registry that throws is a blank dashboard, which is worse than a
+   dashboard missing one pane. */
+const WIDGETS = new Map();
+
+function widgetContainers(view){
+  const cols = [...view.querySelectorAll(':scope > .cmdGrid > .col, :scope > .col')];
+  return cols.length ? cols : [view];
+}
+
+function scanWidgets(){
+  WIDGETS.clear();
+  document.querySelectorAll('.panel[data-widget]').forEach(p => {
+    const id = (p.dataset.widget || '').trim();
+    if (!id) { console.warn('widget: a panel declares an empty id — skipped'); return; }
+    if (WIDGETS.has(id)) { console.warn('widget: duplicate id "'+id+'" — keeping the first'); return; }
+    const v = p.closest('.view');
+    const t = p.querySelector('.ptitle');
+    /* The live badge is part of the heading element and not part of the name:
+       "Live feed● LIVE" is not what anyone would call that panel. */
+    const live = t && t.querySelector('.live');
+    const name = t ? t.textContent.replace(live ? live.textContent : '', '').trim() : id;
+    WIDGETS.set(id, {
+      id,
+      name: name || id,
+      view: (v && v.dataset.view) || 'x',
+      source: 'bundled',
+      el: p
+    });
+    p.dataset.source = 'bundled';
+  });
+  return WIDGETS;
+}
+
+/* ══ THE ARRANGEMENT ═════════════════════════════════════════════════════
+   Which column a panel sits in and in what order, per view, keyed by the ids
+   above. Saved per viewer in localStorage — this is a preference about how
+   one person's screen is arranged, not a fact about the business, and it has
+   no business in Firestore.
+
+   FORGIVING ON PURPOSE. A saved id that no longer exists is ignored, and a
+   panel the saved arrangement has never heard of still appears — it goes to
+   the END of the column the markup put it in. So a panel shipped next week
+   turns up at the bottom of wherever it belongs rather than being dropped,
+   which is how a layout system starts eating features, and rather than
+   landing on top and shoving a year of somebody's arrangement down the page,
+   which is what it did the first time this was measured. */
+const LAYOUT_KEY = 'jarvisLayout';
+let layout = (() => { try { return JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}'); }
+                      catch (_) { return {}; } })();
+function saveLayout(){ try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch (_) {} }
+
+function captureLayout(view){
+  const name = view.dataset.view;
+  layout[name] = widgetContainers(view).map(c =>
+    [...c.querySelectorAll(':scope > .panel[data-widget]')].map(p => p.dataset.widget));
+  saveLayout();
+}
+
+function applyLayout(){
+  document.querySelectorAll('.view').forEach(view => {
+    const saved = layout[view.dataset.view];
+    if (!Array.isArray(saved)) return;
+    const cols = widgetContainers(view);
+    const placed = new Set();
+    saved.forEach((ids, i) => {
+      const col = cols[i];
+      if (!col || !Array.isArray(ids)) return;
+      ids.forEach(id => {
+        const w = WIDGETS.get(id);
+        /* Only ever moves a panel to a column in its OWN view. A saved
+           arrangement is per view, and a panel that turned up in another
+           one would be a panel Thomas cannot find. */
+        if (!w || w.view !== view.dataset.view) return;
+        col.appendChild(w.el);
+        placed.add(id);
+      });
+    });
+    /* Then everything the arrangement never mentioned, re-appended to the
+       column it is already in, so it ends up after the arranged ones instead
+       of in front of them. */
+    cols.forEach(col => {
+      [...col.querySelectorAll(':scope > .panel[data-widget]')].forEach(el2 => {
+        if (!placed.has(el2.dataset.widget)) col.appendChild(el2);
+      });
+    });
+  });
+}
+
+/* The control exists only when there is an arrangement to undo. A reset
+   button on a page nobody has rearranged is a button that does nothing, and
+   one of those next to REFRESH is a button somebody eventually presses to
+   find out. */
+function syncResetBtn(){
+  const b=el('resetLayout');
+  if(b) b.hidden = !Object.keys(layout).length;
+}
+
+function resetLayout(){
+  layout = {}; saveLayout();
+  /* The markup is the default, so putting it back means reloading rather than
+     remembering what the original order was — which would be a second copy of
+     the layout, in code, drifting from the one in the file. */
+  location.reload();
+}
+
+/* ══ MOVING ONE ══════════════════════════════════════════════════════════
+   Drag a panel by its heading. HTML5 drag-and-drop rather than the pointer
+   maths the caption and the whiteboard use: those two have to land anywhere,
+   this one only has to land in a column, and the browser already knows how to
+   do that.
+
+   The whole panel is NOT draggable — a panel is full of text you select and
+   buttons you press, and making all of it a drag handle breaks both. */
+function armDragging(){
+  document.querySelectorAll('.panel[data-widget] > .ptitle').forEach(t => {
+    if (t.dataset.drag) return;
+    t.dataset.drag = '1';
+    t.draggable = true;
+    t.addEventListener('dragstart', ev => {
+      const p = t.closest('.panel');
+      ev.dataTransfer.setData('text/plain', p.dataset.widget);
+      ev.dataTransfer.effectAllowed = 'move';
+      p.classList.add('dragging');
+      document.body.classList.add('arranging');
+    });
+    t.addEventListener('dragend', () => {
+      document.querySelectorAll('.panel.dragging').forEach(p => p.classList.remove('dragging'));
+      document.body.classList.remove('arranging');
+      document.querySelectorAll('.dropOK').forEach(c => c.classList.remove('dropOK'));
+    });
+  });
+
+  document.querySelectorAll('.view').forEach(view => {
+    widgetContainers(view).forEach(col => {
+      if (col.dataset.drop) return;
+      col.dataset.drop = '1';
+      col.addEventListener('dragover', ev => {
+        if (!document.body.classList.contains('arranging')) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        col.classList.add('dropOK');
+      });
+      col.addEventListener('dragleave', () => col.classList.remove('dropOK'));
+      col.addEventListener('drop', ev => {
+        ev.preventDefault();
+        col.classList.remove('dropOK');
+        const id = ev.dataTransfer.getData('text/plain');
+        const w = WIDGETS.get(id);
+        if (!w || w.view !== view.dataset.view) return;
+        /* Dropped ONTO a panel means "before that one"; dropped on the gap
+           means the end. Without this every drop lands at the bottom and
+           reordering a three-panel column takes six drags. */
+        const over = ev.target.closest('.panel[data-widget]');
+        if (over && over !== w.el && over.parentElement === col) col.insertBefore(w.el, over);
+        else col.appendChild(w.el);
+        captureLayout(view);
+        syncResetBtn();
+        remeasure();
+      });
+    });
+  });
+}
+
 const MIN_KEY='jarvisMinimised';
 let minned = (()=>{ try{ return JSON.parse(localStorage.getItem(MIN_KEY)||'{}'); }
                     catch(_){ return {}; } })();
 function saveMin(){ try{ localStorage.setItem(MIN_KEY, JSON.stringify(minned)); }catch(_){} }
 
-/* A stable name for a panel that has no id: its title. Two panels with the
-   same title in one view would collide, and none do. */
+/* THE KEY IS THE DECLARED ID NOW. It used to be the title, with a comment
+   calling that "a stable name for a panel that has no id" — true until a
+   title is edited, and the titles here are sentences. Rewording one used to
+   silently unfold whatever Thomas had folded and orphan the entry that kept
+   it folded. Every panel declares data-widget; the title fallback survives
+   only for anything that does not. */
 function panelKey(p){
-  const t=p.querySelector('.ptitle');
   const view=(p.closest('.view')||{}).dataset;
-  return ((view&&view.view)||'x')+'::'+((t&&t.textContent.trim().slice(0,40))||'panel');
+  const v=(view&&view.view)||'x';
+  const id=(p.dataset&&p.dataset.widget||'').trim();
+  if(id) return v+'::#'+id;
+  const t=p.querySelector('.ptitle');
+  return v+'::'+((t&&t.textContent.trim().slice(0,40))||'panel');
+}
+
+/* ONE-TIME MIGRATION. Changing the key format without this would read every
+   existing folded panel as "not folded" — the feature failing to be a feature,
+   which is the exact thing the comment above the store already warns about.
+   Runs once against the live DOM, where both the old key and the new one can
+   still be computed for the same element, and then marks itself done. */
+function migrateMinKeys(){
+  if(minned.__keyed) return;
+  const next={ __keyed:1 };
+  document.querySelectorAll('.panel').forEach(p=>{
+    const view=(p.closest('.view')||{}).dataset;
+    const v=(view&&view.view)||'x';
+    const t=p.querySelector('.ptitle');
+    const oldKey=v+'::'+((t&&t.textContent.trim().slice(0,40))||'panel');
+    if(minned[oldKey]) next[panelKey(p)]=1;
+  });
+  /* Anything already in the new format is carried across untouched, so running
+     this twice cannot lose a fold. */
+  Object.keys(minned).forEach(k=>{ if(k.indexOf('::#')!==-1) next[k]=minned[k]; });
+  minned=next; saveMin();
 }
 
 function dockFor(view){
@@ -6293,8 +8576,19 @@ function restore(p,orb){
   remeasure();
 }
 
-/* Applied on every render pass, so panels built later fold correctly too. */
+/* Applied on every render pass, so panels built later fold correctly too.
+
+   The registry is rescanned here for the same reason: it is the one pass that
+   already runs after anything appears, so a panel added later gets its id, its
+   place and its drag handle without a second place having to remember. Scan
+   BEFORE the migration and the folds, because both key off the ids. */
 function applyMin(){
+  scanWidgets();
+  migrateMinKeys();
+  applyLayout();
+  armDragging();
+  syncResetBtn();
+
   document.querySelectorAll('.view').forEach(v=>{
     const d=v.querySelector(':scope > .dock');
     if(d) d.textContent='';
@@ -6386,6 +8680,9 @@ const IX_VIEWS=[
   ['brain','Brain','how it all connects'],
   ['board','Board','post-its for the loose thinking'],
   ['openwork','Open work','Active Priorities and Decisions, from the vault'],
+  ['messages','Messages','your iMessage threads, and a reply box'],
+  ['sessions','Sessions','Claude Code and Codex, running on this Mac'],
+  ['proposals','Proposals','what Jarvis thinks you should do next, with its evidence'],
   ['terminal','Terminal','Claude Code itself, on this Mac'],
   ['people','People','who you work with'],
   ['system','System','subsystems and spend']
@@ -7360,8 +9657,139 @@ const HOLO_SEGS = [
    separates a head from a bauble. */
 const HOLO_HEAD = { y: -0.868, rx: 0.082, ry: 0.104, rz: 0.090 };
 
-function makeHologram(cv){
+/* ── THE PAINTING BEHIND HIM ──────────────────────────────────────────────
+   A trading card has art on it. A wireframe man alone on black is a diagram,
+   which is what this was, and the difference between the two is the place he
+   is standing in.
+
+   THE PLACE COMES FROM HIS NAME. Every element below is drawn from one hash,
+   so the same person is always the same landscape and no two people in the
+   roster share one — the only property that matters, because none of it is a
+   fact about them and it must never be read as one. There is no photograph
+   for most of this roster; a scene that is honestly a painting beats a
+   portrait we would have had to invent.
+
+   It is drawn UNDER the figure and the pad, at low alpha, and it takes its
+   colour from the same `col` the figure does — so it follows doom, quantum
+   and Iron Man without a second palette. */
+function artSeed(str){
+  let h=2166136261; str=String(str||'');
+  for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0)||1;
+}
+/* xorshift32. Deterministic, seeded once per card, so the ridge does not
+   crawl between frames — the scene is a painting, not weather. */
+function artRng(seed){
+  let x=seed|0||1;
+  return function(){ x^=x<<13; x>>>=0; x^=x>>>17; x^=x<<5; x>>>=0; return x/4294967296; };
+}
+
+function drawCardScene(ctx, W, H, col, seed, t, horizon){
+  const rnd=artRng(seed), a=(v)=>'rgba('+col+','+v+')';
+
+  /* sky: black at the top, the room's colour bleeding up off the horizon */
+  const sky=ctx.createLinearGradient(0,0,0,horizon);
+  sky.addColorStop(0,'rgba(0,0,0,0)');
+  sky.addColorStop(0.62,a(0.030));
+  sky.addColorStop(1,a(0.115));
+  ctx.fillStyle=sky; ctx.fillRect(0,0,W,horizon);
+
+  /* a disc low in the sky. Which side, and how high, is his. */
+  const mx=W*(0.16+rnd()*0.68), my=horizon*(0.26+rnd()*0.34), mr=Math.max(7,W*0.030);
+  const halo=ctx.createRadialGradient(mx,my,0,mx,my,mr*6);
+  halo.addColorStop(0,a(0.22)); halo.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=halo; ctx.beginPath(); ctx.arc(mx,my,mr*6,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=a(0.30); ctx.beginPath(); ctx.arc(mx,my,mr,0,Math.PI*2); ctx.fill();
+
+  /* embers */
+  const stars=Math.round(W*0.11);
+  for(let i=0;i<stars;i++){
+    const sx=rnd()*W, sy=rnd()*horizon*0.88, sa=0.06+rnd()*0.26;
+    ctx.fillStyle=a(sa.toFixed(3)); ctx.fillRect(sx,sy,1,1);
+  }
+
+  /* the far ridge, then the towers in front of it. Two depths is what stops
+     a skyline reading as a bar chart. */
+  const ridge=(depth,alpha,band)=>{
+    ctx.beginPath(); ctx.moveTo(0,horizon);
+    let y=horizon-band*(0.35+rnd()*0.4);
+    for(let x=0;x<=W;x+=Math.max(6,W/22)){
+      y+=(rnd()-0.5)*band*0.55;
+      y=Math.max(horizon-band,Math.min(horizon-band*0.12,y));
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(W,horizon); ctx.closePath();
+    ctx.fillStyle='rgba(0,0,0,'+depth+')'; ctx.fill();
+    ctx.strokeStyle=a(alpha); ctx.lineWidth=1; ctx.stroke();
+  };
+  ridge(0.62,0.20,horizon*0.30);
+
+  /* Towers, and the reason each one gets a TOP. Drawn as plain rectangles
+     they are a bar chart with a moon over it — the eye reads a row of filled
+     columns as data before it reads it as a city, and this is a card whose
+     whole job is to not look like a dashboard. A spire, a stepped crown or a
+     mast is the cheapest thing that makes a rectangle architecture. */
+  const towers=4+Math.floor(rnd()*5);
+  for(let i=0;i<towers;i++){
+    const tw=W*(0.022+rnd()*0.045), th=horizon*(0.16+rnd()*0.42);
+    const tx=rnd()*(W-tw), ty=horizon-th, crown=rnd();
+    ctx.fillStyle='rgba(0,0,0,0.80)';
+    ctx.beginPath();
+    ctx.moveTo(tx,horizon); ctx.lineTo(tx,ty);
+    if(crown<0.34){                      /* a spire */
+      ctx.lineTo(tx+tw*0.5,ty-th*0.26); ctx.lineTo(tx+tw,ty);
+    } else if(crown<0.67){               /* a stepped crown */
+      ctx.lineTo(tx+tw*0.20,ty); ctx.lineTo(tx+tw*0.20,ty-th*0.11);
+      ctx.lineTo(tx+tw*0.80,ty-th*0.11); ctx.lineTo(tx+tw*0.80,ty);
+      ctx.lineTo(tx+tw,ty);
+    } else {                             /* a flat roof with a mast */
+      ctx.lineTo(tx+tw,ty);
+    }
+    ctx.lineTo(tx+tw,horizon); ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle=a(0.22); ctx.lineWidth=1; ctx.stroke();
+    if(crown>=0.67){
+      ctx.beginPath(); ctx.moveTo(tx+tw*0.5,ty); ctx.lineTo(tx+tw*0.5,ty-th*0.22);
+      ctx.strokeStyle=a(0.20); ctx.stroke();
+      ctx.fillStyle=a(0.40); ctx.fillRect(tx+tw*0.5-1,ty-th*0.22-1,2,2);
+    }
+    /* one lit band, so they read as built rather than as blocks */
+    ctx.fillStyle=a(0.15);
+    ctx.fillRect(tx+tw*0.22,horizon-th*(0.30+rnd()*0.4),tw*0.56,Math.max(1,th*0.035));
+  }
+
+  /* the ground he is standing on, in perspective */
+  ctx.strokeStyle=a(0.09); ctx.lineWidth=1;
+  for(let i=1;i<=7;i++){
+    const gy=horizon+(H-horizon)*Math.pow(i/7,1.9);
+    ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke();
+  }
+  for(let i=-6;i<=6;i++){
+    ctx.beginPath(); ctx.moveTo(W/2+i*W*0.055,horizon);
+    ctx.lineTo(W/2+i*W*0.34,H); ctx.stroke();
+  }
+
+  /* haze on the horizon line, and a slow sweep across it so the painting is
+     not a still. One sine, no state. */
+  const hz=ctx.createLinearGradient(0,horizon-H*0.09,0,horizon+H*0.05);
+  hz.addColorStop(0,'rgba(0,0,0,0)'); hz.addColorStop(0.62,a(0.13)); hz.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=hz; ctx.fillRect(0,horizon-H*0.09,W,H*0.14);
+  const sweep=(Math.sin(t*0.006+seed%97)*0.5+0.5)*W;
+  const sg=ctx.createRadialGradient(sweep,horizon,0,sweep,horizon,W*0.30);
+  sg.addColorStop(0,a(0.10)); sg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=sg; ctx.fillRect(0,horizon-H*0.12,W,H*0.18);
+
+  /* the frame has to win. Everything above is cropped back into it. */
+  const vig=ctx.createRadialGradient(W/2,H*0.5,Math.min(W,H)*0.20,W/2,H*0.5,Math.max(W,H)*0.62);
+  vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(1,'rgba(0,0,0,0.82)');
+  ctx.fillStyle=vig; ctx.fillRect(0,0,W,H);
+}
+
+function makeHologram(cv, subject){
   if(!cv) return { stop(){} };
+  /* Hashed once, not per frame: 60 hashes a second of the same string is the
+     kind of thing that only shows up on someone else's laptop. */
+  const seed=artSeed(subject);
   const ctx=cv.getContext('2d');
   const dpr=Math.min(window.devicePixelRatio||1,2);
   let W=0,H=0,t=0,alive=true;
@@ -7388,10 +9816,17 @@ function makeHologram(cv){
     ctx.clearRect(0,0,W,H);
     const cx=W/2, cy=H*0.46, R=Math.min(W,H)*0.36;
     const yaw=t*0.012;
-    const col='0,243,255';
+    /* The card's art follows the room. A cyan projection inside a doom frame
+       reads as a bug rather than as a skin, and the palette is the one thing
+       a mode is allowed to change. Same three values the core uses. */
+    const md=document.documentElement.dataset.mode;
+    const col = md==='doom' ? '61,220,132' : md==='quantum' ? '255,195,92' : '0,243,255';
 
     /* the projector pad */
     const padY=cy+R*0.92;
+    /* The place he is standing in, under everything else, on the same line his
+       pad sits on — otherwise he floats an inch above his own landscape. */
+    if(subject) drawCardScene(ctx,W,H,col,seed,t,padY);
     for(let i=0;i<3;i++){
       const rr=R*(0.52+i*0.22), a=(0.30-i*0.07);
       ctx.strokeStyle='rgba('+col+','+a.toFixed(3)+')'; ctx.lineWidth=1;
@@ -7565,7 +10000,8 @@ function closeCard(){
   const b=el('cardBack'); if(b) b.hidden=true;
   /* The draft card widens the same element; hand it back the way it was
      found, or the next contact card opens 640px wide with a stale id. */
-  const c=el('card'); if(c){ c.classList.remove('draft'); delete c.dataset.draft; }
+  const c=el('card'); if(c){ c.classList.remove('draft'); c.classList.remove('mtgCard');
+    delete c.dataset.draft; }
   /* Stop the animation with the card. One left running behind a closed
      dialog is how a tab quietly eats a core all afternoon. */
   if(cardHolo){ cardHolo.stop(); cardHolo=null; }
@@ -7789,15 +10225,31 @@ function showCard(p, fromEl){
   const kind=p.kind||'person';
   card.textContent='';
 
+  /* In doom mode this same element is dealt as a trading card — title bar,
+     art, type line, text box, flavour, bottom bar. The furniture below is
+     built every time and is invisible outside doom; the alternative is two
+     renderers for one subject, which is how two versions of the same fact
+     get built. The centred stack the cyan card has always shown is what the
+     two wrappers collapse to when the frame CSS is not in play. */
+  card.classList.add('mtgCard');
+
   const holo=document.createElement('canvas'); holo.className='holo';
   card.appendChild(holo);
 
-  const h=document.createElement('div'); h.style.textAlign='center';
+  const h=document.createElement('div'); h.className='mtgTitle'; h.style.textAlign='center';
   const nm=document.createElement('div'); nm.className='cardName'; nm.textContent=p.name;
   h.appendChild(nm);
-  if(p.role){ const r=document.createElement('div'); r.className='cardRole'; r.textContent=p.role; h.appendChild(r); }
-  if(p.org){ const o=document.createElement('div'); o.className='cardOrg'; o.textContent=String(p.org).toUpperCase(); h.appendChild(o); }
+  const cost=document.createElement('span'); cost.className='mtgCost'; cost.hidden=true;
+  h.appendChild(cost);
   card.appendChild(h);
+
+  const ty=document.createElement('div'); ty.className='mtgType'; ty.style.textAlign='center';
+  if(p.role){ const r=document.createElement('div'); r.className='cardRole'; r.textContent=p.role; ty.appendChild(r); }
+  if(p.org){ const o=document.createElement('div'); o.className='cardOrg'; o.textContent=String(p.org).toUpperCase(); ty.appendChild(o); }
+  if(p.role && p.org) ty.dataset.both='1';
+  const rare=document.createElement('span'); rare.className='mtgRare'; rare.hidden=true;
+  ty.appendChild(rare);
+  card.appendChild(ty);
 
   /* Everything from here to the actions scrolls; the name above and the
      buttons below stay put. */
@@ -7836,7 +10288,29 @@ function showCard(p, fromEl){
      or opened a different person in the meantime. */
   const relHost=document.createElement('div');
   scroll.appendChild(relHost);
+
+  /* THE FRAME FURNITURE IS NOT NEW DATA. The cost pip is r.owed, the count of
+     open commitments the text box lists underneath it. The rarity letter is
+     r.weight, the same number the bar underneath draws. Both are hidden —
+     not zeroed — when the meeting record cannot be read, because a cost of 0
+     on an unknown relationship claims "they owe you nothing", which is the
+     one thing a blank card was already caught saying. The collector line is
+     furniture: it carries no claim, so it is derived from the name and is
+     merely stable rather than meaningful. */
+  const paintFrame=()=>{
+    const r = kind==='person' ? relFor(p) : null;
+    if(r && r.owed!=null){ cost.textContent=String(r.owed); cost.hidden=false; }
+    else cost.hidden=true;
+    const w = r && isFinite(+r.weight) ? +r.weight : null;
+    if(w==null) rare.hidden=true;
+    else {
+      const letter = w>=60?'M' : w>=30?'R' : w>=10?'U' : 'C';
+      rare.textContent=letter; rare.dataset.r=letter; rare.hidden=false;
+      rare.title='Weight '+w;
+    }
+  };
   const paintRel=()=>{
+    paintFrame();
     if(kind!=='person') return;
     relHost.textContent='';
     const say=t=>{
@@ -7947,11 +10421,27 @@ function showCard(p, fromEl){
      own provenance says so in its own words. */
   const note=document.createElement('div'); note.className='cardNote';
   note.textContent = p.provenance ? p.provenance
+    /* No count here (2026-09-23). `messages` was the number of 30-minute
+       scans a person turned up in, not mail — four partners read "588" — and
+       `lastSeen` was the scan clock. The twin now records the real newest
+       mail as lastMailAt; until a person has one, the card says nothing
+       rather than a number that means something else. */
     : (p.source === 'mail'
-      ? 'From your mail — ' + (p.messages||1) + (p.messages===1?' message':' messages') +
-        ', no title on file.' + (p.lastSeen ? ' Last seen ' + String(p.lastSeen).slice(0,10) + '.' : '')
+      ? 'From your mail, no title on file.' + (p.lastMailAt ? ' Last mail ' + String(p.lastMailAt).slice(0,10) + '.' : '')
       : 'From your roster — title read from their signature.' + (p.note ? ' ' + p.note : ''));
   card.appendChild(note);
+
+  /* The bottom bar. Four digits off the name so the same person is always the
+     same number in the set, and the illustrator is whoever is running the
+     room. */
+  const foot=document.createElement('div'); foot.className='mtgFoot';
+  let hsh=0; for(let i=0;i<String(p.name||'').length;i++) hsh=((hsh<<5)-hsh+String(p.name).charCodeAt(i))|0;
+  const numL=document.createElement('span');
+  numL.textContent=String(Math.abs(hsh)%9999+1).padStart(4,'0')+' · OMG · EN';
+  const numR=document.createElement('span'); numR.className='r';
+  numR.textContent='Illus. D.O.O.M · \u00a9 2026 ClearSky';
+  foot.appendChild(numL); foot.appendChild(numR);
+  card.appendChild(foot);
 
   /* Rise from the row that was clicked. */
   if(fromEl){
@@ -7961,8 +10451,13 @@ function showCard(p, fromEl){
   back.hidden=false;
   card.style.animation='none'; void card.offsetWidth; card.style.animation='';
   if(cardHolo) cardHolo.stop();
-  cardHolo = makeHologram(holo);
+  cardHolo = makeHologram(holo, p.name);
 }
+
+(function(){
+  const b=el('resetLayout');
+  if(b) b.addEventListener('click', resetLayout);
+})();
 
 el('cardBack').addEventListener('click', ev=>{ if(ev.target.id==='cardBack') closeCard(); });
 document.addEventListener('keydown', ev=>{ if(ev.key==='Escape') closeCard(); });
@@ -7984,6 +10479,60 @@ function renderPeople(s){
   });
 }
 
+/* ── THE PHONE PANEL ───────────────────────────────────────────────────────
+   Two rows, both honest about the device they are on. Install: the browser's
+   own prompt where there is one (Chrome, Edge), the Share → Add to Home Screen
+   words on iOS where there is not, "installed" when running from the tile.
+   Notifications: JarvisPush.describe() says exactly which of the five states
+   this phone is in — including "add to Home Screen first", the iOS case that
+   a naive check reports as unsupported. TEST sends one to this account only
+   (push-send lets anyone ring their own phone; someone else's is staff-only),
+   so a phone that says "on" can prove it before the twin ever needs to. */
+let installPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installPrompt=e; try{ renderPhone(); }catch(_){} });
+function phoneNote(text,cls){ const n=el('phoneNote'); if(!n) return; n.textContent=text||''; n.className='prNote'+(cls?' '+cls:''); }
+function renderPhone(){
+  const host=el('phone'); if(!host) return;
+  const P=window.JarvisPush;
+  const installed=!!(P&&P.installed()) || (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const st=P?P.state():'unsupported';
+  host.textContent='';
+  const row=(label,text,btns)=>{
+    const r=document.createElement('div'); r.className='pr';
+    const sp=document.createElement('span'); const b=document.createElement('b'); b.textContent=label; sp.appendChild(b); sp.appendChild(document.createTextNode(text)); r.appendChild(sp);
+    (btns||[]).forEach(([t,fn,id])=>{ const bt=document.createElement('button'); bt.textContent=t; if(id) bt.id=id; bt.addEventListener('click',fn); r.appendChild(bt); });
+    host.appendChild(r); return r;
+  };
+  row('Install', installed ? 'Installed. This is the app, opened from the home screen; it starts on the Command Center.'
+    : installPrompt ? 'Put JARVIS on the home screen. It opens on the Command Center with no browser chrome.'
+    : ios ? 'In Safari: tap Share, then Add to Home Screen. It opens on the Command Center, and notifications only work from there.'
+    : 'In Chrome: the browser menu, then Install app or Add to Home screen.',
+    installPrompt && !installed ? [['INSTALL', ()=>{ const p=installPrompt; installPrompt=null; p.prompt(); }]] : []);
+  const btns=[];
+  if(P && (st==='askable'||st==='granted')) btns.push([st==='granted'?'RE-REGISTER':'TURN ON', async ()=>{
+    phoneNote('Asking…');
+    try{ await P.enable(); phoneNote('Notifications are on for this phone.','good'); renderPhone(); }
+    catch(e){ phoneNote(e.message,'bad'); }
+  },'pushOn']);
+  if(P && st==='granted') btns.push(['TEST', async ()=>{
+    phoneNote('Sending…');
+    try{
+      const t=await token();
+      const r=await fetch('/api/push-send',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+        body:JSON.stringify({title:'JARVIS',body:'Mission Control can reach this phone.',url:'/mission?view=command',tag:'jarvis-test'})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+      phoneNote('Sent to '+(j.sent!=null?j.sent:'your')+' device'+(j.sent===1?'':'s')+'.','good');
+    }catch(e){ phoneNote(e.message,'bad'); }
+  },'pushTest']);
+  if(P && st==='granted') btns.push(['TURN OFF', async ()=>{
+    try{ await P.disable(); const t=await token(); await fetch('/api/push-subscribe',{method:'DELETE',headers:{Authorization:'Bearer '+t}}).catch(()=>{}); }catch(_){}
+    phoneNote('This phone will not be notified.'); renderPhone();
+  },'pushOff']);
+  row('Notifications', P ? P.describe() : 'Notifications are not supported here', btns);
+  const note=document.createElement('div'); note.id='phoneNote'; note.className='prNote'; host.appendChild(note);
+}
 authMod.onAuthStateChanged(auth,u=>{
   el('gate').hidden=!!u;
   el('app').hidden=!u;
@@ -7991,7 +10540,11 @@ authMod.onAuthStateChanged(auth,u=>{
      first measurement has to happen after sign-in, not at load. */
   requestAnimationFrame(measureTalk);
   el('app').style.display = u ? 'grid' : 'none';
-  if(u){ try{ showView(localStorage.getItem('jarvisView')||'command'); }catch(_){ showView('command'); }
+  /* ?view= names a screen (the installed app starts on ?view=command, so the
+     home-screen tile opens the Command Center whatever was open last);
+     otherwise the last view on this browser. */
+  if(u){ try{ const want=logicParams.get('view'); showView(want&&document.querySelector('.view[data-view="'+want.replace(/[^a-z]/g,'')+'"]')?want:(localStorage.getItem('jarvisView')||'command')); }catch(_){ showView('command'); }
+         try{ renderPhone(); }catch(_){}
          load(); loadThread(); setInterval(load,30000); }
 });
 

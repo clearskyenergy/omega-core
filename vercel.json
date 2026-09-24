@@ -2,9 +2,27 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
+  "crons": [{ "path": "/api/logic-worker", "schedule": "*/5 * * * *" }],
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/embed/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/((?!embed/).*)",
       "headers": [
         {
           "key": "X-Frame-Options",
@@ -30,11 +48,38 @@
       ]
     },
     {
+      "source": "/data/(.*\\.(?:geojson|json))",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
       "source": "/tenants/(.*)/(.*\\.(?:png|jpg|svg))",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=86400"
+        }
+      ]
+    },
+    {
+      "source": "/vendor/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/vendor/(.*)\\.wasm",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/wasm"
         }
       ]
     },
@@ -61,6 +106,19 @@
       ]
     },
     {
+      "source": "/sitefinder-app/sw.js",
+      "headers": [
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/sitefinder-app"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/(mission-sw|mission-push)\\.js",
       "headers": [
         {
@@ -71,6 +129,8 @@
     }
   ],
   "rewrites": [
+    { "source": "/__/auth/:path*", "destination": "https://clearsky-portal.firebaseapp.com/__/auth/:path*" },
+    { "source": "/__/firebase/:path*", "destination": "https://clearsky-portal.firebaseapp.com/__/firebase/:path*" },
     {
       "source": "/",
       "has": [
@@ -180,26 +240,6 @@
       "destination": "/portals/finance/dealroom"
     },
     {
-      "source": "/battery-sizer",
-      "has": [
-        {
-          "type": "host",
-          "value": "finance.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance/battery-sizer"
-    },
-    {
-      "source": "/battery-sizer.html",
-      "has": [
-        {
-          "type": "host",
-          "value": "finance.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance/battery-sizer"
-    },
-    {
       "source": "/dealroom",
       "has": [
         {
@@ -220,26 +260,6 @@
       "destination": "/portals/finance/dealroom"
     },
     {
-      "source": "/battery-sizer",
-      "has": [
-        {
-          "type": "host",
-          "value": "financing.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance/battery-sizer"
-    },
-    {
-      "source": "/battery-sizer.html",
-      "has": [
-        {
-          "type": "host",
-          "value": "financing.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance/battery-sizer"
-    },
-    {
       "source": "/finance",
       "destination": "/portals/finance"
     },
@@ -250,23 +270,56 @@
     {
       "source": "/skyfund-sandbox/:path*",
       "destination": "/portals/skyfund-sandbox/:path*"
+    },
+    {
+      "source": "/sitefinder-app",
+      "destination": "/portals/sitefinder-app"
+    },
+    {
+      "source": "/sitefinder-app/:path*",
+      "destination": "/portals/sitefinder-app/:path*"
+    },
+    {
+      "source": "/comed-proxy",
+      "destination": "/api/comed-proxy"
+    },
+    {
+      "source": "/comed-proxy/:path*",
+      "destination": "/api/comed-proxy?path=:path*"
     }
   ],
   "functions": {
+    "api/site-catalog.js": { "maxDuration": 60 },
+    "api/comed-proxy.js": { "maxDuration": 30 },
+    "api/logic-worker.js": { "maxDuration": 60 },
+    "api/logic-office.js": { "maxDuration": 60 },
+    "api/logic-accounting.js": { "maxDuration": 60 },
+    "api/ledger-webhook.js": { "maxDuration": 60 },
+    "api/lite-atlas.js": { "maxDuration": 60 },
     "api/grid-atlas.js": {
       "maxDuration": 60
     },
     "api/network-proximity.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "data/{fiber,fiber-api}/**"
     },
     "api/render.js": {
       "maxDuration": 60
+    },
+    "api/fiber-screen.js": {
+      "maxDuration": 30,
+      "includeFiles": "data/{fiber,fiber-api}/**"
+    },
+    "api/agent/*.js": {
+      "maxDuration": 30,
+      "includeFiles": "omega-site-intel.js"
     },
     "api/**/*.js": {
       "maxDuration": 30
     }
   },
   "redirects": [
+    { "source": "/logic", "destination": "/office/app", "permanent": false },
     {
       "source": "/",
       "has": [

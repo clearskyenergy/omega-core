@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Clean Cell">
+  <!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+       The customer's app: the Clean Cell mark in their cyan on white, the way
+       their own site paints it, with a hairline of the same cyan. -->
+  <rect width="512" height="512" rx="112" fill="#ffffff"/>
+  <rect x="14" y="14" width="484" height="484" rx="100" fill="none" stroke="#3FAFC6" stroke-width="14"/>
+  <g transform="translate(140 96) scale(7.2)" fill="#3FAFC6">
+    <path d="M0 0h6.6v46H0z"/>
+    <path d="M25.5 0 9.5 25.5h7.8L13.6 46 28 18.8h-7.6z"/>
+  </g>
+</svg>

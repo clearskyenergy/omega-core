@@ -89,8 +89,8 @@
       icon:'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v4M12 16h.01' },
 
     { key:'proforma', name:'BESS Pro Forma', category:'finance',
-      desc:'IRR, NPV, value stack & incentives in 8 steps.',
-      file:'/proforma.html', tier:TIER.STANDARD, savesData:true,
+      desc:'Investor pro forma & branded deck, sized by the OMEGA engine.',
+      file:'/proforma.html', tier:TIER.STANDARD, savesData:true, version:'2.0.0',
       icon:'M18 20V10M12 20V4M6 20v-6' },
 
     { key:'dcfc', name:'DCFC BESS Pro Forma', category:'finance',
@@ -149,7 +149,7 @@
       icon:'M12 3v2M5.6 5.6l1.4 1.4M3 12h2M17 7l1.4-1.4M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8M3 19h13v3H3zM18 20h2' },
 
     { key:'batterysizer', name:'Battery Sizer', category:'finance',
-      desc:'Size a BESS from utility bills, bill PDFs or an 8760 \u2014 peak-shave dispatch, demand savings, payback & NPV.',
+      desc:'Size a BESS from utility bills, bill PDFs or an 8760 \u2014 peak-shave dispatch, demand savings, payback & NPV, then the engineering design: containers, converters, transformer, breakers, cable, fault duty and a bill of quantities.',
       file:'/battery-sizer.html', badge:'new', tier:TIER.STANDARD,
       icon:'M2 9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2zM22 11v2M11 9l-2 3.5h2.5L10 16' },
 
@@ -162,6 +162,22 @@
       desc:'3-page customer proposals with AI site placement.',
       file:'/sales-proposal.html', tier:TIER.STANDARD, savesData:true,
       icon:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8' },
+
+    /* Deliberately a SECOND proposal tool rather than a fourth model button on
+       'sales'. That one sells a PPA: we own the kit, the customer buys the
+       output, and every number argues about the customer's bill. This one
+       sells the opposite trade — the host owns nothing, buys nothing and
+       saves nothing; they rent us space, power and a fiber path and we pay
+       them. Merging the two would mean one document arguing both directions.
+
+       tier STANDARD to match 'sales': a rep who can build a PPA proposal can
+       build a land lease proposal. The rate card behind it is gated in
+       /api/compute-lease.js, not here — the registry decides what is on the
+       menu, never what the numbers are. */
+    { key:'computelease', name:'Compute Land Lease', category:'sales',
+      desc:'Score a site on power, fiber, zoning and site control — then price the land lease you may offer the host over 15 years.',
+      file:'/compute-proposal.html', badge:'new', tier:TIER.STANDARD, savesData:true,
+      icon:'M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5M9 11h.01M15 11h.01' },
 
     { key:'permit', name:'Permit Creator', category:'permitting',
       desc:'AHJ-ready sets — cover, plot plan, SLD, details.',
@@ -424,9 +440,23 @@
        vercel.json. Rewrites are per-tenant and TOOL_HOST is one shared deploy,
        so pointing at the rewrite would 404 for every tenant that has not added
        it. */
+    /* tier ALL, not DELUXE. The Firestore document has carried tier 0 \u2014 open
+       to every tenant \u2014 with a description that has never existed in this
+       file, so it was opened by hand in the console and the seed was never
+       brought into line. The two disagreed silently: nothing reads the seed
+       until somebody presses "Import / Update Applications", and that press
+       would have revoked Site Finder from every Standard tenant without a
+       word. Found by scripts/publish-tools.js, which is the whole reason that
+       script exists.
+
+       Matching the seed to the live value is the fix. Changing the live value
+       to match the seed is also a fix, and it is the wrong one \u2014 the site
+       finder is top-of-funnel, and a prospecting tool behind an upgrade wall
+       does not produce the upgrade. Same argument gridatlas and datacenter
+       already carry. */
     { key:'sitefinder', name:'Site Finder', category:'interconnection',
       desc:'Browse northern-Illinois C&I property ranked by deliverable kW, not price \u2014 hold a circuit and it leaves every other rep\u2019s inventory.',
-      file:'/clearsky-sitefinder.html', badge:'new', tier:TIER.DELUXE, savesData:true,
+      file:'/clearsky-sitefinder.html', badge:'new', tier:TIER.ALL, savesData:true,
       icon:'M12 22s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11zM12 7l-2 4h3l-2 4' },
 
     /* ── OPERATIONS ── */
@@ -636,8 +666,26 @@
          An allowlist is checked FIRST and short-circuits, so it cannot be
          widened by the tier, by unlockedTools or by requiredTools underneath
          it. That is the point: an allowlist that something else can override
-         is not an allowlist. Absent, nothing changes. */
-      if (workspace.toolAccess && workspace.toolAccess.length)
+         is not an allowlist. Absent, nothing changes.
+
+         ── ABSENT AND EMPTY ARE DIFFERENT, 2026-09-19 ────────────────────
+         This read `&& .length`, so an allowlist of [] was treated as ABSENT
+         and the tier decided. Nowhere else in the estate agrees:
+
+           api/fiber-screen.js    Array.isArray(toolAccess) && indexOf<0 → 403
+           api/compute-lease.js   the same
+           omega-tenant.js        effectiveTools() offers nothing
+           tests/fiber-api.test.js asserts 403 for toolAccess: []
+
+         So an empty allowlist showed the tool UNLOCKED and the endpoint then
+         refused it — the wrong direction for a disagreement. The client must
+         not offer what the server denies.
+
+         `null`/absent still means "no allowlist"; a present array is now
+         authoritative at whatever length, including zero. An empty
+         intersection is a misconfiguration and this is the safe way to be
+         wrong about one. */
+      if (workspace.toolAccess)
         return workspace.toolAccess.indexOf(tool.key) >= 0;
 
       /* ── toolOverrides: the per-tool exception, also documented and also
@@ -681,18 +729,45 @@
          This is what the "Import / Update Applications" button calls. It
          writes/updates one doc per tool (id = key) and stamps a sort index
          so portals render in a stable order. Returns a Promise. ── */
-    publishToFirestore: function (db, firebase) {
+    /* Publish the catalog to Firestore. The admin console's "Import / Update
+       Applications" button calls this with two arguments and writes all of
+       them, which is what it has always done.
+
+       `keys` is optional and exists for scripts/publish-tools.js: after the
+       dry run shows a diff, the operator may want to land ONE tool rather
+       than all forty-four — a full publish reverts any field somebody tuned
+       directly in Firestore back to the seed, and "the new tool, and nothing
+       else" is a reasonable thing to ask for.
+
+       `sort` is still the tool's index in the FULL catalog, not in the
+       filtered subset. Publishing one tool must not renumber it to 0 and
+       send it to the top of every portal's grid. */
+    publishToFirestore: function (db, firebase, keys) {
       if (!db) return Promise.reject(new Error('No Firestore.'));
-      var batch = db.batch();
+      var only = null;
+      if (keys && keys.length) {
+        only = {};
+        for (var q = 0; q < keys.length; q++) only[keys[q]] = true;
+        /* An unknown key means a typo, and a typo that silently writes
+           nothing looks exactly like a successful publish. */
+        var known = {}, miss = [];
+        for (var m = 0; m < SEED_TOOLS.length; m++) known[SEED_TOOLS[m].key] = true;
+        for (var p = 0; p < keys.length; p++) if (!known[keys[p]]) miss.push(keys[p]);
+        if (miss.length) return Promise.reject(new Error(
+          'No tool in the catalog has the key ' + miss.join(', ') + '.'));
+      }
+      var batch = db.batch(), wrote = 0;
       for (var i = 0; i < SEED_TOOLS.length; i++) {
         var t = SEED_TOOLS[i];
+        if (only && !only[t.key]) continue;
         var doc = {};
         for (var k in t) { if (t.hasOwnProperty(k)) doc[k] = t[k]; }
         doc.sort = i;
         doc.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
         batch.set(db.collection('tools').doc(t.key), doc, { merge: true });
+        wrote++;
       }
-      return batch.commit();
+      return batch.commit().then(function () { return wrote; });
     },
 
     /* ── SAVED DATA CONTRACT ──

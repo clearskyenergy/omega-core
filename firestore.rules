@@ -604,6 +604,32 @@ service cloud.firestore {
     }
 
     /* ════════════════════════════════════════════════════════════════════════
+       EVENT LAYER (step one, 2026-09-23)  —  event_config, event_exclusions
+       ════════════════════════════════════════════════════════════════════════
+       api/events.js reads both AS THE CALLER (no service account on that
+       path), so these rules are the whole of their protection.
+
+       event_config/current  { enabled, sampleRate }. Any signed-in user may
+         read it — omega-events.js needs the rate to decide its sample. A
+         missing doc means OFF.
+       event_exclusions/{key}  one doc per excluded org (key = orgId) or host
+         (key = 'host:<hostname>', e.g. the OSA JV, whose members sign in on
+         their own domains). A caller may read ONLY their own org's doc and
+         the host: docs — enough for the endpoint to refuse them, never enough
+         to list which other tenants are held out. This is where tenants on
+         signed agreements (Fenecon, OSA) sit until counsel clears each one.
+       Staff write both. twin_events has no rule here on purpose: the twin's
+       admin SDK writes it and no browser reads it (default deny). */
+    match /event_config/{doc} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+    match /event_exclusions/{key} {
+      allow read:  if signedIn() && (key == userOrg() || key.matches('host:.*') || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
        SIGNED AGREEMENTS  —  legal_acceptances/{uid}__{docVersion}
        ════════════════════════════════════════════════════════════════════════
        Written by omega-legal.js, the signing gate on the sales demo portal. A
@@ -2028,6 +2054,257 @@ service cloud.firestore {
        Same reasoning as legal_acceptances. A withdrawn application is
        'withdrawn'; what was asked for and when survives, because that is the
        half a dispute turns on. */
+    /* ════════════════════════════════════════════════════════════════════
+       WHITE-LABEL STOREFRONT  —  embed_keys, embed_configs, orders
+       ════════════════════════════════════════════════════════════════════
+       A white-labelled tenant runs an ordering surface on their OWN website.
+       Their customer has no account here and must never be asked for one, so
+       the three collections below are reached by a caller with no
+       request.auth at all.
+
+       THE RULE FOR ALL THREE IS THE SAME AND IT IS THE SHORT ONE:
+       NO UNAUTHENTICATED ACCESS. NONE. The public path goes through
+       /api/embed-* on the Admin SDK, which bypasses this file, and those
+       functions are where the public contract is enforced — a publishable
+       key, an origin allowlist, a rate limit, and a response built key by key
+       so nothing leaks by being present.
+
+       Writing `allow read: if true` on any of these to "make the embed work"
+       would hand the whole collection to anybody with a browser. The embed
+       does not need it and never did.
+       ════════════════════════════════════════════════════════════════════ */
+
+    /* ── EMBED KEYS ──  embed_keys/{key}
+       Doc id IS the publishable key (omega_pk_…). It names an orgId, the
+       origins it may be framed by, and whether it is still live.
+
+       NOT READABLE BY THE TENANT, which looks wrong for thirty seconds and is
+       right. The key is already in the page source of their own website —
+       they have it. What this document additionally holds is `origins`,
+       `active` and `scopes`, which are OUR controls over their installation:
+       a tenant who could edit origins could point their key at any site, and
+       a tenant who could flip `active` could not be switched off. Staff read
+       and write; the server reads with the Admin SDK.
+
+       /api/order-link.js hands a tenant's own key back to their own designer
+       when building a customer link — through a function that has already
+       checked they may act in that org, which is the difference. */
+    match /embed_keys/{key} {
+      allow read, write: if isAdmin();
+    }
+
+    /* ── PUBLISHED CONFIGURATIONS ──  embed_configs/{id}
+       A snapshot of a system a designer published for one customer to order:
+       the label, the sizes, the BOM, an expiry.
+
+       CREATED ONLY BY /api/order-link.js. A browser create is refused
+       outright — not narrowed, refused — because the snapshot is the evidence
+       of what was offered, and a client that could write one could offer
+       terms nobody approved and then point at the document.
+
+       Read is the owning org's (so a designer can list what they published)
+       plus ClearSky. The PUBLIC read goes through /api/embed-config, which
+       reshapes the document key by key: the stored doc carries createdBy, an
+       internal email address that has no business on a customer's screen.
+
+       Update is refused too. Withdrawing a link sets `revoked` through
+       /api/order-link.js action:'revoke' — a flag, never a delete, because an
+       order already placed against this configuration references it. */
+    match /embed_configs/{configId} {
+      allow read:   if signedIn()
+                    && (resource.data.get('orgId', '') == userOrg()
+                     || ownsDemoBucket(resource.data.get('orgId', ''))
+                     || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    /* ── ORDERS ──  orders/{orderId}
+       What a storefront customer asked for, and what we are doing about it.
+
+       ── WHO READS ──
+       The tenant reads their own rows: their storefront, their customer,
+       their relationship. ClearSky reads all, because ClearSky fulfils.
+       `.get('orgId','')` and not a bare reference — a bare one fails the
+       WHOLE evaluation on any document written before the field existed, the
+       same trap orgsInvolved documents at length above.
+
+       That the read filters on the SAME field the client queries is what
+       makes the LIST in orders.html legal: Firestore refuses a list the
+       moment one returned document would fail.
+
+       ── WHO WRITES: NOBODY, FROM A BROWSER ──
+       Every write is /api/orders.js or /api/embed-order.js. This is not
+       belt-and-braces over a client that behaves; the rules genuinely cannot
+       express what has to hold:
+
+         · Only ClearSky may set `pricing`. The tenant's margin sits on top of
+           our number; two parties writing one price makes an invoice nobody
+           can reconcile.
+         · Only ClearSky may advance `status` — EXCEPT 'cancelled', which the
+           tenant may always set on their own order. Their customer, their
+           right to call it off.
+         · `history` may only be appended to. An order whose price changed
+           with no record of who changed it is the argument you lose.
+         · A status change notifies the other side, which is a write to a
+           document the caller cannot touch.
+
+       Expressing the first two in a rules file would mean encoding a
+       commercial arrangement in firestore.rules, where it cannot be read by
+       the people who negotiate it. It lives in api/orders.js, next to the
+       comment explaining it.
+
+       ── DELETE IS REFUSED FOR EVERYONE, INCLUDING US ──
+       Same reasoning as legal_acceptances and fin_applications. A cancelled
+       order is 'cancelled'; what was asked for and when survives, because
+       that is the half a dispute turns on. CLAUDE.md: flag, don't drop. */
+    match /orders/{orderId} {
+      allow read:   if signedIn()
+                    && (resource.data.get('orgId', '') == userOrg()
+                     || ownsDemoBucket(resource.data.get('orgId', ''))
+                     || isAdmin());
+      allow create, update: if false;
+      allow delete: if false;
+      // Workflow audit is served through authenticated APIs, never client-writable.
+      match /events/{eventId} { allow read, write: if false; }
+    }
+
+    // Omega Logic accounting credentials and commercial configuration are
+    // Admin SDK only. Tenant branding permissions do not extend to these paths.
+    //
+    // Ledger sync (2026-09-24, api/_lib/ledger-sync.js): a tenant-billed
+    // workspace's OWN QuickBooks company or Stripe account. Every new path
+    // lives under integrations/** and is covered by the two lines below —
+    // no new match block, no new top-level collection:
+    //   integrations/quickbooks_workspaces/orgs/{org}            the workspace's QuickBooks tokens
+    //   integrations/quickbooks_workspaces/orgs/{org}/customers/{key}
+    //   integrations/quickbooks_workspaces/orgs/{org}/invoices/{realmId_id}  reverse index, per company
+    //   integrations/stripe_connect/orgs/{org}                   its connected Stripe account id (no token stored)
+    //   integrations/stripe_connect/orgs/{org}/customers/{key}
+    //   integrations/stripe_connect/orgs/{org}/invoices/{in_id}  reverse index for the webhook
+    //   integrations/stripe_connect/accounts/{acct_id}           reverse index: account -> workspace
+    //   integrations/stripe_connect/events/{evt_id}              webhook dedupe
+    //   integrations/ledger_oauth/states/{state}                 one-time OAuth state, both providers
+    // The workspace's choice (fulfillment/config.ledgerSync) sits in the
+    // fulfillment line below, equally closed.
+    // Why no browser may read them, not even the workspace's own admin:
+    // QuickBooks refresh tokens ROTATE on every use, so a browser copy goes
+    // stale the first time the server refreshes and two writers racing a
+    // rotating credential kill the connection; and a connected Stripe
+    // account id plus the platform key can issue invoices on that account,
+    // so the pairing is the server's alone. The accounting page gets status
+    // from api/logic-accounting.js: env var NAMES that are missing, connected
+    // or not, never a token, key or code.
+    match /integrations/{integrationId}/{document=**} { allow read, write: if false; }
+    match /integrations/{integrationId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/fulfillment/{configId} { allow read, write: if false; }
+    /* Purchase orders (api/logic-materials.js): what the plant sent a supplier
+       and what arrived. Written in the same transaction as the stock counts
+       above, Admin SDK only — a browser that could edit "received" could put
+       cells on the shelf that never came. No rule grants it, and this line
+       says so rather than leaving it to the default. */
+    match /omega_orgs/{orgId}/purchase_orders/{poId} { allow read, write: if false; }
+    /* Custody (api/_lib/custody.js): an end site with its interconnection
+       details, the customer's remembered column mapping and each import
+       batch. Read and written only by api/logic-custody.js and
+       api/my-sites.js, which judge every move against the one status
+       machine; a browser that could write a site or a receipt could start a
+       warranty it is not owed. Stated, like the two lines above. */
+    match /omega_orgs/{orgId}/sites/{siteId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/custody_imports/{batchId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/custody_mappings/{mapId} { allow read, write: if false; }
+    /* What ClearSky sent each subscriber (api/logic-kit.js): the log of app
+       links and guides that went out, owner-only through the endpoint. */
+    match /omega_orgs/{orgId}/kit_sends/{sendId} { allow read, write: if false; }
+    /* The CRM's open follow-ups across every account (the Today hub) and a
+       customer account's daily document allowance (api/crm.js, api/my-files.js).
+       The allowance is its own record, not a field on the customer, because
+       a tenant admin may update the customer record from a browser and
+       would then reset it. Stated, like the two lines above. */
+    match /omega_orgs/{orgId}/crm_followups/{followId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/crm_upload_usage/{usageId} { allow read, write: if false; }
+    /* A pasted site list's daily map-lookup allowance, per customer account,
+       for all customers and for the office (api/_lib/site-geo.js), counted
+       by the endpoints in a transaction. A browser that could write it would
+       reset its own allowance. Stated, like the lines above. */
+    match /omega_orgs/{orgId}/geocode_usage/{usageId} { allow read, write: if false; }
+
+    /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
+       From docs/firestore.rules.plant.addendum, applied 2026-09-20 and
+       ADAPTED: the addendum's plantOrg() fell back to myOrg(), which does
+       not exist in these rules. userOrg() is the real name and it already
+       folds through orgAlias(), so the alias handling the addendum wrote by
+       hand is redundant here rather than missing.
+
+       NONE of the collections that MOVE a unit are client-writable. A unit
+       advances only through /api/mes-scan, which checks the routing in
+       api/_lib/plant.js before it writes. If a browser could set `at`
+       directly, every guarantee in that engine evaporates — a unit could
+       skip EOL test, jump to Ready, or move backwards, and the board would
+       report it as fact. Same arrangement `orders` already has.
+
+       READ IS isOmegaStaff() HERE AND isAdmin() ON `orders`, deliberately.
+       An order carries the customer, the pricing, the cost and the margin.
+       A unit carries a serial and a bench. A rep who is working the floor
+       with a tenant needs the second and has no business in the first. */
+
+    match /plant_works_orders/{woId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+      allow write:  if false;        /* Admin SDK only — raised on deposit paid */
+    }
+
+    match /plant_units/{unitId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+      /* A unit's station is decided by api/_lib/plant.js against the works
+         order's own routing. There is no shape of client write that could be
+         checked here instead. */
+      allow write:  if false;
+      /* The custody chain: append-only events written by the endpoints
+         above; never edited, never deleted, never client-written. */
+      match /custody_events/{eventId} { allow read, write: if false; }
+    }
+
+    match /plant_scans/{scanId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+      allow write:  if false;        /* append-only log, refusals included */
+    }
+
+    match /plant_stations/{stationId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+
+      /* A tenant admin may create, relabel and DEACTIVATE their own benches.
+         Deactivating is how a lost tablet is killed, and waiting on us to do
+         it is how a lost tablet stays live over a weekend.
+
+         They may not mint a token by writing tokenHash themselves: a hash the
+         client chose is a token the client chose, and the console's one-time
+         reveal becomes meaningless. Mint goes through the Admin SDK.
+
+         Firestore rules cannot hide a FIELD, only a document, and a tenant
+         admin must see their own benches — so the document stores a SHA-256
+         of the token and never the token. Reading the hash buys an attacker
+         nothing they can replay. */
+      allow create: if isOmegaStaff();
+      allow update: if isOmegaStaff()
+                    || (isTenantAdmin(resource.data.get('orgId', ''))
+                        && request.resource.data.get('orgId', '') == resource.data.get('orgId', '')
+                        && request.resource.data.get('station', '') == resource.data.get('station', '')
+                        && request.resource.data.get('tokenHash', '') == resource.data.get('tokenHash', '')
+                        && request.resource.data.get('machine', false) == resource.data.get('machine', false));
+      allow delete: if isOmegaStaff();
+    }
+
     match /fin_applications/{appId} {
 
       function appOrg() { return resource.data.get('orgId', ''); }
@@ -2512,6 +2789,111 @@ service cloud.firestore {
         allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
         allow write: if isAdmin() || isTenantAdmin(orgId);
       }
+      /* ── CUSTOMER ACCOUNTS ──  omega_orgs/{orgId}/customers/{customerId}
+         ← BUYER PORTAL (docs/CUSTOMER-PORTAL.md §2). Three levels, not two:
+         the tenant, a CUSTOMER ACCOUNT under it, and the people on it.
+
+         WHY NEITHER IS READABLE BY THE PERSON IT DESCRIBES. A customer
+         account carries `terms` — net days, discount, credit limit. A
+         customer who could read their own record could read their own
+         discount, and one who could WRITE it would set their own price.
+         Rules hide documents, not fields, so there is no read rule that
+         returns the account without the terms inside it. The portal never
+         touches Firestore: api/my-account.js and api/my-orders.js project
+         what a customer may see, key by key, exactly as api/embed-config.js
+         does for the public storefront. These grant the TENANT and us.
+
+         WHY THE TENANT MAY WRITE, BUT NOT MOVE. Terms, plan and status are
+         theirs to set — their customer, their commercial relationship. orgId
+         is not, because a customer account that can move between tenants
+         can be taken to a competitor. Same trap `deals` guards with
+         touchesAttribution() and `projects` guards on orgsInvolved.
+
+         DELETE IS NOT GRANTED. Merging duplicates moves ORDERS, and a
+         migration flags rather than drops: a merged account is marked
+         `mergedInto` and kept. Nothing in the product deletes one. */
+      match /customers/{customerId} {
+        allow read: if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
+
+        /* Created by api/my-account.js on first sign-in (Admin SDK, which
+           these rules do not constrain) or by a tenant admin setting up a
+           sales-led account. A browser-created record is pinned to this org. */
+        allow create: if (isOmegaStaff() || isTenantAdmin(orgAlias(orgId)))
+                      && request.resource.data.get('orgId', orgId) == orgId
+                      && request.resource.data.get('status', 'active') in ['active', 'suspended']
+                      && (isOmegaStaff() || !('editorLite' in request.resource.data));
+
+        /* `mergedInto` is written by a script, never by a browser — a merge
+           that a page could trigger is a merge nobody reviewed. `supersededBy`
+           (a stray login moved onto its company by api/buyers.js) is the same
+           kind of record. `editorLite` is a paid entitlement on the ACCOUNT —
+           every person on it gets it — written only by ClearSky's endpoint or
+           a billing provider, never by the tenant from a browser. */
+        allow update: if (isOmegaStaff() || isTenantAdmin(orgAlias(orgId)))
+                      && request.resource.data.get('orgId', orgId) == resource.data.get('orgId', orgId)
+                      && request.resource.data.get('createdAt', '') == resource.data.get('createdAt', '')
+                      && request.resource.data.get('mergedInto', '') == resource.data.get('mergedInto', '')
+                      && request.resource.data.get('supersededBy', '') == resource.data.get('supersededBy', '')
+                      && (isOmegaStaff() || request.resource.data.get('editorLite', null) == resource.data.get('editorLite', null));
+
+        allow delete: if false;          /* flag, don't drop */
+
+        /* The people on an account. A person JOINS through the endpoints
+           (api/buyers.js, api/po-intake.js, api/my-account.js), because
+           joining is two writes that must happen together — this doc AND the
+           customer_index pointer, which is write:false below. A browser that
+           created only this doc would make a person the sign-in cannot find:
+           their first sign-in would open a separate account. So no create.
+           A tenant admin may still correct a name, phone, role or access
+           here; `uid` is stamped by the endpoint only — a uid the client
+           chose is the one field that could be used to impersonate.
+           Disable, don't delete: a deleted person leaves a pointer to
+           nothing, and the orders they placed stay on the account. */
+        match /users/{emailLower} {
+          allow read: if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
+          allow create: if false;
+          allow update: if (isOmegaStaff() || isTenantAdmin(orgAlias(orgId)))
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'role', 'status', 'updatedAt'])
+                        && request.resource.data.get('role', 'user') in ['owner', 'user']
+                        && request.resource.data.get('status', 'active') in ['active', 'disabled', 'pending'];
+          allow delete: if false;
+        }
+
+        // OEM buyers are not platform tenant members. Customer design APIs
+        // resolve the verified buyer pointer and check paid/trial entitlement.
+        // Keep these designs inaccessible through browser Firestore SDKs.
+        match /projects/{projectId} {
+          allow read, write: if false;
+        }
+
+        /* The supplier's CRM on the account (api/crm.js; the customer's side
+           is api/my-files.js). Contacts, the activity log and the documents
+           are read and written only through those endpoints: a document is
+           visible to the customer only when the office shared it, which is
+           a field on the record — a browser that could read the record
+           could read an office-only one, and one that could write `shared`
+           or `path` could show the customer anything, or point a record at
+           another account's bytes. The endpoints check who, key by key. */
+        match /contacts/{contactId} { allow read, write: if false; }
+        match /activity/{activityId} { allow read, write: if false; }
+        match /files/{fileId}       { allow read, write: if false; }
+      }
+
+      /* ── THE POINTER ──  omega_orgs/{orgId}/customer_index/{emailLower}
+         email -> customerId, written by api/my-account.js with create() so
+         two concurrent first sign-ins cannot both make an account. It exists
+         because a collectionGroup('users') lookup needed a COLLECTION_GROUP
+         index Firestore does not auto-create, and the failed query was being
+         swallowed into "no account found" — a duplicate account on every
+         request rather than a loud failure.
+
+         Admin SDK only. It is an index, not a record: nothing reads it but
+         the endpoint, and a client that could write it could point somebody
+         else's email at an account of its choosing. */
+      match /customer_index/{emailLower} {
+        allow read:  if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
+        allow write: if false;
+      }
 
       /* ── NOTIFICATIONS ──  omega_orgs/{orgId}/notifications/{id}
          Written server-side by /api/opportunity.js and /api/rfq.js; the
@@ -2521,6 +2903,34 @@ service cloud.firestore {
         allow update: if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId))
                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
         allow create, delete: if isAdmin();
+      }
+
+      /* ── STOREFRONT ──  omega_orgs/{orgId}/storefront/{docId}
+         ← WHITE LABEL. The public storefront's configuration: the published
+         product list, the copy, the cost basis the sizer runs on, and the
+         daily order counter.
+
+         READ is the tenant's own. WRITE is ClearSky's alone, and that is not
+         an oversight to be tidied away later:
+
+           · `products[].listPrice` is what a stranger on the open internet
+             sees. A tenant admin who could edit it from a browser could put
+             a price in front of the public that nobody at ClearSky agreed to
+             fulfil at — and we are the ones fulfilling.
+           · `capexPerKwh` / `capexPerKw` are the COST BASIS the sizer sweeps
+             against. Writable by the tenant means discoverable by the
+             tenant, and it is our number, not theirs.
+           · `counters` is the durable order rate limit (api/embed-order.js).
+             A writable counter is not a limit.
+
+         The server reaches it through the Admin SDK, which bypasses this
+         block entirely; the block is what stops a BROWSER. A self-serve
+         catalogue editor for tenants is a real feature and a separate one —
+         it needs an endpoint that validates a price change, not a rule that
+         waves it through. See docs/WHITE-LABEL.md § Not built yet. */
+      match /storefront/{docId} {
+        allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+        allow write: if isAdmin();
       }
     }
 
@@ -3192,6 +3602,24 @@ service cloud.firestore {
                     && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
                     && request.resource.data.orgId == resource.data.orgId;
       allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       AGENT KEYS  —  agent_keys/{sha256(key)}                  ← SERVER ONLY
+       ════════════════════════════════════════════════════════════════════════
+       A machine credential for /api/agent/* (a ChatGPT Action, a partner's
+       script). One row per key, id = SHA-256 of the plaintext, body = orgId,
+       label, scopes[], admin, active, expiresAt, lastUsedAt. Minted by
+       scripts/agent-key.js through the Admin SDK; read by api/_lib/agent-auth.js
+       through the Admin SDK. NO BROWSER READS OR WRITES THIS, and the block
+       below says so explicitly rather than leaning on the implicit deny — an
+       unmatched path and a denied path look identical from the client, and a
+       future "allow read: if isAdmin()" pasted in a hurry would hand every
+       ClearSky sign-in a list of who holds keys. The plaintext is never in
+       the row, so a leak here is a list of labels, not a set of credentials;
+       still, nobody needs it in a browser. */
+    match /agent_keys/{keyId} {
+      allow read, write: if false;
     }
   }
 }

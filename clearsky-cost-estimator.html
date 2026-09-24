@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <!--
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
   ClearSky-OMEGA · Cost Estimator  (capex v1)
   ---------------------------------------------------------------------------
   The receiving end of `clearsky.site-packet/1`.
@@ -298,6 +299,7 @@
   </a>
   <span class="seprt"></span>
   <b style="font-size:13px">Cost Estimator</b>
+  <a href="/" title="OMEGA home" style="color:inherit;font-size:12px;margin-left:10px">Home</a>
   <span class="srcTag" id="clsChip">NO PACKET</span>
   <span class="spacer"></span>
   <button class="btn ghost" id="bReset" type="button">Clear</button>
@@ -464,22 +466,7 @@ var MARKET = [
      vs     voltage sensitivity key, if the line moves with the tie voltage
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* ── THE TABLES LIVE IN omega-cost-model.js ───────────────────────────────
-   MODEL, SPREAD, MARKUP, VOLT, SOIL, AHJ, LABOR and UPGRADE were declared
-   here. They are now in omega-cost-model.js, loaded above, which puts them on
-   window under the same names — so every line below that reads them by bare
-   name is untouched.
-
-   They moved because /api/price-site prices a site without anybody opening
-   this page, and a second copy of these numbers there would be a second
-   answer. This file and that endpoint now read one table. Correct a rate in
-   omega-cost-model.js and both move together. */
-
-
-/* Per-division low/high spread. Equipment is quoted and therefore tight;
-   permitting and civil are the ones that actually move, because soil and an
-   AHJ are not knowable from a desk. These factors are what produce the
-   $389 / $435 / $483 spread on the reference system. */
+/* Pricing tables live only in api/_lib/cost-model.js. */
 
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -763,6 +750,8 @@ var S = {
    ══════════════════════════════════════════════════════════════════════════ */
 var VEND_TOOLKEY = 'costestimator';
 var V_DB = null, V_FB = null, V_ORG = null;
+var SAVED_PRICING = pricingRecords();
+function pricingRecords(){ return JSON.stringify({vendors:VENDORS, installers:INSTALLERS_ST}); }
 
 function vendStat(txt, cls){
   var e = $('vendStat');
@@ -926,8 +915,7 @@ function renderVendForm(){
                                  : 'nothing on file yet';
 }
 
-/* Edits land on the record as they are typed; the estimate re-runs so the
-   effect of a price is visible immediately rather than after a save. */
+/* Edits land on the record as typed. Save publishes them to server pricing. */
 document.addEventListener('input', function(e){
   var it = e.target, ik = it && it.getAttribute && it.getAttribute('data-i');
   if(ik && INSTALLERS_ST[ik]){
@@ -1147,8 +1135,9 @@ function vendExport(){
 function vendSave(){
   if(!V_DB || !V_ORG){ vendStat('Not signed in — nothing saved', 'warn'); return; }
   vendStat('Saving…');
+  var savedRecords = pricingRecords();
   OMEGATools.saveToolData(V_DB, V_FB, V_ORG, VEND_TOOLKEY, vendCollect())
-    .then(function(){ vendStat('Saved for ' + V_ORG); })
+    .then(function(){ SAVED_PRICING = savedRecords; PRICE_KEY = ''; PRICE_RESULT = null; vendStat('Saved for ' + V_ORG); renderOut(); })
     ['catch'](function(err){ vendStat('Save failed: ' + ((err && err.message) || 'unknown error'), 'warn'); });
 }
 function vendLoad(){
@@ -1156,6 +1145,7 @@ function vendLoad(){
   OMEGATools.loadToolData(V_DB, V_ORG, VEND_TOOLKEY).then(function(doc){
     if(doc && doc.data){ vendApply(doc.data); vendStat('Loaded — ' + V_ORG); }
     else vendStat(V_ORG + ' — nothing on file yet');
+    SAVED_PRICING = pricingRecords();
     if(typeof render === 'function'){ try{ render(); }catch(_){} }
   })['catch'](function(){ vendStat('Could not load saved pricing', 'warn'); });
 }
@@ -1171,26 +1161,15 @@ function vendInitCloud(){
     }
     V_FB = firebase; V_DB = firebase.firestore();
     firebase.auth().onAuthStateChanged(function(u){
+      ++PRICE_SEQ; LAST = null; enable(false);
       V_ORG = OMEGATools.orgFromUrl(u ? u.email : null);
-      if(V_ORG) vendLoad(); else vendStat('Sign in to keep this for your team');
+      PRICE_KEY = ''; PRICE_RESULT = null;
+      if(V_ORG) vendLoad(); else { renderOut(); vendStat('Sign in to keep this for your team'); }
     });
   }catch(e){ vendStat('Standalone — this session only'); }
 }
 
-/* ── THE SELECTED SUPPLIER, AS PRICED LINES ────────────────────────────
-   The translation itself moved to omega-cost-model.js. It had to: the site
-   finder prices sites too, and while this lived here that page priced them
-   without the organisation's supplier pricing — the same site through two
-   doors, two answers, one of them unaware a quote existed. Same class of
-   failure the shared model was created to end, one level up.
-
-   What stays here is only the question this page can answer: WHICH supplier
-   the user picked. */
-function vendTier(v){ return OmegaCostModel.vendorTier(v); }
-function vendRates(){
-  var v = VEND_SEL ? VENDORS[VEND_SEL] : null;
-  return OmegaCostModel.ratesFromVendor(v);
-}
+/* Supplier selection is sent by key; rates and evidence resolve server-side. */
 
 function todayISO(){ var d=new Date(); return d.toISOString().slice(0,10); }
 
@@ -1244,29 +1223,7 @@ function hours(){
 function kw(){ return S.kw; }
 function kwh(){ return S.kw == null ? null : S.kw * hours(); }
 
-/* Default equipment yard: 0.8 sq ft per kWh plus a fixed 800 for clearances,
-   fire access and the PCS/transformer pad. 2,000 kWh → 2,400 sq ft, which is
-   the reference. NFPA 855 separation is inside that number, not on top. */
-function padDefault(){ var e = kwh(); return e == null ? null : Math.round(0.8*e + 800); }
-function pad(){ var p = num(S.req.padArea); return p && p > 0 ? p : padDefault(); }
-function poiFt(){ var f = num(S.req.poiDistanceFt); return f != null && f >= 0 ? f : 250; }
 function volt(){ return VOLT[S.req.interconnectionVoltage] ? S.req.interconnectionVoltage : ""; }
-function sizeF(){ var k = kw(); return k == null ? 1 : Math.pow(Math.max(k,25)/1000, 0.75); }
-
-/* Cell and inverter pricing moves quarterly. Beyond one quarter a quote
-   escalates; beyond two it is not a quote any more. */
-function quoteAgeMonths(){
-  if (!S.req.equipmentQuoteDate) return null;
-  var d = new Date(S.req.equipmentQuoteDate + "T12:00:00Z");
-  if (isNaN(d.getTime())) return null;
-  return (Date.now() - d.getTime()) / (1000*60*60*24*30.44);
-}
-function escalation(){
-  var m = quoteAgeMonths();
-  if (m == null) return 1.015;                 /* no quote: one quarter of drift */
-  if (m <= 3) return 1.0;
-  return 1 + 0.006 * ((m - 3) / 3);            /* 0.6% per quarter beyond the first */
-}
 
 function unanswered(){
   var out = [], k;
@@ -1292,84 +1249,68 @@ function unanswered(){
    The ceiling stays at Class 4 on purpose. Class 3 needs a site walk, and no
    amount of quoting tells this tool whether anybody has stood on the ground.
    It says what is still missing instead of promoting itself. */
-function estClass(r){
-  var miss = unanswered().length;
-  var p = S.packet;
-  var posBad = p && p.site && p.site.positionIsBuilding === false;
-  var gaps = (p && p.gaps) ? p.gaps.length : 0;
-  var ev = (r && r.sourcing) ? r.sourcing.evidenceShare : 0;
-  var evPct = Math.round(ev * 100);
-  var evLine = ev > 0
-    ? " " + evPct + "% of the total is priced from written quotes or booked "
-      + "actuals; the rest is an internal planning rate."
-    : " Nothing in this total is priced from a quote or a booked cost yet \u2014 "
-      + "every rate is an internal planning figure.";
+function estClass(r){ return r && r.cls; }
 
-  if (miss >= 3 || posBad || S.req.utilitySideUpgrade === "" || volt() === "")
-    return { n:5, lo:-0.30, hi:0.50, label:"Class 5 \u2014 concept screening",
-             evidenceShare:ev,
-             why:"Some of what decides the cost is still unanswered." + evLine };
-  if (miss >= 1 || gaps > 0)
-    return { n:4, lo:-0.20, hi:0.30, label:"Class 4 \u2014 study estimate",
-             evidenceShare:ev,
-             why:"Not every driver is answered yet." + evLine };
-  return { n:4, lo:-0.20, hi:0.30, label:"Class 4 \u2014 study estimate",
-           evidenceShare:ev,
-           why:"Every driver is answered." + evLine +
-               " Class 3 additionally needs a site walk, which this tool cannot " +
-               "verify from a desk." };
+/* Authenticated pricing; inputs and presentation stay in this page. */
+/* Unanswered fields remain null: the server owns defaults and classification. */
+function pricingInput(){
+  return { orgId:V_ORG || undefined, kw:kw(), hours:num(S.req.duration) || S.hours || null,
+    volt:S.req.interconnectionVoltage, poiFt:num(S.req.poiDistanceFt), padArea:num(S.req.padArea),
+    soil:S.req.soilAndGrading, ahj:S.req.ahj, labor:S.req.laborBasis,
+    utilityUpgrade:S.req.utilitySideUpgrade, carryUpgrade:S.carryUpgrade,
+    quoteDate:S.req.equipmentQuoteDate, supplierKey:VEND_SEL || '', installerKey:INST_SEL || '',
+    site:S.packet && S.packet.site || null, gaps:S.packet && S.packet.gaps || [] };
 }
-
-/* ══════════════════════════════════════════════════════════════════════════
-   THE CALCULATION
-   ══════════════════════════════════════════════════════════════════════════ */
-/* ══════════════════════════════════════════════════════════════════════════
-   ONE PRICING LOOP, IN ONE FILE
-
-   This function used to BE the loop — a second, hand-maintained copy of the
-   arithmetic that also lives in omega-cost-model.js. The parity test proved
-   the two agreed to the cent on the day it was written, which is precisely
-   as long as that kind of proof lasts: the next person to correct a rate
-   corrects one of them.
-
-   That is not an abstract tidiness argument here. A client asking for
-   bankable numbers is asking, in effect, whether the same input always
-   produces the same output and whether anybody can trace how. Two
-   implementations cannot honestly answer either question, and this codebase
-   has already been bitten twice by exactly that — a container carried at two
-   different capacities, a pedestal at two different prices.
-
-   So this now calls the shared model and does nothing else. The resolved
-   values are passed rather than the raw fields (hours, pad, POI distance),
-   so the page's own defaults keep deciding what an unanswered input means
-   and the model is not left to re-default them differently.
-
-   estClass() stays here: the estimate CLASS is a statement about this
-   page's inputs and the packet behind them, not about the arithmetic.
-   ══════════════════════════════════════════════════════════════════════════ */
 function compute(){
-  var K = kw();
-  if (K == null || !(K > 0)) return null;
-  if (typeof OmegaCostModel === "undefined" || !OmegaCostModel.price) return null;
-
-  var r = OmegaCostModel.price({
-    installer: instRecord(),
-    kw: K, hours: hours(),
-    volt: S.req.interconnectionVoltage,
-    poiFt: poiFt(), padArea: pad(),
-    soil: S.req.soilAndGrading,
-    ahj: S.req.ahj,
-    labor: S.req.laborBasis,
-    utilityUpgrade: S.req.utilitySideUpgrade,
-    carryUpgrade: S.carryUpgrade,
-    quoteDate: S.req.equipmentQuoteDate,
-    rates: vendRates()
+  var input = pricingInput();
+  if (!(input.kw > 0)) return Promise.resolve(null);
+  var user = typeof firebase !== 'undefined' && firebase.auth().currentUser;
+  if (!user) return Promise.reject(new Error('Sign in to price this site.'));
+  return user.getIdToken().then(function(token){
+    return fetch('/api/price-site', {method:'POST', headers:{'Content-Type':'application/json',
+      Authorization:'Bearer ' + token}, body:JSON.stringify(input)});
+  }).then(function(response){
+    return response.json().then(function(r){
+      if (!response.ok) throw new Error(r.error && (r.error.message || r.error) || 'Pricing request failed.');
+      if (!r.total || !r.accuracy || !r.divisions || !r.sourcing) throw new Error('Incomplete pricing response.');
+      r.cls = {n:r.accuracy.aace, lo:r.accuracy.low, hi:r.accuracy.high,
+        label:r.estimateClass, why:r.estimateClassWhy, evidenceShare:r.accuracy.evidenceShare};
+      return r;
+    });
   });
-  if (!r) return null;
-  /* The class is decided AFTER the price, because it now depends on how much
-     of that price came from evidence. */
-  r.cls = estClass(r);
-  return r;
+}
+var PRICE_SEQ = 0, PRICE_TIMER = null, PRICE_KEY = '', PRICE_RESULT = null;
+function renderOut(){
+  var seq = ++PRICE_SEQ;
+  clearTimeout(PRICE_TIMER);
+  LAST = null;
+  enable(false);
+  if (!(kw() > 0)) { renderEstimate(null); return; }
+  if (pricingRecords() !== SAVED_PRICING) {
+    $('body').style.display = 'none'; $('blank').style.display = '';
+    $('clsChip').textContent = 'SAVE PRICING';
+    $('blank').innerHTML = '<h3>Save pricing changes first</h3><p>Save your supplier and installer records so the server can use them in this estimate.</p>';
+    return;
+  }
+  var key = JSON.stringify(pricingInput());
+  if (key === PRICE_KEY && PRICE_RESULT) { renderEstimate(PRICE_RESULT); return; }
+  $('body').style.display = 'none'; $('blank').style.display = '';
+  $('clsChip').textContent = 'PRICING';
+  $('blank').innerHTML = '<h3>Pricing this site…</h3><p>Retrieving your organisation’s estimate.</p>';
+  PRICE_TIMER = setTimeout(function(){
+    compute().then(function(r){
+      if(seq !== PRICE_SEQ) return;
+      PRICE_KEY = key; PRICE_RESULT = r; renderEstimate(r);
+    })['catch'](function(err){
+      if(seq !== PRICE_SEQ) return;
+      PRICE_KEY = ''; PRICE_RESULT = null;
+      $('body').style.display = 'none'; $('blank').style.display = '';
+      $('clsChip').textContent = 'UNAVAILABLE';
+      $('blank').innerHTML = '<h3>Estimate unavailable</h3><p>' + esc(err.message) +
+        '</p><button id="retryPrice" class="btn">Retry pricing</button>';
+      $('retryPrice').onclick = renderOut;
+    });
+  }, 250);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1573,7 +1514,7 @@ function adoptHandoff(){
 function report(){
   if (!_reportTo || _reportTo.closed) return;
   var r = null;
-  try { r = compute(); } catch (e) { return; }
+  try { r = LAST && LAST.r; } catch (e) { return; }
   if (!r) return;
   var p = S.packet || {};
   try {
@@ -1581,8 +1522,10 @@ function report(){
       type: HANDOFF_OUT,
       siteId: (p.site && p.site.id) || null,
       address: (p.site && p.site.address) || null,
-      kw: r.kw, kwh: r.kwh,
-      total: r.total, perKwh: r.perKwh,
+      kw: r.kw, kwh: r.kwh, hours:r.hours,
+      total: r.total, perKwh: r.perKwh, perKw:r.perKw,
+      financial:r.financial || null, accuracy:r.accuracy,
+      exposures:r.exposures || [], pricedBy:"api/price-site",
       estimateClass: r.cls.label,
       estimateClassWhy: r.cls.why,
       accuracyLow: r.cls.lo, accuracyHigh: r.cls.hi,
@@ -1964,7 +1907,7 @@ function tableHtml(r){
       '</td>' +
       '<td class="r">'+usdK(D.lo)+'</td><td class="r">'+usd(D.base)+'</td>' +
       '<td class="r">'+usdK(D.hi)+'</td>' +
-      '<td class="r">$'+ (r.kwh ? (D.base/r.kwh).toFixed(0) : '—') +'</td>' +
+      '<td class="r">$'+ (D.perKwh == null ? '—' : D.perKwh.toFixed(0)) +'</td>' +
       '<td class="r"><span class="shr" style="width:'+Math.round(56*D.base/maxShare)+'px"></span></td></tr>';
     if (open) {
       for (j = 0; j < D.lines.length; j++) {
@@ -1982,15 +1925,15 @@ function tableHtml(r){
   if (r.upgradeLine) {
     h += '<tr class="mk"><td>' + esc(r.upgradeLine.name) +
          (r.upgradeLine.carried ? ' <span style="color:var(--amber)">\u00b7 carried allowance</span>' : '') +
-         '</td><td class="r">'+usdK(r.upgradeLine.cost*0.8)+'</td>' +
+         '</td><td class="r">'+usdK(r.upgradeLine.lo)+'</td>' +
          '<td class="r">'+usd(r.upgradeLine.cost)+'</td>' +
-         '<td class="r">'+usdK(r.upgradeLine.cost*1.35)+'</td><td class="r"></td><td></td></tr>';
+         '<td class="r">'+usdK(r.upgradeLine.hi)+'</td><td class="r"></td><td></td></tr>';
   }
 
   h += '<tr class="mk"><td><b>Direct and indirect subtotal</b></td>' +
        '<td class="r">'+usdK(r.subtotal.lo)+'</td><td class="r"><b>'+usd(r.subtotal.base)+'</b></td>' +
        '<td class="r">'+usdK(r.subtotal.hi)+'</td>' +
-       '<td class="r">$'+(r.kwh?(r.subtotal.base/r.kwh).toFixed(0):'—')+'</td><td></td></tr>';
+       '<td class="r">$'+(r.subtotalPerKwh == null ? '—' : r.subtotalPerKwh.toFixed(0))+'</td><td></td></tr>';
 
   for (i = 0; i < r.markups.length; i++) {
     var M = r.markups[i];
@@ -2033,7 +1976,7 @@ function riskHtml(r){
        '<b>' + esc(cls.label) + '</b> \u2014 ' + esc(cls.why) +
        ' On AACE 18R-97 that carries an accuracy range of ' + Math.round(cls.lo*100) + '% to +' +
        Math.round(cls.hi*100) + '%, which on this estimate is <b>' +
-       usdK(r.total.base*(1+cls.lo)) + ' to ' + usdK(r.total.base*(1+cls.hi)) + '</b>. ' +
+       usdK(r.accuracy.rangeLowUsd) + ' to ' + usdK(r.accuracy.rangeHighUsd) + '</b>. ' +
        'That is wider than the low\u2013high columns above, and deliberately so: those columns are ' +
        'the model\u2019s spread, this is the estimate\u2019s.</div>';
 
@@ -2079,9 +2022,9 @@ function riskHtml(r){
     h += '<div class="note bad"><b>Utility-side upgrade \u2014 not in the total.</b> ' +
          'The interconnection study has not come back. If it calls for one, exposure runs ' +
          usdK(up.exposure[0]) + ' to ' + usdK(up.exposure[1]) + ', which would put this project at ' +
-         usdK(r.total.base + up.exposure[0]) + ' to ' + usdK(r.total.base + up.exposure[1]) +
-         ' \u2014 $' + Math.round((r.total.base+up.exposure[0])/r.kwh) + ' to $' +
-         Math.round((r.total.base+up.exposure[1])/r.kwh) + ' / kWh. It is left out because a ' +
+         usdK(up.projectLowUsd) + ' to ' + usdK(up.projectHighUsd) +
+         ' \u2014 $' + Math.round(up.projectLowPerKwh) + ' to $' +
+         Math.round(up.projectHighPerKwh) + ' / kWh. It is left out because a ' +
          'number somebody quotes should not contain a guess this large.</div>';
   }
 
@@ -2184,8 +2127,7 @@ function ganttHtml(sch){
   return h + '</div>';
 }
 
-function renderOut(){
-  var r = compute();
+function renderEstimate(r){
   if (!r) {
     /* ── TWO DIFFERENT BLANKS, AND THEY ARE NOT THE SAME PROBLEM ───────
        This said "NO PACKET" for both, which sent people hunting a broken
@@ -2229,6 +2171,7 @@ function renderOut(){
     var d = this.getAttribute("data-div"); OPEN[d] = !OPEN[d]; renderOut();
   };
   LAST = { r:r, sch:sch };
+  report();
 }
 var LAST = null;
 
@@ -2337,8 +2280,8 @@ function toJson(){
                citation:m.ref, url:m.url, caveat:m.caveat };
     }),
     estimateClass: { aace: r.cls.n, low: r.cls.lo, high: r.cls.hi,
-                     rangeLowUsd: Math.round(r.total.base*(1+r.cls.lo)),
-                     rangeHighUsd: Math.round(r.total.base*(1+r.cls.hi)),
+                     rangeLowUsd: r.accuracy.rangeLowUsd,
+                     rangeHighUsd: r.accuracy.rangeHighUsd,
                      note: r.cls.why },
     /* ── THE AUDIT TRAIL ────────────────────────────────────────────────
        The export is the artefact that reaches a lender's technical adviser,
@@ -2476,13 +2419,13 @@ if (typeof document !== "undefined") {
 
 /* Exposed for the test harness. */
 if (typeof module !== "undefined" && module.exports)
-  module.exports = { MODEL:MODEL, MARKUP:MARKUP, SPREAD:SPREAD, VOLT:VOLT,
+  module.exports = { VOLT:VOLT,
                      UPGRADE:UPGRADE, BAND_LO:BAND_LO, BAND_HI:BAND_HI,
                      MARKET:MARKET, marketHtml:marketHtml, BAND_SRC:BAND_SRC,
                      S:S, compute:compute, cpm:cpm, tasks:tasks, estClass:estClass,
                      sourceHtml:sourceHtml, tableHtml:tableHtml,
                      toJson:toJson, toCsv:toCsv,
-                     VENDORS:VENDORS, vendRates:vendRates, vendTier:vendTier,
+                     VENDORS:VENDORS, pricingInput:pricingInput, renderOut:renderOut,
                      vendImportObj:vendImportObj, BESS_VENDORS:BESS_VENDORS,
                      INSTALLERS:INSTALLERS, INSTALLERS_ST:INSTALLERS_ST,
                      instRecord:instRecord, setInstSel:function(k){ INST_SEL = k; },

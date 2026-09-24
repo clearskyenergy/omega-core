@@ -732,6 +732,7 @@
     var seed = projectSeed(rec, user);
     var ref = db.collection('projects').doc();
     return ref.set(seed).then(function () {
+      try { if (global.OmegaEvents) global.OmegaEvents.emit('project.created', { projectId: ref.id, vertical: String(seed.type || '').toLowerCase() || null, source: 'intake' }); } catch (e) {}
       rec.editorProjectId = ref.id;
       rec.editorProjectName = seed.name;
       logActivity(rec, 'project', 'Opened project "' + seed.name + '" from this intake.',

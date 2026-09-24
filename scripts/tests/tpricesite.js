@@ -67,7 +67,7 @@ ok('every function the price path calls is defined in this file', function () {
    'toLocaleString'].forEach(function (k) { delete called[k]; });
   var missing = Object.keys(called).filter(function (n) {
     if (/^(function|if|for|while|switch|catch|return|typeof|new)$/.test(n)) return false;
-    if (/^(String|Number|Object|Array|JSON|parseInt|parseFloat|isFinite|isNaN)$/.test(n)) return false;
+    if (/^(String|Number|Object|Array|JSON|Error|fetch|parseInt|parseFloat|isFinite|isNaN)$/.test(n)) return false;
     if (new RegExp('function\\s+' + n + '\\s*\\(').test(html)) return false;
     if (new RegExp('\\b' + n + '\\s*=\\s*function').test(html)) return false;
     if (new RegExp('\\.' + n + '\\s*\\(').test(code)) return false;   /* a method */
@@ -82,7 +82,7 @@ ok('the card handler does not call the isOpen() that never existed', function ()
 });
 
 /* ── the two shapes the model is asked for ─────────────────────────────── */
-var M = require(path.join(ROOT, 'omega-cost-model.js'));
+var M = require(path.join(ROOT, 'api/_lib/cost-model.js'));
 var UNKNOWN = {
   volt: '', poiFt: null, padArea: null, soil: '', ahj: '', labor: '',
   utilityUpgrade: '', carryUpgrade: false, quoteDate: ''
@@ -118,12 +118,10 @@ ok('480 V, which is the only driver this page can answer, moves the number',
   });
 
 ok('the tool never quotes a number without its class', function () {
-  var body = html.slice(html.indexOf('function computeEstimate'));
-  body = body.slice(0, body.indexOf('\n  function costInEstimator'));
-  assert(/estimateClass:\s*"Class 5/.test(body),
-    'an inline price is a concept screen and must be labelled Class 5');
-  assert(/accuracyLow:\s*-0\.30/.test(body) && /accuracyHigh:\s*0\.50/.test(body),
-    'the Class 5 accuracy band is missing');
+  var body = html.slice(html.indexOf('function computeEstimate'), html.indexOf('function persistEstimate'));
+  assert(/!est.accuracy/.test(body) && /!est.estimateClass/.test(body), 'reject incomplete responses');
+  assert(/getIdToken/.test(body) && /Bearer /.test(body) && /api\/price-site/.test(body), 'authenticated server pricing');
+  assert(!/CM.price|Class 5|accuracyLow:/.test(body), 'no local pricing or classification fallback');
 });
 
 ok('the packet carries the estimate, class and band together', function () {
@@ -136,13 +134,11 @@ ok('the packet carries the estimate, class and band together', function () {
     });
 });
 
-ok('exporting a packet prices the site if nobody pressed the button',
-  function () {
-    var dp = html.slice(html.indexOf('function downloadPacket'));
-    dp = dp.slice(0, dp.indexOf('\n  /*'));
-    assert(/if \(!_estimates\[r\.id\]\)[\s\S]{0,200}computeEstimate\(r\)/.test(dp),
-      'downloadPacket does not price an unpriced site');
-  });
+ok('exporting a packet waits for server pricing', function () {
+  var dp = html.slice(html.indexOf('function downloadPacket'), html.indexOf('  /* ── COST THIS SITE'));
+  assert(/priceInPlace\(r\).then/.test(dp), 'await pricing before export');
+  assert(/if\(est\) downloadPacket\(r\)/.test(dp), 'do not export on failed pricing');
+});
 
 ok('the packet path cannot recurse back into itself', function () {
   var ce = html.slice(html.indexOf('function computeEstimate'));
@@ -172,11 +168,9 @@ ok('the packet path cannot recurse back into itself', function () {
 });
 
 ok('the site finder prices from the org quote, not just the generic rate', function () {
-  assert(/ratesFromVendor\(_orgPricing\)/.test(html),
-    'computeEstimate does not pass the organisation\'s supplier pricing, so the '
-    + 'same site prices differently here than in the estimator');
-  assert(/toolData"\)\.doc\(ORG\)/.test(html),
-    'nothing reads toolData/{orgId}/tools/costestimator');
+  var body = html.slice(html.indexOf('function computeEstimate'), html.indexOf('function persistEstimate'));
+  assert(/api\/price-site/.test(body), 'server resolves the org quote');
+  assert(!/ratesFromVendor|dcPerKwh|vendorTier/.test(html), 'no client rate conversion or evidence classification');
 });
 
 ok('the finder never WRITES the org pricing', function () {
@@ -350,16 +344,12 @@ ok('the site finder takes its duration default from the shared model', function 
 });
 
 ok('the model exports the default AFTER declaring it', function () {
-  /* It was assigned onto the exports object above its own `var`, where
-     hoisting gives the name but not the value — so it exported undefined
-     and every caller fell back to its own literal, which is the drift this
-     shared file exists to stop. */
-  var src = fs.readFileSync(path.join(ROOT, 'omega-cost-model.js'), 'utf8');
-  assert(src.indexOf('var DEFAULT_HOURS') < src.indexOf('M.DEFAULT_HOURS'),
-    'DEFAULT_HOURS is exported before it is assigned');
   global.window = global;
-  var M2 = require(path.join(ROOT, 'omega-cost-model.js'));
-  assert.strictEqual(M2.DEFAULT_HOURS, 4, 'the exported default is ' + M2.DEFAULT_HOURS);
+  var metadata = require(path.join(ROOT, 'omega-cost-model.js'));
+  assert.strictEqual(metadata.DEFAULT_HOURS, M.DEFAULT_HOURS);
+  assert.strictEqual(metadata.price, undefined);
+  assert.strictEqual(metadata.MODEL, undefined);
+  assert.strictEqual(metadata.ratesFromVendor, undefined);
 });
 
 /* ── WHAT COULD ACTUALLY GO HERE ──────────────────────────────────────
@@ -434,10 +424,13 @@ ok('the recommendation is right-sized, not maximised', function () {
      closest to the default duration; the maximum survives as a note. */
   var fn = html.slice(html.indexOf('function fitOptions(r)'));
   fn = fn.slice(0, fn.indexOf('function mergeOpt'));
-  assert(/var n = Math\.round\(targetKwh \/ unit\)/.test(fn),
-    'units are still sized against the ceiling rather than the target');
-  assert(/Math\.abs\(a\.kwh - targetKwh\)/.test(fn),
-    'the list is not ordered by closeness to the target');
+  /* The rule now lives in OmegaBessCatalog.fit (scripts/test-catalog-fit.js
+     proves it): sized to the TARGET, fewest units first, then closest. A
+     3 MWh need is one 3.4 MWh container, not four cabinets. */
+  assert(/OmegaBessCatalog\.fit\(prods, pick\.kw, targetKwh/.test(fn),
+    'the pick is not sized against the target through the shared fit rule');
+  assert(/\(a\.units \|\| 0\) !== \(b\.units \|\| 0\)/.test(fn) && /a\.ratio >= 1 \? a\.ratio - 1/.test(fn),
+    'the list is not ordered fewest units first, then closest to the target');
   assert(/biggest/.test(fn),
     'the maximum is no longer computed at all — it is still a real question');
 });
@@ -453,8 +446,8 @@ ok('the maximum is bounded, and says by what', function () {
   fn = fn.slice(0, fn.indexOf('function mergeOpt'));
   assert(/MAX_FIT_HOURS/.test(fn) && /MAX_FIT_UNITS/.test(fn),
     'the maximum is unbounded');
-  assert(/if \(n > MAX_FIT_UNITS\) n = MAX_FIT_UNITS/.test(fn),
-    'the unit cap is not applied, so the smallest product will always win');
+  assert(/maxUnits: MAX_FIT_UNITS/.test(fn),
+    'the unit cap is not handed to the fit rule, so the smallest product could tile its way in');
   assert(/biggest \|\| kMax > biggest\.kwh/.test(fn),
     'the largest configuration is not tracked, so the panel cannot answer '
     + '"how big could this go"');
@@ -501,18 +494,10 @@ ok('record arrays are read through a guard, never bare', function () {
     'a bare r.mine.length is back');
 });
 
-ok('the address lookup is normalised the same way every other record is',
-  function () {
-    /* Guarding derived fields one at a time is losing — the next field
-       added to the drawer breaks the lookup again. It goes through enrich()
-       now, so it has cst, claims, mine and whatever comes next. */
-    var seg = html.slice(html.indexOf('circ: v.state, sz: v.size, src: "lookup"'));
-    seg = seg.slice(0, 1600);
-    assert(/try \{ rec = enrich\(rec\); \}/.test(seg),
-      'the lookup record is still handed to the drawer without enrich()');
-    assert(/catch \(eEnrich\)/.test(seg),
-      'an enrich failure would take the whole lookup down');
-  });
+ok('the address lookup is normalised the same way every other record is', function () {
+  var seg = html.slice(html.indexOf('function showViability'), html.indexOf('function showViability') + 2400);
+  assert(/rec = enrich\(rec\)/.test(seg), 'lookup uses the common normalizer');
+});
 
 ok('the card names the battery that fits', function () {
   /* It reaches the card through the decision strip now — one surface
@@ -558,7 +543,7 @@ ok('the card carries a decision strip, not another score', function () {
      now, and a slice that swallows them made "v / 1000" in a money
      formatter read as a score calculation. */
   var fn = html.slice(html.indexOf('function decision(r)'));
-  fn = fn.slice(0, fn.indexOf('\n  var ITC_RATE'));
+  fn = fn.slice(0, fn.indexOf('\n  /* ═'));
   assert(/blockers\s*=\s*\[\]/.test(fn) && /opens\s*=\s*\[\]/.test(fn),
     'it does not separate blockers from open questions');
   assert(!/\bscore\b|\/\s*100\b/.test(fn),
@@ -612,16 +597,9 @@ ok('the next step is ONE action, chosen from what is missing', function () {
 });
 
 ok('NO state rebate is claimed for a commercial site', function () {
-  /* The only Illinois storage programme anywhere in this platform is ComEd
-     BESH at $300/kWh and it is RESIDENTIAL. Applied to a 5.4 MWh commercial
-     battery it would claim a $1.6M rebate against a $1.0M project. */
-  var dh = html.slice(html.indexOf('var ITC_RATE'));
-  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
-  assert(!/BESH|300\s*\/\s*kWh|inc_rate/.test(dh),
-    'a residential rebate is being applied to a commercial site');
-  assert(/ITC_RATE/.test(dh) && /\.short \|\|/.test(dh),
-    'the federal credit is shown without the condition that earns it — the '
-    + 'short-form condition from the value stack must reach the card');
+  var dh = html.slice(html.indexOf('function decisionHtml'), html.indexOf('function valueStackHtml'));
+  assert(/financial.incentives/.test(dh) && /\.short \|\|/.test(dh), 'show returned incentives and conditions');
+  assert(!/VS.incentives|ITC_RATE|rebatePerKwh/.test(dh), 'no browser incentive calculation');
 });
 
 ok('the AACE class keeps a plain-English twin', function () {
@@ -648,12 +626,10 @@ ok('the battery size shows whether or not a product is loaded', function () {
 });
 
 ok('the rebate and the shown size come from the same kWh', function () {
-  /* If these ever diverge the card prints a rebate against a battery it is
-     not displaying, which is the defect this replaced. */
-  var dh = html.slice(html.indexOf('function decisionHtml'));
-  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
-  assert(/kwhFit = fit \? fit\.kwh : est\.kwh/.test(dh),
-    'the rebate basis changed shape — re-check it matches the displayed size');
+  var request = html.slice(html.indexOf('function pricingRequest'), html.indexOf('function computeEstimate'));
+  assert(/hours:fit \? fit.hours/.test(request), 'price the selected product duration');
+  var dh = html.slice(html.indexOf('function decisionHtml'), html.indexOf('function valueStackHtml'));
+  assert(/financial.incentives/.test(dh), 'render incentives from the same server result');
 });
 
 ok('the confirmation folds instead of filling the card', function () {
@@ -722,5 +698,63 @@ ok('under a megawatt the card says kWh', function () {
     'a sub-megawatt battery is still rounded to MWh');
 });
 
-console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
-process.exit(fails ? 1 : 0);
+(async function testAsyncPricing() {
+  var vm = require('vm'), pending = [], saved = [], currentKw = 500, isSaved = true;
+  var user = {uid:'fixture-user', getIdToken:function(){return Promise.resolve('fixture-token');}};
+  var auth = {currentUser:user}, firebase = {auth:function(){return auth;}};
+  var host = {innerHTML:'', getAttribute:function(){return 'site:fixture';}};
+  var ctx = {window:{firebase:firebase, OmegaSiteSaves:{
+      isSaved:function(){return isSaved;},
+      patch:function(id, fields, cb){saved.push({id:id, fields:fields});cb(null, fields);}
+    }}, firebase:firebase, ORG:'tenant.example', ST:{sel:null},
+    _estimates:{}, COST_IN:'estimate', ASSUMED_KW:1000, ASSUMED_HOURS:4,
+    document:{getElementById:function(){return host;}},
+    sizePick:function(){return {kw:currentKw,hours:4};}, fitBest:function(){return {hours:6};},
+    render:function(){}, openDrawer:function(){}, renderCostBack:function(){}, esc:String,
+    fetch:function(url,options){return new Promise(function(resolve){pending.push({url:url,options:options,resolve:resolve});});}
+  };
+  vm.createContext(ctx);
+  var start = html.indexOf('  var _priceRequests = {}');
+  var end = html.indexOf('  /* The old route,', start);
+  assert(start >= 0 && end > start, 'async pricing functions are present');
+  vm.runInContext(html.slice(start,end),ctx);
+  var site = {id:'site:fixture',addr:'Fixture',feederId:'feeder',approx:false};
+  function response(kw){return {total:{lo:90,base:100,hi:120}, accuracy:{aace:5},
+    estimateClass:'Class 5',kw:kw,kwh:kw*6,hours:6,financial:{netCostUsd:75}};}
+  function resolve(index,body,ok){pending[index].resolve({ok:ok !== false,json:function(){return Promise.resolve(body);}});}
+  var first = ctx.priceInPlace(site);
+  assert.strictEqual(ctx.priceInPlace(site),first,'duplicate requests share the same promise');
+  await Promise.resolve();
+  assert.strictEqual(pending.length,1);
+  assert.strictEqual(pending[0].url,'/api/price-site');
+  assert.strictEqual(pending[0].options.headers.Authorization,'Bearer fixture-token');
+  assert.strictEqual(JSON.parse(pending[0].options.body).hours,6,'selected product duration reaches server');
+  resolve(0,response(500));
+  var estimate = await first;
+  assert.strictEqual(ctx._estimates[site.id],estimate);
+  assert.strictEqual(saved.length,1);
+  assert.strictEqual(saved[0].fields.estimate.financial.netCostUsd,75,'financial response persists unchanged');
+  var stale = ctx.priceInPlace(site);
+  await Promise.resolve(); currentKw = 750; resolve(1,response(500));
+  assert.strictEqual(await stale,null,'size changes discard late responses');
+  assert.strictEqual(saved.length,1,'stale responses are not persisted');
+  assert.strictEqual(ctx._priceRequests[site.id],undefined,'stale request does not block retries');
+  isSaved = false;
+  var unsaved = ctx.priceInPlace(site); await Promise.resolve(); resolve(2,response(750)); await unsaved;
+  assert.strictEqual(saved.length,1,'unsaved sites are not created implicitly');
+  var denied = ctx.priceInPlace(site); await Promise.resolve(); resolve(3,{error:'Access denied'},false);
+  assert.strictEqual(await denied,null);
+  assert.strictEqual(ctx._estimates[site.id],undefined,'denied pricing clears old totals');
+  assert(/Access denied/.test(host.innerHTML));
+  auth.currentUser = null;
+  assert.strictEqual(await ctx.priceInPlace(site),null);
+  assert.strictEqual(pending.length,4,'signed-out pricing never calls endpoint');
+  auth.currentUser = user;
+  var changedOrg = ctx.priceInPlace(site); await Promise.resolve(); ctx.ORG='other.example';
+  resolve(4,response(750));
+  assert.strictEqual(await changedOrg,null,'org changes discard in-flight pricing');
+  console.log('  ✓ actual async pricing: bearer auth, dedupe, saved response, stale-size rejection, failures and org changes');
+})().catch(function(e){fails++;console.error(e);}).then(function(){
+  console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
+  process.exit(fails ? 1 : 0);
+});

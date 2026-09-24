@@ -74,9 +74,13 @@ live authentication or tenant-isolation audit.
 5. Review plot-plan/one-line engineering, fencing, grounding, clearances,
    schematics and editable-PowerPoint output separately with an engineer.
    This pass did not validate every drawing generator or establish stamp readiness.
-6. `portals/finance/battery-sizer.html` is an older separate copy and was not
-   changed. Other legacy sizing engines and Grid Atlas's existing heuristic
-   scores still need consolidation; this package does not imply they were audited.
+6. ~~`portals/finance/battery-sizer.html` is an older separate copy and was not
+   changed.~~ **Resolved 2026-09-20.** That copy carried the whole sizing engine
+   inline and had drifted from the canonical tool (nameplate computed as
+   usable/DoD, omitting the discharge half of the round trip). The finance
+   hostnames now serve `/battery-sizer.html`; the file that remains is a
+   redirect. Grid Atlas's heuristic scores still need consolidation; this
+   package does not imply they were audited.
 
 OSM fiber filtering follows the project's
 [telecommunications tagging guidance](https://wiki.openstreetmap.org/wiki/Telecoms).

@@ -38,3 +38,9 @@ storage.rules
 firestore.indexes.json
 firebase.json
 admin/seed-plan.json
+tests/
+.fiber-cache/
+private-fiber/
+*.fiber-backup
+__pycache__/
+*.pyc

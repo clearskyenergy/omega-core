@@ -1,0 +1,2076 @@
+{
+  "builtAt": "2026-09-20T23:14:40.303Z",
+  "uniqueSegments": 30580,
+  "statesWithData": 41,
+  "categoryCounts": {
+    "existing": 8195,
+    "unknown": 20728,
+    "planned": 1644,
+    "inactive": 13
+  },
+  "rejectedGeometries": 26,
+  "overviewToleranceDegrees": 0.002,
+  "scope": "Partial public fiber-route inventory. Not all US cables. Metadata modification is not a field verification date. Published routes may be approximate. No building service, capacity, or path diversity is confirmed.",
+  "stateCountsNote": "Features crossing state boundaries appear in each intersected state; state counts are not additive.",
+  "states": [
+    {
+      "code": "AK",
+      "name": "Alaska",
+      "bbox": [
+        -178.217598399999,
+        51.5830325744919,
+        -129.99223528431,
+        71.4062354087129
+      ],
+      "segments": 1,
+      "counts": {
+        "existing": 1
+      },
+      "sources": [
+        "arcgis-31-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 725
+    },
+    {
+      "code": "AL",
+      "name": "Alabama",
+      "bbox": [
+        -88.4729519086738,
+        30.2336043062115,
+        -84.8940159139852,
+        35.0160336144193
+      ],
+      "segments": 114,
+      "counts": {
+        "unknown": 114
+      },
+      "sources": [
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 4910
+    },
+    {
+      "code": "AR",
+      "name": "Arkansas",
+      "bbox": [
+        -94.6172570924294,
+        33.010151574287,
+        -89.6454792021885,
+        36.4928111085285
+      ],
+      "segments": 0,
+      "counts": {},
+      "sources": [],
+      "coverage": "No bundled route geometry; fiber availability unknown",
+      "publishedLineParts": 0
+    },
+    {
+      "code": "AZ",
+      "name": "Arizona",
+      "bbox": [
+        -114.821761176173,
+        31.3356340208114,
+        -109.045615023362,
+        37.0039259765893
+      ],
+      "segments": 82,
+      "counts": {
+        "existing": 53,
+        "unknown": 14,
+        "planned": 15
+      },
+      "sources": [
+        "arcgis-40-0",
+        "arcgis-89-0",
+        "arcgis-32-1",
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 86
+    },
+    {
+      "code": "CA",
+      "name": "California",
+      "bbox": [
+        -124.392637919657,
+        32.5357813114211,
+        -114.125230481539,
+        42.0021917902511
+      ],
+      "segments": 255,
+      "counts": {
+        "unknown": 10,
+        "planned": 221,
+        "existing": 24
+      },
+      "sources": [
+        "arcgis-40-0",
+        "arcgis-32-1",
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 1049
+    },
+    {
+      "code": "CO",
+      "name": "Colorado",
+      "bbox": [
+        -109.055861085309,
+        36.9889938766449,
+        -102.037207582423,
+        41.0033750969831
+      ],
+      "segments": 16,
+      "counts": {
+        "unknown": 16
+      },
+      "sources": [
+        "arcgis-157-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 16
+    },
+    {
+      "code": "CT",
+      "name": "Connecticut",
+      "bbox": [
+        -73.7252376156291,
+        40.998392480859,
+        -71.7882488869174,
+        42.0474280099877
+      ],
+      "segments": 211,
+      "counts": {
+        "unknown": 211
+      },
+      "sources": [
+        "ct-norwalk-0",
+        "ct-norwalk-1",
+        "ct-norwalk-2"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 211
+    },
+    {
+      "code": "DC",
+      "name": "District of Columbia",
+      "bbox": [
+        -77.1223283253612,
+        38.7882339030724,
+        -76.9109046952054,
+        38.9935411857002
+      ],
+      "segments": 1,
+      "counts": {
+        "existing": 1
+      },
+      "sources": [
+        "arcgis-1-4"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 4
+    },
+    {
+      "code": "DE",
+      "name": "Delaware",
+      "bbox": [
+        -75.791094590963,
+        38.4496021903472,
+        -75.0456230143181,
+        39.8401190170001
+      ],
+      "segments": 0,
+      "counts": {},
+      "sources": [],
+      "coverage": "No bundled route geometry; fiber availability unknown",
+      "publishedLineParts": 0
+    },
+    {
+      "code": "FL",
+      "name": "Florida",
+      "bbox": [
+        -87.6257116073172,
+        24.9563763820178,
+        -80.0509108137256,
+        31.0031571978194
+      ],
+      "segments": 279,
+      "counts": {
+        "unknown": 279
+      },
+      "sources": [
+        "arcgis-227-1",
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 4711
+    },
+    {
+      "code": "GA",
+      "name": "Georgia",
+      "bbox": [
+        -85.6089601990358,
+        30.361291783362,
+        -80.8947535989577,
+        35.0003666741748
+      ],
+      "segments": 1682,
+      "counts": {
+        "unknown": 1682
+      },
+      "sources": [
+        "fna-member-routes-20260918",
+        "arcgis-292-0",
+        "ga-atlanta-16",
+        "ga-atlanta-17",
+        "ga-atlanta-18"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 65382
+    },
+    {
+      "code": "HI",
+      "name": "Hawaii",
+      "bbox": [
+        -160.24240619434,
+        18.9217863000002,
+        -154.791095975916,
+        22.229119880436
+      ],
+      "segments": 0,
+      "counts": {},
+      "sources": [],
+      "coverage": "No bundled route geometry; fiber availability unknown",
+      "publishedLineParts": 0
+    },
+    {
+      "code": "IA",
+      "name": "Iowa",
+      "bbox": [
+        -96.6407091978039,
+        40.3719465905536,
+        -90.1427967895934,
+        43.5014574178935
+      ],
+      "segments": 347,
+      "counts": {
+        "unknown": 346,
+        "existing": 1
+      },
+      "sources": [
+        "arcgis-196-2",
+        "arcgis-31-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 1508
+    },
+    {
+      "code": "ID",
+      "name": "Idaho",
+      "bbox": [
+        -117.236920874714,
+        41.9945994938346,
+        -111.04677118819,
+        48.9999504964449
+      ],
+      "segments": 0,
+      "counts": {},
+      "sources": [],
+      "coverage": "No bundled route geometry; fiber availability unknown",
+      "publishedLineParts": 0
+    },
+    {
+      "code": "IL",
+      "name": "Illinois",
+      "bbox": [
+        -91.5162840225478,
+        36.9868223031145,
+        -87.5079094805859,
+        42.5093636974558
+      ],
+      "segments": 466,
+      "counts": {
+        "existing": 1,
+        "unknown": 465
+      },
+      "sources": [
+        "arcgis-31-0",
+        "arcgis-180-1",
+        "arcgis-335-1",
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 18689
+    },
+    {
+      "code": "IN",
+      "name": "Indiana",
+      "bbox": [
+        -88.1014899039757,
+        37.7762242750731,
+        -84.7874460945035,
+        41.7655403181306
+      ],
+      "segments": 44,
+      "counts": {
+        "unknown": 35,
+        "existing": 9
+      },
+      "sources": [
+        "fna-member-routes-20260918",
+        "arcgis-229-5",
+        "arcgis-229-6"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 2509
+    },
+    {
+      "code": "KS",
+      "name": "Kansas",
+      "bbox": [
+        -102.051535595464,
+        36.988875711631,
+        -94.6012243120583,
+        40.0029878088467
+      ],
+      "segments": 866,
+      "counts": {
+        "unknown": 865,
+        "existing": 1
+      },
+      "sources": [
+        "arcgis-23-1",
+        "arcgis-23-2",
+        "arcgis-31-0",
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 3027
+    },
+    {
+      "code": "KY",
+      "name": "Kentucky",
+      "bbox": [
+        -89.5682311943027,
+        36.4965704240647,
+        -81.9595752176215,
+        39.1420637812888
+      ],
+      "segments": 9053,
+      "counts": {
+        "existing": 6266,
+        "planned": 314,
+        "unknown": 2473
+      },
+      "sources": [
+        "arcgis-229-5",
+        "arcgis-229-6",
+        "arcgis-229-8",
+        "arcgis-229-9",
+        "arcgis-229-13",
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 9440
+    },
+    {
+      "code": "LA",
+      "name": "Louisiana",
+      "bbox": [
+        -94.0417853926842,
+        28.939655700356,
+        -89.0218029112452,
+        33.0234224222938
+      ],
+      "segments": 6,
+      "counts": {
+        "unknown": 6
+      },
+      "sources": [
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 6
+    },
+    {
+      "code": "MA",
+      "name": "Massachusetts",
+      "bbox": [
+        -73.4988399760609,
+        41.2382796850886,
+        -69.9177798085378,
+        42.8868775018485
+      ],
+      "segments": 70,
+      "counts": {
+        "unknown": 59,
+        "planned": 11
+      },
+      "sources": [
+        "ma-cambridge-published-kmz"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 70
+    },
+    {
+      "code": "MD",
+      "name": "Maryland",
+      "bbox": [
+        -79.4898647776351,
+        37.9702549061934,
+        -75.0456230143181,
+        39.7254610846404
+      ],
+      "segments": 52,
+      "counts": {
+        "existing": 1,
+        "unknown": 51
+      },
+      "sources": [
+        "arcgis-1-4",
+        "arcgis-205-0",
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 292
+    },
+    {
+      "code": "ME",
+      "name": "Maine",
+      "bbox": [
+        -71.087509321293,
+        43.0910505868362,
+        -66.9692709999999,
+        47.4533344744111
+      ],
+      "segments": 33,
+      "counts": {
+        "unknown": 32,
+        "existing": 1
+      },
+      "sources": [
+        "arcgis-207-1",
+        "arcgis-31-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 2014
+    },
+    {
+      "code": "MI",
+      "name": "Michigan",
+      "bbox": [
+        -90.408199814443,
+        41.6974947798161,
+        -82.4198358214734,
+        48.1737953198208
+      ],
+      "segments": 65,
+      "counts": {
+        "unknown": 65
+      },
+      "sources": [
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 4517
+    },
+    {
+      "code": "MN",
+      "name": "Minnesota",
+      "bbox": [
+        -97.2294364115602,
+        43.4981021220612,
+        -89.5306731102759,
+        49.3717301117089
+      ],
+      "segments": 1754,
+      "counts": {
+        "existing": 1612,
+        "inactive": 13,
+        "planned": 79,
+        "unknown": 50
+      },
+      "sources": [
+        "arcgis-348-2"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 1754
+    },
+    {
+      "code": "MO",
+      "name": "Missouri",
+      "bbox": [
+        -95.7674795869065,
+        35.9896563973684,
+        -89.1050338194532,
+        40.6097843751778
+      ],
+      "segments": 0,
+      "counts": {},
+      "sources": [],
+      "coverage": "No bundled route geometry; fiber availability unknown",
+      "publishedLineParts": 0
+    },
+    {
+      "code": "MS",
+      "name": "Mississippi",
+      "bbox": [
+        -91.6436823813542,
+        30.1949352845583,
+        -88.090468698187,
+        35.0050415743045
+      ],
+      "segments": 5,
+      "counts": {
+        "unknown": 5
+      },
+      "sources": [
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 5
+    },
+    {
+      "code": "MT",
+      "name": "Montana",
+      "bbox": [
+        -116.063531302962,
+        44.3536397210074,
+        -104.043072320006,
+        49.000026700187
+      ],
+      "segments": 0,
+      "counts": {},
+      "sources": [],
+      "coverage": "No bundled route geometry; fiber availability unknown",
+      "publishedLineParts": 0
+    },
+    {
+      "code": "NC",
+      "name": "North Carolina",
+      "bbox": [
+        -84.3237735212001,
+        33.8821646191216,
+        -75.4565804187069,
+        36.589767807818
+      ],
+      "segments": 498,
+      "counts": {
+        "unknown": 497,
+        "existing": 1
+      },
+      "sources": [
+        "fna-member-routes-20260918",
+        "arcgis-1-3",
+        "arcgis-1-4",
+        "arcgis-164-0",
+        "arcgis-164-1",
+        "arcgis-164-2",
+        "arcgis-164-3",
+        "arcgis-201-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 1933
+    },
+    {
+      "code": "ND",
+      "name": "North Dakota",
+      "bbox": [
+        -104.06299107679,
+        45.9308221984894,
+        -96.5519310094414,
+        49.000026700187
+      ],
+      "segments": 11,
+      "counts": {
+        "unknown": 11
+      },
+      "sources": [
+        "arcgis-184-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 15
+    },
+    {
+      "code": "NE",
+      "name": "Nebraska",
+      "bbox": [
+        -104.056219408163,
+        39.9925949860566,
+        -95.3086972113208,
+        43.0030623064677
+      ],
+      "segments": 0,
+      "counts": {},
+      "sources": [],
+      "coverage": "No bundled route geometry; fiber availability unknown",
+      "publishedLineParts": 0
+    },
+    {
+      "code": "NH",
+      "name": "New Hampshire",
+      "bbox": [
+        -72.5534284815135,
+        42.6986034910061,
+        -70.7341388931027,
+        45.301469220901
+      ],
+      "segments": 1,
+      "counts": {
+        "existing": 1
+      },
+      "sources": [
+        "arcgis-31-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 1982
+    },
+    {
+      "code": "NJ",
+      "name": "New Jersey",
+      "bbox": [
+        -75.5702341815656,
+        38.9566824044022,
+        -73.8961483111507,
+        41.3505731256749
+      ],
+      "segments": 3,
+      "counts": {
+        "unknown": 3
+      },
+      "sources": [
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 4
+    },
+    {
+      "code": "NM",
+      "name": "New Mexico",
+      "bbox": [
+        -109.051346207857,
+        31.3434530117045,
+        -102.997400997005,
+        36.9997602065596
+      ],
+      "segments": 6,
+      "counts": {
+        "unknown": 5,
+        "existing": 1
+      },
+      "sources": [
+        "fna-member-routes-20260918",
+        "arcgis-31-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 215
+    },
+    {
+      "code": "NV",
+      "name": "Nevada",
+      "bbox": [
+        -119.996324683812,
+        34.9989143997324,
+        -114.03739212206,
+        41.996637102119
+      ],
+      "segments": 1,
+      "counts": {
+        "existing": 1
+      },
+      "sources": [
+        "arcgis-32-1"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 5
+    },
+    {
+      "code": "NY",
+      "name": "New York",
+      "bbox": [
+        -79.7632350047347,
+        40.5060033225528,
+        -71.8699866990999,
+        45.0061387952343
+      ],
+      "segments": 44,
+      "counts": {
+        "unknown": 44
+      },
+      "sources": [
+        "fna-member-routes-20260918",
+        "ny-stn-nichols-public"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 44
+    },
+    {
+      "code": "OH",
+      "name": "Ohio",
+      "bbox": [
+        -84.8120705230164,
+        38.4005110248174,
+        -80.519996183897,
+        41.9868720924833
+      ],
+      "segments": 514,
+      "counts": {
+        "unknown": 503,
+        "existing": 11
+      },
+      "sources": [
+        "fna-member-routes-20260918",
+        "arcgis-229-5",
+        "arcgis-229-13",
+        "arcgis-328-1",
+        "arcgis-31-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 1549
+    },
+    {
+      "code": "OK",
+      "name": "Oklahoma",
+      "bbox": [
+        -102.99770949006,
+        33.6211366008172,
+        -94.4285520201746,
+        37.0014780803124
+      ],
+      "segments": 3,
+      "counts": {
+        "unknown": 3
+      },
+      "sources": [
+        "logix-public-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 6
+    },
+    {
+      "code": "OR",
+      "name": "Oregon",
+      "bbox": [
+        -124.5596168958,
+        41.9876722058729,
+        -116.470418774794,
+        46.2360915917563
+      ],
+      "segments": 5073,
+      "counts": {
+        "existing": 1,
+        "planned": 1,
+        "unknown": 5071
+      },
+      "sources": [
+        "arcgis-32-1",
+        "arcgis-372-2",
+        "arcgis-372-3"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 5080
+    },
+    {
+      "code": "PA",
+      "name": "Pennsylvania",
+      "bbox": [
+        -80.5260451861736,
+        39.7193136028847,
+        -74.7000624077059,
+        42.2673270918247
+      ],
+      "segments": 80,
+      "counts": {
+        "unknown": 80
+      },
+      "sources": [
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 559
+    },
+    {
+      "code": "RI",
+      "name": "Rhode Island",
+      "bbox": [
+        -71.8666783895314,
+        41.3227696904759,
+        -71.1171326842024,
+        42.013713319453
+      ],
+      "segments": 0,
+      "counts": {},
+      "sources": [],
+      "coverage": "No bundled route geometry; fiber availability unknown",
+      "publishedLineParts": 0
+    },
+    {
+      "code": "SC",
+      "name": "South Carolina",
+      "bbox": [
+        -83.3506852005262,
+        32.0681738068878,
+        -78.5794534908617,
+        35.2083565771825
+      ],
+      "segments": 652,
+      "counts": {
+        "unknown": 652
+      },
+      "sources": [
+        "fna-member-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 49717
+    },
+    {
+      "code": "SD",
+      "name": "South Dakota",
+      "bbox": [
+        -104.061036199557,
+        42.488459213409,
+        -96.4393947115182,
+        45.9435472909404
+      ],
+      "segments": 1,
+      "counts": {
+        "existing": 1
+      },
+      "sources": [
+        "arcgis-31-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 1161
+    },
+    {
+      "code": "TN",
+      "name": "Tennessee",
+      "bbox": [
+        -90.3054483152986,
+        34.9887598237198,
+        -81.652272204981,
+        36.6796831984548
+      ],
+      "segments": 527,
+      "counts": {
+        "unknown": 527
+      },
+      "sources": [
+        "fna-member-routes-20260918",
+        "arcgis-216-4"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 6532
+    },
+    {
+      "code": "TX",
+      "name": "Texas",
+      "bbox": [
+        -106.650061910463,
+        25.8455573891403,
+        -93.5073889086175,
+        36.4939127214279
+      ],
+      "segments": 1045,
+      "counts": {
+        "unknown": 1043,
+        "existing": 2
+      },
+      "sources": [
+        "fna-member-routes-20260918",
+        "arcgis-31-0",
+        "arcgis-210-0",
+        "arcgis-219-4",
+        "logix-public-routes-20260918"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 16585
+    },
+    {
+      "code": "UT",
+      "name": "Utah",
+      "bbox": [
+        -114.047273017333,
+        36.9917462770659,
+        -109.043206394547,
+        42.0023005787338
+      ],
+      "segments": 0,
+      "counts": {},
+      "sources": [],
+      "coverage": "No bundled route geometry; fiber availability unknown",
+      "publishedLineParts": 0
+    },
+    {
+      "code": "VA",
+      "name": "Virginia",
+      "bbox": [
+        -83.6751767934624,
+        36.5416235165217,
+        -75.2422192922971,
+        39.4569982023955
+      ],
+      "segments": 4484,
+      "counts": {
+        "existing": 209,
+        "unknown": 4263,
+        "planned": 12
+      },
+      "sources": [
+        "arcgis-1-4",
+        "fna-member-routes-20260918",
+        "arcgis-1-3",
+        "arcgis-1-2",
+        "arcgis-5-0",
+        "arcgis-248-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 10717
+    },
+    {
+      "code": "VT",
+      "name": "Vermont",
+      "bbox": [
+        -73.4360006919088,
+        42.7258525193745,
+        -71.505372307751,
+        45.0133516788656
+      ],
+      "segments": 0,
+      "counts": {},
+      "sources": [],
+      "coverage": "No bundled route geometry; fiber availability unknown",
+      "publishedLineParts": 0
+    },
+    {
+      "code": "WA",
+      "name": "Washington",
+      "bbox": [
+        -124.732769825561,
+        45.5430927929256,
+        -116.919132413661,
+        48.9999312771463
+      ],
+      "segments": 1668,
+      "counts": {
+        "unknown": 675,
+        "planned": 993
+      },
+      "sources": [
+        "arcgis-20-20",
+        "arcgis-20-21",
+        "arcgis-128-0",
+        "arcgis-240-0",
+        "arcgis-355-4",
+        "arcgis-96-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 1679
+    },
+    {
+      "code": "WI",
+      "name": "Wisconsin",
+      "bbox": [
+        -92.8853973886457,
+        42.4891528176935,
+        -86.9677122910037,
+        46.952479499975
+      ],
+      "segments": 571,
+      "counts": {
+        "unknown": 571
+      },
+      "sources": [
+        "arcgis-94-5"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 571
+    },
+    {
+      "code": "WV",
+      "name": "West Virginia",
+      "bbox": [
+        -82.6471582149501,
+        37.2049100049074,
+        -77.7274675250574,
+        40.6372032171876
+      ],
+      "segments": 145,
+      "counts": {
+        "existing": 15,
+        "unknown": 130
+      },
+      "sources": [
+        "arcgis-229-5",
+        "arcgis-229-13",
+        "fna-member-routes-20260918",
+        "arcgis-31-0",
+        "arcgis-229-6"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 3759
+    },
+    {
+      "code": "WY",
+      "name": "Wyoming",
+      "bbox": [
+        -111.053428577106,
+        40.9942891865009,
+        -104.051705514988,
+        45.002792875933
+      ],
+      "segments": 1,
+      "counts": {
+        "existing": 1
+      },
+      "sources": [
+        "arcgis-31-0"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 75
+    }
+  ],
+  "sources": [
+    {
+      "id": "arcgis-1-2",
+      "name": "NTIA Grant Shapefiles_MBC — Proposed_NTIA_Fiber",
+      "url": "https://services8.arcgis.com/JYmjBB1HUy1BkQMb/arcgis/rest/services/NTIA_Grant_Shapefiles_MBC/FeatureServer/2",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=5adb010ed6ab4302affa45a522f3c723",
+      "publisher": "MBC.Admin",
+      "itemModified": "2024-12-03T14:51:46+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Planned",
+      "count": 12,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:23.855770+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1733235305943,
+      "includedFeatures": 12
+    },
+    {
+      "id": "arcgis-1-3",
+      "name": "NTIA Grant Shapefiles_MBC — MBC_Existing_Fiber",
+      "url": "https://services8.arcgis.com/JYmjBB1HUy1BkQMb/arcgis/rest/services/NTIA_Grant_Shapefiles_MBC/FeatureServer/3",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=5adb010ed6ab4302affa45a522f3c723",
+      "publisher": "MBC.Admin",
+      "itemModified": "2024-12-03T14:51:46+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Existing (publisher reported)",
+      "count": 3706,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:43:12.397381+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1733235306397,
+      "includedFeatures": 3703
+    },
+    {
+      "id": "arcgis-1-4",
+      "name": "NTIA Grant Shapefiles_MBC — 3rd_Party_Leased_Fiber",
+      "url": "https://services8.arcgis.com/JYmjBB1HUy1BkQMb/arcgis/rest/services/NTIA_Grant_Shapefiles_MBC/FeatureServer/4",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=5adb010ed6ab4302affa45a522f3c723",
+      "publisher": "MBC.Admin",
+      "itemModified": "2024-12-03T14:51:46+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Existing (publisher reported)",
+      "count": 214,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:24.145956+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1744059039976,
+      "includedFeatures": 209
+    },
+    {
+      "id": "arcgis-5-0",
+      "name": "MBC Fiber in Franklin Co — MBC_Fiber_in_Franklin_Co",
+      "url": "https://services9.arcgis.com/AzdpqVmJ5GjGWCoI/arcgis/rest/services/MBC_Fiber_in_Franklin_Co/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=e81a6a57582e4e7484498d3fbe0bb997",
+      "publisher": "FC.GIS",
+      "itemModified": "2019-03-14T17:10:46+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 208,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:26.400925+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1552583791886,
+      "includedFeatures": 208
+    },
+    {
+      "id": "arcgis-20-20",
+      "name": "FiberWebMapAGOL — Fiber Backbone",
+      "url": "https://services1.arcgis.com/ipyDbwUQfysOAPQq/arcgis/rest/services/FiberWebMapAGOL/FeatureServer/20",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=63c67556a5594b65b86e4d5a3644ea93",
+      "publisher": "rvaughan_SkagitCounty",
+      "itemModified": "2020-11-20T23:04:53+00:00",
+      "license": "<div style='text-align: justify;'>Maps and Data are created from available public records and existing map and data sources, not from field surveys.  Maps and Data from all sources may have been adjusted to achieve a &quot;best fit&quot; registration to Skagit County Tax Parcel Maps and Data.  While great care is taken in this process, maps and data from different sources rarely agree as to the precise location of geographic features. The relative positioning of map and data features to one another results from combining different sources without field &quot;ground truthing.&quot; Maps and data features are approximate and are not necessarily accurate to surveying or engineering standards. Map and Data errors can be as great as 300 feet in some areas. Maps and Data should be used as a resource only, and any such use of these products with respect to accuracy and precision shall be the sole responsibility of the user.</div><div style='text-align: justify;'><br /></div><div style='text-align: justify;'><a href='https://www.skagitcounty.net/Departments/Home/draftTermsandConditions.htm#Maps' rel='nofollow ugc' target='_blank'>Skagit County Terms and Use</a></div>",
+      "description": "Fiber Optic Network Data.\nThis is in testing... Data has not been verified.\n\nThe Skagit County Fiber data and maps are a representation of known fiber networks from various partners in Skagit County. These data and maps are intended for use in a \"Skagit County Fiber Story Map\" that was created for the Fiber Optic Connectivity in Skagit County Project, and various agency partners to view. Data sources vary and have not been field verified by Skagit County.",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 87,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:22.505516+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1605911654070,
+      "includedFeatures": 84
+    },
+    {
+      "id": "arcgis-20-21",
+      "name": "FiberWebMapAGOL — Fiber Distribution",
+      "url": "https://services1.arcgis.com/ipyDbwUQfysOAPQq/arcgis/rest/services/FiberWebMapAGOL/FeatureServer/21",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=63c67556a5594b65b86e4d5a3644ea93",
+      "publisher": "rvaughan_SkagitCounty",
+      "itemModified": "2020-11-20T23:04:53+00:00",
+      "license": "<div style='text-align: justify;'>Maps and Data are created from available public records and existing map and data sources, not from field surveys.  Maps and Data from all sources may have been adjusted to achieve a &quot;best fit&quot; registration to Skagit County Tax Parcel Maps and Data.  While great care is taken in this process, maps and data from different sources rarely agree as to the precise location of geographic features. The relative positioning of map and data features to one another results from combining different sources without field &quot;ground truthing.&quot; Maps and data features are approximate and are not necessarily accurate to surveying or engineering standards. Map and Data errors can be as great as 300 feet in some areas. Maps and Data should be used as a resource only, and any such use of these products with respect to accuracy and precision shall be the sole responsibility of the user.</div><div style='text-align: justify;'><br /></div><div style='text-align: justify;'><a href='https://www.skagitcounty.net/Departments/Home/draftTermsandConditions.htm#Maps' rel='nofollow ugc' target='_blank'>Skagit County Terms and Use</a></div>",
+      "description": "Fiber Optic Network Data.\nThis is in testing... Data has not been verified.\n\nThe Skagit County Fiber data and maps are a representation of known fiber networks from various partners in Skagit County. These data and maps are intended for use in a \"Skagit County Fiber Story Map\" that was created for the Fiber Optic Connectivity in Skagit County Project, and various agency partners to view. Data sources vary and have not been field verified by Skagit County.",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 206,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:35.752080+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1605911654070,
+      "includedFeatures": 206
+    },
+    {
+      "id": "arcgis-23-1",
+      "name": "Fiber_BackBone — UGBackbone",
+      "url": "https://services5.arcgis.com/Ox3HYmIeiVBmWWrQ/arcgis/rest/services/Fiber_BackBone/FeatureServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=31633e99ae384a3ea45cd2fe7773c3c2",
+      "publisher": "gardnerkansas",
+      "itemModified": "2018-05-02T20:09:15+00:00",
+      "license": "Fiber Backbone",
+      "description": "Fiber Backbone",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 69,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:36.373285+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1525291747866,
+      "includedFeatures": 69
+    },
+    {
+      "id": "arcgis-23-2",
+      "name": "Fiber_BackBone — Fiber Backbone (Approx 31 Miles)",
+      "url": "https://services5.arcgis.com/Ox3HYmIeiVBmWWrQ/arcgis/rest/services/Fiber_BackBone/FeatureServer/2",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=31633e99ae384a3ea45cd2fe7773c3c2",
+      "publisher": "gardnerkansas",
+      "itemModified": "2018-05-02T20:09:15+00:00",
+      "license": "Fiber Backbone",
+      "description": "Fiber Backbone",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 782,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:49.784947+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1525291748413,
+      "includedFeatures": 781
+    },
+    {
+      "id": "arcgis-40-0",
+      "name": "Fiber — Fiber",
+      "url": "https://services1.arcgis.com/XAiBIVuto7zeZj1B/arcgis/rest/services/Fiber/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=0e46cd56db034f9e91d3468961eefc94",
+      "publisher": "SThompson@azdot.gov_adot",
+      "itemModified": "2026-06-15T16:18:09+00:00",
+      "license": "<div style='text-align:Left;'><p style='font-size:16ptmargin:7 0 7 0;'><span><span>This shapefile is a graphic representation of the locations of the Arizona Department of Transportation fiber. There may be both revisions and corrections to the GIS representation without notice. The Arizona Department of Transportation makes no warranties, implied or expressed, with respect to the accuracy of, or the use of, this data for any specific purpose. Users are required to make their own assessment of the data for any specific use.</span></span></p><div><p><span /></p></div></div>",
+      "description": "<div style='text-align:Left;'><div><div><p><span>The ADOT Broadband Office is responsible for administering the agency broadband program. Their goals are to Reduce Barriers, Maximize Resource Sharing and ITS (Intelligent Transportation Systems) Opportunities, and to Assist Statewide Broadband Initiatives to Expand Broadband and Connect AZ! The ADOT Broadband Office is committed to providing professional and quality service to the Department and its Customers, consistent with the Department’s goals and objectives in meeting the transportation needs of the State of Arizona.</span></p><p><span>Current broadband projects include I-17, I-19 &amp; I-40. These projects are designed to be open-access, middle-mile broadband projects. Duraline armored 7-way multi-duct conduit is used, along with 3 pull boxes every 3,000 feet and a node building approximately every 50 miles. A neutral, third-party provider known as the OMC (Operate-Maintain-Commercialize) vendor, will be responsible for leasing fiber and ducts along the routes.</span></p><p><span>Contact the Broadband Office by email: broadband@azdot.gov</span></p><p><span>Visit https://azdot.gov/business/adot-broadband-office for current information and contacts.</span></p></div></div></div>",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 54,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:36.281963+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1756249538720,
+      "includedFeatures": 54
+    },
+    {
+      "id": "arcgis-89-0",
+      "name": "Pima County Regional Middle Mile Project — PCRMMP_FiberRoute_20251218",
+      "url": "https://services2.arcgis.com/UTBp78iglGpbqp1B/arcgis/rest/services/Pima_County_Regional_Middle_Mile_Project/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=5e201109c2244997b312cd69005dab4c",
+      "publisher": "david.shafer@pima.gov_Pima",
+      "itemModified": "2026-01-14T14:56:05+00:00",
+      "license": "<p><span style='background-color:rgb(255,255,255); color:rgb(74,74,74); font-family:&quot;Avenir Next&quot;, Avenir, &quot;Helvetica Neue&quot;, sans-serif; font-size:16px;'><span style='border:0px solid currentcolor; box-sizing:border-box; font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; line-height:1.5; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>S</span></span><span style='background-color:rgb(255,255,255); color:rgb(74,74,74); font-family:&quot;Avenir Next&quot;, Avenir, &quot;Helvetica Neue&quot;, sans-serif; font-size:12pt;'><span style='border:0px solid currentcolor; box-sizing:border-box; font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; line-height:1.5; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>ubject to Pima County Information Technology Department&nbsp;</span></span><a style='background-color:rgb(255, 255, 255); border:0px solid currentcolor; box-sizing:border-box; color:rgb(0, 97, 155); font-family:&quot;Avenir Next&quot;, Avenir, &quot;Helvetica Neue&quot;, sans-serif; font-size:12pt; font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; line-height:1.5; text-align:start; text-decoration:none; text-indent:0px; text-transform:none; word-spacing:0px;' target='_blank' href='https://www.pima.gov/1993/ITD-GIS-Disclaimer-Use-Restrictions' rel='nofollow ugc noopener noreferrer'>GIS Disclaimer and Use Restrictions</a><span style='background-color:rgb(255,255,255); color:rgb(74,74,74); font-family:&quot;Avenir Next&quot;, Avenir, &quot;Helvetica Neue&quot;, sans-serif; font-size:12pt;'><span style='border:0px solid currentcolor; box-sizing:border-box; font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; line-height:1.5; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>.</span></span></p><p>This dataset was prepared by Pima County using funds under award 04-40-MM588 from the National Telecommunications and Information Administration (NTIA), U.S. Department of Commerce (DOC). The statements, findings, conclusions, and recommendations are those of the authors and do not necessarily reflect the views of the NTIA or DOC.</p>",
+      "description": "<p>This hosted feature layer contains multiple sublayers developed to support planning, environmental review, and public communication for the Pima County Regional Middle Mile broadband infrastructure project. The service includes: (1) an approximate proposed fiber route, (2) the Environmental Assessment (EA) study area used to evaluate potential environmental and cultural impacts, and (3) a 25-mile buffer around the route.</p><p>All datasets are intended for high-level visualization and public information only. The geometries shown are approximate and subject to change as project planning, engineering, permitting, and construction progress. This service does not represent final design alignments, surveyed locations, or legally binding project boundaries.</p><p>Coordinate system: NAD 1983 HARN StatePlane Arizona Central FIPS 0202 (Intl Feet)</p>",
+      "layerDescription": "This layer represents the approximate alignment of the proposed Pima County Regional Middle Mile Project fiber optic deployment. The route was developed based on environmental and planning considerations, and this layer is intended for general reference and public information purposes only. The alignment is subject to change as engineering design, permitting, and construction progress. This dataset does not represent final construction drawings or surveyed locations.Date of last update: 13 January 2026~/ODI/120007/120007.aprx",
+      "status": "Planned; approximate",
+      "count": 14,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:37.185917+00:00",
+      "copyrightText": "Pima County Information Technology Department",
+      "layerLastEditDate": 1772118979619,
+      "includedFeatures": 14
+    },
+    {
+      "id": "arcgis-128-0",
+      "name": "NoaNet Middle Mile — NoaNet_Middle_Mile",
+      "url": "https://services8.arcgis.com/M6FVSymJ2XsnL91N/arcgis/rest/services/NoaNet_Middle_Mile/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=dfb9983900a74a19ac42d9d83c4fbf5d",
+      "publisher": "kira.nelson@noanet.net_NoaNet",
+      "itemModified": "2026-01-21T19:59:03+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 9,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:48.063089+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1659466489335,
+      "includedFeatures": 9
+    },
+    {
+      "id": "arcgis-157-0",
+      "name": "Fruita Fiber Optic Lines — Fruita_Fiber_Optic_Lines",
+      "url": "https://services8.arcgis.com/EHbirLYcjMmLybPA/arcgis/rest/services/Fruita_Fiber_Optic_Lines/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=8d1a479cc7d840118a062930e8a3acd0",
+      "publisher": "fruita_GIS",
+      "itemModified": "2025-10-30T14:54:47+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 16,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:48.122140+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1761836406604,
+      "includedFeatures": 16
+    },
+    {
+      "id": "arcgis-164-0",
+      "name": "Fiber_Layer_AGOL — Windstream Fiber",
+      "url": "https://services2.arcgis.com/WbGEgSzGTEPg4fr6/arcgis/rest/services/Fiber_Layer_AGOL/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=cd3289036f35482b97b09046af59d24f",
+      "publisher": "GIS_Admin_statesvillegis",
+      "itemModified": "2023-12-22T14:55:19+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 19,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:48.187051+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1703256917521,
+      "includedFeatures": 19
+    },
+    {
+      "id": "arcgis-164-1",
+      "name": "Fiber_Layer_AGOL — Statesville_Fiber_Optic_Cable_Ring",
+      "url": "https://services2.arcgis.com/WbGEgSzGTEPg4fr6/arcgis/rest/services/Fiber_Layer_AGOL/FeatureServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=cd3289036f35482b97b09046af59d24f",
+      "publisher": "GIS_Admin_statesvillegis",
+      "itemModified": "2023-12-22T14:55:19+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 63,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:36:48.513926+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1785425855483,
+      "includedFeatures": 63
+    },
+    {
+      "id": "arcgis-164-2",
+      "name": "Fiber_Layer_AGOL — Statesville_Fiber_Extras",
+      "url": "https://services2.arcgis.com/WbGEgSzGTEPg4fr6/arcgis/rest/services/Fiber_Layer_AGOL/FeatureServer/2",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=cd3289036f35482b97b09046af59d24f",
+      "publisher": "GIS_Admin_statesvillegis",
+      "itemModified": "2023-12-22T14:55:19+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 180,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:01.936831+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1778164544850,
+      "includedFeatures": 179
+    },
+    {
+      "id": "arcgis-164-3",
+      "name": "Fiber_Layer_AGOL — Conterra_Fiber",
+      "url": "https://services2.arcgis.com/WbGEgSzGTEPg4fr6/arcgis/rest/services/Fiber_Layer_AGOL/FeatureServer/3",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=cd3289036f35482b97b09046af59d24f",
+      "publisher": "GIS_Admin_statesvillegis",
+      "itemModified": "2023-12-22T14:55:19+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 67,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:02.056547+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1703256917521,
+      "includedFeatures": 62
+    },
+    {
+      "id": "arcgis-180-1",
+      "name": "FiberInfrastructure — Fiber Optic Cable",
+      "url": "https://maps.decaturil.gov/arcgis/rest/services/PublicWorks/FiberInfrastructure/MapServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=ebce6c41af8141c0990be174e86313c4",
+      "publisher": "decaturilgis",
+      "itemModified": "2024-07-30T20:09:55+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "Fiber optic network asset data in the City of Decatur, IL",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 249,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:08.837029+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": null,
+      "includedFeatures": 240
+    },
+    {
+      "id": "arcgis-184-0",
+      "name": "City Owned Fiber Cable — City_Owned_Fiber_Cable",
+      "url": "https://services2.arcgis.com/cEct75q6PZi92VC0/arcgis/rest/services/City_Owned_Fiber_Cable/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=79e5d54348d1452e921d27d5c554996e",
+      "publisher": "giswill",
+      "itemModified": "2024-05-23T20:09:20+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 11,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:01.742851+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1716494962354,
+      "includedFeatures": 11
+    },
+    {
+      "id": "arcgis-196-2",
+      "name": "Fiber view — Fiber Optic Line",
+      "url": "https://services2.arcgis.com/8xg0ntvPHd0DEjki/arcgis/rest/services/Fiber_view/FeatureServer/2",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=31aeb20846334e60a44f755c09ba05f8",
+      "publisher": "StormLake",
+      "itemModified": "2025-07-29T20:18:53+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 486,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:09.122916+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1788889460688,
+      "includedFeatures": 346
+    },
+    {
+      "id": "arcgis-201-0",
+      "name": "E_FiberOptic — E_FiberOptic",
+      "url": "https://services5.arcgis.com/oHyVM17u2FMyV4oB/arcgis/rest/services/E_FiberOptic/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=4964cc10127f4dec9cfd40f2a1c1f539",
+      "publisher": "thomas.vogel_KDPS",
+      "itemModified": "2025-03-17T20:41:57+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "Electric Fiber Optic L:ine. Location, Information",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 30,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:16.516886+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1651600514567,
+      "includedFeatures": 30
+    },
+    {
+      "id": "arcgis-205-0",
+      "name": "Fiber_Optics — IT_Fiber",
+      "url": "https://services6.arcgis.com/M2dyOQipFC1IggF3/arcgis/rest/services/requested_data_gdb/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=b95972e7353b432d8ea6102310cf7a12",
+      "publisher": "nstephens@carolinemd.org_CCMD",
+      "itemModified": "2025-11-14T14:19:51+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "&lt;p&gt;Used in Penny's Map&lt;/p&gt;",
+      "status": "Unknown",
+      "count": 36,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:15.036412+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1763129969727,
+      "includedFeatures": 33
+    },
+    {
+      "id": "arcgis-207-1",
+      "name": "COA Fiber Optic Network — Fiber Optic Network",
+      "url": "https://services1.arcgis.com/0EOqWPtpCmgQr2ay/arcgis/rest/services/COA_Utilities/FeatureServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=1b7bcc9607e240acac336f0a67ddab20",
+      "publisher": "coagis_org",
+      "itemModified": "2023-10-12T15:17:25+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "COA Utilities",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 32,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:13.908818+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1436208639404,
+      "includedFeatures": 32
+    },
+    {
+      "id": "arcgis-210-0",
+      "name": "Fiber Optic Public View — Fiber Optic",
+      "url": "https://services2.arcgis.com/Q162lMMZLeb8KwDU/arcgis/rest/services/Fiber_Optic_Public_View/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=e6890f4e204543c2a21e7390070e311a",
+      "publisher": "jsalgado_tomball",
+      "itemModified": "2025-11-07T21:48:34+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 6,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:21.158982+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1762815273214,
+      "includedFeatures": 6
+    },
+    {
+      "id": "arcgis-216-4",
+      "name": "FiberOptics — FiberOptic_Germantown",
+      "url": "https://services5.arcgis.com/LnfZzt7NtPrHmp5p/arcgis/rest/services/FiberOptics/FeatureServer/4",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=71a7cbf80b5148d789b0a8f685221cea",
+      "publisher": "shumphreys_gtown",
+      "itemModified": "2026-02-11T22:20:42+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 359,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:21.901058+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1787232691111,
+      "includedFeatures": 359
+    },
+    {
+      "id": "arcgis-219-4",
+      "name": "PUBLIC - GRP Fiber Optics — Fiber Optics",
+      "url": "https://services2.arcgis.com/w2TRse9XgbPXdXc6/arcgis/rest/services/Transmission_Fiber/FeatureServer/4",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=c9093d4f5c3744c7aea55d4e23c2632a",
+      "publisher": "ecoleman_sjra",
+      "itemModified": "2026-07-08T13:47:06+00:00",
+      "license": "<p><span style='font-family:&quot;Calibri&quot;,sans-serif; font-size:11.0pt;'><span style='line-height:115%;'>GIS maps and data are to be used for reference purposes only.&nbsp; Spatial features are approximate, and are not necessarily accurate to surveying or engineering standards.&nbsp; The San Jacinto River Authority makes no warranty or guarantee as to the content, errors, omissions, inaccuracies, timeliness, or completeness of any of the data provided, and assumes no legal responsibility for the information contained on this map.&nbsp; Any use of this product with respect to accuracy and precision is to be the sole responsibility of the user.</span></span></p><p><span style='font-family:&quot;Calibri&quot;,sans-serif; font-size:11.0pt;'><span style='line-height:115%;'>Use limitations: &nbsp;Public View</span></span></p>",
+      "description": "<p>Fiber optic line data for the GRP Division, created for a public viewing.<br /><br />This dataset has been prepared for public use and contains geographic features and associated attributes intended to support mapping, analysis, and informational purposes. The data are maintained by the organization and are updated as new information becomes available. A detailed description of the dataset's contents, purpose, and intended use should be provided in this section. Users are encouraged to review the accompanying metadata for information on data sources, update frequency, coordinate system, known limitations, and any applicable use constraints.</p><p>Updated 2024, ECC</p>",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 764,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:37.668313+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1783450702096,
+      "includedFeatures": 764
+    },
+    {
+      "id": "arcgis-227-1",
+      "name": "Fiber_Optics_Network_view — Fiber Optic Cable",
+      "url": "https://services1.arcgis.com/EHJIZRZ77WzgIElO/arcgis/rest/services/Fiber_Optics_Network_view/FeatureServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=447886040b5e4489aadc9293bec642f7",
+      "publisher": "jfaulkner_pogis",
+      "itemModified": "2026-03-10T12:23:23+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 122,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:25.425261+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1776180508820,
+      "includedFeatures": 122
+    },
+    {
+      "id": "arcgis-229-5",
+      "name": "KYTC - Kentucky Wired — Aerial",
+      "url": "https://maps.kytc.ky.gov/arcgis/rest/services/Apps/KYWired/MapServer/5",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=f5f14ecb4950405a83c24a64e4c8c6e1",
+      "publisher": "KYTCGIS",
+      "itemModified": "2025-02-06T15:08:27+00:00",
+      "license": "<p style='text-align:center;'><font size='2'>KYTC publishes this data under the Creative Commons Zero (CC0) license. The data is public domain, and KYTC does not warrant the data. It is the users’ responsibility to determine if it is appropriate for their purposes. For further details about the CC0 license, please refer to <a href='https://creativecommons.org/publicdomain/zero/1.0/' target='_blank' rel='nofollow ugc noopener noreferrer'>https://creativecommons.org/publicdomain/zero/1.0/</a>.</font></p>",
+      "description": "<p><font color='#2f4f4f' size='3'><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>This map service provides access to </span></span><span style='font-family:Arial;'><strong>KentuckyWired</strong> fiber network segment locations</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, allowing consultants and stakeholders to track project progress. The service displays the </span></span><span style='font-family:Arial;'>current status of permitted segments</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> across </span></span><span style='font-family:Arial;'>Kentucky</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, </span><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>supporting efforts to enhance </span></span><span style='font-family:Arial;'>broadband access and connectivity</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> statewide.</span></span></font></p>",
+      "layerDescription": "",
+      "status": "Construction complete",
+      "count": 5735,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:43:58.328068+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": null,
+      "includedFeatures": 5283
+    },
+    {
+      "id": "arcgis-229-6",
+      "name": "KYTC - Kentucky Wired — Underground",
+      "url": "https://maps.kytc.ky.gov/arcgis/rest/services/Apps/KYWired/MapServer/6",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=f5f14ecb4950405a83c24a64e4c8c6e1",
+      "publisher": "KYTCGIS",
+      "itemModified": "2025-02-06T15:08:27+00:00",
+      "license": "<p style='text-align:center;'><font size='2'>KYTC publishes this data under the Creative Commons Zero (CC0) license. The data is public domain, and KYTC does not warrant the data. It is the users’ responsibility to determine if it is appropriate for their purposes. For further details about the CC0 license, please refer to <a href='https://creativecommons.org/publicdomain/zero/1.0/' target='_blank' rel='nofollow ugc noopener noreferrer'>https://creativecommons.org/publicdomain/zero/1.0/</a>.</font></p>",
+      "description": "<p><font color='#2f4f4f' size='3'><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>This map service provides access to </span></span><span style='font-family:Arial;'><strong>KentuckyWired</strong> fiber network segment locations</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, allowing consultants and stakeholders to track project progress. The service displays the </span></span><span style='font-family:Arial;'>current status of permitted segments</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> across </span></span><span style='font-family:Arial;'>Kentucky</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, </span><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>supporting efforts to enhance </span></span><span style='font-family:Arial;'>broadband access and connectivity</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> statewide.</span></span></font></p>",
+      "layerDescription": "",
+      "status": "Construction complete",
+      "count": 1064,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:42:11.427403+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": null,
+      "includedFeatures": 1006
+    },
+    {
+      "id": "arcgis-229-8",
+      "name": "KYTC - Kentucky Wired — Aerial",
+      "url": "https://maps.kytc.ky.gov/arcgis/rest/services/Apps/KYWired/MapServer/8",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=f5f14ecb4950405a83c24a64e4c8c6e1",
+      "publisher": "KYTCGIS",
+      "itemModified": "2025-02-06T15:08:27+00:00",
+      "license": "<p style='text-align:center;'><font size='2'>KYTC publishes this data under the Creative Commons Zero (CC0) license. The data is public domain, and KYTC does not warrant the data. It is the users’ responsibility to determine if it is appropriate for their purposes. For further details about the CC0 license, please refer to <a href='https://creativecommons.org/publicdomain/zero/1.0/' target='_blank' rel='nofollow ugc noopener noreferrer'>https://creativecommons.org/publicdomain/zero/1.0/</a>.</font></p>",
+      "description": "<p><font color='#2f4f4f' size='3'><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>This map service provides access to </span></span><span style='font-family:Arial;'><strong>KentuckyWired</strong> fiber network segment locations</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, allowing consultants and stakeholders to track project progress. The service displays the </span></span><span style='font-family:Arial;'>current status of permitted segments</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> across </span></span><span style='font-family:Arial;'>Kentucky</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, </span><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>supporting efforts to enhance </span></span><span style='font-family:Arial;'>broadband access and connectivity</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> statewide.</span></span></font></p>",
+      "layerDescription": "",
+      "status": "Permit approved; construction unconfirmed",
+      "count": 271,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:41:50.554058+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": null,
+      "includedFeatures": 261
+    },
+    {
+      "id": "arcgis-229-9",
+      "name": "KYTC - Kentucky Wired — Underground",
+      "url": "https://maps.kytc.ky.gov/arcgis/rest/services/Apps/KYWired/MapServer/9",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=f5f14ecb4950405a83c24a64e4c8c6e1",
+      "publisher": "KYTCGIS",
+      "itemModified": "2025-02-06T15:08:27+00:00",
+      "license": "<p style='text-align:center;'><font size='2'>KYTC publishes this data under the Creative Commons Zero (CC0) license. The data is public domain, and KYTC does not warrant the data. It is the users’ responsibility to determine if it is appropriate for their purposes. For further details about the CC0 license, please refer to <a href='https://creativecommons.org/publicdomain/zero/1.0/' target='_blank' rel='nofollow ugc noopener noreferrer'>https://creativecommons.org/publicdomain/zero/1.0/</a>.</font></p>",
+      "description": "<p><font color='#2f4f4f' size='3'><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>This map service provides access to </span></span><span style='font-family:Arial;'><strong>KentuckyWired</strong> fiber network segment locations</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, allowing consultants and stakeholders to track project progress. The service displays the </span></span><span style='font-family:Arial;'>current status of permitted segments</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> across </span></span><span style='font-family:Arial;'>Kentucky</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, </span><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>supporting efforts to enhance </span></span><span style='font-family:Arial;'>broadband access and connectivity</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> statewide.</span></span></font></p>",
+      "layerDescription": "",
+      "status": "Permit approved; construction unconfirmed",
+      "count": 53,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:33.475154+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": null,
+      "includedFeatures": 53
+    },
+    {
+      "id": "arcgis-229-11",
+      "name": "KYTC - Kentucky Wired — Aerial",
+      "url": "https://maps.kytc.ky.gov/arcgis/rest/services/Apps/KYWired/MapServer/11",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=f5f14ecb4950405a83c24a64e4c8c6e1",
+      "publisher": "KYTCGIS",
+      "itemModified": "2025-02-06T15:08:27+00:00",
+      "license": "<p style='text-align:center;'><font size='2'>KYTC publishes this data under the Creative Commons Zero (CC0) license. The data is public domain, and KYTC does not warrant the data. It is the users’ responsibility to determine if it is appropriate for their purposes. For further details about the CC0 license, please refer to <a href='https://creativecommons.org/publicdomain/zero/1.0/' target='_blank' rel='nofollow ugc noopener noreferrer'>https://creativecommons.org/publicdomain/zero/1.0/</a>.</font></p>",
+      "description": "<p><font color='#2f4f4f' size='3'><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>This map service provides access to </span></span><span style='font-family:Arial;'><strong>KentuckyWired</strong> fiber network segment locations</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, allowing consultants and stakeholders to track project progress. The service displays the </span></span><span style='font-family:Arial;'>current status of permitted segments</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> across </span></span><span style='font-family:Arial;'>Kentucky</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, </span><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>supporting efforts to enhance </span></span><span style='font-family:Arial;'>broadband access and connectivity</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> statewide.</span></span></font></p>",
+      "layerDescription": "",
+      "status": "Permit in review",
+      "count": 0,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:33.231139+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": null,
+      "includedFeatures": 0
+    },
+    {
+      "id": "arcgis-229-12",
+      "name": "KYTC - Kentucky Wired — Underground",
+      "url": "https://maps.kytc.ky.gov/arcgis/rest/services/Apps/KYWired/MapServer/12",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=f5f14ecb4950405a83c24a64e4c8c6e1",
+      "publisher": "KYTCGIS",
+      "itemModified": "2025-02-06T15:08:27+00:00",
+      "license": "<p style='text-align:center;'><font size='2'>KYTC publishes this data under the Creative Commons Zero (CC0) license. The data is public domain, and KYTC does not warrant the data. It is the users’ responsibility to determine if it is appropriate for their purposes. For further details about the CC0 license, please refer to <a href='https://creativecommons.org/publicdomain/zero/1.0/' target='_blank' rel='nofollow ugc noopener noreferrer'>https://creativecommons.org/publicdomain/zero/1.0/</a>.</font></p>",
+      "description": "<p><font color='#2f4f4f' size='3'><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>This map service provides access to </span></span><span style='font-family:Arial;'><strong>KentuckyWired</strong> fiber network segment locations</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, allowing consultants and stakeholders to track project progress. The service displays the </span></span><span style='font-family:Arial;'>current status of permitted segments</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> across </span></span><span style='font-family:Arial;'>Kentucky</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, </span><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>supporting efforts to enhance </span></span><span style='font-family:Arial;'>broadband access and connectivity</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> statewide.</span></span></font></p>",
+      "layerDescription": "",
+      "status": "Permit in review",
+      "count": 0,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:39.723059+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": null,
+      "includedFeatures": 0
+    },
+    {
+      "id": "arcgis-229-13",
+      "name": "KYTC - Kentucky Wired — Third Party Fiber",
+      "url": "https://maps.kytc.ky.gov/arcgis/rest/services/Apps/KYWired/MapServer/13",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=f5f14ecb4950405a83c24a64e4c8c6e1",
+      "publisher": "KYTCGIS",
+      "itemModified": "2025-02-06T15:08:27+00:00",
+      "license": "<p style='text-align:center;'><font size='2'>KYTC publishes this data under the Creative Commons Zero (CC0) license. The data is public domain, and KYTC does not warrant the data. It is the users’ responsibility to determine if it is appropriate for their purposes. For further details about the CC0 license, please refer to <a href='https://creativecommons.org/publicdomain/zero/1.0/' target='_blank' rel='nofollow ugc noopener noreferrer'>https://creativecommons.org/publicdomain/zero/1.0/</a>.</font></p>",
+      "description": "<p><font color='#2f4f4f' size='3'><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>This map service provides access to </span></span><span style='font-family:Arial;'><strong>KentuckyWired</strong> fiber network segment locations</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, allowing consultants and stakeholders to track project progress. The service displays the </span></span><span style='font-family:Arial;'>current status of permitted segments</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> across </span></span><span style='font-family:Arial;'>Kentucky</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>, </span><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>supporting efforts to enhance </span></span><span style='font-family:Arial;'>broadband access and connectivity</span><span style='background-color:rgb(255, 255, 255); font-family:Arial;'><span style='font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'> statewide.</span></span></font></p>",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 2473,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:42:43.277545+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": null,
+      "includedFeatures": 2454
+    },
+    {
+      "id": "arcgis-240-0",
+      "name": "Fiber Routes — Fiber Routes",
+      "url": "https://services.arcgis.com/ZOyb2t4B0UYuYNYH/arcgis/rest/services/Fiber_Routes_CDL/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=57d2039245864a56a696eb23e9ebbb22",
+      "publisher": "Transportation_SeattleCityGIS",
+      "itemModified": "2026-09-17T14:17:10+00:00",
+      "license": "The City of Seattle makes no representation or warranty as to its accuracy, and in particular, its accuracy as to labeling, dimensions, contours, property boundaries, or placement or location of any map feature thereof.",
+      "description": "<span style='font-family:&quot;Avenir Next W01&quot;, &quot;Avenir Next W00&quot;, &quot;Avenir Next&quot;, Avenir, &quot;Helvetica Neue&quot;, sans-serif; font-size:16px;'>Displays fiber routes maintained by the Seattle Department of Transportation.</span><div><br /></div><div><div><font face='Avenir Next W01, Avenir Next W00, Avenir Next, Avenir, Helvetica Neue, sans-serif'><span style='font-size:16px;'>Refresh Cycle: Daily</span></font></div><div><font face='Avenir Next W01, Avenir Next W00, Avenir Next, Avenir, Helvetica Neue, sans-serif'><span style='font-size:16px;'><br /></span></font></div><div><font face='Avenir Next W01, Avenir Next W00, Avenir Next, Avenir, Helvetica Neue, sans-serif'><span style='font-size:16px;'>Feature Class: </span></font>SDOT.Fiber_Routes</div></div>",
+      "layerDescription": "&lt;span style=\"font-family:&amp;quot;Avenir Next W01&amp;quot;, &amp;quot;Avenir Next W00&amp;quot;, &amp;quot;Avenir Next&amp;quot;, Avenir, &amp;quot;Helvetica Neue&amp;quot;, sans-serif; font-size:16px;\"&gt;Displays fiber routes maintained by the Seattle Department of Transportation.&lt;/span&gt;&lt;div style=\"font-family:&amp;quot;Avenir Next W01&amp;quot;, &amp;quot;Avenir Next W00&amp;quot;, &amp;quot;Avenir Next&amp;quot;, Avenir, &amp;quot;Helvetica Neue&amp;quot;, sans-serif; font-size:16px;\"&gt;&lt;br /&gt;&lt;/div&gt;&lt;div style=\"font-family:&amp;quot;Avenir Next W01&amp;quot;, &amp;quot;Avenir Next W00&amp;quot;, &amp;quot;Avenir Next&amp;quot;, Avenir, &amp;quot;Helvetica Neue&amp;quot;, sans-serif; font-size:16px;\"&gt;&lt;div style=\"font-family:inherit;\"&gt;&lt;font style=\"font-family:inherit;\"&gt;Refresh Cycle:&nbsp;&lt;/font&gt;&lt;/div&gt;&lt;div style=\"font-family:inherit;\"&gt;&lt;font style=\"font-family:inherit;\"&gt;&lt;br /&gt;&lt;/font&gt;&lt;/div&gt;&lt;div style=\"font-family:inherit;\"&gt;&lt;font style=\"font-family:inherit;\"&gt;Feature Class:&nbsp;&lt;/font&gt;SDOT.Fiber_Routes&lt;/div&gt;&lt;/div&gt;",
+      "status": "Unknown",
+      "count": 1105,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:42:27.072710+00:00",
+      "copyrightText": "City of Seattle, Seattle Department of Transportation\t\t",
+      "layerLastEditDate": 1789654626628,
+      "includedFeatures": 993
+    },
+    {
+      "id": "arcgis-248-0",
+      "name": "Shentel Broadband Fiber Cable Routes - 2025 — Shentel_Fiber_Route",
+      "url": "https://services3.arcgis.com/DXCmCcRcEQ793kMP/arcgis/rest/services/Shentel_Fiber_Route/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=929c46a9d2874ad7a1df14e838c8287a",
+      "publisher": "archive_BedfordVAGIS",
+      "itemModified": "2025-08-01T13:06:29+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "<p><span style='background-color:rgb(255,255,255); color:rgb(20,20,20); font-family:&quot;Avenir Next&quot;, Avenir, &quot;Helvetica Neue&quot;, sans-serif; font-size:16px;'><span style='display:inline !important; float:none; font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>This layer showes fiber cable routes for shentel broadband internet. This data is shared publically and with the broadband group. This data is referenced in a web map for broadband coverage in Bedford County. This layer will be archived and should be reviewed on a 3 year basis.&nbsp;</span></span></p><p><span style='background-color:rgb(255,255,255); color:rgb(20,20,20); font-family:&quot;Avenir Next&quot;, Avenir, &quot;Helvetica Neue&quot;, sans-serif; font-size:16px;'><span style='display:inline !important; float:none; font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>Link to the broadband coverage map: </span></span><a target='_blank' href='https://bedfordvagis.maps.arcgis.com/home/item.html?id=eccb5a6e4d4743a38a578b93f6c574c9' rel='nofollow ugc noopener noreferrer'><span style='color:#87ceeb; font-family:&quot;Avenir Next&quot;, Avenir, &quot;Helvetica Neue&quot;, sans-serif; font-size:16px;'><span style='display:inline !important; float:none; font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>https://bedfordvagis.maps.arcgis.com/home/item.html?id=eccb5a6e4d4743a38a578b93f6c574c9</span></span></a><span style='color:#87ceeb; font-family:&quot;Avenir Next&quot;, Avenir, &quot;Helvetica Neue&quot;, sans-serif; font-size:16px;'><span style='display:inline !important; float:none; font-style:normal; font-variant-caps:normal; font-variant-ligatures:normal; font-weight:400; letter-spacing:normal; text-align:start; text-decoration-color:initial; text-decoration-style:initial; text-indent:0px; text-transform:none; word-spacing:0px;'>&nbsp;</span></span></p>",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 160,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:47.080727+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1631040680115,
+      "includedFeatures": 160
+    },
+    {
+      "id": "arcgis-292-0",
+      "name": "Atlanta Beltline Fiber Route — Atlanta Beltline Fiber Route",
+      "url": "https://services2.arcgis.com/zLeajbicrDRLQcny/arcgis/rest/services/Atlanta_Beltline_Fiber_Route/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=d8d8523758f04a18aac18ce383d62df2",
+      "publisher": "dpwdata_atl",
+      "itemModified": "2022-01-19T00:46:05+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 6,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:50.627152+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1642553154507,
+      "includedFeatures": 6
+    },
+    {
+      "id": "arcgis-328-1",
+      "name": "Fiber Telecom System Public — Fiber Cable",
+      "url": "https://services3.arcgis.com/ccRMrVzOSHBUG6X2/arcgis/rest/services/Fiber_Telecom_System_Public/FeatureServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=7c382860e53041a1a95abde2fa2b7400",
+      "publisher": "dporchetti@marysvilleohio.org_Marysville",
+      "itemModified": "2026-09-03T16:35:52+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "<span style='font-family:&quot;Avenir Next W01&quot;, &quot;Avenir Next W00&quot;, &quot;Avenir Next&quot;, Avenir, &quot;Helvetica Neue&quot;, sans-serif; font-size:16px;'>Approximate location of fiber conduit and cables shown in addition to structure features such as pull boxes, manholes, handholes, etc. Locations are for general system reference. No warranties are expressed or implied by infrastructure data and the use of this data does not replace the need for ground survey or 811 locate services. Contact City of Marysville IT Department with questions. </span>",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 458,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:38:01.637059+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1788764585899,
+      "includedFeatures": 453
+    },
+    {
+      "id": "arcgis-335-1",
+      "name": "Communication_Fiber_Feature Layer_View — Fiber",
+      "url": "https://services1.arcgis.com/hh2VCtfzZp8V2Vbe/arcgis/rest/services/Fiber_(View)/FeatureServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=f30a18c510664dbc8fa636290fe5c44e",
+      "publisher": "WS_Admin",
+      "itemModified": "2024-05-09T20:18:56+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 46,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:37:59.824818+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1775244046735,
+      "includedFeatures": 46
+    },
+    {
+      "id": "arcgis-348-2",
+      "name": "FIBER_Cable — Cable",
+      "url": "https://utility.arcgis.com/usrsvcs/servers/f09b9c5ec5fc4b21bb74769d80384458/rest/services/Maps/FIBER/MapServer/2",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=f09b9c5ec5fc4b21bb74769d80384458",
+      "publisher": "hennepin.county.maps",
+      "itemModified": "2025-03-12T14:31:24+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 1757,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:43:06.800759+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": null,
+      "includedFeatures": 1754
+    },
+    {
+      "id": "arcgis-355-4",
+      "name": "GENERAL_FIBER4AGOL — FiberCable",
+      "url": "https://services3.arcgis.com/5g4JcCVJwbhPOszb/arcgis/rest/services/GENERAL_FIBER4AGOL/FeatureServer/4",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=0fa8c3e43b9f4db1a753170ec1b05cb0",
+      "publisher": "dwelch_RichlandWA",
+      "itemModified": "2023-01-05T21:20:32+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "this limited layer set was created to have public contractors review conectivity",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 304,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:42:45.650008+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1718217137487,
+      "includedFeatures": 304
+    },
+    {
+      "id": "arcgis-372-2",
+      "name": "Fiber — Fiber Service Line",
+      "url": "https://services5.arcgis.com/ikEzR7lqVIlrcVFn/arcgis/rest/services/Fiber/FeatureServer/2",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=d80f0829d8924fb08b476fc29f22f8d6",
+      "publisher": "LewisM@sherwoodoregon.gov_COS",
+      "itemModified": "2026-08-04T16:39:35+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "",
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 1925,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:43:42.573544+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1785861567134,
+      "includedFeatures": 1923
+    },
+    {
+      "id": "arcgis-372-3",
+      "name": "Fiber — Fiber Cable",
+      "url": "https://services5.arcgis.com/ikEzR7lqVIlrcVFn/arcgis/rest/services/Fiber/FeatureServer/3",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=d80f0829d8924fb08b476fc29f22f8d6",
+      "publisher": "LewisM@sherwoodoregon.gov_COS",
+      "itemModified": "2026-08-04T16:39:35+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "",
+      "layerDescription": "Fiber Cable Route for SBB",
+      "status": "Unknown",
+      "count": 3161,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:44:12.814895+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1785861568011,
+      "includedFeatures": 3148
+    },
+    {
+      "id": "arcgis-31-0",
+      "name": "Middle Mile Dashboard Layers - For Public Dashboard — Existing_IRU_Awarded2",
+      "url": "https://utility.arcgis.com/usrsvcs/servers/53d104cecb964033a75c5cd05cab3657/rest/services/MM_Dashboard_Layers_ForPublic/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=53d104cecb964033a75c5cd05cab3657",
+      "publisher": "NBAM_Org",
+      "itemModified": "2026-08-27T17:32:01+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "The Enabling Middle Mile Broadband Infrastructure Program is a $1 billion program funding middle mile projects. This layer includes existing routes and awarded routes.  The layers shown are the approximate route location for the awarded middle mile projects. The actual project area may be different from what is shown. <div><br /></div><div>Disclaimer: The data presented is &quot;as is&quot;, &quot;as available&quot; for informational purposes. NTIA does not warrant the accuracy, adequacy or completeness of this information and expressly disclaims liability for any errors or omissions. <br /><div><br /></div><div><b>Additional Links</b></div><div><b><br /></b></div><div><a href='https://www.arcgis.com/apps/dashboards/4fc111c466a34528b54e462b6df184db' target='_blank' rel='nofollow ugc noopener noreferrer'>Middle Mile Dashboard</a><br /></div><div><b><br /></b></div><div><a href='https://broadbandusa.ntia.gov/funding-programs/enabling-middle-mile-broadband-infrastructure-program' target='_blank' rel='nofollow ugc noopener noreferrer'>Middle Mile Program</a></div></div>",
+      "layerDescription": "",
+      "status": "Existing IRU (publisher reported)",
+      "count": 8,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:39:05.977734+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1761927913582,
+      "includedFeatures": 8
+    },
+    {
+      "id": "arcgis-31-1",
+      "name": "Middle Mile Dashboard Layers - For Public Dashboard — Middle_Mile_Awarded",
+      "url": "https://utility.arcgis.com/usrsvcs/servers/53d104cecb964033a75c5cd05cab3657/rest/services/MM_Dashboard_Layers_ForPublic/FeatureServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=53d104cecb964033a75c5cd05cab3657",
+      "publisher": "NBAM_Org",
+      "itemModified": "2026-08-27T17:32:01+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "The Enabling Middle Mile Broadband Infrastructure Program is a $1 billion program funding middle mile projects. This layer includes existing routes and awarded routes.  The layers shown are the approximate route location for the awarded middle mile projects. The actual project area may be different from what is shown. <div><br /></div><div>Disclaimer: The data presented is &quot;as is&quot;, &quot;as available&quot; for informational purposes. NTIA does not warrant the accuracy, adequacy or completeness of this information and expressly disclaims liability for any errors or omissions. <br /><div><br /></div><div><b>Additional Links</b></div><div><b><br /></b></div><div><a href='https://www.arcgis.com/apps/dashboards/4fc111c466a34528b54e462b6df184db' target='_blank' rel='nofollow ugc noopener noreferrer'>Middle Mile Dashboard</a><br /></div><div><b><br /></b></div><div><a href='https://broadbandusa.ntia.gov/funding-programs/enabling-middle-mile-broadband-infrastructure-program' target='_blank' rel='nofollow ugc noopener noreferrer'>Middle Mile Program</a></div></div>",
+      "layerDescription": "",
+      "status": "Awarded project; operational status unconfirmed",
+      "count": 35,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:39:05.000545+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1782927762002,
+      "excludedNonShareable": 35,
+      "includedFeatures": 0
+    },
+    {
+      "id": "arcgis-32-1",
+      "name": "CDT_Statewide_Network_All_vw — MMBI_Statewide_Network_High",
+      "url": "https://services6.arcgis.com/sAv98EYUZbLCVPW0/arcgis/rest/services/MMBI_Statewide_Network_High_All/FeatureServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=bb8f61cc57fe4582b7236235e52ac7e7",
+      "publisher": "CA_MMBI_Admin",
+      "itemModified": "2026-06-29T16:27:47+00:00",
+      "license": "This data is for use by all users including the public audience.",
+      "description": "<b>Purpose</b><p>This is the complete Statewide Middle Mile Broadband Initiative network design for public use.</p><b>Details</b><p>This is the simplified layer with lower point cluster, limited attributes. This layer supports the public views of data in interactive applications.</p><i>Attributes</i><p>County Name: Full county name<br />\r\nPublic Construction Status: Reported construction status<div>\r\n    <span style='font-family:inherit;font-size:16px;'><strong><u>Legend</u></strong></span><span style='font-family:Avenir Next W01, Avenir Next W00, Avenir Next, Avenir, Helvetica Neue, sans-serif;font-size:16px;'><strong><u> Recommendations:</u></strong></span>\r\n</div>\r\n<div style='font-family:inherit;font-size:16px;'>\r\n    Complete Network.\r\n</div>\r\n<div style='font-family:inherit;font-size:16px;'>\r\n    <img src='https://cammbi.maps.arcgis.com/sharing/rest/content/items/e6f6e87ed6384c23ae57e4089c758840/data' alt='Complete Network Design' />\r\n</div>\r\n<div style='font-family:inherit;font-size:16px;'>\r\n    Project Status\r\n</div>\r\n<div style='font-family:inherit;font-size:16px;'>\r\n    <img src='https://cammbi.maps.arcgis.com/sharing/rest/content/items/ad74e5981f90474ea5199be2534dc5e7/data' alt='Project Status' />\r\n</div></p><b>Process</b><p><p>\r\n    The MMBI Data and GIS team manage this dataset and the versioned edited data.<br />\r\n    Edits to the layer are completed for the following reasons.<br />\r\n    1) Map Change Request, the MMBI official process for Districts and other stakeholders to request changes has been approved.<br />\r\n    2) Attribute or geographic modification to segments that fix incorrect representation or attribution.\r\n</p></p><b>History</b><p><p>\r\n    Creation September 2023<br />\r\n    2024 to Current: Schema modification to support various reporting requirements.<br />\n2026 Simplified down to status reporting.\r\n</p></p><p><b>Data Steward</b> - MMBI GIS and Data</p>",
+      "layerDescription": "Updated using ArcGIS Python API",
+      "status": "Network design; see published construction status",
+      "count": 247,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:38:58.284245+00:00",
+      "copyrightText": "copyright Python API guide",
+      "layerLastEditDate": 1788270942045,
+      "includedFeatures": 245
+    },
+    {
+      "id": "arcgis-94-5",
+      "name": "Norvado Middle Mile 2025 VIEW — MIDDLE_MILE_CONNECT_PROPOSED_FIBER_2025",
+      "url": "https://services5.arcgis.com/xcpZ3V9R5FRJotM2/arcgis/rest/services/Norvado_Middle_Mile_2025_VIEW/FeatureServer/5",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=342cf78b63a1424799fe6406d48284e1",
+      "publisher": "sjohnsonNorvado",
+      "itemModified": "2026-02-18T21:46:58+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": "",
+      "layerDescription": "",
+      "status": "Planned",
+      "count": 572,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:39:23.575697+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1789663517502,
+      "includedFeatures": 571
+    },
+    {
+      "id": "arcgis-96-0",
+      "name": "LPUD Middle Mile Backbone Cabinet Feed — LPUD_Middle_Mile_Backbone_Cabinet_Feed",
+      "url": "https://services8.arcgis.com/M6FVSymJ2XsnL91N/arcgis/rest/services/LPUD_Middle_Mile_Backbone_Cabinet_Feed/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=29b6758499124e1d99b74d93aa1ce041",
+      "publisher": "kira.nelson@noanet.net_NoaNet",
+      "itemModified": "2026-01-21T19:57:43+00:00",
+      "license": "No explicit reuse license in item metadata; retain publisher attribution and verify terms for redistribution.",
+      "description": null,
+      "layerDescription": "",
+      "status": "Unknown",
+      "count": 72,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-09-18T02:39:24.301491+00:00",
+      "copyrightText": "",
+      "layerLastEditDate": 1668633965929,
+      "includedFeatures": 72
+    },
+    {
+      "id": "fna-member-routes-20260918",
+      "name": "Fiber Network Alliance member fiber lines",
+      "publisher": "Fiber Network Alliance / participating members",
+      "url": "https://www.fibernetworkalliance.com/membership-map-line/",
+      "downloadUrl": "https://drive.google.com/file/d/1ulsCVWisT6Yy4_XQET0RN82qeOpoOuc9/view",
+      "license": "Publisher offers download, embedding, copying and customization; retain attribution. Carrier names are as published, not current-ownership verification.",
+      "termsUrl": "https://www.fibernetworkalliance.com/membership-map-line-pop/",
+      "status": "Unknown; undated member map",
+      "dataDate": null,
+      "retrievedAt": "2026-09-18T19:56:04.130240+00:00",
+      "downloadStatus": "complete",
+      "itemModified": null,
+      "rawSha256": "56f0d8949a2fda7344ac4fe5c2d6da435db6bf64f6237dd90fd3ff4ed41968d1",
+      "inputLineParts": 183768,
+      "includedLineParts": 169154,
+      "duplicateLineParts": 11674,
+      "invalidLineParts": 66,
+      "outsideStateBoundaries": 2874,
+      "includedFeatures": 2984,
+      "count": 2984
+    },
+    {
+      "id": "logix-public-routes-20260918",
+      "name": "LOGIX public network map",
+      "publisher": "LOGIX Fiber Networks",
+      "url": "https://logix.com/network-maps/",
+      "downloadUrl": "https://pub.logix.com/map/admin/files/kmz/Connected2Fiber-02012024-blue.kmz",
+      "license": "Public carrier map; no explicit redistribution license identified. Retain attribution and verify terms before external redistribution.",
+      "status": "Unknown; public map filename dated 02012024, not field verification",
+      "dataDate": null,
+      "retrievedAt": "2026-09-18T19:56:04.130240+00:00",
+      "downloadStatus": "complete",
+      "itemModified": null,
+      "rawSha256": "fe21e5c969e8c79688f53a917136c1f62e9be3950215d9d218633ab12ef03257",
+      "inputLineParts": 15830,
+      "includedLineParts": 15573,
+      "invalidLineParts": 221,
+      "duplicateLineParts": 36,
+      "includedFeatures": 248,
+      "count": 248
+    },
+    {
+      "id": "ct-norwalk-0",
+      "name": "Norwalk City Traffic fiber",
+      "publisher": "Norwalk CT GIS",
+      "url": "https://services2.arcgis.com/HfsHDBmkGwb1UtID/ArcGIS/rest/services/Fiber/FeatureServer/0",
+      "status": "Status not established",
+      "retrievedAt": "2026-09-18T19:54:36.888933+00:00",
+      "itemModified": null,
+      "license": "Public agency GIS; no explicit redistribution license identified. Retain attribution; verify terms before external redistribution.",
+      "where": "1=1",
+      "layerDescription": "",
+      "copyrightText": "",
+      "downloadStatus": "complete",
+      "count": 41,
+      "includedFeatures": 41
+    },
+    {
+      "id": "ct-norwalk-1",
+      "name": "Norwalk City MAN fiber",
+      "publisher": "Norwalk CT GIS",
+      "url": "https://services2.arcgis.com/HfsHDBmkGwb1UtID/ArcGIS/rest/services/Fiber/FeatureServer/1",
+      "status": "Status not established",
+      "retrievedAt": "2026-09-18T19:54:36.889013+00:00",
+      "itemModified": null,
+      "license": "Public agency GIS; no explicit redistribution license identified. Retain attribution; verify terms before external redistribution.",
+      "where": "1=1",
+      "layerDescription": "",
+      "copyrightText": "",
+      "downloadStatus": "complete",
+      "count": 40,
+      "includedFeatures": 40
+    },
+    {
+      "id": "ct-norwalk-2",
+      "name": "Norwalk Fibertech fiber",
+      "publisher": "Norwalk CT GIS",
+      "url": "https://services2.arcgis.com/HfsHDBmkGwb1UtID/ArcGIS/rest/services/Fiber/FeatureServer/2",
+      "status": "Status not established",
+      "retrievedAt": "2026-09-18T19:54:36.891830+00:00",
+      "itemModified": null,
+      "license": "Public agency GIS; no explicit redistribution license identified. Retain attribution; verify terms before external redistribution.",
+      "where": "1=1",
+      "layerDescription": "",
+      "copyrightText": "",
+      "downloadStatus": "complete",
+      "count": 130,
+      "includedFeatures": 130
+    },
+    {
+      "id": "ga-atlanta-16",
+      "name": "City of Atlanta Fiber",
+      "publisher": "City of Atlanta DPW",
+      "url": "https://dpwgis.atlantaga.gov/hostingserver/rest/services/Fiber_Assets/FeatureServer/16",
+      "status": "Status not established",
+      "retrievedAt": "2026-09-18T19:54:38.154354+00:00",
+      "itemModified": null,
+      "license": "Public agency GIS; no explicit redistribution license identified. Retain attribution; verify terms before external redistribution.",
+      "where": "1=1",
+      "layerDescription": "GEODATA.Fiber_Cable",
+      "copyrightText": "",
+      "downloadStatus": "complete",
+      "count": 450,
+      "includedFeatures": 450
+    },
+    {
+      "id": "ga-atlanta-17",
+      "name": "Atlanta Unknown/Unmarked Fiber",
+      "publisher": "City of Atlanta DPW",
+      "url": "https://dpwgis.atlantaga.gov/hostingserver/rest/services/Fiber_Assets/FeatureServer/17",
+      "status": "Status not established",
+      "retrievedAt": "2026-09-18T19:54:38.189735+00:00",
+      "itemModified": null,
+      "license": "Public agency GIS; no explicit redistribution license identified. Retain attribution; verify terms before external redistribution.",
+      "where": "1=1",
+      "layerDescription": "",
+      "copyrightText": "",
+      "downloadStatus": "complete",
+      "count": 141,
+      "includedFeatures": 141
+    },
+    {
+      "id": "ga-atlanta-18",
+      "name": "Atlanta GDOT Fiber",
+      "publisher": "City of Atlanta DPW",
+      "url": "https://dpwgis.atlantaga.gov/hostingserver/rest/services/Fiber_Assets/FeatureServer/18",
+      "status": "Status not established",
+      "retrievedAt": "2026-09-18T19:54:38.219634+00:00",
+      "itemModified": null,
+      "license": "Public agency GIS; no explicit redistribution license identified. Retain attribution; verify terms before external redistribution.",
+      "where": "1=1",
+      "layerDescription": "",
+      "copyrightText": "",
+      "downloadStatus": "complete",
+      "count": 62,
+      "includedFeatures": 62
+    },
+    {
+      "id": "ma-cambridge-published-kmz",
+      "name": "Cambridge Network Solutions — Boston / Cambridge / Lowell",
+      "publisher": "Cambridge Network Solutions; hosted by Telecom Ramblings",
+      "url": "https://telecomramblings.com/files/media/CambridgeNetworkSolutions.kmz",
+      "discoveryUrl": "https://www.telecomramblings.com/metro-fiber-maps/new-england/",
+      "retrievedAt": "2026-09-20T23:14:22.771276+00:00",
+      "dataDate": null,
+      "rawSha256": "3dc0dd627f58300be9126ac6f2e8177a509f488c7a25b88a79ce58d860b0532e",
+      "includedFeatures": 70,
+      "count": 70,
+      "excludedInvalidOrDuplicate": 2,
+      "license": "Public operator map linked and hosted by Telecom Ramblings. Attribution retained; no unrestricted redistribution license stated.",
+      "status": "Undated map; current ownership and operational status unverified"
+    },
+    {
+      "id": "ny-stn-nichols-public",
+      "name": "STN Nichols FTTH routes",
+      "publisher": "Southern Tier Central Regional Planning and Development Board",
+      "url": "https://services2.arcgis.com/qO6xd1V1VbSyViir/arcgis/rest/services/Fiber_Route/FeatureServer/0",
+      "retrievedAt": "2026-09-20T23:14:40.303Z",
+      "count": 43,
+      "includedFeatures": 43,
+      "license": "Public agency route layer; attribution retained. No explicit license stated.",
+      "sourceItem": "https://www.arcgis.com/home/item.html?id=3037b92988f8450db8ce87f828c579f3",
+      "status": "Operational status unverified",
+      "rawSha256": "cbd35bf44299b15da6fd81e35f3de71b50062d6ac9b1fd042b07615f8bdb2b15"
+    }
+  ],
+  "boundarySource": "US Census Bureau / Esri USA States Generalized Boundaries",
+  "boundarySourceUrl": "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_States_Generalized_Boundaries/FeatureServer/0",
+  "recordCountNote": "Source map records and line parts are not unique physical cables. Overlapping publishers can describe the same infrastructure.",
+  "expansionAudit": {
+    "inputLineParts": 199598,
+    "includedLineParts": 184727,
+    "duplicateLineParts": 11710,
+    "invalidLineParts": 287,
+    "outsideStateBoundaries": 2874
+  },
+  "preservedBaselineRecords": 26371,
+  "publishedLineParts": 218350,
+  "integratedAt": "2026-09-20T23:25:57.539Z",
+  "priorityStates": [
+    "TX",
+    "GA",
+    "IL",
+    "NJ",
+    "NY",
+    "CT",
+    "FL",
+    "MA",
+    "SC",
+    "NC"
+  ],
+  "preservedProductionRecords": 26371
+}

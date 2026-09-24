@@ -1,0 +1,1549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your orders</title>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     portals/customer/index.html — the buyer's portal
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+     A battery customer signs in here to see their orders moving. It is a
+     FOURTH product surface, sibling to /portals/finance/, and the first page
+     in this codebase whose user is not a tenant member.
+
+     IT DOES NOT LOAD omega-tenant.js, DELIBERATELY. That runtime derives an
+     org from the signed-in email domain, and api/_lib/public-domains.js
+     refuses public providers outright — so a customer on Gmail would be
+     bounced to /start.html and asked to create a company workspace. Wrong
+     door entirely, and a confusing one. This page signs a person in and
+     resolves BRANDING ONLY from the hostname; it never resolves a workspace.
+
+     IT NEVER READS FIRESTORE. An `orders` document carries pricing, cost,
+     margin and staff emails, and rules hide documents rather than fields, so
+     there is no read rule that would work. Everything on this page comes
+     from /api/my-orders and /api/my-account, which project key by key.
+
+     AUTH IS EMAIL MAGIC LINK, PLUS GOOGLE. No password to forget, works for
+     any address, and the email is verified by construction — which matters
+     because email_verified is the whole security model behind the endpoints.
+
+     THE SAME HUBS AS THE CUSTOMER APP, WITH ROOM (docs/OMEGA-LOGIC-ECOSYSTEM.md).
+     Home is the hex hub (omega-hexhub.js) — Fleet in the middle; Size,
+     Design, POs, Pay, Shipping and Warranty around it — with the account at
+     a glance and what is arriving, what to pay and what needs you under it.
+     Fleet and Warranty read /api/my-sites; Pay and Shipping read the orders
+     /api/my-orders already sends (a pay link is drawn only when it is https);
+     Documents read and upload through /api/my-files (bytes fetched with the
+     token, never a URL); Design subscribes through /api/customer-subscribe
+     (checkout comes back here with ?checkout=). The header wears the
+     supplier's name through [data-brand-name]: this is their customer's
+     surface, not the platform's.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+  :root{
+    --ink:#0E1B24; --paper:#F4F7F9; --panel:#FFFFFF; --line:#DCE6EB; --sub:#5A7280;
+    --accent:#0E7C8B; --accent-soft:#E6F6F9; --cta:#0E7C8B;
+    --ok:#1B7F4B; --ok-bg:#E6F5EC; --wait:#A8690B; --wait-bg:#FBF0DD;
+    --bad:#B3261E; --bad-bg:#FBE9E7;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper); color:var(--ink); min-height:100vh;
+    font:400 15px/1.55 'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',Verdana,sans-serif}
+  .top{display:flex;align-items:center;gap:13px;padding:16px 24px;
+    background:var(--panel);border-bottom:1px solid var(--line)}
+  .top img{height:28px;width:auto;display:block}
+  .top .nm{font-size:17px;font-weight:700;letter-spacing:-.01em}
+  .top .sp{flex:1}
+  .top .who{font-size:13.5px;color:var(--sub)}
+  .btn{font:600 14px/1 inherit;border-radius:9px;padding:10px 14px;cursor:pointer;
+    border:1px solid var(--line);background:transparent;color:var(--sub)}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.p{background:var(--cta);border-color:var(--cta);color:#fff}
+  .btn.p:hover{opacity:.9;color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  main{max-width:1040px;margin:0 auto;padding:30px 20px 70px}
+  h1{font-size:27px;font-weight:700;letter-spacing:-.02em;margin:0 0 6px}
+  .lede{color:var(--sub);margin:0 0 26px;max-width:58ch}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:20px;margin-bottom:16px}
+  h2{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--sub);margin:0 0 14px}
+  /* ── an order ─────────────────────────────────────────────────────── */
+  .ord{border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+  .ord:last-child{margin-bottom:0}
+  .ord .hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .ord .no{font:600 15px/1.2 ui-monospace,Menlo,Consolas,monospace}
+  .ord .when{font-size:13px;color:var(--sub)}
+  .ord .sp{flex:1}
+  .pill{font-size:12px;font-weight:700;border-radius:999px;padding:5px 11px;white-space:nowrap}
+  .pill.go{background:var(--ok-bg);color:var(--ok)}
+  .pill.wait{background:var(--wait-bg);color:var(--wait)}
+  .pill.stop{background:var(--bad-bg);color:var(--bad)}
+  .say{margin:10px 0 0;color:var(--sub);font-size:14.5px}
+  .track{display:flex;gap:4px;margin-top:14px}
+  .track i{flex:1;height:5px;border-radius:3px;background:var(--line)}
+  .track i.on{background:var(--accent)}
+  .track i.done{background:var(--ok)}
+  .steps{display:flex;gap:4px;margin-top:6px;font-size:10.5px;color:var(--sub)}
+  .steps span{flex:1;text-align:center;line-height:1.25}
+  .lines{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;
+    display:flex;flex-direction:column;gap:6px}
+  .lines div{display:flex;gap:10px;font-size:14px}
+  .lines .q{font-weight:600;font-variant-numeric:tabular-nums;min-width:32px}
+  .lines .n{flex:1}
+  .meta{margin-top:12px;display:flex;gap:18px;flex-wrap:wrap;font-size:13.5px;color:var(--sub)}
+  .docs{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+  .docs a{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;
+    border:1px solid var(--line);border-radius:8px;padding:7px 11px}
+  .docs a:hover{border-color:var(--accent)}
+  /* ── account ──────────────────────────────────────────────────────── */
+  .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+  .kv .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);font-weight:700}
+  .kv .v{font-size:15px;font-weight:600;margin-top:3px}
+  label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--sub);font-weight:700;margin:14px 0 5px}
+  input{font:inherit;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px}
+  input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .actions{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap}
+  .muted{color:var(--sub)}
+  .err{color:var(--bad);font-weight:600}
+  .empty{text-align:center;padding:30px 12px;color:var(--sub)}
+  /* ── sign in ──────────────────────────────────────────────────────── */
+  #gate{max-width:420px;margin:60px auto;padding:0 20px}
+  #gate section{padding:26px}
+  #gate h1{font-size:23px}
+  .pf-mode{display:flex;gap:8px;margin-bottom:14px}
+  .pf-mode button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 16px;font:inherit;font-weight:600;cursor:pointer;color:var(--sub)}
+  .pf-mode button.on{background:var(--ink);color:var(--paper,#fff);border-color:var(--ink)}
+  .pf-frame{width:100%;height:960px;border:1px solid var(--line);border-radius:12px;background:transparent}
+  .pf-steps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .pf-step{border:1px solid var(--line);background:transparent;border-radius:8px;padding:8px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:var(--sub)}
+  .pf-step.on{border-color:var(--ink);color:var(--ink)}
+  .pf-step[disabled]{opacity:.45;cursor:default}
+  .pf-row{display:block;width:100%;text-align:left;border:1px solid var(--line);background:transparent;border-radius:10px;padding:10px 12px;margin-bottom:8px;font:inherit;cursor:pointer}
+  .pf-table{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0 10px}
+  .pf-table th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .pf-table td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  .pf-table tr[data-site]{cursor:pointer}
+  .pf-table tr[data-site]:hover td{background:var(--wait-bg)}
+  .pf-scroll{overflow:auto;max-width:100%}
+  .pf-bar{height:8px;border-radius:999px;background:var(--line);overflow:hidden;margin:12px 0 6px}
+  .pf-bar i{display:block;height:100%;background:var(--ok);transition:width .3s}
+  .kv small{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);font-weight:700}
+  .kv > div > b{display:block;font-size:15px;margin-top:3px}
+  #pf-body h4{margin:16px 0 6px;font-size:14px}
+  #pf-body ul{margin:4px 0 8px 18px;padding:0}
+  #pf-body select,#pf-body input[type=search]{width:100%}
+  @media (max-width:560px){ main{padding:22px 16px 60px} .row2{grid-template-columns:1fr}
+    .steps{display:none} }
+  .rqs{margin-top:10px;border-top:1px solid var(--line,#e6eef2);padding-top:6px}
+  .rq{padding:8px 0;border-bottom:1px dashed var(--line,#e6eef2);font-size:14px}.rq p{margin:4px 0}.rq .ans{background:var(--sunk,#f1fafc);padding:8px 10px;border-radius:8px}
+  .rqf{margin-top:8px;font-size:14px}.rqf summary{cursor:pointer;color:var(--brand-d,#2A8CA3)}.rqf label{display:block;margin:8px 0 4px}.rqf textarea,.rqf select,.rqf input{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line,#dce4e5);border-radius:8px;margin-bottom:6px}.rqf .addr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:6px}.rqf button{font:inherit;padding:9px 16px;border-radius:999px;border:1px solid var(--brand,#3FAFC6);background:var(--brand,#3FAFC6);color:white;cursor:pointer}
+  @media(max-width:600px){.rqf .addr{grid-template-columns:1fr 1fr}}
+  /* ── the hub home, and the hubs it opens (the customer app's, with room) ── */
+  .home-top{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:18px;align-items:start;margin-bottom:16px}
+  .home-top .hexhub{margin:0}.home-top section{margin:0}
+  .hub-plain{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+  .home-panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;align-items:start}.home-panels section{margin:0}
+  @media (max-width:980px){ .home-top{grid-template-columns:minmax(0,1fr)} }
+  .hrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 0;border-top:1px solid var(--line);color:inherit;text-decoration:none;min-width:0}
+  .hrow>div{min-width:0}.hrow small{display:block;color:var(--sub);font-size:13px;overflow-wrap:anywhere}.hrow:hover b{color:var(--accent)}
+  .card2{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;min-width:0}
+  .card2 .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .card2 .m{font-size:14px;color:var(--sub);margin-top:4px;overflow-wrap:anywhere}
+  .plans{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}.plans .btn{line-height:1.3}.plans .btn small{display:block;font-weight:500;margin-top:4px;opacity:.9}
+  a.btn{display:inline-block;text-decoration:none}
+  .due-over{color:var(--bad);font-weight:700}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .acts2{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}.acts2 select,.acts2 input{width:auto;flex:1 1 150px;min-width:0}
+  select,textarea{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:inherit;max-width:100%}
+  textarea{width:100%;min-height:80px}
+  .hexhub h2{text-transform:none}
+  .logic-theme .home-panels h2,.logic-theme #home-sum h2{font-size:13px;letter-spacing:.09em;margin:0 0 10px}
+  .logic-theme a.hrow{color:var(--ink)}.hrow b{overflow-wrap:anywhere}
+  .sub-h{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--sub);margin:18px 0 6px}
+  /* ── sites from a list (#fleet-bulk): its own card above Fleet ── */
+  .bk-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  #fleet-bulk h2{margin:0}
+  #fleet-bulk textarea.sheet{min-height:170px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
+  #fleet-bulk input[type=checkbox]{width:18px;height:18px;padding:0;margin:0;vertical-align:middle}
+  #fleet-bulk .pf-table input:not([type=checkbox]){padding:7px 9px}
+  #fleet-bulk .pf-table input.bk-n{width:84px}
+  #fleet-bulk .pf-table td small{display:block;color:var(--sub);font-size:12.5px}
+  #fleet-bulk .pf-table tr.bk-prob td{border-top:0;padding-top:0}
+  #fleet-bulk .pf-table label.bk-use{display:flex;gap:6px;align-items:center;margin:0;text-transform:none;letter-spacing:0;font-size:13.5px;color:var(--ink);font-weight:500}
+  #fleet-bulk ul{margin:6px 0 10px 18px;padding:0;font-size:14px}
+  #fleet-bulk details summary{cursor:pointer;color:var(--brand-d,#2A8CA3);font-weight:600}
+  .bk-box{border-top:1px solid var(--line);margin-top:16px;padding-top:14px}
+</style>
+<link rel="stylesheet" href="/omega-logic-theme.css">
+</head>
+<body class="logic-theme">
+
+<header class="top">
+  <img id="mark" alt="" hidden>
+  <a class="nm" id="brand" data-brand-name href="#home" style="color:inherit;text-decoration:none" title="Home">Your account</a>
+  <span class="sp"></span>
+  <span class="who" id="who"></span>
+  <button type="button" class="btn" id="out" hidden>Sign out</button>
+</header>
+
+<div id="gate" hidden>
+  <section>
+    <h1 id="g-h">Customer login</h1>
+    <p class="lede" id="g-p">Log in with your work email. We will email you a secure login link—no password to remember. For a corporate account, use the email assigned by your supplier.</p>
+    <label for="g-email">Email address</label>
+    <input id="g-email" type="email" autocomplete="email" placeholder="you@company.com">
+    <div class="actions">
+      <button type="button" class="btn p" id="g-link">Email my login link</button>
+      <button type="button" class="btn" id="g-google">Use Google</button>
+    </div>
+    <p class="muted" id="g-msg" style="margin-top:14px;font-size:13.5px"></p>
+    <p class="muted">New customer? <button type="button" class="btn" id="g-create">Create a customer account</button></p>
+  </section>
+</div>
+
+<div id="app" class="logic-shell" hidden>
+<nav class="logic-nav" aria-label="Customer account"><a href="#home" data-view="home" aria-current="page">Home</a><p class="eyebrow">Fleet</p><a href="#fleet" data-view="fleet">Fleet &amp; sites</a><a href="#shipping" data-view="shipping">Shipping</a><a href="#warranty" data-view="warranty">Warranty</a><p class="eyebrow">Buy</p><a href="#size" data-view="size">Size a system</a><a href="#orders" data-view="orders">Orders</a><a id="customer-po">POs &amp; deliveries</a><a href="#pay" data-view="pay">Pay</a><p class="eyebrow">Design</p><a href="#design" data-view="design">Design studio</a><p class="eyebrow">Account</p><a href="#documents" data-view="documents">Documents</a><a href="#terms" data-view="terms">Terms &amp; agreements</a><a href="#account" data-view="account">Account</a><a id="customer-app">Phone app</a></nav>
+<main class="logic-main">
+  <h1 id="hello">Home</h1>
+  <p class="lede" id="sub">Your fleet, what is on its way, what to pay and what needs you.</p>
+  <div id="s-home" data-page="home">
+    <div class="home-top"><div id="hub"></div><section id="home-sum"><h2>Your account</h2><div id="home-kv"><p class="muted">Loading…</p></div></section></div>
+    <div id="home-panels" class="home-panels"></div>
+  </div>
+  <section id="s-fleet-bulk" data-page="fleet" hidden><div id="fleet-bulk"><p class="muted">Loading…</p></div></section>
+  <section id="s-fleet" data-page="fleet" hidden><div id="fleet-body"><p class="muted">Loading your sites and units…</p></div></section>
+  <section id="s-shipping" data-page="shipping" hidden><div id="ship-body"><p class="muted">Loading…</p></div></section>
+  <section id="s-warranty" data-page="warranty" hidden><div id="war-body"><p class="muted">Loading…</p></div></section>
+  <section id="s-pay" data-page="pay" hidden><div id="pay-body"><p class="muted">Loading…</p></div></section>
+  <section id="s-size" data-page="size" hidden>
+    <div class="pf-mode" role="tablist" aria-label="Sizing mode"><button type="button" class="on" data-mode="single" role="tab" aria-selected="true">Single site</button><button type="button" data-mode="portfolio" role="tab" aria-selected="false">Portfolio upload</button></div>
+    <div id="size-single"><p class="muted">Size one site from its address and utility data with your supplier’s battery sizer, then request a quote or place an order.</p><p id="size-single-note" class="muted" hidden>The sizer is not available for this account yet.</p><iframe id="size-frame" class="pf-frame" title="Battery sizer" referrerpolicy="strict-origin-when-cross-origin" hidden></iframe><p class="muted" style="font-size:13px"><a id="size-open" href="#" target="_blank" rel="noopener">Open the sizer in its own tab</a></p></div>
+    <div id="size-portfolio" hidden><div id="portfolio-root"><p class="muted">Loading…</p></div></div>
+  </section>
+  <section id="editor-offer" data-page="design" hidden><h2>Site Map · Editor Lite</h2><p id="editor-access" class="muted">Checking your access…</p><p>Lay out your own sites, run the guided build, and export plot plans, single-lines, proposals, drawing sets and estimated bills of materials. Quote projects and place orders with your supplier.</p><p class="muted">This subscription is separate from your free customer account. It is on your company’s account, so everyone on it can design.</p><div id="sub-body"><p class="muted">Checking the subscription…</p></div></section>
+  <section id="design-projects" data-page="design" hidden><div class="actions"><a id="new-project" class="btn p" hidden>New site plan</a></div><h2>Your site plans</h2><div id="project-list"><p class="muted">Loading your designs…</p></div></section>
+  <section id="s-documents" data-page="documents" hidden>
+    <h2>Documents</h2><div id="docs-list"><p class="muted">Loading documents…</p></div>
+    <h2 style="margin-top:22px">Upload a document</h2>
+    <form id="doc-form"><p class="muted">A purchase order, a site survey, a drawing, a utility bill — PDF, PNG, JPEG, Excel, Word, CSV or text, up to 2 MB. Your supplier sees it on your account.</p>
+      <label for="doc-file">File</label><input id="doc-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.docx,.txt">
+      <div class="row2"><div><label for="doc-cat">What it is</label><select id="doc-cat" style="width:100%"></select></div><div><label for="doc-note">Note (optional)</label><input id="doc-note" maxlength="500" placeholder="Which site, which order"></div></div>
+      <div class="actions"><button class="btn p" id="doc-up">Upload</button><span class="muted" id="doc-msg" style="align-self:center;font-size:13.5px"></span></div></form>
+    <h2 style="margin-top:22px">Order documents</h2><div id="customer-documents"><p class="muted">Loading…</p></div>
+  </section>
+  <section id="s-terms" data-page="terms" hidden><h2>Terms &amp; agreements</h2><div id="agreements"></div></section>
+
+  <section id="s-orders" data-page="orders" hidden>
+    <h2>Orders</h2>
+    <div id="orders"><p class="muted">Loading…</p></div>
+  </section>
+
+  <section id="s-acct" data-page="account" hidden>
+    <h2>Your account</h2>
+    <div class="kv" id="acct"></div>
+    <div id="terms-wrap" hidden>
+      <h2 style="margin-top:22px">Your terms</h2>
+      <div class="kv" id="terms"></div>
+      <p class="muted" id="terms-note" style="font-size:13px;margin-top:12px"></p>
+    </div>
+    <div id="people" style="margin-top:22px"></div>
+    <h2 style="margin-top:22px">Your details</h2>
+    <label for="f-name">Your name</label><input id="f-name">
+    <div class="row2">
+      <div><label for="f-company">Company</label><input id="f-company"></div>
+      <div><label for="f-phone">Phone</label><input id="f-phone"></div>
+    </div>
+    <label for="f-line1">Delivery address</label><input id="f-line1" placeholder="Street">
+    <div class="row2">
+      <div><label for="f-city">City</label><input id="f-city"></div>
+      <div><label for="f-state">State / ZIP</label><input id="f-state" placeholder="IL 60616"></div>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn p" id="save">Save my details</button>
+      <span class="muted" id="owner-note" style="align-self:center;font-size:13px" hidden>Only the account owner changes the company and delivery address.</span>
+      <span class="muted" id="save-msg" style="align-self:center;font-size:13.5px"></span>
+    </div>
+  </section>
+  <p class="muted" id="attribution" data-omega-attribution hidden style="font-size:12.5px;margin-top:32px"></p>
+</main>
+</div>
+
+<script src="/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-logic-theme.js"></script>
+<script src="/omega-hexhub.js"></script>
+<script src="/portals/customer/portfolio.js"></script>
+<script>
+/* ES5 — CLAUDE.md's rule for every page outside the few ES2015 core ones. */
+(function () {
+  'use strict';
+
+  /* Every compat page in this repo creates the default app itself — see
+     orders.html:128. This page loads no omega-tenant.js to do it, so without
+     this line firebase.auth() throws "No Firebase App '[DEFAULT]'" on the
+     first call and the portal renders nothing at all. */
+  var _cfg = window.CLEARSKY_CONFIG || {};
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(_cfg.firebase || _cfg);
+  } catch (e) {}
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function qp(k) {
+    var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  /* The tenant whose portal this is. From the hostname, which is theirs —
+     never from anything a caller types. The endpoints scope by the VERIFIED
+     email regardless, so this decides which tenant's portal you are looking
+     at, not what you may see. */
+  var ORG = String(qp('org') || (window.CLEARSKY_CONFIG &&
+            CLEARSKY_CONFIG.tenant && CLEARSKY_CONFIG.tenant.orgId) || '').toLowerCase();
+
+  var LS_EMAIL = 'omega.portal.email';
+  /* Back from Stripe Checkout (api/customer-subscribe.js, from: 'portal'):
+     ?checkout=done|cancelled#design. Said once on Design, then taken off the
+     address so a reload does not say it again. */
+  var CHECKOUT = qp('checkout'); if (CHECKOUT !== 'done' && CHECKOUT !== 'cancelled') CHECKOUT = null;
+  if (/[?&]checkout=/.test(location.search)) { try { history.replaceState(null, '', location.pathname + '?org=' + encodeURIComponent(ORG) + (location.hash || '#design')); } catch (e) {} }
+  $('s-terms').insertBefore($('terms-wrap'), $('agreements'));
+  $('customer-po').href = '/po-inbox?org=' + encodeURIComponent(ORG);
+  $('customer-app').href = '/portals/customer/app?org=' + encodeURIComponent(ORG);
+  var views = {
+    home: ['Home', 'Your fleet, what is on its way, what to pay and what needs you.'],
+    fleet: ['Fleet & sites', 'Every unit on your account: where it is, the site it runs at, and what covers it.'],
+    shipping: ['Shipping', 'Loads on their way to you: carrier, tracking, and where each one is.'],
+    warranty: ['Warranty', 'Coverage for every unit: from when to when, and pending until the unit is bound to a site.'],
+    pay: ['Pay', 'Every open invoice on the account, with your supplier’s payment link where there is one.'],
+    size: ['Size a system', 'Size one site with the sizer, or upload a whole portfolio to screen and size every site.'],
+    orders: ['Orders', 'Everything you have ordered from your supplier.'],
+    documents: ['Documents', 'What your supplier shared with you, and what your company uploaded.'],
+    terms: ['Terms & agreements', 'Your account terms and recorded agreements.'],
+    design: ['Design studio', 'Design your own sites, on your own account.'],
+    account: ['Account', 'Your contact details and delivery information.']
+  };
+  /* Someone still waiting to join an account sees Home and the waiting card
+     on Account, never a page stuck on Loading: nothing of the account loads
+     until they are let in. ASKED keeps the page they wanted, so the moment
+     Check again finds them approved, loadAccount takes them there. */
+  var ASKED = 'home';
+  function view(key) {
+    if (!views[key]) key = 'home';
+    ASKED = key;
+    if (ACCT && ACCT.pending && key !== 'home' && key !== 'account') key = 'account';
+    $('hello').textContent = views[key][0]; $('sub').textContent = views[key][1];
+    Array.prototype.forEach.call(document.querySelectorAll('[data-page]'), function (e) { e.hidden = e.getAttribute('data-page') !== key; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function (e) { if (e.getAttribute('data-view') === key) e.setAttribute('aria-current', 'page'); else e.removeAttribute('aria-current'); });
+  }
+  var portfolioUi = null;
+  function sizeMode(mode) {
+    Array.prototype.forEach.call(document.querySelectorAll('.pf-mode button'), function (b) { var on = b.getAttribute('data-mode') === mode; b.className = on ? 'on' : ''; b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+    $('size-single').hidden = mode !== 'single'; $('size-portfolio').hidden = mode !== 'portfolio';
+    if (mode === 'portfolio' && !portfolioUi && window.OmegaPortfolio && firebase.auth().currentUser) portfolioUi = OmegaPortfolio.mount($('portfolio-root'), { org: ORG, api: api, tok: tok, esc: esc });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.pf-mode button'), function (b) { b.onclick = function () { sizeMode(b.getAttribute('data-mode')); }; });
+  window.addEventListener('hashchange', function () { view(location.hash.slice(1)); });
+  view(location.hash.slice(1) || qp('view'));
+  var PORTAL = null;
+  var portalReady = fetch('/api/customer-portal?org=' + encodeURIComponent(ORG)).then(function (r) {
+    return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Customer portal is unavailable.'); PORTAL = d; paint(); return d; });
+  });
+  portalReady['catch'](function (e) { $('g-msg').className = 'err'; $('g-msg').textContent = e.message; $('g-link').disabled = true; $('g-google').disabled = true; });
+
+  function paint() {
+    if (PORTAL) {
+      /* The tenant's name goes on every [data-brand-name] (the header's is
+         the one this page has): this is the supplier's customer surface. */
+      if (window.OmegaLogicTheme) OmegaLogicTheme.apply(PORTAL.brand);
+      else if (PORTAL.brand.name) Array.prototype.forEach.call(document.querySelectorAll('[data-brand-name]'), function (e) { e.textContent = PORTAL.brand.name; });
+      document.title = 'Your account · ' + PORTAL.brand.name;
+      if (PORTAL.brand.logoUrl) { $('mark').src = PORTAL.brand.logoUrl; $('mark').hidden = false; }
+      $('attribution').textContent = PORTAL.brand.attribution || ''; $('attribution').hidden = !PORTAL.brand.attribution;
+      if (PORTAL.links) { var sizer = PORTAL.links.start || ''; if (sizer) { $('size-frame').src = sizer + (sizer.indexOf('?') >= 0 ? '&' : '?') + 'plain=1'; $('size-frame').hidden = false; $('size-open').href = sizer; } else { $('size-single-note').hidden = false; $('size-open').hidden = true; } }
+      $('customer-po').href = '/po-inbox?org=' + encodeURIComponent(ORG);
+      $('customer-app').href = '/portals/customer/app?org=' + encodeURIComponent(ORG);
+      drawHub();
+      return;
+    }
+    try {
+      var WL = window.OmegaWhiteLabel;
+      if (WL && WL.active && WL.active()) {
+        var n = WL.platformName();
+        $('brand').textContent = n;
+        document.title = 'Your account · ' + n;
+        var m = WL.markUrl && WL.markUrl();
+        if (m) { $('mark').src = m; $('mark').hidden = false; }
+      }
+    } catch (e) {}
+  }
+  function brandName() { return PORTAL && PORTAL.brand && PORTAL.brand.name ? PORTAL.brand.name : 'your supplier'; }
+  function repName() { return ACCT && ACCT.rep && ACCT.rep.name ? ACCT.rep.name : 'your account rep'; }
+
+  function tok() {
+    var u = firebase.auth().currentUser;
+    return u ? u.getIdToken() : Promise.reject(new Error('signed out'));
+  }
+  function api(path, init) {
+    return tok().then(function (t) {
+      var o = init || {};
+      o.headers = o.headers || {};
+      o.headers.Authorization = 'Bearer ' + t;
+      if (o.body) o.headers['Content-Type'] = 'application/json';
+      return fetch(path, o);
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j || {} }; },
+                           function () { return { ok: false, status: r.status, j: {} }; });
+    });
+  }
+  function post(path, body) { return api(path, { method: 'POST', body: JSON.stringify(Object.assign({ org: ORG }, body)) }); }
+  var Q = '?org=' + encodeURIComponent(ORG);
+  /* A 404 with no JSON body is a route this deployment does not have yet,
+     not an answer; the page says so instead of pretending it is empty. */
+  function missing(r) { return r.status === 404 && !r.j.error; }
+
+  /* ── what the hubs read: each endpoint's answer, kept until it is asked
+     again. A hub whose endpoint did not answer shows no count rather than
+     a zero it cannot vouch for. ───────────────────────────────────────── */
+  var ACCT = null, ORDERS = null, SITES = null, PO = null, SUB = null, FILES = null, DESIGN = null;
+  var ERR = { orders: '', sites: '', files: '', sub: '' };
+  var DUE = ['awaiting_payment', 'part_paid'], SETTLED = ['paid', 'not_required'];
+  var STAGE = { deposit: 'Deposit', balance: 'Final balance' };
+  var LOAD = { planned: 'booked', in_transit: 'on its way', delivered: 'delivered', cancelled: 'cancelled', shipped: 'shipped' };
+  var LOAD_TONE = { planned: 'wait', in_transit: 'wait', delivered: 'go', cancelled: 'stop', shipped: '' };
+  var COV = { active: 'go', pending: 'wait', expired: 'stop', transferred: '' };
+  var DAY_MS = 86400000, EXPIRING_DAYS = 90, MAX_DOC = 2 * 1024 * 1024, PO_NEEDS = 'po_needs_information';
+  /* api/_lib/crm.js CATEGORIES, the ones a customer sends; fileInput()
+     decides by the bytes (a plain .zip is refused, so it is not offered) */
+  var DOC_CATS = [['purchase-order', 'Purchase order'], ['site-survey', 'Site survey'], ['drawing', 'Drawing'], ['utility-bill', 'Utility bill'], ['photo', 'Photo'], ['warranty', 'Warranty'], ['contract', 'Contract'], ['datasheet', 'Datasheet'], ['other', 'Other']];
+  function day(s) { return s ? String(s).slice(0, 10) : ''; }
+  function usd(v) { return '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  /* a hub cell holds 22 characters: $501,250.00 becomes $501k */
+  function usdShort(v) { v = Number(v || 0); return v >= 1e6 ? '$' + (v / 1e6).toFixed(1) + 'M' : v >= 1e4 ? '$' + Math.round(v / 1e3) + 'k' : '$' + Math.round(v).toLocaleString('en-US'); }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function kb(n) { n = Number(n); return n > 0 ? (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB') : ''; }
+  /* A link this page may put in an href: https, a named host, no user or
+     password in it. The server already checked (api/_lib/portal.js); this is
+     the page refusing to be the second place a bad record reaches anyone. */
+  function https(u) {
+    if (typeof u !== 'string' || !/^https:\/\//i.test(u) || u.length > 2000 || /[\s<>"'`]/.test(u)) return null;
+    try { var x = new URL(u); return x.protocol === 'https:' && !x.username && !x.password && x.hostname.indexOf('.') > 0 ? x.href : null; } catch (e) { return null; }
+  }
+  function invoicesOf(orders) {
+    var out = [];
+    (orders || []).forEach(function (o) {
+      ((o.checkout && o.checkout.invoices) || []).forEach(function (i) {
+        out.push({ order: o, inv: i, left: Math.max(0, Math.round((Number(i.amount || 0) - Number(i.recorded || 0)) * 100) / 100) });
+      });
+    });
+    return out;
+  }
+  function isDue(x) { return DUE.indexOf(x.inv.status) >= 0; }
+  function isPreparing(x) { return SETTLED.indexOf(x.inv.status) < 0 && !isDue(x); }
+  function isPaid(x) { return x.inv.status === 'paid'; }
+  /* When an issued invoice falls due: its date plus the account's terms, as
+     the endpoint returned both. */
+  function dueOn(i) {
+    var t = Date.parse(i.issuedAt || ''), d = Number(i.dueDays);
+    return isFinite(t) && i.dueDays != null && isFinite(d) ? new Date(t + d * DAY_MS).toISOString().slice(0, 10) : null;
+  }
+  function overdue(x) { var d = dueOn(x.inv); return isDue(x) && !!d && d < new Date().toISOString().slice(0, 10); }
+  /* Every movement on the account: the logistics ledger's loads, or — for an
+     order shipped before loads existed — its one shipment. */
+  function loadsOf(orders, units) {
+    var out = [];
+    (orders || []).forEach(function (o) {
+      var dest = {}, legs = o.loads || [];
+      (o.destinations || []).forEach(function (d) { if (d && d.id) dest[d.id] = d; });
+      legs.forEach(function (l) { out.push({ order: o, load: l, dest: dest[l.destinationId] || null }); });
+      if (o.shipment && !legs.length) {
+        var mine = (units || []).filter(function (u) { return u.orderNo && u.orderNo === o.orderNo; });
+        var moving = mine.some(function (u) { return u.status === 'in_transit'; });
+        out.push({ order: o, dest: (o.destinations || []).length === 1 ? o.destinations[0] : null,
+          load: { id: null, carrier: o.shipment.carrier, tracking: o.shipment.tracking, status: moving ? 'in_transit' : 'shipped', pickedUpAt: o.shipment.shippedAt, units: mine.length || null } });
+      }
+    });
+    return out;
+  }
+  function onTheWay(x) { return x.load.status === 'planned' || x.load.status === 'in_transit'; }
+  function inTransit(x) { return x.load.status === 'in_transit'; }
+  function destLine(d) { return d ? (d.name || d.id || '') + (d.city ? ' · ' + d.city + (d.state ? ', ' + d.state : '') : '') : ''; }
+  function shipsSoon(o) { return !o.shipment && !(o.loads || []).length && o.promisedShipAt && !o.cancelRequested && (o.milestone || {}).key !== 'cancelled'; }
+  function pendingCover(u) { return (u.coverage || []).some(function (c) { return c.status === 'pending'; }); }
+  function expiring(c, now) { var t = Date.parse(c.until || ''); return c.status === 'active' && isFinite(t) && t - now < EXPIRING_DAYS * DAY_MS; }
+  /* What only the customer can move on a unit: it arrived, it has no site
+     (its warranty waits for one), it can be commissioned. */
+  function fleetNeeds(units, mv) {
+    function can(u, k) { return ((mv || {})[k] || []).indexOf(u.status) >= 0 && u.state !== 'scrapped'; }
+    var out = [];
+    (units || []).forEach(function (u) {
+      if (u.status === 'delivered' && can(u, 'received')) out.push({ u: u, what: 'arrived' });
+      else if (u.status === 'received' && !u.siteId && u.state !== 'scrapped') out.push({ u: u, what: 'site' });
+      else if (u.siteId && can(u, 'commissioned') && u.status !== 'commissioned') out.push({ u: u, what: 'commission' });
+    });
+    return out;
+  }
+  function subHint(s) {
+    if (!s || !s.status) return 'Editor Lite';
+    if (s.status === 'past_due') return 'payment due';
+    if (s.status === 'trial') return s.expiresAt ? 'trial to ' + day(s.expiresAt).slice(5).replace('-', '/') : 'on trial';
+    if (s.status === 'active') return 'subscribed';
+    return s.available ? 'subscribe' : 'Editor Lite';
+  }
+
+  /* ── Home: the HEX HUB (omega-hexhub.js), the customer app's own — Fleet in
+     the middle; Size, Design, POs, Pay, Shipping and Warranty around it —
+     with the account at a glance beside it and, under it, what is arriving,
+     what to pay and what needs you. A cell opens its hub here; POs open the
+     company PO desk, where purchase orders are keyed in and uploaded. ───── */
+  function hubItems() {
+    var units = SITES ? SITES.units || [] : null, due = ORDERS ? invoicesOf(ORDERS).filter(isDue) : [];
+    var moving = ORDERS ? loadsOf(ORDERS, units || []).filter(inTransit) : [], pend = units ? units.filter(pendingCover) : [];
+    var owed = due.reduce(function (n, x) { return n + x.left; }, 0), late = due.filter(overdue).length;
+    var act = units ? fleetNeeds(units, SITES.moves).length : 0, now = Date.now();
+    var ending = units ? units.filter(function (u) { return (u.coverage || []).some(function (c) { return expiring(c, now); }); }).length : 0;
+    var queue = PO ? (PO.intake || []).filter(function (x) { return !x.convertedAt; }) : [], ask = queue.filter(function (x) { return x.status === PO_NEEDS; }).length;
+    var sites = SITES ? (SITES.sites || []).length : 0;
+    return [
+      { key: 'fleet', label: 'Fleet', icon: '▦', badge: act || '', hint: units ? plural(units.length, 'unit') + ' · ' + plural(sites, 'site') : '' },
+      { key: 'size', label: 'Size', icon: '⚡︎', hint: 'site · portfolio' },
+      { key: 'design', label: 'Design', icon: '▧', badge: SUB && SUB.status === 'past_due' ? '!' : '', hint: subHint(SUB) },
+      { key: 'pos', label: 'POs', icon: '▥', badge: ask || '', hint: PO ? (ask ? ask + ' need you' : queue.length ? queue.length + ' in review' : 'send · upload') : 'send · upload' },
+      { key: 'pay', label: 'Pay', icon: '$', badge: due.length || '', hint: ORDERS ? (due.length ? usdShort(owed) + (late ? ' · ' + late + ' late' : ' due') : 'nothing due') : '' },
+      { key: 'shipping', label: 'Shipping', icon: '➜', badge: moving.length || '', hint: ORDERS ? (moving.length ? moving.length + ' on the way' : 'nothing moving') : '' },
+      { key: 'warranty', label: 'Warranty', icon: '✓', badge: pend.length || '', hint: units ? (pend.length ? pend.length + ' pending' : ending ? ending + ' ending soon' : units.length ? 'all on file' : '') : '' }
+    ];
+  }
+  function goHub(k) {
+    if (k === 'pos') { location.href = '/po-inbox?org=' + encodeURIComponent(ORG); return; }
+    if (location.hash === '#' + k) view(k); else location.hash = '#' + k;
+    window.scrollTo(0, 0);
+  }
+  function drawHub() {
+    var el = $('hub'); if (!el) return;
+    var items = hubItems(), title = (ACCT && !ACCT.pending && ACCT.company) || 'Your account';
+    if (window.OmegaHexHub && typeof OmegaHexHub.render === 'function') { OmegaHexHub.render(el, { items: items, title: title, caption: PORTAL ? PORTAL.brand.name : '', onPick: goHub }); return; }
+    /* the hub script did not arrive: the same hubs as plain buttons */
+    el.innerHTML = '<section><h2>' + esc(title) + '</h2><div class="hub-plain">' + items.map(function (it) { return '<button type="button" class="btn" data-hub="' + esc(it.key) + '">' + esc(it.label) + (it.badge ? ' · ' + esc(it.badge) : '') + '</button>'; }).join('') + '</div></section>';
+    Array.prototype.forEach.call(el.querySelectorAll('[data-hub]'), function (b) { b.onclick = function () { goHub(b.getAttribute('data-hub')); }; });
+  }
+  function hrow(to, title, sub, pill, tone) {
+    return '<a class="hrow" href="' + esc(to) + '"><div><b>' + esc(title) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</div>' + (pill ? '<span class="pill ' + esc(tone || 'wait') + '">' + esc(pill) + '</span>' : '') + '</a>';
+  }
+  function panel(title, count, to, rows, empty, error) {
+    var shown = rows.slice(0, 5);
+    return '<section><h2>' + esc(title) + (count ? ' · ' + esc(count) : '') + '</h2>'
+      + (error ? '<p class="err">' + esc(error) + '</p>' : shown.length ? shown.join('') + (rows.length > shown.length ? '<p class="muted" style="font-size:13px">and ' + (rows.length - shown.length) + ' more</p>' : '') : '<p class="muted">' + esc(empty) + '</p>')
+      + (to ? '<p style="margin:10px 0 0"><a href="' + esc(to) + '">See all ›</a></p>' : '') + '</section>';
+  }
+  function drawHome() {
+    var el = $('home-panels'), kv = $('home-kv');
+    /* waiting to be let in: no hub — every cell would open a page that has
+       nothing to load until the owner or the supplier approves */
+    if (ACCT && ACCT.pending) {
+      if ($('hub')) $('hub').innerHTML = '';
+      if (!el || !kv) return;
+      kv.innerHTML = '<p><b>Waiting for approval.</b> You asked to join ' + esc(ACCT.company || 'your company') + '. Its account owner, or ' + esc(brandName()) + ', approves new people.</p><p><a class="btn" href="#account">Your account</a> <button type="button" class="btn" id="home-check">Check again</button></p>';
+      el.innerHTML = '';
+      $('home-check').onclick = function () { checkAgain(this); };
+      return;
+    }
+    drawHub();
+    if (!el || !kv) return;
+    var units = SITES ? SITES.units || [] : [], now = Date.now(), inv = ORDERS ? invoicesOf(ORDERS) : [], due = inv.filter(isDue), prep = inv.filter(isPreparing);
+    var owed = due.reduce(function (n, x) { return n + x.left; }, 0), late = due.filter(overdue);
+    kv.innerHTML = '<div class="kv"><div><small>To pay</small><b' + (late.length ? ' class="due-over"' : '') + '>' + (ORDERS ? usd(owed) : '—') + '</b></div><div><small>Units</small><b>' + (SITES ? units.length : '—') + '</b></div><div><small>Sites</small><b>' + (SITES ? (SITES.sites || []).length : '—') + '</b></div><div><small>Orders</small><b>' + (ORDERS ? ORDERS.length : '—') + '</b></div><div><small>Warranty pending</small><b>' + (SITES ? units.filter(pendingCover).length : '—') + '</b></div><div><small>Design</small><b>' + esc(SUB && SUB.status ? ({ active: 'subscribed', trial: 'trial', past_due: 'payment due' }[SUB.status] || 'not active') : '—') + '</b></div></div>'
+      + (ACCT && ACCT.rep && ACCT.rep.name ? '<p class="muted" style="font-size:13.5px;margin:12px 0 0">Your account rep: ' + esc(ACCT.rep.name) + (ACCT.rep.email ? ' · <a href="mailto:' + esc(ACCT.rep.email) + '">' + esc(ACCT.rep.email) + '</a>' : '') + '</p>' : '');
+
+    var arriving = [];
+    if (ORDERS) {
+      loadsOf(ORDERS, units).filter(onTheWay).forEach(function (x) { arriving.push(hrow('#shipping', x.order.orderNo + (x.load.id ? ' · load ' + x.load.id : ''), [x.load.carrier, x.load.tracking, x.dest ? 'to ' + destLine(x.dest) : ''].filter(Boolean).join(' · '), LOAD[x.load.status], LOAD_TONE[x.load.status])); });
+      ORDERS.filter(shipsSoon).forEach(function (o) { arriving.push(hrow('#shipping', o.orderNo, 'ships by ' + day(o.promisedShipAt) + (o.poNumber ? ' · your PO ' + o.poNumber : ''), (o.milestone || {}).label || 'in progress', '')); });
+    }
+    var toPay = due.map(function (x) { var d = dueOn(x.inv), lt = overdue(x); return hrow('#pay', (STAGE[x.inv.stage] || x.inv.stage) + ' · ' + x.order.orderNo, [x.inv.number ? 'invoice ' + x.inv.number : '', d ? (lt ? 'was due ' : 'due ') + d : '', https(x.inv.payUrl) ? 'pay online' : 'payment instructions from ' + (x.order.soldBy || brandName())].filter(Boolean).join(' · '), usd(x.left), lt ? 'stop' : 'wait'); });
+    if (prep.length) toPay.push(hrow('#pay', plural(prep.length, 'invoice') + ' being prepared', 'your supplier raises ' + (prep.length === 1 ? 'it' : 'them') + ' and sends ' + (prep.length === 1 ? 'it' : 'them') + ' to you', usd(prep.reduce(function (n, x) { return n + x.left; }, 0)), ''));
+    /* What only the customer can move: a unit that arrived, a unit with no
+       site, commissioning, a PO the supplier asked about, a colleague asking
+       to join, and an answer to a question they asked. */
+    var needs = [];
+    if (SITES) fleetNeeds(units, SITES.moves).forEach(function (n) {
+      var u = n.u;
+      if (n.what === 'arrived') needs.push(hrow('#fleet', 'Confirm ' + u.serial + ' arrived', u.name + (u.orderNo ? ' · ' + u.orderNo : ''), 'delivered', 'wait'));
+      else if (n.what === 'site') needs.push(hrow('#fleet', 'Choose the site for ' + u.serial, 'its warranty starts from the site' + (u.plannedSiteName ? ' · going to ' + u.plannedSiteName : ''), 'no site', 'wait'));
+      else needs.push(hrow('#fleet', 'Record commissioning of ' + u.serial, 'at ' + (u.siteName || 'its site'), u.label, ''));
+    });
+    if (PO) (PO.intake || []).forEach(function (x) { if (!x.convertedAt && x.status === PO_NEEDS) needs.push(hrow('/po-inbox?org=' + encodeURIComponent(ORG), 'PO ' + x.poNumber + ' needs information', x.reviewNote || 'see the note from ' + brandName(), 'reply', 'wait')); });
+    if (ACCT && ACCT.you && ACCT.you.role === 'owner') (ACCT.users || []).forEach(function (p) { if (p.status === 'pending') needs.push(hrow('#account', (p.name || p.email) + ' asked to join', p.name ? p.email : '', 'approve', 'wait')); });
+    if (ORDERS) ORDERS.forEach(function (o) { (o.requests || []).forEach(function (q2) { var t = Date.parse(q2.answeredAt || ''); if (q2.answer && isFinite(t) && now - t < 14 * DAY_MS) needs.push(hrow(q2.kind === 'warranty' ? '#warranty' : '#orders', 'Answer on ' + o.orderNo, String(q2.answer).slice(0, 120), 'answered', 'go')); }); });
+    if (SUB && SUB.status === 'past_due') needs.push(hrow('#design', 'Editor Lite payment is due', 'update the card to keep designing', 'payment due', 'stop'));
+
+    el.innerHTML = panel('Arriving', arriving.length, '#shipping', arriving, 'Nothing on its way right now.', ERR.orders)
+      + panel('To pay', due.length, '#pay', toPay, 'Nothing to pay right now.', ERR.orders)
+      + panel('Needs you', needs.length, null, needs, 'Nothing needs you right now.', ERR.sites && !needs.length ? ERR.sites : '');
+  }
+
+  /* ── Pay: every open invoice on the account ────────────────────────────
+     Number, amount, when it is due, and the supplier's pay link — a
+     tenant-billed invoice's own link or a QuickBooks invoice's — as a
+     button, https only. With no link the supplier sends payment
+     instructions; the page never takes a card. */
+  function invCard(x) {
+    var i = x.inv, o = x.order, link = https(i.payUrl), paid = isPaid(x), due = isDue(x), d = dueOn(i), late = overdue(x);
+    var when = paid ? '' : due ? (d ? (late ? '<span class="due-over">overdue · was due ' + esc(d) + '</span>' : 'due ' + esc(d)) : i.dueDays != null ? 'due ' + esc(i.dueDays) + ' days from the invoice date' : '') : 'not issued yet';
+    return '<div class="card2" data-invoice="' + esc(o.orderNo + ':' + i.stage) + '"><div class="h"><b>' + (i.number ? 'Invoice ' + esc(i.number) : esc(STAGE[i.stage] || i.stage) + ' invoice') + '</b><b>' + usd(paid ? i.amount : x.left) + '</b></div>'
+      + '<div class="m">' + esc(i.number ? (STAGE[i.stage] || i.stage) + ' · ' : '') + esc(o.orderNo) + (o.poNumber ? ' · your PO ' + esc(o.poNumber) : '') + (i.issuedAt ? ' · issued ' + esc(day(i.issuedAt)) : '') + '</div>'
+      + (when ? '<div class="m">' + when + '</div>' : '')
+      + (i.recorded && !paid ? '<p class="muted" style="font-size:13.5px">' + usd(i.recorded) + ' received of ' + usd(i.amount) + '.</p>' : '')
+      + (paid ? '<p style="margin:8px 0 0"><span class="pill go">paid</span></p>'
+        : due && link ? '<div class="actions" style="margin-top:10px"><a class="btn p" data-pay target="_blank" rel="noopener noreferrer" href="' + esc(link) + '">Pay ' + usd(x.left) + '</a><span class="muted" style="align-self:center;font-size:13px">Opens ' + esc(o.soldBy || brandName()) + '’s payment page.</span></div>'
+        : due ? '<p class="muted" style="font-size:13.5px">Your supplier will send payment instructions.</p>'
+        : '<p class="muted" style="font-size:13.5px">' + esc(o.soldBy || brandName()) + ' raises this invoice and sends it to you.</p>')
+      + '</div>';
+  }
+  function drawPay() {
+    var el = $('pay-body'); if (!el) return;
+    if (!ORDERS) { el.innerHTML = ERR.orders ? '<p class="err">' + esc(ERR.orders) + '</p>' : '<p class="muted">Loading…</p>'; return; }
+    var all = invoicesOf(ORDERS), due = all.filter(isDue), prep = all.filter(isPreparing), paid = all.filter(isPaid), late = due.filter(overdue);
+    due.sort(function (a, b) { var x = dueOn(a.inv) || '9999', y = dueOn(b.inv) || '9999'; return x < y ? -1 : x > y ? 1 : 0; });
+    var sum = function (list) { return list.reduce(function (n, x) { return n + x.left; }, 0); };
+    el.innerHTML = '<div class="kv"><div><small>Open</small><b>' + usd(sum(due)) + '</b><small>' + plural(due.length, 'invoice') + '</small></div><div><small>Overdue</small><b' + (late.length ? ' class="due-over"' : '') + '>' + usd(sum(late)) + '</b><small>' + plural(late.length, 'invoice') + '</small></div><div><small>Being prepared</small><b>' + usd(sum(prep)) + '</b><small>' + plural(prep.length, 'invoice') + '</small></div></div>'
+      + '<p class="sub-h">Open · ' + due.length + '</p>' + (due.map(invCard).join('') || '<p class="muted">Nothing to pay. Invoices appear here as soon as they are issued.</p>')
+      + (prep.length ? '<p class="sub-h">Being prepared · ' + prep.length + '</p>' + prep.map(invCard).join('') : '')
+      + (paid.length ? '<details><summary class="sub-h" style="cursor:pointer">Paid · ' + paid.length + '</summary>' + paid.map(invCard).join('') + '</details>' : '')
+      + (all.length ? '<p class="muted" style="font-size:13.5px">A question about an invoice? Ask on its order under <a href="#orders">Orders</a>.</p>' : '<p class="muted">Invoices come with a priced order. Nothing has been invoiced on this account yet.</p>');
+  }
+
+  /* ── Shipping: loads on their way ────────────────────────────────────── */
+  function loadCard(x) {
+    var l = x.load, o = x.order, bits = [];
+    if (x.dest) bits.push('to ' + destLine(x.dest));
+    if (l.units) bits.push(plural(l.units, 'unit'));
+    if (l.pickedUpAt) bits.push((x.load.id ? 'picked up ' : 'shipped ') + day(l.pickedUpAt));
+    if (l.lastConfirmed) bits.push('last confirmed at ' + l.lastConfirmed.label + (l.lastConfirmed.at ? ' ' + day(l.lastConfirmed.at) : ''));
+    if (l.deliveredAt) bits.push('delivered ' + day(l.deliveredAt));
+    return '<div class="card2" data-load="' + esc(l.id || o.orderNo) + '"><div class="h"><b>' + esc(o.orderNo) + (l.id ? ' · load ' + esc(l.id) : '') + '</b><span class="pill ' + esc(LOAD_TONE[l.status] || '') + '">' + esc(LOAD[l.status] || String(l.status || '').replace(/_/g, ' ')) + '</span></div>'
+      + (o.poNumber ? '<div class="m">your PO ' + esc(o.poNumber) + '</div>' : '')
+      + '<div class="kv" style="margin-top:10px"><div><small>Carrier</small><b>' + esc(l.carrier || '—') + '</b></div><div><small>Tracking</small><b class="mono">' + esc(l.tracking || '—') + '</b></div></div>'
+      + (bits.length ? '<p class="muted" style="font-size:13.5px;margin:10px 0 0">' + esc(bits.join(' · ')) + '</p>' : '') + '</div>';
+  }
+  function drawShipping() {
+    var el = $('ship-body'); if (!el) return;
+    if (!ORDERS) { el.innerHTML = ERR.orders ? '<p class="err">' + esc(ERR.orders) + '</p>' : '<p class="muted">Loading…</p>'; return; }
+    var list = loadsOf(ORDERS, SITES ? SITES.units || [] : []);
+    var moving = list.filter(onTheWay), landed = list.filter(function (x) { return x.load.status === 'delivered' || x.load.status === 'shipped'; }), soon = ORDERS.filter(shipsSoon);
+    el.innerHTML = '<p class="sub-h">On the way · ' + moving.length + '</p>' + (moving.map(loadCard).join('') || '<p class="muted">Nothing on the road right now.</p>')
+      + (soon.length ? '<p class="sub-h">Getting ready · ' + soon.length + '</p>' + soon.map(function (o) { return '<div class="card2"><div class="h"><b>' + esc(o.orderNo) + '</b><span class="pill">' + esc((o.milestone || {}).label || 'in progress') + '</span></div><div class="m">ships by ' + esc(day(o.promisedShipAt)) + (o.poNumber ? ' · your PO ' + esc(o.poNumber) : '') + ((o.destinations || []).length ? ' · to ' + esc(o.destinations.map(destLine).join('; ')) : '') + '</div></div>'; }).join('') : '')
+      + (landed.length ? '<p class="sub-h">Delivered and shipped · ' + landed.length + '</p>' + landed.slice(0, 20).map(loadCard).join('') : '')
+      + '<p class="muted" style="font-size:13.5px">To change a delivery address or date, ask on the order under <a href="#orders">Orders</a>. When a unit arrives, record it under <a href="#fleet">Fleet</a>.</p>';
+  }
+
+  /* ── Warranty: coverage per unit ───────────────────────────────────────
+     api/_lib/custody.js derives each unit's coverage at read time; the page
+     groups and prints it. A question goes onto the unit's ORDER as a
+     warranty request (api/my-orders.js POST), where the office answers. */
+  function covLine(c, now) {
+    var doc = https(c.docUrl), soon = expiring(c, now);
+    return '<div class="hrow"><div>' + esc(c.type === 'sla' ? 'Service level' : 'Warranty') + (c.provider && c.provider !== 'oem' ? ' · ' + esc(c.provider) : '') + (c.termMonths ? ' · ' + esc(c.termMonths) + ' months' : '')
+      + '<small>' + (c.status === 'active' ? 'from ' + esc(day(c.from)) + ' until ' + esc(day(c.until)) + (soon ? ' · ends within ' + EXPIRING_DAYS + ' days' : '') : c.status === 'pending' ? esc(c.why || 'starts when the unit is bound to its site') : c.status === 'expired' ? 'from ' + esc(day(c.from)) + ' · ended ' + esc(day(c.until)) : c.status === 'transferred' ? 'moved to the replacement unit' : esc(c.status)) + '</small>'
+      + (doc ? '<small><a target="_blank" rel="noopener noreferrer" href="' + esc(doc) + '">Terms</a></small>' : '') + '</div><span class="pill ' + (soon ? 'wait' : COV[c.status] || '') + '">' + esc(soon ? 'expiring' : c.status) + '</span></div>';
+  }
+  function drawWarranty() {
+    var el = $('war-body'); if (!el) return;
+    if (!SITES) { el.innerHTML = ERR.sites ? '<p class="err">' + esc(ERR.sites) + '</p>' : '<p class="muted">Loading…</p>'; return; }
+    var byNo = {}; (ORDERS || []).forEach(function (o) { if (o.orderNo) byNo[o.orderNo] = o; });
+    var units = SITES.units || [], now = Date.now(), groups = { pending: [], expiring: [], active: [], ended: [], none: [] };
+    units.forEach(function (u, i) {
+      var cv = u.coverage || [], g = !cv.length ? 'none' : cv.some(function (c) { return c.status === 'pending'; }) ? 'pending' : cv.some(function (c) { return expiring(c, now); }) ? 'expiring' : cv.some(function (c) { return c.status === 'active'; }) ? 'active' : 'ended';
+      groups[g].push(i);
+    });
+    function asked(u) { var o = u.orderNo && byNo[u.orderNo]; if (!o) return []; return (o.requests || []).filter(function (q2) { return q2.kind === 'warranty' && String(q2.message || '').indexOf(u.serial) >= 0; }); }
+    function card(i) {
+      var u = units[i], qs = asked(u), o = u.orderNo ? byNo[u.orderNo] : null;
+      return '<div class="card2" data-cover="' + esc(u.serial) + '"><div class="h"><b class="mono">' + esc(u.serial) + '</b><span class="pill">' + esc(u.label) + '</span></div><div class="m">' + esc(u.name) + (u.orderNo ? ' · ' + esc(u.orderNo) : '') + (u.siteName ? ' · at ' + esc(u.siteName) : ' · no site yet') + '</div>'
+        + (u.coverage || []).map(function (c) { return covLine(c, now); }).join('')
+        + qs.map(function (q2) { return '<div class="rq"><span class="muted">' + esc(day(q2.at)) + (q2.by ? ' · ' + esc(q2.by) : '') + ' · ' + (q2.answer ? 'answered' : 'waiting for an answer') + '</span><p>' + esc(q2.message) + '</p>' + (q2.answer ? '<p class="ans"><b>' + esc((o && o.soldBy) || brandName()) + ':</b> ' + esc(q2.answer) + '</p>' : '') + '</div>'; }).join('')
+        + (pendingCover(u) && !u.siteId ? '<p style="margin:8px 0 0"><a class="btn" href="#fleet">Choose its site</a></p>' : '')
+        + (o ? '<details class="rqf"><summary>Ask about this warranty</summary><form data-wask="' + i + '"><textarea name="message" maxlength="2000" required>' + esc('Unit ' + u.serial + ': ') + '</textarea><button type="submit">Send question</button> <span class="muted rq-status"></span></form></details>'
+          : u.orderNo ? '<p class="muted" style="font-size:13.5px">Ask ' + esc(brandName()) + ' about this unit on order ' + esc(u.orderNo) + '.</p>' : '')
+        + '</div>';
+    }
+    var n = function (k) { return groups[k].length; };
+    el.innerHTML = '<div class="kv"><div><small>Covered</small><b>' + (n('active') + n('expiring')) + '</b></div><div><small>Pending</small><b>' + n('pending') + '</b><small>waiting for a site</small></div><div><small>Ending in ' + EXPIRING_DAYS + ' days</small><b>' + n('expiring') + '</b></div><div><small>Ended</small><b>' + n('ended') + '</b></div></div>'
+      + (n('pending') ? '<p class="sub-h">Pending · ' + n('pending') + '</p><p class="muted" style="font-size:13.5px">Coverage starts when a unit is bound to the site it runs at. Tell us where each one is installed.</p>' + groups.pending.map(card).join('') : '')
+      + (n('expiring') ? '<p class="sub-h">Ending soon · ' + n('expiring') + '</p>' + groups.expiring.map(card).join('') : '')
+      + (n('active') ? '<p class="sub-h">Covered · ' + n('active') + '</p>' + groups.active.map(card).join('') : '')
+      + (n('ended') ? '<p class="sub-h">Ended · ' + n('ended') + '</p>' + groups.ended.map(card).join('') : '')
+      + (n('none') ? '<p class="sub-h">No coverage on file · ' + n('none') + '</p><p class="muted" style="font-size:13.5px">Ask ' + esc(brandName()) + ' what covers these.</p>' + groups.none.map(card).join('') : '')
+      + (units.length ? '' : '<p class="muted">No units have shipped yet. Their warranties appear here from the day they leave the plant.</p>');
+    Array.prototype.forEach.call(el.querySelectorAll('form[data-wask]'), function (f) {
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        var u = units[Number(f.getAttribute('data-wask'))], st = f.querySelector('.rq-status'), btn = f.querySelector('button');
+        btn.disabled = true; st.textContent = 'Sending…';
+        post('/api/my-orders' + Q, { orderNo: u.orderNo, kind: 'warranty', message: f.message.value }).then(function (r) {
+          if (!r.ok) { st.textContent = r.j.error || 'Could not send. Please try again.'; btn.disabled = false; return; }
+          st.textContent = 'Sent. ' + brandName() + ' answers here and on order ' + u.orderNo + '.'; loadOrders();
+        })['catch'](function () { st.textContent = 'Could not reach the server.'; btn.disabled = false; });
+      };
+    });
+  }
+
+  /* ── Fleet: sites and equipment ─────────────────────────────────────────
+     api/my-sites.js — the account's own sites (an end location with its
+     interconnection point) and every shipped unit on its orders. The
+     customer records where a unit is going, receipt, the site it is
+     installed at and commissioning; the office confirms. The same rules the
+     office uses judge each move, and coverage is worked out from the dates
+     every time it is shown. */
+  var UNIT_TONE = { in_service: 'go', commissioned: 'go', cancelled: 'stop' };
+  function drawFleet() {
+    var el = $('fleet-body'); if (!el) return;
+    if (!SITES) { el.innerHTML = ERR.sites ? '<p class="err">' + esc(ERR.sites) + '</p>' : '<p class="muted">Loading your sites and units…</p>'; return; }
+    var sites = SITES.sites || [], units = SITES.units || [], mv = SITES.moves || {}, todo = fleetNeeds(units, mv);
+    function can(u, a) { return (mv[a] || []).indexOf(u.status) >= 0 && u.state !== 'scrapped'; }
+    var siteSel = function (sel) { return sites.map(function (s) { return '<option value="' + esc(s.id) + '"' + (s.id === sel ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join(''); };
+    var running = units.filter(function (u) { return u.status === 'commissioned' || u.status === 'in_service'; }).length, moving = units.filter(function (u) { return u.status === 'in_transit'; }).length;
+    var covered = units.filter(function (u) { return (u.coverage || []).some(function (c) { return c.status === 'active'; }); }).length;
+    el.innerHTML = (todo.length ? '<p class="err" style="font-weight:600">' + plural(todo.length, 'unit needs', 'units need') + ' you below: ' + esc(todo.map(function (n) { return n.u.serial + ' ' + ({ arrived: 'arrived?', site: 'which site?', commission: 'commissioned?' })[n.what]; }).slice(0, 4).join(' · ')) + (todo.length > 4 ? ' …' : '') + '</p>' : '')
+      + '<div class="kv"><div><small>Units</small><b>' + units.length + '</b></div><div><small>Sites</small><b>' + sites.length + '</b></div><div><small>Running</small><b>' + running + '</b></div><div><small>On the way</small><b>' + moving + '</b></div><div><small>Under warranty</small><b>' + covered + '</b></div><div><small>Warranty pending</small><b>' + units.filter(pendingCover).length + '</b></div></div>'
+      + '<p class="sub-h">Sites · ' + sites.length + '</p>'
+      + (sites.map(function (s) { var a = s.address || {}, ic = s.interconnection || {}; return '<div class="hrow"><div><b>' + esc(s.name) + '</b><small>' + esc([a.line1, a.city, a.state, a.zip].filter(Boolean).join(', ')) + '</small>' + (ic.utility || ic.poi ? '<small>' + esc([ic.utility, ic.poi ? 'POI ' + ic.poi : '', ic.meterNo ? 'meter ' + ic.meterNo : ''].filter(Boolean).join(' · ')) + '</small>' : '') + (Number(s.planned) > 0 ? '<small>' + esc(plural(Number(s.planned), 'unit') + ' going here') + '</small>' : '') + '</div><span class="pill">' + plural(Number(s.units) || 0, 'unit') + '</span></div>'; }).join('') || '<p class="muted">No sites yet. Add the location where your units will be interconnected, or many at once from a list above.</p>')
+      + '<details class="rqf" id="site-add"><summary>Add a site</summary><form id="site-form"><div class="row2"><div><label for="sf-name">Site name</label><input id="sf-name" required maxlength="160"></div><div><label for="sf-line1">Street address</label><input id="sf-line1" maxlength="200"></div></div><div class="row2"><div><label for="sf-city">City</label><input id="sf-city" maxlength="100"></div><div><label for="sf-state">State ZIP</label><input id="sf-state" maxlength="60" placeholder="CA 93307"></div></div><div class="row2"><div><label for="sf-utility">Utility</label><input id="sf-utility" maxlength="120"></div><div><label for="sf-meter">Meter no.</label><input id="sf-meter" maxlength="80"></div></div><label for="sf-poi">Point of interconnection</label><input id="sf-poi" maxlength="200" placeholder="e.g. MSB-2, 480 V"><div class="actions"><button type="submit" id="sf-save">Save site</button></div></form></details>'
+      + '<p class="sub-h">Your units · ' + units.length + '</p><p class="muted" style="font-size:13.5px">Tell us when a unit arrives and which site it is installed at: the warranty is tied to that site.</p>'
+      + (units.map(function (u, i) {
+        var acts = '';
+        if (!u.siteId && ['in_transit', 'delivered', 'received', 'ready to ship'].indexOf(u.status) >= 0 && u.state !== 'scrapped' && sites.length) acts += '<div class="acts2"><select data-dest="' + i + '" aria-label="Going to"><option value="">Going to…</option>' + siteSel(u.plannedSiteId) + '</select><button type="button" class="btn" data-act="destination" data-i="' + i + '">' + (u.plannedSiteId ? 'Change' : 'Set') + '</button></div>';
+        if (can(u, 'received')) acts += '<div class="acts2"><select data-cond="' + i + '" aria-label="Condition on arrival"><option value="accepted">Arrived in good order</option><option value="damaged">Arrived damaged</option></select><button type="button" class="btn p" data-act="received" data-i="' + i + '">Received</button></div>';
+        if (can(u, 'assign') && sites.length) acts += '<div class="acts2"><select data-site="' + i + '" aria-label="Installed at">' + (u.siteId ? '' : '<option value="">Installed at…</option>') + siteSel(u.siteId) + '</select><button type="button" class="btn" data-act="assign" data-i="' + i + '">Assign</button></div>';
+        if (can(u, 'commissioned') && u.siteId) acts += '<div class="acts2"><input type="date" data-date="' + i + '" aria-label="Commissioned on"><input data-inst="' + i + '" placeholder="Commissioned by" aria-label="Commissioned by"><button type="button" class="btn" data-act="commissioned" data-i="' + i + '">Commissioned</button></div>';
+        return '<div class="card2" data-unit="' + esc(u.serial) + '"><div class="h"><b class="mono">' + esc(u.serial) + '</b><span class="pill ' + (UNIT_TONE[u.status] || '') + '">' + esc(u.label) + '</span></div>'
+          + '<div class="m">' + esc(u.name) + (u.orderNo ? ' · ' + esc(u.orderNo) : '') + '</div>'
+          + (u.siteName ? '<div class="m">at ' + esc(u.siteName) + (u.position ? ' · ' + esc(u.position) : '') + (u.confirmation === 'confirmed' ? ' · confirmed by your supplier ' + esc(day(u.confirmedAt)) : ' · awaiting your supplier’s confirmation') + '</div>' : u.plannedSiteName ? '<div class="m">going to ' + esc(u.plannedSiteName) + '</div>' : '')
+          + (u.coverage || []).map(function (c) { return '<div class="hrow"><div>' + esc(c.type === 'sla' ? 'Service level' : 'Warranty') + '<small>' + (c.status === 'active' ? 'until ' + esc(day(c.until)) + (c.from ? ' · from ' + esc(day(c.from)) : '') : c.status === 'pending' ? esc(c.why || 'not started') : c.status === 'expired' ? 'ended ' + esc(day(c.until)) : esc(c.status)) + '</small></div><span class="pill ' + (COV[c.status] || '') + '">' + esc(c.status) + '</span></div>'; }).join('')
+          + (u.state ? '<p class="err">' + esc(u.state) + '</p>' : '') + acts + '</div>';
+      }).join('') || '<p class="muted">No units have shipped yet. They appear here from the day they leave the plant.</p>')
+      + '<p class="muted" id="fleet-msg" role="status" style="font-size:13.5px"></p>';
+    $('site-form').onsubmit = function (e) {
+      e.preventDefault(); var sp = String($('sf-state').value || '').trim().split(/\s+/), btn = $('sf-save'); btn.disabled = true; $('fleet-msg').textContent = 'Saving site…';
+      post('/api/my-sites', { action: 'site', name: $('sf-name').value, address: { line1: $('sf-line1').value, city: $('sf-city').value, state: sp[0] || '', zip: sp[1] || '' }, interconnection: { utility: $('sf-utility').value, meterNo: $('sf-meter').value, poi: $('sf-poi').value } }).then(function (r) {
+        if (!r.ok) { $('fleet-msg').textContent = r.j.error || 'Could not save the site.'; btn.disabled = false; return; }
+        loadSites('Site saved.');
+      })['catch'](function () { $('fleet-msg').textContent = 'Could not reach the server.'; btn.disabled = false; });
+    };
+    Array.prototype.forEach.call(el.querySelectorAll('[data-act]'), function (b) {
+      b.onclick = function () {
+        var i = b.getAttribute('data-i'), u = units[Number(i)], act = b.getAttribute('data-act'), body = { action: act, serial: u.serial };
+        if (act === 'assign') { var sel = el.querySelector('[data-site="' + i + '"]'); if (!sel.value) { $('fleet-msg').textContent = 'Choose the site first.'; return; } body.siteId = sel.value; }
+        if (act === 'destination') { var dsel = el.querySelector('[data-dest="' + i + '"]'); if (dsel.value) body.siteId = dsel.value; }
+        if (act === 'commissioned') { var dt = el.querySelector('[data-date="' + i + '"]'), ins = el.querySelector('[data-inst="' + i + '"]'); if (dt.value) body.at = dt.value; body.installer = ins.value; }
+        if (act === 'received') { var cond = el.querySelector('[data-cond="' + i + '"]'); body.condition = cond && cond.value === 'damaged' ? 'damaged' : 'accepted'; if (!window.confirm('Record ' + u.serial + ' as received today' + (body.condition === 'damaged' ? ', DAMAGED' : '') + '?')) return; }
+        b.disabled = true; $('fleet-msg').textContent = 'Recording…';
+        post('/api/my-sites', body).then(function (r) {
+          if (!r.ok) { $('fleet-msg').textContent = r.j.error || 'Could not record that.'; b.disabled = false; return; }
+          var d = r.j; loadSites(d.duplicate ? 'Already recorded.' : act === 'destination' ? (d.unit && d.unit.plannedSiteName ? d.unit.serial + ' is going to ' + d.unit.plannedSiteName + '.' : 'Destination cleared.') : 'Recorded' + (d.unit && d.unit.label ? ': ' + d.unit.label : '') + '.');
+        })['catch'](function () { $('fleet-msg').textContent = 'Could not reach the server.'; b.disabled = false; });
+      };
+    });
+  }
+
+  /* ── Sites from a list: a PO's many places at once ─────────────────────
+     api/my-sites.js sites-preview · sites-create · plan-preview · plan-apply
+     (api/_lib/custody.js parseSiteList, matchSites, spread). The SERVER
+     reads the pasted list — this page parses nothing — and matches it to
+     the account's sites by street and ZIP; the new ones are created in one
+     go; then an order's units are spread over the chosen sites. The
+     preview IS the confirmation: there is no second box, and Send carries
+     confirm:true with the preview's planKey, so a plan that changed since
+     answers "preview again" instead of writing something nobody saw. The
+     order is named by its orderNo, never its id. Its own card and its own
+     state: drawFleet() redraws #fleet-body on every load and must not wipe
+     a list being typed. */
+  var BK = { step: '', text: '', pv: null, stale: false, list: null, orderNo: '', pick: null, n: {}, replan: false, elsewhere: 0, plan: null, body: null, done: null, busy: false, top: '', msg: '', bad: false };
+  var BK_EXAMPLE = '- 100 Main St, Springfield, IL 62701\n- North store: 2200 Lake Ave, Suite 4, Madison, WI 53703 × 4\n- 45 Harbor Rd, Portland, ME 04101 (3 units)';
+  var BK_MAX_FILE = 100000;   // api/_lib/custody.js MAX_SITE_TEXT
+  function bkLines(t) { return String(t || '').split(/\r\n?|\n/).filter(function (x) { return x.trim(); }).length; }
+  function bkAddr(a) { a = a || {}; return [a.line1, a.city, [a.state, a.zip].filter(Boolean).join(' ')].filter(Boolean).join(', '); }
+  function bkSay(t, bad) { BK.msg = t || ''; BK.bad = !!bad; var m = $('bk-msg'); if (m) { m.className = bad ? 'err' : 'muted'; m.textContent = BK.msg; } }
+  function bkMsg() { return '<p id="bk-msg" role="status" aria-live="polite" class="' + (BK.bad ? 'err' : 'muted') + '" style="font-size:13.5px;margin:10px 0 0">' + esc(BK.msg) + '</p>'; }
+  /* the lines of a preview that are (now) sites on the account, in list
+     order, with the unit count the list gave; an unticked line is out */
+  function bkListSites(rows) { var seen = {}, out = []; (rows || []).forEach(function (r) { if (r.status === 'exists' && r.existingId && !r.skip && !seen[r.existingId]) { seen[r.existingId] = true; out.push({ siteId: r.existingId, units: r.units == null ? null : r.units }); } }); return out; }
+  /* A line is known across previews by its street and ZIP, so a name typed
+     in step 2 and a line unticked there survive "change the list and
+     preview again" (and the read-back after Create). A line the server
+     marks to check (a street with no house number: often the sender's
+     signature) starts unticked; every other line starts ticked. */
+  function bkKey(a) { a = a || {}; return String(a.line1 || '').trim().toLowerCase() + '|' + String(a.zip || '').trim().slice(0, 5); }
+  function bkCarry(old, pv) {
+    var by = {}; ((old && old.rows) || []).forEach(function (r) { if (r.status !== 'problem') by[bkKey(r.address)] = r; });
+    ((pv && pv.rows) || []).forEach(function (r) {
+      var o = r.status !== 'problem' ? by[bkKey(r.address)] : null;
+      if (o && o.edited && r.status === 'new') { r.name = o.name; r.edited = true; }
+      r.skip = r.status === 'problem' ? false : o && o.skip != null ? o.skip : r.status === 'new' && (r.warnings || []).length > 0;
+    });
+  }
+  /* the account's sites, the list's first and in its order */
+  function bkSites() {
+    var all = (SITES && SITES.sites) || [], by = {}, out = [], used = {};
+    all.forEach(function (s) { by[s.id] = s; });
+    (BK.list || []).forEach(function (x) { if (by[x.siteId] && !used[x.siteId]) { used[x.siteId] = true; out.push(by[x.siteId]); } });
+    all.forEach(function (s) { if (!used[s.id]) out.push(s); });
+    return out;
+  }
+  function bkOrder() { return ((SITES && SITES.orders) || []).filter(function (o) { return o.orderNo === BK.orderNo; })[0] || null; }
+  function bkOrderLine(o) {
+    return plural(Number(o.units) || 0, 'unit') + ' on the order · ' + (Number(o.eligible) || 0) + ' can be sent' + (o.building ? ' (' + o.building + ' still being built)' : '')
+      + (o.planned ? ' · ' + plural(Number(o.planned), 'unit') + ' already going to a site' : '');
+  }
+  /* what the ticked sites and typed numbers come to, for the running total
+     and the "even" hints; the preview is what counts */
+  function bkTotals() {
+    var o = bkOrder(), picked = bkSites().filter(function (s) { return BK.pick && BK.pick[s.id]; }), E = o ? Number(o.eligible) || 0 : 0, typed = 0, blanks = [], bad = [];
+    picked.forEach(function (s) { var v = String(BK.n[s.id] == null ? '' : BK.n[s.id]).trim(); if (v === '') blanks.push(s); else if (/^\d{1,5}$/.test(v)) typed += Number(v); else bad.push(s.name); });
+    var rest = Math.max(0, E - typed), each = blanks.length ? Math.floor(rest / blanks.length) : 0, extra = blanks.length ? rest % blanks.length : 0, share = {};
+    blanks.forEach(function (s, i) { share[s.id] = each + (i < extra ? 1 : 0); });
+    return { E: E, typed: typed, share: share, sum: typed + (blanks.length ? rest : 0), picked: picked, bad: bad };
+  }
+  function bkPaintTotals() {
+    var t = bkTotals(), el = $('bk-total');
+    Array.prototype.forEach.call(document.querySelectorAll('#fleet-bulk [data-bk-n]'), function (i) { var id = i.getAttribute('data-bk-n'); i.placeholder = t.share[id] != null ? 'even: ' + t.share[id] : ''; });
+    if ($('bk-picked')) $('bk-picked').textContent = t.picked.length;
+    if (!el) return;
+    el.className = t.bad.length ? 'err' : '';
+    el.textContent = !bkOrder() ? 'Choose the order first.' : !t.picked.length ? 'Tick the sites this order goes to.'
+      : t.bad.length ? 'Units must be a whole number: ' + t.bad.join(', ') + '.'
+      : plural(t.picked.length, 'site') + ' · ' + t.sum + ' of the ' + t.E + ' units that can be sent' + (t.typed > t.E ? ' · ' + (t.typed - t.E) + ' more than can still be sent: units already at a ticked site count toward its number, so Preview checks' : t.sum < t.E ? ' · ' + (t.E - t.sum) + ' left without a site' : '');
+  }
+  /* a change to the order, the ticks or a number: the preview no longer
+     says what Send would do, so it goes */
+  function bkUnplan() {
+    BK.plan = null; BK.body = null; var box = $('bk-planbox'); if (box) box.parentNode.removeChild(box);
+    if (!$('bk-msg') && $('bk-plan')) $('bk-plan').parentNode.insertAdjacentHTML('afterend', bkMsg());
+  }
+  function drawBulk() {
+    var el = $('fleet-bulk'); if (!el) return;
+    if (!SITES) { el.innerHTML = '<h2>Sites from a list</h2><p class="muted" style="margin:8px 0 0">' + (ERR.sites ? 'Opens once your sites load.' : 'Loading…') + '</p>'; return; }
+    if (!BK.step) {
+      el.innerHTML = '<h2>Sites from a list</h2><p class="muted" style="margin:8px 0 0;max-width:72ch">A PO that goes to many places? Paste the list of addresses from the email or the sheet: the sites are created in one go, then the order’s units are sent to them all at once instead of one at a time.</p>'
+        + '<div class="actions"><button type="button" class="btn p" data-bk-go="paste">Add your sites from a list</button><button type="button" class="btn" data-bk-go="send">Send units to your sites</button></div>';
+      bkBind(el); return;
+    }
+    var steps = [['paste', '1 · Paste the list'], ['check', '2 · Check the sites'], ['send', '3 · Send units']];
+    el.innerHTML = '<div class="bk-head"><h2>Sites from a list</h2><button type="button" class="btn" data-bk-go="">Close</button></div>'
+      + '<div class="pf-steps" role="tablist" aria-label="Steps">' + steps.map(function (s) { return '<button type="button" role="tab" class="pf-step' + (BK.step === s[0] ? ' on' : '') + '" data-bk-go="' + s[0] + '" aria-selected="' + (BK.step === s[0] ? 'true' : 'false') + '"' + (s[0] === 'check' && !BK.pv ? ' disabled' : '') + '>' + esc(s[1]) + '</button>'; }).join('') + '</div>'
+      + (BK.top ? '<p role="status" style="margin:4px 0 12px"><span class="pill go">done</span> ' + esc(BK.top) + '</p>' : '')
+      + (BK.step === 'paste' ? bkPasteHtml() : BK.step === 'check' ? bkCheckHtml() : bkSendHtml());
+    bkBind(el);
+    if (BK.step === 'send') bkPaintTotals();
+  }
+  function bkPasteHtml() {
+    return '<p class="muted" style="margin:0;max-width:78ch">One address per line, as it came in the email — a bullet or a number in front is fine — or a sheet with a header row (Name, Address, City, State, ZIP, Units). A name before a colon names the site; a count at the end (× 4 or (4 units)) says how many units go there.</p>'
+      + '<label for="bk-text">Your list of sites</label><textarea id="bk-text" class="sheet" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="' + esc(BK_EXAMPLE) + '">' + esc(BK.text) + '</textarea>'
+      + '<label for="bk-file">Or upload a file (.csv, .tsv or .txt)</label><input id="bk-file" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values">'
+      + '<div class="actions"><button type="button" class="btn p" id="bk-preview"' + (BK.busy ? ' disabled' : '') + '>Preview the sites</button><span class="muted" id="bk-count" style="align-self:center;font-size:13.5px">' + esc(BK.text.trim() ? plural(bkLines(BK.text), 'line') : '') + '</span></div>' + bkMsg();
+  }
+  function bkCheckHtml() {
+    var pv = BK.pv || {}, rows = pv.rows || [], s = pv.summary || {};
+    var nAll = rows.filter(function (r) { return r.status === 'new'; }).length, nNew = rows.filter(function (r) { return r.status === 'new' && !r.skip; }).length, nEx = rows.filter(function (r) { return r.status === 'exists'; }).length, nUse = rows.filter(function (r) { return r.status === 'exists' && !r.skip; }).length, nBad = rows.filter(function (r) { return r.status === 'problem'; }).length, nChk = rows.filter(function (r) { return r.status === 'new' && (r.warnings || []).length; }).length, nOff = rows.filter(function (r) { return r.status !== 'problem' && r.skip; }).length;
+    return '<p style="margin:0"><b>' + esc(plural(Number(s.rows) || rows.length, 'address', 'addresses')) + '</b> · ' + nAll + ' new · ' + nEx + ' already on your account' + (nBad ? ' · <span class="err">' + nBad + ' to fix</span>' : '') + (nChk ? ' · ' + nChk + ' to check' : '') + '</p>'
+      + (BK.stale ? '<p class="err">The list changed since this preview. Preview it again before creating.</p>' : '')
+      + (pv.geoLimited ? '<p class="muted" style="font-size:13.5px">Today’s map lookups for your account are used up, so some new lines have no map pin. The sites are created all the same.</p>' : '')
+      + ((pv.problems || []).length ? '<ul class="muted">' + pv.problems.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>' : '')
+      + (rows.length ? '<div class="pf-scroll"><table class="pf-table"><thead><tr><th>Line</th><th>Site name</th><th>Address</th><th>Units</th><th>Status</th></tr></thead><tbody>' + rows.map(function (r, i) {
+        var a = r.address || {}, st = r.status;
+        var name = st === 'new' ? '<input data-bk-name="' + i + '" value="' + esc(r.name) + '" maxlength="160" aria-label="Site name, line ' + esc(r.line) + '">' : '<b>' + esc(st === 'exists' ? (r.existingName || r.name) : r.name) + '</b>';
+        var geo = r.geo ? '<small title="' + esc(r.geo.matchedAddress || '') + '">◉ found on the map</small>' : r.lookedUp ? '<small>not found on the map; the site is still created</small>' : '';
+        var pill = st === 'new' ? '<span class="pill go">new</span>' : st === 'exists' ? '<span class="pill">already a site</span>' : '<span class="pill stop">to fix</span>';
+        var line = st === 'problem' ? '<td class="mono">' + esc(r.line) + '</td>' : '<td><label class="bk-use"><input type="checkbox" data-bk-use="' + i + '"' + (r.skip ? '' : ' checked') + ' aria-label="Use line ' + esc(r.line) + '"><span class="mono">' + esc(r.line) + '</span></label></td>';
+        return '<tr data-bk-row="' + i + '">' + line + '<td>' + name + (r.note ? '<small>' + esc(r.note) + '</small>' : '') + '</td><td>' + esc(a.line1 || '—') + '<small>' + esc([a.city, [a.state, a.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')) + '</small>' + geo + '</td><td>' + (r.units == null ? '<span class="muted">—</span>' : esc(r.units)) + '</td><td>' + pill + '</td></tr>'
+          + ((r.problems || []).length ? '<tr class="bk-prob"><td></td><td colspan="4" class="err" style="font-weight:600">' + esc(r.problems.join('; ')) + '</td></tr>' : '')
+          + (st === 'new' && (r.warnings || []).length ? '<tr class="bk-prob"><td></td><td colspan="4" class="muted" style="font-weight:600">' + esc(r.warnings.join('; ') + (r.skip ? ' Unticked: tick it to create it.' : '')) + '</td></tr>' : '');
+      }).join('') + '</tbody></table></div>' : '')
+      + (nBad ? '<p class="muted" style="font-size:13.5px">Lines to fix are left out. Fix them in the list and preview again (the names you typed are kept), or create the rest now and add those later.</p>' : '')
+      + (nOff ? '<p class="muted" style="font-size:13.5px">' + esc(plural(nOff, 'unticked line is', 'unticked lines are')) + ' not created and not sent units.</p>' : '')
+      + (nNew && nUse ? '<p class="muted" style="font-size:13.5px">The ' + nUse + ' already on your account are not created again; they are in step 3 with the new ones.</p>' : '')
+      + '<div class="actions">' + (nNew ? '<button type="button" class="btn p" id="bk-create"' + (BK.busy || BK.stale ? ' disabled' : '') + '>Create ' + plural(nNew, 'site') + '</button>' : nUse ? '<button type="button" class="btn p" data-bk-go="send">Next: send units to these sites</button>' : '')
+      + '<button type="button" class="btn" data-bk-go="paste">Change the list</button></div>' + bkMsg();
+  }
+  function bkSendHtml() {
+    var orders = SITES.orders, sites = bkSites();
+    if (!orders) return '<p class="muted">Sending units to many sites is not switched on for this account yet.</p>';
+    if (!sites.length) return '<p class="muted">No sites on your account yet. Add them from a list first.</p><div class="actions"><button type="button" class="btn p" data-bk-go="paste">Add your sites from a list</button></div>';
+    if (!orders.length) return '<p class="muted">No order on your account has units yet. Units appear on an order once ' + esc(brandName()) + ' starts building it; come back then.</p>';
+    if (!bkOrder()) BK.orderNo = orders.length === 1 ? orders[0].orderNo : '';
+    if (!BK.pick) { BK.pick = {}; BK.n = {}; (BK.list || []).forEach(function (x) { BK.pick[x.siteId] = true; if (x.units != null) BK.n[x.siteId] = String(x.units); }); }
+    var o = bkOrder();
+    return '<p class="muted" style="margin:0;max-width:78ch">Each unit is marked “going to” its site. When it arrives and you record it received, it is tied to that site and its warranty starts. Nothing ships differently: to change a delivery, ask on the order.</p>'
+      + '<label for="bk-order">Order</label><select id="bk-order" style="width:100%"><option value="">Choose the order…</option>' + orders.map(function (x) { return '<option value="' + esc(x.orderNo) + '"' + (x.orderNo === BK.orderNo ? ' selected' : '') + '>' + esc(x.orderNo + (x.po ? ' · your PO ' + x.po : '') + ' · ' + plural(Number(x.units) || 0, 'unit')) + '</option>'; }).join('') + '</select>'
+      + (o ? '<p class="muted" style="font-size:13.5px;margin:6px 0 0">' + esc(bkOrderLine(o)) + '</p>' : '')
+      + '<div class="bk-head" style="margin:18px 0 0"><p class="sub-h" style="margin:0">Sites · <span id="bk-picked">0</span> of ' + sites.length + ' ticked</p><span><button type="button" class="btn" data-bk-all="1">Tick all</button> <button type="button" class="btn" data-bk-all="0">Tick none</button></span></div>'
+      + '<p class="muted" style="font-size:13.5px;margin:4px 0 8px">Leave Units blank to share the order evenly; type a number to send exactly that many there (units already there or going there count).</p>'
+      + '<div class="pf-scroll"><table class="pf-table"><thead><tr><th></th><th>Site</th><th>Address</th><th>Units</th><th>Now</th></tr></thead><tbody>' + sites.map(function (s) {
+        var now = [Number(s.units) > 0 ? s.units + ' at the site' : '', Number(s.planned) > 0 ? s.planned + ' going here' : ''].filter(Boolean).join(' · ') || 'nothing yet';
+        return '<tr><td><input type="checkbox" data-bk-pick="' + esc(s.id) + '"' + (BK.pick[s.id] ? ' checked' : '') + ' aria-label="Send units to ' + esc(s.name) + '"></td><td><b>' + esc(s.name) + '</b>' + (s.ref ? '<small>' + esc(s.ref) + '</small>' : '') + '</td><td>' + esc(bkAddr(s.address)) + '</td>'
+          + '<td><input class="bk-n" data-bk-n="' + esc(s.id) + '" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="' + esc(BK.n[s.id] == null ? '' : BK.n[s.id]) + '" aria-label="Units for ' + esc(s.name) + '"></td><td><small>' + esc(now) + '</small></td></tr>';
+      }).join('') + '</tbody></table></div>'
+      + '<p id="bk-total" style="margin:10px 0 0;font-weight:600"></p>'
+      + (BK.elsewhere || BK.replan ? '<p style="margin:10px 0 0"><label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:14px;color:var(--ink);font-weight:500;margin:0"><input type="checkbox" id="bk-replan"' + (BK.replan ? ' checked' : '') + '> Also move the ' + plural(BK.elsewhere || 0, 'unit') + ' of this order already going to sites not ticked here</label></p>' : '')
+      + '<div class="actions"><button type="button" class="btn p" id="bk-plan"' + (BK.busy ? ' disabled' : '') + '>Preview</button></div>'
+      + (BK.plan ? bkPlanHtml() : '') + (!BK.plan && !BK.done ? bkMsg() : '') + (BK.done ? bkDoneHtml() : '');
+  }
+  function bkSerials(list) { return list.map(function (a) { return a.serial + (a.how === 'changed' ? ' (moved here)' : ''); }).join(', '); }
+  function bkPlanHtml() {
+    var p = BK.plan, a = p.assignments || [], by = {}, cnt = { 'new': 0, changed: 0, unchanged: 0 };
+    a.forEach(function (x) { (by[x.siteId] = by[x.siteId] || []).push(x); cnt[x.how] = (cnt[x.how] || 0) + 1; });
+    if ((p.problems || []).length) return '<div class="bk-box" id="bk-planbox"><p class="err" style="font-weight:600">' + p.problems.map(esc).join('<br>') + '</p><p class="muted" style="font-size:13.5px">Nothing is sent. Change the numbers or the ticks and preview again.</p>' + bkMsg() + '</div>';
+    var moving = cnt['new'] + cnt.changed, rel = (p.released || []).length, sitesTo = (p.perSite || []).filter(function (s) { return (by[s.siteId] || []).length; }).length, touched = {};
+    a.forEach(function (x) { if (x.how === 'new' || x.how === 'changed') touched[x.siteId] = true; });
+    return '<div class="bk-box" id="bk-planbox"><p class="sub-h" style="margin-top:0">Preview</p><p style="margin:0"><b>' + plural(a.length, 'unit') + ' to ' + plural(sitesTo, 'site') + '</b> · ' + ([cnt['new'] ? cnt['new'] + ' new' : '', cnt.changed ? cnt.changed + ' moved from another site' : '', cnt.unchanged ? cnt.unchanged + ' already going there' : '', rel ? rel + ' taken off a site' : ''].filter(Boolean).join(' · ') || 'nothing to change') + '</p>'
+      + '<div class="pf-scroll"><table class="pf-table"><thead><tr><th>Site</th><th>Units</th><th>Serials</th></tr></thead><tbody>' + (p.perSite || []).map(function (s) {
+        var mine = by[s.siteId] || [];
+        return '<tr data-bk-plan="' + esc(s.siteId) + '"><td><b>' + esc(s.name) + '</b>' + (s.placed ? '<small>' + esc(plural(s.placed, 'unit') + ' of this order already at the site') + '</small>' : '') + (s.short ? '<small class="err">' + esc(s.short + ' short: the order has no more units to send') + '</small>' : '') + '</td><td>' + mine.length + '</td><td>' + (mine.length ? '<details><summary>' + esc(plural(mine.length, 'serial')) + '</summary><span class="mono" style="font-size:13px">' + esc(bkSerials(mine)) + '</span></details>' : '<span class="muted">none</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+      + ((p.leftover || []).length ? '<p class="muted" style="font-size:13.5px"><b>' + plural(p.leftover.length, 'unit stays', 'units stay') + ' without a site</b>: the numbers ask for fewer than the order has. ' + esc(p.leftover.join(', ')) + '</p>' : '')
+      + (rel ? '<p class="muted" style="font-size:13.5px"><b>' + plural(rel, 'unit comes', 'units come') + ' off a site</b> whose number went down: ' + esc(p.released.map(function (r) { return r.serial + ' (' + r.siteName + ')'; }).join(', ')) + '</p>' : '')
+      + ((p.elsewhere || []).length ? '<p class="muted" style="font-size:13.5px"><b>' + plural(p.elsewhere.length, 'unit is', 'units are') + ' already going to other sites</b> and ' + (p.elsewhere.length === 1 ? 'is' : 'are') + ' left alone: ' + esc(p.elsewhere.map(function (r) { return r.serial + ' (' + r.siteName + ')'; }).join(', ')) + '</p>' : '')
+      + ((p.notPlanned || []).length ? '<details style="font-size:13.5px;margin:8px 0"><summary>' + esc(plural(p.notPlanned.length, 'unit') + ' of this order can’t be sent from here') + '</summary><ul>' + p.notPlanned.map(function (x) { return '<li><span class="mono">' + esc(x.serial) + '</span> · ' + esc(x.say) + '</li>'; }).join('') + '</ul></details>' : '')
+      + (moving || rel ? '<div class="actions"><button type="button" class="btn p" id="bk-apply"' + (BK.busy ? ' disabled' : '') + '>' + esc(moving ? 'Send ' + plural(moving, 'unit') + ' to ' + plural(Object.keys(touched).length, 'site') : 'Take ' + plural(rel, 'unit') + ' off their site') + '</button><span class="muted" style="align-self:center;font-size:13px">This is the confirmation: nothing else will ask.</span></div>'
+        : '<p class="muted">Nothing to change: every unit is already going where this sends it.</p>')
+      + bkMsg() + '</div>';
+  }
+  function bkDoneHtml() {
+    var d = BK.done, a = d.assignments || [], sk = a.filter(function (x) { return x.how === 'skipped'; }), wait = a.filter(function (x) { return x.how === 'pending'; }), going = a.length - sk.length - wait.length, sites = {};
+    a.forEach(function (x) { if (x.how !== 'skipped' && x.how !== 'pending') sites[x.siteId] = true; });
+    return '<div class="bk-box" id="bk-donebox"><p style="margin:0"><span class="pill go">sent</span> <b>' + plural(going, 'unit') + ' of ' + esc(d.orderNo) + ' going to ' + plural(Object.keys(sites).length, 'site') + '</b>' + (d.applied ? ' · ' + d.applied + ' changed just now' : '') + '</p>'
+      + (sk.length ? '<p class="err" style="font-size:13.5px">' + esc(plural(sk.length, 'unit was', 'units were') + ' left as they were: ' + sk.map(function (x) { return x.serial + ' (' + (x.why || 'changed') + ')'; }).join(', ')) + '</p>' : '')
+      + (wait.length ? '<p class="err" style="font-size:13.5px">' + esc(plural(wait.length, 'unit is', 'units are') + ' still to send. Preview again and send.') + '</p>' : '')
+      + '<p class="muted" style="font-size:13.5px">Each site below shows how many are going there. When a unit arrives, record it received and it is tied to its site.</p>'
+      + '<div class="actions"><button type="button" class="btn" id="bk-csv">Download CSV</button><button type="button" class="btn" data-bk-go="">Done</button></div>' + bkMsg() + '</div>';
+  }
+  function bkGo(to) {
+    if (to === 'send' && BK.step === 'check' && BK.pv && !BK.list) BK.list = bkListSites(BK.pv.rows);
+    if (to === 'paste' || !to) BK.top = '';
+    BK.step = to; BK.msg = ''; BK.bad = false;
+    drawBulk();
+  }
+  function bkBind(el) {
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-go]'), function (b) { b.onclick = function () { bkGo(b.getAttribute('data-bk-go')); }; });
+    var ta = $('bk-text');
+    if (ta) ta.oninput = function () { BK.text = ta.value; if (BK.pv) BK.stale = true; $('bk-count').textContent = BK.text.trim() ? plural(bkLines(BK.text), 'line') : ''; };
+    if ($('bk-file')) $('bk-file').onchange = function () {
+      var f = this.files && this.files[0], inp = this; if (!f) return;
+      if (f.size > BK_MAX_FILE) { bkSay(f.name + ' is ' + kb(f.size) + '; a site list is at most 100 KB. Split it into smaller lists.', true); inp.value = ''; return; }
+      if (!/\.(csv|tsv|txt)$/i.test(f.name)) { bkSay('A .csv, .tsv or .txt file, please. From Excel: File → Save As → CSV.', true); inp.value = ''; return; }
+      var r = new FileReader();
+      r.onload = function () { BK.text = String(r.result || '').replace(/^﻿/, ''); if (BK.pv) BK.stale = true; if (ta) ta.value = BK.text; $('bk-count').textContent = plural(bkLines(BK.text), 'line') + ' from ' + f.name; bkSay(''); };
+      r.onerror = function () { bkSay('Could not read ' + f.name, true); };
+      r.readAsText(f);
+    };
+    if ($('bk-preview')) $('bk-preview').onclick = function () { bkPreview(this); };
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-name]'), function (i) { i.oninput = function () { var r = BK.pv && BK.pv.rows[Number(i.getAttribute('data-bk-name'))]; if (r) { r.name = i.value; r.edited = true; } }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-use]'), function (c) { c.onchange = function () { var r = BK.pv && BK.pv.rows[Number(c.getAttribute('data-bk-use'))]; if (r) { r.skip = !c.checked; BK.list = null; drawBulk(); } }; });
+    if ($('bk-create')) $('bk-create').onclick = function () { bkCreate(this); };
+    if ($('bk-order')) $('bk-order').onchange = function () { BK.orderNo = this.value; BK.elsewhere = 0; BK.replan = false; BK.plan = null; BK.done = null; BK.msg = ''; drawBulk(); };
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-pick]'), function (c) { c.onchange = function () { BK.pick[c.getAttribute('data-bk-pick')] = c.checked; bkUnplan(); bkPaintTotals(); }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-n]'), function (i) { i.oninput = function () { BK.n[i.getAttribute('data-bk-n')] = i.value; bkUnplan(); bkPaintTotals(); }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-all]'), function (b) { b.onclick = function () { var on = b.getAttribute('data-bk-all') === '1'; bkSites().forEach(function (s) { BK.pick[s.id] = on; }); BK.plan = null; drawBulk(); }; });
+    if ($('bk-replan')) $('bk-replan').onchange = function () { BK.replan = this.checked; bkUnplan(); };
+    if ($('bk-plan')) $('bk-plan').onclick = function () { bkPlan(this); };
+    if ($('bk-apply')) $('bk-apply').onclick = function () { bkApply(this); };
+    if ($('bk-csv')) $('bk-csv').onclick = bkCsv;
+  }
+  function bkPreview(btn) {
+    var t = String(BK.text || '');
+    if (!t.trim()) { bkSay('Paste the list first, or upload a file.', true); return; }
+    BK.busy = true; btn.disabled = true; bkSay('Reading the list and finding each new address on the map… this can take a few seconds.');
+    post('/api/my-sites', { action: 'sites-preview', text: t }).then(function (r) {
+      BK.busy = false;
+      if (!r.ok) { btn.disabled = false; bkSay(missing(r) ? 'Sites from a list are not switched on for this account yet.' : r.j.error || 'Could not read the list.', true); return; }
+      bkCarry(BK.pv, r.j); BK.pv = r.j; BK.stale = false; BK.list = null; BK.pick = null; BK.plan = null; BK.done = null; BK.top = ''; BK.step = 'check'; BK.msg = ''; BK.bad = false;
+      drawBulk();
+    })['catch'](function () { BK.busy = false; btn.disabled = false; bkSay('Could not reach the server.', true); });
+  }
+  function bkCreate(btn) {
+    var send = [];
+    (BK.pv.rows || []).forEach(function (r) { if (r.status === 'new' && !r.skip) send.push({ name: r.name, address: r.address, lat: r.geo ? r.geo.lat : null, lng: r.geo ? r.geo.lng : null, ref: r.ref || '' }); });
+    if (!send.length) return;
+    BK.busy = true; btn.disabled = true; bkSay('Creating ' + plural(send.length, 'site') + '…');
+    var made = null;
+    post('/api/my-sites', { action: 'sites-create', rows: send }).then(function (r) {
+      if (!r.ok) throw new Error(r.j.error || 'Could not create the sites.');
+      made = r.j;
+      /* the list read once more: every line is now one of the account's
+         sites, matched by the server's own rule (street + ZIP) */
+      return post('/api/my-sites', { action: 'sites-preview', text: BK.text });
+    }).then(function (r2) {
+      var c = (made.created || []).length, e = (made.existing || []).length;
+      if (r2.ok) bkCarry(BK.pv, r2.j);
+      BK.busy = false; BK.list = r2.ok ? bkListSites(r2.j.rows) : []; BK.pick = null; BK.n = {}; BK.plan = null; BK.done = null; BK.elsewhere = 0; BK.replan = false;
+      if (r2.ok) { BK.pv = r2.j; BK.stale = false; }
+      BK.top = plural(c, 'site') + ' created' + (e ? ', ' + e + ' already on your account' : '') + '. Now send the order’s units to them.';
+      BK.step = 'send'; BK.msg = ''; BK.bad = false;
+      loadSites();
+      if ($('s-fleet-bulk')) $('s-fleet-bulk').scrollIntoView({ block: 'start' });
+    })['catch'](function (e) { BK.busy = false; btn.disabled = false; bkSay(e.message || 'Could not reach the server.', true); });
+  }
+  function bkBody() {
+    var sites = bkSites().filter(function (s) { return BK.pick && BK.pick[s.id]; }).map(function (s) { var v = String(BK.n[s.id] == null ? '' : BK.n[s.id]).trim(); return { siteId: s.id, units: v === '' ? null : Number(v) }; });
+    return { orderNo: BK.orderNo, sites: sites, replan: BK.replan === true };
+  }
+  function bkPlan(btn) {
+    var t = bkTotals();
+    if (!bkOrder()) { bkSay('Choose the order first.', true); return; }
+    if (!t.picked.length) { bkSay('Tick the sites this order goes to.', true); return; }
+    if (t.bad.length) { bkSay('Units must be a whole number: ' + t.bad.join(', ') + '.', true); return; }
+    var body = bkBody(), send = { action: 'plan-preview', orderNo: body.orderNo, sites: body.sites, replan: body.replan };
+    BK.busy = true; btn.disabled = true; BK.done = null; bkSay('Working out which unit goes where…');
+    post('/api/my-sites', send).then(function (r) {
+      BK.busy = false;
+      if (!r.ok) { btn.disabled = false; bkSay(r.j.error || 'Could not preview that.', true); return; }
+      BK.plan = r.j; BK.body = body; BK.elsewhere = (r.j.elsewhere || []).length || (BK.replan ? BK.elsewhere : 0); BK.msg = ''; BK.bad = false;
+      drawBulk();
+      if ($('bk-planbox')) $('bk-planbox').scrollIntoView({ block: 'nearest' });
+    })['catch'](function () { BK.busy = false; btn.disabled = false; bkSay('Could not reach the server.', true); });
+  }
+  /* Send: the same body plus confirm and the preview's planKey. The server
+     recomputes the plan; over 200 units it answers more:true and the same
+     call goes again. */
+  function bkApply(btn) {
+    var body = BK.body, key = BK.plan.planKey, applied = 0, skipped = [], rounds = 0;
+    BK.busy = true; btn.disabled = true; bkSay('Sending…');
+    function round() {
+      return post('/api/my-sites', { action: 'plan-apply', confirm: true, planKey: key, orderNo: body.orderNo, sites: body.sites, replan: body.replan }).then(function (r) {
+        if (!r.ok) throw new Error(r.j.error || 'Could not send the units.');
+        applied += Number(r.j.applied) || 0; skipped = skipped.concat(r.j.skipped || []); rounds++;
+        if (r.j.more && Number(r.j.applied) > 0 && rounds < 10) { bkSay('Sending… ' + applied + ' so far'); return round(); }
+        return r.j;
+      });
+    }
+    round().then(function (last) {
+      BK.busy = false; BK.plan = null; BK.body = null; BK.top = '';
+      BK.done = { orderNo: body.orderNo, applied: applied, skipped: skipped, assignments: last.assignments || [], released: last.released || [] };
+      BK.msg = ''; BK.bad = false;
+      loadSites();
+    })['catch'](function (e) { BK.busy = false; btn.disabled = false; bkSay(e.message || 'Could not reach the server.', true); });
+  }
+  /* The result as a sheet, made here from what the server answered: a cell
+     that starts with = + - @ is quoted with ' so a spreadsheet shows it
+     rather than runs it (api/_lib/receivables.js cell()); a ZIP with a
+     leading zero is written as text (="04101"), which the site list reads
+     back as the ZIP; UTF-8 with a BOM so Excel reads the names right. */
+  function bkCell(v) {
+    /* { text } is a code a spreadsheet must keep as written: a ZIP like
+       04101 would open as the number 4101, so it goes as ="04101" */
+    if (v && typeof v === 'object') { var t = String(v.text == null ? '' : v.text); return /^\d[\d-]*$/.test(t) && (t.charAt(0) === '0' || t.length > 15) ? '"=""' + t + '"""' : bkCell(t); }
+    var s = v == null ? '' : String(v); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function bkCsv() {
+    var d = BK.done; if (!d) return;
+    var by = {}; ((SITES && SITES.sites) || []).forEach(function (s) { by[s.id] = s; });
+    var rows = [['Serial', 'Site', 'Address', 'City', 'State', 'ZIP', 'Order', 'Status']];
+    d.assignments.forEach(function (a) { var s = by[a.siteId] || {}, ad = s.address || {}; rows.push([a.serial, a.siteName || s.name || '', ad.line1 || '', ad.city || '', ad.state || '', { text: ad.zip || '' }, d.orderNo, a.how === 'skipped' ? 'left as it was: ' + (a.why || '') : a.how === 'pending' ? 'not sent yet' : 'going to']); });
+    d.released.forEach(function (x) { rows.push([x.serial, '', '', '', '', '', d.orderNo, 'taken off ' + (x.siteName || x.siteId)]); });
+    var blob = new Blob(['﻿' + rows.map(function (r) { return r.map(bkCell).join(','); }).join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sites-' + String(d.orderNo || 'order').replace(/[^\w.-]+/g, '_') + '.csv'; a.rel = 'noopener'; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 2000);
+    bkSay('Downloaded ' + a.download + '.');
+  }
+
+  /* ── Documents: api/my-files.js, both directions ────────────────────────
+     What the supplier chose to share, plus the account's own uploads. A
+     file is fetched with the token and handed to the browser as bytes,
+     never as a URL anybody could reuse. An upload lands on the account in
+     the supplier's CRM. */
+  $('doc-cat').innerHTML = DOC_CATS.map(function (c) { return '<option value="' + esc(c[0]) + '">' + esc(c[1]) + '</option>'; }).join('');
+  function catLabel(k) { for (var i = 0; i < DOC_CATS.length; i++) if (DOC_CATS[i][0] === k) return DOC_CATS[i][1]; return k ? String(k).replace(/[-_]/g, ' ') : ''; }
+  function docRow(f) {
+    var mine = f.source === 'customer' || f.from === 'customer';
+    return '<div class="hrow"><div><b>' + esc(f.name || 'Document') + '</b><small>' + esc([catLabel(f.category), mine ? 'uploaded' + (f.uploadedBy ? ' by ' + f.uploadedBy : '') : 'shared by ' + brandName(), day(f.uploadedAt), kb(f.size)].filter(Boolean).join(' · ')) + '</small>' + (f.note ? '<small>' + esc(f.note) + '</small>' : '') + '</div><button type="button" class="btn" data-doc="' + esc(f.id) + '">Download</button></div>';
+  }
+  function drawDocs() {
+    var el = $('docs-list'); if (!el) return;
+    if (!FILES) { el.innerHTML = ERR.files ? '<p class="err">' + esc(ERR.files) + '</p>' : '<p class="muted">Loading documents…</p>'; return; }
+    var files = FILES.files || [], theirs = files.filter(function (f) { return f.source !== 'customer' && f.from !== 'customer'; }), ours = files.filter(function (f) { return f.source === 'customer' || f.from === 'customer'; });
+    el.innerHTML = '<p class="sub-h">From ' + esc(brandName()) + ' · ' + theirs.length + '</p>' + (theirs.map(docRow).join('') || '<p class="muted">Nothing shared with you yet.</p>')
+      + '<p class="sub-h">From your company · ' + ours.length + '</p>' + (ours.map(docRow).join('') || '<p class="muted">Nothing uploaded yet.</p>')
+      + (FILES.limited ? '<p class="muted">Newest shown.</p>' : '');
+    Array.prototype.forEach.call(el.querySelectorAll('[data-doc]'), function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-doc'), f = files.filter(function (x) { return x.id === id; })[0] || {};
+        b.disabled = true; $('doc-msg').textContent = 'Downloading ' + (f.name || 'the document') + '…';
+        download('/api/my-files' + Q + '&file=' + encodeURIComponent(id), f.name).then(function () { $('doc-msg').textContent = ''; }, function (e) { $('doc-msg').textContent = e.message || 'Download failed.'; }).then(function () { b.disabled = false; });
+      };
+    });
+  }
+  function readBase64(file) {
+    return new Promise(function (resolve, reject) {
+      if (!window.FileReader) { reject(new Error('This browser cannot read files.')); return; }
+      var r = new FileReader();
+      r.onload = function () { var s = String(r.result || ''); resolve(s.slice(s.indexOf(',') + 1)); };
+      r.onerror = function () { reject(new Error('Could not read ' + file.name)); };
+      r.readAsDataURL(file);
+    });
+  }
+  function download(path, name) {
+    return tok().then(function (t) { return fetch(path, { headers: { Authorization: 'Bearer ' + t } }); }).then(function (r) {
+      if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || 'Download failed'); }, function () { throw new Error('Download failed'); });
+      return r.blob();
+    }).then(function (blob) {
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name || 'document'; a.rel = 'noopener'; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 2000);
+    });
+  }
+  $('doc-form').onsubmit = function (e) {
+    e.preventDefault();
+    var file = $('doc-file').files && $('doc-file').files[0], btn = $('doc-up'), msg = $('doc-msg');
+    if (!file) { msg.textContent = 'Choose a file first.'; return; }
+    if (file.size > MAX_DOC) { msg.textContent = file.name + ' is ' + kb(file.size) + '; the limit is 2 MB. Send a smaller copy, or ask ' + brandName() + ' for another way.'; return; }
+    if (!/\.(pdf|png|jpe?g|xlsx|docx|csv|txt)$/i.test(file.name)) { msg.textContent = 'PDF, PNG, JPEG, Excel, Word, CSV or text only.'; return; }
+    btn.disabled = true; msg.textContent = 'Uploading ' + file.name + '…';
+    readBase64(file).then(function (b64) { return post('/api/my-files', { action: 'upload', file: { name: file.name, base64: b64 }, category: $('doc-cat').value, note: $('doc-note').value }); }).then(function (r) {
+      btn.disabled = false;
+      if (missing(r)) { msg.textContent = 'Documents are not switched on for this account yet.'; return; }
+      if (!r.ok) { msg.textContent = r.j.error || 'Could not upload.'; return; }
+      $('doc-file').value = ''; $('doc-note').value = '';
+      msg.textContent = r.j.duplicate ? 'That document is already on your account.' : 'Uploaded. ' + brandName() + ' sees it on your account.';
+      loadFiles();
+    })['catch'](function (x) { btn.disabled = false; msg.textContent = x.message || 'Could not reach the server.'; });
+  };
+
+  /* ── Design: Editor Lite, and the subscription ─────────────────────────
+     api/customer-subscribe.js: the supplier's monthly and yearly prices,
+     checkout on a secure payment page that comes back here (from:'portal'),
+     the entitlement on the ACCOUNT so everyone on it can design. The page
+     prices nothing — it prints the cents it was given. Where the supplier
+     has not switched checkout on, a trial still comes from the rep. */
+  var SUB_POLLS = 0, SAID = '';
+  function drawSub() {
+    var el = $('sub-body'); if (!el) return;
+    var access = DESIGN ? DESIGN.access || {} : null, co = (ACCT && ACCT.company) || 'your account', lite = (PORTAL && PORTAL.editorLite) || {};
+    var trialAsk = '<p class="muted">' + (lite.monthlyPriceCents ? usd(lite.monthlyPriceCents / 100) + ' / month. ' : '') + 'Ask ' + esc(repName()) + ' for a trial; your orders and account need no subscription.</p>';
+    function noCheckout() {
+      if (access && access.status === 'trial') return '<p class="muted">Your trial comes from ' + esc(brandName()) + '. To keep designing after it' + (access.expiresAt ? ' ends on ' + esc(new Date(access.expiresAt).toLocaleDateString()) : '') + ', ask ' + esc(repName()) + '.</p>';
+      return access && access.active ? '' : trialAsk;
+    }
+    if (!SUB) { el.innerHTML = ERR.sub ? noCheckout() + '<p class="err">' + esc(ERR.sub) + '</p>' : '<p class="muted">Checking the subscription…</p>'; return; }
+    var s = SUB, m = Number(s.monthlyPriceCents) > 0 ? Number(s.monthlyPriceCents) : 0, y = Number(s.yearlyPriceCents) > 0 ? Number(s.yearlyPriceCents) : 0;
+    var paid = s.status === 'active' || s.status === 'past_due', back = '';
+    /* Back from checkout: the payment page is done; the grant arrives from
+       the payment provider a moment later. Look again a few times rather
+       than say the account is not subscribed. */
+    if (CHECKOUT === 'done' && !paid) {
+      if (SUB_POLLS < 5) { SUB_POLLS++; back = '<p class="muted">Payment received. Switching Editor Lite on for ' + esc(co) + '… this takes a few seconds.</p>'; setTimeout(function () { loadSub(); }, 3000); }
+      else back = '<p class="muted">The payment went through; the subscription has not shown up yet. Refresh in a minute, or ask ' + esc(repName()) + '.</p>';
+    } else if (CHECKOUT === 'done') { SAID = '<p><span class="pill go">subscribed</span> Thank you. Everyone on ' + esc(co) + ' can design now.</p>'; CHECKOUT = null; if (!(access && access.active)) loadDesigns(); }
+    else if (CHECKOUT === 'cancelled') { SAID = '<p class="muted">Checkout was cancelled. Nothing was charged.</p>'; CHECKOUT = null; }
+    /* said once per visit, and kept while the page redraws around it */
+    back = back || SAID;
+    /* Just paid, the grant not here yet: the message and nothing else. A plan
+       button now would sell the same customer a second subscription. The
+       address no longer says checkout=done, so a reload draws the normal card. */
+    if (CHECKOUT === 'done' && !paid) { el.innerHTML = back; return; }
+    if (paid) {
+      var ok = s.status === 'active', plan = s.plan === 'year' ? 'Yearly' : s.plan === 'month' ? 'Monthly' : '';
+      el.innerHTML = back + '<div class="card2" id="sub-card"><div class="h"><b>Your subscription' + (plan ? ' · ' + plan : '') + '</b><span class="pill ' + (ok ? 'go' : 'stop') + '">' + (ok ? 'active' : 'payment due') + '</span></div>'
+        + '<div class="m">' + (s.expiresAt ? (ok ? 'Renews ' : 'Access to ') + esc(new Date(s.expiresAt).toLocaleDateString()) + ' · ' : '') + 'Everyone on ' + esc(co) + ' can design.</div>'
+        + (ok ? '' : '<p class="err">The last payment did not go through. Update the card to keep designing.</p>')
+        + (s.canManage ? '<div class="actions"><button type="button" class="btn" id="sub-manage">' + (ok ? 'Manage subscription' : 'Update payment') + '</button></div>' : '<p class="muted" style="font-size:13.5px">The account owner, or the person who subscribed, manages the subscription.</p>') + '</div>';
+      if ($('sub-manage')) $('sub-manage').onclick = function () { checkout(this, { action: 'manage' }, 'Could not open the billing page.'); };
+      return;
+    }
+    if (s.available && (m || y)) {
+      var save = m && y ? Math.round((1 - y / (m * 12)) * 100) : 0, trial = access && access.status === 'trial';
+      el.innerHTML = back + '<div class="card2" id="sub-card"><b>' + (trial ? 'Keep designing after your trial' : access && access.active ? 'Your own subscription' : 'Subscribe to Editor Lite') + '</b>'
+        + (trial && access.expiresAt ? '<p class="muted" style="font-size:13.5px">Your trial from ' + esc(brandName()) + ' runs to ' + esc(new Date(access.expiresAt).toLocaleDateString()) + '.</p>' : '')
+        + '<p class="muted" style="font-size:13.5px">Monthly or yearly, for everyone on ' + esc(co) + '. Cancel from Manage subscription at any time.</p><div class="plans">'
+        + (m ? '<button type="button" class="btn p" data-plan="month">Monthly<small>' + usd(m / 100) + ' / month</small></button>' : '')
+        + (y ? '<button type="button" class="btn" data-plan="year">Yearly<small>' + usd(y / 100) + ' / year' + (save > 0 ? ' · save ' + save + '%' : '') + '</small></button>' : '')
+        + '</div><p class="muted" style="font-size:13px">Checkout opens on a secure payment page and brings you back here.</p></div>';
+      Array.prototype.forEach.call(el.querySelectorAll('[data-plan]'), function (b) { b.onclick = function () { checkout(b, { plan: b.getAttribute('data-plan') }, 'Could not start the checkout.'); }; });
+      return;
+    }
+    el.innerHTML = back + noCheckout();
+  }
+  function checkout(btn, body, what) {
+    btn.disabled = true;
+    var note = document.createElement('p'); note.className = 'muted'; note.textContent = body.action === 'manage' ? 'Opening your billing page…' : 'Opening checkout…'; btn.parentNode.appendChild(note);
+    post('/api/customer-subscribe', Object.assign({ from: 'portal' }, body)).then(function (r) {
+      var url = r.ok ? https(r.j.url) : null;
+      if (!url) throw new Error(r.ok ? 'The payment page did not come back. Please try again.' : r.j.error || what);
+      location.href = url;
+    })['catch'](function (e) { note.className = 'err'; note.textContent = e.message || what; btn.disabled = false; });
+  }
+
+  /* ── orders ─────────────────────────────────────────────────────────── */
+  var TONE = { shipped: 'go', cancelled: 'stop' };
+  function drawOrders(list) {
+    var documents=[];
+    list.forEach(function(o){(o.documents||[]).forEach(function(d){var url=https(d.url);if(url)documents.push('<p><a target="_blank" rel="noopener noreferrer" href="'+esc(url)+'">'+esc(d.name||d.kind||'Document')+'</a> · '+esc(o.orderNo)+'</p>');});});
+    $('customer-documents').innerHTML=documents.join('')||'<p class="muted">No order documents yet.</p>';
+    if (!list.length) {
+      $('orders').innerHTML = '<div class="empty">Nothing here yet.<br>'
+        + 'Orders you place will appear as soon as they are received.</div>';
+      return;
+    }
+    $('orders').innerHTML = list.map(function (o) {
+      var ms = o.milestone || {};
+      var tone = TONE[ms.key] || 'wait';
+      var track = '';
+      if (ms.index !== null && ms.index !== undefined) {
+        for (var i = 0; i < (ms.of || 6); i++) {
+          track += '<i class="' + (i < ms.index ? 'done' : i === ms.index ? 'on' : '') + '"></i>';
+        }
+      }
+      var lines = (o.items || []).map(function (it) {
+        return '<div><span class="q">' + esc(it.qty || 1) + '&times;</span>'
+             + '<span class="n">' + esc(it.name || it.sku || 'Item')
+             + (it.kwh ? ' <span class="muted">' + esc(it.kwh) + ' kWh</span>' : '')
+             + (it.warranty ? ' <span class="muted">· warranty to ' + esc(it.warranty.until) + '</span>' : '')
+             + '</span></div>';
+      }).join('');
+      var docs = (o.documents || []).map(function (d) {
+        var url = https(d.url);
+        return url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(d.name || d.kind) + '</a>' : '';
+      }).join('');
+      var meta = [];
+      var checkout = '';
+      if (o.checkout) {
+        var own = o.checkout.accounting === 'tenant';
+        checkout = '<div class="lines"><b>Order total $' + Number(o.checkout.total).toFixed(2) + '</b>'
+          + (own ? '<p class="muted">' + esc(o.checkout.depositPercent) + '% deposit. Invoiced by ' + esc(PORTAL && PORTAL.brand ? PORTAL.brand.name : 'your supplier') + '.</p>'
+                 : '<p class="muted">Includes a ClearSky processing fee of $' + Number(o.checkout.processingFee).toFixed(2) + '. ' + esc(o.checkout.depositPercent) + '% deposit; collected by ClearSky for fulfillment.</p>')
+          + (o.checkout.invoices || []).map(function (i) {
+            /* the supplier's own link on a tenant-billed invoice, or
+               QuickBooks' — the server decided which; https only here */
+            var pay = https(i.payUrl);
+            return '<p>' + esc(i.stage) + (i.number ? ' · invoice ' + esc(i.number) : '') + (i.issuedAt ? ' · issued ' + esc(i.issuedAt) : '') + ' · $' + Number(i.amount).toFixed(2) + ' · ' + esc(String(i.status).replace(/_/g, ' '))
+              + (pay ? ' · <a target="_blank" rel="noopener noreferrer" href="' + esc(pay) + '">' + (own ? 'Pay online →' : 'View / pay secure QuickBooks invoice →') + '</a>' : '') + '</p>';
+          }).join('') + '</div>';
+      }
+      if (o.shipment) meta.push('Shipment: ' + esc(o.shipment.carrier) + ' · ' + esc(o.shipment.tracking));
+      if (o.poNumber) meta.push('Your PO ' + esc(o.poNumber));
+      (o.destinations || []).forEach(function (d) {
+        meta.push('Ship to ' + esc(d.name || d.id) + (d.city ? ' · ' + esc(d.city) + (d.state ? ', ' + esc(d.state) : '') : '')
+          + (d.items && d.items.length ? ' · ' + d.items.map(function (i) { return esc(i.qty) + ' × ' + esc(i.sku); }).join(', ') : ''));
+      });
+      (o.loads || []).forEach(function (l) {
+        meta.push('Load ' + esc(l.id) + ' · ' + esc(String(l.status || '').replace(/_/g, ' ')) + ' · ' + esc(l.carrier) + ' ' + esc(l.tracking)
+          + (l.units ? ' · ' + esc(l.units) + ' unit' + (l.units === 1 ? '' : 's') : '')
+          + (l.lastConfirmed ? ' · last confirmed at ' + esc(l.lastConfirmed.label) : '')
+          + (l.deliveredAt ? ' · delivered ' + esc(String(l.deliveredAt).slice(0, 10)) : ''));
+      });
+      if (o.site && o.site.city) meta.push('Delivering to ' + esc(o.site.city) + (o.site.state ? ', ' + esc(o.site.state) : ''));
+      if (o.system && o.system.kwh) meta.push(esc(o.system.kwh) + ' kWh · ' + esc(o.system.kw || '—') + ' kW');
+      if (o.promisedShipAt) meta.push('Ships by ' + esc(String(o.promisedShipAt).slice(0, 10)));
+      if (o.price && o.price.total) meta.push('$' + Number(o.price.total).toLocaleString());
+
+      return '<div class="ord">'
+        + '<div class="hd"><span class="no">' + esc(o.orderNo || '—') + (o.poNumber ? ' <span class="muted" style="font-weight:500">· PO ' + esc(o.poNumber) + '</span>' : '') + '</span>'
+        +   '<span class="when">' + esc(String(o.placedAt || '').slice(0, 10)) + '</span>'
+        +   '<span class="sp"></span>'
+        +   '<span class="pill ' + tone + '">' + esc(ms.label || 'Received') + '</span></div>'
+        + (o.cancelRequested ? '<p class="say"><b>Cancellation requested.</b> '
+            + esc(o.soldBy || 'The team') + ' will be in touch.</p>' : '')
+        + '<p class="say">' + esc(ms.say || '') + '</p>'
+        + (track ? '<div class="track">' + track + '</div>'
+            + '<div class="steps"><span>Received</span><span>Confirmed</span><span>Building</span>'
+            + '<span>Testing</span><span>Ready</span><span>Shipped</span></div>' : '')
+        + (lines ? '<div class="lines">' + lines + '</div>' : '')
+        + checkout
+        + (meta.length ? '<div class="meta">' + meta.join('<span>·</span>') + '</div>' : '')
+        + (docs ? '<div class="docs">' + docs + '</div>' : '')
+        + requestsHtml(o)
+        + '</div>';
+    }).join('');
+  }
+
+  var KIND = { shipping: 'Delivery address or date', information: 'Question', change: 'Change to the order', warranty: 'Warranty' };
+  function requestsHtml(o) {
+    var reqs = (o.requests || []).map(function (r) {
+      return '<div class="rq ' + esc(r.status) + '"><b>' + esc(KIND[r.kind] || r.kind) + '</b> <span class="muted">' + esc(String(r.at || '').slice(0, 10)) + (r.by ? ' · ' + esc(r.by) : '') + ' · ' + (r.status === 'open' ? 'waiting for an answer' : 'answered') + '</span>'
+        + '<p>' + esc(r.message) + '</p>'
+        + (r.address ? '<p class="muted">New address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '')
+        + (r.answer ? '<p class="ans"><b>' + esc(o.soldBy || 'Answer') + ':</b> ' + esc(r.answer) + '</p>' : '') + '</div>';
+    }).join('');
+    return '<div class="rqs">' + reqs + '<details class="rqf"><summary>Request a change or ask a question</summary>'
+      + '<form data-req="' + esc(o.orderNo) + '"><label>About<select name="kind"><option value="information">A question</option><option value="shipping">Delivery address or date</option><option value="change">Change the order</option><option value="warranty">Warranty</option></select></label>'
+      + '<div class="addr" hidden><input name="line1" maxlength="200" placeholder="New delivery address"><input name="city" maxlength="100" placeholder="City"><input name="state" maxlength="40" placeholder="State"><input name="zip" maxlength="20" placeholder="ZIP"></div>'
+      + '<label>What do you need?<textarea name="message" maxlength="2000" required placeholder="Tell us what you need. We will answer here."></textarea></label>'
+      + '<button type="submit">Send request</button> <span class="muted rq-status"></span></form></details></div>';
+  }
+  $('orders').addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'kind') { var f = e.target.closest('form'); if (f) f.querySelector('.addr').hidden = e.target.value !== 'shipping'; }
+  });
+  $('orders').addEventListener('submit', function (e) {
+    var f = e.target; if (!f || !f.getAttribute('data-req')) return;
+    e.preventDefault();
+    var st = f.querySelector('.rq-status'); st.textContent = 'Sending…';
+    var body = { org: ORG, orderNo: f.getAttribute('data-req'), kind: f.kind.value, message: f.message.value,
+      address: f.kind.value === 'shipping' ? { line1: f.line1.value, city: f.city.value, state: f.state.value, zip: f.zip.value } : null };
+    api('/api/my-orders?org=' + encodeURIComponent(ORG), { method: 'POST', body: JSON.stringify(body) }).then(function (r) {
+      if (!r.ok) { st.textContent = (r.j && r.j.error) || 'Could not send. Please try again.'; return; }
+      st.textContent = 'Sent. We will answer here.'; loadOrders();
+    });
+  });
+
+  /* ── loading: each endpoint once, and every hub that reads it redrawn
+     when it answers — nothing waits on the slowest. ────────────────────── */
+  function loadOrders() {
+    return api('/api/my-orders' + Q).then(function (r) {
+      if (!r.ok) { ORDERS = null; ERR.orders = r.j.error || 'Could not load your orders.'; $('orders').innerHTML = '<p class="err">' + esc(ERR.orders) + '</p>'; $('customer-documents').innerHTML = ''; }
+      else { ORDERS = r.j.orders || []; ERR.orders = ''; drawOrders(ORDERS); }
+      drawPay(); drawShipping(); drawWarranty(); drawHome();
+    })['catch'](function () {
+      ERR.orders = 'Could not reach the server. Please try again.';
+      $('orders').innerHTML = '<p class="err">' + esc(ERR.orders) + '</p>';
+      drawPay(); drawShipping(); drawHome();
+    });
+  }
+  function loadSites(note) {
+    return api('/api/my-sites' + Q).then(function (r) {
+      if (r.ok) { SITES = r.j; ERR.sites = ''; } else { SITES = null; ERR.sites = missing(r) ? 'Sites are not switched on for this account yet.' : r.j.error || 'Could not load your sites.'; }
+      drawFleet(); drawBulk(); drawWarranty(); drawShipping(); drawHome();
+      if (note && $('fleet-msg')) $('fleet-msg').textContent = note;
+    })['catch'](function () { ERR.sites = 'Could not reach the server.'; drawFleet(); drawBulk(); drawWarranty(); drawHome(); });
+  }
+  function loadFiles() {
+    return api('/api/my-files' + Q).then(function (r) {
+      if (r.ok) { FILES = r.j; ERR.files = ''; } else { FILES = null; ERR.files = missing(r) ? 'Documents are not switched on for this account yet.' : r.j.error || 'Could not load your documents.'; }
+      drawDocs();
+    })['catch'](function () { ERR.files = 'Could not reach the server.'; drawDocs(); });
+  }
+  function loadSub() {
+    return api('/api/customer-subscribe' + Q).then(function (r) {
+      if (r.ok) { SUB = r.j; ERR.sub = ''; } else if (missing(r)) { SUB = { available: false }; ERR.sub = ''; } else { SUB = null; ERR.sub = r.j.error || 'Could not load the subscription.'; }
+      drawSub(); drawHome();
+    })['catch'](function () { ERR.sub = 'Could not reach the server.'; drawSub(); });
+  }
+  function loadPo() {
+    return api('/api/po-intake' + Q).then(function (r) { PO = r.ok ? r.j : null; drawHome(); })['catch'](function () {});
+  }
+
+  /* ── account ────────────────────────────────────────────────────────── */
+  /* A colleague whose company already has an account asked to join it on
+     their first sign-in; nothing of the account shows until the owner or the
+     supplier approves. Check again asks for the account AND the orders, so
+     the moment they are let in, everything is there. */
+  function drawPending(a) {
+    $('acct').innerHTML = '<div style="grid-column:1/-1"><div class="k">Waiting for approval</div><div class="v">You asked to join ' + esc(a.company || 'your company') + '.</div><p class="muted">Its account owner, or your supplier, approves new people. Once they do, your company’s orders, sites and equipment appear here. <button type="button" class="btn" id="pending-check">Check again</button></p></div>';
+    $('people').innerHTML = ''; $('terms-wrap').hidden = true;
+    ['f-name', 'f-company', 'f-phone', 'f-line1', 'f-city', 'f-state', 'save'].forEach(function (id) { if ($(id)) $(id).disabled = true; });
+    $('pending-check').onclick = function () { checkAgain(this); };
+  }
+  /* Check again, from Home or from Account. The button says it is checking,
+     and when the answer is still "waiting" the card says so, with the time:
+     a tap that changes nothing on screen reads as a dead button. loadAccount
+     and loadOrders both settle on failure, so the button is never left
+     disabled; a check that did not get an answer says that instead. */
+  function checkAgain(btn) {
+    var before = ACCT;
+    btn.disabled = true; btn.textContent = 'Checking…';
+    Promise.all([loadAccount(), loadOrders()]).then(function () {
+      btn.disabled = false; btn.textContent = 'Check again';
+      if (!ACCT || !ACCT.pending) return;
+      var said = ACCT !== before ? 'Still waiting for approval · checked ' + new Date().toLocaleTimeString() + '.' : 'Could not check just now. Please try again.';
+      ['home-check', 'pending-check'].forEach(function (id) {
+        var b = $(id); if (!b) return;
+        var n = b.nextElementSibling;
+        if (!n || !n.hasAttribute('data-checked')) { b.insertAdjacentHTML('afterend', ' <span class="muted" data-checked role="status"></span>'); n = b.nextElementSibling; }
+        n.textContent = said;
+      });
+    });
+  }
+  /* The people on the account; the owner adds, approves and turns access
+     off and on (api/my-account.js add-user · user-status). */
+  function drawPeople(a) {
+    var owner = a.you.role === 'owner', list = a.users || [];
+    $('people').innerHTML = '<h2>People on this account · ' + list.length + '</h2>' + list.map(function (u) {
+      var me = u.email === a.you.email, st = u.status || 'active';
+      var act = !owner || me ? '' : st === 'pending' ? '<button type="button" class="btn p" data-person="' + esc(u.email) + '" data-to="active">Approve</button> <button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="disabled">Decline</button>' : st === 'disabled' ? '<button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="active">Turn on</button>' : '<button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="disabled">Turn off</button>';
+      return '<div class="ord" style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div style="min-width:0;overflow-wrap:anywhere"><b>' + esc(u.name || u.email) + (me ? ' (you)' : '') + '</b> <span class="muted">' + esc(u.email) + (u.role === 'owner' ? ' · owner' : '') + (st === 'pending' ? ' · asked to join' : st === 'disabled' ? ' · access off' : '') + (owner && u.activated === false && st === 'active' ? ' · not signed in yet' : '') + '</span></div><div>' + act + '</div></div>';
+    }).join('')
+      + (owner ? '<div class="row2" style="margin-top:10px"><div><label for="p-email">Add a colleague (work email)</label><input id="p-email" type="email" placeholder="colleague@' + esc(String(a.you.email).split('@')[1] || 'company.com') + '"></div><div><label for="p-name">Their name</label><input id="p-name"></div></div><div class="actions"><button type="button" class="btn p" id="p-add">Add to the account</button><span class="muted" id="p-msg" style="align-self:center;font-size:13.5px"></span></div>'
+        : '<p class="muted" style="font-size:13px">The account owner adds and removes people. Everyone here sees the same orders, sites and equipment.</p>');
+    Array.prototype.forEach.call(document.querySelectorAll('#people [data-person]'), function (b) {
+      b.onclick = function () {
+        var to = b.getAttribute('data-to'), who = b.getAttribute('data-person');
+        if (to === 'disabled' && !window.confirm('Turn off access for ' + who + '? What they did stays on the account.')) return;
+        b.disabled = true;
+        api('/api/my-account', { method: 'POST', body: JSON.stringify({ org: ORG, action: 'user-status', email: who, status: to }) }).then(function (r) {
+          if (!r.ok) { alert(r.j.error || 'Could not change access.'); b.disabled = false; return; }
+          a.users = r.j.users || a.users; drawPeople(a); drawHome();
+        })['catch'](function () { b.disabled = false; });
+      };
+    });
+    if ($('p-add')) $('p-add').onclick = function () {
+      var btn = this; btn.disabled = true; $('p-msg').textContent = 'Adding…';
+      api('/api/my-account', { method: 'POST', body: JSON.stringify({ org: ORG, action: 'add-user', email: $('p-email').value, name: $('p-name').value }) }).then(function (r) {
+        btn.disabled = false;
+        if (!r.ok) { $('p-msg').textContent = r.j.error || 'Could not add them.'; return; }
+        a.users = r.j.users || a.users; drawPeople(a); drawHome(); if ($('p-msg')) $('p-msg').textContent = r.j.note || 'Added.';
+      })['catch'](function () { btn.disabled = false; $('p-msg').textContent = 'Could not reach the server.'; });
+    };
+  }
+  function drawAccount(a) {
+    if (a.pending) return drawPending(a);
+    /* The account card a buyer expects from any industrial supplier: account
+       number, who they are, who looks after them, what terms they have. */
+    var rep = a.rep && a.rep.name ? esc(a.rep.name) + (a.rep.email ? ' · <a href="mailto:' + esc(a.rep.email) + '">' + esc(a.rep.email) + '</a>' : '') : '<span class="muted">Not assigned yet</span>';
+    $('acct').innerHTML =
+        '<div><div class="k">Account number</div><div class="v" style="font-family:ui-monospace,monospace;font-size:13px">' + esc(a.customerId || '—') + '</div></div>'
+      + '<div><div class="k">Company</div><div class="v">' + esc(a.company || '—') + '</div></div>'
+      + '<div><div class="k">Account type</div><div class="v">' + (a.accountType === 'company' ? 'Company account' : 'Individual account') + '</div></div>'
+      + (a.since ? '<div><div class="k">Customer since</div><div class="v">' + esc(String(a.since).slice(0, 10)) + '</div></div>' : '')
+      + '<div><div class="k">Your account rep</div><div class="v">' + rep + '</div></div>'
+      + '<div><div class="k">Signed in as</div><div class="v" style="overflow-wrap:anywhere">' + esc(a.you.email) + (a.you.role === 'owner' ? ' <span class="muted">· account owner</span>' : '') + '</div></div>'
+      + '<div><div class="k">Orders on the account</div><div class="v">' + esc(a.orders) + '</div></div>'
+      + (a.plan === 'designer'
+          ? '<div><div class="k">Plan</div><div class="v">Designer</div></div>' : '');
+    drawPeople(a);
+
+    var t = a.terms || {};
+    var any = t.depositPct != null || t.netDays != null || t.discountPct != null || t.poRequired;
+    $('terms-wrap').hidden = !any;
+    if (any) {
+      $('terms').innerHTML =
+          (t.depositPct != null ? '<div><div class="k">Deposit</div><div class="v">' + esc(t.depositPct) + '% · ' + (t.dueDays ? 'due in ' + esc(t.dueDays) + ' days' : 'on receipt') + '</div></div>' : '')
+        + (t.netDays != null ? '<div><div class="k">Payment terms</div><div class="v">Net ' + esc(t.netDays) + '</div></div>' : '')
+        + (t.discountPct != null ? '<div><div class="k">Your discount</div><div class="v">' + esc(t.discountPct) + '%</div></div>' : '')
+        + (t.poRequired ? '<div><div class="k">Purchase order</div><div class="v">Required</div></div>' : '');
+      $('terms-note').textContent = 'Set by ' + (a.rep && a.rep.name ? a.rep.name : (a.company ? 'your account manager' : 'the team')) + '. Ask them if anything here looks wrong.';
+    }
+
+    var owner = a.you.role === 'owner';
+    ['f-name', 'f-phone', 'save'].forEach(function (id) { $(id).disabled = false; });
+    ['f-company', 'f-line1', 'f-city', 'f-state'].forEach(function (id) { $(id).disabled = !owner; });
+    /* the supplier keeps the name of a company it set up */
+    if (a.companyLocked) { $('f-company').disabled = true; $('f-company').title = 'Your supplier keeps the company name; ask them to change it.'; }
+    $('owner-note').hidden = owner;
+    $('f-name').value = a.you.name || '';
+    $('f-company').value = a.company || '';
+    $('f-phone').value = a.you.phone || '';
+    var ad = a.address || {};
+    $('f-line1').value = ad.line1 || '';
+    $('f-city').value = ad.city || '';
+    $('f-state').value = [ad.state, ad.zip].filter(Boolean).join(' ');
+  }
+
+  function loadAccount() {
+    return api('/api/my-account' + Q).then(function (r) {
+      if (!r.ok) { $('acct').innerHTML = '<p class="err">' + esc(r.j.error || 'Could not load your account.') + '</p>'; $('home-kv').innerHTML = '<p class="err">' + esc(r.j.error || 'Could not load your account.') + '</p>'; return; }
+      /* now that the account's state is known, route again: a person
+         waiting to join is moved off a page that would never load, and the
+         moment they are let in they land on the page they asked for */
+      ACCT = r.j; drawAccount(r.j); drawHome(); view(ASKED);
+      if (r.j.pending) return;
+      loadDesigns(); loadSites(); loadFiles(); loadSub(); loadPo();
+      $('agreements').innerHTML='<h3>Agreements</h3>'+((r.j.agreements||[]).map(function(a){return '<p>'+esc(a.kind)+' · '+esc(a.ref)+' · '+esc(a.signedAt)+'</p>';}).join('')||'<p class="muted">No agreements recorded yet.</p>');
+    })['catch'](function () {});
+  }
+  function loadDesigns() {
+    api('/api/customer-design?org='+encodeURIComponent(ORG)).then(function(r){
+      if(!r.ok)throw new Error(r.j.error||'Could not load your site plans.');
+      var d=r.j,active=d.access.active,base='/editor-lite.html?customer=1&org='+encodeURIComponent(ORG);
+      DESIGN=d;
+      $('new-project').hidden=!active;$('new-project').href=base;
+      $('editor-access').textContent=active?(d.access.status==='owner-access'?'ClearSky owner access · no customer subscription required. Create and use your own site plans in this supplier’s customer workspace.':(d.access.status==='trial'?'Approved trial':'Editor Lite access')+' · available until '+new Date(d.access.expiresAt).toLocaleDateString()+'.'):'Not active on your account.';
+      $('project-list').innerHTML=(d.projects||[]).map(function(p){return '<div class="ord"><h3>'+esc(p.name)+'</h3><p class="muted">'+esc(p.module)+' · '+esc(new Date(p.updatedAt).toLocaleString())+'</p>'+(active?'<a class="btn" href="'+esc(base+'&project='+encodeURIComponent(p.id))+'">Open project →</a>':'<p class="muted">Retained securely. Renew Editor Lite to reopen this design.</p>')+'</div>';}).join('')||'<p class="muted">No site plans yet. '+(active?'Start a new project above.':'Your orders and customer account do not require an editor subscription.')+'</p>';
+      if(d.limited)$('project-list').insertAdjacentHTML('beforeend','<p class="muted">Newest 100 projects shown.</p>');
+      drawSub();
+    })['catch'](function(e){$('project-list').innerHTML='<p class="err">'+esc(e.message)+'</p>';$('editor-access').textContent='';drawSub();});
+  }
+
+  $('save').addEventListener('click', function () {
+    var sp = String($('f-state').value || '').trim().split(/\s+/);
+    $('save-msg').textContent = 'Saving…';
+    api('/api/my-account', { method: 'POST', body: JSON.stringify({
+      org: ORG,
+      name: $('f-name').value, company: $('f-company').disabled ? undefined : $('f-company').value, phone: $('f-phone').value,
+      address: { line1: $('f-line1').value, city: $('f-city').value,
+                 state: sp[0] || '', zip: sp[1] || '' }
+    }) }).then(function (r) {
+      if (!r.ok) { $('save-msg').textContent = r.j.error || 'Could not save.'; return; }
+      $('save-msg').textContent = r.j.note || (r.j.ignored ? 'Saved your name and phone. Only the account owner changes the company and address.' : 'Saved.');
+      ACCT = r.j; drawAccount(r.j); drawHome();
+    })['catch'](function () { $('save-msg').textContent = 'Could not reach the server.'; });
+  });
+
+  /* ── sign in ────────────────────────────────────────────────────────── */
+  $('g-create').onclick=function(){ $('g-h').textContent='Create a customer account';$('g-p').textContent='Verify your work email. If your company already has an account here, you are asked to join it and its owner lets you in; otherwise a free customer account opens for you.';$('g-link').textContent='Verify email and continue';$('g-email').focus(); };
+  function sendLink() {
+    var e = String($('g-email').value || '').trim();
+    if (!e || e.indexOf('@') < 0) { $('g-msg').textContent = 'Please enter your email address.'; return; }
+    try { localStorage.setItem(LS_EMAIL, e); } catch (x) {}
+    firebase.auth().sendSignInLinkToEmail(e, {
+      url: location.origin + location.pathname + '?org=' + encodeURIComponent(ORG) + '&view=' + encodeURIComponent(views[location.hash.slice(1)] ? location.hash.slice(1) : 'home'),
+      handleCodeInApp: true
+    }).then(function () {
+      $('g-msg').textContent = 'Check your inbox — we have emailed a link to ' + e + '.';
+    }, function (err) {
+      $('g-msg').className = 'err';
+      $('g-msg').textContent = (err && err.message) || 'Could not send the link.';
+    });
+  }
+  $('g-link').addEventListener('click', sendLink);
+  $('g-email').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') sendLink(); });
+  $('g-google').addEventListener('click', function () {
+    var p = new firebase.auth.GoogleAuthProvider();
+    firebase.auth().signInWithPopup(p)['catch'](function (err) {
+      $('g-msg').className = 'err';
+      $('g-msg').textContent = (err && err.message) || 'Could not sign in.';
+    });
+  });
+  $('out').addEventListener('click', function () { try { firebase.auth().signOut(); } catch (e) {} });
+
+  /* Completing a magic link when they come back from the email. */
+  try {
+    if (firebase.auth().isSignInWithEmailLink(location.href)) {
+      var saved = '';
+      try { saved = localStorage.getItem(LS_EMAIL) || ''; } catch (x) {}
+      if (!saved) saved = window.prompt('Confirm the email address you used') || '';
+      firebase.auth().signInWithEmailLink(saved, location.href).then(function () {
+        var nextView=views[qp('view')]?qp('view'):'home';
+        history.replaceState(null,'',location.pathname+'?org='+encodeURIComponent(ORG)+'#'+nextView);
+        view(nextView);try{localStorage.removeItem(LS_EMAIL);}catch(e){}
+      })['catch'](function (err) {
+        $('g-msg').className = 'err';
+        $('g-msg').textContent = (err && err.message) || 'That link has expired. Please ask for a new one.';
+      });
+    }
+  } catch (e) {}
+
+  firebase.auth().onAuthStateChanged(function (u) {
+    paint();
+    if (!u) {
+      $('gate').hidden = false; $('app').hidden = true;
+      $('out').hidden = true; $('who').textContent = '';
+      return;
+    }
+    $('gate').hidden = true; $('app').hidden = false;
+    $('out').hidden = false; $('who').textContent = u.email || '';
+    if (!ORG) {
+      $('orders').innerHTML = '<p class="err">This portal link is missing its account. '
+        + 'Please use the link your supplier sent you.</p>';
+      $('home-kv').innerHTML = $('orders').innerHTML;
+      return;
+    }
+    drawHome();
+    portalReady.then(function() { loadAccount(); loadOrders(); if(!$('size-portfolio').hidden)sizeMode('portfolio'); })['catch'](function(e) {
+      $('orders').innerHTML='<p class="err">'+esc(e.message)+'</p>'; $('home-kv').innerHTML=$('orders').innerHTML;
+    });
+  });
+
+  paint();
+})();
+</script>
+</body>
+</html>

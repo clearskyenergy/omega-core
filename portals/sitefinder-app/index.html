@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Site Finder</title>
+<meta name="description" content="Find the sites with the grid capacity you want, screen the listing, size the battery, and make the owner an offer. From your phone.">
+<meta name="theme-color" content="#102A3A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Site Finder">
+<link rel="manifest" href="/sitefinder-app/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="/sitefinder-app/brand/sitefinder-icon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/sitefinder-app/brand/sitefinder-icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  ClearSky-OMEGA · Site Finder — the phone app
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  WHAT THIS IS
+  The site finder's sales process on a phone, installable from the home
+  screen the way the SkyFund app is (manifest + service worker beside it,
+  the Vercel rewrite /sitefinder-app → this folder). Same workspace, same
+  data, same APIs as clearsky-sitefinder.html: the listing catalogue
+  (/api/site-catalog), the energy score (/api/site-score), the host lease
+  offer (/api/site-lease), saved sites and call notes (omega-site-saves.js),
+  circuit capacity (omega-comed-layers.js), the product fit
+  (omega-bess-catalog.js) and the printed proposal (omega-site-lease.js).
+  Nothing is copied from the desktop tool; every shared file is loaded from
+  the root by absolute path, per CLAUDE.md's one-runtime rule.
+
+  WHAT IT DELIBERATELY DOES NOT LOAD
+  omega-tenant.js, for the reason the desktop site finder does not: that
+  page boots Firebase directly from /config.js and resolves the workspace
+  from the signed-in email domain (the rules' userOrg()), with ?org= as a
+  staff preview only. This app does the same, so the two agree.
+
+  ROUTES (hash):  #/find · #/site/{id} · #/saved · #/account
+  ES5 only. var, function, callbacks; no build step.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{--bg:#F4F7F9;--surface:#FFFFFF;--ink:#102A3A;--muted:#3E4F5B;--dim:#6E7C86;--line:#D9E1E7;--line-soft:#E8EEF2;
+  --navy:#102A3A;--teal:#007F7A;--teal-dim:rgba(0,127,122,.10);--amber:#B8741A;--amber-dim:rgba(184,116,26,.12);--red:#B3402E;--red-dim:rgba(179,64,46,.10);
+  --green:#2C7A4B;--green-dim:rgba(44,122,75,.12);--r:10px;--tab-h:64px;--top-h:56px;--shadow:0 1px 2px rgba(16,42,58,.06)}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font:400 15px/1.45 'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;
+  padding-top:calc(var(--top-h) + env(safe-area-inset-top));padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom))}
+h1,h2,h3{margin:0;letter-spacing:-.015em}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:15px}
+a{color:var(--teal)}
+.hide{display:none!important}
+.pend{color:#8a94a0;font-style:italic}
+.top{position:fixed;top:0;left:0;right:0;height:calc(var(--top-h) + env(safe-area-inset-top));padding-top:env(safe-area-inset-top);background:var(--navy);color:#fff;
+  display:flex;align-items:center;gap:10px;padding-left:14px;padding-right:14px;z-index:20}
+.top img{width:32px;height:32px;border-radius:8px}
+.top b{font-size:15px;font-weight:700}
+.top small{display:block;font-size:11px;color:#9FC9C6;font-weight:500}
+.top .who{margin-left:auto;font-size:11px;color:#C9D6DA;text-align:right;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tabs{position:fixed;bottom:0;left:0;right:0;height:calc(var(--tab-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:#fff;border-top:1px solid var(--line);
+  display:flex;z-index:20}
+.tabs a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-decoration:none;color:var(--dim);font-size:11px;font-weight:600}
+.tabs a svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tabs a.on{color:var(--teal)}
+/* A fixed top bar and tab bar: anything scrolled into view (a focused field, a button a test or a screen reader reaches) must land clear of both. */
+html{scroll-padding-top:calc(var(--top-h) + env(safe-area-inset-top) + 12px);scroll-padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom) + 12px)}
+.view{padding:14px 14px 20px;max-width:720px;margin:0 auto}
+.view>*{min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.card h3{font-size:15px;font-weight:700;margin-bottom:4px}
+.search{display:flex;gap:8px;margin-bottom:10px}
+.search input{flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r);font-size:16px;min-width:0}
+.btn{padding:10px 14px;border-radius:var(--r);border:1px solid var(--line);background:#fff;font-weight:600;font-size:14px;color:var(--ink)}
+.btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn.navy{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn.sm{padding:7px 10px;font-size:13px}
+.btn:disabled{opacity:.55;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.note{font-size:12.5px;color:var(--muted);line-height:1.45}
+.note.bad{color:var(--red)}
+.status{font-size:12.5px;color:var(--dim);margin:6px 2px 10px}
+#mapWrap{position:relative;margin-bottom:10px}
+#map{height:170px;border-radius:var(--r);border:1px solid var(--line);background:#e9eef2;transition:height .2s}
+#mapWrap.tall #map{height:62vh}
+#mapWrap.hidden #map{display:none}
+.mapBtns{position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:6px}
+.mapBtns button{background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;font-weight:600;color:var(--ink)}
+.mapBtns button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+#mapWrap.hidden .mapBtns{position:static;margin-bottom:6px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:11px;color:var(--dim);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px;opacity:.85}
+.legend small{flex-basis:100%;font-size:11px}
+#mapWrap.hidden .legend{display:none}
+.site{display:block;text-decoration:none;color:inherit}
+.site .head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.site .addr{font-size:15px;font-weight:700;line-height:1.25}
+.site .sub{font-size:12px;color:var(--dim);margin-top:2px}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.pill.open{background:var(--green-dim);color:var(--green)}.pill.partial{background:var(--amber-dim);color:var(--amber)}.pill.blocked{background:var(--red-dim);color:var(--red)}.pill.unknown{background:#EEF2F5;color:var(--dim)}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.metrics div{background:#F4F7F9;border-radius:8px;padding:8px 9px;font-size:11px;color:var(--dim)}
+.metrics b{display:block;font-size:16px;color:var(--ink);letter-spacing:-.01em;margin-bottom:1px}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:12.5px;margin-top:8px;line-height:1.4}
+.facts b{color:var(--dim);font-weight:600;white-space:nowrap}
+.score{display:flex;align-items:center;gap:12px;background:var(--teal-dim);border-radius:var(--r);padding:10px 12px;margin-bottom:10px}
+.score .n{font-size:30px;font-weight:800;color:var(--teal);line-height:1}
+.score .n small{font-size:12px;color:var(--dim);font-weight:600}
+.score .t{font-size:13px;color:var(--ink)}
+.score .t small{display:block;color:var(--dim);font-size:11.5px}
+.sec{margin-top:14px}
+.sec h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);margin-bottom:8px;font-weight:700}
+.form{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:end;margin:8px 0}
+.form label{font-size:11.5px;color:var(--dim);display:flex;flex-direction:column;gap:4px}
+.form input,.form select{padding:8px 9px;border:1px solid var(--line);border-radius:8px;font-size:15px;width:110px;background:#fff}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.tiles div{border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:11px;color:var(--dim);min-width:0;overflow-wrap:anywhere}
+.tiles b{display:block;font-size:16px;color:var(--ink);letter-spacing:-.01em;margin-bottom:2px}
+textarea.script{width:100%;min-height:150px;font:13px/1.45 inherit;padding:9px;border:1px solid var(--line);border-radius:8px;resize:vertical}
+textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;border:1px solid var(--line);border-radius:8px}
+.who{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:13px;margin:8px 0}
+.who b{color:var(--dim);font-weight:600;white-space:nowrap}
+.log{list-style:none;margin:8px 0 0;padding:0;font-size:12.5px}
+.log li{padding:6px 0;border-top:1px solid var(--line-soft)}
+.log small{color:var(--dim)}
+.fit{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:6px}
+.fit div{padding:8px 10px;font-size:12.5px;border-top:1px solid var(--line-soft)}
+.fit div:first-child{border-top:0;background:var(--teal-dim)}
+.fit b{display:block;font-size:13px}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--dim);font-size:13px;text-decoration:none;margin-bottom:8px}
+.star{border:1px solid var(--line);background:#fff;border-radius:99px;width:40px;height:40px;font-size:20px;line-height:1;flex:0 0 auto}
+.star.on{color:#C98A2B;border-color:#e8d3a8;background:#fff8ea}
+.signin{max-width:420px;margin:30px auto;text-align:center}
+.signin img{width:72px;height:72px;border-radius:18px;margin-bottom:12px}
+.signin h1{font-size:22px;margin-bottom:6px}
+.signin p{color:var(--muted);font-size:14px}
+.signin input{width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r);font-size:16px;margin-top:8px}
+.signin .btn{width:100%;margin-top:10px;padding:13px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13.5px}
+.kv b{color:var(--dim);font-weight:600}
+.warn{background:var(--amber-dim);border:1px solid #efd9b0;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#7a5215;margin-top:8px}
+.empty{padding:30px 10px;text-align:center;color:var(--dim);font-size:14px}
+.csPin{background:transparent;border:0}
+.csPin span{display:inline-block;background:var(--teal);color:#fff;font:700 11px/1 'Inter',sans-serif;padding:5px 7px;border-radius:99px;box-shadow:0 1px 4px rgba(0,0,0,.3);white-space:nowrap;transform:translate(-50%,-50%)}
+.csPin span.sel{background:var(--navy)}
+.csPin span.dim{background:#8a94a0}
+.leaflet-container{font:inherit}
+@media (min-width:720px){#map{height:300px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <img src="/sitefinder-app/brand/sitefinder-icon-192.png" alt="">
+  <div><b>Site Finder</b><small id="topOrg">ClearSky-OMEGA</small></div>
+  <div class="who" id="topWho"></div>
+</header>
+
+<main id="app">
+  <section id="viewSignin" class="view hide">
+    <div class="signin">
+      <img src="/sitefinder-app/brand/sitefinder-icon-192.png" alt="">
+      <h1>Find the power. Then make the offer.</h1>
+      <p>Sign in with your work email. Sites, notes and offers are shared with your team.</p>
+      <button class="btn navy" id="signinGoogle" type="button">Continue with Google</button>
+      <form id="signinForm" style="margin-top:14px">
+        <input id="signinEmail" type="email" autocomplete="username" placeholder="Work email" required>
+        <input id="signinPass" type="password" autocomplete="current-password" placeholder="Password" required>
+        <button class="btn primary" type="submit">Sign in</button>
+      </form>
+      <p class="note" id="signinMsg" role="status"></p>
+    </div>
+  </section>
+
+  <section id="viewFind" class="view hide">
+    <div class="search">
+      <input id="q" type="search" placeholder="Address, city or property type" autocomplete="off" enterkeyhint="search">
+      <button class="btn primary" id="go" type="button">Search</button>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <button class="btn sm" id="nearMe" type="button">Near me</button>
+      <button class="btn sm" id="here" type="button">Search this map</button>
+      <label class="note" style="display:flex;align-items:center;gap:6px;margin-left:auto">Min kW <input id="minKw" type="number" min="0" step="50" value="0" style="width:72px;padding:6px;border:1px solid var(--line);border-radius:6px"></label>
+    </div>
+    <div id="mapWrap"><div id="map"></div>
+      <div class="mapBtns"><button type="button" id="capToggle" class="on">Capacity</button><button type="button" id="baseSat">Satellite</button><button type="button" id="baseStreet">Street</button><button type="button" id="mapSize">Bigger map</button><button type="button" id="mapHide">Hide map</button></div>
+      <div class="legend" id="legend"><span><i style="background:#c8322b"></i>1,001 kW +</span><span><i style="background:#e0a020"></i>501–1,000 kW</span><span><i style="background:#9aa7b4"></i>0–500 kW</span><small id="legendNote">Hosting capacity on the serving circuits. Zoom in to draw it.</small></div></div>
+    <div class="status" id="findStatus" role="status">Search the shared listing catalogue, or press Near me.</div>
+    <div id="findList"></div>
+  </section>
+
+  <section id="viewSite" class="view hide"></section>
+
+  <section id="viewSaved" class="view hide">
+    <div class="status" id="savedStatus" role="status"></div>
+    <div id="savedList"></div>
+  </section>
+
+  <section id="viewAccount" class="view hide"></section>
+</main>
+
+<nav class="tabs" aria-label="App sections">
+  <a href="#/find" data-tab="find"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Find</a>
+  <a href="#/saved" data-tab="saved"><svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>Saved</a>
+  <a href="#/account" data-tab="account"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/></svg>Account</a>
+</nav>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/omega-capacity-ledger.js"></script>
+<script src="/omega-site-saves.js"></script>
+<script src="/omega-site-score.js"></script>
+<script src="/omega-comed-layers.js"></script>
+<script src="/omega-bess-catalog.js"></script>
+<script src="/omega-site-lease.js"></script>
+<script src="/omega-project-cost.js"></script>
+<script>
+(function () {
+  "use strict";
+  var L = window.OmegaLedger, LAY = window.OmegaComEdLayers, SAVES = window.OmegaSiteSaves;
+  var DEFAULT_HOURS = 4, MAX_FIT_UNITS = 4;
+  var ORG_ALIAS = { "fenecon.de": "fenecon.com", "fenecon.us": "fenecon.com" };
+  var STAFF = /^(clearsky-usa\.com|csebuilders\.com)$/;
+  var ST = { user: null, org: "", staff: false, rows: [], byId: {}, sel: null, leases: {}, leaseBusy: {}, projects: {}, projectBusy: {}, saveNote: {}, confirmed: {}, epoch: 0, view: "find", installPrompt: null, db: null };
+
+  /* ── small helpers ─────────────────────────────────────────────────── */
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function fmt(n) { return n == null || !isFinite(n) ? "—" : Math.round(n).toLocaleString(); }
+  function money(n) { return n == null || !isFinite(n) ? "—" : "$" + Math.round(n).toLocaleString(); }
+  function has(v) { return v != null && v !== ""; }
+  function param(k) { var m = location.search.match(new RegExp("[?&]" + k + "=([^&]+)")); try { return m ? decodeURIComponent(m[1]) : ""; } catch (e) { return ""; } }
+  function token(cb) {
+    if (!ST.user) { cb(new Error("Sign in first.")); return; }
+    ST.user.getIdToken().then(function (t) { cb(null, t); }, cb);
+  }
+  function api(path, body, cb) {
+    token(function (err, t) {
+      if (err) { cb(err); return; }
+      fetch(path, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + t }, body: JSON.stringify(body) })
+        .then(function (res) { return res.json().then(function (d) { if (!res.ok) throw new Error(d.error || "Request failed"); return d; }); })
+        .then(function (d) { cb(null, d); })["catch"](cb);
+    });
+  }
+  /* The shared stream owns the saved list, and it echoes a write a beat after
+     the write is confirmed. In that beat the star used to re-render empty,
+     and a second tap removed the record the first had just saved. A confirmed
+     write is the truth until the stream catches up. */
+  function isSaved(id) {
+    if (ST.confirmed && Object.prototype.hasOwnProperty.call(ST.confirmed, id)) return ST.confirmed[id];
+    try { return !!(SAVES && SAVES.isSaved(id)); } catch (e) { return false; }
+  }
+  function savedRec(id) { try { return SAVES ? SAVES.get(id) : null; } catch (e) { return null; } }
+
+  /* ── routing ───────────────────────────────────────────────────────── */
+  function route() {
+    var h = location.hash || "#/find", m;
+    if (!ST.user) { show("signin"); return; }
+    if ((m = h.match(/^#\/site\/(.+)$/))) { openSite(decodeURIComponent(m[1])); return; }
+    if (h.indexOf("#/saved") === 0) { show("saved"); renderSaved(); return; }
+    if (h.indexOf("#/account") === 0) { show("account"); renderAccount(); return; }
+    show("find");
+    if (map) setTimeout(function () { map.invalidateSize(); }, 50);
+  }
+  function show(v) {
+    ST.view = v;
+    ["signin", "find", "site", "saved", "account"].forEach(function (k) {
+      $("view" + k.charAt(0).toUpperCase() + k.slice(1)).classList.toggle("hide", k !== v);
+    });
+    var tabs = document.querySelectorAll(".tabs a"), i;
+    for (i = 0; i < tabs.length; i++) tabs[i].classList.toggle("on", tabs[i].getAttribute("data-tab") === (v === "site" ? "find" : v));
+    document.querySelector(".tabs").classList.toggle("hide", v === "signin");
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", route);
+
+  /* ── the map ───────────────────────────────────────────────────────── */
+  var map = null, markers = null, MARK = {}, tiles = null, CAP = { on: true };
+  function capNote(n, err) {
+    var el = $("legendNote"); if (!el) return;
+    el.textContent = !CAP.on ? "Capacity layer off." : err ? "ComEd capacity could not be read: " + (err.message || err) :
+      n === -1 ? "Zoom in to draw the hosting capacity on the circuits." : n === 0 ? "No published circuits in view." : n + " circuits in view, coloured by available hosting capacity.";
+  }
+  /* The same two basemaps the desktop tool offers. CARTO's street tiles need
+     the key the desktop tool carries (window.CS_TILE_KEY, the key saved in
+     Settings, or ClearSky's default; it is domain-registered, not secret).
+     Esri imagery needs no key and is never watermarked, and on a phone the
+     roof and the yard are what a rep wants to see, so it is the default. */
+  var CS_TILE_KEY_DEFAULT = "cb1_2diy_1_571d8ef1a64c13a11870c259";
+  function tileKey() { var k = ""; try { k = localStorage.getItem("cs.tileKey") || ""; } catch (e) {} return window.CS_TILE_KEY || k || CS_TILE_KEY_DEFAULT; }
+  var BASES = {
+    satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", opts: { maxZoom: 19, attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics" } },
+    street: { url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=", opts: { maxZoom: 19, subdomains: "abcd", attribution: "&copy; OpenStreetMap &copy; CARTO" }, keyed: true }
+  };
+  function pref(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+  function setPref(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  var BASE = BASES[pref("sfapp.base", "")] ? pref("sfapp.base", "") : "satellite";
+  function drawTiles() {
+    if (!map) return;
+    if (tiles) { map.removeLayer(tiles); tiles = null; }
+    var b = BASES[BASE];
+    tiles = window.L.tileLayer(b.url + (b.keyed ? encodeURIComponent(tileKey()) : ""), b.opts).addTo(map);
+    tiles.bringToBack();
+    $("baseSat").classList.toggle("on", BASE === "satellite"); $("baseStreet").classList.toggle("on", BASE === "street");
+  }
+  function mapMode(mode) {
+    var w = $("mapWrap");
+    w.classList.toggle("tall", mode === "tall"); w.classList.toggle("hidden", mode === "hidden");
+    $("mapSize").textContent = mode === "tall" ? "Smaller map" : "Bigger map";
+    $("mapHide").textContent = mode === "hidden" ? "Show map" : "Hide map";
+    setPref("sfapp.map", mode);
+    if (map) setTimeout(function () { map.invalidateSize(); }, 220);
+  }
+  function ensureMap() {
+    if (map || !window.L) return;
+    map = window.L.map("map", { zoomControl: false, attributionControl: true }).setView([41.85, -87.71], 11);
+    markers = window.L.layerGroup().addTo(map);
+    if (LAY && LAY.init) LAY.init(map);
+    drawTiles();
+    mapMode(pref("sfapp.map", "small"));
+    /* The hosting-capacity polygons the desktop map draws: the coloured
+       circuits are how a rep sees where the power is before opening a card.
+       Drawn from zoom 12 in, refreshed when the map settles. */
+    var pal = LAY && (LAY.prospect ? LAY.PROSPECT_COLORS : LAY.COMED_COLORS);
+    if (pal) { var sw = document.querySelectorAll("#legend i"), keys = ["hi", "mid", "lo"], si; for (si = 0; si < sw.length && si < keys.length; si++) if (pal[keys[si]]) sw[si].style.background = pal[keys[si]]; }
+    CAP.on = pref("sfapp.cap", "on") !== "off";
+    $("capToggle").classList.toggle("on", CAP.on);
+    if (LAY && LAY.hosting) LAY.hosting(CAP.on, capNote);
+    map.on("moveend", function () { if (CAP.on && LAY && LAY.refreshHosting) LAY.refreshHosting(capNote); });
+    $("capToggle").onclick = function () {
+      CAP.on = !CAP.on; setPref("sfapp.cap", CAP.on ? "on" : "off"); this.classList.toggle("on", CAP.on);
+      if (LAY && LAY.hosting) LAY.hosting(CAP.on, capNote);
+    };
+    $("baseSat").onclick = function () { BASE = "satellite"; setPref("sfapp.base", BASE); drawTiles(); };
+    $("baseStreet").onclick = function () { BASE = "street"; setPref("sfapp.base", BASE); drawTiles(); };
+    $("mapSize").onclick = function () { mapMode($("mapWrap").classList.contains("tall") ? "small" : "tall"); };
+    $("mapHide").onclick = function () { mapMode($("mapWrap").classList.contains("hidden") ? "small" : "hidden"); };
+  }
+  function pinHtml(r, sel) {
+    var txt = r.circ && r.circ.known ? fmt(r.circ.sellable) + " kW" : (r.lat == null ? "" : "•");
+    return '<span class="' + (sel ? "sel" : (r.circ && r.circ.known ? "" : "dim")) + '">' + esc(txt || "?") + "</span>";
+  }
+  function drawPins() {
+    if (!markers) return;
+    markers.clearLayers(); MARK = {};
+    var i, r, bounds = [];
+    for (i = 0; i < ST.rows.length; i++) {
+      r = ST.rows[i];
+      if (r.lat == null || r.lon == null) continue;
+      var m = window.L.marker([r.lat, r.lon], { icon: window.L.divIcon({ className: "csPin", iconSize: null, iconAnchor: [0, 0], html: pinHtml(r, r.src === "lookup") }) });
+      (function (row) { m.on("click", function () { location.hash = "#/site/" + encodeURIComponent(row.id); }); })(r);
+      m.addTo(markers); MARK[r.id] = m; bounds.push([r.lat, r.lon]);
+    }
+    if (bounds.length && ST.fitPins) { try { map.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 }); } catch (e) {} ST.fitPins = false; }
+  }
+
+  /* ── listings ──────────────────────────────────────────────────────── */
+  /* The server sorts the WHOLE catalogue by what is left on each listing's
+     attributed circuit (api/site-catalog.js `sort:'capacity'`) and applies
+     the minimum kW there, so the first page is the county's shortlist, not
+     the first hundred rows of a spreadsheet. */
+  function loadListings(body, label) {
+    var epoch = ++ST.epoch, status = $("findStatus"), minKw = +$("minKw").value || 0;
+    status.textContent = "Loading " + label + "…";
+    body.orgId = ST.org; body.sort = "capacity"; delete body.minKw; if (minKw > 0) body.minKw = minKw;
+    ST.lastQuery = { body: body, label: label };
+    api("/api/site-catalog", body, function (err, d) {
+      if (epoch !== ST.epoch) return;
+      if (err) { status.textContent = err.message; return; }
+      if (!d.manifest) { ST.rows = []; renderFind(); noCatalogue(status); return; }
+      ST.rows = (d.rows || []).map(prepare);
+      ST.rows.forEach(function (r) { ST.byId[r.id] = r; });
+      ST.fitPins = !body.bbox;
+      var m = d.manifest, coverage = m.circuits ? " · " + m.circuits.toLocaleString() + " of " + (m.count || 0).toLocaleString() + " carry a ComEd circuit" : "";
+      var head = d.total.toLocaleString() + " listings " + label + (minKw > 0 ? " over " + fmt(minKw) + " kW" : "") + (d.hasMore ? " (top " + d.rows.length + ")" : "");
+      status.textContent = head + ". Reading circuits…";
+      renderFind();
+      resolveCircuits(ST.rows, function () {
+        if (epoch !== ST.epoch) return;
+        status.textContent = head + ". Sorted by available capacity" + coverage + ".";
+        renderFind();
+      });
+    });
+  }
+  /* No catalogue in this workspace. Staff work in a client's workspace, and
+     a home-screen app cannot carry ?org=, so the choice is remembered here. */
+  function noCatalogue(status) {
+    if (!ST.staff) { status.textContent = "No listing catalogue is loaded for " + ST.org + " yet."; return; }
+    status.innerHTML = 'No listing catalogue in <b>' + esc(ST.org) + '</b>. You are signed in as ClearSky staff: choose the client workspace to work in.' +
+      '<div class="form" style="margin-top:8px"><label>Workspace<input id="pickOrg" type="text" inputmode="url" autocapitalize="none" placeholder="chileasing.com" value="' + esc(pref("sfapp.org", "chileasing.com")) + '" style="width:200px"></label><button class="btn sm primary" type="button" id="pickOrgGo">Use this workspace</button></div>';
+    $("pickOrgGo").onclick = function () { switchOrg($("pickOrg").value); };
+  }
+  function switchOrg(v) {
+    v = String(v || "").trim().toLowerCase();
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(v)) return;
+    setPref("sfapp.org", v); ST.org = v; $("topOrg").textContent = v;
+    ST.rows = []; ST.byId = {}; ST.leases = {}; ST.projects = {}; ST.epoch++;
+    if (window.OmegaSiteScore) window.OmegaSiteScore.reset();
+    if (SAVES) SAVES.init(v, ST.user, function () {}, ST.db);
+    L.attach(ST.db, v, function () {});
+    location.hash = "#/find"; route();
+    loadListings({ q: $("q").value, page: 0 }, $("q").value ? "for \u201c" + $("q").value + "\u201d" : "in " + v);
+  }
+  /* A listing row from the catalogue, with the flags the desktop tool gives
+     an approximate pin: no circuit is attributed to a ZIP-area centre. A row
+     the server already attributed (feederId, nameplate, queue, circuit{}) seeds
+     the ledger here, so its capacity shows without drawing the map. */
+  function prepare(r) {
+    r.approx = !!(r.geocode && r.geocode.status === "approximate");
+    r.circuitTried = !!(r.circuit && r.circuit.attempted);
+    if (r.feederId && r.nameplate != null) {
+      var known = L.getFeeder && L.getFeeder(r.feederId);
+      if (!known || known.nameplate == null) L.setFeeder(r.feederId, { nameplate: r.nameplate, queue: r.queue || 0, sub: r.sub || "" });
+    }
+    r.circ = L.feederState(r.feederId || null, r.id); r.cst = L.circuitStatus(r.circ);
+    r.sz = r.sz || { kw: null, kwh: null, hours: DEFAULT_HOURS };
+    return r;
+  }
+  function bboxOf(rows) {
+    var b = null, i, r;
+    for (i = 0; i < rows.length; i++) { r = rows[i]; if (r.lat == null) continue;
+      if (!b) b = { n: r.lat, s: r.lat, e: r.lon, w: r.lon };
+      b.n = Math.max(b.n, r.lat); b.s = Math.min(b.s, r.lat); b.e = Math.max(b.e, r.lon); b.w = Math.min(b.w, r.lon); }
+    if (b) { b.n += 0.002; b.s -= 0.002; b.e += 0.002; b.w -= 0.002; }
+    return b;
+  }
+  /* Circuits: the attribute layer for the rows' extent, then each row is
+     attributed by containment or the 46 m proximity rule the desktop uses;
+     a ZIP-area pin gets none. Then one batched score call. */
+  function resolveCircuits(rows, done) {
+    var open = rows.filter(function (r) { return r.lat != null && !r.approx && !r.circuitTried && !(r.feederId && r.nameplate != null); });
+    var b = bboxOf(open);
+    if (!b || !LAY || !LAY.attribIn) { scoreRows(rows, done); return; }
+    LAY.attribIn(b, function (err, attrib) {
+      open.forEach(function (r) {
+        var near = LAY.feederNear ? LAY.feederNear(r.lat, r.lon) : null;
+        if (!near || near.beyond) { r.circuitDistance = near ? near.distance : null; return; }
+        var cap = LAY.capacityOf(near.row) || {};
+        r.feederId = near.row.feeder || null; r.sub = near.row.sub || "";
+        r.circuitDistance = near.distance;
+        if (r.feederId && cap.nameplate != null) L.setFeeder(r.feederId, { nameplate: cap.nameplate, queue: cap.queue || 0, sub: r.sub });
+        r.circ = L.feederState(r.feederId, r.id); r.cst = L.circuitStatus(r.circ);
+      });
+      scoreRows(rows, done);
+    });
+  }
+  function scoreRows(rows, done) {
+    var client = window.OmegaSiteScore;
+    if (!client) { done(); return; }
+    client.score(rows, function (r) { return r.circ; }, { orgId: ST.org, hours: DEFAULT_HOURS, use: "bess" }, function (err, result) {
+      rows.forEach(function (r) {
+        var rec = result && result.byId && result.byId[r.id];
+        if (!rec) { r.scoreError = err ? err.message : "Not scored."; return; }
+        r.score = rec.score; r.peakKw = rec.peakKw; r.annualKwh = r.annualKwh || rec.annualKwh || null;
+        r.sz = { kw: rec.kw, kwh: rec.kwh, hours: rec.hours, loadCeiling: rec.loadCeiling, circuitCeiling: rec.circuitCeiling, circuitLimited: rec.circuitLimited, why: rec.why };
+      });
+      done();
+    });
+  }
+  function renderFind() {
+    var minKw = +$("minKw").value || 0, list = $("findList");
+    var rows = ST.rows.filter(function (r) { return !minKw || (r.circ.known && r.circ.sellable >= minKw); });
+    rows.sort(function (a, b) {
+      if ((a.src === "lookup") !== (b.src === "lookup")) return a.src === "lookup" ? -1 : 1;
+      var sa = a.circ.known ? a.circ.sellable : -1, sb = b.circ.known ? b.circ.sellable : -1;
+      if (sa !== sb) return sb - sa;
+      return (b.score || 0) - (a.score || 0);
+    });
+    if (!rows.length) { list.innerHTML = '<div class="empty">' + (ST.rows.length ? "Nothing here clears " + fmt(minKw) + " kW. Lower the minimum." : "No listings yet. Search, or press Near me.") + "</div>"; drawPins(); return; }
+    list.innerHTML = rows.map(siteCard).join("");
+    drawPins();
+  }
+  function siteCard(r) {
+    var pill = r.circ.known ? (r.circ.sellable > 0 ? (r.cst.key === "partial" ? "partial" : "open") : "blocked") : "unknown";
+    var d = r.detail || {}, ask = has(d.askPrice) ? money(d.askPrice) : has(r.listed && r.listed.askPrice) ? money(r.listed.askPrice) : d.unpriced ? "Unpriced" : "";
+    return '<a class="card site" href="#/site/' + encodeURIComponent(r.id) + '">' +
+      '<div class="head"><div><div class="addr">' + esc(r.addr) + '</div><div class="sub">' + esc([r.src === "lookup" ? "Looking at now" : r.city, r.subtype || r.type, r.sqft ? fmt(r.sqft) + " SF" : (r.lotAcres ? r.lotAcres + " ac" : "")].filter(Boolean).join(" · ")) + '</div></div>' +
+      '<span class="pill ' + pill + '">' + esc(r.circ.known ? (r.circ.sellable > 0 ? fmt(r.circ.sellable) + " kW free" : "No capacity") : (r.approx ? "Area pin" : r.circuitTried ? "No published circuit" : "Circuit unknown")) + '</span></div>' +
+      '<div class="metrics"><div>Energy score<b>' + (r.score == null ? "—" : r.score) + '</b></div><div>Battery<b>' + (r.sz && r.sz.kw ? fmt(r.sz.kw) + " kW" : "—") + '</b></div><div>Asking<b>' + (ask || "—") + '</b></div></div>' +
+      (isSaved(r.id) ? '<div class="note" style="margin-top:6px;color:#C98A2B">★ Saved</div>' : "") + '</a>';
+  }
+  /* A street address (it starts with a number) is looked up as a SITE: the
+     map moves there, the circuit is read, and it opens as a card with the
+     listings around it. Anything else searches the catalogue text. */
+  $("go").onclick = function () {
+    var q = $("q").value.trim();
+    if (/^\d+\s+\S/.test(q)) { lookupAddress(q); return; }
+    loadListings({ q: q, page: 0 }, "for “" + q + "”");
+  };
+  function geocode(q, cb) {
+    var one = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=" + encodeURIComponent(q) + "&benchmark=Public_AR_Current&format=json";
+    fetch(one).then(function (r) { return r.json(); }).then(function (j) {
+      var m = j && j.result && j.result.addressMatches && j.result.addressMatches[0];
+      if (m && m.coordinates) { cb(null, { lat: +m.coordinates.y, lon: +m.coordinates.x, matched: m.matchedAddress || q, src: "census" }); return; }
+      return fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" + encodeURIComponent(q)).then(function (r) { return r.json(); }).then(function (a) {
+        if (a && a[0]) cb(null, { lat: +a[0].lat, lon: +a[0].lon, matched: a[0].display_name || q, src: "nominatim" }); else cb(new Error("That address could not be placed. Try adding the city and ZIP."));
+      });
+    })["catch"](function (e) { cb(new Error("The geocoder did not answer: " + (e.message || e))); });
+  }
+  function lookupAddress(q) {
+    var status = $("findStatus"), epoch = ++ST.epoch;
+    status.textContent = "Placing " + q + "…";
+    geocode(q + (/\b(IL|Illinois)\b/i.test(q) ? "" : ", IL"), function (err, hit) {
+      if (epoch !== ST.epoch) return;
+      if (err) { status.textContent = err.message; return; }
+      var id = "site:" + hit.lat.toFixed(5) + "," + hit.lon.toFixed(5);
+      var rec = prepare({ id: id, addr: q, city: "", state: "IL", zip: "", lat: hit.lat, lon: hit.lon, type: "Site lookup", subtype: "Checked address",
+        geocode: { status: "matched", source: hit.src, accuracy: hit.src === "census" ? "street-interpolated, not rooftop" : "OpenStreetMap match", matchedAddress: hit.matched },
+        owner: { name: "" }, photos: [], src: "lookup", lookedUpAt: new Date().toISOString() });
+      ST.byId[id] = rec;
+      if (map) map.setView([hit.lat, hit.lon], 15);
+      status.textContent = "Reading the circuit at " + q + "…";
+      resolveCircuits([rec], function () {
+        if (epoch !== ST.epoch) return;
+        /* The looked-up site leads the list; the catalogue around it follows. */
+        var body = { orgId: ST.org, bbox: { n: hit.lat + 0.02, s: hit.lat - 0.02, e: hit.lon + 0.027, w: hit.lon - 0.027 }, page: 0 };
+        api("/api/site-catalog", body, function (e2, d) {
+          if (epoch !== ST.epoch) return;
+          var rows = (!e2 && d && d.rows ? d.rows : []).map(prepare);
+          rows.forEach(function (r) { ST.byId[r.id] = r; });
+          ST.rows = [rec].concat(rows); ST.fitPins = false;
+          renderFind();
+          status.textContent = (rec.circ.known ? fmt(rec.circ.sellable) + " kW available on " + rec.feederId + " at " + q : "No published circuit at " + q) + (rows.length ? " · " + rows.length + " listings nearby, reading their circuits…" : ".");
+          location.hash = "#/site/" + encodeURIComponent(id);
+          if (rows.length) resolveCircuits(rows, function () { if (epoch === ST.epoch) { renderFind(); status.textContent = status.textContent.replace(", reading their circuits…", "."); } });
+        });
+      });
+    });
+  }
+  $("q").onkeydown = function (e) { if (e.key === "Enter") $("go").onclick(); };
+  $("minKw").onchange = function () {
+    renderFind();
+    if (ST.lastQuery) loadListings(ST.lastQuery.body, ST.lastQuery.label);
+  };
+  $("here").onclick = function () {
+    if (!map) return;
+    var b = map.getBounds();
+    loadListings({ bbox: { n: b.getNorth(), s: b.getSouth(), e: b.getEast(), w: b.getWest() }, page: 0 }, "on this map");
+  };
+  $("nearMe").onclick = function () {
+    var status = $("findStatus");
+    if (!navigator.geolocation) { status.textContent = "This phone does not share its location."; return; }
+    status.textContent = "Finding you…";
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      var lat = pos.coords.latitude, lon = pos.coords.longitude;
+      if (map) map.setView([lat, lon], 13);
+      loadListings({ bbox: { n: lat + 0.045, s: lat - 0.045, e: lon + 0.06, w: lon - 0.06 }, page: 0 }, "near you");
+    }, function () { status.textContent = "Location not shared. Search by address instead."; }, { timeout: 12000, maximumAge: 60000 });
+  };
+
+  /* ── the site ──────────────────────────────────────────────────────── */
+  function openSite(id) {
+    var r = ST.byId[id] || savedRec(id);
+    if (!r) { location.hash = "#/find"; return; }
+    if (!ST.byId[id]) { r = prepare(r); ST.byId[id] = r; if (r.feederId && r.nameplate != null) { L.setFeeder(r.feederId, { nameplate: r.nameplate, queue: r.queue || 0, sub: r.sub || "" }); r.circ = L.feederState(r.feederId, r.id); r.cst = L.circuitStatus(r.circ); } }
+    ST.sel = id; show("site"); renderSite(r);
+    if (r.score == null && !r.scoreError) { resolveCircuits([r], function () { if (ST.sel === id) renderSite(r); }); }
+  }
+  function sizePick(r) {
+    var cap = r.circ.known && r.circ.sellable > 0 ? r.circ.sellable : (r.sz && r.sz.kw) || null;
+    if (cap == null) return { kw: null, kwh: null, hours: DEFAULT_HOURS };
+    var kw = r.sizePick && r.sizePick.kw ? Math.min(cap, r.sizePick.kw) : (r.sz && r.sz.kw > 0 ? Math.min(cap, r.sz.kw) : cap);
+    var hours = (r.sizePick && r.sizePick.hours) || DEFAULT_HOURS;
+    return { kw: kw, kwh: kw * hours, hours: hours, cap: cap };
+  }
+  function fitFor(r) {
+    var p = sizePick(r), C = window.OmegaBessCatalog;
+    if (p.kw == null || !C) return [];
+    return C.fit(C.products(), p.kw, p.kwh, { maxUnits: MAX_FIT_UNITS }).map(function (o) { o.hours = o.kwh / p.kw; return o; });
+  }
+  function factsHtml(r) {
+    if (r.src === "lookup") return '<p class="note" style="margin:8px 0 0">Address lookup: ' + esc(r.geocode && r.geocode.matchedAddress || r.addr) + ' (' + esc(r.geocode && r.geocode.accuracy || "") + '). Not a listing; owner and property facts are <i class="pend">pending API integration</i>.</p>';
+    var d = r.detail || {}, listed = r.listed || {}, P = '<i class="pend">pending API integration</i>';
+    var ask = has(d.askPrice) ? money(d.askPrice) : has(listed.askPrice) ? money(listed.askPrice) : d.unpriced ? "Unpriced · call for offers" : P;
+    var contact = d.brokers && d.brokers.length ? d.brokers.map(function (b) {
+      return esc(b.name) + (b.firm ? ", " + esc(b.firm) : "") + (b.phone ? ' · <a href="tel:' + esc(String(b.phone).replace(/[^+0-9]/g, "")) + '">' + esc(b.phone) + "</a>" : "");
+    }).join("<br>") : (d.listedBy ? "Listed by " + esc(d.listedBy) : P);
+    var saved = savedRec(r.id), ownerName = (saved && saved.ownerName) || (r.owner && r.owner.name) || d.ownerName || "";
+    var tenancy = [];
+    if (d.tenant || d.headline) tenancy.push(esc(d.tenant || d.headline));
+    if (d.occupancy != null) tenancy.push(fmt(d.occupancy) + "% occupied");
+    if (d.leaseType) tenancy.push(esc(d.leaseType) + " lease");
+    if (d.leaseExpiration) tenancy.push("expires " + esc(d.leaseExpiration));
+    return '<div class="facts">' +
+      "<b>Asking</b><span>" + ask + "</span>" +
+      "<b>Value</b><span>" + (has(r.assessedValue) ? money(r.assessedValue) + " <small>assessed</small>" : P) + "</span>" +
+      "<b>Last sold</b><span>" + (d.lastSalePrice != null ? money(d.lastSalePrice) + (d.lastSaleDate ? " · " + esc(d.lastSaleDate) : "") : P) + "</span>" +
+      "<b>Days on market</b><span>" + (d.daysOnMarket != null ? fmt(d.daysOnMarket) : P) + "</span>" +
+      (d.noi != null ? "<b>NOI</b><span>" + money(d.noi) + "/yr</span>" : "") +
+      (d.capRate != null ? "<b>Cap rate</b><span>" + esc(d.capRate) + "%</span>" : "") +
+      (tenancy.length ? "<b>Tenant</b><span>" + tenancy.join(" · ") + "</span>" : "") +
+      (d.yearBuilt ? "<b>Built</b><span>" + esc(d.yearBuilt) + "</span>" : "") +
+      "<b>Owner</b><span>" + (ownerName ? esc(ownerName) : P) + "</span>" +
+      "<b>Contact</b><span>" + contact + "</span></div>";
+  }
+  function renderSite(r) {
+    var v = $("viewSite"), p = sizePick(r), fits = fitFor(r), lease = ST.leases[r.id], busy = ST.leaseBusy[r.id];
+    var pill = r.circ.known ? (r.circ.sellable > 0 ? (r.cst.key === "partial" ? "partial" : "open") : "blocked") : "unknown";
+    var h = '<a class="back" href="#/find">← Back to results</a>' +
+      '<div class="card"><div class="head" style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">' +
+        '<div><div class="addr" style="font-size:18px;font-weight:800;line-height:1.2">' + esc(r.addr) + '</div><div class="sub" style="font-size:12.5px;color:var(--dim);margin-top:3px">' + esc([r.city, r.state, r.zip].filter(Boolean).join(" ")) + (r.subtype || r.type ? " · " + esc(r.subtype || r.type) : "") + "</div></div>" +
+        '<button class="star' + (isSaved(r.id) ? " on" : "") + '" id="starBtn" type="button" aria-label="Save"' + (ST.saveNote[r.id] && ST.saveNote[r.id].kind === "saving" ? " disabled" : "") + '>' + (isSaved(r.id) ? "★" : "☆") + "</button></div>" +
+      saveNoteHtml(r) +
+      '<div class="row" style="margin-top:8px"><span class="pill ' + pill + '">' + esc(r.circ.known ? (r.circ.sellable > 0 ? fmt(r.circ.sellable) + " kW available on " + (r.feederId || "the circuit") : "No capacity left on " + (r.feederId || "the circuit")) : (r.approx ? "Area pin — no circuit attributed" : r.circuitTried ? "No published circuit within 46 m" : "Circuit not read yet")) + "</span>" +
+        (r.circuitDistance ? '<span class="note">nearest circuit ' + r.circuitDistance + " m</span>" : "") + "</div>" +
+      (r.listed && /^https:\/\/www\.crexi\.com\/properties\/\d+\//.test(r.listed.url || "") ? '<p class="note" style="margin:8px 0 0"><a href="' + esc(r.listed.url) + '" target="_blank" rel="noopener noreferrer"><b>Open Crexi listing &amp; photos ↗</b></a></p>' : "") +
+      factsHtml(r) + "</div>";
+    h += '<div class="score"><div class="n">' + (r.score == null ? "—" : r.score) + " <small>/100</small></div><div class=\"t\">Energy score · battery<small>" +
+      esc(r.scoreError ? r.scoreError : r.sz && r.sz.kw ? (r.sz.circuitLimited ? "Circuit-capped · load supports " + fmt(r.sz.loadCeiling) + " kW" : "Load-sized · circuit allows " + fmt(r.sz.circuitCeiling) + " kW") : "Not enough data to size a system here") + "</small></div></div>";
+    h += '<div class="card"><h3>Battery</h3>' + (p.kw == null ? '<p class="note">Size needs a circuit or a load. Open the desktop tool to place a pin or add a bill.</p>' :
+      '<div class="form"><label>kW<input id="szKw" type="number" min="1" max="' + p.cap + '" value="' + Math.round(p.kw) + '"></label><label>Hours<select id="szHrs">' + [2, 3, 4, 6].map(function (x) { return '<option value="' + x + '"' + (x === p.hours ? " selected" : "") + ">" + x + " h</option>"; }).join("") + "</select></label>" +
+      '<div class="note">' + fmt(p.kw) + " kW / " + fmt(p.kwh) + " kWh · circuit allows " + fmt(p.cap) + " kW</div></div>" +
+      (fits.length ? '<div class="fit">' + fits.slice(0, 3).map(function (o, i) { return "<div><b>" + o.units + " × " + esc(o.model) + (i === 0 ? " — recommended" : "") + "</b>" + fmt(o.kwh) + " kWh at " + fmt(p.kw) + " kW, " + (Math.round(o.hours * 10) / 10) + " h" + (o.form ? " · " + esc(o.form) : "") + (o.under ? " · " + Math.round((1 - o.ratio) * 100) + "% short, closest single product" : "") + "</div>"; }).join("") + "</div>" : "")) + "</div>";
+    h += '<div class="card"><h3>Host lease offer</h3><p class="note">Rent us the pad for this battery and we pay you a fixed rent, escalating, over the term.</p>';
+    if (p.kw == null) h += '<p class="note">Size the battery first.</p>';
+    else {
+      h += '<div class="form"><label>Pad acres<input id="leaseAcres" type="number" min="0.1" step="0.05" placeholder="auto" value="' + (r.leaseAcres || "") + '"></label><label>Term<input id="leaseTerm" type="number" min="5" max="30" value="' + (r.leaseTerm || 15) + '"></label><button class="btn sm primary" id="leaseQuote" type="button"' + (busy ? " disabled" : "") + ">" + (lease && lease.result ? "Re-price" : "Price the offer") + "</button></div>";
+      if (busy) h += '<p class="note" role="status">Pricing…</p>';
+      else if (lease && lease.error) h += '<p class="note bad">' + esc(lease.error) + "</p>";
+      else if (lease && lease.result) {
+        var o = lease.result.offer;
+        if (lease.key !== JSON.stringify(leaseInput(r))) h += '<p class="note bad">The size or inputs changed. Re-price before opening the proposal.</p>';
+        h += '<div class="tiles"><div><b>' + money(o.monthly.base) + "</b>per month</div><div><b>" + money(o.annual.base) + "</b>per year, +" + o.escalatorPct.base + "%/yr</div><div><b>" + money(o.termTotal.base) + "</b>over " + o.termYears + " years</div></div>" +
+          '<p class="note">Walk-away ' + money(o.monthly.low) + "/mo; a confirmed feeder and clean title can command " + money(o.monthly.high) + "/mo. About " + o.leasedAcres + " acres.</p>" +
+          '<div class="row"><button class="btn sm navy" id="leaseOpen" type="button">Open the proposal</button><button class="btn sm" id="leaseShare" type="button">Share summary</button></div>';
+      }
+    }
+    h += "</div>";
+    /* Cost to us: the build plus the building or the pad, from /api/project-cost. */
+    h += '<div class="card"><h3>Cost to deploy</h3><p class="note">What it costs <b>us</b> to put this battery here: the build, plus the building at its asking price or the pad at the host rent over ' + esc(r.leaseTerm || 15) + ' years.</p>';
+    if (p.kw == null) h += '<p class="note">Size the battery first.</p>';
+    else {
+      var pj = ST.projects[r.id], pb = ST.projectBusy[r.id], ask = r.askOverride != null ? r.askOverride : askOf(r);
+      h += '<div class="form"><label>Asking $<input id="projectAsk" type="number" min="0" step="1000" placeholder="pending" value="' + (ask != null ? ask : "") + '"></label><button class="btn sm primary" id="projectQuote" type="button"' + (pb ? " disabled" : "") + ">" + (pj && pj.result ? "Re-cost" : "Cost this project") + "</button></div>";
+      if (pb) h += '<p class="note" role="status">Costing…</p>';
+      else if (pj && pj.error) h += '<p class="note bad">' + esc(pj.error) + "</p>";
+      else if (pj && pj.result) {
+        if (pj.key !== JSON.stringify(projectInput(r))) h += '<p class="note bad">The size or inputs changed. Re-cost before quoting it.</p>';
+        h += window.OmegaProjectCost.html(pj.result, { tiles: "tiles" }) + '<div class="row"><button class="btn sm" id="projectShare" type="button">Share summary</button></div>';
+      }
+    }
+    h += "</div>";
+    h += callHtml(r);
+    v.innerHTML = h;
+    wireSite(r);
+  }
+  function leaseInput(r) {
+    var p = sizePick(r), a = $("leaseAcres"), t = $("leaseTerm");
+    var acres = a && a.value !== "" ? Number(a.value) : (r.leaseAcres || null), term = t && t.value !== "" ? Number(t.value) : (r.leaseTerm || 15);
+    return { orgId: ST.org, kw: p.kw, kwh: p.kwh, acres: acres > 0 ? acres : undefined, termYears: term > 0 ? term : 15,
+      site: { id: r.id, addr: r.addr || "", city: r.city || "", owner: (r.owner && r.owner.name) || "", feederId: r.feederId || "", type: r.type || "", lotAcres: r.lotAcres || null } };
+  }
+  function priceLease(r, open) {
+    if (!window.OmegaSiteLease) return;
+    var input = leaseInput(r), key = JSON.stringify(input), cached = ST.leases[r.id];
+    if (input.acres) r.leaseAcres = input.acres; r.leaseTerm = input.termYears;
+    if (cached && cached.key === key && cached.result) { if (open) openProposal(r, cached.result); else renderSite(r); return; }
+    if (ST.leaseBusy[r.id]) return;
+    ST.leaseBusy[r.id] = true; renderSite(r);
+    window.OmegaSiteLease.quote(input, function (err, result) {
+      delete ST.leaseBusy[r.id];
+      ST.leases[r.id] = err ? { key: key, error: err.message } : { key: key, result: result };
+      if (ST.sel === r.id) renderSite(r);
+      if (!err && open) openProposal(r, result);
+    });
+  }
+  function askOf(r) {
+    var d = r.detail || {};
+    if (typeof d.askPrice === "number" && isFinite(d.askPrice)) return d.askPrice;
+    if (r.listed && typeof r.listed.askPrice === "number" && isFinite(r.listed.askPrice)) return r.listed.askPrice;
+    return null;
+  }
+  function projectInput(r) {
+    var p = sizePick(r), a = $("projectAsk");
+    var ask = a && a.value !== "" ? Number(a.value) : (r.askOverride != null ? r.askOverride : askOf(r));
+    return { orgId: ST.org, kw: p.kw, hours: p.hours, assumedSize: !(r.circ && r.circ.known), askPrice: ask != null && isFinite(ask) && ask >= 0 ? ask : null,
+      termYears: r.leaseTerm || 15, acres: r.leaseAcres || undefined, sqft: r.sqft || undefined,
+      site: { id: r.id, address: r.addr || "", feederId: r.feederId || "", positionIsBuilding: !r.approx } };
+  }
+  function costProject(r) {
+    if (!window.OmegaProjectCost) return;
+    var input = projectInput(r), key = JSON.stringify(input), cached = ST.projects[r.id];
+    if (input.askPrice != null) r.askOverride = input.askPrice;
+    if (cached && cached.key === key && cached.result) { renderSite(r); return; }
+    if (ST.projectBusy[r.id]) return;
+    ST.projectBusy[r.id] = true; renderSite(r);
+    window.OmegaProjectCost.quote(input, function (err, result) {
+      delete ST.projectBusy[r.id];
+      ST.projects[r.id] = err ? { key: key, error: err.message } : { key: key, result: result };
+      if (ST.sel === r.id) renderSite(r);
+    });
+  }
+  function openProposal(r, result) {
+    window.OmegaSiteLease.openProposal(result, { host: (r.owner && r.owner.name) || "", rep: repName(), address: r.addr });
+  }
+  function repName() { return (ST.user && (ST.user.displayName || ST.user.email)) || ""; }
+  function orgName() { var t = window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.tenant; return (t && (t.name || t.brand)) || ST.org; }
+
+  /* ── call the owner ────────────────────────────────────────────────── */
+  function contacts(r) {
+    var d = r.detail || {}, saved = savedRec(r.id), out = [], seen = {};
+    function add(role, name, phone, email, note) {
+      name = name || ""; phone = phone || ""; email = email || "";
+      if (!name && !phone) return; var k = (name + "|" + phone).toLowerCase(); if (seen[k]) return; seen[k] = 1;
+      out.push({ role: role, name: name, phone: phone, email: email, note: note || "" });
+    }
+    add("Owner", (saved && saved.ownerName) || (r.owner && r.owner.name) || d.ownerName, (saved && saved.ownerPhone) || (r.owner && r.owner.phone), r.owner && r.owner.email);
+    (d.brokers || []).forEach(function (b) { add("Listing broker", b.name + (b.firm ? ", " + b.firm : ""), b.phone, b.email, b.phone ? "" : "number masked on Crexi — open the listing and press View phone number"); });
+    if (!out.length && d.listedBy) add("Listing firm", d.listedBy, "", "", "main line not on the listing page");
+    return out;
+  }
+  function scriptText(r) {
+    var p = sizePick(r), lease = ST.leases[r.id] && ST.leases[r.id].result, o = lease && lease.offer, who = contacts(r), first = who[0];
+    var greet = first && first.name ? first.name.split(",")[0].split(" ")[0] : "there", lines = [];
+    lines.push("Hi " + greet + ", this is " + (repName() || "[your name]") + " with " + orgName() + ". I’m calling about " + (r.addr || "your property") + (r.city ? " in " + r.city : "") + ".");
+    lines.push("We develop battery storage on commercial sites, and this property has a strong grid position" + (r.circ.known && r.circ.sellable > 0 ? " — the circuit serving it has about " + fmt(r.circ.sellable) + " kW available today." : "."));
+    lines.push("We would like to lease a small fenced pad" + (o ? ", about " + o.leasedAcres + " acres," : "") + (p.kw != null ? " for a " + fmt(p.kw) + " kW / " + fmt(p.kwh) + " kWh battery." : " for a battery.") + " We pay for the equipment, the interconnection, the permits and the insurance; you keep title and your own meter, and nothing changes on your power bill.");
+    lines.push(o ? "You would receive about " + money(o.monthly.base) + " a month, rising " + o.escalatorPct.base + "% a year, for " + o.termYears + " years — around " + money(o.termTotal.base) + " over the term." : "You would receive a fixed monthly rent, escalating, over a 15-year term. I can send the numbers today.");
+    lines.push(first && /broker/i.test(first.role) ? "I know the property is listed. A ground lease can run alongside a sale and adds income to the asset; would the owner take a 20-minute call about it?" : "Would you be open to a 20-minute walk of the site next week? I will bring a one-page proposal.");
+    return lines.join("\n\n");
+  }
+  function callHtml(r) {
+    var who = contacts(r), saved = savedRec(r.id);
+    var notes = saved && Object.prototype.toString.call(saved.notes) === "[object Array]" ? saved.notes.filter(function (n) { return n && /^Call\b/.test(n.t || ""); }).slice(-5).reverse() : [];
+    var h = '<div class="card"><h3>Call the owner</h3>';
+    h += who.length ? '<div class="who">' + who.map(function (c) {
+      return "<b>" + esc(c.role) + "</b><span>" + (c.name ? esc(c.name) : '<i class="pend">name unknown</i>') +
+        (c.phone ? ' · <a href="tel:' + esc(String(c.phone).replace(/[^+0-9]/g, "")) + '">' + esc(c.phone) + "</a>" : "") +
+        (c.email ? ' · <a href="mailto:' + esc(c.email) + '">' + esc(c.email) + "</a>" : "") + (c.note ? " <small>" + esc(c.note) + "</small>" : "") + "</span>";
+    }).join("") + "</div>" : '<p class="note">No name or number on file yet.</p>';
+    if (!who.some(function (c) { return c.role === "Owner" && c.phone; })) h += '<p class="note">Owner identity and phone are <i class="pend">pending API integration</i>. ' + (who.some(function (c) { return /broker/i.test(c.role); }) ? "The listing broker represents the seller and can carry a ground-lease conversation." : "") + "</p>";
+    h += '<div class="form"><label>Owner name<input id="ownerName" type="text" placeholder="found elsewhere?"></label><label>Owner phone<input id="ownerPhone" type="tel" placeholder="(312) 555-0100"></label><button class="btn sm" id="ownerSave" type="button">Save</button></div>';
+    h += '<div class="sec"><h2>What to say</h2><textarea id="script" class="script" readonly>' + esc(scriptText(r)) + '</textarea><div class="row" style="margin-top:6px"><button class="btn sm" id="scriptCopy" type="button">Copy script</button></div></div>';
+    h += '<div class="sec"><h2>Log the call</h2><div class="form"><label>Outcome<select id="callOutcome" style="width:170px"><option>Left a message</option><option>Spoke — interested</option><option>Spoke — call back</option><option>Spoke — not interested</option><option>Wrong number</option><option>No answer</option></select></label><label>Who<input id="callWho" type="text" value="' + esc(who.length ? who[0].name.split(",")[0] : "") + '"></label></div>' +
+      '<textarea id="callNote" class="small" placeholder="What they said, what happens next"></textarea><div class="row" style="margin-top:6px"><button class="btn sm primary" id="callLog" type="button">Log call</button>' + (isSaved(r.id) ? "" : '<span class="note">Logging saves the site</span>') + "</div>";
+    if (notes.length) h += '<ul class="log">' + notes.map(function (n) { var when = typeof n.ts === "number" ? new Date(n.ts).toISOString() : String(n.ts || ""); return "<li>" + esc(n.t) + "<br><small>" + esc(when.slice(0, 10)) + (n.rep ? " · " + esc(n.rep) : "") + "</small></li>"; }).join("") + "</ul>";
+    return h + "</div></div>";
+  }
+  /* A save is not done until the site says so. The saves module answers
+     with nothing (shared with the workspace), LOCAL_ONLY (this browser
+     only, Firestore unreachable) or a refusal; the star must not fill on a
+     refusal, and a rep must not think a phone-only save reached the office. */
+  /* A write the module confirmed (no error, or LOCAL_ONLY which did store)
+     pins the star until the stream's next change; a refusal pins nothing. */
+  function confirmSaved(id, err, starred) {
+    if (!err || err.code === "LOCAL_ONLY") ST.confirmed[id] = starred; else delete ST.confirmed[id];
+  }
+  function saveOutcome(r, err, verb) {
+    var st = null; try { st = SAVES && SAVES.state(); } catch (e) {}
+    if (err && err.code === "LOCAL_ONLY") ST.saveNote[r.id] = { kind: "local", text: verb + " on this phone only — not shared with " + ST.org + " (" + (st && st.why ? st.why : "the workspace could not be reached") + ")." };
+    else if (err) ST.saveNote[r.id] = { kind: "error", text: "Not " + verb.toLowerCase() + ": " + (err.message || err) };
+    else ST.saveNote[r.id] = { kind: "ok", text: verb + (st && st.shared ? " · shared with " + ST.org : "") + " at " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + "." };
+  }
+  function saveNoteHtml(r) {
+    var n = ST.saveNote[r.id]; if (!n) return "";
+    return '<div class="note" id="saveNote" data-kind="' + n.kind + '" role="status" style="margin-top:6px' + (n.kind === "error" ? ";color:var(--red)" : n.kind === "local" ? ";color:var(--amber)" : n.kind === "ok" ? ";color:var(--green)" : "") + '">' + esc(n.text) + "</div>";
+  }
+  function persist(r, fields, cb) {
+    if (!SAVES) { cb(new Error("Saved sites unavailable")); return; }
+    if (!isSaved(r.id)) {
+      var rec = JSON.parse(JSON.stringify(r)), k;
+      delete rec.circ; delete rec.cst;
+      for (k in fields) if (fields.hasOwnProperty(k)) rec[k] = fields[k];
+      if (fields.ownerName) rec.owner = { name: fields.ownerName, phone: fields.ownerPhone || "" };
+      SAVES.save(rec, cb); return;
+    }
+    SAVES.patch(r.id, fields, cb);
+  }
+  function wireSite(r) {
+    var b;
+    if ((b = $("starBtn"))) b.onclick = function () {
+      var was = isSaved(r.id);
+      ST.saveNote[r.id] = { kind: "saving", text: was ? "Removing…" : "Saving…" }; renderSite(r);
+      if (was) SAVES.remove(r.id, function (err) { confirmSaved(r.id, err, false); saveOutcome(r, err, "Removed"); if (ST.sel === r.id) renderSite(r); });
+      else persist(r, {}, function (err) { confirmSaved(r.id, err, true); saveOutcome(r, err, "Saved"); if (ST.sel === r.id) renderSite(r); });
+    };
+    if ((b = $("szKw"))) b.onchange = function () { r.sizePick = { kw: +this.value, hours: +$("szHrs").value }; renderSite(r); };
+    if ((b = $("szHrs"))) b.onchange = function () { r.sizePick = { kw: +$("szKw").value, hours: +this.value }; renderSite(r); };
+    if ((b = $("projectQuote"))) b.onclick = function () { costProject(r); };
+    if ((b = $("projectShare"))) b.onclick = function () { var btn = this;
+      var pj = ST.projects[r.id], text = pj && pj.result ? window.OmegaProjectCost.summary(pj.result) + " " + r.addr : "";
+      if (!text) return;
+      if (navigator.share) navigator.share({ title: "Cost to deploy — " + r.addr, text: text })["catch"](function () {});
+      else if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { btn.textContent = "Copied"; });
+    };
+    if ((b = $("leaseQuote"))) b.onclick = function () { priceLease(r, false); };
+    if ((b = $("leaseOpen"))) b.onclick = function () { priceLease(r, true); };
+    if ((b = $("leaseShare"))) b.onclick = function () { var btn = this;
+      var lease = ST.leases[r.id], text = lease && lease.result ? window.OmegaSiteLease.summary(lease.result) + " " + r.addr : "";
+      if (!text) return;
+      if (navigator.share) navigator.share({ title: "Host lease offer — " + r.addr, text: text })["catch"](function () {});
+      else if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { btn.textContent = "Copied"; });
+    };
+    if ((b = $("ownerSave"))) b.onclick = function () {
+      var name = $("ownerName").value.trim(), phone = $("ownerPhone").value.trim(), fields = {};
+      if (!name && !phone) return;
+      if (name) fields.ownerName = name; if (phone) fields.ownerPhone = phone;
+      r.owner = r.owner || {}; if (name) r.owner.name = name; if (phone) r.owner.phone = phone;
+      persist(r, fields, function (err) { confirmSaved(r.id, err, true); saveOutcome(r, err, "Saved"); renderSite(r); });
+    };
+    if ((b = $("scriptCopy"))) b.onclick = function () {
+      var ta = $("script"), btn = this;
+      if (navigator.clipboard) navigator.clipboard.writeText(ta.value).then(function () { btn.textContent = "Copied"; }, function () { ta.select(); }); else ta.select();
+    };
+    if ((b = $("callLog"))) b.onclick = function () {
+      var note = "Call · " + $("callOutcome").value + ($("callWho").value.trim() ? " · " + $("callWho").value.trim() : "") + ($("callNote").value.trim() ? " · " + $("callNote").value.trim() : "");
+      var btn = this; btn.disabled = true;
+      persist(r, { note: note }, function (err) { confirmSaved(r.id, err, true); saveOutcome(r, err, "Saved"); btn.disabled = false; renderSite(r); });
+    };
+  }
+
+  /* ── saved ─────────────────────────────────────────────────────────── */
+  function renderSaved() {
+    var list = $("savedList"), st = $("savedStatus"), rows = [];
+    try { rows = SAVES ? SAVES.list() : []; } catch (e) { rows = []; }
+    st.textContent = rows.length ? rows.length + " saved site" + (rows.length === 1 ? "" : "s") + " shared with " + ST.org : "";
+    if (!rows.length) { list.innerHTML = '<div class="empty">Nothing saved yet. Star a site, or log a call.</div>'; return; }
+    rows.sort(function (a, b) { return (b.updatedAt || b.savedAt || 0) - (a.updatedAt || a.savedAt || 0); });
+    list.innerHTML = rows.map(function (s) {
+      var r = ST.byId[s.id] || prepare(s);
+      var lastCall = Object.prototype.toString.call(s.notes) === "[object Array]" ? s.notes.filter(function (n) { return n && /^Call\b/.test(n.t || ""); }).pop() : null;
+      return '<a class="card site" href="#/site/' + encodeURIComponent(s.id) + '"><div class="head"><div><div class="addr">' + esc(s.addr) + '</div><div class="sub">' + esc([s.city, s.subtype || s.type].filter(Boolean).join(" · ")) + (s.ownerName ? " · " + esc(s.ownerName) : "") + "</div></div>" +
+        '<span class="pill ' + (r.circ && r.circ.known && r.circ.sellable > 0 ? "open" : "unknown") + '">' + esc(s.status || "target") + "</span></div>" +
+        (lastCall ? '<div class="note" style="margin-top:6px">' + esc(lastCall.t) + "</div>" : "") + "</a>";
+    }).join("");
+  }
+
+  /* ── account ───────────────────────────────────────────────────────── */
+  function renderAccount() {
+    var v = $("viewAccount"), standalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    v.innerHTML = '<div class="card"><h3>' + esc(repName()) + '</h3><div class="kv" style="margin-top:6px"><b>Workspace</b><span>' + esc(ST.org) + (ST.staff && ST.org !== orgOfEmail() ? " (client workspace)" : "") + "</span><b>Saved sites</b><span>" + esc(savesState()) + "</span></div>" +
+      (ST.staff ? '<div class="form" style="margin-top:8px"><label>Client workspace<input id="acctOrg" type="text" inputmode="url" autocapitalize="none" value="' + esc(ST.org) + '" style="width:200px"></label><button class="btn sm" type="button" id="acctOrgGo">Switch</button></div><p class="note">ClearSky staff work in a client\u2019s workspace; the choice is remembered on this phone.</p>' : "") + "</div>" +
+      '<div class="card"><h3>Install on your phone</h3>' + (standalone ? '<p class="note">Installed. You are running the app from the home screen.</p>' :
+        ST.installPrompt ? '<p class="note">Add Site Finder to the home screen so it opens like an app.</p><button class="btn primary" id="installBtn" type="button">Install</button>' :
+        ios ? '<p class="note">In Safari: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>' : '<p class="note">In Chrome: open the browser menu and choose <b>Install app</b> or <b>Add to Home screen</b>.</p>') + "</div>" +
+      '<div class="card"><h3>Desktop tool</h3><p class="note">The full site finder with the map layers, holds and the cost estimator: <a href="/clearsky-sitefinder.html' + (ST.org ? "?org=" + encodeURIComponent(ST.org) : "") + '">open on a computer</a>.</p></div>' +
+      '<div class="card"><button class="btn" id="signOut" type="button">Sign out</button></div>';
+    var b;
+    if ((b = $("acctOrgGo"))) b.onclick = function () { switchOrg($("acctOrg").value); };
+    if ((b = $("installBtn"))) b.onclick = function () { if (ST.installPrompt) { ST.installPrompt.prompt(); ST.installPrompt = null; } };
+    if ((b = $("signOut"))) b.onclick = function () { firebase.auth().signOut(); };
+  }
+  function savesState() { try { var s = SAVES && SAVES.state ? SAVES.state() : null; return s ? (s.mode === "shared" ? "synced with the team" : s.mode === "local" ? "on this phone only" : s.mode) : "—"; } catch (e) { return "—"; } }
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); ST.installPrompt = e; if (ST.view === "account") renderAccount(); });
+
+  /* ── sign in and boot ──────────────────────────────────────────────── */
+  function signinMsg(t) { $("signinMsg").textContent = t || ""; }
+  $("signinGoogle").onclick = function () {
+    var p = new firebase.auth.GoogleAuthProvider();
+    signinMsg("Opening Google…");
+    firebase.auth().signInWithPopup(p)["catch"](function (e) {
+      if (/popup|cancelled|blocked/i.test(String(e && e.code))) return firebase.auth().signInWithRedirect(p);
+      signinMsg(e && e.message || "Sign-in failed.");
+    });
+  };
+  $("signinForm").onsubmit = function (e) {
+    e.preventDefault(); signinMsg("Signing in…");
+    firebase.auth().signInWithEmailAndPassword($("signinEmail").value.trim(), $("signinPass").value).then(function () { signinMsg(""); }, function (err) { signinMsg(err && err.message || "Sign-in failed."); });
+  };
+  function orgOfEmail() { var e = String(ST.user && ST.user.email || "").toLowerCase(), d = e.indexOf("@") > 0 ? e.split("@")[1] : ""; return ORG_ALIAS[d] || d; }
+  function orgFor(u) {
+    var email = String(u.email || "").toLowerCase(), domain = email.indexOf("@") > 0 ? email.split("@")[1] : "";
+    var mine = ORG_ALIAS[domain] || domain, want = (param("org") || "").toLowerCase() || pref("sfapp.org", "");
+    ST.staff = STAFF.test(mine);
+    return ST.staff && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(want) ? want : mine;
+  }
+  function boot() {
+    var cfg = (window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.firebase) || window.FIREBASE_CONFIG || null;
+    if (typeof firebase === "undefined" || !cfg) { show("signin"); signinMsg("The sign-in service did not load. Check the connection and reopen the app."); return; }
+    try { if (!firebase.apps.length) firebase.initializeApp(cfg); } catch (e) {}
+    try { ST.db = firebase.firestore(); } catch (e) { ST.db = null; }
+    ensureMap();
+    firebase.auth().onAuthStateChanged(function (u) {
+      ST.user = u; ST.rows = []; ST.byId = {}; ST.leases = {}; ST.projects = {}; ST.epoch++;
+      if (window.OmegaSiteScore) window.OmegaSiteScore.reset();
+      if (SAVES) SAVES.detach();
+      L.attach(null, "", function () {});
+      if (!u) { $("topWho").textContent = ""; $("topOrg").textContent = "ClearSky-OMEGA"; show("signin"); return; }
+      ST.org = orgFor(u);
+      $("topWho").textContent = u.displayName || u.email || "";
+      $("topOrg").textContent = ST.org;
+      if (SAVES) { SAVES.init(ST.org, u, function () { if (ST.view === "saved") renderSaved(); if (ST.view === "site" && ST.sel && ST.byId[ST.sel]) renderSite(ST.byId[ST.sel]); }, ST.db); SAVES.onChange(function () { ST.confirmed = {}; if (ST.view === "saved") renderSaved(); if (ST.view === "site" && ST.sel && ST.byId[ST.sel]) renderSite(ST.byId[ST.sel]); }); }
+      if (L.setIdentity) L.setIdentity(u.uid, u.email || "");
+      L.attach(ST.db, ST.org, function () {});
+      route();
+    });
+    if ("serviceWorker" in navigator) { try { navigator.serviceWorker.register("/sitefinder-app/sw.js", { scope: "/sitefinder-app" })["catch"](function () {}); } catch (e) {} }
+  }
+  window.__siteApp = { ST: ST, prepare: prepare, renderFind: renderFind, loadListings: loadListings, resolveCircuits: resolveCircuits, route: route, boot: boot };
+  boot();
+})();
+</script>
+</body>
+</html>

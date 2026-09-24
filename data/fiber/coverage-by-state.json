@@ -1,0 +1,567 @@
+{
+  "dataset_built_at": "2026-09-18T02:20:29Z",
+  "method": "Feature intersection with generalized U.S. Census state geometry. Border-crossing routes can count in more than one state. Counts are source records, not sites served or unique cable routes. Small offshore geometry can fall outside generalized boundaries.",
+  "boundary_source": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/0",
+  "states": [
+    {
+      "state": "AK",
+      "name": "Alaska",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 19,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "AL",
+      "name": "Alabama",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 123,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "AR",
+      "name": "Arkansas",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 1,
+      "telecom_facility_records": 102,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "AS",
+      "name": "American Samoa",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 0,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "AZ",
+      "name": "Arizona",
+      "mapped_fiber_records": 2,
+      "unknown_medium_records": 263,
+      "telecom_facility_records": 91,
+      "california_design_records": 3,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "CA",
+      "name": "California",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 651,
+      "telecom_facility_records": 397,
+      "california_design_records": 2473,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "CO",
+      "name": "Colorado",
+      "mapped_fiber_records": 1,
+      "unknown_medium_records": 2,
+      "telecom_facility_records": 68,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "CT",
+      "name": "Connecticut",
+      "mapped_fiber_records": 3,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 16,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "DC",
+      "name": "District of Columbia",
+      "mapped_fiber_records": 1,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 2,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "DE",
+      "name": "Delaware",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 12,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "FL",
+      "name": "Florida",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 245,
+      "telecom_facility_records": 84,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "GA",
+      "name": "Georgia",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 5,
+      "telecom_facility_records": 88,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "GU",
+      "name": "Guam",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 2,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "HI",
+      "name": "Hawaii",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 1,
+      "telecom_facility_records": 7,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "IA",
+      "name": "Iowa",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 73,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "ID",
+      "name": "Idaho",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 12,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "IL",
+      "name": "Illinois",
+      "mapped_fiber_records": 14,
+      "unknown_medium_records": 74,
+      "telecom_facility_records": 292,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "IN",
+      "name": "Indiana",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 160,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "KS",
+      "name": "Kansas",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 134,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "KY",
+      "name": "Kentucky",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 7,
+      "telecom_facility_records": 123,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "LA",
+      "name": "Louisiana",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 151,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "MA",
+      "name": "Massachusetts",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 12,
+      "telecom_facility_records": 27,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "MD",
+      "name": "Maryland",
+      "mapped_fiber_records": 125,
+      "unknown_medium_records": 18,
+      "telecom_facility_records": 82,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "ME",
+      "name": "Maine",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 13,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "MI",
+      "name": "Michigan",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 780,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "MN",
+      "name": "Minnesota",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 39,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "MO",
+      "name": "Missouri",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 144,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "MP",
+      "name": "Commonwealth of the Northern Mariana Islands",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 13,
+      "telecom_facility_records": 0,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "MS",
+      "name": "Mississippi",
+      "mapped_fiber_records": 3,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 132,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "MT",
+      "name": "Montana",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 21,
+      "telecom_facility_records": 15,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "NC",
+      "name": "North Carolina",
+      "mapped_fiber_records": 27,
+      "unknown_medium_records": 236,
+      "telecom_facility_records": 92,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "ND",
+      "name": "North Dakota",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 1,
+      "telecom_facility_records": 14,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "NE",
+      "name": "Nebraska",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 34,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "NH",
+      "name": "New Hampshire",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 15,
+      "telecom_facility_records": 25,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "NJ",
+      "name": "New Jersey",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 5,
+      "telecom_facility_records": 194,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "NM",
+      "name": "New Mexico",
+      "mapped_fiber_records": 3,
+      "unknown_medium_records": 1,
+      "telecom_facility_records": 91,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "NV",
+      "name": "Nevada",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 75,
+      "california_design_records": 6,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "NY",
+      "name": "New York",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 9,
+      "telecom_facility_records": 96,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "OH",
+      "name": "Ohio",
+      "mapped_fiber_records": 5,
+      "unknown_medium_records": 11,
+      "telecom_facility_records": 263,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "OK",
+      "name": "Oklahoma",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 158,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "OR",
+      "name": "Oregon",
+      "mapped_fiber_records": 7,
+      "unknown_medium_records": 20,
+      "telecom_facility_records": 197,
+      "california_design_records": 3,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "PA",
+      "name": "Pennsylvania",
+      "mapped_fiber_records": 2,
+      "unknown_medium_records": 13,
+      "telecom_facility_records": 111,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "PR",
+      "name": "Puerto Rico",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 2,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "RI",
+      "name": "Rhode Island",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 1,
+      "telecom_facility_records": 1,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "SC",
+      "name": "South Carolina",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 1,
+      "telecom_facility_records": 39,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "SD",
+      "name": "South Dakota",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 9,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "TN",
+      "name": "Tennessee",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 5,
+      "telecom_facility_records": 153,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "TX",
+      "name": "Texas",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 9,
+      "telecom_facility_records": 503,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "UT",
+      "name": "Utah",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 26,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "VA",
+      "name": "Virginia",
+      "mapped_fiber_records": 4,
+      "unknown_medium_records": 38,
+      "telecom_facility_records": 456,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "VI",
+      "name": "United States Virgin Islands",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 0,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "VT",
+      "name": "Vermont",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 1,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "WA",
+      "name": "Washington",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 138,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "WI",
+      "name": "Wisconsin",
+      "mapped_fiber_records": 2,
+      "unknown_medium_records": 1,
+      "telecom_facility_records": 82,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "WV",
+      "name": "West Virginia",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 7,
+      "telecom_facility_records": 16,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    },
+    {
+      "state": "WY",
+      "name": "Wyoming",
+      "mapped_fiber_records": 0,
+      "unknown_medium_records": 0,
+      "telecom_facility_records": 28,
+      "california_design_records": 0,
+      "inventory_completeness": "unknown",
+      "site_capacity_records": 0
+    }
+  ]
+}

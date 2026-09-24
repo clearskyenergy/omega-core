@@ -1,0 +1,16 @@
+{
+  "name": "Your account — design, orders and purchase orders",
+  "short_name": "Your account",
+  "description": "Design your sites, place purchase orders and follow every order from your supplier.",
+  "start_url": "/portals/customer/app",
+  "scope": "/portals/customer/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0B2733",
+  "icons": [
+    { "src": "/icons/omega-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/omega-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/omega-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

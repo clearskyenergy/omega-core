@@ -1470,39 +1470,87 @@ function gather(site, radiusMi, minAcres, onProgress, cb){
     /* Long-haul carrier diversity — nearest published conduit and how many
        providers sit in it. This is the procurement question, not a map decoration. */
     function(next){
-      var best = null, pending = 0, finished = false;
-      var cand = [];
-      for(var i = 0; i < LH_CONDUITS.length; i++){
-        var c = LH_CONDUITS[i];
-        var A = LH_CITY[c.a], B = LH_CITY[c.b];
-        if(!A || !B) continue;
-        /* Cheap pre-filter on endpoint distance before paying for a route. */
-        var d = Math.min(distMi(lat, lon, A[0], A[1]), distMi(lat, lon, B[0], B[1]));
-        if(d < radiusMi + 400) cand.push({ c: c, seed: d });
-      }
-      cand.sort(function(x, y){ return x.seed - y.seed; });
-      cand = cand.slice(0, 12);
-      if(!cand.length){ tick("carrier diversity"); next(); return; }
-      pending = cand.length;
-      function fin(){
-        if(--pending > 0 || finished) return;
-        finished = true;
-        R.longhaul = best;
-        tick("carrier diversity"); next();
-      }
-      for(var k = 0; k < cand.length; k++){
-        (function(entry){
-          routeConduit(entry.c, function(r){
-            if(!r){ fin(); return; }
-            var feats = [{ geometry: { type: "LineString", coordinates: r.coords } }];
-            var hit = nearestLineFeature(feats, lat, lon);
-            if(hit && (!best || hit.dist < best.dist)){
-              best = { dist: hit.dist, conduit: entry.c, routed: r.routed };
+      loadLongHaulFile(function(feats){
+        if(feats){
+          /* ROUTE DIVERSITY, not just proximity. The nearest corridor tells
+             you a lateral is short; it does not tell you the site survives a
+             backhoe. Corridors leaving on the same bearing are one ditch, so
+             bearings are folded to a 180° axis and counted once — the same
+             rule /api/network-proximity applies, so the two agree. */
+          var best = null, near = [];
+          for(var i = 0; i < feats.length; i++){
+            var f = feats[i];
+            if(!f.geometry || !f.geometry.coordinates) continue;
+            var hit = nearestLineFeature([f], lat, lon);
+            if(!hit) continue;
+            var c = lhPropsToConduit(f.properties || {});
+            var rec = { dist: hit.dist, conduit: c, routed: f.properties.routed !== false };
+            if(!best || hit.dist < best.dist) best = rec;
+            if(hit.dist <= 50) near.push(rec);
+          }
+          near.sort(function(x, y){ return x.dist - y.dist; });
+          /* nearestLineFeature returns a distance but not the point it matched,
+             so the axis is taken from the corridor's own endpoints rather than
+             from the bearing to the nearest point. That is coarser than the
+             function's rule and can merge two corridors that diverge near the
+             site; the report says "approximate" for exactly this reason, and
+             /api/network-proximity remains the authority on the count. */
+          var axes = [], indep = 0;
+          for(var m = 0; m < near.length; m++){
+            var cc = near[m].conduit, A = LH_CITY[cc.a], B = LH_CITY[cc.b];
+            var ax;
+            if(A && B){
+              ax = (Math.atan2(B[1] - A[1], B[0] - A[0]) * 180 / Math.PI + 360) % 180;
+            } else continue;
+            var novel = true;
+            for(var q = 0; q < axes.length; q++){
+              var diff = Math.abs(ax - axes[q]); if(diff > 90) diff = 180 - diff;
+              if(diff < 40){ novel = false; break; }
             }
-            fin();
-          });
-        })(cand[k]);
-      }
+            if(novel){ axes.push(ax); indep++; }
+          }
+          if(best){ best.within50 = near.length; best.independent = indep; best.fromFile = true; }
+          R.longhaul = best;
+          tick("carrier diversity"); next();
+          return;
+        }
+
+        /* FALLBACK: the corridor file is not deployed. Route the published
+           subset live, as this did before, and mark the answer so nobody
+           reads six times less coverage as the same answer. */
+        var bestF = null, pending = 0, finished = false, cand = [];
+        for(var j = 0; j < LH_CONDUITS.length; j++){
+          var c2 = LH_CONDUITS[j];
+          var A2 = LH_CITY[c2.a], B2 = LH_CITY[c2.b];
+          if(!A2 || !B2) continue;
+          var d = Math.min(distMi(lat, lon, A2[0], A2[1]), distMi(lat, lon, B2[0], B2[1]));
+          if(d < radiusMi + 400) cand.push({ c: c2, seed: d });
+        }
+        cand.sort(function(x, y){ return x.seed - y.seed; });
+        cand = cand.slice(0, 12);
+        if(!cand.length){ tick("carrier diversity"); next(); return; }
+        pending = cand.length;
+        function fin(){
+          if(--pending > 0 || finished) return;
+          finished = true;
+          if(bestF) bestF.fromFile = false;
+          R.longhaul = bestF;
+          tick("carrier diversity"); next();
+        }
+        for(var k = 0; k < cand.length; k++){
+          (function(entry){
+            routeConduit(entry.c, function(r){
+              if(!r){ fin(); return; }
+              var fs2 = [{ geometry: { type: "LineString", coordinates: r.coords } }];
+              var hit2 = nearestLineFeature(fs2, lat, lon);
+              if(hit2 && (!bestF || hit2.dist < bestF.dist)){
+                bestF = { dist: hit2.dist, conduit: entry.c, routed: r.routed };
+              }
+              fin();
+            });
+          })(cand[k]);
+        }
+      });
     },
     /* Commercial / industrial listings */
     function(next){
@@ -1929,9 +1977,32 @@ function renderReport(R){
     var lh = R.longhaul, lc = lh.conduit;
     var lhCol = lc.isps >= 15 ? "#6ee76e" : lc.isps >= 4 ? "#9BE86E"
               : lc.isps >= 2 ? "#ffb020" : lc.isps === 1 ? "#ff8f3a" : "#7d8fa3";
-    h += row(lhCol, "Nearest long-haul conduit",
-      esc(lc.a + " \u2194 " + lc.b) + (lh.routed ? "" : " \u00b7 direct-line estimate"),
+    h += row(lhCol, "Nearest long-haul corridor",
+      esc(lc.a + " \u2194 " + lc.b) +
+      (lc.row && lc.row !== "roadway" ? " \u00b7 " + esc(lc.row) : "") +
+      (lh.routed ? "" : " \u00b7 straight-line estimate") +
+      (lc.src === "corridor" ? " \u00b7 corridor, carrier count not published" : ""),
       fmtMi(lh.dist));
+    /* ROUTE DIVERSITY. On most sites this is the finding and the distance is
+       the detail: one corridor is a single backhoe away from dark no matter
+       how close it is, and a tenant with an uptime SLA asks about this first. */
+    if(lh.independent != null){
+      var dv = lh.independent >= 3 ? "meshed" : lh.independent === 2 ? "dual-path" : "single-threaded";
+      var dvCol = lh.independent >= 3 ? "#6ee76e" : lh.independent === 2 ? "#9BE86E" : "#ffb020";
+      h += row(dvCol, "Route diversity \u2014 " + dv,
+        lh.independent === 1
+          ? "one corridor within 50 mi; a protected ring would have to be built, not bought"
+          : lh.independent + " corridors on independent bearings within 50 mi \u2014 " +
+            (lh.within50 || 0) + " corridor" + ((lh.within50 === 1) ? "" : "s") + " in reach in total",
+        String(lh.independent));
+      if(lh.independent <= 1){
+        h += '<div class="ga-warn">A single corridor is a single point of failure. Physically diverse ' +
+          'entrances are the first thing a compute tenant asks for and the hardest thing to add later.</div>';
+      }
+      h += '<div class="ga-note">Diversity here is counted from each corridor\u2019s endpoints, which is ' +
+        'coarser than the same rule in /api/network-proximity \u2014 use Network Proximity for the ' +
+        'authoritative count.</div>';
+    }
     if(lc.isps){
       h += row(lhCol, lc.isps + " provider" + (lc.isps > 1 ? "s" : "") + " share this conduit",
         lc.isps >= 15 ? "deep carrier choice — you can run a competitive bid"
@@ -1953,8 +2024,12 @@ function renderReport(R){
       h += '<div class="ga-note">This conduit follows a pipeline right-of-way rather than road or rail, ' +
         'which is unusual and worth verifying before assuming a lateral is straightforward.</div>';
     }
-    h += '<div class="ga-note">Source: Durairajan, Barford, Sommers &amp; Willinger, ' +
-      '<i>InterTubes</i>, ACM SIGCOMM 2015 \u00b7 ' + esc(lc.cite) + '. ' +
+    h += '<div class="ga-note">' + (lc.src === "corridor"
+        ? 'Corridor from data/us-longhaul-fiber.geojson, routed over the road network because US ' +
+          'long-haul fiber is laid in transportation rights-of-way. <strong>No carrier is asserted ' +
+          'on this segment</strong> \u2014 that is licensed data. '
+        : 'Source: Durairajan, Barford, Sommers &amp; Willinger, <i>InterTubes</i>, ACM SIGCOMM 2015 \u00b7 ' +
+          esc(lc.cite) + '. ') +
       'Endpoints are documented; the path between them is inferred along roadway right-of-way ' +
       'per that paper\'s own finding that long-haul conduit co-locates with roads more often than rail.</div>';
   } else {
@@ -2121,7 +2196,11 @@ function exportCsv(R){
     t += csvRow(["ISPs sharing", R.longhaul.conduit.isps || "not published",
                  "Traceroute probes", R.longhaul.conduit.probes || ""]);
     t += csvRow(["Citation", R.longhaul.conduit.cite,
-                 "Path", R.longhaul.routed ? "routed along roadway ROW" : "direct-line estimate"]);
+                 "Path", R.longhaul.routed ? "routed along roadway ROW" : "straight-line estimate"]);
+    t += csvRow(["Corridors within 50 mi", R.longhaul.within50 == null ? "" : R.longhaul.within50,
+                 "Independent bearings", R.longhaul.independent == null ? "" : R.longhaul.independent]);
+    t += csvRow(["Corridor source", R.longhaul.conduit.src === "corridor" ? "corridor (no carrier asserted)" : "InterTubes cited",
+                 "Geometry", R.longhaul.fromFile ? "data/us-longhaul-fiber.geojson (built)" : "routed live (fallback subset)"]);
   } else {
     t += csvRow(["Nearest conduit", "none within reach of the published subset"]);
   }
@@ -4262,6 +4341,50 @@ function saveLhCache(){
   try { localStorage.setItem(LH_CACHE_KEY, JSON.stringify(lhRouteCache)); } catch(e){}
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE PREBUILT CORRIDOR FILE — one geometry, two surfaces
+
+   This file used to route 53 published city pairs through OSRM's public demo
+   server AT RUNTIME, twelve at a time, on every site analysis. It worked, but
+   it left the page and /api/network-proximity measuring against two different
+   maps: the API now carries 317 corridors routed once at build time, and a
+   site that read "34 mi to the nearest conduit" in the editor could read
+   something else on the atlas for no reason a user could ever discover.
+
+   data/us-longhaul-fiber.geojson is that one geometry. It is fetched once per
+   session, it costs no OSRM calls, and it has six times the coverage. OSRM
+   stays behind it as the fallback for a deployment where the file is missing,
+   flagged as such so a degraded answer never passes for the built one.
+   Rebuild the file with scripts/build-fiber-backbone.js.
+   ═══════════════════════════════════════════════════════════════════════════ */
+var LH_FILE = null, LH_FILE_STATE = "idle", LH_FILE_WAIT = [];
+function loadLongHaulFile(cb){
+  if(LH_FILE_STATE === "ok" || LH_FILE_STATE === "missing"){ cb(LH_FILE); return; }
+  LH_FILE_WAIT.push(cb);
+  if(LH_FILE_STATE === "loading") return;
+  LH_FILE_STATE = "loading";
+  getJson("/data/us-longhaul-fiber.geojson", function(err, j){
+    if(!err && j && j.features && j.features.length){
+      LH_FILE = j.features;
+      LH_FILE_STATE = "ok";
+    } else {
+      LH_FILE = null;
+      LH_FILE_STATE = "missing";
+    }
+    var w = LH_FILE_WAIT; LH_FILE_WAIT = [];
+    for(var i = 0; i < w.length; i++) w[i](LH_FILE);
+  }, 25000);
+}
+/* The file's properties and the LH_CONDUITS records describe the same thing
+   in two vocabularies. Everything downstream (lhColor, lhWeight, the report,
+   the CSV) reads the conduit shape, so normalise here rather than in six
+   places that would drift apart. */
+function lhPropsToConduit(p){
+  return { a: p.a, b: p.b, isps: p.isps || null, probes: p.probes || null,
+           cite: p.cite || (p.src === "corridor" ? "corridor — no carrier count published" : ""),
+           row: p.row || "roadway", src: p.src || "corridor", miles: p.miles || null };
+}
+
 function routeConduit(c, cb){
   var A = LH_CITY[c.a], B = LH_CITY[c.b];
   if(!A || !B){ cb(null); return; }
@@ -4346,11 +4469,73 @@ function fetchLongHaul(key, cb){
   var zoom = GA.map.getZoom();
 
   /* A national backbone map is most useful zoomed OUT. Below zoom 7 the whole
-     published set draws, so the country-level picture is visible in one look.
-     Above that it narrows to the viewport. The previous build filtered at every
-     zoom, which meant the national view — the entire point of the layer —
-     could never be seen. */
+     set draws, so the country-level picture is visible in one look. Above that
+     it narrows to the viewport. The previous build filtered at every zoom,
+     which meant the national view — the entire point of the layer — could
+     never be seen. */
   var national = zoom < 7;
+
+  /* The prebuilt file first: 317 corridors already routed, no OSRM round trip,
+     and the same geometry /api/network-proximity measures against. */
+  loadLongHaulFile(function(feats){
+    if(!feats){ fetchLongHaulLive(key, cb, b, national); return; }
+    var out = [], cited = 0, unrouted = 0;
+    for(var i = 0; i < feats.length; i++){
+      var f = feats[i], p = f.properties || {};
+      if(!national && !featInView(f, b)) continue;
+      var c = lhPropsToConduit(p);
+      if(p.src === "intertubes") cited++;
+      if(p.routed === false) unrouted++;
+      out.push({
+        props: {
+          name: p.name || (p.a + " \u2194 " + p.b),
+          isps: c.isps, probes: c.probes, cite: c.cite, row: c.row,
+          src: c.src, routed: p.routed !== false, miles: p.miles || null,
+          meta: p.meta || "", lhConduit: true
+        },
+        geom: f.geometry,
+        lhColor: lhColor(c),
+        lhWeight: lhWeight(c),
+        /* A corridor whose build could not be routed is drawn dashed. So is
+           anything we only infer — a guess must never draw like a survey. */
+        lhDashed: p.routed === false
+      });
+    }
+    if(!out.length){
+      markLayer(key, "empty", "no corridor in view \u2014 zoom out to see the national backbone", 0);
+      GA.status("Long-haul: no corridor in this view \u2014 zoom out to see the national backbone", false);
+      cb([]); return;
+    }
+    markLayer(key, "ok",
+      out.length + " corridors \u00b7 " + cited + " cited (InterTubes, SIGCOMM 2015), " +
+      (out.length - cited) + " corridor-only \u00b7 routed over roadway ROW at build time" +
+      (unrouted ? " \u00b7 " + unrouted + " straight-line fallback" : "") +
+      (national ? " \u00b7 national view" : ""), out.length);
+    GA.status("Long-haul backbone \u00b7 " + out.length + " corridors" +
+      (national ? " (national view)" : "") + " \u00b7 " + cited + " with a published carrier count", false);
+    cb(out);
+  });
+}
+
+/* Is any vertex of this corridor inside the view? Corridors are long, so a
+   bbox-overlap test on endpoints alone hides every route that crosses the
+   screen without starting or ending on it. */
+function featInView(f, b){
+  var g = f.geometry; if(!g || !g.coordinates) return false;
+  var cs = g.type === "LineString" ? [g.coordinates] : g.coordinates;
+  for(var i = 0; i < cs.length; i++){
+    for(var j = 0; j < cs[i].length; j++){
+      var p = cs[i][j];
+      if(p[0] >= b.xmin && p[0] <= b.xmax && p[1] >= b.ymin && p[1] <= b.ymax) return true;
+    }
+  }
+  return false;
+}
+
+/* The pre-file path, kept for a deployment where data/us-longhaul-fiber.geojson
+   was not built. Six times less coverage, so it says so. */
+function fetchLongHaulLive(key, cb, b, national){
+  var GA = ga();
   var todo = [];
   for(var i = 0; i < LH_CONDUITS.length; i++){
     if(national || conduitInView(LH_CONDUITS[i], b)) todo.push(LH_CONDUITS[i]);
@@ -4396,7 +4581,9 @@ function fetchLongHaul(key, cb){
     });
   }, function(){
     markLayer(key, out.length ? "ok" : "empty",
-      "InterTubes (SIGCOMM 2015) published subset · " + routed + " road-routed" +
+      "FALLBACK \u2014 data/us-longhaul-fiber.geojson is not deployed, so only the " +
+      "53-conduit InterTubes subset is shown, routed live. Run scripts/build-fiber-backbone.js. \u00b7 " +
+      routed + " road-routed" +
       (unrouted ? ", " + unrouted + " direct-line fallback" : "") +
       (national ? " · national view" : ""), out.length);
     GA.status("Long-haul backbone · " + out.length + " conduits" +

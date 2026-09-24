@@ -1,0 +1,31 @@
+{
+  "id": "/app-sandbox/customer",
+  "name": "Clean Cell Power Platform",
+  "short_name": "Clean Cell",
+  "description": "Sandbox — Design your sites, place purchase orders and follow every order from your supplier. Nothing is real.",
+  "start_url": "/app-sandbox/customer",
+  "scope": "/app-sandbox/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0E1B24",
+  "icons": [
+    {
+      "src": "/tenants/cleancell/icons/customer-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/tenants/cleancell/icons/customer-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/tenants/cleancell/icons/customer-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "apple_touch_icon": "/tenants/cleancell/icons/customer-180.png"
+}

@@ -117,7 +117,22 @@ function openFinancingApply(){
   location.href = '/financing.html' + (id ? ('?project=' + encodeURIComponent(id)) : '');
 }
 </script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-editor-gate.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<!-- Which PRODUCT of the editor this tenant bought. Loads directly after
+     omega-whitelabel.js because it reads the tenant record that hydrate()
+     puts on CLEARSKY_CONFIG. Fails OPEN: no record, unknown mode, or a read
+     that threw all resolve to the full platform. -->
+<script src="/omega-editor-mode.js"></script>
 <script src="/omega-caps.js"></script>
+<script src="/omega-bess-products.js"></script>
+<script src="/omega-storefront-handoff.js"></script>
+<script src="omega-equipment-visuals.js"></script>
+<!-- Spreadsheet in, records out, with a preview before anything is written.
+     The equipment library uses it to bulk-load modular data-center units
+     (OmegaImport.MDC_SPEC); SheetJS is fetched on first use by _d4LoadXlsx. -->
+<script src="/omega-import.js"></script>
 <!-- Turns a hand-drawn site KMZ into classified features and a grid score.
      Optional: the GIS importer works without it, just without the site
      readout and with everything one colour. -->
@@ -130,6 +145,8 @@ function openFinancingApply(){
 <!-- A build drawing never has the transmission line on it, so screening one
      needs the grid fetched rather than read. Same client the site finder uses. -->
 <script src="/omega-grid-atlas-client.js"></script>
+<script src="/omega-compute-lease.js"></script>
+<script src="/omega-bess-result.js"></script>
 <script src="/omega-parcel-report.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
@@ -432,6 +449,10 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tex
   background:rgba(4,6,10,.78); padding:28px; overflow-y:auto;
 }
 .e3-modal.on{ display:block }
+/* The import preview (omega-import.js) opens from inside the equipment modal
+   and its own z-index sits below this one, so it rendered behind the thing
+   that opened it. The host page owns the stacking order. */
+body .oim-scrim{ z-index:9700 }
 .e3-card{
   max-width:1120px; margin:0 auto; background:var(--panel);
   border:1px solid var(--border); border-radius:10px; overflow:hidden;
@@ -2052,7 +2073,8 @@ window.onerror = function(msg, src, line, col, err) {
           <div class="rb-flyout" id="fly-dc">
             <div class="rb-fly-head">Compute</div>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',openDcClusterDialog)"><span class="fi-ico">▦</span> Data-Ctr Cluster</button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_mdc1')})"><span class="fi-ico">▦</span> 1 MW MDC Pad <span class="fi-sub">40 × 10 ft</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_ztmm1')})" title="ZTMM Container Data Center — IT POD + ELE POD, 6 × 150 kW liquid-cooled racks, external 2 × 1200 kW air-cooled chillers. From the vendor's Layout-01 drawing."><span class="fi-ico">▦</span> ZTMM 1 MW Block <span class="fi-sub">40 × 25 ft</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_mdc1')})"><span class="fi-ico">▦</span> 1 MW MDC Pad <span class="fi-sub">40 × 10 ft · nominal</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_leviathan')})"><span class="fi-ico">▦</span> 1.77 MW MDC Pad <span class="fi-sub">119 × 45 ft</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_triton')})"><span class="fi-ico">▦</span> Triton Pad <span class="fi-sub">120 kW</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_cruiser')})"><span class="fi-ico">▦</span> Cruiser Pad <span class="fi-sub">35 kW</span></button>
@@ -3995,7 +4017,7 @@ if(document.readyState==='loading'){
   <span class="s">|</span>
   <span id="nn-lock-ind" onclick="nnToggleMapLock()" style="cursor:pointer;user-select:none" title="Click to lock/unlock the map">🔓 Map unlocked</span>
   <div style="flex:1"></div>
-  <span id="tb-footer-ver" style="color:rgba(255,255,255,.2)">ClearSky OMEGA v4.24</span>
+  <span id="tb-footer-ver" style="color:rgba(255,255,255,.2)"><span data-omega-platform>ClearSky OMEGA</span> v4.24</span>
 </div>
 
 <!-- BESS Config Modal -->
@@ -4464,6 +4486,9 @@ function _projOrgId() {
 }
 
 function _initFirebase() {
+  // Customer Editor Lite owns authentication and persistence in its parent.
+  // Never initialize platform Firestore/Auth in this drawing-only iframe.
+  if (new URLSearchParams(location.search).get('customerEngine') === '1') return;
   try {
     if (typeof firebase === 'undefined') {
       // Firebase SDK unavailable (offline or blocked) -- running in local/offline mode
@@ -4543,6 +4568,12 @@ function _initFirebase() {
 
       if (user) {
         _currentUser = user;
+
+        /* The org's equipment library, including any uploaded compute
+           modules, so the Data Ctr pickers carry them before the library
+           is ever opened. Forced: a seed-only load may already have run
+           while signed out. Non-fatal — it resolves seed-only on refusal. */
+        try{ if(typeof OmegaEq!=='undefined') OmegaEq.load(true); }catch(e){}
 
         // Now that we know the signed-in user's email domain, re-run brand
         // resolution. On the shared tools.csebuilders.com portal the hostname
@@ -5968,6 +5999,16 @@ const ICONS={
 
   // 1MW modular data center (40ft class)
   dc_mdc1:(s=60)=>ICONS.dc_triton(s),
+  // ZTMM 1 MW container DC: two 40 ft containers (IT POD over ELE POD)
+  dc_ztmm1:(s=60)=>`<svg width="${s}" height="${s}" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="28" cy="28" r="28" fill="#2E2450"/>
+    <rect x="5" y="13" width="46" height="14" rx="1.5" fill="#4C3B87" stroke="#A78BFA" stroke-width="1.4"/>
+    ${[8,15,22,29,36,43].map(x=>`<rect x="${x}" y="16" width="5" height="8" rx=".6" fill="#2B2050" stroke="#8B6FE0" stroke-width=".8"/>`).join('')}
+    <rect x="5" y="29" width="46" height="14" rx="1.5" fill="#3E3170" stroke="#C4B5FD" stroke-width="1.4"/>
+    ${[8,18,28,38].map(x=>`<rect x="${x}" y="32" width="8" height="8" rx=".6" fill="#241C3E" stroke="#A78BFA" stroke-width=".8"/>`).join('')}
+    <text x="28" y="52" font-size="4.2" fill="#C4B5FD" text-anchor="middle" font-family="monospace" font-weight="bold">ZTMM 1 MW</text>
+  </svg>`,
+  dc_ztmm1b:(s=60)=>ICONS.dc_ztmm1(s),
   dc_leviathan:(s=60)=>`<svg width="${s}" height="${s}" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
     <circle cx="28" cy="28" r="28" fill="#241C3E"/>
     <rect x="3" y="13" width="50" height="32" rx="2" fill="#3E3170" stroke="#C4B5FD" stroke-width="1.8"/>
@@ -6146,6 +6187,7 @@ const EQ=[
   {id:'dc_triton',    label:'Compute Container 40ft'},
   {id:'dc_mdc1',      label:'1 MW MDC'},
   {id:'dc_leviathan', label:'1.77 MW MDC'},
+  {id:'dc_ztmm1',     label:'ZTMM 1 MW DC'},
 ];
 
 // == MODULAR DATA-CENTER FOOTPRINTS (real-world ft, for correct drop scale) =
@@ -6208,8 +6250,214 @@ var DC_CATALOG = {
                   ups:'integrated', volts:480, acres:0.12,
                   spec:'1.77 MW IT · closed-circuit direct-to-chip, '
                      + 'air-cooled N+1, no site water · 480 V / 60 Hz',
-                  verified:'armada.ai/product/leviathan' }
+                  verified:'armada.ai/product/leviathan' },
+  /* ── ZTMM CONTAINER DATA CENTER — THE FIRST 1 MW UNIT WITH A DRAWING ──
+     Zhejiang Zhiting (ZTMM) "Container Data Center", Layout-01 dated
+     2026-09-18, drawn for the Manus Bio Augusta concept and published in
+     the "Modular AI Data Center Design Concept" (1 / 3 / 5 MW options).
+     Everything on these rows is read off that drawing; nothing is a
+     planning estimate, which is the difference from dc_mdc1 above.
+
+     What the unit is: TWO 40 ft containers (12192 mm) side by side, each
+     3800 mm (12'-6") wide — an IT POD and an ELE POD — so the pad is
+     40 x 25 ft, not the 40 x 10 the nominal row assumed for "a 1 MW box".
+
+       IT POD   6 x 150 kW liquid-cooled compute racks + 1 x 20 kW network
+                rack on a hot aisle; 2 x CDU >= 900 kW (1 main / 1 spare);
+                3 x 60 kW in-row precision AC (2 main / 1 spare); FM200.
+       ELE POD  ATS -> UPS1/UPS2 input maintenance bypass -> 1125 kVA UPS
+                + 500 kVA UPS -> UPS output 1/2 -> AC output cabinet;
+                2 x 45 kW in-room AC (1 main / 1 spare); FM200.
+       PLANT    outside the containers, NOT on the pad: 2 x 1200 kW
+                air-cooled magnetic-levitation chillers (1 main / 1 spare),
+                a chilled-water storage tank and a hydraulic module. The
+                drawing does not dimension the plant, so this row carries
+                no plant footprint and the build must reserve a chiller
+                yard rather than pretend the pad is the whole site.
+
+     Cooling is 90% liquid / 10% air at the rack: cold plate -> CDU
+     (25% propylene glycol, 35/45 C) -> hydraulic module -> chiller
+     (25% ethylene glycol, 18/26 C). Air-cooled and non-evaporative, with
+     free cooling when ambient allows, so water:0 is a datasheet fact.
+
+     `kw` is IT: 6 x 150 + 20 = 920 kW. The vendor calls the block "1 MW"
+     because the design envelope is 1 MW; sizing off the envelope would
+     overstate what six racks draw by 8%. Option B (dc_ztmm1b) fills a
+     seventh rack for 1.05 MW of compute and, per the concept, needs the
+     CDU, chiller and electrical resized with it — the drawing shown is
+     Option A, so B carries the envelope numbers and says so. */
+  dc_ztmm1:     { label:'ZTMM 1 MW Container DC (6 racks)', kw:920, lf:40, wf:25,
+                  family:'ztmm', racks:6, rackKw:150, networkKw:20,
+                  itPods:1, elePods:1, containers:2,
+                  cooling:'external-chiller', coolKw:1200, water:0,
+                  ups:'integrated', upsKva:1625, volts:null,
+                  spec:'2 × 40 ft containers (IT POD + ELE POD, 12′-6″ wide each) '
+                     + '· 6 × 150 kW liquid-cooled racks + 20 kW network '
+                     + '· 2 × CDU ≥900 kW (1+1) · 3 × 60 kW in-row AC (2+1) '
+                     + '· 1125 + 500 kVA UPS behind ATS + maintenance bypass · FM200 '
+                     + '· external 2 × 1200 kW air-cooled mag-lev chillers (1+1), '
+                     + 'chilled-water tank + hydraulic module, non-evaporative, no site water',
+                  verified:'ZTMM Container Data Center Layout-01 (2026-09-18) '
+                         + '+ Modular AI Data Center Design Concept EN §2' },
+  dc_ztmm1b:    { label:'ZTMM 1 MW Container DC (7 racks, Option B)', kw:1070, lf:40, wf:25,
+                  family:'ztmm', racks:7, rackKw:150, networkKw:20,
+                  itPods:1, elePods:1, containers:2,
+                  cooling:'external-chiller', coolKw:1200, water:0,
+                  ups:'integrated', upsKva:null, volts:null,
+                  spec:'Option B — 7 × 150 kW racks (1.05 MW compute) + 20 kW network '
+                     + 'in the same two 40 ft containers. Maximises rack capacity; the '
+                     + 'concept says CDU, chiller and electrical sizing rise with it and '
+                     + 'must be evaluated against the cooling redundancy target, so the '
+                     + 'plant on this row is the Option A plant until the vendor resizes it.',
+                  verified:'ZTMM Modular AI Data Center Design Concept EN §2 Option B (2026-09-18)' }
 };
+
+/* ══════════════════════════════════════════════════════════════════════
+   ZTMM REFERENCE BLOCKS — 1 / 3 / 5 MW, AS PUBLISHED
+
+   The concept is explicit that 3 MW and 5 MW are NOT five copies of the
+   1 MW block: IT PODs stay modular, the chiller plant, tanks and hydraulic
+   module are shared, and the UPS chain is scaled per ELE POD. So a 3 MW
+   ask placed as three 1 MW units would draw six chillers where the vendor
+   draws four, and six containers where the vendor draws four. These rows
+   are the vendor's own arrangement, read off the three layouts, and
+   ztmmPlan() below picks and tiles them instead of multiplying the small
+   block.
+
+   Every container is 40 ft (12192 mm) x 12'-6" (3800 mm); the block is
+   the containers stacked long-side to long-side, so the pad is 40 ft by
+   12.5 ft per container. `stack` is the order they are drawn in, top to
+   bottom, and is what the site plan draws. The chiller plant, tanks and
+   hydraulic module sit beside the stack and are undimensioned on every
+   sheet, so they are counted here and NOT given a footprint.
+
+   `racks` is compute racks at 150 kW; network racks are counted apart
+   because they are 20 kW and do not scale the CDU. `itKw` is what the
+   racks actually draw, not the MW in the title. The 5 MW sheet labels a
+   "1250kVA UPS5" in two different ELE PODs — counted once, as labelled,
+   and flagged in `notes` rather than silently made six.
+   ══════════════════════════════════════════════════════════════════════ */
+var ZTMM_BLOCKS = [
+  { mw:1, label:'ZTMM 1 MW reference block',
+    racks:6, rackKw:150, networkRacks:1, networkKw:20, itKw:920,
+    itPods:1, elePods:1, containers:2, lf:40, wf:25, stack:['IT','ELE'],
+    cdu:{ n:2, kw:900, main:1, spare:1 },
+    inRowAc:{ n:3, kw:60, main:2, spare:1 },
+    inRoomAc:{ n:2, kw:45, main:1, spare:1 },
+    ups:[ { n:1, kva:1125 }, { n:1, kva:500 } ],
+    chillers:{ n:2, kw:1200, main:1, spare:1 }, tanks:1, hydraulic:'1 module',
+    verified:'Layout-01, 2026-09-18', notes:[] },
+  { mw:3, label:'ZTMM 3 MW block — shared plant',
+    racks:20, rackKw:150, networkRacks:4, networkKw:20, itKw:3080,
+    itPods:2, elePods:2, containers:4, lf:40, wf:50, stack:['ELE','IT','IT','ELE'],
+    cdu:{ n:4, kw:1500, main:2, spare:2 },
+    inRowAc:{ n:12, kw:60, main:8, spare:4 },
+    inRoomAc:{ n:4, kw:60, main:2, spare:2 },
+    ups:[ { n:4, kva:1000 } ],
+    chillers:{ n:4, kw:1200, main:3, spare:1 }, tanks:2, hydraulic:'1 module',
+    verified:'Design Concept EN §3 layout, 2026-09-18',
+    notes:['Each IT POD is two rows of 5 racks + a network rack, CDU 1 main / 1 spare per POD, in-row AC 4 main / 2 spare per POD.'] },
+  { mw:5, label:'ZTMM 5 MW block — optimised multi-POD',
+    racks:35, rackKw:150, networkRacks:5, networkKw:20, itKw:5350,
+    itPods:3, elePods:4, containers:7, lf:40, wf:87.5, stack:['ELE','ELE','IT','IT','IT','ELE','ELE'],
+    cdu:{ n:6, kw:2100, main:3, spare:3 },
+    inRowAc:{ n:15, kw:60, main:10, spare:5 },
+    inRoomAc:{ n:8, kw:60, main:4, spare:4 },
+    ups:[ { n:5, kva:1250 } ],
+    chillers:{ n:4, kw:2000, main:3, spare:1 }, tanks:2, hydraulic:'40 ft + 20 ft',
+    verified:'Design Concept EN §4 layout, 2026-09-18',
+    notes:['IT POD-1 and POD-3 are two rows of 7 racks with CDU ≥2100 kW; POD-2 is one row of 7 with CDU ≥1050 kW.',
+           'Two of the four ELE PODs carry 45 kW in-room AC, two carry 60 kW; the sheet labels UPS5 (1250 kVA) in two PODs — counted once, as labelled.'] }
+];
+
+/* IT load -> the ZTMM blocks that carry it.
+
+   The block is chosen on the vendor's NOMINAL size: a 1 MW ask is the
+   1 MW block, because that is what the vendor calls it and what a rep
+   has asked the vendor for. Inside the block the concept's own rule
+   applies — rack quantity first, at 150 kW — so the racks the load
+   actually populates are counted against the racks drawn, and the
+   difference is reported either way: spare positions when the load is
+   light, and racks OVER the drawing when it is heavy (a 1,000 kW ask
+   is 6.5 racks in a six-rack IT POD, which is exactly the case Option B
+   exists for, and the note says so). Only past the 5 MW sheet do blocks
+   tile — 5 MW blocks first, then the smallest block that holds the rest
+   — and `extrapolated:true` says the vendor has not drawn that.
+
+   `unit` is the catalogue row that was picked; a 7-rack Option B unit
+   re-rates the 1 MW block to seven racks and carries the concept's own
+   caveat that the plant is not resized on the drawing. */
+function ztmmPlan(itKw, unit){
+  itKw = Math.max(0, +itKw || 0);
+  var rackKw = (unit && +unit.rackKw > 0) ? +unit.rackKw : 150;
+  var optionB = !!(unit && +unit.racks === 7);
+  var lib = ZTMM_BLOCKS.map(function(b){
+    var c = {}; for (var k in b) if (Object.prototype.hasOwnProperty.call(b, k)) c[k] = b[k];
+    c.notes = (b.notes || []).slice();
+    if (optionB && b.mw === 1) {
+      c.racks = 7; c.itKw = 7 * rackKw + c.networkRacks * c.networkKw; c.optionB = true;
+      c.label = 'ZTMM 1 MW reference block (Option B, 7 racks)';
+      c.notes.push('Option B: CDU, chiller and electrical sizing rise with the seventh rack and are not resized on the published drawing.');
+    }
+    return c;
+  });
+  /* Racks the load populates within one block's share of it. Network
+     racks are drawn per block and come off the top; the rest is compute
+     at the base density. */
+  function racksFor(b, shareKw){
+    var comp = Math.max(0, shareKw - b.networkRacks * b.networkKw);
+    return shareKw > 0 ? Math.max(1, Math.ceil(comp / rackKw)) : 0;
+  }
+  /* A block takes a load up to the larger of its nominal size and what
+     its racks actually draw: the 1 MW block is "1 MW" although six racks
+     draw 920 kW, and the 3 MW sheet draws 3,080 kW although it is called
+     3 MW. Option B's 1,070 kW must not fall through to the 3 MW block. */
+  function capKw(b){ return Math.max(b.mw * 1000, b.itKw); }
+  var blocks = [], shares = [], extrapolated = false, rem = itKw, i;
+  if (itKw > 0) {
+    var fit = null;
+    for (i = 0; i < lib.length; i++) { if (itKw <= capKw(lib[i])) { fit = lib[i]; break; } }
+    if (fit) { blocks.push(fit); shares.push(itKw); }
+    else {
+      var big = lib[lib.length - 1];
+      while (rem > capKw(big)) { blocks.push(big); shares.push(capKw(big)); rem -= capKw(big); }
+      for (i = 0; i < lib.length; i++) { if (rem <= capKw(lib[i])) { blocks.push(lib[i]); shares.push(rem); break; } }
+      extrapolated = true;
+    }
+  }
+  var t = { containers:0, itPods:0, elePods:0, racksEnvelope:0, networkRacks:0, itKwEnvelope:0,
+            cdu:0, cduKwMax:0, inRowAc:0, inRoomAc:0, tanks:0, sqft:0,
+            chillers:{ n:0, main:0, spare:0, kw:0, coolKw:0 }, upsKva:0, ups:[] };
+  var upsBy = {}, racks = 0, overRacks = 0;
+  blocks.forEach(function(b, bi){
+    var rk = racksFor(b, shares[bi]);
+    racks += Math.min(rk, b.racks); overRacks += Math.max(0, rk - b.racks);
+    t.containers += b.containers; t.itPods += b.itPods; t.elePods += b.elePods;
+    t.racksEnvelope += b.racks; t.networkRacks += b.networkRacks; t.itKwEnvelope += b.itKw;
+    t.cdu += b.cdu.n; t.cduKwMax = Math.max(t.cduKwMax, b.cdu.kw);
+    t.inRowAc += b.inRowAc.n; t.inRoomAc += b.inRoomAc.n; t.tanks += b.tanks;
+    t.sqft += b.lf * b.wf;
+    t.chillers.n += b.chillers.n; t.chillers.main += b.chillers.main; t.chillers.spare += b.chillers.spare;
+    t.chillers.kw = Math.max(t.chillers.kw, b.chillers.kw);
+    t.chillers.coolKw += b.chillers.main * b.chillers.kw;
+    b.ups.forEach(function(u){ upsBy[u.kva] = (upsBy[u.kva] || 0) + u.n; t.upsKva += u.n * u.kva; });
+  });
+  for (var kva in upsBy) if (Object.prototype.hasOwnProperty.call(upsBy, kva)) t.ups.push({ kva:+kva, n:upsBy[kva] });
+  t.ups.sort(function(a, b){ return b.kva - a.kva; });
+  t.acres = +(t.sqft / 43560).toFixed(3);
+  var notes = [];
+  blocks.forEach(function(b){ b.notes.forEach(function(n){ if (notes.indexOf(n) < 0) notes.push(n); }); });
+  if (overRacks > 0) notes.unshift('The load needs ' + overRacks + ' more rack' + (overRacks > 1 ? 's' : '') + ' at ' + rackKw
+    + ' kW than the block draws (' + t.racksEnvelope + '): the drawn racks carry ' + (t.itKwEnvelope / 1000).toFixed(2)
+    + ' MW IT against ' + (itKw / 1000).toFixed(2) + ' MW asked. '
+    + (optionB ? 'Step up to the next block, or accept the shortfall.' : 'Option B (7 racks) or the next block closes it; the vendor resizes the plant either way.'));
+  if (extrapolated) notes.unshift('Beyond the published 5 MW sheet — tiled from the 5 MW block; the vendor has not drawn this arrangement and the shared plant may consolidate further.');
+  notes.push('Chiller plant, chilled-water tanks and hydraulic module are beside the containers and undimensioned on the drawings — reserve a chiller yard; the pad above is containers only.');
+  return { itKw:itKw, rackKw:rackKw, racks:racks, overRacks:overRacks,
+           spareRacks:Math.max(0, t.racksEnvelope - racks),
+           blocks:blocks, extrapolated:extrapolated, totals:t, notes:notes, optionB:optionB };
+}
+/* END ZTMM PLANNER */
 // Compute drop width (px) for an equipment id. DC units scale to real footprint
 // when the map is calibrated; everything else keeps the 60px default.
 // == GENERIC INSERT-TAB EQUIPMENT FOOTPRINTS (real-world ft) ================
@@ -6501,9 +6749,37 @@ function brandName(){
   return 'Your Company';
 }
 function brandLogo(){ return _BRAND.logoDataUrl || ''; }
-// Platform attribution shown on exports. Constant across tenants (like
-// "Powered by Salesforce"); never the NextNRG-specific string.
-function poweredByLine(){ return 'Powered by ClearSky-OMEGA'; }
+/* Platform attribution shown on exports. Was a constant across tenants (like
+   "Powered by Salesforce"); never the NextNRG-specific string.
+
+   ── STILL A CONSTANT, EXCEPT FOR A WHITE-LABELLED TENANT ────────────────
+   A white label is bought precisely so the proposal a designer hands their
+   customer does not carry our name. This is the line on twelve exports — the
+   proposal, the energy balance, the DER summary, the site estimate — so it is
+   the single highest-value place in this file to honour it.
+
+   THREE SOURCES, MOST AUTHORITATIVE FIRST, ALL OPTIONAL. Today the editor
+   loads neither omega-brand.js nor omega-tenant.js (it has its own brand
+   resolution, above), so in production this still returns the constant and
+   nothing changes. It starts working the moment the runtime is wired in —
+   which is the tracked next step in MERGE.md, deliberately NOT bundled here:
+   omega-tenant.js enforces a hostname lock and adding it to a 162k-line page
+   needs its own test pass, not a ride-along on someone else's change.
+
+   'none' returns '' and the callers already tolerate an empty attribution —
+   the line is user-editable as 'ol-developer2', so a blank one is a state
+   this file has always been able to reach. */
+function poweredByLine(){
+  try {
+    if (window.OmegaWhiteLabel && OmegaWhiteLabel.active()) return OmegaWhiteLabel.attribution();
+    var wl = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.whiteLabel)
+          || ((window.CLEARSKY_CONFIG || {}).tenant || {}).whiteLabel;
+    if (wl && wl.enabled !== false && wl.platformName) {
+      return (wl.attribution === 'none') ? '' : (wl.attributionText || 'Powered by ClearSky OMEGA');
+    }
+  } catch (e) {}
+  return 'Powered by ClearSky-OMEGA';
+}
 // EMS/product label for exports -- follows the resolved tenant brand so a
 // tenant's proposal doesn't advertise another tenant's EMS.
 function emsBrandName(){ return brandName() + ' EMS'; }
@@ -8981,7 +9257,11 @@ function renderEl(el){
     if(el.evKind==='charger' && el.evImg){
       _gearHtml='<img src="'+el.evImg+'" alt="charger" style="width:100%;height:100%;object-fit:contain;display:block" draggable="false">';
     } else {
-      _gearHtml=rf(gw,gh);
+      var _visuals=window.OmegaEquipmentVisuals;
+      var _gearKind=el.evKind==='service'?'meter':el.evKind;
+      if(_visuals && (_gearKind==='meter' || (_gearKind==='panel' && _visuals.resolve(el,'panel'))))
+        _gearHtml=_visuals.symbol(_gearKind,gw,gh);
+      else _gearHtml=rf(gw,gh);
     }
     /* Bollard protection pad. The earlier version of this only ran in the
        type==='eq' branch, but guided builds place chargers as type
@@ -16015,12 +16295,31 @@ function parseUtilityBill(text){
 
 /* Battery derates. Nameplate kWh is not usable kWh: usable capacity is
    limited by depth of discharge, and energy delivered to the meter is
-   further reduced by round-trip efficiency. Sizing straight off the raw
-   energy above the shave line - which is what this did before - undersizes
-   the battery by roughly 16%. */
-var BESS_DOD = 0.95;
+   further reduced by the DISCHARGE half of the round trip.
+
+   That last word matters and this used to get it wrong. Round-trip
+   efficiency is the product of BOTH legs - what goes in to charge and what
+   comes out to discharge - so the discharge leg alone is its square root.
+   Applying the whole round trip to the discharge charged the losses twice
+   and over-sized the pack by about 6.6%.
+
+   Depth of discharge drops from 0.95 to 0.90 to match the shared engine's
+   default and most containerised LFP warranties; 0.95 was carried over
+   from the retired bess-engine, which could never read a caller's value at
+   all. The two corrections pull in opposite directions and very nearly
+   cancel - the derate moves from 0.836 to 0.844, about 1% - so this is a
+   consistency fix rather than a repricing. It matters because these
+   constants feed the browser-side shave estimates in the bill importer,
+   and those write into the project alongside results from the shared
+   engine. Two derates in one project is how a drawing and its own sizing
+   come to disagree.
+
+   THE AUTHORITY IS api/_lib/bess-capacity.js. These constants exist for
+   the quick client-side estimates only; anything that reaches a customer
+   should come from /api/bess-size, which uses that module. */
+var BESS_DOD = 0.90;
 var BESS_RTE = 0.88;
-var BESS_DERATE = BESS_DOD * BESS_RTE;
+var BESS_DERATE = BESS_DOD * Math.sqrt(BESS_RTE);
 
 /* Estimate a BESS demand-shaving target from parsed bill fields.
    A single monthly bill carries no load SHAPE, so this returns a
@@ -21258,6 +21557,116 @@ const BESS_CATALOG = {
     notes:'Canadian Solar / e-STORAGE SolBank 3.0 (S-5016-2H / S-5016-4H), 20-ft containerized DC block: 5,016 kWh nominal, up to 2.35 MW at the DC terminal (1.2-2.35 MW depending on paired PCS). 314Ah LFP, ~45% higher density than SolBank 1.0. DC-COUPLED -- needs an external/central PCS + step-up transformer (unlike the all-in-one Energy Station / PowerBlock). Mid-size building block between the KuBank C&I cabinets and the 14 MWh Energy Station; parallels to utility scale. PRICE: quote required. CSI Solar / e-STORAGE. Datasheet SolBank 3.0 v1.6x NA.'},
 };
 
+/* ── THE TENANT'S OWN PRODUCTS LEAD ─────────────────────────────────────
+   BESS_CATALOG above ships 29 products from 7 manufacturers, and the
+   manufacturer field below defaults to "Gotion". Correct for a developer or
+   an EPC, who buys from whoever quotes best — and the worst possible default
+   for a white-labelled battery MANUFACTURER, whose own guided build would
+   otherwise lay out a competitor's container.
+
+   omega-bess-products.js reads the org's own product list (the same one the
+   public storefront and the site study use — one catalogue, not four) and
+   this merges it in. Three things happen, all additive and all no-ops for a
+   tenant with no list:
+
+     1. The entries join BESS_CATALOG, namespaced by org so a tenant SKU can
+        never collide with or silently replace a shipped one. Nothing shipped
+        is removed: a saved drawing may reference a key, and re-rendering it
+        as a different battery is worse than a crowded dropdown.
+     2. Their products are PREPENDED to the model dropdown, in their own
+        optgroup, so theirs is what a designer reaches first.
+     3. The manufacturer field stops saying Gotion.
+
+   Deferred until a user exists, because the read is scoped to their org.
+   Wrapped so a failure — no Firestore, no products, an offline editor —
+   leaves the shipped catalogue exactly as it was. */
+/* Exposed for omega-storefront-handoff.js, the same way window.S is exposed
+   above: BESS_CATALOG is a const in this script's scope, so it is not on
+   window by default, and an anonymous visitor arriving from the storefront
+   has no account to read the tenant catalogue with. */
+try { window.BESS_CATALOG = BESS_CATALOG; } catch (e) {}
+
+(function () {
+  var done = false;
+  function apply(t) {
+    if (done || !t || !t.count) return;
+    done = true;
+    try {
+      for (var i = 0; i < t.keys.length; i++) {
+        var k = t.keys[i];
+        if (!BESS_CATALOG[k]) BESS_CATALOG[k] = t.entries[k];
+      }
+      var sel = document.getElementById('bm-catalog');
+      if (sel && !document.getElementById('bm-cat-tenant')) {
+        var grp = document.createElement('optgroup');
+        grp.id = 'bm-cat-tenant';
+        grp.label = t.brand + ' — your products';
+        for (var j = 0; j < t.keys.length; j++) {
+          var key = t.keys[j], e = t.entries[key];
+          var o = document.createElement('option');
+          o.value = key;
+          o.textContent = e.model + ' — ' + (e.kw || '?') + 'kW / ' + (e.kwh || '?') + 'kWh'
+            + (e._incPCS ? ' · PCS integrated' : '');
+          grp.appendChild(o);
+        }
+        /* After the placeholder option, before every shipped optgroup. */
+        var first = sel.querySelector('optgroup');
+        if (first) sel.insertBefore(grp, first); else sel.appendChild(grp);
+      }
+      var mfr = document.getElementById('bm-mfr');
+      if (mfr && (!mfr.value || mfr.value === 'Gotion')) { mfr.value = t.brand; mfr.placeholder = t.brand; }
+    } catch (e) { /* the shipped catalogue is a perfectly good answer */ }
+  }
+  /* ── THE WHITE LABEL, ON THE SAME TRIGGER ─────────────────────────────
+     Both answers come from the tenant's own org record and both need a
+     signed-in user, so they ride the same wait rather than racing two.
+
+     OmegaWhiteLabel.hydrate() reads omega_orgs/{org} directly — editor.html
+     loads no omega-tenant.js, and adding it would bring the hostname lock to
+     a page that currently boots anywhere. That is a real control and a
+     separate, separately-tested change; this adds branding and removes
+     nothing. See omega-whitelabel.js § HYDRATE. */
+  function brand() {
+    if (!window.OmegaWhiteLabel || !OmegaWhiteLabel.hydrate) return;
+    try {
+      OmegaWhiteLabel.hydrate().then(function () {
+        /* The <title> is the one string the tenant runtime cannot reach on
+           its own, because paintTitle() is never called here — the editor
+           sets its own title. A tab reading "ClearSky OMEGA" is the leak a
+           customer screenshots. */
+        try {
+          if (OmegaWhiteLabel.active()) {
+            document.title = OmegaWhiteLabel.platformName() + ' — Site Designer';
+          }
+        } catch (e) {}
+        /* WHICH PRODUCT. hydrate() has just put editorMode on the tenant, so
+           this is the first moment the answer exists. boot() is a no-op on
+           'full', which is every tenant that has not explicitly bought the
+           cut-down designer — including every tenant with no omega_orgs
+           record at all. See omega-editor-mode.js § FAILS OPEN. */
+        try {
+          if (window.OmegaEditorMode) OmegaEditorMode.boot();
+        } catch (e) {}
+      }, function () {});
+    } catch (e) {}
+  }
+
+  function go() {
+    brand();
+    if (!window.OmegaBessProducts) return;
+    try { OmegaBessProducts.load().then(apply, function () {}); } catch (e) {}
+  }
+  function watch(tries) {
+    if (done || (tries || 0) > 40) return;
+    var u = null;
+    try { u = window.firebase && firebase.apps && firebase.apps.length && firebase.auth().currentUser; } catch (e) {}
+    if (u) { go(); return; }
+    setTimeout(function () { watch((tries || 0) + 1); }, 400);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { watch(0); });
+  else watch(0);
+})();
+
 function applyBMCatalog() {
   const key = document.getElementById('bm-catalog').value;
   const preview = document.getElementById('bm-catalog-preview');
@@ -21340,6 +21749,9 @@ function saveBess(){
   const autoAssemble = !fromGuide && document.getElementById('bm-auto-assemble').checked && !S.editBessId;
   if(S.editBessId){const i=S.bessList.findIndex(x=>x.id===S.editBessId);if(i>=0)S.bessList[i]=b;}
   else S.bessList.push(b);
+  try { if (window.OmegaEvents) OmegaEvents.emit('product.selected', { projectId: _projectId || null, category: 'bess',
+    productId: b.catalogKey || [b.mfr, b.model].filter(Boolean).join(' ') || null, qty: b.qty || 1, kwh: +b.kwh || null, kw: +b.kw || null,
+    edit: !!S.editBessId }); } catch (e) {}
   // Update any placed assemblies
   S.elements.filter(e=>e.type==='bess-asm'&&e.bessId===b.id).forEach(el=>{
     el.label=b.name;el.spec=`${b.kwh}kWh . ${b.kw}kW`;
@@ -24936,6 +25348,7 @@ async function createNewProject() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
+    try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: 'bess', market: market, source: 'editor-modal' }); } catch (e) {}
     document.getElementById('new-proj-modal').style.display='none';
     document.getElementById('proj-modal').style.display='none';
     const basePath = window.location.pathname.endsWith('.html') 
@@ -25282,6 +25695,15 @@ async function saveProject(){
       costOverrides: S.costOverrides || null,
       omegaSizing:   S.omegaSizing   || null,
       omegaSizingAt: S.omegaSizingAt || null,
+      /* FIBER EVIDENCE. Written HERE, in the literal, and nowhere else: this
+         payload is an allowlist, not a spread of S, so a field set by a
+         saveProject wrapper is never written. OmegaVersion.stamp() sets
+         S.omegaVersion and it is provably never persisted — that is the
+         precedent to avoid, and omegaSizing above is the one to copy.
+         Restored in _loadProject; without a matching line there the data is
+         written forever and read never. */
+      omegaFiber:    S.omegaFiber    || null,
+      omegaFiberAt:  S.omegaFiberAt  || null,
       /* Price decks are project data. An 8760 x 7 products is large, so
          only the metadata and series descriptors are guaranteed here --
          see _pdStripForSave for what is dropped when it will not fit. */
@@ -25321,6 +25743,8 @@ async function saveProject(){
       payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       const ref = await _db.collection('projects').add(payload);
       _projectId = ref.id;
+      try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: 'bess',
+        market: payload.wizMode || null, source: (window.__omegaAutopilot && window.__omegaAutopilot.step !== 'idle') ? 'autopilot' : 'editor-save' }); } catch (e) {}
       history.replaceState(null,'',window.location.pathname+'?project='+_projectId);
       // First save: _projectId didn't exist when images were written above.
       // Persist them now under the new id (compressed).
@@ -25625,6 +26049,8 @@ async function _loadProject(id){
     S.costOverrides = (d.costOverrides && typeof d.costOverrides==='object') ? d.costOverrides : null;
     S.omegaSizing   = (d.omegaSizing   && typeof d.omegaSizing==='object')   ? d.omegaSizing   : null;
     S.omegaSizingAt = d.omegaSizingAt || null;
+    S.omegaFiber    = (d.omegaFiber    && typeof d.omegaFiber==='object')    ? d.omegaFiber    : null;
+    S.omegaFiberAt  = d.omegaFiberAt  || null;
     try{ window._omegaComputeLast = (S.omegaSizing && S.omegaSizing.facKw > 0) ? S.omegaSizing : null; }catch(e){}
     try{ if(window.OmegaRecord && OmegaRecord.restore) setTimeout(function(){ try{ OmegaRecord.restore(); }catch(e){} }, 0); }catch(e){}
     /* Same reasoning as vendorOverride: reset to {} when the project has
@@ -32664,6 +33090,10 @@ var OmegaEq = (function(){
       for(var d in DC_CATALOG){
         if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,d)) continue;
         var c=DC_CATALOG[d], F2=304.8;
+        /* An uploaded unit is projected INTO DC_CATALOG by _dcCatalogSync;
+           it already has its own overlay doc and must not be re-seeded as
+           a second, read-only copy of itself. */
+        if(c.org) continue;
         out['DC-'+d.toUpperCase()]={
           key:'DC-'+d.toUpperCase(), cat:'datacenter', sub:'module',
           manufacturer:(String(c.spec||'').split(' ')[0]||'Generic'),
@@ -32729,7 +33159,12 @@ var OmegaEq = (function(){
               v._docId = d.id;
               overlay[v.key]=v;
             });
-            loaded=true; loading=null; resolve(all());
+            loaded=true; loading=null;
+            /* Uploaded compute modules become placeable units. Done here,
+               on every load, so the cluster dialog and the Data Ctr flyout
+               see them without the library ever having been opened. */
+            try{ if(typeof _dcCatalogSync==='function') _dcCatalogSync(); }catch(e){}
+            resolve(all());
           })
           .catch(function(err){
             if(window.console) console.warn('[omega/eq] load failed, seed only:', err && err.message);
@@ -32748,7 +33183,12 @@ var OmegaEq = (function(){
       if(!uid) return reject(new Error('Not signed in.'));
       var doc=JSON.parse(JSON.stringify(rec));
       doc.orgId=orgId();
-      doc.uid=uid;
+      /* The rules refuse an update that changes `uid` (request uid must
+         equal the stored one). Stamping the current user on every save
+         meant a colleague could never archive or re-upload a unit somebody
+         else in the org created. The creator stays; only a new doc takes
+         the current user. */
+      if(!doc._docId || !doc.uid) doc.uid=uid;
       doc.createdBy=doc.createdBy||((_currentUser&&(_currentUser.displayName||_currentUser.email))||'user');
       doc.publishedAt=Date.now();
       doc.archived=!!doc.archived;
@@ -32760,6 +33200,9 @@ var OmegaEq = (function(){
       p.then(function(ref){
         if(ref && ref.id) doc._docId=ref.id;
         overlay[doc.key]=doc;
+        /* Archiving a compute module from the library must take it out of
+           the pickers now, not on the next page load. */
+        if(doc.cat==='datacenter'){ try{ if(typeof _dcCatalogSync==='function') _dcCatalogSync(); }catch(e){} }
         resolve(doc);
       }).catch(reject);
     });
@@ -32790,6 +33233,223 @@ var OmegaEq = (function(){
            pushSeed:pushSeed, seed:seed, orgId:orgId,
            isLoaded:function(){ return loaded; } };
 })();
+
+/* ══════════════════════════════════════════════════════════════════════
+   MODULAR DATA-CENTER UNITS — BULK UPLOAD
+   ──────────────────────────────────────────────────────────────────────
+   DC_CATALOG carried four units and the only way to add a fifth was a
+   commit. A vendor's line card is twenty rows, and a rep evaluating three
+   vendors has sixty. The "+ New equipment" form is BESS-shaped (kWh, PCS,
+   C-rate) and saves cat 'bess' whatever you type into it, so it could not
+   create a compute module at all.
+
+   So: a spreadsheet. omega-import.js parses and validates it, shows what
+   would land and why each held-back row is held back, and only then does
+   commit() below write — one equipment doc per row, cat 'datacenter', sub
+   'module', into THIS org's library and nobody else's (the rules scope
+   equipment/{doc} to orgId). A re-upload of the same manufacturer + model
+   updates in place, because MDC_SPEC derives a stable key from the two.
+
+   WHAT MAKES AN UPLOADED UNIT PLACEABLE. The cluster dialog, the Data Ctr
+   flyout and the guided build's unit picker all iterate DC_CATALOG /
+   DERC_DC, which are source literals. _dcCatalogSync() projects the org's
+   live compute modules into both, under ids that cannot collide with the
+   seed (dc_<key>), on every OmegaEq.load(). Drawings store lf/wf/kw on
+   the shape itself, so a unit later archived still renders where it was
+   placed — the same guarantee dc_leviathan's comment makes for the seed.
+
+   WHAT STAYS OUT. No pricing arithmetic: cost_usd is stored as the vendor
+   quoted it and nothing here computes with it (CLAUDE.md's IP rule).
+   ══════════════════════════════════════════════════════════════════════ */
+
+var _DC_SEED_IDS = (function(){
+  var o={};
+  try{ for(var k in DC_CATALOG){ if(Object.prototype.hasOwnProperty.call(DC_CATALOG,k)) o[k]=1; } }catch(e){}
+  return o;
+})();
+
+/* equipment key -> DC_CATALOG id. Lower-case, underscores, dc_ prefix, so
+   'MDC-ARMADA-LEVIATHAN' is 'dc_mdc_armada_leviathan' and nothing a person
+   types in a SKU column can land on a seed id. */
+function _dcIdForKey(key){
+  var s=String(key||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+  return s ? 'dc_'+s : '';
+}
+
+/* Project the org's live compute modules into DC_CATALOG and DERC_DC.
+   Returns how many are live. Safe to call before anything is loaded. */
+function _dcCatalogSync(){
+  if(typeof DC_CATALOG==='undefined' || typeof OmegaEq==='undefined') return 0;
+  var live={}, n=0, FT=304.8;
+  OmegaEq.all({archived:true}).forEach(function(it){
+    if(!it || it.cat!=='datacenter' || it._seed) return;
+    var key=String(it.key||'');
+    /* "Publish seed library" copies the four built-ins into Firestore under
+       DC-<id>; those are already in the catalog and must not come back as
+       a second row each. */
+    if(/^DC-/i.test(key) && _DC_SEED_IDS[key.slice(3).toLowerCase()]) return;
+    var id=_dcIdForKey(key);
+    if(!id || _DC_SEED_IDS[id] || it.archived) return;
+    var kw=+it.powerKw||+it.pmaxKw||0;
+    var lf=+it.lengthFt||(it.lengthMm?+it.lengthMm/FT:0);
+    var wf=+it.widthFt ||(it.widthMm ?+it.widthMm /FT:0);
+    if(!(kw>0) || !(lf>0) || !(wf>0)) return;   /* not drawable; the upload refuses these anyway */
+    lf=Math.round(lf*10)/10; wf=Math.round(wf*10)/10;
+    var volts=+it.volts||480;
+    var u={ label:((it.manufacturer||'')+' '+(it.model||'')).replace(/\s+/g,' ').trim()||key,
+            kw:kw, lf:lf, wf:wf,
+            cooling:it.cooling||'integrated', water:(it.waterGpd!=null?+it.waterGpd:0),
+            ups:it.ups||'integrated', volts:volts,
+            spec:kw.toLocaleString()+' kW IT · '+lf+'×'+wf+' ft · '+volts+' V',
+            verified:it.verified||null, org:true, key:key };
+    if(it.heightFt!=null) u.hf=+it.heightFt;
+    if(it.coolKw!=null)   u.coolKw=+it.coolKw;
+    if(it.acres!=null)    u.acres=+it.acres;
+    if(it.pue!=null)      u.pue=+it.pue;
+    live[id]=u; n++;
+  });
+  /* Units archived or deleted since the last sync leave the pickers;
+     everything live is (re)written so an edit shows without a reload. */
+  var k;
+  for(k in DC_CATALOG){
+    if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,k)) continue;
+    if(DC_CATALOG[k] && DC_CATALOG[k].org && !live[k]){
+      delete DC_CATALOG[k];
+      try{ if(typeof DERC_DC!=='undefined') delete DERC_DC[k]; }catch(e){}
+    }
+  }
+  for(k in live){
+    if(!Object.prototype.hasOwnProperty.call(live,k)) continue;
+    DC_CATALOG[k]=live[k];
+    try{ if(typeof DERC_DC!=='undefined') DERC_DC[k]={ label:live[k].label, kw:live[k].kw, lf:live[k].lf, wf:live[k].wf }; }catch(e){}
+  }
+  try{ _dcFlyoutSync(live); }catch(e){}
+  return n;
+}
+
+/* The Data Ctr flyout is static markup listing the four seed pads. Append
+   the org's units under their own heading so a rep can place one with the
+   same click as a seed pad. Rebuilt on every sync; nothing else in the
+   flyout is touched. */
+function _dcFlyoutSync(live){
+  var f=document.getElementById('fly-dc'); if(!f) return;
+  var old=f.querySelectorAll('.rb-fly-org');
+  for(var i=0;i<old.length;i++) old[i].parentNode.removeChild(old[i]);
+  var ids=Object.keys(live||{}); if(!ids.length) return;
+  ids.sort(function(a,b){ return (live[b].kw||0)-(live[a].kw||0); });
+  var head=document.createElement('div');
+  head.className='rb-fly-head rb-fly-org'; head.textContent='Your units';
+  f.appendChild(head);
+  ids.forEach(function(id){
+    var u=live[id];
+    var b=document.createElement('button');
+    b.className='rb-fly-item rb-fly-org'; b.type='button';
+    var ico=document.createElement('span'); ico.className='fi-ico'; ico.textContent='▦';
+    var sub=document.createElement('span'); sub.className='fi-sub';
+    sub.textContent=u.lf+' × '+u.wf+' ft · '+u.kw.toLocaleString()+' kW';
+    b.appendChild(ico); b.appendChild(document.createTextNode(' '+u.label+' ')); b.appendChild(sub);
+    b.addEventListener('click', function(){ rbFlyDo('fly-dc', function(){ derSetDc(id); }); });
+    f.appendChild(b);
+  });
+}
+
+/* One equipment doc from one validated row. `prev` is the org's existing
+   doc for the same key, when the sheet is a correction: only the facts the
+   sheet actually carries are written over it, so a re-export with an empty
+   Notes column does not blank the notes somebody typed here. */
+function _e3DcDoc(v, prev, batchId){
+  var FT=304.8, kw=Math.round(+v.kw_it||0);
+  var doc = prev ? JSON.parse(JSON.stringify(prev))
+                 : { key:v.key, cat:'datacenter', sub:'module', energyKwh:0, pnomKva:0,
+                     cRate:null, efficiency:null, archived:false };
+  doc.cat='datacenter'; doc.sub='module'; doc.type='Compute module';
+  doc.manufacturer=v.manufacturer; doc.model=v.model;
+  doc.powerKw=kw; doc.pmaxKw=kw;
+  doc.lengthFt=v.length_ft; doc.lengthMm=Math.round(v.length_ft*FT);
+  doc.widthFt =v.width_ft;  doc.widthMm =Math.round(v.width_ft*FT);
+  if(v.height_ft!=null){ doc.heightFt=v.height_ft; doc.heightMm=Math.round(v.height_ft*FT); }
+  else if(!prev) doc.heightMm=null;
+  if(v.cooling!=null)   doc.cooling=v.cooling;
+  if(v.cool_kw!=null)   doc.coolKw=v.cool_kw;
+  if(v.water_gpd!=null) doc.waterGpd=v.water_gpd;
+  if(v.volts!=null)     doc.volts=v.volts;
+  if(v.ups!=null)       doc.ups=v.ups;
+  if(v.pue!=null)       doc.pue=v.pue;
+  if(v.acres!=null)     doc.acres=v.acres;
+  if(v.cost_usd!=null)  doc.costUsd=v.cost_usd;
+  if(v.verified!=null)  doc.verified=v.verified;
+  if(v.notes!=null)     doc.notes=v.notes;
+  doc.importBatch=batchId;
+  delete doc._seed;
+  return doc;
+}
+
+/* The blank sheet, with the columns in our words and two example rows. */
+function e3DcTemplate(){
+  if(typeof OmegaImport==='undefined'){ alert('The importer did not load. Reload the page.'); return; }
+  _d4LoadXlsx().then(function(){
+    var aoa=OmegaImport.templateRows(OmegaImport.MDC_SPEC);
+    var ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=aoa[0].map(function(h,i){
+      var w=String(h).length;
+      aoa.forEach(function(r){ w=Math.max(w, String(r[i]==null?'':r[i]).length); });
+      return { wch: Math.min(48, w+2) };
+    });
+    var wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Units');
+    XLSX.writeFile(wb, 'modular-data-center-units.xlsx');
+  }).catch(function(e){ alert(e&&e.message||String(e)); });
+}
+
+function e3DcUploadOpen(){
+  if(typeof OmegaImport==='undefined'){ alert('The importer did not load. Reload the page.'); return; }
+  var uid=null; try{ uid=_currentUser?_currentUser.uid:null; }catch(e){}
+  if(!uid || typeof _db==='undefined' || !_db){
+    alert('Sign in first — uploaded units are saved to your organisation’s library.'); return;
+  }
+  var inp=document.createElement('input');
+  inp.type='file'; inp.accept='.xlsx,.xls,.csv';
+  inp.onchange=function(){
+    var f=inp.files && inp.files[0]; if(!f) return;
+    _d4LoadXlsx().then(function(){
+      /* Only this org's own modules can be updated by a re-upload. The
+         seed is read-only and is not offered as an "existing" row. */
+      var existing=OmegaEq.all({archived:true}).filter(function(it){
+        return it && it.cat==='datacenter' && !it._seed;
+      });
+      return OmegaImport.open({
+        file:f,
+        spec:OmegaImport.MDC_SPEC,
+        existing:existing,
+        label:'Modular data center units — '+OmegaEq.orgId(),
+        commit:function(rows, batchId){
+          /* Sequential, as portfolio.html does it: a hundred parallel
+             writes is a thundering herd, and the first refusal stops the
+             run with everything before it safely written and tagged. */
+          var i=0;
+          function next(){
+            if(i>=rows.length) return Promise.resolve(i);
+            var r=rows[i++];
+            var prev=(r.updates && r.updates._docId) ? r.updates : null;
+            return OmegaEq.save(_e3DcDoc(r.rec, prev, batchId)).then(next);
+          }
+          return next();
+        }
+      });
+    }).then(function(res){
+      if(!res) return;
+      return OmegaEq.load(true).then(function(){
+        e3Refresh();
+        var n=_dcCatalogSync();
+        alert(res.imported+' unit'+(res.imported===1?'':'s')+' saved to '+OmegaEq.orgId()
+          +(res.skipped?' · '+res.skipped+' held back':'')
+          +' · batch '+res.batchId
+          +'\n\n'+n+' of your units are now in the Data Ctr flyout and the cluster dialog; the MW-class ones are in the guided build’s unit picker too.');
+      });
+    }).catch(function(err){ alert(err && err.message || String(err)); });
+  };
+  inp.click();
+}
 
 /* ---- compatibility advisory (item 19) -------------------------------- */
 
@@ -32860,6 +33520,9 @@ var E3_COLS = [
   { k:'manufacturer', t:'Manufacturer' },
   { k:'model',        t:'Model' },
   { k:'energyKwh',    t:'Energy [kWh]', n:1 },
+  /* A compute module carries no energy; without this column the Data
+     Center tab listed units with nothing to tell a 35 kW node from 1.77 MW. */
+  { k:'powerKw',      t:'Power [kW]', n:1 },
   { k:'lengthMm',     t:'L [mm]', n:1 },
   { k:'widthMm',      t:'W [mm]', n:1 },
   { k:'heightMm',     t:'H [mm]', n:1 },
@@ -33062,6 +33725,12 @@ function e3BrowserRender(){
     h += '<div class="e3-note info">The '+(_e3Br.cat==='solar'?'solar module':'EV charger')
        + ' catalog still lives in its own module and has not been migrated yet.</div>';
   }
+  if(_e3Br.cat==='datacenter'){
+    h += '<div class="e3-note info">Compute modules are placed from the <strong>Data Ctr</strong> flyout, '
+       + 'the cluster dialog and the guided build’s unit picker. Upload a vendor line card to add '
+       + 'many at once — <strong>Template</strong> gives you the columns; a re-upload of the same '
+       + 'manufacturer and model updates the unit rather than adding a second one.</div>';
+  }
 
   h += _e3FacetBar(all.filter(function(it){ return it.cat===_e3Br.cat; }));
   h += _e3Table(list, null, 'e3BrPick');
@@ -33070,7 +33739,10 @@ function e3BrowserRender(){
      +     ' \u00b7 org <strong>'+_omEsc(OmegaEq.orgId())+'</strong></div>'
      +   '<div style="display:flex;gap:8px">'
      +     '<button class="e3-btn" onclick="e3PushSeed()" title="Copy the built-in library into Firestore once, so it can be edited. Never overwrites an existing entry.">Publish seed library</button>'
-     +     '<button class="e3-btn pri" onclick="e3NewOpen()">+ New equipment</button>'
+     +     (_e3Br.cat==='datacenter'
+         ? '<button class="e3-btn" onclick="e3DcTemplate()" title="A blank spreadsheet with the columns the upload reads, and two example rows.">Template</button>'
+         + '<button class="e3-btn pri" onclick="e3DcUploadOpen()" title="Upload a spreadsheet of modular data-center units (.xlsx or .csv). Nothing is saved until you have seen what would land.">↑ Upload units</button>'
+         : '<button class="e3-btn pri" onclick="e3NewOpen()">+ New equipment</button>')
      +   '</div></div>';
   b.innerHTML=h;
 }
@@ -38013,7 +38685,7 @@ function exportSpecSheet() {
 <body>
 <div class="header">
   <div class="header-left">
-    <div class="badge">${(typeof brandName==='function'?brandName():'ClearSky OMEGA').toUpperCase()} -- SYSTEM SPECIFICATION</div>
+    <div class="badge">${(typeof brandName==='function'?brandName():(window.OmegaWhiteLabel?OmegaWhiteLabel.platformName():'ClearSky OMEGA')).toUpperCase()} -- SYSTEM SPECIFICATION</div>
     <h1>${projectName}</h1>
     <p>${address}</p>
   </div>
@@ -54432,6 +55104,33 @@ function _derRenderDc(g, sh){
      was labelled with, and two units placed side by side needed more
      ground than the datasheet says they do. The pad is now exactly the
      stored footprint and everything is inset within it. */
+  /* ── ZTMM: DRAW THE CONTAINERS THE VENDOR DRAWS ───────────────────
+     A ZTMM block is a stack of 40 ft containers, long side to long side,
+     each an IT POD or an ELE POD in the order the sheet shows. Drawing
+     one slatted box for a 5 MW block hides that it is seven containers
+     and that the IT PODs sit in the middle; a reader of the site plan
+     wants to see the pods. The chiller plant is NOT drawn — the vendor
+     has not dimensioned it — and the label says so. */
+  if(sh.ztmm && sh.ztmm.stack && sh.ztmm.stack.length){
+    var st=sh.ztmm.stack, n=st.length, ch=h/n;
+    _derRect(g, x, y, w, h, '#3C4043', '#9a9a9a', 1);
+    var mz=Math.max(0.4, 0.6*ppf);
+    for(var zi=0; zi<n; zi++){
+      var isIt = st[zi]==='IT';
+      var cy0 = y + zi*ch;
+      _derRect(g, x+mz, cy0+mz, Math.max(1,w-mz*2), Math.max(1,ch-mz*2),
+               isIt ? '#EDE9FE' : '#E8EAED', isIt ? '#6D28D9' : '#5F6368', 1);
+      if(ppf*12.5 >= 9){
+        _derText(g, x+w/2, cy0+ch/2+Math.max(3,Math.min(5,ppf*0.35)),
+                 isIt ? 'IT POD' : 'ELE POD', Math.max(6,Math.min(11,ppf*0.7)),
+                 isIt ? '#6D28D9' : '#5F6368', 'middle', '700');
+      }
+    }
+    _derText(g, x+w/2, y+h+11, (sh.model||'ZTMM')+' • '+(sh.kw||0)+' kW IT • '+n+' × 40 ft • chillers off-pad',
+             Math.max(7,Math.min(12,ppf*0.8)), '#6D28D9', 'middle', '700');
+    return;
+  }
+
   var zoned = (+sh.lf||0) >= 80;
   if(!zoned){
     /* Pad is the footprint; the container sits on it. */
@@ -58021,13 +58720,15 @@ function sebCompute(){
    score, the verdict, the lateral estimate and the route factor all come
    back in the response, and the panel prints what the service used. */
 function openNetworkProximity(){
+  var prior=document.getElementById('npx-modal');
+  if(prior && prior.parentNode) prior.parentNode.removeChild(prior);
   var host=document.createElement('div');
   host.id='npx-modal';
   host.setAttribute('style','position:fixed;inset:0;background:rgba(6,12,22,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px');
   host.onclick=function(e){ if(e.target===host) host.remove(); };
   var site=_npxSiteLatLon();
   host.innerHTML=_npxShell(site, site
-    ? '<div style="padding:24px;color:#94A3B8;font-size:12px">Reading carrier facilities, FCC service, mapped fibre, published plant and long-haul conduits for '
+    ? '<div style="padding:24px;color:#94A3B8;font-size:12px">Reading carrier facilities, FCC service, mapped fibre, published plant, long-haul corridors and operating compute for '
       + site.lat.toFixed(4)+', '+site.lon.toFixed(4)+'… <span style="color:#64748B">(up to a minute — five public sources are asked in parallel)</span></div>'
     : '<div style="padding:24px;color:#94A3B8;font-size:12px">Place or lock the satellite view first — this scores the site against real interconnection density, so it needs a location.</div>');
   document.body.appendChild(host);
@@ -58037,11 +58738,23 @@ function openNetworkProximity(){
     host.innerHTML=_npxShell(site,'<div style="padding:24px;color:#F87171;font-size:12px">The Grid Atlas client (omega-grid-atlas-client.js) did not load. Reload the page.</div>');
     return;
   }
-  GA.network({lat:site.lat, lng:site.lon},{timeoutMs:55000}).then(function(r){
-    if(!document.getElementById('npx-modal')) return;
+  /* A ring when the parcel is anchored to the world, nothing when it is not.
+     The response reports which was used; it is never silently substituted. */
+  var ring=null; try{ ring=_npxSiteRing(); }catch(e){}
+  var req={lat:site.lat, lng:site.lon};
+  if(ring) req.boundary=ring;
+  /* Generation guard. Every call used to append another element with the id
+     'npx-modal', and the only check before writing results was that SOME
+     element with that id existed — so a slow first request could paint over
+     a newer panel with older numbers. Each open claims a generation; a
+     response whose generation is no longer current is dropped. */
+  var gen=(window.__npxGen=(window.__npxGen||0)+1);
+  GA.network(req,{timeoutMs:55000}).then(function(r){
+    if(gen!==window.__npxGen || !document.body.contains(host)) return;
+    _npxStoreAssessment(r);
     host.innerHTML=_npxShell(site,_npxBody(r));
   })['catch'](function(e){
-    if(!document.getElementById('npx-modal')) return;
+    if(gen!==window.__npxGen || !document.body.contains(host)) return;
     host.innerHTML=_npxShell(site,'<div style="padding:24px;color:#F87171;font-size:12px">'+_npxEsc((e&&e.message)||'Network Proximity failed.')+'</div>');
   });
 }
@@ -58059,11 +58772,154 @@ function _npxSiteLatLon(){
 }
 function _npxEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 
+/* ── THE SITE BOUNDARY, IN THE WORLD ──────────────────────────────────────
+   Fiber proximity from a parcel centroid is the wrong number. A 200-acre
+   site whose north edge fronts the road has fiber AT its boundary while its
+   centre is half a mile back, and quoting the centre overstates the lateral
+   by that half mile on every row. So this hands the service a ring.
+
+   _e5Ring() already does something like this and cannot be reused: it reads
+   sh._geoBoundary, which is stamped from sh.boundary — the AUTO-LAYOUT field
+   — and never from sh.pts, where a parcel traced by OmegaSiteRoles actually
+   lives. A traced boundary is invisible to it.
+
+   Returns [[lon,lat], …] (GeoJSON order, closed) or null. Null is a real
+   answer and the caller must treat it as one: it means measure from the
+   point and SAY so, never that the parcel is unbounded. */
+function _npxSiteRing(){
+  function out(pts){
+    if(!pts || pts.length < 3) return null;
+    var ring = pts.map(function(p){
+      var lat = p.lat != null ? +p.lat : null, lng = p.lng != null ? +p.lng : null;
+      if(!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+      return [lng, lat];
+    }).filter(Boolean);
+    if(ring.length < 3) return null;
+    var a = ring[0], b = ring[ring.length-1];
+    if(a[0] !== b[0] || a[1] !== b[1]) ring.push([a[0], a[1]]);
+    return ring;
+  }
+  /* 1 — a shape already carrying world coordinates. */
+  try{
+    var best = null, bestN = 0;
+    (S.shapes||[]).forEach(function(sh){
+      if(sh && sh._geoBoundary && sh._geoBoundary.length > 2 && sh._geoBoundary.length > bestN){
+        best = sh._geoBoundary; bestN = sh._geoBoundary.length;
+      }
+    });
+    var r1 = out(best);
+    if(r1) return r1;
+  }catch(e){}
+  /* 2 — the tagged parcel, in pixels, converted through the map. Uses the
+     ROLE-tagged shape and OmegaSiteRoles.pts(), because rotation is a live
+     render transform: raw sh.pts on a rotated parcel is the parcel's ghost,
+     not where it sits. Rect shapes store one corner plus a size, so
+     _alShapePts expands them. */
+  try{
+    var sh = null;
+    try{ if(window.OmegaSiteRoles && OmegaSiteRoles.byRole) sh = OmegaSiteRoles.byRole('boundary')[0] || null; }catch(e2){}
+    var px = null;
+    if(sh){
+      try{ px = (window.OmegaSiteRoles && OmegaSiteRoles.pts) ? OmegaSiteRoles.pts(sh) : _alShapePts(sh); }catch(e3){ px = null; }
+    }
+    if(!px || px.length < 3){ try{ px = _alFindBoundary(); }catch(e4){ px = null; } }
+    if(px && px.length > 2){
+      /* _liveMapState() deliberately returns null on a frozen plot, so fall
+         back to the saved state. _pxToLatLng prefers the live Google
+         projection anyway and only needs mapState for its fallback maths. */
+      var ms = null;
+      try{ ms = _liveMapState(); }catch(e5){}
+      if(!ms) ms = window._savedMapState || null;
+      var sz = _getCanvasSize();
+      var geo = px.map(function(q){
+        var g = null;
+        try{ g = _pxToLatLng(q.x, q.y, ms, sz.w, sz.h); }catch(e6){}
+        return g ? { lat:g.lat, lng:g.lng } : null;
+      }).filter(Boolean);
+      var r2 = out(geo);
+      if(r2) return r2;
+    }
+  }catch(e){}
+  return null;
+}
+window._npxSiteRing = _npxSiteRing;
+
+/* ── IS A SAVED ASSESSMENT STILL ABOUT THIS SITE? ────────────────────────
+   A fiber answer is only true of the geometry it was measured from. Move the
+   pin or redraw the parcel and the stored distances describe a place that is
+   no longer the site — so every saved assessment carries a key derived from
+   the geometry, and a mismatch marks it stale rather than silently showing
+   old numbers under a new outline.
+
+   Rounded to ~1e-5 degrees (about a metre) so that floating-point noise and
+   a redraw that lands in the same place do not read as a move. Note the
+   known gap: the boundary can change IDENTITY without any vertex moving —
+   tagging a different shape as the boundary when both occupy the same
+   ground — and a geometry hash cannot see that. */
+function _npxSiteKey(){
+  function r(n){ return Math.round(n*1e5)/1e5; }
+  var parts=[];
+  try{
+    var p=_npxSiteLatLon();
+    parts.push(p?('pt:'+r(p.lat)+','+r(p.lon)):'pt:none');
+  }catch(e){ parts.push('pt:err'); }
+  try{
+    var ring=_npxSiteRing();
+    if(ring){
+      parts.push('ring:'+ring.length);
+      for(var i=0;i<ring.length;i++) parts.push(r(ring[i][0])+','+r(ring[i][1]));
+    } else parts.push('ring:none');
+  }catch(e2){ parts.push('ring:err'); }
+  var str=parts.join('|'), h=5381;
+  for(var k=0;k<str.length;k++) h=((h<<5)+h+str.charCodeAt(k))>>>0;
+  return h.toString(36)+'-'+str.length;
+}
+window._npxSiteKey=_npxSiteKey;
+
+/* Compact by design. _shedIfOversize can drop project data to fit the
+   document, and a fat evidence blob makes that more likely — so this keeps
+   the verdict, the provenance and the two nearest records, not the full
+   response. The nulls are carried explicitly: they are the finding. */
+function _npxStoreAssessment(r){
+  try{
+    var PF=(r&&r.publicFiber)||null;
+    if(!PF||PF.status!=='ok') return;
+    function trim(x){
+      if(!x) return null;
+      return { name:x.name||null, operator:x.operator||null,
+               distanceM:x.mapped_distance_m, intersectsSite:!!x.intersects_site,
+               status:x.operational_status||null, sourceUrl:x.source_url||null,
+               vintage:x.source_vintage||x.source_last_edited||x.retrieved_at||null,
+               strands:x.fiber_strands_reported==null?null:x.fiber_strands_reported };
+    }
+    S.omegaFiber={
+      siteKey:_npxSiteKey(),
+      datasetBuiltAt:PF.dataset_built_at||null,
+      measurementMethod:PF.measurement_method||null,
+      measuredFrom:PF.measured_from||null,
+      evidenceStatus:PF.evidence_status||null,
+      counts:PF.counts_in_radius||null,
+      radiusKm:(PF.query&&PF.query.radius_km)||null,
+      requestedGbps:(PF.query&&PF.query.requested_capacity_gbps)||null,
+      nearestRoute:trim((PF.routes||[])[0]),
+      nearestFacility:trim((PF.facilities||[])[0]),
+      planningCount:(PF.counts_in_radius||{}).planning||0,
+      unknownMediumCount:(PF.counts_in_radius||{}).unknown_medium||0,
+      /* Not derived, not defaulted — these are what the dataset actually says. */
+      siteHasFiber:null, availableCapacityGbps:null,
+      serviceability:PF.site_serviceability||'unconfirmed',
+      routeDiversity:PF.physical_route_diversity||'unconfirmed'
+    };
+    S.omegaFiberAt=new Date().toISOString();
+  }catch(e){}
+}
+window._npxStoreAssessment=_npxStoreAssessment;
+
 function _npxShell(site, inner){
   return '<div style="background:#0F1D30;border:1px solid #1E3A5F;border-radius:12px;max-width:900px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
    +'<div style="padding:16px 20px;border-bottom:1px solid #1E3A5F;display:flex;align-items:center;justify-content:space-between">'
    +'<div><div style="font-size:16px;font-weight:800;color:#E2EEF9">◈ Network Proximity</div>'
-   +'<div style="font-size:10px;color:#64748B">Fiber and interconnection reach for this site · PeeringDB, FCC, OpenStreetMap, published plant, long-haul conduits · /api/network-proximity</div></div>'
+   +'<div style="font-size:10px;color:#64748B">Fiber reach, how much capacity is here, and the connectivity half of a data-center read · PeeringDB, FCC, OpenStreetMap, published plant, 317 routed long-haul corridors, 3,100 operating facilities · /api/network-proximity</div></div>'
    +'<button onclick="var h=document.getElementById(\'npx-modal\');if(h)h.remove()" style="background:none;border:none;color:#64748B;font-size:20px;cursor:pointer;line-height:1">×</button></div>'
    + inner + '</div>';
 }
@@ -58094,9 +58950,172 @@ function _npxBody(r){
   });
   if(!rows) rows='<tr><td colspan="6" style="padding:14px;color:#F87171">No PeeringDB facility within 160 miles'+(fac.status==='failed'?' — PeeringDB did not answer ('+esc(fac.error||'')+')':'. For a latency-sensitive load this is a fatal-flaw finding, not a detail.')+'</td></tr>';
 
+  /* ── HOW MUCH FIBER IS HERE ─────────────────────────────────────────
+     The question a developer actually asks, and the one the panel could not
+     answer before: it showed the distance to the nearest carrier hotel and
+     stopped. Class, route diversity and the strand planning band come back
+     from the service; the caveat travels with the band on purpose, because
+     a number without it will be quoted as a measurement within a week. */
+  var cap=r.capacity||{}, dcf=r.datacenter||{}, lh=r.longhaul||{};
+  var clsCol={backbone:'#4ADE80',regional:'#A3E635',metro:'#FBBF24',edge:'#F87171'}[cap['class']]||'#94A3B8';
+  var divCol={meshed:'#4ADE80','dual-path':'#A3E635','single-threaded':'#FBBF24'}[cap.routeDiversity]||'#F87171';
+  var fitCol={strong:'#4ADE80',workable:'#A3E635',marginal:'#FBBF24',poor:'#F87171'}[dcf.verdict]||'#94A3B8';
+
+  var corrRows=(lh.corridors||[]).slice(0,6).map(function(c){
+    return '<tr style="border-bottom:1px solid #14243a">'
+      +'<td style="padding:5px 8px;color:#E2EEF9">'+esc(c.name)+'</td>'
+      +'<td style="padding:5px 8px;color:#94A3B8">'+esc(c.row||'')+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:#E2EEF9">'+fmt(c.mi)+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:#94A3B8">'+c.bearing+'°</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:'+(c.src==='intertubes'?'#FF6FB5':'#64748B')+'">'
+        +(c.src==='intertubes'?(c.isps?c.isps+' ISPs':'cited'):'corridor')+'</td></tr>'; }).join('');
+  if(!corrRows) corrRows='<tr><td colspan="5" style="padding:10px;color:#F87171">No long-haul corridor within '+(cap.corridorRadiusMi||50)+' mi.</td></tr>';
+
+  var calls=((cap.calls||{}).carriers||[]).map(function(c){
+    return c.mapUrl
+      ? '<a href="'+esc(c.mapUrl)+'" target="_blank" rel="noopener" style="color:#38BDF8;text-decoration:none">'+esc(c.name)+' ↗</a>'
+      : '<span style="color:#94A3B8">'+esc(c.name)+'</span>'; }).join(' · ');
+
+  var capNotes=(cap.notes||[]).map(function(n){ return '<li>'+esc(n)+'</li>'; }).join('');
+
+  var dcRows=(dcf.nearest||[]).slice(0,5).map(function(f){
+    return '<tr style="border-bottom:1px solid #14243a">'
+      +'<td style="padding:5px 8px;color:#E2EEF9">'+esc(f.name)+'</td>'
+      +'<td style="padding:5px 8px;color:#94A3B8">'+esc(f.operator||'')+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:#E2EEF9">'+fmt(f.mi)+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:#94A3B8">'+(f.mw!=null?f.mw+' MW':'—')+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:'+(f.operational?'#4ADE80':'#38BDF8')+'">'
+        +(f.operational?'operating':'building')+'</td></tr>'; }).join('');
+  if(!dcRows) dcRows='<tr><td colspan="5" style="padding:10px;color:#94A3B8">No operating compute within 50 mi — greenfield for the carriers too.</td></tr>';
+
+  var dcParts=(dcf.components||[]).map(function(c){
+    var pct=c.max?Math.round(c.points/c.max*100):0;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
+      +'<span style="width:88px;color:#94A3B8;text-transform:capitalize">'+esc(c.key)+'</span>'
+      +'<span style="flex:0 0 70px;height:5px;background:#14243a;border-radius:3px;overflow:hidden;display:inline-block">'
+        +'<span style="display:block;height:5px;width:'+pct+'%;background:'+fitCol+'"></span></span>'
+      +'<span style="width:48px;text-align:right;color:#E2EEF9">'+c.points+'/'+c.max+'</span>'
+      +'<span style="flex:1;color:#64748B">'+esc(c.note)+'</span></div>'; }).join('');
+
+  var capacityBlock=''
+   +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">'
+    + kpi('Connectivity class', esc(cap['class']||'—'), esc(cap.classWhy||''), clsCol)
+    + kpi('Route diversity', esc(cap.routeDiversity||'—'), (cap.independentPaths||0)+' independent corridor'+((cap.independentPaths===1)?'':'s')+' ≤ '+(cap.corridorRadiusMi||50)+' mi', divCol)
+    + kpi('Fiber count (planning band)', (cap.strandBand?cap.strandBand.low+'–'+cap.strandBand.high:'—'), 'strands · NOT a count', '#94A3B8')
+    + kpi('Data-center fit', esc(dcf.verdict||'—'), (dcf.score!=null?dcf.score+'/100':'—')+' · connectivity only', fitCol)
+   +'</div>'
+   +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">'
+    +'<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px;font-size:11px;color:#94A3B8">'
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Long-haul corridors within '+(cap.corridorRadiusMi||50)+' mi</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:10.5px">'
+       +'<thead><tr style="color:#64748B;font-size:9px;text-transform:uppercase"><th style="padding:4px 8px;text-align:left">Corridor</th>'
+       +'<th style="padding:4px 8px;text-align:left">ROW</th><th style="padding:4px 8px;text-align:right">Dist</th>'
+       +'<th style="padding:4px 8px;text-align:right">Bearing</th><th style="padding:4px 8px;text-align:right">Source</th></tr></thead>'
+       +'<tbody>'+corrRows+'</tbody></table>'
+      +(calls?'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin:10px 0 4px">Who to call — '+esc((cap.calls||{}).region||'')+'</div><div style="line-height:1.7">'+calls+'</div>':'')
+    +'</div>'
+    +'<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px;font-size:11px;color:#94A3B8">'
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Data-center fit — connectivity only</div>'
+      + dcParts
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin:10px 0 4px">Operating compute nearby — '
+        +(dcf.within50||0)+' within 50 mi'+(dcf.mwWithin50?', '+dcf.mwWithin50.toLocaleString()+' MW stated':'')+'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:10.5px"><tbody>'+dcRows+'</tbody></table>'
+    +'</div>'
+   +'</div>'
+   +(capNotes?'<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px;font-size:11px;color:#94A3B8;margin-bottom:14px">'
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">What this means for the build</div>'
+      +'<ul style="margin:0;padding-left:16px;line-height:1.6">'+capNotes+'</ul></div>':'');
+
+  /* ── PUBLIC ROUTE EVIDENCE ───────────────────────────────────────────
+     The bundled inventory, read through api/_lib/fiber-evidence.js — the
+     same library /api/fiber-screen serves Grid Atlas from, so the two tools
+     cannot disagree about one location.
+
+     Four buckets stay four buckets. A California design record and an
+     OSM way whose medium is unspecified are NOT confirmed optical routes,
+     and merging them into one "fiber nearby" count is the specific dishonesty
+     this section exists to avoid. Unknown renders as the word unknown, never
+     as an em dash and never as zero. */
+  var PF=r.publicFiber||{};
+  /* If a saved assessment exists and was measured from different geometry,
+     say so here rather than letting the fresh panel imply the stored record
+     is current. The stored one is what a report or an export would use. */
+  var staleBanner='';
+  try{
+    var prev=S.omegaFiber;
+    if(prev&&prev.siteKey&&prev.siteKey!==_npxSiteKey()){
+      staleBanner='<div style="background:#2A1A06;border:1px solid #92400E;border-radius:8px;padding:10px 12px;font-size:11px;color:#FCD34D;margin-bottom:12px">'
+        +'<b>The saved fiber assessment is stale.</b> It was measured on '
+        +esc((S.omegaFiberAt||'').slice(0,10))+' from different site geometry'
+        +(prev.measuredFrom?' ('+esc(prev.measuredFrom.replace(/_/g," "))+')':'')
+        +'. Save the project to replace it with the reading below.</div>';
+    }
+  }catch(e){}
+  var bothUnits=function(m){
+    if(m==null||!isFinite(m)) return 'unknown';
+    var ft=m*3.280839895, mi=m/1609.344, km=m/1000;
+    var imp = mi<0.19 ? Math.round(ft).toLocaleString()+' ft' : mi.toFixed(mi<10?2:1)+' mi';
+    var met = km<1 ? Math.round(m).toLocaleString()+' m' : km.toFixed(km<10?2:1)+' km';
+    return imp+' · '+met;
+  };
+  var unk=function(v,suffix){ return (v==null||v==='') ? '<span style="color:#64748B">unknown</span>'
+                                                       : esc(String(v))+(suffix||''); };
+  var pfRows=function(list,emptyMsg,accent){
+    if(!list||!list.length) return '<div style="color:#64748B;padding:6px 0">'+esc(emptyMsg)+'</div>';
+    return list.slice(0,5).map(function(x){
+      return '<div style="border-left:2px solid '+accent+';padding:4px 0 4px 8px;margin-top:5px">'
+        +'<div style="color:#E2EEF9">'+esc(x.name||x.operator||x.id||'unnamed record')
+        +(x.intersects_site?' <span style="color:#4ADE80">· crosses the site</span>':'')+'</div>'
+        +'<div style="color:#94A3B8">'+bothUnits(x.mapped_distance_m)
+        +' · operator '+unk(x.operator)
+        +' · status '+unk(x.operational_status)
+        +'</div>'
+        +'<div style="color:#64748B">strands '+unk(x.fiber_strands_reported)
+        +' · lit '+unk(x.lit_capacity_gbps,' Gbps')
+        +' · spare '+unk(x.spare_capacity_gbps,' Gbps')
+        +' · serviceability '+esc(x.site_serviceability||'unconfirmed')
+        +' · evidence '+unk(x.source_vintage||x.source_last_edited||x.retrieved_at)
+        +(x.source_url?' · <a href="'+esc(x.source_url)+'" target="_blank" rel="noopener" style="color:#38BDF8">source ↗</a>':'')
+        +'</div></div>';
+    }).join('');
+  };
+  var pfBlock='';
+  if(PF.status==='failed'){
+    pfBlock='<div style="background:#0B1626;border:1px solid #7F1D1D;border-radius:8px;padding:12px;font-size:11px;color:#FCA5A5;margin-bottom:14px">'
+      +'<b>Public route evidence could not be read.</b> '+esc(PF.error||'')+' — '+esc(PF.note||'')+'</div>';
+  } else if(PF.status==='ok'){
+    var c=PF.counts_in_radius||{};
+    var fromBoundary=PF.measured_from==='site_boundary';
+    pfBlock=''
+     +'<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px;font-size:11px;color:#94A3B8;margin-bottom:14px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'
+       +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px">Public route evidence · bundled inventory</div>'
+       +'<div style="font-size:10px;color:'+(fromBoundary?'#4ADE80':'#FBBF24')+'">'
+         +(fromBoundary?'measured from the site boundary':'measured from the site point')+'</div>'
+      +'</div>'
+      +(PF.boundary_note?'<div style="color:#FBBF24;margin-bottom:6px">'+esc(PF.boundary_note)+'</div>':'')
+      +'<div style="color:#64748B;margin-bottom:8px">'+esc(PF.measurement_note||'Distance is to published geometry, not a surveyed cable.')+'</div>'
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-top:8px">Confirmed optical routes ('+(c.routes||0)+')</div>'
+      + pfRows(PF.routes,'No mapped evidence found in the bundled sources. This is not evidence that no fiber exists.','#4ADE80')
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-top:10px">Telecom facilities ('+(c.facilities||0)+') — kept separate from routes</div>'
+      + pfRows(PF.facilities,'No mapped facility found in the bundled sources.','#38BDF8')
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-top:10px">Planning / design records ('+(c.planning||0)+') — not confirmed routes</div>'
+      + pfRows(PF.planning_routes,'No planning record nearby.','#A78BFA')
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-top:10px">Unknown-medium telecom lines ('+(c.unknown_medium||0)+') — optical unconfirmed</div>'
+      + pfRows(PF.unknown_medium_routes,'No unknown-medium line nearby.','#64748B')
+      +'<div style="margin-top:10px;color:#64748B;border-top:1px solid #14243a;padding-top:8px">'
+        +'Site serviceability <b style="color:#FBBF24">'+esc(PF.site_serviceability||'unconfirmed')+'</b>'
+        +' · available capacity <b style="color:#64748B">unknown</b>'
+        +' · route diversity <b style="color:#FBBF24">'+esc(PF.physical_route_diversity||'unconfirmed')+'</b>'
+        +(PF.query&&PF.query.requested_capacity_gbps?' · requested '+esc(PF.query.requested_capacity_gbps)+' Gbps: <b style="color:#64748B">cannot be answered from public records</b>':'')
+        +'<br>'+(PF.limitations||[]).map(esc).join(' ')
+      +'</div>'
+     +'</div>';
+  }
+
   var src=r.sources||{}, ms=function(k){ return r[k]&&r[k].ms!=null?' '+(r[k].ms/1000).toFixed(1)+'s':''; };
   var scol=function(st){ return st==='ok'?'#4ADE80':st==='empty'?'#94A3B8':st==='skipped'?'#FBBF24':'#F87171'; };
-  var sources=[['peeringdb','facilities'],['fcc','fcc'],['osm','osm'],['plant','plant'],['harvest','harvest'],['longhaul','longhaul']].map(function(p){
+  var sources=[['peeringdb','facilities'],['fcc','fcc'],['osm','osm'],['plant','plant'],['harvest','harvest'],['longhaul','longhaul'],['datacenters','datacenter'],['publicFiber','publicFiber']].map(function(p){
     return '<span style="color:'+scol(src[p[0]])+'">'+p[0]+' '+esc(src[p[0]]||'?')+ms(p[1])+'</span>'; }).join(' · ');
   var findings=(r.findings||[]).map(function(f){
     var c=f.severity==='blocker'?'#F87171':f.severity==='risk'?'#FBBF24':'#94A3B8';
@@ -58121,6 +59140,9 @@ function _npxBody(r){
       +(evid?'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin:10px 0 4px">Evidence, nearest first</div><ul style="margin:0;padding-left:16px;line-height:1.6">'+evid+'</ul>':'')
     +'</div>'
    +'</div>'
+   + capacityBlock
+   + staleBanner
+   + pfBlock
    +'<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:inherit">'
     +'<thead><tr style="border-bottom:1px solid #1E3A5F;color:#64748B;font-size:9px;text-transform:uppercase;letter-spacing:.4px">'
     +'<th style="padding:6px 8px;text-align:left">Facility</th><th style="padding:6px 8px;text-align:left">City</th>'
@@ -58134,6 +59156,11 @@ function _npxBody(r){
     +'RTT assumes ~'+esc(r.usPerKm)+'&thinsp;µs/km each way in glass and excludes equipment latency. '
     +'Plant distances are to the nearest published segment; OpenStreetMap distances are to a feature\'s centre. '
     +'A short distance does not mean a carrier will build to you: confirm route, conduit and lit capacity with the providers before this informs a siting decision.'
+    +'<div style="margin-top:6px">Long-haul corridors are routed over the road network because US long-haul fiber is laid in transportation rights-of-way; '
+    +'53 of them carry a citation from Durairajan et al., SIGCOMM 2015 and its count of carriers sharing the conduit, and the rest assert a corridor and '
+    +'nothing about who is in it. <strong>The fiber count is a planning band, not a measurement</strong>'+(cap.strandBand?' — '+esc(cap.strandBand.basis):'')+'. '
+    +'Strand counts are per-cable and per-carrier and are sold as licensed data.</div>'
+    +(dcf.attrib?'<div style="margin-top:6px">Facility data: '+esc(dcf.attrib)+'.</div>':'')
    +'</div>'
   +'</div>';
 }
@@ -101179,7 +102206,19 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       podSpec=best;
     }catch(e){}
     var podKw=(podSpec&&podSpec.kw)?podSpec.kw:1000;
-    var pods=itKw>0?Math.ceil(itKw/podKw):0;
+
+    /* ── ZTMM: THE BLOCK IS PICKED FROM THE VENDOR'S OWN SHEETS ──────
+       For every other unit a pod is a pod and the count is load over
+       unit. The ZTMM family publishes 1, 3 and 5 MW arrangements that
+       share plant, so the count comes from ztmmPlan(): rack-first, the
+       smallest published block that holds the racks, tiled only past
+       5 MW and flagged when it is. Each block carries its own footprint
+       and IT kW, which is what placeAt() draws. */
+    var ztmm=null;
+    try{
+      if(podSpec && podSpec.family==='ztmm' && typeof ztmmPlan==='function') ztmm=ztmmPlan(itKw, podSpec);
+    }catch(e){ ztmm=null; }
+    var pods=ztmm?ztmm.blocks.length:(itKw>0?Math.ceil(itKw/podKw):0);
 
     /* Verdict against the grid ceiling. */
     var verdict, level;
@@ -101245,7 +102284,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       heatRate:heatRate,
       gasMmbtuHr:gasMmbtuHr, gasScfh:gasScfhApprox,
       bessKw:bessKw, bessKwh:bessKwh, rideMin:minutes,
-      pods:pods, podKw:podKw, podSpec:podSpec,
+      pods:pods, podKw:podKw, podSpec:podSpec, ztmm:ztmm,
       island:cfg.island, redundancy:cfg.redundancy,
       ogi:ogi,
       verdict:verdict, level:level
@@ -101328,6 +102367,24 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
           +'</div>'
         +'</div>'
         +'<div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#A78BFA;margin-bottom:6px">2 \u00b7 Load</div>'
+        /* The unit used to be whichever catalogue row sorted largest,
+           which made every dialog run a Leviathan run. It is a choice,
+           and the MW-class rows are listed with their footprint and
+           whether a datasheet stands behind them. */
+        +'<div style="margin-bottom:9px"><label style="'+lbl+'">Compute unit</label><select id="ocb-unit" style="'+inp+'">'
+          +(function(){
+              var o='';
+              try{
+                for(var uk in DC_CATALOG){
+                  if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,uk)) continue;
+                  var u=DC_CATALOG[uk]; if(!(u.kw>=500)) continue;
+                  o+='<option value="'+uk+'"'+(uk==='dc_ztmm1'?' selected':'')+'>'+u.label
+                    +' \u00b7 '+u.kw+' kW IT \u00b7 '+u.lf+'\u00d7'+u.wf+' ft'+(u.verified?'':' \u00b7 nominal')+'</option>';
+                }
+              }catch(e){}
+              return o;
+            })()
+          +'</select></div>'
         +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:11px">'
           +'<div><label style="'+lbl+'">IT load (MW)</label><input id="ocb-it" type="number" step="0.5" min="0.1" value="5" style="'+inp+'"></div>'
           +'<div><label style="'+lbl+'">Design PUE</label><input id="ocb-pue" type="number" step="0.05" min="1.05" value="1.3" style="'+inp+'"></div>'
@@ -101401,7 +102458,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         +tg.map(function(t){ return '<option value="'+t.id+'">'+t.label+'</option>'; }).join('');
       if(!tg.length) sel.innerHTML='<option value="">no generation placed yet</option>';
     })();
-    ['ocb-it','ocb-pue','ocb-ride','ocb-red','ocb-isl',
+    ['ocb-unit','ocb-it','ocb-pue','ocb-ride','ocb-red','ocb-isl',
      'ocb-cert','ocb-typ','ocb-role','ocb-tech','ocb-ac'].forEach(function(id){
       var e=document.getElementById(id); if(e){ e.oninput=recalc; e.onchange=recalc; }
     });
@@ -101412,7 +102469,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var g=function(id){ var e=document.getElementById(id); return e?e.value:''; };
     _r=size({ itMw:parseFloat(g('ocb-it')), pue:parseFloat(g('ocb-pue')),
               rideMin:parseFloat(g('ocb-ride')), redundancy:g('ocb-red'),
-              island:g('ocb-isl'),
+              island:g('ocb-isl'), unitId:g('ocb-unit')||null,
               certaintyTier:parseInt(g('ocb-cert'),10), typology:g('ocb-typ'),
               genRole:g('ocb-role'), genTech:g('ocb-tech'),
               usableAc:parseFloat(g('ocb-ac'))||0 });
@@ -101433,8 +102490,11 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         +row('IT load', mw(r.itKw))
         +row('Mechanical / cooling', mw(r.mechKw))
         +row('Total facility @ PUE '+r.pue.toFixed(2), mw(r.facKw), '#F59E0B')
-        +row('Compute pods', r.pods+' \u00d7 '+(r.podSpec?r.podSpec.label:'pod')+' ('+r.podKw+' kW)')
+        +(r.ztmm
+          ? row('Compute blocks', r.ztmm.blocks.map(function(b){ return b.mw+' MW'; }).join(' + ')+' \u00b7 '+(r.podSpec?r.podSpec.label:'ZTMM'))
+          : row('Compute pods', r.pods+' \u00d7 '+(r.podSpec?r.podSpec.label:'pod')+' ('+r.podKw+' kW)'))
       +'</div>'
+      +ztmmPanel(r)
       +'<div style="background:rgba(0,0,0,.24);border:1px solid #26364d;border-radius:8px;padding:10px 12px;margin-bottom:9px">'
         +'<div style="font-size:9px;font-weight:700;letter-spacing:.5px;color:#A78BFA;text-transform:uppercase;margin-bottom:5px">Grid ceiling</div>'
         +(r.utilKw!=null
@@ -101452,6 +102512,41 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         +'<div style="font-size:8px;color:#6B7280;margin-top:4px;line-height:1.5">Gas at '+(r.heatRate||SOFC_BTU_PER_KWH)+' Btu/kWh LHV. BESS energy = critical load \u00d7 '+r.rideMin+' min \u00f7 '+derate().toFixed(3)+' derate. BESS is sized here and placed by the BESS guided build.</div>'
       +'</div>'
       +ogiPanel(r);
+  }
+
+  /* ── ZTMM: THE PLANT THE VENDOR DRAWS, NOT A PUE GUESS ─────────────
+     Racks, PODs, CDUs, chillers and UPS off the published sheets for the
+     block(s) the load lands in. Shown here because the chiller yard and
+     the UPS chain are what the site plan and the one-line have to make
+     room for, and a PUE slider tells you neither. */
+  function ztmmPanel(r){
+    var Z=r.ztmm; if(!Z || !Z.blocks.length) return '';
+    var T=Z.totals;
+    var row=function(l,v,c){ return '<div style="display:flex;justify-content:space-between;padding:2.5px 0;gap:10px">'
+      +'<span style="color:#8FA3B8;font-size:10px">'+l+'</span>'
+      +'<strong style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:'+(c||'#E2EEF9')+';text-align:right">'+v+'</strong></div>'; };
+    var ups=T.ups.map(function(u){ return u.n+' × '+u.kva+' kVA'; }).join(' + ');
+    var pads=Z.blocks.map(function(b){ return b.lf+'×'+b.wf+' ft'; }).join(', ');
+    return '<div style="background:rgba(0,0,0,.24);border:1px solid '+(Z.extrapolated?'#F59E0B':'#26364d')+';border-radius:8px;padding:10px 12px;margin-bottom:9px">'
+      +'<div style="font-size:9px;font-weight:700;letter-spacing:.5px;color:#A78BFA;text-transform:uppercase;margin-bottom:5px">Modular plant · ZTMM'+(Z.extrapolated?' · extrapolated':'')+'</div>'
+      +row('Compute racks @ '+Z.rackKw+' kW', Z.racks+' of '+T.racksEnvelope
+             +(Z.spareRacks?(' · '+Z.spareRacks+' spare'):'')
+             +(Z.overRacks?(' · '+Z.overRacks+' over'):''),
+           Z.overRacks?'#F87171':(Z.spareRacks?'#F59E0B':'#E2EEF9'))
+      +row('IT envelope', (T.itKwEnvelope/1000).toFixed(2)+' MW incl. '+T.networkRacks+' × 20 kW network')
+      +row('Containers', T.containers+' × 40 ft ('+T.itPods+' IT POD'+(T.itPods>1?'s':'')+', '+T.elePods+' ELE POD'+(T.elePods>1?'s':'')+')')
+      +row('Container pad', pads+' · '+T.acres+' ac')
+      +row('Chillers (air-cooled mag-lev)', T.chillers.n+' × '+T.chillers.kw+' kW · '+T.chillers.main+' main / '+T.chillers.spare+' spare', '#F59E0B')
+      +row('CDU (1+1 per IT POD)', T.cdu+' × ≥'+T.cduKwMax+' kW')
+      +row('In-row / in-room AC', T.inRowAc+' × 60 kW · '+T.inRoomAc+' in ELE PODs')
+      +row('UPS', ups+' = '+(T.upsKva/1000).toFixed(2)+' MVA')
+      +row('Chilled-water tanks', T.tanks+' · hydraulic '+Z.blocks.map(function(b){ return b.hydraulic; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(' / '))
+      +row('Site water', 'none — non-evaporative', '#4ADE80')
+      +'<div style="font-size:8.5px;color:#94A3B8;margin-top:5px;line-height:1.55">'
+        +Z.notes.map(function(n){ return '• '+n; }).join('<br>')
+      +'</div>'
+      +'<div style="font-size:8px;color:#6B7280;margin-top:4px;line-height:1.5">Source: '+Z.blocks.map(function(b){ return b.verified; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join('; ')+'. Preliminary concept for technical and budgetary discussion; final equipment against the confirmed server OEM and the project one-line.</div>'
+      +'</div>';
   }
 
   /* ── PATCH 122: the OGI gates, shown before anyone places anything ──
@@ -101609,13 +102704,21 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
        first and everything else is arranged to serve it. */
     var pSpec=r.podSpec||{id:'dc_leviathan',label:'MDC',kw:1000,lf:40,wf:10};
     var pCols=Math.min(4,Math.max(1,Math.ceil(Math.sqrt(r.pods))));
+    /* ZTMM blocks each carry their own footprint and IT kW (a 3 MW block
+       is four containers on one 40 x 50 pad, not three 1 MW pads), so the
+       row pitch follows the tallest block placed. */
+    var zb=(r.ztmm&&r.ztmm.blocks)||null;
+    var pitchWf=pSpec.wf;
+    if(zb) zb.forEach(function(b){ if(b.wf>pitchWf) pitchWf=b.wf; });
     for(var i=0;i<r.pods;i++){
       var pc=i%pCols, pr=Math.floor(i/pCols);
+      var blk=zb?zb[i]:null;
       S.shapes.push({ id:(typeof uid==='function'?uid():'p'+i+Date.now()),
         kind:'derdc', dcId:pSpec.id||'dc_leviathan',
-        pts:[{x:x0+pc*(pSpec.lf+14)*ppf, y:y0+pr*(pSpec.wf+16)*ppf}],
-        style:(S.shapeStyle||''), lf:pSpec.lf, wf:pSpec.wf,
-        model:pSpec.label, kw:pSpec.kw, scaled:!!(S.pxPerFt>0),
+        pts:[{x:x0+pc*(pSpec.lf+14)*ppf, y:y0+pr*(pitchWf+16)*ppf}],
+        style:(S.shapeStyle||''), lf:blk?blk.lf:pSpec.lf, wf:blk?blk.wf:pSpec.wf,
+        model:blk?blk.label:pSpec.label, kw:blk?blk.itKw:pSpec.kw, scaled:!!(S.pxPerFt>0),
+        ztmm:blk?{ mw:blk.mw, stack:blk.stack.slice(), racks:blk.racks }:undefined,
         omegaCompute:true });
       made++;
     }
@@ -101651,6 +102754,10 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         ogi:r.ogi||null,
         gasMmbtuHr:r.gasMmbtuHr, gasScfh:r.gasScfh,
         bess:{ kw:r.bessKw, kwh:r.bessKwh, rideMin:r.rideMin },
+        unitId:r.podSpec?r.podSpec.id:null,
+        ztmm:r.ztmm?{ racks:r.ztmm.racks, rackKw:r.ztmm.rackKw, spareRacks:r.ztmm.spareRacks,
+                      blocks:r.ztmm.blocks.map(function(b){ return b.mw; }),
+                      extrapolated:r.ztmm.extrapolated, totals:r.ztmm.totals }:null,
         island:r.island, redundancy:r.redundancy, at:Date.now()
       };
       /* So the BESS guided build opens pre-sized. */
@@ -101717,6 +102824,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       +(O&&O.air?(', NOX '+O.air.noxTpy+' TPY AGAINST A 95 TPY SYNTHETIC-MINOR CAP'):'')+'. '
       +(O&&O.hourFive&&!O.hourFive.ok?('UPTIME: '+O.hourFive.text.toUpperCase()+' '):'')
       +'RIDE-THROUGH STORAGE '+C.bess.kw.toLocaleString()+' KW / '+C.bess.kwh.toLocaleString()+' KWH AT '+C.bess.rideMin+' MIN. '
+      +(C.ztmm&&C.ztmm.totals?('MODULAR PLANT (ZTMM): '+C.ztmm.racks+' × '+C.ztmm.rackKw+' KW LIQUID-COOLED RACKS IN '
+          +C.ztmm.totals.containers+' × 40 FT CONTAINERS ('+C.ztmm.blocks.map(function(m){ return m+' MW'; }).join(' + ')+' BLOCK'+(C.ztmm.blocks.length>1?'S':'')+'), '
+          +C.ztmm.totals.chillers.n+' × '+C.ztmm.totals.chillers.kw+' KW AIR-COOLED MAGNETIC-LEVITATION CHILLERS ('+C.ztmm.totals.chillers.main+' MAIN / '+C.ztmm.totals.chillers.spare+' SPARE), '
+          +C.ztmm.totals.cdu+' CDU, UPS '+(C.ztmm.totals.upsKva/1000).toFixed(2)+' MVA. NON-EVAPORATIVE, NO SITE WATER. '
+          +'CHILLER YARD, TANKS AND HYDRAULIC MODULE ARE NOT DIMENSIONED ON THE VENDOR DRAWING AND ARE NOT ON THE PAD SHOWN. '
+          +(C.ztmm.extrapolated?'ARRANGEMENT BEYOND THE PUBLISHED 5 MW SHEET; VENDOR TO CONFIRM. ':'')):'')
       +'GRID RELATIONSHIP: '+(C.island==='independent'?'GRID-INDEPENDENT, UTILITY AS BACKUP':'GRID-PARALLEL')+'. '
       +'GENERATION SIZING ASSUMES UTILITY CAPACITY PER THE SUBSTATION SCREENING ESTIMATE AND IS SUBJECT TO THE '
       +'UTILITY INTERCONNECTION STUDY AND A GAS CAPACITY CONFIRMATION.';
@@ -102635,7 +103748,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
             subMw:20, genType:'fuelcell_sofc', genMw:6, computeMw:5, incBess:true, incCool:true,
             incSub:true, incGen:true, incGenset:true, incBldg:true, topo:'RADIAL',
             bldg:null, bldg0:null, keyBound:false, fmt:'guided', seeded:{},
-            unitId:'dc_mdc1' };
+            unitId:'dc_ztmm1' };
 
   /* ── THE TWO FORMATS DO NOT SHARE A STARTING POINT ────────────────────
      The dialog opened with campus numbers — a 20 MW substation, 6 MW of gas
@@ -102652,8 +103765,10 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     /* One unit on a site that already runs solar: a megawatt of utility
        capacity, the PV that is already there, a megawatt of compute. */
     /* The 1 MW container is the main offering; the Leviathan is the
-       larger block, picked per project. */
-    modular: { subMw:1,  genType:'solar',         genMw:1.3, computeMw:1, unitId:'dc_mdc1' }
+       larger block, picked per project. The default is the ZTMM block
+       because it is the one 1 MW unit with a vendor drawing behind it —
+       dc_mdc1 is still in the list, marked nominal. */
+    modular: { subMw:1,  genType:'solar',         genMw:1.3, computeMw:1, unitId:'dc_ztmm1' }
   };
   function seedFor(fmtKey){
     var d=CGB_SEED[fmtKey]; if(!d) return;
@@ -112407,6 +113522,14 @@ table.e3-tbl td{ white-space:normal }
       lateral: F.lateral || null, latency: F.latency || null,
       nearestCarrier: fac.nearestCarrier || null, within80: fac.within80 || 0,
       netsWithin80: fac.netsWithin80 || 0, ixWithin80: fac.ixWithin80 || 0,
+      /* HOW MUCH, and IS IT A DATA-CENTER SITE. The register ranked parcels
+         on a fiber verdict alone, which cannot separate two sites that both
+         read "plausible" when one is on a single stub and the other sits
+         where three corridors cross. Class and route diversity do separate
+         them, so they are carried onto the row and sorted on. */
+      capacity: (r && r.capacity) || null,
+      datacenter: (r && r.datacenter) || null,
+      corridors: ((r && r.longhaul) || {}).corridors || [],
       fcc: (r && r.fcc) || null, sources: (r && r.sources) || {}, build: r && r.build
     };
     var level = F.verdict === 'unlikely' ? 'warn' : 'info';
@@ -112417,6 +113540,14 @@ table.e3-tbl td{ white-space:normal }
           : '') +
            (F.lateral ? ' Lateral ~' + (F.lateral.mi < 10 ? F.lateral.mi.toFixed(1) : Math.round(F.lateral.mi)) + ' mi to ' + F.lateral.to + '.' : '') +
            ' From /api/network-proximity, not from anything drawn.' });
+    var C = st.fiber.capacity;
+    if (C && (C.routeDiversity === 'single-threaded' || C.routeDiversity === 'none mapped')) {
+      st.flags.push({ level: 'warn', code: 'fiber_single_path',
+        msg: 'Route diversity: ' + C.routeDiversity + '. ' +
+             (C.independentPaths ? 'One corridor within ' + C.corridorRadiusMi + ' mi — ' : 'No corridor within ' + C.corridorRadiusMi + ' mi — ') +
+             'a single cut takes this site off the network. A tenant with an uptime SLA asks for two diverse entrances on day one, ' +
+             'and here that is a build, not a purchase.' });
+    }
   }
 
   /* ── THE FILE THE PARTNERS EXCHANGE ──────────────────────────────────
@@ -112500,9 +113631,25 @@ table.e3-tbl td{ white-space:normal }
   function regFiberColor(v) { return v === 'likely' ? '#2E9E6B' : v === 'plausible' ? '#7FB069' : v === 'uncertain' ? '#C9A24E' : v === 'unlikely' ? '#C97A72' : 'var(--sub)'; }
   function regFiberCell(F) {
     if (!F) return '<span style="color:var(--sub)">\u2014</span>';
-    var t = F.nearestCarrier ? (F.nearestCarrier.mi < 10 ? F.nearestCarrier.mi.toFixed(1) : Math.round(F.nearestCarrier.mi)) + ' mi to carrier' : 'no carrier in 160 mi';
+    var C = F.capacity;
+    /* Two lines, because two different facts. The verdict is "can it be lit";
+       the second line is "with how much, and on how many paths" — which is
+       what actually orders a shortlist once every row reads plausible. */
+    var t = C ? (C['class'] + ' \u00b7 ' + C.routeDiversity)
+              : (F.nearestCarrier ? (F.nearestCarrier.mi < 10 ? F.nearestCarrier.mi.toFixed(1) : Math.round(F.nearestCarrier.mi)) + ' mi to carrier' : 'no carrier in 160 mi');
     return '<b style="color:' + regFiberColor(F.verdict) + '" title="' + esc(F.summary || '') + '">' + esc(F.verdict) + '</b>' +
            '<div style="font-size:10px;color:var(--sub)">' + esc(t) + '</div>';
+  }
+  function regDcColor(v) {
+    return v === 'strong' ? '#16a34a' : v === 'workable' ? '#65a30d'
+         : v === 'marginal' ? '#d97706' : v === 'poor' ? '#dc2626' : 'var(--sub)';
+  }
+  function regDcCell(F) {
+    var D = F && F.datacenter;
+    if (!D) return '<span style="color:var(--sub)">\u2014</span>';
+    return '<b style="color:' + regDcColor(D.verdict) + '" title="Connectivity only \u2014 power, water, land and tax are not in this number">' +
+           esc(D.verdict) + '</b>' +
+           '<div style="font-size:10px;color:var(--sub)">' + D.score + '/100 \u00b7 ' + (D.within50 || 0) + ' nearby</div>';
   }
 
   function regRender() {
@@ -112531,7 +113678,7 @@ table.e3-tbl td{ white-space:normal }
         '</div>' +
         '<div class="e3-tblwrap"><table class="e3-tbl"><thead><tr>' +
           '<th></th><th>Parcel</th><th>Score</th><th>Confidence</th><th>kV</th>' +
-          '<th>POI</th><th>Acres</th><th>MW</th><th>Fiber</th><th>Flags</th><th></th>' +
+          '<th>POI</th><th>Acres</th><th>MW</th><th>Fiber</th><th title="Connectivity only">DC fit</th><th>Flags</th><th></th>' +
         '</tr></thead><tbody>' +
         rows.map(function (r, i) {
           var g = r.grid, k = r.intake;
@@ -112545,6 +113692,7 @@ table.e3-tbl td{ white-space:normal }
             '<td class="e3-num">' + n0(k.grossAcres || 0) + '</td>' +
             '<td class="e3-num">' + (g.mwHostable == null ? '\u2014' : n0(g.mwHostable)) + '</td>' +
             '<td>' + regFiberCell(k.fiber) + '</td>' +
+            '<td>' + regDcCell(k.fiber) + '</td>' +
             '<td style="font-size:10px;color:var(--sub)">' +
               (k.flags.length ? esc(k.flags.map(function (f) { return f.code; }).join(', ')) : '\u2014') +
             '</td>' +
@@ -112767,6 +113915,26 @@ table.e3-tbl td{ white-space:normal }
     if (F.latency) rows += '<tr><td style="color:var(--sub)">latency</td><td class="e3-num">' + F.latency.rttMs.toFixed(2) + ' ms</td><td style="color:var(--sub)">round trip to ' + esc(F.latency.facility) + ' over ~' + F.latency.routeMi.toFixed(1) + ' route mi</td></tr>';
     if (F.lateral) rows += '<tr><td style="color:var(--sub)">lateral</td><td class="e3-num">' + mi(F.lateral.mi) + '</td><td style="color:var(--sub)">to ' + esc(F.lateral.to) + ' \u00b7 ' + money(F.lateral.costLow) + '\u2013' + money(F.lateral.costHigh) + ' \u00b7 ' + esc(F.lateral.basis) + '</td></tr>';
     if (F.fcc) rows += '<tr><td style="color:var(--sub)">at the point</td><td class="e3-num">' + (F.fcc.fiber === true ? 'fiber' : F.fcc.fiber === false ? 'none' : '?') + '</td><td style="color:var(--sub)">' + esc(F.fcc.note || '') + '</td></tr>';
+    var C = F.capacity;
+    if (C) {
+      rows += '<tr><td style="color:var(--sub)">class</td><td class="e3-num">' + esc(C['class']) + '</td><td style="color:var(--sub)">' + esc(C.classWhy || '') + '</td></tr>';
+      rows += '<tr><td style="color:var(--sub)">diversity</td><td class="e3-num">' + (C.independentPaths || 0) + ' path' + (C.independentPaths === 1 ? '' : 's') + '</td><td style="color:var(--sub)">' + esc(C.routeDiversity) + ' \u2014 ' + (C.corridorsWithin || 0) + ' corridor(s) within ' + C.corridorRadiusMi + ' mi</td></tr>';
+      if (C.nearestCorridor) rows += '<tr><td style="color:var(--sub)">corridor</td><td class="e3-num">' + mi(C.nearestCorridor.mi) + '</td><td style="color:var(--sub)">' + esc(C.nearestCorridor.name) + (C.nearestCorridor.row ? ' \u00b7 ' + esc(C.nearestCorridor.row) : '') + (C.nearestCorridor.isps ? ' \u00b7 ' + C.nearestCorridor.isps + ' ISPs (cited)' : '') + '</td></tr>';
+      if (C.strandBand) rows += '<tr><td style="color:var(--sub)">fiber count</td><td class="e3-num">' + C.strandBand.low + '\u2013' + C.strandBand.high + '</td><td style="color:var(--sub)"><b>planning band, not a count</b> \u00b7 ' + esc(C.strandBand.basis) + '</td></tr>';
+      if (C.calls && C.calls.carriers && C.calls.carriers.length)
+        rows += '<tr><td style="color:var(--sub)">who to call</td><td class="e3-num">' + esc(C.calls.region) + '</td><td style="color:var(--sub)">' +
+                esc(C.calls.carriers.map(function (c2) { return c2.name; }).join(', ')) + '</td></tr>';
+      (C.notes || []).forEach(function (n) {
+        rows += '<tr><td style="color:var(--sub)">note</td><td></td><td style="color:var(--sub)">' + esc(n) + '</td></tr>';
+      });
+    }
+    var D = F.datacenter;
+    if (D) {
+      rows += '<tr><td style="color:var(--sub)">DC fit</td><td class="e3-num"><b style="color:' + regDcColor(D.verdict) + '">' + esc(D.verdict) + ' ' + D.score + '</b></td><td style="color:var(--sub)">' + esc(D.scope || '') + '</td></tr>';
+      rows += '<tr><td style="color:var(--sub)">comparables</td><td class="e3-num">' + (D.within50 || 0) + '</td><td style="color:var(--sub)">operating compute within 50 mi' +
+              (D.mwWithin50 ? ', ' + D.mwWithin50.toLocaleString() + ' MW where stated' : '') +
+              (D.nearest && D.nearest[0] ? ' \u00b7 nearest ' + esc(D.nearest[0].name) + ' at ' + mi(D.nearest[0].mi) : '') + '</td></tr>';
+    }
     (F.evidence || []).forEach(function (e) {
       rows += '<tr><td style="color:var(--sub)">evidence</td><td class="e3-num">' + mi(e.mi) + '</td><td style="color:var(--sub)">' + esc(e.label) + '</td></tr>';
     });
@@ -112784,10 +113952,19 @@ table.e3-tbl td{ white-space:normal }
                 'gas_diameter_in','hazard_on_parcel',
                 'fiber_verdict','fiber_score','fiber_carrier_mi','fiber_carrier','fiber_rtt_ms',
                 'fiber_lateral_mi','fiber_lateral_cost_low','fiber_lateral_cost_high','fiber_at_point',
+                /* The columns a shortlist is actually sorted on once every row
+                   reads "plausible". strand_low/high are a PLANNING BAND and
+                   the header says so, because a bare number in a spreadsheet
+                   gets quoted as a measurement by the third forward. */
+                'fiber_class','route_diversity','independent_paths','corridor_mi','corridor_name','corridor_row','corridor_cited_isps',
+                'strand_band_low_PLANNING','strand_band_high_PLANNING',
+                'dc_fit_verdict','dc_fit_score','dc_within_25mi','dc_within_50mi','dc_mw_within_50mi','dc_nearest_mi','dc_nearest_name',
+                'carriers_to_call',
                 'flags','evidence'];
     var out = [head];
     rows.forEach(function (r, i) {
       var g = r.grid, k = r.intake, F = k.fiber || null;
+      var C = F && F.capacity, D = F && F.datacenter;
       out.push([i + 1, r.name, g.score, g.confidence, g.kv || '', g.poiMi == null ? '' : g.poiMi,
         g.poiVia || '', Math.round(k.grossAcres || 0), g.buildableCeilingAcres == null ? '' : g.buildableCeilingAcres,
         g.mwHostable == null ? '' : g.mwHostable, k.circuitsAtMaxKv || 0,
@@ -112797,6 +113974,16 @@ table.e3-tbl td{ white-space:normal }
         F && F.latency ? F.latency.rttMs : '',
         F && F.lateral ? F.lateral.mi : '', F && F.lateral ? F.lateral.costLow : '', F && F.lateral ? F.lateral.costHigh : '',
         F && F.fcc ? (F.fcc.fiber === true ? 'fiber' : F.fcc.fiber === false ? 'none' : 'not checked') : '',
+        C ? C['class'] : '', C ? C.routeDiversity : '', C ? C.independentPaths : '',
+        C && C.nearestCorridor ? C.nearestCorridor.mi : '',
+        C && C.nearestCorridor ? C.nearestCorridor.name : '',
+        C && C.nearestCorridor ? (C.nearestCorridor.row || '') : '',
+        C && C.nearestCorridor && C.nearestCorridor.isps != null ? C.nearestCorridor.isps : '',
+        C && C.strandBand ? C.strandBand.low : '', C && C.strandBand ? C.strandBand.high : '',
+        D ? D.verdict : '', D ? D.score : '', D ? D.within25 : '', D ? D.within50 : '', D ? D.mwWithin50 : '',
+        D && D.nearest && D.nearest[0] ? D.nearest[0].mi : '',
+        D && D.nearest && D.nearest[0] ? D.nearest[0].name : '',
+        C && C.calls ? C.calls.carriers.map(function (c2) { return c2.name; }).join('; ') : '',
         k.flags.map(function (f) { return f.code; }).join('; '), g.evidence]);
     });
     var csv = out.map(function (rr) {
@@ -115536,16 +116723,30 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
  * ====================================================================== */
 (function () {
 'use strict';
+  /* These are the inputs to the ONE sizing engine, shared with the
+     standalone Battery Sizer. The financial fields used to be absent
+     here, which meant this screen reported payback on GROSS cost with no
+     incentive, no O&M and no discounting, while the other screen reported
+     it net of all four. Same site, two answers. They are on the form now
+     because a hidden assumption that moves payback by three years is not
+     a default, it is a finding waiting to happen. */
   function defaultTariff() {
     return {
       demandChargePerKw: 18,      /* $/kW-month                            */
-      energyRate: 0.11,           /* $/kWh flat, used only for arbitrage   */
+      energyRate: 0.11,           /* $/kWh, prices round-trip losses        */
       touSpread: 0,               /* $/kWh on-peak minus off-peak          */
       ratchetPct: 0,              /* 0 = no ratchet; 0.8 = 80% of 11-mo max */
-      capexPerKwh: 400,           /* installed $/kWh                        */
+      capexPerKwh: 400,           /* installed $/kWh of NAMEPLATE           */
       capexPerKw: 250,            /* installed $/kW of power                */
       maxC: 0.5,                  /* power / energy limit, 0.5C = 2 h min   */
-      targetPaybackYr: 7
+      targetPaybackYr: 7,
+      dodPct: 90,                 /* usable depth of discharge              */
+      rtePct: 88,                 /* round-trip; its SQUARE ROOT is the     */
+                                  /* discharge leg that sets nameplate      */
+      itcPct: 30,                 /* investment tax credit                  */
+      omPerKwYr: 10,              /* O&M, $/kW-yr                           */
+      termYr: 10,                 /* analysis term                          */
+      discountPct: 8              /* discount rate for NPV                  */
     };
   }
 
@@ -115638,10 +116839,47 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
 function request(mode, data, opts) {
  var user=window.firebase && firebase.auth().currentUser;
  if(!user) return Promise.reject(new Error('Sign in to run battery sizing.'));
+ /* Event Layer: tool.run with the full inputs and the answer (omega-events.js). */
+ var work=function(){return send(user,mode,data,opts);};
+ return window.OmegaEvents ? OmegaEvents.run('editor','bess-size.'+mode,{mode:mode,data:data,opts:opts},work,window._projectId||null) : work();
+}
+function send(user, mode, data, opts) {
  return user.getIdToken().then(function(token){return fetch('/api/bess-size',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({mode:mode,data:data,opts:opts})});}).then(function(r){return r.json().then(function(j){if(!r.ok) throw new Error(j.error||'Sizing service unavailable');return j;});});
 }
+/* The engineering design is a second engine behind a second endpoint. Same
+   reason as the first: the standard-size tables, the derating method and the
+   degradation schedule are the product, and this file is public. */
+function designRequest(payload) {
+ var user=window.firebase && firebase.auth().currentUser;
+ if(!user) return Promise.reject(new Error('Sign in to run the engineering design.'));
+ return user.getIdToken().then(function(token){return fetch('/api/bess-design',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(payload)});}).then(function(r){return r.json().then(function(j){if(!r.ok) throw new Error(j.error||'Design service unavailable');return j;});});
+}
+
+/* Turn a sizing answer into the design engine's inputs. The sizer speaks kW
+   and kWh at the meter; the design engine speaks MW of duty and hours of
+   duration, which is the same system stated the way an engineer states it.
+   Container and converter block sizes are chosen so the schedule does not
+   come back asking for three hundred skids or a third of a container. */
+function designDefaults(res) {
+  var s = summarize(res) || { kw: 0, kwh: 0, durationH: 4 };
+  var mw = (s.kw || 0) / 1000, mwh = (s.kwh || 0) / 1000;
+  return {
+    loadMw: +mw.toFixed(4),
+    durationH: s.durationH || 4,
+    unitMwh: mwh <= 0.6 ? 0.1 : (mwh <= 3 ? 0.5 : (mwh <= 12 ? 5 : 20)),
+    pcsUnitMw: mw <= 0.3 ? 0.06 : (mw <= 1.5 ? 0.135 : (mw <= 6 ? 0.5 : 2.5)),
+    dodPct: 92, rtePct: 88, cRate: 0.5, powerFactor: 0.9,
+    pcsOutputKv: 0.48, systemKv: 13.8,
+    chargeGridMw: +(mw * 0.5).toFixed(4), chargeWindowH: 16,
+    capex: Math.round(s.capex || 0),
+    demandRatePerKw: 18.5, analysisYears: 20
+  };
+}
+
 window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],defaultTariff:defaultTariff,parseInterval:parseInterval,splitRow:splitRow,detectInterval:detectInterval,roundProduct:roundProduct,summarize:summarize,
- sizeFromInterval:function(v,o){return request('interval',v,o);},sizeFromMonthly:function(v,o){return request('monthly',v,o);}};
+ designDefaults:designDefaults,
+ sizeFromInterval:function(v,o){return request('interval',v,o);},sizeFromMonthly:function(v,o){return request('monthly',v,o);},
+ design:function(p){return designRequest(p);}};
 })();
 /* ====================================================================== *
  *  OMEGA BESS SIZER  —  UI layer                                         *
@@ -115662,7 +116900,11 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     intervalText: '',
     tariff: E.defaultTariff(),
     result: null,
-    peakHours: null
+    peakHours: null,
+    design: null,              /* last /api/bess-design answer      */
+    designIn: null,            /* the inputs it was computed from   */
+    designBusy: false,
+    designErr: null
   };
 
   function blankRows() {
@@ -115718,13 +116960,15 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
   }
 
   var TABS = [['input', 'Utility Data'], ['analysis', 'Analysis'],
-              ['size', 'Recommended Size'], ['handoff', 'Hand Off']];
+              ['size', 'Recommended Size'], ['engineering', 'Engineering'],
+              ['handoff', 'Hand Off']];
 
   function render() {
     var h = host();
     var body = S.tab === 'input' ? viewInput()
              : S.tab === 'analysis' ? viewAnalysis()
-             : S.tab === 'size' ? viewSize() : viewHandoff();
+             : S.tab === 'size' ? viewSize()
+             : S.tab === 'engineering' ? viewEngineering() : viewHandoff();
     var tabs = TABS.map(function (t) {
       return '<div class="e3-tab' + (S.tab === t[0] ? ' on' : '') +
              '" data-sz-tab="' + t[0] + '">' + t[1] + '</div>';
@@ -115797,12 +117041,25 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         fld('Max C-rate', 'maxC', 0.05) +
         fld('Target payback yr', 'targetPaybackYr', 0.5) +
       '</div>' +
+      '<div class="d4-grp" style="margin-top:12px">Battery and finance</div>' +
+      '<div class="e3-facets">' +
+        fld('Usable DoD %', 'dodPct', 1) +
+        fld('Round-trip %', 'rtePct', 1) +
+        fld('ITC %', 'itcPct', 1) +
+        fld('O&M $/kW-yr', 'omPerKwYr', 1) +
+        fld('Term yr', 'termYr', 1) +
+        fld('Discount %', 'discountPct', 0.5) +
+      '</div>' +
       '<div class="e3-facets" style="margin-top:10px">' +
         '<div style="flex:1"></div>' +
         '<button class="e3-btn pri" data-sz-act="run">Size the battery</button>' +
       '</div>' +
       '<div class="e3-note warn" style="margin-top:8px">A ratchet clause means one un-shaved peak ' +
-      'sets the billed floor for a year. Leave it at 0 only if the tariff genuinely has none.</div>';
+      'sets the billed floor for a year. Leave it at 0 only if the tariff genuinely has none.</div>' +
+      '<div class="e3-note info" style="margin-top:6px">Installed $/kWh is priced against ' +
+      '<b>nameplate</b>, not usable energy. Nameplate is the usable figure divided by depth of ' +
+      'discharge and again by the square root of round-trip efficiency — the discharge half of ' +
+      'the trip — so at 90% and 88% a 1,000 kWh duty is a 1,185 kWh pack.</div>';
   }
 
   function fld(label, key, step) {
@@ -115917,6 +117174,224 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
       'degradation, escalation or O&amp;M. Run the proforma for an investment case.</div>';
   }
 
+  /* ---- Engineering ------------------------------------------------- *
+   *  Sizing stops at kW and kWh. Nobody can order that. This step turns
+   *  it into containers, converters, a transformer, a breaker, a cable
+   *  and a fault duty, and says whether the result is buildable.
+   * ------------------------------------------------------------------ */
+  var DESIGN_FIELDS = [
+    ['loadMw',         'Load to support',   'MW',      0.01],
+    ['durationH',      'Duration',          'h',       0.5],
+    ['unitMwh',        'Container size',    'MWh',     0.1],
+    ['pcsUnitMw',      'Converter block',   'MW',      0.005],
+    ['dodPct',         'Usable DoD',        '%',       1],
+    ['rtePct',         'Round-trip',        '%',       1],
+    ['cRate',          'Max C-rate',        'C',       0.05],
+    ['powerFactor',    'Power factor',      '',        0.01],
+    ['pcsOutputKv',    'Converter bus',     'kV',      0.01],
+    ['systemKv',       'System voltage',    'kV',      0.1],
+    ['chargeGridMw',   'Grid charge power', 'MW',      0.05],
+    ['chargeWindowH',  'Charge window',     'h',       1],
+    ['capex',          'Installed cost',    '$',       1000],
+    ['demandRatePerKw','Demand charge',     '$/kW-mo', 0.5],
+    ['analysisYears',  'Analysis term',     'yr',      1]
+  ];
+
+  function designInputs() {
+    if (!S.designIn) S.designIn = E.designDefaults(S.result);
+    return S.designIn;
+  }
+
+  function dFld(key, label, unit, step) {
+    var v = designInputs()[key];
+    /* Same markup as fld() above, so the two forms line up. */
+    return '<div><label class="pm-l">' + esc(label) +
+      (unit ? ' <span style="opacity:.65">' + esc(unit) + '</span>' : '') + '</label> ' +
+      '<input type="number" step="' + step + '" data-dsn="' + key + '" value="' +
+      esc(v == null ? '' : v) + '" style="width:96px"></div>';
+  }
+
+  function statusChip(st) {
+    var c = st === 'FAIL' ? '#EF4444'
+          : (st === 'REVIEW' ? '#F59E0B' : (st === 'N/A' ? '#64748B' : '#22C55E'));
+    return '<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.5px;' +
+           'padding:2px 6px;border-radius:3px;background:' + c + '22;color:' + c + '">' +
+           esc(st) + '</span>';
+  }
+
+  function viewEngineering() {
+    if (!S.result || !S.result.ok) return notYet();
+
+    var form = '<div class="d4-grp">Design inputs</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:8px">' +
+      DESIGN_FIELDS.map(function (f) { return dFld(f[0], f[1], f[2], f[3]); }).join('') +
+      '</div>' +
+      '<div style="margin-top:12px;display:flex;gap:8px;align-items:center">' +
+        '<button class="e3-btn pri" data-sz-act="design"' + (S.designBusy ? ' disabled' : '') + '>' +
+          (S.designBusy ? 'Running…' : 'Run engineering design') + '</button>' +
+        '<button class="e3-btn" data-sz-act="designReset">Reset to sizing</button>' +
+      '</div>';
+
+    if (S.designErr) {
+      form += '<div class="e3-note warn" style="margin-top:12px">' + esc(S.designErr) + '</div>';
+    }
+    if (!S.design) {
+      return form + '<div class="e3-note info" style="margin-top:12px">' +
+        'The sizing sweep says how many kW and kWh the bills justify. It cannot say how many ' +
+        'containers that is, what transformer it needs, what the fault current at the converter ' +
+        'bus will be, or whether the battery can be recharged before the peak period comes round ' +
+        'again. Run the design and it answers all four, with the checks that decide whether the ' +
+        'result is buildable.</div>';
+    }
+
+    var d = S.design, c = d.capacity, p = d.pcs, t = d.transformer, el = d.electrical;
+    var L = d.economics.lifecycle;
+    var h = form;
+
+    h += '<div class="e3-note ' + (d.checks.overall === 'OK' ? 'info' : 'warn') +
+         '" style="margin-top:14px">' + statusChip(d.checks.overall) +
+         ' <b style="margin-left:6px">' + esc(d.checks.summary) + '</b></div>';
+
+    h += '<div class="e5-grid" style="grid-template-columns:repeat(4,1fr);margin-top:10px">' +
+      '<div class="e5-stat"><label>Containers</label><b>' + c.units + '<span>× ' +
+        n0(c.unitMwh * 1000) + ' kWh</span></b></div>' +
+      '<div class="e5-stat"><label>Installed</label><b>' + c.installedMwh + '<span>MWh</span></b></div>' +
+      '<div class="e5-stat"><label>Converters</label><b>' + p.units + '<span>× ' +
+        n0(p.unitMw * 1000) + ' kW</span></b></div>' +
+      '<div class="e5-stat"><label>Transformer</label><b>' +
+        (t.needed ? t.ratingMva + '<span>MVA × ' + t.units + '</span>'
+                  : 'None<span>not required</span>') + '</b></div>' +
+      '</div>';
+
+    /* Why the pack is bigger than the customer's own arithmetic. */
+    h += '<div class="d4-grp" style="margin-top:12px">How the capacity got there</div>';
+    h += '<div style="font-family:var(--font-mono,monospace);font-size:10.5px;color:var(--sub);' +
+         'line-height:1.9;margin-top:6px">' +
+      c.loadMw + ' MW × ' + c.durationH + ' h = ' + c.initialMwh + ' MWh' +
+      ' → ÷' + c.dodPct + '% DoD = ' + c.afterDodMwh +
+      ' → ÷√' + c.rtePct + '% = ' + c.afterRteMwh +
+      ' → C-rate floor ' + c.cRateFloorMwh +
+      ' → <b>required ' + c.requiredMwh + ' MWh</b></div>';
+    h += '<div class="e3-note ' + (c.cRateBound ? 'warn' : 'info') + '">' +
+      (c.cRateBound
+        ? '<b>Power-limited.</b> A ' + c.cRate + 'C battery cannot deliver ' + c.loadMw +
+          ' MW out of less than ' + c.cRateFloorMwh + ' MWh, so the C-rate sets the size, not the ' +
+          'energy the duty needs. The extra capacity is bought for power and sits unused every cycle.'
+        : '<b>Energy-limited.</b> The duty needs ' + c.afterOtherMwh + ' MWh in the pack, above the ' +
+          c.cRateFloorMwh + ' MWh the ' + c.cRate + 'C limit would force.') +
+      ' Quantised to ' + c.units + ' unit' + (c.units > 1 ? 's' : '') + ', leaving ' +
+      c.spareMwh + ' MWh spare.</div>';
+
+    /* Electrical schedule. */
+    h += '<div class="d4-grp" style="margin-top:12px">Electrical schedule</div>';
+    h += '<div class="e3-tblwrap"><table class="e3-tbl"><tbody>' +
+      '<tr><td>Design current</td><td class="e3-num">' + n0(el.primaryBreaker.designA) + ' A</td>' +
+        '<td>' + n0(el.primaryCurrentA) + ' A continuous × ' + el.necBuffer +
+        ' (NEC 125% continuous-duty rule)</td></tr>' +
+      '<tr><td>Primary breaker</td><td class="e3-num">' + esc(el.primaryBreaker.spec) + '</td>' +
+        '<td>at ' + t.primaryKv + ' kV</td></tr>' +
+      (el.primaryCable.valid
+        ? '<tr><td>AC cable</td><td class="e3-num">' + esc(el.primaryCable.spec) + '</td><td>' +
+          'table ampacity ' + n0(el.primaryCable.requiredAmpacity) + ' A after derating ' +
+          el.primaryCable.totalDerating + ', drop ' + el.primaryCable.dropPct + '%</td></tr>'
+        : '<tr><td>AC cable</td><td class="e3-num">invalid</td><td>' +
+          esc(el.primaryCable.note) + '</td></tr>') +
+      '<tr><td>Busduct alternative</td><td class="e3-num">' + n0(el.busduct.ratingA) + ' A</td>' +
+        '<td>drop ' + el.busduct.dropPct + '%' +
+        (el.busduct.requiredIcwKa != null
+          ? ', needs Icw ≥ ' + el.busduct.requiredIcwKa + ' kA for ' +
+            el.busduct.faultDurationS + ' s' : '') + '</td></tr>' +
+      (t.needed
+        ? '<tr><td>Transformer</td><td class="e3-num">' + t.ratingMva + ' MVA × ' + t.units +
+          '</td><td>' + t.primaryKv + '/' + t.secondaryKv + ' kV ' + esc(t.category) + ', ' +
+          esc(t.vectorGroup) + ', %Z=' + t.impedancePct + ', duty ' + n0(t.requiredKva) +
+          ' kVA</td></tr>' : '') +
+      (el.fault.applicable
+        ? '<tr><td>Fault at ' + esc(el.fault.busLabel) + '</td><td class="e3-num">' +
+          el.fault.iscKa + ' kA</td><td>grid ' + el.fault.gridSideKa + ' kA + converters ' +
+          el.fault.inverterKa + ' kA, peak make ' + el.fault.peakKa + ' kA</td></tr>' +
+          (el.switchgear
+            ? '<tr><td>Switchgear Icu</td><td class="e3-num">' + el.switchgear.icuKa + ' kA</td>' +
+              '<td>' + el.switchgear.faultKa + ' kA × ' + el.switchgear.margin +
+              ' margin, on the ' + esc(el.switchgear.bus) + '</td></tr>' : '')
+        : '') +
+      '<tr><td>Metering CT</td><td class="e3-num">' + esc(el.ct.ratio) + '</td><td>burden ' +
+        el.ct.totalBurdenVa + ' VA → ' + el.ct.burdenRatingVa + ' VA, class ' +
+        esc(el.ct.accuracyClass) + '</td></tr>' +
+      '<tr><td>Charging</td><td class="e3-num">' +
+        (p.solarOnly ? 'solar only' : p.fullChargeH + ' h') + '</td><td>' +
+        (p.solarOnly ? 'no grid or generator charging power set'
+                     : 'limited by ' + esc(p.chargeLimitedBy) + ', against a ' +
+                       p.chargeWindowH + ' h window') + '</td></tr>' +
+      '</tbody></table></div>';
+
+    /* Checks. */
+    h += '<div class="d4-grp" style="margin-top:12px">Design checks</div>';
+    h += '<div class="e3-tblwrap"><table class="e3-tbl"><tbody>' +
+      d.checks.checks.map(function (ck) {
+        return '<tr><td>' + esc(ck.name) + '</td><td>' + statusChip(ck.status) + '</td>' +
+               '<td style="font-size:10px">' + esc(ck.detail) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+
+    /* Bill of quantities. */
+    h += '<div class="d4-grp" style="margin-top:12px">Bill of quantities</div>';
+    h += '<div class="e3-tblwrap"><table class="e3-tbl"><thead><tr><th>Equipment</th>' +
+      '<th>Qty</th><th>Specification</th></tr></thead><tbody>' +
+      d.boq.map(function (b) {
+        return '<tr><td>' + esc(b.item) + '</td><td class="e3-num">' + b.qty + '</td>' +
+               '<td style="font-size:10px">' + esc(b.remark) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+
+    /* Lifecycle. */
+    h += '<div class="d4-grp" style="margin-top:12px">' + L.years + '-year lifecycle</div>';
+    h += '<div class="e5-grid" style="grid-template-columns:repeat(4,1fr);margin-top:8px">' +
+      '<div class="e5-stat"><label>Payback</label><b>' +
+        (L.paybackYears != null ? L.paybackYears + '<span>yr</span>'
+                                : '&gt;' + L.years + '<span>yr</span>') + '</b></div>' +
+      '<div class="e5-stat"><label>Discounted</label><b>' +
+        (L.discountedPaybackYears != null ? L.discountedPaybackYears + '<span>yr</span>'
+                                          : '&gt;' + L.years + '<span>yr</span>') + '</b></div>' +
+      '<div class="e5-stat"><label>NPV</label><b>' + money(L.npv) + '</b></div>' +
+      '<div class="e5-stat"><label>IRR</label><b>' +
+        (L.irr != null ? (L.irr * 100).toFixed(1) + '<span>%</span>' : '—') + '</b></div>' +
+      '</div>';
+    if (L.replacements) {
+      h += '<div class="e3-note warn">The pack drops below the minimum state of health in year ' +
+        L.firstReplacementYear + '. ' + L.replacements + ' replacement' +
+        (L.replacements > 1 ? 's are' : ' is') + ' booked inside the ' + L.years +
+        '-year term, and the payback above already carries the cost.</div>';
+    }
+    h += '<div class="e3-tblwrap"><table class="e3-tbl"><thead><tr><th>Yr</th><th>SOH</th>' +
+      '<th>kW cut</th><th>Net</th><th>Cumulative</th></tr></thead><tbody>' +
+      L.rows.map(function (r) {
+        return '<tr' + (r.replacementCapex < 0 ? ' style="background:rgba(239,68,68,.10)"' : '') +
+          '><td>' + r.year + '</td><td class="e3-num">' + r.sohPct + '%</td>' +
+          '<td class="e3-num">' + n0(r.mdReductionKw) + '</td>' +
+          '<td class="e3-num">' + money(r.net) + '</td>' +
+          '<td class="e3-num">' + money(r.cumulative) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+
+    h += '<div class="e3-note info">Standard sizes are IEC 60076 for transformers plus common ' +
+      'breaker, busduct and CT ranges; cable ampacities assume direct burial and must be rechecked ' +
+      'against the installation method actually used. Impedance, X/R, busduct impedance and CT ' +
+      'winding resistance are placeholders until the equipment is selected, and every one of them ' +
+      'moves the fault duty. This is a design basis for a quotation, not a stamped drawing.</div>';
+    return h;
+  }
+
+  async function runDesign() {
+    if (!S.result || !S.result.ok) return;
+    S.designBusy = true; S.designErr = null; render();
+    try {
+      S.design = await E.design(designInputs());
+    } catch (e) {
+      S.design = null;
+      S.designErr = (e && e.message) || 'Design run failed.';
+    }
+    S.designBusy = false;
+    render();
+  }
+
   /* ---- Hand off ----------------------------------------------------- */
   function viewHandoff() {
     var r = S.result;
@@ -115965,6 +117440,16 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         S.tariff[el.getAttribute('data-tar')] = +el.value || 0;
       });
     });
+    h.querySelectorAll('[data-dsn]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        var k = el.getAttribute('data-dsn');
+        /* An emptied field means "fall back to the engine default", not zero:
+           a zero power factor or a zero container size is a divide by nothing. */
+        designInputs()[k] = el.value === '' ? null : +el.value;
+        /* The schedule on screen was computed from the value just replaced. */
+        if (S.design) { S.design = null; render(); }
+      });
+    });
     var ta = h.querySelector('[data-sz="intervalText"]');
     if (ta) ta.addEventListener('change', function () { S.intervalText = ta.value; render(); });
   }
@@ -115995,6 +117480,10 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         S.result = await E.sizeFromMonthly(rows, { tariff: S.tariff, peakHours: S.peakHours });
       }
       if (!S.result.ok) { alert(S.result.error || 'Could not size from this data.'); return; }
+      /* A new size makes the old schedule wrong, not merely stale. Drop it
+         and re-seed the design inputs from the answer just computed. */
+      S.design = null; S.designErr = null;
+      S.designIn = E.designDefaults(S.result);
       S.tab = 'size';
       render();
     } catch (e) {
@@ -116033,6 +117522,20 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         annualDemandSave: s.savingsYr, monthlyDemandSave: Math.round(s.savingsYr / 12),
         basis: s.basis, confidence: s.confidence, fromSizer: true, at: Date.now()
       };
+      /* billBessHint is this editor's own shorthand and other parts of the
+         drawing read it. The RECORD is what leaves the editor: the
+         financing application and the deal room read it, so it carries the
+         basis and the assumptions rather than four loose numbers. Both are
+         written because they answer different questions. */
+      if (window.OmegaBessResult) {
+        var rec = window.OmegaBessResult.fromApi(S.result, {
+          source: 'editor-sizer',
+          by: (window.firebase && firebase.auth().currentUser &&
+               firebase.auth().currentUser.email) || null,
+          projectId: (window.S && (window.S.projectId || window.S.id)) || null
+        });
+        if (rec) window.S[window.OmegaBessResult.FIELD] = rec;
+      }
       if (typeof window.pushHist === 'function') window.pushHist();
       if (typeof window.showBanner === 'function') {
         window.showBanner('cal', '  Sized ' + n0(s.kw) + ' kW / ' + n0(s.kwh) +
@@ -116069,6 +117572,12 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     if (a === 'toConfig') return toConfig();
     if (a === 'save') { saveToProject(); return render(); }
     if (a === 'csv') return csv();
+    if (a === 'design') return runDesign();
+    if (a === 'designReset') {
+      S.designIn = E.designDefaults(S.result);
+      S.design = null; S.designErr = null;
+      return render();
+    }
   }
 
   function open() {
@@ -132586,6 +134095,7 @@ SEL.split(', ').map(function (s) { return s + ' label, ' + s + ' td, ' + s + ' t
     bollard: 'bollard', jbox: 'handhole', charger: 'dcfc-disp',
     ups: 'ups-cab', pole: 'pole', hydrant: 'bollard',
     dc_cruiser: 'dc-mod', dc_triton: 'dc-mod', dc_leviathan: 'dc-mod',
+    dc_mdc1: 'dc-mod', dc_ztmm1: 'dc-mod', dc_ztmm1b: 'dc-mod',
     solar: 'pv-1up-10', building: null, fence: null, camera: null
   };
   /* Element type -> block, for the elements that are not type:'eq' */
@@ -132697,7 +134207,8 @@ SEL.split(', ').map(function (s) { return s + ' label, ' + s + ' td, ' + s + ' t
     bess: 5, pcs: 4, xfmr: 6, disco: 3, panel: 2, meter: 1.5, building: 3,
     hydrant: 1.5, genset: 12, solar: 6.5, pad: 10, bollard: 0.5, fence: 8,
     jbox: 1.5, charger: 2.5, camera: 1, ups: 3, pole: 1.25,
-    dc_cruiser: 20, dc_triton: 30, dc_leviathan: 40
+    dc_cruiser: 20, dc_triton: 30, dc_leviathan: 40,
+    dc_mdc1: 40, dc_ztmm1: 40, dc_ztmm1b: 40
   };
 
   /* Conduit type -> its own layer, so the runs stay separable on the sheet
@@ -140310,6 +141821,7 @@ var ARCH = {
   'solar-carport': { label:'Solar — carport canopy', group:'solar', tilt:7,  clear:14  },
 
   'bess-container':{ label:'BESS — container',       group:'storage', h:9.5  },
+  'bess-assembly': { label:'BESS — complete assembly', group:'storage', h:9.5 },
 
   /* Patch 84. A modular data-centre pod was mapped to 'bess-container',
      so 40 MW of compute drew as forty batteries, counted as STORAGE in
@@ -140360,7 +141872,7 @@ var ARCH_GROUPS = [
 
 /* Selectable archetypes, in menu order. */
 var ARCH_ORDER = ['solar-ground','solar-tracker','solar-roof','solar-carport',
-  'compute-pod','bess-container','bess-cabinet','pcs','ems',
+  'compute-pod','bess-container','bess-assembly','bess-cabinet','pcs','ems',
   'xfmr','switchgear','meter','panel','disco','jbox','genset','ups','pole',
   'building','pad','fence','compound','road','bollard','parking','tree','hydrant','camera',
   'substation','charger','ignore'];
@@ -140417,6 +141929,24 @@ function overlapFrac(a, b){
    then raw pixels, then the app helper, then area, then a visible stub. */
 function shapeBox(sh){
   var p = ppf();
+
+  /* A full BESS assembly is not the battery container alone. Its parts
+     record is the authoritative footprint for the concrete pad, PCS,
+     transformer, disconnect and fence that were laid out together. Using
+     sh.lf/sh.wf here reduced the object to the left-hand container, so the
+     scene centre, ground extent and selection box were all wrong. */
+  if(sh.kind==='assembly' && sh.parts && sh.parts.length && sh.cx != null && sh.cy != null){
+    var ap = [], ai;
+    for(ai=0; ai<sh.parts.length; ai++){
+      var part = sh.parts[ai] || {}, pl = +part.lf || 0, pw = +part.wf || 0;
+      if(!(pl>0) || !(pw>0)) continue;
+      ap.push({ x:sh.cx + ((+part.dx||0) - pl/2)*p,
+                y:sh.cy + ((+part.dy||0) - pw/2)*p });
+      ap.push({ x:sh.cx + ((+part.dx||0) + pl/2)*p,
+                y:sh.cy + ((+part.dy||0) + pw/2)*p });
+    }
+    if(ap.length){ var ab = bboxOfPts(ap); ab.src='assembly parts'; return ab; }
+  }
 
   /* --- 1. feet: true regardless of drawing scale -------------------- */
   if(sh._ftBoundary && sh._ftBoundary.length > 2 && sh.pts && sh.pts[0]){
@@ -140522,7 +142052,8 @@ var EQ_ARCH = {
   ems:'ems',
   /* Modular data-center units are compute, not storage */
   dc_cruiser:'compute-pod', dc_triton:'compute-pod',
-  dc_leviathan:'compute-pod'
+  dc_leviathan:'compute-pod', dc_mdc1:'compute-pod',
+  dc_ztmm1:'compute-pod', dc_ztmm1b:'compute-pod'
 };
 
 /* THE GUIDED BUILDS DO NOT SET eqId.
@@ -140554,6 +142085,9 @@ var ROLE_ARCH = {
 
 function classifyElement(el){
   if(el._visArch && ARCH[el._visArch]) return { arch:el._visArch, why:'explicit' };
+  /* Legacy and wizard BESS assemblies carry their identity in .type rather
+     than eqId. Without this they fell through to an anonymous junction box. */
+  if(el.type==='bess-asm') return { arch:'bess-container', why:'authored' };
   var id = String(el.eqId||'');
   if(EQ_ARCH[id]) return { arch:EQ_ARCH[id], why:'authored' };
 
@@ -140657,7 +142191,7 @@ function classifySolar(sh, ctx){
 /* Non-solar shapes. */
 var SHAPE_ARCH = {
   parking:'parking', adaaisle:'parking', evstencil:'parking', adastencil:'parking',
-  bespad:'bess-container', assembly:'bess-container', energy:'bess-container',
+  bespad:'bess-container', assembly:'bess-assembly', energy:'bess-container',
   substation:'substation', utility:'xfmr',
   evl2:'charger', evcab:'charger', evpost:'charger', evunit:'charger',
   derwind:'ignore', deralt:'genset', derdc:'compute-pod',
@@ -140677,6 +142211,14 @@ function classifyShape(sh, ctx){
   }
   var k = String(sh.kind||'');
   if(k==='dersolar' || k==='solar') return classifySolar(sh, ctx);
+  /* Utility items share one 2D shape type but name their actual device in
+     utype. Treating the whole family as transformers made meters and
+     disconnects appear as large pad-mounts in the visualizer. */
+  if(k==='utility'){
+    var uk = String(sh.utype||'').toLowerCase();
+    var ua = { xfmr:'xfmr', meter:'meter', disco:'disco', ct:'jbox', mpoi:'meter' }[uk] || 'jbox';
+    return { arch:ua, why:'authored' };
+  }
   if(SHAPE_ARCH[k]) return { arch:SHAPE_ARCH[k], why:'authored' };
   /* A rectangle that encloses everything else on the drawing is the
      property line, not a warehouse. readSite flags it (see the context
@@ -140883,6 +142425,14 @@ function readSite(){
       rot: +sh.rot||0,
       approx: !!b.approx, boxSrc: b.src || '?'
     });
+    /* Assembly part offsets are relative to the authored assembly centre,
+       not to the (asymmetric) overall bounds that include the gear column.
+       Anchor the wrapper at that centre so every child lands on the same
+       point as it does in the 2D layout. */
+    if(sh.kind==='assembly' && sh.cx != null && sh.cy != null){
+      var ac = tfPt(sh.cx, sh.cy);
+      it.x = fx(ac.x); it.z = fz(ac.y); it.assemblyScale = scF;
+    }
     /* carry the design data the 3D builders need */
     it.kw       = +sh.kw || 0;
     it.gcr      = +sh.gcr || 0;
@@ -140985,31 +142535,46 @@ function readSite(){
     var eb = elementBox(ele), wpx = eb.w;
     /* Real footprints where the app knows them, so a transformer is 6x5 ft
        and not a 60 px square that happens to be whatever the drop size was. */
-    var fw = wpx/p, fl = eb.h/p;
+    var fw = wpx/p, fl = eb.h/p, footprintSource = '2D symbol';
     try{
       var gf = (typeof EQ_FOOTPRINT_FT!=='undefined') ? EQ_FOOTPRINT_FT[ele.eqId] : null;
       var dc = (typeof DC_CATALOG!=='undefined') ? DC_CATALOG[ele.eqId] : null;
-      if(dc){ fw = dc.lf*(+ele._modelScale||1); fl = dc.wf*(+ele._modelScale||1); }
-      else if(gf){ fw = gf.lf*(+ele._modelScale||1); fl = gf.wf*(+ele._modelScale||1); }
+      if(ele.type==='bess-asm'){
+        /* A legacy BESS assembly's 400 px drawing symbol is deliberately
+           legible, not a physical dimension. Use its selected catalogue
+           footprint whenever it is available; otherwise retain the visual
+           size but make that fact auditable instead of silently treating a
+           symbol as a surveyed container. */
+        var bc = (ele.bessId && S_.bessList) ? S_.bessList.filter(function(x){ return x.id===ele.bessId; })[0] : null;
+        bc = bc || ele._cfgSnapshot || null;
+        var bd = bc && typeof GOTION_CATALOG_DIMS!=='undefined' && bc.catalogKey
+          ? GOTION_CATALOG_DIMS[bc.catalogKey] : null;
+        if(bd){
+          fw = bd.lf*(+ele._modelScale||1); fl = bd.wf*(+ele._modelScale||1);
+          footprintSource = 'BESS catalog';
+        } else footprintSource = 'BESS symbol (catalogue footprint unavailable)';
+      } else if(dc){
+        fw = dc.lf*(+ele._modelScale||1); fl = dc.wf*(+ele._modelScale||1);
+        footprintSource = 'equipment catalog';
+      } else if(gf){
+        fw = gf.lf*(+ele._modelScale||1); fl = gf.wf*(+ele._modelScale||1);
+        footprintSource = 'equipment catalog';
+      }
     }catch(e2){}
+    var productVisual=window.OmegaEquipmentVisuals && window.OmegaEquipmentVisuals.resolve(ele,ce.arch);
+    if(productVisual){
+      fw=productVisual.product.w/12; fl=productVisual.product.d/12;
+      footprintSource=productVisual.exact?'manufacturer enclosure':'reference enclosure (model unverified)';
+    }
     out.items.push(mkItem(ele, 'element', ce, {
       x: fx(eb.x + eb.w/2), z: fz(eb.y + eb.h/2),
-      wf: fw, lf: fl, rot: +ele.rot||0
+      wf: fw, lf: fl, rot: +ele.rot||0, boxSrc:footprintSource
     }));
   }
 
-  /* Apply the same shape translation/scale to authored outlines and tables.
-     Rotation remains on the placement wrapper, so it is applied once. */
-  out.items.forEach(function(item){
-    if(item.src!=='shape')return;
-    var ref=item.ref,scale=+ref.scale||1,tx=+ref.tx||0,ty=+ref.ty||0;
-    if(scale===1&&!tx&&!ty)return;
-    var raw=shapeBox(ref);if(!raw)return;
-    var ox=raw.x+raw.w/2,oy=raw.y+raw.h/2;
-    function point(q){return {x:fx(ox+(q.x*p+cx-ox)*scale+tx),z:fz(oy+(q.z*p+cy-oy)*scale+ty)};}
-    if(item.poly)item.poly=item.poly.map(point);
-    if(item.tables)item.tables=item.tables.map(function(t){var q=point(t);q.wf=t.wf*scale;q.lf=t.lf*scale;q.a=t.a;return q;});
-  });
+  /* Tables and outlines pass through tfPt() as they are read above. Do not
+     apply the shape transform again here: doing so moved every translated or
+     resized solar shape twice, while its wrapper moved only once. */
   /* --- conduits ------------------------------------------------------ */
   out.conduits = [];
   var cds = S_.conduits || [];
@@ -141145,7 +142710,7 @@ function mkItem(ref, src, c, geo){
   };
   if(geo){
     it.x=geo.x; it.z=geo.z;
-    it.wf=Math.max(0.4,geo.wf); it.lf=Math.max(0.4,geo.lf);
+    it.wf=Math.max(0.05,geo.wf); it.lf=Math.max(0.05,geo.lf);
     it.rot=geo.rot; it.approx=!!geo.approx; it.boxSrc=geo.boxSrc||'';
   }
   /* HEIGHT ABOVE GRADE rides on the drawing object, not on the item.
@@ -142176,6 +143741,95 @@ function buildContainer(it, arch){
   return g;
 }
 
+/* COMPLETE BESS ASSEMBLY.
+
+   The 2D BESS Pad tool writes an explicit parts list in feet. Rendering only
+   the battery shell discarded the PCS, transformer, disconnect, concrete
+   pad and required protection that the map had already placed. Build the
+   same topology here from that source of truth, keeping every child in the
+   assembly's local coordinate system so a move or rotation stays rigid. */
+function buildBessAssembly(it, arch){
+  var g = new THREE.Group();
+  var sh = it.ref || {}, parts = sh.parts || [];
+  var hasParts = false, as = (+it.assemblyScale > 0) ? +it.assemblyScale : 1;
+
+  function partItem(part){
+    return { wf:Math.max(0.4, (+part.lf || 1)*as), lf:Math.max(0.4, (+part.wf || 1)*as),
+             arch:part.key, ref:sh, label:part.label || part.key };
+  }
+  function put(part, node){
+    if(!node) return;
+    node.position.set((+part.dx || 0)*as, 0, (+part.dy || 0)*as);
+    g.add(node);
+  }
+
+  parts.forEach(function(part){
+    if(!part || !(+part.lf>0) || !(+part.wf>0)) return;
+    hasParts = true;
+    var pi = partItem(part), key = String(part.key || '').toLowerCase(), node = null;
+    if(key==='concpad' || part.isPad){
+      node = buildPad(pi);
+    } else if(key==='bess' || part.isBattery){
+      node = buildContainer(pi, ARCH['bess-container']);
+    } else if(key==='xfmr' || key==='transformer'){
+      node = buildXfmr(pi, ARCH.xfmr);
+    } else if(key==='pcs' || key==='inverter'){
+      node = buildCabinet(pi, ARCH.pcs, MAT.cabinet);
+    } else if(key==='disco' || key==='disconnect'){
+      node = buildCabinet(pi, ARCH.disco, MAT.cabinet);
+    } else if(key==='ems' || key==='panel'){
+      node = buildCabinet(pi, ARCH[key] || ARCH.ems, MAT.cabinet);
+    }
+    put(part, node);
+  });
+
+  if(!hasParts){
+    /* Saved projects created before the parts model still have a useful
+       container rather than disappearing. */
+    return buildContainer(it, ARCH['bess-container']);
+  }
+
+  /* Use the same parts envelope, side selection and spacing as renderAssembly.
+     A generic compound adds an invented gate and loses per-side protection. */
+  var minX=Infinity, minZ=Infinity, maxX=-Infinity, maxZ=-Infinity;
+  parts.forEach(function(part){
+    if(!part || !(+part.lf>0) || !(+part.wf>0)) return;
+    var x=+part.dx||0, z=+part.dy||0;
+    minX=Math.min(minX,x-part.lf/2); maxX=Math.max(maxX,x+part.lf/2);
+    minZ=Math.min(minZ,z-part.wf/2); maxZ=Math.max(maxZ,z+part.wf/2);
+  });
+  var legacySide=sh.hasFence ? (sh.hasBollards?'both':'fence') : (sh.hasBollards?'bollards':'none');
+  var sides=sh.sides || {n:legacySide,e:legacySide,s:legacySide,w:legacySide};
+  var clearance=sh.fenceClear!=null ? Math.max(0,+sh.fenceClear||0) : 10.5;
+  var left=(minX-clearance)*as, right=(maxX+clearance)*as;
+  var top=(minZ-clearance)*as, bottom=(maxZ+clearance)*as;
+  var edges={n:[left,top,right,top],e:[right,top,right,bottom],
+    s:[right,bottom,left,bottom],w:[left,bottom,left,top]};
+  var inset=Math.min(sh.bollardOffset!=null ? Math.max(0,+sh.bollardOffset||0) : 2.33,clearance*0.5)*as;
+  var bollEdges={n:[left+inset,top+inset,right-inset,top+inset],
+    e:[right-inset,top+inset,right-inset,bottom-inset],
+    s:[right-inset,bottom-inset,left+inset,bottom-inset],
+    w:[left+inset,bottom-inset,left+inset,top+inset]};
+  var spacing=(+sh.bollardSpacing>0 ? +sh.bollardSpacing : 3)*as, seen={};
+  ['n','e','s','w'].forEach(function(side){
+    var value=sides[side], edge=edges[side];
+    if(value==='fence'||value==='both') fenceRun(g,edge[0],edge[1],edge[2],edge[3],ARCH.fence.h,100);
+    if(value!=='bollards'&&value!=='both') return;
+    edge=bollEdges[side];
+    var dx=edge[2]-edge[0], dz=edge[3]-edge[1];
+    var steps=Math.max(1,Math.round(Math.sqrt(dx*dx+dz*dz)/spacing));
+    for(var i=0;i<=steps;i++){
+      var bx=edge[0]+dx*i/steps, bz=edge[1]+dz*i/steps;
+      var key=bx.toFixed(4)+','+bz.toFixed(4);
+      if(seen[key]) continue;
+      seen[key]=true;
+      var boll=buildBollard({wf:0.5,lf:0.5},ARCH.bollard);
+      boll.position.set(bx,0,bz); g.add(boll);
+    }
+  });
+  return g;
+}
+
 function buildCabinet(it, arch, mat){
   var g = new THREE.Group();
   var w = Math.max(2, it.wf), d = Math.max(1.5, it.lf), h = arch.h;
@@ -142404,6 +144058,16 @@ function buildParking(it){
 function buildFence(it, arch){
   var g = new THREE.Group();
   var w = Math.max(2, it.wf), d = Math.max(0.2, it.lf), h = arch.h;
+  /* A drawn rectangle is an enclosure, not one long panel through its
+     centre. Keep genuinely thin fence runs as runs. */
+  if(d >= 4 && w >= 4 && Math.min(w,d)/Math.max(w,d) >= 0.15){
+    var hw=w/2, hd=d/2;
+    fenceRun(g,-hw,-hd, hw,-hd,h,60);
+    fenceRun(g, hw,-hd, hw, hd,h,60);
+    fenceRun(g, hw, hd,-hw, hd,h,60);
+    fenceRun(g,-hw, hd,-hw,-hd,h,60);
+    return g;
+  }
   /* A fence drawn as a long thin rect runs along its long side. */
   var len = Math.max(w, d), along = (w >= d);
   var mesh = new THREE.Mesh(new THREE.PlaneGeometry(len, h), MAT.mesh);
@@ -142509,7 +144173,9 @@ function buildRoad(it, arch){
     var b = { x:(pts[i].x-cx)/p,   z:(pts[i].y-cy)/p };
     var dx = b.x-a.x, dz = b.z-a.z, len = Math.sqrt(dx*dx+dz*dz);
     if(len < 1) continue;
-    var seg = box(len + w, 0.25, w, MAT.concrete);
+    /* Width belongs across the route, not at both ends. Extending every
+       segment by its full width made bends overshoot their drawn endpoints. */
+    var seg = box(len, 0.18, w, MAT.concrete);
     seg.position.set((a.x+b.x)/2, 0.12, (a.z+b.z)/2);
     seg.rotation.y = -Math.atan2(dz, dx);
     seg.receiveShadow = true; seg.castShadow = false;
@@ -142789,7 +144455,7 @@ var V = {
   sun:null, hemi:null, sunInfo:null, onCamera:null,
   target:null, sph:{ r:400, theta:0.85, phi:0.95 },
   layers:{}, opts:{ hour:13, day:172, shadows:true, sat:true, showAll:false, quality:'high', buildings:false },
-  needsRender:true, disposed:false
+  needsRender:true, disposed:false, groundToken:0
 };
 
 function skyTexture(hour, sun){
@@ -143021,6 +144687,10 @@ function applySun(span){
    single biggest thing separating "a 3D diagram" from "a picture of the
    site", so it is worth the alignment arithmetic. */
 function buildGround(site, span){
+  /* Ground texture loads are asynchronous. Ignore callbacks from an older
+     refresh so stale maps cannot paint over the current 3D scene. */
+  var groundToken = ++V.groundToken;
+  function currentGround(){ return !V.disposed && V.groundToken === groundToken; }
   while(V.groundGrp.children.length){
     var g0 = V.groundGrp.children[0];
     /* The satellite plane owns its own texture and material (unlike the
@@ -143035,6 +144705,7 @@ function buildGround(site, span){
   /* Per build. Left set from an earlier success, a later failed request
      never fell back to the capture plane and the ground stayed bare. */
   V.__wideGroundOk = false;
+  V.__nearGroundOk = false;
 
   /* ── THE GROUND HAS TO REACH AS FAR AS THE EYE ──────────────────────
      span*14 is sized from the SITE, so orbiting out past it ran the camera
@@ -143062,7 +144733,9 @@ function buildGround(site, span){
     else if(bd && bd.src) src = bd.src;
     if(!src && window._frozenMapImg) src = window._frozenMapImg;
   }catch(e){}
-  if(!src || !scEl) return;
+  /* A live map may not have a cached screenshot yet. Static Maps needs the
+     canvas and coordinates, not a screenshot, so keep that clean path open. */
+  if(!scEl) return;
 
   /* #sc carries a CSS translate/scale (pinch zoom, Recenter), so its
      bounding rect is the SCREEN size. The backdrop and every shape are in
@@ -143091,7 +144764,16 @@ function buildGround(site, span){
 
      Falls back to the frozen capture when there is no key, so nothing
      gets worse for a deployment without Static Maps enabled. */
-  var wideSrc = null, wideSpanFt = 0, _haveKey = false;
+  var wideSrc = null, wideSpanFt = 0, nearSrc = null, _haveKey = false, captureGround = null;
+
+  function removeCaptureGround(){
+    if(!captureGround) return;
+    try{ if(captureGround.material && captureGround.material.map) captureGround.material.map.dispose(); }catch(e){}
+    try{ if(captureGround.material) captureGround.material.dispose(); }catch(e2){}
+    try{ if(captureGround.geometry) captureGround.geometry.dispose(); }catch(e3){}
+    try{ V.groundGrp.remove(captureGround); }catch(e4){}
+    captureGround = null;
+  }
 
   /* Says which of the two grounds is actually on screen, in the panel, in
      plain words. Silence here is what made a documented fallback look like a
@@ -143100,7 +144782,10 @@ function buildGround(site, span){
     try {
       var n = document.getElementById('ov-satv');
       if (!n) return;
-      if (state === 'clean') {
+      if (state === 'upload') {
+        n.textContent = 'Uploaded site image — using the canvas scale, position and rotation.';
+        n.style.color = '';
+      } else if (state === 'clean') {
         n.textContent = 'Server-rendered satellite image \u2014 one piece, no gaps.';
         n.style.color = '';
       } else if (state === 'refused') {
@@ -143144,7 +144829,7 @@ function buildGround(site, span){
 
   try {
     var _key = '';
-    try { _key = (window._CFG && _CFG.googleMapsKey) || localStorage.getItem('clearsky_maps_key') || ''; } catch(e){}
+    try { _key = ((typeof _CFG!=='undefined' && _CFG && _CFG.googleMapsKey) || localStorage.getItem('clearsky_maps_key') || ''); } catch(e){}
     _haveKey = !!_key;
     /* WHERE IS THIS SITE?
 
@@ -143168,7 +144853,22 @@ function buildGround(site, span){
     if ((!_ms || _ms.lat == null) && site.lat != null) _ms = { lat: site.lat, lng: site.lng };
     if (_ms && _ms.lat == null) _ms = null;
 
-    if (_key && _ms && _ms.lat != null) {
+    var _uploadedGround = !!(window._isUploadedPhoto || (typeof mapMode!=='undefined' && mapMode==='upload'));
+    if (_key && _ms && _ms.lat != null && !_uploadedGround) {
+      /* Exact foreground: same map centre, zoom and visible canvas extent as
+         the editor. It is the alignment reference for equipment on the map;
+         the wider image below is context only. */
+      var _nearZ = (_ms.zoom != null && isFinite(+_ms.zoom)) ? Math.round(+_ms.zoom) : null;
+      var _nearW = Math.max(1, Math.round(rect.width)), _nearH = Math.max(1, Math.round(rect.height));
+      while((_nearW > 640 || _nearH > 640) && _nearZ > 1){
+        _nearW = Math.max(1, Math.round(_nearW/2));
+        _nearH = Math.max(1, Math.round(_nearH/2));
+        _nearZ--;
+      }
+      if(_nearZ !== null) nearSrc = 'https://maps.googleapis.com/maps/api/staticmap?center=' + _ms.lat + ',' + _ms.lng
+        + '&zoom=' + _nearZ + '&size=' + _nearW + 'x' + _nearH
+        + '&scale=2&maptype=satellite&format=jpg&key=' + _key;
+
       /* Cover roughly three times the site's long side, so the imagery still
          reads at the edges of an orbit rather than cutting off.
 
@@ -143200,11 +144900,37 @@ function buildGround(site, span){
     }
   } catch(e){}
 
+  /* The foreground is calibrated to the live canvas. This is deliberately
+     separate from the large context texture: a broad map is useful outside
+     the site, but cannot also be the pixel-for-pixel reference beneath the
+     2D design. */
+  if(nearSrc){
+    var nl = new THREE.TextureLoader();
+    nl.setCrossOrigin('anonymous');
+    nl.load(nearSrc, function(nt){
+      if(!currentGround()){ try{ nt.dispose(); }catch(e){} return; }
+      try{ if(THREE.sRGBEncoding !== undefined) nt.encoding = THREE.sRGBEncoding; }catch(e){}
+      nt.anisotropy = (QUALITY[V.opts.quality] || QUALITY.high).aniso;
+      var nm = new THREE.MeshStandardMaterial({ map:nt, roughness:0.97, metalness:0.0 });
+      var ng = new THREE.Mesh(new THREE.PlaneGeometry(rect.width/p, rect.height/p), nm);
+      ng.rotation.x = -Math.PI/2;
+      ng.position.set((rect.width/2-o.x)/p, 0.03, (rect.height/2-o.y)/p);
+      ng.receiveShadow = true;
+      removeCaptureGround();
+      V.groundGrp.add(ng);
+      V.__nearGroundOk = true;
+      _satNote('clean');
+      V.needsRender = true;
+    }, undefined, function(){
+      if(currentGround()) addCapturePlane();
+    });
+  }
+
   if (wideSrc && wideSpanFt > 0) {
     var wl = new THREE.TextureLoader();
     wl.setCrossOrigin('anonymous');
     wl.load(wideSrc, function(wt){
-      if(V.disposed) return;
+      if(!currentGround()){ try{ wt.dispose(); }catch(e){} return; }
       try{ if(THREE.sRGBEncoding !== undefined) wt.encoding = THREE.sRGBEncoding; }catch(e){}
       wt.anisotropy = (QUALITY[V.opts.quality] || QUALITY.high).aniso;
       var wm = new THREE.MeshStandardMaterial({ map:wt, roughness:0.97, metalness:0.0 });
@@ -143221,10 +144947,11 @@ function buildGround(site, span){
       _satNote('clean');
       V.needsRender = true;
     }, undefined, function(){
+      if(!currentGround()) return;
       if(window.console) console.warn('[ground] Static Maps refused \u2014 enable "Maps Static API" '
         + 'on the key. Falling back to the frozen viewport capture, which is holed wherever '
         + 'a map tile had not finished loading and carries the attribution text in the pixels.');
-      try { if (window.__omegaAddCapturePlane) window.__omegaAddCapturePlane(); } catch(e){}
+      try { addCapturePlane(); } catch(e){}
     });
 
     /* ── AND A WIDER ONE BEHIND IT ──────────────────────────────────────
@@ -143254,7 +144981,7 @@ function buildGround(site, span){
     var cl = new THREE.TextureLoader();
     cl.setCrossOrigin('anonymous');
     cl.load(_ctxUrl, function(ct){
-      if(V.disposed) return;
+      if(!currentGround()){ try{ ct.dispose(); }catch(e){} return; }
       try{ if(THREE.sRGBEncoding !== undefined) ct.encoding = THREE.sRGBEncoding; }catch(e){}
       ct.anisotropy = (QUALITY[V.opts.quality] || QUALITY.high).aniso;
       var cmat = new THREE.MeshStandardMaterial({ map:ct, roughness:0.99, metalness:0.0 });
@@ -143287,18 +145014,18 @@ function buildGround(site, span){
      image loads, the screenshot is never drawn. */
   var _capturePlaced = false;
   function addCapturePlane(){
-    if (_capturePlaced || V.disposed) return;
+    if (_capturePlaced || !currentGround() || V.__nearGroundOk || !src) return;
     _capturePlaced = true;
-    _satNote(_haveKey ? 'refused' : 'nokey');
+    _satNote(_uploadedGround ? 'upload' : (_haveKey ? 'refused' : 'nokey'));
     _loadCapture();
   }
   window.__omegaAddCapturePlane = addCapturePlane;
 
-  if (wideSrc && wideSpanFt > 0) {
-    /* Give Static Maps a moment; if it has not produced a plane, fall
-       back rather than leaving the ground bare. */
+  if (nearSrc || (wideSrc && wideSpanFt > 0)) {
+    /* Give the exact foreground request a moment; if it has not produced a
+       plane, use the saved canvas image rather than leaving the site bare. */
     setTimeout(function(){
-      if (!V.disposed && !V.__wideGroundOk) addCapturePlane();
+      if (currentGround() && !V.__nearGroundOk) addCapturePlane();
     }, 6000);
   } else {
     addCapturePlane();
@@ -143307,15 +145034,35 @@ function buildGround(site, span){
   function _loadCapture(){
   var loader = new THREE.TextureLoader();
   loader.load(src, function(tex){
-    if(V.disposed) return;
+    if(!currentGround() || V.__nearGroundOk){ try{ tex.dispose(); }catch(e){} return; }
     try{ if(THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding; }catch(e){}
     tex.anisotropy = (QUALITY[V.opts.quality] || QUALITY.high).aniso;
     var m = new THREE.MeshStandardMaterial({ map:tex, roughness:0.97, metalness:0.0 });
-    var g = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
+    /* Match CSS object-fit:cover and the uploaded-photo transform. The old
+       ground always stretched an image to the canvas and ignored pan, zoom
+       and rotation, so the 3D objects drifted off their 2D locations. */
+    var drawW = rect.width, drawH = rect.height, photoTransform = false;
+    try{
+      photoTransform = !!(window._isUploadedPhoto || (typeof mapMode!=='undefined' && mapMode==='upload'));
+      if(photoTransform && tex.image && tex.image.width && tex.image.height){
+        var cover = Math.max(rect.width/tex.image.width, rect.height/tex.image.height);
+        drawW = tex.image.width*cover; drawH = tex.image.height*cover;
+      }
+    }catch(e){}
+    var g = new THREE.Mesh(new THREE.PlaneGeometry(drawW/p, drawH/p), m);
     g.rotation.x = -Math.PI/2;
-    g.position.set(x0 + w/2, 0.02, z0 + h/2);
+    var gx = (rect.width/2 - o.x)/p, gz = (rect.height/2 - o.y)/p;
+    if(photoTransform){
+      var bg = (typeof BG!=='undefined' && BG) ? BG : { scale:1, tx:0, ty:0, rot:0 };
+      var bs = (+bg.scale>0) ? +bg.scale : 1;
+      gx += (+bg.tx||0)/p; gz += (+bg.ty||0)/p;
+      g.scale.set(bs, bs, 1);
+      g.rotation.z = -(+bg.rot||0) * Math.PI/180;
+    }
+    g.position.set(gx, 0.02, gz);
     g.receiveShadow = true;
     V.groundGrp.add(g);
+    captureGround = g;
 
     /* ── WHAT SURROUNDS THE IMAGERY ──────────────────────────────────
        The satellite plane only covers the area that was captured. Beyond
@@ -143439,14 +145186,15 @@ function populate(site){
         it._impliedRoof = ru.implied;
         g = buildSolarRoof(it, arch, ru.y, ru.implied); break;
       case 'bess-container': g = buildContainer(it, arch); break;
+      case 'bess-assembly':  g = buildBessAssembly(it, arch); break;
       case 'compute-pod':    g = buildContainer(it, arch); break;
       case 'bess-cabinet':   g = buildBessCabinet(it, arch); break;
       case 'pcs':            g = buildCabinet(it, arch); break;
       case 'ems':            g = buildCabinet(it, arch); break;
       case 'ups':            g = buildCabinet(it, arch); break;
-      case 'panel':          g = buildCabinet(it, arch); break;
-      case 'disco':          g = buildCabinet(it, arch); break;
-      case 'meter':          g = buildCabinet(it, arch); break;
+      case 'panel':
+      case 'disco':
+      case 'meter':          g = window.OmegaEquipmentVisuals ? window.OmegaEquipmentVisuals.build(it,THREE) : buildCabinet(it,arch); break;
       case 'jbox':           g = buildCabinet(it, arch); break;
       case 'xfmr':           g = buildXfmr(it, arch); break;
       case 'switchgear':     g = buildSwitchgear(it, arch); break;
@@ -143463,7 +145211,7 @@ function populate(site){
       case 'tree':           g = buildTree(it, arch); break;
       case 'hydrant':        g = buildHydrant(it, arch); break;
       case 'camera':         g = buildCamera(it, arch); break;
-      case 'charger':        g = buildCharger(it, arch); break;
+      case 'charger':        g = (window.OmegaEquipmentVisuals && window.OmegaEquipmentVisuals.build(it,THREE)) || buildCharger(it, arch); break;
       default: return;
     }
     if(!g) return;
@@ -144085,6 +145833,24 @@ function paintSide(){
         +  Math.round(it._builtSqft).toLocaleString() + ' sqft module \u00b7 '
         +  pctD + '% of design \u00b7 covers ' + pctL + '% of the area</div>';
     }
+    var equipmentVisuals=window.OmegaEquipmentVisuals;
+    var productView=equipmentVisuals && equipmentVisuals.resolve(it.ref,it.arch);
+    if(equipmentVisuals && ['panel','meter','disco','charger'].indexOf(it.arch)>=0){
+      h+='<div class="ov-im" style="margin-top:8px">Product appearance</div><select data-product="'+esc(it.id)+'" style="width:100%;font-size:11px;margin-top:4px">'
+        +'<option value="">From drawing / reference</option>';
+      Object.keys(equipmentVisuals.products).forEach(function(key){
+        var product=equipmentVisuals.products[key];
+        if(product.kind===it.arch) h+='<option value="'+key+'"'+(it.ref._visProduct===key?' selected':'')+'>'+esc(product.name)+'</option>';
+      });
+      h+='</select>';
+      if(productView){
+        var vp=productView.product;
+        h+='<div class="ov-im" style="margin-top:5px">'+(productView.exact?'Product geometry: ':'Reference only; existing model unverified: ')+esc(vp.name)
+          +'<br>'+vp.w+' × '+vp.h+' × '+vp.d+' in (W × H × D)<br>'+esc(vp.description)
+          +'<br><a href="'+esc(vp.url)+'" target="_blank" rel="noopener" style="color:#93c5fd">Manufacturer reference</a>'
+          +'<br>Appearance selection only; equipment ratings and BOM stay as drawn. Mounting support and meter face are illustrative.</div>';
+      }
+    }
     if(it.basis){
       h += '<div class="ov-im" style="margin-top:2px;color:#9FB8DE">'
         +  esc(it.basis) + '</div>';
@@ -144171,6 +145937,18 @@ function fmtHour(v){
 
 function wireSide(){
   var side = el('ov-side'); if(!side) return;
+
+  each(side.querySelectorAll('[data-product]'),function(select){
+    select.onchange=function(){
+      var id=select.getAttribute('data-product');
+      var item=V.site.items.filter(function(it){return it.id===id;})[0];
+      if(!item)return;
+      if(select.value)item.ref._visProduct=select.value;
+      else delete item.ref._visProduct;
+      try{if(typeof renderAll==='function')renderAll();if(typeof pushHist==='function')pushHist();}catch(e){}
+      reload();
+    };
+  });
 
   each(side.querySelectorAll('[data-view]'), function(b){
     b.onclick = function(){ setView(b.getAttribute('data-view')); };
@@ -151802,6 +153580,23 @@ function run(cb){
   var body = { lat: s.lat, lng: s.lng, address: s.address, sizeMw: s.sizeMw,
                dealId: (function(){ try { return new URLSearchParams(location.search).get('id') || ''; } catch (e) { return ''; } })() };
 
+  /* Event Layer: every way this run ends goes through cb, so the one wrap
+     records tool.run (inputs, answer, time) and, on an answer, score.computed. */
+  var T0 = Date.now(), _cb = cb;
+  cb = function (j, err) {
+    try {
+      if (window.OmegaEvents) {
+        var pid = window._projectId || null;
+        OmegaEvents.emit('tool.run', { toolId: 'editor', calc: 'grid-atlas', durationMs: Date.now() - T0,
+          ok: !!j, projectId: pid, inputs: body, outputs: j || { error: String(err || '') } });
+        if (j) OmegaEvents.emit('score.computed', { projectId: pid, score: j.score == null ? null : j.score,
+          band: verdict(j).state, inputsVersion: j.model || j.build || null });
+        else OmegaEvents.error('editor', 'grid-atlas', String(err || 'no answer'));
+      }
+    } catch (e) {}
+    return _cb(j, err);
+  };
+
   var done = false;
   var to = setTimeout(function(){
     if (done) return; done = true; BUSY = false;
@@ -155685,7 +157480,7 @@ if (root.console && console.info) {
   if (P && P.ptype) {
     try { if (root.OmegaProjectTypes && OmegaProjectTypes.set) OmegaProjectTypes.set(P.ptype); } catch (e) {}
   }
-  var ST = { params: P, step: 'idle', log: [], stoppedAt: null, error: null, parcel: null,
+  var ST = { t0: Date.now(), params: P, step: 'idle', log: [], stoppedAt: null, error: null, parcel: null,
              roads: 0, centre: null, front: null, stopped: false, fatal: false, armed: false, timers: [] };
   root.__omegaAutopilot = ST;
 
@@ -155827,6 +157622,17 @@ if (root.console && console.info) {
                  zoning: j.zoning || null, county: j.county || null, source: j.source || null };
       });
     });
+    /* Event Layer: tool.run for the lookup. The owner's name and APN are a
+       third party's, not the customer's calculation data — they stay out. */
+    if (window.OmegaEvents) {
+      var t0 = Date.now(), ev = function (ok, v) {
+        OmegaEvents.emit('tool.run', { toolId: 'editor', calc: 'parcel', durationMs: Date.now() - t0, ok: ok,
+          projectId: root._projectId || null, inputs: { lat: +lat, lng: +lng },
+          outputs: v ? { found: true, vertices: v.ring.length, acres: v.acres, zoning: v.zoning,
+                         county: v.county, source: v.source } : { found: false } });
+      };
+      p.then(function (v) { ev(true, v); }, function (e) { ev(false, null); OmegaEvents.error('editor', 'parcel', e); });
+    }
     parcelCache[key] = p;
     p.then(null, function () { delete parcelCache[key]; });
     return p;
@@ -156510,6 +158316,16 @@ if (root.console && console.info) {
     msg.type = 'OMEGA_AUTOPILOT'; msg.projectId = root._projectId || null;
     ST.last = msg;
     if (P.from === 'jarvis') { try { if (root.opener) root.opener.postMessage(msg, root.location.origin); } catch (e) {} }
+    /* Event Layer: once per run, at its end ('poi' is a pause for a human). */
+    if (msg.stoppedAt !== 'poi' && !ST.evSent && root.OmegaEvents) {
+      ST.evSent = true;
+      try {
+        root.OmegaEvents.emit('sitemap.build.completed', { projectId: msg.projectId, stoppedAt: msg.stoppedAt,
+          parcelFound: !!ST.parcel, roadsFound: +ST.roads || 0,
+          scored: msg.gridScore != null || msg.siteScore != null, durationMs: Date.now() - ST.t0,
+          from: P.from || null, mode: P.mode || null });
+      } catch (e) {}
+    }
     log('report ' + msg.stoppedAt);
   }
 
@@ -158484,6 +160300,15 @@ if (root.console && console.info) {
     clearPrevious();
 
     var pSpec = r.podSpec || { id: 'dc_leviathan', label: 'MDC', kw: 1000, lf: 40, wf: 10 };
+    /* ZTMM blocks are not all the same size (1 MW is two containers, the
+       5 MW block is seven). Slots are packed at the largest block so each
+       one fits, and every shape is then written at its own block's size. */
+    var zBlocks = (r.ztmm && r.ztmm.blocks && r.ztmm.blocks.length) ? r.ztmm.blocks : null;
+    if (zBlocks) {
+      var zMax = { lf: pSpec.lf, wf: pSpec.wf };
+      zBlocks.forEach(function (b) { if (b.lf > zMax.lf) zMax.lf = b.lf; if (b.wf > zMax.wf) zMax.wf = b.wf; });
+      pSpec = { id: pSpec.id, label: pSpec.label, kw: pSpec.kw, lf: zMax.lf, wf: zMax.wf };
+    }
     var fSpec = r.fcSpec || { label: 'SOFC Fuel Cell (NG)', kw: 300, lf: 9, wf: 6,
                               abbr: 'FC', fuel: 'natural gas' };
 
@@ -158602,12 +160427,14 @@ if (root.console && console.info) {
     }
 
     podSlots.forEach(function (s, i) {
+      var blk = zBlocks ? zBlocks[i] : null;
       push({
         id: (typeof uid === 'function' ? uid() : 'p' + i + Date.now()),
         kind: 'derdc', dcId: pSpec.id || 'dc_leviathan',
         pts: [{ x: s.x, y: s.y }],
-        style: (S.shapeStyle || ''), lf: pSpec.lf, wf: pSpec.wf,
-        model: pSpec.label, kw: pSpec.kw,
+        style: (S.shapeStyle || ''), lf: blk ? blk.lf : pSpec.lf, wf: blk ? blk.wf : pSpec.wf,
+        model: blk ? blk.label : pSpec.label, kw: blk ? blk.itKw : pSpec.kw,
+        ztmm: blk ? { mw: blk.mw, stack: blk.stack.slice(), racks: blk.racks } : undefined,
         scaled: !!(S.pxPerFt > 0), omegaCompute: true
       });
     });
@@ -170703,7 +172530,8 @@ if (root.console && console.info) {
     { n: 126, k: 'OmegaIntercon',     what: 'interconnection choice: none / service point / substation yard' },
     { n: 127, k: 'OmegaMoveSystem',   what: 'move the placed build as one object and re-trench on drop' },
     { n: 128, k: 'OmegaMoveSystem',   what: 'move or swap individual compartments, with live separation checking' },
-    { n: 129, k: 'OmegaComputeHUD',   what: 'load-vs-ceiling panel minimises, closes, and reopens from the View tab' }
+    { n: 129, k: 'OmegaComputeHUD',   what: 'load-vs-ceiling panel minimises, closes, and reopens from the View tab' },
+    { n: 130, k: 'OmegaLeasePanel',   what: 'land lease: four gates, tranche and the offer band on the site on screen; branded proposal' }
   ];
 
   /* Source-level edits have no module to look for, so they are detected
@@ -170937,7 +172765,7 @@ if (root.console && console.info) {
   var PLAN = {
     site:   ['@site-setup', 'rb-trace-boundary', 'rb-trace-exclusion', 'rb-intercon', 'rb-place-sub', 'rb-gas-tie', 'rb-max-fit'],
     design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', 'rb-supply-link', 'rb-move-system', 'rb-feas-csv'],
-    size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-optimise', 'rb-compute-cost']
+    size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-optimise', 'rb-compute-cost', 'rb-compute-lease']
   };
   function panel(key) {
     return document.querySelector('#ribbon .ribbon-page[data-page="compute"] .rpanel[data-ct="' + key + '"] .rpanel-body');
@@ -174101,6 +175929,7 @@ if (root.console && console.info) {
   }
 
   function gate(){
+    if (new URLSearchParams(location.search).get('customerEngine') === '1') return;
     if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length ||
         typeof OmegaCaps === 'undefined') { setTimeout(gate, 200); return; }
     firebase.auth().onAuthStateChanged(function (u) {
@@ -174555,6 +176384,427 @@ root.OmegaEvRelay={ relayAll:relayAll, relayOne:relayOne };
   }
   root.OmegaEditorQA={check:check,log:function(){var r=check();if(root.console){console.group('[OMEGA Editor QA]');console.log(r);console.groupEnd()}return r}};
 })(window);
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+ *  OMEGA PATCH 130 — LAND LEASE, IN THE COMPUTE PANEL
+ *  ---------------------------------------------------------------------
+ *  Every other tool on the Compute tab answers a question about the
+ *  BUILD: how big, on what land, served by what, at what capex. None of
+ *  them answers the question that has to be settled before any of it
+ *  matters — will the person who owns this dirt sign, and what do we pay
+ *  them. A rep had to leave the drawing, open compute-proposal.html, and
+ *  retype an address the editor already knows.
+ *
+ *  This is that tool, on the site already on screen.
+ *
+ *  WHERE THE WORK HAPPENS. Nothing here scores or prices anything. The
+ *  four gates, the tranche rule and the lease rate card are in
+ *  /api/compute-lease.js and stay there (CLAUDE.md, IP protection). The
+ *  fan-out to Grid Atlas, Network Proximity and the parcel record, and
+ *  the four-page proposal, are in omega-compute-lease.js — the same
+ *  client compute-proposal.html uses, deliberately, because two copies
+ *  of a proposal generator means two hosts getting two different offers
+ *  from the same company in the same week.
+ *
+ *  THE PROPOSAL CARRIES THE TENANT'S BRAND, not ClearSky's. It is
+ *  resolved server-side from the caller's own omega_orgs record and
+ *  arrives on the response, so this panel does not resolve branding and
+ *  cannot disagree with the standalone tool about it.
+ * ══════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+  var TAG = '[LeasePanel]';
+  var ID = 'cl-lease-modal';
+
+  /* The screen survives closing the modal. A rep who shuts it to look at
+     the drawing and reopens it should not wait 55 seconds for the fiber
+     lookup a second time — the evidence has not changed, only the view. */
+  var S = { evidence: null, result: null, site: null, busy: false, queued: false };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function $(id) { return document.getElementById(id); }
+  function v(id) { var e = $(id); return e ? String(e.value || '').trim() : ''; }
+  function n(id) { var x = v(id); if (x === '') return null; var f = Number(x); return isFinite(f) ? f : null; }
+
+  /* ── WHERE THE SITE COMES FROM ──────────────────────────────────────
+     The same three fallbacks the Network Proximity panel uses, in the
+     same order, so the two panels never disagree about which point they
+     are looking at. */
+  function siteOf() {
+    var lat = null, lng = null;
+    try {
+      if (typeof root._npxSiteLatLon === 'function') {
+        var p = root._npxSiteLatLon();
+        if (p) { lat = p.lat; lng = p.lon; }
+      }
+    } catch (e) {}
+    if (lat == null) {
+      try { if (root.S && isFinite(+root.S.lat) && isFinite(+root.S.lng) && +root.S.lat !== 0) { lat = +root.S.lat; lng = +root.S.lng; } } catch (e) {}
+    }
+    if (lat == null) {
+      try { var m = root._gmap && root._gmap.getCenter && root._gmap.getCenter(); if (m) { lat = m.lat(); lng = m.lng(); } } catch (e) {}
+    }
+    var addr = '';
+    try { addr = (document.getElementById('addr-in') || {}).value || ''; } catch (e) {}
+    if (lat == null && !addr) return null;
+    return { lat: lat, lng: lng, address: String(addr).trim() };
+  }
+
+  /* ── THE REP'S ANSWERS ──────────────────────────────────────────────
+     Matches the `rep` contract in api/compute-lease.js exactly. Anything
+     unanswered is simply absent: the model treats an unanswered question
+     as UNCONFIRMED, never as a failure, and names it in the ask list. */
+  function rep() {
+    var r = {
+      address: (S.site && (S.site.resolved || S.site.address)) || '',
+      lat: S.site ? S.site.lat : null, lng: S.site ? S.site.lng : null,
+      availableMw: n('cl-mw'), willServe: v('cl-willserve'),
+      fiberOnSite: v('cl-fiber'), fiberDownMbps: n('cl-down'), fiberUpMbps: n('cl-up'),
+      zoningCode: v('cl-zone'),
+      ownerName: v('cl-owner'), willingToLease: v('cl-willing'),
+      maxTermYears: n('cl-term'), leasedAcres: n('cl-acres'),
+      meterPosture: v('cl-meter'), hostEngagement: v('cl-engagement'),
+      termYears: n('cl-leaseterm') || 15
+    };
+    var e = v('cl-energy');
+    if (e === 'true') r.openToEnergyStructure = true;
+    else if (e === 'false') r.openToEnergyStructure = false;
+    return r;
+  }
+
+  /* ── PROGRESS ───────────────────────────────────────────────────────
+     One line per source. A rep watching a slow fiber lookup should see
+     that the power gate has already landed, not one spinner. */
+  var RUN = {};
+  var LABEL = { geocode: 'Address', grid: 'Grid Atlas', fiber: 'Network Proximity',
+                parcel: 'Parcel record', score: 'Scoring' };
+  var COLOR = { ok: '#34D399', warn: '#FBBF24', bad: '#F87171', busy: '#60A5FA' };
+  function paintRun() {
+    var el = $('cl-run'); if (!el) return;
+    var out = [], order = ['geocode', 'grid', 'fiber', 'parcel', 'score'], i;
+    for (i = 0; i < order.length; i++) {
+      var r = RUN[order[i]]; if (!r) continue;
+      out.push('<div style="display:flex;gap:8px;padding:2px 0;font-size:10px">'
+        + '<b style="min-width:112px;color:#94A3B8;font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:9px">'
+        + esc(LABEL[order[i]]) + '</b>'
+        + '<span style="color:' + (COLOR[r.cls] || '#94A3B8') + '">' + esc(r.text) + '</span></div>');
+    }
+    el.innerHTML = out.join('');
+  }
+  var PROGRESS = { onSource: function (key, state, text) { RUN[key] = { cls: state, text: text }; paintRun(); } };
+
+  /* ── RENDER ─────────────────────────────────────────────────────────
+     Internal view. The rep sees gate scores, the tranche, the band and
+     the call list; the host sees none of it — that document is the
+     shared client's proposalPages(). */
+  function pill(status) {
+    var c = status === 'pass' ? '#34D399' : status === 'conditional' ? '#FBBF24'
+          : status === 'fail' ? '#F87171' : '#94A3B8';
+    return '<span style="font-size:8.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;'
+      + 'color:' + c + ';border:1px solid ' + c + '55;background:' + c + '15;padding:2px 7px;border-radius:4px">'
+      + esc(status === 'unconfirmed' ? 'to confirm' : status) + '</span>';
+  }
+  function results() {
+    var r = S.result;
+    if (!r) return '<div style="padding:20px;color:#64748B;font-size:11px">Screening…</div>';
+    var CL = root.OmegaComputeLease, money = CL ? CL.money : function (x) { return '$' + x; };
+    var order = r.gateOrder || ['power', 'fiber', 'zoning', 'siteControl'], i, h = [];
+
+    var vc = r.verdict === 'qualified' ? '#34D399' : r.verdict === 'disqualified' ? '#F87171'
+           : r.verdict === 'conditional' ? '#FBBF24' : '#94A3B8';
+    h.push('<div style="border:1px solid ' + vc + '44;background:' + vc + '12;border-radius:8px;padding:11px 13px;margin-bottom:12px">'
+      + '<div style="font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:' + vc + ';margin-bottom:4px">'
+      + esc(r.verdict) + '</div>'
+      + '<div style="font-size:11px;line-height:1.6;color:#B6C6D8">' + esc(r.verdictReason) + '</div></div>');
+
+    h.push('<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">');
+    for (i = 0; i < order.length; i++) {
+      var g = r.gates[order[i]]; if (!g) continue;
+      h.push('<div style="border:1px solid #1E3A5F;border-radius:7px;padding:9px 10px;background:#0B1728">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+        + '<span style="font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#E2EEF9">'
+        + esc(g.label) + (g.hardGate ? ' <span style="color:#F87171">· hard</span>' : '') + '</span>'
+        + '<span style="font-size:14px;font-weight:800;color:#E2EEF9">' + (g.score == null ? '—' : g.score) + '</span></div>'
+        + '<div style="margin-bottom:5px">' + pill(g.status) + '</div>'
+        + '<div style="font-size:10px;line-height:1.5;color:#8FA6BE">' + esc(g.headline) + '</div></div>');
+    }
+    h.push('</div>');
+
+    if (r.offer) {
+      var o = r.offer;
+      h.push('<div style="border:1px solid #1E3A5F;border-radius:8px;padding:12px;margin-bottom:12px;background:#0B1728">'
+        + '<div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#60A5FA;font-weight:800;margin-bottom:9px">'
+        + 'Land lease · ' + o.termYears + '-year term</div>'
+        + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
+        + band('Hold at', money(o.monthly.low), money(o.annual.low), false)
+        + band('Open at', money(o.monthly.base), money(o.annual.base), true)
+        + band('Ceiling', money(o.monthly.high), money(o.annual.high), false)
+        + '</div>'
+        + '<div style="font-size:10px;line-height:1.6;color:#8FA6BE;margin-top:9px">' + esc(o.howToUse) + '</div></div>');
+    } else {
+      h.push('<div style="border:1px solid #F8717144;background:#F8717112;border-radius:8px;padding:11px 13px;margin-bottom:12px;'
+        + 'font-size:11px;line-height:1.6;color:#FCA5A5">No offer is priced for this site.</div>');
+    }
+
+    var t = r.tranche;
+    h.push('<div style="display:flex;gap:10px;align-items:center;border:1px solid #1E3A5F;border-radius:8px;padding:10px 12px;margin-bottom:12px;background:#0B1728">'
+      + '<div style="width:30px;height:30px;border-radius:7px;background:' + (t.n ? '#2563EB' : '#334155') + ';color:#fff;'
+      + 'display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex:0 0 auto">' + (t.n || '?') + '</div>'
+      + '<div><div style="font-size:11.5px;font-weight:700;color:#E2EEF9">' + esc(t.label) + '</div>'
+      + '<div style="font-size:10px;line-height:1.55;color:#8FA6BE">' + esc(t.why) + '</div></div></div>');
+
+    if (r.asks && r.asks.length) {
+      var asks = r.asks.map(function (a) {
+        return '<li style="margin-bottom:6px;list-style:none;padding-left:13px;position:relative">'
+          + '<span style="position:absolute;left:0;top:6px;width:5px;height:5px;border-radius:50%;background:#FBBF24;display:block"></span>'
+          + '<span style="font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#FBBF24;display:block">'
+          + esc(a.gate) + '</span>' + esc(a.ask) + '</li>';
+      }).join('');
+      h.push('<div style="border:1px solid #1E3A5F;border-radius:8px;padding:11px 13px;background:#0B1728">'
+        + '<div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#FBBF24;font-weight:800;margin-bottom:8px">'
+        + 'What closes this site — ' + r.asks.length + ' open</div>'
+        + '<ul style="font-size:10.5px;line-height:1.6;color:#B6C6D8;margin:0;padding:0">' + asks + '</ul></div>');
+    }
+    return h.join('');
+  }
+  function band(label, m, a, hero) {
+    return '<div style="border:1px solid ' + (hero ? '#2563EB' : '#1E3A5F') + ';background:' + (hero ? '#2563EB18' : 'transparent')
+      + ';border-radius:6px;padding:9px;text-align:center">'
+      + '<div style="font-size:8px;letter-spacing:.09em;text-transform:uppercase;font-weight:800;color:'
+      + (hero ? '#60A5FA' : '#64748B') + ';margin-bottom:5px">' + esc(label) + '</div>'
+      + '<div style="font-size:17px;font-weight:800;color:#E2EEF9;letter-spacing:-.02em">' + esc(m) + '</div>'
+      + '<div style="font-size:9px;color:#64748B;margin-top:3px">' + esc(a) + ' / yr</div></div>';
+  }
+
+  function paint() {
+    var el = $('cl-results'); if (el) el.innerHTML = results();
+    var btn = $('cl-proposal-btn');
+    if (btn) btn.disabled = !(S.result && S.result.offerable);
+  }
+
+  /* ── RUN ────────────────────────────────────────────────────────────
+     evidence() once, rescore() on every edit. Editing an answer must
+     never re-run a 55-second fiber lookup: the rep typing "will-serve
+     confirmed" has not moved the site. */
+  function runScreen(force) {
+    var CL = root.OmegaComputeLease;
+    if (!CL) { RUN.score = { cls: 'bad', text: 'omega-compute-lease.js did not load — reload the page.' }; paintRun(); return; }
+    var site = siteOf();
+    if (!site) {
+      RUN.score = { cls: 'bad', text: 'Place or lock the satellite view first — this screens a real point.' };
+      paintRun(); return;
+    }
+    if (!force && S.evidence && S.site) return rescore();
+    RUN = {}; paintRun();
+    S.site = site;
+    CL.evidence({ address: site.address, lat: site.lat, lng: site.lng, sizeMw: n('cl-mw') || 1 }, PROGRESS)
+      .then(function (ev) {
+        S.evidence = ev;
+        S.site = { lat: ev.site.lat, lng: ev.site.lng, address: site.address, resolved: ev.site.resolved };
+        prefill(ev.parcel);
+        return rescore();
+      })['catch'](function (e) {
+        RUN.score = { cls: 'bad', text: (e && e.message) || 'screen failed' }; paintRun();
+      });
+  }
+
+  /* Prefill only what the rep has NOT typed. Their value always wins:
+     they are looking at the site and the county layer is looking at a
+     database that was right in 2019. */
+  function prefill(parcel) {
+    if (!parcel || parcel.ok === false) return;
+    if (parcel.zoning && !v('cl-zone') && $('cl-zone')) $('cl-zone').value = parcel.zoning;
+    if (parcel.owner && !v('cl-owner') && $('cl-owner')) $('cl-owner').value = parcel.owner;
+    if (parcel.acres != null && !v('cl-acres') && $('cl-acres')) {
+      /* The PARCEL's acreage is not the LEASED acreage and must not be
+         written into the field as though it were — we lease a carve-out,
+         not somebody's whole industrial park. Left for the rep to agree. */
+    }
+  }
+
+  function rescore() {
+    var CL = root.OmegaComputeLease;
+    if (!CL) return;
+    if (S.busy) { S.queued = true; return; }
+    S.busy = true;
+    CL.rescore(S.evidence || {}, rep(), PROGRESS).then(function (j) {
+      S.result = j; paint();
+    })['catch'](function () { /* rescore() already reported it on the Scoring line */ })
+      .then(function () {
+        S.busy = false;
+        if (S.queued) { S.queued = false; rescore(); }
+      });
+  }
+
+  /* ── THE MODAL ──────────────────────────────────────────────────── */
+  function field(label, id, type, ph) {
+    return '<div style="margin-bottom:7px"><label style="display:block;font-size:8.5px;color:#64748B;'
+      + 'letter-spacing:.05em;text-transform:uppercase;font-weight:700;margin-bottom:3px">' + esc(label) + '</label>'
+      + '<input id="' + id + '" type="' + type + '" placeholder="' + esc(ph || '') + '" '
+      + 'style="width:100%;background:#0B1728;border:1px solid #1E3A5F;color:#E2EEF9;border-radius:5px;'
+      + 'padding:6px 8px;font-size:11px;font-family:inherit"></div>';
+  }
+  function select(label, id, opts) {
+    var o = opts.map(function (x) {
+      return '<option value="' + esc(x[0]) + '">' + esc(x[1]) + '</option>';
+    }).join('');
+    return '<div style="margin-bottom:7px"><label style="display:block;font-size:8.5px;color:#64748B;'
+      + 'letter-spacing:.05em;text-transform:uppercase;font-weight:700;margin-bottom:3px">' + esc(label) + '</label>'
+      + '<select id="' + id + '" style="width:100%;background:#0B1728;border:1px solid #1E3A5F;color:#E2EEF9;'
+      + 'border-radius:5px;padding:6px 8px;font-size:11px;font-family:inherit">' + o + '</select></div>';
+  }
+  function grp(t) {
+    return '<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:#60A5FA;'
+      + 'font-weight:800;margin:13px 0 7px;padding-bottom:4px;border-bottom:1px solid #1E3A5F">' + esc(t) + '</div>';
+  }
+
+  function open() {
+    var ex = $(ID); if (ex) ex.remove();
+    var host = document.createElement('div');
+    host.id = ID;
+    host.setAttribute('style', 'position:fixed;inset:0;background:rgba(6,12,22,.8);z-index:9999;'
+      + 'display:flex;align-items:center;justify-content:center;padding:20px');
+    host.onclick = function (e) { if (e.target === host) host.remove(); };
+
+    var site = siteOf();
+    host.innerHTML = '<div style="background:#0F1D30;border:1px solid #1E3A5F;border-radius:12px;max-width:1040px;'
+      + 'width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
+      + '<div style="padding:15px 20px;border-bottom:1px solid #1E3A5F;display:flex;align-items:center;justify-content:space-between">'
+      + '<div><div style="font-size:16px;font-weight:800;color:#E2EEF9">◫ Land Lease</div>'
+      + '<div style="font-size:10px;color:#64748B">Four gates · tranche · what you may offer this site host · /api/compute-lease'
+      + (site && site.address ? ' · ' + esc(site.address) : '') + '</div></div>'
+      + '<button onclick="var h=document.getElementById(\'' + ID + '\');if(h)h.remove()" '
+      + 'style="background:none;border:none;color:#64748B;font-size:20px;cursor:pointer;line-height:1">×</button></div>'
+
+      + '<div style="display:grid;grid-template-columns:310px 1fr;gap:0">'
+
+      /* ── left: what the rep heard in the room ── */
+      + '<div style="padding:14px 16px;border-right:1px solid #1E3A5F">'
+      + '<div id="cl-run" style="margin-bottom:6px"></div>'
+      + '<button id="cl-rescreen" style="width:100%;background:#1E3A5F;color:#E2EEF9;border:none;border-radius:6px;'
+      + 'padding:7px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.04em">Re-run the lookups</button>'
+      + grp('Host')
+      + field('Host company', 'cl-host', 'text', 'Acme Logistics')
+      + field('Contact', 'cl-contact', 'text', 'Name')
+      + grp('Gate 1 · Power')
+      + field('Available power (MW)', 'cl-mw', 'number', '1.0')
+      + select('Will-serve', 'cl-willserve', [['unknown', 'Not asked'], ['requested', 'Requested, pending'],
+          ['confirmed', 'Confirmed'], ['none', 'Utility declined']])
+      + grp('Gate 2 · Fiber — hard gate')
+      + select('Service on site', 'cl-fiber', [['unknown', 'Not asked'], ['yes', 'Yes'], ['no', 'No']])
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
+      + field('Down Mbps', 'cl-down', 'number', '1000') + field('Up Mbps', 'cl-up', 'number', '1000') + '</div>'
+      + grp('Gate 3 · Zoning')
+      + field('Zoning code', 'cl-zone', 'text', 'I-2')
+      + grp('Gate 4 · Site control')
+      + field('Owner / controller', 'cl-owner', 'text', 'From the parcel, or ask')
+      + select('Will they lease?', 'cl-willing', [['unknown', 'Not asked'], ['yes', 'Yes'],
+          ['exploring', 'Exploring'], ['no', 'No']])
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
+      + field('Max term (yr)', 'cl-term', 'number', '15') + field('Leased acres', 'cl-acres', 'number', '0.5') + '</div>'
+      + grp('Tranche — what will they give?')
+      + select('The meter', 'cl-meter', [['unknown', 'Not asked'], ['keep', 'Keeps it'],
+          ['share', 'Open to sharing'], ['transfer', 'Will hand it over']])
+      + select('Canopies / solar / storage', 'cl-energy', [['', 'Not asked'], ['true', 'Open to it'],
+          ['false', 'Not interested']])
+      + select('Involvement', 'cl-engagement', [['unknown', 'Not asked'], ['engaged', 'Wants to be involved'],
+          ['passive', 'Cheque, no phone calls']])
+      + grp('Proposal')
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
+      + field('Term (yr)', 'cl-leaseterm', 'number', '15')
+      + select('Show the host', 'cl-present', [['base', 'Opening number'], ['range', 'Hold – open'],
+          ['open', 'Hold only'], ['full', 'Whole band']])
+      + '</div>'
+      + '<div style="font-size:9px;line-height:1.6;color:#64748B;margin-top:4px">Keep the ceiling to yourself. '
+      + 'A host who sees the top of the band has already been given it.</div>'
+      + '</div>'
+
+      /* ── right: the screen, and the document ── */
+      + '<div style="padding:14px 16px">'
+      + '<div id="cl-results"></div>'
+      + '<button id="cl-proposal-btn" disabled style="width:100%;margin-top:12px;background:#2563EB;color:#fff;'
+      + 'border:none;border-radius:7px;padding:10px;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:.03em">'
+      + 'Open the proposal — your branding, ready to print</button>'
+      + '<div style="font-size:9px;line-height:1.6;color:#64748B;margin-top:6px">Four host-facing pages carrying your '
+      + 'company’s name and logo, not ClearSky’s. Print or save as PDF from the window that opens.</div>'
+      + '</div>'
+
+      + '</div></div>';
+
+    document.body.appendChild(host);
+
+    /* Wire after the DOM exists. Every answer re-scores against the
+       evidence already gathered; it never re-runs a lookup. */
+    var ids = ['cl-mw', 'cl-willserve', 'cl-fiber', 'cl-down', 'cl-up', 'cl-zone', 'cl-owner',
+               'cl-willing', 'cl-term', 'cl-acres', 'cl-meter', 'cl-energy', 'cl-engagement', 'cl-leaseterm'];
+    var t = null;
+    function onEdit() { clearTimeout(t); t = setTimeout(rescore, 450); }
+    for (var i = 0; i < ids.length; i++) {
+      var el = $(ids[i]); if (!el) continue;
+      el.addEventListener('change', onEdit);
+      if (el.tagName === 'INPUT') el.addEventListener('input', onEdit);
+    }
+    $('cl-rescreen').onclick = function () { runScreen(true); };
+    $('cl-proposal-btn').onclick = function () {
+      var CL = root.OmegaComputeLease;
+      if (!CL || !S.result) return;
+      var w = CL.openProposal(S.result, {
+        host: v('cl-host') || 'Site Host', contact: v('cl-contact'),
+        rep: repName(), repEmail: repEmail(),
+        present: v('cl-present') || 'base', term: n('cl-leaseterm') || 15
+      });
+      if (!w) alert('The proposal window was blocked. Allow pop-ups for this site and press it again.');
+    };
+
+    paint();
+    runScreen(false);
+  }
+
+  /* The signed-in user is the rep. Firebase already knows both, and
+     asking a rep to type their own name into a panel they opened from a
+     signed-in session is the kind of friction that gets a tool skipped. */
+  function repName() {
+    try { var u = root.firebase && firebase.auth().currentUser; return (u && (u.displayName || '')) || ''; } catch (e) { return ''; }
+  }
+  function repEmail() {
+    try { var u = root.firebase && firebase.auth().currentUser; return (u && (u.email || '')) || ''; } catch (e) { return ''; }
+  }
+
+  /* ── THE BUTTON ─────────────────────────────────────────────────────
+     Injected beside Compute Cost, which is its neighbour in the sequence:
+     Compute Cost prices what we build, this prices what we pay to stand
+     it somewhere. Patch 114's PLAN then moves it into the Compute tab's
+     "3 · Size & Cost" panel. */
+  function inject() {
+    var host = document.getElementById('rb-compute-cost') || document.getElementById('rb-elec');
+    if (!host || !host.parentNode) return false;
+    if (document.getElementById('rb-compute-lease')) return true;
+    var b = document.createElement('button');
+    b.className = 'rbtn'; b.id = 'rb-compute-lease';
+    b.title = 'Land Lease — screen this site on power, fiber, zoning and site control, then price the '
+      + 'lease you may offer the host. Fiber is a hard gate: fail it and no offer is priced.';
+    b.onclick = open;
+    b.innerHTML = '<span class="rb-ico" style="color:#34D399">◫</span>'
+      + '<span class="rb-lbl">Land<br>Lease</span>';
+    host.parentNode.insertBefore(b, host.nextSibling);
+    try { if (root.OmegaMode && root.OmegaMode.keep) root.OmegaMode.keep(/rb-compute-lease/); } catch (e) {}
+    return true;
+  }
+
+  function boot() {
+    var c = 0, iv = setInterval(function () { if (inject() || ++c > 40) clearInterval(iv); }, 500);
+    if (root.console) console.info(TAG + ' ready — OmegaLeasePanel.open()');
+  }
+
+  root.OmegaLeasePanel = { open: open, state: function () { return S; }, site: siteOf, inject: inject };
+  if (typeof document === 'undefined') { /* node */ }
+  else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})(typeof window !== 'undefined' ? window : globalThis);
 </script>
 </body>
 </html>
