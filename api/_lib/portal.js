@@ -292,7 +292,9 @@ function publicOrder(order, opts) {
       invoices: Object.keys(o.logic.invoices || {}).map(function (stage) {
         var invoice = o.logic.invoices[stage];
         return { stage: stage, amount: invoice.amountCents / 100, recorded: (invoice.paidCents || 0) / 100,
-          status: invoice.status, payUrl: o.cancelRequested || o.logic.paymentException ? null : policy.paymentLink(invoice.payUrl), dueDays: commercial.terms.dueDays };
+          status: invoice.status, payUrl: o.cancelRequested || o.logic.paymentException ? null : policy.paymentLink(invoice.payUrl), dueDays: commercial.terms.dueDays,
+          /* tenant-billed: the OEM's own invoice number and date, so the customer can match it to what they were sent */
+          number: o.logic.accounting === 'tenant' && invoice.id ? clip(invoice.id, 80) : null, issuedAt: o.logic.accounting === 'tenant' && invoice.issuedAt ? clip(invoice.issuedAt, 10) : null };
       }) };
   }
   if (o.shipment) out.shipment = { carrier: clip(o.shipment.carrier, 80), tracking: clip(o.shipment.tracking, 120), shippedAt: when(o.shipment.shippedAt) };

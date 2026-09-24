@@ -1,0 +1,116 @@
+{
+  "_": "scripts/intake-order.js reads this shape. Keep the filled-in file OUT of the repo: it carries a customer's commercial terms. Every value below is an example.",
+  "org": "cleancell.us",
+  "tenantSlug": "cleancell",
+  "fulfillmentConfig": {
+    "enabled": true,
+    "accounting": "tenant",
+    "terms": {
+      "depositPct": 30,
+      "dueDays": 0
+    },
+    "fee": {
+      "percent": 0.25,
+      "fixed": 0
+    }
+  },
+  "product": {
+    "sku": "CC-EXAMPLE",
+    "name": "Example product",
+    "kind": "product",
+    "category": "bess",
+    "blurb": "What it is, in one line.",
+    "kw": 60,
+    "kwh": 61.44,
+    "chemistry": "LFP",
+    "leadTimeDays": 30,
+    "priceMode": "quote",
+    "listPrice": 25000,
+    "widthFt": 3.7,
+    "depthFt": 2.5,
+    "inverter": "Integrated PCS",
+    "dcv": "614.4V",
+    "integrates": {
+      "pcs": true,
+      "xfmr": false,
+      "disco": true
+    },
+    "coverage": [
+      {
+        "id": "workmanship",
+        "type": "warranty",
+        "provider": "the OEM",
+        "termMonths": 12,
+        "trigger": "delivery"
+      }
+    ]
+  },
+  "unitType": "cabinet",
+  "customer": {
+    "company": "Example Buyer LLC",
+    "contact": "Buyer Contact",
+    "email": "contact@example-buyer.com",
+    "phone": "",
+    "billingAddress": {
+      "line1": "",
+      "city": "",
+      "state": "",
+      "zip": ""
+    },
+    "terms": {
+      "depositPct": 30,
+      "dueDays": 0
+    },
+    "notes": ""
+  },
+  "order": {
+    "poNumber": "PO-0001",
+    "proposal": "Q-0001 Rev A",
+    "poDate": "2026-01-01",
+    "requestedDate": "2026-03-01",
+    "items": [
+      {
+        "sku": "CC-EXAMPLE",
+        "qty": 2
+      }
+    ],
+    "total": 50000,
+    "destinationNote": "Ship-to to be confirmed",
+    "note": "What the paperwork said, in one paragraph."
+  },
+  "invoices": [
+    {
+      "stage": "deposit",
+      "number": "INV-0001",
+      "date": "2026-01-02",
+      "payments": [
+        {
+          "amount": 15000,
+          "date": "2026-01-05",
+          "bankReference": "ACH 12345"
+        }
+      ]
+    }
+  ],
+  "serials": {
+    "prefix": "EX-",
+    "start": 1,
+    "count": 2,
+    "pad": 3
+  },
+  "sites": [
+    {
+      "name": "Example yard",
+      "address": {
+        "line1": "1 Example Rd",
+        "city": "Kansas City",
+        "state": "MO",
+        "zip": "64101"
+      },
+      "interconnection": {
+        "utility": "Evergy",
+        "poi": "MSB-1"
+      }
+    }
+  ]
+}

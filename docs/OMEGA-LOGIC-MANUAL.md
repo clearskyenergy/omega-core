@@ -243,6 +243,29 @@ The office in a pocket, for whoever is not at the desk. Six tabs:
   waiting, the bottleneck, finished per week and lead time. The steps each
   station carries come off the bills.
 
+### Two ways an order is billed
+
+*Settings → How orders are billed.* **ClearSky invoices from QuickBooks**
+(the default): approving the price queues the deposit invoice in ClearSky's
+QuickBooks, payments are reconciled there, and the ClearSky processing fee
+is added to the customer's total. **The OEM invoices on its own paper**
+(tenant-billed): the OEM sends its own invoice from its own bank; the office
+records *invoice issued* (number, date) and each *payment received* (amount,
+date, bank reference) on the order, on the desktop or in the Office app. A
+stage is paid when what was received covers what was invoiced; release to
+the plant, ready and shipment then follow exactly as they do from a
+QuickBooks receipt. No processing fee is added to the customer's total;
+ClearSky's charge to the OEM is a separate line. The customer sees the
+invoice number and status on their order. QuickBooks is not needed.
+
+**Bringing an order in from the paperwork.** `scripts/intake-order.js`
+runs one order through the same endpoint code the office uses — product on
+the catalog, company account and terms, the order with its PO, the approved
+price, the invoices issued and payments received, the serials on the works
+order, the sites once addresses arrive — as a dry run first (nothing
+written; every refusal named), then `--apply`. `docs/order-intake-template.json`
+is the shape; the filled-in file stays out of the repo.
+
 ### Cash flow
 
 Invoiced, received and outstanding are what QuickBooks has recorded on the
