@@ -14,8 +14,10 @@
    signed-in work email. */
 'use strict';
 var fs = require('fs'), path = require('path');
+/* /logic is the short front door (vercel.json redirects it to /office/app):
+   easy to type, and the phone lands on the Omega Logic sign-in */
 var CODES = {
-  'office-app': 'https://silmarillion.clearskyomega.com/office/app'
+  'office-app': 'https://silmarillion.clearskyomega.com/logic'
 };
 function load() {
   var tries = [process.env.QRCODE, 'qrcode'].filter(Boolean);
