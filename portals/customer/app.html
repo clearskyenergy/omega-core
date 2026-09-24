@@ -161,6 +161,17 @@
   #g-create{min-height:44px}
   .due-over{color:#B42318;font-weight:600}
   .sub-h{font-size:13px;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 2px}
+  /* ── Sites from a list (Fleet → Sites from a list): a step a screen, a card a line ── */
+  .seg button:disabled{opacity:.45;cursor:default}
+  .sl-site{display:flex;gap:10px;align-items:center;padding:10px 12px}
+  .sl-pick{display:flex;gap:12px;align-items:flex-start;flex:1;min-width:0;min-height:44px;cursor:pointer}
+  .sl-pick input{width:24px;height:24px;min-width:24px;margin:2px 0 0;padding:0;flex:none;accent-color:var(--brand-d)}
+  .sl-pick span{min-width:0}.sl-pick small{display:block;color:var(--ink2);font-size:12px;overflow-wrap:anywhere}
+  .sl-n{flex:none;width:72px;text-align:center}.sl-n input{margin:0;text-align:center;padding:10px 4px;min-height:44px}.sl-n small{display:block;font-size:11px;color:var(--ink2)}
+  .sl-row input{margin:8px 0 4px}
+  .sl-row .sl-use{display:flex;gap:10px;align-items:center;min-height:44px;margin:0;cursor:pointer}.sl-row .sl-use input{width:24px;height:24px;min-width:24px;margin:0;padding:0;accent-color:var(--brand-d)}
+  .sl-serials{font-family:'IBM Plex Mono',monospace;font-size:13px;margin:2px 0 10px;overflow-wrap:anywhere}
+  details.sl-pl{border-top:1px solid var(--line)}details.sl-pl:first-child{border-top:0}details.sl-pl summary{padding:11px 0}
 </style>
 </head>
 <body class="logic-theme">
@@ -207,7 +218,7 @@
   /* The bottom tabs, and the hubs reached from Home. An old link or an
      installed app that still says ?tab=design lands on the Design hub. */
   var TABS = ['home', 'orders', 'pos', 'fleet', 'account'], HUBS = ['size', 'design', 'pay', 'shipping', 'warranty'];
-  var TAB = params.get('tab') || 'home'; if (TABS.indexOf(TAB) < 0 && HUBS.indexOf(TAB) < 0) TAB = 'home';
+  var TAB = params.get('tab') || 'home'; if (TABS.indexOf(TAB) < 0 && HUBS.indexOf(TAB) < 0 && TAB !== 'sitelist') TAB = 'home';
   /* Back from Stripe Checkout (api/customer-subscribe.js returnUrls):
      ?tab=design&checkout=done|cancelled. Said once on the Design hub, then
      taken off the address so a reload does not say it again. */
@@ -382,12 +393,13 @@
   function expiring(c, now) { var t = Date.parse(c.until || ''); return c.status === 'active' && isFinite(t) && t - now < EXPIRING_DAYS * DAY_MS; }
 
   /* ── views ────────────────────────────────────────────────────────────── */
-  var VIEWS = { home: drawHome, orders: drawOrders, pos: drawPos, fleet: drawFleet, account: drawAccount, size: drawSize, design: drawDesign, pay: drawPay, shipping: drawShipping, warranty: drawWarranty };
+  var VIEWS = { home: drawHome, orders: drawOrders, pos: drawPos, fleet: drawFleet, account: drawAccount, size: drawSize, design: drawDesign, pay: drawPay, shipping: drawShipping, warranty: drawWarranty, sitelist: drawSiteList };
   /* Set by the waiting screen's Check again and spent by the next draw, so
      the answer "still waiting" is said once, right after the check. */
   var PENDING_RECHECK = false;
   function draw() {
-    var navKey = TABS.indexOf(TAB) >= 0 ? TAB : 'home', rechecked = PENDING_RECHECK;
+    /* Sites from a list is a screen of Fleet: the Fleet tab stays lit */
+    var navKey = TABS.indexOf(TAB) >= 0 ? TAB : TAB === 'sitelist' ? 'fleet' : 'home', rechecked = PENDING_RECHECK;
     PENDING_RECHECK = false;
     Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.setAttribute('aria-current', b.dataset.tab === navKey ? 'page' : 'false'); });
     status('');
@@ -839,7 +851,7 @@
     var pend = units.filter(pendingCover).length, todo = fleetNeeds(units, d.moves);
     el.innerHTML = (todo.length ? '<div class="off">' + plural(todo.length, 'unit needs', 'units need') + ' you below: ' + esc(todo.map(function (n) { return n.u.serial + ' ' + ({ arrived: 'arrived?', site: 'which site?', commission: 'commissioned?' })[n.what]; }).slice(0, 4).join(' · ')) + (todo.length > 4 ? ' …' : '') + '</div>' : '') + '<div class="kv"><div><small>Units</small><b>' + units.length + '</b></div><div><small>Sites</small><b>' + sites.length + '</b></div><div><small>Running</small><b>' + running + '</b><small>commissioned or in service</small></div><div><small>On the way</small><b>' + moving + '</b></div><div><small>Under warranty</small><b>' + covered + '</b></div><div><small>Warranty pending</small><b>' + pend + '</b><small>waiting for a site</small></div></div>'
       + (seen.length ? '<p class="note">' + seen.map(function (k) { return by[k] + ' ' + esc(k); }).join(' · ') + '</p>' : '')
-      + '<div class="acts"><button type="button" class="act" data-go="warranty">Warranty per unit</button><button type="button" class="act" data-go="shipping">Shipping</button></div>';
+      + '<div class="acts"><button type="button" class="act go" data-go="sitelist">Sites from a list</button><button type="button" class="act" data-go="warranty">Warranty per unit</button><button type="button" class="act" data-go="shipping">Shipping</button></div>';
   }
   function drawSites() {
     var el = $('sites-body'); if (!el) return;
@@ -850,7 +862,7 @@
       function can(u, a) { return (mv[a] || []).indexOf(u.status) >= 0 && u.state !== 'scrapped'; }
       var siteSel = sites.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; }).join('');
       el.innerHTML = '<p class="note">Each unit shows where it is and when its warranty runs. Tell us when a unit arrives and which site it is installed at: the warranty is tied to that site.</p>'
-        + (sites.length ? sites.map(function (s) { var a = s.address || {}, ic = s.interconnection || {}; return '<div class="unit"><div><b>' + esc(s.name) + '</b><small>' + esc([a.line1, a.city, a.state, a.zip].filter(Boolean).join(', ')) + '</small>' + (ic.utility || ic.poi ? '<small>' + esc([ic.utility, ic.poi ? 'POI ' + ic.poi : '', ic.meterNo ? 'meter ' + ic.meterNo : ''].filter(Boolean).join(' · ')) + '</small>' : '') + '</div><span class="pill">' + esc(s.units) + ' unit' + (s.units === 1 ? '' : 's') + '</span></div>'; }).join('') : '<p class="note">No sites yet. Add the location where your units will be interconnected.</p>')
+        + (sites.length ? sites.map(function (s) { var a = s.address || {}, ic = s.interconnection || {}; return '<div class="unit"><div><b>' + esc(s.name) + '</b><small>' + esc([a.line1, a.city, a.state, a.zip].filter(Boolean).join(', ')) + '</small>' + (ic.utility || ic.poi ? '<small>' + esc([ic.utility, ic.poi ? 'POI ' + ic.poi : '', ic.meterNo ? 'meter ' + ic.meterNo : ''].filter(Boolean).join(' · ')) + '</small>' : '') + (Number(s.planned) > 0 ? '<small>' + esc(plural(Number(s.planned), 'unit') + ' going here') + '</small>' : '') + '</div><span class="pill">' + esc(s.units) + ' unit' + (s.units === 1 ? '' : 's') + '</span></div>'; }).join('') : '<p class="note">No sites yet. Add the location where your units will be interconnected, or many at once with Sites from a list above.</p>')
         + '<button class="big ghost" id="site-add" type="button">Add a site</button>'
         + '<form id="site-form" hidden><input id="sf-name" placeholder="Site name" required maxlength="160"><input id="sf-line1" placeholder="Street address" maxlength="200"><div class="row"><input id="sf-city" placeholder="City" maxlength="100"><input id="sf-state" placeholder="State ZIP" maxlength="60"></div><div class="row"><input id="sf-utility" placeholder="Utility" maxlength="120"><input id="sf-meter" placeholder="Meter no." maxlength="80"></div><input id="sf-poi" placeholder="Point of interconnection (e.g. MSB-2, 480 V)" maxlength="200"><button class="big" id="sf-save">Save site</button></form>'
         + (units.length ? '<h2>Your units</h2>' + units.map(function (u, i) {
@@ -881,6 +893,302 @@
         };
       });
     })['catch'](function (e) { var el2 = $('sites-body'); if (el2) el2.innerHTML = '<p class="note err">' + esc(e.message) + '</p>'; });
+  }
+
+  /* ── Sites from a list (Fleet → Sites from a list) ──────────────────────
+     The desktop portal's "Sites from a list", one step a screen: paste or
+     upload → check (a card per line) → send an order's units to the sites.
+     api/my-sites.js reads the list and matches it to the account's sites by
+     street and ZIP (this app parses nothing), creates the new ones in one
+     go (sites-create), and spreads the order's units over the chosen sites
+     (plan-preview · plan-apply, api/_lib/custody.js spread). The preview IS
+     the confirmation: there is no second box; Send carries confirm:true and
+     the preview's planKey, so a plan that changed since answers "preview
+     again". The order is named by its orderNo, never its id. Its own state,
+     so Fleet and back keeps a pasted list; nothing is added to #sites-body. */
+  var SL = { step: 'paste', text: '', pv: null, stale: false, list: null, orderNo: '', pick: null, n: {}, replan: false, elsewhere: 0, plan: null, body: null, done: null, busy: false, top: '', msg: '', bad: false };
+  var SL_EXAMPLE = '- 100 Main St, Springfield, IL 62701\n- North store: 2200 Lake Ave, Madison, WI 53703 × 4\n- 45 Harbor Rd, Portland, ME 04101 (3 units)';
+  var SL_MAX_FILE = 100000;   // api/_lib/custody.js MAX_SITE_TEXT
+  function slLines(t) { return String(t || '').split(/\r\n?|\n/).filter(function (x) { return x.trim(); }).length; }
+  function slAddr(a) { a = a || {}; return [a.line1, a.city, [a.state, a.zip].filter(Boolean).join(' ')].filter(Boolean).join(', '); }
+  /* the word about an action lands under its own button (the page's #status
+     is a screen away on a phone); a step that moves on says it at the top */
+  function slSay(t, bad) { SL.msg = t || ''; SL.bad = !!bad; var m = $('sl-msg'); if (m) { m.className = 'status' + (bad ? ' err' : ''); m.textContent = SL.msg; } }
+  function slMsg() { return '<p class="status' + (SL.bad ? ' err' : '') + '" id="sl-msg" role="status" aria-live="polite">' + esc(SL.msg) + '</p>'; }
+  function slListSites(rows) { var seen = {}, out = []; (rows || []).forEach(function (r) { if (r.status === 'exists' && r.existingId && !r.skip && !seen[r.existingId]) { seen[r.existingId] = true; out.push({ siteId: r.existingId, units: r.units == null ? null : r.units }); } }); return out; }
+  /* A line is known across previews by its street and ZIP, so a name typed
+     in Check and a line unticked there survive "change the list and preview
+     again" (and the read-back after Create). A line the server marks to
+     check (a street with no house number: often the sender's signature)
+     starts unticked; every other line starts ticked. */
+  function slKey(a) { a = a || {}; return String(a.line1 || '').trim().toLowerCase() + '|' + String(a.zip || '').trim().slice(0, 5); }
+  function slCarry(old, pv) {
+    var by = {}; ((old && old.rows) || []).forEach(function (r) { if (r.status !== 'problem') by[slKey(r.address)] = r; });
+    ((pv && pv.rows) || []).forEach(function (r) {
+      var o = r.status !== 'problem' ? by[slKey(r.address)] : null;
+      if (o && o.edited && r.status === 'new') { r.name = o.name; r.edited = true; }
+      r.skip = r.status === 'problem' ? false : o && o.skip != null ? o.skip : r.status === 'new' && (r.warnings || []).length > 0;
+    });
+  }
+  function slSites() {
+    var all = (SITES && SITES.sites) || [], by = {}, out = [], used = {};
+    all.forEach(function (s) { by[s.id] = s; });
+    (SL.list || []).forEach(function (x) { if (by[x.siteId] && !used[x.siteId]) { used[x.siteId] = true; out.push(by[x.siteId]); } });
+    all.forEach(function (s) { if (!used[s.id]) out.push(s); });
+    return out;
+  }
+  function slOrder() { return ((SITES && SITES.orders) || []).filter(function (o) { return o.orderNo === SL.orderNo; })[0] || null; }
+  function slOrderLine(o) {
+    return plural(Number(o.units) || 0, 'unit') + ' on the order · ' + (Number(o.eligible) || 0) + ' can be sent' + (o.building ? ' (' + o.building + ' still being built)' : '')
+      + (o.planned ? ' · ' + plural(Number(o.planned), 'unit') + ' already going to a site' : '');
+  }
+  function slTotals() {
+    var o = slOrder(), picked = slSites().filter(function (s) { return SL.pick && SL.pick[s.id]; }), E = o ? Number(o.eligible) || 0 : 0, typed = 0, blanks = [], bad = [];
+    picked.forEach(function (s) { var v = String(SL.n[s.id] == null ? '' : SL.n[s.id]).trim(); if (v === '') blanks.push(s); else if (/^\d{1,5}$/.test(v)) typed += Number(v); else bad.push(s.name); });
+    var rest = Math.max(0, E - typed), each = blanks.length ? Math.floor(rest / blanks.length) : 0, extra = blanks.length ? rest % blanks.length : 0, share = {};
+    blanks.forEach(function (s, i) { share[s.id] = each + (i < extra ? 1 : 0); });
+    return { E: E, typed: typed, share: share, sum: typed + (blanks.length ? rest : 0), picked: picked, bad: bad };
+  }
+  function slPaintTotals() {
+    var t = slTotals(), el = $('sl-total');
+    Array.prototype.forEach.call(document.querySelectorAll('#sl-body [data-sl-n]'), function (i) { var id = i.getAttribute('data-sl-n'); i.placeholder = t.share[id] != null ? String(t.share[id]) : ''; });
+    if ($('sl-picked')) $('sl-picked').textContent = t.picked.length;
+    if (!el) return;
+    el.className = t.bad.length ? 'err' : '';
+    el.textContent = !slOrder() ? 'Choose the order first.' : !t.picked.length ? 'Tick the sites this order goes to.'
+      : t.bad.length ? 'Units must be a whole number: ' + t.bad.join(', ') + '.'
+      : plural(t.picked.length, 'site') + ' · ' + t.sum + ' of the ' + t.E + ' units that can be sent' + (t.typed > t.E ? ' · ' + (t.typed - t.E) + ' more than can still be sent: units already at a ticked site count toward its number, so Preview checks' : t.sum < t.E ? ' · ' + (t.E - t.sum) + ' left without a site' : '');
+  }
+  function slUnplan() {
+    SL.plan = null; SL.body = null; var box = $('sl-planbox'); if (box) box.parentNode.removeChild(box);
+    if (!$('sl-msg') && $('sl-plan')) $('sl-plan').insertAdjacentHTML('afterend', slMsg());
+  }
+  function drawSiteList() {
+    $('view').innerHTML = '<button type="button" class="back" data-go="fleet">‹ Fleet</button><h1>Sites from a list</h1><div id="sl-body"><p class="note">Loading…</p></div>';
+    loadSites().then(function () { slDraw(); })['catch'](function (e) { var el = $('sl-body'); if (el) el.innerHTML = '<p class="note err">' + esc(e.message) + '</p>'; });
+  }
+  function slDraw() {
+    var el = $('sl-body'); if (!el) return;
+    /* step 3 reads the account's sites and orders: after a write they are
+       read again first */
+    if (SL.step === 'send' && !SITES) { el.innerHTML = '<p class="note">Loading…</p>'; loadSites().then(function () { if (SITES) slDraw(); })['catch'](function (e) { var x = $('sl-body'); if (x) x.innerHTML = '<p class="note err">' + esc(e.message) + '</p>'; }); return; }
+    var steps = [['paste', '1 Paste'], ['check', '2 Check'], ['send', '3 Send']];
+    el.innerHTML = '<div class="seg" role="tablist" aria-label="Steps">' + steps.map(function (s) { return '<button type="button" role="tab" data-sl-go="' + s[0] + '" aria-selected="' + (SL.step === s[0] ? 'true' : 'false') + '"' + (s[0] === 'check' && !SL.pv ? ' disabled' : '') + '>' + esc(s[1]) + '</button>'; }).join('') + '</div>'
+      + (SL.top ? '<div class="card hero" role="status"><b>' + esc(SL.top) + '</b></div>' : '')
+      + (SL.step === 'paste' ? slPasteHtml() : SL.step === 'check' ? slCheckHtml() : slSendHtml());
+    slBind(el);
+    if (SL.step === 'send') slPaintTotals();
+  }
+  function slPasteHtml() {
+    return '<p class="note">Add your sites from a list: paste the addresses as they came in the email, one per line (a bullet or a number in front is fine), or a sheet with a header row — Name, Address, City, State, ZIP, Units. <b>Name: address</b> names a site; <b>× 4</b> or <b>(4 units)</b> at the end says how many units go there.</p>'
+      + '<textarea id="sl-text" class="sheet" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Your list of sites" placeholder="' + esc(SL_EXAMPLE) + '">' + esc(SL.text) + '</textarea>'
+      + '<p class="note" id="sl-count">' + esc(SL.text.trim() ? plural(slLines(SL.text), 'line') : 'Paste or type the list above.') + '</p>'
+      + '<div class="card"><b>Or upload the file</b><p class="note">A .csv, .tsv or .txt file. From Excel: Save As → CSV.</p><input id="sl-file" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values"></div>'
+      + '<button type="button" class="big" id="sl-preview"' + (SL.busy ? ' disabled' : '') + '>Preview the sites</button>' + slMsg();
+  }
+  function slCheckHtml() {
+    var pv = SL.pv || {}, rows = pv.rows || [];
+    var nAll = rows.filter(function (r) { return r.status === 'new'; }).length, nNew = rows.filter(function (r) { return r.status === 'new' && !r.skip; }).length, nEx = rows.filter(function (r) { return r.status === 'exists'; }).length, nUse = rows.filter(function (r) { return r.status === 'exists' && !r.skip; }).length, nBad = rows.filter(function (r) { return r.status === 'problem'; }).length, nOff = rows.filter(function (r) { return r.status !== 'problem' && r.skip; }).length;
+    return '<div class="kv sm"><div><small>New</small><b>' + nAll + '</b></div><div><small>Already yours</small><b>' + nEx + '</b></div><div><small>To fix</small><b' + (nBad ? ' class="due-over"' : '') + '>' + nBad + '</b></div><div><small>Lines read</small><b>' + rows.length + '</b></div></div>'
+      + (SL.stale ? '<p class="note err">The list changed since this preview. Preview it again before creating.</p>' : '')
+      + (pv.geoLimited ? '<p class="note">Today’s map lookups for your account are used up, so some new lines have no map pin. The sites are created all the same.</p>' : '')
+      + ((pv.problems || []).length ? '<details><summary>' + esc(plural(pv.problems.length, 'line') + ' left out') + '</summary><ul class="plain note">' + pv.problems.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul></details>' : '')
+      + rows.map(function (r, i) {
+        var a = r.address || {}, st = r.status, bits = [];
+        if (r.units != null) bits.push(plural(Number(r.units), 'unit'));
+        if (r.geo) bits.push('◉ found on the map'); else if (r.lookedUp) bits.push('not found on the map; still created');
+        var pill = st === 'new' ? '<span class="pill go">new</span>' : st === 'exists' ? '<span class="pill">already a site</span>' : '<span class="pill stop">to fix</span>';
+        var head = st === 'problem' ? '<b>Line ' + esc(r.line) + '</b>' : '<label class="sl-use"><input type="checkbox" data-sl-use="' + i + '"' + (r.skip ? '' : ' checked') + ' aria-label="Use line ' + esc(r.line) + '"><b>Line ' + esc(r.line) + '</b></label>';
+        return '<div class="card sl-row" data-sl-row="' + i + '"><div class="h">' + head + pill + '</div>'
+          + (st === 'new' ? '<input data-sl-name="' + i + '" value="' + esc(r.name) + '" maxlength="160" aria-label="Site name, line ' + esc(r.line) + '">' : '<div style="font-weight:600;margin-top:4px">' + esc(st === 'exists' ? (r.existingName || r.name) : r.name) + '</div>')
+          + '<div class="m">' + esc(a.line1 || '—') + '</div><div class="m">' + esc([a.city, [a.state, a.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')) + '</div>'
+          + (bits.length ? '<div class="m">' + esc(bits.join(' · ')) + '</div>' : '')
+          + (r.note ? '<p class="note">' + esc(r.note) + '</p>' : '')
+          + ((r.problems || []).length ? '<p class="note err"><b>' + esc(r.problems.join('; ')) + '</b></p>' : '')
+          + (st === 'new' && (r.warnings || []).length ? '<p class="note"><b>' + esc(r.warnings.join('; ') + (r.skip ? ' Unticked: tick it to create it.' : '')) + '</b></p>' : '') + '</div>';
+      }).join('')
+      + (nBad ? '<p class="note">Lines to fix are left out. Fix them in the list and preview again (the names you typed are kept), or create the rest now and add those later.</p>' : '')
+      + (nOff ? '<p class="note">' + esc(plural(nOff, 'unticked line is', 'unticked lines are')) + ' not created and not sent units.</p>' : '')
+      + (nNew && nUse ? '<p class="note">The ' + nUse + ' already yours are not created again; they are in step 3 with the new ones.</p>' : '')
+      + (nNew ? '<button type="button" class="big" id="sl-create"' + (SL.busy || SL.stale ? ' disabled' : '') + '>Create ' + plural(nNew, 'site') + '</button>' : nUse ? '<button type="button" class="big" data-sl-go="send">Next: send units to these sites</button>' : '')
+      + '<button type="button" class="big ghost" data-sl-go="paste">Change the list</button>' + slMsg();
+  }
+  function slSendHtml() {
+    var orders = SITES.orders, sites = slSites();
+    if (!orders) return '<p class="note">Sending units to many sites is not switched on for this account yet.</p>';
+    if (!sites.length) return '<p class="note">No sites on your account yet. Add them from a list first.</p><button type="button" class="big" data-sl-go="paste">Add your sites from a list</button>';
+    if (!orders.length) return '<p class="note">No order on your account has units yet. Units appear on an order once ' + esc(brandName()) + ' starts building it; come back then.</p>';
+    if (!slOrder()) SL.orderNo = orders.length === 1 ? orders[0].orderNo : '';
+    if (!SL.pick) { SL.pick = {}; SL.n = {}; (SL.list || []).forEach(function (x) { SL.pick[x.siteId] = true; if (x.units != null) SL.n[x.siteId] = String(x.units); }); }
+    var o = slOrder();
+    return '<p class="note">Send units to your sites: each unit is marked “going to” its site. When it arrives and you record it received, it is tied to that site and its warranty starts. Nothing ships differently; to change a delivery, ask on the order.</p>'
+      + '<select id="sl-order" aria-label="Order"><option value="">Choose the order…</option>' + orders.map(function (x) { return '<option value="' + esc(x.orderNo) + '"' + (x.orderNo === SL.orderNo ? ' selected' : '') + '>' + esc(x.orderNo + (x.po ? ' · PO ' + x.po : '') + ' · ' + plural(Number(x.units) || 0, 'unit')) + '</option>'; }).join('') + '</select>'
+      + (o ? '<p class="note">' + esc(slOrderLine(o)) + '</p>' : '')
+      + '<div style="display:flex;align-items:center;gap:4px;margin-top:14px"><b style="flex:1">Sites · <span id="sl-picked">0</span> of ' + sites.length + '</b><button type="button" class="link" data-sl-all="1">Tick all</button><button type="button" class="link" data-sl-all="0">None</button></div>'
+      + '<p class="note" style="margin:2px 0 0">Leave Units blank to share the order evenly; type a number to send exactly that many there.</p>'
+      + sites.map(function (s) {
+        var now = [Number(s.units) > 0 ? s.units + ' at the site' : '', Number(s.planned) > 0 ? s.planned + ' going here' : ''].filter(Boolean).join(' · ');
+        return '<div class="card sl-site"><label class="sl-pick"><input type="checkbox" data-sl-pick="' + esc(s.id) + '"' + (SL.pick[s.id] ? ' checked' : '') + '><span><b>' + esc(s.name) + '</b><small>' + esc(slAddr(s.address)) + '</small>' + (now ? '<small>' + esc(now) + '</small>' : '') + '</span></label>'
+          + '<div class="sl-n"><input data-sl-n="' + esc(s.id) + '" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="' + esc(SL.n[s.id] == null ? '' : SL.n[s.id]) + '" aria-label="Units for ' + esc(s.name) + '"><small>units</small></div></div>';
+      }).join('')
+      + '<p id="sl-total" style="font-weight:600;margin:12px 0 4px"></p>'
+      + (SL.elsewhere || SL.replan ? '<label class="card sl-pick" style="display:flex"><input type="checkbox" id="sl-replan"' + (SL.replan ? ' checked' : '') + '><span>Also move the ' + esc(plural(SL.elsewhere || 0, 'unit')) + ' of this order already going to sites not ticked here</span></label>' : '')
+      + '<button type="button" class="big' + (SL.plan || SL.done ? ' ghost' : '') + '" id="sl-plan"' + (SL.busy ? ' disabled' : '') + '>Preview</button>'
+      + (SL.plan ? slPlanHtml() : '') + (!SL.plan && !SL.done ? slMsg() : '') + (SL.done ? slDoneHtml() : '');
+  }
+  function slPlanHtml() {
+    var p = SL.plan, a = p.assignments || [], by = {}, cnt = { 'new': 0, changed: 0, unchanged: 0 };
+    a.forEach(function (x) { (by[x.siteId] = by[x.siteId] || []).push(x); cnt[x.how] = (cnt[x.how] || 0) + 1; });
+    if ((p.problems || []).length) return '<div id="sl-planbox"><div class="card"><p class="note err"><b>' + p.problems.map(esc).join('<br>') + '</b></p><p class="note">Nothing is sent. Change the numbers or the ticks and preview again.</p></div>' + slMsg() + '</div>';
+    var moving = cnt['new'] + cnt.changed, rel = (p.released || []).length, sitesTo = (p.perSite || []).filter(function (s) { return (by[s.siteId] || []).length; }).length, touched = {};
+    a.forEach(function (x) { if (x.how === 'new' || x.how === 'changed') touched[x.siteId] = true; });
+    return '<div id="sl-planbox"><h2>Preview</h2><p class="note"><b>' + esc(plural(a.length, 'unit') + ' to ' + plural(sitesTo, 'site')) + '</b> · ' + esc([cnt['new'] ? cnt['new'] + ' new' : '', cnt.changed ? cnt.changed + ' moved from another site' : '', cnt.unchanged ? cnt.unchanged + ' already going there' : '', rel ? rel + ' taken off a site' : ''].filter(Boolean).join(' · ') || 'nothing to change') + '</p>'
+      + '<div class="panel">' + (p.perSite || []).map(function (s) {
+        var mine = by[s.siteId] || [];
+        return '<details class="sl-pl" data-sl-plan="' + esc(s.siteId) + '"><summary>' + esc(s.name + ' · ' + plural(mine.length, 'unit')) + '</summary>'
+          + (mine.length ? '<p class="sl-serials">' + esc(mine.map(function (x) { return x.serial + (x.how === 'changed' ? ' (moved here)' : ''); }).join(', ')) + '</p>' : '<p class="note">No units go here.</p>')
+          + (s.placed ? '<p class="note">' + esc(plural(s.placed, 'unit') + ' of this order already at the site') + '</p>' : '') + (s.short ? '<p class="note err">' + esc(s.short + ' short: the order has no more units to send') + '</p>' : '') + '</details>';
+      }).join('') + '</div>'
+      + ((p.leftover || []).length ? '<p class="note"><b>' + esc(plural(p.leftover.length, 'unit stays', 'units stay')) + ' without a site</b>: the numbers ask for fewer than the order has. ' + esc(p.leftover.join(', ')) + '</p>' : '')
+      + (rel ? '<p class="note"><b>' + esc(plural(rel, 'unit comes', 'units come')) + ' off a site</b> whose number went down: ' + esc(p.released.map(function (r) { return r.serial + ' (' + r.siteName + ')'; }).join(', ')) + '</p>' : '')
+      + ((p.elsewhere || []).length ? '<p class="note"><b>' + esc(plural(p.elsewhere.length, 'unit is', 'units are')) + ' already going to other sites</b> and left alone: ' + esc(p.elsewhere.map(function (r) { return r.serial + ' (' + r.siteName + ')'; }).join(', ')) + '</p>' : '')
+      + ((p.notPlanned || []).length ? '<details><summary>' + esc(plural(p.notPlanned.length, 'unit') + ' can’t be sent from here') + '</summary><ul class="plain note">' + p.notPlanned.map(function (x) { return '<li><span class="mono">' + esc(x.serial) + '</span> · ' + esc(x.say) + '</li>'; }).join('') + '</ul></details>' : '')
+      + (moving || rel ? '<button type="button" class="big" id="sl-apply"' + (SL.busy ? ' disabled' : '') + '>' + esc(moving ? 'Send ' + plural(moving, 'unit') + ' to ' + plural(Object.keys(touched).length, 'site') : 'Take ' + plural(rel, 'unit') + ' off their site') + '</button><p class="note" style="text-align:center">This is the confirmation: nothing else will ask.</p>'
+        : '<p class="note">Nothing to change: every unit is already going where this sends it.</p>')
+      + slMsg() + '</div>';
+  }
+  function slDoneHtml() {
+    var d = SL.done, a = d.assignments || [], sk = a.filter(function (x) { return x.how === 'skipped'; }), wait = a.filter(function (x) { return x.how === 'pending'; }), going = a.length - sk.length - wait.length, sites = {};
+    a.forEach(function (x) { if (x.how !== 'skipped' && x.how !== 'pending') sites[x.siteId] = true; });
+    return '<div id="sl-donebox"><div class="card hero"><div class="h"><b>' + esc(plural(going, 'unit') + ' of ' + d.orderNo + ' going to ' + plural(Object.keys(sites).length, 'site')) + '</b><span class="pill go">sent</span></div>'
+      + (d.applied ? '<div class="m">' + esc(d.applied + ' changed just now') + '</div>' : '') + '<p class="note">When a unit arrives, record it received in Fleet and it is tied to its site.</p></div>'
+      + (sk.length ? '<p class="note err">' + esc(plural(sk.length, 'unit was', 'units were') + ' left as they were: ' + sk.map(function (x) { return x.serial + ' (' + (x.why || 'changed') + ')'; }).join(', ')) + '</p>' : '')
+      + (wait.length ? '<p class="note err">' + esc(plural(wait.length, 'unit is', 'units are') + ' still to send. Preview again and send.') + '</p>' : '')
+      + '<button type="button" class="big ghost" id="sl-csv">Download CSV</button><button type="button" class="big ghost" data-go="fleet">Back to Fleet</button>' + slMsg() + '</div>';
+  }
+  function slGo(to) {
+    if (to === 'send' && SL.step === 'check' && SL.pv && !SL.list) SL.list = slListSites(SL.pv.rows);
+    if (to === 'paste') SL.top = '';
+    SL.step = to; SL.msg = ''; SL.bad = false;
+    slDraw(); window.scrollTo(0, 0);
+  }
+  function slBind(el) {
+    Array.prototype.forEach.call(el.querySelectorAll('[data-sl-go]'), function (b) { b.onclick = function () { slGo(b.getAttribute('data-sl-go')); }; });
+    var ta = $('sl-text');
+    if (ta) ta.oninput = function () { SL.text = ta.value; if (SL.pv) SL.stale = true; $('sl-count').textContent = SL.text.trim() ? plural(slLines(SL.text), 'line') : 'Paste or type the list above.'; };
+    if ($('sl-file')) $('sl-file').onchange = function () {
+      var f = this.files && this.files[0], inp = this; if (!f) return;
+      if (f.size > SL_MAX_FILE) { slSay(f.name + ' is ' + kb(f.size) + '; a site list is at most 100 KB. Split it into smaller lists.', true); inp.value = ''; return; }
+      if (!/\.(csv|tsv|txt)$/i.test(f.name)) { slSay('A .csv, .tsv or .txt file, please. From Excel: Save As → CSV.', true); inp.value = ''; return; }
+      var r = new FileReader();
+      r.onload = function () { SL.text = String(r.result || '').replace(/^﻿/, ''); if (SL.pv) SL.stale = true; if (ta) ta.value = SL.text; $('sl-count').textContent = plural(slLines(SL.text), 'line') + ' from ' + f.name; slSay(''); };
+      r.onerror = function () { slSay('Could not read ' + f.name, true); };
+      r.readAsText(f);
+    };
+    if ($('sl-preview')) $('sl-preview').onclick = function () { slPreview(this); };
+    Array.prototype.forEach.call(el.querySelectorAll('[data-sl-name]'), function (i) { i.oninput = function () { var r = SL.pv && SL.pv.rows[Number(i.getAttribute('data-sl-name'))]; if (r) { r.name = i.value; r.edited = true; } }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-sl-use]'), function (c) { c.onchange = function () { var r = SL.pv && SL.pv.rows[Number(c.getAttribute('data-sl-use'))]; if (r) { r.skip = !c.checked; SL.list = null; var y = window.scrollY; slDraw(); window.scrollTo(0, y); } }; });
+    if ($('sl-create')) $('sl-create').onclick = function () { slCreate(this); };
+    if ($('sl-order')) $('sl-order').onchange = function () { SL.orderNo = this.value; SL.elsewhere = 0; SL.replan = false; SL.plan = null; SL.done = null; SL.msg = ''; slDraw(); };
+    Array.prototype.forEach.call(el.querySelectorAll('[data-sl-pick]'), function (c) { c.onchange = function () { SL.pick[c.getAttribute('data-sl-pick')] = c.checked; slUnplan(); slPaintTotals(); }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-sl-n]'), function (i) { i.oninput = function () { SL.n[i.getAttribute('data-sl-n')] = i.value; slUnplan(); slPaintTotals(); }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-sl-all]'), function (b) { b.onclick = function () { var on = b.getAttribute('data-sl-all') === '1'; slSites().forEach(function (s) { SL.pick[s.id] = on; }); SL.plan = null; slDraw(); }; });
+    if ($('sl-replan')) $('sl-replan').onchange = function () { SL.replan = this.checked; slUnplan(); };
+    if ($('sl-plan')) $('sl-plan').onclick = function () { slPlan(this); };
+    if ($('sl-apply')) $('sl-apply').onclick = function () { slApply(this); };
+    if ($('sl-csv')) $('sl-csv').onclick = slCsv;
+  }
+  function slPreview(btn) {
+    var t = String(SL.text || '');
+    if (!t.trim()) { slSay('Paste the list first, or upload a file.', true); return; }
+    SL.busy = true; btn.disabled = true; btn.textContent = 'Reading the list…'; slSay('Finding each new address on the map… this can take a few seconds.');
+    api('/api/my-sites', { action: 'sites-preview', text: t }).then(function (r) {
+      SL.busy = false;
+      if (!r.ok) { btn.disabled = false; btn.textContent = 'Preview the sites'; slSay(missing(r) ? 'Sites from a list are not switched on for this account yet.' : r.j.error || 'Could not read the list.', true); return; }
+      slCarry(SL.pv, r.j); SL.pv = r.j; SL.stale = false; SL.list = null; SL.pick = null; SL.plan = null; SL.done = null; SL.top = ''; SL.step = 'check'; SL.msg = ''; SL.bad = false;
+      slDraw(); window.scrollTo(0, 0);
+    })['catch'](function () { SL.busy = false; btn.disabled = false; btn.textContent = 'Preview the sites'; slSay('Could not reach the server.', true); });
+  }
+  function slCreate(btn) {
+    var send = [];
+    (SL.pv.rows || []).forEach(function (r) { if (r.status === 'new' && !r.skip) send.push({ name: r.name, address: r.address, lat: r.geo ? r.geo.lat : null, lng: r.geo ? r.geo.lng : null, ref: r.ref || '' }); });
+    if (!send.length) return;
+    SL.busy = true; btn.disabled = true; btn.textContent = 'Creating ' + plural(send.length, 'site') + '…'; slSay('');
+    var made = null;
+    api('/api/my-sites', { action: 'sites-create', rows: send }).then(function (r) {
+      made = must(r, 'Could not create the sites.');
+      /* the list read once more: every line is now one of the account's
+         sites, matched by the server's own rule (street + ZIP) */
+      return api('/api/my-sites', { action: 'sites-preview', text: SL.text });
+    }).then(function (r2) {
+      var c = (made.created || []).length, e = (made.existing || []).length;
+      if (r2.ok) slCarry(SL.pv, r2.j);
+      SL.busy = false; SL.list = r2.ok ? slListSites(r2.j.rows) : []; SL.pick = null; SL.n = {}; SL.plan = null; SL.done = null; SL.elsewhere = 0; SL.replan = false;
+      if (r2.ok) { SL.pv = r2.j; SL.stale = false; }
+      SL.top = plural(c, 'site') + ' created' + (e ? ', ' + e + ' already yours' : '') + '. Now send the order’s units to them.';
+      SL.step = 'send'; SL.msg = ''; SL.bad = false; SITES = null;
+      return loadSites()['catch'](function () { return null; }).then(function () { slDraw(); window.scrollTo(0, 0); });
+    })['catch'](function (e) { SL.busy = false; if (!made) { btn.disabled = false; btn.textContent = 'Create ' + plural(send.length, 'site'); slSay(e.message || 'Could not reach the server.', true); } else { SITES = null; slSay(e.message || 'Could not reach the server.', true); } });
+  }
+  function slBody() {
+    var sites = slSites().filter(function (s) { return SL.pick && SL.pick[s.id]; }).map(function (s) { var v = String(SL.n[s.id] == null ? '' : SL.n[s.id]).trim(); return { siteId: s.id, units: v === '' ? null : Number(v) }; });
+    return { orderNo: SL.orderNo, sites: sites, replan: SL.replan === true };
+  }
+  function slPlan(btn) {
+    var t = slTotals();
+    if (!slOrder()) { slSay('Choose the order first.', true); return; }
+    if (!t.picked.length) { slSay('Tick the sites this order goes to.', true); return; }
+    if (t.bad.length) { slSay('Units must be a whole number: ' + t.bad.join(', ') + '.', true); return; }
+    var body = slBody();
+    SL.busy = true; btn.disabled = true; btn.textContent = 'Working out which unit goes where…'; SL.done = null; slSay('');
+    api('/api/my-sites', { action: 'plan-preview', orderNo: body.orderNo, sites: body.sites, replan: body.replan }).then(function (r) {
+      SL.busy = false;
+      if (!r.ok) { btn.disabled = false; btn.textContent = 'Preview'; slSay(r.j.error || 'Could not preview that.', true); return; }
+      SL.plan = r.j; SL.body = body; SL.elsewhere = (r.j.elsewhere || []).length || (SL.replan ? SL.elsewhere : 0); SL.msg = ''; SL.bad = false;
+      slDraw();
+      if ($('sl-planbox')) $('sl-planbox').scrollIntoView({ block: 'start' });
+    })['catch'](function () { SL.busy = false; btn.disabled = false; btn.textContent = 'Preview'; slSay('Could not reach the server.', true); });
+  }
+  /* Send: the same body plus confirm and the preview's planKey; the server
+     recomputes the plan, and over 200 units answers more:true — the same
+     call goes again */
+  function slApply(btn) {
+    var body = SL.body, key = SL.plan.planKey, applied = 0, skipped = [], rounds = 0;
+    SL.busy = true; btn.disabled = true; btn.textContent = 'Sending…'; slSay('');
+    function round() {
+      return api('/api/my-sites', { action: 'plan-apply', confirm: true, planKey: key, orderNo: body.orderNo, sites: body.sites, replan: body.replan }).then(function (r) {
+        var j = must(r, 'Could not send the units.');
+        applied += Number(j.applied) || 0; skipped = skipped.concat(j.skipped || []); rounds++;
+        if (j.more && Number(j.applied) > 0 && rounds < 10) { btn.textContent = 'Sending… ' + applied + ' so far'; return round(); }
+        return j;
+      });
+    }
+    round().then(function (last) {
+      SL.busy = false; SL.plan = null; SL.body = null; SL.top = '';
+      SL.done = { orderNo: body.orderNo, applied: applied, skipped: skipped, assignments: last.assignments || [], released: last.released || [] };
+      SL.msg = ''; SL.bad = false; SITES = null;
+      return loadSites()['catch'](function () { return null; }).then(function () { slDraw(); if ($('sl-donebox')) $('sl-donebox').scrollIntoView({ block: 'start' }); });
+    })['catch'](function (e) { SL.busy = false; btn.disabled = false; btn.textContent = 'Send again'; slSay(e.message || 'Could not reach the server.', true); });
+  }
+  /* The result as a sheet, made here from what the server answered: a cell
+     that starts with = + - @ gets a ' so a spreadsheet shows it rather than
+     runs it (api/_lib/receivables.js cell()); a ZIP with a leading zero
+     goes as text (="04101", which the site list reads back as the ZIP) so
+     a spreadsheet keeps the zero; UTF-8 with a BOM for Excel. */
+  function slCell(v) {
+    if (v && typeof v === 'object') { var t = String(v.text == null ? '' : v.text); return /^\d[\d-]*$/.test(t) && (t.charAt(0) === '0' || t.length > 15) ? '"=""' + t + '"""' : slCell(t); }
+    var s = v == null ? '' : String(v); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function slCsv() {
+    var d = SL.done; if (!d) return;
+    var by = {}; ((SITES && SITES.sites) || []).forEach(function (s) { by[s.id] = s; });
+    var rows = [['Serial', 'Site', 'Address', 'City', 'State', 'ZIP', 'Order', 'Status']];
+    d.assignments.forEach(function (a) { var s = by[a.siteId] || {}, ad = s.address || {}; rows.push([a.serial, a.siteName || s.name || '', ad.line1 || '', ad.city || '', ad.state || '', { text: ad.zip || '' }, d.orderNo, a.how === 'skipped' ? 'left as it was: ' + (a.why || '') : a.how === 'pending' ? 'not sent yet' : 'going to']); });
+    d.released.forEach(function (x) { rows.push([x.serial, '', '', '', '', '', d.orderNo, 'taken off ' + (x.siteName || x.siteId)]); });
+    var blob = new Blob(['﻿' + rows.map(function (r) { return r.map(slCell).join(','); }).join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sites-' + String(d.orderNo || 'order').replace(/[^\w.-]+/g, '_') + '.csv'; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 2000);
+    slSay('Downloaded ' + a.download + '.');
   }
 
   /* ── Waiting to be let in ───────────────────────────────────────────────

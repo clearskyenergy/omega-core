@@ -165,6 +165,19 @@
   .logic-theme .home-panels h2,.logic-theme #home-sum h2{font-size:13px;letter-spacing:.09em;margin:0 0 10px}
   .logic-theme a.hrow{color:var(--ink)}.hrow b{overflow-wrap:anywhere}
   .sub-h{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--sub);margin:18px 0 6px}
+  /* ── sites from a list (#fleet-bulk): its own card above Fleet ── */
+  .bk-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  #fleet-bulk h2{margin:0}
+  #fleet-bulk textarea.sheet{min-height:170px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
+  #fleet-bulk input[type=checkbox]{width:18px;height:18px;padding:0;margin:0;vertical-align:middle}
+  #fleet-bulk .pf-table input:not([type=checkbox]){padding:7px 9px}
+  #fleet-bulk .pf-table input.bk-n{width:84px}
+  #fleet-bulk .pf-table td small{display:block;color:var(--sub);font-size:12.5px}
+  #fleet-bulk .pf-table tr.bk-prob td{border-top:0;padding-top:0}
+  #fleet-bulk .pf-table label.bk-use{display:flex;gap:6px;align-items:center;margin:0;text-transform:none;letter-spacing:0;font-size:13.5px;color:var(--ink);font-weight:500}
+  #fleet-bulk ul{margin:6px 0 10px 18px;padding:0;font-size:14px}
+  #fleet-bulk details summary{cursor:pointer;color:var(--brand-d,#2A8CA3);font-weight:600}
+  .bk-box{border-top:1px solid var(--line);margin-top:16px;padding-top:14px}
 </style>
 <link rel="stylesheet" href="/omega-logic-theme.css">
 </head>
@@ -202,6 +215,7 @@
     <div class="home-top"><div id="hub"></div><section id="home-sum"><h2>Your account</h2><div id="home-kv"><p class="muted">Loading…</p></div></section></div>
     <div id="home-panels" class="home-panels"></div>
   </div>
+  <section id="s-fleet-bulk" data-page="fleet" hidden><div id="fleet-bulk"><p class="muted">Loading…</p></div></section>
   <section id="s-fleet" data-page="fleet" hidden><div id="fleet-body"><p class="muted">Loading your sites and units…</p></div></section>
   <section id="s-shipping" data-page="shipping" hidden><div id="ship-body"><p class="muted">Loading…</p></div></section>
   <section id="s-warranty" data-page="warranty" hidden><div id="war-body"><p class="muted">Loading…</p></div></section>
@@ -705,7 +719,7 @@
     el.innerHTML = (todo.length ? '<p class="err" style="font-weight:600">' + plural(todo.length, 'unit needs', 'units need') + ' you below: ' + esc(todo.map(function (n) { return n.u.serial + ' ' + ({ arrived: 'arrived?', site: 'which site?', commission: 'commissioned?' })[n.what]; }).slice(0, 4).join(' · ')) + (todo.length > 4 ? ' …' : '') + '</p>' : '')
       + '<div class="kv"><div><small>Units</small><b>' + units.length + '</b></div><div><small>Sites</small><b>' + sites.length + '</b></div><div><small>Running</small><b>' + running + '</b></div><div><small>On the way</small><b>' + moving + '</b></div><div><small>Under warranty</small><b>' + covered + '</b></div><div><small>Warranty pending</small><b>' + units.filter(pendingCover).length + '</b></div></div>'
       + '<p class="sub-h">Sites · ' + sites.length + '</p>'
-      + (sites.map(function (s) { var a = s.address || {}, ic = s.interconnection || {}; return '<div class="hrow"><div><b>' + esc(s.name) + '</b><small>' + esc([a.line1, a.city, a.state, a.zip].filter(Boolean).join(', ')) + '</small>' + (ic.utility || ic.poi ? '<small>' + esc([ic.utility, ic.poi ? 'POI ' + ic.poi : '', ic.meterNo ? 'meter ' + ic.meterNo : ''].filter(Boolean).join(' · ')) + '</small>' : '') + '</div><span class="pill">' + plural(Number(s.units) || 0, 'unit') + '</span></div>'; }).join('') || '<p class="muted">No sites yet. Add the location where your units will be interconnected.</p>')
+      + (sites.map(function (s) { var a = s.address || {}, ic = s.interconnection || {}; return '<div class="hrow"><div><b>' + esc(s.name) + '</b><small>' + esc([a.line1, a.city, a.state, a.zip].filter(Boolean).join(', ')) + '</small>' + (ic.utility || ic.poi ? '<small>' + esc([ic.utility, ic.poi ? 'POI ' + ic.poi : '', ic.meterNo ? 'meter ' + ic.meterNo : ''].filter(Boolean).join(' · ')) + '</small>' : '') + (Number(s.planned) > 0 ? '<small>' + esc(plural(Number(s.planned), 'unit') + ' going here') + '</small>' : '') + '</div><span class="pill">' + plural(Number(s.units) || 0, 'unit') + '</span></div>'; }).join('') || '<p class="muted">No sites yet. Add the location where your units will be interconnected, or many at once from a list above.</p>')
       + '<details class="rqf" id="site-add"><summary>Add a site</summary><form id="site-form"><div class="row2"><div><label for="sf-name">Site name</label><input id="sf-name" required maxlength="160"></div><div><label for="sf-line1">Street address</label><input id="sf-line1" maxlength="200"></div></div><div class="row2"><div><label for="sf-city">City</label><input id="sf-city" maxlength="100"></div><div><label for="sf-state">State ZIP</label><input id="sf-state" maxlength="60" placeholder="CA 93307"></div></div><div class="row2"><div><label for="sf-utility">Utility</label><input id="sf-utility" maxlength="120"></div><div><label for="sf-meter">Meter no.</label><input id="sf-meter" maxlength="80"></div></div><label for="sf-poi">Point of interconnection</label><input id="sf-poi" maxlength="200" placeholder="e.g. MSB-2, 480 V"><div class="actions"><button type="submit" id="sf-save">Save site</button></div></form></details>'
       + '<p class="sub-h">Your units · ' + units.length + '</p><p class="muted" style="font-size:13.5px">Tell us when a unit arrives and which site it is installed at: the warranty is tied to that site.</p>'
       + (units.map(function (u, i) {
@@ -742,6 +756,306 @@
         })['catch'](function () { $('fleet-msg').textContent = 'Could not reach the server.'; b.disabled = false; });
       };
     });
+  }
+
+  /* ── Sites from a list: a PO's many places at once ─────────────────────
+     api/my-sites.js sites-preview · sites-create · plan-preview · plan-apply
+     (api/_lib/custody.js parseSiteList, matchSites, spread). The SERVER
+     reads the pasted list — this page parses nothing — and matches it to
+     the account's sites by street and ZIP; the new ones are created in one
+     go; then an order's units are spread over the chosen sites. The
+     preview IS the confirmation: there is no second box, and Send carries
+     confirm:true with the preview's planKey, so a plan that changed since
+     answers "preview again" instead of writing something nobody saw. The
+     order is named by its orderNo, never its id. Its own card and its own
+     state: drawFleet() redraws #fleet-body on every load and must not wipe
+     a list being typed. */
+  var BK = { step: '', text: '', pv: null, stale: false, list: null, orderNo: '', pick: null, n: {}, replan: false, elsewhere: 0, plan: null, body: null, done: null, busy: false, top: '', msg: '', bad: false };
+  var BK_EXAMPLE = '- 100 Main St, Springfield, IL 62701\n- North store: 2200 Lake Ave, Suite 4, Madison, WI 53703 × 4\n- 45 Harbor Rd, Portland, ME 04101 (3 units)';
+  var BK_MAX_FILE = 100000;   // api/_lib/custody.js MAX_SITE_TEXT
+  function bkLines(t) { return String(t || '').split(/\r\n?|\n/).filter(function (x) { return x.trim(); }).length; }
+  function bkAddr(a) { a = a || {}; return [a.line1, a.city, [a.state, a.zip].filter(Boolean).join(' ')].filter(Boolean).join(', '); }
+  function bkSay(t, bad) { BK.msg = t || ''; BK.bad = !!bad; var m = $('bk-msg'); if (m) { m.className = bad ? 'err' : 'muted'; m.textContent = BK.msg; } }
+  function bkMsg() { return '<p id="bk-msg" role="status" aria-live="polite" class="' + (BK.bad ? 'err' : 'muted') + '" style="font-size:13.5px;margin:10px 0 0">' + esc(BK.msg) + '</p>'; }
+  /* the lines of a preview that are (now) sites on the account, in list
+     order, with the unit count the list gave; an unticked line is out */
+  function bkListSites(rows) { var seen = {}, out = []; (rows || []).forEach(function (r) { if (r.status === 'exists' && r.existingId && !r.skip && !seen[r.existingId]) { seen[r.existingId] = true; out.push({ siteId: r.existingId, units: r.units == null ? null : r.units }); } }); return out; }
+  /* A line is known across previews by its street and ZIP, so a name typed
+     in step 2 and a line unticked there survive "change the list and
+     preview again" (and the read-back after Create). A line the server
+     marks to check (a street with no house number: often the sender's
+     signature) starts unticked; every other line starts ticked. */
+  function bkKey(a) { a = a || {}; return String(a.line1 || '').trim().toLowerCase() + '|' + String(a.zip || '').trim().slice(0, 5); }
+  function bkCarry(old, pv) {
+    var by = {}; ((old && old.rows) || []).forEach(function (r) { if (r.status !== 'problem') by[bkKey(r.address)] = r; });
+    ((pv && pv.rows) || []).forEach(function (r) {
+      var o = r.status !== 'problem' ? by[bkKey(r.address)] : null;
+      if (o && o.edited && r.status === 'new') { r.name = o.name; r.edited = true; }
+      r.skip = r.status === 'problem' ? false : o && o.skip != null ? o.skip : r.status === 'new' && (r.warnings || []).length > 0;
+    });
+  }
+  /* the account's sites, the list's first and in its order */
+  function bkSites() {
+    var all = (SITES && SITES.sites) || [], by = {}, out = [], used = {};
+    all.forEach(function (s) { by[s.id] = s; });
+    (BK.list || []).forEach(function (x) { if (by[x.siteId] && !used[x.siteId]) { used[x.siteId] = true; out.push(by[x.siteId]); } });
+    all.forEach(function (s) { if (!used[s.id]) out.push(s); });
+    return out;
+  }
+  function bkOrder() { return ((SITES && SITES.orders) || []).filter(function (o) { return o.orderNo === BK.orderNo; })[0] || null; }
+  function bkOrderLine(o) {
+    return plural(Number(o.units) || 0, 'unit') + ' on the order · ' + (Number(o.eligible) || 0) + ' can be sent' + (o.building ? ' (' + o.building + ' still being built)' : '')
+      + (o.planned ? ' · ' + plural(Number(o.planned), 'unit') + ' already going to a site' : '');
+  }
+  /* what the ticked sites and typed numbers come to, for the running total
+     and the "even" hints; the preview is what counts */
+  function bkTotals() {
+    var o = bkOrder(), picked = bkSites().filter(function (s) { return BK.pick && BK.pick[s.id]; }), E = o ? Number(o.eligible) || 0 : 0, typed = 0, blanks = [], bad = [];
+    picked.forEach(function (s) { var v = String(BK.n[s.id] == null ? '' : BK.n[s.id]).trim(); if (v === '') blanks.push(s); else if (/^\d{1,5}$/.test(v)) typed += Number(v); else bad.push(s.name); });
+    var rest = Math.max(0, E - typed), each = blanks.length ? Math.floor(rest / blanks.length) : 0, extra = blanks.length ? rest % blanks.length : 0, share = {};
+    blanks.forEach(function (s, i) { share[s.id] = each + (i < extra ? 1 : 0); });
+    return { E: E, typed: typed, share: share, sum: typed + (blanks.length ? rest : 0), picked: picked, bad: bad };
+  }
+  function bkPaintTotals() {
+    var t = bkTotals(), el = $('bk-total');
+    Array.prototype.forEach.call(document.querySelectorAll('#fleet-bulk [data-bk-n]'), function (i) { var id = i.getAttribute('data-bk-n'); i.placeholder = t.share[id] != null ? 'even: ' + t.share[id] : ''; });
+    if ($('bk-picked')) $('bk-picked').textContent = t.picked.length;
+    if (!el) return;
+    el.className = t.bad.length ? 'err' : '';
+    el.textContent = !bkOrder() ? 'Choose the order first.' : !t.picked.length ? 'Tick the sites this order goes to.'
+      : t.bad.length ? 'Units must be a whole number: ' + t.bad.join(', ') + '.'
+      : plural(t.picked.length, 'site') + ' · ' + t.sum + ' of the ' + t.E + ' units that can be sent' + (t.typed > t.E ? ' · ' + (t.typed - t.E) + ' more than can still be sent: units already at a ticked site count toward its number, so Preview checks' : t.sum < t.E ? ' · ' + (t.E - t.sum) + ' left without a site' : '');
+  }
+  /* a change to the order, the ticks or a number: the preview no longer
+     says what Send would do, so it goes */
+  function bkUnplan() {
+    BK.plan = null; BK.body = null; var box = $('bk-planbox'); if (box) box.parentNode.removeChild(box);
+    if (!$('bk-msg') && $('bk-plan')) $('bk-plan').parentNode.insertAdjacentHTML('afterend', bkMsg());
+  }
+  function drawBulk() {
+    var el = $('fleet-bulk'); if (!el) return;
+    if (!SITES) { el.innerHTML = '<h2>Sites from a list</h2><p class="muted" style="margin:8px 0 0">' + (ERR.sites ? 'Opens once your sites load.' : 'Loading…') + '</p>'; return; }
+    if (!BK.step) {
+      el.innerHTML = '<h2>Sites from a list</h2><p class="muted" style="margin:8px 0 0;max-width:72ch">A PO that goes to many places? Paste the list of addresses from the email or the sheet: the sites are created in one go, then the order’s units are sent to them all at once instead of one at a time.</p>'
+        + '<div class="actions"><button type="button" class="btn p" data-bk-go="paste">Add your sites from a list</button><button type="button" class="btn" data-bk-go="send">Send units to your sites</button></div>';
+      bkBind(el); return;
+    }
+    var steps = [['paste', '1 · Paste the list'], ['check', '2 · Check the sites'], ['send', '3 · Send units']];
+    el.innerHTML = '<div class="bk-head"><h2>Sites from a list</h2><button type="button" class="btn" data-bk-go="">Close</button></div>'
+      + '<div class="pf-steps" role="tablist" aria-label="Steps">' + steps.map(function (s) { return '<button type="button" role="tab" class="pf-step' + (BK.step === s[0] ? ' on' : '') + '" data-bk-go="' + s[0] + '" aria-selected="' + (BK.step === s[0] ? 'true' : 'false') + '"' + (s[0] === 'check' && !BK.pv ? ' disabled' : '') + '>' + esc(s[1]) + '</button>'; }).join('') + '</div>'
+      + (BK.top ? '<p role="status" style="margin:4px 0 12px"><span class="pill go">done</span> ' + esc(BK.top) + '</p>' : '')
+      + (BK.step === 'paste' ? bkPasteHtml() : BK.step === 'check' ? bkCheckHtml() : bkSendHtml());
+    bkBind(el);
+    if (BK.step === 'send') bkPaintTotals();
+  }
+  function bkPasteHtml() {
+    return '<p class="muted" style="margin:0;max-width:78ch">One address per line, as it came in the email — a bullet or a number in front is fine — or a sheet with a header row (Name, Address, City, State, ZIP, Units). A name before a colon names the site; a count at the end (× 4 or (4 units)) says how many units go there.</p>'
+      + '<label for="bk-text">Your list of sites</label><textarea id="bk-text" class="sheet" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="' + esc(BK_EXAMPLE) + '">' + esc(BK.text) + '</textarea>'
+      + '<label for="bk-file">Or upload a file (.csv, .tsv or .txt)</label><input id="bk-file" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values">'
+      + '<div class="actions"><button type="button" class="btn p" id="bk-preview"' + (BK.busy ? ' disabled' : '') + '>Preview the sites</button><span class="muted" id="bk-count" style="align-self:center;font-size:13.5px">' + esc(BK.text.trim() ? plural(bkLines(BK.text), 'line') : '') + '</span></div>' + bkMsg();
+  }
+  function bkCheckHtml() {
+    var pv = BK.pv || {}, rows = pv.rows || [], s = pv.summary || {};
+    var nAll = rows.filter(function (r) { return r.status === 'new'; }).length, nNew = rows.filter(function (r) { return r.status === 'new' && !r.skip; }).length, nEx = rows.filter(function (r) { return r.status === 'exists'; }).length, nUse = rows.filter(function (r) { return r.status === 'exists' && !r.skip; }).length, nBad = rows.filter(function (r) { return r.status === 'problem'; }).length, nChk = rows.filter(function (r) { return r.status === 'new' && (r.warnings || []).length; }).length, nOff = rows.filter(function (r) { return r.status !== 'problem' && r.skip; }).length;
+    return '<p style="margin:0"><b>' + esc(plural(Number(s.rows) || rows.length, 'address', 'addresses')) + '</b> · ' + nAll + ' new · ' + nEx + ' already on your account' + (nBad ? ' · <span class="err">' + nBad + ' to fix</span>' : '') + (nChk ? ' · ' + nChk + ' to check' : '') + '</p>'
+      + (BK.stale ? '<p class="err">The list changed since this preview. Preview it again before creating.</p>' : '')
+      + (pv.geoLimited ? '<p class="muted" style="font-size:13.5px">Today’s map lookups for your account are used up, so some new lines have no map pin. The sites are created all the same.</p>' : '')
+      + ((pv.problems || []).length ? '<ul class="muted">' + pv.problems.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>' : '')
+      + (rows.length ? '<div class="pf-scroll"><table class="pf-table"><thead><tr><th>Line</th><th>Site name</th><th>Address</th><th>Units</th><th>Status</th></tr></thead><tbody>' + rows.map(function (r, i) {
+        var a = r.address || {}, st = r.status;
+        var name = st === 'new' ? '<input data-bk-name="' + i + '" value="' + esc(r.name) + '" maxlength="160" aria-label="Site name, line ' + esc(r.line) + '">' : '<b>' + esc(st === 'exists' ? (r.existingName || r.name) : r.name) + '</b>';
+        var geo = r.geo ? '<small title="' + esc(r.geo.matchedAddress || '') + '">◉ found on the map</small>' : r.lookedUp ? '<small>not found on the map; the site is still created</small>' : '';
+        var pill = st === 'new' ? '<span class="pill go">new</span>' : st === 'exists' ? '<span class="pill">already a site</span>' : '<span class="pill stop">to fix</span>';
+        var line = st === 'problem' ? '<td class="mono">' + esc(r.line) + '</td>' : '<td><label class="bk-use"><input type="checkbox" data-bk-use="' + i + '"' + (r.skip ? '' : ' checked') + ' aria-label="Use line ' + esc(r.line) + '"><span class="mono">' + esc(r.line) + '</span></label></td>';
+        return '<tr data-bk-row="' + i + '">' + line + '<td>' + name + (r.note ? '<small>' + esc(r.note) + '</small>' : '') + '</td><td>' + esc(a.line1 || '—') + '<small>' + esc([a.city, [a.state, a.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')) + '</small>' + geo + '</td><td>' + (r.units == null ? '<span class="muted">—</span>' : esc(r.units)) + '</td><td>' + pill + '</td></tr>'
+          + ((r.problems || []).length ? '<tr class="bk-prob"><td></td><td colspan="4" class="err" style="font-weight:600">' + esc(r.problems.join('; ')) + '</td></tr>' : '')
+          + (st === 'new' && (r.warnings || []).length ? '<tr class="bk-prob"><td></td><td colspan="4" class="muted" style="font-weight:600">' + esc(r.warnings.join('; ') + (r.skip ? ' Unticked: tick it to create it.' : '')) + '</td></tr>' : '');
+      }).join('') + '</tbody></table></div>' : '')
+      + (nBad ? '<p class="muted" style="font-size:13.5px">Lines to fix are left out. Fix them in the list and preview again (the names you typed are kept), or create the rest now and add those later.</p>' : '')
+      + (nOff ? '<p class="muted" style="font-size:13.5px">' + esc(plural(nOff, 'unticked line is', 'unticked lines are')) + ' not created and not sent units.</p>' : '')
+      + (nNew && nUse ? '<p class="muted" style="font-size:13.5px">The ' + nUse + ' already on your account are not created again; they are in step 3 with the new ones.</p>' : '')
+      + '<div class="actions">' + (nNew ? '<button type="button" class="btn p" id="bk-create"' + (BK.busy || BK.stale ? ' disabled' : '') + '>Create ' + plural(nNew, 'site') + '</button>' : nUse ? '<button type="button" class="btn p" data-bk-go="send">Next: send units to these sites</button>' : '')
+      + '<button type="button" class="btn" data-bk-go="paste">Change the list</button></div>' + bkMsg();
+  }
+  function bkSendHtml() {
+    var orders = SITES.orders, sites = bkSites();
+    if (!orders) return '<p class="muted">Sending units to many sites is not switched on for this account yet.</p>';
+    if (!sites.length) return '<p class="muted">No sites on your account yet. Add them from a list first.</p><div class="actions"><button type="button" class="btn p" data-bk-go="paste">Add your sites from a list</button></div>';
+    if (!orders.length) return '<p class="muted">No order on your account has units yet. Units appear on an order once ' + esc(brandName()) + ' starts building it; come back then.</p>';
+    if (!bkOrder()) BK.orderNo = orders.length === 1 ? orders[0].orderNo : '';
+    if (!BK.pick) { BK.pick = {}; BK.n = {}; (BK.list || []).forEach(function (x) { BK.pick[x.siteId] = true; if (x.units != null) BK.n[x.siteId] = String(x.units); }); }
+    var o = bkOrder();
+    return '<p class="muted" style="margin:0;max-width:78ch">Each unit is marked “going to” its site. When it arrives and you record it received, it is tied to that site and its warranty starts. Nothing ships differently: to change a delivery, ask on the order.</p>'
+      + '<label for="bk-order">Order</label><select id="bk-order" style="width:100%"><option value="">Choose the order…</option>' + orders.map(function (x) { return '<option value="' + esc(x.orderNo) + '"' + (x.orderNo === BK.orderNo ? ' selected' : '') + '>' + esc(x.orderNo + (x.po ? ' · your PO ' + x.po : '') + ' · ' + plural(Number(x.units) || 0, 'unit')) + '</option>'; }).join('') + '</select>'
+      + (o ? '<p class="muted" style="font-size:13.5px;margin:6px 0 0">' + esc(bkOrderLine(o)) + '</p>' : '')
+      + '<div class="bk-head" style="margin:18px 0 0"><p class="sub-h" style="margin:0">Sites · <span id="bk-picked">0</span> of ' + sites.length + ' ticked</p><span><button type="button" class="btn" data-bk-all="1">Tick all</button> <button type="button" class="btn" data-bk-all="0">Tick none</button></span></div>'
+      + '<p class="muted" style="font-size:13.5px;margin:4px 0 8px">Leave Units blank to share the order evenly; type a number to send exactly that many there (units already there or going there count).</p>'
+      + '<div class="pf-scroll"><table class="pf-table"><thead><tr><th></th><th>Site</th><th>Address</th><th>Units</th><th>Now</th></tr></thead><tbody>' + sites.map(function (s) {
+        var now = [Number(s.units) > 0 ? s.units + ' at the site' : '', Number(s.planned) > 0 ? s.planned + ' going here' : ''].filter(Boolean).join(' · ') || 'nothing yet';
+        return '<tr><td><input type="checkbox" data-bk-pick="' + esc(s.id) + '"' + (BK.pick[s.id] ? ' checked' : '') + ' aria-label="Send units to ' + esc(s.name) + '"></td><td><b>' + esc(s.name) + '</b>' + (s.ref ? '<small>' + esc(s.ref) + '</small>' : '') + '</td><td>' + esc(bkAddr(s.address)) + '</td>'
+          + '<td><input class="bk-n" data-bk-n="' + esc(s.id) + '" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="' + esc(BK.n[s.id] == null ? '' : BK.n[s.id]) + '" aria-label="Units for ' + esc(s.name) + '"></td><td><small>' + esc(now) + '</small></td></tr>';
+      }).join('') + '</tbody></table></div>'
+      + '<p id="bk-total" style="margin:10px 0 0;font-weight:600"></p>'
+      + (BK.elsewhere || BK.replan ? '<p style="margin:10px 0 0"><label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:14px;color:var(--ink);font-weight:500;margin:0"><input type="checkbox" id="bk-replan"' + (BK.replan ? ' checked' : '') + '> Also move the ' + plural(BK.elsewhere || 0, 'unit') + ' of this order already going to sites not ticked here</label></p>' : '')
+      + '<div class="actions"><button type="button" class="btn p" id="bk-plan"' + (BK.busy ? ' disabled' : '') + '>Preview</button></div>'
+      + (BK.plan ? bkPlanHtml() : '') + (!BK.plan && !BK.done ? bkMsg() : '') + (BK.done ? bkDoneHtml() : '');
+  }
+  function bkSerials(list) { return list.map(function (a) { return a.serial + (a.how === 'changed' ? ' (moved here)' : ''); }).join(', '); }
+  function bkPlanHtml() {
+    var p = BK.plan, a = p.assignments || [], by = {}, cnt = { 'new': 0, changed: 0, unchanged: 0 };
+    a.forEach(function (x) { (by[x.siteId] = by[x.siteId] || []).push(x); cnt[x.how] = (cnt[x.how] || 0) + 1; });
+    if ((p.problems || []).length) return '<div class="bk-box" id="bk-planbox"><p class="err" style="font-weight:600">' + p.problems.map(esc).join('<br>') + '</p><p class="muted" style="font-size:13.5px">Nothing is sent. Change the numbers or the ticks and preview again.</p>' + bkMsg() + '</div>';
+    var moving = cnt['new'] + cnt.changed, rel = (p.released || []).length, sitesTo = (p.perSite || []).filter(function (s) { return (by[s.siteId] || []).length; }).length, touched = {};
+    a.forEach(function (x) { if (x.how === 'new' || x.how === 'changed') touched[x.siteId] = true; });
+    return '<div class="bk-box" id="bk-planbox"><p class="sub-h" style="margin-top:0">Preview</p><p style="margin:0"><b>' + plural(a.length, 'unit') + ' to ' + plural(sitesTo, 'site') + '</b> · ' + ([cnt['new'] ? cnt['new'] + ' new' : '', cnt.changed ? cnt.changed + ' moved from another site' : '', cnt.unchanged ? cnt.unchanged + ' already going there' : '', rel ? rel + ' taken off a site' : ''].filter(Boolean).join(' · ') || 'nothing to change') + '</p>'
+      + '<div class="pf-scroll"><table class="pf-table"><thead><tr><th>Site</th><th>Units</th><th>Serials</th></tr></thead><tbody>' + (p.perSite || []).map(function (s) {
+        var mine = by[s.siteId] || [];
+        return '<tr data-bk-plan="' + esc(s.siteId) + '"><td><b>' + esc(s.name) + '</b>' + (s.placed ? '<small>' + esc(plural(s.placed, 'unit') + ' of this order already at the site') + '</small>' : '') + (s.short ? '<small class="err">' + esc(s.short + ' short: the order has no more units to send') + '</small>' : '') + '</td><td>' + mine.length + '</td><td>' + (mine.length ? '<details><summary>' + esc(plural(mine.length, 'serial')) + '</summary><span class="mono" style="font-size:13px">' + esc(bkSerials(mine)) + '</span></details>' : '<span class="muted">none</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+      + ((p.leftover || []).length ? '<p class="muted" style="font-size:13.5px"><b>' + plural(p.leftover.length, 'unit stays', 'units stay') + ' without a site</b>: the numbers ask for fewer than the order has. ' + esc(p.leftover.join(', ')) + '</p>' : '')
+      + (rel ? '<p class="muted" style="font-size:13.5px"><b>' + plural(rel, 'unit comes', 'units come') + ' off a site</b> whose number went down: ' + esc(p.released.map(function (r) { return r.serial + ' (' + r.siteName + ')'; }).join(', ')) + '</p>' : '')
+      + ((p.elsewhere || []).length ? '<p class="muted" style="font-size:13.5px"><b>' + plural(p.elsewhere.length, 'unit is', 'units are') + ' already going to other sites</b> and ' + (p.elsewhere.length === 1 ? 'is' : 'are') + ' left alone: ' + esc(p.elsewhere.map(function (r) { return r.serial + ' (' + r.siteName + ')'; }).join(', ')) + '</p>' : '')
+      + ((p.notPlanned || []).length ? '<details style="font-size:13.5px;margin:8px 0"><summary>' + esc(plural(p.notPlanned.length, 'unit') + ' of this order can’t be sent from here') + '</summary><ul>' + p.notPlanned.map(function (x) { return '<li><span class="mono">' + esc(x.serial) + '</span> · ' + esc(x.say) + '</li>'; }).join('') + '</ul></details>' : '')
+      + (moving || rel ? '<div class="actions"><button type="button" class="btn p" id="bk-apply"' + (BK.busy ? ' disabled' : '') + '>' + esc(moving ? 'Send ' + plural(moving, 'unit') + ' to ' + plural(Object.keys(touched).length, 'site') : 'Take ' + plural(rel, 'unit') + ' off their site') + '</button><span class="muted" style="align-self:center;font-size:13px">This is the confirmation: nothing else will ask.</span></div>'
+        : '<p class="muted">Nothing to change: every unit is already going where this sends it.</p>')
+      + bkMsg() + '</div>';
+  }
+  function bkDoneHtml() {
+    var d = BK.done, a = d.assignments || [], sk = a.filter(function (x) { return x.how === 'skipped'; }), wait = a.filter(function (x) { return x.how === 'pending'; }), going = a.length - sk.length - wait.length, sites = {};
+    a.forEach(function (x) { if (x.how !== 'skipped' && x.how !== 'pending') sites[x.siteId] = true; });
+    return '<div class="bk-box" id="bk-donebox"><p style="margin:0"><span class="pill go">sent</span> <b>' + plural(going, 'unit') + ' of ' + esc(d.orderNo) + ' going to ' + plural(Object.keys(sites).length, 'site') + '</b>' + (d.applied ? ' · ' + d.applied + ' changed just now' : '') + '</p>'
+      + (sk.length ? '<p class="err" style="font-size:13.5px">' + esc(plural(sk.length, 'unit was', 'units were') + ' left as they were: ' + sk.map(function (x) { return x.serial + ' (' + (x.why || 'changed') + ')'; }).join(', ')) + '</p>' : '')
+      + (wait.length ? '<p class="err" style="font-size:13.5px">' + esc(plural(wait.length, 'unit is', 'units are') + ' still to send. Preview again and send.') + '</p>' : '')
+      + '<p class="muted" style="font-size:13.5px">Each site below shows how many are going there. When a unit arrives, record it received and it is tied to its site.</p>'
+      + '<div class="actions"><button type="button" class="btn" id="bk-csv">Download CSV</button><button type="button" class="btn" data-bk-go="">Done</button></div>' + bkMsg() + '</div>';
+  }
+  function bkGo(to) {
+    if (to === 'send' && BK.step === 'check' && BK.pv && !BK.list) BK.list = bkListSites(BK.pv.rows);
+    if (to === 'paste' || !to) BK.top = '';
+    BK.step = to; BK.msg = ''; BK.bad = false;
+    drawBulk();
+  }
+  function bkBind(el) {
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-go]'), function (b) { b.onclick = function () { bkGo(b.getAttribute('data-bk-go')); }; });
+    var ta = $('bk-text');
+    if (ta) ta.oninput = function () { BK.text = ta.value; if (BK.pv) BK.stale = true; $('bk-count').textContent = BK.text.trim() ? plural(bkLines(BK.text), 'line') : ''; };
+    if ($('bk-file')) $('bk-file').onchange = function () {
+      var f = this.files && this.files[0], inp = this; if (!f) return;
+      if (f.size > BK_MAX_FILE) { bkSay(f.name + ' is ' + kb(f.size) + '; a site list is at most 100 KB. Split it into smaller lists.', true); inp.value = ''; return; }
+      if (!/\.(csv|tsv|txt)$/i.test(f.name)) { bkSay('A .csv, .tsv or .txt file, please. From Excel: File → Save As → CSV.', true); inp.value = ''; return; }
+      var r = new FileReader();
+      r.onload = function () { BK.text = String(r.result || '').replace(/^﻿/, ''); if (BK.pv) BK.stale = true; if (ta) ta.value = BK.text; $('bk-count').textContent = plural(bkLines(BK.text), 'line') + ' from ' + f.name; bkSay(''); };
+      r.onerror = function () { bkSay('Could not read ' + f.name, true); };
+      r.readAsText(f);
+    };
+    if ($('bk-preview')) $('bk-preview').onclick = function () { bkPreview(this); };
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-name]'), function (i) { i.oninput = function () { var r = BK.pv && BK.pv.rows[Number(i.getAttribute('data-bk-name'))]; if (r) { r.name = i.value; r.edited = true; } }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-use]'), function (c) { c.onchange = function () { var r = BK.pv && BK.pv.rows[Number(c.getAttribute('data-bk-use'))]; if (r) { r.skip = !c.checked; BK.list = null; drawBulk(); } }; });
+    if ($('bk-create')) $('bk-create').onclick = function () { bkCreate(this); };
+    if ($('bk-order')) $('bk-order').onchange = function () { BK.orderNo = this.value; BK.elsewhere = 0; BK.replan = false; BK.plan = null; BK.done = null; BK.msg = ''; drawBulk(); };
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-pick]'), function (c) { c.onchange = function () { BK.pick[c.getAttribute('data-bk-pick')] = c.checked; bkUnplan(); bkPaintTotals(); }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-n]'), function (i) { i.oninput = function () { BK.n[i.getAttribute('data-bk-n')] = i.value; bkUnplan(); bkPaintTotals(); }; });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-all]'), function (b) { b.onclick = function () { var on = b.getAttribute('data-bk-all') === '1'; bkSites().forEach(function (s) { BK.pick[s.id] = on; }); BK.plan = null; drawBulk(); }; });
+    if ($('bk-replan')) $('bk-replan').onchange = function () { BK.replan = this.checked; bkUnplan(); };
+    if ($('bk-plan')) $('bk-plan').onclick = function () { bkPlan(this); };
+    if ($('bk-apply')) $('bk-apply').onclick = function () { bkApply(this); };
+    if ($('bk-csv')) $('bk-csv').onclick = bkCsv;
+  }
+  function bkPreview(btn) {
+    var t = String(BK.text || '');
+    if (!t.trim()) { bkSay('Paste the list first, or upload a file.', true); return; }
+    BK.busy = true; btn.disabled = true; bkSay('Reading the list and finding each new address on the map… this can take a few seconds.');
+    post('/api/my-sites', { action: 'sites-preview', text: t }).then(function (r) {
+      BK.busy = false;
+      if (!r.ok) { btn.disabled = false; bkSay(missing(r) ? 'Sites from a list are not switched on for this account yet.' : r.j.error || 'Could not read the list.', true); return; }
+      bkCarry(BK.pv, r.j); BK.pv = r.j; BK.stale = false; BK.list = null; BK.pick = null; BK.plan = null; BK.done = null; BK.top = ''; BK.step = 'check'; BK.msg = ''; BK.bad = false;
+      drawBulk();
+    })['catch'](function () { BK.busy = false; btn.disabled = false; bkSay('Could not reach the server.', true); });
+  }
+  function bkCreate(btn) {
+    var send = [];
+    (BK.pv.rows || []).forEach(function (r) { if (r.status === 'new' && !r.skip) send.push({ name: r.name, address: r.address, lat: r.geo ? r.geo.lat : null, lng: r.geo ? r.geo.lng : null, ref: r.ref || '' }); });
+    if (!send.length) return;
+    BK.busy = true; btn.disabled = true; bkSay('Creating ' + plural(send.length, 'site') + '…');
+    var made = null;
+    post('/api/my-sites', { action: 'sites-create', rows: send }).then(function (r) {
+      if (!r.ok) throw new Error(r.j.error || 'Could not create the sites.');
+      made = r.j;
+      /* the list read once more: every line is now one of the account's
+         sites, matched by the server's own rule (street + ZIP) */
+      return post('/api/my-sites', { action: 'sites-preview', text: BK.text });
+    }).then(function (r2) {
+      var c = (made.created || []).length, e = (made.existing || []).length;
+      if (r2.ok) bkCarry(BK.pv, r2.j);
+      BK.busy = false; BK.list = r2.ok ? bkListSites(r2.j.rows) : []; BK.pick = null; BK.n = {}; BK.plan = null; BK.done = null; BK.elsewhere = 0; BK.replan = false;
+      if (r2.ok) { BK.pv = r2.j; BK.stale = false; }
+      BK.top = plural(c, 'site') + ' created' + (e ? ', ' + e + ' already on your account' : '') + '. Now send the order’s units to them.';
+      BK.step = 'send'; BK.msg = ''; BK.bad = false;
+      loadSites();
+      if ($('s-fleet-bulk')) $('s-fleet-bulk').scrollIntoView({ block: 'start' });
+    })['catch'](function (e) { BK.busy = false; btn.disabled = false; bkSay(e.message || 'Could not reach the server.', true); });
+  }
+  function bkBody() {
+    var sites = bkSites().filter(function (s) { return BK.pick && BK.pick[s.id]; }).map(function (s) { var v = String(BK.n[s.id] == null ? '' : BK.n[s.id]).trim(); return { siteId: s.id, units: v === '' ? null : Number(v) }; });
+    return { orderNo: BK.orderNo, sites: sites, replan: BK.replan === true };
+  }
+  function bkPlan(btn) {
+    var t = bkTotals();
+    if (!bkOrder()) { bkSay('Choose the order first.', true); return; }
+    if (!t.picked.length) { bkSay('Tick the sites this order goes to.', true); return; }
+    if (t.bad.length) { bkSay('Units must be a whole number: ' + t.bad.join(', ') + '.', true); return; }
+    var body = bkBody(), send = { action: 'plan-preview', orderNo: body.orderNo, sites: body.sites, replan: body.replan };
+    BK.busy = true; btn.disabled = true; BK.done = null; bkSay('Working out which unit goes where…');
+    post('/api/my-sites', send).then(function (r) {
+      BK.busy = false;
+      if (!r.ok) { btn.disabled = false; bkSay(r.j.error || 'Could not preview that.', true); return; }
+      BK.plan = r.j; BK.body = body; BK.elsewhere = (r.j.elsewhere || []).length || (BK.replan ? BK.elsewhere : 0); BK.msg = ''; BK.bad = false;
+      drawBulk();
+      if ($('bk-planbox')) $('bk-planbox').scrollIntoView({ block: 'nearest' });
+    })['catch'](function () { BK.busy = false; btn.disabled = false; bkSay('Could not reach the server.', true); });
+  }
+  /* Send: the same body plus confirm and the preview's planKey. The server
+     recomputes the plan; over 200 units it answers more:true and the same
+     call goes again. */
+  function bkApply(btn) {
+    var body = BK.body, key = BK.plan.planKey, applied = 0, skipped = [], rounds = 0;
+    BK.busy = true; btn.disabled = true; bkSay('Sending…');
+    function round() {
+      return post('/api/my-sites', { action: 'plan-apply', confirm: true, planKey: key, orderNo: body.orderNo, sites: body.sites, replan: body.replan }).then(function (r) {
+        if (!r.ok) throw new Error(r.j.error || 'Could not send the units.');
+        applied += Number(r.j.applied) || 0; skipped = skipped.concat(r.j.skipped || []); rounds++;
+        if (r.j.more && Number(r.j.applied) > 0 && rounds < 10) { bkSay('Sending… ' + applied + ' so far'); return round(); }
+        return r.j;
+      });
+    }
+    round().then(function (last) {
+      BK.busy = false; BK.plan = null; BK.body = null; BK.top = '';
+      BK.done = { orderNo: body.orderNo, applied: applied, skipped: skipped, assignments: last.assignments || [], released: last.released || [] };
+      BK.msg = ''; BK.bad = false;
+      loadSites();
+    })['catch'](function (e) { BK.busy = false; btn.disabled = false; bkSay(e.message || 'Could not reach the server.', true); });
+  }
+  /* The result as a sheet, made here from what the server answered: a cell
+     that starts with = + - @ is quoted with ' so a spreadsheet shows it
+     rather than runs it (api/_lib/receivables.js cell()); a ZIP with a
+     leading zero is written as text (="04101"), which the site list reads
+     back as the ZIP; UTF-8 with a BOM so Excel reads the names right. */
+  function bkCell(v) {
+    /* { text } is a code a spreadsheet must keep as written: a ZIP like
+       04101 would open as the number 4101, so it goes as ="04101" */
+    if (v && typeof v === 'object') { var t = String(v.text == null ? '' : v.text); return /^\d[\d-]*$/.test(t) && (t.charAt(0) === '0' || t.length > 15) ? '"=""' + t + '"""' : bkCell(t); }
+    var s = v == null ? '' : String(v); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function bkCsv() {
+    var d = BK.done; if (!d) return;
+    var by = {}; ((SITES && SITES.sites) || []).forEach(function (s) { by[s.id] = s; });
+    var rows = [['Serial', 'Site', 'Address', 'City', 'State', 'ZIP', 'Order', 'Status']];
+    d.assignments.forEach(function (a) { var s = by[a.siteId] || {}, ad = s.address || {}; rows.push([a.serial, a.siteName || s.name || '', ad.line1 || '', ad.city || '', ad.state || '', { text: ad.zip || '' }, d.orderNo, a.how === 'skipped' ? 'left as it was: ' + (a.why || '') : a.how === 'pending' ? 'not sent yet' : 'going to']); });
+    d.released.forEach(function (x) { rows.push([x.serial, '', '', '', '', '', d.orderNo, 'taken off ' + (x.siteName || x.siteId)]); });
+    var blob = new Blob(['﻿' + rows.map(function (r) { return r.map(bkCell).join(','); }).join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sites-' + String(d.orderNo || 'order').replace(/[^\w.-]+/g, '_') + '.csv'; a.rel = 'noopener'; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 2000);
+    bkSay('Downloaded ' + a.download + '.');
   }
 
   /* ── Documents: api/my-files.js, both directions ────────────────────────
@@ -997,9 +1311,9 @@
   function loadSites(note) {
     return api('/api/my-sites' + Q).then(function (r) {
       if (r.ok) { SITES = r.j; ERR.sites = ''; } else { SITES = null; ERR.sites = missing(r) ? 'Sites are not switched on for this account yet.' : r.j.error || 'Could not load your sites.'; }
-      drawFleet(); drawWarranty(); drawShipping(); drawHome();
+      drawFleet(); drawBulk(); drawWarranty(); drawShipping(); drawHome();
       if (note && $('fleet-msg')) $('fleet-msg').textContent = note;
-    })['catch'](function () { ERR.sites = 'Could not reach the server.'; drawFleet(); drawWarranty(); drawHome(); });
+    })['catch'](function () { ERR.sites = 'Could not reach the server.'; drawFleet(); drawBulk(); drawWarranty(); drawHome(); });
   }
   function loadFiles() {
     return api('/api/my-files' + Q).then(function (r) {

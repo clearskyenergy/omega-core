@@ -99,6 +99,146 @@ tracks it and the office confirms it.
   supplier's confirmation*, then *confirmed by your supplier on …*.
   Exceptions: `declared_unconfirmed` after three days.
 
+## Many sites at once — a PO's list of sites
+
+A customer's PO for dozens of units that go to a dozen or more stores
+usually names the stores as a plain list in an email (`- Street, City, ST
+ZIP` per line) or a sheet. Before this, each site was added by hand and each
+unit given its *Going to* one at a time. Now the list is pasted once, the
+sites are created in one go, and the order's units are spread over them in
+one go. It is built ON the unit record and the `destination` event above:
+nothing new is stored beside them.
+
+**Where.** The customer: the portal's *Fleet & sites* → **Sites from a
+list**, and the customer app's Fleet → **Sites from a list**
+(`?tab=sitelist`). The office: *Deliver → Sites & custody* → **Many sites at
+once** (`/logic-custody.html#many`), with a customer-account picker first;
+the office app's Sites tab links there. The same three steps on each:
+
+1. **Paste or upload** the list (a .csv, .tsv or .txt file is read as text
+   in the browser; an Excel sheet is saved as CSV first).
+2. **Check**: one row per line — a tick, name (editable before Create),
+   address, units, and *new* / *already a site* / *problem* with the reason;
+   a pin when the address was found on the map. Lines that are not
+   addresses (the greeting, a name) are listed as left out. A street with
+   no house number in front (*to check*: as often the sender's office in an
+   email signature as a site) is read but starts **unticked**; an unticked
+   line is not created and not ticked in step 3. A typed name and a tick
+   are kept when the list is changed and previewed again (matched by street
+   and ZIP). Editing the list after a preview turns Create off until it is
+   previewed again. **Create N sites** (the ticked new ones).
+3. **Assign (office) / Send (customer)**: pick the order; the list's sites
+   come first, ticked, with the list's unit counts; a blank box shows its
+   even share; a running total compares the numbers with the units that can
+   be sent. **Preview** shows the serials per site, what is left over, what
+   is released, what is already going elsewhere and what cannot be sent and
+   why. **Assign / Send** records it. The result has **Download CSV** (one
+   row per unit: serial, site, address, city, state, ZIP, order, status —
+   the office's adds site ref and PO), made in the browser from the answer,
+   UTF-8 with a BOM, a `'` before a cell starting with `= + - @`, and a
+   ZIP (or the office's site ref) with a leading zero written as text,
+   `="07022"`, so a spreadsheet keeps the zero; the list reader takes
+   `="…"` back as the value.
+
+The preview IS the confirmation. No step opens a browser `confirm()` box;
+the Assign/Send call carries `confirm: true` and the preview's `planKey`.
+
+**The list** (`api/_lib/custody.js` `parseSiteList`). One address per line:
+bullets and numbering are stripped; `Street, City, ST 12345` (or ZIP+4, or
+`ST, 12345`), read from the right so a `Suite 100` stays in the street; a
+full stop or semicolon at the end of a line is not part of the ZIP; a
+leading `Name: ` names the site, and so does `Name — ` when the name is not
+itself a street and a house number follows (an emailed `1200 S Hwy 99 –
+Suite 100`, where Outlook turned ` - ` into ` – `, is one street); a
+trailing count ` x3`, ` ×3`, ` (3 units)`, ` - 3 units` or `; 3` sets its
+units. A line in quotes (a one-column sheet saved as CSV quotes every
+address) is read as its cells, and so is a row copied out of a sheet
+without its header (tab-separated): by position, `[name] street, city,
+state, ZIP [units]`, the state found from the right — so a ZIP is never
+taken for a unit count. A line of column names (`Address`) is read past.
+Or a sheet whose first line is a header (name/site/store, address/street,
+city, state, zip, units/qty/batteries, ref/store #). The state must be one of the
+50, DC or PR (full names become codes); a row missing a part is a problem
+and is not created; the same street and ZIP twice is a problem on the
+second; at most 200 sites per list; units a whole number 0–10,000. A site
+with no name is called `City, ST` (`City, ST · street` when two share a
+city).
+
+**Matching** (`matchSites`, `placeSites`). A row is *already a site* when the
+account has a site at the same street (case, punctuation and the usual USPS
+abbreviations folded) and 5-digit ZIP — never by id, because `siteId()` cuts
+at 60 characters and folds capitals. A new site whose id is taken gets the
+next free `-2` … `-9`. So a second Create of the same list creates nothing.
+
+**The map pin** (`api/_lib/geocode.js` `many`, `censusOnly`). Only rows that
+would be created are looked up, on the US Census geocoder only (Nominatim's
+policy is one request a second), four at a time, at most 40 per preview and
+none started after 15 seconds. A miss, or a row not reached, is shown
+without a pin and still created; it is never a refusal. The lookups are an
+**allowance** (`api/_lib/site-geo.js`), claimed in a Firestore transaction
+before any leaves, as the site study claims its parcel lookups: a
+customer's preview spends its account's (200 a day) and all customers'
+(1,000 a day), the office's its own (1,000 a day), in
+`omega_orgs/{org}/geocode_usage/{scope__day}` (Admin SDK only); a cache
+hit is free. Spent, the rows come back without a pin and the answer says
+`geoLimited` (the screens say so) — because `sites-preview` answers any
+verified email, and uncounted it was an open geocoding proxy.
+
+**Bounded.** The text is at most 100,000 characters (400 on one line; a
+longer line is left out by name, a sheet cell is cut there), and every
+pattern in the reader is anchored or runs on a short window, the
+right-hand trims done by hand: a crafted line of tabs or spaces cannot
+hold the function (`scripts/test-site-list.js` times them).
+
+**The spread** (`spread`, recomputed by the endpoint on every call — the
+browser never sends serial → site pairs).
+- Eligible units: shipping units of the order, not scrapped or lost, not
+  already bound to a site, custody status at the plant, in transit or
+  delivered (`plannable`). A received unit is left out: receipt is what
+  turns *going to* into an assignment, so it is assigned when it gets there.
+  Units still being built are eligible — that is the whole order the week
+  the PO lands.
+- Lowest serial first, in natural order (`…-9` before `…-10`), sites in the
+  order shown.
+- No numbers: an even spread, one more to the first sites (56 over 16 is
+  8 × 4 and 8 × 3). All numbers: exactly those, and asking for more than the
+  order can send assigns nothing and says so. Mixed: the numbered sites
+  first, the rest spread evenly over the others.
+- A re-run writes nothing. A lowered number keeps the site's lowest serials
+  and clears the rest. Units already going to a site not on the list are
+  left alone unless *Also move them* (`replan: true`); with it, one the
+  numbers do not use keeps its destination and is reported with those
+  (`elsewhere`, `unused: true`), never as "without a site".
+- A unit of the order stamped for **another account** (an import or a
+  replacement put it on a resale account) is left out on both doors
+  (`why: 'account'`, `C.stampedAccount`), re-checked inside the write, and
+  never re-stamped.
+
+**The writes.** `plan-apply` needs `confirm: true` and the preview's
+`planKey` (or `perSite` counts); a plan that changed since answers 409
+"preview it again". Each unit is re-read inside a transaction (25 per
+transaction) and recorded through `destination()` — one `destination` event
+per unit with `via: 'site-list'` and a `planId`; `custody.customerId` is
+stamped only where it is empty. At most 200 units per call; `more: true`
+means call again with the same body (the pages do): the `planKey` is over
+the serial → site assignments only, which the calls of one apply do not
+change — the released units are not in it, because a release written by
+the first call is (rightly) no longer a release when the second recomputes,
+and a key over them refused the second call after the first had written.
+A unit that moved since
+the preview is skipped with its reason. The customer's writes are
+`method: 'customer'` and re-check the login's account pointer inside each
+transaction (`still(tx)`); the office's are `method: 'manual'` with one
+`omega_audit` row per create and per plan.
+
+| Action | Customer (`api/my-sites.js`) | Office (`api/logic-custody.js`) |
+|---|---|---|
+| `sites-preview { text }` | the caller's account | needs `customerId` (400 missing, 404 unknown or closed) |
+| `sites-create { rows }` | `source: 'customer-list'` | `source: 'office-list'`, audited |
+| `plan-preview { sites, replan? }` | by `orderNo` (the order id never reaches a customer) | by `orderId`; a site on another account → 409 |
+| `plan-apply { …, confirm, planKey }` | as above; a unit stamped for another account is left out (`why: 'account'`) | as above; the same, and a site on another account → 409 |
+| GET | `orders: [{ orderNo, po, units, eligible, building, planned }]`; sites carry `planned` | `?view=plan&customerId=` → the account's sites and its orders with units |
+
 ## The fleet register — the spreadsheet
 
 `/logic-register.html` (Deliver → Fleet register) is one flat row per
@@ -126,8 +266,10 @@ event `detail`) links the unit to a party and never moves it. **A move**
 `install` / `commission`) goes through the same status machine as every
 other door, so a refused move stays refused here with its reason, and a
 cell that no move applies to is not editable. Rows can be selected and
-assigned to a site, or given a destination, in one go; the visible sheet
-exports to CSV.
+assigned to a site, or given a destination, in one go — a destination only
+where the one planning rule allows (`can.destination`, `plannable`): a
+received unit or one already at a site is named and left out, to be
+assigned instead; the visible sheet exports to CSV.
 
 ### What Siemens, Schneider and the standards do, and what was taken
 
@@ -269,8 +411,47 @@ and agrees with the default template.
 - `firestore.indexes.json` is unchanged: the custody views read the org's
   units by `createdAt` and filter in memory (2,000 newest; older units open
   by serial).
+- Many sites at once:
+  - the site list does not write the order's delivery destinations or plan
+    loads (Shipping's destinations and legs stay as they were); it records
+    where each unit is *going*;
+  - no Census batch endpoint: a preview geocodes at most 40 new rows one
+    call at a time, inside the daily allowance, so a longer list (or a day
+    past the allowance) shows the rest without a pin (they are created
+    without coordinates), and nothing re-geocodes a site later — an address
+    edited on the Sites form drops its pin rather than keeping the old
+    address's (`site()` keeps a pin only while the address is the same
+    place);
+  - `siteId()` still cuts at 60 characters and folds capitals; matching is
+    by address and Create takes the next free `-2` … `-9`, but the id
+    function itself is unchanged;
+  - the single `site` action on `api/logic-custody.js` still does not check
+    that its `customerId` is an account in the workspace (the list's
+    actions do);
+  - a received unit can still be left at *going to* through the single-unit
+    `destination` action (the unit passport, the customer's Fleet); the bulk
+    plan and the register's *Going to…* leave received units — and units
+    already at a site — out and name them (`registerRow().can.destination`
+    is `plannable`);
+  - the customer's single-unit `destination` and moves still stamp the
+    unit's account unconditionally, as before; only the bulk plan leaves out
+    a unit stamped for another account;
+  - the "to check" flag is a heuristic (a street without a house number in
+    front); a signature line that starts with one is read as a site like any
+    other and has to be unticked by eye;
+  - an .xlsx is not read (save it as CSV); at most 200 sites per list;
+  - the PDF guides (`/guides/*.pdf`) were not re-shot for these screens.
 
 Tests: `scripts/test-custody.js` (library, office endpoint, customer
-endpoint, replacement and import) in the `test:logic` chain;
-`npm run check:pages` renders the custody page and the customer app's panel
-against the shared sample tenant.
+endpoint, replacement and import) and `scripts/test-site-list.js` (the list
+parser and its time bounds, matching, the spread, both endpoints' four
+actions, the geocoding allowance, a unit on another account, an apply over
+200 writes; fictional addresses only) in the `test:logic` chain; `npm run
+check:pages` renders the custody page and the customer app's panel against
+the shared sample tenant, and drives a pasted list end to end on the
+customer portal, the customer phone sandbox at 390px and
+`logic-custody.html` (a flagged signature left unticked, a typed name kept
+through a second preview, create, assign, per-site counts, the CSV's rows
+with a leading-zero ZIP, a second run that changes nothing, a re-run after
+a unit is received that the running total does not block, no browser box),
+and the register's *Going to…* leaving out a unit already at a site.

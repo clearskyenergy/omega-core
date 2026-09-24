@@ -32,8 +32,10 @@
      open the customer app as the office (with the owner's controls), and
      signing out of one does not sign the other out */
   /* v2: the sample grew a CRM, documents, a pay link and the design tool's
-     prices; a phone that kept the v1 sample starts over on the new one */
-  var KEY = 'omega_sandbox_v2', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
+     prices; a phone that kept the v1 sample starts over on the new one.
+     v3: the sample order carries the two units still on the line (what a
+     site list is spread over); a phone that kept v2 starts over */
+  var KEY = 'omega_sandbox_v3', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function seedIfMissing(k, v) { try { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }

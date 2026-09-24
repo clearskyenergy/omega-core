@@ -215,6 +215,48 @@ sent still open.
   and ship plus a cap); a unit's coverage is worked out from these every
   time it is shown and is *pending* until the unit is bound to a site.
   Design and the honest list: `docs/LOGISTICS-CUSTODY.md`.
+- **Many sites at once** (*Sites & custody* → *Many sites at once*): when a
+  customer's PO lists its sites in an email or a sheet.
+  1. **Choose the customer account.** Its sites and its orders that have
+     units show; a closed account says so and takes no sites.
+  2. **Paste the list** as it came (one address per line, `Street, City, ST
+     ZIP`; bullets are fine; `Store 12: …` names a site; ` x4` or
+     `(4 units)` at the end sets its units), or choose a .csv, .tsv or .txt
+     file (a sheet with a header row works too), and press **Preview the
+     list**.
+  3. **Check the sites.** One row per line: a tick, the name (change it
+     here), the address, the units, and *new*, *already a site* or
+     *problem* with the reason; a pin when the address was found on the
+     map (the office has a daily allowance of map lookups; past it, new
+     lines show without a pin and are created all the same). Greetings are
+     listed as left out. A line whose street has no house number in front —
+     usually the sender's own address in the email signature — is marked
+     *to check* and starts **unticked**; tick it only if it really is a
+     site. An unticked line is not created and not ticked in step 4. Fix a
+     problem in the paste box and preview again: the names you typed and
+     the ticks are kept. A sheet row pasted without its header (Street,
+     City, State, ZIP in columns) and a CSV that quotes every address both
+     read. Press **Create N sites** — pressing it again creates nothing;
+     sites already on the account are used, not copied.
+  4. **Assign the order's units.** The order is chosen; the list's sites are
+     ticked in list order with the list's counts. A blank box takes an even
+     share of the rest (the grey number); the first sites take the one
+     extra. The total says how many of the order's units can go to a site
+     (units still being built count; received ones are assigned when they
+     arrive). A site's number counts the units already there, so the
+     list's own numbers can add up to more than that total on a re-run —
+     Preview is never blocked for it, and says what would change. Tick
+     *Also move units…* only to move units already going to other sites
+     (one the numbers do not use stays where it was going, and the preview
+     says so). A unit on another customer account is left out, with the
+     reason. Press **Preview** to see the serials per site, lowest first,
+     then **Assign**. Nothing asks again: the preview is the check.
+  5. **Download CSV** — one row per unit: serial, site, site ref, address,
+     city, state, ZIP, order, PO, status (a ZIP like 07022 keeps its zero
+     in Excel). Each unit's passport now says *going to* its site, and
+     receiving it binds it there.
+  Running the same list and numbers again changes nothing; lowering a
+  site's number keeps its lowest serials and clears the rest.
 
 ### The office app (`/office/app`)
 
@@ -327,7 +369,8 @@ the app; the rest open their page. The screens:
   the **unit passport** (custody, who confirmed, coverage, history, and only
   the moves that apply: received, assign to the site, going to, installed,
   commissioned, in service), the sites with their unit counts, and the
-  exceptions. Imports and coverage templates stay on the desktop.
+  exceptions. Imports, coverage templates and a customer's list of sites
+  (*Many sites at once*, linked from the tab) stay on the desktop.
 
 ### Procurement — stock, materials, vendors
 
@@ -544,6 +587,34 @@ site*. What the customer places is marked *awaiting your supplier's
 confirmation* until the office confirms it, then *confirmed by your
 supplier* with the date.
 
+**Sites from a list** — for a PO whose units go to many places. On the
+desktop it is the card at the top of *Fleet & sites*; in the app, Fleet →
+**Sites from a list** (the Fleet tab stays lit; *‹ Fleet* goes back).
+1. **Add your sites from a list**: paste the addresses as they came in the
+   email, one per line (a bullet in front is fine; `Name: address` names a
+   site; ` x4` or `(4 units)` at the end says how many units go there), or
+   upload a .csv, .tsv or .txt file; **Preview the sites**.
+2. **Check**: how many are new, already yours, to fix and to check; each
+   line with a tick, its name (change it before creating), its address and
+   its units; lines that are not addresses are listed as left out. A line
+   whose street has no house number in front (often your own office in the
+   email's signature) is *to check* and starts unticked — tick it only if
+   it is a site; an unticked line is not created and gets no units. Fixing
+   the list and previewing again keeps the names you typed and the ticks.
+   **Create N sites**.
+3. **Send units to your sites**: the order (chosen for you when there is
+   one), the list's sites ticked with its numbers, a blank box sharing the
+   rest evenly and a total against the units that can be sent (a site's
+   number counts the units already there, so Preview decides).
+   **Preview**
+   shows the serials going to each site; **Send N units to M sites** marks
+   each one *going to* its site — nothing else asks. **Download CSV** gives
+   the list of serials with each site's address (ZIPs keep a leading zero
+   in Excel). Each site in Fleet then
+   says *N units going here*; when a unit arrives and is recorded received,
+   it is tied to that site and its warranty starts. Running the same list
+   again creates and changes nothing.
+
 **Account** — account number, company, rep, the account's orders; the
 terms the supplier set; **People on this account** — the OWNER adds a
 colleague at the company's own email domain, approves someone who asked to
@@ -602,18 +673,26 @@ both apps and both desktops, the CRM (`api/crm.js` — contacts, activity and
 follow-ups, documents both ways, the derived timeline), the customer's
 documents (`api/my-files.js`), the supplier's pay link on a tenant-billed
 invoice, and the customer's Editor Lite subscription
-(`api/customer-subscribe.js`, the Stripe webhook's grant).
+(`api/customer-subscribe.js`, the Stripe webhook's grant); then **many sites
+at once**: a PO's list of sites pasted or uploaded, the sites created in one
+go and the order's units spread over them (`api/_lib/custody.js`
+`parseSiteList` · `matchSites` · `spread`, the four list actions on
+`api/my-sites.js` and `api/logic-custody.js`, the customer portal's and
+app's *Sites from a list*, the office's *Many sites at once*).
 
 Tests: `npm test` (the plant chain runs `test-plant-work`, `test-plant-stats`,
 `test-office-ops`, `test-app-manifest`; the logic chain `test-po-bulk`,
 `tests/tappsandbox` — which fails when `app-sandbox/` is not what
-`npm run build:sandbox` produces — `test-crm` and `test-customer-subscribe`);
+`npm run build:sandbox` produces — `test-custody`, `test-site-list`,
+`test-crm` and `test-customer-subscribe`);
 `npm run check:pages` renders the office dashboard, settings, inventory,
 materials, catalog, plant board and map, the bench (tablet and roaming
 phone), the plant app, the office app, the customer app (both at phone and
 desktop width), the desktop CRM, the customer portal and the three
-sandboxes (sign in, change something, reload) in Chromium, and fails on a
-page error, a console error or an `/api/` call the sample does not answer.
+sandboxes (sign in, change something, reload) in Chromium — and a pasted
+site list end to end on the portal, the customer phone sandbox and Sites &
+custody — and fails on a page error, a console error or an `/api/` call the
+sample does not answer.
 
 **Needs a person with credentials**
 
@@ -660,6 +739,14 @@ page error, a console error or an `/api/` call the sample does not answer.
 - Containers and pallets, lots, an installer login, onward resale between
   tenants, site-level SLAs, photos or GPS at commissioning, carrier webhooks
   and offline scanning (`docs/LOGISTICS-CUSTODY.md` has the list).
+- From a site list: the order's delivery destinations and loads (the list
+  says where each unit is going; Shipping still plans the loads), an .xlsx
+  (save it as CSV), more than 200 sites (or 100 KB) at a time, a map pin
+  for more than 40 new sites in one preview or past the day's map-lookup
+  allowance (the site is created without one), a pin re-found after an
+  address is edited (the old pin is dropped), a signature that starts with
+  a house number being caught (untick it by eye), and the PDF guides'
+  screenshots of these screens.
 - Merging two customer accounts that both have history (orders, sites,
   designs). Only an EMPTY stray login moves onto its company, from the
   office's *Add a person*; a real merge is a reviewed script that has not

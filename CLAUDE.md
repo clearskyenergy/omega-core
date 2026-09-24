@@ -445,6 +445,12 @@ is not built.
   (`registerRow()` / `REGISTER_COLUMNS` in the library, `?view=register`):
   a cell edit is either a `detail` (reseller, end customer, installer,
   notes — links, never moves) or a move through the same `judge`/`apply`.
+  A PO's list of sites (pasted or uploaded, on the customer portal and app
+  and the office's *Many sites at once*) is read, matched by address and
+  spread by the pure `parseSiteList` / `matchSites` / `spread` in the
+  library, and written only as sites plus one `destination()` per unit by
+  the four list actions on `api/my-sites.js` and `api/logic-custody.js` —
+  the server recomputes the plan, the preview is the confirmation.
   Design and what is not built: `docs/LOGISTICS-CUSTODY.md`.
 - **A customer is an ACCOUNT with people on it**, not an email. Each
   workspace's customers are `omega_orgs/{org}/customers/{id}` with

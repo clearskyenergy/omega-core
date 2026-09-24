@@ -56,8 +56,9 @@
     "test:systems": "node scripts/test-systems-manifest.js",
     "test:portal": "node scripts/test-portal.js && node scripts/test-orders-create.js && node scripts/test-portfolio.js",
     "test:materials": "node scripts/test-materials.js",
-    "test:logic": "node scripts/test-logic.js && node scripts/test-po-bulk.js && node scripts/tests/tappsandbox.js && node scripts/test-office-stage.js && node scripts/test-logic-workflow.js && node scripts/test-order-lifecycle.js && node scripts/test-logic-admin.js && node scripts/test-custody.js && node scripts/test-kit.js && node scripts/test-customer-accounts.js && node scripts/test-crm.js && node scripts/test-customer-subscribe.js && node scripts/test-logic-workspaces.js && node scripts/test-auth-check.js && node scripts/test-accounting.js && node scripts/test-ledger-sync.js",
+    "test:logic": "node scripts/test-logic.js && node scripts/test-po-bulk.js && node scripts/tests/tappsandbox.js && node scripts/test-office-stage.js && node scripts/test-logic-workflow.js && node scripts/test-order-lifecycle.js && node scripts/test-logic-admin.js && node scripts/test-custody.js && node scripts/test-site-list.js && node scripts/test-kit.js && node scripts/test-customer-accounts.js && node scripts/test-crm.js && node scripts/test-customer-subscribe.js && node scripts/test-logic-workspaces.js && node scripts/test-auth-check.js && node scripts/test-accounting.js && node scripts/test-ledger-sync.js",
     "test:logic-workflow": "node scripts/test-logic-workflow.js",
+    "test:sitelist": "node scripts/test-site-list.js",
     "test:scope": "node scripts/test-partner-scope.js"
   }
 }

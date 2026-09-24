@@ -371,6 +371,31 @@ system* view carries a *Portfolio upload* mode — `api/customer-portfolio.js`,
 portfolio package, reviews document matches, runs the analysis in batches and
 exports the results. See `docs/PORTFOLIO-SCREENING.md`.
 
+**Sites from a list** (2026-09-24): a PO whose units go to many stores. On
+*Fleet & sites* (portal) and Fleet → *Sites from a list* (app,
+`?tab=sitelist`), anyone active on the account pastes the list of addresses
+as it came in the email, or uploads a .csv/.tsv/.txt; the server reads it
+(`api/my-sites.js` `sites-preview` — the page parses nothing), says which
+lines are new, already a site on the ACCOUNT (same street and ZIP), a
+problem, or *to check* (a street with no house number — usually the
+sender's signature — which starts unticked; an unticked line is not
+created), and *Create N sites* makes the ticked new ones in one
+transaction. A typed name and a tick survive a second preview. The map
+pins come out of a daily allowance per account and for all customers
+(`api/_lib/site-geo.js`), because the preview answers any verified email;
+past it the lines show without a pin and are created all the same. Then
+*Send units to your sites*: the order is picked by its **orderNo** (its id
+never reaches the buyer), the list's sites come ticked with the list's unit
+counts, *Preview* shows the serials per site, and *Send* marks each unit
+*going to* its site — the same `destination` a single unit gets, one event
+per unit; a unit of the order stamped for another account is left out,
+as on the office's door. It is still a declaration, not a delivery instruction: the unit
+is tied to the site when it is received, and changing where a load is
+delivered is still a request on the order. The preview is the confirmation
+(no browser box). The result downloads as a CSV made in the browser. Scope
+is the account (`B.accountOrders`), re-checked inside every write
+(`still(tx)`). Design: `docs/LOGISTICS-CUSTODY.md` *Many sites at once*.
+
 ## 6. Plan status, and where the platform sale lands
 
 `plan: 'free' | 'designer'` on the buyer record.
@@ -658,4 +683,10 @@ finance sizer (§12). Also still open from §2:
   supplier's own payment page), paying the supplier its share of a design
   subscription (Stripe Connect), and design access while a subscription is
   past due;
-- editing an existing site from the customer app (the endpoint takes it).
+- editing an existing site from the customer app (the endpoint takes it);
+- from a site list (§5): writing the order's delivery destinations or
+  loads (the list says where each unit is going; Shipping still plans the
+  loads), reading an .xlsx (save it as CSV), more than 200 sites in one
+  list, and a map pin for more than 40 new sites in one preview or past
+  the day's allowance (the rest are created without one).
+  `docs/LOGISTICS-CUSTODY.md` has the full list.
