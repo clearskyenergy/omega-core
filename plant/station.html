@@ -208,7 +208,7 @@
   <button class="x" type="button" id="cam-x">Close</button>
 </div>
 
-<script src="/omega-logic-theme.js"></script><script>
+<script src="/omega-logic-theme.js"></script><script src="/omega-scan.js"></script><script>
 /* ES5 on purpose: this runs on whatever tablet is cheapest that year. */
 (function () {
   'use strict';
@@ -510,28 +510,21 @@
   function closeCam() {
     $('cam').classList.remove('on');
     if (camTimer) { clearInterval(camTimer); camTimer = null; }
-    if (camStream) { camStream.getTracks().forEach(function (t) { t.stop(); }); camStream = null; }
+    if (camStream) { var st = camStream; camStream = null; if (typeof st === 'function') st(); else st.getTracks().forEach(function (t) { t.stop(); }); }
     focusScan();
   }
   $('cam-x').addEventListener('click', closeCam);
+  /* omega-scan.js: the browser's own reader, or ZXing where there is none
+     (every iPhone and iPad) */
   $('camBtn').addEventListener('click', function () {
-    if (!window.BarcodeDetector || !navigator.mediaDevices) {
-      show('bad', '✕', '', 'This tablet cannot scan with its camera', 'use the gun');
-      return;
-    }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (st) {
-      camStream = st;
-      var v = $('cam-v');
-      v.srcObject = st; v.play();
-      $('cam').classList.add('on');
-      var det = new window.BarcodeDetector({ formats: ['qr_code', 'data_matrix', 'code_128'] });
-      camTimer = setInterval(function () {
-        det.detect(v).then(function (codes) {
-          if (codes && codes.length) { var val = codes[0].rawValue; closeCam(); submit(val); }
-        })['catch'](function () {});
-      }, 300);
-    })['catch'](function () {
-      show('bad', '✕', '', 'No camera permission', 'use the gun');
+    if (!window.OmegaScan) { show('bad', '✕', '', 'The camera reader did not load', 'refresh, or use the gun'); return; }
+    $('cam').classList.add('on');
+    OmegaScan.start($('cam-v'), function (val) { camStream = null; closeCam(); submit(val); }).then(function (stop) {
+      if (!$('cam').classList.contains('on')) { stop(); return; }
+      camStream = stop;
+    }, function (e) {
+      closeCam();
+      show('bad', '✕', '', e.message, 'use the gun or type the serial');
     });
   });
 

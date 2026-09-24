@@ -344,7 +344,9 @@ is not built.
   remembers the choice and forgets it on sign-out; `?org=` in an old link
   only preselects. `/office/app.webmanifest` is the one office manifest.
   An app installed on an iPhone home screen signs in THROUGH ITS OWN HOST
-  (the `/__/auth` proxy in vercel.json): `config.js` decides that, because
+  (the `/__/auth` proxy in vercel.json), and on silmarillion — whose
+  handler IS registered with Google — so does every Omega Logic sign-in,
+  installed or not: `config.js` decides that, because
   `omega-tenant.js` starts Firebase the moment it loads and the first start
   fixes the auth domain. Google needs `https://<host>/__/auth/handler` on
   the OAuth client's redirect URIs; `api/auth-check.js` asks Google whether
@@ -515,6 +517,13 @@ is not built.
   browsers. The sample tenant in `scripts/_lib/logic-fixtures.js` answers
   every one of these routes, so `check:pages` and the sandboxes exercise
   them.
+- **Scanning is `omega-scan.js`.** The office app, the bench and the
+  desktop Sites page read labels (QR, Data Matrix, Code 128) through it:
+  the browser's own BarcodeDetector where it reads all three, else ZXing
+  (barcode-detector + zxing-wasm, MIT/Apache) self-hosted under
+  `/vendor/zxing/<version>/` — Safari has no BarcodeDetector, so every
+  iPhone takes that road. No CDN at scan time. `check:pages` feeds a fake
+  camera a printed label and requires the passport and the bench to open.
 - Chromium render checks for all of it: `npm run check:pages`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)

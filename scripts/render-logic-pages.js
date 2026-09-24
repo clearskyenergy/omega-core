@@ -44,7 +44,7 @@ var STATE = F.initialState(), V = F.views(STATE), TENANT = require('../tenants/c
    /api/logic-office (the one writer's door), the ledger sync to
    /api/logic-accounting */
 var OFFICE_POSTS = [], ACC_POSTS = [];
-var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
+var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm' };
 /* Who the stub server says is signed in: the office, or the buyer on the
    Riverside account (the customer endpoints scope by the verified email). */
 var OFFICE = 'demo@cleancell.us', BUYER = 'ops@riverside.example';
@@ -280,10 +280,11 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('  the totals and aging are the server\'s: invoiced, received, outstanding, overdue, on PO credit', t0.invoiced === '$591,475.00' && t0.received === '$240,600.00' && t0.outstanding === '$350,875.00' && t0.overdue === '$0.00' && t0.credit === '$0.00' && t0.toIssue === '$90,225.00' && a0['1-30'] === '$0.00' && a0.current === '$350,875.00', [t0, a0]);
     ok('  the sync card names what the deployment is missing and the connected Stripe account, never a secret', /QBO_CLIENT_ID/.test(head.sync) && /acct_1DEMOCLEANCELL/.test(head.sync) && /test mode/.test(head.sync), head.sync.slice(0, 300));
     await p.click('[data-open="o2:deposit"]'); await p.waitForTimeout(200);
-    var dr = await p.evaluate(function () { var d = document.getElementById('drawer'); return { open: !d.hidden, pay: d.querySelectorAll('a.paylink[href^="https://invoice.stripe.com/"]').length, voids: d.querySelectorAll('[data-act="void"]').length, push: d.querySelectorAll('[data-act="push"]').length, text: d.textContent.replace(/\s+/g, ' ') }; });
+    var dr = await p.evaluate(function () { var d = document.getElementById('drawer'); return { open: !d.hidden, pay: d.querySelectorAll('a.paylink[href^="https://invoice.stripe.com/"]').length, voids: d.querySelectorAll('.pays [data-act="void"]').length, state: (d.querySelector('#paystate') || {}).textContent || '', push: d.querySelectorAll('[data-act="push"]').length, text: d.textContent.replace(/\s+/g, ' ') }; });
     ok('  an invoice opens in the drawer with its payment page, its payments and a push to Stripe', dr.open && dr.pay === 1 && dr.voids === 1 && dr.push === 1 && dr.text.indexOf(PLACEHOLDER) >= 0, [dr.open, dr.pay, dr.voids, dr.push, dr.text.slice(0, 240)]);
     /* void the placeholder: the order is in the plant on it, so the office must choose */
-    await p.click('#drawer [data-act="void"]'); await p.waitForTimeout(150);
+    ok('  the invoice says at the top whether the money is in, with the one tap that changes it', /Payment\s*Received/.test(dr.state) && /Mark as not received/.test(dr.state), dr.state);
+    await p.click('#paystate [data-act="void"]'); await p.waitForTimeout(150);
     var dv = await p.evaluate(function () { return { open: !document.getElementById('dlg-void').hidden, choice: !document.getElementById('void-choice').hidden, radios: document.querySelectorAll('#dlg-void input[name="after"]').length, go: document.getElementById('void-go').disabled, focus: document.activeElement && document.activeElement.id, summary: document.getElementById('void-summary').textContent }; });
     ok('  voiding a payment the order was released on asks: keep building on the PO, or hold', dv.open && dv.choice && dv.radios === 2 && dv.go === true && dv.focus === 'void-reason' && /USD 90,225\.00 · 2026-08-22 · REPLACE WITH/.test(dv.summary), dv);
     var REASON = 'Recorded from the intake template; the money has not arrived';
@@ -300,6 +301,11 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('  after the void: received back to what really arrived, the deposit open and flagged released on PO', after.onpo === 1 && after.st === 'awaiting payment' && after.voidedTag === 1 && !after.dlg && after.drawer && /keeps building/.test(after.status) && t1.received === '$150,375.00' && t1.outstanding === '$441,100.00' && t1.overdue === '$90,225.00' && t1.credit === '$90,225.00' && a1['31-60'] === '$90,225.00', [after, t1, a1]);
     await p.click('[data-open="o2:deposit"]'); await p.waitForTimeout(200);
     var dr2 = await p.evaluate(function () { var d = document.getElementById('drawer'), s = d.querySelector('s.voided'); return { struck: s ? s.textContent : '', voids: d.querySelectorAll('[data-act="void"]').length, warn: (d.querySelector('.warn') || {}).textContent || '', release: d.querySelectorAll('[data-act="release"]').length }; });
+    var ps = await p.evaluate(function () { var x = document.getElementById('paystate'); return x ? x.textContent : ''; });
+    await p.click('#paystate [data-act="record"]'); await p.waitForTimeout(150);
+    var pd = await p.evaluate(function () { return { open: !document.getElementById('dlg-pay').hidden, amount: document.getElementById('pay-amount').value }; });
+    await p.click('#dlg-pay [data-cancel]'); await p.waitForTimeout(100);
+    ok('  after the void the top says not received, building on the PO, and "Mark as received" opens the payment with the balance filled in', /Not received yet/.test(ps) && /keeps building on its PO/.test(ps) && /Mark as received/.test(ps) && pd.open && pd.amount === '90225.00', [ps, pd]);
     ok('  the voided payment stays on the invoice, struck through, and cannot be voided twice; the credit release says who and why', dr2.struck.indexOf('REPLACE WITH THE BANK REFERENCE') >= 0 && dr2.voids === 0 && /Released on PO SS-PO-5521 by demo@cleancell\.us/.test(dr2.warn) && /not yet received/.test(dr2.warn) && dr2.release === 0, dr2);
     /* the customer agreed net 30 on the PO: move the due date, with a reason */
     await p.click('#drawer [data-act="edit"]'); await p.waitForTimeout(150);
@@ -1120,6 +1126,63 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     if (shotsAt) await ip.screenshot({ path: path.join(shotsAt, name + '.png'), fullPage: true });
     await ictx.close();
   }
+  /* A browser where Google's pop-up cannot open (an app's built-in browser,
+     pop-ups blocked): a redirect through another site's auth helper never
+     comes back ("missing initial state"), so the page says what to do
+     instead; only a helper on this very site may take the redirect. */
+  var bctx = await b.newContext({ viewport: { width: 390, height: 844 } }), bp = await bctx.newPage();
+  bp.on('pageerror', function (e) { errs.push('popup-blocked: ' + e.message); });
+  await bp.goto(base + '/app-sandbox/office', { waitUntil: 'domcontentloaded' }); await bp.waitForTimeout(500);
+  await bp.evaluate(function () { var a = firebase.auth(); window.__redir = 0; a.signInWithPopup = function () { return Promise.reject({ code: 'auth/popup-blocked' }); }; a.signInWithRedirect = function () { window.__redir++; return Promise.resolve(); }; });
+  await bp.click('#signin'); await bp.waitForTimeout(400);
+  var blocked = await bp.evaluate(function () { return { msg: document.getElementById('ols-msg').textContent, redir: window.__redir }; });
+  await bp.evaluate(function () { firebase.auth().app = { options: { authDomain: location.host } }; });
+  await bp.click('#signin'); await bp.waitForTimeout(400);
+  var home = await bp.evaluate(function () { return window.__redir; });
+  ok('Google\'s pop-up blocked: no redirect through another site\'s helper, the person is told to use Safari/Chrome or email; with the helper on this site the redirect is taken', blocked.redir === 0 && /can\u2019t open in this browser/.test(blocked.msg) && /\/logic in Safari or Chrome/.test(blocked.msg) && home === 1, [blocked, home]);
+  await bctx.close();
+  /* The camera reads a unit's label on a phone with no BarcodeDetector of
+     its own (every iPhone): omega-scan.js loads ZXing from /vendor, the
+     office app's passport and the bench open the unit. A fake camera shows
+     a sample unit's Code 128 label (its bar widths below, as printed): the
+     one in transit for the office, one still in the plant for the bench. */
+  var LABELS = { 'CC418-26-44192': [2,1,1,2,1,4,1,3,1,3,2,1,1,3,1,3,2,1,2,2,1,2,3,1,1,2,3,2,2,1,3,1,1,2,2,2,1,2,2,1,3,2,2,2,3,2,1,1,2,2,3,1,1,2,1,2,2,1,3,2,2,2,1,2,3,1,1,1,3,1,4,1,2,3,1,3,1,1,1,1,1,1,4,3,1,2,3,2,2,1,2,3,3,1,1,1,2],
+    'CC418-26-44190': [2,1,1,2,1,4,1,3,1,3,2,1,1,3,1,3,2,1,2,2,1,2,3,1,1,2,3,2,2,1,3,1,1,2,2,2,1,2,2,1,3,2,2,2,3,2,1,1,2,2,3,1,1,2,1,2,2,1,3,2,2,2,1,2,3,1,1,1,3,1,4,1,2,3,1,3,1,1,2,1,4,1,2,1,1,3,1,1,4,1,2,3,3,1,1,1,2] };
+  function cameraOn(serial) {
+    var FW = 640, FH = 480, y = Buffer.alloc(FW * FH, 250), bars = LABELS[serial], mods = bars.reduce(function (a, w) { return a + w; }, 0), sc = 3, bx = Math.floor((FW - mods * sc) / 2);
+    bars.forEach(function (w, i) { if (i % 2 === 0) for (var yy = 160; yy < 320; yy++) for (var xx = bx; xx < bx + w * sc; xx++) y[yy * FW + xx] = 12; bx += w * sc; });
+    var feed = path.join(os.tmpdir(), 'omega-scan-' + serial + '-' + process.pid + '.y4m'), uv = Buffer.alloc((FW / 2) * (FH / 2) * 2, 128), parts = [Buffer.from('YUV4MPEG2 W' + FW + ' H' + FH + ' F10:1 Ip A1:1 C420jpeg\n')];
+    for (var fi = 0; fi < 10; fi++) parts.push(Buffer.from('FRAME\n'), y, uv);
+    fs.writeFileSync(feed, Buffer.concat(parts));
+    return chromium.launch({ executablePath: CHROME, args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--use-file-for-fake-video-capture=' + feed] }).then(function (br) {
+      return br.newContext({ viewport: { width: 390, height: 844 }, permissions: ['camera'] }).then(function (c) {
+        return c.addInitScript(function () { window.OMEGA_SCAN_ZXING = true; }).then(function () { return { browser: br, ctx: c, done: function () { return br.close().then(function () { try { fs.unlinkSync(feed); } catch (e) {} }); } }; });
+      });
+    });
+  }
+  var cam1 = await cameraOn('CC418-26-44192');
+  try {
+    var cp = await cam1.ctx.newPage(), camErrs = [], wasmType = [];
+    cp.on('pageerror', function (e) { camErrs.push(e.message); });
+    cp.on('response', function (r) { if (/\.wasm$/.test(r.url())) wasmType.push(r.status() + ' ' + (r.headers()['content-type'] || '')); });
+    await cp.goto(base + '/app-sandbox/office', { waitUntil: 'domcontentloaded' }); await cp.waitForTimeout(400);
+    await cp.click('#signin'); await cp.waitForTimeout(700); await cp.click('[data-tab="sites"]'); await cp.waitForTimeout(700);
+    await cp.click('#su-go'); await cp.waitForTimeout(150);
+    var emptyOpen = await cp.$eval('#status', function (e) { return e.textContent; });
+    await cp.click('#su-cam');
+    var pass = ''; for (var ci = 0; ci < 40 && !/CC418-26-44192/.test(pass); ci++) { await cp.waitForTimeout(250); pass = await cp.evaluate(function () { var b = document.getElementById('su-body'); return b ? b.textContent.replace(/\s+/g, ' ') : ''; }); }
+    var camShut = await cp.$eval('#cam', function (e) { return e.hidden; });
+    ok('the office app\'s Camera reads a unit\'s Code 128 label with no BarcodeDetector of the phone\'s own (ZXing from /vendor), closes the camera and opens the passport; an empty Open says what to do', /CC418-26-44192/.test(pass) && /in transit/.test(pass) && camShut && /Type or scan a serial/.test(emptyOpen) && wasmType.length === 1 && /200 application\/wasm/.test(wasmType[0]) && !camErrs.length, [pass.slice(0, 120), camShut, emptyOpen, wasmType, camErrs]);
+  } finally { await cam1.done(); }
+  var cam2 = await cameraOn('CC418-26-44190');
+  try {
+    var bp2 = await cam2.ctx.newPage(), benchErrs = [];
+    bp2.on('pageerror', function (e) { benchErrs.push(e.message); });
+    await bp2.goto(base + '/app-sandbox/bench', { waitUntil: 'domcontentloaded' }); await bp2.waitForTimeout(700);
+    await bp2.selectOption('#pick', 'rack'); await bp2.waitForTimeout(200); await bp2.click('#camBtn');
+    var steps = 0; for (var bi = 0; bi < 40 && !steps; bi++) { await bp2.waitForTimeout(250); steps = await bp2.$$eval('#work .step', function (r) { return r.length; }); }
+    ok('  the bench\'s Camera reads a plant unit\'s label and opens its steps', steps === 3 && !benchErrs.length, [steps, benchErrs]);
+  } finally { await cam2.done(); }
   ok('no JS errors', errs.length === 0, errs);
   ok('every /api/ route a page called is one the stub answers', missing.length === 0, missing);
   await b.close(); srv.close();
