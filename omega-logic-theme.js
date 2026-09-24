@@ -11,6 +11,21 @@
                  ES5, no build step, like every shared runtime file. */
 (function () {
   'use strict';
+  /* Every Omega Logic page wears the product's home-screen identity: a
+     phone that adds ANY office page to its home screen gets the Hex grid
+     icon and the name "Omega Logic", never a letter tile made from the
+     page title. (The office app declares these statically; a desktop
+     office page gets them here, before anyone can tap Share.) */
+  try { (function homeScreen() {
+    /* office and plant pages only: a customer page (portal, customer app,
+       storefront, Editor Lite, customer POs) wears the SUPPLIER's name */
+    if (typeof location === 'undefined' || typeof document === 'undefined' || !document.head || !document.createElement) return;
+    if (!/^\/(omega-logic|logic-[a-z-]+|office\/|plant\/|portals\/customer\/admin)/.test(location.pathname || '')) return;
+    var h = document.head;
+    if (!h.querySelector('link[rel="apple-touch-icon"]')) { var l = document.createElement('link'); l.rel = 'apple-touch-icon'; l.href = '/icons/omega-logic-180.png'; h.appendChild(l); }
+    if (!h.querySelector('meta[name="apple-mobile-web-app-title"]')) { var m = document.createElement('meta'); m.name = 'apple-mobile-web-app-title'; m.content = 'Omega Logic'; h.appendChild(m); }
+    if (!h.querySelector('link[rel="icon"]')) { var f = document.createElement('link'); f.rel = 'icon'; f.type = 'image/png'; f.href = '/icons/omega-logic-192.png'; h.appendChild(f); }
+  })(); } catch (e) { /* never break a page over an icon */ }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function apply(brand) {
     brand = brand || {}; var style = document.documentElement.style;
