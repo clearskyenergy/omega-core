@@ -155,6 +155,20 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
   function text(p, sel) { return p.$eval(sel, function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); }); }
   /* a small real file for an upload control */
   function pdf(name) { return { name: name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n% render check\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n') }; }
+  /* a downloaded CSV as rows of cells: the BOM dropped, quoted cells
+     (a doubled quote inside) read the way a spreadsheet reads them */
+  function csvOf(text) {
+    var s = String(text).replace(/^\uFEFF/, ''), rows = [], row = [], cell = '', q = false;
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (q) { if (ch === '"' && s.charAt(i + 1) === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; continue; }
+      if (ch === '"') q = true; else if (ch === ',') { row.push(cell); cell = ''; } else if (ch === '\r') continue; else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; } else cell += ch;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return { bom: String(text).charAt(0) === '\uFEFF', rows: rows };
+  }
+  /* sideways scroll at a width, then back to where the check was */
+  async function hscrollAt(p, w, back) { await p.setViewportSize({ width: w, height: 800 }); await p.waitForTimeout(200); var hs = await p.evaluate(function () { return document.documentElement.scrollWidth > document.documentElement.clientWidth + 1; }); if (back) { await p.setViewportSize(back); await p.waitForTimeout(150); } return hs; }
   await check('materials', '/logic-materials.html?org=cleancell.us', async function (p) {
     var rows = await p.$$eval('#buy tbody tr', function (r) { return r.length; });
     var first = await p.$eval('#buy tbody tr td', function (e) { return e.textContent.trim().slice(0, 60); });
@@ -335,7 +349,9 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var assign = await p.$$eval('[data-assign]', function (r) { return r.length; });
     var opts = await p.$$eval('select[data-for] option', function (r) { return r.map(function (x) { return x.textContent; }); });
     var parts = await p.$$eval('#parts tbody tr', function (r) { return r.length; });
-    ok('finished units are counted by product: 2 available, 1 assigned, 3 building', /CC-C215 2 1 3/.test(finished[0] || ''), finished);
+    /* the sample order carries three units: the one on its way and the two
+       still on the line (44193, 44195); a unit with an order is assigned */
+    ok('finished units are counted by product: 2 available, 3 assigned, 1 building', /CC-C215 2 3 1/.test(finished[0] || ''), finished);
     ok('each available unit can be assigned to an order that needs the product', assign === 2 && opts.some(function (o) { return /CC-26-4419/.test(o); }), [assign, opts]);
     ok('components on the shelf come from the plan', parts >= 4, parts);
     return { finished: finished, assign: assign, parts: parts };
@@ -710,6 +726,15 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.selectOption('#reg tbody tr[data-serial="CC418-26-44192"] td select', 'site_company-riverside-riverside-yard-93307'); await p.waitForTimeout(900);
     var r92b = await p.$eval('#reg tbody tr[data-serial="CC418-26-44192"]', function (tr) { var o = {}; Array.prototype.forEach.call(tr.querySelectorAll('td[data-k]'), function (td) { o[td.getAttribute('data-k')] = td.textContent.trim(); }); return o; });
     ok('  search finds by any column; a cell edit saves a detail in place (Enter), and choosing a site in the Site cell assigns the unit through the rules: warranty active, confirmed by the office', found.join('|') === 'CC418-26-44192' && after === 'Valley Power Partners' && /Saved reseller/.test(st) && r92b.site === 'Riverside yard' && /assigned to site/.test(r92b.statusLabel) && /^active/.test(r92b.warrantyStatus) && r92b.warrantyUntil === '2036-09-10' && /^confirmed/.test(r92b.confirmation) && r92b.reseller === 'Valley Power Partners', [found, after, st, r92b]);
+    /* "Going to" for a selection: only what the one planning rule allows
+       (a unit at a site — or received — is named and left out); the sample
+       is put back afterwards for the checks that follow */
+    var keep93 = JSON.stringify(STATE.units.filter(function (u) { return u.serial === 'CC418-26-44193'; })[0]), keepEv = JSON.stringify(STATE.custodyEvents);
+    await p.check('#reg tbody tr[data-serial="CC418-26-44192"] [data-sel]'); await p.check('#reg tbody tr[data-serial="CC418-26-44193"] [data-sel]');
+    await p.selectOption('#with-dest', 'site_company-riverside-riverside-yard-93307'); await p.click('#with-going'); await p.waitForTimeout(900);
+    var st2 = await p.$eval('#status', function (e) { return e.textContent; }), going = {}; STATE.units.forEach(function (u) { if (u.custody && u.custody.plannedSiteId) going[u.serial] = u.custody.plannedSiteId; });
+    ok('  "Going to" on a selection sets it only where the planning rule allows and names the rest: the unit already at a site is left out, not sent', /^1 going there; left out \(received or at a site already: assign it to the site instead\): CC418-26-44192\.$/.test(st2) && going['CC418-26-44193'] === 'site_company-riverside-riverside-yard-93307' && !going['CC418-26-44192'], [st2, going]);
+    STATE.units = STATE.units.map(function (u) { return u.serial === 'CC418-26-44193' ? JSON.parse(keep93) : u; }); STATE.custodyEvents = JSON.parse(keepEv);
     return { rows: rows, cols: heads.length, after: after };
   });
   await check('kit', '/logic-kit.html?org=cleancell.us', async function (p) {
@@ -895,6 +920,194 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('  the account\'s documents: what the supplier shared, and an upload from the phone joins the company\'s', lists.join('|') === 'From Clean Cell · 1|From your company · 2', lists);
     return { who: who, result: result.slice(0, 40) };
   });
+  /* ── Many sites at once. A customer's PO names its sites in an email; the
+     list is pasted, the sites are created in one go and the order's units
+     are spread over them — on the customer portal, the customer phone
+     sandbox at 390px and the office's Sites & custody. Five FICTIONAL
+     addresses (never a customer's real site): one with a unit count, one
+     named in the list, one renamed before Create (and kept through a
+     second preview); the greeting and the sign-off are left out, and the
+     sender's signature address is read but flagged and starts unticked, so
+     it is never created. The first site's ZIP starts with a zero, and the
+     CSV keeps it (="07022"). The sample order has three units that can be
+     sent (the one on its way, the two on the line): the counted site takes
+     two, the one left goes to the first site without a number, lowest
+     serial first. The preview is the only confirmation — no browser box
+     opens anywhere in the flow. A second run creates nothing and changes
+     nothing. Each check starts from a fresh sample (the checks above moved
+     44192 onto Riverside yard), so the three read the same numbers. ── */
+  var SITE_LIST = 'Hi Clean Cell, please send the batteries on our PO to these stores:\n\n'
+    + '- 410 Example Ave, Fairview, NJ 07022\n'
+    + '- 77 Sample Plaza Suite 12, Springfield, IL 62704 x2\n'
+    + '- 9 Placeholder Rd, Riverton, WY 82501\n'
+    + '- Store 12: 1200 Demo Pkwy, Madison, WI 53703\n'
+    + '- 55 Fictional Way, Portland, ME 04101\n\n'
+    + 'Thanks,\nDana\nExample Capital, 500 Demo Ave Suite 2000, Austin, TX 78701';
+  var LIST_NAMES = ['Fairview, NJ', 'Springfield, IL', 'Riverton, WY', 'Store 12', 'Portland, ME'];
+  /* the six rows the preview shows: the five sites, then the signature */
+  var LIST_ROWS = LIST_NAMES.concat(['Austin, TX']), LIST_USE = 'on|on|on|on|on|off';
+  /* site → the serials it gets, in list order */
+  var LIST_SPREAD = ['Fairview store:1:CC418-26-44192', 'Springfield, IL:2:CC418-26-44193 CC418-26-44195', 'Riverton, WY:0:', 'Store 12:0:', 'Portland, ME:0:'];
+  var LIST_PLANNED = { 'CC418-26-44192': 'Fairview store', 'CC418-26-44193': 'Springfield, IL', 'CC418-26-44195': 'Springfield, IL' };
+  /* the rows the customer's CSV carries (Serial, Site, Address, City, State, ZIP, Order, Status) */
+  var LIST_CSV = [['Serial', 'Site', 'Address', 'City', 'State', 'ZIP', 'Order', 'Status'],
+    ['CC418-26-44192', 'Fairview store', '410 Example Ave', 'Fairview', 'NJ', '="07022"', 'CC-26-4419', 'going to'],
+    ['CC418-26-44193', 'Springfield, IL', '77 Sample Plaza Suite 12', 'Springfield', 'IL', '62704', 'CC-26-4419', 'going to'],
+    ['CC418-26-44195', 'Springfield, IL', '77 Sample Plaza Suite 12', 'Springfield', 'IL', '62704', 'CC-26-4419', 'going to']];
+  function freshSample() { STATE = F.initialState(); V = F.views(STATE); }
+  function riversideSites(state) { return state.sites.filter(function (s) { return s.customerId === 'company_riverside'; }).map(function (s) { return s.name; }); }
+  function plannedOf(state) { var o = {}; state.units.filter(function (u) { return u.orderId === 'o1'; }).forEach(function (u) { if (u.custody && u.custody.plannedSiteName) o[u.serial] = u.custody.plannedSiteName; }); return o; }
+  function destEvents(state) { var n = 0; Object.keys(state.custodyEvents).forEach(function (k) { state.custodyEvents[k].forEach(function (e) { if (e.via === 'site-list') n++; }); }); return n; }
+  async function download(p, sel) { var w = p.waitForEvent('download', { timeout: 5000 }).catch(function () { return null; }); await p.click(sel); var d = await w; return d ? { name: d.suggestedFilename(), csv: csvOf(fs.readFileSync(await d.path(), 'utf8')) } : { name: null, csv: { bom: false, rows: [] } }; }
+  var WIDE = { width: 1280, height: 900 };
+  freshSample();
+  await check('site-list-portal', '/portals/customer/?org=cleancell.us', async function (p) {
+    var dialogs = []; p.on('dialog', function (d) { dialogs.push(d.message()); d.dismiss(); });
+    await p.waitForTimeout(1200);
+    await p.click('.logic-nav [data-view="fleet"]'); await p.waitForTimeout(400);
+    var card = await text(p, '#fleet-bulk');
+    await p.click('#fleet-bulk [data-bk-go="paste"]'); await p.waitForTimeout(200);
+    await p.fill('#bk-text', SITE_LIST); await p.click('#bk-preview'); await p.waitForSelector('#fleet-bulk tr[data-bk-row]');
+    var sum = await text(p, '#fleet-bulk > p'), left = await p.$$eval('#fleet-bulk ul li', function (r) { return r.length; });
+    var rows = await p.$$eval('#fleet-bulk tr[data-bk-row]', function (r) { return r.map(function (x) { var i = x.querySelector('[data-bk-name]'); return (i ? i.value : '?') + '|' + x.cells[3].textContent.trim() + '|' + x.cells[4].textContent.trim(); }); });
+    var use = await p.$$eval('#fleet-bulk [data-bk-use]', function (r) { return r.map(function (c) { return c.checked ? 'on' : 'off'; }).join('|'); }), warn = await text(p, '#fleet-bulk tr[data-bk-row="5"] + tr');
+    var create = await text(p, '#bk-create'), hs1 = await hscrollAt(p, 390, WIDE);
+    ok('site list (portal): Fleet opens with "Sites from a list"; five addresses pasted from an email are read, the greeting and sign-off left out, each new with its default or given name and the one unit count; the signature address is flagged and unticked, so Create makes five', /Add your sites from a list/.test(card) && /Send units to your sites/.test(card) && /^6 addresses · 6 new · 0 already on your account · 1 to check/.test(sum) && left === 3 && rows.join(' / ') === LIST_ROWS.map(function (n, i) { return n + '|' + (i === 1 ? '2' : '—') + '|new'; }).join(' / ') && use === LIST_USE && /does not start with a house number/.test(warn) && create === 'Create 5 sites' && !hs1, [card.slice(0, 80), sum, left, rows, use, warn, create, hs1]);
+    await p.fill('#fleet-bulk [data-bk-name="0"]', 'Fairview store');
+    /* back to the list and preview again: the typed name and the unticked line are kept */
+    await p.click('#fleet-bulk .pf-step[data-bk-go="paste"]'); await p.waitForTimeout(150); await p.click('#bk-preview'); await p.waitForSelector('#fleet-bulk tr[data-bk-row]');
+    var kept = await p.$eval('#fleet-bulk [data-bk-name="0"]', function (e) { return e.value; }), use2 = await p.$$eval('#fleet-bulk [data-bk-use]', function (r) { return r.map(function (c) { return c.checked ? 'on' : 'off'; }).join('|'); });
+    ok('  a second preview keeps the name typed in step 2 and the line left unticked', kept === 'Fairview store' && use2 === LIST_USE, [kept, use2]);
+    await p.click('#bk-create'); await p.waitForSelector('#bk-plan'); await p.waitForTimeout(300);
+    var top = await text(p, '#fleet-bulk [role="status"]');
+    var ticks = await p.$$eval('#fleet-bulk [data-bk-pick]', function (r) { return r.map(function (c) { var tr = c.closest('tr'); return tr.querySelector('b').textContent + ':' + (c.checked ? 'on' : 'off') + ':' + tr.querySelector('[data-bk-n]').value; }); });
+    var order = await p.$eval('#bk-order', function (e) { return e.value; }), total = await text(p, '#bk-total');
+    ok('  Create makes the five sites on the account in one go (the renamed one as typed); step 3 has the order chosen, the list\'s sites ticked in list order with its count, and a running total', /^done 5 sites created\. Now send the order’s units to them\./.test(top) && riversideSites(STATE).join('|') === 'Riverside yard|Fairview store|' + LIST_NAMES.slice(1).join('|') && ticks.join('|') === 'Fairview store:on:|Springfield, IL:on:2|Riverton, WY:on:|Store 12:on:|Portland, ME:on:|Riverside yard:off:' && order === 'CC-26-4419' && /^5 sites · 3 of the 3 units that can be sent$/.test(total), [top, riversideSites(STATE), ticks, order, total]);
+    await p.click('#bk-plan'); await p.waitForSelector('#bk-planbox');
+    var plan = await p.$$eval('#bk-planbox tr[data-bk-plan]', function (r) { return r.map(function (x) { var s = x.querySelector('.mono'); return x.cells[0].querySelector('b').textContent + ':' + x.cells[1].textContent.trim() + ':' + (s ? s.textContent.split(', ').join(' ') : ''); }); });
+    var apply = await text(p, '#bk-apply'), hs2 = await hscrollAt(p, 390, WIDE);
+    ok('  Preview shows the serials per site, lowest first: the counted site takes two, the first open site the one left', plan.join(' / ') === LIST_SPREAD.join(' / ') && apply === 'Send 3 units to 2 sites' && !hs2 && Object.keys(plannedOf(STATE)).length === 0, [plan, apply, hs2]);
+    await p.click('#bk-apply'); await p.waitForSelector('#bk-donebox'); await p.waitForTimeout(400);
+    var done = await text(p, '#bk-donebox > p');
+    var got = await download(p, '#bk-csv');
+    var fleet = await p.$$eval('#fleet-body small', function (r) { return r.filter(function (s) { return /going here/.test(s.textContent); }).map(function (s) { return s.parentNode.querySelector('b').textContent + ':' + s.textContent; }); });
+    ok('  Send records each unit "going to" its site (one event per unit) and the Fleet list counts them per site', /^sent 3 units of CC-26-4419 going to 2 sites · 3 changed just now$/.test(done) && same(plannedOf(STATE), LIST_PLANNED) && destEvents(STATE) === 3 && fleet.join('|') === 'Fairview store:1 unit going here|Springfield, IL:2 units going here', [done, plannedOf(STATE), destEvents(STATE), fleet]);
+    ok('  the CSV download is one row per unit with its site\'s address, made in the browser (UTF-8 with a BOM)', got.name === 'sites-CC-26-4419.csv' && got.csv.bom && JSON.stringify(got.csv.rows) === JSON.stringify(LIST_CSV), [got.name, got.csv.bom, got.csv.rows]);
+    /* the same list again: nothing new, nothing moved */
+    await p.click('#fleet-bulk .pf-step[data-bk-go="paste"]'); await p.waitForTimeout(200);
+    await p.click('#bk-preview'); await p.waitForFunction(function () { var e = document.querySelector('#fleet-bulk > p'); return e && / 1 new /.test(e.textContent); });
+    var sum2 = await text(p, '#fleet-bulk > p'), create2 = await p.$$eval('#bk-create', function (r) { return r.length; });
+    await p.click('#fleet-bulk .actions [data-bk-go="send"]'); await p.waitForSelector('#bk-plan');
+    await p.click('#bk-plan'); await p.waitForSelector('#bk-planbox');
+    var again = await text(p, '#bk-planbox'), apply2 = await p.$$eval('#bk-apply', function (r) { return r.length; });
+    ok('  a second run of the same list creates nothing and changes nothing (the signature is still new and still unticked)', /^6 addresses · 1 new · 5 already on your account · 1 to check/.test(sum2) && create2 === 0 && /Nothing to change/.test(again) && apply2 === 0 && riversideSites(STATE).length === 6 && destEvents(STATE) === 3, [sum2, create2, again.slice(0, 160), apply2, riversideSites(STATE).length, destEvents(STATE)]);
+    ok('  no browser box opens anywhere in the flow: the preview is the confirmation', dialogs.length === 0, dialogs);
+    return { sites: riversideSites(STATE).length, planned: Object.keys(plannedOf(STATE)).length, csv: got.csv.rows.length - 1 };
+  });
+  freshSample();
+  await check('site-list-office', '/logic-custody.html?org=cleancell.us#many', async function (p) {
+    var dialogs = []; p.on('dialog', function (d) { dialogs.push(d.message()); d.dismiss(); });
+    await p.waitForTimeout(800);
+    var navLink = await p.$$eval('.logic-nav a[href="#many"]', function (r) { return r.map(function (x) { return x.textContent.trim(); }); });
+    var hidden = await p.$eval('#mn-steps', function (e) { return e.classList.contains('hide'); });
+    await p.selectOption('#mn-acct', 'company_riverside'); await p.waitForSelector('#mn-steps:not(.hide)'); await p.waitForTimeout(300);
+    var note = await text(p, '#mn-acct-note');
+    ok('site list (office): Sites & custody has "Many sites at once" in its menu; choosing the customer account opens the steps with its sites and its order', navLink.join('|') === 'Many sites at once' && hidden && /^Riverside Cold Chain · 1 site · 1 order with units\.$/.test(note), [navLink, hidden, note]);
+    await p.fill('#mn-text', SITE_LIST); await p.click('#mn-check'); await p.waitForSelector('#mn-preview [data-mn-name]');
+    var sum = await text(p, '#mn-preview .sum'), left = await p.$$eval('#mn-preview details li', function (r) { return r.length; });
+    var rows = await p.$$eval('#mn-preview tbody tr', function (r) { return r.map(function (x) { var i = x.querySelector('[data-mn-name]'); return (i ? i.value : '?') + '|' + x.cells[3].textContent.trim() + '|' + x.querySelector('.pill').textContent; }); });
+    var use = await p.$$eval('#mn-preview [data-mn-use]', function (r) { return r.map(function (c) { return c.checked ? 'on' : 'off'; }).join('|'); });
+    var create = await text(p, '#mn-create'), hs1 = await hscrollAt(p, 390, WIDE);
+    ok('  the pasted email is read: five new sites with their names and the one count, the greeting and sign-off left out, the signature flagged and unticked', /^6 read \(one address per line\) · 6 new · 0 already on the account · 1 to check/.test(sum) && left === 3 && rows.join(' / ') === LIST_ROWS.map(function (n, i) { return n + '|' + (i === 1 ? '2' : '—') + '|new'; }).join(' / ') && use === LIST_USE && create === 'Create 5 sites' && !hs1, [sum, left, rows, use, create, hs1]);
+    await p.fill('#mn-preview [data-mn-name="0"]', 'Fairview store');
+    /* checking the list again keeps the typed name and the unticked line */
+    await p.click('#mn-check'); await p.waitForTimeout(400); await p.waitForSelector('#mn-preview [data-mn-name]');
+    var kept = await p.$eval('#mn-preview [data-mn-name="0"]', function (e) { return e.value; }), use2 = await p.$$eval('#mn-preview [data-mn-use]', function (r) { return r.map(function (c) { return c.checked ? 'on' : 'off'; }).join('|'); });
+    ok('  a second check keeps the name typed in step 2 and the line left unticked', kept === 'Fairview store' && use2 === LIST_USE, [kept, use2]);
+    await p.click('#mn-create'); await p.waitForFunction(function () { return /Created 5 sites/.test(document.getElementById('mn-msg1').textContent); }); await p.waitForTimeout(500);
+    var msg1 = await text(p, '#mn-msg1');
+    var ticks = await p.$$eval('#mn-sites tbody tr', function (r) { return r.map(function (tr) { return tr.querySelector('b').textContent + ':' + (tr.querySelector('[data-mn-on]').checked ? 'on' : 'off') + ':' + tr.querySelector('[data-mn-n]').value; }); });
+    var order = await p.$eval('#mn-order', function (e) { return e.value; }), total = await text(p, '#mn-total');
+    ok('  Create adds the five to the customer\'s account (the renamed one as typed); step 3 ticks them in list order with the list\'s count, the order chosen, and totals the units', /^Created 5 sites\. Now assign the order's units below\./.test(msg1) && riversideSites(STATE).join('|') === 'Riverside yard|Fairview store|' + LIST_NAMES.slice(1).join('|') && ticks.join('|') === 'Fairview store:on:|Springfield, IL:on:2|Riverton, WY:on:|Store 12:on:|Portland, ME:on:|Riverside yard:off:' && order === 'o1' && /^3 of 3 units that can be sent to a site, over 5 sites\.$/.test(total), [msg1, riversideSites(STATE), ticks, order, total]);
+    await p.click('#mn-plan'); await p.waitForSelector('#mn-planout .sum');
+    var plan = await p.$$eval('#mn-planout tbody tr', function (r) { return r.map(function (x) { return x.cells[0].textContent.trim() + ':' + x.cells[2].querySelector('b').textContent.trim() + ':' + Array.prototype.map.call(x.querySelectorAll('.serials .mono'), function (s) { return s.textContent; }).join(' '); }); });
+    var apply = await text(p, '#mn-apply'), hs2 = await hscrollAt(p, 390, WIDE);
+    ok('  Preview lists the serials per site, lowest first; nothing is saved yet', plan.join(' / ') === LIST_SPREAD.join(' / ') && apply === 'Assign 3 units to 2 sites' && !hs2 && Object.keys(plannedOf(STATE)).length === 0, [plan, apply, hs2]);
+    await p.click('#mn-apply'); await p.waitForSelector('#mn-done .sum'); await p.waitForTimeout(500);
+    var done = await text(p, '#mn-done .sum');
+    var now = await p.$$eval('#mn-sites tbody tr', function (r) { return r.map(function (tr) { return tr.querySelector('b').textContent + ':' + tr.cells[2].textContent.trim(); }); });
+    var got = await download(p, '#mn-csv');
+    var rowsOk = got.csv.rows.length === 4 && got.csv.rows[0].join(',') === 'Serial,Site,Site ref,Address,City,State,ZIP,Order,PO,Status' && LIST_CSV.slice(1).every(function (want, i) { var r = got.csv.rows[i + 1]; return r && [r[0], r[1], r[3], r[4], r[5], r[6], r[7], r[9]].join('|') === want.join('|') && r[8] === 'RCC-2200'; });
+    ok('  Assign records each unit going to its site; the account\'s sites say so; the CSV is one row per unit with the site\'s address, the order and its PO', /^3 units of CC-26-4419 going to 2 sites · 3 saved now$/.test(done) && same(plannedOf(STATE), LIST_PLANNED) && destEvents(STATE) === 3 && now[0] === 'Fairview store:1 going there' && now[1] === 'Springfield, IL:2 going there' && /^site-plan-CC-26-4419-\d{4}-\d{2}-\d{2}\.csv$/.test(got.name || '') && got.csv.bom && rowsOk, [done, plannedOf(STATE), now, got.name, got.csv.rows]);
+    /* the same list again: the preview says all five are there; Create uses them; the plan changes nothing */
+    await p.click('#mn-check'); await p.waitForFunction(function () { var e = document.querySelector('#mn-preview .sum'); return e && / 1 new /.test(e.textContent); });
+    var sum2 = await text(p, '#mn-preview .sum'), use = await text(p, '#mn-create');
+    await p.click('#mn-create'); await p.waitForFunction(function () { return /No new sites/.test(document.getElementById('mn-msg1').textContent); }); await p.waitForTimeout(500);
+    var msg2 = await text(p, '#mn-msg1');
+    await p.click('#mn-plan'); await p.waitForSelector('#mn-planout .sum'); await p.waitForTimeout(200);
+    var msg3 = await text(p, '#mn-msg3'), applyHidden = await p.$eval('#mn-apply', function (e) { return e.classList.contains('hide'); });
+    ok('  a second run of the same list creates nothing and changes nothing', /· 1 new · 5 already on the account/.test(sum2) && use === 'Use the 5 sites already on the account' && /^No new sites; 5 sites were already on the account\./.test(msg2) && /Nothing to change/.test(msg3) && applyHidden && riversideSites(STATE).length === 6 && destEvents(STATE) === 3, [sum2, use, msg2, msg3, applyHidden, riversideSites(STATE).length, destEvents(STATE)]);
+    /* the load arrives: 44192 is received and bound at Fairview store (its
+       plan honoured). The list's own numbers again — Fairview 1, Springfield
+       2 — add up to more than the two units not yet at a site, but the one
+       at Fairview counts toward Fairview: Preview is not blocked, and says
+       nothing changes */
+    var rc = F.post(STATE, '/api/logic-custody', '', { action: 'move', move: 'receive', serial: 'CC418-26-44192' }, 'demo@cleancell.us');
+    await p.selectOption('#mn-acct', ''); await p.selectOption('#mn-acct', 'company_riverside'); await p.waitForSelector('#mn-steps:not(.hide)'); await p.waitForSelector('#mn-sites [data-mn-on]');
+    var nums = { 'Fairview store': '1', 'Springfield, IL': '2' };
+    var rowsAt = await p.$$eval('#mn-sites tbody tr', function (r) { return r.map(function (tr) { return tr.querySelector('b').textContent; }); });
+    for (var ri = 0; ri < rowsAt.length; ri++) { if (!nums[rowsAt[ri]]) continue; var sel = '#mn-sites tbody tr:nth-child(' + (ri + 1) + ')'; await p.check(sel + ' [data-mn-on]'); await p.fill(sel + ' [data-mn-n]', nums[rowsAt[ri]]); }
+    var total3 = await text(p, '#mn-total'), planOff = await p.$eval('#mn-plan', function (e) { return e.disabled; });
+    await p.click('#mn-plan'); await p.waitForSelector('#mn-planout .sum'); await p.waitForTimeout(200);
+    var msg4 = await text(p, '#mn-msg3'), probs = await p.$$eval('#mn-planout .note.err', function (r) { return r.length; });
+    ok('  a re-run of the list after a unit is received and bound is not blocked by the running total: the unit at a site counts toward its number, and the preview says nothing changes', rc.ok === true && /^The numbers add up to 3; 2 units of this order can still be sent to a site\. Units already at a ticked site count toward its number, so Preview checks\.$/.test(total3) && planOff === false && probs === 0 && /Nothing to change/.test(msg4), [rc.say || rc.error, total3, planOff, probs, msg4]);
+    ok('  no browser box opens anywhere in the flow', dialogs.length === 0, dialogs);
+    return { sites: riversideSites(STATE).length, planned: Object.keys(plannedOf(STATE)).length, csv: got.csv.rows.length - 1 };
+  });
+  await check('site-list-app', '/app-sandbox/customer', async function (p) {
+    await p.waitForTimeout(400);
+    /* the sandbox keeps its own sample on the phone: start it over (the
+       check above moved 44192 onto Riverside yard) */
+    p.once('dialog', function (d) { d.accept(); }); await p.click('#sb-reset'); await p.waitForTimeout(900);
+    if (await p.$eval('#gate', function (e) { return e.hidden; })) { await p.click('#signout'); await p.waitForTimeout(600); }
+    await p.fill('#g-email', 'ops@riverside.example'); await p.click('#g-link'); await p.waitForTimeout(900);
+    var dialogs = []; p.on('dialog', function (d) { dialogs.push(d.message()); d.dismiss(); });
+    function sb() { return p.evaluate(function () { return OMEGA_SANDBOX.state(); }); }
+    await p.click('[data-tab="fleet"]'); await p.waitForTimeout(600);
+    await p.click('[data-go="sitelist"]'); await p.waitForSelector('#sl-text');
+    var navOn = await p.$eval('#nav [data-tab="fleet"]', function (e) { return e.getAttribute('aria-current') || e.className; });
+    await p.fill('#sl-text', SITE_LIST); await p.click('#sl-preview'); await p.waitForSelector('[data-sl-row]');
+    var kv = await texts(p, '#sl-body .kv div'), left = await p.$$eval('#sl-body details li', function (r) { return r.length; });
+    var rows = await p.$$eval('[data-sl-row]', function (r) { return r.map(function (x) { var i = x.querySelector('[data-sl-name]'); return (i ? i.value : '?') + '|' + x.querySelector('.pill').textContent; }); });
+    var unitsLine = await text(p, '[data-sl-row="1"]'), create = await text(p, '#sl-create');
+    var hs1 = await p.evaluate(function () { return document.documentElement.scrollWidth > document.documentElement.clientWidth + 1; });
+    var use = await p.$$eval('[data-sl-use]', function (r) { return r.map(function (c) { return c.checked ? 'on' : 'off'; }).join('|'); });
+    ok('site list (phone, 390px): Fleet → Sites from a list; the pasted email reads as five new sites and the flagged, unticked signature, one card each, the greeting and sign-off left out', navOn === 'page' && kv.join('|') === 'New6|Already yours0|To fix0|Lines read6' && left === 3 && rows.join(' / ') === LIST_ROWS.map(function (n) { return n + '|new'; }).join(' / ') && use === LIST_USE && /2 units/.test(unitsLine) && create === 'Create 5 sites' && !hs1, [navOn, kv, left, rows, use, unitsLine, create, hs1]);
+    await p.fill('[data-sl-name="0"]', 'Fairview store');
+    await p.click('#sl-create'); await p.waitForSelector('#sl-plan'); await p.waitForTimeout(300);
+    var top = await text(p, '#sl-body .card.hero');
+    var ticks = await p.$$eval('#sl-body .sl-site', function (r) { return r.map(function (x) { return x.querySelector('b').textContent + ':' + (x.querySelector('[data-sl-pick]').checked ? 'on' : 'off') + ':' + x.querySelector('[data-sl-n]').value; }); });
+    var total = await text(p, '#sl-total'), s1 = await sb();
+    ok('  Create makes the five on the account in one go; Send has the order chosen and the list\'s sites ticked with its count', /^5 sites created\. Now send the order’s units to them\./.test(top) && riversideSites(s1).join('|') === 'Riverside yard|Fairview store|' + LIST_NAMES.slice(1).join('|') && ticks.join('|') === 'Fairview store:on:|Springfield, IL:on:2|Riverton, WY:on:|Store 12:on:|Portland, ME:on:|Riverside yard:off:' && /^5 sites · 3 of the 3 units that can be sent$/.test(total), [top, riversideSites(s1), ticks, total]);
+    await p.click('#sl-plan'); await p.waitForSelector('#sl-planbox');
+    var plan = await p.$$eval('[data-sl-plan]', function (r) { return r.map(function (x) { var m = /^(.*) · (\d+) units?$/.exec(x.querySelector('summary').textContent) || []; var s = x.querySelector('.sl-serials'); return m[1] + ':' + m[2] + ':' + (s ? s.textContent.split(', ').join(' ') : ''); }); });
+    var apply = await text(p, '#sl-apply');
+    ok('  Preview folds the serials per site, lowest first', plan.join(' / ') === LIST_SPREAD.join(' / ') && apply === 'Send 3 units to 2 sites', [plan, apply]);
+    await p.click('#sl-apply'); await p.waitForSelector('#sl-donebox'); await p.waitForTimeout(300);
+    var done = await text(p, '#sl-donebox .card.hero .h b') + ' · ' + await text(p, '#sl-donebox .card.hero .m'), got = await download(p, '#sl-csv'), s2 = await sb();
+    ok('  Send records each unit going to its site in the sandbox\'s own sample; the CSV is one row per unit with its site\'s address', done === '3 units of CC-26-4419 going to 2 sites · 3 changed just now' && same(plannedOf(s2), LIST_PLANNED) && destEvents(s2) === 3 && got.name === 'sites-CC-26-4419.csv' && got.csv.bom && JSON.stringify(got.csv.rows) === JSON.stringify(LIST_CSV), [done, plannedOf(s2), destEvents(s2), got.name, got.csv.rows]);
+    await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(800); await p.click('[data-tab="fleet"]'); await p.waitForTimeout(700);
+    var fleet = await p.$$eval('#sites-body small', function (r) { return r.filter(function (s) { return /going here/.test(s.textContent); }).map(function (s) { return s.parentNode.querySelector('b').textContent + ':' + s.textContent; }); });
+    await p.click('[data-go="sitelist"]'); await p.waitForSelector('#sl-text');
+    await p.fill('#sl-text', SITE_LIST); await p.click('#sl-preview'); await p.waitForSelector('[data-sl-row]');
+    var kv2 = await texts(p, '#sl-body .kv div');
+    await p.click('#sl-body button.big[data-sl-go="send"]'); await p.waitForSelector('#sl-plan');
+    await p.click('#sl-plan'); await p.waitForSelector('#sl-planbox');
+    var again = await text(p, '#sl-planbox'), apply2 = await p.$$eval('#sl-apply', function (r) { return r.length; }), s3 = await sb();
+    ok('  after a reload Fleet counts the units going to each site; the same list again creates nothing and changes nothing', fleet.join('|') === 'Fairview store:1 unit going here|Springfield, IL:2 units going here' && kv2.join('|') === 'New1|Already yours5|To fix0|Lines read6' && /Nothing to change/.test(again) && apply2 === 0 && riversideSites(s3).length === 6 && destEvents(s3) === 3, [fleet, kv2, again.slice(0, 160), apply2, riversideSites(s3).length, destEvents(s3)]);
+    ok('  no browser box opens anywhere in the flow', dialogs.length === 0, dialogs);
+    return { sites: riversideSites(s3).length, planned: Object.keys(plannedOf(s3)).length, csv: got.csv.rows.length - 1 };
+  }, { phone: true });
   /* The installed iPhone app (navigator.standalone) signs in through its
      own host. Until Google accepts that host's /__/auth/handler
      (api/auth-check), a tap on Google must not strand the person on

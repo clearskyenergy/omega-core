@@ -2222,6 +2222,11 @@ service cloud.firestore {
        would then reset it. Stated, like the two lines above. */
     match /omega_orgs/{orgId}/crm_followups/{followId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/crm_upload_usage/{usageId} { allow read, write: if false; }
+    /* A pasted site list's daily map-lookup allowance, per customer account,
+       for all customers and for the office (api/_lib/site-geo.js), counted
+       by the endpoints in a transaction. A browser that could write it would
+       reset its own allowance. Stated, like the lines above. */
+    match /omega_orgs/{orgId}/geocode_usage/{usageId} { allow read, write: if false; }
 
     /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
        From docs/firestore.rules.plant.addendum, applied 2026-09-20 and
