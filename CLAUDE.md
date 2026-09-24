@@ -374,6 +374,14 @@ is not built.
   manifest. The customer app loads NO `omega-tenant.js`, like the portal
   and for the same reason. The apps add no endpoint of their own: pricing,
   acceptance, shipment and wires stay on the desktop.
+- **Logic HQ (`clearsky/app`) is ClearSky's fourth phone app**, across
+  every workspace: subscribers, the estate's orders, every floor and its
+  holds, and a door into each subscriber's own apps. Same shell pattern,
+  its own scope and a static OMEGA manifest (it is ours; no tenant mark).
+  It adds NO endpoint and no write: it reads `logic-admin` and `logic-kit`
+  (owner), `logic-summary` (staff) and `logic-office` (owner reads any org),
+  each of which refuses on its own. Not in `api/_lib/kit.js` — that list is
+  what a subscriber is given. Render check: `clearsky-hq` in `check:pages`.
 - **The sandboxes are a build output.** `app-sandbox/` is the four pages
   (three apps and the bench) with `sandbox.js` in place of Firebase and
   `/api/`: `scripts/_lib/logic-fixtures.js` (ONE sample tenant; also what

@@ -418,6 +418,38 @@ A customer login that has no company account yet is told to open Account
 first (the record is created on first sign-in) or to ask the supplier to
 assign the email to the company.
 
+### Logic HQ — ClearSky's phone app (`/clearsky/app`)
+
+The three apps above each look at ONE workspace. Logic HQ is ClearSky's
+own and looks at all of them. Open `silmarillion.clearskyomega.com/clearsky/app`
+on the phone, sign in with the ClearSky owner Google account, then Share →
+Add to Home Screen (iPhone) or Install app (Android). It wears the OMEGA
+icon, never a tenant's. Five tabs:
+
+- **Today** — subscribers and how many have Logic live, the newest orders
+  across the estate, units on every floor, units held, what has been
+  recorded as collected; *Needs ClearSky*: accounts pending approval,
+  suspended or near the end of a trial, orders with a payment exception or a
+  cancel request, and every held serial with its station and NCR; a line
+  per subscriber; where the orders are, by milestone.
+- **Accounts** — every Logic subscriber (or *Every tenant*), filterable and
+  searchable. Open one for its plan, workspace counts, the office view (to
+  price, deposits, build, ship, open customer requests, invoiced and
+  outstanding), a door into ITS office, plant and customer apps and each
+  desktop page, members, hosts, the admin audit trail and the kit sends.
+- **Orders** — the newest 120 orders in the estate, by workspace; open one
+  for its milestone, lines, money, floor by station and shipment.
+- **Floor** — every plant together, by station, and every held unit.
+- **Links** — the ClearSky desktop pages, the sandboxes and the guides.
+
+It reads only: `/api/logic-admin` and `/api/logic-kit` (owner only),
+`/api/logic-summary` (ClearSky staff) and `/api/logic-office` (which lets
+the owner read any workspace). Each refuses on its own; anybody else who
+signs in sees the refusal. Every write — commissioning, billing, status,
+pricing, acceptance, shipping — stays on the desktop, and the app links
+there. Opening a workspace's app from an account points that app at that
+workspace on the phone, the same as its own link would.
+
 ## 6. Build notes — what landed in this pass, and what did not
 
 Built on `claude/white-label-cleancell-usa-st5trq` after PR #45 (commits

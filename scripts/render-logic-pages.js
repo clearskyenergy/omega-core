@@ -55,6 +55,15 @@ var srv = http.createServer(function (req, res) {
   if (u === '/api/logic-kit' && req.method === 'POST') return posted(function (b) { KIT_SENDS.unshift({ id: 'k' + KIT_SENDS.length, orgId: b.org, audience: b.audience, to: b.to, channel: b.channel || 'email', note: b.note || '', by: 'tom@clearsky-usa.com', at: new Date().toISOString() }); return { ok: true }; });
   if (u.indexOf('/api/logic-kit') === 0) { var Kit = require('../api/_lib/kit'); if (!/org=/.test(q)) return json({ owner: true, subscribers: [{ id: 'cleancell.us', name: 'Clean Cell', status: 'active', domains: [] }], guides: Kit.GUIDES, items: Kit.ITEMS }); var kit = Kit.forOrg('cleancell.us', { name: 'Clean Cell' }); return json({ owner: true, org: 'cleancell.us', name: 'Clean Cell', status: 'active', brand: F.brand, kit: kit, messages: { plant: Kit.message(kit, 'plant'), office: Kit.message(kit, 'office'), customer: Kit.message(kit, 'customer') }, sends: KIT_SENDS }); }
   if (u.indexOf('/api/customer-design') === 0) return json(V.designJson());
+  /* Logic HQ (clearsky/app.html): the owner's subscriber list and one record
+     through the real summary builder, and the estate through the real
+     roll-up over the sample orders and their floor. */
+  if (u.indexOf('/api/logic-admin') === 0) { var LA = require('../api/_lib/logic-admin'), bill = { tier: 'pro', addons: ['omega-logic'], toolAccess: ['editor', 'gridatlas'] }, org = Object.assign({}, TENANT, { status: 'active', omegaLogic: true }), sm = LA.summary('cleancell.us', org, bill), pend = LA.summary('pending.example', { name: 'Pending OEM', status: 'pending', vertical: 'oem' }, {});
+    if (!/org=/.test(q)) return json({ owner: true, subscribers: [sm, pend], total: 2 });
+    return json({ owner: true, orgId: 'cleancell.us', summary: sm, org: org, billing: bill, members: [{ uid: 'u1', email: 'demo@cleancell.us', name: 'Demo', role: 'owner', status: 'active' }], hosts: [], audit: [{ action: 'commission', by: 'tom@clearsky-usa.com', at: '2026-09-01T10:00:00Z' }],
+      counts: { orders: 3, customers: 2, reps: 1, workOrders: 1, units: 6, stations: 3 }, links: { office: '/omega-logic?org=cleancell.us', settings: '/logic-settings.html?org=cleancell.us', catalog: '/logic-catalog.html?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us' } }); }
+  if (u.indexOf('/api/logic-summary') === 0) { var orders = STATE.orders.map(function (o) { return Object.assign({ _id: o.id, orgId: 'cleancell.us', orgName: 'Clean Cell' }, o); });
+    return json(require('../api/_lib/logic').rollup(orders, orders.map(function (o) { return o.id === 'o1' ? { units: STATE.units.map(function (x) { return { serial: x.serial, at: x.at, hold: x.hold || null }; }), known: true, released: true } : { units: [], known: true, released: false }; }), new Date().toISOString())); }
   if (u.indexOf('/api/app-manifest') === 0) return json(V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT));
   if (u === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.CLEARSKY_CONFIG={firebase:{}};'); }
   if (u === '/omega-brand.js' || u === '/omega-tenant.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('/* stub */'); }
@@ -277,6 +286,28 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var moves = await p.$$eval('#su-body [data-move]', function (r) { return r.map(function (x) { return x.getAttribute('data-move'); }); });
     ok('  the Sites tab mirrors the desktop: the customer says, receive a load, unit passport, sites, and a unit opens with only the moves that apply', /^The customer says/.test(h2s[0]) && h2s.some(function (t) { return /Receive a load/.test(t); }) && h2s.some(function (t) { return /Unit passport/.test(t); }) && h2s.some(function (t) { return /^Sites · 1/.test(t); }) && loadOpts.some(function (t) { return /LOAD-1 · 1 unit/.test(t); }) && /in transit/.test(su) && /going to|no site assigned/.test(su) && moves.join('|') === 'receive', [h2s, loadOpts, su.slice(0, 200), moves]);
     return { tabs: tabs.length, cards: cards, companies: companies, preview: preview, assign: assign };
+  });
+  await check('clearsky-hq', '/clearsky/app', async function (p) {
+    await p.waitForTimeout(600);
+    var tabs = await p.$$eval('#nav button', function (r) { return r.map(function (x) { return x.textContent.trim().replace(/^[^A-Za-z]+/, ''); }); });
+    var kv = await p.$$eval('#view .kv div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
+    var needs = await p.$$eval('#view .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 90); }); });
+    ok('Logic HQ: five tabs, and Today counts subscribers, orders and the held unit', tabs.join('|') === 'Today|Accounts|Orders|Floor|Links' && kv.some(function (t) { return /Subscribers\s*2/.test(t); }) && kv.some(function (t) { return /Units held\s*1/.test(t); }), [tabs, kv]);
+    ok('  needs ClearSky: the pending account and the held serial', needs.some(function (t) { return /Pending OEM.*pending approval/.test(t); }) && needs.some(function (t) { return /CC418-26-44194.*held/.test(t); }), needs);
+    await p.click('[data-tab="accounts"]'); await p.waitForTimeout(300);
+    var cards = await p.$$eval('#view .card', function (r) { return r.length; });
+    await p.click('[data-acc="cleancell.us"]'); await p.waitForTimeout(600);
+    var acc = await p.$eval('#view', function (e) { return e.textContent.replace(/\s+/g, ' '); });
+    var apps = await p.$$eval('#view a.unit', function (r) { return r.map(function (x) { return x.getAttribute('href'); }); });
+    ok('  an account opens with its plan, the office counts and a door into each of its apps', cards === 2 && /Tier\s*pro/.test(acc) && /To price\s*1/.test(acc) && apps.some(function (h) { return /\/office\/app\?org=cleancell\.us/.test(h); }) && apps.some(function (h) { return /\/plant\/app\?org=cleancell\.us/.test(h); }), [cards, acc.slice(0, 200), apps]);
+    await p.click('[data-tab="orders"]'); await p.waitForTimeout(300);
+    var orders = await p.$$eval('#view .card', function (r) { return r.length; });
+    await p.click('#view .card'); await p.waitForTimeout(300);
+    var h1 = await p.$eval('#view h1', function (e) { return e.textContent; });
+    await p.click('[data-tab="floor"]'); await p.waitForTimeout(300);
+    var held = await p.$$eval('#view .pill.bad', function (r) { return r.length; });
+    ok('  orders across the estate open one by one; the floor lists the hold', orders === 3 && /CC-26-/.test(h1) && held >= 1, [orders, h1, held]);
+    return { tabs: tabs.length, accounts: cards, orders: orders };
   });
   await check('custody', '/logic-custody.html?org=cleancell.us', async function (p) {
     await p.waitForTimeout(700);
