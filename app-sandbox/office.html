@@ -115,11 +115,11 @@
   <button data-tab="sites"><span>◎</span>Sites</button>
   <button data-tab="menu"><span>⋮⋮</span>Menu</button>
 </nav>
-<script>window.OMEGA_NO_HUB_ROUTE = true; /* Omega Logic resolves its own workspace (omega-logic-signin.js) */</script><script src="/app-sandbox/sandbox.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-logic-signin.js"></script>
+<script>window.OMEGA_NO_HUB_ROUTE = true; /* Omega Logic resolves its own workspace (omega-logic-signin.js) */</script><script src="/app-sandbox/sandbox.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-auth-errors.js"></script><script src="/omega-logic-signin.js"></script>
 <script>
 (function () {
   'use strict';
-  var cfg = window.CLEARSKY_CONFIG || {}; if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg);
+  var cfg = window.CLEARSKY_CONFIG || {}; if (!firebase.apps.length) firebase.initializeApp(window.OmegaLogicSignIn ? OmegaLogicSignIn.config(cfg.firebase || cfg) : (cfg.firebase || cfg));
   var auth = firebase.auth(), params = new URLSearchParams(location.search);
   function $(id) { return document.getElementById(id); }
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -600,7 +600,9 @@
   /* ── shell ────────────────────────────────────────────────────────────── */
   Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; PICK = null; CUST = null; SERIAL = null; closeCam(); if (DATA) draw(); else loadAll(); window.scrollTo(0, 0); }; });
   document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; PICK = null; CUST = null; draw(); window.scrollTo(0, 0); };
-  $('refresh').onclick = function () { PICK = null; CUST = null; CUSTODY = null; LOADS = null; loadAll(); };
+  /* ↻ on the sign-in, picker or dead end asks Omega Logic again; it never
+     loads an empty company */
+  $('refresh').onclick = function () { if (!$('gate').hidden) { if (auth.currentUser) { WS = null; front(); } return; } PICK = null; CUST = null; CUSTODY = null; LOADS = null; loadAll(); };
   /* signing out forgets the company too: the next person on this phone
      signs in to Omega Logic and lands in their own */
   function signOut() { setOrg(''); WS = null; auth.signOut().then(function () { location.replace(location.pathname); }); }
