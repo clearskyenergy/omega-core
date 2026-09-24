@@ -381,7 +381,11 @@ function econ(kW, kWhUsable, annSav, lossCost, curve){
      second time. */
   var replCost = name*replPerKwh;
 
-  var cf = [-net], i, npv = -net, cum = -net, payback = Infinity, yr1 = 0;
+  /* The year-by-year strip behind the NPV, returned as it is computed so a
+     caller that prices this system elsewhere (the pro forma's BESS revenue)
+     books the same savings, fade and replacements the size was chosen on,
+     instead of re-deriving them and drifting. */
+  var cf = [-net], i, npv = -net, cum = -net, payback = Infinity, yr1 = 0, schedule = [];
   var age = 1, replacements = 0, firstRepl = null, replTotal = 0;
   for(i=1;i<=term;i++){
     var e = Math.pow(1+esc, i-1);
@@ -393,8 +397,11 @@ function econ(kW, kWhUsable, annSav, lossCost, curve){
       if(firstRepl === null) firstRepl = i;
       age = 1; soh = 1;
     }
-    var sav = annSav*savingsRatio(curve, soh)*e;
+    var ratio = savingsRatio(curve, soh);
+    var sav = annSav*ratio*e;
     var c = sav - lossCost*e - om*e - replThisYear;
+    schedule.push({ year:i, soh:soh, ratio:ratio, savings:sav, loss:lossCost*e, om:om*e,
+                    replacement:replThisYear });
     if(i === 1) yr1 = c;
     cf.push(c);
     npv += c/Math.pow(1+disc, i);
@@ -414,7 +421,8 @@ function econ(kW, kWhUsable, annSav, lossCost, curve){
     incGross:incGross, incNet:incNet,
     annSav:annSav, lossCost:lossCost, yr1:yr1,
     payback: payback, npv:npv, irr:r,
-    roi: net>0 ? (yr1/net*100) : 0
+    roi: net>0 ? (yr1/net*100) : 0,
+    schedule: schedule
   };
 }
 function runInterval(){
@@ -833,6 +841,11 @@ function energyNeeded(m, T){
  RESULT.underwriting=underwriting(RESULT,b,RESULT.rec);
  RESULT.shortPeriod=RESULT.nMon<12?shortPeriodCallout(RESULT,b):'';
  RESULT.durationProbe=probeDurations()||null;
+ /* Only the pick needs its schedule. Every other sweep row, and the
+    duration probe, drops it here, or the sizer's response would grow by a
+    term-long strip for each of the hundred-odd candidates it never shows. */
+ RESULT.sweep.forEach(function(s){ if(s!==RESULT.best) delete s.schedule; });
+ if(RESULT.durationProbe) delete RESULT.durationProbe.schedule;
  RESULT.costRows=RESULT.months.map(function(m,i){return {before:RESULT.mode==='interval'?RESULT.baseBilled[i]*nv('dRate',18.5):demandCost(RESULT.baseBilled[i],m),after:RESULT.mode==='interval'?b.billed[i]*nv('dRate',18.5):demandCost(b.billed[i],m)};});
 
  if(RESULT.mode==='interval'){
@@ -850,3 +863,7 @@ function energyNeeded(m, T){
  }
  return RESULT;
 };
+/* The request contract ships with the engine it protects: every door that
+   hands this function a request (api/bess-size.js, the pro forma's
+   proforma-sizing.js) refuses bad input with the same rules. */
+module.exports.validate = require('./bess-size-validate');

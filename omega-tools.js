@@ -89,8 +89,8 @@
       icon:'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v4M12 16h.01' },
 
     { key:'proforma', name:'BESS Pro Forma', category:'finance',
-      desc:'IRR, NPV, value stack & incentives in 8 steps.',
-      file:'/proforma.html', tier:TIER.STANDARD, savesData:true,
+      desc:'Investor pro forma & branded deck, sized by the OMEGA engine.',
+      file:'/proforma.html', tier:TIER.STANDARD, savesData:true, version:'2.0.0',
       icon:'M18 20V10M12 20V4M6 20v-6' },
 
     { key:'dcfc', name:'DCFC BESS Pro Forma', category:'finance',
