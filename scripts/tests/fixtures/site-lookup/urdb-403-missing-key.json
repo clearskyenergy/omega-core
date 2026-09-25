@@ -1,0 +1,6 @@
+{
+ "_captured": "2026-09-24, live: no api_key",
+ "status": 403,
+ "headers": {"content-type":"application/json"},
+ "body": {"error":{"code":"API_KEY_MISSING","message":"No api_key was supplied. Get one at https://api.openei.org:443"}}
+}

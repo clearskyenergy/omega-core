@@ -1,0 +1,6 @@
+{
+ "_captured": "Shape from SPEC.md section 1 (a transient 502 seen live 2026-09-24 after 11 s; body elided there). Not a raw capture.",
+ "status": 502,
+ "headers": {"content-type":"application/json"},
+ "body": {"errors":["Service temporarily unavailable"],"status":"502"}
+}

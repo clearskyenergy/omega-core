@@ -1,0 +1,6 @@
+{
+ "_captured": "2026-09-24, live: X-Api-Key: DEMO_KEY after the 10-request allowance",
+ "status": 429,
+ "headers": {"content-type":"application/json","retry-after":"10753","x-ratelimit-limit":"10","x-ratelimit-remaining":"0"},
+ "body": {"error":{"code":"OVER_RATE_LIMIT","message":"You have exceeded your rate limit. Try again later or contact us for assistance: https://developer.nrel.gov/contact/"}}
+}

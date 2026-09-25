@@ -163,7 +163,8 @@ on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to
    with Approve/Reject buttons calling `/api/tenant-approve`; tier/addon
    editors, subscription-due, Stripe create.
 9. **Move pricing/scoring logic server-side** per CLAUDE.md IP section:
-   ev-cost-workbook unit-rate bands, valuestack dispatch, proforma math.
+   ev-cost-workbook unit-rate bands, valuestack dispatch. (Proforma math:
+   done 2026-09-24 — `api/_lib/proforma-engine.js`, see the entry below.)
 10. **Consolidate the orgAlias map** into one exported constant imported by
     the four clients (rules stay hand-mirrored).
 11. **White-label `editor.html`.** ⚠ It now has an ACCESS GATE
@@ -2090,3 +2091,49 @@ Zero-rate demand periods no longer emit a `$0.00` line. That was not
 cosmetic: a caller reading the first demand line got the period that never
 moves, so a battery shaving the window that *is* billed looked like it
 achieved nothing.
+
+---
+
+## BESS Pro Forma: the investor model moves to the server, and the deck (2026-09-24)
+
+The old `proforma.html` was NextNRG's legacy EV-charging calculator copied into
+core: every figure computed in the browser, no income tax, the ITC and a lump
+of MACRS subtracted from capex at year zero, degradation computed and never
+applied, a fixed 10-year horizon, "NextNRG" and "Miami Beach" in a core file,
+and a Monday.com field. It is replaced, not patched. `docs/PROFORMA.md` is the
+method, the checks and the not-built list.
+
+**Moved to `/api/` (CLAUDE.md IP rule):** ITC basis and the §48E rate build,
+MACRS and bonus, state and federal tax, debt sizing, IRR/NPV/payback,
+levelized price, LCOE — `api/_lib/proforma-engine.js` behind
+`POST /api/proforma` (`context | size | model | site`). The page renders what
+the API returns; `proforma-logic.js` only lays out the deck.
+
+**Why SAM's method.** The three investor one-pagers the deck is modelled on
+were built in NREL SAM (single owner, 2025.4.16 defaults), identified from the
+reserve arithmetic and the 90/97% basis split. Topanga and Sunnyside reproduce
+to the dollar on ITC, basis and year-1 distribution and on IRR and IRR build;
+the test asserts it. A financing team comparing our deck with a SAM run sees
+the same numbers.
+
+**Sizing is the unified engine.** The battery is sized by
+`battery-tool-engine.js` (merged in the same release; see "Battery sizing: one
+engine"). `econ()` now also returns the year-by-year schedule it already
+computed — savings re-solved at each state of health, replacements — and the
+sweep rows drop it so `/api/bess-size` responses did not grow (byte-identical
+before and after, 49 requests compared). The request validation that lived
+inline in `api/bess-size.js` is now `api/_lib/bess-size-validate.js`, shared by
+both endpoints.
+
+**Energy-community lookups do not use DOE's map.** The NETL ArcGIS layers still
+carry the 2024 list (wrong for 314 counties and 152 coal tracts against Notice
+2026-39). The lookup reads Treasury's own tables, bundled under
+`api/_lib/data/` and rebuilt each June by `scripts/build-energy-communities.js`.
+
+**Branding** is the producing tenant's `omega_orgs` record; nothing defaults to
+a tenant. `tenants/nextnrg/tenant.json` gained the colours and tagline its
+decks use, which reach Firestore the next time the seed runs.
+
+**The marketplace card** reads `tools/proforma` from Firestore; its new
+description and version 2.0.0 appear after "Import / Update Applications".
+

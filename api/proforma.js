@@ -9,6 +9,9 @@
                                           bridge to the ONE sizing engine
    POST { action:'model', inputs:{…} }  → _lib/proforma-engine.js, the
                                           SAM single-owner cash flow
+   POST { action:'site', address:{…} }  → _lib/site-lookup.js: state tax,
+                                          energy community, low income,
+                                          PVWatts and URDB for one address
 
    WHY IT IS ONE ENDPOINT. The investor math is the thing being protected
    (CLAUDE.md, "where logic lives"): proforma.html collects inputs and
@@ -41,10 +44,11 @@ var auth = require('./_lib/verify-token');
 var WL = require('./_lib/whitelabel');
 var engine = require('./_lib/proforma-engine');
 var sizing = require('./_lib/proforma-sizing');
+var site = require('./_lib/site-lookup');
 
 var TOOL_KEY = 'proforma';
 var SIZING_ENGINE = 'battery-tool-engine';
-var ACTIONS = ['context', 'size', 'model'];
+var ACTIONS = ['context', 'size', 'model', 'site'];
 /* Every paid plan, and the trial. An unrecognised tier is a data-entry
    mistake on billing/current, and a mistake must not hand out a tool. */
 var TIERS = ['trial', 'standard', 'pro', 'deluxe', 'enterprise', 'partner', 'internal'];
@@ -230,6 +234,21 @@ module.exports = function (req, res) {
           field: (sized && sized.field) || null });
       }
       return res.status(200).json({ ok: true, sizing: sized });
+    }
+
+    /* Public-data facts for one address. Behind the same gate because it
+       spends the platform's API quota; each source fails into its own
+       errors entry, so only a request that cannot be looked up is a 400.
+       The body may carry the user's own API keys: it is never logged. */
+    if (action === 'site') {
+      return site.lookup(body).then(function (found) {
+        if (!found || found.ok === false) {
+          return res.status(400).json({ ok: false,
+            error: (found && found.error) || 'Send the site address.',
+            field: (found && found.field) || 'address' });
+        }
+        return res.status(200).json(found);
+      });
     }
 
     /* The engine collects every input error in one pass, so the page can
