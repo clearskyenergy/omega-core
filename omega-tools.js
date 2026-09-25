@@ -500,6 +500,19 @@
       orgs:['clearsky-usa.com','csebuilders.com'],
       icon:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h3l-1 3h3M16 13v6' },
 
+    /* ── L2 PROJECT CLOSEOUT ──
+       The sibling of the cost workbook: the workbook gets a Level 2 job
+       approved, this gets it paid. Eversource (MA, CT) and National Grid
+       (MA, NY, RI) completion packages — invoices, proof of payment,
+       inspection, EVSE serials, network activation, photos, sign-off —
+       exported as one ZIP. Customer-facing, so no orgs restriction.
+       No savesData: closeouts are kept in the user's browser and exported
+       as a file; nothing is written to Firestore. */
+    { key:'evcloseout', name:'L2 Project Closeout', category:'operations',
+      desc:'Level 2 EV charging closeout for Eversource and National Grid make-ready: checklist, EVSE serials, final cost vs incentive, ZIP package.',
+      file:'/ev-closeout.html', badge:'new', tier:TIER.ALL,
+      icon:'M9 11l3 3L22 4M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8' },
+
     /* ── A NOTE ON THE TWO INTAKE ENTRIES ──
        'intake' is the customer-facing form: every tenant sees it.
        'intake_admin' is the staff queue: restricted by orgs:[] above.

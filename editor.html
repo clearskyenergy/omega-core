@@ -72169,6 +72169,9 @@ function _renderEstimate(host){
     +   (window._elecWorkbookHost()
           ? '<button onclick="window._elecOpenWorkbook()" title="Build the utility program form and the customer proposal from this estimate" style="padding:10px 16px;background:rgba(197,165,90,.16);border:1px solid rgba(197,165,90,.42);color:#C5A55A;font-weight:700;font-size:12px;border-radius:7px;cursor:pointer;font-family:inherit">EV Cost Workbook</button>'
           : '')
+    +   (window._elecWorkbookHost()
+          ? '<button onclick="window._elecOpenCloseout()" title="Level 2 project closeout package for Eversource / National Grid" style="padding:10px 16px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#E8F0FE;font-weight:600;font-size:12px;border-radius:7px;cursor:pointer;font-family:inherit">L2 Closeout</button>'
+          : '')
     + '</div>'
     + '<div style="padding:0 20px 14px;font-size:8.5px;color:#6B8299;line-height:1.5">Labor units are NECA-style crew-hours (normal conditions); material prices are indicative and trued up at order time in the marketplace portal (Rexel / City Electric Supply). Edit any knob to reprice live. Estimates are indicative only — verify field conditions and utility requirements.</div>'
     + '</div>';
@@ -72755,6 +72758,21 @@ window._elecOpenWorkbook = function(){
     showBanner('cal', payloads.length>1
       ? ('Sending '+payloads.length+' site maps to the EV Cost Workbook…')
       : 'Sending the estimate to the EV Cost Workbook…');
+};
+
+/* HANDOFF -> L2 PROJECT CLOSEOUT (ev-closeout.html, same origin).
+   The same _evPackSite() payload the cost workbook takes, for the current
+   site map only, through localStorage: the closeout reads it on open or on
+   its "From editor" button. The estimate becomes the Estimate column and
+   the charger fleet becomes the EVSE register. */
+window._elecOpenCloseout = function(){
+  var p = null;
+  try{ p = _evPackSite(((typeof _docTabs!=='undefined' && _docTabs[_activeDocTab])||{}).name||''); }catch(e){ p=null; }
+  if(!p){ alert('Build the estimate first.'); return; }
+  try{ localStorage.setItem('OMEGA_EV_CLOSEOUT_HANDOFF', JSON.stringify(p)); }
+  catch(e){ alert('Could not hand the estimate over: '+e.message); return; }
+  var w = window.open(location.origin + '/ev-closeout.html', '_blank');
+  if(!w){ alert('Allow pop-ups to open the closeout tool.'); return; }
 };
 
 /* ---- expose entry point ---- */
