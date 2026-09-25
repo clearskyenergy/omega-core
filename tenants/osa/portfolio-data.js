@@ -1198,11 +1198,40 @@
      the RANGE PRESENT IN THE PORTFOLIO rather than a fixed 0-100, because a
      book where every grid score sits between 40 and 60 would otherwise render
      as one column and tell you nothing about which of them is better. */
+  /* The axes, the grid size and the buyer's-market corner all come from
+     config.js `portfolio.matrix` unless the caller overrides them, because
+     that block says in its own comment that a different pair is changed
+     there and nowhere else. `buckets` is a band width in score points and
+     `buyersMarket` a score threshold, which is how they read for a fixed
+     0-100 grid; here they become the number of cells and the depth of the
+     top-right corner, so 10-point bands stay a 10 x 10 grid and "60+ on
+     both" stays the top four bands. */
+  function matrixCfgAxis(which) {
+    var c = (matrixCfg()[which] || {});
+    return { key: c.key || (which === 'x' ? 'grid' : 'viability'), label: c.label || '' };
+  }
+  /* The pickers have to offer the SAME names the axis labels print, or the
+     dropdown says "Grid score" while the grid it drives is captioned
+     "Grid · can it be built" and a reader reasonably assumes they are two
+     different measurements. One resolver, used by both. */
+  function matrixAxes() {
+    var cx = matrixCfgAxis('x'), cy = matrixCfgAxis('y');
+    return MATRIX_AXES.map(function (a) {
+      var label = (cx.label && a.key === cx.key) ? cx.label
+                : (cy.label && a.key === cy.key) ? cy.label : a.label;
+      return { key:a.key, label:label, hint:a.hint, get:a.get };
+    });
+  }
   function matrix(list, opts) {
     opts = opts || {};
-    var size = opts.size || 10;
-    var ax = matrixAxis(opts.x || 'grid');
-    var ay = matrixAxis(opts.y || 'viability');
+    var mc = matrixCfg();
+    var size = opts.size || (mc.buckets ? Math.round(100 / mc.buckets) : 10);
+    var cx = matrixCfgAxis('x'), cy = matrixCfgAxis('y');
+    var ax = matrixAxis(opts.x || cx.key), ay = matrixAxis(opts.y || cy.key);
+    /* The configured label wins only for the configured axis: pick a
+       different one in the dropdown and it must be named for what it is. */
+    if (cx.label && ax.key === cx.key) ax = { key:ax.key, label:cx.label, hint:ax.hint, get:ax.get };
+    if (cy.label && ay.key === cy.key) ay = { key:ay.key, label:cy.label, hint:ay.hint, get:ay.get };
 
     var live = counted(list).filter(function (d) { return !isExit(d.stage); });
     var placed = [], unscored = [];
@@ -1235,7 +1264,8 @@
     /* The buyer's market: the top-right block. Its size is a setting because
        "how much of the board counts as attractive" is a commercial judgement,
        not a fact. */
-    var band = opts.band || 3;
+    var band = opts.band
+      || (mc.buyersMarket != null ? Math.max(1, Math.round((100 - mc.buyersMarket) / (100 / size))) : 3);
     var hot = Object.keys(cells).filter(function (k) {
       return cells[k].x >= size - band && cells[k].y >= size - band;
     }).reduce(function (n, k) { return n + cells[k].deals.length; }, 0);
@@ -1414,59 +1444,26 @@
      partner-facing summary without any of them re-deriving it. */
   function matrixCfg() { return (cfg().portfolio || {}).matrix || {}; }
 
-  function scoreOn(deal, axisKey) {
-    if (axisKey === 'grid')      return deal.grid ? deal.grid.score : null;
-    if (axisKey === 'viability') return deal.viability ? deal.viability.score : null;
-    if (axisKey === 'size')      return deal.sizeMw;
-    if (axisKey === 'capex')     return deal.capexUsd;
-    return null;
-  }
+  /* ⚠ A SECOND matrix() AND A SECOND scoreOn() USED TO LIVE HERE, and being
+     declared after the real ones they won — every commit this file has ever
+     had carried both. So the matrix that shipped was this one: fixed 0-100
+     bands, no axis argument, its own return shape. Two consequences nobody
+     connected to a cause.
 
-  function matrix(list) {
-    var m = matrixCfg();
-    var band = m.buckets || 10;
-    var n = Math.round(100 / band);          /* 10 bands of 10 */
-    var xKey = (m.x || {}).key || 'grid';
-    var yKey = (m.y || {}).key || 'viability';
-    var bar = m.buyersMarket != null ? m.buyersMarket : 60;
+     One: the Across / Up pickers in portfolio.html were permanently EMPTY.
+     They are wired to a renderer that reads MATRIX_AXES, and that renderer
+     was shadowed too (see the note above renderMatrix there), so the two
+     dropdowns sat unlabelled above a grid that ignored them.
 
-    var cells = {}, unscored = [], placed = 0;
-    counted(list).forEach(function (d) {
-      if (isExit(d.stage)) return;
-      var x = scoreOn(d, xKey), y = scoreOn(d, yKey);
-      if (x == null || y == null) { unscored.push(d); return; }
-      /* Clamp to the last band so a 100 lands in the top cell rather than
-         falling off the edge into an index that does not exist. */
-      var xi = Math.min(n - 1, Math.floor(x / band));
-      var yi = Math.min(n - 1, Math.floor(y / band));
-      var k = xi + ':' + yi;
-      (cells[k] = cells[k] || { xi:xi, yi:yi, deals:[] }).deals.push(d);
-      placed++;
-    });
+     Two: on a real portfolio the grid was almost entirely blank. Scores
+     cluster — a book where every score sits between 58 and 82 lands in nine
+     of a hundred cells and reads as an empty board. That is the exact
+     failure the surviving matrix() normalises against the portfolio's own
+     range to avoid.
 
-    var out = [];
-    for (var yi = n - 1; yi >= 0; yi--) {        /* top row is the highest y */
-      var row = [];
-      for (var xi = 0; xi < n; xi++) {
-        var c = cells[xi + ':' + yi] || { xi:xi, yi:yi, deals:[] };
-        c.xLo = xi * band; c.xHi = xi * band + band - 1;
-        c.yLo = yi * band; c.yHi = yi * band + band - 1;
-        /* In the buyer's market when the whole band clears the bar, not just
-           its top edge \u2014 a cell spanning 55-64 is not "above 60". */
-        c.buyers = c.xLo >= bar && c.yLo >= bar;
-        c.heat = c.deals.length ? (c.xLo + c.yLo) / 2 : null;
-        row.push(c);
-      }
-      out.push(row);
-    }
-    return {
-      rows: out, unscored: unscored, placed: placed, band: band, bar: bar,
-      xLabel: (m.x || {}).label || 'Grid', yLabel: (m.y || {}).label || 'Bankable',
-      buyersCount: out.reduce(function (a, r) {
-        return a + r.reduce(function (b, c) {
-          return b + (c.buyers ? c.deals.length : 0); }, 0); }, 0)
-    };
-  }
+     Deleted rather than merged: the config block it read (portfolio.matrix)
+     is now read by the real one, so the axes are still decided in one place.
+     DO NOT reintroduce a second declaration of either name. */
 
   /* ── Project type ────────────────────────────────────────────────────────
      Setting the type also sets the technology categories it implies, so the
@@ -2469,7 +2466,25 @@
     var rows = [
       { name:'Cedar Rapids fleet depot', address:'Cedar Rapids, IA', state:'IA',
         clientOrgId:'concordenergyusa.com', stage:'construction',
+        projectType:'charging_bess',
+        siteNotes:'Regional parcel carrier converting 120 vans and 40 tractors. '
+          + 'Existing 2.5 MVA service on the north pad; the depot already owns the '
+          + 'adjoining lot, so the battery and the dispensers sit on land under control.',
+        energy:{ monthlyBillUsd:96400, annualKwh:11800000, meters:3, loadKw:6400,
+                 utilityAccount:'ALLIANT-88-214' },
         categories:['dcfc','bess'], sizeMw:8.4, sizeMwh:24, capexUsd:14200000,
+        projectId:'proj-demo-cedar',
+        design:{ status:'complete', lead:'design@sunesol.com', rounds:2,
+                 sentAt:d(268), returnedAt:d(240),
+                 brief:'Dispenser islands on the north pad, battery behind the wash bay.' },
+        grid:{ score:78, ranAt:d(300), source:'Grid Atlas',
+               substations:[{ name:'Prairie Creek 69 kV', km:1.1 }],
+               summary:'Substation 1.1 km, two 69 kV feeders on the parcel boundary.' },
+        permitting:{ startedAt:d(280), ahj:'Linn County', utility:'Alliant Energy',
+          applications:[{ id:'a1', kind:'Interconnection', status:'approved' },
+                        { id:'a2', kind:'Building', status:'filed' }] },
+        viability:{ score:82, threshold:65, verdict:'pass', model:'OSA v2',
+                    scoredBy:'ClearSky', scoredAt:d(300) },
         origination:{ partnerOrg:'voltcore-cells.com', partnerName:'VoltCore Cells',
           contactName:'Ana Beltran', referredAt:d(320), channel:'Manufacturer referral',
           agreementRef:'MSA-2024-11', feeBasis:'1.5% of closed capital', feeUsd:135000,
@@ -2512,7 +2527,24 @@
 
       { name:'El Paso compute campus', address:'El Paso, TX', state:'TX',
         clientOrgId:'iqgen.energy', stage:'marketplace',
+        projectType:'compute_gen',
+        siteNotes:'Load-led campus on 140 acres of ranch land. Power procurement is '
+          + 'the project: the tenant is signed subject to energisation and the '
+          + 'generation package is what the buyer is actually underwriting.',
+        energy:{ monthlyBillUsd:0, annualKwh:612000000, meters:1, loadKw:75000,
+                 utilityAccount:'' },
         categories:['compute','powergen'], sizeMw:75, capexUsd:340000000,
+        projectId:'proj-demo-elpaso',
+        design:{ status:'in_design', lead:'design@ogisolar.com', rounds:1,
+                 sentAt:d(35), dueAt:d(-9),
+                 brief:'Two 40 MW halls plus on-site generation; substation on the east line.' },
+        grid:{ score:64, ranAt:d(200), source:'Grid Atlas',
+               substations:[{ name:'Newman 115 kV', km:4.3 }],
+               summary:'Nearest substation 4.3 km; queue position is the long pole.' },
+        permitting:{ startedAt:d(190), ahj:'El Paso County', utility:'El Paso Electric',
+          applications:[{ id:'a1', kind:'Interconnection', status:'not_started' }] },
+        viability:{ score:71, threshold:65, verdict:'pass', model:'OSA v2',
+                    scoredBy:'OGI Solar', scoredAt:d(205) },
         origination:{ partnerOrg:'sundial-power.com', partnerName:'Sundial Power',
           contactName:'Marcus Hale', referredAt:d(210), channel:'Shareholder introduction',
           feeBasis:'0.5% of closed capital', locked:true, lockedAt:d(200) },
@@ -2530,7 +2562,13 @@
       { name:'Ulm C&I retrofit', address:'Ulm, DE', state:'DE',
         clientOrgId:'fenecon.com', stage:'dead',
         deadReason:'Interconnection cost or timeline', deadAt:d(30),
+        projectType:'bess',
+        siteNotes:'Peak-shaving retrofit behind an existing 1.6 MVA service. Killed on '
+          + 'the utility study: the reinforcement quote was larger than the asset.',
+        energy:{ monthlyBillUsd:21000, annualKwh:4100000, meters:1, loadKw:1600 },
         categories:['bess'], sizeMw:1.4, sizeMwh:2.8, capexUsd:2100000,
+        viability:{ score:58, threshold:65, verdict:'fail', model:'OSA v2',
+                    scoredBy:'ClearSky', scoredAt:d(240) },
         origination:{ partnerOrg:'voltcore-cells.com', partnerName:'VoltCore Cells',
           referredAt:d(260), channel:'Manufacturer referral', locked:true, lockedAt:d(250) },
         preDev:{ budgetUsd:60000, spentUsd:58000 },
@@ -2544,7 +2582,22 @@
 
       { name:'Bakersfield rooftop portfolio', address:'Bakersfield, CA', state:'CA',
         clientOrgId:'sunesol.com', stage:'funded',
+        projectType:'solar_bess',
+        siteNotes:'Nine packing-house roofs under one owner, financed as one portfolio. '
+          + 'Roofs were re-membraned in 2024, so the structural review is a formality '
+          + 'and every site shares a single interconnection agreement.',
+        energy:{ monthlyBillUsd:41200, annualKwh:5900000, meters:9, loadKw:2800 },
         categories:['solar','bess'], sizeMw:2.1, capexUsd:4400000,
+        projectId:'proj-demo-bakersfield',
+        design:{ status:'complete', lead:'design@sunesol.com', rounds:1,
+                 sentAt:d(160), returnedAt:d(140),
+                 brief:'Nine roofs, one single-line, shared point of interconnection.' },
+        grid:{ score:69, ranAt:d(180), source:'Grid Atlas',
+               substations:[{ name:'Rosedale 70 kV', km:2.4 }] },
+        permitting:{ startedAt:d(165), ahj:'Kern County', utility:'PG&E',
+          applications:[{ id:'a1', kind:'Interconnection', status:'approved' }] },
+        viability:{ score:76, threshold:65, verdict:'pass', model:'OSA v2',
+                    scoredBy:'SUN Energy Solutions', scoredAt:d(175) },
         origination:{ partnerOrg:'sundial-power.com', partnerName:'Sundial Power',
           referredAt:d(190), channel:'Shareholder introduction', feeUsd:38000, locked:true },
         preDev:{ budgetUsd:90000, spentUsd:87500 },
@@ -2564,8 +2617,12 @@
           { at:d(70), to:'verified' }, { at:d(110), to:'marketplace' },
           { at:d(60), to:'committed' }, { at:d(25), to:'funded' } ] },
 
+      /* Deliberately thin. A sample portfolio where every project is complete
+         teaches nobody what an incomplete one looks like, and the Buyer Folder
+         view exists precisely to say what is still missing. */
       { name:'Laredo substation-adjacent BESS', address:'Laredo, TX', state:'TX',
         clientOrgId:'', stage:'screening', categories:['bess'], sizeMw:20,
+        projectType:'bess',
         origination:{ partnerOrg:'', partnerName:'', referredAt:d(14), channel:'Inbound web' },
         preDev:{}, verification:{}, funding:{ draws:[] }, build:{},
         participants:[], bom:[],
@@ -2616,8 +2673,7 @@
     addLink:addLink, updateLink:updateLink, removeLink:removeLink, rename:rename,
     uploadDoc:uploadDoc, fmtBytes:fmtBytes, maxUploadMb:maxUploadMb,
     projectTypes:projectTypes, typeOf:typeOf, setProjectType:setProjectType,
-    matrix:matrix, scoreOn:scoreOn,
-    MATRIX_AXES:MATRIX_AXES, matrixAxis:matrixAxis, matrix:matrix,
+    MATRIX_AXES:MATRIX_AXES, matrixAxes:matrixAxes, matrixAxis:matrixAxis, matrix:matrix,
     nextStep:nextStep,
     savePrescreen:savePrescreen, financePartners:financePartners,
     financePartnerOf:financePartnerOf, applyFundingSchedule:applyFundingSchedule,

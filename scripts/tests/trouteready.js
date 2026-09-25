@@ -94,5 +94,45 @@ ok(page.indexOf('id="v-buyer"') >= 0, 'and the Buyer Folder view was added');
 ok(/label:'Matrix'/.test(page) && /label:'Buyer Folder'/.test(page),
    'the portfolio switcher gained Buyer Folder without losing Matrix');
 
+/* ── AGAINST THE SHAPE THE CONSOLE ACTUALLY PASSES ────────────────────────
+   Every case above hands readiness() a hand-written flat object, and that is
+   how the load bug survived being tested: the console does not pass flat
+   objects. portfolio.html calls closestToMarket(S.deals), and S.deals are
+   Portfolio.normalize()'d, which nests monthlyBillUsd / annualKwh / loadKw
+   under `energy`. Read flat, those were zero on every real deal, so scope
+   could never reach ready and its detail line read "No load or usage data"
+   however much the intake form had collected.
+
+   So this runs the REAL normaliser rather than a copy of what it is believed
+   to produce. A fixture that agrees with the model instead of with the
+   product tests nothing. */
+global.window.Portfolio = undefined;
+require(path.join(__dirname, '..', '..', 'tenants', 'osa', 'portfolio-data.js'));
+const Portfolio = global.window.Portfolio;
+ok(typeof Portfolio.normalize === 'function', 'the real portfolio normaliser loads');
+
+const normalised = Portfolio.normalize('d1', {
+  name: 'Hillside Bottling', address: '600 N Union Ave, Havre de Grace, MD',
+  siteNotes: 'Roof recently replaced; switchgear in the north bay and room behind the plant.',
+  projectType: 'bess', categories: ['bess'], sizeMw: 3,
+  energy: { loadKw: 480, annualKwh: 1120000, monthlyBillUsd: 18400 }
+});
+ok(normalised.energy.loadKw === 480, 'normalize() nests the load under energy, as the console sees it');
+ok(normalised.loadKw === undefined, 'and does NOT leave a flat copy behind');
+
+const real = R.readiness(normalised);
+ok(real.sets.find(s => s.key === 'scope').state === 'ready',
+   'scope reads ready on a normalised deal with a size and a load');
+ok(real.sets.find(s => s.key === 'scope').detail === 'Type, size and load recorded',
+   'and says so, instead of "No load or usage data"');
+
+/* A normalised deal with the energy block EMPTY is still honestly incomplete —
+   the fix must not make every deal look scoped. */
+const noLoad = R.readiness(Portfolio.normalize('d2', {
+  name: 'X', address: 'Y', projectType: 'bess', sizeMw: 3
+}));
+ok(noLoad.sets.find(s => s.key === 'scope').state === 'partial',
+   'a normalised deal with no usage data is still only partial on scope');
+
 if (fails) { console.log('trouteready: ' + fails + ' failed'); process.exit(1); }
 console.log('trouteready: all passed');

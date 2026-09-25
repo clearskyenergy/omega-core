@@ -93,11 +93,26 @@
 
   /* ── Scope ────────────────────────────────────────────────────────────────
      What is actually being built and how big. Evaluation's output. */
+  /* THE LOAD FIGURES LIVE UNDER `energy`, NOT AT THE TOP LEVEL. Portfolio's
+     normalize() nests monthlyBillUsd / annualKwh / meters / loadKw there, and
+     the console hands this module a NORMALISED deal. Reading them flat meant
+     `load` was zero on every real deal, so scope could never reach `ready` and
+     every project's detail line read "No load or usage data" no matter what
+     the intake form had collected. Both shapes are read now: `energy` first
+     because that is what the product passes, then flat, because a raw
+     Firestore document written before the block existed still carries them
+     there and a readiness model that only works on one shape is the bug
+     again. */
+  function loadOf(d) {
+    var e = g(d, 'energy', {}) || {};
+    return num(g(e, 'loadKw', 0)) || num(g(e, 'annualKwh', 0)) || num(g(e, 'monthlyBillUsd', 0))
+        || num(g(d, 'loadKw', 0)) || num(g(d, 'annualKwh', 0)) || num(g(d, 'monthlyBillUsd', 0));
+  }
   function scopeOf(d) {
     var type = String(g(d, 'projectType', '')).trim();
     var cats = (g(d, 'categories', []) || []).length;
     var size = num(g(d, 'sizeMw', 0)) || num(g(d, 'sizeMwh', 0));
-    var load = num(g(d, 'loadKw', 0)) || num(g(d, 'annualKwh', 0)) || num(g(d, 'monthlyBillUsd', 0));
+    var load = loadOf(d);
     var started = !!(type || cats || size || load);
     return { state: state(!!((type || cats) && size && load), started),
              detail: !started ? 'No project type, size or load'

@@ -460,35 +460,6 @@ select.ff-i{cursor:pointer}
 .prog{height:3px;background:#E9EDF1;border-radius:2px;margin-top:10px;overflow:hidden;display:none}
 .prog i{display:block;height:100%;background:var(--accent);width:0;transition:width .18s}
 
-/* ── The matrix ────────────────────────────────────────────────────────
-   A grid of squares, one axis per score, coloured by how strong the cell is.
-   Sized so the whole thing fits without scrolling — the point is seeing the
-   shape of the portfolio at once, and a matrix you have to scroll is a table
-   with extra steps. */
-.mx-wrap{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
-.mx-card{background:#fff;border:1px solid var(--line);border-radius:var(--r);
-  padding:18px 20px;box-shadow:var(--shadow)}
-.mx-grid{display:grid;gap:3px;position:relative}
-.mx-cell{aspect-ratio:1;border-radius:4px;background:#F2F5F7;border:1px solid transparent;
-  display:flex;align-items:center;justify-content:center;font:600 12px 'DM Mono',monospace;
-  color:#fff;cursor:default;position:relative;min-width:34px}
-.mx-cell.has{cursor:pointer}
-.mx-cell.has:hover{outline:2px solid var(--navy);outline-offset:1px;z-index:2}
-.mx-cell.empty{color:transparent}
-/* The buyer's market, drawn as a box around the top-right block rather than a
-   colour on each square — it is a region, and outlining it says that. */
-.mx-cell.buyers{box-shadow:inset 0 0 0 2px var(--bad)}
-.mx-ax{font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;
-  color:var(--ink-3)}
-.mx-yax{writing-mode:vertical-rl;transform:rotate(180deg);text-align:center;
-  padding:0 4px;white-space:nowrap}
-.mx-tick{font:500 9.5px 'DM Mono',monospace;color:var(--ink-3);text-align:center}
-.mx-legend{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:14px;
-  font-size:11.5px;color:var(--ink-2)}
-.mx-swatch{display:inline-block;width:12px;height:12px;border-radius:3px;
-  vertical-align:-2px;margin-right:5px}
-.mx-side{flex:1;min-width:260px;display:flex;flex-direction:column;gap:12px}
-
 /* ── Kanban ────────────────────────────────────────────────────────────
    Sized for reading, not for looking impressive. Eleven stages plus two exits
    will never fit on one screen, so the job is to make the scroll worth it:
@@ -497,7 +468,20 @@ select.ff-i{cursor:pointer}
 /* ── Matrix ────────────────────────────────────────────────────────────
    The tile wall from the sketch. Warm = attractive, which is the opposite of
    the usual traffic-light reading, so the legend says so explicitly rather
-   than trusting people to guess. */
+   than trusting people to guess.
+
+   A SECOND SET OF .mx-* RULES used to sit above this one, left behind with
+   the shadowed renderer it styled (.mx-tick, .mx-swatch, .mx-side, .mx-ax,
+   .mx-yax, .mx-cell.has/.empty/.buyers — none of them emitted by any code in
+   this file any more). Two .mx-cell rules is how you end up tuning a cell
+   size that the cascade then overrides; they are gone.
+
+   Its comment carried the one constraint worth keeping, so it is kept here:
+   the whole grid has to fit without scrolling. The point is seeing the shape
+   of the portfolio at once, and a matrix you have to scroll is a table with
+   extra steps. That is what max-width on .mx-grid is for — the cells are
+   square, so width IS height, and an unbounded grid on a wide screen becomes
+   a 1500px column of tiles. */
 .mx-bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
 .mx-bar label{font-size:11.5px;font-weight:600;color:var(--ink-2);display:flex;
   align-items:center;gap:6px}
@@ -507,7 +491,11 @@ select.ff-i{cursor:pointer}
 .mx-ylab{writing-mode:vertical-rl;transform:rotate(180deg);font-size:10.5px;
   font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-3);
   display:flex;align-items:center;justify-content:center;padding:2px 0}
-.mx-grid{display:grid;gap:3px;flex:1;min-width:0}
+/* Square cells mean width IS height, so the cap has to know how tall the
+   window is or the grid runs off the bottom of a laptop screen — which is
+   the scrolling the note above says this view must not need. */
+.mx-grid{display:grid;gap:3px;flex:1;min-width:0;
+  max-width:clamp(360px,calc(100vh - 400px),720px)}
 .mx-cell{aspect-ratio:1;border-radius:5px;background:#F4F6F8;border:1px solid #EDF0F3;
   position:relative;overflow:hidden}
 .mx-cell.hot{outline:2px solid var(--bad);outline-offset:-2px;z-index:1}
@@ -516,8 +504,12 @@ select.ff-i{cursor:pointer}
   padding:5px 6px;text-align:left;font:600 10px 'DM Sans',sans-serif;
   color:#3A2A12;line-height:1.15;overflow:hidden}
 .mx-tile:hover{outline:2px solid var(--navy);outline-offset:-2px;z-index:2}
-.mx-tile b{display:block;font-size:10.5px;font-weight:700;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+/* Three lines, not one ellipsised line. In a 70px square "Cedar Rapids fleet
+   depot" truncates to "Ced…", which identifies nothing — the tile exists to
+   be recognised without hovering. */
+.mx-tile b{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+  font-size:9.5px;font-weight:700;line-height:1.15;overflow:hidden;
+  white-space:normal;max-width:100%}
 .mx-tile .n{font-family:'DM Mono',monospace;font-size:9.5px;opacity:.75}
 .mx-more{position:absolute;top:2px;right:3px;font:700 9px 'DM Mono',monospace;
   background:rgba(0,0,0,.35);color:#fff;border-radius:3px;padding:0 3px}
@@ -763,7 +755,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
     <section class="view on" id="v-dash">
       <div class="ph"><h1 id="dash-h">Portfolio</h1>
         <p>Everything referred, wherever it got to. Dead and parked deals stay in every
-           denominator on this page \u2014 a partner who brought forty sites and funded one is
+           denominator on this page — a partner who brought forty sites and funded one is
            a different partner from one who brought one and funded one.</p></div>
       <div class="stats" id="dash-stats"></div>
       <div class="card">
@@ -771,7 +763,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
           <span class="sub" id="dash-fnsub"></span></div>
         <div class="card-b"><div class="funnel" id="dash-funnel"></div>
           <div class="fnote">Counts deals that <b>ever reached</b> each gate, not what is sitting
-            there now. A site that funded and then failed in construction still reached funded \u2014
+            there now. A site that funded and then failed in construction still reached funded —
             counting only current stage would make this curve improve every time something
             blew up.</div></div>
       </div>
@@ -1048,7 +1040,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
           <button class="btn-x" onclick="loadDesign(true)">Rescan</button></div>
         <div class="card-b" style="padding-bottom:12px">
           <div class="fbar">
-            <input id="design-q" class="fbar-i" placeholder="Search project or address\u2026"
+            <input id="design-q" class="fbar-i" placeholder="Search project or address…"
               oninput="S.designQ=this.value;renderDesign()">
             <span class="fbar-n" id="design-count"></span>
           </div>
@@ -1466,7 +1458,18 @@ function refresh(manual){
     if(manual) toast('Refreshed'); });
 }
 var dealErr=null;
-function loadSample(){ S.deals=F.sample(); S.demo=true; S.loaded=true; render();
+/* The sample REPLACES the portfolio, so everything derived from the portfolio
+   has to be derived again. refresh() already does this for the real load; the
+   sample did not, and because refresh() links the Design list on first load —
+   before anybody presses this button — every sample project showed "Link to a
+   deal…" next to a deal that plainly owns it. The demo undersold the one
+   handoff it exists to show. Only the lists that are already loaded are
+   touched: this must not start a read nobody asked for. */
+function loadSample(){
+  S.deals=F.sample(); S.demo=true; S.loaded=true;
+  if (S.inboxLoaded) S.inbox = IN.annotate(S.inbox, S.deals);
+  if (S.designLoaded) loadDesign(false);
+  render();
   toast('Sample portfolio loaded \u2014 nothing is saved'); }
 
 /* ── The portfolio switcher ───────────────────────────────────────────────
@@ -3107,14 +3110,14 @@ function renderMatrix(){
 
   /* ONE BAD RENDER USED TO BE PERMANENT. dataset.built guards against
      rebuilding the options on every redraw, which is right — but it was set
-     unconditionally, so if F.MATRIX_AXES was not available on the first pass
+     unconditionally, so if the axis list was not available on the first pass
      the selects were marked built while empty and never tried again. Two
      unlabelled dropdowns, for the rest of the session, with no way to pick
      an axis.
 
      Now it is only marked built once options actually exist, so a later
      redraw repairs it. */
-  var axes = (F && F.MATRIX_AXES) || [];
+  var axes = (F && F.matrixAxes && F.matrixAxes()) || [];
   ['mx-x','mx-y'].forEach(function(id,i){
     var sel=document.getElementById(id); if(!sel||sel.dataset.built) return;
     if(!axes.length) return;                     /* try again on the next draw */
@@ -3226,111 +3229,23 @@ function mxOpen(x,y){
   }).then(function(v){ if(v) openDeal(v.id); });
 }
 
-/* ── The matrix ───────────────────────────────────────────────────────────
-   Every live project as a square, placed by can-it-be-built against
-   would-it-be-funded. Colour is strength; the outlined block top-right is the
-   buyer's market. */
-function renderMatrix(){
-  var host=document.getElementById('mx-host'); if(!host) return;
-  var m=F.matrix(S.deals), n=m.rows.length;
+/* ⚠ A SECOND renderMatrix() AND A SECOND mxOpen() USED TO LIVE HERE. Function
+   declarations hoist, so the later pair won and the ones above — the ones the
+   markup is actually wired to — never ran. Not a regression: the file has
+   carried both since the view was written.
 
-  /* A single ramp from cool to warm. Deliberately not red-for-bad: on this
-     grid warm means STRONG, which is the opposite of the usual convention and
-     is why the legend spells it out rather than assuming. */
-  function colour(c){
-    if(!c.deals.length) return '#F2F5F7';
-    var t=(c.xLo+c.yLo)/2/100;                    /* 0..1 */
-    var stops=[[236,241,245],[253,230,190],[249,178,102],[233,110,74],[199,52,52]];
-    var i=Math.min(stops.length-2, Math.floor(t*(stops.length-1)));
-    var f=t*(stops.length-1)-i, a=stops[i], b=stops[i+1];
-    return 'rgb('+a.map(function(v,k){ return Math.round(v+(b[k]-v)*f); }).join(',')+')';
-  }
+   What it looked like from the outside: the Across and Up dropdowns in
+   #v-matrix were permanently blank (only the shadowed renderer fills them),
+   #mx-count stayed empty, the unscored tray never painted, and the grid
+   showed bare counts on fixed 0-100 bands — which on any real portfolio is
+   three coloured squares in a field of ninety-seven empty ones, because
+   scores cluster.
 
-  var grid='<div class="mx-grid" style="grid-template-columns:repeat('+n+',minmax(34px,1fr))">';
-  m.rows.forEach(function(row){
-    row.forEach(function(c){
-      var k=c.deals.length;
-      grid+='<div class="mx-cell'+(k?' has':' empty')+(c.buyers?' buyers':'')+'"'
-        + ' style="background:'+colour(c)+'"'
-        + (k?' onclick="mxOpen('+c.xi+','+c.yi+')"':'')
-        + ' title="'+esc(m.xLabel+' '+c.xLo+'\u2013'+c.xHi+' \u00b7 '+m.yLabel+' '
-            +c.yLo+'\u2013'+c.yHi+(k?' \u00b7 '+k+' project'+(k===1?'':'s'):' \u00b7 empty'))+'">'
-        + (k||'')+'</div>';
-    });
-  });
-  grid+='</div>';
+   The pair that survives names each project on its tile, honours both
+   dropdowns, and normalises the axes against the portfolio's own range. The
+   matching duplicate in portfolio-data.js went with it.
 
-  /* Ticks along the bottom, so a square's position is readable rather than
-     inferred by counting. */
-  var ticks='<div class="mx-grid" style="grid-template-columns:repeat('+n+',minmax(34px,1fr));'
-    + 'gap:3px;margin-top:5px">';
-  for(var i=0;i<n;i++) ticks+='<div class="mx-tick">'+(i*m.band)+'</div>';
-  ticks+='</div>';
-
-  var un=m.unscored.length;
-  host.innerHTML =
-      '<div class="mx-wrap">'
-    +   '<div class="mx-card">'
-    +     '<div style="display:flex;gap:8px">'
-    +       '<div class="mx-ax mx-yax">'+esc(m.yLabel)+' \u2192</div>'
-    +       '<div>'+grid+ticks
-    +         '<div class="mx-ax" style="text-align:center;margin-top:6px">'
-    +           esc(m.xLabel)+' \u2192</div>'
-    +       '</div>'
-    +     '</div>'
-    +     '<div class="mx-legend">'
-    +       '<span><span class="mx-swatch" style="background:#F2F5F7"></span>empty</span>'
-    +       '<span><span class="mx-swatch" style="background:#FDE6BE"></span>weak</span>'
-    +       '<span><span class="mx-swatch" style="background:#E96E4A"></span>strong</span>'
-    +       '<span><span class="mx-swatch" style="box-shadow:inset 0 0 0 2px var(--bad);'
-    +         'background:#fff"></span>buyer\u2019s market \u2014 '+m.bar+'+ on both</span>'
-    +     '</div>'
-    +   '</div>'
-    +   '<div class="mx-side">'
-    +     stat('In the buyer\u2019s market', m.buyersCount,
-            m.buyersCount?'strong on both axes':'nothing there yet')
-    +     stat('Placed on the grid', m.placed, 'have both scores')
-    +     stat('Not yet scored', un, un?'need Grid Atlas or OGI':'all scored')
-    +     (un
-        ? '<div class="card"><div class="card-h"><h2>Waiting for a score</h2>'
-          + '<span class="sub">They cannot be placed until they have both</span></div>'
-          + '<div class="tbl-wrap"><table><thead><tr><th>Site</th><th>Missing</th>'
-          + '<th></th></tr></thead><tbody>'
-          + m.unscored.slice(0,12).map(function(d){
-              var miss=[];
-              if(d.grid.score==null) miss.push('Grid Atlas');
-              if(d.viability.score==null) miss.push('OGI');
-              return '<tr class="row" onclick="openDeal(\''+d.id+'\')">'
-                + '<td class="t-name">'+esc(d.name)+'</td>'
-                + '<td style="font-size:12px;color:var(--ink-2)">'+esc(miss.join(' and '))+'</td>'
-                + '<td>'+esc(F.stageOf(d.stage).label)+'</td></tr>'; }).join('')
-          + '</tbody></table></div>'
-          + (un>12?'<div class="card-b t-sub">and '+(un-12)+' more</div>':'')
-          + '</div>'
-        : '')
-    +   '</div>'
-    + '</div>';
-}
-
-/* One square may hold several projects. One opens directly; more than one
-   lists them, because silently opening the first would hide the others. */
-function mxOpen(xi,yi){
-  var m=F.matrix(S.deals), cell=null;
-  m.rows.forEach(function(r){ r.forEach(function(c){
-    if(c.xi===xi&&c.yi===yi) cell=c; }); });
-  if(!cell||!cell.deals.length) return;
-  if(cell.deals.length===1){ openDeal(cell.deals[0].id); return; }
-  Forms.open({
-    title:cell.deals.length+' projects here',
-    intro:m.xLabel+' '+cell.xLo+'\u2013'+cell.xHi+' \u00b7 '+m.yLabel+' '+cell.yLo+'\u2013'+cell.yHi,
-    fields:[{key:'id',type:'radio',label:'Open which',required:true,
-      options:cell.deals.map(function(d){
-        return {value:d.id,label:d.name,
-                hint:F.stageOf(d.stage).label+' \u00b7 '
-                   +(d.origination.partnerName||d.origination.partnerOrg||'unattributed')}; })}],
-    submitLabel:'Open'
-  }).then(function(v){ if(v) openDeal(v.id); });
-}
+   scripts/tests/tosamatrix.js fails if either name is declared twice again. */
 
 /* ── Board ────────────────────────────────────────────────────────────── */
 /* ── Board preferences ───────────────────────────────────────────────────

@@ -40,6 +40,21 @@ const dblEsc = [...src.matchAll(/\\\\u[0-9a-fA-F]{4}/g)];
 chk('no double-escaped unicode in string literals', dblEsc.length === 0,
   dblEsc.length ? dblEsc.slice(0, 5).map(m => m[0]).join(', ') : '');
 
+/* The SINGLE-escaped twin, and the one the double-escape check cannot see.
+   `\u2026` is a JavaScript string escape. In a string literal it is the
+   character; in raw markup it is six characters, and
+   placeholder="Search project or address\u2026" shipped exactly that. So the
+   markup is checked separately, with the script and style blocks blanked out
+   (line numbers preserved) because inside them the escape is correct. */
+const markupOnly = src
+  .replace(/<script\b[\s\S]*?<\/script>/g, m => '\n'.repeat((m.match(/\n/g) || []).length))
+  .replace(/<style\b[\s\S]*?<\/style>/g, m => '\n'.repeat((m.match(/\n/g) || []).length));
+const inMarkup = markupOnly.split('\n')
+  .map((l, i) => [i + 1, l])
+  .filter(([, l]) => /\\u[0-9a-fA-F]{4}/.test(l));
+chk('no \\uXXXX escape in raw markup', inMarkup.length === 0,
+  inMarkup.length ? 'line ' + inMarkup.slice(0, 5).map(x => x[0]).join(', ') : '');
+
 /* Mojibake from a bad encoding round-trip. */
 const mojibake = [...src.matchAll(/[ÃÂ][\u0080-\u00bf]/g)];
 chk('no mojibake (UTF-8 read as latin-1)', mojibake.length === 0,
