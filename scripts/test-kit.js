@@ -18,13 +18,15 @@ t('the three phone apps each have a sandbox and a guide; every guide is a PDF un
 });
 /* The Omega Logic app guide is written by build.js under two names (the
    old Omega-Logic-Office-App.pdf and Omega-Logic-App.pdf); the kit links
-   whichever is committed, and it must be a name build.js writes. */
+   whichever is committed, and it must be a name build.js writes (guard.js GUIDES/ALSO). */
 t('the office guide is the Omega Logic app guide, and the office app and the desktop office both point at it', function () {
   var g = K.GUIDES.filter(function (x) { return x.audience === 'office'; });
   assert.equal(g.length, 1, 'one office guide'); assert.ok(/^\/guides\/Omega-Logic-(Office-)?App\.pdf$/.test(g[0].path), g[0].path);
   ['office-app', 'office-desktop'].forEach(function (key) { assert.equal(K.ITEMS.filter(function (i) { return i.key === key; })[0].guide, g[0].path, key); });
-  var build = fs.readFileSync(path.join(ROOT, 'scripts/guides/build.js'), 'utf8');
-  K.GUIDES.forEach(function (x) { var file = x.path.replace(/^\/guides\//, ''); assert.ok(build.indexOf("'" + file + "'") >= 0, file + ' is not a name scripts/guides/build.js writes'); });
+  /* the names build.js writes are guard.js GUIDES and ALSO (one list; tguides.js judges the same) */
+  var G = require(path.join(ROOT, 'scripts/guides/guard.js')), names = [];
+  Object.keys(G.GUIDES).forEach(function (k) { names.push(G.GUIDES[k]); (G.ALSO[k] || []).forEach(function (n) { names.push(n); }); });
+  K.GUIDES.forEach(function (x) { var file = x.path.replace(/^\/guides\//, ''); assert.ok(names.indexOf(file) >= 0, file + ' is not a name scripts/guides/build.js writes'); });
 });
 /* The PDFs are built by scripts/guides/build.js and committed under guides/:
    a guide the kit sends, or a Help menu links, must be a file that is there. */
