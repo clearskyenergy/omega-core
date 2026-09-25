@@ -17,7 +17,8 @@ function po(body, products) {
   var poNumber = text(body.poNumber, 80, true);
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > 50) throw A.httpError(400, 'Provide 1–50 order lines');
   var quantities = P.quantities(body.items), items = Object.keys(quantities).sort().map(function (sku) {
-    var p = products.filter(function (r) { return r.sku === sku && r.active !== false && !r.placeholder && r.sku !== 'GENERIC-BESS'; })[0];
+    /* the one buyer test (portal.js orderable): published, and never a component (CUST-04) */
+    var p = products.filter(function (r) { return r && r.sku === sku && require('./portal').orderable(r); })[0];
     if (!p) throw A.httpError(400, 'Select a currently published product or service');
     return { sku: sku, name: String(p.name || sku), kind: p.kind === 'service' ? 'service' : 'product', qty: quantities[sku] };
   });
@@ -77,7 +78,10 @@ function transition(leg, action, body, by, now) {
   return { leg: next, event: ev };
 }
 function buyerOrder(o, id) {
-  return { id: id, orderNo: o.orderNo, status: o.status, poNumber: (o.purchaseOrder || {}).number || null,
+  /* the public milestone rides with every order (CUST-05); a door that
+     shows it to the buyer also turns status into its label */
+  var m = require('./portal').milestoneOf(o);
+  return { id: id, orderNo: o.orderNo, status: o.status, milestone: { key: m.key, label: m.label, say: m.say }, poNumber: (o.purchaseOrder || {}).number || null,
     items: (o.items || []).map(function (i) { return { sku: i.sku, name: i.name || i.sku, qty: i.qty }; }),
     destinations: (o.delivery || {}).destinations || [], revision: (o.delivery || {}).revision || 0,
     legs: ((o.delivery || {}).legs || []).map(function (l) { return { id:l.id, destinationId:l.destinationId, carrier:l.carrier,

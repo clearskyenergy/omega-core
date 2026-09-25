@@ -53,16 +53,15 @@ var W = require('./_lib/plant-work');
 /* The product list is the one place a bench's steps are written down
    (plant-work.js). One document read per scan; a plant with no stations on
    its bills gets an empty index and behaves exactly as before. */
-function catalogIndex(snap) {
-  var by = {}, rows = snap && snap.exists ? (snap.data() || {}).products || [] : [];
-  rows.forEach(function (p) { if (p && p.sku && ['__proto__', 'constructor', 'prototype'].indexOf(String(p.sku)) < 0) by[p.sku] = p; });
-  return by;
-}
+function catalogIndex(snap) { return W.catalogIndex(snap && snap.exists ? (snap.data() || {}).products : []); }
 function catalogRef(db, orgId) { return db.collection('omega_orgs').doc(orgId).collection('storefront').doc('config'); }
 function stockRef(db, orgId) { return db.collection('omega_orgs').doc(orgId).collection('fulfillment').doc('materials'); }
 function safeKey(k) { return ['__proto__', 'constructor', 'prototype'].indexOf(k) < 0; }
 /* Check-only steps live on the works order's copy of the routing. */
-function checksOf(wo, station) { var s = (wo && wo.routing || []).filter(function (x) { return x && x.key === station; })[0]; return s && Array.isArray(s.checks) ? s.checks : []; }
+var checksOf = W.checksOf;
+/* What the bench shows as "work order": the order number people say, never
+   the document id (wo_…). */
+function workOrderName(unit, wo) { return String((unit && unit.orderNo) || (wo && wo.orderNo) || '').slice(0, 80) || null; }
 
 /* ── ISSUE A PART / CONFIRM A STEP ────────────────────────────────────────
    Body: { stationId, token, scanId, serial, action: 'issue', code, qty?, lot? }
@@ -213,7 +212,7 @@ module.exports = A.handler(function (req, res) {
           /* A replay. Hand back what we decided the first time. */
           var p = prev.data() || {};
           if (p.serial !== serial || p.stationId !== stationId) throw A.httpError(409, 'Scan identifier already belongs to another event');
-          return { replayed: true, verdict: p.verdict || { ok: true, action: 'duplicate', say: 'Already recorded.' },instructions:(p.context||{}).instructions||'',parameters:(p.context||{}).parameters||'',workOrder:p.woId||null };
+          return { replayed: true, verdict: p.verdict || { ok: true, action: 'duplicate', say: 'Already recorded.' },instructions:(p.context||{}).instructions||'',parameters:(p.context||{}).parameters||'',workOrder:p.woId||null,workOrderNo:p.workOrderNo||null };
         }
         var uRef = db.collection('plant_units').doc(orgId + '__' + serial);
         return tx.get(uRef).then(function (us) {
@@ -227,7 +226,8 @@ module.exports = A.handler(function (req, res) {
           return Promise.resolve(woP).then(async function (wos) {
             var wo = wos && wos.exists ? wos.data() : null;
             var routing = P.routingOf(wo);
-            /* The steps at the bench it is LEAVING gate the arrival here. */
+            /* The steps at the bench it is LEAVING gate the arrival here
+               (plant-work.js openAt — the same gate a test result meets). */
             var by = unit ? catalogIndex(await tx.get(catalogRef(db, orgId))) : {};
             var product = unit && unit.sku && by[unit.sku] ? by[unit.sku] : null;
             var leaving = unit && unit.at ? W.statusOf(unit, unit.at, W.stepsFor(product, unit.at, by, checksOf(wo, unit.at))) : null;
@@ -244,32 +244,54 @@ module.exports = A.handler(function (req, res) {
               }
             }
             var now = new Date().toISOString();
+            /* A shipping unit reaching Ready owes the shelf every bill line no
+               bench issued (plant-work.js backflush). Read the stock before
+               anything is written: a transaction reads first. */
+            var owed = verdict.ok && verdict.action === 'advance' && verdict.to === 'ready' && unit && unit.shipUnit ? W.backflush(product, unit, routing) : [];
+            var stockDoc = owed.length ? await tx.get(stockRef(db, orgId)) : null;
 
             /* Every scan is recorded, including the refused ones. A bench that
                keeps refusing is the signal that a label is damaged or a unit
                skipped a step, and it is invisible if only successes are kept. */
             tx.set(scanRef, {
               orgId: orgId, scanId: scanId, stationId: stationId, station: station,
-              serial: serial, woId: (unit && unit.woId) || null,
+              serial: serial, woId: (unit && unit.woId) || null, workOrderNo: workOrderName(unit, wo),
               gun: S.clean(b.gun, 40) || null,
               at: now, clientAt: S.clean(b.at, 40) || null,
               context:{lineId:liveStation.lineId||null,location:liveStation.location||'',stationRevision:liveStation.revision||0,flowVersion:wo&&wo.flowVersion||0,
                 instructions:step.instructions||liveStation.instructions||'',parameters:step.parameters||''},
               verdict: verdict, ok: !!verdict.ok,
+              backflush: owed.length ? owed : null,
               createdAt: FV.serverTimestamp()
             });
 
-            var patch = P.applyScan(unit, verdict, now);
+            var patch = P.applyScan(unit, verdict, now), short = [];
             if (patch) {
               if (patch.at === 'ready' && unit.shipUnit && !unit.orderId) patch.inventoryStatus = 'available';
+              if (owed.length) {
+                /* the unit's material trace says what came off the shelf for
+                   it at Ready, next to what each bench issued */
+                var flushed = {}; owed.forEach(function (l) { flushed[l.sku] = l.qty; });
+                patch.backflushed = flushed; patch.backflushedAt = now;
+                var sd = stockDoc && stockDoc.exists ? stockDoc.data() || {} : {}, stock = sd.stock && typeof sd.stock === 'object' ? Object.assign({}, sd.stock) : {};
+                owed.forEach(function (l) {
+                  var entry = safeKey(l.sku) && stock[l.sku] && typeof stock[l.sku] === 'object' ? stock[l.sku] : {}, left = (Number(entry.onHand) || 0) - l.qty;
+                  if (left < 0) { short.push(l.sku); left = 0; }
+                  stock[l.sku] = Object.assign({}, entry, { onHand: Math.round(left * 10000) / 10000, lastIssuedAt: now, lastIssuedTo: serial });
+                });
+                tx.set(stockRef(db, orgId), { stock: stock, revision: (Number(sd.revision) || 0) + 1, updatedAt: now, updatedBy: 'station:' + stationId }, { merge: true });
+              }
               patch.updatedAt = FV.serverTimestamp();
               patch.lastStationId = stationId;
               tx.update(uRef, patch);
               /* A shipping unit reaching Ready is a finished one: the works
-                 order's count lets the materials plan stop demanding its parts. */
+                 order's count lets the materials plan stop demanding its parts,
+                 and what was backflushed joins what the benches issued. */
               if (patch.at === 'ready' && unit.shipUnit && wo && unit.woId && safeKey(String(unit.sku || ''))) {
                 var rc = Object.assign({}, wo.readyCounts || {}); rc[unit.sku] = (Number(rc[unit.sku]) || 0) + 1;
-                tx.update(db.collection('plant_works_orders').doc(unit.woId), { readyCounts: rc });
+                var woPatch = { readyCounts: rc };
+                if (owed.length) { var iss = Object.assign({}, wo.issued || {}); owed.forEach(function (l) { iss[l.sku] = Math.round(((Number(iss[l.sku]) || 0) + l.qty) * 10000) / 10000; }); woPatch.issued = iss; }
+                tx.update(db.collection('plant_works_orders').doc(unit.woId), woPatch);
               }
             }
             var work = unit && verdict.ok ? W.statusOf(Object.assign({}, unit, { at: station }), station, W.stepsFor(product, station, by, checksOf(wo, station)))
@@ -281,7 +303,9 @@ module.exports = A.handler(function (req, res) {
               unit: unit ? { serial: serial, wo: unit.woId || null, at: patch ? patch.at : String(unit.at || '') } : null,
               routing: routing.map(function (s) { return { key: s.key, label: s.label }; })
               ,instructions:step.instructions||liveStation.instructions||'',parameters:step.parameters||'',workOrder:unit&&unit.woId||null,
-              work: work, product: product ? String(product.name || product.sku).slice(0, 120) : (unit && unit.sku ? String(unit.sku) : null)
+              workOrderNo: workOrderName(unit, wo),
+              work: work, product: product ? String(product.name || product.sku).slice(0, 120) : (unit && unit.sku ? String(unit.sku) : null),
+              backflushed: patch && owed.length ? { lines: owed, short: short } : null
             };
           });
         });
@@ -292,8 +316,8 @@ module.exports = A.handler(function (req, res) {
         ok: !!v.ok, action: v.action || null, reason: v.reason || null, say: v.say || '',
         serial: serial, station: station, stationLabel: String(st.label || station),
         replayed: !!out.replayed, unit: out.unit || null, routing: out.routing || null
-        ,instructions:out.instructions||'',parameters:out.parameters||'',workOrder:out.workOrder||null,
-        work: out.work || null, product: out.product || null
+        ,instructions:out.instructions||'',parameters:out.parameters||'',workOrder:out.workOrder||null,workOrderNo:out.workOrderNo||null,
+        work: out.work || null, product: out.product || null, backflushed: out.backflushed || null
       };
     });
   });

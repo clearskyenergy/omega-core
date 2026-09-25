@@ -500,8 +500,8 @@ var EMAIL = ['Hi Clean Cell team,', '', 'Please ship PO VC-PO-77 to these sites:
     var plan = V.custodyJson('org=cleancell.us&view=plan&customerId=company_riverside'); assert.equal(plan.sites.length, 3); assert.equal(plan.orders[0].orderId, 'o1'); assert.equal(plan.orders[0].planned, 3);
     assert.equal(V.custodyJson('org=cleancell.us').planned.length, 3, 'the overview lists units being built that are going somewhere');
     assert.equal(F.post(st, '/api/logic-custody', '', { action: 'sites-preview', text: 'x' }).status, 400);
-    var op = F.post(st, '/api/logic-custody', '', { action: 'sites-preview', customerId: 'company_incharge', text: '- 915 Harbor Finch Way, Tacoma, WA 98402' }); assert.equal(op.summary.new, 1);
-    var oc = F.post(st, '/api/logic-custody', '', { action: 'sites-create', customerId: 'company_incharge', rows: [{ name: 'Tacoma, WA', address: op.rows[0].address }] }); assert.equal(oc.created[0].source, 'office-list');
+    var op = F.post(st, '/api/logic-custody', '', { action: 'sites-preview', customerId: 'company_harbor', text: '- 915 Harbor Finch Way, Tacoma, WA 98402' }); assert.equal(op.summary.new, 1);
+    var oc = F.post(st, '/api/logic-custody', '', { action: 'sites-create', customerId: 'company_harbor', rows: [{ name: 'Tacoma, WA', address: op.rows[0].address }] }); assert.equal(oc.created[0].source, 'office-list');
     assert.equal(F.post(st, '/api/logic-custody', '', { action: 'plan-preview', orderId: 'o1', sites: [{ siteId: oc.created[0].id }] }).status, 409, 'another account\'s site');
     assert.match(F.post(st, '/api/logic-custody', '', { action: 'plan-preview', orderId: 'o1', sites: [{ siteId: sites[0].siteId, units: 3 }] }).problems[0], /2 already going to other sites/);
     var opv = F.post(st, '/api/logic-custody', '', { action: 'plan-preview', orderId: 'o1', replan: true, sites: [{ siteId: sites[0].siteId, units: 3 }] }); assert.equal(opv.writes, 2);
@@ -511,12 +511,12 @@ var EMAIL = ['Hi Clean Cell team,', '', 'Please ship PO VC-PO-77 to these sites:
   });
   await test('the sandbox leaves out a unit stamped for another account on the customer\'s door too', function () {
     var st = F.initialState(), V = F.views(st), u = st.units.filter(function (x) { return x.serial === 'CC418-26-44195'; })[0];
-    u.custody = { customerId: 'company_incharge' };
+    u.custody = { customerId: 'company_harbor' };
     var sites = V.mySitesJson().sites.map(function (x) { return { siteId: x.id, units: null }; });
     var pp = F.post(st, '/api/my-sites', '', { action: 'plan-preview', orderNo: 'CC-26-4419', sites: sites }, 'ops@riverside.example');
     assert.deepEqual(pp.notPlanned.map(function (x) { return x.serial + ':' + x.why; }), ['CC418-26-44195:account']);
     var ap = F.post(st, '/api/my-sites', '', { action: 'plan-apply', orderNo: 'CC-26-4419', sites: sites, confirm: true, planKey: pp.planKey }, 'ops@riverside.example');
-    assert.equal(ap.applied, 2); assert.deepEqual(u.custody, { customerId: 'company_incharge' }, 'not planned, not re-stamped');
+    assert.equal(ap.applied, 2); assert.deepEqual(u.custody, { customerId: 'company_harbor' }, 'not planned, not re-stamped');
     assert.equal(F.post(st, '/api/my-sites', '', { action: 'sites-preview', text: '- 1 Elm St, Aurora, CO 80010' }).geoLimited, false);
   });
   console.log('\n' + count + ' site-list checks passed\n');

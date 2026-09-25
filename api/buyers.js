@@ -18,17 +18,27 @@ var S = require('./_lib/office-stage');
    invoiced, what has been recorded as paid, the balance, whether it
    shipped, who on the account it is billed to, and whether the customer is
    waiting on an answer. Cost and margin are ClearSky's and are not here. */
-function money(id, o) {
+function money(id, o, billing) {
   var l = o.logic || {}, inv = 0, paid = 0;
   Object.keys(l.invoices || {}).forEach(function (k) { var i = l.invoices[k] || {}; inv += Number(i.amountCents) || 0; paid += Number(i.paidCents) || 0; });
   var at = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toISOString() : (typeof o.createdAt === 'string' ? o.createdAt : null);
-  var stage = null; try { stage = S.stageOf(o); } catch (e) { stage = null; }
+  var stage = null; try { stage = S.stageOf(o, { billing: billing }); } catch (e) { stage = null; }
   return { id: id, orderNo: o.orderNo || id, status: o.status || 'new', stage: stage, placedAt: at, poNumber: (o.purchaseOrder || {}).number || null,
     billedTo: { name: String((o.customer || {}).name || '').slice(0, 120), email: String((o.customer || {}).email || '').slice(0, 160) },
     totalCents: l.commercial ? Number(l.commercial.totalCents) || 0 : null, invoicedCents: inv, paidCents: paid, balanceCents: Math.max(0, inv - paid),
     shippedAt: o.shipment && o.shipment.shippedAt ? String(o.shipment.shippedAt) : null, worksOrderId: o.worksOrderId || null,
     items: (o.items || []).slice(0, 20).map(function (i) { return { sku: i.sku, name: i.name || i.sku, qty: i.qty }; }),
     openRequests: (o.requests || []).filter(function (r) { return r && r.status === 'open'; }).length };
+}
+/* Whether the office can EMAIL a customer their invitation (OFF-05): the
+   white label's sender, the storefront's customer email switched on, and
+   the mail transport configured. ONE rule: the invite action refuses on it
+   and GET says it (inviteEmail), so the pages offer "Share app link"
+   instead of a button that answers 409. */
+function inviteMailOn(org, storefront) {
+  var em = ((org || {}).whiteLabel || {}).embed || {};
+  if (!em.mailFrom || !storefront || !storefront.exists || (storefront.data() || {}).emailCustomer !== true) return false;
+  try { return !!require('./_lib/mail').configured(); } catch (e) { return false; }
 }
 function totalsOf(rows) { return rows.reduce(function (t, m) { t.invoicedCents += m.invoicedCents; t.paidCents += m.paidCents; t.balanceCents += m.balanceCents; t.openRequests += m.openRequests; return t; }, { invoicedCents: 0, paidCents: 0, balanceCents: 0, openRequests: 0 }); }
 module.exports = A.handler(async function (req, res) {
@@ -57,6 +67,7 @@ module.exports = A.handler(async function (req, res) {
     return found;
   }
   if (req.method === 'GET') {
+    var inviteEmail = inviteMailOn(ctx.org, await root.collection('storefront').doc('config').get());
     if (req.query.customerId || req.query.email) {
       var acct = await accountOf(req.query);
       if (!acct) throw A.httpError(404, 'Customer not found');
@@ -66,7 +77,7 @@ module.exports = A.handler(async function (req, res) {
       var movedPeople = everyone.filter(function (u) { return u.movedTo; }).map(function (u) { return { email: u.email, name: u.name, movedTo: u.movedTo }; });
       var contact = acct.user || people.filter(function (u) { return u.role === 'owner' && u.status === 'active'; })[0] || people[0] || null;
       var got = await B.accountOrders(db, org, contact ? contact.email : null, acct, { limit: 100 });
-      var orders = got.docs.map(function (r) { return money(r.id, r.data()); });
+      var orders = got.docs.map(function (r) { return money(r.id, r.data(), (ctx.config || {}).accounting); });
       return { customerId: acct.id, company: acct.data.name || '', accountType: acct.data.accountType || (acct.data.source === 'office' ? 'company' : 'individual'), domain: acct.data.domain || '',
         rep: acct.data.rep || null, owner: X.owner(caller), editorAccess: require('./_lib/buyer-design').entitlement(ctx, acct.data),
         /* the person the office opened it from (or the owner), for the older views */
@@ -74,7 +85,7 @@ module.exports = A.handler(async function (req, res) {
         activated: !!(contact && contact.activated), lastSeenAt: contact ? contact.lastSeenAt || null : null, contactStatus: contact ? contact.status : null,
         people: people, movedPeople: movedPeople, address: acct.data.address || null, createdAt: acct.data.createdAt || null,
         plan: acct.data.plan || 'free', status: acct.data.status || 'active', terms: P.terms(ctx.config.terms, acct.data.terms),
-        portalUrl: portalUrl, appUrl: appUrl, orders: orders, totals: totalsOf(orders), limited: got.truncated };
+        portalUrl: portalUrl, appUrl: appUrl, inviteEmail: inviteEmail, orders: orders, totals: totalsOf(orders), limited: got.truncated };
     }
     var q = root.collection('customers').orderBy('__name__');
     if (req.query.after) q = q.startAfter(P.id(req.query.after));
@@ -86,7 +97,7 @@ module.exports = A.handler(async function (req, res) {
         users: list.map(function (u) { return { email: u.email, name: u.name, role: u.role, status: u.status, activated: u.activated }; }), usersLimited: list.length === 25 };
     }));
     return { org: org, name: ctx.org.name || org, brand: require('./_lib/logic-brand')(ctx.org), owner: X.owner(caller), publicDomains: require('./_lib/public-domains'), customers: customers.filter(function (c) { return !c.supersededBy; }),
-      portalUrl: portalUrl, appUrl: appUrl, next: rows.size === 50 ? rows.docs[49].id : null };
+      portalUrl: portalUrl, appUrl: appUrl, inviteEmail: inviteEmail, next: rows.size === 50 ? rows.docs[49].id : null };
   }
   if (b.action === 'editor-trial') {
     X.requireOwner(caller);
@@ -139,7 +150,7 @@ module.exports = A.handler(async function (req, res) {
   if (b.action === 'create') {
     if (!B.clean(b.company) || !B.clean(b.name)) throw A.httpError(400, 'Company and contact name are required');
     var address = B.email(b.email), terms = b.terms ? P.terms(ctx.config.terms, b.terms) : {};
-    /* One company, one account: a second "Amperage Capital" splits its
+    /* One company, one account: a second "Buyer Co" splits its
        orders, balance and people in two. Add the person to the one that
        exists instead. */
     var typedDomain = B.accountDomain(b.domain);
@@ -184,8 +195,7 @@ module.exports = A.handler(async function (req, res) {
     var address2 = B.email(b.email), target = B.active(await B.lookup(db, org, address2)), mail = require('./_lib/mail');
     if (b.customerId && target.id !== P.id(b.customerId)) throw A.httpError(400, 'That person is not on this account');
     var wl = ctx.org.whiteLabel || {}, em = wl.embed || {}, brand = require('./_lib/logic-brand')(ctx.org);
-    var storefront = await root.collection('storefront').doc('config').get();
-    if (!em.mailFrom || !storefront.exists || storefront.data().emailCustomer !== true || !mail.configured()) throw A.httpError(409, 'Customer email delivery is not configured. Share the customer app link instead.');
+    if (!inviteMailOn(ctx.org, await root.collection('storefront').doc('config').get())) throw A.httpError(409, 'Customer email delivery is not configured. Share the customer app link instead.');
     // A portal invitation, NOT a bearer sign-in link. Only the recipient can
     // authenticate; office staff never receive login tokens or passwords.
     var title = brand.name + ': your customer account';

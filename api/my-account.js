@@ -166,15 +166,25 @@ function peopleFor(db, org, acct) {
                 re-enable them. Roles are the supplier's; nobody may lock
                 the account out of its last active owner.
    Twenty additions a day per account; every change is audited. */
+/* May this person add a colleague here (CUST-22)? ONE rule, for the
+   add-user refusal below and for the page (`addPeople` on every answer):
+   the account's owner, on a company account the SUPPLIER set up with an
+   email domain, signed in at that domain. `why` is said only when the
+   answer is the owner's to give; otherwise the page names the supplier. */
+function addPeople(acct, email) {
+  var d = (acct && acct.data) || {}, dom = d.domain || '', owner = !!(acct && acct.user) && acct.user.role === 'owner';
+  var ok = owner && !!dom && (d.source === 'office' || d.accountType === 'company') && B.companyDomain(email) === dom;
+  return { ok: ok, domain: ok ? dom : null, why: ok ? null : owner ? null : 'Only the account owner adds colleagues. Ask them, or your supplier.' };
+}
 async function people(db, org, acct, caller, email, body) {
   if (!acct.user || acct.user.role !== 'owner') throw A.httpError(403, 'Only the account owner can manage people on it. Ask them, or your supplier.');
   var target = B.email(body.email);
   if (body.action === 'user-status') {
     var r = await B.setUser(db, org, acct.id, target, { status: body.status === 'disabled' ? 'disabled' : 'active' }, email, { owner: true });
-    return { ok: true, person: r, users: await peopleFor(db, org, acct), note: r.declined ? 'Request declined. They were not added.' : r.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
+    return { ok: true, person: r, users: await peopleFor(db, org, acct), addPeople: addPeople(acct, email), note: r.declined ? 'Request declined. They were not added.' : r.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
   }
-  var d = acct.data || {}, dom = d.domain || '';
-  if (!dom || (d.source !== 'office' && d.accountType !== 'company') || B.companyDomain(email) !== dom) throw A.httpError(403, 'Ask your supplier to add colleagues to this account.');
+  var dom = addPeople(acct, email).domain;
+  if (!dom) throw A.httpError(403, 'Ask your supplier to add colleagues to this account.');
   if (B.companyDomain(target) !== dom) throw A.httpError(400, 'Add colleagues with an @' + dom + ' email. Anyone else, ask your supplier to add.');
   var had = await db.collection('orders').where('orgId', '==', org).where('customer.email', '==', target).limit(1).get();
   if (!had.empty) throw A.httpError(409, target + ' already has orders with your supplier. Ask your supplier to add them, so their orders move over properly.');
@@ -185,7 +195,7 @@ async function people(db, org, acct, caller, email, body) {
     tx.update(ref, { peopleAddUsage: { day: day, count: use.day === day ? (use.count || 0) + 1 : 1 } });
   });
   var added = await B.addUser(db, org, acct.id, target, { name: body.name, role: 'user', status: 'active' }, email, { source: 'owner' });
-  return { ok: true, person: { email: added.email, role: added.role, status: added.status }, users: await peopleFor(db, org, acct),
+  return { ok: true, person: { email: added.email, role: added.role, status: added.status }, users: await peopleFor(db, org, acct), addPeople: addPeople(acct, email),
     note: 'Added. They sign in with ' + added.email + ' and see this account.' };
 }
 
@@ -205,7 +215,7 @@ module.exports = A.handler(function (req, res) {
     /* Guarded so the 503 says something a customer can act on, rather than
        naming our environment variables. */
     if (typeof A.isDegraded === 'function' && A.isDegraded()) {
-      throw A.httpError(503, 'Your account are temporarily unavailable. Please try again shortly.');
+      throw A.httpError(503, 'Your account is temporarily unavailable. Please try again shortly.');
     }
     var db = A.db();
     var orgRef = db.collection('omega_orgs').doc(org);
@@ -232,6 +242,7 @@ module.exports = A.handler(function (req, res) {
           out.createdNow = acct.created;
           /* the supplier keeps the name of a company it set up */
           out.companyLocked = B.namedCompany(acct.data);
+          out.addPeople = addPeople(acct, email);
           /* Colleagues on the same account: the people a buyer already works
              with. Names and addresses only; the owner also sees each
              person's status, because the owner manages them. */
@@ -287,6 +298,7 @@ module.exports = A.handler(function (req, res) {
                  and the delivery address. */
               if (ignored.length) out.ignored = ignored;
               out.companyLocked = B.namedCompany(c.exists ? c.data() : acct.data);
+              out.addPeople = addPeople({ data: c.exists ? c.data() : acct.data, user: acct.user }, email);
               if (ignored.length) out.note = isOwner ? (writeC || writeU ? 'Saved. ' : '') + 'Your supplier keeps the company name; ask them to change it.' : 'Saved your name and phone. Only the account owner changes the company and address.';
               return peopleFor(db, org, acct).then(function (list) { out.users = list; return out; });
             });

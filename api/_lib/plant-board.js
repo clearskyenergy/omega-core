@@ -159,8 +159,11 @@ function activity(units, w, limit) {
     if (arrived && at) out.push({ at: arrived, serial: serial, kind: 'scan', station: at, say: 'Arrived at ' + P.labelOf(routing, at) });
     if (u.test && u.test.at) {
       var t2 = iso(u.test.at);
+      /* a result a supervisor recorded by hand says so, and who */
+      var byHand = u.test.source === 'manual';
       if (t2) out.push({ at: t2, serial: serial, kind: 'test', station: text(u.test.station, 40),
-        say: u.test.result === 'pass' ? 'Machine test passed' : 'Machine test FAILED' + (u.test.failureCode ? ' · ' + text(u.test.failureCode, 100) : '') });
+        say: (byHand ? 'Test ' : 'Machine test ') + (u.test.result === 'pass' ? 'passed' : 'FAILED' + (u.test.failureCode ? ' · ' + text(u.test.failureCode, 100) : '')) + (byHand ? ' — recorded by hand' + (u.test.note ? ': ' + text(u.test.note, 200) : '') : ''),
+        by: byHand ? text(u.test.by, 160) || null : null });
     }
     if (u.hold && u.holdAt) {
       var t3 = iso(u.holdAt);

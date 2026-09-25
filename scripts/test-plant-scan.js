@@ -70,6 +70,21 @@ testPatch = P.applyMachineResult(unit('bms'), v, '2026-09-21T11:01:00Z', { resul
 ok('a failed machine test places a hold without advancing the unit', !v.ok && v.action === 'hold' && !Object.prototype.hasOwnProperty.call(testPatch, 'at') && testPatch.hold === 'CAP_LOW', testPatch);
 v = P.judgeMachineResult(unit('eol'), 'eol', R, { pass: false });
 ok('a later failed retest still places an EOL unit on hold', !v.ok && v.action === 'hold' && v.at === 'eol', v);
+/* PLANT-03: a test result is an arrival at the test station. A step still
+   open at the bench the unit is leaving refuses it, pass or fail — the same
+   gate a scan meets (plant-work.js openAt supplies the list). */
+v = P.judgeMachineResult(unit('bms'), 'eol', R, { pass: true }, { open: ['Load firmware'] });
+ok('REFUSES a machine pass while a step is open at the bench it is leaving', !v.ok && v.reason === 'work_open' && /BMS & firmware/.test(v.say) && /Load firmware/.test(v.say), v);
+ok('  and applyMachineResult writes nothing for it', P.applyMachineResult(unit('bms'), v, 'T', { result: 'pass' }) === null);
+v = P.judgeMachineResult(unit('bms'), 'eol', R, { pass: false }, { open: ['Fit BMS'] });
+ok('  a fail posted out of sequence is refused, not turned into a hold', !v.ok && v.reason === 'work_open' && v.action !== 'hold', v);
+v = P.judgeMachineResult(unit('bms'), 'eol', R, { pass: true }, { open: [] });
+ok('  with nothing open the pass advances as before', v.ok && v.action === 'advance' && v.to === 'eol', v);
+v = P.judgeMachineResult(unit('eol', { test: { result: 'fail' } }), 'eol', R, { pass: true }, { open: ['x'] });
+ok('  a retest at the station it is already at is not an arrival, so nothing gates it', v.ok && v.action === 'duplicate', v);
+testPatch = P.applyMachineResult(unit('bms'), P.judgeMachineResult(unit('bms'), 'eol', R, { pass: false }), 'T', { result: 'fail', source: 'manual' });
+ok('a hand-recorded fail with no code holds the unit and says it was recorded by hand', /recorded by hand/.test(testPatch.hold), testPatch);
+ok('the note floor for a hand-recorded result is a named constant', P.MANUAL_NOTE_MIN === 5);
 ok('measurements reject an arbitrary diagnostic blob', (function () { try { P.measurementsOf({ bad: 'not-a-number' }); return false; } catch (e) { return true; } })());
 
 v = P.judgeScan(unit('kit'), 'welding', R);

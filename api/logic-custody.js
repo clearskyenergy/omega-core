@@ -58,7 +58,7 @@ async function products(db, org) { var s = await root(db, org).collection('store
 async function sites(db, org) { var q = await root(db, org).collection('sites').orderBy('__name__').limit(500).get(); return q.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); }
 async function tracked(db, org) {
   var q = db.collection('plant_units').where('orgId', '==', org).orderBy('createdAt', 'desc').limit(MAX_UNITS); if (q.select) q = q.select.apply(q, UNIT_FIELDS);
-  var s = await q.get(); return { units: s.docs.map(function (d) { return d.data(); }).filter(function (u) { return u.shipUnit; }), limited: s.size === MAX_UNITS };
+  var s = await q.get(); return { units: s.docs.map(function (d) { return d.data(); }).filter(function (u) { return u.shipUnit && u.inventoryStatus !== 'void'; }), limited: s.size === MAX_UNITS };
 }
 function unitRef(db, org, serial) { return db.collection('plant_units').doc(org + '__' + serial); }
 function view(u, byProduct, now) {
@@ -303,7 +303,7 @@ module.exports = A.handler(async function (req, res) {
         var v0 = C.judge(u, 'replace', body); if (!v0.ok) throw A.httpError(409, v0.say);
         var rep = C.serial(b.replacementSerial), rref = unitRef(db, org, rep), rs = await tx.get(rref);
         if (!rs.exists || rs.data().orgId !== org) throw A.httpError(404, 'Replacement serial is not registered');
-        var ru = rs.data(), rc = C.custodyOf(ru); if (!ru.shipUnit) throw A.httpError(400, 'Replacement must be a shipping unit');
+        var ru = rs.data(), rc = C.custodyOf(ru); if (!ru.shipUnit) throw A.httpError(400, 'Replacement must be a shipping unit'); if (ru.inventoryStatus === 'void') throw A.httpError(409, 'That serial was voided (a typo corrected at registration); use the real serial');
         if (['installed', 'commissioned', 'in_service', 'rma_open', 'replaced', 'decommissioned'].indexOf(rc.status) >= 0) throw A.httpError(409, 'Replacement unit is already ' + C.label(rc.status));
         var prods2 = await products(db, org), prod = prods2.filter(function (p) { return p.sku === u.sku; })[0], c0 = C.custodyOf(u);
         var oldCov = C.coverageWithInheritance(prod, u, now).map(function (cv) { return Object.assign({}, cv, { serial: serial }); });

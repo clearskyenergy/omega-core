@@ -120,24 +120,24 @@ var ORG = 'cleancell.us', admin = { email: 'pm@cleancell.us', admin: true, uid: 
   console.log('\nmany purchase orders at once');
   mock('../api/_lib/po-intake', { scope: async function (c, org, office) { return office ? { office: true, ctx: CTX } : { office: false, ctx: CTX, account: { id: 'company_riverside', user: { email: c.email } } }; }, company: async function (org, id) { var r = db.collection('omega_orgs').doc(org).collection('customers').doc(id), s = await r.get(); return { id: s.id, data: s.data(), ref: r }; }, root: function (org) { return db.collection('omega_orgs').doc(org); }, submit: async function () { throw new Error('not in this test'); }, project: function () { return {}; } });
   var intake = require('../api/po-intake');
-  var dest = { name: 'InCharge Bakersfield', line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' };
+  var dest = { name: 'Harbor Bakersfield', line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' };
   var batch = await intake({ method: 'POST', body: { org: ORG, office: true, customerId: 'company_riverside', action: 'submit-many', email: 'ops@riverside.example', pos: [
-    { number: 'INC-4471', lines: [{ sku: 'CAB', qty: 4 }, { sku: 'CAB418', qty: 1 }], destination: dest, requestedDate: '2026-11-15', notes: 'dock B' },
-    { number: 'INC-4472', lines: [{ sku: 'CAB', qty: 2 }], destination: Object.assign({}, dest, { name: 'InCharge Fresno', city: 'Fresno' }) },
-    { number: 'INC-4473', lines: [{ sku: 'NOPE', qty: 1 }], destination: dest },
-    { number: 'INC-4471', lines: [{ sku: 'CAB', qty: 1 }], destination: dest }
+    { number: 'HBR-4471', lines: [{ sku: 'CAB', qty: 4 }, { sku: 'CAB418', qty: 1 }], destination: dest, requestedDate: '2026-11-15', notes: 'dock B' },
+    { number: 'HBR-4472', lines: [{ sku: 'CAB', qty: 2 }], destination: Object.assign({}, dest, { name: 'Harbor Fresno', city: 'Fresno' }) },
+    { number: 'HBR-4473', lines: [{ sku: 'NOPE', qty: 1 }], destination: dest },
+    { number: 'HBR-4471', lines: [{ sku: 'CAB', qty: 1 }], destination: dest }
   ] }, caller: admin }, res);
   ok('two entered, one bad SKU and one duplicate named', batch.created.length === 2 && batch.skipped.length === 2 && /published product/.test(batch.skipped[0].error) && /Duplicate/.test(batch.skipped[1].error), batch);
   var made = rows.get('orders/' + batch.created[0].id);
-  ok('  each is a mapped order awaiting pricing, with its destination and terms', made.status === 'new' && made.items.length === 2 && made.delivery.destinations[0].address.city === 'Bakersfield' && made.delivery.destinations[0].requestedDate === '2026-11-15' && made.requestedTerms.depositPct === 40 && made.purchaseOrder.number === 'INC-4471' && made.poIntake.source === 'office-bulk', made);
-  var again = await intake({ method: 'POST', body: { org: ORG, office: true, customerId: 'company_riverside', action: 'submit-many', email: 'ops@riverside.example', pos: [{ number: 'INC-4472', lines: [{ sku: 'CAB', qty: 9 }], destination: dest }] }, caller: admin }, res);
+  ok('  each is a mapped order awaiting pricing, with its destination and terms', made.status === 'new' && made.items.length === 2 && made.delivery.destinations[0].address.city === 'Bakersfield' && made.delivery.destinations[0].requestedDate === '2026-11-15' && made.requestedTerms.depositPct === 40 && made.purchaseOrder.number === 'HBR-4471' && made.poIntake.source === 'office-bulk', made);
+  var again = await intake({ method: 'POST', body: { org: ORG, office: true, customerId: 'company_riverside', action: 'submit-many', email: 'ops@riverside.example', pos: [{ number: 'HBR-4472', lines: [{ sku: 'CAB', qty: 9 }], destination: dest }] }, caller: admin }, res);
   ok('an existing PO number is skipped, never overwritten', again.created.length === 0 && /already exists/.test(again.skipped[0].error) && rows.get('orders/' + batch.created[1].id).items[0].qty === 2, again);
   ok('the company counts the batch against its day', rows.get('omega_orgs/' + ORG + '/customers/company_riverside').poIntakeUsage.count === 2);
   await rejects('an empty batch is refused', function () { return intake({ method: 'POST', body: { org: ORG, customerId: 'company_riverside', action: 'submit-many', pos: [] }, caller: buyer }, res); }, '1–50');
-  var own = await intake({ method: 'POST', body: { org: ORG, customerId: 'company_other', action: 'submit-many', email: 'somebody@else.example', pos: [{ number: 'INC-4480', lines: [{ sku: 'CAB', qty: 6 }], destination: dest, requestedDate: '2026-12-01' }] }, caller: buyer }, res);
+  var own = await intake({ method: 'POST', body: { org: ORG, customerId: 'company_other', action: 'submit-many', email: 'somebody@else.example', pos: [{ number: 'HBR-4480', lines: [{ sku: 'CAB', qty: 6 }], destination: dest, requestedDate: '2026-12-01' }] }, caller: buyer }, res);
   var ownRow = rows.get('orders/' + own.created[0].id);
   ok('the customer\'s own login keys in a batch for ITS company, whatever customerId and email it sends', own.created.length === 1 && ownRow.customerId === 'company_riverside' && ownRow.customer.email === 'ops@riverside.example' && ownRow.poIntake.source === 'customer-bulk' && ownRow.status === 'new' && !ownRow.logic, ownRow);
-  ok('  and the same PO number from the customer is then a duplicate for the office', (await intake({ method: 'POST', body: { org: ORG, office: true, customerId: 'company_riverside', action: 'submit-many', email: 'ops@riverside.example', pos: [{ number: 'INC-4480', lines: [{ sku: 'CAB', qty: 1 }], destination: dest }] }, caller: admin }, res)).skipped[0].error.indexOf('already exists') >= 0);
+  ok('  and the same PO number from the customer is then a duplicate for the office', (await intake({ method: 'POST', body: { org: ORG, office: true, customerId: 'company_riverside', action: 'submit-many', email: 'ops@riverside.example', pos: [{ number: 'HBR-4480', lines: [{ sku: 'CAB', qty: 1 }], destination: dest }] }, caller: admin }, res)).skipped[0].error.indexOf('already exists') >= 0);
 
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);

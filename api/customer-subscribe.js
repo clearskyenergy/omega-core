@@ -10,7 +10,7 @@
    POST /api/customer-subscribe { org, action: 'manage' [, from:'portal'] }
         { url }  → Stripe billing portal for the ACCOUNT's Stripe customer
 
-   The one thing a supplier's customer (Amperage Capital, buying from Clean
+   The one thing a supplier's customer (a buyer company, buying from Clean
    Cell) pays the platform for: the design tool, white-labelled as the
    supplier's, monthly or yearly. docs/OMEGA-LOGIC-ECOSYSTEM.md "The one paid
    difference".

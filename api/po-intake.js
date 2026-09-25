@@ -1,6 +1,14 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
-var A=require('./_lib/admin'),B=require('./_lib/buyer-accounts'),P=require('./_lib/logic-policy'),L=require('./_lib/order-lifecycle'),I=require('./_lib/po-intake'),X=require('./_lib/logic-access');
+var A=require('./_lib/admin'),B=require('./_lib/buyer-accounts'),P=require('./_lib/logic-policy'),L=require('./_lib/order-lifecycle'),I=require('./_lib/po-intake'),X=require('./_lib/logic-access'),Pt=require('./_lib/portal');
+/* What the buyer reads of an order that came from a PO: the six public
+   words (api/_lib/portal.js milestoneOf), never the internal status —
+   'quoted' is ClearSky's price to the tenant, 'in_fulfilment' says nothing.
+   The office keeps the raw status it works by, with the words beside it. */
+function buyerRow(s,office){var o=s.data(),v=L.buyerOrder(o,s.id),m=Pt.milestoneOf(o);v.milestone={key:m.key,label:m.label,say:m.say};if(!office)v.status=m.label;return v;}
+/* A PO in review, in the buyer's words: its state and which door it came
+   through are said plainly; the door's code stays with the office. */
+function intakeRow(s,office,brand){var v=I.project(s);v.statusLabel=Pt.poStatusWord(v);v.sourceLabel=Pt.poSourceWord(v.source,brand);if(!office)v.source=v.sourceLabel;return v;}
 module.exports=A.handler(async function(req,res){
   try {
   res.setHeader('Cache-Control','no-store');if(['GET','POST'].indexOf(req.method)<0)throw A.httpError(405,'GET or POST only');
@@ -69,7 +77,7 @@ module.exports=A.handler(async function(req,res){
        `email`, and the record says which door it came through. Pricing,
        acceptance and the charge stay with the office either way. */
     var list=Array.isArray(b.pos)?b.pos:[];if(!list.length||list.length>50)throw A.httpError(400,'Enter 1–50 purchase orders at a time');
-    var bulkCatalog=await root.collection('storefront').doc('config').get(),bulkProducts=bulkCatalog.exists?bulkCatalog.data().products||[]:[];
+    var bulkCatalog=await root.collection('storefront').doc('config').get(),bulkProducts=Pt.orderables(bulkCatalog.exists?bulkCatalog.data().products:[]);
     var billing=B.active(await B.lookup(db,org,B.email(scope.office?b.email:c.email)));if(billing.id!==acct.id)throw A.httpError(400,'Billing contact must belong to this company');
     var bulkSource=scope.office?'office-bulk':'customer-bulk',bulkDayLimit=scope.office?200:50;
     var seen={},prepared=list.map(function(po,i){try{po=po&&typeof po==='object'?po:{};var input=L.po({poNumber:po.number,items:po.lines,destinations:[{id:'d1',address:po.destination,requestedDate:po.requestedDate||'',items:po.lines}],notes:po.notes||''},bulkProducts);var key=P.key(org+':'+acct.id+':'+input.poNumber.toLowerCase());if(seen[key])throw A.httpError(400,'Duplicate PO number in this batch');seen[key]=true;return {ok:true,input:input,key:key};}catch(e){return {ok:false,number:String(po&&po.number||('row '+(i+1))).slice(0,80),error:e.message};}});
@@ -98,12 +106,12 @@ module.exports=A.handler(async function(req,res){
   if(req.method==='GET'&&!b.id){
     var rows=await db.collection('orders').where('orgId','==',org).where('customerId','==',acct.id).limit(200).get();
     var list=rows.docs.filter(function(s){return s.data().orgId===org;});
-    var catalog=await root.collection('storefront').doc('config').get(),contacts=scope.office?await acct.ref.collection('users').limit(100).get():null;
-    return {office:scope.office,brand:require('./_lib/logic-brand')(scope.ctx.org),company:{id:acct.id,name:acct.data.name,rep:acct.data.rep||null},reps:scope.office?await I.reps(org):[],
-      terms:P.terms(scope.ctx.config.terms,acct.data.terms),products:(catalog.exists?catalog.data().products||[]:[]).filter(function(p){return p.active!==false&&!p.placeholder&&p.sku!=='GENERIC-BESS';}).map(function(p){return {sku:p.sku,name:p.name,kind:p.kind||'product'};}),
+    var catalog=await root.collection('storefront').doc('config').get(),contacts=scope.office?await acct.ref.collection('users').limit(100).get():null,brand=require('./_lib/logic-brand')(scope.ctx.org);
+    return {office:scope.office,brand:brand,company:{id:acct.id,name:acct.data.name,rep:acct.data.rep||null},reps:scope.office?await I.reps(org):[],
+      terms:P.terms(scope.ctx.config.terms,acct.data.terms),products:Pt.orderables(catalog.exists?catalog.data().products:[]).map(function(p){return {sku:p.sku,name:p.name,kind:p.kind||'product'};}),
       contacts:contacts?contacts.docs.filter(function(s){return ['disabled','suspended'].indexOf(s.data().status)<0;}).map(function(s){return {email:s.id,name:s.data().name,role:s.data().role};}):[],
-      intake:list.filter(function(s){return !!s.data().poIntake;}).map(I.project).sort(function(a,b){return b.createdAt.localeCompare(a.createdAt);}),
-      orders:list.filter(function(s){return !s.data().poIntake||s.data().poIntake.convertedAt;}).map(function(s){return L.buyerOrder(s.data(),s.id);}),limited:rows.size===200};
+      intake:list.filter(function(s){return !!s.data().poIntake;}).map(function(s){return intakeRow(s,scope.office,brand.shortName);}).sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));}),
+      orders:list.filter(function(s){return !s.data().poIntake||s.data().poIntake.convertedAt;}).map(function(s){return buyerRow(s,scope.office);}),limited:rows.size===200};
   }
   var ref=db.collection('orders').doc(P.id(b.id)),row=await ref.get();if(!row.exists||row.data().orgId!==org||row.data().customerId!==acct.id||!row.data().poIntake)throw A.httpError(404,'PO not found');
   if(req.method==='GET'&&b.file){var f=row.data().poIntake.files.filter(function(f){return f.id===b.file;})[0];if(!f)throw A.httpError(404,'Document not found');
@@ -119,7 +127,7 @@ module.exports=A.handler(async function(req,res){
       if(o.poIntake.convertedAt)return {ok:true,id:ref.id,duplicate:true};
       if(o.poIntake.uploadState==='pending')throw A.httpError(409,'Retry the incomplete document upload first');
       if(o.status==='po_declined')throw A.httpError(409,'Reopen the PO for review before conversion');
-      var input=L.po(b,catalog.exists?catalog.data().products||[]:[]);if(o.poIntake.number&&input.poNumber!==o.poIntake.number)throw A.httpError(400,'Keep the original PO number');
+      var input=L.po(b,Pt.orderables(catalog.exists?catalog.data().products:[]));if(o.poIntake.number&&input.poNumber!==o.poIntake.number)throw A.httpError(400,'Keep the original PO number');
       var now=new Date().toISOString();tx.update(ref,{status:'new',items:input.items,customer:{email:B.email(b.email),name:contact.user.name||b.email,company:acct.data.name,phone:contact.user.phone||'',address:input.destinations[0].address,notes:input.notes},
         purchaseOrder:{number:input.poNumber,submittedBy:o.poIntake.submittedBy,submittedAt:o.poIntake.createdAt},rep:o.poIntake.rep||null,delivery:{version:1,revision:0,destinations:input.destinations,legs:[]},requestedTerms:P.terms(scope.ctx.config.terms,contact.data.terms),'poIntake.convertedAt':now});
       tx.create(ref.collection('events').doc(),{at:now,by:c.email,what:'Reviewed PO mapped to catalog and submitted for commercial pricing. No acceptance or charge.'});return {ok:true,id:ref.id};});

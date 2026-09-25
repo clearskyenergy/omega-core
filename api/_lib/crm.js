@@ -3,7 +3,7 @@
    the timeline says
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   The Customer hub of Omega Logic opens an ACCOUNT (Amperage Capital), not a
+   The Customer hub of Omega Logic opens an ACCOUNT (a buyer company), not a
    person. Under it the office keeps three things no other record held:
 
      omega_orgs/{org}/customers/{customerId}/contacts/{id}   people who never log in

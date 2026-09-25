@@ -1,0 +1,15 @@
+{
+  "tier": "deluxe",
+  "addons": [
+    "compute",
+    "parcelscreen",
+    "engineering",
+    "schematics",
+    "exports",
+    "permitting",
+    "whitelabel",
+    "omega-logic"
+  ],
+  "trialEndsAt": "2026-09-30T12:00:00.000Z",
+  "subscriptionDue": "09/30/2026"
+}

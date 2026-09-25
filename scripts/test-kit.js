@@ -1,7 +1,7 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
    test-kit.js — the one list of where everything lives (api/_lib/kit.js). */
 'use strict';
-var assert = require('assert'), fs = require('fs'), path = require('path'), K = require('../api/_lib/kit'), n = 0;
+var assert = require('assert'), fs = require('fs'), path = require('path'), vm = require('vm'), K = require('../api/_lib/kit'), n = 0;
 var ROOT = path.join(__dirname, '..');
 function t(name, fn) { fn(); n++; console.log('PASS ' + name); }
 t('every item has an address, an audience and a kind; org items carry ?org=', function () {
@@ -66,5 +66,104 @@ t('the message per audience names each item, how to install it, the sandbox and 
   assert.ok(/Sign in: Work Google account, or work email and password/.test(o), 'the office signs in with Google or a work email and password (omega-logic-signin.js)');
   assert.ok(/Add to Home Screen/.test(o) && /On a computer:/.test(o) && /Install in the address bar/.test(o), 'the office is told how to install the app on a phone and on a computer');
   var pl = K.message(k, 'plant'); assert.ok(/Plant app: https/.test(pl) && /Bench scan station: https/.test(pl) && !/Customer app/.test(pl));
+});
+/* DOC-M7: the customer message is read by the supplier's customer, word for
+   word. It carried lines written for the supplier ("For the buyer.", the
+   website-button walkthrough) and called the Fleet tab by an old name. */
+t('the customer message speaks to the customer: no notes for the supplier, no walkthrough, the tabs by their names', function () {
+  var k = K.forOrg('cleancell.us', { name: 'Clean Cell', brandName: 'Clean Cell Power Platform' }), m = K.message(k, 'customer');
+  assert.ok(!/For the buyer|\bbuyer\b|walkthrough|website button|recommended/i.test(m), m);
+  assert.ok(!/Sites & equipment/.test(m) && /\bFleet\b/.test(m), 'the tab is Fleet (Home · Orders · POs · Fleet · Account)');
+  K.ITEMS.filter(function (i) { return i.audience === 'customer'; }).forEach(function (i) {
+    assert.ok(!/\bthe buyer\b|\bbuyer\b|the customer'?s?\b/i.test(i.what + ' ' + i.signin), i.key + ' is said to the customer, not about them: ' + i.what);
+  });
+  var g = K.GUIDES.filter(function (x) { return x.audience === 'customer'; })[0];
+  assert.ok(!/Sites & equipment/.test(g.covers) && /Fleet/.test(g.covers), g.covers);
+});
+t('an item for the supplier\'s website stays on the kit page but is never in a message', function () {
+  var k = K.forOrg('cleancell.us', { name: 'Clean Cell' }), start = k.items.filter(function (i) { return i.key === 'customer-start'; })[0];
+  assert.ok(start && start.send === false && /customer-start\.html\?org=cleancell\.us$/.test(start.url), 'the walkthrough is still listed, marked not to send');
+  ['plant', 'office', 'customer'].forEach(function (a) { assert.ok(!/customer-start/.test(K.message(k, a)), a + ' message'); });
+  assert.ok(k.items.filter(function (i) { return i.key !== 'customer-start'; }).every(function (i) { return i.send === true; }), 'everything else is sent');
+});
+t('the customer is never pointed at the supplier\'s side', function () {
+  var m = K.message(K.forOrg('cleancell.us', { name: 'Clean Cell', brandName: 'Clean Cell Power Platform' }), 'customer');
+  assert.ok(!/app-sandbox\/(plant|office|bench)|\/plant\/|\/office\/|\/omega-logic|logic-/.test(m), m);
+});
+/* Safari on iOS 26 opens in the compact layout, where Share is inside the
+   ••• menu at the end of the address bar: "tap Share" first sends an
+   iPhone user looking for a button that is not there. */
+t('the iPhone step matches Safari on iOS 26: ••• first, then Share, Add to Home Screen, Add', function () {
+  ['phone', 'office'].forEach(function (key) {
+    var s = K.INSTALL[key];
+    assert.ok(/iPhone[^.]*•••[^.]*→ Share → Add to Home Screen → Add/.test(s), key + ': ' + s);
+    assert.ok(s.indexOf('•••') < s.indexOf('Share'), key + ': ••• comes before Share');
+    assert.ok(/if you see a Share button, tap it directly/.test(s), key + ': a phone set to another layout still has the button');
+  });
+});
+/* D1 (2026-09-24): a workspace's owner or admin prices and accepts what it
+   invoices itself; ClearSky prices what goes through ClearSky's QuickBooks.
+   The kit said "pricing, acceptance" as if every office user had them. */
+t('the office line says who prices and accepts, as decided', function () {
+  var d = K.ITEMS.filter(function (i) { return i.key === 'office-desktop'; })[0].what;
+  assert.ok(/owner or admin/.test(d) && /invoice yourselves/.test(d) && /ClearSky/.test(d), d);
+  assert.ok(!/^The full system: pricing, acceptance/.test(d), 'no bare promise of pricing and acceptance');
+  assert.ok(/owner or admin/.test(K.message(K.forOrg('cleancell.us', { name: 'Clean Cell' }), 'office')));
+});
+
+/* DOC-M7, CUST-12, CUST-13: the customer message links the customer
+   sandbox, and its strip linked the plant, the office (the margin sheet,
+   other companies' names) and the bench. The shim runs here on a stub page,
+   as each app. */
+function stripAs(app, links) {
+  var src = fs.readFileSync(path.join(ROOT, 'scripts/_lib/app-sandbox-shim.js'), 'utf8'), on = {}, inserted = null, toasts = [];
+  function el() { return { style: {}, remove: function () {}, appendChild: function () {} }; }
+  var store = {}, page = {
+    OMEGA_SANDBOX_APP: app, OMEGA_SANDBOX_LINKS: links, OMEGA_SANDBOX_TENANT: {},
+    OmegaSandboxFixtures: { initialState: function () { return {}; }, views: function () { return {}; }, brand: {}, post: function () { return {}; } },
+    localStorage: { getItem: function (k) { return store[k] || null; }, setItem: function (k, v) { store[k] = String(v); }, removeItem: function (k) { delete store[k]; } },
+    location: { pathname: '/app-sandbox/' + app, host: 'sandbox.test', href: 'https://sandbox.test/app-sandbox/' + app, reload: function () {} },
+    setTimeout: function () {},
+    document: {
+      head: { appendChild: function () {} },
+      body: { firstChild: null, insertBefore: function (d) { inserted = d; }, appendChild: function (d) { if (d.className === 'sb-toast') toasts.push(d.textContent); } },
+      createElement: el, getElementById: function () { return {}; },
+      addEventListener: function (type, fn) { on[type] = fn; }
+    }
+  };
+  vm.runInNewContext(src, page);
+  on.DOMContentLoaded();
+  return {
+    html: inserted.innerHTML, toasts: toasts,
+    click: function (href) { var stopped = false; on.click({ target: { closest: function () { return { getAttribute: function () { return href; } }; } }, preventDefault: function () { stopped = true; } }); return stopped; }
+  };
+}
+t('the customer sandbox strip links no plant, office or bench, and a link into them is not followed', function () {
+  var c = stripAs('customer');
+  assert.ok(!/app-sandbox\/(plant|office|bench)|>Plant<|>Office<|>Bench</.test(c.html), c.html);
+  assert.ok(/Reset/.test(c.html) && /sample company account/.test(c.html), c.html);
+  assert.ok(c.click('/app-sandbox/office') && c.click('/app-sandbox/plant?x=1') && c.click('/app-sandbox/bench') && c.click('/app-sandbox/office.html#orders'), 'a link a page carries into the supplier\'s side is stopped');
+  assert.ok(/supplier/.test(c.toasts[0] || ''), 'and says why');
+  assert.ok(!c.click('/app-sandbox/customer?tab=pos'), 'its own page still routes');
+  var art = stripAs('customer', { plant: 'https://p.example/', office: 'https://o.example/', customer: 'https://c.example/', bench: 'https://b.example/' });
+  assert.ok(!/p\.example|o\.example|b\.example/.test(art.html), 'nor as a published test link');
+});
+t('the supplier\'s own sandboxes still link each other and the customer app', function () {
+  ['plant', 'office', 'bench'].forEach(function (app) {
+    var s = stripAs(app);
+    ['plant', 'office', 'customer', 'bench'].forEach(function (k) { assert.ok(s.html.indexOf('href="/app-sandbox/' + k + '"') >= 0, app + ' → ' + k); });
+    assert.ok(/aria-current="page">/.test(s.html) && !s.click('/app-sandbox/office'), app);
+  });
+});
+/* The customer's published test link carries no address of the supplier's
+   side at all (scripts/build-app-sandbox.js artifactPage). */
+t('the customer\'s published test link carries no link to the plant, office or bench', function () {
+  var B = require('./build-app-sandbox'), os = require('os'), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-art-'));
+  try {
+    var made = B.buildArtifacts(dir, { plant: 'https://plant.example/', office: 'https://office.example/', customer: 'https://customer.example/', bench: 'https://bench.example/' });
+    var c = fs.readFileSync(path.join(made.customer, 'index.html'), 'utf8'), o = fs.readFileSync(path.join(made.office, 'index.html'), 'utf8');
+    assert.ok(/OMEGA_SANDBOX_LINKS=\{\}/.test(c) && !/(plant|office|bench)\.example/.test(c), 'customer');
+    assert.ok(/office\.example/.test(o) && /customer\.example/.test(o), 'the office link still carries them');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 console.log('\n' + n + ' kit checks passed');

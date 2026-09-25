@@ -13,8 +13,29 @@ var APPLY = process.argv.indexOf('--apply') >= 0, FORCE = process.argv.indexOf('
    when the mail transport is configured — Firebase's set-password link. */
 var CREATE_OWNERS = process.argv.indexOf('--create-owners') >= 0;
 var root = path.join(__dirname, '..', 'tenants');
-var seeds = fs.readdirSync(root).filter(function (d) { return fs.existsSync(path.join(root, d, 'tenant.json')); })
-  .map(function (d) { var t = JSON.parse(fs.readFileSync(path.join(root, d, 'tenant.json'))); t.slug = d; return t; });
+/* ── tenants/<slug>/billing.json: WHAT THE ACCOUNT BOUGHT, KEPT OFF THE SITE ──
+   A tenant folder is served (whitelabel-setup.html fetches tenant.json over
+   HTTP), so a tenant.json that carried tier, add-ons and dates published
+   them to anybody with the address (LIVE-1, 2026-09-24). Those fields may
+   sit in billing.json beside it instead, which .vercelignore keeps off the
+   site; this is its only reader. Only these keys: an invoice amount, a
+   payment link or a Stripe id does not belong in the repo at all, so any
+   other key is refused rather than seeded. A key in both files must agree,
+   so the two can never quietly disagree about what a tenant pays for. */
+var BILLING_FILE_KEYS = ['tier', 'addons', 'trialEndsAt', 'subscriptionDue', 'toolOverrides', 'paymentProvider'];
+function loadSeed(d) {
+  var t = JSON.parse(fs.readFileSync(path.join(root, d, 'tenant.json'))), bf = path.join(root, d, 'billing.json');
+  if (fs.existsSync(bf)) {
+    var b = JSON.parse(fs.readFileSync(bf));
+    Object.keys(b).forEach(function (k) {
+      if (BILLING_FILE_KEYS.indexOf(k) < 0) throw new Error('tenants/' + d + '/billing.json: ' + k + ' is not a field the seed takes from it (' + BILLING_FILE_KEYS.join(', ') + ')');
+      if (t[k] !== undefined && JSON.stringify(t[k]) !== JSON.stringify(b[k])) throw new Error('tenants/' + d + ': ' + k + ' differs between tenant.json and billing.json; keep it in billing.json only');
+      t[k] = b[k];
+    });
+  }
+  t.slug = d; return t;
+}
+var seeds = fs.readdirSync(root).filter(function (d) { return fs.existsSync(path.join(root, d, 'tenant.json')); }).map(loadSeed);
 
 /* 'deluxe' was missing here too, so a deluxe tenant's tenant_public said
    'standard' and their sign-in page painted the wrong tier before auth.

@@ -267,8 +267,12 @@ function publicOrder(order, opts) {
        the customer has no read path to. */
     orderNo: clip(o.orderNo, 120),
     /* The brand they think they bought from — the white-label seller's own
-       name, never orgId, which is an internal partition key. */
-    soldBy: clip(o.orgName, 160),
+       name, never orgId, which is an internal partition key. The endpoint
+       passes the supplier's CURRENT short name (api/_lib/logic-brand.js
+       shortName), so every order says it the one way the rest of the page
+       does; `orgName` is only what was stamped when the order was written
+       ("Cleancell" on one, "Clean Cell" on the next). */
+    soldBy: clip(op.soldBy || o.orgName, 160),
     placedAt: when(o.createdAt),
     milestone: ms,
     /* The internal status is NOT echoed. 'quoted' and 'accepted' are
@@ -376,6 +380,74 @@ function publicOrder(order, opts) {
   return out;
 }
 
+/* ── what a buyer may ORDER ───────────────────────────────────────────
+   A published product or service. Never a placeholder, never the generic
+   design concept, and never a `component` — what a product is MADE OF (a
+   cell, a BMS): it is never published, drawn, picked or ordered, and a
+   bill-of-materials import puts dozens of them in the same product list.
+   The ONE test every buyer surface lists and accepts products through:
+   the PO sheet and its product line (api/po-intake.js), One PO to several
+   sites (api/customer-po.js) and the design tool's list and quote
+   (api/customer-design.js). */
+function orderable(p) {
+  return !!p && typeof p === 'object' && !!p.sku && p.active !== false && !p.placeholder && p.sku !== 'GENERIC-BESS'
+    && String(p.kind || 'product') !== 'component';
+}
+function orderables(list) { return (Array.isArray(list) ? list : []).filter(orderable); }
+
+/* ── a purchase order's review, in the buyer's words ─────────────────────
+   api/po-intake.js keeps its own states and door codes; the buyer reads
+   these. `brand` is the supplier's short name. */
+var PO_WORDS = { po_review: 'under review', po_needs_information: 'needs information from you', po_declined: 'declined' };
+function poStatusWord(row) {
+  row = row || {};
+  if (row.convertedAt) return 'entered as an order';
+  return Object.prototype.hasOwnProperty.call(PO_WORDS, row.status) ? PO_WORDS[row.status] : 'received';
+}
+function poSourceWord(source, brand) {
+  var who = brand || 'your supplier';
+  switch (String(source || '')) {
+    case 'customer': return 'sent by your company';
+    case 'customer-bulk': return 'sent by your company on the PO sheet';
+    case 'office': case 'office-bulk': return 'entered by ' + who;
+    case 'email': case 'email-adapter': return 'received by email';
+    default: return 'received by ' + who;
+  }
+}
+
+/* ── a SITE as the buyer reads it: key by key ─────────────────────────
+   The same discipline as publicOrder: every key named, nothing forwarded.
+   Where the site is, what it is called and the customer's own reference
+   are theirs. The DETAILS — interconnection, site contact, end customer,
+   notes — are shown only when they are the customer's OWN entries:
+   `customerEntries`, which only api/my-sites.js writes (what somebody on
+   the account typed), or, on a site the customer made that nobody has
+   edited since, the record itself. What the office typed about a site (a
+   meter number, a contact, "gate code, call Sam") stays in the office. A
+   site record also carries customerId, createdBy and updatedBy (staff
+   emails) and lifecycleSiteId: none of them is here. api/my-sites.js and
+   the sample tenant (scripts/_lib/logic-fixtures.js) both answer through
+   this one function. */
+function ownSiteEntries(s) {
+  s = s || {};
+  if (s.customerEntries && typeof s.customerEntries === 'object') return s.customerEntries;
+  var theirs = (s.source === 'customer' || s.source === 'customer-list') && (!s.updatedAt || s.updatedAt === s.createdAt) && (!s.updatedBy || s.updatedBy === s.createdBy);
+  return theirs ? s : {};
+}
+function str(v, n) { return v == null ? '' : String(v).slice(0, n || 200); }
+function publicSite(s) {
+  s = s || {};
+  var own = ownSiteEntries(s), a = s.address || {}, ic = own.interconnection || {}, ct = own.contact || {};
+  return { id: s.id, name: str(s.name, 160),
+    address: { line1: str(a.line1), line2: str(a.line2), city: str(a.city, 100), state: str(a.state, 40), zip: str(a.zip, 20), country: str(a.country, 40) },
+    endCustomer: str(own.endCustomer, 160),
+    interconnection: { utility: str(ic.utility, 120), accountNo: str(ic.accountNo, 80), meterNo: str(ic.meterNo, 80), poi: str(ic.poi), serviceVoltage: str(ic.serviceVoltage, 40),
+      serviceKw: ic.serviceKw == null || ic.serviceKw === '' || !isFinite(Number(ic.serviceKw)) ? null : Number(ic.serviceKw), agreementRef: str(ic.agreementRef, 120) },
+    contact: { name: str(ct.name, 120), phone: str(ct.phone, 40), email: str(ct.email, 160) },
+    notes: str(own.notes, 1000), status: s.status === 'inactive' ? 'inactive' : 'active', ref: str(s.ref, 80),
+    lat: typeof s.lat === 'number' && isFinite(s.lat) ? s.lat : null, lng: typeof s.lng === 'number' && isFinite(s.lng) ? s.lng : null };
+}
+
 module.exports = {
   LADDER: LADDER,
   when: when,
@@ -386,5 +458,11 @@ module.exports = {
   stationMilestone: stationMilestone,
   milestoneOf: milestoneOf,
   publicOrder: publicOrder,
-  tenantPayLink: tenantPayLink
+  tenantPayLink: tenantPayLink,
+  orderable: orderable,
+  orderables: orderables,
+  poStatusWord: poStatusWord,
+  poSourceWord: poSourceWord,
+  publicSite: publicSite,
+  ownSiteEntries: ownSiteEntries
 };

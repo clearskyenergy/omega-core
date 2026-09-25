@@ -47,9 +47,9 @@ process.env.STRIPE_SECRET_KEY = 'sk_test_fixture'; process.env.STRIPE_WEBHOOK_SE
 var subscribe = require('../api/customer-subscribe'), hook = require('../api/stripe-webhook'), billingApi = require('../api/tenant-billing');
 var D = require('../api/_lib/buyer-design'), X = require('../api/_lib/logic-access'), portal = require('../api/_lib/portal'), office = require('../api/logic-office');
 
-var ORG = 'cleancell.us', O = 'omega_orgs/' + ORG, AMP = 'acct_amperage';
+var ORG = 'cleancell.us', O = 'omega_orgs/' + ORG, HRC = 'acct_harbor';
 function person(email, extra) { return Object.assign({ uid: email.split('@')[0], email: email, orgId: email.split('@')[1], claims: { email_verified: true } }, extra || {}); }
-var SHANNON = person('shannon@amperagecapital.com'), CFO = person('cfo@amperagecapital.com'), NEWBIE = person('new@amperagecapital.com'), STRANGER = person('nobody@elsewhere.com');
+var DANA = person('dana@harborridge.example'), CFO = person('cfo@harborridge.example'), NEWBIE = person('new@harborridge.example'), STRANGER = person('nobody@elsewhere.com');
 var OFFICE = { uid: 'pm', email: 'pm@cleancell.us', orgId: ORG, staff: false, claims: { email_verified: true } };
 var STAFF = { uid: 'tom', email: 'tom@clearsky-usa.com', orgId: 'clearsky-usa.com', staff: true, claims: { email_verified: true } };
 var res = { headers: {}, setHeader: function (k, v) { this.headers[k] = v; } };
@@ -63,15 +63,15 @@ function seed(billing) {
   db.seed(O + '/billing/current', Object.assign({ addons: ['omega-logic'], status: 'active', tier: 'standard', stripeCustomerId: 'cus_TENANT', editorLite: { enabled: true, modules: ['bess'] } }, billing || {}));
   db.seed(O + '/fulfillment/config', { enabled: true, accounting: 'tenant', terms: { depositPct: 30, dueDays: 0 } });
   db.seed(O + '/members/pm', { email: 'pm@cleancell.us', role: 'admin', status: 'active' });
-  db.seed(O + '/customers/' + AMP, { orgId: ORG, name: 'Amperage Capital', status: 'active', source: 'office', accountType: 'company', createdAt: '2026-09-22T00:00:00Z' });
-  [['shannon', 'owner', 'active'], ['cfo', 'user', 'active'], ['new', 'user', 'pending']].forEach(function (p) {
-    var email = p[0] + '@amperagecapital.com';
-    db.seed(O + '/customers/' + AMP + '/users/' + email, { email: email, role: p[1], status: p[2] });
-    db.seed(O + '/customer_index/' + email, { customerId: AMP });
+  db.seed(O + '/customers/' + HRC, { orgId: ORG, name: 'Harbor Ridge Capital', status: 'active', source: 'office', accountType: 'company', createdAt: '2026-09-22T00:00:00Z' });
+  [['dana', 'owner', 'active'], ['cfo', 'user', 'active'], ['new', 'user', 'pending']].forEach(function (p) {
+    var email = p[0] + '@harborridge.example';
+    db.seed(O + '/customers/' + HRC + '/users/' + email, { email: email, role: p[1], status: p[2] });
+    db.seed(O + '/customer_index/' + email, { customerId: HRC });
   });
 }
 var PRICED = { customerEditorLite: { monthlyPriceCents: 79900, yearlyPriceCents: 799000, currency: 'USD' } };
-function account() { return db.data.get(O + '/customers/' + AMP); }
+function account() { return db.data.get(O + '/customers/' + HRC); }
 
 /* the webhook, as Vercel calls it: raw bytes in, status + JSON out. A
    subscription event is what Stripe holds at that moment, so the stub's
@@ -89,39 +89,39 @@ var NOW = Math.floor(Date.parse('2026-09-24T12:00:00Z') / 1000), MONTH = 30 * 86
 function sub(id, status, extra) {
   return Object.assign({ id: id, object: 'subscription', customer: 'cus_T1', status: status, current_period_end: NOW + MONTH, collection_method: 'charge_automatically',
     items: { data: [{ price: { recurring: { interval: 'month' }, metadata: {} } }] },
-    metadata: { kind: 'customer-editor-lite', org: ORG, customerId: AMP, email: 'cfo@amperagecapital.com', plan: 'month' } }, extra || {});
+    metadata: { kind: 'customer-editor-lite', org: ORG, customerId: HRC, email: 'cfo@harborridge.example', plan: 'month' } }, extra || {});
 }
 function evt(id, type, object, created) { return { id: id, type: type, created: created || NOW, data: { object: object } }; }
 async function checkoutDone(again) {
   if (!again) await call(subscribe, 'POST', { plan: 'month' }, CFO);
   subs.sub_A = sub('sub_A', 'active');
   return deliver(evt('evt_done', 'checkout.session.completed', { id: 'cs_1', object: 'checkout.session', mode: 'subscription', customer: 'cus_T1', subscription: 'sub_A',
-    metadata: { kind: 'customer-editor-lite', org: ORG, customerId: AMP, email: 'cfo@amperagecapital.com', plan: 'month' } }));
+    metadata: { kind: 'customer-editor-lite', org: ORG, customerId: HRC, email: 'cfo@harborridge.example', plan: 'month' } }));
 }
 
 (async function () {
   console.log('\nthe offer');
   await test('no price set (or Editor Lite off, or no Stripe key): unavailable, and checkout is refused', async function () {
     seed();
-    var g = await call(subscribe, 'GET', {}, SHANNON);
+    var g = await call(subscribe, 'GET', {}, DANA);
     assert.equal(g.available, false); assert.equal(g.monthlyPriceCents, null); assert.equal(g.yearlyPriceCents, null); assert.equal(g.status, 'inactive'); assert.equal(g.entitled, false);
-    await rejects(call(subscribe, 'POST', { plan: 'month' }, SHANNON), 409, /does not offer/);
+    await rejects(call(subscribe, 'POST', { plan: 'month' }, DANA), 409, /does not offer/);
     assert.equal(calls.sessions.length + calls.customers.length, 0, 'Stripe is never called without a price');
     seed(Object.assign({}, PRICED, { editorLite: { enabled: false, modules: ['bess'] } }));
-    assert.equal((await call(subscribe, 'GET', {}, SHANNON)).available, false, 'the supplier has Editor Lite off');
+    assert.equal((await call(subscribe, 'GET', {}, DANA)).available, false, 'the supplier has Editor Lite off');
     seed(PRICED); var key = process.env.STRIPE_SECRET_KEY; delete process.env.STRIPE_SECRET_KEY;
-    try { assert.equal((await call(subscribe, 'GET', {}, SHANNON)).available, false, 'no Stripe key on the server'); } finally { process.env.STRIPE_SECRET_KEY = key; }
+    try { assert.equal((await call(subscribe, 'GET', {}, DANA)).available, false, 'no Stripe key on the server'); } finally { process.env.STRIPE_SECRET_KEY = key; }
     seed({ customerEditorLite: { monthlyPriceCents: 79900 } });
-    var m = await call(subscribe, 'GET', {}, SHANNON); assert.equal(m.available, true); assert.equal(m.yearlyPriceCents, null);
-    await rejects(call(subscribe, 'POST', { plan: 'year' }, SHANNON), 409, /yearly/);
-    await rejects(call(subscribe, 'POST', { plan: 'weekly' }, SHANNON), 400);
+    var m = await call(subscribe, 'GET', {}, DANA); assert.equal(m.available, true); assert.equal(m.yearlyPriceCents, null);
+    await rejects(call(subscribe, 'POST', { plan: 'year' }, DANA), 409, /yearly/);
+    await rejects(call(subscribe, 'POST', { plan: 'weekly' }, DANA), 400);
   });
   await test('only a verified, active person on an account sees the offer or starts a checkout', async function () {
     seed(PRICED);
     await rejects(call(subscribe, 'GET', {}, NEWBIE), 403, /waiting for approval/);
     await rejects(call(subscribe, 'POST', { plan: 'month' }, NEWBIE), 403);
     await rejects(call(subscribe, 'GET', {}, STRANGER), 403);
-    await rejects(call(subscribe, 'GET', {}, person('cfo@amperagecapital.com', { claims: { email_verified: false } })), 403, /confirm your email/);
+    await rejects(call(subscribe, 'GET', {}, person('cfo@harborridge.example', { claims: { email_verified: false } })), 403, /confirm your email/);
     assert.equal(calls.sessions.length, 0);
   });
 
@@ -136,16 +136,16 @@ async function checkoutDone(again) {
     assert.equal(s.mode, 'subscription'); assert.equal(s.customer, 'cus_T1'); assert.equal(li.quantity, 1);
     assert.deepEqual([li.price_data.currency, li.price_data.unit_amount, li.price_data.recurring.interval], ['usd', 799000, 'year']);
     assert.match(li.price_data.product_data.name, /Clean Cell Power Platform · Editor Lite/, 'white-labelled as the supplier\'s');
-    var want = { kind: 'customer-editor-lite', org: ORG, customerId: AMP, email: 'cfo@amperagecapital.com', plan: 'year' };
+    var want = { kind: 'customer-editor-lite', org: ORG, customerId: HRC, email: 'cfo@harborridge.example', plan: 'year' };
     assert.deepEqual(s.metadata, want); assert.deepEqual(s.subscription_data.metadata, want);
     assert(!('orgId' in s.metadata) && !('orgId' in calls.customers[0].params.metadata), 'orgId would route it to the TENANT\'s billing branch');
     assert.equal(calls.customers[0].key, 'sk_test_fixture', 'the env key, as api/stripe-create.js');
-    assert.match(calls.customers[0].opts.idempotencyKey, /cleancell\.us-acct_amperage/);
+    assert.match(calls.customers[0].opts.idempotencyKey, /cleancell\.us-acct_harbor/);
     assert.match(s.success_url, /^https:\/\/silmarillion\.clearskyomega\.com\/portals\/customer\/app\?org=cleancell\.us&tab=design&checkout=done$/);
     assert.match(s.cancel_url, /checkout=cancelled/);
-    assert.deepEqual(db.data.get('stripe_customers/cus_T1'), Object.assign({}, db.data.get('stripe_customers/cus_T1'), { kind: 'customer-editor-lite', org: ORG, customerId: AMP }));
+    assert.deepEqual(db.data.get('stripe_customers/cus_T1'), Object.assign({}, db.data.get('stripe_customers/cus_T1'), { kind: 'customer-editor-lite', org: ORG, customerId: HRC }));
     assert.equal(db.data.get(O + '/billing/current').stripeCustomerId, 'cus_TENANT', 'the tenant\'s own Stripe customer is untouched');
-    await call(subscribe, 'POST', { plan: 'month', from: 'portal' }, SHANNON);
+    await call(subscribe, 'POST', { plan: 'month', from: 'portal' }, DANA);
     assert.equal(calls.customers.length, 1, 'a colleague\'s checkout reuses the ACCOUNT\'s Stripe customer');
     assert.equal(calls.sessions[1].customer, 'cus_T1'); assert.equal(calls.sessions[1].line_items[0].price_data.unit_amount, 79900);
     assert.match(calls.sessions[1].success_url, /\/portals\/customer\/\?org=cleancell\.us&checkout=done#design$/);
@@ -158,17 +158,17 @@ async function checkoutDone(again) {
     var out = await checkoutDone();
     assert.equal(out.code, 200); assert.equal(out.body.customerEditorLite.applied, 'active');
     var g = account().editorLite;
-    assert.deepEqual([g.source, g.status, g.plan, g.stripeCustomerId, g.stripeSubscriptionId, g.subscribedBy], ['provider', 'active', 'month', 'cus_T1', 'sub_A', 'cfo@amperagecapital.com']);
+    assert.deepEqual([g.source, g.status, g.plan, g.stripeCustomerId, g.stripeSubscriptionId, g.subscribedBy], ['provider', 'active', 'month', 'cus_T1', 'sub_A', 'cfo@harborridge.example']);
     assert.equal(g.expiresAt, new Date((NOW + MONTH) * 1000).toISOString());
     var ctx = await X.context(ORG);
     assert.equal(D.entitlement(ctx, account(), null).active, true, 'buyer-design accepts it');
-    var view = await call(subscribe, 'GET', {}, SHANNON);
+    var view = await call(subscribe, 'GET', {}, DANA);
     assert.deepEqual([view.status, view.entitled, view.plan, view.canManage], ['active', true, 'month', true]);
     assert.equal(JSON.stringify(db.data.get(O + '/billing/current')), tenantBefore, 'the supplier\'s billing/current is not touched');
     assert.equal(db.data.get('stripe_events/evt_done').applied, 'active');
     var audit = Array.from(db.data.values()).filter(function (v) { return v && v.action === 'customer-editor-lite'; });
-    assert.equal(audit.length, 1); assert.equal(audit[0].customerId, AMP); assert.equal(audit[0].grant.status, 'active'); assert.equal(audit[0].was, null);
-    await rejects(call(subscribe, 'POST', { plan: 'year' }, SHANNON), 409, /already has/);
+    assert.equal(audit.length, 1); assert.equal(audit[0].customerId, HRC); assert.equal(audit[0].grant.status, 'active'); assert.equal(audit[0].was, null);
+    await rejects(call(subscribe, 'POST', { plan: 'year' }, DANA), 409, /already has/);
   });
   await test('the same event twice is one grant; an older event never overwrites a newer one', async function () {
     seed(PRICED); await checkoutDone();
@@ -196,16 +196,16 @@ async function checkoutDone(again) {
     assert.equal(gone.body.customerEditorLite.applied, 'inactive');
     var g = account().editorLite; assert.equal(g.status, 'inactive'); assert.equal(g.source, 'provider');
     assert.equal(D.entitlement(await X.context(ORG), account(), null).active, false, 'revoked');
-    assert.equal((await call(subscribe, 'GET', {}, SHANNON)).status, 'inactive');
+    assert.equal((await call(subscribe, 'GET', {}, DANA)).status, 'inactive');
     assert.equal(db.data.get(O + '/billing/current').tier, 'standard', 'a customer cancelling never sets the SUPPLIER to trial');
     /* a supplier's trial is not revoked by a stray lapse */
-    seed(PRICED); db.data.get(O + '/customers/' + AMP).editorLite = { status: 'trial', source: 'owner-trial', expiresAt: '2099-01-01T00:00:00Z' };
-    db.seed('stripe_customers/cus_T1', { kind: 'customer-editor-lite', org: ORG, customerId: AMP });
+    seed(PRICED); db.data.get(O + '/customers/' + HRC).editorLite = { status: 'trial', source: 'owner-trial', expiresAt: '2099-01-01T00:00:00Z' };
+    db.seed('stripe_customers/cus_T1', { kind: 'customer-editor-lite', org: ORG, customerId: HRC });
     await deliver(evt('evt_inc', 'customer.subscription.created', sub('sub_B', 'incomplete'), NOW));
     assert.equal(account().editorLite.source, 'owner-trial', 'an incomplete checkout leaves the trial alone');
   });
   await test('a subscription event with no metadata is still ours by the pointer; a pointer to another account is refused', async function () {
-    seed(PRICED); db.seed('stripe_customers/cus_T1', { kind: 'customer-editor-lite', org: ORG, customerId: AMP });
+    seed(PRICED); db.seed('stripe_customers/cus_T1', { kind: 'customer-editor-lite', org: ORG, customerId: HRC });
     var bare = sub('sub_C', 'active'); bare.metadata = {};
     var r = await deliver(evt('evt_bare', 'customer.subscription.updated', bare));
     assert.equal(r.body.customerEditorLite.applied, 'active'); assert.equal(account().editorLite.stripeSubscriptionId, 'sub_C');
@@ -241,7 +241,7 @@ async function checkoutDone(again) {
   });
   await test('an event about our Stripe customer that carries no grant (customer.created / .updated) is acknowledged, never sent to the tenant branch', async function () {
     seed(PRICED); var tenantBefore = JSON.stringify(db.data.get(O + '/billing/current'));
-    var cus = { id: 'cus_T1', object: 'customer', email: 'cfo@amperagecapital.com', metadata: { kind: 'customer-editor-lite', org: ORG, customerId: AMP } };
+    var cus = { id: 'cus_T1', object: 'customer', email: 'cfo@harborridge.example', metadata: { kind: 'customer-editor-lite', org: ORG, customerId: HRC } };
     for (var type of ['customer.created', 'customer.updated']) {
       var r = await deliver(evt('evt_' + type.replace('.', ''), type, cus));
       assert.equal(r.code, 200, type + ' must not 500 (Stripe would retry it for days)');
@@ -280,16 +280,16 @@ async function checkoutDone(again) {
   console.log('\nmanage');
   await test('manage: the owner or the subscriber opens the billing portal for the ACCOUNT\'s Stripe customer; a colleague cannot', async function () {
     seed(PRICED);
-    await rejects(call(subscribe, 'POST', { action: 'manage' }, SHANNON), 409, /no Editor Lite subscription/);
+    await rejects(call(subscribe, 'POST', { action: 'manage' }, DANA), 409, /no Editor Lite subscription/);
     await checkoutDone();
-    db.seed(O + '/customers/' + AMP + '/users/jane@amperagecapital.com', { email: 'jane@amperagecapital.com', role: 'user', status: 'active' });
-    db.seed(O + '/customer_index/jane@amperagecapital.com', { customerId: AMP });
-    await rejects(call(subscribe, 'POST', { action: 'manage' }, person('jane@amperagecapital.com')), 403, /owner/);
-    var r = await call(subscribe, 'POST', { action: 'manage' }, SHANNON);
+    db.seed(O + '/customers/' + HRC + '/users/jane@harborridge.example', { email: 'jane@harborridge.example', role: 'user', status: 'active' });
+    db.seed(O + '/customer_index/jane@harborridge.example', { customerId: HRC });
+    await rejects(call(subscribe, 'POST', { action: 'manage' }, person('jane@harborridge.example')), 403, /owner/);
+    var r = await call(subscribe, 'POST', { action: 'manage' }, DANA);
     assert.match(r.url, /^https:\/\/billing\.stripe\.com\//); assert.equal(calls.portals[0].customer, 'cus_T1');
     assert.match(calls.portals[0].return_url, /\/portals\/customer\/app\?org=cleancell\.us&tab=design$/);
     await call(subscribe, 'POST', { action: 'manage' }, CFO);
-    assert.equal(calls.portals.length, 2); await rejects(call(subscribe, 'POST', { action: 'refund' }, SHANNON), 400);
+    assert.equal(calls.portals.length, 2); await rejects(call(subscribe, 'POST', { action: 'refund' }, DANA), 400);
   });
 
   console.log('\nthe prices');
@@ -300,7 +300,7 @@ async function checkoutDone(again) {
     assert.deepEqual(db.data.get(O + '/billing/current').customerEditorLite, { monthlyPriceCents: 79900, yearlyPriceCents: 799000, currency: 'USD', interval: 'month' }, 'a price left out is kept');
     await billingApi({ method: 'POST', body: { orgId: ORG, customerEditorLite: { monthlyPriceCents: null } }, caller: STAFF }, res);
     assert.equal(db.data.get(O + '/billing/current').customerEditorLite.monthlyPriceCents, null, 'null withdraws a plan');
-    assert.equal((await call(subscribe, 'GET', {}, SHANNON)).monthlyPriceCents, null);
+    assert.equal((await call(subscribe, 'GET', {}, DANA)).monthlyPriceCents, null);
     await rejects(billingApi({ method: 'POST', body: { orgId: ORG, customerEditorLite: { yearlyPriceCents: 12.5 } }, caller: STAFF }, res), 400, /whole cents/);
     await rejects(billingApi({ method: 'POST', body: { orgId: ORG, customerEditorLite: { yearlyPriceCents: 50 } }, caller: STAFF }, res), 400);
     await rejects(billingApi({ method: 'POST', body: { orgId: ORG, customerEditorLite: { costCents: 1 } }, caller: STAFF }, res), 400);
@@ -311,7 +311,7 @@ async function checkoutDone(again) {
 
   console.log('\ntenant-billed pay links');
   function pricedOrder(id, accounting, invoice) {
-    db.seed('orders/' + id, { orgId: ORG, orderNo: 'CC-' + id, status: 'accepted', customerId: AMP, createdAt: 1, items: [{ sku: 'R60', qty: 1 }], customer: { email: 'shannon@amperagecapital.com' },
+    db.seed('orders/' + id, { orgId: ORG, orderNo: 'CC-' + id, status: 'accepted', customerId: HRC, createdAt: 1, items: [{ sku: 'R60', qty: 1 }], customer: { email: 'dana@harborridge.example' },
       tenantPricing: { total: 1000, currency: 'USD', publishedToCustomer: true },
       logic: { accounting: accounting, acceptedAt: '2026-09-24T00:00:00Z', commercial: { baseCents: 100000, feeCents: 0, totalCents: 100000, depositCents: 30000, balanceCents: 70000, terms: { depositPct: 30, dueDays: 0 } },
         invoices: { deposit: Object.assign({ amountCents: 30000, status: accounting === 'tenant' ? 'to_issue' : 'queued' }, invoice || {}) } } });

@@ -57,6 +57,8 @@ function daysBetween(a, b) { return Math.round((ms(b) - ms(a)) / 86400000); }
 function addDays(d, n) { return new Date(ms(d) + n * 86400000).toISOString().slice(0, 10); }
 function bucket(days) { return days <= 0 ? 'current' : days <= 30 ? '1-30' : days <= 60 ? '31-60' : days <= 90 ? '61-90' : '90+'; }
 function usd(c) { return (Number(c || 0) / 100); }
+/* money as a person reads it: $90,225.00 */
+function dollars(c) { return '$' + (Number(c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 function settle(inv) {
   inv = inv || {};
@@ -140,7 +142,7 @@ function recordPlan(o, stage, p) {
   if (re) { entry.reinstates = re.reinstates; entry.reinstateReason = re.reinstateReason; }
   var payments = pays.concat([entry]);
   var invoice = Object.assign({}, inv, { payments: payments }, settle({ amountCents: inv.amountCents, id: inv.id, payments: payments }), { checkedAt: p.at });
-  if (invoice.paidCents > inv.amountCents) throw fail(400, 'Payments would exceed the invoice: USD ' + usd(invoice.paidCents) + ' against ' + usd(inv.amountCents));
+  if (invoice.paidCents > inv.amountCents) throw fail(400, 'Payments would exceed the invoice: ' + dollars(invoice.paidCents) + ' recorded against an invoice of ' + dollars(inv.amountCents));
   var liftHold = !!(l.paymentHold && l.paymentHold.stage === stage && invoice.satisfied);
   var event = stage + ' invoice ' + inv.id + ': USD ' + usd(p.amountCents) + ' received ' + p.date + ' · bank reference ' + ref +
     (invoice.satisfied ? ' · paid in full' : ' · USD ' + usd(invoice.balanceCents) + ' outstanding') +

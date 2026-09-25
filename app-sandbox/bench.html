@@ -131,6 +131,16 @@
   footer .r.ok{color:var(--ok);border-color:#1E5C3E}
   footer .r.bad{color:var(--bad);border-color:#5C2723}
   footer .cam{all:unset;cursor:pointer;font-size:13px;color:var(--sub);border:1px solid var(--line);padding:7px 12px;border-radius:9px;white-space:nowrap}
+  /* a damaged label, or a phone with no gun: type the serial */
+  #typebox{width:100%;max-width:860px;display:flex;gap:8px;flex:none}
+  #typebox[hidden]{display:none}
+  #typed{flex:1;min-width:0;font:600 18px/1.3 var(--mono);background:var(--panel);color:var(--ink);border:2px solid var(--accent);border-radius:12px;padding:12px;-webkit-user-select:text;user-select:text}
+  #typebox button{font:800 16px system-ui,sans-serif;border-radius:12px;padding:0 18px;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+  #typebox #typed-go{background:var(--accent);border-color:var(--accent);color:#062A30}
+  #back-app{font:700 14px system-ui,sans-serif;color:var(--accent);text-decoration:none;white-space:nowrap}
+  #pair .row2{display:flex;gap:10px}
+  #pair .row2 button{flex:1}
+  #pair #p-cancel{background:transparent;border:1px solid var(--line);color:var(--ink)}
 
   /* pairing — seen once per tablet, by the person who installs it */
   #pair{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;padding:24px;z-index:20}
@@ -155,11 +165,12 @@
   @media (prefers-reduced-motion:reduce){#verdict{transition:none}}
 </style>
 <link rel="stylesheet" href="/omega-logic-theme.css">
-<style>body.logic-theme{--bg:var(--paper);--panel:var(--sunk);--accent:var(--brand);--ok:#198764;--ok-dim:#E9F7F0;--bad:#C4372B;--bad-dim:#FCEAE8;--wait:#A26718;--wait-dim:#FFF5DD}#pair button,.logic-theme .b{color:white}.logic-theme #verdict,.logic-theme .step{border-radius:14px}.logic-theme #scan,.logic-theme .part input{background:white}.logic-theme .step{background:white}</style>
+<style>body.logic-theme{--bg:var(--paper);--panel:var(--sunk);--accent:var(--brand);--ok:#198764;--ok-dim:#E9F7F0;--bad:#C4372B;--bad-dim:#FCEAE8;--wait:#A26718;--wait-dim:#FFF5DD}#pair button,.logic-theme .b,.logic-theme #typebox #typed-go{color:white;background:var(--brand-fill);border-color:var(--brand-fill)}.logic-theme #pair #p-cancel{color:var(--ink)}.logic-theme #typed{background:white}.logic-theme #back-app{color:var(--brand-fill)}.logic-theme #verdict,.logic-theme .step{border-radius:14px}.logic-theme #scan,.logic-theme .part input{background:white}.logic-theme .step{background:white}</style>
 </head>
 <body class="logic-theme">
 
 <header>
+  <a id="back-app" href="/plant/app" hidden>‹ Plant app</a>
   <div>
     <div class="st" id="h-station">Station</div>
     <div class="seq" id="h-seq"></div>
@@ -168,7 +179,7 @@
     <select id="pick" hidden aria-label="The bench you are at"></select>
     <span class="pill" id="p-net">checking</span>
     <span class="pill q" id="p-queue" hidden></span>
-    <span class="pill"><button type="button" id="unpair" title="Unpair this tablet">unpair</button></span>
+    <span class="pill"><button type="button" id="unpair" title="Unpair this bench">unpair</button></span>
   </div>
 </header>
 
@@ -180,7 +191,8 @@
     <div id="sub"></div>
   </div>
   <input id="scan" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
-         inputmode="none" placeholder="Pull the trigger on a unit, or on a part going into it">
+         inputmode="none" placeholder="Scan a unit or a part" aria-label="Scan a unit's label, or a part going into it">
+  <div id="typebox" hidden><input id="typed" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Type the serial" aria-label="Type a serial or a part code"><button type="button" id="typed-go">Go</button><button type="button" id="typed-x" aria-label="Close the typing field">✕</button></div>
   <div id="work" aria-live="polite"></div>
   <div class="strip" id="strip"></div>
   <div id="instructions" role="status"></div>
@@ -188,6 +200,7 @@
 
 <footer>
   <div class="recent" id="recent"></div>
+  <button class="cam" id="typeBtn" type="button">Type a serial</button>
   <button class="cam" id="camBtn" type="button">Use camera</button>
 </footer>
 
@@ -198,7 +211,7 @@
   <input id="p-id" placeholder="eol-01" autocapitalize="off" autocorrect="off" spellcheck="false">
   <label for="p-token">Pairing token</label>
   <input id="p-token" placeholder="paste from the console" autocapitalize="off" autocorrect="off" spellcheck="false">
-  <button type="button" id="p-go">Pair</button>
+  <div class="row2"><button type="button" id="p-cancel">Cancel</button><button type="button" id="p-go">Pair</button></div>
   <div class="err" id="p-err"></div>
 </div></div>
 
@@ -287,7 +300,7 @@
     if (!current || !current.work || !current.work.steps || !current.work.steps.length) { el.className = ''; el.innerHTML = ''; return; }
     var w = current.work, firstOpen = null, h = '';
     h += '<div class="wh"><span><b>' + esc(current.serial) + '</b>' + (current.product ? ' · ' + esc(current.product) : '') + '</span>'
-       + '<span>' + (current.workOrder ? 'works order ' + esc(current.workOrder) + ' · ' : '') + (w.steps.length - w.open.length) + ' of ' + w.steps.length + ' steps done</span></div>';
+       + '<span>' + (current.workOrder ? 'order ' + esc(current.workOrder) + ' · ' : '') + (w.steps.length - w.open.length) + ' of ' + w.steps.length + ' steps done</span></div>';
     for (var i = 0; i < w.steps.length; i++) {
       var s = w.steps[i], now = !s.done && !firstOpen;
       if (now) firstOpen = s;
@@ -361,6 +374,9 @@
 
   /* ── the queue: written BEFORE the network is touched ───────────────── */
   function enqueue(item) {
+    /* no bench, no queue: a scan held for "whichever bench pairs next" would
+       be sent with that bench's credential */
+    if (!cfg) { show('bad', '✕', '', 'This bench is not paired', 'tap “pair” at the top'); openPair(''); return; }
     item.scanId = uuid(); item.at = new Date().toISOString();
     if (cfg && cfg.roaming) {
       var pick = $('pick').value;
@@ -434,14 +450,15 @@
       beep(false);
     }
     if (j.ok) {
-      current = { serial: serial, work: j.work || null, routing: j.routing || null, at: j.unit ? j.unit.at : '', workOrder: j.workOrder || null, product: j.product || null };
+      current = { serial: serial, work: j.work || null, routing: j.routing || null, at: j.unit ? j.unit.at : '', workOrder: j.workOrderNo || null, product: j.product || null };
       if (!current.work) $('sub').textContent = ($('sub').textContent ? $('sub').textContent + ' · ' : '') + 'nothing to issue here — scan the next unit';
     } else if (current && current.serial === serial) {
       current = null;
     }
     paintWork();
     if (j.unit && j.routing) strip(j.routing, j.unit.at);
-    $('instructions').textContent = (j.workOrder ? 'Work order: ' + j.workOrder + '\n' : '') + (j.instructions || cfg.instructions || '') + (j.parameters ? '\nParameters: ' + j.parameters : '');
+    /* the order number people say; never the document id (wo_…) */
+    $('instructions').textContent = (j.workOrderNo ? 'Work order: ' + j.workOrderNo + '\n' : '') + (j.instructions || (cfg && cfg.instructions) || '') + (j.parameters ? '\nParameters: ' + j.parameters : '');
     pushRecent(serial, !!j.ok);
   }
 
@@ -450,11 +467,17 @@
   function focusScan() {
     if ($('pair').classList.contains('on') || $('cam').classList.contains('on')) return;
     var a = document.activeElement;
-    if (a && (a.id === 'pick' || (a.classList && a.classList.contains('lot')))) return;   /* picking a bench, typing a lot */
-    try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+    if (a && (a.id === 'pick' || a.id === 'typed' || (a.classList && a.classList.contains('lot')))) return;   /* picking a bench, typing a serial or a lot */
+    /* the typing field is open: IT is where keystrokes go — a gun's too, and
+       its Enter sends them (goTyped). Never nowhere: after a tap on Issue or
+       Done redraws the steps, focus would otherwise sit on the page and
+       every scan after it would be lost without a word (F3). */
+    var target = $('typebox').hidden ? input : $('typed');
+    if (a === target) return;
+    try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); }
   }
   setInterval(focusScan, 1200);
-  document.addEventListener('click', function (e) { if (!(e.target && (e.target.id === 'pick' || (e.target.classList && e.target.classList.contains('lot'))))) focusScan(); });
+  document.addEventListener('click', function (e) { if (!(e.target && (e.target.id === 'pick' || e.target.id === 'typed' || (e.target.classList && e.target.classList.contains('lot'))))) focusScan(); });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) focusScan(); });
   /* Enter in a lot field issues that part with the lot. */
   $('work').addEventListener('keydown', function (e) {
@@ -505,6 +528,21 @@
     if (e.key === 'Enter') { e.preventDefault(); submit(input.value); }
   });
 
+  /* ── typing a serial ─────────────────────────────────────────────────
+     The scan box keeps inputmode="none" so a gun never pops a keyboard over
+     the bench; a phone with no gun, or a label too damaged to read, types
+     here instead and presses Go (or Enter). Same submit() as a scan. */
+  function openType() { $('typebox').hidden = false; $('typeBtn').textContent = 'Close typing'; setTimeout(function () { try { $('typed').focus(); } catch (e) {} }, 30); }
+  function closeType() { $('typebox').hidden = true; $('typed').value = ''; $('typeBtn').textContent = 'Type a serial'; focusScan(); }
+  function goTyped() { var v = $('typed').value.trim(); if (!v) { $('typed').focus(); return; } $('typed').value = ''; submit(v); $('typed').focus(); }
+  $('typeBtn').addEventListener('click', function () { if ($('typebox').hidden) openType(); else closeType(); });
+  $('typed-go').addEventListener('click', goTyped);
+  $('typed-x').addEventListener('click', closeType);
+  $('typed').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); goTyped(); } });
+  /* a finger on the scan box means "I want to type": open the field that
+     brings up the keyboard (a gun never touches the screen) */
+  input.addEventListener('pointerdown', function (e) { if (e.pointerType === 'touch' && $('typebox').hidden) { e.preventDefault(); openType(); } });
+
   /* ── camera fallback, where there is no gun ─────────────────────────── */
   var camStream = null, camTimer = null;
   function closeCam() {
@@ -524,7 +562,7 @@
       camStream = stop;
     }, function (e) {
       closeCam();
-      show('bad', '✕', '', e.message, 'use the gun or type the serial');
+      show('bad', '✕', '', e.message, 'use the gun, or tap “Type a serial”');
     });
   });
 
@@ -537,6 +575,12 @@
     setTimeout(function () { $('p-id').focus(); }, 50);
   }
   function closePair() { $('pair').classList.remove('on'); focusScan(); }
+  /* Cancel: back to the bench as it was; an unpaired bench says so and the
+     pill at the top pairs it later */
+  $('p-cancel').addEventListener('click', function () {
+    closePair();
+    if (!cfg) show('wait', '!', 'Not paired', 'This bench is not paired yet', 'tap “pair” at the top when you have the station ID and token');
+  });
   $('p-go').addEventListener('click', function () {
     var id = $('p-id').value.trim(), tok = $('p-token').value.trim();
     if (!id || !tok) { $('p-err').textContent = 'Both fields are needed.'; return; }
@@ -566,10 +610,14 @@
   $('p-token').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('p-go').click(); });
 
   $('unpair').addEventListener('click', function () {
+    if (!cfg) { openPair(''); return; }
     if (queue.length) { show('wait', '!', '', 'Pending scans must be resolved before unpairing', 'Contact your plant manager; the queue has been retained.'); return; }
+    /* the token is shown once and cannot be shown again: one stray tap on a
+       small pill must not cost the bench its credential */
+    if (!window.confirm('Unpair this bench (' + (cfg.label || cfg.stationId) + ')?\n\nThe pairing token is shown only once. To pair again, an administrator creates a new credential under Work orders → Pair a scanner.')) return;
     cfg = null; store(LS_KEY, null);
     queue = []; store(LS_QUEUE, queue); paintQueue();
-    current = null; paintWork();
+    current = null; paintWork(); paintHeader();
     openPair('');
   });
 
@@ -584,9 +632,11 @@
   function paintHeader() {
     /* the bench is Omega Logic's plant, in its own colours on every workspace */
     paintPick();
+    $('unpair').textContent = cfg ? 'unpair' : 'pair';
+    $('unpair').title = cfg ? 'Unpair this bench' : 'Pair this bench';
     $('h-station').textContent = (cfg && cfg.label) || 'Station';
     $('h-seq').textContent = cfg ? [cfg.lineId, cfg.location, cfg.roaming ? 'roaming · pick the bench per scan' : (cfg.station || cfg.stationId)].filter(Boolean).join(' · ') : '';
-    $('instructions').textContent = cfg ? (cfg.instructions || '') + (cfg.machine ? '\nMachine station: test results must come from the paired rig.' : '') : '';
+    $('instructions').textContent = cfg ? (cfg.instructions || '') + (cfg.machine ? '\nMachine station: test results come from the paired rig. With the rig down, a supervisor records the result by hand in the Plant app (Quality → the serial → Record the result by hand).' : '') : '';
   }
   function refreshStation() {
     if (!cfg) return;
@@ -601,6 +651,23 @@
         if (previous.indexOf('Work order:') === 0) $('instructions').textContent = previous;
       })['catch'](function (e) { $('instructions').textContent = e.message; });
   }
+
+  /* ── the way back ─────────────────────────────────────────────────────
+     Opened from the installed Plant app, this page runs inside it with no
+     browser bar: without a link there is no way back. A kiosk tablet opened
+     straight on the bench shows none. */
+  (function () {
+    var back = '', k = 'omega_bench_back';
+    try {
+      var rf = document.referrer ? new URL(document.referrer) : null;
+      if (rf && rf.origin === location.origin && /^\/(plant\/app|app-sandbox\/plant)/.test(rf.pathname)) back = rf.pathname + rf.search;
+      if (back) sessionStorage.setItem(k, back); else back = sessionStorage.getItem(k) || '';
+    } catch (e) {}
+    var standalone = false;
+    try { standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches); } catch (e) {}
+    if (!back && standalone) back = '/plant/app';
+    if (back) { $('back-app').href = back; $('back-app').hidden = false; }
+  })();
 
   /* ── boot ───────────────────────────────────────────────────────────── */
   window.addEventListener('online', function () { paintNet(); flush(); });

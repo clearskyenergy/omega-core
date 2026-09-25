@@ -38,7 +38,7 @@
    Scrubbed 500s, like api/my-orders.js.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
-var A = require('./_lib/admin'), B = require('./_lib/buyer-accounts'), P = require('./_lib/logic-policy'), C = require('./_lib/custody'), SG = require('./_lib/site-geo');
+var A = require('./_lib/admin'), B = require('./_lib/buyer-accounts'), P = require('./_lib/logic-policy'), C = require('./_lib/custody'), SG = require('./_lib/site-geo'), Pt = require('./_lib/portal');
 var crypto = require('crypto');
 var PLAN_CHUNK = 25;   // units per transaction: the plant scans these units while they are built
 var CUSTOMER_MOVES = { received: 'receive', assign: 'assign', installed: 'install', commissioned: 'commission' };
@@ -63,7 +63,33 @@ function pub(u, product, now, order) {
     plannedSiteId: c.plannedSiteId || null, plannedSiteName: c.plannedSiteName || null, confirmation: C.confirmation(c), confirmedAt: c.confirmedAt || null,
     coverage: C.coverageWithInheritance(product, u, now, shipped).map(function (cv) { return { id: cv.templateId, type: cv.type, provider: cv.provider, status: cv.status, why: cv.why, from: cv.startDate, until: cv.endDate, termMonths: cv.termMonths, metrics: cv.metrics, docUrl: cv.docUrl }; }) };
 }
-function pubSite(s) { return { id: s.id, name: s.name, address: s.address || {}, endCustomer: s.endCustomer || '', interconnection: s.interconnection || {}, contact: s.contact || {}, notes: s.notes || '', status: s.status || 'active', ref: s.ref || '', lat: s.lat == null ? null : s.lat, lng: s.lng == null ? null : s.lng }; }
+/* A site as the CUSTOMER reads it, key by key: api/_lib/portal.js
+   publicSite (the details are shown only when they are the customer's own
+   entries — what the office typed about a site stays in the office). */
+var pubSite = Pt.publicSite, ownEntries = Pt.ownSiteEntries, DETAILS = ['interconnection', 'contact', 'endCustomer', 'notes'];
+/* What the customer entered, kept apart from the record the office also
+   edits: their previous entries, with what they sent now on top (a field
+   they did not send is theirs as it was). Cleaned by the same C.site. */
+function entriesOf(b, before, rec, email, now) {
+  var prev = before || {}, sent = function (k) { return b[k] !== undefined; };
+  var merged = { name: rec.name, address: rec.address,
+    interconnection: Object.assign({}, prev.interconnection || {}, b.interconnection && typeof b.interconnection === 'object' ? b.interconnection : {}),
+    contact: Object.assign({}, prev.contact || {}, b.contact && typeof b.contact === 'object' ? b.contact : {}),
+    endCustomer: sent('endCustomer') ? b.endCustomer : prev.endCustomer, notes: sent('notes') ? b.notes : prev.notes };
+  var c = C.site(merged);
+  return { interconnection: c.interconnection, contact: c.contact, endCustomer: c.endCustomer, notes: c.notes, at: now, by: email };
+}
+/* An edit from the customer changes what they sent; a detail they did not
+   send (or cannot see: the office's) is kept, never wiped. */
+function keepUnsent(b, existing) {
+  if (!existing) return b;
+  var out = Object.assign({}, b);
+  DETAILS.forEach(function (k) {
+    if (k === 'interconnection' || k === 'contact') out[k] = Object.assign({}, existing[k] || {}, b[k] && typeof b[k] === 'object' ? b[k] : {});
+    else if (b[k] === undefined) out[k] = existing[k];
+  });
+  return out;
+}
 function poOf(o) { return (o.purchaseOrder && o.purchaseOrder.number) || o.poNumber || null; }
 
 module.exports = A.handler(async function (req, res) {
@@ -123,7 +149,8 @@ module.exports = A.handler(async function (req, res) {
           var item = pl.create[i], id = null;
           for (var j = 0; j < item.candidates.length && !id; j++) { var cand = item.candidates[j]; if (taken[cand]) continue; taken[cand] = true; if (!(await tx.get(root(db, org).collection('sites').doc(cand))).exists) id = cand; }
           if (!id) throw A.httpError(409, 'Row ' + (item.row + 1) + ' (' + item.rec.name + '): too many sites share that name and ZIP. Rename it and try again.');
-          made.push({ id: id, doc: Object.assign({ orgId: org }, item.rec, { customerId: acct.id, source: 'customer-list', createdAt: now, createdBy: email, updatedAt: now, updatedBy: email }) });
+          made.push({ id: id, doc: Object.assign({ orgId: org }, item.rec, { customerId: acct.id, source: 'customer-list', createdAt: now, createdBy: email, updatedAt: now, updatedBy: email,
+            customerEntries: { interconnection: item.rec.interconnection, contact: item.rec.contact, endCustomer: item.rec.endCustomer, notes: item.rec.notes, at: now, by: email } }) });
         }
         made.forEach(function (m) { tx.create(root(db, org).collection('sites').doc(m.id), m.doc); });
         return { ok: true, created: made.map(function (m) { return pubSite(Object.assign({ id: m.id }, m.doc)); }), existing: pl.existing.map(pubSite) };
@@ -180,11 +207,12 @@ module.exports = A.handler(async function (req, res) {
         await still(tx);
         var existing = id ? await tx.get(root(db, org).collection('sites').doc(id)) : null;
         if (id && (!existing.exists || existing.data().customerId !== acct.id)) throw A.httpError(404, 'Site not found on your account');
-        var rec = C.site(Object.assign({}, b, { customerId: acct.id, lifecycleSiteId: existing && existing.exists ? existing.data().lifecycleSiteId : null }), existing && existing.exists ? existing.data() : null);
+        var before = existing && existing.exists ? existing.data() : null;
+        var rec = C.site(Object.assign({}, keepUnsent(b, before), { customerId: acct.id, lifecycleSiteId: before ? before.lifecycleSiteId : null }), before);
         rec.customerId = acct.id;
-        var sref = existing && existing.exists ? existing.ref : root(db, org).collection('sites').doc(C.siteId(acct.id, rec));
+        var sref = before ? existing.ref : root(db, org).collection('sites').doc(C.siteId(acct.id, rec));
         if (!id) { var clash = await tx.get(sref); if (clash.exists) throw A.httpError(409, 'You already have a site with that name and ZIP'); }
-        var doc = Object.assign({ orgId: org }, rec, { updatedAt: now, updatedBy: email });
+        var doc = Object.assign({ orgId: org }, rec, { updatedAt: now, updatedBy: email, customerEntries: entriesOf(b, before ? ownEntries(before) : null, rec, email, now) });
         if (existing && existing.exists) tx.update(sref, doc); else tx.create(sref, Object.assign(doc, { createdAt: now, createdBy: email, source: 'customer' }));
         return { ok: true, site: pubSite(Object.assign({ id: sref.id }, doc)) };
       });

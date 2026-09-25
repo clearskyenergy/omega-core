@@ -14,6 +14,7 @@
   "indexes": [
     { "collectionGroup": "projects", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" } ] },
     { "collectionGroup": "plant_units", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "inventoryStatus", "order": "ASCENDING" } ] },
+    { "collectionGroup": "plant_units", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "inventoryStatus", "order": "ASCENDING" }, { "fieldPath": "shipUnit", "order": "ASCENDING" } ] },
     { "collectionGroup": "plant_units", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "rootSerial", "order": "ASCENDING" } ] },
     { "collectionGroup": "plant_units", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "orderId", "order": "ASCENDING" } ] },
     { "collectionGroup": "plant_units", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },

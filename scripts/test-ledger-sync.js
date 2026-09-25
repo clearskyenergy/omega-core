@@ -103,10 +103,10 @@ function stSeed(org, acct, extra) {
 }
 function view(o) {
   o = o || {};
-  return { id: o.id || 'amp', orgId: ORG, orderNo: o.orderNo || 'CC-26-5001', poNumber: o.po === undefined ? 'CCUS-3V3I-0926' : o.po,
-    customer: { name: 'Dana Reyes', company: 'Amperage Capital', email: 'ap@amperage.example' },
-    account: o.account || { id: 'c1', key: 'account:c1', name: 'Amperage Capital' },
-    invoice: { stage: o.stage || 'deposit', number: o.number || 'CCUS-3V3I-0926-01 Rev B', issuedAt: '2026-09-23', dueAt: o.dueAt === undefined ? '2026-09-23' : o.dueAt,
+  return { id: o.id || 'amp', orgId: ORG, orderNo: o.orderNo || 'CC-26-5001', poNumber: o.po === undefined ? 'ACME-4X7Q-0926' : o.po,
+    customer: { name: 'Dana Reyes', company: 'Acme Fleet', email: 'ap@acme.example' },
+    account: o.account || { id: 'c1', key: 'account:c1', name: 'Acme Fleet' },
+    invoice: { stage: o.stage || 'deposit', number: o.number || 'ACME-4X7Q-0926-01 Rev B', issuedAt: '2026-09-23', dueAt: o.dueAt === undefined ? '2026-09-23' : o.dueAt,
       amountCents: o.amountCents || 134909910, ledger: o.ledger || null, payments: o.payments || [] },
     ledgerSync: o.ledgerSync || { provider: 'quickbooks', quickbooks: { itemRef: '17', taxCodeRef: 'NON', approved: true } } };
 }
@@ -237,7 +237,7 @@ await check('qbo.js with an org keeps its own token document, redirect and refre
   var j = await Q.request(ORG, 'invoice', { Line: [] }, 'rid-1');
   assert.equal(j.Invoice.Id, '145'); assert.equal(j.realmId, '9130');
   assert.equal(calls[0].headers.Authorization, 'Bearer AT-SECRET-token'); assert.deepEqual(JSON.parse(calls[0].body), { Line: [] });
-  route('GET', /\/v3\/company\/9130\/invoice\/999\?minorversion=75$/, { status: 400, body: { Fault: { Error: [{ code: '610', Message: 'Object Not Found: Amperage Capital' }] } } });
+  route('GET', /\/v3\/company\/9130\/invoice\/999\?minorversion=75$/, { status: 400, body: { Fault: { Error: [{ code: '610', Message: 'Object Not Found: Acme Fleet' }] } } });
   await assert.rejects(Q.request(ORG, 'invoice/999'), function (e) {
     assert.equal(e.status, 502); assert.equal(e.code, '610');
     assert.equal(e.message, 'QuickBooks request failed (400); review the integration and retry'); return true;
@@ -323,19 +323,19 @@ await check('QuickBooks push: one customer per ACCOUNT, stable request ids, DocN
   assert.deepEqual(r, { provider: 'quickbooks', invoiceId: '145', number: null, customerId: '58', company: '9130',
     hostedUrl: 'https://connect.intuit.com/portal/app/CommerceNetwork/view/scs-v1-abc', totalCents: 134909910, warning: null });
   var q = calls.filter(function (c) { return /\/query\?/.test(c.url); })[0];
-  assert.equal(decodeURIComponent(q.url.split('query=')[1].split('&')[0]), "select * from Customer where DisplayName = 'Amperage Capital'");
+  assert.equal(decodeURIComponent(q.url.split('query=')[1].split('&')[0]), "select * from Customer where DisplayName = 'Acme Fleet'");
   var cust = calls.filter(function (c) { return /\/customer\?/.test(c.url); })[0];
   assert.match(cust.url, new RegExp('requestid=' + P.key('ws-customer:cleancell.us:9130:account:c1') + '$'));
-  assert.deepEqual(JSON.parse(cust.body), { DisplayName: 'Amperage Capital', CompanyName: 'Amperage Capital', PrimaryEmailAddr: { Address: 'ap@amperage.example' } });
+  assert.deepEqual(JSON.parse(cust.body), { DisplayName: 'Acme Fleet', CompanyName: 'Acme Fleet', PrimaryEmailAddr: { Address: 'ap@acme.example' } });
   var post = calls.filter(function (c) { return c.method === 'POST' && /\/invoice\?/.test(c.url); })[0], body = JSON.parse(post.body);
-  assert.match(post.url, new RegExp('requestid=' + P.key('ws-invoice:cleancell.us:amp:deposit:CCUS-3V3I-0926-01 Rev B') + '$'));
+  assert.match(post.url, new RegExp('requestid=' + P.key('ws-invoice:cleancell.us:amp:deposit:ACME-4X7Q-0926-01 Rev B') + '$'));
   assert.equal('DocNumber' in body, false, '23 characters is over QuickBooks\' 21');
   assert.equal(body.CustomerRef.value, '58'); assert.equal(body.CurrencyRef.value, 'USD'); assert.equal(body.TxnDate, '2026-09-23'); assert.equal(body.DueDate, '2026-09-23');
   assert.equal(body.Line.length, 1); assert.equal(body.Line[0].Amount, 1349099.1); assert.equal(body.Line[0].SalesItemLineDetail.UnitPrice, 1349099.1);
   assert.equal(body.Line[0].SalesItemLineDetail.Qty, 1); assert.equal(body.Line[0].SalesItemLineDetail.ItemRef.value, '17'); assert.equal(body.Line[0].SalesItemLineDetail.TaxCodeRef.value, 'NON');
-  assert.equal(body.PrivateNote, 'OMEGA cleancell.us / CC-26-5001 / deposit / CCUS-3V3I-0926-01 Rev B');
-  assert.equal(body.CustomerMemo.value, 'Deposit — PO CCUS-3V3I-0926 — Invoice CCUS-3V3I-0926-01 Rev B');
-  assert.equal(body.BillEmail.Address, 'ap@amperage.example'); assert.equal(body.AllowOnlineACHPayment, true);
+  assert.equal(body.PrivateNote, 'OMEGA cleancell.us / CC-26-5001 / deposit / ACME-4X7Q-0926-01 Rev B');
+  assert.equal(body.CustomerMemo.value, 'Deposit — PO ACME-4X7Q-0926 — Invoice ACME-4X7Q-0926-01 Rev B');
+  assert.equal(body.BillEmail.Address, 'ap@acme.example'); assert.equal(body.AllowOnlineACHPayment, true);
   var map = db.data.get('integrations/quickbooks_workspaces/orgs/' + ORG + '/customers/' + P.key('account:c1'));
   assert.deepEqual([map.accountKey, map.realmId, map.qboCustomerId, map.matchedExisting], ['account:c1', '9130', '58', false]);
   var ix = db.data.get('integrations/quickbooks_workspaces/orgs/' + ORG + '/invoices/9130_145');
@@ -416,13 +416,13 @@ await check('QuickBooks pull: linked payments become qbo: references; split allo
 
 await check('QuickBooks link: an existing invoice is adopted only when amount and currency match', async function () {
   reset(); qbSeed(ORG, '9130');
-  var inv = { Id: '145', DocNumber: 'CCUS-01', TotalAmt: 1349099.10, CustomerRef: { value: '58', name: 'Amperage Capital LLC' }, CurrencyRef: { value: 'USD' } };
+  var inv = { Id: '145', DocNumber: 'CCUS-01', TotalAmt: 1349099.10, CustomerRef: { value: '58', name: 'Acme Fleet LLC' }, CurrencyRef: { value: 'USD' } };
   route('GET', /\/9130\/invoice\/145\?include=invoiceLink/, function () { return ok({ Invoice: inv }); });
   await assert.rejects(LS.providers.quickbooks.linkInvoice(ORG, view(), 'deposit', 'in_1'), { status: 400, message: 'QuickBooks invoice id must be digits' });
   var r = await LS.providers.quickbooks.linkInvoice(ORG, view(), 'deposit', '145');
   assert.deepEqual(r, { provider: 'quickbooks', invoiceId: '145', number: 'CCUS-01', customerId: '58', company: '9130', hostedUrl: null, totalCents: 134909910, warning: null });
   var map = db.data.get('integrations/quickbooks_workspaces/orgs/' + ORG + '/customers/' + P.key('account:c1'));
-  assert.equal(map.qboCustomerId, '58'); assert.equal(map.matchedExisting, true); assert.equal(map.displayName, 'Amperage Capital LLC');
+  assert.equal(map.qboCustomerId, '58'); assert.equal(map.matchedExisting, true); assert.equal(map.displayName, 'Acme Fleet LLC');
   assert.equal(calls.filter(function (c) { return c.method === 'POST'; }).length, 0, 'linking creates nothing in QuickBooks');
   /* the same QuickBooks invoice cannot be linked to a second order */
   await assert.rejects(LS.providers.quickbooks.linkInvoice(ORG, view({ id: 'other' }), 'deposit', '145'), { status: 409, message: /already linked to another order/ });
@@ -546,7 +546,7 @@ await check('Stripe push: customer, invoice, item and finalize on the connected 
   assert.equal(api[1].headers['Idempotency-Key'], 'omega-inv-' + P.key('cleancell.us:o2:deposit:SS-1042:0'));
   assert.equal(api[3].headers['Idempotency-Key'], 'omega-fin-' + P.key('cleancell.us:in_1'));
   var cu = form(api[0].body);
-  assert.equal(cu.get('name'), 'Sierra Storage'); assert.equal(cu.get('email'), 'ap@amperage.example'); assert.equal(cu.get('metadata[omega_account]'), 'email:buy@sierra.example');
+  assert.equal(cu.get('name'), 'Sierra Storage'); assert.equal(cu.get('email'), 'ap@acme.example'); assert.equal(cu.get('metadata[omega_account]'), 'email:buy@sierra.example');
   var b = form(api[1].body);
   assert.equal(b.get('customer'), 'cus_A'); assert.equal(b.get('collection_method'), 'send_invoice'); assert.equal(b.get('auto_advance'), 'false');
   assert.equal(b.get('currency'), 'usd'); assert.equal(b.get('pending_invoice_items_behavior'), 'exclude');
@@ -596,8 +596,8 @@ await check('Stripe push: customer, invoice, item and finalize on the connected 
   assert.equal(r.invoiceId, 'in_1');
   assert.equal(calls.filter(function (c) { return /\/v1\/invoices$/.test(c.url); })[0].headers['Idempotency-Key'], 'omega-inv-' + P.key('cleancell.us:o2:deposit:SS-1042:1'));
   /* above Stripe's eight-digit line limit: parts, and a warning a person reads */
-  reset(); stSeed(ORG, 'acct_1CLEAN'); stripeRoutes({ total: 134909910, number: 'CCUS-3V3I-0926-01 Rev B' });
-  r = await LS.providers.stripe.pushInvoice(ORG, stripeView({ id: 'amp', number: 'CCUS-3V3I-0926-01 Rev B', amountCents: 134909910 }), 'deposit');
+  reset(); stSeed(ORG, 'acct_1CLEAN'); stripeRoutes({ total: 134909910, number: 'ACME-4X7Q-0926-01 Rev B' });
+  r = await LS.providers.stripe.pushInvoice(ORG, stripeView({ id: 'amp', number: 'ACME-4X7Q-0926-01 Rev B', amountCents: 134909910 }), 'deposit');
   var items = calls.filter(function (c) { return /invoiceitems/.test(c.url); }).map(function (c) { return Number(form(c.body).get('amount')); });
   assert.deepEqual(items, [99999999, 34909911]);
   assert.match(r.warning, /999,999\.99/);

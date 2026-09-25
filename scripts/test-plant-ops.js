@@ -40,6 +40,14 @@ ok('build demand by SKU is required less registered, across open work orders, ne
 ok('per-work-order remaining lists late work first', d.workOrders[0].id === 'wo_1' && d.workOrders[0].late === true && d.workOrders[0].remaining.CAB === 1 && d.workOrders.length === 3);
 var st = O.stock([{ serial: 'S1', sku: 'CAB', at: 'ready', shipUnit: true }, { serial: 'S2', sku: 'CAB', at: 'ready', shipUnit: true, hold: 'x' }, { serial: 'M1', sku: 'CAB', at: 'ready', shipUnit: false }, { serial: 'S3', sku: 'CAB', at: 'pack', shipUnit: true }]);
 ok('finished stock counts only shipping roots at Ready, separating held ones', st.available === 1 && st.held === 1 && st.skus[0].serials.length === 2);
+/* PLANT-08: every shipping unit by product and state, from the three
+   inventoryStatus reads — not "whatever the first page held" */
+var fin = O.finished([{ serial: 'S1', sku: 'CAB', at: 'ready', shipUnit: true, inventoryStatus: 'available', test: { result: 'pass' } }, { serial: 'S2', sku: 'CAB', at: 'ready', shipUnit: true, inventoryStatus: 'available', hold: 'dent' },
+  { serial: 'S3', sku: 'CAB', at: 'ready', shipUnit: true, inventoryStatus: 'allocated', orderId: 'o1' }, { serial: 'S4', sku: 'CAB', at: 'rack', shipUnit: true, inventoryStatus: 'building' },
+  { serial: 'S5', sku: 'RACK', at: '', shipUnit: true, inventoryStatus: 'allocated', orderId: 'o2' }, { serial: 'M1', sku: 'MOD', at: 'ready', shipUnit: false, inventoryStatus: 'available' },
+  { serial: 'V1', sku: 'CAB', at: '', shipUnit: true, inventoryStatus: 'void' }]);
+ok('finished stock by state: on the shelf, held, on an order, being built; components and voided serials are not units', JSON.stringify(fin.totals) === '{"available":1,"held":1,"assigned":2,"building":1}' && fin.skus.map(function (x) { return x.sku + ':' + x.available + '/' + x.assigned + '/' + x.building; }).join(',') === 'CAB:1/1/1,RACK:0/1/0', JSON.stringify(fin));
+ok('  and lists each unit the office can assign, with its test', fin.available.length === 1 && fin.available[0].serial === 'S1' && fin.available[0].test.result === 'pass');
 var c = O.completed(rows);
 ok('completed units on orders: ready roots counted, stock and shipped orders excluded, expected-minus-ready still building', c.readyOnOrders === 2 && c.building === 4 && c.awaitingShipment.length === 0, JSON.stringify(c));
 var readyRow = B.row({ id: 'wo_r', orderNo: 'CC-R', orderId: 'r', requirements: [{ sku: 'CAB', qty: 1 }], routing: P.DEFAULT_ROUTING, status: 'released' }, [unit('R1', { at: 'ready' })], NOW);

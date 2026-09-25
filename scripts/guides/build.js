@@ -20,13 +20,15 @@
    goes to <tmp>/omega-guides-draft, and --draft --out guides/ is refused.
 
    Every build refuses a guide whose printed text names a tenant (guard.js
-   LEAK): /guides is public and goes to every subscriber.
+   LEAK) or carries a name scripts/_lib/discreet.js matches (the buyer on a
+   tenant's live order, matched by hash): /guides is public and goes to
+   every subscriber.
 
    A guide laid out as fixed sheets (office.html: <main data-mode="solo">)
    draws its own band and footer and is printed edge to edge; build.js
    refuses a sheet whose content runs past its page. */
 'use strict';
-var fs = require('fs'), path = require('path'), os = require('os'), Guard = require('./guard');
+var fs = require('fs'), path = require('path'), os = require('os'), Guard = require('./guard'), Discreet = require('../_lib/discreet');
 var PW = (function () { try { return require.resolve('playwright'); } catch (e) { return '/opt/node22/lib/node_modules/playwright'; } })(), chromium = require(PW).chromium;
 var CHROME = fs.existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : chromium.executablePath();
 var DRAFT = process.argv.indexOf('--draft') >= 0;
@@ -59,7 +61,7 @@ function combined() {
 }
 var TITLES = { plant: ['Omega Logic · The Plant app', 'For the builders: work orders, the bench, every unit. Install it, run the work, one system. ClearSky-OMEGA'],
   office: ['Omega Logic · The app', 'Put it on your phone or computer, sign in, and run the business from it. ClearSky-OMEGA'],
-  customer: ['Your account on your phone', 'Your company account with your supplier: site plans, orders and warranty, purchase orders, sites & equipment, your people.'],
+  customer: ['Your account on your phone', 'Your company account with your supplier: site plans, orders and warranty, purchase orders, your fleet and its sites, your people.'],
   all: ['Omega Logic on your phone', 'The Omega Logic app, the Plant app and the customer app. Install them, run the work, one system. ClearSky-OMEGA'] };
 /* The CUSTOMER guide goes to every supplier's customers, and their app wears
    the supplier's name, not ours: a plain band, no Omega Logic mark, no
@@ -123,8 +125,10 @@ if (Object.keys(badShots).length && !DRAFT) {
     }
     await p.waitForTimeout(300);
     /* the printed words, not the source: a tenant's name never ships */
-    var leak = await p.evaluate(function (src) { var m = (document.title + '\n' + document.body.innerText).match(new RegExp(src, 'i')); return m ? m[0] : null; }, Guard.LEAK.source);
-    if (leak) { await b.close(); console.error('guides: ' + GUIDES[key] + ' names a tenant ("' + leak + '"): /guides is public. Say "your company" instead.'); process.exit(1); }
+    var printed = await p.evaluate(function () { return document.title + '\n' + document.body.innerText; });
+    var leak = printed.match(Guard.LEAK), named = Discreet.hits(printed);
+    if (leak) { await b.close(); console.error('guides: ' + GUIDES[key] + ' names a tenant ("' + leak[0] + '"): /guides is public. Say "your company" instead.'); process.exit(1); }
+    if (named.length) { await b.close(); console.error('guides: ' + GUIDES[key] + ' carries a name no file may say (' + named.map(function (x) { return x.what + ', line ' + x.line; }).join('; ') + ')'); process.exit(1); }
     var sheets = await p.evaluate(function () { return !!document.querySelector('main[data-mode="solo"] .sheet'); });
     var over = await p.evaluate(function () {
       return Array.prototype.map.call(document.querySelectorAll('.olg .sheet'), function (s, i) {

@@ -53,6 +53,11 @@ var DEFAULT_ROUTING = [
    can type "pass" makes the certificate worthless. */
 var MACHINE_STATIONS = ['eol'];
 
+/* A supervisor may record a test station's result by hand when the rig
+   cannot post it (api/mes-test-result.js, manual:true). The note is the
+   evidence a certificate reader will ask for, so it has a floor. */
+var MANUAL_NOTE_MIN = 5;
+
 function norm(v) { return String(v == null ? '' : v).trim(); }
 
 function routingOf(wo) {
@@ -114,12 +119,18 @@ function judgeScan(unit, station, routing, opts) {
   if (!unit) {
     return { ok: false, reason: 'unknown_unit', say: 'That serial is not on any open works order here.' };
   }
+  /* a serial typed wrong at registration and voided (api/logic-plant.js
+     correct-serial): its record is kept, but it is not a unit */
+  if (unit.inventoryStatus === 'void') {
+    var by = unit.voided && norm(unit.voided.replacedBy);
+    return { ok: false, reason: 'voided', say: 'That serial was voided — it was typed wrong at registration.' + (by ? ' The unit is ' + by + '.' : '') };
+  }
 
   var at = norm(unit.at);
   var ai = at ? indexOf(routing, at) : -1;
   if (at && ai < 0) return { ok: false, reason: 'unknown_position', say: 'This unit has an unknown position; supervisor review is required.' };
   if (unit.test && unit.test.result === 'fail' && !opts.machine) {
-    return { ok: false, reason: 'retest_required', say: 'A failed test requires a passing machine retest before this unit can move.' };
+    return { ok: false, reason: 'retest_required', say: 'A failed test needs a passing retest before this unit can move: the test rig, or a supervisor recording it by hand in the Plant app (Quality → the serial → Record the result by hand).' };
   }
 
   if (unit.hold) {
@@ -127,7 +138,7 @@ function judgeScan(unit, station, routing, opts) {
              ncr: norm(unit.ncr) || null };
   }
   if (MACHINE_STATIONS.indexOf(station) >= 0 && !opts.machine) {
-    return { ok: false, reason: 'machine_station', say: labelOf(routing, station) + ' is recorded by the test rig, not by a scan.' };
+    return { ok: false, reason: 'machine_station', say: labelOf(routing, station) + ' is recorded by the test rig, not by a scan. With the rig down, a supervisor records the result by hand in the Plant app (Quality → the serial).' };
   }
   if (ai === si) {
     /* Already here. Guns double-fire and people re-scan when they are unsure;
@@ -194,13 +205,20 @@ function measurementsOf(raw) {
 
 /* A test rig may advance only a station marked machine-only. A failed test
    deliberately does NOT advance the unit: it records the result, places the
-   unit on hold at its prior station and requires a human disposition. */
-function judgeMachineResult(unit, station, routing, result) {
+   unit on hold at its prior station and requires a human disposition.
+
+   opts.open is the same list judgeScan takes: the steps still open at the
+   bench the unit is LEAVING (plant-work.js openAt). A pass is an arrival at
+   the test station like any other, so it is refused while a step is open —
+   a rig's pass (or a supervisor's hand-recorded one, api/mes-test-result.js)
+   must never carry a unit past a firmware load nobody confirmed or a part
+   nobody issued. The caller persists the refusal with the evidence. */
+function judgeMachineResult(unit, station, routing, result, opts) {
   station = norm(station);
   if (MACHINE_STATIONS.indexOf(station) < 0) {
     return { ok: false, reason: 'not_machine_station', say: 'This station does not accept machine results.' };
   }
-  var base = judgeScan(unit, station, routing, { machine: true });
+  var base = judgeScan(unit, station, routing, { machine: true, open: opts && Array.isArray(opts.open) ? opts.open : [] });
   if (!base.ok) return base;
   if (!result || (result.pass !== true && result.pass !== false)) {
     return { ok: false, reason: 'invalid_result', say: 'The test rig did not send a pass or fail result.' };
@@ -227,7 +245,7 @@ function applyMachineResult(unit, verdict, at, record) {
   }
   if (verdict && verdict.action === 'hold') {
     return {
-      hold: record.failureCode || 'Test failed',
+      hold: record.failureCode || (record.source === 'manual' ? 'Test failed (recorded by hand)' : 'Test failed'),
       ncr: record.ncr || null,
       test: record,
       testFailedAt: at
@@ -239,6 +257,7 @@ function applyMachineResult(unit, verdict, at, record) {
 module.exports = {
   DEFAULT_ROUTING: DEFAULT_ROUTING,
   MACHINE_STATIONS: MACHINE_STATIONS,
+  MANUAL_NOTE_MIN: MANUAL_NOTE_MIN,
   routingOf: routingOf,
   indexOf: indexOf,
   labelOf: labelOf,

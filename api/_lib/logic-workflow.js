@@ -33,10 +33,13 @@ function invoicePlan(id, stage, amount) {
   return { amountCents: amount, requestId: P.key(id + ':' + stage + ':v1'), date: new Date().toISOString().slice(0, 10), status: amount ? 'queued' : 'not_required' };
 }
 async function price(orderId, total, caller, accept) {
-  X.requireOwner(caller);
   var ref = A.db().collection('orders').doc(P.id(orderId)), initial = await ref.get();
   if (!initial.exists) throw A.httpError(404, 'Order not found');
   var order = initial.data(), ctx = await X.context(order.orgId);
+  /* D1: ClearSky prices and accepts everything; an active owner or admin of
+     the workspace what the workspace bills itself. ONE rule, in
+     logic-access.requirePricer; the event below records who and when. */
+  await X.requirePricer(caller, ctx, order);
   if(order.poIntake&&!order.poIntake.convertedAt)throw A.httpError(409,'Review and map the uploaded PO to catalog items before pricing');
   if (!X.enabled(ctx)) throw A.httpError(409, 'Enable the Omega Logic subscription and fulfillment configuration first');
   var conf = ctx.config, tenantBilled = conf.accounting === 'tenant';
@@ -73,7 +76,7 @@ async function price(orderId, total, caller, accept) {
     if (o.logic) {
       if (o.logic.commercial.baseCents !== commercial.baseCents) throw A.httpError(409, 'Invoiced price is locked; issue an accounting adjustment before repricing');
       if (accept && !o.logic.acceptedAt) {
-        tx.update(ref, { 'logic.acceptedAt': new Date().toISOString(), 'logic.nextRunAt': Date.now(), status: 'accepted' });
+        tx.update(ref, { 'logic.acceptedAt': new Date().toISOString(), 'logic.acceptedBy': caller.email, 'logic.nextRunAt': Date.now(), status: 'accepted' });
         event(tx, ref, caller.email, 'Commercial order accepted');
       }
       return { ok: true, duplicate: true };
@@ -81,14 +84,14 @@ async function price(orderId, total, caller, accept) {
     if (JSON.stringify(o.items) !== JSON.stringify(order.items) || o.customer.email !== order.customer.email) throw A.httpError(409, 'Order changed; reload');
     var firstInvoice = invoicePlan(orderId, 'deposit', commercial.depositCents); if (tenantBilled && firstInvoice.amountCents) firstInvoice.status = 'to_issue';
     var priced = { logic: { enabled: true, commercial: commercial, accounting: tenantBilled ? 'tenant' : 'quickbooks', realmId: tenantBilled ? null : String(conf.realmId), itemRef: tenantBilled ? null : String(conf.itemRef),
-      acceptedAt: accept ? new Date().toISOString() : null, createdAt: new Date().toISOString(), nextRunAt: Date.now(),
+      acceptedAt: accept ? new Date().toISOString() : null, acceptedBy: accept ? caller.email : null, pricedBy: caller.email, createdAt: new Date().toISOString(), nextRunAt: Date.now(),
       invoices: { deposit: firstInvoice },
       payout: { mode: 'wire', status: 'awaiting_cleared_funds', sentCents: 0 }, leaseUntil: 0 },
       tenantPricing: { total: commercial.totalCents / 100, currency: 'USD', publishedToCustomer: true },
       status: accept ? 'accepted' : 'quoted', updatedAt: A.FieldValue().serverTimestamp() };
     if (stampAccount && !o.customerId) priced.customerId = stampAccount;
     tx.update(ref, priced);
-    event(tx, ref, caller.email, tenantBilled ? 'Customer price approved; the OEM issues the deposit invoice on its own paper' : 'Customer price approved; installment invoice queued');
+    event(tx, ref, caller.email, (tenantBilled ? 'Customer price approved; the OEM issues the deposit invoice on its own paper' : 'Customer price approved; installment invoice queued') + (accept ? ' · order accepted' : ''));
     return { ok: true, commercial: commercial };
   });
 }
@@ -515,9 +518,11 @@ async function release(ref) {
       var u = doc.data();
       if (!u.shipUnit || u.orderId || !wanted[u.sku] || !P.ready(u)) continue;
       var children = await tx.get(db.collection('plant_units').where('orgId', '==', o.orgId).where('rootSerial', '==', u.serial).limit(201));
-      if (children.size > 200 || children.empty || children.docs.some(function (d) { var n = d.data(); return !P.ready(n) || !!n.orderId; })) continue;
-      if (allNodes.length + children.size > 350) continue;
-      wanted[u.sku]--; selected.push(u.serial); allNodes = allNodes.concat(children.docs);
+      /* a voided serial (a typo the plant corrected) is not a component of the cabinet */
+      var kids = children.docs.filter(function (d) { return d.data().inventoryStatus !== 'void'; });
+      if (children.size > 200 || !kids.length || kids.some(function (d) { var n = d.data(); return !P.ready(n) || !!n.orderId; })) continue;
+      if (allNodes.length + kids.length > 350) continue;
+      wanted[u.sku]--; selected.push(u.serial); allNodes = allNodes.concat(kids);
     }
     var woId = 'wo_' + ref.id, woRef = db.collection('plant_works_orders').doc(woId), oldWo = await tx.get(woRef);
     var config=await tx.get(db.collection('omega_orgs').doc(o.orgId).collection('fulfillment').doc('config'));

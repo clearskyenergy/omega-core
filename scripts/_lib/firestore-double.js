@@ -5,7 +5,8 @@
    Enough of the Admin SDK surface for the endpoints under test: documents in
    a Map keyed by path; collections as queries with ==, in and <= filters,
    orderBy (including __name__), limit and select; merge sets; create that
-   refuses to overwrite; transactions that refuse a read after a write;
+   refuses to overwrite; transactions that refuse a read after a write (and,
+   with db.serial, run one at a time);
    batches; add(). Shared by test-portfolio.js and test-logic-admin.js so
    there is one double to fix when the SDK surface a test needs grows.
 
@@ -22,7 +23,11 @@ class DB {
   collection(p) { return new Query(this, p); }
   doc(p) { return new Ref(this, p); }
   seed(p, v) { this.data.set(p, clone(v)); }
-  runTransaction(fn) { var db = this, writes = [], writing = false; var tx = { get: async function (r) { assert.equal(writing, false, 'no reads after writes'); return r.get(); }, create: function (r, v) { writing = true; writes.push(function () { assert(!db.data.has(r.path)); db.seed(r.path, v); }); }, set: function (r, v, o) { writing = true; writes.push(function () { db.seed(r.path, o && o.merge ? Object.assign({}, db.data.get(r.path) || {}, clone(v)) : v); }); }, update: function (r, v) { writing = true; writes.push(function () { assert(db.data.has(r.path)); db.data.set(r.path, patch(clone(db.data.get(r.path)), v)); }); } }; return Promise.resolve(fn(tx)).then(function (out) { writes.forEach(function (w) { w(); }); return out; }); }
+  /* `db.serial = true` runs transactions one after another, which is what
+     Firestore's isolation guarantees: a test of a check-then-write race sets
+     it and fires two at once. Off by default, so no other test changes. */
+  runTransaction(fn) { var db = this; if (!db.serial) return db.runOne(fn); var run = (db.txTail || Promise.resolve()).then(function () { return db.runOne(fn); }); db.txTail = run.then(function () {}, function () {}); return run; }
+  runOne(fn) { var db = this, writes = [], writing = false; var tx = { get: async function (r) { assert.equal(writing, false, 'no reads after writes'); return r.get(); }, create: function (r, v) { writing = true; writes.push(function () { assert(!db.data.has(r.path)); db.seed(r.path, v); }); }, set: function (r, v, o) { writing = true; writes.push(function () { db.seed(r.path, o && o.merge ? Object.assign({}, db.data.get(r.path) || {}, clone(v)) : v); }); }, update: function (r, v) { writing = true; writes.push(function () { assert(db.data.has(r.path)); db.data.set(r.path, patch(clone(db.data.get(r.path)), v)); }); } }; return Promise.resolve(fn(tx)).then(function (out) { writes.forEach(function (w) { w(); }); return out; }); }
 }
 class Ref {
   constructor(db, p) { this.db = db; this.path = p; this.id = p.split('/').pop(); }

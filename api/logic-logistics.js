@@ -58,7 +58,9 @@ module.exports=A.handler(async function(req,res){
           !invoices.deposit||(invoices.deposit.amountCents&&!invoices.deposit.satisfied)||!invoices.balance||(invoices.balance.amountCents&&!invoices.balance.satisfied))throw A.httpError(409,'Verified payments and accounting release are required before pickup');
         for(var rootSerial of leg.serials){
           var family=await tx.get(db.collection('plant_units').where('orgId','==',org).where('rootSerial','==',rootSerial).limit(401));
-          if(family.empty||family.size>400||!family.docs.some(function(x){return x.data().serial===rootSerial&&x.data().shipUnit;})||family.docs.some(function(x){var u=x.data();return u.orderId!==ref.id||!P.ready(u);}))throw A.httpError(409,'Every serialized component must pass testing and reach Ready without a hold');
+          /* a voided serial (a typo the plant corrected) is not a component of anything */
+          var live=family.docs.filter(function(x){return x.data().inventoryStatus!=='void';});
+          if(family.empty||family.size>400||!live.some(function(x){return x.data().serial===rootSerial&&x.data().shipUnit;})||live.some(function(x){var u=x.data();return u.orderId!==ref.id||!P.ready(u);}))throw A.httpError(409,'Every serialized component must pass testing and reach Ready without a hold');
         }
       }
       /* Custody follows the load (api/_lib/custody.js): pickup puts every

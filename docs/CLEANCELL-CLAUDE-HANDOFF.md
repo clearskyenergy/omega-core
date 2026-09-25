@@ -14,7 +14,7 @@ The company PO launch is live and was live-verified on 2026-09-21. Every step un
 - PR #65 merged (`7f8ba54`, implementation `7802f90`): company accounts, PO intake, private uploads, reviewed order entry, logistics ledger.
 - PR #67 merged (`7676079`): upgrade log release entry and the download-authorization lifecycle test. Production deployment of `7676079` recorded 2026-09-22T00:01Z.
 - PR #68 (`codex/po-launch-followups`): logistics order list excludes unconverted and declined PO intake server-side; the inbox "Update review" action is an inline form instead of two browser `prompt()` dialogs.
-- Live InCharge Energy company under CleanCell: `company_2b06b22951a9dd00659e1c59c676c523cb69474e`, domain `inchargeus.com` (descriptive only), active, free customer account. No customer contact, login or access grant exists because none was supplied.
+- Live Harbor Charging company under CleanCell: `company_2b06b22951a9dd00659e1c59c676c523cb69474e`, domain `harborcharging.com` (descriptive only), active, free customer account. No customer contact, login or access grant exists because none was supplied.
 
 ## Completed 2026-09-21 (do not repeat)
 
@@ -41,7 +41,7 @@ The company PO launch is live and was live-verified on 2026-09-21. Every step un
 - Customer company PO inbox: https://silmarillion.clearskyomega.com/po-inbox?org=cleancell.us
 - Office: https://silmarillion.clearskyomega.com/omega-logic?org=cleancell.us
 - Office company accounts: https://silmarillion.clearskyomega.com/po-inbox?office=1&org=cleancell.us
-- InCharge office: https://silmarillion.clearskyomega.com/po-inbox?office=1&org=cleancell.us&customerId=company_2b06b22951a9dd00659e1c59c676c523cb69474e
+- Harbor office: https://silmarillion.clearskyomega.com/po-inbox?office=1&org=cleancell.us&customerId=company_2b06b22951a9dd00659e1c59c676c523cb69474e
 - URL Generator: https://silmarillion.clearskyomega.com/logic-urls?org=cleancell.us
 - Logistics: https://silmarillion.clearskyomega.com/logic-logistics?org=cleancell.us
 
@@ -66,7 +66,7 @@ The company PO launch is live and was live-verified on 2026-09-21. Every step un
 - Live CleanCell catalog is empty. Obtain approved SKUs/specs/prices; do not invent production products. Demonstration equipment must stay clearly labeled.
 - QuickBooks automation is not active in the live office. Configure and verify before claiming invoice/deposit-to-production automation. Default deposit approved by the user: 30% on order; account-specific terms override. A PO is not payment evidence.
 - Customer editor subscription displays $799/month; checkout is not enabled and nothing was charged.
-- InCharge contact emails are required to assign customer logins. Do not infer membership from an email domain or bypass verification for admin@ addresses.
+- Harbor contact emails are required to assign customer logins. Do not infer membership from an email domain or bypass verification for admin@ addresses.
 - Email-to-PO ingestion is NOT connected (needs mailbox/provider, authenticated inbound processing, attachment handling, sender-to-company review, deduplication, audit; unknown senders must not gain company access).
 - Automated portfolio ZIP screening, batch sizing/optimization and document extraction are NOT live.
 - Logistics is manual event tracking, not carrier booking or live GPS. Onward transfers, load cancellation/replanning, shortage resolution and commissioning approval remain to build.
@@ -77,7 +77,7 @@ The company PO launch is live and was live-verified on 2026-09-21. Every step un
 
 ## Next steps (each needs client input or a decision first)
 
-1. Get InCharge's named contacts from CleanCell, then assign logins in the InCharge office inbox ("Assign a customer login"). Send nothing automatically.
+1. Get Harbor's named contacts from CleanCell, then assign logins in the Harbor office inbox ("Assign a customer login"). Send nothing automatically.
 2. Get the approved CleanCell product list and import it with `scripts/import-products.js` (see `docs/product-list-template.csv`); refuse cost-basis columns.
 3. Decide the receiving mailbox/provider for email-to-PO intake before any ingestion code is written.
 4. Activate and verify QuickBooks in the live office before representing invoicing automation.

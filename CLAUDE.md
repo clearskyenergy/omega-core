@@ -501,6 +501,40 @@ is not built.
   lands in `omega_orgs/{org}/admin_audit` with what changed and what it was.
   Tests: `scripts/test-logic-admin.js` on the shared
   `scripts/_lib/firestore-double.js`.
+- **Price and accept follow who bills (D1).** A workspace's owner or an
+  administrator (an active `omega_orgs/{org}/members` owner|admin) approves
+  the price of, and accepts, an order the workspace bills itself
+  (`fulfillment/config.accounting === 'tenant'`, or the order's own billing
+  once priced: `office-stage.billingOf`); ClearSky, the logic-access owner,
+  prices whatever goes through its QuickBooks and may act on any order.
+  `logic-access.requirePricer` is the gate inside the workflow's `price`
+  and `accept`; `office-stage.actions()` gives each order `can{price,accept}`
+  and `waitingOn`, which the desktop pane, the app, Today and the Sales hub
+  follow (an order waiting on someone else is listed and named, never
+  counted). Each price and acceptance keeps who and when
+  (`logic.pricedBy` / `acceptedBy`, the event history). Shipment and wires
+  stay ClearSky's.
+- **A workspace runs its own Team (D2).** `api/_lib/logic-members.js`
+  `change()` is the ONE writer of `omega_orgs/{org}/members`:
+  `logic-team.html` → `api/logic-team.js` (the tenant's owner or admin),
+  `api/logic-admin.js` (ClearSky) and `api/set-role.js` all go through it.
+  An admin never makes or touches an owner; the last active owner is never
+  disabled or demoted (re-read inside the transaction); nobody is deleted;
+  every change is an `admin_audit` row with who, was and now. A person
+  outside the workspace's domain needs an existing `org_members` grant —
+  Team never writes one. The rules let a browser write a member record only
+  to join as a member or change its own name (ClearSky staff aside), and `tenantReader()` keeps a disabled
+  member (or an unverified email) out of orders and plant records.
+- **A test result by hand goes through the rig's gate (D3).** When the EOL
+  rig cannot post, an owner or administrator records Pass or Fail with a
+  note (5+ characters) on the Plant app's unit or the serial record:
+  `api/mes-test-result.js` `manual: true` runs the same `record()` and
+  `plant.judgeMachineResult` as the rig, which now takes the open steps, so
+  no pass, machine or manual, skips a step still open (PLANT-03). It is
+  stored on `unit.test` and in `plant_scans` with `source: 'manual'`, by,
+  at and the note, audited as `plant-manual-test`; a fail holds the unit.
+  The rig stays the normal way, and a rig token may not use a `manual_`
+  scan id.
 - **The ecosystem is one map**: `docs/OMEGA-LOGIC-ECOSYSTEM.md` (who uses
   which app, the hubs, the API contracts, what is not built). Both apps and
   both desktops open on the HEX HUB (`omega-hexhub.js`, `OmegaHexHub.render`;

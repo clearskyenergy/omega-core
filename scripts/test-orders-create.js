@@ -81,28 +81,28 @@ async function post(b) { return orders({ method: 'POST', body: b, caller: rep },
      billed to, and a '/' in an address is 'no account', never a 500. */
   function account(email, user) {
     db.seed('omega_orgs/cleancell.us/customer_index/' + email, { customerId: 'amp1' });
-    db.seed('omega_orgs/cleancell.us/customers/amp1', { name: 'Amperage Capital', status: 'active' });
+    db.seed('omega_orgs/cleancell.us/customers/amp1', { name: 'Acme Fleet', status: 'active' });
     db.seed('omega_orgs/cleancell.us/customers/amp1/users/' + email, user);
   }
-  reset(); account('shannon@amperagecapital.com', { status: 'active', role: 'owner' });
-  await post({ action: 'create', customer: { name: 'Shannon Johnson', email: 'shannon@amperagecapital.com' }, items: [] });
+  reset(); account('jordan@acmefleet.com', { status: 'active', role: 'owner' });
+  await post({ action: 'create', customer: { name: 'Jordan Blake', email: 'jordan@acmefleet.com' }, items: [] });
   o = created();
   ok('an order for an active person on an account carries its customerId', o.customerId === 'amp1');
   ok('  and the account is marked hasOrders in the same write', db.rows.get('omega_orgs/cleancell.us/customers/amp1').hasOrders === true);
-  reset(); account('ops@amperagecapital.com', { status: 'pending', source: 'domain-request' });
-  await post({ action: 'create', customer: { name: 'Ops', email: 'ops@amperagecapital.com' }, items: [] });
+  reset(); account('ops@acmefleet.com', { status: 'pending', source: 'domain-request' });
+  await post({ action: 'create', customer: { name: 'Ops', email: 'ops@acmefleet.com' }, items: [] });
   ok('a join request still waiting does NOT put the order on the company', created() && !created().customerId);
-  reset(); account('gone@amperagecapital.com', { status: 'disabled', declined: true });
-  await post({ action: 'create', customer: { name: 'Gone', email: 'gone@amperagecapital.com' }, items: [] });
+  reset(); account('gone@acmefleet.com', { status: 'disabled', declined: true });
+  await post({ action: 'create', customer: { name: 'Gone', email: 'gone@acmefleet.com' }, items: [] });
   ok('nor does a request that was turned down', created() && !created().customerId);
-  reset(); account('left@amperagecapital.com', { status: 'disabled', source: 'office', approvedAt: '2026-01-01' });
-  await post({ action: 'create', customer: { name: 'Left', email: 'left@amperagecapital.com' }, items: [] });
+  reset(); account('left@acmefleet.com', { status: 'disabled', source: 'office', approvedAt: '2026-01-01' });
+  await post({ action: 'create', customer: { name: 'Left', email: 'left@acmefleet.com' }, items: [] });
   ok('a colleague once admitted and since turned off still stamps (the company\'s order)', created().customerId === 'amp1');
-  reset(); account('retry@amperagecapital.com', { status: 'active' });
+  reset(); account('retry@acmefleet.com', { status: 'active' });
   var realRun = db.runTransaction.bind(db), tries = 0;
   db.runTransaction = function (fn) { tries++; var dry = { get: function (r) { return r.get(); }, set: function () {}, update: function () {} };
-    return Promise.resolve(fn(dry)).then(function () { db.seed('omega_orgs/cleancell.us/customers/amp1', { name: 'Amperage Capital', status: 'suspended' }); return realRun(fn); }); };
-  await post({ action: 'create', customer: { name: 'Retry', email: 'retry@amperagecapital.com' }, items: [] });
+    return Promise.resolve(fn(dry)).then(function () { db.seed('omega_orgs/cleancell.us/customers/amp1', { name: 'Acme Fleet', status: 'suspended' }); return realRun(fn); }); };
+  await post({ action: 'create', customer: { name: 'Retry', email: 'retry@acmefleet.com' }, items: [] });
   db.runTransaction = realRun;
   ok('a retried create does not keep a stamp from the attempt that was thrown away', tries === 1 && created() && !created().customerId);
   reset();

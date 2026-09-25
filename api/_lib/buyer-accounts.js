@@ -3,7 +3,7 @@
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
    Omega Logic is ClearSky's product; a tenant (Clean Cell) is a workspace in
-   it; and the workspace's customers (Amperage Capital) are SUB-ACCOUNTS with
+   it; and the workspace's customers (a buyer company) are SUB-ACCOUNTS with
    several people on each:
 
      omega_orgs/{org}/customers/{customerId}              the company
@@ -38,7 +38,7 @@ function companyDomain(address) { var d = domainOf(address); return d && PUBLIC.
 function accountDomain(value) {
   var d = String(value || '').trim().toLowerCase().replace(/^@/, '');
   if (!d) return '';
-  if (d.length > 120 || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) throw A.httpError(400, 'Company email domain looks wrong (e.g. amperagecapital.com)');
+  if (d.length > 120 || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) throw A.httpError(400, 'Company email domain looks wrong: type the domain only, e.g. yourcustomer.com');
   if (PUBLIC.indexOf(d) >= 0) throw A.httpError(400, d + ' is a public mailbox provider, not a company domain');
   return d;
 }
@@ -348,7 +348,7 @@ async function setUser(db, org, customerId, address, change, by, how) {
 
 /* ── A colleague signing in for the first time ─────────────────────────
    Their verified email's domain matches exactly ONE active company account
-   the office set up (amperagecapital.com → Amperage Capital): they join it
+   the office set up (buyerco.com → Buyer Co): they join it
    as a PENDING user — nothing is visible until the account owner or the
    supplier approves — instead of silently getting an account of their own
    that would then block the office from adding them. */
@@ -361,8 +361,8 @@ async function joinRequest(db, org, address, caller) {
   var out = await addUser(db, org, hits[0].id, address, { name: caller && caller.name, role: 'user', status: 'pending', uid: caller && caller.uid }, address, { source: 'domain-request' });
   return out.account;
 }
-/* A company by name, so the office does not create a second "Amperage
-   Capital". Only an office company matches (officeCompany): a self-made
+/* A company by name, so the office does not create a second "Buyer
+   Co". Only an office company matches (officeCompany): a self-made
    account's name is whatever its customer typed, so matching it would hand
    the office's contacts and POs to whoever typed the name first. Records
    written before nameLower existed are matched by a bounded scan. */

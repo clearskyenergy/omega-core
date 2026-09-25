@@ -1,0 +1,86 @@
+<!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     logic-team.html — the workspace's own people. An owner or administrator
+     adds office and plant staff, changes what they can do and disables
+     anyone who leaves; a member or viewer sees the list. Every rule is the
+     server's (api/logic-team.js → api/_lib/logic-members.js, the one writer
+     ClearSky's console uses too): this page shows only the controls the
+     server says this person may use, and prints its refusals as they come. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Team</title><link rel="stylesheet" href="/omega-logic-theme.css"><style>
+body{margin:0}header{padding:22px 4%;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}main{min-width:0}
+.lede{max-width:760px;color:var(--ink2)}
+.card{border:1px solid var(--line);border-radius:14px;padding:18px 20px;background:white;margin:16px 0}.card h2{margin:0 0 6px;font-size:20px}.card p{margin:6px 0}
+.hint{font-size:13px;color:var(--ink2)}
+.people{margin:0;padding:0;list-style:none}
+.person{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) auto;gap:10px 16px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+.person:first-child{border-top:0}
+.who b{display:block;overflow-wrap:anywhere}.who small{display:block;color:var(--ink2);overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:6px;padding:2px 8px;font-size:12px;background:var(--sunk);color:var(--ink2);margin-right:6px}
+.pill.off{background:#FCEAE8;color:#B42318}.pill.you{background:var(--brand-soft);color:var(--brand-fill)}
+.role select{width:100%}.act{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.act button,.card button{padding:9px 14px;border:1px solid var(--line);border-radius:9px;background:white;color:var(--ink);cursor:pointer;font:inherit}
+button:disabled{opacity:.55;cursor:wait}
+.say{margin:8px 0 0;font-size:13px}.say:empty{display:none}.say.bad{color:#B42318}.person .say{grid-column:1/-1;margin:0}
+.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:10px 0 0}.roles div{background:var(--sunk);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--ink2)}.roles b{display:block;color:var(--ink)}
+.log{margin:0;padding:0;list-style:none}.log li{padding:9px 0;border-top:1px solid var(--line);font-size:13px;overflow-wrap:anywhere}.log li:first-child{border-top:0}.log small{color:var(--ink2)}
+@media(max-width:640px){.person{grid-template-columns:minmax(0,1fr)}.act{justify-content:flex-start}}
+</style></head><body class="logic-theme"><header><b data-product-name>Team</b><span><a id="office">Office</a></span></header><div class="logic-shell"><nav class="logic-nav" aria-label="Team"></nav><main class="logic-main"><h1>Team</h1><p class="lede">The people who use this workspace, in the office and in the plant. The owner and administrators add people, change what they can do and disable anyone who leaves. Nobody is deleted: a disabled person keeps their history and can be enabled again.</p><p id="status" class="logic-status" role="status">Checking access…</p><div id="content"></div></main></div>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script>
+(function(){'use strict';
+var org=new URLSearchParams(location.search).get('org')||'',cfg=window.CLEARSKY_CONFIG||{},DATA=null,BUSY=false;
+if(!firebase.apps.length)firebase.initializeApp(cfg.firebase||cfg);var auth=firebase.auth();
+function $(id){return document.getElementById(id);}
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+var q='?org='+encodeURIComponent(org);($('office')||{}).href='/omega-logic'+q;
+var ROLE={owner:'Owner',admin:'Administrator',member:'Member',viewer:'Viewer'};
+var ROLE_NOTE={owner:'Everything an administrator does, and making or changing owners.',admin:'Approves prices and accepts the orders your company bills itself, records invoices and payments, runs the plant and stock, and adds or disables people up to administrator.',member:'Sees orders, customers, company POs and stock, and works at the benches. Does not price orders, record money or manage people.',viewer:'Sees the workspace and changes nothing.'};
+function roleName(r){return ROLE[r]||r||'No role';}
+/* what a role change will do, asked before it is sent: one mis-tap on a phone select is otherwise a change nobody meant */
+function roleQuestion(email,was,to){var q='Make '+email+' '+roleName(to)+(was?' (now '+roleName(was)+')':'')+'?';
+  if(to==='owner')return q+' An owner can do everything, including changing or disabling the other owners.';
+  if(was==='owner'||was==='admin')return q+' They will no longer be able to '+(to==='admin'?'change owners':'manage the team, prices or payments')+'.';
+  return q;}
+function day(v){return v?OmegaLogicTheme.day(v):'';}
+function api(body){return auth.currentUser.getIdToken().then(function(t){return fetch('/api/logic-team'+(body?'':q),{method:body?'POST':'GET',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});}).then(function(r){return r.json().then(function(d){if(!r.ok||d.ok===false){var e=new Error(d.error||'Request failed');e.status=r.status;throw e;}return d;},function(){throw new Error('Request failed ('+r.status+')');});});}
+function say(el,text,bad){if(!el)return;el.className='say'+(bad?' bad':'');el.textContent=text||'';}
+function roleSelect(p,roles){var opts=roles.slice();if(p.role&&opts.indexOf(p.role)<0)opts.unshift(p.role);
+  return '<select data-role-for="'+esc(p.email)+'" aria-label="Role for '+esc(p.email)+'">'+opts.map(function(r){return '<option value="'+esc(r)+'"'+(r===p.role?' selected':'')+(roles.indexOf(r)<0?' disabled':'')+'>'+esc(roleName(r))+'</option>';}).join('')+'</select>';}
+function person(p,i,d){var off=p.status==='disabled',pills=(p.you?'<span class="pill you">You</span>':'')+(off?'<span class="pill off">Disabled</span>':'')+(p.lastOwner?'<span class="pill">The only owner</span>':'')+(p.outside?'<span class="pill">Other company · ClearSky grant</span>':'');
+  var added=p.invitedAt?'Added '+day(p.invitedAt)+(p.invitedBy?' by '+p.invitedBy:''):'';
+  /* your own role is changed by another owner or administrator, never by a slip of your own select (the same as Disable) */
+  var role=d.manage&&p.can&&p.can.role&&!p.you?roleSelect(p,d.assignable):'<span>'+esc(roleName(p.role))+'</span>'+(d.manage&&p.you&&p.can&&p.can.role?'<small class="hint" style="display:block">Another owner or administrator changes your role.</small>':'');
+  var acts='';if(d.manage&&p.can){if(p.can.disable&&!p.you)acts+='<button type="button" data-status-for="'+esc(p.email)+'" data-status="disabled">Disable</button>';if(p.can.enable)acts+='<button type="button" data-status-for="'+esc(p.email)+'" data-status="active">Enable</button>';}
+  return '<li class="person" data-i="'+i+'"><div class="who"><b>'+esc(p.name||p.email)+'</b>'+(p.name?'<small>'+esc(p.email)+'</small>':'')+'<small>'+pills+esc(added)+'</small></div><div class="role">'+role+'</div><div class="act">'+acts+'</div><p class="say" id="say-'+i+'" role="status"></p></li>';}
+function draw(d){DATA=d;var h='';
+  if(d.manage){h+='<section class="card" id="add"><h2>Add a person</h2><p class="hint">Use their work address at @'+esc(d.domain)+'. Somebody from another company needs ClearSky to grant them access first. A new person is emailed a link to set a password; they sign in at <a href="'+esc(d.frontDoor)+'">'+esc(String(d.frontDoor).replace(/^https:\/\//,''))+'</a>.</p>'
+    +'<div class="form-grid"><div><label for="add-email">Work email</label><input id="add-email" type="email" autocomplete="off" inputmode="email" maxlength="160" placeholder="name@'+esc(d.domain)+'"></div><div><label for="add-name">Name</label><input id="add-name" autocomplete="off" maxlength="120" placeholder="Their name"></div><div><label for="add-role">Role</label><select id="add-role">'+d.assignable.map(function(r){return '<option value="'+esc(r)+'"'+(r==='member'?' selected':'')+'>'+esc(roleName(r))+'</option>';}).join('')+'</select></div></div>'
+    +'<div class="actions"><button type="button" class="primary" id="add-go">Add to the team</button></div><p class="say" id="add-say" role="status"></p></section>';}
+  else h+='<p class="logic-status">Your role is '+esc(roleName(d.role))+'. The workspace owner or an administrator adds people and changes roles; ask them.</p>';
+  h+='<section class="card"><h2>People · '+d.people.length+'</h2>'+(d.people.length?'<ul class="people">'+d.people.map(function(p,i){return person(p,i,d);}).join('')+'</ul>':'<p class="hint">Nobody is on this workspace yet.</p>')+(d.limited?'<p class="hint">Showing the first 200 people.</p>':'')+'</section>';
+  h+='<section class="card"><h2>What each role can do</h2><div class="roles">'+['owner','admin','member','viewer'].map(function(r){return '<div><b>'+esc(roleName(r))+'</b>'+esc(ROLE_NOTE[r])+'</div>';}).join('')+'</div><p class="hint">Prices and acceptance on orders billed through ClearSky’s QuickBooks stay with ClearSky.</p></section>';
+  if(d.manage)h+='<section class="card"><h2>Recent changes</h2>'+(d.log.length?'<ul class="log">'+d.log.map(function(a){var was=a.was==='unrecorded'?'':a.was?roleName(a.was.role)+(a.was.status==='disabled'?' (disabled)':''):'not on the team',now=a.now?roleName(a.now.role)+(a.now.status==='disabled'?' (disabled)':''):'';return '<li><b>'+esc(a.email)+'</b>: '+(was?esc(was)+' → ':'now ')+esc(now)+'<br><small>'+esc(day(a.at))+' · '+esc(a.by||'')+(a.via==='team'?'':' · ClearSky')+'</small></li>';}).join('')+'</ul>':'<p class="hint">No changes recorded yet.</p>')+'</section>';
+  $('content').innerHTML=h;
+  if($('add-go'))$('add-go').onclick=add;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-role-for]'),function(se){se.onchange=function(){var email=se.getAttribute('data-role-for'),to=se.value,was=null;
+    (DATA.people||[]).forEach(function(p){if(p.email===email)was=p.role;});
+    if(!window.confirm(roleQuestion(email,was,to))){se.value=was||'';return;}
+    change(se,{email:email,role:to},'is now '+roleName(to)+'.');};});
+  Array.prototype.forEach.call(document.querySelectorAll('[data-status-for]'),function(bt){bt.onclick=function(){var email=bt.getAttribute('data-status-for'),st=bt.getAttribute('data-status');
+    if(st==='disabled'&&!window.confirm('Disable '+email+'? They can no longer open this workspace’s office, plant app or orders. Nothing they did is deleted, and you can enable them again.'))return;
+    change(bt,{email:email,status:st},st==='disabled'?'is disabled.':'is enabled again.');};});}
+function lineOf(el){var li=el&&el.closest?el.closest('li'):null;return li?li.querySelector('.say'):null;}
+/* the answer lands on the person's own row (after the list is redrawn), not at the top of a long page */
+function rowLine(email){var i=-1;(DATA&&DATA.people||[]).forEach(function(p,k){if(p.email===email)i=k;});return i<0?null:$('say-'+i);}
+function change(el,body,done){if(BUSY)return;BUSY=true;el.disabled=true;var line=lineOf(el);say(line,'Saving…');body.org=org;body.action='member';
+  api(body).then(function(r){return load().then(function(){say(rowLine(r.email),r.email+' '+done+(r.note?' '+r.note:''));});})['catch'](function(e){say(line,e.message,true);if(el.tagName==='SELECT'&&DATA){DATA.people.forEach(function(p){if(p.email===body.email)el.value=p.role;});}el.disabled=false;}).then(function(){BUSY=false;});}
+function add(){if(BUSY)return;var email=String($('add-email').value||'').trim().toLowerCase(),name=String($('add-name').value||'').trim(),role=$('add-role').value;
+  if(!/^[^@\s\/]+@[^@\s\/]+\.[^@\s\/]+$/.test(email)){say($('add-say'),'Type their full work email address.',true);return;}
+  BUSY=true;$('add-go').disabled=true;say($('add-say'),'Adding…');
+  api({org:org,action:'member',email:email,name:name,role:role}).then(function(r){return load().then(function(){say($('add-say'),r.email+' is on the team as '+roleName(r.role)+'.'+(r.note?' '+r.note:''));say(rowLine(r.email),'Just added.');});})['catch'](function(e){say($('add-say'),e.message,true);$('add-go').disabled=false;}).then(function(){BUSY=false;});}
+function load(){return api().then(function(d){OmegaLogicTheme.chrome({org:org,current:'team',owner:d.owner,brand:d.brand,who:auth.currentUser&&auth.currentUser.email});$('status').textContent='';draw(d);});}
+auth.onAuthStateChanged(function(u){$('content').textContent='';
+  if(!u){$('status').innerHTML='Sign in through your <a href="/omega-logic'+esc(q)+'">office</a> to open the team.';return;}
+  if(!org){$('status').innerHTML='Open the team from your <a href="/omega-logic">office workspace</a>.';return;}
+  load()['catch'](function(e){$('status').className='logic-status error';$('status').textContent=e.message;});});
+})();
+</script></body></html>

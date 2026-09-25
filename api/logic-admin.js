@@ -17,6 +17,9 @@
    POST { action: 'org' }          the structural tenant fields (+ tenant_public mirror)
    POST { action: 'storefront' }   copy, flags, limits, cost basis — never products
    POST { action: 'member' }       invite / re-role / disable a workspace member
+                                   (api/_lib/logic-members.js change(), the one
+                                   writer of members; the Team page,
+                                   api/logic-team.js, is its other door)
 
    Billing, branding and the white label, the office terms and the tenant's
    status keep their own endpoints (tenant-billing, tenant-branding,
@@ -25,29 +28,11 @@
    row in omega_orgs/{org}/admin_audit with what changed and what it was.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
-var A = require('./_lib/admin'), X = require('./_lib/logic-access'), L = require('./_lib/logic-admin'), WL = require('./_lib/whitelabel'), M = require('./_lib/mail');
+var A = require('./_lib/admin'), X = require('./_lib/logic-access'), L = require('./_lib/logic-admin'), WL = require('./_lib/whitelabel');
 var zip = require('./_lib/portfolio/zip'), csv = require('./_lib/portfolio/csv'), PUBLIC = require('./_lib/public-domains');
-
-function now() { return new Date().toISOString(); }
-/* The set-password link continues to the tenant's own host — but Firebase
-   Auth only accepts a continue URL on a domain listed under Authentication →
-   Settings → Authorized domains, and a newly commissioned host never is
-   (there is no wildcard). So a refused host falls back to the hub, which is,
-   and the response says so instead of handing staff an error. */
-var HUB = 'https://silmarillion.clearskyomega.com/';
-async function resetLink(auth, email, hostName) {
-  try { return { link: await auth.generatePasswordResetLink(email, { url: 'https://' + hostName + '/' }), error: null, note: null }; }
-  catch (e1) {
-    if (!/allowlist|authorized|unauthorized-continue-uri|invalid-continue-uri/i.test(String(e1 && e1.message || e1))) return { link: null, error: String(e1 && e1.message || e1), note: null };
-    try { return { link: await auth.generatePasswordResetLink(email, { url: HUB }), error: null, note: hostName + ' is not an authorized domain in Firebase Auth yet, so the link continues to the hub; add the host under Authentication → Settings → Authorized domains to change that.' }; }
-    catch (e2) { return { link: null, error: String(e2 && e2.message || e2), note: null }; }
-  }
-}
-/* Audit ids sort NEWEST FIRST under a plain ascending orderBy('__name__'):
-   an inverted millisecond stamp, so the trail needs no composite index (a
-   descending __name__ order on a subcollection does, and the live page
-   found that out). */
-function rid(at) { return String(1e13 - Date.parse(at)).padStart(13, '0') + '_' + Math.random().toString(36).slice(2, 8); }
+/* People: ONE writer (api/_lib/logic-members.js), shared with the Team page.
+   Its audit ids sort newest first under a plain ascending __name__ order. */
+var Members = require('./_lib/logic-members'), now = Members.now, rid = Members.rid;
 
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -125,41 +110,12 @@ module.exports = A.handler(async function (req, res) {
 
   /* ── POST ────────────────────────────────────────────────────────────── */
   var action = String(b.action || '');
-  async function ensureMember(orgId, orgName, hostName, m) {
-    var auth = A.init().auth(), u, status, members = db.collection('omega_orgs').doc(orgId).collection('members');
-    /* A status change or a set-password link never creates an account: the
-       member is found by email, and only a ROLE (an invitation) reaches Auth
-       to create one. */
-    if (!m.role) {
-      var found = await members.where('email', '==', m.email).limit(1).get();
-      if (found.empty) throw A.httpError(404, m.email + ' is not a member of this workspace yet; give a role to invite them');
-      var doc = found.docs[0], data = doc.data(), out = { uid: doc.id, email: m.email, role: data.role, status: data.status || 'active', account: 'unchanged', claims: false, resetLink: null, resetLinkError: null, mail: null };
-      if (m.status) { await doc.ref.set({ status: m.status, updatedAt: now(), updatedBy: caller.email }, { merge: true }); out.status = m.status; }
-      if (m.resetLink) { var made0 = await resetLink(auth, m.email, hostName); out.resetLink = made0.link; out.resetLinkError = made0.error; out.resetLinkNote = made0.note; }
-      return out;
-    }
-    try { u = await auth.getUserByEmail(m.email); status = 'existing'; }
-    catch (e) { if (!(e && e.code === 'auth/user-not-found')) throw e; u = await auth.createUser({ email: m.email, emailVerified: false, displayName: m.name || orgName }); status = 'created'; }
-    var mref = db.collection('omega_orgs').doc(orgId).collection('members').doc(u.uid), prev = await mref.get();
-    var patch = { email: m.email, status: m.status || (prev.exists && prev.data().status) || 'active', updatedAt: now() };
-    if (m.role) patch.role = m.role; if (m.name) patch.name = m.name; if (!prev.exists) { patch.invitedBy = caller.email; patch.invitedAt = now(); }
-    if (!prev.exists && !patch.role) throw A.httpError(404, m.email + ' is not a member of this workspace yet; give a role to invite them');
-    await mref.set(patch, { merge: true });
-    /* Sign-in claims are set only for the tenant's own people: rewriting a
-       staff member's or a partner's claims would move THEIR home workspace. */
-    var claims = A.orgOf(m.email) === orgId;
-    if (claims && patch.role) await auth.setCustomUserClaims(u.uid, Object.assign({}, u.customClaims || {}, { orgId: orgId, role: patch.role }));
-    var link = null, linkError = null, linkNote = null, mail = null;
-    if (status === 'created' || m.sendMail) { var made = await resetLink(auth, m.email, hostName); link = made.link; linkError = made.error; linkNote = made.note; }
-    if (m.sendMail && link && M.configured && M.configured()) {
-      try {
-        var r = await M.send(m.email, orgName + ' on ClearSky-OMEGA — set your password', M.layout('Your ' + orgName + ' workspace is ready',
-          '<p>ClearSky has set up <b>' + M.esc(orgName) + '</b> at <b>' + M.esc(hostName) + '</b>.</p><p>Choose your password to get in. The link is good for about an hour; after that, use “Forgot password” on the sign-in page with this address.</p>' + M.button(link, 'Set your password')),
-          'Your ' + orgName + ' workspace is ready at https://' + hostName + '/. Set your password: ' + link);
-        mail = r && r.ok ? 'sent' : 'not sent';
-      } catch (e3) { mail = 'not sent — ' + e3.message; }
-    }
-    return { uid: u.uid, email: m.email, role: patch.role || (prev.exists ? prev.data().role : null), status: patch.status, account: status, claims: claims, resetLink: link, resetLinkError: linkError, resetLinkNote: linkNote, mail: mail };
+  /* ClearSky's door to the one member writer: any role, the set-password
+     link handed back to staff (reveal), mail only when asked. */
+  function ensureMember(orgId, orgName, hostName, m, audited) {
+    return Members.change({ orgId: orgId, orgName: orgName, host: hostName, by: caller.email, actor: 'clearsky', via: 'logic-admin',
+      request: { email: m.email, role: m.role || null, status: m.status || null, resetLink: m.resetLink === true, name: m.name || '', sendMail: m.sendMail === true },
+      reveal: true, mailNew: false, audit: audited === true });
   }
 
   if (action === 'commission') {
@@ -202,13 +158,9 @@ module.exports = A.handler(async function (req, res) {
     return { ok: true, changed: Object.keys(sp) };
   }
   if (action === 'member') {
-    var m = L.memberRequest(b);
-    if (m.status === 'disabled') {
-      var roster = await root.collection('members').limit(200).get(), owners = roster.docs.filter(function (d) { var x = d.data(); return x.role === 'owner' && x.status !== 'disabled'; });
-      if (owners.length === 1 && owners[0].data().email === m.email) throw A.httpError(409, 'That is the last active owner; make somebody else the owner first');
-    }
-    var out = await ensureMember(org, before.name || org, (before.domains || [])[0] || (before.slug + '.clearskyomega.com'), m);
-    if (!m.resetLink || m.status) await audit('member', { email: m.email, role: out.role, status: out.status, account: out.account });
+    /* the last-owner rule, the audit row (was → now) and the account and
+       claims handling all live in the one writer */
+    var out = await ensureMember(org, before.name || org, (before.domains || [])[0] || (before.slug + '.clearskyomega.com'), L.memberRequest(b), true);
     return Object.assign({ ok: true }, out);
   }
   throw A.httpError(400, 'action must be commission, org, storefront or member');

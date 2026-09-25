@@ -265,7 +265,7 @@ var quickbooks = {
     return qbResult(org, realm, id, inv.amountCents, customerId);
   },
   /* Adopt an invoice the workspace already made in its QuickBooks (the
-     Amperage deposit was issued before a provider was chosen): only when
+     live order's deposit was issued before a provider was chosen): only when
      currency and amount match, and never one already linked elsewhere. */
   linkInvoice: async function (org, view, stage, providerInvoiceId) {
     org = orgOf(org);

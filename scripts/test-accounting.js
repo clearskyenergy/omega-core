@@ -4,7 +4,7 @@
    end to end offline
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   Why this exists: the live Amperage Capital order (PO CCUS-3V3I-0926) was
+   Why this exists: the live Acme Fleet order (PO ACME-4X7Q-0926) was
    run through the intake script with the template's placeholder payment
    still in it; the placeholder was recorded as USD 1,349,099.10 received and
    released the order to the plant. Only the PO had arrived. These tests pin
@@ -128,16 +128,16 @@ function seed(opts) {
   db.seed(O + '/fulfillment/config', Object.assign({ enabled: true, accounting: 'tenant', terms: { depositPct: 90, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, opts.config || {}));
   db.seed(O + '/members/office', { email: ADMIN.email, role: 'admin', status: 'active' });
   db.seed(O + '/members/floor', { email: MEMBER.email, role: 'member', status: 'active' });
-  db.seed(O + '/customers/c1', { orgId: ORG, name: 'Amperage Capital', accountType: 'company', domain: 'amperagecapital.com', status: 'active', terms: { depositPct: 90, dueDays: opts.dueDays || 0 } });
-  db.seed(O + '/customers/c1/users/shannon@amperagecapital.com', { email: 'shannon@amperagecapital.com', role: 'owner', status: 'active' });
-  db.seed(O + '/customers/c1/users/ap@amperagecapital.com', { email: 'ap@amperagecapital.com', role: 'user', status: 'active' });
-  db.seed(O + '/customer_index/shannon@amperagecapital.com', { customerId: 'c1' });
-  db.seed(O + '/customer_index/ap@amperagecapital.com', { customerId: 'c1' });
-  db.seed('orders/amp', { orgId: ORG, orderNo: 'CC-26-0926', status: 'new', createdAt: '2026-09-22T10:00:00Z', purchaseOrder: { number: 'CCUS-3V3I-0926' }, customerId: 'c1',
-    customer: { name: 'Shannon Johnson', company: 'Amperage Capital', email: 'shannon@amperagecapital.com' }, items: [{ sku: 'R60', name: 'R60 skid', qty: opts.qty || 56 }] });
+  db.seed(O + '/customers/c1', { orgId: ORG, name: 'Acme Fleet', accountType: 'company', domain: 'acmefleet.com', status: 'active', terms: { depositPct: 90, dueDays: opts.dueDays || 0 } });
+  db.seed(O + '/customers/c1/users/jordan@acmefleet.com', { email: 'jordan@acmefleet.com', role: 'owner', status: 'active' });
+  db.seed(O + '/customers/c1/users/ap@acmefleet.com', { email: 'ap@acmefleet.com', role: 'user', status: 'active' });
+  db.seed(O + '/customer_index/jordan@acmefleet.com', { customerId: 'c1' });
+  db.seed(O + '/customer_index/ap@acmefleet.com', { customerId: 'c1' });
+  db.seed('orders/amp', { orgId: ORG, orderNo: 'CC-26-0926', status: 'new', createdAt: '2026-09-22T10:00:00Z', purchaseOrder: { number: 'ACME-4X7Q-0926' }, customerId: 'c1',
+    customer: { name: 'Jordan Blake', company: 'Acme Fleet', email: 'jordan@acmefleet.com' }, items: [{ sku: 'R60', name: 'R60 skid', qty: opts.qty || 56 }] });
 }
 async function priced(id) { await post(office, { action: 'price', orderId: id || 'amp', total: 1498999, accept: true }, OWNER); }
-async function issued(id, stage, number, date, extra) { return post(office, Object.assign({ action: 'invoice-issued', orderId: id || 'amp', stage: stage || 'deposit', number: number || 'CCUS-3V3I-0926-01 Rev B', date: date || '2026-09-23' }, extra || {})); }
+async function issued(id, stage, number, date, extra) { return post(office, Object.assign({ action: 'invoice-issued', orderId: id || 'amp', stage: stage || 'deposit', number: number || 'ACME-4X7Q-0926-01 Rev B', date: date || '2026-09-23' }, extra || {})); }
 async function paid(ref, amount, date, stage, id, extra) { return post(office, Object.assign({ action: 'payment-received', orderId: id || 'amp', stage: stage || 'deposit', amount: amount == null ? DEP / 100 : amount, date: date || '2026-10-02', bankReference: ref }, extra || {})); }
 function readyUnits(n, id) {
   for (var i = 1; i <= n; i++) db.seed('plant_units/' + ORG + '__U' + i, { orgId: ORG, orderId: id || 'amp', woId: 'wo_' + (id || 'amp'), serial: 'U' + i, rootSerial: 'U' + i, sku: 'R60', unitType: 'cabinet', shipUnit: true, parentSerial: null, at: 'ready', test: { result: 'pass' }, hold: null, ncr: null });
@@ -162,7 +162,7 @@ async function main() {
     assert.equal(R.settle(inv({ id: null, payments: [] })).status, 'to_issue');
     assert.deepEqual(R.settle({ amountCents: 0 }), { paidCents: 0, balanceCents: 0, satisfied: true, status: 'not_required' });
   });
-  await test('refKey folds case and spacing; the Amperage placeholder is a placeholder; qbo: and stripe: are reserved', function () {
+  await test('refKey folds case and spacing; the Acme placeholder is a placeholder; qbo: and stripe: are reserved', function () {
     assert.equal(R.refKey('  ach   4471 '), R.refKey('ACH 4471'));
     assert.equal(R.isPlaceholder(PLACEHOLDER), true);
     ['TBD', 'n/a', 'XXXX', '0000', 'pending wire', 'not yet received'].forEach(function (r) { assert.equal(R.isPlaceholder(r), true, r); });
@@ -277,11 +277,11 @@ async function main() {
       invoices: { deposit: inv({ payments: [pay('ACH 1', 100000, { voidedAt: AT, voidedBy: BY, voidReason: 'never arrived', voidSource: 'office' })] }) } }, { status: 'in_fulfilment' });
     var b = tenantOrder({ invoices: { deposit: inv({ id: 'INV-9', payments: [pay('ACH 9', 100000)] }), balance: inv({ id: null, amountCents: 50000, issuedAt: null }) } }, { orderNo: 'CC-2', customer: { name: 'Pat', email: 'Pat@Other.example', company: 'Other Co' } });
     var c = tenantOrder({}, { poIntake: { number: 'P' } });
-    var entries = [{ id: 'a', order: a, account: { id: 'c1', name: 'Amperage Capital' } }, { id: 'b', order: b, account: null }, { id: 'c', order: c, account: null }];
+    var entries = [{ id: 'a', order: a, account: { id: 'c1', name: 'Acme Fleet' } }, { id: 'b', order: b, account: null }, { id: 'c', order: c, account: null }];
     var all = R.rows(entries, '2026-10-15', { provider: 'stripe' });
     assert.deepEqual(all.map(function (r) { return r.key; }), ['a:deposit', 'b:deposit', 'b:balance']);
     var r0 = all[0];
-    assert.deepEqual(r0.customer, { key: 'account:c1', customerId: 'c1', name: 'Amperage Capital', contact: 'Buyer', email: 'Buyer@Example.com' });
+    assert.deepEqual(r0.customer, { key: 'account:c1', customerId: 'c1', name: 'Acme Fleet', contact: 'Buyer', email: 'Buyer@Example.com' });
     assert.equal(r0.releasedOnPo, true); assert.equal(r0.receivedCents, 0); assert.equal(r0.payments[0].voided, true); assert.equal(r0.payments[0].source, 'office');
     assert.equal(r0.actions.void, false); assert.equal(r0.actions.record, true); assert.equal(r0.actions.push, true); assert.equal(r0.actions.pull, false); assert.equal(r0.actions.releaseOnPo, false);
     assert.equal(all[1].customer.key, 'email:pat@other.example'); assert.equal(all[1].customer.name, 'Other Co'); assert.equal(all[2].status, 'to_issue'); assert.equal(all[2].actions.issue, true);
@@ -300,9 +300,9 @@ async function main() {
     assert(hostile.indexOf('"\'=HYPERLINK(""x""),Inc"') >= 0, hostile);
   });
 
-  /* ───────────────────────── the Amperage order, end to end ───────────── */
+  /* ───────────────────────── the Acme order, end to end ───────────── */
   var WO, UNITS;
-  await test('THE AMPERAGE ORDER: the placeholder released the plant; void with keep-building puts received back to zero and keeps building', async function () {
+  await test('THE ACME ORDER: the placeholder released the plant; void with keep-building puts received back to zero and keeps building', async function () {
     seed(); await priced();
     assert.equal(order().logic.commercial.depositCents, DEP);
     await issued();
@@ -317,18 +317,18 @@ async function main() {
     var releasedAt = order().logic.releasedAt;
     var body = { action: 'payment-void', orderId: 'amp', stage: 'deposit', bankReference: PLACEHOLDER, reason: 'Recorded by the intake script from the template; the money has not been received — only the PO' };
     await rejects(post(office, body), 409, /keep building on the PO, or hold/);
-    var out = await post(office, Object.assign({ keepBuilding: true, poNumber: 'CCUS-3V3I-0926' }, body));
+    var out = await post(office, Object.assign({ keepBuilding: true, poNumber: 'ACME-4X7Q-0926' }, body));
     var d = dep();
     assert.equal(d.status, 'awaiting_payment'); assert.equal(d.paidCents, 0); assert.equal(d.balanceCents, DEP); assert.equal(d.satisfied, false);
     assert.equal(d.payments.length, 1); assert.equal(d.payments[0].bankReference, PLACEHOLDER);
     assert.equal(d.payments[0].voidedBy, ADMIN.email); assert.equal(d.payments[0].voidSource, 'office'); assert.match(d.payments[0].voidReason, /only the PO/); assert(d.payments[0].voidedAt);
     var cr = order().logic.creditRelease;
-    assert.equal(cr.basis, 'void'); assert.equal(cr.poNumber, 'CCUS-3V3I-0926'); assert.equal(cr.openCents, DEP); assert.equal(cr.voidedReference, PLACEHOLDER); assert.equal(cr.by, ADMIN.email);
+    assert.equal(cr.basis, 'void'); assert.equal(cr.poNumber, 'ACME-4X7Q-0926'); assert.equal(cr.openCents, DEP); assert.equal(cr.voidedReference, PLACEHOLDER); assert.equal(cr.by, ADMIN.email);
     assert.equal(order().status, 'in_fulfilment'); assert.equal(order().logic.releasedAt, releasedAt); assert.equal(order().worksOrderId, 'wo_amp');
     assert.deepEqual(db.data.get('plant_works_orders/wo_amp'), WO); assert.deepEqual(keys('plant_units/').map(function (k) { return db.data.get(k); }), UNITS);
     assert.equal(order().logic.paymentException || null, null); assert.equal(order().logic.paymentHold || null, null);
     assert.equal(out.order.creditRelease.basis, 'void'); assert.equal(out.order.status, 'in_fulfilment');
-    assert(events().some(function (w) { return /voided by office@cleancell\.us — .*kept building on PO CCUS-3V3I-0926/.test(w); }));
+    assert(events().some(function (w) { return /voided by office@cleancell\.us — .*kept building on PO ACME-4X7Q-0926/.test(w); }));
     var a = audits('ledger-payment-void'); assert.equal(a.length, 1); assert.equal(a[0].orderId, 'amp'); assert.equal(a[0].before.paidCents, DEP); assert.equal(a[0].after.paidCents, 0); assert.equal(a[0].before.entry.voidedAt, undefined);
     /* the dashboard (omega-logic.html sums amountCents / paidCents) and the office header */
     var g = await call(office, 'GET', {}, ADMIN), invd = 0, rcvd = 0;
@@ -339,7 +339,7 @@ async function main() {
     /* the accounting page */
     var acc = await call(accounting, 'GET', {}, ADMIN), row = acc.rows[0];
     assert.equal(acc.rows.length, 1); assert.equal(row.releasedOnPo, true); assert.equal(row.payments[0].voided, true); assert.equal(row.receivedCents, 0);
-    assert.equal(row.customer.name, 'Amperage Capital'); assert.equal(row.customer.key, 'account:c1'); assert.equal(row.poNumber, 'CCUS-3V3I-0926');
+    assert.equal(row.customer.name, 'Acme Fleet'); assert.equal(row.customer.key, 'account:c1'); assert.equal(row.poNumber, 'ACME-4X7Q-0926');
     assert.equal(acc.totals.invoicedCents, DEP); assert.equal(acc.totals.receivedCents, 0); assert.equal(acc.totals.outstandingCents, DEP);
     assert.equal(acc.totals.creditReleasedCents, DEP); assert.equal(acc.totals.voidedCents, DEP);
     assert.equal(row.overdue, R.daysBetween('2026-09-23', acc.today) > 0); assert.equal(row.bucket, R.bucket(R.daysBetween('2026-09-23', acc.today)));
@@ -375,17 +375,17 @@ async function main() {
     await post(office, { action: 'payment-void', orderId: 'amp', stage: 'deposit', bankReference: 'ACH 5001', reason: 'Returned by the bank (R01)', keepBuilding: false });
     assert(order().logic.paymentHold);
     var rel = await post(office, { action: 'release-on-po', orderId: 'amp', reason: 'Credit approved by the CFO against the PO' });
-    assert.equal(rel.creditRelease.basis, 'hold-lifted'); assert.equal(rel.creditRelease.poNumber, 'CCUS-3V3I-0926'); assert.equal(rel.creditRelease.openCents, DEP);
+    assert.equal(rel.creditRelease.basis, 'hold-lifted'); assert.equal(rel.creditRelease.poNumber, 'ACME-4X7Q-0926'); assert.equal(rel.creditRelease.openCents, DEP);
     assert.equal(order().logic.paymentHold, null); assert.equal(order().logic.paymentException, null); assert.equal(rel.order.status, 'in_fulfilment');
     assert.equal(S.stageOf(order()).label, 'Released on PO');
   });
   await test('release on PO before any payment releases the plant; shipment still needs the deposit and the balance', async function () {
     seed({ qty: 2 }); await priced();
     await rejects(post(office, { action: 'release-on-po', orderId: 'amp', reason: 'no' }), 400, /Say why/);
-    var rel = await post(office, { action: 'release-on-po', orderId: 'amp', reason: 'PO received; Amperage is a credit-approved account', poNumber: '' });
-    assert.equal(rel.creditRelease.basis, 'po'); assert.equal(rel.creditRelease.poNumber, 'CCUS-3V3I-0926'); assert.equal(rel.creditRelease.openCents, DEP);
+    var rel = await post(office, { action: 'release-on-po', orderId: 'amp', reason: 'PO received; Acme is a credit-approved account', poNumber: '' });
+    assert.equal(rel.creditRelease.basis, 'po'); assert.equal(rel.creditRelease.poNumber, 'ACME-4X7Q-0926'); assert.equal(rel.creditRelease.openCents, DEP);
     assert.equal(rel.order.status, 'in_fulfilment'); assert.equal(rel.order.worksOrderId, 'wo_amp'); assert(rel.order.releasedAt);
-    assert(events().some(function (w) { return w.indexOf('Released on PO CCUS-3V3I-0926 (credit release by office@cleancell.us) before the deposit; 0 finished units reserved') === 0; }));
+    assert(events().some(function (w) { return w.indexOf('Released on PO ACME-4X7Q-0926 (credit release by office@cleancell.us) before the deposit; 0 finished units reserved') === 0; }));
     assert.equal((await post(office, { action: 'release-on-po', orderId: 'amp', reason: 'again, twice over' })).duplicate, true);
     readyUnits(2);
     await rejects(post(office, { action: 'ship', orderId: 'amp', shipment: { carrier: 'Estes', tracking: 'BOL-1' } }, OWNER), 409, /deposit must be recorded before shipment/);
@@ -393,7 +393,7 @@ async function main() {
     await issued(); await paid('ACH 4471');
     assert.equal(S.creditOpen(order()), 0);
     await rejects(post(office, { action: 'ship', orderId: 'amp', shipment: { carrier: 'Estes', tracking: 'BOL-1' } }, OWNER), 409, /Final payment must be recorded before shipment/);
-    await issued('amp', 'balance', 'CCUS-3V3I-0926-02', '2026-10-10'); await paid('ACH 4490', BAL / 100, '2026-10-12', 'balance');
+    await issued('amp', 'balance', 'ACME-4X7Q-0926-02', '2026-10-10'); await paid('ACH 4490', BAL / 100, '2026-10-12', 'balance');
     await post(office, { action: 'ship', orderId: 'amp', shipment: { carrier: 'Estes', tracking: 'BOL-1' } }, OWNER);
     assert.equal(order().status, 'shipped');
     /* the office stage for "balance recorded, deposit still open" is never "ready to ship" */
@@ -460,7 +460,7 @@ async function main() {
     seed(); await priced(); await issued();
     await post(office, { action: 'release-on-po', orderId: 'amp', reason: 'PO received; credit approved' });
     /* a colleague's order on the same ACCOUNT, billed to them (pricing stamps it for the account) */
-    db.seed('orders/amp2', { orgId: ORG, orderNo: 'CC-26-0930', status: 'new', createdAt: '2026-09-23T10:00:00Z', customer: { name: 'AP desk', company: 'Amperage', email: 'AP@amperagecapital.com' }, items: [{ sku: 'R60', qty: 1 }] });
+    db.seed('orders/amp2', { orgId: ORG, orderNo: 'CC-26-0930', status: 'new', createdAt: '2026-09-23T10:00:00Z', customer: { name: 'AP desk', company: 'Acme', email: 'AP@acmefleet.com' }, items: [{ sku: 'R60', qty: 1 }] });
     await priced('amp2'); await issued('amp2', 'deposit', 'D-2', '2026-09-23');
     await paid('ACH 1', 100, '2026-09-24', 'deposit', 'amp2');
     await post(office, { action: 'payment-void', orderId: 'amp2', stage: 'deposit', bankReference: 'ACH 1', reason: 'Entered against the wrong order', keepBuilding: false });
@@ -471,13 +471,13 @@ async function main() {
     db.seed('orders/raw', { orgId: ORG, orderNo: 'CC-26-0932', status: 'new', createdAt: '2026-09-24T11:00:00Z', customer: { email: 'z@z.example' }, items: [] });
     var acc = await call(accounting, 'GET', {}, ADMIN);
     assert.deepEqual(acc.rows.map(function (r) { return r.key; }), ['oth:deposit', 'amp2:deposit', 'amp:deposit']);
-    assert.equal(acc.rows[1].customer.key, 'account:c1', 'the colleague is on the Amperage account'); assert.equal(acc.rows[1].customer.name, 'Amperage Capital');
+    assert.equal(acc.rows[1].customer.key, 'account:c1', 'the colleague is on the Acme account'); assert.equal(acc.rows[1].customer.name, 'Acme Fleet');
     assert.equal(acc.rows[1].payments.length, 1); assert.equal(acc.rows[1].payments[0].voided, true); assert.equal(acc.rows[1].receivedCents, 0);
     assert.equal(acc.rows[0].customer.key, 'email:lee@other.example'); assert.equal(acc.rows[0].status, 'to_issue');
     assert.equal(acc.totals.voidedCents, 10000); assert.equal(acc.totals.receivedCents, 0);
     var amp = acc.totals.byCustomer.filter(function (c) { return c.key === 'account:c1'; })[0];
     assert.equal(amp.count, 2); assert.equal(amp.invoicedCents, DEP * 2); assert.equal(amp.outstandingCents, DEP * 2); assert.equal(acc.totals.byCustomer[0].key, 'account:c1');
-    assert.deepEqual(acc.customers, [{ key: 'account:c1', name: 'Amperage Capital' }, { key: 'email:lee@other.example', name: 'Other, "Power" Co' }]);
+    assert.deepEqual(acc.customers, [{ key: 'account:c1', name: 'Acme Fleet' }, { key: 'email:lee@other.example', name: 'Other, "Power" Co' }]);
     assert.equal(acc.allCount, 3); assert.equal(acc.filtered, false); assert.equal(acc.limited, false); assert.equal(acc.sync.available, true); assert.equal(acc.sync.provider, 'none');
     assert.equal(acc.brand.workspace, 'Clean Cell'); assert.equal(acc.accounting, 'tenant');
     var f = await call(accounting, 'GET', { customer: 'account:c1', status: 'open' }, ADMIN);
@@ -557,8 +557,8 @@ async function main() {
     var pu = await post(accounting, { action: 'sync-push', orderId: 'amp', stage: 'deposit' });
     assert.equal(pu.ledger.state, 'pushed'); assert.equal(pu.ledger.provider, 'quickbooks'); assert.equal(dep().ledger.invoiceId, pu.ledger.invoiceId);
     var seen = LS_CALLS.filter(function (c) { return c.fn === 'push'; })[0].view;
-    assert.deepEqual(seen.account, { id: 'c1', key: 'account:c1', name: 'Amperage Capital' }); assert.equal(seen.poNumber, 'CCUS-3V3I-0926');
-    assert.equal(seen.invoice.number, 'CCUS-3V3I-0926-01 Rev B'); assert.equal(seen.invoice.amountCents, DEP); assert.equal(seen.invoice.dueAt, '2026-09-23'); assert.equal(seen.orgId, ORG);
+    assert.deepEqual(seen.account, { id: 'c1', key: 'account:c1', name: 'Acme Fleet' }); assert.equal(seen.poNumber, 'ACME-4X7Q-0926');
+    assert.equal(seen.invoice.number, 'ACME-4X7Q-0926-01 Rev B'); assert.equal(seen.invoice.amountCents, DEP); assert.equal(seen.invoice.dueAt, '2026-09-23'); assert.equal(seen.orgId, ORG);
     assert.equal((await post(accounting, { action: 'sync-push', orderId: 'amp', stage: 'deposit' })).duplicate, true);
     await rejects(post(accounting, { action: 'sync-link', orderId: 'amp', stage: 'deposit', invoiceId: '999' }), 409, /already linked to QuickBooks invoice/);
     await rejects(post(accounting, { action: 'sync-link', orderId: 'amp', stage: 'deposit', invoiceId: '9/9' }), 400);
@@ -592,7 +592,7 @@ async function main() {
     assert.deepEqual(pl.results[0].stages.deposit.conflicts, ['qbo:89 now applies USD 60.00 in QuickBooks (recorded USD 50.00); void and re-record by hand']);
     assert.equal(dep().payments[1].amountCents, 5000);
     /* link on another order (issued while QuickBooks was not connected, so still pending); then disconnect */
-    db.seed('orders/two', { orgId: ORG, orderNo: 'CC-26-0940', status: 'new', createdAt: '2026-09-25T10:00:00Z', customerId: 'c1', customer: { name: 'Shannon Johnson', email: 'shannon@amperagecapital.com' }, items: [{ sku: 'R60', qty: 1 }] });
+    db.seed('orders/two', { orgId: ORG, orderNo: 'CC-26-0940', status: 'new', createdAt: '2026-09-25T10:00:00Z', customerId: 'c1', customer: { name: 'Jordan Blake', email: 'jordan@acmefleet.com' }, items: [{ sku: 'R60', qty: 1 }] });
     LS.ready = false; await priced('two'); await issued('two', 'deposit', 'D-TWO', '2026-09-25'); LS.ready = true;
     assert.equal(dep('two').ledger.state, 'pending');
     var ln = await post(accounting, { action: 'sync-link', orderId: 'two', stage: 'deposit', invoiceId: '145' });
@@ -603,7 +603,7 @@ async function main() {
     assert.equal(audits('ledger-sync-disconnect').length, 1);
     /* stripe: the hosted invoice page becomes the invoice's pay link */
     await post(accounting, { action: 'sync-choose', provider: 'stripe', stripe: { paymentMethods: ['us_bank_account'], sendEmail: true } });
-    db.seed('orders/three', { orgId: ORG, orderNo: 'CC-26-0941', status: 'new', createdAt: '2026-09-26T10:00:00Z', customerId: 'c1', customer: { name: 'Shannon Johnson', email: 'shannon@amperagecapital.com' }, items: [{ sku: 'R60', qty: 1 }] });
+    db.seed('orders/three', { orgId: ORG, orderNo: 'CC-26-0941', status: 'new', createdAt: '2026-09-26T10:00:00Z', customerId: 'c1', customer: { name: 'Jordan Blake', email: 'jordan@acmefleet.com' }, items: [{ sku: 'R60', qty: 1 }] });
     await priced('three'); await issued('three', 'deposit', 'D-THREE', '2026-09-26');
     var st = dep('three');
     assert.equal(st.ledger.provider, 'stripe'); assert.equal(st.ledger.state, 'pushed'); assert.match(st.payUrl, /^https:\/\/invoice\.stripe\.com\//); assert.equal(st.payUrl, st.ledger.hostedUrl);
@@ -612,7 +612,7 @@ async function main() {
        Stripe workspace: one call records both, pushes to Stripe, and the
        office's link is what the customer sees (Stripe's page is kept on the
        ledger) */
-    db.seed('orders/four', { orgId: ORG, orderNo: 'CC-26-0942', status: 'new', createdAt: '2026-09-27T10:00:00Z', customerId: 'c1', customer: { name: 'Shannon Johnson', email: 'shannon@amperagecapital.com' }, items: [{ sku: 'R60', qty: 1 }] });
+    db.seed('orders/four', { orgId: ORG, orderNo: 'CC-26-0942', status: 'new', createdAt: '2026-09-27T10:00:00Z', customerId: 'c1', customer: { name: 'Jordan Blake', email: 'jordan@acmefleet.com' }, items: [{ sku: 'R60', qty: 1 }] });
     await priced('four');
     var both = await issued('four', 'deposit', 'D-FOUR', '2026-09-27', { dueAt: '2026-10-27', payUrl: 'https://pay.cleancell.us/inv/D-FOUR' });
     var f4 = dep('four');
@@ -633,7 +633,7 @@ async function main() {
     await post(accounting, { action: 'sync-choose', provider: 'stripe' });
     LS.ready = false;
     var out = await issued();
-    assert.equal(out.invoice.id, 'CCUS-3V3I-0926-01 Rev B'); assert.equal(out.sync.skipped, 'not-connected'); assert.equal(dep().ledger.state, 'pending'); assert.equal(dep().ledger.by, ADMIN.email);
+    assert.equal(out.invoice.id, 'ACME-4X7Q-0926-01 Rev B'); assert.equal(out.sync.skipped, 'not-connected'); assert.equal(dep().ledger.state, 'pending'); assert.equal(dep().ledger.by, ADMIN.email);
     assert.equal((await post(accounting, { action: 'sync-pull', orderId: 'amp' })).skipped, 'not-connected');
     /* once connected, the worker pushes what is pending */
     LS.ready = true;
@@ -643,7 +643,7 @@ async function main() {
     seed(); await priced(); await post(accounting, { action: 'sync-choose', provider: 'stripe' });
     LS.pushFail = 'Stripe request failed (500): upstream';
     out = await issued();
-    assert.equal(out.ok, true); assert.equal(dep().id, 'CCUS-3V3I-0926-01 Rev B'); assert.equal(dep().status, 'awaiting_payment');
+    assert.equal(out.ok, true); assert.equal(dep().id, 'ACME-4X7Q-0926-01 Rev B'); assert.equal(dep().status, 'awaiting_payment');
     assert.equal(dep().ledger.state, 'error'); assert.equal(dep().ledger.error, 'Stripe request failed (500): upstream'); assert.equal(out.sync.stages.deposit.pushed, false);
     /* an 'error' is not retried behind anybody's back; the explicit push is */
     LS.pushFail = null; await W.processOrder('amp'); assert.equal(dep().ledger.state, 'error');
@@ -709,7 +709,7 @@ async function main() {
     seed(); await priced(); await issued(); await paid('ACH 4471');
     await post(office, { action: 'payment-void', orderId: 'amp', stage: 'deposit', bankReference: 'ACH 4471', reason: 'Returned by the bank', keepBuilding: false });
     var g = await call(office, 'GET', {}, ADMIN), x = g.orders[0];
-    assert.equal(x.poNumber, 'CCUS-3V3I-0926'); assert.equal(x.logic.paymentHold.reference, 'ACH 4471'); assert.equal(x.logic.creditRelease, null);
+    assert.equal(x.poNumber, 'ACME-4X7Q-0926'); assert.equal(x.logic.paymentHold.reference, 'ACH 4471'); assert.equal(x.logic.creditRelease, null);
     assert.equal(g.links.accounting, '/logic-accounting.html?org=cleancell.us');
     await post(office, { action: 'release-on-po', orderId: 'amp', reason: 'Credit approved on the PO' });
     x = (await call(office, 'GET', {}, ADMIN)).orders[0];
