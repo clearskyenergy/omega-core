@@ -15,7 +15,7 @@ a proposal waiting on Tommy, not a settled price.
 
 A customer should understand in minutes which parts of OMEGA they need, buy
 those, and opt in to more as their work grows. So: (1) ONE catalog of
-sellable **modules**, carved out of the Site Map editor's ~180 functions and
+sellable **modules**, carved out of the Site Map editor's 186 functions and
 the platform's other tools, with ONE price each for everybody; (2) a
 **Package** panel in the master console where staff build a tenant's menu at
 onboarding, and the price, the Stripe subscription and the access all follow
@@ -264,6 +264,54 @@ consultants, drafting, data)? Those numbers feed the value page.
 
 ---
 
+### 4.1 Where today's gates leak (fix before a module is sold)
+
+A full sweep of `editor.html` (186 distinct user-facing functions) found that
+the capability gate covers very few of them. A module can only be sold if its
+tools stay shut for a tenant who has not bought it. Phase 2 must close all of
+these, each with a test:
+
+1. **`schematic` and `riser` protect almost nothing.** Schematic Editor,
+   Riser, Check One-Line, Design Review, Permit Sheet, Sheet Set Manager and
+   Geo Export sit on the ungated Output tab (anchors 109271, 128798, 140945,
+   140956, 140985, 110975, 111955, 115800).
+2. **`permitting` unlocks nothing visible.** The cap exists only in
+   commented-out markup (2305); the Permitting Matrix (140991) is ungated.
+3. **The File menu goes around the export and engineering gates.** The
+   Documentation drawer (15 sheets E0–S3.0 plus XLSX/GeoJSON exports, 1800),
+   Print/PDF (1798), BOM / Sourcing (1804) and Electrical Estimate (1805) are
+   ungated there; View › Summary › Cost reaches Construction Cost (3618).
+4. **Compute leaks out of its tab.** Compute Build (Build tab, 1835) and Data
+   Ctr placement (Draw tab, 2071–2080) carry no `compute` cap.
+5. **The command palette (Ctrl+K) and Ask Jarvis run hidden buttons.** They
+   index every ribbon button, including those the gate removed, and click
+   them by name (105492, 105558). They must read the same module check.
+6. **`?customerEngine=1` switches the gate off entirely** (4491, 175932).
+7. **Parcel Screen needs both `parcelscreen` and `engineering`** because it
+   lives inside the Analyze tab; Grid Atlas pre-screen, Find Substation,
+   Network Proximity and Site Score are behind `engineering` too. Each must
+   move to its own module gate.
+8. **The retired `csebuilders.com` still resolves to the ungated `internal`
+   tier** in `omega-caps.js` (`INTERNAL_DOMAINS`, 306) with no verified-email
+   check, against CLAUDE.md. Queued as its own fix.
+
+`can('tou'|'demand'|'capacity'|'ancillary'|'program')` inside Value Stack
+(93476) is NOT a tier gate; it filters revenue streams by market partner.
+
+### 4.2 Not live yet: do not sell as included
+
+Marked SOON, hidden or retiring in the editor today: Permit Creator (hidden;
+stub says "contact your account rep"), Site Pre-Qual, Site Pre-Screen, Price
+Decks, Digital Twin hand-off (SOON), Viability Workflow (hidden), BESS Config
+(retiring), the radial power-flow / short-circuit engine (tagged BETA, no
+button). BETA and sellable only with a beta clause: Permitting Matrix,
+Noise Modeling, Design Optimizer, 3D Site Visualizer, Bill Analysis, Geo
+Export, Export for CAD, Export for Validation. Unwired code that could become
+a feature: `openLaborProposal` (49886), `openSiteCapture` (14525), the URDB
+tariff import engine (130416).
+
+---
+
 ## 5. Data model and server pieces
 
 ### 5.1 `api/_lib/modules.js`: the ONE module catalog (code)
@@ -445,7 +493,9 @@ pricing math only in `/api/`, staff = verified `@clearsky-usa.com`
 - **Phase 1, catalog**: `api/_lib/modules.js` + tests (every tool and every
   ribbon button accounted for); `pricebook/` rules + seed; Stripe Products
   and Prices per module (script, idempotent, writes ids into the price book).
-- **Phase 2, editor re-gate**: `MODULE_GRANTS` in `omega-caps.js`; ribbon
+- **Phase 2, editor re-gate**: close every leak in §4.1 first (File menu,
+  command palette, Jarvis, `?customerEngine=1`, ungated Output tools);
+  `MODULE_GRANTS` in `omega-caps.js`; ribbon
   `data-cap` → module caps per Appendix A; locked buttons say which module
   unlocks them. Backfill script proposes `modules[]` for every live tenant
   from its current tier/add-ons, dry run first, **flag, don't drop**.
@@ -494,7 +544,8 @@ Status column: `NEW`/`BETA` as the editor's own `OmegaTags` list marks them.
 | Lite | Draw / Annotate / Edit | Select/Move, Line, Polyline, Rectangle, Circle, EV Stencil, ADA Symbol, ADA Aisle, Colour, Conduit runs, MV Trench, home-run routing, Text Note, Callout Arrow, Dimension, Zone Box, Labels, Duplicate, Delete, Undo/Redo, Clear |
 | Lite | View | Layers, Compass, Coordinates, Crosshair, Native Layer, Dock Left, Diagnose, Conduit Schedule, Solar panel view, 3D Review, Summary, Meters, live takeoff, Presentation, Snapshot, command search |
 | Lite | Output | Blueprint / PDF, Proposal, Spec Sheet, Interactive Report, Export to Monday (BETA) |
-| Lite | Settings | Maps key, AI keys, CRM Integration, Sync to CRM |
+| Lite | Settings / File | Maps key, AI keys, CRM Integration, Sync to CRM, Equipment Library, New/Open/Save projects, share link |
+| Lite | AI | Ask Jarvis (F1), Design with AI (address → sketch), AI Stencil, AI Render, AI bill reader |
 | Grid Atlas | Analyze (today behind `engineering`) | Grid Atlas pre-screen, Grid Pre-Qualify, Find Substation, Substations → map layer, load vs grid ceiling |
 | Storage | Build › Size & Configure; Analyze | BESS Sizer, Solar BESS Sizer, BESS BTM, Solar → BESS, Import Bill, Bill Analysis (NEW), Value Stack (TOU/demand/capacity/ancillary/program), Price Decks, Non-Export Headroom, Energy Balance, 10-year cost of ownership |
 | Estimate/BOM | Estimate (today behind `engineering`) | Construction Cost, Electrical Estimate, Takeoff & Budget (NEW), BOM / Sourcing, Budget CSV, Trench schedule CSV, estimate CSV, cost/spec sheet |
@@ -504,8 +555,8 @@ Status column: `NEW`/`BETA` as the editor's own `OmegaTags` list marks them.
 | Engineering | Analyze | Circuit Analysis (NEW), NEC 220 load calc, Electrical Sizing (NEC 690.7), network analysis (BETA), DER Generation, Generation Analysis / PVWatts, design optimizer (BETA), Optimise Layout, terrain screen, pile schedule, stringing CSV, Export for Validation (BETA), Validation Status (BETA), Digital Twin handoff |
 | Investor & Finance | Output › Marketplace | Push to Marketplace (NEW), Apply for Financing (DLL), city net-zero investment case, Building Net-Zero |
 | Compute | Compute (behind `compute`) | Compute Build, ZTMM container data centre, Lay Out Site, Max Load, Load Siting Screen, prime-mover compare, gas / fiber tie-in, Compute Cost, Supply Link, Land Lease, compute campus proposal |
-| Permitting Matrix | Output › Permit Documents | Permit Creator, Permitting Matrix (BETA: Vista / SDG&E verified), Gantt timeline, dependencies & risk, fee summary, required-documents checklist |
+| Permitting Matrix | Output › Permit Documents | Permit Creator (hidden today), Permitting Matrix (BETA: Vista / SDG&E verified), Gantt timeline, dependencies & risk, fee summary, required-documents checklist |
 
-About 180 user-facing functions in all, counting each equipment type. The builder must reconcile this table
+186 distinct user-facing functions in all (a full sweep found 189 rows across 13 categories: site intelligence 28, design and drawing 41, guided builds 13, conduit 9, electrical 16, drawings and exports 13, permitting 6, BOM and cost 6, revenue 13, compute 20, collaboration 8, AI 8, imports 8). Items in §4.2 are listed where they live but are not sold until live. The builder must reconcile this table
 button by button in Phase 2; anything found that is not here goes into one
 module or Lite, never left ungated.
