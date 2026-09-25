@@ -10,7 +10,8 @@
    intake template's placeholder bank reference, the live order's situation the
    accounting page exists to correct; one to price), a company account with
    an uploaded PO under review, a customer account with a site plan on
-   trial.
+   trial, and one PO for 56 cabinets going to 16 sites whose FREIGHT PLAN
+   (api/_lib/freight.js) the shipping page prices lane by lane.
 
    The workspace bills on its own paper (fulfillment/config.accounting
    'tenant'): the order in build has its deposit paid and its balance
@@ -48,6 +49,9 @@ var M = require('../../api/_lib/materials'), C = require('../../api/_lib/logic-c
 var Board = require('../../api/_lib/plant-board'), Ops = require('../../api/_lib/plant-ops'), Attention = require('../../api/_lib/plant-attention');
 var W = require('../../api/_lib/plant-work'), Plant = require('../../api/_lib/plant'), S = require('../../api/_lib/office-stage'), Rel = require('../../api/_lib/plant-release');
 var Manifest = require('../../api/app-manifest'), Cu = require('../../api/_lib/custody');
+/* the freight plan (pure; bundled like custody): the master list, the lanes,
+   the two sheets, a quote as the office records it, what Accept may plan */
+var Fr = require('../../api/_lib/freight');
 /* the receivables rules (pure): the accounting ledger and the three office
    corrections below apply them; nothing here re-derives money */
 var R = require('../../api/_lib/receivables');
@@ -55,7 +59,10 @@ var CRM = require('../../api/_lib/crm'), Portal = require('../../api/_lib/portal
 
 var ORG = 'cleancell.us';
 var CATALOG = [
-  { sku: 'CC-C215', name: '215 kWh outdoor cabinet', kind: 'product', kw: 100, kwh: 215, widthFt: 4.5, depthFt: 3.5, leadTimeDays: 20, priceMode: 'quote', warrantyYears: 10, bom: [{ sku: 'CC-MOD-52', qty: 8, unit: 'ea', station: 'rack', step: '1 · Fit modules' }, { sku: 'CC-HARN', qty: 2.5, unit: 'm', station: 'rack', step: '2 · Harness' }, { sku: 'CC-BMS-M', qty: 1, unit: 'ea' }, { sku: 'CC-ENC-1B', qty: 1, unit: 'ea' }] },
+  /* CC-C215 carries the catalog's shipping fields (api/_lib/shipping-fields.js,
+     fictional values); CC-C418 has none, so the freight plan says "not on
+     file" for it rather than guessing */
+  { sku: 'CC-C215', name: '215 kWh outdoor cabinet', kind: 'product', kw: 100, kwh: 215, widthFt: 4.5, depthFt: 3.5, heightFt: 7.5, weightLb: 5500, freightClass: '85', stackable: false, handlingNote: 'Class 9 lithium battery — see SDS', leadTimeDays: 20, priceMode: 'quote', warrantyYears: 10, bom: [{ sku: 'CC-MOD-52', qty: 8, unit: 'ea', station: 'rack', step: '1 · Fit modules' }, { sku: 'CC-HARN', qty: 2.5, unit: 'm', station: 'rack', step: '2 · Harness' }, { sku: 'CC-BMS-M', qty: 1, unit: 'ea' }, { sku: 'CC-ENC-1B', qty: 1, unit: 'ea' }] },
   { sku: 'CC-C418', name: '418 kWh outdoor cabinet', kind: 'product', kw: 200, kwh: 418, widthFt: 7.5, depthFt: 4.5, leadTimeDays: 30, priceMode: 'quote', warrantyYears: 10, bom: [] },
   { sku: 'CC-MOD-52', name: '5.2 kWh module', kind: 'component', kwh: 5.2, unit: 'ea', leadTimeDays: 10, bom: [{ sku: 'CC-CELL-280', qty: 104, unit: 'ea', yieldPct: 98 }, { sku: 'CC-HARN', qty: 2.5, unit: 'm' }] },
   { sku: 'CC-CELL-280', name: 'LFP cell 280 Ah', kind: 'component', unit: 'ea', moq: 1000, leadTimeDays: 60, supplier: 'EVE Energy', supplierSku: 'LF280K', safetyStock: 2000 },
@@ -73,6 +80,57 @@ var STOCK = { 'CC-MOD-52': { onHand: 8 }, 'CC-CELL-280': { onHand: 500, onOrder:
 var WORKS = [{ id: 'wo_1', orderNo: 'CC-26-4419', status: 'awaiting_serials', requirements: [{ sku: 'CC-C215', qty: 5 }], dueDate: '2026-11-14' }];
 var MAT_ORDERS = [{ id: 'a', orderNo: 'CC-26-4420', status: 'accepted', items: [{ sku: 'CC-C215', qty: 2 }], promisedShipAt: '2026-12-05' }, { id: 'b', orderNo: 'CC-26-4421', status: 'new', items: [{ sku: 'CC-C418', qty: 3 }] }];
 var NOW = '2026-09-21';
+/* ── the freight plan's sample: one PO (order o7, CC-26-4431) for 56
+   cabinets — 40 × CC-C215, 16 × CC-C418 — going to the sites the customer
+   sent a few at a time. Sixteen sites in seven regions, made-up streets in
+   real US cities, each with a map pin and some with a receiving contact;
+   one ZIP has a leading zero (the sheets keep it). 54 units are "going to"
+   a site, 2 have none yet. Kept apart from the custody sample (state.sites,
+   state.units), so the pages that count its sites and units are unchanged;
+   the freight plan reads both. Every name, street and number is fictional.
+   [key, name, street, city, state, ZIP, lat, lng, contact, phone, ref, CC-C215, CC-C418] */
+var FREIGHT_SITES = [
+  ['paterson', 'Paterson yard', '18 Demo St', 'Paterson', 'NJ', '07501', 40.9168, -74.1718, 'Receiving desk', '(201) 555-0101', 'SG-101', 4, 0],
+  ['scranton', 'Scranton depot', '250 Sample Rd', 'Scranton', 'PA', '18503', 41.4090, -75.6624, '', '', 'SG-102', 3, 0],
+  ['albany', 'Albany cold store', '9 Placeholder Ave', 'Albany', 'NY', '12207', 42.6526, -73.7562, 'Jordan Ellis', '(518) 555-0103', 'SG-103', 3, 0],
+  ['richmond', 'Richmond substation', '600 Example Blvd', 'Richmond', 'VA', '23219', 37.5407, -77.4360, '', '', 'SG-104', 2, 2],
+  ['baltimore', 'Baltimore harbor lot', '31 Fictional Way', 'Baltimore', 'MD', '21201', 39.2904, -76.6122, 'Sam Ortiz', '(410) 555-0105', 'SG-105', 3, 0],
+  ['charlotte', 'Charlotte hub', '1200 Demo Pkwy', 'Charlotte', 'NC', '28202', 35.2271, -80.8431, '', '', 'SG-106', 3, 0],
+  ['atlanta', 'Atlanta distribution', '77 Sample Plaza', 'Atlanta', 'GA', '30303', 33.7490, -84.3880, 'Receiving desk', '(404) 555-0107', 'SG-107', 4, 0],
+  ['nashville', 'Nashville campus', '415 Example Ln', 'Nashville', 'TN', '37203', 36.1627, -86.7816, '', '', 'SG-108', 0, 3],
+  ['columbus', 'Columbus plant', '88 Placeholder Rd', 'Columbus', 'OH', '43215', 39.9612, -82.9988, 'Riley Park', '(614) 555-0109', 'SG-109', 3, 0],
+  ['indianapolis', 'Indianapolis yard', '5 Fictional Ct', 'Indianapolis', 'IN', '46204', 39.7684, -86.1581, '', '', 'SG-110', 3, 0],
+  ['dallas', 'Dallas data hall', '2100 Demo Ave', 'Dallas', 'TX', '75201', 32.7767, -96.7970, 'Dock office', '(214) 555-0111', 'SG-111', 0, 4],
+  ['houston', 'Houston terminal', '900 Sample St', 'Houston', 'TX', '77002', 29.7604, -95.3698, '', '', 'SG-112', 4, 0],
+  ['okc', 'Oklahoma City store', '140 Example Dr', 'Oklahoma City', 'OK', '73102', 35.4676, -97.5164, 'Casey Lin', '(405) 555-0113', 'SG-113', 3, 0],
+  ['phoenix', 'Phoenix solar farm', '66 Placeholder Blvd', 'Phoenix', 'AZ', '85004', 33.4484, -112.0740, '', '', 'SG-114', 2, 2],
+  ['denver', 'Denver microgrid', '1700 Fictional St', 'Denver', 'CO', '80202', 39.7392, -104.9903, 'Site lead', '(303) 555-0115', 'SG-115', 0, 3],
+  ['sacramento', 'Sacramento depot', '321 Demo Way', 'Sacramento', 'CA', '95814', 38.5816, -121.4944, '', '', 'SG-116', 2, 1]
+];
+var FREIGHT_ORDER = { id: 'o7', orderNo: 'CC-26-4431', poNumber: 'SG-PO-3300' };
+/* the sites, the 56 units (serial order is site order; the first 30 are
+   ready — tested and passed, as the pickup gate requires — the next 16 on
+   the line with one held, the last 10 not started, the two with no site
+   among them) and the pinned ship-from */
+function freightSample(ago) {
+  var sites = FREIGHT_SITES.map(function (r) {
+    return { id: 'site_summit-grid-' + r[0], orgId: ORG, name: r[1], customerId: null, endCustomer: 'Summit Grid Co.', ref: r[10], address: { line1: r[2], line2: '', city: r[3], state: r[4], zip: r[5], country: 'US' }, lat: r[6], lng: r[7],
+      interconnection: {}, contact: { name: r[8], phone: r[9], email: '' }, notes: '', status: 'active', lifecycleSiteId: null, source: 'office-list', createdAt: ago(12), createdBy: 'demo@cleancell.us' };
+  });
+  var picks = []; FREIGHT_SITES.forEach(function (r, i) { var k; for (k = 0; k < r[11]; k++) picks.push({ sku: 'CC-C215', site: sites[i] }); for (k = 0; k < r[12]; k++) picks.push({ sku: 'CC-C418', site: sites[i] }); });
+  picks.push({ sku: 'CC-C215', site: null }, { sku: 'CC-C418', site: null });
+  var line = ['pack', 'qa', 'eol', 'bms', 'elec', 'encl', 'rack', 'module'];
+  var units = picks.map(function (x, n) {
+    var u = { serial: 'CC418-26-' + (45101 + n), sku: x.sku, shipUnit: true, unitType: 'cabinet', orderId: FREIGHT_ORDER.id, orderNo: FREIGHT_ORDER.orderNo, done: {} };
+    if (n < 30) Object.assign(u, { at: 'ready', startedAt: ago(9 + n % 4), arrivedAt: ago(1 + n % 6), inventoryStatus: 'allocated', test: { result: 'pass', at: ago(1 + n % 6) } });
+    else if (n < 46) Object.assign(u, { at: line[n % line.length], startedAt: ago(3), arrivedAt: ago(1), inventoryStatus: 'building' }, n === 38 ? { hold: 'NCR-26-97' } : {});
+    else Object.assign(u, { at: '', inventoryStatus: 'building' });
+    if (x.site) u.custody = { plannedSiteId: x.site.id, plannedSiteName: x.site.name, plannedAt: ago(2), plannedBy: 'office' };
+    return u;
+  });
+  return { units: units, sites: sites, quotes: [], audit: [],
+    origin: { name: 'Main plant · Building A', address: { line1: '2400 Sample Industrial Pkwy', line2: '', city: 'Fort Worth', state: 'TX', zip: '76106', country: 'US' }, contact: { name: 'Shipping office', phone: '(817) 555-0100' }, hours: 'Mon–Fri 7:00–15:00', notes: 'Forklift and crane on site; flatbeds and step decks load at dock 3.', lat: 32.8138, lng: -97.348 } };
+}
 /* the shape api/_lib/logic-brand.js returns: the customer-facing name, the
    workspace (the tenant's own name, shown inside Omega Logic) and the
    contract's "powered by" line */
@@ -222,7 +280,13 @@ function initialState() {
     /* the customer's uploads today, per account (crm_upload_usage) */
     uploads: {},
     intake: [{ id: 'po_x', orderNo: 'PO-IN-X', customerId: 'company_riverside', poNumber: 'RCC-2211', status: 'po_review', source: 'customer', notes: 'see attached', createdAt: '2026-09-19T10:00:00Z', reviewNote: '', convertedAt: null, rep: null, files: [] }],
-    companyOrders: [{ id: 'o1', customerId: 'company_riverside', orderNo: 'CC-26-4419', status: 'in_fulfilment', poNumber: 'RCC-2200', items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], destinations: [{ id: 'd1', address: { name: 'Riverside yard', city: 'Bakersfield', state: 'CA' }, items: [{ sku: 'CC-C215', qty: 5 }] }], revision: 1, legs: [{ id: 'LOAD-1', status: 'in_transit', carrier: 'Estes', tracking: 'BOL-771', destinationId: 'd1', serials: ['CC418-26-44192'], lastConfirmedLocation: { label: 'Fresno, CA' } }] }],
+    companyOrders: [{ id: 'o1', customerId: 'company_riverside', orderNo: 'CC-26-4419', status: 'in_fulfilment', poNumber: 'RCC-2200', items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], destinations: [{ id: 'd1', address: { name: 'Riverside yard', city: 'Bakersfield', state: 'CA' }, items: [{ sku: 'CC-C215', qty: 5 }] }], revision: 1, legs: [{ id: 'LOAD-1', status: 'in_transit', carrier: 'Estes', tracking: 'BOL-771', destinationId: 'd1', serials: ['CC418-26-44192'], lastConfirmedLocation: { label: 'Fresno, CA' } }] },
+      /* the freight plan's order (freightSample below): one PO, one destination
+         on the order (the customer's office), the sites sent a few at a time;
+         no customer account in this workspace, so no customer surface lists it */
+      { id: FREIGHT_ORDER.id, customerId: null, orderNo: FREIGHT_ORDER.orderNo, status: 'in_fulfilment', poNumber: FREIGHT_ORDER.poNumber, customer: { name: 'Procurement', company: 'Summit Grid Co.' }, promisedShipAt: dayAgo(-21),
+        items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 40 }, { sku: 'CC-C418', name: '418 kWh outdoor cabinet', qty: 16 }],
+        destinations: [{ id: 'd1', address: { name: 'Summit Grid Co. · per site list', line1: '1 Example Plaza', city: 'Chicago', state: 'IL', zip: '60601' }, items: [{ sku: 'CC-C215', qty: 40 }, { sku: 'CC-C418', qty: 16 }] }], revision: 0, legs: [] }],
     account: { customerId: 'company_riverside', company: 'Riverside Cold Chain', accountType: 'company', since: '2026-08-01T00:00:00Z', rep: { name: 'Sam Rep', email: 'sam@cleancell.us' }, plan: 'free', status: 'active',
       you: { email: 'ops@riverside.example', name: 'Dana Ops', phone: '', role: 'owner' }, address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, terms: { depositPct: 40, dueDays: 0, netDays: 30 }, users: null, agreements: [{ kind: 'MSA', ref: 'MSA-2026-04', signedAt: '2026-08-02' }], orders: 1 },
     projects: [{ id: 'p1', name: 'Bakersfield yard', module: 'bess', createdAt: '2026-09-15T10:00:00Z', updatedAt: '2026-09-18T10:00:00Z', revision: 3 }],
@@ -249,7 +313,10 @@ function initialState() {
       { uid: 'u_sam', email: 'sam@cleancell.us', name: 'Sam Rep', role: 'owner', status: 'active', invitedAt: '2026-08-01T15:00:00Z', invitedBy: 'tom@clearsky-usa.com' },
       { uid: 'u_demo', email: 'demo@cleancell.us', name: 'Dee Office', role: 'admin', status: 'active', invitedAt: '2026-08-01T15:05:00Z', invitedBy: 'sam@cleancell.us' },
       { uid: 'u_marco', email: 'marco@cleancell.us', name: 'Marco Bench', role: 'member', status: 'active', invitedAt: '2026-08-12T15:00:00Z', invitedBy: 'sam@cleancell.us' }],
-    teamLog: []
+    teamLog: [],
+    /* the freight plan: order o7's units and sites, the ship-from, and the
+       quotes the office records (omega_orgs/{org}/freight_quotes) */
+    freight: freightSample(ago)
   };
 }
 
@@ -430,7 +497,32 @@ function views(state) {
       toConfirm: off.filter(function (u) { return u.custody.confirmation === 'declared'; }), planned: units.filter(function (u) { var c = Cu.custodyOf(u); return c.plannedSiteId && !c.siteId; }).map(function (u) { return unitView(u, now); }),
       mapping: state.custodyMapping, columns: Cu.TEMPLATE_HEADERS, moves: Cu.MOVES, states: Cu.STATES, limited: false, sampled: units.length };
   }
-  function logisticsJson() { return { owner: false, brand: brand, notice: 'Sandbox: one order with one planned load.', limited: false, orders: state.companyOrders.map(function (o) { return { id: o.id, orderNo: o.orderNo, poNumber: o.poNumber, revision: o.revision, destinations: o.destinations, legs: o.legs || [] }; }) }; }
+  function logisticsJson() { return { owner: false, brand: brand, notice: 'Sandbox: a sample ledger. Nothing here books a carrier or tracks a truck.', limited: false, orders: state.companyOrders.map(function (o) { return { id: o.id, orderNo: o.orderNo, poNumber: o.poNumber, revision: o.revision, destinations: o.destinations, legs: o.legs || [] }; }) }; }
+  /* ── the freight plan: GET /api/logic-logistics?freight=<orderId>
+     (api/logic-logistics.js freightGet) — the order's shipping units with
+     the sites they are going to, from the custody sample and the freight
+     sample together, the catalog, the ship-from and the order's quotes,
+     worked out by api/_lib/freight.js with both sheets built there ── */
+  function freightOrder(id) {
+    var co = state.companyOrders.filter(function (o) { return o.id === id; })[0] || null, so = state.orders.filter(function (o) { return o.id === id; })[0] || null;
+    return co || so ? Object.assign({}, so || {}, co || {}) : null;
+  }
+  function freightUnits() { return state.units.concat((state.freight || {}).units || []); }
+  function freightSites() { var by = {}; state.sites.concat((state.freight || {}).sites || []).forEach(function (x) { by[x.id] = x; }); return by; }
+  /* what F.plan reads for one order; the plant's date is the works order's
+     due date, else the order's promised ship date */
+  function freightInput(o, now) {
+    var fr = state.freight || {}, w = o.worksOrderId && state.wo && o.worksOrderId === state.wo.id ? state.wo : null;
+    return { order: o, units: freightUnits().filter(function (u) { return u.orderId === o.id && u.shipUnit; }), components: freightUnits().filter(function (u) { return u.orderId === o.id && !u.shipUnit && u.rootSerial; }), sites: freightSites(), products: CATALOG, origin: fr.origin || null,
+      quotes: (fr.quotes || []).filter(function (x) { return x.orderId === o.id; }), promised: (w && (w.dueDate || w.promisedShipAt)) || o.promisedShipAt || null, now: now };
+  }
+  function freightJson(q) {
+    var id = decodeURIComponent((/(?:^|&)freight=([^&]*)/.exec(q || '') || [])[1] || ''), o = id ? freightOrder(id) : null;
+    if (!id) return { status: 400, error: 'Choose the order' };
+    if (!o) return { status: 404, error: 'Order not found' };
+    var now = iso(Date.now()), pl = Fr.plan(freightInput(o, now));
+    return Object.assign({ brand: brand, owner: false, limited: false, sitesLimited: false }, pl, { exports: Fr.exportsOf(pl, now) });
+  }
   /* the customer's view of a site: api/_lib/portal.js publicSite, the one
      projection api/my-sites.js answers through (only what the customer
      entered of the interconnection, contact, end customer and notes) */
@@ -625,7 +717,7 @@ function views(state) {
       domain: ORG, frontDoor: 'https://silmarillion.clearskyomega.com/logic', people: rows, limited: false, log: manages ? (state.teamLog || []).slice(0, 50) : [] };
   }
   function workspacesJson(email) { return { email: email || 'demo@cleancell.us', owner: false, workspaces: [{ orgId: ORG, name: 'Clean Cell', role: 'admin', status: 'active' }] }; }
-  return { teamJson: teamJson, teamActor: teamActor, workspacesJson: workspacesJson, crmJson: crmJson, myFilesJson: myFilesJson, subJson: subJson, portfolioJson: portfolioJson, accountOrders: accountOrders, materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, accountingJson: accountingJson, accountingCsv: accountingCsv, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, myUnits: myUnits, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manualTest: manualTest, manifest: manifest, brand: brand, CATALOG: CATALOG };
+  return { teamJson: teamJson, teamActor: teamActor, workspacesJson: workspacesJson, crmJson: crmJson, myFilesJson: myFilesJson, subJson: subJson, portfolioJson: portfolioJson, accountOrders: accountOrders, materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, accountingJson: accountingJson, accountingCsv: accountingCsv, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, freightJson: freightJson, freightOrder: freightOrder, freightUnits: freightUnits, freightSites: freightSites, freightInput: freightInput, logisticsJson: logisticsJson, mySitesJson: mySitesJson, myUnits: myUnits, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manualTest: manualTest, manifest: manifest, brand: brand, CATALOG: CATALOG };
 }
 
 /* ── the writes a trial touches ───────────────────────────────────────── */
@@ -985,6 +1077,104 @@ function post(state, path, query, b, who) {
       return { ok: true, dryRun: false, batchId: batchId, mapping: mapping, summary: Object.assign({}, planned.summary, done), errors: planned.items.filter(function (x) { return x.problems.length; }) };
     }
     return err(400, 'Unknown custody action');
+  }
+  /* ── the freight plan's four writes (api/logic-logistics.js freightPost),
+     through the same library: F.origin, F.quoteInput, F.acceptCheck. What
+     the sample does not do the product's way: no map lookup for a new
+     ship-from (a changed address is saved without a pin, so its stops go
+     in state order; the same address keeps its pin), and Accept pushes the
+     legs itself in the shape L.planLeg makes, with planLeg's checks —
+     order-lifecycle.js is server-only and never in the public sandbox. The
+     other ledger actions are the desktop's, against Firestore. ── */
+  if (path === '/api/logic-logistics') {
+    var fr = state.freight || (state.freight = { units: [], sites: [], origin: null, quotes: [], audit: [] }), fday = Fr.quoteDay(now);
+    fr.quotes = fr.quotes || []; fr.audit = fr.audit || [];
+    var frAudit = function (row) { fr.audit.push(Object.assign({ orgId: ORG, by: who, at: now }, row)); };
+    var trailed = function (q, status, note) { return (q.trail || []).concat([{ at: now, by: who, status: status, note: note }]); };
+    if (['freight-origin', 'freight-quote', 'freight-withdraw', 'freight-accept'].indexOf(b.action) < 0) return err(400, 'The sample ledger plans loads only from an accepted freight quote; record pickups and receipts on the real ledger.');
+    try {
+      if (b.action === 'freight-origin') {
+        var before = fr.origin || null, og = Fr.origin(b.origin, before);
+        fr.origin = og; fr.originUpdatedAt = now; fr.originUpdatedBy = who;
+        frAudit({ action: 'freight-origin', before: before, after: og });
+        return { ok: true, origin: og, geoLimited: false };
+      }
+      if (!b.orderId) return err(400, 'Choose the order');
+      var fo = V.freightOrder(String(b.orderId)); if (!fo) return err(404, 'Order not found');
+      if (b.action === 'freight-quote') {
+        var qpl = Fr.plan(V.freightInput(fo, now)), key = Fr.laneKeyOf(b.laneKey), lane = qpl.lanes.filter(function (l) { return l.key === key; })[0];
+        if (!lane) return err(409, 'That lane is not on this order any more. Reload the freight plan.');
+        var doc = Fr.quoteInput(b, lane, { id: fo.id, orgId: ORG, orderNo: fo.orderNo }, who, now), qid = 'fq_' + hex(16), was = null;
+        doc.orgId = ORG;
+        if (doc.supersedes) {
+          was = fr.quotes.filter(function (x) { return x.id === doc.supersedes; })[0] || null;
+          if (!was || was.orderId !== fo.id || was.laneKey !== key) return err(404, 'The quote this replaces is not on this lane');
+          if (was.status !== 'recorded') return err(409, 'Only a recorded quote can be replaced; that one is ' + was.status);
+        }
+        var rec = Object.assign({ id: qid }, doc); fr.quotes.push(rec);
+        if (was) { was.status = 'superseded'; was.supersededBy = qid; was.trail = trailed(was, 'superseded', 'Replaced by ' + qid); }
+        frAudit({ action: 'freight-quote', orderId: fo.id, quoteId: qid, laneKey: key, carrier: doc.carrier, amountCents: doc.amountCents, units: doc.units, supersedes: doc.supersedes });
+        return { ok: true, quote: Fr.quoteView(rec, lane, fday) };
+      }
+      if (b.action === 'freight-withdraw') {
+        var why = typeof b.reason === 'string' ? b.reason.trim() : '';
+        if (why.length < 3 || why.length > 300 || /[\u0000-\u001f\u007f]/.test(why)) return err(400, 'Give a reason for withdrawing it (3–300 characters)');
+        var wq = fr.quotes.filter(function (x) { return x.id === String(b.quoteId || ''); })[0];
+        if (!wq || wq.orderId !== fo.id) return err(404, 'Quote not found');
+        if (wq.status === 'accepted') return err(409, 'An accepted quote planned loads; change those on the ledger');
+        if (wq.status !== 'recorded') return err(409, 'This quote is already ' + wq.status);
+        wq.status = 'withdrawn'; wq.withdrawnAt = now; wq.withdrawnBy = who; wq.reason = why; wq.trail = trailed(wq, 'withdrawn', why);
+        frAudit({ action: 'freight-withdraw', orderId: fo.id, quoteId: wq.id, laneKey: wq.laneKey || '', reason: why });
+        return { ok: true, quote: Fr.quoteView(wq, null, fday) };
+      }
+      /* freight-accept: one leg per stop of the quote, all or none */
+      if (typeof b.revision !== 'number' || b.revision % 1 !== 0 || b.revision < 0) return err(400, 'Revision required');
+      var loadIn = b.loadId == null || b.loadId === '' ? '' : String(b.loadId).trim();
+      if (loadIn && !Fr.LOAD_ID.test(loadIn)) return err(400, 'Load id: letters, numbers, dash and underscore, at most 100');
+      var booking = String(b.bookingRef == null ? '' : b.bookingRef).trim().slice(0, 160);
+      var co = state.companyOrders.filter(function (o) { return o.id === fo.id; })[0] || null;
+      if (!co || !Array.isArray(co.destinations)) return err(409, Fr.LEGACY_SAY);
+      if ((co.revision || 0) !== b.revision) return err(409, 'Order changed; reload before recording another event');
+      if (fo.cancelRequested || fo.status === 'cancelled') return err(409, 'Resolve the cancelled order before recording a movement');
+      var aq = fr.quotes.filter(function (x) { return x.id === String(b.quoteId || ''); })[0];
+      if (!aq || aq.orderId !== fo.id) return err(404, 'Quote not found');
+      var pre = Fr.plan(V.freightInput(fo, now)), preLane = pre.lanes.filter(function (l) { return l.key === aq.laneKey; })[0] || null, laneOpen = [];
+      if (preLane) preLane.stops.forEach(function (st) { laneOpen = laneOpen.concat(st.openSerials); });
+      var unitsBy = {}; V.freightUnits().forEach(function (u) { unitsBy[u.serial] = u; });
+      var chk = Fr.acceptCheck({ quote: aq, unitsBySerial: unitsBy, sitesById: V.freightSites(), order: fo, now: now, laneOpen: laneOpen });
+      if (chk.problems.length) return err(409, chk.problems[0]);
+      if (chk.ineligible.length) return err(409, Fr.ineligibleSay(chk.ineligible));
+      var tracking = booking || String(aq.reference || '').trim();
+      if (!tracking) return err(400, 'Enter the carrier’s booking or quote reference');
+      var legs = co.legs || [], loadId = loadIn || Fr.nextLoadId(fo, aq.laneKey, legs);
+      /* L.planLeg's checks, in its order, before anything is written */
+      var added = [], total = chk.stops.length, assigned = {};
+      legs.forEach(function (l) { (l.serials || []).forEach(function (sn) { assigned[sn] = true; }); });
+      for (var si = 0; si < chk.stops.length; si++) {
+        var st = chk.stops[si], head = 'Stop ' + st.seq + ' · ' + st.siteName + ': ', legId = loadId + '-S' + st.seq, all = legs.concat(added);
+        if (all.some(function (l) { return l.id === legId; })) return err(409, head + 'Shipment leg identifier already exists');
+        if (all.length >= 100) return err(409, head + 'Order has reached its shipment-leg limit; contact support');
+        var dest = co.destinations.filter(function (d) { return d.id === st.destinationId; })[0];
+        if (!dest) return err(400, head + 'Choose an order destination');
+        var counts = {}, allow = {}, prior = {}, bad = null;
+        st.serials.forEach(function (sn) { var u = unitsBy[sn]; if (bad) return; if (!u) { bad = err(400, head + 'Serial ' + sn + ' is not registered'); return; } if (u.orderId !== fo.id || !u.shipUnit || assigned[sn] || u.logisticsLegId) { bad = err(409, head + 'Serial ' + sn + ' must be an unassigned shipping unit on this order'); return; } counts[u.sku] = (counts[u.sku] || 0) + 1; });
+        if (bad) return bad;
+        (dest.items || []).forEach(function (i) { allow[i.sku] = (allow[i.sku] || 0) + Number(i.qty || 0); });
+        all.filter(function (l) { return l.destinationId === dest.id; }).forEach(function (l) { (l.items || []).forEach(function (i) { prior[i.sku] = (prior[i.sku] || 0) + i.qty; }); });
+        if (Object.keys(counts).some(function (k) { return !allow[k] || counts[k] + (prior[k] || 0) > allow[k]; })) return err(409, head + 'Shipment exceeds destination allocation');
+        st.serials.forEach(function (sn) { assigned[sn] = true; });
+        added.push({ id: legId, destinationId: dest.id, serials: st.serials.slice(), items: Object.keys(counts).map(function (k) { return { sku: k, qty: counts[k] }; }), carrier: aq.carrier, tracking: tracking, status: 'planned', createdAt: now,
+          siteId: st.siteId, siteName: st.siteName, freight: { quoteId: aq.id, laneKey: aq.laneKey, loadId: loadId, stop: st.seq, stops: total } });
+      }
+      /* the writes: the units onto their loads, the ledger, the quote accepted and the lane's other open quotes replaced */
+      added.forEach(function (leg) { leg.serials.forEach(function (sn) { unitsBy[sn].logisticsLegId = leg.id; unitsBy[sn].logisticsOrderId = fo.id; }); });
+      co.legs = legs.concat(added); co.revision = (co.revision || 0) + 1;
+      var legIds = added.map(function (l) { return l.id; }), others = fr.quotes.filter(function (x) { return x.id !== aq.id && x.orderId === fo.id && x.laneKey === aq.laneKey && x.status === 'recorded'; });
+      aq.status = 'accepted'; aq.acceptedAt = now; aq.acceptedBy = who; aq.legIds = legIds; aq.trail = trailed(aq, 'accepted', 'Planned ' + legIds.length + ' load' + (legIds.length === 1 ? '' : 's') + ' as ' + loadId);
+      others.forEach(function (x) { x.status = 'superseded'; x.supersededBy = aq.id; x.trail = trailed(x, 'superseded', 'Quote ' + aq.id + ' accepted for this lane'); });
+      frAudit({ action: 'freight-accept', orderId: fo.id, quoteId: aq.id, laneKey: aq.laneKey, loadId: loadId, legIds: legIds, superseded: others.map(function (x) { return x.id; }) });
+      return { ok: true, revision: co.revision, loadId: loadId, legs: added, quote: Fr.quoteView(aq, preLane, fday), notOnQuote: chk.notOnQuote, superseded: others.map(function (x) { return x.id; }) };
+    } catch (e) { return err(e.status || 400, e.message); }
   }
   if (path === '/api/my-sites') {
     var CM = { received: 'receive', assign: 'assign', installed: 'install', commissioned: 'commission' };

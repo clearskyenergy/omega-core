@@ -1,8 +1,8 @@
-sku,name,kw,kwh,widthFt,depthFt,dimUnits,chemistry,usableKwh,durationH,warrantyYears,leadTimeDays,integratesPcs,integratesXfmr,integratesDisco,inverter,inverterKva,transformer,disconnect,dcv,priceMode,listPrice,blurb,notes,kind,unit,supplier,supplierSku,moq
-CC-215,Example all-in-one cabinet,100,215,8,4,ft,LFP,200,2,10,120,yes,no,yes,Integrated PCS,100,,400A 480V,1331V,quote,,Outdoor-rated cabinet. Pad or pier mount.,Replace this row with your own products.,product,,,,
-CC-2000,Example 20 ft container,500,2000,6058,2438,mm,LFP,1900,4,10,180,yes,yes,yes,Integrated PCS,500,750KVA 480/480V,800A 480V,1331V,quote,,20 ft container with integrated thermal and fire suppression.,dimUnits is mm here because container datasheets print mm.,product,,,,
-CC-MOD-52,5.2 kWh module,,5.2,,,,LFP,,,,10,,,,,,,,,,,,Sub-assembly: a module of 104 cells. Never sold on its own.,component,ea,,,
-CC-CELL-280,LFP cell 280 Ah,,,,,,LFP,,,,60,,,,,,,,,,,,,component,ea,EVE Energy,LF280K,1000
-CC-BMS-M,Master BMS,,,,,,,,,,30,,,,,,,,,,,,,component,ea,,,
-CC-ENC-1B,Single-bay enclosure,,,,,,,,,,45,,,,,,,,,,,,,component,ea,,,
-CC-HARN,HV harness,,,,,,,,,,14,,,,,,,,,,,,,component,m,,,
+sku,name,kw,kwh,widthFt,depthFt,dimUnits,chemistry,usableKwh,durationH,warrantyYears,leadTimeDays,integratesPcs,integratesXfmr,integratesDisco,inverter,inverterKva,transformer,disconnect,dcv,priceMode,listPrice,blurb,notes,kind,unit,supplier,supplierSku,moq,weightLb,weightUnits,heightFt,freightClass,stackable,handlingNote
+CC-215,Example all-in-one cabinet,100,215,8,4,ft,LFP,200,2,10,120,yes,no,yes,Integrated PCS,100,,400A 480V,1331V,quote,,Outdoor-rated cabinet. Pad or pier mount.,Replace this row with your own products.,product,,,,,5500,lb,7.5,85,no,Class 9 lithium battery — see SDS
+CC-2000,Example 20 ft container,500,2000,6058,2438,mm,LFP,1900,4,10,180,yes,yes,yes,Integrated PCS,500,750KVA 480/480V,800A 480V,1331V,quote,,20 ft container with integrated thermal and fire suppression.,dimUnits is mm here because container datasheets print mm.,product,,,,,16330,kg,2896,85,no,Container: crane or forklift at site
+CC-MOD-52,5.2 kWh module,,5.2,,,,LFP,,,,10,,,,,,,,,,,,Sub-assembly: a module of 104 cells. Never sold on its own.,component,ea,,,,,,,,,
+CC-CELL-280,LFP cell 280 Ah,,,,,,LFP,,,,60,,,,,,,,,,,,,component,ea,EVE Energy,LF280K,1000,,,,,,
+CC-BMS-M,Master BMS,,,,,,,,,,30,,,,,,,,,,,,,component,ea,,,,,,,,,
+CC-ENC-1B,Single-bay enclosure,,,,,,,,,,45,,,,,,,,,,,,,component,ea,,,,,,,,,
+CC-HARN,HV harness,,,,,,,,,,14,,,,,,,,,,,,,component,m,,,,,,,,,

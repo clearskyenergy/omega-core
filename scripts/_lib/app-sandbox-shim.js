@@ -37,8 +37,10 @@
      site list is spread over); a phone that kept v2 starts over.
      v4: the plant runs the full routing on the sample's own units (the
      bench moves them), the workspace has its people (Team) and the office
-     prices and accepts what it bills itself; a phone that kept v3 starts over */
-  var KEY = 'omega_sandbox_v4', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
+     prices and accepts what it bills itself; a phone that kept v3 starts over.
+     v5: the sample carries the freight plan's order (56 cabinets, 16
+     sites, a ship-from); a phone that kept v4 starts over */
+  var KEY = 'omega_sandbox_v5', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function seedIfMissing(k, v) { try { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -86,7 +88,8 @@
     if (path === '/api/my-orders') return V.myOrdersJson(who());
     if (path === '/api/my-sites') return V.mySitesJson();
     if (path === '/api/logic-custody') return V.custodyJson(q);
-    if (path === '/api/logic-logistics') return V.logisticsJson();
+    /* the ledger, or one order's freight plan (?freight=<orderId>) */
+    if (path === '/api/logic-logistics') return /(^|&)freight=/.test(q) ? V.freightJson(q) : V.logisticsJson();
     if (path === '/api/customer-design') return V.designJson();
     if (path === '/api/crm') return V.crmJson(q);
     if (path === '/api/my-files') return V.myFilesJson(q);

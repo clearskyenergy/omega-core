@@ -2227,6 +2227,13 @@ service cloud.firestore {
     match /omega_orgs/{orgId}/sites/{siteId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_imports/{batchId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_mappings/{mapId} { allow read, write: if false; }
+    /* Freight quotes (api/_lib/freight.js, api/logic-logistics.js): what a
+       carrier quoted the office per lane of an order, append-only (status
+       moves, amounts never change). Not on the order, because any member of
+       the tenant may read an order from a browser; read and written only by
+       the ledger endpoint, office admins only. The ship-from sits on
+       fulfillment/config.freight, closed above. Stated, like the lines above. */
+    match /omega_orgs/{orgId}/freight_quotes/{quoteId} { allow read, write: if false; }
     /* What ClearSky sent each subscriber (api/logic-kit.js): the log of app
        links and guides that went out, owner-only through the endpoint. */
     match /omega_orgs/{orgId}/kit_sends/{sendId} { allow read, write: if false; }

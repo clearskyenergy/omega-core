@@ -1,6 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
-var A=require('./admin'),M=require('./materials');
+var A=require('./admin'),M=require('./materials'),SF=require('./shipping-fields');
 function clean(v,n){return String(v==null?'':v).trim().slice(0,n);}
 /* Three kinds. A `component` is what a product is MADE OF — a cell, a BMS, a
    module — and is never sold, published, drawn or priced: api/embed-config.js,
@@ -32,6 +32,12 @@ function product(p){
      carries once it is bound to a site. warrantyYears stays the default
      template when the list is empty. Ids unique per product. */
   var C=require('./custody'),ids={};out.coverage=(Array.isArray(p.coverage)?p.coverage:[]).slice(0,10).map(function(t){var v=C.template(t);if(ids[v.id])throw A.httpError(400,'Coverage id "'+v.id+'" is used twice');ids[v.id]=true;return v;});
+  /* Shipping fields (api/_lib/shipping-fields.js): what the freight plan
+     estimates a load from. A product only; set when the request carries
+     them (a blank clears one), so api/logic-catalog.js's
+     Object.assign({},old,product) keeps a stored value a save leaves out.
+     Never public: api/embed-config.js names none of them. */
+  if(kind==='product')Object.assign(out,SF.pick(p));
   return out;
 }
 function designs(config){
@@ -48,8 +54,8 @@ function select(config,sku,target){
   if(qty>9999)throw A.httpError(400,'This target requires more than 9999 units');
   return Object.assign({},target,{product:p,qty:qty,selectedKw:p.placeholder?target.kw:qty*p.kw,selectedKwh:p.placeholder?target.kwh:qty*p.kwh});
 }
-/* The OFFICE projection — the tenant's own catalog page. Sourcing fields and
-   the bill of materials are theirs to see; the public projection in
-   api/embed-config.js never names them. */
-function view(p){var out={};['sku','name','blurb','kind','category','active','priceMode','designEnabled','kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','chemistry','imageUrl','unit','supplier','supplierSku','moq','safetyStock'].forEach(function(k){if(p[k]!=null&&p[k]!=='')out[k]=p[k];});if(Array.isArray(p.coverage)&&p.coverage.length)out.coverage=p.coverage;var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};out.bom=(p.bom||[]).map(function(l){var o={sku:String(l.sku),qty:Number(l.qty),unit:String(l.unit||'ea'),yieldPct:Number(l.yieldPct)>0?Number(l.yieldPct):100};if(l.station)o.station=String(l.station);if(l.step)o.step=String(l.step);return o;});return out;}
+/* The OFFICE projection — the tenant's own catalog page. Sourcing fields,
+   shipping fields and the bill of materials are theirs to see; the public
+   projection in api/embed-config.js never names them. */
+function view(p){var out={};['sku','name','blurb','kind','category','active','priceMode','designEnabled','kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','chemistry','imageUrl','unit','supplier','supplierSku','moq','safetyStock'].concat(SF.FIELDS).forEach(function(k){if(p[k]!=null&&p[k]!=='')out[k]=p[k];});if(Array.isArray(p.coverage)&&p.coverage.length)out.coverage=p.coverage;var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};out.bom=(p.bom||[]).map(function(l){var o={sku:String(l.sku),qty:Number(l.qty),unit:String(l.unit||'ea'),yieldPct:Number(l.yieldPct)>0?Number(l.yieldPct):100};if(l.station)o.station=String(l.station);if(l.step)o.step=String(l.step);return o;});return out;}
 module.exports={product:product,designs:designs,select:select,view:view,KINDS:KINDS};

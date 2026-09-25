@@ -81,7 +81,7 @@ var srv = http.createServer(function (req, res) {
   /* the office's writes, and what the accounting page posted, in order (the
      corrections go to /api/logic-office, the one writer's door) */
   if (post && u === '/api/logic-office') return posted(function (b) { OFFICE_POSTS.push(b); return F.post(STATE, u, q, b, OFFICE); });
-  if (post && ['/api/buyers', '/api/logic-custody', '/api/crm'].indexOf(u) >= 0) return write(OFFICE);
+  if (post && ['/api/buyers', '/api/logic-custody', '/api/crm', '/api/logic-logistics'].indexOf(u) >= 0) return write(OFFICE);
   if (post && ['/api/my-account', '/api/my-sites', '/api/my-orders', '/api/my-files', '/api/customer-portfolio'].indexOf(u) >= 0) return write(BUYER);
   if (post && u === '/api/po-intake') return write(function (b) { return b.office ? OFFICE : BUYER; });
   if (post && u === '/api/customer-subscribe') return posted(function (b) { var r = F.post(STATE, u, q, b, BUYER); return r && STRIPE[r.url] ? { url: STRIPE[r.url](b) } : r; });
@@ -102,7 +102,8 @@ var srv = http.createServer(function (req, res) {
   if (u === '/api/customer-subscribe') return send(V.subJson(BUYER));
   if (u === '/api/customer-portfolio') return send(V.portfolioJson());
   if (u.indexOf('/api/logic-custody') === 0) { if (/template=/.test(q)) { res.writeHead(200, { 'Content-Type': 'text/csv' }); return res.end(require('../api/_lib/custody').csvTemplate()); } return json(V.custodyJson(q)); }
-  if (u.indexOf('/api/logic-logistics') === 0) return json(V.logisticsJson());
+  /* the ledger, or one order's freight plan (?freight=<orderId>) */
+  if (u.indexOf('/api/logic-logistics') === 0) return /(^|&)freight=/.test(q) ? send(V.freightJson(q)) : json(V.logisticsJson());
   if (u === '/api/logic-kit' && post) return posted(function (b) { KIT_SENDS.unshift({ id: 'k' + KIT_SENDS.length, orgId: b.org, audience: b.audience, to: b.to, channel: b.channel || 'email', note: b.note || '', by: 'tom@clearsky-usa.com', at: new Date().toISOString() }); return { ok: true }; });
   if (u.indexOf('/api/logic-kit') === 0) { var Kit = require('../api/_lib/kit'); if (!/org=/.test(q)) return json({ owner: true, subscribers: [{ id: 'cleancell.us', name: 'Clean Cell', status: 'active', domains: [] }], guides: Kit.GUIDES, items: Kit.ITEMS }); var kit = Kit.forOrg('cleancell.us', { name: 'Clean Cell' }); return json({ owner: true, org: 'cleancell.us', name: 'Clean Cell', status: 'active', brand: F.brand, kit: kit, messages: { plant: Kit.message(kit, 'plant'), office: Kit.message(kit, 'office'), customer: Kit.message(kit, 'customer') }, sends: KIT_SENDS }); }
   if (u.indexOf('/api/customer-design') === 0) return json(V.designJson());
@@ -511,6 +512,9 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var cards = await p.$$eval('#view .card', function (r) { return r.length; });
     await p.click('[data-order="o1"]'); await p.waitForTimeout(300);
     var h1 = await p.$eval('#view h1', function (e) { return e.textContent; });
+    /* the order's freight plan is a desktop screen: the app links to it */
+    var frLink = await p.$$eval('#order-freight', function (r) { return r.map(function (x) { return x.getAttribute('href') + '|' + x.textContent.trim(); }); });
+    ok('  an open order links to its freight plan on the desktop (Shipping & receiving, the order chosen, scrolled to the plan)', frLink.join() === '/logic-logistics.html?org=cleancell.us&order=o1#freight|Freight plan on the desktop', frLink);
     var answer = await p.$$eval('[data-resolve]', function (r) { return r.length; });
     var money = await texts(p, '#view .kv div');
     var payLink = await p.$$eval('#view a.act', function (r) { return r.map(function (x) { return x.getAttribute('href'); }); });
@@ -1159,6 +1163,8 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var done = await text(p, '#mn-done .sum');
     var now = await p.$$eval('#mn-sites tbody tr', function (r) { return r.map(function (tr) { return tr.querySelector('b').textContent + ':' + tr.cells[2].textContent.trim(); }); });
     var got = await download(p, '#mn-csv');
+    var nextFreight = await p.$$eval('#mn-freight', function (r) { return r.map(function (x) { var a = x.querySelector('a'); return x.textContent.replace(/\s+/g, ' ').trim() + '|' + (a ? a.getAttribute('href') : ''); }); });
+    ok('  after assigning, the next step points to the order\'s freight plan', nextFreight.join() === 'Next: price the freight for this order — Freight plan|/logic-logistics.html?org=cleancell.us&order=o1#freight', nextFreight);
     var rowsOk = got.csv.rows.length === 4 && got.csv.rows[0].join(',') === 'Serial,Site,Site ref,Address,City,State,ZIP,Order,PO,Status' && LIST_CSV.slice(1).every(function (want, i) { var r = got.csv.rows[i + 1]; return r && [r[0], r[1], r[3], r[4], r[5], r[6], r[7], r[9]].join('|') === want.join('|') && r[8] === 'RCC-2200'; });
     ok('  Assign records each unit going to its site; the account\'s sites say so; the CSV is one row per unit with the site\'s address, the order and its PO', /^3 units of CC-26-4419 going to 2 sites · 3 saved now$/.test(done) && same(plannedOf(STATE), LIST_PLANNED) && destEvents(STATE) === 3 && now[0] === 'Fairview store:1 going there' && now[1] === 'Springfield, IL:2 going there' && /^site-plan-CC-26-4419-\d{4}-\d{2}-\d{2}\.csv$/.test(got.name || '') && got.csv.bom && rowsOk, [done, plannedOf(STATE), now, got.name, got.csv.rows]);
     /* the same list again: the preview says all five are there; Create uses them; the plan changes nothing */
@@ -1232,6 +1238,136 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('  no browser box opens anywhere in the flow', dialogs.length === 0, dialogs);
     return { sites: riversideSites(s3).length, planned: Object.keys(plannedOf(s3)).length, csv: got.csv.rows.length - 1 };
   }, { phone: true });
+  /* ── the FREIGHT PLAN (api/_lib/freight.js over api/logic-logistics.js):
+     order o7, one PO for 56 cabinets to 16 sites the customer sent a few at
+     a time. What the page draws is checked against what the library works
+     out for the same sample, and the downloads against the ONE list of
+     columns. Last in the run: Accept plans loads on the shared ledger. ── */
+  freshSample();
+  var Fr = require('../api/_lib/freight'), FX = V.freightJson('org=cleancell.us&freight=o7');
+  function labels(cols) { return cols.map(function (c) { return c.label; }); }
+  function laneOf(x, k) { return x.lanes.filter(function (l) { return l.key === k; })[0]; }
+  function inDays(n) { return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
+  await check('freight', '/logic-logistics.html?org=cleancell.us&order=o7#freight', async function (p) {
+    var dialogs = []; p.on('dialog', function (d) { dialogs.push(d.message()); d.dismiss(); });
+    await p.waitForSelector('#fr-lanes tr[data-lane]'); await p.waitForTimeout(400);
+    var chosen = await p.$eval('#order', function (e) { return e.value; }), nav = await p.$$eval('.logic-nav a[href="#freight"]', function (r) { return r.length; });
+    var seen = await p.evaluate(function () { var r = document.getElementById('freight').getBoundingClientRect(); return window.scrollY > 0 && r.top < innerHeight && r.bottom > 0; });
+    var head = await text(p, '#fr-summary > p'), tiles = await p.$$eval('#fr-summary .logic-kv > div', function (r) { return r.map(function (x) { return x.querySelector('small').textContent + ':' + x.querySelector('b').textContent; }); });
+    var weightMiss = await text(p, '#fr-summary .logic-kv > div.w');
+    ok('freight plan: opened from a link (?order=o7#freight) the order is chosen and the page is at the plan; the summary counts every unit, the two with no site in red, and the weight on file naming the SKU that has none', chosen === 'o7' && nav === 1 && seen && /^CC-26-4431 · PO SG-PO-3300 · Summit Grid Co\./.test(head)
+      && tiles.join('|') === 'Units:56|Sites:16|Lanes:7|Need freight:54|Booked on a load:0|Shipped:0|No site yet:2|Cannot ship:0|Ready at the plant:30|Est. weight to ship:214,500 lb' && /not on file: CC-C418/.test(weightMiss)
+      && await p.$$eval('#fr-summary .logic-kv > div.bad', function (r) { return r.map(function (x) { return x.querySelector('small').textContent; }).join(); }) === 'No site yet', [chosen, nav, seen, head, tiles, weightMiss]);
+    var origin = await text(p, '#fr-origin-view');
+    ok('  the ship-from is the plant, on the map, so stops run nearest-first from it', /^Main plant · Building A\s*2400 Sample Industrial Pkwy, Fort Worth, TX 76106/.test(origin) && /Shipping office · \(817\) 555-0100 · Mon–Fri 7:00–15:00/.test(origin) && /On the map: stops run nearest-first/.test(origin) && await text(p, '#fr-origin-edit') === 'Change the ship-from', origin);
+    /* the lanes: one row each, in the fixed region order, as the library has them */
+    var lanes = await p.$$eval('#fr-lanes tr[data-lane]', function (r) { return r.map(function (x) { return [x.getAttribute('data-lane'), x.cells[1].textContent.trim(), x.cells[2].textContent.trim(), x.cells[4].textContent.trim(), x.cells[5].textContent.trim()].join(':'); }); });
+    var want = FX.lanes.map(function (l) { return [l.key, l.stops.length, l.open + ' / 0', 'none yet', 'Needs a quote'].join(':'); });
+    var regionOrder = Fr.REGIONS.map(function (r) { return r.key; }).filter(function (k) { return FX.lanes.some(function (l) { return l.key === k; }); });
+    ok('  the lanes table: seven regions in the fixed order, stops and units open per lane, no price yet', lanes.join(' ') === want.join(' ') && FX.lanes.map(function (l) { return l.key; }).join() === regionOrder.join() && regionOrder.join() === 'NORTHEAST,MIDATLANTIC,SOUTHEAST,GREATLAKES,SOUTHCENTRAL,MOUNTAIN,PACIFIC', [lanes, want]);
+    /* a lane's stops, nearest first from the ship-from: the page's order is the
+       library's, and the first stop is the nearest of the lane's sites */
+    await p.click('[data-open-lane="NORTHEAST"]'); await p.waitForTimeout(400);
+    var stops = await p.$$eval('details[data-lane="NORTHEAST"] .fr-stops tbody tr', function (r) { return r.map(function (x) { return x.cells[0].textContent.trim() + ':' + x.cells[1].querySelector('b').textContent + ':' + x.cells[3].textContent.trim(); }); });
+    var ne = laneOf(FX, 'NORTHEAST'), org0 = STATE.freight.origin, neSites = STATE.freight.sites.filter(function (x) { return Fr.regionOf(x.address.state, 'US') === 'NORTHEAST'; });
+    var nearest = neSites.slice().sort(function (a, b) { return Fr.haversineMiles(org0, a) - Fr.haversineMiles(org0, b); })[0].name;
+    var legOk = ne.stops.every(function (st, i) { var prev = i ? ne.stops[i - 1] : org0; return st.milesFromPrev === Fr.haversineMiles(prev, st); });
+    var open390 = await hscrollAt(p, 390, WIDE);
+    ok('  a lane opens with its stops nearest-first (miles straight-line from the ship-from, then stop to stop), each with its address, receiving contact and units', stops.join(' | ') === ne.stops.map(function (st) { return st.seq + ':' + st.name + ':' + st.milesFromPrev.toLocaleString('en-US', { maximumFractionDigits: 1 }); }).join(' | ') && ne.stops[0].name === nearest && legOk && ne.ordering === 'nearest' && !open390, [stops, nearest, legOk, open390]);
+    /* the two sheets, as files: the columns are the library's, one list */
+    var master = await download(p, '#fr-master'), quote = await download(p, '#fr-quote');
+    var mr = master.csv.rows, qr = quote.csv.rows, mSerials = mr.slice(1).map(function (r) { return r[0]; });
+    var o7Serials = STATE.freight.units.map(function (u) { return u.serial; }).sort();
+    ok('  Download master list: freight-master-<order>-<day>.csv, a BOM, the library\'s columns, one row per unit (56), every serial once, the two with no site last', /^freight-master-CC-26-4431-\d{4}-\d{2}-\d{2}\.csv$/.test(master.name || '') && master.csv.bom && JSON.stringify(mr[0]) === JSON.stringify(labels(Fr.MASTER_COLUMNS)) && mr.length === 57
+      && mSerials.slice().sort().join() === o7Serials.join() && mr.slice(-2).every(function (r) { return r[5] === 'No site yet'; }), [master.name, master.csv.bom, mr[0], mr.length, mr.slice(-2)]);
+    var zi = labels(Fr.QUOTE_COLUMNS).indexOf('ZIP'), si = labels(Fr.QUOTE_COLUMNS).indexOf('Site'), paterson = qr.filter(function (r) { return r[si] === 'Paterson yard'; })[0];
+    ok('  Download quote request: the library\'s columns, one row per stop that needs freight (16), the leading-zero ZIP kept as ="07501", and no customer name, PO or price on the carrier\'s sheet', /^freight-quote-request-CC-26-4431-\d{4}-\d{2}-\d{2}\.csv$/.test(quote.name || '') && quote.csv.bom && JSON.stringify(qr[0]) === JSON.stringify(labels(Fr.QUOTE_COLUMNS)) && qr.length === 17
+      && !!paterson && paterson[zi] === '="07501"' && !/Summit Grid|SG-PO-3300|\$/.test(qr.map(function (r) { return r.join(','); }).join('\n')), [quote.name, qr[0], qr.length, paterson]);
+    /* record two prices on the lane: the lower is best */
+    async function price(carrier, amount, ref) {
+      var f = 'form[data-quote-lane="NORTHEAST"] ';
+      await p.fill(f + '[name=carrier]', carrier); await p.fill(f + '[name=amount]', amount); await p.fill(f + '[name=transitDays]', '4'); await p.fill(f + '[name=validUntil]', inDays(30)); await p.fill(f + '[name=reference]', ref);
+      var before = STATE.freight.quotes.length;
+      await p.click(f + 'button.primary');
+      await p.waitForFunction(function (n) { var m = document.querySelector('[data-lane-msg="NORTHEAST"]'); return m && /^Recorded/.test(m.textContent) && document.querySelectorAll('details[data-lane="NORTHEAST"] [data-quote]').length === n; }, before + 1);
+      await p.waitForTimeout(200);
+    }
+    await price('Ridgeline Freight', '18400', 'RQ-5521');
+    await price('Blue Mesa Logistics', '16950', 'BM-88');
+    var qs = STATE.freight.quotes, q1 = qs[0], q2 = qs[1];
+    var bestRow = await text(p, 'tr[data-lane="NORTHEAST"] td:nth-child(5)'), bestPill = await p.$$eval('details[data-lane="NORTHEAST"] .pill.best', function (r) { return r.map(function (x) { return x.closest('[data-quote]').getAttribute('data-quote'); }); });
+    var laneState = await text(p, 'tr[data-lane="NORTHEAST"] td:nth-child(6)'), msg = await text(p, '[data-lane-msg="NORTHEAST"]');
+    ok('  Record price twice on the Northeast lane: both kept, the lower one is best in the lanes table and on the lane, the lane is Quoted', qs.length === 2 && q1.carrier === 'Ridgeline Freight' && q1.amountCents === 1840000 && q2.amountCents === 1695000 && q2.status === 'recorded' && q2.planKey === ne.planKey && q2.units === 10
+      && bestRow.indexOf('$16,950.00 · Blue Mesa Logistics · 4 days · valid to ' + inDays(30)) === 0 && bestPill.join() === q2.id && laneState === 'Quoted' && /^Recorded \$16,950\.00 from Blue Mesa Logistics\./.test(msg), [qs.map(function (q) { return q.carrier + ':' + q.amountCents + ':' + q.status; }), bestRow, bestPill, laneState, msg]);
+    /* Accept: an inline second step lists the loads, the booking reference
+       prefilled from the quote; Plan puts them on the ledger */
+    await p.click('[data-accept="' + q2.id + '"]'); await p.waitForTimeout(200);
+    var step = await p.$$eval('[data-accept-step="' + q2.id + '"]', function (r) { return r.map(function (x) { return { hidden: x.hidden, legs: Array.prototype.map.call(x.querySelectorAll('li'), function (li) { return li.textContent.replace(/\s+/g, ' ').trim().split(' · ')[0]; }), ref: x.querySelector('[data-accept-ref]').value, go: x.querySelector('[data-accept-go]').textContent }; }); });
+    var step390 = await hscrollAt(p, 390, WIDE);
+    /* each load as the ledger will name it (the lane's nextLoadId, the server's rule) and each stop where its site is now */
+    var wantLegs = ne.stops.map(function (st) { return ne.nextLoadId + '-S' + st.seq + ' → ' + st.name + ', ' + st.oneLine; });
+    var stepPh = await p.$eval('[data-accept-load="' + q2.id + '"]', function (x) { return x.placeholder; });
+    ok('  Accept… opens the inline step (no browser box): the three loads it will plan, one per stop, named as the ledger will name them, each stop at its current address, and the quote\'s reference as the booking reference', step.length === 1 && !step[0].hidden && step[0].legs.join(' | ') === wantLegs.join(' | ') && ne.nextLoadId === 'FRT-CC-26-4431-NORTHEAST-1' && stepPh === ne.nextLoadId && step[0].ref === 'BM-88' && step[0].go === 'Plan 3 loads' && !step390, [step, wantLegs, stepPh, step390]);
+    await p.click('[data-accept-go="' + q2.id + '"]');
+    await p.waitForSelector('details[data-lane="NORTHEAST"] a[data-load]'); await p.waitForTimeout(400);
+    var o7 = STATE.companyOrders.filter(function (o) { return o.id === 'o7'; })[0];
+    var legIds = o7.legs.map(function (l) { return l.id; }), unitsOn = STATE.freight.units.filter(function (u) { return u.logisticsLegId; });
+    var planned = await p.$$eval('details[data-lane="NORTHEAST"] [data-quote="' + q2.id + '"] a[data-load]', function (r) { return r.map(function (a) { return a.getAttribute('href'); }); });
+    var loads = await p.$$eval('details[data-lane="NORTHEAST"] > .fr-loads a[data-load]', function (r) { return r.map(function (a) { var t = document.getElementById(a.getAttribute('href').slice(1)); return a.getAttribute('data-load') + '|' + a.getAttribute('href') + '|' + (t && t.closest('#detail') ? 'on the ledger' : 'missing'); }); });
+    var ledger = await p.$$eval('#detail p[id^="load-FRT-"]', function (r) { return r.map(function (x) { return x.querySelector('b').textContent; }); });
+    var after = await p.$$eval('#fr-lanes tr[data-lane="NORTHEAST"] td', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
+    var tiles2 = await p.$$eval('#fr-summary .logic-kv > div', function (r) { return r.map(function (x) { return x.querySelector('small').textContent + ':' + x.querySelector('b').textContent; }); }), msg2 = await text(p, '[data-lane-msg="NORTHEAST"]');
+    ok('  Plan 3 loads: the ledger has one planned leg per stop with the carrier and booking reference, the quote id and never its amount; the ten units are on them; the other price is replaced; each lane link lands on its load', legIds.join() === 'FRT-CC-26-4431-NORTHEAST-1-S1,FRT-CC-26-4431-NORTHEAST-1-S2,FRT-CC-26-4431-NORTHEAST-1-S3' && o7.revision === 1
+      && o7.legs.every(function (l, i) { return l.status === 'planned' && l.carrier === 'Blue Mesa Logistics' && l.tracking === 'BM-88' && l.destinationId === 'd1' && l.siteId === ne.stops[i].siteId && l.freight.quoteId === q2.id && l.freight.stops === 3 && JSON.stringify(l).indexOf('1695000') < 0 && l.serials.join() === ne.stops[i].openSerials.join(); })
+      && unitsOn.length === 10 && q2.status === 'accepted' && q2.legIds.join() === legIds.join() && q1.status === 'superseded' && q1.supersededBy === q2.id && q1.amountCents === 1840000
+      && loads.length === 3 && loads.every(function (x, i) { return x === legIds[i] + '|#load-' + legIds[i] + '|on the ledger'; }) && planned.join() === legIds.map(function (id) { return '#load-' + id; }).join() && ledger.join() === legIds.map(function (id) { return id + ' · planned'; }).join()
+      && after[5] === 'Quote accepted · loads planned' && after[2] === '0 / 10' && tiles2.indexOf('Booked on a load:10') >= 0 && tiles2.indexOf('Need freight:44') >= 0 && /^Accepted\. Planned 3 loads on the ledger: FRT-CC-26-4431-NORTHEAST-1-S1, FRT-CC-26-4431-NORTHEAST-1-S2, FRT-CC-26-4431-NORTHEAST-1-S3\./.test(msg2), [legIds, o7.revision, unitsOn.length, q1.status, q2.status, loads, planned, ledger, after, tiles2, msg2]);
+    var quote2 = await download(p, '#fr-quote'), master2 = await download(p, '#fr-master'), li = labels(Fr.MASTER_COLUMNS).indexOf('Load');
+    ok('  the sheets are built again from the ledger: the quote request drops the three booked stops (13 left), the master list names each booked unit\'s load', quote2.csv.rows.length === 14 && !quote2.csv.rows.some(function (r) { return r[0] === 'Northeast'; }) && master2.csv.rows.length === 57 && master2.csv.rows.filter(function (r) { return /^FRT-CC-26-4431-NORTHEAST-1-S\d$/.test(r[li]); }).length === 10, [quote2.csv.rows.length, master2.csv.rows.filter(function (r) { return r[li]; }).length]);
+    /* a price, then the site's address is corrected (same site, new street):
+       the price is flagged, never best, cannot be accepted, and says where
+       it was priced for and where the site is now */
+    var sc = laneOf(FX, 'SOUTHCENTRAL'), scSite = STATE.freight.sites.filter(function (x) { return x.id === sc.stops[0].siteId; })[0], scWas = JSON.parse(JSON.stringify(scSite.address));
+    await p.click('[data-open-lane="SOUTHCENTRAL"]'); await p.waitForTimeout(300);
+    var fs = 'form[data-quote-lane="SOUTHCENTRAL"] ', nq = await p.$$eval('details[data-lane="SOUTHCENTRAL"] [data-quote]', function (r) { return r.length; });
+    await p.fill(fs + '[name=carrier]', 'Prairie Line Carriers'); await p.fill(fs + '[name=amount]', '9100'); await p.fill(fs + '[name=validUntil]', inDays(20)); await p.fill(fs + '[name=reference]', 'PLC-7');
+    await p.click(fs + 'button.primary');
+    await p.waitForFunction(function (n) { return document.querySelectorAll('details[data-lane="SOUTHCENTRAL"] [data-quote]').length === n; }, nq + 1); await p.waitForTimeout(200);
+    var scq = STATE.freight.quotes[STATE.freight.quotes.length - 1];
+    scSite.address = { line1: '4800 Corrected Blvd', line2: '', city: 'Waco', state: 'TX', zip: '76701', country: 'US' };
+    await p.evaluate(function () { var o = document.getElementById('order'); o.dispatchEvent(new Event('change')); });
+    await p.waitForFunction(function (id) { var q = document.querySelector('details[data-lane="SOUTHCENTRAL"] [data-quote="' + id + '"] .note.err'); return !!q && /was priced for/.test(q.textContent); }, scq.id); await p.waitForTimeout(200);
+    await p.click('[data-open-lane="SOUTHCENTRAL"]'); await p.waitForTimeout(300);
+    var mv = await p.$$eval('details[data-lane="SOUTHCENTRAL"] [data-quote="' + scq.id + '"]', function (r) { return r.map(function (x) { return { pills: Array.prototype.map.call(x.querySelectorAll('.pill'), function (y) { return y.textContent; }), note: (x.querySelector('.note.err') || {}).textContent || '', accept: x.querySelectorAll('[data-accept]').length }; }); });
+    var scBest = await text(p, 'tr[data-lane="SOUTHCENTRAL"] td:nth-child(5)'), scState = await text(p, 'tr[data-lane="SOUTHCENTRAL"] td:nth-child(6)');
+    var wasLine = [scWas.city, scWas.state + ' ' + scWas.zip].join(', ');
+    ok('  a site\'s address corrected after its price: the price is flagged lane changed, is not best, offers no Accept, and names where it was priced for and where the site is now', mv.length === 1 && mv[0].pills.indexOf('lane changed') >= 0 && mv[0].pills.indexOf('best') < 0 && mv[0].accept === 0
+      && mv[0].note.indexOf(sc.stops[0].name + ' was priced for ' + wasLine + ', now 4800 Corrected Blvd, Waco, TX 76701') >= 0 && /none yet/.test(scBest) && scState === 'Needs a quote', [mv, scBest, scState, wasLine]);
+    scSite.address = scWas;
+    /* a unit with no site that is already on a load (planned by hand on the
+       ledger): not "No site yet" and nothing to assign — its own list, and
+       the tile counts only the one still to give a site */
+    var o7b = STATE.companyOrders.filter(function (o) { return o.id === 'o7'; })[0], lu = STATE.freight.units.filter(function (u) { return !u.custody && !u.logisticsLegId; })[0];
+    o7b.legs.push({ id: 'HAND-1', destinationId: 'd1', serials: [lu.serial], items: [{ sku: lu.sku, qty: 1 }], carrier: 'Local haul', tracking: 'HAND-1', status: 'planned', createdAt: new Date().toISOString() }); o7b.revision++; lu.logisticsLegId = 'HAND-1'; lu.logisticsOrderId = 'o7';
+    await p.evaluate(function () { document.getElementById('order').dispatchEvent(new Event('change')); });
+    await p.waitForFunction(function () { return document.querySelectorAll('#fr-unassigned h3').length === 2; }); await p.waitForTimeout(200);
+    var heads = await texts(p, '#fr-unassigned h3'), offRows = await texts(p, '#fr-unassigned h3:nth-of-type(2) + p + .logic-scroll tbody tr', 200);
+    var tiles3 = await p.$$eval('#fr-summary .logic-kv > div', function (r) { return r.map(function (x) { return x.querySelector('small').textContent + ':' + x.querySelector('b').textContent; }); });
+    var offNote = await text(p, '#fr-unassigned h3:nth-of-type(2) + p');
+    ok('  a unit with no site already on a load is listed apart ("On a load without a site", its load named, nothing to assign), and the "No site yet" tile counts the list under it', heads.join('|') === 'No site yet · 1|On a load without a site · 1' && tiles3.indexOf('No site yet:1') >= 0 && offRows.length === 1 && offRows[0].indexOf(lu.serial) === 0 && /Booked · on load HAND-1/.test(offRows[0]) && !/Many sites at once/.test(offNote), [heads, tiles3, offRows, offNote]);
+    o7b.legs.pop(); o7b.revision--; delete lu.logisticsLegId; delete lu.logisticsOrderId;
+    var wide = await hscrollAt(p, 1280, WIDE);
+    ok('  no sideways scroll at 1280px, and no browser box anywhere in the flow', !wide && dialogs.length === 0, [wide, dialogs]);
+    return { lanes: lanes.length, master: mr.length - 1, quoteRows: qr.length - 1, quotes: qs.length, legs: legIds.length };
+  });
+  /* the desktop office's order: "Freight plan →" and "Export master list" */
+  await check('freight-office', '/omega-logic?org=cleancell.us', async function (p) {
+    await p.waitForTimeout(600); await p.click('#orders [data-pick="o1"]'); await p.waitForTimeout(400);
+    var link = await p.$$eval('#detail a[data-freight-link]', function (r) { return r.map(function (x) { return x.getAttribute('href') + '|' + x.textContent.trim(); }); });
+    var got = await download(p, '#detail button[data-freight-export]'), rows = got.csv.rows;
+    ok('freight plan from the office\'s order: "Freight plan →" opens Shipping & receiving on the order, and "Export master list" saves the order\'s master list (the library\'s columns, one row per unit: o1 has three)', link.join() === '/logic-logistics.html?org=cleancell.us&order=o1#freight|Freight plan →' && /^freight-master-CC-26-4419-\d{4}-\d{2}-\d{2}\.csv$/.test(got.name || '') && got.csv.bom && JSON.stringify(rows[0]) === JSON.stringify(labels(Fr.MASTER_COLUMNS)) && rows.length === 4 && rows.slice(1).map(function (r) { return r[0]; }).sort().join() === 'CC418-26-44192,CC418-26-44193,CC418-26-44195', [link, got.name, rows.length, rows[0]]);
+    return { link: link.length, rows: rows.length - 1 };
+  });
   /* The installed iPhone app (navigator.standalone) signs in through its
      own host. Until Google accepts that host's /__/auth/handler
      (api/auth-check), a tap on Google must not strand the person on
