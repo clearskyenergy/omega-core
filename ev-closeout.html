@@ -243,17 +243,49 @@ var BASE_IDS = ['invoice','hwInvoice','payment','lien','permit','inspect','bldg'
 
 var PROGRAMS = {
   es_ma: {
-    utility:'Eversource', state:'MA', name:'Eversource MA — EV Make-Ready Program (Level 2)',
-    submit:'Your installer submits the project closeout report through Eversource\u2019s MA EV PowerClerk portal (eversourcemaevprogram.powerclerk.com) with the project number (ESMAEV-##### or HTMAEV-#####). Chargers must be on Eversource\u2019s MA EVSE Qualified Products List, with proof of purchase before construction. Letter of Agreement must be fully executed by Dec 31, 2026.',
+    utility:'Eversource', state:'MA', name:'Eversource MA \u2014 EV Charging Rebate Program, Make-Ready (Level 2)',
+    /* VERIFIED 2026-09-25 against Eversource's own documents:
+       - MA process page (business-ev-charging-rebates/massachusetts-ev-
+         charging-rebates-process): installer submits a project closeout
+         report through PowerClerk; final inspection may be required;
+         proof of purchase from the QPL before Permission to Install.
+       - Commercial Application 2-0165 (Revised 5/23): QPL, Approved Make
+         Ready Contractor, keep chargers functional AND reporting data for
+         at least five years, notify Eversource of MassEVIP / other funding.
+       - EV Estimate Template Rev. March 2026: totals (1)-(4) must match the
+         PowerClerk cost fields; the same sections are the Costs tab here.
+       Eversource does NOT publish its closeout document list; it lives in
+       PowerClerk. Items below marked confirm:true are the standard closeout
+       evidence, shown so nothing is missed, and say so on screen. */
+    verified:'2026-09-25 \u2014 Eversource MA process page, Commercial Application 2-0165 (rev. 5/23), EV Estimate Template (Rev. March 2026). The closeout document list itself is published only inside PowerClerk: items tagged \u201cconfirm in PowerClerk\u201d are standard closeout evidence, not quoted from Eversource.',
+    submit:'Your approved Make Ready contractor submits the project closeout report through Eversource\u2019s MA EV PowerClerk portal (eversourcemaevprogram.powerclerk.com) under the project number (ESMAEV-##### or HTMAEV-#####). Questions: MAEVcharging@eversource.com. Letters of Agreement must be fully executed by Dec 31, 2026; approved projects may finish after that as the LOA specifies. Eversource issues Permission to Operate after closeout (and a final inspection where required).',
     termYears:5,
-    docs: pick(BASE_IDS, [
-      { id:'es_complete', cat:'forms', req:true, label:'Eversource Project Completion Form',
-        detail:'Signed by the site host and the contractor; project ID from the pre-approval letter.' },
-      { id:'es_approval', cat:'forms', req:true, label:'Pre-approval / commitment letter (copy)',
-        detail:'Sets the approved make-ready amount the completion is reconciled against.' },
-      { id:'es_hostagr',  cat:'admin', req:true, label:'Executed Site Host Agreement',
-        detail:'The program participation agreement signed at approval.' }
-    ])
+    termNote:'Keep the chargers functional and reporting data for at least five years (Commercial Application 2-0165).',
+    costCats:'esma',
+    docs: [
+      { id:'es_closeout', cat:'forms',   req:true, label:'Project closeout report in PowerClerk', detail:'Submitted by the installer on the site host\u2019s behalf (Eversource MA process, step 7).' },
+      { id:'es_matrix',   cat:'costs',   req:true, label:'Final cost matrix on the EV Estimate Template (Rev. March 2026)',
+        detail:'Final costs in the same rows as the estimate. Customer-side, utility-side, EVSE and networking totals must match the PowerClerk cost fields. Export it from the EV Cost Workbook (Eversource MA form) with final numbers.' },
+      { id:'es_loa',      cat:'forms',   req:true, label:'Fully executed Letter of Agreement (copy)', detail:'Sets the approved amounts the closeout is reconciled against.' },
+      { id:'es_pop',      cat:'equip',   req:true, label:'Proof of purchase of QPL chargers', detail:'Required before Permission to Install; models must be on Eversource\u2019s MA EVSE Qualified Products List.' },
+      { id:'es_contractor',cat:'admin',  req:true, label:'Work done by an Eversource Approved Make Ready Contractor', detail:'Contractor named on the application.' },
+      { id:'es_funding',  cat:'forms',   req:true, label:'MassEVIP / other state or federal funding: award or notice', detail:'Applicants must apply where eligible and notify Eversource of any funding received.' },
+      { id:'es_data',     cat:'equip',   req:true, label:'Chargers networked and reporting data (5-year commitment)', detail:'Network activation confirmation and station IDs.' },
+      { id:'es_inspect',  cat:'permits', req:false, label:'Final inspection / municipal wiring sign-off', detail:'Eversource: \u201ccertain projects may require a final inspection.\u201d Keep the AHJ certificate on file either way.' },
+      { id:'es_invoices', cat:'costs',   req:true, confirm:true, label:'Final itemised contractor invoice(s)', detail:'Matching the final cost matrix.' },
+      { id:'es_hwinv',    cat:'costs',   req:true, confirm:true, label:'EVSE and networking invoices', detail:'' },
+      { id:'es_serials',  cat:'equip',   req:true, confirm:true, label:'EVSE register with serial numbers', detail:'Generated from the Equipment tab.' },
+      { id:'es_permit',   cat:'permits', req:true, confirm:true, label:'Electrical permit', detail:'Permit costs are reimbursable customer-side make-ready.' },
+      { id:'es_w9',       cat:'admin',   req:true, confirm:true, label:'W-9 for the rebate payee', detail:'' },
+      { id:'es_asbuilt',  cat:'drawings',req:true, confirm:true, label:'As-built site sketch', detail:'Chargers, conduit route and length, distribution cabinets, interconnection point, as the application sketch showed them.' }
+    ],
+    photos: [
+      { id:'ph_evse',   label:'Each charger installed, full view', req:true, confirm:true },
+      { id:'ph_plate',  label:'Each charger nameplate / serial number label', req:true, confirm:true },
+      { id:'ph_panel',  label:'Panel / distribution equipment and metering', req:true, confirm:true },
+      { id:'ph_trench', label:'Open trench with conduit before backfill', req:false, confirm:true },
+      { id:'ph_screen', label:'Charger online on the network', req:false, confirm:true }
+    ]
   },
   es_ct: {
     utility:'Eversource', state:'CT', name:'Eversource CT — EV Charging Program (Level 2, PURA)',
@@ -331,6 +363,24 @@ var PROGRAMS = {
   }
 };
 
+/* Eversource MA: the sections of the EV Estimate Template (Rev. March
+   2026). The first four are the PowerClerk cost fields, footnotes (1)-(4). */
+var COST_CATS_ESMA = [
+  { k:'dp',   label:'Design & permitting (sheet rows 10\u201311)',                       elig:true,  pc:'Customer-Side Make-Ready' },
+  { k:'cs',   label:'Customer-side make-ready \u2014 site & electrical (rows 13\u201325)', elig:true,  pc:'Customer-Side Make-Ready' },
+  { k:'us',   label:'Utility-side make-ready \u2014 primary conduit (rows 27\u201329)',    elig:true,  pc:'Utility-Side Make-Ready' },
+  { k:'evse', label:'EVSE \u2014 hardware, freight, installation, kits (rows 31\u201335)', elig:true,  pc:'EVSE', evse:true },
+  { k:'net',  label:'Networking \u2014 Public L2 / MUD only (row 37)',                     elig:true,  pc:'Networking', evse:true },
+  { k:'fp',   label:'Future proofing (rows 39\u201346, ineligible)',                        elig:false },
+  { k:'inel', label:'Striping, signage, warranty, activation, validation, workplace/fleet networking, sales tax (ineligible)', elig:false }
+];
+var ESMA_FROM_GENERIC = { design:'dp', civil:'cs', conduit:'cs', electric:'cs', pads:'cs', restore:'cs',
+                          evse:'evse', evseInst:'evse', network:'net', other:'inel' };
+function costCats(){ return (C && prog().costCats==='esma') ? COST_CATS_ESMA : COST_CATS; }
+function ensureCosts(){
+  var cats=costCats(), i;
+  for(i=0;i<cats.length;i++) if(!C.costs[cats[i].k]) C.costs[cats[i].k]={est:0,fin:0,eligOverride:null};
+}
 var COST_CATS = [
   { k:'design',   label:'Design, engineering & permitting', elig:true  },
   { k:'civil',    label:'Trenching, boring & civil',        elig:true  },
@@ -361,6 +411,7 @@ function uid(){ return 'c'+Date.now().toString(36)+Math.random().toString(36).sl
 function blank(){
   var costs={}, i;
   for(i=0;i<COST_CATS.length;i++) costs[COST_CATS[i].k]={est:0,fin:0,eligOverride:null};
+  for(i=0;i<COST_CATS_ESMA.length;i++) costs[COST_CATS_ESMA[i].k]={est:0,fin:0,eligOverride:null};
   return {
     id:uid(), created:new Date().toISOString(), updated:null,
     program:'es_ma',
@@ -388,7 +439,7 @@ function docState(id){ if(!C.docs[id]) C.docs[id]={status:'todo',ref:'',note:''}
 function allItems(){
   var out=prog().docs.slice(), i;
   var ph=prog().photos||PHOTOS;
-  for(i=0;i<ph.length;i++) out.push({ id:ph[i].id, cat:'photos', req:ph[i].req, label:ph[i].label, detail:'' });
+  for(i=0;i<ph.length;i++) out.push({ id:ph[i].id, cat:'photos', req:ph[i].req, confirm:ph[i].confirm, label:ph[i].label, detail:'' });
   return out;
 }
 
@@ -482,8 +533,9 @@ function isElig(cat){
 }
 function totals(){
   var t={est:0,fin:0,elig:0,evse:0,inel:0}, i, c, row;
-  for(i=0;i<COST_CATS.length;i++){
-    c=COST_CATS[i]; row=C.costs[c.k]||{est:0,fin:0};
+  var CC=costCats();
+  for(i=0;i<CC.length;i++){
+    c=CC[i]; row=C.costs[c.k]||{est:0,fin:0};
     t.est+=num(row.est); t.fin+=num(row.fin);
     if(isElig(c)) t.elig+=num(row.fin);
     else if(c.evse) t.evse+=num(row.fin);
@@ -532,6 +584,7 @@ function readiness(){
 var TABS=[['project','Project'],['equip','Equipment'],['costs','Costs & incentive'],
           ['docs','Documents'],['photos','Photos'],['signoff','Sign-off'],['review','Review & export']];
 function render(){
+  ensureCosts();
   var r=readiness(), h='', i;
   for(i=0;i<TABS.length;i++){
     var cnt='';
@@ -639,8 +692,9 @@ function vCosts(){
    +'</div>';
   h+='<div class="card"><h3>Cost reconciliation<span class="hint">Final column must tie to the invoices you attach</span></h3><div class="body"><div class="scroll"><table class="t"><thead><tr>'
    +'<th>Category</th><th>Make-ready eligible</th><th class="num">Estimate</th><th class="num">Final invoiced</th><th class="num">Variance</th></tr></thead><tbody>';
-  for(i=0;i<COST_CATS.length;i++){
-    c=COST_CATS[i]; row=C.costs[c.k];
+  var CC=costCats();
+  for(i=0;i<CC.length;i++){
+    c=CC[i]; row=C.costs[c.k];
     var el=isElig(c);
     h+='<tr><td>'+esc(c.label)+'</td><td><select onchange="setElig(\''+c.k+'\',this.value)" style="width:90px">'
       +'<option value="1"'+(el?' selected':'')+'>Yes</option><option value="0"'+(!el?' selected':'')+'>No</option></select></td>'
@@ -650,6 +704,15 @@ function vCosts(){
   }
   h+='<tr class="tot"><td>Total</td><td></td><td class="num mono">'+money(t.est)+'</td><td class="num mono">'+money(t.fin)+'</td><td class="num mono">'+money(t.fin-t.est)+'</td></tr>';
   h+='</tbody></table></div><div class="note" style="margin-top:8px">Which categories count follows your approval letter. Defaults follow the current Eversource MA and National Grid MA templates: make-ready and EVSE eligible, networking eligible for Public L2 and MUD only, signage, striping, activation and warranty ineligible. Change a row if your program or segment differs.</div></div></div>';
+  if(prog().costCats==='esma'){
+    var pcs=['Customer-Side Make-Ready','Utility-Side Make-Ready','EVSE','Networking'], pj, pt;
+    h+='<div class="card"><h3>PowerClerk totals<span class="hint">Template footnotes (1)\u2013(4): these must match the PowerClerk cost fields</span></h3><div class="body"><table class="t" style="max-width:560px"><tbody>';
+    for(pj=0;pj<pcs.length;pj++){
+      pt=0; for(i=0;i<COST_CATS_ESMA.length;i++) if(COST_CATS_ESMA[i].pc===pcs[pj] && isElig(COST_CATS_ESMA[i])) pt+=num(C.costs[COST_CATS_ESMA[i].k].fin);
+      h+='<tr><td>('+(pj+1)+') '+pcs[pj]+' total</td><td class="num mono">'+money(pt)+'</td></tr>';
+    }
+    h+='</tbody></table></div></div>';
+  }
   h+='<div class="card"><h3>Incentive reconciliation<span class="hint">Numbers from your approval letter</span></h3><div class="body"><div class="grid">'
    +'<label class="f"><span>Approved make-ready incentive ($)</span><input type="number" step="0.01" value="'+esc(inc.approved)+'" onchange="setInc(\'approved\',this.value)"></label>'
    +'<label class="f"><span>Program share of eligible cost (%)</span><input type="number" step="1" value="'+esc(inc.pct)+'" onchange="setInc(\'pct\',this.value)"></label>'
@@ -679,6 +742,7 @@ function chkRow(it){
   var pill = st.status==='na' ? '<span class="pill opt">N/A</span>'
            : (st.status==='collected'||st.status==='submitted') ? '<span class="pill done">'+(st.status==='submitted'?'Submitted':'Collected')+'</span>'
            : it.req ? '<span class="pill req">Required</span>' : '<span class="pill opt">If applicable</span>';
+  if(it.confirm) pill+=' <span class="pill opt" title="Standard closeout evidence; Eversource publishes its list only inside PowerClerk">confirm in PowerClerk</span>';
   return '<div class="chk"><div><div class="lbl">'+esc(it.label)+' '+pill+'</div>'
     +(it.detail?'<div class="det">'+esc(it.detail)+'</div>':'')
     +'<div class="files">'+f+'</div></div>'
@@ -694,8 +758,7 @@ function vDocs(){
     any=''; for(i=0;i<docs.length;i++) if(docs[i].cat===cat) any+=chkRow(docs[i]);
     if(any) h+='<div class="card"><h3>'+esc(CATS[cat].replace(/^\d+ /,''))+'</h3><div class="body">'+any+'</div></div>';
   }
-  var sg=DOC.signage;
-  return h+'<div class="note">'+esc(sg.label)+' is under Photos.</div>';
+  return h;
 }
 function vPhotos(){
   var h='<div class="card"><h3>Photo set<span class="hint">Nameplates must be legible — the serial is read off the photo</span></h3><div class="body">';
@@ -744,7 +807,7 @@ function equipCSV(){
 }
 function costCSV(){
   var rows=[['Category','Make-ready eligible','Estimate','Final invoiced','Variance']], i, c, row, t=totals(), p=payable();
-  for(i=0;i<COST_CATS.length;i++){ c=COST_CATS[i]; row=C.costs[c.k]; rows.push([c.label,isElig(c)?'Yes':'No',r2(row.est),r2(row.fin),r2(num(row.fin)-num(row.est))]); }
+  for(i=0;i<costCats().length;i++){ c=costCats()[i]; row=C.costs[c.k]; rows.push([c.label,isElig(c)?'Yes':'No',r2(row.est),r2(row.fin),r2(num(row.fin)-num(row.est))]); }
   rows.push(['Total','',r2(t.est),r2(t.fin),r2(t.fin-t.est)]);
   rows.push([]); rows.push(['Eligible final cost','','',r2(t.elig)]);
   rows.push(['Approved incentive','','',r2(C.incentive.approved)]);
@@ -769,7 +832,7 @@ function summaryHTML(){
   for(i=0;i<C.equip.length;i++){ e=C.equip[i]; h+='<tr><td>'+esc(e.tag)+'</td><td>'+esc(e.make)+'</td><td>'+esc(e.model)+'</td><td>'+esc(e.serial)+'</td><td class="num">'+esc(e.ports)+'</td><td class="num">'+esc(e.kw)+'</td><td>'+esc(e.netId)+'</td><td>'+esc(e.estar)+'</td><td>'+esc(e.loc)+'</td></tr>'; }
   h+='</tbody></table>';
   h+='<h2>Final cost reconciliation</h2><table><thead><tr><th>Category</th><th>Eligible</th><th class="num">Estimate</th><th class="num">Final</th></tr></thead><tbody>';
-  for(i=0;i<COST_CATS.length;i++){ c=COST_CATS[i]; row=C.costs[c.k]; if(!num(row.est)&&!num(row.fin)) continue; h+='<tr><td>'+esc(c.label)+'</td><td>'+(isElig(c)?'Yes':'No')+'</td><td class="num">'+money(row.est)+'</td><td class="num">'+money(row.fin)+'</td></tr>'; }
+  for(i=0;i<costCats().length;i++){ c=costCats()[i]; row=C.costs[c.k]; if(!num(row.est)&&!num(row.fin)) continue; h+='<tr><td>'+esc(c.label)+'</td><td>'+(isElig(c)?'Yes':'No')+'</td><td class="num">'+money(row.est)+'</td><td class="num">'+money(row.fin)+'</td></tr>'; }
   h+='<tr><th>Total</th><th></th><th class="num">'+money(t.est)+'</th><th class="num">'+money(t.fin)+'</th></tr></tbody></table>'
    +'<table><tbody>'+tr2('Eligible make-ready (final)',money(t.elig))+tr2('Approved incentive',money(C.incentive.approved))+tr2('Payable at completion',money(pay.pay))+'</tbody></table>';
   h+='<h2 class="pb">Document checklist</h2><table><thead><tr><th>Item</th><th>Status</th><th>Files / reference</th></tr></thead><tbody>';
@@ -862,10 +925,11 @@ function loadHandoff(pay){
   if(s.applicant && !C.p.siteHost) C.p.siteHost=s.applicant;
   if(s.address && !C.p.address) C.p.address=s.address;
   if(pay.lines && pay.lines.length){
-    for(i=0;i<COST_CATS.length;i++) C.costs[COST_CATS[i].k].est=0;
+    ensureCosts(); for(i=0;i<costCats().length;i++) C.costs[costCats()[i].k].est=0;
     for(i=0;i<pay.lines.length;i++){
       var l=pay.lines[i];
-      C.costs[catOfLine(l)].est=r2(C.costs[catOfLine(l)].est+num(l.mat)+num(l.lab));
+      var ck=catOfLine(l); if(prog().costCats==='esma') ck=ESMA_FROM_GENERIC[ck]||'inel';
+      C.costs[ck].est=r2(C.costs[ck].est+num(l.mat)+num(l.lab));
     }
   }
   if(pay.chargers && pay.chargers.length){
@@ -880,7 +944,7 @@ function loadHandoff(pay){
                        ports: num(ch.ports)||2, kw: num(ch.kw)||'', netId:'', estar:'Unknown', loc:'' });
       }
     }
-    if(hw) C.costs.evse.est=r2(hw);
+    if(hw) C.costs.evse.est=r2(hw);  /* same key in both category sets */
   }
   save(); render();
   return n;
