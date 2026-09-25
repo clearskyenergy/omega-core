@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L2 Project Closeout</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" onerror="void 0"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" onerror="void 0"></script>
+<script src="/config.js" onerror="void 0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="window._ZIPFAIL=1"></script>
+<!--
+  LEVEL 2 PROJECT CLOSEOUT
+  The sibling of ev-cost-workbook.html. The workbook gets a job APPROVED
+  (estimate -> utility make-ready application); this page gets it PAID
+  (installed job -> the utility's project-completion package).
+
+  Programs covered: Eversource (MA, CT) and National Grid (MA, NY, RI)
+  Level 2 make-ready. The checklists below are what those programs ask for
+  at completion — final itemised invoices split make-ready vs EVSE, proof
+  of payment, the electrical inspection certificate, photos, EVSE serials,
+  network activation and the data-sharing commitment, W-9 and as-builts.
+  Program manuals change every filing cycle: every list is data (PROGRAMS),
+  and the page says so on screen. Confirm against the current manual.
+
+  Nothing here is written to Firestore. A closeout is saved in this
+  browser (localStorage for the record, IndexedDB for attached files) and
+  can be exported as a JSON file or a ZIP package. The incentive figure is
+  reconciliation arithmetic on numbers the user types from their own
+  pre-approval letter — no eligibility or pricing rule lives in this file.
+
+  ES5 only (see CLAUDE.md).
+-->
+<style>
+:root{
+  --bg:#F4F1EC; --surface:#FFFFFF; --ink:#0B1E35; --gold:#C9A84C;
+  --line:#DFD9CF; --line2:#EBE6DE; --sub:#5B6B7E; --dim:#8A94A0;
+  --green:#1E7A44; --red:#B4342B; --amber:#A66A00;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.45;-webkit-text-size-adjust:100%}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.tb{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 18px;background:var(--surface);border-bottom:2px solid var(--gold);box-shadow:0 1px 3px rgba(11,30,53,.06)}
+.tb-logo-txt{font-size:14px;font-weight:800;color:var(--ink)}
+.tb-logo-txt span{color:var(--gold)}
+.tb-sub{font-size:10px;color:var(--sub);letter-spacing:1.3px;text-transform:uppercase;padding-left:12px;border-left:1px solid var(--line)}
+.tb-sp{flex:1}
+.tb-who{font-size:11px;color:var(--sub)}
+.tabs{display:flex;gap:2px;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:none;background:none;padding:10px 14px;font-size:12px;font-weight:600;color:var(--sub);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;font-family:inherit}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--gold)}
+.tabs .cnt{display:inline-block;margin-left:6px;font-size:10px;padding:1px 6px;border-radius:9px;background:#F1ECE2;color:var(--sub)}
+.tabs .cnt.ok{background:#E3F2E8;color:var(--green)}
+.wrap{max-width:1180px;margin:0 auto;padding:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:4px;margin-bottom:14px;overflow:hidden}
+.card>h3{margin:0;padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;background:#FBF9F6;border-bottom:1px solid var(--line2);display:flex;align-items:center;gap:9px}
+.card>h3:before{content:"";width:3px;height:12px;background:var(--gold);flex:none}
+.card>h3 .hint{margin-left:auto;font-weight:400;letter-spacing:0;text-transform:none;color:var(--dim);font-size:10.5px}
+.body{padding:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0 12px}
+label.f{display:block;margin-bottom:10px}
+label.f>span{display:block;font-size:10px;color:var(--sub);margin-bottom:4px}
+label.f>span b{color:var(--red);font-weight:700}
+input[type=text],input[type=number],input[type=date],input[type=email],select,textarea{width:100%;padding:7px 9px;background:var(--surface);border:1px solid #CFC8BC;border-radius:3px;color:var(--ink);font-family:inherit;font-size:12.5px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--ink);box-shadow:0 0 0 2px rgba(11,30,53,.09)}
+textarea{resize:vertical;min-height:60px}
+button{font-family:inherit;cursor:pointer;border-radius:3px}
+.btn{padding:7px 12px;font-size:11.5px;font-weight:600;background:var(--surface);border:1px solid #CFC8BC;color:var(--ink)}
+.btn:hover{border-color:var(--ink)}
+.btn.p{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.g{border-color:var(--gold);color:#8A6F1E;background:#FDFAF2}
+.btn.sm{padding:4px 8px;font-size:10.5px}
+.btn.x{border:none;background:none;color:var(--dim);font-size:15px;padding:2px 6px}
+.btn.x:hover{color:var(--red)}
+.row-btn{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.note{font-size:11.5px;color:var(--sub);line-height:1.55}
+.warn{background:#FFF7E6;border:1px solid #F0D9A8;color:#6B4A00;padding:9px 12px;border-radius:3px;font-size:11.5px;margin-bottom:12px}
+.okbox{background:#EAF5EE;border:1px solid #BFE0CB;color:#14532D;padding:9px 12px;border-radius:3px;font-size:11.5px;margin-bottom:12px}
+table.t{width:100%;border-collapse:collapse;font-size:12px}
+table.t th{text-align:left;font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--sub);padding:7px 6px;border-bottom:1px solid var(--line);background:#FBF9F6;white-space:nowrap}
+table.t td{padding:5px 6px;border-bottom:1px solid var(--line2);vertical-align:middle}
+table.t td input,table.t td select{padding:5px 6px;font-size:12px}
+table.t td.num,table.t th.num{text-align:right}
+table.t tr.tot td{font-weight:700;background:#FBF9F6;border-top:2px solid var(--line)}
+.scroll{overflow-x:auto}
+.pill{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:.3px}
+.pill.req{background:#FBE9E7;color:var(--red)}
+.pill.opt{background:#EEF1F4;color:var(--sub)}
+.pill.done{background:#E3F2E8;color:var(--green)}
+.meter{height:10px;background:#EEE9E0;border-radius:6px;overflow:hidden;margin:6px 0 4px}
+.meter>div{height:100%;background:var(--green);transition:width .2s}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:11px 13px}
+.kpi .l{font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--sub)}
+.kpi .v{font-size:19px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:10.5px;color:var(--dim)}
+.chk{display:grid;grid-template-columns:1fr 150px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--line2);align-items:start}
+.chk:last-child{border-bottom:none}
+.chk .lbl{font-weight:600;font-size:12.5px}
+.chk .det{font-size:11px;color:var(--sub);margin-top:2px}
+.chk .files{font-size:11px;color:var(--sub);margin-top:4px}
+.chk .files span{display:inline-block;background:#F4F1EC;border:1px solid var(--line2);border-radius:3px;padding:1px 6px;margin:2px 4px 0 0}
+@media(max-width:720px){ .chk{grid-template-columns:1fr} }
+.hide{display:none}
+/* gate */
+#gate{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+.gate-card{max-width:440px;width:100%;background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:4px;padding:30px 28px;text-align:center}
+.gate-title{font-size:17px;font-weight:700;margin-bottom:8px}
+.gate-msg{font-size:12.5px;color:var(--sub);line-height:1.6}
+/* print = the closeout package cover document */
+#printDoc{display:none}
+@media print{
+  body{background:#fff}
+  #gate,#app{display:none !important}
+  #printDoc{display:block !important;font-size:11px;color:#000}
+  #printDoc h1{font-size:18px;margin:0 0 4px}
+  #printDoc h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;border-bottom:1.5px solid #000;padding-bottom:3px;margin:18px 0 8px;page-break-after:avoid}
+  #printDoc table{width:100%;border-collapse:collapse;margin-bottom:6px}
+  #printDoc th,#printDoc td{border:1px solid #999;padding:3px 5px;text-align:left;font-size:10px}
+  #printDoc td.num,#printDoc th.num{text-align:right}
+  #printDoc .sig{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:26px}
+  #printDoc .sig div{border-top:1px solid #000;padding-top:4px;font-size:10px}
+  #printDoc .pb{page-break-before:always}
+}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-card">
+    <div style="font-size:13px;font-weight:800;margin-bottom:20px">ClearSky <b style="color:var(--gold)">OMEGA</b></div>
+    <div class="gate-title" id="gateTitle">Checking access…</div>
+    <div class="gate-msg" id="gateMsg">One moment.</div>
+    <div id="gateActions" class="row-btn" style="justify-content:center;margin-top:16px"></div>
+    <div id="gatePw" style="display:none;margin-top:14px;text-align:left">
+      <input type="email" id="gatePwEmail" placeholder="you@company.com" autocomplete="username" style="margin-bottom:8px">
+      <input type="password" id="gatePwPass" placeholder="Password" autocomplete="current-password" style="margin-bottom:10px;width:100%;padding:7px 9px;border:1px solid #CFC8BC;border-radius:3px"
+             onkeydown="if(event.key==='Enter')window.__gatePwSignIn()">
+      <div id="gatePwErr" style="display:none;color:#b91c1c;font-size:12px;margin-bottom:8px"></div>
+      <div class="row-btn" style="justify-content:center"><button class="btn p" onclick="window.__gatePwSignIn()">Sign in</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="tb">
+    <a href="/" style="text-decoration:none"><div class="tb-logo-txt" id="tbName">ClearSky <span>OMEGA</span></div></a>
+    <div class="tb-sub">Level 2 Project Closeout</div>
+    <div class="tb-sp"></div>
+    <select id="savedSel" onchange="openSaved(this.value)" style="width:auto;min-width:200px"></select>
+    <button class="btn" onclick="newCloseout()">New</button>
+    <button class="btn" onclick="pullFromEditor()" title="Take the site, charger fleet and estimate from the editor">From editor</button>
+    <button class="btn" onclick="document.getElementById('jsonIn').click()">Open file</button>
+    <input type="file" id="jsonIn" accept=".json,application/json" class="hide" onchange="importJSON(this)">
+    <button class="btn" onclick="exportJSON()">Save file</button>
+    <button class="btn" onclick="printPackage()">Print package</button>
+    <button class="btn p" onclick="exportZip()">Export ZIP</button>
+    <span class="tb-who" id="tbWho"></span>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="wrap" id="view"></div>
+</div>
+
+<div id="printDoc"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   PROGRAM DATA — the ONLY place a utility's closeout requirements live.
+   Every item: id, label, detail, req (required at completion), cat.
+   Categories drive the ZIP folder a file lands in.
+   ════════════════════════════════════════════════════════════════════ */
+var CATS = {
+  forms:   '01 Completion Forms',
+  costs:   '02 Invoices & Payment',
+  permits: '03 Permits & Inspection',
+  equip:   '04 EVSE & Network',
+  photos:  '05 Photos',
+  drawings:'06 As-Builts',
+  admin:   '07 Tax & Agreements'
+};
+
+/* Shared building blocks — each program picks from these and adds its own. */
+var DOC = {
+  invoice:   { id:'invoice',   cat:'costs',   req:true,  label:'Final itemised contractor invoice(s)',
+               detail:'Line items split into make-ready (customer-side infrastructure) and EVSE hardware / installation. Totals must match the cost reconciliation.' },
+  payment:   { id:'payment',   cat:'costs',   req:true,  label:'Proof of payment',
+               detail:'Cancelled cheque, bank/ACH record or paid-in-full receipt for every invoice claimed.' },
+  lien:      { id:'lien',      cat:'costs',   req:false, label:'Final lien waiver / release',
+               detail:'From the electrical contractor (and any sub over the program threshold).' },
+  hwInvoice: { id:'hwInvoice', cat:'costs',   req:true,  label:'EVSE hardware invoice',
+               detail:'Showing make, model, quantity and unit price of the chargers purchased.' },
+  permit:    { id:'permit',    cat:'permits', req:true,  label:'Electrical permit',
+               detail:'Permit number issued by the AHJ for the EVSE installation.' },
+  inspect:   { id:'inspect',   cat:'permits', req:true,  label:'Certificate of electrical inspection (final sign-off)',
+               detail:'Signed final by the municipal wiring inspector / AHJ.' },
+  bldg:      { id:'bldg',      cat:'permits', req:false, label:'Building / zoning / DPW permits closed',
+               detail:'Only where the job needed them (trenching in the right of way, new pads, signage).' },
+  serials:   { id:'serials',   cat:'equip',   req:true,  label:'EVSE register with serial numbers',
+               detail:'Make, model, serial, ports and kW for every charger. Generated from the Equipment tab.' },
+  qpl:       { id:'qpl',       cat:'equip',   req:true,  label:'Qualified / ENERGY STAR product evidence',
+               detail:'Spec sheet or listing showing each Level 2 model is on the program’s qualified product list.' },
+  network:   { id:'network',   cat:'equip',   req:true,  label:'Network service agreement',
+               detail:'Executed networking / software subscription covering the program’s required operating term.' },
+  activation:{ id:'activation',cat:'equip',   req:true,  label:'Commissioning / network activation confirmation',
+               detail:'Report or screenshot showing each station online and reporting on the network, with the activation date.' },
+  datashare: { id:'datashare', cat:'admin',   req:true,  label:'Data-sharing authorisation',
+               detail:'Signed consent for the network provider to share charging-session data with the utility for the program term.' },
+  w9:        { id:'w9',        cat:'admin',   req:true,  label:'IRS Form W-9',
+               detail:'For whoever receives the incentive payment (site host or assigned contractor).' },
+  assign:    { id:'assign',    cat:'admin',   req:false, label:'Incentive payment assignment',
+               detail:'Only if the incentive is paid to the contractor rather than the site host.' },
+  asbuilt:   { id:'asbuilt',   cat:'drawings',req:true,  label:'As-built site plan',
+               detail:'Charger locations, conduit/trench route, panel and meter as installed. Export from the editor.' },
+  oneline:   { id:'oneline',   cat:'drawings',req:true,  label:'As-built single-line diagram',
+               detail:'Service, panel, breakers and circuits feeding the EVSE, as installed.' },
+  loadcalc:  { id:'loadcalc',  cat:'drawings',req:false, label:'Final load calculation',
+               detail:'Where the service or panel was modified.' },
+  signage:   { id:'signage',   cat:'photos',  req:false, label:'EV parking signage / striping in place',
+               detail:'Photo of signage and stall marking, including any accessible (ADA) space.' }
+};
+
+var PHOTOS = [
+  { id:'ph_evse',   label:'Each charger installed, full view',                req:true  },
+  { id:'ph_plate',  label:'Each charger nameplate / serial number label',     req:true  },
+  { id:'ph_panel',  label:'Panel / breakers feeding the EVSE (cover off)',    req:true  },
+  { id:'ph_meter',  label:'Service / meter (and new meter if installed)',     req:true  },
+  { id:'ph_trench', label:'Open trench with conduit before backfill',         req:false },
+  { id:'ph_restore',label:'Surface restoration after backfill',               req:false },
+  { id:'ph_bollard',label:'Bollards / wheel stops / pad',                      req:false },
+  { id:'ph_screen', label:'Charger screen or app showing it online',          req:true  }
+];
+
+function pick(ids, extra){
+  var out=[], i;
+  for(i=0;i<ids.length;i++) out.push(DOC[ids[i]]);
+  for(i=0;extra && i<extra.length;i++) out.push(extra[i]);
+  return out;
+}
+var BASE_IDS = ['invoice','hwInvoice','payment','lien','permit','inspect','bldg',
+                'serials','qpl','network','activation','datashare','w9','assign',
+                'asbuilt','oneline','loadcalc','signage'];
+
+var PROGRAMS = {
+  es_ma: {
+    utility:'Eversource', state:'MA', name:'Eversource MA — EV Make-Ready Program (Level 2)',
+    submit:'Submit the completion package to the Eversource EV program team through the program portal / your Eversource project manager, referencing the project ID on the approval letter.',
+    termYears:5,
+    docs: pick(BASE_IDS, [
+      { id:'es_complete', cat:'forms', req:true, label:'Eversource Project Completion Form',
+        detail:'Signed by the site host and the contractor; project ID from the pre-approval letter.' },
+      { id:'es_approval', cat:'forms', req:true, label:'Pre-approval / commitment letter (copy)',
+        detail:'Sets the approved make-ready amount the completion is reconciled against.' },
+      { id:'es_hostagr',  cat:'admin', req:true, label:'Executed Site Host Agreement',
+        detail:'The program participation agreement signed at approval.' }
+    ])
+  },
+  es_ct: {
+    utility:'Eversource', state:'CT', name:'Eversource CT — EV Charging Program (Level 2, PURA)',
+    submit:'Submit through the Eversource CT EV Charging Program portal, referencing the application number.',
+    termYears:5,
+    docs: pick(BASE_IDS, [
+      { id:'ct_complete', cat:'forms', req:true, label:'Project Completion / Incentive Request Form',
+        detail:'Signed by the site host; application number from the reservation.' },
+      { id:'ct_approval', cat:'forms', req:true, label:'Incentive reservation / approval (copy)',
+        detail:'Approved port count and incentive cap.' },
+      { id:'ct_hostagr',  cat:'admin', req:true, label:'Executed participant / site host agreement', detail:'' }
+    ])
+  },
+  ng_ma: {
+    utility:'National Grid', state:'MA', name:'National Grid MA — EV Charging Station Program (Level 2)',
+    submit:'Upload the completion package to the National Grid EV program portal (or send to your National Grid EV program contact) with the project number.',
+    termYears:5,
+    docs: pick(BASE_IDS, [
+      { id:'ng_complete', cat:'forms', req:true, label:'National Grid Project Completion Form',
+        detail:'Signed by the customer and the installing contractor.' },
+      { id:'ng_approval', cat:'forms', req:true, label:'Approval / Letter of Commitment (copy)', detail:'' },
+      { id:'ng_cost',     cat:'costs', req:true, label:'Final cost breakdown in the program cost template',
+        detail:'Same categories as the application. Generated from the Costs tab (cost_reconciliation.csv).' }
+    ])
+  },
+  ng_ny: {
+    utility:'National Grid', state:'NY', name:'National Grid NY — EV Make-Ready Program (Level 2)',
+    submit:'Submit the completion package in the National Grid NY Make-Ready participant portal, referencing the project ID.',
+    termYears:5,
+    docs: pick(BASE_IDS, [
+      { id:'ny_complete', cat:'forms', req:true, label:'Make-Ready Program Project Completion Form', detail:'' },
+      { id:'ny_approval', cat:'forms', req:true, label:'Incentive approval / reservation (copy)', detail:'' },
+      { id:'ny_cost',     cat:'costs', req:true, label:'Itemised make-ready cost breakdown (program categories)',
+        detail:'Customer-side make-ready separated from EVSE and ineligible costs.' },
+      { id:'ny_contractor',cat:'admin',req:true, label:'Approved contractor confirmation',
+        detail:'The installer’s eligible-contractor status in the program.' }
+    ])
+  },
+  ng_ri: {
+    utility:'National Grid', state:'RI', name:'Rhode Island Energy / National Grid RI — EV Program (Level 2)',
+    submit:'Submit to the RI EV program team with the project number. (Rhode Island Energy took over National Grid’s RI service territory in 2022.)',
+    termYears:5,
+    docs: pick(BASE_IDS, [
+      { id:'ri_complete', cat:'forms', req:true, label:'Project Completion Form', detail:'' },
+      { id:'ri_approval', cat:'forms', req:true, label:'Approval letter (copy)', detail:'' }
+    ])
+  }
+};
+
+var COST_CATS = [
+  { k:'design',   label:'Design, engineering & permitting', elig:true  },
+  { k:'civil',    label:'Trenching, boring & civil',        elig:true  },
+  { k:'conduit',  label:'Conduit, wire & pull boxes',       elig:true  },
+  { k:'electric', label:'Panels, breakers, disconnects & service upgrade', elig:true },
+  { k:'pads',     label:'Pads, bollards & mounting',        elig:true  },
+  { k:'restore',  label:'Surface restoration & striping',   elig:true  },
+  { k:'evse',     label:'EVSE hardware',                    elig:false, evse:true },
+  { k:'evseInst', label:'EVSE installation labour',         elig:false, evse:true },
+  { k:'network',  label:'Networking / software subscription', elig:false, evse:true },
+  { k:'other',    label:'Other / ineligible',               elig:false }
+];
+
+/* ════════════════════════════════════════════════════════════════════
+   STATE
+   ════════════════════════════════════════════════════════════════════ */
+var STORE_KEY = 'OMEGA_L2_CLOSEOUTS';
+var HANDOFF_KEY = 'OMEGA_EV_CLOSEOUT_HANDOFF';
+var TAB = 'project';
+var C = null;          /* the open closeout */
+var FILES = {};        /* itemId -> [{id,name,type,size}] (blobs in IndexedDB) */
+
+function uid(){ return 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function blank(){
+  var costs={}, i;
+  for(i=0;i<COST_CATS.length;i++) costs[COST_CATS[i].k]={est:0,fin:0,eligOverride:null};
+  return {
+    id:uid(), created:new Date().toISOString(), updated:null,
+    program:'es_ma',
+    p:{ projectName:'', utilityProjectId:'', siteHost:'', siteContact:'', siteEmail:'', sitePhone:'',
+        address:'', city:'', state:'', zip:'', accountNo:'', meterNo:'', siteType:'Workplace',
+        contractor:'', contractorLicense:'', contractorContact:'', contractorEmail:'',
+        permitNo:'', ahj:'', inspectionDate:'', energizedDate:'', activationDate:'',
+        networkProvider:'', payee:'Site host', notes:'' },
+    equip:[],
+    costs:costs,
+    incentive:{ approved:0, pct:100, perPortCap:0, received:0 },
+    docs:{},    /* itemId -> {status, ref, note} */
+    signoff:{ hostName:'', hostTitle:'', hostDate:'', ctrName:'', ctrTitle:'', ctrDate:'' }
+  };
+}
+
+/* ── helpers ── */
+function $(id){ return document.getElementById(id); }
+function num(v){ var n=parseFloat(String(v==null?'':v).replace(/[$,\s]/g,'')); return isFinite(n)?n:0; }
+function r2(n){ return Math.round((n||0)*100)/100; }
+function money(n){ return '$'+r2(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function prog(){ return PROGRAMS[C.program] || PROGRAMS.es_ma; }
+function docState(id){ if(!C.docs[id]) C.docs[id]={status:'todo',ref:'',note:''}; return C.docs[id]; }
+function allItems(){
+  var out=prog().docs.slice(), i;
+  for(i=0;i<PHOTOS.length;i++) out.push({ id:PHOTOS[i].id, cat:'photos', req:PHOTOS[i].req, label:PHOTOS[i].label, detail:'' });
+  return out;
+}
+
+/* ── persistence (this browser) ── */
+function readAll(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)||'{}')||{}; }catch(e){ return {}; } }
+function writeAll(o){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(o)); }catch(e){} }
+var _saveT=null;
+function save(){
+  clearTimeout(_saveT);
+  _saveT=setTimeout(function(){
+    C.updated=new Date().toISOString();
+    C.fileIndex=FILES;
+    var all=readAll(); all[C.id]=C; writeAll(all);
+    renderSaved();
+  },250);
+}
+function renderSaved(){
+  var all=readAll(), keys=[], k, h='<option value="">Saved closeouts…</option>';
+  for(k in all) if(all.hasOwnProperty(k)) keys.push(all[k]);
+  keys.sort(function(a,b){ return String(b.updated||'').localeCompare(String(a.updated||'')); });
+  for(var i=0;i<keys.length;i++){
+    h+='<option value="'+esc(keys[i].id)+'"'+(C&&keys[i].id===C.id?' selected':'')+'>'
+      +esc(keys[i].p.projectName||keys[i].p.address||'Untitled')+' — '+esc((PROGRAMS[keys[i].program]||{}).utility||'')+' '+esc((PROGRAMS[keys[i].program]||{}).state||'')+'</option>';
+  }
+  $('savedSel').innerHTML=h;
+}
+function openSaved(id){
+  var all=readAll(); if(!id||!all[id]) return;
+  C=all[id]; FILES=C.fileIndex||{}; render();
+}
+function newCloseout(){ C=blank(); FILES={}; save(); render(); }
+
+/* ── attachments: IndexedDB, falls back to memory ── */
+var IDB=null, MEMBLOB={};
+function idb(cb){
+  if(IDB) return cb(IDB);
+  try{
+    var rq=indexedDB.open('omega-l2-closeout',1);
+    rq.onupgradeneeded=function(){ rq.result.createObjectStore('files'); };
+    rq.onsuccess=function(){ IDB=rq.result; cb(IDB); };
+    rq.onerror=function(){ cb(null); };
+  }catch(e){ cb(null); }
+}
+function putBlob(key, blob, cb){
+  idb(function(db){
+    if(!db){ MEMBLOB[key]=blob; return cb(); }
+    try{ var tx=db.transaction('files','readwrite'); tx.objectStore('files').put(blob,key); tx.oncomplete=function(){cb();}; tx.onerror=function(){ MEMBLOB[key]=blob; cb(); }; }
+    catch(e){ MEMBLOB[key]=blob; cb(); }
+  });
+}
+function getBlob(key, cb){
+  if(MEMBLOB[key]) return cb(MEMBLOB[key]);
+  idb(function(db){
+    if(!db) return cb(null);
+    try{ var rq=db.transaction('files').objectStore('files').get(key); rq.onsuccess=function(){cb(rq.result||null);}; rq.onerror=function(){cb(null);}; }
+    catch(e){ cb(null); }
+  });
+}
+function delBlob(key){
+  delete MEMBLOB[key];
+  idb(function(db){ if(db) try{ db.transaction('files','readwrite').objectStore('files')['delete'](key); }catch(e){} });
+}
+function attach(itemId, input){
+  var files=input.files, i, left=files.length;
+  if(!left) return;
+  if(!FILES[itemId]) FILES[itemId]=[];
+  for(i=0;i<files.length;i++){
+    (function(f){
+      var key=C.id+'/'+itemId+'/'+uid();
+      putBlob(key, f, function(){
+        FILES[itemId].push({ key:key, name:f.name, type:f.type, size:f.size });
+        var st=docState(itemId); if(st.status==='todo') st.status='collected';
+        if(--left===0){ save(); render(); }
+      });
+    })(files[i]);
+  }
+  input.value='';
+}
+function detach(itemId, key){
+  var list=FILES[itemId]||[], i;
+  for(i=0;i<list.length;i++) if(list[i].key===key){ list.splice(i,1); break; }
+  delBlob(key); save(); render();
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   DERIVED NUMBERS
+   ════════════════════════════════════════════════════════════════════ */
+function isElig(cat){
+  var o=C.costs[cat.k]&&C.costs[cat.k].eligOverride;
+  return (o===true||o===false) ? o : cat.elig;
+}
+function totals(){
+  var t={est:0,fin:0,elig:0,evse:0,inel:0}, i, c, row;
+  for(i=0;i<COST_CATS.length;i++){
+    c=COST_CATS[i]; row=C.costs[c.k]||{est:0,fin:0};
+    t.est+=num(row.est); t.fin+=num(row.fin);
+    if(isElig(c)) t.elig+=num(row.fin);
+    else if(c.evse) t.evse+=num(row.fin);
+    else t.inel+=num(row.fin);
+  }
+  return t;
+}
+function ports(){ var n=0,i; for(i=0;i<C.equip.length;i++) n+=num(C.equip[i].ports)||0; return n; }
+/* Reconciliation, not eligibility: every input is a number the user copied
+   from their own approval letter. Payable is the lesser of what was
+   approved, the program share of the eligible final cost, and any per-port
+   cap they entered. */
+function payable(){
+  var t=totals(), inc=C.incentive;
+  var share=t.elig*(num(inc.pct)/100);
+  var caps=[share];
+  if(num(inc.approved)>0) caps.push(num(inc.approved));
+  if(num(inc.perPortCap)>0 && ports()>0) caps.push(num(inc.perPortCap)*ports());
+  return { share:share, pay:Math.max(0,Math.min.apply(null,caps)), t:t };
+}
+function readiness(){
+  var items=allItems(), req=0, done=0, missing=[], i, st;
+  for(i=0;i<items.length;i++){
+    st=docState(items[i].id);
+    if(st.status==='na') continue;
+    if(items[i].req){ req++; if(st.status==='collected'||st.status==='submitted') done++; else missing.push(items[i].label); }
+  }
+  /* the package is also incomplete while the register or the costs are empty */
+  var gaps=[];
+  if(!C.equip.length) gaps.push('No chargers in the equipment register');
+  for(i=0;i<C.equip.length;i++){ if(!String(C.equip[i].serial||'').trim()){ gaps.push('Serial number missing on '+(C.equip[i].tag||('charger '+(i+1)))); break; } }
+  if(!totals().fin) gaps.push('No final invoiced costs entered');
+  var P=C.p;
+  if(!P.utilityProjectId) gaps.push('Utility project / application ID');
+  if(!P.inspectionDate)   gaps.push('Final inspection date');
+  if(!P.activationDate)   gaps.push('Network activation date');
+  var s=C.signoff;
+  if(!s.hostName||!s.ctrName) gaps.push('Sign-off names');
+  return { req:req, done:done, missing:missing, gaps:gaps,
+           pct: req ? Math.round(100*done/req) : 0 };
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   RENDER
+   ════════════════════════════════════════════════════════════════════ */
+var TABS=[['project','Project'],['equip','Equipment'],['costs','Costs & incentive'],
+          ['docs','Documents'],['photos','Photos'],['signoff','Sign-off'],['review','Review & export']];
+function render(){
+  var r=readiness(), h='', i;
+  for(i=0;i<TABS.length;i++){
+    var cnt='';
+    if(TABS[i][0]==='equip') cnt='<span class="cnt">'+C.equip.length+'</span>';
+    if(TABS[i][0]==='review') cnt='<span class="cnt'+(r.pct===100&&!r.gaps.length?' ok':'')+'">'+r.pct+'%</span>';
+    h+='<button class="'+(TAB===TABS[i][0]?'on':'')+'" onclick="go(\''+TABS[i][0]+'\')">'+TABS[i][1]+cnt+'</button>';
+  }
+  $('tabs').innerHTML=h;
+  var v={project:vProject,equip:vEquip,costs:vCosts,docs:vDocs,photos:vPhotos,signoff:vSignoff,review:vReview}[TAB];
+  $('view').innerHTML=v();
+  renderSaved();
+}
+function go(t){ TAB=t; render(); window.scrollTo(0,0); }
+
+function fld(path, label, type, req, opts){
+  var parts=path.split('.'), o=C, i;
+  for(i=0;i<parts.length-1;i++) o=o[parts[i]];
+  var v=o[parts[parts.length-1]];
+  var span='<span>'+esc(label)+(req?' <b>*</b>':'')+'</span>';
+  if(type==='select'){
+    var s='<select onchange="setF(\''+path+'\',this.value,1)">', j;
+    for(j=0;j<opts.length;j++) s+='<option'+(opts[j]===v?' selected':'')+'>'+esc(opts[j])+'</option>';
+    return '<label class="f">'+span+s+'</select></label>';
+  }
+  if(type==='area') return '<label class="f" style="grid-column:1/-1">'+span+'<textarea oninput="setF(\''+path+'\',this.value)">'+esc(v)+'</textarea></label>';
+  return '<label class="f">'+span+'<input type="'+(type||'text')+'" value="'+esc(v)+'" oninput="setF(\''+path+'\',this.value)"'
+        +(type==='number'?' onchange="render()"':'')+'></label>';
+}
+function setF(path, val, rerender){
+  var parts=path.split('.'), o=C, i;
+  for(i=0;i<parts.length-1;i++) o=o[parts[i]];
+  o[parts[parts.length-1]]=val;
+  save(); if(rerender) render();
+}
+function setProgram(k){ C.program=k; if(!C.p.state) C.p.state=PROGRAMS[k].state; save(); render(); }
+
+function vProject(){
+  var P=prog(), h='', k;
+  h+='<div class="card"><h3>Utility program<span class="hint">Pick the program the job was approved under</span></h3><div class="body">';
+  h+='<label class="f"><span>Program</span><select onchange="setProgram(this.value)">';
+  for(k in PROGRAMS) if(PROGRAMS.hasOwnProperty(k)) h+='<option value="'+k+'"'+(k===C.program?' selected':'')+'>'+esc(PROGRAMS[k].name)+'</option>';
+  h+='</select></label><div class="note">'+esc(P.submit)+'</div>'
+   +'<div class="warn" style="margin:10px 0 0">Program manuals are revised each filing cycle. This checklist reflects the typical completion requirements for Level 2 make-ready; confirm against the current program manual and your approval letter before submitting.</div>'
+   +'</div></div>';
+  h+='<div class="card"><h3>Project</h3><div class="body"><div class="grid">'
+   +fld('p.projectName','Project name',0,1)+fld('p.utilityProjectId','Utility project / application ID',0,1)
+   +fld('p.siteType','Site type','select',0,['Workplace','Public','Multi-unit dwelling','Fleet','Municipal','Other'])
+   +fld('p.accountNo','Utility account #',0,1)+fld('p.meterNo','Meter #')
+   +'</div></div></div>';
+  h+='<div class="card"><h3>Site host</h3><div class="body"><div class="grid">'
+   +fld('p.siteHost','Site host (legal name)',0,1)+fld('p.siteContact','Contact')+fld('p.siteEmail','Email','email')+fld('p.sitePhone','Phone')
+   +fld('p.address','Service address',0,1)+fld('p.city','City',0,1)+fld('p.state','State',0,1)+fld('p.zip','ZIP')
+   +fld('p.payee','Incentive paid to','select',0,['Site host','Contractor (assignment)'])
+   +'</div></div></div>';
+  h+='<div class="card"><h3>Contractor</h3><div class="body"><div class="grid">'
+   +fld('p.contractor','Electrical contractor',0,1)+fld('p.contractorLicense','Master electrician license #',0,1)
+   +fld('p.contractorContact','Contact')+fld('p.contractorEmail','Email','email')
+   +'</div></div></div>';
+  h+='<div class="card"><h3>Milestones</h3><div class="body"><div class="grid">'
+   +fld('p.permitNo','Electrical permit #',0,1)+fld('p.ahj','Authority having jurisdiction')
+   +fld('p.inspectionDate','Final inspection passed','date',1)+fld('p.energizedDate','Energized','date')
+   +fld('p.activationDate','Network activation','date',1)+fld('p.networkProvider','Network provider',0,1)
+   +fld('p.notes','Notes','area')
+   +'</div></div></div>';
+  return h;
+}
+
+function vEquip(){
+  var h='<div class="card"><h3>EVSE register<span class="hint">One row per charger — the utility matches serials to the approval</span></h3><div class="body">';
+  h+='<div class="row-btn" style="margin-bottom:10px"><button class="btn" onclick="addEquip()">+ Add charger</button>'
+   +'<button class="btn" onclick="fillNetwork()">Copy network provider to all</button>'
+   +'<span class="note">'+C.equip.length+' charger(s), '+ports()+' port(s)</span></div>';
+  h+='<div class="scroll"><table class="t"><thead><tr><th>Tag</th><th>Make</th><th>Model</th><th>Serial #</th><th class="num">Ports</th><th class="num">kW</th>'
+   +'<th>Network station ID</th><th>ENERGY STAR</th><th>Location / stall</th><th></th></tr></thead><tbody>';
+  for(var i=0;i<C.equip.length;i++){
+    var e=C.equip[i];
+    h+='<tr>'+ecell(i,'tag',e.tag,80)+ecell(i,'make',e.make,110)+ecell(i,'model',e.model,130)
+      +ecell(i,'serial',e.serial,140)+ecell(i,'ports',e.ports,55,1)+ecell(i,'kw',e.kw,60,1)
+      +ecell(i,'netId',e.netId,120)
+      +'<td><select onchange="setE('+i+',\'estar\',this.value)" style="width:80px">'
+      +['Yes','No','Unknown'].map(function(o){ return '<option'+(o===e.estar?' selected':'')+'>'+o+'</option>'; }).join('')+'</select></td>'
+      +ecell(i,'loc',e.loc,120)
+      +'<td><button class="btn x" onclick="delEquip('+i+')" title="Remove">×</button></td></tr>';
+  }
+  if(!C.equip.length) h+='<tr><td colspan="10" class="note" style="padding:14px">No chargers yet. Press <b>From editor</b> to take the fleet off the drawing, or add them here.</td></tr>';
+  return h+'</tbody></table></div></div></div>';
+}
+function ecell(i,k,v,w,isNum){
+  return '<td><input type="'+(isNum?'number':'text')+'" value="'+esc(v)+'" style="min-width:'+w+'px" oninput="setE('+i+',\''+k+'\',this.value)"'+(isNum?' onchange="render()"':'')+'></td>';
+}
+function setE(i,k,v){ C.equip[i][k]=v; save(); }
+function addEquip(){ var n=C.equip.length+1; C.equip.push({tag:'EV-'+(n<10?'0':'')+n,make:'',model:'',serial:'',ports:2,kw:7.2,netId:'',estar:'Unknown',loc:''}); save(); render(); }
+function delEquip(i){ C.equip.splice(i,1); save(); render(); }
+function fillNetwork(){ var i; for(i=0;i<C.equip.length;i++) if(!C.equip[i].netId) C.equip[i].netId=C.p.networkProvider?C.p.networkProvider+' — ':''; save(); render(); }
+
+function vCosts(){
+  var t=totals(), pay=payable(), inc=C.incentive, i, c, row, h='';
+  h+='<div class="kpis">'
+   +kpi('Final invoiced',money(t.fin),'Estimate '+money(t.est))
+   +kpi('Variance',money(t.fin-t.est),t.est?(Math.round(1000*(t.fin-t.est)/t.est)/10)+'% vs estimate':'')
+   +kpi('Eligible make-ready',money(t.elig),'EVSE '+money(t.evse)+' · other '+money(t.inel))
+   +kpi('Incentive payable',money(pay.pay),'Approved '+money(inc.approved))
+   +'</div>';
+  h+='<div class="card"><h3>Cost reconciliation<span class="hint">Final column must tie to the invoices you attach</span></h3><div class="body"><div class="scroll"><table class="t"><thead><tr>'
+   +'<th>Category</th><th>Make-ready eligible</th><th class="num">Estimate</th><th class="num">Final invoiced</th><th class="num">Variance</th></tr></thead><tbody>';
+  for(i=0;i<COST_CATS.length;i++){
+    c=COST_CATS[i]; row=C.costs[c.k];
+    var el=isElig(c);
+    h+='<tr><td>'+esc(c.label)+'</td><td><select onchange="setElig(\''+c.k+'\',this.value)" style="width:90px">'
+      +'<option value="1"'+(el?' selected':'')+'>Yes</option><option value="0"'+(!el?' selected':'')+'>No</option></select></td>'
+      +'<td class="num"><input type="number" step="0.01" value="'+r2(row.est)+'" style="width:120px;text-align:right" onchange="setCost(\''+c.k+'\',\'est\',this.value)"></td>'
+      +'<td class="num"><input type="number" step="0.01" value="'+r2(row.fin)+'" style="width:120px;text-align:right" onchange="setCost(\''+c.k+'\',\'fin\',this.value)"></td>'
+      +'<td class="num mono" style="color:'+(num(row.fin)-num(row.est)>0?'var(--red)':'var(--green)')+'">'+money(num(row.fin)-num(row.est))+'</td></tr>';
+  }
+  h+='<tr class="tot"><td>Total</td><td></td><td class="num mono">'+money(t.est)+'</td><td class="num mono">'+money(t.fin)+'</td><td class="num mono">'+money(t.fin-t.est)+'</td></tr>';
+  h+='</tbody></table></div><div class="note" style="margin-top:8px">Which categories count as make-ready follows your approval letter; the defaults are the usual split (customer-side infrastructure eligible, EVSE hardware and networking separate). Change a category if your program differs.</div></div></div>';
+  h+='<div class="card"><h3>Incentive reconciliation<span class="hint">Numbers from your approval letter</span></h3><div class="body"><div class="grid">'
+   +'<label class="f"><span>Approved make-ready incentive ($)</span><input type="number" step="0.01" value="'+esc(inc.approved)+'" onchange="setInc(\'approved\',this.value)"></label>'
+   +'<label class="f"><span>Program share of eligible cost (%)</span><input type="number" step="1" value="'+esc(inc.pct)+'" onchange="setInc(\'pct\',this.value)"></label>'
+   +'<label class="f"><span>Per-port cap ($, optional)</span><input type="number" step="0.01" value="'+esc(inc.perPortCap)+'" onchange="setInc(\'perPortCap\',this.value)"></label>'
+   +'<label class="f"><span>Received to date ($)</span><input type="number" step="0.01" value="'+esc(inc.received)+'" onchange="setInc(\'received\',this.value)"></label>'
+   +'</div><table class="t" style="max-width:520px"><tbody>'
+   +'<tr><td>Eligible final cost</td><td class="num mono">'+money(t.elig)+'</td></tr>'
+   +'<tr><td>× program share ('+num(inc.pct)+'%)</td><td class="num mono">'+money(pay.share)+'</td></tr>'
+   +(num(inc.perPortCap)>0?'<tr><td>Per-port cap × '+ports()+' ports</td><td class="num mono">'+money(num(inc.perPortCap)*ports())+'</td></tr>':'')
+   +'<tr><td>Approved amount</td><td class="num mono">'+money(inc.approved)+'</td></tr>'
+   +'<tr class="tot"><td>Payable at completion (lesser of the above)</td><td class="num mono">'+money(pay.pay)+'</td></tr>'
+   +'<tr><td>Balance after received</td><td class="num mono">'+money(pay.pay-num(inc.received))+'</td></tr>'
+   +'</tbody></table>'
+   +(num(inc.approved)>0 && pay.share<num(inc.approved)
+      ? '<div class="warn" style="margin-top:10px">Final eligible cost came in under the approved amount — the utility will pay on actuals, so expect '+money(num(inc.approved)-pay.pay)+' less than approved.</div>' : '')
+   +'</div></div>';
+  return h;
+}
+function kpi(l,v,s){ return '<div class="kpi"><div class="l">'+esc(l)+'</div><div class="v">'+v+'</div><div class="s">'+esc(s||'')+'</div></div>'; }
+function setCost(k,f,v){ C.costs[k][f]=num(v); save(); render(); }
+function setElig(k,v){ C.costs[k].eligOverride=(v==='1'); save(); render(); }
+function setInc(k,v){ C.incentive[k]=num(v); save(); render(); }
+
+function chkRow(it){
+  var st=docState(it.id), files=FILES[it.id]||[], f='', i;
+  for(i=0;i<files.length;i++) f+='<span>'+esc(files[i].name)+' <a href="javascript:void 0" onclick="detach(\''+it.id+'\',\''+files[i].key+'\')" style="color:var(--red);text-decoration:none">×</a></span>';
+  var pill = st.status==='na' ? '<span class="pill opt">N/A</span>'
+           : (st.status==='collected'||st.status==='submitted') ? '<span class="pill done">'+(st.status==='submitted'?'Submitted':'Collected')+'</span>'
+           : it.req ? '<span class="pill req">Required</span>' : '<span class="pill opt">If applicable</span>';
+  return '<div class="chk"><div><div class="lbl">'+esc(it.label)+' '+pill+'</div>'
+    +(it.detail?'<div class="det">'+esc(it.detail)+'</div>':'')
+    +'<div class="files">'+f+'</div></div>'
+    +'<div><select onchange="setDoc(\''+it.id+'\',\'status\',this.value)">'
+    +[['todo','To collect'],['collected','Collected'],['submitted','Submitted'],['na','Not applicable']].map(function(o){ return '<option value="'+o[0]+'"'+(st.status===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('')
+    +'</select><label class="btn sm" style="display:inline-block;margin-top:6px">Attach<input type="file" multiple class="hide" onchange="attach(\''+it.id+'\',this)"></label></div>'
+    +'<div><input type="text" placeholder="Reference / note" value="'+esc(st.note)+'" oninput="setDoc(\''+it.id+'\',\'note\',this.value,1)"></div></div>';
+}
+function setDoc(id,k,v,quiet){ docState(id)[k]=v; save(); if(!quiet) render(); }
+function vDocs(){
+  var docs=prog().docs, h='', cat, i, any;
+  for(cat in CATS){ if(!CATS.hasOwnProperty(cat)||cat==='photos') continue;
+    any=''; for(i=0;i<docs.length;i++) if(docs[i].cat===cat) any+=chkRow(docs[i]);
+    if(any) h+='<div class="card"><h3>'+esc(CATS[cat].replace(/^\d+ /,''))+'</h3><div class="body">'+any+'</div></div>';
+  }
+  var sg=DOC.signage;
+  return h+'<div class="note">'+esc(sg.label)+' is under Photos.</div>';
+}
+function vPhotos(){
+  var h='<div class="card"><h3>Photo set<span class="hint">Nameplates must be legible — the serial is read off the photo</span></h3><div class="body">';
+  var items=allItems(), i;
+  for(i=0;i<items.length;i++) if(items[i].cat==='photos') h+=chkRow(items[i]);
+  return h+'</div></div>';
+}
+function vSignoff(){
+  var P=prog();
+  return '<div class="card"><h3>Attestation</h3><div class="body"><div class="note" style="margin-bottom:12px">'
+    +'By signing, the site host and contractor state that the equipment listed was installed as approved, is energized, networked and operating, '
+    +'that the costs claimed were incurred and paid, and that the site host will keep the chargers in service and share usage data for the '
+    +'program term ('+P.termYears+' years is typical — check the approval letter).</div><div class="grid">'
+    +fld('signoff.hostName','Site host signatory',0,1)+fld('signoff.hostTitle','Title')+fld('signoff.hostDate','Date','date')
+    +fld('signoff.ctrName','Contractor signatory',0,1)+fld('signoff.ctrTitle','Title')+fld('signoff.ctrDate','Date','date')
+    +'</div><div class="note">Print the package to collect wet signatures, or attach the signed utility completion form under Documents.</div></div></div>';
+}
+function vReview(){
+  var r=readiness(), pay=payable(), h='', i;
+  h+='<div class="card"><h3>Readiness</h3><div class="body">'
+   +'<div style="font-size:22px;font-weight:700">'+r.done+' of '+r.req+' required items</div><div class="meter"><div style="width:'+r.pct+'%"></div></div>';
+  if(!r.missing.length && !r.gaps.length) h+='<div class="okbox" style="margin-top:10px">Package complete. Export the ZIP and submit it to '+esc(prog().utility)+'.</div>';
+  if(r.gaps.length){ h+='<div class="warn" style="margin-top:10px"><b>Still needed:</b><ul style="margin:6px 0 0 18px;padding:0">'; for(i=0;i<r.gaps.length;i++) h+='<li>'+esc(r.gaps[i])+'</li>'; h+='</ul></div>'; }
+  if(r.missing.length){ h+='<div class="warn"><b>Documents to collect:</b><ul style="margin:6px 0 0 18px;padding:0">'; for(i=0;i<r.missing.length;i++) h+='<li>'+esc(r.missing[i])+'</li>'; h+='</ul></div>'; }
+  h+='</div></div>';
+  h+='<div class="kpis">'+kpi('Chargers / ports',C.equip.length+' / '+ports(),'')+kpi('Final invoiced',money(pay.t.fin),'')+kpi('Incentive payable',money(pay.pay),'')+kpi('Program',prog().utility+' '+prog().state,'')+'</div>';
+  h+='<div class="card"><h3>Export</h3><div class="body"><div class="row-btn">'
+   +'<button class="btn p" onclick="exportZip()">Export ZIP package</button>'
+   +'<button class="btn" onclick="printPackage()">Print closeout summary</button>'
+   +'<button class="btn" onclick="dl(\'equipment_register.csv\',equipCSV(),\'text/csv\')">Equipment CSV</button>'
+   +'<button class="btn" onclick="dl(\'cost_reconciliation.csv\',costCSV(),\'text/csv\')">Cost CSV</button>'
+   +'<button class="btn" onclick="exportJSON()">Save closeout file</button></div>'
+   +'<div class="note" style="margin-top:10px">The ZIP holds the closeout summary, the equipment register, the cost reconciliation and every attached file filed by category. Closeouts are kept in this browser; save the file to move one to another computer (attachments travel in the ZIP, not the file).</div></div></div>';
+  return h;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   EXPORTS
+   ════════════════════════════════════════════════════════════════════ */
+function csvCell(v){ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function csv(rows){ return rows.map(function(r){ return r.map(csvCell).join(','); }).join('\r\n'); }
+function equipCSV(){
+  var rows=[['Tag','Make','Model','Serial','Ports','kW','Network station ID','ENERGY STAR','Location']], i, e;
+  for(i=0;i<C.equip.length;i++){ e=C.equip[i]; rows.push([e.tag,e.make,e.model,e.serial,e.ports,e.kw,e.netId,e.estar,e.loc]); }
+  return csv(rows);
+}
+function costCSV(){
+  var rows=[['Category','Make-ready eligible','Estimate','Final invoiced','Variance']], i, c, row, t=totals(), p=payable();
+  for(i=0;i<COST_CATS.length;i++){ c=COST_CATS[i]; row=C.costs[c.k]; rows.push([c.label,isElig(c)?'Yes':'No',r2(row.est),r2(row.fin),r2(num(row.fin)-num(row.est))]); }
+  rows.push(['Total','',r2(t.est),r2(t.fin),r2(t.fin-t.est)]);
+  rows.push([]); rows.push(['Eligible final cost','','',r2(t.elig)]);
+  rows.push(['Approved incentive','','',r2(C.incentive.approved)]);
+  rows.push(['Payable at completion','','',r2(p.pay)]);
+  return csv(rows);
+}
+function summaryHTML(){
+  var P=C.p, pr=prog(), t=totals(), pay=payable(), r=readiness(), h='', i, e, c, row, items=allItems(), st;
+  h+='<h1>Level 2 EV Charging — Project Completion Package</h1>'
+   +'<div>'+esc(pr.name)+'</div><div>Prepared '+new Date().toLocaleDateString()+'</div>';
+  h+='<h2>Project</h2><table><tbody>'
+   +tr2('Project',P.projectName)+tr2('Utility project / application ID',P.utilityProjectId)
+   +tr2('Site host',P.siteHost)+tr2('Contact',[P.siteContact,P.siteEmail,P.sitePhone].filter(Boolean).join(' · '))
+   +tr2('Service address',[P.address,P.city,P.state,P.zip].filter(Boolean).join(', '))
+   +tr2('Utility account / meter',[P.accountNo,P.meterNo].filter(Boolean).join(' / '))+tr2('Site type',P.siteType)
+   +tr2('Contractor',P.contractor+(P.contractorLicense?' (Lic. '+P.contractorLicense+')':''))
+   +tr2('Electrical permit',P.permitNo+(P.ahj?' — '+P.ahj:''))
+   +tr2('Final inspection',P.inspectionDate)+tr2('Energized',P.energizedDate)
+   +tr2('Network activation',P.activationDate+(P.networkProvider?' — '+P.networkProvider:''))
+   +tr2('Incentive paid to',P.payee)+'</tbody></table>';
+  h+='<h2>EVSE register ('+C.equip.length+' chargers, '+ports()+' ports)</h2><table><thead><tr><th>Tag</th><th>Make</th><th>Model</th><th>Serial</th><th class="num">Ports</th><th class="num">kW</th><th>Network ID</th><th>ENERGY STAR</th><th>Location</th></tr></thead><tbody>';
+  for(i=0;i<C.equip.length;i++){ e=C.equip[i]; h+='<tr><td>'+esc(e.tag)+'</td><td>'+esc(e.make)+'</td><td>'+esc(e.model)+'</td><td>'+esc(e.serial)+'</td><td class="num">'+esc(e.ports)+'</td><td class="num">'+esc(e.kw)+'</td><td>'+esc(e.netId)+'</td><td>'+esc(e.estar)+'</td><td>'+esc(e.loc)+'</td></tr>'; }
+  h+='</tbody></table>';
+  h+='<h2>Final cost reconciliation</h2><table><thead><tr><th>Category</th><th>Eligible</th><th class="num">Estimate</th><th class="num">Final</th></tr></thead><tbody>';
+  for(i=0;i<COST_CATS.length;i++){ c=COST_CATS[i]; row=C.costs[c.k]; if(!num(row.est)&&!num(row.fin)) continue; h+='<tr><td>'+esc(c.label)+'</td><td>'+(isElig(c)?'Yes':'No')+'</td><td class="num">'+money(row.est)+'</td><td class="num">'+money(row.fin)+'</td></tr>'; }
+  h+='<tr><th>Total</th><th></th><th class="num">'+money(t.est)+'</th><th class="num">'+money(t.fin)+'</th></tr></tbody></table>'
+   +'<table><tbody>'+tr2('Eligible make-ready (final)',money(t.elig))+tr2('Approved incentive',money(C.incentive.approved))+tr2('Payable at completion',money(pay.pay))+'</tbody></table>';
+  h+='<h2 class="pb">Document checklist</h2><table><thead><tr><th>Item</th><th>Status</th><th>Files / reference</th></tr></thead><tbody>';
+  for(i=0;i<items.length;i++){
+    st=docState(items[i].id);
+    var fl=(FILES[items[i].id]||[]).map(function(f){ return f.name; }).join(', ');
+    h+='<tr><td>'+esc(items[i].label)+(items[i].req?' *':'')+'</td><td>'+({todo:'OUTSTANDING',collected:'Collected',submitted:'Submitted',na:'N/A'})[st.status]+'</td><td>'+esc([fl,st.note].filter(Boolean).join(' — '))+'</td></tr>';
+  }
+  h+='</tbody></table><div>* required at completion. '+r.done+' of '+r.req+' required items complete.</div>';
+  var s=C.signoff;
+  h+='<h2>Attestation</h2><div>The undersigned state that the equipment listed was installed as approved, is energized, networked and operating; that the costs claimed were incurred and paid; and that the site host will keep the chargers in service and share usage data for the program term.</div>'
+   +'<div class="sig"><div>Site host: '+esc(s.hostName)+(s.hostTitle?', '+esc(s.hostTitle):'')+'<br>Date: '+esc(s.hostDate)+'</div>'
+   +'<div>Contractor: '+esc(s.ctrName)+(s.ctrTitle?', '+esc(s.ctrTitle):'')+'<br>Date: '+esc(s.ctrDate)+'</div></div>';
+  return h;
+}
+function tr2(k,v){ return '<tr><th style="width:34%">'+esc(k)+'</th><td>'+esc(v||'')+'</td></tr>'; }
+function printPackage(){ $('printDoc').innerHTML=summaryHTML(); window.print(); }
+function safeName(s){ return String(s||'closeout').replace(/[^\w\- .]+/g,'_').replace(/\s+/g,'_').slice(0,60); }
+function dl(name, data, type){
+  var b=(data instanceof Blob)?data:new Blob([data],{type:type||'application/octet-stream'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name;
+  document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.parentNode.removeChild(a); },500);
+}
+function exportJSON(){ C.fileIndex=FILES; dl(safeName(C.p.projectName||C.p.address)+'_closeout.json', JSON.stringify(C,null,2), 'application/json'); }
+function importJSON(inp){
+  var f=inp.files[0]; if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var o=JSON.parse(rd.result);
+      if(!o||!o.p||!o.costs) throw new Error('not a closeout file');
+      var b=blank(), k;
+      for(k in b) if(b.hasOwnProperty(k) && o[k]==null) o[k]=b[k];
+      o.id=o.id||uid(); C=o; FILES={};  /* attachments do not travel in the file */
+      save(); render();
+    }catch(e){ alert('Could not open that file: '+e.message); }
+  };
+  rd.readAsText(f); inp.value='';
+}
+function exportZip(){
+  if(window._ZIPFAIL || typeof JSZip==='undefined'){ alert('The ZIP library did not load. Use Print package and the CSV buttons instead.'); return; }
+  var zip=new JSZip(), root=safeName(C.p.projectName||C.p.address)+'_L2_closeout';
+  var doc='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Closeout summary</title><style>body{font-family:Arial,sans-serif;font-size:12px;max-width:900px;margin:24px auto}table{width:100%;border-collapse:collapse;margin-bottom:8px}th,td{border:1px solid #999;padding:4px 6px;text-align:left}td.num,th.num{text-align:right}h2{border-bottom:2px solid #000;font-size:14px;margin-top:22px}.sig{display:flex;gap:40px;margin-top:30px}.sig div{flex:1;border-top:1px solid #000;padding-top:4px}</style></head><body>'+summaryHTML()+'</body></html>';
+  zip.file(root+'/00_Closeout_Summary.html', doc);
+  zip.file(root+'/'+CATS.equip+'/equipment_register.csv', equipCSV());
+  zip.file(root+'/'+CATS.costs+'/cost_reconciliation.csv', costCSV());
+  var items=allItems(), jobs=[], i, j;
+  for(i=0;i<items.length;i++){
+    var list=FILES[items[i].id]||[];
+    for(j=0;j<list.length;j++) jobs.push({ item:items[i], f:list[j] });
+  }
+  var left=jobs.length, missing=[];
+  function finish(){
+    if(missing.length) zip.file(root+'/MISSING_ATTACHMENTS.txt','These files were listed but are not stored in this browser; re-attach them:\r\n'+missing.join('\r\n'));
+    zip.generateAsync({type:'blob'}).then(function(b){ dl(root+'.zip', b, 'application/zip'); });
+  }
+  if(!left) return finish();
+  jobs.forEach(function(jb){
+    getBlob(jb.f.key, function(blob){
+      var folder=root+'/'+CATS[jb.item.cat]+'/'+safeName(jb.item.label)+'/';
+      if(blob) zip.file(folder+jb.f.name, blob); else missing.push(jb.item.label+': '+jb.f.name);
+      if(--left===0) finish();
+    });
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   EDITOR HANDOFF
+   editor.html writes OMEGA_EV_CLOSEOUT_HANDOFF (same origin) and opens
+   this page. Same payload shape the cost workbook takes: site, chargers
+   (fleet by model), lines (priced estimate), feet. Estimate lines become
+   the Estimate column; the fleet becomes the register rows.
+   ════════════════════════════════════════════════════════════════════ */
+function catOfLine(l){
+  var s=(String(l.category||'')+' '+String(l.description||'')).toLowerCase();
+  if(/charger|evse|pedestal/.test(s)) return 'evseInst';
+  if(/network|software|subscription|activation/.test(s)) return 'network';
+  if(/trench|bore|excavat|saw ?cut|backfill/.test(s)) return 'civil';
+  if(/restor|asphalt|concrete patch|strip|paint/.test(s)) return 'restore';
+  if(/pad|bollard|wheel ?stop|base/.test(s)) return 'pads';
+  if(/panel|breaker|disconnect|switch|meter|transformer|service/.test(s)) return 'electric';
+  if(/design|engineer|permit|drawing|survey/.test(s)) return 'design';
+  if(/conduit|wire|cable|handhole|pull ?box|junction/.test(s)) return 'conduit';
+  return 'other';
+}
+function loadHandoff(pay){
+  if(pay.sites && pay.sites.length) pay=pay.sites[0];
+  var s=pay.site||{}, i, j, n=0;
+  if(s.name && !C.p.projectName) C.p.projectName=s.name;
+  if(s.applicant && !C.p.siteHost) C.p.siteHost=s.applicant;
+  if(s.address && !C.p.address) C.p.address=s.address;
+  if(pay.lines && pay.lines.length){
+    for(i=0;i<COST_CATS.length;i++) C.costs[COST_CATS[i].k].est=0;
+    for(i=0;i<pay.lines.length;i++){
+      var l=pay.lines[i];
+      C.costs[catOfLine(l)].est=r2(C.costs[catOfLine(l)].est+num(l.mat)+num(l.lab));
+    }
+  }
+  if(pay.chargers && pay.chargers.length){
+    var hw=0;
+    C.equip=[];
+    for(i=0;i<pay.chargers.length;i++){
+      var ch=pay.chargers[i], q=Math.max(1,Math.round(num(ch.qty)||1));
+      hw+=num(ch.eq);
+      for(j=0;j<q;j++){
+        n++;
+        C.equip.push({ tag:'EV-'+(n<10?'0':'')+n, make:ch.mfr||'', model:ch.model||ch.id||'', serial:'',
+                       ports: num(ch.ports)||2, kw: num(ch.kw)||'', netId:'', estar:'Unknown', loc:'' });
+      }
+    }
+    if(hw) C.costs.evse.est=r2(hw);
+  }
+  save(); render();
+  return n;
+}
+function pullFromEditor(){
+  var raw=null;
+  try{ raw=localStorage.getItem(HANDOFF_KEY); }catch(e){}
+  if(!raw){ alert('Nothing handed over yet. In the editor open Electrical Estimate and press L2 Closeout.'); return; }
+  try{
+    var n=loadHandoff(JSON.parse(raw));
+    localStorage.removeItem(HANDOFF_KEY);
+    TAB='project'; render();
+    alert('Loaded the site'+(n?' and '+n+' charger(s)':'')+' from the editor. Serial numbers and final costs are yours to fill in.');
+  }catch(e){ alert('The editor handoff could not be read: '+e.message); }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   BOOT + GATE
+   A signed-in account on a tenant host. The tool writes nothing to the
+   server, so this is the same commercial gate the registry applies, not
+   a security boundary.
+   ════════════════════════════════════════════════════════════════════ */
+function boot(email){
+  $('gate').style.display='none'; $('app').style.display='block';
+  $('tbWho').textContent=email||'';
+  try{
+    var nm=window.OmegaBrand && OmegaBrand.platformName ? OmegaBrand.platformName() : '';
+    if(nm) $('tbName').textContent=nm;
+  }catch(e){}
+  var all=readAll(), latest=null, k;
+  for(k in all) if(all.hasOwnProperty(k) && (!latest || String(all[k].updated)>String(latest.updated))) latest=all[k];
+  C=latest||blank(); FILES=C.fileIndex||{};
+  var handed=false; try{ handed=!!localStorage.getItem(HANDOFF_KEY); }catch(e){}
+  if(handed){ C=blank(); FILES={}; pullFromEditor(); }
+  render();
+}
+(function(){
+  function show(t,m,a){ $('gateTitle').textContent=t; $('gateMsg').innerHTML=m; $('gateActions').innerHTML=a||''; $('gatePw').style.display='none'; }
+  var h=String(location.hostname||'').toLowerCase();
+  if(h==='localhost'||h==='127.0.0.1'||h===''){ boot('local preview'); return; }
+  var FB={ apiKey:"AIzaSyABoM1lgOYUnd5ZadaoTMhYmA9cHa8Tyo0", authDomain:"clearsky-portal.firebaseapp.com", projectId:"clearsky-portal",
+           storageBucket:"clearsky-portal.firebasestorage.app", messagingSenderId:"742134484347", appId:"1:742134484347:web:ab0f95fd221536158481de" };
+  var cfg=(window.CONFIG && window.CONFIG.firebase) || window.FIREBASE_CONFIG || FB;
+  if(typeof firebase==='undefined'||!firebase.initializeApp){
+    show('Sign-in unavailable','The authentication service did not load. Check the connection and reload.','<button class="btn" onclick="location.reload()">Reload</button>'); return;
+  }
+  var auth;
+  try{ if(!firebase.apps||!firebase.apps.length) firebase.initializeApp(cfg); auth=firebase.auth(); }
+  catch(e){ show('Sign-in unavailable',esc(e&&e.message||e)); return; }
+  window.__gateSignIn=function(){ auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())['catch'](function(err){ if(err&&err.code!=='auth/popup-closed-by-user') show('Sign-in failed',esc(err.message||err),'<button class="btn p" onclick="window.__gateSignIn()">Try again</button>'); }); };
+  window.__gateShowPw=function(){ $('gatePw').style.display='block'; $('gatePwEmail').focus(); };
+  window.__gatePwSignIn=function(){
+    var em=String($('gatePwEmail').value||'').trim(), pw=String($('gatePwPass').value||'');
+    if(!em||!pw) return;
+    auth.signInWithEmailAndPassword(em,pw)['catch'](function(){ var e=$('gatePwErr'); e.textContent='That email and password combination was not recognised.'; e.style.display='block'; });
+  };
+  auth.onAuthStateChanged(function(user){
+    if(!user){
+      show('Sign in required','Sign in with your company account to work on project closeouts.',
+           '<button class="btn p" onclick="window.__gateSignIn()">Sign in with Google</button><button class="btn" onclick="window.__gateShowPw()">Use email and password</button>');
+      return;
+    }
+    boot(user.email||'');
+  });
+})();
+</script>
+</body>
+</html>
