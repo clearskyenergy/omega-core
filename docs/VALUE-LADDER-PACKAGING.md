@@ -4,22 +4,26 @@
 
 Status: **build spec, not built.** Written 2026-09-25 from the Will × Andrew ×
 Tommy call, Tommy's notebook pages, the Omega Energy OS Subscription Agreement
-(.pages template) and a read of this repo. Hand this file to the builder
-session as the brief. Every number marked **(decide)** is a proposal waiting on
-Tommy, not a settled price.
+(.pages template), Tommy's instructions in session, and a read of this repo,
+including a ribbon-by-ribbon inventory of `editor.html` (Appendix A). Hand this
+file to the builder session as the brief. Every number marked **(decide)** is
+a proposal waiting on Tommy, not a settled price.
 
 ---
 
 ## 0. What we are building, in one paragraph
 
 A customer should understand in minutes which parts of OMEGA they need, buy
-those, and be switched up to more as their work grows. So: (1) ONE catalog of
-about ten sellable **modules** with ONE price each for everybody, (2) a
+those, and opt in to more as their work grows. So: (1) ONE catalog of
+sellable **modules**, carved out of the Site Map editor's ~130 functions and
+the platform's other tools, with ONE price each for everybody; (2) a
 **Package** panel in the master console where staff build a tenant's menu at
-onboarding and switch modules on and off later, and (3) a **Subscription
-Proposal** tool, built like the BESS Pro Forma, that produces a branded,
-customer-specific proposal and order form for their organization. The floor is
-**$500 a month**. Nobody is sold anything cheaper.
+onboarding, and the price, the Stripe subscription and the access all follow
+from the ticks; (3) a **Your plan** menu inside the customer's own workspace
+where their owner or admin opts in to more modules and pays for them; and (4)
+a **Subscription Proposal** tool, built like the BESS Pro Forma, that turns a
+discovery conversation into a branded proposal and order form for that
+company. The floor is **$500 a month**. **Nothing is free.**
 
 ---
 
@@ -27,51 +31,46 @@ customer-specific proposal and order form for their organization. The floor is
 
 | Source | What it settles |
 |---|---|
-| Call, Andrew | A value ladder: meet customers where they are, ~10 clear blocks instead of a $1,250–$2,500 lump, each block ~$250, customers self-select and opt in fast, "flip them up" as they use more. Show value in cash-flow terms. |
-| Call, Will | Value-based pricing from target audience, average deal size and what they save or earn. One **unit price per module** for every customer (no "price treatment" arguments between customers). Over/under consumption → restructure the contract at renewal; the unit price never changes. Start high and give a **transformation credit**; it is easier to discount than to raise. |
-| Call, Tommy | Not per seat: one person designs, twenty look. Charge for what the org consumes. Tier 1 / Tier 2 / Custom stays; custom is "you do these three things, it's $750". |
-| Notebook p.1 | Value ladder → meet customers where they are → lead them on the journey. Granular approach. Revenue budget. Buying journey. Modules: opt in, cash flow, start point, à la carte, self-select opt-in. $1,250–$2,500 is the ladder's top of the standard range. |
-| Notebook p.3–5 | Value-based pricing on consumption; target audience, average deal size, what they save (revenue and cost); reverse-engineer to bundle price; 100 users × $1k/user/yr illustration; over/under consumption → restructure contract; price treatment → break down unit price to consumption; easier to discount than raise; automate and digitize the process, give them a credit; circle of life; customer focused. |
-| Notebook p.2 | The 15 target accounts (§9). |
-| Subscription Agreement | Tier 1 Field $1,299/mo, Tier 2 Pro $2,499/mo, Tier 3 Enterprise $150k–$350k/yr, Tier 4 Platform custom. Annual Service Fee $3,400/yr (T1/T2; year one = onboarding), $10,000/yr (T3). T3 setup $25,000 one-time. Annual prepay = 12th month free. Inaugural price locked 12 months. Custom dev $250/hr; T3 includes 7 hrs/mo. Named Authorized Users (§2.3). Tier Scope (§2.5). Telemetry audit (§2.6). |
-| Tommy, 2026-09-25 | **Never under $500/mo**, even for a very lite version. Must be able to sell: the Site Map editor and its exports and reports; the financing marketplace; packages by customer type; Omega Logic (the ERP); BOM functions and exports; the Project Closeout tool; the EV Cost Workbook for customers applying for rebates. |
+| Call, Andrew | A value ladder: meet customers where they are, a few clear blocks instead of a $1,250–$2,500 lump, blocks around $250, customers self-select and opt in fast, "flip them up" as they use more. Show value in cash-flow terms. |
+| Call, Will | Value-based pricing from target audience, average deal size and what they save or earn. One **unit price per module** for every customer. Over/under consumption → restructure the contract; the unit price never changes. Start high and give a **transformation credit**; it is easier to discount than to raise. |
+| Call, Tommy | Not per seat: one person designs, twenty look. Charge for what the org consumes. Tier 1 / Tier 2 / Custom stays. |
+| Notebook | Value ladder → meet customers where they are → lead them on the journey. Granular approach, revenue budget, buying journey, modules: opt in, cash flow, start point, à la carte, self-select. Value-based pricing on consumption; reverse-engineer to bundle price; over/under consumption → restructure; break the price down to consumption; easier to discount than raise; automate and digitize the process and give them a credit; customer focused. |
+| Notebook, account list | The 15 target accounts (§9). |
+| Subscription Agreement | Tier 1 Field $1,299/mo, Tier 2 Pro $2,499/mo, Tier 3 Enterprise $150k–$350k/yr, Tier 4 Platform custom. Annual Service Fee $3,400/yr (T1/T2; year one = onboarding), $10,000/yr (T3). T3 setup $25,000. Annual prepay: pay 11 months for 12. Inaugural price locked 12 months. Custom dev $250/hr; T3 includes 7 hrs/mo. Named Authorized Users (§2.3). Tier Scope (§2.5). Telemetry audit (§2.6). |
+| Tommy, 2026-09-25 | **Never under $500/mo.** **Never give anything away for free.** **Grid Atlas is its own $250/mo add-on.** The Site Map editor is 100+ tools (guided build, schematic editor, Grid Atlas, network proximity, parcel screening, plot plan, single line…) and must be packaged by what lives in it. Sell: the editor and its exports and reports; the financing marketplace; packages by customer type; Omega Logic (the ERP); BOM functions and exports; the Project Closeout tool; the EV Cost Workbook for rebates. Staff click the menu → that is the price and the payment; customers can see the menu and opt in. A PDF for the board advisors. |
 
 ---
 
 ## 2. Pricing rules (the builder enforces these in code, not in copy)
 
-1. **Floor: $500/month** list, before any credit is applied. Credits can bring
-   the first 90 days under list, but never below $500. **(decide)** whether
-   the credit may take the price under $500 at all; this spec assumes it
-   may NOT.
-2. **One list price per module**, stored in a versioned price book. A tenant's
-   package records the price-book version it was sold on. Changing the price
-   book never reprices a signed package (same rule `customerEditorLite` already
-   follows with Stripe).
-3. **Charged per workspace, not per seat, and nothing is free.** Every plan
-   includes a counted number of builder logins **(decide: 3)** and viewer
-   logins **(decide: 10)**. Extra builders and extra viewers are priced line
-   items **(decide: $50 and $15/mo each)**. Included means paid for inside the
-   plan; it never means free. This needs Agreement §2.3 changed (§7).
-4. **Deliverable modules carry included usage and an overage price**
-   (permitting matrices, site studies, EV applications). Usage is counted
-   server-side (§5.4), never from browser telemetry.
-5. **Transformation credit** at signing **(decide: 40% off list for the first
-   90 days)**, shown as a line on the proposal, never as a lower list price.
-6. **Quarterly right-size.** At each 90-day review, under-used modules can come
-   off and over-used modules move the tenant to the plan that fits. The unit
-   prices do not change inside the Initial Term (Agreement "Inaugural
-   Pricing" still holds).
-7. **Plans are pre-picked module sets**, priced below the sum of their parts,
-   so the plans and the à la carte menu always agree.
-8. **Nothing is given away.** There is no free tier, no free trial of a
-   module outside a signed package, and no free function. A trial is a
-   package with a start date and a price, and the credit (rule 5) is the only
-   discount. Anything "tier ALL" in `omega-tools.js` today (Grid Atlas,
-   the compute calculators, intake, the financing marketplace) is included in
-   a paid package, never open to an unpaid account. The public storefront
-   (`/embed/`) is the paying tenant's White Label module serving THEIR
-   visitors; it is not a free tier of ours.
+1. **Floor: $500/month.** No package, trial or credited month is below it.
+2. **Nothing is free.** No free tier, no free function, no free viewer, no
+   free trial outside a signed package. A trial is a package with a start
+   date and a price. Everything `tier:TIER.ALL` in `omega-tools.js` today
+   (Grid Atlas, the compute calculators, intake, the financing marketplace,
+   the ComEd finder, the EV workbook) is inside a paid module or Lite. The
+   public storefront (`/embed/`) is the paying tenant's White Label module
+   serving THEIR visitors; it is not a free tier of ours.
+3. **One list price per module**, in a versioned price book. A tenant's
+   package records the version it was sold on; a new version never reprices a
+   signed package (the rule `customerEditorLite` already follows with Stripe).
+4. **Per workspace, not per seat.** Lite includes a counted number of builder
+   logins **(decide: 3)** and viewer logins **(decide: 10)**. Extras are priced
+   **(decide: $50 builder, $15 viewer, per month)**. Included means paid for
+   inside the plan.
+5. **Deliverable modules carry included usage and an overage price.** Usage
+   is counted on the server where the deliverable is produced (§5.4).
+6. **Transformation credit** at signing **(decide: 40% off list for the first
+   90 days, never below $500)**, shown as its own line, never as a lower list
+   price.
+7. **Add any time, remove at the review.** A customer may opt in to a module
+   whenever they like (prorated). Modules come off only at the quarterly
+   right-size, and unit prices hold for the Initial Term (Agreement
+   "Inaugural Pricing").
+8. **Plans are value caps, not fixed lists** (§3.5): Field is Lite + up to
+   $1,250 of modules for $1,299; Pro is Lite + up to $3,000 of modules
+   (one Deliverable at most) for $2,499. The menu and the plans always agree
+   because a plan is just a discounted amount of the menu.
 
 ---
 
@@ -81,118 +80,187 @@ customer-specific proposal and order form for their organization. The floor is
 
 | Rung | Name | Price | Who stands here |
 |---|---|---|---|
-| 0 | **Taste** (free, not a subscription) | $0 | Anyone who sizes a battery on a tenant's storefront, uses Grid Atlas or the compute calculators, files an opportunity, or views a project shared with them. Lead capture, not a customer. |
-| 1 | **Lite** | **$500/mo** (the floor) | Somebody designing their first sites. |
-| 2 | **Lite + modules** | +$250 / +$500 each | Most installers and developers. |
+| 1 | **Lite** | **$500/mo**, the floor | Anyone designing sites. Design, guided builds, blueprint, proposal. |
+| 2 | **Lite + add-ons and modules** | +$250 / +$500 each | Most installers, developers, EPCs. |
 | 3 | **Deliverables** | +$750 each + usage | Teams doing volume permitting or site sourcing. |
-| 4 | **Omega Logic** | from $2,500/mo on top | OEMs, distributors, builders running orders, plant and shipping. |
-| 5 | **Enterprise / Platform** | $150k–$350k/yr, or custom | Multi-team accounts; every module on one usage contract. |
+| 4 | **Omega Logic** | from $1,500, all five parts $2,500 | OEMs, distributors, builders running orders, plant and shipping. |
+| 5 | **Enterprise / Platform** | $150k–$350k/yr, or custom | Multi-team, multi-workspace accounts. |
 
-### 3.2 Lite: $500/month, the floor
+There is no rung 0. A lead who has not signed is a lead.
 
-What every paying workspace gets. Lite alone is a real product: design a site,
-show it, propose it, send it to financing.
+### 3.2 Lite — $500/month (the Site Map core)
 
-| Included | Tool keys (`omega-tools.js`) / caps (`omega-caps.js`) |
+What every paying workspace gets: design any site on live satellite, fast,
+and show it. About 60 of the editor's functions. Full list in Appendix A.
+
+| Group | Inside |
 |---|---|
-| Site Map editor on live satellite, sandboxes | `editor`, `sandbox`; caps `design`, `view`, `export.blueprint` |
-| Blueprint export (the drawing you show, not a permit set) | cap `export.blueprint` |
-| Sales Proposal Builder | `sales` |
-| Grid Atlas, ComEd Capacity Finder, compute calculators | `gridatlas`, `comedcap`, `datacenter`, `computepower` (already tier ALL) |
-| Project Intake | `intake` |
-| **Financing marketplace: file an opportunity, see financing partners** | `opportunity`, `financing` |
-| Account settings, OMEGA Signal connections | `signal` |
-| 3 builder logins, unlimited viewers **(decide)** | |
+| Site setup and map | Site Setup (calibrated satellite backdrop), address search, satellite / aerial / street views, Upload Image + B&W stencil trace, Lock Map, Calibrate Scale, Set Plot, GPS Place, Native Layer, Compass, Layers, Coordinates, Recenter, Dock |
+| Draw and annotate | Select/Move, Line, Polyline, Rectangle, Circle, EV and ADA stencils, Colour, Text Note, Callout Arrow, Dimension, Zone Box, Labels, Duplicate, Undo/Redo, command search (Ctrl+K), Designer/Pro modes |
+| Equipment | BESS cabinet and pad, PCS/inverter, transformer, UPS, generator, solar, wind, fuel cell, panelboard, AC disconnect, meter, junction box, EV chargers (L2 + DCFC catalog), utility pole, Source/POI, concrete pad, fence, bollard, hydrant, camera, parking stall array, custom equipment |
+| **Guided builds** | BESS Build, DER Build, Auto Layout, Full Topology, Level 2 Build, DCFC Build, Solar + Storage, BESS Config, Move System, Cluster tools, Fence & Tie, charger pads **(decide: in Lite, as the reason Lite is worth $500)** |
+| Conduit and trench | Conduit runs, MV trench, home-run auto-routing, conduit schedule, BESS run checklist, re-anchor and diagnose |
+| Review and present | Summary, Meters, live takeoff, 3D Review, Presentation mode, Snapshot |
+| Outputs | **Blueprint / PDF** (the drawing you show, not a permit set), client Proposal, Spec Sheet, Interactive Report, Export to Monday (BETA), CRM integration and sync |
+| Other pages | Sales Proposal Builder, Open a Sandbox, Project Intake, Account settings and OMEGA Signal, **financing marketplace listing** (File an Opportunity, Financing Partners) |
+| Logins | 3 builders, 10 viewers **(decide)** |
 
-### 3.3 Modules
+### 3.3 Add-on and modules
 
-Prices are list, per month. "Replaces" is the tool or service the customer pays
-for today. The ranges are typical market figures to confirm before they are
-quoted, and the proposal tool lets the rep overwrite them with the customer's
-own numbers (§6).
+List prices per month. "Replaces" is what the customer pays for today; the
+ranges are typical market figures to confirm before they are quoted, and the
+proposal tool lets the rep type the customer's own numbers over them.
 
-| Key | Module | Class / list | What is inside (tool keys, caps, add-ons) | Meter | Replaces |
+**Add-on, $250**
+
+| Key | Module | Inside | Replaces |
+|---|---|---|---|
+| `gridatlas` | **Grid Atlas** | Standalone Grid Atlas (substations, lines, plants, EIA), the in-editor Grid Atlas pre-screen, Find Substation, Substations → map layer, Grid Pre-Qualify, ComEd Capacity Finder, Interconnection Screener (FERC Order 792 fast track), load vs grid ceiling | Grid and hosting-capacity data subscription, $250–$1,500/mo |
+
+**Standard, $250 each**
+
+| Key | Module | Inside | Meter | Replaces |
+|---|---|---|---|---|
+| `storage` | **Storage Sizing & Revenue** | BESS Sizer, Solar BESS Sizer, BESS BTM, Solar → BESS, Import Bill, Bill Analysis, in-editor Value Stack (TOU, demand, capacity, ancillary, programs), Price Decks (nodal DA/RT + ancillary), Non-Export Headroom, Energy Balance, 10-year cost of ownership; pages Battery Sizer, BESS Pro Forma + investor deck, Value Stack, BESS ISO Calculator | models run | Storage modelling seat, $300–$1,000/mo |
+| `estimate` | **Estimate, BOM & Procurement** | Construction Cost, Electrical Estimate (NECA labour units), Takeoff & Budget, **BOM / Sourcing** (Rexel, CES), BOM / trench / budget / estimate CSV and XLSX exports, cost and spec sheets, Cost Estimator page (AACE class), **Request for Quote** to every vendor on the BOM (`api/rfq.js`), Procurement Marketplace when it ships | BOMs, RFQs | Estimating seat + manual RFQ time, $250–$800/mo |
+| `evrebates` | **EV Rebates & Closeout** | **EV Cost Workbook** (estimate → customer proposal + utility make-ready forms: Eversource CT/MA, National Grid, UI; unit-rate bands; eligibility), **L2 Project Closeout** (`ev-closeout.html`: Eversource MA/CT and National Grid MA/NY/RI completion packages: checklist, EVSE serials, final cost vs incentive, one ZIP), future-EV marking | applications + closeouts **(decide: 20/mo included, $50 each over)** | ~$1,000 per application prepared outside |
+
+**Premium, $500 each**
+
+| Key | Module | Inside | Replaces |
+|---|---|---|---|
+| `plansets` | **Plan Sets & CAD** | **Plot Plan E0/E1.1**, **One-Line E2.0**, **Schematic Editor** (CAD one-line), Riser, SLD check, Permit Sheet (title block, equipment and conductor schedules, NEC notes), Sheet Set Manager (numbering, revisions, issue sets, transmittals), Site Plan Styles, Architecture Mode (full CAD drafting), Building Designer, design rule check and design review, 3D Site Visualizer and AI Render, Georeferenced Export (DXF, DXF 3D, KMZ, GeoJSON, shapefile; BETA), Export for CAD (BETA) | CAD seat + outsourced drafting, $400–$1,500/mo |
+| `siteintel` | **Site Intelligence** | **Network Proximity** (carrier hotels, route distance, fibre RTT), Site Pre-Screen (any US ZIP), Site Pre-Qual, Site Score, Viability Workflow, Project Intelligence (pursue/hold, readiness), GIS Layers import (parcels, easements, circuits, fiber, wetland), Buildable Area and exclusions, Terrain (USGS 3DEP LiDAR, slope, cut/fill), **Parcel Screening Register** (rank a folder of site KMZs), acoustic screening (BETA) | Site-screening consultant or GIS analyst time, $500–$2,000/mo |
+| `engineering` | **Engineering & Analysis** | Circuit Analysis (panel hierarchy, NEC 220 load calc), Electrical Sizing (NEC 690.7 strings, MPPT), network load flow and short circuit (BETA), Conductor & Transformer Sizing, Multi-Node Power Flow, DER Generation and PVWatts yield, design optimizer (BETA), Optimise Layout, terrain screen, pile schedule, stringing, Site Optimizer (8760), Export for Validation / PE stamp (BETA) | Power-systems analysis licence or engineer hours, $500–$1,500/mo |
+| `finance` | **Investor & Finance** | **Push to Marketplace**, **Apply for Financing** (DLL), Site Investment Analysis, DCFC Pro Forma, 3D Fleet Modeler, Residential BESS Analyzer, Degradation & Warranty, city net-zero investment case | Analyst model build + modelling tools, $500–$2,000/mo |
+| `compute` | **Compute & Data Center** | Compute tab: Compute Build, ZTMM container data centre, Lay Out Site, Max Load, Load Siting Screen, prime-mover compare, gas and fiber tie-in, Compute Cost, Supply Link, compute campus proposal; Compute Land Lease; parcel screening for campuses | Site-selection consultant time, $500–$1,500/mo |
+| `ops` | **Operations** | O&M console, SLA & contract intelligence, Field Service & Dispatch, Owner Reporting, Fleet Command, Site Lifecycle console, Digital Twin handoff | Asset-management platform, $500–$2,000/mo |
+| `whitelabel` | **White Label Storefront** | The tenant's name on the platform, sizing embedded on their own website, leads and orders into their queue. Needs the Reseller addendum (§7) | Custom web sizing tool + lead capture, $500–$2,000/mo |
+
+**Deliverables, $750 each + usage**
+
+| Key | Module | Inside | Meter | Replaces | Honest limit today |
 |---|---|---|---|---|---|
-| `plansets` | **Plan Sets, Exports & Reports** | Standard · $250 | Plot plan, one-line, schematics and risers, georeferenced and plan-set exports, branded reports. Caps `export`, `schematic`, `riser`; add-ons `exports`, `schematics`; `branded-report.html` | plan sets exported | CAD seat + outsourced drafting, $250–$600/mo |
-| `evrebates` | **EV Rebates & Closeout** | Standard · $250 + usage | **EV Cost Workbook** (estimate → customer proposal + utility make-ready forms: Eversource CT/MA, National Grid, UI; unit-rate bands and eligibility checks) and the **Project Closeout tool** (`ev-closeout.html`: Level 2 completion packages for Eversource MA/CT and National Grid MA/NY/RI: checklist, EVSE serials, final cost vs incentive, one ZIP). On its branch the closeout is `tier:ALL`; packaging moves it into this module. Tools `evcostwb`, `evcloseout` | applications + closeouts produced **(decide: 20/mo included, $50 each over)** | ~$1,000 per application prepared outside |
-| `storage` | **Storage Sizing & Pro Forma** | Standard · $250 | Battery Sizer (bills, bill PDFs, 8760), BESS Pro Forma and investor deck, Value Stack, BESS ISO Calculator. `batterysizer`, `proforma`, `valuestack`, `isocalc` | models run | Storage modelling seat, $300–$1,000/mo |
-| `bom` | **BOM & Procurement** | Standard · $250 | The editor's bill of materials, BOM CSV/XLSX export (`bomToCSV` in `editor.html`), Request for Quote to vendors (`api/rfq.js`, `rfqs/` + `recipients/`), Procurement Marketplace when it ships (`procurement`, `soon:true` today) | BOMs exported, RFQs sent | Estimating/takeoff seat + manual RFQ time, $250–$800/mo |
-| `engineering` | **Engineering** | Premium · $500 | Conductor & transformer sizing, multi-node power flow, interconnection screener, Site Optimizer, cost estimator; cap `engineering`; add-on `engineering`. `conductorsizing`, `powerflow`, `interconnect`, `siteoptimizer`, `costestimator` | studies run | Power-systems analysis licence or engineer hours, $500–$1,500/mo |
-| `finance` | **Investor & Finance** | Premium · $500 | Site Investment Analysis, DCFC pro forma, 3D fleet modeler, residential portfolio analyzer, degradation & warranty; **financing marketplace pro side** (pipeline, capital-partner matching, portfolio screening) **(decide which marketplace functions are in Lite and which are in this module; none is free)**. `investment`, `dcfc`, `fleet`, `apartment`, `degradation` | investor packages | Analyst model build + modelling tools, $500–$2,000/mo |
-| `compute` | **Compute & Data Center** | Premium · $500 | Compute campus builder + the parcel screening that feeds it (add-on `compute` already grants `compute` + `parcelscreen`), Compute Land Lease. `computelease` | campuses screened | Site-selection consultant time, $500–$1,500/mo |
-| `ops` | **Operations** | Premium · $500 | O&M console, SLA & contract intelligence, field service & dispatch, owner reporting, Fleet Command, Site Lifecycle console. `omconsole`, `slaintel`, `fieldservice`, `ownerreport`, `fleetcommand`, `sitelifecycle` | sites operated | Asset-management / monitoring platform, $500–$2,000/mo |
-| `whitelabel` | **White Label Storefront** | Premium · $500 | Tenant's name on the platform (`whiteLabel`), embed sizing on their own website (`/embed/`, publishable key), leads and orders into their queue. Add-on `whitelabel` | leads captured | Custom web sizing tool + lead capture, $500–$2,000/mo |
-| `permitting` | **Permitting Matrix** | Deliverable · $750 + usage | Permit Creator (`permit`), AHJ programme, the 20-page permitting matrix with Gantt (the jurisdiction engine in `editor.html`, §"close-out and end of life" et al.). Add-on `permitting` | matrices **(decide: 1/mo included, $2,500 each over)** | $30,000 consultant report |
-| `sitefinder` | **Site Finder & Parcel Screening** | Deliverable · $750 + usage | Site Finder (ranked by deliverable kW, hold a circuit), Site Discovery & Screening, parcel screening. `sitefinder`, `sitediscovery`; add-on `parcelscreen` | site studies **(decide: 25/mo included, $15 each over)** | Parcel + hosting-capacity data subscription, $1,000–$8,000/mo. ClearSky pays ~$100k/yr for the data; ~12 subscribers covers it. |
-| `logic` | **Omega Logic (ERP)** | Platform · from $2,500 | The office, plant and customer apps; bulk POs (`api/po-intake.js`); materials plan and BOM explosion (`api/logic-materials.js`, `api/_lib/materials.js`); purchase orders; freight plan; custody, sites and warranty; CRM; QuickBooks or tenant invoicing. Add-on `omega-logic` (`api/_lib/logic-access.js`) | orders and units run **(decide tiering)** | ERP/MRP + CRM subscriptions, $1,500–$5,000/mo |
+| `permitting` | **Permitting Matrix** | Permit Creator (full set), the five-sheet permitting matrix (cover, master matrix, Gantt timeline, dependencies & risk, fee summary), required-documents checklist, jurisdiction engine | matrices **(decide: 1/mo included, $2,500 each over)** | $30,000 consultant report | **BETA in the editor's own code: one verified jurisdiction pack (Vista / SDG&E).** Elsewhere the permits and code references are right but agencies, fees and durations come back blank. Sell by verified jurisdiction, or as a draft matrix, until more packs exist **(decide)**. |
+| `sitefinder` | **Site Finder** | C&I property ranked by deliverable kW, hold a circuit, Site Discovery & Screening | site studies **(decide: 25/mo included, $15 each over)** | Parcel + capacity data, $1,000–$8,000/mo | **Northern Illinois (ComEd) only today.** ClearSky pays ~$100k/yr for the data; ~12 subscribers covers it. |
 
-Not sold as modules: `osaportal` (JV, governed by the JV agreement),
-`spatco_ev` (one tenant's own tool), `intake_admin` (ClearSky's own queue),
-the `soon:true` placeholders (`ahj`, `aggregators`, `offtakers`) until they
-ship. `interconnectstudy` stays Enterprise-only.
+**Platform: Omega Logic** (sold in five parts; all five **$2,500**, $3,500 à la carte)
 
-### 3.4 Plans, rebuilt from modules
-
-| Plan | Price | Contents | Sum at list |
+| Key | Part | List | Inside |
 |---|---|---|---|
-| **Lite** | $500/mo | Lite only | $500 |
-| **Tier 1 · Field** | $1,299/mo | Lite + 3 Standard + 1 Premium | $1,750 |
-| **Tier 2 · Pro** | $2,499/mo | Lite + 3 Standard + 3 Premium + 1 Deliverable | $3,500 |
-| **Tier 3 · Enterprise** | $150k–$350k/yr | Every module, pooled usage, quarterly right-size, 7 dev hrs/mo (per Agreement §4.6) | n/a |
-| **Tier 4 · Platform** | Custom | Omega Logic + whatever above, scoped per contract | n/a |
+| `logic-office` | **Office** (required for the others) | $1,500 | Orders with pricing and acceptance, customers as accounts, CRM, PO loads in bulk, invoicing (QuickBooks or the tenant's own), Team, Today hub, the Omega Logic phone app |
+| `logic-plant` | **Plant** | $750 | Work orders, stations and routing, bench scan station, steps and checks, quality holds, end-of-line tests, plant map |
+| `logic-materials` | **Materials & Purchasing** | $500 | Bill-of-materials explosion, stock counts, suppliers and buy prices, purchase orders, the materials plan |
+| `logic-logistics` | **Logistics & Warranty** | $500 | Freight plan, carrier quotes, loads, custody, sites, derived warranty and SLA, fleet register |
+| `logic-customer` | **Customer App** | $250 | The tenant's own customers: fleet, POs, pay, shipping, warranty, Editor Lite |
 
-À la carte between plans: Lite + any modules, each at list. The proposal tool
-always shows the à la carte sum next to the plan that fits, so the customer
-sees why the plan is the better deal.
+**Not sold:** `osaportal` (JV agreement), `spatco_ev` (one tenant's own
+tool), `intake_admin` (ClearSky's queue), `soon:true` placeholders
+(`ahj`, `aggregators`, `offtakers`) until they ship. `interconnectstudy`
+stays Enterprise-only.
 
-### 3.5 Starter packs by customer type
+### 3.4 The whole menu at a glance
 
-The Package panel and the proposal tool preselect these from the tenant's
-`vertical` (and the extra types below, which need a `customerType` field or a
-widening of `vertical`, **(decide)**).
+| Shelf | Items | Each |
+|---|---|---|
+| Floor | Lite | $500 |
+| Add-on | Grid Atlas | $250 |
+| Standard | Storage Sizing & Revenue · Estimate, BOM & Procurement · EV Rebates & Closeout | $250 |
+| Premium | Plan Sets & CAD · Site Intelligence · Engineering & Analysis · Investor & Finance · Compute & Data Center · Operations · White Label | $500 |
+| Deliverable | Permitting Matrix · Site Finder | $750 + usage |
+| Platform | Omega Logic (Office $1,500 · Plant $750 · Materials $500 · Logistics $500 · Customer App $250) | all five $2,500 |
 
-| Customer type | Examples | Preselected | Usually next |
+Everything on the editor side at list: $500 + $250 + $750 + $3,500 + $1,500
+= **$6,500/mo**. With all of Omega Logic: **$9,000/mo** ($108k/yr).
+
+### 3.5 Plans
+
+| Plan | Price | Rule | Saves |
 |---|---|---|---|
-| Installer (EV) | Concord, OGI | Lite + EV Rebates & Closeout + Plan Sets | Permitting Matrix, BOM |
-| Installer (solar/BESS) | SunESol | Lite + Storage + Plan Sets | BOM, Permitting |
-| Developer | NextNRG, Budderfly, Solela | Lite + Storage + Investor & Finance | Site Finder, Operations |
-| EPC / engineering | CIR | Lite + Plan Sets + Engineering + Permitting | BOM, White Label on deliverables |
-| OEM | Clean Cell, FENECON | Lite + White Label + Storage + BOM | Omega Logic |
-| Distributor | Walters | Lite + White Label + BOM | Omega Logic (orders, freight) |
-| Compute / advisor | East West Energy | Lite + Compute + Investor & Finance | Site Finder, Engineering |
-| Capital partner | Helios | Lite + Investor & Finance | Site Finder |
+| **Lite** | $500/mo | Lite only | n/a |
+| **Tier 1 · Field** | $1,299/mo | Lite + up to $1,250 of add-on / Standard / Premium modules | up to $451/mo |
+| **Tier 2 · Pro** | $2,499/mo | Lite + up to $3,000 of modules, at most one Deliverable | up to $1,001/mo |
+| **Tier 3 · Enterprise** | $150k–$350k/yr | Every module, several workspaces, pooled usage, 7 dev hrs/mo, $25k setup, $10k/yr service fee | see note |
+| **Tier 4 · Platform** | Custom | Omega Logic + anything above, scoped per contract | n/a |
+
+Below Field's $1,299, the customer pays à la carte. **Enterprise note:** the
+whole menu at list is $108k/yr, so the $150k floor is carried by multiple
+workspaces, 7 dev hours a month (~$21k/yr at $250/hr), priority support and
+pooled usage. **(decide)** whether that is the pitch, or the Enterprise floor
+moves.
+
+### 3.6 Starter packs by customer type
+
+| Type | Examples | Start (list) | Usually next |
+|---|---|---|---|
+| EV installer | Concord, OGI | Lite + EV Rebates + Estimate/BOM + Grid Atlas + Plan Sets → **Field $1,299** ($1,750 list) | Permitting (as packs land), EV overage |
+| Solar / BESS installer | SunESol | Lite + Storage + Estimate/BOM + Plan Sets → **Field** | Grid Atlas, Permitting |
+| Developer | NextNRG, Budderfly, Solela | Lite + Grid Atlas + Storage + Investor & Finance ($1,500) → **Field** | Site Intelligence, Operations |
+| EPC / engineering | CIR | Lite + Plan Sets + Engineering + Estimate/BOM + Permitting → **Pro $2,499** (room for Grid Atlas + Site Intelligence inside the cap) | Operations |
+| OEM | Clean Cell, FENECON | Lite + White Label + Storage + Estimate/BOM → **Field**, + Omega Logic | Plan Sets, Permitting |
+| Distributor | Walters | Lite + White Label + Estimate/BOM ($1,250) | Logic Office + Logistics |
+| Compute / advisor | East West Energy | Lite + Compute + Grid Atlas + Site Intelligence → **Field** | Engineering, Site Finder |
+| Capital partner | Helios | Lite + Investor & Finance + Grid Atlas ($1,250) | Site Intelligence |
+
+### 3.7 Sizing up a company (the discovery that picks the package)
+
+Ten questions, asked on the call or in the proposal tool. A module goes in the
+starting package only when the answer is **"this quarter"**; a "within the
+year" answer puts it on the next-rung list. The result is always ≥ $500.
+
+| # | Question | Yes this quarter → |
+|---|---|---|
+| 1 | Do you design sites (BESS, solar, EV, microgrid, data centre)? | Lite |
+| 2 | Do you find or screen your own sites or grid capacity? | Grid Atlas; many sites → Site Intelligence; northern Illinois C&I → Site Finder |
+| 3 | Do you size storage or model savings/revenue for a customer? | Storage Sizing & Revenue |
+| 4 | Do you price jobs, build a BOM or buy the equipment? | Estimate, BOM & Procurement |
+| 5 | Do you file EV make-ready or rebate applications? How many a month? | EV Rebates & Closeout (>20/mo → overage in the proposal) |
+| 6 | Do you submit drawings to a utility or an AHJ yourselves? | Plan Sets & CAD |
+| 7 | Do you need permitting timelines, fees and a Gantt? Where? | Permitting Matrix (only where a jurisdiction pack is verified) |
+| 8 | Do you do electrical engineering in-house or pay for it? | Engineering & Analysis |
+| 9 | Do you raise capital, sell to investors or need financing? | Investor & Finance |
+| 10 | Do you build compute / data-centre sites? | Compute & Data Center |
+| 11 | Do you operate assets after COD? | Operations |
+| 12 | Do you sell a product under your own name, take orders, build or ship? | White Label; Omega Logic parts by what they run |
+
+Plus one money question: **what do you pay today for each of these** (tools,
+consultants, drafting, data)? Those numbers feed the value page.
 
 ---
 
 ## 4. What already exists (do not rebuild)
 
 - `api/tenant-billing.js`: staff-only, allow-listed writer of
-  `omega_orgs/{org}/billing/current` with a history subcollection. Fields
-  today: `tier`, `addons`, `toolOverrides`, `toolAccess`, `status`,
-  `trialEndsAt`, `subscriptionDue`, `amountDue`, `paymentLink`, `autopay`,
-  `paymentProvider`, `stripeCustomerId`, `customerEditorLite`.
-- `omega-caps.js`: tier → editor capability ladder (`trial`, `standard`,
-  `deluxe`, `enterprise`) and `ADDON_GRANTS` (`compute`, `parcelscreen`,
-  `engineering`, `schematics`, `exports`, `permitting`).
-- `omega-tools.js`: the tool catalog with `tier` (ALL/STANDARD/DELUXE/
-  ENTERPRISE). `toolAccess` is an allowlist that wins over tier, add-ons and
-  overrides ("absent ≠ empty"; `scripts/tests/ttoolaccess.js`).
-- `admin/admin-console.js`: tenant drawer with add-on checkboxes
-  (`ADDON_UI`, `_addonToggles`), Omega Logic bundle (`/api/logic-onboard`
-  `action:'bundle'`), tier dropdown with the Tier 1–4 prices.
-- `api/logic-admin.js` + `logic-admin.html`: ClearSky commissioning of Logic
-  subscribers; every write lands in `admin_audit`.
-- `api/_lib/logic-access.js`: Omega Logic gate (`addons` contains
-  `omega-logic`).
-- `proforma.html` + `proforma-logic.js` + `api/proforma` +
-  `api/_lib/proforma-engine.js`: THE pattern for the proposal tool (inputs in
-  the page, every dollar from the endpoint, deck drawn from the same answer,
-  saved under `toolData/{orgId}/tools/proforma`).
-- Event Layer (`omega-events.js` → `api/events.js`): product telemetry. **Not
-  a billing meter** (§5.4).
-- `ev-closeout.html` (Project Closeout) and the Eversource MA estimate
-  template live on the unmerged branch `claude/level-2-closeout-tool-aqkh73`.
-  **Merge it first**; the `evrebates` module depends on it.
+  `omega_orgs/{org}/billing/current` with history. Fields: `tier`, `addons`,
+  `toolOverrides`, `toolAccess`, `status`, `trialEndsAt`, `subscriptionDue`,
+  `amountDue`, `paymentLink`, `autopay`, `paymentProvider`, `stripeCustomerId`,
+  `customerEditorLite`.
+- `omega-caps.js`: tier ladder (`trial`, `standard`, `deluxe`, `enterprise`)
+  and `ADDON_GRANTS` (`compute`, `parcelscreen`, `engineering`, `schematics`,
+  `exports`, `permitting`).
+- `editor.html` ribbon gates today: Compute tab `data-cap="compute"`; Analyze
+  and Estimate tabs `data-cap="engineering"`; Plot Plan `export.plotplan`;
+  One-Line `export.oneline`; Blueprint `export.blueprint`; Permit
+  `permitting`; Apply for Financing `export`; schematic section `schematic`.
+  **Grid Atlas pre-screen and the whole Estimate tab sit behind
+  `engineering`**, so they cannot be sold separately until they are
+  re-gated (§5.1).
+- `omega-tools.js`: tool catalog by tier; `toolAccess` allowlist wins over
+  tier/add-ons/overrides ("absent ≠ empty"; `scripts/tests/ttoolaccess.js`).
+- `admin/admin-console.js`: tenant drawer, add-on checkboxes (`ADDON_UI`),
+  Omega Logic bundle (`/api/logic-onboard` `action:'bundle'`), Tier 1–4
+  dropdown with prices.
+- **Stripe is wired**: `api/stripe-create.js` (customer, subscription with ONE
+  price, or a payment link; staff only), `api/stripe-webhook.js`
+  (`invoice.paid` → active, `payment_failed` → grace, `customer.subscription.*`
+  → tier from the price's `tier` metadata), `api/stripe-portal.js` (tenant
+  admin opens the Customer Portal), `api/stripe-invoices.js`,
+  `api/customer-subscribe.js` (the pattern for Checkout).
+- `proforma.html` + `proforma-logic.js` + `/api/proforma` +
+  `api/_lib/proforma-engine.js`: THE pattern for the proposal tool.
+- Event Layer: product telemetry, **not** a billing meter (§5.4).
+- `ev-closeout.html` and the Eversource MA template are on the unmerged branch
+  `claude/level-2-closeout-tool-aqkh73`. **Merge it first.**
 
 ---
 
@@ -200,277 +268,244 @@ widening of `vertical`, **(decide)**).
 
 ### 5.1 `api/_lib/modules.js`: the ONE module catalog (code)
 
-Pure, ES5, no Firebase. The single place that says what a module *is*:
+Pure, ES5. What a module *is*: `{ key, name, shelf, tools[], caps[],
+ribbon[], addons[], meter, requires[] }`. `ribbon[]` names the editor ribbon
+buttons/tabs it unlocks (ids or handler names, as `OmegaTags` already matches
+them). `resolve(moduleKeys)` → `{ tier, addons[], toolAccess[], caps[] }`.
 
-```js
-{ key:'evrebates', name:'EV Rebates & Closeout', cls:'standard',
-  tools:['evcostwb','evcloseout'], caps:[], addons:[],
-  meter:{ key:'ev.application', label:'applications and closeouts' },
-  verticals:['installer'], blurb:'…', replaces:'…' }
-```
+- **Re-gate the editor by module**: `omega-caps.js` gains `MODULE_GRANTS`
+  (fed from the same list, bundled for the browser), and the ribbon's
+  `data-cap` values move from tier-sized caps to module caps
+  (`gridatlas`, `estimate`, `siteintel`, `plansets`…). Staff keep `all`.
+  This is the one piece of real editor work; it must be done button by
+  button against Appendix A, with a test that every ribbon button is in
+  exactly one module or in Lite.
+- A test asserts every `omega-tools.js` key is in one module, in Lite, or on
+  the "not sold" list, so tool 43 cannot go unpriced.
+- Prices are NOT here.
 
-- `resolve(moduleKeys)` → `{ tier, addons[], toolAccess[] }`, the fields the
-  existing gates already read. Lite's tools are always in `toolAccess`.
-  Writing `toolAccess` means a new tool joins nobody's package by accident,
-  which is the property `ttoolaccess.js` already guards.
-- Prices are NOT here. What a module contains changes with code; what it
-  costs changes with a sales decision.
-- A test asserts every `tools[]` key exists in the REAL `OMEGATools.catalog()`
-  and every tool in the catalog is either in a module, in Lite, or on an
-  explicit "not sold" list (§3.3), so tool 43 cannot go unpriced.
+### 5.2 `pricebook/{version}` (Firestore, staff-written, append-only)
 
-### 5.2 `pricebook/{version}` (Firestore, staff-written, world-unreadable)
+`floorCents: 50000`, Lite price and included logins, each module's
+`priceCents`, `stripePriceId`, included usage and `overageCents` +
+`stripeMeteredPriceId`, plan caps (`field: {priceCents:129900,
+capCents:125000}`, `pro: {…, capCents:300000, maxDeliverables:1}`), credit,
+service fees. A version is frozen once used; a change is a new version.
 
-```
-pricebook/2026-10
-  floorCents: 50000
-  lite: { priceCents: 50000, builders: 3, extraBuilderCents: 5000 }
-  modules: { plansets:{priceCents:25000}, evrebates:{priceCents:25000,
-             included:20, overageCents:5000}, … }
-  plans: { field:{priceCents:129900, rule:'3S+1P'}, pro:{…} }
-  credit: { pct: 40, days: 90 }
-  serviceFee: { lite: ?, field: 340000, pro: 340000, enterprise: 1000000 }
-  createdAt, createdBy, frozen: true
-```
+### 5.3 `billing/current` gains allow-listed fields
 
-Append-only: a new version is a new doc; `frozen` versions are never edited
-(rules: create by staff, update/delete denied). This is what keeps "one price
-for everybody" defensible in a dispute.
+In `api/tenant-billing.js` ALLOWED (and nowhere else): `modules[]`,
+`pricebookVersion`, `plan`, `credit {pct, endsAt}`, `builders`, `viewers`,
+`stripeSubscriptionId`. `tier`, `addons` and `toolAccess` become **derived**
+from `modules[]` by `modules.resolve()` and are never hand-edited for a
+packaged tenant again.
 
-### 5.3 `billing/current` gains four allow-listed fields
+### 5.4 Usage counters
 
-Add to `ALLOWED` in `api/tenant-billing.js` (and nowhere else):
-`modules[]`, `pricebookVersion`, `credit {pct, endsAt}`, `builders`. A new
-staff endpoint `POST /api/tenant-package` (or an `action` on
-`tenant-billing`) takes `{ orgId, modules[], pricebookVersion, credit?,
-builders? }`, validates against the price book, **refuses anything under the
-floor**, runs `modules.resolve()` and writes `modules` + the derived `tier`,
-`addons`, `toolAccess` in ONE transaction with a history row and an
-`admin_audit` row. Staff never hand-edit `toolAccess` for a packaged tenant
-again. The derived fields keep every existing gate working unchanged.
-
-### 5.4 Usage counters (the meter)
-
-**Do not bill from the Event Layer.** It is gated on terms acceptance and
-`event_exclusions`. FENECON and the OSA JV are excluded by design, so billing
-from it would give signed-agreement tenants free usage and a gap we could
-never explain. Count on the server, where the deliverable is produced:
-
-- `omega_orgs/{org}/usage/{YYYY-MM}`: `{ 'ev.application': n,
-  'permit.matrix': n, 'site.study': n, … }`, incremented in a transaction by
-  the endpoint that produces the deliverable (the way `api/embed-layout.js`
-  already caps site studies per org per day). Admin-SDK only in rules.
-- Where a deliverable is produced purely in the browser today (e.g. the EV
-  workbook's export, the permitting matrix inside `editor.html`), the builder
-  must add a small `POST /api/usage` "I produced one" call that is idempotent
-  by a client-generated id. It is an honest counter for billing, **not a
-  security boundary**. Say so in the file header.
-- The console and the proposal both show usage against included credits.
+**Not the Event Layer** (terms-gated; FENECON and OSA excluded by design, so
+they would get free usage). Count where the deliverable is produced:
+`omega_orgs/{org}/usage/{YYYY-MM}` incremented in a transaction by the
+producing endpoint; `POST /api/usage` (idempotent by client id) for the
+producers that live in the browser today (EV workbook export, closeout ZIP,
+permitting matrix). It is an honest billing counter, not a security boundary;
+say so in the header. Overage reaches Stripe as metered usage records.
 
 ### 5.5 `subscription_proposals/{id}` (Admin-SDK only)
 
-```
-orgId (may be a prospect domain with no omega_orgs yet), prospect{name,
-logo, vertical, contactName, contactEmail}, discovery{…answers},
-modules[], plan, pricebookVersion, lines[] (computed by the server),
-replaces[] (rep-editable: tool, their current $/mo), term, paymentElection
-('monthly'|'annual'), credit, serviceFee, totals{list, credit, firstYear},
-status: 'draft'|'sent'|'accepted'|'declined'|'expired', sentAt, acceptedAt,
-acceptedBy, pdfPath, createdBy, audit[]
-```
-
-Accepting a proposal calls the SAME code path as §5.3, so a signed proposal
-and a console change produce identical billing records.
+Prospect, discovery answers, modules, plan, price-book version, server-computed
+lines, rep-entered "replaces" figures, term, payment election, credit,
+service fee, totals, status (`draft|sent|accepted|declined|expired`), who and
+when, PDF path. Accepting runs the same path as §6.1.
 
 ---
 
-## 6. The Subscription Proposal tool (`subscription-proposal.html`)
+## 6. Click the menu → price → pay → access
 
-Built on the BESS Pro Forma pattern: one page + `subscription-proposal-logic.js`
-(draws the deck) + `POST /api/subscription-proposal` backed by
-`api/_lib/subscription-pricing.js`. **All pricing math is server-side** (per
-CLAUDE.md IP rule: pricing logic never ships to a browser). The page collects,
-posts, renders. Staff-only to start (ClearSky reps), then optionally a tenant's
-own reps for reseller cases (White Label).
+### 6.1 Staff side (master console, onboarding a tenant)
 
-Steps:
+1. Tenant drawer → **Package** panel: customer type preselects the starter
+   pack (§3.6); staff tick and untick the menu. Live: list total, plan that
+   fits, credit, first-90-days price, usage included, **floor enforced**.
+2. **Send proposal** (opens the proposal tool prefilled) or **Activate**.
+3. Activate → `POST /api/tenant-package` (staff): validates against the
+   price book → creates or updates the **Stripe subscription with one item
+   per module** (or the plan's price plus its module metadata), metered items
+   for usage, the credit as a Stripe coupon → returns Checkout / the invoice
+   link for the first payment.
+4. `api/stripe-webhook.js` on `customer.subscription.created|updated` and
+   `invoice.paid`: reads the subscription's items (price metadata `module`)
+   → writes `modules[]` → `modules.resolve()` → `tier`, `addons`,
+   `toolAccess`, caps. **What Stripe says is paid is what is switched on.**
+   History row + `admin_audit` row on every change.
 
-1. **Company**: domain → pulls `omega_orgs/{org}` name, logo, colours,
-   vertical if the tenant exists; else a prospect record.
-2. **How they work today** (discovery; this is the "game"): projects per
-   month, EV applications per month, permits per year, sites screened per
-   month, people who design vs people who view, tools they pay for now and
-   what each costs. Ten questions, not sixty.
-3. **Recommended package**: the server maps answers → modules (starter pack
-   by type, plus modules triggered by volumes, e.g. >5 EV applications/mo ⇒
-   `evrebates`). The rep can tick and untick. Live: list, closest plan, à la
-   carte sum, floor warning.
-4. **Value**: their current spend per replaced tool (rep-entered, defaults
-   from the catalog ranges), deliverable math ("45 applications × ~$1,000 =
-   $45,000 vs $1,299"; "one permitting matrix = $30,000 vs $9,000/yr"),
-   payback. Cash-flow framing: this month, this quarter, this year.
-5. **Terms**: monthly vs annual prepay (pay 11 months for 12, Agreement §4.3),
-   Annual Service Fee, transformation credit, Initial Term 12 months,
-   Inaugural Pricing lock, quarterly right-size, the ladder of what switches
-   on next and the trigger for each.
-6. **Deck**: a 6–8 page PDF: cover in the customer's name; what you do
-   today; your package; what it replaces; the numbers; your next rungs;
-   order form (the Agreement's Order Form, filled in); signature block.
-   ClearSky brand by default; the reseller's brand when a White Label tenant
-   sends it (`OmegaWhiteLabel`).
-7. **Send and accept**: save as `sent`; a link for the customer to review and
-   accept (signed-in, verified email at their domain). Acceptance →
-   `tenant-package` path (§5.3) → workspace switched on. Declines and expiry
-   recorded.
+### 6.2 Customer side (the menu they opt in from)
 
-Saved per the standard contract: `toolData/{orgId}/tools/subproposal` for the
-rep's drafts, `subscription_proposals/` for the record.
+1. **Your plan** page in Account Settings for the tenant's owner/admin
+   (`A.isTenantAdmin`): the same menu, what they have, what each module adds,
+   the price, the usage against included.
+2. Tick a module → shows the new monthly total and today's prorated charge →
+   **Add to my plan** → `POST /api/plan-change` (tenant admin) adds the
+   Stripe subscription item (prorated, card on file via the Customer Portal)
+   → the webhook switches it on in seconds. An accepted opt-in is an Order
+   Form amendment (§7).
+3. Removing a module: **request removal at the next review**, never an
+   instant drop (rule 7). Staff see it in the console.
+4. Members who are not admins see the menu read-only with **Ask my admin**.
+5. The storefront and the editor's locked buttons show "Part of <Module>,
+   $X/mo, Add" to an admin, and "Ask your admin" to anyone else.
 
 ---
 
 ## 7. Changes the Subscription Agreement needs (for counsel)
 
-The template assumes four fixed tiers and named seats. The ladder needs:
-
-- **Order Form**: a Lite line ($500/mo), a **Module Schedule** (ticked modules
-  with unit prices from price-book version X, included usage, overage),
-  builders included, credit line. Tier checkboxes stay for Field/Pro/
-  Enterprise/Platform.
-- **§2.3 Authorized Users**: today named users only, no sharing. Add a
-  **Viewer** class (read-only, unlimited, not counted) and a builder count.
-  Credential-sharing prohibition stays.
-- **§2.5 Tier Scope** → "Tier and Module Scope": access follows the Tier AND
-  the Module Schedule; adding a module is an Order Form amendment or an
-  accepted proposal.
-- **New: Usage fees and quarterly right-sizing**: included usage, overage
-  billed monthly in arrears, the 90-day review, module removal at review, unit
-  prices fixed for the Initial Term.
-- **New: Transformation credit**: amount, period, forfeited on early
-  termination **(decide)**.
-- **§2.4 service-bureau restriction** conflicts with White Label resale (Clean
-  Cell sells Site Map + Grid Atlas under its own name). A **Reseller / White
-  Label addendum** is needed before that module is sold.
-- **§4.4 Annual Service Fee** for Lite: $3,400 would be more than half a
-  year of Lite. **(decide: lower for Lite, e.g. $1,500, or waive)**.
-- FENECON and OSA are under signed agreements; the menu reaches them only as
-  an amendment.
+- **Order Form**: a Lite line ($500/mo), a **Module Schedule** (modules, unit
+  prices from price-book version X, included usage, overage), included
+  builder and viewer logins, credit line.
+- **§2.3 Authorized Users**: add counted **Viewer** logins and extras priced.
+- **§2.5 Tier Scope** → "Tier and Module Scope".
+- **New: electronic opt-in**: adding a module in the product is an amendment
+  to the Order Form at the published unit price, prorated.
+- **New: usage and quarterly right-size**: included usage, overage in
+  arrears, the 90-day review, removals at review, unit prices fixed for the
+  Initial Term.
+- **New: transformation credit**: amount, period, never below $500,
+  forfeited on early termination **(decide)**.
+- **§2.4 service-bureau restriction** conflicts with White Label resale: a
+  **Reseller / White Label addendum** first.
+- **§4.4 Annual Service Fee** for Lite: $3,400 is more than half a year of
+  Lite **(decide: lower for Lite, e.g. $1,500, or fold into Lite's price)**.
+- **Beta modules** (Permitting Matrix outside verified jurisdictions, Geo
+  Export, Export for CAD, Validation, network analysis, optimizer, noise)
+  sold with a beta clause, or not sold until finished **(decide)**.
+- FENECON and OSA: the menu reaches them only as an amendment.
 
 ---
 
-## 8. Admin console: the Package panel (tenant onboarding)
+## 8. The Subscription Proposal tool (`subscription-proposal.html`)
 
-In the master console tenant drawer (`admin/admin-console.js`), replace the
-free-standing add-on checkboxes with a **Package** panel:
+The BESS Pro Forma pattern: page + `subscription-proposal-logic.js` (draws the
+deck) + `POST /api/subscription-proposal` (`context | recommend | price |
+save | send | accept`) backed by `api/_lib/subscription-pricing.js`. All
+pricing math server-side (CLAUDE.md IP rule). Staff-only to start.
 
-- Customer type → starter pack preselected (§3.5).
-- The ten modules as tick boxes grouped Standard / Premium / Deliverable /
-  Platform, each with its price, what's inside, and usage-to-date vs included.
-- Live summary: list, plan that fits, à la carte sum, credit, first-90-days
-  price, **floor enforced** (Save disabled with the reason under $500).
-- Buttons: **Save as proposal** (opens §6 prefilled) · **Apply to tenant**
-  (§5.3 endpoint) · **History** (billing history + admin_audit rows).
-- The raw add-on text field stays for `osa-jv` and `grid-atlas`, as today.
-
-The same panel, read-only, belongs on the tenant's own Account Settings as
-"Your plan", with a **Request this module** button that files a request into
-the console (no self-serve charge yet).
+1. **Company**: domain → `omega_orgs/{org}` brand and vertical, or a prospect.
+2. **How they work today**: the §3.7 questions + what they pay today.
+3. **Recommended package**: server maps answers → modules; rep adjusts.
+4. **Value**: their spend vs ours, deliverable math, payback, per month /
+   quarter / year.
+5. **Terms**: monthly or annual prepay, service fee, credit, Initial Term,
+   the next rungs and the trigger for each.
+6. **Deck**: 6–8 page PDF in the customer's name (the Agreement's Order Form
+   filled in, signature block). Reseller's brand when a White Label tenant
+   sends it.
+7. **Send and accept**: acceptance → §6.1 step 3 → payment → access.
 
 ---
 
-## 9. The 15 target accounts: starting package
+## 9. The 15 target accounts
 
-Lite = $500. Status is from each `tenants/<slug>/tenant.json` seed and may be
-stale; check the live console before any call.
+Status is from `tenants/<slug>/tenant.json` seeds and may be stale; check the
+live console first.
 
-| Account | Type | Status | Start with | List/mo | Switch on next | Move-up trigger |
-|---|---|---|---|---|---|---|
-| Clean Cell | OEM | Trial ends **2026-09-30**; white label + Logic live on trial | Lite + White Label + Storage + BOM + Omega Logic | $4,000 | Permitting, Engineering | Storefront orders and bulk POs running through Logic |
-| Concord Energy | Installer (EV L2) | Paying, Field $1,299 | Field: Lite + EV Rebates & Closeout + Plan Sets + BOM + Engineering | $1,299 plan | EV application overage above 20/mo, then Permitting | 45 National Grid applications in 72 h |
-| NextNRG | Developer | Enterprise, Compute add-on | Enterprise contract: Storage + Investor & Finance + Compute + Plan Sets | contract | Operations, Site Finder | Quarterly right-size; enough viewer logins in the contract for the team to present James's IRR |
-| Budderfly | Developer (EE-as-a-service) | Trial ends 2026-10-16 | Lite + Storage + Investor & Finance | $1,250 | Operations, Site Finder | Installed sites needing owner reporting |
-| East West Energy | Advisor / integrator (DC + BESS) | Trial ends 2026-10-16 | Lite + Compute + Investor & Finance | $1,500 | Site Finder, Engineering | >5 campuses screened a month |
-| CIR (Cleantech Industry Resources) | EPC / engineering | Trial | Lite + Plan Sets + Engineering + Permitting | $2,000 | BOM, White Label on deliverables | >1 permitting matrix a month |
-| FENECON | OEM, receives full BOM | Signed MSA; Event Layer excluded | Lite + White Label + Storage + BOM (by MSA amendment) | $1,500 | Omega Logic | RFQ volume from the BOM tool |
-| Walters Wholesale Electric | Distributor, receives full BOM | Trial | Lite + White Label + BOM | $1,250 | Omega Logic (orders, freight) | Contractor orders via their storefront |
-| Solela / Chileasing | Developer / leasing | Standard | Lite + Storage + Investor & Finance | $1,250 | Operations (owner reporting) | Leased assets in service |
-| Helios Energy Advisors | Capital partner | Partner (confirm it is `heliosnrgy.com`) | Lite + Investor & Finance | $1,000 | Site Finder | Sourcing their own pipeline |
-| OGI Solar / OSA | Installer / JV | OGI standard; OSA under JV agreement | OGI: Lite + Plan Sets + Storage + EV Rebates. OSA: JV terms, not the menu | $1,250 | Permitting | OSA verification volume |
-| Green Wolf Strategies | Not on platform | Discovery | Run the proposal tool's discovery step | ≥$500 | Set on the call | n/a |
-| Lattice Energy | Not on platform | Discovery | Same | ≥$500 | Set on the call | n/a |
-| Roam Energy | Not on platform | Discovery | Same | ≥$500 | Set on the call | n/a |
-| R.E.S. (marked "??" on the list; confirm the company) | Not on platform | Discovery | Same | ≥$500 | Set on the call | n/a |
+| Account | Type | Status | Start with | List/mo | Pay | Next | Trigger |
+|---|---|---|---|---|---|---|---|
+| Clean Cell | OEM | Trial ends **2026-09-30**; white label + Logic live on trial | Lite + White Label + Grid Atlas + Storage + Estimate/BOM + Omega Logic (all five) | $5,250 | $1,299 Field + $2,500 Logic = **$3,799** | Plan Sets, Permitting | Storefront orders and bulk POs through Logic |
+| Concord Energy | EV installer | Paying, Field | Lite + EV Rebates + Estimate/BOM + Grid Atlas + Plan Sets | $1,750 | **$1,299** Field | EV overage >20/mo, Permitting (CT/MA packs) | 45 applications in 72 h |
+| NextNRG | Developer | Enterprise, Compute add-on | Storage + Investor & Finance + Compute + Grid Atlas + Site Intelligence + Plan Sets | $3,000 | Existing contract; map to modules at renewal (Pro covers this set) | Operations, Site Finder | Quarterly right-size |
+| Budderfly | Developer (EE-as-a-service) | Trial ends 2026-10-16 | Lite + Grid Atlas + Storage + Investor & Finance | $1,500 | **$1,299** Field | Operations, Site Intelligence | Installed sites needing owner reporting |
+| East West Energy | Compute / advisor | Trial ends 2026-10-16 | Lite + Compute + Grid Atlas + Site Intelligence | $1,750 | **$1,299** Field | Engineering, Site Finder | >5 campuses screened a month |
+| CIR | EPC / engineering | Trial | Lite + Plan Sets + Engineering + Estimate/BOM + Permitting (+ Grid Atlas + Site Intelligence inside Pro) | $3,250 | **$2,499** Pro | Operations | >1 matrix a month |
+| FENECON | OEM, receives full BOM | Signed MSA | Lite + White Label + Storage + Estimate/BOM | $1,500 | $1,299 Field **by MSA amendment** | Omega Logic | RFQ volume |
+| Walters Wholesale | Distributor | Trial | Lite + White Label + Estimate/BOM | $1,250 | **$1,250** | Logic Office + Logistics | Contractor orders via storefront |
+| Solela / Chileasing | Developer / leasing | Standard | Lite + Storage + Investor & Finance | $1,250 | **$1,250** | Operations | Leased assets in service |
+| Helios Energy Advisors | Capital partner (confirm = `heliosnrgy.com`) | Partner | Lite + Investor & Finance + Grid Atlas | $1,250 | **$1,250** | Site Intelligence | Sourcing own pipeline |
+| OGI Solar / OSA | Installer / JV | OGI standard; OSA under JV | OGI: Lite + Storage + EV Rebates + Estimate/BOM | $1,250 | **$1,250**; OSA on JV terms | Plan Sets | OSA verification volume |
+| Green Wolf Strategies | Not on platform | Discovery | §3.7 on the call | ≥ $500 | | | |
+| Lattice Energy | Not on platform | Discovery | same | ≥ $500 | | | |
+| Roam Energy | Not on platform | Discovery | same | ≥ $500 | | | |
+| R.E.S. (confirm the company) | Not on platform | Discovery | same | ≥ $500 | | | |
 
-Not on the list but raised on the call: **Brett** (batteries + compute, five
-sites): Lite + Compute ($1,000) or Lite + Storage ($750); the case the floor is for.
+Pipeline at the proposed prices, excluding NextNRG's existing contract and
+counting the four discovery accounts at the $500 floor: **$18,494/mo
+(~$221.9k/yr)**. Brett (batteries + compute, not on the list): Lite + Compute
+$1,000, or Lite + Grid Atlas $750.
 
 ---
 
 ## 10. Build plan
 
-Phases are independently shippable. Every phase keeps the repo's constraints:
-ES5 in tool pages and `omega-*.js`, no build step, single-file HTML tools with
-one optional `-logic.js`, the copyright header on every new file, pricing math
-only in `/api/`, staff = verified `@clearsky-usa.com` (`caller.staff`),
-Admin-SDK-only paths for billing/usage/proposals, tests on
+Constraints for every phase: ES5 in tool pages and `omega-*.js`, no build
+step, single-file tools with one optional `-logic.js`, the copyright header,
+pricing math only in `/api/`, staff = verified `@clearsky-usa.com`
+(`caller.staff`), Admin-SDK-only billing/usage/proposal paths, tests on
 `scripts/_lib/firestore-double.js`, `npm test` and `npm run check:pages` green.
 
-**Phase 0: prerequisites**
-- Merge `claude/level-2-closeout-tool-aqkh73` (`ev-closeout.html`, the
-  Eversource MA template, the `evcloseout` tool entry).
-- Tommy settles every **(decide)** in this file.
+- **Phase 0**: merge `claude/level-2-closeout-tool-aqkh73`; Tommy settles
+  every **(decide)**; counsel starts §7.
+- **Phase 1, catalog**: `api/_lib/modules.js` + tests (every tool and every
+  ribbon button accounted for); `pricebook/` rules + seed; Stripe Products
+  and Prices per module (script, idempotent, writes ids into the price book).
+- **Phase 2, editor re-gate**: `MODULE_GRANTS` in `omega-caps.js`; ribbon
+  `data-cap` → module caps per Appendix A; locked buttons say which module
+  unlocks them. Backfill script proposes `modules[]` for every live tenant
+  from its current tier/add-ons, dry run first, **flag, don't drop**.
+- **Phase 3, staff Package panel + `tenant-package` + webhook → modules.**
+- **Phase 4, customer Your plan + `plan-change`.**
+- **Phase 5, proposal tool.**
+- **Phase 6, usage meter + Stripe metered overage + the 90-day right-size
+  report.**
 
-**Phase 1: catalog + price book + packaging endpoint**
-- `api/_lib/modules.js` + `scripts/tests/tmodules.js` (every tool accounted
-  for; `resolve()` output; Lite always present; unknown module refused).
-- `pricebook/{version}` rules (staff create, no update/delete, no browser
-  read for non-staff) + `scripts/seed-pricebook.js`.
-- `tenant-billing` ALLOWED += `modules`, `pricebookVersion`, `credit`,
-  `builders`; `POST /api/tenant-package` with floor enforcement; tests for
-  floor, derived fields, audit row, and "a frozen price book is never edited".
-
-**Phase 2: Package panel in the master console**
-- §8, calling Phase 1. `check:pages` render against the logic fixtures.
-- Backfill: a dry-run script that proposes a `modules[]` for every live
-  tenant from its current `tier`/`addons` and prints the diff; `--apply` only
-  after review (flag, don't drop).
-
-**Phase 3: Subscription Proposal tool**
-- `subscription-proposal.html`, `subscription-proposal-logic.js`,
-  `api/subscription-proposal.js` (`context | recommend | price | save |
-  send | accept`), `api/_lib/subscription-pricing.js` (pure; tested).
-- Register in `omega-tools.js` as a staff-only tool (not in any module).
-- The deck and the Order Form render from the same server answer.
-
-**Phase 4: usage meter**
-- `omega_orgs/{org}/usage/{YYYY-MM}` counters in the endpoints that produce
-  EV applications, closeouts, permitting matrices, site studies; `POST
-  /api/usage` for the browser-only producers; usage-vs-included in the panel
-  and on invoices.
-
-**Phase 5: customer side**
-- "Your plan" on Account Settings; **Request this module** → console inbox;
-  90-day right-size report per tenant (used vs included, recommended change).
-
-**Docs to update when each phase lands:** this file, `CLAUDE.md` (Tool gating
-section: "effective tools" now derives from `modules[]` for a packaged
-tenant), `docs/WHITE-LABEL.md` (reseller addendum), `MERGE.md` for any logic
-moved server-side.
+Docs to update as phases land: this file, `CLAUDE.md` (Tool gating),
+`docs/WHITE-LABEL.md` (reseller addendum), `MERGE.md`.
 
 ---
 
-## 11. Decisions for Tommy (collected)
+## 11. Decisions for Tommy
 
-1. Module list prices: Standard $250, Premium $500, Deliverable $750, Logic
-   from $2,500. Lite $500.
-2. Builders included in Lite (3?) and the extra-builder price ($50?).
-3. Transformation credit: 40% for 90 days? May it take a month under $500
-   (this spec says no)? Forfeited on early termination?
-4. Usage: EV applications (20 included, $50 over?), permitting matrices (1
-   included, $2,500 over?), site studies (25 included, $15 over?).
-5. Which financing-marketplace functions sit in Lite and which in Investor & Finance (none is free).
-6. Annual Service Fee for Lite ($3,400 as in the Agreement, lower, or waived).
-7. Whether to add `customerType` (distributor, capital partner, compute)
-   beside `vertical`, or widen `vertical`.
-8. Omega Logic tiering (by orders/month, units/month, or plant stations).
-9. Who may send proposals: ClearSky staff only, or White Label tenants to
-   their own customers too.
+1. Prices: Lite $500; Grid Atlas $250; Standard $250; Premium $500;
+   Deliverable $750; Logic Office $1,500, Plant $750, Materials $500,
+   Logistics $500, Customer App $250, all five $2,500.
+2. Guided builds in Lite (this spec: yes).
+3. Logins in Lite (3 builders, 10 viewers) and the extra-login prices.
+4. Credit: 40% for 90 days, never below $500, forfeited on early exit?
+5. Usage: EV 20 included / $50 over; matrices 1 / $2,500; site studies 25 /
+   $15.
+6. Permitting Matrix while it is BETA: sell per verified jurisdiction, as a
+   draft, or hold.
+7. Enterprise: keep $150k floor with dev hours and workspaces as the reason,
+   or move it.
+8. Lite's Annual Service Fee.
+9. Who may send proposals (staff only, or White Label tenants too).
+10. Whether a customer's opt-in is instant (this spec) or staff-approved.
+
+---
+
+## Appendix A. What lives in the Site Map editor, by module
+
+From the `editor.html` ribbon (tabs File, Edit, Build, Compute, Insert, Draw,
+Annotate, Analyze, Estimate, View, Output, Settings) and the modules it loads.
+Status column: `NEW`/`BETA` as the editor's own `OmegaTags` list marks them.
+
+| Module | Ribbon location | Functions |
+|---|---|---|
+| Lite | Build › Site | Site Setup, address search, Upload Image, Stencil B&W, Lock Map, Calibrate Scale, Clear Scale, Set Plot, Clear Plot, GPS Place, Recenter |
+| Lite | Build › Build (guided) | DER Build, Auto Layout, BESS Build, Full Topology, Level 2, DCFC Build, Solar + Storage, BESS Config, Move System, Cluster tools, Fence & Tie |
+| Lite | Insert | BESS Cabinet, PCS/Inverter, Transformer, UPS, Generator, Solar, Wind, Fuel Cell, Panelboard, AC Disconnect, Meter, Junction Box, EV Charger (L2/DCFC catalog), Utility Pole, Source/POI, Utility, Parking Stalls, Concrete Pad, Fence, Bollard, Fire Hydrant, Camera, custom equipment |
+| Lite | Draw / Annotate / Edit | Select/Move, Line, Polyline, Rectangle, Circle, EV Stencil, ADA Symbol, ADA Aisle, Colour, Conduit runs, MV Trench, home-run routing, Text Note, Callout Arrow, Dimension, Zone Box, Labels, Duplicate, Delete, Undo/Redo, Clear |
+| Lite | View | Layers, Compass, Coordinates, Crosshair, Native Layer, Dock Left, Diagnose, Conduit Schedule, Solar panel view, 3D Review, Summary, Meters, live takeoff, Presentation, Snapshot, command search |
+| Lite | Output | Blueprint / PDF, Proposal, Spec Sheet, Interactive Report, Export to Monday (BETA) |
+| Lite | Settings | Maps key, AI keys, CRM Integration, Sync to CRM |
+| Grid Atlas | Analyze (today behind `engineering`) | Grid Atlas pre-screen, Grid Pre-Qualify, Find Substation, Substations → map layer, load vs grid ceiling |
+| Storage | Build › Size & Configure; Analyze | BESS Sizer, Solar BESS Sizer, BESS BTM, Solar → BESS, Import Bill, Bill Analysis (NEW), Value Stack (TOU/demand/capacity/ancillary/program), Price Decks, Non-Export Headroom, Energy Balance, 10-year cost of ownership |
+| Estimate/BOM | Estimate (today behind `engineering`) | Construction Cost, Electrical Estimate, Takeoff & Budget (NEW), BOM / Sourcing, Budget CSV, Trench schedule CSV, estimate CSV, cost/spec sheet |
+| EV Rebates | Insert; Output | Future EV marking, EV Cost Workbook link (page), L2 Project Closeout (page, on branch) |
+| Plan Sets & CAD | Output › Permit Documents / Handoff; Annotate › Markup; Draw › Drafting | Plot Plan E0/E1.1, One-Line E2.0, Schematic Editor (NEW), Riser (NEW), SLD check (NEW), Permit Sheet (NEW), Sheet Set Manager (NEW), Site Plan Styles (NEW), Architecture Mode, Building Designer (NEW), design rule check (NEW), design review, 3D Site Visualizer, AI Render, Georeferenced Export (BETA), Export for CAD (BETA), general and keyed notes |
+| Site Intelligence | Analyze › Assessment; Insert › Site & Safety | Network Proximity, Site Pre-Screen, Site Pre-Qual, Site Score, Viability Workflow, Project Intelligence, GIS Layers (NEW), Buildable Area, Add Exclusion, Terrain Layer, 3DEP Tiles, Terrain Key, Parcel Screening Register, acoustic screening (BETA) |
+| Engineering | Analyze | Circuit Analysis (NEW), NEC 220 load calc, Electrical Sizing (NEC 690.7), network analysis (BETA), DER Generation, Generation Analysis / PVWatts, design optimizer (BETA), Optimise Layout, terrain screen, pile schedule, stringing CSV, Export for Validation (BETA), Validation Status (BETA), Digital Twin handoff |
+| Investor & Finance | Output › Marketplace | Push to Marketplace (NEW), Apply for Financing (DLL), city net-zero investment case, Building Net-Zero |
+| Compute | Compute (behind `compute`) | Compute Build, ZTMM container data centre, Lay Out Site, Max Load, Load Siting Screen, prime-mover compare, gas / fiber tie-in, Compute Cost, Supply Link, Land Lease, compute campus proposal |
+| Permitting Matrix | Output › Permit Documents | Permit Creator, Permitting Matrix (BETA: Vista / SDG&E verified), Gantt timeline, dependencies & risk, fee summary, required-documents checklist |
+
+About 130 user-facing functions in all. The builder must reconcile this table
+button by button in Phase 2; anything found that is not here goes into one
+module or Lite, never left ungated.
