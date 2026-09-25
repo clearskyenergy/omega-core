@@ -398,7 +398,8 @@ async function signIn(p, h, how) {
   var chromium = require(PW).chromium, PINNED = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
   var CHROME = process.env.CHROME || (fs.existsSync(PINNED) ? PINNED : chromium.executablePath());
 
-  var sb = sandboxFiles(), servers = {}, bases = {};
+  var sb = sandboxFiles(), servers = {}, bases = {}, SANDBOX_PAGES = [];
+  try { SANDBOX_PAGES = require(path.join(ROOT, 'scripts/build-app-sandbox.js')).PAGES || []; } catch (e) {}
   console.log('shots: ' + ROOT + ' → ' + OUT + '\n  sandbox ' + sb.from + (/['"]\/api\/crm['"]/.test(sb.files['sandbox.js']) ? '' : '\n  the sandbox has no /api/crm: the account sections use the sample in crmSample()'));
   fs.mkdirSync(OUT, { recursive: true });
   /* the record of what passed; an --only run keeps every other entry */
@@ -426,6 +427,8 @@ async function signIn(p, h, how) {
       /* an app on an iPhone Home Screen (navigator.standalone) */
       if (shot.installed) await ctx.addInitScript(function () { try { Object.defineProperty(Navigator.prototype, 'standalone', { configurable: true, get: function () { return true; } }); } catch (e) {} });
       var p = await ctx.newPage(), errs = [], h = helpers(p, shot.name);
+      /* every page file the shot loads: the manifest records them (guard.js sourcesOf), so a later change to one of them makes this picture stale */
+      var loaded = []; p.on('request', function (r) { var u = r.url(); if (u.indexOf(base + '/') === 0 && /^(document|script|stylesheet)$/.test(r.resourceType())) loaded.push(u.slice(base.length)); });
       p.on('pageerror', function (e) { errs.push(e.message); });
       await p.goto(base + shot.page, { waitUntil: 'domcontentloaded' });
       if (shot.signIn) await signIn(p, h, shot.signIn);
@@ -451,7 +454,7 @@ async function signIn(p, h, how) {
       }, shot.clip) : null;
       if (shot.clip && !clip) throw new Error('nothing to clip to: ' + shot.clip.join(' … '));
       await p.screenshot(clip ? { path: file, animations: 'disabled', fullPage: true, clip: clip } : { path: file, animations: 'disabled' });
-      manifest[shot.name + '.png'] = { sha256: Guard.sha256(file), takenAt: new Date().toISOString(), tree: tree, commit: commit };
+      manifest[shot.name + '.png'] = { sha256: Guard.sha256(file), takenAt: new Date().toISOString(), tree: tree, commit: commit, sources: Guard.sourcesOf(ROOT, loaded, SANDBOX_PAGES) };
       Guard.writeManifest(OUT, manifest);
       done.push(shot.name); console.log('  ok    ' + shot.name + (errs.length ? '  (page errors: ' + errs.slice(0, 2).join(' | ') + ')' : ''));
     } catch (e) {

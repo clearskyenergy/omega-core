@@ -51,16 +51,20 @@ var PLAIN = [
   { key: 'po-example', what: 'a real customer\'s PO numbering in a sample line', re: /\bINC-44\d\d\b/g },
   { key: 'tenant-hardcoded', what: 'a tenant\'s name hard-coded into a shared page', re: /CleanCell[’']s/g }
 ];
-var COMPOUNDS = Object.keys(WORDS).filter(function (h) { return WORDS[h].inside; }).map(function (h) { return { hash: h, len: WORDS[h].len, sum: WORDS[h].sum }; });
 function lengths(map) { var o = {}; Object.keys(map).forEach(function (h) { o[map[h].len] = 1; }); return o; }
-var LENS = lengths(WORDS), CAP_LENS = lengths(CAPITALISED);
-
 function lineAt(text, i) { return text.slice(0, Math.max(0, i)).split('\n').length; }
+
+/* the matcher over any lists of the same shape: the real ones below, and
+   the fictional ones scripts/tests/tdiscreet.js proves the method on — so
+   no test has to spell a real name to show that it is caught */
+function matcher(WORDS, CAPITALISED, PLAIN) {
+var COMPOUNDS = Object.keys(WORDS).filter(function (h) { return WORDS[h].inside; }).map(function (h) { return { hash: h, len: WORDS[h].len, sum: WORDS[h].sum }; });
+var LENS = lengths(WORDS), CAP_LENS = lengths(CAPITALISED);
 
 /* hits(text) → [{ key, what, n, sample, line }]: each thing found, how many
    times, and the first line it is on — the line says where, so a hashed
    word can be found without this file saying what it is */
-function hits(text) {
+return function hits(text) {
   text = String(text == null ? '' : text);
   var found = [], low = text.toLowerCase(), by = {};
   function tally(entry, at, n, sample) {
@@ -102,6 +106,7 @@ function hits(text) {
     if (e) { var re = new RegExp(w + '(?![a-z])', 'g'); tally(e, text.search(re), (text.match(re) || []).length, 'a hashed word'); }
   });
   return found;
+};
 }
 
-module.exports = { hits: hits, sha: sha, WORDS: WORDS, CAPITALISED: CAPITALISED, PLAIN: PLAIN };
+module.exports = { hits: matcher(WORDS, CAPITALISED, PLAIN), matcher: matcher, sha: sha, WORDS: WORDS, CAPITALISED: CAPITALISED, PLAIN: PLAIN };

@@ -1122,8 +1122,8 @@
     return '<p class="note">Send units to your sites: each unit is marked “going to” its site. When it arrives and you record it received, it is tied to that site and its warranty starts. Nothing ships differently; to change a delivery, ask on the order.</p>'
       + '<select id="sl-order" aria-label="Order"><option value="">Choose the order…</option>' + orders.map(function (x) { return '<option value="' + esc(x.orderNo) + '"' + (x.orderNo === SL.orderNo ? ' selected' : '') + '>' + esc(x.orderNo + (x.po ? ' · PO ' + x.po : '') + ' · ' + plural(Number(x.units) || 0, 'unit')) + '</option>'; }).join('') + '</select>'
       + (o ? '<p class="note">' + esc(slOrderLine(o)) + '</p>' : '')
-      + '<div style="display:flex;align-items:center;gap:4px;margin-top:14px"><b style="flex:1">Sites · <span id="sl-picked">0</span> of ' + sites.length + '</b><button type="button" class="link" data-sl-all="1">Tick all</button><button type="button" class="link" data-sl-all="0">None</button></div>'
-      + '<p class="note" style="margin:2px 0 0">Leave Units blank to share the order evenly; type a number to send exactly that many there.</p>'
+      + '<div style="display:flex;align-items:center;gap:4px;margin-top:14px"><b style="flex:1">Sites · <span id="sl-picked">0</span> of ' + sites.length + '</b><button type="button" class="link" data-sl-all="1">Tick all</button><button type="button" class="link" data-sl-all="0">None</button><button type="button" class="link" data-sl-one>One each</button></div>'
+      + '<p class="note" style="margin:2px 0 0">Leave Units blank to share the order evenly; type a number to send exactly that many there. <b>One each</b> sends one unit to every ticked site; the rest of the order waits for your next list.</p>'
       + sites.map(function (s) {
         var now = [Number(s.units) > 0 ? s.units + ' at the site' : '', Number(s.planned) > 0 ? s.planned + ' going here' : ''].filter(Boolean).join(' · ');
         return '<div class="card sl-site"><label class="sl-pick"><input type="checkbox" data-sl-pick="' + esc(s.id) + '"' + (SL.pick[s.id] ? ' checked' : '') + '><span><b>' + esc(s.name) + '</b><small>' + esc(slAddr(s.address)) + '</small>' + (now ? '<small>' + esc(now) + '</small>' : '') + '</span></label>'
@@ -1190,6 +1190,8 @@
     if ($('sl-order')) $('sl-order').onchange = function () { SL.orderNo = this.value; SL.elsewhere = 0; SL.replan = false; SL.plan = null; SL.done = null; SL.msg = ''; slDraw(); };
     Array.prototype.forEach.call(el.querySelectorAll('[data-sl-pick]'), function (c) { c.onchange = function () { SL.pick[c.getAttribute('data-sl-pick')] = c.checked; slUnplan(); slPaintTotals(); }; });
     Array.prototype.forEach.call(el.querySelectorAll('[data-sl-n]'), function (i) { i.oninput = function () { SL.n[i.getAttribute('data-sl-n')] = i.value; slUnplan(); slPaintTotals(); }; });
+    /* one unit to each ticked site: the rest of the order stays without a site, and the next list's sites take the next units */
+    Array.prototype.forEach.call(el.querySelectorAll('[data-sl-one]'), function (b) { b.onclick = function () { slSites().forEach(function (s) { if (SL.pick[s.id]) SL.n[s.id] = '1'; }); SL.plan = null; slDraw(); }; });
     Array.prototype.forEach.call(el.querySelectorAll('[data-sl-all]'), function (b) { b.onclick = function () { var on = b.getAttribute('data-sl-all') === '1'; slSites().forEach(function (s) { SL.pick[s.id] = on; }); SL.plan = null; slDraw(); }; });
     if ($('sl-replan')) $('sl-replan').onchange = function () { SL.replan = this.checked; slUnplan(); };
     if ($('sl-plan')) $('sl-plan').onclick = function () { slPlan(this); };

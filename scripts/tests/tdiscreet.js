@@ -221,19 +221,35 @@ function everyFile() {
   var all = Object.keys(D.WORDS).concat(Object.keys(D.CAPITALISED));
   ok('the hashed lists are non-empty and every entry is a SHA-256', all.length >= 4 && all.every(function (h) { return /^[0-9a-f]{64}$/.test(h); }));
   ok('a plain paragraph passes', !hits('The office prices the order and the plant builds it.').length);
-  /* the samples are the names themselves, so they are stored the way a name
-     is kept out of this file: base64, decoded only here */
-  function name(b64) { return Buffer.from(b64, 'base64').toString('utf8'); }
-  var CO = name('QW1wZXJhZ2UgQ2FwaXRhbA=='), DOMAIN = name('YW1wZXJhZ2VjYXBpdGFsLmNvbQ=='), KEY = DOMAIN.split('.')[0], WORD = CO.split(' ')[0];
-  ok('the samples decode to what the hashes are of', D.CAPITALISED[D.sha(WORD)] && D.WORDS[D.sha(KEY)]);
-  function buyer(t) { return hits(t).filter(function (h) { return h.key === 'buyer'; }).reduce(function (n, h) { return n + h.n; }, 0); }
+  /* The method, proved on a FICTIONAL buyer through the same matcher: a
+     real name would have to be written here to be tested, and a name kept
+     in base64 is a name anyone can read. The fictional lists are built the
+     way the real ones are (discreet.js header). */
+  var CO = 'Voltmark Holdings', DOMAIN = 'voltmarkholdings.com', KEY = 'voltmarkholdings', WORD = 'Voltmark', PERSON = 'morgana', PO = 'q7zx';
+  function sum(w) { var n = 0; for (var i = 0; i < w.length; i++) n += w.charCodeAt(i); return n; }
+  var FW = {}, FC = {};
+  FW[D.sha(KEY)] = { key: 'buyer', what: 'the fictional buyer (key)', len: KEY.length, inside: true, sum: sum(KEY) };
+  FW[D.sha(PERSON)] = { key: '#person', what: 'a person at the fictional buyer', len: PERSON.length };
+  FW[D.sha(PO)] = { key: '#po', what: 'the fictional PO code', len: PO.length };
+  FC[D.sha(WORD)] = { key: 'buyer', what: 'the fictional buyer (company)', len: WORD.length };
+  var fh = D.matcher(FW, FC, D.PLAIN);
+  function buyer(t) { return fh(t).filter(function (h) { return h.key === 'buyer'; }).reduce(function (n, h) { return n + h.n; }, 0); }
   ok('the company is found in a comment, a placeholder and a domain alike',
      buyer('/* e.g. ' + CO + ' */') === 1 && buyer('placeholder="e.g. ' + DOMAIN + '"') === 1 && buyer('"' + KEY.slice(0, 8) + '-' + KEY.slice(8) + '"') === 1 && buyer('var x = "' + WORD + KEY.slice(8, 9).toUpperCase() + KEY.slice(9) + '";') === 2,
-     [buyer('/* e.g. ' + CO + ' */'), buyer('placeholder="e.g. ' + DOMAIN + '"')]);
+     [buyer('/* e.g. ' + CO + ' */'), buyer('placeholder="e.g. ' + DOMAIN + '"'), buyer('"' + KEY.slice(0, 8) + '-' + KEY.slice(8) + '"'), buyer('var x = "' + WORD + KEY.slice(8, 9).toUpperCase() + KEY.slice(9) + '";')]);
   ok('and inside a longer run of letters', buyer('https://www.' + KEY + 'partners.example/') === 1);
   ok('the other customer is found as written', hits('InCharge Bakersfield').length === 1);
-  ok('the electrical quantity is not the company', !hits('priced by its ' + WORD.toLowerCase() + ', labeled with ' + WORD.toLowerCase() + '/voltage').length);
-  ok('a hashed person and PO code are found in any case, as a whole word, and say only where', hits('Ask ' + name('U2hhbm5vbg==') + ' about PO ' + name('M1YzSQ==')).length === 2 && hits('Ask ' + name('U2hhbm5vbg==')).every(function (h) { return h.sample === 'a hashed word'; }));
+  ok('the company\'s word in lowercase, an ordinary word, is not the company', !fh('priced by its ' + WORD.toLowerCase() + ', labeled with ' + WORD.toLowerCase() + '/voltage').length);
+  ok('a hashed person and PO code are found in any case, as a whole word, and say only where', fh('Ask Morgana about PO Q7ZX').length === 2 && fh('Ask MORGANA').every(function (h) { return h.sample === 'a hashed word'; }));
+  ok('the real lists are what hits() runs on: a fictional name is not on them', !hits('Ask Morgana at ' + DOMAIN).length);
+  /* the real samples, when a person who may know them keeps them OUTSIDE
+     the repo (OMEGA_DISCREET_SAMPLES=<file>: { company, domain, person, po }) */
+  var SAMPLES = process.env.OMEGA_DISCREET_SAMPLES;
+  if (SAMPLES && fs.existsSync(SAMPLES)) {
+    var sm = JSON.parse(fs.readFileSync(SAMPLES, 'utf8')), key = String(sm.domain || '').split('.')[0];
+    ok('(local samples) the real hashes are of the real names', !!(D.CAPITALISED[D.sha(String(sm.company || '').split(' ')[0])] && D.WORDS[D.sha(key)] && D.WORDS[D.sha(String(sm.person || '').toLowerCase())] && D.WORDS[D.sha(String(sm.po || '').toLowerCase())]));
+    ok('(local samples) and the real names are found', hits(sm.company + ' ' + sm.domain + ' ' + sm.person + ' PO ' + sm.po).length >= 3);
+  }
 })();
 
 /* ── .vercelignore, read correctly ─────────────────────────────────────── */

@@ -40,11 +40,11 @@ if (DRAFT && OUT === SERVED) { console.error('guides: a --draft never writes to 
    template cannot load a file, so it goes in as a data URI) */
 var MARK = 'data:image/png;base64,' + fs.readFileSync(path.join(__dirname, '..', '..', 'icons', 'omega-logic-180.png')).toString('base64');
 var header = fs.readFileSync(path.join(__dirname, 'header.html'), 'utf8').replace(/<!--[\s\S]*?-->/g, '').replace('%%OMEGA_LOGIC_MARK%%', MARK);
-var GUIDES = { plant: 'Omega-Logic-Plant-App.pdf', office: 'Omega-Logic-Office-App.pdf', customer: 'Omega-Logic-Customer-App.pdf', all: 'Omega-Logic-Phone-Apps.pdf' };
+var GUIDES = Guard.GUIDES;
 /* the same PDF under a second name: the Omega Logic app guide is what the
    office guide is; the old name stays because the app's Help panel, the kit
    and the tests link it */
-var ALSO = { office: ['Omega-Logic-App.pdf'] };
+var ALSO = Guard.ALSO;
 function read(k) { return fs.readFileSync(path.join(__dirname, k + '.html'), 'utf8'); }
 function headOf(h) { return h.slice(0, h.indexOf('<body>')); }
 function bodyOf(h) { return h.slice(h.indexOf('<body>') + 6, h.lastIndexOf('</body>')); }
@@ -82,7 +82,7 @@ function assets(html) {
 /* A screenshot is printed only if shots.js took it and its bytes match the
    record (guard.js): 'missing', 'unrecorded' (a leftover or a hand-copied
    picture) and 'changed' are all unusable, and all name the fix. */
-var MANIFEST = Guard.readManifest(SHOTS);
+var MANIFEST = Guard.readManifest(SHOTS); var BUILT = Guard.readBuilt();
 function shotState(src) { return Guard.verdict(SHOTS, src.replace(/^shots\//, ''), MANIFEST); }
 function unusableOf(html) { return assets(html).filter(function (src) { return /^shots\//.test(src) && shotState(src) !== 'ok'; }); }
 var problems = [], badShots = {};
@@ -144,8 +144,15 @@ if (Object.keys(badShots).length && !DRAFT) {
       margin: { top: '1.05in', bottom: '0.6in', left: '0.55in', right: '0.55in' } });
     console.log(GUIDES[key] + (missing.length ? '  (draft: ' + missing.length + ' screenshot' + (missing.length === 1 ? '' : 's') + ' boxed)' : ''));
     (ALSO[key] || []).forEach(function (name) { fs.copyFileSync(file, path.join(OUT, name)); console.log(name + '  (= ' + GUIDES[key] + ')'); });
+    /* what this PDF printed (guard.js freshness): only a real build into guides/ */
+    if (!DRAFT && OUT === SERVED && !missing.length) {
+      var rec = { sha256: Guard.sha256(file), shots: {}, guides: {} };
+      Guard.GUIDE_HTML[key].forEach(function (h) { rec.guides[h] = Guard.sha256(path.join(__dirname, h)); Guard.shotsIn(fs.readFileSync(path.join(__dirname, h), 'utf8')).forEach(function (png) { rec.shots[png] = MANIFEST[png].sha256; }); });
+      [GUIDES[key]].concat(ALSO[key] || []).forEach(function (name) { BUILT[name] = rec; });
+    }
     await p.close();
   }
   await b.close();
+  if (!DRAFT && OUT === SERVED) Guard.writeBuilt(BUILT);
   if (DRAFT) console.log('draft written to ' + OUT);
 })().catch(function (e) { console.error(e); process.exit(1); });

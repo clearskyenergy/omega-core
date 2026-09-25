@@ -1192,6 +1192,51 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('  no browser box opens anywhere in the flow', dialogs.length === 0, dialogs);
     return { sites: riversideSites(STATE).length, planned: Object.keys(plannedOf(STATE)).length, csv: got.csv.rows.length - 1 };
   });
+  /* One per site: an order whose units each go to their own site, the
+     addresses arriving a few at a time. Two sites first, one unit each, the
+     third unit left for later; then the next list's one site takes the
+     next serial and the first two stay where they are */
+  var ONE_A = '410 Example Ave, Fairview, NJ 07022\n77 Sample Plaza Suite 12, Springfield, IL 62704', ONE_B = '9 Placeholder Rd, Riverton, WY 82501';
+  freshSample();
+  await check('one-per-site-office', '/logic-custody.html?org=cleancell.us#many', async function (p) {
+    await p.waitForTimeout(800);
+    await p.selectOption('#mn-acct', 'company_riverside'); await p.waitForSelector('#mn-steps:not(.hide)'); await p.waitForTimeout(300);
+    await p.fill('#mn-text', ONE_A); await p.click('#mn-check'); await p.waitForSelector('#mn-preview [data-mn-name]');
+    await p.click('#mn-create'); await p.waitForFunction(function () { return /Created 2 sites/.test(document.getElementById('mn-msg1').textContent); }); await p.waitForTimeout(400);
+    await p.click('#mn-one'); await p.waitForTimeout(150);
+    var boxes = await p.$$eval('#mn-sites tbody tr', function (r) { return r.map(function (tr) { return tr.querySelector('b').textContent + ':' + (tr.querySelector('[data-mn-on]').checked ? 'on' : 'off') + ':' + tr.querySelector('[data-mn-n]').value; }); });
+    var total = await text(p, '#mn-total');
+    await p.click('#mn-plan'); await p.waitForSelector('#mn-planout .sum');
+    var plan = await p.$$eval('#mn-planout tbody tr', function (r) { return r.map(function (x) { return x.cells[0].textContent.trim() + ':' + x.cells[2].querySelector('b').textContent.trim() + ':' + Array.prototype.map.call(x.querySelectorAll('.serials .mono'), function (s) { return s.textContent; }).join(' '); }); });
+    var out = await text(p, '#mn-planout'), apply = await text(p, '#mn-apply');
+    ok('one per site (office): One per site puts 1 in each ticked site; Preview sends one unit to each, lowest serials first, and leaves the third for the next list', boxes.join('|') === 'Fairview, NJ:on:1|Springfield, IL:on:1|Riverside yard:off:' && /^2 of 3 units that can be sent to a site, over 2 sites · 1 left over\.$/.test(total) && plan.join(' / ') === 'Fairview, NJ:1:CC418-26-44192 / Springfield, IL:1:CC418-26-44193' && /CC418-26-44195/.test(out) && apply === 'Assign 2 units to 2 sites', [boxes, total, plan, out.slice(0, 300), apply]);
+    await p.click('#mn-apply'); await p.waitForSelector('#mn-done .sum'); await p.waitForTimeout(400);
+    /* the next addresses arrive: one more site, One per site again */
+    await p.fill('#mn-text', ONE_B); await p.click('#mn-check'); await p.waitForFunction(function () { var e = document.querySelector('#mn-preview .sum'); return e && / 1 new /.test(e.textContent); });
+    await p.click('#mn-create'); await p.waitForFunction(function () { return /Created 1 site/.test(document.getElementById('mn-msg1').textContent); }); await p.waitForTimeout(400);
+    await p.click('#mn-one'); await p.waitForTimeout(150);
+    await p.click('#mn-plan'); await p.waitForSelector('#mn-planout .sum');
+    var plan2 = await p.$$eval('#mn-planout tbody tr', function (r) { return r.map(function (x) { return x.cells[0].textContent.trim() + ':' + x.cells[2].querySelector('b').textContent.trim() + ':' + Array.prototype.map.call(x.querySelectorAll('.serials .mono'), function (s) { return s.textContent; }).join(' '); }); });
+    await p.click('#mn-apply'); await p.waitForSelector('#mn-done .sum'); await p.waitForTimeout(400);
+    var planned = plannedOf(STATE);
+    ok('  the next list\'s site takes the next serial; the first two keep theirs', plan2.filter(function (x) { return /^Riverton, WY:1:CC418-26-44195$/.test(x); }).length === 1 && planned['CC418-26-44192'] === 'Fairview, NJ' && planned['CC418-26-44193'] === 'Springfield, IL' && planned['CC418-26-44195'] === 'Riverton, WY', [plan2, planned]);
+    return { planned: Object.keys(planned).length };
+  });
+  freshSample();
+  await check('one-per-site-portal', '/portals/customer/?org=cleancell.us', async function (p) {
+    await p.waitForTimeout(1200);
+    await p.click('.logic-nav [data-view="fleet"]'); await p.waitForTimeout(400);
+    await p.click('#fleet-bulk [data-bk-go="paste"]'); await p.waitForTimeout(200);
+    await p.fill('#bk-text', ONE_A); await p.click('#bk-preview'); await p.waitForSelector('#fleet-bulk tr[data-bk-row]');
+    await p.click('#bk-create'); await p.waitForSelector('#bk-plan'); await p.waitForTimeout(300);
+    await p.click('#fleet-bulk [data-bk-one]'); await p.waitForTimeout(150);
+    var boxes = await p.$$eval('#fleet-bulk [data-bk-pick]', function (r) { return r.map(function (c) { var tr = c.closest('tr'); return tr.querySelector('b').textContent + ':' + (c.checked ? 'on' : 'off') + ':' + tr.querySelector('[data-bk-n]').value; }); });
+    await p.click('#bk-plan'); await p.waitForSelector('#bk-planbox');
+    var plan = await p.$$eval('#bk-planbox tr[data-bk-plan]', function (r) { return r.map(function (x) { var s = x.querySelector('.mono'); return x.cells[0].querySelector('b').textContent + ':' + x.cells[1].textContent.trim() + ':' + (s ? s.textContent : ''); }); });
+    var box = await text(p, '#bk-planbox'), hs = await hscrollAt(p, 390, WIDE);
+    ok('one per site (portal): One per site puts 1 in each ticked site; the preview sends one unit to each and says the third stays without a site', boxes.join('|') === 'Fairview, NJ:on:1|Springfield, IL:on:1|Riverside yard:off:' && plan.join(' / ') === 'Fairview, NJ:1:CC418-26-44192 / Springfield, IL:1:CC418-26-44193' && /1 unit stays without a site/.test(box) && !hs, [boxes, plan, box.slice(0, 300), hs]);
+    return { sites: 2 };
+  });
   await check('site-list-app', '/app-sandbox/customer', async function (p) {
     await p.waitForTimeout(400);
     /* the sandbox keeps its own sample on the phone: start it over (the

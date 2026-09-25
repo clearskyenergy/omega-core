@@ -130,7 +130,10 @@ the office app's Sites tab links there. The same three steps on each:
 3. **Assign (office) / Send (customer)**: pick the order; the list's sites
    come first, ticked, with the list's unit counts; a blank box shows its
    even share; a running total compares the numbers with the units that can
-   be sent. **Preview** shows the serials per site, what is left over, what
+   be sent. **One per site** (the customer app: **One each**) fills 1 into
+   every ticked box — the page's own shortcut, not a server option: the
+   plan is the same `spread` over explicit numbers, so the rest of the
+   order is `leftover` and the next list's sites take the next serials. **Preview** shows the serials per site, what is left over, what
    is released, what is already going elsewhere and what cannot be sent and
    why. **Assign / Send** records it. The result has **Download CSV** (one
    row per unit: serial, site, address, city, state, ZIP, order, status —

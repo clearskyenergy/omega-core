@@ -324,7 +324,12 @@ Logic nor ClearSky; `Omega-Logic-Phone-Apps.pdf` is the three back to back.
   4. **Assign the order's units.** The order is chosen; the list's sites are
      ticked in list order with the list's counts. A blank box takes an even
      share of the rest (the grey number); the first sites take the one
-     extra. The total says how many of the order's units can go to a site
+     extra. **One per site** puts 1 in every ticked box — for an order
+     whose units each go to their own site while the addresses are still
+     coming in: this list's sites get one unit each, lowest serials first,
+     the rest of the order stays without a site, and the next list's sites
+     take the next serials (units already going to a site are left where
+     they are). The total says how many of the order's units can go to a site
      (units still being built count; received ones are assigned when they
      arrive). A site's number counts the units already there, so the
      list's own numbers can add up to more than that total on a re-run —
@@ -836,7 +841,9 @@ desktop it is the card at the top of *Fleet & sites*; in the app, Fleet →
 3. **Send units to your sites**: the order (chosen for you when there is
    one), the list's sites ticked with its numbers, a blank box sharing the
    rest evenly and a total against the units that can be sent (a site's
-   number counts the units already there, so Preview decides).
+   number counts the units already there, so Preview decides). **One
+   each** (the portal's **One per site**) sends one unit to every ticked
+   site and leaves the rest of the order for your next list.
    **Preview**
    shows the serials going to each site; **Send N units to M sites** marks
    each one *going to* its site — nothing else asks. **Download CSV** gives

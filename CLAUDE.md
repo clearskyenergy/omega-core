@@ -512,6 +512,16 @@ is not built.
   is not) from screenshots `scripts/guides/shots.js` takes of the sandboxes
   (tenant names neutralised: a public PDF names no tenant); the office's is
   `guides/Omega-Logic-App.pdf`. Add an app there, not in a page.
+- **A release that changes a screen retakes the guides.** `shots.js`
+  records, per screenshot, the sha256 of every page file the shot loaded
+  (`shots/manifest.json` `sources`; a sandbox page counts as its source
+  page); `build.js` records which screenshots each PDF printed
+  (`scripts/guides/built.json`). `scripts/tests/tguides.js` (in `npm test`)
+  fails when a photographed page changed since its shot, or a PDF was not
+  rebuilt from the current shots. The fix is `npm run guides` (shots, then
+  build) and committing `scripts/guides/`, `guides/`; never an edit to the
+  manifest or `built.json`. A new screen gets a shot and a line in the guide
+  that teaches it.
 - **ClearSky commissions and controls Logic subscribers from
   `/logic-admin.html`** (`api/logic-admin.js`, owner-only through
   `logic-access.requireOwner`). It owns only what no other endpoint did —
