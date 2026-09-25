@@ -372,7 +372,9 @@ body:not(.booting) #boot{display:none}
 body.booting .step,body.booting .tb-right .rep,body.booting .save-state,body.booting .xp,body.booting .mstrip,body.booting .mobnav{display:none!important}
 body.refused .step,body.refused .stepper,body.refused .rail,body.refused .tb-right .rep,body.refused .save-state,body.refused .xp,body.refused .mstrip,body.refused .mobnav,body.refused #boot{display:none!important}
 body.refused .app{grid-template-columns:minmax(0,860px);justify-content:center}
-#notice:empty{display:none}
+#notice:empty,#legacy-offer:empty,#deck-omit:empty{display:none}
+.help .warn-t{color:var(--pf-amber-ink);font-weight:600}
+.help .btn-t{font-size:12px;min-height:0;padding:0}
 /* Until the context call says what the platform is called here, its name is
    not painted: a white-labelled workspace on a host with no tenant pin would
    otherwise see ours first. */
@@ -653,6 +655,7 @@ body.brand-pending .tb-logo{visibility:hidden}
 
 <main class="main" id="main" tabindex="-1">
 <div id="notice" role="alert"></div>
+<div id="legacy-offer"></div>
 <div class="card boot" id="boot"><span class="spin" aria-hidden="true"></span><span id="boot-msg">Signing you in…</span></div>
 
 <!-- ═══ SITE & SYSTEM ═══ -->
@@ -660,9 +663,21 @@ body.brand-pending .tb-logo{visibility:hidden}
   <header class="step-h">
     <div class="kick" data-kick="site">Step 1</div>
     <h2 id="h-site" tabindex="-1">Site &amp; system</h2>
-    <p class="lede">Where the project is, what is being built there and how it earns. Everything after this follows your answers: a part you leave out has no step, no field and no line in the deck.</p>
+    <p class="lede">What is being built, how it earns and where it is. Everything after this follows your answers: a part you leave out has no step, no field and no line in the deck.</p>
   </header>
   <div class="notes" id="n-site"></div>
+
+  <!-- Configuration first: what is at the site and how it earns decide every
+       step after this one, so they are the first thing the step asks. -->
+  <div class="sec-h"><span>What’s at this site?</span><span class="rule"></span></div>
+  <p class="sec-note">Battery storage is always in — this is the BESS Pro Forma. Add what else is being built; each part brings only its own steps, costs and deck content, and switching one off keeps what you typed for it.</p>
+  <div class="comp-grid" id="comp-grid"></div>
+
+  <div class="sec-h"><span>How does this project earn money?</span><span class="rule"></span></div>
+  <p class="sec-note" id="earn-lede">One choice. Only the ones that fit what is at the site are offered; the prices and terms go in Revenue &amp; operating costs.</p>
+  <div class="earn-grid" id="earn-grid" role="radiogroup" aria-label="How the project earns money"></div>
+  <div id="earn-more"></div>
+  <p class="err" data-err="revenue.bess.mode" style="display:block"></p>
 
   <div class="sec-h"><span>The site</span><span class="rule"></span></div>
   <div class="card" id="c-site">
@@ -711,16 +726,6 @@ body.brand-pending .tb-logo{visibility:hidden}
     <div id="site-facts"></div>
   </div>
 
-  <div class="sec-h"><span>What’s at this site?</span><span class="rule"></span></div>
-  <p class="sec-note">Battery storage is always in — this is the BESS Pro Forma. Add what else is being built; each part brings only its own steps, costs and deck content, and switching one off keeps what you typed for it.</p>
-  <div class="comp-grid" id="comp-grid"></div>
-
-  <div class="sec-h"><span>How does this project earn money?</span><span class="rule"></span></div>
-  <p class="sec-note" id="earn-lede">One choice. Only the ones that fit what is at the site are offered; the prices and terms go in Revenue &amp; operating costs.</p>
-  <div class="earn-grid" id="earn-grid" role="radiogroup" aria-label="How the project earns money"></div>
-  <div id="earn-more"></div>
-  <p class="err" data-err="revenue.bess.mode" style="display:block"></p>
-
   <div class="sec-h"><span>Host &amp; schedule</span><span class="rule"></span></div>
   <div class="card">
     <div class="card-h"><h3>Host &amp; sponsor</h3></div>
@@ -759,7 +764,7 @@ body.brand-pending .tb-logo{visibility:hidden}
 
   <div class="card">
     <div class="card-h"><h3>Schedule &amp; term</h3></div>
-    <p class="card-note">The construction start decides which credits the project keeps: solar placed in service after 2027 needs construction begun by 4 July 2026, storage phases down for construction after 2033, and the foreign-entity (FEOC) cost thresholds rise each year.</p>
+    <p class="card-note" id="sched-note">The construction start decides which credits the project keeps: storage phases down for construction after 2033, and the foreign-entity (FEOC) cost thresholds rise each year.</p>
     <div class="fg">
       <div class="f s2 mw">
         <span class="lbl" id="p-boc-l">Construction start (BOC)</span>
@@ -776,7 +781,7 @@ body.brand-pending .tb-logo{visibility:hidden}
       <div class="f s2 num">
         <label for="p-years">Analysis term <span class="req" aria-hidden="true">*</span></label>
         <div class="ig"><input id="p-years" type="text" inputmode="numeric" data-path="years" data-kind="int"><span class="suf">years</span></div>
-        <p class="help">Usually the PPA or services-agreement term; the cash flows and the deck run this long.</p>
+        <p class="help" id="p-years-h">Usually the services-agreement term; the cash flows and the deck run this long.</p>
         <p class="err" data-err="years"></p>
       </div>
     </div>
@@ -821,14 +826,15 @@ body.brand-pending .tb-logo{visibility:hidden}
             <select id="mo-sy" data-path="sz.load.startYear" data-kind="sel" data-num="1" aria-label="First bill year" style="flex:1 1 0"></select>
           </div>
         </div>
-        <div class="f s3"><p class="help beside">Peak demand is the billed kW on each bill; energy is the kWh used. Paste two columns straight from a spreadsheet into any cell.</p></div>
+        <div class="f s3"><p class="help beside">Peak demand is the billed kW on each bill; energy is the kWh used. Paste the columns straight from a spreadsheet into any cell.</p></div>
       </div>
       <div class="mtw">
         <table class="mtbl">
-          <thead><tr><th scope="col">Bill</th><th scope="col" class="d">Days</th><th scope="col">Peak demand (kW)</th><th scope="col">Energy (kWh)</th></tr></thead>
+          <thead><tr id="mo-head"><th scope="col">Bill</th><th scope="col" class="d">Days</th><th scope="col">Peak demand (kW)</th><th scope="col">Energy (kWh)</th></tr></thead>
           <tbody id="mo-rows"></tbody>
         </table>
       </div>
+      <p class="help" id="mo-tou-h" hidden></p>
       <div class="inline" style="margin-top:10px">
         <button type="button" class="btn btn-s btn-sm" data-act="mo-more" id="mo-more">Add 12 more months</button>
         <button type="button" class="btn-t" data-act="mo-clear">Clear the bills</button>
@@ -855,8 +861,8 @@ body.brand-pending .tb-logo{visibility:hidden}
       </div>
       <div class="f s2 num">
         <label for="t-rt">Demand ratchet</label>
-        <div class="ig"><input id="t-rt" type="text" inputmode="decimal" data-path="sz.tariff.ratchetPct" data-kind="pctfrac" data-dp="1"><span class="suf">% of peak</span></div>
-        <p class="help">Share of the trailing 11-month peak billed as a floor. 0 if the tariff has none.</p>
+        <div class="ig"><input id="t-rt" type="text" inputmode="decimal" data-path="sz.tariff.ratchetPct" data-kind="pctfrac" data-dp="1" data-blank="null" placeholder="none"><span class="suf">% of peak</span></div>
+        <p class="help" id="t-rt-h">Share of the trailing 11-month peak billed as a floor. Blank if the tariff has none.</p>
         <p class="err" data-err="sz.tariff.ratchetPct"></p>
       </div>
     </div>
@@ -865,7 +871,7 @@ body.brand-pending .tb-logo{visibility:hidden}
       <div class="in">
         <label class="lbl" for="t-urdb">Paste one rate record as JSON</label>
         <textarea id="t-urdb" rows="5" spellcheck="false" data-path="sz.tariff.urdb" data-kind="urdb" placeholder="{ &quot;name&quot;: &quot;…&quot;, &quot;energyratestructure&quot;: [ … ], &quot;demandratestructure&quot;: [ … ] }"></textarea>
-        <p class="help">For a tariff with time-of-use or seasonal demand charges. It replaces the single demand charge above in the sizing; the other two fields still apply where the record is silent.</p>
+        <p class="help">For a tariff with time-of-use or seasonal demand charges. On monthly bills its demand rates replace the single demand charge above — a time-of-use demand charge needs each bill’s on-peak kW, which the bill table then asks for. Interval sizing prices demand at the single charge. Its demand ratchet applies while the ratchet field is blank.</p>
         <p class="err" data-err="sz.tariff.urdb"></p>
         <p class="derived" id="urdb-ok" hidden></p>
       </div>
@@ -1085,7 +1091,7 @@ body.brand-pending .tb-logo{visibility:hidden}
           <div class="ig"><input id="pr-cont" type="text" inputmode="decimal" data-path="ui.presets.contingencyPct" data-kind="num" data-dp="2"><span class="suf">% of lines</span></div>
         </div>
       </div>
-      <p class="help" style="margin:10px 0 16px">The battery unit costs are the ones the sizing engine priced the size on in Load &amp; battery sizing — change them here or there.</p>
+      <p class="help" id="pr-bess-h" style="margin:10px 0 16px">The battery unit costs are the ones the sizing engine priced the size on in Load &amp; battery sizing — change them here or there.</p>
     </details>
     <div class="lines" id="capex-lines"></div>
     <div class="lines-foot">
@@ -1231,7 +1237,7 @@ body.brand-pending .tb-logo{visibility:hidden}
           <div class="ig"><span class="pre">$</span><input id="po-am" type="text" inputmode="decimal" data-path="ui.presets.assetMgmt" data-kind="num" data-dp="0" data-fmt="sep"><span class="suf">/yr</span></div>
         </div>
       </div>
-      <p class="help" style="margin:10px 0 16px">Every line is its year-one cost and escalates at its own rate. Battery O&amp;M uses the same rate the sizing engine assumed.</p>
+      <p class="help" id="po-bess-h" style="margin:10px 0 16px">Every line is its year-one cost and escalates at its own rate. Battery O&amp;M uses the same rate the sizing engine assumed.</p>
     </details>
     <div class="lines" id="opex-lines"></div>
     <div class="lines-foot">
@@ -1610,6 +1616,7 @@ body.brand-pending .tb-logo{visibility:hidden}
         </div>
       </div>
     </div>
+    <div id="deck-omit" aria-live="polite"></div>
     <div class="deck-box" id="deck-box" aria-label="Deck preview"><div class="empty">The deck appears once the model has run.</div></div>
   </div>
   <div class="step-nav" data-nav="results"></div>
@@ -1757,9 +1764,13 @@ var TREATMENT = {
 
 /* The documented defaults of the sizing bridge (api/_lib/proforma-sizing.js).
    A new report opens with them filled in so the user can see what the engine
-   assumes; a field left blank falls back to the same value on the server. */
+   assumes; a field left blank falls back to the same value on the server,
+   and the page prices the preset lines on that same value (bessUnitCosts).
+   The ratchet is the exception and opens BLANK: the bridge lets a pasted
+   URDB record's own ratchet stand in only when the request states none, and
+   a stated 0 would quietly overrule every tariff that has one. */
 var SIZING_DEFAULTS = {
-  tariff: { demandChargePerKw: 18, energyRate: 0.11, ratchetPct: 0 },
+  tariff: { demandChargePerKw: 18, energyRate: 0.11, ratchetPct: null },
   bess: { capexPerKwh: 400, capexPerKw: 250, rtePct: 88, dodPct: 90, cRate: 0.5, omPerKwYr: 10,
           fadePctYr: 2, minSohPct: 70, durations: [1, 2, 4, 6], headroomPct: 0 },
   finance: { itcPct: 30 }
@@ -1814,10 +1825,11 @@ var WARN_STEP = {
   STORAGE_PHASEDOWN: ['site', 'tax'], TAX_EXEMPT_HOST: ['site'], STATE_TAX_MISSING: ['site', 'tax'],
   NO_SIZING: ['load'], SIZING_TERM_SHORT: ['load'], SIZING_MISMATCH: ['load'],
   EV_NO_CREDIT: ['capex'], ROOF_INELIGIBLE: ['capex'], CONTROLLER_INTEGRAL: ['capex'], INTERCONNECTION_LIMIT: ['capex'],
+  BLENDED_SPLIT: ['capex'],
   DR_UPSIDE: ['revenue'], BESS_REPLACEMENT_EXCLUDED: ['revenue'],
   FEOC: ['tax'], PWA: ['tax'], LOW_INCOME: ['tax'], MID_QUARTER: ['tax'], NON_STATUTORY_RATE: ['tax'],
   STATE_RATE_MISMATCH: ['tax'], TRANSFER_SFE: ['tax'], ITC_CARRYFORWARD: ['tax'],
-  DEBT_NOT_SUPPORTED: ['finance'], DSCR_BELOW_MIN: ['finance']
+  DEBT_NOT_SUPPORTED: ['finance'], DSCR_BELOW_MIN: ['finance'], DEBT_CAPPED: ['finance'], NEGATIVE_CFADS: ['finance']
 };
 var LEVELS = { critical: 0, warn: 1, info: 2 };
 /* Critical first, then warnings, then notes; anything unknown last. */
@@ -1860,9 +1872,9 @@ var VALID = [];     /* client-side problems with the open report */
 var IV = { reportId: null, text: '', name: '', size: 0, parsed: null };
 var MODEL = { timer: null, inflight: false, queued: false, key: '', result: null, error: null,
               serverErrors: [], state: 'idle', at: 0, reportId: null };
-var SZ = { busy: false, error: null, field: null };
+var SZ = { busy: false, error: null, field: null, notes: [] };
 var SITE = { busy: false, error: null, field: null };
-var SAVE = { timer: null, retry: null, retryMs: 4000, inflight: false, again: false };
+var SAVE = { timer: null, retry: null, retryMs: 4000, inflight: false, again: false, recheck: false };
 var DECK = { timer: null, key: '' };
 var EXPORT = { busy: '', queued: '', note: '', noteBad: false };
 var SETTINGS = { p: null };
@@ -2144,7 +2156,9 @@ function mergeStore(remote, mirror) {
   else if (remote && out[remote.current]) pick = remote.current;
   STORE.current = pick || newestId();
   Object.keys(out).forEach(function (id) { ensureReport(out[id]); });
-  boundStore(true);
+  /* Colleagues saving at once can leave the shared document over the bound;
+     trimming it here removes their oldest reports too, so it is said. */
+  boundStore(false);
 }
 
 function newestId(except) {
@@ -2163,30 +2177,37 @@ function dropReport(id) {
     if (META.pendingDeletes.indexOf(id) < 0) META.pendingDeletes.push(id);
   }
 }
-/* Forty reports, then the size ceiling; oldest first, never the open one. */
+function storeChars() {
+  try { return JSON.stringify(pack(STORE.reports)).length; } catch (e) { return 0; }
+}
+/* Forty reports, then the size ceiling; oldest first, never the open one.
+   The store is the workspace's, so a report removed may be a colleague's:
+   the notice names what went. */
 function boundStore(quiet) {
   var ids = Object.keys(STORE.reports).sort(function (a, b) {
     return (STORE.reports[a].updatedAt || 0) - (STORE.reports[b].updatedAt || 0);
   });
-  var dropped = 0;
+  var names = [];
+  function drop(id) { names.push(STORE.reports[id].name || 'Untitled pro forma'); dropReport(id); }
   while (ids.length > MAX_REPORTS) {
     var o = ids.shift();
     if (o === STORE.current) { ids.push(o); continue; }
-    dropReport(o); dropped++;
+    drop(o);
   }
-  var size = 0;
-  try { size = JSON.stringify(pack(STORE.reports)).length; } catch (e) { size = 0; }
+  var size = storeChars();
   while (size > MAX_DOC_CHARS && ids.length > 1) {
     var id = ids.shift();
     if (id === STORE.current) { ids.push(id); continue; }
     size -= JSON.stringify(pack(STORE.reports[id])).length;
-    dropReport(id); dropped++;
+    drop(id);
   }
-  if (dropped && !quiet) {
-    toast(dropped === 1 ? 'Your oldest pro forma was removed to stay within the saved-report limit.'
-      : 'Your ' + dropped + ' oldest pro formas were removed to stay within the saved-report limit.', 6000);
+  if (names.length && !quiet) {
+    toast((names.length === 1 ? 'The workspace’s oldest pro forma, “' + names[0] + '”, was removed'
+      : 'The workspace’s ' + names.length + ' oldest pro formas, from “' + names[0] + '”, were removed')
+      + ' to stay within the saved-report limit (' + MAX_REPORTS + ' reports).', 8000);
+    if (R && $('rep-menu') && !$('rep-menu').hidden) renderReportMenu();
   }
-  return dropped;
+  return names.length;
 }
 
 function setSave(state, detail) {
@@ -2220,6 +2241,36 @@ function saveNow() {
   writeMirror();
   return flushRemote();
 }
+/* THE BOUND IS THE DOCUMENT'S, NOT THIS TAB'S. Colleagues add reports to
+   the same document, and each tab read it once, at load; two tabs each at
+   35 that add ten apiece would otherwise leave 55, and a write that took
+   the document past 1 MiB would be refused on every retry. So before a
+   write that adds a report, one after a refused write, and every write
+   near either ceiling, the document is read again: reports a colleague has
+   added since are taken in (they appear in the menu), and the bound is
+   applied to the whole of it. */
+function needsRecheck() {
+  if (SAVE.recheck) return true;
+  var ids = Object.keys(DIRTY);
+  for (var i = 0; i < ids.length; i++) if (STORE.reports[ids[i]] && !SYNCED[ids[i]]) return true;
+  return Object.keys(STORE.reports).length >= MAX_REPORTS - 4 || storeChars() > MAX_DOC_CHARS * 0.8;
+}
+function recheckRemote() {
+  return OMEGATools.loadToolData(DB, ORG, TOOL_KEY).then(function (doc) {
+    var rrep = doc && isPlain(doc.data) && isPlain(doc.data.reports) ? doc.data.reports : {};
+    Object.keys(rrep).forEach(function (id) {
+      if (STORE.reports[id] || DELETES.indexOf(id) >= 0 || META.pendingDeletes.indexOf(id) >= 0) return;
+      var r = unpack(rrep[id]);
+      if (!validReport(r)) return;
+      ensureReport(r);
+      STORE.reports[id] = r;
+      SYNCED[id] = clone(rrep[id]);
+      META.synced[id] = 1;
+    });
+    SAVE.recheck = false;
+    boundStore(false);
+  }, function () { /* the write still goes; the next one reads again */ });
+}
 /* One write at a time: each diffs against what the last one left, so two
    in flight at once could each miss a key the other removed. */
 function flushRemote() {
@@ -2229,6 +2280,19 @@ function flushRemote() {
     setSave('local', 'The workspace database is not available on this page.');
     return Promise.resolve(false);
   }
+  if ((Object.keys(DIRTY).length || DELETES.length) && needsRecheck()) {
+    SAVE.inflight = true;
+    setSave('saving');
+    return recheckRemote().then(function () {
+      SAVE.inflight = false;
+      writeMirror();
+      return writeRemote();
+    });
+  }
+  return writeRemote();
+}
+function writeRemote() {
+  if (SAVE.inflight) { SAVE.again = true; return Promise.resolve(false); }
   var ids = Object.keys(DIRTY), dels = DELETES.slice();
   if (!ids.length && !dels.length) { setSave(REMOTE.failed ? 'local' : 'saved'); return Promise.resolve(true); }
   var del = firebase.firestore.FieldValue['delete'](), reports = {}, sent = {};
@@ -2251,6 +2315,8 @@ function flushRemote() {
       META.pendingDeletes = META.pendingDeletes.filter(function (d) { return dels.indexOf(d) < 0; });
       REMOTE.failed = false;
       SAVE.retryMs = 4000;
+      /* The legacy draft counts as imported once its report is saved. */
+      for (var sid in sent) if (has(sent, sid) && STORE.reports[sid] && STORE.reports[sid].legacy) markLegacyDone();
       writeMirror();
       setSave(Object.keys(DIRTY).length ? 'pending' : 'saved');
       if (SAVE.again) { SAVE.again = false; flushRemote(); }
@@ -2260,6 +2326,8 @@ function flushRemote() {
       SAVE.again = false;
       ids.forEach(function (id) { if (STORE.reports[id]) DIRTY[id] = 1; });
       dels.forEach(function (d) { if (DELETES.indexOf(d) < 0) DELETES.push(d); });
+      /* A refusal may be the document's size: the retry reads it first. */
+      SAVE.recheck = true;
       setSave('local', (e && e.message) || 'The workspace refused the write.');
       if (SAVE.retry) clearTimeout(SAVE.retry);
       SAVE.retry = setTimeout(function () { SAVE.retry = null; flushRemote(); }, SAVE.retryMs);
@@ -2270,18 +2338,30 @@ function flushRemote() {
 
 /* ── LEGACY DRAFT ────────────────────────────────────────────────────────
    The tool this page replaced kept one draft per browser under
-   'clearsky_proforma_draft'. It is imported once, into a new report, and the
-   old key is left exactly as it was: that page's owner may still want it. */
+   'clearsky_proforma_draft', with no workspace on it: on a shared browser it
+   may be another company's. So it is never taken in on its own. The page
+   OFFERS it (offerLegacy, a banner after sign-in, never for an account the
+   service refused) and imports it only when the user says so. The report it
+   becomes carries the draft's fingerprint (legacy), so a reload before the
+   save lands does not offer it twice, and the draft counts as done only once
+   that report has reached the workspace. The old key is left exactly as it
+   was: that page's owner may still want it. */
 function legacyNum(v) { var n = parseNum(v); return fin(n) ? n : null; }
-function importLegacy() {
-  var raw = null, done = null;
+function legacyDraft() {
+  var raw = null, done = null, d = null, h = 2166136261;
   try { raw = localStorage.getItem(LEGACY_KEY); done = localStorage.getItem(LEGACY_DONE_KEY); } catch (e) { return null; }
   if (!raw || done) return null;
-  try { localStorage.setItem(LEGACY_DONE_KEY, String(Date.now())); } catch (e) { return null; }
-  var d = null;
   try { d = JSON.parse(raw); } catch (e) { d = null; }
   if (!isPlain(d)) return null;
-  var rep = newReport(), p = rep.inputs.project;
+  for (var i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0; }
+  return { d: d, hash: 'l' + (h >>> 0).toString(36) + raw.length.toString(36) };
+}
+function markLegacyDone() {
+  try { localStorage.setItem(LEGACY_DONE_KEY, String(Date.now())); } catch (e) {}
+}
+function legacyReport(L) {
+  var d = L.d, rep = newReport(), p = rep.inputs.project;
+  rep.legacy = L.hash;
   if (str(d.projectName)) p.name = String(d.projectName).trim().slice(0, 120);
   if (str(d.address)) p.street = String(d.address).trim().slice(0, 100);
   var cs = /^\s*([^,]+?)\s*,\s*([A-Za-z]{2})\b\s*(\d{5})?/.exec(String(d.cityState || ''));
@@ -2316,6 +2396,30 @@ function importLegacy() {
   refreshPresets(rep);
   rep.name = p.name || 'Imported draft';
   return rep;
+}
+function offerLegacy() {
+  var box = $('legacy-offer'), L = legacyDraft();
+  box.innerHTML = '';
+  if (!L) return;
+  for (var id in STORE.reports) {
+    if (!has(STORE.reports, id) || STORE.reports[id].legacy !== L.hash) continue;
+    /* Already imported: done once it is on the workspace, else the next save does it. */
+    if (META.synced[id]) markLegacyDone();
+    return;
+  }
+  var name = str(L.d.projectName) ? String(L.d.projectName).trim().slice(0, 120) : '';
+  box.innerHTML = '<div class="banner info"><div><b>A draft from the previous pro forma tool is saved in this browser' + (name ? ': “' + esc(name) + '”' : '') + '.</b> '
+    + 'It belongs to no workspace, so it comes in only if you say so — as a new pro forma your workspace can see. The old draft is left as it was.</div>'
+    + '<div class="inline"><button type="button" class="btn btn-p btn-sm" data-act="legacy-import">Import it</button>'
+    + '<button type="button" class="btn btn-s btn-sm" data-act="legacy-dismiss">Don’t import</button></div></div>';
+}
+function importLegacy() {
+  var L = legacyDraft();
+  $('legacy-offer').innerHTML = '';
+  if (!L) return;
+  addReport(legacyReport(L));
+  saveNow();
+  toast('Imported your draft from the previous pro forma tool as a new pro forma.', 5000);
 }
 
 /* ═══ THE ONE PLACE THAT TALKS TO /api/proforma ══════════════════════════ */
@@ -2364,6 +2468,8 @@ function api(action, body) {
       var e = httpErr(r.status, readable(r.status, j));
       e.errors = (j && Array.isArray(j.errors)) ? j.errors : null;
       e.field = (j && typeof j.field === 'string') ? j.field : null;
+      /* A refusal may say why in more than one sentence (the sizing's notes). */
+      e.warnings = (j && Array.isArray(j.warnings)) ? j.warnings.filter(function (w) { return typeof w === 'string'; }).slice(0, 6) : [];
       throw e;
     });
   });
@@ -2420,8 +2526,10 @@ function monthRows(sm, sy, n, old) {
   var rows = [];
   for (var i = 0; i < n; i++) {
     var m = (sm + i) % 12, y = sy + Math.floor((sm + i) / 12), o = (old && old[i]) || {};
-    rows.push({ month: m, year: y, days: daysIn(y, m),
-                demandKw: fin(o.demandKw) ? o.demandKw : null, kwh: fin(o.kwh) ? o.kwh : null });
+    var row = { month: m, year: y, days: daysIn(y, m),
+                demandKw: fin(o.demandKw) ? o.demandKw : null, kwh: fin(o.kwh) ? o.kwh : null };
+    if (fin(o.onPeakKw)) row.onPeakKw = o.onPeakKw;
+    rows.push(row);
   }
   return rows;
 }
@@ -2671,7 +2779,7 @@ function wholeDollars(n) { return Math.round(n); }
    contracted income is flat unless the user says otherwise. */
 var OPEX_ESCALATOR = 2.5, OTHER_ESCALATOR = 0;
 function capexPresets(rep) {
-  var I = rep.inputs, P = rep.ui.presets || {}, B = rep.sizingRequest.bess || {}, out = {};
+  var I = rep.inputs, P = rep.ui.presets || {}, U = bessUnitCosts(rep), B = { capexPerKwh: U.cKwh, capexPerKw: U.cKw }, out = {};
   if (isOn(rep, 'solar') && I.solar.kwDc > 0 && P.solarPerW > 0) {
     out['p-solar'] = { label: 'Solar PV system', asset: 'solar', amount: I.solar.kwDc * 1000 * P.solarPerW,
       how: fmtNum(I.solar.kwDc, 1) + ' kW DC × ' + rate(P.solarPerW, 2) + '/W' };
@@ -2756,7 +2864,7 @@ function refreshPresets(rep, reset) {
     });
 }
 function opexPresets(rep, capexTotal) {
-  var I = rep.inputs, P = rep.ui.presets || {}, B = rep.sizingRequest.bess || {}, out = {};
+  var I = rep.inputs, P = rep.ui.presets || {}, B = { omPerKwYr: bessUnitCosts(rep).om }, out = {};
   if (isOn(rep, 'solar') && I.solar.kwDc > 0 && P.solarOmPerKw > 0) {
     out['o-solar'] = { label: 'Solar O&M', perYear: I.solar.kwDc * P.solarOmPerKw,
       how: fmtNum(I.solar.kwDc, 1) + ' kW DC × ' + rate(P.solarOmPerKw, 2) + '/kW-yr' };
@@ -2787,12 +2895,48 @@ function compact(o) {
   for (var k in o) if (has(o, k) && o[k] != null && o[k] !== '') out[k] = o[k];
   return out;
 }
-function monthlyRowsOut(L) {
+/* A bill's on-peak kW goes only with a tariff that prices demand by time of
+   use: it means nothing to a flat charge, and a figure typed for a tariff
+   since removed waits in the row rather than being sent. */
+function monthlyRowsOut(L, onPeak) {
   var rows = [];
   (L.rows || []).forEach(function (r) {
-    if (fin(r.demandKw) || fin(r.kwh)) rows.push({ month: r.month, year: r.year, days: r.days, demandKw: r.demandKw, kwh: r.kwh });
+    if (!(fin(r.demandKw) || fin(r.kwh))) return;
+    var o = { month: r.month, year: r.year, days: r.days, demandKw: r.demandKw, kwh: r.kwh };
+    if (onPeak && fin(r.onPeakKw)) o.onPeakKw = r.onPeakKw;
+    rows.push(o);
   });
   return rows;
+}
+/* What a pasted URDB record says about demand, read off its shape (the
+   bridge prices it; this only decides what to ask for and what to say). */
+function urdbOf(rep) { var u = rep.sizingRequest.tariff.urdb; return isPlain(u) ? u : null; }
+function urdbTouDemand(u) { return !!u && Array.isArray(u.demandratestructure) && u.demandratestructure.length > 0; }
+function urdbRatchetPct(u) { var n = u ? Number(u.demandratchetpercentage) : 0; return fin(n) && n > 0 ? n : 0; }
+function askOnPeak(rep) { return rep.sizingRequest.load.mode === 'monthly' && urdbTouDemand(urdbOf(rep)); }
+/* The battery's unit costs the preset lines are priced on. A battery the
+   engine sized is priced on the costs it was sized on (the sizing echoes
+   them as settings.cKwh / cKw / om), so the capital cost, the credit basis
+   and the size can never have come from two different prices. Otherwise a
+   blank field is the bridge's default, exactly as the sizing would read
+   it — never $0. */
+function bessUnitCosts(rep) {
+  var B = rep.sizingRequest.bess || {}, D = SIZING_DEFAULTS.bess;
+  var st = engineSized(rep) && isPlain(rep.sizing.settings) ? rep.sizing.settings : {};
+  function one(k, sk) { return fin(st[sk]) ? st[sk] : fin(B[k]) ? B[k] : D[k]; }
+  return { cKwh: one('capexPerKwh', 'cKwh'), cKw: one('capexPerKw', 'cKw'), om: one('omPerKwYr', 'om'), sized: engineSized(rep) };
+}
+/* Where the unit-cost fields have moved on since the size was chosen, the
+   sentence that says the line still follows the sizing until a re-size. */
+function unitCostsNote(rep, which) {
+  var U = bessUnitCosts(rep), B = rep.sizingRequest.bess || {}, D = SIZING_DEFAULTS.bess, moved = [];
+  if (!U.sized) return '';
+  function typed(k) { return fin(B[k]) ? B[k] : D[k]; }
+  if (which === 'capex') {
+    if (Math.abs(typed('capexPerKwh') - U.cKwh) > 0.005) moved.push(money(U.cKwh) + '/kWh');
+    if (Math.abs(typed('capexPerKw') - U.cKw) > 0.005) moved.push(money(U.cKw) + '/kW');
+  } else if (Math.abs(typed('omPerKwYr') - U.om) > 0.005) moved.push(rate(U.om, 2) + '/kW-yr');
+  return moved.length ? 'The battery line is priced at the ' + moved.join(' and ') + ' the size was chosen on. Re-size to price it at the new ' + (which === 'capex' ? 'costs' : 'rate') + '.' : '';
 }
 function sizingPayload(rep, durs) {
   var S = rep.sizingRequest, L = S.load, load;
@@ -2805,10 +2949,11 @@ function sizingPayload(rep, durs) {
     }
     load = { mode: 'interval', values: P.values, intervalMin: L.intervalMin, startMonth: L.startMonth, startYear: L.startYear };
   } else {
-    var rows = monthlyRowsOut(L);
+    var rows = monthlyRowsOut(L, askOnPeak(rep));
     if (!rows.length) return { error: 'Enter at least one bill’s peak demand and energy.' };
     load = { mode: 'monthly', rows: rows };
   }
+  /* A blank ratchet is left out, so a pasted tariff's own stands in. */
   var tariff = compact({ demandChargePerKw: S.tariff.demandChargePerKw, energyRate: S.tariff.energyRate,
                          ratchetPct: S.tariff.ratchetPct });
   if (isPlain(S.tariff.urdb)) tariff.urdb = S.tariff.urdb;
@@ -2816,13 +2961,18 @@ function sizingPayload(rep, durs) {
   if (durs) bess.durations = durs.slice();
   return { load: load, tariff: tariff, bess: bess, finance: sizingFinance(rep) };
 }
+/* "Has the sizing moved?" A blank field and the default it falls back to
+   are the same request, so they key the same: otherwise a cleared cost
+   would read as a change the moment a reload filled the default back in. */
 function sizingKey(rep) {
-  var S = rep.sizingRequest, L = S.load, sm = L.summary || {};
+  var S = rep.sizingRequest, L = S.load, sm = L.summary || {}, t = clone(S.tariff) || {}, b = compact(S.bess), k;
   var load = L.mode === 'interval'
     ? { mode: 'interval', intervalMin: L.intervalMin, startMonth: L.startMonth, startYear: L.startYear,
         readings: L.readings, hash: sm.hash, unit: sm.unit, col: sm.col, neg: sm.neg }
-    : { mode: 'monthly', rows: monthlyRowsOut(L) };
-  return stable({ load: load, tariff: S.tariff, bess: compact(S.bess), finance: sizingFinance(rep) });
+    : { mode: 'monthly', rows: monthlyRowsOut(L, askOnPeak(rep)) };
+  for (k in SIZING_DEFAULTS.tariff) if (has(SIZING_DEFAULTS.tariff, k) && t[k] == null) t[k] = SIZING_DEFAULTS.tariff[k];
+  for (k in SIZING_DEFAULTS.bess) if (has(SIZING_DEFAULTS.bess, k) && !has(b, k)) b[k] = SIZING_DEFAULTS.bess[k];
+  return stable({ load: load, tariff: t, bess: b, finance: sizingFinance(rep) });
 }
 function sizingStale(rep) { return !!(rep.sizing && rep.ui.sizedKey && rep.ui.sizedKey !== sizingKey(rep)); }
 function applySizing(rep, s, key, sweep) {
@@ -3015,7 +3165,9 @@ function readValue(host, el, kind) {
   if (kind === 'text') return el.value;
   if (kind === 'num' || kind === 'int' || kind === 'pctfrac') {
     raw = String(el.value || '').trim();
-    if (raw === '') return undefined;
+    /* data-blank="null": blank is a value of its own ("none stated"), kept
+       as null so a reload reads the same thing the edit wrote. */
+    if (raw === '') return host.getAttribute('data-blank') === 'null' ? null : undefined;
     n = parseNum(raw);
     if (!fin(n)) return BAD_VALUE;
     return kind === 'pctfrac' ? n / 100 : n;
@@ -3831,6 +3983,18 @@ function renderSite() {
   if (box.getAttribute('data-html') !== h) { box.innerHTML = h; box.setAttribute('data-html', h); }
   renderComps();
   renderEarn();
+  renderSchedule();
+}
+/* The schedule's help says only what applies to what is at the site: the
+   solar deadline is a fact about solar, and a PPA term about a PPA. */
+function renderSchedule() {
+  var e = effectiveEarn(R);
+  $('sched-note').textContent = 'The construction start decides which credits the project keeps: '
+    + (isOn(R, 'solar') ? 'solar placed in service after 2027 needs construction begun by 4 July 2026, storage phases down for construction after 2033, '
+                         : 'the storage credit phases down for construction begun after 2033, ')
+    + 'and the foreign-entity (FEOC) cost thresholds rise each year.';
+  $('p-years-h').textContent = (e === 'ppa' ? 'Usually the PPA term' : e === 'host' ? 'Usually the life expected of the system'
+    : 'Usually the services-agreement term') + '; the cash flows and the deck run this long.';
 }
 
 /* ═══ INTERVAL FILES ═════════════════════════════════════════════════════
@@ -4071,20 +4235,30 @@ function relabelMonths() {
   var L = R.sizingRequest.load;
   L.rows = monthRows(num0(L.startMonth), L.startYear || new Date().getFullYear() - 1, (L.rows || []).length || 12, L.rows);
 }
+/* The bill table asks for each bill's on-peak kW only while a pasted tariff
+   prices demand by time of use; a figure typed for it stays in the row when
+   the column goes, and comes back with it. */
 function renderMonthly() {
-  var L = R.sizingRequest.load, rows = L.rows || [], body = $('mo-rows');
-  var sig = rows.map(function (r) { return r.month + '/' + r.year; }).join(',') + '|' + R.id;
+  var L = R.sizingRequest.load, rows = L.rows || [], body = $('mo-rows'), tou = askOnPeak(R);
+  var sig = rows.map(function (r) { return r.month + '/' + r.year; }).join(',') + '|' + R.id + '|' + tou;
   if (body.getAttribute('data-sig') !== sig) {
     var out = [];
     rows.forEach(function (r, i) {
       var lab = MONTHS[r.month] + ' ' + r.year;
       out.push('<tr><th scope="row">' + lab + '</th><td class="d">' + r.days + '</td>'
         + '<td><input id="mo-' + i + '-d" type="text" inputmode="decimal" aria-label="Peak demand, ' + lab + ', kW" data-path="sz.load.rows.' + i + '.demandKw" data-kind="num" data-fmt="sep" data-grid="' + i + ',0"></td>'
-        + '<td><input id="mo-' + i + '-e" type="text" inputmode="decimal" aria-label="Energy, ' + lab + ', kWh" data-path="sz.load.rows.' + i + '.kwh" data-kind="num" data-fmt="sep" data-grid="' + i + ',1"></td></tr>');
+        + '<td><input id="mo-' + i + '-e" type="text" inputmode="decimal" aria-label="Energy, ' + lab + ', kWh" data-path="sz.load.rows.' + i + '.kwh" data-kind="num" data-fmt="sep" data-grid="' + i + ',1"></td>'
+        + (tou ? '<td><input id="mo-' + i + '-p" type="text" inputmode="decimal" aria-label="On-peak demand, ' + lab + ', kW" data-path="sz.load.rows.' + i + '.onPeakKw" data-kind="num" data-fmt="sep" data-grid="' + i + ',2"></td>' : '')
+        + '</tr>');
     });
     body.innerHTML = out.join('');
     body.setAttribute('data-sig', sig);
+    $('mo-head').innerHTML = '<th scope="col">Bill</th><th scope="col" class="d">Days</th><th scope="col">Peak demand (kW)</th><th scope="col">Energy (kWh)</th>'
+      + (tou ? '<th scope="col">On-peak demand (kW)</th>' : '');
   }
+  var th = $('mo-tou-h');
+  th.hidden = !tou;
+  th.textContent = tou ? 'The pasted tariff charges demand by time of use, so each bill needs its on-peak kW: the highest demand inside the tariff’s on-peak hours, printed on most bills. A bill without it cannot be priced on the on-peak charge — the engine notes after sizing say how it was priced.' : '';
   $('mo-more').hidden = rows.length >= 24;
   var sy = $('mo-sy');
   if (!sy.options.length) {
@@ -4101,13 +4275,14 @@ function onGridPaste(e) {
   var text = (e.clipboardData || root.clipboardData || { getData: function () { return ''; } }).getData('text');
   if (!/[\t\n]/.test(text)) return;
   e.preventDefault();
-  var start = at.split(','), r0 = +start[0], c0 = +start[1], rows = R.sizingRequest.load.rows;
+  var start = at.split(','), r0 = +start[0], c0 = +start[1], rows = R.sizingRequest.load.rows, cols = ['demandKw', 'kwh'];
+  if (askOnPeak(R)) cols.push('onPeakKw');
   text.replace(/\r/g, '').split('\n').forEach(function (line, i) {
     if (!line.trim() || !rows[r0 + i]) return;
     /* Tabs are what a spreadsheet copies; without them the line is one
        cell, because a comma may be a thousands separator. */
     (line.indexOf('\t') >= 0 ? line.split('\t') : [line]).forEach(function (cell, j) {
-      var key = c0 + j === 0 ? 'demandKw' : c0 + j === 1 ? 'kwh' : null, n = parseNum(cell);
+      var key = cols[c0 + j] || null, n = parseNum(cell);
       if (key && fin(n)) rows[r0 + i][key] = n;
     });
   });
@@ -4161,7 +4336,10 @@ function renderSizingStatus() {
   m.setAttribute('data-act', manual ? 'use-engine' : 'manual');
   m.hidden = manual && !R.sizing;
   var h = '';
-  if (SZ.error) h += '<div class="banner bad" style="margin:14px 0 0"><div>' + esc(SZ.error) + '</div></div>';
+  if (SZ.error) {
+    h += '<div class="banner bad" style="margin:14px 0 0"><div>' + esc(SZ.error)
+      + (SZ.notes && SZ.notes.length ? SZ.notes.map(function (w) { return '<br>' + esc(w); }).join('') : '') + '</div></div>';
+  }
   else if (probs.length && !SZ.busy) h += '<p class="help" style="margin-top:12px">' + esc(probs[0]) + '</p>';
   else if (ivMissing && !SZ.busy) h += '<p class="help" style="margin-top:12px">' + (L.readings ? 'Upload the interval file again to re-size.' : 'Upload an interval file to size from it.') + '</p>';
   st.innerHTML = h;
@@ -4395,6 +4573,22 @@ function renderSizing() {
   ok.hidden = !isPlain(u);
   if (isPlain(u)) ok.textContent = 'Using ' + (u.name || 'the pasted rate') + (u.utility ? ' · ' + u.utility : '') + '.';
   if (isPlain(u)) $('urdb-more').open = true;
+  renderRatchet();
+}
+/* The ratchet the sizing will use, said beside the field. A stated ratchet
+   overrules the pasted tariff's (the bridge's rule), so when the two differ
+   the page says so and offers the tariff's — it never picks silently. */
+function renderRatchet() {
+  var u = urdbOf(R), tr = urdbRatchetPct(u), mine = R.sizingRequest.tariff.ratchetPct, h = $('t-rt-h');
+  var stated = fin(mine) ? mine * 100 : null, html;
+  $('t-rt').placeholder = tr ? fmtNum(tr, 1) + ' (tariff)' : 'none';
+  if (u && stated === null) {
+    html = tr ? 'Blank: the pasted tariff’s ' + esc(fmtNum(tr, 1)) + '% ratchet applies.' : 'Blank: the pasted tariff has no ratchet.';
+  } else if (u && Math.abs(stated - tr) > 0.05) {
+    html = '<span class="warn-t">The pasted tariff’s ratchet is ' + (tr ? esc(fmtNum(tr, 1)) + '%' : 'none') + '; the ' + esc(fmtNum(stated, 1))
+      + '% here replaces it in the sizing.</span> <button type="button" class="btn-t" data-act="ratchet-urdb">Use the tariff’s</button>';
+  } else html = 'Share of the trailing 11-month peak billed as a floor. Blank if the tariff has none.';
+  if (h.getAttribute('data-html') !== html) { h.innerHTML = html; h.setAttribute('data-html', html); }
 }
 
 /* The figures a step shows come from the last model run. When that run no
@@ -4510,10 +4704,16 @@ function renderLines(list) {
   });
 }
 function capexSum() { var t = 0; R.inputs.capex.lines.forEach(function (l) { t += num0(l.amount); }); return t; }
+function paintCostNote(id, which, base) {
+  var note = unitCostsNote(R, which), el = $(id);
+  var html = note ? '<span class="warn-t">' + esc(note) + '</span> <button type="button" class="btn-t" data-act="goto" data-k="load">Re-size</button>' : esc(base);
+  if (el.getAttribute('data-html') !== html) { el.innerHTML = html; el.setAttribute('data-html', html); }
+}
 function renderCapex() {
   showNeeds($('presets'));
   $('pr-ctrl-h').textContent = R.inputs.controller && !(R.ui.presets.controller > 0)
     ? 'Enter its installed cost; no line is added until you do.' : '';
+  paintCostNote('pr-bess-h', 'capex', 'The battery unit costs are the ones the sizing engine priced the size on in Load & battery sizing — change them here or there.');
   renderLines('capex');
   var res = lastRun();
   $('capex-total').innerHTML = res && res.capex && fin(res.capex.total)
@@ -4554,6 +4754,7 @@ function renderRevenue() {
   $('evrev-aside').textContent = isOn(R, 'ev') && R.inputs.ev.kw > 0 ? 'On ' + kw(R.inputs.ev.kw) + ' of chargers' : '';
   renderLines('other');
   showNeeds($('opex-presets'));
+  paintCostNote('po-bess-h', 'opex', 'Every line is its year-one cost and escalates at its own rate. Battery O&M uses the same rate the sizing engine assumed.');
   renderLines('opex');
   showNeeds($('s-revenue'));
   var reps = engineSized(R) ? (R.sizing.replacements || []) : [];
@@ -4672,7 +4873,7 @@ function renderFinance() {
     var d = res && res.debt, box = $('debt-sum');
     if (!d) box.innerHTML = '<p class="help">The debt amount, the binding constraint and coverage appear once the model runs.</p>';
     else {
-      box.innerHTML = '<div class="stats" style="margin:0">' + stat(money(d.amount), 'Debt, sized by ' + (d.sizingBinding === 'dscr' ? 'coverage' : 'loan-to-cost'))
+      box.innerHTML = '<div class="stats" style="margin:0">' + stat(money(d.amount), 'Debt, sized by ' + (d.sizingBinding === 'dscr' ? 'coverage' : d.sizingBinding === 'cap' ? 'the 90% ceiling' : 'loan-to-cost'))
         + stat(money(d.annualDebtService1), 'Year-one debt service') + stat(fin(d.dscrMin) ? fmtFixed(d.dscrMin, 2) + '× / ' + fmtFixed(d.dscrAvg, 2) + '×' : '—', 'DSCR, minimum / average')
         + stat(pct(d.ratePct, 2) + ' · ' + (fin(d.tenorYears) ? d.tenorYears + ' yrs' : '—'), (d.shape === 'level' ? 'Level' : 'Sculpted') + ' repayment') + '</div>'
         + '<p class="help" style="margin-top:10px">The upfront fee and the debt service reserve are funded at close; both are in the uses below.</p>';
@@ -4875,7 +5076,7 @@ function renderDeck() {
     box.innerHTML = '<div class="empty">The report module did not load, so the deck cannot be drawn. Reload the page.</div>';
     return;
   }
-  if (!res) { DECK.key = ''; box.innerHTML = '<div class="empty">The deck appears once the model has run.</div>'; $('deck-count').textContent = ''; return; }
+  if (!res) { DECK.key = ''; box.innerHTML = '<div class="empty">The deck appears once the model has run.</div>'; $('deck-count').textContent = ''; $('deck-omit').innerHTML = ''; return; }
   if (!$('pf-deck-css') && typeof P.css === 'function') {
     var st = document.createElement('style');
     st.id = 'pf-deck-css';
@@ -4891,6 +5092,22 @@ function renderDeck() {
   box.innerHTML = html || '<div class="empty">The deck could not be drawn from this result.</div>';
   var n = box.querySelectorAll('.pf-slide').length;
   $('deck-count').textContent = n ? '(' + n + ' page' + (n === 1 ? '' : 's') + ')' : '';
+  renderOmitted(P, res, brand, opts);
+}
+/* A full numbers page gives up the least important lines last of all, and
+   never quietly: the renderer names what it left out (the same for the
+   preview, the PDF and the PowerPoint), and this says so beside the deck. */
+function renderOmitted(P, res, brand, opts) {
+  var box = $('deck-omit'), list = [];
+  try { list = typeof P.omitted === 'function' ? P.omitted(res, brand, opts) || [] : []; } catch (e) { list = []; }
+  if (!list.length) { box.innerHTML = ''; return; }
+  var names = list.map(function (x) { return '“' + x.label + '”'; }), page = list[0].page;
+  var said = names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  box.innerHTML = '<div class="banner warn"><div><b>' + list.length + (list.length === 1 ? ' line does' : ' lines do') + ' not fit on page ' + esc(page)
+    + ', The Numbers:</b> ' + esc(said) + '. '
+    + (R.reportOpts.include.disclosures ? 'The Disclosures appendix prints ' + (list.length === 1 ? 'it' : 'them') + ' in full.'
+      : 'Add the Disclosures appendix and ' + (list.length === 1 ? 'it is' : 'they are') + ' printed there in full.')
+    + '</div>' + (R.reportOpts.include.disclosures ? '' : '<button type="button" class="btn btn-s btn-sm" data-act="omit-disclosures">Add the appendix</button>') + '</div>';
 }
 
 /* ── EXPORTS: the deck as PDF or PowerPoint, the cash flow as CSV ────────
@@ -5131,11 +5348,11 @@ function runModel() {
 function runSizing(durs) {
   if (SZ.busy || !R) return;
   var rep = R, payload = sizingPayload(rep, durs);
-  if (payload.error) { SZ.error = payload.error; SZ.field = null; renderSizing(); return; }
+  if (payload.error) { SZ.error = payload.error; SZ.field = null; SZ.notes = []; renderSizing(); return; }
   var before = rep.sizingRequest.bess.durations;
   if (durs) rep.sizingRequest.bess.durations = durs.slice();
   var key = sizingKey(rep), sweep = !durs;
-  SZ.busy = true; SZ.error = null; SZ.field = null;
+  SZ.busy = true; SZ.error = null; SZ.field = null; SZ.notes = [];
   renderSizing();
   var summary = clone(payload);
   if (summary.load && summary.load.values) { summary.load.readings = summary.load.values.length; delete summary.load.values; }
@@ -5148,6 +5365,7 @@ function runSizing(durs) {
     if (durs) rep.sizingRequest.bess.durations = before;
     if (rep !== R) return;
     SZ.error = (e && e.message) || 'The sizing did not run.';
+    SZ.notes = (e && e.warnings) || [];
     SZ.field = e && e.field ? normPath(e.field, 'sz.') : null;
     if (SZ.field && !document.querySelector('[data-err="' + SZ.field + '"]')) SZ.field = null;
   }).then(function () {
@@ -5369,15 +5587,20 @@ function orgFallback(u) {
 function onSignedIn(u) {
   paintAvatar();
   $('boot-msg').textContent = 'Opening your pro formas…';
+  var refused = false;
   loadContext().then(function () {
+    /* The endpoint's refusal is the gate: a refused account gets the notice
+       and nothing else — no store read, no new report, no write to its
+       workspace, no legacy draft. A service that is merely down still opens
+       the form (it saves; it models once the service answers). */
+    if (!CTX.ok && CTX.error && CTX.error.status === 403) { refused = true; return null; }
     /* The org the server resolved (aliases folded, as the rules fold them)
        is the one whose toolData the rules allow this user to write. */
     ORG = CTX.orgId || orgFallback(u);
     initSettings();
     return loadStore(ORG);
   }).then(function () {
-    var legacy = importLegacy();
-    if (legacy) { STORE.reports[legacy.id] = legacy; STORE.current = legacy.id; DIRTY[legacy.id] = 1; toast('Imported your draft from the previous pro forma tool.', 5000); }
+    if (refused) { document.body.className = document.body.className.replace(/\bbooting\b/, '').trim(); return; }
     if (!STORE.current || !STORE.reports[STORE.current]) {
       var rep = newReport();
       STORE.reports[rep.id] = rep;
@@ -5388,6 +5611,7 @@ function onSignedIn(u) {
     openReport(STORE.current, !stepFromHash(), true);
     if (Object.keys(DIRTY).length || DELETES.length) scheduleSave();
     else setSave(REMOTE.failed ? 'local' : 'saved');
+    offerLegacy();
   })['catch'](function (e) {
     $('boot-msg').textContent = 'Something went wrong opening the pro forma: ' + ((e && e.message) || e) + '. Reload the page to try again.';
   });
@@ -5527,6 +5751,20 @@ function onClick(e) {
   }
   else if (act === 'reset-opex') { refreshPresets(R, 'opex'); edited('opex.lines'); }
   else if (act === 'state-auto') { R.ui.stateAuto = true; syncStateTax(R); edited('tax.statePct.auto'); }
+  else if (act === 'ratchet-urdb') {
+    /* Blank is "the tariff's": the bridge then reads the record's own. */
+    R.sizingRequest.tariff.ratchetPct = null;
+    delete BAD['sz.tariff.ratchetPct'];
+    edited('sz.tariff.ratchetPct');
+    paintFields($('s-load'));
+  }
+  else if (act === 'omit-disclosures') {
+    R.reportOpts.include.disclosures = true;
+    edited('ro.include.disclosures');
+    paintFields($('deck-card'));
+  }
+  else if (act === 'legacy-import') importLegacy();
+  else if (act === 'legacy-dismiss') { markLegacyDone(); $('legacy-offer').innerHTML = ''; }
   else if (act === 'use-model-itc') {
     var run = lastRun(), sb = run && run.tax && run.tax.itc && run.tax.itc.byAsset && run.tax.itc.byAsset.storage;
     if (sb && fin(sb.ratePct)) { R.sizingRequest.finance.itcPct = sb.ratePct; edited('sz.finance.itcPct'); paintFields($('s-load')); }
@@ -5555,6 +5793,13 @@ function onClick(e) {
 function wire() {
   var sel = $('p-state');
   sel.innerHTML = '<option value="">Choose…</option>' + optionList(STATES.map(function (s) { return [s[0], s[1]]; }), '');
+  /* A blank sizing field is the bridge's default, and the preset lines are
+     priced on it too, so the empty field shows the value it stands for. */
+  var dflt = document.querySelectorAll('[data-path^="sz.bess."],[data-path^="sz.tariff."]');
+  for (var d = 0; d < dflt.length; d++) {
+    var dp = dflt[d].getAttribute('data-path').split('.'), dv = (SIZING_DEFAULTS[dp[1]] || {})[dp[2]];
+    if (dflt[d].tagName === 'INPUT' && dp.length === 3 && fin(dv)) dflt[d].placeholder = fmtNum(dv, 4);
+  }
   document.addEventListener('input', onFieldEvent);
   document.addEventListener('change', onFieldEvent);
   /* A site fact's Apply switch is not a field: it writes the fact's value

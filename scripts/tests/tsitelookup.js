@@ -16,6 +16,10 @@
    - the key order (server env, then the user's, then DEMO_KEY), and that no
      key ever reaches a URL or the result — even when an upstream echoes it;
    - the address validator, and one lookup per request;
+   - the shared quota: no lookup without a caller, ten a minute per person
+     and thirty an hour per workspace on sliding windows, a refusal charged
+     to nobody, and an identical lookup answered from a per-workspace cache
+     that keeps only complete answers — all on a fake clock;
    - the bundled Treasury tables, including Connecticut's planning regions;
    - the table builder's spreadsheet reader, on a workbook built here.
 
@@ -89,8 +93,11 @@ function world(census, pv, urdb) {
     throw new Error('unexpected URL ' + u);
   });
 }
+/* Each run is its own caller with its own guard, so one case's answer is
+   never another's cache hit; the quota section shares a guard on purpose. */
+var WHO = { orgId: 'example-energy.com', uid: 'u-1' };
 function run(body, n, extra) {
-  var o = { fetch: n.fetch, env: NO_ENV, now: NOW, timeouts: FAST }, k;
+  var o = { fetch: n.fetch, env: NO_ENV, now: NOW, timeouts: FAST, who: WHO, guard: S.createGuard() }, k;
   for (k in (extra || {})) o[k] = extra[k];
   return S.lookup(body, o);
 }
@@ -630,10 +637,275 @@ function lookups() {
   .then(function (r) {
     eq('an invalid request resolves ok:false (the handler makes it a 400)', r.ok, false);
     eq('...with the field', r.field, 'address.street');
-    return S.lookup(body(CANOGA), { fetch: null, env: NO_ENV, now: NOW, timeouts: FAST });
+    return S.lookup(body(CANOGA), { fetch: null, env: NO_ENV, now: NOW, timeouts: FAST, who: WHO, guard: S.createGuard() });
   })
   .then(function (r) {
     ok('no fetch at all: a clean error, not a throw', r.ok === true && typeof r.errors.geo === 'string' && r.energyCommunity.status === 'unknown', r.errors);
+  });
+}
+
+/* ── the shared quota: per-org and per-person limits, and the cache ──────── */
+
+/* On a fake clock: every call names its own `now`, which is also what the
+   guard counts by, so a minute or an hour passes in no time at all. */
+function quota() {
+  var G, n, n2;
+  function q(b, net1, who, g, now) {
+    return S.lookup(b, { fetch: net1.fetch, env: NO_ENV, now: now, timeouts: FAST, who: who, guard: g });
+  }
+  function sized(kw) { return body(CANOGA, { solar: { kwDc: kw } }); }
+  /* n lookups by one person at one instant, each a different solar size so
+     none is a cache hit; resolves the list of results. */
+  function burst(count, from, who, g, now, net1) {
+    var p = Promise.resolve(), out = [], i;
+    for (i = 0; i < count; i++) {
+      (function (kw) {
+        p = p.then(function () { return q(sized(kw), net1, who, g, now).then(function (r) { out.push(r); }); });
+      })(from + i);
+    }
+    return p.then(function () { return out; });
+  }
+  function allOk(rs) { return rs.every(function (r) { return r.ok === true; }); }
+  function rejected(p) { return p.then(function () { return 'resolved'; }, function (e) { return e.message; }); }
+  var ANA = { orgId: 'example-energy.com', uid: 'ana' }, BEN = { orgId: 'example-energy.com', uid: 'ben' };
+  var CY = { orgId: 'example-energy.com', uid: 'cy' }, DEE = { orgId: 'example-energy.com', uid: 'dee' };
+  var OLA = { orgId: 'other-power.com', uid: 'ola' };
+
+  return Promise.resolve()
+
+  .then(function () {
+    section('Quota: who is asking');
+    eq('30 lookups an hour per workspace', S.LIMITS.ORG_PER_HOUR, 30);
+    eq('10 a minute per person', S.LIMITS.USER_PER_MINUTE, 10);
+    eq('a repeat is cached for an hour', S.LIMITS.CACHE_MS, 3600000);
+    n = world();
+    return rejected(S.lookup(body(CANOGA), { fetch: n.fetch, env: NO_ENV, now: NOW, timeouts: FAST }));
+  })
+  .then(function (m) {
+    ok('no opts.who: refused, not run uncounted', /needs opts\.who/.test(m), m);
+    eq('...and nothing went out', n.calls.length, 0);
+    return rejected(S.lookup(body(CANOGA), { fetch: n.fetch, env: NO_ENV, now: NOW, who: { orgId: 'example-energy.com' } }));
+  })
+  .then(function (m) {
+    ok('a who with no uid is refused too', /needs opts\.who/.test(m), m);
+    return rejected(S.lookup(body(CANOGA), { fetch: n.fetch, env: NO_ENV, now: NOW, who: { orgId: '', uid: 'u' } }));
+  })
+  .then(function (m) {
+    ok('...and one with an empty orgId', /needs opts\.who/.test(m), m);
+    eq('...none of them reached the network', n.calls.length, 0);
+  })
+
+  /* ── the cache ── */
+  .then(function () {
+    section('Quota: an identical lookup is free');
+    G = S.createGuard(); n = world();
+    return q(sized(250), n, ANA, G, NOW);
+  })
+  .then(function (r) {
+    eq('first lookup: three requests', n.calls.length, 3);
+    /* The caller scribbles on its copy; the next caller must not see it. */
+    r.solar.kwhAnnual = -1;
+    r.warnings.push('scribbled on by the first caller');
+    return q(body({ street: ' 22125  roscoe BLVD ', city: 'canoga park', state: 'ca', zip: '91304' }, { solar: { kwDc: 250 } }),
+      n, BEN, G, NOW + 1000);
+  })
+  .then(function (r) {
+    eq('the same site (spacing and case aside), by a colleague: no request', n.calls.length, 3);
+    eq('...the same answer', r.solar.kwhAnnual, 407042);
+    ok('...not the copy the first caller edited', r.warnings.indexOf('scribbled on by the first caller') < 0, r.warnings);
+    eq('...in the contract\'s shape', Object.keys(r).sort().join(','), 'energyCommunity,errors,geo,lowIncome,ok,solar,tax,utility,warnings');
+    return q(sized(250), n, OLA, G, NOW + 2000);
+  })
+  .then(function () {
+    eq('another workspace, same site: its own lookup (the cache is per workspace)', n.calls.length, 6);
+    return q(sized(100), n, ANA, G, NOW + 3000);
+  })
+  .then(function () {
+    eq('a different solar size is a different lookup', n.calls.length, 9);
+    return q(body(CANOGA, { solar: { kwDc: 250, tilt: 20 } }), n, ANA, G, NOW + 4000);
+  })
+  .then(function () {
+    eq('...so is a different tilt', n.calls.length, 12);
+    return q(body(CANOGA, { solar: false }), n, ANA, G, NOW + 5000);
+  })
+  .then(function () {
+    eq('...and no solar at all (geocoder and URDB only)', n.calls.length, 14);
+    return q(sized(250), n, ANA, G, NOW + 3600000 - 1);
+  })
+  .then(function () {
+    eq('still cached a moment before the hour', n.calls.length, 14);
+    return q(sized(250), n, ANA, G, NOW + 3600000);
+  })
+  .then(function () {
+    eq('an hour on, looked up afresh', n.calls.length, 17);
+    return q(body(CANOGA, { solar: { kwDc: 250 }, keys: { nrel: 'USERnrel0123456789abcdefABCDEF' } }), n, ANA, G, NOW + 3600001);
+  })
+  .then(function (r) {
+    eq('the user\'s own key is not answered from a demo-key result', n.calls.length, 20);
+    eq('...and says whose key it used', r.solar.keyUsed, 'user');
+    return q(body(CANOGA, { solar: { kwDc: 250 }, keys: { nrel: 'bad key!' } }), n, ANA, G, NOW + 3600002);
+  })
+  .then(function (r) {
+    eq('a malformed key falls to the demo key, so the demo answer is reused', n.calls.length, 20);
+    eq('...with THIS request\'s warning about the key, once', r.warnings.filter(function (w) { return /not in the expected format/.test(w); }).length, 1);
+    r.utility.name = 'scribbled on by a cache hit';
+    return q(sized(250), n, BEN, G, NOW + 3600003);
+  })
+  .then(function (r) {
+    eq('the next hit on the same answer: still no request', n.calls.length, 20);
+    ok('...without the last caller\'s key warning', !r.warnings.some(function (w) { return /not in the expected format/.test(w); }), r.warnings);
+    ok('...or its edits (every hit is its own copy)', r.utility.name !== 'scribbled on by a cache hit', r.utility.name);
+    G = S.createGuard(); n = world();
+    return q(body(CANOGA, { solar: { kwDc: 250 }, keys: { nrel: 'bad key!' } }), n, ANA, G, NOW);
+  })
+  .then(function (r) {
+    ok('a lookup made with a malformed key warns about it', r.warnings.some(function (w) { return /not in the expected format/.test(w); }), r.warnings);
+    return q(sized(250), n, BEN, G, NOW + 1);
+  })
+  .then(function (r) {
+    eq('...is reused by a colleague', n.calls.length, 3);
+    ok('...who does not inherit that warning', !r.warnings.some(function (w) { return /not in the expected format/.test(w); }), r.warnings);
+    ok('...but keeps the rest (the demo-key notes)', r.warnings.filter(function (w) { return /demo key/.test(w); }).length === 2, r.warnings);
+    G = S.createGuard(); n = world(null, null, 'urdb-empty');
+    return q(sized(250), n, ANA, G, NOW);
+  })
+  .then(function (r) {
+    ok('a lookup where one source failed', typeof r.errors.utility === 'string', r.errors);
+    n2 = world();
+    return q(sized(250), n2, ANA, G, NOW + 1);
+  })
+  .then(function (r) {
+    eq('...is not kept: the repeat asks again', n2.calls.length, 3);
+    eq('...and gets the full answer', JSON.stringify(r.errors), '{}');
+    G = S.createGuard({ cacheMax: 2 }); n = world();
+    return burst(3, 400, ANA, G, NOW, n);
+  })
+  .then(function () {
+    eq('three lookups into a two-answer cache', n.calls.length, 9);
+    return q(sized(402), n, ANA, G, NOW + 1);
+  })
+  .then(function () {
+    eq('...the newest is kept', n.calls.length, 9);
+    return q(sized(400), n, ANA, G, NOW + 2);
+  })
+  .then(function () {
+    eq('...the oldest went first', n.calls.length, 12);
+  })
+
+  /* ── per person ── */
+  .then(function () {
+    section('Quota: ten a minute per person');
+    G = S.createGuard(); n = world();
+    return burst(10, 200, ANA, G, NOW, n);
+  })
+  .then(function (rs) {
+    ok('ten different lookups in one minute all run', rs.length === 10 && allOk(rs), rs.map(function (r) { return r.ok; }));
+    eq('...thirty requests', n.calls.length, 30);
+    return q(sized(300), n, ANA, G, NOW);
+  })
+  .then(function (r) {
+    eq('the eleventh is refused', r.ok, false);
+    eq('...as a 429', r.status, 429);
+    eq('...retry after the whole minute', r.retryAfter, 60);
+    ok('...naming the per-person limit and the wait', /10 site lookups in a minute/.test(r.error) && /60 s/.test(r.error), r.error);
+    eq('...and nothing went out', n.calls.length, 30);
+    return q(sized(200), n, ANA, G, NOW + 1);
+  })
+  .then(function (r) {
+    eq('a repeat is still answered past the cap (a cache hit spends nothing)', r.ok, true);
+    eq('...with no request', n.calls.length, 30);
+    return q(body({ street: '1<b>', city: 'X', state: 'CA' }), n, ANA, G, NOW + 2);
+  })
+  .then(function (r) {
+    eq('an invalid request past the cap is still the 400, not a 429', r.field, 'address.street');
+    return q(sized(300), n, BEN, G, NOW + 3);
+  })
+  .then(function (r) {
+    eq('a colleague is not held to another person\'s minute', r.ok, true);
+    return q(sized(301), n, ANA, G, NOW + 59999);
+  })
+  .then(function (r) {
+    eq('a moment before the minute is up: still refused', r.status, 429);
+    eq('...retry in 1 s', r.retryAfter, 1);
+    return q(sized(301), n, ANA, G, NOW + 60000);
+  })
+  .then(function (r) {
+    eq('a minute on: allowed again', r.ok, true);
+    /* Sliding, not fixed: five at 0 s and five at 30 s; at 60 s only the
+       first five have left the window. A fixed minute would reset to ten. */
+    G = S.createGuard(); n = world();
+    return burst(5, 500, ANA, G, NOW, n);
+  })
+  .then(function () { return burst(5, 510, ANA, G, NOW + 30000, n); })
+  .then(function () { return burst(5, 520, ANA, G, NOW + 60000, n); })
+  .then(function (rs) {
+    ok('the window slides: five slots free at 60 s', allOk(rs), rs.map(function (r) { return r.ok; }));
+    return q(sized(530), n, ANA, G, NOW + 60000);
+  })
+  .then(function (r) {
+    eq('...and no sixth', r.status, 429);
+    eq('...until the 30 s ones leave, 30 s later', r.retryAfter, 30);
+    G = S.createGuard({ userPerMinute: 1 }); n = world();
+    return q(body({ street: '1<b>', city: 'X', state: 'CA' }), n, ANA, G, NOW);
+  })
+  .then(function () { return q(sized(250), n, ANA, G, NOW); })
+  .then(function (r) {
+    eq('an invalid request is not charged (the one allowed lookup still runs)', r.ok, true);
+    return burst(3, 260, ANA, G, NOW + 30000, n);
+  })
+  .then(function (rs) {
+    ok('retries inside the minute are refused', rs.every(function (r) { return r.status === 429; }), rs.map(function (r) { return r.status; }));
+    return q(sized(270), n, ANA, G, NOW + 60000);
+  })
+  .then(function (r) {
+    eq('...and not charged: the minute still ends a minute after the one that ran', r.ok, true);
+  })
+
+  /* ── per workspace ── */
+  .then(function () {
+    section('Quota: thirty an hour per workspace');
+    G = S.createGuard(); n = world();
+    return burst(10, 600, ANA, G, NOW, n)
+      .then(function (a) { return burst(10, 610, BEN, G, NOW, n).then(function (b) { return a.concat(b); }); })
+      .then(function (ab) { return burst(10, 620, CY, G, NOW, n).then(function (c) { return ab.concat(c); }); });
+  })
+  .then(function (rs) {
+    ok('three people, ten each: thirty lookups run', rs.length === 30 && allOk(rs), rs.filter(function (r) { return !r.ok; }).length);
+    return q(sized(630), n, DEE, G, NOW + 1000);
+  })
+  .then(function (r) {
+    eq('a fourth person\'s first lookup is refused: the workspace is spent', r.status, 429);
+    eq('...until the hour turns', r.retryAfter, 3599);
+    ok('...naming the workspace limit', /workspace has run 30 site lookups in the last hour/.test(r.error) && /60 min/.test(r.error), r.error);
+    return q(sized(630), n, OLA, G, NOW + 1000);
+  })
+  .then(function (r) {
+    eq('another workspace is untouched', r.ok, true);
+    return q(sized(600), n, DEE, G, NOW + 2000);
+  })
+  .then(function (r) {
+    eq('a site the workspace already looked up is still answered', r.ok, true);
+    return q(sized(631), n, DEE, G, NOW + 3600000);
+  })
+  .then(function (r) {
+    eq('an hour on, the workspace may look up again', r.ok, true);
+    /* A refusal is charged to nobody: Ana's refused retries must not eat
+       the hour Ben still has. */
+    G = S.createGuard({ userPerMinute: 2, orgPerHour: 3 }); n = world();
+    return burst(2, 700, ANA, G, NOW, n);
+  })
+  .then(function () { return burst(4, 710, ANA, G, NOW, n); })
+  .then(function (rs) {
+    ok('Ana, past her minute, is refused four times', rs.every(function (r) { return r.status === 429; }), rs.map(function (r) { return r.status; }));
+    return q(sized(720), n, BEN, G, NOW);
+  })
+  .then(function (r) {
+    eq('...and none of it was charged to the workspace: Ben has the third', r.ok, true);
+    return q(sized(721), n, BEN, G, NOW);
+  })
+  .then(function (r) {
+    eq('...and then it is spent', r.status, 429);
+    ok('...named as the workspace\'s limit, the longer wait', /workspace/.test(r.error) && r.retryAfter === 3600, [r.retryAfter, r.error]);
   });
 }
 
@@ -762,7 +1034,7 @@ keysPure();
 tablesPure();
 builder();
 hygiene();
-lookups().then(function () {
+lookups().then(quota).then(function () {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 }, function (e) {

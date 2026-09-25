@@ -51,6 +51,31 @@
    ONE ADDRESS PER REQUEST. A lookup spends the platform's shared quota on
    three public APIs; a list of addresses is a batch job, and this is not
    the door for one.
+
+   THE QUOTA IS SHARED, SO IT IS COUNTED. One tenant looping on this must not
+   switch tariff and solar suggestions off for every other one. lookup()
+   therefore needs to know who is asking (opts.who, the verified orgId and
+   uid; without it the call is refused, not run uncounted) and allows
+   ORG_PER_HOUR lookups per workspace and USER_PER_MINUTE per person,
+   sliding windows, before any request leaves. Past either cap it resolves
+   { ok:false, status:429, retryAfter } and the handler answers 429. An
+   identical lookup by the same workspace within CACHE_MS (same address,
+   same solar size and angles, same kind of key) is answered from memory
+   and spends neither quota nor allowance; only a result in which every
+   source answered is kept, so a failure is never replayed. The cache is
+   per workspace on purpose: a shared one would tell a tenant, by a fast
+   answer, that somebody else had just looked at that site.
+
+   ⚠ BOTH LIVE IN MODULE MEMORY, PER WARM INSTANCE. Vercel runs many
+   instances, so the real ceiling is the limit times the instances, and a
+   burst spread across cold starts is not limited at all. It is a speed
+   bump, not a hard cap: it stops the case that happens — one page or script
+   looping against one warm instance — and makes a repeat free. A durable
+   per-org cap needs a counter written in a transaction (what embed-layout
+   does for Regrid), and this endpoint cannot write: it runs on
+   verify-token, as the caller, with no service account. The money-costing
+   call has the durable cap; this one is free public data, so the trade is
+   the same one api/_lib/embed.js makes for its reads.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -72,6 +97,13 @@ var RETRY_FLOOR_MS = 2500;       // a retry with less time than this cannot fini
 var DEMO_KEY = 'DEMO_KEY';
 var STALE_TARIFF_MONTHS = 18;
 var MAX_RATES = 5;
+
+var MINUTE_MS = 60000, HOUR_MS = 3600000;
+var ORG_PER_HOUR = 30;           // one workspace, all its people
+var USER_PER_MINUTE = 10;        // one person: a stuck button, not a day's work
+var CACHE_MS = HOUR_MS;          // public data that changes yearly; one window
+var CACHE_MAX = 500;             // answers held at once, oldest out first
+var TRACKED_MAX = 5000;          // orgs + people counted at once; see sweep()
 
 /* PVWatts inputs for a commercial rooftop (SPEC §4): premium modules, 14 %
    system losses, fixed roof mount at 10° facing south, DC/AC 1.2, 96 %
@@ -627,6 +659,97 @@ function utility(fetchFn, geo, pick, nowSec, T) {
   });
 }
 
+/* ── the shared quota: counted per org and per person, repeats cached ────── */
+
+function inWords(secs) { return secs < 90 ? secs + ' s' : Math.round(secs / 60) + ' min'; }
+
+/* A limiter and a cache with their own memory, so a test can hold a fresh
+   one on a fake clock; the endpoint uses GUARD, the module's own. The maps
+   have no prototype: orgId and uid come from a verified token, but a key
+   spelled __proto__ must still be only a key. */
+function createGuard(limits) {
+  limits = isObj(limits) ? limits : {};
+  function limit(k, d) { return num(limits[k]) && limits[k] > 0 ? limits[k] : d; }
+  var L = { orgPerHour: limit('orgPerHour', ORG_PER_HOUR), userPerMinute: limit('userPerMinute', USER_PER_MINUTE),
+    cacheMs: limit('cacheMs', CACHE_MS), cacheMax: limit('cacheMax', CACHE_MAX) };
+  var orgs = Object.create(null), users = Object.create(null), answers = Object.create(null);
+
+  /* The times still inside the window, oldest first; an emptied key goes. */
+  function recent(map, k, windowMs, now) {
+    var t = map[k] || [], i = 0;
+    while (i < t.length && t[i] <= now - windowMs) i++;
+    if (i) t = t.slice(i);
+    if (t.length) map[k] = t; else delete map[k];
+    return t;
+  }
+  /* Whole seconds until a slot opens; 0 when one is free now. */
+  function waitFor(t, cap, windowMs, now) {
+    if (t.length < cap) return 0;
+    return Math.max(1, Math.ceil((t[t.length - cap] + windowMs - now) / 1000));
+  }
+  /* The maps grow with people, not with requests, but are still bounded:
+     swept when large rather than on a timer, so an idle instance does
+     nothing. */
+  function sweep(now) {
+    if (Object.keys(orgs).length + Object.keys(users).length < TRACKED_MAX) return;
+    Object.keys(orgs).forEach(function (k) { recent(orgs, k, HOUR_MS, now); });
+    Object.keys(users).forEach(function (k) { recent(users, k, MINUTE_MS, now); });
+  }
+
+  /* who → null when this lookup may go out (and it is counted), or
+     { retryAfter, error }. Both windows are checked before either is
+     charged, so a refusal costs nothing: a person hammering retry does not
+     eat the rest of the workspace's hour. The longer wait is the one named. */
+  function take(who, now) {
+    sweep(now);
+    var u = recent(users, who.uid, MINUTE_MS, now), o = recent(orgs, who.orgId, HOUR_MS, now);
+    var wu = waitFor(u, L.userPerMinute, MINUTE_MS, now), wo = waitFor(o, L.orgPerHour, HOUR_MS, now);
+    if (wo && wo >= wu) {
+      return { retryAfter: wo, error: 'This workspace has run ' + L.orgPerHour + ' site lookups in the last hour, ' +
+        'the most one workspace may; try again in about ' + inWords(wo) + '.' };
+    }
+    if (wu) {
+      return { retryAfter: wu, error: 'That is ' + L.userPerMinute + ' site lookups in a minute, the most one person may; ' +
+        'try again in ' + inWords(wu) + '.' };
+    }
+    users[who.uid] = u.concat([now]);
+    orgs[who.orgId] = o.concat([now]);
+    return null;
+  }
+
+  /* Held as JSON and parsed on the way out, so a caller that edits its copy
+     cannot edit the next caller's. */
+  function get(key, now) {
+    var e = answers[key];
+    if (!e) return null;
+    if (!(now >= e.at && now - e.at < L.cacheMs)) { delete answers[key]; return null; }
+    return JSON.parse(e.json);
+  }
+  /* Keys iterate in insertion order, so the first is the oldest; a re-put
+     moves its key to the back. */
+  function put(key, value, now) {
+    delete answers[key];
+    answers[key] = { at: now, json: JSON.stringify(value) };
+    var ks = Object.keys(answers), i = 0;
+    while (ks.length - i > L.cacheMax) delete answers[ks[i++]];
+  }
+
+  return { take: take, get: get, put: put };
+}
+var GUARD = createGuard();
+
+/* What makes two lookups the same answer: the workspace, the address as
+   validated (so spacing and case do not split it), the solar request, and
+   which KIND of key each service would use, since the result says which.
+   Never the key itself. Validated fields carry no control characters, so a
+   newline cannot be forged into a second field. */
+function cacheKey(who, req, nrel, urdb) {
+  var s = req.solar ? [req.solar.perKw ? 'per-kw' : req.solar.kwDc, req.solar.tilt, req.solar.azimuth].join(',') : 'no-solar';
+  return [who.orgId, req.oneLine.toLowerCase(), s, nrel.used, urdb.used].join('\n');
+}
+
+function isId(v) { return typeof v === 'string' && v.length > 0; }
+
 /* ── the lookup ──────────────────────────────────────────────────────────── */
 
 /* Every key that went out on this request, scrubbed from the result as a
@@ -642,20 +765,43 @@ function scrub(result, secrets) {
   return changed ? JSON.parse(s) : result;
 }
 
-/* body (the POST) → Promise of the §7.3 result, or { ok:false, field, error }
-   for a request that cannot be looked up. Never rejects for an upstream
+/* body (the POST) → Promise of the §7.3 result, { ok:false, field, error }
+   for a request that cannot be looked up, or { ok:false, status:429,
+   retryAfter, error } past the quota. Never rejects for an upstream
    failure: each lookup fails into its own errors entry.
-   opts: { fetch, env, now (ms), timeouts } — injectable for tests; timeouts
-   exists so a test of a hung upstream does not take six real seconds. */
+   opts: { who:{orgId, uid} (required), fetch, env, now (ms), timeouts,
+   guard } — who is counted against the quota; the rest are injectable for
+   tests. now is the clock for both the tariff date and the quota; timeouts
+   exists so a test of a hung upstream does not take six real seconds;
+   guard is a createGuard() so a test does not share the module's. */
 function lookup(body, opts) {
   opts = opts || {};
+  var who = isObj(opts.who) ? opts.who : null;
+  /* Refused, not run uncounted: a caller that forgot to say who is asking
+     would otherwise be the one door around the quota. */
+  if (!who || !isId(who.orgId) || !isId(who.uid)) {
+    return Promise.reject(new Error('site-lookup: lookup() needs opts.who { orgId, uid } to count the shared quota'));
+  }
   var v = validate(body);
   if (!v.ok) return Promise.resolve(v);
   var req = v.request;
   var fetchFn = opts.fetch || (typeof fetch === 'function' ? fetch : null);
   var env = opts.env || process.env;
-  var nowSec = Math.floor((num(opts.now) ? opts.now : Date.now()) / 1000);
+  var now = num(opts.now) ? opts.now : Date.now();
+  var nowSec = Math.floor(now / 1000);
   var nrel = pickKey('nrel', env, req.keys), urdb = pickKey('urdb', env, req.keys);
+  var guard = opts.guard || GUARD;
+  var key = cacheKey(who, req, nrel, urdb);
+
+  /* A repeat is free: no request, no charge. A malformed-key warning belongs
+     to THIS request, so it is stored off and put back per caller. */
+  var seen = guard.get(key, now);
+  if (seen) {
+    seen.warnings = req.keyWarnings.concat(Array.isArray(seen.warnings) ? seen.warnings : []);
+    return Promise.resolve(seen);
+  }
+  var over = guard.take(who, now);
+  if (over) return Promise.resolve({ ok: false, status: 429, retryAfter: over.retryAfter, field: null, error: over.error });
   var t = isObj(opts.timeouts) ? opts.timeouts : {};
   var T = {
     geocodeMs: num(t.geocodeMs) ? t.geocodeMs : GEOCODE_MS,
@@ -723,15 +869,27 @@ function lookup(body, opts) {
       return result;
     });
   }).then(function (res) {
-    return scrub(res, [nrel.key, urdb.key]);
+    var out = scrub(res, [nrel.key, urdb.key]);
+    /* Only an answer in which every source answered: a timeout or a 429
+       kept for an hour would be an outage we manufactured. Scrubbed first,
+       so no key is ever held. */
+    if (!Object.keys(out.errors).length) {
+      var keep = {}, k;
+      for (k in out) if (has(out, k)) keep[k] = out[k];
+      keep.warnings = out.warnings.slice(req.keyWarnings.length);
+      guard.put(key, keep, now);
+    }
+    return out;
   });
 }
 
 module.exports = {
   lookup: lookup,
   validate: validate,
+  createGuard: createGuard,
   /* For scripts/tests/tsitelookup.js: the pure parts. */
   _pure: { energyCommunity: energyCommunity, lowIncome: lowIncome, tax: tax, pickKey: pickKey,
     summarizeRate: summarizeRate, sinceIso: sinceIso, getJson: getJson },
-  LIMITS: { GEOCODE_MS: GEOCODE_MS, GEOCODE_BUDGET_MS: GEOCODE_BUDGET_MS, LOOKUP_MS: LOOKUP_MS, RETRY_FLOOR_MS: RETRY_FLOOR_MS }
+  LIMITS: { GEOCODE_MS: GEOCODE_MS, GEOCODE_BUDGET_MS: GEOCODE_BUDGET_MS, LOOKUP_MS: LOOKUP_MS, RETRY_FLOOR_MS: RETRY_FLOOR_MS,
+    ORG_PER_HOUR: ORG_PER_HOUR, USER_PER_MINUTE: USER_PER_MINUTE, CACHE_MS: CACHE_MS, CACHE_MAX: CACHE_MAX }
 };

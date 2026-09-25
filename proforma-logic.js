@@ -16,6 +16,8 @@
                                                             downloads it; resolves { fileName }
      OmegaProformaReport.pptx.fileName(result, brand, opts) '<Tenant> - <Project> -
                                                             Investor One-Pager - <Q# YYYY>.pptx'
+     OmegaProformaReport.omitted(result, brand, opts)       the lines a full numbers page
+                                                            left out, for the page to name
      OmegaProformaReport.brandFrom(contextBrand, overrides)  name, logo, tagline, accent
      OmegaProformaReport.brandFrom.logoAccent(url, cb)      an accent read off the logo
      OmegaProformaReport.palette(accentHex)                 the deck's colours
@@ -88,6 +90,7 @@
   var COL_W = 206.64, COL_H = 268.08;                                 // a numbers-page column
   var BULLET_W = COL_W - 13.23, BULLET_TOP = 11 + 6.79, BULLET_LINE = 8.67;
   var BULLET_GAP = 6.4, BULLET_GAP_MIN = 4.5;                         // the reference's usual gap, and its tightest
+  var BULLET_GAP_FLOOR = 2.6;                                         // tighter than the reference, still a break between bullets
   var DIS_H = 296;                                                    // the disclosures' column height
 
   /* ── STRINGS ────────────────────────────────────────────────────────────── */
@@ -487,7 +490,8 @@
       levered: met.levered === true || !!debt,
       roof: roof > 0 ? roof : 0,
       itcFace: pos(at(r, 'tax.itc.face')) || 0,
-      footerTitle: clean(o.footerTitle) || 'Investor One-Pager'
+      footerTitle: clean(o.footerTitle) || 'Investor One-Pager',
+      omitted: []
     };
   }
   function term(m) { return m.years ? trimmed(m.years, 0) : ''; }
@@ -734,10 +738,15 @@
   }
 
   /* ── 3 · THE NUMBERS ────────────────────────────────────────────────────── */
+  /* omitted: the bullets a full column had to leave out, [{ column, k, v }],
+     for the page to name and the disclosures appendix to print. */
   function numbersPage(m) {
     var title = m.levered ? 'Returns, capital structure and operating economics' : 'Returns, tax basis and operating economics';
-    return { kind: 'numbers', head: heading(['THE NUMBERS'], title), returns: returnsModel(m), tax: taxModel(m), revenue: revenueModel(m),
-      floor: banner([floorText(m)]) };
+    var tax = taxModel(m), revenue = revenueModel(m), omitted = [], i;
+    for (i = 0; i < tax.dropped.length; i++) omitted.push({ column: tax.label, k: tax.dropped[i].k, v: tax.dropped[i].v });
+    for (i = 0; i < revenue.dropped.length; i++) omitted.push({ column: revenue.label, k: revenue.dropped[i].k, v: revenue.dropped[i].v });
+    return { kind: 'numbers', head: heading(['THE NUMBERS'], title), returns: returnsModel(m), tax: tax, revenue: revenue,
+      floor: banner([floorText(m)]), omitted: omitted };
   }
   /* The contract rounds each step to 0.1 of a point, so the build arrives in
      points (4.8). A build in fractions (0.048) is recognised by its total
@@ -838,8 +847,11 @@
      either, neither can claim the whole system's size. Fewer lines give the
      all-in unit cost the reference quotes. */
   function costItem(m) {
-    var capex = m.r.capex || {}, total = num(capex.total), lines = arr(capex.lines), parts = [], count = {}, unit = '', i;
+    var capex = m.r.capex || {}, total = num(capex.total), lines = arr(capex.lines), parts = [], count = {}, unit = '', allIn, i;
     if (total === null) return null;
+    if (m.solar && pos(capex.perWdc)) unit = '$' + num(capex.perWdc).toFixed(2) + '/W DC, ' + kwWords(m.solar.kwDc) + ' DC nameplate';
+    else if (m.bess) unit = '$' + trimmed(total / m.bess.kwh, 0) + '/kWh, ' + kwhWords(m.bess.kwh) + ' nameplate';
+    allIn = fmt.money(total) + (unit ? ' (' + unit + ')' : '');
     if (lines.length >= 3) {
       for (i = 0; i < lines.length; i++) if (lines[i]) count[lines[i].asset] = (count[lines[i].asset] || 0) + 1;
       for (i = 0; i < lines.length && parts.length < 7; i++) {
@@ -849,11 +861,11 @@
         if (L.asset === 'storage' && m.bess && count.storage === 1) per = ' ($' + trimmed(amt / m.bess.kwh, 0) + '/kWh)';
         parts.push(lowerFirst(clean(L.label)) + ' ' + fmt.money(amt) + per);
       }
-      return { k: 'Total installed cost', v: fmt.money(total) + (parts.length ? ' ' + DASH + ' ' + parts.join(', ') : ''), p: 1 };
+      /* short of room, the line list gives way to the all-in unit cost */
+      return parts.length ? { k: 'Total installed cost', v: fmt.money(total) + ' ' + DASH + ' ' + parts.join(', '), s: allIn, p: 1 }
+        : { k: 'Total installed cost', v: fmt.money(total), p: 1 };
     }
-    if (m.solar && pos(capex.perWdc)) unit = '$' + num(capex.perWdc).toFixed(2) + '/W DC, ' + kwWords(m.solar.kwDc) + ' DC nameplate';
-    else if (m.bess) unit = '$' + trimmed(total / m.bess.kwh, 0) + '/kWh, ' + kwhWords(m.bess.kwh) + ' nameplate';
-    return { k: 'Total installed cost', v: fmt.money(total) + (unit ? ' (' + unit + ')' : ''), p: 1 };
+    return { k: 'Total installed cost', v: allIn, p: 1 };
   }
   /* The ITC rate as the engine built it, per asset, and the one rate when
      every asset with basis shares it. A 'blended' line (one installed cost
@@ -919,21 +931,23 @@
     }
     if (rate.item) items.push(rate.item);
     if (m.itcFace) {
-      var cash = num(itc.cash), how = '';
+      var cash = num(itc.cash), how = '', sold = itc.monetization === 'transfer' && cash !== null;
       if (rate.single !== null && qb) how = ' (' + fmt.percent(rate.single) + ' ' + TIMES + ' ' + fmt.money(qb) + ' eligible basis)';
-      if (itc.monetization === 'transfer' && cash !== null) {
+      if (sold) {
         how += ', transferred' + (pos(itc.transferPrice) ? ' at $' + num(itc.transferPrice).toFixed(2) + '/$1' : '') +
           ' for ' + fmt.money(cash) + ' net cash, received in Year 1';
       } else {
         how += t.appetite === 'nol' ? ', used against federal tax as it can be absorbed' : ', claimed against federal tax in Year 1';
       }
-      items.push({ k: 'ITC amount', v: fmt.money(m.itcFace) + how, p: 2 });
+      items.push({ k: 'ITC amount', v: fmt.money(m.itcFace) + how, p: 2,
+        s: fmt.money(m.itcFace) + (sold ? ', ' + fmt.money(cash) + ' net cash on transfer' : '') });
     }
     if (after) {
-      var method = depreciationWords(t.classes), bonus = pos(t.bonusPct);
-      items.push({ k: 'Depreciable basis after ITC haircut', v: fmt.money(after) + (m.itcFace ? ' (reduced by 50% of the ITC)' : '') +
+      var method = depreciationWords(t.classes), bonus = pos(t.bonusPct), cut = m.itcFace ? ' (reduced by 50% of the ITC)' : '';
+      items.push({ k: 'Depreciable basis after ITC haircut', v: fmt.money(after) + cut +
         (method ? '; ' + method + (t.convention === 'mid-quarter' ? ', mid-quarter convention' : '') : '') +
-        (bonus ? '; ' + fmt.percent(bonus, 1) + ' bonus depreciation in Year 1' : ''), p: 4 });
+        (bonus ? '; ' + fmt.percent(bonus, 1) + ' bonus depreciation in Year 1' : ''), p: 4,
+        s: fmt.money(after) + cut + (bonus ? '; ' + fmt.percent(bonus, 1) + ' bonus in Year 1' : '') });
     }
     if (num(t.statePct) !== null) {
       items.push({ k: 'State tax rate', v: fmt.percent(t.statePct) +
@@ -950,7 +964,7 @@
     var note = m.levered || step ? ''
       : '* Opportunity to optimize tax benefits and levered returns ' + DASH + ' e.g. step-up capital in tax syndication.';
     var budget = COL_H - BULLET_TOP - 3.4 - (note ? 8 + linesOf(note, 7.2, COL_W) * BULLET_LINE : 0), set = fit(items, budget);
-    return { label: 'Tax', items: set.items, gap: set.gap, note: note ? noWidow(note) : '' };
+    return { label: 'Tax', items: set.items, gap: set.gap, dropped: set.dropped, note: note ? noWidow(note) : '' };
   }
 
   /* What the battery earns, by how the deal pays for it (contract §1
@@ -958,25 +972,31 @@
      value is the host's, and the line says so. */
   function storageItem(m) {
     var rev = m.r.revenue || {}, b = at(m.inp, 'revenue.bess') || {}, host = pos(rev.hostSavingsY1), y1 = num(at(rev, 'year1.bess'));
+    var inYear1 = y1 !== null ? fmt.money(y1) + ' in Year 1' : '', p = m.ppa ? 4 : 2;
     if (m.bessMode === 'shared-savings' && y1 !== null) {
-      return { k: 'Storage revenue', v: fmt.money(y1) + ' in Year 1' +
-        (pos(b.sharePct) && host ? ' ' + DASH + ' ' + fmt.percent(b.sharePct) + ' of ' + fmt.money(host) + ' host bill savings' : ''), p: 2 };
+      return { k: 'Storage revenue', v: inYear1 +
+        (pos(b.sharePct) && host ? ' ' + DASH + ' ' + fmt.percent(b.sharePct) + ' of ' + fmt.money(host) + ' host bill savings' : ''), s: inYear1, p: p };
     }
     if (m.bessMode === 'fixed' && y1 !== null) {
-      return { k: 'Storage services fee', v: fmt.money(y1) + ' in Year 1' +
-        (pos(b.fixedPerKwMonth) ? ' (' + fmt.money(b.fixedPerKwMonth) + '/kW-month on ' + kwWords(m.bess.kw) + ')' : ''), p: 2 };
+      return { k: 'Storage services fee', v: inYear1 +
+        (pos(b.fixedPerKwMonth) ? ' (' + fmt.money(b.fixedPerKwMonth) + '/kW-month on ' + kwWords(m.bess.kw) + ')' : ''), s: inYear1, p: p };
     }
     if (m.bessMode === 'host-owned' && (y1 !== null || host)) {
-      return { k: 'Host bill savings', v: fmt.money(y1 !== null ? y1 : host) + ' in Year 1, kept by the host-owner', p: 2 };
+      return { k: 'Host bill savings', v: fmt.money(y1 !== null ? y1 : host) + ' in Year 1, kept by the host-owner', p: p };
     }
     if (host) {
       return { k: 'Host bill savings from storage', v: fmt.money(host) + ' in Year 1, delivered under the ' + (m.ppa ? 'PPA' : 'agreement') +
-        ' (not separate revenue)', p: 8 };
+        ' (not separate revenue)', s: fmt.money(host) + ' in Year 1 (host value, not revenue)', p: 8 };
     }
     return null;
   }
   /* The third column: its bullets, fitted above the sources & uses table
-     that sits at its foot. */
+     that sits at its foot. A financing team reads the reference's lines
+     here \u2014 production, the PPA rate and its revenue, escalator, term, the
+     levelized PPA price and LCOE, demand response, opex \u2014 so those outrank
+     the detail a full column gives up first (the grid-market line, the
+     wording after a figure). A line may carry a shorter wording (s) or a
+     line it folds into (into, fold); see fit. */
   function revenueModel(m) {
     var rev = m.r.revenue || {}, y1 = rev.year1 || {}, inp = m.inp, t = term(m), items = [], i;
     var b = at(inp, 'revenue.bess') || {}, storage = m.bess ? storageItem(m) : null;
@@ -984,54 +1004,60 @@
     var dr = at(inp, 'revenue.dr') || {}, dr1 = pos(y1.dr), ev = at(inp, 'revenue.ev') || {}, ev1 = pos(y1.ev);
     var other = arr(at(inp, 'revenue.other')), other1 = pos(y1.other), names = [], opex = m.r.opex || {};
     if (m.solar) {
-      var gross = pos(rev.solarKwh1) || pos(m.solar.kwh1), net = pos(rev.solarNetKwh1) || pos(m.solar.netKwh1);
+      var gross = pos(rev.solarKwh1) || pos(m.solar.kwh1), net = pos(rev.solarNetKwh1) || pos(m.solar.netKwh1), drawn = net && net < gross - 0.5;
       if (gross) {
         items.push({ k: 'Year 1 production', v: trimmed(gross, 0) + ' kWh AC' +
-          (net && net < gross - 0.5 ? ' to grid gross (' + trimmed(net, 0) + ' kWh net of ~' + trimmed(gross - net, 0) + ' kWh grid draw)' : '') +
-          (pos(m.solar.availabilityLossPct) ? ', less a ' + fmt.percent(m.solar.availabilityLossPct) + ' availability allowance' : ''), p: 1 });
+          (drawn ? ' to grid gross (' + trimmed(net, 0) + ' kWh net of ~' + trimmed(gross - net, 0) + ' kWh grid draw)' : '') +
+          (pos(m.solar.availabilityLossPct) ? ', less a ' + fmt.percent(m.solar.availabilityLossPct) + ' availability allowance' : ''),
+          s: trimmed(gross, 0) + ' kWh AC' + (drawn ? ' gross, ' + trimmed(net, 0) + ' net' : ''), p: 1 });
       }
     }
     if (m.ppa) {
-      items.push({ k: 'PPA rate, Year 1', v: fmt.rate(m.ppa.rate1) + ' (' + trimmed(m.ppa.rate1 * 100, 2) + '\u00a2/kWh)', p: 2 });
-      if (num(m.ppa.escalatorPct) !== null) items.push({ k: 'Escalator', v: fmt.percent(m.ppa.escalatorPct) + ' per year', p: 4 });
+      items.push({ id: 'ppa', k: 'PPA rate, Year 1', v: fmt.rate(m.ppa.rate1) + ' (' + trimmed(m.ppa.rate1 * 100, 2) + '\u00a2/kWh)', p: 2 });
+      if (num(m.ppa.escalatorPct) !== null) items.push({ id: 'esc', k: 'Escalator', v: fmt.percent(m.ppa.escalatorPct) + ' per year', p: 4 });
     } else if (storage) {
       /* without a PPA the battery's revenue leads, and its escalator is the utility's */
       items.push(storage);
       storage = null;
-      if (pos(b.escalatorPct)) items.push({ k: 'Escalator', v: fmt.percent(b.escalatorPct) + ' per year (utility rates)', p: 5 });
+      if (pos(b.escalatorPct)) items.push({ id: 'esc', k: 'Escalator', v: fmt.percent(b.escalatorPct) + ' per year (utility rates)', p: 4 });
     }
-    if (t) items.push({ k: 'Term', v: t + ' years modeled', p: 6 });
-    if (m.ppa && num(y1.ppa) !== null) items.push({ k: 'Year 1 PPA revenue', v: fmt.money(y1.ppa), p: 3 });
+    if (t) items.push({ k: 'Term', v: t + ' years modeled', p: 7, into: 'esc', fold: ' over the ' + t + '-year term' });
+    if (m.ppa && num(y1.ppa) !== null) {
+      items.push({ k: 'Year 1 PPA revenue', v: fmt.money(y1.ppa), p: 3, into: 'ppa', fold: '; ' + fmt.money(y1.ppa) + ' of revenue in Year 1' });
+    }
     if (storage) items.push(storage);
     if (m.bess && replaced && repMode !== 'none') {
-      items.push({ k: 'Battery replacement', v: replaced + (repMode === 'expense' ? ', paid from operating cash' : ', funded from a reserve'), p: 9 });
+      items.push({ k: 'Battery replacement', v: replaced + (repMode === 'expense' ? ', paid from operating cash' : ', funded from a reserve'), s: replaced, p: 5 });
     }
-    if (m.ppa && num(m.met.lppaCents) !== null) items.push({ k: 'Levelized PPA price (nominal)', v: fmt.cents(m.met.lppaCents), p: 7 });
-    if (m.solar && num(m.met.lcoeCents) !== null) items.push({ k: 'LCOE (nominal)', v: fmt.cents(m.met.lcoeCents), p: 7 });
-    if (m.bess && !m.solar && num(m.met.lcosCents) !== null) items.push({ k: 'LCOS (nominal)', v: fmt.cents(m.met.lcosCents) + ' discharged', p: 7 });
+    if (m.ppa && num(m.met.lppaCents) !== null) items.push({ k: 'Levelized PPA price (nominal)', v: fmt.cents(m.met.lppaCents), p: 3 });
+    if (m.solar && num(m.met.lcoeCents) !== null) items.push({ k: 'LCOE (nominal)', v: fmt.cents(m.met.lcoeCents), p: 3 });
+    if (m.bess && !m.solar && num(m.met.lcosCents) !== null) items.push({ k: 'LCOS (nominal)', v: fmt.cents(m.met.lcosCents) + ' discharged', p: 3 });
     if (pos(dr.perYear) || pos(dr.perKwYear)) {
-      var amount = dr1 ? fmt.money(dr1) : pos(dr.perYear) ? fmt.money(dr.perYear) : fmt.money(dr.perKwYear) + '/kW-yr';
+      var amount = dr1 ? fmt.money(dr1) : pos(dr.perYear) ? fmt.money(dr.perYear) : fmt.money(dr.perKwYear) + '/kW-yr', yearly = dr1 || pos(dr.perYear) ? '/yr' : '';
       items.push({ k: 'Demand response revenue', v: dr.inBase === true ? amount + ' in Year 1, included in the base case'
-        : 'up to ' + amount + (dr1 || pos(dr.perYear) ? '/yr' : '') + ', not in the base case', p: 5 });
+        : 'up to ' + amount + yearly + ', not in the base case', s: dr.inBase === true ? amount + ' in Year 1' : 'up to ' + amount + yearly + ' (upside)', p: 5 });
     } else if (m.bess) {
+      /* the floor banner names this upside too, so it is the first to give way */
       items.push({ k: 'Grid market participation revenue',
-        v: '$0 modeled ' + DASH + ' frequency regulation and capacity market upside not yet quantified', p: 10 });
+        v: '$0 modeled ' + DASH + ' frequency regulation and capacity market upside not yet quantified', p: 10, restated: true });
     }
     if (m.ev && ev1) {
       items.push({ k: 'EV charging revenue', v: fmt.money(ev1) + ' in Year 1' +
-        (pos(ev.perKwYear) ? ' (' + fmt.money(ev.perKwYear) + '/kW-yr on ' + kwWords(m.ev.kw) + ')' : '') + ', included in the base case', p: 4 });
+        (pos(ev.perKwYear) ? ' (' + fmt.money(ev.perKwYear) + '/kW-yr on ' + kwWords(m.ev.kw) + ')' : '') + ', included in the base case',
+        s: fmt.money(ev1) + ' in Year 1', p: 5 });
     }
     if (other1) {
       for (i = 0; i < other.length; i++) if (other[i] && clean(other[i].label)) names.push(clean(other[i].label));
       items.push({ k: names.length === 1 ? names[0] : 'Other revenue',
-        v: fmt.money(other1) + ' in Year 1' + (names.length > 1 ? ' (' + list(names) + ')' : ''), p: 6 });
+        v: fmt.money(other1) + ' in Year 1' + (names.length > 1 ? ' (' + list(names) + ')' : ''), s: fmt.money(other1) + ' in Year 1', p: 6 });
     }
     if (num(opex.year1Total) !== null) {
-      items.push({ k: 'Total Year 1 Opex', v: fmt.money(opex.year1Total) +
-        (pos(opex.escalatorPct) ? ', escalating at ' + fmt.percent(opex.escalatorPct) + '/yr' : ''), p: 3 });
+      var rise = pos(opex.escalatorPct);
+      items.push({ k: 'Total Year 1 Opex', v: fmt.money(opex.year1Total) + (rise ? ', escalating at ' + fmt.percent(rise) + '/yr' : ''),
+        s: fmt.money(opex.year1Total) + (rise ? ', +' + fmt.percent(rise) + '/yr' : ''), p: 3 });
     }
     var su = sourcesUses(m), set = fit(items, su.budget);
-    return { label: 'Revenue & opex', items: set.items, gap: set.gap, su: su };
+    return { label: 'Revenue & opex', items: set.items, gap: set.gap, dropped: set.dropped, su: su };
   }
 
   /* The sources & uses table sits at the foot of the third column; what it
@@ -1200,6 +1226,12 @@
     var assumptions = arr(m.r.assumptions).filter(function (a) { return clean(a); });
     var version = clean(m.r.version), blocks = [], pages = [[]], used = 0, out = [], i;
     warns.sort(function (a, b) { return rank(a) - rank(b); });
+    /* what a full numbers page had to leave out is printed first, whole */
+    if (m.omitted.length) blocks.push({ h: 'Not shown on The Numbers' });
+    for (i = 0; i < m.omitted.length; i++) {
+      var gone = m.omitted[i].k + ': ' + m.omitted[i].v;
+      blocks.push({ li: gone, text: gone });
+    }
     if (warns.length) blocks.push({ h: 'Warnings' });
     for (i = 0; i < warns.length; i++) {
       var lvl = LEVELS[warns[i].level] != null ? warns[i].level : 'info', word = lvl === 'warn' ? 'Warning' : upperFirst(lvl);
@@ -1257,7 +1289,8 @@
      run. */
   function deck(result, brand, opts) {
     if (!result || typeof result !== 'object' || result.ok === false || !result.inputs) return null;
-    var m = context(result, brand, opts), pages = [coverPage(m), overviewPage(m), numbersPage(m)], sz;
+    var m = context(result, brand, opts), numbers = numbersPage(m), pages = [coverPage(m), overviewPage(m), numbers], sz;
+    m.omitted = numbers.omitted;
     if (m.inc.sizing && (sz = sizingPage(m))) pages.push(sz);
     if (m.inc.cashflow) pages = pages.concat(cashflowPages(m));
     if (m.inc.disclosures) pages = pages.concat(disclosurePages(m));
@@ -1310,20 +1343,74 @@
     for (var i = 0; i < items.length; i++) out.push('<li><b>' + esc(items[i].k) + ':</b> ' + esc(noWidow(items[i].v)) + '</li>');
     return '<ul class="pf-bul"' + (set.gap < BULLET_GAP ? ' style="--pf-gap:' + set.gap.toFixed(2) + 'pt"' : '') + '>' + out.join('') + '</ul>';
   }
-  /* Fits a column's bullets into budgetPt: first by closing the gaps down to
-     the reference's tightest, then by dropping the least important bullet.
+  /* Fits a column's bullets into budgetPt. Each step is taken only when the
+     one before it was not enough, so a column that fits is set exactly as
+     the reference sets it:
+       1. the gaps close from the reference's usual 6.4 pt to its tightest;
+       2. a line the page says elsewhere goes (restated: the floor banner
+          names the grid-market upside), as the reference decks let it;
+       3. a line folds into the line it belongs with (the Year 1 PPA revenue
+          into the PPA rate, the term into the escalator), least important
+          first — the figure stays, the bullet goes;
+       4. a line takes its shorter wording (s), least important first — the
+          figure stays, the explanation after it goes;
+       5. the gaps close to a floor tighter than the reference's;
+       6. and only then the least important line is dropped. What is dropped
+          is RETURNED, never lost quietly: the page names it and the
+          disclosures appendix prints it.
      The line estimate is pessimistic on purpose: a column with air at the
      bottom reads fine, one that runs into the banner does not. */
   function fit(items, budgetPt) {
-    var keep = items.slice(), i;
+    var keep = [], dropped = [], gap, i, x;
+    for (i = 0; i < items.length; i++) {
+      x = items[i];
+      keep.push({ id: x.id, k: x.k, v: x.v, s: x.s, full: x.v, p: x.p, into: x.into, fold: x.fold, restated: x.restated });
+    }
+    function room(floor) {
+      var text = 0, j;
+      for (j = 0; j < keep.length; j++) text += linesOf(keep[j].k + ': ' + keep[j].v, 7.22, BULLET_W) * BULLET_LINE;
+      var g = keep.length > 1 ? (budgetPt - text) / (keep.length - 1) : BULLET_GAP;
+      return g >= floor || keep.length < 2 ? Math.max(floor, Math.min(BULLET_GAP, g)) : null;
+    }
+    function done(g) {
+      for (var j = 0; j < keep.length; j++) keep[j] = { k: keep[j].k, v: keep[j].v, p: keep[j].p };
+      return { items: keep, gap: g, dropped: dropped };
+    }
+    function target(id) {
+      for (var j = 0; id && j < keep.length; j++) if (keep[j].id === id) return keep[j];
+      return null;
+    }
+    /* the least important line that passes the test; the first of equals */
+    function worst(test) {
+      var w = -1;
+      for (var j = 0; j < keep.length; j++) if (test(keep[j]) && (w < 0 || keep[j].p > keep[w].p)) w = j;
+      return w;
+    }
+    function restated(it) { return !!it.restated; }
+    function foldable(it) { return !!(it.into && target(it.into)); }
+    function shortable(it) { return !!(it.s && it.s !== it.v); }
+    if ((gap = room(BULLET_GAP_MIN)) !== null) return done(gap);
+    for (i = worst(restated); i >= 0; i = worst(restated)) {
+      keep.splice(i, 1);
+      if ((gap = room(BULLET_GAP_MIN)) !== null) return done(gap);
+    }
+    for (i = worst(foldable); i >= 0; i = worst(foldable)) {
+      x = target(keep[i].into);
+      x.v += keep[i].fold;
+      x.full += keep[i].fold;
+      if (x.s) x.s += keep[i].fold;
+      keep.splice(i, 1);
+      if ((gap = room(BULLET_GAP_MIN)) !== null) return done(gap);
+    }
+    for (i = worst(shortable); i >= 0; i = worst(shortable)) {
+      keep[i].v = keep[i].s;
+      if ((gap = room(BULLET_GAP_MIN)) !== null) return done(gap);
+    }
     for (;;) {
-      var text = 0;
-      for (i = 0; i < keep.length; i++) text += linesOf(keep[i].k + ': ' + keep[i].v, 7.22, BULLET_W) * BULLET_LINE;
-      var gap = keep.length > 1 ? (budgetPt - text) / (keep.length - 1) : BULLET_GAP;
-      if (gap >= BULLET_GAP_MIN || keep.length < 2) return { items: keep, gap: Math.max(BULLET_GAP_MIN, Math.min(BULLET_GAP, gap)) };
-      var worst = 0;
-      for (i = 1; i < keep.length; i++) if (keep[i].p > keep[worst].p) worst = i;
-      keep.splice(worst, 1);
+      if ((gap = room(BULLET_GAP_FLOOR)) !== null) return done(gap);
+      i = worst(function () { return true; });
+      dropped.push({ k: keep[i].k, v: keep[i].full });
+      keep.splice(i, 1);
     }
   }
 
@@ -2833,12 +2920,26 @@
     return d ? deckFileName(d.m) : '';
   };
 
+  /* The lines a full numbers page left out — the same in the preview, the
+     PDF and the PowerPoint, since all three are one deck() — so a page can
+     say so: [{ page, column, label, text }], empty when everything fit. */
+  function omitted(result, brand, opts) {
+    var d = deck(result, brand, opts), out = [], n = 0, i;
+    if (!d) return out;
+    for (i = 0; i < d.pages.length; i++) if (d.pages[i].kind === 'numbers') n = d.pages[i].n;
+    for (i = 0; i < d.m.omitted.length; i++) {
+      out.push({ page: n, column: d.m.omitted[i].column, label: d.m.omitted[i].k, text: d.m.omitted[i].v });
+    }
+    return out;
+  }
+
   var API = {
     render: render,
     css: css,
     documentHtml: documentHtml,
     print: print,
     pptx: pptx,
+    omitted: omitted,
     brandFrom: brandFrom,
     palette: palette,
     fmt: fmt,

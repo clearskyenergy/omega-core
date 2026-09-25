@@ -157,6 +157,32 @@ if (solar.ok) {
   var doc = R.documentHtml(solar, brand, {});
   ok('the printable document sets a 16:9 page', /@page\s*\{[^}]*size:\s*10in\s+5\.625in/.test(doc));
 }
+/* The fullest page 3 a site can produce: solar, storage, EV charging and a
+   controller, a storage fee on top of the PPA, demand response and a loan.
+   Financing teams read the levelized price and LCOE first, so they must
+   survive a full Revenue & Opex column; anything that does not fit is
+   reported by omitted(), never dropped in silence. */
+var FULL = JSON.parse(JSON.stringify(SOLAR));
+FULL.ev = { kw: 125 };
+FULL.capex.lines.push({ id: 'ev', label: 'EV charging make-ready', amount: 120000, asset: 'ev', itcEligible: 0, depClass: 'macrs5' });
+FULL.revenue.bess = { mode: 'fixed', fixedPerKwMonth: 6, escalatorPct: 2 };
+FULL.revenue.ev = { perKwYear: 80, escalatorPct: 0 };
+FULL.revenue.dr = { perYear: 25000, inBase: false };
+FULL.debt = { sizing: 'min', ltcPct: 45, ratePct: 7.5, tenorYears: 15, dscrMin: 1.35, shape: 'sculpted', feePct: 1.5, dsraMonths: 6 };
+var full = E.run(FULL);
+ok('the full solar + storage + EV + controller + debt case models', full.ok === true, full.errors);
+if (full.ok) {
+  var fh = R.render(full, brand, {}), ft = clean('full case', fh);
+  var gone = R.omitted(full, brand, {});
+  ok('omitted() reports what page 3 left out, as a list', Array.isArray(gone));
+  var goneKeys = gone.map(function (g) { return g.label; }).join(' | ');
+  ok('the levelized PPA price is on the deck (or named as left out)', /Levelized PPA price/.test(ft) || /Levelized PPA price/.test(goneKeys), goneKeys);
+  ok('the LCOE is on the deck (or named as left out)', /LCOE/.test(ft) || /LCOE/.test(goneKeys), goneKeys);
+  ok('the levelized price and LCOE are never the lines that give way', !/Levelized PPA price|LCOE/.test(goneKeys), goneKeys);
+  ok('a levered deck says equity and debt', /equity sought/i.test(ft) && /debt at 7\.5%/.test(ft));
+  ok('EV charging appears in the system flow when the site has it', /EV Charging/.test(ft));
+}
+
 if (battery.ok) {
   var bh = R.render(battery, brand, {});
   var bt = clean('battery only', bh);

@@ -35,6 +35,13 @@ colour on the record the deck takes its accent from the logo. The "powered
 by" line is `api/_lib/whitelabel.js attributionLine()` — empty unless a
 white label says otherwise, exactly as every other export.
 
+Who gets in: a verified work email. Public email providers
+(`api/_lib/public-domains.js`) are refused, because the workspace is the email
+domain and every gmail.com user would otherwise share one. A company with no
+`omega_orgs` record yet is let through (CLAUDE.md: fail open on a missing
+record); a pending, suspended or cancelled one is not; `toolOverrides.proforma`
+and the org and member `toolAccess` lists apply as everywhere else.
+
 ## 2. The model
 
 The three NextNRG one-pagers this deck is modelled on were built in NREL SAM
@@ -66,14 +73,23 @@ SAM's single-owner method so a deck built here and a deck built there agree:
   carries losses forward (80% limit) and uses the credit under §38(c); the
   credit can be sold (§6418) instead.
 - Debt: sized by loan-to-cost, by DSCR, or the lesser; level or sculpted;
-  DSRA of next year's service released at maturity; fee amortised.
+  DSRA of next year's service released at maturity; fee amortised. Whatever
+  the rule, the loan stops at 90% of installed cost (`DEBT_CAPPED`), so equity
+  can never go to zero or below. A loan year whose cash available for debt
+  service is zero or negative counts against the minimum DSCR and is named
+  (`NEGATIVE_CFADS`).
+- A cost line marked `blended` (contingency, soft costs) takes the solar and
+  storage credit rates in proportion: its own `solarSharePct` if given, else
+  the site's solar and storage lines, else the system at preset unit costs
+  (`BLENDED_SPLIT` says when an estimate moved a figure).
 - Metrics: after-tax IRR, the IRR build (cash only → depreciation → ITC, each
   step the difference of values rounded to 0.1 so it adds up on the page),
   after-tax payback, total investor returns (the sum of after-tax cash flows
   years 0..N), year-1 distribution, NPV, levelized PPA price and LCOE (SAM's
   definitions at the stated nominal rate), LCOS for a battery-only project,
   DSCR, sensitivity.
-- Warnings, in plain sentences with the rule and the date: the solar deadline,
+- Warnings name only what the project claims (a battery-only project is never
+  told about the solar deadline), in plain sentences with the rule and the date: the solar deadline,
   FEOC material-assistance thresholds by construction year, prevailing wage,
   low-income allocation, storage phase-down, §30C's end for chargers, roof
   credit, mid-quarter, a non-statutory rate, a state rate that disagrees with
@@ -138,7 +154,10 @@ list. PVWatts and URDB need keys. Set `NREL_API_KEY` and `OPENEI_API_KEY` in
 Vercel; until then a user's own keys from Settings are passed through for the
 one call (never stored or logged), and PVWatts falls back to DEMO_KEY (about
 ten calls, shared). Every lookup is shown with an Apply switch; nothing is
-applied silently.
+applied silently. Lookups are limited to 30 an hour per workspace and 10 a
+minute per person, and an identical lookup within the hour is answered from
+memory; the limits live in each server instance, so they are a speed bump,
+not a hard cap.
 
 ## 6. Not built — say so before selling it
 
