@@ -244,7 +244,7 @@ var BASE_IDS = ['invoice','hwInvoice','payment','lien','permit','inspect','bldg'
 var PROGRAMS = {
   es_ma: {
     utility:'Eversource', state:'MA', name:'Eversource MA — EV Make-Ready Program (Level 2)',
-    submit:'Submit the completion package to the Eversource EV program team through the program portal / your Eversource project manager, referencing the project ID on the approval letter.',
+    submit:'Your installer submits the project closeout report through Eversource\u2019s MA EV PowerClerk portal (eversourcemaevprogram.powerclerk.com) with the project number (ESMAEV-##### or HTMAEV-#####). Chargers must be on Eversource\u2019s MA EVSE Qualified Products List, with proof of purchase before construction. Letter of Agreement must be fully executed by Dec 31, 2026.',
     termYears:5,
     docs: pick(BASE_IDS, [
       { id:'es_complete', cat:'forms', req:true, label:'Eversource Project Completion Form',
@@ -268,16 +268,44 @@ var PROGRAMS = {
     ])
   },
   ng_ma: {
-    utility:'National Grid', state:'MA', name:'National Grid MA — EV Charging Station Program (Level 2)',
-    submit:'Upload the completion package to the National Grid EV program portal (or send to your National Grid EV program contact) with the project number.',
-    termYears:5,
-    docs: pick(BASE_IDS, [
-      { id:'ng_complete', cat:'forms', req:true, label:'National Grid Project Completion Form',
-        detail:'Signed by the customer and the installing contractor.' },
-      { id:'ng_approval', cat:'forms', req:true, label:'Approval / Letter of Commitment (copy)', detail:'' },
-      { id:'ng_cost',     cat:'costs', req:true, label:'Final cost breakdown in the program cost template',
-        detail:'Same categories as the application. Generated from the Costs tab (cost_reconciliation.csv).' }
-    ])
+    utility:'National Grid', state:'MA', name:'National Grid MA \u2014 EV Charging Station Make-Ready Program (Level 2)',
+    /* VERIFIED 2026-09-25 against National Grid's own documents:
+       Closeout Checklist CM10894 (2/26), Standard Terms and Conditions
+       CM10552 MA (1/26), incentive charts CM8214B/D (11/25), Invoice
+       Template (nationalgrid_ev_make_ready_invoice.xlsx). Phase III ends
+       12/31/2026; applications by Oct 1 2026, signed Pre-Approval Offer
+       Letter back by Dec 31 2026. */
+    verified:'2026-09-25 \u2014 National Grid Closeout Checklist CM10894 (2/26), T&C CM10552 (1/26)',
+    submit:'Upload every closeout document to the CE 2.0 portal (nationalgridclean energy.my.site.com/tradepartners). Questions: EVnationalgrid@nationalgrid.com. Customer-side construction must finish within 6 months of the Pre-Approval Offer Letter unless the program manager extends it; costs invoiced before the approval letter date are not eligible.'.replace('clean energy','cleanenergy'),
+    termYears:4,
+    termNote:'Keep the EVSE operational and report usage monthly for 4 years from the Activation Date (T&C 1.3, 4.6, 11.1); a shortfall is repaid straight-line.',
+    docs: [
+      /* Already on file from the application: at closeout, check for missing answers or signatures. */
+      { id:'ng_estimate', cat:'forms',   req:true, label:'Estimate (on file from application)', detail:'Check it is complete and signed.' },
+      { id:'ng_siteplan', cat:'drawings',req:true, label:'Site Plan (on file from application)', detail:'' },
+      { id:'ng_agreement',cat:'admin',   req:true, label:'Signed Agreement (Pre-Approval Offer Letter)', detail:'On file; check signatures.' },
+      { id:'ng_tc',       cat:'admin',   req:true, label:'Terms and Conditions (CM10552 MA)', detail:'On file; check signatures.' },
+      { id:'ng_assign',   cat:'admin',   req:false,label:'Assignment of Incentive (CM8264 MA)', detail:'Only when someone other than the customer is paid. That payee also submits a W-9.' },
+      { id:'ng_ejc',      cat:'admin',   req:false,label:'Publicly Accessible and Fleet EJ Community Certification (CM9274)', detail:'Public and fleet projects.' },
+      /* New at closeout */
+      { id:'ng_asbuilt',  cat:'drawings',req:true, label:'As-Built Site Plan', detail:'' },
+      { id:'ng_sessions', cat:'equip',   req:true, label:'Sessions Report', detail:'Must show networking IDs, date of charge and usage.' },
+      { id:'ng_permit',   cat:'permits', req:true, label:'City or Town Permit', detail:'' },
+      { id:'ng_invoice',  cat:'costs',   req:true, label:'Invoice Template, signed by the customer, both tabs complete', detail:'The Serial Number tab needs, per port: EVSE serial (required), MAC address (optional), charger type and activation date. Filled from the Equipment tab.' },
+      { id:'ng_custinv',  cat:'costs',   req:true, label:'Customer Invoice showing total project costs incurred', detail:'' },
+      { id:'ng_distinv',  cat:'costs',   req:true, label:'Distributor invoice for the EVSEs and equipment', detail:'' },
+      { id:'ng_thirdparty',cat:'forms',  req:true, label:'Third Party Funding Verification Form (CM9272)', detail:'Filed whether or not other funding (e.g. MassEVIP) was used.' },
+      { id:'ng_w9',       cat:'admin',   req:true, label:'Customer and payee W-9s', detail:'' },
+      { id:'ng_signatory',cat:'admin',   req:false,label:'Authorized Signatory Form (CM11271)', detail:'Listed on the program page (not on the checklist): signatories for Site Host, Property Owner and EVSE Owner-Operator.' },
+      { id:'ng_final',    cat:'forms',   req:false,label:'Final Rebate Document', detail:'National Grid prepares this after the above; attach it when it comes back.' },
+      { id:'ng_qpl',      cat:'equip',   req:true, label:'Chargers on the EPRI Vetted Product List (MA tab); network provider on the Qualified Network Service Provider List (CM9896)', detail:'Networking is required for Public and Workplace Level 2, not for MUD.' }
+    ],
+    photos: [
+      { id:'ph_evse',   label:'Pictures of each EVSE installed', req:true },
+      { id:'ph_plate',  label:'Each charger nameplate / serial number label', req:false },
+      { id:'ph_xfmrpad',label:'Transformer pad (if civil work was required)', req:false },
+      { id:'ph_bollard',label:'Bollards (if civil work was required)', req:false }
+    ]
   },
   ng_ny: {
     utility:'National Grid', state:'NY', name:'National Grid NY — EV Make-Ready Program (Level 2)',
@@ -310,9 +338,13 @@ var COST_CATS = [
   { k:'electric', label:'Panels, breakers, disconnects & service upgrade', elig:true },
   { k:'pads',     label:'Pads, bollards & mounting',        elig:true  },
   { k:'restore',  label:'Surface restoration & striping',   elig:true  },
-  { k:'evse',     label:'EVSE hardware',                    elig:false, evse:true },
-  { k:'evseInst', label:'EVSE installation labour',         elig:false, evse:true },
-  { k:'network',  label:'Networking / software subscription', elig:false, evse:true },
+  /* Eligible by default: the Eversource MA (Rev. March 2026) and National
+     Grid MA invoice templates both carry an "Eligible EVSE Costs" block and
+     count networking as eligible for Public L2 and MUD. Switch a row off on
+     the Costs tab for Workplace/Fleet networking. */
+  { k:'evse',     label:'EVSE hardware & freight',          elig:true, evse:true },
+  { k:'evseInst', label:'EVSE installation',                elig:true, evse:true },
+  { k:'network',  label:'Networking (eligible for Public L2 / MUD)', elig:true, evse:true },
   { k:'other',    label:'Other / ineligible',               elig:false }
 ];
 
@@ -355,7 +387,8 @@ function prog(){ return PROGRAMS[C.program] || PROGRAMS.es_ma; }
 function docState(id){ if(!C.docs[id]) C.docs[id]={status:'todo',ref:'',note:''}; return C.docs[id]; }
 function allItems(){
   var out=prog().docs.slice(), i;
-  for(i=0;i<PHOTOS.length;i++) out.push({ id:PHOTOS[i].id, cat:'photos', req:PHOTOS[i].req, label:PHOTOS[i].label, detail:'' });
+  var ph=prog().photos||PHOTOS;
+  for(i=0;i<ph.length;i++) out.push({ id:ph[i].id, cat:'photos', req:ph[i].req, label:ph[i].label, detail:'' });
   return out;
 }
 
@@ -541,7 +574,9 @@ function vProject(){
   h+='<label class="f"><span>Program</span><select onchange="setProgram(this.value)">';
   for(k in PROGRAMS) if(PROGRAMS.hasOwnProperty(k)) h+='<option value="'+k+'"'+(k===C.program?' selected':'')+'>'+esc(PROGRAMS[k].name)+'</option>';
   h+='</select></label><div class="note">'+esc(P.submit)+'</div>'
-   +'<div class="warn" style="margin:10px 0 0">Program manuals are revised each filing cycle. This checklist reflects the typical completion requirements for Level 2 make-ready; confirm against the current program manual and your approval letter before submitting.</div>'
+   +(P.verified
+      ? '<div class="okbox" style="margin:10px 0 0">Checklist verified '+esc(P.verified)+'.'+(P.termNote?' '+esc(P.termNote):'')+'</div>'
+      : '<div class="warn" style="margin:10px 0 0">This program\u2019s checklist has NOT yet been checked against the utility\u2019s current documents. It shows the usual Level 2 completion requirements; confirm against the current program manual and your approval letter before submitting.</div>')
    +'</div></div>';
   h+='<div class="card"><h3>Project</h3><div class="body"><div class="grid">'
    +fld('p.projectName','Project name',0,1)+fld('p.utilityProjectId','Utility project / application ID',0,1)
@@ -614,7 +649,7 @@ function vCosts(){
       +'<td class="num mono" style="color:'+(num(row.fin)-num(row.est)>0?'var(--red)':'var(--green)')+'">'+money(num(row.fin)-num(row.est))+'</td></tr>';
   }
   h+='<tr class="tot"><td>Total</td><td></td><td class="num mono">'+money(t.est)+'</td><td class="num mono">'+money(t.fin)+'</td><td class="num mono">'+money(t.fin-t.est)+'</td></tr>';
-  h+='</tbody></table></div><div class="note" style="margin-top:8px">Which categories count as make-ready follows your approval letter; the defaults are the usual split (customer-side infrastructure eligible, EVSE hardware and networking separate). Change a category if your program differs.</div></div></div>';
+  h+='</tbody></table></div><div class="note" style="margin-top:8px">Which categories count follows your approval letter. Defaults follow the current Eversource MA and National Grid MA templates: make-ready and EVSE eligible, networking eligible for Public L2 and MUD only, signage, striping, activation and warranty ineligible. Change a row if your program or segment differs.</div></div></div>';
   h+='<div class="card"><h3>Incentive reconciliation<span class="hint">Numbers from your approval letter</span></h3><div class="body"><div class="grid">'
    +'<label class="f"><span>Approved make-ready incentive ($)</span><input type="number" step="0.01" value="'+esc(inc.approved)+'" onchange="setInc(\'approved\',this.value)"></label>'
    +'<label class="f"><span>Program share of eligible cost (%)</span><input type="number" step="1" value="'+esc(inc.pct)+'" onchange="setInc(\'pct\',this.value)"></label>'
