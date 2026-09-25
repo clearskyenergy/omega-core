@@ -515,8 +515,11 @@ is not built.
 - **A release that changes a screen retakes the guides.** `shots.js`
   records, per screenshot, the sha256 of every page file the shot loaded
   (`shots/manifest.json` `sources`; a sandbox page counts as its source
-  page); `build.js` records which screenshots each PDF printed
-  (`scripts/guides/built.json`). `scripts/tests/tguides.js` (in `npm test`)
+  page, and the sandbox runtime as `app-sandbox/sandbox.js`, so a change
+  in a library that works out what a screen shows counts too); `build.js`
+  records which screenshots, guide words and builder each PDF was made
+  from (`scripts/guides/built.json`) and leaves a PDF whose inputs did not
+  change as it is (`--force` rebuilds). `scripts/tests/tguides.js` (in `npm test`)
   fails when a photographed page changed since its shot, or a PDF was not
   rebuilt from the current shots. The fix is `npm run guides` (shots, then
   build) and committing `scripts/guides/`, `guides/`; never an edit to the

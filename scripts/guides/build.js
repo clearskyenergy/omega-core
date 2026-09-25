@@ -15,6 +15,8 @@
                                             is drawn as a dashed box with its
                                             file name; written to a temp folder
      ... --out DIR                          write somewhere other than guides/
+     ... --force                            rebuild a PDF even when nothing it
+                                            is made from changed (built.json)
 
    A draft NEVER lands in guides/, which the site serves: without --out it
    goes to <tmp>/omega-guides-draft, and --draft --out guides/ is refused.
@@ -83,6 +85,20 @@ function assets(html) {
    record (guard.js): 'missing', 'unrecorded' (a leftover or a hand-copied
    picture) and 'changed' are all unusable, and all name the fix. */
 var MANIFEST = Guard.readManifest(SHOTS); var BUILT = Guard.readBuilt();
+var FORCE = process.argv.indexOf('--force') >= 0;
+/* what a guide is made from now: its sources' words, the pictures they print (as shots.js recorded them) and the builder */
+function recordOf(key) {
+  var rec = { shots: {}, guides: {}, build: Guard.buildSha(__dirname) };
+  Guard.GUIDE_HTML[key].forEach(function (h) { rec.guides[h] = Guard.sha256(path.join(__dirname, h)); Guard.shotsIn(fs.readFileSync(path.join(__dirname, h), 'utf8')).forEach(function (png) { rec.shots[png] = (MANIFEST[png] || {}).sha256 || null; }); });
+  return rec;
+}
+function unchanged(key) {
+  var now = recordOf(key), same = function (a, b) { return JSON.stringify(a) === JSON.stringify(b); };
+  return [GUIDES[key]].concat(ALSO[key] || []).every(function (name) {
+    var b = BUILT[name], f = path.join(OUT, name);
+    return b && fs.existsSync(f) && Guard.sha256(f) === b.sha256 && b.build === now.build && same(b.shots, now.shots) && same(b.guides, now.guides);
+  });
+}
 function shotState(src) { return Guard.verdict(SHOTS, src.replace(/^shots\//, ''), MANIFEST); }
 function unusableOf(html) { return assets(html).filter(function (src) { return /^shots\//.test(src) && shotState(src) !== 'ok'; }); }
 var problems = [], badShots = {};
@@ -105,6 +121,10 @@ if (Object.keys(badShots).length && !DRAFT) {
   fs.mkdirSync(OUT, { recursive: true });
   var b = await chromium.launch({ executablePath: CHROME });
   for (var key in GUIDES) {
+    /* a PDF whose words, pictures and builder are what built.json says it
+       was made from is left as it is: a rebuild would change its bytes (the
+       print date) and nothing a reader sees */
+    if (!DRAFT && OUT === SERVED && !FORCE && unchanged(key)) { console.log(GUIDES[key] + '  unchanged'); continue; }
     var p = await b.newPage(), html = sourceOf(key), missing = unusableOf(html);
     var tmp = path.join(__dirname, '.' + key + '.build.html');
     fs.writeFileSync(tmp, html);
@@ -146,8 +166,7 @@ if (Object.keys(badShots).length && !DRAFT) {
     (ALSO[key] || []).forEach(function (name) { fs.copyFileSync(file, path.join(OUT, name)); console.log(name + '  (= ' + GUIDES[key] + ')'); });
     /* what this PDF printed (guard.js freshness): only a real build into guides/ */
     if (!DRAFT && OUT === SERVED && !missing.length) {
-      var rec = { sha256: Guard.sha256(file), shots: {}, guides: {} };
-      Guard.GUIDE_HTML[key].forEach(function (h) { rec.guides[h] = Guard.sha256(path.join(__dirname, h)); Guard.shotsIn(fs.readFileSync(path.join(__dirname, h), 'utf8')).forEach(function (png) { rec.shots[png] = MANIFEST[png].sha256; }); });
+      var rec = recordOf(key); rec.sha256 = Guard.sha256(file);
       [GUIDES[key]].concat(ALSO[key] || []).forEach(function (name) { BUILT[name] = rec; });
     }
     await p.close();

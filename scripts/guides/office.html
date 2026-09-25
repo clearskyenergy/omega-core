@@ -647,7 +647,7 @@ html,body{margin:0}
 
   <h2 class="mt">The sections</h2>
   <dl class="sec">
-    <dt>Overview</dt><dd>Invoiced, received, the balance and open requests. Quick buttons: <span class="k">Log a call</span>, <span class="k">Add a contact</span>, <span class="k">Upload a document</span>, <span class="k">Enter a PO</span>. <b>Their app</b>: the link to send them, and the <b>Company email domain</b> (page 14).</dd>
+    <dt>Overview</dt><dd>Invoiced, received, the balance and open requests. Quick buttons: <span class="k">Log a call</span>, <span class="k">Add a contact</span>, <span class="k">Upload a document</span>, <span class="k">Enter a PO</span>. <b>Their app</b>: the link to send them, and the <b>Company email domain</b> (page 15).</dd>
     <dt>People</dt><dd>Who signs in to their app: <span class="k">Approve</span> someone who asked to join, <span class="k">Turn off</span> someone who left, <span class="k">Invite</span> (<span class="k">Share app link</span> when your workspace sends no invitation email), or add a person. Plus contacts who never log in.</dd>
     <dt>Activity</dt><dd>Log a call, email, meeting, note or task. Put a date in <b>Follow up on</b> and it shows on <b>Today</b> that day, until you mark it done.</dd>
     <dt>Documents</dt><dd>A contract, a drawing, a photo (up to 2 MB). Tick <span class="k">Share with the customer</span> and they see it in their app; unticked, it stays in your office. What they upload lands here too.</dd>
@@ -687,30 +687,7 @@ html,body{margin:0}
   </div>
 </div></section>
 
-<!-- ═══ 10 · FREIGHT PLAN (the desktop's Shipping & receiving) ═══════ -->
-<section class="sheet"><div class="body">
-  <div class="kick">On the desktop · Shipping</div>
-  <h1>Freight: from sites to priced loads</h1>
-  <div class="rule"></div>
-  <p class="lead" style="margin-bottom:12px">One order, many sites, the addresses arriving a few at a time. The <b>freight plan</b> puts every unit against the site it's going to, groups the sites into lanes a carrier can price, and plans the loads from the price you accept.</p>
-  <div style="display:grid;grid-template-columns:4.3in 1fr;gap:.24in;align-items:start">
-    <figure class="wide"><img src="shots/desktop-freight.png" width="1280" height="800" alt="The freight plan's lanes on the desktop"><figcaption>Shipping &amp; receiving, Freight plan: one lane per region, stops nearest-first from your ship-from.</figcaption></figure>
-    <div class="box">
-      <h3>Good to know</h3>
-      <p>It doesn't book a carrier or email anyone. Miles are straight-line, not road miles. Weights and sizes come from your product list; a product without them says <b>not on file</b>, never a guess.</p>
-      <p>Only your office's administrators see the freight plan and its prices. Your customers never do.</p>
-    </div>
-  </div>
-  <ul class="hl mt">
-    <li><span class="hx"><span>1</span></span><p><b>Give the units their sites.</b> <span class="k">Sites &amp; custody</span> → <span class="k">Many sites at once</span>: paste the addresses as they come in, then assign the order's units. Each unit is now going to its site.</p></li>
-    <li><span class="hx"><span>2</span></span><p><b>Open the order's freight plan.</b> On the order, <span class="k">Freight plan →</span> (in the app: <span class="k">Freight plan on the desktop</span>). Set your <b>ship-from</b> once: the stops are ordered from it.</p></li>
-    <li><span class="hx"><span>3</span></span><p><b>Download the sheets.</b> <span class="k">Download master list</span>: every unit with its product, build status and site address. <span class="k">Download quote request</span>: one row per stop with units, serials, estimated weight and when they're ready (built, tested and passed). It carries no customer name, PO or price. Send it to your logistics partners. <span class="k">Export master list</span> on the order saves the first one straight away.</p></li>
-    <li><span class="hx"><span>4</span></span><p><b>Record the prices.</b> Open a lane and type what each carrier quoted: amount, transit days, valid until, their reference. The lowest open price is marked <b>best</b>. A price is never edited or deleted: record a new one to replace it, or withdraw it with a reason. If a site's address is corrected after a price, the price says so and can't be accepted: get a fresh one.</p></li>
-    <li><span class="hx"><span>5</span></span><p><b>Accept.</b> <span class="k">Accept…</span> lists the loads it will plan, one per stop, with the carrier's reference. <span class="k">Plan</span> puts them on the ledger. If a unit has moved or shipped since, it is named and nothing is planned. Record each pickup and delivery on its load as usual.</p></li>
-  </ul>
-</div></section>
-
-<!-- ═══ 11 · THE CAMERA ═════════════════════════════════════════════ -->
+<!-- ═══ 10 · THE CAMERA ═════════════════════════════════════════════ -->
 <section class="sheet"><div class="body">
   <div class="kick">Deliver · Sites</div>
   <h1>Scan a label with the camera</h1>
@@ -811,7 +788,30 @@ html,body{margin:0}
   <p class="small" style="margin-top:6px">Your own role is changed by another owner or administrator. Someone from another company needs ClearSky to give them access first. Every change is under <b>Recent changes</b>, with who made it.</p>
 </div></section>
 
-<!-- ═══ 14 · YOUR CUSTOMERS' APP + GOOD TO KNOW ═════════════════════ -->
+<!-- ═══ 14 · FREIGHT PLAN (the desktop's Shipping & receiving) ═══════ -->
+<section class="sheet"><div class="body">
+  <div class="kick">On the desktop · Shipping</div>
+  <h1>Freight: from sites to priced loads</h1>
+  <div class="rule"></div>
+  <p class="lead" style="margin-bottom:12px">One order, many sites, the addresses arriving a few at a time. The <b>freight plan</b> puts every unit against the site it's going to, groups the sites into lanes a carrier can price, and plans the loads from the price you accept.</p>
+  <div style="display:grid;grid-template-columns:4.3in 1fr;gap:.24in;align-items:start">
+    <figure class="wide"><img src="shots/desktop-freight.png" width="1280" height="800" alt="The freight plan's lanes on the desktop"><figcaption>Shipping &amp; receiving, Freight plan: one lane per region, stops nearest-first from your ship-from.</figcaption></figure>
+    <div class="box">
+      <h3>Good to know</h3>
+      <p>It doesn't book a carrier or email anyone. Miles are straight-line, not road miles. Weights and sizes come from your product list; a product without them says <b>not on file</b>, never a guess.</p>
+      <p>Only your office's administrators see the freight plan and its prices. Your customers never do.</p>
+    </div>
+  </div>
+  <ul class="hl mt">
+    <li><span class="hx"><span>1</span></span><p><b>Give the units their sites.</b> <span class="k">Sites &amp; custody</span> → <span class="k">Many sites at once</span>: paste the addresses as they come in, then assign the order's units. Each unit is now going to its site.</p></li>
+    <li><span class="hx"><span>2</span></span><p><b>Open the order's freight plan.</b> On the order, <span class="k">Freight plan →</span> (in the app: <span class="k">Freight plan on the desktop</span>). Set your <b>ship-from</b> once: the stops are ordered from it.</p></li>
+    <li><span class="hx"><span>3</span></span><p><b>Download the sheets.</b> <span class="k">Download master list</span>: every unit with its product, build status and site address. <span class="k">Download quote request</span>: one row per stop with units, serials, estimated weight and when they're ready (built, tested and passed). It carries no customer name, PO or price. Send it to your logistics partners. <span class="k">Export master list</span> on the order saves the first one straight away.</p></li>
+    <li><span class="hx"><span>4</span></span><p><b>Record the prices.</b> Open a lane and type what each carrier quoted: amount, transit days, valid until, their reference. The lowest open price is marked <b>best</b>. A price is never edited or deleted: record a new one to replace it, or withdraw it with a reason. If a site's address is corrected after a price, the price says so and can't be accepted: get a fresh one.</p></li>
+    <li><span class="hx"><span>5</span></span><p><b>Accept.</b> <span class="k">Accept…</span> lists the loads it will plan, one per stop, with the carrier's reference. <span class="k">Plan</span> puts them on the ledger. If a unit has moved or shipped since, it is named and nothing is planned. Record each pickup and delivery on its load as usual.</p></li>
+  </ul>
+</div></section>
+
+<!-- ═══ 15 · YOUR CUSTOMERS' APP + GOOD TO KNOW ═════════════════════ -->
 <section class="sheet"><div class="body">
   <div class="kick">Your customers</div>
   <h1>Your customers' app</h1>

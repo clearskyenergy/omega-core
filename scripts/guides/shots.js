@@ -399,7 +399,9 @@ async function signIn(p, h, how) {
   var CHROME = process.env.CHROME || (fs.existsSync(PINNED) ? PINNED : chromium.executablePath());
 
   var sb = sandboxFiles(), servers = {}, bases = {}, SANDBOX_PAGES = [];
-  try { SANDBOX_PAGES = require(path.join(ROOT, 'scripts/build-app-sandbox.js')).PAGES || []; } catch (e) {}
+  /* without the page map a sandbox shot would record only the shared files and still look fresh */
+  SANDBOX_PAGES = require(path.join(ROOT, 'scripts/build-app-sandbox.js')).PAGES;
+  if (!Array.isArray(SANDBOX_PAGES) || !SANDBOX_PAGES.length) throw new Error('shots: scripts/build-app-sandbox.js has no PAGES; the manifest could not say which page a sandbox shot is');
   console.log('shots: ' + ROOT + ' → ' + OUT + '\n  sandbox ' + sb.from + (/['"]\/api\/crm['"]/.test(sb.files['sandbox.js']) ? '' : '\n  the sandbox has no /api/crm: the account sections use the sample in crmSample()'));
   fs.mkdirSync(OUT, { recursive: true });
   /* the record of what passed; an --only run keeps every other entry */

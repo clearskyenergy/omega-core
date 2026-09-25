@@ -50,8 +50,9 @@ function verdict(dir, file, m) {
 }
 
 /* the repo files a shot's requests came from: a sandbox page is the page it
-   is built from (build-app-sandbox PAGES); the sandbox runtime, the config
-   and tenant stand-ins, vendored code and pictures are not screens */
+   is built from (build-app-sandbox PAGES), the sandbox runtime is its
+   committed build; the tenant stand-ins, vendored code and pictures are not
+   screens */
 var SCREEN_EXT = { '.html': 1, '.js': 1, '.css': 1 };
 function sourcesOf(root, urlPaths, sandboxPages) {
   var bySandbox = {}, out = {};
@@ -59,8 +60,14 @@ function sourcesOf(root, urlPaths, sandboxPages) {
   (urlPaths || []).forEach(function (u) {
     u = String(u || '').split('?')[0].split('#')[0];
     var rel = null;
-    if (u.indexOf('/app-sandbox/') === 0) { var name = u.slice(13); if (!path.extname(name)) name += '.html'; rel = bySandbox[name] || null; }
-    else if (/^\/(config|omega-brand|omega-tenant)\.js$/.test(u) || u.indexOf('/vendor/') === 0) rel = null;
+    /* the sandbox runtime (served as itself, and as /config.js to the desktop
+       pages) is the fixtures, the shim and every pure library that works out
+       what a screen shows (lanes, stages, totals): its committed build is
+       app-sandbox/sandbox.js, which tappsandbox.js keeps equal to a fresh
+       build, so its hash covers all of them */
+    if (u === '/app-sandbox/sandbox.js' || u === '/config.js') rel = 'app-sandbox/sandbox.js';
+    else if (u.indexOf('/app-sandbox/') === 0) { var name = u.slice(13); if (!path.extname(name)) name += '.html'; rel = bySandbox[name] || null; }
+    else if (/^\/(omega-brand|omega-tenant)\.js$/.test(u) || u.indexOf('/vendor/') === 0) rel = null;
     else {
       rel = u === '/' ? 'index.html' : u.replace(/^\/+/, '');
       if (!fs.existsSync(path.join(root, rel)) && fs.existsSync(path.join(root, rel + '.html'))) rel += '.html';
@@ -92,7 +99,10 @@ function guideMap(guideDir) {
   });
   return out;
 }
-/* built.json (next to this file): { pdf: { sha256, shots: { png: sha256 }, guides: { html: sha256 } } } */
+/* what a PDF's layout comes from besides its words and pictures: the
+   builder and the band it prints on every page */
+function buildSha(guideDir) { return crypto.createHash('sha256').update(fs.readFileSync(path.join(guideDir, 'build.js'))).update(fs.readFileSync(path.join(guideDir, 'header.html'))).digest('hex'); }
+/* built.json (next to this file): { pdf: { sha256, shots: { png: sha256 }, guides: { html: sha256 }, build: buildSha } } */
 var BUILT = path.join(__dirname, 'built.json');
 function readBuilt(file) { file = file || BUILT; try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}; } catch (e) { return {}; } }
 function writeBuilt(b, file) { var out = {}; Object.keys(b).sort().forEach(function (k) { out[k] = b[k]; }); fs.writeFileSync(file || BUILT, JSON.stringify(out, null, 2) + '\n'); }
@@ -122,10 +132,12 @@ function freshness(o) {
     Object.keys(b.shots || {}).forEach(function (png) { var e = m[png]; if (!e || e.sha256 !== b.shots[png]) problems.push(pdf + ': printed an older ' + png); });
     (o.used[pdf] || []).forEach(function (png) { if (!(b.shots || {})[png]) problems.push(pdf + ': was built without ' + png); });
     Object.keys(b.guides || {}).forEach(function (h) { var g = path.join(o.guideDir, h); if (!fs.existsSync(g) || sha256(g) !== b.guides[h]) problems.push(pdf + ': scripts/guides/' + h + ' changed since the build'); });
+    ((o.guideFiles || {})[pdf] || []).forEach(function (h) { if (!(b.guides || {})[h]) problems.push(pdf + ': built without scripts/guides/' + h); });
+    if (o.build && b.build !== o.build) problems.push(pdf + ': scripts/guides/build.js or header.html changed since the build');
   });
   return problems;
 }
 
 module.exports = { LEAK: LEAK, MANIFEST: MANIFEST, sha256: sha256, readManifest: readManifest, writeManifest: writeManifest, verdict: verdict,
   sourcesOf: sourcesOf, BUILT: BUILT, readBuilt: readBuilt, writeBuilt: writeBuilt, freshness: freshness,
-  GUIDES: GUIDES, ALSO: ALSO, GUIDE_HTML: GUIDE_HTML, shotsIn: shotsIn, guideMap: guideMap };
+  GUIDES: GUIDES, ALSO: ALSO, GUIDE_HTML: GUIDE_HTML, shotsIn: shotsIn, guideMap: guideMap, buildSha: buildSha };
