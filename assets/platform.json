@@ -183,16 +183,16 @@
       "lines": 1708
     },
     {
-      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastPush": "2026-09-24T15:56:17-05:00",
       "lastBy": "clearskyenergy",
-      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
-      "commits": 1,
+      "lastMsg": "BESS Pro Forma: server-side investor model, sizing bridge, API, deck renderer, new page",
+      "commits": 2,
       "file": "proforma.html",
-      "title": "NextNRG — BESS Pro Forma",
+      "title": "BESS Pro Forma",
       "area": "Economics",
-      "kb": 88,
-      "scripts": 2,
-      "lines": 1749
+      "kb": 268,
+      "scripts": 10,
+      "lines": 4643
     },
     {
       "lastPush": "2026-09-08T03:46:07-05:00",

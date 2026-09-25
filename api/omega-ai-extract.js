@@ -35,9 +35,10 @@
 var crypto = require('crypto');
 var AIERR  = require('./_lib/ai-errors');
 
-/* Who sees a provider's own words. Same two domains verify-token treats as
-   ClearSky staff; this file verifies tokens itself and cannot import that. */
-var STAFF_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
+/* Who sees a provider's own words. The same domain verify-token treats as
+   ClearSky staff (csebuilders.com retired 2026-09-24); this file verifies
+   tokens itself and cannot import that. */
+var STAFF_DOMAINS = ['clearsky-usa.com'];
 
 var PROJECT_ID    = process.env.FIREBASE_PROJECT_ID || 'clearsky-portal';
 var DEFAULT_MODEL = process.env.OMEGA_AI_MODEL || 'claude-sonnet-5';
@@ -165,7 +166,10 @@ module.exports = async function handler(req, res) {
   }
 
   var email = String(claims.email || '').toLowerCase();
-  if (!email || claims.email_verified === false) {
+  /* The literal true only: an absent claim is not verified. The staff flag
+     on an upstream failure below reads the domain, and must not do so for
+     an address nobody proved. */
+  if (!email || claims.email_verified !== true) {
     res.status(403).json({ error: 'This account has no verified email address.' });
     return;
   }

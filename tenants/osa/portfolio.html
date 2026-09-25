@@ -131,6 +131,22 @@ button{font-family:inherit}
   box-shadow:0 1px 2px rgba(16,24,40,.09)}
 .vsw .n{font-size:11px;font-weight:600;opacity:.7;font-variant-numeric:tabular-nums}
 
+/* Buyer-folder readiness. Four states, and the fourth has to look different
+   from the third: `missing` is work somebody has to do, `unbacked` is work the
+   portal cannot record. A hatched chip says "not your fault, not your task"
+   without needing the legend. */
+.bf{display:flex;gap:4px;flex-wrap:wrap}
+.bf i{font-style:normal;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:5px;
+  white-space:nowrap;border:1px solid transparent}
+.bf i.ready   {background:#DCFCE7;color:#166534}
+.bf i.partial {background:#FEF3C7;color:#92400E}
+.bf i.missing {background:#F1F3F5;color:#6B7280}
+.bf i.unbacked{background:repeating-linear-gradient(135deg,#F8FAFC,#F8FAFC 4px,#EEF1F5 4px,#EEF1F5 8px);
+  color:#64748B;border-color:#D8DEE6}
+.bfbar{height:6px;border-radius:3px;background:#EEF1F5;overflow:hidden;min-width:70px}
+.bfbar span{display:block;height:100%;background:var(--accent)}
+.bfpct{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;min-width:38px}
+
 #main{flex:1;padding:22px 26px 60px;max-width:1600px;min-width:0}
 .view{display:none}.view.on{display:block}
 .ph{margin-bottom:18px}
@@ -1003,6 +1019,24 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
       </div></div>
     </section>
 
+    <section class="view" id="v-buyer">
+      <div class="ph"><h1>Buyer Folder</h1>
+        <p>How close each project is to the Omega Buyer&rsquo;s Marketplace, by the six data
+           sets a buyer receives: Summary, Scope, Technical, Engineering&nbsp;/&nbsp;IA,
+           Financial and Legal. This is a different question from the stage ladder &mdash; a
+           site can sit in permitting with no legal package at all &mdash; so it sits
+           alongside the Matrix rather than replacing it.</p></div>
+      <div class="card">
+        <div class="card-h"><h2>Closest to the marketplace</h2>
+          <span class="fbar-n" id="buyer-count" style="margin-left:auto"></span></div>
+        <div class="card-b" id="buyer-note" style="padding-bottom:4px"></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Project</th><th style="width:120px">Ready</th>
+            <th>The six data sets</th><th>Blocking</th></tr></thead>
+          <tbody id="buyer-rows"></tbody></table></div>
+      </div>
+    </section>
+
     <section class="view" id="v-design">
       <div class="ph"><h1>Design</h1>
         <p>Every project in the site editor. The ones created from a deal carry it with them;
@@ -1142,6 +1176,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 <script src="/tenants/osa/forms.js?v=4"></script>
 <script src="/tenants/osa/access-data.js?v=6"></script>
 <script src="/tenants/osa/portfolio-data.js?v=27"></script>
+<script src="/tenants/osa/route-to-development.js?v=1"></script>
 <!-- SheetJS, for the Excel importer only. Loaded here rather than bundled so a
      CDN outage costs you the importer and nothing else. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1445,12 +1480,70 @@ var VIEWS = [
   { k:'matrix',   label:'Matrix'   },
   { k:'dash',     label:'Overview' },
   { k:'board',    label:'Board'    },
-  { k:'pipeline', label:'List'     }
+  { k:'pipeline', label:'List'     },
+  { k:'buyer',    label:'Buyer Folder' }
 ];
 function inPortfolio(v){
   for(var i=0;i<VIEWS.length;i++) if(VIEWS[i].k===v) return true;
   return false;
 }
+/* ── Buyer-folder readiness ───────────────────────────────────────────────
+   Grant's route-to-development document, rendered. The six data sets are the
+   contents of the Buyer Folder, and this ranks the portfolio by how much of
+   each project's folder exists.
+
+   It reads RouteToDevelopment and nothing else — no stage is read and none is
+   written, so this view cannot disagree with the Matrix. They are answering
+   different questions on purpose. */
+function renderBuyer(){
+  var host=document.getElementById('buyer-rows'); if(!host) return;
+  var RTD=window.RouteToDevelopment;
+  if(!RTD){ host.innerHTML='<tr><td colspan="4"><div class="empty">'
+    + '<b>Readiness model not loaded</b>route-to-development.js did not load.</div></td></tr>';
+    return; }
+
+  var ranked=RTD.closestToMarket(S.deals.filter(function(d){ return !F.isExit(d.stage); }));
+  var cnt=document.getElementById('buyer-count');
+  if(cnt) cnt.textContent=ranked.length+' live project'+(ranked.length===1?'':'s');
+
+  /* Say once, at the top, why nothing can reach 100% yet. Repeating it on
+     every row would be noise; leaving it out entirely would make the ceiling
+     look like a bug. */
+  var note=document.getElementById('buyer-note');
+  if(note){
+    note.innerHTML=ranked.some(function(r){ return r.readiness.ceiling; })
+      ? '<div class="banner info" style="margin:0">The portal has no field yet for leases, '
+        + 'PPAs, JDAs or executed interconnection agreements, so <b>Legal</b> shows as '
+        + 'unrecordable rather than missing and readiness ceilings at 85%. '
+        + 'See tenants/osa/ROUTE-TO-DEVELOPMENT.md.</div>'
+      : '';
+  }
+
+  if(!ranked.length){
+    host.innerHTML='<tr><td colspan="4"><div class="empty"><b>Nothing live</b>'
+      + 'Adopt a project and it will appear here.</div></td></tr>';
+    return;
+  }
+
+  host.innerHTML=ranked.map(function(r){
+    var d=r.deal, rd=r.readiness;
+    var chips=rd.sets.map(function(x){
+      return '<i class="'+x.state+'" title="'+esc(x.label+' — '+x.detail)+'">'
+           + esc(x.label)+'</i>';
+    }).join('');
+    return '<tr>'
+      + '<td><div class="t-name"><a href="#" onclick="openDeal(\''+esc(d.id)+'\');return false">'
+      +   esc(d.name||'Untitled')+'</a></div>'
+      +   '<div class="t-sub">'+esc(d.address||'—')+'</div></td>'
+      + '<td><div style="display:flex;align-items:center;gap:8px">'
+      +   '<span class="bfpct">'+rd.pct+'%</span>'
+      +   '<span class="bfbar"><span style="width:'+rd.pct+'%"></span></span></div></td>'
+      + '<td><div class="bf">'+chips+'</div></td>'
+      + '<td class="t-sub">'+(rd.blocking.length?esc(rd.blocking.join(', ')):'Nothing outstanding')+'</td>'
+      + '</tr>';
+  }).join('');
+}
+
 function renderViewSwitch(){
   var el=document.getElementById('viewswitch'); if(!el) return;
   var on=inPortfolio(S.view);
@@ -1498,7 +1591,7 @@ function render(){
   renderBanners(); renderDash(); renderPipeline(); renderPartners(); renderJD();
   renderFunding(); renderSupply(); renderInbox(); renderWork();
   renderMatrix(); renderPipelineWidget(); renderBoard(); renderVerify(); renderDesign();
-  renderSettings(); renderStaff(); renderInvites(); renderViewSwitch();
+  renderSettings(); renderStaff(); renderInvites(); renderViewSwitch(); renderBuyer();
   renderUsers(); renderOrgs(); renderCounts();
   if(S.openId) renderDrawer();
 }

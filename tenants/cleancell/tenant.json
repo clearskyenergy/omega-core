@@ -10,7 +10,8 @@
   "status": "active",
   "receivesFullBom": false,
   "requiredTools": [
-    "financing"
+    "financing",
+    "batterysizer"
   ],
   "ownerEmail": "robert.bucher@cleancell.us",
   "whiteLabel": {
