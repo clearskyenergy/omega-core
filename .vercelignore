@@ -15,6 +15,17 @@ tenants/*/*.rules
 tenants/*/*.md
 *.md
 !tenants/osa/*.md
+# A tenant folder IS served (whitelabel-setup.html fetches tenant.json and
+# products.json over HTTP; the customer manifest links icons/), so what the
+# public must not read sits beside them and stays off the site:
+#   billing.json   tier, add-ons, trial and due dates; read by
+#                  scripts/seed-omega-orgs.js only (LIVE-1, 2026-09-24)
+#   products.csv   the human-editable source of products.json; nothing
+#                  fetches it, the import script reads it from disk
+# The notes are tenants/<slug>/NOTES.md (the *.md lines above).
+# scripts/tests/tdiscreet.js checks all three stay unserved.
+tenants/*/billing.json
+tenants/*/products.csv
 
 # ── NOT WEB CONTENT, AND ONE OF THEM IS THE CUSTOMER BOOK ────────────────
 # Vercel serves the repo root, so anything sitting here is a URL. These were:

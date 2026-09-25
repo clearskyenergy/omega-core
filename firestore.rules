@@ -178,6 +178,23 @@ service cloud.firestore {
         && tMemberEnabled(o)
         && tRole(o) == 'owner';
     }
+    /* A person who may READ a workspace's operational records (orders,
+       works orders, units, scans) straight from the client SDK: their home
+       org or a demo bucket they own, a VERIFIED email, and not disabled on
+       the workspace's roster. The same three things logic-access.authorize
+       checks before Omega Logic's endpoints read the same records, so
+       disabling somebody on the Team page (status 'disabled') cuts off the
+       direct read too, and an unverified password account typed at the
+       tenant's domain reads nothing. ABSENT COUNTS AS ENABLED, exactly as
+       tMemberEnabled() says, so a tenant with no roster yet is not locked
+       out. tMemberEnabled(userOrg()) rather than of the record's orgId: the
+       list query a tenant runs filters orgId == its own org, and a path
+       built from the token is one the rules engine can check for a LIST. */
+    function tenantReader(o) {
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true
+        && ((o == userOrg() && tMemberEnabled(userOrg())) || ownsDemoBucket(o));
+    }
 
     function demoBucketOrg() {
       return userOrg() == 'clearsky-usa.com' ? 'demo-clearsky'
@@ -2164,10 +2181,8 @@ service cloud.firestore {
        order is 'cancelled'; what was asked for and when survives, because
        that is the half a dispute turns on. CLAUDE.md: flag, don't drop. */
     match /orders/{orderId} {
-      allow read:   if signedIn()
-                    && (resource.data.get('orgId', '') == userOrg()
-                     || ownsDemoBucket(resource.data.get('orgId', ''))
-                     || isAdmin());
+      allow read:   if tenantReader(resource.data.get('orgId', ''))
+                    || isAdmin();
       allow create, update: if false;
       allow delete: if false;
       // Workflow audit is served through authenticated APIs, never client-writable.
@@ -2218,6 +2233,13 @@ service cloud.firestore {
     match /omega_orgs/{orgId}/sites/{siteId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_imports/{batchId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_mappings/{mapId} { allow read, write: if false; }
+    /* Freight quotes (api/_lib/freight.js, api/logic-logistics.js): what a
+       carrier quoted the office per lane of an order, append-only (status
+       moves, amounts never change). Not on the order, because any member of
+       the tenant may read an order from a browser; read and written only by
+       the ledger endpoint, office admins only. The ship-from sits on
+       fulfillment/config.freight, closed above. Stated, like the lines above. */
+    match /omega_orgs/{orgId}/freight_quotes/{quoteId} { allow read, write: if false; }
     /* What ClearSky sent each subscriber (api/logic-kit.js): the log of app
        links and guides that went out, owner-only through the endpoint. */
     match /omega_orgs/{orgId}/kit_sends/{sendId} { allow read, write: if false; }
@@ -2255,17 +2277,13 @@ service cloud.firestore {
 
     match /plant_works_orders/{woId} {
       allow read:   if isOmegaStaff()
-                    || (signedIn()
-                        && (resource.data.get('orgId', '') == userOrg()
-                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+                    || tenantReader(resource.data.get('orgId', ''));
       allow write:  if false;        /* Admin SDK only — raised on deposit paid */
     }
 
     match /plant_units/{unitId} {
       allow read:   if isOmegaStaff()
-                    || (signedIn()
-                        && (resource.data.get('orgId', '') == userOrg()
-                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+                    || tenantReader(resource.data.get('orgId', ''));
       /* A unit's station is decided by api/_lib/plant.js against the works
          order's own routing. There is no shape of client write that could be
          checked here instead. */
@@ -2277,9 +2295,7 @@ service cloud.firestore {
 
     match /plant_scans/{scanId} {
       allow read:   if isOmegaStaff()
-                    || (signedIn()
-                        && (resource.data.get('orgId', '') == userOrg()
-                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+                    || tenantReader(resource.data.get('orgId', ''));
       allow write:  if false;        /* append-only log, refusals included */
     }
 
@@ -2745,19 +2761,24 @@ service cloud.firestore {
          Self-create is allowed so a person appears in the tenant admin's
          list on first sign-in — but ONLY as role 'member', status 'active',
          with email pinned to the token. Same shape as omega_staff: showing
-         up is automatic, promotion is an administrator act (or /api/set-role).
+         up is automatic, promotion is an administrator act.
 
-         A tenant admin may set role in ['admin','member','viewer'] — never
-         'owner', and never on the owner's own doc. Without that clamp two
-         admins can demote each other, which is an argument that should not
-         be settled in software. Only the owner (or ClearSky) transfers
-         ownership. */
+         A TENANT OWNER OR ADMIN HAS NO DIRECT WRITE HERE (2026-09-24). They
+         add, re-role, disable and enable people through /api/logic-team (the
+         Team page) or /api/set-role, which both go through the one member
+         writer, api/_lib/logic-members.js change(). That writer holds what a
+         rule cannot: the last active owner is never disabled or re-roled
+         (a rule reads the roster as it was BEFORE the write, so an only owner
+         could disable themselves here), the check and the write are one
+         transaction (two owners cannot disable each other at once), and
+         every change lands in omega_orgs/{org}/admin_audit with who, was and
+         now. An admin still never touches an owner nor makes one — that is
+         permit() in the same file. Deploy these rules WITH that endpoint.
+         ClearSky keeps a direct write (isAdmin()) for repairs; a person may
+         still correct their own name. */
       match /members/{uid} {
         function isSelfHere() { return signedIn() && request.auth.uid == uid; }
         function inThisOrg()  { return orgId == userOrg() || ownsDemoBucket(orgId); }
-        function targetIsOwner() {
-          return resource != null && resource.data.get('role', 'member') == 'owner';
-        }
         function selfSafeFields() {
           return request.resource.data.diff(resource.data).affectedKeys()
                    .hasOnly(['name', 'updatedAt']);
@@ -2766,8 +2787,6 @@ service cloud.firestore {
                     || (signedIn() && inThisOrg())
                     || isSelfHere();
         allow create: if isAdmin()
-                    || (isTenantAdmin(orgId)
-                        && request.resource.data.get('role', 'member') in ['admin', 'member', 'viewer'])
                     || (isSelfHere()
                         && inThisOrg()
                         && request.resource.data.get('email', '').lower()
@@ -2775,13 +2794,6 @@ service cloud.firestore {
                         && request.resource.data.get('role', 'member') == 'member'
                         && request.resource.data.get('status', 'active') == 'active');
         allow update: if isAdmin()
-                    || (isTenantOwner(orgId)
-                        && request.resource.data.get('role', 'member')
-                             in ['owner', 'admin', 'member', 'viewer'])
-                    || (isTenantAdmin(orgId)
-                        && !targetIsOwner()
-                        && request.resource.data.get('role', 'member')
-                             in ['admin', 'member', 'viewer'])
                     || (isSelfHere() && selfSafeFields());
         /* Disable, don't delete — who had access and when is what you need
            after an incident. */

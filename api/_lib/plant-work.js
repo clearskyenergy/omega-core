@@ -17,7 +17,9 @@
    product's cells are demanded by the plan, bought by the office, and issued
    at Module build by the operator, and all three read the same line. A line
    with no station is planned and bought but never gated at a bench — the
-   plant that has not mapped its stations yet keeps working exactly as before.
+   plant that has not mapped its stations yet keeps working exactly as before
+   — and comes off the shelf when the unit reaches Ready instead
+   (backflush(), below), so the shelf count does not stay high by it.
 
    ── A STEP IS DONE WHEN ITS PARTS ARE ISSUED ─────────────────────────────
    Issuing is the bench's one extra interaction: scan the part's label (or tap
@@ -212,6 +214,72 @@ function issuedTotals(unit) {
   return out;
 }
 
+/* ── THE GATE, FOR EVERY CALLER ────────────────────────────────────────
+   A unit arriving anywhere — a bench scan (api/mes-scan.js), a rig's
+   result or a supervisor's hand-recorded one (api/mes-test-result.js) — is
+   refused while a step is open at the bench it is leaving. These three are
+   the one way every caller works that out, so a second endpoint cannot
+   forget the checks on the routing or read the bill differently. */
+
+/* sku → catalog row, from storefront/config.products */
+function catalogIndex(rows) {
+  var by = {};
+  (Array.isArray(rows) ? rows : []).forEach(function (p) { if (isPlain(p) && p.sku && safeKey(String(p.sku))) by[p.sku] = p; });
+  return by;
+}
+/* check-only steps live on the works order's copy of the routing */
+function checksOf(wo, station) {
+  var s = (wo && Array.isArray(wo.routing) ? wo.routing : []).filter(function (x) { return x && x.key === station; })[0];
+  return s && Array.isArray(s.checks) ? s.checks : [];
+}
+/* the names of the steps still open where the unit IS */
+function openAt(unit, wo, by) {
+  if (!unit || !norm(unit.at)) return [];
+  var at = norm(unit.at), product = unit.sku && by && safeKey(String(unit.sku)) && isPlain(by[unit.sku]) ? by[unit.sku] : null;
+  return statusOf(unit, at, stepsFor(product, at, by, checksOf(wo, at))).open;
+}
+
+/* ── LINES NO BENCH ISSUES ─────────────────────────────────────────────
+   A bill line with no station (or one naming a station that is not on the
+   unit's routing) is planned and bought, but no bench ever takes it off the
+   shelf. The materials plan assumes a finished unit took its whole bill
+   (materials.js demandsFrom), so without this the shelf count stays high
+   by that line for every unit built and the next plan under-buys.
+
+   backflush() is what a unit that has just reached Ready still owes the
+   shelf: each such line's quantity for one unit, less anything a bench did
+   issue to it. api/mes-scan.js takes it off fulfillment/materials and adds
+   it to the works order's issued totals in the same transaction as the
+   arrival — the same two writes an issue at a bench makes — so the plan's
+   "a finished unit took its bill" is true on the shelf too. */
+function routingKeys(routing) { return (Array.isArray(routing) ? routing : []).map(function (s) { return norm(s && s.key); }).filter(Boolean); }
+function benchless(line, keys) { var st = norm(line && line.station); return !st || keys.indexOf(st) < 0; }
+function backflush(product, unit, routing) {
+  if (!product || !Array.isArray(product.bom)) return [];
+  var keys = routingKeys(routing), got = issuedTotals(unit), out = [];
+  product.bom.forEach(function (l) {
+    if (!isPlain(l) || !safeKey(String(l.sku)) || !benchless(l, keys)) return;
+    var left = roundQty(num(l.qty) - num(got[l.sku]));
+    if (left > 0) out.push({ sku: String(l.sku), qty: left, unit: norm(l.unit) || 'ea' });
+  });
+  return out;
+}
+/* Every assembly's lines that no bench on `routing` issues — the warning
+   the materials plan and the catalog show. */
+function unstationed(products, routing) {
+  var keys = routingKeys(routing), out = [];
+  (Array.isArray(products) ? products : []).forEach(function (p) {
+    if (!isPlain(p) || p.active === false || p.kind === 'service' || !Array.isArray(p.bom) || !p.bom.length) return;
+    var lines = p.bom.filter(function (l) { return isPlain(l) && l.sku && benchless(l, keys); }).map(function (l) {
+      var st = norm(l.station);
+      return { sku: String(l.sku), qty: roundQty(num(l.qty)), unit: norm(l.unit) || 'ea', station: st || null };
+    });
+    if (lines.length) out.push({ sku: String(p.sku), name: norm(p.name) || String(p.sku), kind: p.kind === 'component' ? 'component' : 'product', lines: lines.slice(0, 80) });
+  });
+  return out;
+}
+
 module.exports = { stepsFor: stepsFor, stationsWithWork: stationsWithWork, statusOf: statusOf, resolvePart: resolvePart,
   judgeIssue: judgeIssue, applyIssue: applyIssue, judgeStepDone: judgeStepDone, applyStepDone: applyStepDone,
-  issuedTotals: issuedTotals, stepId: stepId, MAX_STEPS: MAX_STEPS, DEFAULT_STEP: DEFAULT_STEP };
+  issuedTotals: issuedTotals, stepId: stepId, catalogIndex: catalogIndex, checksOf: checksOf, openAt: openAt,
+  backflush: backflush, unstationed: unstationed, MAX_STEPS: MAX_STEPS, DEFAULT_STEP: DEFAULT_STEP };

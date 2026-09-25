@@ -29,59 +29,93 @@ code{font:8.6pt "Liberation Mono","DejaVu Sans Mono",monospace;color:#0f2e3f}
 .flow{width:100%;height:auto;margin:6px 0 4px}
 .break{page-break-before:always}
 .keep{page-break-inside:avoid}
+.shotw{border:1px solid #cfdde3;border-radius:10px;overflow:hidden;background:#fff;margin:6px 0 8px;box-shadow:0 1px 2px rgba(15,46,63,.08);page-break-inside:avoid}.shotw img{width:100%;display:block}.shotw small{display:block;font-size:7.6pt;color:#5a7280;padding:4px 7px;border-top:1px solid #e3edf1}
 
 .cover{background:#e8f3f6;border-radius:8px;padding:14px 16px;margin:0 0 12px}.cover h1{font-size:20pt;color:#0f2e3f;margin:0 0 4px;letter-spacing:-.3px}.cover p{margin:0;color:#3f5866;font-size:10pt}.steps li{margin:0 0 5px}
 </style></head><body>
 
-<div class="cover"><h1>The Plant app</h1><p>Omega Logic on the builder's phone: work orders, every unit and its step, the bench scanner, stock, quality holds.</p></div>
+<div class="cover"><h1>The Plant app</h1><p>Omega Logic on the builder's phone: work orders, every unit and its step, the bench scanner, stock, quality holds and, for a supervisor, a test result by hand.</p></div>
 <h2>1. What it is and where it lives</h2>
 <table><tr><th>What</th><th>Address</th><th>Sign in</th></tr>
-<tr><td><b>Plant app</b></td><td><span class="url">silmarillion.clearskyomega.com/plant/app?org=yourcompany.com</span><br>(<code>?org=</code> is your company's email domain; the link your office sends already has it)</td><td>work Google account of the workspace</td></tr>
-<tr><td><b>Bench scan station</b></td><td><span class="url">silmarillion.clearskyomega.com/plant/station.html</span></td><td>a station credential from Work orders, pasted once</td></tr>
+<tr><td><b>Plant app</b></td><td><span class="url">silmarillion.clearskyomega.com/plant/app?org=yourcompany.com</span><br>(<code>?org=</code> is your company's email domain; the link your office sends already has it)</td><td>your work Google account, or your work email and password</td></tr>
+<tr><td><b>Bench scan station</b></td><td><span class="url">silmarillion.clearskyomega.com/plant/station.html</span>, or <b>Scan → Open the scanner</b> in the app</td><td>a station credential from Work orders &amp; registration, pasted once</td></tr>
+<tr><td><b>Registering serials</b></td><td>the desktop: <b>Work orders &amp; registration</b> (<span class="url">/plant/?org=yourcompany.com</span>)</td><td>the same sign-in as the Omega Logic app</td></tr>
 </table>
 <p>Nothing lives only on the phone. The app reads and writes the same work orders and unit records as the plant board and the office, through the same signed-in endpoints, so a scan at a bench is on every other screen the moment it is saved.</p>
 
-<h2>2. Put it on your phone</h2>
-<p>It is a web app: nothing to download from a store, and every update reaches the phone the next time it is opened. Open the address once from the link the office sends; the app remembers the workspace after that. Sign in with the work Google account that is a member of the workspace.</p>
+<h2>2. Put it on your phone and sign in</h2>
+<p>It is a web app: nothing to download from a store, and every update reaches the phone the next time it is opened. Open the address once from the link the office sends; the app remembers your company after that. Sign in with your work Google account, or your work email and password (<b>Forgot password?</b> sets one). If you work for more than one company it asks which one to open. <b>Sign out</b> also forgets the company. Your owner or an administrator adds you to the workspace on <b>Team</b>.</p>
 <div class="cols"><div><h3>iPhone or iPad (Safari)</h3><ol class="steps">
 <li>Open <b>Safari</b> and go to the link your office sent.</li>
-<li>Tap the menu button at the left of the address bar (iOS 27) or <b>···</b> at the right (iOS 26), then <b>Share</b>. See a Share button (the square with the arrow)? Just tap that.</li>
+<li>Tap the menu button at the left of the address bar (iOS 27) or <b>•••</b> at the right (iOS 26), then <b>Share</b>. See a Share button (the square with the arrow)? Just tap that.</li>
 <li>Swipe up on the sheet or tap <b>View More</b>, then <b>Add to Home Screen</b>.</li>
 <li>Leave <b>Open as Web App</b> on and tap <b>Add</b>. No switch? Older iOS: just tap <b>Add</b>.</li>
-<li>Open it from the Home Screen from now on and sign in there: it keeps its own sign-in, separate from Safari. It opens full screen as <b>Omega Logic</b>, ClearSky's app, with your company's workspace shown inside.</li></ol></div>
+<li>Open it from the Home Screen from now on and <b>sign in there once</b>: it keeps its own sign-in, separate from Safari. <b>Continue with Google</b> goes to Google and comes back to the app; or use your work email and password. There is no emailed link in the installed app (it would open in Safari). It opens full screen as <b>Omega Logic</b>, ClearSky's app, with your company's workspace inside.</li></ol></div>
 <div><h3>Android (Chrome)</h3><ol class="steps">
 <li>Open <b>Chrome</b> and go to the link your office sent.</li>
 <li>Tap <b>⋮</b> at the right of the address bar, then <b>Install and create shortcut</b> (older Chrome: <b>Install app</b> or <b>Add to Home screen</b>).</li>
 <li>Tap <b>Install</b>, not Create shortcut.</li>
-<li>Open it from its icon, with your other apps, and sign in.</li></ol></div></div>
+<li>Open it from its icon, with your other apps, and sign in: Google, or your work email (a sign-in link by email, or <b>Use a password instead</b>).</li></ol></div></div>
 
 <h2>3. The five tabs</h2>
-<div class="side two"><div>
-<ul><li><b>Today</b>: open work orders, late, with holds, mine; today's scans, units that reached Ready, refusals, test fails; <b>needs a person</b> (held, stuck, failed, quiet benches, tap to open); <b>Scan at a bench</b>.</li>
-<li><b>Work</b>: every open work order, late first, with All / Mine / Late / Holds / Ready filters. Tap one: stage, target, built %, ready units, holds, next operation, what it is <b>short of</b>, every unit with its station and step progress.</li>
-<li><b>Scan</b>: opens the bench screen. Paired once as a <b>roaming phone</b>, the builder picks the bench they are at on each scan. Look up any serial from here.</li>
-<li><b>Stock</b>: finished units by product (available, assigned, building) and the parts short for the open work.</li>
-<li><b>Quality</b>: units on hold. Open one to place a hold with the reason, or release it with the disposition. A hold stops every scan on that unit until it is released. Once a unit has shipped, its record shows <b>After the plant</b>: where it is now, which site it went to, and a link to its custody passport.</li></ul>
-<div class="keep"><h3>The bench</h3><p>Scan the unit's serial or its label. The screen shows the steps for this bench with each part and quantity for this unit. Scan a part's label, or tap <b>Issue</b>, to take it off stock and onto the unit; a lot number travels with it. A check step gets <b>Done</b>. When every step is complete the bench says which bench is next; the next bench refuses the unit while anything here is open. Scans queue when the yard has no signal and send when it returns.</p></div></div>
-<div class="shot"><img src="shots/plant-work.png" alt=""><small>Work order: built %, ready units, holds, what is short, every unit's step</small></div>
-<div class="shot"><img src="shots/bench.png" alt=""><small>The bench: this unit's steps and parts, issued on scan</small></div></div>
-<h2 class="break">4. How it links to the main system</h2>
 <div class="side"><div>
-<ol class="keep">
-<li>The office accepts an order on the desktop; when the deposit is paid it is released and a <b>work order</b> exists. It appears on the Plant app's Today and Work tabs.</li>
-<li>Serials are registered on the desktop plant board. The builders build bench by bench with the scanner, issuing parts as they go. The materials plan nets what was issued; Stock in the Omega Logic app shows what is short.</li>
-<li>A unit that reaches <b>Ready</b> is finished stock. The office assigns it to an order from the Omega Logic app, or the plant built it for one already.</li>
-<li>The office records the shipment on the desktop. From then on the unit's custody chain starts: in transit, received, assigned to the customer's site, commissioned. The Plant app shows that under <b>After the plant</b> on the unit, and the customer sees it on their phone.</li>
-<li>Every unit's full record — the plant trace, the tests, the scans, the custody chain and the warranty — is one passport on the desktop: <span class="url">silmarillion.clearskyomega.com/logic-custody?org=yourcompany.com</span>.</li></ol>
-<div class="callout"><b>Your apps.</b> Today in the Plant app links to the Omega Logic app and the bench. One account, one record: what you build here is what the office ships and the customer places at a site.</div></div>
-<div class="shot"><img src="shots/plant-unit.png" alt=""><small>A unit: where it is at the plant, steps, scans, quality</small></div></div>
-<h2>5. If something looks wrong</h2>
-<ul>
-<li><b>"Open the app once from your office link so it knows your workspace"</b>: open the Plant app link your office sent once (it ends in <code>?org=</code> and your company's email domain); the app remembers it.</li>
-<li><b>The app looks stale</b>: close it fully and open it again. Updates arrive on the next open; data is never shown from a cache.</li>
-<li><b>Offline</b>: the app says so and shows nothing rather than yesterday's list.</li>
-<li><b>Questions</b>: ClearSky Energy Solutions. The full manual is in the workspace documentation.</li></ul>
-<ul><li><b>Nothing loads after sign-in</b>: your email is not a member of the workspace yet. Contact ClearSky or your administrator.</li>
-<li><b>The bench says it is not paired</b>: a plant administrator creates a Roaming phone credential under Work orders on the desktop; paste the token once on the bench screen.</li></ul>
+<ul><li><b>Today</b>: open work orders, late, with holds, mine; today's scans, units that reached Ready, refusals, test fails; <b>needs a person</b> (held, stuck, failed, quiet benches, tap to open); <b>Scan at a bench</b>.</li>
+<li><b>Work</b>: every open work order, late first, with All / Mine / Late / Holds / Ready filters. Tap one: stage, target, built %, ready units, holds, next operation, what it is <b>short of</b>, every unit with its bench and step progress.</li>
+<li><b>Scan</b>: <b>Open the scanner</b> for the bench screen (below). Paired once as a <b>roaming phone</b>, you pick the bench you are at on each scan. <b>Find a unit</b> looks up any serial.</li>
+<li><b>Stock</b>: finished units by product (on the shelf, on orders, being built for stock, held), counted over every unit; the parts short for the open work; and the <b>parts no bench issues</b>, which come off the shelf when a unit reaches Ready.</li>
+<li><b>Quality</b>: units on hold. Open one to place a hold with the reason, or release it with the disposition (the owner or an administrator; everyone else sees who can). A hold stops every scan on that unit until it is released. Once a unit has shipped, its record shows <b>After the plant</b>: where it is now, which site it went to, and a link to its custody passport.</li></ul></div>
+<div class="shot"><img src="shots/plant-work.png" alt=""><small>Work order: built %, ready units, holds, what is short, every unit's step</small></div></div>
 
+<div class="side two keep"><div>
+<h3>The bench: scan, type or use the camera</h3>
+<ol class="steps">
+<li>In the app, <b>Scan → Open the scanner</b>. A roaming phone picks the bench you are at, top right. (Not paired yet? See section 7.)</li>
+<li>Scan the unit's label with a scanner gun, or tap <b>Use camera</b> and point the phone at it (QR, Data Matrix or Code 128; the first time, tap <b>Allow</b>). A damaged label, or no scanner: tap <b>Type a serial</b>, type it, tap <b>Go</b> (or Enter).</li>
+<li>The screen shows this bench's steps for the unit, with each part and quantity. Scan a part's label or type its code, or tap <b>Issue</b>, to take it off stock and onto the unit; a lot number travels with it. A check step gets <b>Done</b>.</li>
+<li>When every step is done the bench names the next one. The next bench refuses the unit while anything here is still open, and says what.</li></ol>
+<p>Scans queue when the yard has no signal and send when it returns. <b>‹ Plant app</b>, top left, takes you back. <b>unpair</b> asks first: the token is shown only once.</p></div>
+<div class="shot"><img src="shots/bench-type.png" alt=""><small>Type a serial: for a label that will not scan</small></div>
+<div class="shot"><img src="shots/bench.png" alt=""><small>The unit at this bench: its steps and parts</small></div></div>
+
+<h2 class="break">4. A test result by hand (supervisor)</h2>
+<div class="side"><div>
+<p>The <b>EOL test rig</b> records its result on its own, and that stays the normal way. When the rig cannot (it is down, or not connected yet), the workspace's <b>owner or an administrator</b> records the result by hand. Everyone else sees who can.</p>
+<ol class="steps">
+<li>Open the unit: <b>Scan → Find a unit</b>, or tap it on a work order. The <b>Test result</b> box shows when the unit is at the bench just before the test, or at the test.</li>
+<li>Choose <b>Pass</b> or <b>Fail</b>.</li>
+<li>Write what was tested, and with what (at least 5 characters): <i>"Insulation 520 MΩ on the bench meter; tester offline"</i>.</li>
+<li>For a fail, a <b>failure code</b>: letters, digits, dot, dash or underscore (a space becomes an underscore: <i>low insulation</i> is LOW_INSULATION).</li>
+<li>Tap <b>Record the result by hand</b>.</li></ol>
+<div class="callout"><b>What it keeps, and what it never does.</b> The result is the unit's test evidence, marked <b>by hand</b>, with your name, the time and your note, and it is audited. It goes through the same gate as the rig: a pass, by hand or by the rig, never takes a unit past a step still open at the bench it is leaving; the app says which step. A fail holds the unit (<i>Test failed (recorded by hand)</i>) until a passing retest. The same form is on the unit's serial record on the desktop.</div></div>
+<div class="shot"><img src="shots/plant-test.png" alt=""><small>Record the result by hand: Pass or Fail, what was tested</small></div></div>
+
+<h2>5. Registering serials (desktop)</h2>
+<p>Serials are the real ones off the labels, registered against the work order they are built for: on the desktop, <b>Work orders &amp; registration → Register serials</b> (a work order's own <b>+ Register serials</b> opens it with that order chosen).</p>
+<div class="shotw" style="width:3.9in;margin-left:auto;margin-right:auto"><img src="shots/plant-register.png" alt=""><small>Register serials: the work order chosen, the serials pasted one per line, the batch as rows</small></div>
+<ol class="steps">
+<li>Choose the <b>work order</b>. While an order is waiting for serials nothing is chosen for you; <b>finished stock</b> is there to choose on purpose.</li>
+<li>Check the <b>SKU</b> (filled in from the order) and the type.</li>
+<li><b>Paste</b> the serials, one per line (a column from the label sheet), or scan one label after another into the box. Tap <b>Add these serials</b>. A component (a module in a cabinet): <b>A component under a parent</b>; Enter adds it and clears the box for the next scan.</li>
+<li>Check <b>This batch</b>: one row per serial; <b>✕</b> takes a row out. Then <b>Register</b>.</li></ol>
+<p><b>Typed one wrong?</b> Open its record (<b>Find serial record</b>). Until the floor has scanned it, the owner or an administrator can <b>correct</b> it (type the right serial: it takes the place, components and all) or <b>void</b> it (leave that blank: its place is freed), with a reason. The mistake is kept, marked void, and refused at every bench.</p>
+
+<h2>6. How it links to the main system</h2>
+<div class="side" style="grid-template-columns:minmax(0,1fr) 150px"><div>
+<ol class="keep">
+<li>The office's owner or an administrator accepts an order on the desktop (ClearSky, for an order billed through ClearSky's QuickBooks); when the deposit is paid it is released and a <b>work order</b> exists. It appears on the Plant app's Today and Work tabs.</li>
+<li>Serials are registered against it (section 5). The builders build bench by bench with the scanner, issuing parts as they go; parts no bench issues come off the shelf when the unit reaches Ready. The materials plan nets what was issued; Stock shows what is short.</li>
+<li>A unit that passes its test and reaches <b>Ready</b> is finished stock. The office assigns it to an order from the Omega Logic app, or the plant built it for one already.</li>
+<li>ClearSky records the shipment on the desktop. From then on the unit's custody chain starts: in transit, received, assigned to the customer's site, commissioned. The Plant app shows that under <b>After the plant</b> on the unit, and the customer sees it on their phone.</li>
+<li>Every unit's full record (plant trace, tests, scans, custody chain, warranty) is one passport on the desktop: <span class="url">silmarillion.clearskyomega.com/logic-custody?org=yourcompany.com</span>.</li></ol>
+<div class="callout"><b>Your apps.</b> Today in the Plant app links to the Omega Logic app and the bench. One account, one record: what you build here is what the office ships and the customer places at a site.</div></div>
+<div class="shot" style="width:150px"><img src="shots/plant-unit.png" alt=""><small>A unit: where it is at the plant, steps, scans, quality</small></div></div>
+
+<h2>7. If something looks wrong</h2>
+<ul>
+<li><b>"Open the app once from your office link so it knows your workspace"</b>: open the link your office sent once (it ends in <code>?org=</code> and your company's email domain).</li>
+<li><b>"No workspace at…" after sign-in</b>: your email is not on the workspace yet. Ask your owner or an administrator to add you on Team.</li>
+<li><b>Stale or offline</b>: close the app fully and open it again (updates arrive on the next open). Offline, it says so at the top; the bench keeps its scans and sends them when the signal returns.</li>
+<li><b>The bench says it is not paired</b>: a plant administrator creates a <b>Roaming phone</b> credential on the desktop (Work orders &amp; registration → Pair a scanner or EOL rig); paste its station ID and token once on the bench screen (the token is shown only once).</li>
+<li><b>The camera does not open</b>: allow it (iPhone: Settings → Apps → Safari → Camera) and tap Use camera again, or tap Type a serial.</li>
+<li><b>Questions</b>: your workspace owner or an administrator, then ClearSky Energy Solutions, <b>dev@clearsky-usa.com</b>. The office's guide is in the Omega Logic app under Menu → Help &amp; guides.</li></ul>
 </body></html>

@@ -197,7 +197,11 @@ module.exports = A.handler(function (req, res) {
       throw A.httpError(503, 'Your orders are temporarily unavailable. Please try again shortly.');
     }
     var db = A.db();
-    await B.context(org);
+    var ctx = await B.context(org);
+    /* The supplier, named the one way the rest of the customer's pages name
+       it (api/_lib/logic-brand.js shortName), not whatever was stamped on
+       each order when it was written. */
+    var tenant = (ctx && ctx.org) || {}, soldBy = tenant.name || (tenant.whiteLabel && tenant.whiteLabel.platformName) ? require('./_lib/logic-brand')(tenant).shortName : null;
     var account = await B.lookup(db, org, email);
     if (account) B.active(account);
     var wanted = String((req.query && req.query.orderNo) || '').trim().slice(0, 120);
@@ -222,7 +226,7 @@ module.exports = A.handler(function (req, res) {
         });
         return Promise.all(rows.map(function (o) {
           return unitsFor(db, org, o.orderNo).then(function (units) {
-            return P.publicOrder(o, { units: units, milestoneMap: cfg.map, showPrice: cfg.showPrice, catalogBy: cfg.by });
+            return P.publicOrder(o, { units: units, milestoneMap: cfg.map, showPrice: cfg.showPrice, catalogBy: cfg.by, soldBy: soldBy });
           });
         })).then(function (orders) {
           /* Reported off the rows actually returned, so a single-order

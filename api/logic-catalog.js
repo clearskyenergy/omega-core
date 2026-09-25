@@ -5,8 +5,10 @@ module.exports=A.handler(async function(req,res){
   res.setHeader('Cache-Control','no-store');if(['GET','POST'].indexOf(req.method)<0)throw A.httpError(405,'GET or POST only');
   var b=req.body||{},caller=await A.authenticate(req),org=A.safeOrg(req.method==='GET'?req.query.org:b.org),ctx=await X.authorize(caller,org,req.method==='POST');
   var ref=A.db().doc('omega_orgs/'+org+'/storefront/config');
-  if(req.method==='GET'){var snap=await ref.get(),d=snap.exists?snap.data():{};var routing=require('./_lib/plant-flow').current(ctx.config).routing.map(function(s){return {key:s.key,label:s.label};});
-    return {org:org,brand:require('./_lib/logic-brand')(ctx.org),owner:X.owner(caller),revision:d.catalogRevision||0,products:(d.products||[]).map(C.view),designProducts:C.designs(d),routing:routing};}
+  if(req.method==='GET'){var snap=await ref.get(),d=snap.exists?snap.data():{},flow=require('./_lib/plant-flow').current(ctx.config);var routing=flow.routing.map(function(s){return {key:s.key,label:s.label};});
+    /* bill lines no bench issues (PLANT-07): flagged in the bill editor, the same list the materials plan shows */
+    return {org:org,brand:require('./_lib/logic-brand')(ctx.org),owner:X.owner(caller),revision:d.catalogRevision||0,products:(d.products||[]).map(C.view),designProducts:C.designs(d),routing:routing,
+      unstationed:require('./_lib/plant-work').unstationed(d.products||[],flow.routing)};}
   if(b.action!=='save')throw A.httpError(400,'Unknown catalog action');
   var product=C.product(b.product);
   return A.db().runTransaction(async function(tx){

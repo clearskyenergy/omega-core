@@ -11,7 +11,7 @@ against; the API contracts at the end are what the pages call.
 ClearSky                      makes Omega Logic (like Intuit makes QuickBooks)
 └── an Omega Logic customer   a WORKSPACE: Clean Cell (orgId cleancell.us)
     │                         downloads ONE app — the Omega Logic app
-    └── their customers       ACCOUNTS: Amperage Capital, InCharge Energy
+    └── their customers       ACCOUNTS: Acme Fleet, Harbor Charging
         │                     each a company with several people on it
         └── the customer app  the TENANT's app (its name, its icon), one per supplier
 ```
@@ -67,7 +67,7 @@ customer hub does:
   paid, shipped; POs received; requests asked and answered; people who joined;
   documents; logged activity.
 
-## The customer app (Amperage Capital's)
+## The customer app (Acme Fleet's)
 
 - **Fleet** — every unit on the account: where it is, the site it runs at,
   its warranty and SLA; *going to*, received, assign, commissioned; add a site.

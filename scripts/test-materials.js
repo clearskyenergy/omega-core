@@ -316,6 +316,9 @@ console.log('\nthe endpoint');
   ok('  with the catalog and stock revisions the page needs to save against', got.catalogRevision === 3 && got.stockRevision === 0);
   ok('  and counts of what is set up', got.components === 5 && got.withBom === 2);
   ok('  with a twelve-week projection', got.projection && got.projection.weeks.length === 12 && got.projection.rows.some(function (r) { return r.sku === 'CELL'; }));
+  /* PLANT-07: the bill lines no bench on the plant's routing issues are named,
+     per assembly, so nobody counts on a bench to take them off the shelf */
+  ok('  naming every bill line no bench issues, per assembly', Array.isArray(got.unstationed) && got.unstationed.length === CATALOG.filter(function (p) { return p.kind !== 'service' && (p.bom || []).some(function (l) { return !l.station; }); }).length && got.unstationed.every(function (p) { return p.lines.length && p.lines.every(function (l) { return !l.station || ['kit', 'module', 'rack', 'encl', 'elec', 'bms', 'eol', 'qa', 'pack', 'ready'].indexOf(l.station) < 0; }); }), got.unstationed);
   await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: 'CELL', onHand: 500, revision: 0 }, caller: member }, res), /administrator/);
   ok('a member cannot record a count', true);
   await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: 'GHOST', onHand: 1, revision: 0 }, caller: admin }, res), /No such component/);

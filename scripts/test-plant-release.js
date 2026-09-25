@@ -38,5 +38,14 @@ rejects('refuses more shipping cabinets than the sale ordered', function () {
 rejects('refuses duplicate routing stations', function () { R.routingOf(['kit', 'kit']); }, 'repeat');
 rejects('refuses an overlong trace value', function () { R.traceOf({ lot: 'x'.repeat(500) }); }, 'too long');
 
+/* PLANT-12: a serial typed wrong may be voided or corrected only while it
+   is nothing but a typo — nothing on the floor has seen it. */
+var fresh = { serial: 'CAB-0001', at: '', done: {}, work: {}, test: null, inventoryStatus: 'allocated' };
+ok('a registered serial the floor has not seen may be corrected', R.correctable(fresh).ok === true);
+ok('  one that was scanned in anywhere may not', !R.correctable(Object.assign({}, fresh, { at: 'kit' })).ok && /evidence/.test(R.correctable(Object.assign({}, fresh, { at: 'kit' })).why));
+ok('  nor one with a part issued, a test, or a backflush', !R.correctable(Object.assign({}, fresh, { work: { rack: {} } })).ok && !R.correctable(Object.assign({}, fresh, { test: { result: 'pass' } })).ok && !R.correctable(Object.assign({}, fresh, { backflushed: { X: 1 } })).ok);
+ok('  nor finished stock, an assigned stock unit or one that left the plant', !R.correctable(Object.assign({}, fresh, { inventoryStatus: 'available' })).ok && !R.correctable(Object.assign({}, fresh, { allocatedAt: 'T' })).ok && !R.correctable(Object.assign({}, fresh, { custody: { status: 'in_transit' } })).ok);
+ok('  and a void is final', !R.correctable(Object.assign({}, fresh, { inventoryStatus: 'void' })).ok && !R.correctable(null).ok);
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

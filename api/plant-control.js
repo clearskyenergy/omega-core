@@ -26,6 +26,23 @@ function ncrOf(value) {
   return ncr;
 }
 
+/* Who may hold and release: a tenant administrator (A.isTenantAdmin), and
+   also an administrator from another company acting in this workspace on
+   its cross-org grant (org_members) — the same people the plant pages show
+   the controls to (api/logic-plant.js controls()). */
+function mayControl(db, caller, org) {
+  return A.isTenantAdmin(caller, org).then(function (ok) {
+    if (ok || caller.staff || caller.orgId === org || !caller.uid) return ok;
+    return A.canActInOrg(caller, org).then(function (can) {
+      if (!can) return false;
+      return db.collection('omega_orgs').doc(org).collection('members').doc(String(caller.uid)).get().then(function (s) {
+        var d = s.exists ? s.data() || {} : {};
+        return d.status !== 'disabled' && (d.role === 'owner' || d.role === 'admin');
+      });
+    });
+  });
+}
+
 module.exports = A.handler(function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   var body = req.body || {};
@@ -45,7 +62,7 @@ module.exports = A.handler(function (req) {
     return unitRef.get().then(function (first) {
       if (!first.exists) throw A.httpError(404, 'unit not found');
       var firstUnit = first.data() || {};
-      return A.isTenantAdmin(caller, firstUnit.orgId).then(function (admin) {
+      return mayControl(db, caller, firstUnit.orgId).then(function (admin) {
         if (!admin) throw A.httpError(403, 'Only a tenant administrator may control a quality hold.');
         var scanRef = db.collection('plant_scans').doc(org + '__control_' + id);
         return db.runTransaction(function (tx) {

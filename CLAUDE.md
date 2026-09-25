@@ -454,6 +454,29 @@ is not built.
   the four list actions on `api/my-sites.js` and `api/logic-custody.js` —
   the server recomputes the plan, the preview is the confirmation.
   Design and what is not built: `docs/LOGISTICS-CUSTODY.md`.
+- **An order's freight plan is DERIVED, and Accept plans through the
+  ledger's own planner.** `api/_lib/freight.js` (pure, ES5, bundled) reads
+  the units' sites (`custody.siteId`, else `plannedSiteId`), groups them into
+  lanes by ONE fixed state→region map (lane keys are words, never a state
+  code: they are in the load ids a carrier reads), orders stops nearest-first
+  from the ship-from (`fulfillment/config.freight.origin`, straight-line
+  miles) and
+  builds the master list and the carrier's quote request — the ONLY place
+  their columns live; the carrier's sheet carries no customer, PO or price.
+  Quotes are `omega_orgs/{org}/freight_quotes/` (closed in the rules, never
+  on the order a member may read), append-only: amounts never change, only
+  status; a lane's key covers each site's ADDRESS, so a corrected address
+  makes a price stale and Accept refuses it. "Ready" is the pickup gate's
+  (`logic-policy.ready`, components included), and a blank load id is
+  `F.nextLoadId` — the one rule the Accept step previews. `freight-accept`
+  calls `L.planLeg` (`api/_lib/order-lifecycle.js`)
+  once per stop in one transaction — the SAME function the `plan` action
+  calls — so a lane is one leg per stop; a leg carries the quote id, never
+  the amount. Catalog shipping fields (`weightLb`, `heightFt`,
+  `freightClass`, `stackable`, `handlingNote`) have ONE validator,
+  `api/_lib/shipping-fields.js`; a missing one reads "not on file", never a
+  guess, and none is ever public. Office admins only (the ledger's gate).
+  Design and what is not built: `docs/LOGISTICS-CUSTODY.md` (*Freight plan*).
 - **A customer is an ACCOUNT with people on it**, not an email. Each
   workspace's customers are `omega_orgs/{org}/customers/{id}` with
   `users/{email}` and the `customer_index` pointer; `api/_lib/buyer-accounts.js`
@@ -489,6 +512,19 @@ is not built.
   is not) from screenshots `scripts/guides/shots.js` takes of the sandboxes
   (tenant names neutralised: a public PDF names no tenant); the office's is
   `guides/Omega-Logic-App.pdf`. Add an app there, not in a page.
+- **A release that changes a screen retakes the guides.** `shots.js`
+  records, per screenshot, the sha256 of every page file the shot loaded
+  (`shots/manifest.json` `sources`; a sandbox page counts as its source
+  page, and the sandbox runtime as `app-sandbox/sandbox.js`, so a change
+  in a library that works out what a screen shows counts too); `build.js`
+  records which screenshots, guide words and builder each PDF was made
+  from (`scripts/guides/built.json`) and leaves a PDF whose inputs did not
+  change as it is (`--force` rebuilds). `scripts/tests/tguides.js` (in `npm test`)
+  fails when a photographed page changed since its shot, or a PDF was not
+  rebuilt from the current shots. The fix is `npm run guides` (shots, then
+  build) and committing `scripts/guides/`, `guides/`; never an edit to the
+  manifest or `built.json`. A new screen gets a shot and a line in the guide
+  that teaches it.
 - **ClearSky commissions and controls Logic subscribers from
   `/logic-admin.html`** (`api/logic-admin.js`, owner-only through
   `logic-access.requireOwner`). It owns only what no other endpoint did —
@@ -501,6 +537,40 @@ is not built.
   lands in `omega_orgs/{org}/admin_audit` with what changed and what it was.
   Tests: `scripts/test-logic-admin.js` on the shared
   `scripts/_lib/firestore-double.js`.
+- **Price and accept follow who bills (D1).** A workspace's owner or an
+  administrator (an active `omega_orgs/{org}/members` owner|admin) approves
+  the price of, and accepts, an order the workspace bills itself
+  (`fulfillment/config.accounting === 'tenant'`, or the order's own billing
+  once priced: `office-stage.billingOf`); ClearSky, the logic-access owner,
+  prices whatever goes through its QuickBooks and may act on any order.
+  `logic-access.requirePricer` is the gate inside the workflow's `price`
+  and `accept`; `office-stage.actions()` gives each order `can{price,accept}`
+  and `waitingOn`, which the desktop pane, the app, Today and the Sales hub
+  follow (an order waiting on someone else is listed and named, never
+  counted). Each price and acceptance keeps who and when
+  (`logic.pricedBy` / `acceptedBy`, the event history). Shipment and wires
+  stay ClearSky's.
+- **A workspace runs its own Team (D2).** `api/_lib/logic-members.js`
+  `change()` is the ONE writer of `omega_orgs/{org}/members`:
+  `logic-team.html` → `api/logic-team.js` (the tenant's owner or admin),
+  `api/logic-admin.js` (ClearSky) and `api/set-role.js` all go through it.
+  An admin never makes or touches an owner; the last active owner is never
+  disabled or demoted (re-read inside the transaction); nobody is deleted;
+  every change is an `admin_audit` row with who, was and now. A person
+  outside the workspace's domain needs an existing `org_members` grant —
+  Team never writes one. The rules let a browser write a member record only
+  to join as a member or change its own name (ClearSky staff aside), and `tenantReader()` keeps a disabled
+  member (or an unverified email) out of orders and plant records.
+- **A test result by hand goes through the rig's gate (D3).** When the EOL
+  rig cannot post, an owner or administrator records Pass or Fail with a
+  note (5+ characters) on the Plant app's unit or the serial record:
+  `api/mes-test-result.js` `manual: true` runs the same `record()` and
+  `plant.judgeMachineResult` as the rig, which now takes the open steps, so
+  no pass, machine or manual, skips a step still open (PLANT-03). It is
+  stored on `unit.test` and in `plant_scans` with `source: 'manual'`, by,
+  at and the note, audited as `plant-manual-test`; a fail holds the unit.
+  The rig stays the normal way, and a rig token may not use a `manual_`
+  scan id.
 - **The ecosystem is one map**: `docs/OMEGA-LOGIC-ECOSYSTEM.md` (who uses
   which app, the hubs, the API contracts, what is not built). Both apps and
   both desktops open on the HEX HUB (`omega-hexhub.js`, `OmegaHexHub.render`;

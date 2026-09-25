@@ -66,6 +66,7 @@ function judge(unit, action, body) {
   var c = custodyOf(unit), move = MOVES[action], b = body || {};
   if (!move) return { ok: false, reason: 'unknown_action', say: 'Unknown custody action "' + action + '"' };
   if (!unit || !unit.shipUnit) return { ok: false, reason: 'not_a_shipping_unit', say: 'Only a shipping unit is tracked past the plant; a component travels with its assembly' };
+  if (unit.inventoryStatus === 'void') return { ok: false, reason: 'void', say: 'That serial was voided at registration (a typo the plant corrected); use the real serial' };
   if (c.state === 'scrapped') return { ok: false, reason: 'scrapped', say: 'A scrapped unit is not moved again' };
   if (['ship', 'receive'].indexOf(action) >= 0 && !c.status && unit.at !== 'ready') return { ok: false, reason: 'not_ready', say: 'The unit has not reached Ready at the plant' };
   if (move.from.indexOf(c.status) < 0) return { ok: false, reason: 'wrong_status', say: 'Cannot ' + action.replace('-', ' ') + ' a unit that is ' + label(c.status) };
@@ -75,8 +76,23 @@ function judge(unit, action, body) {
   if (action === 'replace' && b.replacementSerial === unit.serial) return { ok: false, reason: 'self', say: 'A unit cannot replace itself' };
   return { ok: true, action: action, say: 'OK' };
 }
+/* A CUSTOMER's own date binds coverage with no office check (confirmation
+   is never a gate on the warranty), so it must be one that can be true: not
+   after today — a day's grace, because the phone's "today" is the buyer's
+   own time zone — and not before the step it follows (a receipt before the
+   unit shipped; an installation or a commissioning before it arrived). The
+   browser's date limits are a convenience; this is the rule. */
+var AFTER = { receive: ['shippedAt'], deliver: ['shippedAt'], install: ['receivedAt', 'deliveredAt', 'shippedAt'], commission: ['installedAt', 'receivedAt', 'deliveredAt', 'shippedAt'] };
+var WORDS_AT = { shippedAt: 'it shipped', deliveredAt: 'it was delivered', receivedAt: 'it was received', installedAt: 'it was installed' };
+function plausible(c, action, d, now) {
+  var today = String(now).slice(0, 10), grace = new Date(Date.parse(today + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10);
+  if (d > grace) throw fail(400, 'The date ' + d + ' is in the future: use the day it happened');
+  var prior = (AFTER[action] || []).filter(function (k) { return c[k]; })[0];
+  if (prior && d < String(c[prior]).slice(0, 10)) throw fail(400, 'The date ' + d + ' is before ' + WORDS_AT[prior] + ' (' + String(c[prior]).slice(0, 10) + ', as recorded); if that record is wrong, ask your supplier to correct it');
+}
 function apply(unit, action, body, by, now, method) {
   var c = custodyOf(unit), b = body || {}, at = clean(b.at, 40) || now, dayAt = day(at), patch = {}, ev = { type: action, from: c.status, to: MOVES[action].to, by: by, at: now, method: method || 'manual', note: clean(b.note, 500) };
+  if (method === 'customer' && clean(b.at, 40)) plausible(c, action, dayAt, now);
   patch['custody.status'] = MOVES[action].to; patch['custody.custodian'] = CUSTODIAN[MOVES[action].to]; patch['custody.updatedAt'] = now; patch['custody.updatedBy'] = by;
   if (action === 'ship') { patch['custody.shippedAt'] = dayAt; if (b.legId) { patch['custody.legId'] = clean(b.legId, 120); ev.legId = clean(b.legId, 120); } }
   if (action === 'deliver') { patch['custody.deliveredAt'] = dayAt; }
@@ -109,6 +125,7 @@ function apply(unit, action, body, by, now, method) {
 function destination(unit, body, by, now, method) {
   var c = custodyOf(unit), b = body || {};
   if (!unit || !unit.shipUnit) throw fail(400, 'Only a shipping unit is tracked past the plant');
+  if (unit.inventoryStatus === 'void') throw fail(409, 'That serial was voided at registration (a typo the plant corrected); use the real serial');
   if (c.state === 'scrapped') throw fail(409, 'A scrapped unit is not sent anywhere');
   if (['', 'in_transit', 'delivered', 'received'].indexOf(c.status) < 0) throw fail(409, 'The unit is already ' + label(c.status) + '; change its site through assign');
   var clear = !b.siteId;
@@ -299,7 +316,7 @@ var COLUMNS = {
   notes: ['notes', 'note', 'comment', 'comments']
 };
 var TEMPLATE_HEADERS = ['serial_number', 'site_id', 'site_name', 'address', 'city', 'state', 'zip', 'end_customer', 'position', 'installer', 'received_date', 'install_date', 'commission_date', 'condition', 'utility', 'meter_number', 'interconnection_point', 'notes'];
-function csvTemplate() { return TEMPLATE_HEADERS.join(',') + '\n' + ['CC418-26-44190', '', 'Bakersfield yard', '1200 Depot Rd', 'Bakersfield', 'CA', '93307', 'InCharge Energy', 'Pad 2', 'Riverside Electric', '2026-11-20', '2026-11-28', '2026-12-04', 'accepted', 'PG&E', '1002233', 'POI-7 480V', ''].join(',') + '\n'; }
+function csvTemplate() { return TEMPLATE_HEADERS.join(',') + '\n' + ['CC418-26-44190', '', 'Bakersfield yard', '1200 Depot Rd', 'Bakersfield', 'CA', '93307', 'Harbor Charging', 'Pad 2', 'Riverside Electric', '2026-11-20', '2026-11-28', '2026-12-04', 'accepted', 'PG&E', '1002233', 'POI-7 480V', ''].join(',') + '\n'; }
 /* RFC-4180 enough: quoted fields, doubled quotes, CRLF; a tab-separated
    paste from a sheet is accepted too. csvRows keeps the line each row
    started on; `sep` is chosen by the caller when it knows better (a site
@@ -747,6 +764,7 @@ function placeSites(recs, have, customerId) {
 function plannable(unit) {
   var c = custodyOf(unit);
   if (!unit || !unit.shipUnit) return { ok: false, why: 'component', say: 'A component travels with its assembly' };
+  if (unit.inventoryStatus === 'void') return { ok: false, why: 'void', say: 'Voided at registration' };
   if (c.state === 'scrapped') return { ok: false, why: 'scrapped', say: 'Scrapped' };
   if (c.state === 'lost') return { ok: false, why: 'lost', say: 'Marked lost' };
   if (c.siteId) return { ok: false, why: 'bound', say: label(c.status).charAt(0).toUpperCase() + label(c.status).slice(1) + ' at ' + (c.siteName || c.siteId) };

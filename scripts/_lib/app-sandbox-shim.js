@@ -34,8 +34,13 @@
   /* v2: the sample grew a CRM, documents, a pay link and the design tool's
      prices; a phone that kept the v1 sample starts over on the new one.
      v3: the sample order carries the two units still on the line (what a
-     site list is spread over); a phone that kept v2 starts over */
-  var KEY = 'omega_sandbox_v3', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
+     site list is spread over); a phone that kept v2 starts over.
+     v4: the plant runs the full routing on the sample's own units (the
+     bench moves them), the workspace has its people (Team) and the office
+     prices and accepts what it bills itself; a phone that kept v3 starts over.
+     v5: the sample carries the freight plan's order (56 cabinets, 16
+     sites, a ship-from); a phone that kept v4 starts over */
+  var KEY = 'omega_sandbox_v5', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function seedIfMissing(k, v) { try { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -61,6 +66,8 @@
   auth.isSignInWithEmailLink = function () { return false; };
   auth.signInWithEmailLink = function (email) { return become(email); };
   auth.signInWithEmailAndPassword = function (email) { return become(email); };
+  /* "First time here? Create a password": any email, signed in at once (no confirmation email in a sandbox) */
+  auth.createUserWithEmailAndPassword = function (email) { return become(email).then(function (u) { return { user: u }; }); };
   auth.sendPasswordResetEmail = function () { return Promise.resolve(); };
   function GoogleAuthProvider() {}
   var fb = { apps: [1], initializeApp: function () {}, auth: function () { return auth; } };
@@ -70,7 +77,7 @@
   /* ── /api/, answered on the device ───────────────────────────────────── */
   function who() { return user ? user.email : ''; }
   function get(path, q) {
-    if (path === '/api/logic-plant') return V.plantJson(q);
+    if (path === '/api/logic-plant') return V.plantJson(q, who());
     if (path === '/api/logic-materials') return /workOrder=/.test(q) ? V.soloJson() : V.materialsJson();
     if (path === '/api/logic-catalog') return V.catalogJson();
     if (path === '/api/logic-office') return V.officeJson();
@@ -81,7 +88,8 @@
     if (path === '/api/my-orders') return V.myOrdersJson(who());
     if (path === '/api/my-sites') return V.mySitesJson();
     if (path === '/api/logic-custody') return V.custodyJson(q);
-    if (path === '/api/logic-logistics') return V.logisticsJson();
+    /* the ledger, or one order's freight plan (?freight=<orderId>) */
+    if (path === '/api/logic-logistics') return /(^|&)freight=/.test(q) ? V.freightJson(q) : V.logisticsJson();
     if (path === '/api/customer-design') return V.designJson();
     if (path === '/api/crm') return V.crmJson(q);
     if (path === '/api/my-files') return V.myFilesJson(q);
@@ -89,6 +97,7 @@
     if (path === '/api/customer-portfolio') return V.portfolioJson();
     if (path === '/api/app-manifest') return V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT);
     if (path === '/api/logic-workspaces') return V.workspacesJson(who());
+    if (path === '/api/logic-team') return V.teamJson(who());
     /* whether Google takes an installed app through this host: yes here,
        unless a check says otherwise (OMEGA_SANDBOX_GOOGLE = false) */
     if (path === '/api/auth-check') return { google: global.OMEGA_SANDBOX_GOOGLE !== false };
@@ -135,11 +144,21 @@
   global.confirm = function (msg) { toast(String(msg || '').split('?')[0] + ' — done. (The sandbox skips the confirmation.)'); return true; };
   var CSS = '.sb-strip{background:#6D5BD0;color:#fff;font:600 12px/1.3 system-ui,sans-serif;padding:6px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:relative;z-index:6}.sb-strip b{letter-spacing:.1em;text-transform:uppercase;font-size:10.5px}.sb-strip span{opacity:.85;font-weight:500;flex:1 1 240px;min-width:0;line-height:1.35}.sb-strip a,.sb-strip button{color:#fff;background:rgba(255,255,255,.14);border:0;border-radius:6px;padding:4px 8px;font:600 12px system-ui,sans-serif;text-decoration:none;cursor:pointer}.sb-strip a[aria-current]{background:rgba(255,255,255,.34)}.sb-toast{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0));background:#0B2733;color:#fff;padding:12px 14px;border-radius:12px;font:500 14px system-ui,sans-serif;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.25)}';
   function toast(t) { var el = document.createElement('div'); el.className = 'sb-toast'; el.textContent = t; document.body.appendChild(el); setTimeout(function () { el.remove(); }, 3200); }
+  /* THE CUSTOMER SANDBOX IS SENT TO A SUPPLIER'S CUSTOMER: the kit's
+     customer message links it (api/_lib/kit.js). The plant, the office (the
+     margin sheet, "ClearSky approves the customer price", every other
+     company on the book) and the bench are the SUPPLIER'S side, so the
+     customer's strip links none of them (DOC-M7, CUST-12, CUST-13), and a
+     link into them that a page carries is answered like any desktop page:
+     not part of this sample. The other three still link each other and the
+     customer app — their people are the supplier's. */
+  var SUPPLIER_SIDE = ['plant', 'office', 'bench'];
+  function stripLinks() { return (APP === 'customer' ? [] : [['plant', 'Plant'], ['office', 'Office'], ['customer', 'Customer'], ['bench', 'Bench']]).filter(function (x) { return !!LINKS[x[0]]; }); }
   function strip() {
     var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
     var d = document.createElement('div'); d.className = 'sb-strip';
-    d.innerHTML = '<b>Sandbox</b><span>Nothing here is real — a sample plant, on this phone.</span>'
-      + [['plant', 'Plant'], ['office', 'Office'], ['customer', 'Customer'], ['bench', 'Bench']].map(function (x) { return LINKS[x[0]] ? '<a href="' + LINKS[x[0]] + '"' + (APP === x[0] ? ' aria-current="page"' : '') + '>' + x[1] + '</a>' : ''; }).join('')
+    d.innerHTML = '<b>Sandbox</b><span>Nothing here is real — ' + (APP === 'customer' ? 'a sample company account' : 'a sample plant') + ', on this phone.</span>'
+      + stripLinks().map(function (x) { return '<a href="' + LINKS[x[0]] + '"' + (APP === x[0] ? ' aria-current="page"' : '') + '>' + x[1] + '</a>'; }).join('')
       + '<button type="button" id="sb-reset">Reset</button>';
     document.body.insertBefore(d, document.body.firstChild);
     document.getElementById('sb-reset').onclick = function () { if (confirm('Start the sample over? Everything you did in this sandbox on this phone is forgotten.')) reset(); };
@@ -148,6 +167,7 @@
   document.addEventListener('click', function (e) {
     var a = e.target && e.target.closest ? e.target.closest('a[href]') : null; if (!a) return;
     var href = a.getAttribute('href') || '';
+    if (APP === 'customer' && SUPPLIER_SIDE.some(function (k) { return LINKS[k] && href.indexOf(LINKS[k]) === 0 && /^(\.html)?([?#\/]|$)/.test(href.slice(LINKS[k].length)); })) { e.preventDefault(); toast('That is your supplier’s side — not part of this sample.'); return; }
     if (/^(https?:)?\/\//.test(href) || href.charAt(0) !== '/' || href.indexOf('/app-sandbox/') === 0) return;
     e.preventDefault(); toast('That opens a desktop page in the real product — not part of this sandbox.');
   }, true);

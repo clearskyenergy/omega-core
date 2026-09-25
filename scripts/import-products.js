@@ -78,11 +78,27 @@
    Still no cost basis: a component's buy price is exactly the number that
    turns up on a supplier's sheet, and the FORBIDDEN list above applies to
    both files.
+
+   ─────────────────────────────────────────────────────────────────────────────
+   SHIPPING FIELDS  (product rows only — what the freight plan estimates from)
+   ─────────────────────────────────────────────────────────────────────────────
+   weightLb (alias weight, shippingWeight) with weightUnits lb | kg (default
+   lb; kg × 2.20462) · heightFt (alias height) in the SAME dimUnits as the
+   footprint, with the same plausibility band · freightClass (alias class,
+   nmfcClass) — an NMFC class · stackable (yes/no; BLANK IS NOT "NO") ·
+   handlingNote (alias handling, specialHandling). Each converted value goes
+   through api/_lib/shipping-fields.js, the one validator the catalog
+   endpoint also uses; a bad one makes the row a problem and it is not
+   imported. Blank values are reported, never guessed — the freight plan
+   then says "not on file". On a component or service row they are ignored,
+   with a warning. None of them is ever published (api/embed-config.js).
    ═══════════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var fs = require('fs'), path = require('path');
 var engine = require(path.join(__dirname, '..', 'api', '_lib', 'bess-engine.js'));
 var materials = require(path.join(__dirname, '..', 'api', '_lib', 'materials.js'));
+/* no require() inside, so this runs without firebase-admin installed */
+var SF = require(path.join(__dirname, '..', 'api', '_lib', 'shipping-fields.js'));
 
 function arg(name, dflt) {
   var i = process.argv.indexOf('--' + name);
@@ -190,6 +206,46 @@ function dims(r, sku) {
   return { widthFt: w, depthFt: d };
 }
 
+/* ── Shipping fields (products only) ────────────────────────────────────
+   The column names and the unit conversion live here and nowhere else;
+   the converted value is judged by api/_lib/shipping-fields.js. Returns
+   the fields present, or false (and a PROBLEM) when one is bad. */
+var TO_LB = { lb: 1, lbs: 1, kg: 2.20462, kgs: 2.20462 };
+function cell(r, names) { for (var i = 0; i < names.length; i++) { var v = r[names[i]]; if (v != null && String(v).trim() !== '') return String(v).trim(); } return ''; }
+function carriesShipping(r) { return !!cell(r, ['weightlb', 'weight', 'shippingweight', 'heightft', 'height', 'freightclass', 'class', 'nmfcclass', 'stackable', 'handlingnote', 'handling', 'specialhandling']); }
+function shipping(r, sku) {
+  var out = {};
+  function judge(key, v) { try { var x = SF.value(key, v); if (x !== null) out[key] = x; return true; } catch (e) { problems.push(sku + ': ' + e.message); return false; } }
+  var w = cell(r, ['weightlb', 'weight', 'shippingweight']), wu = norm(r.weightunits || '') || 'lb';
+  if (!TO_LB[wu]) { problems.push(sku + ': weightUnits "' + r.weightunits + '" is not lb or kg'); return false; }
+  if (w) {
+    var n = num(w);
+    if (n == null) { problems.push(sku + ': weight "' + w + '" is not a number'); return false; }
+    if (!judge('weightLb', +(n * TO_LB[wu]).toFixed(2))) return false;
+  }
+  var u = norm(r.dimunits || r.units || 'ft'), k = TO_FT[u];
+  var hRaw = r.heightft != null && u === 'ft' ? r.heightft : (r.height != null ? r.height : r.heightft);
+  if (k && String(hRaw == null ? '' : hRaw).trim() !== '') {
+    var h = num(hRaw);
+    if (h == null) { problems.push(sku + ': height "' + hRaw + '" is not a number'); return false; }
+    h = +(h * k).toFixed(2);
+    if (h < MIN_FT || h > MAX_FT) { problems.push(sku + ': height works out at ' + h + ' ft. That is not a battery — check dimUnits (datasheets print mm).'); return false; }
+    if (!judge('heightFt', h)) return false;
+  }
+  var fc = cell(r, ['freightclass', 'class', 'nmfcclass']);
+  if (fc && !judge('freightClass', fc)) return false;
+  /* the raw cell to the one validator, NOT through bool(): bool() reads any
+     text it does not know as "no", so "TBD" or "N/A" would become "Do not
+     stack" on a carrier's sheet. SF.value takes yes/y/1/true and
+     no/n/0/false and refuses anything else as a row problem. */
+  var st = String(r.stackable == null ? '' : r.stackable).trim();
+  if (st && !judge('stackable', st)) return false;
+  if (!st && Object.prototype.hasOwnProperty.call(r, 'stackable')) warnings.push(sku + ': stackable is blank — the freight plan will say "not on file" rather than assume yes or no.');
+  var hn = cell(r, ['handlingnote', 'handling', 'specialhandling']);
+  if (hn && !judge('handlingNote', hn)) return false;
+  return out;
+}
+
 function toProduct(r, i) {
   var sku = String(r.sku || r.model || '').trim();
   if (!sku) { problems.push('row ' + (i + 2) + ': no sku'); return null; }
@@ -216,6 +272,7 @@ function toProduct(r, i) {
     if (String(r.notes || '').trim()) c.notes = String(r.notes).trim();
     if (c.leadTimeDays == null) warnings.push(sku + ': component has no leadTimeDays — the plan cannot compute an order-by date for it.');
     c._hasIntegrationAnswer = true;    /* not a question for a component */
+    if (carriesShipping(r)) warnings.push(sku + ': shipping fields (weight, height, freight class, stackable, handling) are ignored on a component row — a component travels inside its product.');
     return c;
   }
 
@@ -255,7 +312,13 @@ function toProduct(r, i) {
 
   var pcs = bool(r.integratespcs || r.pcs), xf = bool(r.integratesxfmr || r.xfmr),
       dc = bool(r.integratesdisco || r.disco);
-  if (kind === 'service') { p.integrates = { pcs: false, xfmr: false, disco: false }; p._hasIntegrationAnswer = true; return p; }
+  if (kind === 'service') {
+    if (carriesShipping(r)) warnings.push(sku + ': shipping fields (weight, height, freight class, stackable, handling) are ignored on a service row.');
+    p.integrates = { pcs: false, xfmr: false, disco: false }; p._hasIntegrationAnswer = true; return p;
+  }
+  var sh = shipping(r, sku);
+  if (sh === false) return null;
+  Object.keys(sh).forEach(function (k) { p[k] = sh[k]; });
   if (pcs === null && xf === null && dc === null) {
     warnings.push(sku + ': no integration flags. The guided build will assume the cabinet '
       + 'integrates NOTHING and draw an external PCS, transformer and disconnect.');
@@ -327,6 +390,10 @@ console.log('  ' + String(drawable).padStart(3) + '  drawable on a site study an
 console.log('  ' + String(oneline).padStart(3) + '  with a stated integration answer'
   + (oneline < orderable ? '   ← ' + (orderable - oneline) + ' will draw an external PCS' : ''));
 console.log('  ' + String(priced).padStart(3) + '  showing a public list price (the rest say "price on request")');
+var physical = products.filter(function (p) { return p.kind === 'product'; }).length;
+var weighed = products.filter(function (p) { return p.kind === 'product' && p.weightLb != null; }).length;
+console.log('  ' + String(weighed).padStart(3) + '  with a shipping weight'
+  + (weighed < physical ? '   ← ' + (physical - weighed) + ' missing (the freight plan will say "not on file")' : ''));
 
 if (warnings.length) {
   console.log('\n  WARNINGS — these import, but something will not work as expected:');

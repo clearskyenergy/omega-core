@@ -93,7 +93,7 @@ ok('  and not twice', r.status === 409, r);
 r = F.post(s, '/api/po-intake', '', { action: 'submit-many', pos: [{ number: 'INC-1', lines: [{ sku: 'CC-C215', qty: 2 }], destination: { city: 'Fresno' } }, { number: 'RCC-2211', lines: [{ sku: 'CC-C215', qty: 1 }], destination: {} }, { number: 'INC-2', lines: [{ sku: 'CC-MOD-52', qty: 1 }], destination: {} }] }, 'ops@riverside.example');
 ok('a customer\'s stack of POs: one entered, the existing number and the component named', r.created.length === 1 && /already exists/.test(r.skipped[0].error) && /published/.test(r.skipped[1].error), r);
 ok('  and the office sees it as an order to price for that company', V.officeJson().totals.byStage.quote === 2 && V.officeJson().orders[0].customer.company === 'Riverside Cold Chain' && V.officeJson().orders[0].customerId === 'company_riverside' && V.intakeJson('', 'ops@riverside.example').orders[0].poNumber === 'INC-1');
-r = F.post(s, '/api/po-intake', '', { action: 'submit-many', office: true, customerId: 'company_incharge', email: 'nobody@incharge.example', pos: [{ number: 'INC-3', lines: [{ sku: 'CC-C215', qty: 1 }], destination: {} }] }, 'pm@cleancell.us');
+r = F.post(s, '/api/po-intake', '', { action: 'submit-many', office: true, customerId: 'company_harbor', email: 'nobody@harbor.example', pos: [{ number: 'INC-3', lines: [{ sku: 'CC-C215', qty: 1 }], destination: {} }] }, 'pm@cleancell.us');
 ok('the office must name a billing contact on the company', r.status === 400, r);
 r = F.post(s, '/api/my-orders', 'org=cleancell.us', { orderNo: 'CC-26-4419', kind: 'warranty', message: 'Cabinet two shows a BMS fault.' }, 'ops@riverside.example');
 ok('a customer asks on an order and the office sees it open', r.ok && V.officeJson().orders.filter(function (o) { return o.id === 'o1'; })[0].requests.filter(function (q) { return q.status === 'open'; }).length === 1);
@@ -102,7 +102,17 @@ ok('a hold placed from the phone shows on the unit and the board', r.ok && V.pla
 r = F.post(s, '/api/buyers', '', { action: 'terms', email: 'ops@riverside.example', terms: { depositPct: 25, dueDays: 15 } });
 ok('terms set in the office reach the customer\'s account', r.ok && V.accountJson().terms.depositPct === 25 && V.buyersJson('email=ops%40riverside.example').terms.dueDays === 15);
 var bench = V.benchJson({ action: 'issue', code: 'CC-MOD-52' });
-ok('the bench issues a part off the sample bill', /Issued 2 ea/.test(bench.say) && bench.work.steps[0].done);
+ok('the bench issues a part off the sample bill', /Issued 8 ea/.test(bench.say) && bench.work.steps[0].done);
+/* UX-12: ONE cabinet bill. What the bench issues is the catalogue's own
+   stationed lines, at the catalogue's quantity, and none of it is also on
+   the Stock tab's "parts no bench issues" list for the same product */
+(function () {
+  var cab = V.CATALOG.filter(function (p) { return p.sku === 'CC-C215'; })[0];
+  var shelf = (V.materialsJson().unstationed.filter(function (g) { return g.sku === 'CC-C215'; })[0] || { lines: [] }).lines.map(function (l) { return l.sku; });
+  var atBench = []; bench.work.steps.forEach(function (st) { (st.parts || []).forEach(function (x) { atBench.push(x.sku + ':' + x.qty); }); });
+  var stationed = cab.bom.filter(function (l) { return l.station === 'rack'; }).map(function (l) { return l.sku + ':' + l.qty; });
+  ok('the bench and the Stock tab read one cabinet bill: the bench issues the catalogue\'s rack lines, and the shelf list names only what no bench issues', atBench.join() === stationed.join() && !atBench.some(function (x) { return shelf.indexOf(x.split(':')[0]) >= 0; }) && shelf.join() === 'CC-BMS-M,CC-ENC-1B', { atBench: atBench, stationed: stationed, shelf: shelf });
+})();
 var size = V.designPost({ action: 'size', module: 'bess', kw: 400, hours: 2, sku: 'CC-C215' });
 ok('quick size runs the catalog selection', size.qty === 4 && size.selectedKwh === 860, size);
 ok('state survives JSON: what localStorage keeps is enough to rebuild every view', F.views(JSON.parse(JSON.stringify(s))).officeJson().orders.length === 5);

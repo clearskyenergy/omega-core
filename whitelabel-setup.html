@@ -21,7 +21,8 @@
      the Firestore rules ALREADY grant a ClearSky staff browser:
 
        omega_orgs/{org}                    staff write (branding + whiteLabel)
-       omega_orgs/{org}/billing/current    staff write (tier + addons)
+       omega_orgs/{org}/billing/current    staff write (tier + addons, and only
+                                           when the tenant file carries them)
        omega_orgs/{org}/storefront/config  allow write: if isAdmin()
        embed_keys/{key}                    allow read, write: if isAdmin()
 
@@ -350,6 +351,34 @@ function pick(src, keys) {
   return out;
 }
 
+/* billing/current from the tenant file: only the fields it actually carries,
+   or null for no write at all. Tier and addons only — nothing that prices the
+   account (amountDue, paymentLink, stripeCustomerId and lastPaidAt are a
+   commercial record and this page has no business touching them).
+
+   A served tenant.json need not carry billing, and Clean Cell's no longer
+   does: tenants/<slug>/ is public, so tier, add-ons and dates moved to
+   billing.json, which .vercelignore keeps off the site and only
+   scripts/seed-omega-orgs.js reads (LIVE-1). This used to default a missing
+   tier to 'standard' and missing addons to [] — under merge:true that would
+   REPRICE a paying account the moment its file stopped carrying them. So a
+   file with no billing plans no billing write; tier and add-ons are then set
+   from the master console. Pure, so scripts/tests/tdiscreet.js runs it. */
+function billingFromSeed(seed) {
+  seed = seed || {};
+  var b = {}, any = false;
+  if (seed.tier) { b.tier = seed.tier; any = true; }
+  if (Array.isArray(seed.addons)) { b.addons = seed.addons; any = true; }
+  if (seed.trialEndsAt) { b.trialEndsAt = seed.trialEndsAt; any = true; }
+  if (seed.subscriptionDue) { b.subscriptionDue = seed.subscriptionDue; any = true; }
+  /* toolAccess is the PRODUCT: present means "exactly these tools, whatever
+     the tier". The white-labelled design tool is ['editor','gridatlas'].
+     Only written when the tenant file names something — an empty array means
+     NO tools, and writing one by accident would lock the account out. */
+  if (Array.isArray(seed.toolAccess) && seed.toolAccess.length) { b.toolAccess = seed.toolAccess; any = true; }
+  return any ? b : null;
+}
+
 function buildPlan() {
   var org = String($('org').value || '').trim().toLowerCase();
   var list = activeProducts() || [];
@@ -389,17 +418,7 @@ function buildPlan() {
   };
   if (SEED.whiteLabel) orgDoc.whiteLabel = SEED.whiteLabel;
 
-  /* tier and addons only. Nothing that prices the account — amountDue,
-     paymentLink, stripeCustomerId and lastPaidAt are a commercial record and
-     this page has no business touching them. */
-  var billing = { tier: SEED.tier || 'standard', addons: SEED.addons || [] };
-  if (SEED.trialEndsAt) billing.trialEndsAt = SEED.trialEndsAt;
-  if (SEED.subscriptionDue) billing.subscriptionDue = SEED.subscriptionDue;
-  /* toolAccess is the PRODUCT: present means "exactly these tools, whatever
-     the tier". The white-labelled design tool is ['editor','gridatlas'].
-     Only written when the tenant file names something — an empty array means
-     NO tools, and writing one by accident would lock the account out. */
-  if (Array.isArray(SEED.toolAccess) && SEED.toolAccess.length) billing.toolAccess = SEED.toolAccess;
+  var billing = billingFromSeed(SEED);
 
   var sf = pick(sfSeed, SF_KEYS);
   sf.products = list;
@@ -435,14 +454,21 @@ function renderPlan() {
     '<table><thead><tr><th style="width:42%">Document</th><th>What happens</th></tr></thead><tbody>'
     + '<tr><td class="mono">omega_orgs/' + esc(org) + '</td><td>' + verdict(CURRENT.org, PLAN.orgDoc) + '</td></tr>'
     + '<tr><td class="mono">omega_orgs/' + esc(org) + '/billing/current</td><td>'
-      + verdict(CURRENT.billing, PLAN.billing)
-      + '<div class="hint">tier <b>' + esc(PLAN.billing.tier) + '</b> · addons: '
-      + esc((PLAN.billing.addons || []).join(', ') || 'none')
+      + (PLAN.billing ? verdict(CURRENT.billing, PLAN.billing)
+      + '<div class="hint">' + (PLAN.billing.tier ? 'tier <b>' + esc(PLAN.billing.tier) + '</b>' : 'tier unchanged')
+      + (PLAN.billing.addons ? ' · addons: ' + esc(PLAN.billing.addons.join(', ') || 'none') : ' · addons unchanged')
       + (PLAN.billing.toolAccess
           ? '<br><b>tools: ' + esc(PLAN.billing.toolAccess.join(', ')) + ' — and nothing else</b>, '
             + 'whatever the tier. This is the product.'
           : '<br>tools: whatever the plan includes (no allowlist)')
-      + '</div></td></tr>'
+      + '</div>'
+      : '<span class="pill same">not written</span>'
+      + '<div class="hint">The tenant file carries no billing (a tenant folder is public, so tier, add-ons and dates '
+      + 'are kept out of it). Set them from the master console.'
+      + (CURRENT.billing ? ' Now: tier <b>' + esc(CURRENT.billing.tier || '—') + '</b> · '
+          + esc((CURRENT.billing.addons || []).length) + ' add-on(s).' : ' There is no billing record yet.')
+      + '</div>')
+      + '</td></tr>'
     + '<tr><td class="mono">omega_orgs/' + esc(org) + '/storefront/config</td><td>'
       + verdict(CURRENT.storefront, PLAN.storefront)
       + '<div class="hint">' + PLAN.storefront.products.length + ' product(s). Cost basis untouched'
@@ -472,17 +498,16 @@ function publish() {
   orgDoc.updatedAt = FV.serverTimestamp();
   if (!CURRENT.org) orgDoc.createdAt = FV.serverTimestamp();
 
-  var billing = JSON.parse(JSON.stringify(PLAN.billing));
-  billing.updatedAt = FV.serverTimestamp();
+  /* no billing in the tenant file, no billing write (billingFromSeed) */
+  var billing = PLAN.billing ? JSON.parse(JSON.stringify(PLAN.billing)) : null;
+  if (billing) billing.updatedAt = FV.serverTimestamp();
 
   var sf = JSON.parse(JSON.stringify(PLAN.storefront));
   sf.updatedAt = FV.serverTimestamp();
 
-  Promise.all([
-    ref.set(orgDoc, { merge: true }),
-    ref.collection('billing').doc('current').set(billing, { merge: true }),
-    ref.collection('storefront').doc('config').set(sf, { merge: true })
-  ]).then(function () {
+  var writes = [ref.set(orgDoc, { merge: true }), ref.collection('storefront').doc('config').set(sf, { merge: true })];
+  if (billing) writes.push(ref.collection('billing').doc('current').set(billing, { merge: true }));
+  Promise.all(writes).then(function () {
     return ensureKey(org);
   }).then(function (key) {
     msg('m3', 'Published.', 'ok');

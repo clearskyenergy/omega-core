@@ -1,12 +1,10 @@
 {
   "orgId": "cleancell.us",
-  "name": "Cleancell",
+  "name": "Clean Cell",
   "domains": [
     "cleancell.clearskyomega.com"
   ],
   "vertical": "oem",
-  "tier": "deluxe",
-  "trialEndsAt": "2026-09-30T12:00:00.000Z",
   "logoUrl": "",
   "shell": "default",
   "status": "active",
@@ -16,18 +14,6 @@
     "batterysizer"
   ],
   "ownerEmail": "robert.bucher@cleancell.us",
-  "_note": "Added 2026-09-17 for the live Amperage Capital deal (56 units). orgId is cleancell.us — the domain of robert.bucher@cleancell.us, which is ALSO their website (verified 2026-09-17: resolves, HTTP 200, MX smtp.google.com, so it is a real Workspace domain and passes the work-email gate in api/_lib/public-domains.js). ⚠ THE LIVE RECORD IS UNDER THE WRONG KEY AND THIS FILE IS THE CORRECTION. Thomas created omega_orgs/cleancellusa.com by hand on 2026-09-16 with a paid tier and addons already set. cleancellusa.com does NOT EXIST — NXDOMAIN, checked 2026-09-17. Because orgId IS the email domain, that account is reachable only by someone mailing from @cleancellusa.com, so nobody at Clean Cell can sign in to it and none of what was bought is reachable. tier/addons/dates here are copied from that record rather than invented, so a seed run reproduces what he decided instead of repricing a paying account to a trial. The invoice amount is deliberately NOT in this file: plan() in scripts/seed-omega-orgs.js does not read it, and a contract value does not belong in the repo. The migration itself (create cleancell.us, repoint tenant_public/cleancell.clearskyomega.com, FLAG the old record without deleting it — CLAUDE.md, never delete in a migration) is a Firestore write and is NOT done by this file. NAME — three spellings are in play. Thomas's record says 'Cleancell', which is what this file now matches so a seed does not rename his account; cleancell.us calls itself 'Clean Cell US'; clearsky-cost-estimator.html carries a battery brand { key: 'cleancells', name: 'Clean Cells' }. That estimator entry is a BRAND in a dropdown, not a tenant, and was deliberately left alone — renaming a brand key silently rewrites saved estimates. RECEIVER VS ORIGINATOR. receivesFullBom is false because Clean Cell is the MIRROR of FENECON: Fenecon is an OEM that RECEIVES quote requests, Clean Cell is an originator that SENDS an opportunity out. Read that carefully — false is also the default for every tenant, so it does not positively say 'originator', and there is no field that does: plan() in scripts/seed-omega-orgs.js copies a fixed key list, so an invented key never reaches Firestore. Originator identity is recorded PER DEAL by omega-originator.js as originatorOrgId. requiredTools pins the financing marketplace, which is this deal's route to Amperage. HOSTNAME: cleancell.clearskyomega.com does not resolve — there is no wildcard DNS for *.clearskyomega.com, and budderfly./eastwestenergy./walters. are the same. Until it is attached in Vercel they sign in on silmarillion.clearskyomega.com, an OPEN_HOST that resolves the workspace from the email domain. BATTERY SIZER: pinned in requiredTools 2026-09-20. Clean Cell sells battery systems, so the sizer is the tool that generates the opportunity this workspace exists to route; leaving it to the tier meant it could be removed from the dashboard by any member. The tier (deluxe) and the 'engineering' addon already satisfy the gate in api/bess-size.js and api/bess-design.js, so pinning it changes what is VISIBLE, not what is PERMITTED — the gate is still the serverless function, never the dashboard. Note requiredTools is copied into tenant_public by scripts/seed-omega-orgs.js, so this only takes effect on the next seed run; it is not live until then, and neither is the orgId correction described above.",
-  "addons": [
-    "compute",
-    "parcelscreen",
-    "engineering",
-    "schematics",
-    "exports",
-    "permitting",
-    "whitelabel",
-    "omega-logic"
-  ],
-  "subscriptionDue": "09/30/2026",
   "whiteLabel": {
     "enabled": true,
     "platformName": "Clean Cell Power Platform",
@@ -71,56 +57,23 @@
     "aisleFt": 20,
     "rowsPerBlock": 2,
     "products": [],
-    "_productShape": {
-      "_comment": "The shape products[] takes. PUBLISHED (reaches the public storefront via api/embed-config.js): sku, name, blurb, imageUrl, kw, kwh, widthFt, depthFt, chemistry, warrantyYears, leadTimeDays, priceMode, listPrice. ENGINEERING ONLY (read by the guided build through omega-bess-products.js, never published): chem, usableKwh, durationH, dcv, inverter, inverterKva, transformer, disconnect, integrates, notes. This key is documentation and is ignored by every reader.",
-      "example": {
-        "sku": "CC-2000",
-        "name": "CleanCell 2000 container",
-        "kw": 500,
-        "kwh": 2000,
-        "widthFt": 20,
-        "depthFt": 8,
-        "priceMode": "quote",
-        "chemistry": "LFP",
-        "warrantyYears": 10,
-        "leadTimeDays": 180,
-        "usableKwh": 1900,
-        "durationH": 4,
-        "dcv": "1331V",
-        "inverter": "Integrated PCS",
-        "inverterKva": 500,
-        "transformer": "",
-        "disconnect": "800A 480V",
-        "integrates": {
-          "pcs": true,
-          "xfmr": false,
-          "disco": true
-        },
-        "notes": "Replace every value here with Clean Cell's own submittal."
-      }
-    },
     "designerPitch": true
   },
-  "_noteWhiteLabel": "WHITE LABEL, added 2026-09-18. Clean Cell sells on cleancell.us; ClearSky fulfils. See docs/WHITE-LABEL.md for the whole design. FIVE THINGS ARE NOT DONE BY THIS FILE and each one is a decision somebody has to make, not a field to fill in. (1) storefront.products IS EMPTY HERE ON PURPOSE, AND THE CATALOGUE LIVES NEXT DOOR. Nothing is orderable until real SKUs are published into omega_orgs/cleancell.us/storefront/config.products, and inventing them in THIS file would push fictional equipment through seed-omega-orgs.js on every run, silently, for as long as nobody noticed. Added 2026-09-19: tenants/cleancell/products.csv (human-editable) and products.json (the importer's --out artifact, which is what whitelabel-setup.html and `npm run demo` actually read). Those four rows are PLACEHOLDER capacity slots on the standard C&I ladder - a 215 kWh cabinet, a 418, a 1.25 MWh skid, a 5 MWh container - and every one says so in its notes field, which is the string the setup page's warning and scripts/test-wl-preview.js both key off. They exist so a demo has something to size against and a lot to draw on. They are NOT Clean Cell's datasheet. Replace them the moment a submittal arrives: node scripts/import-products.js --org cleancell.us --file their.csv --out tenants/cleancell/products.json. The separation is the point - seeding stays truthful, demoing stays possible, and the two cannot be confused because they are different files. Note clearsky-cost-estimator.html carries a battery BRAND { key:'cleancells', name:'Clean Cells' } - that is a dropdown entry, not a SKU, and it has no price. With products empty the storefront still works: it sizes, it takes the enquiry, and it says we will come back with options, which is true. (2) THE COST BASIS (storefront.capexPerKwh / capexPerKw) IS DELIBERATELY ABSENT. It is Clean Cell's negotiated buy price and this file is committed source - seed-omega-orgs.js THROWS if either key appears here. Set them directly in Firestore. Until then the sizer sweeps on the engine defaults in api/_lib/bess-engine.js, which are generic and will mis-rank the recommendation for their actual equipment. (3) showEconomics IS FALSE. Turning it on publishes an annual saving off the customer's own tariff, and a payback only where a product carries a published list price - never off the cost basis (api/embed-size.js explains why at length). That is a marketing call. (4) NO EMBED KEY EXISTS YET. Two sanctioned ways to fix that. With the Admin credential: scripts/seed-embed-key.js --org cleancell.us --origins https://cleancell.us,.cleancell.us --apply. Without it: sign in as ClearSky staff and open /whitelabel-setup.html?org=cleancell.us, which mints one from crypto.getRandomValues using the origins in whiteLabel.embed.origins above, records mintedBy, and reuses an existing active key rather than minting a second. The script stays canonical for rotating, re-scoping and disabling. (5) HOSTNAME. cleancell.clearskyomega.com still does not resolve - there is no wildcard DNS for *.clearskyomega.com - so the loader snippet on cleancell.us would load nothing. Either attach that hostname in Vercel or point the snippet at silmarillion.clearskyomega.com, which does resolve. ATTRIBUTION: 'powered-by' on the signed-in chrome (their staff know whose platform it is and the contract has not said otherwise), 'none' on the public storefront (their customer is on their website and there is only one company in that conversation). Both are contract terms - change them when the paper says to, not to tidy this file.",
-  "_noteSiteStudy": "SITE STUDY (api/embed-layout.js), added 2026-09-18. The middle of the funnel: address -> parcel -> does this system fit in your yard, drawn to scale. THREE THINGS TO KNOW. (1) IT NEEDS A FOOTPRINT PER PRODUCT. Each entry in products[] must carry widthFt and depthFt or that product is silently not offered a study - api/embed-config.js computes flow.siteStudy from whether ANY product has both. There is no default footprint on purpose: a made-up size drawn to scale on somebody's own lot is the most convincing kind of wrong. So until products[] is populated with real dimensions, the study button never appears. (2) IT COSTS MONEY. The parcel lookup reaches Regrid, which is billed per lookup, and cleancell.us is on the deluxe tier so REGRID_TIERS admits it. Three controls: requireContactForLayout (true here) means the endpoint REFUSES without an enquiry receipt, so every lookup we pay for has already produced a named lead for Clean Cell; dailyParcelCap 40 is a hard per-day stop in a transaction; and api/parcel.js's cache makes the same address free after the first call. Raise the cap once the funnel is measured, not before. (3) THE GEOMETRY ASSUMPTIONS ARE VISIBLE ON THE DRAWING. 15 ft property setback, 5 ft between units, a 20 ft access aisle every 2 rows. These are NOT a code determination for any jurisdiction and are printed on the plan as assumptions. They are conservative by choice: undercounting a yard loses nothing because a real engineer refines it, while overcounting sells a system that cannot be installed. If Clean Cell's installation manual specifies different separations, put THEIR numbers here.",
-  "_noteGuidedBuild": "GUIDED BUILD, 2026-09-19. The BESS Guided Build in editor.html (Build ribbon -> BESS Build, openBessGuidedBuild) places a whole one-line from a configured system: BESS -> PCS -> disconnect -> transformer -> EMS -> switchgear -> meter -> POI, auto-trenched, skipping whatever the cabinet already integrates. cleancell.us is on the deluxe tier so it is already unlocked. THE PROBLEM IT HAD: editor.html ships BESS_CATALOG with 29 products from 7 manufacturers - Gotion (13), Pytes, Canadian Solar, Aspen Woods, CATL, FENECON, Autel - and the manufacturer field defaults to value=\"Gotion\". Clean Cell was in none of them, so their own guided build specced a competitor's container. omega-bess-products.js now merges the org's own products in and leads the dropdown with them. IT READS THE SAME LIST AS THE STOREFRONT: omega_orgs/cleancell.us/storefront/config.products. One catalogue feeds the public storefront, the site-study footprints AND what the editor places, so filling it once is the whole job. THE ENGINEERING FIELDS ARE NOT PUBLISHED: chem, usableKwh, durationH, dcv, inverter, inverterKva, transformer, disconnect, integrates{} and notes are read by the guided build and never leave the signed-in product, because api/embed-config.js builds its public response key by key - scripts/test-bess-products.js asserts each one is absent from that file. INTEGRATES{} IS THE ONE THAT CHANGES THE DRAWING: getWizSteps() SKIPS the PCS, disconnect and transformer steps when the pad already contains them and re-routes the one-line. A container with an internal PCS drawn with an external one is not a cosmetic error, it is a one-line nobody would build. Get integrates{} from Clean Cell's submittal, not from a guess. NOTHING SHIPPED IS REMOVED - the merge is additive and namespaced by org, because a saved project references a catalogue key and re-rendering it as a different battery would be worse than a crowded dropdown. If Clean Cell should not see competitors at all, that is a separate decision and a separate change.",
-  "_noteFunnel": "THE FUNNEL, CORRECTED 2026-09-19. Thomas: \"I don't want them in the editor... I want that to be a place we can eventually sell them... they have to have an account, I don't want people getting into my system... just get a taste, then they can build the BESS and buy it.\" So: THE STOREFRONT IS THE TASTE (size a system, see it on their own lot, order the product) AND THE DESIGNER IS THE NEXT SALE. The storefront no longer links into the editor at all - it describes the designer and takes an enquiry, which lands in the SAME orders queue marked interest:'platform' so Clean Cell and ClearSky work one desk. omega-editor-gate.js is the door: a signed-in user of an ACTIVE tenant, or nobody. That is enough on its own because workspaces are created PENDING and a human approves them, so \"has an account\" already means somebody decided they could have one. THE GATE FAILS OPEN ON A MISSING RECORD, deliberately - firestore.rules' tenantActive() says ABSENT COUNTS AS ACTIVE because every tenant live today has no omega_orgs doc until the seed runs, and a gate that failed closed would lock out every paying customer on the first deploy. Only an explicit pending/suspended/cancelled, or toolOverrides.editor === false, refuses. THE REFUSAL IS THE PITCH: white-labelled, says what the designer does, and offers a way to ask for an account - a stranger who got this far is interested, and \"access denied\" wastes that. THE HAND-OFF LINK STILL WORKS (/editor?k=&sku=&qty=&addr=) for somebody who HAS an account, so a Clean Cell rep can send a pre-configured designer link or ride it on the welcome email; the gate decides, not the link. NOT THE SECURITY BOUNDARY - firestore.rules is, and every project read and write is already scoped by orgId. This gate decides who is SHOWN the product, which is a commercial control. WHAT IS STILL OPEN: whether a Clean Cell-referred customer becomes their own tenant (auto-approved, or pending as today) or a collaborator on Clean Cell's workspace via org_members. That is a commercial decision about who owns the customer relationship and it has not been made.",
-  "_noteBrand": "BRAND, CORRECTED 2026-09-19 FROM THEIR LIVE SITE. accent was #2B5FA8, a blue nobody had verified — cleancell.us sits behind a SiteGround bot wall (/.well-known/sgcaptcha) that refuses curl and a headless browser alike, so it had been a guess. Thomas supplied screenshots of the real homepage and the palette is TEAL, not blue: #19C2D4 for the Cleancell wordmark, the 'We see opportunity.' headline and 'Partner with US'; a coral #F0564F for every call to action (CONTACT, OUR SERVICES); near-black #0E1B24 body text on a white-to-cyan gradient. Rounded cards, generous whitespace, a geometric rounded sans, and a lightning bolt as the hero watermark — the bolt is also the 'll' in the wordmark. accentCta and ink are NEW keys and are read by nothing yet: api/_lib/whitelabel.js's allowlist decides what crosses into world-readable tenant_public, and adding them there is a separate, deliberate change. They are recorded here so the next person does not have to re-derive the palette from a screenshot. ⚠ ALSO NOTED: their homepage does NOT position them as a container BESS vendor. It says they 'empower US-based energy and electrification companies... through strategic collaboration, licensing, and innovative programs', and 'Who We Work With' lists cell manufacturing, module and pack, electrode materials, recycling, EV and storage assembly, research labs and wind/solar equipment. That is a licensing and technology-transfer business across the battery value chain. The storefront demo assumes a manufacturer selling cabinets and containers off a catalogue, which may be one line of their business rather than the whole of it. Confirm what they actually sell before the catalogue is filled with real SKUs.",
   "appIcon": {
+    "180": "/tenants/cleancell/icons/plant-180.png",
     "192": "/tenants/cleancell/icons/plant-192.png",
     "512": "/tenants/cleancell/icons/plant-512.png",
-    "180": "/tenants/cleancell/icons/plant-180.png",
     "maskable": "/tenants/cleancell/icons/plant-maskable-512.png",
     "office": {
+      "180": "/tenants/cleancell/icons/office-180.png",
       "192": "/tenants/cleancell/icons/office-192.png",
       "512": "/tenants/cleancell/icons/office-512.png",
-      "180": "/tenants/cleancell/icons/office-180.png",
       "maskable": "/tenants/cleancell/icons/office-maskable-512.png"
     },
     "customer": {
+      "180": "/tenants/cleancell/icons/customer-180.png",
       "192": "/tenants/cleancell/icons/customer-192.png",
       "512": "/tenants/cleancell/icons/customer-512.png",
-      "180": "/tenants/cleancell/icons/customer-180.png",
       "maskable": "/tenants/cleancell/icons/customer-maskable-512.png"
     }
   }

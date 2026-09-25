@@ -146,6 +146,20 @@ console.log('\nthe gate: a unit cannot leave a bench with a step open');
   ok('out of sequence is still the first answer when the bench is wrong', !v.ok && v.reason === 'work_open' || v.reason === 'out_of_sequence');
 })();
 
+console.log('\none gate for every caller, and the lines no bench issues');
+(function () {
+  var wo = { routing: R.map(function (s) { return s.key === 'bms' ? { key: 'bms', label: s.label, checks: ['Load firmware'] } : s; }) };
+  var u = unit('bms');
+  ok('openAt: what is open where the unit IS, parts and the routing\'s checks', W.openAt(u, wo, by).join('|') === 'Fit BMS|Load firmware', W.openAt(u, wo, by));
+  ok('  nothing for a unit that has not started, or has no product on file', W.openAt(unit(''), wo, by).length === 0 && W.openAt(unit('bms', { sku: 'NOPE' }), wo, by).join() === 'Load firmware');
+  ok('catalogIndex drops prototype keys and non-rows', Object.keys(W.catalogIndex([{ sku: '__proto__' }, null, { sku: 'A' }])).join() === 'A');
+  var flushed = W.backflush(by.CAB, unit('ready', { work: { rack: { issued: { MOD: 2, HARN: 2.5 } }, bms: { issued: { BMS: 1 } } } }), R);
+  ok('backflush: only the lines no bench issues — the unstationed label, the unissued enclosure is at a bench so it is not', flushed.map(function (l) { return l.sku + ':' + l.qty; }).join() === 'LABEL:1', flushed);
+  ok('  a station that is not on the routing counts as no bench', W.backflush({ bom: [{ sku: 'X', qty: 3, station: 'weld' }] }, unit('ready'), R).map(function (l) { return l.sku + ':' + l.qty; }).join() === 'X:3');
+  ok('  and what a bench already issued is not taken twice', W.backflush({ bom: [{ sku: 'X', qty: 3 }] }, unit('ready', { work: { kit: { issued: { X: 1 } } } }), R)[0].qty === 2);
+  ok('unstationed: per assembly, the lines no bench on the routing issues', JSON.stringify(W.unstationed(CATALOG, R).map(function (p) { return p.sku + ':' + p.lines.map(function (l) { return l.sku; }).join('+'); })) === '["CAB:LABEL"]', W.unstationed(CATALOG, R));
+})();
+
 console.log('\nthe materials plan stops demanding what was issued');
 (function () {
   var plain = [{ sku: 'CAB', name: 'Cabinet', kind: 'product', bom: [{ sku: 'BMS', qty: 1, unit: 'ea', station: 'bms' }, { sku: 'ENC', qty: 1, unit: 'ea' }] },

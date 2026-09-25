@@ -5,13 +5,13 @@
 Written 2026-09-24. This covers the accounting page (`logic-accounting.html`),
 what it may change on an order, and how a tenant-billed workspace keeps its
 **own** QuickBooks company or Stripe account in step. It ends with the steps
-that fix the live Amperage order and the list of what is **not built**.
+that fix the live Acme order and the list of what is **not built**.
 
 ---
 
 ## Why this exists
 
-The live Amperage Capital order (PO `CCUS-3V3I-0926`, USD 1,498,999.00,
+The live Acme Fleet order (PO `ACME-4X7Q-0926`, USD 1,498,999.00,
 tenant-billed, 90 % deposit invoice USD 1,349,099.10) was run through
 `scripts/intake-order.js` with the template's placeholder payment still in
 the order file. The run recorded `payment-received` USD 1,349,099.10 dated
@@ -82,14 +82,14 @@ Now there is, and the placeholder cannot happen again.
    browser; the page lists missing env var **names** only.
 9. **Only invoices issued while a provider was chosen are pushed
    automatically** (`ledger.state === 'pending'`). An invoice issued before
-   (Amperage's deposit) is pushed or **linked** by an explicit action, so
+   (Acme's deposit) is pushed or **linked** by an explicit action, so
    nothing is entered twice in books that may already hold it.
 
 10. **One invoice takes its payments from one place.** Bank references
     from the office and `qbo:` / `stripe:` references from a pull never
     match, so the same money could otherwise be counted twice — once by
     hand, once by the pull — and a doubled part payment would release the
-    plant on money that never arrived (the Amperage failure again). So:
+    plant on money that never arrived (the Acme failure again). So:
     - an invoice that lives in the workspace's **QuickBooks** (linked or
       pushed, and QuickBooks is still the chosen provider) refuses a payment
       recorded by hand — *"This invoice is in QuickBooks (145); apply the
@@ -97,7 +97,7 @@ Now there is, and the placeholder cannot happen again.
       on it. After the workspace switches to *Off* (or to Stripe) the office
       records by hand again;
     - a **Stripe** invoice still takes a wire recorded by hand: that is the
-      path for an installment above Stripe's per-payment cap (Amperage);
+      path for an installment above Stripe's per-payment cap (Acme);
     - either way, while an invoice carries payments recorded by hand, a
       provider receipt is **not recorded**: the pull reports a conflict
       naming the hand entries, and a person voids the hand entry the books
@@ -116,7 +116,7 @@ Now there is, and the placeholder cannot happen again.
 | OAuth / Connect callback | `api/ledger-connect.js` |
 | Stripe Connect webhook | `api/ledger-webhook.js` (NOT `api/stripe-webhook.js`) |
 | The page | `logic-accounting.html` (Money → Accounting in `omega-logic-theme.js`); the dashboard links it from Cash flow and from each tenant-billed invoice |
-| Tests | `scripts/test-accounting.js` (workflow, endpoints, the Amperage scenario), `scripts/test-ledger-sync.js` (providers, callback, webhook); render checks `accounting` and `office` in `scripts/render-logic-pages.js` |
+| Tests | `scripts/test-accounting.js` (workflow, endpoints, the Acme scenario), `scripts/test-ledger-sync.js` (providers, callback, webhook); render checks `accounting` and `office` in `scripts/render-logic-pages.js` |
 
 **Who.** Every accounting read and write passes
 `X.authorize(caller, org, true)`: a workspace owner/admin or the ClearSky
@@ -201,7 +201,7 @@ order change and its order event: `ledger-invoice-issued`,
   `api/logic-accounting.js` and `api/ledger-webhook.js` have `maxDuration: 60`
   in `vercel.json`.
 - **Stripe amounts above USD 999,999.99** (Stripe's per-line maximum; the
-  Amperage deposit is USD 1,349,099.10) are split into tagged parts on one
+  Acme deposit is USD 1,349,099.10) are split into tagged parts on one
   invoice, and the invoice carries a warning: a single card or bank payment
   that large may be refused unless the Stripe account has a raised limit. A
   wire recorded by the office is the path for those.
@@ -268,15 +268,15 @@ Stripe, the workspace's own account through Connect (Standard OAuth):
 The OAuth state cookie is host-scoped: Connect must be started on the
 redirect URI's host. The page says so when it is opened elsewhere.
 
-## Fixing the live Amperage order (after deploy — no script, no data surgery)
+## Fixing the live Acme order (after deploy — no script, no data surgery)
 
 As Tom (owner) or a Clean Cell admin:
 1. Open `/logic-accounting.html?org=cleancell.us`.
-2. Open the row `CCUS-3V3I-0926 · deposit`, and choose **Void** on the
+2. Open the row `ACME-4X7Q-0926 · deposit`, and choose **Void** on the
    placeholder payment.
 3. Reason: *"Recorded by the intake script from the template; the money has
    not been received — only the PO"*.
-4. Choose **Keep building on the PO** (PO `CCUS-3V3I-0926`), then **Void
+4. Choose **Keep building on the PO** (PO `ACME-4X7Q-0926`), then **Void
    payment**.
 
 Result: the deposit of USD 1,349,099.10 is *awaiting payment* with 0
@@ -287,7 +287,7 @@ the bank's real reference and the invoice becomes paid. Shipment still needs
 the deposit and the balance recorded.
 
 `scripts/test-accounting.js` runs exactly this on the Firestore double
-(tests "THE AMPERAGE ORDER …" and "then the real wire …").
+(tests "THE ACME ORDER …" and "then the real wire …").
 
 ## Not built
 

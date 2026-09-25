@@ -11,12 +11,14 @@ body{margin:0}.entry-top{padding:20px 5%;display:flex;align-items:center;gap:18p
 <footer class="entry-footer">Sizing and site layouts are planning concepts, not an engineering approval or a confirmed equipment order. Final products, availability and commercial terms are confirmed by your supplier.</footer></main>
 <script src="/omega-logic-theme.js"></script><script>
 (function(){'use strict';var p=new URLSearchParams(location.search),org=p.get('org')||'',frame=document.getElementById('storefront'),frameOrigin='';function $(id){return document.getElementById(id);}
+/* ?plain=1: inside the customer portal's own frame, which has its header and links already — no second header, no "link above" */
+var plain=p.get('plain')==='1';if(plain){var top=document.querySelector('.entry-top');if(top){top.hidden=true;top.style.display='none';}}
 fetch('/api/customer-portal?org='+encodeURIComponent(org)).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error||'This customer workspace is unavailable.');return d;});}).then(function(d){
   OmegaLogicTheme.apply(d.brand);document.title=d.brand.name+' · Size a system';if(d.brand.logoUrl){$('logo').src=d.brand.logoUrl;$('logo').hidden=false;}
   ['account','design','app'].forEach(function(id){var href=id==='design'?d.links.design:id==='app'?d.links.app:d.links.account;if(!href)return;$(id).href=href;$(id).hidden=false;});$('home').href=d.links.account;
   $('status').textContent='';$('status').hidden=true;
   if(d.links.storefront){frameOrigin=new URL(d.links.storefront).origin;frame.src=d.links.storefront+(d.links.storefront.indexOf('?')>=0?'&':'?')+'plain=1';frame.hidden=false;$('size-note').hidden=true;}
-  else $('size-note').textContent='The supplier’s website sizer is being configured. You can already create your customer account using the link above.';
+  else $('size-note').textContent='The supplier’s website sizer is being configured.'+(plain?'':' You can already create your customer account using the link above.');
 }).catch(function(e){$('status').textContent=e.message;$('status').className='logic-status error';$('size-note').textContent='The battery sizer is unavailable. Please contact your supplier.';});
 window.addEventListener('message',function(e){if(e.source!==frame.contentWindow||e.origin!==frameOrigin||!e.data)return;var h=Number(e.data.height);if(e.data.omegaEmbed==='height'&&isFinite(h)&&h>0)frame.style.height=Math.min(12000,Math.max(600,h))+'px';});
 }());</script></body></html>

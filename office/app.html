@@ -201,7 +201,7 @@
 <header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-product-name>Omega Logic</b></a><small class="wl"><span id="who"></span><button type="button" id="switch" hidden title="Open another company" aria-label="Switch company"><span>Switch</span></button></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh" aria-label="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
 <main>
   <div id="gate"><h1>Omega Logic <span class="sub">— sign in with your work account</span></h1><p class="note">Orders, purchase orders, customers, the plant, stock and every unit to its site — one app for the people running the business. Your workspace opens from your work email.</p><button class="big" id="signin">Continue with Google</button><p class="or">or with any work email</p><input id="g-email" type="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@company.com"><button class="big ghost" id="g-link">Email me a sign-in link</button><p class="note" id="gate-note"></p></div>
-  <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale.</div>
+  <div id="offline" class="off" hidden>Offline. What is on screen was loaded before the connection dropped and may be out of date; nothing can be saved until you are back online.</div>
   <p id="status" class="status" role="status" aria-live="polite"></p>
   <div id="view"></div>
 </main>
@@ -270,8 +270,11 @@
     });
   }
   function status(t) { $('status').textContent = t || ''; }
-  function fail(e) { status(e.message || String(e)); }
+  /* a dropped connection says so in words, never "Failed to fetch" (DOC-m2) */
+  function fail(e) { status(OmegaLogicTheme.plainError(e)); }
   function dollars(c) { return '$' + (Number(c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  /* payment terms as the customer's Account says them: 0 days is on receipt */
+  function dueWords(n) { n = Number(n) || 0; return n ? 'due in ' + plural(n, 'day') : 'due on receipt'; }
   function day(s) { return s ? String(s).slice(0, 10) : ''; }
   function openReq(o) { return (o.requests || []).filter(function (r) { return r.status === 'open'; }); }
   function stageKey(o) { return o.stage ? o.stage.key : o.status; }
@@ -333,7 +336,8 @@
     $('who').title = [company, email].filter(Boolean).join(' · ');
   }
   function loadMaterials() { return MAT ? Promise.resolve(MAT) : api('/api/logic-materials' + q).then(function (m) { MAT = m; return m; }); }
-  function loadUnits() { return UNITS ? Promise.resolve(UNITS) : api('/api/logic-plant' + q + '&page=units').then(function (u) { UNITS = u.rows || []; return UNITS; }); }
+  /* finished units by state, counted by the server over every unit (page=stock, plant-ops finished — PLANT-08), not the first page of a list */
+  function loadUnits() { return UNITS ? Promise.resolve(UNITS) : api('/api/logic-plant' + q + '&page=stock').then(function (u) { UNITS = u || {}; return UNITS; }); }
   /* api/buyers.js is an administrator's: its first answer says which this
      login is (a 403 is a member or a viewer, not a fault) */
   function loadBuyers() {
@@ -369,8 +373,12 @@
   }
 
   /* ── views ────────────────────────────────────────────────────────────── */
+  /* the status line belongs to the screen that said it: a new tab starts
+     clean (an old message never follows the person to Home) */
+  var SHOWN_TAB = null;
   function draw() {
     if (!DATA) return;
+    if (TAB !== SHOWN_TAB) { SHOWN_TAB = TAB; status(''); }
     Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.setAttribute('aria-current', b.dataset.tab === TAB ? 'page' : 'false'); });
     if (TAB === 'today') return PICK ? drawOrder() : drawToday();
     if (TAB === 'orders') return PICK ? drawOrder() : drawOrders();
@@ -387,16 +395,24 @@
      In-app screens open here (data-go); the rest open their page. One list,
      so nothing in the business is more than two taps away. ─────────────── */
   var MENU_OPEN = null;
+  /* D1: who may approve prices and accept orders — the office endpoint says
+     (access.prices: 'all' for ClearSky, 'workspace' for an owner or
+     administrator on what the workspace bills itself, 'none'); a server
+     from before that rule: ClearSky only. D2: access.team — may add and
+     turn off the workspace's people (Team). Showing a row is not access:
+     each endpoint refuses on its own. */
+  function access() { return (DATA && DATA.access) || { prices: DATA && DATA.owner ? 'all' : 'none', team: !!(DATA && DATA.owner) }; }
+  function mayPrice() { var a = access(); return a.prices === 'all' || (a.prices === 'workspace' && (DATA.billing || (DATA.config && DATA.config.accounting)) === 'tenant'); }
   function menuPanels() {
-    var d = '?org=' + encodeURIComponent(ORG);
+    var d = '?org=' + encodeURIComponent(ORG), a = access();
     return [
-      { key: 'sales', icon: '▤', name: 'Sales', rows: [['go', 'orders', 'Orders', 'Every order, its stage, money and requests'], ['go', 'pos', 'PO loads', 'Key in a stack of customer purchase orders'], ['href', '/po-inbox' + d + '&office=1', 'Company POs', 'Uploaded POs to review and map'], ['href', '/omega-logic' + d, 'Price & accept', 'Approve a price, accept, record shipment']] },
+      { key: 'sales', icon: '▤', name: 'Sales', rows: [['go', 'orders', 'Orders', 'Every order, its stage, money and requests'], ['go', 'pos', 'PO loads', 'Key in a stack of customer purchase orders'], ['href', '/po-inbox' + d + '&office=1', 'Company POs', 'Uploaded POs to review and map']].concat(mayPrice() ? [['href', '/omega-logic' + d + '#orders', 'Price & accept', a.prices === 'all' ? 'Approve a price, accept, record shipment' : 'Approve the price and accept the orders your company bills']] : []) },
       { key: 'customers', icon: '◉', name: 'Customers', rows: [['go', 'customers', 'Customers', 'Accounts: people, calls and notes, documents, orders, sites'], ['href', '/portals/customer/admin.html' + d, 'Customer hub on the desktop', 'The same accounts with more room'], ['href', '/portals/customer/app' + d, 'Customer app', 'What your customers see and use'], ['href', '/portals/customer/' + d, 'Customer portal', 'The same account on a desktop']] },
       { key: 'plant', icon: '⚙', name: 'Plant', rows: [['href', '/plant/app' + d, 'Plant app', 'Work orders, units, quality'], ['href', '/plant/station.html', 'Bench scan station', 'Scan a unit in, issue parts, finish steps'], ['href', '/plant/work-orders.html' + d, 'Work orders', 'Progress, holds, what is short'], ['href', '/plant/manager.html' + d, 'Plant board', 'The line, dwell times, the bottleneck']] },
       { key: 'deliver', icon: '◎', name: 'Deliver', rows: [['go', 'sites', 'Sites & custody', 'What the customer says, receive a load, passports'], ['href', '/logic-register.html' + d, 'Fleet register', 'Every unit on one sheet'], ['href', '/logic-logistics.html' + d, 'Shipping & receiving', 'Loads, carriers, BOLs, receipts'], ['href', '/logic-custody.html' + d, 'Sites & imports', 'Sites, spreadsheet import, coverage templates']] },
       { key: 'stock', icon: '▦', name: 'Stock', rows: [['go', 'stock', 'Stock', 'Finished units, parts short, open POs'], ['href', '/logic-materials.html' + d, 'Materials plan', 'What to buy and when'], ['href', '/logic-materials.html' + d + '#po', 'Purchase orders', 'Supplier orders and receipts'], ['href', '/logic-inventory.html' + d, 'Inventory', 'Units on the shelf, assign to orders']] },
       { key: 'money', icon: '$', name: 'Money', rows: [['go', 'money', 'Invoices', 'To issue, overdue and open, with the pay link'], ['go', 'orders', 'Orders', 'Record an invoice issued or a payment received on the order'], ['href', '/omega-logic' + d + '#cash', 'Cash flow', 'Invoiced, received, outstanding']] },
-      { key: 'setup', icon: '✎', name: 'Setup', rows: [['href', '/logic-catalog.html' + d, 'Products & bills', 'Catalog, bills of materials, coverage'], ['href', '/logic-settings.html' + d, 'Settings', 'Terms, billing mode, workspace']].concat(DATA && DATA.owner || (WS && WS.workspaces.length > 1) ? [['go', 'workspace', 'Switch company', DATA && DATA.owner ? 'ClearSky owner: open another Omega Logic workspace' : 'Open another company you work with']] : []) },
+      { key: 'setup', icon: '✎', name: 'Setup', rows: [['href', '/logic-catalog.html' + d, 'Products & bills', 'Catalog, bills of materials, coverage']].concat(a.team ? [['href', '/logic-team.html' + d, 'Team', 'Add and turn off your office and plant staff']] : [], [['href', '/logic-settings.html' + d, 'Settings', 'Terms, billing mode, workspace']]).concat(DATA && DATA.owner || (WS && WS.workspaces.length > 1) ? [['go', 'workspace', 'Switch company', DATA && DATA.owner ? 'ClearSky owner: open another Omega Logic workspace' : 'Open another company you work with']] : []) },
       { key: 'help', icon: '?', name: 'Help & guides', rows: [['href', '/guides/Omega-Logic-Office-App.pdf', 'Omega Logic app guide', 'Install and use, PDF'], ['href', '/guides/Omega-Logic-Customer-App.pdf', 'Customer app guide', 'Send it to a customer, PDF'], ['href', '/guides/Omega-Logic-Plant-App.pdf', 'Plant app guide', 'For the builders, PDF']] }
     ];
   }
@@ -407,24 +423,9 @@
     if (typeof u !== 'string' || !u || u.length > 1000 || /[\s<>"'`]/.test(u) || !/^https:\/\//i.test(u)) return '';
     try { var x = new URL(u); return x.protocol === 'https:' && !x.username && !x.password && x.hostname.indexOf('.') > 0 ? x.href : ''; } catch (e) { return ''; }
   }
-  /* Every invoice with money still owed on it, from the orders the office
-     endpoint already sent: to issue (tenant-billed, not yet on the
-     supplier's paper), overdue (past the order's terms from the day it was
-     issued) or open. */
-  function invoiceRows() {
-    var now = todayIso(), out = [];
-    (DATA.orders || []).forEach(function (o) {
-      var l = o.logic; if (!l) return;
-      var terms = (l.commercial && l.commercial.terms) || {}, tb = tenantBilled(l);
-      Object.keys(l.invoices || {}).forEach(function (k) {
-        var i = l.invoices[k] || {}, amt = Number(i.amountCents) || 0, pd = Number(i.paidCents) || 0;
-        if (!amt || pd >= amt || i.status === 'paid' || i.satisfied === true) return;
-        var due = i.dueDate || i.dueAt ? day(toIso(i.dueDate || i.dueAt)) : i.issuedAt ? addDays(i.issuedAt, terms.dueDays) : '';
-        out.push({ o: o, k: k, i: i, tb: tb, open: amt - pd, due: due, state: tb && !i.id ? 'issue' : due && due < now ? 'overdue' : 'open', pay: safeUrl(i.payUrl) });
-      });
-    });
-    return out.sort(function (a, b) { return (a.due || '9') < (b.due || '9') ? -1 : (a.due || '9') > (b.due || '9') ? 1 : 0; });
-  }
+  /* Every invoice with money still owed on it — to issue, overdue or open —
+     by the one rule the desktop dashboard uses too (OmegaLogicTheme.invoices) */
+  function invoiceRows() { return OmegaLogicTheme.invoices(DATA.orders || [], DATA.config && DATA.config.accounting, todayIso()); }
   /* What is short for the open work: the materials plan's own rows */
   function shortParts(m) { return m ? (m.rows || []).filter(function (x) { return x.kind === 'component' && !x.make && x.net && (x.net.committed + x.net.pipeline + (x.net.buffer || 0)) > 0; }) : []; }
   function unitsOf(o) { return (o.items || []).reduce(function (n, i) { return n + (Number(i.qty) || 0); }, 0); }
@@ -439,57 +440,23 @@
      hub (the same tile below it opens it too): what is in that hub now,
      then where to work it. Today closes the panel and goes to the list of
      what needs a person. ──────────────────────────────────────────────── */
+  /* The counts are ONE computation shared with the desktop dashboard
+     (OmegaLogicTheme.hub), so the two count the same things (OFF-14) and
+     the price and accept step is counted only for whoever may take it (D1).
+     What only this app draws is added here: the parts short (the Stock
+     panel's list) and the payment exceptions. */
   function summary() {
-    var orders = DATA.orders || [], s = { orders: orders, invoiced: 0, paid: 0, depositsOpen: 0, exceptions: 0 };
-    orders.forEach(function (o) {
-      var l = o.logic; if (!l) return;
-      Object.keys(l.invoices || {}).forEach(function (k) {
-        var i = l.invoices[k] || {}, amt = Number(i.amountCents) || 0, pd = Number(i.paidCents) || 0;
-        s.invoiced += amt; s.paid += pd;
-        if (k === 'deposit' && pd < amt) s.depositsOpen += amt - pd;
-      });
-      if (l.lastError || l.paymentException) s.exceptions++;
-    });
-    s.inv = invoiceRows();
-    s.toIssue = s.inv.filter(function (x) { return x.state === 'issue'; }).length;
-    s.overdue = s.inv.filter(function (x) { return x.state === 'overdue'; }).length;
-    s.withReq = orders.filter(function (o) { return openReq(o).length; });
-    s.attention = orders.filter(function (o) { return stageKey(o) === 'exception'; });
-    s.toPrice = orders.filter(function (o) { return ['quote', 'priced'].indexOf(stageKey(o)) >= 0; });
-    s.toShip = orders.filter(function (o) { return stageKey(o) === 'ship'; });
-    s.shipUnits = s.toShip.reduce(function (n, o) { return n + unitsOf(o); }, 0);
-    s.rows = BOARD ? (BOARD.rows || []).filter(function (r) { return r.stage !== 'complete'; }) : null;
-    s.late = s.rows ? s.rows.filter(function (r) { return r.late; }) : [];
-    s.held = s.rows ? s.rows.filter(function (r) { return r.progress && r.progress.held > 0; }) : [];
-    s.heldUnits = s.held.reduce(function (n, r) { return n + (Number(r.progress.held) || 0); }, 0);
-    s.short = MAT ? shortParts(MAT) : null;
-    var intake = DATA.intake || {}; s.review = (intake.review || 0) + (intake.needsInfo || 0);
-    s.needs = [];
-    s.withReq.forEach(function (o) { s.needs.push({ o: o, why: plural(openReq(o).length, 'customer request'), pill: 'answer' }); });
-    /* one row per order, as the desktop hub (omega-logic.html hubSummary):
-       an order with an open request is listed to answer, not again to fix
-       or to price */
-    s.attention.forEach(function (o) { if (!openReq(o).length) s.needs.push({ o: o, why: o.stage ? o.stage.next : 'needs attention', pill: 'fix' }); });
-    s.toPrice.forEach(function (o) { if (!openReq(o).length) s.needs.push({ o: o, why: o.stage ? o.stage.next : 'price it', pill: 'price' }); });
-    s.follow = (FOLLOW || []).filter(fuDue);
-    s.followLater = (FOLLOW || []).length - s.follow.length;
-    s.pending = BUYERS ? (BUYERS.customers || []).reduce(function (n, c) { return n + (Number(c.pending) || 0); }, 0) : 0;
-    s.count = s.needs.length + s.review + s.follow.length;
+    var cu = CUSTODY, orders = DATA.orders || [];
+    var s = OmegaLogicTheme.hub({ orders: orders, owner: DATA.owner, accounting: DATA.config && DATA.config.accounting, intake: DATA.intake, follow: FOLLOW || [],
+      pending: BUYERS ? (BUYERS.customers || []).reduce(function (n, c) { return n + (Number(c.pending) || 0); }, 0) : null,
+      plantRows: BOARD ? BOARD.rows || [] : null, toConfirm: cu ? (cu.toConfirm || []).length : null, inTransit: cu && cu.counts ? Number(cu.counts.in_transit) || 0 : null,
+      short: MAT ? (MAT.summary && MAT.summary.short != null ? Number(MAT.summary.short) || 0 : shortParts(MAT).length) : null,
+      outstandingCents: DATA.receivables ? DATA.receivables.outstandingCents : null, today: todayIso() });
+    s.parts = MAT ? shortParts(MAT) : null;
+    s.exceptions = orders.filter(function (o) { return o.logic && (o.logic.lastError || o.logic.paymentException); }).length;
     return s;
   }
-  function hubItems(s) {
-    var cu = CUSTODY, toConfirm = cu ? (cu.toConfirm || []).length : 0, transit = cu && cu.counts ? Number(cu.counts.in_transit) || 0 : null, owed = s.invoiced - s.paid;
-    var sales = s.toPrice.length + s.review + s.withReq.length;
-    return [
-      { key: 'today', label: 'Today', icon: '◷', badge: cap(s.count), hint: new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) },
-      { key: 'sales', label: 'Sales', icon: '▤', badge: cap(sales), hint: s.toPrice.length ? s.toPrice.length + ' to price' : s.withReq.length ? plural(s.withReq.length, 'request') : s.review ? plural(s.review, 'PO') + ' to review' : plural(s.orders.length, 'order') },
-      { key: 'customers', label: 'Customers', icon: '◉', badge: cap(s.pending + s.follow.length), hint: s.follow.length ? plural(s.follow.length, 'follow-up') + ' due' : s.pending ? s.pending + ' asking to join' : 'CRM' },
-      { key: 'plant', label: 'Plant', icon: '⚙', badge: cap(s.heldUnits), hint: s.rows ? (s.late.length ? s.late.length + ' late' : plural(s.rows.length, 'work order')) : '' },
-      { key: 'deliver', label: 'Deliver', icon: '◎', badge: cap(s.shipUnits + toConfirm), hint: s.shipUnits ? plural(s.shipUnits, 'unit') + ' to ship' : toConfirm ? toConfirm + ' to confirm' : transit != null ? transit + ' in transit' : '' },
-      { key: 'stock', label: 'Stock', icon: '▦', badge: cap(s.short ? s.short.length : 0), hint: s.short ? (s.short.length ? plural(s.short.length, 'part') + ' short' : 'nothing short') : '' },
-      { key: 'money', label: 'Money', icon: '$', badge: cap(s.toIssue + s.overdue), hint: s.overdue ? s.overdue + ' overdue' : s.toIssue ? s.toIssue + ' to issue' : owed > 0 ? kdollars(owed) + ' open' : 'nothing open' }
-    ];
-  }
+  function hubItems(s) { return s.items; }
   function paintHub(s) {
     var el = $('hubs'); if (!el || !DATA) return;
     var items = hubItems(s || summary()), caption = (DATA.brand && DATA.brand.workspace) || DATA.name || ORG;
@@ -509,13 +476,26 @@
   function li(inner, attrs) { return attrs ? '<button type="button" ' + attrs + '>' + inner + '<span class="go">›</span></button>' : '<div class="li">' + inner + '</div>'; }
   function liText(title, sub, pill, bad) { return '<div><b>' + esc(title) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</div>' + (pill ? '<span class="pill' + (bad ? ' bad' : '') + '" style="margin-left:auto">' + esc(pill) + '</span>' : ''); }
   function orderWho(o) { return (o.customer && (o.customer.company || o.customer.name || o.customer.email)) || ''; }
+  /* a row that opens a page outside the app (a PO's review is a desktop page) */
+  function liLink(inner, href) { return '<a href="' + esc(href) + '">' + inner + '<span class="go">›</span></a>'; }
+  /* the stage's next step, said as somebody else's when it is (D1: o.waitingOn) */
+  function nextLine(o) { var n = o.stage ? o.stage.next : ''; if (!n) return ''; return o.waitingOn === 'clearsky' ? 'Waiting on ClearSky · ' + n : o.waitingOn === 'admin' ? 'Waiting on an owner or administrator · ' + n : n; }
+  /* D1: a price or acceptance that is somebody else's step, said plainly */
+  function waitingLine(o) {
+    var step = stageKey(o) === 'priced' ? 'accept the order' : 'approve the customer price';
+    if (o.waitingOn === 'admin') return 'waiting on your workspace owner or an administrator to ' + step;
+    if (DATA && DATA.active === false) return 'waiting on ClearSky: Omega Logic is not switched on for this workspace yet';
+    return 'waiting on ClearSky to ' + step;
+  }
   function hubLive(key, s) {
     var out = [], more = function (n, shown) { return n > shown ? '<div class="li"><small class="note">and ' + (n - shown) + ' more</small></div>' : ''; };
     function sub(t) { out.push('<div class="sub">' + esc(t) + '</div>'); }
     if (key === 'sales') {
       if (s.withReq.length) { sub('Customer requests · ' + s.withReq.length); s.withReq.slice(0, 5).forEach(function (o) { out.push(li(liText(o.orderNo, orderWho(o) + ' · ' + plural(openReq(o).length, 'request') + ' open', 'answer', true), 'data-order="' + esc(o.id) + '"')); }); out.push(more(s.withReq.length, 5)); }
-      if (s.toPrice.length) { sub('To price · ' + s.toPrice.length); s.toPrice.slice(0, 5).forEach(function (o) { out.push(li(liText(o.orderNo, orderWho(o) + ' · ' + (o.stage ? o.stage.next : ''), 'price', true), 'data-order="' + esc(o.id) + '"')); }); out.push(more(s.toPrice.length, 5)); }
-      if (s.review) { sub('Company POs'); out.push(li(liText(plural(s.review, 'company PO') + ' to review', 'uploaded by customers', 'review', true), 'data-go="pos"')); }
+      /* D1: only what this person may price or accept; the rest is listed as waiting, and on whom */
+      if (s.toPrice.length) { sub('To price · ' + s.toPrice.length); s.toPrice.slice(0, 5).forEach(function (o) { out.push(li(liText(o.orderNo, orderWho(o) + ' · ' + (o.stage ? o.stage.next : ''), o.can && !o.can.price ? 'accept' : 'price', true), 'data-order="' + esc(o.id) + '"')); }); out.push(more(s.toPrice.length, 5)); }
+      if (s.review) { sub('Company POs · ' + s.review); OmegaLogicTheme.reviewLinks(ORG, s).forEach(function (r) { out.push(liLink(liText(r.title, r.sub, 'review', true), r.href)); }); }
+      if (s.waiting.length) { sub('Waiting on someone else · ' + s.waiting.length); s.waiting.slice(0, 5).forEach(function (o) { out.push(li(liText(o.orderNo, orderWho(o) + ' · ' + waitingLine(o), 'waiting'), 'data-order="' + esc(o.id) + '"')); }); out.push(more(s.waiting.length, 5)); }
       if (!out.length) out.push(li(liText('Nothing waiting', plural(s.orders.length, 'order') + ' in the workspace; every one priced and answered')));
     }
     if (key === 'customers') {
@@ -544,13 +524,14 @@
       if (!out.length) out.push(li(liText('Nothing ready to ship', 'Units show here when an order is ready')));
     }
     if (key === 'stock') {
-      if (!s.short) out.push(li(liText('Materials plan loading…', '')));
-      else if (!s.short.length) out.push(li(liText('Nothing short', 'Every part for the open work is on hand or on order')));
-      else { sub('Parts short · ' + s.short.length); s.short.slice(0, 6).forEach(function (x) { var firm = Math.ceil(x.net.committed + x.net.pipeline + (x.net.buffer || 0)); out.push(li(liText(x.name || x.sku, x.sku + ' · on hand ' + x.onHand + ' · on order ' + x.onOrder + (x.orderBy ? ' · order by ' + x.orderBy : ''), firm + ' ' + (x.unit || ''), true))); }); out.push(more(s.short.length, 6)); }
+      if (!s.parts) out.push(li(liText('Materials plan loading…', '')));
+      else if (!s.parts.length) out.push(li(liText('Nothing short', 'Every part for the open work is on hand or on order')));
+      else { sub('Parts short · ' + s.parts.length); s.parts.slice(0, 6).forEach(function (x) { var firm = Math.ceil(x.net.committed + x.net.pipeline + (x.net.buffer || 0)); out.push(li(liText(x.name || x.sku, x.sku + ' · on hand ' + x.onHand + ' · on order ' + x.onOrder + (x.orderBy ? ' · order by ' + x.orderBy : ''), firm + ' ' + (x.unit || ''), true))); }); out.push(more(s.parts.length, 6)); }
     }
     if (key === 'money') {
-      var owed = s.invoiced - s.paid;
-      out.push(li(liText(dollars(owed) + ' open', dollars(s.invoiced) + ' invoiced · ' + dollars(s.paid) + ' received · ' + plural(s.inv.length, 'unpaid invoice')), 'data-go="money"'));
+      /* the receivables ledger's totals (what Accounting prints), never a sum made here */
+      var rt = DATA.receivables;
+      out.push(li(liText(rt ? dollars(rt.outstandingCents) + ' outstanding' : plural(s.inv.length, 'unpaid invoice'), rt ? dollars(rt.invoicedCents) + ' invoiced · ' + dollars(rt.receivedCents) + ' received' + (rt.toIssueCents ? ' · ' + dollars(rt.toIssueCents) + ' to issue' : '') : 'Totals are on Accounting on the desktop'), 'data-go="money"'));
       var hot2 = s.inv.filter(function (x) { return x.state !== 'open'; });
       if (hot2.length) { sub('Needs a person · ' + hot2.length); hot2.slice(0, 6).forEach(function (x) { out.push(li(liText(x.o.orderNo + ' · ' + x.k, orderWho(x.o) + ' · ' + dollars(x.open) + (x.due ? ' · due ' + x.due : ''), x.state === 'issue' ? 'to issue' : 'overdue', true), 'data-order="' + esc(x.o.id) + '"')); }); out.push(more(hot2.length, 6)); }
     }
@@ -601,20 +582,22 @@
     var reqs = openReq(o).length, b = boardFor(o), key = stageKey(o), money = invoiceSums(o);
     return '<button class="card' + (key === 'exception' || reqs ? ' urgent' : '') + '" data-order="' + esc(o.id) + '"><div class="h"><b>' + esc(o.orderNo) + '</b><span class="pill' + (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : '') + '">' + esc(stageLabel(o)) + '</span></div>'
       + '<div class="m">' + esc(o.customer.company || o.customer.name || o.customer.email) + ' · ' + esc((o.items || []).map(function (i) { return i.qty + ' × ' + (i.name || i.sku); }).join(', ')) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + '</div>'
-      + (o.logic && o.logic.commercial ? '<div class="m">' + dollars(o.logic.commercial.totalCents) + (money.balance > 0 ? ' · <b>' + dollars(money.balance) + ' outstanding</b>' : ' · paid in full') + '</div>' : '<div class="m">' + esc(o.stage ? o.stage.next : '') + '</div>')
+      + (o.logic && o.logic.commercial ? '<div class="m">' + dollars(o.logic.commercial.totalCents) + (money.balance > 0 ? ' · <b>' + dollars(money.balance) + ' outstanding</b>' : ' · paid in full') + '</div>' : '<div class="m">' + esc(nextLine(o)) + '</div>')
       + (b ? '<div class="bar"><i style="width:' + b.progress.percent + '%' + (b.progress.held ? ';background:#B42318' : '') + '"></i></div><div class="m">' + (b.progress.units ? b.progress.percent + '% built · ' + b.progress.readyRoots + ' of ' + b.progress.expectedRoots + ' ready' : 'awaiting serials') + (b.late ? ' · <b style="color:#B42318">late</b>' : '') + '</div>' : '')
       + (reqs ? '<div class="m"><span class="pill bad">' + reqs + ' customer request' + (reqs === 1 ? '' : 's') + ' waiting</span></div>' : '') + '</button>';
   }
   function bindOrders() { Array.prototype.forEach.call(document.querySelectorAll('[data-order]'), function (b) { b.onclick = function () { PICK = b.dataset.order; draw(); window.scrollTo(0, 0); }; }); }
 
   function drawToday() {
-    var s = summary(), bs = (DATA.totals || {}).byStage || {}, rows = s.rows, late = s.late, held = s.held;
+    var s = summary(), rows = s.rows, late = s.late, held = s.held;
     $('view').innerHTML = '<div id="hubs"></div><div id="hub-panels"></div>'
       + '<h2>Today</h2><p class="note">' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })) + ' · ' + esc(DATA.name) + (DATA.limited ? ' · newest 100 orders' : '') + '</p>'
       + (!DATA.active ? '<div class="warn">Omega Logic is not active on this workspace yet. Orders can be read; pricing and acceptance wait for setup on the desktop.</div>' : '')
-      + '<div class="kv" id="today-kv"><div><small>To price</small><b>' + ((bs.quote || 0) + (bs.priced || 0)) + '</b></div><div><small>Awaiting deposit</small><b>' + (bs.deposit || 0) + '</b></div><div><small>In build</small><b>' + ((bs.release || 0) + (bs.production || 0) + (bs.balance || 0)) + '</b></div><div><small>Ready · shipped</small><b>' + ((bs.ship || 0) + (bs.shipped || 0)) + '</b></div></div>'
+      /* the server's stage counts, the same six the desktop strip shows (OmegaLogicTheme.stageTiles) */
+      + '<div class="kv" id="today-kv">' + OmegaLogicTheme.stageTiles((DATA.totals || {}).byStage).map(function (t) { return '<div data-k="' + esc(t.k) + '"' + (t.bad ? ' class="bad"' : '') + '><small>' + esc(t.label) + '</small><b>' + t.n + '</b></div>'; }).join('') + '</div>'
       + '<div id="today-needs"></div>'
-      + '<h2>Money</h2><div class="kv"><div><small>Invoiced</small><b>' + dollars(s.invoiced) + '</b></div><div><small>Received</small><b>' + dollars(s.paid) + '</b></div><div class="' + (s.invoiced - s.paid > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(s.invoiced - s.paid) + '</b></div><div><small>Deposits awaiting</small><b>' + dollars(s.depositsOpen) + '</b></div>' + (s.toIssue ? '<div class="bad"><small>Invoices to issue</small><b>' + s.toIssue + '</b></div>' : '') + (s.overdue ? '<div class="bad"><small>Invoices overdue</small><b>' + s.overdue + '</b></div>' : '') + (s.exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + s.exceptions + '</b></div>' : '') + '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div></div>'
+      /* the receivables ledger's totals, the figures Accounting and the desktop print (OFF-02) */
+      + '<h2>Money</h2><div class="kv" id="money-kv">' + OmegaLogicTheme.moneyTiles(DATA.receivables).map(OmegaLogicTheme.tileHtml).join('') + (s.exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + s.exceptions + '</b></div>' : '') + '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div></div>'
       + '<h2>Plant</h2>' + (rows ? '<div class="kv"><div><small>Open work orders</small><b>' + rows.length + '</b></div><div class="' + (late.length ? 'bad' : '') + '"><small>Late</small><b>' + late.length + '</b></div><div class="' + (held.length ? 'bad' : '') + '"><small>With holds</small><b>' + held.length + '</b></div><div><small>Ready to ship</small><b>' + rows.filter(function (r) { return r.stage === 'ready'; }).length + '</b></div></div>' + (late.concat(held.filter(function (r) { return !r.late; })).slice(0, 4).map(function (r) { return '<div class="unit"><div><b>' + esc(r.orderNo) + '</b><small>' + esc(r.stageLabel) + (r.late ? ' · late · due ' + esc(r.due) : '') + (r.progress.held ? ' · ' + r.progress.held + ' on hold' : '') + '</small></div><span class="pill bad">' + (r.late ? 'late' : 'hold') + '</span></div>'; }).join('')) : '<p class="note">Plant board unavailable.</p>')
       + '<h2>' + esc((DATA.brand && DATA.brand.workspace) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record. The plant builds it, the office runs it, the customer places it: each app shows the same unit.</p><div class="kv"><a href="/plant/app' + q + '" style="text-decoration:none;color:inherit"><small>Plant</small><b style="font-size:15px">Work orders &amp; benches</b></a><a href="/plant/station.html" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a><a href="#" id="to-sites" style="text-decoration:none;color:inherit"><small>Sites</small><b style="font-size:15px">What the customer says</b></a><a href="/portals/customer/app' + q + '" style="text-decoration:none;color:inherit"><small>Customer</small><b style="font-size:15px">What they see</b></a></div>';
     paintHub(s); paintPanels(s); paintNeeds(s);
@@ -636,7 +619,8 @@
     var el = $('today-needs'); if (!el || !DATA) return; s = s || summary();
     var now = todayIso();
     el.innerHTML = '<h2>Needs a person · ' + s.count + '</h2>'
-      + (s.review ? '<button class="unit" id="to-review"><div><b>' + plural(s.review, 'company PO') + ' to review</b><small>uploaded by customers; map the lines and destinations on the desktop</small></div><span class="pill bad">review</span></button>' : '')
+      /* whose PO waits (OFF-03): a row per company; a company with one PO opens its review (a desktop page) */
+      + OmegaLogicTheme.reviewLinks(ORG, s).map(function (r) { return '<a class="unit" href="' + esc(r.href) + '" style="text-decoration:none;color:inherit"><div><b>' + esc(r.title) + '</b><small>' + esc(r.sub) + ' · on the desktop</small></div><span class="pill bad">review</span></a>'; }).join('')
       + s.follow.map(function (f) {
           var due = day(toIso(f.followUpAt)), late = !!due && due < now, who = f.company || f.customerName || customerName(f.customerId) || 'A customer';
           var inner = '<div><b>' + esc(f.subject || typeLabel(f.type)) + '</b><small>' + esc(who) + ' · ' + esc(typeLabel(f.type)) + (f.contactName ? ' · ' + esc(f.contactName) : '') + ' · ' + (!due ? 'no date' : (late ? 'was due ' : 'due ') + esc(due)) + '</small></div><span class="pill bad">' + (late ? 'overdue' : f.type === 'task' ? 'task' : 'follow up') + '</span>';
@@ -644,11 +628,12 @@
           return f.customerId ? '<div class="fu"><button class="unit" data-fu-cust="' + esc(f.customerId) + '">' + inner + '</button><button type="button" class="act" data-fu-today="' + esc(f.id) + '" data-fu-of="' + esc(f.customerId) + '">Done</button></div>' : '<div class="unit">' + inner + '</div>';
         }).join('')
       + (s.needs.slice(0, 8).map(function (n) { return '<button class="unit" data-order="' + esc(n.o.id) + '"><div><b>' + esc(n.o.orderNo) + '</b><small>' + esc(n.o.customer.company || n.o.customer.name || n.o.customer.email) + ' · ' + esc(n.why) + '</small></div><span class="pill bad">' + esc(n.pill) + '</span></button>'; }).join(''))
-      + (s.count ? '' : '<p class="note">Nothing waiting on the office. Every order is priced, every request answered' + (FOLLOW && !FOLLOW_ERR ? ', every follow-up done' : '') + '.</p>')
+      /* D1: a price or acceptance that is somebody else's step — shown, named, never counted as the office's */
+      + s.waiting.slice(0, 5).map(function (o) { return '<button class="unit" data-order="' + esc(o.id) + '"><div><b>' + esc(o.orderNo) + '</b><small>' + esc(orderWho(o)) + ' · ' + esc(waitingLine(o)) + '</small></div><span class="pill">waiting</span></button>'; }).join('')
+      + (s.count ? '' : '<p class="note">' + (s.waiting.length ? 'Nothing else is waiting on you.' : 'Nothing waiting on the office. Every order is priced, every request answered' + (FOLLOW && !FOLLOW_ERR ? ', every follow-up done' : '') + '.') + '</p>')
       + (s.followLater > 0 ? '<p class="note">' + plural(s.followLater, 'more follow-up') + ' scheduled for later; each shows here on its day.</p>' : '')
       + (FOLLOW_ERR ? '<p class="note">CRM follow-ups could not load: ' + esc(FOLLOW_ERR) + '</p>' : '');
     bindOrders();
-    if ($('to-review')) $('to-review').onclick = function () { TAB = 'pos'; draw(); };
     Array.prototype.forEach.call(el.querySelectorAll('[data-fu-cust]'), function (b) { b.onclick = function () { openCustomer(b.getAttribute('data-fu-cust'), 'activity'); }; });
     Array.prototype.forEach.call(el.querySelectorAll('[data-fu-today]'), function (b) {
       b.onclick = function () {
@@ -677,27 +662,34 @@
     if (!o) { PICK = null; return draw(); }
     var l = o.logic, c = l && l.commercial, b = boardFor(o), money = invoiceSums(o), key = stageKey(o);
     var reqs = (o.requests || []).slice().reverse();
-    $('view').innerHTML = '<button class="back" id="back">‹ Back</button><h1>' + esc(o.orderNo) + '</h1><p class="note">' + (o.customer.company ? '<b>' + esc(o.customer.company) + '</b> · ' : '') + esc(o.customer.name || '') + ' · ' + esc(o.customer.email) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + (o.createdAt ? ' · ' + esc(day(o.createdAt)) : '') + '</p>' + (o.customerId ? '<button class="back" id="open-acct" style="margin:0 0 8px">Open the ' + esc(o.customer.company || 'customer') + ' account ›</button>' : '')
-      + '<p><span class="pill' + (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : (key === 'exception' ? ' bad' : '')) + '">' + esc(stageLabel(o)) + '</span> <span class="note">' + esc(o.stage ? o.stage.next : '') + '</span></p>'
+    $('view').innerHTML = '<button class="back" id="back">‹ Back</button><h1>' + esc(o.orderNo) + '</h1><p class="note">' + (o.customer.company ? '<b>' + esc(o.customer.company) + '</b> · ' : '') + esc(o.customer.name || '') + ' · ' + esc(o.customer.email) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + (o.createdAt ? ' · ' + esc(OmegaLogicTheme.day(o.createdAt)) : '') + '</p>' + (o.customerId ? '<button class="back" id="open-acct" style="margin:0 0 8px">Open the ' + esc(o.customer.company || 'customer') + ' account ›</button>' : '')
+      + '<p><span class="pill' + (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : (key === 'exception' ? ' bad' : '')) + '">' + esc(stageLabel(o)) + '</span> <span class="note">' + esc(nextLine(o)) + '</span></p>'
       + (o.cancelRequested ? '<div class="warn">Cancellation requested. Refund and stock disposition need review on the desktop.</div>' : '')
       + (l && (l.lastError || l.paymentException) ? '<div class="warn">' + esc(l.paymentException || l.lastError) + '</div>' : '')
       + '<h2>Lines</h2>' + (o.items || []).map(function (i) { return '<div class="unit"><div>' + esc(i.name || i.sku) + '<small>' + esc(i.sku) + '</small></div><b>' + esc(i.qty) + '</b></div>'; }).join('')
-      + (c ? '<h2>Money</h2><div class="kv"><div><small>Customer total</small><b>' + dollars(c.totalCents) + '</b></div><div><small>Deposit</small><b>' + dollars(c.depositCents) + '</b><small>' + esc(c.terms ? c.terms.depositPct + '% · due in ' + c.terms.dueDays + ' days' : '') + '</small></div><div><small>Received</small><b>' + dollars(money.paid) + '</b></div><div class="' + (money.balance > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(money.balance) + '</b></div></div>'
+      + (c ? '<h2>Money</h2><div class="kv"><div><small>Customer total</small><b>' + dollars(c.totalCents) + '</b></div><div><small>Deposit</small><b>' + dollars(c.depositCents) + '</b><small>' + esc(c.terms ? c.terms.depositPct + '% · ' + dueWords(c.terms.dueDays) : '') + '</small></div><div><small>Received</small><b>' + dollars(money.paid) + '</b></div><div class="' + (money.balance > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(money.balance) + '</b></div></div>'
+          /* D1: who approved the price and accepted the order, and when */
+          + (l.pricedBy || l.acceptedBy ? '<p class="note">' + (l.pricedBy ? 'Price approved by ' + esc(l.pricedBy) + (l.pricedAt ? ' on ' + esc(OmegaLogicTheme.day(l.pricedAt)) : '') : '') + (l.pricedBy && l.acceptedBy ? ' · ' : '') + (l.acceptedBy ? 'Accepted by ' + esc(l.acceptedBy) + (l.acceptedAt ? ' on ' + esc(OmegaLogicTheme.day(l.acceptedAt)) : '') : '') + '</p>' : '')
+          /* UX-8: priced, not yet accepted — where the acceptance happens, or whom it waits on */
+          + (key === 'priced' ? '<p class="note" id="accept-note">' + ((o.can ? o.can.accept : DATA.owner) ? 'Priced, not yet accepted. Accept the order on the desktop (Work it on the desktop, below).' : esc(waitingLine(o).replace(/^waiting/, 'Waiting')) + '.') + '</p>' : '')
           + Object.keys(l.invoices || {}).map(function (k) {
               var i = l.invoices[k], pay = safeUrl(i.payUrl), tb = tenantBilled(l), owing = i.amountCents && i.status !== 'paid' && i.satisfied !== true;
-              return '<div class="unit"><div><b>' + esc(k) + ' invoice' + (i.id && tb ? ' · ' + esc(i.id) : '') + '</b><small>' + dollars(i.amountCents) + ' · ' + esc(String(i.status).replace(/_/g, ' ')) + ' · recorded ' + dollars(i.paidCents || 0) + (i.issuedAt ? ' · issued ' + esc(i.issuedAt) : '') + '</small></div>' + (pay ? '<a class="act" target="_blank" rel="noopener noreferrer" href="' + esc(pay) + '">Pay link</a>' : '') + '</div>'
+              return '<div class="unit"><div><b>' + esc(k) + ' invoice' + (i.id && tb ? ' · ' + esc(i.id) : '') + '</b><small>' + dollars(i.amountCents) + ' · ' + esc(OmegaLogicTheme.words(i.status)) + ' · recorded ' + dollars(i.paidCents || 0) + (i.issuedAt ? ' · issued ' + esc(OmegaLogicTheme.day(i.issuedAt)) : '') + '</small></div>' + (pay ? '<a class="act" target="_blank" rel="noopener noreferrer" href="' + esc(pay) + '">Pay link</a>' : '') + '</div>'
                 + (tb && owing && ADMIN !== false ? (!i.id
                     ? '<div class="row"><input data-inv-no="' + esc(k) + '" placeholder="Invoice number" maxlength="80"><input data-inv-date="' + esc(k) + '" type="date" value="' + todayIso() + '"></div><div class="row"><input data-inv-pay="' + esc(k) + '" type="url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="Pay link (https, optional)"><button data-issue="' + esc(k) + '">Issued</button></div><p class="note">The pay link is your own payment page for this invoice; the customer\'s Pay hub opens it.</p>'
                     : '<label class="lbl" for="pl-' + esc(k) + '">Pay link for invoice ' + esc(i.id) + ' — the customer\'s Pay hub opens it</label><div class="row"><input id="pl-' + esc(k) + '" data-link-url="' + esc(k) + '" type="url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="https://… (your payment page)" value="' + esc(i.payUrl || '') + '"><button data-link-save="' + esc(k) + '">' + (i.payUrl ? 'Change' : 'Add') + '</button></div>'
                       + '<div class="row"><input data-pay-amt="' + esc(k) + '" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="USD received"><input data-pay-date="' + esc(k) + '" type="date" value="' + todayIso() + '"></div><div class="row"><input data-pay-ref="' + esc(k) + '" placeholder="Bank ref"><button data-paid="' + esc(k) + '">Received</button></div>') : '');
             }).join('')
-        : '<h2>Money</h2><p class="note">' + (DATA.owner ? 'Not priced yet. Approve the customer price on the desktop.' : 'Not priced yet. ClearSky approves the customer price.') + '</p>')
-      + (b ? '<h2>Build</h2><div class="bar"><i style="width:' + b.progress.percent + '%' + (b.progress.held ? ';background:#B42318' : '') + '"></i></div><div class="kv"><div><small>Built</small><b>' + b.progress.percent + '%</b><small>' + b.progress.done + ' of ' + b.progress.total + ' steps</small></div><div><small>Ready to ship</small><b>' + b.progress.readyRoots + ' / ' + b.progress.expectedRoots + '</b></div><div class="' + (b.progress.held ? 'bad' : '') + '"><small>On hold</small><b>' + b.progress.held + '</b></div><div><small>' + (b.late ? 'Late · due' : 'Target') + '</small><b style="font-size:15px">' + esc(b.due || '—') + '</b></div></div>' + (l && l.allocatedSerials && l.allocatedSerials.length ? '<p class="note">' + l.allocatedSerials.length + ' unit' + (l.allocatedSerials.length === 1 ? '' : 's') + ' assigned from finished stock: ' + esc(l.allocatedSerials.join(', ')) + '</p>' : '') : (l && l.releasedAt ? '<h2>Build</h2><p class="note">Released to the plant ' + esc(day(l.releasedAt)) + '.</p>' : ''))
-      + (o.shipment ? '<h2>Shipment</h2><p>' + esc(o.shipment.carrier) + ' · ' + esc(o.shipment.tracking) + (o.shipment.shippedAt ? ' · ' + esc(day(o.shipment.shippedAt)) : '') + '</p>' : '')
+        /* D1: who approves the price — the server says (o.can, o.waitingOn) */
+        : '<h2>Money</h2><p class="note">Not priced yet. ' + ((o.can ? o.can.price : DATA.owner) ? 'Approve the customer price on the desktop (Work it on the desktop, below).' : esc(waitingLine(o).replace(/^waiting/, 'Waiting')) + '.') + '</p>')
+      + (b ? '<h2>Build</h2><div class="bar"><i style="width:' + b.progress.percent + '%' + (b.progress.held ? ';background:#B42318' : '') + '"></i></div><div class="kv"><div><small>Built</small><b>' + b.progress.percent + '%</b><small>' + b.progress.done + ' of ' + b.progress.total + ' steps</small></div><div><small>Ready to ship</small><b>' + b.progress.readyRoots + ' / ' + b.progress.expectedRoots + '</b></div><div class="' + (b.progress.held ? 'bad' : '') + '"><small>On hold</small><b>' + b.progress.held + '</b></div><div><small>' + (b.late ? 'Late · due' : 'Target') + '</small><b style="font-size:15px">' + esc(b.due || '—') + '</b></div></div>' + (l && l.allocatedSerials && l.allocatedSerials.length ? '<p class="note">' + l.allocatedSerials.length + ' unit' + (l.allocatedSerials.length === 1 ? '' : 's') + ' assigned from finished stock: ' + esc(l.allocatedSerials.join(', ')) + '</p>' : '') : (l && l.releasedAt ? '<h2>Build</h2><p class="note">Released to the plant ' + esc(OmegaLogicTheme.day(l.releasedAt)) + '.</p>' : ''))
+      + (o.shipment ? '<h2>Shipment</h2><p>' + esc(o.shipment.carrier) + ' · ' + esc(o.shipment.tracking) + (o.shipment.shippedAt ? ' · ' + esc(OmegaLogicTheme.day(o.shipment.shippedAt)) : '') + '</p>' : '')
       + '<h2>Customer requests · ' + openReq(o).length + ' open</h2>'
-      + (reqs.length ? reqs.map(function (r) { return '<div class="rq"><b>' + esc(r.kind) + '</b> <span class="note">' + esc(String(r.at || '').slice(0, 16).replace('T', ' ')) + ' · ' + esc(r.by) + ' · ' + esc(r.status) + '</span><p>' + esc(r.message) + '</p>' + (r.address ? '<p class="note">Requested address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '') + (r.status === 'open' && ADMIN === false ? '<p class="note">Open. A workspace administrator answers it.</p>' : r.status === 'open' ? '<textarea id="answer-' + esc(r.id) + '" maxlength="2000" placeholder="Answer to the customer" style="min-height:70px;font-family:inherit"></textarea><button class="big ghost" data-resolve="' + esc(r.id) + '">Answer &amp; close</button><p class="note">Make the change through its own control first (Shipping for an address, pricing for a change); this records the answer the customer sees.</p>' : '<div class="ans"><b>Answered:</b> ' + esc(r.answer) + ' <span class="note">' + esc(day(r.answeredAt)) + ' · ' + esc(r.answeredBy || '') + '</span></div>') + '</div>'; }).join('') : '<p class="note">No requests on this order.</p>')
+      + (reqs.length ? reqs.map(function (r) { return '<div class="rq"><b>' + esc(OmegaLogicTheme.words(r.kind)) + '</b> <span class="note">' + esc(OmegaLogicTheme.when(r.at)) + ' · ' + esc(r.by) + ' · ' + esc(r.status === 'open' ? 'open' : 'answered') + '</span><p>' + esc(r.message) + '</p>' + (r.address ? '<p class="note">Requested address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '') + (r.status === 'open' && ADMIN === false ? '<p class="note">Open. A workspace administrator answers it.</p>' : r.status === 'open' ? '<textarea id="answer-' + esc(r.id) + '" maxlength="2000" placeholder="Answer to the customer" style="min-height:70px;font-family:inherit"></textarea><button class="big ghost" data-resolve="' + esc(r.id) + '">Answer &amp; close</button><p class="note">Make the change through its own control first (Shipping for an address, pricing for a change); this records the answer the customer sees.</p>' : '<div class="ans"><b>Answered:</b> ' + esc(r.answer) + ' <span class="note">' + esc(OmegaLogicTheme.day(r.answeredAt)) + ' · ' + esc(r.answeredBy || '') + '</span></div>') + '</div>'; }).join('') : '<p class="note">No requests on this order.</p>')
       + (c && tenantBilled(l) && ADMIN === false && Object.keys(l.invoices || {}).length ? '<p class="note">Invoices and payments are recorded by a workspace administrator.</p>' : '')
       + ((key === 'balance' || key === 'production') && ADMIN !== false ? '<button class="big ghost" id="act-ready">Verify ready · invoice the balance</button>' : '')
+      /* the order's freight plan (sites grouped into lanes, the sheet a logistics partner prices from, prices and Accept) is a desktop screen; an administrator's, like api/logic-logistics.js */
+      + (ADMIN !== false ? '<a class="big ghost" id="order-freight" href="' + esc('/logic-logistics.html' + q + '&order=' + encodeURIComponent(o.id) + '#freight') + '">Freight plan on the desktop</a>' : '')
       + '<a class="big ghost" href="/omega-logic' + q + '&order=' + encodeURIComponent(o.id) + '">Work it on the desktop</a>';
     $('back').onclick = function () { PICK = null; draw(); };
     if ($('open-acct')) $('open-acct').onclick = function () { PICK = null; openCustomer(o.customerId); };
@@ -747,19 +739,20 @@
      open. Each opens its order, where it is issued, its pay link added or
      changed, and a payment recorded (api/logic-office.js). ─────────────── */
   function invLine(x) {
-    var i = x.i, sub = [orderWho(x.o), x.k + ' invoice' + (i.id ? ' ' + i.id : ''), x.due ? (x.state === 'overdue' ? 'was due ' : 'due ') + x.due : i.issuedAt ? 'issued ' + i.issuedAt : 'not issued', x.tb ? 'your paper' : 'QuickBooks'].filter(Boolean);
+    var i = x.i, sub = [orderWho(x.o), x.k + ' invoice' + (i.id ? ' ' + i.id : ''), x.due ? (x.state === 'overdue' ? 'was due ' : 'due ') + OmegaLogicTheme.day(x.due) : i.issuedAt ? 'issued ' + OmegaLogicTheme.day(i.issuedAt) : 'not issued', x.tb ? 'your invoice' : 'ClearSky QuickBooks'].filter(Boolean);
     return '<div class="inv"><div class="unit"><button type="button" class="back" data-order="' + esc(x.o.id) + '" style="text-align:left;min-width:0;flex:1"><b>' + esc(x.o.orderNo) + ' · ' + dollars(x.open) + '</b><small>' + sub.map(esc).join(' · ') + '</small></button>'
       + '<span class="acts">' + (x.state === 'issue' ? '<span class="pill bad">to issue</span>' : x.state === 'overdue' ? '<span class="pill bad">overdue</span>' : '<span class="pill">open</span>')
       + (x.pay ? '<a class="act" target="_blank" rel="noopener noreferrer" href="' + esc(x.pay) + '">Pay link</a>' : x.tb && i.id && ADMIN !== false ? '<button type="button" class="act" data-order="' + esc(x.o.id) + '">Add pay link</button>' : '') + '</span></div></div>';
   }
   function drawMoney() {
-    var s = summary(), inv = s.inv, groups = [['issue', 'To issue', 'Tenant-billed invoices not yet on your paper: open the order, enter your number and date, and your pay link if you have one.'], ['overdue', 'Overdue', 'Past the order\'s payment terms from the day the invoice was issued.'], ['open', 'Open', 'Issued and waiting for payment.']];
+    var s = summary(), inv = s.inv, groups = [['issue', 'To issue', 'Invoices your company bills but has not issued yet: open the order, enter your invoice number and date, and your pay link if you have one.'], ['overdue', 'Overdue', 'Past the order\'s payment terms from the day the invoice was issued.'], ['open', 'Open', 'Issued and waiting for payment.']];
     $('view').innerHTML = '<h1>Money</h1>'
-      + '<div class="kv"><div><small>Invoiced</small><b>' + dollars(s.invoiced) + '</b></div><div><small>Received</small><b>' + dollars(s.paid) + '</b></div><div class="' + (s.invoiced - s.paid > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(s.invoiced - s.paid) + '</b></div><div><small>Deposits awaiting</small><b>' + dollars(s.depositsOpen) + '</b></div></div>'
+      /* the receivables ledger's totals: the figures Accounting and the desktop print (OFF-02) */
+      + '<div class="kv" id="money-tiles">' + OmegaLogicTheme.moneyTiles(DATA.receivables).map(OmegaLogicTheme.tileHtml).join('') + '</div>'
       + (s.exceptions ? '<div class="warn">' + plural(s.exceptions, 'order') + ' with a payment exception; each is under Needs attention on Orders.</div>' : '')
       + groups.map(function (g) { var rows = inv.filter(function (x) { return x.state === g[0]; }); return '<h2>' + esc(g[1]) + ' · ' + rows.length + '</h2>' + (rows.length ? '<p class="note">' + esc(g[2]) + '</p>' + rows.map(invLine).join('') : '<p class="note">None.</p>'); }).join('')
       + (DATA.limited ? '<p class="note">From the newest 100 orders.</p>' : '')
-      + '<p class="note">A pay link is your own payment page for an invoice billed on your paper; the customer\'s Pay hub opens it. QuickBooks-billed invoices carry QuickBooks\' own link.</p>'
+      + '<p class="note">A pay link is your own payment page for an invoice your company issues; the customer\'s Pay hub opens it. An invoice ClearSky issues from its QuickBooks carries QuickBooks\' own link.</p>'
       + '<a class="big ghost" href="/omega-logic' + q + '#cash">Cash flow on the desktop</a>';
     bindOrders();
   }
@@ -774,7 +767,7 @@
       var active = (c.companies || []).filter(function (x) { return x.status === 'active'; });
       if (from && from.id === COMPANY_ID && !active.some(function (x) { return x.id === COMPANY_ID; })) status((from.company || 'That account') + ' is not an active company account, so POs cannot be entered for it. Its access is set on the desktop customer page (Account access).');
       el.innerHTML = '<div class="row"><select id="company"><option value="">Choose a company…</option>' + active.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === COMPANY_ID ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>'
-        + '<details><summary class="note">Add a company account</summary><input id="new-company" placeholder="Company name" maxlength="160"><input id="new-domain" placeholder="Email domain, e.g. inchargeus.com (optional)"><button class="big ghost" id="add-company">Create the account</button></details>'
+        + '<details><summary class="note">Add a company account</summary><input id="new-company" placeholder="Company name" maxlength="160"><input id="new-domain" placeholder="Email domain, e.g. example.com (optional)"><button class="big ghost" id="add-company">Create the account</button></details>'
         + '<div id="company-body"></div>';
       $('company').onchange = function () { COMPANY_ID = this.value; store('omega_office_app_company', COMPANY_ID); drawCompany(); };
       $('add-company').onclick = function () {
@@ -791,17 +784,18 @@
     loadCompany(COMPANY_ID).then(function (c) {
       el = $('company-body'); if (!el) return;
       var contacts = c.contacts || [], queue = (c.intake || []).filter(function (p) { return !p.convertedAt; });
-      el.innerHTML = '<h2>' + esc(c.company.name) + '</h2><p class="note">Terms: ' + esc(c.terms.depositPct) + '% deposit, due in ' + esc(c.terms.dueDays) + ' days' + (c.company.rep ? ' · rep ' + esc(c.company.rep.name) : '') + '</p>'
+      el.innerHTML = '<h2>' + esc(c.company.name) + '</h2><p class="note">Terms: ' + esc(c.terms.depositPct) + '% deposit, ' + esc(dueWords(c.terms.dueDays)) + (c.company.rep ? ' · rep ' + esc(c.company.rep.name) : '') + '</p>'
         + '<label class="note">Billing contact for these POs<select id="bulk-contact">' + (contacts.map(function (x) { return '<option value="' + esc(x.email) + '">' + esc(x.name) + ' · ' + esc(x.email) + '</option>'; }).join('') || '<option value="">Assign a company login on the desktop first</option>') + '</select></label>'
-        + '<label class="note">One line per product per PO: <b>PO number, SKU, qty, ship-to name, address, city, state, ZIP, requested date, notes</b></label><textarea id="bulk-text" placeholder="INC-4471, CC-C215, 4, InCharge Bakersfield, 1200 Depot Rd, Bakersfield, CA, 93307, 2026-11-15, dock B" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>'
+        + '<label class="note" for="bulk-text">One line per product per PO: <b>PO number, SKU, qty, ship-to name, address, city, state, ZIP, requested date, notes</b>. Paste rows straight from Excel or Google Sheets (a header row is skipped), or type them with commas; an address with a comma in it goes in "double quotes". One PO number is one order to ONE place.</label><textarea id="bulk-text" placeholder="PO-1001, ' + esc(((c.products || [])[0] || {}).sku || 'SKU-1') + ', 2, Main Street site, 100 Main St, Springfield, IL, 62701, 2026-11-15, dock 2" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>'
         + '<p class="note">Products: ' + esc((c.products || []).map(function (p) { return p.sku; }).join(', ') || 'none published') + '</p>'
-        + '<p id="bulk-preview" class="note">Paste or type lines above.</p><button class="big" id="bulk-go">Enter these purchase orders</button><div id="bulk-result"></div>'
-        + '<h2>Under review · ' + queue.length + '</h2>' + (queue.map(function (p) { return '<div class="unit"><div><b>' + esc(p.poNumber) + '</b><small>' + esc(String(p.status).replace(/_/g, ' ')) + ' · ' + esc(p.source) + ' · ' + esc(day(p.createdAt)) + (p.reviewNote ? ' · ' + esc(p.reviewNote) : '') + '</small></div><a class="pill" href="/customer-po' + q + '&office=1&customerId=' + encodeURIComponent(COMPANY_ID) + '&intake=' + encodeURIComponent(p.id) + '">review</a></div>'; }).join('') || '<p class="note">Nothing uploaded by this company is waiting for review.</p>')
-        + '<h2>Orders · ' + (c.orders || []).length + '</h2>' + ((c.orders || []).slice(0, 20).map(function (o) { return '<div class="unit"><div><b>' + esc(o.orderNo) + '</b>' + (o.poNumber ? ' <span class="note">PO ' + esc(o.poNumber) + '</span>' : '') + '<small>' + esc(o.items.map(function (i) { return i.qty + ' × ' + i.name; }).join('; ')) + (o.legs && o.legs.length ? ' · ' + o.legs.length + ' load' + (o.legs.length === 1 ? '' : 's') : '') + '</small></div><span class="pill">' + esc(o.status) + '</span></div>'; }).join('') || '<p class="note">No orders yet.</p>')
+        + '<p id="bulk-preview" class="note">Paste or type lines above.</p><p class="note" id="bulk-several" hidden>A PO number here goes to more than one address. Give each address its own PO number (one line group per site), or ask the customer to send it from their app with “One PO to several sites”: it then arrives under review below.</p><button class="big" id="bulk-go">Enter these purchase orders</button><div id="bulk-result"></div>'
+        + '<h2>Under review · ' + queue.length + '</h2>' + (queue.map(function (p) { return '<div class="unit"><div><b>' + esc(p.poNumber) + '</b><small>' + esc(OmegaLogicTheme.words(p.status)) + ' · ' + esc(OmegaLogicTheme.source(p.source)) + ' · ' + esc(OmegaLogicTheme.day(p.createdAt)) + (p.reviewNote ? ' · ' + esc(p.reviewNote) : '') + '</small></div><a class="pill" href="/customer-po' + q + '&office=1&customerId=' + encodeURIComponent(COMPANY_ID) + '&intake=' + encodeURIComponent(p.id) + '">review</a></div>'; }).join('') || '<p class="note">Nothing uploaded by this company is waiting for review.</p>')
+        + '<h2>Orders · ' + (c.orders || []).length + '</h2>' + ((c.orders || []).slice(0, 20).map(function (o) { return '<div class="unit"><div><b>' + esc(o.orderNo) + '</b>' + (o.poNumber ? ' <span class="note">PO ' + esc(o.poNumber) + '</span>' : '') + '<small>' + esc(o.items.map(function (i) { return i.qty + ' × ' + i.name; }).join('; ')) + (o.legs && o.legs.length ? ' · ' + o.legs.length + ' load' + (o.legs.length === 1 ? '' : 's') : '') + '</small></div><span class="pill">' + esc(o.milestone && o.milestone.label ? o.milestone.label : OmegaLogicTheme.words(o.status)) + '</span></div>'; }).join('') || '<p class="note">No orders yet.</p>')
         + '<a class="big ghost" href="/po-inbox?office=1&org=' + encodeURIComponent(ORG) + '">Company POs on the desktop</a>';
-      $('bulk-text').oninput = function () { $('bulk-preview').textContent = OmegaPoBulk.summary(OmegaPoBulk.parse(this.value)); };
+      function preview(r) { $('bulk-preview').textContent = OmegaPoBulk.summary(r); $('bulk-several').hidden = !(OmegaPoBulk.several && OmegaPoBulk.several(r)); }
+      $('bulk-text').oninput = function () { preview(OmegaPoBulk.parse(this.value)); };
       $('bulk-go').onclick = function () {
-        var r = OmegaPoBulk.parse($('bulk-text').value); $('bulk-preview').textContent = OmegaPoBulk.summary(r);
+        var r = OmegaPoBulk.parse($('bulk-text').value); preview(r);
         if (!OmegaPoBulk.ready(r)) { status('Fix the lines first.'); return; }
         if (!$('bulk-contact').value) { status('Choose the billing contact.'); return; }
         if (!confirm('Enter ' + r.pos.length + ' purchase order' + (r.pos.length === 1 ? '' : 's') + ' for ' + c.company.name + '?')) return;
@@ -817,8 +811,8 @@
   }
 
   /* ── Customers: the Customer hub ─────────────────────────────────────────
-     A customer is a COMPANY ACCOUNT with people on it (Amperage Capital:
-     Shannon and his colleagues). The hub opens the account — its people,
+     A customer is a COMPANY ACCOUNT with people on it (a fleet buyer and
+     its colleagues). The hub opens the account — its people,
      every order on it, money, sites and units — never one person's slice. */
   var CUST_FILTER = '';
   function drawCustomers() {
@@ -993,7 +987,7 @@
 
   /* ── the rows each section is made of ── */
   function accountOrderRow(o) {
-    return '<button class="unit" data-order="' + esc(o.id) + '"><div><b>' + esc(o.orderNo) + (o.poNumber ? ' · PO ' + esc(o.poNumber) : '') + '</b><small>' + esc(o.stage ? o.stage.label : o.status) + ' · ' + esc((o.items || []).map(function (i) { return i.qty + ' × ' + (i.name || i.sku); }).join(', ')) + (o.billedTo && o.billedTo.name ? ' · ' + esc(o.billedTo.name) : '') + (o.shippedAt ? ' · shipped ' + esc(day(o.shippedAt)) : '') + '</small></div><div style="text-align:right;flex:none"><b>' + dollars(o.invoicedCents) + '</b><small>' + (o.balanceCents > 0 ? dollars(o.balanceCents) + ' open' : o.invoicedCents ? 'paid' : 'not invoiced') + (o.openRequests ? ' · ' + plural(o.openRequests, 'request') : '') + '</small></div></button>';
+    return '<button class="unit" data-order="' + esc(o.id) + '"><div><b>' + esc(o.orderNo) + (o.poNumber ? ' · PO ' + esc(o.poNumber) : '') + '</b><small>' + esc(o.stage ? o.stage.label : o.status) + ' · ' + esc((o.items || []).map(function (i) { return i.qty + ' × ' + (i.name || i.sku); }).join(', ')) + (o.billedTo && o.billedTo.name ? ' · ' + esc(o.billedTo.name) : '') + (o.shippedAt ? ' · shipped ' + esc(OmegaLogicTheme.day(o.shippedAt)) : '') + '</small></div><div style="text-align:right;flex:none"><b>' + dollars(o.invoicedCents) + '</b><small>' + (o.balanceCents > 0 ? dollars(o.balanceCents) + ' open' : o.invoicedCents ? 'paid' : 'not invoiced') + (o.openRequests ? ' · ' + plural(o.openRequests, 'request') : '') + '</small></div></button>';
   }
   function fuLine(a) {
     var due = day(toIso(a.followUpAt)), now = todayIso(), late = !!due && due < now, on = !due || due === now, who = contactOf(a.contactId);
@@ -1015,7 +1009,7 @@
     return '<div class="rq"><span class="tk">' + esc(typeLabel(a.type)) + '</span> <b>' + esc(a.subject || '') + '</b>'
       + '<small class="note">' + [when(a.at), a.by || '', who ? 'with ' + who.name : a.contactName ? 'with ' + a.contactName : '', ord ? ord.orderNo : a.orderNo || ''].filter(Boolean).map(esc).join(' · ') + '</small>'
       + (a.body && a.body !== a.subject ? '<p>' + esc(a.body) + '</p>' : '')
-      + (a.followUpAt || a.type === 'task' ? '<div class="acts start">' + (owed ? '<span class="pill' + (!due || due <= todayIso() ? ' bad' : '') + '">' + (due ? 'follow up ' + esc(due) : 'to do') + '</span>' + (canEdit() ? '<button type="button" class="act" data-fu-done="' + esc(a.id) + '">Done</button>' : '') : '<span class="pill ok">' + (a.followUpAt ? 'followed up' : 'done') + (a.doneAt ? ' ' + esc(day(toIso(a.doneAt))) : '') + '</span>') + '</div>' : '')
+      + (a.followUpAt || a.type === 'task' ? '<div class="acts start">' + (owed ? '<span class="pill' + (!due || due <= todayIso() ? ' bad' : '') + '">' + (due ? 'follow up ' + esc(due) : 'to do') + '</span>' + (canEdit() ? '<button type="button" class="act" data-fu-done="' + esc(a.id) + '">Done</button>' : '') : '<span class="pill ok">' + (a.followUpAt ? 'followed up' : 'done') + (a.doneAt ? ' ' + esc(OmegaLogicTheme.day(a.doneAt)) : '') + '</span>') + '</div>' : '')
       + '</div>';
   }
   function contactRow(x) {
@@ -1052,7 +1046,7 @@
   }
 
   /* ── the sections ── */
-  function termsLine(c) { return c.terms ? esc(c.terms.depositPct) + '% deposit · due in ' + esc(c.terms.dueDays) + ' days' : 'the workspace terms'; }
+  function termsLine(c) { return c.terms ? esc(c.terms.depositPct) + '% deposit · ' + esc(dueWords(c.terms.dueDays)) : 'the workspace terms'; }
   function secOverview(c) {
     var t = c.totals || {}, reqs = (c.orders || []).filter(function (o) { return o.openRequests; }), fus = accountFollowUps(), tl = crmOk() ? newestFirst(CRM.timeline || []) : [];
     var quick = mayEnterPo() ? [['po', '▥', 'Enter a PO']] : [];
@@ -1065,7 +1059,7 @@
       + '<h2>Their app</h2><div class="card form"><b>' + esc((DATA && DATA.brand && DATA.brand.name) || 'Customer app') + '</b><div class="m" style="overflow-wrap:anywhere">' + esc(c.appUrl || '') + '</div><div class="row" style="margin-top:8px"><button id="app-share">Send the app link</button><button id="portal-share">Desktop link</button></div></div>'
       + (c.limitedAccess
         ? '<h2>Terms</h2><p class="note">' + termsLine(c) + '. The company\'s email domain, its access and its terms are set by a workspace administrator.</p>'
-        : '<label class="note" for="c-domain">Company email domain — people who sign in from it ask to join this account</label><div class="row"><input id="c-domain" placeholder="e.g. amperagecapital.com" value="' + esc(c.domain || '') + '" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="c-domain-save">Save</button></div>'
+        : '<label class="note" for="c-domain">Company email domain — people who sign in from it ask to join this account</label><div class="row"><input id="c-domain" placeholder="e.g. example.com" value="' + esc(c.domain || '') + '" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="c-domain-save">Save</button></div>'
           + '<h2>Terms</h2><p class="note">For the whole account; applies to future prices, issued invoices keep theirs.</p><div class="row"><input id="t-dep" type="number" min="0" max="100" inputmode="numeric" value="' + esc(c.terms.depositPct) + '" aria-label="Deposit %"><input id="t-due" type="number" min="0" inputmode="numeric" value="' + esc(c.terms.dueDays) + '" aria-label="Due in days"></div><p class="note">Deposit % · due in days</p><button class="big ghost" id="save-terms">Save terms</button>')
       + (c.address ? '<h2>Delivery address</h2><p>' + esc([c.address.line1, c.address.city, c.address.state, c.address.zip].filter(Boolean).join(', ')) + '</p>' : '');
   }
@@ -1077,10 +1071,11 @@
       + (unknown === 'role' ? ' Your role in this workspace cannot see who they are; office members and administrators can.' : unknown ? ' Who they are could not be read just now; refresh to try again.' : ro ? ' Approving, turning off and adding people is for a workspace administrator.' : '') + '</p>'
       + (people.map(function (u) {
           var st = u.status || 'active', lastOwner = u.role === 'owner' && st === 'active' && people.filter(function (x) { return x.role === 'owner' && (x.status || 'active') === 'active'; }).length === 1;
-          return '<div class="unit"><div><b>' + esc(u.name || u.email) + '</b><small>' + (u.name ? esc(u.email) + ' · ' : '') + esc(u.role) + (st === 'pending' ? ' · asked to join ' + esc(day(u.requestedAt)) : st === 'disabled' ? ' · access off' : u.activated ? '' : ' · not signed in yet') + '</small></div>'
+          return '<div class="unit"><div><b>' + esc(u.name || u.email) + '</b><small>' + (u.name ? esc(u.email) + ' · ' : '') + esc(u.role) + (st === 'pending' ? ' · asked to join ' + esc(OmegaLogicTheme.day(u.requestedAt)) : st === 'disabled' ? ' · access off' : u.activated ? '' : ' · not signed in yet') + '</small></div>'
             + (ro ? '' : '<span class="acts">'
               + (st === 'pending' ? '<button class="act go" data-pact="active" data-email="' + esc(u.email) + '">Approve</button><button class="act" data-pact="disabled" data-email="' + esc(u.email) + '">Decline</button>' : st === 'disabled' ? '<button class="act" data-pact="active" data-email="' + esc(u.email) + '">Turn on</button>' : lastOwner ? '' : '<button class="act" data-pact="disabled" data-email="' + esc(u.email) + '">Turn off</button>')
-              + (st === 'active' ? '<button class="act" data-pinv="' + esc(u.email) + '">Invite</button>' : '') + '</span>') + '</div>';
+              /* OFF-05: with the workspace's invitation email off (the server's inviteEmail), the button is what it does: share the app link */
+              + (st === 'active' ? '<button class="act" data-pinv="' + esc(u.email) + '">' + (c.inviteEmail === false ? 'Share app link' : 'Invite') + '</button>' : '') + '</span>') + '</div>';
         }).join('') || (unknown ? '' : '<p class="note">Nobody on this account yet.</p>'))
       + (ro ? '' : '<div class="card form"><b>Add a person</b><input id="np-email" type="email" placeholder="Their work email" autocomplete="off" autocapitalize="off" spellcheck="false"><input id="np-name" placeholder="Their name" maxlength="120"><select id="np-role"><option value="user">User</option><option value="owner">Owner (manages the people)</option></select><button class="big" id="np-add">Add to ' + esc(c.company || 'the account') + '</button><p class="note">They sign in to the customer app with this email and see the whole account. Someone at the company who already signed in on their own is moved onto it, when their own account is empty.</p></div>')
       + '<h2>Contacts · ' + list.length + '</h2><p class="note">People at ' + esc(c.company || 'the company') + ' who never log in — site leads, accounts payable, engineers.</p>'
@@ -1090,7 +1085,7 @@
     if (!crmOk()) return crmDown();
     var acts = newestFirst((CRM.activity || []).filter(function (a) { return !a.archived; })), fus = accountFollowUps(), list = contacts();
     return (canEdit() ? '<div class="card form" id="log-form"><b>Log it</b><div class="chips" role="group" aria-label="What happened">' + ACT_TYPES.map(function (t) { return '<button type="button" data-atype="' + t[0] + '" aria-pressed="' + (ACT_TYPE === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>'
-      + '<input id="lg-subject" placeholder="Subject, e.g. Fresno delivery window" maxlength="160" autocomplete="off">'
+      + '<input id="lg-subject" placeholder="Subject, e.g. Site delivery window" maxlength="160" autocomplete="off">'
       + '<textarea id="lg-body" class="plain" placeholder="What was said, what was agreed" maxlength="4000"></textarea>'
       + '<label class="lbl" for="lg-at">When</label><input id="lg-at" type="datetime-local" value="' + nowLocal() + '">'
       + '<label class="lbl" for="lg-contact">With</label><select id="lg-contact"><option value="">— no contact —</option>' + list.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === ACT_CONTACT ? ' selected' : '') + '>' + esc(x.name || x.email) + (x.title ? ' · ' + esc(x.title) : '') + '</option>'; }).join('') + '</select>'
@@ -1127,7 +1122,7 @@
   function drawCustomer() {
     var c = CUST, sec = CUST_SEC, people = c.people || [];
     var n = { people: people.length + contacts().length, documents: crmOk() ? (CRM.files || []).filter(function (f) { return !f.archived; }).length : 0, orders: (c.orders || []).length, activity: accountFollowUps().length };
-    $('view').innerHTML = '<button class="back" id="back">‹ Customers</button><h1>' + esc(c.company || c.email || c.customerId) + '</h1><p class="note">' + esc(c.accountType === 'company' ? 'Company account' : 'Account') + ' · ' + esc(c.status) + (c.createdAt ? ' · since ' + esc(day(toIso(c.createdAt))) : '') + (c.rep && c.rep.name ? ' · rep ' + esc(c.rep.name) : '') + '</p>'
+    $('view').innerHTML = '<button class="back" id="back">‹ Customers</button><h1>' + esc(c.company || c.email || c.customerId) + '</h1><p class="note">' + esc(c.accountType === 'company' ? 'Company account' : 'Account') + ' · ' + esc(c.status) + (c.createdAt ? ' · since ' + esc(OmegaLogicTheme.day(c.createdAt)) : '') + (c.rep && c.rep.name ? ' · rep ' + esc(c.rep.name) : '') + '</p>'
       + '<div class="seg" id="cust-seg" role="tablist" aria-label="Account sections">' + SECTIONS.map(function (s) { var on = sec === s[0]; return '<button type="button" role="tab" data-sec="' + s[0] + '" aria-pressed="' + on + '" aria-selected="' + on + '">' + esc(s[1]) + (n[s[0]] ? ' <small>' + n[s[0]] + '</small>' : '') + '</button>'; }).join('') + '</div>'
       + '<div id="cust-body">' + (sec === 'people' ? secPeople(c) : sec === 'activity' ? secActivity(c) : sec === 'documents' ? secDocuments(c) : sec === 'orders' ? secOrders(c) : sec === 'timeline' ? secTimeline() : sec === 'sites' ? '<h2>Sites &amp; units</h2><div id="cust-sites"><p class="note">Loading…</p></div>' : secOverview(c)) + '</div>';
     $('back').onclick = function () { CUST = null; CRM = null; draw(); };
@@ -1160,7 +1155,7 @@
          is sent, so the company's name, address and access are untouched */
       if ($('c-domain-save')) $('c-domain-save').onclick = function () {
         var btn = this, d = $('c-domain').value.trim().toLowerCase().replace(/^@/, '');
-        if (d && !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) { status('Type the domain only, e.g. amperagecapital.com.'); return; }
+        if (d && !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) { status('Type the domain only, e.g. example.com.'); return; }
         btn.disabled = true; status('Saving…');
         api('/api/buyers', { action: 'profile', customerId: c.customerId, domain: d }).then(function () { return reopen(d ? 'Saved. People who sign in from ' + d + ' now ask to join ' + (c.company || 'this account') + '.' : 'Saved. No company domain on this account.'); })['catch'](function (e) { fail(e); btn.disabled = false; });
       };
@@ -1186,7 +1181,9 @@
       });
       each('[data-pinv]', function (bt) {
         bt.onclick = function () {
-          var who = bt.getAttribute('data-pinv'); bt.disabled = true; status('Sending…');
+          var who = bt.getAttribute('data-pinv');
+          if (c.inviteEmail === false) { status('Invitation email is off for this workspace; share the app link with ' + who + '.'); shareLink(c.appUrl, c.company || 'Your account'); return; }
+          bt.disabled = true; status('Sending…');
           api('/api/buyers', { action: 'invite', customerId: c.customerId, email: who }).then(function (r) { status(r.note || 'Sent.'); })['catch'](function (e) { status(e.message + ' Sending the link instead.'); shareLink(c.appUrl, c.company || 'Your account'); }).then(function () { bt.disabled = false; });
         };
       });
@@ -1277,16 +1274,17 @@
     $('view').innerHTML = '<h1>Stock</h1><div id="stock-body"><p class="note">Loading…</p></div>';
     Promise.all([loadUnits(), loadMaterials()['catch'](function () { return null; })]).then(function (r) {
       var el = $('stock-body'); if (!el) return;
-      var units = r[0], m = r[1], by = {};
-      units.forEach(function (u) { if (!u.shipUnit) return; var g = by[u.sku] = by[u.sku] || { available: [], assigned: 0, building: 0 }; if (u.inventoryStatus === 'available' && u.at === 'ready' && !u.hold) g.available.push(u); else if (u.orderId) g.assigned++; else g.building++; });
+      var st = r[0] || {}, m = r[1], by = {}, capped = st.limited && (st.limited.available || st.limited.allocated || st.limited.building);
+      (st.skus || []).forEach(function (g) { by[g.sku] = { available: [], held: Number(g.held) || 0, assigned: Number(g.assigned) || 0, building: Number(g.building) || 0, count: Number(g.available) || 0 }; });
+      (st.available || []).forEach(function (u) { var g = by[u.sku] || (by[u.sku] = { available: [], held: 0, assigned: 0, building: 0, count: 0 }); g.available.push(u); });
       var skus = Object.keys(by).sort();
       var short = m ? (m.rows || []).filter(function (x) { return x.kind === 'component' && !x.make && (x.net.committed + x.net.pipeline + (x.net.buffer || 0)) > 0; }) : [];
       var pos = m ? (m.purchaseOrders || []).filter(function (p) { return ['received', 'cancelled'].indexOf(p.status) < 0; }) : [];
       el.innerHTML = '<h2>Finished units</h2><p class="note">Available is finished, tested and unassigned. Assign one to an order that needs it; the plant then builds one fewer for that order.</p>'
-        + (skus.map(function (s) { var g = by[s], want = needs(s); return '<div class="unit"><div><b>' + esc(s) + '</b><small>' + g.available.length + ' available · ' + g.assigned + ' assigned · ' + g.building + ' building' + (want.length ? ' · ' + want.length + ' order' + (want.length === 1 ? '' : 's') + ' waiting' : '') + '</small></div><span class="pill' + (g.available.length ? ' ok' : '') + '">' + g.available.length + ' on the shelf</span></div>'
-            + g.available.map(function (u) { return '<div class="unit" style="border-top:0;padding-top:0"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.unitType || 'unit') + (u.test && u.test.result ? ' · test ' + esc(u.test.result) : '') + '</small></div>' + (want.length ? '<div class="row" style="flex:1;max-width:60%"><select data-for="' + esc(u.serial) + '"><option value="">Assign to…</option>' + want.map(function (o) { return '<option value="' + esc(o.id) + '">' + esc(o.orderNo) + ' · ' + esc(o.customer.name) + '</option>'; }).join('') + '</select><button data-assign="' + esc(u.serial) + '">Go</button></div>' : '<span class="pill">no order needs it</span>') + '</div>'; }).join(''); }).join('') || '<p class="note">No finished shipping units in the newest 100.</p>')
+        + (skus.map(function (s) { var g = by[s], want = needs(s); return '<div class="unit"><div><b>' + esc(s) + '</b><small>' + (capped ? 'at least ' : '') + Math.max(g.count, g.available.length) + ' available' + (g.held ? ' · ' + g.held + ' held' : '') + ' · ' + g.assigned + ' assigned · ' + g.building + ' building' + (want.length ? ' · ' + want.length + ' order' + (want.length === 1 ? '' : 's') + ' waiting' : '') + '</small></div><span class="pill' + (g.available.length ? ' ok' : '') + '">' + Math.max(g.count, g.available.length) + ' on the shelf</span></div>'
+            + g.available.map(function (u) { return '<div class="unit" style="border-top:0;padding-top:0"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.unitType || 'unit') + (u.test && u.test.result ? ' · test ' + esc(u.test.result) : '') + '</small></div>' + (want.length ? '<div class="row" style="flex:1;max-width:60%"><select data-for="' + esc(u.serial) + '"><option value="">Assign to…</option>' + want.map(function (o) { return '<option value="' + esc(o.id) + '">' + esc(o.orderNo) + ' · ' + esc(orderWho(o)) + '</option>'; }).join('') + '</select><button data-assign="' + esc(u.serial) + '">Go</button></div>' : '<span class="pill">no order needs it</span>') + '</div>'; }).join(''); }).join('') || '<p class="note">No finished shipping units in the newest 100.</p>')
         + '<h2>Parts short · ' + short.length + '</h2>' + (m ? (short.map(function (x) { var firm = Math.ceil(x.net.committed + x.net.pipeline + (x.net.buffer || 0)); return '<div class="unit"><div>' + esc(x.name) + '<small>' + esc(x.sku) + ' · on hand ' + x.onHand + ' · on order ' + x.onOrder + (x.orderBy ? ' · order by ' + esc(x.orderBy) : '') + (x.supplier ? ' · ' + esc(x.supplier) : '') + '</small></div><span class="pill bad">' + firm + ' ' + esc(x.unit) + (x.late ? ' · late' : '') + '</span></div>'; }).join('') || '<p class="note">✓ Nothing short for the open work.</p>') + '<p class="note">Purchase list value ' + (m.summary && m.summary.spend != null ? '$' + Number(m.summary.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '.</p>' : '<p class="note">Materials plan unavailable.</p>')
-        + '<h2>Purchase orders open · ' + pos.length + '</h2>' + (pos.map(function (p) { var lines = (p.lines || []); return '<div class="unit"><div><b>' + esc(p.reference || p.id) + '</b><small>' + esc(p.supplier || '') + ' · ' + esc(lines.map(function (l) { return (l.received || 0) + '/' + l.qty + ' ' + l.sku; }).join(', ')) + (p.expectedAt ? ' · expected ' + esc(day(p.expectedAt)) : '') + '</small></div><span class="pill">' + esc(String(p.status || '').replace(/_/g, ' ')) + '</span></div>'; }).join('') || '<p class="note">None open.</p>')
+        + '<h2>Purchase orders open · ' + pos.length + '</h2>' + (pos.map(function (p) { var lines = (p.lines || []); return '<div class="unit"><div><b>' + esc(p.reference || p.id) + '</b><small>' + esc(p.supplier || '') + ' · ' + esc(lines.map(function (l) { return (l.received || 0) + '/' + l.qty + ' ' + l.sku; }).join(', ')) + (p.expectedAt ? ' · expected ' + esc(OmegaLogicTheme.day(p.expectedAt)) : '') + '</small></div><span class="pill">' + esc(String(p.status || '').replace(/_/g, ' ')) + '</span></div>'; }).join('') || '<p class="note">None open.</p>')
         + '<a class="big ghost" href="/logic-materials.html' + q + '">Buy and receive on the desktop</a>';
       Array.prototype.forEach.call(el.querySelectorAll('[data-assign]'), function (b) {
         b.onclick = function () {
@@ -1310,7 +1308,7 @@
     if (LOADS) return Promise.resolve(LOADS);
     return api('/api/logic-logistics' + q).then(function (d) { LOADS = []; (d.orders || []).forEach(function (o) { (o.legs || []).forEach(function (l) { if (l.status !== 'closed' && l.status !== 'received') LOADS.push({ orderId: o.id, orderNo: o.orderNo, legId: l.id, status: l.status, serials: l.serials || [] }); }); }); return LOADS; })['catch'](function () { LOADS = []; return LOADS; });
   }
-  function covLine(c) { return '<div class="unit"><div>' + esc(c.type === 'sla' ? 'Service level' : 'Warranty') + ' <span class="mono">' + esc(c.templateId || c.id || '') + '</span><small>' + (c.status === 'active' ? 'until ' + esc(day(c.endDate || c.until)) + ' · from ' + esc(day(c.startDate || c.from)) : c.status === 'pending' ? esc(c.why || 'not started') : c.status === 'expired' ? 'ended ' + esc(day(c.endDate || c.until)) : esc(c.status)) + '</small></div><span class="pill' + (c.status === 'active' ? ' ok' : c.status === 'expired' ? ' bad' : '') + '">' + esc(c.status) + '</span></div>'; }
+  function covLine(c) { return '<div class="unit"><div>' + esc(c.type === 'sla' ? 'Service level' : 'Warranty') + ' <span class="mono">' + esc(c.templateId || c.id || '') + '</span><small>' + (c.status === 'active' ? 'until ' + esc(OmegaLogicTheme.day(c.endDate || c.until)) + ' · from ' + esc(OmegaLogicTheme.day(c.startDate || c.from)) : c.status === 'pending' ? esc(c.why || 'not started') : c.status === 'expired' ? 'ended ' + esc(OmegaLogicTheme.day(c.endDate || c.until)) : esc(c.status)) + '</small></div><span class="pill' + (c.status === 'active' ? ' ok' : c.status === 'expired' ? ' bad' : '') + '">' + esc(c.status) + '</span></div>'; }
   function siteName(id) { var s = ((CUSTODY && CUSTODY.sites) || []).filter(function (x) { return x.id === id; })[0]; return s ? s.name : id; }
   function siteOptions(sel) { return ((CUSTODY && CUSTODY.sites) || []).filter(function (s) { return s.status !== 'inactive'; }).map(function (s) { return '<option value="' + esc(s.id) + '"' + (s.id === sel ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join(''); }
   /* the camera reads the label (omega-scan.js: the browser's own reader, or
@@ -1330,7 +1328,7 @@
       var el = $('sites-body'); if (!el) return; var c = r[0], loads = r[1], tc = c.toConfirm || [], pl = c.planned || [], counts = c.counts || {};
       el.innerHTML = '<div class="kv"><div><small>In transit</small><b>' + esc(counts.in_transit || 0) + '</b></div><div><small>Received · assigned</small><b>' + esc((counts.received || 0) + (counts.delivered || 0)) + ' · ' + esc(counts.assigned || 0) + '</b></div><div><small>Installed · commissioned</small><b>' + esc(counts.installed || 0) + ' · ' + esc((counts.commissioned || 0) + (counts.in_service || 0)) + '</b></div><div class="' + ((c.exceptions || []).length ? 'bad' : '') + '"><small>Exceptions</small><b>' + esc((c.exceptions || []).length) + '</b></div></div>'
         + '<h2>The customer says · ' + tc.length + '</h2><p class="note">Units the customer placed at a site from their phone. Confirm each once the install is verified, or open it to correct it.</p>'
-        + (tc.map(function (u) { return '<div class="unit" data-declared="' + esc(u.serial) + '"><button class="back" data-open="' + esc(u.serial) + '" style="text-align:left;min-width:0"><span class="mono">' + esc(u.serial) + '</span><small>at ' + esc(u.custody.siteName || u.custody.siteId) + (u.custody.position ? ' · ' + esc(u.custody.position) : '') + ' · ' + esc(u.custody.label) + ' · since ' + esc(day(u.custody.declaredAt)) + '</small></button><button data-confirm="' + esc(u.serial) + '" style="padding:8px 14px;border:1px solid var(--brand);background:white;color:var(--brand-d);border-radius:8px">Confirm</button></div>'; }).join('') || '<p class="note">✓ Nothing awaiting confirmation.</p>')
+        + (tc.map(function (u) { return '<div class="unit" data-declared="' + esc(u.serial) + '"><button class="back" data-open="' + esc(u.serial) + '" style="text-align:left;min-width:0"><span class="mono">' + esc(u.serial) + '</span><small>at ' + esc(u.custody.siteName || u.custody.siteId) + (u.custody.position ? ' · ' + esc(u.custody.position) : '') + ' · ' + esc(u.custody.label) + ' · since ' + esc(OmegaLogicTheme.day(u.custody.declaredAt)) + '</small></button><button data-confirm="' + esc(u.serial) + '" style="padding:8px 14px;border:1px solid var(--brand);background:white;color:var(--brand-d);border-radius:8px">Confirm</button></div>'; }).join('') || '<p class="note">✓ Nothing awaiting confirmation.</p>')
         + (pl.length ? '<h2>Going to · ' + pl.length + '</h2>' + pl.map(function (u) { return '<button class="unit" data-open="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.custody.label) + ' → ' + esc(u.custody.plannedSiteName || u.custody.plannedSiteId) + ' · said by the ' + esc(u.custody.plannedBy || 'office') + '</small></div><span class="pill">going to</span></button>'; }).join('') : '')
         + '<h2>Receive a load</h2><p class="note">Choose the load Shipping planned, then scan or type each serial. Shorts and strays are named; a unit the customer already said is going to a site is bound there.</p>'
         + '<select id="rc-load"><option value="">— choose the load —</option>' + loads.map(function (l, i) { return '<option value="' + i + '">' + esc(l.orderNo) + ' · ' + esc(l.legId) + ' · ' + l.serials.length + ' unit' + (l.serials.length === 1 ? '' : 's') + '</option>'; }).join('') + '</select>'
@@ -1364,7 +1362,7 @@
       $('su-serial').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); $('su-go').click(); } };
       Array.prototype.forEach.call(el.querySelectorAll('[data-open]'), function (b) { b.onclick = function () { SERIAL = b.getAttribute('data-open'); draw(); window.scrollTo(0, 0); }; });
       Array.prototype.forEach.call(el.querySelectorAll('[data-confirm]'), function (b) { b.onclick = function () { b.disabled = true; status('Confirming…'); api('/api/logic-custody', { action: 'confirm', serial: b.getAttribute('data-confirm') }).then(function (r) { status(r.say || 'Confirmed.'); CUSTODY = null; drawSites(); })['catch'](function (e) { fail(e); b.disabled = false; }); }; });
-    })['catch'](function (e) { var el = $('sites-body'); if (el) el.innerHTML = '<p class="note" style="color:#B42318">' + esc(e.message) + '</p>'; });
+    })['catch'](function (e) { var el = $('sites-body'); if (el) el.innerHTML = '<p class="note" style="color:#B42318">' + esc(OmegaLogicTheme.plainError(e)) + '</p>'; });
   }
   function drawSiteUnit() {
     $('view').innerHTML = '<button class="back" id="back">‹ Sites</button><div id="su-body"><p class="note">Loading…</p></div>';
@@ -1374,14 +1372,14 @@
       function can(m) { return moves[m] && moves[m].from.indexOf(c.status) >= 0 && c.state !== 'scrapped'; }
       el.innerHTML = '<h1 class="mono" style="font-family:\'IBM Plex Mono\',monospace;font-size:20px">' + esc(u.serial) + '</h1><p class="note">' + esc(d.product ? d.product.name : u.sku) + ' · ' + esc(u.orderNo || 'stock') + '</p>'
         + '<div class="kv"><div><small>Custody</small><b style="font-size:16px">' + esc(c.label) + '</b>' + (c.state ? '<small style="color:#B42318">' + esc(c.state) + '</small>' : '') + '</div><div><small>Site</small><b style="font-size:16px">' + esc(c.siteName || (c.plannedSiteName ? 'going to ' + c.plannedSiteName : '—')) + '</b>' + (c.position ? '<small>' + esc(c.position) + '</small>' : '') + '</div></div>'
-        + (c.siteId ? (c.confirmation === 'confirmed' ? '<p class="note"><span class="pill ok">confirmed</span> by ' + esc(c.confirmedBy || '') + ' on ' + esc(day(c.confirmedAt)) + '</p>' : '<p class="note"><span class="pill">customer says</span> at ' + esc(c.siteName) + ' since ' + esc(day(c.declaredAt)) + ' · not yet confirmed</p><button class="big" id="su-confirm">Confirm it is at ' + esc(c.siteName) + '</button>') : '')
-        + '<p class="note">' + [c.shippedAt ? 'shipped ' + day(c.shippedAt) : '', c.receivedAt ? 'received ' + day(c.receivedAt) : '', c.installedAt ? 'installed ' + day(c.installedAt) : '', c.commissionedAt ? 'commissioned ' + day(c.commissionedAt) : '', c.installer ? 'by ' + c.installer : ''].filter(Boolean).map(esc).join(' · ') + '</p>'
+        + (c.siteId ? (c.confirmation === 'confirmed' ? '<p class="note"><span class="pill ok">confirmed</span> by ' + esc(c.confirmedBy || '') + ' on ' + esc(OmegaLogicTheme.day(c.confirmedAt)) + '</p>' : '<p class="note"><span class="pill">customer says</span> at ' + esc(c.siteName) + ' since ' + esc(OmegaLogicTheme.day(c.declaredAt)) + ' · not yet confirmed</p><button class="big" id="su-confirm">Confirm it is at ' + esc(c.siteName) + '</button>') : '')
+        + '<p class="note">' + [c.shippedAt ? 'shipped ' + OmegaLogicTheme.day(c.shippedAt) : '', c.receivedAt ? 'received ' + OmegaLogicTheme.day(c.receivedAt) : '', c.installedAt ? 'installed ' + OmegaLogicTheme.day(c.installedAt) : '', c.commissionedAt ? 'commissioned ' + OmegaLogicTheme.day(c.commissionedAt) : '', c.installer ? 'by ' + c.installer : ''].filter(Boolean).map(esc).join(' · ') + '</p>'
         + '<h2>Coverage</h2>' + ((u.coverage || []).map(covLine).join('') || '<p class="note">No coverage template on this product.</p>')
         + (can('receive') ? '<button class="big ghost" data-move="receive">Received</button>' : '')
         + (can('assign') ? '<h2>Installed at</h2><div class="row"><select id="su-site">' + (c.siteId ? '' : '<option value="">Choose the site…</option>') + siteOptions(c.siteId) + '</select><input id="su-pos" placeholder="Position" value="' + esc(c.position || '') + '" style="max-width:38%"></div><button class="big ghost" data-move="assign">Assign to the site</button>' : '')
         + (!c.siteId && ['', 'in_transit', 'delivered', 'received'].indexOf(c.status) >= 0 && c.state !== 'scrapped' ? '<h2>Going to</h2><div class="row"><select id="su-dest"><option value="">— no destination —</option>' + siteOptions(c.plannedSiteId) + '</select><button id="su-dest-go" type="button">Set</button></div>' : '')
         + (can('install') ? '<button class="big ghost" data-move="install">Installed</button>' : '') + (can('commission') && c.siteId ? '<div class="row"><input type="date" id="su-date"><input id="su-inst" placeholder="Commissioned by"></div><button class="big ghost" data-move="commission">Commissioned</button>' : '') + (can('in-service') ? '<button class="big ghost" data-move="in-service">In service</button>' : '')
-        + '<h2>History</h2>' + ((d.events || []).slice(0, 12).map(function (e) { return '<div class="unit"><div>' + esc(e.type) + (e.siteId ? ' · ' + esc(siteName(e.siteId)) : '') + (e.note ? ' · ' + esc(e.note) : '') + '<small>' + esc(day(e.at)) + ' · ' + esc(e.by) + ' · ' + esc(e.method) + '</small></div></div>'; }).join('') || '<p class="note">No custody events; the unit has not left the plant.</p>')
+        + '<h2>History</h2>' + ((d.events || []).slice(0, 12).map(function (e) { return '<div class="unit"><div>' + esc(OmegaLogicTheme.words(e.type)) + (e.siteId ? ' · ' + esc(siteName(e.siteId)) : '') + (e.note ? ' · ' + esc(e.note) : '') + '<small>' + esc(OmegaLogicTheme.day(e.at)) + ' · ' + esc(e.by) + ' · ' + esc(e.method) + '</small></div></div>'; }).join('') || '<p class="note">No custody events; the unit has not left the plant.</p>')
         + '<a class="big ghost" href="/logic-custody.html' + q + '&serial=' + encodeURIComponent(u.serial) + '">Full passport on the desktop</a>';
       function after(r) { status(r.say || 'Recorded.'); CUSTODY = null; drawSiteUnit(); }
       if ($('su-confirm')) $('su-confirm').onclick = function () { this.disabled = true; api('/api/logic-custody', { action: 'confirm', serial: u.serial }).then(after)['catch'](fail); };
@@ -1394,7 +1392,7 @@
           b.disabled = true; status('Recording…'); api('/api/logic-custody', body).then(after)['catch'](function (e) { fail(e); b.disabled = false; });
         };
       });
-    })['catch'](function (e) { var el = $('su-body'); if (el) el.innerHTML = '<p class="note" style="color:#B42318">' + esc(e.message) + '</p>'; });
+    })['catch'](function (e) { var el = $('su-body'); if (el) el.innerHTML = '<p class="note" style="color:#B42318">' + esc(OmegaLogicTheme.plainError(e)) + '</p>'; });
   }
 
   /* ── the front door: sign in to Omega Logic, then the company ────────────
@@ -1435,7 +1433,7 @@
         b.onclick = function () { gate(false); draw(); };
         var box = $('gate').querySelector('.ols') || $('gate'); box.insertBefore(b, box.firstChild);
       }
-    })['catch'](function (e) { $('gate').innerHTML = '<p class="note" style="text-align:center;margin-top:40px;color:#B42318">' + esc(e.message) + '</p>'; });
+    })['catch'](function (e) { $('gate').innerHTML = '<p class="note" style="text-align:center;margin-top:40px;color:#B42318">' + esc(OmegaLogicTheme.plainError(e)) + '</p>'; });
   }
   /* "Switch" appears only for someone with more than one company */
   function showSwitch() {
@@ -1445,8 +1443,8 @@
   }
 
   /* ── shell ────────────────────────────────────────────────────────────── */
-  Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; PICK = null; CUST = null; SERIAL = null; PO_FROM = null; closeCam(); if (DATA) draw(); else if (ORG) loadAll(); window.scrollTo(0, 0); }; });
-  document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; PICK = null; CUST = null; PO_FROM = null; draw(); window.scrollTo(0, 0); };
+  Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; PICK = null; CUST = null; SERIAL = null; PO_FROM = null; closeCam(); status(''); if (DATA) draw(); else if (ORG) loadAll(); window.scrollTo(0, 0); }; });
+  document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; PICK = null; CUST = null; PO_FROM = null; status(''); draw(); window.scrollTo(0, 0); };
   $('refresh').onclick = function () { PICK = null; CUST = null; CUSTODY = null; LOADS = null; WS = null; if (ORG && $('gate').hidden) loadAll(); else if (auth.currentUser) front(); };
   $('signout').onclick = signOut;
   $('switch').onclick = function () { front(true); };

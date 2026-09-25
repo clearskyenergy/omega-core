@@ -15,18 +15,22 @@
                                             is drawn as a dashed box with its
                                             file name; written to a temp folder
      ... --out DIR                          write somewhere other than guides/
+     ... --force                            rebuild a PDF even when nothing it
+                                            is made from changed (built.json)
 
    A draft NEVER lands in guides/, which the site serves: without --out it
    goes to <tmp>/omega-guides-draft, and --draft --out guides/ is refused.
 
    Every build refuses a guide whose printed text names a tenant (guard.js
-   LEAK): /guides is public and goes to every subscriber.
+   LEAK) or carries a name scripts/_lib/discreet.js matches (the buyer on a
+   tenant's live order, matched by hash): /guides is public and goes to
+   every subscriber.
 
    A guide laid out as fixed sheets (office.html: <main data-mode="solo">)
    draws its own band and footer and is printed edge to edge; build.js
    refuses a sheet whose content runs past its page. */
 'use strict';
-var fs = require('fs'), path = require('path'), os = require('os'), Guard = require('./guard');
+var fs = require('fs'), path = require('path'), os = require('os'), Guard = require('./guard'), Discreet = require('../_lib/discreet');
 var PW = (function () { try { return require.resolve('playwright'); } catch (e) { return '/opt/node22/lib/node_modules/playwright'; } })(), chromium = require(PW).chromium;
 var CHROME = fs.existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : chromium.executablePath();
 var DRAFT = process.argv.indexOf('--draft') >= 0;
@@ -38,11 +42,11 @@ if (DRAFT && OUT === SERVED) { console.error('guides: a --draft never writes to 
    template cannot load a file, so it goes in as a data URI) */
 var MARK = 'data:image/png;base64,' + fs.readFileSync(path.join(__dirname, '..', '..', 'icons', 'omega-logic-180.png')).toString('base64');
 var header = fs.readFileSync(path.join(__dirname, 'header.html'), 'utf8').replace(/<!--[\s\S]*?-->/g, '').replace('%%OMEGA_LOGIC_MARK%%', MARK);
-var GUIDES = { plant: 'Omega-Logic-Plant-App.pdf', office: 'Omega-Logic-Office-App.pdf', customer: 'Omega-Logic-Customer-App.pdf', all: 'Omega-Logic-Phone-Apps.pdf' };
+var GUIDES = Guard.GUIDES;
 /* the same PDF under a second name: the Omega Logic app guide is what the
    office guide is; the old name stays because the app's Help panel, the kit
    and the tests link it */
-var ALSO = { office: ['Omega-Logic-App.pdf'] };
+var ALSO = Guard.ALSO;
 function read(k) { return fs.readFileSync(path.join(__dirname, k + '.html'), 'utf8'); }
 function headOf(h) { return h.slice(0, h.indexOf('<body>')); }
 function bodyOf(h) { return h.slice(h.indexOf('<body>') + 6, h.lastIndexOf('</body>')); }
@@ -59,7 +63,7 @@ function combined() {
 }
 var TITLES = { plant: ['Omega Logic · The Plant app', 'For the builders: work orders, the bench, every unit. Install it, run the work, one system. ClearSky-OMEGA'],
   office: ['Omega Logic · The app', 'Put it on your phone or computer, sign in, and run the business from it. ClearSky-OMEGA'],
-  customer: ['Your account on your phone', 'Your company account with your supplier: site plans, orders and warranty, purchase orders, sites & equipment, your people.'],
+  customer: ['Your account on your phone', 'Your company account with your supplier: site plans, orders and warranty, purchase orders, your fleet and its sites, your people.'],
   all: ['Omega Logic on your phone', 'The Omega Logic app, the Plant app and the customer app. Install them, run the work, one system. ClearSky-OMEGA'] };
 /* The CUSTOMER guide goes to every supplier's customers, and their app wears
    the supplier's name, not ours: a plain band, no Omega Logic mark, no
@@ -80,7 +84,21 @@ function assets(html) {
 /* A screenshot is printed only if shots.js took it and its bytes match the
    record (guard.js): 'missing', 'unrecorded' (a leftover or a hand-copied
    picture) and 'changed' are all unusable, and all name the fix. */
-var MANIFEST = Guard.readManifest(SHOTS);
+var MANIFEST = Guard.readManifest(SHOTS); var BUILT = Guard.readBuilt();
+var FORCE = process.argv.indexOf('--force') >= 0;
+/* what a guide is made from now: its sources' words, the pictures they print (as shots.js recorded them) and the builder */
+function recordOf(key) {
+  var rec = { shots: {}, guides: {}, build: Guard.buildSha(__dirname) };
+  Guard.GUIDE_HTML[key].forEach(function (h) { rec.guides[h] = Guard.sha256(path.join(__dirname, h)); Guard.shotsIn(fs.readFileSync(path.join(__dirname, h), 'utf8')).forEach(function (png) { rec.shots[png] = (MANIFEST[png] || {}).sha256 || null; }); });
+  return rec;
+}
+function unchanged(key) {
+  var now = recordOf(key), same = function (a, b) { return JSON.stringify(a) === JSON.stringify(b); };
+  return [GUIDES[key]].concat(ALSO[key] || []).every(function (name) {
+    var b = BUILT[name], f = path.join(OUT, name);
+    return b && fs.existsSync(f) && Guard.sha256(f) === b.sha256 && b.build === now.build && same(b.shots, now.shots) && same(b.guides, now.guides);
+  });
+}
 function shotState(src) { return Guard.verdict(SHOTS, src.replace(/^shots\//, ''), MANIFEST); }
 function unusableOf(html) { return assets(html).filter(function (src) { return /^shots\//.test(src) && shotState(src) !== 'ok'; }); }
 var problems = [], badShots = {};
@@ -103,6 +121,10 @@ if (Object.keys(badShots).length && !DRAFT) {
   fs.mkdirSync(OUT, { recursive: true });
   var b = await chromium.launch({ executablePath: CHROME });
   for (var key in GUIDES) {
+    /* a PDF whose words, pictures and builder are what built.json says it
+       was made from is left as it is: a rebuild would change its bytes (the
+       print date) and nothing a reader sees */
+    if (!DRAFT && OUT === SERVED && !FORCE && unchanged(key)) { console.log(GUIDES[key] + '  unchanged'); continue; }
     var p = await b.newPage(), html = sourceOf(key), missing = unusableOf(html);
     var tmp = path.join(__dirname, '.' + key + '.build.html');
     fs.writeFileSync(tmp, html);
@@ -123,8 +145,10 @@ if (Object.keys(badShots).length && !DRAFT) {
     }
     await p.waitForTimeout(300);
     /* the printed words, not the source: a tenant's name never ships */
-    var leak = await p.evaluate(function (src) { var m = (document.title + '\n' + document.body.innerText).match(new RegExp(src, 'i')); return m ? m[0] : null; }, Guard.LEAK.source);
-    if (leak) { await b.close(); console.error('guides: ' + GUIDES[key] + ' names a tenant ("' + leak + '"): /guides is public. Say "your company" instead.'); process.exit(1); }
+    var printed = await p.evaluate(function () { return document.title + '\n' + document.body.innerText; });
+    var leak = printed.match(Guard.LEAK), named = Discreet.hits(printed);
+    if (leak) { await b.close(); console.error('guides: ' + GUIDES[key] + ' names a tenant ("' + leak[0] + '"): /guides is public. Say "your company" instead.'); process.exit(1); }
+    if (named.length) { await b.close(); console.error('guides: ' + GUIDES[key] + ' carries a name no file may say (' + named.map(function (x) { return x.what + ', line ' + x.line; }).join('; ') + ')'); process.exit(1); }
     var sheets = await p.evaluate(function () { return !!document.querySelector('main[data-mode="solo"] .sheet'); });
     var over = await p.evaluate(function () {
       return Array.prototype.map.call(document.querySelectorAll('.olg .sheet'), function (s, i) {
@@ -140,8 +164,14 @@ if (Object.keys(badShots).length && !DRAFT) {
       margin: { top: '1.05in', bottom: '0.6in', left: '0.55in', right: '0.55in' } });
     console.log(GUIDES[key] + (missing.length ? '  (draft: ' + missing.length + ' screenshot' + (missing.length === 1 ? '' : 's') + ' boxed)' : ''));
     (ALSO[key] || []).forEach(function (name) { fs.copyFileSync(file, path.join(OUT, name)); console.log(name + '  (= ' + GUIDES[key] + ')'); });
+    /* what this PDF printed (guard.js freshness): only a real build into guides/ */
+    if (!DRAFT && OUT === SERVED && !missing.length) {
+      var rec = recordOf(key); rec.sha256 = Guard.sha256(file);
+      [GUIDES[key]].concat(ALSO[key] || []).forEach(function (name) { BUILT[name] = rec; });
+    }
     await p.close();
   }
   await b.close();
+  if (!DRAFT && OUT === SERVED) Guard.writeBuilt(BUILT);
   if (DRAFT) console.log('draft written to ' + OUT);
 })().catch(function (e) { console.error(e); process.exit(1); });

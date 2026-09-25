@@ -482,6 +482,114 @@ module.exports = { bomLines: bomLines, validateCatalog: validateCatalog, lowLeve
   MAX_LINES: MAX_LINES, MAX_DEPTH: MAX_DEPTH };
 
   };
+  defs['api/_lib/shipping-fields.js'] = function (module, exports, require) {
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   shipping-fields.js — what a catalog PRODUCT weighs, how tall it stands,
+   its NMFC freight class, whether it stacks and how it must be handled.
+
+   ONE validator for the five optional fields, shared by the catalog writer
+   (api/_lib/logic-catalog.js), the product importer
+   (scripts/import-products.js — which keeps the column names and the unit
+   conversion; this file only judges the converted value) and the freight
+   plan (api/_lib/freight.js), which reads them for estimates.
+
+   No require() at all, on purpose: scripts/import-products.js is spawned
+   without the Admin SDK installed, and custody.js → admin.js needs it. ES5 because
+   api/_lib/freight.js is bundled into the public sandbox with it.
+
+   Stored flat on the product row, next to widthFt / depthFt:
+     weightLb      number, 1–200,000
+     heightFt      number, 0.5–80 (the same plausibility band as the
+                   footprint in import-products.js)
+     freightClass  string, one of FREIGHT_CLASSES ('77.5', not '77.50')
+     stackable     boolean; ABSENT means not on file — blank is not "no"
+     handlingNote  string, at most 200 characters
+   Products only; a component or a service carries none of them.
+
+   Never published: api/embed-config.js builds its answer key by key and
+   names none of these (scripts/test-freight.js asserts it). Missing values
+   read "not on file" and are never guessed. */
+'use strict';
+
+var FIELDS = ['weightLb', 'heightFt', 'freightClass', 'stackable', 'handlingNote'];
+var FREIGHT_CLASSES = ['50', '55', '60', '65', '70', '77.5', '85', '92.5', '100', '110', '125', '150', '175', '200', '250', '300', '400', '500'];
+var LIMITS = { weightLb: { min: 1, max: 200000, unit: 'lb' }, heightFt: { min: 0.5, max: 80, unit: 'ft' } };
+var NOT_ON_FILE = 'not on file';
+var LABELS = { weightLb: 'Weight', heightFt: 'Height', freightClass: 'Freight class', stackable: 'Stackable', handlingNote: 'Handling note' };
+
+function bad(msg) { var e = new Error(msg); e.status = 400; return e; }
+function blank(v) { return v === null || v === undefined || (typeof v === 'string' && v.replace(/^\s+|\s+$/g, '') === ''); }
+function trim(v) { return String(v).replace(/^\s+|\s+$/g, ''); }
+
+/* one field → its stored value, or null when blank; a bad value throws 400 */
+function value(key, v) {
+  if (FIELDS.indexOf(key) < 0) throw bad('Unknown shipping field ' + key);
+  if (blank(v)) return null;
+  if (key === 'weightLb' || key === 'heightFt') {
+    if (typeof v === 'boolean') throw bad(LABELS[key] + ' must be a number');
+    var n = Number(typeof v === 'string' ? trim(v).replace(/,/g, '') : v), L = LIMITS[key];
+    if (!isFinite(n) || n < L.min || n > L.max) throw bad(LABELS[key] + ' must be ' + L.min + '–' + L.max.toLocaleString('en-US') + ' ' + L.unit + ' (got ' + trim(v) + ')');
+    return Math.round(n * 100) / 100;
+  }
+  if (key === 'freightClass') {
+    var s = trim(v), num = Number(s), c = /^\d+(\.\d+)?$/.test(s) && isFinite(num) ? String(num) : s;
+    if (FREIGHT_CLASSES.indexOf(c) < 0) throw bad('Freight class must be an NMFC class: ' + FREIGHT_CLASSES.join(', ') + ' (got ' + s + ')');
+    return c;
+  }
+  if (key === 'stackable') {
+    if (v === true || v === false) return v;
+    var t = trim(v).toLowerCase();
+    if (['yes', 'y', '1', 'true'].indexOf(t) >= 0) return true;
+    if (['no', 'n', '0', 'false'].indexOf(t) >= 0) return false;
+    throw bad('Stackable must be yes or no (got ' + trim(v) + ')');
+  }
+  /* handlingNote */
+  var h = trim(v);
+  if (/[\u0000-\u001f\u007f]/.test(h)) throw bad('Handling note must be one line of plain text');
+  if (h.length > 200) throw bad('Handling note: at most 200 characters');
+  return h;
+}
+
+/* only the fields PRESENT on p; a present blank becomes null, which clears
+   it; an absent one is left out, so a save that does not send it keeps the
+   stored value */
+function pick(p) {
+  var out = {};
+  if (!p || typeof p !== 'object') return out;
+  for (var i = 0; i < FIELDS.length; i++) {
+    var k = FIELDS[i];
+    if (Object.prototype.hasOwnProperty.call(p, k)) out[k] = value(k, p[k]);
+  }
+  return out;
+}
+
+function has(p, k) { return !!p && p[k] !== null && p[k] !== undefined && p[k] !== ''; }
+function fmt(n) { var r = Math.round(Number(n) * 100) / 100; return r.toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+/* W × D × H in feet; a missing side says so rather than being guessed */
+function dims(p) {
+  var parts = ['widthFt', 'depthFt', 'heightFt'], any = false, out = [];
+  for (var i = 0; i < parts.length; i++) {
+    if (has(p, parts[i]) && isFinite(Number(p[parts[i]]))) { any = true; out.push(String(Math.round(Number(p[parts[i]]) * 100) / 100)); }
+    else out.push(NOT_ON_FILE);
+  }
+  return any ? out.join(' × ') : NOT_ON_FILE;
+}
+/* display strings for one product */
+function describe(p) {
+  p = p || {};
+  return {
+    weight: has(p, 'weightLb') ? fmt(p.weightLb) + ' lb' : NOT_ON_FILE,
+    dims: dims(p) === NOT_ON_FILE ? NOT_ON_FILE : dims(p) + ' ft',
+    freightClass: has(p, 'freightClass') ? String(p.freightClass) : NOT_ON_FILE,
+    stackable: p.stackable === true ? 'yes' : p.stackable === false ? 'no' : NOT_ON_FILE,
+    handling: has(p, 'handlingNote') ? String(p.handlingNote) : NOT_ON_FILE
+  };
+}
+
+module.exports = { FIELDS: FIELDS, FREIGHT_CLASSES: FREIGHT_CLASSES, LIMITS: LIMITS, NOT_ON_FILE: NOT_ON_FILE, value: value, pick: pick, describe: describe, dims: dims };
+
+  };
   defs['api/_lib/custody.js'] = function (module, exports, require) {
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
@@ -551,6 +659,7 @@ function judge(unit, action, body) {
   var c = custodyOf(unit), move = MOVES[action], b = body || {};
   if (!move) return { ok: false, reason: 'unknown_action', say: 'Unknown custody action "' + action + '"' };
   if (!unit || !unit.shipUnit) return { ok: false, reason: 'not_a_shipping_unit', say: 'Only a shipping unit is tracked past the plant; a component travels with its assembly' };
+  if (unit.inventoryStatus === 'void') return { ok: false, reason: 'void', say: 'That serial was voided at registration (a typo the plant corrected); use the real serial' };
   if (c.state === 'scrapped') return { ok: false, reason: 'scrapped', say: 'A scrapped unit is not moved again' };
   if (['ship', 'receive'].indexOf(action) >= 0 && !c.status && unit.at !== 'ready') return { ok: false, reason: 'not_ready', say: 'The unit has not reached Ready at the plant' };
   if (move.from.indexOf(c.status) < 0) return { ok: false, reason: 'wrong_status', say: 'Cannot ' + action.replace('-', ' ') + ' a unit that is ' + label(c.status) };
@@ -560,8 +669,23 @@ function judge(unit, action, body) {
   if (action === 'replace' && b.replacementSerial === unit.serial) return { ok: false, reason: 'self', say: 'A unit cannot replace itself' };
   return { ok: true, action: action, say: 'OK' };
 }
+/* A CUSTOMER's own date binds coverage with no office check (confirmation
+   is never a gate on the warranty), so it must be one that can be true: not
+   after today — a day's grace, because the phone's "today" is the buyer's
+   own time zone — and not before the step it follows (a receipt before the
+   unit shipped; an installation or a commissioning before it arrived). The
+   browser's date limits are a convenience; this is the rule. */
+var AFTER = { receive: ['shippedAt'], deliver: ['shippedAt'], install: ['receivedAt', 'deliveredAt', 'shippedAt'], commission: ['installedAt', 'receivedAt', 'deliveredAt', 'shippedAt'] };
+var WORDS_AT = { shippedAt: 'it shipped', deliveredAt: 'it was delivered', receivedAt: 'it was received', installedAt: 'it was installed' };
+function plausible(c, action, d, now) {
+  var today = String(now).slice(0, 10), grace = new Date(Date.parse(today + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10);
+  if (d > grace) throw fail(400, 'The date ' + d + ' is in the future: use the day it happened');
+  var prior = (AFTER[action] || []).filter(function (k) { return c[k]; })[0];
+  if (prior && d < String(c[prior]).slice(0, 10)) throw fail(400, 'The date ' + d + ' is before ' + WORDS_AT[prior] + ' (' + String(c[prior]).slice(0, 10) + ', as recorded); if that record is wrong, ask your supplier to correct it');
+}
 function apply(unit, action, body, by, now, method) {
   var c = custodyOf(unit), b = body || {}, at = clean(b.at, 40) || now, dayAt = day(at), patch = {}, ev = { type: action, from: c.status, to: MOVES[action].to, by: by, at: now, method: method || 'manual', note: clean(b.note, 500) };
+  if (method === 'customer' && clean(b.at, 40)) plausible(c, action, dayAt, now);
   patch['custody.status'] = MOVES[action].to; patch['custody.custodian'] = CUSTODIAN[MOVES[action].to]; patch['custody.updatedAt'] = now; patch['custody.updatedBy'] = by;
   if (action === 'ship') { patch['custody.shippedAt'] = dayAt; if (b.legId) { patch['custody.legId'] = clean(b.legId, 120); ev.legId = clean(b.legId, 120); } }
   if (action === 'deliver') { patch['custody.deliveredAt'] = dayAt; }
@@ -594,6 +718,7 @@ function apply(unit, action, body, by, now, method) {
 function destination(unit, body, by, now, method) {
   var c = custodyOf(unit), b = body || {};
   if (!unit || !unit.shipUnit) throw fail(400, 'Only a shipping unit is tracked past the plant');
+  if (unit.inventoryStatus === 'void') throw fail(409, 'That serial was voided at registration (a typo the plant corrected); use the real serial');
   if (c.state === 'scrapped') throw fail(409, 'A scrapped unit is not sent anywhere');
   if (['', 'in_transit', 'delivered', 'received'].indexOf(c.status) < 0) throw fail(409, 'The unit is already ' + label(c.status) + '; change its site through assign');
   var clear = !b.siteId;
@@ -784,7 +909,7 @@ var COLUMNS = {
   notes: ['notes', 'note', 'comment', 'comments']
 };
 var TEMPLATE_HEADERS = ['serial_number', 'site_id', 'site_name', 'address', 'city', 'state', 'zip', 'end_customer', 'position', 'installer', 'received_date', 'install_date', 'commission_date', 'condition', 'utility', 'meter_number', 'interconnection_point', 'notes'];
-function csvTemplate() { return TEMPLATE_HEADERS.join(',') + '\n' + ['CC418-26-44190', '', 'Bakersfield yard', '1200 Depot Rd', 'Bakersfield', 'CA', '93307', 'InCharge Energy', 'Pad 2', 'Riverside Electric', '2026-11-20', '2026-11-28', '2026-12-04', 'accepted', 'PG&E', '1002233', 'POI-7 480V', ''].join(',') + '\n'; }
+function csvTemplate() { return TEMPLATE_HEADERS.join(',') + '\n' + ['CC418-26-44190', '', 'Bakersfield yard', '1200 Depot Rd', 'Bakersfield', 'CA', '93307', 'Harbor Charging', 'Pad 2', 'Riverside Electric', '2026-11-20', '2026-11-28', '2026-12-04', 'accepted', 'PG&E', '1002233', 'POI-7 480V', ''].join(',') + '\n'; }
 /* RFC-4180 enough: quoted fields, doubled quotes, CRLF; a tab-separated
    paste from a sheet is accepted too. csvRows keeps the line each row
    started on; `sep` is chosen by the caller when it knows better (a site
@@ -1232,6 +1357,7 @@ function placeSites(recs, have, customerId) {
 function plannable(unit) {
   var c = custodyOf(unit);
   if (!unit || !unit.shipUnit) return { ok: false, why: 'component', say: 'A component travels with its assembly' };
+  if (unit.inventoryStatus === 'void') return { ok: false, why: 'void', say: 'Voided at registration' };
   if (c.state === 'scrapped') return { ok: false, why: 'scrapped', say: 'Scrapped' };
   if (c.state === 'lost') return { ok: false, why: 'lost', say: 'Marked lost' };
   if (c.siteId) return { ok: false, why: 'bound', say: label(c.status).charAt(0).toUpperCase() + label(c.status).slice(1) + ' at ' + (c.siteName || c.siteId) };
@@ -1375,7 +1501,7 @@ module.exports = { STATUSES: STATUSES, STATES: STATES, MOVES: MOVES, LABELS: LAB
   defs['api/_lib/logic-catalog.js'] = function (module, exports, require) {
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
-var A=require('api/_lib/admin.js'),M=require('api/_lib/materials.js');
+var A=require('api/_lib/admin.js'),M=require('api/_lib/materials.js'),SF=require('api/_lib/shipping-fields.js');
 function clean(v,n){return String(v==null?'':v).trim().slice(0,n);}
 /* Three kinds. A `component` is what a product is MADE OF — a cell, a BMS, a
    module — and is never sold, published, drawn or priced: api/embed-config.js,
@@ -1407,6 +1533,12 @@ function product(p){
      carries once it is bound to a site. warrantyYears stays the default
      template when the list is empty. Ids unique per product. */
   var C=require('api/_lib/custody.js'),ids={};out.coverage=(Array.isArray(p.coverage)?p.coverage:[]).slice(0,10).map(function(t){var v=C.template(t);if(ids[v.id])throw A.httpError(400,'Coverage id "'+v.id+'" is used twice');ids[v.id]=true;return v;});
+  /* Shipping fields (api/_lib/shipping-fields.js): what the freight plan
+     estimates a load from. A product only; set when the request carries
+     them (a blank clears one), so api/logic-catalog.js's
+     Object.assign({},old,product) keeps a stored value a save leaves out.
+     Never public: api/embed-config.js names none of them. */
+  if(kind==='product')Object.assign(out,SF.pick(p));
   return out;
 }
 function designs(config){
@@ -1423,10 +1555,10 @@ function select(config,sku,target){
   if(qty>9999)throw A.httpError(400,'This target requires more than 9999 units');
   return Object.assign({},target,{product:p,qty:qty,selectedKw:p.placeholder?target.kw:qty*p.kw,selectedKwh:p.placeholder?target.kwh:qty*p.kwh});
 }
-/* The OFFICE projection — the tenant's own catalog page. Sourcing fields and
-   the bill of materials are theirs to see; the public projection in
-   api/embed-config.js never names them. */
-function view(p){var out={};['sku','name','blurb','kind','category','active','priceMode','designEnabled','kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','chemistry','imageUrl','unit','supplier','supplierSku','moq','safetyStock'].forEach(function(k){if(p[k]!=null&&p[k]!=='')out[k]=p[k];});if(Array.isArray(p.coverage)&&p.coverage.length)out.coverage=p.coverage;var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};out.bom=(p.bom||[]).map(function(l){var o={sku:String(l.sku),qty:Number(l.qty),unit:String(l.unit||'ea'),yieldPct:Number(l.yieldPct)>0?Number(l.yieldPct):100};if(l.station)o.station=String(l.station);if(l.step)o.step=String(l.step);return o;});return out;}
+/* The OFFICE projection — the tenant's own catalog page. Sourcing fields,
+   shipping fields and the bill of materials are theirs to see; the public
+   projection in api/embed-config.js never names them. */
+function view(p){var out={};['sku','name','blurb','kind','category','active','priceMode','designEnabled','kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','chemistry','imageUrl','unit','supplier','supplierSku','moq','safetyStock'].concat(SF.FIELDS).forEach(function(k){if(p[k]!=null&&p[k]!=='')out[k]=p[k];});if(Array.isArray(p.coverage)&&p.coverage.length)out.coverage=p.coverage;var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};out.bom=(p.bom||[]).map(function(l){var o={sku:String(l.sku),qty:Number(l.qty),unit:String(l.unit||'ea'),yieldPct:Number(l.yieldPct)>0?Number(l.yieldPct):100};if(l.station)o.station=String(l.station);if(l.step)o.step=String(l.step);return o;});return out;}
 module.exports={product:product,designs:designs,select:select,view:view,KINDS:KINDS};
 
   };
@@ -1486,7 +1618,7 @@ function stationMap(routing, units, now, opts) {
   var lead = [], finishedAt = [], wip = 0, held = 0, notStarted = 0, finished = 0;
   var lastKey = routing.length ? routing[routing.length - 1].key : null;
   (units || []).slice(0, MAX_UNITS).forEach(function (u) {
-    if (!u || (opts.shipUnitsOnly && !u.shipUnit)) return;
+    if (!u || (opts.shipUnitsOnly && !u.shipUnit) || u.inventoryStatus === 'void') return;   /* a voided typo is not a unit */
     var done = u.done && typeof u.done === 'object' ? u.done : {};
     var started = ms(u.startedAt);
     /* dwell at every station it has LEFT */
@@ -1603,6 +1735,11 @@ var DEFAULT_ROUTING = [
    can type "pass" makes the certificate worthless. */
 var MACHINE_STATIONS = ['eol'];
 
+/* A supervisor may record a test station's result by hand when the rig
+   cannot post it (api/mes-test-result.js, manual:true). The note is the
+   evidence a certificate reader will ask for, so it has a floor. */
+var MANUAL_NOTE_MIN = 5;
+
 function norm(v) { return String(v == null ? '' : v).trim(); }
 
 function routingOf(wo) {
@@ -1664,12 +1801,18 @@ function judgeScan(unit, station, routing, opts) {
   if (!unit) {
     return { ok: false, reason: 'unknown_unit', say: 'That serial is not on any open works order here.' };
   }
+  /* a serial typed wrong at registration and voided (api/logic-plant.js
+     correct-serial): its record is kept, but it is not a unit */
+  if (unit.inventoryStatus === 'void') {
+    var by = unit.voided && norm(unit.voided.replacedBy);
+    return { ok: false, reason: 'voided', say: 'That serial was voided — it was typed wrong at registration.' + (by ? ' The unit is ' + by + '.' : '') };
+  }
 
   var at = norm(unit.at);
   var ai = at ? indexOf(routing, at) : -1;
   if (at && ai < 0) return { ok: false, reason: 'unknown_position', say: 'This unit has an unknown position; supervisor review is required.' };
   if (unit.test && unit.test.result === 'fail' && !opts.machine) {
-    return { ok: false, reason: 'retest_required', say: 'A failed test requires a passing machine retest before this unit can move.' };
+    return { ok: false, reason: 'retest_required', say: 'A failed test needs a passing retest before this unit can move: the test rig, or a supervisor recording it by hand in the Plant app (Quality → the serial → Record the result by hand).' };
   }
 
   if (unit.hold) {
@@ -1677,7 +1820,7 @@ function judgeScan(unit, station, routing, opts) {
              ncr: norm(unit.ncr) || null };
   }
   if (MACHINE_STATIONS.indexOf(station) >= 0 && !opts.machine) {
-    return { ok: false, reason: 'machine_station', say: labelOf(routing, station) + ' is recorded by the test rig, not by a scan.' };
+    return { ok: false, reason: 'machine_station', say: labelOf(routing, station) + ' is recorded by the test rig, not by a scan. With the rig down, a supervisor records the result by hand in the Plant app (Quality → the serial).' };
   }
   if (ai === si) {
     /* Already here. Guns double-fire and people re-scan when they are unsure;
@@ -1744,13 +1887,20 @@ function measurementsOf(raw) {
 
 /* A test rig may advance only a station marked machine-only. A failed test
    deliberately does NOT advance the unit: it records the result, places the
-   unit on hold at its prior station and requires a human disposition. */
-function judgeMachineResult(unit, station, routing, result) {
+   unit on hold at its prior station and requires a human disposition.
+
+   opts.open is the same list judgeScan takes: the steps still open at the
+   bench the unit is LEAVING (plant-work.js openAt). A pass is an arrival at
+   the test station like any other, so it is refused while a step is open —
+   a rig's pass (or a supervisor's hand-recorded one, api/mes-test-result.js)
+   must never carry a unit past a firmware load nobody confirmed or a part
+   nobody issued. The caller persists the refusal with the evidence. */
+function judgeMachineResult(unit, station, routing, result, opts) {
   station = norm(station);
   if (MACHINE_STATIONS.indexOf(station) < 0) {
     return { ok: false, reason: 'not_machine_station', say: 'This station does not accept machine results.' };
   }
-  var base = judgeScan(unit, station, routing, { machine: true });
+  var base = judgeScan(unit, station, routing, { machine: true, open: opts && Array.isArray(opts.open) ? opts.open : [] });
   if (!base.ok) return base;
   if (!result || (result.pass !== true && result.pass !== false)) {
     return { ok: false, reason: 'invalid_result', say: 'The test rig did not send a pass or fail result.' };
@@ -1777,7 +1927,7 @@ function applyMachineResult(unit, verdict, at, record) {
   }
   if (verdict && verdict.action === 'hold') {
     return {
-      hold: record.failureCode || 'Test failed',
+      hold: record.failureCode || (record.source === 'manual' ? 'Test failed (recorded by hand)' : 'Test failed'),
       ncr: record.ncr || null,
       test: record,
       testFailedAt: at
@@ -1789,6 +1939,7 @@ function applyMachineResult(unit, verdict, at, record) {
 module.exports = {
   DEFAULT_ROUTING: DEFAULT_ROUTING,
   MACHINE_STATIONS: MACHINE_STATIONS,
+  MANUAL_NOTE_MIN: MANUAL_NOTE_MIN,
   routingOf: routingOf,
   indexOf: indexOf,
   labelOf: labelOf,
@@ -1963,8 +2114,11 @@ function activity(units, w, limit) {
     if (arrived && at) out.push({ at: arrived, serial: serial, kind: 'scan', station: at, say: 'Arrived at ' + P.labelOf(routing, at) });
     if (u.test && u.test.at) {
       var t2 = iso(u.test.at);
+      /* a result a supervisor recorded by hand says so, and who */
+      var byHand = u.test.source === 'manual';
       if (t2) out.push({ at: t2, serial: serial, kind: 'test', station: text(u.test.station, 40),
-        say: u.test.result === 'pass' ? 'Machine test passed' : 'Machine test FAILED' + (u.test.failureCode ? ' · ' + text(u.test.failureCode, 100) : '') });
+        say: (byHand ? 'Test ' : 'Machine test ') + (u.test.result === 'pass' ? 'passed' : 'FAILED' + (u.test.failureCode ? ' · ' + text(u.test.failureCode, 100) : '')) + (byHand ? ' — recorded by hand' + (u.test.note ? ': ' + text(u.test.note, 200) : '') : ''),
+        by: byHand ? text(u.test.by, 160) || null : null });
     }
     if (u.hold && u.holdAt) {
       var t3 = iso(u.holdAt);
@@ -2089,6 +2243,30 @@ function stock(units) {
   return { skus: skus, available: total, held: held };
 }
 
+/* Every shipping unit by product, in one of three places: on the shelf
+   (built for stock, at Ready, no hold — what the office can assign), on an
+   order (assigned, whether built yet or shipped), or being built for stock.
+   A held stock unit at Ready is counted apart. Voided serials (a typo that
+   was corrected) are not units. The caller reads each inventoryStatus
+   through its own index (api/logic-plant.js page=stock) so the counts are
+   not "whatever the first page of documents happened to hold". */
+function finished(units) {
+  var by = {}, totals = { available: 0, held: 0, assigned: 0, building: 0 }, avail = [];
+  (Array.isArray(units) ? units : []).forEach(function (u) {
+    u = u || {};
+    if (!u.shipUnit || u.inventoryStatus === 'void') return;
+    var sku = text(u.sku, 100); if (!sku) return;
+    var g = by[sku] || (by[sku] = { sku: sku, available: 0, held: 0, assigned: 0, building: 0 }), k;
+    if (u.orderId) k = 'assigned';
+    else if (u.inventoryStatus === 'available' && text(u.at, 40) === 'ready') k = u.hold ? 'held' : 'available';
+    else k = 'building';
+    g[k]++; totals[k]++;
+    if (k === 'available' && avail.length < 500) avail.push({ serial: text(u.serial, 100), sku: sku, unitType: text(u.unitType, 40) || 'unit', test: u.test && u.test.result ? { result: text(u.test.result, 10) } : null });
+  });
+  var skus = Object.keys(by).sort().map(function (k) { return by[k]; });
+  return { skus: skus, available: avail, totals: totals };
+}
+
 /* Completed units on orders: ready shipping units per works order, whether
    the order can ship, and what already left. */
 function completed(rows) {
@@ -2103,7 +2281,7 @@ function completed(rows) {
   return out;
 }
 
-module.exports = { floor: floor, queues: queues, demand: demand, stock: stock, completed: completed };
+module.exports = { floor: floor, queues: queues, demand: demand, stock: stock, finished: finished, completed: completed };
 
   };
   defs['api/_lib/plant-attention.js'] = function (module, exports, require) {
@@ -2139,7 +2317,7 @@ function attention(units, stations, routing, now, opts) {
   var last = routing.length ? routing[routing.length - 1].key : 'ready';
   var stuck = [], held = [], failed = [], off = [], counts = { units: 0, notStarted: 0, wip: 0, finished: 0 };
   (Array.isArray(units) ? units : []).forEach(function (u) {
-    if (!u) return;
+    if (!u || u.inventoryStatus === 'void') return;   /* a voided typo is not a unit */
     counts.units++;
     var at = text(u.at, 40), base = { serial: text(u.serial, 100), sku: text(u.sku, 100), unitType: text(u.unitType, 20), shipUnit: !!u.shipUnit,
       woId: text(u.woId, 120) || null, orderNo: text(u.orderNo, 120) || null, at: at, label: at ? labelOf(routing, at) : 'Not started' };
@@ -2199,7 +2377,9 @@ module.exports = { attention: attention, DEFAULTS: DEFAULTS };
    product's cells are demanded by the plan, bought by the office, and issued
    at Module build by the operator, and all three read the same line. A line
    with no station is planned and bought but never gated at a bench — the
-   plant that has not mapped its stations yet keeps working exactly as before.
+   plant that has not mapped its stations yet keeps working exactly as before
+   — and comes off the shelf when the unit reaches Ready instead
+   (backflush(), below), so the shelf count does not stay high by it.
 
    ── A STEP IS DONE WHEN ITS PARTS ARE ISSUED ─────────────────────────────
    Issuing is the bench's one extra interaction: scan the part's label (or tap
@@ -2394,9 +2574,75 @@ function issuedTotals(unit) {
   return out;
 }
 
+/* ── THE GATE, FOR EVERY CALLER ────────────────────────────────────────
+   A unit arriving anywhere — a bench scan (api/mes-scan.js), a rig's
+   result or a supervisor's hand-recorded one (api/mes-test-result.js) — is
+   refused while a step is open at the bench it is leaving. These three are
+   the one way every caller works that out, so a second endpoint cannot
+   forget the checks on the routing or read the bill differently. */
+
+/* sku → catalog row, from storefront/config.products */
+function catalogIndex(rows) {
+  var by = {};
+  (Array.isArray(rows) ? rows : []).forEach(function (p) { if (isPlain(p) && p.sku && safeKey(String(p.sku))) by[p.sku] = p; });
+  return by;
+}
+/* check-only steps live on the works order's copy of the routing */
+function checksOf(wo, station) {
+  var s = (wo && Array.isArray(wo.routing) ? wo.routing : []).filter(function (x) { return x && x.key === station; })[0];
+  return s && Array.isArray(s.checks) ? s.checks : [];
+}
+/* the names of the steps still open where the unit IS */
+function openAt(unit, wo, by) {
+  if (!unit || !norm(unit.at)) return [];
+  var at = norm(unit.at), product = unit.sku && by && safeKey(String(unit.sku)) && isPlain(by[unit.sku]) ? by[unit.sku] : null;
+  return statusOf(unit, at, stepsFor(product, at, by, checksOf(wo, at))).open;
+}
+
+/* ── LINES NO BENCH ISSUES ─────────────────────────────────────────────
+   A bill line with no station (or one naming a station that is not on the
+   unit's routing) is planned and bought, but no bench ever takes it off the
+   shelf. The materials plan assumes a finished unit took its whole bill
+   (materials.js demandsFrom), so without this the shelf count stays high
+   by that line for every unit built and the next plan under-buys.
+
+   backflush() is what a unit that has just reached Ready still owes the
+   shelf: each such line's quantity for one unit, less anything a bench did
+   issue to it. api/mes-scan.js takes it off fulfillment/materials and adds
+   it to the works order's issued totals in the same transaction as the
+   arrival — the same two writes an issue at a bench makes — so the plan's
+   "a finished unit took its bill" is true on the shelf too. */
+function routingKeys(routing) { return (Array.isArray(routing) ? routing : []).map(function (s) { return norm(s && s.key); }).filter(Boolean); }
+function benchless(line, keys) { var st = norm(line && line.station); return !st || keys.indexOf(st) < 0; }
+function backflush(product, unit, routing) {
+  if (!product || !Array.isArray(product.bom)) return [];
+  var keys = routingKeys(routing), got = issuedTotals(unit), out = [];
+  product.bom.forEach(function (l) {
+    if (!isPlain(l) || !safeKey(String(l.sku)) || !benchless(l, keys)) return;
+    var left = roundQty(num(l.qty) - num(got[l.sku]));
+    if (left > 0) out.push({ sku: String(l.sku), qty: left, unit: norm(l.unit) || 'ea' });
+  });
+  return out;
+}
+/* Every assembly's lines that no bench on `routing` issues — the warning
+   the materials plan and the catalog show. */
+function unstationed(products, routing) {
+  var keys = routingKeys(routing), out = [];
+  (Array.isArray(products) ? products : []).forEach(function (p) {
+    if (!isPlain(p) || p.active === false || p.kind === 'service' || !Array.isArray(p.bom) || !p.bom.length) return;
+    var lines = p.bom.filter(function (l) { return isPlain(l) && l.sku && benchless(l, keys); }).map(function (l) {
+      var st = norm(l.station);
+      return { sku: String(l.sku), qty: roundQty(num(l.qty)), unit: norm(l.unit) || 'ea', station: st || null };
+    });
+    if (lines.length) out.push({ sku: String(p.sku), name: norm(p.name) || String(p.sku), kind: p.kind === 'component' ? 'component' : 'product', lines: lines.slice(0, 80) });
+  });
+  return out;
+}
+
 module.exports = { stepsFor: stepsFor, stationsWithWork: stationsWithWork, statusOf: statusOf, resolvePart: resolvePart,
   judgeIssue: judgeIssue, applyIssue: applyIssue, judgeStepDone: judgeStepDone, applyStepDone: applyStepDone,
-  issuedTotals: issuedTotals, stepId: stepId, MAX_STEPS: MAX_STEPS, DEFAULT_STEP: DEFAULT_STEP };
+  issuedTotals: issuedTotals, stepId: stepId, catalogIndex: catalogIndex, checksOf: checksOf, openAt: openAt,
+  backflush: backflush, unstationed: unstationed, MAX_STEPS: MAX_STEPS, DEFAULT_STEP: DEFAULT_STEP };
 
   };
   defs['api/_lib/office-stage.js'] = function (module, exports, require) {
@@ -2409,6 +2655,10 @@ module.exports = { stepsFor: stepsFor, stationsWithWork: stationsWithWork, statu
    same thing everywhere it is printed and the office never re-derives it in
    the browser. The inputs are the order fields api/logic-office.js already
    projects; nothing here reads Firestore or decides what a caller may see.
+   The caller's standing arrives already verified (logic-access builds it);
+   access()/actions() only turn it into what the office is shown, and the
+   gate that refuses a price is logic-access.requirePricer, on the same
+   billingOf() rule.
 
    The stages follow the commercial protocol in docs/OMEGA-LOGIC-OPERATIONS.md:
    price → accept → deposit → release → build → balance → ship. An exception
@@ -2435,12 +2685,31 @@ function text(v, max) { return String(v == null ? '' : v).trim().slice(0, max ||
 function out(key, next, owner, label, credit) { var r = { key: key, label: label || STAGES[key], next: next, owner: !!owner }; if (credit) r.credit = true; return r; }
 function creditOpen(o) { var l = (o && o.logic) || {}, dep = (l.invoices || {}).deposit; if (!l.creditRelease || !dep || !dep.amountCents || dep.satisfied) return 0; return Math.max(0, (Number(dep.amountCents) || 0) - (Number(dep.paidCents) || 0)); }
 
+/* HOW AN ORDER IS BILLED decides who approves its price (D1, 2026-09-24).
+   'tenant': the workspace invoices its customer on its own paper, so its
+   owner or an administrator approves the price and accepts the order.
+   'quickbooks': ClearSky invoices from its QuickBooks, so ClearSky does.
+   A priced order carries its own mode (logic.accounting, or the snapshot's
+   commercial.billing) and that wins; until it is priced the workspace's
+   setting (fulfillment/config.accounting) says how it will be billed.
+   ONE rule: logic-access.requirePricer (the server gate) and actions()
+   (what the office is shown) both read it from here. */
+function billingOf(o, fallback) {
+  var l = (o && o.logic) || null;
+  if (l) return l.accounting === 'tenant' || (l.commercial && l.commercial.billing === 'tenant') ? 'tenant' : 'quickbooks';
+  return fallback === 'tenant' ? 'tenant' : 'quickbooks';
+}
+
 /* `owner` marks a next step only ClearSky can take (price, accept, ship,
    settle); the office shows it as waiting on ClearSky rather than as a
-   button the OEM cannot press. */
-function stageOf(o) {
+   button the OEM cannot press. Price and accept are ClearSky's only on an
+   order billed through ClearSky's QuickBooks: on a tenant-billed order the
+   workspace's owner or administrator takes them (opts.billing is the
+   workspace's setting, for an order not priced yet). */
+function stageOf(o, opts) {
   o = o || {};
   var l = o.logic || null, status = text(o.status, 40), inv = (l && l.invoices) || {};
+  var clearskyPrices = billingOf(o, opts && opts.billing) !== 'tenant';
   if (status === 'cancelled') return out('cancelled', 'Refund and stock disposition need review', true);
   if (o.cancelRequested) return out('exception', 'Cancellation requested — refund and stock disposition need ClearSky review', true, 'Cancellation requested');
   if (l && (l.paymentException || l.lastError)) return out('exception', text(l.paymentException || l.lastError, 200), true);
@@ -2451,8 +2720,8 @@ function stageOf(o) {
     if (p.status === 'wire_recorded') return out('shipped', 'Settled', false);
     return out('shipped', 'Confirm cleared receipts', true);
   }
-  if (!l) return out('quote', 'Approve the customer price', true);
-  if (!l.acceptedAt) return out('priced', 'Accept the order', true);
+  if (!l) return out('quote', 'Approve the customer price', clearskyPrices);
+  if (!l.acceptedAt) return out('priced', 'Accept the order', clearskyPrices);
   if (!l.releasedAt) {
     var dep = inv.deposit;
     if (!dep) return out('deposit', 'Deposit invoice is being queued', false);
@@ -2466,6 +2735,41 @@ function stageOf(o) {
   if (bal) return out('balance', 'Awaiting final payment · ' + dollars(bal.paidCents || 0) + ' of ' + dollars(bal.amountCents) + ' recorded' + (open ? ' · deposit ' + dollars(open) + ' open (released on PO)' : ''), false, null, open > 0);
   if (open) return out('production', 'Released on PO ' + po + ' · deposit ' + dollars(open) + ' not yet received', false, 'Released on PO', true);
   return out('production', 'Building — follow the work order', false);
+}
+
+/* The standing that may take the price/accept step on a tenant-billed
+   order: an ACTIVE owner or admin of the workspace (a member doc with no
+   status predates the field and is active). access() is what the office
+   is told about the person looking; the server builds it from the verified
+   caller (logic-access) and nothing else. */
+function officeAdmin(m) { return !!m && (m.status || 'active') === 'active' && (m.role === 'owner' || m.role === 'admin'); }
+function access(clearsky, member, enabled) {
+  clearsky = clearsky === true;
+  return { clearsky: clearsky, admin: !clearsky && officeAdmin(member), enabled: enabled === true, role: clearsky ? 'clearsky' : ((member && member.role) || null) };
+}
+
+/* What the person looking at the office may do on this order, and who the
+   price/accept step waits on when it is not them (D1). PURE: the caller's
+   standing comes in as `access` (access() above, built on the server):
+     access.clearsky  the ClearSky owner — prices and accepts everything
+     access.admin     an active owner or admin of THIS workspace — prices
+                      and accepts what the workspace bills itself
+     access.enabled   Omega Logic is switched on for the workspace (the
+                      workflow refuses to price otherwise)
+   `billing` is the workspace's setting (fulfillment/config.accounting).
+   Returns { stage, can: { price, accept }, waitingOn } where waitingOn is
+   'clearsky' (ClearSky's step), 'admin' (the workspace owner or an
+   administrator's step) or null (nobody but the office, or the viewer). */
+function actions(o, access, billing) {
+  o = o || {}; access = access || {};
+  var stage = stageOf(o, { billing: billing }), l = o.logic || null, mode = billingOf(o, billing);
+  var open = !o.cancelRequested && ['cancelled', 'shipped', 'complete'].indexOf(text(o.status, 40)) < 0;
+  var may = access.enabled !== false && (access.clearsky === true || (access.admin === true && mode === 'tenant'));
+  var can = { price: !!(may && open && !l), accept: !!(may && open && l && !l.acceptedAt) };
+  var step = stage.key === 'quote' || stage.key === 'priced', waitingOn = null;
+  if (step && !can.price && !can.accept) waitingOn = mode === 'tenant' && access.enabled !== false ? 'admin' : 'clearsky';
+  else if (!step && stage.owner && access.clearsky !== true) waitingOn = 'clearsky';
+  return { stage: stage, can: can, waitingOn: waitingOn };
 }
 
 /* Counts for the office header. `paidCents` is what accounting has
@@ -2518,7 +2822,180 @@ function finance(orders, owner) {
   return f;
 }
 
-module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, creditOpen: creditOpen, totals: totals, finance: finance, dollars: dollars };
+module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, billingOf: billingOf, officeAdmin: officeAdmin, access: access, actions: actions, creditOpen: creditOpen, totals: totals, finance: finance, dollars: dollars };
+
+  };
+  defs['api/_lib/plant-release.js'] = function (module, exports, require) {
+/* ═══════════════════════════════════════════════════════════════════════════
+   api/_lib/plant-release.js — validate an order's as-built release package
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   A works-order release is where a commercial order becomes physical units.
+   This pure module validates that package before api/plant-release.js writes
+   anything: one serial is one physical thing, a component belongs to one
+   larger assembly, the product roots do not exceed what was ordered, and a
+   component tree cannot contain a cycle. It knows no Firestore and makes no
+   commercial decision, so the guardrails are testable without a database.
+   ═══════════════════════════════════════════════════════════════════════════ */
+'use strict';
+
+var P = require('api/_lib/plant.js');
+
+var TYPES = { cell: 1, module: 2, rack: 3, cabinet: 4, accessory: 1 };
+
+function fail(message) { var e = new Error(message); e.status = 400; throw e; }
+function clean(value, max) {
+  var out = String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+  if (out.length > (max || 160)) fail('A release field is too long.');
+  return out;
+}
+function required(value, name, max) {
+  var out = clean(value, max);
+  if (!out) fail((name || 'A release field') + ' is required.');
+  return out;
+}
+function typeOf(value) {
+  var type = required(value, 'unitType', 20).toLowerCase();
+  if (!TYPES[type]) fail('unitType must be cell, module, rack, cabinet or accessory.');
+  return type;
+}
+function number(value, name) {
+  if (value == null || value === '') return null;
+  var n = Number(value);
+  if (!isFinite(n) || n < 0 || n > 10000000) fail((name || 'number') + ' is out of range.');
+  return n;
+}
+
+/* The trace fields are fixed. An arbitrary metadata map feels flexible until
+   a scanner sends a 900 KB diagnostic blob and blocks every write on the
+   traveler. Raw rig diagnostics belong in the immutable scan event; this is
+   the stable identity carried by a cell/module/cabinet for its lifetime. */
+function traceOf(raw) {
+  raw = raw || {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('trace must be an object.');
+  return {
+    lot:             clean(raw.lot, 100) || null,
+    supplier:         clean(raw.supplier, 160) || null,
+    manufacturedAt:   clean(raw.manufacturedAt, 40) || null,
+    chemistry:        clean(raw.chemistry, 80) || null,
+    capacityKwh:      number(raw.capacityKwh, 'trace.capacityKwh'),
+    nominalVoltage:   number(raw.nominalVoltage, 'trace.nominalVoltage'),
+    firmware:         clean(raw.firmware, 100) || null,
+    bmsVersion:       clean(raw.bmsVersion, 100) || null
+  };
+}
+
+function orderedQuantities(order) {
+  var out = {}, items = (order && Array.isArray(order.items)) ? order.items : [];
+  items.forEach(function (item) {
+    var sku = clean(item && item.sku, 100);
+    var qty = Math.floor(Number(item && item.qty) || 0);
+    if (sku && qty > 0) out[sku] = (out[sku] || 0) + qty;
+  });
+  return out;
+}
+
+function noCycle(units) {
+  var bySerial = {}, state = {};
+  units.forEach(function (u) { bySerial[u.serial] = u; });
+  function visit(serial) {
+    if (state[serial] === 'visiting') fail('A component tree cannot contain a cycle.');
+    if (state[serial] === 'done') return;
+    state[serial] = 'visiting';
+    var u = bySerial[serial];
+    if (u.parentSerial) visit(u.parentSerial);
+    state[serial] = 'done';
+  }
+  units.forEach(function (u) { visit(u.serial); });
+}
+
+function normalizeUnits(raw, order) {
+  if (!Array.isArray(raw) || !raw.length || raw.length > 400) {
+    fail('Release 1 to 400 serialized units at a time.');
+  }
+  var seen = {}, units = raw.map(function (input) {
+    input = input || {};
+    var serial = P.serialFrom(input.serial);
+    if (!serial) fail('Every unit needs a readable serial.');
+    if (seen[serial]) fail('A serial appears more than once in this release.');
+    seen[serial] = true;
+    var parent = input.parentSerial ? P.serialFrom(input.parentSerial) : '';
+    if (input.parentSerial && !parent) fail('A parentSerial is unreadable.');
+    if (parent === serial) fail('A serial cannot be its own parent.');
+    return {
+      serial: serial,
+      sku: required(input.sku, 'sku', 100),
+      unitType: typeOf(input.unitType),
+      parentSerial: parent || null,
+      shipUnit: input.shipUnit === true,
+      trace: traceOf(input.trace)
+    };
+  });
+
+  var bySerial = {};
+  units.forEach(function (u) { bySerial[u.serial] = u; });
+  units.forEach(function (u) {
+    if (!u.parentSerial) return;
+    var parent = bySerial[u.parentSerial];
+    if (!parent) fail('Every parentSerial must be included in the same release.');
+    if (TYPES[parent.unitType] <= TYPES[u.unitType]) {
+      fail('A parent must be a larger assembly than its component.');
+    }
+  });
+  noCycle(units);
+
+  var allowed = orderedQuantities(order), roots = {};
+  units.forEach(function (u) {
+    if (!u.shipUnit) return;
+    if (u.parentSerial) fail('A shipping unit cannot also be a component.');
+    if (!allowed[u.sku]) fail('A shipping unit SKU is not on the order.');
+    roots[u.sku] = (roots[u.sku] || 0) + 1;
+  });
+  Object.keys(roots).forEach(function (sku) {
+    if (roots[sku] > allowed[sku]) fail('Release has more ' + sku + ' shipping units than the order.');
+  });
+  if (!Object.keys(roots).length) fail('At least one unit must be marked shipUnit.');
+  return units;
+}
+
+function routingOf(raw) {
+  var routing = raw || P.DEFAULT_ROUTING;
+  if (!Array.isArray(routing) || !routing.length || routing.length > 24) fail('Routing must have 1 to 24 stations.');
+  var seen = {};
+  return routing.map(function (station) {
+    var key = clean(typeof station === 'string' ? station : station && station.key, 32).toLowerCase();
+    var label = clean(typeof station === 'string' ? station : station && station.label, 80) || key;
+    if (!/^[a-z][a-z0-9_-]{0,31}$/.test(key)) fail('A routing station key is invalid.');
+    if (seen[key]) fail('Routing cannot repeat a station.');
+    seen[key] = true;
+    return { key: key, label: label };
+  });
+}
+
+/* ── A SERIAL TYPED WRONG ──────────────────────────────────────────────
+   Registration takes whatever was typed or scanned, and two labels read
+   into one field make a serial nobody printed. Until that serial has done
+   anything on the floor it is only a typo holding one of the order's slots,
+   so it may be VOIDED (the slot is freed) or CORRECTED (the right serial
+   takes its place, with its components). Once a bench, a rig, the stock
+   shelf or a site has seen it, the record is evidence: it is never voided,
+   only held. The record itself is kept, marked void, never deleted
+   (api/logic-plant.js correct-serial, audited). */
+function correctable(unit) {
+  if (!unit) return { ok: false, why: 'Serial not found.' };
+  if (unit.inventoryStatus === 'void' || unit.voided) return { ok: false, why: 'This serial was already voided.' };
+  var done = unit.done && typeof unit.done === 'object' ? Object.keys(unit.done).length : 0;
+  var work = unit.work && typeof unit.work === 'object' ? Object.keys(unit.work).length : 0;
+  if (String(unit.at || '') || unit.startedAt || done || work || unit.test || unit.backflushed) {
+    return { ok: false, why: 'This unit has been scanned or tested, so its record is evidence and cannot be voided. Place a quality hold instead and tell the plant manager.' };
+  }
+  if (unit.allocatedAt || unit.inventoryStatus === 'available' || (unit.custody && unit.custody.status)) {
+    return { ok: false, why: 'This unit is finished stock or has left the plant; it cannot be voided.' };
+  }
+  return { ok: true, why: '' };
+}
+
+module.exports = { normalizeUnits: normalizeUnits, routingOf: routingOf, traceOf: traceOf, orderedQuantities: orderedQuantities, correctable: correctable };
 
   };
   defs['api/_lib/whitelabel.js'] = function (module, exports, require) {
@@ -2774,6 +3251,664 @@ module.exports.OMEGA_LOGIC = OMEGA_LOGIC;
 module.exports.iconPath = iconPath;
 
   };
+  defs['api/_lib/freight.js'] = function (module, exports, require) {
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   freight.js — one order's FREIGHT PLAN: every shipping unit with the site
+   it is going to (the MASTER LIST), the sites grouped into LANES a
+   logistics partner can price, the quotes the office records per lane, and
+   what accepting one plans on the ledger.
+
+   Built ON what exists, not beside it:
+     plant_units/{org__serial}.custody     plannedSiteId / siteId (bulk sites)
+     omega_orgs/{org}/sites/{siteId}       address, lat/lng, contact, ref
+     orders/{id}.delivery                  destinations[] and legs[] (the
+                                           ledger, api/logic-logistics.js)
+     storefront/config.products[]          weightLb, widthFt, depthFt,
+                                           heightFt, freightClass, stackable,
+                                           handlingNote (shipping-fields.js)
+     omega_orgs/{org}/fulfillment/config.freight.origin   the ship-from
+     omega_orgs/{org}/freight_quotes/{id}  quotes, append-only (Admin SDK)
+
+   LANES are US regions, one fixed map, in this order:
+     NORTHEAST      Northeast            CT MA ME NH NJ NY PA RI VT
+     MIDATLANTIC    Mid-Atlantic         DC DE MD VA WV
+     SOUTHEAST      Southeast            AL FL GA KY MS NC SC TN
+     GREATLAKES     Great Lakes          IL IN MI OH WI
+     CENTRALPLAINS  Central Plains       IA KS MN MO ND NE SD
+     SOUTHCENTRAL   South Central        AR LA OK TX
+     MOUNTAIN       Mountain             AZ CO ID MT NM NV UT WY
+     PACIFIC        Pacific              CA OR WA
+     ALASKA         Alaska (ocean/air)   AK
+     HAWAII         Hawaii (ocean/air)   HI
+     PUERTORICO     Puerto Rico (ocean)  PR
+     CHECK          Address to check     anything else (no state, another country)
+   A lane KEY is never a state's two letters: it goes into every load id
+   Accept names (FRT-<order>-<lane>-<n>-S<k>), which a carrier and the
+   customer read, and "NE" or "SC" would read as Nebraska or South Carolina.
+   Within a lane the stops that still need freight are ordered
+   nearest-neighbour from the ORIGIN by straight-line (haversine) miles when
+   the origin and the stop both have a map pin; a stop with no pin is
+   appended in state order (state, city, name). Stops whose units are all
+   booked or shipped follow, unnumbered by distance.
+
+   Pure: no Firestore, no network, no clock but the `now` handed in. It
+   holds no pricing logic (a quote is a number the carrier gave the office,
+   recorded as typed) and it never reads a list price, a supplier, a cost
+   basis or a margin. Bundled into the public sandbox, so ES5 and only
+   ./admin (httpError, stubbed there), ./custody and ./shipping-fields —
+   never order-lifecycle.js or logic-policy.js (server-only). */
+'use strict';
+var A = require('api/_lib/admin.js'), C = require('api/_lib/custody.js'), SF = require('api/_lib/shipping-fields.js');
+
+/* ── regions ──────────────────────────────────────────────────────────── */
+var REGIONS = [
+  { key: 'NORTHEAST', label: 'Northeast', states: ['CT', 'MA', 'ME', 'NH', 'NJ', 'NY', 'PA', 'RI', 'VT'] },
+  { key: 'MIDATLANTIC', label: 'Mid-Atlantic', states: ['DC', 'DE', 'MD', 'VA', 'WV'] },
+  { key: 'SOUTHEAST', label: 'Southeast', states: ['AL', 'FL', 'GA', 'KY', 'MS', 'NC', 'SC', 'TN'] },
+  { key: 'GREATLAKES', label: 'Great Lakes', states: ['IL', 'IN', 'MI', 'OH', 'WI'] },
+  { key: 'CENTRALPLAINS', label: 'Central Plains', states: ['IA', 'KS', 'MN', 'MO', 'ND', 'NE', 'SD'] },
+  { key: 'SOUTHCENTRAL', label: 'South Central', states: ['AR', 'LA', 'OK', 'TX'] },
+  { key: 'MOUNTAIN', label: 'Mountain', states: ['AZ', 'CO', 'ID', 'MT', 'NM', 'NV', 'UT', 'WY'] },
+  { key: 'PACIFIC', label: 'Pacific', states: ['CA', 'OR', 'WA'] },
+  { key: 'ALASKA', label: 'Alaska (ocean/air)', states: ['AK'] },
+  { key: 'HAWAII', label: 'Hawaii (ocean/air)', states: ['HI'] },
+  { key: 'PUERTORICO', label: 'Puerto Rico (ocean)', states: ['PR'] },
+  { key: 'CHECK', label: 'Address to check', states: [] }
+];
+var REGION_OF = {}, REGION_BY_KEY = {}, REGION_INDEX = {};
+REGIONS.forEach(function (r, i) { REGION_BY_KEY[r.key] = r; REGION_INDEX[r.key] = i; r.states.forEach(function (s) { REGION_OF[s] = r.key; }); });
+var US_COUNTRY = ['', 'US', 'USA', 'U.S.', 'U.S.A.', 'UNITED STATES', 'UNITED STATES OF AMERICA'];
+
+var LOAD_ID = /^[A-Za-z0-9_-]{1,100}$/;
+var QUOTE_ID = /^[A-Za-z0-9_-]{1,120}$/;
+var MAX_STOP_UNITS = 100;    // the ledger's own cap on serials per load (order-lifecycle serials())
+var MAX_QUOTE_UNITS = 400;   // one accept is one transaction
+var EARTH_MILES = 3958.8;
+var NOT = SF.NOT_ON_FILE;
+var NOTICE = 'Weights, sizes and classes come from the product catalog; a value that is not on file says "not on file" and is never guessed. Miles are straight-line, not road miles. Nothing here books a carrier: record the quotes you get, and Accept plans the loads on this ledger.';
+var FREIGHT_LABELS = { open: 'Needs freight', booked: 'Booked on load', shipped: 'Shipped', unassigned: 'No site yet', blocked: 'Cannot ship' };
+var LANE_LABELS = { 'needs-quote': 'Needs a quote', quoted: 'Quoted', accepted: 'Quote accepted · loads planned', booked: 'Booked on the ledger', shipped: 'Shipped' };
+
+function fail(s, m) { return A.httpError(s, m); }
+function clean(v, n) { return String(v == null ? '' : v).replace(/^\s+|\s+$/g, '').slice(0, n || 160); }
+/* free text a person typed: bounded, no control characters (a note may
+   carry line breaks) */
+function text(v, max, label, required, multiline) {
+  if (v == null) v = '';
+  if (typeof v !== 'string' && typeof v !== 'number') throw fail(400, label + ' must be text');
+  var s = String(v);
+  if ((multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/ : /[\u0000-\u001f\u007f]/).test(s)) throw fail(400, label + ' has characters that are not allowed');
+  s = s.replace(/^\s+|\s+$/g, '');
+  if (s.length > max) throw fail(400, label + ': at most ' + max + ' characters');
+  if (required && !s) throw fail(400, label + ' is required');
+  return s;
+}
+function regionOf(state, country) {
+  var cc = String(country == null ? '' : country).replace(/^\s+|\s+$/g, '').toUpperCase();
+  if (cc === 'PR' || cc === 'PUERTO RICO') return 'PUERTORICO';
+  if (US_COUNTRY.indexOf(cc) < 0) return 'CHECK';
+  return REGION_OF[C.stateCode(state)] || 'CHECK';
+}
+function laneKeyOf(k) { var s = String(k == null ? '' : k); if (!REGION_BY_KEY[s]) throw fail(400, 'Unknown lane'); return s; }
+/* a day, from an ISO string, a Date or a Firestore Timestamp */
+function dayOf(v) {
+  if (!v) return null;
+  if (typeof v === 'string') return /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null;
+  if (typeof v.toDate === 'function') { try { return v.toDate().toISOString().slice(0, 10); } catch (e) { return null; } }
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10);
+  var sec = v._seconds != null ? v._seconds : v.seconds;
+  return sec != null && isFinite(sec) ? new Date(sec * 1000).toISOString().slice(0, 10) : null;
+}
+
+/* the day a quote's "valid until" is judged against: the calendar day in
+   Hawaii (UTC−10), the last US state to finish a day. A carrier's "valid
+   until the 24th" is good through the end of the 24th wherever the office
+   is; judged on the UTC day it would expire at 5pm Pacific / 8pm Eastern.
+   The cost is a few hours of grace after midnight in the east, and the
+   carrier confirms the rate when the load is booked anyway. The page's date
+   picker uses the browser's own day, which is never before this one in the
+   US, so a date it offers is never refused here. */
+function quoteDay(now) {
+  var t = Date.parse(String(now == null ? '' : now));
+  return isFinite(t) ? new Date(t - 10 * 3600000).toISOString().slice(0, 10) : String(now == null ? '' : now).slice(0, 10);
+}
+/* where a stop is, for a price: the street as matched (C.addressKey), the
+   city and the state — C.samePlace's terms. It is in a lane's key, so a
+   site whose address is corrected (same site, new street) makes a price
+   given for the old one stale, and Accept compares it again. */
+function placeKey(a) {
+  a = a || {};
+  return C.addressKey(a.line1, a.zip) + '|' + String(a.city || '').replace(/^\s+|\s+$/g, '').toLowerCase() + '|' + (C.stateCode(a.state) || String(a.state || '').replace(/^\s+|\s+$/g, '').toUpperCase());
+}
+/* the address a quote's stop was priced for */
+function quotedAt(s) { s = s || {}; return { line1: s.line1 || '', city: s.city || '', state: s.state || '', zip: s.zip || '' }; }
+/* the load id Accept uses when the office leaves the box blank:
+   FRT-<order>-<lane>-<n>, n one past the loads already planned on this lane
+   from a quote (counted by their freight.loadId, whatever the office named
+   them), stepped past any leg id the ledger already has. ONE rule: the
+   endpoint, the sandbox and each lane's nextLoadId in the plan (what the
+   Accept step previews) all call this, on the same legs. */
+function nextLoadId(order, laneKey, legs) {
+  var o = order || {}, list = Array.isArray(legs) ? legs : [], seen = {}, n = 0, id;
+  var base = 'FRT-' + String(o.orderNo || o.id || 'order').replace(/[^A-Za-z0-9_-]+/g, '-').slice(0, 60) + '-' + String(laneKey || '');
+  list.forEach(function (l) { var f = l && l.freight; if (f && f.laneKey === laneKey && f.loadId && !seen[f.loadId]) { seen[f.loadId] = true; n++; } });
+  do { n++; id = base + '-' + n; } while (list.some(function (l) { return !!l && String(l.id).indexOf(id + '-S') === 0; }));
+  return id;
+}
+
+/* ── distance ─────────────────────────────────────────────────────────── */
+function hasPin(p) {
+  if (!p || p.lat === null || p.lng === null || p.lat === undefined || p.lng === undefined || p.lat === '' || p.lng === '') return false;
+  var la = Number(p.lat), ln = Number(p.lng);
+  return isFinite(la) && isFinite(ln) && la >= -90 && la <= 90 && ln >= -180 && ln <= 180;
+}
+function rad(d) { return d * Math.PI / 180; }
+function rawMiles(a, b) {
+  var dLat = rad(Number(b.lat) - Number(a.lat)), dLng = rad(Number(b.lng) - Number(a.lng));
+  var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(rad(Number(a.lat))) * Math.cos(rad(Number(b.lat))) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * EARTH_MILES * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+/* straight-line miles, one decimal; null without both pins */
+function haversineMiles(a, b) { return hasPin(a) && hasPin(b) ? Math.round(rawMiles(a, b) * 10) / 10 : null; }
+
+/* ── money: a quote as the carrier gave it, in cents. Not a price this
+   platform computes — a number typed off a carrier's email. (Named
+   quoteCents: scripts/tests/tappsandbox.js refuses a `cents` function in
+   the public bundle, where it would mean the fee snapshot.) ─────────── */
+function quoteCents(v) {
+  if (v === null || v === undefined || typeof v === 'boolean' || (typeof v === 'string' && !v.replace(/^\s+|\s+$/g, ''))) throw fail(400, 'Enter the quoted amount');
+  var n = Number(typeof v === 'string' ? v.replace(/[$,\s]/g, '') : v);
+  if (!isFinite(n) || n <= 0 || n > 10000000) throw fail(400, 'The quoted amount must be more than $0 and at most $10,000,000');
+  return Math.round(n * 100);
+}
+
+/* ── one unit ─────────────────────────────────────────────────────────── */
+/* Ready to ship exactly as the pickup gate judges it: logic-policy.ready()
+   (at Ready, no hold, no NCR, and a PASSING test — no test record is not a
+   pass). That module is server-only and never in the public bundle, so the
+   one condition is copied here; scripts/test-freight.js holds the two to
+   the same answers. api/logic-logistics.js pickup also runs it on every
+   serialized component of the unit (its rootSerial family), so a unit is
+   only ready when its components are: `parts` are those, as far as the
+   order's units show them. A sheet that says "Ready now" is a promise to a
+   carrier; it must never be one the pickup then refuses. */
+function unitReady(u) { return !!u && u.at === 'ready' && !u.hold && !u.ncr && !!u.test && u.test.result === 'pass'; }
+function partSay(c) {
+  var at = clean(c.at, 60);
+  return c.hold ? 'on hold' : c.ncr ? 'NCR ' + clean(c.ncr, 60) : c.test && c.test.result === 'fail' ? 'test failed' : at === 'ready' ? 'awaiting test' : at ? 'at ' + at : 'not started';
+}
+function buildState(u, parts) {
+  u = u || {};
+  var at = clean(u.at, 60), failed = !!(u.test && u.test.result === 'fail'), passed = !!(u.test && u.test.result === 'pass');
+  var part = (parts || []).filter(function (c) { return c && !unitReady(c); }).sort(function (a, b) { return C.naturalCompare(a.serial, b.serial); })[0] || null;
+  var ready = unitReady(u) && !part;
+  var label = u.hold ? 'On hold · ' + clean(u.hold, 80) : u.ncr ? 'On hold · NCR ' + clean(u.ncr, 60) : failed ? 'Test failed'
+    : at === 'ready' && !passed ? 'Awaiting test' : at === 'ready' && part ? 'Component not ready · ' + clean(part.serial, 100) + ' ' + partSay(part) : ready ? 'Ready' : at ? 'Building · ' + at : 'Not started';
+  return { ready: ready, label: label, since: ready ? dayOf(u.arrivedAt) || dayOf(u.readyAt) : null };
+}
+/* each shipping unit's serialized components, by its serial (rootSerial) */
+function partsIndex(list) {
+  var by = {};
+  (list || []).forEach(function (c) { if (!c || c.shipUnit || !c.rootSerial || c.rootSerial === c.serial) return; (by[c.rootSerial] = by[c.rootSerial] || []).push(c); });
+  return by;
+}
+/* the legs an order carries, by serial and by id */
+function legIndex(legs) {
+  var idx = { bySerial: {}, byId: {} };
+  (legs || []).forEach(function (l) { if (!l) return; if (l.id) idx.byId[l.id] = l; (l.serials || []).forEach(function (s) { idx.bySerial[s] = l; }); });
+  return idx;
+}
+/* the leg a unit is on: the order's own ledger first, then the unit's
+   logisticsLegId (a load recorded against it that this order does not
+   list is still a load: treated as planned, never as free) */
+function legOf(u, idx) {
+  if (!u) return null;
+  if (typeof idx === 'function') return idx(u) || null;
+  idx = idx || { bySerial: {}, byId: {} };
+  if (!idx.bySerial) idx = { bySerial: idx, byId: {} };
+  var l = idx.bySerial[u.serial] || (u.logisticsLegId ? idx.byId[u.logisticsLegId] : null);
+  if (!l && u.logisticsLegId) l = { id: String(u.logisticsLegId), status: 'planned', carrier: '', tracking: '', unknown: true };
+  return l || null;
+}
+/* blocked · shipped · booked · unassigned · open */
+function freightState(u, idx) {
+  var c = C.custodyOf(u);
+  if (c.state === 'scrapped' || c.state === 'lost') return 'blocked';
+  var leg = legOf(u, idx);
+  if (c.status || (leg && leg.status !== 'planned')) return 'shipped';
+  if (leg) return 'booked';
+  if (!siteOfUnit(u)) return 'unassigned';
+  return 'open';
+}
+/* assigned (bound) wins over planned ("going to") */
+function siteOfUnit(u) {
+  var c = C.custodyOf(u);
+  if (c.siteId) return { siteId: String(c.siteId), siteName: clean(c.siteName, 160), how: 'assigned' };
+  if (c.plannedSiteId) return { siteId: String(c.plannedSiteId), siteName: clean(c.plannedSiteName, 160), how: 'planned' };
+  return null;
+}
+
+/* ── estimates, from the catalog only ─────────────────────────────────── */
+function num(v) { return v === null || v === undefined || v === '' || typeof v === 'boolean' ? null : (isFinite(Number(v)) ? Number(v) : null); }
+function r2(n) { return Math.round(n * 100) / 100; }
+function estimate(units, bySku) {
+  bySku = bySku || {};
+  var lb = 0, lbN = 0, lbMiss = {}, sq = 0, sqN = 0, sqMiss = {}, h = null, hMiss = {}, stack = {}, classes = {}, classMiss = {}, handling = {}, n = 0, noStack = false;
+  (units || []).forEach(function (u) {
+    if (!u) return; n++;
+    var sku = String(u.sku || ''), key = sku || '(no SKU)', p = bySku[sku] || null, w = p ? num(p.weightLb) : null, wf = p ? num(p.widthFt) : null, df = p ? num(p.depthFt) : null, hf = p ? num(p.heightFt) : null;
+    if (w != null) { lb += w; lbN++; } else lbMiss[key] = true;
+    if (wf != null && df != null) { sq += wf * df; sqN++; } else sqMiss[key] = true;
+    if (hf != null) h = h == null ? hf : Math.max(h, hf); else hMiss[key] = true;
+    stack[key] = p && p.stackable === true ? 'yes' : p && p.stackable === false ? 'no' : 'unknown';
+    if (p && p.stackable === false) noStack = true;
+    if (p && p.freightClass != null && p.freightClass !== '') classes[String(p.freightClass)] = true; else classMiss[key] = true;
+    if (p && p.handlingNote) handling[String(p.handlingNote)] = true;
+  });
+  var hl = Object.keys(handling).sort(); if (noStack) hl.push('Do not stack');
+  var sorted = function (o) { return Object.keys(o).sort(C.naturalCompare); };
+  /* stacking, as a carrier reads it: "yes" or "no" when every SKU says the
+     same; the SKUs named when they differ ("yes: A; no: B"); and a SKU
+     nobody answered for named as not on file — never folded into a
+     "mixed" that reads as some yes and some no */
+  var yes = [], no = [], unk = [];
+  sorted(stack).forEach(function (k) { (stack[k] === 'yes' ? yes : stack[k] === 'no' ? no : unk).push(k); });
+  var stackable = !yes.length && !no.length ? NOT : (yes.length && no.length ? 'yes: ' + yes.join(', ') + '; no: ' + no.join(', ') : yes.length ? 'yes' : 'no') + (unk.length ? ' (' + NOT + ': ' + unk.join(', ') + ')' : '');
+  return {
+    units: n,
+    weightLb: { lb: r2(lb), complete: n > 0 ? lbN === n : true, missing: sorted(lbMiss), counted: lbN },
+    floorSqFt: { sqft: r2(sq), complete: n > 0 ? sqN === n : true, missing: sorted(sqMiss), counted: sqN },
+    maxHeightFt: h == null ? null : r2(h), heightComplete: Object.keys(hMiss).length === 0, heightMissing: sorted(hMiss),
+    stackable: stackable,
+    freightClass: Object.keys(classes).sort(function (a, b) { return Number(a) - Number(b); }),
+    freightClassComplete: Object.keys(classMiss).length === 0, freightClassMissing: sorted(classMiss),
+    handling: hl
+  };
+}
+/* one estimate cell: the number when complete, "not on file" when nothing
+   is, "<n> (not on file: SKU…)" when partial */
+function estCell(total, complete, missing, counted) {
+  if (complete) return total;
+  if (!counted) return NOT;
+  return total + ' (' + NOT + ': ' + missing.join(', ') + ')';
+}
+
+/* ── which order destination a stop's leg goes against ────────────────── */
+var LEGACY_SAY = 'This order needs a reviewed destination plan; legacy orders are not changed automatically';
+function destinationFor(destinations, site) {
+  var list = Array.isArray(destinations) ? destinations : null, s = site || {}, a = s.address || {}, nm = s.name || s.siteName || s.siteId || 'this stop';
+  if (!list) return { id: null, how: 'none', say: LEGACY_SAY };
+  var hit = list.filter(function (d) { return d && d.address && C.samePlace(d.address, a); })[0];
+  if (hit) return { id: hit.id, how: 'address', say: '' };
+  if (list.length === 1) return { id: list[0].id, how: 'only', say: 'The order has one destination (' + clean((list[0].address || {}).name || list[0].id, 120) + '); this stop is recorded on its load as the real drop.' };
+  return { id: null, how: 'none', say: 'No destination on the order matches ' + nm + (C.oneLine(a) ? ' (' + C.oneLine(a) + ')' : '') + '. Plan this stop on the ledger against the right destination.' };
+}
+
+/* ── stop order ───────────────────────────────────────────────────────── */
+function byState(a, b) {
+  var sa = C.stateCode((a.address || {}).state) || String((a.address || {}).state || ''), sb = C.stateCode((b.address || {}).state) || String((b.address || {}).state || '');
+  if (sa !== sb) return sa < sb ? -1 : 1;
+  var ca = String((a.address || {}).city || '').toLowerCase(), cb = String((b.address || {}).city || '').toLowerCase();
+  if (ca !== cb) return ca < cb ? -1 : 1;
+  var n = C.naturalCompare(String(a.name || ''), String(b.name || '')); if (n) return n;
+  return String(a.siteId) < String(b.siteId) ? -1 : String(a.siteId) > String(b.siteId) ? 1 : 0;
+}
+function orderStops(origin, stops) {
+  var list = (stops || []).map(function (s) { var o = {}; for (var k in s) if (Object.prototype.hasOwnProperty.call(s, k)) o[k] = s[k]; return o; });
+  var out = [], ordering;
+  if (hasPin(origin)) {
+    var pinned = list.filter(hasPin), rest = list.filter(function (s) { return !hasPin(s); }).sort(byState), cur = origin;
+    /* nearest first; a tie goes to the name as a person reads it, then the id */
+    var before = function (x, y) { var n = C.naturalCompare(String(x.name || ''), String(y.name || '')); return n ? n < 0 : String(x.siteId) < String(y.siteId); };
+    while (pinned.length) {
+      var best = 0, bestD = rawMiles(cur, pinned[0]);
+      for (var i = 1; i < pinned.length; i++) {
+        var d = rawMiles(cur, pinned[i]);
+        if (d < bestD || (d === bestD && before(pinned[i], pinned[best]))) { best = i; bestD = d; }
+      }
+      var next = pinned.splice(best, 1)[0]; next.milesFromPrev = Math.round(bestD * 10) / 10; out.push(next); cur = next;
+    }
+    rest.forEach(function (s) { s.milesFromPrev = null; out.push(s); });
+    ordering = !rest.length ? 'nearest' : out.length === rest.length ? 'state' : 'mixed';
+  } else {
+    out = list.sort(byState); out.forEach(function (s) { s.milesFromPrev = null; }); ordering = 'state';
+  }
+  out.forEach(function (s, i) { s.seq = i + 1; });
+  var miles = null;
+  if (out.length && hasPin(origin) && out.every(hasPin)) { miles = 0; out.forEach(function (s) { miles += s.milesFromPrev; }); miles = Math.round(miles * 10) / 10; }
+  return { stops: out, ordering: ordering, miles: miles };
+}
+
+/* ── the ship-from ────────────────────────────────────────────────────── */
+function origin(input, existing) {
+  var b = input && typeof input === 'object' ? input : {}, a = b.address && typeof b.address === 'object' ? b.address : {}, ct = b.contact && typeof b.contact === 'object' ? b.contact : {};
+  var name = text(b.name, 160, 'The ship-from name', true);
+  var line1 = text(a.line1, 200, 'Street', true), line2 = text(a.line2, 200, 'Street 2'), city = text(a.city, 100, 'City', true);
+  var state = C.stateCode(a.state); if (!state) throw fail(400, 'Use a US state');
+  var zip = text(a.zip, 20, 'ZIP', true), zm = /^(\d{5})(?:-?(\d{4}))?$/.exec(zip);
+  if (!zm) throw fail(400, 'ZIP must be 5 or 9 digits');
+  var address = { line1: line1, line2: line2, city: city, state: state, zip: zm[2] ? zm[1] + '-' + zm[2] : zm[1], country: 'US' };
+  var keep = !!existing && !!existing.address && C.samePlace(existing.address, address);
+  var lat = b.lat === undefined ? (keep && existing.lat != null ? Number(existing.lat) : null) : (b.lat === null || b.lat === '' ? null : Number(b.lat));
+  var lng = b.lng === undefined ? (keep && existing.lng != null ? Number(existing.lng) : null) : (b.lng === null || b.lng === '' ? null : Number(b.lng));
+  if ((lat != null && !(lat >= -90 && lat <= 90)) || (lng != null && !(lng >= -180 && lng <= 180))) throw fail(400, 'Latitude or longitude out of range');
+  if ((lat == null) !== (lng == null)) { lat = null; lng = null; }
+  return { name: name, address: address, contact: { name: text(ct.name, 120, 'Contact name'), phone: text(ct.phone, 40, 'Contact phone') },
+    hours: text(b.hours, 120, 'Dock hours'), notes: text(b.notes, 500, 'Notes', false, true), lat: lat, lng: lng };
+}
+function originLine(o) { return o && o.address && o.address.line1 ? [clean(o.name, 160), C.oneLine(o.address)].filter(Boolean).join(', ') : ''; }
+
+/* ── the order, however it is shaped ─────────────────────────────────── */
+function deliveryOf(o) {
+  o = o || {};
+  var d = o.delivery && typeof o.delivery === 'object' ? o.delivery : (Array.isArray(o.destinations) ? { destinations: o.destinations, legs: o.legs, revision: o.revision } : {});
+  return { destinations: Array.isArray(d.destinations) ? d.destinations : null, legs: Array.isArray(d.legs) ? d.legs : [], revision: typeof d.revision === 'number' ? d.revision : 0 };
+}
+function poOf(o) { return (o && ((o.purchaseOrder && o.purchaseOrder.number) || o.poNumber)) || ''; }
+function customerOf(o) { var c = (o && o.customer) || {}; return typeof c === 'string' ? c : clean(c.company || c.name, 160); }
+
+/* ── quotes ───────────────────────────────────────────────────────────── */
+/* `day` is quoteDay(now): what "valid until" is judged against */
+function quoteView(q, lane, day) {
+  q = q || {};
+  var vu = q.validUntil || null, open = (q.status || 'recorded') === 'recorded', here = {};
+  ((lane && lane.stops) || []).forEach(function (st) { here[st.siteId] = st; });
+  /* each stop as priced, with where that site is NOW when it is still on
+     the lane: `moved` when the site's address is no longer the one the
+     carrier priced (the Accept step shows the current one; Accept refuses) */
+  var stops = (q.stops || []).map(function (s) {
+    var cur = here[s.siteId] || null;
+    return { seq: s.seq, siteId: s.siteId, siteName: s.siteName || '', line1: s.line1 || '', city: s.city || '', state: s.state || '', zip: s.zip || '', serials: (s.serials || []).slice(),
+      where: cur ? cur.oneLine || C.oneLine(cur.address) : '', moved: !!cur && !C.samePlace(quotedAt(s), cur.address) };
+  });
+  return { id: String(q.id || ''), laneKey: q.laneKey || '', laneLabel: q.laneLabel || (REGION_BY_KEY[q.laneKey] || {}).label || '', carrier: q.carrier || '', amountCents: typeof q.amountCents === 'number' ? q.amountCents : null,
+    currency: q.currency || 'USD', transitDays: q.transitDays == null ? null : q.transitDays, validUntil: vu, reference: q.reference || '', note: q.note || '', status: q.status || 'recorded',
+    /* flags for a quote that is still open: an accepted, superseded or
+       withdrawn one is history, and its lane has moved on by design */
+    expired: open && !!(vu && day && vu < day), stale: open && (!lane || q.planKey !== lane.planKey), moved: open && stops.some(function (s) { return s.moved; }),
+    stops: stops,
+    units: typeof q.units === 'number' ? q.units : (q.stops || []).reduce(function (t, s) { return t + (s.serials || []).length; }, 0),
+    recordedAt: q.recordedAt || null, recordedBy: q.recordedBy || null, acceptedAt: q.acceptedAt || null, acceptedBy: q.acceptedBy || null, legIds: (q.legIds || []).slice(),
+    withdrawnAt: q.withdrawnAt || null, withdrawnBy: q.withdrawnBy || null, reason: q.reason || '', supersededBy: q.supersededBy || null, supersedes: q.supersedes || null };
+}
+function newestFirst(a, b) { var x = String(a.recordedAt || ''), y = String(b.recordedAt || ''); return x < y ? 1 : x > y ? -1 : 0; }
+function bestOf(views) {
+  var best = null;
+  views.forEach(function (v) {
+    /* a price Accept would refuse is never "best": expired, or a stop's address moved since */
+    if (v.status !== 'recorded' || v.expired || v.moved || v.amountCents == null) return;
+    if (!best || v.amountCents < best.amountCents || (v.amountCents === best.amountCents && String(v.recordedAt || '') < String(best.recordedAt || ''))) best = v;
+  });
+  return best;
+}
+
+/* ── the plan ─────────────────────────────────────────────────────────── */
+function contactOf(site) { var c = (site && site.contact) || {}; return { name: clean(c.name, 120), phone: clean(c.phone, 40) }; }
+function addressOf(site) {
+  var a = (site && site.address) || {};
+  return { line1: clean(a.line1, 200), line2: clean(a.line2, 200), city: clean(a.city, 100), state: clean(a.state, 40), zip: clean(a.zip, 20), country: clean(a.country, 40) || 'US' };
+}
+function skuLines(units, bySku) {
+  var by = {}, order = [];
+  units.forEach(function (u) { var s = String(u.sku || ''); if (!by[s]) { by[s] = { sku: s, name: bySku[s] && bySku[s].name ? clean(bySku[s].name, 160) : '', qty: 0 }; order.push(s); } by[s].qty++; });
+  return order.sort(C.naturalCompare).map(function (s) { return by[s]; });
+}
+function readyOf(units, promised, today, builds) {
+  var of = units.length, k = units.filter(function (u) { return builds && builds[u.serial] ? builds[u.serial].ready : buildState(u).ready; }).length;
+  if (!of) return { ready: 0, of: 0, date: null, label: 'Nothing left to ship' };
+  if (k === of) return { ready: k, of: of, date: today || null, label: 'Ready now' };
+  if (promised) return { ready: k, of: of, date: promised, label: k + ' of ' + of + ' ready · plant date ' + promised };
+  return { ready: k, of: of, date: null, label: k + ' of ' + of + ' ready · no ship date set' };
+}
+function plan(input) {
+  var inp = input || {}, now = String(inp.now || ''), today = now.slice(0, 10), qday = quoteDay(now), o = inp.order || {}, dl = deliveryOf(o), idx = legIndex(dl.legs);
+  var bySku = {}; (inp.products || []).forEach(function (p) { if (p && p.sku) bySku[String(p.sku)] = p; });
+  var sites = inp.sites || {}, orig = inp.origin && inp.origin.address ? inp.origin : null, promised = dayOf(inp.promised);
+  /* inp.components: the order's serialized components (not shipping
+     units), which the pickup gate checks with their unit */
+  var parts = partsIndex((inp.components || []).concat(inp.units || []));
+  var units = (inp.units || []).filter(function (u) { return u && u.shipUnit; }).slice().sort(function (a, b) { return C.naturalCompare(a.serial, b.serial); });
+  var recs = [], builds = {}, stopsById = {}, stopOrder = [], unassigned = [], offLane = [], blocked = [];
+  units.forEach(function (u) {
+    var st = freightState(u, idx), leg = legOf(u, idx), s = siteOfUnit(u), rec = { u: u, state: st, leg: leg, site: s, build: buildState(u, parts[u.serial]) };
+    recs.push(rec); builds[u.serial] = rec.build;
+    if (st === 'blocked') { blocked.push(rec); return; }
+    /* no site: still to be given one (unassigned), or already on a load or
+       shipped without one (planned by hand, or before bulk sites) — the
+       second is not work for "Many sites at once" and is listed apart */
+    if (!s) { (st === 'unassigned' ? unassigned : offLane).push(rec); return; }
+    var stop = stopsById[s.siteId];
+    if (!stop) { stop = stopsById[s.siteId] = { siteId: s.siteId, recs: [], hows: {}, fallbackName: s.siteName }; stopOrder.push(s.siteId); }
+    stop.recs.push(rec); stop.hows[s.how] = true;
+  });
+  /* each stop, with its site's address and pin */
+  var built = stopOrder.map(function (id) {
+    var st = stopsById[id], site = sites[id] || null, a = addressOf(site), openU = [], bookedN = 0, shippedN = 0;
+    st.recs.forEach(function (r) { if (r.state === 'open') openU.push(r.u); else if (r.state === 'booked') bookedN++; else if (r.state === 'shipped') shippedN++; });
+    return { siteId: id, name: clean(site && site.name, 160) || st.fallbackName || id, ref: clean(site && site.ref, 80), how: st.hows.assigned && st.hows.planned ? 'mixed' : st.hows.assigned ? 'assigned' : 'planned',
+      siteStatus: !site ? 'missing' : site.status === 'inactive' ? 'inactive' : 'active',
+      address: a, oneLine: C.oneLine(a), lat: site && hasPin(site) ? Number(site.lat) : null, lng: site && hasPin(site) ? Number(site.lng) : null, contact: contactOf(site),
+      region: regionOf(a.state, a.country), recs: st.recs,
+      serials: st.recs.map(function (r) { return r.u.serial; }), openSerials: openU.map(function (u) { return u.serial; }),
+      open: openU.length, booked: bookedN, shipped: shippedN, units: st.recs.length,
+      skus: skuLines(openU, bySku), estimate: estimate(openU, bySku), ready: readyOf(openU, promised, today, builds),
+      destination: destinationFor(dl.destinations, { name: clean(site && site.name, 160) || st.fallbackName || id, address: a }) };
+  });
+  /* lanes, in REGIONS order; open stops routed first */
+  var byLane = {}; built.forEach(function (s) { (byLane[s.region] = byLane[s.region] || []).push(s); });
+  var quoteViews = (inp.quotes || []).filter(function (q) { return q && q.id; });
+  var usedQuotes = {}, laneOfSerial = {};
+  var lanes = REGIONS.filter(function (r) { return byLane[r.key]; }).map(function (r) {
+    var all = byLane[r.key], openStops = all.filter(function (s) { return s.open > 0; }), restStops = all.filter(function (s) { return !s.open; });
+    var r1 = orderStops(orig, openStops), r2 = orderStops(orig, restStops);
+    r2.stops.forEach(function (s, i) { s.seq = r1.stops.length + i + 1; s.milesFromPrev = null; });
+    var stops = r1.stops.concat(r2.stops), openU = [], pairs = [], n = { units: 0, open: 0, booked: 0, shipped: 0 };
+    stops.forEach(function (s) {
+      n.units += s.units; n.open += s.open; n.booked += s.booked; n.shipped += s.shipped;
+      /* the lane as priced: each open serial → its site AT its address */
+      s.recs.forEach(function (rc) { laneOfSerial[rc.u.serial] = { lane: r.key, seq: s.seq, siteId: s.siteId }; if (rc.state === 'open') { openU.push(rc.u); pairs.push({ serial: rc.u.serial, siteId: s.siteId + '@' + placeKey(s.address) }); } });
+    });
+    var lane = { key: r.key, label: r.label, ordering: openStops.length ? r1.ordering : r2.ordering, miles: openStops.length ? r1.miles : null, stops: stops,
+      units: n.units, open: n.open, booked: n.booked, shipped: n.shipped, skus: skuLines(openU, bySku), estimate: estimate(openU, bySku), planKey: C.planKey({ assignments: pairs }),
+      nextLoadId: nextLoadId(o, r.key, dl.legs) };
+    var qs = quoteViews.filter(function (q) { return q.laneKey === r.key; }).map(function (q) { usedQuotes[q.id] = true; return quoteView(q, lane, qday); }).sort(newestFirst);
+    lane.quotes = qs; lane.best = bestOf(qs);
+    lane.accepted = qs.filter(function (q) { return q.status === 'accepted'; }).sort(function (a, b) { return String(a.acceptedAt || '') < String(b.acceptedAt || '') ? 1 : -1; })[0] || null;
+    lane.state = lane.open > 0 ? (qs.some(function (q) { return q.status === 'recorded' && !q.expired && !q.moved; }) ? 'quoted' : 'needs-quote') : lane.booked > 0 ? (lane.accepted ? 'accepted' : 'booked') : 'shipped';
+    lane.stateLabel = LANE_LABELS[lane.state];
+    lane.loads = [];
+    return lane;
+  });
+  /* the ledger's loads that carry each lane's units */
+  var laneBy = {}; lanes.forEach(function (l) { laneBy[l.key] = l; });
+  dl.legs.forEach(function (leg) {
+    var hit = null; (leg.serials || []).some(function (sn) { hit = laneOfSerial[sn] || null; return !!hit; });
+    if (!hit) return;
+    laneBy[hit.lane].loads.push({ legId: leg.id, status: leg.status || '', carrier: leg.carrier || '', tracking: leg.tracking || '', siteId: leg.siteId || hit.siteId, stop: leg.freight && leg.freight.stop ? leg.freight.stop : hit.seq, quoteId: leg.freight && leg.freight.quoteId ? leg.freight.quoteId : null, units: (leg.serials || []).length });
+  });
+  /* master rows, in lane · stop · serial order, then no site, then cannot ship */
+  var rows = [], stopOf = {};
+  lanes.forEach(function (l) { l.stops.forEach(function (s) { s.recs.forEach(function (rc) { stopOf[rc.u.serial] = { lane: l, stop: s }; }); }); });
+  var rank = function (x, at) { return at ? 0 : x.state === 'blocked' ? 3 : x.state === 'unassigned' ? 2 : 1; };
+  var sortedRecs = recs.slice().sort(function (x, y) {
+    var a = stopOf[x.u.serial], b = stopOf[y.u.serial], ra = rank(x, a), rb = rank(y, b);
+    if (ra !== rb) return ra - rb;
+    if (a && b) { var la = REGION_INDEX[a.lane.key], lb = REGION_INDEX[b.lane.key]; if (la !== lb) return la - lb; if (a.stop.seq !== b.stop.seq) return a.stop.seq - b.stop.seq; }
+    return C.naturalCompare(x.u.serial, y.u.serial);
+  });
+  var orderNo = clean(o.orderNo, 60), po = clean(poOf(o), 80);
+  sortedRecs.forEach(function (rc) {
+    var u = rc.u, p = bySku[u.sku] || null, at = stopOf[u.serial], s = at ? at.stop : null, a = s ? s.address : {};
+    rows.push({ serial: u.serial, sku: u.sku || '', product: p && p.name ? clean(p.name, 160) : '', build: rc.build.label, readySince: rc.build.since || '', freight: FREIGHT_LABELS[rc.state],
+      lane: at ? at.lane.label : '', stop: s ? s.seq : '', site: s ? s.name : (rc.site ? rc.site.siteName || rc.site.siteId : ''), siteRef: s ? s.ref : '', siteIs: rc.site ? (rc.site.how === 'assigned' ? 'Assigned' : 'Going to') : '',
+      street: a.line1 || '', street2: a.line2 || '', city: a.city || '', state: a.state || '', zip: a.zip || '', country: s ? a.country || 'US' : '', lat: s && s.lat != null ? s.lat : '', lng: s && s.lng != null ? s.lng : '',
+      contact: s ? s.contact.name : '', phone: s ? s.contact.phone : '',
+      weightLb: p && num(p.weightLb) != null ? num(p.weightLb) : NOT, dims: SF.dims(p || {}), freightClass: p && p.freightClass ? String(p.freightClass) : NOT,
+      stackable: p && p.stackable === true ? 'yes' : p && p.stackable === false ? 'no' : NOT, handling: p && p.handlingNote ? String(p.handlingNote) : NOT,
+      load: rc.leg ? rc.leg.id : '', carrier: rc.leg ? rc.leg.carrier || '' : '', orderNo: orderNo, poNumber: po, freightState: rc.state });
+  });
+  var otherQuotes = quoteViews.filter(function (q) { return !usedQuotes[q.id]; }).map(function (q) { return quoteView(q, null, qday); }).sort(newestFirst);
+  var count = function (st) { return recs.filter(function (r) { return r.state === st; }).length; };
+  var openAll = recs.filter(function (r) { return r.state === 'open'; }).map(function (r) { return r.u; }), est = estimate(openAll, bySku);
+  var tidy = function (rc) { var u = rc.u; return { serial: u.serial, sku: u.sku || '', state: rc.state, stateLabel: FREIGHT_LABELS[rc.state], build: rc.build.label, ready: rc.build.ready, load: rc.leg ? rc.leg.id : '', why: rc.state === 'blocked' ? (C.custodyOf(u).state === 'lost' ? 'Marked lost' : 'Scrapped') : rc.state === 'shipped' ? 'Shipped' : rc.state === 'booked' ? 'Booked' : '' }; };
+  /* stops as the page reads them: the working recs dropped */
+  lanes.forEach(function (l) { l.stops.forEach(function (s) { delete s.recs; delete s.region; }); });
+  return {
+    order: { id: String(o.id || ''), orderNo: orderNo, poNumber: po, status: o.status || '', customer: customerOf(o), revision: dl.revision, legacy: !dl.destinations,
+      destinations: (dl.destinations || []).map(function (d) { var da = d.address || {}; return { id: d.id, name: clean(da.name, 160), city: clean(da.city, 100), state: clean(da.state, 40), zip: clean(da.zip, 20), items: (d.items || []).map(function (i) { return { sku: i.sku, qty: i.qty }; }) }; }) },
+    origin: orig, originSet: !!orig, originPinned: hasPin(orig),
+    summary: { units: recs.length, sites: built.length, lanes: lanes.length, open: count('open'), booked: count('booked'), shipped: count('shipped'), unassigned: count('unassigned'), blocked: count('blocked'),
+      ready: recs.filter(function (r) { return r.build.ready && r.state !== 'shipped' && r.state !== 'blocked'; }).length,
+      weightLb: est.weightLb.counted ? est.weightLb.lb : null, weightComplete: est.weightLb.complete, weightMissing: est.weightLb.missing },
+    rows: rows, lanes: lanes, unassigned: unassigned.map(tidy), offLane: offLane.map(tidy), blocked: blocked.map(tidy), otherQuotes: otherQuotes, notice: NOTICE, generatedAt: now
+  };
+}
+
+/* ── the two sheets: the ONLY place their columns are defined ────────── */
+var MASTER_COLUMNS = [
+  { key: 'serial', label: 'Serial' }, { key: 'sku', label: 'SKU' }, { key: 'product', label: 'Product' }, { key: 'build', label: 'Build status' }, { key: 'readySince', label: 'Ready since' },
+  { key: 'freight', label: 'Freight status' }, { key: 'lane', label: 'Lane' }, { key: 'stop', label: 'Stop' }, { key: 'site', label: 'Site' }, { key: 'siteRef', label: 'Site ref', text: true }, { key: 'siteIs', label: 'Site is' },
+  { key: 'street', label: 'Street' }, { key: 'street2', label: 'Street 2' }, { key: 'city', label: 'City' }, { key: 'state', label: 'State' }, { key: 'zip', label: 'ZIP', text: true }, { key: 'country', label: 'Country' },
+  { key: 'lat', label: 'Latitude' }, { key: 'lng', label: 'Longitude' }, { key: 'contact', label: 'Receiving contact' }, { key: 'phone', label: 'Contact phone' },
+  { key: 'weightLb', label: 'Weight lb' }, { key: 'dims', label: 'Dimensions ft (W × D × H)' }, { key: 'freightClass', label: 'Freight class' }, { key: 'stackable', label: 'Stackable' }, { key: 'handling', label: 'Handling' },
+  { key: 'load', label: 'Load' }, { key: 'carrier', label: 'Carrier' }, { key: 'orderNo', label: 'Order' }, { key: 'poNumber', label: 'Customer PO' }
+];
+var QUOTE_COLUMNS = [
+  { key: 'lane', label: 'Lane' }, { key: 'stop', label: 'Stop' }, { key: 'stopsInLane', label: 'Stops in lane' }, { key: 'pickUp', label: 'Pick up from' },
+  { key: 'site', label: 'Site' }, { key: 'siteRef', label: 'Site ref', text: true }, { key: 'street', label: 'Street' }, { key: 'street2', label: 'Street 2' }, { key: 'city', label: 'City' }, { key: 'state', label: 'State' }, { key: 'zip', label: 'ZIP', text: true }, { key: 'country', label: 'Country' },
+  { key: 'lat', label: 'Latitude' }, { key: 'lng', label: 'Longitude' }, { key: 'miles', label: 'Miles from previous stop (straight line)' }, { key: 'contact', label: 'Receiving contact' }, { key: 'phone', label: 'Contact phone' },
+  { key: 'units', label: 'Units' }, { key: 'skus', label: 'SKUs' }, { key: 'serials', label: 'Serials' }, { key: 'weight', label: 'Est. weight lb' }, { key: 'floor', label: 'Est. floor area sq ft' }, { key: 'height', label: 'Max height ft' },
+  { key: 'freightClass', label: 'Freight class' }, { key: 'stackable', label: 'Stackable' }, { key: 'ready', label: 'Ready' }, { key: 'pickupDate', label: 'Earliest pickup date' }, { key: 'handling', label: 'Special handling' }, { key: 'orderNo', label: 'Order' }
+];
+/* one cell, as the bulk-sites download writes it (logic-custody.html
+   csvCell): {text} keeps a leading-zero ZIP or a long ref as ="…", a text
+   cell starting = + - @ gets a leading ' so a spreadsheet does not run it.
+   A number is written as the number — a longitude is negative and is not
+   a formula. */
+function cell(v, asText) {
+  if (asText) {
+    var t = String(v == null ? '' : v);
+    return /^\d[\d-]*$/.test(t) && (t.charAt(0) === '0' || t.length > 15) ? '"=""' + t + '"""' : cell(t);
+  }
+  if (typeof v === 'number' && isFinite(v)) return String(v);
+  var s = v == null ? '' : String(v);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function csv(columns, rows) {
+  var lines = [columns.map(function (c) { return cell(c.label); }).join(',')];
+  (rows || []).forEach(function (r) { lines.push(columns.map(function (c) { return cell(r[c.key], c.text); }).join(',')); });
+  return '\ufeff' + lines.join('\r\n');
+}
+function masterCsv(pl) { return csv(MASTER_COLUMNS, pl.rows || []); }
+function quoteRows(pl) {
+  var out = [], from = originLine(pl.origin) || 'not set', orderNo = (pl.order || {}).orderNo || '';
+  (pl.lanes || []).forEach(function (l) {
+    var open = l.stops.filter(function (s) { return s.open > 0; });
+    open.forEach(function (s) {
+      var e = s.estimate, a = s.address;
+      out.push({ lane: l.label, stop: s.seq, stopsInLane: open.length, pickUp: from, site: s.name, siteRef: s.ref, street: a.line1, street2: a.line2, city: a.city, state: a.state, zip: a.zip, country: a.country || 'US',
+        lat: s.lat == null ? '' : s.lat, lng: s.lng == null ? '' : s.lng, miles: s.milesFromPrev == null ? '' : s.milesFromPrev, contact: s.contact.name, phone: s.contact.phone, units: s.open,
+        skus: s.skus.map(function (k) { return k.qty + ' × ' + k.sku + (k.name ? ' ' + k.name : ''); }).join('; '), serials: s.openSerials.join(' '),
+        weight: estCell(e.weightLb.lb, e.weightLb.complete, e.weightLb.missing, e.weightLb.counted), floor: estCell(e.floorSqFt.sqft, e.floorSqFt.complete, e.floorSqFt.missing, e.floorSqFt.counted),
+        height: e.maxHeightFt == null ? NOT : estCell(e.maxHeightFt, e.heightComplete, e.heightMissing, 1),
+        freightClass: e.freightClass.length ? estCell(e.freightClass.join(', '), e.freightClassComplete, e.freightClassMissing, 1) : NOT, stackable: e.stackable, ready: s.ready.label, pickupDate: s.ready.date || '',
+        handling: e.handling.join('; '), orderNo: orderNo });
+    });
+  });
+  return out;
+}
+function quoteCsv(pl) { return csv(QUOTE_COLUMNS, quoteRows(pl)); }
+function fileSafe(s) { return String(s || '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'order'; }
+function exportsOf(pl, now) {
+  var day = String(now || pl.generatedAt || '').slice(0, 10), no = fileSafe((pl.order || {}).orderNo || (pl.order || {}).id);
+  return { master: { filename: 'freight-master-' + no + '-' + day + '.csv', csv: masterCsv(pl) }, quote: { filename: 'freight-quote-request-' + no + '-' + day + '.csv', csv: quoteCsv(pl) } };
+}
+
+/* ── recording a quote ────────────────────────────────────────────────── */
+function quoteInput(body, lane, order, by, now) {
+  var b = body || {}, today = quoteDay(now), key = laneKeyOf(b.laneKey);
+  if (!lane || lane.key !== key) throw fail(409, 'That lane is not on this order any more. Reload the freight plan.');
+  if (!(lane.open > 0)) throw fail(409, 'Every unit on this lane is already booked or shipped; there is nothing left to quote');
+  if (!b.planKey) throw fail(400, 'Reload the freight plan before recording a quote');
+  if (String(b.planKey) !== lane.planKey) throw fail(409, 'This lane changed since you opened it. Reload the freight plan and record the quote again.');
+  var carrier = text(b.carrier, 120, 'Carrier', true), amountCents = quoteCents(b.amount);
+  var cur = b.currency == null || b.currency === '' ? 'USD' : String(b.currency).replace(/^\s+|\s+$/g, '').toUpperCase();
+  if (cur !== 'USD') throw fail(400, 'Quotes are recorded in USD');
+  var transit = null;
+  if (b.transitDays != null && b.transitDays !== '') { transit = Number(b.transitDays); if (!(isFinite(transit) && Math.floor(transit) === transit && transit >= 0 && transit <= 90)) throw fail(400, 'Transit days must be a whole number from 0 to 90'); }
+  var valid = b.validUntil == null || b.validUntil === '' ? null : C.day(b.validUntil);
+  if (valid && today && valid < today) throw fail(400, 'That quote has already expired (valid until ' + valid + ')');
+  var sup = b.supersedes == null || b.supersedes === '' ? null : String(b.supersedes);
+  if (sup && !QUOTE_ID.test(sup)) throw fail(400, 'Invalid quote to replace');
+  var stops = lane.stops.filter(function (s) { return s.open > 0; }).map(function (s) { return { seq: s.seq, siteId: s.siteId, siteName: s.name, line1: s.address.line1 || '', city: s.address.city || '', state: s.address.state || '', zip: s.address.zip || '', serials: s.openSerials.slice() }; });
+  var units = stops.reduce(function (t, s) { return t + s.serials.length; }, 0), w = lane.estimate.weightLb;
+  return { orgId: clean(order && order.orgId, 200) || null, orderId: String((order && order.id) || ''), orderNo: clean(order && order.orderNo, 60), laneKey: key, laneLabel: lane.label,
+    carrier: carrier, amountCents: amountCents, currency: 'USD', transitDays: transit, validUntil: valid, reference: text(b.reference, 120, 'Reference'), note: text(b.note, 500, 'Note', false, true), planKey: lane.planKey,
+    stops: stops, units: units, weightLb: w.counted ? w.lb : null, weightComplete: !!w.complete,
+    status: 'recorded', recordedAt: now, recordedBy: by || '', supersedes: sup,
+    acceptedAt: null, acceptedBy: null, legIds: [], withdrawnAt: null, withdrawnBy: null, reason: '', supersededBy: null,
+    trail: [{ at: now, by: by || '', status: 'recorded', note: sup ? 'Replaces ' + sup : '' }] };
+}
+
+/* ── accepting one: may its units still be planned? ───────────────────── */
+function eligible(u, siteId, orderId, idx) {
+  if (!u) return 'not registered';
+  if (u.orderId !== orderId) return 'no longer on this order';
+  if (!u.shipUnit) return 'not a shipping unit';
+  var c = C.custodyOf(u);
+  if (c.state === 'scrapped') return 'scrapped';
+  if (c.state === 'lost') return 'marked lost';
+  var leg = legOf(u, idx);
+  if (leg) return 'already on load ' + leg.id;
+  if (c.status) return 'already ' + C.label(c.status);
+  var s = siteOfUnit(u);
+  if (!s) return 'no longer has a site';
+  if (s.siteId !== siteId) return 'now going to ' + (s.siteName || s.siteId);
+  return null;
+}
+function acceptCheck(input) {
+  var inp = input || {}, q = inp.quote || {}, units = inp.unitsBySerial || {}, sites = inp.sitesById || {}, o = inp.order || {}, today = quoteDay(inp.now);
+  var dl = deliveryOf(o), idx = legIndex(dl.legs), problems = [], ineligible = [], total = 0, covered = {};
+  if (q.status !== 'recorded') problems.push('This quote is ' + (q.status || 'not recorded') + '; only a recorded quote can be accepted');
+  if (q.validUntil && today && q.validUntil < today) problems.push('This quote expired on ' + q.validUntil + '; record the carrier’s fresh quote');
+  if (!dl.destinations) problems.push(LEGACY_SAY);
+  var stops = (q.stops || []).map(function (s) {
+    var site = sites[s.siteId] || null, nm = (site && site.name) || s.siteName || s.siteId, head = 'Stop ' + s.seq + ' · ' + nm + ': ';
+    if (!site) problems.push(head + 'the site is gone');
+    else if (site.status === 'inactive') problems.push(head + 'the site is inactive');
+    /* the carrier priced a place: a site whose address was corrected since
+       (same site, new street) is a different drop, at a price nobody gave */
+    else if (!C.samePlace(quotedAt(s), site.address || {})) problems.push(head + 'the address changed since this price (priced for ' + (C.oneLine(quotedAt(s)) || 'no address') + '; now ' + (C.oneLine(site.address) || 'no address') + '). Record a new price for this lane');
+    var dest = dl.destinations ? destinationFor(dl.destinations, { name: nm, address: (site && site.address) || { city: s.city, state: s.state, zip: s.zip } }) : { id: null, how: 'none', say: LEGACY_SAY };
+    if (dl.destinations && dest.how === 'none') problems.push(head + dest.say);
+    var list = (s.serials || []).slice();
+    if (list.length > MAX_STOP_UNITS) problems.push(head + list.length + ' units; one load carries at most ' + MAX_STOP_UNITS + '. Plan this stop on the ledger in parts');
+    total += list.length;
+    list.forEach(function (sn) { covered[sn] = true; var why = eligible(units[sn] || null, s.siteId, String(o.id || ''), idx); if (why) ineligible.push({ serial: sn, why: why }); });
+    return { seq: s.seq, siteId: s.siteId, siteName: nm, destinationId: dest.id, destinationHow: dest.how, serials: list };
+  });
+  if (!stops.length) problems.push('This quote names no stops');
+  if (total > MAX_QUOTE_UNITS) problems.push('This quote covers ' + total + ' units; accept at most ' + MAX_QUOTE_UNITS + ' at a time');
+  var notOnQuote = (inp.laneOpen || []).filter(function (sn) { return !covered[sn]; });
+  return { stops: stops, ineligible: ineligible, notOnQuote: notOnQuote, problems: problems };
+}
+/* "S1 (why), S2 (why) … and N more" */
+function ineligibleSay(list) {
+  var shown = list.slice(0, 10).map(function (x) { return x.serial + ' (' + x.why + ')'; }).join(', ');
+  return 'Not eligible any more: ' + shown + (list.length > 10 ? ' and ' + (list.length - 10) + ' more' : '') + ' — re-quote the lane or plan the rest on the ledger';
+}
+
+module.exports = { REGIONS: REGIONS, REGION_OF: REGION_OF, NOTICE: NOTICE, LOAD_ID: LOAD_ID, QUOTE_ID: QUOTE_ID, MAX_STOP_UNITS: MAX_STOP_UNITS, MAX_QUOTE_UNITS: MAX_QUOTE_UNITS, FREIGHT_LABELS: FREIGHT_LABELS, LANE_LABELS: LANE_LABELS, LEGACY_SAY: LEGACY_SAY,
+  MASTER_COLUMNS: MASTER_COLUMNS, QUOTE_COLUMNS: QUOTE_COLUMNS,
+  regionOf: regionOf, laneKeyOf: laneKeyOf, haversineMiles: haversineMiles, hasPin: hasPin, cents: quoteCents, quoteCents: quoteCents, dayOf: dayOf, quoteDay: quoteDay, placeKey: placeKey, nextLoadId: nextLoadId,
+  unitReady: unitReady, buildState: buildState, partsIndex: partsIndex, legIndex: legIndex, legOf: legOf, freightState: freightState, siteOfUnit: siteOfUnit, estimate: estimate, estCell: estCell,
+  destinationFor: destinationFor, orderStops: orderStops, origin: origin, originLine: originLine, deliveryOf: deliveryOf,
+  plan: plan, quoteView: quoteView, cell: cell, csv: csv, masterCsv: masterCsv, quoteRows: quoteRows, quoteCsv: quoteCsv, exportsOf: exportsOf,
+  quoteInput: quoteInput, eligible: eligible, acceptCheck: acceptCheck, ineligibleSay: ineligibleSay };
+
+  };
   defs['api/_lib/receivables.js'] = function (module, exports, require) {
 /* ═══════════════════════════════════════════════════════════════════════════
    api/_lib/receivables.js — the rules of a tenant-billed receivable
@@ -2834,6 +3969,8 @@ function daysBetween(a, b) { return Math.round((ms(b) - ms(a)) / 86400000); }
 function addDays(d, n) { return new Date(ms(d) + n * 86400000).toISOString().slice(0, 10); }
 function bucket(days) { return days <= 0 ? 'current' : days <= 30 ? '1-30' : days <= 60 ? '31-60' : days <= 90 ? '61-90' : '90+'; }
 function usd(c) { return (Number(c || 0) / 100); }
+/* money as a person reads it: $90,225.00 */
+function dollars(c) { return '$' + (Number(c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 function settle(inv) {
   inv = inv || {};
@@ -2917,7 +4054,7 @@ function recordPlan(o, stage, p) {
   if (re) { entry.reinstates = re.reinstates; entry.reinstateReason = re.reinstateReason; }
   var payments = pays.concat([entry]);
   var invoice = Object.assign({}, inv, { payments: payments }, settle({ amountCents: inv.amountCents, id: inv.id, payments: payments }), { checkedAt: p.at });
-  if (invoice.paidCents > inv.amountCents) throw fail(400, 'Payments would exceed the invoice: USD ' + usd(invoice.paidCents) + ' against ' + usd(inv.amountCents));
+  if (invoice.paidCents > inv.amountCents) throw fail(400, 'Payments would exceed the invoice: ' + dollars(invoice.paidCents) + ' recorded against an invoice of ' + dollars(inv.amountCents));
   var liftHold = !!(l.paymentHold && l.paymentHold.stage === stage && invoice.satisfied);
   var event = stage + ' invoice ' + inv.id + ': USD ' + usd(p.amountCents) + ' received ' + p.date + ' · bank reference ' + ref +
     (invoice.satisfied ? ' · paid in full' : ' · USD ' + usd(invoice.balanceCents) + ' outstanding') +
@@ -3115,7 +4252,7 @@ module.exports = { STAGES: STAGES, BUCKETS: BUCKETS, refKey: refKey, isPlacehold
    the timeline says
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   The Customer hub of Omega Logic opens an ACCOUNT (Amperage Capital), not a
+   The Customer hub of Omega Logic opens an ACCOUNT (a buyer company), not a
    person. Under it the office keeps three things no other record held:
 
      omega_orgs/{org}/customers/{customerId}/contacts/{id}   people who never log in
@@ -3829,8 +4966,12 @@ function publicOrder(order, opts) {
        the customer has no read path to. */
     orderNo: clip(o.orderNo, 120),
     /* The brand they think they bought from — the white-label seller's own
-       name, never orgId, which is an internal partition key. */
-    soldBy: clip(o.orgName, 160),
+       name, never orgId, which is an internal partition key. The endpoint
+       passes the supplier's CURRENT short name (api/_lib/logic-brand.js
+       shortName), so every order says it the one way the rest of the page
+       does; `orgName` is only what was stamped when the order was written
+       ("Cleancell" on one, "Clean Cell" on the next). */
+    soldBy: clip(op.soldBy || o.orgName, 160),
     placedAt: when(o.createdAt),
     milestone: ms,
     /* The internal status is NOT echoed. 'quoted' and 'accepted' are
@@ -3938,6 +5079,74 @@ function publicOrder(order, opts) {
   return out;
 }
 
+/* ── what a buyer may ORDER ───────────────────────────────────────────
+   A published product or service. Never a placeholder, never the generic
+   design concept, and never a `component` — what a product is MADE OF (a
+   cell, a BMS): it is never published, drawn, picked or ordered, and a
+   bill-of-materials import puts dozens of them in the same product list.
+   The ONE test every buyer surface lists and accepts products through:
+   the PO sheet and its product line (api/po-intake.js), One PO to several
+   sites (api/customer-po.js) and the design tool's list and quote
+   (api/customer-design.js). */
+function orderable(p) {
+  return !!p && typeof p === 'object' && !!p.sku && p.active !== false && !p.placeholder && p.sku !== 'GENERIC-BESS'
+    && String(p.kind || 'product') !== 'component';
+}
+function orderables(list) { return (Array.isArray(list) ? list : []).filter(orderable); }
+
+/* ── a purchase order's review, in the buyer's words ─────────────────────
+   api/po-intake.js keeps its own states and door codes; the buyer reads
+   these. `brand` is the supplier's short name. */
+var PO_WORDS = { po_review: 'under review', po_needs_information: 'needs information from you', po_declined: 'declined' };
+function poStatusWord(row) {
+  row = row || {};
+  if (row.convertedAt) return 'entered as an order';
+  return Object.prototype.hasOwnProperty.call(PO_WORDS, row.status) ? PO_WORDS[row.status] : 'received';
+}
+function poSourceWord(source, brand) {
+  var who = brand || 'your supplier';
+  switch (String(source || '')) {
+    case 'customer': return 'sent by your company';
+    case 'customer-bulk': return 'sent by your company on the PO sheet';
+    case 'office': case 'office-bulk': return 'entered by ' + who;
+    case 'email': case 'email-adapter': return 'received by email';
+    default: return 'received by ' + who;
+  }
+}
+
+/* ── a SITE as the buyer reads it: key by key ─────────────────────────
+   The same discipline as publicOrder: every key named, nothing forwarded.
+   Where the site is, what it is called and the customer's own reference
+   are theirs. The DETAILS — interconnection, site contact, end customer,
+   notes — are shown only when they are the customer's OWN entries:
+   `customerEntries`, which only api/my-sites.js writes (what somebody on
+   the account typed), or, on a site the customer made that nobody has
+   edited since, the record itself. What the office typed about a site (a
+   meter number, a contact, "gate code, call Sam") stays in the office. A
+   site record also carries customerId, createdBy and updatedBy (staff
+   emails) and lifecycleSiteId: none of them is here. api/my-sites.js and
+   the sample tenant (scripts/_lib/logic-fixtures.js) both answer through
+   this one function. */
+function ownSiteEntries(s) {
+  s = s || {};
+  if (s.customerEntries && typeof s.customerEntries === 'object') return s.customerEntries;
+  var theirs = (s.source === 'customer' || s.source === 'customer-list') && (!s.updatedAt || s.updatedAt === s.createdAt) && (!s.updatedBy || s.updatedBy === s.createdBy);
+  return theirs ? s : {};
+}
+function str(v, n) { return v == null ? '' : String(v).slice(0, n || 200); }
+function publicSite(s) {
+  s = s || {};
+  var own = ownSiteEntries(s), a = s.address || {}, ic = own.interconnection || {}, ct = own.contact || {};
+  return { id: s.id, name: str(s.name, 160),
+    address: { line1: str(a.line1), line2: str(a.line2), city: str(a.city, 100), state: str(a.state, 40), zip: str(a.zip, 20), country: str(a.country, 40) },
+    endCustomer: str(own.endCustomer, 160),
+    interconnection: { utility: str(ic.utility, 120), accountNo: str(ic.accountNo, 80), meterNo: str(ic.meterNo, 80), poi: str(ic.poi), serviceVoltage: str(ic.serviceVoltage, 40),
+      serviceKw: ic.serviceKw == null || ic.serviceKw === '' || !isFinite(Number(ic.serviceKw)) ? null : Number(ic.serviceKw), agreementRef: str(ic.agreementRef, 120) },
+    contact: { name: str(ct.name, 120), phone: str(ct.phone, 40), email: str(ct.email, 160) },
+    notes: str(own.notes, 1000), status: s.status === 'inactive' ? 'inactive' : 'active', ref: str(s.ref, 80),
+    lat: typeof s.lat === 'number' && isFinite(s.lat) ? s.lat : null, lng: typeof s.lng === 'number' && isFinite(s.lng) ? s.lng : null };
+}
+
 module.exports = {
   LADDER: LADDER,
   when: when,
@@ -3948,7 +5157,13 @@ module.exports = {
   stationMilestone: stationMilestone,
   milestoneOf: milestoneOf,
   publicOrder: publicOrder,
-  tenantPayLink: tenantPayLink
+  tenantPayLink: tenantPayLink,
+  orderable: orderable,
+  orderables: orderables,
+  poStatusWord: poStatusWord,
+  poSourceWord: poSourceWord,
+  publicSite: publicSite,
+  ownSiteEntries: ownSiteEntries
 };
 
   };
@@ -3962,10 +5177,11 @@ module.exports = {
    one work order with six cabinets at real stations with real timings,
    three orders (one in build with a customer request; one billed on the
    OEM's own paper and released on a payment that never arrived — the
-   intake template's placeholder bank reference, the Amperage situation the
+   intake template's placeholder bank reference, the live order's situation the
    accounting page exists to correct; one to price), a company account with
    an uploaded PO under review, a customer account with a site plan on
-   trial.
+   trial, and one PO for 56 cabinets going to 16 sites whose FREIGHT PLAN
+   (api/_lib/freight.js) the shipping page prices lane by lane.
 
    The workspace bills on its own paper (fulfillment/config.accounting
    'tenant'): the order in build has its deposit paid and its balance
@@ -4001,8 +5217,11 @@ module.exports = {
 'use strict';
 var M = require('api/_lib/materials.js'), C = require('api/_lib/logic-catalog.js'), Stats = require('api/_lib/plant-stats.js');
 var Board = require('api/_lib/plant-board.js'), Ops = require('api/_lib/plant-ops.js'), Attention = require('api/_lib/plant-attention.js');
-var W = require('api/_lib/plant-work.js'), Plant = require('api/_lib/plant.js'), S = require('api/_lib/office-stage.js');
+var W = require('api/_lib/plant-work.js'), Plant = require('api/_lib/plant.js'), S = require('api/_lib/office-stage.js'), Rel = require('api/_lib/plant-release.js');
 var Manifest = require('api/app-manifest.js'), Cu = require('api/_lib/custody.js');
+/* the freight plan (pure; bundled like custody): the master list, the lanes,
+   the two sheets, a quote as the office records it, what Accept may plan */
+var Fr = require('api/_lib/freight.js');
 /* the receivables rules (pure): the accounting ledger and the three office
    corrections below apply them; nothing here re-derives money */
 var R = require('api/_lib/receivables.js');
@@ -4010,7 +5229,10 @@ var CRM = require('api/_lib/crm.js'), Portal = require('api/_lib/portal.js'), Po
 
 var ORG = 'cleancell.us';
 var CATALOG = [
-  { sku: 'CC-C215', name: '215 kWh outdoor cabinet', kind: 'product', kw: 100, kwh: 215, widthFt: 4.5, depthFt: 3.5, leadTimeDays: 20, priceMode: 'quote', warrantyYears: 10, bom: [{ sku: 'CC-MOD-52', qty: 8, unit: 'ea' }, { sku: 'CC-BMS-M', qty: 1, unit: 'ea' }, { sku: 'CC-ENC-1B', qty: 1, unit: 'ea' }] },
+  /* CC-C215 carries the catalog's shipping fields (api/_lib/shipping-fields.js,
+     fictional values); CC-C418 has none, so the freight plan says "not on
+     file" for it rather than guessing */
+  { sku: 'CC-C215', name: '215 kWh outdoor cabinet', kind: 'product', kw: 100, kwh: 215, widthFt: 4.5, depthFt: 3.5, heightFt: 7.5, weightLb: 5500, freightClass: '85', stackable: false, handlingNote: 'Class 9 lithium battery — see SDS', leadTimeDays: 20, priceMode: 'quote', warrantyYears: 10, bom: [{ sku: 'CC-MOD-52', qty: 8, unit: 'ea', station: 'rack', step: '1 · Fit modules' }, { sku: 'CC-HARN', qty: 2.5, unit: 'm', station: 'rack', step: '2 · Harness' }, { sku: 'CC-BMS-M', qty: 1, unit: 'ea' }, { sku: 'CC-ENC-1B', qty: 1, unit: 'ea' }] },
   { sku: 'CC-C418', name: '418 kWh outdoor cabinet', kind: 'product', kw: 200, kwh: 418, widthFt: 7.5, depthFt: 4.5, leadTimeDays: 30, priceMode: 'quote', warrantyYears: 10, bom: [] },
   { sku: 'CC-MOD-52', name: '5.2 kWh module', kind: 'component', kwh: 5.2, unit: 'ea', leadTimeDays: 10, bom: [{ sku: 'CC-CELL-280', qty: 104, unit: 'ea', yieldPct: 98 }, { sku: 'CC-HARN', qty: 2.5, unit: 'm' }] },
   { sku: 'CC-CELL-280', name: 'LFP cell 280 Ah', kind: 'component', unit: 'ea', moq: 1000, leadTimeDays: 60, supplier: 'EVE Energy', supplierSku: 'LF280K', safetyStock: 2000 },
@@ -4028,17 +5250,80 @@ var STOCK = { 'CC-MOD-52': { onHand: 8 }, 'CC-CELL-280': { onHand: 500, onOrder:
 var WORKS = [{ id: 'wo_1', orderNo: 'CC-26-4419', status: 'awaiting_serials', requirements: [{ sku: 'CC-C215', qty: 5 }], dueDate: '2026-11-14' }];
 var MAT_ORDERS = [{ id: 'a', orderNo: 'CC-26-4420', status: 'accepted', items: [{ sku: 'CC-C215', qty: 2 }], promisedShipAt: '2026-12-05' }, { id: 'b', orderNo: 'CC-26-4421', status: 'new', items: [{ sku: 'CC-C418', qty: 3 }] }];
 var NOW = '2026-09-21';
+/* ── the freight plan's sample: one PO (order o7, CC-26-4431) for 56
+   cabinets — 40 × CC-C215, 16 × CC-C418 — going to the sites the customer
+   sent a few at a time. Sixteen sites in seven regions, made-up streets in
+   real US cities, each with a map pin and some with a receiving contact;
+   one ZIP has a leading zero (the sheets keep it). 54 units are "going to"
+   a site, 2 have none yet. Kept apart from the custody sample (state.sites,
+   state.units), so the pages that count its sites and units are unchanged;
+   the freight plan reads both. Every name, street and number is fictional.
+   [key, name, street, city, state, ZIP, lat, lng, contact, phone, ref, CC-C215, CC-C418] */
+var FREIGHT_SITES = [
+  ['paterson', 'Paterson yard', '18 Demo St', 'Paterson', 'NJ', '07501', 40.9168, -74.1718, 'Receiving desk', '(201) 555-0101', 'SG-101', 4, 0],
+  ['scranton', 'Scranton depot', '250 Sample Rd', 'Scranton', 'PA', '18503', 41.4090, -75.6624, '', '', 'SG-102', 3, 0],
+  ['albany', 'Albany cold store', '9 Placeholder Ave', 'Albany', 'NY', '12207', 42.6526, -73.7562, 'Jordan Ellis', '(518) 555-0103', 'SG-103', 3, 0],
+  ['richmond', 'Richmond substation', '600 Example Blvd', 'Richmond', 'VA', '23219', 37.5407, -77.4360, '', '', 'SG-104', 2, 2],
+  ['baltimore', 'Baltimore harbor lot', '31 Fictional Way', 'Baltimore', 'MD', '21201', 39.2904, -76.6122, 'Sam Ortiz', '(410) 555-0105', 'SG-105', 3, 0],
+  ['charlotte', 'Charlotte hub', '1200 Demo Pkwy', 'Charlotte', 'NC', '28202', 35.2271, -80.8431, '', '', 'SG-106', 3, 0],
+  ['atlanta', 'Atlanta distribution', '77 Sample Plaza', 'Atlanta', 'GA', '30303', 33.7490, -84.3880, 'Receiving desk', '(404) 555-0107', 'SG-107', 4, 0],
+  ['nashville', 'Nashville campus', '415 Example Ln', 'Nashville', 'TN', '37203', 36.1627, -86.7816, '', '', 'SG-108', 0, 3],
+  ['columbus', 'Columbus plant', '88 Placeholder Rd', 'Columbus', 'OH', '43215', 39.9612, -82.9988, 'Riley Park', '(614) 555-0109', 'SG-109', 3, 0],
+  ['indianapolis', 'Indianapolis yard', '5 Fictional Ct', 'Indianapolis', 'IN', '46204', 39.7684, -86.1581, '', '', 'SG-110', 3, 0],
+  ['dallas', 'Dallas data hall', '2100 Demo Ave', 'Dallas', 'TX', '75201', 32.7767, -96.7970, 'Dock office', '(214) 555-0111', 'SG-111', 0, 4],
+  ['houston', 'Houston terminal', '900 Sample St', 'Houston', 'TX', '77002', 29.7604, -95.3698, '', '', 'SG-112', 4, 0],
+  ['okc', 'Oklahoma City store', '140 Example Dr', 'Oklahoma City', 'OK', '73102', 35.4676, -97.5164, 'Casey Lin', '(405) 555-0113', 'SG-113', 3, 0],
+  ['phoenix', 'Phoenix solar farm', '66 Placeholder Blvd', 'Phoenix', 'AZ', '85004', 33.4484, -112.0740, '', '', 'SG-114', 2, 2],
+  ['denver', 'Denver microgrid', '1700 Fictional St', 'Denver', 'CO', '80202', 39.7392, -104.9903, 'Site lead', '(303) 555-0115', 'SG-115', 0, 3],
+  ['sacramento', 'Sacramento depot', '321 Demo Way', 'Sacramento', 'CA', '95814', 38.5816, -121.4944, '', '', 'SG-116', 2, 1]
+];
+var FREIGHT_ORDER = { id: 'o7', orderNo: 'CC-26-4431', poNumber: 'SG-PO-3300' };
+/* the sites, the 56 units (serial order is site order; the first 30 are
+   ready — tested and passed, as the pickup gate requires — the next 16 on
+   the line with one held, the last 10 not started, the two with no site
+   among them) and the pinned ship-from */
+function freightSample(ago) {
+  var sites = FREIGHT_SITES.map(function (r) {
+    return { id: 'site_summit-grid-' + r[0], orgId: ORG, name: r[1], customerId: null, endCustomer: 'Summit Grid Co.', ref: r[10], address: { line1: r[2], line2: '', city: r[3], state: r[4], zip: r[5], country: 'US' }, lat: r[6], lng: r[7],
+      interconnection: {}, contact: { name: r[8], phone: r[9], email: '' }, notes: '', status: 'active', lifecycleSiteId: null, source: 'office-list', createdAt: ago(12), createdBy: 'demo@cleancell.us' };
+  });
+  var picks = []; FREIGHT_SITES.forEach(function (r, i) { var k; for (k = 0; k < r[11]; k++) picks.push({ sku: 'CC-C215', site: sites[i] }); for (k = 0; k < r[12]; k++) picks.push({ sku: 'CC-C418', site: sites[i] }); });
+  picks.push({ sku: 'CC-C215', site: null }, { sku: 'CC-C418', site: null });
+  var line = ['pack', 'qa', 'eol', 'bms', 'elec', 'encl', 'rack', 'module'];
+  var units = picks.map(function (x, n) {
+    var u = { serial: 'CC418-26-' + (45101 + n), sku: x.sku, shipUnit: true, unitType: 'cabinet', orderId: FREIGHT_ORDER.id, orderNo: FREIGHT_ORDER.orderNo, done: {} };
+    if (n < 30) Object.assign(u, { at: 'ready', startedAt: ago(9 + n % 4), arrivedAt: ago(1 + n % 6), inventoryStatus: 'allocated', test: { result: 'pass', at: ago(1 + n % 6) } });
+    else if (n < 46) Object.assign(u, { at: line[n % line.length], startedAt: ago(3), arrivedAt: ago(1), inventoryStatus: 'building' }, n === 38 ? { hold: 'NCR-26-97' } : {});
+    else Object.assign(u, { at: '', inventoryStatus: 'building' });
+    if (x.site) u.custody = { plannedSiteId: x.site.id, plannedSiteName: x.site.name, plannedAt: ago(2), plannedBy: 'office' };
+    return u;
+  });
+  return { units: units, sites: sites, quotes: [], audit: [],
+    origin: { name: 'Main plant · Building A', address: { line1: '2400 Sample Industrial Pkwy', line2: '', city: 'Fort Worth', state: 'TX', zip: '76106', country: 'US' }, contact: { name: 'Shipping office', phone: '(817) 555-0100' }, hours: 'Mon–Fri 7:00–15:00', notes: 'Forklift and crane on site; flatbeds and step decks load at dock 3.', lat: 32.8138, lng: -97.348 } };
+}
 /* the shape api/_lib/logic-brand.js returns: the customer-facing name, the
    workspace (the tenant's own name, shown inside Omega Logic) and the
    contract's "powered by" line */
 var brand = { name: 'Clean Cell', shortName: 'Clean Cell', workspace: 'Clean Cell', primary: '#3FAFC6', accent: '#EE5A4F', ink: '#0B2733', supportEmail: '', attribution: 'Powered by ClearSky OMEGA' };
-var flow = { version: 1, lines: [{ id: 'line_1', name: 'North line', location: 'Building A' }], routing: [{ key: 'kit', label: 'Kitting' }, { key: 'eol', label: 'EOL test' }, { key: 'ready', label: 'Ready' }] };
-var wo = { id: 'wo_1', orgId: ORG, orderNo: 'CC-26-4419', status: 'awaiting_serials', lineId: 'line_1', routing: flow.routing, flowVersion: 1, requirements: [{ sku: 'CC-C215', qty: 5 }], dueDate: '2026-11-14', managerRevision: 0 };
-/* the bench: one cabinet with two parts steps and a check at Rack assembly */
-var benchCab = { sku: 'CC-C215', name: 'Cabinet', bom: [{ sku: 'CC-MOD-52', qty: 2, unit: 'ea', station: 'rack', step: '1 · Fit modules' }, { sku: 'CC-HARN', qty: 2.5, unit: 'm', station: 'rack', step: '2 · Harness' }] };
+/* the plant's flow: the full ten operations with their names (a three-step
+   stand-in showed raw keys for units at Module build and Rack assembly), a
+   torque check at Rack assembly and a firmware load at BMS & firmware */
+var ROUTING = Plant.DEFAULT_ROUTING.map(function (s) { var r = { key: s.key, label: s.label }; if (s.key === 'rack') r.checks = ['Torque busbars']; if (s.key === 'bms') r.checks = ['Load firmware']; return r; });
+var flow = { version: 1, lines: [{ id: 'line_1', name: 'North line', location: 'Building A' }], routing: ROUTING };
+var wo = { id: 'wo_1', orgId: ORG, orderId: 'o1', orderNo: 'CC-26-4419', status: 'awaiting_serials', lineId: 'line_1', routing: flow.routing, flowVersion: 1, requirements: [{ sku: 'CC-C215', qty: 5 }], dueDate: '2026-11-14', managerRevision: 0 };
+/* the bench works from the SAME cabinet bill as the materials plan and the
+   Stock tab (UX-12: a second, bench-only bill had the bench issuing modules
+   the Stock tab said came off the shelf at Ready): the modules and the
+   harness are issued at Rack assembly (plus the routing's torque check
+   there, and its firmware load at BMS & firmware); the BMS and the
+   enclosure have no bench, so they come off the shelf at Ready */
 var benchBy = {}; CATALOG.forEach(function (p) { benchBy[p.sku] = p; });
-function benchSteps() { return W.stepsFor(benchCab, 'rack', benchBy, ['Torque busbars']); }
-function fullRouting() { return Plant.DEFAULT_ROUTING.map(function (s) { return { key: s.key, label: s.label }; }); }
+/* The unit the sample's benches are working on: at Rack assembly, nothing
+   issued, no hold. The bench and the Plant app read the SAME state.units,
+   so it moves bench to bench and the app follows it (PLANT-11). */
+var WORKING = 'CC418-26-44195';
+function benchProduct(u) { return (u && benchBy[u.sku]) || null; }
+function benchSteps(u, station) { return W.stepsFor(benchProduct(u), station, benchBy, W.checksOf({ routing: ROUTING }, station)); }
 function iso(d) { return new Date(d).toISOString(); }
 function hex(n) { var s = ''; for (var i = 0; i < n; i++) s += Math.floor(Math.random() * 16).toString(16); return s; }
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
@@ -4098,8 +5383,10 @@ function initialState() {
       { serial: 'CC418-26-44191', sku: 'CC-C215', shipUnit: true, startedAt: T(1), done: { kit: T(3), module: T(15), rack: T(18), encl: T(20), elec: T(24), bms: T(26), eol: T(27), qa: T(29), pack: T(30) }, at: 'ready', arrivedAt: T(30), inventoryStatus: 'available', unitType: 'cabinet' },
       { serial: 'CC418-26-44192', sku: 'CC-C215', shipUnit: true, startedAt: T(4), done: { kit: T(6), module: T(40), rack: T(43), encl: T(45), elec: T(49), bms: T(51), eol: T(52), qa: T(54), pack: T(55) }, at: 'ready', arrivedAt: T(55), inventoryStatus: 'allocated', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet', customerId: 'company_riverside', custody: { status: 'in_transit', custodian: 'carrier', shippedAt: '2026-09-10', legId: 'LOAD-1', customerId: 'company_riverside' } },
       { serial: 'CC418-26-44193', sku: 'CC-C215', shipUnit: true, startedAt: T(60), done: { kit: T(62) }, at: 'module', arrivedAt: T(62), inventoryStatus: 'building', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet' },
-      { serial: 'CC418-26-44194', sku: 'CC-C215', shipUnit: true, startedAt: T(70), done: { kit: T(71), module: T(90) }, at: 'rack', arrivedAt: T(90), hold: 'NCR-26-89', inventoryStatus: 'building', unitType: 'cabinet' },
-      { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, at: '', done: {}, inventoryStatus: 'building', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet' }
+      { serial: 'CC418-26-44194', sku: 'CC-C215', shipUnit: true, startedAt: T(70), done: { kit: T(71), module: T(90) }, at: 'rack', arrivedAt: T(90), hold: 'NCR-26-89', inventoryStatus: 'building', unitType: 'cabinet',
+        work: { rack: { issued: { 'CC-MOD-52': 2 }, lots: {}, done: { '1-fit-modules': T(92) } } } },
+      /* the cabinet on the benches today (WORKING): on the order, at Rack assembly, nothing issued yet */
+      { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, startedAt: T(148), done: { kit: T(150), module: T(190) }, at: 'rack', arrivedAt: T(190), inventoryStatus: 'building', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet', work: {} }
     ],
     orders: [
       /* billed on the supplier's own paper: no ClearSky fee on the total, the
@@ -4112,7 +5399,7 @@ function initialState() {
           acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, answer: null }] },
       /* billed on the OEM's own paper and released on a payment that never
          arrived: the intake template's placeholder reference was recorded as
-         the deposit (what happened to the Amperage order in production) */
+         the deposit (what happened to a live order in production) */
       { id: 'o2', orderNo: 'CC-26-4420', status: 'in_fulfilment', createdAt: '2026-08-18T10:00:00Z', purchaseOrder: { number: 'SS-PO-5521' }, customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }],
         logic: { accounting: 'tenant', commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } },
           invoices: { deposit: { amountCents: 9022500, id: 'SS-1042', issuedAt: '2026-08-20', date: '2026-08-20', status: 'paid', paidCents: 9022500, balanceCents: 0, satisfied: true,
@@ -4121,7 +5408,7 @@ function initialState() {
           acceptedAt: '2026-08-19', releasedAt: '2026-08-22', requirements: [], allocatedSerials: [] } },
       /* accepted; the deposit invoice is the supplier's to issue */
       { id: 'o4', orderNo: 'CC-26-4422', status: 'accepted', createdAt: '2026-09-18T10:00:00Z', customer: { name: 'Mesa Microgrid', email: 'buy@mesa.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }], logic: { accounting: 'tenant', commercial: { baseCents: 30075000, feeCents: 0, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 9022500, paidCents: 0, status: 'to_issue' } }, acceptedAt: '2026-09-18', requirements: [], allocatedSerials: [] } },
-      { id: 'o3', orderNo: 'CC-26-4421', status: 'new', createdAt: '2026-09-20T10:00:00Z', customerId: 'company_incharge', customer: { name: 'Purchasing', company: 'InCharge Energy', email: 'po@incharge.example' }, items: [{ sku: 'CC-C215', name: '215 kWh', qty: 20 }], logic: null }
+      { id: 'o3', orderNo: 'CC-26-4421', status: 'new', createdAt: '2026-09-20T10:00:00Z', customerId: 'company_harbor', customer: { name: 'Purchasing', company: 'Harbor Charging', email: 'po@harbor.example' }, items: [{ sku: 'CC-C215', name: '215 kWh', qty: 20 }], logic: null }
     ],
     customers: [
       { id: 'company_riverside', company: 'Riverside Cold Chain', accountType: 'company', domain: 'riverside.example', status: 'active', terms: { depositPct: 40, dueDays: 0 }, usersLimited: false, users: [
@@ -4130,7 +5417,7 @@ function initialState() {
         { email: 'new.hire@riverside.example', name: '', role: 'user', status: 'pending', activated: true, requestedAt: '2026-09-23T15:00:00Z' }],
         /* the design tool: a trial the supplier's owner granted a week ago */
         editorLite: { status: 'trial', source: 'owner-trial', expiresAt: ago(-7), grantedBy: 'sam@cleancell.us', grantedAt: ago(7) } },
-      { id: 'company_incharge', company: 'InCharge Energy', accountType: 'company', domain: '', status: 'active', terms: { depositPct: 30, dueDays: 0 }, users: [], usersLimited: false }
+      { id: 'company_harbor', company: 'Harbor Charging', accountType: 'company', domain: '', status: 'active', terms: { depositPct: 30, dueDays: 0 }, users: [], usersLimited: false }
     ],
     /* the CRM (api/crm.js): per account, the contacts who never log in,
        what was logged, and the documents both ways. A call with a
@@ -4153,9 +5440,9 @@ function initialState() {
           { id: 'f_msa', orgId: ORG, customerId: 'company_riverside', name: 'Riverside-MSA-2026.pdf', type: 'application/pdf', size: 184320, sha256: null, category: 'contract', note: 'Countersigned', shared: true, from: 'office', uploadedBy: 'sam@cleancell.us', uploadedAt: '2026-08-02T16:00:00Z', archived: false, uploadState: 'stored' },
           { id: 'f_sheet', orgId: ORG, customerId: 'company_riverside', name: 'Riverside-pricing-worksheet.xlsx', type: CRM.MIME.xlsx, size: 48213, sha256: null, category: 'other', note: 'Office only: the margin sheet', shared: false, from: 'office', uploadedBy: 'sam@cleancell.us', uploadedAt: '2026-08-20T16:00:00Z', archived: false, uploadState: 'stored' },
           { id: 'f_survey', orgId: ORG, customerId: 'company_riverside', name: 'Bakersfield-site-survey.pdf', type: 'application/pdf', size: 912384, sha256: null, category: 'site-survey', note: 'Pad and MSB photos', shared: true, from: 'customer', uploadedBy: 'ops@riverside.example', uploadedAt: ago(3), archived: false, uploadState: 'stored' }] },
-      company_incharge: {
-        contacts: [{ id: 'ct_morgan', orgId: ORG, customerId: 'company_incharge', name: 'Morgan Lee', title: 'Procurement', email: 'po@incharge.example', phone: '', notes: '', primary: true, archived: false, createdAt: '2026-09-20T12:00:00Z', createdBy: 'sam@cleancell.us' }],
-        activity: [{ id: 'ac_task', orgId: ORG, customerId: 'company_incharge', type: 'task', subject: 'Ask InCharge for the site survey', body: 'Needed before the 20-cabinet order can be priced.', at: ago(1), followUpAt: null, contactId: 'ct_morgan', contactName: 'Morgan Lee', orderId: 'o3', orderNo: 'CC-26-4421', by: 'sam@cleancell.us', loggedAt: ago(1), done: false, doneAt: null, doneBy: null }],
+      company_harbor: {
+        contacts: [{ id: 'ct_morgan', orgId: ORG, customerId: 'company_harbor', name: 'Morgan Lee', title: 'Procurement', email: 'po@harbor.example', phone: '', notes: '', primary: true, archived: false, createdAt: '2026-09-20T12:00:00Z', createdBy: 'sam@cleancell.us' }],
+        activity: [{ id: 'ac_task', orgId: ORG, customerId: 'company_harbor', type: 'task', subject: 'Ask Harbor for the site survey', body: 'Needed before the 20-cabinet order can be priced.', at: ago(1), followUpAt: null, contactId: 'ct_morgan', contactName: 'Morgan Lee', orderId: 'o3', orderNo: 'CC-26-4421', by: 'sam@cleancell.us', loggedAt: ago(1), done: false, doneAt: null, doneBy: null }],
         files: [] }
     },
     /* omega_audit rows the CRM timeline reads (the design tool's history) */
@@ -4163,61 +5450,120 @@ function initialState() {
     /* the customer's uploads today, per account (crm_upload_usage) */
     uploads: {},
     intake: [{ id: 'po_x', orderNo: 'PO-IN-X', customerId: 'company_riverside', poNumber: 'RCC-2211', status: 'po_review', source: 'customer', notes: 'see attached', createdAt: '2026-09-19T10:00:00Z', reviewNote: '', convertedAt: null, rep: null, files: [] }],
-    companyOrders: [{ id: 'o1', customerId: 'company_riverside', orderNo: 'CC-26-4419', status: 'in_fulfilment', poNumber: 'RCC-2200', items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], destinations: [{ id: 'd1', address: { name: 'Riverside yard', city: 'Bakersfield', state: 'CA' }, items: [{ sku: 'CC-C215', qty: 5 }] }], revision: 1, legs: [{ id: 'LOAD-1', status: 'in_transit', carrier: 'Estes', tracking: 'BOL-771', destinationId: 'd1', serials: ['CC418-26-44192'], lastConfirmedLocation: { label: 'Fresno, CA' } }] }],
+    companyOrders: [{ id: 'o1', customerId: 'company_riverside', orderNo: 'CC-26-4419', status: 'in_fulfilment', poNumber: 'RCC-2200', items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], destinations: [{ id: 'd1', address: { name: 'Riverside yard', city: 'Bakersfield', state: 'CA' }, items: [{ sku: 'CC-C215', qty: 5 }] }], revision: 1, legs: [{ id: 'LOAD-1', status: 'in_transit', carrier: 'Estes', tracking: 'BOL-771', destinationId: 'd1', serials: ['CC418-26-44192'], lastConfirmedLocation: { label: 'Fresno, CA' } }] },
+      /* the freight plan's order (freightSample below): one PO, one destination
+         on the order (the customer's office), the sites sent a few at a time;
+         no customer account in this workspace, so no customer surface lists it */
+      { id: FREIGHT_ORDER.id, customerId: null, orderNo: FREIGHT_ORDER.orderNo, status: 'in_fulfilment', poNumber: FREIGHT_ORDER.poNumber, customer: { name: 'Procurement', company: 'Summit Grid Co.' }, promisedShipAt: dayAgo(-21),
+        items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 40 }, { sku: 'CC-C418', name: '418 kWh outdoor cabinet', qty: 16 }],
+        destinations: [{ id: 'd1', address: { name: 'Summit Grid Co. · per site list', line1: '1 Example Plaza', city: 'Chicago', state: 'IL', zip: '60601' }, items: [{ sku: 'CC-C215', qty: 40 }, { sku: 'CC-C418', qty: 16 }] }], revision: 0, legs: [] }],
     account: { customerId: 'company_riverside', company: 'Riverside Cold Chain', accountType: 'company', since: '2026-08-01T00:00:00Z', rep: { name: 'Sam Rep', email: 'sam@cleancell.us' }, plan: 'free', status: 'active',
       you: { email: 'ops@riverside.example', name: 'Dana Ops', phone: '', role: 'owner' }, address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, terms: { depositPct: 40, dueDays: 0, netDays: 30 }, users: null, agreements: [{ kind: 'MSA', ref: 'MSA-2026-04', signedAt: '2026-08-02' }], orders: 1 },
     projects: [{ id: 'p1', name: 'Bakersfield yard', module: 'bess', createdAt: '2026-09-15T10:00:00Z', updatedAt: '2026-09-18T10:00:00Z', revision: 3 }],
-    benchUnit: { serial: 'CC418-26-44190', sku: 'CC-C215', at: 'rack', work: {}, hold: null },
+    /* the parts shelf, which the bench takes from (fulfillment/materials),
+       and the bench's log (plant_scans), newest first */
+    stock: clone(STOCK), scans: [],
     /* custody (api/_lib/custody.js): one end site on the customer's account,
        the load above on its way there, events appended per serial. The
        sample order has three units: the one on the load and two still on
        the line (44193, 44195) — what a site list is spread over while the
        order is being built. */
     sites: [{ id: 'site_company-riverside-riverside-yard-93307', orgId: ORG, name: 'Riverside yard', customerId: 'company_riverside', endCustomer: '', address: { line1: '1200 Depot Rd', line2: '', city: 'Bakersfield', state: 'CA', zip: '93307', country: 'US' }, lat: null, lng: null,
-      interconnection: { utility: 'PG&E', accountNo: '', meterNo: '1002233', poi: 'MSB-2, 480 V', serviceVoltage: '480', serviceKw: 500, agreementRef: '' }, contact: { name: 'Dana Ops', phone: '', email: 'ops@riverside.example' }, notes: '', status: 'active', lifecycleSiteId: null, createdAt: '2026-09-01T10:00:00Z', createdBy: 'demo@cleancell.us' }],
+      interconnection: { utility: 'PG&E', accountNo: '', meterNo: '1002233', poi: 'MSB-2, 480 V', serviceVoltage: '480', serviceKw: 500, agreementRef: '' }, contact: { name: 'Dana Ops', phone: '', email: 'ops@riverside.example' }, notes: '', status: 'active', lifecycleSiteId: null, createdAt: '2026-09-01T10:00:00Z', createdBy: 'demo@cleancell.us',
+      /* what the customer entered for it in their app (api/my-sites.js
+         writes this; portal.js publicSite shows the customer only this) */
+      customerEntries: { interconnection: { utility: 'PG&E', accountNo: '', meterNo: '1002233', poi: 'MSB-2, 480 V', serviceVoltage: '480', serviceKw: 500, agreementRef: '' }, contact: { name: 'Dana Ops', phone: '', email: 'ops@riverside.example' }, endCustomer: '', notes: '', at: '2026-09-02T10:00:00Z', by: 'ops@riverside.example' } }],
     custodyEvents: { 'CC418-26-44192': [{ type: 'ship', from: '', to: 'in_transit', by: 'demo@cleancell.us', at: '2026-09-10T15:00:00Z', method: 'logistics', legId: 'LOAD-1', orderId: 'o1' }] },
     custodyMapping: null,
-    poUsage: 0
+    poUsage: 0,
+    /* the workspace's own people (omega_orgs/{org}/members, D2): an owner,
+       the sample office login (an administrator) and a plant member; the
+       Team page's changes land in teamLog (admin_audit, action 'member') */
+    team: [
+      { uid: 'u_sam', email: 'sam@cleancell.us', name: 'Sam Rep', role: 'owner', status: 'active', invitedAt: '2026-08-01T15:00:00Z', invitedBy: 'tom@clearsky-usa.com' },
+      { uid: 'u_demo', email: 'demo@cleancell.us', name: 'Dee Office', role: 'admin', status: 'active', invitedAt: '2026-08-01T15:05:00Z', invitedBy: 'sam@cleancell.us' },
+      { uid: 'u_marco', email: 'marco@cleancell.us', name: 'Marco Bench', role: 'member', status: 'active', invitedAt: '2026-08-12T15:00:00Z', invitedBy: 'sam@cleancell.us' }],
+    teamLog: [],
+    /* the freight plan: order o7's units and sites, the ship-from, and the
+       quotes the office records (omega_orgs/{org}/freight_quotes) */
+    freight: freightSample(ago)
   };
 }
 
 /* ── what each endpoint answers ───────────────────────────────────────── */
 function views(state) {
-  function planned() { return M.plan({ now: NOW, products: CATALOG, stock: STOCK, works: WORKS, orders: MAT_ORDERS, sourcing: SOURCING }); }
+  /* the shelf the bench takes from, and the works order it issues to: the
+     cabinet on the benches is the one started unit the plan knows of, so an
+     issue lowers the shelf and the demand together (materials.js) */
+  function stockNow() { return state.stock || STOCK; }
+  function worksNow() { return WORKS.map(function (w) { return w.id !== 'wo_1' ? w : Object.assign({}, w, { registeredCounts: { 'CC-C215': 1 }, issued: (state.wo && state.wo.issued) || {}, readyCounts: {} }); }); }
+  function planned() { return M.plan({ now: NOW, products: CATALOG, stock: stockNow(), works: worksNow(), orders: MAT_ORDERS, sourcing: SOURCING }); }
   function materialsJson() {
     var p = planned();
-    return Object.assign({ org: ORG, name: 'Clean Cell', brand: brand, owner: false, stockRevision: 2, catalogRevision: 5, components: 5, withBom: 2, limited: false,
-      projection: M.projection({ now: NOW, products: CATALOG, stock: STOCK, works: WORKS, orders: MAT_ORDERS, sourcing: SOURCING, supplies: [{ sku: 'CC-CELL-280', qty: 2500, at: '2026-11-01' }] }, { weeks: 12 }),
+    return Object.assign({ org: ORG, name: 'Clean Cell', brand: brand, owner: false, stockRevision: 2, catalogRevision: 5, components: 5, withBom: 2, limited: false, unstationed: W.unstationed(CATALOG, ROUTING),
+      projection: M.projection({ now: NOW, products: CATALOG, stock: stockNow(), works: worksNow(), orders: MAT_ORDERS, sourcing: SOURCING, supplies: [{ sku: 'CC-CELL-280', qty: 2500, at: '2026-11-01' }] }, { weeks: 12 }),
       bySupplier: M.purchaseBySupplier(p), sourcingRevision: 3, prices: SOURCING.prices,
       suppliers: Object.keys(SOURCING.suppliers).map(function (id) { return Object.assign({ id: id }, SOURCING.suppliers[id]); }),
       purchaseOrders: [{ id: 'po1', supplier: 'EVE Energy', supplierId: 'sup_eve', reference: 'PO-1001', expectedAt: '2026-11-01', note: 'air freight', status: 'partial', createdAt: '2026-09-20T10:00:00Z', createdBy: 'plant@cleancell.us', receivedAt: null,
         lines: [{ sku: 'CC-CELL-280', name: 'LFP cell 280 Ah', unit: 'ea', qty: 4000, received: 1500 }], receipts: [] }] }, p);
   }
-  function soloJson() { var solo = M.plan({ now: NOW, products: CATALOG, stock: STOCK, works: WORKS, orders: [], sourcing: SOURCING }); return { org: ORG, workOrder: { id: 'wo_1', orderNo: 'CC-26-4419', status: 'awaiting_serials', dueDate: '2026-11-14' }, feasible: false, short: M.shortfallsByWorksOrder(solo)['CC-26-4419'] || [], unknownSkus: [], hasBom: true }; }
-  function catalogJson() { return { org: ORG, brand: brand, owner: true, revision: 5, products: CATALOG.map(C.view), designProducts: C.designs({ products: CATALOG }) }; }
+  function soloJson() { var solo = M.plan({ now: NOW, products: CATALOG, stock: stockNow(), works: worksNow(), orders: [], sourcing: SOURCING }); return { org: ORG, workOrder: { id: 'wo_1', orderNo: 'CC-26-4419', status: 'awaiting_serials', dueDate: '2026-11-14' }, feasible: false, short: M.shortfallsByWorksOrder(solo)['CC-26-4419'] || [], unknownSkus: [], hasBom: true }; }
+  function catalogJson() { return { org: ORG, brand: brand, owner: true, revision: 5, products: CATALOG.map(C.view), designProducts: C.designs({ products: CATALOG }), routing: ROUTING.map(function (s) { return { key: s.key, label: s.label }; }), unstationed: W.unstationed(CATALOG, ROUTING) }; }
   function unitsWith(extra) { return state.units.map(function (u) { return Object.assign({ orgId: ORG, woId: 'wo_1', orderNo: 'CC-26-4419' }, extra || {}, u); }); }
-  function mapJson() { var routing = Plant.DEFAULT_ROUTING.map(function (s) { return s.key === 'bms' ? { key: s.key, label: s.label, checks: ['Load firmware'] } : s; }); var m = Stats.stationMap(routing, state.units, Date.now(), { shipUnitsOnly: true }); m.steps = Stats.stepsByStation(routing, [benchCab].concat(CATALOG), W.stepsFor); m.lines = flow.lines; m.sampledLimit = false; return { name: 'Clean Cell', owner: false, brand: brand, map: m }; }
+  function mapJson() { var routing = ROUTING; var m = Stats.stationMap(routing, state.units, Date.now(), { shipUnitsOnly: true }); m.steps = Stats.stepsByStation(routing, CATALOG, W.stepsFor); m.lines = flow.lines; m.sampledLimit = false; return { name: 'Clean Cell', owner: false, brand: brand, map: m }; }
   function boardJson(q) {
     var now = iso(Date.now()), units = unitsWith();
     var rows = [Board.row(state.wo, units, now)], common = { name: 'Clean Cell', owner: false, flow: flow, brand: brand, asOf: now, rows: rows, limited: false, unitsLimited: false, links: {} };
     if (/page=board/.test(q)) return common;
     return Object.assign(common, { floor: Ops.floor([], now, 14), queues: Ops.queues(rows), demand: Ops.demand(rows), stock: Ops.stock([]), completed: Ops.completed(rows), scansLimited: false, stockLimited: false });
   }
-  function progressOf(u) { if (u.serial !== state.benchUnit.serial) return { station: u.at, done: 1, total: 3, open: ['2 · Harness', 'Torque busbars'], complete: false }; var st = W.statusOf(state.benchUnit, 'rack', benchSteps()); return { station: 'rack', done: st.steps.filter(function (s) { return s.done; }).length, total: st.steps.length, open: st.open, complete: st.complete }; }
-  function plantJson(q) {
+  /* how far through its bench a unit is, off the same steps the bench shows */
+  function progressOf(u) { if (!u.at) return null; var steps = benchSteps(u, u.at); if (!steps.length) return null; var st = W.statusOf(u, u.at, steps); return { station: u.at, done: st.steps.length - st.open.length, total: st.steps.length, open: st.open.slice(0, 6), complete: st.complete }; }
+  function withProgress(u) { var p = progressOf(u); return p ? Object.assign({}, u, { progress: p }) : u; }
+  /* canControl (PLANT-16): an owner or administrator holds, releases, tests
+     by hand and corrects; `who` is the signed-in person (the sample office
+     login when none is named) */
+  function plantJson(q, who) {
+    var canControl = ['owner', 'admin'].indexOf(teamActor(who)) >= 0;
     if (/map=1/.test(q)) return mapJson();
     if (/page=board|page=ops/.test(q)) return boardJson(q);
     if (/page=attention/.test(q)) return Object.assign(Attention.attention(state.units, [], flow.routing, iso(Date.now()), {}), { name: 'Clean Cell', owner: false, brand: brand, sampled: state.units.length, sampledLimit: false, links: {} });
     if (/page=works/.test(q)) return { rows: [state.wo], next: null };
     if (/page=units/.test(q)) return { rows: state.units.map(function (u) { return Object.assign({ id: ORG + '__' + u.serial, orgId: ORG, woId: 'wo_1' }, u); }), next: null };
+    /* finished units by state (api/logic-plant.js page=stock, plant-ops.js finished) */
+    if (/page=stock/.test(q)) { var fin = Ops.finished(state.units); return { name: 'Clean Cell', brand: brand, asOf: iso(Date.now()), skus: fin.skus, available: fin.available, totals: fin.totals, limited: { available: false, allocated: false, building: false }, cap: 1000 }; }
     if (/page=stations/.test(q)) return { rows: [], next: null };
-    if (/workOrder=/.test(q)) { var wUnits = unitsWith(), wNow = iso(Date.now()); return { workOrder: state.wo, board: Board.row(state.wo, wUnits, wNow), activity: Board.activity(wUnits, state.wo, 50), units: state.units.slice(3, 5).map(function (u) { return Object.assign({}, u, { woId: 'wo_1', progress: progressOf(u) }); }), limited: false }; }
-    if (/serial=/.test(q)) { var serial = decodeURIComponent((/serial=([^&]*)/.exec(q) || [])[1] || ''), u = state.units.filter(function (x) { return x.serial === serial; })[0]; if (!u) return { error: 'Unit not found', status: 404 }; return { unit: Object.assign({ orgId: ORG, woId: 'wo_1', orderNo: 'CC-26-4419', work: {} }, u, u.at === 'rack' ? { progress: progressOf(u) } : {}), genealogy: [{ serial: u.serial, unitType: u.unitType, parentSerial: null }], events: [] }; }
-    return { name: 'Clean Cell', owner: false, flow: flow, brand: brand, worksOrders: [state.wo], units: unitsWith(), limited: false };
+    /* every unit of the work order, each with where it is on its bench */
+    if (/workOrder=/.test(q)) { var wUnits = unitsWith(), wNow = iso(Date.now()); return { workOrder: state.wo, board: Board.row(state.wo, wUnits, wNow), activity: Board.activity(wUnits, state.wo, 50), units: wUnits.map(withProgress), limited: false, canControl: canControl, lines: flow.lines }; }
+    if (/serial=/.test(q)) { var serial = decodeURIComponent((/serial=([^&]*)/.exec(q) || [])[1] || ''), u = state.units.filter(function (x) { return x.serial === serial; })[0]; if (!u) return { error: 'Unit not found', status: 404 };
+      return { unit: withProgress(Object.assign({ orgId: ORG, woId: 'wo_1', orderNo: 'CC-26-4419', work: {} }, u)), genealogy: [{ serial: u.serial, unitType: u.unitType, parentSerial: null }], events: (state.scans || []).filter(function (e) { return e.serial === serial; }).slice(0, 100),
+        routing: ROUTING.map(function (s) { return { key: s.key, label: s.label, machine: Plant.MACHINE_STATIONS.indexOf(s.key) >= 0 }; }), canControl: canControl, correctable: Rel.correctable(u).ok }; }
+    return { name: 'Clean Cell', owner: false, canControl: canControl, flow: flow, brand: brand, worksOrders: [state.wo], units: unitsWith(), limited: false };
   }
-  function officeJson() { var orders = state.orders.map(function (o) { return Object.assign({}, o, { stage: S.stageOf(o), poNumber: R.poOf(o) }); }); return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 }, accounting: 'tenant' }, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
-    links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
-    orders: orders, totals: S.totals(orders), intake: { review: state.intake.filter(function (p) { return !p.convertedAt && p.status === 'po_review'; }).length, needsInfo: 0, declined: 0 }, limited: false }; }
+  /* GET /api/logic-office as api/logic-office.js builds it. The sample
+     office login is an ACTIVE ADMIN of a workspace that bills its own
+     orders (D1), so each order's can/waitingOn are office-stage
+     access()/actions() — the rule logic-access.requirePricer enforces.
+     opts: { role, billing: 'quickbooks' } shows the same book to a member,
+     or as billed through ClearSky's QuickBooks (render checks). The money
+     tiles are the receivables ledger's own totals (OFF-02), the same rows
+     Accounting prints; the Review list names whose PO waits (OFF-03). */
+  function officeJson(opts) {
+    opts = opts || {};
+    var billing = opts.billing === 'quickbooks' ? 'quickbooks' : 'tenant', who = S.access(false, { role: opts.role || 'admin', status: 'active' }, true);
+    var orders = state.orders.map(function (o) { var a = S.actions(o, who, billing); return Object.assign({}, o, { stage: a.stage, can: a.can, waitingOn: a.waitingOn, billing: S.billingOf(o, billing), poNumber: R.poOf(o),
+      logic: o.logic ? Object.assign({}, o.logic, { pricedAt: o.logic.pricedAt || o.logic.createdAt || null, pricedBy: o.logic.pricedBy || null, acceptedBy: o.logic.acceptedBy || null }) : null }); });
+    var rt = R.totals(R.rows(ledgerEntries().map(function (e) { return { id: e.id, order: e.order, account: null }; }), NOW, { provider: 'stripe' })); delete rt.byCustomer;
+    var open = state.intake.filter(function (p) { return !p.convertedAt && p.status !== 'po_declined'; });
+    var company = function (id) { var c = state.customers.filter(function (x) { return x.id === id; })[0]; return c ? c.company : ''; };
+    return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 }, accounting: billing },
+      access: { role: who.role, prices: who.admin ? 'workspace' : 'none', team: who.admin }, billing: billing, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
+      links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
+      orders: orders, totals: S.totals(orders), receivables: rt,
+      intake: { review: open.filter(function (p) { return p.status !== 'po_needs_information'; }).length, needsInfo: open.filter(function (p) { return p.status === 'po_needs_information'; }).length, declined: state.intake.filter(function (p) { return !p.convertedAt && p.status === 'po_declined'; }).length,
+        waiting: open.slice(0, 20).map(function (p) { return { id: p.id, customerId: p.customerId || null, company: company(p.customerId), poNumber: p.poNumber || '', status: p.status, createdAt: p.createdAt || null }; }) },
+      limited: false };
+  }
   /* ── accounting (api/logic-accounting.js GET): the receivables ledger by
      customer ACCOUNT, built by api/_lib/receivables.js exactly as the
      endpoint builds it — the page prints it and never sums money. The sync
@@ -4249,7 +5595,7 @@ function views(state) {
     var emails = c.users.filter(function (u) { return u.status === 'active'; }).map(function (u) { return u.email; });
     var orders = state.orders.filter(function (o) { return o.customerId === c.id || (!o.customerId && emails.indexOf(o.customer.email) >= 0); }).map(money);
     var contact = c.users.filter(function (u) { return u.role === 'owner' && u.status === 'active'; })[0] || c.users[0] || null;
-    return { customerId: c.id, company: c.company, accountType: c.accountType || 'company', domain: c.domain || '', rep: null, owner: false, editorAccess: entitlement(c.editorLite),
+    return { customerId: c.id, company: c.company, accountType: c.accountType || 'company', domain: c.domain || '', rep: null, owner: false, editorAccess: entitlement(c.editorLite), inviteEmail: false,
       name: contact ? contact.name : '', email: contact ? contact.email : '', phone: '', activated: !!(contact && contact.activated), contactStatus: contact ? contact.status : null,
       people: clone(c.users), address: state.account.customerId === c.id ? state.account.address : null, createdAt: '2026-08-01T00:00:00Z', plan: 'free', status: c.status, terms: c.terms, portalUrl: PORTAL_URL, appUrl: APP_URL,
       orders: orders, totals: orders.reduce(function (t, m) { t.invoicedCents += m.invoicedCents; t.paidCents += m.paidCents; t.balanceCents += m.balanceCents; t.openRequests += m.openRequests; return t; }, { invoicedCents: 0, paidCents: 0, balanceCents: 0, openRequests: 0 }), limited: false };
@@ -4257,16 +5603,20 @@ function views(state) {
   function buyersJson(q) {
     if (/customerId=/.test(q)) return buyerDetail(decodeURIComponent((/customerId=([^&]*)/.exec(q) || [])[1] || ''));
     if (/email=/.test(q)) { var c = customerOf(decodeURIComponent((/email=([^&]*)/.exec(q) || [])[1] || '')); return c ? buyerDetail(c.id) : { error: 'Customer not found', status: 404 }; }
-    return { org: ORG, name: 'Clean Cell', brand: brand, owner: false, portalUrl: PORTAL_URL, appUrl: APP_URL, next: null,
+    return { org: ORG, name: 'Clean Cell', brand: brand, owner: false, portalUrl: PORTAL_URL, appUrl: APP_URL, inviteEmail: false, next: null,
       customers: state.customers.map(function (c) { return Object.assign(clone(c), { pending: c.users.filter(function (u) { return u.status === 'pending'; }).length }); }) };
   }
   function companyJson(id, office) {
     var c = state.customers.filter(function (x) { return x.id === id; })[0]; if (!c) return { error: 'Active company account not found', status: 404 };
     return { office: office, brand: brand, company: { id: c.id, name: c.company, rep: null }, reps: [], terms: c.terms,
-      products: CATALOG.filter(function (p) { return p.kind !== 'component'; }).map(function (p) { return { sku: p.sku, name: p.name, kind: p.kind || 'product' }; }),
+      /* the one buyer test (portal.js orderables): never a component (CUST-04) */
+      products: Portal.orderables(CATALOG).map(function (p) { return { sku: p.sku, name: p.name, kind: p.kind || 'product' }; }),
       contacts: c.users.map(function (u) { return { email: u.email, name: u.name, role: u.role }; }),
-      intake: state.intake.filter(function (p) { return p.customerId === id; }).map(function (p) { var o = clone(p); delete o.customerId; return o; }),
-      orders: state.companyOrders.filter(function (o) { return o.customerId === id; }).map(function (o) { var x = clone(o); delete x.customerId; return x; }), limited: false };
+      /* api/po-intake.js intakeRow / buyerRow: a PO's state and door in the
+         buyer's words (the door's code stays with the office), and an
+         order's public milestone (the buyer's status is its label) */
+      intake: state.intake.filter(function (p) { return p.customerId === id; }).map(function (p) { var o = clone(p); delete o.customerId; o.statusLabel = Portal.poStatusWord(o); o.sourceLabel = Portal.poSourceWord(o.source, brand.shortName); if (!office) o.source = o.sourceLabel; return o; }),
+      orders: state.companyOrders.filter(function (o) { return o.customerId === id; }).map(function (o) { var x = clone(o), m = Portal.milestoneOf(o); delete x.customerId; x.milestone = { key: m.key, label: m.label, say: m.say }; if (!office) x.status = m.label; return x; }), limited: false };
   }
   function intakeJson(q, who) {
     var office = /office=1/.test(q), cid = decodeURIComponent((/customerId=([^&]*)/.exec(q) || [])[1] || '');
@@ -4317,8 +5667,36 @@ function views(state) {
       toConfirm: off.filter(function (u) { return u.custody.confirmation === 'declared'; }), planned: units.filter(function (u) { var c = Cu.custodyOf(u); return c.plannedSiteId && !c.siteId; }).map(function (u) { return unitView(u, now); }),
       mapping: state.custodyMapping, columns: Cu.TEMPLATE_HEADERS, moves: Cu.MOVES, states: Cu.STATES, limited: false, sampled: units.length };
   }
-  function logisticsJson() { return { owner: false, brand: brand, notice: 'Sandbox: one order with one planned load.', limited: false, orders: state.companyOrders.map(function (o) { return { id: o.id, orderNo: o.orderNo, poNumber: o.poNumber, revision: o.revision, destinations: o.destinations, legs: o.legs || [] }; }) }; }
-  function pubSite(s) { return { id: s.id, name: s.name, address: s.address || {}, endCustomer: s.endCustomer || '', interconnection: s.interconnection || {}, contact: s.contact || {}, notes: s.notes || '', status: s.status || 'active', ref: s.ref || '', lat: s.lat == null ? null : s.lat, lng: s.lng == null ? null : s.lng }; }
+  function logisticsJson() { return { owner: false, brand: brand, notice: 'Sandbox: a sample ledger. Nothing here books a carrier or tracks a truck.', limited: false, orders: state.companyOrders.map(function (o) { return { id: o.id, orderNo: o.orderNo, poNumber: o.poNumber, revision: o.revision, destinations: o.destinations, legs: o.legs || [] }; }) }; }
+  /* ── the freight plan: GET /api/logic-logistics?freight=<orderId>
+     (api/logic-logistics.js freightGet) — the order's shipping units with
+     the sites they are going to, from the custody sample and the freight
+     sample together, the catalog, the ship-from and the order's quotes,
+     worked out by api/_lib/freight.js with both sheets built there ── */
+  function freightOrder(id) {
+    var co = state.companyOrders.filter(function (o) { return o.id === id; })[0] || null, so = state.orders.filter(function (o) { return o.id === id; })[0] || null;
+    return co || so ? Object.assign({}, so || {}, co || {}) : null;
+  }
+  function freightUnits() { return state.units.concat((state.freight || {}).units || []); }
+  function freightSites() { var by = {}; state.sites.concat((state.freight || {}).sites || []).forEach(function (x) { by[x.id] = x; }); return by; }
+  /* what F.plan reads for one order; the plant's date is the works order's
+     due date, else the order's promised ship date */
+  function freightInput(o, now) {
+    var fr = state.freight || {}, w = o.worksOrderId && state.wo && o.worksOrderId === state.wo.id ? state.wo : null;
+    return { order: o, units: freightUnits().filter(function (u) { return u.orderId === o.id && u.shipUnit; }), components: freightUnits().filter(function (u) { return u.orderId === o.id && !u.shipUnit && u.rootSerial; }), sites: freightSites(), products: CATALOG, origin: fr.origin || null,
+      quotes: (fr.quotes || []).filter(function (x) { return x.orderId === o.id; }), promised: (w && (w.dueDate || w.promisedShipAt)) || o.promisedShipAt || null, now: now };
+  }
+  function freightJson(q) {
+    var id = decodeURIComponent((/(?:^|&)freight=([^&]*)/.exec(q || '') || [])[1] || ''), o = id ? freightOrder(id) : null;
+    if (!id) return { status: 400, error: 'Choose the order' };
+    if (!o) return { status: 404, error: 'Order not found' };
+    var now = iso(Date.now()), pl = Fr.plan(freightInput(o, now));
+    return Object.assign({ brand: brand, owner: false, limited: false, sitesLimited: false }, pl, { exports: Fr.exportsOf(pl, now) });
+  }
+  /* the customer's view of a site: api/_lib/portal.js publicSite, the one
+     projection api/my-sites.js answers through (only what the customer
+     entered of the interconnection, contact, end customer and notes) */
+  function pubSite(s) { return Portal.publicSite(s); }
   function pubUnit(u) { var c = Cu.custodyOf(u), p = prodOf(u.sku), now = iso(Date.now()); return { serial: u.serial, sku: u.sku, name: p ? p.name : u.sku, orderNo: u.orderNo || null, status: c.status || (u.at === 'ready' ? 'ready to ship' : 'being built'), label: c.status ? Cu.label(c.status) : (u.at === 'ready' ? 'ready to ship' : 'being built'), state: c.state || null,
     siteId: c.siteId || null, siteName: c.siteName || null, position: c.position || '', shippedAt: c.shippedAt || null, receivedAt: c.receivedAt || null, installedAt: c.installedAt || null, commissionedAt: c.commissionedAt || null, replacedBy: c.replacedBy || null, replaces: c.replaces || null, plannedSiteId: c.plannedSiteId || null, plannedSiteName: c.plannedSiteName || null, confirmation: Cu.confirmation(c), confirmedAt: c.confirmedAt || null,
     coverage: Cu.coverageWithInheritance(p, u, now).map(function (cv) { return { id: cv.templateId, type: cv.type, provider: cv.provider, status: cv.status, why: cv.why, from: cv.startDate, until: cv.endDate, termMonths: cv.termMonths, metrics: cv.metrics, docUrl: cv.docUrl }; }) }; }
@@ -4330,7 +5708,11 @@ function views(state) {
       orders: units.length && o1 ? [Object.assign({ orderNo: o1.orderNo, po: poOf(o1) }, Cu.unitCounts(units))] : [],
       units: units.filter(function (u) { return Cu.custodyOf(u).status || u.at === 'ready'; }).map(pubUnit), moves: { received: ['', 'in_transit', 'delivered'], assign: ['delivered', 'received', 'assigned'], installed: ['assigned', 'received'], commissioned: ['assigned', 'installed', 'received'] } }; }
   function riverside() { return state.customers.filter(function (c) { return c.id === 'company_riverside'; })[0]; }
-  function accountJson(who) { var a = clone(state.account); if (who) a.you.email = who; a.users = riverside().users.map(function (u) { return { email: u.email, name: u.name, role: u.role, status: u.status, activated: u.activated, requestedAt: u.requestedAt || null }; }); return a; }
+  function accountJson(who) { var a = clone(state.account), r = riverside(); if (who) a.you.email = who; a.users = r.users.map(function (u) { return { email: u.email, name: u.name, role: u.role, status: u.status, activated: u.activated, requestedAt: u.requestedAt || null }; });
+    /* api/my-account.js addPeople: the owner of a company account the supplier set up with a domain, signed in at that domain */
+    var dom = r.domain || '', ok = a.you.role === 'owner' && !!dom && String(a.you.email).split('@')[1] === dom;
+    a.addPeople = { ok: ok, domain: ok ? dom : null, why: ok || a.you.role === 'owner' ? null : 'Only the account owner adds colleagues. Ask them, or your supplier.' };
+    return a; }
   function myOrdersJson(who) {
     var mine = state.orders.filter(function (o) { return o.customer.email === (who || 'ops@riverside.example') || o.customer.email === 'ops@riverside.example'; });
     return { orders: mine.map(function (o) {
@@ -4358,20 +5740,77 @@ function views(state) {
     if (b.action === 'save') { var id = b.projectId || ('p_' + hex(8)), p = state.projects.filter(function (x) { return x.id === id; })[0]; if (!p) { p = { id: id, name: '', module: 'bess', revision: 0 }; state.projects.unshift(p); } p.name = String(b.name || p.name || 'Untitled site plan').slice(0, 120); p.revision++; p.updatedAt = iso(Date.now()); return { ok: true, id: id, revision: p.revision, updatedAt: p.updatedAt }; }
     return { error: 'Unknown design action', status: 400 };
   }
+  /* ── the bench (api/mes-scan.js), on the sample's own units ──────────
+     The same judgeScan, judgeIssue and judgeStepDone the endpoint runs,
+     against state.units: a unit moves bench to bench, a part issued comes
+     off the shelf (state.stock) and onto the works order (state.wo.issued),
+     and the Plant app shows where it went. "st-phone" is a roaming phone
+     (the operator picks the bench); any other station ID is Rack assembly. */
+  function unitNamed(serial) { return state.units.filter(function (x) { return x.serial === serial; })[0] || null; }
+  function take(sku, qty, serial) {
+    var shelf = state.stock || (state.stock = clone(STOCK)), e = shelf[sku] || (shelf[sku] = { onHand: 0 }), left = (Number(e.onHand) || 0) - qty, short = left < 0;
+    e.onHand = Math.round(Math.max(0, left) * 10000) / 10000; e.lastIssuedTo = serial;
+    var iss = state.wo.issued || (state.wo.issued = {}); iss[sku] = Math.round(((Number(iss[sku]) || 0) + qty) * 10000) / 10000;
+    return short;
+  }
+  function log(e) { (state.scans || (state.scans = [])).unshift(e); if (state.scans.length > 200) state.scans.length = 200; }
   function benchJson(b) {
-    var routing = fullRouting(), unit = state.benchUnit, steps = benchSteps();
-    if (b.action === 'describe' && b.stationId === 'st-phone') return { ok: true, station: '*', roaming: true, stationLabel: 'Marco’s phone', lineId: 'main', location: '', instructions: '', revision: 1, machine: false, brand: brand, routing: routing.filter(function (s) { return s.key !== 'eol'; }) };
-    if (b.action === 'describe') return { ok: true, station: 'rack', stationLabel: 'Bay 2 · Rack assembly', lineId: 'main', location: 'Bay 2', instructions: 'Fit modules bottom-up.', revision: 1, machine: false, brand: brand };
-    if (b.action === 'issue' || b.action === 'step-done') {
-      var v = b.action === 'issue' ? W.judgeIssue(unit, 'rack', routing, steps, b.code, b.qty) : W.judgeStepDone(unit, 'rack', routing, steps, b.stepId);
-      var patch = b.action === 'issue' ? W.applyIssue(unit, 'rack', v, 'now', b.lot) : W.applyStepDone(unit, 'rack', v, 'now');
-      if (patch) unit.work.rack = patch;
-      return { ok: !!v.ok, action: v.action || null, reason: v.reason || null, say: v.say, serial: unit.serial, station: 'rack', work: W.statusOf(unit, 'rack', steps) };
+    var routing = ROUTING, labels = {}; routing.forEach(function (s) { labels[s.key] = s.label; });
+    var hint = 'Sample plant: the cabinet on the line is ' + WORKING + ', at Rack assembly. Tap “Type a serial” and type it; then scan or type the part codes CC-MOD-52 and CC-HARN to issue them.';
+    if (b.action === 'describe' && b.stationId === 'st-phone') return { ok: true, station: '*', roaming: true, stationLabel: 'Marco’s phone', lineId: 'main', location: '', instructions: hint, revision: 1, machine: false, brand: brand, routing: routing.filter(function (s) { return Plant.MACHINE_STATIONS.indexOf(s.key) < 0; }).map(function (s) { return { key: s.key, label: s.label }; }) };
+    if (b.action === 'describe') return { ok: true, station: 'rack', stationLabel: 'Bay 2 · Rack assembly', lineId: 'main', location: 'Bay 2', instructions: 'Fit modules bottom-up.\n' + hint, revision: 1, machine: false, brand: brand };
+    var station = b.stationId === 'st-phone' ? String(b.station || '') : 'rack';
+    if (!station || !labels[station]) return { ok: false, reason: 'no_station', say: 'Choose the bench you are at first.', serial: '', station: '', stationLabel: 'Marco’s phone' };
+    var issuing = b.action === 'issue' || b.action === 'step-done';
+    var serial = Plant.serialFrom(b.serial) || (issuing ? WORKING : ''), unit = unitNamed(serial), now = iso(Date.now());
+    if (!serial) return { ok: false, reason: 'unreadable', say: 'That code did not read as a serial. Scan the label on the frame.' };
+    if (issuing) {
+      var steps = benchSteps(unit, station);
+      var v = b.action === 'issue' ? W.judgeIssue(unit, station, routing, steps, b.code, b.qty) : W.judgeStepDone(unit, station, routing, steps, b.stepId);
+      var patch = b.action === 'issue' ? W.applyIssue(unit, station, v, now, b.lot) : W.applyStepDone(unit, station, v, now), short = false;
+      if (patch) { unit.work = unit.work || {}; unit.work[station] = patch; }
+      if (patch && v.action === 'issue') short = take(v.sku, v.qty, serial);
+      log({ serial: serial, station: station, kind: b.action, at: now, ok: !!v.ok, verdict: v, sku: v.sku || null, qty: v.qty || null });
+      return { ok: !!v.ok, action: v.action || null, reason: v.reason || null, say: (v.say || '') + (short ? ' The shelf count for it was already short — tell the office.' : ''), serial: serial, station: station, stockShort: short,
+        work: unit && unit.at === station ? W.statusOf(unit, station, steps) : null };
     }
-    var serial = Plant.serialFrom(b.serial);
-    if (serial !== unit.serial) return { ok: false, reason: 'unknown_unit', say: 'That serial is not on any open works order here.', serial: serial, station: 'rack', routing: routing };
-    return { ok: true, action: 'duplicate', say: 'Already at Rack assembly.', serial: serial, station: 'rack', unit: { serial: serial, at: 'rack', wo: 'wo_1' }, routing: routing,
-      workOrder: 'wo_1', product: 'Cabinet', work: W.statusOf(unit, 'rack', steps), instructions: 'Fit modules bottom-up.' };
+    var leaving = unit && unit.at ? W.statusOf(unit, unit.at, benchSteps(unit, unit.at)) : null;
+    var verdict = Plant.judgeScan(unit, station, routing, { open: leaving ? leaving.open : [] });
+    var moved = Plant.applyScan(unit || {}, verdict, now);
+    if (moved) {
+      Object.keys(moved).forEach(function (k) { unit[k] = moved[k]; });
+      if (moved.at === 'ready' && unit.shipUnit) {
+        if (!unit.orderId) unit.inventoryStatus = 'available';
+        /* what no bench issued comes off the shelf at Ready (plant-work.js backflush) */
+        W.backflush(benchProduct(unit), unit, routing).forEach(function (l) { take(l.sku, l.qty, serial); (unit.backflushed || (unit.backflushed = {}))[l.sku] = l.qty; });
+      }
+    }
+    log({ serial: serial, station: station, at: now, ok: !!verdict.ok, verdict: verdict });
+    var here = unit && verdict.ok ? W.statusOf(unit, station, benchSteps(unit, station)) : (verdict.reason === 'work_open' ? leaving : null);
+    return { ok: !!verdict.ok, action: verdict.action || null, reason: verdict.reason || null, say: verdict.say || '', serial: serial, station: station, stationLabel: b.stationId === 'st-phone' ? 'Marco’s phone' : 'Bay 2 · Rack assembly',
+      unit: unit ? { serial: serial, at: unit.at || '', wo: 'wo_1' } : null, routing: routing.map(function (s) { return { key: s.key, label: s.label }; }),
+      workOrder: unit ? 'wo_1' : null, workOrderNo: unit ? (unit.orderNo || state.wo.orderNo) : null, product: unit ? (benchProduct(unit) || {}).name || unit.sku : null,
+      work: here && here.steps.length ? here : null, instructions: station === 'rack' ? 'Fit modules bottom-up.' : '' };
+  }
+  /* a supervisor's hand-recorded result (api/mes-test-result.js manual):
+     the same judge as the rig, the same open-step gate, kept on the unit */
+  function manualTest(b, who) {
+    var serial = Plant.serialFrom(b.serial), unit = unitNamed(serial), station = String(b.station || ''), note = String(b.note || '').replace(/\s+/g, ' ').trim();
+    /* logic-access.authorize(…, write): an owner or administrator of the workspace; a member or viewer is refused */
+    var role = teamActor(who); if (role !== 'owner' && role !== 'admin') return { status: 403, error: 'An active OEM administrator is required' };
+    if (Plant.MACHINE_STATIONS.indexOf(station) < 0) return { status: 400, error: 'A result can be recorded by hand only at a test station (' + Plant.MACHINE_STATIONS.join(', ') + ')' };
+    if (b.result !== 'pass' && b.result !== 'fail') return { status: 400, error: 'result must be pass or fail' };
+    if (note.length < Plant.MANUAL_NOTE_MIN) return { status: 400, error: 'Write what was tested and with what (at least ' + Plant.MANUAL_NOTE_MIN + ' characters)' };
+    /* a typed code: spaces are underscores; anything else a code cannot hold is refused in words (UX-10) */
+    var code = String(b.failureCode == null ? '' : b.failureCode).trim().replace(/\s+/g, '_').toUpperCase().slice(0, 60);
+    if (code && !/^[A-Z0-9._-]+$/.test(code)) return { status: 400, error: 'The failure code may use letters, digits, dot, dash and underscore only (spaces become underscores), e.g. CELL_LOW' };
+    var open = unit && unit.at ? W.statusOf(unit, unit.at, benchSteps(unit, unit.at)).open : [], now = iso(Date.now());
+    var v = Plant.judgeMachineResult(unit, station, ROUTING, { pass: b.result === 'pass' }, { open: open });
+    var test = { station: station, result: b.result, measurements: {}, failureCode: code || null, ncr: null, source: 'manual', by: who || 'demo@cleancell.us', note: note.slice(0, 1000), at: now };
+    var patch = unit ? Plant.applyMachineResult(unit, v, now, test) : null;
+    if (patch) Object.keys(patch).forEach(function (k) { unit[k] = patch[k]; });
+    log({ serial: serial, station: station, at: now, ok: !!v.ok, manual: true, by: test.by, test: test, verdict: v });
+    return { ok: !!v.ok, action: v.action || null, reason: v.reason || null, say: v.say || '', serial: serial, station: station, test: test, unit: unit ? { serial: serial, at: unit.at || '', hold: unit.hold || null } : null };
   }
   /* ── the CRM (api/crm.js), the customer's documents (api/my-files.js)
      and the design tool (api/customer-subscribe.js): the records above,
@@ -4428,8 +5867,27 @@ function views(state) {
   function manifest(app, tenant) { return Manifest.manifestFor(ORG, tenant, app); }
   /* api/logic-workspaces.js: where the signed-in person may go. The sample
      office login has one company, so the front door goes straight in. */
+  /* ── the Team page (api/logic-team.js GET): the workspace's people, and
+     for an owner or admin what each row allows and the recent changes. The
+     person looking is found by email in state.team (the sample office
+     login is an administrator). ── */
+  var TEAM_ROLES = ['owner', 'admin', 'member', 'viewer'];
+  /* a sandbox takes any email: one not on the team stands in for the sample office login (an administrator) */
+  function teamActor(who) { var m = (state.team || []).filter(function (x) { return x.email === String(who || 'demo@cleancell.us').toLowerCase(); })[0]; if (!m) return 'admin'; return (m.status || 'active') === 'active' ? m.role : null; }
+  function teamJson(who) {
+    var actor = teamActor(who), manages = actor === 'owner' || actor === 'admin', people = state.team || [];
+    var owners = people.filter(function (m) { return m.role === 'owner' && (m.status || 'active') !== 'disabled'; }).length;
+    var rows = people.map(function (m) {
+      var status = m.status || 'active', last = m.role === 'owner' && status !== 'disabled' && owners <= 1, editable = manages && (actor !== 'admin' || m.role !== 'owner');
+      return { email: m.email, name: m.name || null, role: m.role || null, status: status, you: m.email === String(who || 'demo@cleancell.us').toLowerCase(), outside: m.email.split('@')[1] !== ORG, lastOwner: last,
+        invitedAt: m.invitedAt || null, invitedBy: m.invitedBy || null, updatedAt: m.updatedAt || null, updatedBy: m.updatedBy || null,
+        can: { role: editable && !last, disable: editable && status !== 'disabled' && !last, enable: editable && status === 'disabled' } };
+    }).sort(function (x, y) { var r = TEAM_ROLES.indexOf(x.role) - TEAM_ROLES.indexOf(y.role); return r || (x.email < y.email ? -1 : x.email > y.email ? 1 : 0); });
+    return { org: ORG, name: 'Clean Cell', brand: brand, owner: false, role: actor, manage: manages, assignable: actor === 'owner' ? TEAM_ROLES.slice() : actor === 'admin' ? ['admin', 'member', 'viewer'] : [],
+      domain: ORG, frontDoor: 'https://silmarillion.clearskyomega.com/logic', people: rows, limited: false, log: manages ? (state.teamLog || []).slice(0, 50) : [] };
+  }
   function workspacesJson(email) { return { email: email || 'demo@cleancell.us', owner: false, workspaces: [{ orgId: ORG, name: 'Clean Cell', role: 'admin', status: 'active' }] }; }
-  return { workspacesJson: workspacesJson, crmJson: crmJson, myFilesJson: myFilesJson, subJson: subJson, portfolioJson: portfolioJson, accountOrders: accountOrders, materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, accountingJson: accountingJson, accountingCsv: accountingCsv, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, myUnits: myUnits, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
+  return { teamJson: teamJson, teamActor: teamActor, workspacesJson: workspacesJson, crmJson: crmJson, myFilesJson: myFilesJson, subJson: subJson, portfolioJson: portfolioJson, accountOrders: accountOrders, materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, accountingJson: accountingJson, accountingCsv: accountingCsv, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, freightJson: freightJson, freightOrder: freightOrder, freightUnits: freightUnits, freightSites: freightSites, freightInput: freightInput, logisticsJson: logisticsJson, mySitesJson: mySitesJson, myUnits: myUnits, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manualTest: manualTest, manifest: manifest, brand: brand, CATALOG: CATALOG };
 }
 
 /* ── the writes a trial touches ───────────────────────────────────────── */
@@ -4438,9 +5896,60 @@ function post(state, path, query, b, who) {
   function err(s, m) { return { status: s, error: m }; }
   function order(id) { return state.orders.filter(function (o) { return o.id === id; })[0]; }
   if (path === '/api/mes-scan') return V.benchJson(b);
+  if (path === '/api/mes-test-result') return b.manual === true ? V.manualTest(b, who) : err(401, 'Not in this sandbox: a test rig posts with its own paired credential');
   if (path === '/api/customer-design') return V.designPost(b);
+  /* ── the Team page (api/logic-team.js POST → logic-members.js change):
+     the same rules — an owner does anything; an administrator never makes
+     or touches an owner; nobody is deleted; the last active owner stays;
+     a person outside the workspace's domain needs ClearSky's grant (none
+     in the sample); every change is logged with who, what it was and is ── */
+  if (path === '/api/logic-team') {
+    var actor = V.teamActor(who);
+    if (actor !== 'owner' && actor !== 'admin') return err(403, 'The workspace owner or an administrator manages the team');
+    if (b.action === 'delete' || b.action === 'remove') return err(400, 'Nobody is deleted: disable them instead, and enable them again if they come back');
+    if ((b.action || 'member') !== 'member') return err(400, 'action must be member');
+    var tEmail = String(b.email || '').trim().toLowerCase(), tRole = b.role === undefined ? null : String(b.role), tStatus = b.status === undefined ? null : String(b.status);
+    if (!/^[^@\s/]+@[^@\s/]+\.[^@\s/]+$/.test(tEmail)) return err(400, 'A valid email is required');
+    if (tRole !== null && ['owner', 'admin', 'member', 'viewer'].indexOf(tRole) < 0) return err(400, 'role must be one of owner, admin, member, viewer');
+    if (tStatus !== null && ['active', 'disabled'].indexOf(tStatus) < 0) return err(400, 'status must be active or disabled');
+    if (tRole === null && tStatus === null) return err(400, 'Give a role, a status, or ask for a set-password link');
+    if (tRole && !/^[a-z0-9][a-z0-9._%+'-]*@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/.test(tEmail)) return err(400, 'Type their real email address, like name@' + ORG);
+    if (tRole && tEmail.split('@')[1] !== ORG) return err(403, tEmail + ' is outside ' + ORG + '. Only people with an @' + ORG + ' address can be added here; ClearSky grants access to anybody else.');
+    var team = state.team || (state.team = []), tgt = team.filter(function (m) { return m.email === tEmail; })[0] || null;
+    if (actor === 'admin' && tRole === 'owner') return err(403, 'Only an owner can make somebody an owner');
+    if (actor === 'admin' && tgt && tgt.role === 'owner') return err(403, 'Only an owner can change or disable an owner');
+    var activeOwner = function (m) { return m.role === 'owner' && (m.status || 'active') !== 'disabled'; };
+    if (tgt && activeOwner(tgt) && (tStatus === 'disabled' || (tRole && tRole !== 'owner')) && team.filter(activeOwner).length <= 1) return err(409, 'That is the last active owner; make somebody else the owner first');
+    if (!tRole && !tgt) return err(404, tEmail + ' is not a member of this workspace yet; give a role to invite them');
+    var was = tgt ? { role: tgt.role, status: tgt.status || 'active' } : null, account = tgt ? 'existing' : 'created';
+    if (!tgt) { tgt = { uid: 'u_' + hex(8), email: tEmail, name: String(b.name || '').slice(0, 120) || null, role: tRole, status: tStatus || 'active', invitedAt: now, invitedBy: who }; team.push(tgt); }
+    else { if (tRole) tgt.role = tRole; if (tStatus) tgt.status = tStatus; if (b.name) tgt.name = String(b.name).slice(0, 120); tgt.updatedAt = now; tgt.updatedBy = who; }
+    (state.teamLog || (state.teamLog = [])).unshift({ at: now, by: who, email: tEmail, via: 'team', was: was, now: { role: tgt.role, status: tgt.status || 'active' } });
+    return { ok: true, email: tEmail, role: tgt.role, status: tgt.status || 'active', account: tRole ? account : 'unchanged', mail: null,
+      note: account === 'created' ? 'Tell ' + tEmail + ' to open https://silmarillion.clearskyomega.com/logic and choose “Forgot password” with this address to set a password, or sign in with Google if it is a Google account.' : null };
+  }
   if (path === '/api/logic-office') {
     var o = order(b.orderId); if (!o) return err(404, 'Order not found');
+    /* D1: price and accept (logic-workflow price): the sample office login
+       is an active administrator of a workspace that bills its own orders,
+       so it may; the price snapshot is logic-policy's own, with no fee
+       (tenant-billed), and who and when are kept on the order */
+    if (b.action === 'price' || b.action === 'accept') {
+      if (o.cancelRequested || ['cancelled', 'shipped', 'complete'].indexOf(o.status) >= 0) return err(409, 'Order is not open for pricing');
+      if (b.action === 'accept') { if (!o.logic) return err(409, 'Approve the customer price first'); if (!o.logic.acceptedAt) { o.logic.acceptedAt = now; o.logic.acceptedBy = who; o.status = 'accepted'; } return { ok: true, duplicate: true }; }
+      if (o.logic) return err(409, 'This order is already priced');
+      /* the sample's own arithmetic: the product's price snapshot
+         (logic-policy) is server-only and never in a public sandbox; a
+         tenant-billed order carries no fee, the deposit is the account's */
+      var acct = o.customerId ? state.customers.filter(function (x) { return x.id === o.customerId; })[0] : null, t = (acct && acct.terms) || { depositPct: 30, dueDays: 0 };
+      var base = Math.round(Number(b.total) * 100); if (!(base > 0)) return err(400, 'An approved customer price greater than zero is required');
+      var dep = Math.round(base * (Number(t.depositPct) || 0) / 100);
+      var commercial = { baseCents: base, feeCents: 0, totalCents: base, depositCents: dep, balanceCents: base - dep, currency: 'USD', terms: { depositPct: Number(t.depositPct) || 0, dueDays: Number(t.dueDays) || 0 }, billing: 'tenant' };
+      o.logic = { enabled: true, accounting: 'tenant', commercial: commercial, invoices: { deposit: { amountCents: commercial.depositCents, paidCents: 0, status: commercial.depositCents ? 'to_issue' : 'not_required' } },
+        acceptedAt: b.accept === true ? now : null, acceptedBy: b.accept === true ? who : null, pricedBy: who, createdAt: now, requirements: [], allocatedSerials: [] };
+      o.status = b.accept === true ? 'accepted' : 'quoted';
+      return { ok: true, commercial: commercial };
+    }
     if (b.action === 'request-resolve') { var r = (o.requests || []).filter(function (x) { return x.id === b.requestId; })[0]; if (!r || r.status !== 'open') return err(404, 'Open request not found'); if (!String(b.answer || '').trim()) return err(400, 'Write the answer the customer will read'); r.status = 'resolved'; r.answer = String(b.answer).trim().slice(0, 2000); r.answeredAt = now; r.answeredBy = who; return { ok: true }; }
     if (b.action === 'ready') return o.logic && o.logic.releasedAt ? { ok: true, note: 'Every unit passed; the balance invoice is queued.' } : err(409, 'Release the order to the plant first');
     if (b.action === 'cancel') { o.cancelRequested = true; return { ok: true }; }
@@ -4739,6 +6248,104 @@ function post(state, path, query, b, who) {
     }
     return err(400, 'Unknown custody action');
   }
+  /* ── the freight plan's four writes (api/logic-logistics.js freightPost),
+     through the same library: F.origin, F.quoteInput, F.acceptCheck. What
+     the sample does not do the product's way: no map lookup for a new
+     ship-from (a changed address is saved without a pin, so its stops go
+     in state order; the same address keeps its pin), and Accept pushes the
+     legs itself in the shape L.planLeg makes, with planLeg's checks —
+     order-lifecycle.js is server-only and never in the public sandbox. The
+     other ledger actions are the desktop's, against Firestore. ── */
+  if (path === '/api/logic-logistics') {
+    var fr = state.freight || (state.freight = { units: [], sites: [], origin: null, quotes: [], audit: [] }), fday = Fr.quoteDay(now);
+    fr.quotes = fr.quotes || []; fr.audit = fr.audit || [];
+    var frAudit = function (row) { fr.audit.push(Object.assign({ orgId: ORG, by: who, at: now }, row)); };
+    var trailed = function (q, status, note) { return (q.trail || []).concat([{ at: now, by: who, status: status, note: note }]); };
+    if (['freight-origin', 'freight-quote', 'freight-withdraw', 'freight-accept'].indexOf(b.action) < 0) return err(400, 'The sample ledger plans loads only from an accepted freight quote; record pickups and receipts on the real ledger.');
+    try {
+      if (b.action === 'freight-origin') {
+        var before = fr.origin || null, og = Fr.origin(b.origin, before);
+        fr.origin = og; fr.originUpdatedAt = now; fr.originUpdatedBy = who;
+        frAudit({ action: 'freight-origin', before: before, after: og });
+        return { ok: true, origin: og, geoLimited: false };
+      }
+      if (!b.orderId) return err(400, 'Choose the order');
+      var fo = V.freightOrder(String(b.orderId)); if (!fo) return err(404, 'Order not found');
+      if (b.action === 'freight-quote') {
+        var qpl = Fr.plan(V.freightInput(fo, now)), key = Fr.laneKeyOf(b.laneKey), lane = qpl.lanes.filter(function (l) { return l.key === key; })[0];
+        if (!lane) return err(409, 'That lane is not on this order any more. Reload the freight plan.');
+        var doc = Fr.quoteInput(b, lane, { id: fo.id, orgId: ORG, orderNo: fo.orderNo }, who, now), qid = 'fq_' + hex(16), was = null;
+        doc.orgId = ORG;
+        if (doc.supersedes) {
+          was = fr.quotes.filter(function (x) { return x.id === doc.supersedes; })[0] || null;
+          if (!was || was.orderId !== fo.id || was.laneKey !== key) return err(404, 'The quote this replaces is not on this lane');
+          if (was.status !== 'recorded') return err(409, 'Only a recorded quote can be replaced; that one is ' + was.status);
+        }
+        var rec = Object.assign({ id: qid }, doc); fr.quotes.push(rec);
+        if (was) { was.status = 'superseded'; was.supersededBy = qid; was.trail = trailed(was, 'superseded', 'Replaced by ' + qid); }
+        frAudit({ action: 'freight-quote', orderId: fo.id, quoteId: qid, laneKey: key, carrier: doc.carrier, amountCents: doc.amountCents, units: doc.units, supersedes: doc.supersedes });
+        return { ok: true, quote: Fr.quoteView(rec, lane, fday) };
+      }
+      if (b.action === 'freight-withdraw') {
+        var why = typeof b.reason === 'string' ? b.reason.trim() : '';
+        if (why.length < 3 || why.length > 300 || /[\u0000-\u001f\u007f]/.test(why)) return err(400, 'Give a reason for withdrawing it (3–300 characters)');
+        var wq = fr.quotes.filter(function (x) { return x.id === String(b.quoteId || ''); })[0];
+        if (!wq || wq.orderId !== fo.id) return err(404, 'Quote not found');
+        if (wq.status === 'accepted') return err(409, 'An accepted quote planned loads; change those on the ledger');
+        if (wq.status !== 'recorded') return err(409, 'This quote is already ' + wq.status);
+        wq.status = 'withdrawn'; wq.withdrawnAt = now; wq.withdrawnBy = who; wq.reason = why; wq.trail = trailed(wq, 'withdrawn', why);
+        frAudit({ action: 'freight-withdraw', orderId: fo.id, quoteId: wq.id, laneKey: wq.laneKey || '', reason: why });
+        return { ok: true, quote: Fr.quoteView(wq, null, fday) };
+      }
+      /* freight-accept: one leg per stop of the quote, all or none */
+      if (typeof b.revision !== 'number' || b.revision % 1 !== 0 || b.revision < 0) return err(400, 'Revision required');
+      var loadIn = b.loadId == null || b.loadId === '' ? '' : String(b.loadId).trim();
+      if (loadIn && !Fr.LOAD_ID.test(loadIn)) return err(400, 'Load id: letters, numbers, dash and underscore, at most 100');
+      var booking = String(b.bookingRef == null ? '' : b.bookingRef).trim().slice(0, 160);
+      var co = state.companyOrders.filter(function (o) { return o.id === fo.id; })[0] || null;
+      if (!co || !Array.isArray(co.destinations)) return err(409, Fr.LEGACY_SAY);
+      if ((co.revision || 0) !== b.revision) return err(409, 'Order changed; reload before recording another event');
+      if (fo.cancelRequested || fo.status === 'cancelled') return err(409, 'Resolve the cancelled order before recording a movement');
+      var aq = fr.quotes.filter(function (x) { return x.id === String(b.quoteId || ''); })[0];
+      if (!aq || aq.orderId !== fo.id) return err(404, 'Quote not found');
+      var pre = Fr.plan(V.freightInput(fo, now)), preLane = pre.lanes.filter(function (l) { return l.key === aq.laneKey; })[0] || null, laneOpen = [];
+      if (preLane) preLane.stops.forEach(function (st) { laneOpen = laneOpen.concat(st.openSerials); });
+      var unitsBy = {}; V.freightUnits().forEach(function (u) { unitsBy[u.serial] = u; });
+      var chk = Fr.acceptCheck({ quote: aq, unitsBySerial: unitsBy, sitesById: V.freightSites(), order: fo, now: now, laneOpen: laneOpen });
+      if (chk.problems.length) return err(409, chk.problems[0]);
+      if (chk.ineligible.length) return err(409, Fr.ineligibleSay(chk.ineligible));
+      var tracking = booking || String(aq.reference || '').trim();
+      if (!tracking) return err(400, 'Enter the carrier’s booking or quote reference');
+      var legs = co.legs || [], loadId = loadIn || Fr.nextLoadId(fo, aq.laneKey, legs);
+      /* L.planLeg's checks, in its order, before anything is written */
+      var added = [], total = chk.stops.length, assigned = {};
+      legs.forEach(function (l) { (l.serials || []).forEach(function (sn) { assigned[sn] = true; }); });
+      for (var si = 0; si < chk.stops.length; si++) {
+        var st = chk.stops[si], head = 'Stop ' + st.seq + ' · ' + st.siteName + ': ', legId = loadId + '-S' + st.seq, all = legs.concat(added);
+        if (all.some(function (l) { return l.id === legId; })) return err(409, head + 'Shipment leg identifier already exists');
+        if (all.length >= 100) return err(409, head + 'Order has reached its shipment-leg limit; contact support');
+        var dest = co.destinations.filter(function (d) { return d.id === st.destinationId; })[0];
+        if (!dest) return err(400, head + 'Choose an order destination');
+        var counts = {}, allow = {}, prior = {}, bad = null;
+        st.serials.forEach(function (sn) { var u = unitsBy[sn]; if (bad) return; if (!u) { bad = err(400, head + 'Serial ' + sn + ' is not registered'); return; } if (u.orderId !== fo.id || !u.shipUnit || assigned[sn] || u.logisticsLegId) { bad = err(409, head + 'Serial ' + sn + ' must be an unassigned shipping unit on this order'); return; } counts[u.sku] = (counts[u.sku] || 0) + 1; });
+        if (bad) return bad;
+        (dest.items || []).forEach(function (i) { allow[i.sku] = (allow[i.sku] || 0) + Number(i.qty || 0); });
+        all.filter(function (l) { return l.destinationId === dest.id; }).forEach(function (l) { (l.items || []).forEach(function (i) { prior[i.sku] = (prior[i.sku] || 0) + i.qty; }); });
+        if (Object.keys(counts).some(function (k) { return !allow[k] || counts[k] + (prior[k] || 0) > allow[k]; })) return err(409, head + 'Shipment exceeds destination allocation');
+        st.serials.forEach(function (sn) { assigned[sn] = true; });
+        added.push({ id: legId, destinationId: dest.id, serials: st.serials.slice(), items: Object.keys(counts).map(function (k) { return { sku: k, qty: counts[k] }; }), carrier: aq.carrier, tracking: tracking, status: 'planned', createdAt: now,
+          siteId: st.siteId, siteName: st.siteName, freight: { quoteId: aq.id, laneKey: aq.laneKey, loadId: loadId, stop: st.seq, stops: total } });
+      }
+      /* the writes: the units onto their loads, the ledger, the quote accepted and the lane's other open quotes replaced */
+      added.forEach(function (leg) { leg.serials.forEach(function (sn) { unitsBy[sn].logisticsLegId = leg.id; unitsBy[sn].logisticsOrderId = fo.id; }); });
+      co.legs = legs.concat(added); co.revision = (co.revision || 0) + 1;
+      var legIds = added.map(function (l) { return l.id; }), others = fr.quotes.filter(function (x) { return x.id !== aq.id && x.orderId === fo.id && x.laneKey === aq.laneKey && x.status === 'recorded'; });
+      aq.status = 'accepted'; aq.acceptedAt = now; aq.acceptedBy = who; aq.legIds = legIds; aq.trail = trailed(aq, 'accepted', 'Planned ' + legIds.length + ' load' + (legIds.length === 1 ? '' : 's') + ' as ' + loadId);
+      others.forEach(function (x) { x.status = 'superseded'; x.supersededBy = aq.id; x.trail = trailed(x, 'superseded', 'Quote ' + aq.id + ' accepted for this lane'); });
+      frAudit({ action: 'freight-accept', orderId: fo.id, quoteId: aq.id, laneKey: aq.laneKey, loadId: loadId, legIds: legIds, superseded: others.map(function (x) { return x.id; }) });
+      return { ok: true, revision: co.revision, loadId: loadId, legs: added, quote: Fr.quoteView(aq, preLane, fday), notOnQuote: chk.notOnQuote, superseded: others.map(function (x) { return x.id; }) };
+    } catch (e) { return err(e.status || 400, e.message); }
+  }
   if (path === '/api/my-sites') {
     var CM = { received: 'receive', assign: 'assign', installed: 'install', commissioned: 'commission' };
     var mine = function () { return state.sites.filter(function (x) { return x.customerId === 'company_riverside' && x.status !== 'inactive'; }); };
@@ -4893,7 +6500,7 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
 
   };
   window.OmegaSandboxFixtures = req('scripts/_lib/logic-fixtures.js');
-  window.OMEGA_SANDBOX_TENANT = {"name":"Cleancell","whiteLabel":{"enabled":true,"platformName":"Clean Cell Power Platform","shortName":"Clean Cell","attribution":"powered-by","attributionText":"Powered by ClearSky OMEGA","markUrl":"","supportEmail":"robert.bucher@cleancell.us","accent":"#19C2D4","embed":{"origins":["https://cleancell.us",".cleancell.us"],"headline":"Size your Clean Cell storage system","intro":"Enter what your utility bill says and we will size a system for your site. No account needed.","cta":"Request this system","attribution":"none","supportEmail":"robert.bucher@cleancell.us","mailFrom":""},"accentCta":"#F0564F","ink":"#0E1B24"},"appIcon":{"180":"/tenants/cleancell/icons/plant-180.png","192":"/tenants/cleancell/icons/plant-192.png","512":"/tenants/cleancell/icons/plant-512.png","maskable":"/tenants/cleancell/icons/plant-maskable-512.png","office":{"180":"/tenants/cleancell/icons/office-180.png","192":"/tenants/cleancell/icons/office-192.png","512":"/tenants/cleancell/icons/office-512.png","maskable":"/tenants/cleancell/icons/office-maskable-512.png"},"customer":{"180":"/tenants/cleancell/icons/customer-180.png","192":"/tenants/cleancell/icons/customer-192.png","512":"/tenants/cleancell/icons/customer-512.png","maskable":"/tenants/cleancell/icons/customer-maskable-512.png"}}};
+  window.OMEGA_SANDBOX_TENANT = {"name":"Clean Cell","whiteLabel":{"enabled":true,"platformName":"Clean Cell Power Platform","shortName":"Clean Cell","attribution":"powered-by","attributionText":"Powered by ClearSky OMEGA","markUrl":"","supportEmail":"robert.bucher@cleancell.us","accent":"#19C2D4","embed":{"origins":["https://cleancell.us",".cleancell.us"],"headline":"Size your Clean Cell storage system","intro":"Enter what your utility bill says and we will size a system for your site. No account needed.","cta":"Request this system","attribution":"none","supportEmail":"robert.bucher@cleancell.us","mailFrom":""},"accentCta":"#F0564F","ink":"#0E1B24"},"appIcon":{"180":"/tenants/cleancell/icons/plant-180.png","192":"/tenants/cleancell/icons/plant-192.png","512":"/tenants/cleancell/icons/plant-512.png","maskable":"/tenants/cleancell/icons/plant-maskable-512.png","office":{"180":"/tenants/cleancell/icons/office-180.png","192":"/tenants/cleancell/icons/office-192.png","512":"/tenants/cleancell/icons/office-512.png","maskable":"/tenants/cleancell/icons/office-maskable-512.png"},"customer":{"180":"/tenants/cleancell/icons/customer-180.png","192":"/tenants/cleancell/icons/customer-192.png","512":"/tenants/cleancell/icons/customer-512.png","maskable":"/tenants/cleancell/icons/customer-maskable-512.png"}}};
 })();
 /* ═══════════════════════════════════════════════════════════════════════════
    scripts/_lib/app-sandbox-shim.js — the three phone apps with nothing behind
@@ -4931,8 +6538,13 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
   /* v2: the sample grew a CRM, documents, a pay link and the design tool's
      prices; a phone that kept the v1 sample starts over on the new one.
      v3: the sample order carries the two units still on the line (what a
-     site list is spread over); a phone that kept v2 starts over */
-  var KEY = 'omega_sandbox_v3', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
+     site list is spread over); a phone that kept v2 starts over.
+     v4: the plant runs the full routing on the sample's own units (the
+     bench moves them), the workspace has its people (Team) and the office
+     prices and accepts what it bills itself; a phone that kept v3 starts over.
+     v5: the sample carries the freight plan's order (56 cabinets, 16
+     sites, a ship-from); a phone that kept v4 starts over */
+  var KEY = 'omega_sandbox_v5', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function seedIfMissing(k, v) { try { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -4958,6 +6570,8 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
   auth.isSignInWithEmailLink = function () { return false; };
   auth.signInWithEmailLink = function (email) { return become(email); };
   auth.signInWithEmailAndPassword = function (email) { return become(email); };
+  /* "First time here? Create a password": any email, signed in at once (no confirmation email in a sandbox) */
+  auth.createUserWithEmailAndPassword = function (email) { return become(email).then(function (u) { return { user: u }; }); };
   auth.sendPasswordResetEmail = function () { return Promise.resolve(); };
   function GoogleAuthProvider() {}
   var fb = { apps: [1], initializeApp: function () {}, auth: function () { return auth; } };
@@ -4967,7 +6581,7 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
   /* ── /api/, answered on the device ───────────────────────────────────── */
   function who() { return user ? user.email : ''; }
   function get(path, q) {
-    if (path === '/api/logic-plant') return V.plantJson(q);
+    if (path === '/api/logic-plant') return V.plantJson(q, who());
     if (path === '/api/logic-materials') return /workOrder=/.test(q) ? V.soloJson() : V.materialsJson();
     if (path === '/api/logic-catalog') return V.catalogJson();
     if (path === '/api/logic-office') return V.officeJson();
@@ -4978,7 +6592,8 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
     if (path === '/api/my-orders') return V.myOrdersJson(who());
     if (path === '/api/my-sites') return V.mySitesJson();
     if (path === '/api/logic-custody') return V.custodyJson(q);
-    if (path === '/api/logic-logistics') return V.logisticsJson();
+    /* the ledger, or one order's freight plan (?freight=<orderId>) */
+    if (path === '/api/logic-logistics') return /(^|&)freight=/.test(q) ? V.freightJson(q) : V.logisticsJson();
     if (path === '/api/customer-design') return V.designJson();
     if (path === '/api/crm') return V.crmJson(q);
     if (path === '/api/my-files') return V.myFilesJson(q);
@@ -4986,6 +6601,7 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
     if (path === '/api/customer-portfolio') return V.portfolioJson();
     if (path === '/api/app-manifest') return V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT);
     if (path === '/api/logic-workspaces') return V.workspacesJson(who());
+    if (path === '/api/logic-team') return V.teamJson(who());
     /* whether Google takes an installed app through this host: yes here,
        unless a check says otherwise (OMEGA_SANDBOX_GOOGLE = false) */
     if (path === '/api/auth-check') return { google: global.OMEGA_SANDBOX_GOOGLE !== false };
@@ -5032,11 +6648,21 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
   global.confirm = function (msg) { toast(String(msg || '').split('?')[0] + ' — done. (The sandbox skips the confirmation.)'); return true; };
   var CSS = '.sb-strip{background:#6D5BD0;color:#fff;font:600 12px/1.3 system-ui,sans-serif;padding:6px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:relative;z-index:6}.sb-strip b{letter-spacing:.1em;text-transform:uppercase;font-size:10.5px}.sb-strip span{opacity:.85;font-weight:500;flex:1 1 240px;min-width:0;line-height:1.35}.sb-strip a,.sb-strip button{color:#fff;background:rgba(255,255,255,.14);border:0;border-radius:6px;padding:4px 8px;font:600 12px system-ui,sans-serif;text-decoration:none;cursor:pointer}.sb-strip a[aria-current]{background:rgba(255,255,255,.34)}.sb-toast{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0));background:#0B2733;color:#fff;padding:12px 14px;border-radius:12px;font:500 14px system-ui,sans-serif;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.25)}';
   function toast(t) { var el = document.createElement('div'); el.className = 'sb-toast'; el.textContent = t; document.body.appendChild(el); setTimeout(function () { el.remove(); }, 3200); }
+  /* THE CUSTOMER SANDBOX IS SENT TO A SUPPLIER'S CUSTOMER: the kit's
+     customer message links it (api/_lib/kit.js). The plant, the office (the
+     margin sheet, "ClearSky approves the customer price", every other
+     company on the book) and the bench are the SUPPLIER'S side, so the
+     customer's strip links none of them (DOC-M7, CUST-12, CUST-13), and a
+     link into them that a page carries is answered like any desktop page:
+     not part of this sample. The other three still link each other and the
+     customer app — their people are the supplier's. */
+  var SUPPLIER_SIDE = ['plant', 'office', 'bench'];
+  function stripLinks() { return (APP === 'customer' ? [] : [['plant', 'Plant'], ['office', 'Office'], ['customer', 'Customer'], ['bench', 'Bench']]).filter(function (x) { return !!LINKS[x[0]]; }); }
   function strip() {
     var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
     var d = document.createElement('div'); d.className = 'sb-strip';
-    d.innerHTML = '<b>Sandbox</b><span>Nothing here is real — a sample plant, on this phone.</span>'
-      + [['plant', 'Plant'], ['office', 'Office'], ['customer', 'Customer'], ['bench', 'Bench']].map(function (x) { return LINKS[x[0]] ? '<a href="' + LINKS[x[0]] + '"' + (APP === x[0] ? ' aria-current="page"' : '') + '>' + x[1] + '</a>' : ''; }).join('')
+    d.innerHTML = '<b>Sandbox</b><span>Nothing here is real — ' + (APP === 'customer' ? 'a sample company account' : 'a sample plant') + ', on this phone.</span>'
+      + stripLinks().map(function (x) { return '<a href="' + LINKS[x[0]] + '"' + (APP === x[0] ? ' aria-current="page"' : '') + '>' + x[1] + '</a>'; }).join('')
       + '<button type="button" id="sb-reset">Reset</button>';
     document.body.insertBefore(d, document.body.firstChild);
     document.getElementById('sb-reset').onclick = function () { if (confirm('Start the sample over? Everything you did in this sandbox on this phone is forgotten.')) reset(); };
@@ -5045,6 +6671,7 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
   document.addEventListener('click', function (e) {
     var a = e.target && e.target.closest ? e.target.closest('a[href]') : null; if (!a) return;
     var href = a.getAttribute('href') || '';
+    if (APP === 'customer' && SUPPLIER_SIDE.some(function (k) { return LINKS[k] && href.indexOf(LINKS[k]) === 0 && /^(\.html)?([?#\/]|$)/.test(href.slice(LINKS[k].length)); })) { e.preventDefault(); toast('That is your supplier’s side — not part of this sample.'); return; }
     if (/^(https?:)?\/\//.test(href) || href.charAt(0) !== '/' || href.indexOf('/app-sandbox/') === 0) return;
     e.preventDefault(); toast('That opens a desktop page in the real product — not part of this sandbox.');
   }, true);

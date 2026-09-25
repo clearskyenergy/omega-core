@@ -1,33 +1,270 @@
 <!doctype html>
-<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     plant/index.html — serial records, registering serials, pairing benches.
+     Every serial has a history: where it is, what went into it, its tests and
+     holds. Registration takes the real serials against the work order they
+     are built for — pasted one per line or scanned one after another — and a
+     serial typed wrong can be voided or corrected before the floor has seen
+     it (api/logic-plant.js correct-serial, audited). A supervisor records a
+     test result by hand only when the rig cannot (api/mes-test-result.js).
+     The endpoints decide who may; this page shows a control only to someone
+     who may use it and otherwise says who can. ES5 on purpose. -->
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Omega Logic · Factory</title><style>
-*{box-sizing:border-box}body{margin:0;background:#f3f6f4;color:#172a32;font:15px/1.5 system-ui,sans-serif}header{background:#15232c;color:white;padding:20px 4vw;display:flex;justify-content:space-between;gap:20px}a{color:#008777}header a{color:#bde5db}main{max-width:1450px;padding:32px 4vw;margin:auto}h1{font-size:34px;letter-spacing:-1px;margin:5px 0}h2{font-size:21px}h3{font-size:16px}.muted{color:#63797c}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.panel{background:white;border:1px solid #d7e1df;border-radius:10px;padding:22px;margin-top:18px}input,select,textarea,button{font:inherit}input,select,textarea{width:100%;padding:9px;border:1px solid #bbc9c7;border-radius:5px;margin-top:4px}textarea{font:12px/1.5 ui-monospace,monospace;min-height:155px}label{display:block;font-size:12px;margin:10px 0}button{padding:9px 14px;border:1px solid #a5b9b6;background:white;border-radius:6px;cursor:pointer}button.primary{background:#00796d;color:white;border-color:#00796d}button:disabled{opacity:.5}.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.bar input{width:240px}.record{padding:13px 0;border-bottom:1px solid #dce4e2}.record button{float:right}.record small{display:block;color:#63797c}pre{font:12px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}#message{position:sticky;top:8px;background:#fff3d5;color:#664c1e;padding:12px;border-radius:5px;z-index:2}#message:empty{display:none}.compact{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}summary{cursor:pointer;font-weight:650}@media(max-width:800px){.grid,.compact{grid-template-columns:1fr}header{flex-direction:column}}
-</style></head><body><header><b>Ω &nbsp; OMEGA LOGIC / FACTORY</b><nav><a id="office" href="/omega-logic">Order office</a> &nbsp; / &nbsp; <a href="/plant/station.html">Paired scanner</a></nav></header><main><div id="message" role="status"></div><div id="gate"><h1>Factory & traceability</h1><p>Sign in with your authorized plant account.</p><button id="signin">Sign in</button></div><div id="app" hidden><p class="muted" id="name"></p><h1>Every serial has a history.</h1><p class="muted">Actual units, machine test evidence and component genealogy. No invented serials or inferred test passes.</p><div class="bar"><input id="lookup" aria-label="Serial to look up" placeholder="Scan / enter a serial"><button id="find" class="primary">Find serial record</button><button id="refresh">Refresh plant</button></div><section id="serial" class="panel" hidden></section><div class="grid"><section class="panel"><h2>Works orders</h2><div id="works"></div></section><section class="panel"><h2>Recent units</h2><div id="units"></div></section></div><p class="muted" id="limit"></p>
-<details class="panel"><summary>Register units & component genealogy</summary><p class="muted">Register a complete assembly with its real serials. Parent and child must be in the same batch (up to 400 components). Tests are submitted by the paired EOL rig, never by this form.</p><label>Destination<select id="destination"><option value="stock">Build finished-stock inventory</option></select></label><div class="compact"><label>Serial<input id="uSerial"></label><label>SKU<input id="uSku"></label><label>Type<select id="uType"><option>cabinet</option><option>rack</option><option>module</option><option>cell</option><option>accessory</option></select></label><label>Parent serial (blank for shipping root)<input id="uParent"></label><label>Supplier / lot<input id="uLot"></label><label>Capacity, kWh<input id="uCapacity" type="number" step="0.001"></label></div><button id="add">Add unit to batch</button><label>Batch (review or paste your serialized assembly JSON)<textarea id="batch">[]</textarea></label><button id="register" class="primary">Register this batch</button><p class="muted">Stock only becomes available after routing and machine tests pass. Existing stock needs its actual test history recorded before it can be allocated.</p></details>
+*{box-sizing:border-box}body{margin:0;background:#f3f6f4;color:#172a32;font:15px/1.5 system-ui,sans-serif}header{background:#15232c;color:white;padding:20px 4vw;display:flex;justify-content:space-between;gap:20px}a{color:#008777}header a{color:#bde5db}main{max-width:1450px;padding:32px 4vw;margin:auto}h1{font-size:34px;letter-spacing:-1px;margin:5px 0}h2{font-size:21px}h3{font-size:16px}.muted{color:#63797c}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.panel{background:white;border:1px solid #d7e1df;border-radius:10px;padding:22px;margin-top:18px}input,select,textarea,button{font:inherit}input,select,textarea{width:100%;padding:9px;border:1px solid #bbc9c7;border-radius:5px;margin-top:4px}textarea{font:13px/1.5 ui-monospace,monospace;min-height:120px}label{display:block;font-size:12px;margin:10px 0}button{padding:9px 14px;border:1px solid #a5b9b6;background:white;border-radius:6px;cursor:pointer}button.primary{background:#00796d;color:white;border-color:#00796d}button:disabled{opacity:.5}.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.bar input{width:240px}.record{padding:13px 0;border-bottom:1px solid #dce4e2}.record button{float:right}.record small{display:block;color:#63797c}pre{font:12px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}#message{position:sticky;top:8px;background:#fff3d5;color:#664c1e;padding:12px;border-radius:5px;z-index:2}#message:empty{display:none}.compact{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}summary{cursor:pointer;font-weight:650}
+.fields{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 16px;margin:6px 0 12px}.fields dt{color:#63797c;font-size:13px}.fields dd{margin:0;overflow-wrap:anywhere}
+.brow{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #dce4e2;font-size:14px}.brow .mono{font-family:ui-monospace,monospace}.brow.bad{color:#9b2c1f}.brow button{padding:4px 10px}
+.note-warn{background:#fff3d5;color:#664c1e;border-radius:6px;padding:8px 10px;font-size:13px}.note-warn[hidden]{display:none}.note-bad{color:#9b2c1f;font-size:13px}.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid #cbd8d5}.pill.bad{background:#fdebe9;color:#b42318;border-color:#f4b4ae}
+.seg{display:flex;gap:18px}.seg label,.logic-theme .seg label{display:flex;flex-direction:row;gap:8px;align-items:center;font-size:15px;margin:6px 0}.seg input,.logic-theme .seg input{width:auto;min-height:0;padding:0;margin:0}.box{border:1px solid #d7e1df;border-radius:8px;padding:12px 14px;margin:12px 0}.box h3{margin:0 0 6px}
+@media(max-width:800px){.grid,.compact{grid-template-columns:1fr}header{flex-direction:column}.brow{grid-template-columns:minmax(0,1fr) auto}.brow .hide-sm{display:none}}
+</style></head><body><header><b>Ω &nbsp; OMEGA LOGIC / FACTORY</b><nav><a id="office" href="/omega-logic">Order office</a> &nbsp; / &nbsp; <a href="/plant/station.html">Paired scanner</a></nav></header><main><div id="message" role="status"></div><div id="gate"><h1>Factory & traceability</h1><p>Sign in with your authorized plant account.</p><button id="signin">Sign in</button></div><div id="app" hidden><p class="muted" id="name"></p><h1>Every serial has a history.</h1><p class="muted">Actual units, test evidence and component genealogy. No invented serials or inferred test passes.</p><div class="bar" id="records"><input id="lookup" aria-label="Serial to look up" placeholder="Scan / enter a serial"><button id="find" class="primary">Find serial record</button><button id="refresh">Refresh plant</button></div><section id="serial" class="panel" hidden></section><div class="grid"><section class="panel"><h2>Work orders</h2><div id="works"></div></section><section class="panel"><h2>Recent units</h2><div id="units"></div></section></div><p class="muted" id="limit"></p>
+<details class="panel" id="register-panel"><summary>Register serials</summary>
+<p class="muted">Register the real serials against the work order they are built for. Paste them one per line (a column from the label sheet), or scan one label after another into the box. A component (a module in a cabinet) goes in with its parent, in the same batch. Up to 400 at a time. Tests are recorded by the paired EOL rig, never by this form.</p>
+<label>Work order<select id="destination"></select></label><p class="note-warn" id="dest-note" hidden></p>
+<div class="compact"><label>SKU<input id="uSku" list="sku-list" autocapitalize="characters" autocomplete="off"></label><label>Type<select id="uType"><option>cabinet</option><option>rack</option><option>module</option><option>cell</option><option>accessory</option></select></label><label>Supplier / lot (optional)<input id="uLot" autocomplete="off"></label></div><datalist id="sku-list"></datalist>
+<label>Serials — one per line<textarea id="paste" rows="6" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="CC418-26-00001&#10;CC418-26-00002&#10;CC418-26-00003"></textarea></label>
+<div class="bar"><button id="paste-add">Add these serials</button><span class="muted" id="paste-note"></span></div>
+<details class="box"><summary>A component under a parent</summary><div class="compact"><label>Serial<input id="uSerial" autocomplete="off" autocapitalize="characters" spellcheck="false"></label><label>Parent serial<input id="uParent" autocomplete="off" autocapitalize="characters" spellcheck="false"></label><label>Capacity, kWh<input id="uCapacity" type="number" step="0.001"></label></div><div class="bar"><button id="add">Add unit to batch</button><span class="muted">Enter adds it; the serial clears for the next scan.</span></div></details>
+<h3>This batch <span class="muted" id="batch-count"></span></h3><div id="batch-rows"><p class="muted">Nothing added yet.</p></div>
+<div class="bar"><button id="register" class="primary">Register this batch</button><button id="clear-batch">Clear the batch</button></div>
+<details class="box"><summary>The batch as JSON (advanced)</summary><label>Edit or paste a serialized assembly<textarea id="batch">[]</textarea></label></details>
+<p class="muted">Stock only becomes available after routing and tests pass. Existing stock needs its actual test history recorded before it can be allocated.</p></details>
 <details class="panel"><summary>Pair a scanner or EOL rig</summary><p class="muted">Administrator access required. The token is shown once. Enter it on the bench’s scanner page; for EOL, install it securely in the rig integration.</p><label>Station<select id="station"><option value="kit">Kitting</option><option value="module">Module build</option><option value="rack">Rack assembly</option><option value="encl">Enclosure</option><option value="elec">Electrical</option><option value="bms">BMS & firmware</option><option value="eol">EOL test rig (machine only)</option><option value="qa">QA / FAT</option><option value="pack">Pack & DG</option><option value="ready">Ready to ship</option></select></label><button id="pair">Create station credential</button><pre id="credential"></pre></details></div></main>
 <link rel="stylesheet" href="/omega-logic-theme.css"><script src="/omega-logic-theme.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script>
-'use strict';var cfg=window.CLEARSKY_CONFIG||{};if(!firebase.apps.length)firebase.initializeApp(cfg.firebase||cfg);var auth=firebase.auth(),params=new URLSearchParams(location.search),ORG=params.get('org')||'',WO=params.get('wo')||'',REQUEST=null;
-function $(id){return document.getElementById(id);}function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}function err(e){$('message').textContent=e.message||String(e);}function api(body,serial){return auth.currentUser.getIdToken().then(function(t){return fetch('/api/logic-plant'+(body?'':'?org='+encodeURIComponent(ORG)+(serial?'&serial='+encodeURIComponent(serial):'')),{method:body?'POST':'GET',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:body?JSON.stringify(Object.assign({org:ORG},body)):undefined});}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Request failed');return j;});});}
-function refresh(){return api().then(function(d){$('name').textContent=d.name+' · factory workspace';($('office')||{}).href='/omega-logic?org='+encodeURIComponent(ORG);$('works').innerHTML=d.worksOrders.map(function(w){return '<div class="record"><b>'+esc(w.orderNo||'Inventory')+'</b><small>'+esc(w.id)+' · '+esc(w.status)+'</small><p>'+esc((w.requirements||[]).map(function(i){return i.qty+' × '+i.sku;}).join(', '))+'</p></div>';}).join('')||'<p class="muted">Paid orders will release work here automatically.</p>';$('units').innerHTML=d.units.map(function(u){return '<div class="record"><button data-serial="'+esc(u.serial)+'">Record →</button><b>'+esc(u.serial)+'</b><small>'+esc(u.sku)+' · '+esc(u.at||'Not started')+(u.hold?' · HOLD: '+esc(u.hold):'')+'</small></div>';}).join('')||'<p class="muted">No registered units.</p>';$('destination').innerHTML='<option value="stock">Build finished-stock inventory</option>'+d.worksOrders.filter(function(w){return w.orderId&&w.requirements&&w.requirements.length;}).map(function(w){return '<option value="'+esc(w.id)+'" '+(WO===w.id?'selected':'')+'>'+esc(w.orderNo)+' · '+esc(w.id)+'</option>';}).join('');$('limit').textContent=d.limited?'Showing newest 100 works orders and units. Use exact serial lookup for older records.':'';});}
-function lookup(serial){return api(null,serial).then(function(d){$('serial').hidden=false;$('serial').innerHTML='<h2>'+esc(d.unit.serial)+'</h2><p>'+esc(d.unit.unitType)+' · '+esc(d.unit.sku)+' · order '+esc(d.unit.orderNo||'unassigned stock')+'</p><h3>Product identity</h3><pre>'+esc(JSON.stringify(d.unit.trace,null,2))+'</pre><h3>Latest test</h3><pre>'+esc(JSON.stringify(d.unit.test||'No machine evidence yet',null,2))+'</pre><h3>Assembly genealogy</h3><p>'+d.genealogy.map(function(u){return esc(u.serial)+' ('+esc(u.unitType)+') → '+esc(u.parentSerial||'shipping root');}).join('<br>')+'</p><h3>Scan / test history</h3>'+d.events.map(function(e){return '<div class="record">'+esc(e.at)+' · '+esc(e.station)+' · '+esc((e.verdict||{}).say)+'<pre>'+esc(e.test?JSON.stringify(e.test.measurements):'')+'</pre></div>';}).join('')+(d.eventsLimited?'<p>Showing latest 100 events.</p>':'');});}
-$('signin').onclick=function(){auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())['catch'](err);};$('refresh').onclick=function(){refresh()['catch'](err);};$('find').onclick=function(){lookup($('lookup').value)['catch'](err);};$('lookup').onkeydown=function(e){if(e.key==='Enter')$('find').click();};document.addEventListener('click',function(e){var b=e.target.closest('[data-serial]');if(b)lookup(b.getAttribute('data-serial'))['catch'](err);});
-$('add').onclick=function(){try{var list=JSON.parse($('batch').value),parent=$('uParent').value.trim();list.push({serial:$('uSerial').value.trim(),sku:$('uSku').value.trim(),unitType:$('uType').value,parentSerial:parent||null,shipUnit:!parent,trace:{lot:$('uLot').value,capacityKwh:$('uCapacity').value||null}});$('batch').value=JSON.stringify(list,null,2);REQUEST=null;}catch(e){err(e);}};
-$('batch').oninput=function(){REQUEST=null;};$('destination').onchange=function(){REQUEST=null;};$('register').onclick=function(){var btn=this;try{var units=JSON.parse($('batch').value);if(!REQUEST){var bytes=new Uint8Array(16);crypto.getRandomValues(bytes);REQUEST=Array.prototype.map.call(bytes,function(n){return ('0'+n.toString(16)).slice(-2);}).join('');}btn.disabled=true;api({action:$('destination').value==='stock'?'stock':'register',workOrderId:$('destination').value,requestId:REQUEST,units:units}).then(function(d){$('message').textContent='Registered · '+d.workOrderId;$('batch').value='[]';REQUEST=null;return refresh();})['catch'](err).then(function(){btn.disabled=false;});}catch(e){btn.disabled=false;err(e);}};
-$('pair').onclick=function(){var btn=this;btn.disabled=true;api({action:'station',station:$('station').value}).then(function(d){$('credential').textContent='Station ID: '+d.stationId+'\nToken (copy now): '+d.token+'\n'+(d.machine?'POST machine results to /api/mes-test-result.':'Pair at /plant/station.html.');})['catch'](err).then(function(){btn.disabled=false;});};
-/* Human disposition is audited, but never substitutes for a machine retest. */
-var readSerial=lookup;
-lookup=function(serial){return readSerial(serial).then(function(){var box=document.createElement('div');box.innerHTML='<h3>Quality disposition</h3><p class="muted">Plant administrators can hold this unit or release its hold after disposition. A failed test still requires a passing machine retest.</p><label>Reason / disposition<textarea id="qualityReason"></textarea></label><div class="bar"><button data-quality="hold">Place quality hold</button><button data-quality="release">Release existing hold</button></div>';box.setAttribute('data-quality-serial',serial);$('serial').appendChild(box);});};
-document.addEventListener('click',function(e){var btn=e.target.closest('[data-quality]');if(!btn)return;var box=btn.closest('[data-quality-serial]'),serial=box.getAttribute('data-quality-serial'),reason=$('qualityReason').value.trim(),action=btn.getAttribute('data-quality');if(!reason){err(new Error('Enter a reason or disposition first.'));return;}var payload={orgId:ORG,serial:serial,action:action,reason:reason},key=JSON.stringify(payload);if(btn._requestKey!==key){var bytes=new Uint8Array(16);crypto.getRandomValues(bytes);btn._actionId=Array.prototype.map.call(bytes,function(n){return ('0'+n.toString(16)).slice(-2);}).join('');btn._requestKey=key;}payload.actionId=btn._actionId;var buttons=box.querySelectorAll('button');Array.prototype.forEach.call(buttons,function(b){b.disabled=true;});auth.currentUser.getIdToken().then(function(t){return fetch('/api/plant-control',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify(payload)});}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error||'Quality action failed');return d;});}).then(function(){ $('message').textContent=action==='hold'?'Quality hold recorded.':'Disposition recorded. Any failed test still requires a passing retest.';return lookup(serial);}).then(refresh)['catch'](err).then(function(){Array.prototype.forEach.call(buttons,function(b){b.disabled=false;});});});
+(function () {
+'use strict';
+var cfg = window.CLEARSKY_CONFIG || {}; if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg);
+var auth = firebase.auth(), params = new URLSearchParams(location.search), ORG = params.get('org') || '', WO = params.get('wo') || '';
+var DATA = null, BATCH = [], REQUEST = null, SERIAL = null;
+var ADMIN_ONLY = 'Only the workspace owner or an administrator can do this. Ask them, or the plant manager.';
+function $(id) { return document.getElementById(id); }
+function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function err(e) { $('message').textContent = (e && e.message) || String(e); }
+function note(t) { $('message').textContent = t || ''; }
+function mint() { var bytes = new Uint8Array(16); crypto.getRandomValues(bytes); return Array.prototype.map.call(bytes, function (n) { return ('0' + n.toString(16)).slice(-2); }).join(''); }
+function when(s) { return s ? String(s).slice(0, 16).replace('T', ' ') : ''; }
+/* one chrome: Omega Logic, the workspace inside, the menu in the order the business runs */
+function chrome(d) { if (d && d.brand && window.OmegaLogicTheme) OmegaLogicTheme.chrome({ org: ORG, current: 'works', owner: d.owner, brand: d.brand, who: auth.currentUser && auth.currentUser.email, subtitle: 'Plant · work orders, serial records and quality' }); return d; }
+function withOrg(body) { var out = { org: ORG }; Object.keys(body).forEach(function (k) { if (body[k] !== undefined) out[k] = body[k]; }); return out; }
+function api(body, query) {
+  return auth.currentUser.getIdToken().then(function (t) {
+    return fetch(body ? '/api/logic-plant' : '/api/logic-plant?org=' + encodeURIComponent(ORG) + (query || ''), { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(withOrg(body)) : undefined });
+  }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Request failed'); return j; }); }).then(chrome);
+}
+function post(path, body) {
+  return auth.currentUser.getIdToken().then(function (t) { return fetch(path, { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); })
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Request failed'); return j; }); });
+}
+
+/* ── work orders, recent units, the registration choices ─────────────── */
+function remainingOf(w) {
+  var reg = w.registeredCounts || {}, out = [];
+  (w.requirements || []).forEach(function (r) { var left = Math.max(0, (Number(r.qty) || 0) - (Number(reg[r.sku]) || 0)); if (left > 0) out.push({ sku: r.sku, left: left, qty: Number(r.qty) || 0 }); });
+  return out;
+}
+function awaiting() { return ((DATA && DATA.worksOrders) || []).filter(function (w) { return w.orderId && ['complete', 'shipped', 'cancelled'].indexOf(w.status) < 0 && remainingOf(w).length; }); }
+function stationName(key) { var s = ((DATA && DATA.flow && DATA.flow.routing) || []).filter(function (x) { return x.key === key; })[0]; return s ? s.label : (key || 'not started'); }
+function lineName(id) { var l = ((DATA && DATA.flow && DATA.flow.lines) || []).filter(function (x) { return x.id === id; })[0]; return l ? l.name : (id || ''); }
+function refresh() {
+  return api().then(function (d) {
+    DATA = d;
+    $('name').textContent = ((d.brand && d.brand.workspace) || d.name) + ' · factory workspace';
+    ($('office') || {}).href = '/omega-logic?org=' + encodeURIComponent(ORG);
+    $('works').innerHTML = d.worksOrders.map(function (w) {
+      var left = remainingOf(w);
+      return '<div class="record"><b>' + esc(w.orderNo || 'Inventory') + '</b><small>' + esc(String(w.status || '').replace(/_/g, ' ')) + (w.lineId ? ' · ' + esc(lineName(w.lineId)) : '') + (left.length ? ' · ' + esc(left.map(function (x) { return x.left + ' ' + x.sku + ' to register'; }).join(', ')) : '') + '</small><p>' + esc((w.requirements || []).map(function (i) { return i.qty + ' × ' + i.sku; }).join(', ')) + '</p></div>';
+    }).join('') || '<p class="muted">Paid orders will release work here automatically.</p>';
+    $('units').innerHTML = d.units.map(function (u) {
+      var v = u.inventoryStatus === 'void';
+      return '<div class="record"><button data-serial="' + esc(u.serial) + '">Record →</button><b' + (v ? ' style="text-decoration:line-through"' : '') + '>' + esc(u.serial) + '</b><small>' + esc(u.sku) + ' · ' + (v ? 'void' + (u.voided && u.voided.replacedBy ? ' → ' + esc(u.voided.replacedBy) : '') : esc(stationName(u.at))) + (u.hold ? ' · HOLD: ' + esc(u.hold) : '') + (u.orderNo ? ' · ' + esc(u.orderNo) : '') + '</small></div>';
+    }).join('') || '<p class="muted">No registered units.</p>';
+    $('limit').textContent = d.limited ? 'Showing the newest 100 works orders and units. Use exact serial lookup for older records.' : '';
+    paintDestination();
+    $('station').innerHTML = d.flow.routing.map(function (s) { return '<option value="' + esc(s.key) + '">' + esc(s.label) + (s.key === 'eol' ? ' (machine only)' : '') + '</option>'; }).join('') + '<option value="*">Roaming phone — the operator picks the bench on each scan</option>';
+    var line = $('station-line'); if (!line) { var label = document.createElement('label'); label.textContent = 'Line / location'; line = document.createElement('select'); line.id = 'station-line'; label.appendChild(line); $('pair').parentNode.insertBefore(label, $('pair')); }
+    line.innerHTML = d.flow.lines.map(function (l) { return '<option value="' + esc(l.id) + '">' + esc(l.name) + '</option>'; }).join('');
+    if (params.get('serial')) { var s = params.get('serial'); params.delete('serial'); return lookup(s); }
+  });
+}
+/* A work order waiting for serials is never registered against by default:
+   the toolbar's "+ Register serials" used to land on finished stock and the
+   serials went to the shelf instead of the order (PLANT-12). */
+function paintDestination() {
+  var wait = awaiting(), keep = $('destination').value || WO, opts = '';
+  if (wait.length) opts += '<option value="">Choose the work order…</option>';
+  opts += wait.map(function (w) { var left = remainingOf(w); return '<option value="' + esc(w.id) + '">' + esc(w.orderNo) + ' · ' + esc(left.map(function (x) { return x.left + ' of ' + x.qty + ' ' + x.sku; }).join(', ')) + ' still to register</option>'; }).join('');
+  opts += '<option value="stock">Finished-stock inventory (no order)</option>';
+  $('destination').innerHTML = opts;
+  var has = Array.prototype.some.call($('destination').options, function (o) { return o.value === keep; });
+  $('destination').value = has ? keep : (wait.length ? '' : 'stock');
+  $('dest-note').hidden = !(wait.length && !$('destination').value);
+  $('dest-note').textContent = wait.length === 1 ? wait[0].orderNo + ' is waiting for serials. Choose it, or choose finished stock on purpose.' : wait.length + ' work orders are waiting for serials. Choose the one these serials belong to.';
+  var skus = {}; wait.forEach(function (w) { remainingOf(w).forEach(function (x) { skus[x.sku] = true; }); });
+  $('sku-list').innerHTML = Object.keys(skus).map(function (k) { return '<option value="' + esc(k) + '">'; }).join('');
+  fillSku();
+  if (WO && has) $('register-panel').open = true;
+}
+function chosenWo() { var id = $('destination').value; return ((DATA && DATA.worksOrders) || []).filter(function (w) { return w.id === id; })[0] || null; }
+function fillSku() { var w = chosenWo(), left = w ? remainingOf(w) : []; if (left.length === 1 || (left.length && !$('uSku').value)) $('uSku').value = left[0].sku; }
+$('destination').onchange = function () { REQUEST = null; $('dest-note').hidden = true; fillSku(); paintBatch(); };
+
+/* ── the batch ───────────────────────────────────────────────────────── */
+/* DISPLAY ONLY: the tail of a label URL, upper-cased, and whether it looks
+   like a serial. The endpoint runs the real reader (api/_lib/plant.js
+   serialFrom) and refuses the batch if it disagrees. */
+function tidy(raw) { var s = String(raw || '').trim(); if (s.indexOf('/') >= 0) s = s.split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop(); return s.toUpperCase(); }
+function looksOk(s) { return /^[A-Za-z0-9][A-Za-z0-9._-]{3,63}$/.test(s); }
+function syncJson() { $('batch').value = JSON.stringify(BATCH, null, 2); }
+function paintBatch() {
+  var seen = {}, dup = {}, w = chosenWo(), left = {}, count = {};
+  BATCH.forEach(function (u) { if (seen[u.serial]) dup[u.serial] = true; seen[u.serial] = true; if (u.shipUnit) count[u.sku] = (count[u.sku] || 0) + 1; });
+  if (w) remainingOf(w).forEach(function (x) { left[x.sku] = x.left; });
+  var over = w ? Object.keys(count).filter(function (k) { return count[k] > (left[k] || 0); }) : [];
+  $('batch-count').textContent = BATCH.length ? '· ' + BATCH.length + ' unit' + (BATCH.length === 1 ? '' : 's') : '';
+  $('batch-rows').innerHTML = BATCH.length ? BATCH.map(function (u, i) {
+    var bad = !looksOk(u.serial) ? 'not a readable serial' : (dup[u.serial] ? 'twice in this batch' : '');
+    return '<div class="brow' + (bad ? ' bad' : '') + '"><span class="mono">' + esc(u.serial) + (bad ? ' · ' + esc(bad) : '') + '</span><span>' + esc(u.sku) + ' · ' + esc(u.unitType) + '</span><span class="hide-sm">' + (u.parentSerial ? 'in ' + esc(u.parentSerial) : 'shipping unit') + (u.trace && u.trace.lot ? ' · lot ' + esc(u.trace.lot) : '') + '</span><button type="button" data-drop="' + i + '" aria-label="Remove ' + esc(u.serial) + '">✕</button></div>';
+  }).join('') + (over.length ? '<p class="note-bad">More ' + esc(over.join(', ')) + ' shipping units than ' + esc(w.orderNo) + ' still needs (' + esc(over.map(function (k) { return count[k] + ' here, ' + (left[k] || 0) + ' to register'; }).join('; ')) + ').</p>' : '') : '<p class="muted">Nothing added yet.</p>';
+  $('register').textContent = BATCH.length ? 'Register ' + BATCH.length + ' serial' + (BATCH.length === 1 ? '' : 's') : 'Register this batch';
+  syncJson();
+}
+$('batch-rows').addEventListener('click', function (e) { var b = e.target.closest('[data-drop]'); if (!b) return; BATCH.splice(Number(b.getAttribute('data-drop')), 1); REQUEST = null; paintBatch(); });
+function unitFrom(serial, parent) {
+  var sku = $('uSku').value.trim(), cap = $('uCapacity').value;
+  return { serial: serial, sku: sku, unitType: $('uType').value, parentSerial: parent || null, shipUnit: !parent, trace: { lot: $('uLot').value.trim() || null, capacityKwh: parent && cap ? cap : null } };
+}
+$('paste-add').onclick = function () {
+  if (!$('uSku').value.trim()) { $('paste-note').textContent = 'Say which SKU these serials are first.'; $('uSku').focus(); return; }
+  var have = {}; BATCH.forEach(function (u) { have[u.serial] = true; });
+  var list = String($('paste').value || '').split(/[\s,;]+/).map(tidy).filter(Boolean), added = 0, skipped = [];
+  list.forEach(function (s) { if (have[s]) { skipped.push(s); return; } have[s] = true; BATCH.push(unitFrom(s, null)); added++; });
+  REQUEST = null; $('paste').value = ''; $('paste').focus();
+  $('paste-note').textContent = added + ' added' + (skipped.length ? ' · already in the batch: ' + skipped.join(', ') : '') + '.';
+  paintBatch();
+};
+function addOne() {
+  var s = tidy($('uSerial').value), parent = tidy($('uParent').value);
+  if (!s) { $('uSerial').focus(); return; }
+  if (!$('uSku').value.trim()) { err(new Error('Say which SKU this unit is first.')); $('uSku').focus(); return; }
+  if (BATCH.some(function (u) { return u.serial === s; })) { err(new Error(s + ' is already in this batch.')); $('uSerial').value = ''; $('uSerial').focus(); return; }
+  BATCH.push(unitFrom(s, parent)); REQUEST = null; note('');
+  /* the next scan must not run into this one: clear the serial and put the
+     cursor back; the parent, SKU and type stay for the next component */
+  $('uSerial').value = ''; $('uSerial').focus();
+  paintBatch();
+}
+$('add').onclick = addOne;
+$('uSerial').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); addOne(); } };
+$('batch').oninput = function () { try { var v = JSON.parse($('batch').value); if (Array.isArray(v)) { BATCH = v; REQUEST = null; paintBatch(); } } catch (e) {} };
+$('clear-batch').onclick = function () { if (BATCH.length && !window.confirm('Remove all ' + BATCH.length + ' serials from this batch? Nothing has been registered yet.')) return; BATCH = []; REQUEST = null; paintBatch(); };
+$('register').onclick = function () {
+  var btn = this, dest = $('destination').value;
+  if (!dest) { err(new Error('Choose the work order these serials belong to, or finished stock.')); $('destination').focus(); return; }
+  if (!BATCH.length) { err(new Error('Add the serials first.')); $('paste').focus(); return; }
+  var bad = BATCH.filter(function (u) { return !looksOk(u.serial); }); if (bad.length) { err(new Error('Fix or remove ' + bad.map(function (u) { return u.serial; }).join(', ') + ' first.')); return; }
+  if (!REQUEST) REQUEST = mint();
+  btn.disabled = true;
+  var w = chosenWo(), n = BATCH.length;
+  api({ action: dest === 'stock' ? 'stock' : 'register', workOrderId: dest, requestId: REQUEST, units: BATCH }).then(function (d) {
+    var got = d.registered || n;
+    note('Registered ' + got + ' serial' + (got === 1 ? '' : 's') + (w ? ' on ' + w.orderNo : ' as finished stock') + (d.duplicate ? ' (already recorded)' : '') + '.');
+    BATCH = []; REQUEST = null; paintBatch(); return refresh();
+  })['catch'](err).then(function () { btn.disabled = false; });
+};
+
+/* ── the serial record ───────────────────────────────────────────────── */
+function fields(rows) { rows = rows.filter(function (r) { return r[1] != null && r[1] !== ''; }); return rows.length ? '<dl class="fields">' + rows.map(function (r) { return '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>'; }).join('') + '</dl>' : '<p class="muted">Nothing recorded.</p>'; }
+function measures(m) { return Object.keys(m || {}).map(function (k) { return k + ' ' + m[k]; }).join(' · '); }
+function lookup(serial) {
+  serial = tidy(serial); if (!serial) return Promise.resolve();
+  return api(null, '&serial=' + encodeURIComponent(serial)).then(function (d) {
+    SERIAL = d;
+    var u = d.unit, t = u.test || null, tr = u.trace || {}, routing = d.routing || [], labels = {}, ai = -1;
+    routing.forEach(function (s, i) { labels[s.key] = s.label; if (s.key === u.at) ai = i; });
+    var next = ai >= 0 ? routing[ai + 1] : (u.at ? null : routing[0]), testAt = routing.filter(function (s) { return s.machine && ((next && next.key === s.key) || s.key === u.at); });
+    var may = d.canControl === true, v = u.inventoryStatus === 'void', vd = u.voided || {};
+    var h = '<h2>' + esc(u.serial) + (v ? ' <span class="pill bad">void</span>' : '') + (u.hold ? ' <span class="pill bad">on hold</span>' : '') + '</h2><p>' + esc(u.unitType) + ' · ' + esc(u.sku) + ' · ' + esc(u.orderNo || 'unassigned stock') + '</p>'
+      + (v ? '<p class="note-warn">Voided ' + esc(when(vd.at)) + ' by ' + esc(vd.by) + ': ' + esc(vd.reason) + (vd.replacedBy ? ' · corrected to ' + esc(vd.replacedBy) : '') + '</p>' : '')
+      + (u.correctedFrom ? '<p class="muted">Registered in place of the mistyped serial ' + esc(u.correctedFrom) + '.</p>' : '')
+      + '<h3>Where it is</h3>' + fields([['At', v ? '—' : (u.at ? labels[u.at] || u.at : 'not started')], ['Next', next && !v ? next.label : ''], ['Since', when(u.arrivedAt)], ['Hold', u.hold ? u.hold + (u.ncr ? ' · ' + u.ncr : '') : ''], ['Status', String(u.inventoryStatus || '').replace(/_/g, ' ')]])
+      + '<h3>Product identity</h3>' + fields([['Lot', tr.lot], ['Supplier', tr.supplier], ['Manufactured', tr.manufacturedAt], ['Chemistry', tr.chemistry], ['Capacity, kWh', tr.capacityKwh], ['Nominal voltage', tr.nominalVoltage], ['Firmware', tr.firmware], ['BMS version', tr.bmsVersion]])
+      + '<h3>Latest test</h3>' + (t ? fields([['Result', t.result], ['Station', labels[t.station] || t.station], ['When', when(t.at)], ['Recorded by', t.source === 'manual' ? 'hand · ' + (t.by || '') : 'the test rig'], ['Note', t.note], ['Failure code', t.failureCode], ['NCR', t.ncr], ['Measurements', measures(t.measurements)], ['Program', t.program], ['Fixture', t.fixture]]) : '<p class="muted">No test evidence yet.</p>')
+      + '<h3>Assembly genealogy</h3><p>' + d.genealogy.map(function (g) { return esc(g.serial) + ' (' + esc(g.unitType) + ') → ' + esc(g.parentSerial || 'shipping root'); }).join('<br>') + '</p>'
+      + '<h3>Scan / test history</h3>' + (d.events.map(function (e) {
+          var say = (e.verdict || {}).say || (e.correction ? e.correction.action : '') || '';
+          var who = e.by || (e.control && e.control.by) || (e.correction && e.correction.by) || '';
+          return '<div class="record">' + esc(when(e.at || (e.test && e.test.at))) + ' · ' + esc(labels[e.station] || e.station || '') + ' · ' + esc(say) + (e.ok === false ? ' <span class="pill bad">refused</span>' : '') + (e.manual ? ' <span class="pill">by hand</span>' : '') + (who ? '<small>' + esc(who) + '</small>' : '') + (e.test && measures(e.test.measurements) ? '<small>' + esc(measures(e.test.measurements)) + '</small>' : '') + (e.test && e.test.note ? '<small>' + esc(e.test.note) + '</small>' : '') + '</div>';
+        }).join('') || '<p class="muted">No scans yet.</p>') + (d.eventsLimited ? '<p class="muted">Showing the latest 100 events.</p>' : '');
+    if (!v) {
+      /* a result by hand, only at a test station the unit arrives at next or is at */
+      if (testAt.length) h += '<div class="box"><h3>Record a test result by hand</h3>' + (may ? '<p class="muted">Only when the rig cannot post it. It is kept as test evidence with your name and the note, audited, and the unit still cannot pass a step that is open.</p><div class="seg"><label><input type="radio" name="t-res" value="pass"> Pass</label><label><input type="radio" name="t-res" value="fail"> Fail</label></div>'
+        + (testAt.length > 1 ? '<label>Station<select id="t-station">' + testAt.map(function (s) { return '<option value="' + esc(s.key) + '">' + esc(s.label) + '</option>'; }).join('') + '</select></label>' : '<p class="muted">Station: ' + esc(testAt[0].label) + '</p>')
+        + '<label>What was tested, and with what (at least 5 characters)<textarea id="t-note" maxlength="1000" style="min-height:70px"></textarea></label><label>Failure code, for a fail (optional: letters, digits, dot, dash or underscore)<input id="t-code" maxlength="60" placeholder="e.g. CELL_LOW"></label><button id="t-save">Record the result</button>' : '<p class="muted">' + esc(ADMIN_ONLY) + '</p>') + '</div>';
+      h += '<div class="box"><h3>Quality disposition</h3>' + (may ? '<p class="muted">Hold this unit or release its hold after disposition. A failed test still requires a passing retest.</p><label>Reason / disposition<textarea id="qualityReason" style="min-height:70px"></textarea></label><div class="bar"><button data-quality="hold">Place quality hold</button><button data-quality="release">Release existing hold</button></div>' : '<p class="muted">' + esc(ADMIN_ONLY) + '</p>') + '</div>';
+      if (d.correctable) h += '<div class="box"><h3>Serial typed wrong?</h3>' + (may ? '<p class="muted">Until the floor has scanned it, a mistyped serial can be corrected (the right serial takes its place, components and all) or voided (its place on the work order is freed). The record is kept, marked void, and the change is audited.</p><div class="compact"><label>Right serial (blank to void)<input id="c-to" autocomplete="off" autocapitalize="characters" spellcheck="false"></label><label style="grid-column:span 2">Why<input id="c-why" maxlength="500" placeholder="e.g. two labels scanned into one"></label></div><button id="c-go">Correct / void this serial</button>' : '<p class="muted">' + esc(ADMIN_ONLY) + '</p>') + '</div>';
+    }
+    $('serial').hidden = false; $('serial').innerHTML = h;
+    bindRecord(u, testAt);
+  });
+}
+function bindRecord(u, testAt) {
+  var testId = null, testKey = '', fixId = null, fixKey = '';
+  if ($('t-save')) $('t-save').onclick = function () {
+    var pick = document.querySelector('input[name="t-res"]:checked'), noteText = $('t-note').value.trim(), station = $('t-station') ? $('t-station').value : testAt[0].key;
+    if (!pick) { err(new Error('Choose Pass or Fail.')); return; }
+    if (noteText.length < 5) { err(new Error('Write what was tested and with what (at least 5 characters).')); $('t-note').focus(); return; }
+    var body = { manual: true, org: ORG, serial: u.serial, station: station, result: pick.value, note: noteText, failureCode: $('t-code').value.trim() || null };
+    var key = JSON.stringify(body); if (key !== testKey) { testKey = key; testId = mint(); } body.actionId = testId;
+    var btn = this; btn.disabled = true;
+    post('/api/mes-test-result', body).then(function (r) { note((r.say || 'Recorded.') + (r.ok || r.action === 'hold' ? '' : ' Nothing was changed.')); return lookup(u.serial); }).then(refresh)['catch'](err).then(function () { btn.disabled = false; });
+  };
+  if ($('c-go')) $('c-go').onclick = function () {
+    var to = tidy($('c-to').value), why = $('c-why').value.trim();
+    if (why.length < 5) { err(new Error('Say why (at least 5 characters).')); $('c-why').focus(); return; }
+    if (!window.confirm(to ? 'Replace ' + u.serial + ' with ' + to + '? ' + u.serial + ' is kept as a void record.' : 'Void ' + u.serial + '? Its place on the work order is freed; the record is kept, marked void.')) return;
+    var key = u.serial + '>' + to + '>' + why; if (key !== fixKey) { fixKey = key; fixId = mint(); }
+    var btn = this; btn.disabled = true;
+    api({ action: 'correct-serial', serial: u.serial, replacement: to || null, reason: why, requestId: fixId }).then(function (r) { note(r.say || 'Done.'); return refresh().then(function () { return lookup(to || u.serial); }); })['catch'](err).then(function () { btn.disabled = false; });
+  };
+}
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('[data-quality]'); if (!btn || !SERIAL) return;
+  var serial = SERIAL.unit.serial, reason = $('qualityReason').value.trim(), action = btn.getAttribute('data-quality');
+  if (!reason) { err(new Error('Enter a reason or disposition first.')); return; }
+  var payload = { orgId: ORG, serial: serial, action: action, reason: reason }, key = JSON.stringify(payload);
+  if (btn._requestKey !== key) { btn._actionId = mint(); btn._requestKey = key; }
+  payload.actionId = btn._actionId;
+  var buttons = btn.parentNode.querySelectorAll('button'); Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
+  post('/api/plant-control', payload).then(function () { note(action === 'hold' ? 'Quality hold recorded.' : 'Disposition recorded. Any failed test still requires a passing retest.'); return lookup(serial); }).then(refresh)['catch'](err).then(function () { Array.prototype.forEach.call(buttons, function (b) { b.disabled = false; }); });
+});
+document.addEventListener('click', function (e) { var b = e.target.closest('[data-serial]'); if (b) lookup(b.getAttribute('data-serial'))['catch'](err); });
+
+/* ── pairing ─────────────────────────────────────────────────────────── */
+$('pair').onclick = function () {
+  var btn = this; btn.disabled = true;
+  api({ action: 'station', station: $('station').value, lineId: $('station-line') && $('station-line').value }).then(function (d) {
+    $('credential').textContent = 'Station ID: ' + d.stationId + '\nToken (copy now): ' + d.token + '\n' + (d.machine ? 'POST machine results to /api/mes-test-result.' : 'Pair at /plant/station.html.');
+  })['catch'](err).then(function () { btn.disabled = false; });
+};
+
+/* ── shell ───────────────────────────────────────────────────────────── */
+$('signin').onclick = function () { auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())['catch'](err); };
+$('refresh').onclick = function () { refresh()['catch'](err); };
+$('find').onclick = function () { lookup($('lookup').value)['catch'](err); };
+$('lookup').onkeydown = function (e) { if (e.key === 'Enter') $('find').click(); };
 document.body.classList.add('logic-theme');
-var manager=document.createElement('a');manager.href='/plant/manager?org='+encodeURIComponent(ORG);manager.textContent='Plant manager';manager.style.marginLeft='18px';document.querySelector('header nav').appendChild(manager);var board=document.createElement('a');board.href='/plant/work-orders?org='+encodeURIComponent(ORG);board.textContent='Work orders';board.style.marginLeft='18px';document.querySelector('header nav').appendChild(board);
-var flowRefresh=refresh;refresh=function(){return flowRefresh().then(function(){return api();}).then(function(d){
-  $('station').innerHTML=d.flow.routing.map(function(s){return '<option value="'+esc(s.key)+'">'+esc(s.label)+(s.key==='eol'?' (machine only)':'')+'</option>';}).join('')+'<option value="*">Roaming phone — the operator picks the bench on each scan</option>';
-  var line=$('station-line');if(!line){var label=document.createElement('label');label.textContent='Line / location';line=document.createElement('select');line.id='station-line';label.appendChild(line);$('pair').before(label);}
-  line.innerHTML=d.flow.lines.map(function(l){return '<option value="'+esc(l.id)+'">'+esc(l.name)+'</option>';}).join('');
-  if(params.get('serial')){var serial=params.get('serial');params.delete('serial');return lookup(serial);}
-});};
-var rawApi=api;api=function(body,serial){if(body&&body.action==='station')body.lineId=$('station-line')&&$('station-line').value;return rawApi(body,serial);};
-var unbrandedPlantApi=api;api=function(body,serial){return unbrandedPlantApi(body,serial).then(function(d){if(d.brand){OmegaLogicTheme.chrome({org:ORG,current:location.hash==='#records'?'quality':'works',owner:d.owner,brand:d.brand,who:auth.currentUser&&auth.currentUser.email,subtitle:'Plant · work orders, serial records and quality'});}return d;});};
-auth.onAuthStateChanged(function(u){$('gate').hidden=!!u;$('app').hidden=!u;if(u){if(!ORG){err(new Error('Open this factory from its OEM workspace.'));return;}refresh()['catch'](err);}else{$('credential').textContent='';$('serial').innerHTML='';}});
+var manager = document.createElement('a'); manager.href = '/plant/manager?org=' + encodeURIComponent(ORG); manager.textContent = 'Plant manager'; manager.style.marginLeft = '18px'; document.querySelector('header nav').appendChild(manager);
+var board = document.createElement('a'); board.href = '/plant/work-orders?org=' + encodeURIComponent(ORG); board.textContent = 'Work orders'; board.style.marginLeft = '18px'; document.querySelector('header nav').appendChild(board);
+auth.onAuthStateChanged(function (u) {
+  $('gate').hidden = !!u; $('app').hidden = !u;
+  if (u) {
+    if (!ORG) { err(new Error('Open this factory from its OEM workspace.')); return; }
+    refresh().then(function () {
+      if (location.hash === '#records') { try { $('records').scrollIntoView(); $('lookup').focus(); } catch (e) {} }
+      if (location.hash === '#register') { $('register-panel').open = true; try { $('register-panel').scrollIntoView(); } catch (e) {} }
+    })['catch'](err);
+  } else { $('credential').textContent = ''; $('serial').innerHTML = ''; }
+});
+paintBatch();
+})();
 </script></body></html>

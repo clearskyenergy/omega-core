@@ -1,14 +1,15 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
    Demo design language; tenant branding changes tokens, not layout. */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
-:root{--brand:#3FAFC6;--brand-d:#2A8CA3;--brand-soft:#E2F4F8;--accent:#EE5A4F;--ink:#0B2733;--ink2:#3F5D68;--ink3:#86A0A9;--paper:#fff;--sunk:#F1FAFC;--line:#DCECF1;--line2:#EFF8FA;--r:14px;--muted:var(--ink2);--sub:var(--ink2);--cta:var(--brand);--green:var(--brand);--wash:var(--sunk);color-scheme:light}
+:root{--brand:#3FAFC6;--brand-d:#2A8CA3;--brand-fill:#1F6F82;--brand-soft:#E2F4F8;--accent:#EE5A4F;--ink:#0B2733;--ink2:#3F5D68;--ink3:#86A0A9;--paper:#fff;--sunk:#F1FAFC;--line:#DCECF1;--line2:#EFF8FA;--r:14px;--muted:var(--ink2);--sub:var(--ink2);--cta:var(--brand);--green:var(--brand);--wash:var(--sunk);color-scheme:light}
 body.logic-theme{font:400 15px/1.6 'Poppins',ui-sans-serif,system-ui,sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
 body.logic-theme{--primary:var(--brand);--primary-soft:var(--brand-soft)}
 .logic-theme *{box-sizing:border-box}.logic-theme [hidden]{display:none!important}
 .logic-theme h1,.logic-theme h2,.logic-theme h3{letter-spacing:-.025em;line-height:1.15;color:var(--ink)}
 .logic-theme h1{font-size:clamp(28px,3vw,40px);font-weight:700}.logic-theme h2{font-size:24px}.logic-theme h3{font-size:19px}
 .logic-theme button,.logic-theme .btn,.logic-theme .button{font-family:inherit;border-radius:999px;font-weight:600;cursor:pointer}
-.logic-theme button.primary,.logic-theme .btn.p{background:var(--brand);border-color:var(--brand);color:#fff}
+/* a filled action carries white text: --brand-fill is dark enough for it (5.7:1 on the product's own colours; apply() darkens a tenant's) — the light brand behind white was 2.6:1 */
+.logic-theme button.primary,.logic-theme .btn.p{background:var(--brand-fill);border-color:var(--brand-fill);color:#fff}
 .logic-theme a{color:var(--brand-d)}.logic-theme input,.logic-theme select,.logic-theme textarea{font:inherit;color:var(--ink);border:1px solid var(--line);border-radius:10px;background:white;padding:11px 13px}
 .logic-theme :focus-visible{outline:3px solid var(--brand-d);outline-offset:3px}
 .logic-theme header{background:white;color:var(--ink);border-bottom:1px solid var(--line)}.logic-theme header a{color:var(--ink2)}
@@ -45,3 +46,5 @@ body.logic-theme{--primary:var(--brand);--primary-soft:var(--brand-soft)}
 .logic-kv div{padding:12px 14px;border-left:3px solid var(--brand);background:var(--sunk);border-radius:0 10px 10px 0}
 .logic-kv div small{display:block;color:var(--ink2);font-size:12px}.logic-kv div b{font-size:22px}
 .logic-kv div.bad{border-left-color:#B42318}.logic-kv div.bad b{color:#B42318}
+/* an office page opened signed out: the way back to Omega Logic's front door (omega-logic-theme.js watchSignIn) */
+.logic-theme a.logic-signin{font-size:14px;font-weight:600;color:var(--brand-d);text-decoration:none;padding:8px 14px;border:1px solid var(--brand);border-radius:999px;white-space:nowrap;align-self:center}

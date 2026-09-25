@@ -53,7 +53,7 @@ function stationMap(routing, units, now, opts) {
   var lead = [], finishedAt = [], wip = 0, held = 0, notStarted = 0, finished = 0;
   var lastKey = routing.length ? routing[routing.length - 1].key : null;
   (units || []).slice(0, MAX_UNITS).forEach(function (u) {
-    if (!u || (opts.shipUnitsOnly && !u.shipUnit)) return;
+    if (!u || (opts.shipUnitsOnly && !u.shipUnit) || u.inventoryStatus === 'void') return;   /* a voided typo is not a unit */
     var done = u.done && typeof u.done === 'object' ? u.done : {};
     var started = ms(u.startedAt);
     /* dwell at every station it has LEFT */

@@ -219,8 +219,20 @@ function load(){
     sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id; ROWS.push(v); });
     render();
   })['catch'](function(e){
+    /* firestore.rules shows a tenant its orders only on a VERIFIED email and
+       an enabled seat (tenantReader()); say which, instead of a raw refusal. */
+    if (!STAFF && ME && !ME.emailVerified) {
+      document.getElementById('list').innerHTML =
+        '<div class="empty">Verify your email address to see your orders: open the link we sent to '+esc(ME.email)
+        +', then reload this page. <button type="button" id="verifyAgain">Send the link again</button></div>';
+      var b = document.getElementById('verifyAgain');
+      if (b) b.onclick = function(){ b.disabled = true; ME.sendEmailVerification().then(function(){ b.textContent = 'Sent'; }, function(x){ b.disabled = false; b.textContent = 'Could not send it: '+(x && x.message || 'try again'); }); };
+      return;
+    }
     document.getElementById('list').innerHTML =
-      '<div class="empty">Could not load orders. '+esc(e.message||'')+'</div>';
+      '<div class="empty">Could not load orders. '+(e && e.code === 'permission-denied'
+        ? 'Your access to this workspace is switched off; ask its owner or an administrator.'
+        : esc(e.message||''))+'</div>';
   });
 }
 

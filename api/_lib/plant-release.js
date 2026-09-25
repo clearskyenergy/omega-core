@@ -144,4 +144,27 @@ function routingOf(raw) {
   });
 }
 
-module.exports = { normalizeUnits: normalizeUnits, routingOf: routingOf, traceOf: traceOf, orderedQuantities: orderedQuantities };
+/* ── A SERIAL TYPED WRONG ──────────────────────────────────────────────
+   Registration takes whatever was typed or scanned, and two labels read
+   into one field make a serial nobody printed. Until that serial has done
+   anything on the floor it is only a typo holding one of the order's slots,
+   so it may be VOIDED (the slot is freed) or CORRECTED (the right serial
+   takes its place, with its components). Once a bench, a rig, the stock
+   shelf or a site has seen it, the record is evidence: it is never voided,
+   only held. The record itself is kept, marked void, never deleted
+   (api/logic-plant.js correct-serial, audited). */
+function correctable(unit) {
+  if (!unit) return { ok: false, why: 'Serial not found.' };
+  if (unit.inventoryStatus === 'void' || unit.voided) return { ok: false, why: 'This serial was already voided.' };
+  var done = unit.done && typeof unit.done === 'object' ? Object.keys(unit.done).length : 0;
+  var work = unit.work && typeof unit.work === 'object' ? Object.keys(unit.work).length : 0;
+  if (String(unit.at || '') || unit.startedAt || done || work || unit.test || unit.backflushed) {
+    return { ok: false, why: 'This unit has been scanned or tested, so its record is evidence and cannot be voided. Place a quality hold instead and tell the plant manager.' };
+  }
+  if (unit.allocatedAt || unit.inventoryStatus === 'available' || (unit.custody && unit.custody.status)) {
+    return { ok: false, why: 'This unit is finished stock or has left the plant; it cannot be voided.' };
+  }
+  return { ok: true, why: '' };
+}
+
+module.exports = { normalizeUnits: normalizeUnits, routingOf: routingOf, traceOf: traceOf, orderedQuantities: orderedQuantities, correctable: correctable };

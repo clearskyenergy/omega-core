@@ -17,7 +17,7 @@
     "dcv": "1331V",
     "inverter": "Integrated PCS",
     "disconnect": "400A 480V",
-    "notes": "PLACEHOLDER SPEC — a capacity slot on the standard C&I ladder. Replace every number with Clean Cell's own submittal before a customer sees this.",
+    "notes": "PLACEHOLDER SPEC — a capacity slot on the standard C&I ladder and not a datasheet. Replace every number with the manufacturer's submittal.",
     "integrates": {
       "pcs": true,
       "xfmr": false,
@@ -42,7 +42,7 @@
     "dcv": "1331V",
     "inverter": "Integrated PCS",
     "disconnect": "600A 480V",
-    "notes": "PLACEHOLDER SPEC — replace with Clean Cell's own submittal.",
+    "notes": "PLACEHOLDER SPEC — replace with the manufacturer's submittal.",
     "integrates": {
       "pcs": true,
       "xfmr": false,
@@ -67,7 +67,7 @@
     "dcv": "1331V",
     "inverter": "Integrated PCS",
     "disconnect": "800A 480V",
-    "notes": "PLACEHOLDER SPEC — replace with Clean Cell's own submittal.",
+    "notes": "PLACEHOLDER SPEC — replace with the manufacturer's submittal.",
     "integrates": {
       "pcs": true,
       "xfmr": false,
@@ -93,7 +93,7 @@
     "inverter": "Integrated PCS",
     "transformer": "3000KVA 480/13800V",
     "disconnect": "3000A 480V",
-    "notes": "PLACEHOLDER SPEC — dimUnits is mm because container datasheets print mm. Replace with Clean Cell's own submittal.",
+    "notes": "PLACEHOLDER SPEC — dimUnits is mm because container datasheets print mm. Replace with the manufacturer's submittal.",
     "integrates": {
       "pcs": true,
       "xfmr": true,

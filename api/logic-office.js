@@ -43,30 +43,49 @@ module.exports = A.handler(async function (req, res) {
     /* A company PO that has not been converted is not an order yet; it has
        its own review queue (po-inbox). The office counts it here and lists
        only real orders — the same rule api/logic-logistics.js applies. */
-    var intake = { review: 0, needsInfo: 0, declined: 0 };
+    var intake = { review: 0, needsInfo: 0, declined: 0, waiting: [] };
+    /* D1: who may price and accept which order (office-stage access(),
+       turned into each order's `can` and `waitingOn` by actions() — the
+       rule logic-access.requirePricer enforces when the button is pressed). */
+    var who = S.access(owner, ctx.member, X.enabled(ctx)), billing = (ctx.config || {}).accounting === 'tenant' ? 'tenant' : 'quickbooks';
     var orders = rows[0].docs.filter(function (s) {
       var o = s.data(); if (!o.poIntake || o.poIntake.convertedAt) return true;
       if (o.status === 'po_declined') intake.declined++; else if (o.status === 'po_needs_information') intake.needsInfo++; else intake.review++;
+      /* the Review list names whose PO waits (OFF-03): a company with one
+         opens that PO, a company with several opens its own queue */
+      if (o.status !== 'po_declined' && intake.waiting.length < 20) intake.waiting.push({ id: s.id, customerId: o.customerId || null, company: (o.customer || {}).company || '',
+        poNumber: (o.poIntake || {}).number || '', status: o.status || null, createdAt: (o.poIntake || {}).createdAt || null });
       return false;
     }).map(function (s) {
-      var o = s.data();
-      return { id: s.id, orderNo: o.orderNo, poNumber: R.poOf(o), stage: S.stageOf(o), rep: o.rep || null, totalCents: o.logic && o.logic.commercial ? o.logic.commercial.totalCents : null,
+      var o = s.data(), act = S.actions(o, who, billing);
+      return { id: s.id, orderNo: o.orderNo, poNumber: R.poOf(o), stage: act.stage, can: act.can, waitingOn: act.waitingOn, billing: S.billingOf(o, billing), rep: o.rep || null, totalCents: o.logic && o.logic.commercial ? o.logic.commercial.totalCents : null,
         createdAt: o.createdAt && typeof o.createdAt.toDate === 'function' ? o.createdAt.toDate().toISOString() : (typeof o.createdAt === 'string' ? o.createdAt : null), customer: { name: (o.customer || {}).name || '', email: (o.customer || {}).email || '', company: (o.customer || {}).company || '' }, customerId: o.customerId || null,
         items: o.items || [], status: o.status, cancelRequested: !!o.cancelRequested, worksOrderId: o.worksOrderId || null,
-        logic: o.logic ? { commercial: o.logic.commercial, invoices: o.logic.invoices, acceptedAt: o.logic.acceptedAt,
+        logic: o.logic ? { commercial: o.logic.commercial, invoices: o.logic.invoices, acceptedAt: o.logic.acceptedAt, accounting: o.logic.accounting || null,
+          pricedAt: o.logic.createdAt || null, pricedBy: o.logic.pricedBy || null, acceptedBy: o.logic.acceptedBy || null,
           releasedAt: o.logic.releasedAt || null, requirements: o.logic.requirements || [], allocatedSerials: o.logic.allocatedSerials || [],
           lastError: o.logic.lastError || null, paymentException: o.logic.paymentException || null,
           creditRelease: o.logic.creditRelease || null, paymentHold: o.logic.paymentHold || null,
           payout: owner ? o.logic.payout : null } : null, shipment: o.shipment || null,
         requests: Array.isArray(o.requests) ? o.requests.slice(-20) : [] };
     });
+    /* OFF-02: the money tiles are the receivables ledger's own totals — the
+       same rows() and totals() Accounting prints — never a sum the page
+       makes. Totals only: byCustomer names customers and stays on Accounting. */
+    var receivables = R.totals(R.rows(rows[0].docs.map(function (s) { return { id: s.id, order: s.data(), account: null }; }),
+      new Date().toISOString().slice(0, 10), { provider: (((ctx.config || {}).ledgerSync) || {}).provider || 'none' }));
+    delete receivables.byCustomer;
     var conf = Object.assign({ enabled: false, terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, ctx.config);
     if (!owner) { delete conf.realmId; delete conf.itemRef; delete conf.accountingApproved; }
+    /* access.prices: 'all' (ClearSky), 'workspace' (an owner or admin: what
+       the workspace bills itself) or 'none'; access.team: may add and disable
+       people on the Team page (api/logic-team.js). */
     return { owner: owner, org: org, name: ctx.org.name || org, brand: require('./_lib/logic-brand')(ctx.org), active: X.enabled(ctx), config: conf,
+      access: { role: who.role, prices: who.clearsky ? 'all' : (who.admin ? 'workspace' : 'none'), team: who.clearsky || who.admin }, billing: billing,
       bundle: { name: 'Omega Logic', included: ['OEM order operations', 'White-label website sizer / platform lite', 'White-label sitemap editor resale'],
         subscriptionSeparate: true, subscriptionDue: ctx.billing.subscriptionDue || null },
       products: rows[2].exists ? (rows[2].data().products || []).length : 0,
-      links: links(org, key && key.id), orders: orders, limited: rows[0].size === 100, intake: intake, totals: S.totals(orders), finance: S.finance(orders, owner) };
+      links: links(org, key && key.id), orders: orders, limited: rows[0].size === 100, intake: intake, receivables: receivables, totals: S.totals(orders), finance: S.finance(orders, owner) };
   }
   if (req.method !== 'POST') throw A.httpError(405, 'GET or POST only');
   if (b.action === 'configure') {
@@ -92,8 +111,11 @@ module.exports = A.handler(async function (req, res) {
      and split companies; it is gone on purpose. */
   var orderId = P.id(b.orderId), ref = db.collection('orders').doc(orderId), row = await ref.get();
   if (!row.exists || row.data().orgId !== org) throw A.httpError(404, 'Order not found in this workspace');
-  if (b.action === 'price') return W.price(orderId, b.total, caller, b.accept === true);
-  if (b.action === 'accept') { X.requireOwner(caller); if (!row.data().logic) throw A.httpError(409, 'Approve the customer price first'); return W.price(orderId, row.data().logic.commercial.baseCents / 100, caller, true); }
+  /* D1: ClearSky prices and accepts everything; a workspace owner or admin
+     what the workspace bills itself. Checked here for a plain refusal, and
+     again inside the workflow's one writer (W.price) before it writes. */
+  if (b.action === 'price') { await X.requirePricer(caller, ctx, row.data()); return W.price(orderId, b.total, caller, b.accept === true); }
+  if (b.action === 'accept') { await X.requirePricer(caller, ctx, row.data()); if (!row.data().logic) throw A.httpError(409, 'Approve the customer price first'); return W.price(orderId, row.data().logic.commercial.baseCents / 100, caller, true); }
   if (b.action === 'sync') { X.requireOwner(caller); return W.processOrder(orderId); }
   if (b.action === 'ready') return W.finish(orderId, caller);
   if (b.action === 'ship') {

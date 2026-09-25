@@ -20,8 +20,8 @@ A Clean Cell customer is neither, and trying to make them one of the two is
 where this design would go wrong. **A buyer is a person with orders.** They get
 a portal, not a workspace.
 
-This RESOLVES the question recorded in `tenants/cleancell/tenant.json` under
-`_noteFunnel` — *"whether a Clean Cell-referred customer becomes their own
+This RESOLVES the question recorded in `tenants/cleancell/NOTES.md` under
+*The funnel* (formerly `_noteFunnel` in `tenant.json`) — *"whether a Clean Cell-referred customer becomes their own
 tenant or a collaborator on Clean Cell's workspace via org_members."* The
 answer is **neither, at first**. Becoming a tenant is a later, separate event
 with a commercial trigger (§6), not something that happens because somebody
@@ -143,7 +143,7 @@ now lists the ISP and regional mailboxes too) never joins anyone.
 inbox's company form, or in the profile — never read off a contact's address
 (a consultant's domain would pull strangers in). Typing it verifies the
 account as a company (`accountType: 'company'`). `B.findByName`, which stops a
-second "Amperage Capital", matches only office companies (`B.officeCompany`):
+second "Acme Fleet", matches only office companies (`B.officeCompany`):
 a self-made account's name is whatever its customer typed.
 The name of a company the office set up (or verified) is the office's: the
 customer app and portal show it locked, and `api/my-account.js` reports a
@@ -186,7 +186,7 @@ owner nor the office can turn it back on (`setUser` checks the pointer).
 
 ### Merging is the one dangerous operation
 
-Three people at Amperage Capital order separately over two months and
+Three people at Acme Fleet order separately over two months and
 self-serve into three single-user accounts. Clean Cell then wants one account
 with three users and all six orders.
 
@@ -287,8 +287,19 @@ would be load-bearing. Without it, anyone registers `bob@bigcustomer.com` with
 a password account and reads Bob's orders. `api/my-orders.js` refuses an
 unverified token, flatly, before it touches Firestore.
 
-Auth: **email magic link, plus Google.** No password to forget, works for any
-address, and the email is verified by construction.
+Auth: **email magic link, plus Google** — no password to forget, works for
+any address, and the email is verified by construction — **and email and
+password** (2026-09-25) for the app on an iPhone Home Screen, where an
+emailed link would open in Safari instead of the app. The customer app signs
+in through the one Omega Logic sign-in (`omega-logic-signin.js`) in the
+supplier's name, with no Omega Logic words: installed on an iPhone
+(`navigator.standalone`) it offers Google by same-site redirect, email and
+password, *Forgot password?* and *First time here? Create a password*, with
+one line saying why there is no link; in a browser the emailed link comes
+first. A password account is created unverified, so the app shows *Confirm
+your email* and answers nothing until the confirmation link is opened —
+`email_verified` stays the whole model. The buyer's own guide,
+`/guides/Omega-Logic-Customer-App.pdf`, walks through it.
 
 ### Both axes, always
 
@@ -522,7 +533,7 @@ Clean Cell  ·  cleancell.us  ·  active  ·  deluxe + whitelabel
 ├── Control plane      domains, whiteLabel block, embed keys, storefront config
 ├── Commercials        billing/current, tier, addons, toolAccess, subscriptionDue
 ├── Customers          ── the drill-down ──────────────────────────────
-│     Amperage Capital · 6 orders · Net 30 · designer · 3 users
+│     Acme Fleet · 6 orders · Net 30 · designer · 3 users
 │       ├── Users          names, roles, last seen, invite/remove
 │       ├── Orders         every order + milestone + documents
 │       ├── Terms          net days, discount, credit limit, PO required
@@ -661,6 +672,21 @@ the obvious version. Since then, what landed:
   workspace. Tests: `scripts/test-crm.js`, `scripts/test-customer-subscribe.js`;
   `npm run check:pages` renders `index.html`, `app.html` and `admin.html`.
 
+- The 2026-09-24 review pass (2026-09-25): the installed app's sign-in
+  (above, §3); the PO sheet read straight from Excel or Google Sheets
+  (tabs, a header row, quoted cells; a PO number with two addresses is
+  stopped) in `omega-po-bulk.js`; components never offered as orderable
+  (`api/_lib/portal.js` `orderable`); plain milestone words on POs and
+  orders; a site built key by key for the customer (`publicSite`, with
+  `customerEntries` recording what the customer typed); each Fleet unit
+  card saying what happened on its own line; the date on Received and
+  Commissioned asked for and checked (never in the future, never before
+  the unit shipped or arrived); and the buyer's PDF guide rewritten for
+  the app as it is (Home · Orders · POs · Fleet · Account, the installed
+  sign-in, sites from a list, POs from a spreadsheet). Tests:
+  `scripts/test-customer-surfaces.js`, `scripts/test-customer-signin.js`,
+  `scripts/test-po-bulk.js`.
+
 Still open: the `designer` upgrade's tenant-vs-`org_members` question (§6),
 the Salesforce sync (§10 item 6), and whether the lite dashboard links the
 finance sizer (§12). Also still open from §2:
@@ -683,7 +709,11 @@ finance sizer (§12). Also still open from §2:
   supplier's own payment page), paying the supplier its share of a design
   subscription (Stripe Connect), and design access while a subscription is
   past due;
-- editing an existing site from the customer app (the endpoint takes it);
+- editing or retiring an existing site from the customer app or the portal
+  (the endpoint takes an edit; no page offers one yet);
+- a confirmed test on a real iPhone of the installed app's sign-in, and
+  email/password sign-up switched on in the Firebase project (without it
+  *First time here? Create a password* is refused);
 - from a site list (§5): writing the order's delivery destinations or
   loads (the list says where each unit is going; Shipping still plans the
   loads), reading an .xlsx (save it as CSV), more than 200 sites in one

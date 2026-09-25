@@ -8,49 +8,49 @@
      · ClearSky staff — any org, any role
      · the org OWNER   — any role in their own org (including transferring 'owner')
      · an org ADMIN    — 'admin' | 'member' | 'viewer' in their own org, never on the owner
+     An owner or admin whose own record is disabled may not.
 
-   Writes omega_orgs/{orgId}/members/{uid} AND sets custom claims
-   { orgId, role } on the Auth user, so Storage rules and other /api
-   functions can trust request.auth.token.role without a Firestore read.
-   The user must sign out/in (or force-refresh their token) to pick claims up;
-   the members doc is what the portal reads immediately.
+   The write is the ONE member writer (api/_lib/logic-members.js change()),
+   the same one the Team page and ClearSky's Omega Logic console use: the
+   last active owner is never disabled or re-roled, and every change lands in
+   omega_orgs/{orgId}/admin_audit (via 'set-role') with who, was and now. It
+   sets the custom claims { orgId, role } on the tenant's own people, so
+   Storage rules and other /api functions can trust request.auth.token.role
+   without a Firestore read. The user must sign out/in (or force-refresh
+   their token) to pick claims up; the members doc is what the portal reads
+   immediately.
+
+   `status` is optional: a role change keeps the person's status as it is
+   (changing somebody's role never quietly re-enables them).
    ═══════════════════════════════════════════════════════════════════════════════ */
 'use strict';
-var A = require('./_lib/admin');
+var A = require('./_lib/admin'), Members = require('./_lib/logic-members');
 
-module.exports = A.handler(function (req) {
+var ROLES = ['owner', 'admin', 'member', 'viewer'];
+
+module.exports = A.handler(async function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   var b = req.body || {};
   var orgId = String(b.orgId || '').toLowerCase();
   var role = b.role;
-  var status = b.status || 'active';
-  if (!orgId || ['owner', 'admin', 'member', 'viewer'].indexOf(role) < 0) throw A.httpError(400, 'orgId and a valid role are required');
+  var status = b.status === undefined || b.status === null || b.status === '' ? null : String(b.status);
+  if (!orgId || ROLES.indexOf(role) < 0) throw A.httpError(400, 'orgId and a valid role are required');
+  if (status !== null && ['active', 'disabled'].indexOf(status) < 0) throw A.httpError(400, 'status must be active or disabled');
 
-  return A.authenticate(req).then(function (caller) {
-    var auth = A.init().auth();
-    var target = b.targetUid ? auth.getUser(b.targetUid) : auth.getUserByEmail(String(b.targetEmail || '').toLowerCase());
-    return target.then(function (user) {
-      var targetOrg = A.orgOf(user.email);
-      if (!caller.staff && targetOrg !== orgId) throw A.httpError(400, 'target is not in ' + orgId);
-      var membersRef = A.db().collection('omega_orgs').doc(orgId).collection('members');
-      return Promise.all([
-        caller.staff ? Promise.resolve({ role: 'staff' }) : membersRef.doc(caller.uid).get().then(function (s) { return s.exists ? s.data() : { role: 'member' }; }),
-        membersRef.doc(user.uid).get().then(function (s) { return s.exists ? s.data() : null; })
-      ]).then(function (r) {
-        var callerRole = r[0].role, current = r[1];
-        var allowed = caller.staff
-          || callerRole === 'owner'
-          || (callerRole === 'admin' && role !== 'owner' && !(current && current.role === 'owner'));
-        if (!allowed) throw A.httpError(403, 'not permitted to assign ' + role + ' here');
+  var caller = await A.authenticate(req), auth = A.init().auth();
+  var user = b.targetUid ? await auth.getUser(String(b.targetUid)) : await auth.getUserByEmail(String(b.targetEmail || '').trim().toLowerCase());
+  var email = String(user.email || '').toLowerCase();
+  if (!email) throw A.httpError(400, 'That account has no email address');
+  if (!caller.staff && A.orgOf(email) !== orgId) throw A.httpError(400, 'target is not in ' + orgId);
 
-        var doc = { email: String(user.email).toLowerCase(), name: user.displayName || (current && current.name) || '',
-          role: role, status: status, updatedAt: A.FieldValue().serverTimestamp(), updatedBy: caller.email };
-        if (!current) doc.createdAt = A.FieldValue().serverTimestamp();
-        return Promise.all([
-          membersRef.doc(user.uid).set(doc, { merge: true }),
-          auth.setCustomUserClaims(user.uid, Object.assign({}, user.customClaims || {}, { orgId: orgId, role: status === 'disabled' ? 'disabled' : role }))
-        ]).then(function () { return { ok: true, uid: user.uid, orgId: orgId, role: role, status: status }; });
-      });
-    });
-  });
+  var actor = 'clearsky';
+  if (!caller.staff) {
+    var mine = await A.db().collection('omega_orgs').doc(orgId).collection('members').doc(caller.uid).get(), me = mine.exists ? mine.data() : {};
+    actor = (me.status || 'active') === 'disabled' ? null : (me.role === 'owner' || me.role === 'admin' ? me.role : null);
+    if (!actor) throw A.httpError(403, 'not permitted to assign ' + role + ' here');
+  }
+  var org = await A.db().collection('omega_orgs').doc(orgId).get(), name = (org.exists && org.data().name) || orgId;
+  var out = await Members.change({ orgId: orgId, orgName: name, host: Members.HUB_HOST, path: '/logic', by: caller.email, actor: actor, via: 'set-role',
+    request: { email: email, role: role, status: status, resetLink: false, name: '', sendMail: false }, reveal: false, mailNew: false, audit: true });
+  return { ok: true, uid: out.uid, orgId: orgId, role: out.role, status: out.status };
 });

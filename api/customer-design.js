@@ -2,7 +2,7 @@
    Buyer projects are nested under the supplier's CUSTOMER, never a platform org.
    All access is through this API; browser Firestore access stays denied. */
 'use strict';
-var A = require('./_lib/admin'), B = require('./_lib/buyer-accounts'), D = require('./_lib/buyer-design'), P = require('./_lib/logic-policy');
+var A = require('./_lib/admin'), B = require('./_lib/buyer-accounts'), D = require('./_lib/buyer-design'), P = require('./_lib/logic-policy'), Pt = require('./_lib/portal');
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET' && req.method !== 'POST') throw A.httpError(405, 'GET or POST only');
@@ -25,7 +25,7 @@ module.exports = A.handler(async function (req, res) {
        750 KB and a hundred of them would be read for a name each. */
     var rows = await scope.projects.orderBy('updatedAt', 'desc').select('name', 'module', 'updatedAt', 'revision').limit(100).get();
     return { org: org, customerId: scope.account.id, brand: require('./_lib/logic-brand')(scope.ctx.org),
-      access: scope.grant, designProducts:require('./_lib/logic-catalog').designs(storefront.exists?storefront.data():{}),products: products.filter(function(p){return p && p.sku && p.active !== false;}).map(function(p){return {sku:B.clean(p.sku,64),name:B.clean(p.name||p.sku,120)};}),
+      access: scope.grant, designProducts:require('./_lib/logic-catalog').designs(storefront.exists?storefront.data():{}),products: Pt.orderables(products).map(function(p){return {sku:B.clean(p.sku,64),name:B.clean(p.name||p.sku,120)};}),
       projects: rows.docs.map(function (r) { var d = r.data(); return { id: r.id, name: d.name, module: d.module, updatedAt: d.updatedAt, revision: d.revision }; }), limited: rows.size === 100 };
   }
   if (b.action === 'size') {var sizing=D.sizing(scope,b);return b.module==='bess'?require('./_lib/logic-catalog').select(storefront.exists?storefront.data():{},b.sku,sizing):sizing;}
@@ -47,7 +47,8 @@ module.exports = A.handler(async function (req, res) {
       if(!draft.exists||draft.data().revision!==b.revision)throw A.httpError(409,'Your design changed. Save and review it before requesting a quote.');
       var p=draft.data();
       if(D.entitlement(fresh,acct.data,caller).modules.indexOf(p.module)<0)throw A.httpError(403,'This design module is no longer enabled');
-      var product=catalog.exists&&(catalog.data().products||[]).filter(function(x){return x.sku===sku&&x.active!==false;})[0];
+      /* only what a buyer may order: a `component` (what a product is made of) is never quoted */
+      var product=catalog.exists&&Pt.orderables(catalog.data().products).filter(function(x){return x.sku===sku;})[0];
       if(!product)throw A.httpError(409,'Select equipment from the supplier’s current published catalog');
       if(prior.exists){var old=prior.data();if(old.items[0].sku!==sku||old.items[0].qty!==qty)throw A.httpError(409,'This saved revision already has a different quote request. Save a new revision for a new request.');return {ok:true,duplicate:true,orderId:orderId,orderNo:old.orderNo};}
       var now=new Date().toISOString(),no='REQ-'+now.slice(0,10).replace(/-/g,'')+'-'+orderId.slice(-8).toUpperCase();

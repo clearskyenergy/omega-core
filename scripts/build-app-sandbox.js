@@ -206,6 +206,11 @@ var SHARED = ['omega-logic-theme.css', 'omega-logic-theme.js', 'omega-po-bulk.js
 var TITLES = { plant: 'Omega Logic Plant', office: 'Omega Logic', customer: 'Clean Cell Account', bench: 'Omega Logic Bench' };
 function artifactPage(p, files, links) {
   var s = files[p.out], icon = p.bench ? null : p.icon;
+  /* The customer's test link goes to a supplier's CUSTOMER (the kit's
+     customer message): it carries no address of the plant, the office or
+     the bench at all, so its strip cannot offer them (the shim hides them
+     too; DOC-M7). */
+  if (p.app === 'customer') links = {};
   s = must(s, SANDBOX_SCRIPT, '<script>window.OMEGA_SANDBOX_APP=' + JSON.stringify(p.app) + ';window.OMEGA_SANDBOX_LINKS=' + JSON.stringify(links) + ';</script><script src="sandbox.js"></script>', p.out + ' sandbox script');
   SHARED.forEach(function (f) { s = s.split('"/' + f + '"').join('"' + f + '"'); });
   if (!p.bench) {

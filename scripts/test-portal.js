@@ -293,5 +293,27 @@ ok('a 500-item order is capped rather than echoed whole',
      em.indexOf('globalThis') > 0);
 })();
 
+/* ── what a buyer may order, in words a buyer reads (CUST-04/05/06) ──── */
+(function () {
+  console.log('\nwhat a buyer may order, and the words for it\n');
+  var list = [{ sku: 'R60', kind: 'product' }, { sku: 'SVC', kind: 'service' }, { sku: 'CELL', kind: 'component' }, { sku: 'OLD', active: false }, { sku: 'PH', placeholder: true }, { sku: 'GENERIC-BESS' }, { sku: 'BARE' }, null, { name: 'no sku' }];
+  ok('a component, a placeholder, a retired row and the generic concept are never orderable',
+     JSON.stringify(P.orderables(list).map(function (p) { return p.sku; })) === '["R60","SVC","BARE"]', P.orderables(list));
+  ok('  and a list that is not a list is none', P.orderables(undefined).length === 0 && P.orderables({}).length === 0);
+  ok('a PO in review reads in words', P.poStatusWord({ status: 'po_needs_information' }) === 'needs information from you' && P.poStatusWord({ status: 'po_review' }) === 'under review' && P.poStatusWord({ status: 'new', convertedAt: '2026-09-01' }) === 'entered as an order' && P.poStatusWord({ status: 'weird_key' }) === 'received');
+  ok('  and so does the door it came through, naming the supplier', P.poSourceWord('customer-bulk') === 'sent by your company on the PO sheet' && P.poSourceWord('office-bulk', 'Clean Cell') === 'entered by Clean Cell' && P.poSourceWord(undefined) === 'received by your supplier');
+  var office = { id: 's1', name: 'Yard', customerId: 'c1', createdBy: 'pm@supplier.example', updatedBy: 'pm@supplier.example', lifecycleSiteId: 'L1', address: { line1: '1 A St', zip: '80010' },
+    interconnection: { meterNo: 'M-77', agreementRef: 'IA-9' }, contact: { name: 'Gate guard' }, endCustomer: 'Resale end user', notes: 'slow payer' };
+  var seen = JSON.stringify(P.publicSite(office));
+  ok('a site the office typed up reaches the buyer as where it is, never what the office wrote about it (CUST-21)',
+     ['M-77', 'IA-9', 'Gate guard', 'Resale end user', 'slow payer', 'supplier.example', 'customerId', 'lifecycleSiteId', 'createdBy'].every(function (n) { return seen.indexOf(n) < 0; }) && /1 A St/.test(seen), seen);
+  ok('  the buyer\'s own entries come back, and only those',
+     P.publicSite({ id: 's2', name: 'Lot', source: 'customer', notes: 'office edit', interconnection: { poi: 'X' }, customerEntries: { interconnection: { poi: 'Pad 3' }, notes: 'mine' } }).interconnection.poi === 'Pad 3'
+     && P.publicSite({ id: 's3', name: 'Lot', source: 'customer', createdAt: 'a', updatedAt: 'a', notes: 'mine', interconnection: {} }).notes === 'mine'
+     && P.publicSite({ id: 's4', name: 'Lot', source: 'customer', createdAt: 'a', updatedAt: 'b', updatedBy: 'pm@x', createdBy: 'me@y', notes: 'office' }).notes === '');
+  ok('an order names the supplier the way the page does when the endpoint says so, and by its stamp otherwise',
+     P.publicOrder({ orgName: 'Cleancell' }, { soldBy: 'Clean Cell' }).soldBy === 'Clean Cell' && P.publicOrder({ orgName: 'Cleancell' }).soldBy === 'Cleancell');
+})();
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed  (including the org-shape control)\n');
 process.exit(fail ? 1 : 0);

@@ -30,7 +30,7 @@ function attention(units, stations, routing, now, opts) {
   var last = routing.length ? routing[routing.length - 1].key : 'ready';
   var stuck = [], held = [], failed = [], off = [], counts = { units: 0, notStarted: 0, wip: 0, finished: 0 };
   (Array.isArray(units) ? units : []).forEach(function (u) {
-    if (!u) return;
+    if (!u || u.inventoryStatus === 'void') return;   /* a voided typo is not a unit */
     counts.units++;
     var at = text(u.at, 40), base = { serial: text(u.serial, 100), sku: text(u.sku, 100), unitType: text(u.unitType, 20), shipUnit: !!u.shipUnit,
       woId: text(u.woId, 120) || null, orderNo: text(u.orderNo, 120) || null, at: at, label: at ? labelOf(routing, at) : 'Not started' };

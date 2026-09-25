@@ -59,6 +59,12 @@ function poView(id, po) {
     lines: (po.lines || []).map(function (l) { return { sku: l.sku, name: l.name, unit: l.unit, qty: l.qty, received: l.received || 0 }; }),
     receipts: (po.receipts || []).slice(-10) };
 }
+function unstationedOf(products, config) {
+  var W = require('./_lib/plant-work'), routing;
+  try { routing = require('./_lib/plant-flow').current(config || {}).routing; }
+  catch (e) { routing = require('./_lib/plant').DEFAULT_ROUTING; }
+  return W.unstationed(products, routing);
+}
 function count(v, what) {
   if (v == null || v === '') return 0;
   var n = Number(v);
@@ -128,6 +134,11 @@ module.exports = A.handler(async function (req, res) {
         .sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); }),
       prices: (function () { var out = {}; Object.keys(sourcing.prices || {}).forEach(function (k) { if (safe(k)) out[k] = sourcing.prices[k]; }); return out; })(),
       sourcingRevision: sourcing.revision || 0,
+      /* Bill lines no bench on the plant's routing issues (PLANT-07): they
+         are bought, and they come off the shelf only when the unit reaches
+         Ready (plant-work.js backflush) — the page says which, so nobody
+         counts on a bench to take them. */
+      unstationed: unstationedOf(products, ctx.config),
       /* 200 is the read cap on each of orders and works orders. Past it the
          plan is computed on the newest 200 and says so, rather than being
          quietly short. */

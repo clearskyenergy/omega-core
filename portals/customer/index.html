@@ -145,6 +145,8 @@
   @media(max-width:600px){.rqf .addr{grid-template-columns:1fr 1fr}}
   /* ── the hub home, and the hubs it opens (the customer app's, with room) ── */
   .home-top{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:18px;align-items:start;margin-bottom:16px}
+  /* waiting to be let in: no hub, so no empty column beside the card */
+  .home-top.one{grid-template-columns:minmax(0,1fr)}.home-top.one #hub{display:none}
   .home-top .hexhub{margin:0}.home-top section{margin:0}
   .hub-plain{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
   .home-panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;align-items:start}.home-panels section{margin:0}
@@ -178,6 +180,13 @@
   #fleet-bulk ul{margin:6px 0 10px 18px;padding:0;font-size:14px}
   #fleet-bulk details summary{cursor:pointer;color:var(--brand-d,#2A8CA3);font-weight:600}
   .bk-box{border-top:1px solid var(--line);margin-top:16px;padding-top:14px}
+  /* a phone: the header is the name and Sign out on one line, who is
+     signed in under them, never three wrapped rows */
+  .top .nm{min-width:0;overflow-wrap:anywhere}
+  @media (max-width:560px){ .top{flex-wrap:wrap;gap:6px 10px;padding:12px 16px} .top .who{order:5;flex:1 1 100%;font-size:12.5px;overflow-wrap:anywhere} }
+  /* the supplier's colour as ink where white text sits on it (WCAG AA): the
+     page darkens --cta to at least 4.5:1 once it knows the colour */
+  body.logic-theme .btn.p,body.logic-theme .rqf button{background:var(--cta);border-color:var(--cta);color:#fff}
 </style>
 <link rel="stylesheet" href="/omega-logic-theme.css">
 </head>
@@ -349,6 +358,13 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function (e) { if (e.getAttribute('data-view') === key) e.setAttribute('aria-current', 'page'); else e.removeAttribute('aria-current'); });
   }
   var portfolioUi = null;
+  /* The sizer in the Size frame is a whole page with its own header and
+     links (Customer login, Design studio, Phone app): inside this portal,
+     which already has them, that is a second nav. A same-site page loses
+     its header in the frame; another site's cannot be touched and keeps it. */
+  $('size-frame').addEventListener('load', function () {
+    try { var d = this.contentDocument; if (!d) return; Array.prototype.forEach.call(d.querySelectorAll('body > header'), function (h) { h.hidden = true; h.style.display = 'none'; }); } catch (e) {}
+  });
   function sizeMode(mode) {
     Array.prototype.forEach.call(document.querySelectorAll('.pf-mode button'), function (b) { var on = b.getAttribute('data-mode') === mode; b.className = on ? 'on' : ''; b.setAttribute('aria-selected', on ? 'true' : 'false'); });
     $('size-single').hidden = mode !== 'single'; $('size-portfolio').hidden = mode !== 'portfolio';
@@ -369,6 +385,7 @@
          the one this page has): this is the supplier's customer surface. */
       if (window.OmegaLogicTheme) OmegaLogicTheme.apply(PORTAL.brand);
       else if (PORTAL.brand.name) Array.prototype.forEach.call(document.querySelectorAll('[data-brand-name]'), function (e) { e.textContent = PORTAL.brand.name; });
+      ink(PORTAL.brand.primary);
       document.title = 'Your account · ' + PORTAL.brand.name;
       if (PORTAL.brand.logoUrl) { $('mark').src = PORTAL.brand.logoUrl; $('mark').hidden = false; }
       $('attribution').textContent = PORTAL.brand.attribution || ''; $('attribution').hidden = !PORTAL.brand.attribution;
@@ -389,7 +406,26 @@
       }
     } catch (e) {}
   }
-  function brandName() { return PORTAL && PORTAL.brand && PORTAL.brand.name ? PORTAL.brand.name : 'your supplier'; }
+  /* The supplier named ONE way in running text: its short name
+     (api/_lib/logic-brand.js shortName); the header wears the full name. */
+  function brandName() { var b = PORTAL && PORTAL.brand; return b && (b.shortName || b.name) ? b.shortName || b.name : 'your supplier'; }
+  /* The supplier's colour as INK: white text on a button, and a link on
+     white, both need 4.5:1 (WCAG AA); a bright brand teal gives about 2:1.
+     The brand colour stays on borders, bars and tints. */
+  function lum(hex) {
+    var c = [1, 3, 5].map(function (i) { var v = parseInt(hex.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function aaInk(hex) {
+    if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return null;
+    var rgb = [1, 3, 5].map(function (i) { return parseInt(hex.slice(i, i + 2), 16); }), f = 1, out = hex;
+    while (f > 0 && 1.05 / (lum(out) + 0.05) < 4.6) {
+      f -= 0.02;
+      out = '#' + rgb.map(function (v) { var x = Math.max(0, Math.round(v * f)).toString(16); return x.length < 2 ? '0' + x : x; }).join('');
+    }
+    return out;
+  }
+  function ink(primary) { var v = aaInk(primary); if (!v) return; try { ['--brand-d', '--cta', '--accent'].forEach(function (k) { document.documentElement.style.setProperty(k, v); }); } catch (e) {} }
   function repName() { return ACCT && ACCT.rep && ACCT.rep.name ? ACCT.rep.name : 'your account rep'; }
 
   function tok() {
@@ -420,9 +456,13 @@
   var ACCT = null, ORDERS = null, SITES = null, PO = null, SUB = null, FILES = null, DESIGN = null;
   var ERR = { orders: '', sites: '', files: '', sub: '' };
   var DUE = ['awaiting_payment', 'part_paid'], SETTLED = ['paid', 'not_required'];
+  function todayIso() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   var STAGE = { deposit: 'Deposit', balance: 'Final balance' };
-  var LOAD = { planned: 'booked', in_transit: 'on its way', delivered: 'delivered', cancelled: 'cancelled', shipped: 'shipped' };
-  var LOAD_TONE = { planned: 'wait', in_transit: 'wait', delivered: 'go', cancelled: 'stop', shipped: '' };
+  var LOAD = { planned: 'booked', in_transit: 'on its way', delivered: 'delivered', accepted: 'received', exception: 'received with a problem', cancelled: 'cancelled', shipped: 'shipped' };
+  var LOAD_TONE = { planned: 'wait', in_transit: 'wait', delivered: 'go', accepted: 'go', exception: 'stop', cancelled: 'stop', shipped: '' };
+  /* an invoice's state in the customer's words; never a raw key */
+  var INV_WORD = { awaiting_payment: 'due', part_paid: 'part paid', paid: 'paid', not_required: 'not needed', queued: 'being prepared', to_issue: 'being prepared', awaiting_cleared_funds: 'payment clearing', cancelled: 'cancelled', void: 'cancelled' };
+  function word(map, k) { return map[k] || String(k || '').replace(/_/g, ' '); }
   var COV = { active: 'go', pending: 'wait', expired: 'stop', transferred: '' };
   var DAY_MS = 86400000, EXPIRING_DAYS = 90, MAX_DOC = 2 * 1024 * 1024, PO_NEEDS = 'po_needs_information';
   /* api/_lib/crm.js CATEGORIES, the ones a customer sends; fileInput()
@@ -552,6 +592,8 @@
     var el = $('home-panels'), kv = $('home-kv');
     /* waiting to be let in: no hub — every cell would open a page that has
        nothing to load until the owner or the supplier approves */
+    var top = document.querySelector('.home-top');
+    if (top) top.className = 'home-top' + (ACCT && ACCT.pending ? ' one' : '');
     if (ACCT && ACCT.pending) {
       if ($('hub')) $('hub').innerHTML = '';
       if (!el || !kv) return;
@@ -572,7 +614,7 @@
       loadsOf(ORDERS, units).filter(onTheWay).forEach(function (x) { arriving.push(hrow('#shipping', x.order.orderNo + (x.load.id ? ' · load ' + x.load.id : ''), [x.load.carrier, x.load.tracking, x.dest ? 'to ' + destLine(x.dest) : ''].filter(Boolean).join(' · '), LOAD[x.load.status], LOAD_TONE[x.load.status])); });
       ORDERS.filter(shipsSoon).forEach(function (o) { arriving.push(hrow('#shipping', o.orderNo, 'ships by ' + day(o.promisedShipAt) + (o.poNumber ? ' · your PO ' + o.poNumber : ''), (o.milestone || {}).label || 'in progress', '')); });
     }
-    var toPay = due.map(function (x) { var d = dueOn(x.inv), lt = overdue(x); return hrow('#pay', (STAGE[x.inv.stage] || x.inv.stage) + ' · ' + x.order.orderNo, [x.inv.number ? 'invoice ' + x.inv.number : '', d ? (lt ? 'was due ' : 'due ') + d : '', https(x.inv.payUrl) ? 'pay online' : 'payment instructions from ' + (x.order.soldBy || brandName())].filter(Boolean).join(' · '), usd(x.left), lt ? 'stop' : 'wait'); });
+    var toPay = due.map(function (x) { var d = dueOn(x.inv), lt = overdue(x); return hrow('#pay', (STAGE[x.inv.stage] || x.inv.stage) + ' · ' + x.order.orderNo, [x.inv.number ? 'invoice ' + x.inv.number : '', d ? (lt ? 'was due ' : 'due ') + d : '', https(x.inv.payUrl) ? 'pay online' : 'payment instructions from ' + brandName()].filter(Boolean).join(' · '), usd(x.left), lt ? 'stop' : 'wait'); });
     if (prep.length) toPay.push(hrow('#pay', plural(prep.length, 'invoice') + ' being prepared', 'your supplier raises ' + (prep.length === 1 ? 'it' : 'them') + ' and sends ' + (prep.length === 1 ? 'it' : 'them') + ' to you', usd(prep.reduce(function (n, x) { return n + x.left; }, 0)), ''));
     /* What only the customer can move: a unit that arrived, a unit with no
        site, commissioning, a PO the supplier asked about, a colleague asking
@@ -601,15 +643,15 @@
      instructions; the page never takes a card. */
   function invCard(x) {
     var i = x.inv, o = x.order, link = https(i.payUrl), paid = isPaid(x), due = isDue(x), d = dueOn(i), late = overdue(x);
-    var when = paid ? '' : due ? (d ? (late ? '<span class="due-over">overdue · was due ' + esc(d) + '</span>' : 'due ' + esc(d)) : i.dueDays != null ? 'due ' + esc(i.dueDays) + ' days from the invoice date' : '') : 'not issued yet';
+    var when = paid ? '' : due ? (d ? (late ? '<span class="due-over">overdue · was due ' + esc(d) + '</span>' : 'due ' + esc(d)) : i.dueDays != null ? (Number(i.dueDays) === 0 ? 'due on receipt' : 'due ' + esc(i.dueDays) + ' day' + (Number(i.dueDays) === 1 ? '' : 's') + ' from the invoice date') : '') : 'not issued yet';
     return '<div class="card2" data-invoice="' + esc(o.orderNo + ':' + i.stage) + '"><div class="h"><b>' + (i.number ? 'Invoice ' + esc(i.number) : esc(STAGE[i.stage] || i.stage) + ' invoice') + '</b><b>' + usd(paid ? i.amount : x.left) + '</b></div>'
       + '<div class="m">' + esc(i.number ? (STAGE[i.stage] || i.stage) + ' · ' : '') + esc(o.orderNo) + (o.poNumber ? ' · your PO ' + esc(o.poNumber) : '') + (i.issuedAt ? ' · issued ' + esc(day(i.issuedAt)) : '') + '</div>'
       + (when ? '<div class="m">' + when + '</div>' : '')
       + (i.recorded && !paid ? '<p class="muted" style="font-size:13.5px">' + usd(i.recorded) + ' received of ' + usd(i.amount) + '.</p>' : '')
       + (paid ? '<p style="margin:8px 0 0"><span class="pill go">paid</span></p>'
-        : due && link ? '<div class="actions" style="margin-top:10px"><a class="btn p" data-pay target="_blank" rel="noopener noreferrer" href="' + esc(link) + '">Pay ' + usd(x.left) + '</a><span class="muted" style="align-self:center;font-size:13px">Opens ' + esc(o.soldBy || brandName()) + '’s payment page.</span></div>'
+        : due && link ? '<div class="actions" style="margin-top:10px"><a class="btn p" data-pay target="_blank" rel="noopener noreferrer" href="' + esc(link) + '">Pay ' + usd(x.left) + '</a><span class="muted" style="align-self:center;font-size:13px">Opens ' + esc(brandName()) + '’s payment page.</span></div>'
         : due ? '<p class="muted" style="font-size:13.5px">Your supplier will send payment instructions.</p>'
-        : '<p class="muted" style="font-size:13.5px">' + esc(o.soldBy || brandName()) + ' raises this invoice and sends it to you.</p>')
+        : '<p class="muted" style="font-size:13.5px">' + esc(brandName()) + ' raises this invoice and sends it to you.</p>')
       + '</div>';
   }
   function drawPay() {
@@ -673,7 +715,7 @@
       var u = units[i], qs = asked(u), o = u.orderNo ? byNo[u.orderNo] : null;
       return '<div class="card2" data-cover="' + esc(u.serial) + '"><div class="h"><b class="mono">' + esc(u.serial) + '</b><span class="pill">' + esc(u.label) + '</span></div><div class="m">' + esc(u.name) + (u.orderNo ? ' · ' + esc(u.orderNo) : '') + (u.siteName ? ' · at ' + esc(u.siteName) : ' · no site yet') + '</div>'
         + (u.coverage || []).map(function (c) { return covLine(c, now); }).join('')
-        + qs.map(function (q2) { return '<div class="rq"><span class="muted">' + esc(day(q2.at)) + (q2.by ? ' · ' + esc(q2.by) : '') + ' · ' + (q2.answer ? 'answered' : 'waiting for an answer') + '</span><p>' + esc(q2.message) + '</p>' + (q2.answer ? '<p class="ans"><b>' + esc((o && o.soldBy) || brandName()) + ':</b> ' + esc(q2.answer) + '</p>' : '') + '</div>'; }).join('')
+        + qs.map(function (q2) { return '<div class="rq"><span class="muted">' + esc(day(q2.at)) + (q2.by ? ' · ' + esc(q2.by) : '') + ' · ' + (q2.answer ? 'answered' : 'waiting for an answer') + '</span><p>' + esc(q2.message) + '</p>' + (q2.answer ? '<p class="ans"><b>' + esc(brandName()) + ':</b> ' + esc(q2.answer) + '</p>' : '') + '</div>'; }).join('')
         + (pendingCover(u) && !u.siteId ? '<p style="margin:8px 0 0"><a class="btn" href="#fleet">Choose its site</a></p>' : '')
         + (o ? '<details class="rqf"><summary>Ask about this warranty</summary><form data-wask="' + i + '"><textarea name="message" maxlength="2000" required>' + esc('Unit ' + u.serial + ': ') + '</textarea><button type="submit">Send question</button> <span class="muted rq-status"></span></form></details>'
           : u.orderNo ? '<p class="muted" style="font-size:13.5px">Ask ' + esc(brandName()) + ' about this unit on order ' + esc(u.orderNo) + '.</p>' : '')
@@ -725,9 +767,9 @@
       + (units.map(function (u, i) {
         var acts = '';
         if (!u.siteId && ['in_transit', 'delivered', 'received', 'ready to ship'].indexOf(u.status) >= 0 && u.state !== 'scrapped' && sites.length) acts += '<div class="acts2"><select data-dest="' + i + '" aria-label="Going to"><option value="">Going to…</option>' + siteSel(u.plannedSiteId) + '</select><button type="button" class="btn" data-act="destination" data-i="' + i + '">' + (u.plannedSiteId ? 'Change' : 'Set') + '</button></div>';
-        if (can(u, 'received')) acts += '<div class="acts2"><select data-cond="' + i + '" aria-label="Condition on arrival"><option value="accepted">Arrived in good order</option><option value="damaged">Arrived damaged</option></select><button type="button" class="btn p" data-act="received" data-i="' + i + '">Received</button></div>';
+        if (can(u, 'received')) acts += '<div class="acts2"><input type="date" data-rdate="' + i + '" aria-label="Arrived on" max="' + todayIso() + '" value="' + todayIso() + '"><select data-cond="' + i + '" aria-label="Condition on arrival"><option value="accepted">Arrived in good order</option><option value="damaged">Arrived damaged</option></select><button type="button" class="btn p" data-act="received" data-i="' + i + '">Received</button></div>';
         if (can(u, 'assign') && sites.length) acts += '<div class="acts2"><select data-site="' + i + '" aria-label="Installed at">' + (u.siteId ? '' : '<option value="">Installed at…</option>') + siteSel(u.siteId) + '</select><button type="button" class="btn" data-act="assign" data-i="' + i + '">Assign</button></div>';
-        if (can(u, 'commissioned') && u.siteId) acts += '<div class="acts2"><input type="date" data-date="' + i + '" aria-label="Commissioned on"><input data-inst="' + i + '" placeholder="Commissioned by" aria-label="Commissioned by"><button type="button" class="btn" data-act="commissioned" data-i="' + i + '">Commissioned</button></div>';
+        if (can(u, 'commissioned') && u.siteId) acts += '<div class="acts2"><input type="date" data-date="' + i + '" aria-label="Commissioned on" max="' + todayIso() + '" value="' + todayIso() + '"><input data-inst="' + i + '" placeholder="Commissioned by" aria-label="Commissioned by"><button type="button" class="btn" data-act="commissioned" data-i="' + i + '">Commissioned</button></div>';
         return '<div class="card2" data-unit="' + esc(u.serial) + '"><div class="h"><b class="mono">' + esc(u.serial) + '</b><span class="pill ' + (UNIT_TONE[u.status] || '') + '">' + esc(u.label) + '</span></div>'
           + '<div class="m">' + esc(u.name) + (u.orderNo ? ' · ' + esc(u.orderNo) : '') + '</div>'
           + (u.siteName ? '<div class="m">at ' + esc(u.siteName) + (u.position ? ' · ' + esc(u.position) : '') + (u.confirmation === 'confirmed' ? ' · confirmed by your supplier ' + esc(day(u.confirmedAt)) : ' · awaiting your supplier’s confirmation') + '</div>' : u.plannedSiteName ? '<div class="m">going to ' + esc(u.plannedSiteName) + '</div>' : '')
@@ -747,8 +789,12 @@
         var i = b.getAttribute('data-i'), u = units[Number(i)], act = b.getAttribute('data-act'), body = { action: act, serial: u.serial };
         if (act === 'assign') { var sel = el.querySelector('[data-site="' + i + '"]'); if (!sel.value) { $('fleet-msg').textContent = 'Choose the site first.'; return; } body.siteId = sel.value; }
         if (act === 'destination') { var dsel = el.querySelector('[data-dest="' + i + '"]'); if (dsel.value) body.siteId = dsel.value; }
-        if (act === 'commissioned') { var dt = el.querySelector('[data-date="' + i + '"]'), ins = el.querySelector('[data-inst="' + i + '"]'); if (dt.value) body.at = dt.value; body.installer = ins.value; }
-        if (act === 'received') { var cond = el.querySelector('[data-cond="' + i + '"]'); body.condition = cond && cond.value === 'damaged' ? 'damaged' : 'accepted'; if (!window.confirm('Record ' + u.serial + ' as received today' + (body.condition === 'damaged' ? ', DAMAGED' : '') + '?')) return; }
+        /* received and commissioned both say WHEN (today unless another day
+           is chosen) and are confirmed before they are recorded */
+        function when(sel, what) { var v = sel && sel.value ? sel.value : todayIso(); if (v > todayIso()) { $('fleet-msg').textContent = 'The ' + what + ' date is in the future.'; return null; } return v; }
+        function onDay(v) { return v === todayIso() ? 'today (' + v + ')' : 'on ' + v; }
+        if (act === 'commissioned') { var dt = when(el.querySelector('[data-date="' + i + '"]'), 'commissioning'), ins = el.querySelector('[data-inst="' + i + '"]'); if (!dt) return; body.at = dt; body.installer = ins.value; if (!window.confirm('Record ' + u.serial + ' as commissioned ' + onDay(dt) + (u.siteName ? ' at ' + u.siteName : '') + '?')) return; }
+        if (act === 'received') { var rd = when(el.querySelector('[data-rdate="' + i + '"]'), 'arrival'), cond = el.querySelector('[data-cond="' + i + '"]'); if (!rd) return; body.at = rd; body.condition = cond && cond.value === 'damaged' ? 'damaged' : 'accepted'; if (!window.confirm('Record ' + u.serial + ' as received ' + onDay(rd) + (body.condition === 'damaged' ? ', DAMAGED' : '') + '?')) return; }
         b.disabled = true; $('fleet-msg').textContent = 'Recording…';
         post('/api/my-sites', body).then(function (r) {
           if (!r.ok) { $('fleet-msg').textContent = r.j.error || 'Could not record that.'; b.disabled = false; return; }
@@ -888,8 +934,8 @@
     return '<p class="muted" style="margin:0;max-width:78ch">Each unit is marked “going to” its site. When it arrives and you record it received, it is tied to that site and its warranty starts. Nothing ships differently: to change a delivery, ask on the order.</p>'
       + '<label for="bk-order">Order</label><select id="bk-order" style="width:100%"><option value="">Choose the order…</option>' + orders.map(function (x) { return '<option value="' + esc(x.orderNo) + '"' + (x.orderNo === BK.orderNo ? ' selected' : '') + '>' + esc(x.orderNo + (x.po ? ' · your PO ' + x.po : '') + ' · ' + plural(Number(x.units) || 0, 'unit')) + '</option>'; }).join('') + '</select>'
       + (o ? '<p class="muted" style="font-size:13.5px;margin:6px 0 0">' + esc(bkOrderLine(o)) + '</p>' : '')
-      + '<div class="bk-head" style="margin:18px 0 0"><p class="sub-h" style="margin:0">Sites · <span id="bk-picked">0</span> of ' + sites.length + ' ticked</p><span><button type="button" class="btn" data-bk-all="1">Tick all</button> <button type="button" class="btn" data-bk-all="0">Tick none</button></span></div>'
-      + '<p class="muted" style="font-size:13.5px;margin:4px 0 8px">Leave Units blank to share the order evenly; type a number to send exactly that many there (units already there or going there count).</p>'
+      + '<div class="bk-head" style="margin:18px 0 0"><p class="sub-h" style="margin:0">Sites · <span id="bk-picked">0</span> of ' + sites.length + ' ticked</p><span><button type="button" class="btn" data-bk-all="1">Tick all</button> <button type="button" class="btn" data-bk-all="0">Tick none</button> <button type="button" class="btn" data-bk-one>One per site</button></span></div>'
+      + '<p class="muted" style="font-size:13.5px;margin:4px 0 8px">Leave Units blank to share the order evenly; type a number to send exactly that many there (units already there or going there count). <b>One per site</b> sends one unit to every ticked site; the rest of the order waits for your next list.</p>'
       + '<div class="pf-scroll"><table class="pf-table"><thead><tr><th></th><th>Site</th><th>Address</th><th>Units</th><th>Now</th></tr></thead><tbody>' + sites.map(function (s) {
         var now = [Number(s.units) > 0 ? s.units + ' at the site' : '', Number(s.planned) > 0 ? s.planned + ' going here' : ''].filter(Boolean).join(' · ') || 'nothing yet';
         return '<tr><td><input type="checkbox" data-bk-pick="' + esc(s.id) + '"' + (BK.pick[s.id] ? ' checked' : '') + ' aria-label="Send units to ' + esc(s.name) + '"></td><td><b>' + esc(s.name) + '</b>' + (s.ref ? '<small>' + esc(s.ref) + '</small>' : '') + '</td><td>' + esc(bkAddr(s.address)) + '</td>'
@@ -955,6 +1001,8 @@
     if ($('bk-order')) $('bk-order').onchange = function () { BK.orderNo = this.value; BK.elsewhere = 0; BK.replan = false; BK.plan = null; BK.done = null; BK.msg = ''; drawBulk(); };
     Array.prototype.forEach.call(el.querySelectorAll('[data-bk-pick]'), function (c) { c.onchange = function () { BK.pick[c.getAttribute('data-bk-pick')] = c.checked; bkUnplan(); bkPaintTotals(); }; });
     Array.prototype.forEach.call(el.querySelectorAll('[data-bk-n]'), function (i) { i.oninput = function () { BK.n[i.getAttribute('data-bk-n')] = i.value; bkUnplan(); bkPaintTotals(); }; });
+    /* one unit to each ticked site: the rest of the order stays without a site, and the next list's sites take the next units */
+    Array.prototype.forEach.call(el.querySelectorAll('[data-bk-one]'), function (b) { b.onclick = function () { bkSites().forEach(function (s) { if (BK.pick[s.id]) BK.n[s.id] = '1'; }); BK.plan = null; drawBulk(); }; });
     Array.prototype.forEach.call(el.querySelectorAll('[data-bk-all]'), function (b) { b.onclick = function () { var on = b.getAttribute('data-bk-all') === '1'; bkSites().forEach(function (s) { BK.pick[s.id] = on; }); BK.plan = null; drawBulk(); }; });
     if ($('bk-replan')) $('bk-replan').onchange = function () { BK.replan = this.checked; bkUnplan(); };
     if ($('bk-plan')) $('bk-plan').onclick = function () { bkPlan(this); };
@@ -1219,13 +1267,13 @@
       if (o.checkout) {
         var own = o.checkout.accounting === 'tenant';
         checkout = '<div class="lines"><b>Order total $' + Number(o.checkout.total).toFixed(2) + '</b>'
-          + (own ? '<p class="muted">' + esc(o.checkout.depositPercent) + '% deposit. Invoiced by ' + esc(PORTAL && PORTAL.brand ? PORTAL.brand.name : 'your supplier') + '.</p>'
+          + (own ? '<p class="muted">' + esc(o.checkout.depositPercent) + '% deposit. Invoiced by ' + esc(brandName()) + '.</p>'
                  : '<p class="muted">Includes a ClearSky processing fee of $' + Number(o.checkout.processingFee).toFixed(2) + '. ' + esc(o.checkout.depositPercent) + '% deposit; collected by ClearSky for fulfillment.</p>')
           + (o.checkout.invoices || []).map(function (i) {
             /* the supplier's own link on a tenant-billed invoice, or
                QuickBooks' — the server decided which; https only here */
             var pay = https(i.payUrl);
-            return '<p>' + esc(i.stage) + (i.number ? ' · invoice ' + esc(i.number) : '') + (i.issuedAt ? ' · issued ' + esc(i.issuedAt) : '') + ' · $' + Number(i.amount).toFixed(2) + ' · ' + esc(String(i.status).replace(/_/g, ' '))
+            return '<p>' + esc(STAGE[i.stage] || word({}, i.stage)) + (i.number ? ' · invoice ' + esc(i.number) : '') + (i.issuedAt ? ' · issued ' + esc(String(i.issuedAt).slice(0, 10)) : '') + ' · $' + Number(i.amount).toFixed(2) + ' · ' + esc(word(INV_WORD, i.status))
               + (pay ? ' · <a target="_blank" rel="noopener noreferrer" href="' + esc(pay) + '">' + (own ? 'Pay online →' : 'View / pay secure QuickBooks invoice →') + '</a>' : '') + '</p>';
           }).join('') + '</div>';
       }
@@ -1236,7 +1284,7 @@
           + (d.items && d.items.length ? ' · ' + d.items.map(function (i) { return esc(i.qty) + ' × ' + esc(i.sku); }).join(', ') : ''));
       });
       (o.loads || []).forEach(function (l) {
-        meta.push('Load ' + esc(l.id) + ' · ' + esc(String(l.status || '').replace(/_/g, ' ')) + ' · ' + esc(l.carrier) + ' ' + esc(l.tracking)
+        meta.push('Load ' + esc(l.id) + ' · ' + esc(word(LOAD, l.status)) + ' · ' + esc(l.carrier) + ' ' + esc(l.tracking)
           + (l.units ? ' · ' + esc(l.units) + ' unit' + (l.units === 1 ? '' : 's') : '')
           + (l.lastConfirmed ? ' · last confirmed at ' + esc(l.lastConfirmed.label) : '')
           + (l.deliveredAt ? ' · delivered ' + esc(String(l.deliveredAt).slice(0, 10)) : ''));
@@ -1252,7 +1300,7 @@
         +   '<span class="sp"></span>'
         +   '<span class="pill ' + tone + '">' + esc(ms.label || 'Received') + '</span></div>'
         + (o.cancelRequested ? '<p class="say"><b>Cancellation requested.</b> '
-            + esc(o.soldBy || 'The team') + ' will be in touch.</p>' : '')
+            + esc(brandName()) + ' will be in touch.</p>' : '')
         + '<p class="say">' + esc(ms.say || '') + '</p>'
         + (track ? '<div class="track">' + track + '</div>'
             + '<div class="steps"><span>Received</span><span>Confirmed</span><span>Building</span>'
@@ -1272,7 +1320,7 @@
       return '<div class="rq ' + esc(r.status) + '"><b>' + esc(KIND[r.kind] || r.kind) + '</b> <span class="muted">' + esc(String(r.at || '').slice(0, 10)) + (r.by ? ' · ' + esc(r.by) : '') + ' · ' + (r.status === 'open' ? 'waiting for an answer' : 'answered') + '</span>'
         + '<p>' + esc(r.message) + '</p>'
         + (r.address ? '<p class="muted">New address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '')
-        + (r.answer ? '<p class="ans"><b>' + esc(o.soldBy || 'Answer') + ':</b> ' + esc(r.answer) + '</p>' : '') + '</div>';
+        + (r.answer ? '<p class="ans"><b>' + esc(brandName()) + ':</b> ' + esc(r.answer) + '</p>' : '') + '</div>';
     }).join('');
     return '<div class="rqs">' + reqs + '<details class="rqf"><summary>Request a change or ask a question</summary>'
       + '<form data-req="' + esc(o.orderNo) + '"><label>About<select name="kind"><option value="information">A question</option><option value="shipping">Delivery address or date</option><option value="change">Change the order</option><option value="warranty">Warranty</option></select></label>'
@@ -1364,14 +1412,27 @@
   }
   /* The people on the account; the owner adds, approves and turns access
      off and on (api/my-account.js add-user · user-status). */
+  /* May this owner add a colleague here? api/my-account.js decides (only
+     an owner of a company account the SUPPLIER set up with an email
+     domain, at that domain); the form shows only where the answer can be
+     yes, and otherwise says who to ask. The server's own word (`addPeople`)
+     when it sends one; until then, a company account or one the customer
+     opened alone. */
+  function canAddPeople(a) {
+    var ask = 'Colleagues are added to this account by ' + brandName() + ': ask ' + repName() + ' to add them, with their work email.';
+    var srv = a && a.addPeople;
+    if (srv && typeof srv === 'object') return { ok: srv.ok === true, domain: srv.domain || '', why: srv.why || ask };
+    return a && a.accountType === 'company' ? { ok: true, domain: '', why: '' } : { ok: false, domain: '', why: ask };
+  }
   function drawPeople(a) {
-    var owner = a.you.role === 'owner', list = a.users || [];
+    var owner = a.you.role === 'owner', list = a.users || [], add = canAddPeople(a);
     $('people').innerHTML = '<h2>People on this account · ' + list.length + '</h2>' + list.map(function (u) {
       var me = u.email === a.you.email, st = u.status || 'active';
       var act = !owner || me ? '' : st === 'pending' ? '<button type="button" class="btn p" data-person="' + esc(u.email) + '" data-to="active">Approve</button> <button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="disabled">Decline</button>' : st === 'disabled' ? '<button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="active">Turn on</button>' : '<button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="disabled">Turn off</button>';
-      return '<div class="ord" style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div style="min-width:0;overflow-wrap:anywhere"><b>' + esc(u.name || u.email) + (me ? ' (you)' : '') + '</b> <span class="muted">' + esc(u.email) + (u.role === 'owner' ? ' · owner' : '') + (st === 'pending' ? ' · asked to join' : st === 'disabled' ? ' · access off' : '') + (owner && u.activated === false && st === 'active' ? ' · not signed in yet' : '') + '</span></div><div>' + act + '</div></div>';
+      return '<div class="ord" style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div style="min-width:0;overflow-wrap:anywhere"><b>' + esc(u.name || u.email) + (me ? ' (you)' : '') + '</b> <span class="muted">' + esc([u.name ? u.email : '', u.role === 'owner' ? 'owner' : '', st === 'pending' ? 'asked to join' : st === 'disabled' ? 'access off' : '', owner && u.activated === false && st === 'active' ? 'not signed in yet' : ''].filter(Boolean).join(' · ')) + '</span></div><div>' + act + '</div></div>';
     }).join('')
-      + (owner ? '<div class="row2" style="margin-top:10px"><div><label for="p-email">Add a colleague (work email)</label><input id="p-email" type="email" placeholder="colleague@' + esc(String(a.you.email).split('@')[1] || 'company.com') + '"></div><div><label for="p-name">Their name</label><input id="p-name"></div></div><div class="actions"><button type="button" class="btn p" id="p-add">Add to the account</button><span class="muted" id="p-msg" style="align-self:center;font-size:13.5px"></span></div>'
+      + (owner && !add.ok ? '<p class="muted" style="font-size:13px">' + esc(add.why) + '</p>'
+        : owner ? '<div class="row2" style="margin-top:10px"><div><label for="p-email">Add a colleague (work email' + (add.domain ? ', @' + esc(add.domain) : '') + ')</label><input id="p-email" type="email" placeholder="colleague@' + esc(add.domain || String(a.you.email).split('@')[1] || 'company.com') + '"></div><div><label for="p-name">Their name</label><input id="p-name"></div></div><div class="actions"><button type="button" class="btn p" id="p-add">Add to the account</button><span class="muted" id="p-msg" style="align-self:center;font-size:13.5px"></span></div>'
         : '<p class="muted" style="font-size:13px">The account owner adds and removes people. Everyone here sees the same orders, sites and equipment.</p>');
     Array.prototype.forEach.call(document.querySelectorAll('#people [data-person]'), function (b) {
       b.onclick = function () {
@@ -1415,7 +1476,7 @@
     $('terms-wrap').hidden = !any;
     if (any) {
       $('terms').innerHTML =
-          (t.depositPct != null ? '<div><div class="k">Deposit</div><div class="v">' + esc(t.depositPct) + '% · ' + (t.dueDays ? 'due in ' + esc(t.dueDays) + ' days' : 'on receipt') + '</div></div>' : '')
+          (t.depositPct != null ? '<div><div class="k">Deposit</div><div class="v">' + esc(t.depositPct) + '% · ' + (t.dueDays ? 'due in ' + esc(t.dueDays) + ' day' + (Number(t.dueDays) === 1 ? '' : 's') : 'on receipt') + '</div></div>' : '')
         + (t.netDays != null ? '<div><div class="k">Payment terms</div><div class="v">Net ' + esc(t.netDays) + '</div></div>' : '')
         + (t.discountPct != null ? '<div><div class="k">Your discount</div><div class="v">' + esc(t.discountPct) + '%</div></div>' : '')
         + (t.poRequired ? '<div><div class="k">Purchase order</div><div class="v">Required</div></div>' : '');
@@ -1456,7 +1517,7 @@
       DESIGN=d;
       $('new-project').hidden=!active;$('new-project').href=base;
       $('editor-access').textContent=active?(d.access.status==='owner-access'?'ClearSky owner access · no customer subscription required. Create and use your own site plans in this supplier’s customer workspace.':(d.access.status==='trial'?'Approved trial':'Editor Lite access')+' · available until '+new Date(d.access.expiresAt).toLocaleDateString()+'.'):'Not active on your account.';
-      $('project-list').innerHTML=(d.projects||[]).map(function(p){return '<div class="ord"><h3>'+esc(p.name)+'</h3><p class="muted">'+esc(p.module)+' · '+esc(new Date(p.updatedAt).toLocaleString())+'</p>'+(active?'<a class="btn" href="'+esc(base+'&project='+encodeURIComponent(p.id))+'">Open project →</a>':'<p class="muted">Retained securely. Renew Editor Lite to reopen this design.</p>')+'</div>';}).join('')||'<p class="muted">No site plans yet. '+(active?'Start a new project above.':'Your orders and customer account do not require an editor subscription.')+'</p>';
+      $('project-list').innerHTML=(d.projects||[]).map(function(p){return '<div class="ord"><h3>'+esc(p.name)+'</h3><p class="muted">'+esc(({bess:'Battery storage',compute:'Compute',ev:'EV charging',solar:'Solar'})[p.module]||p.module)+' · '+esc(new Date(p.updatedAt).toLocaleDateString())+'</p>'+(active?'<a class="btn" href="'+esc(base+'&project='+encodeURIComponent(p.id))+'">Open project →</a>':'<p class="muted">Retained securely. Renew Editor Lite to reopen this design.</p>')+'</div>';}).join('')||'<p class="muted">No site plans yet. '+(active?'Start a new project above.':'Your orders and customer account do not require an editor subscription.')+'</p>';
       if(d.limited)$('project-list').insertAdjacentHTML('beforeend','<p class="muted">Newest 100 projects shown.</p>');
       drawSub();
     })['catch'](function(e){$('project-list').innerHTML='<p class="err">'+esc(e.message)+'</p>';$('editor-access').textContent='';drawSub();});
@@ -1487,7 +1548,11 @@
       url: location.origin + location.pathname + '?org=' + encodeURIComponent(ORG) + '&view=' + encodeURIComponent(views[location.hash.slice(1)] ? location.hash.slice(1) : 'home'),
       handleCodeInApp: true
     }).then(function () {
-      $('g-msg').textContent = 'Check your inbox — we have emailed a link to ' + e + '.';
+      /* who sends it, and where else to look: the email is the sign-in
+         service's own, not the supplier's */
+      var f = _cfg.firebase || _cfg, from = /^[a-z0-9-]+$/.test(f.projectId || '') ? 'noreply@' + f.projectId + '.firebaseapp.com' : '';
+      $('g-msg').className = 'muted';
+      $('g-msg').textContent = 'Check your inbox: a sign-in link ' + (from ? 'from ' + from + ' ' : '') + 'is on its way to ' + e + '. It can take a minute; if it is not there, look in spam or junk.';
     }, function (err) {
       $('g-msg').className = 'err';
       $('g-msg').textContent = (err && err.message) || 'Could not send the link.';

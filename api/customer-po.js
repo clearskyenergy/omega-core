@@ -1,6 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
-var A=require('./_lib/admin'),B=require('./_lib/buyer-accounts'),P=require('./_lib/logic-policy'),L=require('./_lib/order-lifecycle');
+var A=require('./_lib/admin'),B=require('./_lib/buyer-accounts'),P=require('./_lib/logic-policy'),L=require('./_lib/order-lifecycle'),Pt=require('./_lib/portal');
 module.exports=A.handler(async function(req,res){
   res.setHeader('Cache-Control','no-store');
   if(['GET','POST'].indexOf(req.method)<0)throw A.httpError(405,'GET or POST only');
@@ -13,15 +13,17 @@ module.exports=A.handler(async function(req,res){
       // The ACCOUNT's orders, not the caller's: every person on the company sees them.
       var rows=await B.accountOrders(db,org,email,acct,{limit:50});
       var catalog=await db.doc('omega_orgs/'+org+'/storefront/config').get();
-      return {brand:require('./_lib/logic-brand')(ctx.org),products:(catalog.exists?catalog.data().products||[]:[]).filter(function(p){return p.active!==false&&!p.placeholder&&p.sku!=='GENERIC-BESS';}).map(function(p){return {sku:p.sku,name:p.name,kind:p.kind||'product'};}),
-        orders:rows.docs.map(function(s){return L.buyerOrder(s.data(),s.id);}),limited:rows.truncated,terms:P.terms(ctx.config.terms,acct.data.terms)};
+      // Only what a buyer may order (api/_lib/portal.js orderable): never a component, a placeholder or the generic concept.
+      return {brand:require('./_lib/logic-brand')(ctx.org),products:Pt.orderables(catalog.exists?catalog.data().products:[]).map(function(p){return {sku:p.sku,name:p.name,kind:p.kind||'product'};}),
+        // The public milestone in plain words, never the internal status ('quoted' is ClearSky's price to the tenant).
+        orders:rows.docs.map(function(s){var o=s.data(),v=L.buyerOrder(o,s.id),m=Pt.milestoneOf(o);v.milestone={key:m.key,label:m.label,say:m.say};v.status=m.label;return v;}),limited:rows.truncated,terms:P.terms(ctx.config.terms,acct.data.terms)};
     }
     if(b.action!=='submit')throw A.httpError(400,'Unsupported action');
     return db.runTransaction(async function(tx){
       // Re-read account and catalog inside the transaction; suspension/catalog edits race safely.
       var fresh=B.active(await B.lookup(db,org,email,tx));
       var catalog=await tx.get(db.doc('omega_orgs/'+org+'/storefront/config'));
-      var input=L.po(b,catalog.exists?catalog.data().products||[]:[]);
+      var input=L.po(b,Pt.orderables(catalog.exists?catalog.data().products:[]));
       var id='po_'+P.key(org+':'+fresh.id+':'+input.poNumber.toLowerCase()),ref=db.collection('orders').doc(id),old=await tx.get(ref);
       var fingerprint=P.key(JSON.stringify(input));
       if(old.exists){

@@ -95,6 +95,30 @@ function stock(units) {
   return { skus: skus, available: total, held: held };
 }
 
+/* Every shipping unit by product, in one of three places: on the shelf
+   (built for stock, at Ready, no hold — what the office can assign), on an
+   order (assigned, whether built yet or shipped), or being built for stock.
+   A held stock unit at Ready is counted apart. Voided serials (a typo that
+   was corrected) are not units. The caller reads each inventoryStatus
+   through its own index (api/logic-plant.js page=stock) so the counts are
+   not "whatever the first page of documents happened to hold". */
+function finished(units) {
+  var by = {}, totals = { available: 0, held: 0, assigned: 0, building: 0 }, avail = [];
+  (Array.isArray(units) ? units : []).forEach(function (u) {
+    u = u || {};
+    if (!u.shipUnit || u.inventoryStatus === 'void') return;
+    var sku = text(u.sku, 100); if (!sku) return;
+    var g = by[sku] || (by[sku] = { sku: sku, available: 0, held: 0, assigned: 0, building: 0 }), k;
+    if (u.orderId) k = 'assigned';
+    else if (u.inventoryStatus === 'available' && text(u.at, 40) === 'ready') k = u.hold ? 'held' : 'available';
+    else k = 'building';
+    g[k]++; totals[k]++;
+    if (k === 'available' && avail.length < 500) avail.push({ serial: text(u.serial, 100), sku: sku, unitType: text(u.unitType, 40) || 'unit', test: u.test && u.test.result ? { result: text(u.test.result, 10) } : null });
+  });
+  var skus = Object.keys(by).sort().map(function (k) { return by[k]; });
+  return { skus: skus, available: avail, totals: totals };
+}
+
 /* Completed units on orders: ready shipping units per works order, whether
    the order can ship, and what already left. */
 function completed(rows) {
@@ -109,4 +133,4 @@ function completed(rows) {
   return out;
 }
 
-module.exports = { floor: floor, queues: queues, demand: demand, stock: stock, completed: completed };
+module.exports = { floor: floor, queues: queues, demand: demand, stock: stock, finished: finished, completed: completed };

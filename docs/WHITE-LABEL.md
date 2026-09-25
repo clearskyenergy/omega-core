@@ -739,7 +739,8 @@ Whether a Clean Cell-referred customer is **their own tenant** (own `orgId`,
 own `billing.toolAccess`) or a **collaborator on Clean Cell's workspace** via
 `org_members`. The mechanism above works either way; who owns the customer
 relationship is a commercial question. Recorded in
-`tenants/cleancell/tenant.json` under `_noteFunnel`.
+`tenants/cleancell/NOTES.md` under *The funnel* (it was `_noteFunnel` in
+`tenant.json`, which the site serves; the notes moved off it on 2026-09-24).
 
 ---
 

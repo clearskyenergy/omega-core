@@ -52,8 +52,10 @@ if (!APPLY) {
   mock(adminPath, A);
   /* the double starts from the tenant as it is seeded in the repo */
   var seed = require(path.join(ROOT, 'tenants', ORDER.tenantSlug || org.split('.')[0], 'tenant.json'));
+  /* the plan lives in billing.json beside the tenant (kept off the site); an older folder has it in tenant.json */
+  var bill = {}; try { bill = require(path.join(ROOT, 'tenants', ORDER.tenantSlug || org.split('.')[0], 'billing.json')); } catch (e) {}
   db.seed('omega_orgs/' + org, { name: seed.name, status: 'active', vertical: seed.vertical, domains: seed.domains, whiteLabel: seed.whiteLabel });
-  db.seed('omega_orgs/' + org + '/billing/current', { addons: seed.addons || [], status: 'active' });
+  db.seed('omega_orgs/' + org + '/billing/current', { addons: bill.addons || seed.addons || [], status: 'active' });
   db.seed('omega_orgs/' + org + '/fulfillment/config', Object.assign({ enabled: true, terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, ORDER.fulfillmentConfig || {}));
   db.seed('omega_orgs/' + org + '/storefront/config', { products: require(path.join(ROOT, 'tenants', ORDER.tenantSlug || org.split('.')[0], 'products.json')), catalogRevision: 1 });
   db.seed('omega_orgs/' + org + '/members/tom', { role: 'owner', status: 'active' });

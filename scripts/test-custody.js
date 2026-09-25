@@ -53,6 +53,8 @@ var NOW = '2026-09-05T12:00:00Z';
     assert.equal(C.judge(unit('Y', { at: 'rack' }), 'ship', {}).reason, 'not_ready'); assert.equal(C.judge(unit('M', { shipUnit: false }), 'receive', {}).reason, 'not_a_shipping_unit');
     assert.equal(C.judge(unit('Z', { custody: { status: 'received' } }), 'assign', {}).reason, 'site_required'); assert.equal(C.judge(unit('Z', { custody: { status: 'assigned', siteId: 's' } }), 'assign', { siteId: 's' }).action, 'duplicate');
     assert.equal(C.judge(unit('Z', { custody: { status: 'in_service' } }), 'commission', {}).reason, 'wrong_status'); assert.equal(C.judge(unit('Z', { custody: { state: 'scrapped' } }), 'receive', {}).reason, 'scrapped');
+    /* a serial voided at registration (a typo the plant corrected) is never moved, sent anywhere or planned */
+    var v = unit('V', { inventoryStatus: 'void' }); assert.equal(C.judge(v, 'receive', {}).reason, 'void'); assert.throws(function () { C.destination(v, { siteId: 's', siteName: 'S' }, 'pm', NOW, 'manual'); }, /voided/); assert.equal(C.plannable(v).why, 'void');
   });
   await test('apply stamps the dates and writes one event; commissioning implies installed', function () {
     var ap = C.apply(unit('X', { custody: { status: 'assigned', siteId: 's' } }), 'commission', { at: '2026-09-04', installer: 'Riverside Electric' }, 'pm', NOW, 'scan');
@@ -106,7 +108,7 @@ var NOW = '2026-09-05T12:00:00Z';
   seed();
   var siteId;
   await test('a site is an end location with its interconnection; the same name and ZIP is one site', async function () {
-    var r = await post({ action: 'site', name: 'Bakersfield yard', customerId: 'company_riverside', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, interconnection: { utility: 'PG&E', meterNo: '1002233', poi: 'POI-7 480V', serviceKw: 500 }, endCustomer: 'InCharge Energy' });
+    var r = await post({ action: 'site', name: 'Bakersfield yard', customerId: 'company_riverside', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, interconnection: { utility: 'PG&E', meterNo: '1002233', poi: 'POI-7 480V', serviceKw: 500 }, endCustomer: 'Harbor Charging' });
     siteId = r.siteId; assert.match(siteId, /^site_company-riverside-bakersfield-yard-93307/); assert.equal(db.data.get(O + '/sites/' + siteId).interconnection.poi, 'POI-7 480V');
     await rejects(post({ action: 'site', name: 'bakersfield  yard', customerId: 'company_riverside', address: { zip: '93307' } }), 409, /already exists/);
     var e = await post({ action: 'site', id: siteId, name: 'Bakersfield yard', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, interconnection: { utility: 'PG&E', poi: 'POI-7 480V', serviceKw: 750 } }); assert.equal(e.site.interconnection.serviceKw, 750); assert.equal(e.site.customerId, 'company_riverside');
@@ -161,7 +163,9 @@ var NOW = '2026-09-05T12:00:00Z';
     assert.equal(db.data.get(O + '/sites/' + mySite).customerId, 'company_riverside', 'the customer cannot put a site on another account');
     await rejects(cpost({ action: 'assign', serial: 'S002', siteId: 'site_nope' }), 404, /Site not found/);
     var r = await cpost({ action: 'assign', serial: 'S002', siteId: mySite, position: 'Bay 1' }); assert.equal(r.unit.siteName, 'Fresno depot'); assert.equal(r.unit.coverage[0].status, 'active');
-    var c = await cpost({ action: 'commissioned', serial: 'S002', at: '2026-09-05', installer: 'Riverside Electric' }); assert.equal(c.unit.status, 'commissioned'); assert.equal(c.unit.commissionedAt, '2026-09-05');
+    /* the office received S002 today (the endpoint's clock), so the customer commissions it today: a commissioning before the receipt is refused (CUST-17) */
+    var TODAY = new Date().toISOString().slice(0, 10);
+    var c = await cpost({ action: 'commissioned', serial: 'S002', at: TODAY, installer: 'Riverside Electric' }); assert.equal(c.unit.status, 'commissioned'); assert.equal(c.unit.commissionedAt, TODAY);
     await rejects(cpost({ action: 'commissioned', serial: 'S002', at: '2026-09-06' }), 409, /commissioned/);
     var ev = Array.from(db.data.keys()).filter(function (k) { return k.indexOf('plant_units/' + ORG + '__S002/custody_events/') === 0; }).map(function (k) { return db.data.get(k); }); assert.equal(ev[ev.length - 1].method, 'customer');
   });
@@ -205,22 +209,37 @@ var NOW = '2026-09-05T12:00:00Z';
   });
   await test('an import is mapped, dry-run, then committed; sites are created; a second run changes nothing', async function () {
     ['S007', 'S008'].forEach(function (s) { db.seed('plant_units/' + ORG + '__' + s, unit(s, { custody: { status: 'in_transit', shippedAt: '2026-08-15' } })); });
-    var text = 'Serial No,Site,Street,City,State,Zip,End Customer,Position,Installer,Received,Commissioned\nS007,Tehachapi wind yard,4 Ridge Rd,Tehachapi,CA,93561,InCharge,Pad 1,Riverside Electric,8/20/2026,2026-09-04\nS008,Tehachapi wind yard,4 Ridge Rd,Tehachapi,CA,93561,InCharge,Pad 2,,8/20/2026,\nS001,Tehachapi wind yard,4 Ridge Rd,Tehachapi,CA,93561,,,,8/20/2026,\nNOPE,Tehachapi wind yard,4 Ridge Rd,Tehachapi,CA,93561,,,,8/20/2026,\n';
+    var text = 'Serial No,Site,Street,City,State,Zip,End Customer,Position,Installer,Received,Commissioned\nS007,Tehachapi wind yard,4 Ridge Rd,Tehachapi,CA,93561,Harbor,Pad 1,Riverside Electric,8/20/2026,2026-09-04\nS008,Tehachapi wind yard,4 Ridge Rd,Tehachapi,CA,93561,Harbor,Pad 2,,8/20/2026,\nS001,Tehachapi wind yard,4 Ridge Rd,Tehachapi,CA,93561,,,,8/20/2026,\nNOPE,Tehachapi wind yard,4 Ridge Rd,Tehachapi,CA,93561,,,,8/20/2026,\n';
     var dry = await post({ action: 'import', text: text, customerId: 'company_riverside', allowNewSites: true }); assert.equal(dry.dryRun, true); assert.equal(dry.mapping['Serial No'], 'serial'); assert.equal(dry.mapping['Commissioned'], 'commissionDate');
     assert.equal(dry.plan.summary.willChange, 2); assert.equal(dry.plan.summary.errors, 2); assert.equal(dry.plan.summary.newSites, 1);
     assert.deepEqual(dry.plan.items[0].actions.map(function (a) { return a.action; }), ['receive', 'assign', 'commission']); assert.deepEqual(dry.plan.items[1].actions.map(function (a) { return a.action; }), ['receive', 'assign']);
     assert.match(dry.plan.items[2].problems[0], /replaced/); assert.match(dry.plan.items[3].problems[0], /not registered/);
     await rejects(post({ action: 'import', text: text, customerId: 'company_riverside' }), 409, /does not exist; add it first/).catch(function () {}); /* new sites need allowNewSites; the row error is in the plan, not thrown */
     var noNew = await post({ action: 'import', text: text, customerId: 'company_riverside', allowNewSites: false }); assert.match(noNew.plan.items[0].problems[0], /does not exist/);
-    var done = await post({ action: 'import', text: text, customerId: 'company_riverside', allowNewSites: true, dryRun: false, fileName: 'incharge-sites.csv' });
+    var done = await post({ action: 'import', text: text, customerId: 'company_riverside', allowNewSites: true, dryRun: false, fileName: 'harbor-sites.csv' });
     assert.equal(done.summary.created, 1); assert.equal(done.summary.updated, 2); assert.equal(done.errors.length, 2);
     var s7 = await get({ serial: 'S007' }); assert.equal(s7.unit.custody.status, 'commissioned'); assert.equal(s7.site.name, 'Tehachapi wind yard'); assert.equal(s7.site.customerId, 'company_riverside'); assert.equal(s7.unit.coverage[0].status, 'active'); assert.equal(s7.events.length, 3); assert.equal(s7.events[0].method, 'import');
     var s8 = await get({ serial: 'S008' }); assert.equal(s8.unit.custody.status, 'assigned'); assert.equal(s8.unit.custody.position, 'Pad 2');
     var again = await post({ action: 'import', text: text, customerId: 'company_riverside', allowNewSites: true, dryRun: false }); assert.equal(again.summary.updated, 0); assert.equal(again.summary.skipped, 2); assert.equal(again.summary.created, 0);
-    var batches = Array.from(db.data.keys()).filter(function (k) { return k.indexOf(O + '/custody_imports/') === 0; }); assert.equal(batches.length, 2); assert.equal(db.data.get(batches[0]).fileName, 'incharge-sites.csv');
+    var batches = Array.from(db.data.keys()).filter(function (k) { return k.indexOf(O + '/custody_imports/') === 0; }); assert.equal(batches.length, 2); assert.equal(db.data.get(batches[0]).fileName, 'harbor-sites.csv');
     await post({ action: 'mapping-save', mapping: { 'Serial No': 'serial', 'Site': 'siteName', 'Bogus': 'nope' } }); assert.deepEqual(db.data.get(O + '/custody_mappings/assignment').columnMap, { 'Serial No': 'serial', 'Site': 'siteName' });
     var d = await get({}); assert.equal(d.mapping['Serial No'], 'serial');
   });
   await test('a site page lists what is bound to it', async function () { var d = await get({ site: siteId }); assert.deepEqual(d.units.map(function (u) { return u.serial; }).sort(), ['S001', 'S006']); });
+  await test('CUST-17: a customer\'s own date is one that can be true — not in the future, not before the step it follows — and nothing moves when it is not', async function () {
+    db.seed('plant_units/' + ORG + '__S010', unit('S010', { sku: 'CC-C418', custody: { status: 'in_transit', shippedAt: '2026-08-01', customerId: 'company_riverside' } }));
+    await rejects(cpost({ action: 'received', serial: 'S010', at: '2025-01-01' }), 400, /before it shipped \(2026-08-01, as recorded\)/);
+    await rejects(cpost({ action: 'received', serial: 'S010', at: '2099-01-01' }), 400, /in the future/);
+    assert.equal(db.data.get('plant_units/' + ORG + '__S010').custody.status, 'in_transit', 'a refused date moves nothing');
+    assert.equal((await cpost({ action: 'received', serial: 'S010', at: '2026-08-04' })).unit.status, 'received');
+    await cpost({ action: 'assign', serial: 'S010', siteId: mySite });
+    await rejects(cpost({ action: 'commissioned', serial: 'S010', at: '2031-06-01' }), 400, /in the future/);
+    await rejects(cpost({ action: 'commissioned', serial: 'S010', at: '2026-08-02' }), 400, /before it was received \(2026-08-04, as recorded\)/);
+    var tomorrow = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+    var c = await cpost({ action: 'commissioned', serial: 'S010', at: tomorrow }); assert.equal(c.unit.commissionedAt, tomorrow, 'a day\'s grace for the buyer\'s own time zone');
+    var sla = c.unit.coverage.filter(function (x) { return x.id === 'uptime'; })[0]; assert.equal(sla.from, tomorrow, 'the SLA starts on a date that can be true');
+    /* the office's record (an import of history, the load) is judged by the office, not refused here */
+    assert.doesNotThrow(function () { C.apply(unit('S011', { custody: { status: 'in_transit', shippedAt: '2026-08-01' } }), 'receive', { at: '2026-07-30' }, 'pm@cleancell.us', NOW, 'import'); });
+  });
   console.log('\n' + count + ' custody checks passed\n');
 })().catch(function (e) { console.error('FAIL', e); process.exit(1); });

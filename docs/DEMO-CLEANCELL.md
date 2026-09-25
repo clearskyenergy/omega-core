@@ -219,8 +219,8 @@ is and the paper has not said otherwise. Both are contract terms, in
 storefront, and it lands in the same order queue marked `interest: 'platform'`.
 Whether that customer becomes their own tenant or a collaborator on Clean Cell's
 workspace is **not decided** — it is a commercial question about who owns the
-customer relationship. It is recorded as open in `tenants/cleancell/tenant.json`
-under `_noteFunnel`. Do not improvise an answer in the meeting.
+customer relationship. It is recorded as open in `tenants/cleancell/NOTES.md`
+under *The funnel*. Do not improvise an answer in the meeting.
 
 **"Can we edit our own product list?"** Not yet, and the rules say so
 deliberately: `products[].listPrice` is what a stranger sees and we are the ones
