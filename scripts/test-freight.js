@@ -571,7 +571,10 @@ function quoteBody(lane, extra) { return Object.assign({ action: 'freight-quote'
       var s = fs.readFileSync(path.join(__dirname, '..', 'api', '_lib', f), 'utf8');
       assert(/© 2025–2026 ClearSky Energy Solutions LLC\. Proprietary and Confidential\./.test(s.slice(0, 200)), f + ' carries the header');
       if (acorn) acorn.parse(s, { ecmaVersion: 5, sourceType: 'script' });
-      else assert(!/=>|`|\b(let|const|class|async)\s/.test(s.replace(/\/\*[\s\S]*?\*\//g, '')), f + ' is ES5');
+      /* no parser here (CI): a keyword check over the CODE — comments and
+         string literals out first, so "Freight class must be…" in a message
+         is not the class keyword */
+      else assert(!/=>|`|\b(let|const|class|async)\s/.test(s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"/g, "''").replace(/(^|[^:\\])\/\/.*$/gm, '$1')), f + ' is ES5');
     });
     var fr = fs.readFileSync(path.join(__dirname, '..', 'api', '_lib', 'freight.js'), 'utf8');
     assert(!/require\(['"]\.\/(order-lifecycle|logic-policy)['"]\)/.test(fr), 'no server-only module in a bundled library');
