@@ -836,16 +836,23 @@ function energyNeeded(m, T){
  }
 
  var b=RESULT.best, head=1+Math.round(nv('headroom',10))/100;
- RESULT.rec=econ(b.kW*head,b.kWh*head,b.annSav,b.lossCost,RESULT.fadeCurve);
+ /* The recommendation's pricing, for any sweep row: a caller that lists
+    other sizes beside the pick (the pro forma's alternatives) prices them
+    on the same headroom and fade curve, not at their un-grossed optimum.
+    A function, like savingsWith, so it never reaches a JSON response. */
+ RESULT.priceWithHeadroom=function(s){return econ(s.kW*head,s.kWh*head,s.annSav,s.lossCost,RESULT.fadeCurve);};
+ RESULT.rec=RESULT.priceWithHeadroom(b);
  RESULT.breakEven=breakEven(RESULT,b,RESULT.rec,RESULT.fadeCurve);
  RESULT.underwriting=underwriting(RESULT,b,RESULT.rec);
  RESULT.shortPeriod=RESULT.nMon<12?shortPeriodCallout(RESULT,b):'';
  RESULT.durationProbe=probeDurations()||null;
- /* Only the pick needs its schedule. Every other sweep row, and the
-    duration probe, drops it here, or the sizer's response would grow by a
-    term-long strip for each of the hundred-odd candidates it never shows. */
- RESULT.sweep.forEach(function(s){ if(s!==RESULT.best) delete s.schedule; });
+ /* The year-by-year strip is for a caller that prices this system
+    elsewhere and says so (input.keepSchedule, the pro forma's bridge), and
+    only the recommendation's. Everything else drops it, so a Battery Sizer
+    response is byte for byte what it was before the strip existed. */
+ RESULT.sweep.forEach(function(s){ delete s.schedule; });
  if(RESULT.durationProbe) delete RESULT.durationProbe.schedule;
+ if(input.keepSchedule!==true) delete RESULT.rec.schedule;
  RESULT.costRows=RESULT.months.map(function(m,i){return {before:RESULT.mode==='interval'?RESULT.baseBilled[i]*nv('dRate',18.5):demandCost(RESULT.baseBilled[i],m),after:RESULT.mode==='interval'?b.billed[i]*nv('dRate',18.5):demandCost(b.billed[i],m)};});
 
  if(RESULT.mode==='interval'){

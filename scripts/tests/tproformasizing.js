@@ -121,21 +121,59 @@ ok(R.schedule[8].grossSavings > R.schedule[7].grossSavings, 'savings recover wit
 
 /* ── 3. the engine's schedule is the NPV's own cash flow ──────────────── */
 console.log('engine schedule');
-var bills = ADAPTER.monthlyToBills(bills12(), { demandChargePerKw: 18 }).map(function (b) { b.label += ' 2025'; return b; });
-var E = ENGINE({ mode: 'tool-monthly', data: bills, durations: [1, 2, 4, 6], settings: { obj: 'npv', term: 20, fade: 3, minSoh: 80 } });
+function billsIn() { return ADAPTER.monthlyToBills(bills12(), { demandChargePerKw: 18 }).map(function (b) { b.label += ' 2025'; return b; }); }
+var E = ENGINE({ mode: 'tool-monthly', data: billsIn(), durations: [1, 2, 4, 6], settings: { obj: 'npv', term: 20, fade: 3, minSoh: 80 }, keepSchedule: true });
 var d = 0.08, npv = -E.rec.net;
 E.rec.schedule.forEach(function (y) { npv += (y.savings - y.loss - y.om - y.replacement) / Math.pow(1 + d, y.year); });
 near(npv, E.rec.npv, 1e-6, 'discounting the schedule reproduces the engine\'s NPV exactly');
 eq(E.rec.schedule.length, 20, 'one row per year of the term');
-ok(!!E.best.schedule, 'the modelled optimum keeps its schedule');
-eq(E.sweep.filter(function (s) { return s.schedule; }).length, 1, 'every other sweep row drops it (only the pick, which is a sweep row, keeps one)');
-var probe = ENGINE({ mode: 'tool-interval', data: ADAPTER.intervalToMonths(interval8760(), 60, 0), durations: [2], settings: { obj: 'npv' } });
+ok(!E.best.schedule && E.sweep.every(function (s) { return !s.schedule; }), 'asked for, only the recommendation carries a schedule: no sweep row, the pick included');
+var E0 = ENGINE({ mode: 'tool-monthly', data: billsIn(), durations: [1, 2, 4, 6], settings: { obj: 'npv', term: 20, fade: 3, minSoh: 80 } });
+ok(!E0.rec.schedule && JSON.stringify(E0).indexOf('"schedule"') < 0, 'not asked for, no schedule anywhere in the answer');
+ok(E.priceWithHeadroom(E.best).npv === E.rec.npv && E.priceWithHeadroom(E.best).kW === E.rec.kW, 'the recommendation is priceWithHeadroom of the pick');
+ok(JSON.stringify(E0).indexOf('priceWithHeadroom') < 0, 'and that function never reaches a JSON answer');
+var probe = ENGINE({ mode: 'tool-interval', data: ADAPTER.intervalToMonths(interval8760(), 60, 0), durations: [2], settings: { obj: 'npv' }, keepSchedule: true });
 ok(probe.durationProbe && !probe.durationProbe.schedule, 'the duration probe drops it too');
+
+/* ── 3b. /api/bess-size answers what it did before the schedule existed ─ *
+   3b6f7e2 is the engine the moment before econ() began keeping a strip.
+   It is compiled in memory beside the live one, so both read the same
+   capacity chain and tariff code and only the engine differs. */
+console.log('Battery Sizer answer unchanged');
+var OLD_REV = '3b6f7e2', oldEngine = null;
+try {
+  var Module = require('module');
+  var oldSrc = require('child_process').execFileSync('git', ['show', OLD_REV + ':api/_lib/battery-tool-engine.js'],
+    { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  var oldFile = path.join(ROOT, 'api/_lib/battery-tool-engine.' + OLD_REV + '.js');
+  var om = new Module(oldFile, module);
+  om.filename = oldFile;
+  om.paths = Module._nodeModulePaths(path.dirname(oldFile));
+  om._compile(oldSrc, oldFile);
+  oldEngine = om.exports;
+} catch (e) { oldEngine = null; }
+if (!oldEngine) {
+  console.log('  skip the engine at ' + OLD_REV + ' is not in this checkout (shallow clone?)');
+} else {
+  var MIXT = { name: 'Facility + on-peak', flatdemandstructure: [[{ rate: 8 }]], flatdemandmonths: [0,0,0,0,0,0,0,0,0,0,0,0],
+               demandratestructure: [[{ rate: 0 }], [{ rate: 12 }]], demandratchetpercentage: 70,
+               demandweekdayschedule: Array.apply(null, Array(12)).map(function () { return Array.apply(null, Array(24)).map(function (x, h) { return h >= 12 && h < 20 ? 1 : 0; }); }) };
+  [
+    ['tool-monthly, default settings', function () { return { mode: 'tool-monthly', data: billsIn(), durations: [1, 2, 4, 6], settings: { obj: 'npv' } }; }],
+    ['tool-monthly, fade, floor, headroom, ratchet', function () { return { mode: 'tool-monthly', data: billsIn(), durations: [1, 2, 4, 6], settings: { obj: 'npv', term: 20, fade: 3, minSoh: 80, headroom: 15, ratchet: 60 } }; }],
+    ['tool-monthly, structured tariff', function () { return { mode: 'tool-monthly', data: billsIn().map(function (b) { b.onPeakKw = b.peak * 0.9; return b; }), durations: [2, 4], settings: { obj: 'pay' }, tariff: MIXT }; }],
+    ['tool-monthly, five bills', function () { return { mode: 'tool-monthly', data: billsIn().slice(0, 5), durations: [1, 2], settings: { obj: 'sav' } }; }],
+    ['tool-interval, one duration (the probe runs)', function () { return { mode: 'tool-interval', data: ADAPTER.intervalToMonths(interval8760(), 60, 0), durations: [2], settings: { obj: 'npv', term: 15 } }; }],
+    ['tool-interval, four durations', function () { return { mode: 'tool-interval', data: ADAPTER.intervalToMonths(interval8760(), 60, 0), durations: [1, 2, 4, 6], settings: { obj: 'npv', headroom: 0, ratchet: 50 } }; }]
+  ].forEach(function (c) {
+    var was = JSON.stringify(oldEngine(c[1]())), now = JSON.stringify(ENGINE(c[1]()));
+    ok(was === now, c[0] + ': byte-identical (' + now.length + ' bytes' + (was === now ? '' : ' vs ' + was.length + ' before') + ')');
+  });
+}
 
 /* ── 4. parity with a direct engine run ───────────────────────────────── */
 console.log('parity');
-var direct = ENGINE({ mode: 'tool-monthly', data: ADAPTER.monthlyToBills(bills12(), { demandChargePerKw: 18 }).map(function (b) { b.label += ' 2025'; return b; }),
-                      durations: M.settings.durations, settings: M.settings });
+var direct = ENGINE({ mode: 'tool-monthly', data: billsIn(), durations: M.settings.durations, settings: M.settings, keepSchedule: true });
 near(M.system.kw, direct.rec.kW, 1e-9, 'same kW as the engine run directly with the bridge\'s settings');
 near(M.system.usableKwh, direct.rec.kWh, 1e-9, 'same usable kWh');
 near(M.system.nameplateKwh, direct.rec.nameplate, 1e-9, 'same nameplate');
@@ -144,13 +182,45 @@ near(M.schedule[24].netSavings, direct.rec.schedule[24].savings - direct.rec.sch
 eq(direct.rec.kW, direct.best.kW, 'with headroom forced to 0 the priced system is the optimum itself');
 var withDefault = {}, k;
 for (k in M.settings) if (k !== 'headroom') withDefault[k] = M.settings[k];
-var loose = ENGINE({ mode: 'tool-monthly', data: ADAPTER.monthlyToBills(bills12(), { demandChargePerKw: 18 }).map(function (b) { b.label += ' 2025'; return b; }),
-                     durations: M.settings.durations, settings: withDefault });
+var loose = ENGINE({ mode: 'tool-monthly', data: billsIn(), durations: M.settings.durations, settings: withDefault });
 near(loose.rec.kW / loose.best.kW, 1.1, 1e-9, 'left to the engine\'s default, the priced system would be 10% larger than the one that earns the savings');
 var H = SIZING.size(monthlyReq({ bess: { headroomPct: 15 } }));
 near(H.system.kw / M.system.kw, 1.15, 1e-9, 'a requested headroom is priced and reported together');
 near(H.savings.demandY1, M.savings.demandY1, 1e-6, 'and earns no extra saving');
 ok(H.assumptions.some(function (s) { return /15% larger/.test(s); }), 'and is said in the assumptions');
+
+/* Headroom and the alternatives: every row is priced as the system is. */
+function altAt(r, dur) { return r.alternatives.filter(function (a) { return a.durationH === dur; })[0]; }
+var H25 = SIZING.size(monthlyReq({ bess: { headroomPct: 25 } }));
+var others25 = H25.alternatives.filter(function (a) { return !a.chosen; });
+ok(H25.ok && others25.length >= 1, 'at 25% headroom the other durations are still listed');
+ok(others25.every(function (a) { var z = altAt(M, a.durationH); return z && Math.abs(a.kw / z.kw - 1.25) < 1e-9 && Math.abs(a.usableKwh / z.usableKwh - 1.25) < 1e-9; }),
+   'each alternative carries the same 25% headroom as the system (kW and usable kWh x 1.25)');
+ok(others25.every(function (a) { return Math.abs(a.netY1 - altAt(M, a.durationH).netY1) < 1e-6 && a.npv < altAt(M, a.durationH).npv; }),
+   'and, like the system, earns no extra saving for it and screens lower');
+var chosen25 = H25.alternatives.filter(function (a) { return a.chosen; })[0];
+ok(chosen25.kw === H25.system.kw && others25.every(function (a) { return a.npv < chosen25.npv; }),
+   'so the chosen system, as priced, still screens highest (it did not at 25% when the rest were un-grossed)');
+ok(H25.assumptions.some(function (s) { return /Every alternative listed carries the same headroom/.test(s); }), 'the assumptions say every row carries it');
+var rawH = ENGINE({ mode: 'tool-monthly', data: billsIn(), durations: H25.settings.durations, settings: H25.settings, keepSchedule: true });
+ok(others25.every(function (a) {
+  var top = null;
+  rawH.sweep.forEach(function (r) { if (r.dur === a.durationH && r.npv > 0 && (!top || r.npv > top.npv)) top = r; });
+  var q = rawH.priceWithHeadroom(top);
+  return q.kW === a.kw && q.npv === a.npv && q.nameplate === a.nameplateKwh;
+}), 'each alternative is the engine\'s own pricing of that duration\'s best size, as the system is of the pick');
+eq(JSON.stringify(SIZING.size(monthlyReq({ bess: { headroomPct: 0 } })).alternatives), JSON.stringify(M.alternatives), 'at no headroom the alternatives are the sweep\'s own rows, unchanged');
+var H50 = SIZING.size(monthlyReq({ bess: { headroomPct: 50 } }));
+ok(!altAt(H50, 4) && altAt(M, 4) && H50.assumptions.some(function (s) { return /4 hours no longer pay back once the 50% headroom is costed/.test(s); }),
+   'a duration that pays back only without headroom is dropped at 50%, and named');
+var FLIP = SIZING.size(monthlyReq({ bess: { capexPerKw: 800, capexPerKwh: 250, headroomPct: 50 } }));
+var flipChosen = FLIP.alternatives.filter(function (a) { return a.chosen; })[0];
+ok(FLIP.ok && FLIP.alternatives.some(function (a) { return !a.chosen && a.npv > flipChosen.npv; }) &&
+   FLIP.warnings.some(function (w) { return /2-hour alternative screens higher than the system chosen/.test(w); }),
+   'when headroom lets a smaller alternative screen higher, that is said, not hidden');
+eq(FLIP.system.durationH, 1, 'and the system is still the one the engine chose');
+var DEEP = SIZING.size(monthlyReq({ bess: { capexPerKw: 600, capexPerKwh: 350, headroomPct: 100 } }));
+ok(DEEP.ok && DEEP.warnings.some(function (w) { return /not once the 100% headroom is costed/.test(w); }), 'an optimum that stops paying once headroom is costed is flagged');
 
 /* ── 5. interval data ─────────────────────────────────────────────────── */
 console.log('interval data');
@@ -169,7 +239,7 @@ near(I.annualPeakKw, Math.max.apply(null, interval8760()), 1e-9, 'annual peak is
 ok(allFinite(I), 'every number is finite');
 ok(JSON.stringify(I).length < 20000 && longestArray(I) <= 20, 'no load array comes back (' + JSON.stringify(I).length + ' bytes)');
 eq(I.warnings.length, 0, 'a clean year raises no warning');
-var directI = ENGINE({ mode: 'tool-interval', data: ADAPTER.intervalToMonths(interval8760(), 60, 0), durations: I.settings.durations, settings: I.settings });
+var directI = ENGINE({ mode: 'tool-interval', data: ADAPTER.intervalToMonths(interval8760(), 60, 0), durations: I.settings.durations, settings: I.settings, keepSchedule: true });
 near(I.system.kw, directI.rec.kW, 1e-9, 'interval parity: same kW as a direct engine run');
 near(I.savings.netY1, directI.rec.schedule[0].savings - directI.rec.schedule[0].loss, 1e-6, 'interval parity: same year-one saving');
 
@@ -183,6 +253,17 @@ var P = SIZING.size({ load: { mode: 'interval', values: interval35040().slice(0,
 ok(P.ok && P.months.length === 3, 'three months of quarter-hours size, stated as three months');
 eq(P.months[0].label + '|' + P.months[2].label, 'Jul 2025|Sep 2025', 'labelled from the stated start');
 ok(P.warnings.some(function (w) { return /Only 3 months/.test(w); }), 'a partial year is flagged');
+
+/* 17,520 readings are a year of half-hours or two of hours: the count
+   alone is refused (see the refusals), and either answer, once stated, is
+   taken as stated. */
+var TWO = SIZING.size({ load: { mode: 'interval', values: interval8760().concat(interval8760()), intervalMin: 60, startYear: 2024 } });
+ok(TWO.ok && TWO.months.length === 24 && TWO.load.intervalMin === 60 && TWO.load.intervalDetected === false, 'two years of hours, stated, size as 24 months');
+var HALF = SIZING.size({ load: { mode: 'interval', values: interval8760().concat(interval8760()), intervalMin: 30 } });
+ok(HALF.ok && HALF.months.length === 12 && HALF.load.intervalMin === 30, 'the same count stated as half-hours sizes as twelve months');
+var LEAP30 = []; for (var h30 = 0; h30 < 366 * 48; h30++) LEAP30.push(Math.round(kwAt(Math.floor(h30 / 2)) * 10) / 10);
+var L30 = SIZING.size({ load: { mode: 'interval', values: LEAP30 } });
+ok(L30.ok && L30.load.intervalMin === 30 && L30.load.intervalDetected, 'a leap year of half-hours (17,568) is no other whole number of years, and is still read from the count');
 
 /* ── 6. structured tariff ─────────────────────────────────────────────── */
 console.log('structured tariff');
@@ -206,6 +287,44 @@ eq(UR0.settings.ratchet, 0, 'a stated ratchet, zero included, wins');
 var IU = SIZING.size({ load: { mode: 'interval', values: interval8760() }, tariff: { urdb: FLAT18 } });
 ok(IU.ok && IU.warnings.some(function (w) { return /monthly bills only/.test(w); }), 'on interval data the tariff is flagged as not applied');
 near(IU.system.kw, SIZING.size({ load: { mode: 'interval', values: interval8760() } }).system.kw, 1e-9, 'and changes nothing');
+
+/* A URDB record often carries a plain demand charge as one all-hours
+   time-of-use period, and some records carry energy rates only. Neither
+   is a determinant a monthly bill states without onPeakKw, so priced as
+   sent every month's demand would cost nothing and the site would be
+   refused as too flat to shave. */
+function hours(fn) { return Array.apply(null, Array(12)).map(function (x, m) { return Array.apply(null, Array(24)).map(function (y, h) { return fn(m, h); }); }); }
+var TOU15 = { name: 'All-hours TOU 15', demandratestructure: [[{ rate: 15 }]], demandweekdayschedule: hours(function () { return 0; }),
+              demandweekendschedule: hours(function () { return 0; }) };
+var ENERGY = { name: 'Energy only', energyratestructure: [[{ rate: 0.1 }]], energyweekdayschedule: hours(function () { return 0; }) };
+var flat15 = SIZING.size(monthlyReq({ tariff: { demandChargePerKw: 15, energyRate: 0.11 } }));
+var T15 = SIZING.size(monthlyReq({ tariff: { demandChargePerKw: 15, energyRate: 0.11, urdb: TOU15 } }));
+ok(T15.ok, 'a time-of-use-only tariff with no on-peak kW on the bills still sizes');
+ok(T15.warnings.some(function (w) { return /only in time-of-use windows/.test(w) && /onPeakKw/.test(w) && /flat \$15\.00\/kW-month/.test(w); }),
+   'with a warning that names onPeakKw and the flat charge it fell back to');
+near(T15.system.kw, flat15.system.kw, 1e-9, 'priced at the flat demand charge the request states');
+near(T15.savings.netY1, flat15.savings.netY1, 1e-6, 'and saves what that flat charge saves');
+ok(T15.assumptions.some(function (s) { return /flat \$15\.00\/kW-month/.test(s); }) && !T15.assumptions.some(function (s) { return /structured tariff "/.test(s); }),
+   'the assumptions say flat, not the tariff it could not apply');
+var rows15 = bills12().map(function (r) { r.onPeakKw = r.demandKw; return r; });
+var T15on = SIZING.size(monthlyReq({ load: { mode: 'monthly', rows: rows15 }, tariff: { demandChargePerKw: 5, urdb: TOU15 } }));
+ok(T15on.ok && !T15on.warnings.some(function (w) { return /onPeakKw/.test(w); }) &&
+   T15on.assumptions.some(function (s) { return /structured tariff "All-hours TOU 15"/.test(s); }), 'with each bill\'s on-peak kW the tariff\'s own charge is billed, not the flat $5');
+near(T15on.system.kw, flat15.system.kw, 1e-9, 'and, the window being every hour, sizes what a flat $15 does');
+var TD = SIZING.size(monthlyReq({ tariff: { urdb: TOU15 } }));
+ok(TD.ok && TD.warnings.some(function (w) { return /flat \$18\.00\/kW-month demand charge \(the default: none was stated\)/.test(w); }), 'an unstated flat charge is named as the default');
+var EO = SIZING.size(monthlyReq({ tariff: { demandChargePerKw: 18, urdb: ENERGY } }));
+ok(EO.ok && EO.warnings.some(function (w) { return /"Energy only" bills no demand charge/.test(w) && /flat \$18/.test(w); }), 'an energy-only tariff falls back to the flat charge too, and says so');
+near(EO.system.kw, M.system.kw, 1e-9, 'sizing what a flat $18 does');
+var halfOn = bills12().map(function (r, i) { if (i % 2) r.onPeakKw = r.demandKw; return r; });
+var TH = SIZING.size(monthlyReq({ load: { mode: 'monthly', rows: halfOn }, tariff: { demandChargePerKw: 15, urdb: TOU15 } }));
+ok(TH.ok && TH.warnings.some(function (w) { return /6 of 12 do not/.test(w) && /no demand charge at all/.test(w); }) &&
+   TH.savings.netY1 < T15on.savings.netY1, 'on-peak kW on half the bills prices those, and says the rest are billed no demand at all');
+var SUMMER = { name: 'Summer facility', flatdemandstructure: [[{ rate: 0 }], [{ rate: 18 }]], flatdemandmonths: [0,0,0,0,0,1,1,1,0,0,0,0] };
+var S = SIZING.size(monthlyReq({ load: { mode: 'monthly', rows: bills12().slice(0, 3) }, tariff: { urdb: SUMMER } }));
+ok(S.ok === false && S.field === 'load' && /No battery size saves money/.test(S.error) &&
+   S.warnings.some(function (w) { return /"Summer facility" bills no demand charge in any month these bills cover/.test(w); }),
+   'a load the tariff genuinely bills no demand on is refused, and the refusal carries the reason');
 
 /* ── 7. what does not pencil ──────────────────────────────────────────── */
 console.log('when nothing pays');
@@ -236,6 +355,11 @@ var CASES = [
   [{ load: { mode: 'interval', values: interval8760().map(function (v, i) { return i === 99 ? -1 : v; }) } }, 'load.values', /finite nonnegative kW/],
   [{ load: { mode: 'interval', values: interval8760().map(function (v, i) { return i === 7 ? '5' : v; }) } }, 'load.values', /finite nonnegative kW/],
   [{ load: { mode: 'interval', values: interval8760().concat([1, 2, 3]) } }, 'load.intervalMin', /not one whole year/],
+  [{ load: { mode: 'interval', values: interval8760().concat(interval8760()) } }, 'load.intervalMin', /17,520 readings are one year at 30 minutes or 2 years at 60 minutes/],
+  [{ load: { mode: 'interval', values: years12.slice(0, 26280) } }, 'load.intervalMin', /one year at 20 minutes or 3 years at 60 minutes/],
+  [{ load: { mode: 'interval', values: interval35040() } }, 'load.intervalMin', /one year at 15 minutes, 2 years at 30 minutes or 4 years at 60 minutes/],
+  [{ load: { mode: 'interval', values: years12.slice(0, 52560) } }, 'load.intervalMin', /one year at 10 minutes, .*2 years at 20 minutes/],
+  [{ load: { mode: 'interval', values: years12.slice(0, 105120) } }, 'load.intervalMin', /one year at 5 minutes, .*12 years at 60 minutes/],
   [{ load: { mode: 'interval', values: interval8760(), intervalMin: 7 } }, 'load.intervalMin', /5, 10, 15, 20, 30 or 60/],
   [{ load: { mode: 'interval', values: interval8760(), startMonth: 12 } }, 'load.startMonth', /0 \(January\) to 11/],
   [{ load: { mode: 'interval', values: interval8760(), startMonth: 1.5 } }, 'load.startMonth', /0 \(January\) to 11/],
@@ -308,9 +432,9 @@ ok(ENGINE.validate === require(path.join(ROOT, 'api/_lib/bess-size-validate')), 
 /* ── 10. performance ──────────────────────────────────────────────────── */
 console.log('performance');
 var big = interval35040();
-var pRun = timed(function () { return SIZING.size({ load: { mode: 'interval', values: big, startYear: 2025 }, bess: { durations: [1, 2, 4, 6] }, finance: { termYears: 25 } }); });
+var pRun = timed(function () { return SIZING.size({ load: { mode: 'interval', values: big, intervalMin: 15, startYear: 2025 }, bess: { durations: [1, 2, 4, 6] }, finance: { termYears: 25 } }); });
 console.log('       (' + pRun.ms + ' ms for 35,040 quarter-hour readings x 4 durations)');
-ok(pRun.out.ok && pRun.out.load.intervalMin === 15, 'a quarter-hour year sizes, interval read from the count');
+ok(pRun.out.ok && pRun.out.load.intervalMin === 15 && pRun.out.months.length === 12, 'a stated quarter-hour year sizes as twelve months');
 ok(pRun.ms < 10000, 'in under 10 s (' + pRun.ms + ' ms)');
 ok(JSON.stringify(pRun.out).length < 20000, 'and the answer is still small (' + JSON.stringify(pRun.out).length + ' bytes)');
 

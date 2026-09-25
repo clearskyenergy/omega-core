@@ -550,6 +550,25 @@ Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by
 - Bumping `TERMS_VERSION` again means bumping it in `api/_lib/events.js` too,
   or every event is refused.
 
+## BESS Pro Forma — the investor model (2026-09-24)
+
+`docs/PROFORMA.md` is the method and the not-built list.
+
+- Every figure on the deck comes from `api/_lib/proforma-engine.js` through
+  `POST /api/proforma`. `proforma.html` collects inputs and renders;
+  `proforma-logic.js` lays out the PDF and PowerPoint and computes nothing.
+- The engine follows NREL SAM's single-owner method on purpose: the investor
+  decks it replaces were SAM runs. `scripts/tests/tproformaengine.js` asserts
+  the published Topanga/Sunnyside/Taft figures; a change that moves them is a
+  change of method, not a refactor.
+- The battery is sized by the unified engine (`battery-tool-engine.js` via
+  `api/_lib/proforma-sizing.js`), never a second sizer.
+- The deck carries the PRODUCING tenant's brand (the caller's `omega_orgs`
+  record plus per-report overrides). No tenant is ever a default.
+- Energy-community and low-income status come from Treasury's tables in
+  `api/_lib/data/`, rebuilt each June (`scripts/build-energy-communities.js`).
+  Do not switch to DOE's ArcGIS layers; they lag a year or more.
+
 ## Silmarillion 2.0 — joint development
 
 The OMEGA operating system is named **Silmarillion 2.0**. Today it is an

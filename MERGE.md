@@ -2120,7 +2120,42 @@ returns the year-by-year schedule it already computed; sweep rows drop it so
 `/api/bess-size` responses are byte-identical. Its request validation moved to
 `api/_lib/bess-size-validate.js`, shared by both endpoints.
 
-**Follow-up (same branch family):** dashboard styling, PowerPoint export,
-server-side site lookups (energy community, PVWatts, URDB) and
-`docs/PROFORMA.md`.
+
+---
+
+## BESS Pro Forma 2.1: configuration first, the dashboard's look, PowerPoint, site lookups (2026-09-24)
+
+`docs/PROFORMA.md` is the method, the checks and the not-built list.
+
+**Configuration first.** Step 1 asks what is at the site (battery always;
+solar, EV charging and a controller each optional) and how the project earns
+(a PPA only when there is solar; a share of the host's savings; a fixed storage
+fee; host-owned). Every later step, result, warning and deck page shows only
+what the project has; what was typed for a component that is switched off is
+kept, not lost. The old page made every project an EV-charging site.
+
+**The dashboard's look.** The white top bar, paper and type of the marketplace
+and projects pages, with `/omega-theme.css` linked last as they do. The app
+chrome stays the platform's; the deck carries the producing tenant's brand.
+
+**PowerPoint.** `OmegaProformaReport.pptx()` builds the same pages as the PDF
+from native shapes and tables, from the same content builders, so the two
+cannot say different things. PptxGenJS 4.0.1 is loaded from jsdelivr on first
+use only, pinned by SRI; it is never in the repo.
+
+**Site lookups (`site` action, `api/_lib/site-lookup.js`).** Census geocode;
+energy-community and low-income-tract status; PVWatts v8 production; URDB v8
+tariffs. Each is independent and shown with an Apply switch. Energy-community
+status does NOT come from DOE's ArcGIS layers: they still carry the 2024 list
+(wrong for 314 counties and 152 coal tracts against Notice 2026-39). Treasury's
+own tables are bundled under `api/_lib/data/` and rebuilt each June by
+`scripts/build-energy-communities.js`. PVWatts and URDB need
+`NREL_API_KEY` / `OPENEI_API_KEY` in Vercel; until then a user's own keys from
+Settings are passed for the one call and never stored.
+
+**Branding** is the producing tenant's `omega_orgs` record; nothing defaults to
+a tenant. `tenants/nextnrg/tenant.json` gained the colours and tagline its decks
+use, which reach Firestore the next time the seed runs. **The marketplace card**
+reads `tools/proforma` from Firestore; its new description and version 2.0.0
+appear after "Import / Update Applications".
 

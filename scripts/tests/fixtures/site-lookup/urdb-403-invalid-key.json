@@ -1,0 +1,6 @@
+{
+ "_captured": "2026-09-24, live: X-Api-Key header with a 40-zero key",
+ "status": 403,
+ "headers": {"content-type":"application/json"},
+ "body": {"error":{"code":"API_KEY_INVALID","message":"An invalid api_key was supplied. Get one at https://api.openei.org:443"}}
+}

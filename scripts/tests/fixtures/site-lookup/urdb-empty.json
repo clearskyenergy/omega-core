@@ -1,0 +1,6 @@
+{
+ "_captured": "Shape from SPEC.md section 5 (\"items empty = no data\"); not a raw capture.",
+ "status": 200,
+ "headers": {"content-type":"application/json"},
+ "body": {"items":[]}
+}

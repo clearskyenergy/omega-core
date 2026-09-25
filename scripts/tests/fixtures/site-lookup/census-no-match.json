@@ -1,0 +1,6 @@
+{
+ "_captured": "2026-09-24, live: GET geocoding.geo.census.gov/geocoder/geographies/onelineaddress benchmark=Public_AR_Current vintage=Census2020_Current layers=Census Tracts,Counties,States (geography attributes trimmed to the ones read)",
+ "status": 200,
+ "headers": {"content-type":"application/json"},
+ "body": {"result":{"input":{"address":{"address":"99999 Nowhere Lane, Faketown, ZZ 00000"},"vintage":{"isDefault":false,"id":"420","vintageName":"Census2020_Current","vintageDescription":"Census2020 Vintage - Current Benchmark"},"benchmark":{"isDefault":true,"benchmarkDescription":"Public Address Ranges - Current Benchmark","id":"4","benchmarkName":"Public_AR_Current"}},"addressMatches":[]}}
+}

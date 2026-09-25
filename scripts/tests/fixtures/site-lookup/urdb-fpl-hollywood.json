@@ -1,0 +1,6 @@
+{
+ "_captured": "2026-09-24, live: detail=full getpage=69a9cc7ac1e98824d7034a8d (FPL GSD-1), wrapped as a one-item list; flat demand only, no TOU demand",
+ "status": 200,
+ "headers": {"content-type":"application/json"},
+ "body": {"items":[{"label":"69a9cc7ac1e98824d7034a8d","uri":"https://apps.openei.org/IURDB/rate/view/69a9cc7ac1e98824d7034a8d","approved":true,"is_default":false,"utility":"Florida Power & Light Co.","eiaid":6452,"name":"GSD-1 (General Service Demand)","startdate":1767250800,"sector":"Commercial","peakkwcapacitymin":25,"peakkwcapacitymax":500,"flatdemandstructure":[[{"rate":12.7,"adj":2.33}]],"flatdemandmonths":[0,0,0,0,0,0,0,0,0,0,0,0],"fixedchargefirstmeter":33.71,"fixedchargeunits":"$/month"}]}
+}

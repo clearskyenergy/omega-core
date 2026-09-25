@@ -1,0 +1,6 @@
+{
+ "_captured": "A gateway error page, the malformed case: not JSON. Synthetic.",
+ "status": 502,
+ "headers": {"content-type":"text/html"},
+ "body": "<html><body><h1>502 Bad Gateway</h1></body></html>"
+}

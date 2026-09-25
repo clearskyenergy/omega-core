@@ -27,7 +27,8 @@
  *    the ratchet reads the eleven bills BEFORE each one by position.
  *
  *  size(req) never throws for bad input: it answers
- *  {ok:false, error, field} with `field` naming the request path.
+ *  {ok:false, error, field} with `field` naming the request path, plus
+ *  the warnings gathered so far when the load itself cannot be sized.
  * ====================================================================== */
 var ENGINE = require('./battery-tool-engine');
 var ADAPTER = require('./bess-size-adapter');
@@ -97,7 +98,9 @@ function fmt(n, dp) {
 function money(n, dp) { return '$' + fmt(n, dp); }
 /* A unit price at the precision it was typed: $0.11 and $0.0875, not $0.110. */
 function price(n) { return '$' + fmt(n, 4).replace(/(\.\d\d\d*?)0+$/, '$1'); }
-function list(xs) { return xs.length > 1 ? xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1] : String(xs[0]); }
+function list(xs, word) {
+  return xs.length > 1 ? xs.slice(0, -1).join(', ') + ' ' + (word || 'and') + ' ' + xs[xs.length - 1] : String(xs[0]);
+}
 function section(req, key) {
   var v = req[key];
   if (v == null) return {};
@@ -105,16 +108,21 @@ function section(req, key) {
   return v;
 }
 
-/* Whole years only: the count is ambiguous otherwise (17,520 readings are
-   a year of half-hours or two years of hours), and guessing wrong would
-   bill every month at twice or half its length. */
+/* One whole year at one step, and nothing else the count could be. Any
+   other count is ambiguous, and so is a year that is also a whole number
+   of 365-day years at another step: 17,520 readings are a year of
+   half-hours or two years of hours, 35,040 a year of quarter-hours or two
+   of half-hours. Guessing wrong bills every month at twice or half its
+   length, so those are sent back for load.intervalMin rather than read. */
 function detectInterval(n) {
-  var i, step;
+  var out = { step: null, others: [] }, i, step, year;
   for (i = 0; i < V.INTERVAL_MINUTES.length; i++) {
     step = V.INTERVAL_MINUTES[i];
-    if (n === 365 * 1440 / step || n === 366 * 1440 / step) return step;
+    year = 365 * 1440 / step;
+    if (n === year || n === 366 * 1440 / step) out.step = step;
+    else if (n % year === 0) out.others.push(n / year + ' years at ' + step + ' minutes');
   }
-  return null;
+  return out;
 }
 
 /* ---------------------------------------------------------------------- *
@@ -132,11 +140,17 @@ function intervalLoad(load, notes) {
 
   var intervalMin = load.intervalMin, detected = blank(intervalMin);
   if (detected) {
-    intervalMin = detectInterval(n);
-    if (!intervalMin) {
+    var read = detectInterval(n);
+    if (!read.step) {
       throw invalid('load.intervalMin is needed: ' + fmt(n) + ' readings is not one whole year ' +
                     'at 5, 10, 15, 20, 30 or 60 minutes.', 'load.intervalMin');
     }
+    if (read.others.length) {
+      throw invalid('load.intervalMin is needed: ' + fmt(n) + ' readings are ' +
+                    list(['one year at ' + read.step + ' minutes'].concat(read.others), 'or') +
+                    ', and the count cannot say which.', 'load.intervalMin');
+    }
+    intervalMin = read.step;
   } else {
     under('load.intervalMin', function () { V.checkIntervalMin(intervalMin, httpError); });
     intervalMin = Number(intervalMin);
@@ -323,12 +337,51 @@ function prepare(req) {
     urdb = null;
   }
   if (urdb) {
-    var norm = TARIFF.normalize(urdb), missing = built.data.filter(function (m) { return m.onPeakKw == null; });
-    if (norm.hasTouDemand && missing.length) {
-      notes.warnings.push('The tariff\'s on-peak demand charge is priced only on bills that state an ' +
-        'on-peak kW (onPeakKw); ' + missing.length + ' of ' + built.data.length + ' do not, so that ' +
-        'charge earns nothing on them.');
+    /* A monthly bill carries two demand figures the tariff can bill: the
+       month's peak, for its facility charge, and - only if the bill states
+       it - the peak inside the on-peak window (onPeakKw, on the bill as
+       sent), for its time-of-use charges. */
+    var norm = TARIFF.normalize(urdb), facMonths = {}, touMonths = {}, anyFac = false, anyTou = false;
+    var mi, rates, per;
+    for (mi = 0; mi < 12; mi++) {
+      rates = TARIFF.marginalDemandRates(mi, norm);
+      if (rates.facility > 0) facMonths[mi] = anyFac = true;
+      for (per in rates.byPeriod) {
+        if (Object.prototype.hasOwnProperty.call(rates.byPeriod, per)) touMonths[mi] = anyTou = true;
+      }
     }
+    var inFac = built.data.filter(function (m) { return facMonths[m.month]; });
+    var inTou = built.data.filter(function (m) { return touMonths[m.month]; });
+    var missing = inTou.filter(function (m) { return m.onPeakKw == null; });
+    var flatNote = ' demand is priced instead at the flat ' + price(settings.dRate) + '/kW-month demand charge' +
+      (blank(t.demandChargePerKw) ? ' (the default: none was stated)' : '');
+    if (!anyFac && (!anyTou || (inTou.length && missing.length === inTou.length))) {
+      /* Nothing these bills carry is a determinant this tariff bills, so
+         it would price every month's demand at zero and the site would be
+         refused as too flat to shave - a reason nobody can act on. The
+         flat charge is the one demand price the request does state. */
+      notes.warnings.push(anyTou
+        ? 'The structured tariff "' + norm.name + '" bills demand only in time-of-use windows, and no ' +
+          'bill states its on-peak kW (onPeakKw), so those charges cannot be read from these bills;' +
+          flatNote + '. State each bill\'s on-peak kW to price the tariff\'s own.'
+        : 'The structured tariff "' + norm.name + '" bills no demand charge, so' + flatNote +
+          '. If the tariff truly bills no demand, a battery that shaves peaks saves nothing on it.');
+      urdb = null;
+    } else {
+      if (missing.length) {
+        notes.warnings.push((anyFac ? 'The tariff\'s on-peak demand charge is priced only on bills that state an '
+          : 'The structured tariff bills demand only in time-of-use windows, priced only on bills that state an ') +
+          'on-peak kW (onPeakKw); ' + missing.length + ' of ' + inTou.length + ' do not, so ' + (anyFac
+          ? 'that charge earns nothing on them.'
+          : 'they are billed no demand charge at all and the savings are understated.'));
+      }
+      if (!inFac.length && !inTou.length) {
+        notes.warnings.push('The structured tariff "' + norm.name + '" bills no demand charge in any month ' +
+          'these bills cover, so a battery has no demand charge to shave on them.');
+      }
+    }
+  }
+  if (urdb) {
     notes.assumptions.push('Demand is priced month by month from the structured tariff "' + norm.name + '".');
   } else {
     notes.assumptions.push('Demand is priced at a flat ' + price(settings.dRate) + '/kW-month.');
@@ -365,8 +418,11 @@ function translate(p, raw) {
      size: ranking a set with no winner returns a battery approaching zero,
      which reads as a recommendation and is an artefact (see pickBest in
      the engine). The chosen duration's row IS the chosen system, as priced,
-     so the row a page highlights and the headline cannot disagree. */
-  var byDur = {}, unviable = [];
+     so the row a page highlights and the headline cannot disagree.
+     Each other row is picked the way the system was - best before headroom
+     - and then priced by the engine exactly as the system was, headroom
+     and fade curve included, so the table compares like with like. */
+  var byDur = {}, unviable = [], unviableHeadroom = [], higher = [];
   raw.sweep.forEach(function (row) {
     if (!(row.annSav > 0) || !(row.npv > 0)) return;
     if (!byDur[row.dur] || row.npv > byDur[row.dur].npv) byDur[row.dur] = row;
@@ -377,9 +433,11 @@ function translate(p, raw) {
       alternatives.push({ durationH: d, kw: rec.kW, usableKwh: rec.kWh, nameplateKwh: rec.nameplate,
                           netY1: y1.netSavings, npv: rec.npv, chosen: true });
     } else if (byDur[d]) {
-      var r = byDur[d];
-      alternatives.push({ durationH: d, kw: r.kW, usableKwh: r.kWh, nameplateKwh: r.nameplate,
-                          netY1: r.annSav - r.lossCost, npv: r.npv, chosen: false });
+      var q = raw.priceWithHeadroom(byDur[d]), q1 = q.schedule[0];
+      if (!(q.npv > 0)) { unviableHeadroom.push(d); return; }
+      if (q.npv > rec.npv) higher.push(d);
+      alternatives.push({ durationH: d, kw: q.kW, usableKwh: q.kWh, nameplateKwh: q.nameplate,
+                          netY1: q1.savings - q1.loss, npv: q.npv, chosen: false });
     } else {
       unviable.push(d);
     }
@@ -427,7 +485,24 @@ function translate(p, raw) {
   }
   if (headroom > 0) {
     a.push('The system is ' + headroom + '% larger than the optimum; the oversize is costed but ' +
-      'earns no extra saving.');
+      'earns no extra saving.' + (alternatives.length > 1 ? ' Every alternative listed carries the same headroom.' : ''));
+  }
+  if (unviableHeadroom.length) {
+    a.push('At their best size, batteries of ' + list(unviableHeadroom) + ' hours no longer pay back once ' +
+      'the ' + headroom + '% headroom is costed, and are not listed as alternatives.');
+  }
+  /* The pick is made before headroom, as the Battery Sizer makes it, and
+     the oversize costs a bigger pack more; so with headroom a smaller
+     alternative can screen higher. Said, rather than re-ranked here, so the
+     system stays the one the engine chose. */
+  if (higher.length) {
+    notes.warnings.push('With the ' + headroom + '% headroom costed, the ' + list(higher) + '-hour ' +
+      'alternative' + (higher.length > 1 ? 's screen' : ' screens') + ' higher than the system chosen, which ' +
+      'is picked before headroom is added. Compare them before settling on a size.');
+  }
+  if (headroom > 0 && !(rec.npv > 0) && best.npv > 0) {
+    notes.warnings.push('The optimum pays back on the screening NPV, but not once the ' + headroom +
+      '% headroom is costed.');
   }
 
   var used = {}, k;
@@ -484,17 +559,21 @@ function size(req) {
   }
   var raw;
   /* A request that passed every check and still cannot be sized is the
-     data's fault, not a server fault - the same answer bess-size.js gives. */
+     data's fault, not a server fault - the same answer bess-size.js gives.
+     It carries the warnings gathered so far: they are often the reason. */
+  function unsized(error) { return { ok: false, field: 'load', error: error, warnings: p.notes.warnings }; }
   try {
-    raw = ENGINE({ mode: p.mode, data: p.data, durations: p.durations, settings: p.settings, tariff: p.urdb });
+    /* keepSchedule: the pro forma books the recommendation's own
+       year-by-year strip, which the engine drops for every other caller. */
+    raw = ENGINE({ mode: p.mode, data: p.data, durations: p.durations, settings: p.settings, tariff: p.urdb,
+                   keepSchedule: true });
   } catch (err) {
-    return { ok: false, field: 'load', error: err && err.message
-      ? 'Could not size from this data: ' + err.message : 'Could not size from this data.' };
+    return unsized(err && err.message ? 'Could not size from this data: ' + err.message : 'Could not size from this data.');
   }
-  if (!raw || !raw.best || !raw.rec) return { ok: false, field: 'load', error: 'Could not size from this data.' };
+  if (!raw || !raw.best || !raw.rec || !raw.rec.schedule) return unsized('Could not size from this data.');
   if (!(raw.best.annSav > 0)) {
-    return { ok: false, field: 'load', error: 'No battery size saves money on this load at this tariff: ' +
-      'the monthly peaks are too flat, or the demand charge too low, to shave.' };
+    return unsized('No battery size saves money on this load at this tariff: ' +
+      'the monthly peaks are too flat, or the demand charge too low, to shave.');
   }
   return translate(p, raw);
 }

@@ -9,6 +9,9 @@
                                           bridge to the ONE sizing engine
    POST { action:'model', inputs:{…} }  → _lib/proforma-engine.js, the
                                           SAM single-owner cash flow
+   POST { action:'site', address:{…} }  → _lib/site-lookup.js: state tax,
+                                          energy community, low income,
+                                          PVWatts and URDB for one address
 
    WHY IT IS ONE ENDPOINT. The investor math is the thing being protected
    (CLAUDE.md, "where logic lives"): proforma.html collects inputs and
@@ -18,6 +21,16 @@
 
    THE GATE is api/listings.js's, on verify-token rather than admin.js so it
    runs without a service account (and in CI without firebase-admin):
+   - The email must be VERIFIED (claims.email_verified === true, as
+     my-orders, my-files and po-intake require). A Firebase password
+     account can be opened on any address without proving it, so an
+     unverified email names neither a company nor a ClearSky employee.
+     That includes staff: the bypass below is for a verified staff address
+     only; an unverified one is refused like anybody else's.
+   - A PUBLIC mail domain (api/_lib/public-domains.js, the list signup
+     refuses) is refused before anything is read. orgId is the email
+     domain, so without this every gmail.com account would share ONE
+     workspace with no record, and the fail-open below would let it in.
    - A MISSING omega_orgs record is allowed. Every legacy tenant has none
      until the seed runs; tenantActive() in the rules and the editor gate
      read absence as active for the same reason, and getting it backwards
@@ -38,13 +51,15 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var auth = require('./_lib/verify-token');
+var PUBLIC_DOMAINS = require('./_lib/public-domains');
 var WL = require('./_lib/whitelabel');
 var engine = require('./_lib/proforma-engine');
 var sizing = require('./_lib/proforma-sizing');
+var site = require('./_lib/site-lookup');
 
 var TOOL_KEY = 'proforma';
 var SIZING_ENGINE = 'battery-tool-engine';
-var ACTIONS = ['context', 'size', 'model'];
+var ACTIONS = ['context', 'size', 'model', 'site'];
 /* Every paid plan, and the trial. An unrecognised tier is a data-entry
    mistake on billing/current, and a mistake must not hand out a tool. */
 var TIERS = ['trial', 'standard', 'pro', 'deluxe', 'enterprise', 'partner', 'internal'];
@@ -92,14 +107,25 @@ function gate(req) {
   return auth.verifyIdToken(token).then(function (caller) {
     if (!caller.orgId) throw auth.httpError(403, 'That account has no organisation.');
     var base = 'omega_orgs/' + encodeURIComponent(caller.orgId);
+    /* The raw claim, strictly: verify-token's emailVerified reads an ABSENT
+       claim as verified, which is the wrong way round for a gate. */
+    var verified = !!caller.claims && caller.claims.email_verified === true;
 
     /* For staff the org is read for the brand only, best-effort: a branding
        read must not be able to fail a support session. */
-    if (caller.staff) {
+    if (caller.staff && verified) {
       return auth.readAsCaller(token, base).then(
         function (org) { return { caller: caller, org: org || null }; },
         function () { return { caller: caller, org: null }; });
     }
+
+    /* Both before any read. A public domain first: confirming a gmail
+       address would not make it a workspace, so that is the fix to name. */
+    if (PUBLIC_DOMAINS.indexOf(caller.orgId) >= 0) {
+      throw auth.httpError(403, 'Sign in with your work email. The pro forma belongs to a company workspace, and ' +
+        text(caller.orgId, 80) + ' is a personal email provider.');
+    }
+    if (!verified) throw auth.httpError(403, 'Confirm your email address, then sign in again.');
 
     return Promise.all([
       auth.readAsCaller(token, base),
@@ -221,15 +247,40 @@ module.exports = function (req, res) {
 
     /* A load or tariff the engine cannot size is unprocessable, not a
        fault: 422 with the bridge's reason and the request path it names,
-       the answer /api/bess-size gives for the same data. */
+       the answer /api/bess-size gives for the same data. The bridge's
+       warnings travel with it, because they are what explains a refusal
+       the user can act on (a tariff whose demand the bills cannot price). */
     if (action === 'size') {
       var sized = sizing.size(body.sizing);
       if (!sized || sized.ok === false) {
         return res.status(422).json({ ok: false,
           error: (sized && sized.error) || 'Could not size from this data.',
-          field: (sized && sized.field) || null });
+          field: (sized && sized.field) || null,
+          warnings: (sized && Array.isArray(sized.warnings)) ? sized.warnings.slice(0, 12) : [] });
       }
       return res.status(200).json({ ok: true, sizing: sized });
+    }
+
+    /* Public-data facts for one address. Behind the same gate because it
+       spends the platform's API quota; each source fails into its own
+       errors entry, so only a request that cannot be looked up is a 400.
+       The lookup counts that quota per org and per person (see its
+       header), so it is told who is asking; past the cap it is 429 with
+       Retry-After and no upstream request is made.
+       The body may carry the user's own API keys: it is never logged. */
+    if (action === 'site') {
+      return site.lookup(body, { who: { orgId: g.caller.orgId, uid: g.caller.uid } }).then(function (found) {
+        if (found && found.ok === false && found.status === 429) {
+          res.setHeader('Retry-After', String(found.retryAfter));
+          return res.status(429).json({ ok: false, error: found.error, retryAfter: found.retryAfter });
+        }
+        if (!found || found.ok === false) {
+          return res.status(400).json({ ok: false,
+            error: (found && found.error) || 'Send the site address.',
+            field: (found && found.field) || 'address' });
+        }
+        return res.status(200).json(found);
+      });
     }
 
     /* The engine collects every input error in one pass, so the page can

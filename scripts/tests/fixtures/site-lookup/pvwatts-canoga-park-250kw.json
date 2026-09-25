@@ -1,0 +1,6 @@
+{
+ "_captured": "2026-09-24, live: GET developer.nlr.gov/api/pvwatts/v8.json, 250 kW DC rooftop defaults (poa/solrad/dc monthly arrays and ssc_info trimmed)",
+ "status": 200,
+ "headers": {"content-type":"application/json; charset=utf-8","x-ratelimit-limit":"10","x-ratelimit-remaining":"9"},
+ "body": {"inputs":{"system_capacity":"250","module_type":"1","losses":"14","array_type":"1","tilt":"10","azimuth":"180","dc_ac_ratio":"1.2","inv_eff":"96","lat":"34.219674602002","lon":"-118.60876064565","timeframe":"monthly"},"errors":[],"warnings":[],"version":"8.5.0","station_info":{"lat":34.20999908447266,"lon":-118.620002746582,"elev":263.2799987792969,"tz":-8,"location":"85111","city":"","state":"California","country":"United States","solar_resource_file":"85111.csv","distance":1492,"weather_data_source":"NSRDB PSM V3 GOES tmy-2020 3.2.0"},"outputs":{"ac_monthly":[23696.06919513391,25705.14224162974,35562.86976679186,38995.5958063659,40938.82185892072,42892.80748246087,44767.58588648983,43646.63785304975,35350.23494759171,30677.90616870818,24439.97053534113,20368.44151885746],"ac_annual":407042.0832613413,"solrad_annual":5.897337805923036,"capacity_factor":18.58639649595168}}
+}

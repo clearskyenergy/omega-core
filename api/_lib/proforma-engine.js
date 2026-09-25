@@ -31,8 +31,9 @@
  *    - a standalone tax position: NOLs carried forward under the 80%
  *      limit, and a directly claimed ITC held to §38(c) and carried;
  *    - ITC transfer under §6418;
- *    - debt sized on LTC, DSCR or the lesser, level or sculpted, with a
- *      DSRA and the fee amortised for tax;
+ *    - debt sized on LTC, DSCR or the lesser, level or sculpted, never
+ *      past 90% of installed cost, with a DSRA and the fee amortised for
+ *      tax;
  *    - battery revenue from the OMEGA sizing engine's year-by-year savings
  *      schedule, and its pack replacements funded from a reserve;
  *    - demand response, EV charging and other revenue;
@@ -561,7 +562,7 @@ function readCapex(e, v, o) {
     var asset = readEnum(e, f + '.asset', l.asset, 'other', ASSETS, 'The asset of "' + name + '"');
     var d = LINE_DEFAULTS[asset];
     var elig = asset === 'interconnection' && facilityAcKw(o) > 5000 ? 0 : d.itcEligible;
-    out.push({
+    var line = {
       id: id,
       label: label,
       amount: readNum(e, f + '.amount', l.amount, { req: true, min: 0, max: 1e10, label: 'The amount of "' + name + '"' }),
@@ -569,7 +570,14 @@ function readCapex(e, v, o) {
       itcEligible: readNum(e, f + '.itcEligible', l.itcEligible,
         { def: elig, min: 0, max: 1, label: 'The ITC-eligible share of "' + name + '"' }),
       depClass: readEnum(e, f + '.depClass', l.depClass, d.depClass, LINE_CLASSES, 'The depreciation class of "' + name + '"')
-    });
+    };
+    /* Only a blended line has two rates to divide between; on any other
+       line a solar share could only restate the asset, so it is not read. */
+    if (asset === 'blended') {
+      line.solarSharePct = readNum(e, f + '.solarSharePct', l.solarSharePct,
+        { min: 0, max: 100, label: 'The solar share of "' + name + '" (%)' });
+    }
+    out.push(line);
   });
   return out;
 }
@@ -802,13 +810,11 @@ function normalize(raw) {
 }
 
 /* validate(inputs) -> [{field, message}], empty when run() would model.
-   The one refusal that needs the rates (a blended line with nothing to
-   blend) is checked here too, so validate() and run() never disagree. */
+   Every refusal is made while reading the inputs: once they read, the
+   model runs (a blended line with nothing to weigh it by is split by the
+   system, not refused), so validate() and run() cannot disagree. */
 function validate(raw) {
-  var n = normalize(raw);
-  if (n.errors.length) return n.errors;
-  var b = basisOf(n.inputs, NO_ADJ, assetRates(n.inputs));
-  return b.error ? [b.error] : [];
+  return normalize(raw).errors;
 }
 
 /* ---------------------------------------------------------------------- *
@@ -950,15 +956,22 @@ function assetRates(inp) {
    class. So a line's qualifying basis is its eligible share of the part
    that lands in 5-year MACRS, stepped up to fair market value when
    there is a step-up; the SAME step-up lifts that part's depreciable
-   basis, which then loses half the credit (§50(c)(3)). A 'blended' line
-   (contingency, soft costs) takes the solar-and-storage lines' weighted
-   rate and eligible share. */
+   basis, which then loses half the credit (§50(c)(3)).
+
+   A 'blended' line (one installed cost for solar and storage, or the
+   contingency and soft costs on top of them) is part solar and part
+   storage, and its rate is the two rates weighted by that split. The
+   split is, in order: the solar share entered on the line; the weights of
+   the site's own solar and storage lines; or, with neither, the system at
+   preset costs (systemSplit). Refusing instead would lose exactly the
+   deck-shaped input - one installed cost - in the case investors most
+   need, a solar credit that is gone or at risk. Equal rates need no split. */
 function basisOf(inp, adj, rates) {
   var alloc = inp.allocation, step = inp.tax.itc.stepUpPct / 100;
   var hasSolar = !!inp.solar, hasBess = !!inp.bess;
   var solarRate = rates.solar ? (adj.solarItcZero ? 0 : rates.solar.ratePct) : 0;
   var storageRate = rates.storage ? rates.storage.ratePct : 0;
-  var lines = [], wAmt = 0, wElig = 0, wQ = 0, wRateQ = 0, wRateAmt = 0, blended = [];
+  var lines = [], wAmt = 0, wElig = 0, wQ = 0, wRateQ = 0, wRateAmt = 0, wSolarQ = 0, wSolarAmt = 0, blended = [];
 
   function share5(l) { return l.depClass === 'energy' ? alloc.macrs5 / 100 : (l.depClass === 'macrs5' ? 1 : 0); }
 
@@ -979,33 +992,45 @@ function basisOf(inp, adj, rates) {
     if (l.asset === 'solar' || l.asset === 'storage') {
       var q = amt * elig * row.s5 * (1 + step);
       wAmt += amt; wElig += amt * elig; wQ += q; wRateQ += q * rate; wRateAmt += amt * rate;
+      if (l.asset === 'solar') { wSolarQ += q; wSolarAmt += amt; }
     }
   });
 
+  var sys = null, derived = [];
   if (blended.length) {
-    var bRate, bElig = null;
+    var both = hasSolar && hasBess, sameRate = Math.abs(solarRate - storageRate) < 1e-12;
+    var linesRate = null, linesElig = null, linesShare = null;
     if (wAmt > 0) {
-      bRate = wQ > 0 ? wRateQ / wQ : wRateAmt / wAmt;
-      bElig = wElig / wAmt;
-    } else if (hasSolar && hasBess) {
-      /* Nothing to weigh the two rates by. Equal rates need no weights;
-         different ones cannot be split without inventing the cost split. */
-      if (Math.abs(solarRate - storageRate) > 1e-9) {
-        return { error: err('capex.lines', 'A blended cost line takes its ITC rate from the solar and storage lines, ' +
-          'and the solar and storage rates differ; add those lines, or classify the blended cost as solar or storage.') };
-      }
-      bRate = solarRate;
-    } else {
-      bRate = hasSolar ? solarRate : (hasBess ? storageRate : 0);
+      linesRate = wQ > 0 ? wRateQ / wQ : wRateAmt / wAmt;
+      linesElig = wElig / wAmt;
+      linesShare = wQ > 0 ? wSolarQ / wQ : wSolarAmt / wAmt;
     }
     blended.forEach(function (row) {
-      row.rate = bRate;
-      row.elig = bElig != null ? bElig : row.line.itcEligible;
+      var own = row.line.solarSharePct, sh;
+      if (!both) {
+        /* One asset on the site: the line can only be that asset, whatever
+           share it carries. */
+        sh = hasSolar ? 1 : (hasBess ? 0 : null);
+        row.rate = linesRate != null ? linesRate : (hasSolar ? solarRate : (hasBess ? storageRate : 0));
+      } else if (own != null) {
+        sh = own / 100;
+        row.rate = sameRate ? solarRate : sh * solarRate + (1 - sh) * storageRate;
+      } else if (linesShare != null) {
+        sh = linesShare;
+        row.rate = linesRate;
+      } else {
+        sys = sys || systemSplit(inp);
+        sh = sys.share;
+        row.rate = sameRate ? solarRate : sh * solarRate + (1 - sh) * storageRate;
+        derived.push(row.line.label || row.line.id);
+      }
+      row.share = sh;
+      row.elig = linesElig != null ? linesElig : row.line.itcEligible;
       row.bucket = 'blended';
     });
   }
 
-  var classes = {}, face = 0, qualifying = 0, depBefore = 0;
+  var classes = {}, face = 0, qualifying = 0, depBefore = 0, blendSolar = 0, blendStorage = 0, blendRateQ = 0, blendRateAmt = 0;
   ALLOC_CLASSES.forEach(function (c) { classes[c] = 0; });
   var byBucket = { solar: { basis: 0, amount: 0 }, storage: { basis: 0, amount: 0 }, blended: { basis: 0, amount: 0 } };
   var out = lines.map(function (row) {
@@ -1023,14 +1048,56 @@ function basisOf(inp, adj, rates) {
     face += credit;
     qualifying += q;
     if (row.bucket) { byBucket[row.bucket].basis += q; byBucket[row.bucket].amount += credit; }
-    return {
+    var o = {
       id: l.id, label: l.label, amount: amt, asset: l.asset, itcEligible: row.elig, depClass: l.depClass,
       itcBasis: q, itcRatePct: row.rate, itc: credit, depBasisByClass: cls
     };
+    if (row.bucket === 'blended') {
+      /* Which claim the blended basis belongs to, so the deadline, FEOC
+         and phase-down tests see the solar and storage in it. */
+      if (row.share != null) { blendSolar += q * row.share; blendStorage += q * (1 - row.share); }
+      blendRateQ += q * row.rate;
+      blendRateAmt += amt * row.rate;
+      o.solarSharePct = row.share == null ? null : row.share * 100;
+    }
+    return o;
   });
+  /* One rate for the deck's blended row: the lines' own when they agree,
+     else the basis-weighted average of them. */
+  var blendedRate = null;
+  if (blended.length) {
+    blendedRate = blended[0].rate;
+    if (blended.some(function (r) { return r.rate !== blended[0].rate; })) {
+      var bq = byBucket.blended.basis, ba = 0;
+      blended.forEach(function (r) { ba += r.amount; });
+      blendedRate = bq > 0 ? blendRateQ / bq : (ba > 0 ? blendRateAmt / ba : blended[0].rate);
+    }
+  }
   return { lines: out, classes: classes, face: face, qualifying: qualifying, depBefore: depBefore,
            haircut: 0.5 * face, byBucket: byBucket, solarRate: solarRate, storageRate: storageRate,
-           blendedRate: blended.length ? blended[0].rate : null };
+           blendedRate: blendedRate, blendedSolarBasis: blendSolar, blendedStorageBasis: blendStorage,
+           split: derived.length ? { lines: derived, sharePct: sys.share * 100, perWdc: sys.perWdc, perKwh: sys.perKwh,
+                                     perKw: sys.perKw } : null };
+}
+
+/* What a blended line is split by when nothing on the site says: the
+   system at the product's own preset costs - the page's solar $/W DC and
+   the sizing engine's battery $/kWh and $/kW, or the battery costs the
+   sizing run was actually made at when it carries them. It divides one
+   number between two rates and nothing else, and BLENDED_SPLIT says so
+   whenever it moves a figure, so it is a stand-in for the split, never a
+   cost estimate. */
+var SPLIT_REF = { solarPerWdc: 2.4, storagePerKwh: 400, storagePerKw: 250 };
+
+function systemSplit(inp) {
+  var s = inp.solar, b = inp.bess;
+  var set = b.sizing && isObj(b.sizing.settings) ? b.sizing.settings : {};
+  var perKwh = toNum(set.capexPerKwh), perKw = toNum(set.capexPerKw);
+  perKwh = isFiniteNum(perKwh) && perKwh >= 0 ? perKwh : SPLIT_REF.storagePerKwh;
+  perKw = isFiniteNum(perKw) && perKw >= 0 ? perKw : SPLIT_REF.storagePerKw;
+  if (!(perKwh + perKw > 0)) { perKwh = SPLIT_REF.storagePerKwh; perKw = SPLIT_REF.storagePerKw; }
+  var solar = s.kwDc * 1000 * SPLIT_REF.solarPerWdc, storage = b.kwh * perKwh + b.kw * perKw;
+  return { share: solar / (solar + storage), perWdc: SPLIT_REF.solarPerWdc, perKwh: perKwh, perKw: perKw };
 }
 
 /* Loan size and debt service from cash available for debt service.
@@ -1038,7 +1105,17 @@ function basisOf(inp, adj, rates) {
    CAPEX", not of total uses). The DSCR candidate is the most debt the
    cash covers at the minimum ratio: for a sculpted loan the present value
    of CFADS / DSCR, for a level loan the annuity that the THINNEST year
-   covers. Sculpted service is CFADS / k with k set so it repays exactly. */
+   covers. Sculpted service is CFADS / k with k set so it repays exactly.
+
+   Whatever the rule, the loan stops at DEBT_CEILING_PCT of installed cost
+   (binding 'cap'). A DSCR on strong cash can otherwise lend more than the
+   project costs, which leaves the deck with negative equity, no IRR and a
+   payback of zero; and total uses are installed cost plus reserves and
+   the fee, so a loan held to 90% of installed cost always leaves real
+   equity. The ceiling is a guard against a meaningless deck, not a view
+   of what a lender would advance: DEBT_CAPPED says when it binds. */
+var DEBT_CEILING_PCT = 90;
+
 function sizeDebt(D, cfads, capex) {
   var T = D.tenorYears, r = D.ratePct / 100, pos = [0], pvPos = 0, minC = Infinity, v = 1, t;
   for (t = 1; t <= T; t++) {
@@ -1048,13 +1125,15 @@ function sizeDebt(D, cfads, capex) {
     if (cfads[t] < minC) minC = cfads[t];
   }
   var ann = r > 0 ? (1 - Math.pow(1 + r, -T)) / r : T;
-  var ltc = D.ltcPct / 100 * capex;
+  var ltc = D.ltcPct / 100 * capex, ceiling = DEBT_CEILING_PCT / 100 * capex;
   var dscr = D.shape === 'level' ? Math.max(0, minC) / D.dscrMin * ann : pvPos / D.dscrMin;
   var amount, binding;
   if (D.sizing === 'ltc') { amount = ltc; binding = 'ltc'; }
   else if (D.sizing === 'dscr') { amount = dscr; binding = 'dscr'; }
   else if (ltc <= dscr) { amount = ltc; binding = 'ltc'; }
   else { amount = dscr; binding = 'dscr'; }
+  var requested = amount, requestedBy = binding;
+  if (amount > ceiling) { amount = ceiling; binding = 'cap'; }
   var ds = zeros(cfads.length - 1), shape = D.shape;
   if (amount > 0) {
     if (shape === 'sculpted' && pvPos > 0) {
@@ -1067,7 +1146,8 @@ function sizeDebt(D, cfads, capex) {
       for (t = 1; t <= T; t++) ds[t] = amount / ann;
     }
   }
-  return { amount: amount, binding: binding, ds: ds, ltcCapacity: ltc, dscrCapacity: dscr, shape: shape };
+  return { amount: amount, binding: binding, ds: ds, ltcCapacity: ltc, dscrCapacity: dscr, ceiling: ceiling,
+           requested: requested, requestedBy: requestedBy, shape: shape };
 }
 
 var NO_ADJ = { capex: 1, ppa: 1, production: 1, savings: 1, bessFee: 1, solarItcZero: false, transferPrice: null };
@@ -1081,7 +1161,7 @@ function adjust(changes) {
 
 /* One full run of the cash flow. adj scales inputs for a sensitivity
    without copying them. Returns the arrays and figures assemble() and
-   notes() publish, or {error} when the inputs cannot be modelled. */
+   notes() publish; inputs that normalize() accepted always model. */
 function model(inp, adj) {
   var N = inp.years, s = inp.solar, b = inp.bess, ev = inp.ev, rv = inp.revenue, tx = inp.tax, p = inp.project;
   var t, k;
@@ -1184,7 +1264,6 @@ function model(inp, adj) {
   /* ---- credit and basis ---- */
   var rates = assetRates(inp);
   var B = basisOf(inp, adj, rates);
-  if (B.error) return { error: B.error };
 
   /* ---- depreciation ---- */
   var depFed = zeros(N), depSt = zeros(N), bonus = tx.bonusPct / 100;
@@ -1243,9 +1322,10 @@ function model(inp, adj) {
     ds = sized.ds;
   }
   var amount = sized ? sized.amount : 0, T = D ? D.tenorYears : 0, rate = D ? D.ratePct / 100 : 0;
-  var intr = zeros(N), prin = zeros(N), feeAm = zeros(N), dsraFund = zeros(N), dscr = [], bal = amount;
+  var intr = zeros(N), prin = zeros(N), feeAm = zeros(N), dsraFund = zeros(N), dscr = [], bal = amount, dry = [];
   var fee = D ? D.feePct / 100 * amount : 0;
   for (t = 1; t <= N; t++) {
+    dscr[t] = null;
     if (t <= T && amount > 0) {
       intr[t] = bal * rate;
       prin[t] = ds[t] - intr[t];
@@ -1253,9 +1333,15 @@ function model(inp, adj) {
       /* A loan fee is amortised over the loan for tax (§446 and the
          OID rules), not deducted at close; SAM leaves it out altogether. */
       feeAm[t] = fee / T;
+      /* A loan year with no cash to service it is a covenant breach. A
+         sculpted loan takes nothing that year (it sculpts to max(0, CFADS))
+         and adds the interest to the balance; with no service there is no
+         ratio, so it is recorded as 0x rather than left out, which would
+         let the minimum skip the one year a lender tests hardest. */
+      dscr[t] = ds[t] > 0 ? cfads[t] / ds[t] : 0;
+      if (cfads[t] <= 0) dry.push(t);
     }
     dsraFund[t] = dsra[t] - dsra[t - 1];
-    dscr[t] = ds[t] > 1e-9 ? cfads[t] / ds[t] : null;
   }
 
   /* ---- taxes, credit, cash ---- */
@@ -1337,9 +1423,15 @@ function model(inp, adj) {
     during = extent(dist, itcInDist ? 2 : 1, D.dsraMonths > 0 ? T - 1 : T);
     after = extent(dist, T + 1, N);
   }
-  var dscrVals = dscr.filter(function (x) { return x != null; });
-  var dscrMin = dscrVals.length ? Math.min.apply(null, dscrVals) : null;
-  var dscrAvg = dscrVals.length ? dscrVals.reduce(function (x, y) { return x + y; }, 0) / dscrVals.length : null;
+  /* A year the loan takes nothing from counts against the minimum but not
+     in the average: its 0x is a breach, not a ratio to be averaged. */
+  var dscrMin = null, dscrSum = 0, dscrN = 0;
+  for (t = 1; t <= N; t++) {
+    if (dscr[t] == null) continue;
+    if (dscrMin === null || dscr[t] < dscrMin) dscrMin = dscr[t];
+    if (ds[t] > 0) { dscrSum += dscr[t]; dscrN++; }
+  }
+  var dscrAvg = dscrN ? dscrSum / dscrN : null;
 
   return {
     N: N, capexTotal: capexTotal, rates: rates, basis: B,
@@ -1347,7 +1439,7 @@ function model(inp, adj) {
     drRev: drRev, evRev: evRev, otherRev: otherRev, revenue: revenue, opex: opex, ebitda: ebitda,
     wc: wc, wcFund: wcFund, eqFund: eqFund, eqRepl: eqRepl, bessFund: bessFund, bessRepl: bessRepl,
     bessCash: bessCash, replCapex: replCapex, reps: reps, resInt: resInt, cfads: cfads,
-    debt: D ? { amount: amount, sized: sized, fee: fee, dsra0: dsra[0], dscrMin: dscrMin, dscrAvg: dscrAvg } : null,
+    debt: D ? { amount: amount, sized: sized, fee: fee, dsra0: dsra[0], dscrMin: dscrMin, dscrAvg: dscrAvg, dry: dry } : null,
     ds: ds, intr: intr, prin: prin, feeAm: feeAm, dsraFund: dsraFund, dscr: dscr,
     depFed: depFed, depSt: depSt, stTI: stTI, fedTI: fedTI, stTax: stTax, fedTax: fedTax, itcFlow: itcFlow,
     nolFBal: nolFBal, nolSBal: nolSBal, creditBal: creditBal, creditExpired: creditExpired,
@@ -1435,6 +1527,7 @@ function assemble(inp, c) {
       sizing: inp.debt.sizing, sizingBinding: c.debt.sized.binding,
       ltcPct: c.capexTotal > 0 ? c.debt.amount / c.capexTotal * 100 : null,
       ltcCapacity: c.debt.sized.ltcCapacity, dscrCapacity: c.debt.sized.dscrCapacity,
+      ceilingCapacity: c.debt.sized.ceiling,
       fee: c.fee, dsra0: c.debt.dsra0, dsraMonths: inp.debt.dsraMonths, dscrTarget: inp.debt.dscrMin,
       dscrMin: c.debt.dscrMin, dscrAvg: c.debt.dscrAvg, annualDebtService1: c.ds[1] || 0
     };
@@ -1486,14 +1579,14 @@ function assemble(inp, c) {
   };
 }
 
-/* The same model re-run with one input moved. A scenario that cannot be
-   modelled (a blended line with nothing to split it by, once the solar
-   credit is gone) is left out rather than guessed. */
+/* The same model re-run with one input moved. Every scenario that applies
+   is run; none is dropped. The one that used to be - the solar slip on a
+   single blended cost line, which had nothing to weigh the two rates by -
+   now splits that line by the system, and BLENDED_SPLIT says so. */
 function sensitivity(inp, base) {
   var out = [], baseIrr = base.metrics.afterTaxIrr, p = inp.project, rv = inp.revenue;
   function add(key, label, changes) {
     var r = model(inp, adjust(changes));
-    if (r.error) return;
     var v = r.metrics.afterTaxIrr;
     out.push({ key: key, label: label, afterTaxIrr: v, delta: v == null || baseIrr == null ? null : v - baseIrr });
   }
@@ -1518,7 +1611,7 @@ function sensitivity(inp, base) {
   /* The slip case the research asks for: solar whose credit rides on
      the December 31, 2027 deadline or on the July 2026 grandfather, or
      whose dates are not known yet. */
-  var solarBasis = base.basis.byBucket.solar.basis + (inp.solar ? base.basis.byBucket.blended.basis : 0);
+  var solarBasis = base.basis.byBucket.solar.basis + (inp.solar ? base.basis.blendedSolarBasis : 0);
   var datesSafe = p.bocMonth && p.pisMonth && p.bocMonth <= SOLAR_BOC_CUTOFF && p.pisMonth <= SOLAR_PIS_DEADLINE;
   if (inp.solar && base.basis.solarRate > 0 && solarBasis > 0 && !datesSafe) {
     add('itcSlip', 'Solar misses the 2027 in-service deadline (no solar ITC)', { solarItcZero: true });
@@ -1537,15 +1630,25 @@ function notes(inp, c, meta, sens) {
   var N = c.N, rv = inp.revenue, D = inp.debt;
   function warn(level, code, text) { w.push({ level: level, code: code, text: text }); }
   var boc = p.bocMonth, pis = p.pisMonth, bocY = boc ? Number(boc.slice(0, 4)) : null;
-  var solarBasis = B.byBucket.solar.basis + (B.blendedRate != null && s ? B.byBucket.blended.basis : 0);
-  var storageBasis = B.byBucket.storage.basis + (B.blendedRate != null && b ? B.byBucket.blended.basis : 0);
+  var solarBasis = B.byBucket.solar.basis + (s ? B.blendedSolarBasis : 0);
+  var storageBasis = B.byBucket.storage.basis + (b ? B.blendedStorageBasis : 0);
   var solarClaim = !!(s && solarBasis > 0), storageClaim = !!(b && storageBasis > 0);
   var solarAc = s ? (s.kwAc || s.kwDc) : 0;
 
   /* -- timing: the solar deadline, FEOC and the storage phase-down -- */
-  if ((solarClaim || storageClaim) && (!boc || !pis)) {
-    warn('warn', 'TIMING_MISSING', 'Without beginning-of-construction and placed-in-service months the model cannot test the ' +
-      'solar in-service deadline, the FEOC threshold year or the storage phase-down, so the credits shown assume all three are met.');
+  /* Named only for the credits this project claims, each with the dates it
+     needs: the solar deadline both months, FEOC and the phase-down only
+     the construction start. A battery is never told about a solar
+     deadline, on screen or in the deck's disclosures. */
+  var untested = [], needBoc = false, needPis = false;
+  if (solarClaim && (!boc || !pis)) { untested.push('the solar in-service deadline'); needBoc = !boc; needPis = !pis; }
+  if ((solarClaim || storageClaim) && !boc) { untested.push('the FEOC threshold year'); needBoc = true; }
+  if (storageClaim && !boc) untested.push('the storage phase-down');
+  if (untested.length) {
+    warn('warn', 'TIMING_MISSING', 'Without ' + (needBoc && needPis ? 'beginning-of-construction and placed-in-service months'
+      : needBoc ? 'a beginning-of-construction month' : 'a placed-in-service month') + ' the model cannot test ' +
+      listText(untested, 'or') + ', so the credits shown assume ' +
+      (untested.length === 1 ? 'it is' : untested.length === 2 ? 'both are' : 'all three are') + ' met.');
   }
   if (solarClaim && boc && pis) {
     if (boc > SOLAR_BOC_CUTOFF && pis > SOLAR_PIS_DEADLINE) {
@@ -1640,14 +1743,34 @@ function notes(inp, c, meta, sens) {
   });
   B.lines.forEach(function (l) {
     if (l.asset === 'controller' && l.itcBasis > 0) {
-      warn('warn', 'CONTROLLER_INTEGRAL', 'A microgrid controller earns the credit only as an integral part of the storage or solar ' +
-        'system, not as a campus-level controller; confirm the treatment of "' + l.label + '" with tax counsel.');
+      warn('warn', 'CONTROLLER_INTEGRAL', 'A microgrid controller earns the credit only as an integral part of the ' +
+        (b && s ? 'storage or solar' : (b ? 'storage' : 'solar')) + ' system, not as a campus-level controller; confirm the ' +
+        'treatment of "' + l.label + '" with tax counsel.');
     }
     if (l.asset === 'interconnection' && l.itcBasis > 0 && facilityAcKw(inp) > 5000) {
       warn('warn', 'INTERCONNECTION_LIMIT', 'Interconnection costs earn the credit only for a facility of 5 MW AC or less, and this one ' +
         'is ' + fmtNum(facilityAcKw(inp)) + ' kW, so "' + l.label + '" should carry no eligible share.');
     }
   });
+  /* A split taken from the system is a stand-in; say so wherever it moves
+     a figure - the base credit when the two rates differ, or the slip case
+     that zeroes the solar rate - and not when equal rates make it moot. */
+  var slipRun = sens.some(function (x) { return x.key === 'itcSlip'; });
+  var ratesDiffer = Math.abs(B.solarRate - B.storageRate) >= 1e-12;
+  if (B.split && (ratesDiffer || slipRun)) {
+    var sp = B.split, many = sp.lines.length > 1, sh = sp.sharePct / 100;
+    var bits = [];
+    if (sp.perKwh > 0) bits.push(fmtNum(b.kwh, 0) + ' kWh at $' + fmtNum(sp.perKwh) + '/kWh');
+    if (sp.perKw > 0) bits.push(fmtNum(b.kw, 0) + ' kW at $' + fmtNum(sp.perKw) + '/kW');
+    var rests = ratesDiffer ? (many ? 'their' : 'its') + ' ITC rate of ' + fmtNum(sh * B.solarRate + (1 - sh) * B.storageRate) + '%' +
+      (slipRun ? ' and the solar deadline slip case both rest' : ' rests') : 'the solar deadline slip case rests';
+    warn(ratesDiffer ? 'warn' : 'info', 'BLENDED_SPLIT', 'The blended cost line' + (many ? 's ' : ' ') +
+      listText(sp.lines.map(function (x) { return '"' + x + '"'; }), 'and') + (many ? ' do' : ' does') +
+      ' not say how much is solar, so ' + (many ? 'they are' : 'it is') + ' split by the system at preset costs, ' +
+      fmtNum(sp.sharePct, 0) + '% solar and ' + fmtNum(100 - sp.sharePct, 0) + '% storage (' + fmtNum(s.kwDc) + ' kW DC at $' +
+      sp.perWdc.toFixed(2) + '/W against ' + bits.join(' plus ') + '), and ' + rests + ' on that split; enter the solar share ' +
+      'on the line, or split it into solar and storage lines, to use the real one.');
+  }
 
   /* -- depreciation -- */
   var pisM = monthNumber(pis);
@@ -1716,12 +1839,38 @@ function notes(inp, c, meta, sens) {
 
   /* -- debt and returns -- */
   if (D) {
+    var sz = c.debt.sized;
     if (!(c.debt.amount > 0)) {
       warn('warn', 'DEBT_NOT_SUPPORTED', 'The cash available for debt service supports no debt at a ' + fmtNum(D.dscrMin) +
         '× DSCR, so the project is modelled without debt.');
     } else if (c.debt.dscrMin != null && c.debt.dscrMin < D.dscrMin - 1e-6) {
       warn('warn', 'DSCR_BELOW_MIN', 'The minimum DSCR is ' + c.debt.dscrMin.toFixed(2) + '×, below the ' + fmtNum(D.dscrMin) +
         '× covenant floor.');
+    }
+    if (c.debt.amount > 0 && sz.binding === 'cap') {
+      warn('warn', 'DEBT_CAPPED', (sz.requestedBy === 'dscr'
+        ? 'At a ' + fmtNum(D.dscrMin) + '× DSCR the cash available for debt service would support ' + money(sz.requested) +
+          ' of debt, ' + fmtNum(sz.requested / c.capexTotal * 100, 0) + '% of installed cost'
+        : 'A ' + fmtNum(D.ltcPct) + '% loan-to-cost would lend ' + money(sz.requested)) +
+        '; debt is capped at ' + DEBT_CEILING_PCT + '% of installed cost, so the loan is ' + money(c.debt.amount) +
+        ' and equity funds the rest of the uses.');
+    }
+    /* Negative cash in a loan year is a breach whatever the minimum says:
+       name the year, and what the model did about it. */
+    var dry = c.debt.amount > 0 ? c.debt.dry : [];
+    if (dry.length) {
+      var worst = Infinity, held = 0, paid = 0, sculptedDry = true;
+      dry.forEach(function (y) {
+        if (c.cfads[y] < worst) worst = c.cfads[y];
+        if (c.ds[y] > 0) { sculptedDry = false; paid += c.ds[y]; } else held += c.intr[y];
+      });
+      var when = dry.length === 1 ? 'year ' + dry[0] : 'years ' + listText(dry.map(String), 'and');
+      var cash = dry.length === 1 ? 'is ' + money(worst) : 'is at or below zero (as low as ' + money(worst) + ')';
+      warn('warn', 'NEGATIVE_CFADS', 'In ' + when + ' the cash available for debt service ' + cash + ', ' + (sculptedDry
+        ? 'so the sculpted loan takes nothing and ' + money(held) + ' of interest is added to the balance; a lender counts ' +
+          (dry.length === 1 ? 'that' : 'each') + ' as a covenant breach, so the minimum DSCR is shown as 0×.'
+        : 'so the owner pays the ' + money(paid) + ' of debt service from equity; a lender counts ' +
+          (dry.length === 1 ? 'that' : 'each') + ' as a covenant breach.'));
     }
   }
   [['after-tax', c.irrInfo.at], ['pre-tax', c.irrInfo.pre]].forEach(function (x) {
@@ -1822,6 +1971,7 @@ function notes(inp, c, meta, sens) {
       ', sized on ' + (D.sizing === 'ltc' ? fmtNum(D.ltcPct) + '% of installed cost'
         : D.sizing === 'dscr' ? 'a ' + fmtNum(D.dscrMin) + '× DSCR'
         : 'the lesser of ' + fmtNum(D.ltcPct) + '% of installed cost and a ' + fmtNum(D.dscrMin) + '× DSCR') +
+      (c.debt.sized.binding === 'cap' ? ' and capped at ' + DEBT_CEILING_PCT + '% of installed cost' : '') +
       '; cash available for debt service is EBITDA plus reserve interest less reserve deposits' +
       (inp.bessReplacement.mode === 'expense' && c.reps.length ? ' and replacements paid from cash' : '') + '.');
     a.push('The ' + fmtNum(D.feePct) + '% financing fee is paid at close and amortised over the loan for tax' +
@@ -1872,6 +2022,12 @@ function fmtNum(v, dp) {
 
 function money(v) { return (v < 0 ? '-$' : '$') + fmtNum(Math.abs(v), 0); }
 
+/* ['a'] -> 'a'; ['a', 'b'] -> 'a or b'; ['a', 'b', 'c'] -> 'a, b or c'. */
+function listText(items, word) {
+  if (items.length < 2) return items.join('');
+  return items.slice(0, -1).join(', ') + ' ' + word + ' ' + items[items.length - 1];
+}
+
 function escText(pct) {
   if (!pct) return 'flat';
   return (pct > 0 ? 'escalating ' : 'falling ') + fmtNum(Math.abs(pct)) + '% a year';
@@ -1887,7 +2043,6 @@ function run(raw) {
   var n = normalize(raw);
   if (n.errors.length) return { ok: false, errors: n.errors };
   var core = model(n.inputs, NO_ADJ);
-  if (core.error) return { ok: false, errors: [core.error] };
   var result = assemble(n.inputs, core);
   result.sensitivity = sensitivity(n.inputs, core);
   var nt = notes(n.inputs, core, n.meta, result.sensitivity);

@@ -444,6 +444,64 @@ var cfadsOk = ltcRun.rows.every(function (r) {
 });
 ok('CFADS is EBITDA + reserve interest - reserve deposits every year', cfadsOk);
 
+/* The review's case: a 28c PPA (about Topanga's levelized price) sized on
+   a 1.25x DSCR over 20 years at 6.5% would lend 118% of installed cost,
+   leaving negative equity, no IRR and a payback of zero. */
+var strong = E.run(site({ revenue: { ppa: { rate1: 0.28 } }, debt: { sizing: 'dscr', tenorYears: 20, ratePct: 6.5, dscrMin: 1.25 } }));
+ok('DSCR sizing on strong cash stops at 90% of installed cost and says the cap binds',
+  strong.debt.sizingBinding === 'cap' && Math.abs(strong.debt.amount - 1350000) < 1e-6 &&
+  strong.debt.dscrCapacity > strong.capex.total && strong.debt.ceilingCapacity === 1350000, strong.debt);
+ok('so the equity is positive and the IRR and payback are real numbers',
+  strong.sourcesUses.equity > 0 && strong.metrics.afterTaxIrr !== null && strong.metrics.paybackYears > 0, strong.metrics);
+ok('the capped loan is named in a warning and in the assumptions', warning(strong, 'DEBT_CAPPED') &&
+  /118% of installed cost/.test(warning(strong, 'DEBT_CAPPED').text) &&
+  strong.assumptions.some(function (a) { return /capped at 90% of installed cost/.test(a); }));
+ok('a capped sculpted loan covers more than its floor', strong.debt.dscrMin > 1.25, strong.debt.dscrMin);
+var ltc95 = E.run(site({ debt: { sizing: 'ltc', ltcPct: 95 } }));
+ok('an entered 95% loan-to-cost is capped at 90% too', ltc95.debt.sizingBinding === 'cap' &&
+  Math.abs(ltc95.debt.amount - 1350000) < 1e-6 && /A 95% loan-to-cost/.test(warning(ltc95, 'DEBT_CAPPED').text));
+ok('a loan under the ceiling raises no cap', codes(ltcRun).indexOf('DEBT_CAPPED') < 0 && codes(dscrRun).indexOf('DEBT_CAPPED') < 0);
+/* The worst case for equity: 100% loan-to-cost, nothing else in the uses,
+   cash strong enough for any DSCR. */
+var equityOk = [], equityBad = [];
+['min', 'ltc', 'dscr'].forEach(function (sizing) {
+  ['sculpted', 'level'].forEach(function (shape) {
+    [0.2, 0.28, 0.45].forEach(function (ppa) {
+      var r = E.run(site({ revenue: { ppa: { rate1: ppa } }, reserves: { wcMonths: 0 },
+        debt: { sizing: sizing, shape: shape, ltcPct: 100, dscrMin: 1, feePct: 0, dsraMonths: 0, tenorYears: 20, ratePct: 5 } }));
+      var tag = sizing + '/' + shape + '/' + ppa;
+      if (r.ok && r.sourcesUses.equity >= 0.1 * r.capex.total - 1e-6 && r.debt.amount <= 0.9 * r.capex.total + 1e-6 &&
+          Math.abs(r.sourcesUses.equity + r.sourcesUses.debt - r.sourcesUses.totalUses) < 1e-6) equityOk.push(tag);
+      else equityBad.push(tag);
+    });
+  });
+});
+ok('equity is positive in every sizing mode and shape (' + equityOk.length + ' runs)', equityBad.length === 0, equityBad);
+
+/* A pack replacement paid from cash in year 10 turns that year's CFADS
+   negative: a sculpted loan takes nothing and capitalises the interest. */
+function dryYear(debt) {
+  return bessOnly({ bess: { sizing: { schedule: sizingSchedule(20, 250000, 3, 0, 0), replacements: [{ year: 10, cost: 300000 }] } },
+                    bessReplacement: { mode: 'expense' }, opex: { lines: [{ id: 'om', label: 'O&M', perYear: 10000 }] }, debt: debt });
+}
+var dry = E.run(dryYear({ sizing: 'min' }));
+ok('the fixture: year 10 has negative CFADS and the sculpted loan takes nothing',
+  dry.rows[9].cfads < 0 && dry.rows[9].debtService === 0 && dry.debt.shape === 'sculpted', dry.rows[9]);
+ok('that year is a breach at 0x in the row and in the minimum, not skipped',
+  dry.rows[9].dscr === 0 && dry.debt.dscrMin === 0 && dry.metrics.dscrMin === 0, dry.debt.dscrMin);
+near('the average leaves the unserviced year out: the sculpted ratio of the others', dry.debt.dscrAvg, dry.rows[0].dscr, 1e-9);
+near('the interest that year is added to the balance', dry.rows[9].principal, -dry.rows[9].interest, 1e-9);
+near('and the loan still repays', sum(col(dry, 'principal')), dry.debt.amount, 1e-6);
+ok('the breach is flagged, naming the year and the capitalised interest',
+  codes(dry).indexOf('DSCR_BELOW_MIN') >= 0 && /^In year 10 .*sculpted loan takes nothing/.test(warning(dry, 'NEGATIVE_CFADS').text) &&
+  warning(dry, 'NEGATIVE_CFADS').text.indexOf(money(dry.rows[9].interest)) >= 0, warning(dry, 'NEGATIVE_CFADS'));
+var dryLevel = E.run(dryYear({ sizing: 'ltc', shape: 'level' }));
+ok('a level loan in the same year shows the negative ratio as the minimum and says the owner pays',
+  dryLevel.rows[9].dscr < 0 && dryLevel.debt.dscrMin === dryLevel.rows[9].dscr &&
+  /from equity/.test((warning(dryLevel, 'NEGATIVE_CFADS') || {}).text || ''), dryLevel.debt);
+ok('positive cash in every loan year raises no breach', codes(ltcRun).indexOf('NEGATIVE_CFADS') < 0 &&
+  codes(E.run(dryYear({ sizing: 'min', tenorYears: 9 }))).indexOf('NEGATIVE_CFADS') < 0);
+
 section('tax appetite: NOLs and the §38(c) credit limit');
 var nol = E.run(site({ tax: { appetite: 'nol' } }));
 var limitOk = nol.rows.every(function (r) {
@@ -682,6 +740,103 @@ ok('every warning is one plain sentence with a level and a code', [cliffRun, ris
   });
 }));
 
+section('a blended cost line split between solar and storage');
+/* One installed cost for solar and storage, as the reference decks enter
+   it, with rates that differ (storage in an energy community). The system
+   at preset costs: 500 kW DC x $2.40/W = $1.2M against 1,000 kWh x $400 +
+   250 kW x $250 = $462,500. */
+var ALL_IN = { capex: { lines: [{ id: 'x', label: 'All in', amount: 1500000, asset: 'blended' }] },
+               tax: { itc: { storage: { energyCommunity: true } } } };
+var SYS_SHARE = 1200000 / (1200000 + 462500);
+var allIn = E.run(site(ALL_IN));
+ok('a single blended line between two different rates runs instead of being refused', allIn.ok === true, allIn.errors);
+eq('and validate() agrees', E.validate(site(ALL_IN)).length, 0);
+near('with nothing on the site to weigh it by, it is split by the system at preset costs',
+  allIn.capex.lines[0].solarSharePct, SYS_SHARE * 100, 1e-9);
+near('its rate is the two rates weighted by that split', allIn.capex.lines[0].itcRatePct, SYS_SHARE * 30 + (1 - SYS_SHARE) * 40, 1e-9);
+near('and so is its credit', allIn.tax.itc.face, 1500000 * 0.9 * (SYS_SHARE * 0.3 + (1 - SYS_SHARE) * 0.4), 1e-6);
+ok('the stand-in split is a warning that names it and asks for the real one',
+  warning(allIn, 'BLENDED_SPLIT').level === 'warn' && /72% solar and 28% storage/.test(warning(allIn, 'BLENDED_SPLIT').text) &&
+  /enter the solar share/.test(warning(allIn, 'BLENDED_SPLIT').text), warning(allIn, 'BLENDED_SPLIT'));
+var entered = E.run(site(merge(ALL_IN, { capex: { lines: [{ id: 'x', label: 'All in', amount: 1500000, asset: 'blended', solarSharePct: 25 }] } })));
+near('a solar share entered on the line replaces it', entered.capex.lines[0].itcRatePct, 0.25 * 30 + 0.75 * 40, 1e-9);
+ok('and needs no note', codes(entered).indexOf('BLENDED_SPLIT') < 0);
+var sizedSplit = E.run(site(merge(ALL_IN, { bess: { sizing: { settings: { capexPerKwh: 300, capexPerKw: 0 } } } })));
+near('the battery costs the sizing run was made at are used when it carries them', sizedSplit.capex.lines[0].solarSharePct,
+  1200000 / (1200000 + 300000) * 100, 1e-9);
+var withLines = E.run(site({ capex: { lines: [
+  { id: 'solar', label: 'Solar', amount: 1000000, asset: 'solar' }, { id: 'bess', label: 'Storage', amount: 500000, asset: 'storage' },
+  { id: 'cont', label: 'Contingency', amount: 75000, asset: 'blended' }] }, tax: { itc: { storage: { energyCommunity: true } } } }));
+near('beside solar and storage lines it takes their weights, as before', withLines.capex.lines[2].itcRatePct,
+  (1000000 * 30 + 500000 * 40) / 1500000, 1e-9);
+ok('and needs no note', codes(withLines).indexOf('BLENDED_SPLIT') < 0);
+var soloShare = E.run(solarOnly({ capex: { lines: [{ id: 's', label: 'Solar', amount: 1000000, asset: 'solar' },
+  { id: 'c', label: 'Contingency', amount: 50000, asset: 'blended', solarSharePct: 40 }] } }));
+ok('on a site with one asset a blended line is that asset, whatever share it carries',
+  soloShare.capex.lines[1].solarSharePct === 100 && soloShare.capex.lines[1].itcRatePct === 30);
+var pastIn = E.run(site(merge(ALL_IN, { project: { bocMonth: '2026-09', pisMonth: '2028-03' } })));
+ok('past the solar deadline the deck-shaped input runs: solar at 0%, the storage share keeps its credit',
+  pastIn.ok && warning(pastIn, 'SOLAR_CLIFF').level === 'critical' &&
+  Math.abs(pastIn.capex.lines[0].itcRatePct - (1 - SYS_SHARE) * 40) < 1e-9 && pastIn.tax.itc.face > 0, pastIn.errors || pastIn.capex.lines[0]);
+var atRisk = E.run(site({ project: { bocMonth: '2027-02', pisMonth: '2027-10' },
+  capex: { lines: [{ id: 'x', label: 'Installed cost', amount: 1500000, asset: 'blended' }] } }));
+var atRiskSlipped = E.run(site({ project: { bocMonth: '2027-02', pisMonth: '2028-01' },
+  capex: { lines: [{ id: 'x', label: 'Installed cost', amount: 1500000, asset: 'blended' }] } }));
+ok('at risk, the slip case the research asks for is in the sensitivities', sens(atRisk, 'itcSlip') !== null,
+  atRisk.sensitivity.map(function (s) { return s.key; }));
+near('and it is the same project placed in service in 2028', sens(atRisk, 'itcSlip').afterTaxIrr, atRiskSlipped.metrics.afterTaxIrr, 1e-12);
+ok('the deadline warning quotes it', warning(atRisk, 'SOLAR_CLIFF').text.indexOf((atRiskSlipped.metrics.afterTaxIrr * 100).toFixed(2)) >= 0);
+ok('equal base rates make the split moot, so the note is only a note, about the slip case',
+  warning(atRisk, 'BLENDED_SPLIT').level === 'info' && /slip case/.test(warning(atRisk, 'BLENDED_SPLIT').text));
+var allStorage = E.run(site(merge(ALL_IN, { project: { bocMonth: '2026-09', pisMonth: '2028-03' },
+  capex: { lines: [{ id: 'x', label: 'All in', amount: 1500000, asset: 'blended', solarSharePct: 0 }] } })));
+ok('a blended line entered as all storage makes no solar claim, so the solar deadline does not apply to it',
+  codes(allStorage).indexOf('SOLAR_CLIFF') < 0 && allStorage.capex.lines[0].itcRatePct === 40);
+
+section('a battery-only project hears nothing about solar');
+var batteryRuns = [
+  bessOnly({ project: { bocMonth: '', pisMonth: '' } }),
+  bessOnly({ project: { bocMonth: '2027-03', pisMonth: '' } }),
+  bessOnly({ project: { bocMonth: '2034-05', pisMonth: '2035-01' } }),
+  bessOnly({ project: { bocMonth: '2036-05', pisMonth: '2037-01' } }),
+  bessOnly({ project: { bocMonth: '2027-03', pisMonth: '2027-11' }, revenue: { bess: { mode: 'fixed', fixedPerKwMonth: 20 } },
+             debt: { sizing: 'min' }, tax: { itc: { feocAttested: true } } }),
+  bessOnly({ bess: { kw: 1500, kwh: 6000, sizing: null }, ev: { kw: 100 }, revenue: { bess: { mode: 'fixed', fixedPerKwMonth: 20 } },
+             capex: { lines: [{ id: 'b', label: 'Battery', amount: 3000000, asset: 'storage' },
+                              { id: 'c', label: 'Controller', amount: 50000, asset: 'controller', itcEligible: 1 },
+                              { id: 'i', label: 'Interconnection', amount: 80000, asset: 'interconnection' },
+                              { id: 'x', label: 'Contingency', amount: 100000, asset: 'blended' }] },
+             tax: { appetite: 'nol', itc: { storage: { pwa: false, lowIncome: 10, ratePctOverride: 36 } } } }),
+  bessOnly({ tax: { itc: { monetization: 'transfer' } }, bessReplacement: { mode: 'none' }, revenue: { dr: { perYear: 10000 } } }),
+  dryYear({ sizing: 'min' }), dryYear({ sizing: 'ltc', ltcPct: 95, shape: 'level' }), bleeder('full'), bleeder('nol')
+];
+var solarWords = [];
+batteryRuns.forEach(function (input, i) {
+  var r = E.run(input);
+  if (!r.ok) { solarWords.push('run ' + i + ' refused: ' + JSON.stringify(r.errors)); return; }
+  r.warnings.concat(r.assumptions.map(function (a) { return { code: 'assumption', text: a }; }),
+    r.sensitivity.map(function (s) { return { code: 'sensitivity', text: s.label }; })).forEach(function (w) {
+    if (/\bsolar\b|\bPV\b/i.test(w.text)) solarWords.push('run ' + i + ' ' + w.code + ': ' + w.text);
+  });
+});
+ok('no warning, assumption or sensitivity of ' + batteryRuns.length + ' battery-only runs mentions solar', solarWords.length === 0, solarWords);
+eq('without dates, a battery is told only what it claims', (warning(E.run(batteryRuns[0]), 'TIMING_MISSING') || {}).text,
+  'Without a beginning-of-construction month the model cannot test the FEOC threshold year or the storage phase-down, ' +
+  'so the credits shown assume both are met.');
+eq('a battery needs no in-service month for its credit tests', codes(E.run(batteryRuns[1])).indexOf('TIMING_MISSING'), -1);
+eq('solar and storage without dates still hear all three', (warning(E.run(site({ project: { bocMonth: '', pisMonth: '' } })), 'TIMING_MISSING') || {}).text,
+  'Without beginning-of-construction and placed-in-service months the model cannot test the solar in-service deadline, ' +
+  'the FEOC threshold year or the storage phase-down, so the credits shown assume all three are met.');
+eq('with a construction start, only the solar deadline waits on the in-service month',
+  (warning(E.run(site({ project: { bocMonth: '2027-01', pisMonth: '' } })), 'TIMING_MISSING') || {}).text,
+  'Without a placed-in-service month the model cannot test the solar in-service deadline, so the credits shown assume it is met.');
+ok('every new warning is one plain sentence with a level and a code', [strong, ltc95, dry, dryLevel, allIn, pastIn, atRisk].every(function (r) {
+  return r.warnings.every(function (w) {
+    return ['critical', 'warn', 'info'].indexOf(w.level) >= 0 && /^[A-Z_]+$/.test(w.code) &&
+      /\.$/.test(w.text) && w.text.indexOf('\n') < 0 && !/undefined|NaN|null|Infinity/.test(w.text);
+  });
+}));
+
 section('sensitivities');
 var sen = E.run(site({ tax: { itc: { monetization: 'transfer' } }, bess: { sizing: { schedule: sizingSchedule(20, 40000, 3, 2, 0) } },
                      revenue: { bess: { mode: 'shared-savings' } } }));
@@ -742,12 +897,10 @@ refused('a 15-point low-income bonus', site({ tax: { itc: { solar: { lowIncome: 
 refused('a state spelled out', site({ project: { state: 'California' } }), 'project.state');
 refused('a 60-year term', site({ years: 60 }), 'years');
 refused('a battery fee with no battery', solarOnly({ revenue: { bess: { mode: 'fixed' } } }), 'revenue.bess.mode');
-refused('a blended line between two different rates with nothing to weigh them by',
-  site({ capex: { lines: [{ id: 'x', label: 'All in', amount: 10, asset: 'blended' }] }, tax: { itc: { storage: { energyCommunity: true } } } }),
-  'capex.lines');
-eq('validate() agrees with run() on that', E.validate(site({ capex: { lines: [{ id: 'x', label: 'All in', amount: 10, asset: 'blended' }] },
-  tax: { itc: { storage: { energyCommunity: true } } } }))[0].field, 'capex.lines');
+refused('a blended line\'s solar share over 100%',
+  site({ capex: { lines: [{ id: 'x', label: 'All in', amount: 10, asset: 'blended', solarSharePct: 120 }] } }), 'capex.lines[0].solarSharePct');
 eq('validate() passes a good input', E.validate(site()).length, 0);
+eq('validate() agrees with run() on a refusal', E.validate(site({ years: 60 }))[0].field, 'years');
 var garbage = [undefined, null, 42, 'x', [], [1], true, { years: {} }, { capex: 'x' }, { capex: { lines: [null, 3, 'x'] } },
   { solar: [], bess: 'big', debt: 7, tax: { itc: 'none' } }, { project: { name: 'x' }, revenue: { other: [null] }, opex: { lines: [5] } },
   { project: { name: 'x' }, bess: { kw: 1, kwh: 1, sizing: { schedule: 'x', replacements: [null] } } }, { allocation: [] }];
@@ -779,7 +932,8 @@ var SHAPE = [
   ['revenue', shape.revenue, 'year1 ppaRate1 escalatorPct solarKwh1 solarNetKwh1 hostSavingsY1'],
   ['revenue.year1', shape.revenue.year1, 'ppa bess dr ev other total'],
   ['opex', shape.opex, 'year1Total escalatorPct'],
-  ['debt', shape.debt, 'amount ratePct tenorYears shape sizingBinding fee dsra0 dscrMin dscrAvg annualDebtService1'],
+  ['debt', shape.debt, 'amount ratePct tenorYears shape sizingBinding ltcCapacity dscrCapacity ceilingCapacity fee dsra0 ' +
+    'dscrMin dscrAvg annualDebtService1'],
   ['metrics', shape.metrics, 'afterTaxIrr preTaxIrr afterTaxIrrExItc irrBuild npv paybackYears totalReturns totalDistributions ' +
     'moic year1Distribution distributionsDuringDebt distributionsAfterDebt lppaCents lcoeCents lcosCents levered'],
   ['metrics.irrBuild', shape.metrics.irrBuild, 'cashOnly depreciation itc total'],
@@ -906,6 +1060,15 @@ ok('Taft: year 1 pays the credit sale and the rest of the debt term pays far les
 ok('the decks\' own errors are flagged, not fixed: Sunnyside\'s 7% and 36%, Taft\'s 8.84% in Florida',
   codes(S).indexOf('STATE_RATE_MISMATCH') >= 0 && codes(S).indexOf('NON_STATUTORY_RATE') >= 0 &&
   codes(F).indexOf('STATE_RATE_MISMATCH') >= 0 && codes(T).indexOf('STATE_RATE_MISMATCH') < 0);
+/* Both decks enter one blended installed cost and begin construction after
+   July 2026, which is the slip scenario the tax research asks for; it used
+   to vanish for want of a split. They now carry it, and the published
+   figures above did not move to make room. */
+ok('Topanga and Sunnyside carry the solar slip case, and their deadline warnings quote it', [T, S].every(function (r) {
+  var slip = sens(r, 'itcSlip'), w = warning(r, 'SOLAR_CLIFF'), note = warning(r, 'BLENDED_SPLIT');
+  return slip && slip.afterTaxIrr < r.metrics.afterTaxIrr && w && w.text.indexOf((slip.afterTaxIrr * 100).toFixed(2) + '%') >= 0 &&
+    note && note.level === 'info';
+}), [sens(T, 'itcSlip'), sens(S, 'itcSlip')]);
 
 console.log('\n  published vs model' + '\n  ' + pad('deck', 14, true) + pad('figure', 26, true) + pad('published', 22) + pad('model', 22) +
   pad('diff', 12) + '  tolerance');

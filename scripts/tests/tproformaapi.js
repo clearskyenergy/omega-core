@@ -1,7 +1,9 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   POST /api/proforma (api/proforma.js), offline: the gate, the three
-   actions and the brand a deck is drawn with.
+   POST /api/proforma (api/proforma.js), offline: the gate, the four
+   actions and the brand a deck is drawn with. The 'site' action runs the
+   real api/_lib/site-lookup.js with a recorded-fixture fetch in place of
+   the network (scripts/tests/tsitelookup.js covers the lookup itself).
 
    The handler is loaded in a vm sandbox with verify-token replaced by a
    stub that answers from an in-memory Firestore, the way
@@ -12,7 +14,11 @@
 
    The gate is the product's commercial control and the part that is
    easiest to get backwards, so each rule is checked in both directions:
-   the case it refuses and the neighbouring case it must let through.
+   the case it refuses and the neighbouring case it must let through —
+   a public mail domain against a company domain with no record, an
+   unverified email (staff included) against a verified one, and the site
+   quota's 429 against the colleague, the repeat and the other workspace
+   it must still serve.
 
    No network, no credentials, no npm install.
    Run: node scripts/tests/tproformaapi.js
@@ -24,8 +30,11 @@ var SRC = fs.readFileSync(path.join(ROOT, 'api', 'proforma.js'), 'utf8');
 var REAL = {
   whitelabel: require(path.join(ROOT, 'api', '_lib', 'whitelabel')),
   engine: require(path.join(ROOT, 'api', '_lib', 'proforma-engine')),
-  sizing: require(path.join(ROOT, 'api', '_lib', 'proforma-sizing'))
+  sizing: require(path.join(ROOT, 'api', '_lib', 'proforma-sizing')),
+  site: require(path.join(ROOT, 'api', '_lib', 'site-lookup')),
+  publicDomains: require(path.join(ROOT, 'api', '_lib', 'public-domains'))
 };
+var FIX = path.join(__dirname, 'fixtures', 'site-lookup');
 
 var pass = 0, fail = 0;
 function ok(name, cond, got) {
@@ -53,7 +62,7 @@ var BILLING_PATH = BASE + '/billing/current';
 /* docs: { path: fields | THROWS(n) }; a missing path is a 404 (null). */
 function world(docs, caller) {
   var w = { reads: [], verified: [] };
-  w.caller = caller || { uid: UID, email: 'ana@' + ORG, emailVerified: true, orgId: ORG, staff: false, claims: {} };
+  w.caller = caller || { uid: UID, email: 'ana@' + ORG, emailVerified: true, orgId: ORG, staff: false, claims: { email_verified: true } };
   w.stub = {
     httpError: httpError,
     verifyIdToken: function (token) {
@@ -85,8 +94,10 @@ function load(w, override) {
     require: function (n) {
       if (/\/verify-token$/.test(n)) return w.stub;
       if (/\/whitelabel$/.test(n)) return REAL.whitelabel;
+      if (/\/public-domains$/.test(n)) return REAL.publicDomains;
       if (/\/proforma-engine$/.test(n)) return override.engine || REAL.engine;
       if (/\/proforma-sizing$/.test(n)) return override.sizing || REAL.sizing;
+      if (/\/site-lookup$/.test(n)) return override.site || REAL.site;
       throw new Error('api/proforma.js required an unstubbed module: ' + n);
     }
   };
@@ -128,7 +139,16 @@ function docsWith(org, billing, member) {
 var ACTIVE = { name: 'Example Energy', status: 'active' };
 var STANDARD = { tier: 'standard' };
 var MEMBER = { email: 'ana@' + ORG, role: 'member', status: 'active' };
-var STAFF = { uid: 'staff-1', email: 'rep@csebuilders.com', emailVerified: true, orgId: 'csebuilders.com', staff: true, claims: {} };
+var STAFF = { uid: 'staff-1', email: 'rep@csebuilders.com', emailVerified: true, orgId: 'csebuilders.com', staff: true, claims: { email_verified: true } };
+/* A caller as verify-token builds one: emailVerified is its reading (an
+   absent claim reads as true), claims is the token. The gate must go by the
+   claim. */
+function person(email, verifiedClaim, staff) {
+  var claims = {};
+  if (verifiedClaim !== undefined) claims.email_verified = verifiedClaim;
+  return { uid: 'p-' + email, email: email, emailVerified: verifiedClaim !== false,
+    orgId: email.split('@')[1], staff: !!staff, claims: claims };
+}
 
 /* Topanga, the first reference deck (tproformaengine.js calibrates it):
    315 kW DC solar + 300 kW / 1,800 kWh storage, unlevered, 28 years. */
@@ -151,6 +171,30 @@ function bills12() {
   return rows;
 }
 var MONTHLY = { load: { mode: 'monthly', rows: bills12() }, tariff: { demandChargePerKw: 18, energyRate: 0.11 } };
+
+/* The real site lookup, with recorded responses in place of the network and
+   no server keys, counting every outbound request so a refused caller can be
+   shown to have spent nothing. It keeps what the handler passed (who is
+   asking), and has its own quota guard on a clock the test moves (s.now),
+   so the handler's 429 is the real limiter's. */
+function siteStub(limits) {
+  function fixture(name) { return JSON.parse(fs.readFileSync(path.join(FIX, name + '.json'), 'utf8')); }
+  var s = { calls: [], opts: [], now: Date.UTC(2026, 8, 24), guard: REAL.site.createGuard(limits) };
+  function fakeFetch(url) {
+    s.calls.push(url);
+    var f = /geocoding\.geo\.census\.gov/.test(url) ? fixture('census-canoga-park-ca')
+      : /pvwatts/.test(url) ? fixture('pvwatts-canoga-park-250kw') : fixture('urdb-ladwp-canoga-park');
+    return Promise.resolve({ status: f.status, headers: { get: function () { return null; } },
+      text: function () { return Promise.resolve(JSON.stringify(f.body)); } });
+  }
+  s.module = { lookup: function (body, o) {
+    s.opts.push(o);
+    return REAL.site.lookup(body, { fetch: fakeFetch, env: {}, now: s.now, guard: s.guard, who: o && o.who });
+  } };
+  return s;
+}
+var SITE_BODY = { action: 'site', address: { street: '22125 Roscoe Blvd', city: 'Canoga Park', state: 'CA', zip: '91304' },
+  solar: { kwDc: 250 } };
 
 /* Keys of a JSON value that hold an array longer than n: the sizing
    response must not echo a load back. */
@@ -278,6 +322,70 @@ function main() {
   })
   .then(function (r) { eq('an account with no organisation is 403', r.status, 403); })
 
+  /* ── who may sign in at all ── */
+  .then(function () {
+    section('A work email, verified (before anything is read)');
+    /* The hole this closes: orgId is the email domain, gmail.com has no
+       omega_orgs record, and a missing record fails open, so every Google
+       account shared one workspace with the investor model in it. */
+    return post({}, { action: 'context' }, { caller: person('someone@gmail.com', true) });
+  })
+  .then(function (r) {
+    eq('gmail.com with no documents at all: 403', r.status, 403);
+    ok('...telling them to use a work email', /work email/.test(r.body.error), r.body.error);
+    ok('...and naming the provider', /gmail\.com is a personal email provider/.test(r.body.error), r.body.error);
+    eq('...refused before any read', r.world.reads.length, 0);
+    return post({}, { action: 'model', inputs: TOPANGA }, { caller: person('someone@gmail.com', true) });
+  })
+  .then(function (r) {
+    eq('...for the model too, not only context', r.status, 403);
+    var st = siteStub();
+    return post({}, SITE_BODY, { caller: person('someone@outlook.com', true), override: { site: st.module } })
+      .then(function (r2) {
+        eq('outlook.com cannot run a site lookup', r2.status, 403);
+        eq('...and spends no API quota', st.calls.length, 0);
+        eq('...the lookup was never called', st.opts.length, 0);
+      });
+  })
+  .then(function () {
+    /* Every provider on the ONE list is refused, so a new entry there
+       closes this door with no change here. */
+    return REAL.publicDomains.reduce(function (p, d) {
+      return p.then(function (bad) {
+        return post({}, { action: 'context' }, { caller: person('x@' + d, true) }).then(function (r) {
+          return r.status === 403 ? bad : bad.concat([d + ':' + r.status]);
+        });
+      });
+    }, Promise.resolve([]));
+  })
+  .then(function (bad) {
+    eq('every domain in api/_lib/public-domains.js is refused', JSON.stringify(bad), '[]');
+    return post({}, { action: 'context' }, { caller: person('ana@' + ORG, false) });
+  })
+  .then(function (r) {
+    eq('a work email with email_verified false: 403', r.status, 403);
+    ok('...asking them to confirm it', /Confirm your email/.test(r.body.error), r.body.error);
+    eq('...refused before any read', r.world.reads.length, 0);
+    return post({}, { action: 'context' }, { caller: person('ana@' + ORG, undefined) });
+  })
+  .then(function (r) {
+    /* verify-token reads an absent claim as emailVerified:true; the gate
+       must not. */
+    eq('a work email with no email_verified claim: 403 (the claim, not emailVerified)', r.status, 403);
+    return post({}, { action: 'context' }, { caller: person('ana@' + ORG, 'true') });
+  })
+  .then(function (r) {
+    eq('email_verified "true" as a string is not true', r.status, 403);
+    return post({}, { action: 'context' }, { caller: person('ana@' + ORG, true) });
+  })
+  .then(function (r) {
+    eq('a verified work email with no org, billing or member record: allowed (fail open)', r.status, 200);
+    eq('...branded with its own orgId', r.body.brand.name, ORG);
+    eq('...after reading all three', r.world.reads.length, 3);
+    return post({}, { action: 'context' }, { caller: person('ana@example.com', true) });
+  })
+  .then(function (r) { eq('example.com is on the list (a documentation domain is nobody\'s workspace)', r.status, 403); })
+
   /* ── the org record ── */
   .then(function () { section('Organisation status (fails open on a missing record)'); return post(docsWith(undefined, STANDARD, MEMBER), { action: 'context' }); })
   .then(function (r) {
@@ -384,6 +492,25 @@ function main() {
   .then(function (r) {
     eq('a failed brand read cannot fail a staff session', r.status, 200);
     eq('...the brand falls back to the orgId', r.body.brand.name, 'csebuilders.com');
+    /* Anybody can open a password account on rep@csebuilders.com without
+       owning the mailbox, and verify-token calls that staff. */
+    var d = {};
+    d['omega_orgs/csebuilders.com'] = { name: 'ClearSky', status: 'suspended' };
+    return post(d, { action: 'context' }, { caller: person('rep@csebuilders.com', false, true) });
+  })
+  .then(function (r) {
+    eq('an UNVERIFIED staff address is refused', r.status, 403);
+    ok('...as an unverified email, not waved through as staff', /Confirm your email/.test(r.body.error), r.body.error);
+    eq('...before any read (the staff branch never ran)', r.world.reads.length, 0);
+    return post({}, { action: 'model', inputs: TOPANGA }, { caller: person('rep@clearsky-usa.com', undefined, true) });
+  })
+  .then(function (r) {
+    eq('a staff address with no email_verified claim is refused too', r.status, 403);
+    return post({}, { action: 'context' }, { caller: person('rep@clearsky-usa.com', true, true) });
+  })
+  .then(function (r) {
+    eq('a VERIFIED staff address is staff again', r.status, 200);
+    eq('...reading only its own org, for the brand', JSON.stringify(r.world.reads.map(function (x) { return x.path; })), JSON.stringify(['omega_orgs/clearsky-usa.com']));
   })
 
   /* ── requests ── */
@@ -520,6 +647,120 @@ function main() {
     return post(docsWith(ACTIVE, STANDARD, MEMBER), { action: 'size' });
   })
   .then(function (r) { eq('no sizing request is 422', r.status, 422); })
+
+  /* ── site ── */
+  .then(function () {
+    section('site');
+    var st = siteStub();
+    return post(docsWith({ name: 'X', status: 'suspended' }, STANDARD, MEMBER), SITE_BODY, { override: { site: st.module } })
+      .then(function (r) {
+        eq('a suspended org cannot run a site lookup', r.status, 403);
+        eq('...and spends no API quota', st.calls.length, 0);
+        return post(docsWith(ACTIVE, { tier: 'standard', toolAccess: ['editor'] }, MEMBER), SITE_BODY, { override: { site: st.module } });
+      })
+      .then(function (r) {
+        eq('an org whose product lacks the pro forma cannot either', r.status, 403);
+        eq('...still no outbound request', st.calls.length, 0);
+        return post(docsWith(ACTIVE, STANDARD, MEMBER), SITE_BODY, { override: { site: st.module } });
+      })
+      .then(function (r) {
+        eq('a located address is 200', r.status, 200);
+        eq('ok:true', r.body.ok, true);
+        eq('the contract\'s blocks, exactly', Object.keys(r.body).sort().join(','),
+          'energyCommunity,errors,geo,lowIncome,ok,solar,tax,utility,warnings');
+        eq('state tax is the engine\'s own rate', r.body.tax.statePct, REAL.engine.STATE_TAX.CA);
+        eq('energy community from the Treasury table', r.body.energyCommunity.status, 'yes');
+        eq('PVWatts production for the 250 kW asked', r.body.solar.kwhAnnual, 407042);
+        ok('URDB rates, at most five', r.body.utility && r.body.utility.rates.length > 0 && r.body.utility.rates.length <= 5, r.body.utility);
+        eq('no source failed', JSON.stringify(r.body.errors), '{}');
+        eq('three requests: geocoder, PVWatts, URDB', st.calls.length, 3);
+        return post(docsWith(ACTIVE, STANDARD, MEMBER), { action: 'site', address: { street: '1 Main St<script>', city: 'X', state: 'CA' } },
+          { override: { site: st.module } });
+      })
+      .then(function (r) {
+        eq('an address with markup is 400', r.status, 400);
+        eq('...naming the field', r.body.field, 'address.street');
+        return post(docsWith(ACTIVE, STANDARD, MEMBER), { action: 'site', addresses: [SITE_BODY.address, SITE_BODY.address] },
+          { override: { site: st.module } });
+      })
+      .then(function (r) {
+        eq('a list of addresses is 400 (one lookup per request)', r.status, 400);
+        ok('...saying so', /one address/i.test(r.body.error), r.body.error);
+        eq('invalid requests reached no upstream', st.calls.length, 3);
+        var boomSite = { lookup: function () { throw new Error('lookup blew up at /var/task/api/_lib/site-lookup.js'); } };
+        return post(docsWith(ACTIVE, STANDARD, MEMBER), SITE_BODY, { override: { site: boomSite } });
+      })
+      .then(function (r) {
+        eq('a lookup fault is 500 with the fixed message', r.status, 500);
+        ok('...and nothing of the error', !/blew up|site-lookup/.test(JSON.stringify(r.body)), r.body);
+      });
+  })
+
+  /* ── site: the shared quota ── */
+  .then(function () {
+    section('site: the shared quota, through the handler');
+    /* Small caps so the test reads; tsitelookup.js holds the real ones. */
+    var st = siteStub({ userPerMinute: 2, orgPerHour: 3 });
+    var docs = docsWith(ACTIVE, STANDARD, MEMBER);
+    function sized(kw) { return { action: 'site', address: SITE_BODY.address, solar: { kwDc: kw } }; }
+    var BEN = { uid: 'u/2', email: 'ben@' + ORG, emailVerified: true, orgId: ORG, staff: false, claims: { email_verified: true } };
+    var OTHER = person('ola@other-power.com', true);
+    function site1(body, caller) { return post(docs, body, { caller: caller, override: { site: st.module } }); }
+    return site1(sized(250))
+      .then(function (r) {
+        eq('a lookup is 200', r.status, 200);
+        eq('the handler tells the lookup which workspace is asking', st.opts[0].who.orgId, ORG);
+        eq('...and which person (the verified uid, not anything in the body)', st.opts[0].who.uid, UID);
+        eq('...and nothing else it could get wrong', Object.keys(st.opts[0]).join(','), 'who');
+        eq('three requests', st.calls.length, 3);
+        return site1(sized(250));
+      })
+      .then(function (r) {
+        eq('the same lookup again is 200', r.status, 200);
+        eq('...answered from the cache: no request', st.calls.length, 3);
+        return site1(sized(251));
+      })
+      .then(function (r) {
+        eq('a second different lookup in the minute is 200', r.status, 200);
+        return site1(sized(252));
+      })
+      .then(function (r) {
+        eq('the third in a minute (cap 2) is 429', r.status, 429);
+        eq('...with Retry-After', r.headers['retry-after'], '60');
+        eq('...the same number in the body', r.body.retryAfter, 60);
+        eq('...ok:false', r.body.ok, false);
+        ok('...saying why and when', /a minute/.test(r.body.error) && /60 s/.test(r.body.error), r.body.error);
+        eq('...and no upstream request', st.calls.length, 6);
+        eq('...still not cached', r.headers['cache-control'], 'private, no-store');
+        return site1(sized(252), BEN);
+      })
+      .then(function (r) {
+        eq('a colleague\'s lookup is 200 (the workspace\'s third of 3)', r.status, 200);
+        st.now += 60000;
+        return site1(sized(253));
+      })
+      .then(function (r) {
+        eq('a minute on, the workspace\'s hour is still spent: 429', r.status, 429);
+        ok('...naming the workspace', /workspace/.test(r.body.error), r.body.error);
+        eq('...retry when its first lookup leaves the hour', r.headers['retry-after'], '3540');
+        return site1(sized(250));
+      })
+      .then(function (r) {
+        eq('a site it already looked up is still answered', r.status, 200);
+        return site1(sized(253), OTHER);
+      })
+      .then(function (r) {
+        eq('another workspace is untouched', r.status, 200);
+        eq('...and it is the other workspace that was counted', st.opts[st.opts.length - 1].who.orgId, 'other-power.com');
+        st.now += 3600000;
+        return site1(sized(253));
+      })
+      .then(function (r) {
+        eq('an hour on, the workspace may look up again', r.status, 200);
+        return site1({ action: 'site', address: { street: '1<b>', city: 'X', state: 'CA' } });
+      })
+      .then(function (r) { eq('a bad address is still a 400 alongside the quota', r.status, 400); });
+  })
 
   /* ── faults ── */
   .then(function () {

@@ -1,0 +1,6 @@
+{
+ "_captured": "Shape from SPEC.md section 4 and the PVWatts v8 docs (HTTP 422, errors[], outputs {}); not a raw capture — a 422 needs a working key.",
+ "status": 422,
+ "headers": {"content-type":"application/json"},
+ "body": {"inputs":{"tilt":"95"},"errors":["'tilt' must be between 0 and 90"],"warnings":[],"version":"8.5.0","outputs":{}}
+}
