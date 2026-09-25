@@ -1523,7 +1523,133 @@ var FORM_NG_MA = {
   blocks: BLOCKS_NG_MA
 };
 
-var FORMS = [ FORM_UI_L2, FORM_ES_CT_L2, FORM_NG_MA ];
+/* ══════════════════════════════════════════════════════════════════════
+   EVERSOURCE MASSACHUSETTS — EV Estimate Template (Rev. March 2026)
+   Eversource MA does not use the CT matrix. Its sheet ("Cost Matrix ESMA",
+   one Excel table named SimpleInvoice, B8:J62) asks for Material Qty and
+   Unit Price with Material Total as a FORMULA (qty x price), a Labor Total,
+   a Subcontracted flag, and four eligible totals that must match the
+   PowerClerk application fields: customer-side make-ready (J57),
+   utility-side make-ready (J58), EVSE (J59), networking (J60).
+
+   The export fills THEIR file (assets/utility-templates/), not a lookalike,
+   because the template says "confirm revision in PowerClerk" and a reviewer
+   recognises their own sheet. `esma.row` is the sheet row; several model
+   rows may share one sheet row and are summed. Keys are the same row keys
+   the classifier emits, so the estimate ingest and mapping are untouched.
+   ══════════════════════════════════════════════════════════════════════ */
+var BLOCKS_ES_MA_L2 = [
+  { id:'mr', title:'Eligible Make-Ready (Design, Customer-Side, Utility-Side)', fill:'FFBFBFBF', rows:[
+      {k:'design',     l:'Design/Engineering',                         esma:{row:10}},
+      {k:'permit',     l:'Permitting',                                 esma:{row:11}},
+      {k:'trench',     l:'Trenching & Backfill - Continuously Paved Area\n(i.e., asphalt, concrete)',
+                       esma:{row:13, qty:'ftTrenchPaved'}},
+      {k:'trenchTurf', l:'Trenching & Backfill - Non-Continuously Paved Area\n(i.e., grass)',
+                       esma:{row:14, qty:'ftTrenchTurf'}},
+      {k:'conduit',    l:'Conduit & Cable - Underground',              esma:{row:15, qty:'ftConduitUG'}},
+      {k:'wire',       l:'Cable - Underground (with conduit row)',     esma:{row:15}},
+      {k:'conduitAG',  l:'Conduit & Cable - Above Ground/Indoor',      esma:{row:16, qty:'ftConduitAG'}},
+      {k:'wireAG',     l:'Cable - Above Ground/Indoor (with conduit row)', esma:{row:16}},
+      {k:'restore',    l:'Restoration (with paved trenching)',         esma:{row:13}},
+      {k:'bollard',    l:'Protective Bollards',                        esma:{row:17}},
+      {k:'handhole',   l:'Handholes',                                  esma:{row:18}},
+      {k:'concrete',   l:'Concrete Work - EVSE Bases',                 esma:{row:20}},
+      {k:'pad',        l:'Concrete Work - EVSE Bases (pads)',          esma:{row:20}},
+      {k:'xfmrpad',    l:'Concrete Work - Utility Transformer Pad',    esma:{row:21}},
+      {k:'panel',      l:'Distribution Equipment (i.e., panels, service board, breakers, enclosures)', esma:{row:23}},
+      {k:'boards',     l:'Distribution Equipment (service board)',     esma:{row:23}},
+      {k:'meter',      l:'Metering Equipment (i.e., meter socket, CT cabinet)', esma:{row:24}},
+      {k:'commission', l:'Other (commissioning)',                      esma:{row:25}},
+      {k:'other',      l:'Other',                                      esma:{row:25}},
+      {k:'trenchPri',  l:'Trenching & Backfill for Primary Conduit (utility-side)', esma:{row:27}},
+      {k:'conduitPri', l:'Primary Conduit (Concrete-encased, utility-side)',        esma:{row:29}}
+  ]},
+  { id:'evse', title:'Eligible EVSE Costs', fill:'FFBFBFBF', rows:[
+      {k:'charger',    l:'EVSE Hardware #1',                           esma:{row:31, qty:'plugs'}},
+      {k:'charger2',   l:'EVSE Hardware #2',                           esma:{row:32}},
+      {k:'shipping',   l:'EVSE Freight/Shipping',                      esma:{row:33}},
+      {k:'install',    l:'EVSE Installation',                          esma:{row:34, qty:'plugs'}},
+      {k:'pedestal',   l:'Other (i.e., cable management, power management kits, mounting kits)', esma:{row:35}},
+      {k:'network',    l:'EVSE Networking (Public L2s and MUDs only)',  esma:{row:37, qty:'plugs'}},
+      {k:'warranty',   l:'Maintenance/Warranty Plan (ineligible)',     esma:{row:51}},
+      {k:'activation', l:'Activation Fee (ineligible)',                esma:{row:52}},
+      {k:'validation', l:'Validation (ineligible)',                    esma:{row:53}},
+      {k:'other',      l:'Other EVSE (ineligible)',                    esma:{row:55}}
+  ]},
+  { id:'fp', title:'Ineligible Infrastructure - Future Proofing', fill:'FFFFC000', rows:[
+      {k:'trench',     l:'Future Proofing - Trenching & Backfill (continuously paved area)', esma:{row:39}},
+      {k:'trenchTurf', l:'Future Proofing - Trenching & Backfill (non-continuously paved area)', esma:{row:40}},
+      {k:'conduit',    l:'Future Proofing - Conduit & Cable (underground)',     esma:{row:41}},
+      {k:'wire',       l:'Future Proofing - Conduit & Cable (spare conductors)', esma:{row:41}},
+      {k:'conduitAG',  l:'Future Proofing - Conduit & Cable (above ground/indoor)', esma:{row:42}},
+      {k:'bollard',    l:'Future Proofing - Protective Bollards',              esma:{row:43}},
+      {k:'concrete',   l:'Future Proofing - Concrete Work/Bases/Pads',         esma:{row:44}},
+      {k:'panel',      l:'Future Proofing - Panels/Service Board/Breakers',    esma:{row:45}},
+      {k:'xfmr',       l:'Future Proofing - Other (transformer capacity)',     esma:{row:46}},
+      {k:'other',      l:'Future Proofing - Other',                            esma:{row:46}}
+  ]},
+  { id:'ne', title:'Ineligible Costs', fill:'FFFFC000', rows:[
+      /* The classifier books bollards and networking as ineligible (the UI
+         way). On Eversource MA both are eligible sheet rows, so they are
+         written to rows 17 and 37 — same treatment as National Grid MA. */
+      {k:'bollard',    l:'Protective Bollards (eligible on Eversource MA)', esma:{row:17}},
+      {k:'network',    l:'EVSE Networking (eligible for Public L2 / MUD)',  esma:{row:37, qty:'plugs'}},
+      {k:'networkNE',  l:'EVSE Networking (Workplace, Fleet, DCFC)',        esma:{row:54}},
+      {k:'striping',   l:'Parking Spot Striping/Painting',                  esma:{row:47}},
+      {k:'signage',    l:'Signage',                                         esma:{row:48}},
+      {k:'warranty',   l:'Maintenance/Warranty Plan',                       esma:{row:51}},
+      {k:'activation', l:'Activation Fee',                                  esma:{row:52}},
+      {k:'validation', l:'Validation',                                      esma:{row:53}},
+      {k:'other',      l:'Other',                                           esma:{row:55}}
+  ]}
+];
+var FORM_ES_MA_L2 = {
+  id:'es-ma-l2',
+  utility:'Eversource MA',
+  program:'MA EV Charging Program — EV Estimate Template (Rev. March 2026)',
+  short:'Eversource MA — L2',
+  classes:['l2'],
+  sheet:'Cost Matrix ESMA',
+  writer:'eversource-ma',
+  banners:{ site:'Site Information / System Details', costs:'Estimate' },
+  headers:{ type:'Description', desc:'Detail/Notes', mat:'Material Total',
+            lab:'Labor Total', tot:'Total Cost' },
+  totalLabel:'Estimate Total for Eligible and Ineligible Costs',
+  /* MA is 6.25%. The template has two ineligible tax rows (49 Infrastructure,
+     56 EVSE); the workbook books tax the way the Eversource CT and National
+     Grid MA submissions do — on the EVSE hardware and installation only —
+     so it lands on row 56, Sales Tax - EVSE. */
+  tax:{ rate:6.25, label:'Sales Tax - EVSE', mode:'single', section:'ne',
+        matRows:['charger','charger2','pedestal'], labRows:['install'] },
+  left:[
+    { title:'Project', fields:[
+        {k:'esmaProjNo', label:'Eversource Project # (ESMAEV-##### or HTMAEV-#####):'},
+        {k:'address',    label:'Project Street Address:'},
+        {k:'city',       label:'Project City, State, ZIP Code:'},
+        {k:'plugs',      label:'Number of Ports:'} ]},
+    { title:'Installer Information', fields:[
+        {k:'company',   label:'Company Name:',  from:'contractor'},
+        {k:'contact',   label:'Contact Name:',  from:'contractor'},
+        {k:'email',     label:'Contact Email:', from:'contractor'},
+        {k:'phone',     label:'Contact Phone:', from:'contractor'} ]},
+    { title:'Site Host Information', fields:[
+        {k:'applicant', label:'Company Name:'},
+        {k:'custContact', label:'Contact Name:'},
+        {k:'custEmail', label:'Contact Email:'},
+        {k:'custPhone', label:'Contact Phone:'} ]}
+  ],
+  right:[
+    { type:'stack', label:'Site Category', k:'category', type2:'select',
+      options:['Public','Workplace','Multi-Unit Dwelling (MUD)','Fleet'] },
+    { type:'stack', label:'Subcontracted work (Y/N on every priced row)', k:'esmaSub', type2:'select',
+      options:['N','Y'] },
+    { type:'stack', label:'Total Feet of Trenching', k:'ftTrench',  type2:'number', fmt:'#,##0' },
+    { type:'stack', label:'Total Feet of Conduit',   k:'ftConduit', type2:'number', fmt:'#,##0' }
+  ],
+  blocks: BLOCKS_ES_MA_L2
+};
+
+var FORMS = [ FORM_UI_L2, FORM_ES_CT_L2, FORM_ES_MA_L2, FORM_NG_MA ];
 
 function formById(id){ for(var i=0;i<FORMS.length;i++){ if(FORMS[i].id===id) return FORMS[i]; } return FORMS[0]; }
 var FORM = FORMS[0];                       /* utility form driving the cost blocks (may be null) */
@@ -6557,6 +6683,17 @@ function exportWorkbook(){
       } else if(j.form.writer==='eversource'){
         sheetES40(wb, buildModel(j.form), j.form, site);
         name='Eversource_Cost_Estimate_Matrix_'+slug+'_'+stamp+'.xlsx';
+      } else if(j.form.writer==='eversource-ma'){
+        name='Eversource_MA_EV_Estimate_'+slug+'_'+stamp+'.xlsx';
+        esmaWorkbookFromTemplate(buildModel(j.form)).then(function(blob){
+          made.push(_dlBlob(blob, name));
+          setTimeout(function(){ step(ix+1); }, 700);
+        })['catch'](function(err){
+          btn.disabled=false; btn.textContent='Export workbook';
+          alert('The Eversource MA estimate could not be built: '
+                +(err && err.message ? err.message : err));
+        });
+        return;
       } else if(j.form.writer==='nationalgrid'){
         /* Their file, loaded and filled \u2014 not one of ours that resembles it.
            Reading the template is async, so this branch takes the promise
@@ -6797,6 +6934,163 @@ function ngWorkbookFromTemplate(m, form){
     ngFillTemplate(ws, m);
     return wb;
   });
+}
+
+/* ── EVERSOURCE MA — fill their March 2026 template ─────────────────────
+   ExcelJS 4.4 cannot open this file (it throws on the SimpleInvoice table's
+   autofilter), and a load/save round trip would drop the data-validation
+   extension anyway. So the file is filled at the XML level with JSZip: only
+   the cells we write change; every formula, style, table, image and
+   validation list is Eversource's own, byte for byte. Cached formula results
+   are stripped and fullCalcOnLoad is set, so Excel recomputes Material
+   Total (qty x unit price) and the four eligible totals on open. */
+var ESMA_TEMPLATE_URL = '/assets/utility-templates/eversource-ma-ev-estimate-2026-03.xlsx';
+var ESMA_SHEET = 'xl/worksheets/sheet1.xml';   /* "Cost Matrix ESMA" */
+/* Rows whose Material Total is a typed value, not qty x price. */
+var ESMA_MAT_DIRECT = { 10:1, 11:1 };
+
+function esmaRollup(m){
+  var byRow={}, bi, ri, b, r, cfg, rr;
+  for(bi=0;bi<m.blocks.length;bi++){
+    b=m.blocks[bi];
+    for(ri=0;ri<b.rows.length;ri++){
+      r=b.rows[ri];
+      cfg=(r.def && r.def.esma) || null;
+      if(!cfg) continue;
+      rr=cfg.row;
+      if(!byRow[rr]) byRow[rr]={ mat:0, lab:0, qty:0, notes:[] };
+      byRow[rr].mat += num(r.mat);
+      byRow[rr].lab += num(r.lab);
+      if(cfg.qty) byRow[rr].qty = num(DATA[cfg.qty]) || num(r.qty) || byRow[rr].qty;
+      else if(num(r.qty)) byRow[rr].qty += num(r.qty);
+      if(r.note) byRow[rr].notes.push(r.note);
+    }
+  }
+  /* The model's single tax line goes on row 56, Sales Tax - EVSE. */
+  if(num(m.taxTotal)) byRow[56]={ mat:r2(m.taxTotal), lab:0, qty:1, notes:[] };
+  return byRow;
+}
+
+function _xmlEsc(v){
+  return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _colNum(ref){
+  var c=String(ref).replace(/[0-9]/g,''), n=0, i;
+  for(i=0;i<c.length;i++) n=n*26+(c.charCodeAt(i)-64);
+  return n;
+}
+/* Write one cell into the sheet XML. A number is <v>; text is an inline
+   string. The cell keeps the template's style (s=) so it still looks like
+   their sheet; a cell the template never wrote is inserted in column order. */
+function esmaSetCell(xml, ref, value){
+  var rowNo=ref.replace(/[A-Z]/g,'');
+  var inner = (typeof value==='number')
+    ? '<v>'+value+'</v>'
+    : '<is><t xml:space="preserve">'+_xmlEsc(value)+'</t></is>';
+  var tAttr = (typeof value==='number') ? '' : ' t="inlineStr"';
+  var cellRe = new RegExp('<c r="'+ref+'"([^>]*?)(/>|>[\\s\\S]*?</c>)');
+  var m = xml.match(cellRe);
+  if(m){
+    var attrs = m[1].replace(/\s+t="[^"]*"/,'');
+    return xml.replace(cellRe, '<c r="'+ref+'"'+attrs+tAttr+'>'+inner+'</c>');
+  }
+  var rowRe = new RegExp('(<row r="'+rowNo+'"[^>]*>)([\\s\\S]*?)(</row>)');
+  var rm = xml.match(rowRe);
+  var cell='<c r="'+ref+'"'+tAttr+'>'+inner+'</c>';
+  if(!rm) return xml;   /* no such row in the template: leave it alone */
+  var cells=rm[2], want=_colNum(ref), re=/<c r="([A-Z]+)\d+"/g, mm, at=cells.length;
+  while((mm=re.exec(cells))){ if(_colNum(mm[1])>want){ at=mm.index; break; } }
+  return xml.replace(rowRe, rm[1]+cells.slice(0,at)+cell+cells.slice(at)+rm[3]);
+}
+
+function esmaFillXml(xml, m){
+  function put(ref, v){ if(v!==undefined && v!==null && v!=='') xml=esmaSetCell(xml, ref, v); }
+  put('B4', d('esmaProjNo'));
+  put('B6', new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}));
+  put('D4', d('address'));
+  put('D5', d('city'));
+  put('D7', num(DATA.plugs)||'');
+  put('F4', d('company')); put('F5', d('contact')); put('F6', d('email')); put('F7', d('phone'));
+  put('I4', d('applicant')); put('I5', d('custContact')); put('I6', d('custEmail')); put('I7', d('custPhone'));
+
+  var byRow=esmaRollup(m), sub=d('esmaSub')||'N', rr, g, q, mat;
+  /* The EVSE hardware row asks for type and make/model in its note cell. */
+  if(byRow[31]){
+    var mdl=[], i;
+    for(i=0; EDITOR_FLEET && i<EDITOR_FLEET.length; i++)
+      mdl.push([EDITOR_FLEET[i].mfr, EDITOR_FLEET[i].model].filter(Boolean).join(' '));
+    byRow[31].notes.unshift('EVSE Type: L2'+(mdl.length?' · Make/Model: '+mdl.join(', '):''));
+  }
+  for(rr in byRow){
+    if(!byRow.hasOwnProperty(rr)) continue;
+    g=byRow[rr];
+    /* Row 37's total is Material only (J37 = Material Total), so networking
+       labor would vanish from the sheet: book it as part of the charge. */
+    if(+rr===37 && g.lab){ g.mat+=g.lab; g.lab=0; }
+    mat=r2(g.mat);
+    if(!mat && !r2(g.lab)) continue;
+    var notes=uniqJoin(g.notes,' · ');
+    if(notes) put('C'+rr, notes);
+    if(ESMA_MAT_DIRECT[rr]){
+      put('G'+rr, mat);
+    } else if(mat){
+      /* Material Total is their formula, qty x unit price. The unit price is
+         what makes it equal the material we priced; a row with money and no
+         count goes in as 1 x the lump sum. */
+      q = r2(g.qty) > 0 ? r2(g.qty) : 1;
+      put('E'+rr, q);
+      put('F'+rr, Math.round(mat/q*10000)/10000);
+    }
+    /* Row 37 (networking) has no labor column in its total formula. */
+    if(r2(g.lab) && +rr!==37) put('H'+rr, r2(g.lab));
+    if(+rr!==37 && +rr!==56 && +rr!==49) put('I'+rr, sub);
+  }
+  /* Drop cached results so no stale 0 shows before Excel recalculates. */
+  xml = xml.replace(/(<f>[^<]*<\/f>)<v>[^<]*<\/v>/g, '$1');
+  return xml;
+}
+
+function esmaWorkbookFromTemplate(m){
+  if(typeof JSZip==='undefined' || window._ZIPFAIL)
+    return Promise.reject(new Error('the ZIP library did not load'));
+  return fetch(ESMA_TEMPLATE_URL).then(function(r){
+    if(!r.ok) throw new Error('template not found ('+r.status+')');
+    return r.arrayBuffer();
+  }).then(function(buf){ return JSZip.loadAsync(buf); })
+  .then(function(zip){
+    return zip.file(ESMA_SHEET).async('string').then(function(xml){
+      zip.file(ESMA_SHEET, esmaFillXml(xml, m));
+      return zip.file('xl/workbook.xml').async('string');
+    }).then(function(wbx){
+      wbx = /<calcPr\b/.test(wbx)
+        ? wbx.replace(/<calcPr\b([^>]*?)\s*\/>/, function(all, a){
+            return '<calcPr'+a.replace(/\s+fullCalcOnLoad="[^"]*"/,'')+' fullCalcOnLoad="1"/>'; })
+        : wbx.replace('</workbook>','<calcPr fullCalcOnLoad="1"/></workbook>');
+      zip.file('xl/workbook.xml', wbx);
+      /* calcChain lists cells by cached state; Excel rebuilds it. */
+      if(zip.file('xl/calcChain.xml')){
+        zip.remove('xl/calcChain.xml');
+        return Promise.all([zip.file('[Content_Types].xml').async('string'),
+                            zip.file('xl/_rels/workbook.xml.rels').async('string')])
+          .then(function(a){
+            zip.file('[Content_Types].xml', a[0].replace(/<Override[^>]*calcChain[^>]*\/>/,''));
+            zip.file('xl/_rels/workbook.xml.rels', a[1].replace(/<Relationship[^>]*calcChain[^>]*\/>/,''));
+            return zip;
+          });
+      }
+      return zip;
+    });
+  }).then(function(zip){
+    return zip.generateAsync({ type:'blob',
+      mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  });
+}
+function _dlBlob(blob, filename){
+  var url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=filename; a.style.display='none';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ try{ document.body.removeChild(a); URL.revokeObjectURL(url); }catch(e){} }, 4000);
+  return filename;
 }
 
 /* Values only. Every cell already carries the template's styling, and
