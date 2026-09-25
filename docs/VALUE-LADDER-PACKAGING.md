@@ -48,9 +48,11 @@ customer-specific proposal and order form for their organization. The floor is
    package records the price-book version it was sold on. Changing the price
    book never reprices a signed package (same rule `customerEditorLite` already
    follows with Stripe).
-3. **Charged per workspace, not per seat.** The workspace includes a number of
-   builder logins **(decide: 3)** and unlimited viewers. Extra builders are a
-   line item **(decide: $50/mo each)**. This needs Agreement §2.3 changed (§7).
+3. **Charged per workspace, not per seat, and nothing is free.** Every plan
+   includes a counted number of builder logins **(decide: 3)** and viewer
+   logins **(decide: 10)**. Extra builders and extra viewers are priced line
+   items **(decide: $50 and $15/mo each)**. Included means paid for inside the
+   plan; it never means free. This needs Agreement §2.3 changed (§7).
 4. **Deliverable modules carry included usage and an overage price**
    (permitting matrices, site studies, EV applications). Usage is counted
    server-side (§5.4), never from browser telemetry.
@@ -62,6 +64,14 @@ customer-specific proposal and order form for their organization. The floor is
    Pricing" still holds).
 7. **Plans are pre-picked module sets**, priced below the sum of their parts,
    so the plans and the à la carte menu always agree.
+8. **Nothing is given away.** There is no free tier, no free trial of a
+   module outside a signed package, and no free function. A trial is a
+   package with a start date and a price, and the credit (rule 5) is the only
+   discount. Anything "tier ALL" in `omega-tools.js` today (Grid Atlas,
+   the compute calculators, intake, the financing marketplace) is included in
+   a paid package, never open to an unpaid account. The public storefront
+   (`/embed/`) is the paying tenant's White Label module serving THEIR
+   visitors; it is not a free tier of ours.
 
 ---
 
@@ -108,7 +118,7 @@ own numbers (§6).
 | `storage` | **Storage Sizing & Pro Forma** | Standard · $250 | Battery Sizer (bills, bill PDFs, 8760), BESS Pro Forma and investor deck, Value Stack, BESS ISO Calculator. `batterysizer`, `proforma`, `valuestack`, `isocalc` | models run | Storage modelling seat, $300–$1,000/mo |
 | `bom` | **BOM & Procurement** | Standard · $250 | The editor's bill of materials, BOM CSV/XLSX export (`bomToCSV` in `editor.html`), Request for Quote to vendors (`api/rfq.js`, `rfqs/` + `recipients/`), Procurement Marketplace when it ships (`procurement`, `soon:true` today) | BOMs exported, RFQs sent | Estimating/takeoff seat + manual RFQ time, $250–$800/mo |
 | `engineering` | **Engineering** | Premium · $500 | Conductor & transformer sizing, multi-node power flow, interconnection screener, Site Optimizer, cost estimator; cap `engineering`; add-on `engineering`. `conductorsizing`, `powerflow`, `interconnect`, `siteoptimizer`, `costestimator` | studies run | Power-systems analysis licence or engineer hours, $500–$1,500/mo |
-| `finance` | **Investor & Finance** | Premium · $500 | Site Investment Analysis, DCFC pro forma, 3D fleet modeler, residential portfolio analyzer, degradation & warranty; **financing marketplace pro side** (pipeline, capital-partner matching, portfolio screening) **(decide exactly what the paid side is vs the free filing)**. `investment`, `dcfc`, `fleet`, `apartment`, `degradation` | investor packages | Analyst model build + modelling tools, $500–$2,000/mo |
+| `finance` | **Investor & Finance** | Premium · $500 | Site Investment Analysis, DCFC pro forma, 3D fleet modeler, residential portfolio analyzer, degradation & warranty; **financing marketplace pro side** (pipeline, capital-partner matching, portfolio screening) **(decide which marketplace functions are in Lite and which are in this module; none is free)**. `investment`, `dcfc`, `fleet`, `apartment`, `degradation` | investor packages | Analyst model build + modelling tools, $500–$2,000/mo |
 | `compute` | **Compute & Data Center** | Premium · $500 | Compute campus builder + the parcel screening that feeds it (add-on `compute` already grants `compute` + `parcelscreen`), Compute Land Lease. `computelease` | campuses screened | Site-selection consultant time, $500–$1,500/mo |
 | `ops` | **Operations** | Premium · $500 | O&M console, SLA & contract intelligence, field service & dispatch, owner reporting, Fleet Command, Site Lifecycle console. `omconsole`, `slaintel`, `fieldservice`, `ownerreport`, `fleetcommand`, `sitelifecycle` | sites operated | Asset-management / monitoring platform, $500–$2,000/mo |
 | `whitelabel` | **White Label Storefront** | Premium · $500 | Tenant's name on the platform (`whiteLabel`), embed sizing on their own website (`/embed/`, publishable key), leads and orders into their queue. Add-on `whitelabel` | leads captured | Custom web sizing tool + lead capture, $500–$2,000/mo |
@@ -299,7 +309,7 @@ Steps:
    from the catalog ranges), deliverable math ("45 applications × ~$1,000 =
    $45,000 vs $1,299"; "one permitting matrix = $30,000 vs $9,000/yr"),
    payback. Cash-flow framing: this month, this quarter, this year.
-5. **Terms**: monthly vs annual prepay (12th month free, Agreement §4.3),
+5. **Terms**: monthly vs annual prepay (pay 11 months for 12, Agreement §4.3),
    Annual Service Fee, transformation credit, Initial Term 12 months,
    Inaugural Pricing lock, quarterly right-size, the ladder of what switches
    on next and the trigger for each.
@@ -376,7 +386,7 @@ stale; check the live console before any call.
 |---|---|---|---|---|---|---|
 | Clean Cell | OEM | Trial ends **2026-09-30**; white label + Logic live on trial | Lite + White Label + Storage + BOM + Omega Logic | $4,000 | Permitting, Engineering | Storefront orders and bulk POs running through Logic |
 | Concord Energy | Installer (EV L2) | Paying, Field $1,299 | Field: Lite + EV Rebates & Closeout + Plan Sets + BOM + Engineering | $1,299 plan | EV application overage above 20/mo, then Permitting | 45 National Grid applications in 72 h |
-| NextNRG | Developer | Enterprise, Compute add-on | Enterprise contract: Storage + Investor & Finance + Compute + Plan Sets | contract | Operations, Site Finder | Quarterly right-size; viewers free so the team presents James's IRR |
+| NextNRG | Developer | Enterprise, Compute add-on | Enterprise contract: Storage + Investor & Finance + Compute + Plan Sets | contract | Operations, Site Finder | Quarterly right-size; enough viewer logins in the contract for the team to present James's IRR |
 | Budderfly | Developer (EE-as-a-service) | Trial ends 2026-10-16 | Lite + Storage + Investor & Finance | $1,250 | Operations, Site Finder | Installed sites needing owner reporting |
 | East West Energy | Advisor / integrator (DC + BESS) | Trial ends 2026-10-16 | Lite + Compute + Investor & Finance | $1,500 | Site Finder, Engineering | >5 campuses screened a month |
 | CIR (Cleantech Industry Resources) | EPC / engineering | Trial | Lite + Plan Sets + Engineering + Permitting | $2,000 | BOM, White Label on deliverables | >1 permitting matrix a month |
@@ -457,7 +467,7 @@ moved server-side.
    (this spec says no)? Forfeited on early termination?
 4. Usage: EV applications (20 included, $50 over?), permitting matrices (1
    included, $2,500 over?), site studies (25 included, $15 over?).
-5. What exactly is free vs paid in the financing marketplace.
+5. Which financing-marketplace functions sit in Lite and which in Investor & Finance (none is free).
 6. Annual Service Fee for Lite ($3,400 as in the Agreement, lower, or waived).
 7. Whether to add `customerType` (distributor, capital partner, compute)
    beside `vertical`, or widen `vertical`.
