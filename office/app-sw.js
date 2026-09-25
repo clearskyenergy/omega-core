@@ -3,8 +3,8 @@
    an order list from yesterday is worse than a spinner. What it keeps is
    the SHELL (the page, the theme, the PO parser), so the app opens and says
    "offline" instead of a browser error page. API calls are never cached. */
-var SHELL = 'office-app-shell-v1';
-var FILES = ['/office/app', '/office/app.html', '/omega-logic-theme.css', '/omega-logic-theme.js', '/omega-po-bulk.js', '/omega-logic-signin.js', '/omega-hexhub.js'];
+var SHELL = 'office-app-shell-v2';
+var FILES = ['/office/app', '/office/app.html', '/omega-logic-theme.css', '/omega-logic-theme.js', '/omega-po-bulk.js', '/omega-logic-signin.js', '/omega-hexhub.js', '/omega-scan.js'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(SHELL).then(function (c) { return Promise.all(FILES.map(function (f) { return c.add(f)['catch'](function () {}); })); }).then(function () { return self.skipWaiting(); }));
 });

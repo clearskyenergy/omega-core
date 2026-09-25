@@ -2094,46 +2094,68 @@ achieved nothing.
 
 ---
 
-## BESS Pro Forma: the investor model moves to the server, and the deck (2026-09-24)
+## BESS Pro Forma 2.0: the investor model moves to the server (2026-09-24)
 
 The old `proforma.html` was NextNRG's legacy EV-charging calculator copied into
 core: every figure computed in the browser, no income tax, the ITC and a lump
 of MACRS subtracted from capex at year zero, degradation computed and never
-applied, a fixed 10-year horizon, "NextNRG" and "Miami Beach" in a core file,
-and a Monday.com field. It is replaced, not patched. `docs/PROFORMA.md` is the
-method, the checks and the not-built list.
+applied, a fixed 10-year horizon, and tenant names in a core file. Replaced.
 
 **Moved to `/api/` (CLAUDE.md IP rule):** ITC basis and the §48E rate build,
-MACRS and bonus, state and federal tax, debt sizing, IRR/NPV/payback,
-levelized price, LCOE — `api/_lib/proforma-engine.js` behind
-`POST /api/proforma` (`context | size | model | site`). The page renders what
-the API returns; `proforma-logic.js` only lays out the deck.
+MACRS and bonus, state and federal tax, debt sizing, IRR/NPV/payback, levelized
+price, LCOE — `api/_lib/proforma-engine.js` behind `POST /api/proforma`
+(`context | size | model`, gated on the `proforma` tool). The page renders what
+the API returns; `proforma-logic.js` lays out the investor deck (PDF) in the
+producing tenant's brand and computes nothing.
 
-**Why SAM's method.** The three investor one-pagers the deck is modelled on
-were built in NREL SAM (single owner, 2025.4.16 defaults), identified from the
-reserve arithmetic and the 90/97% basis split. Topanga and Sunnyside reproduce
-to the dollar on ITC, basis and year-1 distribution and on IRR and IRR build;
-the test asserts it. A financing team comparing our deck with a SAM run sees
-the same numbers.
+**Method.** The investor one-pagers the deck is modelled on were NREL SAM
+single-owner runs; the engine follows SAM's method, and
+`scripts/tests/tproformaengine.js` reproduces the published Topanga and
+Sunnyside figures to the dollar (ITC, basis, year-1 distribution) and to the
+basis point (IRR, IRR build).
 
-**Sizing is the unified engine.** The battery is sized by
-`battery-tool-engine.js` (merged in the same release; see "Battery sizing: one
-engine"). `econ()` now also returns the year-by-year schedule it already
-computed — savings re-solved at each state of health, replacements — and the
-sweep rows drop it so `/api/bess-size` responses did not grow (byte-identical
-before and after, 49 requests compared). The request validation that lived
-inline in `api/bess-size.js` is now `api/_lib/bess-size-validate.js`, shared by
-both endpoints.
+**Sizing** is the unified engine merged in the same release
+(`battery-tool-engine.js` via `api/_lib/proforma-sizing.js`). `econ()` now also
+returns the year-by-year schedule it already computed; sweep rows drop it so
+`/api/bess-size` responses are byte-identical. Its request validation moved to
+`api/_lib/bess-size-validate.js`, shared by both endpoints.
 
-**Energy-community lookups do not use DOE's map.** The NETL ArcGIS layers still
-carry the 2024 list (wrong for 314 counties and 152 coal tracts against Notice
-2026-39). The lookup reads Treasury's own tables, bundled under
-`api/_lib/data/` and rebuilt each June by `scripts/build-energy-communities.js`.
+
+---
+
+## BESS Pro Forma 2.1: configuration first, the dashboard's look, PowerPoint, site lookups (2026-09-24)
+
+`docs/PROFORMA.md` is the method, the checks and the not-built list.
+
+**Configuration first.** Step 1 asks what is at the site (battery always;
+solar, EV charging and a controller each optional) and how the project earns
+(a PPA only when there is solar; a share of the host's savings; a fixed storage
+fee; host-owned). Every later step, result, warning and deck page shows only
+what the project has; what was typed for a component that is switched off is
+kept, not lost. The old page made every project an EV-charging site.
+
+**The dashboard's look.** The white top bar, paper and type of the marketplace
+and projects pages, with `/omega-theme.css` linked last as they do. The app
+chrome stays the platform's; the deck carries the producing tenant's brand.
+
+**PowerPoint.** `OmegaProformaReport.pptx()` builds the same pages as the PDF
+from native shapes and tables, from the same content builders, so the two
+cannot say different things. PptxGenJS 4.0.1 is loaded from jsdelivr on first
+use only, pinned by SRI; it is never in the repo.
+
+**Site lookups (`site` action, `api/_lib/site-lookup.js`).** Census geocode;
+energy-community and low-income-tract status; PVWatts v8 production; URDB v8
+tariffs. Each is independent and shown with an Apply switch. Energy-community
+status does NOT come from DOE's ArcGIS layers: they still carry the 2024 list
+(wrong for 314 counties and 152 coal tracts against Notice 2026-39). Treasury's
+own tables are bundled under `api/_lib/data/` and rebuilt each June by
+`scripts/build-energy-communities.js`. PVWatts and URDB need
+`NREL_API_KEY` / `OPENEI_API_KEY` in Vercel; until then a user's own keys from
+Settings are passed for the one call and never stored.
 
 **Branding** is the producing tenant's `omega_orgs` record; nothing defaults to
-a tenant. `tenants/nextnrg/tenant.json` gained the colours and tagline its
-decks use, which reach Firestore the next time the seed runs.
-
-**The marketplace card** reads `tools/proforma` from Firestore; its new
-description and version 2.0.0 appear after "Import / Update Applications".
+a tenant. `tenants/nextnrg/tenant.json` gained the colours and tagline its decks
+use, which reach Firestore the next time the seed runs. **The marketplace card**
+reads `tools/proforma` from Firestore; its new description and version 2.0.0
+appear after "Import / Update Applications".
 

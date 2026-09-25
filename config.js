@@ -50,6 +50,12 @@ window.CLEARSKY_CONFIG = {
 (function (c) {
   try {
     var app = /^\/(office\/app|plant\/app|portals\/customer\/app|omega-logic)(\/|\.html)?$/.test(location.pathname);
-    if (app && navigator.standalone === true && c.firebase && c.firebase.authDomain) c.firebase.authDomain = location.host;
+    /* On a host whose handler IS registered with Google (below), every
+       Omega Logic sign-in goes through this host, installed or not: the
+       pop-up and the redirect are then same-site everywhere, including an
+       app's built-in browser, where a helper on another site loses the
+       result. Elsewhere, only the installed app (api/auth-check guards it). */
+    var registered = ['silmarillion.clearskyomega.com'].indexOf(location.host) >= 0;
+    if (app && (registered || navigator.standalone === true) && c.firebase && c.firebase.authDomain) c.firebase.authDomain = location.host;
   } catch (e) {}
 })(window.CLEARSKY_CONFIG);

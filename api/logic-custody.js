@@ -10,6 +10,9 @@
                                             site, shipping, coverage (the
                                             spreadsheet)
         &template=assignment                the CSV to send a customer
+        &view=plan&customerId=<id>          one customer ACCOUNT's sites and its
+                                            orders with units, for "many
+                                            sites at once"
    POST /api/logic-custody { org, action, … }
         site          create or edit a site (an end location with its
                       interconnection details)
@@ -28,6 +31,12 @@
         import        a spreadsheet of site assignments, mapped, dry run
                       first, idempotent on commit
         mapping-save  remember a customer's column names for next time
+      Many sites at once (a customer's PO list of sites), for ONE account:
+        sites-preview { customerId, text }   the list read and matched
+        sites-create  { customerId, rows }   one transaction, idempotent
+        plan-preview  { orderId, sites: [{ siteId, units }], replan? }
+        plan-apply    { orderId, sites, replan?, planKey, confirm: true }
+      — the same actions and rules as api/my-sites.js, scoped to the office
 
    Every rule is in api/_lib/custody.js; this file reads and writes. A move
    is judged inside the transaction that applies it, so two scanners cannot
@@ -39,6 +48,8 @@
    catalog fields and change through the catalog endpoint. */
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy'), C = require('./_lib/custody'), Plant = require('./_lib/plant'), B = require('./_lib/buyer-accounts');
+var SG = require('./_lib/site-geo');
+var PLAN_CHUNK = 25;   // units per transaction: the plant scans these units while they are built
 var UNIT_FIELDS = ['serial', 'sku', 'unitType', 'shipUnit', 'rootSerial', 'woId', 'orderId', 'orderNo', 'customerId', 'at', 'hold', 'inventoryStatus', 'custody', 'createdAt'];
 var MAX_UNITS = 2000;
 
@@ -70,6 +81,11 @@ async function accountOfUnit(db, org, u, order) {
 /* A site on one customer's account never takes another customer's unit: the
    warranty would start at a site the owner cannot see. */
 function siteFits(site, owner) { if (site && site.customerId && owner && site.customerId !== owner) throw A.httpError(409, 'That site belongs to another customer account'); }
+/* An account sites may be created on: it exists and is open — not turned
+   off, not superseded or merged into another. */
+function openAccount(d) { return !!d && ['disabled', 'suspended', 'cancelled'].indexOf(d.status) < 0 && !d.supersededBy && !d.mergedInto; }
+function poOf(o) { return (o.purchaseOrder && o.purchaseOrder.number) || o.poNumber || null; }
+function accountId(v, say) { if (!v) throw A.httpError(400, say || 'Choose the customer account'); return P.id(v); }
 
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -81,6 +97,20 @@ module.exports = A.handler(async function (req, res) {
 
   if (req.method === 'GET') {
     if (req.query.template) { res.setHeader('Content-Type', 'text/csv; charset=utf-8'); res.setHeader('Content-Disposition', 'attachment; filename="site-assignment-template.csv"'); res.end(C.csvTemplate()); return; }
+    /* one account's sites and its orders with units: what the office's
+       "many sites at once" pickers need, without the whole fleet */
+    if (req.query.view === 'plan') {
+      var pcid = accountId(req.query.customerId), pc = await root(db, org).collection('customers').doc(pcid).get();
+      if (!pc.exists) throw A.httpError(404, 'Customer account not found');
+      var porders = (await B.accountOrders(db, org, null, { id: pcid }, { limit: 100 })).docs, pids = porders.map(function (d) { return d.id; }), punits = [];
+      for (var pi = 0; pi < pids.length; pi += 10) { var ps = await db.collection('plant_units').where('orgId', '==', org).where('orderId', 'in', pids.slice(pi, pi + 10)).limit(MAX_UNITS).get(); ps.docs.forEach(function (d) { var pu = d.data(); if (pu.shipUnit) punits.push(pu); }); }
+      var byOrd = {}, boundAt = {}, goingAt = {};
+      punits.forEach(function (pu) { var pcu = C.custodyOf(pu); (byOrd[pu.orderId] = byOrd[pu.orderId] || []).push(pu); if (pcu.siteId) boundAt[pcu.siteId] = (boundAt[pcu.siteId] || 0) + 1; else if (pcu.plannedSiteId) goingAt[pcu.plannedSiteId] = (goingAt[pcu.plannedSiteId] || 0) + 1; });
+      var psites = await root(db, org).collection('sites').where('customerId', '==', pcid).limit(500).get();
+      return { brand: brand, customer: { id: pcid, name: pc.data().name || pcid, status: pc.data().status || 'active', open: openAccount(pc.data()) },
+        sites: psites.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }).filter(function (sx) { return sx.status !== 'inactive'; }).map(function (sx) { return { id: sx.id, name: sx.name, address: sx.address || {}, ref: sx.ref || '', lat: sx.lat == null ? null : sx.lat, lng: sx.lng == null ? null : sx.lng, units: boundAt[sx.id] || 0, planned: goingAt[sx.id] || 0 }; }),
+        orders: porders.filter(function (d) { return byOrd[d.id]; }).map(function (d) { var o = d.data(); return Object.assign({ orderId: d.id, orderNo: o.orderNo || null, po: poOf(o) }, C.unitCounts(byOrd[d.id])); }) };
+    }
     var prods = await products(db, org), byP = {}; prods.forEach(function (p) { if (p && p.sku) byP[p.sku] = p; });
     if (req.query.serial) {
       var serial = Plant.serialFrom(req.query.serial) || C.serial(req.query.serial), ref = unitRef(db, org, serial), s = await ref.get();
@@ -117,14 +147,16 @@ module.exports = A.handler(async function (req, res) {
     }
     var counts = {}; C.STATUSES.forEach(function (k) { counts[k || 'plant'] = 0; });
     var offPlant = []; list.forEach(function (u) { var c = C.custodyOf(u); counts[c.status || 'plant']++; if (c.status) offPlant.push(view(u, byP, now)); });
-    var siteList = await sites(db, org), perSite = {}; offPlant.forEach(function (u) { if (u.custody.siteId) perSite[u.custody.siteId] = (perSite[u.custody.siteId] || 0) + 1; });
+    var siteList = await sites(db, org), perSite = {}, plannedAt = {}; offPlant.forEach(function (u) { if (u.custody.siteId) perSite[u.custody.siteId] = (perSite[u.custody.siteId] || 0) + 1; });
+    /* "going to": from EVERY unit, the ones still being built included */
+    var goingTo = list.filter(function (u) { var c = C.custodyOf(u); return c.plannedSiteId && !c.siteId; }); goingTo.forEach(function (u) { var id = C.custodyOf(u).plannedSiteId; plannedAt[id] = (plannedAt[id] || 0) + 1; });
     var cov = { active: 0, pending: 0, expired: 0, expiring: 0 }; offPlant.forEach(function (u) { u.coverage.forEach(function (cv) { if (cov[cv.status] != null) cov[cv.status]++; if (cv.status === 'active' && cv.endDate && (Date.parse(cv.endDate) - Date.parse(now)) / 86400000 <= 90) cov.expiring++; }); });
     var customers = await root(db, org).collection('customers').orderBy('__name__').limit(200).get();
     var mapping = await root(db, org).collection('custody_mappings').doc('assignment').get();
-    var toConfirm = offPlant.filter(function (u) { return u.custody.confirmation === 'declared'; }), planned = offPlant.filter(function (u) { return u.custody.plannedSiteId && !u.custody.siteId; });
+    var toConfirm = offPlant.filter(function (u) { return u.custody.confirmation === 'declared'; }), planned = goingTo.slice(0, 200).map(function (u) { return view(u, byP, now); });
     return { brand: brand, name: ctx.org.name || org, owner: X.owner(caller), counts: counts, coverage: cov, units: offPlant.slice(0, 500), unitsShown: Math.min(offPlant.length, 500), unitsTotal: offPlant.length,
       toConfirm: toConfirm.slice(0, 200), planned: planned.slice(0, 200),
-      sites: siteList.map(function (s) { return Object.assign({}, s, { units: perSite[s.id] || 0 }); }), exceptions: C.exceptions(list, prods, now).slice(0, 200),
+      sites: siteList.map(function (s) { return Object.assign({}, s, { units: perSite[s.id] || 0, planned: plannedAt[s.id] || 0 }); }), exceptions: C.exceptions(list, prods, now).slice(0, 200),
       customers: customers.docs.map(function (d) { return { id: d.id, name: d.data().name || d.id }; }), products: prods.filter(function (p) { return p && p.sku && (p.kind || 'product') === 'product'; }).map(function (p) { return { sku: p.sku, name: p.name, coverage: C.templatesOf(p) }; }),
       mapping: mapping.exists ? mapping.data().columnMap || null : null, columns: C.TEMPLATE_HEADERS, moves: C.MOVES, states: C.STATES, limited: all.limited, sampled: list.length };
   }
@@ -132,6 +164,87 @@ module.exports = A.handler(async function (req, res) {
   /* ── writes ─────────────────────────────────────────────────────────── */
   var action = String(b.action || ''), method = ['manual', 'scan', 'import'].indexOf(b.method) >= 0 ? b.method : 'manual';
   function audit(tx, what, extra) { tx.create(db.collection('omega_audit').doc(), Object.assign({ orgId: org, action: 'custody-' + what, by: by, at: now }, extra || {})); }
+
+  /* ── many sites at once, for one customer account ─────────────────── */
+  if (action === 'sites-preview' || action === 'sites-create') {
+    var scid = accountId(b.customerId, 'Choose the customer account the sites belong to'), cref = root(db, org).collection('customers').doc(scid);
+    if (action === 'sites-preview') {
+      if (String(b.text == null ? '' : b.text).length > C.MAX_SITE_TEXT) throw A.httpError(400, 'That list is too long; paste at most ' + C.MAX_SITE_ROWS + ' sites at a time.');
+      var cd = await cref.get(); if (!cd.exists || !openAccount(cd.data())) throw A.httpError(404, 'Customer account not found, or it is closed');
+      var have0 = (await root(db, org).collection('sites').where('customerId', '==', scid).limit(500).get()).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      var pv = C.sitesPreview(b.text, have0, scid);
+      /* the pins: new rows only, Census only, cache first, inside the
+         office's own daily allowance (api/_lib/site-geo.js) */
+      var geo = await SG.locate(db, org, pv.rows, 'office', scid, now);
+      return Object.assign({ ok: true, customerId: scid, geoLimited: geo.geoLimited }, pv);
+    }
+    var recs = C.siteListInputs(b.rows, scid);
+    return db.runTransaction(async function (tx) {
+      var cd2 = await tx.get(cref); if (!cd2.exists || !openAccount(cd2.data())) throw A.httpError(404, 'Customer account not found, or it is closed');
+      var cur = await tx.get(root(db, org).collection('sites').where('customerId', '==', scid).limit(500)), have = cur.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      var pl = C.placeSites(recs, have, scid), taken = {}, made = [];
+      for (var i = 0; i < pl.create.length; i++) {
+        var item = pl.create[i], sid = null;
+        for (var j = 0; j < item.candidates.length && !sid; j++) { var cand = item.candidates[j]; if (taken[cand]) continue; taken[cand] = true; if (!(await tx.get(root(db, org).collection('sites').doc(cand))).exists) sid = cand; }
+        if (!sid) throw A.httpError(409, 'Row ' + (item.row + 1) + ' (' + item.rec.name + '): too many sites share that name and ZIP. Rename it and try again.');
+        made.push({ id: sid, doc: Object.assign({ orgId: org }, item.rec, { customerId: scid, source: 'office-list', createdAt: now, createdBy: by, updatedAt: now, updatedBy: by }) });
+      }
+      made.forEach(function (m) { tx.create(root(db, org).collection('sites').doc(m.id), m.doc); });
+      audit(tx, 'sites-created', { customerId: scid, created: made.map(function (m) { return m.id; }), existing: pl.existing.map(function (x) { return x.id; }) });
+      return { ok: true, customerId: scid, created: made.map(function (m) { return Object.assign({ id: m.id }, m.doc); }), existing: pl.existing };
+    });
+  }
+  if (action === 'plan-preview' || action === 'plan-apply') {
+    if (!b.orderId) throw A.httpError(400, 'Choose the order');
+    var poref = db.collection('orders').doc(P.id(b.orderId)), pos = await poref.get();
+    if (!pos.exists || pos.data().orgId !== org) throw A.httpError(404, 'Order not found');
+    if (!Array.isArray(b.sites) || !b.sites.length) throw A.httpError(400, 'Choose the sites');
+    if (b.sites.length > C.MAX_SITE_ROWS) throw A.httpError(400, 'At most ' + C.MAX_SITE_ROWS + ' sites in one plan');
+    var sdocs = await Promise.all(b.sites.map(function (x) { var v = String(x && x.siteId || ''); return /^[a-zA-Z0-9_-]{1,120}$/.test(v) ? root(db, org).collection('sites').doc(v).get() : null; }));
+    var known = sdocs.filter(function (d) { return d && d.exists; }).map(function (d) { return Object.assign({ id: d.id }, d.data()); }), siteOf = {};
+    var chosen = C.planSites(b.sites, known, 'Site not found');
+    known.forEach(function (sx) { siteOf[sx.id] = sx; });
+    /* every site must be one the order's account may use (siteFits), and a
+       unit stamped for another account is left out of the spread */
+    var powner = await B.accountOfOrder(db, org, pos.data());
+    chosen.forEach(function (x) { siteFits(siteOf[x.siteId], powner); });
+    function ownerOf(u) { return C.stampedAccount(u) || powner || null; }
+    function refuse(u) { var o = ownerOf(u), bad = chosen.filter(function (x) { var sx = siteOf[x.siteId]; return sx.customerId && o && sx.customerId !== o; })[0]; return bad ? 'On another customer account than ' + bad.name : null; }
+    var punits = (await db.collection('plant_units').where('orgId', '==', org).where('orderId', '==', pos.id).limit(MAX_UNITS).get()).docs.map(function (d) { return d.data(); }).filter(function (u) { return u.shipUnit; });
+    var plan = C.spread(punits, chosen, { replan: b.replan === true, exclude: refuse });
+    if (action === 'plan-preview') return Object.assign({ ok: true, orderId: pos.id, orderNo: pos.data().orderNo || null }, plan);
+    if (b.confirm !== true) throw A.httpError(400, 'Preview the plan, then confirm it');
+    if (plan.problems.length) throw A.httpError(409, plan.problems[0]);
+    if (!C.planMatches(plan, b)) throw A.httpError(409, 'The order changed since your preview. Preview it again.');
+    var todo = C.planWrites(plan), more = todo.length > C.MAX_PLAN_UNITS, was = {}, planRef = db.collection('omega_audit').doc(), planId = planRef.id, applied = [], skipped = [];
+    todo = todo.slice(0, C.MAX_PLAN_UNITS);
+    punits.forEach(function (u) { was[u.serial] = C.custodyOf(u).plannedSiteId || ''; });
+    for (var c0 = 0; c0 < todo.length; c0 += PLAN_CHUNK) {
+      var chunk = todo.slice(c0, c0 + PLAN_CHUNK);
+      /* each unit re-read inside its transaction; outcomes returned, never
+         pushed from inside, so a retried transaction cannot count twice */
+      var r = await db.runTransaction(async function (tx) {
+        var snaps = await Promise.all(chunk.map(function (a) { return tx.get(unitRef(db, org, a.serial)); })), ok = [], no = [], writes = [];
+        chunk.forEach(function (a, k) {
+          var u = snaps[k].exists ? snaps[k].data() : null, p = u ? C.plannable(u) : null, no1 = u && a.siteId ? refuse(u) : null;
+          if (!u || u.orgId !== org || u.orderId !== pos.id) { no.push({ serial: a.serial, why: 'No longer on this order' }); return; }
+          if (!p.ok) { no.push({ serial: a.serial, why: p.say }); return; }
+          if (no1) { no.push({ serial: a.serial, why: no1 }); return; }
+          if ((C.custodyOf(u).plannedSiteId || '') !== was[a.serial]) { no.push({ serial: a.serial, why: 'Changed since the preview' }); return; }
+          var dr = C.destination(u, { siteId: a.siteId, siteName: a.siteName }, by, now, 'manual');
+          dr.event.orderId = pos.id; dr.event.via = 'site-list'; dr.event.planId = planId;
+          if (a.siteId && !C.custodyOf(u).customerId && ownerOf(u)) dr.patch['custody.customerId'] = ownerOf(u);
+          writes.push({ ref: snaps[k].ref, serial: a.serial, dr: dr }); ok.push(a);
+        });
+        writes.forEach(function (w) { tx.update(w.ref, w.dr.patch); tx.create(eventDoc(w.ref), Object.assign({ orgId: org, serial: w.serial }, w.dr.event)); });
+        return { ok: ok, no: no };
+      });
+      applied = applied.concat(r.ok); skipped = skipped.concat(r.no);
+    }
+    await planRef.create({ orgId: org, action: 'custody-site-plan', by: by, at: now, planId: planId, orderId: pos.id, customerId: powner || null, sites: chosen.map(function (x) { return x.siteId; }).slice(0, 200), applied: applied.length, skipped: skipped.length, released: applied.filter(function (a) { return a.how === 'released'; }).length, more: more });
+    return { ok: true, planId: planId, orderId: pos.id, orderNo: pos.data().orderNo || null, applied: applied.length, skipped: skipped, more: more, perSite: plan.perSite, assignments: C.planResult(plan, applied, skipped),
+      released: plan.released, leftover: plan.leftover, elsewhere: plan.elsewhere, notPlanned: plan.notPlanned, planKey: plan.planKey };
+  }
 
   if (action === 'site') {
     var id = b.id ? P.id(b.id) : null, sref;
