@@ -68,8 +68,10 @@ module.exports = A.handler(function (req) {
         batch.set(orgRef.collection('billing').doc('current'), billing);
         batch.set(orgRef.collection('members').doc(caller.uid), member);
         batch.set(db.collection('tenant_public').doc(host), pub);
-        /* Tell ClearSky. The master console lists omega_orgs where status == 'pending'; this is the nudge. */
-        batch.set(db.collection('omega_orgs').doc('csebuilders.com').collection('notifications').doc(), { kind: 'signup', text: 'New workspace request: ' + name + ' (' + domain + ') by ' + email + ' — ' + vertical, orgId: domain, read: false, createdAt: FV.serverTimestamp() });
+        /* Tell ClearSky. The master console lists omega_orgs where status == 'pending'; this is the nudge.
+           Into ClearSky's own org inbox: csebuilders.com is retired, and a note there would be readable by
+           whoever held that domain next. */
+        batch.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc(), { kind: 'signup', text: 'New workspace request: ' + name + ' (' + domain + ') by ' + email + ' — ' + vertical, orgId: domain, read: false, createdAt: FV.serverTimestamp() });
         return batch.commit().then(function () {
           return A.init().auth().setCustomUserClaims(caller.uid, Object.assign({}, caller.claims.orgId ? {} : {}, { orgId: domain, role: 'owner' }));
         }).then(function () {

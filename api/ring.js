@@ -52,14 +52,16 @@ var OAUTH_URL = 'https://oauth.ring.com/oauth/token';
 
 /* Staff by default. RING_ALLOWED_EMAILS widens it to named addresses — his
    personal Google account is not on a ClearSky domain, so without this the
-   owner of the cameras cannot see his own cameras. */
-function allowed(email) {
-  var e = String(email || '').toLowerCase();
-  if (!e) return false;
+   owner of the cameras cannot see his own cameras. Either way the email must
+   be VERIFIED: a password account can be opened on any address, a named one
+   included, without proving it. caller.staff already requires that. */
+function allowed(caller) {
+  var e = String((caller && caller.email) || '').toLowerCase();
+  if (!e || caller.emailVerified !== true) return false;
   var list = String(process.env.RING_ALLOWED_EMAILS || '')
     .toLowerCase().split(',').map(function (s) { return s.trim(); }).filter(Boolean);
   if (list.indexOf(e) >= 0) return true;
-  return list.length === 0 ? V.isStaffEmail(e) : false;
+  return list.length === 0 ? caller.staff === true : false;
 }
 
 /* ── the access token ───────────────────────────────────────────────────── */
@@ -143,7 +145,7 @@ module.exports = async function handler(req, res) {
     try { caller = await V.verifyIdToken(m[1]); }
     catch (e) { return send(res, e.status || 401, { error: e.message }); }
 
-    if (!allowed(caller.email)) {
+    if (!allowed(caller)) {
       /* Deliberately the same shape as any other refusal. Telling a stranger
          that the cameras exist and they are merely not on the list is more
          than they need to know. */

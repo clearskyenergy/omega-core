@@ -131,7 +131,7 @@ those clients import.
 
 ## Access rules (summary)
 
-| Doc                              | tenant owner | tenant admin | member | csebuilders.com |
+| Doc                              | tenant owner | tenant admin | member | ClearSky staff  |
 |----------------------------------|--------------|--------------|--------|-----------------|
 | omega_orgs/{org} branding fields | write        | write        | read   | write           |
 | omega_orgs/{org} status/vertical | read         | read         | read   | write           |
@@ -294,7 +294,7 @@ user). Do not add a second copy of that list — see what three copies of
   the one line that would turn it into impersonation.
 - `whitelabel-setup.html` is the staff last mile: it turns `tenants/<slug>/`
   into a live storefront from the browser, using only writes the rules already
-  grant an `@csebuilders.com` token. It does NOT write `tenant_public` — that
+  grant a verified `@clearsky-usa.com` token. It does NOT write `tenant_public` — that
   needs the one allowlist in `api/_lib/whitelabel.js` and stays with
   `scripts/seed-omega-orgs.js`, which remains canonical for a bulk seed and
   for rotating, re-scoping or disabling an embed key.
@@ -615,6 +615,18 @@ tenant. Treat it that way.
 - Every `/api/` function verifies the Firebase ID token, resolves `orgId`,
   and checks `billing/current` before doing work. A hidden link is not a
   gate; a function that refuses is.
+- **ClearSky staff is a VERIFIED `@clearsky-usa.com` address.** csebuilders.com
+  was retired as a staff domain on 2026-09-24 (the legacy repo's domain; no
+  accounts): never add it back, and never add a domain nobody uses — if it
+  lapsed, whoever registered it could verify an address and be staff.
+- **Staff by email domain needs a VERIFIED email** (`email_verified`
+  is the literal `true`; absent is not verified). A Firebase password account
+  can be opened on any address without proving it. One rule in four places:
+  `verify-token.js` `verifyIdToken()`, `admin.js` `authenticate()` (the
+  explicit `role: 'staff'` claim still counts), `isAdmin()` in
+  `firestore.rules`, `isAdminDomain()` in `storage.rules`. Never decide staff
+  with `isStaffEmail()` on a caller; read `caller.staff`.
+  `scripts/tests/tstaffverified.js` holds it.
 - When reconciling or touching any tool, identify logic that belongs in
   `/api/` and move it. Record the move in `MERGE.md`.
 - `omega-sso.js` refuses to boot unless `location.hostname` matches a
