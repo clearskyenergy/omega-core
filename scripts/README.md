@@ -3,7 +3,7 @@
 | script | purpose | writes? |
 |---|---|---|
 | audit-counts.js | per-orgId doc counts across the collections that matter; `--diff a b` fails if any org lost docs | no |
-| audit-unverified-staff.js | lists @clearsky-usa.com / @csebuilders.com Auth accounts with an unverified email — the people who stop being staff now that staff needs `email_verified`; run before the rules deploy. `--all` lists every staff-domain account and whether it is staff | no |
+| audit-unverified-staff.js | lists @clearsky-usa.com Auth accounts with an unverified email — the people who stop being staff now that staff needs `email_verified`; run before the rules deploy. `--all` lists every staff-domain account and whether it is staff | no |
 | seed-omega-orgs.js | omega_orgs + billing/current + tenant_public from `tenants/*/tenant.json`; dry-run by default | with `--apply` |
 | backfill-orgid.html | browser tool from the legacy repo: stamps orgId on older `projects` | yes (browser) |
 | check-rules.js | rules sanity checks from the legacy repo | no |

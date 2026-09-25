@@ -40,7 +40,11 @@ var PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'clearsky-portal';
 var CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 
 var ORG_ALIAS = { 'fenecon.de': 'fenecon.com', 'fenecon.us': 'fenecon.com' };
-var STAFF_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
+/* ClearSky staff by email domain. csebuilders.com was RETIRED 2026-09-24:
+   it was the legacy repo's domain, has no accounts and is not a mailbox
+   anybody uses. A staff domain nobody uses is only attack surface — if it
+   ever lapsed, whoever registered it could verify an address and be staff. */
+var STAFF_DOMAINS = ['clearsky-usa.com'];
 
 function orgOf(email) {
   var d = String(email || '').toLowerCase().split('@')[1] || '';
@@ -112,7 +116,7 @@ function verifyIdToken(token) {
 
       /* STAFF NEEDS A VERIFIED EMAIL. A Firebase password account can be
          opened on any address without proving it, so an unverified
-         @csebuilders.com names nobody. Only the literal true counts: a
+         @clearsky-usa.com names nobody. Only the literal true counts: a
          missing claim is not verified, and neither is the string "true". */
       var email = body.email || '';
       var verified = body.email_verified === true;

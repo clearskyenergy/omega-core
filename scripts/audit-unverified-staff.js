@@ -6,9 +6,9 @@
    Staff by email domain now needs a VERIFIED email (api/_lib/verify-token.js,
    api/_lib/admin.js authenticate(), isAdmin() in firestore.rules,
    isAdminDomain() in storage.rules). A real ClearSky person on an
-   @clearsky-usa.com or @csebuilders.com PASSWORD account that never
+   @clearsky-usa.com PASSWORD account that never
    confirmed its address loses staff the moment that ships. Google sign-in on
-   those Workspace domains is always verified, so this lists the password
+   that Workspace domain is always verified, so this lists the password
    accounts that are not — run it before the rules deploy and fix each one
    (confirm the address, or sign in with Google) rather than find out from a
    403.
@@ -60,11 +60,11 @@ async function main() {
   console.log('Scanned ' + seen + ' accounts.');
   if (ALL) {
     rows.sort(function (a, b) { return a.email < b.email ? -1 : 1; });
-    console.log(rows.length + ' @clearsky-usa.com / @csebuilders.com account(s); staff = verified (or a role:staff claim):');
+    console.log(rows.length + ' @clearsky-usa.com account(s); staff = verified (or a role:staff claim):');
     console.table(rows);
     return;
   }
-  if (!rows.length) { console.log('No unverified @clearsky-usa.com / @csebuilders.com accounts. Nobody loses staff.'); return; }
+  if (!rows.length) { console.log('No unverified @clearsky-usa.com accounts. Nobody loses staff.'); return; }
   console.log(rows.length + ' unverified staff-domain account(s) — these are NOT staff once the change ships' +
               ' (unless keepsStaffByClaim):');
   console.table(rows);

@@ -1,10 +1,10 @@
-/* ClearSky staff is a VERIFIED @clearsky-usa.com / @csebuilders.com address.
+/* ClearSky staff is a VERIFIED @clearsky-usa.com address.
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
    THE HOLE THIS CLOSES
    Staff status used to be decided from the email domain alone. A Firebase
    email/password account can be opened on ANY address without proving it, so
-   an unverified rep@csebuilders.com was ClearSky staff: past the tenant gates
+   an unverified rep@clearsky-usa.com was ClearSky staff: past the tenant gates
    in every endpoint that honours caller.staff, and admin in firestore.rules.
    api/proforma.js was fixed first (2026-09-24); this is the same rule applied
    where the decision is made for everybody:
@@ -16,6 +16,10 @@
      · api/ring.js, which asked isStaffEmail() directly
    "Verified" is the literal true. A missing claim is not verified, and
    neither is the string "true".
+
+   csebuilders.com was RETIRED as a staff domain the same day: it was the
+   legacy repo's domain, has no accounts, and a staff domain nobody uses is
+   only attack surface. A VERIFIED @csebuilders.com is not staff either.
 
    The tokens here are real RS256 JWTs signed with a throwaway key, so
    verify-token runs its own signature and claim checks rather than a stub's.
@@ -78,22 +82,20 @@ function req(tok, extra) {
 /* ── 1. verify-token.verifyIdToken ───────────────────────────────────────── */
 async function verifyTokenTests() {
   console.log('verify-token.verifyIdToken');
-  let c = await V.verifyIdToken(token('rep@csebuilders.com', true));
-  ok(c.staff === true && c.emailVerified === true, 'a VERIFIED @csebuilders.com is staff');
-  c = await V.verifyIdToken(token('tom@clearsky-usa.com', true));
-  ok(c.staff === true, 'a VERIFIED @clearsky-usa.com is staff');
-  c = await V.verifyIdToken(token('REP@CSEBUILDERS.COM', true));
+  let c = await V.verifyIdToken(token('rep@clearsky-usa.com', true));
+  ok(c.staff === true && c.emailVerified === true, 'a VERIFIED @clearsky-usa.com is staff');
+  c = await V.verifyIdToken(token('rep@csebuilders.com', true));
+  ok(c.staff === false && c.emailVerified === true, 'a VERIFIED @csebuilders.com is NOT staff (domain retired)');
+  c = await V.verifyIdToken(token('REP@CLEARSKY-USA.COM', true));
   ok(c.staff === true, 'the domain is compared case-insensitively');
 
-  c = await V.verifyIdToken(token('rep@csebuilders.com', false));
-  ok(c.staff === false && c.emailVerified === false, 'an UNVERIFIED @csebuilders.com is NOT staff');
-  c = await V.verifyIdToken(token('tom@clearsky-usa.com', false));
-  ok(c.staff === false, 'an UNVERIFIED @clearsky-usa.com is NOT staff');
-  c = await V.verifyIdToken(token('rep@csebuilders.com', undefined));
+  c = await V.verifyIdToken(token('rep@clearsky-usa.com', false));
+  ok(c.staff === false && c.emailVerified === false, 'an UNVERIFIED @clearsky-usa.com is NOT staff');
+  c = await V.verifyIdToken(token('rep@clearsky-usa.com', undefined));
   ok(c.staff === false && c.emailVerified === false, 'a MISSING email_verified claim is not verified, and not staff');
-  c = await V.verifyIdToken(token('rep@csebuilders.com', 'true'));
+  c = await V.verifyIdToken(token('rep@clearsky-usa.com', 'true'));
   ok(c.staff === false && c.emailVerified === false, 'email_verified "true" as a string is not true');
-  c = await V.verifyIdToken(token('rep@csebuilders.com.evil.example', true));
+  c = await V.verifyIdToken(token('rep@clearsky-usa.com.evil.example', true));
   ok(c.staff === false, 'a look-alike domain is not staff, verified or not');
 
   c = await V.verifyIdToken(token('ana@cleancell.us', true));
@@ -102,7 +104,7 @@ async function verifyTokenTests() {
   ok(c.emailVerified === false, 'emailVerified reads an absent claim as NOT verified (it used to read it as verified)');
 
   /* The claim is inside the signed payload; flipping it breaks the signature. */
-  const t = token('rep@csebuilders.com', false).split('.');
+  const t = token('rep@clearsky-usa.com', false).split('.');
   const forged = JSON.parse(Buffer.from(t[1], 'base64url').toString());
   forged.email_verified = true;
   let refused = null;
@@ -117,30 +119,36 @@ async function endpointTests() {
 
   reads.length = 0;
   let r = res();
-  await screen(req(token('rep@csebuilders.com', true)), r);
+  await screen(req(token('rep@clearsky-usa.com', true)), r);
   ok(r.statusCode === 400 && /latitude/i.test(r.body && r.body.error),
      'verified staff pass the gate and reach input validation (400 on an empty query) — got ' + r.statusCode);
   ok(!reads.some(p => /members\//.test(p)), 'verified staff are not asked for an org membership');
 
   reads.length = 0;
   r = res();
-  await screen(req(token('rep@csebuilders.com', false)), r);
-  ok(r.statusCode === 403, 'an UNVERIFIED @csebuilders.com is refused by the tenant gate — got ' + r.statusCode + ' ' + JSON.stringify(r.body));
-  ok(reads.some(p => /^omega_orgs\/csebuilders\.com$/.test(p)),
+  await screen(req(token('rep@clearsky-usa.com', false)), r);
+  ok(r.statusCode === 403, 'an UNVERIFIED @clearsky-usa.com is refused by the tenant gate — got ' + r.statusCode + ' ' + JSON.stringify(r.body));
+  ok(reads.some(p => /^omega_orgs\/clearsky-usa\.com$/.test(p)),
      'and it was judged as an ordinary member of its own domain, not as staff');
 
   r = res();
-  await screen(req(token('rep@csebuilders.com', undefined)), r);
+  await screen(req(token('rep@clearsky-usa.com', undefined)), r);
   ok(r.statusCode === 403, 'a staff address with no email_verified claim is refused too — got ' + r.statusCode);
+
+  r = res();
+  await screen(req(token('rep@csebuilders.com', true)), r);
+  ok(r.statusCode === 403, 'a VERIFIED @csebuilders.com is refused by the tenant gate (domain retired) — got ' + r.statusCode);
 
   console.log('api/ring.js (asked isStaffEmail() directly)');
   const ring = require(path.join(ROOT, 'api/ring.js'));
   const saved = process.env.RING_ALLOWED_EMAILS;
   try {
     delete process.env.RING_ALLOWED_EMAILS;
-    r = res(); await ring(req(token('rep@csebuilders.com', true), { query: { path: '/nope' } }), r);
+    r = res(); await ring(req(token('rep@clearsky-usa.com', true), { query: { path: '/nope' } }), r);
     ok(r.statusCode === 400, 'no allowlist: verified staff reach the path check (400) — got ' + r.statusCode);
-    r = res(); await ring(req(token('rep@csebuilders.com', false), { query: { path: '/nope' } }), r);
+    r = res(); await ring(req(token('rep@csebuilders.com', true), { query: { path: '/nope' } }), r);
+    ok(r.statusCode === 403, 'no allowlist: a VERIFIED @csebuilders.com is refused (domain retired) — got ' + r.statusCode);
+    r = res(); await ring(req(token('rep@clearsky-usa.com', false), { query: { path: '/nope' } }), r);
     ok(r.statusCode === 403, 'no allowlist: an UNVERIFIED staff address is refused (403) — got ' + r.statusCode);
     r = res(); await ring(req(token('ana@cleancell.us', true), { query: { path: '/nope' } }), r);
     ok(r.statusCode === 403, 'no allowlist: a verified non-staff address is refused (403)');
@@ -181,16 +189,16 @@ async function adminTests() {
     return A.authenticate({ headers: { authorization: 'Bearer ' + name } });
   }
 
-  let c = await as('v', { email: 'rep@csebuilders.com', email_verified: true });
-  ok(c.staff === true, 'a VERIFIED @csebuilders.com is staff');
-  c = await as('vc', { email: 'tom@clearsky-usa.com', email_verified: true });
+  let c = await as('v', { email: 'rep@clearsky-usa.com', email_verified: true });
   ok(c.staff === true, 'a VERIFIED @clearsky-usa.com is staff');
+  c = await as('cse', { email: 'rep@csebuilders.com', email_verified: true });
+  ok(c.staff === false, 'a VERIFIED @csebuilders.com is NOT staff (domain retired)');
 
-  const unverified = await as('u', { email: 'rep@csebuilders.com', email_verified: false });
-  ok(unverified.staff === false, 'an UNVERIFIED @csebuilders.com is NOT staff');
-  c = await as('m', { email: 'rep@csebuilders.com' });
+  const unverified = await as('u', { email: 'rep@clearsky-usa.com', email_verified: false });
+  ok(unverified.staff === false, 'an UNVERIFIED @clearsky-usa.com is NOT staff');
+  c = await as('m', { email: 'rep@clearsky-usa.com' });
   ok(c.staff === false, 'a MISSING email_verified claim is not staff');
-  c = await as('s', { email: 'rep@csebuilders.com', email_verified: 'true' });
+  c = await as('s', { email: 'rep@clearsky-usa.com', email_verified: 'true' });
   ok(c.staff === false, 'email_verified "true" as a string is not true');
 
   c = await as('claim', { email: 'ops@partner.example', email_verified: false, role: 'staff' });
@@ -201,7 +209,7 @@ async function adminTests() {
   /* What staff used to buy: acting in, and administering, somebody else's tenant. */
   ok(await A.canActInOrg(unverified, 'cleancell.us') === false, 'an unverified staff address cannot act in another tenant');
   ok(await A.isTenantAdmin(unverified, 'cleancell.us') === false, 'nor administer one');
-  const verified = await as('v2', { email: 'rep@csebuilders.com', email_verified: true });
+  const verified = await as('v2', { email: 'rep@clearsky-usa.com', email_verified: true });
   ok(await A.canActInOrg(verified, 'cleancell.us') === true, 'a verified staff address still can (the bypass is intact for real staff)');
 }
 
@@ -219,8 +227,11 @@ function rulesTests() {
   ok(isAdmin && VERIFIED.test(isAdmin), 'firestore.rules isAdmin() requires email_verified == true (absent reads as false)');
   ok(isAdmin && /^\s*return\s+signedIn\(\)\s*&&\s*request\.auth\.token\.get\('email_verified'/.test(isAdmin),
      'and it is a top-level && — not one arm of an ||');
-  ok(isAdmin && /csebuilders\[\.\]com/.test(isAdmin) && /clearsky-usa\[\.\]com/.test(isAdmin),
-     'isAdmin() still names both ClearSky domains');
+  ok(isAdmin && /clearsky-usa\[\.\]com/.test(isAdmin), 'isAdmin() names @clearsky-usa.com');
+  ['isAdmin', 'isVdcOperatorDomain', 'vdcOperatorOrg'].forEach(function (n) {
+    const b = fnBody(fs1, n);
+    ok(b && !/csebuilders/.test(b), 'firestore.rules ' + n + '() no longer names the retired csebuilders.com');
+  });
   ok(/function isOmegaStaff\(\)\s*\{\s*return isAdmin\(\)/.test(fs1) && /function isOmegaAdmin\(\)\s*\{\s*return isAdmin\(\)/.test(fs1),
      'isOmegaStaff() and isOmegaAdmin() reach the domain only through isAdmin()');
 
@@ -229,6 +240,15 @@ function rulesTests() {
   ok(dom && VERIFIED.test(dom), 'storage.rules isAdminDomain() requires email_verified == true');
   ok(dom && /^\s*return\s+request\.auth\s*!=\s*null\s*&&\s*request\.auth\.token\.get\('email_verified'/.test(dom),
      'and it is a top-level && guarded by request.auth != null');
+  ok(dom && !/csebuilders/.test(dom), 'storage.rules isAdminDomain() no longer names the retired csebuilders.com');
+
+  console.log('api/ (the staff domain lists)');
+  ['api/_lib/verify-token.js', 'api/_lib/admin.js', 'api/omega-ai-extract.js'].forEach(function (f) {
+    const m = /var STAFF_DOMAINS = (\[[^\]]*\])/.exec(fs.readFileSync(path.join(ROOT, f), 'utf8'));
+    ok(m && m[1] === "['clearsky-usa.com']", f + ' STAFF_DOMAINS is exactly clearsky-usa.com — got ' + (m && m[1]));
+  });
+  ok(!/doc\('csebuilders\.com'\)/.test(fs.readFileSync(path.join(ROOT, 'api/tenant-signup.js'), 'utf8')),
+     'signup alerts no longer land in the retired csebuilders.com org');
 }
 
 (async function () {
