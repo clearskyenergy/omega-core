@@ -15,7 +15,7 @@ a proposal waiting on Tommy, not a settled price.
 
 A customer should understand in minutes which parts of OMEGA they need, buy
 those, and opt in to more as their work grows. So: (1) ONE catalog of
-sellable **modules**, carved out of the Site Map editor's ~130 functions and
+sellable **modules**, carved out of the Site Map editor's ~180 functions and
 the platform's other tools, with ONE price each for everybody; (2) a
 **Package** panel in the master console where staff build a tenant's menu at
 onboarding, and the price, the Stripe subscription and the access all follow
@@ -91,7 +91,7 @@ There is no rung 0. A lead who has not signed is a lead.
 ### 3.2 Lite — $500/month (the Site Map core)
 
 What every paying workspace gets: design any site on live satellite, fast,
-and show it. About 60 of the editor's functions. Full list in Appendix A.
+and show it. About 90 of the editor's functions. Full list in Appendix A.
 
 | Group | Inside |
 |---|---|
@@ -506,6 +506,6 @@ Status column: `NEW`/`BETA` as the editor's own `OmegaTags` list marks them.
 | Compute | Compute (behind `compute`) | Compute Build, ZTMM container data centre, Lay Out Site, Max Load, Load Siting Screen, prime-mover compare, gas / fiber tie-in, Compute Cost, Supply Link, Land Lease, compute campus proposal |
 | Permitting Matrix | Output › Permit Documents | Permit Creator, Permitting Matrix (BETA: Vista / SDG&E verified), Gantt timeline, dependencies & risk, fee summary, required-documents checklist |
 
-About 130 user-facing functions in all. The builder must reconcile this table
+About 180 user-facing functions in all, counting each equipment type. The builder must reconcile this table
 button by button in Phase 2; anything found that is not here goes into one
 module or Lite, never left ungated.
