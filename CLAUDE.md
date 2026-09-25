@@ -615,6 +615,14 @@ tenant. Treat it that way.
 - Every `/api/` function verifies the Firebase ID token, resolves `orgId`,
   and checks `billing/current` before doing work. A hidden link is not a
   gate; a function that refuses is.
+- **ClearSky staff by email domain needs a VERIFIED email** (`email_verified`
+  is the literal `true`; absent is not verified). A Firebase password account
+  can be opened on any address without proving it. One rule in four places:
+  `verify-token.js` `verifyIdToken()`, `admin.js` `authenticate()` (the
+  explicit `role: 'staff'` claim still counts), `isAdmin()` in
+  `firestore.rules`, `isAdminDomain()` in `storage.rules`. Never decide staff
+  with `isStaffEmail()` on a caller; read `caller.staff`.
+  `scripts/tests/tstaffverified.js` holds it.
 - When reconciling or touching any tool, identify logic that belongs in
   `/api/` and move it. Record the move in `MERGE.md`.
 - `omega-sso.js` refuses to boot unless `location.hostname` matches a

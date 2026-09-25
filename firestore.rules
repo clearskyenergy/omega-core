@@ -188,11 +188,20 @@ service cloud.firestore {
     function ownsDemoBucket(org) {
       return signedIn() && demoBucketOrg() != '' && org == demoBucketOrg();
     }
+    /* ClearSky staff by email domain — a VERIFIED email only. A Firebase
+       password account can be opened on any address without proving it, so
+       an unverified @csebuilders.com names nobody. .get() with a false
+       default: a token with no email_verified claim is not verified, and
+       reading an absent key would raise an error inside the || chains that
+       call this. Same rule as api/_lib/admin.js authenticate(),
+       api/_lib/verify-token.js and isAdminDomain() in storage.rules. */
     function isAdmin() {
-      return signedIn() && (
-        request.auth.token.email.matches('.*@clearsky-usa[.]com')
-        || request.auth.token.email.matches('.*@csebuilders[.]com')
-      );
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true
+        && (
+          request.auth.token.email.matches('.*@clearsky-usa[.]com')
+          || request.auth.token.email.matches('.*@csebuilders[.]com')
+        );
     }
 
     /* ------------------------------------------------------------

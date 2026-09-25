@@ -165,7 +165,10 @@ module.exports = async function handler(req, res) {
   }
 
   var email = String(claims.email || '').toLowerCase();
-  if (!email || claims.email_verified === false) {
+  /* The literal true only: an absent claim is not verified. The staff flag
+     on an upstream failure below reads the domain, and must not do so for
+     an address nobody proved. */
+  if (!email || claims.email_verified !== true) {
     res.status(403).json({ error: 'This account has no verified email address.' });
     return;
   }

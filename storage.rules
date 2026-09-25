@@ -73,8 +73,16 @@ service firebase.storage {
         : '';
     }
 
+    /* ClearSky staff — a VERIFIED email only, the same rule as isAdmin() in
+       firestore.rules. A Firebase password account can be opened on any
+       address without proving it; without this, an unverified
+       @csebuilders.com could read every tenant's files and plant a
+       "deliverable" in any customer's folder. .get() with a false default:
+       an absent claim is not verified. */
     function isAdminDomain() {
-      return userOrg() == 'clearsky-usa.com' || userOrg() == 'csebuilders.com';
+      return request.auth != null
+        && request.auth.token.get('email_verified', false) == true
+        && (userOrg() == 'clearsky-usa.com' || userOrg() == 'csebuilders.com');
     }
 
     function okImage() {

@@ -75,7 +75,8 @@ function b64urlToJson(s) {
   try { return JSON.parse(b64urlToBuf(s).toString('utf8')); } catch (e) { return null; }
 }
 
-/* Verify a Firebase ID token. Resolves { uid, email, orgId, staff, claims }. */
+/* Verify a Firebase ID token.
+   Resolves { uid, email, emailVerified, orgId, staff, claims }. */
 function verifyIdToken(token) {
   return Promise.resolve().then(function () {
     var parts = String(token || '').split('.');
@@ -109,13 +110,18 @@ function verifyIdToken(token) {
       if (!(body.exp > now - skew)) throw httpError(401, 'token has expired');
       if (!(body.iat < now + skew)) throw httpError(401, 'token is not yet valid');
 
+      /* STAFF NEEDS A VERIFIED EMAIL. A Firebase password account can be
+         opened on any address without proving it, so an unverified
+         @csebuilders.com names nobody. Only the literal true counts: a
+         missing claim is not verified, and neither is the string "true". */
       var email = body.email || '';
+      var verified = body.email_verified === true;
       return {
         uid: body.sub,
         email: email,
-        emailVerified: body.email_verified !== false,
+        emailVerified: verified,
         orgId: orgOf(email),
-        staff: isStaffEmail(email),
+        staff: verified && isStaffEmail(email),
         claims: body
       };
     });
