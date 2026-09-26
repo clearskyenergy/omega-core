@@ -141736,6 +141736,7 @@ challengeRow(s) +
   #tb .rtab.active,#ribbon .rbtn:hover .rb-lbl{color:#16202B!important;background:#E6EEF9}
 }
 </style>
+<script src="/omega-ribbon-icons.js?v=1"></script>
 <script id="omega-ribbon-icons-js">
 /* ====================================================================== *
  *  OMEGA RIBBON ICONS                                                    *
@@ -141776,11 +141777,21 @@ challengeRow(s) +
     [/setting|config|library/i, 'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6'],
     [/build|equipment|insert|pad|fence/i, 'M3 7l9-5 9 5v10l-9 5-9-5zM3 7l9 5 9-5M12 12v10']
   ];
+  /* The picture is the icon set's (omega-ribbon-icons.js): one glyph per
+     button label, in the ribbon's line style; the loose regex tier above
+     is its own second chance. A button the set does not know is marked
+     data-icon-fallback so the render check can name it. */
   function glyph(span) {
     var button = span.closest('button') || span.parentNode;
     var text = button ? button.textContent : '';
-    var d = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z';
-    for (var i = 0; i < GLYPHS.length; i++) if (GLYPHS[i][0].test(text)) { d = GLYPHS[i][1]; break; }
+    var lbl = button && button.querySelector ? button.querySelector('.rb-lbl, .rs-lbl, .fi-lbl, .mi-lbl') : null;
+    var label = lbl ? lbl.textContent : text;
+    var set = window.OmegaRibbonIconSet, d = set ? set.pathFor(label, text) : null;
+    if (!d || (set && d === set.FALLBACK)) {
+      d = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z';
+      for (var i = 0; i < GLYPHS.length; i++) if (GLYPHS[i][0].test(text)) { d = GLYPHS[i][1]; break; }
+      if (button && button.setAttribute && d === 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z') button.setAttribute('data-icon-fallback', '1');
+    }
     span.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>';
   }
 
@@ -141836,6 +141847,7 @@ challengeRow(s) +
       out.push({
         label: lbl ? lbl.textContent.replace(/\s+/g, ' ').trim() : (btns[i].id || '?'),
         kind: svg ? 'svg' : 'glyph',
+        fallback: btns[i].getAttribute('data-icon-fallback') === '1',
         attrWidth: svg ? svg.getAttribute('width') : null,
         tagged: ico.classList.contains('omg-svg-ico')
       });
