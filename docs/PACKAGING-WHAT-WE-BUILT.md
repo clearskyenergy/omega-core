@@ -3,7 +3,7 @@
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
 Written 2026-09-26 for Tommy, at the end of phases 0–9. Ten stacked draft
-pull requests sit above `main`, #134 → the Phase 9 PR, each tested
+pull requests sit above `main`, #134 → #144, each tested
 (`npm test`, `npm run check:pages`) and previewed on Vercel. Nothing is live:
 every runtime flag is off, the price book is disabled in the seed, no rule is
 deployed, no tenant is packaged. The order to change that is in
@@ -53,7 +53,7 @@ deployed, no tenant is packaged. The order to change that is in
 | 6 · Proposal tool | #141 | `subscription-proposal.html` for every ClearSky rep: discovery → recommended package → value → terms → a seven-page branded deck with the Order Form → send. `proposal.html` for the customer; accepting routes into signup (prefilled), a plan change or staff activation and never prices. Self-serve signup walks the same discovery, and the system reflects the answers. |
 | 7 · Usage and review | #142 | Usage counted where a deliverable is produced (EV workbook, closeout ZIP, Site Finder packet, an RFQ), included + packs, the 402 offer at the allowance, overage as a line on the recurring invoice, buy-more packs and auto top-up from Your plan, the 90-day review on the Package tab. |
 | 8 · Omega Logic follows the package | #143 | Office and the four Logic parts are refused by name where they are served; the office menu, hex hub, dashboard and phone app draw only the parts bought; the customer portal is the Customer App part. Legacy Logic tenants unchanged. The release checklist for the whole stack. |
-| 9 · The plant's doors and sign-in | this PR | The bench, the rig and hold/release follow the Plant part; the rules compare a sign-in email lower-cased (Team Hub and terms were refused for a capitalised address); the preview sign-in refusal names the hostname to authorise. |
+| 9 · The plant's doors and sign-in | #144 | The bench, the rig and hold/release follow the Plant part; the rules compare a sign-in email lower-cased (Team Hub and terms were refused for a capitalised address); the preview sign-in refusal names the hostname to authorise. |
 
 Every phase has a validation document (`PACKAGING-PHASE-N-VALIDATION.md`)
 with what was verified, screenshots and what remains, and a row in
@@ -97,7 +97,7 @@ else needs your console access.
 2. **Read and approve the stack** (you): click through the previews in
    order; the checklist §0 lists the sign-offs the plan assumed (price
    book values, counsel).
-3. **Merge** #134 → the Phase 9 PR bottom-up (I can do this on your word).
+3. **Merge** #134 → #144 bottom-up (I can do this on your word).
    Vercel deploys `main` to production; with every flag off, no tenant
    sees a change.
 4. **Deploy the rules** (you): `firebase deploy --only firestore:rules,storage`

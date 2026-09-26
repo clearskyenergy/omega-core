@@ -2,9 +2,10 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Branch `codex/packaging-phase-9`, stacked on Phase 8
-([#143](https://github.com/clearskyenergy/omega-core/pull/143)); the draft PR
-and Vercel preview links are added on push. No live organization, trial,
+Draft PR [#144](https://github.com/clearskyenergy/omega-core/pull/144),
+stacked on Phase 8 ([#143](https://github.com/clearskyenergy/omega-core/pull/143)).
+[Vercel preview](https://omega-core-git-codex-packaging-phase-9-clearsky-usa.vercel.app).
+No live organization, trial,
 billing date, QuickBooks record, environment variable or deployed rule was
 changed. Runtime flags remain off by default.
 
