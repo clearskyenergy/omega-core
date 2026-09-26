@@ -249,6 +249,21 @@ approves via `POST /api/tenant-approve` (master console button). A pending
 tenant's users see a "being set up" screen from `omega-tenant.js`. Never
 let a browser create `omega_orgs` directly.
 
+Launch hardening (2026-09-26): **where a person is sent is ONE rule**,
+`api/_lib/kit.js` `home(org, { wildcard })`: an attached hostname, else the
+open host `silmarillion.clearskyomega.com`, and a `<slug>.clearskyomega.com`
+host only under `TENANT_WILDCARD_LIVE=true`, because no wildcard record
+exists; the slug host is only reserved on the record. `/start` runs the
+hub routing on every host and never leaves the origin outside a hub. The
+billing engine's own bookkeeping never cuts access: a reconcile error only
+flags `reconciliationRequired` (401/403/429 and the guard are retried), the
+live runner finds tenants by `packagedLive` and runs hourly, a paid
+invoice mails the tenant (`paid`) and ClearSky (`paidAlert`), the driver
+refuses to invoice while QuickBooks' custom transaction numbers are off.
+`SUPPORT_EMAIL` (mail.js) and its literal twin in `omega-tenant.js` are the
+only support address; csebuilders.com is never written again. See
+`docs/PACKAGING-PHASE-10A-VALIDATION.md` (Launch hardening).
+
 ## Tenant resolution order (omega-brand.js)
 
 1. Firestore `tenants/{orgId}` matched by hostname → `domains[]`

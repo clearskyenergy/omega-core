@@ -50,7 +50,12 @@ function prepare(c, input, now) {
        floored to (pay-at-the-end activates seconds after the record is
        made): it must exist and not be in the future, judged against now */
     var signup = Policy.instant(c.org.signedUpAt);
-    if (!isFinite(signup) || signup > now) fail('Original signup date is required');
+    /* a legacy tenant predates signedUpAt (self-serve signup, 2026-09-06):
+       its record's own dates anchor the billing day, else today does */
+    if (!isFinite(signup)) signup = Policy.instant(c.org.createdAt);
+    if (!isFinite(signup)) signup = Policy.instant(c.org.approvedAt);
+    if (!isFinite(signup)) signup = now;
+    if (signup > now) fail('Original signup date is required');
     patch = Object.assign({}, selected, M.resolve(['lite']), { packaged: true, modules: ['lite'], subscription: Policy.subscription(selected, at), packagingState: 'awaiting_payment',
       billingProvider: 'quickbooks', paymentProvider: 'quickbooks', qboEnv: c.book.qbo.env,
       proposedPackage: selected, billingDay: new Date(signup).getUTCDate(), nextInvoiceOn: R.iso(at), subscriptionStartedAt: at,
@@ -128,10 +133,13 @@ async function apply(db, orgId, input, caller, now, deps) {
       }
       B.freeze(tx, db.doc('pricebook/' + c.book.version), fresh.book, now);
       tx.set(current, patch, { merge: true });
-      if (p.action !== 'approve') tx.set(c.root, { packaged: true, updatedAt: now }, { merge: true });
-      /* the organization record says it is packaged: the live runner finds its tenants by this, as the sandbox runner does by packagingSandbox */
+      /* the organization record says it is packaged, and in which company:
+         the live runner finds its tenants by packagedLive (a sandbox signup
+         is also `packaged`, and the production runner must never poll it),
+         the sandbox runner by packagingSandbox */
+      if (p.action !== 'approve') tx.set(c.root, { packaged: true, packagedLive: Mode.live(), updatedAt: now }, { merge: true });
       if (p.action === 'approve') {
-        tx.update(c.root, { status: 'active', approvedAt: now, approvedBy: caller.email, packagingTrialUsedAt: now, packaged: true });
+        tx.update(c.root, { status: 'active', approvedAt: now, approvedBy: caller.email, packagingTrialUsedAt: now, packaged: true, packagedLive: Mode.live() });
         (c.org.domains || []).forEach(function (host) { tx.set(db.doc('tenant_public/' + host), { status: 'active', tier: patch.tier }, { merge: true }); });
         tx.set(c.root.collection('notifications').doc('package-approved'), { kind: 'account', read: false, createdAt: now,
           text: 'Your workspace is approved. Your trial ends on ' + R.iso(patch.trialEndsAt) + '.', packageMail: 'approved', mailState: 'pending' });
@@ -209,6 +217,8 @@ async function issue(db, orgId, now, deps) {
  * QuickBooks shows it paid or reversed; a late payer drops to Lite for a
  * while but never loses the package they bought. */
 function kindOf(r) { return r.kind === 'change' ? 'change' : r.kind === 'pack' ? 'pack' : 'subscription'; }
+/* a failure that is ours, not the invoice's: no answer, a 5xx, QuickBooks refusing our connection, or the guard */
+function clearskySide(e) { return !e || !e.status || e.status >= 500 || e.status === 401 || e.status === 403 || e.status === 429 || e.clearsky === true; }
 function bought(billing, last) {
   var sub = billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription : { modules: last.modules, plan: last.plan };
   return { modules: M.normalize(sub.modules), plan: sub.plan };
@@ -222,8 +232,16 @@ function accessAfterInvoices(billing, records, book, now) {
   var owing = unpaid.concat(openChanges, openPacks);
   var patch = { amountDue: owing.reduce(function (n, r) { return n + Math.max(0, (r.totalCents || 0) - (r.paidCents || 0)); }, 0) / 100 };
   if (subs.length || openChanges.length) patch.paymentLink = unpaid.length && unpaid[0].state !== 'reversed' ? unpaid[0].paymentLink || null : (openChanges.length ? openChanges[0].paymentLink || null : null);
+  /* A reconciliation error (a QuickBooks call that failed validation, or
+     three failed reads in a row) is a PERSON's problem, flagged here for the
+     console and the runner's alert. Access is judged from the invoice states
+     last read from QuickBooks and is never cut by ClearSky's own bookkeeping:
+     a connection or configuration fault on our side must not read every
+     paying tenant out of its workspace (launch review, 2026-09-26). */
+  patch.reconciliationRequired = subs.some(function (r) { return r.reconcileError; }) || changes.some(function (r) { return r.reconcileError; });
   if (!subs.length) return patch;
-  if (subs.some(function (r) { return r.reconcileError; }) || changes.some(function (r) { return r.reconcileError; })) return Object.assign(patch, { packagingState: 'reconciliation_required', accessUntil: now });
+  /* the first invoice voided before anything was paid: nothing to pay against; a person re-issues or closes */
+  if (!paid.length && subs.some(function (r) { return r.state === 'reversed'; })) return Object.assign(patch, { packagingState: 'awaiting_payment', accessUntil: now, reissueRequired: true });
   if (subs.some(function (r) { return r.state === 'reversed'; })) return Object.assign(patch, { packagingState: 'unpaid', accessUntil: now });
   if (!paid.length) return Object.assign(patch, { packagingState: 'awaiting_payment', accessUntil: now });
   var last = paid[paid.length - 1], own = bought(billing, last);
@@ -273,11 +291,12 @@ async function reconcile(db, orgId, now, deps, options) {
   var rows = await query.get(), results = [], q = Q.driver(c.book, deps);
   for (var i = 0; i < rows.docs.length; i++) {
     var doc = rows.docs[i], record = doc.data(); if (!record.qboInvoiceId) continue;
-    var receipt, error = false, transient = false;
-    // A transport failure (no status, or 5xx from the QuickBooks call) keeps
-    // the record as it was and is retried; only a validation failure, or
-    // three transport failures in a row, marks the record for review.
-    try { receipt = await q.reconcile(record); } catch (e) { if (!e.status || e.status >= 500) transient = true; else error = true; }
+    var receipt, error = false, transient = false, note = null;
+    // A failure on ClearSky's side (no status, 5xx, or QuickBooks refusing
+    // OUR connection: 401, 403, 429, the guard) keeps the record as it was
+    // and is retried; only a validation failure, or three such failures in a
+    // row, marks the record for review. Neither cuts the tenant's access.
+    try { receipt = await q.reconcile(record); } catch (e) { note = String(e.message || e).slice(0, 200); if (clearskySide(e)) transient = true; else error = true; }
     var state = error || transient ? record.state : receipt.reversed ? 'reversed' : receipt.satisfied ? 'paid' : 'unpaid', review = error;
     await db.runTransaction(async function (tx) {
       var invoices = await tx.get(collection.orderBy('date')), old = await tx.get(doc.ref), live = await tx.get(current);
@@ -300,8 +319,21 @@ async function reconcile(db, orgId, now, deps, options) {
         if (state === 'paid' && snapshot.state !== 'paid' && (rolled || snapshot.state === 'cancelled' || snapshot.state === 'expired')) review = true;
         subUpdate = subscriptionAfterChange(Object.assign({}, billing, { __book: c.book }), snapshot, snapshot.state, state, subs);
       }
-      var update = { state: state, reconcileError: error, reconcileRetries: retries, reconciledAt: now, reviewRequired: review };
+      var update = { state: state, reconcileError: error, reconcileRetries: retries, reconciledAt: now, reviewRequired: review, reconcileNote: error || transient ? note : null };
       if (!error && !transient) { update.paymentLink = receipt.payUrl || null; update.paidCents = receipt.paidCents; }
+      /* money landed on a subscription invoice: the tenant hears (the first one opens the workspace), and so does ClearSky */
+      if (kindOf(snapshot) === 'subscription' && state === 'paid' && snapshot.state !== 'paid') {
+        var first = !subs.some(function (r) { return r.state === 'paid' && r.date !== snapshot.date; });
+        tx.set(c.root.collection('notifications').doc('package-paid-' + snapshot.date), { kind: 'billing', read: false, createdAt: now, packageMail: 'paid', mailState: 'pending', first: first,
+          text: 'Payment received: ' + P.money(snapshot.totalCents) + (first ? '. Your workspace is open.' : '. Thank you.'), amountDisplay: P.money(snapshot.totalCents), date: snapshot.date, invoiceId: record.qboInvoiceId });
+        tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-paid-' + orgId + '-' + record.qboInvoiceId), { kind: 'payment', read: false, createdAt: now, orgId: orgId, staffMail: 'paidAlert', mailState: 'pending',
+          text: 'Payment received: ' + (c.org.name || orgId) + ' ' + P.money(snapshot.totalCents) + (first ? ' (first invoice: the workspace is open)' : ''), amountDisplay: P.money(snapshot.totalCents), invoiceId: record.qboInvoiceId, first: first });
+      }
+      /* a person has to look: once per invoice, in ClearSky's own inbox and by mail */
+      if (review && !snapshot.reviewRequired) {
+        tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-review-' + orgId + '-' + record.qboInvoiceId), { kind: 'billing-review', read: false, createdAt: now, orgId: orgId, staffMail: 'billingAlert', mailState: 'pending',
+          text: 'Accounting review: invoice ' + record.qboInvoiceId + ' for ' + (c.org.name || orgId) + (note ? ' (' + note + ')' : '') + '. Access is unchanged until you decide.', invoiceId: record.qboInvoiceId });
+      }
       var all = invoices.docs.map(function (d) { return d.id === doc.id ? Object.assign({}, d.data(), update) : d.data(); });
       var afterBilling = subUpdate ? Object.assign({}, billing, { subscription: subUpdate }) : billing;
       var patch = displayAfter(accessAfterInvoices(afterBilling, all, c.book, now), afterBilling, c.book, now);
@@ -314,7 +346,7 @@ async function reconcile(db, orgId, now, deps, options) {
         tx.set(current.collection('history').doc(), event); tx.set(c.root.collection('admin_audit').doc(), event);
       }
     });
-    results.push({ invoiceId: record.qboInvoiceId, state: state, reviewRequired: review });
+    results.push({ invoiceId: record.qboInvoiceId, kind: kindOf(record), state: state, was: record.state, changed: record.state !== state, reviewRequired: review });
   }
   if (bounded) await current.update({ reconcileCursor: rows.docs.length === bounded ? rows.docs[rows.docs.length - 1].data().date : null });
   return { invoices: results };

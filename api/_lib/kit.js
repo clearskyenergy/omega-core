@@ -63,6 +63,19 @@ var GUIDES = [
 /* A tenant's own hostname, once it is attached and serving; else the open
    host. The one rule, so the office's customer links and the kit agree. */
 function hostOf(d) { d = d || {}; return Array.isArray(d.domains) && d.domains[0] && d.domains[0] !== 'silmarillion.clearskyomega.com' && d.hostAttached === true ? d.domains[0] : null; }
+/* Where a person is SENT for a workspace (signup, the pay step, the mails):
+   its own attached hostname, else the open host. `*.clearskyomega.com` has
+   no wildcard record today (WHITE-LABEL.md; walters./roam. never resolved),
+   so a new tenant's slug host is RESERVED on its record (`domains[0]`,
+   `tenant_public/{host}`) and nobody is sent there until `opts.wildcard`
+   (TENANT_WILDCARD_LIVE=true, read by the caller: this file reads no
+   environment) says the wildcard serves. ONE rule, here, for every writer. */
+function home(d, opts) {
+  var own = hostOf(d); if (own) return own;
+  var slug = d && Array.isArray(d.domains) && d.domains[0];
+  if (opts && opts.wildcard === true && slug && /\.clearskyomega\.com$/.test(slug)) return slug;
+  return ORIGIN.replace('https://', '');
+}
 function url(path, org, host) { var base = host ? 'https://' + String(host).replace(/^https?:\/\//, '').replace(/\/$/, '') : ORIGIN; return base + path + (org ? (path.indexOf('?') >= 0 ? '&' : '?') + 'org=' + encodeURIComponent(org) : ''); }
 /* the kit for one workspace: every item with its live address, sandbox and guide */
 function forOrg(org, opts) {
@@ -99,4 +112,4 @@ function message(kit, audience) {
   lines.push('', 'Sign in: ' + (items[0] ? items[0].signin : '') + '.');
   return lines.join('\n');
 }
-module.exports = { ORIGIN: ORIGIN, ITEMS: ITEMS, GUIDES: GUIDES, INSTALL: INSTALL, url: url, hostOf: hostOf, forOrg: forOrg, message: message };
+module.exports = { home: home, ORIGIN: ORIGIN, ITEMS: ITEMS, GUIDES: GUIDES, INSTALL: INSTALL, url: url, hostOf: hostOf, forOrg: forOrg, message: message };

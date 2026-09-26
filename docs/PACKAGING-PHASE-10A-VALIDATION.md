@@ -188,3 +188,86 @@ merged. Nothing else can show until step 6 above.
   its name.
 - `test.com` on production is a legacy pending tenant created by hand; it
   can be approved or left from the master console.
+
+## Launch hardening (2026-09-26, evening; branch `codex/launch-hardening`)
+
+Before Monday's first sale, four review lenses (customer, staff, security,
+money) read the whole path and each finding was adversarially verified three
+times. What survived, and what changed:
+
+- **`/start` stood still on the front door.** Only `app.`, `www.` and
+  `clearskyomega.com` were hubs, so on `silmarillion.clearskyomega.com` (an
+  OPEN host, where every link sends people) the signup page never heard
+  `omega:hub` and showed nothing after sign-in. `omega-tenant.js` now runs
+  the hub's routing on `/start` on EVERY host, and outside a hub it never
+  sends a person to another hostname: an existing tenant's owner lands on
+  the dashboard of the host they are on.
+- **`<slug>.clearskyomega.com` does not resolve.** There is no wildcard
+  record (WHITE-LABEL.md; walters./roam. never resolved), and every
+  redirect and mail pointed a paying buyer at it. `api/_lib/kit.js`
+  `home()` is now the ONE rule for where a person is sent: an attached
+  hostname, else the open host, and the slug host only under
+  `TENANT_WILDCARD_LIVE=true` (checklist §2, §6). The slug host stays
+  reserved on the record (`domains[0]`, `tenant_public/{host}`) for the day
+  the wildcard lands. The signup page no longer promises a hostname; it says
+  where to sign in.
+- **A ClearSky-side QuickBooks fault read every paying tenant out.** A
+  reconcile error (4xx, or three transport failures) set
+  `packagingState: 'reconciliation_required'` with `accessUntil: now` on a
+  tenant whose invoice was fine. Now `accessAfterInvoices` judges access
+  from the invoice states last read and only FLAGS `reconciliationRequired`;
+  401/403/429 and the guard's own refusals (`e.clearsky`) are retried like a
+  5xx, never a review; the console chip says *Accounting review*; ClearSky
+  is mailed once per invoice (`billingAlert`) with the reason
+  (`reconcileNote`). Our bookkeeping never cuts a customer's access.
+- **Money is announced.** A subscription invoice reconciling as paid writes
+  the tenant's receipt (`paid`: the first one says the workspace is open,
+  with the address to sign in) and ClearSky's `paidAlert`, both delivered by
+  the runner and at once after an "I've paid" look (`reconcileNow` calls
+  `deliver` and `staffDeliver`). Reconciliation results now carry
+  `was`/`changed`.
+- **The live runner had the wrong mark and the wrong pace.** A sandbox
+  signup is `packaged: true` too, so the production runner would have polled
+  it against the production company. Signup and every activation now write
+  `packagedLive` (the mode at the time) and the live runner queries that.
+  It runs hourly (`20 * * * *`), ten workspaces a tick with the cursor
+  carrying on, so a payment is seen within the hour without anyone pressing
+  a button; it was five a day.
+- **Custom transaction numbers.** OMEGA numbers its invoices `OP-…` and
+  dedupes by that number; with the QuickBooks setting off the company
+  renumbers and a retry would issue twice. The driver reads
+  `Preferences.SalesFormsPrefs.CustomTxnNumbers` before creating and refuses
+  while it is `false`, refuses an invoice QuickBooks renumbered, and emails
+  the new invoice once through QuickBooks (`invoice/{id}/send`, best effort,
+  `emailed` recorded) so the customer has the invoice itself with its Pay
+  now button.
+- **A missing pay link is not a dead end.** `invoice()` names it
+  (`payLinkMissing`); signup tells the page the invoice was emailed to the
+  billing address and mails ClearSky that Payments may be off. The engine's
+  own words (`payNowError`) stay on the record for staff; the customer hears
+  what happens next.
+- **The switch on before the seed** answered a 409 to every visitor. GET
+  `/api/tenant-signup` now answers `packaging: false, notReady: …`; the page
+  says "opening shortly" and takes nobody's details; a request is refused,
+  nothing half-made.
+- **Legacy tenants** (no `signedUpAt`) could not be activated from the
+  Package tab: `createdAt`, then `approvedAt`, then today anchor the billing
+  day. `RESERVED` labels now include the front door, plumbing and our names.
+  `support@` and `billing@csebuilders.com` are gone from the runtime and the
+  mail footer (`SUPPORT_EMAIL`, default `dev@clearsky-usa.com`); the
+  packaged welcome mail has the person's name. The growth board reads
+  `awaiting_payment` as a sale to close; the console shows *First invoice
+  voided* when `reissueRequired`.
+
+Tests: `scripts/test-launch-hardening.js` (new, in `npm test`),
+`test-self-serve-signup` (16 checks: the open-host address and the wildcard
+switch, reserved labels, the not-seeded answer, the missing pay link, the
+payment mails, the page sources), `test-plan-change` (review never locks,
+a 403 is retried), `tgrowth`, `test-tenant-signup`, and the packaging suite.
+
+Still not built (honest): re-issuing a first invoice that was voided before
+payment (it is flagged `reissueRequired` and shown in the console; a person
+re-issues or closes by hand); a rate cap on signups; a transactional
+"I've paid" throttle (two clicks inside eight seconds may both look);
+`tenant_public.tier` stays `trial` after a paid activation (nothing reads it
+for access).

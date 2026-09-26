@@ -287,6 +287,12 @@ The agent needs these from the packaging build, in order of arrival:
    sent by the platform yet**, so the agent's "trial ends" mail is the only
    one until that lands — when it does, record it on `billing/current` and
    stand the agent down that day.
+   A pay-at-the-end signup (Phase 10A) that has not paid its first invoice
+   is `read-only` with the flag `awaiting-payment` (2026-09-26): the action
+   is a call about the invoice, not an invoice link, because the link is
+   already on the pay step and in the mail; the workspace opens the moment
+   QuickBooks shows it paid, and the platform mails the buyer and ClearSky
+   when it does.
 2. **The billing profile** (phase 4, landed): `omega_orgs/{org}/billing/profile`
    carries the billing contact and AP address; the board's `who` is that
    contact when there is one, else the signup email, else the owner.
