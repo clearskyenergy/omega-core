@@ -146,6 +146,105 @@ screenshots and review.
 
 ---
 
+## 6. The project decides the workspace (make it look nicer now)
+
+Two layers, never confused:
+
+| Layer | Decides | Strength | Source |
+|---|---|---|---|
+| **Package** | what the tenant OWNS | hard: un-owned tools are gone (§3) | `billing/current.modules[]` |
+| **Project type** | what is IN FRONT of the user for this project | soft: one click shows everything they own | the project's `type` when it is created |
+
+When a user creates or opens a project they pick what they are building:
+**Level 2 EV · DCFC · BESS (behind or in front of the meter) · Solar + Storage ·
+DER / Microgrid · Compute campus · Building / Net-Zero**. That choice sets up
+the editor for that job. It builds on what already exists: `omega-editor-mode.js`
+(`bess-lite` hides compute and EV categories), Compute Mode (a curated 4-tab
+layout, editor.html ~166639), and the L2 / FOM / BTM modes on the Build panel.
+
+### 6.1 Rules for a project workspace
+
+1. **Draw functions are never removed by a project type.** Select/Move,
+   Line, Polyline, Rectangle, Circle, Text, Callout, Dimension, Zone Box,
+   Conduit, Trench, Undo/Redo, Layers, Calibrate Scale and 3D Review stay in
+   every workspace. A project type only reorders and focuses.
+2. **Relevant first.** The workspace opens on its guided build, puts its
+   equipment at the front of Insert, and puts its outputs first on Output.
+3. **Everything else is one click away.** A single **"All tools"** toggle in
+   the ribbon header shows every tool the package owns. Nothing owned is
+   ever unreachable, and the choice is remembered per user.
+4. **Same order and style everywhere.** A workspace chooses which groups
+   show first. It never invents new groups, colours or button styles.
+5. **Mixed projects work.** A project can be BESS + Level 2; the workspace
+   is the union of both.
+6. **The package still wins.** A workspace never shows a tool the tenant
+   doesn't own; in its place the + Modules tab shows the matching module
+   ("DCFC projects usually add Plan Sets & CAD").
+
+### 6.2 What each workspace puts forward
+
+| Project type | Opens on | Insert shows first | Analyze / Estimate first | Output first | Tucked behind "All tools" |
+|---|---|---|---|---|---|
+| Level 2 EV | Level 2 guided build | L2 chargers, panelboard, meter, disconnect, bollard, ADA stencils, parking stalls | Electrical Estimate, Construction Cost | Proposal, EV Cost Workbook, Plot Plan, One-Line, L2 Closeout | Compute, BESS sizing, wind/genset/fuel cell, terrain, network proximity |
+| DCFC | DCFC build (+ BESS demand management) | DCFC, transformer, switchgear, BESS pad, bollards | Grid Atlas, Estimate, Energy Balance | Proposal, EV Workbook, Plot Plan, One-Line | Compute, building net-zero, piles |
+| BESS | BESS Build | BESS cabinet/pad/cluster, PCS, transformer, EMS, meter, fence | Grid Atlas, BESS Sizer, Value Stack, Import Bill | Proposal, Pro Forma, Plot Plan, One-Line | EV catalog, compute, building net-zero |
+| Solar + Storage | Solar + Storage flow | Arrays (ground/roof/canopy), BESS, inverter, transformer | Generation / PVWatts, Non-Export Headroom, BESS Sizer | Proposal, pile/string CSV, Plot Plan, One-Line | EV catalog, compute |
+| DER / Microgrid | DER Build / Full Topology | Genset, fuel cell, wind, BESS, switchgear, POI | Energy Balance, DER Generation, load flow | One-Line, Permit Sheet, Proposal | EV stencils, parking |
+| Compute campus | Compute Build | Data-centre pods, substation, gas/fiber tie-in | Load Screen, Max Load, Network Proximity | Campus proposal, Land Lease | EV, parking, ADA |
+| Building / Net-Zero | Building Designer | Building, panels, rooftop solar | Net-zero case, NEC 220 load calc | Building report, DXF | Compute, EV catalog |
+
+### 6.3 Look-nicer-now track (runs alongside, does not wait for packaging)
+
+Visible polish a customer notices in the first minute, safe to ship alone:
+- **Project start screen:** big, illustrated cards for the seven project
+  types instead of a form; the choice sets the workspace.
+- **Ribbon clean-up:** one icon style and size (`OmegaRibbonIcons`), one
+  label length (two short lines max), consistent group captions, no
+  duplicated buttons (Calibrate Scale and Export for Validation appear
+  twice today), retire hidden/retiring items (BESS Config, Viability).
+- **Right panel order:** the results rail shows the numbers that matter
+  for this project type first (kW/kWh and payback for BESS; ports and
+  make-ready cost for EV).
+- **Empty states:** every panel that has nothing yet says what to do next
+  in one sentence, with the button.
+- **One accent, one type scale** across the editor, the admin console and
+  the customer pages.
+
+### 6.4 Acceptance
+
+`check:pages` gains the seven workspaces × the five packages. It fails if a
+core draw function is missing from any workspace, if "All tools" hides
+anything the package owns, if a workspace shows an un-owned tool, or on the
+tidiness checks in §3.2. Screenshots of each workspace go into the guides.
+
+---
+
+## 7. Brief for the design and build agents (Fable, ChatGPT / Astra)
+
+Two agents working on the same editor must share one source of truth:
+
+- **Read first:** `CLAUDE.md`, `docs/VALUE-LADDER-PACKAGING.md` (catalog,
+  Appendix A inventory, §4.1 leaks, §4.2 not-live list), this file, and
+  `MERGE.md` before touching `editor.html`.
+- **Split the work, not the files:** one agent owns the package layer
+  (`api/_lib/modules.js`, `omega-caps.js`, gate tests, Phases 1–3); the
+  other owns the workspace and polish layer (§6: project start screen,
+  workspace presets, ribbon clean-up). They meet at one interface:
+  `data-module` on each button (package) and a `workspaces` table in
+  `api/_lib/modules.js`'s bundled twin (project type → groups first,
+  tucked groups, start build). Neither edits the other's layer without a note
+  in the PR.
+- **Never:** remove a draw function; hard-code a tenant; add a build step;
+  put pricing math in the browser; add a second list of modules or prices.
+- **Every PR:** `npm test`, `npm run check:pages`, screenshots of the
+  affected workspaces under Lite and one paid package, and a line in this
+  file's status.
+- **Order:** §6.3 polish and the project start screen can start now. Workspace
+  presets (§6.1–6.2) start after Phase 1 exists, because they reference
+  module ids.
+
+---
+
 ## 5. Decisions this roadmap adds
 
 1. Self-serve trial: none (approval + payment first), or a priced package
