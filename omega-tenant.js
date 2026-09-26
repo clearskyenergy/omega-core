@@ -99,6 +99,10 @@
      which is the hostname lock doing exactly what it should to a host nobody
      told it about. */
   var HUB_HOSTS = ['app.clearskyomega.com', 'clearskyomega.com', 'www.clearskyomega.com'];
+  /* The address a refused person may write to. csebuilders.com was retired
+     on 2026-09-24 and nothing answers there; api/_lib/mail.js SUPPORT_EMAIL
+     is the server twin, change both together. */
+  var SUPPORT_EMAIL = 'dev@clearsky-usa.com';
 
   /* ── HOSTS THAT SERVE EVERY TENANT INLINE ────────────────────────────────
      A HUB dispatches: a signed-in user is redirected to their own org's
@@ -265,7 +269,7 @@
       c.tenant.shell = pub.shell || c.tenant.shell || 'default';
       c.tenant.vertical = pub.vertical || c.tenant.vertical || null;
     }
-    if (!c.adminDomains) c.adminDomains = ['csebuilders.com', 'clearsky-usa.com'];
+    if (!c.adminDomains) c.adminDomains = ['clearsky-usa.com'];
     applyColors(c.tenant.colors);
   }
   function applyColors(colors) {
@@ -283,7 +287,7 @@
     var d = document.createElement('div');
     d.setAttribute('style', 'position:fixed;inset:0;background:#0A1628;color:#E5EEF7;z-index:99999;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;padding:24px;text-align:center');
     d.innerHTML = '<div style="max-width:520px"><div style="font-size:22px;font-weight:700;margin-bottom:10px">This portal is not available at this address</div>'
-      + '<div style="font-size:14px;color:#8BA3C4;line-height:1.5">' + String(msg).replace(/</g, '&lt;') + '<br><br>If you believe this is an error, contact support@csebuilders.com.</div></div>';
+      + '<div style="font-size:14px;color:#8BA3C4;line-height:1.5">' + String(msg).replace(/</g, '&lt;') + '<br><br>If you believe this is an error, contact ' + SUPPORT_EMAIL + '.</div></div>';
     document.body ? document.body.appendChild(d) : document.addEventListener('DOMContentLoaded', function () { document.body.appendChild(d); });
   }
 
@@ -700,8 +704,13 @@
         var o = s.data(), host = (o.domains && o.domains[0]) || null;
         T.org = o; T.status = o.status || 'active';
         if (T.status === 'pending') { pendingBanner(o, user, null); lockedEntitlements(); return; }
-        if (host && host !== T.host && !onStart) { global.location.href = 'https://' + host + global.location.pathname + global.location.search; return; }
-        if (host && host !== T.host && onStart) { global.location.href = 'https://' + host + '/'; return; }
+        /* A HUB dispatches to the workspace's own hostname. Anywhere else
+           (the open host, a tenant host) the workspace is served HERE: a
+           slug host under clearskyomega.com may not resolve at all (no
+           wildcard record; walters./roam. never did), so /start on the
+           front door opens the dashboard on the same origin. */
+        if (host && host !== T.host && T.hub) { global.location.href = 'https://' + host + (onStart ? '/' : global.location.pathname + global.location.search); return; }
+        if (onStart && !T.hub) { global.location.href = '/'; return; }
         try { global.dispatchEvent(new CustomEvent('omega:hub', { detail: { exists: true, org: o } })); } catch (e) {}
       } else {
         if (!onStart) { global.location.href = '/start.html'; return; }
@@ -806,7 +815,12 @@
     /* a page that is its own front door (Omega Logic: /office/app, /logic,
        /omega-logic) sets OMEGA_NO_HUB_ROUTE: it resolves the workspace
        itself, including cross-company grants the hub would send to signup */
-    if (T.hub) { if (!global.OMEGA_NO_HUB_ROUTE) routeFromHub(user); return; }
+    /* The signup page (/start) runs the hub's routing on EVERY host. The
+       front door is silmarillion, an OPEN host, and until 2026-09-26 only
+       app./www. dispatched, so the page there never heard omega:hub and
+       stood still with nothing to do. */
+    var onStart = /\/start(\.html)?$/.test(String(global.location && global.location.pathname || ''));
+    if (T.hub || onStart) { if (!global.OMEGA_NO_HUB_ROUTE) routeFromHub(user); return; }
     var org = orgIdFor(user); if (!org) return;
     var uid = user.uid;
     var ref = d.collection('omega_orgs').doc(org);
@@ -900,7 +914,7 @@
          was. Nothing here is a security boundary — Firestore rules are, and
          they do not care whether a browser is still holding a token. */
       if (T.status === 'suspended' || T.status === 'cancelled') {
-        refuse('Your organisation\'s account is ' + T.status + '. Contact billing@csebuilders.com to restore access.');
+        refuse('Your organisation\'s account is ' + T.status + '. Contact ' + SUPPORT_EMAIL + ' to restore access.');
         return;
       }
       if (T.member && T.member.status === 'disabled') {

@@ -1294,6 +1294,9 @@ function _authedPost(path, body){
 function _standing(bill, org){
   if (bill && bill.packaged === true) {
     var ps = bill.packagingState;
+    /* a reconciliation a person has to look at: access is unchanged (the engine never cuts it for our own bookkeeping), the chip says so */
+    if (bill.reconciliationRequired === true) return { key: 'unpriced', chip: 'warn', label: (ps === 'paid' ? 'Active · ' : '') + 'Accounting review' };
+    if (bill.reissueRequired === true) return { key: 'overdue', chip: 'bad', label: 'First invoice voided' };
     if (ps === 'paid') return { key: 'current', chip: 'good', label: 'Active' };
     if (ps === 'trial') return { key: 'trialend', chip: 'warn', label: 'Trial ends ' + new Date(bill.trialEndsAt).toLocaleDateString() };
     if (ps === 'past_due_lite' || ps === 'unpaid') return { key: 'overdue', chip: 'bad', label: 'Past due' };
