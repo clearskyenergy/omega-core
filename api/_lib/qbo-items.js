@@ -39,6 +39,20 @@ async function guard(book, realm, deps) {
   var connection = await deps.Q.load();
   if (!connection || connection.env !== want || String(connection.realmId) !== realm) fail('Stored ClearSky connection is not the requested ' + want);
 }
+/* Why an existing QuickBooks item is refused, in the words the operator
+   needs to re-run: an item made by hand (or through a connector) carries
+   whatever income account and tax treatment that person chose, so the
+   message names them instead of a bare "needs review". */
+function review(item, name, options) {
+  if (!item || !item.Id) return 'not returned by QuickBooks';
+  var why = [], account = item.IncomeAccountRef && item.IncomeAccountRef.value;
+  if (item.Name !== name) why.push('name is ' + item.Name);
+  if (item.Type !== 'Service') why.push('type is ' + item.Type);
+  if (item.Active === false) why.push('inactive');
+  if (String(account || '') !== options.incomeAccountId) why.push('income account is ' + (account ? account + (item.IncomeAccountRef.name ? ' ' + item.IncomeAccountRef.name : '') : 'unset') + ', not ' + options.incomeAccountId);
+  if (item.Taxable !== options.taxable) why.push(item.Taxable === true ? 'taxable' : item.Taxable === false ? 'non-taxable' : 'taxability unset');
+  return why.join('; ');
+}
 async function sync(db, book, options, deps) {
   options = options || {}; B.writable(book);
   var plan = items(book);
@@ -65,7 +79,8 @@ async function sync(db, book, options, deps) {
       item = (await call('item', { Name: p.name, Type: 'Service', IncomeAccountRef: { value: options.incomeAccountId },
         UnitPrice: p.priceCents / 100, Taxable: options.taxable }, requestId(options.realmId, p.name))).Item;
     }
-    if (!item || !item.Id || item.Name !== p.name || item.Type !== 'Service' || item.Active === false || !item.IncomeAccountRef || String(item.IncomeAccountRef.value) !== options.incomeAccountId || item.Taxable !== options.taxable) fail('Existing item needs accounting review: ' + p.name);
+    var why = review(item, p.name, options);
+    if (why) fail('Existing item needs accounting review: ' + p.name + ' (' + why + ')');
     if (book.qbo.items[p.key] && book.qbo.items[p.key] !== String(item.Id)) fail('Existing item binding changed');
     bindings[p.key] = String(item.Id);
   }

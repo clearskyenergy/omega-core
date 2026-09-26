@@ -31,6 +31,9 @@ async function main() {
   var saved = await B.load(db, b.version); eq(Object.keys(saved.qbo.items).length, 32); eq(saved.modules.lite.qboItemId, '1');
   await I.sync(db, saved, opts, deps); eq(writes, 32, 'retry creates nothing');
   rows.Lite.Active = false; await refuses(function () { return I.sync(db, saved, opts, deps); }, /accounting review/); eq(writes, 32); rows.Lite.Active = true;
+  /* The refusal names what to fix: the account an item made by hand carries, or its tax treatment. */
+  rows.Lite.IncomeAccountRef = { value: '9', name: 'Sales' }; await refuses(function () { return I.sync(db, saved, opts, deps); }, /review: Lite \(income account is 9 Sales, not 7\)/); eq(writes, 32); rows.Lite.IncomeAccountRef = { value: '7' };
+  rows.Lite.Taxable = true; await refuses(function () { return I.sync(db, saved, opts, deps); }, /review: Lite \(taxable\)/); eq(writes, 32); rows.Lite.Taxable = false;
   saved.frozen = true; var before = calls; await refuses(function () { return I.sync(db, saved, opts, deps); }, /immutable/); eq(calls, before);
   saved.frozen = false; saved.qbo.realmId = '999'; await refuses(function () { return I.sync(db, saved, opts, deps); }, /realm mismatch/); eq(calls, before);
   /* Simulate a price book frozen during network I/O. The final transaction
