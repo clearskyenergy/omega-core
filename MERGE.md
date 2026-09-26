@@ -2260,6 +2260,22 @@ compares the sign-in email lower-cased in the four team blocks,
 preview hostname when a sign-in is refused for an unauthorised domain. See
 docs/PACKAGING-PHASE-9-VALIDATION.md.
 
+## Ribbon icons — September 26, 2026
+
+`editor.html`: the ribbon's icon module (`OmegaRibbonIcons`, the light
+restyle that turns every text glyph into an SVG line icon) drew a generic
+four-box placeholder for any button its ten loose regexes did not match —
+about ninety of them (Trace Boundary, Add Exclusion, the interconnection
+modes, Place Substation, Supply Link, Move System, Load Screen, Land Lease,
+the stencils, the equipment…). `omega-ribbon-icons.js` (new, ES5, UMD) is
+the one icon set: a hand-drawn 24×24 stroke glyph per button label, in
+the ribbon's line style, with the regex tier kept as the second chance;
+the module loads it first and marks a button it does not know
+(`data-icon-fallback`). `scripts/tests/tribbonicons.js` (in `npm test`)
+reads every ribbon label out of `editor.html` and fails if one falls back.
+Tommy, 2026-09-26: "we had logos for this earlier and they were fine —
+just make them match your new style."
+
 ## Packaging Phase 10A — September 26, 2026
 
 No `editor.html` edit. `start.html` gains *Pay and start now* and the pay
