@@ -156,7 +156,8 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     assert.equal(S.canApply(ctx(book)), true);
     /* the book's own validation: a "-proposed" version is never the production company's, and a production book names its realm */
     var PB = require('../api/_lib/pricebook');
-    assert.throws(function () { var b = H.enabledBook(); b.qbo.env = 'production'; b.qbo.realmId = '9130000000000000'; PB.validate(b); }, /sign the values off/);
+    assert.throws(function () { var b = H.enabledBook(); b.version = '2026-10-proposed'; b.qbo.env = 'production'; b.qbo.realmId = '9130000000000000'; PB.validate(b); }, /sign the values off/);
+    assert.equal(PB.VERSION, '2026-10', 'the release version is signed off (2026-09-26)'); assert.ok(!/-proposed$/.test(PB.VERSION));
     assert.throws(function () { var b = H.enabledBook(); b.version = '2026-10'; b.qbo.env = 'production'; b.qbo.realmId = null; PB.validate(b); }, /names the production realm/);
     assert.throws(function () { var b = H.enabledBook(); b.qbo.env = 'staging'; PB.validate(b); }, /sandbox or production/);
   });
@@ -198,7 +199,8 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     function run(args, env) { var r = cp.spawnSync(process.execPath, args, { cwd: ROOT, env: Object.assign({}, process.env, env || {}), encoding: 'utf8' }); return { code: r.status, out: r.stdout + r.stderr }; }
     var a = run(['scripts/seed-pricebook.js', '--live']); assert.equal(a.code, 1); assert.match(a.out, /--live needs --realm/);
     var b = run(['scripts/seed-pricebook.js', '--realm=9130000000000000']); assert.equal(b.code, 1); assert.match(b.out, /--realm goes with --live/);
-    var c = run(['scripts/seed-pricebook.js', '--live', '--realm=9130000000000000']); assert.equal(c.code, 1); assert.match(c.out, /sign the values off/, 'the proposed version cannot be seeded for production');
+    var c = run(['scripts/seed-pricebook.js', '--live', '--realm=9130000000000000']); assert.equal(c.code, 0, c.out); assert.match(c.out, /"live": true/); assert.match(c.out, /"env": "production"/); assert.match(c.out, /"realmId": "9130000000000000"/, 'the release version may be seeded for production (dry run)');
+    assert.ok(!/"applied": true/.test(c.out), 'and a dry run writes nothing');
     var d = run(['scripts/seed-pricebook.js']); assert.equal(d.code, 0); assert.match(d.out, /"dryRun": true/); assert.match(d.out, /"live": false/);
     var e = run(['scripts/qbo-sync-items.js', '--live'], { PACKAGING_LIVE: '', QBO_ENV: 'sandbox' }); assert.equal(e.code, 1); assert.match(e.out, /--live needs PACKAGING_LIVE=true/);
     var f = run(['scripts/qbo-sync-items.js', '--apply', '--realm=1', '--income-account=1', '--taxable'], { PACKAGING_LIVE: 'true', QBO_ENV: 'production' }); assert.equal(f.code, 1); assert.match(f.out, /say --live/);

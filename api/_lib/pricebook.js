@@ -4,7 +4,10 @@
  */
 'use strict';
 var M = require('./modules');
-var VERSION = '2026-10-proposed';
+/* Signed off by Tommy on 2026-09-26 ("do the version rename"): the release
+   version. A book named *-proposed is sandbox-only by validate(); this one
+   may be seeded for the production company (seed-pricebook.js --live). */
+var VERSION = '2026-10';
 function integer(n, name, min) {
   if (typeof n !== 'number' || !isFinite(n) || Math.floor(n) !== n || n < (min || 0) || n > 1000000000) {
     var e = new Error('Invalid ' + name); e.status = 400; throw e;
