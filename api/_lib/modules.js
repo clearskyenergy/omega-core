@@ -31,7 +31,7 @@ var CATALOG = [
     'openMarketplacePush openFinancingApply openBuildingPanel'),
   record('compute', 'Compute & Data Center', 'premium', 'datacenter computepower computelease', 'compute',
     'openDcClusterDialog derSetDc'),
-  record('ops', 'Operations', 'premium', 'sitelifecycle omconsole slaintel fieldservice ownerreport fleetcommand', 'ops', ''),
+  record('ops', 'Operations', 'premium', 'sitelifecycle omconsole slaintel fieldservice ownerreport fleetcommand', 'ops', 'OmegaOM.open OmegaFleetOM.open'),
   record('whitelabel', 'White Label Storefront', 'premium', '', 'whitelabel', ''),
   record('permitting', 'Permitting Matrix', 'deliverable', '', 'permitting', 'OmegaPermitMatrix.open', 'matrices'),
   record('sitefinder', 'Site Finder', 'deliverable', 'sitefinder sitediscovery', 'sitefinder', '', 'siteStudies'),
@@ -58,18 +58,28 @@ BY_KEY.compute.ribbon.push("_guidedPick('compute')");
 BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cost', '#rp-cost');
 NOT_SOLD[5].ribbon.push("homeStartWizard('BTM')");
 var IDS = {
-  lite: 'rb-color rb-fom rb-fence-tie rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-trace-boundary rb-design-ai rb-nrel-key',
-  gridatlas: 'rb-gridatlas', storage: 'omega-btn-bill-analysis rb-valuestack rb-omlife',
+  lite: 'rb-color rb-fence-tie rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-trace-boundary rb-design-ai rb-nrel-key',
+  gridatlas: 'rb-gridatlas', storage: 'omega-btn-bill-analysis rb-valuestack',
   estimate: 'rb-takeoff-budget', evrebates: 'rb-ev-future',
   plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks',
   siteintel: 'rb-noise-model rb-buildable rb-trace-exclusion rb-gis-layers rb-parcel-screen',
   engineering: 'rb-optimizer rb-optimise rb-elec rb-circuit omega-terr-btn',
   compute: 'rb-sub-envelope rb-feas-csv rb-place-sub rb-gas-tie rb-fiber-tie rb-max-fit rb-site-build rb-max-load rb-load-screen rb-compute-cost rb-supply-link rb-intercon rb-compute-lease rb-design-site rb-ladder-toggle rb-compute-site-setup',
+  ops: 'rb-omlife rb-fom',
   permitting: 'omega-btn-permit-matrix'
 };
 NOT_SOLD[5].ribbon.push('#rb-screen', 'sendToPermitCreator');
 BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(words('shapeArc shapeEllipse shapePolygon shapeHatchBox ovLock setPlot clearPlot'));
 Object.keys(IDS).forEach(function (k) { words(IDS[k]).forEach(function (id) { BY_KEY[k].ribbon.push('#' + id); }); });
+/* Shared drawing/analysis controls must not be stranded in the paid Compute tab. */
+BY_KEY.lite.editorPage = 'draw';
+BY_KEY.siteintel.editorPage = 'analyze';
+BY_KEY.engineering.editorPage = 'analyze';
+BY_KEY.storage.editorPage = 'analyze';
+BY_KEY.ops.editorPage = 'analyze';
+BY_KEY.plansets.editorPage = 'output';
+BY_KEY.finance.editorPage = 'output';
+BY_KEY.evrebates.editorPage = 'output';
 /* Honest beta disclosures travel with the one catalog projection. Hidden
  * stubs remain NOT_SOLD and are never turned into included features. */
 BY_KEY.plansets.beta = ['3D Site Visualizer', 'Georeferenced Export', 'Export for CAD'];
@@ -80,6 +90,29 @@ BY_KEY.permitting.beta = ['Permitting Matrix'];
 BY_KEY.permitting.coverage = 'Verified Vista / SDG&E pack; other jurisdictions are draft matrices with unverified agencies, fees and durations.';
 BY_KEY.sitefinder.coverage = 'Northern Illinois (ComEd) only.';
 BY_KEY.whitelabel.agreement = 'Reseller addendum required';
+/* Customer menu copy belongs to the catalog, never to a second UI list. */
+var FEATURES = {
+  lite: ['Site drawing and equipment placement', 'Guided project builds', 'Blueprints and customer proposals'],
+  gridatlas: ['Grid Atlas maps', 'Utility capacity screening', 'Substation context'],
+  storage: ['Battery sizing', 'Revenue and value stack', 'Storage pro forma'],
+  estimate: ['Electrical estimates', 'Bill of materials', 'Procurement requests'],
+  evrebates: ['EV cost workbook', 'Rebate applications', 'Level 2 closeout'],
+  plansets: ['Plot plans and one-lines', 'Schematic and permit sheets', 'AI Render'],
+  siteintel: ['Site intelligence', 'Network proximity', 'Terrain and parcel screening'],
+  engineering: ['Conductor sizing', 'Power flow', 'Design validation'],
+  finance: ['Investment analysis', 'Financing applications', 'Marketplace publishing'],
+  compute: ['Compute campus design', 'Power and load screening', 'Land lease proposals'],
+  ops: ['Site lifecycle', 'Field service', 'Owner reporting'],
+  whitelabel: ['Your branded storefront', 'Embedded customer experience', 'Reseller delivery'],
+  permitting: ['Permitting matrices (BETA)', 'Jurisdiction checklist', 'Verified coverage shown below'],
+  sitefinder: ['Site discovery', 'Parcel studies', 'Northern Illinois coverage'],
+  'logic-office': ['Orders and customers', 'Office workflow', 'Fulfilment tracking'],
+  'logic-plant': ['Production board', 'Work instructions', 'Plant release'],
+  'logic-materials': ['Materials planning', 'Purchasing', 'Kit tracking'],
+  'logic-logistics': ['Freight coordination', 'Delivery tracking', 'Warranty workflow'],
+  'logic-customer': ['Customer order status', 'Customer documents', 'Delivery updates']
+};
+CATALOG.forEach(function (m) { m.features = FEATURES[m.key]; });
 /* Viewing/navigation survives an expired trial; producing commands do not. */
 var READ_ONLY_RIBBON = words('openProjectsModal rbNav rbTab omegaLoadMap toggleLayersPanel toggleCompassPanel toggleSitePanel toggleMeterPanel toggleDockLeft toggleDiagPanel opToggleCoords')
   .concat(["openRpPanel('summary')", "rpTab('summary')"]);

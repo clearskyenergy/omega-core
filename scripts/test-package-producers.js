@@ -44,7 +44,7 @@ async function main() {
   setup(['lite']); var p = await expect('package-access', 'GET', {}, 200); assert.deepEqual(p.body.modules, ['lite']); count++;
   assert(reads.every(function (r) { return r.indexOf('omega_orgs/example.com') === 0; })); count++;
   p = await call('package-access', 'GET', {}, { orgId: 'other.com' }); assert.equal(p.status, 403); count++;
-  await expect('package-access', 'POST', {}, 405);
+  await expect('package-access', 'POST', {}, 403);
   broken = true; await expect('package-access', 'GET', {}, 503); broken = false;
   setup(['lite']); ctx.billing = {}; p = await expect('package-access', 'GET', {}, 200); assert.equal(p.body.packaged, false); count++;
   console.log('Packaged API producers: ' + count + ' passed; no network calls.');

@@ -126,6 +126,8 @@ function openFinancingApply(){
      that threw all resolve to the full platform. -->
 <script src="/omega-editor-mode.js"></script>
 <script src="/omega-caps.js"></script>
+<script src="/omega-workspaces.js"></script>
+<script src="/omega-package-menu.js"></script>
 <script src="/omega-bess-products.js"></script>
 <script src="/omega-storefront-handoff.js"></script>
 <script src="omega-equipment-visuals.js"></script>
@@ -26015,6 +26017,7 @@ async function _loadProject(id){
     // -- Project type: the record's type wins over the browser's last choice --
     try{
       if(d.type && window.OmegaProjectTypes && typeof OmegaProjectTypes.set==='function') OmegaProjectTypes.set(d.type);
+      if(window.OmegaWorkspaces) OmegaWorkspaces.setProject(d.type, d.siteScopes, true);
     }catch(e){}
 
     // -- Address -> satellite bar -------------------------------
@@ -36116,6 +36119,7 @@ function _omRow(k,v,cls,title){
 function _omSet(id,html){
   var el=document.getElementById(id);
   if(el) el.innerHTML=html;
+  if(window.OmegaWorkspaces) OmegaWorkspaces.results();
 }
 
 function omegaRenderResults(){
@@ -72971,7 +72975,8 @@ function homeLoadRecent(){
   var host = document.getElementById('home-recent');
   if(!host) return;
 
-  var list = (window._allProjects && window._allProjects.length) ? window._allProjects.slice() : null;
+  /* An empty result is loaded. Retrying it recursively freezes new accounts. */
+  var list = Array.isArray(window._allProjects) ? window._allProjects.slice() : null;
 
   if(!list){
     /* Kick a quiet fetch if Firestore is available, then re-render. */
@@ -77733,6 +77738,7 @@ window._crmToastModal=_crmToastModal;
     /* the assembly hint should name the right thing */
     refreshAssemblyNote(key);
 
+    if(!silent && window.OmegaWorkspaces) OmegaWorkspaces.setProject(key, null, true);
     if(!silent && window.console) console.info('[project-type] '+key);
   }
 
@@ -105483,8 +105489,15 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     items = [];
     var seenEl = [];
     function add(el, page) {
-      if (!el || (window.OmegaCaps && !OmegaCaps.allowedElement(el))) return;
-      if (el.hasAttribute('data-cap-blocked') || el.hasAttribute('data-omega-retired')) return;
+      if (!el) return;
+      var discovery = null, caps = window.OmegaCaps, view = caps && caps.packageAccess();
+      if (caps && !caps.allowedElement(el)) {
+        if (!view || view.readOnly || view.toolAccess.indexOf('editor') < 0) return;
+        var owners = caps.owners(el.id || '', el.getAttribute('onclick') || '');
+        discovery = owners.length === 1 && caps.MODULE_GRANTS[owners[0]];
+        if (!discovery || view.modules.indexOf(discovery.key) >= 0) return;
+      }
+      if ((!view && el.hasAttribute('data-cap-blocked')) || el.hasAttribute('data-omega-retired') || el.hasAttribute('data-packaging-retired')) return;
       var name = textOf(el);
       if (!name) return;
       if (seenEl.indexOf(el) >= 0) return;
@@ -105492,10 +105505,11 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       var panel = el.closest ? el.closest('.rpanel') : null;
       var cap = panel ? panel.querySelector('.rpanel-cap') : null;
       items.push({
-        el: el,
+        el: el, discovery: discovery ? discovery.key : null,
+        moduleName: discovery ? discovery.name : '',
         page: page || null,
         name: name,
-        group: cap ? cap.textContent.trim() : '',
+        group: discovery ? 'In other modules' : (cap ? cap.textContent.trim() : ''),
         desc: el.getAttribute('data-tip') || el.getAttribute('title') || '',
         ico: icoOf(el)
       });
@@ -105535,7 +105549,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     return sc + Math.max(0, 24 - s.length) * 0.4;
   }
 
-  function search(q) {
+  function search(q, ungrouped) {
     q = (q || '').toLowerCase().replace(/\s+/g, '');
     var out = [];
     for (var i = 0; i < items.length; i++) {
@@ -105545,7 +105559,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       if (!s) s = score(q, it.name + ' ' + it.group + ' ' + it.desc) * 0.6;
       if (s > 0) out.push({ it: it, s: s });
     }
-    out.sort(function (a, b) { return b.s - a.s; });
+    out.sort(function (a, b) { return (ungrouped ? 0 : Number(!!a.it.discovery) - Number(!!b.it.discovery)) || b.s - a.s; });
     return out.slice(0, 60).map(function (o) { return o.it; });
   }
 
@@ -105559,9 +105573,14 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       ckList.appendChild(e);
       return;
     }
+    var discoveryHeader = false;
     list.forEach(function (it, i) {
+      if (it.discovery && !discoveryHeader) {
+        var heading = document.createElement('div'); heading.className = 'ck-empty'; heading.textContent = 'In other modules'; ckList.appendChild(heading); discoveryHeader = true;
+      }
       var r = document.createElement('div');
       r.className = 'ck-row' + (i === 0 ? ' sel' : '');
+      if (it.discovery) { r.style.color = 'var(--sub)'; r.setAttribute('data-module-discovery', it.discovery); }
       var path = [it.page ? tabLabel(it.page) : (it.group || 'Menu'), it.group].filter(Boolean);
       r.innerHTML = '<div class="ck-ico"></div><div class="ck-txt">' +
         '<div class="ck-name"></div><div class="ck-desc"></div></div>' +
@@ -105569,7 +105588,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       r.querySelector('.ck-ico').textContent = it.ico;
       r.querySelector('.ck-name').textContent = it.name;
       r.querySelector('.ck-desc').textContent = (it.desc || '').replace(/\s+/g, ' ').slice(0, 110);
-      r.querySelector('.ck-path').textContent = path.slice(0, 2).join(' \u203A ');
+      r.querySelector('.ck-path').textContent = it.discovery ? it.moduleName : path.slice(0, 2).join(' \u203A ');
       r.addEventListener('mouseenter', function () { select(i); });
       r.addEventListener('click', function () { run(it); });
       rows.push(r);
@@ -105587,6 +105606,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
   }
 
   function run(it) {
+    if (it.discovery) { close(); return window.OmegaPackageMenu ? OmegaPackageMenu.open(it.discovery) : false; }
     if (it.el && window.OmegaCaps && !OmegaCaps.allowedElement(it.el)) return false;
     if (it.run && window.OmegaCaps && OmegaCaps.packageAccess() && OmegaCaps.packageAccess().readOnly && it.name.indexOf('Theme:') !== 0 && it.name.indexOf('Interface:') !== 0) return false;
     close();
@@ -105605,7 +105625,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
   window.OmegaCommands = {
     list: function () {
       buildIndex();
-      return items.map(function (it) { return { name: it.name, group: it.group || '', page: it.page || '', desc: it.desc || '' }; });
+      return items.map(function (it) { return { name: it.name, group: it.group || '', page: it.page || '', desc: it.desc || '', module: it.discovery || null, action: it.discovery ? 'view-module' : 'run' }; });
     },
     run: function (name) {
       buildIndex();
@@ -105613,7 +105633,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       if (!q) return false;
       var hit = null;
       for (var i = 0; i < items.length; i++) { if (items[i].name.toLowerCase() === q) { hit = items[i]; break; } }
-      if (!hit) { var res = search(name); hit = res[0] || null; }
+      if (!hit) { var res = search(name, true); hit = res[0] || null; }
       if (!hit) return false;
       run(hit);
       return true;
@@ -107682,7 +107702,10 @@ button[style*="linear-gradient"][aria-disabled="true"]{
        very first boot wrote 'designer' and from then on the account looked
        like somebody had chosen it — which meant a tier-derived default could
        never apply again, on any machine that had opened the editor once. */
-    if (!ephemeral) { try { localStorage.setItem(KEY, mode); } catch (e) {} }
+    if (!ephemeral) {
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+      if (window.OmegaCaps && OmegaCaps.packageAccess() && window.OmegaWorkspaces) OmegaWorkspaces.setAll(mode === 'pro');
+    }
     if (!quiet && window.console) console.info(TAG + ' ' + mode + ' mode');
     return mode;
   }
@@ -107792,6 +107815,8 @@ button[style*="linear-gradient"][aria-disabled="true"]{
      decides where somebody starts. */
   function defaultMode() {
     var C = window.OmegaCaps;
+    var pack = C && C.packageAccess();
+    if (pack) return pack.staff || pack.modules.indexOf('engineering') >= 0 || pack.modules.indexOf('plansets') >= 0 ? 'pro' : 'designer';
     var t = '';
     try { t = document.body.getAttribute('data-tier') || ''; } catch (e) {}
     if (t && C && C.can) {
@@ -107811,7 +107836,8 @@ button[style*="linear-gradient"][aria-disabled="true"]{
          — so this is the trial-shaped guess, revisited below rather than
          trusted. Marked ephemeral so it is not mistaken for a choice. */
       set(defaultMode(), true, true);
-      document.addEventListener('omega:tier', function () {
+      function revisitMode() {
+        if (window.OmegaCaps && OmegaCaps.packageAccess()) { var hint = document.getElementById('omg-firstrun'); if (hint) hint.remove(); }
         var again = null;
         try { again = localStorage.getItem(KEY); } catch (e) {}
         if (again) return;              /* they chose in the meantime */
@@ -107824,10 +107850,12 @@ button[style*="linear-gradient"][aria-disabled="true"]{
           var n = document.getElementById('omg-firstrun');
           if (n && n.parentNode) n.parentNode.removeChild(n);
         }
-      });
+      }
+      document.addEventListener('omega:tier', revisitMode);
+      document.addEventListener('omega:package', revisitMode);
       /* The note offers "switch to Pro", so it only belongs in front of
          somebody who is actually in Designer. */
-      if (defaultMode() === 'designer') firstRunNote();
+      if (defaultMode() === 'designer' && !(window.OmegaCaps && OmegaCaps.packageAccess())) firstRunNote();
     }
 
     /* Patch scripts add ribbon buttons on timers well after load, so the
@@ -165862,6 +165890,9 @@ if (root.console && console.info) {
   }
 
   function enable() {
+    if (root.OmegaCaps && root.OmegaCaps.packageAccess() && root.OmegaWorkspaces) {
+      root.OmegaWorkspaces.setProject('compute', null, true); return true;
+    }
     if (on) return true;
     prevReportTab = root.reportTab;
     root.reportTab = function (tab) {
@@ -166553,8 +166584,9 @@ if (root.console && console.info) {
         if (labelOf(b) !== mv.label) return;
         if (b.getAttribute('data-shelf-dupe')) return;   /* hidden copy */
         if (mv.from && pageOf(b) !== mv.from) return;
-        if (pageOf(b) === mv.to) return;                 /* already home */
-        var target = panelIn(mv.to, mv.panel);
+        var destination = root.OmegaCaps && root.OmegaCaps.commandPage ? root.OmegaCaps.commandPage(b, mv.to) : mv.to;
+        if (pageOf(b) === destination) return;           /* already home */
+        var target = panelIn(destination, mv.panel);
         if (!target) return;
         remember(b);
         target.appendChild(b);
@@ -172897,6 +172929,17 @@ if (root.console && console.info) {
       var prev = null;
       PLAN[key].forEach(function (id) {
         var el = find(id); if (!el) return;
+        var caps = root.OmegaCaps, view = caps && caps.packageAccess();
+        if (view) {
+          var command = el.classList.contains('rbtn-wrap') ? el.querySelector('.rbtn') : el;
+          var owners = caps.owners(command.id, command.getAttribute('onclick') || '');
+          var module = owners.length === 1 && caps.MODULE_GRANTS[owners[0]];
+          if (module && module.editorPage && module.key !== 'compute') {
+            var home = document.querySelector('#ribbon .ribbon-page[data-page="' + module.editorPage + '"] .rpanel-body');
+            if (home && el.parentNode !== home) { home.appendChild(el); moved++; }
+            return;
+          }
+        }
         var want = prev ? prev.nextSibling : body.firstChild;
         if (el.parentNode !== body || el !== want) {
           body.insertBefore(el, prev ? prev.nextSibling : body.firstChild);
@@ -176044,8 +176087,10 @@ if (root.console && console.info) {
     if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length ||
         typeof OmegaCaps === 'undefined') { setTimeout(gate, 200); return; }
     firebase.auth().onAuthStateChanged(function (u) {
-      if (!u) return;
+      if (window.OmegaWorkspaces) OmegaWorkspaces.setIdentity(u && u.uid);
+      if (!u) { OmegaCaps.setPackage(OmegaCaps.pendingPackage()); OmegaCaps.apply('trial'); return; }
       OmegaCaps.resolve(firebase.firestore(), u.email, u.emailVerified).then(function (t) {
+        if (firebase.auth().currentUser !== u) return;
         tier = t;
         var r = OmegaCaps.apply(tier);
         if (window.console)

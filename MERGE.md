@@ -2173,3 +2173,27 @@ submission now require Firebase authentication. No financial/scoring engine
 was moved in this phase: the browser-engine debt above remains a release
 prerequisite, not a solved security claim. See
 `docs/PACKAGING-PHASE-2-VALIDATION.md` for coverage and exact test limitations.
+
+
+## Packaging Phase 3 — September 26, 2026
+
+The packaged editor now derives command attributes and MODULE_GRANTS from the
+server catalog, prunes empty containers, renumbers captions and provides seven
+project workspaces with a per-user All tools choice. The shared module gallery
+uses server feature/price projections; subscription checkout remains Phase 5.
+Staff-only presentation previews do not write billing or impersonate a tenant.
+Catalog metadata keeps shared draw tools out of gated Compute/Estimate
+containers. Fleet O&M and O&M Lifecycle now correctly belong to Operations;
+no second command ownership table was introduced.
+
+The full canonical HTML browser run exposed an existing Recent Projects loop:
+a successfully loaded empty array was mistaken for a missing result, causing
+an endless promise/refetch loop on a new account. Empty results now render the
+existing empty state. No draw implementation was removed. Result-rail changes
+only reorder existing displayed values and add an action for an empty project;
+no financial/scoring engine changed or moved. The engine debt above remains.
+
+Legacy layout modes remain for unpackaged records; packaged project focus
+cannot override module access. The dry-run backfill requires captured current
+tool access and flags grants outside the sold catalog, rather than deleting or
+automatically converting them. See docs/PACKAGING-PHASE-3-VALIDATION.md.

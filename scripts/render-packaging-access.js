@@ -62,7 +62,7 @@ async function run() {
       await page.evaluate(function (theme) { document.documentElement.setAttribute('data-theme', theme); document.body.setAttribute('data-theme', theme); document.getElementById('fixture-note').textContent = (OmegaCaps.packageAccess().modules.length === 1 ? 'Lite' : 'Lite + Estimate + Plan Sets + Compute') + ' · ' + theme + ' · offline editor controls'; rbTab('output'); }, theme);
       ok(await page.locator('#rp-tab-cost').evaluate(function (el) { return el.hasAttribute('data-package-hidden'); }) === (plan === 'lite'), 'Summary Cost');
       ok(await page.locator('.rtab[data-page="estimate"]').isVisible() === (plan === 'paid'), 'Estimate tab follows module, not legacy Engineering cap');
-      var names = await page.evaluate(function () { return OmegaCommands.list().map(function (x) { return x.name; }).join('|'); });
+      var names = await page.evaluate(function () { return OmegaCommands.list().filter(function (x) { return x.action !== 'view-module'; }).map(function (x) { return x.name; }).join('|'); });
       ok(/Plot Plan/.test(names) === (plan === 'paid'), 'palette/Jarvis list');
       await page.evaluate(function () { openPlotPlanExport(); d4Open(); openRpPanel('cost'); rpTab('cost'); OmegaAIRender.open(); _guidedPick('compute'); });
       var calls = await page.evaluate(function () { return window.calls; });

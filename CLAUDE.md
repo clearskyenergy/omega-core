@@ -168,6 +168,12 @@ authorized projections and server quotes. Packaged records use the server access
 unpackaged records keep legacy gates. Do not enable packaged billing before
 full editor, server-engine, write-rule and billing lifecycle validation. See `docs/PACKAGING-ROADMAP.md`.
 
+Packaged editor presentation uses the server catalog through OmegaCaps;
+OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
+The shared omega-package-menu.js renders catalog features and server-formatted
+prices. Staff package previews are read-only server projections, never tenant
+impersonation or billing edits. Legacy layout modes apply to unpackaged records.
+
 ## Self-serve signup (policy decided 2026-09-06)
 
 Hub host `app.clearskyomega.com` serves `/start.html`. Sign in → if

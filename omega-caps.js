@@ -173,12 +173,27 @@
 
   /* Packaged state is a server projection of the sole catalog. Never derive
      it from tiers, addons, query strings or a second browser module table. */
-  var _package = null, _packageRequest = 0;
+  var _package = null, _packageRequest = 0, MODULE_GRANTS = {}, _packageSignature = null;
   var COMMANDS = '.rbtn,.rsbtn,.rb-fly-item,#app-menu .menu-item,[data-module],[data-cap]';
   function pendingPackage() { return { packaged: true, readOnly: true, modules: [], caps: [], toolAccess: [], catalog: [], notSold: [] }; }
   function setPackage(view) {
+    var previous = _package;
     _package = view && view.packaged === true ? view : null;
     if (_package && (!Array.isArray(view.modules) || !Array.isArray(view.caps) || !Array.isArray(view.catalog) || !Array.isArray(view.toolAccess))) _package = pendingPackage();
+    Object.keys(MODULE_GRANTS).forEach(function (k) { delete MODULE_GRANTS[k]; });
+    if (_package) _package.catalog.forEach(function (m) { MODULE_GRANTS[m.key] = m; });
+    if (previous && !_package && global.document && global.document.querySelectorAll) {
+      var old = global.document.querySelectorAll('[data-package-hidden],[data-package-empty],[data-workspace-hidden]');
+      for (var n = 0; n < old.length; n++) {
+        if (old[n].hasAttribute('data-package-hidden')) old[n].style.display = old[n].getAttribute('data-package-display') || '';
+        old[n].removeAttribute('data-package-hidden'); old[n].removeAttribute('data-package-display');
+        old[n].removeAttribute('data-package-empty'); old[n].removeAttribute('data-workspace-hidden');
+      }
+      if (global.document.body && global.document.body.removeAttribute) global.document.body.removeAttribute('data-packaged-editor');
+      ['omega-workspace-controls', 'omega-package-tab'].forEach(function (id) { var el = global.document.getElementById && global.document.getElementById(id); if (el) el.remove(); });
+      if (global.OmegaPackageMenu) global.OmegaPackageMenu.close();
+      _packageSignature = null;
+    }
     return _package;
   }
   function matches(selector, id, handler) {
@@ -234,7 +249,9 @@
     guardLaunchers();
     var nodes = scope.querySelectorAll(COMMANDS), removed = 0;
     for (var i = 0; i < nodes.length; i++) {
-      var el = nodes[i], allowed = allowedElement(el);
+      var el = nodes[i], own = owners(el.id || '', el.getAttribute('onclick') || '');
+      if (own.length === 1 && el.matches('.rbtn,.rsbtn,.rb-fly-item,#app-menu .menu-item')) el.setAttribute('data-module', own[0]);
+      var allowed = allowedElement(el);
       if (!allowed) {
         if (!el.hasAttribute('data-package-hidden')) el.setAttribute('data-package-display', el.style.display || '');
         el.setAttribute('data-package-hidden', '1'); el.style.setProperty('display', 'none', 'important'); removed++;
@@ -244,6 +261,99 @@
       }
     }
     return removed;
+  }
+  function commandPage(el, destination) {
+    if (!_package || !el || !global.document) return destination;
+    var target = global.document.querySelector('.ribbon-page[data-page="' + destination + '"]');
+    var owner = target && target.getAttribute('data-module');
+    var keys = owners(el.id || '', el.getAttribute('onclick') || '');
+    var module = keys.length === 1 && MODULE_GRANTS[keys[0]];
+    return owner && module && module.key !== owner && module.editorPage ? module.editorPage : destination;
+  }
+  function rehome(scope) {
+    var nodes = scope.querySelectorAll('#ribbon .ribbon-page[data-module] .rbtn,#ribbon .ribbon-page[data-module] .rsbtn');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i], page = el.closest('.ribbon-page'), from = page.getAttribute('data-page');
+      var destination = commandPage(el, from);
+      if (destination === from) continue;
+      var target = global.document.querySelector('.ribbon-page[data-page="' + destination + '"] .rpanel-body');
+      var node = el.closest('.rbtn-wrap') || el;
+      if (target && node.parentNode !== target) target.appendChild(node);
+    }
+  }
+  function layout(scope) {
+    if (!_package || !scope || !scope.querySelectorAll || !global.document) return;
+    var doc = global.document;
+    if (!doc.getElementById('omega-package-layout-style')) {
+      var style = doc.createElement('style'); style.id = 'omega-package-layout-style';
+      style.textContent =
+        'body[data-packaged-editor="1"][data-packaged-editor] #tb{height:auto;min-height:32px;flex-wrap:wrap}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .ribbon-page{max-width:100%;width:100%;flex-wrap:wrap;height:auto;overflow:visible;align-items:stretch}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rpanel{min-width:0;max-width:100%;min-height:78px;flex-direction:column}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rpanel-body{min-height:56px;flex:1 0 auto;order:0;flex-wrap:wrap}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rpanel-cap{order:1}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon{height:auto;max-height:42vh;overflow:auto}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs{min-width:0;flex-wrap:wrap;flex:1 0 100%;height:32px;min-height:32px}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs .rtab{padding:0 9px;font-size:11px;height:32px}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rbtn:not([data-package-hidden]):not([data-workspace-hidden]):not([data-omega-retired]):not([data-packaging-retired]):not([data-shelf-dupe]):not(.omega-gated-hidden),' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rsbtn:not([data-package-hidden]):not([data-workspace-hidden]):not([data-omega-retired]):not([data-packaging-retired]):not([data-shelf-dupe]):not(.omega-gated-hidden){display:flex!important}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rbtn-wrap:not([data-package-empty]),body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rpanel:not([data-package-empty]){display:flex!important}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs .rtab:not([data-package-empty]):not([data-package-hidden]){display:flex!important}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon [data-workspace-hidden],body[data-packaged-editor="1"][data-packaged-editor] #ribbon [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tab-menu [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] [data-package-hidden]{display:none!important}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #omega-package-tab{order:999}' +
+        '#omega-workspace-controls{display:flex;align-items:center;gap:8px;padding:4px 12px;font:11px system-ui;color:var(--sub);background:var(--navy)}' +
+        '#omega-workspace-controls button{font:inherit;color:var(--text);border:1px solid var(--border);background:transparent;border-radius:4px;padding:4px 8px;cursor:pointer}';
+      (doc.head || doc.body).appendChild(style);
+    }
+    function usable(el) {
+      return !el.hasAttribute('data-package-hidden') && !el.hasAttribute('data-workspace-hidden') && !el.hasAttribute('data-omega-retired') && !el.hasAttribute('data-packaging-retired') && !el.classList.contains('omega-gated-hidden') && !el.hasAttribute('data-shelf-dupe');
+    }
+    function hasControls(el) {
+      var controls = el.querySelectorAll('.rbtn,.rsbtn,input,select,.home-recent-item');
+      for (var i = 0; i < controls.length; i++) if (usable(controls[i])) return true;
+      return false;
+    }
+    var wraps = scope.querySelectorAll('#ribbon .rbtn-wrap');
+    for (var w = 0; w < wraps.length; w++) wraps[w].toggleAttribute('data-package-empty', !hasControls(wraps[w]));
+    var pages = scope.querySelectorAll('#ribbon .ribbon-page');
+    for (var p = 0; p < pages.length; p++) {
+      var groups = pages[p].querySelectorAll('.rpanel'), number = 0, any = false;
+      for (var g = 0; g < groups.length; g++) {
+        var present = hasControls(groups[g]);
+        groups[g].toggleAttribute('data-package-empty', !present);
+        if (!present) continue;
+        any = true;
+        var cap = groups[g].querySelector('.rpanel-cap');
+        if (cap && /^\s*\d+\s*[·.]/.test(cap.textContent)) {
+          var title = cap.textContent.replace(/^\s*\d+\s*[·.]\s*/, '');
+          var text = (++number) + ' · ' + title;
+          if (cap.textContent !== text) cap.textContent = text;
+        }
+      }
+      if (!groups.length) any = hasControls(pages[p]);
+      var key = pages[p].getAttribute('data-page'), tab = doc.querySelector('#ribbon-tabs .rtab[data-page="' + key + '"]');
+      pages[p].toggleAttribute('data-package-empty', !any);
+      if (tab) tab.toggleAttribute('data-package-empty', !any);
+      var mobile = doc.querySelector('#ribbon-tab-menu [onclick="rbHamburgerPick(\'' + key + '\')"]');
+      if (mobile) mobile.toggleAttribute('data-package-empty', !any);
+    }
+    var active = doc.querySelector('#ribbon-tabs .rtab.active');
+    if (active && (active.hasAttribute('data-package-empty') || active.hasAttribute('data-package-hidden'))) {
+      var next = doc.querySelector('#ribbon-tabs .rtab:not([data-package-empty]):not([data-package-hidden]):not([data-page="__file"])');
+      if (next && typeof global.rbTab === 'function') global.rbTab(next.getAttribute('data-page'));
+    }
+    if (global.OmegaWorkspaces && !doc.getElementById('omega-workspace-controls')) {
+      var ribbon = doc.getElementById('ribbon');
+      if (ribbon && ribbon.parentNode) {
+        var bar = doc.createElement('div'); bar.id = 'omega-workspace-controls';
+        var label = doc.createElement('span'); label.id = 'omega-workspace-label'; bar.appendChild(label);
+        var toggle = doc.createElement('button'); toggle.id = 'omega-workspace-all'; toggle.type = 'button';
+        toggle.onclick = function () { global.OmegaWorkspaces.setAll(!global.OmegaWorkspaces.all()); };
+        bar.appendChild(toggle); ribbon.parentNode.insertBefore(bar, ribbon);
+        global.OmegaWorkspaces.apply(scope);
+      }
+    }
+    if (global.OmegaPackageMenu) { global.OmegaPackageMenu.tab(); global.OmegaPackageMenu.staffPreview(); }
   }
   function guardLaunchers() {
     if (!_package) return;
@@ -322,7 +432,22 @@
   function apply(tier, root) {
     var scope = root || global.document;
     if (!scope || !scope.querySelectorAll) return { tier: normalise(tier), removed: 0 };
-    if (_package) return { tier: normalise(tier), packaged: true, removed: applyPackage(scope) };
+    if (_package) {
+      if (global.OmegaComputeTab && global.OmegaComputeTab.place) global.OmegaComputeTab.place();
+      rehome(scope);
+      var hidden = applyPackage(scope);
+      if (global.document && global.document.body) {
+        global.document.body.setAttribute('data-packaged-editor', '1');
+        var signature = JSON.stringify([_package.modules, _package.staff, _package.readOnly]);
+        if (_packageSignature !== signature) {
+          _packageSignature = signature;
+          try { global.document.dispatchEvent(new global.CustomEvent('omega:package', { detail: _package })); } catch (e) {}
+        }
+      }
+      if (global.OmegaWorkspaces) global.OmegaWorkspaces.apply(scope);
+      layout(scope);
+      return { tier: normalise(tier), packaged: true, removed: hidden };
+    }
     var nodes = scope.querySelectorAll('[data-cap]'), removed = 0, i, el, cap;
     for (i = 0; i < nodes.length; i++) {
       el = nodes[i];
@@ -427,12 +552,13 @@
         var d = setOrg(email);
         var internal = emailVerified === true && INTERNAL_DOMAINS.indexOf(d) >= 0;
         setAddons([]);
-        ++_packageRequest;
+        var resolution = ++_packageRequest;
         setPackage(null);
         if (internal && !db) return done('internal');
         if (!d || !db) return done('trial');
         db.collection('omega_orgs').doc(d).collection('billing').doc('current').get()
           .then(function (s) {
+            if (resolution !== _packageRequest) return done('trial');
             var b = s.exists ? (s.data() || {}) : {};
             if (!s.exists && internal) return done('internal');
             if (b.packaged === true) {
@@ -450,6 +576,7 @@
             done(eff);
           })
           .catch(function () {
+            if (resolution !== _packageRequest) return done('trial');
             /* A failed read must not hand out the engineering suite to a
                customer — but it must not lock ClearSky out either. */
             if (!internal) setPackage(pendingPackage());
@@ -469,6 +596,7 @@
     normalise: normalise, setFor: setFor, can: can, apply: apply, resolve: resolve,
     setOrg: setOrg, orgOf: orgOf, org: function () { return _org; },
     effectiveTier: effectiveTier, setPackage: setPackage, packageAccess: function () { return _package; },
+    MODULE_GRANTS: MODULE_GRANTS, owners: owners, commandPage: commandPage, layout: layout,
     guardLaunchers: guardLaunchers, pendingPackage: pendingPackage, fetchPackage: fetchPackage, allowedElement: allowedElement, allowedCommand: allowedCommand, commandSelector: COMMANDS
   };
 })(typeof window !== 'undefined' ? window : this);

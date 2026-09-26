@@ -11,6 +11,8 @@ tools.forEach(function (t) {
 });
 check(!M.resolve(['lite', 'engineering']).toolAccess.includes('interconnectstudy'), 'Enterprise-only study stays separate');
 check(M.resolve(['lite']).caps.indexOf('all') < 0, 'no all capability');
+check(M.owners('rb-fom', '').join() === 'ops', 'Fleet O&M is Operations, not a front-of-meter Lite control');
+check(M.owners('rb-omlife', '').join() === 'ops', 'O&M Lifecycle belongs to Operations');
 check(M.owners('ov-airender', '').join() === 'plansets', 'AI Render decision');
 check(M.owners('', "_guidedPick('compute')").join() === 'compute', 'Compute does not inherit guided Lite');
 [[], ['storage'], ['lite', 'logic-plant'], ['lite', 'lite'], ['lite', 'toString'], ['lite', '__proto__'], ['lite', 'unknown'], 'lite'].forEach(function (keys) {

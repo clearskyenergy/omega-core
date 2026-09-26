@@ -978,3 +978,13 @@ document's surfaces:
   CNAME'd to the same Vercel project is the answer; framing the authenticated
   portal to disguise the URL is not, and `X-Frame-Options: SAMEORIGIN` on
   everything but `/embed/` (see § Clickjacking) is why.
+
+
+### Packaged workspace presentation (Phase 3, disabled pending rollout)
+
+When billing/current.packaged is true, the server modules projection governs
+editor tools. The legacy bess-lite presentation filter no longer competes
+with project focus: All tools restores every owned tool, while seven project
+types prioritize relevant commands. Existing drawings remain mounted.
+A staff package preview changes presentation only; it does not change the
+resolved organization, customer records, module purchases or billing dates.

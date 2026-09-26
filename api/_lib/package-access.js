@@ -12,7 +12,7 @@ function instant(v) {
 function project(caller, billing, org, member, now) {
   billing = billing || {};
   if (billing.packaged !== true) return { packaged: false };
-  if (caller.staff) return { packaged: true, staff: true, readOnly: false, modules: M.catalog().map(function (m) { return m.key; }),
+  if (caller.staff) return { packaged: true, staff: true, canPreview: true, starters: M.starters(), readOnly: false, modules: M.catalog().map(function (m) { return m.key; }),
     caps: ['all'], toolAccess: M.catalog().reduce(function (out, m) { return out.concat(m.tools); }, []), catalog: M.catalog(), notSold: M.notSold(), readOnlyRibbon: M.readOnlyRibbon() };
   if (!(caller.emailVerified === true || caller.claims && caller.claims.email_verified === true)) deny('Verified email required');
   if (!org || org.status !== 'active' || !member || (member.status && member.status !== 'active')) deny('Active organization membership required');
