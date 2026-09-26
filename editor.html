@@ -141815,11 +141815,10 @@ challengeRow(s) +
 #ribbon .rbtn{max-width:88px;flex-shrink:0}
 #ribbon .rb-lbl{font-size:10px!important;line-height:1.2!important;max-width:82px;white-space:nowrap;word-break:normal;hyphens:none}
 #ribbon .rpanel-cap{font-size:9px!important;line-height:1.4;letter-spacing:.08em;text-transform:uppercase}
-@media(prefers-color-scheme:light){
-  #tb,#ribbon{--text:#16202B;--sub:#526273;--border:#D7DFE6;--bg:#F5F4F0;--navy:#fff;--accent:#2B5FA8;--hl:#2B5FA8;--hl-dim:#E6EEF9;background:#F5F4F0!important;color:#16202B}
-  #tb .rtab,#ribbon .rb-lbl,#ribbon .rpanel-cap{color:#526273!important}
-  #tb .rtab.active,#ribbon .rbtn:hover .rb-lbl{color:#16202B!important;background:#E6EEF9}
-}
+/* Light values live in the shared token set (omega-ui-theme :root and its
+   light blocks); the ribbon only names which token paints its ground. */
+#tb,#ribbon{background:var(--navy);color:var(--text)}
+#tb .rtab.active{background:var(--hl-dim)}
 </style>
 <script src="/omega-ribbon-icons.js?v=1"></script>
 <script id="omega-ribbon-icons-js">
