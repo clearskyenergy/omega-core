@@ -16,7 +16,7 @@ https://claude.ai/artifact/2Sou93uMRrCsc8K4E2Xg8n (private to the owner).
 |---|---|---|---|
 | Docs (this file, VALUE-LADDER, handoff, prototype) | [#134](https://github.com/clearskyenergy/omega-core/pull/134) | supplied ZIP imported; timing reconciled with approval 2026-09-26 | review with Phase 0 |
 | 0 · Decide + fixes | [#134](https://github.com/clearskyenergy/omega-core/pull/134) · [preview](https://omega-core-git-codex-packaging-phase-0-clearsky-usa.vercel.app) | implemented; npm test + check:pages pass; not merged | PR #133 already merged closeout; verified fallback + new-signup cap; approval-started lifecycle remains Phase 4 |
-| A · Polish now | pending PR | implemented; npm test + check:pages pass; not merged | Seven cards and ribbon polish only. Full workspace filtering, results rail and broader empty states remain later work. |
+| A · Polish now | [#135](https://github.com/clearskyenergy/omega-core/pull/135) · [preview](https://omega-core-git-codex-packaging-phase-a-clearsky-usa.vercel.app) | implemented; npm test + check:pages pass; not merged | Seven cards and ribbon polish only. Full workspace filtering, results rail and broader empty states remain later work. |
 | 1 · Catalog | | not started | |
 | 2 · Close the leaks | | not started | |
 | 3 · Editor fits the package | | not started | |
