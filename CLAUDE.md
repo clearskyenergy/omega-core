@@ -806,7 +806,18 @@ tenant. Treat it that way.
   answer is the real projection: Lite's tools open, every other tile
   locked, the starter set drawn from Lite), on a desktop and a 390px phone.
   `applyToolLocks` reads a present `toolAccess` array as the allowlist at
-  any length (absent ≠ empty), which is how a package reaches the tiles. It fails on an error, an unanswered
+  any length (absent ≠ empty), which is how a package reaches the tiles.
+  Phase 10B: the Account panel's Billing & plan has a packaged section
+  (`renderPackagedBilling`: facts from `billing/current`, the priced figure
+  and `invoices[]` from `GET /api/plan-change`, *I've paid* = reconcile-now)
+  and **The Ladder** ("build your own experience and pay for what you need";
+  each Omega Logic department its own opt-in): `OmegaPackageMenu.open(key,
+  { view, onChanged })` is the ONE menu, handed the page's own package view
+  where `OmegaCaps` is absent, and `OmegaTenant.refreshPackage()` re-asks
+  the server after a change. A locked tile on a packaged workspace offers
+  its module by name and price and opens the Ladder on it; a legacy tenant
+  (no packaged record: NextNRG, prepaid) keeps the old request and sees no
+  Ladder. Scenarios lite-ladder, awaiting and legacy-enterprise hold it. It fails on an error, an unanswered
   `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
   tile. `check:pages` does not cover the dashboard; run this after any
   change to `index.html` or the runtime it loads. The double's own test is
