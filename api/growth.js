@@ -40,9 +40,12 @@ function assemble(db, id, org, pendingRequests) {
     soft(ref.collection('members').limit(MAX_MEMBERS).get(), { docs: [], size: 0, forEach: function () {} }),
     soft(db.collection('team_members').where('orgId', '==', id).limit(MAX_SEEN).get(), { docs: [], forEach: function () {} }),
     count(db.collection('projects').where('orgId', '==', id)),
-    soft(db.collection('projects').where('orgId', '==', id).orderBy('createdAt', 'desc').limit(1).get(), { docs: [] })
+    soft(db.collection('projects').where('orgId', '==', id).orderBy('createdAt', 'desc').limit(1).get(), { docs: [] }),
+    /* the billing profile (packaging phase 4): the billing contact is who an
+       invoice conversation goes to; the signup email or the owner otherwise */
+    soft(ref.collection('billing').doc('profile').get(), { exists: false })
   ]).then(function (r) {
-    var billing = r[0].exists ? (r[0].data() || {}) : {};
+    var billing = r[0].exists ? (r[0].data() || {}) : {}, profile = r[5] && r[5].exists ? (r[5].data() || {}) : {};
     var members = [], owner = null;
     r[1].forEach(function (d) { var m = d.data() || {}; members.push(m); if (!owner && m.role === 'owner' && m.email) owner = m.email; });
     var lastSeen = null;
@@ -52,10 +55,12 @@ function assemble(db, id, org, pendingRequests) {
     return {
       orgId: id, name: org.name || id, vertical: org.vertical || null, status: org.status || 'active',
       createdAt: G.millis(org.createdAt), approvedAt: G.millis(org.approvedAt),
-      who: (org.signup && org.signup.email) || owner || null,
+      who: profile.email || (org.signup && org.signup.email) || owner || null,
       billing: { tier: billing.tier || null, trialEndsAt: G.millis(billing.trialEndsAt), lastPaidAt: G.millis(billing.lastPaidAt),
         subscriptionDue: G.millis(billing.subscriptionDue), amountDue: billing.amountDue == null ? null : Number(billing.amountDue),
-        paymentProvider: billing.paymentProvider || null, status: billing.status || null, paymentFailedAt: G.millis(billing.paymentFailedAt) },
+        paymentProvider: billing.paymentProvider || null, status: billing.status || null, paymentFailedAt: G.millis(billing.paymentFailedAt),
+        /* packaged (phases 1–4): the state machine's own word and the access deadline; no prices, no modules here */
+        packaged: billing.packaged === true, packagingState: billing.packagingState || null, accessUntil: G.millis(billing.accessUntil) },
       members: members.length, lastSeenAt: lastSeen, projects: r[3], lastProjectAt: newest,
       accessRequestPending: !!rq, nudges: rq ? Number(rq.nudges || 0) : 0
     };

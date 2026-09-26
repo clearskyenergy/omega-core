@@ -279,17 +279,21 @@ past-due mail goes to the founder first.
 
 The agent needs these from the packaging build, in order of arrival:
 
-1. **The trial as designed** (phases 0 and 4): 14 days from approval, the
-   day-11 in-product banner and email, read-only after an unpaid trial end.
-   The agent must not send a second "trial ends" mail on day 11; it reads
-   `growth_log` and, when phase 4 lands, the notification the platform
-   sent, and stands down on that day.
-2. **The billing profile** (phase 4, ROADMAP §10.4): a billing contact and
-   an AP address per tenant. Until then `who` is the signup email or the
-   owner member, which is right for a trial and wrong for an invoice.
-3. **The package** (`billing/current.modules[]`, phases 1–4): what a tenant
-   owns, so "next rung" can be specific. The board shows `tier` until then
-   and says nothing about modules on purpose.
+1. **The trial as designed** (phases 0 and 4, landed): 14 days from
+   approval; read-only after an unpaid trial end, which the board now reads
+   as its own lifecycle (`read-only`, priority 3: send the invoice link or
+   close). The in-product notice from day 10 exists
+   (`api/_lib/package-access.js` `billingNotice`); **no day-11 email is
+   sent by the platform yet**, so the agent's "trial ends" mail is the only
+   one until that lands — when it does, record it on `billing/current` and
+   stand the agent down that day.
+2. **The billing profile** (phase 4, landed): `omega_orgs/{org}/billing/profile`
+   carries the billing contact and AP address; the board's `who` is that
+   contact when there is one, else the signup email, else the owner.
+3. **The package** (`billing/current.modules[]`, phases 1–4, landed): what
+   a tenant owns. The board reads `packaged`, `packagingState` and
+   `accessUntil` for the lifecycle and still says nothing about modules or
+   prices on purpose.
 4. **The proposal tool** (phase 6, in build): `context | recommend | price
    | save | send | accept`. The agent calls `context` and `recommend` at
    rung 3 and never `send`.
@@ -297,10 +301,13 @@ The agent needs these from the packaging build, in order of arrival:
    best upsell trigger there is; it becomes a flag on the board the day the
    counters exist.
 
-And one thing this side owes the packaging build: **no edits to
-`omega-tenant.js`, `omega-tools.js`, `admin/`, `start.html` or the signup
-endpoints** until phases 4 through 6 merge. The presence write in §2 and
-the machine-key scope wait for that.
+The presence write in §2 is placed: `omega-tenant.js` writes
+`team_members.lastSeen` once per page load on every signed-in page (the
+dashboard keeps its own richer write and sets `OMEGA_PRESENCE_BY_PAGE`), so
+a person who only opens a tool no longer reads as never signed in. The
+editor does not load `omega-tenant.js` by design (CLAUDE.md), so an
+editor-only session is still not seen; that write belongs with the editor's
+own sign-in when it is next touched. The machine-key scope still waits.
 
 ---
 

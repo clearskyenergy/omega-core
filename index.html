@@ -2725,6 +2725,7 @@ var PORTAL_DEFAULT_DOMAIN = OmegaBrand.defaultDomain(WORKSPACES);
 // Defaults to null; every consumer must handle "no workspace yet".
 var WORKSPACE = null;
 window.OMEGA_WORKSPACE = null;
+window.OMEGA_PRESENCE_BY_PAGE = true;   /* this page writes its own team_members presence (registerMember); omega-tenant.js writes it on every other page */
 
 // ══════════ FIREBASE INIT ══════════
 let CFG, auth, db, currentUser = null, currentOrg = null;
@@ -5211,7 +5212,11 @@ function applyToolLocks(){
      unlockedTools = [] with pendingApproval set, and a signup on a trial
      record is tier level 3, so this return used to leave every tool live
      under the "awaiting approval" strip. */
-  if(!(ws.toolAccess && ws.toolAccess.length) && !ws.pendingApproval &&
+  /* Absent ≠ empty (CLAUDE.md): a present toolAccess array is the
+     allowlist at any length — omega-tenant.js hands a PACKAGED workspace
+     its package's tools that way, [] included when read-only — so the
+     tier's early return is only for a workspace with no list at all. */
+  if(!Array.isArray(ws.toolAccess) && !ws.pendingApproval &&
      (ws.tierLevel >= 3 || ws.accountTier === 'Enterprise' || ws.accountTier === 'Internal')){ return; }
   // Prefer an explicit unlockedTools allowlist; otherwise fall back to the
   // requiredTools defined per workspace. If neither exists, unlock everything
@@ -5220,7 +5225,7 @@ function applyToolLocks(){
      enterprise/internal early return above — that return exists so a tier-3
      account is not accidentally locked out, and an explicit allowlist is not
      an accident. Checked before the list is chosen for that reason. */
-  var list = (ws.toolAccess && ws.toolAccess.length) ? ws.toolAccess
+  var list = Array.isArray(ws.toolAccess) ? ws.toolAccess
            : (ws.unlockedTools || ws.requiredTools);
   /* Awaiting approval: nothing opens, whatever the tier says. omega-tenant.js
      hands over unlockedTools = [] once, but every later OmegaBrand.resolve()

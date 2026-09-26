@@ -104,6 +104,8 @@ var A = { db: function () { return db; }, handler: function (f) { return f; }, a
   httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, safeOrg: function (v) { return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v || '') ? v : ''; } };
 mock('../api/_lib/admin', A);
 var api = require('../../api/growth');
+/* the endpoint judges against the clock; the fixtures are relative to NOW, so pin it (the test is otherwise true only within an hour of NOW) */
+Date.now = function () { return NOW; };
 var STAFF = { uid: 's', email: 'ops@clearsky-usa.com', staff: true, claims: { email_verified: true } };
 var TENANT = { uid: 't', email: 'ann@northstar.example', orgId: 'northstar.example', staff: false, claims: { email_verified: true } };
 function call(query, caller) { return api({ method: 'GET', query: query || {}, caller: caller || STAFF }, { setHeader: function () {}, headers: {} }); }
@@ -148,5 +150,22 @@ db.seed('omega_orgs/solo.example', { name: 'Solo', status: 'active', createdAt: 
   n++; console.log('PASS ?org= returns one workspace with the facts behind the call');
   await rejects(call({ org: 'nobody.example' }), 404); n++; console.log('PASS an unknown workspace is a 404');
   await rejects(call({ org: '../etc' }), 400); n++; console.log('PASS a malformed org is refused, not read as a path or as "everything"');
+  /* packaging phases 1–4: a packaged tenant is judged by its state machine, and the billing contact is who */
+  var pk = function (b, extra) { return G.judge(Object.assign({ orgId: 'pk.example', name: 'Packed', status: 'active', billing: Object.assign({ packaged: true }, b), lastSeenAt: ago(1), projects: 3 }, extra || {}), NOW); };
+  assert.equal(pk({ packagingState: 'paid', accessUntil: ahead(20) }).lifecycle, 'paying');
+  assert.equal(pk({ packagingState: 'trial', trialEndsAt: ahead(5), accessUntil: ahead(5) }).lifecycle, 'trial');
+  assert.match(pk({ packagingState: 'trial', trialEndsAt: ahead(2), accessUntil: ahead(2) }).action, /Send Packed the proposal: trial ends in/);
+  assert.equal(pk({ packagingState: 'trial', trialEndsAt: ago(1), accessUntil: ago(1) }).lifecycle, 'read-only');
+  assert.equal(pk({ packagingState: 'awaiting_payment', accessUntil: ahead(3) }).lifecycle, 'read-only');
+  var ro = pk({ packagingState: 'paid', accessUntil: ago(2) });
+  assert.equal(ro.lifecycle, 'read-only'); assert.equal(ro.priority, 3); assert.match(ro.action, /Unpaid: send Packed the invoice link/); assert.ok(ro.flags.indexOf('read-only') >= 0);
+  assert.equal(pk({ packagingState: 'past_due_lite', accessUntil: ahead(20) }).lifecycle, 'past-due');
+  assert.equal(pk({ tier: 'standard', lastPaidAt: ago(10) }, { billing: { packaged: false, tier: 'standard', lastPaidAt: ago(10) } }).lifecycle, 'paying', 'an unpackaged record keeps the tier reading');
+  n++; console.log('PASS a packaged tenant is judged by its state: paying, trial, read-only, past due');
+  db.seed('omega_orgs/newco.example/billing/profile', { email: 'ap@newco.example', contactName: 'AP Desk' });
+  var b2 = await call(); var byId2 = {}; b2.tenants.forEach(function (r) { byId2[r.orgId] = r; });
+  assert.equal(byId2['newco.example'].who, 'ap@newco.example', 'the billing contact, once there is one');
+  assert.equal(byId2['northstar.example'].who, 'ann@northstar.example', 'the signup email or the owner otherwise');
+  n++; console.log('PASS who: the billing profile contact wins over the signup email and the owner');
   console.log('all ' + n + ' growth checks passed');
 })().catch(function (e) { console.error(e); process.exit(1); });

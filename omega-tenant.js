@@ -643,8 +643,27 @@
         });
     }, delay);
   }
+  /* Presence from every signed-in page (the sales board reads
+     team_members.lastSeen; until now only the dashboard wrote it, so a
+     person who only opened a tool read as never signed in). The dashboard
+     keeps its own richer write (index.html registerMember, with the
+     person's name) and says so with OMEGA_PRESENCE_BY_PAGE; every other
+     page writes one merge per load here, only for the workspace of the
+     person's own domain (the rules allow no other), and a refused write is
+     silent: presence is a courtesy, never a gate. */
+  var presenceDone = false;
+  function touchPresence(ws) {
+    if (presenceDone || global.OMEGA_PRESENCE_BY_PAGE || !ws || !ws.orgId || ws.pendingApproval) return;
+    if (!global.firebase || !firebase.auth || !firebase.firestore) return;
+    var user = firebase.auth().currentUser; if (!user || !user.email) return;
+    var email = String(user.email).toLowerCase(); if (email.split('@')[1] !== ws.orgId) return;
+    presenceDone = true;
+    firebase.firestore().collection('team_members').doc(ws.orgId + '__' + email)
+      .set({ orgId: ws.orgId, email: email, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {});
+  }
   function fireEntitlements(ws) {
     T._ent = true; T._ws = ws;
+    try { touchPresence(ws); } catch (e) {}
     try { countDesignWork((ws && ws.orgId) || '', (ws && ws.jdPartnerOf) || ''); } catch (e) {}
     try { paintMarketplaceNav(ws); } catch (e) {}
     try { packageBillingChrome(ws); } catch (e) {}

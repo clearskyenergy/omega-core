@@ -94,4 +94,28 @@ function pending(host) {
   return { org: org, name: 'Pendingco', tier: 'trial', user: { uid: uid, email: 'sam@pendingco.example', displayName: 'Sam Reyes', emailVerified: true }, docs: docs, termsAccepted: true, pending: true };
 }
 
-module.exports = { newco: newco, northstar: northstar, pending: pending, TERMS_VERSION: TERMS_VERSION };
+/* lite: a PACKAGED tenant on Lite alone, paid (packaging phases 1–4). The
+   page reads `billing/current.packaged` and asks /api/package-access for
+   the projection; the render check answers with `packageView`, computed
+   here by the real api/_lib/package-access.js from the same records, so the
+   locks the page paints are the server's own answer. */
+function lite(host) {
+  var org = 'litelabs.example', uid = 'uid-lite-owner', me = 'kim@litelabs.example';
+  var docs = merge(pub(host, org, 'Lite Labs', 'lite', 'installer'), {});
+  var orgDoc = { name: 'Lite Labs', slug: 'litelabs', domains: [host], logoUrl: '', vertical: 'installer', shell: 'default', status: 'active', receivesFullBom: false,
+    exportBrand: { name: 'Lite Labs', logo: '' }, signup: { email: me, uid: uid }, createdAt: ago(40), approvedAt: ago(39), approvedBy: 'ops@clearsky-usa.com' };
+  var billing = { packaged: true, modules: ['lite'], plan: 'Lite', packagingState: 'paid', paidThrough: iso(20).slice(0, 10), accessUntil: iso(25), billingDay: 20,
+    subscription: { modules: ['lite'] }, paymentProvider: 'quickbooks', createdAt: ago(40) };
+  var member = { email: me, name: 'Kim Sato', role: 'owner', status: 'active', createdAt: ago(40) };
+  docs['omega_orgs/' + org] = orgDoc;
+  docs['omega_orgs/' + org + '/billing/current'] = billing;
+  docs['omega_orgs/' + org + '/members/' + uid] = member;
+  docs['termsAcceptances/' + uid] = { uid: uid, email: me, orgId: org, version: TERMS_VERSION, acceptedAt: ago(30) };
+  docs['team_members/' + org + '__' + me] = { orgId: org, email: me, name: 'Kim Sato', photo: '', lastSeen: ago(1) };
+  var X = require('../../api/_lib/package-access'), M = require('../../api/_lib/modules');
+  var view = X.project({ staff: false, claims: { email_verified: true } }, billing, orgDoc, member, Date.now());
+  return { org: org, name: 'Lite Labs', tier: 'lite', user: { uid: uid, email: me, displayName: 'Kim Sato', emailVerified: true }, docs: docs, termsAccepted: true,
+    packageView: view, liteTools: M.get('lite').tools.slice() };
+}
+
+module.exports = { newco: newco, northstar: northstar, pending: pending, lite: lite, TERMS_VERSION: TERMS_VERSION };

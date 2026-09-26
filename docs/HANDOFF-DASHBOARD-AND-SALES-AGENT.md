@@ -9,7 +9,16 @@ Repo: `clearskyenergy/omega-core`.
 - Branch: **`claude/stoic-goodall-zah8tv`**, based on `main` at `3b95b1f`
   (the merge of #133, the L2 closeout tool). The code is commit `e8a6262`;
   the commits after it on the branch are this note only.
-- No pull request is open for it. Nothing is deployed. No rules changed.
+- **Folded in on 2026-09-26** (branch `codex/dashboard-and-growth`, after
+  the packaging stack landed on `main` through #144): §3's four conflicts
+  resolved (only `package.json` needed a hand), and §4's items done —
+  `applyToolLocks` reads a present `toolAccess` as the list, the starter
+  set already asks the package-aware `OMEGATools.isUnlocked`, the dashboard
+  check answers `/api/package-access` and gained the packaged `lite`
+  tenant, the board reads the billing profile and the packaged states
+  (`read-only` lifecycle), the day-11 email is recorded as not built, and
+  presence is written from every page that runs `omega-tenant.js`.
+- No pull request was open for it. Nothing was deployed. No rules changed.
 - It was built while phases 0–6 were in flight and **deliberately stays off
   every file those phases edit**: `omega-tenant.js`, `omega-tools.js`,
   `omega-caps.js`, `editor.html`, `admin/`, `start.html`,

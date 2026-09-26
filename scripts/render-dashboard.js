@@ -52,12 +52,16 @@ var CHART_STUB = '(function(){function Chart(el,cfg){this.canvas=el;this.config=
 
 /* what the page called on /api/ and what it would have sent off the machine */
 var apiCalls = [], missing = [], external = [];
+/* the package projection the scenario's tenant gets (fixture.packageView; an
+   unpackaged tenant is told so, as api/package-access.js does) */
+var PACKAGE_VIEW = null;
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], post = req.method === 'POST';
   function json(o, status) { res.writeHead(status || 200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); }
   if (u.indexOf('/api/') === 0) {
     apiCalls.push(req.method + ' ' + u);
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
+    if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
     missing.push(req.method + ' ' + u); return json({ error: 'render-dashboard does not answer ' + u }, 404);
   }
   var f = path.join(ROOT, u === '/' ? 'index.html' : u);
@@ -82,6 +86,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
      the tenant's fixture installed before any page script runs. */
   async function scenario(name, fx, opts) {
     opts = opts || {};
+    PACKAGE_VIEW = fx.packageView || null;
     var errs = [], warns = [], muted = false, ctx = await browser.newContext({ viewport: opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!opts.phone, isMobile: !!opts.phone });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) {
       var url = r.request().url();
@@ -309,6 +314,29 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('pending: Upgrade writes the person\'s access request (a record, not an email) and says so', req.length === 1 && req[0].path === 'access_requests/' + pend.user.uid && req[0].upgrade === true && /sent/.test(said), [req, said]);
     return out;
   } });
+
+  /* ══ 5. LITE LABS — a PACKAGED tenant on Lite alone (phases 1–4) ══
+     The page reads billing.packaged, asks /api/package-access (answered with
+     the real projection) and must open exactly Lite's tools: the Quick
+     Access tiles outside Lite locked, the starter set drawn only from Lite,
+     every other tool tile locked with the overlay inside it. */
+  var lt = FX.lite(HOST);
+  await scenario('lite', lt, { steps: async function (p, shown) {
+    var out = await common(p, shown, lt, 'lite');
+    var handed = await p.evaluate(function () { var w = window.__entitlements; return w ? { packaged: !!w.packaged, access: Array.isArray(w.toolAccess) ? w.toolAccess.slice().sort() : null, modules: w.modules || null } : null; });
+    ok('lite: omega-tenant.js handed the page the package: Lite\'s tools as the allowlist, nothing more', !!handed && handed.packaged && handed.access && handed.access.join() === lt.liteTools.slice().sort().join(), handed);
+    var tiles = await p.$$eval('[data-tool]', function (r) { return r.map(function (x) { return { tool: x.getAttribute('data-tool'), locked: x.classList.contains('locked') }; }); });
+    var wrong = tiles.filter(function (t) { return (lt.liteTools.indexOf(t.tool) >= 0) === t.locked; });
+    ok('lite: every tile of a tool outside Lite is locked and every Lite tool is open (' + tiles.length + ' tiles)', tiles.length > 0 && !wrong.length, wrong);
+    ok('lite: the Quick Access tiles say the same: Site Map and Sales open, Site Investment Analysis locked', out.quick.indexOf('editor') >= 0 && out.quick.indexOf('sales') >= 0 && out.quick.indexOf('investment:locked') >= 0, out.quick);
+    var starter = await p.evaluate(function () { var n = document.querySelector('.pm-starter-note'); return { note: !!n, tools: Array.prototype.map.call(document.querySelectorAll('#dash-grid .pm-tile[data-tool]'), function (t) { return t.getAttribute('data-tool'); }) }; });
+    var outside = starter.tools.filter(function (k) { return lt.liteTools.indexOf(k) < 0; });
+    ok('lite: the starter set is drawn from Lite alone', starter.note && starter.tools.length > 0 && !outside.length, starter);
+    var overlays = await p.$$eval('[data-tool].locked', function (r) { return r.map(function (x) { var o = x.querySelector('.lock-overlay, .tool-lock, [class*="lock"]'); if (!o) return null; var a = x.getBoundingClientRect(), b = o.getBoundingClientRect(); return b.left >= a.left - 2 && b.top >= a.top - 2 && b.right <= a.right + 2 && b.bottom <= a.bottom + 2; }); });
+    ok('lite: each lock overlay stays inside its own tile', overlays.every(function (v) { return v !== false; }), overlays);
+    return out;
+  } });
+  PACKAGE_VIEW = null;
 
   ok('no /api/ route was called that this check does not answer', !missing.length, missing);
   ok('nothing tried to leave the machine', !external.length, external);

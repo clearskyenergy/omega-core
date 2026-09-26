@@ -49,13 +49,26 @@ function daysUntil(v, now) { var m = millis(v); return m == null ? null : (m - n
 function round1(n) { return n == null ? null : Math.round(n * 10) / 10; }
 function n(v) { var x = Number(v); return isFinite(x) ? x : 0; }
 
-/* pending | trial | paying | past-due | suspended | cancelled */
+/* pending | trial | paying | read-only | past-due | suspended | cancelled */
 function lifecycleOf(t, now) {
   var status = String(t.status || 'active').toLowerCase();
   var b = t.billing || {};
   if (status === 'cancelled') return 'cancelled';
   if (status === 'suspended') return 'suspended';
   if (status === 'pending' || t.accessRequestPending) return 'pending';
+  /* a PACKAGED tenant (packaging phases 1–4) is judged by its state machine:
+     paid before the access deadline is paying; a trial inside its dates is a
+     trial; unpaid after the trial, awaiting payment, or past the deadline is
+     read-only (saved work stays, nothing new is made); the Lite fallback is
+     past due. Legacy tiers keep the reading below. */
+  if (b.packaged === true) {
+    var st = String(b.packagingState || '').toLowerCase(), until = millis(b.accessUntil);
+    if (st === 'past_due_lite') return 'past-due';
+    if (until != null && until <= now) return 'read-only';
+    if (st === 'paid') return 'paying';
+    if (st === 'trial') { var ends = millis(b.trialEndsAt); return ends != null && ends <= now ? 'read-only' : 'trial'; }
+    return 'read-only';
+  }
   var tier = String(b.tier || 'trial').toLowerCase();
   var paid = millis(b.lastPaidAt) != null;
   var bStatus = String(b.status || '').toLowerCase();
@@ -127,6 +140,12 @@ function judge(t, now) {
       priority = 1; action = 'Check in with ' + name;
       why = left != null ? fmtDays(left) + ' of trial left.' : 'On trial with no end date on record.';
     }
+  } else if (life === 'read-only') {
+    /* packaged, unpaid: the trial ended, or the access deadline passed, or
+       the first invoice waits. Saved work stays; nothing new is made. */
+    flags.push('read-only');
+    priority = 3; action = 'Unpaid: send ' + name + ' the invoice link or close the workspace';
+    why = 'The workspace is read-only until the invoice is paid' + (b.accessUntil ? ' (access ended ' + fmtDate(b.accessUntil) + ')' : '') + '. Saved work stays; nothing new is made.';
   } else if (life === 'past-due') {
     flags.push('past-due');
     priority = 3; action = 'Payment overdue: reach ' + name + ' before access is affected';
