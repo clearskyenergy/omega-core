@@ -165871,13 +165871,27 @@ if (root.console && console.info) {
   'use strict';
   var TAG = '[ReportFix]';
 
-  /* Everything in #sc that is chrome rather than site. */
+  /* Everything in #sc that is chrome rather than site.
+     'omega-compass' and the .op-panel frames (COORDINATES, TERRAIN KEY)
+     came later than this list: OmegaPanels.wrap() moves #o2-coords and
+     #tl-key inside an .op-panel, so hiding the inner id left the frame
+     and its title bar on the report. */
   var OVERLAYS = [
     'omega-ladder', 'rr-stale', 'lgd', 'lgd-items', 'eng-legend',
     'zc', 'zc-unlock', 'zpct', 'ruler', 'ruler-bar', 'ruler-lbl',
     'banner', 'rr-mapbadge', 'o2-coords', 'tl-key', 'snapring',
-    'cal-ov', 'sub-props', 'omega-extype'
+    'cal-ov', 'sub-props', 'omega-extype', 'omega-compass',
+    'op-o2-coords', 'op-tl-key'
   ];
+
+  /* Class-based overlays the ids miss. NEVER '.cel': that is the wrapper
+     renderEl() builds round every placed element (chargers, panels,
+     meters, bollards, BESS). It sat in this list, so the capture hid the
+     equipment and the report's site map showed the trench line and the
+     parking with nothing on it. It only ever showed up when a repaint
+     during the async capture rebuilt the nodes visible, which is why it
+     read as intermittent. scripts/tests/treportchrome.js holds this. */
+  var CHROME_CLASSES = ['.omega-toast', '.map-attrib', '.op-panel'];
 
   function hideChrome() {
     var hidden = [];
@@ -165888,8 +165902,7 @@ if (root.console && console.info) {
         el.style.display = 'none';
       }
     });
-    /* Class-based overlays the ids miss. */
-    ['.cel', '.omega-toast', '.map-attrib'].forEach(function (sel) {
+    CHROME_CLASSES.forEach(function (sel) {
       var els = document.querySelectorAll('#sc ' + sel);
       for (var i = 0; i < els.length; i++) {
         if (els[i].style.display !== 'none') {
@@ -166004,7 +166017,7 @@ if (root.console && console.info) {
 
   root.OmegaReportFix = {
     hideChrome: hideChrome, restore: restore,
-    pruneOrphans: pruneOrphans, overlays: OVERLAYS
+    pruneOrphans: pruneOrphans, overlays: OVERLAYS, chromeClasses: CHROME_CLASSES
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
