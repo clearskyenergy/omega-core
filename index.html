@@ -2672,6 +2672,11 @@ window._omegaReady = function(){
      Tenant-neutral; belongs upstream beside omega-assets.js. -->
 <script src="/omega-fleet.js"></script>
 <script src="/omega-tools.js?v=9"></script>
+<!-- Omega Workspace's chrome. Loaded here for ONE function, wantsWorkspace():
+     the rule for where "home" is for this person (omega_orgs.shell =
+     'workspace', or ?home=workspace on this browser). The rule lives in that
+     file so this page, the workspace and the legacy pages cannot disagree. -->
+<script src="/omega-workspace-shell.js"></script>
 <!-- ONE New Project dialog for every page that has one. There were two,
      behind the same button and the same function names, and they wrote
      different documents. -->
@@ -2936,6 +2941,17 @@ var _omegaOnAuth = function (user, tries) {
        is already up; this only ever narrows what is offered. A failed read
        must not lock a paying customer out of tools they have — so on any
        error the tier decides, exactly as it did before. */
+    /* ── OMEGA WORKSPACE, ONE TENANT AT A TIME ───────────────────────────
+       A tenant whose record says shell: 'workspace' (or a person who asked
+       for it with ?home=workspace) has a different home: workspace.html,
+       the hub-first page. The signed-in session travels with them, same
+       origin. The shell may only be known once omega-tenant.js has read the
+       org record, so the entitlements event is watched too. ?home=classic
+       brings this page back on that browser. */
+    if (window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace(ws)) { showRedirecting('Omega'); window.location.replace('/workspace'); return; }
+    window.addEventListener('omega:entitlements', function (e) {
+      if (window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace(e.detail || window.OMEGA_WORKSPACE)) window.location.replace('/workspace');
+    });
     showApp(user);
     applyToolLocks();   // gate tools by workspace.unlockedTools (demo Enterprise = all unlocked)
     (function () {

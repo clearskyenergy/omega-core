@@ -79,6 +79,12 @@ function northstar(host) {
     docs['projects/' + p[0]] = { orgId: org, orgsInvolved: [org], name: p[1], type: 'bess', stage: p[5], bessKwh: p[2], capex: p[3], incentive: Math.round(p[3] * 0.3), annualRevenue: Math.round(p[3] * 0.11),
       utility: p[4], program: 'ConnectedSolutions', nextAction: 'Review', ownerEmail: me, ownerName: 'Ann Lee', quoted: p[5] !== 'package', createdAt: ago(p[6]), updatedAt: ago(p[6] / 2) };
   });
+  /* a request for quote from the Riverside BOM: two vendors asked, one has
+     answered (the workspace's Today counts it; api/rfq.js is what writes
+     these shapes) */
+  docs['rfqs/rfq-riverside'] = { sourceOrgId: org, projectId: 'p-riverside', projectName: 'Riverside BESS', status: 'open', recipientOrgIds: ['voltacell.example', 'cellworks.example'], requestedBy: me, createdByUid: uid, createdAt: ago(4), updatedAt: ago(1) };
+  docs['rfqs/rfq-riverside/recipients/voltacell.example'] = { vendorOrgId: 'voltacell.example', scope: 'lines', status: 'quoted', quote: { total: 412000, leadWeeks: 10 }, revealed: false, createdAt: ago(4), updatedAt: ago(1) };
+  docs['rfqs/rfq-riverside/recipients/cellworks.example'] = { vendorOrgId: 'cellworks.example', scope: 'lines', status: 'sent', quote: null, revealed: false, createdAt: ago(4), updatedAt: ago(4) };
   return { org: org, name: 'Northstar Development', tier: 'standard', user: { uid: uid, email: me, displayName: 'Ann Lee', emailVerified: true }, docs: docs, termsAccepted: true,
     lockedQuick: 'investment' /* Site Investment Analysis is Enterprise; Standard does not carry it */ };
 }

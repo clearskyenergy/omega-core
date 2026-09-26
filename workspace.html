@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════════
+  ClearSky-OMEGA · Omega Workspace — the home of a workspace
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  ONE HOME, BUILT FROM WHAT THE WORKSPACE HOLDS.
+
+  This replaces the tenant dashboard (index.html) one tenant at a time
+  (omega_orgs/{org}.shell = 'workspace'; ?home=workspace to try it on one
+  browser, ?home=classic to go back). It opens the way Omega Logic opens: a
+  hex hub of where to go, Today beside it, and everything else below.
+
+    the hub      omega-hexhub.js draws it; omega-workspace-hub.js decides the
+                 six cells from what OMEGATools.isUnlocked() says this person
+                 may open. Showing a cell is never access.
+    Today        what needs this person, ranked by omega-workspace-today.js
+                 (pure, tested): the account, their to-dos, quotes at both
+                 ends of the Quote Desk, the referral inbox, projects that
+                 are ready, stalled or unsized — from records the rules
+                 already let them read.
+    All tools    the whole catalog, by category, each tile Live or Locked by
+                 the same rule the old dashboard's applyToolLocks() used
+                 (OMEGATools.isUnlocked on the merged workspace; nothing opens
+                 while approval is pending). A locked tile explains, never
+                 hides: what they have and what they are paying for.
+    In flight    projects, with who has each one and how far along it is.
+    Around you   the team's feed and messages, who is here (team_members
+                 presence), the partners on shared projects. Each panel is an
+                 opt-in kept on dashboard_layouts/{org}__{uid}.workspace.
+
+  Tenant-neutral: no customer name, logo or domain. Sign-in and the workspace
+  come from the same chain every signed-in page uses (omega-brand →
+  omega-tenant → omega-whitelabel → omega-tools); the terms gate wraps
+  showApp() here exactly as on the dashboard. The chrome is
+  omega-workspace-shell.js, shared with the projects and marketplace pages.
+  ES5 in this file. Render check: npm run check:workspace.
+  ═══════════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="author" content="ClearSky Energy Solutions LLC">
+<meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">
+<title>Omega Workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* the page's own sections; the chrome's rules live in omega-workspace-shell.js */
+html,body{margin:0}
+#boot{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:#F5F4F0;color:#556B82;font:500 13px "DM Sans",system-ui,sans-serif}
+#boot .m{width:46px;height:46px;border-radius:12px;background:radial-gradient(circle at 30% 30%,#17293A,#050A11);display:grid;place-items:center;font:700 26px Poppins,sans-serif;color:#2FE3C8;box-shadow:inset 0 0 0 1px rgba(53,198,244,.35)}
+body.ready #boot{display:none}
+#refused{display:none;max-width:520px;margin:60px auto;padding:24px;background:#fff;border:1px solid #E4E8EC;border-radius:14px;color:#14171A;line-height:1.5}
+body.refused #refused{display:block}body.refused #content{display:none}
+#content{display:none}body.ready:not(.refused) #content{display:flex;flex-direction:column;gap:22px}
+.ows-content h2{margin:0;font:600 16px Poppins,"DM Sans",sans-serif;text-wrap:balance}
+.eyebrow{font:500 11px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
+.num{font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.sec{display:flex;flex-direction:column;gap:12px}
+.sec .hd{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}.sec .hd .sub{color:var(--ows-ink2);font-size:13px;margin-top:2px}
+/* notices: approval, trial, read-only */
+.notice{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:10px;font-size:13px;background:var(--ows-amber-soft);color:var(--ows-ink);border:1px solid transparent}
+.notice b{color:var(--ows-amber)}.notice .ows-pill{margin-left:auto}.notice.bad{background:#FDECEC}.notice.bad b{color:#C0392B}
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,460px) minmax(0,1fr);gap:20px;align-items:stretch}
+#hub .hexhub{margin:0;padding:16px 14px 10px;height:100%;display:flex;flex-direction:column}#hub .hexhub h2{text-align:left;margin:0 6px 2px;font-size:20px}#hub .hexhub .hh-cap{text-align:left;margin:0 6px 4px}
+#hub .hexhub svg{margin-top:auto;margin-bottom:auto}
+#hub .held{position:relative;display:flex;gap:6px;flex-wrap:wrap;margin:8px 4px 0}
+#hub .held .ows-chip{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#C9D6E2}#hub .held .ows-chip.on{background:rgba(47,227,200,.12);color:#2FE3C8}
+.today{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:18px 20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.today .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}.today h2{font-size:18px}.today .sub{color:var(--ows-ink2);font-size:13px;margin-top:2px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.kpi{background:var(--ows-sunk);border:1px solid var(--ows-line);border-radius:12px;padding:10px 12px;min-width:0}.kpi .v{font:500 20px/1.1 "DM Mono",monospace;font-variant-numeric:tabular-nums}.kpi .l{font-size:11.5px;color:var(--ows-ink2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kpi .d{font:400 11px "DM Mono",monospace;margin-top:4px;color:var(--ows-ink3)}.kpi .d.up{color:var(--ows-green)}.kpi .d.warn{color:var(--ows-amber)}
+.next{display:flex;flex-direction:column;gap:6px}
+.next .row{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 12px 9px 10px;border:1px solid var(--ows-line);border-radius:10px;background:var(--ows-paper)}
+.next .row .bar{width:4px;min-height:30px;height:100%;border-radius:2px;background:var(--ows-brand)}.next .row.warn .bar{background:var(--ows-amber)}.next .row.good .bar{background:var(--ows-green)}.next .row.hot .bar{background:var(--ows-coral)}
+.next .row b{font-weight:600;display:block}.next .row small{color:var(--ows-ink2);font-size:12px}
+.presence{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ows-ink2);padding-top:10px;border-top:1px solid var(--ows-line)}
+.avs{display:flex}.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:10.5px;font-weight:700;background:var(--ows-brand);flex:none;overflow:hidden}.av img{width:100%;height:100%;object-fit:cover}.avs .av{border:2px solid var(--ows-paper);margin-left:-6px}.avs .av:first-child{margin-left:0}.av.me{background:var(--ows-teal-d)}.av.partner{background:var(--ows-teal-d)}.av.sys{background:var(--ows-ink3)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ows-green);display:inline-block}.dot.away{background:var(--ows-amber)}.dot.off{background:var(--ows-ink3)}
+/* tools */
+.plan{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;font-size:13px}
+.plan .ows-pill{margin-left:auto}
+.cat{display:flex;flex-direction:column;gap:10px}.cat h3{margin:6px 0 0;font:600 13px "DM Sans",sans-serif;color:var(--ows-ink2)}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.tool{position:relative;display:flex;flex-direction:column;gap:8px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:14px;min-height:120px;color:inherit;transition:transform .15s,box-shadow .15s;text-align:left}
+.tool:hover{transform:translateY(-2px);box-shadow:var(--ows-shadow)}.tool .t{display:flex;align-items:center;gap:10px;padding-right:58px}
+.tool .ico{width:36px;height:36px;border-radius:10px;background:var(--ows-brand-soft);color:var(--ows-brand-ink);display:grid;place-items:center;flex:none}.tool .ico svg{width:18px;height:18px}
+.tool b{font-weight:600;font-size:14px;display:block}.tool .d{color:var(--ows-ink2);font-size:12.5px;line-height:1.4}
+.tool .st{position:absolute;top:12px;right:12px;font-size:11px;font-weight:600;color:var(--ows-green);display:flex;gap:5px;align-items:center}
+.tool.locked{background:transparent;border-style:dashed}.tool.locked .ico{background:var(--ows-sunk);color:var(--ows-ink3)}.tool.locked b{color:var(--ows-ink2)}.tool.locked .st{color:var(--ows-ink3)}.tool.locked:hover{transform:none;box-shadow:none}
+.more summary{cursor:pointer;font-size:12.5px;color:var(--ows-ink2);padding:6px 0;list-style:none;display:inline-flex;align-items:center;gap:6px}.more summary::-webkit-details-marker{display:none}.more summary::before{content:"\25B8";color:var(--ows-ink3)}.more[open] summary::before{content:"\25BE"}.more .grid{margin-top:8px}
+.tool.soon{opacity:.7}.tool.soon .st{color:var(--ows-amber)}
+/* in flight */
+.proj{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.pc{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;text-align:left;color:inherit;width:100%}.pc:hover{box-shadow:var(--ows-shadow)}
+.pc .stage{font:500 11px "DM Mono",monospace;color:var(--ows-ink3);letter-spacing:.05em;text-transform:uppercase}.pc b{font-weight:600}.pc .meta{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--ows-ink2)}.pc .meta span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc .bar{height:5px;border-radius:3px;background:var(--ows-sunk);overflow:hidden}.pc .bar i{display:block;height:100%;background:var(--ows-brand);border-radius:3px}
+.pc .who{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ows-ink2)}.pc .who .av{width:20px;height:20px;font-size:9px}
+.empty{color:var(--ows-ink2);font-size:13px;background:var(--ows-paper);border:1px dashed var(--ows-line2);border-radius:12px;padding:16px 18px;line-height:1.5}.empty b{color:var(--ows-ink)}
+/* around you */
+.community{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.panel{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel .hd{display:flex;justify-content:space-between;align-items:center;gap:10px}.panel h3{margin:0;font:600 14px "DM Sans",sans-serif}
+.feed .ev{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;padding:8px 0;border-bottom:1px solid var(--ows-line);align-items:start;font-size:13px}.feed .ev:last-child{border-bottom:0}
+.feed .ev .when{color:var(--ows-ink3);font:400 11.5px "DM Mono",monospace;white-space:nowrap}.feed .ev span.t{color:var(--ows-ink2)}.feed .ev b{font-weight:600}
+.people{display:flex;flex-direction:column;gap:8px}.people .pr{display:flex;align-items:center;gap:10px;font-size:13px}.people .pr .av{width:28px;height:28px;font-size:11px}.people .pr small{display:block;color:var(--ows-ink3);font-size:11.5px}.people .pr>div{min-width:0}
+.post{display:flex;gap:8px}.post input{flex:1;min-width:0;border:1px solid var(--ows-line);border-radius:10px;padding:8px 10px;font:inherit;background:var(--ows-sunk)}
+.opt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--ows-line)}.opt b{display:block;font-weight:600}.opt small{color:var(--ows-ink2);font-size:12px;display:block;line-height:1.4}
+.tg{width:42px;height:24px;border-radius:999px;background:var(--ows-line2);position:relative;transition:background .15s;flex:none}.tg::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}.tg[aria-checked="true"]{background:var(--ows-teal-d)}.tg[aria-checked="true"]::after{left:21px}
+.kv{display:flex;flex-direction:column}.kv div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--ows-line);font-size:13px}.kv div span:first-child{color:var(--ows-ink2)}.kv div span:last-child{text-align:right;font-weight:600}
+.field label{display:block;font-size:12px;color:var(--ows-ink2);margin-bottom:4px}.field input{width:100%;border:1px solid var(--ows-line);border-radius:10px;padding:9px 11px;font:inherit}
+@media (max-width:1040px){.hero{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:700px){.next .row{grid-template-columns:4px minmax(0,1fr)}.next .row .ows-pill{grid-column:2;justify-self:start}}
+@media (prefers-reduced-motion:reduce){.tool,.tg,.tg::after{transition:none}}
+</style>
+</head>
+<body class="ows">
+<div id="boot"><span class="m">Ω</span><span>Opening your workspace…</span></div>
+<div class="ows-app">
+  <nav id="side-nav"></nav>
+  <div class="ows-main">
+    <header id="topbar"></header>
+    <main id="main" class="ows-content">
+      <div id="refused"></div>
+      <div id="content">
+        <div id="ows-notice" hidden></div>
+        <section class="hero">
+          <div id="hub"></div>
+          <div class="today" id="today"></div>
+        </section>
+        <section class="sec" id="tools">
+          <div class="hd"><div><h2>All tools</h2><div class="sub" id="tools-sub">Every tool in the catalog. Live ones open; locked ones say what plan carries them.</div></div><a class="ows-pill ghost" href="/marketplace.html">Marketplace ›</a></div>
+          <div class="plan" id="plan"></div>
+          <div id="tools-body"></div>
+        </section>
+        <section class="sec" id="flight">
+          <div class="hd"><div><h2>In flight</h2><div class="sub">Every project, who has it and how far along it is. A partner on the JDA sees the same board.</div></div><div style="display:flex;gap:8px"><button class="ows-pill primary" type="button" id="new-project">+ New project</button><a class="ows-pill ghost" href="/projects.html">All projects ›</a></div></div>
+          <div id="flight-body"></div>
+        </section>
+        <section class="sec" id="team">
+          <div class="hd"><div><h2>Around you</h2><div class="sub">Your team, your partners. Turn panels on or off in Customize.</div></div><button class="ows-pill" type="button" id="customize">⚙ Customize</button></div>
+          <div class="community" id="around"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-auth-errors.js?v=1"></script>
+<script src="/omega-jd-nav.js?v=1"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-terms.js"></script>
+<script src="/omega-tools.js?v=9"></script>
+<script src="/omega-newproject.js"></script>
+<script src="/omega-hexhub.js"></script>
+<script src="/omega-workspace-hub.js"></script>
+<script src="/omega-workspace-today.js"></script>
+<script src="/omega-workspace-shell.js"></script>
+<script>
+(function () {
+'use strict';
+var CFG = window.CLEARSKY_CONFIG || {};
+try { firebase.initializeApp(CFG.firebase); } catch (e) { if (!/already exists/.test(String(e && e.message))) throw e; }
+var auth = firebase.auth(), db = firebase.firestore();
+var WORKSPACES = CFG.workspaces || {};
+var S = window.OmegaWorkspaceShell, HUB = window.OmegaWorkspaceHub, T = window.OMEGATools, TODAY = window.OmegaWorkspaceToday;
+var esc = S.esc, byId = function (id) { return document.getElementById(id); };
+var WS = null, USER = null, ME = '', PROFILE = null;
+var DATA = { projects: [], todos: [], messages: [], members: [], pinned: [], prefs: null, rfqsSent: [], rfqsReceived: [], referrals: [] };
+var PREFS_DEFAULT = { presence: true, feed: true, partners: true, guides: false };
+var STAGE_KEYS = ['candidate', 'package', 'submitted', 'interconnect', 'permitting', 'finance', 'construction', 'online'];
+var STAGE_LABEL = { candidate: 'Candidate', package: 'Site package', submitted: 'Submitted to utility', interconnect: 'Interconnection', permitting: 'Permitting', finance: 'Finance ready', construction: 'Construction', online: 'Online' };
+var DAY = 86400000;
+
+/* ── the chrome, before anyone is known ─────────────────────────────────── */
+S.mount({ current: 'home', tabs: true, search: search, onNav: function (key) {
+  if (key === 'home') { window.scrollTo({ top: 0, behavior: 'smooth' }); return true; }
+  if (key === 'tools' || key === 'team' || key === 'feed') { go(key); return true; }
+  if (key === 'billing') { billingDrawer(); return true; }
+  if (key === 'settings') { settingsDrawer(); return true; }
+  if (key === 'projects' && WS) { areaDrawer('projects'); return true; }
+  return false;
+} });
+function go(key) { var el = byId(key === 'feed' ? 'around' : key); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+/* ── sign-in: the same chain as every signed-in page ────────────────────── */
+var nullSeen = 0, tries = 0;
+auth.onAuthStateChanged(function (user) {
+  if (!user) {
+    var had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+    if (nullSeen++ < (had ? 20 : 4)) { setTimeout(function () { if (!auth.currentUser && nullSeen >= (had ? 20 : 4)) window.location.href = '/'; }, 400); return; }
+    if (!auth.currentUser) window.location.href = '/';
+    return;
+  }
+  nullSeen = 0; bind(user, 0);
+});
+function bind(user, n) {
+  var ws = OmegaBrand.resolve(user.email || '', WORKSPACES);
+  if (!ws) {
+    if (n < 8) { setTimeout(function () { bind(user, n + 1); }, 250); return; }
+    document.body.classList.add('ready', 'refused');
+    byId('refused').innerHTML = '<b>' + esc(OmegaBrand.accessMessage(user.email, WORKSPACES)) + '</b><p style="margin:10px 0 0"><button class="ows-pill" type="button" onclick="OmegaWorkspaceShell.signOut()">Sign out</button></p>';
+    return;
+  }
+  WS = ws; window.OMEGA_WORKSPACE = ws; USER = user; ME = String(user.email || '').toLowerCase();
+  window.showApp(user);
+}
+/* showApp is wrapped by omega-terms.js: it runs once the terms are accepted */
+window.showApp = function (user) {
+  document.body.classList.add('ready');
+  S.paint({ ws: WS, user: user });
+  try { OmegaJdNav.reveal(user.email); } catch (e) {}
+  revealStaff(user);
+  OmegaNewProject.configure({ db: db, auth: auth, orgId: function () { return WS.orgId; }, ownerName: function () { return who(); }, afterCreate: openProject });
+  render();
+  load();
+  OmegaTenant.onEntitlements(function (ws) { if (ws) { WS = ws; window.OMEGA_WORKSPACE = ws; } S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() }); render(); logicSection(); });
+  window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = e.detail; window.OMEGA_WORKSPACE = WS; render(); } });
+  route();
+};
+/* ClearSky staff: the two consoles. A VERIFIED clearsky-usa.com address,
+   as isAdmin() in the rules requires; the link grants nothing. */
+function revealStaff(user) {
+  var d = String(user.email || '').toLowerCase().split('@')[1] || '';
+  if (d !== 'clearsky-usa.com' || user.emailVerified !== true) return;
+  ['sn-adm-divider', 'sn-adm-label', 'sn-admin', 'sn-ops'].forEach(function (id) { var el = byId(id); if (el) el.style.display = ''; });
+}
+function holds(part) { return (WS && Array.isArray(WS.modules) && WS.modules.indexOf(part) >= 0) || (WS && Array.isArray(WS.addons) && WS.addons.indexOf('omega-logic') >= 0); }
+var logicDone = false;
+function logicSection() {
+  if (logicDone || !holds('logic-office')) return; logicDone = true;
+  var items = [{ key: 'orders', label: 'Orders', icon: 'quotes', href: '/omega-logic#orders' }];
+  if (holds('logic-plant')) items.push({ key: 'plant', label: 'Plant', icon: 'settings', href: '/plant/manager.html' });
+  if (holds('logic-logistics')) items.push({ key: 'deliver', label: 'Deliver', icon: 'projects', href: '/logic-logistics.html' });
+  items.push({ key: 'officeapp', label: 'Office app', icon: 'me', href: '/office/app' });
+  S.section('Omega Logic', items);
+}
+function who() { return (PROFILE && PROFILE.name) || (USER && USER.displayName) || (ME ? ME.split('@')[0] : ''); }
+function first() { return who().split(' ')[0]; }
+function ini(name) { return S.initials(name); }
+
+/* ── reads the rules already grant ───────────────────────────────────────── */
+function load() {
+  var org = WS.orgId; if (!org) return;
+  function q2(coll, field) { return db.collection(coll).where(field, '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }); }
+  function q(coll) { return db.collection(coll).where('orgId', '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }); }
+  Promise.all([
+    q('projects'),
+    db.collection('projects').where('orgsInvolved', 'array-contains', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }),
+    q('team_todos'), q('team_messages'), q('team_members'),
+    T.loadPinned(db, org),
+    USER ? db.collection('dashboard_layouts').doc(org + '__' + USER.uid).get().then(function (d) { return d.exists ? (d.data() || {}).workspace || null : null; })['catch'](function () { return null; }) : Promise.resolve(null),
+    db.collection('team_members').doc(org + '__' + ME).get().then(function (d) { return d.exists ? d.data() : null; })['catch'](function () { return null; }),
+    /* requests for quote I sent, each with its recipients (the Quote Desk's own reads) */
+    db.collection('rfqs').where('sourceOrgId', '==', org).get().then(function (s) {
+      var out = [], jobs = [];
+      s.forEach(function (d) { var f = d.data() || {}; f.id = d.id; f.recipients = []; out.push(f); jobs.push(d.ref.collection('recipients').get().then(function (rs) { rs.forEach(function (x) { var w = x.data() || {}; w.id = x.id; f.recipients.push(w); }); })['catch'](function () {})); });
+      return Promise.all(jobs).then(function () { return out; });
+    })['catch'](function () { return []; }),
+    /* requests addressed to this workspace as the vendor */
+    new Promise(function (res) { try { db.collectionGroup('recipients').where('vendorOrgId', '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var w = d.data() || {}; w.id = d.id; w.rfqId = d.ref.parent && d.ref.parent.parent ? d.ref.parent.parent.id : ''; out.push(w); }); res(out); }, function () { res([]); }); } catch (e) { res([]); } }),
+    q2('referrals', 'toOrgId')
+  ]).then(function (r) {
+    var seen = {}; DATA.projects = [];
+    r[0].concat(r[1]).forEach(function (p) { if (!seen[p.id]) { seen[p.id] = 1; DATA.projects.push(p); } });
+    DATA.projects.sort(function (a, b) { return ms(b.updatedAt || b.createdAt) - ms(a.updatedAt || a.createdAt); });
+    DATA.todos = r[2]; DATA.messages = r[3]; DATA.members = r[4]; DATA.pinned = r[5] || []; DATA.prefs = r[6]; PROFILE = r[7]; DATA.rfqsSent = r[8]; DATA.rfqsReceived = r[9]; DATA.referrals = r[10];
+    S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() });
+    render();
+  });
+}
+function ms(t) { if (!t) return 0; if (t.toDate) return t.toDate().getTime(); if (t.seconds) return t.seconds * 1000; var d = new Date(t); return isNaN(d) ? 0 : d.getTime(); }
+function ago(t) { var m = (Date.now() - ms(t)) / 60000; if (m < 1) return 'now'; if (m < 60) return Math.round(m) + 'm'; if (m < 1440) return Math.round(m / 60) + 'h'; var d = Math.round(m / 1440); return d === 1 ? 'Yesterday' : d + 'd'; }
+function money(n) { n = Number(n) || 0; return n >= 1e6 ? '$' + (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? '$' + Math.round(n / 1e3) + 'k' : '$' + Math.round(n); }
+function prefs() { var p = {}; Object.keys(PREFS_DEFAULT).forEach(function (k) { p[k] = DATA.prefs && typeof DATA.prefs[k] === 'boolean' ? DATA.prefs[k] : PREFS_DEFAULT[k]; }); return p; }
+
+/* ── what this person may open: ONE rule, the catalog's ─────────────────── */
+function tool(key) { return T.byKey(key); }
+function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, WS); }
+function hubCtx() { return { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], hideMarketplace: !!WS.hideMarketplace }; }
+function href(t) { return T.hrefFor(t, WS); }
+function launch(t) {
+  if (!t) return;
+  if (!open(t)) { lockedDrawer(t); return; }
+  if (t.action) { var seed = String(t.action).split(':')[1] || 'bess'; OmegaNewProject.open(seed); return; }
+  var h = href(t); if (h) window.location.href = h;
+}
+function openProject(id) {
+  var slug = WS && WS.allowedDomain ? String(WS.allowedDomain).split('.')[0] : '';
+  window.location.href = '/editor.html?id=' + encodeURIComponent(id) + (slug ? '&org=' + encodeURIComponent(slug) : '');
+}
+function toolIcon(t) { return t && t.icon ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="' + esc(t.icon) + '"/></svg>' : S.ICON.tools; }
+
+/* ── Today: what needs this person, derived by omega-workspace-today.js ── */
+var TODAY_CACHE = null;
+function today() {
+  if (TODAY_CACHE) return TODAY_CACHE;
+  var pa = WS.packageAccess;
+  TODAY_CACHE = TODAY.build({ now: Date.now(), me: ME, orgId: WS.orgId, pendingApproval: !!WS.pendingApproval, readOnly: !!(pa && pa.packaged && pa.readOnly), billingNotice: pa && pa.billingNotice || null, trialEndsAt: trialEnd(),
+    projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived, referrals: DATA.referrals, canOpen: function (k) { return open(tool(k)); } });
+  return TODAY_CACHE;
+}
+function needs() { return today().needs; }
+function act(r) {
+  if (!r || !r.act) return;
+  if (r.act.kind === 'billing') billingDrawer(); else if (r.act.kind === 'team') go('team'); else if (r.act.kind === 'project') openProject(r.act.id); else if (r.act.kind === 'tool') launch(tool(r.act.id));
+}
+function trialEnd() {
+  if (WS.trial && WS.trial.endsAt) return ms(WS.trial.endsAt);
+  try { var t = OmegaBrand.trial(WS); if (t && t.endsAt) return t.endsAt.getTime(); } catch (e) {}
+  return 0;
+}
+function presence(m) { var s = (Date.now() - ms(m.lastSeen)) / 60000; return s < 15 ? 'on' : s < 1440 ? 'away' : 'off'; }
+
+/* ── render ─────────────────────────────────────────────────────────────── */
+function render() {
+  if (!WS) return;
+  TODAY_CACHE = null;
+  renderNotice(); renderHub(); renderToday(); renderTools(); renderFlight(); renderAround();
+  S.badge('home', needs().length);
+}
+function renderNotice() {
+  var n = byId('ows-notice'), pa = WS.packageAccess, h = '';
+  if (WS.pendingApproval) h = '<div class="notice"><b>Awaiting approval</b><span>' + esc(WS.clientName || WS.orgId) + ' is with the ClearSky team. Tools stay locked until it is approved, usually one business day.</span></div>';
+  else if (pa && pa.readOnly && pa.billingNotice) h = '<div class="notice bad"><b>Read-only</b><span>' + esc(pa.billingNotice.text) + '</span>' + (pa.billingNotice.payUrl ? '<a class="ows-pill primary sm" href="' + esc(pa.billingNotice.payUrl) + '" target="_blank" rel="noopener">Pay now</a>' : '') + '</div>';
+  n.innerHTML = h; n.hidden = !h;
+}
+function renderHub() {
+  var c = HUB.compose(hubCtx()), n = needs().length, myTodos = DATA.todos.filter(function (x) { return !x.done && String(x.assignee || '').toLowerCase() === ME; }).length;
+  var items = [{ key: 'today', label: c.centre.label, icon: c.centre.icon, hint: c.centre.hint, badge: n || '' }].concat(c.ring.map(function (a) {
+    return { key: a.key, label: a.label, icon: a.icon, hint: a.hint, badge: a.key === 'team' && myTodos ? myTodos : (a.key === 'projects' && DATA.projects.length ? DATA.projects.length : '') };
+  }));
+  OmegaHexHub.render(byId('hub'), { items: items, title: 'Where to?', caption: (WS.clientName || WS.orgId) + ' · ' + first(), onPick: function (key) { if (key === 'today') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; } if (key === 'team') { go('team'); return; } areaDrawer(key); } });
+  var held = heldChips(), hb = byId('hub').querySelector('.hexhub');
+  if (hb && held) { var d = document.createElement('div'); d.className = 'held'; d.innerHTML = held; hb.appendChild(d); }
+}
+function planName() { var pa = WS.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {}; if (pa && pa.packaged) return b.plan || 'Packaged'; return WS.accountTier || (WS.tierLevel >= 3 ? 'Enterprise' : WS.tierLevel === 2 ? 'Deluxe' : WS.tierLevel === 1 ? 'Standard' : 'Plan'); }
+function heldChips() {
+  var out = ['<span class="ows-chip on">' + esc(planName()) + (trialEnd() && trialEnd() > Date.now() ? ' · trial' : '') + '</span>'];
+  if (WS.packageAccess && WS.packageAccess.packaged && Array.isArray(WS.packageAccess.catalog)) {
+    WS.packageAccess.catalog.filter(function (m) { return WS.modules.indexOf(m.key) >= 0 && m.name !== planName(); }).slice(0, 5).forEach(function (m) { out.push('<span class="ows-chip">' + esc(m.name) + '</span>'); });
+  } else if (Array.isArray(WS.addons) && WS.addons.length) WS.addons.slice(0, 5).forEach(function (a) { out.push('<span class="ows-chip">' + esc(a) + '</span>'); });
+  var n = T.catalog().filter(function (t) { return !t.soon && open(t) && T.isVisible(t, WS); }).length;
+  out.push('<span class="ows-chip">' + n + ' tools open</span>');
+  return out.join('');
+}
+function renderToday() {
+  var hour = new Date().getHours(), greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  var td = today(), rows = td.needs;
+  var h = '<div class="hd"><div><h2 id="ows-greet">' + greet + ', ' + esc(first()) + '</h2><div class="sub">' + esc(WS.clientName || WS.orgId) + ' · ' + esc(planName()) + (WS.vertical ? ' · ' + esc(WS.vertical) : '') + '</div></div><span class="ows-pill ghost" id="ows-date">' + new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }) + '</span></div>';
+  h += '<div class="kpis">' + td.kpis.map(function (k) { return '<div class="kpi" data-kpi="' + esc(k.key) + '"><div class="v">' + esc(k.value) + '</div><div class="l">' + esc(k.label) + '</div>' + (k.delta ? '<div class="d ' + esc(k.tone || '') + '">' + esc(k.delta) + '</div>' : '') + '</div>'; }).join('') + '</div>';
+  h += '<div class="eyebrow">Needs you</div><div class="next">';
+  if (!rows.length) h += '<div class="empty">Nothing is waiting on you. Start a project, or open Site Map and draw one.</div>';
+  rows.forEach(function (r, i) { h += '<div class="row ' + esc(r.cls) + '" data-key="' + esc(r.key) + '"><i class="bar"></i><div><b>' + esc(r.t) + '</b><small>' + esc(r.s) + '</small></div>' + (r.href ? '<a class="ows-pill sm" href="' + esc(r.href) + '"' + (/^https?:/.test(r.href) ? ' target="_blank" rel="noopener"' : '') + '>' + esc(r.cta) + '</a>' : '<button class="ows-pill sm" type="button" data-need="' + i + '">' + esc(r.cta) + '</button>') + '</div>'; });
+  if (td.more) h += '<div class="eyebrow" style="padding:4px 0">+ ' + td.more + ' more under Team and In flight</div>';
+  h += '</div>';
+  if (prefs().presence) {
+    var others = DATA.members.filter(function (m) { return String(m.email || '').toLowerCase() !== ME; }), on = others.filter(function (m) { return presence(m) === 'on'; });
+    h += '<div class="presence"><span class="avs"><span class="av me">' + esc(ini(who())) + '</span>' + on.slice(0, 4).map(function (m) { return '<span class="av">' + esc(ini(m.name || m.email)) + '</span>'; }).join('') + '</span>';
+    if (!others.length) h += '<span>Just you here. Anyone with an <b>@' + esc(WS.orgId) + '</b> address signs in and joins this workspace.</span>';
+    else if (!on.length) h += '<span>' + others.length + ' teammate' + (others.length === 1 ? '' : 's') + ' on this workspace. Nobody else is in right now.</span>';
+    else h += '<span>You and ' + on.map(function (m) { return '<b>' + esc(String(m.name || m.email).split(' ')[0]) + '</b>'; }).join(', ') + ' are in the workspace now.</span>';
+    h += '</div>';
+  }
+  byId('today').innerHTML = h;
+  Array.prototype.forEach.call(byId('today').querySelectorAll('[data-need]'), function (b) { b.addEventListener('click', function () { act(needs()[Number(b.getAttribute('data-need'))]); }); });
+}
+function renderTools() {
+  /* the whole catalog, so a locked tile says what a plan carries: only a
+     tool restricted to other orgs, the staff queue, and (for a packaged
+     workspace) what is not sold at all are left out */
+  var pa = WS.packageAccess, unsold = {};
+  if (pa && pa.packaged && Array.isArray(pa.notSold)) pa.notSold.forEach(function (n) { (n.tools || []).forEach(function (k) { unsold[k] = true; }); });
+  var all = T.catalog().filter(function (t) { if (t.key === 'intake_admin' || unsold[t.key]) return false; if (t.orgs && t.orgs.length) return !!(WS.orgId && t.orgs.indexOf(WS.orgId) >= 0); return true; }), openN = all.filter(function (t) { return !t.soon && open(t); }).length, total = all.filter(function (t) { return !t.soon; }).length;
+  var p = '<span class="ows-chip on">' + esc(planName()) + '</span>';
+  if (pa && pa.packaged && Array.isArray(pa.catalog)) p += pa.catalog.filter(function (m) { return WS.modules.indexOf(m.key) >= 0 && m.name !== planName(); }).map(function (m) { return '<span class="ows-chip">' + esc(m.name) + '</span>'; }).join('');
+  else if (Array.isArray(WS.addons)) p += WS.addons.map(function (a) { return '<span class="ows-chip">' + esc(a) + '</span>'; }).join('');
+  p += '<span class="num" style="color:var(--ows-ink2)">' + openN + ' of ' + total + ' tools open</span>';
+  p += WS.pendingApproval ? '<span class="ows-pill ghost">Locked until approval</span>' : '<a class="ows-pill" href="/marketplace.html">Change plan</a>';
+  byId('plan').innerHTML = p;
+  var h = '';
+  function tile(t) {
+    var st = t.soon ? 'soon' : open(t) ? 'live' : 'locked';
+    return '<button class="tool ' + st + '" type="button" data-tool="' + esc(t.key) + '"><span class="st">' + (st === 'live' ? '<span class="dot"></span>Live' : st === 'soon' ? 'Soon' : 'Locked') + '</span><div class="t"><span class="ico">' + toolIcon(t) + '</span><b>' + esc(t.name) + '</b></div><div class="d">' + esc(t.desc || '') + '</div></button>';
+  }
+  var pinned = T.pinnedTools(DATA.pinned, WS);
+  if (pinned.length) h += '<div class="cat"><h3>Pinned</h3><div class="grid">' + pinned.map(tile).join('') + '</div></div>';
+  T.CATEGORIES.forEach(function (c) {
+    var list = all.filter(function (t) { return t.category === c.key; }); if (!list.length) return;
+    var live = list.filter(function (t) { return open(t) || t.soon; }), locked = list.filter(function (t) { return !open(t) && !t.soon; });
+    h += '<div class="cat"><h3>' + esc(c.label) + ' <span class="num" style="color:var(--ows-ink3);font-weight:400">' + list.filter(function (t) { return open(t) && !t.soon; }).length + '/' + list.length + '</span></h3>'
+      + (live.length ? '<div class="grid">' + live.map(tile).join('') + '</div>' : '')
+      + (locked.length ? '<details class="more"' + (live.length ? '' : ' open') + '><summary>' + locked.length + ' more on ' + (WS.pendingApproval ? 'approval' : 'other plans') + '</summary><div class="grid">' + locked.map(tile).join('') + '</div></details>' : '') + '</div>';
+  });
+  byId('tools-body').innerHTML = h;
+  Array.prototype.forEach.call(byId('tools-body').querySelectorAll('[data-tool]'), function (b) { b.addEventListener('click', function () { var t = tool(b.getAttribute('data-tool')); if (t && t.soon) { S.toast(t.name + ' is coming soon'); return; } launch(t); }); });
+}
+function renderFlight() {
+  var b = byId('flight-body');
+  if (!DATA.projects.length) { b.innerHTML = '<div class="empty"><b>No projects yet.</b> Start one and it appears here with its stage, its owner and how far along it is.</div>'; return; }
+  b.innerHTML = '<div class="proj">' + DATA.projects.slice(0, 8).map(function (p) {
+    var i = Math.max(0, STAGE_KEYS.indexOf(p.stage)), pct = Math.round(i / (STAGE_KEYS.length - 1) * 100);
+    var owner = p.ownerName || (p.ownerEmail ? String(p.ownerEmail).split('@')[0] : (p.createdBy && p.createdBy.email ? String(p.createdBy.email).split('@')[0] : (typeof p.createdBy === 'string' ? p.createdBy.split('@')[0] : '')));
+    var mine = String(p.ownerEmail || '').toLowerCase() === ME;
+    var size = p.bessKwh ? (p.bessKwh >= 1000 ? (p.bessKwh / 1000).toFixed(1) + ' MWh' : p.bessKwh + ' kWh') : (p.address || p.utility || '');
+    return '<button class="pc" type="button" data-open="' + esc(p.id) + '"><span class="stage">' + esc(STAGE_LABEL[p.stage] || 'Candidate') + '</span><b>' + esc(p.name || 'Untitled') + '</b><div class="meta"><span>' + esc(size) + '</span><span class="num">' + pct + '%</span></div><div class="bar"><i style="width:' + pct + '%"></i></div><div class="who"><span class="av' + (mine ? ' me' : '') + '">' + esc(ini(owner || '?')) + '</span>' + (mine ? 'You' : esc(owner || 'Unassigned')) + '</div></button>';
+  }).join('') + '</div>';
+  Array.prototype.forEach.call(b.querySelectorAll('[data-open]'), function (x) { x.addEventListener('click', function () { openProject(x.getAttribute('data-open')); }); });
+}
+function feedItems() {
+  var out = DATA.messages.map(function (m) { return { at: ms(m.createdAt), who: m.authorName || String(m.authorEmail || '').split('@')[0], text: m.text || '', me: String(m.authorEmail || '').toLowerCase() === ME }; });
+  DATA.projects.forEach(function (p) { var owner = p.ownerName || String(p.ownerEmail || '').split('@')[0] || 'Someone'; out.push({ at: ms(p.updatedAt || p.createdAt), who: owner, text: (p.stage ? 'moved ' : 'saved ') + (p.name || 'a project') + (p.stage ? ' to ' + (STAGE_LABEL[p.stage] || p.stage) : ''), me: String(p.ownerEmail || '').toLowerCase() === ME }); });
+  return out.filter(function (x) { return x.at > 0; }).sort(function (a, b) { return b.at - a.at; }).slice(0, 8);
+}
+function renderAround() {
+  var P = prefs(), h = '', a = byId('around');
+  if (P.feed) {
+    var items = feedItems();
+    h += '<div class="panel" id="feed"><div class="hd"><h3>Workspace feed</h3><span class="ows-chip">Team</span></div><div class="feed">' + (items.length ? items.map(function (e) { return '<div class="ev"><span class="av' + (e.me ? ' me' : '') + '">' + esc(ini(e.who)) + '</span><div><b>' + esc(e.me ? 'You' : e.who) + '</b> <span class="t">' + esc(e.text) + '</span></div><span class="when">' + esc(ago(e.at)) + '</span></div>'; }).join('') : '<div class="empty">Nothing yet. A saved project or a message to the team lands here.</div>') + '</div><form class="post" id="post"><input id="post-text" placeholder="Post a message to your team…" maxlength="500" aria-label="Message"><button class="ows-pill primary" type="submit">Post</button></form></div>';
+  }
+  if (P.presence) {
+    var list = DATA.members.slice().sort(function (x, y) { var o = { on: 0, away: 1, off: 2 }; return o[presence(x)] - o[presence(y)] || String(x.name || '').localeCompare(String(y.name || '')); });
+    h += '<div class="panel"><div class="hd"><h3>People</h3><span class="ows-chip">' + (list.length || 1) + ' in workspace</span></div><div class="people">' + (list.length ? list.map(function (m) { var me = String(m.email || '').toLowerCase() === ME, st = presence(m); return '<div class="pr"><span class="av' + (me ? ' me' : '') + '">' + esc(ini(m.name || m.email)) + '</span><div>' + esc(m.name || String(m.email || '').split('@')[0]) + (me ? ' <small>You · ' + esc(WS.role || 'member') + '</small>' : '<small><span class="dot ' + (st === 'on' ? '' : st) + '"></span> ' + (st === 'on' ? 'In the workspace' : st === 'away' ? 'Seen ' + ago(m.lastSeen) + ' ago' : 'Last seen ' + ago(m.lastSeen) + ' ago') + '</small>') + '</div></div>'; }).join('') : '<div class="empty"><b>You are the whole team here.</b> Anyone with an @' + esc(WS.orgId) + ' address signs in and joins as a member.</div>') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ows-pill" type="button" id="invite">+ Invite a colleague</button></div></div>';
+  }
+  if (P.partners) {
+    var partners = {}, org = WS.orgId;
+    DATA.projects.forEach(function (p) { (p.orgsInvolved || []).forEach(function (o) { if (o && o !== org) partners[o] = (partners[o] || 0) + 1; }); });
+    if (WS.jdPartnerOrg && WS.jdPartnerOrg !== org) partners[WS.jdPartnerOrg] = partners[WS.jdPartnerOrg] || 0;
+    var keys = Object.keys(partners);
+    h += '<div class="panel"><div class="hd"><h3>Partners on your projects</h3><span class="ows-chip">JDA</span></div>' + (keys.length ? '<div class="people">' + keys.map(function (k) { return '<div class="pr"><span class="av partner">' + esc(ini(k.split('.')[0])) + '</span><div>' + esc(k) + '<small>' + (partners[k] ? partners[k] + ' shared project' + (partners[k] === 1 ? '' : 's') : 'Joint development partner') + '</small></div></div>'; }).join('') + '</div>' : '<div class="empty">No partner is on your projects yet. Share one under a joint development agreement and they appear here for that project only.</div>') + '<div class="ows-note" style="font-size:12.5px">A vendor’s identity shows only after a quote is accepted. Before that they see the anonymised opportunity.</div></div>';
+  }
+  if (P.guides) {
+    h += '<div class="panel"><div class="hd"><h3>Guides</h3><span class="ows-chip">For your tools</span></div><div class="ows-rows">' + [['Omega Logic app', 'The office on a phone', '/guides/Omega-Logic-App.pdf']].map(function (g) { return '<a class="ows-row" href="' + g[2] + '" target="_blank" rel="noopener"><span class="ic">' + S.ICON.file + '</span><div><b>' + esc(g[0]) + '</b><small>' + esc(g[1]) + '</small></div><span class="ows-pill sm ghost">Open</span></a>'; }).join('') + '</div></div>';
+  }
+  a.innerHTML = h || '<div class="empty">Every panel is off. Turn one on in Customize.</div>';
+  var form = byId('post'); if (form) form.addEventListener('submit', post);
+  var inv = byId('invite'); if (inv) inv.addEventListener('click', inviteDrawer);
+}
+function post(e) {
+  e.preventDefault(); var inp = byId('post-text'), text = (inp.value || '').trim(); if (!text) return;
+  db.collection('team_messages').add({ orgId: WS.orgId, text: text, authorEmail: ME, authorName: who(), createdAt: firebase.firestore.FieldValue.serverTimestamp() })
+    .then(function () { inp.value = ''; DATA.messages.push({ orgId: WS.orgId, text: text, authorEmail: ME, authorName: who(), createdAt: new Date() }); renderAround(); S.toast('Posted to your team'); })
+    ['catch'](function (err) { S.toast('Could not post: ' + (err && err.message)); });
+}
+
+/* ── the side panels ────────────────────────────────────────────────────── */
+function areaDrawer(key) {
+  var a = null; HUB.AREAS.forEach(function (x) { if (x.key === key) a = x; }); if (!a) return;
+  var rows = HUB.items(key, hubCtx()).map(function (r) {
+    if (r.page) return { key: 'p:' + r.href, name: r.name, sub: r.sub, href: r.href, icon: S.ICON.projects, onClick: r.href.charAt(0) === '#' ? function () { S.closeDrawer(); go(r.href.slice(1)); } : null };
+    var t = tool(r.key); return { key: r.key, name: r.name, sub: r.sub, locked: r.locked, icon: toolIcon(t), href: r.locked ? null : (t.action ? null : href(t)), onClick: function () { S.closeDrawer(); launch(t); } };
+  });
+  if (key === 'projects') rows = rows.concat(DATA.projects.slice(0, 6).map(function (p) { return { key: 'proj:' + p.id, name: p.name || 'Untitled', sub: (STAGE_LABEL[p.stage] || 'Candidate') + ' · ' + ago(p.updatedAt || p.createdAt), icon: S.ICON.projects, onClick: function () { openProject(p.id); } }; }));
+  var why = a.always ? 'Every workspace has this.' : a.logic ? 'Shown because this workspace holds Omega Logic ' + esc(a.label) + '.' : 'Shown because at least one of these tools is open on your plan. A locked one says what carries it.';
+  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: a.icon + ' ' + a.label, sub: a.hint, rows: rows, note: why + ' Showing a link is never access: every tool checks the same plan.', onLocked: function (r) { S.closeDrawer(); lockedDrawer(tool(r.key)); } });
+}
+function lockedDrawer(t) {
+  if (!t) return;
+  var pa = WS.packageAccess, mods = pa && Array.isArray(pa.catalog) ? pa.catalog.filter(function (m) { return (m.tools || []).indexOf(t.key) >= 0; }) : [];
+  var tierName = ['everyone', 'Standard', 'Deluxe', 'Enterprise'][typeof t.tier === 'number' ? t.tier : 1] || 'a higher plan';
+  var html = '<div class="ows-note">' + (WS.pendingApproval ? '<b>' + esc(t.name) + '</b> opens once your workspace is approved.' : mods.length ? '<b>' + esc(t.name) + '</b> is part of ' + mods.map(function (m) { return '<b>' + esc(m.name) + '</b>'; }).join(' and ') + ', which ' + esc(WS.clientName || 'this workspace') + ' does not hold yet.' : '<b>' + esc(t.name) + '</b> is on the ' + esc(tierName) + ' plan and above. ' + esc(WS.clientName || 'This workspace') + ' is on ' + esc(planName()) + '.') + '</div>';
+  var rows = WS.pendingApproval ? [] : [{ key: 'plan', name: 'See plans in the Marketplace', sub: 'What each plan carries, and what it costs', href: '/marketplace.html', icon: S.ICON.marketplace }, { key: 'ask', name: 'Ask ClearSky to switch it on', sub: OmegaBrand.upgradeEmail(), href: 'mailto:' + encodeURIComponent(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Unlock ' + t.name + ' for ' + (WS.clientName || WS.orgId)), icon: S.ICON.feed, cta: 'Email' }];
+  S.drawer({ eyebrow: 'Not on your plan', title: t.name, sub: t.desc || '', html: html, rows: rows });
+}
+function billingDrawer() {
+  var b = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}, pa = WS.packageAccess;
+  function day(v) { var t = ms(v); return t ? new Date(t).toLocaleDateString() : '—'; }
+  var kv = [['Plan', planName()], ['Workspace', WS.clientName || WS.orgId], ['Your role', WS.role || 'member']];
+  if (pa && pa.packaged) { kv.push(['Modules', (pa.catalog || []).filter(function (m) { return WS.modules.indexOf(m.key) >= 0; }).map(function (m) { return m.name; }).join(', ') || '—']); if (pa.accessUntil) kv.push(['Access through', day(pa.accessUntil)]); if (pa.readOnly) kv.push(['Status', 'Read-only']); }
+  else { kv.push(['Add-ons', (WS.addons || []).join(', ') || 'None']); if (Array.isArray(WS.toolAccess)) kv.push(['Tools on this plan', WS.toolAccess.length]); }
+  if (b.amountDue != null) kv.push(['Amount due', money(b.amountDue)]);
+  if (b.subscriptionDue) kv.push(['Next payment', day(b.subscriptionDue)]);
+  if (trialEnd()) kv.push(['Trial ends', day(trialEnd())]);
+  var html = '<div class="kv">' + kv.map(function (r) { return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</div>';
+  var rows = [{ key: 'plans', name: 'Change plan', sub: 'Add a module, or move up a plan, in the Marketplace', href: '/marketplace.html', icon: S.ICON.marketplace }];
+  if (b.paymentLink) rows.unshift({ key: 'pay', name: 'Pay', sub: 'Your invoice, on the payment page', href: b.paymentLink, newTab: true, icon: S.ICON.billing });
+  S.drawer({ eyebrow: 'Account', title: 'Plan & billing', sub: 'What ' + (WS.clientName || 'this workspace') + ' holds and what it is paying for.', html: html, rows: rows, note: 'Prices and changes are always the server’s: nothing here is priced in the browser.' });
+}
+function settingsDrawer() {
+  var html = '<div class="field"><label for="set-name">Display name</label><input id="set-name" value="' + esc(who()) + '" maxlength="60"></div><div class="kv"><div><span>Email</span><span>' + esc(ME) + '</span></div><div><span>Workspace</span><span>' + esc(WS.orgId) + '</span></div><div><span>Role</span><span>' + esc(WS.role || 'member') + '</span></div></div>';
+  var rows = [{ key: 'save', name: 'Save name', sub: 'Shown to your team and on projects you own', icon: S.ICON.me, cta: 'Save', onClick: saveName }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'out', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];
+  S.drawer({ eyebrow: 'Account', title: 'Settings', html: html, rows: rows });
+}
+function saveName() {
+  var v = (byId('set-name').value || '').trim(); if (!v) return;
+  db.collection('team_members').doc(WS.orgId + '__' + ME).set({ orgId: WS.orgId, email: ME, name: v }, { merge: true })
+    .then(function () { PROFILE = PROFILE || {}; PROFILE.name = v; S.paint({ ws: WS, user: USER, displayName: v }); render(); S.closeDrawer(); S.toast('Saved'); })
+    ['catch'](function (err) { S.toast('Could not save: ' + (err && err.message)); });
+}
+function inviteDrawer() {
+  var link = window.location.origin + '/';
+  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Invite a colleague', html: '<div class="ows-note">Anyone with an <b>@' + esc(WS.orgId) + '</b> email signs in at <b>' + esc(link) + '</b> and joins this workspace as a member. No invitation to send: the address is the key.</div>', rows: [{ key: 'copy', name: 'Copy the sign-in link', sub: link, icon: S.ICON.feed, cta: 'Copy', onClick: function () { try { navigator.clipboard.writeText(link).then(function () { S.toast('Copied'); }, function () { S.toast(link); }); } catch (e) { S.toast(link); } } }] });
+}
+function customizeDrawer() {
+  var P = prefs(), opts = [['presence', 'Who is here', 'Teammates in the workspace and what they have open.'], ['feed', 'Workspace feed', 'Saved projects and messages from your team.'], ['partners', 'Partners on your projects', 'Vendors and joint development partners acting on your projects.'], ['guides', 'Guides', 'Short guides for the tools you hold.']];
+  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Customize your home', sub: 'Your plan sets the hub. You choose what else is around it. Saved for you.', html: '<div>' + opts.map(function (o) { return '<div class="opt"><div><b>' + esc(o[1]) + '</b><small>' + esc(o[2]) + '</small></div><button class="tg" type="button" role="switch" aria-checked="' + (P[o[0]] ? 'true' : 'false') + '" data-opt="' + o[0] + '" aria-label="' + esc(o[1]) + '"></button></div>'; }).join('') + '</div>', ready: function (el) {
+    Array.prototype.forEach.call(el.querySelectorAll('[data-opt]'), function (t) { t.addEventListener('click', function () { var k = t.getAttribute('data-opt'), p = prefs(); p[k] = !p[k]; t.setAttribute('aria-checked', p[k] ? 'true' : 'false'); DATA.prefs = p; renderToday(); renderAround(); savePrefs(p); }); });
+  } });
+}
+var saveT;
+function savePrefs(p) {
+  clearTimeout(saveT); saveT = setTimeout(function () {
+    if (!USER) return;
+    db.collection('dashboard_layouts').doc(WS.orgId + '__' + USER.uid).set({ workspace: p, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {});
+  }, 500);
+}
+function search(qs) {
+  qs = String(qs || '').toLowerCase().trim();
+  Array.prototype.forEach.call(document.querySelectorAll('#tools-body .tool'), function (t) { t.style.display = !qs || t.textContent.toLowerCase().indexOf(qs) >= 0 ? '' : 'none'; });
+  Array.prototype.forEach.call(document.querySelectorAll('#flight-body .pc'), function (t) { t.style.display = !qs || t.textContent.toLowerCase().indexOf(qs) >= 0 ? '' : 'none'; });
+  if (qs) go('tools');
+}
+function route() {
+  var h = (window.location.hash || '').slice(1);
+  if (!h) return;
+  if (h === 'billing') billingDrawer(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer();
+  else if (h.indexOf('area-') === 0) areaDrawer(h.slice(5));
+  else go(h);
+}
+window.addEventListener('hashchange', function () { if (WS) route(); });
+byId('customize').addEventListener('click', customizeDrawer);
+byId('new-project').addEventListener('click', function () { if (WS && WS.pendingApproval) { S.toast('Projects open once your workspace is approved'); return; } OmegaNewProject.open('bess'); });
+window.WORKSPACE_PAGE = { render: render, needs: needs, data: DATA };
+})();
+</script>
+</body>
+</html>

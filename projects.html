@@ -742,6 +742,10 @@ window._omegaReady = function(){
 <script src="/omega-jd-nav.js?v=1"></script>
 <script src="/omega-brand.js"></script>
 <script src="/omega-tenant.js"></script>
+<!-- The workspace's ground (the blueprint grid) and its home link, so a
+     click from /workspace to here and back never changes product. -->
+<script src="/omega-workspace-shell.js"></script>
+<script>if (window.OmegaWorkspaceShell) OmegaWorkspaceShell.theme();</script>
 <script src="/omega-whitelabel.js"></script>
 <!-- The My Applications submenu is built from OMEGATools' public API, and
      paint() bails on its first line when OMEGATools is undefined. This page

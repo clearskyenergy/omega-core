@@ -670,6 +670,29 @@ is not built.
   camera a printed label and requires the passport and the bench to open.
 - Chromium render checks for all of it: `npm run check:pages`.
 
+## Omega Workspace — the home (2026-09-26)
+
+`workspace.html` is the hub-first home that replaces the dashboard one
+tenant at a time: `omega_orgs/{org}.shell = 'workspace'` flips a tenant,
+`?home=workspace` tries it on one browser (`?home=classic` undoes it), and
+`OmegaWorkspaceShell.wantsWorkspace()` is the ONE rule index.html, the
+workspace and the legacy pages read. `omega-workspace-shell.js` is the one
+chrome (rail, topbar, switcher, the website's blueprint grid, side panel,
+toast, phone tab bar); a page never builds its own rail. The hub is
+`omega-hexhub.js` drawn from `omega-workspace-hub.js`, which composes the
+six cells from `OMEGATools.isUnlocked()` — showing a cell is never access —
+and `scripts/tests/tworkspacehub.js` asserts every key it names against the
+real catalogs. Every tool tile is Live, Locked or Soon by that same rule;
+a locked tile explains, never hides. Today is `omega-workspace-today.js`
+(pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
+both ends of the Quote Desk, the referral inbox, projects ready, stalled or
+unsized. Never a second copy of those rules in a page. Opt-in panels live on
+`dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
+renders it as four tenants on the Firebase double; run it and
+`check:dashboard` after any change to the page, the shell or the runtime.
+Design, launch order and the honest list of what is not built:
+`docs/OMEGA-WORKSPACE.md`.
+
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
 Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by
