@@ -2124,3 +2124,138 @@ returns the year-by-year schedule it already computed; sweep rows drop it so
 server-side site lookups (energy community, PVWatts, URDB) and
 `docs/PROFORMA.md`.
 
+
+## Packaging Phase 0 — September 26, 2026
+
+L2 closeout is already on main via PR #133; no second merge was performed.
+`omega-caps.js` takes verification from the same Firebase user as the email,
+requires literal true plus the current staff domain on all three fallback
+paths, and clears stale add-ons before resolving another account. An existing
+billing record wins. Server authorization continues to use `caller.staff`.
+New signup trials default to and cannot exceed 14 days; repeat signup does
+not rewrite billing. Phase 4 still owns approval-started trials and billing.
+No pricing/modeling engine is changed or moved by this phase; existing engine
+debt above is outside this authentication-only editor edit. No tenant data,
+QuickBooks records, rules or production deployment changed.
+
+## Packaging Track A — September 26, 2026
+
+The shared `omega-newproject.js` now presents seven project cards. Solar +
+Storage expands to existing `der` + `bess` siteScopes. Existing scope keys
+and primary-type precedence remain stable; Building is additive. No saved
+project is migrated. The editor recognises Building for its existing project
+type selector. This is project metadata, not a new entitlement or engine.
+
+The existing OmegaRibbonIcons owner converts glyphs to a common SVG stroke
+family. OmegaShelf keeps the named duplicate tools hidden after late
+injection, and retires only the BESS Config and Viability ribbon launchers.
+`_openPadConfig` (equipment placement/configuration) and every draw function
+remain intact. No pricing, scoring, eligibility or finance engine changes
+were made; the existing browser-engine debt listed above remains.
+
+Workspace filtering and the catalog-based package gates remain Phase 3.
+Checks render the real shared dialog and isolated real ribbon owners with
+legacy standard/deluxe billing fixtures; they do not simulate future
+Lite/Field module entitlements or claim a full Maps/authenticated editor run.
+
+
+## Packaging Phase 2 — September 26, 2026
+
+The canonical editor keeps every drawing implementation. The shared server
+catalog now drives packaged command visibility, direct launchers, File/Output,
+Summary Cost, Ctrl+K/Jarvis and late controls. Customer Editor Lite receives an
+authorized drawing projection instead of bypassing caps by query parameter.
+AI Render belongs only to Plan Sets & CAD. Existing tier behavior stays on
+unpackaged records; read failures no longer stand in for legacy billing.
+
+Server producers use `api/_lib/package-access.js`; Grid Atlas and validation
+submission now require Firebase authentication. No financial/scoring engine
+was moved in this phase: the browser-engine debt above remains a release
+prerequisite, not a solved security claim. See
+`docs/PACKAGING-PHASE-2-VALIDATION.md` for coverage and exact test limitations.
+
+
+## Packaging Phase 3 — September 26, 2026
+
+The packaged editor now derives command attributes and MODULE_GRANTS from the
+server catalog, prunes empty containers, renumbers captions and provides seven
+project workspaces with a per-user All tools choice. The shared module gallery
+uses server feature/price projections; subscription checkout remains Phase 5.
+Staff-only presentation previews do not write billing or impersonate a tenant.
+Catalog metadata keeps shared draw tools out of gated Compute/Estimate
+containers. Fleet O&M and O&M Lifecycle now correctly belong to Operations;
+no second command ownership table was introduced.
+
+The full canonical HTML browser run exposed an existing Recent Projects loop:
+a successfully loaded empty array was mistaken for a missing result, causing
+an endless promise/refetch loop on a new account. Empty results now render the
+existing empty state. No draw implementation was removed. Result-rail changes
+only reorder existing displayed values and add an action for an empty project;
+no financial/scoring engine changed or moved. The engine debt above remains.
+
+Legacy layout modes remain for unpackaged records; packaged project focus
+cannot override module access. The dry-run backfill requires captured current
+tool access and flags grants outside the sold catalog, rather than deleting or
+automatically converting them. See docs/PACKAGING-PHASE-3-VALIDATION.md.
+
+
+## Packaging Phase 5 — September 26, 2026
+
+No `editor.html` edit. The shared + Modules gallery (`omega-package-menu.js`)
+gained the subscribe control: a quote, a pay-first change invoice or an
+immediate $0 activation, all from `POST /api/plan-change`; the browser
+displays server strings and grants nothing. The tools appear when the
+server projection says so. "Your plan" in the tenant record uses the same
+control. No draw implementation was touched and no financial engine moved;
+the proration and change math lives in `api/_lib/plan-change.js` and
+`api/_lib/package-billing.js`. What a tenant bought (`billing.subscription`)
+is now separate from what is switched on (`billing.modules`), so a late
+payment never rewrites the package. The browser-engine debt above remains.
+See docs/PACKAGING-PHASE-5-VALIDATION.md.
+
+
+## Packaging Phase 6 — September 26, 2026
+
+No `editor.html` edit. The Subscription Proposal is a new root tool page on
+the Pro Forma pattern with a companion `subscription-proposal-logic.js`
+that only draws; every figure comes from `POST /api/subscription-proposal`
+on `api/_lib/subscription-proposal.js` and the price book. `brandOf` moved
+out of `api/proforma.js` into `api/_lib/deck-brand.js` so the two decks
+share one brand rule (the Pro Forma keeps `_gate.brandOf`). `start.html`
+gained the discovery step and a proposal prefill; `api/tenant-signup.js`
+stores the answers and accepts a keyed proposal. No draw implementation was
+touched and no financial engine moved; the browser-engine debt above
+remains. See docs/PACKAGING-PHASE-6-VALIDATION.md.
+
+
+## Packaging Phase 7 — September 26, 2026
+
+No `editor.html` edit. `omega-usage.js` is a new shared runtime file; the EV
+cost workbook, the closeout and Site Finder gate their export through
+`POST /api/usage` before producing, and the RFQ endpoint counts a bill of
+materials server-side. All counting, allowance, overage and review math is
+in `api/_lib/usage.js`; the browser draws the server’s badge. No draw
+implementation was touched and no financial engine moved; the
+browser-engine debt above remains. See docs/PACKAGING-PHASE-7-VALIDATION.md.
+
+## Packaging Phase 8 — September 26, 2026
+
+No `editor.html` edit. Omega Logic follows the package: `api/_lib/logic-access.js`
+judges a packaged tenant by `modules[]` and the live grant
+(`package-access.live`, lifted out of the editor projection so both read one
+rule), and every Logic endpoint names the part it serves. The office chrome
+(`omega-logic-theme.js`), the desktop dashboard, the Omega Logic app and
+`logic-settings.html` draw only the parts held; the sandboxes were rebuilt and
+the PDF guides retaken because those screens changed. Nothing moved between
+browser and server; the browser-engine debt above remains. See
+docs/PACKAGING-PHASE-8-VALIDATION.md and docs/PACKAGING-RELEASE-CHECKLIST.md.
+
+## Packaging Phase 9 — September 26, 2026
+
+No `editor.html` edit, no page changed. The bench (`api/mes-scan.js`), the
+test rig (`api/mes-test-result.js`) and hold/release (`api/plant-control.js`)
+run `logic-access.requirePartIfPackaged(org, 'plant')`; `firestore.rules`
+compares the sign-in email lower-cased in the four team blocks,
+`termsAcceptances` and `isAdmin()`; `omega-auth-errors.js` names the
+preview hostname when a sign-in is refused for an unauthorised domain. See
+docs/PACKAGING-PHASE-9-VALIDATION.md.

@@ -1,0 +1,346 @@
+<!-- docs/design/package-panel-prototype.html — DESIGN REFERENCE ONLY, not served (docs/ is not deployed).
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     The Package panel prototype for the master console. Static data, writes nothing.
+     Build spec: docs/PACKAGING-ROADMAP.md §8. -->
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tenant Package Panel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+:root{--navy:#16202B;--blue:#2B5FA8;--text:#14171A;--sub:#5B6672;--bg:#F5F4F0;--surface:#FFFFFF;--border:#E1E7EB;--sunk:#EEF1F3;--green:#2E7D5B;--green-s:#E3F2EA;--red:#D9482B;--red-s:#FBE7E2;--amber:#B45F06;--amber-s:#FBEFD9;--blue-s:#E6EEF9;--onnavy:#EEF2F6;
+--f:"DM Sans",system-ui,sans-serif;--m:"DM Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--navy:#0B1219;--blue:#6E9BE0;--text:#E6EBF0;--sub:#94A1AE;--bg:#10161D;--surface:#172029;--border:#26323E;--sunk:#1D2833;--green:#6CC59A;--green-s:#16322A;--red:#F08A70;--red-s:#3A1F19;--amber:#E9A94A;--amber-s:#382A14;--blue-s:#1A2A40}}
+:root[data-theme="dark"]{color-scheme:dark;--navy:#0B1219;--blue:#6E9BE0;--text:#E6EBF0;--sub:#94A1AE;--bg:#10161D;--surface:#172029;--border:#26323E;--sunk:#1D2833;--green:#6CC59A;--green-s:#16322A;--red:#F08A70;--red-s:#3A1F19;--amber:#E9A94A;--amber-s:#382A14;--blue-s:#1A2A40}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:14px/1.5 var(--f);padding-inline:16px;padding-block:0 40px}
+.num{font-family:var(--m);font-variant-numeric:tabular-nums}
+.top{background:var(--navy);color:var(--onnavy);margin-inline:-16px;padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.top b{font-size:15px}.top span{font:12px var(--m);opacity:.7}
+.proto{margin-left:auto;font:500 11px var(--m);background:#D97706;color:#fff;padding:3px 8px;border-radius:4px;letter-spacing:.05em}
+.wrap{max-width:1280px;margin:16px auto 0;display:grid;grid-template-columns:260px 1fr;gap:16px}
+@media(max-width:860px){.wrap{grid-template-columns:1fr}}
+.list{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;align-self:start}
+.list h3{margin:0;padding:10px 12px;font:500 11px var(--m);letter-spacing:.08em;text-transform:uppercase;color:var(--sub);border-bottom:1px solid var(--border)}
+.acct{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--border);padding:9px 12px;font:13px var(--f);color:var(--text);cursor:pointer}
+.acct:hover{background:var(--sunk)}.acct.on{background:var(--blue-s);box-shadow:inset 3px 0 0 var(--blue)}
+.acct small{display:block;color:var(--sub);font-size:11.5px}
+.acct .num{font-size:12px;color:var(--sub);white-space:nowrap}
+.drawer{background:var(--surface);border:1px solid var(--border);border-radius:8px;min-width:0}
+.dh{padding:16px 18px 0;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end}
+.dh h2{margin:0;font-size:20px}.dh .sub{color:var(--sub);font-size:12.5px}
+.pill{font:500 11px var(--m);padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--sub)}
+.pill.warn{background:var(--amber-s);color:var(--amber)}.pill.ok{background:var(--green-s);color:var(--green)}
+.tabs{display:flex;gap:2px;padding:12px 18px 0;border-bottom:1px solid var(--border);overflow-x:auto}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:8px 12px;font:600 13px var(--f);color:var(--sub);cursor:pointer;white-space:nowrap}
+.tab.on{color:var(--blue);border-color:var(--blue)}
+.pane{padding:16px 18px}
+.grid{display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+label.l{font:500 11px var(--m);color:var(--sub);letter-spacing:.05em;text-transform:uppercase}
+select,button.b{font:500 13px var(--f);color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:7px 10px;cursor:pointer}
+button.b:hover,select:hover{border-color:var(--blue)}
+button.p{background:var(--blue);border-color:var(--blue);color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.shelf{margin-top:14px}
+.shelf h4{margin:0 0 6px;font:500 11px var(--m);letter-spacing:.08em;text-transform:uppercase;color:var(--sub);display:flex;justify-content:space-between}
+.mods{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.mod{display:grid;grid-template-columns:auto 1fr;gap:2px 9px;padding:10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface)}
+.mod input{margin-top:3px;accent-color:var(--blue)}
+.mod .n{font-weight:600;display:flex;justify-content:space-between;gap:6px}
+.mod .d{grid-column:2;font-size:12px;color:var(--sub);line-height:1.4}
+.mod .t{grid-column:2;display:flex;gap:5px;flex-wrap:wrap;margin-top:3px}
+.mod.on{border-color:var(--blue);background:var(--blue-s)}
+.mod.fixed{cursor:default}
+.tg{font:500 10.5px var(--m);padding:1px 6px;border-radius:4px;background:var(--sunk);color:var(--sub)}
+.tg.beta{background:var(--amber-s);color:var(--amber)}.tg.gate{background:var(--red-s);color:var(--red)}
+.sum{position:sticky;top:12px;background:var(--navy);color:var(--onnavy);border-radius:8px;padding:16px;display:grid;gap:9px}
+.sum .k{font:500 10.5px var(--m);letter-spacing:.08em;text-transform:uppercase;opacity:.65}
+.sum .big{font:500 30px var(--m)}
+.sum .r{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.sum hr{border:0;border-top:1px solid rgba(255,255,255,.15);margin:2px 0;width:100%}
+.fit{background:rgba(110,155,224,.2);border-radius:6px;padding:8px 10px;font-size:12.5px}
+.floor{background:rgba(217,72,43,.25);border-radius:6px;padding:8px 10px;font-size:12.5px}
+.sum label{display:flex;gap:7px;align-items:center;font-size:12.5px;cursor:pointer}
+.sum .acts{display:grid;gap:6px}
+.sum button{width:100%}
+.note{font-size:12px;color:var(--sub)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{font:500 10.5px var(--m);text-transform:uppercase;letter-spacing:.07em;color:var(--sub);text-align:left;padding:7px 9px;border-bottom:1px solid var(--text)}
+td{padding:7px 9px;border-bottom:1px solid var(--border);vertical-align:top}
+td.r,th.r{text-align:right}
+.tw{overflow-x:auto;border:1px solid var(--border);border-radius:6px}
+pre{background:var(--sunk);border-radius:6px;padding:12px;font:12px/1.5 var(--m);overflow-x:auto;margin:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:900px){.two{grid-template-columns:1fr}}
+h3.s{margin:0 0 8px;font-size:15px}
+.cust{border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.cust .bar{background:var(--sunk);padding:10px 14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:13px}
+.cm{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--border)}
+.cm .n{font-weight:600}.cm .d{font-size:12px;color:var(--sub)}
+.have{font:500 11px var(--m);color:var(--green)}
+.confirm{background:var(--blue-s);border:1px solid var(--blue);border-radius:8px;padding:12px 14px;margin:10px 14px;display:grid;gap:8px}
+.toast{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);left:50%;transform:translateX(-50%);background:var(--navy);color:var(--onnavy);padding:10px 16px;border-radius:8px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+</style>
+
+<div class="top"><b>Master console</b><span>tools · tenants</span><span class="proto">PROTOTYPE · NOTHING HERE WRITES TO A TENANT</span></div>
+
+<div class="wrap">
+  <nav class="list" aria-label="Tenants"><h3>Tenants · 15 targets</h3><div id="accts"></div></nav>
+  <section class="drawer">
+    <div class="dh"><div><h2 id="t-name">Clean Cell</h2><div class="sub" id="t-sub"></div></div><span class="pill" id="t-status"></span></div>
+    <div class="tabs" role="tablist">
+      <button class="tab on" data-p="pkg" role="tab">Package</button>
+      <button class="tab" data-p="write" role="tab">What Activate writes</button>
+      <button class="tab" data-p="cust" role="tab">Customer's "Your plan"</button>
+      <button class="tab" data-p="hist" role="tab">History</button>
+    </div>
+
+    <div class="pane" id="p-pkg">
+      <div class="grid">
+        <div>
+          <div class="row">
+            <label class="l" for="ctype">Customer type</label>
+            <select id="ctype"></select>
+            <button class="b" id="starter" type="button">Apply starter pack</button>
+          </div>
+          <div id="shelves"></div>
+        </div>
+        <aside class="sum" aria-live="polite">
+          <div><div class="k">Menu value (list)</div><div class="big num" id="s-list">$0</div></div>
+          <div class="r"><span>Plan that fits</span><span class="num" id="s-plan"></span></div>
+          <div class="r"><span>Monthly charge</span><span class="num" id="s-pay"></span></div>
+          <label for="credit"><input type="checkbox" id="credit" checked> Transformation credit 40% · 90 days</label>
+          <div class="r"><span>First 90 days</span><span class="num" id="s-first"></span></div>
+          <div class="r"><span>Service fee / yr</span><span class="num" id="s-fee"></span></div>
+          <div class="r" style="gap:6px"><select id="feeMode" aria-label="Annual service fee"><option value="standard">Charge standard</option><option value="custom">Custom amount</option><option value="waived">Waive</option></select><input id="feeAmt" type="number" min="0" step="100" aria-label="Custom service fee" hidden style="width:100px;font:13px var(--m);padding:6px;border-radius:6px;border:1px solid var(--border)"></div>
+          <input id="feeWhy" aria-label="Reason for changing the fee" placeholder="Reason (required)" hidden style="font:13px var(--f);padding:6px 8px;border-radius:6px;border:1px solid var(--border)">
+          <div class="r"><span>Billing date</span><span class="num" id="s-bday"></span></div>
+          <hr>
+          <div class="r"><span>Included usage</span><span class="num" id="s-use" style="text-align:right"></span></div>
+          <div class="fit" id="s-fit"></div>
+          <div class="floor" id="s-floor" hidden>Below the $500 floor. Lite is required.</div>
+          <div class="acts">
+            <button class="b p" id="activate" type="button">Activate: send first invoice</button>
+            <button class="b" id="propose" type="button">Send as proposal</button>
+          </div>
+          <div class="note" style="color:inherit;opacity:.65">Prices from price book 2026-10 (proposed). Activate issues the first invoice from ClearSky's QuickBooks and emails its pay link; modules switch on when QuickBooks shows it paid.</div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="pane" id="p-write" hidden>
+      <div class="two">
+        <div><h3 class="s">QuickBooks invoice lines (ClearSky company)</h3><div class="tw"><table><thead><tr><th>Line</th><th>QuickBooks item</th><th class="r">Monthly</th></tr></thead><tbody id="w-stripe"></tbody></table></div>
+          <p class="note" style="margin-top:8px">A plan that fits (Field / Pro) is one plan line listing its modules; below Field each module is its own line. Usage over the included amount appears as overage lines on next month's invoice. Paid by card or ACH through the invoice's QuickBooks pay link.</p></div>
+        <div><h3 class="s">omega_orgs/<span id="w-org"></span>/billing/current</h3><pre id="w-bill"></pre>
+          <p class="note" style="margin-top:8px"><code>tier</code>, <code>addons</code> and <code>toolAccess</code> are derived from <code>modules</code>. Nobody edits them by hand for a packaged tenant.</p></div>
+      </div>
+    </div>
+
+    <div class="pane" id="p-cust" hidden>
+      <p class="note" style="margin-bottom:10px">What the tenant's owner or admin sees in Account Settings. Members see it read-only with "Ask my admin".</p>
+      <div class="cust">
+        <div class="bar"><b id="c-head">Your plan</b><span class="num" id="c-total"></span></div>
+        <div id="c-confirm"></div>
+        <div id="c-list"></div>
+      </div>
+    </div>
+
+    <div class="pane" id="p-hist" hidden>
+      <div class="tw"><table><thead><tr><th>When</th><th>Who</th><th>Change</th><th class="r">Monthly</th></tr></thead><tbody id="h-rows"></tbody></table></div>
+      <p class="note" style="margin-top:8px">Every change is a billing history row and an admin_audit row: who, when, what it was, what it is now.</p>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+var SH=[['lite','Floor'],['add','Add-on · $250'],['std','Standard · $250'],['prem','Premium · $500'],['del','Deliverable · $750 + usage'],['logic','Omega Logic']];
+var M=[
+ {k:'lite',s:'lite',n:'Lite (Site Map core)',p:500,d:'Editor, guided builds, equipment, conduit, 3D review, blueprint, proposal, financing listing. 3 builders, 10 viewers.',fixed:1},
+ {k:'gridatlas',s:'add',n:'Grid Atlas',p:250,d:'Substations, lines, hosting capacity, grid pre-screen, interconnection screener.',gate:'behind Engineering today'},
+ {k:'storage',s:'std',n:'Storage Sizing & Revenue',p:250,d:'BESS sizers, bill import, value stack, pro forma.'},
+ {k:'estimate',s:'std',n:'Estimate, BOM & Procurement',p:250,d:'Construction cost, NECA estimate, takeoff, BOM sourcing, RFQ.',gate:'behind Engineering today'},
+ {k:'evrebates',s:'std',n:'EV Rebates & Closeout',p:250,d:'EV Cost Workbook, utility forms, L2 closeout.',use:'20 applications'},
+ {k:'plansets',s:'prem',n:'Plan Sets & CAD',p:500,d:'Plot plan, one-line, schematic editor, riser, permit sheet, sheet manager.',gate:'ungated today'},
+ {k:'siteintel',s:'prem',n:'Site Intelligence',p:500,d:'Network proximity, parcel screening, GIS layers, terrain.'},
+ {k:'engineering',s:'prem',n:'Engineering & Analysis',p:500,d:'Circuit analysis, NEC calcs, load flow, yield, optimizer.'},
+ {k:'finance',s:'prem',n:'Investor & Finance',p:500,d:'Push to Marketplace, Apply for Financing, investment analysis.'},
+ {k:'compute',s:'prem',n:'Compute & Data Center',p:500,d:'Compute build, max load, tie-ins, compute cost, land lease.'},
+ {k:'ops',s:'prem',n:'Operations',p:500,d:'O&M console, SLA, field service, owner reporting.'},
+ {k:'whitelabel',s:'prem',n:'White Label Storefront',p:500,d:'Their name, sizing on their website, leads to their queue.'},
+ {k:'permitting',s:'del',n:'Permitting Matrix',p:750,d:'Permits, Gantt, dependencies, fees.',use:'1 matrix',beta:1},
+ {k:'sitefinder',s:'del',n:'Site Finder',p:750,d:'C&I sites ranked by deliverable kW. Northern Illinois.',use:'25 site studies'},
+ {k:'logic-office',s:'logic',n:'Logic · Office',p:1500,d:'Orders, customers, CRM, PO loads, invoicing.'},
+ {k:'logic-plant',s:'logic',n:'Logic · Plant',p:750,d:'Work orders, stations, bench scan, quality.',req:'logic-office'},
+ {k:'logic-materials',s:'logic',n:'Logic · Materials',p:500,d:'BOM explosion, stock, suppliers, POs.',req:'logic-office'},
+ {k:'logic-logistics',s:'logic',n:'Logic · Logistics',p:500,d:'Freight, custody, sites, warranty.',req:'logic-office'},
+ {k:'logic-customer',s:'logic',n:'Logic · Customer App',p:250,d:'Their customers: fleet, POs, pay, shipping.',req:'logic-office'}
+];
+var B={};M.forEach(function(m){B[m.k]=m;});
+var TYPES={'EV installer':['evrebates','estimate','gridatlas','plansets'],'Solar / BESS installer':['storage','estimate','plansets'],'Developer':['gridatlas','storage','finance'],'EPC / engineering':['plansets','engineering','estimate','permitting'],'OEM':['whitelabel','storage','estimate'],'Distributor':['whitelabel','estimate'],'Compute / advisor':['compute','gridatlas','siteintel'],'Capital partner':['finance','gridatlas']};
+var LOGIC5=['logic-office','logic-plant','logic-materials','logic-logistics','logic-customer'];
+var A=[
+ {d:16,n:'Clean Cell',o:'cleancell.us',t:'OEM',st:'Trial ends 30 Sep',w:1,m:['whitelabel','gridatlas','storage','estimate'].concat(LOGIC5)},
+ {d:3,n:'Concord Energy',o:'concordenergyusa.com',t:'EV installer',st:'Paying · Field',ok:1,m:['evrebates','estimate','gridatlas','plansets']},
+ {d:22,n:'NextNRG',o:'nextnrg.com',t:'Developer',st:'Enterprise contract',ok:1,m:['storage','finance','compute','gridatlas','siteintel','plansets']},
+ {d:2,n:'Budderfly',o:'budderfly.com',t:'Developer',st:'Trial ends 16 Oct',w:1,m:['gridatlas','storage','finance']},
+ {d:2,n:'East West Energy',o:'eastwestenergy.ai',t:'Compute / advisor',st:'Trial ends 16 Oct',w:1,m:['compute','gridatlas','siteintel']},
+ {d:9,n:'CIR',o:'cleantechir.com',t:'EPC / engineering',st:'Trial',w:1,m:['plansets','engineering','estimate','permitting','gridatlas','siteintel']},
+ {d:12,n:'FENECON',o:'fenecon.com',t:'OEM',st:'Signed MSA',m:['whitelabel','storage','estimate']},
+ {d:19,n:'Walters Wholesale',o:'walterswholesale.com',t:'Distributor',st:'Trial',w:1,m:['whitelabel','estimate']},
+ {d:27,n:'Solela / Chileasing',o:'chileasing.com',t:'Developer',st:'Standard',ok:1,m:['storage','finance']},
+ {d:5,n:'Helios Energy Advisors',o:'heliosnrgy.com',t:'Capital partner',st:'Partner',m:['finance','gridatlas']},
+ {d:14,n:'OGI Solar',o:'ogisolar.com',t:'EV installer',st:'Standard · JV member',ok:1,m:['storage','evrebates','estimate']},
+ {d:26,n:'Green Wolf Strategies',o:'(prospect)',t:'Developer',st:'Discovery',m:[]},
+ {d:26,n:'Lattice Energy',o:'(prospect)',t:'Developer',st:'Discovery',m:[]},
+ {d:26,n:'Roam Energy',o:'(prospect)',t:'Developer',st:'Discovery',m:[]},
+ {d:26,n:'R.E.S. (confirm)',o:'(prospect)',t:'Developer',st:'Discovery',m:[]}
+];
+var cur=0, sel={}, hist={}, pending=null, fees={};
+function feeOf(p){var f=fees[cur]||{mode:'standard'};return f.mode==='waived'?0:(f.mode==='custom'?(+f.amt||0):p.fee);}
+function $(i){return document.getElementById(i);}
+function money(n){return '$'+Math.round(n).toLocaleString('en-US');}
+function money2(n){return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function ord(d){var s=['th','st','nd','rd'],v=d%100;return d+(s[(v-20)%10]||s[v]||s[0]);}
+function cycle(day){var t=new Date();t.setHours(0,0,0,0);
+  function at(y,m){var last=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(day,last));}
+  var next=at(t.getFullYear(),t.getMonth());if(next<=t)next=at(t.getFullYear(),t.getMonth()+1);
+  var prev=at(next.getFullYear(),next.getMonth()-1);
+  return {left:Math.round((next-t)/864e5),len:Math.round((next-prev)/864e5),label:next.toLocaleDateString('en-US',{month:'short',day:'numeric'})};}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function keys(){return Object.keys(sel).filter(function(k){return sel[k];});}
+
+function price(ks){
+  var mods=0,del=0,logic=0,list=0;
+  ks.forEach(function(k){var m=B[k];list+=m.p;if(m.s==='logic')logic+=m.p;else if(m.s!=='lite'){mods+=m.p;if(m.s==='del')del++;}});
+  var hasLite=ks.indexOf('lite')>=0, plan, core;
+  if(!hasLite) return {list:list,ok:false};
+  if(mods===0){plan='Lite';core=500;}
+  else if(del===0&&mods<=1250){ if(500+mods>1299){plan='Field';core=1299;} else {plan='A la carte';core=500+mods;} }
+  else if(del<=1&&mods<=3000){plan='Pro';core=2499;}
+  else {plan='Enterprise (quote)';core=500+mods;}
+  var lg=logic; if(LOGIC5.every(function(k){return ks.indexOf(k)>=0;})) lg=2500;
+  var fee = plan==='Lite'||plan==='A la carte'?1500:(plan==='Enterprise (quote)'?10000:3400);
+  return {list:list,ok:true,plan:plan,core:core,logic:lg,pay:core+lg,mods:mods,del:del,fee:fee};
+}
+
+function renderAccts(){
+  $('accts').innerHTML=A.map(function(a,i){var p=price(['lite'].concat(a.m));
+    return '<button type="button" class="acct'+(i===cur?' on':'')+'" data-i="'+i+'"><span>'+esc(a.n)+'<small>'+esc(a.t)+'</small></span><span class="num">'+money(p.pay)+'</span></button>';}).join('');
+}
+function renderShelves(){
+  $('shelves').innerHTML=SH.map(function(s){
+    var ms=M.filter(function(m){return m.s===s[0];});
+    return '<div class="shelf"><h4><span>'+s[1]+'</span>'+(s[0]==='logic'?'<span>all five $2,500</span>':'')+'</h4><div class="mods">'+ms.map(function(m){
+      var tags=[];
+      if(m.use)tags.push('<span class="tg">incl. '+m.use+'/mo</span>');
+      if(m.beta)tags.push('<span class="tg beta">BETA · 1 jurisdiction</span>');
+      if(m.gate)tags.push('<span class="tg gate">Lock: '+m.gate+'</span>');
+      if(m.req)tags.push('<span class="tg">needs Office</span>');
+      return '<label class="mod'+(m.fixed?' fixed':'')+'" for="m-'+m.k+'"><input type="checkbox" id="m-'+m.k+'"'+(m.fixed?' checked disabled':'')+' data-k="'+m.k+'"><span class="n"><span>'+m.n+'</span><span class="num">'+money(m.p)+'</span></span><span class="d">'+m.d+'</span>'+(tags.length?'<span class="t">'+tags.join('')+'</span>':'')+'</label>';
+    }).join('')+'</div></div>';
+  }).join('');
+}
+function syncChecks(){M.forEach(function(m){var i=$('m-'+m.k);i.checked=!!sel[m.k];i.closest('.mod').classList.toggle('on',!!sel[m.k]);});}
+
+function render(){
+  var a=A[cur], ks=keys(), p=price(ks);
+  $('t-name').textContent=a.n; $('t-sub').textContent=a.o+' · '+a.t;
+  var st=$('t-status'); st.textContent=a.st; st.className='pill'+(a.w?' warn':a.ok?' ok':'');
+  syncChecks();
+  $('s-list').textContent=money(p.list); $('s-bday').textContent=ord(a.d)+' of each month';
+  $('s-floor').hidden=p.ok; $('activate').disabled=!p.ok; $('propose').disabled=!p.ok;
+  if(p.ok){
+    $('s-plan').textContent=p.plan+(p.logic?' + Logic':'');
+    $('s-pay').textContent=money(p.pay);
+    $('s-first').textContent=$('credit').checked?money(Math.max(500,p.pay*0.6)):money(p.pay);
+    var fm=fees[cur]||{mode:'standard'};
+    $('feeMode').value=fm.mode; $('feeAmt').hidden=fm.mode!=='custom'; $('feeWhy').hidden=fm.mode==='standard';
+    $('feeAmt').value=fm.amt||''; $('feeWhy').value=fm.why||'';
+    $('s-fee').textContent=fm.mode==='waived'?'Waived (was '+money(p.fee)+')':money(feeOf(p))+(fm.mode==='custom'?' (custom)':'');
+    if(fm.mode!=='standard'&&!(fm.why||'').trim()){ $('activate').disabled=true; $('propose').disabled=true; }
+    var fit;
+    if(p.plan==='Field') fit='Field fits: '+money(500+p.mods)+' of modules for $1,299. Room for '+money(1250-p.mods)+' more at no charge.';
+    else if(p.plan==='Pro') fit='Pro fits: '+money(500+p.mods)+' of modules for $2,499. Room for '+money(3000-p.mods)+' more.';
+    else if(p.plan==='A la carte') fit='Below Field. Add '+money(1299-500-p.mods+1)+' more of modules and Field becomes the better deal.';
+    else if(p.plan==='Lite') fit='Lite only. The smallest package we sell.';
+    else fit='Past Pro. Quote Enterprise on an annual contract.';
+    if(ks.some(function(k){return B[k].req;})&&!sel['logic-office']) fit+=' Logic parts need Office.';
+    $('s-fit').textContent=fit;
+  } else {['s-plan','s-pay','s-first','s-fee'].forEach(function(i){$(i).textContent='-';}); $('s-fit').textContent='';}
+  var use=ks.filter(function(k){return B[k].use;}).map(function(k){return B[k].use;});
+  $('s-use').textContent=use.length?use.join(', '):'none';
+  renderWrite(p,ks); renderCust(p,ks); renderHist();
+}
+function renderWrite(p,ks){
+  var a=A[cur], rows=[];
+  if(p.ok){
+    if(p.plan==='Field'||p.plan==='Pro') rows.push(['Plan: '+p.plan+' ('+ks.filter(function(k){return B[k].s!=='logic'&&k!=='lite';}).length+' modules listed on the line)','OMEGA Plan · '+p.plan,p.core]);
+    else ks.filter(function(k){return B[k].s!=='logic';}).forEach(function(k){rows.push([B[k].n,'OMEGA · '+B[k].n,B[k].p]);});
+    if(p.logic){ if(p.logic===2500) rows.push(['Omega Logic (all five)','OMEGA · Omega Logic (all five)',2500]); else ks.filter(function(k){return B[k].s==='logic';}).forEach(function(k){rows.push([B[k].n,'OMEGA · '+B[k].n,B[k].p]);}); }
+    ks.filter(function(k){return B[k].use;}).forEach(function(k){rows.push([B[k].n+' overage','OMEGA · '+B[k].n+' overage','billed next month']);});
+    var fm2=fees[cur]||{mode:'standard'}, fv=feeOf(p);
+    if(fm2.mode==='waived') rows.push(['Annual service fee: waived ('+(fm2.why||'no reason yet')+')','none',0]);
+    else rows.push(['Annual service fee'+(fm2.mode==='custom'?' (custom: '+(fm2.why||'no reason yet')+')':''),'OMEGA · Annual service fee',fv]);
+    if($('credit').checked) rows.push(['Transformation credit 40% (first 3 invoices, never below $500)','OMEGA · Transformation credit',-(p.pay-Math.max(500,p.pay*0.6))]);
+  }
+  $('w-stripe').innerHTML=rows.map(function(r){return '<tr><td>'+esc(r[0])+'</td><td class="num">'+r[1]+'</td><td class="r num">'+(typeof r[2]==='number'?(r[2]<0?'−'+money(-r[2]):money(r[2])):r[2])+'</td></tr>';}).join('')||'<tr><td colspan="3" class="note">Nothing to bill. Lite is required.</td></tr>';
+  $('w-org').textContent=a.o;
+  var tier=p.plan==='Pro'?'deluxe':p.plan==='Enterprise (quote)'?'enterprise':'standard';
+  var addons=[];
+  if(sel.compute)addons.push('compute');if(sel.siteintel)addons.push('parcelscreen');if(sel.engineering)addons.push('engineering');if(sel.plansets){addons.push('schematics','exports');}if(sel.permitting)addons.push('permitting');if(sel.whitelabel)addons.push('whitelabel');if(ks.some(function(k){return B[k].s==='logic';}))addons.push('omega-logic');
+  var bill={modules:ks,pricebookVersion:'2026-10',plan:p.plan||null,credit:$('credit').checked?{pct:40,endsAt:'+90 days'}:null,builders:3,viewers:10,
+    tier:tier+'   // derived',addons:addons,toolAccess:'[derived from modules by modules.resolve()]',serviceFee:(function(){var f=fees[cur]||{mode:'standard'};return {mode:f.mode,amountCents:Math.round(feeOf(p)*100),reason:f.why||null,appliesTo:'first-year'};})(),billingProvider:'quickbooks',qboCustomerId:'OMEGA-'+a.o,nextInvoiceOn:'1st of next month',status:'awaiting first payment'};
+  $('w-bill').textContent=JSON.stringify(bill,null,2).replace(/"([a-zA-Z]+)":/g,'$1:');
+}
+function renderCust(p,ks){
+  var a=A[cur];
+  $('c-head').textContent=a.n+' · Your plan';
+  $('c-total').textContent=p.ok?(p.plan+' · '+money(p.pay)+'/mo'):'-';
+  $('c-confirm').innerHTML='';
+  if(pending){
+    var after=price(ks.concat([pending])), delta=after.pay-p.pay, cy=cycle(a.d), pr=Math.round(delta*cy.left/cy.len*100)/100;
+    $('c-confirm').innerHTML='<div class="confirm"><b>Subscribe to '+esc(B[pending].n)+'?</b><span>'+(delta===0?'Inside your '+p.plan+' plan: no extra charge. It switches on now.':'<span class="num">'+money2(pr)+'</span> today'+(after.plan!==p.plan?' (moves you to '+after.plan+', the better deal)':'')+' ('+cy.left+' of '+cy.len+' days left until your billing date, '+cy.label+'), then '+money(after.pay)+' a month on the '+ord(a.d)+'. Billed in QuickBooks; it switches on as soon as the payment clears.')+'</span><span style="display:flex;gap:8px"><button class="b p" type="button" id="c-yes">'+(delta===0?'Turn it on':'Subscribe and pay')+'</button><button class="b" type="button" id="c-no">Cancel</button></span></div>';
+  }
+  $('c-list').innerHTML=M.filter(function(m){return m.s!=='lite';}).map(function(m){
+    var have=!!sel[m.k];
+    return '<div class="cm"><div><div class="n">'+m.n+'</div><div class="d">'+m.d+'</div></div>'+(have?'<span class="have">On · remove at review</span>':'<button class="b" type="button" data-add="'+m.k+'"'+(m.req&&!sel[m.req]?' disabled title="Needs Office"':'')+'>Subscribe · '+money(m.p)+'/mo</button>')+'</div>';
+  }).join('');
+}
+function renderHist(){
+  var h=hist[cur]||[];
+  $('h-rows').innerHTML=h.length?h.map(function(r){return '<tr><td class="num">'+r[0]+'</td><td>'+r[1]+'</td><td>'+esc(r[2])+'</td><td class="r num">'+r[3]+'</td></tr>';}).join(''):'<tr><td colspan="4" class="note">No changes yet in this session. Activate or add a module to see a row.</td></tr>';
+}
+function log(who,what){var p=price(keys());(hist[cur]=hist[cur]||[]).unshift([new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),who,what,p.ok?money(p.pay):'-']);}
+function toast(t){var e=$('toast');e.textContent=t;e.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(function(){e.hidden=true;},2600);}
+function load(i){cur=i;pending=null;sel={lite:true};A[i].m.forEach(function(k){sel[k]=true;});$('ctype').value=A[i].t;renderAccts();render();}
+
+$('ctype').innerHTML=Object.keys(TYPES).map(function(t){return '<option>'+t+'</option>';}).join('');
+renderShelves();
+$('shelves').addEventListener('change',function(e){var k=e.target.getAttribute('data-k');if(!k)return;sel[k]=e.target.checked;
+  if(k==='logic-office'&&!e.target.checked)LOGIC5.forEach(function(x){sel[x]=false;});
+  if(B[k].req&&e.target.checked)sel[B[k].req]=true; render();});
+$('starter').addEventListener('click',function(){sel={lite:true};TYPES[$('ctype').value].forEach(function(k){sel[k]=true;});render();toast('Starter pack for '+$('ctype').value+' applied');});
+$('credit').addEventListener('change',render);
+$('feeMode').addEventListener('change',function(){var f=fees[cur]=fees[cur]||{};f.mode=this.value;render();});
+$('feeAmt').addEventListener('input',function(){var f=fees[cur]=fees[cur]||{mode:'custom'};f.amt=this.value;$('s-fee').textContent=money(+this.value||0)+' (custom)';renderWrite(price(keys()),keys());});
+$('feeWhy').addEventListener('input',function(){var f=fees[cur]=fees[cur]||{mode:'standard'};f.why=this.value;var ok=!!this.value.trim();$('activate').disabled=!ok;$('propose').disabled=!ok;renderWrite(price(keys()),keys());});
+$('accts').addEventListener('click',function(e){var b=e.target.closest('[data-i]');if(b)load(+b.getAttribute('data-i'));});
+$('activate').addEventListener('click',function(){log('staff@clearsky-usa.com','Activated: '+keys().filter(function(k){return k!=='lite';}).map(function(k){return B[k].n;}).join(', ')+'. Service fee: '+((fees[cur]||{}).mode||'standard')+((fees[cur]||{}).why?' ('+fees[cur].why+')':'')+'. Payment link sent.');renderHist();toast('Prototype: would issue the QuickBooks invoice and email its pay link');});
+$('propose').addEventListener('click',function(){log('staff@clearsky-usa.com','Proposal sent ('+price(keys()).plan+')');renderHist();toast('Prototype: would open the proposal tool prefilled');});
+document.querySelector('.tabs').addEventListener('click',function(e){var t=e.target.closest('.tab');if(!t)return;
+  [].forEach.call(document.querySelectorAll('.tab'),function(x){x.classList.toggle('on',x===t);});
+  ['pkg','write','cust','hist'].forEach(function(p){$('p-'+p).hidden=p!==t.getAttribute('data-p');});});
+$('p-cust').addEventListener('click',function(e){
+  var add=e.target.closest('[data-add]');
+  if(add){pending=add.getAttribute('data-add');render();return;}
+  if(e.target.id==='c-no'){pending=null;render();return;}
+  if(e.target.id==='c-yes'){var k=pending;pending=null;sel[k]=true;log(A[cur].n+' admin','Added '+B[k].n+' from Your plan');render();renderAccts();toast(B[k].n+': payment requested in QuickBooks. It switches on when the payment clears.');}
+});
+load(0);
+})();
+</script>
+
+</html>

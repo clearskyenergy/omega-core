@@ -1060,3 +1060,17 @@ sample does not answer.
   scan queue is).
 - Shrinking a phone photo to fit the 2 MB document limit: a full-size
   photo is refused, and the person sends a smaller copy.
+
+**Omega Logic follows the package (2026-09-26, packaging Phase 8).** A
+workspace on a package sees only the parts it bought: Office runs the
+business, the money and the setup; Plant adds Build, Inventory and Quality;
+Materials & Purchasing adds the materials plan, purchase orders and vendors;
+Logistics & Warranty adds Shipping & receiving, Sites & custody, the fleet
+register and the app's Sites tab; Customer App opens the customer portal and
+app to the workspace's customers. A page of a part not bought says so in one
+sentence ("Materials & Purchasing is not in your Omega Logic package"); the
+Package tab and Your plan are where a part is added. A workspace on the
+older Omega Logic subscription holds everything, as before. The bench, the
+test rig and a quality hold or release check the Plant part too (packaging
+Phase 9): a paired station of a workspace whose package lost Plant stops
+scanning with "Plant is not in your Omega Logic package".

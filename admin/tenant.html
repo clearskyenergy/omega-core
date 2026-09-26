@@ -92,8 +92,13 @@
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .save{background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/admin/package-panel.css">
+<script src="/omega-package-menu.js"></script>
+<script src="/omega-billing-profile.js"></script>
+<script src="/admin/package-panel.js"></script>
 </head>
-<body>
+<body class="package-admin">
 
 <header>
   <a href="/admin/">&larr; All tenants</a>
@@ -105,6 +110,7 @@
 </header>
 
 <main>
+<section id="package-panel" aria-label="Subscription package"></section>
   <section>
     <h2>Systems <button type="button" class="mini" id="refresh">Refresh</button>
       <a class="mini" id="asjson" href="#" style="text-decoration:none;padding:7px 11px;border:1px solid var(--line);border-radius:8px">JSON</a></h2>
@@ -157,7 +163,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
 <script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
 <script>
 /* ES5 — this is a tool page, and CLAUDE.md's rule is the same for all of them. */
 (function () {
@@ -355,10 +363,11 @@
   $('refresh').addEventListener('click', loadSystems);
 
   firebase.auth().onAuthStateChanged(function (u) {
-    if (!u) { $('tname').textContent = 'Sign in required'; return; }
+    if (!u) { OmegaPackagePanel.clear(); $('tname').textContent = 'Sign in required'; return; }
     db = firebase.firestore();
     loadSystems();
     loadCustomers();
+    OmegaPackagePanel.mount($('package-panel'), ORG, u);
   });
 })();
 </script>

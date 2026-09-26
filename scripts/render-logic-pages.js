@@ -53,6 +53,11 @@ var OFFICE = 'demo@cleancell.us', BUYER = 'ops@riverside.example';
    ClearSky's QuickBooks): the fixture's officeJson(opts), teamJson(who)
    and plantJson(q, who) answer for that person */
 var OFFICE_VIEW = null, TEAM_WHO = OFFICE, PLANT_WHO = OFFICE;
+/* Phase 8: a check may say which Omega Logic parts the sample workspace
+   holds (OFFICE_VIEW.parts: plant, materials, logistics, customer); the
+   fixture's own answer is a legacy subscription, the field absent, which
+   the pages read as every part. */
+function withParts(d) { if (OFFICE_VIEW && Array.isArray(OFFICE_VIEW.parts) && d && d.access) d.access.parts = OFFICE_VIEW.parts.slice(); return d; }
 /* what /api/logic-workspaces answers: the fixture's one company, unless a
    check sets a longer list (someone who works for two companies) */
 var WORKSPACES = null;
@@ -90,7 +95,7 @@ var srv = http.createServer(function (req, res) {
   if (u.indexOf('/api/logic-catalog') === 0) return json(V.catalogJson());
   if (u === '/api/logic-accounting' && post) return posted(function (b) { ACC_POSTS.push(b); if (b.action === 'sync-connect') return { url: '/logic-accounting.html?org=cleancell.us&connected=' + b.provider }; return { ok: true }; });
   if (u.indexOf('/api/logic-accounting') === 0) return json(/(^|&)format=csv(&|$)/.test(q) ? V.accountingCsv(q) : V.accountingJson(q));
-  if (u.indexOf('/api/logic-office') === 0) return json(V.officeJson(OFFICE_VIEW));
+  if (u.indexOf('/api/logic-office') === 0) return json(withParts(V.officeJson(OFFICE_VIEW)));
   if (u.indexOf('/api/buyers') === 0) return send(V.buyersJson(q));
   if (u.indexOf('/api/po-intake') === 0) return send(V.intakeJson(q, BUYER));
   if (u.indexOf('/api/customer-portal') === 0) return json(V.portalJson);
@@ -1570,6 +1575,39 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('  approving posts the price with accept, and the order records who priced and accepted it', sent && sent.action === 'price' && sent.orderId === 'o3' && sent.accept === true && Number(sent.total) === 850000 && o3.status === 'accepted' && o3.logic.pricedBy === OFFICE && o3.logic.acceptedBy === OFFICE && /Price approved by demo@cleancell\.us/.test(after) && /Accepted by demo@cleancell\.us/.test(after), [sent, o3.status, after.slice(0, 300)]);
     return { priced: o3.status };
   });
+  OFFICE_VIEW = null;
+
+  /* ── Phase 8: Omega Logic follows the package ─────────────────────────
+     The sample workspace bought Office and Plant only (access.parts). The
+     desktop menu, the hex hub and the Omega Logic app draw nothing of
+     Materials & Purchasing or Logistics & Warranty — no Deliver, no
+     materials plan, no Sites tab — and call none of their endpoints. */
+  OFFICE_VIEW = { parts: ['plant'] };
+  await check('package-parts', '/omega-logic?org=cleancell.us', async function (p) {
+    var calls = []; p.on('request', function (r) { var x = r.url(); if (x.indexOf(base + '/api/') === 0) calls.push(x.slice(base.length).split('?')[0]); });
+    await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(1000);
+    var navGroups = await p.$$eval('.logic-nav .eyebrow', function (r) { return r.map(function (x) { return x.textContent; }); });
+    var navLinks = await p.$$eval('.logic-nav a', function (r) { return r.map(function (x) { return x.textContent; }); });
+    var hub = await p.$$eval('#hub .hx', function (r) { return r.map(function (x) { return x.getAttribute('data-hub'); }); });
+    var panels = await p.evaluate(function () { return ['floor', 'perf', 'deliver', 'kv-buy'].map(function (id) { var e = document.getElementById(id); return id + ':' + (e ? (e.hidden ? 'hidden' : 'shown') : 'none'); }); });
+    ok('Phase 8, the desktop: Office and Plant bought — Build, the plant\'s Inventory and Quality, no shipping or materials plan; the hub without Deliver or Stock; no deliveries panel, no purchase-list tile', navGroups.join('|') === 'Run the business|Build|Stock & supply|Deliver|Money|Setup' && navLinks.indexOf('Inventory') >= 0 && navLinks.indexOf('Quality & holds') >= 0 && navLinks.indexOf('Materials plan') < 0 && navLinks.indexOf('Shipping & receiving') < 0 && navLinks.indexOf('Sites & custody') < 0 && hub.join('|') === 'today|sales|customers|plant|money' && panels.join('|') === 'floor:shown|perf:shown|deliver:none|kv-buy:hidden', [navGroups, navLinks, hub, panels]);
+    ok('  and it called no endpoint of a part it does not hold', calls.indexOf('/api/logic-custody') < 0 && calls.indexOf('/api/logic-materials') < 0 && calls.indexOf('/api/logic-logistics') < 0 && calls.indexOf('/api/logic-plant') >= 0, calls);
+    return { nav: navGroups.length, hub: hub.length };
+  });
+  await check('package-parts-app', '/office/app?org=cleancell.us', async function (p) {
+    var calls = []; p.on('request', function (r) { var x = r.url(); if (x.indexOf(base + '/api/') === 0) calls.push(x.slice(base.length).split('?')[0]); });
+    await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(1100);
+    var tabs = await p.$$eval('#nav button', function (r) { return r.filter(function (x) { return !x.hidden; }).map(function (x) { return x.textContent.trim().replace(/^[^A-Za-z]+/, ''); }); });
+    var hub = await p.$$eval('#hubs .hx', function (r) { return r.map(function (x) { return x.getAttribute('data-hub'); }); });
+    var tiles = await p.$$eval('#hub-panels [data-hpanel]', function (r) { return r.map(function (x) { return x.getAttribute('data-hpanel'); }); });
+    var apps = await texts(p, '#view .kv a small'), blocks = await texts(p, '#view h2');
+    await p.click('[data-tab="menu"]'); await p.waitForTimeout(300);
+    var menuPanels = await p.$$eval('#view [data-panel]', function (r) { return r.map(function (x) { return x.getAttribute('data-panel'); }); });
+    var freq = (await texts(p, '#view .freq a, #view .freq button')).map(function (t) { return t.replace(/^[^A-Za-z]+/, ''); });
+    ok('Phase 8, the app: four tabs (no Sites), the hub without Deliver or Stock, Today without a purchase-list tile, the apps strip without Sites or Customer, the Menu without Deliver, the shortcuts without Sites or Register', tabs.join('|') === 'Home|Orders|Customers|Menu' && hub.join('|') === 'today|sales|customers|plant|money' && tiles.join('|') === 'sales|customers|plant|money' && apps.join('|') === 'Plant|Bench|Office' && blocks.indexOf('Plant') >= 0 && menuPanels.join('|') === 'sales|customers|plant|stock|money|setup|help' && freq.join('|') === 'Orders|PO loads|Customers|Stock|Invoices|Plant', [tabs, hub, tiles, apps, blocks, menuPanels, freq]);
+    ok('  and it called no endpoint of a part it does not hold', calls.indexOf('/api/logic-custody') < 0 && calls.indexOf('/api/logic-materials') < 0 && calls.indexOf('/api/logic-plant') >= 0, calls);
+    return { tabs: tabs.length, hub: hub.length };
+  }, { phone: true });
   OFFICE_VIEW = null;
 
   /* ── the 2026-09-24 review's fixes, where a person meets them ──────── */

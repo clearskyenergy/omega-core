@@ -79,7 +79,8 @@ function entitle(caller) {
   return A.db().collection('omega_orgs').doc(caller.orgId).get().then(function (s) {
     var org = s.exists ? (s.data() || {}) : null;
     if (!org || (org.status || 'active') !== 'active') throw A.httpError(403, 'tenant is not active');
-    return A.billingOf(caller.orgId).then(function (bill) {
+    return A.billingOf(caller.orgId).then(async function (bill) {
+      if (bill.packaged === true) { await require('./_lib/package-access').withCaller(caller, 'lite', { tools: ['editor'] }); return true; }
       if (!entitled(bill)) throw A.httpError(403, 'constrained layout is not on this plan');
       return true;
     });

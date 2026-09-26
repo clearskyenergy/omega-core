@@ -227,18 +227,19 @@ async function main() {
     await post({ action: 'price', orderId: 'q2', total: 90000 }, CLEARSKY);
     function row(d, id) { return d.orders.filter(function (x) { return x.id === id; })[0]; }
     var a = await get(ADMIN);
-    assert.deepEqual(a.access, { role: 'admin', prices: 'workspace', team: true }); assert.equal(a.billing, 'tenant');
+    /* parts: every Omega Logic part, this being a legacy (addon) subscription — Phase 8 */
+    assert.deepEqual(a.access, { role: 'admin', prices: 'workspace', team: true, parts: ['plant', 'materials', 'logistics', 'customer'] }); assert.equal(a.billing, 'tenant');
     /* OFF-02 / OFF-03: the money tiles are the receivables ledger's own totals (no customer list), and the Review list names whose PO waits */
     assert.ok(a.receivables && !('byCustomer' in a.receivables) && a.receivables.toIssueCents === 2700000 && a.receivables.invoicedCents === 0, JSON.stringify(a.receivables));
     assert.ok(Array.isArray(a.intake.waiting) && a.intake.waiting.length === 0);
     assert.deepEqual(row(a, 'q1').can, { price: true, accept: false }); assert.equal(row(a, 'q1').waitingOn, null); assert.equal(row(a, 'q1').stage.owner, false); assert.equal(row(a, 'q1').billing, 'tenant');
     assert.deepEqual(row(a, 'q2').can, { price: false, accept: true });
     var m = await get(MEMBER);
-    assert.deepEqual(m.access, { role: 'member', prices: 'none', team: false });
+    assert.deepEqual(m.access, { role: 'member', prices: 'none', team: false, parts: ['plant', 'materials', 'logistics', 'customer'] });
     assert.deepEqual(row(m, 'q1').can, { price: false, accept: false }); assert.equal(row(m, 'q1').waitingOn, 'admin');
     var v = await get(VIEWER); assert.equal(row(v, 'q1').waitingOn, 'admin'); assert.equal(v.access.prices, 'none');
     var sky = await get(CLEARSKY);
-    assert.deepEqual(sky.access, { role: 'clearsky', prices: 'all', team: true }); assert.deepEqual(row(sky, 'q1').can, { price: true, accept: false });
+    assert.deepEqual(sky.access, { role: 'clearsky', prices: 'all', team: true, parts: ['plant', 'materials', 'logistics', 'customer'] }); assert.deepEqual(row(sky, 'q1').can, { price: true, accept: false });
     seed('quickbooks');
     a = await get(ADMIN);
     assert.equal(a.access.prices, 'workspace'); assert.deepEqual(row(a, 'q1').can, { price: false, accept: false });

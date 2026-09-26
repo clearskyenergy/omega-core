@@ -201,6 +201,10 @@ function entitle(caller, orgId) {
     var bill = r[1] || {};
     var member = r[2].exists ? (r[2].data() || {}) : null;
     if (caller.staff) return true;
+    var access = require('./_lib/package-access');
+    var projection = access.project(caller, bill, org, member, Date.now());
+    access.requireModule(projection, 'sitefinder', { tools: ['sitefinder', 'sitediscovery'] });
+    if (projection.packaged) return true;
 
     if (org) {
       var status = String(org.status || 'active');

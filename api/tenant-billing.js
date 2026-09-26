@@ -48,7 +48,7 @@ function litePrices(given) {
 module.exports = A.handler(function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   var b = req.body || {};
-  var orgId = String(b.orgId || '').toLowerCase();
+  var orgId = A.safeOrg(b.orgId);
   if (!orgId) throw A.httpError(400, 'orgId required');
 
   return A.authenticate(req).then(function (caller) {
@@ -95,6 +95,9 @@ module.exports = A.handler(function (req) {
 
     return ref.get().then(function (snap) {
       var before = snap.exists ? snap.data() : {};
+      if (before.packaged === true && Object.keys(patch).some(function (key) { return key !== 'customerEditorLite'; })) {
+        throw A.httpError(409, 'Packaged billing is payment-controlled; use the reviewed Package panel');
+      }
       /* The whole block is written back, merged here, so the history row's
          before/after is the block and a price left out is not wiped. */
       if (lite) patch.customerEditorLite = Object.assign({}, before.customerEditorLite || {}, lite, { currency: 'USD' });

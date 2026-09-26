@@ -83,8 +83,10 @@ function load(w, override) {
     module: { exports: {} },
     console: { error: function () { logged.push(Array.prototype.slice.call(arguments).join(' ')); }, log: function () {} },
     require: function (n) {
+      if (/\/package-access$/.test(n)) return require(path.join(ROOT, 'api/_lib/package-access'));
       if (/\/verify-token$/.test(n)) return w.stub;
       if (/\/whitelabel$/.test(n)) return REAL.whitelabel;
+      if (/\/deck-brand$/.test(n)) return require(path.join(ROOT, 'api/_lib/deck-brand'));
       if (/\/proforma-engine$/.test(n)) return override.engine || REAL.engine;
       if (/\/proforma-sizing$/.test(n)) return override.sizing || REAL.sizing;
       throw new Error('api/proforma.js required an unstubbed module: ' + n);

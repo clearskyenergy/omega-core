@@ -170,8 +170,8 @@ function decodeFields(f) {
 }
 
 /* Authenticate, then read the caller's own billing record.
-   Resolves { caller, tier, billing }. Tier falls back to 'trial' — a read
-   that fails must not hand out a paid capability. */
+   Resolves { caller, tier, billing }. A missing record is legacy trial; a
+   failed read is unavailable, never an empty billing record with legacy access. */
 function authenticateWithTier(req) {
   var h = (req.headers && req.headers.authorization) || '';
   var m = /^Bearer (.+)$/.exec(h);
@@ -185,7 +185,7 @@ function authenticateWithTier(req) {
         return { caller: caller, billing: b || {}, tier: (b && b.tier) || 'trial' };
       })
       .catch(function () {
-        return { caller: caller, billing: {}, tier: 'trial' };
+        throw httpError(503, 'Could not verify workspace billing; try again.');
       });
   });
 }

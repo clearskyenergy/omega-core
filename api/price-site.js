@@ -215,6 +215,10 @@ function gate(caller, org) {
     var member = r[2].exists ? (r[2].data() || {}) : null;
 
     if (caller.staff) return billing;
+    var access = require('./_lib/package-access');
+    var projection = access.project(caller, billing, orgDoc, member, Date.now());
+    access.requireModule(projection, ['estimate', 'sitefinder'], { tools: TOOL_KEYS });
+    if (projection.packaged) return billing;
 
     if (orgDoc && orgDoc.status && orgDoc.status !== 'active') {
       throw A.httpError(403, 'this organisation is ' + orgDoc.status);

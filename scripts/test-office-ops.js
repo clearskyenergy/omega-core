@@ -38,7 +38,9 @@ function mock(p, e) { require.cache[require.resolve(p)] = { id: require.resolve(
 mock('../api/_lib/admin', A);
 var CTX = { orgId: 'cleancell.us', org: { name: 'Clean Cell' }, billing: {}, config: { terms: { depositPct: 30, dueDays: 0 } } };
 var X = { authorize: async function (c, org, write) { if (!org) throw A.httpError(400, 'Valid org required'); if (write && !c.admin) throw A.httpError(403, 'An active OEM administrator is required'); return CTX; },
-  context: async function () { return CTX; }, owner: function (c) { return !!(c && c.owner); }, requireOwner: function (c) { if (!c.owner) throw A.httpError(403, 'owner'); }, subscribed: function () { return true; }, enabled: function () { return true; } };
+  context: async function () { return CTX; }, owner: function (c) { return !!(c && c.owner); }, requireOwner: function (c) { if (!c.owner) throw A.httpError(403, 'owner'); }, subscribed: function () { return true; }, enabled: function () { return true; },
+  /* Phase 8: the sample is a legacy subscription and holds every Omega Logic part */
+  parts: function () { return ['plant', 'materials', 'logistics', 'customer']; } };
 mock('../api/_lib/logic-access', X);
 mock('../api/_lib/logic-brand', function () { return { name: 'Clean Cell' }; });
 mock('../api/_lib/mail', { send: async function () {} });

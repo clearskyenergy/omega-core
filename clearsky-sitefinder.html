@@ -945,6 +945,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="/config.js"></script>
+<script src="/omega-usage.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="omega-capacity-ledger.js"></script>
 <script src="omega-site-saves.js"></script>
@@ -5052,7 +5053,9 @@
     };
   }
 
-  function downloadPacket(r) {
+  function downloadPacket(r, counted) {
+    /* Phase 7: the packet is the site study; the server counts it first. */
+    if (window.OmegaUsage && counted !== true) { OmegaUsage.count('siteStudies', 'packet:' + r.id).then(function () { downloadPacket(r, true); }, function (e) { OmegaUsage.explain(e); }); return; }
     /* Price it on the way out if nobody has. The packet is what leaves this
        tool and goes to a lender, a partner or a customer, and one that says
        "no estimate" because a button went unpressed is a packet that gets

@@ -56,6 +56,7 @@ const fakeAdmin = {
                                         orgId: 'concordenergyusa.com', staff: false }),
   canActInOrg: (c, o) => Promise.resolve(c.orgId === o),
   db: () => DB,
+  billingOf: org => DB.collection('omega_orgs').doc(org).collection('billing').doc('current').get().then(s => s.exists ? s.data() : {}),
   FieldValue: () => ({ serverTimestamp: () => '<ts>' })
 };
 const libPath = require.resolve(path.join(__dirname, '..', '..', 'api', '_lib', 'admin.js'));

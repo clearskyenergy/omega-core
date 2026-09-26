@@ -73,9 +73,13 @@ function namedCompany(v) {
   return (v.source !== 'self' || v.accountType === 'company') && !v.supersededBy && !v.mergedInto;
 }
 function officeCompany(v) { return namedCompany(v) && DEAD.indexOf((v || {}).status) < 0; }
+/* The customer portal and app are the Customer App part of Omega Logic
+   (Phase 8): a packaged workspace holds them only with logic-customer in
+   its package; a legacy subscription holds every part. Said to the
+   customer as "not active" — the package is the supplier's to change. */
 async function context(org) {
   var ctx = await X.context(org);
-  if (!X.subscribed(ctx)) throw A.httpError(403, 'This customer portal is not active');
+  if (!X.subscribed(ctx) || X.parts(ctx).indexOf('customer') < 0) throw A.httpError(403, 'This customer portal is not active');
   return ctx;
 }
 /* May this person act on this account? No account at all is its own case:

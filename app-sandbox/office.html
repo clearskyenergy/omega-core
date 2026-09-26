@@ -210,7 +210,7 @@
   <button data-tab="today" aria-current="page"><span>⌂</span>Home</button>
   <button data-tab="orders"><span>▤</span>Orders</button>
   <button data-tab="customers"><span>◉</span>Customers</button>
-  <button data-tab="sites"><span>◎</span>Sites</button>
+  <button data-tab="sites" data-part="logistics"><span>◎</span>Sites</button>
   <button data-tab="menu"><span>⋮⋮</span>Menu</button>
 </nav>
 <script>window.OMEGA_NO_HUB_ROUTE = true; /* Omega Logic resolves its own workspace (omega-logic-signin.js) */</script><script src="/app-sandbox/sandbox.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-auth-errors.js"></script><script src="/omega-logic-signin.js"></script><script src="/omega-hexhub.js"></script><script src="/omega-scan.js"></script>
@@ -314,10 +314,15 @@
   function loadAll() {
     status('Loading…'); MAT = null; UNITS = null; BUYERS = null; CUST = null; CRM = null; COMPANIES = null; COMPANY = null; FOLLOW = null; FOLLOW_ERR = ''; HUB_TRIED = {};
     var tried = ORG;
-    return Promise.all([api('/api/logic-office' + q), api('/api/logic-plant' + q + '&page=board')['catch'](function () { return null; })]).then(function (r) {
-      if (ORG !== tried) return;
+    /* the office first; the plant board only where the Plant part is held (Phase 8) */
+    return api('/api/logic-office' + q).then(function (d) {
+      if (ORG !== tried) return null;
+      DATA = d;
+      return Promise.all([d, has('plant') ? api('/api/logic-plant' + q + '&page=board')['catch'](function () { return null; }) : null]);
+    }).then(function (r) {
+      if (ORG !== tried || !r) return;
       DATA = r[0]; BOARD = r[1];
-      $('nav').hidden = false;
+      $('nav').hidden = false; layoutTabs();
       /* Omega Logic is ClearSky's app: its own name and colours, with the
          workspace you are in shown under it, as QuickBooks shows the company */
       paintWho((DATA.brand && DATA.brand.workspace) || DATA.name || ORG);
@@ -403,18 +408,29 @@
      each endpoint refuses on its own. */
   function access() { return (DATA && DATA.access) || { prices: DATA && DATA.owner ? 'all' : 'none', team: !!(DATA && DATA.owner) }; }
   function mayPrice() { var a = access(); return a.prices === 'all' || (a.prices === 'workspace' && (DATA.billing || (DATA.config && DATA.config.accounting)) === 'tenant'); }
+  /* Phase 8: the Omega Logic parts this workspace holds (access.parts —
+     plant, materials, logistics, customer; a legacy subscription, or a
+     server from before the field, holds every part). A tab, screen, row or
+     hub of a part not bought is not drawn and its endpoint is not called;
+     the endpoint refuses it on its own whatever is shown. */
+  function has(part) { var p = access().parts; return !part || !Array.isArray(p) || p.indexOf(part) >= 0; }
+  function layoutTabs() { Array.prototype.forEach.call(document.querySelectorAll('#nav button[data-part]'), function (b) { b.hidden = !has(b.getAttribute('data-part')); }); }
   function menuPanels() {
     var d = '?org=' + encodeURIComponent(ORG), a = access();
-    return [
+    /* a panel's `part`, or a row's fifth field, names the Omega Logic part
+       whose endpoint serves it (Phase 8): not held, not drawn */
+    var panels = [
       { key: 'sales', icon: '▤', name: 'Sales', rows: [['go', 'orders', 'Orders', 'Every order, its stage, money and requests'], ['go', 'pos', 'PO loads', 'Key in a stack of customer purchase orders'], ['href', '/po-inbox' + d + '&office=1', 'Company POs', 'Uploaded POs to review and map']].concat(mayPrice() ? [['href', '/omega-logic' + d + '#orders', 'Price & accept', a.prices === 'all' ? 'Approve a price, accept, record shipment' : 'Approve the price and accept the orders your company bills']] : []) },
-      { key: 'customers', icon: '◉', name: 'Customers', rows: [['go', 'customers', 'Customers', 'Accounts: people, calls and notes, documents, orders, sites'], ['href', '/portals/customer/admin.html' + d, 'Customer hub on the desktop', 'The same accounts with more room'], ['href', '/portals/customer/app' + d, 'Customer app', 'What your customers see and use'], ['href', '/portals/customer/' + d, 'Customer portal', 'The same account on a desktop']] },
-      { key: 'plant', icon: '⚙', name: 'Plant', rows: [['href', '/plant/app' + d, 'Plant app', 'Work orders, units, quality'], ['href', '/app-sandbox/bench', 'Bench scan station', 'Scan a unit in, issue parts, finish steps'], ['href', '/plant/work-orders.html' + d, 'Work orders', 'Progress, holds, what is short'], ['href', '/plant/manager.html' + d, 'Plant board', 'The line, dwell times, the bottleneck']] },
-      { key: 'deliver', icon: '◎', name: 'Deliver', rows: [['go', 'sites', 'Sites & custody', 'What the customer says, receive a load, passports'], ['href', '/logic-register.html' + d, 'Fleet register', 'Every unit on one sheet'], ['href', '/logic-logistics.html' + d, 'Shipping & receiving', 'Loads, carriers, BOLs, receipts'], ['href', '/logic-custody.html' + d, 'Sites & imports', 'Sites, spreadsheet import, coverage templates']] },
-      { key: 'stock', icon: '▦', name: 'Stock', rows: [['go', 'stock', 'Stock', 'Finished units, parts short, open POs'], ['href', '/logic-materials.html' + d, 'Materials plan', 'What to buy and when'], ['href', '/logic-materials.html' + d + '#po', 'Purchase orders', 'Supplier orders and receipts'], ['href', '/logic-inventory.html' + d, 'Inventory', 'Units on the shelf, assign to orders']] },
+      { key: 'customers', icon: '◉', name: 'Customers', rows: [['go', 'customers', 'Customers', 'Accounts: people, calls and notes, documents, orders, sites'], ['href', '/portals/customer/admin.html' + d, 'Customer hub on the desktop', 'The same accounts with more room'], ['href', '/portals/customer/app' + d, 'Customer app', 'What your customers see and use', 'customer'], ['href', '/portals/customer/' + d, 'Customer portal', 'The same account on a desktop', 'customer']] },
+      { key: 'plant', part: 'plant', icon: '⚙', name: 'Plant', rows: [['href', '/plant/app' + d, 'Plant app', 'Work orders, units, quality'], ['href', '/app-sandbox/bench', 'Bench scan station', 'Scan a unit in, issue parts, finish steps'], ['href', '/plant/work-orders.html' + d, 'Work orders', 'Progress, holds, what is short'], ['href', '/plant/manager.html' + d, 'Plant board', 'The line, dwell times, the bottleneck']] },
+      { key: 'deliver', part: 'logistics', icon: '◎', name: 'Deliver', rows: [['go', 'sites', 'Sites & custody', 'What the customer says, receive a load, passports'], ['href', '/logic-register.html' + d, 'Fleet register', 'Every unit on one sheet'], ['href', '/logic-logistics.html' + d, 'Shipping & receiving', 'Loads, carriers, BOLs, receipts'], ['href', '/logic-custody.html' + d, 'Sites & imports', 'Sites, spreadsheet import, coverage templates']] },
+      /* finished units (the Stock screen, Inventory) are the plant's; the plan and the POs are Materials & Purchasing's */
+      { key: 'stock', icon: '▦', name: 'Stock', rows: [['go', 'stock', 'Stock', 'Finished units, parts short, open POs', 'plant'], ['href', '/logic-materials.html' + d, 'Materials plan', 'What to buy and when', 'materials'], ['href', '/logic-materials.html' + d + '#po', 'Purchase orders', 'Supplier orders and receipts', 'materials'], ['href', '/logic-inventory.html' + d, 'Inventory', 'Units on the shelf, assign to orders', 'plant']] },
       { key: 'money', icon: '$', name: 'Money', rows: [['go', 'money', 'Invoices', 'To issue, overdue and open, with the pay link'], ['go', 'orders', 'Orders', 'Record an invoice issued or a payment received on the order'], ['href', '/omega-logic' + d + '#cash', 'Cash flow', 'Invoiced, received, outstanding']] },
       { key: 'setup', icon: '✎', name: 'Setup', rows: [['href', '/logic-catalog.html' + d, 'Products & bills', 'Catalog, bills of materials, coverage']].concat(a.team ? [['href', '/logic-team.html' + d, 'Team', 'Add and turn off your office and plant staff']] : [], [['href', '/logic-settings.html' + d, 'Settings', 'Terms, billing mode, workspace']]).concat(DATA && DATA.owner || (WS && WS.workspaces.length > 1) ? [['go', 'workspace', 'Switch company', DATA && DATA.owner ? 'ClearSky owner: open another Omega Logic workspace' : 'Open another company you work with']] : []) },
-      { key: 'help', icon: '?', name: 'Help & guides', rows: [['href', '/guides/Omega-Logic-Office-App.pdf', 'Omega Logic app guide', 'Install and use, PDF'], ['href', '/guides/Omega-Logic-Customer-App.pdf', 'Customer app guide', 'Send it to a customer, PDF'], ['href', '/guides/Omega-Logic-Plant-App.pdf', 'Plant app guide', 'For the builders, PDF']] }
+      { key: 'help', icon: '?', name: 'Help & guides', rows: [['href', '/guides/Omega-Logic-Office-App.pdf', 'Omega Logic app guide', 'Install and use, PDF'], ['href', '/guides/Omega-Logic-Customer-App.pdf', 'Customer app guide', 'Send it to a customer, PDF', 'customer'], ['href', '/guides/Omega-Logic-Plant-App.pdf', 'Plant app guide', 'For the builders, PDF', 'plant']] }
     ];
+    return panels.filter(function (p) { return has(p.part); }).map(function (p) { p.rows = p.rows.filter(function (r) { return has(r[4]); }); return p; }).filter(function (p) { return p.rows.length; });
   }
   /* A pay link is drawn only when it is an https address with no user name
      or password in it: the endpoints check it when it is saved and when it
@@ -447,7 +463,7 @@
      panel's list) and the payment exceptions. */
   function summary() {
     var cu = CUSTODY, orders = DATA.orders || [];
-    var s = OmegaLogicTheme.hub({ orders: orders, owner: DATA.owner, accounting: DATA.config && DATA.config.accounting, intake: DATA.intake, follow: FOLLOW || [],
+    var s = OmegaLogicTheme.hub({ orders: orders, owner: DATA.owner, parts: access().parts, accounting: DATA.config && DATA.config.accounting, intake: DATA.intake, follow: FOLLOW || [],
       pending: BUYERS ? (BUYERS.customers || []).reduce(function (n, c) { return n + (Number(c.pending) || 0); }, 0) : null,
       plantRows: BOARD ? BOARD.rows || [] : null, toConfirm: cu ? (cu.toConfirm || []).length : null, inTransit: cu && cu.counts ? Number(cu.counts.in_transit) || 0 : null,
       short: MAT ? (MAT.summary && MAT.summary.short != null ? Number(MAT.summary.short) || 0 : shortParts(MAT).length) : null,
@@ -558,7 +574,7 @@
   function rowHtml(r) { var inner = '<div><b>' + esc(r[2]) + '</b><small>' + esc(r[3]) + '</small></div><span class="go">›</span>'; return r[0] === 'go' ? '<button type="button" data-go="' + esc(r[1]) + '">' + inner + '</button>' : '<a href="' + esc(r[1]) + '">' + inner + '</a>'; }
   function drawMenu(filter) {
     var panels = menuPanels(), f = String(filter || '').toLowerCase().trim();
-    var freq = [['go', 'orders', '▤', 'Orders'], ['go', 'pos', '▥', 'PO loads'], ['go', 'customers', '◉', 'Customers'], ['go', 'sites', '◎', 'Sites'], ['go', 'stock', '▦', 'Stock'], ['go', 'money', '$', 'Invoices'], ['href', '/logic-register.html?org=' + encodeURIComponent(ORG), '▦', 'Register'], ['href', '/plant/app?org=' + encodeURIComponent(ORG), '⚙', 'Plant']];
+    var freq = [['go', 'orders', '▤', 'Orders'], ['go', 'pos', '▥', 'PO loads'], ['go', 'customers', '◉', 'Customers'], ['go', 'sites', '◎', 'Sites', 'logistics'], ['go', 'stock', '▦', 'Stock', 'plant'], ['go', 'money', '$', 'Invoices'], ['href', '/logic-register.html?org=' + encodeURIComponent(ORG), '▦', 'Register', 'logistics'], ['href', '/plant/app?org=' + encodeURIComponent(ORG), '⚙', 'Plant', 'plant']].filter(function (x) { return has(x[4]); });
     var html = '<h1>Menu</h1><input class="qsearch" id="qsearch" placeholder="Search menu items" value="' + esc(filter || '') + '" autocomplete="off">';
     if (f) {
       var hits = []; panels.forEach(function (p) { p.rows.forEach(function (r) { if ((r[2] + ' ' + r[3] + ' ' + p.name).toLowerCase().indexOf(f) >= 0) hits.push(r); }); });
@@ -597,17 +613,21 @@
       + '<div class="kv" id="today-kv">' + OmegaLogicTheme.stageTiles((DATA.totals || {}).byStage).map(function (t) { return '<div data-k="' + esc(t.k) + '"' + (t.bad ? ' class="bad"' : '') + '><small>' + esc(t.label) + '</small><b>' + t.n + '</b></div>'; }).join('') + '</div>'
       + '<div id="today-needs"></div>'
       /* the receivables ledger's totals, the figures Accounting and the desktop print (OFF-02) */
-      + '<h2>Money</h2><div class="kv" id="money-kv">' + OmegaLogicTheme.moneyTiles(DATA.receivables).map(OmegaLogicTheme.tileHtml).join('') + (s.exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + s.exceptions + '</b></div>' : '') + '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div></div>'
-      + '<h2>Plant</h2>' + (rows ? '<div class="kv"><div><small>Open work orders</small><b>' + rows.length + '</b></div><div class="' + (late.length ? 'bad' : '') + '"><small>Late</small><b>' + late.length + '</b></div><div class="' + (held.length ? 'bad' : '') + '"><small>With holds</small><b>' + held.length + '</b></div><div><small>Ready to ship</small><b>' + rows.filter(function (r) { return r.stage === 'ready'; }).length + '</b></div></div>' + (late.concat(held.filter(function (r) { return !r.late; })).slice(0, 4).map(function (r) { return '<div class="unit"><div><b>' + esc(r.orderNo) + '</b><small>' + esc(r.stageLabel) + (r.late ? ' · late · due ' + esc(r.due) : '') + (r.progress.held ? ' · ' + r.progress.held + ' on hold' : '') + '</small></div><span class="pill bad">' + (r.late ? 'late' : 'hold') + '</span></div>'; }).join('')) : '<p class="note">Plant board unavailable.</p>')
-      + '<h2>' + esc((DATA.brand && DATA.brand.workspace) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record. The plant builds it, the office runs it, the customer places it: each app shows the same unit.</p><div class="kv"><a href="/plant/app' + q + '" style="text-decoration:none;color:inherit"><small>Plant</small><b style="font-size:15px">Work orders &amp; benches</b></a><a href="/app-sandbox/bench" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a><a href="#" id="to-sites" style="text-decoration:none;color:inherit"><small>Sites</small><b style="font-size:15px">What the customer says</b></a><a href="/portals/customer/app' + q + '" style="text-decoration:none;color:inherit"><small>Customer</small><b style="font-size:15px">What they see</b></a></div>';
+      + '<h2>Money</h2><div class="kv" id="money-kv">' + OmegaLogicTheme.moneyTiles(DATA.receivables).map(OmegaLogicTheme.tileHtml).join('') + (s.exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + s.exceptions + '</b></div>' : '') + (has('materials') ? '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div>' : '') + '</div>'
+      + (!has('plant') ? '' : '<h2>Plant</h2>' + (rows ? '<div class="kv"><div><small>Open work orders</small><b>' + rows.length + '</b></div><div class="' + (late.length ? 'bad' : '') + '"><small>Late</small><b>' + late.length + '</b></div><div class="' + (held.length ? 'bad' : '') + '"><small>With holds</small><b>' + held.length + '</b></div><div><small>Ready to ship</small><b>' + rows.filter(function (r) { return r.stage === 'ready'; }).length + '</b></div></div>' + (late.concat(held.filter(function (r) { return !r.late; })).slice(0, 4).map(function (r) { return '<div class="unit"><div><b>' + esc(r.orderNo) + '</b><small>' + esc(r.stageLabel) + (r.late ? ' · late · due ' + esc(r.due) : '') + (r.progress.held ? ' · ' + r.progress.held + ' on hold' : '') + '</small></div><span class="pill bad">' + (r.late ? 'late' : 'hold') + '</span></div>'; }).join('')) : '<p class="note">Plant board unavailable.</p>'))
+      + '<h2>' + esc((DATA.brand && DATA.brand.workspace) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record. The plant builds it, the office runs it, the customer places it: each app shows the same unit.</p><div class="kv">'
+      + (has('plant') ? '<a href="/plant/app' + q + '" style="text-decoration:none;color:inherit"><small>Plant</small><b style="font-size:15px">Work orders &amp; benches</b></a><a href="/app-sandbox/bench" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a>' : '')
+      + (has('logistics') ? '<a href="#" id="to-sites" style="text-decoration:none;color:inherit"><small>Sites</small><b style="font-size:15px">What the customer says</b></a>' : '')
+      + (has('customer') ? '<a href="/portals/customer/app' + q + '" style="text-decoration:none;color:inherit"><small>Customer</small><b style="font-size:15px">What they see</b></a>' : '')
+      + '<a href="/office/app' + q + '" style="text-decoration:none;color:inherit"><small>Office</small><b style="font-size:15px">This app</b></a></div>';
     paintHub(s); paintPanels(s); paintNeeds(s);
     if ($('to-sites')) $('to-sites').onclick = function (e) { e.preventDefault(); TAB = 'sites'; draw(); window.scrollTo(0, 0); };
     /* What the hub's badges and the follow-ups need, each once per load.
        Whatever arrives repaints the hub; nothing waits on the slowest. */
     function again() { if (TAB === 'today' && !PICK && $('hubs')) { var t = summary(); paintHub(t); paintPanels(t); paintNeeds(t); } }
-    loadMaterials().then(function (m) { var ms = m.summary || {}, el = $('kv-buy'); again(); if (!el) return; el.innerHTML = '<small>Purchase list value</small><b>' + (ms.spend != null ? '$' + Number(ms.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '</b><small>' + (ms.short || 0) + ' short · ' + (ms.late || 0) + ' late</small>'; if (ms.late) el.className = 'bad'; })['catch'](function () { if ($('kv-buy')) $('kv-buy').innerHTML = '<small>Purchase list value</small><b>—</b>'; });
+    if (has('materials')) loadMaterials().then(function (m) { var ms = m.summary || {}, el = $('kv-buy'); again(); if (!el) return; el.innerHTML = '<small>Purchase list value</small><b>' + (ms.spend != null ? '$' + Number(ms.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '</b><small>' + (ms.short || 0) + ' short · ' + (ms.late || 0) + ' late</small>'; if (ms.late) el.className = 'bad'; })['catch'](function () { if ($('kv-buy')) $('kv-buy').innerHTML = '<small>Purchase list value</small><b>—</b>'; });
     if (!FOLLOW) loadFollowUps().then(again);
-    if (!CUSTODY && !HUB_TRIED.custody) { HUB_TRIED.custody = true; loadCustody().then(again)['catch'](function () {}); }
+    if (has('logistics') && !CUSTODY && !HUB_TRIED.custody) { HUB_TRIED.custody = true; loadCustody().then(again)['catch'](function () {}); }
     /* people asking to join: the Customer hub list is office-admin data;
        a member who may not read it simply sees no badge */
     if (!BUYERS && !HUB_TRIED.buyers) { HUB_TRIED.buyers = true; loadBuyers().then(again)['catch'](function () {}); }

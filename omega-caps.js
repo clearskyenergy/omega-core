@@ -171,8 +171,233 @@
     return LADDER.indexOf(t) >= 0 || UNGATED[t] ? t : 'trial';
   }
 
+  /* Packaged state is a server projection of the sole catalog. Never derive
+     it from tiers, addons, query strings or a second browser module table. */
+  var _package = null, _packageRequest = 0, MODULE_GRANTS = {}, _packageSignature = null;
+  var COMMANDS = '.rbtn,.rsbtn,.rb-fly-item,#app-menu .menu-item,[data-module],[data-cap]';
+  function pendingPackage() { return { packaged: true, readOnly: true, modules: [], caps: [], toolAccess: [], catalog: [], notSold: [] }; }
+  function setPackage(view) {
+    var previous = _package;
+    _package = view && view.packaged === true ? view : null;
+    if (_package && (!Array.isArray(view.modules) || !Array.isArray(view.caps) || !Array.isArray(view.catalog) || !Array.isArray(view.toolAccess))) _package = pendingPackage();
+    Object.keys(MODULE_GRANTS).forEach(function (k) { delete MODULE_GRANTS[k]; });
+    if (_package) _package.catalog.forEach(function (m) { MODULE_GRANTS[m.key] = m; });
+    if (previous && !_package && global.document && global.document.querySelectorAll) {
+      var old = global.document.querySelectorAll('[data-package-hidden],[data-package-empty],[data-workspace-hidden]');
+      for (var n = 0; n < old.length; n++) {
+        if (old[n].hasAttribute('data-package-hidden')) old[n].style.display = old[n].getAttribute('data-package-display') || '';
+        old[n].removeAttribute('data-package-hidden'); old[n].removeAttribute('data-package-display');
+        old[n].removeAttribute('data-package-empty'); old[n].removeAttribute('data-workspace-hidden');
+      }
+      if (global.document.body && global.document.body.removeAttribute) global.document.body.removeAttribute('data-packaged-editor');
+      ['omega-workspace-controls', 'omega-package-tab'].forEach(function (id) { var el = global.document.getElementById && global.document.getElementById(id); if (el) el.remove(); });
+      if (global.OmegaPackageMenu) global.OmegaPackageMenu.close();
+      _packageSignature = null;
+    }
+    return _package;
+  }
+  function matches(selector, id, handler) {
+    if (selector.charAt(0) === '#') return selector.slice(1) === id;
+    var compact = String(handler || '').replace(/\s/g, '').replace(/"/g, "'");
+    if (selector.indexOf('(') >= 0) return compact.indexOf(selector) >= 0;
+    return new RegExp('(^|[^a-zA-Z0-9_$])' + selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=[^a-zA-Z0-9_$]|$)').test(compact);
+  }
+  function owners(id, handler) {
+    if (!_package) return [];
+    var rows = (_package.catalog || []).concat(_package.notSold || []), exact = [], out = [];
+    rows.forEach(function (m) { (m.ribbon || []).forEach(function (s) {
+      if (matches(s, id, handler)) {
+        if (s.charAt(0) === '#') { if (exact.indexOf(m.key) < 0) exact.push(m.key); }
+        else if (out.indexOf(m.key) < 0) out.push(m.key);
+      }
+    }); });
+    return exact.length ? exact : out;
+  }
+  function allowedCommand(id, handler) {
+    if (!_package || _package.staff) return true;
+    if (_package.toolAccess.indexOf('editor') < 0) return false;
+    var own = owners(id, handler);
+    if (!own.some(function (k) { return _package.modules.indexOf(k) >= 0; })) return false;
+    if (!_package.readOnly) return true;
+    return (_package.readOnlyRibbon || []).some(function (s) { return matches(s, id, handler); });
+  }
+  function allowedElement(el) {
+    if (!_package || _package.staff) return true;
+    if (!el || !el.getAttribute) return false;
+    var module = el.getAttribute('data-module'), cap = el.getAttribute('data-cap');
+    if (module && !_package.modules.some(function (k) { return module.split(/\s+/).indexOf(k) >= 0; })) return false;
+    var handler = el.getAttribute('onclick') || '', own = owners(el.id || '', handler);
+    if (own.length) return allowedCommand(el.id || '', handler);
+    if (module) return !_package.readOnly;
+    if (cap && el.classList && (el.classList.contains('rtab') || el.classList.contains('ribbon-page'))) {
+      var page = el.classList.contains('ribbon-page') ? el : global.document.querySelector('.ribbon-page[data-page="' + el.getAttribute('data-page') + '"]');
+      var children = page ? page.querySelectorAll('.rbtn,.rsbtn') : [];
+      for (var c = 0; c < children.length; c++) if (allowedElement(children[c])) return true;
+      return false;
+    }
+    if (cap) {
+      if (_package.readOnly && cap !== 'view') return false;
+      /* Container caps may group specific owned exports. Ownership of one
+         child must not grant its siblings; each command is checked below. */
+      return _package.caps.some(function (k) { return k === cap || k.indexOf(cap + '.') === 0; });
+    }
+    if (module) return !_package.readOnly;
+    return false; // An unclassified command never inherits a tier grant.
+  }
+  function applyPackage(scope) {
+    if (!_package || !scope || !scope.querySelectorAll) return 0;
+    guardLaunchers();
+    var nodes = scope.querySelectorAll(COMMANDS), removed = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i], own = owners(el.id || '', el.getAttribute('onclick') || '');
+      if (own.length === 1 && el.matches('.rbtn,.rsbtn,.rb-fly-item,#app-menu .menu-item')) el.setAttribute('data-module', own[0]);
+      var allowed = allowedElement(el);
+      if (!allowed) {
+        if (!el.hasAttribute('data-package-hidden')) el.setAttribute('data-package-display', el.style.display || '');
+        el.setAttribute('data-package-hidden', '1'); el.style.setProperty('display', 'none', 'important'); removed++;
+      } else if (el.hasAttribute('data-package-hidden')) {
+        el.style.display = el.getAttribute('data-package-display') || '';
+        el.removeAttribute('data-package-hidden'); el.removeAttribute('data-package-display');
+      }
+    }
+    return removed;
+  }
+  function commandPage(el, destination) {
+    if (!_package || !el || !global.document) return destination;
+    var target = global.document.querySelector('.ribbon-page[data-page="' + destination + '"]');
+    var owner = target && target.getAttribute('data-module');
+    var keys = owners(el.id || '', el.getAttribute('onclick') || '');
+    var module = keys.length === 1 && MODULE_GRANTS[keys[0]];
+    return owner && module && module.key !== owner && module.editorPage ? module.editorPage : destination;
+  }
+  function rehome(scope) {
+    var nodes = scope.querySelectorAll('#ribbon .ribbon-page[data-module] .rbtn,#ribbon .ribbon-page[data-module] .rsbtn');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i], page = el.closest('.ribbon-page'), from = page.getAttribute('data-page');
+      var destination = commandPage(el, from);
+      if (destination === from) continue;
+      var target = global.document.querySelector('.ribbon-page[data-page="' + destination + '"] .rpanel-body');
+      var node = el.closest('.rbtn-wrap') || el;
+      if (target && node.parentNode !== target) target.appendChild(node);
+    }
+  }
+  function layout(scope) {
+    if (!_package || !scope || !scope.querySelectorAll || !global.document) return;
+    var doc = global.document;
+    if (!doc.getElementById('omega-package-layout-style')) {
+      var style = doc.createElement('style'); style.id = 'omega-package-layout-style';
+      style.textContent =
+        'body[data-packaged-editor="1"][data-packaged-editor] #tb{height:auto;min-height:32px;flex-wrap:wrap}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .ribbon-page{max-width:100%;width:100%;flex-wrap:wrap;height:auto;overflow:visible;align-items:stretch}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rpanel{min-width:0;max-width:100%;min-height:78px;flex-direction:column}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rpanel-body{min-height:56px;flex:1 0 auto;order:0;flex-wrap:wrap}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rpanel-cap{order:1}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon{height:auto;max-height:42vh;overflow:auto}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs{min-width:0;flex-wrap:wrap;flex:1 0 100%;height:32px;min-height:32px}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs .rtab{padding:0 9px;font-size:11px;height:32px}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rbtn:not([data-package-hidden]):not([data-workspace-hidden]):not([data-omega-retired]):not([data-packaging-retired]):not([data-shelf-dupe]):not(.omega-gated-hidden),' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rsbtn:not([data-package-hidden]):not([data-workspace-hidden]):not([data-omega-retired]):not([data-packaging-retired]):not([data-shelf-dupe]):not(.omega-gated-hidden){display:flex!important}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rbtn-wrap:not([data-package-empty]),body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rpanel:not([data-package-empty]){display:flex!important}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs .rtab:not([data-package-empty]):not([data-package-hidden]){display:flex!important}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon [data-workspace-hidden],body[data-packaged-editor="1"][data-packaged-editor] #ribbon [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tab-menu [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] [data-package-hidden]{display:none!important}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #omega-package-tab{order:999}' +
+        '#omega-workspace-controls{display:flex;align-items:center;gap:8px;padding:4px 12px;font:11px system-ui;color:var(--sub);background:var(--navy)}' +
+        '#omega-workspace-controls button{font:inherit;color:var(--text);border:1px solid var(--border);background:transparent;border-radius:4px;padding:4px 8px;cursor:pointer}';
+      (doc.head || doc.body).appendChild(style);
+    }
+    function usable(el) {
+      return !el.hasAttribute('data-package-hidden') && !el.hasAttribute('data-workspace-hidden') && !el.hasAttribute('data-omega-retired') && !el.hasAttribute('data-packaging-retired') && !el.classList.contains('omega-gated-hidden') && !el.hasAttribute('data-shelf-dupe');
+    }
+    function hasControls(el) {
+      var controls = el.querySelectorAll('.rbtn,.rsbtn,input,select,.home-recent-item');
+      for (var i = 0; i < controls.length; i++) if (usable(controls[i])) return true;
+      return false;
+    }
+    var wraps = scope.querySelectorAll('#ribbon .rbtn-wrap');
+    for (var w = 0; w < wraps.length; w++) wraps[w].toggleAttribute('data-package-empty', !hasControls(wraps[w]));
+    var pages = scope.querySelectorAll('#ribbon .ribbon-page');
+    for (var p = 0; p < pages.length; p++) {
+      var groups = pages[p].querySelectorAll('.rpanel'), number = 0, any = false;
+      for (var g = 0; g < groups.length; g++) {
+        var present = hasControls(groups[g]);
+        groups[g].toggleAttribute('data-package-empty', !present);
+        if (!present) continue;
+        any = true;
+        var cap = groups[g].querySelector('.rpanel-cap');
+        if (cap && /^\s*\d+\s*[·.]/.test(cap.textContent)) {
+          var title = cap.textContent.replace(/^\s*\d+\s*[·.]\s*/, '');
+          var text = (++number) + ' · ' + title;
+          if (cap.textContent !== text) cap.textContent = text;
+        }
+      }
+      if (!groups.length) any = hasControls(pages[p]);
+      var key = pages[p].getAttribute('data-page'), tab = doc.querySelector('#ribbon-tabs .rtab[data-page="' + key + '"]');
+      pages[p].toggleAttribute('data-package-empty', !any);
+      if (tab) tab.toggleAttribute('data-package-empty', !any);
+      var mobile = doc.querySelector('#ribbon-tab-menu [onclick="rbHamburgerPick(\'' + key + '\')"]');
+      if (mobile) mobile.toggleAttribute('data-package-empty', !any);
+    }
+    var active = doc.querySelector('#ribbon-tabs .rtab.active');
+    if (active && (active.hasAttribute('data-package-empty') || active.hasAttribute('data-package-hidden'))) {
+      var next = doc.querySelector('#ribbon-tabs .rtab:not([data-package-empty]):not([data-package-hidden]):not([data-page="__file"])');
+      if (next && typeof global.rbTab === 'function') global.rbTab(next.getAttribute('data-page'));
+    }
+    if (global.OmegaWorkspaces && !doc.getElementById('omega-workspace-controls')) {
+      var ribbon = doc.getElementById('ribbon');
+      if (ribbon && ribbon.parentNode) {
+        var bar = doc.createElement('div'); bar.id = 'omega-workspace-controls';
+        var label = doc.createElement('span'); label.id = 'omega-workspace-label'; bar.appendChild(label);
+        var toggle = doc.createElement('button'); toggle.id = 'omega-workspace-all'; toggle.type = 'button';
+        toggle.onclick = function () { global.OmegaWorkspaces.setAll(!global.OmegaWorkspaces.all()); };
+        bar.appendChild(toggle); ribbon.parentNode.insertBefore(bar, ribbon);
+        global.OmegaWorkspaces.apply(scope);
+      }
+    }
+    if (global.OmegaPackageMenu) { global.OmegaPackageMenu.tab(); global.OmegaPackageMenu.staffPreview(); }
+  }
+  function guardLaunchers() {
+    if (!_package) return;
+    (_package.catalog || []).concat(_package.notSold || []).forEach(function (m) {
+      (m.ribbon || []).forEach(function (selector) {
+        if (selector.charAt(0) === '#') return;
+        var name = selector.split('(')[0], parts = name.split('.'), host = global;
+        for (var i = 0; i < parts.length - 1; i++) { host = host && host[parts[i]]; }
+        var key = parts[parts.length - 1], original = host && host[key];
+        if (typeof original !== 'function' || original._omegaPackageGuard) return;
+        var wrapped = function () {
+          var args = Array.prototype.slice.call(arguments), encoded;
+          try { encoded = args.map(function (a) { return JSON.stringify(a); }).join(','); } catch (e) { encoded = ''; }
+          if (!allowedCommand('', name + '(' + encoded + ')')) return false;
+          return original.apply(this, arguments);
+        };
+        wrapped._omegaPackageGuard = true;
+        host[key] = wrapped;
+      });
+    });
+  }
+  function fetchPackage(user) {
+    var request = ++_packageRequest;
+    setPackage(pendingPackage());
+    if (!user || !user.getIdToken || !global.fetch) return Promise.reject(new Error('Package access unavailable'));
+    return user.getIdToken().then(function (token) {
+      return global.fetch('/api/package-access', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+    }).then(function (r) { if (!r.ok) throw new Error('Package access unavailable'); return r.json(); })
+      .then(function (v) { if (request !== _packageRequest || (global.firebase && global.firebase.auth().currentUser !== user)) throw new Error('Account changed'); if (!v || v.packaged !== true) throw new Error('Package access changed; reload'); setPackage(v); return v; });
+  }
+  /* Capture covers keyboard-generated clicks and programmatic .click() on
+     a hidden button. The API still checks every producing request. */
+  if (global.document && global.document.addEventListener) global.document.addEventListener('click', function (e) {
+    if (!_package || !e.target || !e.target.closest) return;
+    var el = e.target.closest(COMMANDS);
+    if (el && !allowedElement(el)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+
   function setFor(tier) {
     var t = normalise(tier), out = {}, i, j, g;
+    if (_package) {
+      (_package.readOnly ? ['view'] : _package.caps).forEach(function (k) { out[k] = 1; });
+      return out;
+    }
     if (UNGATED[t]) { out.all = 1; return out; }
     var top = LADDER.indexOf(t);
     for (i = 0; i <= top; i++) {
@@ -207,6 +432,22 @@
   function apply(tier, root) {
     var scope = root || global.document;
     if (!scope || !scope.querySelectorAll) return { tier: normalise(tier), removed: 0 };
+    if (_package) {
+      if (global.OmegaComputeTab && global.OmegaComputeTab.place) global.OmegaComputeTab.place();
+      rehome(scope);
+      var hidden = applyPackage(scope);
+      if (global.document && global.document.body) {
+        global.document.body.setAttribute('data-packaged-editor', '1');
+        var signature = JSON.stringify([_package.modules, _package.staff, _package.readOnly]);
+        if (_packageSignature !== signature) {
+          _packageSignature = signature;
+          try { global.document.dispatchEvent(new global.CustomEvent('omega:package', { detail: _package })); } catch (e) {}
+        }
+      }
+      if (global.OmegaWorkspaces) global.OmegaWorkspaces.apply(scope);
+      layout(scope);
+      return { tier: normalise(tier), packaged: true, removed: hidden };
+    }
     var nodes = scope.querySelectorAll('[data-cap]'), removed = 0, i, el, cap;
     for (i = 0; i < nodes.length; i++) {
       el = nodes[i];
@@ -296,25 +537,36 @@
      engineering suite, the export group, all removed from the people
      demoing them.
 
-     These two domains are the same pair isAdmin() uses in firestore.rules
-     and adminDomains uses in the tenant configs. 'internal' is already in
+     Only a verified Firebase email at ClearSky's current staff domain may
+     use this presentation fallback. Server authorization still uses caller.staff. 'internal' is already in
      UNGATED, so it grants everything without inventing a new tier.
 
      A BILLING RECORD STILL WINS IF ONE EXISTS. This is a fallback for the
      absent-record case, not an override — so if ClearSky is ever given a
      real billing doc for testing, that is what applies. */
-  var INTERNAL_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
+  var INTERNAL_DOMAINS = ['clearsky-usa.com'];
 
-  function resolve(db, email) {
+  function resolve(db, email, emailVerified) {
     return new Promise(function (done) {
       try {
         var d = setOrg(email);
-        if (INTERNAL_DOMAINS.indexOf(d) >= 0 && !db) return done('internal');
+        var internal = emailVerified === true && INTERNAL_DOMAINS.indexOf(d) >= 0;
+        setAddons([]);
+        var resolution = ++_packageRequest;
+        setPackage(null);
+        if (internal && !db) return done('internal');
         if (!d || !db) return done('trial');
         db.collection('omega_orgs').doc(d).collection('billing').doc('current').get()
           .then(function (s) {
+            if (resolution !== _packageRequest) return done('trial');
             var b = s.exists ? (s.data() || {}) : {};
-            if (!s.exists && INTERNAL_DOMAINS.indexOf(d) >= 0) return done('internal');
+            if (!s.exists && internal) return done('internal');
+            if (b.packaged === true) {
+              setPackage(pendingPackage());
+              var user = global.firebase && global.firebase.auth().currentUser;
+              if (!user || user.email !== email) return done('trial');
+              return fetchPackage(user).then(function (view) { done(view.tier || 'standard'); }, function () { done('trial'); });
+            }
             setAddons(b.addons || []);
             var eff = effectiveTier(b.tier || 'trial', b.capTier);
             if (b.capTier && eff !== normalise(b.tier || 'trial') && global.console) {
@@ -324,9 +576,11 @@
             done(eff);
           })
           .catch(function () {
+            if (resolution !== _packageRequest) return done('trial');
             /* A failed read must not hand out the engineering suite to a
                customer — but it must not lock ClearSky out either. */
-            done(INTERNAL_DOMAINS.indexOf(d) >= 0 ? 'internal' : 'trial');
+            if (!internal) setPackage(pendingPackage());
+            done(internal ? 'internal' : 'trial');
           });
       } catch (e) { done('trial'); }
     });
@@ -341,6 +595,8 @@
     JV_ORGS: JV_ORGS, JV_GRANTS: JV_GRANTS, INTERNAL_DOMAINS: INTERNAL_DOMAINS,
     normalise: normalise, setFor: setFor, can: can, apply: apply, resolve: resolve,
     setOrg: setOrg, orgOf: orgOf, org: function () { return _org; },
-    effectiveTier: effectiveTier
+    effectiveTier: effectiveTier, setPackage: setPackage, packageAccess: function () { return _package; },
+    MODULE_GRANTS: MODULE_GRANTS, owners: owners, commandPage: commandPage, layout: layout,
+    guardLaunchers: guardLaunchers, pendingPackage: pendingPackage, fetchPackage: fetchPackage, allowedElement: allowedElement, allowedCommand: allowedCommand, commandSelector: COMMANDS
   };
 })(typeof window !== 'undefined' ? window : this);

@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 // Vercel serverless function: /api/validation
 // Receives a permit-set "export for validation & stamp approval" request from
 // the NextNRG SiteMap Designer, generates a validation/invoice tracking ID,
@@ -30,11 +31,14 @@ function genValidationId(){
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   if (req.method !== 'POST') { res.status(405).json({ error: 'POST only' }); return; }
 
   try {
+    var auth = require('./_lib/verify-token');
+    var ctx = await auth.authenticateWithTier(req);
+    await require('./_lib/package-access').withToken(req, ctx, 'engineering');
     var body = req.body;
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
 
@@ -42,7 +46,7 @@ module.exports = async function handler(req, res) {
     var projectName = (body && body.projectName) || 'Untitled Project';
     var address     = (body && body.address)     || '';
     var senderName  = (body && body.senderName)  || 'NextNRG User';
-    var senderEmail = (body && body.senderEmail) || '';
+    var senderEmail = ctx.caller.email; // Verified caller identity, never a submitted impersonation.
     var org         = (body && body.org)         || 'NextNRG';
     var market      = (body && body.market)      || '';
     var offtaker    = (body && body.offtaker)    || '';
@@ -121,6 +125,6 @@ module.exports = async function handler(req, res) {
 
     res.status(200).json({ ok: true, validationId: validationId, projectId: projectId });
   } catch (err) {
-    res.status(500).json({ error: String(err && err.message || err) });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Validation submission failed' });
   }
 };

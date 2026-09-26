@@ -657,6 +657,7 @@
     /* Can this tenant even SEE the tool? Client-specific tools (tool.orgs)
        are visible only to the listed orgs. Everyone sees non-restricted tools. */
     isVisible: function (tool, workspace) {
+      if (workspace && workspace.packaged === true && (!workspace.packageAccess || !Array.isArray(workspace.packageAccess.toolAccess) || workspace.packageAccess.toolAccess.indexOf(tool.key) < 0)) return false;
       if (!tool.orgs || !tool.orgs.length) return true;        // not restricted
       if (!workspace || !workspace.orgId) return false;        // restricted, no org
       return tool.orgs.indexOf(workspace.orgId) >= 0;
@@ -666,6 +667,7 @@
        (Visibility is separate — an unlocked tool the tenant can't see is hidden.) */
     isUnlocked: function (tool, workspace) {
       if (!this.isVisible(tool, workspace)) return false;
+      if (workspace && workspace.packaged === true) return !!(workspace.packageAccess && Array.isArray(workspace.packageAccess.toolAccess) && workspace.packageAccess.toolAccess.indexOf(tool.key) >= 0);
       if (!workspace) return true;              // admin/internal sees all
 
       /* ── toolAccess: THE ALLOWLIST, AND IT WINS ────────────────────────

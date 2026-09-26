@@ -160,12 +160,71 @@ Effective tools for a user =
 `omega-tools.js` computes this on boot. Rules enforce the same on each
 tool's data collections.
 
+The editor's internal fallback requires a literal `emailVerified === true`
+from its Firebase user and the `clearsky-usa.com` domain. An existing billing
+record still wins. Packaging has one server catalog (`api/_lib/modules.js`) and proposed,
+disabled price book (`api/_lib/pricebook.js`). `api/package-catalog` returns
+authorized projections and server quotes. Packaged records use the server access projection introduced in Phase 2;
+unpackaged records keep legacy gates. Do not enable packaged billing before
+full editor, server-engine, write-rule and billing lifecycle validation. See `docs/PACKAGING-ROADMAP.md`.
+
+Phase 4 adds private signup billing profiles, reviewed staff package activation,
+server-priced sandbox invoices and paid reconciliation. New trials start at
+approval, once per organization and at most 14 days. Annual prepay uses the
+11-month price without transformation credit. Packaged billing/profile writes
+are Admin SDK only. API and rules enforce the recorded access deadline;
+legacy tier edits cannot modify a packaged subscription. Staff authentication
+requires a literal verified ClearSky domain even with an old role claim.
+Flags remain off by default; see docs/PACKAGING-PHASE-4-VALIDATION.md before
+any sandbox enablement or release.
+
+Phase 5 separates what a tenant BOUGHT (`billing/current.subscription`) from
+what is switched on (`billing/current.modules`); `POST /api/plan-change` is
+the one door for a tenant's own additions (pay first, prorated; a $0 addition
+inside a paid tier switches on at once). Phase 6: the Subscription Proposal
+(`subscription-proposal.html`, `proposal.html`, `api/subscription-proposal.js`
+on `api/_lib/subscription-proposal.js`) and the signup discovery in
+`start.html` share ONE set of questions, ONE recommendation and the price
+book; `subscription_proposals` is Admin SDK only; accepting a proposal never
+prices anything — signup, plan-change or activation do. `api/_lib/deck-brand.js`
+is the one brand-of-a-deck rule (Pro Forma and proposal). Phase 7:
+`api/_lib/usage.js` is the ONE usage counter (`omega_orgs/{org}/usage/{cycle}`,
+Admin SDK only, idempotent by client id): a metered deliverable is counted
+where it is produced (`POST /api/usage` from the browser tools, server-side
+in `rfq.js`), the allowance is included + packs, overage is billed on the
+recurring invoice, and packs and auto top-up go through `plan-change`. It is
+an honest billing counter, not a security boundary. Phase 8: **Omega Logic
+follows the package.** A packaged tenant (`billing.packaged`) is judged by
+`modules[]` alone — Office is `logic-office`, the parts are `logic-plant`,
+`logic-materials`, `logic-logistics`, `logic-customer` — and the grant must be
+live (`package-access.live`, the editor's own rule). `logic-access.authorize(c,
+org, write, part)` refuses a part not bought; `parts(ctx)` is what the office
+endpoint (`access.parts`), the front door and the customer-portal gate
+(`buyer-accounts.context`) report, and what the chrome, the hex hub, the
+dashboard and the Omega Logic app draw. A legacy tenant (addon `omega-logic`)
+is unchanged and holds every part; absent means "everything", a present list
+is the package. Showing a link is never access. Phase 9: a door that is not
+a member's (the bench and rig tokens, a tenant admin's hold/release) runs
+`requirePartIfPackaged(org, 'plant')` — a packaged workspace must hold the
+part, a legacy or unrecorded one keeps its own rule — and `firestore.rules`
+compares a sign-in email lower-cased in the team blocks, `termsAcceptances`
+and `isAdmin()` (`scripts/tests/tsigninemail.js`), as `admin.js` does.
+
+Packaged editor presentation uses the server catalog through OmegaCaps;
+OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
+The shared omega-package-menu.js renders catalog features and server-formatted
+prices. Staff package previews are read-only server projections, never tenant
+impersonation or billing edits. Legacy layout modes apply to unpackaged records.
+
 ## Self-serve signup (policy decided 2026-09-06)
 
 Hub host `app.clearskyomega.com` serves `/start.html`. Sign in → if
 `omega_orgs/{emailDomain}` exists, route to its hostname (colleagues
 auto-join as `member`); else the form → `POST /api/tenant-signup` creates
-the tenant `status: 'pending'` on a 30-day trial. Work email only —
+the tenant `status: 'pending'` with a signup trial capped in code at 14 days.
+The Phase 0 cap applies only to new signups; existing trial dates are preserved.
+Packaging Phase 4 moves the one organization trial to approval, with first
+billing at trial end (see `docs/PACKAGING-ROADMAP.md` §10). Work email only —
 public providers in `api/_lib/public-domains.js` are refused. ClearSky
 approves via `POST /api/tenant-approve` (master console button). A pending
 tenant's users see a "being set up" screen from `omega-tenant.js`. Never
@@ -692,8 +751,8 @@ tenant. Treat it that way.
 - **Staff by email domain needs a VERIFIED email** (`email_verified`
   is the literal `true`; absent is not verified). A Firebase password account
   can be opened on any address without proving it. One rule in four places:
-  `verify-token.js` `verifyIdToken()`, `admin.js` `authenticate()` (the
-  explicit `role: 'staff'` claim still counts), `isAdmin()` in
+  `verify-token.js` `verifyIdToken()`, `admin.js` `authenticate()` (an old
+  `role: 'staff'` claim cannot bypass verified-domain identity), `isAdmin()` in
   `firestore.rules`, `isAdminDomain()` in `storage.rules`. Never decide staff
   with `isStaffEmail()` on a caller; read `caller.staff`.
   `scripts/tests/tstaffverified.js` holds it.

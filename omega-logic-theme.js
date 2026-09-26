@@ -94,10 +94,31 @@
     } catch (e) { return v === true; }
   }
 
-  /* opts.team: show Team under Setup (an owner or administrator, or ClearSky) */
+  /* The same for the Omega Logic PARTS a workspace holds (Phase 8): the
+     office endpoint says (access.parts — plant, materials, logistics,
+     customer; every one on a legacy subscription); pages that do not say
+     remember it for THIS workspace only. Not said means everything is
+     shown, as before; a list that was said, even an empty one, is what the
+     package holds. Showing a link is never access: each endpoint refuses
+     the part it owns on its own (logic-access.requirePart). */
+  var PARTS = ['plant', 'materials', 'logistics', 'customer'];
+  function partsFlag(org, v) {
+    try {
+      if (Array.isArray(v)) { v = v.filter(function (p) { return PARTS.indexOf(p) >= 0; }); if (org) sessionStorage.setItem('omega_logic_parts', org + '|' + v.join(',')); return v; }
+      if (v == null && org) { var s = sessionStorage.getItem('omega_logic_parts') || '', i = s.indexOf('|'); if (i > 0 && s.slice(0, i) === org) return s.slice(i + 1) ? s.slice(i + 1).split(',') : []; }
+      return null;
+    } catch (e) { return Array.isArray(v) ? v.slice() : null; }
+  }
+  /* is this part shown: not said (null) shows everything */
+  function holds(parts, part) { return !part || !Array.isArray(parts) || parts.indexOf(part) >= 0; }
+
+  /* opts.team: show Team under Setup (an owner or administrator, or ClearSky)
+     opts.parts: the Omega Logic parts held (an array), or null for all. A
+     link's fourth field names the part whose endpoint serves it; a group
+     with nothing left is not drawn. */
   function groups(org, owner, opts) {
     opts = opts || {};
-    var q = '?org=' + encodeURIComponent(org), e = encodeURIComponent(org);
+    var q = '?org=' + encodeURIComponent(org), e = encodeURIComponent(org), parts = owner ? null : opts.parts;
     var g = [
       ['Run the business', [
         ['dashboard', 'Dashboard', '/omega-logic' + q],
@@ -106,24 +127,25 @@
         ['customers', 'Customers', '/portals/customer/admin.html' + q],
         ['officeapp', 'Office app', '/office/app' + q]]],
       ['Build', [
-        ['woboard', 'Work order board', '/plant/work-orders.html' + q],
-        ['works', 'Work orders & registration', '/plant/' + q],
-        ['board', 'Plant board', '/plant/manager.html' + q],
-        ['stations', 'Stations & tablets', '/plant/manager.html' + q + '#stations'],
-        ['app', 'Plant app', '/plant/app' + q]]],
+        ['woboard', 'Work order board', '/plant/work-orders.html' + q, 'plant'],
+        ['works', 'Work orders & registration', '/plant/' + q, 'plant'],
+        ['board', 'Plant board', '/plant/manager.html' + q, 'plant'],
+        ['stations', 'Stations & tablets', '/plant/manager.html' + q + '#stations', 'plant'],
+        ['app', 'Plant app', '/plant/app' + q, 'plant']]],
       ['Stock & supply', [
-        ['inventory', 'Inventory', '/logic-inventory.html' + q],
-        ['materials', 'Materials plan', '/logic-materials.html' + q],
-        ['purchasing', 'Purchase orders', '/logic-materials.html' + q + '#po'],
-        ['vendors', 'Vendors & prices', '/logic-materials.html' + q + '#suppliers']]],
+        /* finished units on the shelf are the plant's (api/logic-plant page=stock) */
+        ['inventory', 'Inventory', '/logic-inventory.html' + q, 'plant'],
+        ['materials', 'Materials plan', '/logic-materials.html' + q, 'materials'],
+        ['purchasing', 'Purchase orders', '/logic-materials.html' + q + '#po', 'materials'],
+        ['vendors', 'Vendors & prices', '/logic-materials.html' + q + '#suppliers', 'materials']]],
       ['Deliver', [
-        ['shipping', 'Shipping & receiving', '/logic-logistics.html' + q],
-        ['custody', 'Sites & custody', '/logic-custody.html' + q],
-        ['register', 'Fleet register', '/logic-register.html' + q],
+        ['shipping', 'Shipping & receiving', '/logic-logistics.html' + q, 'logistics'],
+        ['custody', 'Sites & custody', '/logic-custody.html' + q, 'logistics'],
+        ['register', 'Fleet register', '/logic-register.html' + q, 'logistics'],
         /* the plant board's own Quality view: holds, failed tests and
            routing exceptions (a serial's record is looked up from Work
            orders & registration) */
-        ['quality', 'Quality & holds', '/plant/manager.html' + q + '#quality']]],
+        ['quality', 'Quality & holds', '/plant/manager.html' + q + '#quality', 'plant']]],
       ['Money', [
         ['cash', 'Cash flow', '/omega-logic' + q + '#cash'],
         ['accounting', 'Accounting', '/logic-accounting.html' + q]]],
@@ -141,6 +163,7 @@
       ['kit', 'Apps & guides', '/logic-kit.html' + q],
       ['flow', 'Production flow', '/plant/manager.html' + q + '#flow'],
       ['mission', 'Jarvis Mission', '/mission?view=logic&org=' + e]]]);
+    if (Array.isArray(parts)) g = g.map(function (x) { return [x[0], x[1].filter(function (l) { return holds(parts, l[3]); })]; }).filter(function (x) { return x[1].length; });
     return g;
   }
 
@@ -247,6 +270,9 @@
     o = o || {};
     var org = String(o.org || ''), owner = ownerFlag(o.owner), name = 'Omega Logic';
     var team = owner || teamFlag(org, o.team) || o.current === 'team';
+    /* the parts this workspace holds (Phase 8): said by the office endpoint,
+       remembered for the pages that do not say; ClearSky sees every group */
+    var parts = owner ? null : partsFlag(org, o.parts);
     /* Omega Logic is ClearSky's product and the tenant is a workspace in it
        (as QuickBooks is the app and the company is what you sign into): the
        header is always Omega Logic in its own colours, and says whose
@@ -286,7 +312,7 @@
     if (!nav && shell) { nav = document.createElement('nav'); nav.className = 'logic-nav'; nav.setAttribute('aria-label', 'Office'); shell.insertBefore(nav, shell.firstChild); }
     if (nav) {
       var h = '';
-      groups(org, owner, { team: team }).forEach(function (g) {
+      groups(org, owner, { team: team, parts: parts }).forEach(function (g) {
         h += '<p class="eyebrow">' + esc(g[0]) + '</p>';
         g[1].forEach(function (l) { h += '<a href="' + esc(l[2]) + '"' + (l[0] === o.current ? ' aria-current="page"' : '') + '>' + esc(l[1]) + '</a>'; });
       });
@@ -352,7 +378,11 @@
      than a zero it cannot vouch for.
        input: { orders, owner, accounting, intake, follow, followErr,
                 pending, plantRows, toConfirm, inTransit, short,
-                outstandingCents, today }
+                outstandingCents, today,
+                parts }   the Omega Logic parts held (Phase 8): a ring cell
+                          whose part is not in the package is not drawn
+                          (Plant · plant, Deliver · logistics, Stock ·
+                          materials); not said draws all six
      Price and accept (D1): the server says per order whether the person
      looking may take the step (o.can) and whom it waits on (o.waitingOn);
      an order the viewer may price or accept is theirs to do, one waiting
@@ -457,8 +487,11 @@
       { key: 'money', label: 'Money', icon: '$', badge: cap(money), hint: caption([[s.overdue, s.overdue + ' overdue'], [s.toIssue, s.toIssue + ' to issue']],
         x.outstandingCents == null ? '' : Number(x.outstandingCents) > 0 ? kdollars(x.outstandingCents) + ' open' : 'nothing open') }
     ];
+    if (Array.isArray(x.parts)) s.items = s.items.filter(function (it) { return holds(x.parts, HUB_PART[it.key]); });
     return s;
   }
+  /* which Omega Logic part each ring cell belongs to (the rest are the Office's) */
+  var HUB_PART = { plant: 'plant', deliver: 'logistics', stock: 'materials' };
   /* Where "N company POs to review" goes (OFF-03): one row per company
      that has a PO waiting, saying whose it is; a company with one PO
      waiting opens that PO's review itself, a company with several opens its
@@ -517,7 +550,7 @@
     ];
   }
 
-  window.OmegaLogicTheme = { apply: apply, reset: reset, chrome: chrome, groups: groups, signInHref: signInHref, nextFor: nextFor, officeSubPage: officeSubPage,
+  window.OmegaLogicTheme = { apply: apply, reset: reset, chrome: chrome, groups: groups, holds: holds, partsHeld: partsFlag, signInHref: signInHref, nextFor: nextFor, officeSubPage: officeSubPage,
     land: land, landTarget: landTarget, words: words, source: source, count: count, day: day, when: when, plainError: plainError, fillFor: fillFor,
     hub: hub, invoices: invoices, reviewLinks: reviewLinks, moneyTiles: moneyTiles, tileHtml: tileHtml, stageTiles: stageTiles, company: company, safeUrl: safeUrl };
 })();

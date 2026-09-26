@@ -126,6 +126,8 @@ function openFinancingApply(){
      that threw all resolve to the full platform. -->
 <script src="/omega-editor-mode.js"></script>
 <script src="/omega-caps.js"></script>
+<script src="/omega-workspaces.js"></script>
+<script src="/omega-package-menu.js"></script>
 <script src="/omega-bess-products.js"></script>
 <script src="/omega-storefront-handoff.js"></script>
 <script src="omega-equipment-visuals.js"></script>
@@ -1751,12 +1753,12 @@ window.onerror = function(msg, src, line, col, err) {
     <div class="rtab"        data-page="__file"  onclick="rbAppMenu(event)">File</div>
     <div class="rtab"        data-page="modify"  onclick="rbTab('modify')">Edit</div>
     <div class="rtab active" data-page="home"    onclick="rbTab('home')">Build</div>
-    <div class="rtab"        data-page="compute" data-cap="compute" onclick="rbTab('compute')" title="Compute campus &mdash; site, design, sizing and cost tools for a data-centre campus with on-site power">Compute</div>
+    <div class="rtab"        data-page="compute" data-module="compute" data-cap="compute" onclick="rbTab('compute')" title="Compute campus &mdash; site, design, sizing and cost tools for a data-centre campus with on-site power">Compute</div>
     <div class="rtab"        data-page="insert"  onclick="rbTab('insert')">Insert</div>
     <div class="rtab"        data-page="draw"    onclick="rbTab('draw')">Draw</div>
     <div class="rtab"        data-page="annotate" onclick="rbTab('annotate')">Annotate</div>
     <div class="rtab"        data-page="analyze" data-cap="engineering" onclick="rbTab('analyze')">Analyze</div>
-    <div class="rtab"        data-page="estimate" data-cap="engineering" onclick="rbTab('estimate')">Estimate</div>
+    <div class="rtab"        data-page="estimate" data-module="estimate" data-cap="engineering" onclick="rbTab('estimate')">Estimate</div>
     <div class="rtab"        data-page="view"    onclick="rbTab('view')">View</div>
     <div class="rtab"        data-page="output"  onclick="rbTab('output')">Output</div>
     <div class="rtab"        data-page="settings" onclick="rbTab('settings')">Settings</div>
@@ -1867,7 +1869,7 @@ window.onerror = function(msg, src, line, col, err) {
        here now, in the order you use them. The buttons are the same DOM
        nodes the patches inject; OmegaComputeTab moves them into these
        panels as they appear, so nothing was re-implemented. -->
-  <div class="ribbon-page" data-page="compute" data-cap="compute">
+  <div class="ribbon-page" data-page="compute" data-module="compute" data-cap="compute">
     <div class="rpanel" data-ct="site" data-shelf="1">
       <div class="rpanel-body"></div>
       <div class="rpanel-cap">1 &middot; Site</div>
@@ -2219,7 +2221,7 @@ window.onerror = function(msg, src, line, col, err) {
   </div>
 
   <!-- ESTIMATE (cost / sourcing / takeoff — grouped for findability) -->
-  <div class="ribbon-page" data-page="estimate" data-cap="engineering">
+  <div class="ribbon-page" data-page="estimate" data-module="estimate" data-cap="engineering">
     <div class="rpanel">
       <div class="rpanel-body">
         <button class="rbtn" onclick="openRpPanel('cost')" title="Construction cost estimator — equipment, install, incentives, revenue, ROI"><span class="rb-ico">$</span><span class="rb-lbl">Construction<br>Cost</span></button>
@@ -2327,7 +2329,7 @@ window.onerror = function(msg, src, line, col, err) {
         <!-- Beside Push to Marketplace on purpose: both are ways of taking a
              finished design outward. The marketplace lists a deal for capital
              to find; this one asks a named lender for a price. -->
-        <button class="rbtn" onclick="rbRun(openFinancingApply)" data-cap="export" title="Apply for financing — DLL pricing request. Carries the project across and collects the credit package."><span class="rb-ico" style="color:#F0A030">$</span><span class="rb-lbl">Apply for Financing</span></button>
+        <button class="rbtn" onclick="rbRun(openFinancingApply)" data-cap="export" title="Apply for financing — DLL pricing request. Carries the project across and collects the credit package."><span class="rb-ico" style="color:#F0A030">$</span><span class="rb-lbl">Apply for<br>Financing</span></button>
       </div>
       <div class="rpanel-cap">Marketplace</div>
     </div>
@@ -3583,7 +3585,7 @@ if(document.readyState==='loading'){
   <div id="rp-inner" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
   <div style="display:flex;border-bottom:1px solid var(--border);align-items:center">
     <button onclick="rpTab('summary')" id="rp-tab-summary" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;cursor:pointer;border:none;background:rgba(197,165,90,.08);color:var(--gold);font-family:inherit;border-bottom:2px solid var(--gold);transition:all .15s">📋 Summary</button>
-    <button onclick="rpTab('cost')" id="rp-tab-cost" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;cursor:pointer;border:none;background:transparent;color:var(--sub);font-family:inherit;border-bottom:2px solid transparent;transition:all .15s">💰 Cost Est.</button>
+    <button onclick="rpTab('cost')" id="rp-tab-cost" data-module="estimate" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;cursor:pointer;border:none;background:transparent;color:var(--sub);font-family:inherit;border-bottom:2px solid transparent;transition:all .15s">💰 Cost Est.</button>
   </div>
   <div id="rp-summary" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:12px;min-width:0;overflow-wrap:break-word;word-break:normal">
     <div style="margin-bottom:10px;min-width:0">
@@ -3611,7 +3613,7 @@ if(document.readyState==='loading'){
       <div id="rp-scale" style="font-size:11px;color:var(--sub)">Not calibrated</div>
     </div>
   </div>
-  <div id="rp-cost" style="flex:1;overflow-y:auto;padding:0;display:none;flex-direction:column">
+  <div id="rp-cost" data-module="estimate" style="flex:1;overflow-y:auto;padding:0;display:none;flex-direction:column">
 
   <!-- Cost sub-tabs -->
   <div style="display:flex;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)">
@@ -26015,6 +26017,7 @@ async function _loadProject(id){
     // -- Project type: the record's type wins over the browser's last choice --
     try{
       if(d.type && window.OmegaProjectTypes && typeof OmegaProjectTypes.set==='function') OmegaProjectTypes.set(d.type);
+      if(window.OmegaWorkspaces) OmegaWorkspaces.setProject(d.type, d.siteScopes, true);
     }catch(e){}
 
     // -- Address -> satellite bar -------------------------------
@@ -36116,6 +36119,7 @@ function _omRow(k,v,cls,title){
 function _omSet(id,html){
   var el=document.getElementById(id);
   if(el) el.innerHTML=html;
+  if(window.OmegaWorkspaces) OmegaWorkspaces.results();
 }
 
 function omegaRenderResults(){
@@ -56542,8 +56546,11 @@ async function _valSubmit(){
     summary:     _valSummary()
   };
   try {
+    var validationUser = firebase.auth().currentUser;
+    if (!validationUser) throw new Error('Sign in to submit for validation');
+    var validationToken = await validationUser.getIdToken();
     var resp = await fetch('/api/validation', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+      method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer ' + validationToken}, body:JSON.stringify(payload)
     });
     var j = await resp.json();
     if(!resp.ok || !j.validationId){ throw new Error(j && j.error ? j.error : 'submit failed'); }
@@ -72968,7 +72975,8 @@ function homeLoadRecent(){
   var host = document.getElementById('home-recent');
   if(!host) return;
 
-  var list = (window._allProjects && window._allProjects.length) ? window._allProjects.slice() : null;
+  /* An empty result is loaded. Retrying it recursively freezes new accounts. */
+  var list = Array.isArray(window._allProjects) ? window._allProjects.slice() : null;
 
   if(!list){
     /* Kick a quiet fetch if Firestore is available, then re-render. */
@@ -77645,6 +77653,14 @@ window._crmToastModal=_crmToastModal;
       ai:'a combined solar photovoltaic and battery energy storage (PV + BESS) installation',
       hint:'Both PV rapid-shutdown/array signage and NFPA 855 battery signage are included \u2014 this is the CSE non-export solar + storage combo.'
     },
+    building: {
+      label:'Building / Net-Zero', noun:'building', assembly:null,
+      sheets:{ e0:1,e10:1,e1:1,e12:0,e20:1,e30:1,e40:0,e50:1,s11:0,s12:0,s20:0,s30:0 },
+      names:{ e20:'E2.0 — Building Electrical One-Line', e30:'E3.0 — Signage' },
+      cover:{ model:'Building system', mfr:'Manufacturer' },
+      ai:'a building and net-zero energy project',
+      hint:'Begin with the building and its loads; add rooftop generation and storage as needed.'
+    },
     datacenter: {
       label:'Data Center / Compute Load',
       noun:'compute load facility', assembly:null,
@@ -77676,7 +77692,7 @@ window._crmToastModal=_crmToastModal;
               dcfc:'ev', ev:'ev', 'ev-dcfc':'ev', evdcfc:'ev',
               bess:'bess', storage:'bess', battery:'bess',
               solar:'solar', pv:'solar', solarpv:'solar',
-              der:'der', microgrid:'der',
+              der:'der', microgrid:'der', building:'building', netzero:'building',
               solarbess:'solarbess', 'solar+bess':'solarbess', 'solar-bess':'solarbess',
               'solar+storage':'solarbess', solarstorage:'solarbess',
               datacenter:'datacenter', compute:'datacenter', 'data-center':'datacenter', datacentre:'datacenter' };
@@ -77722,6 +77738,7 @@ window._crmToastModal=_crmToastModal;
     /* the assembly hint should name the right thing */
     refreshAssemblyNote(key);
 
+    if(!silent && window.OmegaWorkspaces) OmegaWorkspaces.setProject(key, null, true);
     if(!silent && window.console) console.info('[project-type] '+key);
   }
 
@@ -105472,7 +105489,15 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     items = [];
     var seenEl = [];
     function add(el, page) {
-      if (!el || el.offsetParent === null && !page) { /* keep going anyway */ }
+      if (!el) return;
+      var discovery = null, caps = window.OmegaCaps, view = caps && caps.packageAccess();
+      if (caps && !caps.allowedElement(el)) {
+        if (!view || view.readOnly || view.toolAccess.indexOf('editor') < 0) return;
+        var owners = caps.owners(el.id || '', el.getAttribute('onclick') || '');
+        discovery = owners.length === 1 && caps.MODULE_GRANTS[owners[0]];
+        if (!discovery || view.modules.indexOf(discovery.key) >= 0) return;
+      }
+      if ((!view && el.hasAttribute('data-cap-blocked')) || el.hasAttribute('data-omega-retired') || el.hasAttribute('data-packaging-retired')) return;
       var name = textOf(el);
       if (!name) return;
       if (seenEl.indexOf(el) >= 0) return;
@@ -105480,10 +105505,11 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       var panel = el.closest ? el.closest('.rpanel') : null;
       var cap = panel ? panel.querySelector('.rpanel-cap') : null;
       items.push({
-        el: el,
+        el: el, discovery: discovery ? discovery.key : null,
+        moduleName: discovery ? discovery.name : '',
         page: page || null,
         name: name,
-        group: cap ? cap.textContent.trim() : '',
+        group: discovery ? 'In other modules' : (cap ? cap.textContent.trim() : ''),
         desc: el.getAttribute('data-tip') || el.getAttribute('title') || '',
         ico: icoOf(el)
       });
@@ -105497,6 +105523,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     var menu = document.querySelectorAll('#app-menu .menu-item,.rb-fly-item');
     for (var j = 0; j < menu.length; j++) add(menu[j], null);
     for (var k = 0; k < STATIC.length; k++) {
+      if (window.OmegaCaps && OmegaCaps.packageAccess() && OmegaCaps.packageAccess().readOnly && STATIC[k].name.indexOf('Theme:') !== 0 && STATIC[k].name.indexOf('Interface:') !== 0) continue;
       items.push({
         el: null, page: null, name: STATIC[k].name, group: 'Interface',
         desc: STATIC[k].desc, ico: STATIC[k].ico, run: STATIC[k].run
@@ -105522,7 +105549,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     return sc + Math.max(0, 24 - s.length) * 0.4;
   }
 
-  function search(q) {
+  function search(q, ungrouped) {
     q = (q || '').toLowerCase().replace(/\s+/g, '');
     var out = [];
     for (var i = 0; i < items.length; i++) {
@@ -105532,7 +105559,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       if (!s) s = score(q, it.name + ' ' + it.group + ' ' + it.desc) * 0.6;
       if (s > 0) out.push({ it: it, s: s });
     }
-    out.sort(function (a, b) { return b.s - a.s; });
+    out.sort(function (a, b) { return (ungrouped ? 0 : Number(!!a.it.discovery) - Number(!!b.it.discovery)) || b.s - a.s; });
     return out.slice(0, 60).map(function (o) { return o.it; });
   }
 
@@ -105546,9 +105573,14 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       ckList.appendChild(e);
       return;
     }
+    var discoveryHeader = false;
     list.forEach(function (it, i) {
+      if (it.discovery && !discoveryHeader) {
+        var heading = document.createElement('div'); heading.className = 'ck-empty'; heading.textContent = 'In other modules'; ckList.appendChild(heading); discoveryHeader = true;
+      }
       var r = document.createElement('div');
       r.className = 'ck-row' + (i === 0 ? ' sel' : '');
+      if (it.discovery) { r.style.color = 'var(--sub)'; r.setAttribute('data-module-discovery', it.discovery); }
       var path = [it.page ? tabLabel(it.page) : (it.group || 'Menu'), it.group].filter(Boolean);
       r.innerHTML = '<div class="ck-ico"></div><div class="ck-txt">' +
         '<div class="ck-name"></div><div class="ck-desc"></div></div>' +
@@ -105556,7 +105588,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       r.querySelector('.ck-ico').textContent = it.ico;
       r.querySelector('.ck-name').textContent = it.name;
       r.querySelector('.ck-desc').textContent = (it.desc || '').replace(/\s+/g, ' ').slice(0, 110);
-      r.querySelector('.ck-path').textContent = path.slice(0, 2).join(' \u203A ');
+      r.querySelector('.ck-path').textContent = it.discovery ? it.moduleName : path.slice(0, 2).join(' \u203A ');
       r.addEventListener('mouseenter', function () { select(i); });
       r.addEventListener('click', function () { run(it); });
       rows.push(r);
@@ -105574,6 +105606,9 @@ button[style*="linear-gradient"][aria-disabled="true"]{
   }
 
   function run(it) {
+    if (it.discovery) { close(); return window.OmegaPackageMenu ? OmegaPackageMenu.open(it.discovery) : false; }
+    if (it.el && window.OmegaCaps && !OmegaCaps.allowedElement(it.el)) return false;
+    if (it.run && window.OmegaCaps && OmegaCaps.packageAccess() && OmegaCaps.packageAccess().readOnly && it.name.indexOf('Theme:') !== 0 && it.name.indexOf('Interface:') !== 0) return false;
     close();
     if (it.run) { try { it.run(); } catch (e) { console.error(TAG, e); } return; }
     if (it.page && typeof window.rbTab === 'function') {
@@ -105590,7 +105625,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
   window.OmegaCommands = {
     list: function () {
       buildIndex();
-      return items.map(function (it) { return { name: it.name, group: it.group || '', page: it.page || '', desc: it.desc || '' }; });
+      return items.map(function (it) { return { name: it.name, group: it.group || '', page: it.page || '', desc: it.desc || '', module: it.discovery || null, action: it.discovery ? 'view-module' : 'run' }; });
     },
     run: function (name) {
       buildIndex();
@@ -105598,7 +105633,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       if (!q) return false;
       var hit = null;
       for (var i = 0; i < items.length; i++) { if (items[i].name.toLowerCase() === q) { hit = items[i]; break; } }
-      if (!hit) { var res = search(name); hit = res[0] || null; }
+      if (!hit) { var res = search(name, true); hit = res[0] || null; }
       if (!hit) return false;
       run(hit);
       return true;
@@ -107667,7 +107702,10 @@ button[style*="linear-gradient"][aria-disabled="true"]{
        very first boot wrote 'designer' and from then on the account looked
        like somebody had chosen it — which meant a tier-derived default could
        never apply again, on any machine that had opened the editor once. */
-    if (!ephemeral) { try { localStorage.setItem(KEY, mode); } catch (e) {} }
+    if (!ephemeral) {
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+      if (window.OmegaCaps && OmegaCaps.packageAccess() && window.OmegaWorkspaces) OmegaWorkspaces.setAll(mode === 'pro');
+    }
     if (!quiet && window.console) console.info(TAG + ' ' + mode + ' mode');
     return mode;
   }
@@ -107777,6 +107815,8 @@ button[style*="linear-gradient"][aria-disabled="true"]{
      decides where somebody starts. */
   function defaultMode() {
     var C = window.OmegaCaps;
+    var pack = C && C.packageAccess();
+    if (pack) return pack.staff || pack.modules.indexOf('engineering') >= 0 || pack.modules.indexOf('plansets') >= 0 ? 'pro' : 'designer';
     var t = '';
     try { t = document.body.getAttribute('data-tier') || ''; } catch (e) {}
     if (t && C && C.can) {
@@ -107796,7 +107836,8 @@ button[style*="linear-gradient"][aria-disabled="true"]{
          — so this is the trial-shaped guess, revisited below rather than
          trusted. Marked ephemeral so it is not mistaken for a choice. */
       set(defaultMode(), true, true);
-      document.addEventListener('omega:tier', function () {
+      function revisitMode() {
+        if (window.OmegaCaps && OmegaCaps.packageAccess()) { var hint = document.getElementById('omg-firstrun'); if (hint) hint.remove(); }
         var again = null;
         try { again = localStorage.getItem(KEY); } catch (e) {}
         if (again) return;              /* they chose in the meantime */
@@ -107809,10 +107850,12 @@ button[style*="linear-gradient"][aria-disabled="true"]{
           var n = document.getElementById('omg-firstrun');
           if (n && n.parentNode) n.parentNode.removeChild(n);
         }
-      });
+      }
+      document.addEventListener('omega:tier', revisitMode);
+      document.addEventListener('omega:package', revisitMode);
       /* The note offers "switch to Pro", so it only belongs in front of
          somebody who is actually in Designer. */
-      if (defaultMode() === 'designer') firstRunNote();
+      if (defaultMode() === 'designer' && !(window.OmegaCaps && OmegaCaps.packageAccess())) firstRunNote();
     }
 
     /* Patch scripts add ribbon buttons on timers well after load, so the
@@ -141678,6 +141721,21 @@ challengeRow(s) +
 })();
 
 </script>
+<style id="omega-packaging-ribbon-style">
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+#ribbon [data-shelf-dupe],#ribbon [data-packaging-retired]{display:none!important}
+#ribbon .rb-ico,#ribbon .rs-ico,#ribbon .fi-ico,#ribbon .mi-ico{color:var(--accent,#6E9BE0)!important}
+#ribbon .rb-ico svg{width:22px!important;height:22px!important;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#ribbon .rs-ico svg,#ribbon .fi-ico svg,#ribbon .mi-ico svg{width:16px!important;height:16px!important}
+#ribbon .rbtn{max-width:88px;flex-shrink:0}
+#ribbon .rb-lbl{font-size:10px!important;line-height:1.2!important;max-width:82px;white-space:nowrap;word-break:normal;hyphens:none}
+#ribbon .rpanel-cap{font-size:9px!important;line-height:1.4;letter-spacing:.08em;text-transform:uppercase}
+@media(prefers-color-scheme:light){
+  #tb,#ribbon{--text:#16202B;--sub:#526273;--border:#D7DFE6;--bg:#F5F4F0;--navy:#fff;--accent:#2B5FA8;--hl:#2B5FA8;--hl-dim:#E6EEF9;background:#F5F4F0!important;color:#16202B}
+  #tb .rtab,#ribbon .rb-lbl,#ribbon .rpanel-cap{color:#526273!important}
+  #tb .rtab.active,#ribbon .rbtn:hover .rb-lbl{color:#16202B!important;background:#E6EEF9}
+}
+</style>
 <script id="omega-ribbon-icons-js">
 /* ====================================================================== *
  *  OMEGA RIBBON ICONS                                                    *
@@ -141704,6 +141762,28 @@ challengeRow(s) +
   if (window.OmegaRibbonIcons) return;
   var TAG = '[OmegaRibbonIcons]';
 
+  /* One stroke family for text glyphs and new injected buttons. Existing
+     SVG artwork stays semantic and is sized by the same rule. */
+  var GLYPHS = [
+    [/battery|bess|storage/i, 'M4 5h16v16H4zM8 2h8M12 8v10M8 13h8'],
+    [/charg|ev |dcfc|level.?2/i, 'M6 21V3h10v18M4 21h14M9 7h4v5H9zM16 7h3l2 3v8h-3'],
+    [/solar|generation|sun/i, 'M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2M8 8h8v8H8z'],
+    [/cost|budget|estimate|finance|value|bill/i, 'M4 3h16v18H4zM7 7h10M7 11h3M14 11h3M7 15h3M14 15h3'],
+    [/export|print|report|sheet|proposal|pdf/i, 'M5 2h9l5 5v15H5zM14 2v6h5M8 12h8M8 16h8'],
+    [/layer|map|site|plot|terrain|parcel/i, 'M2 6l6-3 8 3 6-3v15l-6 3-8-3-6 3zM8 3v15M16 6v15'],
+    [/line|draw|rect|circle|annot|text|dimension|calib|scale/i, 'M3 21l2-6L17 3l4 4L9 19zM14 6l4 4M3 21l6-2'],
+    [/undo|redo|reset|clear/i, 'M4 10a8 8 0 1 1 1 8M4 3v7h7'],
+    [/setting|config|library/i, 'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6'],
+    [/build|equipment|insert|pad|fence/i, 'M3 7l9-5 9 5v10l-9 5-9-5zM3 7l9 5 9-5M12 12v10']
+  ];
+  function glyph(span) {
+    var button = span.closest('button') || span.parentNode;
+    var text = button ? button.textContent : '';
+    var d = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z';
+    for (var i = 0; i < GLYPHS.length; i++) if (GLYPHS[i][0].test(text)) { d = GLYPHS[i][1]; break; }
+    span.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>';
+  }
+
   /* .rb-ico carries a fixed height:18px, which would clip an icon scaled
      past it. :has() would do this in CSS alone, but tagging the span keeps
      it working where :has() is unavailable — and the class is also what a
@@ -141713,6 +141793,7 @@ challengeRow(s) +
       '#ribbon .rb-ico, #ribbon .rs-ico, #ribbon .fi-ico, #ribbon .mi-ico');
     var n = 0;
     for (var i = 0; i < spans.length; i++) {
+      if (!spans[i].querySelector('svg')) glyph(spans[i]);
       var has = !!spans[i].querySelector('svg');
       if (has && !spans[i].classList.contains('omg-svg-ico')) {
         spans[i].classList.add('omg-svg-ico');
@@ -153592,7 +153673,7 @@ function run(cb){
   }
   BUSY = true;
   paint();
-  var list = C.candidates || [C.serviceUrl];
+  var list = ['/api/grid-atlas']; // One authenticated service; never retry a paid gate on an old host.
   var idx = 0, target = list[0];
 
   var body = { lat: s.lat, lng: s.lng, address: s.address, sizeMw: s.sizeMw,
@@ -153625,8 +153706,13 @@ function run(cb){
 
   function attempt(){
   target = list[idx];
-  fetch(target, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body) })
+  Promise.resolve().then(function () {
+    var user = window.firebase && firebase.auth().currentUser;
+    if (!user) throw new Error('Sign in to run Grid Atlas');
+    return user.getIdToken();
+  }).then(function (token) {
+    return fetch(target, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
+  })
     .then(function (r) {
       return r.json().catch(function(){ return null; }).then(function (j) {
         if (!r.ok) {
@@ -165804,6 +165890,9 @@ if (root.console && console.info) {
   }
 
   function enable() {
+    if (root.OmegaCaps && root.OmegaCaps.packageAccess() && root.OmegaWorkspaces) {
+      root.OmegaWorkspaces.setProject('compute', null, true); return true;
+    }
     if (on) return true;
     prevReportTab = root.reportTab;
     root.reportTab = function (tab) {
@@ -166460,11 +166549,24 @@ if (root.console && console.info) {
 
   /* ── the three operations ───────────────────────────────────────────── */
 
+  function retire() {
+    buttons().forEach(function (b) {
+      var command = b.getAttribute('onclick') || '';
+      if (b.id === 'rb-bess-config' || /openViabilityWorkflow/.test(command)) {
+        b.setAttribute('data-packaging-retired', '1');
+        b.hidden = true;
+        b.setAttribute('aria-hidden', 'true');
+      }
+    });
+  }
+
   function dedupe() {
+    retire();
     var seen = {}, n = 0;
     buttons().forEach(function (b) {
       var k = labelOf(b);
-      if (DEDUPE.indexOf(k) < 0) return;
+      if (DEDUPE.indexOf(k) < 0 || b.getAttribute('data-shelf-dupe')) return;
+      if (b.hidden || b.style.display === 'none') return;
       if (seen[k]) {
         remember(b);
         b.style.display = 'none';
@@ -166482,8 +166584,9 @@ if (root.console && console.info) {
         if (labelOf(b) !== mv.label) return;
         if (b.getAttribute('data-shelf-dupe')) return;   /* hidden copy */
         if (mv.from && pageOf(b) !== mv.from) return;
-        if (pageOf(b) === mv.to) return;                 /* already home */
-        var target = panelIn(mv.to, mv.panel);
+        var destination = root.OmegaCaps && root.OmegaCaps.commandPage ? root.OmegaCaps.commandPage(b, mv.to) : mv.to;
+        if (pageOf(b) === destination) return;           /* already home */
+        var target = panelIn(destination, mv.panel);
         if (!target) return;
         remember(b);
         target.appendChild(b);
@@ -166620,11 +166723,24 @@ if (root.console && console.info) {
       apply();
       var n = 0, iv = setInterval(function () {
         if (!applied) { apply(); return; }
-        move(); recaption(); hideEmptyPanels();
+        dedupe(); move(); recaption(); hideEmptyPanels();
         if (++n > 20) clearInterval(iv);
       }, 700);
     }, 1200);
   }
+
+  var polishPending = false;
+  function watchPolish() {
+    var ribbon = document.getElementById('ribbon');
+    if (!ribbon || !root.MutationObserver) return;
+    new MutationObserver(function () {
+      if (polishPending || !applied) return;
+      polishPending = true;
+      setTimeout(function () { polishPending = false; dedupe(); recaption(); }, 0);
+    }).observe(ribbon, { childList:true, subtree:true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchPolish);
+  else watchPolish();
 
   root.OmegaShelf = {
     apply: apply,
@@ -172813,6 +172929,17 @@ if (root.console && console.info) {
       var prev = null;
       PLAN[key].forEach(function (id) {
         var el = find(id); if (!el) return;
+        var caps = root.OmegaCaps, view = caps && caps.packageAccess();
+        if (view) {
+          var command = el.classList.contains('rbtn-wrap') ? el.querySelector('.rbtn') : el;
+          var owners = caps.owners(command.id, command.getAttribute('onclick') || '');
+          var module = owners.length === 1 && caps.MODULE_GRANTS[owners[0]];
+          if (module && module.editorPage && module.key !== 'compute') {
+            var home = document.querySelector('#ribbon .ribbon-page[data-page="' + module.editorPage + '"] .rpanel-body');
+            if (home && el.parentNode !== home) { home.appendChild(el); moved++; }
+            return;
+          }
+        }
         var want = prev ? prev.nextSibling : body.firstChild;
         if (el.parentNode !== body || el !== want) {
           body.insertBefore(el, prev ? prev.nextSibling : body.firstChild);
@@ -175929,8 +176056,9 @@ if (root.console && console.info) {
      into work that happens when a gated button is genuinely injected. */
   function carriesCap(n){
     if (!n || n.nodeType !== 1) return false;
-    if (n.hasAttribute && n.hasAttribute('data-cap')) return true;
-    return !!(n.querySelector && n.querySelector('[data-cap]'));
+    var selector = window.OmegaCaps ? OmegaCaps.commandSelector : '[data-cap]';
+    if (n.matches && n.matches(selector)) return true;
+    return !!(n.querySelector && n.querySelector(selector));
   }
 
   function watch(){
@@ -175947,12 +176075,22 @@ if (root.console && console.info) {
   }
 
   function gate(){
-    if (new URLSearchParams(location.search).get('customerEngine') === '1') return;
+    if (new URLSearchParams(location.search).get('customerEngine') === '1') {
+      if (!window.OmegaCaps) { setTimeout(gate, 200); return; }
+      OmegaCaps.setPackage(OmegaCaps.pendingPackage());
+      try {
+        var parentBridge = window.parent !== window && window.parent.location.origin === location.origin && /^\/editor-lite(?:\.html)?\/?$/.test(window.parent.location.pathname) && window.parent.OmegaBuyerEngine;
+        if (parentBridge && parentBridge.authorized === true && parentBridge.packageAccess) OmegaCaps.setPackage(parentBridge.packageAccess);
+      } catch (e) {}
+      tier = 'standard'; OmegaCaps.apply(tier); watch(); return;
+    }
     if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length ||
         typeof OmegaCaps === 'undefined') { setTimeout(gate, 200); return; }
     firebase.auth().onAuthStateChanged(function (u) {
-      if (!u) return;
-      OmegaCaps.resolve(firebase.firestore(), u.email).then(function (t) {
+      if (window.OmegaWorkspaces) OmegaWorkspaces.setIdentity(u && u.uid);
+      if (!u) { OmegaCaps.setPackage(OmegaCaps.pendingPackage()); OmegaCaps.apply('trial'); return; }
+      OmegaCaps.resolve(firebase.firestore(), u.email, u.emailVerified).then(function (t) {
+        if (firebase.auth().currentUser !== u) return;
         tier = t;
         var r = OmegaCaps.apply(tier);
         if (window.console)

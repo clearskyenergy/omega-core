@@ -229,6 +229,35 @@ POST { org, action: 'manage' [, from:'portal'] }       { url } → Stripe billin
 - A trial from the supplier's owner (`buyers` `editor-trial`) is refused
   over a paid subscription that is active or past due.
 
+## Omega Logic follows the package (Phase 8)
+
+A workspace that is PACKAGED (`billing/current.packaged`, the packaging
+program's `modules[]`) is judged by its package alone: Office is
+`logic-office`; the parts are Plant (`logic-plant`), Materials & Purchasing
+(`logic-materials`), Logistics & Warranty (`logic-logistics`) and Customer
+App (`logic-customer`); the grant must be live (`package-access.live` — paid,
+or a trial inside its dates, and before `accessUntil`). `logic-access.parts`
+says which parts a workspace holds; `authorize(caller, org, write, part)`
+refuses a part not bought in a sentence ("Plant is not in your Omega Logic
+package"), and each endpoint names the part it serves — `logic-plant` and the
+manual test result are Plant's, `logic-materials` is Materials &
+Purchasing's, `logic-logistics` and `logic-custody` are Logistics &
+Warranty's, and the customer portal and app (`buyer-accounts.context`) are
+Customer App's, closed as "not active" without it. The office endpoint's
+`access.parts` and the front door's `parts` per workspace tell the pages;
+`omega-logic-theme.js` `chrome()` and `hub()` draw only the groups and ring
+cells of the parts held (remembered per workspace for pages that do not say,
+as Team is), the dashboard draws only their panels, and the Omega Logic app
+hides the Sites tab, the Deliver and materials rows and the customer-app rows
+it does not hold — and calls none of their endpoints. A legacy subscription
+(addon `omega-logic`) holds every part and is unchanged; a response without
+`parts` shows everything. Showing a link is never access. The doors that are
+not a member's — a bench or rig token (`api/mes-scan.js`,
+`api/mes-test-result.js`), a tenant administrator's hold or release
+(`api/plant-control.js`) — run `logic-access.requirePartIfPackaged(org,
+'plant')`: a packaged workspace must hold Plant; a legacy one, or one with no
+record yet, is left to the door's own rule.
+
 ## Where each piece is
 
 | Surface | Page | Hub, and what it reads |
@@ -250,6 +279,11 @@ the shell.
   timeline) and `scripts/test-customer-subscribe.js` (availability,
   checkout, the webhook grant and its safeguards, Manage, pay links) run in
   `npm run test:logic`, on `scripts/_lib/firestore-double.js`.
+- `scripts/test-logic-package.js` (Phase 8: the package gate, the parts
+  each endpoint serves, the customer-portal gate, the chrome's groups, hub
+  and remembered parts, the app's Menu by parts) runs in `npm run test:logic`
+  on the same double; `check:pages` adds `package-parts` and
+  `package-parts-app`, a sample workspace that bought Office and Plant only.
 - `npm run check:pages` renders every surface above in Chromium at phone
   and desktop widths with the one sample tenant
   (`scripts/_lib/logic-fixtures.js`: contacts, activity with a follow-up
@@ -301,3 +335,6 @@ the shell.
   a load's status, custody owns the units.
 - The PDF guides (`scripts/guides/*.html`) do not show the hubs, the Money
   screen or the CRM sections yet.
+- Editor Lite for a tenant's customers is not a priced Logic part. (The
+  bench, the rig and hold/release follow the Plant part since packaging
+  Phase 9: `logic-access.requirePartIfPackaged`.)

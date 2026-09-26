@@ -60,7 +60,9 @@ module.exports = A.handler(async function (req, res) {
     try {
       var ctx = await X.authorize(caller, org, false);
       var m = await db.doc('omega_orgs/' + org + '/members/' + caller.uid).get();
-      out.push({ orgId: org, name: ctx.org.name || org, role: (m.exists && m.data().role) || 'member', status: ctx.org.status || 'active' });
+      /* parts: the Omega Logic parts the workspace holds (Phase 8), so the
+         app can lay out its tabs before the office endpoint answers */
+      out.push({ orgId: org, name: ctx.org.name || org, role: (m.exists && m.data().role) || 'member', status: ctx.org.status || 'active', parts: X.parts(ctx) });
     } catch (e) { if (!e.status || e.status >= 500) throw e; if (e.reason === 'inactive') inactive = true; /* not theirs, or closed: not listed */ }
   }
   if (out.length) return { email: email, owner: false, workspaces: out };

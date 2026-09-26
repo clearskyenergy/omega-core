@@ -9,9 +9,7 @@
    api/proforma.js was fixed first (2026-09-24); this is the same rule applied
    where the decision is made for everybody:
      · api/_lib/verify-token.js verifyIdToken()   — staff and emailVerified
-     · api/_lib/admin.js authenticate()           — staff (the explicit
-                                                    role === 'staff' claim
-                                                    still stands on its own)
+     · api/_lib/admin.js authenticate()           — verified staff domain only
      · firestore.rules isAdmin(), storage.rules isAdminDomain()
      · api/ring.js, which asked isStaffEmail() directly
    "Verified" is the literal true. A missing claim is not verified, and
@@ -202,7 +200,9 @@ async function adminTests() {
   ok(c.staff === false, 'email_verified "true" as a string is not true');
 
   c = await as('claim', { email: 'ops@partner.example', email_verified: false, role: 'staff' });
-  ok(c.staff === true, 'the explicit custom claim role === "staff" still makes staff (only the Admin SDK can mint it)');
+  ok(c.staff === false, 'a role claim cannot substitute for a verified staff domain');
+  c = await as('retired-claim', { email: 'rep@csebuilders.com', email_verified: true, role: 'staff' });
+  ok(c.staff === false, 'a role claim cannot restore the retired staff domain');
   c = await as('t', { email: 'ana@cleancell.us', email_verified: true });
   ok(c.staff === false, 'a verified tenant user is not staff');
 
@@ -254,6 +254,14 @@ function rulesTests() {
 (async function () {
   try {
     await verifyTokenTests();
+    var savedFetch = global.fetch;
+    global.fetch = async function (url) { if (/firestore\.googleapis\.com/.test(String(url))) return { ok: false, status: 503, json: async () => ({}) }; return savedFetch(url); };
+    var accessFailure;
+    try { await V.authenticateWithTier(req(token('member@example.com', true))); } catch (e) { accessFailure = e; }
+    ok(accessFailure && accessFailure.status === 503, 'billing read failure is unavailable, never legacy trial access');
+    global.fetch = savedFetch;
+    var missing = await V.authenticateWithTier(req(token('member@example.com', true)));
+    ok(missing.tier === 'trial' && !missing.billing.packaged, 'an actual missing billing record preserves legacy behavior');
     await endpointTests();
     await adminTests();
     rulesTests();

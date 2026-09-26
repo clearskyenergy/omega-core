@@ -148,7 +148,7 @@ var T = {
     return send(o.email, 'We received your ClearSky-OMEGA workspace request',
       layout('Request received', '<p>Thanks, ' + esc(o.name) + '. We\'re setting up a workspace for <b>' + esc(o.company) + '</b> at <b>' + esc(o.host) + '</b>.</p>'
         + '<p>The ClearSky team reviews every new workspace — usually within one business day. You\'ll get another email the moment it\'s live.</p>'
-        + '<p>Your 30-day trial starts on approval, not today.</p>'));
+        + (o.packaging ? '<p>Your one trial starts on approval and lasts at most 14 days. Payment is required to continue after it ends.</p>' : '<p>Your trial is capped at 14 days. We will confirm your workspace access and trial dates after review.</p>')));
   },
   signupAlert: function (o) {
     var to = process.env.MAIL_NOTIFY || 'dev@clearsky-usa.com';
@@ -166,7 +166,25 @@ var T = {
       layout(esc(o.company) + ' is ready', '<p>Your workspace has been approved. Sign in with your ' + esc(o.orgId) + ' email:</p>'
         + button('https://' + o.host + '/', 'Open ' + o.host)
         + '<p>Colleagues at <b>' + esc(o.orgId) + '</b> can sign in at the same address and will join automatically. You\'re the workspace owner — invite, promote and manage them from Account settings.</p>'
-        + (o.trialEndsAt ? '<p>Your trial runs until <b>' + esc(String(o.trialEndsAt).slice(0, 10)) + '</b>.</p>' : '')));
+        + (o.trialEndsAt ? '<p>Your trial runs until <b>' + esc(new Date(o.trialEndsAt).toISOString().slice(0, 10)) + '</b>.</p>' : '')));
+  },
+  trialEnding: function (o) {
+    return send(o.email, 'Your OMEGA trial ends on ' + new Date(o.trialEndsAt).toISOString().slice(0, 10),
+      layout('Your trial is ending', '<p>' + esc(o.text) + '</p><p>We will issue your first QuickBooks invoice at trial end. Payment is required to keep creating and exporting.</p>'
+        + button('https://' + o.host + '/account-settings.html', 'View your plan')));
+  },
+  packageInvoice: function (o) {
+    return send(o.email, 'Your OMEGA subscription invoice is ready',
+      layout('Pay to continue', '<p>' + esc(o.text) + '</p>' + (o.paymentLink ? button(o.paymentLink, 'Pay in QuickBooks') : '<p>Open your plan for invoice details.</p>')));
+  },
+  /* The Subscription Proposal (Phase 6): the link carries the key that opens
+     the customer's view; the reply goes to the rep who prepared it. */
+  proposalSent: function (o) {
+    return send(o.email, (o.platformName || 'ClearSky-OMEGA') + ' subscription proposal for ' + o.company,
+      layout('Your proposal is ready', '<p>' + (o.contactName ? 'Hello ' + esc(o.contactName) + '. ' : '') + esc(o.sender || 'ClearSky') + ' has prepared a subscription proposal for <b>' + esc(o.company) + '</b>: '
+        + esc(o.planDisplay || '') + ' at ' + esc(o.monthlyDisplay || '') + '.</p>' + button(o.url, 'Open your proposal')
+        + '<p>It is valid until <b>' + esc(o.validUntil || '') + '</b>. Accept it online, or reply to this email with questions.</p>' + (o.note ? '<p>' + esc(o.note) + '</p>' : '')),
+      null, o.replyTo ? { replyTo: o.replyTo } : {});
   },
   rejected: function (o) {
     return send(o.email, 'About your ClearSky-OMEGA workspace request',
