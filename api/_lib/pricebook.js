@@ -22,7 +22,7 @@ function proposed() {
       pro: { name: 'Pro', priceCents: 249900, capCents: 300000, maxDeliverables: 1 } },
     logicBundle: { name: 'Omega Logic — all five', priceCents: 250000 },
     enterprise: { floorAnnualCents: 15000000, setupCents: 2500000, devHoursMonthly: 7 },
-    credit: { pct: 40, days: 90 }, annualPaidMonths: 11,
+    credit: { pct: 40, days: 90 }, annualPaidMonths: 10, /* pay for the year: ten months of twelve, two months free (Tommy, 2026-09-26) */
     serviceFees: { lite: 150000, field: 340000, pro: 340000, enterprise: 1000000, waiverScope: 'first-year' },
     policy: { trialDays: 14, guidedBuildsInLite: true, failedPaymentGraceBusinessDays: 10,
       memberModuleEntry: true, billingProvider: 'quickbooks', savedCardEnabled: false,

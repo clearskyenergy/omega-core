@@ -2,9 +2,10 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-`workspace.html` is the new home for a tenant: what Omega Logic's front door
-is for the office, this is for the whole platform. It replaces the dashboard
-(`index.html`) one tenant at a time. Design decided 2026-09-26.
+`workspace.html` is the home of a signed-in workspace: what Omega Logic's
+front door is for the office, this is for the whole platform. It replaces the
+dashboard (`index.html`), which a tenant keeps only by saying so. Design
+decided 2026-09-26.
 
 ## What it is
 
@@ -62,7 +63,9 @@ is for the office, this is for the whole platform. It replaces the dashboard
 ## The package store (packaged tenants)
 
 `marketplace.html` is also where a PACKAGED workspace (`billing.packaged`)
-opts in and pays. Above the tool catalogue it shows the plan strip (plan,
+opts in and pays: the full-page Ladder (the dashboard's Your modules cards
+and Account panel open the same catalogue as a dialog). Above the tool
+catalogue it shows the plan strip (plan,
 monthly price, next invoice, modules held, changes waiting for payment) and
 every module on its shelf (Included with every plan · Add-ons · Standard ·
 Premium · Deliverables · Omega Logic) with the server's price from
@@ -86,7 +89,7 @@ ground, one home; the session travels same-origin on every hop.
 
 | From | Click | To |
 |---|---|---|
-| Sign-in (`login.html`, `index.html` card) | signs in | `index.html` sees `shell: 'workspace'` (or the browser's `?home=workspace`) and sends on to `/workspace` |
+| Sign-in (`login.html`, `index.html` card) | signs in | `index.html` sends on to `/workspace` once the tenant's shell is known, unless it is `classic`, the workspace is a partner portfolio, or the browser asked for the classic page |
 | `/workspace` hub | Today | scrolls to Needs you |
 | `/workspace` hub | Projects · Design · Grid · Finance · Sales · Market … | the side panel for that area: its pages and tools, locked ones marked; Open goes to the tool (`OMEGATools.hrefFor`) or opens the New Project dialog for Site Map and the sandbox |
 | `/workspace` hub | Team | scrolls to Around you |
@@ -111,19 +114,18 @@ ground, one home; the session travels same-origin on every hop.
 | rail | Sign out | ends the session, `/login.html` |
 | Settings panel | Classic dashboard | `/?home=classic`, the old home on this browser |
 
-## Launch — how a tenant gets it
+## Launch — home by default
 
-1. Merge and deploy. `/workspace` is served on every host at once; nothing
-   routes to it yet.
-2. Try it: `?home=workspace` on any signed-in visit sticks for that browser
-   (`localStorage.omega_home`); `?home=classic` undoes it. Staff and a
-   friendly tenant first.
-3. Flip a tenant: set `omega_orgs/{org}.shell = 'workspace'` (the console's
-   structural field). `index.html` sends that tenant's signed-in visits to
-   `/workspace` (`OmegaWorkspaceShell.wantsWorkspace`, the one rule), the
-   legacy pages point Dashboard at it, the session travels same-origin.
-4. When every live tenant is flipped, `index.html` becomes the sign-in card
-   and nothing else. Not yet.
+1. Merge and deploy. A signed-in visit to `/` goes on to `/workspace` on the
+   same origin (`index.html`, once the entitlements say where home is).
+2. A tenant that keeps the classic dashboard says so on its record:
+   `omega_orgs/{org}.shell = 'classic'` (the console's structural field).
+   A partner-type workspace (a cross-org portfolio) keeps it too.
+3. A browser keeps it with `?home=classic` (sticky; `?home=workspace` flips
+   back) or visits it once with `?stay=classic` (the referral inbox).
+4. `OmegaWorkspaceShell.homeOf()` is the one rule: `index.html` sends on,
+   the legacy pages point Dashboard at the same home and wear the workspace
+   rail, and nothing decides before the tenant's shell is known.
 
 Render check: `npm run check:workspace` (four tenants on the Firebase
 double, desktop and phone). Run it, and `check:dashboard`, after any change

@@ -47,7 +47,7 @@ async function run() {
   recurring.nextInvoiceOn = '2027-02-01';
   equal(Policy.invoice(recurring, proposed, '2027-02-01').subtotalCents, 200000); // first-year waiver ends
   var annual = Object.assign({}, recurring, { interval: 'annual', nextInvoiceOn: '2026-02-01' });
-  equal(Policy.invoice(annual, proposed, '2026-02-01').subtotalCents, 550000);
+  equal(Policy.invoice(annual, proposed, '2026-02-01').subtotalCents, 500000); /* ten months of twelve (2026-09-26) */
   equal(Policy.invoice(annual, proposed, '2026-02-01').nextInvoiceOn, '2027-02-01');
   rejects(function () { Policy.terms({ modules: ['lite'], interval: 'annual', credit: true }, proposed, now); }, /excludes the transformation credit/);
   // What is billed is the subscription record (what they bought), never the grant.
@@ -70,6 +70,8 @@ async function run() {
       }
       if (path.indexOf('invoice/I1') === 0) return { Invoice: storedInvoice };
       if (path === 'payment/P1') return { Payment: payment };
+      if (path === 'preferences') return { Preferences: { SalesFormsPrefs: { CustomTxnNumbers: true } } };
+      if (path === 'invoice/I1/send') return {};
       throw new Error('Unexpected QBO path ' + path);
     } };
   var q = QB.driver(book, deps), p = BP.normalize(profile);

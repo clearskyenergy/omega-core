@@ -63,8 +63,8 @@ async function run() {
   assert.throws(function () { SP.selection({ modules: rec.modules, interval: 'annual', credit: true }, book, now); }, /Annual prepay excludes/); count++;
   assert.throws(function () { SP.selection({ modules: ['lite', 'evrebates', 'plansets', 'siteintel', 'engineering'], plan: 'field' }, book, now); }, /do not fit/); count++;
   var annual = SP.compose({ prospect: PROSPECT, discovery: EV, selection: { modules: rec.modules, interval: 'annual' } }, book, now);
-  equal(annual.pricing.annualPrepayCents, 129900 * 11, 'annual prepay is eleven months');
-  check(/eleven months/.test(annual.orderForm.term.election) === false && /11 months for 12/.test(annual.terms.election), 'the election says 11 months for 12');
+  equal(annual.pricing.annualPrepayCents, 129900 * 10, 'annual prepay is ten months: two months free');
+  check(/eleven months/.test(annual.orderForm.term.election) === false && /10 months for 12/.test(annual.terms.election), 'the election says 10 months for 12');
   /* ── the endpoint: staff only, context, save, send ── */
   var member = { uid: 'm1', staff: false, email: 'someone@other.example', orgId: 'other.example', role: 'member', claims: { email_verified: true } };
   await refused(function () { return post({ action: 'context' }, member); }, /Staff only/, 'context is staff only');

@@ -6,9 +6,9 @@
 
   ONE HOME, BUILT FROM WHAT THE WORKSPACE HOLDS.
 
-  This replaces the tenant dashboard (index.html) one tenant at a time
-  (omega_orgs/{org}.shell = 'workspace'; ?home=workspace to try it on one
-  browser, ?home=classic to go back). It opens the way Omega Logic opens: a
+  This is the home of a signed-in workspace (index.html sends a signed-in
+  visit here); a tenant keeps the classic dashboard with
+  omega_orgs/{org}.shell = 'classic', a browser with ?home=classic. It opens the way Omega Logic opens: a
   hex hub of where to go, Today beside it, and everything else below.
 
     the hub      omega-hexhub.js draws it; omega-workspace-hub.js decides the
@@ -40,6 +40,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- The OMEGA loading screen on the way OUT (data-boot="no": this page has
+     its own boot splash below), so a click to Projects or a tool never
+     flashes the next page. -->
+<script src="/omega-splash.js?v=1" data-boot="no"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="author" content="ClearSky Energy Solutions LLC">
 <meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">

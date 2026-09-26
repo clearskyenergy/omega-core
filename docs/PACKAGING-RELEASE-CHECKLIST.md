@@ -13,7 +13,7 @@ is to be run by an agent without them.
 
 - [ ] Decisions on record (roadmap §11): $0 module inside a paid tier
       activates at once (option 1); AI Render only in Plan Sets & CAD;
-      Export to Monday stays in Lite; annual prepay is eleven months with no
+      Export to Monday stays in Lite; annual prepay is ten months (two months free) with no
       transformation credit; trials start at approval, once per
       organization, at most 14 days; staff is a verified `@clearsky-usa.com`.
 - [ ] **(Tommy)** Price book values signed off (VALUE-LADDER §11). Until
@@ -71,7 +71,9 @@ All off by default. Set them in Vercel per environment; never in the repo.
 | `PACKAGING_LIVE=true` **and** `QBO_ENV=production` | Production only, both literal | LIVE: the production company, an enabled book under a release version, any tenant may buy. One without the other, or `QBO_ENV` unset, is refused everywhere: no invoice, no sync, no runner tick, no packaged signup |
 | `PACKAGING_SIGNUP_ENABLED=true` | Preview | `start.html` collects the billing profile and the discovery answers |
 | `PACKAGING_BILLING_ENABLED=true` | Preview | activation, invoices, reconciliation, plan changes, packs |
-| `CRON_SECRET` (and the billing runner's own secret, per `api/billing-run.js`) | Preview and Production | the authenticated runners: `/api/logic-worker` (five-minute) and `/api/billing-run` (daily: reconcile, recurring invoices, review) |
+| `CRON_SECRET` (and the billing runner's own secret, per `api/billing-run.js`) | Preview and Production | the authenticated runners: `/api/logic-worker` (five-minute) and `/api/billing-run` (hourly since 2026-09-26: reconcile, recurring invoices, review, the payment and review mails; ten workspaces a tick, the cursor carrying on) |
+| `TENANT_WILDCARD_LIVE=true` | Production, only once `*.clearskyomega.com` is attached on Vercel and its DNS record exists | until then every link, redirect and mail sends a person to the open host `silmarillion.clearskyomega.com` (`api/_lib/kit.js` `home()`, the one rule) and the slug host stays reserved on the record. Off by default: the wildcard does not exist today (WHITE-LABEL.md) |
+| `SUPPORT_EMAIL` | Production | the address in the mail footer (`api/_lib/mail.js`); the refusal screen's twin in `omega-tenant.js` is a literal, change both. Default `dev@clearsky-usa.com`, the mailbox that exists; csebuilders.com is retired |
 | existing Firebase Admin and QuickBooks credentials | as today | no new OAuth scope; Step B (saved card) stays off |
 
 In sandbox mode a tenant takes part only when its `omega_orgs/{org}`
@@ -132,6 +134,8 @@ so. Record the date and who did it beside each.
 | 5 | As the tenant's owner, add a module from + Modules / Your plan | A prorated change invoice with a pay link; nothing switches on before payment except a $0 module inside a paid tier; after the runner reconciles the payment, the tools appear without staff |
 | 6 | Send a proposal from `subscription-proposal.html`; accept it from `proposal.html` | The prospect lands in signup with the package prefilled; accepting never prices; the proposal reads `accepted`; a proposal for a paid packaged tenant becomes a plan change |
 | 7 | Export an EV workbook past the included count; buy a pack; switch auto top-up on | The 402 offer at the allowance; a paid pack adds units after reconciliation; overage appears as a line on the next recurring invoice; the Package tab's review names it |
+| 10B | On the paid workspace open Account › Billing & plan; Open the Ladder; Subscribe to a module; pay its invoice in the sandbox; I've paid. On a workspace awaiting its first payment open the panel. On a legacy enterprise tenant open the panel | The panel shows the package, Active, the monthly figure, the next invoice; the Ladder lists every rung not bought with a quote on Subscribe; paid, the tile unlocks without a reload; awaiting: Pay in QuickBooks and I've paid on the panel and the bar; legacy: no Ladder, nothing locked, the paid year shown |
+| 10A | From /login create an account with a fresh work address; verify it; the billing profile; build a system (watch the price and the yearly saving); Pay and start now; pay the sandbox invoice; I've paid | The login pane names the next steps and links to the signup page; an unverified address is held with Resend; the build step shows `$…/month` and the yearly card `…/year, invoiced once · save $…`; the pay step opens with QuickBooks' page; paid, the workspace opens with the package bought |
 | 8 | Activate Lite + Office + Plant; open the office, a materials page, the Omega Logic app and the customer portal | Build shown, no Deliver or materials plan; the materials page prints "Materials & Purchasing is not in your Omega Logic package"; the app has four tabs; the customer portal says "not active" until Customer App is added; a legacy tenant shows nothing new |
 
 Then the runners: `vercel.json` schedules `/api/billing-run` daily and
@@ -147,6 +151,21 @@ the audit rows it writes.
       pay-at-the-end signup falls back to approval. The browser runbook:
       `docs/PAYMENTS-BROWSER-SETUP.md` (it also connects the Stripe
       bookkeeping app; that is not what pays an invoice).
+- [ ] **Custom transaction numbers are on** in the production company
+      (Settings → Sales → Sales form content). OMEGA numbers its invoices
+      `OP-…` and finds them again by that number, so a retry never issues
+      twice; the driver refuses to invoice while QuickBooks reports the
+      setting off, and refuses an invoice QuickBooks renumbered.
+- [ ] **Where a new workspace opens.** `*.clearskyomega.com` has no wildcard
+      record, so a new tenant is sent to `silmarillion.clearskyomega.com`
+      (it serves every tenant by email domain) and its slug host is only
+      reserved on the record. To serve slug hosts later: attach
+      `*.clearskyomega.com` to the Vercel project, add the DNS `CNAME *` it
+      asks for, confirm `anything.clearskyomega.com` resolves, then set
+      `TENANT_WILDCARD_LIVE=true` and redeploy. Not needed for the first sale.
+- [ ] **The support mailbox.** `dev@clearsky-usa.com` is what the mail
+      footer and a refusal screen name. Make `support@clearsky-usa.com` an
+      alias of it and set `SUPPORT_EMAIL` when that is the name to show.
 - [ ] Sandbox acceptance complete for every phase above.
 - [x] **Sign the values off**: `VERSION` in `api/_lib/pricebook.js` is
       `2026-10` (renamed from `…-proposed` on 2026-09-26, Tommy's word). A
@@ -164,7 +183,10 @@ the audit rows it writes.
       current book in either mode; the name is historical.
 - [ ] Vercel **Production** environment: `PACKAGING_SIGNUP_ENABLED=true`,
       `PACKAGING_BILLING_ENABLED=true`, `PACKAGING_LIVE=true`,
-      `QBO_ENV=production`, `CRON_SECRET`. Redeploy.
+      `QBO_ENV=production`, `CRON_SECRET`, `MAIL_NOTIFY` (where payment and
+      review mail goes). Leave `TENANT_WILDCARD_LIVE` unset. Redeploy.
+      If the switch is on before the seed, signup says "opening shortly"
+      and takes nobody's details; nothing 500s.
 - [ ] One real signup by ClearSky (a company on a ClearSky-controlled
       domain, a real card): the pay step shows QuickBooks' page, the
       invoice is in the production company, "I've paid" opens the

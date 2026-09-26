@@ -322,13 +322,17 @@
     catch (e) { global.location.href = '/login.html'; }
   }
 
-  /* ── THE CUTOVER SWITCH ───────────────────────────────────────────────
-     Where "home" is for this person: the workspace once the tenant's
-     record says shell: 'workspace' (a per-tenant flip from the console),
-     or when they asked for it on this browser (?home=workspace, which
-     sticks; ?home=classic undoes it). Read by index.html to send a
-     signed-in visit on, and by the legacy pages to point their Dashboard
-     link at the same place, so the flow is one loop and not two. */
+  /* ── THE HOME SWITCH ─────────────────────────────────────────────────
+     Where "home" is for this person. The WORKSPACE, unless:
+       ?home=classic on this browser (sticks; ?home=workspace flips back)
+       ?stay=classic on this one visit (the referral inbox lives there)
+       the tenant's record says shell: 'classic' (a per-tenant opt-out from
+         the console; read off the merged workspace, or off the tenant_public
+         pin before sign-in)
+       a PARTNER-type workspace (its cross-org portfolio is the dashboard's)
+     homeOf() answers 'workspace', 'classic', or null while the tenant's
+     shell is not known yet — index.html waits for the entitlements before
+     it sends anyone on, so a classic tenant is never bounced and back. */
   var HOME_KEY = 'omega_home';
   function homePref() {
     try {
@@ -337,16 +341,23 @@
       return global.localStorage.getItem(HOME_KEY) || '';
     } catch (e) { return ''; }
   }
-  function wantsWorkspace(ws) {
-    /* ?stay=classic: this one visit stays on the dashboard (the referral
-       inbox lives there) without touching the browser's home */
-    if (/[?&]stay=classic\b/.test(global.location.search || '')) return false;
-    var pref = homePref();
-    if (pref === 'classic') return false;
-    if (pref === 'workspace') return true;
-    ws = ws || global.OMEGA_WORKSPACE || null;
-    return !!(ws && ws.shell === 'workspace');
+  function shellOf(ws) {
+    if (ws && ws.shell) return ws.shell;
+    try { var t = global.CLEARSKY_CONFIG && global.CLEARSKY_CONFIG.tenant; if (t && t.shell) return t.shell; } catch (e) {}
+    return null;
   }
+  function homeOf(ws) {
+    if (/[?&]stay=classic\b/.test(global.location.search || '')) return 'classic';
+    var pref = homePref();
+    if (pref === 'classic') return 'classic';
+    if (pref === 'workspace') return 'workspace';
+    ws = ws || global.OMEGA_WORKSPACE || null;
+    if (ws && ws.type === 'partner') return 'classic';
+    var shell = shellOf(ws);
+    if (shell === null) return null;
+    return shell === 'classic' ? 'classic' : 'workspace';
+  }
+  function wantsWorkspace(ws) { return homeOf(ws) === 'workspace'; }
   function homeHref(ws) { return wantsWorkspace(ws) ? '/workspace' : '/'; }
   /* which rail item this page IS */
   function currentKey() {
@@ -388,5 +399,5 @@
     both(); global.addEventListener('omega:entitlements', both); setTimeout(both, 1500);
   }
 
-  global.OmegaWorkspaceShell = { mount: mount, adopt: adopt, currentKey: currentKey, paint: paint, badge: badge, section: section, workspaces: workspaces, drawer: drawer, closeDrawer: closeDrawer, toast: toast, signOut: signOut, theme: theme, homeHref: homeHref, wantsWorkspace: wantsWorkspace, closeRail: closeRail, ICON: ICON, PRODUCT: PRODUCT, esc: esc, initials: initials };
+  global.OmegaWorkspaceShell = { mount: mount, adopt: adopt, currentKey: currentKey, homeOf: homeOf, paint: paint, badge: badge, section: section, workspaces: workspaces, drawer: drawer, closeDrawer: closeDrawer, toast: toast, signOut: signOut, theme: theme, homeHref: homeHref, wantsWorkspace: wantsWorkspace, closeRail: closeRail, ICON: ICON, PRODUCT: PRODUCT, esc: esc, initials: initials };
 })(window);

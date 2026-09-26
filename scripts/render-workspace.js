@@ -319,7 +319,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       var ga = document.querySelector('.mkt-card:not(.mkt-mod) .mkt-act.primary[onclick*="gridatlas"]');
       return { h1: document.querySelector('.mkt-banner h1').textContent, plan: document.getElementById('mkt-plan').textContent.replace(/\s+/g, ' '), cards: cards, gaTool: ga ? ga.textContent : null, shelves: document.querySelectorAll('#mkt-shelves .mkt-shelf').length };
     });
-    ok('store: the hero reads Your plan and the strip names Lite, the monthly price and the modules held', st.h1 === 'Your plan' && /Lite/.test(st.plan) && /\$149\/month/.test(st.plan) && /1 of \d+ modules/.test(st.plan), st.plan);
+    ok('store: the hero reads The Ladder and the strip names Lite, the monthly price and the modules held', st.h1 === 'The Ladder' && /Lite/.test(st.plan) && /\$149\/month/.test(st.plan) && /1 of \d+ modules/.test(st.plan), st.plan);
     ok('store: every catalog module is a card with the server\'s price, on its shelf', st.cards.length === M.catalog().length && st.cards.every(function (c) { return /\$\d/.test(c.price); }) && st.shelves >= 5, { n: st.cards.length, shelves: st.shelves });
     ok('store: Lite is in the plan and every other module offers Subscribe', st.cards.filter(function (c) { return c.owned; }).map(function (c) { return c.key; }).join() === 'lite' && st.cards.filter(function (c) { return !c.owned; }).every(function (c) { return /Subscribe/.test(c.act); }), st.cards.slice(0, 4));
     ok('store: the locked Grid Atlas TOOL card points at its module', st.gaTool === 'Add Grid Atlas to plan', st.gaTool);

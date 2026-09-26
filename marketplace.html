@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script src="/omega-splash.js?v=1"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="omega-build" content="marketplace-standalone-2026-07-13">
@@ -847,7 +848,7 @@ window._omegaReady = function(){
          once). A legacy tenant never sees this section and keeps the
          catalogue below exactly as it was. Nothing here grants access: the
          tools appear when the server's projection says so. -->
-    <section id="mkt-store" class="opm-host" hidden aria-label="Your plan">
+    <section id="mkt-store" class="opm-host" hidden aria-label="The Ladder">
       <div class="mkt-plan" id="mkt-plan"></div>
       <div id="mkt-shelves"></div>
       <p class="mkt-store-note" id="mkt-store-note"></p>
@@ -1277,8 +1278,8 @@ function storeMode(ws){
   (pa.notSold || []).forEach(function(n){ (n.tools||[]).forEach(function(k){ STORE.notSold[k] = n.reason || 'Not sold'; }); });
   storeIndex(pa.catalog || []);
   if (window.OmegaPackageMenu && OmegaPackageMenu.styles) OmegaPackageMenu.styles();
-  var h1 = document.querySelector('.mkt-banner h1'); if (h1) h1.textContent = 'Your plan';
-  setText('mkt-sub', 'What ' + (ws.clientName||'your workspace') + ' holds, what each module adds, and what it costs. A change switches on when its payment clears.');
+  var h1 = document.querySelector('.mkt-banner h1'); if (h1) h1.textContent = 'The Ladder';
+  setText('mkt-sub', 'Build your own experience and pay for what you need to run your business. What ' + (ws.clientName||'your workspace') + ' holds, what each rung adds, and what it costs; a change switches on when its payment clears.');
   el('mkt-store').hidden = false;
   paintStore(); paintMarket();
   /* the price list, then (for an owner or admin) the pending changes */
@@ -1303,7 +1304,7 @@ function paintStore(){
   if (sm && sm.monthlyDisplay) h += '<span><b>'+esc(sm.monthlyDisplay)+'</b></span>';
   if (sm && sm.nextInvoiceOn) h += '<span>next invoice '+esc(sm.nextInvoiceOn)+'</span>';
   if (sm && sm.pending && sm.pending.length) h += '<span class="mkt-chip" style="background:#FFF6E5;color:#8A6D1F">'+sm.pending.length+' waiting for payment</span>';
-  h += '<span class="mkt-note">'+(STORE.control.canManage ? 'Monthly prices. Nothing new is charged for what your plan already covers.' : 'Ask your workspace administrator to add a module.')+'</span>';
+  h += '<span class="mkt-note">'+(STORE.control.canManage ? 'Monthly prices. Nothing new is charged for what your plan already covers.' : 'Your workspace owner or an administrator climbs the Ladder. Ask them to add what you need.')+'</span>';
   plan.innerHTML = h;
   shelves.innerHTML = '';
   if (!STORE.rows.length){ shelves.innerHTML = '<div class="mkt-empty">Your package is loading…</div>'; return; }
@@ -1346,8 +1347,11 @@ function moduleCard(m){
    (reload so the server's projection repaints every tile); an invoice is
    waiting for payment (repaint with the pending state) */
 function storeChanged(r){
-  if (r && r.state === 'active'){ toast('Added. Reloading your tools…'); setTimeout(function(){ window.location.reload(); }, 1500); return; }
-  OmegaPackageMenu.loadControl().then(function(c){ STORE.control = c; STORE.summary = c.summary || STORE.summary; paintStore(); });
+  var fresh = (r && r.state === 'active' && window.OmegaTenant && OmegaTenant.refreshPackage) ? OmegaTenant.refreshPackage() : Promise.resolve(null);
+  fresh.then(function(view){
+    if (view && Array.isArray(view.modules)){ STORE.owned = view.modules.slice(); toast('Added. Your tools are updating…'); paintMarket(); }
+    return OmegaPackageMenu.loadControl();
+  }).then(function(c){ STORE.control = c; STORE.summary = c.summary || STORE.summary; paintStore(); })['catch'](function(){ paintStore(); });
 }
 function storeFocus(key){
   var card = document.querySelector('[data-module-card="'+key+'"]'); if (!card) return;

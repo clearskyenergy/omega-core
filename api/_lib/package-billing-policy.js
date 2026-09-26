@@ -19,7 +19,7 @@ function terms(input, book, now) {
   var quote = P.quote(input.modules, book, { plan: input.plan, builders: input.builders, viewers: input.viewers, serviceFee: serviceFee, credit: credit, now: now });
   var interval = input.interval || 'monthly';
   if (['monthly', 'annual'].indexOf(interval) < 0) fail('Invalid billing interval');
-  // Tommy's decision, 2026-09-26: annual prepay uses the 11-month price
+  // Tommy's decision, 2026-09-26: annual prepay uses the 10-month price (two months free)
   // without transformation credit. Keep the policy explicit in the book.
   if (interval === 'annual' && credit && book.policy.annualTransformationCredit !== true) fail('Annual prepay excludes the transformation credit');
   return { modules: quote.modules, monthlyCents: quote.monthlyCents, monthlyDisplay: quote.display.monthly, plan: quote.plan, pricebookVersion: book.version, builders: input.builders == null ? book.logins.builders : input.builders,

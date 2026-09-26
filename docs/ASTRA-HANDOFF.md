@@ -21,7 +21,7 @@ operator assignments below; the source commercial requirements still apply.
   the proposed book remains sandbox-only until price-book sign-off.
 - AI Render belongs only to **Plan Sets & CAD**, not Lite.
 - Export to Monday (BETA) stays in **Lite** (explicit decision, 2026-09-26).
-- Annual prepay charges 11 months for 12 and **does not receive the
+- Annual prepay charges 10 months for 12 (two months free; 11 until 2026-09-26) and **does not receive the
   transformation credit** (explicit decision, 2026-09-26).
 - A $0 module addition inside a tier whose current cycle is **already paid**
   activates immediately; anything owed waits for the paid invoice

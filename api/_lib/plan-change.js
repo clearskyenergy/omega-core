@@ -241,8 +241,17 @@ async function summary(db, orgId) {
       monthly = q.display.monthly; planDisplay = q.display.plan;
     } catch (e) { monthly = b.monthlyDisplay || null; }
   }
+  /* every invoice the workspace has, newest first: the Account panel lists
+     them with the pay link while unpaid (Phase 10B: pay in settings) */
+  var invoices = rows.slice().reverse().slice(0, 24).map(function (r) {
+    return { id: r.id || r.date, kind: S.kindOf(r), state: r.state, date: r.date, period: r.period || null, totalCents: r.totalCents, display: P.money(r.totalCents),
+      paymentLink: r.state === 'unpaid' ? (r.paymentLink || null) : null, names: r.add ? names(r.add) : null, paidAt: r.paidAt || null };
+  });
   return { orgId: orgId, packaged: b.packaged === true, packagingState: b.packagingState || null, plan: sub.plan || null, planDisplay: planDisplay, modules: b.modules || ['lite'], subscription: sub.modules || ['lite'],
+    moduleNames: names(b.modules || ['lite']), subscriptionNames: names(sub.modules || ['lite']),
     interval: b.interval || 'monthly', billingDay: b.billingDay || null, nextInvoiceOn: b.nextInvoiceOn || null, monthlyDisplay: monthly,
+    accessUntil: b.accessUntil == null ? null : b.accessUntil, paidThrough: b.paidThrough || null, amountDue: b.amountDue == null ? null : b.amountDue,
+    amountDueDisplay: b.amountDue == null ? null : P.money(Math.round(b.amountDue * 100)), paymentLink: b.paymentLink || null, invoices: invoices,
     gate: state(c, Date.now()), pending: pending(rows), removalRequests: b.removalRequests || [],
     recent: rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state !== 'unpaid'; }).slice(-5).map(function (r) { return { id: r.id, add: r.add, names: names(r.add), state: r.state, date: r.date, display: P.money(r.totalCents || 0) }; }) };
 }
@@ -319,6 +328,9 @@ async function reconcileNow(db, orgId, caller, now, deps) {
   if (b.paymentCheckedAt && now - b.paymentCheckedAt < 8000) return out(b, { throttled: true });
   await current.set({ paymentCheckedAt: now, paymentCheckedBy: caller.email }, { merge: true });
   try { await S.reconcile(db, orgId, now, deps); } catch (e) { return out(b, { error: e.status && e.status < 500 ? e.message : 'QuickBooks could not be reached; try again in a moment' }); }
+  /* what the look found goes out now, not at the next tick: the tenant's
+     receipt (the first one says the workspace is open) and ClearSky's alert */
+  try { var Runner = require('./package-billing-runner'), mailer = (deps && deps.mail) || require('./mail'); await Runner.deliver(db, orgId, now, mailer); await Runner.staffDeliver(db, now, mailer); } catch (e) {}
   var after = await current.get();
   return out(after.exists ? after.data() : {});
 }
