@@ -871,7 +871,13 @@ tenant. Treat it that way.
   one card per module: held ones Live in shelf order, bought-not-on ones
   named, up to three unheld rungs dashed with + Add opening the Ladder on
   them; the catalog and prices are the server's, never a second list.
-  Scenarios lite-ladder, awaiting and legacy-enterprise hold it. It fails on an error, an unanswered
+  Scenarios lite-ladder, awaiting and legacy-enterprise hold it.
+  The master console (`admin/admin-console.js`) reads a packaged tenant
+  by its state machine: `_standing` has a key per state, plan and module
+  keys become the price book's words from `GET /api/offerings`
+  (`STATE.priceBook`, fetched at boot, never a copy), Manage sends a
+  packaged workspace to its Package tab, and Client Inventory carries the
+  book above the legacy roster tiers (`scripts/tests/tadminstanding.js`). It fails on an error, an unanswered
   `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
   tile. `check:pages` does not cover the dashboard; run this after any
   change to `index.html` or the runtime it loads. The double's own test is
