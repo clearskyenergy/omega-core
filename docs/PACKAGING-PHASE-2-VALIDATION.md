@@ -76,6 +76,9 @@ token and takes sender identity from the verified caller. Tests sent no mail.
 - `npm test`: passed, including 1,329 packaging assertions.
 - Packaging access: 131 assertions; producer handlers: 65; Admin producers: 12.
 - Existing tool allowlist suite: 34 assertions, including six new regressions.
+- The full CI geometry/routing script set also passed locally after updating
+  its legacy RFQ Admin mock for the new billing read. RFQ routing now runs in
+  `npm test` as well.
 - Two signed-JWT regressions distinguish a missing billing document from an
   unavailable read. Existing gate tests use verified current-domain staff.
 - `npm run check:pages`: passed; existing page renders, Phase 0's 12 assertions,
