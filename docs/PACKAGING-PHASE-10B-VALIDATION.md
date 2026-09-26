@@ -123,5 +123,16 @@ the paid Lite tenant).
   Payments permission; the panel says what is true: each invoice arrives
   with its pay link, a card saved on QuickBooks' page pays the next in one
   click.
-- The admin console's Tenants & Users card and Client Inventory tiers
-  (Phase 10).
+- ~~The admin console's Tenants & Users card and Client Inventory tiers
+  (Phase 10).~~ Done later on 2026-09-26 (`codex/admin-packages`): a
+  packaged workspace's row shows its plan and modules in the price book's
+  words with the monthly figure, the next invoice and the amount due with
+  the QuickBooks pay link; standing has a key per state (*Awaiting first
+  payment*, *Active · invoice <date>*, *Accounting review* with access
+  unchanged, *First invoice voided*, *Package proposed*) and the pills,
+  the filter and the broadcast list share them; Manage shows a package
+  summary and *Open the Package tab* instead of the legacy tier form;
+  Client Inventory carries the book from `GET /api/offerings`
+  (`scripts/tests/tadminstanding.js`, in `npm test`). Still legacy: the
+  contract engine's numeric defaults in `admin/index.html` and the
+  roster's own Core / Performance / Enterprise tiers.
