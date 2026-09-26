@@ -23,13 +23,14 @@ var A = require('./_lib/admin');
 module.exports = A.handler(function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   var b = req.body || {};
-  return A.authenticate(req).then(function (caller) {
+  return A.authenticate(req).then(async function (caller) {
     var db = A.db(), FV = A.FieldValue();
     if (b.action === 'reveal')  return reveal(caller, b, db, FV);
     if (b.action === 'respond') return respond(caller, b, db, FV);
     if (b.action === 'decide')  return decide(caller, b, db, FV);
     if (b.action === 'distributors') return distributors(caller, db);
 
+    await require('./_lib/package-access').withCaller(caller, 'estimate');
     if (!b.projectId || !Array.isArray(b.bom) || !b.bom.length) throw A.httpError(400, 'projectId and a non-empty bom[] are required');
     return db.collection('projects').doc(String(b.projectId)).get().then(function (ps) {
       if (!ps.exists) throw A.httpError(404, 'project not found');

@@ -425,13 +425,19 @@
        intersection is left empty rather than widened — omega-tools.js and
        the api/ tool gates both read a present-but-empty allowlist as "none",
        which is the safe way to be wrong about an allowlist. */
-    var orgAccess = (b.toolAccess && b.toolAccess.length) ? b.toolAccess : null;
-    var memAccess = (T.member && T.member.toolAccess && T.member.toolAccess.length)
-                      ? T.member.toolAccess : null;
+    var orgAccess = Array.isArray(b.toolAccess) ? b.toolAccess : null;
+    var memAccess = T.member && Array.isArray(T.member.toolAccess) ? T.member.toolAccess : null;
     if (orgAccess && memAccess) {
       ws.toolAccess = memAccess.filter(function (k) { return orgAccess.indexOf(k) >= 0; });
     } else if (orgAccess || memAccess) {
       ws.toolAccess = (orgAccess || memAccess).slice();
+    }
+    ws.packaged = b.packaged === true || !!(T.packageAccess && T.packageAccess.packaged);
+    if (ws.packaged) {
+      ws.packageAccess = T.packageAccess || { packaged: true, modules: [], caps: [], toolAccess: [], readOnly: true };
+      ws.modules = ws.packageAccess.modules.slice();
+      ws.toolAccess = ws.packageAccess.toolAccess.slice();
+      ws.toolOverrides = {}; ws.addons = [];
     }
     ws.role = T.role;
     ws.orgStatus = T.status;
@@ -639,7 +645,8 @@
      step. */
   function lockedEntitlements() {
     var ws = mergeEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || {}) || {};
-    ws.unlockedTools = [];
+    ws.unlockedTools = []; ws.toolAccess = [];
+    if (ws.packaged) ws.packageAccess = { packaged: true, modules: [], caps: [], toolAccess: [], readOnly: true };
     ws.pendingApproval = true;
     fireEntitlements(ws);
   }
@@ -737,12 +744,37 @@
        the org record, and with it the tenant's name and every flag on it,
        because a member document happened to be unreadable. */
     function soft(p) { return p.then(function (s) { return s; },
-                                     function () { return { exists: false }; }); }
+                                     function () { return { exists: false, failed: true }; }); }
     Promise.all([
       soft(ref.get()),
       soft(ref.collection('billing').doc('current').get()),
       soft(ref.collection('members').doc(uid).get())
     ]).then(function (r) {
+      T.packageAccess = null;
+      if (r[1].failed) throw new Error('Could not verify workspace billing');
+      var bill = r[1].exists ? r[1].data() : {};
+      if (bill.packaged !== true) return r;
+      T.packageAccess = { packaged: true, modules: [], caps: [], toolAccess: [], readOnly: true };
+      var enrollment = Promise.resolve();
+      if (!r[2].exists && !r[2].failed && r[0].exists && r[0].data().status === 'active' && user.emailVerified === true) {
+        // Preserve colleague auto-join before asking the server for membership.
+        // Existing rules permit only this caller's active member record.
+        enrollment = ref.collection('members').doc(uid).set({
+          email: String(user.email || '').toLowerCase(), name: user.displayName || '',
+          role: 'member', status: 'active', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(function () { return ref.collection('members').doc(uid).get(); })
+          .then(function (member) { r[2] = member; });
+      }
+      return enrollment.then(function () { return user.getIdToken(); }).then(function (token) {
+        return global.fetch('/api/package-access', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+      }).then(function (response) {
+        if (!response.ok) throw new Error('Could not verify package access');
+        return response.json();
+      }).then(function (view) {
+        if (view.packaged !== true || !Array.isArray(view.toolAccess)) throw new Error('Package access changed; reload');
+        T.packageAccess = view; return r;
+      });
+    }).then(function (r) {
       T.org = r[0].exists ? r[0].data() : null;
       T.billing = r[1].exists ? r[1].data() : null;
       T.member = r[2].exists ? r[2].data() : null;
@@ -834,8 +866,8 @@
         fireEntitlements(mergeEntitlements(ws || baseWorkspace(org, user)));
       })(0);
     })['catch'](function (err) {
-      log('entitlements read failed; config.js tier stands', err && err.message);
-      fireEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || null);
+      log('entitlements unavailable; tools remain closed', err && err.message);
+      lockedEntitlements();
     });
   }
 

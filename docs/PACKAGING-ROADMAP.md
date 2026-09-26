@@ -18,7 +18,7 @@ https://claude.ai/artifact/2Sou93uMRrCsc8K4E2Xg8n (private to the owner).
 | 0 · Decide + fixes | [#134](https://github.com/clearskyenergy/omega-core/pull/134) · [preview](https://omega-core-git-codex-packaging-phase-0-clearsky-usa.vercel.app) | implemented; npm test + check:pages pass; not merged | PR #133 already merged closeout; verified fallback + new-signup cap; approval-started lifecycle remains Phase 4 |
 | A · Polish now | [#135](https://github.com/clearskyenergy/omega-core/pull/135) · [preview](https://omega-core-git-codex-packaging-phase-a-clearsky-usa.vercel.app) | implemented; npm test + check:pages pass; not merged | Seven cards and ribbon polish only. Full workspace filtering, results rail and broader empty states remain later work. |
 | 1 · Catalog | [#136](https://github.com/clearskyenergy/omega-core/pull/136), stacked on #135 | implemented; npm test + check:pages pass; disabled | One catalog/price book; server quotes; sandbox-only item sync. AI Render: Plan Sets & CAD only. Real sandbox apply and later package gates remain. |
-| 2 · Close the leaks | | not started | |
+| 2 · Close the leaks | review pending | implemented; npm test + check:pages pass; disabled | Catalog-based UI/API gates; eight entry paths covered. Full editor, legacy engine ports and packaged write rules remain release work. See PACKAGING-PHASE-2-VALIDATION.md. |
 | 3 · Editor fits the package | | not started | |
 | 4 · Admin panel, signup billing, trial, QuickBooks customer | | not started | |
 | 5 · Subscribe in the editor (Step A) | | not started | |

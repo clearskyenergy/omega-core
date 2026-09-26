@@ -31,10 +31,8 @@
      check and nothing else — an allowlist still wins over it.
    - Staff skip the entitlement checks, not the brand: a ClearSky rep's deck
      carries ClearSky's brand by the same path a tenant's carries theirs.
-   - A read that THROWS is 503, never a pass. That is why billing is read
-     here and not taken from authenticateWithTier(), which answers a failed
-     billing read with an empty record — and an empty record has no
-     toolAccess, so a two-tool tenant would briefly own all of them.
+   - A read that THROWS is 503, never a pass. Billing is read together with the org and membership. authenticateWithTier
+     now also rejects failed reads; neither path can mistake failure for legacy access.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var auth = require('./_lib/verify-token');
@@ -108,7 +106,10 @@ function gate(req) {
     ]).then(function (r) {
       var org = r[0] || null;
       if (org && CLOSED.indexOf(org.status) >= 0) throw auth.httpError(403, closedMessage(org.status));
-      var why = refusal(r[1], r[2]);
+      var access = require('./_lib/package-access');
+      var projection = access.project(caller, r[1], org, r[2], Date.now());
+      access.requireModule(projection, 'storage', { tools: ['proforma'] });
+      var why = projection.packaged ? null : refusal(r[1], r[2]);
       if (why) throw auth.httpError(403, why);
       return { caller: caller, org: org };
     }, function () {

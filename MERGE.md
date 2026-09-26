@@ -2157,3 +2157,19 @@ Workspace filtering and the catalog-based package gates remain Phase 3.
 Checks render the real shared dialog and isolated real ribbon owners with
 legacy standard/deluxe billing fixtures; they do not simulate future
 Lite/Field module entitlements or claim a full Maps/authenticated editor run.
+
+
+## Packaging Phase 2 — September 26, 2026
+
+The canonical editor keeps every drawing implementation. The shared server
+catalog now drives packaged command visibility, direct launchers, File/Output,
+Summary Cost, Ctrl+K/Jarvis and late controls. Customer Editor Lite receives an
+authorized drawing projection instead of bypassing caps by query parameter.
+AI Render belongs only to Plan Sets & CAD. Existing tier behavior stays on
+unpackaged records; read failures no longer stand in for legacy billing.
+
+Server producers use `api/_lib/package-access.js`; Grid Atlas and validation
+submission now require Firebase authentication. No financial/scoring engine
+was moved in this phase: the browser-engine debt above remains a release
+prerequisite, not a solved security claim. See
+`docs/PACKAGING-PHASE-2-VALIDATION.md` for coverage and exact test limitations.

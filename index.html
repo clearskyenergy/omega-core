@@ -2944,7 +2944,8 @@ var _omegaOnAuth = function (user, tries) {
           if (!snap.exists) return;
           var b = snap.data() || {};
           var changed = false;
-          if (Array.isArray(b.toolAccess) && b.toolAccess.length) {
+          if (b.packaged === true) return; // omega-tenant owns the server package projection.
+          if (Array.isArray(b.toolAccess)) {
             ws.toolAccess = b.toolAccess.slice(); changed = true;
           }
           if (b.toolOverrides && typeof b.toolOverrides === 'object' &&

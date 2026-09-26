@@ -164,9 +164,9 @@ The editor's internal fallback requires a literal `emailVerified === true`
 from its Firebase user and the `clearsky-usa.com` domain. An existing billing
 record still wins. Packaging has one server catalog (`api/_lib/modules.js`) and proposed,
 disabled price book (`api/_lib/pricebook.js`). `api/package-catalog` returns
-authorized projections and server quotes. Legacy gates remain active until
-Phases 2–3; do not enable packaged billing before those gates and the billing
-lifecycle are validated. See `docs/PACKAGING-ROADMAP.md`.
+authorized projections and server quotes. Packaged records use the server access projection introduced in Phase 2;
+unpackaged records keep legacy gates. Do not enable packaged billing before
+full editor, server-engine, write-rule and billing lifecycle validation. See `docs/PACKAGING-ROADMAP.md`.
 
 ## Self-serve signup (policy decided 2026-09-06)
 

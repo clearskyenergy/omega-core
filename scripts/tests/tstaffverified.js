@@ -254,6 +254,14 @@ function rulesTests() {
 (async function () {
   try {
     await verifyTokenTests();
+    var savedFetch = global.fetch;
+    global.fetch = async function (url) { if (/firestore\.googleapis\.com/.test(String(url))) return { ok: false, status: 503, json: async () => ({}) }; return savedFetch(url); };
+    var accessFailure;
+    try { await V.authenticateWithTier(req(token('member@example.com', true))); } catch (e) { accessFailure = e; }
+    ok(accessFailure && accessFailure.status === 503, 'billing read failure is unavailable, never legacy trial access');
+    global.fetch = savedFetch;
+    var missing = await V.authenticateWithTier(req(token('member@example.com', true)));
+    ok(missing.tier === 'trial' && !missing.billing.packaged, 'an actual missing billing record preserves legacy behavior');
     await endpointTests();
     await adminTests();
     rulesTests();

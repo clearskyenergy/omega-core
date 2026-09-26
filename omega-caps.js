@@ -171,8 +171,123 @@
     return LADDER.indexOf(t) >= 0 || UNGATED[t] ? t : 'trial';
   }
 
+  /* Packaged state is a server projection of the sole catalog. Never derive
+     it from tiers, addons, query strings or a second browser module table. */
+  var _package = null, _packageRequest = 0;
+  var COMMANDS = '.rbtn,.rsbtn,.rb-fly-item,#app-menu .menu-item,[data-module],[data-cap]';
+  function pendingPackage() { return { packaged: true, readOnly: true, modules: [], caps: [], toolAccess: [], catalog: [], notSold: [] }; }
+  function setPackage(view) {
+    _package = view && view.packaged === true ? view : null;
+    if (_package && (!Array.isArray(view.modules) || !Array.isArray(view.caps) || !Array.isArray(view.catalog) || !Array.isArray(view.toolAccess))) _package = pendingPackage();
+    return _package;
+  }
+  function matches(selector, id, handler) {
+    if (selector.charAt(0) === '#') return selector.slice(1) === id;
+    var compact = String(handler || '').replace(/\s/g, '').replace(/"/g, "'");
+    if (selector.indexOf('(') >= 0) return compact.indexOf(selector) >= 0;
+    return new RegExp('(^|[^a-zA-Z0-9_$])' + selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=[^a-zA-Z0-9_$]|$)').test(compact);
+  }
+  function owners(id, handler) {
+    if (!_package) return [];
+    var rows = (_package.catalog || []).concat(_package.notSold || []), exact = [], out = [];
+    rows.forEach(function (m) { (m.ribbon || []).forEach(function (s) {
+      if (matches(s, id, handler)) {
+        if (s.charAt(0) === '#') { if (exact.indexOf(m.key) < 0) exact.push(m.key); }
+        else if (out.indexOf(m.key) < 0) out.push(m.key);
+      }
+    }); });
+    return exact.length ? exact : out;
+  }
+  function allowedCommand(id, handler) {
+    if (!_package || _package.staff) return true;
+    if (_package.toolAccess.indexOf('editor') < 0) return false;
+    var own = owners(id, handler);
+    if (!own.some(function (k) { return _package.modules.indexOf(k) >= 0; })) return false;
+    if (!_package.readOnly) return true;
+    return (_package.readOnlyRibbon || []).some(function (s) { return matches(s, id, handler); });
+  }
+  function allowedElement(el) {
+    if (!_package || _package.staff) return true;
+    if (!el || !el.getAttribute) return false;
+    var module = el.getAttribute('data-module'), cap = el.getAttribute('data-cap');
+    if (module && !_package.modules.some(function (k) { return module.split(/\s+/).indexOf(k) >= 0; })) return false;
+    var handler = el.getAttribute('onclick') || '', own = owners(el.id || '', handler);
+    if (own.length) return allowedCommand(el.id || '', handler);
+    if (module) return !_package.readOnly;
+    if (cap && el.classList && (el.classList.contains('rtab') || el.classList.contains('ribbon-page'))) {
+      var page = el.classList.contains('ribbon-page') ? el : global.document.querySelector('.ribbon-page[data-page="' + el.getAttribute('data-page') + '"]');
+      var children = page ? page.querySelectorAll('.rbtn,.rsbtn') : [];
+      for (var c = 0; c < children.length; c++) if (allowedElement(children[c])) return true;
+      return false;
+    }
+    if (cap) {
+      if (_package.readOnly && cap !== 'view') return false;
+      /* Container caps may group specific owned exports. Ownership of one
+         child must not grant its siblings; each command is checked below. */
+      return _package.caps.some(function (k) { return k === cap || k.indexOf(cap + '.') === 0; });
+    }
+    if (module) return !_package.readOnly;
+    return false; // An unclassified command never inherits a tier grant.
+  }
+  function applyPackage(scope) {
+    if (!_package || !scope || !scope.querySelectorAll) return 0;
+    guardLaunchers();
+    var nodes = scope.querySelectorAll(COMMANDS), removed = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i], allowed = allowedElement(el);
+      if (!allowed) {
+        if (!el.hasAttribute('data-package-hidden')) el.setAttribute('data-package-display', el.style.display || '');
+        el.setAttribute('data-package-hidden', '1'); el.style.setProperty('display', 'none', 'important'); removed++;
+      } else if (el.hasAttribute('data-package-hidden')) {
+        el.style.display = el.getAttribute('data-package-display') || '';
+        el.removeAttribute('data-package-hidden'); el.removeAttribute('data-package-display');
+      }
+    }
+    return removed;
+  }
+  function guardLaunchers() {
+    if (!_package) return;
+    (_package.catalog || []).concat(_package.notSold || []).forEach(function (m) {
+      (m.ribbon || []).forEach(function (selector) {
+        if (selector.charAt(0) === '#') return;
+        var name = selector.split('(')[0], parts = name.split('.'), host = global;
+        for (var i = 0; i < parts.length - 1; i++) { host = host && host[parts[i]]; }
+        var key = parts[parts.length - 1], original = host && host[key];
+        if (typeof original !== 'function' || original._omegaPackageGuard) return;
+        var wrapped = function () {
+          var args = Array.prototype.slice.call(arguments), encoded;
+          try { encoded = args.map(function (a) { return JSON.stringify(a); }).join(','); } catch (e) { encoded = ''; }
+          if (!allowedCommand('', name + '(' + encoded + ')')) return false;
+          return original.apply(this, arguments);
+        };
+        wrapped._omegaPackageGuard = true;
+        host[key] = wrapped;
+      });
+    });
+  }
+  function fetchPackage(user) {
+    var request = ++_packageRequest;
+    setPackage(pendingPackage());
+    if (!user || !user.getIdToken || !global.fetch) return Promise.reject(new Error('Package access unavailable'));
+    return user.getIdToken().then(function (token) {
+      return global.fetch('/api/package-access', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+    }).then(function (r) { if (!r.ok) throw new Error('Package access unavailable'); return r.json(); })
+      .then(function (v) { if (request !== _packageRequest || (global.firebase && global.firebase.auth().currentUser !== user)) throw new Error('Account changed'); if (!v || v.packaged !== true) throw new Error('Package access changed; reload'); setPackage(v); return v; });
+  }
+  /* Capture covers keyboard-generated clicks and programmatic .click() on
+     a hidden button. The API still checks every producing request. */
+  if (global.document && global.document.addEventListener) global.document.addEventListener('click', function (e) {
+    if (!_package || !e.target || !e.target.closest) return;
+    var el = e.target.closest(COMMANDS);
+    if (el && !allowedElement(el)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+
   function setFor(tier) {
     var t = normalise(tier), out = {}, i, j, g;
+    if (_package) {
+      (_package.readOnly ? ['view'] : _package.caps).forEach(function (k) { out[k] = 1; });
+      return out;
+    }
     if (UNGATED[t]) { out.all = 1; return out; }
     var top = LADDER.indexOf(t);
     for (i = 0; i <= top; i++) {
@@ -207,6 +322,7 @@
   function apply(tier, root) {
     var scope = root || global.document;
     if (!scope || !scope.querySelectorAll) return { tier: normalise(tier), removed: 0 };
+    if (_package) return { tier: normalise(tier), packaged: true, removed: applyPackage(scope) };
     var nodes = scope.querySelectorAll('[data-cap]'), removed = 0, i, el, cap;
     for (i = 0; i < nodes.length; i++) {
       el = nodes[i];
@@ -311,12 +427,20 @@
         var d = setOrg(email);
         var internal = emailVerified === true && INTERNAL_DOMAINS.indexOf(d) >= 0;
         setAddons([]);
+        ++_packageRequest;
+        setPackage(null);
         if (internal && !db) return done('internal');
         if (!d || !db) return done('trial');
         db.collection('omega_orgs').doc(d).collection('billing').doc('current').get()
           .then(function (s) {
             var b = s.exists ? (s.data() || {}) : {};
             if (!s.exists && internal) return done('internal');
+            if (b.packaged === true) {
+              setPackage(pendingPackage());
+              var user = global.firebase && global.firebase.auth().currentUser;
+              if (!user || user.email !== email) return done('trial');
+              return fetchPackage(user).then(function (view) { done(view.tier || 'standard'); }, function () { done('trial'); });
+            }
             setAddons(b.addons || []);
             var eff = effectiveTier(b.tier || 'trial', b.capTier);
             if (b.capTier && eff !== normalise(b.tier || 'trial') && global.console) {
@@ -328,6 +452,7 @@
           .catch(function () {
             /* A failed read must not hand out the engineering suite to a
                customer — but it must not lock ClearSky out either. */
+            if (!internal) setPackage(pendingPackage());
             done(internal ? 'internal' : 'trial');
           });
       } catch (e) { done('trial'); }
@@ -343,6 +468,7 @@
     JV_ORGS: JV_ORGS, JV_GRANTS: JV_GRANTS, INTERNAL_DOMAINS: INTERNAL_DOMAINS,
     normalise: normalise, setFor: setFor, can: can, apply: apply, resolve: resolve,
     setOrg: setOrg, orgOf: orgOf, org: function () { return _org; },
-    effectiveTier: effectiveTier
+    effectiveTier: effectiveTier, setPackage: setPackage, packageAccess: function () { return _package; },
+    guardLaunchers: guardLaunchers, pendingPackage: pendingPackage, fetchPackage: fetchPackage, allowedElement: allowedElement, allowedCommand: allowedCommand, commandSelector: COMMANDS
   };
 })(typeof window !== 'undefined' ? window : this);

@@ -26,7 +26,7 @@ var CATALOG = [
   record('siteintel', 'Site Intelligence', 'premium', '', 'siteintel parcelscreen',
     'openScorePanel openNetworkProximity openProjectIntelligence opToggleTerrainKey tlCycle ttCycle e5Open', 'screens'),
   record('engineering', 'Engineering & Analysis', 'premium', 'conductorsizing powerflow siteoptimizer', 'engineering',
-    'openDerAnalysis openValidationExport openValidationStatus e3MeteoOpen'),
+    'openDerAnalysis openValidationExport openValidationStatus _valSubmit e3MeteoOpen'),
   record('finance', 'Investor & Finance', 'premium', 'investment dcfc fleet apartment degradation', 'finance',
     'openMarketplacePush openFinancingApply openBuildingPanel'),
   record('compute', 'Compute & Data Center', 'premium', 'datacenter computepower computelease', 'compute',
@@ -53,9 +53,9 @@ var NOT_SOLD = [
 var BY_KEY = {};
 CATALOG.forEach(function (m) { BY_KEY[m.key] = m; });
 /* Argument-sensitive launchers must never grant Compute from the Lite build family. */
-BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(["_guidedPick('der')", "_guidedPick('standard')", "_guidedPick('deluxe')", "_guidedPick('l2')", "_guidedPick('ev')", "homeStartWizard('FOM')", "openRpPanel('summary')"]);
+BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(["_guidedPick('der')", "_guidedPick('standard')", "_guidedPick('deluxe')", "_guidedPick('l2')", "_guidedPick('ev')", "homeStartWizard('FOM')", "openRpPanel('summary')", "rpTab('summary')"]);
 BY_KEY.compute.ribbon.push("_guidedPick('compute')");
-BY_KEY.estimate.ribbon.push("openRpPanel('cost')");
+BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cost', '#rp-cost');
 NOT_SOLD[5].ribbon.push("homeStartWizard('BTM')");
 var IDS = {
   lite: 'rb-color rb-fom rb-fence-tie rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-trace-boundary rb-design-ai rb-nrel-key',
@@ -80,6 +80,9 @@ BY_KEY.permitting.beta = ['Permitting Matrix'];
 BY_KEY.permitting.coverage = 'Verified Vista / SDG&E pack; other jurisdictions are draft matrices with unverified agencies, fees and durations.';
 BY_KEY.sitefinder.coverage = 'Northern Illinois (ComEd) only.';
 BY_KEY.whitelabel.agreement = 'Reseller addendum required';
+/* Viewing/navigation survives an expired trial; producing commands do not. */
+var READ_ONLY_RIBBON = words('openProjectsModal rbNav rbTab omegaLoadMap toggleLayersPanel toggleCompassPanel toggleSitePanel toggleMeterPanel toggleDockLeft toggleDiagPanel opToggleCoords')
+  .concat(["openRpPanel('summary')", "rpTab('summary')"]);
 var STARTERS = {
   ev: ['lite', 'evrebates', 'estimate', 'gridatlas', 'plansets'],
   solar: ['lite', 'storage', 'estimate', 'plansets'],
@@ -128,4 +131,5 @@ function owners(id, handler) {
 }
 module.exports = { catalog: function () { return copy(CATALOG); }, notSold: function () { return copy(NOT_SOLD); },
   starters: function () { return copy(STARTERS); }, get: function (key) { return Object.prototype.hasOwnProperty.call(BY_KEY, key) ? copy(BY_KEY[key]) : null; },
+  readOnlyRibbon: function () { return copy(READ_ONLY_RIBBON); },
   normalize: normalize, resolve: resolve, owners: owners };

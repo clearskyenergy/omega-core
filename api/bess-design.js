@@ -152,13 +152,13 @@ module.exports = function (req, res) {
   res.setHeader('Cache-Control', 'private, no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
 
-  return auth.authenticateWithTier(req).then(function (a) {
+  return auth.authenticateWithTier(req).then(function (ctx) { return require('./_lib/package-access').withToken(req, ctx, "storage"); }).then(function (a) {
     /* Same gate as /api/bess-size. The engineering schedule is the more
        valuable half of the tool, so it does not get a looser one. */
     var addons = a.billing.addons || [];
     var overrides = a.billing.toolOverrides || {};
     var paidTiers = ['standard', 'deluxe', 'enterprise', 'partner', 'internal'];
-    if (!a.caller.staff &&
+    if (!a.caller.staff && !a.packageAccess &&
         (overrides.batterysizer === false ||
          (paidTiers.indexOf(a.tier) < 0 && overrides.batterysizer !== true &&
           addons.indexOf('engineering') < 0))) {

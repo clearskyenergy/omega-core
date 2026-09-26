@@ -1751,12 +1751,12 @@ window.onerror = function(msg, src, line, col, err) {
     <div class="rtab"        data-page="__file"  onclick="rbAppMenu(event)">File</div>
     <div class="rtab"        data-page="modify"  onclick="rbTab('modify')">Edit</div>
     <div class="rtab active" data-page="home"    onclick="rbTab('home')">Build</div>
-    <div class="rtab"        data-page="compute" data-cap="compute" onclick="rbTab('compute')" title="Compute campus &mdash; site, design, sizing and cost tools for a data-centre campus with on-site power">Compute</div>
+    <div class="rtab"        data-page="compute" data-module="compute" data-cap="compute" onclick="rbTab('compute')" title="Compute campus &mdash; site, design, sizing and cost tools for a data-centre campus with on-site power">Compute</div>
     <div class="rtab"        data-page="insert"  onclick="rbTab('insert')">Insert</div>
     <div class="rtab"        data-page="draw"    onclick="rbTab('draw')">Draw</div>
     <div class="rtab"        data-page="annotate" onclick="rbTab('annotate')">Annotate</div>
     <div class="rtab"        data-page="analyze" data-cap="engineering" onclick="rbTab('analyze')">Analyze</div>
-    <div class="rtab"        data-page="estimate" data-cap="engineering" onclick="rbTab('estimate')">Estimate</div>
+    <div class="rtab"        data-page="estimate" data-module="estimate" data-cap="engineering" onclick="rbTab('estimate')">Estimate</div>
     <div class="rtab"        data-page="view"    onclick="rbTab('view')">View</div>
     <div class="rtab"        data-page="output"  onclick="rbTab('output')">Output</div>
     <div class="rtab"        data-page="settings" onclick="rbTab('settings')">Settings</div>
@@ -1867,7 +1867,7 @@ window.onerror = function(msg, src, line, col, err) {
        here now, in the order you use them. The buttons are the same DOM
        nodes the patches inject; OmegaComputeTab moves them into these
        panels as they appear, so nothing was re-implemented. -->
-  <div class="ribbon-page" data-page="compute" data-cap="compute">
+  <div class="ribbon-page" data-page="compute" data-module="compute" data-cap="compute">
     <div class="rpanel" data-ct="site" data-shelf="1">
       <div class="rpanel-body"></div>
       <div class="rpanel-cap">1 &middot; Site</div>
@@ -2219,7 +2219,7 @@ window.onerror = function(msg, src, line, col, err) {
   </div>
 
   <!-- ESTIMATE (cost / sourcing / takeoff — grouped for findability) -->
-  <div class="ribbon-page" data-page="estimate" data-cap="engineering">
+  <div class="ribbon-page" data-page="estimate" data-module="estimate" data-cap="engineering">
     <div class="rpanel">
       <div class="rpanel-body">
         <button class="rbtn" onclick="openRpPanel('cost')" title="Construction cost estimator — equipment, install, incentives, revenue, ROI"><span class="rb-ico">$</span><span class="rb-lbl">Construction<br>Cost</span></button>
@@ -3583,7 +3583,7 @@ if(document.readyState==='loading'){
   <div id="rp-inner" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-width:0">
   <div style="display:flex;border-bottom:1px solid var(--border);align-items:center">
     <button onclick="rpTab('summary')" id="rp-tab-summary" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;cursor:pointer;border:none;background:rgba(197,165,90,.08);color:var(--gold);font-family:inherit;border-bottom:2px solid var(--gold);transition:all .15s">📋 Summary</button>
-    <button onclick="rpTab('cost')" id="rp-tab-cost" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;cursor:pointer;border:none;background:transparent;color:var(--sub);font-family:inherit;border-bottom:2px solid transparent;transition:all .15s">💰 Cost Est.</button>
+    <button onclick="rpTab('cost')" id="rp-tab-cost" data-module="estimate" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;cursor:pointer;border:none;background:transparent;color:var(--sub);font-family:inherit;border-bottom:2px solid transparent;transition:all .15s">💰 Cost Est.</button>
   </div>
   <div id="rp-summary" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:12px;min-width:0;overflow-wrap:break-word;word-break:normal">
     <div style="margin-bottom:10px;min-width:0">
@@ -3611,7 +3611,7 @@ if(document.readyState==='loading'){
       <div id="rp-scale" style="font-size:11px;color:var(--sub)">Not calibrated</div>
     </div>
   </div>
-  <div id="rp-cost" style="flex:1;overflow-y:auto;padding:0;display:none;flex-direction:column">
+  <div id="rp-cost" data-module="estimate" style="flex:1;overflow-y:auto;padding:0;display:none;flex-direction:column">
 
   <!-- Cost sub-tabs -->
   <div style="display:flex;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)">
@@ -56542,8 +56542,11 @@ async function _valSubmit(){
     summary:     _valSummary()
   };
   try {
+    var validationUser = firebase.auth().currentUser;
+    if (!validationUser) throw new Error('Sign in to submit for validation');
+    var validationToken = await validationUser.getIdToken();
     var resp = await fetch('/api/validation', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+      method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer ' + validationToken}, body:JSON.stringify(payload)
     });
     var j = await resp.json();
     if(!resp.ok || !j.validationId){ throw new Error(j && j.error ? j.error : 'submit failed'); }
@@ -105480,7 +105483,8 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     items = [];
     var seenEl = [];
     function add(el, page) {
-      if (!el || el.offsetParent === null && !page) { /* keep going anyway */ }
+      if (!el || (window.OmegaCaps && !OmegaCaps.allowedElement(el))) return;
+      if (el.hasAttribute('data-cap-blocked') || el.hasAttribute('data-omega-retired')) return;
       var name = textOf(el);
       if (!name) return;
       if (seenEl.indexOf(el) >= 0) return;
@@ -105505,6 +105509,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     var menu = document.querySelectorAll('#app-menu .menu-item,.rb-fly-item');
     for (var j = 0; j < menu.length; j++) add(menu[j], null);
     for (var k = 0; k < STATIC.length; k++) {
+      if (window.OmegaCaps && OmegaCaps.packageAccess() && OmegaCaps.packageAccess().readOnly && STATIC[k].name.indexOf('Theme:') !== 0 && STATIC[k].name.indexOf('Interface:') !== 0) continue;
       items.push({
         el: null, page: null, name: STATIC[k].name, group: 'Interface',
         desc: STATIC[k].desc, ico: STATIC[k].ico, run: STATIC[k].run
@@ -105582,6 +105587,8 @@ button[style*="linear-gradient"][aria-disabled="true"]{
   }
 
   function run(it) {
+    if (it.el && window.OmegaCaps && !OmegaCaps.allowedElement(it.el)) return false;
+    if (it.run && window.OmegaCaps && OmegaCaps.packageAccess() && OmegaCaps.packageAccess().readOnly && it.name.indexOf('Theme:') !== 0 && it.name.indexOf('Interface:') !== 0) return false;
     close();
     if (it.run) { try { it.run(); } catch (e) { console.error(TAG, e); } return; }
     if (it.page && typeof window.rbTab === 'function') {
@@ -153638,7 +153645,7 @@ function run(cb){
   }
   BUSY = true;
   paint();
-  var list = C.candidates || [C.serviceUrl];
+  var list = ['/api/grid-atlas']; // One authenticated service; never retry a paid gate on an old host.
   var idx = 0, target = list[0];
 
   var body = { lat: s.lat, lng: s.lng, address: s.address, sizeMw: s.sizeMw,
@@ -153671,8 +153678,13 @@ function run(cb){
 
   function attempt(){
   target = list[idx];
-  fetch(target, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body) })
+  Promise.resolve().then(function () {
+    var user = window.firebase && firebase.auth().currentUser;
+    if (!user) throw new Error('Sign in to run Grid Atlas');
+    return user.getIdToken();
+  }).then(function (token) {
+    return fetch(target, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
+  })
     .then(function (r) {
       return r.json().catch(function(){ return null; }).then(function (j) {
         if (!r.ok) {
@@ -176001,8 +176013,9 @@ if (root.console && console.info) {
      into work that happens when a gated button is genuinely injected. */
   function carriesCap(n){
     if (!n || n.nodeType !== 1) return false;
-    if (n.hasAttribute && n.hasAttribute('data-cap')) return true;
-    return !!(n.querySelector && n.querySelector('[data-cap]'));
+    var selector = window.OmegaCaps ? OmegaCaps.commandSelector : '[data-cap]';
+    if (n.matches && n.matches(selector)) return true;
+    return !!(n.querySelector && n.querySelector(selector));
   }
 
   function watch(){
@@ -176019,7 +176032,15 @@ if (root.console && console.info) {
   }
 
   function gate(){
-    if (new URLSearchParams(location.search).get('customerEngine') === '1') return;
+    if (new URLSearchParams(location.search).get('customerEngine') === '1') {
+      if (!window.OmegaCaps) { setTimeout(gate, 200); return; }
+      OmegaCaps.setPackage(OmegaCaps.pendingPackage());
+      try {
+        var parentBridge = window.parent !== window && window.parent.location.origin === location.origin && /^\/editor-lite(?:\.html)?\/?$/.test(window.parent.location.pathname) && window.parent.OmegaBuyerEngine;
+        if (parentBridge && parentBridge.authorized === true && parentBridge.packageAccess) OmegaCaps.setPackage(parentBridge.packageAccess);
+      } catch (e) {}
+      tier = 'standard'; OmegaCaps.apply(tier); watch(); return;
+    }
     if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length ||
         typeof OmegaCaps === 'undefined') { setTimeout(gate, 200); return; }
     firebase.auth().onAuthStateChanged(function (u) {

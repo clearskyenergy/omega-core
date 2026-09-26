@@ -19,7 +19,7 @@
     "osa:invite": "node scripts/provision-osa-member.js",
     "osa:invite:apply": "node scripts/provision-osa-member.js --apply",
     "rules:check": "node scripts/check-rules.js",
-    "check:pages": "node scripts/render-logic-pages.js && node scripts/render-packaging-phase-0.js && node scripts/render-packaging-phase-a.js && node scripts/render-packaging-catalog.js",
+    "check:pages": "node scripts/render-logic-pages.js && node scripts/render-packaging-phase-0.js && node scripts/render-packaging-phase-a.js && node scripts/render-packaging-catalog.js && node scripts/render-packaging-access.js",
     "guides": "node scripts/guides/shots.js && node scripts/guides/build.js",
     "build:sandbox": "node scripts/build-app-sandbox.js",
     "test:sizer": "node scripts/test-bess-sizer.js",
@@ -65,6 +65,6 @@
     "test:logic-workflow": "node scripts/test-logic-workflow.js",
     "test:sitelist": "node scripts/test-site-list.js",
     "test:scope": "node scripts/test-partner-scope.js",
-    "test:packaging": "node scripts/test-packaging-catalog.js && node scripts/test-subscription-pricing.js && node scripts/test-qbo-items.js && node scripts/test-package-catalog-api.js"
+    "test:packaging": "node scripts/test-packaging-catalog.js && node scripts/test-subscription-pricing.js && node scripts/test-qbo-items.js && node scripts/test-package-catalog-api.js && node scripts/test-package-access.js && node scripts/test-package-producers.js && node scripts/test-package-admin-producers.js"
   }
 }

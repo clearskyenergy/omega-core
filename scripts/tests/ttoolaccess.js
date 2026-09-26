@@ -102,7 +102,7 @@ ok('no workspace still sees everything', unlocked(PROFORMA, null) === true);
 /* ── 3 · omega-tenant.js: the org allowlist reaches the workspace ───────
    Harness after scripts/tests/tpending.js — the host has to resolve or
    resolveHost() refuses it and never gets to the entitlement phase. */
-function run(docs, host) {
+function run(docs, host, projection) {
   docs = Object.assign({
     'tenant_public/cc.clearskyomega.com': {
       orgId: 'design-customer.com', name: 'A Clean Cell customer',
@@ -113,13 +113,14 @@ function run(docs, host) {
                  insertBefore(n) { this.children.push(n); }, appendChild(n) { this.children.push(n); } };
   const snap = p => ({ exists: p in docs, data: () => docs[p] });
   const ref = p => ({
-    get: () => Promise.resolve(snap(p)),
+    get: () => docs.__failedBilling && /billing\/current$/.test(p) ? Promise.reject(new Error('offline')) : Promise.resolve(snap(p)),
     set: () => Promise.resolve(),
     collection: c => ({ doc: d => ref(p + '/' + c + '/' + d) })
   });
   let authCb = null;
   const G = {
     console, setTimeout, Promise, Date, JSON,
+    fetch: async () => ({ ok: !!projection, json: async () => projection }),
     CustomEvent: function (n, o) { this.type = n; this.detail = o && o.detail; },
     location: { hostname: host || 'cc.clearskyomega.com', pathname: '/', search: '', href: '' },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
@@ -146,12 +147,12 @@ function run(docs, host) {
   return { G, signIn: u => authCb && authCb(u) };
 }
 
-const USER = { uid: 'u1', email: 'chris@design-customer.com', displayName: 'Chris' };
+const USER = { getIdToken: () => Promise.resolve('fixture'), uid: 'u1', email: 'chris@design-customer.com', displayName: 'Chris' };
 const ORG = 'omega_orgs/design-customer.com';
 const wait = () => new Promise(r => setTimeout(r, 40));
 
-function entitlements(docs) {
-  const t = run(docs);
+function entitlements(docs, projection) {
+  const t = run(docs, null, projection);
   let got = null;
   t.G.OmegaTenant.onEntitlements(ws => { got = ws; });
   t.signIn(USER);
@@ -241,6 +242,24 @@ function entitlements(docs) {
      ws && Array.isArray(ws.toolAccess) && ws.toolAccess.length === 0, ws && ws.toolAccess);
   ok('★ and offers nothing rather than the whole tier',
      ws && (ws.unlockedTools || []).length === 0, ws && ws.unlockedTools);
+
+  for (const emptyAt of ['billing', 'member']) {
+    ws = await entitlements({ [ORG]: org,
+      [ORG + '/billing/current']: { tier: 'enterprise', toolAccess: emptyAt === 'billing' ? [] : DESIGN_PRODUCT },
+      [ORG + '/members/u1']: { role: 'member', status: 'active', toolAccess: emptyAt === 'member' ? [] : DESIGN_PRODUCT } });
+    ok(emptyAt + ' empty allowlist closes every tool', ws && ws.toolAccess.length === 0 && ws.unlockedTools.length === 0);
+  }
+  const projection = require('../../api/_lib/package-access').project({ emailVerified: true },
+    { packaged: true, modules: ['lite'], packagingState: 'paid' }, org, { role: 'member', status: 'active' });
+  const packagedDocs = { [ORG]: org, [ORG + '/billing/current']: { packaged: true, tier: 'enterprise', toolAccess: ['proforma'] },
+    [ORG + '/members/u1']: { role: 'member', status: 'active' } };
+  ws = await entitlements(packagedDocs, projection);
+  ok('package projection overrides legacy enterprise and allowlist', ws && ws.packaged && ws.toolAccess.indexOf('editor') >= 0 && ws.toolAccess.indexOf('proforma') < 0);
+  ok('unowned packaged tool is hidden, not a disabled tile', !TOOLS.isVisible(PROFORMA, ws));
+  ws = await entitlements(packagedDocs, null);
+  ok('failed package projection closes every tool', ws && ws.toolAccess.length === 0 && ws.unlockedTools.length === 0);
+  ws = await entitlements({ [ORG]: org, __failedBilling: true });
+  ok('failed billing read cannot fall back to config tier', ws && ws.toolAccess.length === 0 && ws.unlockedTools.length === 0);
 
   console.log('\ntool access allowlist: ' + pass + ' passed, ' + fail + ' failed');
   if (fail) process.exit(1);

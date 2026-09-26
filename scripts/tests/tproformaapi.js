@@ -83,6 +83,7 @@ function load(w, override) {
     module: { exports: {} },
     console: { error: function () { logged.push(Array.prototype.slice.call(arguments).join(' ')); }, log: function () {} },
     require: function (n) {
+      if (/\/package-access$/.test(n)) return require(path.join(ROOT, 'api/_lib/package-access'));
       if (/\/verify-token$/.test(n)) return w.stub;
       if (/\/whitelabel$/.test(n)) return REAL.whitelabel;
       if (/\/proforma-engine$/.test(n)) return override.engine || REAL.engine;
