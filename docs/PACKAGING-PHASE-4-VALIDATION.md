@@ -3,7 +3,8 @@
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
 Draft PR [#139](https://github.com/clearskyenergy/omega-core/pull/139),
-stacked on Phase 3. No live organization, trial, billing date, QuickBooks
+stacked on Phase 3. [Vercel preview](https://omega-core-git-codex-packaging-phase-4-clearsky-usa.vercel.app).
+No live organization, trial, billing date, QuickBooks
 record, environment variable or deployed rule was changed. Runtime flags
 remain off by default; the proposed book remains disabled in the seed.
 
