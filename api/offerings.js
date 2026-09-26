@@ -20,7 +20,7 @@ function view(b, source) {
     modules: modules, starters: M.starters(), starterLabels: M.starterLabels(),
     logins: { builders: b.logins.builders, viewers: b.logins.viewers, builderDisplay: P.money(b.logins.builderCents) + '/month', viewerDisplay: P.money(b.logins.viewerCents) + '/month' },
     trial: { days: Math.min(b.policy.trialDays, 14), note: 'One trial per company, at most 14 days, starting when ClearSky approves the request. Or pay now and start today.' },
-    annual: { paidMonths: b.annualPaidMonths, note: 'Annual prepay is ' + b.annualPaidMonths + ' months for the year.' },
+    annual: { paidMonths: b.annualPaidMonths, freeMonths: 12 - b.annualPaidMonths, note: 'Pay for the year and you pay for ' + b.annualPaidMonths + ' months of twelve, invoiced once: ' + (12 - b.annualPaidMonths) + ' months free.' },
     signup: { packaged: process.env.PACKAGING_SIGNUP_ENABLED === 'true', payNow: process.env.PACKAGING_SIGNUP_ENABLED === 'true' && process.env.PACKAGING_BILLING_ENABLED === 'true', start: '/start.html' } };
 }
 module.exports = A.handler(async function (req, res) {
