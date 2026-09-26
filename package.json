@@ -20,6 +20,7 @@
     "osa:invite:apply": "node scripts/provision-osa-member.js --apply",
     "rules:check": "node scripts/check-rules.js",
     "check:pages": "node scripts/render-logic-pages.js",
+    "check:dashboard": "node scripts/render-dashboard.js",
     "guides": "node scripts/guides/shots.js && node scripts/guides/build.js",
     "build:sandbox": "node scripts/build-app-sandbox.js",
     "test:sizer": "node scripts/test-bess-sizer.js",

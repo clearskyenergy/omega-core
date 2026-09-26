@@ -565,16 +565,28 @@ body.signed-out #app-body{display:none !important}
   .ov-val{font-size:30px}
 }
 
-/* ── UPGRADE OVERLAY (locked tools) ── */
-.pm-tile.locked{ position:relative; cursor:pointer; }
-.pm-tile.locked > *:not(.pm-lock){ filter:grayscale(.85) opacity(.45); pointer-events:none; }
+/* ── UPGRADE OVERLAY (locked tools) ──
+   lockTile() locks ANY [data-tool] element — a .pm-tile card or a Quick
+   Access .quick-link — and appends the badge and the overlay, both
+   position:absolute. So the locked element itself must be their containing
+   block. These rules were written for .pm-tile only; a .quick-link has no
+   position of its own, so the overlay escaped to the page, lay invisibly
+   (opacity:0 still hit-tests) over the first screen, and the hover lift —
+   a transform is a containing block too — pulled it into the tile and back
+   out several times a second: the "Upgrade" flashing.
+   A locked tile does not lift either: at its bottom edge the lift alone moves
+   it out from under the pointer, and the overlay would blink there.
+   scripts/render-dashboard.js measures the overlay against its tile. */
+.locked[data-tool]{ position:relative; cursor:pointer; }
+.locked[data-tool]:hover{ transform:none; }
+.locked[data-tool] > *:not(.pm-lock):not(.pm-lock-badge){ filter:grayscale(.85) opacity(.45); pointer-events:none; }
 .pm-lock{
   position:absolute; inset:0; display:flex; flex-direction:column;
   align-items:center; justify-content:center; gap:6px;
   background:linear-gradient(135deg, rgba(8,56,79,.90), rgba(0,111,154,.88));
   border-radius:inherit; opacity:0; transition:opacity .16s; z-index:3;
 }
-.pm-tile.locked:hover .pm-lock{ opacity:1; }
+.locked[data-tool]:hover .pm-lock{ opacity:1; }
 .pm-lock-badge{
   position:absolute; top:8px; right:8px; z-index:4;
   background:var(--cs-accent); color:#04303a; font-size:9px; font-weight:800;
@@ -618,7 +630,7 @@ body.signed-out #app-body{display:none !important}
 .th-assignee{font-weight:600;color:var(--cs-blue)}
 .th-due{color:#B26A00}
 .th-due.over{color:var(--cs-red);font-weight:600}
-.th-del{background:none;border:none;color:#C9C7C2;cursor:pointer;font-size:15px;line-height:1;padding:0 2px;flex:none}
+.th-del{background:none;border:none;color:#C9C7C2;cursor:pointer;font-size:15px;line-height:1;padding:0 2px;flex:none;min-width:40px;min-height:40px;display:inline-flex;align-items:center;justify-content:center}
 .th-del:hover{color:var(--cs-red)}
 
 /* composer */
@@ -706,7 +718,7 @@ body.signed-out #app-body{display:none !important}
 .acct-modal{background:#fff;border-radius:18px;width:440px;max-width:94vw;max-height:90vh;overflow-y:auto;box-shadow:0 30px 70px rgba(0,0,0,.3)}
 .acct-head{padding:22px 24px 16px;border-bottom:1px solid var(--cs-border);display:flex;align-items:center;justify-content:space-between}
 .acct-head h3{font-size:18px;font-weight:800;color:var(--cs-navy)}
-.acct-close{background:none;border:none;font-size:22px;line-height:1;color:var(--cs-sub);cursor:pointer}
+.acct-close{background:none;border:none;font-size:22px;line-height:1;color:var(--cs-sub);cursor:pointer;min-width:40px;min-height:40px}
 .acct-close:hover{color:var(--cs-navy)}
 .acct-body{padding:20px 24px 24px}
 .acct-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(221,216,208,.5);font-size:13px}
@@ -795,7 +807,7 @@ body{background:#F4F6F8}
   box-shadow:0 0 0 4px rgba(0,112,242,.12),0 1px 3px rgba(16,40,64,.18)}
 
 /* ── Quick Access tiles: brighter, crisp, hover ── */
-.quick-link{border:1px solid var(--pol-border) !important;box-shadow:var(--pol-shadow) !important;
+.quick-link{border:1px solid var(--pol-border) !important;box-shadow:var(--pol-shadow) !important;position:relative;cursor:pointer;
   transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease}
 .quick-link:hover{transform:translateY(-2px);box-shadow:var(--pol-shadow-hover) !important;
   border-color:var(--pol-blue) !important}
@@ -1162,7 +1174,27 @@ body{overflow-x:hidden}
 /* Mobile: sidebar collapses; the existing hamburger drawer handles nav */
 @media (max-width:900px){
   #app{flex-direction:column}
-  #side-nav{display:none}   /* mobile uses the top hamburger drawer instead */
+  /* The drawer script moves #side-nav INTO the hamburger drawer at this
+     width (it used to be display:none here, which left To-Dos, Team, Feed,
+     Chat, Quote Desk, JD and Deal Room with no way in on a phone). Until it
+     has moved, hide it in its desktop slot. */
+  #app > #side-nav{display:none}
+  .tb-nav.has-sidenav .tb-tab{display:none}   /* the sidebar carries every tab and more */
+  /* In the drawer the sidebar is a light panel, not the navy rail: the
+     drawer paints a white fill behind its children (the ::before above),
+     so the rail's own palette would leave light-grey labels on white. It
+     stays positioned (relative, not the rail's sticky) so it sits above
+     that fill and scrolls with the drawer. */
+  .tb-nav #side-nav{display:flex;position:relative;z-index:1;width:auto;height:auto;max-height:none;overflow:visible;margin:0 12px 14px;border-radius:12px;background:#F4F7FA;color:#16202B}
+  .tb-nav #side-nav .sn-head{display:none}     /* the drawer already says who and where */
+  .tb-nav #side-nav .sn-scroll{overflow:visible;padding:8px}
+  .tb-nav #side-nav .sn-item{color:#16202B}
+  .tb-nav #side-nav .sn-item:hover{background:rgba(0,112,242,.08);color:#0B2A3D}
+  .tb-nav #side-nav .sn-item.active{background:#1264A3;color:#fff}
+  .tb-nav #side-nav .sn-app{color:#3B4A5A}
+  .tb-nav #side-nav .sn-app:hover{background:rgba(0,112,242,.08);color:#0B2A3D}
+  .tb-nav #side-nav .sn-divider{background:#DCE3EA}
+  .tb-nav #side-nav .sn-section-label{color:#6B7A8D}
   #app-body #main{padding:20px 14px 48px}
 }
 
@@ -1216,11 +1248,11 @@ body.dash-editing #bld-overlay{display:flex;position:relative;z-index:5}
 .bld-editing-hint{background:#EAF3FF;border:1px solid #BBD9FF;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#0B4F9E;margin-bottom:12px}
 
 /* ── Builder: config panel (#2) + view-mode canvas (#4) ── */
-#bld-config{position:fixed;top:0;right:-360px;width:340px;height:100vh;background:#fff;z-index:2147483600;
+#bld-config{position:fixed;top:0;right:-360px;width:340px;height:100vh;height:100dvh;background:#fff;z-index:2147483600;
   box-shadow:-8px 0 30px rgba(16,40,64,.16);transition:right .24s ease;display:flex;flex-direction:column}
 #bld-config.open{right:0}
 .cfg-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--pol-border,#E1E6EC);font:700 15px/1 'DM Sans',sans-serif;color:var(--cs-navy,#16202B)}
-.cfg-x{border:none;background:none;font-size:22px;cursor:pointer;color:var(--sub,#556B82);line-height:1}
+.cfg-x{border:none;background:none;font-size:22px;cursor:pointer;color:var(--sub,#556B82);line-height:1;min-width:40px;min-height:40px}
 .cfg-body{flex:1;overflow-y:auto;padding:20px}
 .cfg-row{margin-bottom:16px}
 .cfg-row label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--sub,#556B82);margin-bottom:6px}
@@ -1254,7 +1286,7 @@ body.dash-editing #edit-bar{opacity:1 !important;pointer-events:auto !important;
 
 /* Team Workspace hidden until a Workspace sidebar item is clicked (not a permanent dashboard block) */
 /* Team Workspace as a right-edge slide-in drawer (dashboard stays behind) */
-#sw{position:fixed;top:0;right:0;height:100vh;width:min(760px,92vw);max-width:760px;
+#sw{position:fixed;top:0;right:0;height:100vh;height:100dvh;width:min(760px,92vw);max-width:760px;
   background:#fff;z-index:2147483500;box-shadow:-12px 0 40px rgba(16,40,64,.22);
   transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);
   display:flex;flex-direction:column;border-radius:0}
@@ -1333,11 +1365,11 @@ body.dash-edit-on .db-bar{display:flex;align-items:center;gap:10px;padding:5px 8
 .db-remove{background:rgba(224,87,79,.22);color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font:600 11px/1 'DM Sans',sans-serif}
 .db-remove:hover{background:rgba(224,87,79,.42)}
 /* palette */
-#dash-palette{position:fixed;top:0;right:-320px;width:300px;height:100vh;background:#fff;z-index:2147483600;
+#dash-palette{position:fixed;top:0;right:-320px;width:300px;height:100vh;height:100dvh;background:#fff;z-index:2147483600;
   box-shadow:-10px 0 30px rgba(16,40,64,.18);transition:right .24s ease;display:flex;flex-direction:column}
 #dash-palette.open{right:0}
 .dp-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--pol-border,#E1E6EC);font:700 15px/1 'DM Sans',sans-serif;color:var(--cs-navy,#16202B)}
-.dp-x{border:none;background:none;font-size:22px;cursor:pointer;color:var(--sub,#556B82)}
+.dp-x{border:none;background:none;font-size:22px;cursor:pointer;color:var(--sub,#556B82);min-width:40px;min-height:40px}
 .dp-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
 .dp-item{text-align:left;padding:12px 14px;border:1px solid var(--pol-border,#E1E6EC);border-radius:10px;background:#fff;cursor:pointer;font:600 13px/1 'DM Sans',sans-serif;color:var(--ink,#14171A)}
 .dp-item:hover:not([disabled]){border-color:var(--sap-blue,#2B5FA8);color:var(--sap-blue,#2B5FA8)}
@@ -1874,7 +1906,7 @@ window._omegaReady = function(){
                               <div class="th-compose">
                                 <textarea class="th-input" id="th-msg-text" rows="2" placeholder="Post a message to your team…" maxlength="600"></textarea>
                                 <div class="th-compose-row" style="justify-content:flex-end">
-                                  <button class="th-send" id="th-msg-btn" onclick="postMessage()">Post</button>
+                                  <button class="th-send" id="th-msg-btn" onclick="postTeamMessage()">Post</button>
                                 </div>
                               </div>
                             </div>
@@ -2083,9 +2115,6 @@ window._omegaReady = function(){
     <div class="pm-toast" id="pm-toast"></div>
 
     </div><!-- /.dash-block apps -->
-    <div class="dash-block" data-block="quick">
-    <!-- ══ QUICK LINKS (Open Project Portal / Site Map / Compute / How It Works) ══ -->
-    </div><!-- /.dash-block quick -->
     <div class="dash-block" data-block="command">
     <div class="block-head">
       <div><div class="block-title">Quick Access</div></div>
@@ -2284,7 +2313,7 @@ window._omegaReady = function(){
     <div class="block-head">
       <div>
         <div class="block-title">Project Portfolio</div>
-        <div class="block-sub">Sample rows shown until projects are tagged — replace via Firestore or the constants above</div>
+        <div class="block-sub">Every project you own — stage, storage, capex, incentives and what happens next</div>
       </div>
       <button class="block-toggle" id="portfolio-toggle" onclick="togglePortfolio()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -2313,33 +2342,10 @@ window._omegaReady = function(){
 
 
     </div><!-- /.dash-block portfolio -->
-    <div class="dash-block" data-block="guides">
-    <!-- ══ GUIDES & TRAINING (tutorial PDF + video walkthrough) ══ -->
-    <div class="block-head" style="margin-top:26px">
-      <div><div class="block-title">Guides &amp; Training</div></div>
-    </div>
-    <div class="quick-row">
-      <!-- Guided Build Walkthrough → open the tutorial page -->
-      <a class="quick-link" href="guided-build-walkthrough.html" target="_blank" rel="noopener">
-        <div class="ql-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
-        <div class="ql-title">Guided Build Walkthrough</div>
-        <div class="ql-desc">Step-by-step SiteMap Designer tutorial</div>
-      </a>
-      <!-- Download tutorial as PDF (tenant-branded) -->
-      <a class="quick-link" href="guided-build-walkthrough.pdf" download>
-        <div class="ql-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
-        <div class="ql-title">Download Tutorial (PDF)</div>
-        <div class="ql-desc"><span id="ql-brand">Workspace</span>-branded walkthrough</div>
-      </a>
-      <!-- Guided Build video tutorial -->
-      <a class="quick-link" onclick="openVideoTutorial()">
-        <div class="ql-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
-        <div class="ql-title">Video Tutorial</div>
-        <div class="ql-desc">Watch the guided build video</div>
-      </a>
-    </div>
-
-    </div><!-- /.dash-block guides -->
+    <!-- Guides & Training lived here: a walkthrough page, a branded PDF and a
+         video tile. None of the three assets exists yet (the links 404ed on
+         every tenant's dashboard), so the block is out until one does — the
+         markup is in git history; #video-modal below is still wired. -->
     </div><!-- /#dev-fixed -->
     </div><!-- /#dev-main -->
 
@@ -2896,6 +2902,11 @@ var _omegaOnAuth = function (user, tries) {
         setTimeout(function () { _omegaOnAuth(user, (tries || 0) + 1); }, 250);
         return;
       }
+      /* Refused: this is the sign-in card's screen, and only that. Without
+         these two lines the shell (sidebar, empty topbar, zero KPIs) sat in
+         normal flow under the card, scrollable, with a user present. */
+      document.body.classList.add('signed-out');
+      showLogin();
       showAuthErr(OmegaBrand.accessMessage(email, WORKSPACES));
       return;
     }
@@ -2993,6 +3004,7 @@ function showRedirecting(name){
 function showLogin() {
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
+  document.body.style.overflow = '';   // a drawer's scroll lock never outlives the session
 }
 
 /* Resolve the friendliest available name: saved profile → Firebase displayName
@@ -3000,7 +3012,7 @@ function showLogin() {
 function _greetName(user) {
   if (_myProfile && _myProfile.name) return _myProfile.name;
   if (user && user.displayName) return user.displayName;
-  if (user && user.email) return user.email;
+  if (user && user.email) return String(user.email).split('@')[0];
   return 'there';
 }
 /* (Re)render the welcome line + topbar name. Called at sign-in and again once
@@ -3382,7 +3394,9 @@ function _arc(cx,cy,r,a0,a1){
 var _wgDonutChart=null, _wgValueChart=null;
 
 function renderWidgets(k, counts){
-  if (typeof Chart === 'undefined'){ return; } /* CDN not ready yet */
+  /* The numbers paint whether or not Chart.js arrived (a kiosk browser that
+     blocks the CDN used to get two blank cards); only the canvases need it. */
+  var hasChart = (typeof Chart !== 'undefined');
 
   /* ── DONUT: portfolio by grouped stage (Chart.js) ── */
   var groups = WG_GROUPS.map(function(g){
@@ -3395,7 +3409,7 @@ function renderWidgets(k, counts){
   var dCanvas = document.getElementById('wg-donut-canvas');
   if (_wgDonutChart){ _wgDonutChart.destroy(); _wgDonutChart=null; }
   var hasData = total>0;
-  _wgDonutChart = new Chart(dCanvas, {
+  _wgDonutChart = !hasChart ? null : new Chart(dCanvas, {
     type:'doughnut',
     data:{
       labels: hasData ? groups.map(function(g){return g.label;}) : ['No sites'],
@@ -3446,7 +3460,7 @@ function renderWidgets(k, counts){
   if (_wgValueChart){ _wgValueChart.destroy(); _wgValueChart=null; }
   var g1=vCanvas.getContext('2d').createLinearGradient(0,0,0,160);
   g1.addColorStop(0,'rgba(46,156,60,.22)'); g1.addColorStop(1,'rgba(46,156,60,0)');
-  _wgValueChart = new Chart(vCanvas, {
+  _wgValueChart = !hasChart ? null : new Chart(vCanvas, {
     type:'line',
     data:{ labels:MO, datasets:[
       { label:'Portfolio capex', data:capSeries, borderColor:'#2E9C3C', backgroundColor:g1,
@@ -3960,7 +3974,7 @@ function renderMessages(msgs){
   box.innerHTML = h;
 }
 
-function postMessage(){
+function postTeamMessage(){
   var el = document.getElementById('th-msg-text');
   var text = (el.value||'').trim();
   if (!text){ el.focus(); return; }
@@ -4355,6 +4369,14 @@ function _providerId(){
    Everything degrades to "—" rather than erroring. A tenant with no billing
    document is the normal state for an account ClearSky has not priced yet,
    and a red failure on the account page for that is noise. */
+/* Billing dates arrive as ISO strings (stripe-webhook, tenant-signup) and were
+   printed raw: "trial ends 2026-10-26T14:03:11.512Z". A day is enough. */
+function _acctDay(v){
+  if (!v) return '';
+  var d = (v && v.toDate) ? v.toDate() : new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
 function _money(n){
   n = Number(n);
   if (!isFinite(n)) return '—';
@@ -4373,8 +4395,8 @@ function loadBilling(){
        account reads "nothing due" while money has already changed hands —
        which is the version a customer disputes. */
     setText('acct-paid',   b.amountPaid == null ? '—'
-                           : _money(b.amountPaid) + (b.lastPaidAt ? (' on ' + b.lastPaidAt) : ''));
-    setText('acct-due',    b.subscriptionDue || (b.trialEndsAt ? ('trial ends ' + b.trialEndsAt) : '—'));
+                           : _money(b.amountPaid) + (b.lastPaidAt ? (' on ' + _acctDay(b.lastPaidAt)) : ''));
+    setText('acct-due',    b.subscriptionDue ? _acctDay(b.subscriptionDue) : (b.trialEndsAt ? ('trial ends ' + _acctDay(b.trialEndsAt)) : '—'));
     if (b.note){
       setText('acct-note', b.note);
       var nr = document.getElementById('acct-note-row'); if (nr) nr.style.display = '';
@@ -4401,7 +4423,7 @@ function loadBilling(){
       var parts = [];
       if (c.tier) parts.push('plan → ' + c.tier);
       if (c.amountDue != null) parts.push('amount due ' + _money(c.amountDue));
-      if (c.subscriptionDue) parts.push('due ' + c.subscriptionDue);
+      if (c.subscriptionDue) parts.push('due ' + _acctDay(c.subscriptionDue));
       if (c.addons) parts.push('add-ons: ' + (c.addons.length ? c.addons.join(', ') : 'none'));
       rows.push('<div>' + escHtml(when) + ' — ' + escHtml(parts.join(' · ') || 'terms updated') + '</div>');
     });
@@ -5184,7 +5206,11 @@ function applyToolLocks(){
   if(!ws){ return; }
   // Enterprise / internal tiers see everything — never lock. Unless an
   // explicit allowlist says otherwise; see the note below.
-  if(!(ws.toolAccess && ws.toolAccess.length) &&
+  /* …unless the workspace is awaiting approval: omega-tenant.js hands over
+     unlockedTools = [] with pendingApproval set, and a signup on a trial
+     record is tier level 3, so this return used to leave every tool live
+     under the "awaiting approval" strip. */
+  if(!(ws.toolAccess && ws.toolAccess.length) && !ws.pendingApproval &&
      (ws.tierLevel >= 3 || ws.accountTier === 'Enterprise' || ws.accountTier === 'Internal')){ return; }
   // Prefer an explicit unlockedTools allowlist; otherwise fall back to the
   // requiredTools defined per workspace. If neither exists, unlock everything
@@ -5195,6 +5221,11 @@ function applyToolLocks(){
      an accident. Checked before the list is chosen for that reason. */
   var list = (ws.toolAccess && ws.toolAccess.length) ? ws.toolAccess
            : (ws.unlockedTools || ws.requiredTools);
+  /* Awaiting approval: nothing opens, whatever the tier says. omega-tenant.js
+     hands over unlockedTools = [] once, but every later OmegaBrand.resolve()
+     re-merges the workspace and recomputes the list from the (trial) tier, so
+     the [] did not survive to this read. The flag does. */
+  if (ws.pendingApproval) list = [];
   if(!list){ return; }
   var unlocked = {};
   for(var i=0;i<list.length;i++){ unlocked[list[i]] = true; }
@@ -5231,7 +5262,8 @@ function lockTile(tile, key){
   badge.textContent = 'Upgrade';
   tile.appendChild(badge);
 
-  var name = tile.querySelector('.pm-name');
+  // .pm-name on a card, .ql-title on a Quick Access tile.
+  var name = tile.querySelector('.pm-name, .ql-title');
   var label = name ? name.textContent : 'This module';
 
   var lock = document.createElement('div');
@@ -5240,15 +5272,15 @@ function lockTile(tile, key){
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+
     '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'+
     '<div class="pm-lock-txt">Upgrade to unlock</div>'+
-    '<div class="pm-lock-sub">'+label+' is available on a higher plan.</div>'+
+    '<div class="pm-lock-sub">'+esc2(label)+' is available on a higher plan.</div>'+
     '<button class="pm-lock-cta" onclick="event.stopPropagation();openUpgrade(this)">Request access</button>';
   tile.appendChild(lock);
 }
 
 function openUpgrade(el){
   var tile = el.closest ? el.closest('[data-tool]') : null;
-  var name = tile ? (tile.querySelector('.pm-name')||{}).textContent : 'this module';
-  showUpgradeModal(name);
+  var name = tile ? (tile.querySelector('.pm-name, .ql-title')||{}).textContent : '';
+  showUpgradeModal(name || 'this module');
 }
 
 function showUpgradeModal(toolName){
@@ -5263,7 +5295,7 @@ function showUpgradeModal(toolName){
         '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'+
       '</div>'+
       '<div style="font-size:19px;font-weight:700;color:#16202B;margin-bottom:8px">Unlock '+esc2(toolName)+'</div>'+
-      '<div style="font-size:13px;color:#5B6672;line-height:1.55;margin-bottom:22px">Your OMEGA demo workspace currently includes the <b>Site Designer &amp; permit engine</b>. '+esc2(toolName)+' is part of the full ClearSky-OMEGA suite \u2014 financial modeling, investor underwriting, procurement, and more.</div>'+
+      '<div style="font-size:13px;color:#5B6672;line-height:1.55;margin-bottom:22px"><b>'+esc2(toolName)+'</b> is not part of your current plan. Request access and it is switched on for your whole workspace \u2014 no new sign-in, no data to move.</div>'+
       '<a href="mailto:'+encodeURIComponent(OmegaBrand.upgradeEmail())+'?subject=Unlock%20'+encodeURIComponent(toolName)+'" style="display:block;background:linear-gradient(135deg,#2B5FA8,#2B5FA8);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:13px;border-radius:10px;margin-bottom:10px">Request access</a>'+
       '<button onclick="document.getElementById(\'upgrade-modal\').remove()" style="background:none;border:none;color:#5B6672;font-size:13px;cursor:pointer;font-family:inherit">Maybe later</button>'+
     '</div>';
@@ -5424,12 +5456,31 @@ function _paintDash(){
     });
     renderedKeys[ct.key] = true;
   }
-  el.innerHTML = html || '<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--cs-sub)">No tools pinned yet. Add some from the marketplace below.</div>';
+  /* Pass 3: nothing required and nothing pinned — the state every self-serve
+     workspace opens in, and it used to be an empty grid pointing at a
+     marketplace that is not on this page. A starter set instead: the first
+     tools this plan can open, in catalogue order. Pin to keep; the tiles say
+     so. */
+  var starter = false;
+  if (count === 0){
+    for (var s=0;s<tools.length;s++){
+      if (count >= DASH_MAX) break;
+      var st = tools[s];
+      if (renderedKeys[st.key] || st.soon) continue;
+      if (typeof OMEGATools.isUnlocked === 'function' && !OMEGATools.isUnlocked(st, _PORTAL_WS)) continue;
+      html += _tile(st, true); renderedKeys[st.key]=true; count++; starter = true;
+    }
+    if (starter) html = '<div class="pm-starter-note" style="grid-column:1/-1;font-size:12.5px;color:var(--cs-sub);padding:2px 2px 6px">A starter set for your plan. Keep what you use, and <a href="/marketplace.html" style="color:var(--cs-accent);font-weight:600">browse the Marketplace</a> for the rest.</div>' + html;
+  }
+  el.innerHTML = html || '<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--cs-sub)">Nothing to open yet. <a href="/marketplace.html" style="color:var(--cs-accent);font-weight:600">Browse the Marketplace</a> and pin the tools you use.</div>';
+  /* Tiles carry data-tool now, so the plan's locks apply to them too — the
+     tier gate ran before this grid was painted. Idempotent. */
+  try { if (typeof applyToolLocks === 'function') applyToolLocks(); } catch(e){}
 }
 
 /* Render a tile for a tool that isn't in the shared catalog (direct href). */
 function _localTile(t){
-  return '<div class="pm-tile app">'
+  return '<div class="pm-tile app" data-tool="'+esc(t.key)+'">'
     + '<a class="pm-open" href="'+esc(t.href)+'" style="text-decoration:none;color:inherit;display:block">'
     +   '<div class="pm-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="'+PORTAL_STROKE+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="'+t.icon+'"/></svg></div>'
     +   '<div class="pm-name">'+esc(t.name)+'</div>'
@@ -5503,7 +5554,7 @@ function _tile(t, onDash){
   var badgeTxt = t.badge ? (t.badge==='invest'?'Investors':(t.badge==='new'?'New':t.badge)) : (t.soon?'Soon':'');
   var badge = badgeTxt ? '<span class="pm-badge '+esc(t.badge||'')+'">'+esc(badgeTxt)+'</span>' : '';
 
-  return '<div class="pm-tile app">'+badge
+  return '<div class="pm-tile app" data-tool="'+esc(t.key)+'">'+badge
     + '<a class="pm-open" '+open+' style="text-decoration:none;color:inherit;display:block">'
     +   '<div class="pm-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="'+t.icon+'"/></svg></div>'
     +   '<div class="pm-name">'+esc(t.name)+'</div>'
@@ -5599,6 +5650,25 @@ function _dashCapMsg(msg){
     // restore it exactly on desktop. On mobile we move it onto document.body so its
     // position:fixed isn't trapped by the sticky topbar's stacking context.
     var navHome = nav.parentNode, navNext = nav.nextSibling;
+    /* The sidebar comes along. Its ids (#sn-*) are what every reveal targets
+       — staff nav, JD partners, the pinned apps list — so it is MOVED, not
+       copied, and moved back at desktop widths. */
+    var side = document.getElementById('side-nav'),
+        sideHome = side ? side.parentNode : null, sideNext = side ? side.nextSibling : null;
+    function placeSide(mobile){
+      if (!side) return;
+      if (mobile){
+        var acts = nav.querySelector('.tb-drawer-actions');
+        if (side.parentNode !== nav || (acts && side.nextSibling !== acts)) nav.insertBefore(side, acts || null);
+        nav.classList.add('has-sidenav');
+      } else {
+        nav.classList.remove('has-sidenav');
+        if (side.parentNode !== sideHome && sideHome){
+          if (sideNext && sideNext.parentNode === sideHome) sideHome.insertBefore(side, sideNext);
+          else sideHome.appendChild(side);
+        }
+      }
+    }
 
     // Reparent + inline background depending on viewport width.
     //  ≤900px  → drawer: fixed, on document.body, solid white
@@ -5618,6 +5688,7 @@ function _dashCapMsg(msg){
         nav.style.backgroundColor = '';
         nav.style.opacity = '';
       }
+      placeSide(mobile);
     }
     place();
     window.addEventListener('resize', place);
@@ -5630,11 +5701,15 @@ function _dashCapMsg(msg){
                      '<button class="btn-signout" onclick="closeNav();signOut()">Sign out</button>';
     nav.insertBefore(who, nav.firstChild);
     nav.appendChild(acts);
+    placeSide(window.innerWidth <= 900);   // the sidebar sits above Account / Sign out
 
     b.addEventListener('click', toggleNav);
     s.addEventListener('click', closeNav);
     nav.addEventListener('click', function(e){
-      if(e.target.closest && e.target.closest('.tb-tab')) closeNav();
+      if(!e.target.closest) return;
+      /* a tab, a sidebar entry or a pinned app: the drawer's job is done.
+         The My Applications expander stays open. */
+      if(e.target.closest('.tb-tab') || e.target.closest('.sn-item:not(.sn-toggle)') || e.target.closest('.sn-app')) closeNav();
     });
     document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeNav(); });
   }
@@ -5709,6 +5784,10 @@ var AN_TYPE_COLORS  = { bess:'#2B5FA8', dcfc:'#2B5FA8', solar:'#F0A030', other:'
 
 function renderCharts(a){
   window._lastAgg = a;   // cache for the dashboard builder
+  /* The board's own chart cards draw from this cache; mount() drew them on a
+     timer that could beat this roll-up, leaving empty canvases until the
+     next edit. Redraw now that the numbers exist. */
+  if (window.DASH && DASH.redraw) setTimeout(function(){ try { DASH.redraw(); } catch(e){} }, 0);
   if (typeof Chart === 'undefined') return;
   var STAGE = (typeof STAGE_KEYS!=='undefined')?STAGE_KEYS:Object.keys(a.counts||{});
   var LBL = (typeof STAGE_LABEL!=='undefined')?STAGE_LABEL:{};
@@ -5809,7 +5888,17 @@ var _SW_TITLES = { todos:'To-Dos', team:'Team', feed:'Company Feed', msgs:'Messa
   var MAP = { todos:'todos', team:'team', feed:'feed', chat:'msgs' };
   function fromHash(){
     var h = String(location.hash || '').replace('#','').toLowerCase();
-    if (MAP[h] && typeof snWork === 'function') snWork(null, MAP[h]);
+    if (!MAP[h] || typeof snWork !== 'function') return;
+    /* Not before sign-in. The drawer locks page scroll, and a hash arriving
+       with an expired session (Projects links here as /#todos) froze the
+       sign-in card under the lock — on a phone the Google button was below
+       the fold and unreachable. Wait for the workspace, then open. */
+    if (!document.body.classList.contains('auth-ready') || document.body.classList.contains('signed-out')){
+      var once = function(){ window.removeEventListener('omega:entitlements', once); fromHash(); };
+      window.addEventListener('omega:entitlements', once);
+      return;
+    }
+    snWork(null, MAP[h]);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fromHash);
   else fromHash();
@@ -5890,7 +5979,7 @@ function _paintSideApps(){
           if (t.key==='editor'){
             html += '<a class="sn-app" href="#" onclick="if(typeof openNewProjectModal===\'function\'){openNewProjectModal(\'bess\');}return false;"><span class="sn-app-dot"></span>'+label+'</a>';
           } else {
-            var href = _withOrg((typeof OMEGATools!=='undefined' && OMEGATools.hrefFor)?OMEGATools.hrefFor(t):'#');
+            var href = _withOrg((typeof OMEGATools!=='undefined' && OMEGATools.hrefFor)?OMEGATools.hrefFor(t, _PORTAL_WS):'#');
             html += '<a class="sn-app" href="'+href+'"><span class="sn-app-dot"></span>'+label+'</a>';
           }
           n++;
@@ -6498,10 +6587,24 @@ var DASH = (function(){
   function togglePalette(){ var p=document.getElementById('dash-palette'); if(p.classList.contains('open')) closePalette(); else openPalette(); }
   function openPalette(){
     var p=document.getElementById('dash-palette');
-    p.querySelector('.dp-body').innerHTML = _visibleAddable().map(function(a){
+    var items = _visibleAddable().map(function(a){
       var already = state.added.some(function(x){return x.type===a.type;});
       return '<button class="dp-item" onclick="DASH.addWidget(\''+a.type+'\')" '+(already?'disabled':'')+'>'+a.name+(already?' ✓':'')+'</button>';
-    }).join('');
+    });
+    /* A built-in block that was removed. restoreBlock() existed and nothing
+       called it, so "Remove" on Portfolio Command Center was permanent. */
+    var hidden = state.hidden.filter(function(k){ return !!byKey(k); });
+    if (hidden.length){
+      items.push('<div class="dp-sep" style="margin:10px 0 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-sub)">Bring back</div>');
+      hidden.forEach(function(k){
+        /* a block key is a data-block attribute (command, apps, portfolio…);
+           one that would not round-trip through an onclick string is skipped
+           rather than restored under another name */
+        if (String(k).replace(/[^\w-]/g,'') !== k) return;
+        items.push('<button class="dp-item" onclick="DASH.restoreBlock(\''+k+'\')">↩ '+escHtml(_blockLabel(byKey(k),k))+'</button>');
+      });
+    }
+    p.querySelector('.dp-body').innerHTML = items.join('');
     p.classList.add('open');
   }
   function closePalette(){ var p=document.getElementById('dash-palette'); if(p) p.classList.remove('open'); }
@@ -6735,7 +6838,10 @@ var TC={bess:'#2B5FA8',dcfc:'#2B5FA8',solar:'#F0A030',
     toggle:toggle,
     togglePalette:togglePalette,
     addWidget:addWidget,
+    restoreBlock:restoreBlock,
     refresh:function(){ apply(); _drawAdded(); },
+    /* the charts only, once the project roll-up has landed */
+    redraw:function(){ _drawAdded(); },
     _state:function(){ return state; }
   };
 })();
@@ -6947,6 +7053,11 @@ var TASKFLOW = (function(){
                   + 'color:#8a1c12;border:1px solid #f5c6c0;font-weight:600;font-size:13px">'
                   + escHtml(_status)+'</div>';
     if (!_proj){ host.innerHTML=statusBar+'<div class="tf-empty">Select a project above to see its task flow.</div>'; _renderProgress(); return; }
+    if (!_flow.length){
+      host.innerHTML = statusBar+'<div class="tf-empty">No phases yet.</div>'
+                     + '<button class="tf-add-phase" onclick="TASKFLOW.addPhase()">+ Add phase</button>';
+      _renderProgress(); return;
+    }
     if (_view<0 || _view>=_flow.length) _view = activeStep();
     var active = activeStep();
 
