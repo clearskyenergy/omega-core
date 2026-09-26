@@ -6,6 +6,11 @@ Implementation is behind `billing/current.packaged`. No tenant, trial, billing
 date, QuickBooks company or rule deployment was changed. The proposed book
 remains disabled. This is a stacked change on Phase 2.
 
+Draft PR: [#138](https://github.com/clearskyenergy/omega-core/pull/138).
+Vercel-assigned preview: [Phase 3](https://omega-core-git-codex-packaging-phase-3-clearsky-usa.vercel.app).
+Consult the PR for current hosted checks/deployment status. Authenticated hosted
+customer acceptance is still outstanding; the captures below are offline fixtures.
+
 ## Behavior
 
 - One server catalog supplies module ownership, feature triplets and the
