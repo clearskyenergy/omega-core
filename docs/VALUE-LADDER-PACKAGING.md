@@ -551,7 +551,8 @@ Docs to update as phases land: this file, `CLAUDE.md` (Tool gating),
    draft, or hold.
 7. Enterprise: keep $150k floor with dev hours and workspaces as the reason,
    or move it.
-8. Lite's Annual Service Fee.
+8. Lite's Annual Service Fee (staff can charge, change or waive it per
+   tenant regardless; ROADMAP §10.7).
 9. Who may send proposals (staff only, or White Label tenants too).
 10. Whether a customer's opt-in is instant (this spec) or staff-approved.
 

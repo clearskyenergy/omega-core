@@ -112,13 +112,15 @@ h3.s{margin:0 0 8px;font-size:15px}
           <label for="credit"><input type="checkbox" id="credit" checked> Transformation credit 40% · 90 days</label>
           <div class="r"><span>First 90 days</span><span class="num" id="s-first"></span></div>
           <div class="r"><span>Service fee / yr</span><span class="num" id="s-fee"></span></div>
+          <div class="r" style="gap:6px"><select id="feeMode" aria-label="Annual service fee"><option value="standard">Charge standard</option><option value="custom">Custom amount</option><option value="waived">Waive</option></select><input id="feeAmt" type="number" min="0" step="100" aria-label="Custom service fee" hidden style="width:100px;font:13px var(--m);padding:6px;border-radius:6px;border:1px solid var(--border)"></div>
+          <input id="feeWhy" aria-label="Reason for changing the fee" placeholder="Reason (required)" hidden style="font:13px var(--f);padding:6px 8px;border-radius:6px;border:1px solid var(--border)">
           <div class="r"><span>Billing date</span><span class="num" id="s-bday"></span></div>
           <hr>
           <div class="r"><span>Included usage</span><span class="num" id="s-use" style="text-align:right"></span></div>
           <div class="fit" id="s-fit"></div>
           <div class="floor" id="s-floor" hidden>Below the $500 floor. Lite is required.</div>
           <div class="acts">
-            <button class="b p" id="activate" type="button">Activate: create subscription</button>
+            <button class="b p" id="activate" type="button">Activate: send first invoice</button>
             <button class="b" id="propose" type="button">Send as proposal</button>
           </div>
           <div class="note" style="color:inherit;opacity:.65">Prices from price book 2026-10 (proposed). Activate issues the first invoice from ClearSky's QuickBooks and emails its pay link; modules switch on when QuickBooks shows it paid.</div>
@@ -196,7 +198,8 @@ var A=[
  {d:26,n:'Roam Energy',o:'(prospect)',t:'Developer',st:'Discovery',m:[]},
  {d:26,n:'R.E.S. (confirm)',o:'(prospect)',t:'Developer',st:'Discovery',m:[]}
 ];
-var cur=0, sel={}, hist={}, pending=null;
+var cur=0, sel={}, hist={}, pending=null, fees={};
+function feeOf(p){var f=fees[cur]||{mode:'standard'};return f.mode==='waived'?0:(f.mode==='custom'?(+f.amt||0):p.fee);}
 function $(i){return document.getElementById(i);}
 function money(n){return '$'+Math.round(n).toLocaleString('en-US');}
 function money2(n){return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -253,7 +256,11 @@ function render(){
     $('s-plan').textContent=p.plan+(p.logic?' + Logic':'');
     $('s-pay').textContent=money(p.pay);
     $('s-first').textContent=$('credit').checked?money(Math.max(500,p.pay*0.6)):money(p.pay);
-    $('s-fee').textContent=money(p.fee);
+    var fm=fees[cur]||{mode:'standard'};
+    $('feeMode').value=fm.mode; $('feeAmt').hidden=fm.mode!=='custom'; $('feeWhy').hidden=fm.mode==='standard';
+    $('feeAmt').value=fm.amt||''; $('feeWhy').value=fm.why||'';
+    $('s-fee').textContent=fm.mode==='waived'?'Waived (was '+money(p.fee)+')':money(feeOf(p))+(fm.mode==='custom'?' (custom)':'');
+    if(fm.mode!=='standard'&&!(fm.why||'').trim()){ $('activate').disabled=true; $('propose').disabled=true; }
     var fit;
     if(p.plan==='Field') fit='Field fits: '+money(500+p.mods)+' of modules for $1,299. Room for '+money(1250-p.mods)+' more at no charge.';
     else if(p.plan==='Pro') fit='Pro fits: '+money(500+p.mods)+' of modules for $2,499. Room for '+money(3000-p.mods)+' more.';
@@ -274,6 +281,9 @@ function renderWrite(p,ks){
     else ks.filter(function(k){return B[k].s!=='logic';}).forEach(function(k){rows.push([B[k].n,'OMEGA · '+B[k].n,B[k].p]);});
     if(p.logic){ if(p.logic===2500) rows.push(['Omega Logic (all five)','OMEGA · Omega Logic (all five)',2500]); else ks.filter(function(k){return B[k].s==='logic';}).forEach(function(k){rows.push([B[k].n,'OMEGA · '+B[k].n,B[k].p]);}); }
     ks.filter(function(k){return B[k].use;}).forEach(function(k){rows.push([B[k].n+' overage','OMEGA · '+B[k].n+' overage','billed next month']);});
+    var fm2=fees[cur]||{mode:'standard'}, fv=feeOf(p);
+    if(fm2.mode==='waived') rows.push(['Annual service fee: waived ('+(fm2.why||'no reason yet')+')','none',0]);
+    else rows.push(['Annual service fee'+(fm2.mode==='custom'?' (custom: '+(fm2.why||'no reason yet')+')':''),'OMEGA · Annual service fee',fv]);
     if($('credit').checked) rows.push(['Transformation credit 40% (first 3 invoices, never below $500)','OMEGA · Transformation credit',-(p.pay-Math.max(500,p.pay*0.6))]);
   }
   $('w-stripe').innerHTML=rows.map(function(r){return '<tr><td>'+esc(r[0])+'</td><td class="num">'+r[1]+'</td><td class="r num">'+(typeof r[2]==='number'?(r[2]<0?'−'+money(-r[2]):money(r[2])):r[2])+'</td></tr>';}).join('')||'<tr><td colspan="3" class="note">Nothing to bill. Lite is required.</td></tr>';
@@ -282,7 +292,7 @@ function renderWrite(p,ks){
   var addons=[];
   if(sel.compute)addons.push('compute');if(sel.siteintel)addons.push('parcelscreen');if(sel.engineering)addons.push('engineering');if(sel.plansets){addons.push('schematics','exports');}if(sel.permitting)addons.push('permitting');if(sel.whitelabel)addons.push('whitelabel');if(ks.some(function(k){return B[k].s==='logic';}))addons.push('omega-logic');
   var bill={modules:ks,pricebookVersion:'2026-10',plan:p.plan||null,credit:$('credit').checked?{pct:40,endsAt:'+90 days'}:null,builders:3,viewers:10,
-    tier:tier+'   // derived',addons:addons,toolAccess:'[derived from modules by modules.resolve()]',billingProvider:'quickbooks',qboCustomerId:'OMEGA-'+a.o,nextInvoiceOn:'1st of next month',status:'awaiting first payment'};
+    tier:tier+'   // derived',addons:addons,toolAccess:'[derived from modules by modules.resolve()]',serviceFee:(function(){var f=fees[cur]||{mode:'standard'};return {mode:f.mode,amountCents:Math.round(feeOf(p)*100),reason:f.why||null,appliesTo:'first-year'};})(),billingProvider:'quickbooks',qboCustomerId:'OMEGA-'+a.o,nextInvoiceOn:'1st of next month',status:'awaiting first payment'};
   $('w-bill').textContent=JSON.stringify(bill,null,2).replace(/"([a-zA-Z]+)":/g,'$1:');
 }
 function renderCust(p,ks){
@@ -314,8 +324,11 @@ $('shelves').addEventListener('change',function(e){var k=e.target.getAttribute('
   if(B[k].req&&e.target.checked)sel[B[k].req]=true; render();});
 $('starter').addEventListener('click',function(){sel={lite:true};TYPES[$('ctype').value].forEach(function(k){sel[k]=true;});render();toast('Starter pack for '+$('ctype').value+' applied');});
 $('credit').addEventListener('change',render);
+$('feeMode').addEventListener('change',function(){var f=fees[cur]=fees[cur]||{};f.mode=this.value;render();});
+$('feeAmt').addEventListener('input',function(){var f=fees[cur]=fees[cur]||{mode:'custom'};f.amt=this.value;$('s-fee').textContent=money(+this.value||0)+' (custom)';renderWrite(price(keys()),keys());});
+$('feeWhy').addEventListener('input',function(){var f=fees[cur]=fees[cur]||{mode:'standard'};f.why=this.value;var ok=!!this.value.trim();$('activate').disabled=!ok;$('propose').disabled=!ok;renderWrite(price(keys()),keys());});
 $('accts').addEventListener('click',function(e){var b=e.target.closest('[data-i]');if(b)load(+b.getAttribute('data-i'));});
-$('activate').addEventListener('click',function(){log('staff@clearsky-usa.com','Activated: '+keys().filter(function(k){return k!=='lite';}).map(function(k){return B[k].n;}).join(', ')+'. Payment link sent.');renderHist();toast('Prototype: would issue the QuickBooks invoice and email its pay link');});
+$('activate').addEventListener('click',function(){log('staff@clearsky-usa.com','Activated: '+keys().filter(function(k){return k!=='lite';}).map(function(k){return B[k].n;}).join(', ')+'. Service fee: '+((fees[cur]||{}).mode||'standard')+((fees[cur]||{}).why?' ('+fees[cur].why+')':'')+'. Payment link sent.');renderHist();toast('Prototype: would issue the QuickBooks invoice and email its pay link');});
 $('propose').addEventListener('click',function(){log('staff@clearsky-usa.com','Proposal sent ('+price(keys()).plan+')');renderHist();toast('Prototype: would open the proposal tool prefilled');});
 document.querySelector('.tabs').addEventListener('click',function(e){var t=e.target.closest('.tab');if(!t)return;
   [].forEach.call(document.querySelectorAll('.tab'),function(x){x.classList.toggle('on',x===t);});

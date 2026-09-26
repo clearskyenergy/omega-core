@@ -176,6 +176,7 @@ $3,400/yr Field/Pro, $1,500/yr Lite (proposed), $10,000/yr Enterprise.
 | Permitting Matrix while BETA | sold with a beta label, verified jurisdictions listed |
 | Enterprise floor | $150k/yr, quoted by staff |
 | Lite service fee | $1,500/yr |
+| Service fee per tenant | staff can Charge standard / Custom amount / Waive, reason required, audited; a waiver applies to the first year only unless staff choose every year (ROADMAP §10.7) |
 
 ## 10. Setting Astra up (for Tommy)
 
