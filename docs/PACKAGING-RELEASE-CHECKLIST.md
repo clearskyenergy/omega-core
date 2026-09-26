@@ -145,17 +145,23 @@ the audit rows it writes.
 
 ## 6. Production (Phase 10A: in this order, each step checked before the next)
 
-- [ ] **QuickBooks Payments is on** in the production company, with cards
+- [x] **QuickBooks Payments is on** in the production company, with cards
       and bank transfer allowed on invoices and *Pay now* visible on an
       invoice preview. Without it no invoice carries a pay link and every
       pay-at-the-end signup falls back to approval. The browser runbook:
       `docs/PAYMENTS-BROWSER-SETUP.md` (it also connects the Stripe
       bookkeeping app; that is not what pays an invoice).
-- [ ] **Custom transaction numbers are on** in the production company
+      *Read through the QuickBooks connector on 2026-09-26 (company
+      "ClearSky Energy Solutions LLC"): payment methods card, ACH and PayPal
+      enabled for all invoices. Still to eyeball once: a *Pay now* button on
+      an invoice preview.*
+- [x] **Custom transaction numbers are on** in the production company
       (Settings → Sales → Sales form content). OMEGA numbers its invoices
       `OP-…` and finds them again by that number, so a retry never issues
       twice; the driver refuses to invoice while QuickBooks reports the
       setting off, and refuses an invoice QuickBooks renumbered.
+      *Read through the QuickBooks connector on 2026-09-26: `custom_txn_numbers`
+      enabled.*
 - [ ] **Where a new workspace opens.** `*.clearskyomega.com` has no wildcard
       record, so a new tenant is sent to `silmarillion.clearskyomega.com`
       (it serves every tenant by email domain) and its slug host is only
