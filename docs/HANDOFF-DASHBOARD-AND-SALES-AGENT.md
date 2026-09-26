@@ -6,8 +6,9 @@ Owner: Tommy Gilmer (ClearSky). Written 2026-09-26, for the session building
 `packaging: phase N` so it can fold this in when the phases are done.
 Repo: `clearskyenergy/omega-core`.
 
-- Branch: **`claude/stoic-goodall-zah8tv`**, one commit, `e8a6262`, based on
-  `main` at `3b95b1f` (the merge of #133, the L2 closeout tool).
+- Branch: **`claude/stoic-goodall-zah8tv`**, based on `main` at `3b95b1f`
+  (the merge of #133, the L2 closeout tool). The code is commit `e8a6262`;
+  the commits after it on the branch are this note only.
 - No pull request is open for it. Nothing is deployed. No rules changed.
 - It was built while phases 0–6 were in flight and **deliberately stays off
   every file those phases edit**: `omega-tenant.js`, `omega-tools.js`,
@@ -20,7 +21,7 @@ Repo: `clearskyenergy/omega-core`.
 
 ## 1. What is on the branch
 
-Three things, one commit.
+Three things.
 
 1. **A render check for the tenant dashboard.** `npm run check:dashboard`
    boots the real `index.html` in Chromium, signed in, with the Firebase
@@ -224,6 +225,6 @@ team counts for any tenant.
 ## 7. One-line summary for the status table
 
 `docs/PACKAGING-ROADMAP.md` status: *Dashboard render check + first-run
-fixes + `/api/growth` (branch `claude/stoic-goodall-zah8tv`, `e8a6262`,
-not merged): merge after the phases; conflicts only in `package.json`
+fixes + `/api/growth` (branch `claude/stoic-goodall-zah8tv`, code in
+`e8a6262`, not merged): merge after the phases; conflicts only in `package.json`
 (one key) and adjacent CSS if #126 lands first; then do §4 items 1–6.*
