@@ -689,6 +689,34 @@ is not built.
   camera a printed label and requires the passport and the bench to open.
 - Chromium render checks for all of it: `npm run check:pages`.
 
+## Omega Workspace — the home (2026-09-26)
+
+`workspace.html` is the hub-first home of a signed-in workspace: index.html
+sends a signed-in visit on once the entitlements say where home is. A
+tenant keeps the classic dashboard with `omega_orgs/{org}.shell = 'classic'`
+(a partner-type workspace keeps it too), a browser with `?home=classic`
+(`?stay=classic` for one visit), and `OmegaWorkspaceShell.homeOf()` is the
+ONE rule index.html, the workspace and the legacy pages read. The dashboard
+fixtures say `shell: 'classic'` for that reason. `omega-workspace-shell.js` is the one
+chrome (rail, topbar, switcher, the website's blueprint grid, side panel,
+toast, phone tab bar); a page never builds its own rail. The hub is
+`omega-hexhub.js` drawn from `omega-workspace-hub.js`, which composes the
+six cells from `OMEGATools.isUnlocked()` — showing a cell is never access —
+and `scripts/tests/tworkspacehub.js` asserts every key it names against the
+real catalogs. Every tool tile is Live, Locked or Soon by that same rule;
+a locked tile explains, never hides. Today is `omega-workspace-today.js`
+(pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
+both ends of the Quote Desk, the referral inbox, projects ready, stalled or
+unsized. Never a second copy of those rules in a page. Opt-in panels live on
+`dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
+renders it as four tenants on the Firebase double; run it and
+`check:dashboard` after any change to the page, the shell or the runtime.
+For a PACKAGED workspace `marketplace.html` is also the package store:
+modules on their shelves with `api/package-catalog`'s prices, opting in
+through the shared `omega-package-menu.js` control and `plan-change`; a
+legacy tenant sees the catalogue as before. Design, launch order and the
+honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
+
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
 Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by
