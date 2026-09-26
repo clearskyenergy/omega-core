@@ -135,7 +135,7 @@ step, pricing only in `/api/`, verified staff, Admin-SDK-only billing paths,
 | **1 · Catalog** | `api/_lib/modules.js` (modules, tools, ribbon, menu, meters); `pricebook/{version}` + rules + seed; Stripe Product/Price per module and plan (idempotent script writing ids into the price book). | Tests: every tool, ribbon button and menu entry in exactly one module; floor enforced; frozen price book immutable. |
 | **2 · Close the leaks** | VALUE-LADDER §4.1: File menu, Summary › Cost, Documentation drawer, Output tab, command palette, Jarvis, `?customerEngine=1`, compute outside its tab. | A tenant without a module cannot reach its tools by any path (test per path). |
 | **3 · Editor fits the package** | §3 above: `data-module`, `MODULE_GRANTS`, `layout()`, + Modules tab, palette "In other modules", package-driven default layout. Backfill `modules[]` for every live tenant from today's tier/add-ons (dry run, flag don't drop). | `check:pages` passes for the five packages; no live tenant loses a tool they use today without a decision. |
-| **4 · Admin Package panel** | Package panel in the tenant drawer (prototype linked above); `POST /api/tenant-package`; webhook writes `modules[]`; `tenant-approve` requires a package; signup proposes one. | Approving a tenant produces a Stripe subscription and access only after payment. |
+| **4 · Admin Package panel** | Package panel in the admin portal, full spec in §8 (prototype: `docs/design/package-panel-prototype.html`); `POST /api/tenant-package`; webhook writes `modules[]`; `tenant-approve` requires a package; signup proposes one. | Approving a tenant produces a Stripe subscription and access only after payment. |
 | **5 · Customer opt-in** | "Your plan" in Account Settings; `POST /api/plan-change`; + Modules tab wired to it. | A tenant admin adds a module and sees it in the ribbon without staff. |
 | **6 · Proposal tool** | `subscription-proposal.html` on the Pro Forma pattern. | A branded proposal and filled order form from a discovery. |
 | **7 · Usage and review** | Server-side usage counters, Stripe metered overage, the 90-day right-size report in the console. | Overage billed; review lists what to add or remove. |
@@ -242,6 +242,111 @@ Two agents working on the same editor must share one source of truth:
 - **Order:** §6.3 polish and the project start screen can start now. Workspace
   presets (§6.1–6.2) start after Phase 1 exists, because they reference
   module ids.
+
+---
+
+## 8. The Package panel in the admin portal (build spec)
+
+Tommy's decision (2026-09-26): the master-console Package panel goes into
+the admin portal. The clickable design reference is
+`docs/design/package-panel-prototype.html` (open it locally in a browser;
+static data, writes nothing). Build it to look and behave like that file.
+
+### 8.1 Where it lives
+
+| Surface | File | What it gets |
+|---|---|---|
+| Master index (tools.clearskyomega.com `/admin`) | `admin/index.html` + `admin/admin-console.js` | Tenant list shows each tenant's plan and monthly charge (from `billing/current`), sortable; a status pill (trial ending, awaiting payment, past due, active). Clicking a tenant opens its record. The old tier dropdown and add-on checkboxes (`ADDON_UI`, `_addonToggles`) are replaced by a link to the Package tab. |
+| Tenant record | `admin/tenant.html?org=<orgId>` | Four tabs, exactly as the prototype: **Package**, **What Activate writes**, **Customer's "Your plan"** (preview), **History**. `tenant.html` is already the one record page for staff and tenant admins ("two doors, one implementation"); keep that. |
+| Customer side | Account Settings "Your plan" (§2, Phase 5) | The same menu component in read/opt-in mode. |
+
+One component, three uses: write the menu once as `/omega-package-menu.js`
+(ES5, no Firebase inside; takes the catalog, the price book and the current
+`modules[]`, renders, calls back on change). Staff Package tab, customer
+"Your plan" and the proposal tool all use it. No second copy of the menu.
+
+### 8.2 Package tab (staff)
+
+- **Customer type** select + **Apply starter pack** (types and packs from
+  `api/_lib/modules.js`, VALUE-LADDER §3.6).
+- **Shelves**: Floor (Lite, always on, not untickable), Add-on, Standard,
+  Premium, Deliverable, Omega Logic. Each card: name, price, one-line
+  contents, tags for included usage, BETA, "needs Office", and a red
+  **Lock** tag while its editor gate is not yet enforced (VALUE-LADDER §4.1;
+  the tag disappears when Phase 2 lands for that module).
+- **Summary rail** (sticky): menu value at list, plan that fits, monthly
+  charge, credit toggle and first-90-days, annual service fee, included
+  usage, a sentence on room left in Field/Pro or when Field becomes the
+  better deal, and the **floor warning** that disables Activate.
+- **Activate** → `POST /api/tenant-package {orgId, modules, pricebookVersion,
+  credit}` → returns the Stripe payment link, shown and copyable.
+  **Send as proposal** → opens the proposal tool prefilled (Phase 6; until
+  then disabled with "coming").
+- Logic parts auto-add Office; removing Office removes the parts.
+- **The browser never computes the price it charges.** The rail may show a
+  live estimate from the price book, but Activate sends only `modules[]`;
+  the server recomputes and the returned total is what is displayed after.
+
+### 8.3 What Activate writes tab
+
+Read-only preview from the server (`POST /api/tenant-package` with
+`dryRun:true`): the Stripe items (plan price or one per module, metered
+usage items, credit coupon) and the exact `billing/current` patch
+(`modules`, `pricebookVersion`, `plan`, `credit`, logins, derived `tier`,
+`addons`, `toolAccess`). Staff see this before they commit.
+
+### 8.4 Customer's "Your plan" tab
+
+The customer menu rendered as the tenant admin will see it, in preview
+(no writes from staff side). Add → confirm box with new monthly total and
+today's prorated charge; "On · remove at review" on owned modules.
+
+### 8.5 History tab
+
+`omega_orgs/{org}/billing/current/history` + `admin_audit` rows, newest
+first: when, who, what changed (was → now), monthly total. Read through the
+existing endpoints; no new store.
+
+### 8.6 Server pieces it needs
+
+| Piece | New/changed | Notes |
+|---|---|---|
+| `api/_lib/modules.js` | new | catalog, starter packs, `resolve()`, `price()` (pure, tested) |
+| `pricebook/{version}` | new collection | staff create, frozen once used; browser read for staff only |
+| `GET /api/package-catalog` | new | modules + current price book for the panel (staff or tenant admin) |
+| `POST /api/tenant-package` | new | staff; `dryRun` or apply; floor enforced; Stripe create/update; history + audit |
+| `api/tenant-billing.js` | changed | ALLOWED += `modules`, `pricebookVersion`, `plan`, `credit`, `builders`, `viewers`, `stripeSubscriptionId` |
+| `api/stripe-webhook.js` | changed | subscription items → `modules[]` → `resolve()` → derived fields |
+| `api/tenant-approve.js` | changed | `approve` requires a package (calls tenant-package) |
+| `api/tenant-signup.js` | changed | writes a proposed package, no free trial |
+| `scripts/stripe-sync-prices.js` | new | Products/Prices per module + plan, ids into the price book |
+| `scripts/backfill-modules.js` | new | proposes `modules[]` from today's tier/add-ons; dry run default |
+
+### 8.7 Access
+
+Staff only for Package, Activate and History writes: verified
+`@clearsky-usa.com` (`caller.staff`, never `isStaffEmail`). Tenant admins
+(`A.isTenantAdmin`) see "Your plan" and their own History, never the staff
+Package tab or another tenant. Firestore rules deny browser writes to
+`billing/*` and `pricebook/*` except staff, as today.
+
+### 8.8 Look and feel
+
+Match the admin console tokens (`--cs-navy #16202B`, `--cs-blue #2B5FA8`,
+`--cs-bg #F5F4F0`, DM Sans / DM Mono) as the prototype does; light and dark;
+works at 1280px and down to a tablet. Cards the same height per row, one
+accent, tags in one style, no empty shelves.
+
+### 8.9 Done when
+
+- Staff open a tenant, pick a type, adjust, Activate, and the customer gets a
+  payment link; paying switches the modules on in the editor.
+- Tests: floor refused; Logic parts need Office; dry run equals apply;
+  webhook maps items to modules; a tenant admin cannot call tenant-package;
+  a frozen price book cannot change; `check:pages` renders the tenant page
+  with the sample tenant in `scripts/_lib/logic-fixtures.js`.
+- `CLAUDE.md` Tool gating and White label sections updated to say
+  `modules[]` is the source.
 
 ---
 
