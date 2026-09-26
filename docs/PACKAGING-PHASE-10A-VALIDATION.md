@@ -2,7 +2,7 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Draft PR (see the roadmap's status table), on branch `codex/self-serve`,
+Draft PR [#146](https://github.com/clearskyenergy/omega-core/pull/146),
 stacked on the dashboard fold-in
 ([#145](https://github.com/clearskyenergy/omega-core/pull/145)).
 [Vercel preview](https://omega-core-git-codex-self-serve-clearsky-usa.vercel.app).
