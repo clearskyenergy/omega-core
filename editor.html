@@ -295,7 +295,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tex
   background:var(--hover); border-bottom:1px solid var(--border);
   cursor:move; user-select:none;
 }
-.op-bar.op-dragging{ background:rgba(74,143,216,.18) }
+.op-bar.op-dragging{ background:var(--hl-dim) }
 .op-bar .op-title{
   flex:1; font-family:'IBM Plex Sans',sans-serif; font-size:8.5px;
   font-weight:700; letter-spacing:.08em; color:var(--sub); white-space:nowrap;
@@ -486,7 +486,7 @@ body .oim-scrim{ z-index:9700 }
   cursor:pointer; color:var(--sub); font-size:10.5px; font-weight:600;
 }
 .e3-sub div:hover{ color:var(--text) }
-.e3-sub div.on{ color:var(--text); border-color:var(--accent); background:rgba(74,143,216,.10) }
+.e3-sub div.on{ color:var(--text); border-color:var(--accent); background:var(--hl-dim) }
 .e3-facets{ display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center }
 .e3-facet{ position:relative }
 .e3-fbtn{
@@ -75273,9 +75273,9 @@ window._crmToastModal=_crmToastModal;
 <style>
   #omega-compass{
     position:absolute; left:16px; top:120px; z-index:340; width:126px;
-    background:rgba(10,22,40,.94); border:1px solid #1C3350; border-radius:6px;
+    background:var(--panel); border:1px solid var(--border); border-radius:6px;
     box-shadow:0 8px 24px rgba(0,0,0,.5); user-select:none;
-    font-family:'IBM Plex Mono',monospace; color:#E8F0FA;
+    font-family:'IBM Plex Mono',monospace; color:var(--text);
   }
   #omega-compass.hidden{ display:none; }
   #omega-compass{ cursor:grab; }
@@ -75283,19 +75283,19 @@ window._crmToastModal=_crmToastModal;
   #omega-compass button{ cursor:pointer; }
   #oc-bar{
     display:flex; align-items:center; gap:6px; padding:4px 5px 4px 7px;
-    background:#132844; border-bottom:1px solid #1C3350;
+    background:var(--surface); border-bottom:1px solid var(--border);
     border-radius:5px 5px 0 0; cursor:grab; touch-action:none;
-    font-size:9px; letter-spacing:.12em; font-weight:600; color:#7D95B4;
+    font-size:9px; letter-spacing:.12em; font-weight:600; color:var(--sub);
   }
   #oc-bar.dragging{ cursor:grabbing; }
   #oc-bar .oc-title{ flex:1; }
   #oc-bar button{
     all:unset; width:15px; height:15px; display:flex; align-items:center;
     justify-content:center; cursor:pointer; border-radius:3px;
-    color:#7D95B4; font-size:10px; line-height:1;
+    color:var(--sub); font-size:10px; line-height:1;
   }
-  #oc-bar button:hover{ background:rgba(0,212,255,.18); color:#00D4FF; }
-  #oc-bar button:focus-visible{ outline:1px solid #00D4FF; }
+  #oc-bar button:hover{ background:var(--hl-dim); color:var(--accent); }
+  #oc-bar button:focus-visible{ outline:1px solid var(--accent); }
   #oc-body{ padding:9px 9px 10px; }
   #omega-compass.min #oc-body{ display:none; }
 
@@ -75308,34 +75308,34 @@ window._crmToastModal=_crmToastModal;
     display:grid; grid-template-columns:repeat(3,30px); grid-template-rows:repeat(3,26px);
     gap:1px; justify-content:center; align-content:center;
     padding:6px; border-radius:50%;
-    border:1px solid #24405F; background:rgba(19,40,68,.45);
+    border:1px solid var(--border); background:var(--inset);
     position:relative;
   }
   /* North tick on the ring - makes it read as an orientation device. */
   #oc-rose::before{
     content:''; position:absolute; top:-1px; left:50%;
-    width:1px; height:6px; background:#4A8FD8; transform:translateX(-50%);
+    width:1px; height:6px; background:var(--accent); transform:translateX(-50%);
   }
   #oc-rose > button{
     /* explicit resets rather than `all:unset`, which reset too much */
     margin:0; padding:0; background:none; border:0; font:inherit;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:0; cursor:pointer; border-radius:4px; color:#8FA6C2;
+    gap:0; cursor:pointer; border-radius:4px; color:var(--sub);
     font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:600;
     line-height:1; transition:background .12s,color .12s;
   }
   #oc-rose > button .oc-ar{ font-size:11px; line-height:1; }
-  #oc-rose > button:hover{ background:rgba(0,212,255,.18); color:#00D4FF; }
-  #oc-rose > button:active{ background:rgba(0,212,255,.32); }
-  #oc-rose > button:focus-visible{ outline:2px solid #00D4FF; outline-offset:-2px; }
+  #oc-rose > button:hover{ background:var(--hl-dim); color:var(--accent); }
+  #oc-rose > button:active{ background:var(--hover-strong); }
+  #oc-rose > button:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
   #oc-rose > span{ display:block; }            /* empty grid cells */
   #oc-rose > #oc-fit{
-    color:#4A8FD8; font-size:8.5px; letter-spacing:.06em;
-    border:1px solid rgba(74,143,216,.35);
+    color:var(--accent); font-size:8.5px; letter-spacing:.06em;
+    border:1px solid var(--hl-dim);
   }
-  #oc-rose > #oc-fit:hover{ background:rgba(74,143,216,.18); color:#4A8FD8; }
-  #omega-compass.locked #oc-rose > button{ color:#3A4C63; cursor:not-allowed; }
-  #omega-compass.locked #oc-rose > button:hover{ background:none; color:#3A4C63; }
+  #oc-rose > #oc-fit:hover{ background:var(--hl-dim); color:var(--accent); }
+  #omega-compass.locked #oc-rose > button{ color:var(--border); cursor:not-allowed; }
+  #omega-compass.locked #oc-rose > button:hover{ background:none; color:var(--border); }
 </style>
 <script>
 (function(){
@@ -75538,9 +75538,9 @@ window._crmToastModal=_crmToastModal;
 <style>
   #omega-diag{
     position:absolute; right:14px; top:96px; z-index:345; width:270px;
-    background:rgba(10,22,40,.96); border:1px solid #1C3350; border-radius:6px;
+    background:var(--panel); border:1px solid var(--border); border-radius:6px;
     box-shadow:0 8px 26px rgba(0,0,0,.55); font-family:'IBM Plex Mono',monospace;
-    color:#E8F0FA; max-height:70%; display:flex; flex-direction:column;
+    color:var(--text); max-height:70%; display:flex; flex-direction:column;
   }
   #omega-diag.hidden{ display:none; }
   #omega-diag{ cursor:grab; }
@@ -75548,35 +75548,35 @@ window._crmToastModal=_crmToastModal;
   #omega-diag button, #omega-diag input{ cursor:pointer; }
   #od-bar{
     display:flex; align-items:center; gap:6px; padding:5px 6px 5px 8px;
-    background:#132844; border-bottom:1px solid #1C3350; border-radius:5px 5px 0 0;
+    background:var(--surface); border-bottom:1px solid var(--border); border-radius:5px 5px 0 0;
     cursor:grab; touch-action:none; font-size:9px; letter-spacing:.12em;
-    font-weight:600; color:#7D95B4;
+    font-weight:600; color:var(--sub);
   }
   #od-bar .od-t{ flex:1; }
   #od-bar button{
     all:unset; width:16px; height:16px; display:flex; align-items:center;
-    justify-content:center; cursor:pointer; border-radius:3px; color:#7D95B4; font-size:10px;
+    justify-content:center; cursor:pointer; border-radius:3px; color:var(--sub); font-size:10px;
   }
-  #od-bar button:hover{ background:rgba(0,212,255,.18); color:#00D4FF; }
+  #od-bar button:hover{ background:var(--hl-dim); color:var(--accent); }
   #od-body{ padding:8px 9px 10px; overflow-y:auto; }
   .od-row{ display:flex; justify-content:space-between; gap:8px; align-items:baseline;
-           font-size:10.5px; line-height:1.75; border-bottom:1px solid rgba(28,51,80,.5); }
+           font-size:10.5px; line-height:1.75; border-bottom:1px solid var(--hairline); }
   .od-row:last-of-type{ border-bottom:0; }
-  .od-k{ color:#7D95B4; white-space:nowrap; }
+  .od-k{ color:var(--sub); white-space:nowrap; }
   .od-v{ font-weight:600; text-align:right; word-break:break-word; }
-  .od-ok{ color:#4A8FD8; } .od-warn{ color:#F59E0B; } .od-bad{ color:#FF6B6B; }
+  .od-ok{ color:var(--accent); } .od-warn{ color:var(--warn); } .od-bad{ color:var(--bad); }
   #od-verdict{
     margin-top:9px; padding:8px; border-radius:4px; font-size:10.5px; line-height:1.5;
-    background:rgba(245,158,11,.10); border-left:2px solid #F59E0B; color:#E8C89A;
+    background:var(--hl-dim); border-left:2px solid var(--warn); color:var(--text);
   }
-  #od-verdict.good{ background:rgba(74,143,216,.10); border-left-color:#4A8FD8; color:#A6DDB4; }
+  #od-verdict.good{ background:var(--hl-dim); border-left-color:var(--accent); color:var(--text); }
   #od-act{ margin-top:8px; display:flex; gap:5px; }
   #od-act button{
     all:unset; flex:1; text-align:center; padding:6px 4px; border-radius:4px;
-    border:1px solid #1C3350; background:#132844; cursor:pointer;
-    font-size:9.5px; font-weight:600; color:#8FA6C2;
+    border:1px solid var(--border); background:var(--surface); cursor:pointer;
+    font-size:9.5px; font-weight:600; color:var(--sub);
   }
-  #od-act button:hover{ background:#1A3556; color:#00D4FF; }
+  #od-act button:hover{ background:var(--hover-strong); color:var(--accent); }
 </style>
 <script>
 (function(){
@@ -75970,11 +75970,11 @@ window._crmToastModal=_crmToastModal;
   #omega-addr-in:focus{ outline:none; }
   .omega-addr:focus-within{ border-color:var(--hl); }
   #omega-addr-go{
-    flex:none; background:#132844; border:1px solid var(--border); color:var(--text);
+    flex:none; background:var(--surface); border:1px solid var(--border); color:var(--text);
     font-family:inherit; font-size:10px; font-weight:600; letter-spacing:.04em;
     padding:4px 9px; border-radius:4px; cursor:pointer;
   }
-  #omega-addr-go:hover{ background:#1A3556; border-color:var(--hl); color:var(--hl); }
+  #omega-addr-go:hover{ background:var(--hover-strong); border-color:var(--hl); color:var(--hl); }
   #omega-addr-go:disabled{ opacity:.5; cursor:default; }
   /* Docked left: full width of the column, stacked. */
   body.omega-dock-left .omega-addr{
@@ -76130,18 +76130,18 @@ window._crmToastModal=_crmToastModal;
   .omega-key-eye:hover{ color:var(--hl); border-color:var(--hl); }
   .omega-key-actions{ display:flex; gap:5px; margin-top:2px; }
   .omega-key-actions button{
-    flex:1; background:#132844; border:1px solid var(--border); color:var(--text);
+    flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text);
     font-family:inherit; font-size:9.5px; font-weight:600; letter-spacing:.03em;
     padding:5px 4px; border-radius:4px; cursor:pointer;
   }
-  .omega-key-actions button:hover{ background:#1A3556; border-color:var(--hl); color:var(--hl); }
+  .omega-key-actions button:hover{ background:var(--hover-strong); border-color:var(--hl); color:var(--hl); }
   .omega-key-status{
     font-family:var(--font-mono); font-size:9.5px; color:var(--sub);
     padding:2px 1px 0; min-height:13px; line-height:1.35;
   }
   .omega-key-status.ok{ color:var(--green); }
-  .omega-key-status.bad{ color:#FF6B6B; }
-  .omega-key-status.warn{ color:#F59E0B; }
+  .omega-key-status.bad{ color:var(--bad); }
+  .omega-key-status.warn{ color:var(--warn); }
   body.omega-dock-left .omega-keys{ min-width:0; }
   body.omega-dock-left .omega-key-lbl{ flex:0 0 78px; }
 </style>
@@ -76244,7 +76244,7 @@ window._crmToastModal=_crmToastModal;
   .omega-beta{ position:relative; }
   .omega-beta-tag{
     position:absolute; top:1px; right:1px; font:700 6.5px/1 'IBM Plex Mono',monospace;
-    letter-spacing:.08em; color:var(--ink); background:#F59E0B;
+    letter-spacing:.08em; color:var(--ink); background:var(--warn);
     border-radius:2px; padding:2px 3px; pointer-events:none;
   }
   body.omega-dock-left .omega-beta-tag{ top:50%; right:6px; transform:translateY(-50%); }
@@ -76254,8 +76254,8 @@ window._crmToastModal=_crmToastModal;
   }
   .omega-modal-card{
     width:min(460px,94vw); max-height:86vh; overflow:auto; background:#0E1D33;
-    border:1px solid #1C3350; border-radius:10px; box-shadow:0 24px 60px rgba(0,0,0,.6);
-    font-family:'IBM Plex Sans',system-ui,sans-serif; color:#E8F0FA;
+    border:1px solid var(--border); border-radius:10px; box-shadow:0 24px 60px rgba(0,0,0,.6);
+    font-family:'IBM Plex Sans',system-ui,sans-serif; color:var(--text);
   }
   .omega-modal-hd{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -76263,34 +76263,34 @@ window._crmToastModal=_crmToastModal;
     font-size:14px; font-weight:700;
   }
   .omega-modal-hd button{
-    all:unset; cursor:pointer; color:#7D95B4; font-size:15px; padding:2px 6px; border-radius:4px;
+    all:unset; cursor:pointer; color:var(--sub); font-size:15px; padding:2px 6px; border-radius:4px;
   }
-  .omega-modal-hd button:hover{ color:#00D4FF; background:rgba(0,212,255,.12); }
+  .omega-modal-hd button:hover{ color:var(--accent); background:rgba(0,212,255,.12); }
   .omega-modal-bd{ padding:14px 18px 18px; }
   .omega-modal-bd p{ font-size:12px; color:#8BA3C4; line-height:1.55; margin:0 0 12px; }
   .omega-pick{
     display:block; width:100%; text-align:left; margin-bottom:6px; padding:10px 12px;
-    background:var(--inset); border:1px solid #1C3350; border-radius:6px;
-    color:#E8F0FA; font:600 12px 'IBM Plex Sans'; cursor:pointer;
+    background:var(--inset); border:1px solid var(--border); border-radius:6px;
+    color:var(--text); font:600 12px 'IBM Plex Sans'; cursor:pointer;
   }
-  .omega-pick:hover{ border-color:#00D4FF; color:#00D4FF; background:rgba(0,212,255,.08); }
-  .omega-pick small{ display:block; font-weight:400; font-size:10px; color:#7D95B4; margin-top:2px; }
+  .omega-pick:hover{ border-color:var(--accent); color:var(--accent); background:rgba(0,212,255,.08); }
+  .omega-pick small{ display:block; font-weight:400; font-size:10px; color:var(--sub); margin-top:2px; }
   .omega-field{ display:flex; gap:6px; margin-bottom:9px; }
   .omega-field input{
     flex:1; min-width:0; padding:8px 10px; background:var(--bg); border:1px solid var(--hairline);
     border-radius:5px; color:#E8F0FE; font-family:'IBM Plex Mono',monospace; font-size:11px; outline:none;
   }
-  .omega-field input:focus{ border-color:#00D4FF; }
+  .omega-field input:focus{ border-color:var(--accent); }
   .omega-field button{
     all:unset; cursor:pointer; padding:8px 11px; border-radius:5px; font:600 11px 'IBM Plex Sans';
-    background:var(--hover-strong); border:1px solid var(--hairline); color:#E8F0FA;
+    background:var(--hover-strong); border:1px solid var(--hairline); color:var(--text);
   }
-  .omega-field button:hover{ border-color:#00D4FF; color:#00D4FF; }
+  .omega-field button:hover{ border-color:var(--accent); color:var(--accent); }
   .omega-lab{ font-size:10px; color:#8BA3C4; margin:0 0 4px; font-weight:600; letter-spacing:.03em; }
   .omega-note{ font-size:10.5px; line-height:1.5; margin-top:10px; padding:9px 11px;
-               border-radius:6px; background:rgba(245,158,11,.10); border-left:2px solid #F59E0B; color:#E8C89A; }
-  .omega-note.ok{ background:rgba(74,143,216,.10); border-left-color:#4A8FD8; color:#A6DDB4; }
-  .omega-note.bad{ background:rgba(255,107,107,.10); border-left-color:#FF6B6B; color:#FFB3B3; }
+               border-radius:6px; background:var(--hl-dim); border-left:2px solid var(--warn); color:var(--text); }
+  .omega-note.ok{ background:var(--hl-dim); border-left-color:var(--accent); color:var(--text); }
+  .omega-note.bad{ background:rgba(255,107,107,.10); border-left-color:var(--bad); color:#FFB3B3; }
 </style>
 <script>
 (function(){
@@ -76453,7 +76453,7 @@ window._crmToastModal=_crmToastModal;
      Objects that belong to the map instead of chasing it.
      ==================================================== -->
 <style>
-  #rb-native[aria-pressed="true"]{ background:rgba(74,143,216,.18); border-color:#4A8FD8; color:#4A8FD8; }
+  #rb-native[aria-pressed="true"]{ background:var(--hl-dim); border-color:var(--accent); color:var(--accent); }
 </style>
 <script>
 (function(){
@@ -77572,7 +77572,7 @@ window._crmToastModal=_crmToastModal;
     border:1px solid var(--border); color:var(--text);
     font-family:var(--font-sans,inherit); font-size:12.5px; outline:none;
   }
-  #pp-ptype:focus{ border-color:var(--hl,#00D4FF); }
+  #pp-ptype:focus{ border-color:var(--hl,var(--accent)); }
   #pp-ptype-hint{ font-size:10.5px; color:var(--sub); margin-top:5px; line-height:1.45; }
 </style>
 <script>
@@ -77884,9 +77884,9 @@ window._crmToastModal=_crmToastModal;
 <style>
   #omega-site{
     position:fixed; right:14px; bottom:14px; width:236px; z-index:4200;
-    background:var(--panel,#0E1D33); border:1px solid var(--border,#1C3350);
+    background:var(--panel,#0E1D33); border:1px solid var(--border,var(--border));
     border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.45);
-    font-family:var(--font-sans,system-ui,sans-serif); color:var(--text,#E8F0FA);
+    font-family:var(--font-sans,system-ui,sans-serif); color:var(--text,var(--text));
     cursor:grab; user-select:none;
   }
   #omega-site:active{ cursor:grabbing; }
@@ -77894,40 +77894,40 @@ window._crmToastModal=_crmToastModal;
   #omega-site button{ cursor:pointer; }
   #os-bar{
     display:flex; align-items:center; gap:6px; padding:6px 9px;
-    border-bottom:1px solid var(--border,#1C3350);
+    border-bottom:1px solid var(--border,var(--border));
     font:600 10px/1 var(--font-mono,ui-monospace,monospace);
-    letter-spacing:.14em; color:var(--sub,#7D95B4); text-transform:uppercase;
+    letter-spacing:.14em; color:var(--sub,var(--sub)); text-transform:uppercase;
   }
   #os-bar .os-sp{ flex:1; }
   #os-bar button{
     all:unset; width:17px; height:17px; display:grid; place-items:center;
-    border-radius:4px; color:var(--sub,#7D95B4); font-size:12px; line-height:1;
+    border-radius:4px; color:var(--sub,var(--sub)); font-size:12px; line-height:1;
   }
-  #os-bar button:hover{ background:var(--hover-strong); color:var(--text,#E8F0FA); }
+  #os-bar button:hover{ background:var(--hover-strong); color:var(--text,var(--text)); }
   #os-body{ padding:9px 10px 10px; }
   #omega-site.min #os-body{ display:none; }
   .os-row{
     display:flex; justify-content:space-between; align-items:baseline;
-    font:400 11px/1.85 var(--font-mono,ui-monospace,monospace); color:var(--sub,#7D95B4);
+    font:400 11px/1.85 var(--font-mono,ui-monospace,monospace); color:var(--sub,var(--sub));
   }
-  .os-row b{ color:var(--text,#E8F0FA); font-weight:500; }
+  .os-row b{ color:var(--text,var(--text)); font-weight:500; }
   .os-h{
     font:600 9px/1 var(--font-mono,ui-monospace,monospace); letter-spacing:.16em;
-    color:var(--sub,#7D95B4); text-transform:uppercase; margin:9px 0 5px;
+    color:var(--sub,var(--sub)); text-transform:uppercase; margin:9px 0 5px;
   }
   .os-proof{
-    background:var(--inset); border:1px solid var(--border,#1C3350);
+    background:var(--inset); border:1px solid var(--border,var(--border));
     border-radius:6px; padding:6px 8px; margin-top:2px;
   }
-  .os-proof .os-fix{ color:var(--ok,#4A8FD8); }
-  .os-proof .os-px{ color:var(--hl,#00D4FF); }
+  .os-proof .os-fix{ color:var(--ok,var(--accent)); }
+  .os-proof .os-px{ color:var(--hl,var(--accent)); }
   .os-btns{ display:flex; flex-direction:column; gap:4px; margin-top:9px; }
   .os-btns button{
     all:unset; text-align:center; padding:6px 8px; border-radius:5px;
-    border:1px solid var(--border,#1C3350); background:var(--hover);
-    font:500 11px/1 var(--font-sans,system-ui,sans-serif); color:var(--text,#E8F0FA);
+    border:1px solid var(--border,var(--border)); background:var(--hover);
+    font:500 11px/1 var(--font-sans,system-ui,sans-serif); color:var(--text,var(--text));
   }
-  .os-btns button:hover{ background:rgba(0,212,255,.14); border-color:var(--hl,#00D4FF); }
+  .os-btns button:hover{ background:var(--hl-dim); border-color:var(--hl,var(--accent)); }
 </style>
 <script>
 (function(){
@@ -79952,9 +79952,9 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
 <style>
   #omega-meters{
     position:fixed; right:14px; top:120px; width:250px; z-index:4300;
-    background:var(--panel,#0E1D33); border:1px solid var(--border,#1C3350);
+    background:var(--panel,#0E1D33); border:1px solid var(--border,var(--border));
     border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.45);
-    font-family:var(--font-sans,system-ui,sans-serif); color:var(--text,#E8F0FA);
+    font-family:var(--font-sans,system-ui,sans-serif); color:var(--text,var(--text));
     cursor:grab; user-select:none; max-height:60vh; overflow-y:auto;
   }
   #omega-meters:active{ cursor:grabbing; }
@@ -79962,27 +79962,27 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
   #omega-meters button{ cursor:pointer; }
   #om-bar{
     display:flex; align-items:center; gap:6px; padding:6px 9px;
-    border-bottom:1px solid var(--border,#1C3350); position:sticky; top:0;
+    border-bottom:1px solid var(--border,var(--border)); position:sticky; top:0;
     background:var(--panel,#0E1D33);
     font:600 10px/1 var(--font-mono,ui-monospace,monospace);
-    letter-spacing:.14em; color:var(--sub,#7D95B4); text-transform:uppercase;
+    letter-spacing:.14em; color:var(--sub,var(--sub)); text-transform:uppercase;
   }
   #om-bar .om-sp{ flex:1; }
   #om-bar button{ all:unset; width:28px; height:28px; display:grid; place-items:center;
-    border-radius:4px; color:var(--sub,#7D95B4); font-size:14px; flex:0 0 28px; }
-  #om-bar button:hover{ background:var(--hover-strong); color:var(--text,#E8F0FA); }
+    border-radius:4px; color:var(--sub,var(--sub)); font-size:14px; flex:0 0 28px; }
+  #om-bar button:hover{ background:var(--hover-strong); color:var(--text,var(--text)); }
   #om-body{ padding:8px 10px 10px; }
-  .om-meter{ border:1px solid var(--border,#1C3350); border-radius:6px;
+  .om-meter{ border:1px solid var(--border,var(--border)); border-radius:6px;
     padding:7px 8px; margin-bottom:7px; background:var(--inset); }
   .om-meter h4{ font:600 11px/1.3 var(--font-mono,ui-monospace,monospace);
-    letter-spacing:.1em; color:var(--hl,#00D4FF); margin:0 0 4px; }
+    letter-spacing:.1em; color:var(--hl,var(--accent)); margin:0 0 4px; }
   .om-row{ display:flex; justify-content:space-between;
-    font:400 10.5px/1.75 var(--font-mono,ui-monospace,monospace); color:var(--sub,#7D95B4); }
-  .om-row b{ color:var(--text,#E8F0FA); font-weight:500; }
-  .om-auto{ color:var(--warn,#F59E0B); }
-  .om-none{ border-color:var(--warn,#F59E0B); }
+    font:400 10.5px/1.75 var(--font-mono,ui-monospace,monospace); color:var(--sub,var(--sub)); }
+  .om-row b{ color:var(--text,var(--text)); font-weight:500; }
+  .om-auto{ color:var(--warn,var(--warn)); }
+  .om-none{ border-color:var(--warn,var(--warn)); }
   .om-note{ font:400 9.5px/1.45 var(--font-sans,system-ui,sans-serif);
-    color:var(--sub,#7D95B4); margin-top:5px; }
+    color:var(--sub,var(--sub)); margin-top:5px; }
 </style>
 <script>
 (function(){
@@ -81262,14 +81262,14 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
      ==================================================================== -->
 <style>
   .rb-fly-item.omega-toggle-on{
-    background:rgba(0,212,255,.14);
-    box-shadow:inset 2px 0 0 var(--hl,#00D4FF);
+    background:var(--hl-dim);
+    box-shadow:inset 2px 0 0 var(--hl,var(--accent));
   }
   .rb-fly-item .omega-state{
     float:right; font:600 9px/1 var(--font-mono,ui-monospace,monospace);
     letter-spacing:.1em; opacity:.85; padding-left:10px;
   }
-  .rb-fly-item.omega-toggle-on .omega-state{ color:var(--hl,#00D4FF); }
+  .rb-fly-item.omega-toggle-on .omega-state{ color:var(--hl,var(--accent)); }
 </style>
 <script>
 (function(){
@@ -81726,19 +81726,19 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     font-size:22px; line-height:1; cursor:pointer; }
   #sos-modal .sos-bd{ padding:16px 20px; }
   #sos-modal label{ display:block; font-size:10px; font-weight:700; letter-spacing:.09em;
-    text-transform:uppercase; color:#8FA3B8; margin:14px 0 5px; }
+    text-transform:uppercase; color:var(--sub); margin:14px 0 5px; }
   #sos-modal label:first-child{ margin-top:0; }
   #sos-modal select, #sos-modal input{ width:100%; padding:9px 10px; border-radius:7px;
     background:var(--navy); border:1px solid var(--border); color:var(--text); font-size:13px; }
   #sos-modal .sos-two{ display:flex; gap:10px; }
   #sos-modal .sos-two > div{ flex:1; min-width:0; }
   #sos-spec{ margin-top:12px; padding:10px 12px; border:1px solid var(--border); border-radius:8px;
-    background:var(--inset); font:400 11px/1.7 var(--font-mono,ui-monospace,monospace); color:#8FA3B8; }
+    background:var(--inset); font:400 11px/1.7 var(--font-mono,ui-monospace,monospace); color:var(--sub); }
   #sos-spec b{ color:var(--text); font-weight:600; }
-  #sos-modal .sos-note{ font-size:10px; line-height:1.5; color:#8FA3B8; margin-top:12px; }
+  #sos-modal .sos-note{ font-size:10px; line-height:1.5; color:var(--sub); margin-top:12px; }
   #sos-modal .sos-ft{ padding:12px 20px 16px; display:flex; gap:9px; justify-content:flex-end; }
   #sos-modal .sos-ft button{ padding:9px 16px; border-radius:8px; font-size:13px;
-    font-weight:700; cursor:pointer; border:1px solid var(--border); background:transparent; color:#8FA3B8; }
+    font-weight:700; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--sub); }
   #sos-modal .sos-ft button.go{ background:#FBBF24; border-color:#FBBF24; color:var(--ink); }
 </style>
 <script>
@@ -82241,17 +82241,17 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
   #arr-modal .arr-hd button{ background:none;border:none;color:#64748B;font-size:22px;cursor:pointer; }
   #arr-modal .arr-bd{ padding:15px 19px; }
   #arr-modal label{ display:block; font-size:10px; font-weight:700; letter-spacing:.09em;
-    text-transform:uppercase; color:#8FA3B8; margin:13px 0 5px; }
+    text-transform:uppercase; color:var(--sub); margin:13px 0 5px; }
   #arr-modal label:first-child{ margin-top:0; }
   #arr-modal input,#arr-modal select{ width:100%; padding:8px 10px; border-radius:7px;
     background:var(--navy); border:1px solid var(--border); color:var(--text); font-size:13px; }
   #arr-modal .arr-two{ display:flex; gap:10px; } #arr-modal .arr-two>div{ flex:1; min-width:0; }
   #arr-calc{ margin-top:13px; padding:10px 12px; border:1px solid var(--border); border-radius:8px;
-    background:var(--inset); font:400 11px/1.75 var(--font-mono,ui-monospace,monospace); color:#8FA3B8; }
+    background:var(--inset); font:400 11px/1.75 var(--font-mono,ui-monospace,monospace); color:var(--sub); }
   #arr-calc b{ color:var(--text); font-weight:600; }
   #arr-modal .arr-ft{ padding:11px 19px 15px; display:flex; gap:9px; justify-content:flex-end; }
   #arr-modal .arr-ft button{ padding:8px 15px; border-radius:8px; font-size:13px; font-weight:700;
-    cursor:pointer; border:1px solid var(--border); background:transparent; color:#8FA3B8; }
+    cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--sub); }
   #arr-modal .arr-ft button.go{ background:#FBBF24; border-color:#FBBF24; color:var(--ink); }
 </style>
 <script>
@@ -104888,7 +104888,7 @@ body{ -webkit-font-smoothing:antialiased; }
 .rbtn:hover .rb-lbl,.rbtn.active-tool .rb-lbl{ color:var(--text); }
 
 /* THE NEON KILLER.
-   Roughly 200 ribbon icons carry an inline colour (#22C55E, #00D4FF,
+   Roughly 200 ribbon icons carry an inline colour (#22C55E, var(--accent),
    #A78BFA …). Autodesk ribbons are monochrome, with colour reserved for
    state; a rainbow of hues on a dark bar is the single biggest reason the
    old chrome read as "neon". Forcing the icon colour here fixes all of
@@ -176280,9 +176280,9 @@ body.omega-review-3d #cov{pointer-events:none!important}
 .opi-head{height:64px;flex:none;display:flex;align-items:center;gap:14px;padding:0 22px;background:#16202B;border-bottom:1px solid #30404F}.opi-mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#4A8FD8,#26568E);display:grid;place-items:center;color:#fff;font-size:18px}.opi-title{font-size:16px;font-weight:800;color:#F2F6FA}.opi-sub{font-size:10px;color:#8FA2B5;margin-top:2px}.opi-close{margin-left:auto;width:34px;height:34px;border:1px solid #3A4A59;background:#22303D;color:#C9D4DE;border-radius:8px;cursor:pointer;font-size:18px}
 .opi-scroll{overflow:auto;padding:18px 20px 28px}.opi-grid{display:grid;grid-template-columns:minmax(250px,.8fr) minmax(420px,1.5fr) minmax(260px,.9fr);gap:14px}.opi-card{background:#16202B;border:1px solid #30404F;border-radius:11px;padding:16px;min-width:0}.opi-card h3{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#8FA2B5;margin:0 0 12px}.opi-decision{font-size:27px;font-weight:800;line-height:1.05;margin:4px 0 8px}.opi-reason{font-size:11px;line-height:1.5;color:#AAB8C5}.opi-score{font:800 54px/1 'IBM Plex Mono',monospace;color:#60A5FA}.opi-score small{font-size:15px;color:#718599}.opi-bar{height:7px;background:#22303D;border-radius:5px;overflow:hidden;margin:10px 0}.opi-bar>i{display:block;height:100%;background:linear-gradient(90deg,#4A8FD8,#62C6FF)}
 .opi-metrics{grid-column:span 2;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;padding:0;overflow:hidden}.opi-metric{padding:15px;background:var(--bg)}.opi-metric+.opi-metric{border-left:1px solid #30404F}.opi-k{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:#8395A6}.opi-v{font:700 20px/1.25 'IBM Plex Mono',monospace;color:#ECF3F8;margin-top:6px}.opi-note{font-size:9px;color:#718599;margin-top:4px}
-.opi-check{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid #ffffff0e}.opi-check:last-child{border:0}.opi-dot{width:18px;height:18px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800}.opi-ok{background:#22c55e26;color:#4ADE80}.opi-warn{background:#f59e0b24;color:#FBBF24}.opi-check b{display:block;font-size:11px;color:#DCE6EE}.opi-check span{display:block;font-size:9px;color:#7F92A4;line-height:1.35;margin-top:2px}
-.opi-table{width:100%;border-collapse:collapse}.opi-table th{text-align:right;font-size:8px;color:#718599;text-transform:uppercase;padding:0 8px 8px}.opi-table th:first-child,.opi-table td:first-child{text-align:left}.opi-table td{text-align:right;border-top:1px solid #ffffff10;padding:10px 8px;font:600 10px 'IBM Plex Mono',monospace;color:#CFDAE3}.opi-table td:first-child{font-family:'IBM Plex Sans',sans-serif}.opi-table tr.opi-base td{background:#4a8fd817;color:#EEF7FF}.opi-tag{font-size:7px;background:#4A8FD8;color:#fff;padding:2px 5px;border-radius:8px;margin-left:5px}
-.opi-action{display:flex;gap:10px;padding:10px 0;border-top:1px solid #ffffff10}.opi-action:first-of-type{border-top:0}.opi-num{font:700 10px 'IBM Plex Mono',monospace;color:#60A5FA;background:#4a8fd81f;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;flex:none}.opi-action b{font-size:11px;color:#DCE6EE}.opi-action p{font-size:9px;line-height:1.4;color:#7F92A4;margin:2px 0 0}.opi-btns{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}.opi-btn{border:1px solid #3A4C5E;background:#22303D;color:#DCE6EE;border-radius:7px;padding:8px 10px;font:600 10px 'IBM Plex Sans',sans-serif;cursor:pointer}.opi-btn.primary{background:#4A8FD8;border-color:#4A8FD8;color:#fff}.opi-wide{grid-column:1/-1}
+.opi-check{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid #ffffff0e}.opi-check:last-child{border:0}.opi-dot{width:18px;height:18px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800}.opi-ok{background:#22c55e26;color:#4ADE80}.opi-warn{background:var(--warn)24;color:#FBBF24}.opi-check b{display:block;font-size:11px;color:#DCE6EE}.opi-check span{display:block;font-size:9px;color:#7F92A4;line-height:1.35;margin-top:2px}
+.opi-table{width:100%;border-collapse:collapse}.opi-table th{text-align:right;font-size:8px;color:#718599;text-transform:uppercase;padding:0 8px 8px}.opi-table th:first-child,.opi-table td:first-child{text-align:left}.opi-table td{text-align:right;border-top:1px solid #ffffff10;padding:10px 8px;font:600 10px 'IBM Plex Mono',monospace;color:#CFDAE3}.opi-table td:first-child{font-family:'IBM Plex Sans',sans-serif}.opi-table tr.opi-base td{background:var(--accent)17;color:#EEF7FF}.opi-tag{font-size:7px;background:var(--accent);color:#fff;padding:2px 5px;border-radius:8px;margin-left:5px}
+.opi-action{display:flex;gap:10px;padding:10px 0;border-top:1px solid #ffffff10}.opi-action:first-of-type{border-top:0}.opi-num{font:700 10px 'IBM Plex Mono',monospace;color:#60A5FA;background:var(--accent)1f;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;flex:none}.opi-action b{font-size:11px;color:#DCE6EE}.opi-action p{font-size:9px;line-height:1.4;color:#7F92A4;margin:2px 0 0}.opi-btns{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}.opi-btn{border:1px solid #3A4C5E;background:#22303D;color:#DCE6EE;border-radius:7px;padding:8px 10px;font:600 10px 'IBM Plex Sans',sans-serif;cursor:pointer}.opi-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.opi-wide{grid-column:1/-1}
 @media(max-width:980px){#opi{padding:0}.opi-shell{border-radius:0;border:0}.opi-grid{grid-template-columns:1fr 1fr}.opi-metrics,.opi-wide{grid-column:1/-1}}@media(max-width:680px){.opi-scroll{padding:12px}.opi-grid{grid-template-columns:1fr}.opi-metrics{grid-column:auto;grid-template-columns:1fr 1fr}.opi-card,.opi-wide{grid-column:auto}.opi-head{padding:0 14px}}
 </style>
 <div id="opi" role="dialog" aria-modal="true" aria-labelledby="opi-title" onclick="if(event.target===this)closeProjectIntelligence()"><section class="opi-shell"><header class="opi-head"><div class="opi-mark">◆</div><div><div class="opi-title" id="opi-title">OMEGA Project Intelligence</div><div class="opi-sub" id="opi-project">Decision-grade project screen</div></div><button class="opi-close" onclick="closeProjectIntelligence()" aria-label="Close">×</button></header><div class="opi-scroll"><div class="opi-grid" id="opi-body"></div></div></section></div>

@@ -28,7 +28,7 @@ def line_start(i): return lines_start[bisect.bisect_right(lines_start, i) - 1]
 def line_text(i):
     a = line_start(i); b = s.find('\n', a); return s[a:b if b >= 0 else len(s)]
 
-EXCL = re.compile(r'fillStyle|strokeStyle|\bctx\b|setAttribute\(|jsPDF|\bpdf\b|\bdoc\.|fill=|stroke=|["\']fill["\']|setDrawColor|sld-sheet|ReportExport|chart|canvas|toDataURL|palette|gradient|swatch|--gb-|:root|--(?:navy|bg|panel|surface|border|text|sub|ink|hl|accent|icon)\s*:', re.I)
+EXCL = re.compile(r'fillStyle|strokeStyle|\bctx\b|setAttribute\(|jsPDF|\bpdf\b|\bdoc\.|fill=|stroke=|["\']fill["\']|setDrawColor|sld-sheet|ReportExport|chart|canvas|toDataURL|palette|gradient|swatch|--gb-|:root|^\s*--[\w-]+\s*:|/\*[^*]*\*/', re.I)
 PROP = r'(?:background(?:-color)?|border(?:-(?:top|bottom|left|right|color))?|color|outline|box-shadow|scrollbar-color)'
 def ctx_prop(before):
     m = re.search(PROP + r'\s*:\s*(?:[^;"\'`{}]*?)$', before, re.I)
@@ -57,6 +57,34 @@ def token(lit, prop, before):
         if L == '#e2eef9': return 'var(--text)'
         if L in ('#16202b', '#0b1626', '#0f1d30'): return 'var(--ink)'
     return None
+
+# The old navy/cyan family (compass, diagnostics, address chip, SOS, ARR and
+# friends) is chrome everywhere it appears in a <style> block: one token each.
+NAVY = {
+    'rgba(10,22,40,.94)': 'var(--panel)', 'rgba(10,22,40,.96)': 'var(--panel)',
+    '#132844': 'var(--surface)', '#1a3556': 'var(--hover-strong)', '#1c3350': 'var(--border)',
+    '#24405f': 'var(--border)', '#3a4c63': 'var(--border)', '#7d95b4': 'var(--sub)',
+    '#8fa6c2': 'var(--sub)', '#8fa3b8': 'var(--sub)', '#e8f0fa': 'var(--text)',
+    '#00d4ff': 'var(--accent)', 'rgba(0,212,255,.18)': 'var(--hl-dim)',
+    'rgba(0,212,255,.14)': 'var(--hl-dim)', 'rgba(0,212,255,.32)': 'var(--hover-strong)',
+    '#4a8fd8': 'var(--accent)', 'rgba(74,143,216,.35)': 'var(--hl-dim)',
+    'rgba(74,143,216,.18)': 'var(--hl-dim)', 'rgba(74,143,216,.10)': 'var(--hl-dim)',
+    'rgba(19,40,68,.45)': 'var(--inset)', 'rgba(28,51,80,.5)': 'var(--hairline)',
+    '#ff6b6b': 'var(--bad)', '#f59e0b': 'var(--warn)', 'rgba(245,158,11,.10)': 'var(--hl-dim)',
+    '#e8c89a': 'var(--text)', '#a6ddb4': 'var(--text)',
+}
+if MODE == 'navy':
+    NL = re.compile('|'.join(re.escape(k) for k in NAVY), re.I)
+    out = []; last = 0; count = collections.Counter()
+    for m in NL.finditer(s):
+        i = m.start()
+        if kind_at(i) != 'style' or EXCL.search(line_text(i)): continue
+        tok = NAVY[m.group(0).lower()]
+        out.append(s[last:i]); out.append(tok); last = m.end(); count[m.group(0) + ' -> ' + tok] += 1
+    out.append(s[last:]); open(p, 'w', encoding='utf-8').write(''.join(out))
+    print('MODE navy replaced', sum(count.values()))
+    for k, v in sorted(count.items(), key=lambda x: -x[1]): print('%5d %s' % (v, k))
+    sys.exit(0)
 
 out = []; last = 0; count = collections.Counter(); skipped = collections.Counter()
 for m in LIT.finditer(s):
