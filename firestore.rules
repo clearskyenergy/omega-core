@@ -242,7 +242,7 @@ service cloud.firestore {
     function isAdmin() {
       return signedIn()
         && request.auth.token.get('email_verified', false) == true
-        && request.auth.token.email.matches('.*@clearsky-usa[.]com');
+        && request.auth.token.email.lower().matches('.*@clearsky-usa[.]com');
     }
 
     /* ------------------------------------------------------------
@@ -652,14 +652,14 @@ service cloud.firestore {
       allow create: if signedIn()
                     && request.auth.uid == uid
                     && request.resource.data.uid == uid
-                    && request.resource.data.email == request.auth.token.email
+                    && request.resource.data.email.lower() == request.auth.token.email.lower()
                     && request.resource.data.version is string
                     && request.resource.data.version.size() > 0
                     && request.resource.data.acceptedAt == request.time;
       allow update: if signedIn()
                     && request.auth.uid == uid
                     && request.resource.data.uid == uid
-                    && request.resource.data.email == request.auth.token.email
+                    && request.resource.data.email.lower() == request.auth.token.email.lower()
                     && request.resource.data.version is string
                     && request.resource.data.version.size() > 0
                     && request.resource.data.version != resource.data.version
@@ -826,26 +826,31 @@ service cloud.firestore {
       allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId));
     }
 
+    /* A sign-in email is compared lower-cased in the four team blocks and
+       in termsAcceptances (2026-09-26): the pages write the address
+       lower-cased (index.html _meEmail), and a token from a password account
+       can carry it in any case, which refused every Team Hub write for that
+       person. userOrg() and org_members already lower-case. */
     match /team_messages/{docId} {
       allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
       allow create: if signedIn()
                     && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId))
-                    && request.resource.data.authorEmail == request.auth.token.email;
+                    && request.resource.data.authorEmail.lower() == request.auth.token.email.lower();
       allow update: if false;
       allow delete: if signedIn()
                     && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
-                    && resource.data.authorEmail == request.auth.token.email;
+                    && resource.data.authorEmail.lower() == request.auth.token.email.lower();
     }
 
     match /team_members/{memberId} {
       allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
       allow create: if signedIn()
                     && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId))
-                    && request.resource.data.email == request.auth.token.email
-                    && memberId == request.resource.data.orgId + '__' + request.auth.token.email;
+                    && request.resource.data.email.lower() == request.auth.token.email.lower()
+                    && memberId == request.resource.data.orgId + '__' + request.auth.token.email.lower();
       allow update: if signedIn()
                     && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
-                    && resource.data.email == request.auth.token.email
+                    && resource.data.email.lower() == request.auth.token.email.lower()
                     && request.resource.data.orgId == resource.data.orgId
                     && request.resource.data.email == resource.data.email;
       allow delete: if false;
@@ -854,18 +859,18 @@ service cloud.firestore {
     match /team_conversations/{convoId} {
       allow read:   if signedIn()
                     && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
-                    && request.auth.token.email in resource.data.members;
+                    && request.auth.token.email.lower() in resource.data.members;
       allow create: if signedIn()
                     && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId))
-                    && request.auth.token.email in request.resource.data.members;
+                    && request.auth.token.email.lower() in request.resource.data.members;
       allow update: if signedIn()
                     && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
-                    && request.auth.token.email in resource.data.members
+                    && request.auth.token.email.lower() in resource.data.members
                     && request.resource.data.orgId == resource.data.orgId
                     && request.resource.data.kind == resource.data.kind;
       allow delete: if signedIn()
                     && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
-                    && resource.data.createdBy == request.auth.token.email;
+                    && resource.data.createdBy.lower() == request.auth.token.email.lower();
     }
 
     match /team_convo_messages/{msgId} {
@@ -877,10 +882,10 @@ service cloud.firestore {
       }
       allow read:   if signedIn()
                     && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
-                    && request.auth.token.email in convoCur().members;
+                    && request.auth.token.email.lower() in convoCur().members;
       allow create: if signedIn()
                     && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId))
-                    && request.auth.token.email in convoNew().members;
+                    && request.auth.token.email.lower() in convoNew().members;
       allow update, delete: if false;
     }
 

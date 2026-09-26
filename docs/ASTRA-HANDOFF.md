@@ -44,6 +44,10 @@ operator assignments below; the source commercial requirements still apply.
   `codex/packaging-phase-8` (PR #143), stacked on Phase 7, with the ordered
   release checklist for the whole stack. See `docs/PACKAGING-PHASE-8-VALIDATION.md`
   and `docs/PACKAGING-RELEASE-CHECKLIST.md`.
+- Phase 9 (the bench, the rig and hold/release follow the Plant part; the
+  rules compare a sign-in email lower-cased; the preview sign-in message
+  names the host) was built on `codex/packaging-phase-9`, stacked on Phase
+  8. See `docs/PACKAGING-PHASE-9-VALIDATION.md`.
 
 ## 1. What you are building
 

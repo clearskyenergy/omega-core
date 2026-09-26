@@ -155,12 +155,12 @@ Real sandbox acceptance has **not** been performed.
 
 ## Remaining acceptance and release debt
 
-- The bench (`api/mes-scan.js`, station tokens) and hold/release
-  (`api/plant-control.js`, tenant admins) do not run through `logic-access`
-  and are not part-gated; a station is minted through `logic-plant`, which
-  is, so a tenant without Plant cannot create one, but an existing station
-  token keeps scanning. `plant-release.js` (ClearSky staff) reads the Logic
-  context only to refuse releasing an Omega Logic tenant's order.
+- ~~The bench and hold/release are not part-gated.~~ Closed in Phase 9:
+  `logic-access.requirePartIfPackaged` gates the bench, the rig and
+  hold/release on the Plant part for a packaged workspace
+  (`PACKAGING-PHASE-9-VALIDATION.md`). `plant-release.js` (ClearSky staff)
+  reads the Logic context only to refuse releasing an Omega Logic tenant's
+  order.
 - Editor Lite for a tenant's customers (`editor-lite`, `lite-atlas`,
   `customer-design`, the Stripe subscription) is gated on the tenant's
   `editorLite.enabled` and the customer portal being open; it is not a

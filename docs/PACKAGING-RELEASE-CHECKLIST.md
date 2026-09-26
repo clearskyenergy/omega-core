@@ -21,9 +21,21 @@ is to be run by an agent without them.
 - [ ] Counsel's Agreement changes for clickwrap terms and the usage meters.
 - [ ] The tip branch (`codex/packaging-phase-8`) passes `npm test` and
       `npm run check:pages` on a clean checkout.
-- [ ] Firebase Authentication → Authorized domains carries the Vercel
-      preview hostnames you will click through (the "This site isn't
-      authorised for sign-in" screen is that list, not a code fault).
+- [ ] **Signing in on a preview (Tommy, console only).** "This site isn't
+      authorised for sign-in" on a `*.vercel.app` address is Firebase's
+      `auth/unauthorized-domain`: the hostname is not on the project's
+      list. Add each preview hostname you will click through under
+      Firebase → Authentication → Settings → Authorized domains (no
+      wildcards; one line per branch, e.g.
+      `omega-core-git-codex-packaging-phase-9-clearsky-usa.vercel.app`),
+      or sign in with email and password, which does not check the list.
+      Then sign in with an address whose domain is a workspace
+      (`tom@clearsky-usa.com` for ClearSky; a public-provider address such
+      as gmail has no workspace and is refused by design).
+- [ ] **The rules are deployed** (§4). Until then a person who signed up
+      with a capital letter in their address is refused every Team Hub
+      write and the terms acceptance: the deployed rules compare the token
+      email verbatim; the repo's compare it lower-cased (Phase 9).
 
 ## 1. Merge order
 
@@ -44,6 +56,7 @@ per-phase history and the guide manifests stay attached to their commits.
 | 8 | [#141](https://github.com/clearskyenergy/omega-core/pull/141) | 6 · proposal tool and signup discovery | #140 |
 | 9 | [#142](https://github.com/clearskyenergy/omega-core/pull/142) | 7 · usage, packs, review | #141 |
 | 10 | [#143](https://github.com/clearskyenergy/omega-core/pull/143) | 8 · Omega Logic follows the package | #142 |
+| 11 | Phase 9 PR (`codex/packaging-phase-9`) | 9 · the plant's doors and sign-in | #143 |
 
 After each merge: `npm test` on `main`; the Vercel production build is
 green; nothing changes for a tenant because every flag is off.
@@ -95,8 +108,11 @@ then prove it:
       at localhost:9297, project `demo-omega-packaging`).
 - [ ] Deploy `firestore.rules` and `storage.rules`.
 - [ ] Grep the **live** rules for `isTenantAdmin`, `opportunities`,
-      `pricebook`, `subscription_proposals`, `/usage/` and the packaged
-      write gates from Phase 4; each must read exactly as the repo's.
+      `pricebook`, `subscription_proposals`, `/usage/`, the packaged
+      write gates from Phase 4 and `token.email.lower()` in the team
+      blocks, `termsAcceptances` and `isAdmin()` (Phase 9); each must read
+      exactly as the repo's. Then sign in with a mixed-case password
+      account and post one Team Hub message.
 - [ ] `scripts/audit-counts.js` before and after; counts unchanged (a rules
       deploy moves no data).
 
@@ -142,8 +158,6 @@ the audit rows it writes.
   models and site screens are not counted (verify-token producers).
 - Packs expire with the cycle; no rollover; no refund beyond taking units
   back on a reversal.
-- The bench and hold/release do not run through `logic-access` and are not
-  part-gated (Phase 8 validation).
 - A tenant that never pays keeps receiving recurring invoices; the invoice
   DocNumber depends on the sandbox company's custom transaction numbers.
 - The Phase 2 browser-engine ports and the historic release inventory

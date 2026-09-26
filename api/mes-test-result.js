@@ -32,6 +32,7 @@
 var A = require('./_lib/admin');
 var P = require('./_lib/plant');
 var S = require('./_lib/plant-station');
+var X = require('./_lib/logic-access');
 var W = require('./_lib/plant-work');
 
 var PER_MINUTE = 120;
@@ -169,7 +170,6 @@ function record(db, FV, e) {
 
 /* ── a supervisor, by hand ─────────────────────────────────────────────── */
 function manual(req, body) {
-  var X = require('./_lib/logic-access');
   var org = A.safeOrg(body.org || body.orgId);
   if (!org) throw A.httpError(400, 'Valid org required');
   var serial = P.serialFrom(body.serial);
@@ -218,13 +218,15 @@ module.exports = A.handler(function (req) {
   var ncr = codeOf(body.ncr, 'ncr', false);
 
   var db = A.db(), FV = A.FieldValue();
-  return S.verify(db, stationId, token).then(function (checked) {
+  return S.verify(db, stationId, token).then(async function (checked) {
     var station = checked.data || {};
     var orgId = String(station.orgId || '').toLowerCase();
     var stationKey = String(station.station || '').toLowerCase();
     if (station.machine !== true || P.MACHINE_STATIONS.indexOf(stationKey) < 0) {
       throw A.httpError(403, 'this paired station is not authorised to submit machine test results');
     }
+    /* Phase 9: the rig is the Plant part's, like the bench */
+    await X.requirePartIfPackaged(orgId, 'plant');
     return record(db, FV, { orgId: orgId, serial: serial, scanId: scanId, stationKey: stationKey, passed: passed, measurements: measurements,
       failureCode: failureCode, ncr: ncr, source: 'machine', clientAt: S.clean(body.at, 40) || null,
       machine: { stationId: stationId, ref: checked.ref, tokenHash: station.tokenHash, program: S.clean(body.program, 100) || null, fixture: S.clean(body.fixture, 100) || null } });

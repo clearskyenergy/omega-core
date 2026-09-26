@@ -145,6 +145,25 @@ function seed() {
     });
     assert.match(read('api/_lib/buyer-accounts.js'), /X\.parts\(ctx\)\.indexOf\('customer'\) < 0\) throw A\.httpError\(403, 'This customer portal is not active'\)/, 'the customer portal and app are the Customer App part');
   });
+  await test('a token\'s or an administrator\'s door (the bench, the rig, hold/release): a packaged workspace must hold Plant; a legacy one, or one with no record, is left to its own rule', async function () {
+    seed();
+    var ctx = await X.requirePartIfPackaged('acme.example', 'plant');
+    assert.equal(ctx.orgId, 'acme.example'); assert.deepEqual(X.parts(ctx), ['plant', 'materials']);
+    await refused(X.requirePartIfPackaged('acme.example', 'logistics'), 403, /^Logistics & Warranty is not in your Omega Logic package$/, 'part');
+    await refused(X.requirePartIfPackaged('nooffice.example', 'plant'), 403, /subscription is not active/, 'inactive');
+    assert.equal(await X.requirePartIfPackaged('oldco.example', 'plant'), null, 'a legacy subscription: not judged here');
+    assert.equal(await X.requirePartIfPackaged('nobody.example', 'plant'), null, 'no omega_orgs record, no billing: not judged here');
+    db.seed('omega_orgs/thin.example/billing/current', { packaged: true, modules: ['lite', 'logic-office', 'logic-plant'], packagingState: 'paid', accessUntil: iso(NOW + 9 * DAY) });
+    await refused(X.requirePartIfPackaged('thin.example', 'plant'), 403, /subscription is not active/, 'inactive'); /* packaged billing with no organization record: closed, never open by accident */
+    await refused(X.requirePartIfPackaged('not an org', 'plant'), 400, /Valid org required/);
+    /* the three doors call it */
+    var scan = read('api/mes-scan.js');
+    assert.equal((scan.match(/S\.verify\((?:[^()]|\([^()]*\))*\)\.then\(plantDoor\)/g) || []).length, 3, 'every station verification is followed by the plant door');
+    assert.equal((scan.match(/S\.verify\(/g) || []).length, 3, 'and there are no others');
+    assert.match(scan, /function plantDoor\(checked\) \{ return X\.requirePartIfPackaged\(checked\.data\.orgId, 'plant'\)/);
+    assert.match(read('api/mes-test-result.js'), /station\.machine !== true[^]*?await X\.requirePartIfPackaged\(orgId, 'plant'\);[^]*?return record\(/, 'the rig, after the station is known and before the result is recorded');
+    assert.match(read('api/plant-control.js'), /if \(!admin\) throw A\.httpError\(403[^]*?return X\.requirePartIfPackaged\(firstUnit\.orgId, 'plant'\);/, 'hold and release, after the administrator check');
+  });
   await test('the customer portal and app are the Customer App part: closed to a package without it, said as "not active"', async function () {
     seed();
     await refused(B.context('acme.example'), 403, /^This customer portal is not active$/);

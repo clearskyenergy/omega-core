@@ -1070,5 +1070,7 @@ register and the app's Sites tab; Customer App opens the customer portal and
 app to the workspace's customers. A page of a part not bought says so in one
 sentence ("Materials & Purchasing is not in your Omega Logic package"); the
 Package tab and Your plan are where a part is added. A workspace on the
-older Omega Logic subscription holds everything, as before. Not built: the
-bench's station tokens and hold/release do not check the Plant part.
+older Omega Logic subscription holds everything, as before. The bench, the
+test rig and a quality hold or release check the Plant part too (packaging
+Phase 9): a paired station of a workspace whose package lost Plant stops
+scanning with "Plant is not in your Omega Logic package".

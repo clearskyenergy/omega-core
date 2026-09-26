@@ -251,7 +251,12 @@ as Team is), the dashboard draws only their panels, and the Omega Logic app
 hides the Sites tab, the Deliver and materials rows and the customer-app rows
 it does not hold — and calls none of their endpoints. A legacy subscription
 (addon `omega-logic`) holds every part and is unchanged; a response without
-`parts` shows everything. Showing a link is never access.
+`parts` shows everything. Showing a link is never access. The doors that are
+not a member's — a bench or rig token (`api/mes-scan.js`,
+`api/mes-test-result.js`), a tenant administrator's hold or release
+(`api/plant-control.js`) — run `logic-access.requirePartIfPackaged(org,
+'plant')`: a packaged workspace must hold Plant; a legacy one, or one with no
+record yet, is left to the door's own rule.
 
 ## Where each piece is
 
@@ -330,7 +335,6 @@ the shell.
   a load's status, custody owns the units.
 - The PDF guides (`scripts/guides/*.html`) do not show the hubs, the Money
   screen or the CRM sections yet.
-- The bench (`api/mes-scan.js`, station tokens) and hold/release
-  (`api/plant-control.js`) do not run through `logic-access` and are not
-  gated on the Plant part; a station is minted through `logic-plant`, which
-  is. Editor Lite for a tenant's customers is not a priced Logic part.
+- Editor Lite for a tenant's customers is not a priced Logic part. (The
+  bench, the rig and hold/release follow the Plant part since packaging
+  Phase 9: `logic-access.requirePartIfPackaged`.)

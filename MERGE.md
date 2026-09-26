@@ -2249,3 +2249,13 @@ rule), and every Logic endpoint names the part it serves. The office chrome
 the PDF guides retaken because those screens changed. Nothing moved between
 browser and server; the browser-engine debt above remains. See
 docs/PACKAGING-PHASE-8-VALIDATION.md and docs/PACKAGING-RELEASE-CHECKLIST.md.
+
+## Packaging Phase 9 — September 26, 2026
+
+No `editor.html` edit, no page changed. The bench (`api/mes-scan.js`), the
+test rig (`api/mes-test-result.js`) and hold/release (`api/plant-control.js`)
+run `logic-access.requirePartIfPackaged(org, 'plant')`; `firestore.rules`
+compares the sign-in email lower-cased in the four team blocks,
+`termsAcceptances` and `isAdmin()`; `omega-auth-errors.js` names the
+preview hostname when a sign-in is refused for an unauthorised domain. See
+docs/PACKAGING-PHASE-9-VALIDATION.md.

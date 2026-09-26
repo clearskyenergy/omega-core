@@ -43,6 +43,23 @@ function requirePart(ctx, part) {
   if (!LOGIC_PARTS[part]) throw A.httpError(500, 'Unknown Omega Logic part');
   if (parts(ctx).indexOf(part) < 0) { var e = A.httpError(403, M.get(LOGIC_PARTS[part]).name + ' is not in your Omega Logic package'); e.reason = 'part'; throw e; }
 }
+/* A door that is not a member's — a bench or rig token (api/mes-scan.js,
+   api/mes-test-result.js), a tenant administrator's hold or release
+   (api/plant-control.js): a PACKAGED workspace must hold the part, judged
+   exactly as authorize() judges a member; a legacy workspace, or one with
+   no omega_orgs record yet, is left to the door's own rule (null). */
+async function requirePartIfPackaged(orgId, part) {
+  orgId = A.safeOrg(orgId);
+  if (!orgId) throw A.httpError(400, 'Valid org required');
+  var root = A.db().collection('omega_orgs').doc(orgId);
+  var rows = await Promise.all([root.get(), root.collection('billing').doc('current').get()]);
+  var billing = rows[1].exists ? rows[1].data() || {} : {};
+  if (billing.packaged !== true) return null;
+  var ctx = { orgId: orgId, org: rows[0].exists ? rows[0].data() || {} : {}, billing: billing, config: {}, member: null };
+  if (!subscribed(ctx)) { var ie = A.httpError(403, 'Omega Logic subscription is not active'); ie.reason = 'inactive'; throw ie; }
+  requirePart(ctx, part);
+  return ctx;
+}
 function enabled(ctx) { return subscribed(ctx) && ctx.config.enabled === true; }
 /* The context also carries the caller's standing in the workspace as
    `member` ({ role, status } off omega_orgs/{org}/members/{uid}; null for
@@ -88,5 +105,5 @@ async function requirePricer(c, ctx, order) {
   if (!subscribed(ctx)) { var ie = A.httpError(403, 'Omega Logic subscription is not active'); ie.reason = 'inactive'; throw ie; }
   return d.role;
 }
-module.exports = { owner: owner, requireOwner: requireOwner, context: context, subscribed: subscribed, enabled: enabled, authorize: authorize, parts: parts, requirePart: requirePart, LOGIC_PARTS: LOGIC_PARTS,
+module.exports = { owner: owner, requireOwner: requireOwner, context: context, subscribed: subscribed, enabled: enabled, authorize: authorize, parts: parts, requirePart: requirePart, requirePartIfPackaged: requirePartIfPackaged, LOGIC_PARTS: LOGIC_PARTS,
   officeAdmin: officeAdmin, access: access, requirePricer: requirePricer };

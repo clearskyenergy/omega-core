@@ -203,7 +203,12 @@ endpoint (`access.parts`), the front door and the customer-portal gate
 (`buyer-accounts.context`) report, and what the chrome, the hex hub, the
 dashboard and the Omega Logic app draw. A legacy tenant (addon `omega-logic`)
 is unchanged and holds every part; absent means "everything", a present list
-is the package. Showing a link is never access.
+is the package. Showing a link is never access. Phase 9: a door that is not
+a member's (the bench and rig tokens, a tenant admin's hold/release) runs
+`requirePartIfPackaged(org, 'plant')` — a packaged workspace must hold the
+part, a legacy or unrecorded one keeps its own rule — and `firestore.rules`
+compares a sign-in email lower-cased in the team blocks, `termsAcceptances`
+and `isAdmin()` (`scripts/tests/tsigninemail.js`), as `admin.js` does.
 
 Packaged editor presentation uses the server catalog through OmegaCaps;
 OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
