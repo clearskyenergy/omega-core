@@ -2,7 +2,7 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Validated September 26, 2026. [Draft PR #135](https://github.com/clearskyenergy/omega-core/pull/135); not merged.
+Validated September 26, 2026. Rebased onto Phase 0 with Tommy’s approval; combined npm test and check:pages passed again, including Phase 0’s 12 browser assertions. Hosted checks passed on the rebased code. [Draft PR #135](https://github.com/clearskyenergy/omega-core/pull/135); not merged.
 [Branch preview](https://omega-core-git-codex-packaging-phase-a-clearsky-usa.vercel.app) (Vercel GitHub integration).
 
 The shared project creator now presents seven illustrated multi-select
