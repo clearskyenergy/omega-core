@@ -2137,3 +2137,23 @@ not rewrite billing. Phase 4 still owns approval-started trials and billing.
 No pricing/modeling engine is changed or moved by this phase; existing engine
 debt above is outside this authentication-only editor edit. No tenant data,
 QuickBooks records, rules or production deployment changed.
+
+## Packaging Track A — September 26, 2026
+
+The shared `omega-newproject.js` now presents seven project cards. Solar +
+Storage expands to existing `der` + `bess` siteScopes. Existing scope keys
+and primary-type precedence remain stable; Building is additive. No saved
+project is migrated. The editor recognises Building for its existing project
+type selector. This is project metadata, not a new entitlement or engine.
+
+The existing OmegaRibbonIcons owner converts glyphs to a common SVG stroke
+family. OmegaShelf keeps the named duplicate tools hidden after late
+injection, and retires only the BESS Config and Viability ribbon launchers.
+`_openPadConfig` (equipment placement/configuration) and every draw function
+remain intact. No pricing, scoring, eligibility or finance engine changes
+were made; the existing browser-engine debt listed above remains.
+
+Workspace filtering and the catalog-based package gates remain Phase 3.
+Checks render the real shared dialog and isolated real ribbon owners with
+legacy standard/deluxe billing fixtures; they do not simulate future
+Lite/Field module entitlements or claim a full Maps/authenticated editor run.

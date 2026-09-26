@@ -42,6 +42,8 @@ jobs:
         run: |
           node scripts/test-caps.js
           node scripts/test-tenant-signup.js
+
+          node scripts/test-project-start.js
           node scripts/test-bess-sizer.js
           node scripts/test-site-intel.js
           node scripts/test-agent-sites.js

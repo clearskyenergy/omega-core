@@ -2327,7 +2327,7 @@ window.onerror = function(msg, src, line, col, err) {
         <!-- Beside Push to Marketplace on purpose: both are ways of taking a
              finished design outward. The marketplace lists a deal for capital
              to find; this one asks a named lender for a price. -->
-        <button class="rbtn" onclick="rbRun(openFinancingApply)" data-cap="export" title="Apply for financing — DLL pricing request. Carries the project across and collects the credit package."><span class="rb-ico" style="color:#F0A030">$</span><span class="rb-lbl">Apply for Financing</span></button>
+        <button class="rbtn" onclick="rbRun(openFinancingApply)" data-cap="export" title="Apply for financing — DLL pricing request. Carries the project across and collects the credit package."><span class="rb-ico" style="color:#F0A030">$</span><span class="rb-lbl">Apply for<br>Financing</span></button>
       </div>
       <div class="rpanel-cap">Marketplace</div>
     </div>
@@ -77645,6 +77645,14 @@ window._crmToastModal=_crmToastModal;
       ai:'a combined solar photovoltaic and battery energy storage (PV + BESS) installation',
       hint:'Both PV rapid-shutdown/array signage and NFPA 855 battery signage are included \u2014 this is the CSE non-export solar + storage combo.'
     },
+    building: {
+      label:'Building / Net-Zero', noun:'building', assembly:null,
+      sheets:{ e0:1,e10:1,e1:1,e12:0,e20:1,e30:1,e40:0,e50:1,s11:0,s12:0,s20:0,s30:0 },
+      names:{ e20:'E2.0 — Building Electrical One-Line', e30:'E3.0 — Signage' },
+      cover:{ model:'Building system', mfr:'Manufacturer' },
+      ai:'a building and net-zero energy project',
+      hint:'Begin with the building and its loads; add rooftop generation and storage as needed.'
+    },
     datacenter: {
       label:'Data Center / Compute Load',
       noun:'compute load facility', assembly:null,
@@ -77676,7 +77684,7 @@ window._crmToastModal=_crmToastModal;
               dcfc:'ev', ev:'ev', 'ev-dcfc':'ev', evdcfc:'ev',
               bess:'bess', storage:'bess', battery:'bess',
               solar:'solar', pv:'solar', solarpv:'solar',
-              der:'der', microgrid:'der',
+              der:'der', microgrid:'der', building:'building', netzero:'building',
               solarbess:'solarbess', 'solar+bess':'solarbess', 'solar-bess':'solarbess',
               'solar+storage':'solarbess', solarstorage:'solarbess',
               datacenter:'datacenter', compute:'datacenter', 'data-center':'datacenter', datacentre:'datacenter' };
@@ -141678,6 +141686,21 @@ challengeRow(s) +
 })();
 
 </script>
+<style id="omega-packaging-ribbon-style">
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+#ribbon [data-shelf-dupe],#ribbon [data-packaging-retired]{display:none!important}
+#ribbon .rb-ico,#ribbon .rs-ico,#ribbon .fi-ico,#ribbon .mi-ico{color:var(--accent,#6E9BE0)!important}
+#ribbon .rb-ico svg{width:22px!important;height:22px!important;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#ribbon .rs-ico svg,#ribbon .fi-ico svg,#ribbon .mi-ico svg{width:16px!important;height:16px!important}
+#ribbon .rbtn{max-width:88px;flex-shrink:0}
+#ribbon .rb-lbl{font-size:10px!important;line-height:1.2!important;max-width:82px;white-space:nowrap;word-break:normal;hyphens:none}
+#ribbon .rpanel-cap{font-size:9px!important;line-height:1.4;letter-spacing:.08em;text-transform:uppercase}
+@media(prefers-color-scheme:light){
+  #tb,#ribbon{--text:#16202B;--sub:#526273;--border:#D7DFE6;--bg:#F5F4F0;--navy:#fff;--accent:#2B5FA8;--hl:#2B5FA8;--hl-dim:#E6EEF9;background:#F5F4F0!important;color:#16202B}
+  #tb .rtab,#ribbon .rb-lbl,#ribbon .rpanel-cap{color:#526273!important}
+  #tb .rtab.active,#ribbon .rbtn:hover .rb-lbl{color:#16202B!important;background:#E6EEF9}
+}
+</style>
 <script id="omega-ribbon-icons-js">
 /* ====================================================================== *
  *  OMEGA RIBBON ICONS                                                    *
@@ -141704,6 +141727,28 @@ challengeRow(s) +
   if (window.OmegaRibbonIcons) return;
   var TAG = '[OmegaRibbonIcons]';
 
+  /* One stroke family for text glyphs and new injected buttons. Existing
+     SVG artwork stays semantic and is sized by the same rule. */
+  var GLYPHS = [
+    [/battery|bess|storage/i, 'M4 5h16v16H4zM8 2h8M12 8v10M8 13h8'],
+    [/charg|ev |dcfc|level.?2/i, 'M6 21V3h10v18M4 21h14M9 7h4v5H9zM16 7h3l2 3v8h-3'],
+    [/solar|generation|sun/i, 'M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2M8 8h8v8H8z'],
+    [/cost|budget|estimate|finance|value|bill/i, 'M4 3h16v18H4zM7 7h10M7 11h3M14 11h3M7 15h3M14 15h3'],
+    [/export|print|report|sheet|proposal|pdf/i, 'M5 2h9l5 5v15H5zM14 2v6h5M8 12h8M8 16h8'],
+    [/layer|map|site|plot|terrain|parcel/i, 'M2 6l6-3 8 3 6-3v15l-6 3-8-3-6 3zM8 3v15M16 6v15'],
+    [/line|draw|rect|circle|annot|text|dimension|calib|scale/i, 'M3 21l2-6L17 3l4 4L9 19zM14 6l4 4M3 21l6-2'],
+    [/undo|redo|reset|clear/i, 'M4 10a8 8 0 1 1 1 8M4 3v7h7'],
+    [/setting|config|library/i, 'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6'],
+    [/build|equipment|insert|pad|fence/i, 'M3 7l9-5 9 5v10l-9 5-9-5zM3 7l9 5 9-5M12 12v10']
+  ];
+  function glyph(span) {
+    var button = span.closest('button') || span.parentNode;
+    var text = button ? button.textContent : '';
+    var d = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z';
+    for (var i = 0; i < GLYPHS.length; i++) if (GLYPHS[i][0].test(text)) { d = GLYPHS[i][1]; break; }
+    span.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>';
+  }
+
   /* .rb-ico carries a fixed height:18px, which would clip an icon scaled
      past it. :has() would do this in CSS alone, but tagging the span keeps
      it working where :has() is unavailable — and the class is also what a
@@ -141713,6 +141758,7 @@ challengeRow(s) +
       '#ribbon .rb-ico, #ribbon .rs-ico, #ribbon .fi-ico, #ribbon .mi-ico');
     var n = 0;
     for (var i = 0; i < spans.length; i++) {
+      if (!spans[i].querySelector('svg')) glyph(spans[i]);
       var has = !!spans[i].querySelector('svg');
       if (has && !spans[i].classList.contains('omg-svg-ico')) {
         spans[i].classList.add('omg-svg-ico');
@@ -166460,11 +166506,24 @@ if (root.console && console.info) {
 
   /* ── the three operations ───────────────────────────────────────────── */
 
+  function retire() {
+    buttons().forEach(function (b) {
+      var command = b.getAttribute('onclick') || '';
+      if (b.id === 'rb-bess-config' || /openViabilityWorkflow/.test(command)) {
+        b.setAttribute('data-packaging-retired', '1');
+        b.hidden = true;
+        b.setAttribute('aria-hidden', 'true');
+      }
+    });
+  }
+
   function dedupe() {
+    retire();
     var seen = {}, n = 0;
     buttons().forEach(function (b) {
       var k = labelOf(b);
-      if (DEDUPE.indexOf(k) < 0) return;
+      if (DEDUPE.indexOf(k) < 0 || b.getAttribute('data-shelf-dupe')) return;
+      if (b.hidden || b.style.display === 'none') return;
       if (seen[k]) {
         remember(b);
         b.style.display = 'none';
@@ -166620,11 +166679,24 @@ if (root.console && console.info) {
       apply();
       var n = 0, iv = setInterval(function () {
         if (!applied) { apply(); return; }
-        move(); recaption(); hideEmptyPanels();
+        dedupe(); move(); recaption(); hideEmptyPanels();
         if (++n > 20) clearInterval(iv);
       }, 700);
     }, 1200);
   }
+
+  var polishPending = false;
+  function watchPolish() {
+    var ribbon = document.getElementById('ribbon');
+    if (!ribbon || !root.MutationObserver) return;
+    new MutationObserver(function () {
+      if (polishPending || !applied) return;
+      polishPending = true;
+      setTimeout(function () { polishPending = false; dedupe(); recaption(); }, 0);
+    }).observe(ribbon, { childList:true, subtree:true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchPolish);
+  else watchPolish();
 
   root.OmegaShelf = {
     apply: apply,
