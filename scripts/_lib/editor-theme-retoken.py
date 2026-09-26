@@ -72,13 +72,20 @@ NAVY = {
     'rgba(19,40,68,.45)': 'var(--inset)', 'rgba(28,51,80,.5)': 'var(--hairline)',
     '#ff6b6b': 'var(--bad)', '#f59e0b': 'var(--warn)', 'rgba(245,158,11,.10)': 'var(--hl-dim)',
     '#e8c89a': 'var(--text)', '#a6ddb4': 'var(--text)',
+    '#0f2040': 'var(--panel)', 'rgba(10,22,40,.92)': 'var(--scrim)', '#6b8cae': 'var(--sub)',
+    '#4a6080': 'var(--sub)', '#0b1e35': 'var(--panel)', '#0d1b2a': 'var(--navy)', '#243b55': 'var(--border)',
+    '#e2eaf4': 'var(--text)', '#0e1d33': 'var(--panel)',
 }
-if MODE == 'navy':
+if MODE.startswith('navy'):
     NL = re.compile('|'.join(re.escape(k) for k in NAVY), re.I)
     out = []; last = 0; count = collections.Counter()
     for m in NL.finditer(s):
-        i = m.start()
-        if kind_at(i) != 'style' or EXCL.search(line_text(i)): continue
+        i = m.start(); k = kind_at(i); before = s[line_start(i):i]; lt = line_text(i)
+        if MODE == 'navy': ok = (k == 'style')
+        elif MODE == 'navy-markup': ok = (k == 'html') and bool(re.search(r'style\s*="[^"]*$', before))
+        else:
+            ok = (k == 'script') and re.search(PROP + r'\s*:\s*[^;"\'`{}]*$', before, re.I) is not None and bool(re.search(r'style\s*=|cssText|\.style\.|innerHTML|insertAdjacentHTML|<style|createElement\(\s*[\'"]style', lt))
+        if not ok or EXCL.search(lt): continue
         tok = NAVY[m.group(0).lower()]
         out.append(s[last:i]); out.append(tok); last = m.end(); count[m.group(0) + ' -> ' + tok] += 1
     out.append(s[last:]); open(p, 'w', encoding='utf-8').write(''.join(out))
@@ -91,7 +98,7 @@ for m in LIT.finditer(s):
     i = m.start(); k = kind_at(i); lt = line_text(i); before = s[line_start(i):i]
     ok = False
     if MODE == 'css': ok = (k == 'style')
-    elif MODE == 'markup': ok = (k == 'html') and bool(re.search(r'style\s*=\s*["\'][^"\']*$', before))
+    elif MODE == 'markup': ok = (k == 'html') and bool(re.search(r'style\s*="[^"]*$', before))
     elif MODE == 'js' and k == 'script':
         same_string = re.search(PROP + r'\s*:\s*[^;"\'`{}]*$', before, re.I) is not None
         styled = bool(re.search(r'style\s*=|cssText|\.style\.|innerHTML|insertAdjacentHTML|<style|createElement\(\s*[\'"]style', lt))

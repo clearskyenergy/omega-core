@@ -1847,8 +1847,8 @@ window.onerror = function(msg, src, line, col, err) {
      deleting the button would be fine but deleting the tool would not.
      It was already marked LEAVING SOON and the BESS Sizer beside it does
      the same job; the ribbon slot is worth more than the second door. -->
-        <button class="rbtn" id="rb-bess-config" hidden aria-hidden="true" onclick="openBessModal(null)" title="BESS Config &mdash; size the battery, set chemistry, run the value stack. Being retired; the BESS Sizer replaces it." style="display:none;position:relative"><span class="rb-ico" style="color:#00D4FF">&#9881;</span><span class="rb-lbl">BESS<br>Config</span><span style="position:absolute;top:2px;right:3px;font-size:6.5px;font-weight:800;letter-spacing:.3px;background:rgba(239,68,68,.9);color:#FFF1F1;padding:1px 3px;border-radius:3px;line-height:1.2">LEAVING SOON</span></button>
-        <button class="rbtn" onclick="openBessSizer()" title="BESS Sizer &mdash; size, screen and qualify a site from the utility bill and site details. Analysis only, nothing is placed." style="position:relative"><span class="rb-ico" style="color:#00D4FF">&#9878;</span><span class="rb-lbl">BESS<br>Sizer</span></button>
+        <button class="rbtn" id="rb-bess-config" hidden aria-hidden="true" onclick="openBessModal(null)" title="BESS Config &mdash; size the battery, set chemistry, run the value stack. Being retired; the BESS Sizer replaces it." style="display:none;position:relative"><span class="rb-ico" style="color:var(--accent)">&#9881;</span><span class="rb-lbl">BESS<br>Config</span><span style="position:absolute;top:2px;right:3px;font-size:6.5px;font-weight:800;letter-spacing:.3px;background:rgba(239,68,68,.9);color:#FFF1F1;padding:1px 3px;border-radius:3px;line-height:1.2">LEAVING SOON</span></button>
+        <button class="rbtn" onclick="openBessSizer()" title="BESS Sizer &mdash; size, screen and qualify a site from the utility bill and site details. Analysis only, nothing is placed." style="position:relative"><span class="rb-ico" style="color:var(--accent)">&#9878;</span><span class="rb-lbl">BESS<br>Sizer</span></button>
         <button class="rbtn" onclick="openSolarBessSizer()" title="Solar &rarr; BESS Sizer &mdash; size storage from the solar drawn on the sitemap"><span class="rb-ico" style="color:#FBBF24">&#9788;</span><span class="rb-lbl">Solar BESS<br>Sizer</span></button>
         <button class="rbtn" onclick="homeStartWizard('BTM')" title="Behind-the-meter guided flow &mdash; coming soon" style="display:none;position:relative;opacity:.72"><span class="rb-ico">&#9644;</span><span class="rb-lbl">BESS<br>BTM</span><span style="position:absolute;top:2px;right:3px;font-size:6.5px;font-weight:800;letter-spacing:.3px;background:rgba(245,158,11,.9);color:#1A1206;padding:1px 3px;border-radius:3px;line-height:1.2">SOON</span></button>
         <button class="rbtn" onclick="homeStartWizard('FOM')" title="Solar + Storage single-pass flow — utility-first: POI to PV, branching at the 480V bus" style="position:relative;opacity:1"><span class="rb-ico" style="color:#FBBF24">&#9638;</span><span class="rb-lbl">Solar +<br>Storage</span></button>
@@ -2196,9 +2196,9 @@ window.onerror = function(msg, src, line, col, err) {
       <div class="rpanel-body">
         <button class="rbtn" onclick="rbRun(openViabilityWorkflow)"><span class="rb-ico">◪</span><span class="rb-lbl">Viability<br>Workflow</span></button>
         <button class="rbtn" onclick="rbRun(openComedPreQual)"><span class="rb-ico">⌇</span><span class="rb-lbl">Grid Pre-<br>Qualify</span></button>
-        <button class="rbtn" onclick="rbRun(function(){if(window.OmegaSubstation)OmegaSubstation.open();})" title="Find Substation &mdash; nearest substation to this address and a screening estimate of available MW. Places it on the site so it feeds the DER rollup and sets the ceiling for the Compute Build. Not a substitute for the utility interconnection study."><span class="rb-ico" style="color:#F59E0B">⌖</span><span class="rb-lbl">Find<br>Substation</span></button>
+        <button class="rbtn" onclick="rbRun(function(){if(window.OmegaSubstation)OmegaSubstation.open();})" title="Find Substation &mdash; nearest substation to this address and a screening estimate of available MW. Places it on the site so it feeds the DER rollup and sets the ceiling for the Compute Build. Not a substitute for the utility interconnection study."><span class="rb-ico" style="color:var(--warn)">⌖</span><span class="rb-lbl">Find<br>Substation</span></button>
         <button class="rbtn" onclick="openBillImport()" title="Import Utility Bill — paste bill text to autofill demand, usage, rate and demand charge for any utility"><span class="rb-ico" style="color:#4ADE80">&#9781;</span><span class="rb-lbl">Import<br>Bill</span></button>
-        <button class="rbtn" onclick="openSitePreQual()" title="Site Pre-Qualification — Phase 0 property viability score (open area, parking, title, zoning) run before utility engagement. ComEd bands as a benchmark; works for any utility."><span class="rb-ico" style="color:#00D4FF">&#9672;</span><span class="rb-lbl">Site<br>Pre-Qual</span></button>
+        <button class="rbtn" onclick="openSitePreQual()" title="Site Pre-Qualification — Phase 0 property viability score (open area, parking, title, zoning) run before utility engagement. ComEd bands as a benchmark; works for any utility."><span class="rb-ico" style="color:var(--accent)">&#9672;</span><span class="rb-lbl">Site<br>Pre-Qual</span></button>
         <button class="rbtn" onclick="openScorePanel()" title="Interconnection-Ease site score — utility, capacity, permitting, queue, land"><span class="rb-ico">◎</span><span class="rb-lbl">Site<br>Score</span></button>
         <button class="rbtn" onclick="rbRun(openDerAnalysis)" title="DER generation + revenue waterfall (solar/wind/gen → data center → PJM value stack)"><span class="rb-ico">⚡</span><span class="rb-lbl">DER<br>Generation</span></button>
         <button class="rbtn" onclick="rbRun(openNonExportCalc)" title="How much additional solar fits under a never-export ceiling for a given BESS size, simulated hour-by-hour against your 8760 load"><span class="rb-ico" style="color:#4ADE80">☀</span><span class="rb-lbl">Non-Export<br>Headroom</span></button>
@@ -2215,7 +2215,7 @@ window.onerror = function(msg, src, line, col, err) {
     </div>
     <div class="rpanel">
       <div class="rpanel-body">
-        <button class="rbtn" id="btn-dtwin" onclick="omegaDigitalTwinSoon()" title="Digital Twin — in development. The one-line handoff is built and callable now: omegaOneLineExport() / omegaTwinPush(siteId)." style="position:relative;opacity:.55"><span class="rb-ico" style="color:#38BDF8">◈</span><span class="rb-lbl">Digital<br>Twin</span><span id="btn-dtwin-soon" style="position:absolute;top:2px;right:2px;background:#F59E0B;color:#16202B;font-size:7px;font-weight:800;letter-spacing:.4px;line-height:1;padding:2px 3px;border-radius:2px;pointer-events:none">SOON</span></button>
+        <button class="rbtn" id="btn-dtwin" onclick="omegaDigitalTwinSoon()" title="Digital Twin — in development. The one-line handoff is built and callable now: omegaOneLineExport() / omegaTwinPush(siteId)." style="position:relative;opacity:.55"><span class="rb-ico" style="color:#38BDF8">◈</span><span class="rb-lbl">Digital<br>Twin</span><span id="btn-dtwin-soon" style="position:absolute;top:2px;right:2px;background:var(--warn);color:var(--ink);font-size:7px;font-weight:800;letter-spacing:.4px;line-height:1;padding:2px 3px;border-radius:2px;pointer-events:none">SOON</span></button>
       </div>
       <div class="rpanel-cap">Operations</div>
     </div>
@@ -2257,7 +2257,7 @@ window.onerror = function(msg, src, line, col, err) {
       <div class="rpanel-body">
         <!-- Set Plot retired: plots froze the map into a raster, which disabled
      anchoring entirely. Restore by re-instating this button:
-     <button class="rbtn" id="rb-setplot" onclick="setPlot()" title="Capture &amp; lock the current satellite view as a fixed, calibrated plot layer — nothing moves and +/- zooms the plot and your drawings together"><span class="rb-ico" style="color:#00D4FF">📌</span><span class="rb-lbl">Set<br>Plot</span></button> -->
+     <button class="rbtn" id="rb-setplot" onclick="setPlot()" title="Capture &amp; lock the current satellite view as a fixed, calibrated plot layer — nothing moves and +/- zooms the plot and your drawings together"><span class="rb-ico" style="color:var(--accent)">📌</span><span class="rb-lbl">Set<br>Plot</span></button> -->
         <button class="rbtn" id="rb-gps" onclick="openGpsPlacement()" title="GPS Placement — drop equipment by latitude/longitude on a live Google Map. Markers lock perfectly to their coordinates at any zoom (no drift), then apply to the canvas."><span class="rb-ico" style="color:#4285F4">📍</span><span class="rb-lbl">GPS<br>Place</span></button>
         <!-- Clear Plot retired: plots froze the map into a raster, which disabled
      anchoring entirely. Restore by re-instating this button:
@@ -2274,9 +2274,9 @@ window.onerror = function(msg, src, line, col, err) {
         
         <button class="rbtn" onclick="openProjectIntelligence()" title="Project Intelligence — pursue / hold decision, readiness, economics and scenarios"><span class="rb-ico" style="color:#60A5FA">◆</span><span class="rb-lbl">Project<br>Intelligence</span></button>
         <button class="rbtn" onclick="openRpPanel('summary')" title="Site map summary — BESS, conduit, equipment, DER"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
-        <button class="rbtn" id="rb-meters" aria-pressed="false" onclick="rbRun(toggleMeterPanel)" title="Group equipment by service meter — connected kW, storage and conduit per meter"><span class="rb-ico" style="color:#F59E0B">Ⓜ</span><span class="rb-lbl">Meters</span></button>
-        <button class="rbtn" id="rb-site" aria-pressed="false" onclick="rbRun(toggleSitePanel)" title="Live takeoff measured from the geometry, plus the ground-vs-pixel scale proof"><span class="rb-ico" style="color:#00D4FF">▦</span><span class="rb-lbl">Site<br>Map</span></button>
-        <button class="rbtn" id="rb-native" aria-pressed="false" onclick="rbRun(toggleNativeLayer)" title="Draw everything as native Google Maps objects — locked to the ground, to scale, no reprojection"><span class="rb-ico" style="color:#4A8FD8">◈</span><span class="rb-lbl">Native<br>Layer</span></button>
+        <button class="rbtn" id="rb-meters" aria-pressed="false" onclick="rbRun(toggleMeterPanel)" title="Group equipment by service meter — connected kW, storage and conduit per meter"><span class="rb-ico" style="color:var(--warn)">Ⓜ</span><span class="rb-lbl">Meters</span></button>
+        <button class="rbtn" id="rb-site" aria-pressed="false" onclick="rbRun(toggleSitePanel)" title="Live takeoff measured from the geometry, plus the ground-vs-pixel scale proof"><span class="rb-ico" style="color:var(--accent)">▦</span><span class="rb-lbl">Site<br>Map</span></button>
+        <button class="rbtn" id="rb-native" aria-pressed="false" onclick="rbRun(toggleNativeLayer)" title="Draw everything as native Google Maps objects — locked to the ground, to scale, no reprojection"><span class="rb-ico" style="color:var(--accent)">◈</span><span class="rb-lbl">Native<br>Layer</span></button>
         <button class="rbtn" id="rb-dock-left" aria-pressed="false" onclick="rbRun(toggleDockLeft)" title="Dock the tool panel to the left of the screen as a vertical column"><span class="rb-ico">◧</span><span class="rb-lbl">Dock Left</span></button>
         <button class="rbtn" onclick="rbRun(toggleDiagPanel)" title="Anchor diagnostics — why equipment is or is not locked to the ground"><span class="rb-ico">⚠</span><span class="rb-lbl">Diagnose</span></button>
         <button class="rbtn" onclick="rbRun(toggleCompassPanel)" title="Compass — pan the view north / south / east / west, and frame the drawing"><span class="rb-ico">⊕</span><span class="rb-lbl">Compass</span></button>
@@ -2364,7 +2364,7 @@ window.onerror = function(msg, src, line, col, err) {
     </div>
     <div class="rpanel">
       <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(openCrmSettings)" title="Connect a CRM (Monday, Salesforce, HubSpot, Zoho) and map how OMEGA project data flows into it"><span class="rb-ico" style="color:#00D4FF">⇄</span><span class="rb-lbl">CRM<br>Integration</span></button>
+        <button class="rbtn" onclick="rbRun(openCrmSettings)" title="Connect a CRM (Monday, Salesforce, HubSpot, Zoho) and map how OMEGA project data flows into it"><span class="rb-ico" style="color:var(--accent)">⇄</span><span class="rb-lbl">CRM<br>Integration</span></button>
         <button class="rbtn" onclick="rbRun(openCrmSync)" title="Push the current project into your connected CRM"><span class="rb-ico" style="color:#1DB95A">⟳</span><span class="rb-lbl">Sync to<br>CRM</span></button>
       </div>
       <div class="rpanel-cap">Integrations</div>
@@ -2858,7 +2858,7 @@ if(document.readyState==='loading'){
   <div id="lp-float-bar" onmousedown="_startPanelDrag(event,'lp')" style="cursor:move">
     <span id="lp-float-title">Controls</span>
     <div style="display:flex;gap:6px;align-items:center">
-      <button id="lp-float-min" onmousedown="event.stopPropagation()" onclick="minimizeLpPanel()" title="Minimize" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:var(--sub);border-radius:6px;width:26px;height:26px;cursor:pointer;font-family:inherit;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">–</button>
+      <button id="lp-float-min" onmousedown="event.stopPropagation()" onclick="minimizeLpPanel()" title="Minimize" style="background:var(--hover-strong);border:1px solid var(--hairline);color:var(--sub);border-radius:6px;width:26px;height:26px;cursor:pointer;font-family:inherit;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">–</button>
       <button id="lp-float-close" onmousedown="event.stopPropagation()" onclick="closeLpPanel()" title="Close panel">✕</button>
     </div>
   </div>
@@ -2957,7 +2957,7 @@ if(document.readyState==='loading'){
           <input id="brand-color-hex" type="text" placeholder="auto &mdash; taken from the logo" oninput="_brandSetColor(this.value)"
             style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 9px;border-radius:6px;font-size:12px;font-family:var(--font-mono,monospace);outline:none">
           <button onclick="_brandClearColor()" title="Go back to reading the colour from the logo"
-            style="background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;font-size:10px">Auto</button>
+            style="background:var(--hover);border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;font-size:10px">Auto</button>
         </div>
         <div id="brand-color-note" style="font-size:8.5px;color:var(--sub);margin-top:5px;line-height:1.4">Drives the colours on the DER analysis deck and report. Left on Auto, it is sampled from your logo.</div>
       </div>
@@ -3106,16 +3106,16 @@ if(document.readyState==='loading'){
     <div style="font-size:9px;color:var(--sub);margin-bottom:8px;line-height:1.4">Pull parcel, zoning &amp; utility data for the site address. Feeds the Interconnection-Ease score.</div>
     <div style="display:flex;flex-direction:column;gap:5px">
       <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--text)">
-        <input type="checkbox" id="layer-parcel" onchange="toggleDataLayer('parcel',this.checked)" style="accent-color:var(--gold)"> 🗺️ Parcels <span style="font-size:8px;color:var(--sub);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;margin-left:auto">Regrid</span>
+        <input type="checkbox" id="layer-parcel" onchange="toggleDataLayer('parcel',this.checked)" style="accent-color:var(--gold)"> 🗺️ Parcels <span style="font-size:8px;color:var(--sub);background:var(--hover);padding:1px 5px;border-radius:4px;margin-left:auto">Regrid</span>
       </label>
       <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--text)">
-        <input type="checkbox" id="layer-zoning" onchange="toggleDataLayer('zoning',this.checked)" style="accent-color:var(--gold)"> 🏛️ Zoning <span style="font-size:8px;color:var(--sub);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;margin-left:auto">AHJ GIS</span>
+        <input type="checkbox" id="layer-zoning" onchange="toggleDataLayer('zoning',this.checked)" style="accent-color:var(--gold)"> 🏛️ Zoning <span style="font-size:8px;color:var(--sub);background:var(--hover);padding:1px 5px;border-radius:4px;margin-left:auto">AHJ GIS</span>
       </label>
       <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--text)">
-        <input type="checkbox" id="layer-utility" onchange="toggleDataLayer('utility',this.checked)" style="accent-color:var(--gold)"> ⚡ Utility / Capacity <span style="font-size:8px;color:var(--sub);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;margin-left:auto">Hosting Map</span>
+        <input type="checkbox" id="layer-utility" onchange="toggleDataLayer('utility',this.checked)" style="accent-color:var(--gold)"> ⚡ Utility / Capacity <span style="font-size:8px;color:var(--sub);background:var(--hover);padding:1px 5px;border-radius:4px;margin-left:auto">Hosting Map</span>
       </label>
       <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;color:var(--text)">
-        <input type="checkbox" id="layer-permit" onchange="toggleDataLayer('permit',this.checked)" style="accent-color:var(--gold)"> 📋 Permitting (AHJ) <span style="font-size:8px;color:var(--sub);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;margin-left:auto">Permit DB</span>
+        <input type="checkbox" id="layer-permit" onchange="toggleDataLayer('permit',this.checked)" style="accent-color:var(--gold)"> 📋 Permitting (AHJ) <span style="font-size:8px;color:var(--sub);background:var(--hover);padding:1px 5px;border-radius:4px;margin-left:auto">Permit DB</span>
       </label>
     </div>
     <div id="layer-data-out" style="margin-top:9px;font-size:10px;color:var(--sub);line-height:1.5"></div>
@@ -3256,7 +3256,7 @@ if(document.readyState==='loading'){
         <!-- AI-generated SVG overlay -->
         <svg id="schematic-svg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible" xmlns="http://www.w3.org/2000/svg"></svg>
         <!-- Drag handle / reposition mode indicator -->
-        <div id="schem-handle" style="display:none;position:absolute;top:6px;left:6px;background:rgba(0,212,255,.85);color:#16202B;border-radius:4px;padding:3px 8px;font-size:9px;font-weight:700;font-family:'IBM Plex Mono',monospace;pointer-events:none;z-index:10">✥ DRAG TO REPOSITION</div>
+        <div id="schem-handle" style="display:none;position:absolute;top:6px;left:6px;background:rgba(0,212,255,.85);color:var(--ink);border-radius:4px;padding:3px 8px;font-size:9px;font-weight:700;font-family:'IBM Plex Mono',monospace;pointer-events:none;z-index:10">✥ DRAG TO REPOSITION</div>
         <!-- Resize corner handle -->
         <div id="schem-resize" style="display:none;position:absolute;bottom:0;right:0;width:18px;height:18px;background:var(--accent);border-radius:3px 0 0 0;cursor:se-resize;z-index:11"
           onmousedown="schemStartResize(event)">
@@ -3281,7 +3281,7 @@ if(document.readyState==='loading'){
       <button onclick="zoomBg(-0.15)">−</button>
       <button onclick="resetBgZoom()" style="font-size:9px">RST</button>
       <button id="zc-unlock" onclick="setMapInteractive(true)" title="Map is locked — tap to unlock panning"
-        style="display:none;font-size:14px;background:rgba(244,160,32,.9);border-color:#F4A020;color:#16202B">🔓</button>
+        style="display:none;font-size:14px;background:rgba(244,160,32,.9);border-color:#F4A020;color:var(--ink)">🔓</button>
       <div id="zpct">100%</div>
     </div>
 
@@ -3310,7 +3310,7 @@ if(document.readyState==='loading'){
     </div>
 
     <!-- BESS pad picker modal -->
-    <div id="pad-modal" style="position:absolute;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:300">
+    <div id="pad-modal" style="position:absolute;inset:0;background:var(--scrim);display:none;align-items:center;justify-content:center;z-index:300">
       <div class="cal-box">
         <h3>▬ Place BESS Assembly (to scale)</h3>
         <p>Pick a model to size the pad in real feet, then choose what to include.</p>
@@ -3355,7 +3355,7 @@ if(document.readyState==='loading'){
     </div>
 
     <!-- Parking stalls picker modal -->
-    <div id="park-modal" style="position:absolute;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:300">
+    <div id="park-modal" style="position:absolute;inset:0;background:var(--scrim);display:none;align-items:center;justify-content:center;z-index:300">
       <div class="cal-box">
         <h3>▤ Parking Stall Array</h3>
         <p>Enter the grid of stalls to place.</p>
@@ -3531,7 +3531,7 @@ if(document.readyState==='loading'){
   <div class="e3-body" id="e3-new-body"></div>
 </div></div>
 
-<div id="report-overlay" style="display:none;position:fixed;inset:0;background:rgba(4,10,20,.85);z-index:9998;overflow-y:auto;padding:24px">
+<div id="report-overlay" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:9998;overflow-y:auto;padding:24px">
   <div id="report-card" style="max-width:1080px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.6)">
     <!-- Report header -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border);background:var(--panel)">
@@ -3545,7 +3545,7 @@ if(document.readyState==='loading'){
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="_reportShareLink()" style="display:flex;align-items:center;gap:6px;background:rgba(27,79,138,.35);border:1px solid rgba(46,134,193,.4);color:var(--text);border-radius:8px;padding:7px 13px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600">🔗 Share link</button>
         <button id="report-approve-btn" onclick="_reportToggleApprove()" style="background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.35);color:#22C55E;border-radius:8px;padding:7px 13px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600">✓ Mark Approved</button>
-        <button onclick="closeReport()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:var(--sub);border-radius:8px;width:32px;height:32px;cursor:pointer;font-family:inherit;font-size:15px">✕</button>
+        <button onclick="closeReport()" style="background:var(--hover-strong);border:1px solid var(--hairline);color:var(--sub);border-radius:8px;width:32px;height:32px;cursor:pointer;font-family:inherit;font-size:15px">✕</button>
       </div>
     </div>
     <!-- Tab bar -->
@@ -3564,7 +3564,7 @@ if(document.readyState==='loading'){
   <div id="scorep-float-bar" onmousedown="_startPanelDrag(event,'scorep')" style="cursor:move">
     <span id="scorep-float-title">Site Score</span>
     <div style="display:flex;gap:6px;align-items:center">
-      <button onmousedown="event.stopPropagation()" onclick="minimizeScorePanel()" title="Minimize" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:var(--sub);border-radius:6px;width:26px;height:26px;cursor:pointer;font-family:inherit;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center" id="scorep-float-min">–</button>
+      <button onmousedown="event.stopPropagation()" onclick="minimizeScorePanel()" title="Minimize" style="background:var(--hover-strong);border:1px solid var(--hairline);color:var(--sub);border-radius:6px;width:26px;height:26px;cursor:pointer;font-family:inherit;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center" id="scorep-float-min">–</button>
       <button onmousedown="event.stopPropagation()" onclick="closeScorePanel()" title="Close panel" id="scorep-float-close">✕</button>
     </div>
   </div>
@@ -3578,7 +3578,7 @@ if(document.readyState==='loading'){
   <div id="rp-float-bar" onmousedown="_startPanelDrag(event,'rp')" style="cursor:move">
     <span id="rp-float-title">Summary</span>
     <div style="display:flex;gap:6px;align-items:center">
-      <button id="rp-float-min" onmousedown="event.stopPropagation()" onclick="minimizeRpPanel()" title="Minimize" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:var(--sub);border-radius:6px;width:26px;height:26px;cursor:pointer;font-family:inherit;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">–</button>
+      <button id="rp-float-min" onmousedown="event.stopPropagation()" onclick="minimizeRpPanel()" title="Minimize" style="background:var(--hover-strong);border:1px solid var(--hairline);color:var(--sub);border-radius:6px;width:26px;height:26px;cursor:pointer;font-family:inherit;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">–</button>
       <button id="rp-float-close" onmousedown="event.stopPropagation()" onclick="closeRpPanel()" title="Close panel">✕</button>
     </div>
   </div>
@@ -3617,7 +3617,7 @@ if(document.readyState==='loading'){
   <div id="rp-cost" data-module="estimate" style="flex:1;overflow-y:auto;padding:0;display:none;flex-direction:column">
 
   <!-- Cost sub-tabs -->
-  <div style="display:flex;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)">
+  <div style="display:flex;border-bottom:1px solid var(--border);background:var(--inset)">
     <button onclick="setCostTab('costs')" id="ct-costs" class="cost-sub-tab active" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--accent);cursor:pointer;border-bottom:2px solid var(--accent)">💰 Costs</button>
     <button onclick="setCostTab('incentives')" id="ct-inc" class="cost-sub-tab" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent">🎁 Incentives</button>
     <button onclick="setCostTab('revenue')" id="ct-rev" class="cost-sub-tab" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent">📈 Revenue</button>
@@ -3640,7 +3640,7 @@ if(document.readyState==='loading'){
     <div id="ce-thru-sizer" style="background:linear-gradient(135deg,rgba(251,191,36,.07),rgba(34,197,94,.06));border:1px solid rgba(251,191,36,.3);border-radius:9px;padding:11px;margin-bottom:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <div style="font-size:10px;font-weight:800;color:#FBBF24;text-transform:uppercase;letter-spacing:.7px">☀ Solar → BESS Sizer</div>
-        <button onclick="ceThruSizerRun()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:var(--sub);border-radius:5px;padding:3px 9px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit">↻ Read sitemap</button>
+        <button onclick="ceThruSizerRun()" style="background:var(--hover-strong);border:1px solid rgba(255,255,255,.2);color:var(--sub);border-radius:5px;padding:3px 9px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit">↻ Read sitemap</button>
       </div>
       <div style="font-size:8.5px;color:var(--sub);line-height:1.5;margin-bottom:9px">Estimates the BESS needed for the <strong>solar drawn on the sitemap</strong>. Reads each array's footprint and kW-DC, models annual <strong>input → throughput → output</strong>, and recommends kWh / kW. Other DER on the map is included when present.</div>
 
@@ -3660,7 +3660,7 @@ if(document.readyState==='loading'){
       </div>
 
       <!-- Flow readout -->
-      <div id="ce-thru-flow" style="display:none;font-size:9.5px;line-height:1.7;background:rgba(0,0,0,.18);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px"></div>
+      <div id="ce-thru-flow" style="display:none;font-size:9.5px;line-height:1.7;background:var(--inset);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px"></div>
 
       <button onclick="ceThruSizerApply()" style="width:100%;padding:7px;background:linear-gradient(135deg,#FBBF24,#22C55E);color:#16202B;font-weight:800;font-size:9.5px;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Apply size → BESS config & estimate</button>
     </div>
@@ -3690,7 +3690,7 @@ if(document.readyState==='loading'){
     <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--red);margin-bottom:5px">⚡ Conduit & Wiring</div>
     <div style="font-size:9px;color:var(--sub);margin-bottom:5px;line-height:1.4">Material + labor rates per LF. Labor default $35/ft applies to both AC & DC runs.</div>
     <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px">
-      <div style="font-size:9px;font-weight:700;color:var(--sub);padding:2px 0;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:2px">DC Power (RMC)</div>
+      <div style="font-size:9px;font-weight:700;color:var(--sub);padding:2px 0;border-bottom:1px solid var(--hairline);margin-bottom:2px">DC Power (RMC)</div>
       <div class="ce-row"><span class="ce-lbl">Material ($/ft)</span><input class="ce-inp" id="ce-rmc-mat" type="number" value="11.5" step="0.5" oninput="_debounceCost()" onfocus="this.select()" onclick="this.select()"><span class="ce-unit" id="ce-rmc-ft">-- ft</span></div>
       <div class="ce-row"><span class="ce-lbl">Labor ($/ft)</span><input class="ce-inp" id="ce-rmc-labor" type="number" value="35" step="1" oninput="_debounceCost()" onfocus="this.select()" onclick="this.select()"></div>
       <div class="ce-row" style="margin-top:4px"><span style="font-size:9px;font-weight:700;color:var(--sub)">AC Power (RMC)</span></div>
@@ -3706,7 +3706,7 @@ if(document.readyState==='loading'){
       <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>AC material</span><span id="ce-emt-mat-total" style="color:var(--text)">$--</span></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>AC labor</span><span id="ce-emt-labor-total" style="color:var(--text)">$--</span></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>BMS/Data</span><span id="ce-bms-total" style="color:var(--text)">$--</span></div>
-      <div style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,.1);padding-top:4px;margin-top:2px"><span style="font-weight:700;color:var(--text)">Conduit total</span><span id="ce-conduit-total" style="color:var(--red);font-weight:700;font-family:'IBM Plex Mono',monospace">$--</span></div>
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--hairline);padding-top:4px;margin-top:2px"><span style="font-weight:700;color:var(--text)">Conduit total</span><span id="ce-conduit-total" style="color:var(--red);font-weight:700;font-family:'IBM Plex Mono',monospace">$--</span></div>
       <div id="ce-conduit-schedule" style="margin-top:8px;padding:7px;background:rgba(197,165,90,.04);border:1px solid rgba(197,165,90,.1);border-radius:5px"><div style="font-size:8.5px;color:var(--sub);text-align:center;padding:4px 0">Calibrate map to see LF schedule</div></div>
     </div>
 
@@ -3742,7 +3742,7 @@ if(document.readyState==='loading'){
         </div>
       </label>
       <div id="comed-panel" style="display:none">
-        <div style="font-size:9px;color:var(--sub);line-height:1.5;margin-bottom:8px;padding:6px 8px;background:rgba(0,0,0,.2);border-radius:5px">
+        <div style="font-size:9px;color:var(--sub);line-height:1.5;margin-bottom:8px;padding:6px 8px;background:var(--inset);border-radius:5px">
           <strong style="color:#60A5FA">ComEd BESH (Battery Energy Storage Honorarium)</strong> -- <strong style="color:#60A5FA">$250/kWh C&I</strong> of nameplate capacity.<br>
           <span style="color:#22C55E;font-size:8.5px">✓ STANDALONE storage qualifies -- solar pairing NOT required (IL CEJA, Public Act 102-0662, eff. 2022)</span><br>
           C&amp;I customers must enroll in the <strong style="color:#60A5FA">BESH rate plan</strong> and participate in ComEd <strong style="color:#60A5FA">demand response / peak load reduction</strong> program as a condition of rebate. Pre-approval required before installation.
@@ -3783,8 +3783,8 @@ if(document.readyState==='loading'){
         </div>
         <div class="ce-row"><span class="ce-lbl" title="PJM RegD regulation market clearing price (capability + performance), $/MW-hr. Manual 12 governs the mechanics; the $ price comes from PJM market data. Default is a mid-band estimate — verify current PJM RMCCP+RMPCP.">PJM RegD price ($/MW-hr)</span><input class="ce-inp" id="vs-regprice" type="number" step="0.5" value="14" onfocus="this.select()" onclick="this.select()"></div>
       </div>
-      <button onclick="runValueStackEstimate()" style="width:100%;margin-top:8px;padding:7px;background:rgba(0,212,255,.14);border:1px solid rgba(0,212,255,.4);color:var(--accent);font-weight:700;font-size:10px;border-radius:6px;cursor:pointer;font-family:inherit">⚡ Estimate Value Stack</button>
-      <div id="vs-result" style="display:none;margin-top:9px;background:rgba(0,0,0,.18);border-radius:6px;padding:9px"></div>
+      <button onclick="runValueStackEstimate()" style="width:100%;margin-top:8px;padding:7px;background:var(--hl-dim);border:1px solid rgba(0,212,255,.4);color:var(--accent);font-weight:700;font-size:10px;border-radius:6px;cursor:pointer;font-family:inherit">⚡ Estimate Value Stack</button>
+      <div id="vs-result" style="display:none;margin-top:9px;background:var(--inset);border-radius:6px;padding:9px"></div>
     </div>
 
     <div style="font-size:10px;color:var(--sub);margin-bottom:8px;line-height:1.4">Toggle the revenue streams and services that apply to this site. These feed the ROI model.</div>
@@ -3834,7 +3834,7 @@ if(document.readyState==='loading'){
     <!-- Year-by-year table -->
     <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--sub);margin-bottom:5px">Year-by-Year Cash Flow</div>
     <div id="roi-table" style="font-size:10px;color:var(--sub)"></div>
-    <div style="margin-top:8px;font-size:9px;color:var(--sub);line-height:1.5;padding:8px;background:rgba(255,255,255,.03);border-radius:6px">
+    <div style="margin-top:8px;font-size:9px;color:var(--sub);line-height:1.5;padding:8px;background:var(--hover);border-radius:6px">
       Projections assume 3% annual revenue growth, 2% O&M escalation, 8% discount rate. For illustrative purposes only.
     </div>
   </div>
@@ -3899,7 +3899,7 @@ if(document.readyState==='loading'){
     </div>
     <div id="gm-export-row" style="display:none;margin-top:8px">
       <button type="button" onclick="exportGridReport()"
-        style="width:100%;padding:9px;background:var(--gold);color:#0B1E35;border:none;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:.04em">
+        style="width:100%;padding:9px;background:var(--gold);color:var(--panel);border:none;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:.04em">
         Export PDF Report
       </button>
     </div>
@@ -3944,9 +3944,9 @@ if(document.readyState==='loading'){
     <button onclick="sldAddNode('dergen')" style="background:#4A1A1A;color:#fff;border:none;border-radius:4px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer" title="Standby generator">+ Gen</button>
     <button onclick="sldAddNode('derfc')" style="background:#3B2A5A;color:#fff;border:none;border-radius:4px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer" title="Fuel cell">+ Fuel Cell</button>
     <span style="width:1px;height:20px;background:rgba(255,255,255,.2);margin:0 2px"></span>
-    <button onclick="sldToggleWire()" id="sld-wire-btn" style="background:rgba(255,255,255,.1);color:#aaa;border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer">Wire Mode</button>
+    <button onclick="sldToggleWire()" id="sld-wire-btn" style="background:var(--hover-strong);color:#aaa;border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer">Wire Mode</button>
     <button onclick="sldDeleteSelected()" style="background:rgba(220,50,50,.15);color:#f88;border:1px solid rgba(220,50,50,.3);border-radius:4px;padding:4px 9px;font-size:10px;cursor:pointer">Delete</button>
-    <button onclick="sldClear()" style="background:rgba(255,255,255,.05);color:#888;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:4px 9px;font-size:10px;cursor:pointer">Clear All</button>
+    <button onclick="sldClear()" style="background:var(--hover);color:#888;border:1px solid var(--hairline);border-radius:4px;padding:4px 9px;font-size:10px;cursor:pointer">Clear All</button>
     <button onclick="sldAutoLayout()" style="background:rgba(197,165,90,.15);color:#C5A55A;border:1px solid rgba(197,165,90,.3);border-radius:4px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer">Auto-Layout</button>
     <button onclick="sldExportSVG()" style="background:#C5A55A;color:#0B1E35;border:none;border-radius:4px;padding:4px 11px;font-size:10px;font-weight:800;cursor:pointer;margin-left:auto">Export PDF</button>
   </div>
@@ -4032,7 +4032,7 @@ if(document.readyState==='loading'){
         <h3 id="bm-title" style="margin:0 0 2px">Configure BESS Unit</h3>
         <div style="font-size:10px;color:var(--sub)">Select a system from the catalog -- grid pre-qualification runs automatically</div>
       </div>
-      <button onclick="closeBessModal()" style="background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px;line-height:1">✕</button>
+      <button onclick="closeBessModal()" style="background:var(--hover);border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px;line-height:1">✕</button>
     </div>
 
     <!-- Two-column layout: left = config, right = pre-qual -->
@@ -4099,15 +4099,15 @@ if(document.readyState==='loading'){
         <div style="background:rgba(27,79,138,.1);border:1px solid rgba(96,165,250,.25);border-radius:8px;padding:9px;margin-bottom:4px">
           <div style="font-size:9px;font-weight:700;color:#60A5FA;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">⚡ Operating Mode</div>
           <div style="display:flex;gap:6px">
-            <label style="flex:1;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 8px;display:flex;align-items:flex-start;gap:7px" id="bm-mode-btm-label">
+            <label style="flex:1;cursor:pointer;background:var(--hover);border:1px solid var(--hairline);border-radius:6px;padding:7px 8px;display:flex;align-items:flex-start;gap:7px" id="bm-mode-btm-label">
               <input type="radio" name="bm-opmode" id="bm-mode-btm" value="BTM" checked onchange="bmOnModeChange()" style="accent-color:#60A5FA;margin-top:1px;flex-shrink:0">
               <div>
                 <div style="font-size:10px;font-weight:700;color:var(--text)">BTM -- Behind the Meter</div>
                 <div style="font-size:8.5px;color:var(--sub);line-height:1.4;margin-top:1px">Peak shaving + demand charge reduction . Non-export . Trickle charges off-peak -> discharges on demand events . BESH honorarium eligible (BTM C&amp;I only) . NOT for PJM frequency regulation</div>
               </div>
             </label>
-            <label style="flex:1;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 8px;display:flex;align-items:flex-start;gap:7px" id="bm-mode-fom-label">
-              <input type="radio" name="bm-opmode" id="bm-mode-fom" value="FOM" onchange="bmOnModeChange()" style="accent-color:#F59E0B;margin-top:1px;flex-shrink:0">
+            <label style="flex:1;cursor:pointer;background:var(--hover);border:1px solid var(--hairline);border-radius:6px;padding:7px 8px;display:flex;align-items:flex-start;gap:7px" id="bm-mode-fom-label">
+              <input type="radio" name="bm-opmode" id="bm-mode-fom" value="FOM" onchange="bmOnModeChange()" style="accent-color:var(--warn);margin-top:1px;flex-shrink:0">
               <div>
                 <div style="font-size:10px;font-weight:700;color:var(--text)">FOM -- Front of Meter</div>
                 <div style="font-size:8.5px;color:var(--sub);line-height:1.4;margin-top:1px">PJM Frequency Regulation + capacity markets . Connects utility-side of meter . IEEE 1547 + full interconnection study required . CEJA distributed generation incentive eligible (CRGA S.1-75(c-5)) . PJM dispatches battery directly via RegD signal . BMS charge throttle manages interconnection . Primary FR business model</div>
@@ -4118,7 +4118,7 @@ if(document.readyState==='loading'){
 
                 <!-- BTM Peak Demand Shaving Analysis -- shown only when BTM selected -->
         <div id="bm-fom-demand-panel" style="display:none;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:10px;margin-bottom:4px">
-          <div style="font-size:9px;font-weight:700;color:#F59E0B;text-transform:uppercase;letter-spacing:.7px;margin-bottom:7px">📊 Peak Demand Shaving Sizer</div>
+          <div style="font-size:9px;font-weight:700;color:var(--warn);text-transform:uppercase;letter-spacing:.7px;margin-bottom:7px">📊 Peak Demand Shaving Sizer</div>
 
           <!-- Bill Upload Zone -->
           <div id="fom-upload-zone"
@@ -4128,7 +4128,7 @@ if(document.readyState==='loading'){
             ondrop="event.preventDefault();this.style.borderColor='rgba(245,158,11,.25)';this.style.background='rgba(245,158,11,.04)';fomHandleFileUpload(event.dataTransfer.files[0])"
             style="border:1.5px dashed rgba(245,158,11,.35);border-radius:7px;padding:10px;text-align:center;cursor:pointer;margin-bottom:7px;background:rgba(245,158,11,.04);transition:.2s">
             <div style="font-size:16px;margin-bottom:3px">📄</div>
-            <div style="font-size:9px;font-weight:700;color:#F59E0B">Upload Utility Bill</div>
+            <div style="font-size:9px;font-weight:700;color:var(--warn)">Upload Utility Bill</div>
             <div style="font-size:8px;color:var(--sub);margin-top:2px">PDF or image . AI extracts all values automatically</div>
             <div id="fom-upload-status" style="font-size:8px;color:var(--sub);margin-top:4px;min-height:12px"></div>
           </div>
@@ -4138,7 +4138,7 @@ if(document.readyState==='loading'){
           <div id="fom-parsed-summary" style="display:none;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:8px;margin-bottom:7px;font-size:8.5px">
             <div style="font-size:9px;font-weight:700;color:#22C55E;margin-bottom:5px">&#10003; Bill Parsed &mdash; <span id="fom-parsed-utility"></span></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px" id="fom-parsed-fields"></div>
-            <button onclick="fomClearBill()" style="margin-top:6px;background:none;border:1px solid rgba(255,255,255,.15);color:var(--sub);border-radius:4px;padding:2px 8px;font-size:8px;cursor:pointer;font-family:inherit">&#10005; Clear &amp; enter manually</button>
+            <button onclick="fomClearBill()" style="margin-top:6px;background:none;border:1px solid var(--hairline);color:var(--sub);border-radius:4px;padding:2px 8px;font-size:8px;cursor:pointer;font-family:inherit">&#10005; Clear &amp; enter manually</button>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
@@ -4146,13 +4146,13 @@ if(document.readyState==='loading'){
               <div style="font-size:8.5px;color:var(--sub);margin-bottom:3px">Annual Utility Bill ($)</div>
               <input id="fom-annual-bill" type="number" min="0" step="1000" placeholder="e.g. 120000"
                 oninput="fomRunDemandAnalysis()"
-                style="width:100%;background:var(--surface);border:1px solid rgba(245,158,11,.4);color:#F59E0B;padding:5px 8px;border-radius:5px;font-size:11px;font-family:'IBM Plex Mono',monospace;font-weight:700;box-sizing:border-box">
+                style="width:100%;background:var(--surface);border:1px solid rgba(245,158,11,.4);color:var(--warn);padding:5px 8px;border-radius:5px;font-size:11px;font-family:'IBM Plex Mono',monospace;font-weight:700;box-sizing:border-box">
             </div>
             <div>
               <div style="font-size:8.5px;color:var(--sub);margin-bottom:3px">Site Zip Code</div>
               <input id="fom-zipcode" type="text" maxlength="10" placeholder="e.g. 06108"
                 oninput="fomRunDemandAnalysis()"
-                style="width:100%;background:var(--surface);border:1px solid rgba(245,158,11,.4);color:#F59E0B;padding:5px 8px;border-radius:5px;font-size:11px;font-family:'IBM Plex Mono',monospace;font-weight:700;box-sizing:border-box">
+                style="width:100%;background:var(--surface);border:1px solid rgba(245,158,11,.4);color:var(--warn);padding:5px 8px;border-radius:5px;font-size:11px;font-family:'IBM Plex Mono',monospace;font-weight:700;box-sizing:border-box">
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
@@ -4203,7 +4203,7 @@ if(document.readyState==='loading'){
           </div>
           <div style="font-size:8px;color:var(--sub);margin-bottom:6px;line-height:1.4">
             <span style="color:#60A5FA;font-weight:700">Service size sets the BTM ceiling.</span> Non-export charging must fit under service capacity minus existing peak load (NEC 220/705). Leave blank to size on feeder + load only.
-            <button id="fom-ai-btn" onclick="fomAiEnhance()" style="padding:5px 8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#F59E0B;border-radius:5px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit">
+            <button id="fom-ai-btn" onclick="fomAiEnhance()" style="padding:5px 8px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:var(--warn);border-radius:5px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit">
               &#10022; AI-Enhance rates
             </button>
             <button onclick="document.getElementById('fom-bill-file').click()" style="padding:5px 8px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);color:#60A5FA;border-radius:5px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit">
@@ -4221,7 +4221,7 @@ if(document.readyState==='loading'){
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
             <div style="font-size:9px;font-weight:700;color:#22C55E;text-transform:uppercase;letter-spacing:.7px">⚙ BMS Charge Throttle</div>
             <button id="bm-bms-btn" onclick="bmToggleBmsThrottle()"
-              style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:var(--sub);border-radius:20px;padding:3px 10px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;transition:.2s">
+              style="background:var(--hover-strong);border:1px solid rgba(255,255,255,.2);color:var(--sub);border-radius:20px;padding:3px 10px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;transition:.2s">
               OFF
             </button>
           </div>
@@ -4245,7 +4245,7 @@ if(document.readyState==='loading'){
         <div id="bm-solar-sizing" style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.28);border-radius:8px;padding:10px;margin-bottom:4px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
             <div style="font-size:10px;font-weight:700;color:#FBBF24;text-transform:uppercase;letter-spacing:.7px">⚡ Size BESS from DER</div>
-            <button id="bm-solar-refresh" onclick="bmSolarSizingRefresh()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:var(--sub);border-radius:5px;padding:3px 9px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit">↻ Read site DER</button>
+            <button id="bm-solar-refresh" onclick="bmSolarSizingRefresh()" style="background:var(--hover-strong);border:1px solid rgba(255,255,255,.2);color:var(--sub);border-radius:5px;padding:3px 9px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit">↻ Read site DER</button>
           </div>
           <div style="font-size:8.5px;color:var(--sub);line-height:1.5;margin-bottom:8px">Reads the DER placed on the site map — solar, wind, gensets, fuel cell — and sizes storage to capture it. Adjust the strategy and target duration, then apply to the specs below.</div>
 
@@ -4385,7 +4385,7 @@ if(document.readyState==='loading'){
       </button>
       <button id="bm-save-btn" class="mb-s" onclick="saveBess()" style="position:relative;margin-left:auto">
         💾 Save & Place ✓
-        <span id="bm-save-prequal-badge" style="display:none;position:absolute;top:-8px;right:-8px;background:var(--green);color:#16202B;border-radius:10px;font-size:8px;font-weight:800;padding:2px 6px"></span>
+        <span id="bm-save-prequal-badge" style="display:none;position:absolute;top:-8px;right:-8px;background:var(--green);color:var(--ink);border-radius:10px;font-size:8px;font-weight:800;padding:2px 6px"></span>
       </button>
     </div>
   </div>
@@ -49156,14 +49156,14 @@ async function exportPermitPDF() {
 
 
 <!-- ══ JSON EXPORT MODAL ══ -->
-<div id="export-modal" style="display:none;position:fixed;inset:0;background:rgba(10,22,40,.92);z-index:9999;align-items:center;justify-content:center">
-  <div style="background:#0F2040;border:1px solid #1E3A5F;border-radius:14px;width:560px;max-width:94vw;max-height:90vh;overflow-y:auto;padding:28px 30px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+<div id="export-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;width:560px;max-width:94vw;max-height:90vh;overflow-y:auto;padding:28px 30px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
       <div>
-        <div style="font-family:'DM Sans',sans-serif;font-size:18px;font-weight:700;color:#E2EEF9">📋 Export to Proposal Generator</div>
-        <div style="font-size:11px;color:#6B8CAE;margin-top:3px">Project data ready to load into the BESS Proposal Generator</div>
+        <div style="font-family:'DM Sans',sans-serif;font-size:18px;font-weight:700;color:var(--text)">📋 Export to Proposal Generator</div>
+        <div style="font-size:11px;color:var(--sub);margin-top:3px">Project data ready to load into the BESS Proposal Generator</div>
       </div>
-      <button onclick="document.getElementById('export-modal').style.display='none'" style="background:rgba(255,255,255,.08);border:1px solid #1E3A5F;color:#6B8CAE;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;font-family:inherit">✕</button>
+      <button onclick="document.getElementById('export-modal').style.display='none'" style="background:var(--hover-strong);border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;font-family:inherit">✕</button>
     </div>
 
     <!-- Summary chips -->
@@ -49171,7 +49171,7 @@ async function exportPermitPDF() {
 
     <!-- Instructions -->
     <div style="background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:11px;color:#A0C4E0;line-height:1.7">
-      <strong style="color:#00D4FF">How to use:</strong><br>
+      <strong style="color:var(--accent)">How to use:</strong><br>
       1. Click <strong>Copy JSON</strong> below -- or <strong>Download .json file</strong><br>
       2. Open the <strong>'+brandName()+' BESS Proposal Generator</strong><br>
       3. Paste into <em>"Or paste JSON data"</em> field and click <strong>⚡ Parse &amp; Auto-Fill</strong><br>
@@ -49179,46 +49179,46 @@ async function exportPermitPDF() {
     </div>
 
     <!-- JSON preview -->
-    <textarea id="export-json-box" readonly style="width:100%;height:140px;background:rgba(0,0,0,.4);border:1px solid #1E3A5F;color:#6B8CAE;border-radius:7px;padding:10px;font-size:10px;font-family:'DM Mono',monospace;resize:none;margin-bottom:12px"></textarea>
+    <textarea id="export-json-box" readonly style="width:100%;height:140px;background:var(--scrim);border:1px solid var(--border);color:var(--sub);border-radius:7px;padding:10px;font-size:10px;font-family:'DM Mono',monospace;resize:none;margin-bottom:12px"></textarea>
 
     <!-- Action buttons -->
     <div style="display:flex;gap:8px">
       <button onclick="copyExportJson()" id="copy-btn" style="flex:1;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#16202B;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📋 Copy JSON</button>
-      <button onclick="downloadExportJson()" style="flex:1;background:#16202B;border:1px solid #1DB95A;color:#1DB95A;border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">⬇ Download .json</button>
+      <button onclick="downloadExportJson()" style="flex:1;background:var(--bg);border:1px solid #1DB95A;color:#1DB95A;border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">⬇ Download .json</button>
     </div>
   </div>
 </div>
 
 <!-- ══ PROPOSAL EXPORT MODAL ══ -->
-<div id="proposal-modal" style="display:none;position:fixed;inset:0;background:rgba(10,22,40,.92);z-index:9999;overflow-y:auto;padding:20px">
-  <div style="max-width:520px;margin:40px auto;background:#0F2040;border:1px solid #1E3A5F;border-radius:12px;overflow:hidden">
+<div id="proposal-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:9999;overflow-y:auto;padding:20px">
+  <div style="max-width:520px;margin:40px auto;background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden">
     <!-- Header -->
-    <div style="background:#16202B;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1E3A5F">
+    <div style="background:var(--bg);padding:18px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
       <div>
         <div id="prop-modal-brand" style="font-size:10px;color:#1DB95A;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px"></div>
-        <div style="font-size:16px;font-weight:700;color:#E2EEF9">Export Proposal</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)">Export Proposal</div>
       </div>
-      <button onclick="closeProposalExport()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#E2EEF9;border-radius:6px;padding:6px 12px;cursor:pointer;font-family:inherit;font-size:12px">✕ Close</button>
+      <button onclick="closeProposalExport()" style="background:var(--hover-strong);border:1px solid var(--hairline);color:var(--text);border-radius:6px;padding:6px 12px;cursor:pointer;font-family:inherit;font-size:12px">✕ Close</button>
     </div>
     <div style="padding:20px 24px">
       <!-- Project Info -->
       <div style="margin-bottom:16px">
-        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#6B8CAE;margin-bottom:10px;display:flex;align-items:center;gap:6px"><span style="width:3px;height:12px;background:#1DB95A;border-radius:2px;display:inline-block"></span>Project Information</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--sub);margin-bottom:10px;display:flex;align-items:center;gap:6px"><span style="width:3px;height:12px;background:#1DB95A;border-radius:2px;display:inline-block"></span>Project Information</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div><label style="font-size:10px;color:#6B8CAE;display:block;margin-bottom:3px">Project / Site Name</label>
-            <input id="prop-project" style="width:100%;background:rgba(255,255,255,.06);border:1px solid #1E3A5F;color:#E2EEF9;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="BESS Installation Site"></div>
-          <div><label style="font-size:10px;color:#6B8CAE;display:block;margin-bottom:3px">Site Address</label>
-            <input id="prop-address" style="width:100%;background:rgba(255,255,255,.06);border:1px solid #1E3A5F;color:#E2EEF9;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="Auto-filled from editor"></div>
-          <div><label style="font-size:10px;color:#6B8CAE;display:block;margin-bottom:3px">Client / Site Owner</label>
-            <input id="prop-client" style="width:100%;background:rgba(255,255,255,.06);border:1px solid #1E3A5F;color:#E2EEF9;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="Client name"></div>
-          <div><label style="font-size:10px;color:#6B8CAE;display:block;margin-bottom:3px">Utility Provider</label>
-            <input id="prop-utility" style="width:100%;background:rgba(255,255,255,.06);border:1px solid #1E3A5F;color:#E2EEF9;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="e.g. ComEd, PG&E"></div>
-          <div><label style="font-size:10px;color:#6B8CAE;display:block;margin-bottom:3px">Rep Name</label>
-            <input id="prop-rep" style="width:100%;background:rgba(255,255,255,.06);border:1px solid #1E3A5F;color:#E2EEF9;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="Your name"></div>
-          <div><label style="font-size:10px;color:#6B8CAE;display:block;margin-bottom:3px">Proposal #</label>
-            <input id="prop-num" style="width:100%;background:rgba(255,255,255,.06);border:1px solid #1E3A5F;color:#E2EEF9;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="NX-2025-001"></div>
-          <div><label style="font-size:10px;color:#6B8CAE;display:block;margin-bottom:3px">Project Type</label>
-            <select id="prop-type" style="width:100%;background:rgba(255,255,255,.06);border:1px solid #1E3A5F;color:#E2EEF9;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit">
+          <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Project / Site Name</label>
+            <input id="prop-project" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="BESS Installation Site"></div>
+          <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Site Address</label>
+            <input id="prop-address" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="Auto-filled from editor"></div>
+          <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Client / Site Owner</label>
+            <input id="prop-client" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="Client name"></div>
+          <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Utility Provider</label>
+            <input id="prop-utility" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="e.g. ComEd, PG&E"></div>
+          <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Rep Name</label>
+            <input id="prop-rep" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="Your name"></div>
+          <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Proposal #</label>
+            <input id="prop-num" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="NX-2025-001"></div>
+          <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Project Type</label>
+            <select id="prop-type" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit">
               <option value="bess">BESS (Battery Storage)</option>
               <option value="solar">Solar PV</option>
               <option value="solar_bess">Solar + Storage</option>
@@ -49236,21 +49236,21 @@ async function exportPermitPDF() {
       <!-- Live cost preview -->
       <div id="prop-cost-preview" style="background:rgba(29,185,90,.07);border:1px solid rgba(29,185,90,.2);border-radius:8px;padding:12px;margin-bottom:16px">
         <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1DB95A;margin-bottom:8px">Cost Summary (from editor)</div>
-        <div id="prop-cost-lines" style="font-size:11px;color:#6B8CAE;line-height:1.8"></div>
+        <div id="prop-cost-lines" style="font-size:11px;color:var(--sub);line-height:1.8"></div>
         <div style="border-top:1px solid rgba(29,185,90,.2);margin-top:8px;padding-top:8px;display:flex;justify-content:space-between">
-          <span style="color:#E2EEF9;font-weight:700;font-size:12px">Estimated Total</span>
+          <span style="color:var(--text);font-weight:700;font-size:12px">Estimated Total</span>
           <span id="prop-grand-total" style="color:#1DB95A;font-weight:700;font-size:18px;font-family:'DM Mono',monospace">$--</span>
         </div>
       </div>
 
       <!-- Sitemap capture option -->
       <div style="background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:12px;margin-bottom:16px">
-        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#00D4FF;margin-bottom:8px">📸 Sitemap Image</div>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#6B8CAE">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:8px">📸 Sitemap Image</div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:var(--sub)">
           <input type="checkbox" id="prop-include-map" checked style="accent-color:#1DB95A">
           Capture current site map canvas and embed in proposal
         </label>
-        <div style="font-size:9px;color:#4A6080;margin-top:5px;line-height:1.4">The map will appear on a dedicated Sitemap page between the spec section and the financial summary.</div>
+        <div style="font-size:9px;color:var(--sub);margin-top:5px;line-height:1.4">The map will appear on a dedicated Sitemap page between the spec section and the financial summary.</div>
       </div>
 
       <!-- Generate button -->
@@ -49258,13 +49258,13 @@ async function exportPermitPDF() {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Generate & Download PDF
       </button>
-      <div id="prop-status" style="text-align:center;font-size:11px;color:#6B8CAE;margin-top:10px;min-height:16px"></div>
+      <div id="prop-status" style="text-align:center;font-size:11px;color:var(--sub);margin-top:10px;min-height:16px"></div>
     </div>
   </div>
 </div>
 
 <!-- ══ PROJECTS MODAL ══════════════════════════════════════ -->
-<div id="proj-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center">
+<div id="proj-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:9999;align-items:center;justify-content:center">
   <div style="background:var(--navy);border:1px solid var(--border);border-radius:12px;width:min(680px,95vw);max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6)">
     <!-- Header -->
     <div style="display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
@@ -49296,7 +49296,7 @@ async function exportPermitPDF() {
 </div>
 
 <!-- ══ NEW PROJECT MODAL ══════════════════════════════════ -->
-<div id="new-proj-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10000;align-items:center;justify-content:center">
+<div id="new-proj-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:10000;align-items:center;justify-content:center">
   <div style="background:var(--navy);border:1px solid var(--border);border-radius:12px;width:min(480px,95vw);box-shadow:0 20px 60px rgba(0,0,0,.6)">
     <div style="padding:20px 24px;border-bottom:1px solid var(--border)">
       <div style="font-size:16px;font-weight:700;color:var(--text)">＋ New BESS Project</div>
@@ -49331,7 +49331,7 @@ async function exportPermitPDF() {
     </div>
     <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
       <button onclick="document.getElementById('new-proj-modal').style.display='none'" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:8px 18px;font-size:12px;cursor:pointer">Cancel</button>
-      <button onclick="createNewProject()" style="background:var(--green);border:none;color:#16202B;border-radius:6px;padding:8px 20px;font-size:12px;font-weight:700;cursor:pointer">Create Project -></button>
+      <button onclick="createNewProject()" style="background:var(--green);border:none;color:var(--ink);border-radius:6px;padding:8px 20px;font-size:12px;font-weight:700;cursor:pointer">Create Project -></button>
     </div>
   </div>
 </div>
@@ -49552,7 +49552,7 @@ async function exportPermitPDF() {
   <button class="ctx-btn" onclick="ctxResetLabel()" style="width:100%;text-align:left;background:none;border:none;color:var(--sub);padding:7px 10px;font-size:12px;cursor:pointer;border-radius:4px;font-family:inherit;display:flex;align-items:center;gap:8px">
     <span>📌</span><span>Reset Label Position</span>
   </button>
-  <div style="height:1px;background:rgba(255,255,255,.06);margin:3px 0"></div>
+  <div style="height:1px;background:var(--hover);margin:3px 0"></div>
   <button class="ctx-btn" onclick="ctxDuplicate()" style="width:100%;text-align:left;background:none;border:none;color:var(--text);padding:7px 10px;font-size:12px;cursor:pointer;border-radius:4px;font-family:inherit;display:flex;align-items:center;gap:8px">
     <span>⧉</span><span>Duplicate</span>
   </button>
@@ -49850,7 +49850,7 @@ async function exportPermitPDF() {
         </div>
         <div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:2px">Feeder capacity . interconnection feasibility . max BESS size</div>
       </div>
-      <button onclick="document.getElementById('prequal-modal').style.display='none'" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);border-radius:7px;padding:6px 12px;cursor:pointer;font-size:13px;font-family:inherit;transition:all .12s" onmouseover="this.style.background='rgba(255,255,255,.15)'" onmouseout="this.style.background='rgba(255,255,255,.08)'">✕ Close</button>
+      <button onclick="document.getElementById('prequal-modal').style.display='none'" style="background:var(--hover-strong);border:1px solid var(--hairline);color:rgba(255,255,255,.7);border-radius:7px;padding:6px 12px;cursor:pointer;font-size:13px;font-family:inherit;transition:all .12s" onmouseover="this.style.background='rgba(255,255,255,.15)'" onmouseout="this.style.background='rgba(255,255,255,.08)'">✕ Close</button>
     </div>
 
     <!-- Address input row -->
@@ -49880,7 +49880,7 @@ async function exportPermitPDF() {
     <div id="pq-results" style="padding:14px 22px 20px;overflow-y:auto;flex:1"></div>
 
     <!-- Footer note -->
-    <div style="padding:10px 22px;border-top:1px solid rgba(255,255,255,.06);font-size:9px;color:var(--sub);flex-shrink:0;line-height:1.5">
+    <div style="padding:10px 22px;border-top:1px solid var(--hairline);font-size:9px;color:var(--sub);flex-shrink:0;line-height:1.5">
       ⚠ This analysis is AI-generated. The serving utility and interconnection rule are inferred from the site's state — service territory does not follow state lines, and municipal/co-op carve-outs are common — so always confirm the actual serving utility and its published hosting-capacity data before project commitment. Screening parameters follow IEEE 1547; incentive and tariff details are jurisdiction-specific. Requires an AI token (Settings &rarr; AI Keys) for full analysis — runs heuristic estimate without a token.
     </div>
   </div>
@@ -52200,23 +52200,23 @@ window.renderFreqReg = renderFreqReg;
         <div style="font-size:9px;color:#C5A55A;letter-spacing:.5px;margin-top:1px">9 Gated Investment Phases — Property Intake through Commercial Operation</div>
       </div>
       <div id="vw-pills" style="display:flex;gap:3px"></div>
-      <button onclick="closeViabilityWorkflow()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:5px;padding:4px 11px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">✕ Close</button>
+      <button onclick="closeViabilityWorkflow()" style="background:var(--hover-strong);border:1px solid var(--hairline);color:#fff;border-radius:5px;padding:4px 11px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">✕ Close</button>
     </div>
     <!-- SCENARIO BAR -->
-    <div id="vw-scenario-bar" style="background:#0B1E35;border-bottom:1px solid #243B55;display:flex;align-items:center;gap:6px;padding:7px 14px;flex-shrink:0;overflow-x:auto"></div>
+    <div id="vw-scenario-bar" style="background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;padding:7px 14px;flex-shrink:0;overflow-x:auto"></div>
     <!-- PHASE TABS -->
-    <div id="vw-tabs" style="background:#0D1B2A;border-bottom:1px solid #243B55;display:flex;overflow-x:auto;flex-shrink:0;padding:0 4px"></div>
+    <div id="vw-tabs" style="background:var(--navy);border-bottom:1px solid var(--border);display:flex;overflow-x:auto;flex-shrink:0;padding:0 4px"></div>
     <!-- BODY -->
     <div id="vw-body-wrap" style="display:flex;flex:1;overflow:hidden;position:relative">
     <div id="vw-compare" style="display:none"></div>
       <div id="vw-panel" style="flex:1;overflow-y:auto;padding:18px 22px"></div>
       <!-- SIDEBAR -->
-      <div style="width:210px;background:#0D1B2A;border-left:1px solid #243B55;overflow-y:auto;padding:12px;flex-shrink:0">
+      <div style="width:210px;background:var(--navy);border-left:1px solid var(--border);overflow-y:auto;padding:12px;flex-shrink:0">
         <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:#C5A55A;margin-bottom:9px;text-transform:uppercase">Phase Status</div>
         <div id="vw-scores" style="display:flex;flex-direction:column;gap:6px"></div>
         <div style="margin-top:14px">
           <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:#C5A55A;margin-bottom:7px;text-transform:uppercase">Decision</div>
-          <div id="vw-decision" style="border-radius:7px;padding:9px;text-align:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1)">
+          <div id="vw-decision" style="border-radius:7px;padding:9px;text-align:center;background:var(--hover);border:1px solid var(--hairline)">
             <div id="vw-dec-icon" style="font-size:20px;margin-bottom:3px">⏳</div>
             <div id="vw-dec-label" style="font-size:11px;font-weight:700;color:#8BA3C4">Pending</div>
             <div id="vw-dec-sub" style="font-size:8.5px;color:#8BA3C4;margin-top:3px;line-height:1.4">Complete phases to unlock</div>
@@ -52224,15 +52224,15 @@ window.renderFreqReg = renderFreqReg;
         </div>
         <div style="margin-top:12px">
           <button onclick="vwPrint()" style="width:100%;padding:6px;background:rgba(197,165,90,.1);border:1px solid rgba(197,165,90,.3);color:#C5A55A;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;font-family:inherit">🖨 Print Report</button>
-          <button onclick="vwReset()" style="width:100%;padding:6px;background:transparent;border:1px solid rgba(255,255,255,.08);color:#8BA3C4;border-radius:5px;cursor:pointer;font-size:9px;font-weight:600;font-family:inherit;margin-top:5px">↺ Reset All</button>
+          <button onclick="vwReset()" style="width:100%;padding:6px;background:transparent;border:1px solid var(--hairline);color:#8BA3C4;border-radius:5px;cursor:pointer;font-size:9px;font-weight:600;font-family:inherit;margin-top:5px">↺ Reset All</button>
         </div>
       </div>
     </div>
     <!-- FOOTER NAV -->
-    <div style="background:#0B1E35;border-top:1px solid #243B55;padding:9px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0">
-      <button id="vw-prev" onclick="vwPrev()" style="padding:6px 16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#8BA3C4;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">← Previous</button>
+    <div style="background:var(--panel);border-top:1px solid var(--border);padding:9px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0">
+      <button id="vw-prev" onclick="vwPrev()" style="padding:6px 16px;background:var(--hover);border:1px solid var(--hairline);color:#8BA3C4;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">← Previous</button>
       <div style="flex:1;text-align:center;font-size:10px;color:#8BA3C4" id="vw-footer-label"></div>
-      <button id="vw-next" onclick="vwNext()" style="padding:6px 18px;background:#C5A55A;color:#0B1E35;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:800;font-family:inherit">Next Phase →</button>
+      <button id="vw-next" onclick="vwNext()" style="padding:6px 18px;background:#C5A55A;color:var(--panel);border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:800;font-family:inherit">Next Phase →</button>
     </div>
   </div>
 </div>
@@ -119280,7 +119280,7 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         <div style="font-size:14px;font-weight:800;color:#fff;letter-spacing:.3px">Price Decks</div>
         <div style="font-size:9px;color:#60A5FA;letter-spacing:.5px;margin-top:1px">Nodal energy &amp; ancillary price series by settlement point</div>
       </div>
-      <button onclick="closePriceDecks()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:5px;padding:4px 11px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">&#10005; Close</button>
+      <button onclick="closePriceDecks()" style="background:var(--hover-strong);border:1px solid var(--hairline);color:#fff;border-radius:5px;padding:4px 11px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">&#10005; Close</button>
     </div>
     <div id="pd-body" style="flex:1;overflow-y:auto;padding:16px 20px"></div>
   </div>
