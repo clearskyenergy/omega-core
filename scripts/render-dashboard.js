@@ -140,6 +140,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok(name + ': auth answered within 8s (the splash came down)', ready, tReady);
     var steps = opts.steps || function () { return {}; };
     await wait(1400);   /* entitlements, listeners, the tools grid, the widgets */
+    /* a packaged workspace paints twice: once on the Firestore records and
+       again when /api/package-access answers. On a slow runner the checks
+       read between the two and saw a starter set drawn from the tier; wait
+       for the bound workspace to carry the projection and the grid to follow. */
+    if (fx.packageView) await p.waitForFunction(function () { var w = window.OMEGA_WORKSPACE; return !!(w && w.packageAccess && document.querySelectorAll('#dash-grid .pm-tile').length); }, null, { timeout: 8000 }).catch(function () {});
     var shown = await p.evaluate(function () {
       var g = function (id) { var e = document.getElementById(id); return e ? getComputedStyle(e).display : 'missing'; };
       return { splash: g('boot-splash'), auth: g('auth-screen'), app: g('app'), pending: !!document.getElementById('omega-pending'), terms: !!document.getElementById('ot-modal') };
@@ -283,9 +288,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   }, after: async function (p, ctx, mute) {
     /* sign out from the topbar: the session ends and the page goes to the front door.
        What login.html then logs (it imports Google's module SDK, stubbed here) is not the dashboard's. */
-    var nav = p.waitForNavigation({ timeout: 4000 }).then(function () { return p.url(); }, function () { return p.url(); });
+    /* mute at the COMMIT of the navigation, before login.html's own scripts run: on a slow runner
+       its stubbed module import threw before the load event, and the dashboard was blamed */
+    var nav = p.waitForURL(function (u) { return /\/login\.html$/.test(u.pathname); }, { timeout: 4000, waitUntil: 'commit' }).then(function () { mute(); return p.url(); }, function () { mute(); return p.url(); });
     await p.click('.tb-user .btn-signout:last-child');
-    var url = await nav; mute();
+    var url = await nav;
     ok('northstar: Sign Out ends the session and goes to /login.html', /\/login\.html$/.test(url), url);
     return { afterSignOut: url.replace(/^https?:\/\/[^/]+/, '') };
   } });
