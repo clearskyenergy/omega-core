@@ -91,6 +91,12 @@ NAVY = {
     '#152a45': 'var(--surface)', '#1b2632': 'var(--bg)', '#22303d': 'var(--surface)',
     '#30404f': 'var(--border)', 'rgba(16,18,22,.86)': 'var(--panel)',
     '#2a3a49': {'bg': 'var(--blue)', 'border': 'var(--border)'},
+    # coloured TEXT (section headings, labels) tuned for a dark ground: the
+    # muted status tokens carry a legible value in both schemes
+    '#a78bfa': {'color': 'var(--purple)'}, '#60a5fa': {'color': 'var(--accent-2)'}, '#38bdf8': {'color': 'var(--accent-2)'},
+    '#22c55e': {'color': 'var(--green)'}, '#4ade80': {'color': 'var(--green)'}, '#1db95a': {'color': 'var(--green)'},
+    '#fbbf24': {'color': 'var(--amber)'}, '#f5a623': {'color': 'var(--amber)'}, '#a0c4e0': {'color': 'var(--sub)'},
+    'rgba(255,255,255,.25)': {'color': 'var(--sub)'},
 }
 if MODE.startswith('navy'):
     NL = re.compile('(?:' + '|'.join(re.escape(k) for k in NAVY) + ')(?![0-9a-fA-F])', re.I)
