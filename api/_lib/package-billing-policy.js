@@ -2,7 +2,7 @@
  * Pure subscription lifecycle calculations. No browser math or side effects.
  */
 'use strict';
-var M = require('./modules'), B = require('./pricebook'), P = require('./subscription-pricing'), R = require('./proration');
+var M = require('./modules'), P = require('./subscription-pricing'), R = require('./proration');
 function fail(message) { var e = new Error(message); e.status = 409; throw e; }
 function instant(v) { return typeof v === 'number' ? v : v && typeof v.toMillis === 'function' ? v.toMillis() : Date.parse(v); }
 function trialDays(book, configured) {
@@ -34,10 +34,19 @@ function approve(org, billing, selected, book, now, configuredTrialDays) {
   var days = trialDays(book, configuredTrialDays);
   if (billing.trialDurationDays != null) days = Math.min(days, trialDays(book, billing.trialDurationDays));
   var end = now + days * R.DAY, grants = M.resolve(selected.modules);
-  return Object.assign({}, selected, grants, { packaged: true, billingProvider: 'quickbooks', paymentProvider: 'quickbooks',
+  // The credit window starts when paying starts (trial end), so the trial
+  // never eats credit days. The book still bounds the window.
+  if (selected.credit) selected = Object.assign({}, selected, { credit: Object.assign({}, selected.credit, { startsAt: new Date(end).toISOString(), endsAt: new Date(end + book.credit.days * R.DAY).toISOString() }) });
+  return Object.assign({}, selected, grants, { subscription: subscription(selected, now), packaged: true, billingProvider: 'quickbooks', paymentProvider: 'quickbooks',
     qboEnv: 'sandbox', packagingState: days ? 'trial' : 'awaiting_payment', trialUsedAt: now, trialStartedAt: now, trialEndsAt: end,
     billingDay: new Date(signup).getUTCDate(), nextInvoiceOn: R.iso(end), subscriptionStartedAt: now,
     accessUntil: end, status: 'active', amountDue: 0, proposedPackage: null });
+}
+/* What the tenant BOUGHT. Written by approve/activate and by a paid change;
+ * never by reconciliation, which only decides what is switched on. */
+function subscription(selected, now) {
+  return { modules: M.normalize(selected.modules), plan: selected.plan, interval: selected.interval || 'monthly',
+    builders: selected.builders, viewers: selected.viewers, since: now };
 }
 function scaledLines(lines, numerator, denominator) {
   var out = lines.map(function (l) { return Object.assign({}, l, { quantity: 1, amountCents: Math.round(l.amountCents * numerator / denominator) }); });
@@ -48,7 +57,11 @@ function scaledLines(lines, numerator, denominator) {
 }
 function invoice(billing, book, on) {
   R.date(on);
-  var selected = billing.modules, start = instant(billing.subscriptionStartedAt), first = billing.firstInvoiceOn == null;
+  // Modules and plan come from what the tenant bought (the subscription
+  // record); interval and logins stay the operational terms staff set.
+  var sub = billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription : { modules: billing.modules, plan: billing.plan };
+  billing = Object.assign({}, billing, { plan: sub.plan || billing.plan });
+  var selected = M.normalize(sub.modules), start = instant(billing.subscriptionStartedAt), first = billing.firstInvoiceOn == null;
   if (on !== billing.nextInvoiceOn) fail('Invoice must use the recorded next billing date');
   if (!isFinite(start)) fail('Subscription start is required');
   var feeStart = billing.firstInvoiceOn || on;
@@ -77,14 +90,15 @@ function invoice(billing, book, on) {
       Math.max(0, gross - Math.round(book.floorCents * numerator / denominator)));
     if (discount) lines.push({ itemKey: 'credit', name: 'Transformation credit', quantity: 1, amountCents: -discount });
   }
-  var feeDue = first || (billing.serviceFeeNextOn && billing.serviceFeeNextOn <= on), serviceFeeNextOn = billing.serviceFeeNextOn || null;
+  var feeDue = first || (billing.serviceFeeNextOn && billing.serviceFeeNextOn <= on), serviceFeeNextOn = billing.serviceFeeNextOn || null, feeNote = null;
   if (feeDue) {
     if (quote.serviceFee.amountCents) lines.push({ itemKey: 'service-fee', name: 'Annual service fee', quantity: 1, amountCents: quote.serviceFee.amountCents });
+    else if (quote.serviceFee.mode === 'waived') feeNote = 'Annual service fee: waived';
     serviceFeeNextOn = R.addYears(feeStart, year);
   }
-  return { date: on, period: { start: on, end: end }, lines: lines, modules: selected.slice(), plan: quote.plan,
+  return { date: on, period: { start: on, end: end }, lines: lines, modules: selected.slice(), plan: quote.plan, memo: feeNote,
     subtotalCents: lines.reduce(function (n, l) { return n + l.amountCents; }, 0), pricebookVersion: book.version,
     nextInvoiceOn: end, serviceFeeNextOn: serviceFeeNextOn, first: first, interval: interval,
     graceEndsOn: R.businessDays(on, book.policy.failedPaymentGraceBusinessDays), display: { subscription: quote.display.monthly, subtotal: P.money(lines.reduce(function (n, l) { return n + l.amountCents; }, 0)) } };
 }
-module.exports = { instant: instant, trialDays: trialDays, terms: terms, approve: approve, invoice: invoice };
+module.exports = { instant: instant, trialDays: trialDays, terms: terms, approve: approve, invoice: invoice, subscription: subscription };

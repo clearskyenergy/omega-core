@@ -35,7 +35,7 @@ function prepare(c, input, now) {
     if (c.billing.trialEndsAt != null) fail('Existing trial dates must be preserved; review the legacy tenant separately');
     var signup = Policy.instant(c.org.signedUpAt);
     if (!isFinite(signup) || signup > at) fail('Original signup date is required');
-    patch = Object.assign({}, selected, M.resolve(['lite']), { packaged: true, modules: ['lite'], packagingState: 'awaiting_payment',
+    patch = Object.assign({}, selected, M.resolve(['lite']), { packaged: true, modules: ['lite'], subscription: Policy.subscription(selected, at), packagingState: 'awaiting_payment',
       billingProvider: 'quickbooks', paymentProvider: 'quickbooks', qboEnv: 'sandbox',
       proposedPackage: selected, billingDay: new Date(signup).getUTCDate(), nextInvoiceOn: R.iso(at), subscriptionStartedAt: at,
       accessUntil: at, status: 'active' });
@@ -53,7 +53,7 @@ function display(c, p) {
     scheduledInvoice: p.action === 'approve' ? Policy.invoice(p.patch, c.book, p.patch.nextInvoiceOn) : null,
     customer: BP.customer(p.profile, c.root.id),
     trialStartsOnApproval: p.action === 'approve', billingDay: p.patch.billingDay,
-    canApply: process.env.PACKAGING_BILLING_ENABLED === 'true' && c.org.packagingSandbox === true && c.book.enabled === true,
+    canApply: process.env.PACKAGING_BILLING_ENABLED === 'true' && process.env.QBO_ENV === 'sandbox' && c.org.packagingSandbox === true && c.book.enabled === true,
     notice: p.action === 'approve' ? 'Approval creates the sandbox customer and starts the one trial. The first invoice is issued at trial end.' : 'Access starts only after the sandbox invoice is confirmed paid.' };
 }
 async function preview(db, orgId, input, now) { var c = await context(db, orgId, input.pricebookVersion); return display(c, prepare(c, input, now)); }
@@ -145,7 +145,7 @@ async function issue(db, orgId, now, deps) {
     if (existing.exists && existing.data().qboInvoiceId) return null;
     if (latest.nextInvoiceOn !== b.nextInvoiceOn) fail('Billing date changed; retry');
     if (latest.invoiceLock && latest.invoiceLock.until > now) fail('Invoice is already being issued');
-    var prepared = existing.exists ? existing.data() : Policy.invoice(Object.assign({}, latest, latest.proposedPackage || {}), c.book, latest.nextInvoiceOn);
+    var prepared = existing.exists ? existing.data() : Policy.invoice(latest, c.book, latest.nextInvoiceOn);
     prepared.marker = 'OMEGA subscription ' + orgId + ' / ' + prepared.date;
     tx.set(ref, Object.assign({}, prepared, { state: 'prepared', createdAt: prepared.createdAt || now }));
     tx.update(current, { invoiceLock: { date: prepared.date, until: now + 120000 } });
@@ -181,26 +181,62 @@ async function issue(db, orgId, now, deps) {
     throw e;
   }
 }
+/* What is switched on = what the tenant bought (billing.subscription),
+ * gated by the payment state of the SUBSCRIPTION invoices. A change record
+ * (Phase 5) only ever moves modules into or out of the subscription when
+ * QuickBooks shows it paid or reversed; a late payer drops to Lite for a
+ * while but never loses the package they bought. */
+function kindOf(r) { return r.kind === 'change' ? 'change' : 'subscription'; }
+function bought(billing, last) {
+  var sub = billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription : { modules: last.modules, plan: last.plan };
+  return { modules: M.normalize(sub.modules), plan: sub.plan };
+}
 function accessAfterInvoices(billing, records, book, now) {
-  var rows = records.filter(function (r) { return r.qboInvoiceId; }).sort(function (a, b) { return a.date.localeCompare(b.date); });
-  var paid = rows.filter(function (r) { return r.state === 'paid'; }), unpaid = rows.filter(function (r) { return r.state !== 'paid'; });
-  var patch = { amountDue: unpaid.reduce(function (n, r) { return n + Math.max(0, (r.totalCents || 0) - (r.paidCents || 0)); }, 0) / 100 };
-  if (rows.length) patch.paymentLink = unpaid.length && unpaid[0].state !== 'reversed' ? unpaid[0].paymentLink || null : null;
-  if (!rows.length) return patch;
-  if (rows.some(function (r) { return r.reconcileError; })) return Object.assign(patch, { packagingState: 'reconciliation_required', accessUntil: now });
-  if (rows.some(function (r) { return r.state === 'reversed'; })) return Object.assign(patch, { packagingState: 'unpaid', accessUntil: now });
+  var subs = records.filter(function (r) { return kindOf(r) === 'subscription' && r.qboInvoiceId; }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+  var changes = records.filter(function (r) { return kindOf(r) === 'change'; });
+  var paid = subs.filter(function (r) { return r.state === 'paid'; }), unpaid = subs.filter(function (r) { return r.state !== 'paid'; });
+  var openChanges = changes.filter(function (r) { return r.state === 'unpaid' && r.qboInvoiceId; }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+  var owing = unpaid.concat(openChanges);
+  var patch = { amountDue: owing.reduce(function (n, r) { return n + Math.max(0, (r.totalCents || 0) - (r.paidCents || 0)); }, 0) / 100 };
+  if (subs.length || openChanges.length) patch.paymentLink = unpaid.length && unpaid[0].state !== 'reversed' ? unpaid[0].paymentLink || null : (openChanges.length ? openChanges[0].paymentLink || null : null);
+  if (!subs.length) return patch;
+  if (subs.some(function (r) { return r.reconcileError; }) || changes.some(function (r) { return r.reconcileError; })) return Object.assign(patch, { packagingState: 'reconciliation_required', accessUntil: now });
+  if (subs.some(function (r) { return r.state === 'reversed'; })) return Object.assign(patch, { packagingState: 'unpaid', accessUntil: now });
   if (!paid.length) return Object.assign(patch, { packagingState: 'awaiting_payment', accessUntil: now });
-  var last = paid[paid.length - 1];
+  var last = paid[paid.length - 1], own = bought(billing, last);
   patch.paidThrough = last.period.end;
   if (unpaid.length) {
     var due = unpaid[0].date, grace = R.date(R.addDays(R.businessDays(due, book.policy.failedPaymentGraceBusinessDays), 1));
-    if (now >= grace) return Object.assign(patch, M.resolve(['lite']), { packagingState: 'past_due_lite', plan: 'alacarte',
-      pastDueSince: due, accessUntil: R.date(rows[rows.length - 1].period.end) });
-    return Object.assign(patch, M.resolve(last.modules), { packagingState: 'paid', pastDueSince: due, accessUntil: grace });
+    if (now >= grace) return Object.assign(patch, M.resolve(['lite']), { packagingState: 'past_due_lite', plan: own.plan,
+      pastDueSince: due, accessUntil: R.date(subs[subs.length - 1].period.end) });
+    return Object.assign(patch, M.resolve(own.modules), { packagingState: 'paid', plan: own.plan, pastDueSince: due, accessUntil: grace });
   }
-  return Object.assign(patch, M.resolve(last.modules), { packagingState: 'paid', plan: last.plan,
+  return Object.assign(patch, M.resolve(own.modules), { packagingState: 'paid', plan: own.plan,
     proposedPackage: null, pastDueSince: null, paidThrough: last.period.end,
     accessUntil: R.date(R.addDays(R.businessDays(last.period.end, book.policy.failedPaymentGraceBusinessDays), 1)) });
+}
+/* A change record moving to paid or reversed edits the subscription. Paid
+ * after its cycle rolled (or after a cancel) is still honoured — the
+ * customer paid — and flagged so a person can invoice the gap or refund. */
+function subscriptionAfterChange(billing, record, from, to, subs) {
+  var sub = billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription : null;
+  if (!sub) return null;
+  var modules = sub.modules.slice(), plan = sub.plan;
+  if (to === 'paid' && from !== 'paid') { (record.add || []).forEach(function (k) { if (modules.indexOf(k) < 0) modules.push(k); }); if (record.plan) plan = record.plan; }
+  else if (to === 'reversed' && from === 'paid') {
+    var coveredLater = subs.some(function (r) { return r.state === 'paid' && r.date >= (record.cycle ? record.cycle.end : '9999') && (r.modules || []).some(function (k) { return (record.add || []).indexOf(k) >= 0; }); });
+    if (!coveredLater) { modules = modules.filter(function (k) { return (record.add || []).indexOf(k) < 0; }); plan = record.planBefore || plan; }
+  } else return null;
+  modules = M.normalize(modules);
+  try { P.quote(modules, billing.__book, { plan: plan }); } catch (e) { plan = P.quote(modules, billing.__book, { plan: 'auto' }).plan; }
+  return Object.assign({}, sub, { modules: modules, plan: plan, changedAt: Date.now() });
+}
+/* Display fields that follow a grant change; used by reconcile and plan-change. */
+function displayAfter(patch, billing, book, now) {
+  if (!patch.modules) return patch;
+  var q = P.quote(patch.modules, book, { plan: patch.plan || billing.plan, builders: billing.builders, viewers: billing.viewers,
+    serviceFee: billing.serviceFee, credit: billing.credit, interval: billing.interval, now: now });
+  patch.monthlyCents = q.monthlyCents; patch.monthlyDisplay = q.display.monthly; return patch;
 }
 async function reconcile(db, orgId, now, deps, options) {
   var c = await context(db, orgId); guard(c);
@@ -214,34 +250,43 @@ async function reconcile(db, orgId, now, deps, options) {
   var rows = await query.get(), results = [], q = Q.driver(c.book, deps);
   for (var i = 0; i < rows.docs.length; i++) {
     var doc = rows.docs[i], record = doc.data(); if (!record.qboInvoiceId) continue;
-    var receipt, error = false;
-    try { receipt = await q.reconcile(record); } catch (e) { error = true; }
-    var state = error ? record.state : receipt.reversed ? 'reversed' : receipt.satisfied ? 'paid' : 'unpaid';
+    var receipt, error = false, transient = false;
+    // A transport failure (no status, or 5xx from the QuickBooks call) keeps
+    // the record as it was and is retried; only a validation failure, or
+    // three transport failures in a row, marks the record for review.
+    try { receipt = await q.reconcile(record); } catch (e) { if (!e.status || e.status >= 500) transient = true; else error = true; }
+    var state = error || transient ? record.state : receipt.reversed ? 'reversed' : receipt.satisfied ? 'paid' : 'unpaid', review = error;
     await db.runTransaction(async function (tx) {
       var invoices = await tx.get(collection.orderBy('date')), old = await tx.get(doc.ref), live = await tx.get(current);
-      var snapshot = old.data(), billing = live.data();
+      var snapshot = old.data(), billing = live.data(), subUpdate = null;
       if (snapshot.qboInvoiceId !== record.qboInvoiceId) fail('Invoice binding changed');
-      var update = { state: state, reconcileError: error, reconciledAt: now };
-      if (!error) { update.paymentLink = receipt.payUrl || null; update.paidCents = receipt.paidCents; }
-      var all = invoices.docs.map(function (d) { return d.id === doc.id ? Object.assign({}, d.data(), update) : d.data(); });
-      var patch = accessAfterInvoices(billing, all, c.book, now);
-      if (patch.modules) {
-        var displayQuote = P.quote(patch.modules, c.book, { plan: patch.plan || billing.plan, builders: billing.builders, viewers: billing.viewers,
-          serviceFee: billing.serviceFee, credit: billing.credit, interval: billing.interval, now: now });
-        patch.monthlyCents = displayQuote.monthlyCents; patch.monthlyDisplay = displayQuote.display.monthly;
+      var retries = transient ? (snapshot.reconcileRetries || 0) + 1 : 0;
+      if (transient && retries >= 3) { error = true; review = true; }
+      var subs = invoices.docs.map(function (d) { return d.data(); }).filter(function (r) { return kindOf(r) === 'subscription' && r.qboInvoiceId; });
+      if (kindOf(snapshot) === 'change' && !error && !transient) {
+        var rolled = subs.some(function (r) { return snapshot.cycle && snapshot.cycle.end && r.date >= snapshot.cycle.end; });
+        if (state === 'unpaid') state = snapshot.state === 'cancelled' ? 'cancelled' : (rolled || snapshot.state === 'expired') ? 'expired' : 'unpaid';
+        if (state === 'paid' && snapshot.state !== 'paid' && (rolled || snapshot.state === 'cancelled' || snapshot.state === 'expired')) review = true;
+        subUpdate = subscriptionAfterChange(Object.assign({}, billing, { __book: c.book }), snapshot, snapshot.state, state, subs);
       }
+      var update = { state: state, reconcileError: error, reconcileRetries: retries, reconciledAt: now, reviewRequired: review };
+      if (!error && !transient) { update.paymentLink = receipt.payUrl || null; update.paidCents = receipt.paidCents; }
+      var all = invoices.docs.map(function (d) { return d.id === doc.id ? Object.assign({}, d.data(), update) : d.data(); });
+      var afterBilling = subUpdate ? Object.assign({}, billing, { subscription: subUpdate }) : billing;
+      var patch = displayAfter(accessAfterInvoices(afterBilling, all, c.book, now), afterBilling, c.book, now);
+      if (subUpdate) patch.subscription = subUpdate;
       if (state === 'paid' && snapshot.state !== 'paid') patch.lastPaidAt = now;
       tx.update(doc.ref, update); tx.update(current, patch);
       if (snapshot.state !== state || !!snapshot.reconcileError !== error || billing.packagingState !== patch.packagingState) {
-        var event = { at: now, by: 'quickbooks-reconciliation', action: 'invoice-' + state, invoiceId: record.qboInvoiceId,
+        var event = { at: now, by: 'quickbooks-reconciliation', action: (kindOf(snapshot) === 'change' ? 'change-' : 'invoice-') + state, invoiceId: record.qboInvoiceId, reviewRequired: review,
           was: { state: snapshot.state, packagingState: billing.packagingState }, changed: { state: state, packagingState: patch.packagingState, modules: patch.modules || billing.modules } };
         tx.set(current.collection('history').doc(), event); tx.set(c.root.collection('admin_audit').doc(), event);
       }
     });
-    results.push({ invoiceId: record.qboInvoiceId, state: state, reviewRequired: error });
+    results.push({ invoiceId: record.qboInvoiceId, state: state, reviewRequired: review });
   }
   if (bounded) await current.update({ reconcileCursor: rows.docs.length === bounded ? rows.docs[rows.docs.length - 1].data().date : null });
   return { invoices: results };
 }
 module.exports = { context: context, guard: guard, prepare: prepare, display: display, preview: preview, apply: apply,
-  issue: issue, reconcile: reconcile, accessAfterInvoices: accessAfterInvoices };
+  issue: issue, reconcile: reconcile, accessAfterInvoices: accessAfterInvoices, displayAfter: displayAfter, kindOf: kindOf, bought: bought };

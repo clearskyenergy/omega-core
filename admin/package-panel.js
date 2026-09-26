@@ -80,6 +80,73 @@
       var d = el('td', row.action || 'Billing updated'), details = el('details'), summary = el('summary', 'Before and after'); details.appendChild(summary); details.appendChild(el('pre', JSON.stringify({ was: row.was, now: row.changed }, null, 2))); d.appendChild(details); r.appendChild(d); body.appendChild(r);
     }); table.appendChild(body); pane.appendChild(table);
   }
+  /* Your plan: what is on, what is waiting for payment, what to add (pay
+     first, prorated to the billing date), and removals queued for the
+     quarterly review. The same control as the editor's + Modules gallery. */
+  function yourPlan(pane, data) {
+    pane.textContent = '';
+    var b = data.billing, owned = b.modules || ['lite'], sequence = 0;
+    var head = el('div', '', 'pp-plan'); head.appendChild(el('div', 'Loading your plan…', 'pp-plan-name')); pane.appendChild(head);
+    function ordinal(d) { return d + (d % 10 === 1 && d !== 11 ? 'st' : d % 10 === 2 && d !== 12 ? 'nd' : d % 10 === 3 && d !== 13 ? 'rd' : 'th'); }
+    function headline(summary) {
+      head.textContent = '';
+      head.appendChild(el('div', (summary.planDisplay || 'Lite') + (summary.monthlyDisplay ? ' · ' + summary.monthlyDisplay : ''), 'pp-plan-name'));
+      head.appendChild(el('div', (summary.billingDay ? 'Billed on the ' + ordinal(summary.billingDay) + ' of each month' : 'Billing date follows the original signup day') + (summary.nextInvoiceOn ? ' · next invoice ' + summary.nextInvoiceOn : '') + (summary.packagingState ? ' · ' + summary.packagingState.replace(/_/g, ' ') : ''), 'pp-note'));
+      if (b.paymentLink) { var pay = el('a', 'Pay in QuickBooks', 'pp-pay'); pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; head.appendChild(pay); }
+    }
+    if (data.canManagePackage) pane.appendChild(el('p', 'This is what the customer sees. Actions here are taken on the customer’s behalf and billed to them.', 'pp-note'));
+    var pendingHost = el('div'); pane.appendChild(pendingHost);
+    pane.appendChild(el('h3', 'In your package'));
+    global.OmegaPackageMenu.picker(pane.appendChild(el('div')), { catalog: data.modules, modules: owned, readOnly: true });
+    var removals = el('div', '', 'pp-removals'); pane.appendChild(removals);
+    pane.appendChild(el('h3', 'Add to your package'));
+    var cards = el('div', '', 'pp-cards'); pane.appendChild(cards);
+    function draw(summary) {
+      headline(summary);
+      var pending = {}; (summary.pending || []).forEach(function (p) { (p.add || []).forEach(function (k) { pending[k] = p; }); });
+      var state = { canManage: true, pending: pending, onChanged: function () { setTimeout(function () { reload('cust'); }, 400); } };
+      pendingHost.textContent = '';
+      if (summary.pending && summary.pending.length) {
+        pendingHost.appendChild(el('h3', 'Waiting for payment'));
+        summary.pending.forEach(function (p) {
+          var row = el('div', '', 'pp-pending');
+          row.appendChild(el('span', (p.names || p.add).join(', ') + ' · ' + p.display + ' · pay before ' + p.expiresOn));
+          if (p.paymentLink) { var a = el('a', 'Pay in QuickBooks', 'pp-pay'); a.href = p.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); }
+          pendingHost.appendChild(row);
+        });
+      }
+      if (summary.gate && !summary.gate.canApply) pendingHost.appendChild(el('p', summary.gate.reason, 'pp-note'));
+      cards.textContent = '';
+      data.modules.filter(function (m) { return owned.indexOf(m.key) < 0; }).forEach(function (m) {
+        var card = global.OmegaPackageMenu.card(m, m.priceDisplay);
+        global.OmegaPackageMenu.subscribeControl(card.querySelector('.opm-act'), m, state);
+        cards.appendChild(card);
+      });
+      if (!cards.children.length) cards.appendChild(el('p', 'Your package includes every module in the catalog.', 'pp-note'));
+      removals.textContent = '';
+      var requested = {}; (summary.removalRequests || []).forEach(function (r) { requested[r.module] = r; });
+      var list = el('div', '', 'pp-row');
+      owned.filter(function (k) { return k !== 'lite'; }).forEach(function (k) {
+        var m = data.modules.filter(function (x) { return x.key === k; })[0]; if (!m) return;
+        var wrap = el('span', '', 'pkm-tag');
+        wrap.appendChild(document.createTextNode(m.name + ' '));
+        var b2 = button(requested[k] ? 'Withdraw removal request' : 'Remove at next review', function () {
+          b2.disabled = true;
+          global.OmegaPackageMenu.api('/api/plan-change', { action: requested[k] ? 'withdraw-removal' : 'request-removal', remove: [k] }).then(function () { refresh(); }, function (e) { message(e.message, true); b2.disabled = false; });
+        });
+        wrap.appendChild(b2); list.appendChild(wrap);
+      });
+      if (list.children.length) { removals.appendChild(el('p', 'Removals take effect at the quarterly review; your access is unchanged until then.', 'pp-note')); removals.appendChild(list); }
+    }
+    function refresh() {
+      var ticket = ++sequence;
+      global.OmegaPackageMenu.api('/api/plan-change?orgId=' + encodeURIComponent(orgId)).then(function (summary) { if (ticket === sequence) draw(summary); }, function (e) { if (ticket === sequence) pendingHost.textContent = e.message; });
+    }
+    refresh();
+  }
+  /* A subscription change re-reads the whole record (the picker, history and
+     plan line all move) and stays on the tab the person was using. */
+  function reload(keepTab) { return load().then(function () { if (keepTab) tab(keepTab); }); }
   function render(data, profile) {
     record = data; selected = data.billing.proposedPackage || data.billing; host.textContent = '';
     var heading = el('div', '', 'pp-head'), title = el('div'); title.appendChild(el('h2', data.name)); title.appendChild(el('div', orgId + ' · ' + data.pricebookVersion, 'pp-sub')); heading.appendChild(title); heading.appendChild(el('span', data.billing.packagingState || data.status, 'pp-pill')); host.appendChild(heading);
@@ -121,9 +188,7 @@
       [['write-invoice', 'QuickBooks invoice'], ['write-billing', 'Billing record'], ['write-customer', 'QuickBooks customer']].forEach(function (p) { var area = el('div'); area.appendChild(el('h3', p[1])); var pre = el('pre', 'Choose Review activation to load the server preview.'); pre.id = 'pp-' + p[0]; area.appendChild(pre); two.appendChild(area); });
       var applyButton = button('Apply reviewed changes', apply, 'pp-primary'); applyButton.id = 'pp-apply'; applyButton.disabled = true; panes.write.appendChild(applyButton);
     }
-    panes.cust.appendChild(el('p', data.canManagePackage ? 'Read-only preview of this tenant’s current plan. Subscription changes open in Your plan after checkout is available.' : 'Your current modules. Subscription checkout is being prepared.', 'pp-note'));
-    if (data.billing.paymentLink) { var pay = el('a', 'Pay in QuickBooks', 'pp-pay'); pay.href = data.billing.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; panes.cust.appendChild(pay); }
-    global.OmegaPackageMenu.picker(panes.cust.appendChild(el('div')), { catalog: data.modules, modules: data.billing.modules || ['lite'], readOnly: true });
+    yourPlan(panes.cust, data);
     history(data.history, panes.hist);
     if (data.canManagePackage && data.audit.length) { panes.hist.appendChild(el('h3', 'Admin audit')); history(data.audit, panes.hist); }
     var details = el('details'), summary = el('summary', 'Billing contact and address'); details.appendChild(summary); var form = el('div', '', 'obp-grid'); details.appendChild(form);

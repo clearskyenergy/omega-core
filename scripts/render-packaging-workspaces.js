@@ -5,7 +5,24 @@
 'use strict';
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var M = require('../api/_lib/modules'), X = require('../api/_lib/package-access');
+var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture');
 var ROOT = path.join(__dirname, '..'), output = process.env.WORKSPACE_SHOTS || path.join(ROOT, 'docs/screenshots/packaging-phase-3');
+var output5 = process.env.WORKSPACE_SHOTS || path.join(ROOT, 'docs/screenshots/packaging-phase-5');
+/* Phase 5: while `live` is set, /api/package-access and /api/plan-change are
+ * the REAL handlers over an in-memory Firestore seeded with a paid tenant;
+ * QuickBooks is a stand-in that counts invoices. The mock must be installed
+ * before the handler is required. */
+var LIVE_ORG = 'packaging.example', db = null, caller = null, live = false, sandboxInvoices = 0;
+H.mockAdmin(function () { return db; }, function () { return caller; }); H.mockQbo(function () { sandboxInvoices++; });
+process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
+var planChange = require('../api/plan-change');
+async function liveProjection() { var snap = await db.doc('omega_orgs/' + LIVE_ORG + '/billing/current').get(); return X.project({ emailVerified: true }, snap.data(), { status: 'active' }, { role: 'owner' }); }
+function json(route, status, body) { return route.fulfill({ status: status, contentType: 'application/json', body: JSON.stringify(body) }); }
+async function liveChange(route) {
+  var req = route.request(), url = new URL(req.url()), body = req.method() === 'POST' ? req.postDataJSON() : {};
+  try { return json(route, 200, await planChange({ method: req.method(), headers: {}, query: Object.fromEntries(url.searchParams), body: body }, { setHeader: function () {} })); }
+  catch (e) { return json(route, e.status || 500, { error: e.message }); }
+}
 var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium, count = 0;
 function ok(value, label) { assert(value, label); count++; }
 var server = http.createServer(function (req, res) {
@@ -48,7 +65,7 @@ function fixture(tier) {
 }
 
 async function run() {
-  fs.mkdirSync(output, { recursive: true });
+  fs.mkdirSync(output, { recursive: true }); fs.mkdirSync(output5, { recursive: true });
   await new Promise(function (resolve) { server.listen(0, '127.0.0.1', resolve); });
   var base = 'http://127.0.0.1:' + server.address().port;
   var browser = await chromium.launch({ executablePath: process.env.CHROME || chromium.executablePath() });
@@ -60,7 +77,9 @@ async function run() {
       await context.route('**/*', function (route) {
         var url = new URL(route.request().url());
         if (url.origin !== base) return route.fulfill({ status: 200, body: '' });
+        if (url.pathname === '/api/plan-change') return live ? liveChange(route) : json(route, 503, { error: 'Offline producer' });
         if (url.pathname === '/api/package-access') {
+          if (live) return liveProjection().then(function (p) { return json(route, 200, p); });
           var projection = view;
           if (route.request().method() === 'POST' && view.staff) {
             projection = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: route.request().postDataJSON().previewModules }, { status: 'active' }, { role: 'owner' });
@@ -70,7 +89,7 @@ async function run() {
         }
         if (url.pathname === '/api/package-catalog') {
           var B = require('../api/_lib/pricebook'), P = require('../api/_lib/subscription-pricing'), book = B.proposed();
-          return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ modules: M.catalog().map(function (m) { m.priceDisplay = P.money(book.modules[m.key].priceCents) + '/month'; return m; }) }) });
+          return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ canManage: live, modules: M.catalog().map(function (m) { m.priceDisplay = P.money(book.modules[m.key].priceCents) + '/month'; return m; }) }) });
         }
         if (url.pathname.indexOf('/api/') === 0) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Offline producer"}' });
         return route.continue();
@@ -172,6 +191,55 @@ async function run() {
       ok(await page.locator('[data-module-card="plansets"]').count() === 1, 'Ctrl+K/Jarvis unowned command opens module card');
       await page.evaluate(function () { OmegaPackageMenu.close(); });
       ok(await page.evaluate(function () { return OmegaCaps.packageAccess().modules.join() === 'lite'; }), 'discovery never grants access');
+      // Phase 5: the workspace OWNER on a paid Field package subscribes from the
+      // gallery. Pay first (a sandbox change invoice, nothing switched on), cancel,
+      // then a $0 addition inside the tier that switches on at once and shows
+      // its tools. The browser only displays what the server returned.
+      db = new F.DB(); db.serial = true; H.seedPaidTenant(db, { org: LIVE_ORG, name: 'Packaging preview', keys: M.starters().ev, plan: 'field', profile: H.profile(LIVE_ORG, 'Packaging preview'), member: 'fixture-user' });
+      caller = { uid: 'fixture-user', staff: false, email: 'designer@' + LIVE_ORG, orgId: LIVE_ORG, role: 'owner', claims: { email_verified: true } }; live = true; sandboxInvoices = 0;
+      var owned = M.normalize(M.starters().ev), storageAllowed = function () { var el = document.getElementById('rb-valuestack'); return !!el && OmegaCaps.allowedElement(el) && !el.classList.contains('omega-gated-hidden'); };
+      await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, await liveProjection());
+      ok(await page.evaluate(storageAllowed) === false, 'Storage tools are gated before it is bought');
+      await page.locator('#omega-package-tab').click();
+      var siteintel = page.locator('[data-subscribe="siteintel"]'), storage = page.locator('[data-subscribe="storage"]');
+      await siteintel.getByRole('button', { name: 'Subscribe', exact: true }).waitFor();
+      ok(await page.locator('[data-subscribe] .opm-primary').count() === M.catalog().length - owned.length, 'an owner sees Subscribe on every unowned card');
+      await siteintel.getByRole('button', { name: 'Subscribe', exact: true }).click();
+      await siteintel.locator('.opm-quote').waitFor();
+      ok(/^\$[\d,]+\.\d{2} today \(\d+ of \d+ days left until your billing date, \d{4}-\d{2}-\d{2}\)$/.test(await siteintel.locator('.opm-quote').textContent()), 'the quote is server-priced and prorated to the billing date');
+      await page.screenshot({ path: path.join(output5, 'editor-subscribe-quote-' + theme + '.png') });
+      await siteintel.getByRole('button', { name: 'Subscribe and pay' }).click();
+      await siteintel.getByRole('button', { name: 'Cancel request' }).waitFor();
+      ok(sandboxInvoices === 1, 'one sandbox change invoice is issued');
+      ok(await page.evaluate(function () { return OmegaCaps.packageAccess().modules.indexOf('siteintel') < 0; }), 'nothing switches on before the payment clears');
+      ok((await siteintel.textContent()).indexOf('Waiting for payment') >= 0 && await siteintel.getByRole('link', { name: 'Pay in QuickBooks' }).count() === 1, 'the card waits for payment with the QuickBooks pay link');
+      await page.screenshot({ path: path.join(output5, 'editor-subscribe-waiting-' + theme + '.png') });
+      await siteintel.getByRole('button', { name: 'Cancel request' }).click();
+      await siteintel.getByRole('button', { name: 'Subscribe', exact: true }).waitFor();
+      var changes = (await db.collection('omega_orgs').doc(LIVE_ORG).collection('billing').doc('current').collection('invoices').get()).docs.map(function (d) { return d.data(); }).filter(function (r) { return r.kind === 'change'; });
+      ok(changes.length === 1 && changes[0].state === 'cancelled', 'a cancelled change stays on record, marked cancelled');
+      await page.locator('#omega-package-menu').getByRole('button', { name: 'Close', exact: true }).first().click();
+      // A smaller Field package with room under its cap: the next addition is
+      // included in what they already pay for.
+      db = new F.DB(); db.serial = true; H.seedPaidTenant(db, { org: LIVE_ORG, name: 'Packaging preview', keys: ['lite', 'evrebates', 'estimate'], plan: 'field', profile: H.profile(LIVE_ORG, 'Packaging preview'), member: 'fixture-user' });
+      await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, await liveProjection());
+      ok(await page.evaluate(storageAllowed) === false, 'Storage tools are still gated on the smaller package');
+      await page.locator('#omega-package-tab').click();
+      await storage.getByRole('button', { name: 'Subscribe', exact: true }).waitFor();
+      await storage.getByRole('button', { name: 'Subscribe', exact: true }).click();
+      await storage.locator('.opm-quote').waitFor();
+      ok((await storage.locator('.opm-quote').textContent()).indexOf('no charge today') >= 0, 'a module inside the paid tier costs nothing today');
+      await storage.getByRole('button', { name: 'Turn it on' }).click();
+      await page.waitForFunction(function () { return OmegaCaps.packageAccess().modules.indexOf('storage') >= 0; });
+      await page.locator('[data-module-card="storage"]').waitFor({ state: 'detached' });
+      ok(sandboxInvoices === 1, 'nothing is invoiced for an included module');
+      ok(await page.evaluate(storageAllowed) === true, 'Storage tools appear without staff');
+      await page.screenshot({ path: path.join(output5, 'editor-subscribe-added-' + theme + '.png') });
+      await page.locator('#omega-package-menu').getByRole('button', { name: 'Close', exact: true }).first().click();
+      await page.evaluate(function () { rbTab('analyze'); });
+      await page.screenshot({ path: path.join(output5, 'editor-after-subscribe-' + theme + '.png') });
+      await page.evaluate(function () { rbTab('home'); });
+      live = false; db = null; caller = null;
       view = X.project({ staff: true }, { packaged: true }, null, null);
       await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
       await page.getByLabel('Viewing as package').selectOption('lite');
@@ -184,7 +252,7 @@ async function run() {
       ok(!errors.length, 'no full-editor JS errors: ' + errors.join('; '));
       await context.close();
     }
-    console.log('Full editor workspaces: ' + count + ' passed; 84 screenshots at 1280px and 1024px; offline service adapters.');
+    console.log('Full editor workspaces: ' + count + ' passed; 84 screenshots at 1280px and 1024px; offline service adapters. Phase 5 subscribe: 8 captures, real /api/plan-change over an in-memory Firestore, QuickBooks stand-in.');
   } finally { await browser.close(); server.close(); }
 }
 run().catch(function (e) { console.error(e); server.close(); process.exitCode = 1; });

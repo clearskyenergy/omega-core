@@ -2197,3 +2197,18 @@ Legacy layout modes remain for unpackaged records; packaged project focus
 cannot override module access. The dry-run backfill requires captured current
 tool access and flags grants outside the sold catalog, rather than deleting or
 automatically converting them. See docs/PACKAGING-PHASE-3-VALIDATION.md.
+
+
+## Packaging Phase 5 — September 26, 2026
+
+No `editor.html` edit. The shared + Modules gallery (`omega-package-menu.js`)
+gained the subscribe control: a quote, a pay-first change invoice or an
+immediate $0 activation, all from `POST /api/plan-change`; the browser
+displays server strings and grants nothing. The tools appear when the
+server projection says so. "Your plan" in the tenant record uses the same
+control. No draw implementation was touched and no financial engine moved;
+the proration and change math lives in `api/_lib/plan-change.js` and
+`api/_lib/package-billing.js`. What a tenant bought (`billing.subscription`)
+is now separate from what is switched on (`billing.modules`), so a late
+payment never rewrites the package. The browser-engine debt above remains.
+See docs/PACKAGING-PHASE-5-VALIDATION.md.

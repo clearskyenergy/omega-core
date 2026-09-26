@@ -50,10 +50,11 @@ async function run() {
   equal(Policy.invoice(annual, proposed, '2026-02-01').subtotalCents, 550000);
   equal(Policy.invoice(annual, proposed, '2026-02-01').nextInvoiceOn, '2027-02-01');
   rejects(function () { Policy.terms({ modules: ['lite'], interval: 'annual', credit: true }, proposed, now); }, /excludes the transformation credit/);
-  var discounted = Object.assign({}, recurring, { modules: ['lite', 'storage'], plan: 'alacarte', nextInvoiceOn: '2026-02-01',
+  // What is billed is the subscription record (what they bought), never the grant.
+  var discounted = Object.assign({}, recurring, { modules: ['lite'], subscription: { modules: ['lite', 'storage'], plan: 'alacarte' }, plan: 'alacarte', nextInvoiceOn: '2026-02-01',
     credit: { pct: 40, startsAt: '2026-01-01T00:00:00Z', endsAt: '2026-02-15T00:00:00Z' } });
   equal(Policy.invoice(discounted, proposed, '2026-02-01').subtotalCents, 60000); // credit only for 14 of 28 days
-  discounted.modules = ['lite'];
+  discounted.subscription = { modules: ['lite'], plan: 'alacarte' };
   equal(Policy.invoice(discounted, proposed, '2026-02-01').subtotalCents, 50000); // floor unaffected by credit
   var book = B.proposed(); book.qbo.realmId = '123'; book.qbo.items = { 'module:lite': '1', credit: '2' };
   var requests = [], storedCustomer, storedInvoice, payment;

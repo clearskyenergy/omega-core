@@ -23,6 +23,13 @@ operator assignments below; the source commercial requirements still apply.
 - Export to Monday (BETA) stays in **Lite** (explicit decision, 2026-09-26).
 - Annual prepay charges 11 months for 12 and **does not receive the
   transformation credit** (explicit decision, 2026-09-26).
+- A $0 module addition inside a tier whose current cycle is **already paid**
+  activates immediately; anything owed waits for the paid invoice
+  (explicit decision, 2026-09-26, option 1).
+- Phase 5 Step A (subscribe in the editor, Your plan, `POST /api/plan-change`)
+  was built on `codex/packaging-phase-5`, stacked on Phase 4, under the same
+  sandbox flags; Step B (card on file) stays off. See
+  `docs/PACKAGING-PHASE-5-VALIDATION.md`.
 
 ## 1. What you are building
 

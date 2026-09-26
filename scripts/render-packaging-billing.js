@@ -5,22 +5,17 @@
  */
 'use strict';
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
-var F = require('./_lib/firestore-double'), B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules');
+var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture'), B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules');
 var fixture, org, profile, db, caller, invoices = 0, checks = 0, shots = 0;
-var root = path.join(__dirname, '..'), out = path.join(root, 'docs/screenshots/packaging-phase-4');
-F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, authenticate: async function () { return caller; }, db: function () { return db; },
-  safeOrg: function (s) { return /^[a-z0-9.-]+\.[a-z]+$/.test(s || '') ? s : null; }, orgOf: function (s) { return s.split('@')[1]; },
-  isTenantAdmin: async function (c, o) { return c.staff || c.orgId === o && c.role === 'owner'; },
-  billingOf: async function (o) { var r = await db.doc('omega_orgs/' + o + '/billing/current').get(); return r.exists ? r.data() : {}; },
-  httpError: function (status, message) { var e = new Error(message); e.status = status; return e; },
-  FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; },
-  init: function () { return { auth: function () { return { setCustomUserClaims: async function () {} }; } }; } });
+var root = path.join(__dirname, '..'), out = path.join(root, 'docs/screenshots/packaging-phase-4'), out5 = path.join(root, 'docs/screenshots/packaging-phase-5');
+H.mockAdmin(function () { return db; }, function () { return caller; });
 fixture = require('./_lib/logic-fixtures'); org = fixture.ORG;
-profile = { legalName: fixture.brand.companyName || 'Clean Cell — test fixture', contactName: 'Fixture Owner', email: 'owner@' + org, phone: '555-0100',
- address: { line1: '1 Fixture Way', city: 'Chicago', state: 'IL', postalCode: '60601', country: 'US' }, vertical: 'oem', teamSize: 3 };
+profile = H.profile(org, fixture.brand.companyName);
 F.mock('../api/_lib/mail', { templates: { signupReceived: async function () {}, signupAlert: async function () {} } });
-require('../api/_lib/qbo-billing').driver = function () { return { customer: async function () { return 'C-fixture'; }, invoice: async function (plan) { invoices++; return { id: 'I-fixture', totalCents: plan.subtotalCents, payUrl: 'https://connect.intuit.com/pay/fixture' }; } }; };
-var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup') };
+H.mockQbo(function () { invoices++; });
+var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change') };
+/* Phase 5: a tenant whose current cycle is already paid, seen by its owner. */
+function seedPaid(keys, plan, staff) { seed(keys, staff); H.seedPaidTenant(db, { org: org, keys: keys, plan: plan }); }
 function seed(keys, staff) {
   db = new F.DB(); db.serial = true; var book = B.proposed(); book.enabled = true; book.qbo.realmId = 'fixture'; db.seed('pricebook/' + book.version, book);
   db.seed('omega_orgs/' + org, { name: 'Clean Cell · fixture', status: 'pending', packagingSandbox: true, signedUpAt: Date.now() - 86400000, domains: ['fixture.example'] });
@@ -51,10 +46,10 @@ async function init(context, base) {
   });
 }
 function check(v, text) { assert(v, text); checks++; }
-async function capture(page, name) { await page.screenshot({ path: path.join(out, name + '.png'), fullPage: true }); shots++; }
+async function capture(page, name) { await page.screenshot({ path: path.join(name.indexOf('your-plan') === 0 ? out5 : out, name + '.png'), fullPage: true }); shots++; }
 async function run() {
   process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.PACKAGING_SIGNUP_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
-  fs.mkdirSync(out, { recursive: true }); await new Promise(function (resolve) { server.listen(0, '127.0.0.1', resolve); }); var base = 'http://127.0.0.1:' + server.address().port;
+  fs.mkdirSync(out, { recursive: true }); fs.mkdirSync(out5, { recursive: true }); await new Promise(function (resolve) { server.listen(0, '127.0.0.1', resolve); }); var base = 'http://127.0.0.1:' + server.address().port;
   var browser = await require(process.env.PLAYWRIGHT || 'playwright').chromium.launch({ executablePath: process.env.CHROME });
   try {
     for (var pack of ['lite', 'field']) for (var theme of ['light', 'dark']) {
@@ -104,6 +99,43 @@ async function run() {
     for (var pair of [['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await sp.locator('[data-profile-field="' + pair[0] + '"]').fill(pair[1]);
     await capture(sp, 'signup-billing'); await sp.locator('#billing-submit').click(); await sp.locator('#step-done').waitFor({ state: 'visible' });
     check(db.data.get('omega_orgs/signup-fixture.example').status === 'pending', 'actual signup endpoint creates pending org'); check(db.data.get('omega_orgs/signup-fixture.example/billing/current').trialEndsAt === undefined, 'signup has no running trial'); await signup.close();
+    /* Phase 5: Your plan for a paid tenant admin — quote, pay first, included, removal. */
+    for (var theme5 of ['light', 'dark']) {
+      seedPaid(M.starters().ev, 'field', false); var invoicesBefore = invoices;
+      var planContext = await browser.newContext({ viewport: { width: 1280, height: 960 }, colorScheme: theme5 }); await init(planContext, base);
+      var pp = await planContext.newPage(), planErrors = []; pp.on('pageerror', function (e) { planErrors.push(e.message); });
+      await pp.goto(base + '/admin/tenant.html?org=' + org); await pp.locator('[data-pp-tab="cust"]').waitFor(); await pp.locator('[data-pp-tab="cust"]').click();
+      await pp.locator('[data-subscribe="siteintel"] button').waitFor();
+      check((await pp.locator('.pp-plan-name').textContent()).indexOf('$1,299') >= 0, 'Your plan shows the server monthly price');
+      check(await pp.locator('[data-subscribe]').count() === M.catalog().length - M.starters().ev.length, 'one subscribe control per unowned module');
+      await pp.locator('[data-subscribe="siteintel"] button').click();
+      await pp.waitForFunction(function () { var n = document.querySelector('[data-subscribe="siteintel"] .opm-quote'); return n && n.textContent.indexOf('today') >= 0; });
+      var quoteText = await pp.locator('[data-subscribe="siteintel"]').textContent();
+      check(quoteText.indexOf('$760.80 today') >= 0 && quoteText.indexOf('on the 20th') >= 0, 'server quote prorated to the billing date: ' + quoteText);
+      check(quoteText.indexOf('service fee') >= 0, 'plan change discloses the service fee change');
+      await capture(pp, 'your-plan-quote-' + theme5);
+      await pp.locator('[data-subscribe="siteintel"]').getByRole('button', { name: 'Subscribe and pay' }).click();
+      await pp.waitForFunction(function () { var n = document.querySelector('[data-subscribe="siteintel"] .opm-wait'); return n && n.textContent.indexOf('Invoice created') >= 0; });
+      check(invoices === invoicesBefore + 1, 'exactly one change invoice'); check(db.data.get('omega_orgs/' + org + '/billing/current').modules.indexOf('siteintel') < 0, 'nothing switches on before payment');
+      await pp.waitForFunction(function () { return document.querySelector('.pp-pending'); });
+      check((await pp.locator('.pp-pending').textContent()).indexOf('pay before 2026-10-20') >= 0, 'pending change lists its expiry');
+      await capture(pp, 'your-plan-waiting-' + theme5);
+      check(planErrors.length === 0, planErrors.join('\n')); await planContext.close();
+    }
+    seedPaid(['lite', 'evrebates', 'estimate'], 'field', false); var includedBefore = invoices;
+    var incContext = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(incContext, base); var ip = await incContext.newPage();
+    await ip.goto(base + '/admin/tenant.html?org=' + org); await ip.locator('[data-pp-tab="cust"]').click(); await ip.locator('[data-subscribe="storage"] button').click();
+    await ip.waitForFunction(function () { var n = document.querySelector('[data-subscribe="storage"] .opm-quote'); return n && n.textContent.indexOf('no charge today') >= 0; });
+    await ip.locator('[data-subscribe="storage"]').getByRole('button', { name: 'Turn it on' }).click();
+    await ip.waitForFunction(function () { return document.querySelector('[data-pp-pane="cust"] [data-module-card="storage"].on'); });
+    check(invoices === includedBefore, 'an included addition creates no invoice'); check(db.data.get('omega_orgs/' + org + '/billing/current').modules.indexOf('storage') >= 0, 'and switches on immediately inside the paid tier');
+    await capture(ip, 'your-plan-included');
+    await ip.locator('[data-pp-pane="cust"]').getByRole('button', { name: 'Remove at next review' }).first().click();
+    await ip.waitForFunction(function () { return document.querySelector('[data-pp-pane="cust"]').textContent.indexOf('Withdraw removal request') >= 0; });
+    check((db.data.get('omega_orgs/' + org + '/billing/current').removalRequests || []).length === 1, 'removal is queued, not applied'); await incContext.close();
+    seedPaid(M.starters().ev, 'field', false); caller.role = 'member'; var memberContext = await browser.newContext(); await init(memberContext, base); var mp = await memberContext.newPage();
+    await mp.goto(base + '/admin/tenant.html?org=' + org); await mp.locator('[data-pp-tab="cust"]').waitFor().catch(function () {});
+    check(await mp.locator('[data-subscribe] .opm-primary').count() === 0, 'a member sees no subscribe action'); await memberContext.close(); caller.role = 'owner';
     console.log('Packaging billing UI: ' + checks + ' checks, ' + shots + ' screenshots; mocked QBO, no live writes.');
   } finally { await browser.close(); }
 }

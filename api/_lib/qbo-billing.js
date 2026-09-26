@@ -59,7 +59,8 @@ function driver(book, supplied) {
         var tax = item.SalesTaxCodeRef && item.SalesTaxCodeRef.value;
         if (!tax && typeof item.Taxable === 'boolean') tax = item.Taxable ? 'TAX' : 'NON';
         if (!tax) fail('Choose the item tax treatment in QuickBooks first');
-        rows.push({ Amount: l.amountCents / 100, Description: l.name, DetailType: 'SalesItemLineDetail',
+        var description = l.name + (Array.isArray(l.modules) && l.modules.length ? ' · includes ' + l.modules.map(function (k) { return require('./modules').get(k).name; }).join(', ') : '');
+        rows.push({ Amount: l.amountCents / 100, Description: description.slice(0, 4000), DetailType: 'SalesItemLineDetail',
           SalesItemLineDetail: { ItemRef: { value: String(itemId) }, Qty: 1, UnitPrice: l.amountCents / 100, TaxCodeRef: { value: String(tax) } } });
       }
     }
@@ -69,13 +70,13 @@ function driver(book, supplied) {
   function validateInvoice(inv, plan, customerId) {
     if (!inv || !inv.Id || String((inv.CustomerRef || {}).value) !== String(customerId) ||
         ((inv.CurrencyRef || {}).value || 'USD') !== 'USD' || inv.PrivateNote !== plan.marker) fail('Subscription invoice identity changed');
-    var expected = plan.lines.filter(function (l) { return l.amountCents !== 0; });
-    var actual = (inv.Line || []).filter(function (l) { return l.DetailType === 'SalesItemLineDetail' || l.DetailType === 'DiscountLineDetail'; });
-    if (expected.length !== actual.length || expected.some(function (l, i) {
-      var a = actual[i], discount = l.amountCents < 0;
-      return a.DetailType !== (discount ? 'DiscountLineDetail' : 'SalesItemLineDetail') || cents(a.Amount) !== Math.abs(l.amountCents) ||
-        (!discount && String((a.SalesItemLineDetail.ItemRef || {}).value) !== String(book.qbo.items[l.itemKey]));
-    })) fail('Subscription invoice lines changed; accounting review required');
+    // QuickBooks may re-sequence lines (discounts move after the subtotal),
+    // so compare as a multiset of (type, item, amount), not by position.
+    var expected = plan.lines.filter(function (l) { return l.amountCents !== 0; })
+      .map(function (l) { return (l.amountCents < 0 ? 'discount' : 'item:' + book.qbo.items[l.itemKey]) + ':' + Math.abs(l.amountCents); }).sort();
+    var actual = (inv.Line || []).filter(function (l) { return l.DetailType === 'SalesItemLineDetail' || l.DetailType === 'DiscountLineDetail'; })
+      .map(function (a) { return (a.DetailType === 'DiscountLineDetail' ? 'discount' : 'item:' + String(((a.SalesItemLineDetail || {}).ItemRef || {}).value)) + ':' + cents(a.Amount); }).sort();
+    if (expected.length !== actual.length || expected.some(function (e, i) { return e !== actual[i]; })) fail('Subscription invoice lines changed; accounting review required');
     return inv;
   }
   async function invoice(plan, profile, customerId) {
@@ -87,7 +88,7 @@ function driver(book, supplied) {
       var payload = { CustomerRef: { value: customerId }, CurrencyRef: { value: 'USD' }, DocNumber: number,
         TxnDate: plan.date, DueDate: plan.date, BillEmail: { Address: profile.email },
         AllowOnlineACHPayment: true, AllowOnlineCreditCardPayment: true, PrivateNote: plan.marker,
-        CustomerMemo: { value: 'OMEGA subscription ' + plan.period.start + ' to ' + plan.period.end + (profile.poRequired ? ' · PO ' + profile.poNumber : '') },
+        CustomerMemo: { value: (plan.kind === 'change' ? 'OMEGA subscription change ' : 'OMEGA subscription ') + plan.period.start + ' to ' + plan.period.end + (profile.poRequired ? ' · PO ' + profile.poNumber : '') + (plan.memo ? ' · ' + plan.memo : '') },
         Line: await lines(plan) };
       if (profile.apEmail) payload.BillEmailCc = { Address: profile.apEmail };
       inv = (await call('invoice', payload, key(plan.marker))).Invoice;

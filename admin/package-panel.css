@@ -42,3 +42,11 @@
 
 body.package-admin{--ink:var(--pkg-text);--paper:var(--pkg-bg);--panel:var(--pkg-surface);--line:var(--pkg-border);--sub:var(--pkg-sub);--wash:var(--pkg-sunk)}
 body.package-admin header{background:var(--pkg-navy)}
+#package-panel .pp-plan{display:grid;gap:4px;margin-bottom:12px}#package-panel .pp-plan-name{font:500 18px 'DM Mono',monospace}
+#package-panel .pp-pending{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--pkg-blue);border-radius:6px;margin-bottom:8px}
+#package-panel .pp-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:12px}#package-panel .pp-cards .opm-card{border:1px solid var(--pkg-border);border-radius:10px;padding:16px}
+#package-panel .pp-cards h3{font-size:15px;margin:8px 0}#package-panel .pp-cards ul{padding-left:18px;line-height:1.6;margin:0}#package-panel .pp-cards .opm-price{font-weight:600;margin:6px 0 0}
+#package-panel .opm-note{font-size:12px;color:var(--pkg-sub);line-height:1.5}#package-panel .opm-act{margin-top:10px;display:grid;gap:6px}#package-panel .opm-act p{margin:0}
+#package-panel .opm-quote{font-weight:600}#package-panel .opm-wait{font-weight:600;color:var(--pkg-blue)}#package-panel .opm-reason{color:#B45F06;font-size:12px}#package-panel .opm-row{display:flex;flex-wrap:wrap;gap:6px}
+#package-panel .opm-act .opm-primary{background:var(--pkg-blue);color:#fff;border-color:var(--pkg-blue)}#package-panel .opm-icon{display:inline-flex;width:30px;height:30px;border-radius:7px;align-items:center;justify-content:center;background:var(--pkg-sunk);color:var(--pkg-blue);font-weight:700}
+#package-panel .pp-removals{margin:10px 0 18px}#package-panel .pp-removals .pkm-tag{display:inline-flex;gap:6px;align-items:center;padding:4px 8px}

@@ -17,12 +17,23 @@ module.exports = A.handler(async function (req, res) {
   }
   var c = await S.context(A.db(), orgId), billing = Object.assign({}, c.billing);
   billing.paymentLink = require('./_lib/logic-policy').paymentLink(billing.paymentLink);
-  delete billing.activationLock; delete billing.invoiceLock;
+  delete billing.activationLock; delete billing.invoiceLock; delete billing.changeLock;
   var history = await c.root.collection('billing').doc('current').collection('history').orderBy('at', 'desc').limit(100).get();
   var audit = caller.staff ? await c.root.collection('admin_audit').orderBy('at', 'desc').limit(100).get() : { docs: [] };
+  var rows = history.docs.map(function (d) { return d.data(); });
+  if (!caller.staff) {
+    // The tenant sees their plan, never staff-internal reasons, realms or
+    // the before/after patches that carry staff emails.
+    var keep = ['packaged', 'packagingState', 'modules', 'plan', 'interval', 'billingDay', 'nextInvoiceOn', 'paidThrough', 'accessUntil', 'trialEndsAt',
+      'amountDue', 'paymentLink', 'monthlyDisplay', 'builders', 'viewers', 'toolAccess', 'removalRequests', 'subscription', 'pricebookVersion'];
+    var shown = {}; keep.forEach(function (k) { if (billing[k] !== undefined) shown[k] = billing[k]; });
+    if (billing.serviceFee) shown.serviceFee = { mode: billing.serviceFee.mode, display: billing.serviceFee.display || null, appliesTo: billing.serviceFee.appliesTo || null };
+    billing = shown;
+    rows = rows.map(function (r) { return { at: r.at, action: r.action, changed: r.changed ? { modules: r.changed.modules, plan: r.changed.plan, state: r.changed.state, add: r.changed.add, totalCents: r.changed.totalCents, packagingState: r.changed.packagingState } : null }; });
+  }
   return { orgId: orgId, name: c.org.name || orgId, status: c.org.status, canManagePackage: caller.staff, billing: billing,
     pricebookVersion: c.book.version, enabled: c.book.enabled, defaults: { credit: c.book.credit, builders: c.book.logins.builders,
       viewers: c.book.logins.viewers, annualPaidMonths: c.book.annualPaidMonths, annualTransformationCredit: c.book.policy.annualTransformationCredit === true },
     modules: P.catalog(c.book), starters: M.starters(), starterLabels: M.starterLabels(),
-    history: history.docs.map(function (d) { return d.data(); }), audit: audit.docs.map(function (d) { return d.data(); }) };
+    history: rows, audit: audit.docs.map(function (d) { return d.data(); }) };
 });

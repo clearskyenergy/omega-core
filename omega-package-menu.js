@@ -1,10 +1,74 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
- * The shared package gallery. Server catalog and server-formatted prices only.
- * Phase 5 supplies the paid subscription action; this phase never grants access.
+ * The shared package gallery and the subscribe control (Phase 5). Server
+ * catalog, server quotes and server-formatted prices only. Subscribing posts
+ * to /api/plan-change; the browser never prices anything and never grants
+ * access — the tools appear when the server's projection says so.
  */
 (function (global) {
   'use strict';
-  var dialog, body, trigger, request = 0;
+  var dialog, body, trigger, request = 0, control = { canManage: false, pending: {}, loaded: false };
+  function api(path, payload) {
+    var user = global.firebase && global.firebase.auth().currentUser;
+    if (!user || !user.getIdToken || !global.fetch) return Promise.reject(new Error('Sign in to continue'));
+    return user.getIdToken().then(function (token) {
+      var opts = { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } };
+      if (payload) { opts.method = 'POST'; opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(payload); }
+      return global.fetch(path, opts);
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Request refused'); if (global.firebase.auth().currentUser !== user) throw new Error('Account changed'); return j; }); });
+  }
+  function link(href, text) { var a = node('a', text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; }
+  function button(text, fn, cls) { var b = node('button', text, cls); b.type = 'button'; b.onclick = fn; return b; }
+  /* One control, three places: the editor's + Modules gallery, Your plan in
+     the account pages, and the staff record. state: { canManage, pending:
+     { moduleKey: pendingChange }, onChanged(result), actor }. */
+  function subscribeControl(host, m, state) {
+    host.textContent = ''; host.className = 'opm-act'; host.setAttribute('data-subscribe', m.key);
+    var pendingChange = state.pending && state.pending[m.key];
+    if (!state.canManage) { host.appendChild(node('p', 'Ask your workspace administrator to add this module.', 'opm-note')); return; }
+    if (pendingChange) {
+      host.appendChild(node('p', 'Waiting for payment · ' + pendingChange.display + ' · expires ' + pendingChange.expiresOn, 'opm-wait'));
+      if (pendingChange.paymentLink) host.appendChild(link(pendingChange.paymentLink, 'Pay in QuickBooks'));
+      host.appendChild(button('Cancel request', function () {
+        host.textContent = 'Cancelling…';
+        api('/api/plan-change', { action: 'cancel', changeId: pendingChange.id }).then(function (r) { if (state.onChanged) state.onChanged(r); }, function (e) { host.textContent = e.message; });
+      }));
+      return;
+    }
+    function quote(plan) {
+      host.textContent = 'Pricing…';
+      var body = { action: 'quote', add: [m.key] }; if (plan) body.plan = plan;
+      api('/api/plan-change', body).then(function (q) {
+        host.textContent = '';
+        host.appendChild(node('p', q.display.today, 'opm-quote'));
+        host.appendChild(node('p', q.display.then, 'opm-note'));
+        host.appendChild(node('p', q.display.activation, 'opm-note'));
+        if (q.serviceFeeNote) host.appendChild(node('p', q.serviceFeeNote, 'opm-note'));
+        if (q.add.length > 1) host.appendChild(node('p', 'Also adds what it needs: ' + (q.addNames || q.add).filter(function (n, i) { return q.add[i] !== m.key; }).join(', '), 'opm-note'));
+        if (!q.canApply) { host.appendChild(node('p', q.reason, 'opm-reason')); host.appendChild(button('Close', function () { subscribeControl(host, m, state); })); return; }
+        var row = node('div', '', 'opm-row');
+        row.appendChild(button(q.included ? 'Turn it on' : 'Subscribe and pay', function () {
+          host.textContent = q.included ? 'Turning it on…' : 'Creating your invoice…';
+          var body = { action: 'apply', add: [m.key], previewId: q.previewId, effectiveAt: q.effectiveAt }; if (plan) body.plan = plan;
+          api('/api/plan-change', body).then(function (r) {
+            host.textContent = '';
+            if (r.state === 'active') host.appendChild(node('p', 'Added. Your tools are updating…', 'opm-quote'));
+            else { host.appendChild(node('p', 'Invoice created: ' + r.display + '. It switches on when the payment clears; pay before ' + r.expiresOn + '.', 'opm-wait')); if (r.paymentLink) host.appendChild(link(r.paymentLink, 'Pay in QuickBooks')); }
+            if (state.onChanged) state.onChanged(r);
+          }, function (e) { host.textContent = ''; host.appendChild(node('p', e.message, 'opm-reason')); host.appendChild(button('Try again', function () { subscribeControl(host, m, state); })); });
+        }, 'opm-primary'));
+        if (q.steer) row.appendChild(button(q.steer.display, function () { quote(q.steer.plan); }));
+        row.appendChild(button('Cancel', function () { subscribeControl(host, m, state); }));
+        host.appendChild(row);
+      }, function (e) { host.textContent = ''; host.appendChild(node('p', e.message, 'opm-reason')); host.appendChild(button('Try again', function () { subscribeControl(host, m, state); })); });
+    }
+    host.appendChild(button('Subscribe', function () { quote(null); }, 'opm-primary'));
+  }
+  function loadControl() {
+    return api('/api/plan-change').then(function (summary) {
+      var pending = {}; (summary.pending || []).forEach(function (p) { (p.add || []).forEach(function (k) { pending[k] = p; }); });
+      control = { canManage: true, pending: pending, loaded: true, summary: summary }; return control;
+    }, function () { control = { canManage: false, pending: {}, loaded: true }; return control; });
+  }
   function node(tag, text, cls) { var el = document.createElement(tag); if (text) el.textContent = text; if (cls) el.className = cls; return el; }
   function close() { if (dialog) dialog.remove(); dialog = body = null; request++; if (trigger && trigger.focus) trigger.focus(); }
   function card(m, price, focus) {
@@ -16,14 +80,19 @@
     if (m.beta && m.beta.length) el.appendChild(node('p', 'BETA: ' + m.beta.join(', '), 'opm-note'));
     if (m.coverage) el.appendChild(node('p', m.coverage, 'opm-note'));
     if (m.agreement) el.appendChild(node('p', m.agreement, 'opm-note'));
-    // No disabled selling control or pretend checkout. Phase 5 installs an action
-    // only after the pay-first endpoint exists. Listing never changes modules[].
-    el.appendChild(node('p', 'Subscription checkout is being prepared. Your current access is unchanged.', 'opm-note'));
+    // The control posts to the server; listing never changes modules[].
+    subscribeControl(el.appendChild(node('div')), m, { canManage: control.canManage, pending: control.pending, onChanged: changed });
     if (m.key === focus) { el.tabIndex = -1; el.setAttribute('data-selected', '1'); }
     return el;
   }
+  var lastRows = [];
+  function changed(result) {
+    var user = global.firebase && global.firebase.auth().currentUser, caps = global.OmegaCaps;
+    var refresh = result && result.state === 'active' && caps && caps.fetchPackage && user ? caps.fetchPackage(user).then(function () { caps.apply('standard'); }, function () {}) : Promise.resolve();
+    refresh.then(loadControl).then(function () { if (body) render(lastRows, null); });
+  }
   function render(rows, focus) {
-    if (!body) return;
+    if (!body) return; lastRows = rows;
     body.textContent = '';
     var access = global.OmegaCaps && global.OmegaCaps.packageAccess(), owned = access ? access.modules : [];
     rows.filter(function (m) { return owned.indexOf(m.key) < 0; }).forEach(function (m) { body.appendChild(card(m, m.priceDisplay, focus)); });
@@ -52,7 +121,9 @@
       .then(function (r) { if (!r.ok) throw new Error('unavailable'); return r.json(); })
       .then(function (result) {
         if (tokenRequest !== request || !body || global.firebase.auth().currentUser !== user) return;
-        status.textContent = 'Monthly prices. Subscription changes require confirmed payment.'; render(result.modules, key);
+        status.textContent = 'Monthly prices. A change switches on when its payment clears; nothing new is charged for what your plan already covers.';
+        control = { canManage: false, pending: {}, loaded: false }; render(result.modules, key);
+        if (result.canManage) loadControl().then(function () { if (tokenRequest === request && body) render(result.modules, key); });
       }, function () { if (tokenRequest === request) status.textContent = 'Current pricing is unavailable. Please try again later.'; });
     return true;
   }
@@ -67,7 +138,10 @@
       '.opm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:14px;margin-top:18px}' +
       '.opm-card{border:1px solid var(--opm-border);border-radius:10px;padding:18px}.opm-card[data-selected]{outline:2px solid var(--opm-blue)}' +
       '.opm-card h3{font-size:16px;margin:10px 0}.opm-card ul{padding-left:18px;line-height:1.7}.opm-price{font-weight:600}.opm-note{font-size:12px;color:var(--opm-sub);line-height:1.6}' +
-      '.opm-icon{display:inline-flex;width:30px;height:30px;border-radius:7px;align-items:center;justify-content:center;background:var(--opm-sunk);color:var(--opm-blue);font-weight:700}';
+      '.opm-icon{display:inline-flex;width:30px;height:30px;border-radius:7px;align-items:center;justify-content:center;background:var(--opm-sunk);color:var(--opm-blue);font-weight:700}' +
+      '.opm-act{margin-top:10px;display:grid;gap:6px}.opm-act p{margin:0}.opm-quote{font-weight:600}.opm-wait{font-weight:600;color:var(--opm-blue)}.opm-reason{color:#B45F06;font-size:12px}' +
+      '.opm-row{display:flex;flex-wrap:wrap;gap:6px}.opm-act button{font:500 13px system-ui;padding:7px 12px;border:1px solid var(--opm-border);border-radius:6px;background:var(--opm-surface);color:var(--opm-text);cursor:pointer}' +
+      '.opm-act .opm-primary{background:var(--opm-blue);color:#fff;border-color:var(--opm-blue)}.opm-act a{color:var(--opm-blue)}';
     document.head.appendChild(style);
     var button = node('button', '+ Modules', 'rtab'); button.id = 'omega-package-tab'; button.type = 'button'; button.onclick = function () { open(); }; host.appendChild(button);
   }
@@ -145,5 +219,5 @@
     }
     draw(); return { value: function () { return selected.slice(); }, set: function (keys) { selected = keys.slice(); draw(); if (options.onChange) options.onChange(selected.slice()); } };
   }
-  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker };
+  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker, card: card, subscribeControl: subscribeControl, api: api, styles: tab };
 })(typeof window !== 'undefined' ? window : this);
