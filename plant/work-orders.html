@@ -5,7 +5,8 @@
      per-column filters, and a work-order card with task progress, action taken,
      assignee and parts. Every number on it comes from /api/logic-plant?page=board
      (api/_lib/plant-board.js); this page filters, sorts and renders. ES5 on purpose. -->
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Work orders</title><link rel="stylesheet" href="/omega-logic-theme.css"><style>
+<html lang="en"><head><meta charset="utf-8"><script src="/omega-splash.js?v=1"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Work orders</title><link rel="stylesheet" href="/omega-logic-theme.css"><style>
 body{margin:0}header{padding:14px 4%;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}header nav a{margin-left:16px;text-decoration:none;font-size:14px}
 .board{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:calc(100vh - 66px)}.board.open{grid-template-columns:230px minmax(0,1fr) 460px}
 .tree{background:var(--sunk);border-right:1px solid var(--line);padding:16px 12px;overflow:auto}.tree .eyebrow{margin:18px 8px 6px}.tree .eyebrow:first-child{margin-top:4px}

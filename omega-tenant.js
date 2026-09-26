@@ -998,6 +998,9 @@
     try {
       T._watching = true;
       firebase.auth().onAuthStateChanged(function (user) {
+        /* the loading screen (omega-splash.js) waits on this: signed out ends
+           it, signed in waits for the entitlements */
+        try { global.dispatchEvent(new CustomEvent('omega:auth', { detail: { user: !!user } })); } catch (e) {}
         if (user) { markSession(); setTimeout(function () { loadEntitlements(user); }, 0); }
         else { T.billing = null; T.member = null; T.role = 'member'; T._ent = false; packageBillingChrome(null); }
       });

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script src="/omega-splash.js?v=1" data-hold="1"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Create your workspace · ClearSky-OMEGA</title>
 <!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
@@ -171,7 +172,7 @@
   var auth = firebase.auth(), signupOptions = null, billingForm = null, signupPicker = null, discoveryBuilt = false, recommended = null, proposal = null;
   function qp(k){ var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search); return m ? decodeURIComponent(m[1]) : ''; }
   var $ = function(id){ return document.getElementById(id); };
-  function show(id){ ['step-auth','step-form','step-discovery','step-billing','step-build','step-pay','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
+  function show(id){ if (window.OmegaSplash) OmegaSplash.done(); ['step-auth','step-form','step-discovery','step-billing','step-build','step-pay','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
   /* the offerings page names a package (?plan=field, ?modules=lite,gridatlas); the picker starts there */
   function wantedModules(){ var m = qp('modules'); if (!m || !signupOptions) return null; var keys = signupOptions.modules.map(function (x) { return x.key; }); var out = String(m).split(',').map(function (k) { return k.trim(); }).filter(function (k) { return keys.indexOf(k) >= 0; }); return out.length ? out : null; }
   function wantedPlan(){ var p = qp('plan'); return p && ['field', 'pro', 'auto'].indexOf(p) >= 0 ? p : null; }
