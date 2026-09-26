@@ -6,7 +6,7 @@ var count = 0, now = Date.parse('2026-09-26T12:00:00Z');
 var caller = { uid: 'member', orgId: 'example.com', emailVerified: true, staff: false };
 var org = { status: 'active' }, member = { status: 'active', role: 'member' };
 function check(fn) { fn(); count++; }
-function bill(keys) { return { packaged: true, modules: keys || ['lite'], packagingState: 'paid', tier: 'enterprise', addons: ['compute'], toolOverrides: { compute: true } }; }
+function bill(keys) { return { packaged: true, modules: keys || ['lite'], packagingState: 'paid', accessUntil: Date.now() + 86400000, tier: 'enterprise', addons: ['compute'], toolOverrides: { compute: true } }; }
 function project(b, m, c, o) { return X.project(c || caller, b || bill(), o || org, m || member, now); }
 function denied(fn) { check(function () { assert.throws(fn, function (e) { return e.status === 403; }); }); }
 check(function () { assert.deepEqual(X.project(caller, {}, null, null, now), { packaged: false }); });
@@ -36,6 +36,21 @@ check(function () { X.requireModule(project(trial), 'storage'); });
 trial.trialEndsAt++; denied(function () { X.requireModule(project(trial), 'storage'); });
 trial.trialStartedAt = now - 14 * 86400000; trial.trialEndsAt = now; denied(function () { X.requireModule(project(trial), 'storage'); });
 check(function () { X.requireModule(project(bill(), null, Object.assign({}, caller, { staff: true })), 'compute'); });
+var deadline = bill(['lite', 'storage']); deadline.accessUntil = now + 1;
+check(function () { X.requireModule(project(deadline), 'storage'); });
+delete deadline.accessUntil; denied(function () { X.requireModule(project(deadline), 'storage'); });
+deadline.accessUntil = now; denied(function () { X.requireModule(project(deadline), 'storage'); });
+deadline.accessUntil = 'invalid'; denied(function () { X.requireModule(project(deadline), 'storage'); });
+var fallback = bill(); fallback.packagingState = 'past_due_lite'; fallback.paidThrough = '2026-09-01'; fallback.accessUntil = now + 1;
+check(function () { X.requireModule(project(fallback), 'lite'); });
+fallback.modules.push('storage'); denied(function () { X.requireModule(project(fallback), 'storage'); });
+fallback.modules = ['lite']; delete fallback.paidThrough; denied(function () { X.requireModule(project(fallback), 'lite'); });
+var day11 = bill(); day11.packagingState = 'trial'; day11.trialStartedAt = now - 10 * 86400000; day11.trialEndsAt = now + 4 * 86400000; day11.accessUntil = day11.trialEndsAt;
+check(function () { assert(project(day11).billingNotice.text.includes('Your trial ends')); });
+day11.packagingState = 'awaiting_payment'; day11.paymentLink = 'javascript:alert(1)';
+check(function () { assert.equal(project(day11).billingNotice.payUrl, null); });
+day11.paymentLink = 'https://connect.intuit.com/pay/fixture';
+check(function () { assert.equal(project(day11).billingNotice.payUrl, day11.paymentLink); });
 // Server projection and the actual browser runtime agree without a second catalog.
 var box = { console: console }; vm.runInNewContext(fs.readFileSync(require.resolve('../omega-caps.js'), 'utf8'), box);
 var C = box.OmegaCaps;

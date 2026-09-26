@@ -6,18 +6,30 @@
 'use strict';
 var A = require('./_lib/admin');
 var M = require('./_lib/mail');
+var S = require('./_lib/package-billing');
 module.exports = A.handler(function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   var b = req.body || {};
   return A.authenticate(req).then(function (caller) {
     if (!caller.staff) throw A.httpError(403, 'staff only');
-    var orgId = String(b.orgId || '').toLowerCase(); if (!orgId) throw A.httpError(400, 'orgId required');
+    var orgId = A.safeOrg(b.orgId); if (!orgId) throw A.httpError(400, 'orgId required');
     var db = A.db(), FV = A.FieldValue(); var ref = db.collection('omega_orgs').doc(orgId);
-    return ref.get().then(function (s) {
+    return ref.get().then(async function (s) {
       if (!s.exists) throw A.httpError(404, 'no such tenant');
       var org = s.data(), hosts = org.domains || [];
       var status = { approve: 'active', reject: 'cancelled', suspend: 'suspended', reactivate: 'active' }[b.action];
       if (!status) throw A.httpError(400, 'action must be approve|reject|suspend|reactivate');
+      var current = await ref.collection('billing').doc('current').get();
+      var billing = current.exists ? current.data() : {};
+      if (billing.packaged === true) {
+        if (b.tier) throw A.httpError(409, 'Use the Package panel to change a packaged subscription');
+        if (b.action === 'reactivate' && org.status !== 'suspended') throw A.httpError(409, 'Only a suspended packaged workspace can be reactivated');
+        if (b.action === 'approve') {
+          if (!Array.isArray(b.modules)) throw A.httpError(400, 'Review a package before approval');
+          if (b.dryRun !== false) return S.preview(db, orgId, b, Date.now());
+          return S.apply(db, orgId, b, caller, Date.now());
+        }
+      }
       var batch = db.batch();
       var patch = { status: status, updatedAt: FV.serverTimestamp() };
       if (b.action === 'approve') { patch.approvedAt = FV.serverTimestamp(); patch.approvedBy = caller.email; }

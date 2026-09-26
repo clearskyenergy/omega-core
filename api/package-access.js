@@ -14,7 +14,7 @@ module.exports = async function (req, res) {
       var body = req.body || {};
       if (Object.keys(body).some(function (k) { return k !== 'previewModules'; })) throw V.httpError(400, 'Only previewModules is accepted');
       var modules = M.normalize(body.previewModules);
-      var preview = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', modules: modules }, { status: 'active' }, { role: 'owner' }, Date.now());
+      var preview = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: modules }, { status: 'active' }, { role: 'owner' }, Date.now());
       preview.canPreview = true; preview.preview = true; preview.starters = M.starters();
       return res.status(200).json(preview);
     }

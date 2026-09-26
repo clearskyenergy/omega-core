@@ -20,7 +20,7 @@ https://claude.ai/artifact/2Sou93uMRrCsc8K4E2Xg8n (private to the owner).
 | 1 · Catalog | [#136](https://github.com/clearskyenergy/omega-core/pull/136), stacked on #135 | implemented; npm test + check:pages pass; disabled | One catalog/price book; server quotes; sandbox-only item sync. AI Render: Plan Sets & CAD only. Real sandbox apply and later package gates remain. |
 | 2 · Close the leaks | [#137](https://github.com/clearskyenergy/omega-core/pull/137) · [preview](https://omega-core-git-codex-packaging-phase-2-clearsky-usa.vercel.app) | implemented; npm test + check:pages pass; disabled | Catalog-based UI/API gates; eight entry paths covered. Full editor, legacy engine ports and packaged write rules remain release work. See PACKAGING-PHASE-2-VALIDATION.md. |
 | 3 · Editor fits the package | [#138](https://github.com/clearskyenergy/omega-core/pull/138), stacked on #137 | draft, unmerged; local checks green; disabled | 1,870 packaging assertions; 180 full-editor checks, 84 desktop/tablet captures. Project workspaces, shared gallery, staff preview and dry-run planner. Export to Monday stays in Lite, per Tommy’s explicit decision. See PACKAGING-PHASE-3-VALIDATION.md. |
-| 4 · Admin panel, signup billing, trial, QuickBooks customer | | not started | |
+| 4 · Admin panel, signup billing, trial, QuickBooks customer | pending PR, stacked on #138 | implemented; npm test + check:pages pass; disabled | Four admin tabs, private signup profile, approval-started trial, sandbox customer/invoices, paid reconciliation and write rules. Annual prepay excludes transformation credit. See PACKAGING-PHASE-4-VALIDATION.md; real sandbox payment and reference visual acceptance remain. |
 | 5 · Subscribe in the editor (Step A) | | not started | |
 | 5b · Card on file (Step B) | | blocked on Tommy | QuickBooks Payments permission |
 | 6 · Proposal tool | | not started | |
@@ -433,6 +433,10 @@ Every tenant has exactly **one base**, plus any **add-ons**:
   one click, prorated (§10.5). Same from Field to Pro.
 - The Subscription Agreement's Tier 1–4 stay; Lite + modules is the new
   à la carte line on the Order Form.
+
+Annual prepay charges 11 months for 12, without the transformation credit
+(Tommy’s explicit decision, 2026-09-26). The book records this as
+`policy.annualTransformationCredit: false`.
 
 ### 10.2 Trials: 14 days at most, then everyone pays
 

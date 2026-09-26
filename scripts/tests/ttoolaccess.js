@@ -250,7 +250,7 @@ function entitlements(docs, projection) {
     ok(emptyAt + ' empty allowlist closes every tool', ws && ws.toolAccess.length === 0 && ws.unlockedTools.length === 0);
   }
   const projection = require('../../api/_lib/package-access').project({ emailVerified: true },
-    { packaged: true, modules: ['lite'], packagingState: 'paid' }, org, { role: 'member', status: 'active' });
+    { packaged: true, modules: ['lite'], packagingState: 'paid', accessUntil: Date.now() + 86400000 }, org, { role: 'member', status: 'active' });
   const packagedDocs = { [ORG]: org, [ORG + '/billing/current']: { packaged: true, tier: 'enterprise', toolAccess: ['proforma'] },
     [ORG + '/members/u1']: { role: 'member', status: 'active' } };
   ws = await entitlements(packagedDocs, projection);

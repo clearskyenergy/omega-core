@@ -12,6 +12,9 @@
 <script src="/omega-brand.js"></script>
 <script src="/omega-tenant.js"></script>
 <script src="/omega-whitelabel.js"></script>
+<script src="/omega-package-menu.js"></script>
+<script src="/omega-billing-profile.js"></script>
+<link rel="stylesheet" href="/admin/package-panel.css">
 <style>
   :root{--bg:#0A1628;--card:#0F1F38;--line:#22354F;--txt:#E5EEF7;--sub:#8BA3C4;--teal:#00A9A4;--blue:#006F9A;--gold:#F5B942;--red:#F87171}
   *{box-sizing:border-box}
@@ -73,8 +76,22 @@
     <label>Phone <span style="font-weight:400">(optional)</span></label><input id="f-phone" type="tel" autocomplete="tel">
     <label>What are you working on? <span style="font-weight:400">(optional)</span></label><textarea id="f-note" rows="2" placeholder="e.g. 3 BESS sites in ComEd territory, need interconnection screening"></textarea>
     <button class="btn" id="f-submit" onclick="submitWorkspace()">Request my workspace</button>
-    <div class="hint">Workspaces are reviewed by the ClearSky team, usually within one business day. You start on a free 30-day trial.</div>
+    <div class="hint">Workspaces are reviewed by the ClearSky team, usually within one business day. Any new trial is capped at 14 days. Payment is required to continue afterward.</div>
     <div class="err" id="form-err"></div>
+  </div>
+
+  <div id="step-billing" class="hide">
+    <h1>Billing and your proposed package</h1>
+    <p>Approval starts your one trial of at most 14 days. Your first QuickBooks invoice arrives at trial end; payment is required to continue. Recurring invoices follow your signup day.</p>
+    <div id="signup-billing-profile" class="obp-grid"></div>
+    <h2>Choose your modules</h2>
+    <p>Staff will review this proposed package. Prices and the final invoice are confirmed by the server.</p>
+    <div id="signup-package-menu"></div>
+    <label for="signup-interval">Billing frequency</label>
+    <select id="signup-interval"><option value="monthly">Monthly</option><option value="annual">Annual prepay · no transformation credit</option></select>
+    <button class="btn" id="billing-submit" onclick="submitWorkspace(true)">Request my workspace</button>
+    <button class="btn ghost" onclick="backToCompany()">Back to company details</button>
+    <div class="err" id="billing-err"></div>
   </div>
 
   <!-- STEP 3: done -->
@@ -95,9 +112,9 @@
 (function(){
   var CFG = window.CLEARSKY_CONFIG;
   if (!firebase.apps.length) firebase.initializeApp(CFG.firebase);
-  var auth = firebase.auth();
+  var auth = firebase.auth(), signupOptions = null, billingForm = null, signupPicker = null;
   var $ = function(id){ return document.getElementById(id); };
-  function show(id){ ['step-auth','step-form','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
+  function show(id){ ['step-auth','step-form','step-billing','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
   function err(id,msg){ var e=$(id); e.style.display = msg ? 'block' : 'none'; e.textContent = msg||''; }
   function domainOf(email){ return String(email||'').toLowerCase().split('@')[1]||''; }
   function slugOf(d){ return String(d||'').split('.')[0].replace(/[^a-z0-9-]/g,''); }
@@ -123,23 +140,42 @@
     var u = auth.currentUser; if(!u) return;
     $('who-email').textContent = u.email; $('who-domain').textContent = domainOf(u.email);
     if(!$('f-slug').value) $('f-slug').value = slugOf(domainOf(u.email));
-    show('step-form');
+    show('step-form'); $('f-submit').disabled = true;
+    u.getIdToken().then(function (token) { return fetch('/api/tenant-signup', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Signup unavailable'); return j; }); })
+      .then(function (j) { if (auth.currentUser !== u) return; signupOptions = j; $('f-submit').disabled = false; $('f-submit').textContent = j.packaging ? 'Continue to billing' : 'Request my workspace'; },
+        function (e) { err('form-err', e.message); });
   });
   auth.onAuthStateChanged(function(u){ if(!u) show('step-auth'); });
   $('f-slug').addEventListener('input', function(){ $('host-preview').textContent = ($('f-slug').value||'yourcompany') + '.clearskyomega.com'; });
 
-  window.submitWorkspace = function(){
+  window.backToCompany = function () { show('step-form'); };
+  window.submitWorkspace = function(fromBilling){
     var u = auth.currentUser; if(!u) return;
     var name=$('f-name').value.trim(); if(name.length<2){ err('form-err','Company name is required.'); return; }
-    var btn=$('f-submit'); btn.disabled=true; btn.textContent='Creating…'; err('form-err','');
+    if (!signupOptions) { err('form-err', 'Wait for signup options to load.'); return; }
+    var payload = { companyName:name, vertical:$('f-vertical').value, slug:$('f-slug').value.trim(), phone:$('f-phone').value.trim(), note:$('f-note').value.trim() };
+    var errorId = signupOptions.packaging && fromBilling ? 'billing-err' : 'form-err';
+    if (signupOptions.packaging && !fromBilling) {
+      if (!billingForm) billingForm = OmegaBillingProfile.render($('signup-billing-profile'), { legalName: name, email: u.email, phone: payload.phone, contactName: u.displayName || '', vertical: payload.vertical, address: { country: 'US' } });
+      if (!signupPicker) signupPicker = OmegaPackageMenu.picker($('signup-package-menu'), { catalog: signupOptions.modules, modules: ['lite'] });
+      document.querySelector('[data-profile-field="vertical"]').value = payload.vertical;
+      show('step-billing'); return;
+    }
+    if (signupOptions.packaging) {
+      if (!billingForm.valid()) return;
+      payload.billingProfile = billingForm.value(); payload.vertical = payload.billingProfile.vertical;
+      payload.modules = signupPicker.value(); payload.interval = $('signup-interval').value;
+    }
+    var btn=$(signupOptions.packaging ? 'billing-submit' : 'f-submit'); btn.disabled=true; btn.textContent='Creating…'; err(errorId,'');
     u.getIdToken().then(function(tok){
       return fetch('/api/tenant-signup',{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
-        body: JSON.stringify({ companyName:name, vertical:$('f-vertical').value, slug:$('f-slug').value.trim(), phone:$('f-phone').value.trim(), note:$('f-note').value.trim() }) });
+        body: JSON.stringify(payload) });
     }).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j; }); })
     .then(function(j){
       if (j.exists && j.host && j.status==='active'){ location.href='https://'+j.host+'/'; return; }
       $('done-name').textContent = name; $('done-host').textContent = j.host; $('done-email').textContent = u.email; show('step-done');
-    })['catch'](function(e){ err('form-err', e.message); btn.disabled=false; btn.textContent='Request my workspace'; });
+    })['catch'](function(e){ err(errorId, e.message); btn.disabled=false; btn.textContent='Request my workspace'; });
   };
 })();
 </script>

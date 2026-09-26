@@ -195,6 +195,31 @@ service cloud.firestore {
         && request.auth.token.get('email_verified', false) == true
         && ((o == userOrg() && tMemberEnabled(userOrg())) || ownsDemoBucket(o));
     }
+    /* Packaged production uses server-derived grants. Legacy tenants without
+       packaged billing retain their existing rules. Read clauses stay intact
+       so an unpaid tenant never loses access to saved work. */
+    function packagedBilling(o) {
+      return exists(/databases/$(database)/documents/omega_orgs/$(o)/billing/current)
+        && get(/databases/$(database)/documents/omega_orgs/$(o)/billing/current).data.get('packaged', false) == true;
+    }
+    function packagePeriodOpen(b) {
+      let now = request.time.toMillis();
+      let state = b.get('packagingState', '');
+      return b.get('accessUntil', 0) is number && now < b.get('accessUntil', 0)
+        && (state == 'paid'
+          || (state == 'past_due_lite' && b.get('modules', []) == ['lite'] && b.get('paidThrough', '') != '')
+          || (state == 'trial' && b.get('trialStartedAt', 0) is number && b.get('trialEndsAt', 0) is number
+            && now >= b.get('trialStartedAt', 0) && now < b.get('trialEndsAt', 0)
+            && b.get('trialEndsAt', 0) - b.get('trialStartedAt', 0) <= 1209600000));
+    }
+    function packageWrite(o, tool) {
+      return isAdmin() || !packagedBilling(o)
+        || (tenantReader(o) && tenantDoc(o).get('status', '') == 'active'
+          && tHasMember(o) && tRole(o) in ['owner', 'admin', 'member']
+          && packagePeriodOpen(get(/databases/$(database)/documents/omega_orgs/$(o)/billing/current).data)
+          && tool in get(/databases/$(database)/documents/omega_orgs/$(o)/billing/current).data.get('toolAccess', [])
+          && (tMember(o).get('toolAccess', null) == null || tool in tMember(o).get('toolAccess', [])));
+    }
 
     function demoBucketOrg() {
       return userOrg() == 'clearsky-usa.com' ? 'demo-clearsky'
@@ -572,7 +597,7 @@ service cloud.firestore {
 
     match /toolData/{orgId}/tools/{toolKey} {
       allow read:  if signedIn() && (userOrg() == orgId || ownsDemoBucket(orgId) || isAdmin());
-      allow write: if signedIn() && (userOrg() == orgId || ownsDemoBucket(orgId));
+      allow write: if signedIn() && (userOrg() == orgId || ownsDemoBucket(orgId)) && packageWrite(orgId, toolKey);
     }
     match /toolData/{orgId}/prefs/{prefId} {
       allow read:  if signedIn() && (userOrg() == orgId || ownsDemoBucket(orgId) || isAdmin());
@@ -1600,14 +1625,14 @@ service cloud.firestore {
                     || isConsoleViewer()
                     || isOmegaStaff()
                   );
-      allow create: if request.auth != null
+      allow create: if request.auth != null && packageWrite(userOrg(), 'editor')
                     && (
                       request.resource.data.orgId == userOrg()
                       || ownsDemoBucket(request.resource.data.orgId)
                       || isAdmin()
                       || isOmegaStaff()
                     );
-      allow update: if request.auth != null
+      allow update: if request.auth != null && packageWrite(userOrg(), 'editor')
                     && (
                       (
                         (
@@ -1624,7 +1649,7 @@ service cloud.firestore {
                       || isAdmin()
                       || isOmegaStaff()
                     );
-      allow delete: if request.auth != null
+      allow delete: if request.auth != null && packageWrite(userOrg(), 'editor')
                     && (
                       resource.data.orgId == userOrg()
                       || resource.data.uid == request.auth.uid
@@ -2735,8 +2760,13 @@ service cloud.firestore {
          A tenant admin who could edit `tier` would be pricing their own
          subscription. */
       match /billing/{docId} {
-        allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
-        allow write: if isAdmin();
+        allow read: if isAdmin() || (docId == 'profile'
+          ? (tenantReader(orgId) && isTenantAdmin(orgId))
+          : (signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId))));
+        // Profiles and packaged entitlements are Admin SDK only. A console
+        // cannot forge a paid grant or alter the signup billing anchor.
+        allow write: if docId != 'profile' && isAdmin() && !packagedBilling(orgId)
+          && (request.resource == null || request.resource.data.get('packaged', false) != true);
 
         /* ── BILLING HISTORY ──  billing/current/history/{entryId}
            Rules do NOT cascade into a subcollection, so without this block the
@@ -2758,8 +2788,15 @@ service cloud.firestore {
              Create is open to isAdmin() so the console can log a change it
              made directly; /api/tenant-billing appends the same shape through
              the Admin SDK. Either path produces a row, neither can alter one. */
-          allow create: if isAdmin();
+          allow create: if isAdmin() && !packagedBilling(orgId);
           allow update, delete: if false;
+        }
+        match /invoices/{invoiceId} {
+          allow read: if isAdmin() || (tenantReader(orgId) && isTenantAdmin(orgId));
+          allow write: if false;
+        }
+        match /operations/{operationId} {
+          allow read, write: if false;
         }
       }
 

@@ -988,3 +988,17 @@ with project focus: All tools restores every owned tool, while seven project
 types prioritize relevant commands. Existing drawings remain mounted.
 A staff package preview changes presentation only; it does not change the
 resolved organization, customer records, module purchases or billing dates.
+
+
+### Packaged billing (Phase 4, disabled pending rollout)
+
+`modules[]` remains the entitlement source. The admin tenant record uses one
+shared menu for staff selection and customer preview. Package changes are
+server-priced and reviewed before activation; QuickBooks payment evidence
+controls paid access. The private billing profile never reaches tenant_public,
+and exemption certificates are staff-only. Approval starts the one capped
+trial, with first billing at its end and recurring dates anchored to signup.
+Annual prepay excludes transformation credit. Unpaid work stays readable;
+project/tool-data writes and project uploads are payment-gated. Legacy buyer
+Editor Lite remains a separate product. See PACKAGING-PHASE-4-VALIDATION.md
+for fixture evidence and outstanding real-sandbox acceptance.

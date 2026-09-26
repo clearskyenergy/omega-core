@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
-  "crons": [{ "path": "/api/logic-worker", "schedule": "*/5 * * * *" }],
+  "crons": [{ "path": "/api/logic-worker", "schedule": "*/5 * * * *" }, { "path": "/api/billing-run", "schedule": "0 8 * * *" }],
   "headers": [
     {
       "source": "/embed/(.*)",
@@ -292,6 +292,7 @@
     "api/site-catalog.js": { "maxDuration": 60 },
     "api/comed-proxy.js": { "maxDuration": 30 },
     "api/logic-worker.js": { "maxDuration": 60 },
+    "api/billing-run.js": { "maxDuration": 60 },
     "api/logic-office.js": { "maxDuration": 60 },
     "api/logic-accounting.js": { "maxDuration": 60 },
     "api/ledger-webhook.js": { "maxDuration": 60 },

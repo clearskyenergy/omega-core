@@ -168,6 +168,16 @@ authorized projections and server quotes. Packaged records use the server access
 unpackaged records keep legacy gates. Do not enable packaged billing before
 full editor, server-engine, write-rule and billing lifecycle validation. See `docs/PACKAGING-ROADMAP.md`.
 
+Phase 4 adds private signup billing profiles, reviewed staff package activation,
+server-priced sandbox invoices and paid reconciliation. New trials start at
+approval, once per organization and at most 14 days. Annual prepay uses the
+11-month price without transformation credit. Packaged billing/profile writes
+are Admin SDK only. API and rules enforce the recorded access deadline;
+legacy tier edits cannot modify a packaged subscription. Staff authentication
+requires a literal verified ClearSky domain even with an old role claim.
+Flags remain off by default; see docs/PACKAGING-PHASE-4-VALIDATION.md before
+any sandbox enablement or release.
+
 Packaged editor presentation uses the server catalog through OmegaCaps;
 OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
 The shared omega-package-menu.js renders catalog features and server-formatted
@@ -709,8 +719,8 @@ tenant. Treat it that way.
 - **Staff by email domain needs a VERIFIED email** (`email_verified`
   is the literal `true`; absent is not verified). A Firebase password account
   can be opened on any address without proving it. One rule in four places:
-  `verify-token.js` `verifyIdToken()`, `admin.js` `authenticate()` (the
-  explicit `role: 'staff'` claim still counts), `isAdmin()` in
+  `verify-token.js` `verifyIdToken()`, `admin.js` `authenticate()` (an old
+  `role: 'staff'` claim cannot bypass verified-domain identity), `isAdmin()` in
   `firestore.rules`, `isAdminDomain()` in `storage.rules`. Never decide staff
   with `isStaffEmail()` on a caller; read `caller.staff`.
   `scripts/tests/tstaffverified.js` holds it.

@@ -163,6 +163,8 @@ function owners(id, handler) {
   }).map(function (m) { return m.key; });
 }
 module.exports = { catalog: function () { return copy(CATALOG); }, notSold: function () { return copy(NOT_SOLD); },
-  starters: function () { return copy(STARTERS); }, get: function (key) { return Object.prototype.hasOwnProperty.call(BY_KEY, key) ? copy(BY_KEY[key]) : null; },
+  starters: function () { return copy(STARTERS); },
+  starterLabels: function () { return { ev: 'EV installer', solar: 'Solar / BESS installer', developer: 'Developer', epc: 'EPC / engineering', oem: 'OEM', distributor: 'Distributor', compute: 'Compute / advisor', capital: 'Capital partner' }; },
+  get: function (key) { return Object.prototype.hasOwnProperty.call(BY_KEY, key) ? copy(BY_KEY[key]) : null; },
   readOnlyRibbon: function () { return copy(READ_ONLY_RIBBON); },
   normalize: normalize, resolve: resolve, owners: owners };

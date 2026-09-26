@@ -18,7 +18,7 @@ W.setAll(false); W.setIdentity('alice'); check(W.all(), 'preference remembered f
 var packages = [['lite'], M.starters().ev, M.starters().developer, M.starters().epc, M.catalog().map(function (m) { return m.key; })];
 var core = ['rbMode(\'select\')', 'rbMode(\'line\')', 'rbMode(\'polyline\')', 'rbMode(\'rect\')', 'rbMode(\'circle\')', 'addTextBox()', 'undoLast()', 'startCal()', 'toggle3D()', 'toggleLayersPanel()', 'openConduitMenu()', 'openMvCableDialog()'];
 packages.forEach(function (keys) {
-  C.setPackage(X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', modules: keys }, { status: 'active' }, { role: 'owner' }));
+  C.setPackage(X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: keys }, { status: 'active' }, { role: 'owner' }));
   Object.keys(W.presets).forEach(function (workspace) {
     W.setProject(workspace);
     core.forEach(function (handler) { check(W.relevance(handler, '', 'draw') >= 0 && C.allowedCommand('', handler), keys.join(',') + '/' + workspace + ': core ' + handler); });

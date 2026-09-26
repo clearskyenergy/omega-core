@@ -26,7 +26,17 @@ function project(caller, billing, org, member, now) {
     var start = instant(billing.trialStartedAt), end = instant(billing.trialEndsAt);
     canWork = isFinite(start) && isFinite(end) && end > start && end - start <= 14 * 86400000 && now >= start && now < end;
   }
+  // Renewal fallback is a server-written Lite grant after an earlier paid
+  // period. It cannot resurrect premium modules or an unpaid first trial.
+  if (state === 'past_due_lite') canWork = grants.modules.length === 1 && grants.modules[0] === 'lite' && isFinite(instant(billing.paidThrough));
+  canWork = canWork && billing.accessUntil != null && isFinite(instant(billing.accessUntil)) && now < instant(billing.accessUntil);
+  var notice = null;
+  if (state === 'trial' && canWork && now >= instant(billing.trialStartedAt) + 10 * 86400000) {
+    notice = { text: 'Your trial ends on ' + new Date(instant(billing.trialEndsAt)).toISOString().slice(0, 10) + '. Your plan: ' + (billing.plan || 'Lite + modules') + (billing.monthlyDisplay ? ', ' + billing.monthlyDisplay : '') + '.', payUrl: null };
+  } else if (!canWork) notice = { text: 'This workspace is read-only. Your saved projects remain available. Pay to continue creating and exporting.', payUrl: require('./logic-policy').paymentLink(billing.paymentLink) };
+  else if (state === 'past_due_lite') notice = { text: 'Payment is overdue. Your workspace has returned to Lite. Your saved work remains available.', payUrl: require('./logic-policy').paymentLink(billing.paymentLink) };
   return { packaged: true, staff: false, readOnly: !canWork || member.role === 'viewer', modules: grants.modules,
+    accessUntil: billing.accessUntil == null ? null : instant(billing.accessUntil), billingNotice: notice,
     tier: grants.tier, addons: grants.addons, caps: grants.caps, toolAccess: grants.toolAccess, catalog: M.catalog(), notSold: M.notSold(), readOnlyRibbon: M.readOnlyRibbon() };
 }
 function requireModule(view, key, options) {

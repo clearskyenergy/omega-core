@@ -100,5 +100,50 @@
     };
     label.appendChild(select); label.appendChild(notice); bar.appendChild(label);
   }
-  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview };
+  // The same server catalog drives the staff picker, signup and customer view.
+  // Dependencies are presentation only; the server independently normalizes
+  // every selection and is the sole authority for prices and access.
+  function picker(host, options) {
+    var rows = options.catalog || [], selected = (options.modules || ['lite']).slice();
+    function choose(key, on) {
+      if (key === 'lite') return;
+      if (on) {
+        if (selected.indexOf(key) < 0) selected.push(key);
+        var match = rows.filter(function (m) { return m.key === key; })[0];
+        (match.requires || []).forEach(function (dep) { if (selected.indexOf(dep) < 0) selected.push(dep); });
+      } else selected = selected.filter(function (k) {
+        var match = rows.filter(function (m) { return m.key === k; })[0];
+        return k !== key && (!match || (match.requires || []).indexOf(key) < 0);
+      });
+      draw(); if (options.onChange) options.onChange(selected.slice());
+    }
+    function draw() {
+      host.textContent = ''; var shelves = {};
+      rows.forEach(function (m) {
+        if (!shelves[m.shelf]) {
+          var shelf = node('div', '', 'pkm-shelf');
+          shelf.appendChild(node('h4', { floor: 'Floor', addon: 'Add-on', standard: 'Standard', premium: 'Premium', deliverable: 'Deliverable', platform: 'Omega Logic' }[m.shelf] || m.shelf));
+          var grid = node('div', '', 'pkm-mods'); shelf.appendChild(grid); shelves[m.shelf] = grid; host.appendChild(shelf);
+        }
+        var owned = selected.indexOf(m.key) >= 0, item = node('label', '', 'pkm-mod' + (owned ? ' on' : ''));
+        item.setAttribute('data-module-card', m.key);
+        var checkbox = node('input'); checkbox.type = 'checkbox'; checkbox.checked = owned;
+        checkbox.disabled = options.readOnly === true || m.key === 'lite'; checkbox.setAttribute('aria-label', m.name);
+        checkbox.onchange = function () { choose(m.key, checkbox.checked); };
+        item.appendChild(checkbox); var title = node('span', '', 'pkm-name'); title.appendChild(node('b', m.name)); title.appendChild(node('span', m.priceDisplay || 'Pricing unavailable', 'pkm-price')); item.appendChild(title);
+        item.appendChild(node('span', (m.features || []).join(' · '), 'pkm-desc'));
+        if (m.coverage) item.appendChild(node('span', m.coverage, 'pkm-desc'));
+        if (m.agreement) item.appendChild(node('span', m.agreement, 'pkm-desc'));
+        var tags = node('span', '', 'pkm-tags');
+        if (m.usageDisplay) tags.appendChild(node('span', m.usageDisplay, 'pkm-tag'));
+        if (m.key === 'lite') tags.appendChild(node('span', 'Always included', 'pkm-tag'));
+        if (m.beta && m.beta.length) tags.appendChild(node('span', 'BETA', 'pkm-tag beta'));
+        if ((m.requires || []).indexOf('logic-office') >= 0) tags.appendChild(node('span', 'Needs Office', 'pkm-tag'));
+        if (options.readOnly && owned) tags.appendChild(node('span', 'On · remove at review', 'pkm-tag'));
+        item.appendChild(tags); shelves[m.shelf].appendChild(item);
+      });
+    }
+    draw(); return { value: function () { return selected.slice(); }, set: function (keys) { selected = keys.slice(); draw(); if (options.onChange) options.onChange(selected.slice()); } };
+  }
+  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker };
 })(typeof window !== 'undefined' ? window : this);

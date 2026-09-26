@@ -78,16 +78,15 @@ function isStaffEmail(email) { return STAFF_DOMAINS.indexOf(orgOf(email)) >= 0; 
    STAFF BY DOMAIN NEEDS A VERIFIED EMAIL. A Firebase password account can be
    opened on any address without proving it, so an unverified @clearsky-usa.com
    is nobody. email_verified must be the literal true (absent is not verified),
-   the same rule as verify-token.js and isAdmin() in firestore.rules. The
-   explicit custom claim role === 'staff' stands on its own: only the Admin SDK
-   can mint one, and nothing in this repo does. */
+   the same rule as verify-token.js and isAdmin() in firestore.rules.
+   A legacy role claim never substitutes for verified domain ownership. */
 function authenticate(req) {
   var h = req.headers.authorization || '';
   var m = /^Bearer (.+)$/.exec(h);
   if (!m) return Promise.reject(httpError(401, 'missing bearer token'));
   return init().auth().verifyIdToken(m[1]).then(function (dec) {
     var email = dec.email || '';
-    var staff = (dec.email_verified === true && isStaffEmail(email)) || dec.role === 'staff';
+    var staff = dec.email_verified === true && isStaffEmail(email);
     return { uid: dec.uid, email: email, orgId: dec.orgId || orgOf(email), staff: staff, claims: dec };
   }).catch(function () { throw httpError(401, 'invalid token'); });
 }

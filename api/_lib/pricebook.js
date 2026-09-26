@@ -23,7 +23,8 @@ function proposed() {
     serviceFees: { lite: 150000, field: 340000, pro: 340000, enterprise: 1000000, waiverScope: 'first-year' },
     policy: { trialDays: 14, guidedBuildsInLite: true, failedPaymentGraceBusinessDays: 10,
       memberModuleEntry: true, billingProvider: 'quickbooks', savedCardEnabled: false,
-      packExpiry: 'cycle-end', autoTopup: false, permittingBeta: true, removalsAtReview: true, reviewDays: 90 },
+      packExpiry: 'cycle-end', autoTopup: false, permittingBeta: true, removalsAtReview: true, reviewDays: 90,
+      annualTransformationCredit: false },
     qbo: { env: 'sandbox', realmId: null, items: {} } };
   var logic = { 'logic-office': 150000, 'logic-plant': 75000, 'logic-materials': 50000,
     'logic-logistics': 50000, 'logic-customer': 25000 };

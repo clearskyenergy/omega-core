@@ -1292,6 +1292,15 @@ function _authedPost(path, body){
    forgot to bill and a tenant who has paid are different problems, and
    collapsing them hides the one you can still fix. */
 function _standing(bill, org){
+  if (bill && bill.packaged === true) {
+    var ps = bill.packagingState;
+    if (ps === 'paid') return { key: 'current', chip: 'good', label: 'Active' };
+    if (ps === 'trial') return { key: 'trialend', chip: 'warn', label: 'Trial ends ' + new Date(bill.trialEndsAt).toLocaleDateString() };
+    if (ps === 'past_due_lite' || ps === 'unpaid') return { key: 'overdue', chip: 'bad', label: 'Past due' };
+    if (ps === 'awaiting_payment') return { key: 'overdue', chip: 'warn', label: 'Awaiting payment' };
+    return { key: 'unpriced', chip: 'warn', label: ps === 'reconciliation_required' ? 'Accounting review' : 'Package review' };
+  }
+
   if ((org.status||'') === 'pending') return { key:'pending', label:'pending approval', chip:'warn' };
   if (!bill || !Object.keys(bill).length) return { key:'unpriced', label:'not priced', chip:'neutral' };
   var now = Date.now(), DAY = 86400000;
@@ -1305,7 +1314,8 @@ function _standing(bill, org){
   return { key:'current', label:'current', chip:'good' };
 }
 
-var tnFilter = 'all';
+var tnFilter = 'all', tnSort = 'name';
+function setTnSort(value) { tnSort = value; renderTenants(); }
 function setTnFilter(f){ tnFilter=f; renderTenants(); }
 
 /* REFRESH HAS TO SAY SOMETHING.
@@ -1453,6 +1463,7 @@ function pushTierToBilling(orgId, crmTier){
   var ref = db.collection('omega_orgs').doc(orgId).collection('billing').doc('current');
   ref.get().then(function(snap){
     var before = snap.exists ? snap.data() : {};
+    if (before.packaged === true) throw new Error('Use the Package panel for this subscription: /admin/tenant.html?org=' + encodeURIComponent(orgId));
     return ref.set({ tier: target, updatedAt: FV.serverTimestamp(),
                      updatedBy: (currentUser && currentUser.email) || 'console' }, { merge:true })
       .then(function(){
@@ -1979,12 +1990,17 @@ function renderTenants(){
   }
 
   var shown = rows.filter(function(r){ return tnFilter==='all' || _standing(r._bill,r).key===tnFilter; });
+  shown.sort(function (a, b) {
+    if (tnSort === 'monthly') return ((b._bill || {}).monthlyCents || 0) - ((a._bill || {}).monthlyCents || 0);
+    if (tnSort === 'plan') return String((a._bill || {}).plan || (a._bill || {}).tier || '').localeCompare(String((b._bill || {}).plan || (b._bill || {}).tier || ''));
+    return String(a.name || a._id).localeCompare(String(b.name || b._id));
+  });
 
   var html = '<div class="filter-row">'+fh+'</div>'
     + '<div style="display:flex;gap:8px;align-items:center;margin:0 0 12px">'
     + '<button class="btn-ghost" onclick="openBroadcast()">\u2709 Message '
     +   (tnFilter==='all'?'all tenants':('the '+esc(tnFilter)+' list'))+'</button>'
-    + '<span class="sub-txt">'+shown.length+' shown</span></div>';
+    + '<span class="sub-txt">'+shown.length+' shown</span><label>Sort <select onchange="setTnSort(this.value)">'+[['name','Tenant'],['plan','Plan'],['monthly','Monthly charge']].map(function (s) { return '<option value="'+s[0]+'"'+(tnSort===s[0]?' selected':'')+'>'+s[1]+'</option>'; }).join('')+'</select></label></div>';
 
   /* .table-wrap + .ptable are what every other table on this page uses. The
      previous markup asked for .tbl, which has no rule anywhere in this
@@ -1998,9 +2014,9 @@ function renderTenants(){
     var due = bill.subscriptionDue ? ('due '+esc(bill.subscriptionDue)) : '';
     var amt = (Number(bill.amountDue||0)>0) ? ('$'+Number(bill.amountDue).toLocaleString()) : '';
     var sub = [due,amt].filter(Boolean).join(' \u00b7 ');
-    html += '<tr><td class="site-nm">'+esc(r.name||r._id)+'</td>'
+    html += '<tr><td class="site-nm"><a href="/admin/tenant.html?org='+encodeURIComponent(r._id)+'">'+esc(r.name||r._id)+'</a></td>'
          +  '<td class="sub-txt">'+esc(r._id)+'</td>'
-         +  '<td>'+esc(bill.tier||'\u2014')+'</td>'
+         +  '<td>'+esc(bill.packaged ? bill.plan || 'Proposed package' : bill.tier || '\u2014')+(bill.packaged ? '<div class="sub-txt">'+esc(bill.monthlyDisplay || '')+'</div>' : '')+'</td>'
          +  '<td><span class="chip '+sd.chip+'">'+esc(sd.label)+'</span>'
          +    (sub?('<div class="sub-txt">'+sub+'</div>'):'')+'</td>'
          +  '<td><span class="chip '+_tnStatusChip(st)+'">'+esc(st)+'</span></td>'
@@ -2057,6 +2073,8 @@ function openBroadcast(orgId){
 }
 
 function tenantAction(orgId, action){
+  var tenant = (STATE.tenants || []).filter(function (t) { return t._id === orgId; })[0];
+  if (action === 'approve' && tenant && tenant._bill && tenant._bill.packaged === true) { location.href = '/admin/tenant.html?org=' + encodeURIComponent(orgId); return; }
   var verb = { approve:'approve', reject:'REJECT', suspend:'SUSPEND', reactivate:'reactivate' }[action]||action;
   /* Reject and suspend are the two that a customer feels immediately, so they
      are the two that ask. Approve is additive and reversible by suspending. */
@@ -2246,6 +2264,8 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
              ['partner','partner \u2014 JV / channel'],
              ['internal','internal \u2014 ClearSky']];
   h+='<div><div class="block-title" style="font-size:13px;margin-bottom:8px">Commercial terms</div>';
+  h+='<a href="/admin/tenant.html?org='+encodeURIComponent(orgId)+'">Open Package panel</a>';
+  if (bill.packaged !== true) {
   h+=logicEnrollmentHtml(orgId, bill);
   h+='<label class="sub-txt" style="display:block;margin-bottom:10px">Plan'
    + '<select id="tb-tier-'+esc(orgId)+'" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">'
@@ -2345,6 +2365,7 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
   h+=' <span id="tb-msg-'+esc(orgId)+'" class="sub-txt"></span>';
   h+='<div class="sub-txt" style="margin-top:8px">Provider: '+esc(bill.paymentProvider||'\u2014')
    + (bill.stripeCustomerId?(' \u00b7 Stripe '+esc(bill.stripeCustomerId)):'')+'</div>';
+  } else { h+='<p class="sub-txt">'+esc(bill.plan || 'Lite + modules')+' · '+esc(bill.monthlyDisplay || '')+' · '+esc(bill.packagingState || '')+'</p><p class="sub-txt">Modules and billing changes are managed in the Package panel.</p>'; }
   h+='</div>';
 
   /* ── Identity & usage ── */
@@ -2716,6 +2737,7 @@ function saveTenantBilling(orgId){
 
   ref.get().then(function(snap){
     var before=snap.exists?snap.data():{};
+    if (before.packaged === true) throw new Error('Use the Package panel for this subscription.');
     var write=Object.assign({}, patch, {
       updatedAt: FV.serverTimestamp(),
       updatedBy: (currentUser && currentUser.email) || 'console'

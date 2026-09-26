@@ -7,6 +7,10 @@
 var M = require('./modules'), B = require('./pricebook');
 function fail(message) { var e = new Error(message); e.status = 400; throw e; }
 function money(n) { return '$' + (n / 100).toLocaleString('en-US', { minimumFractionDigits: n % 100 ? 2 : 0, maximumFractionDigits: 2 }); }
+function dollarInput(value) {
+  if (typeof value !== 'string' || !/^\d{1,8}(\.\d{1,2})?$/.test(value)) fail('Enter a dollar amount with at most two decimal places');
+  var parts = value.split('.'); return B.integer(Number(parts[0]) * 100 + Number(((parts[1] || '') + '00').slice(0, 2)), 'custom service fee');
+}
 function fee(book, plan, choice, year) {
   choice = choice || { mode: 'standard' }; year = year || 1;
   var mode = choice.mode || 'standard', scope = choice.appliesTo || book.serviceFees.waiverScope;
@@ -16,10 +20,13 @@ function fee(book, plan, choice, year) {
   var standard = book.serviceFees[plan] == null ? book.serviceFees.lite : book.serviceFees[plan];
   var amount = mode === 'custom' ? B.integer(choice.amountCents, 'custom service fee') : (mode === 'waived' ? 0 : standard);
   if (year > 1 && scope === 'first-year') amount = standard;
-  return { mode: mode, amountCents: amount, standardCents: standard, appliesTo: scope, reason: choice.reason || '', display: amount ? money(amount) + '/year' : 'Waived' };
+  return { mode: mode, amountCents: amount, amountDollars: (amount / 100).toFixed(2), standardCents: standard, appliesTo: scope, reason: choice.reason || '', display: amount ? money(amount) + '/year' : 'Waived' };
 }
 function quote(keys, book, options) {
   B.validate(book); options = options || {};
+  var interval = options.interval || 'monthly';
+  if (['monthly', 'annual'].indexOf(interval) < 0) fail('Invalid billing interval');
+  if (interval === 'annual' && options.credit && book.policy.annualTransformationCredit !== true) fail('Annual prepay excludes the transformation credit');
   var modules = M.normalize(keys), editor = 0, logic = 0, logicCount = 0, deliverables = 0, lines = [];
   modules.forEach(function (k) {
     var m = M.get(k), price = book.modules[k].priceCents;
@@ -64,14 +71,25 @@ function quote(keys, book, options) {
   if (creditCents) lines.push({ itemKey: 'credit', name: 'Transformation credit', quantity: 1, amountCents: -creditCents });
   var monthly = recurring - creditCents;
   var service = fee(book, chosen.plan, options.serviceFee, options.year);
-  return { pricebookVersion: book.version, modules: modules, plan: chosen.plan,
+  return { pricebookVersion: book.version, modules: modules, plan: chosen.plan, interval: interval,
     editorListCents: editor, alacarteCents: list + logic + extra, logicCents: logic, loginCents: extra,
     recurringCents: recurring, creditCents: creditCents, monthlyCents: monthly,
     annualPrepayBeforeCreditCents: recurring * book.annualPaidMonths,
     serviceFee: service, lines: lines, grants: M.resolve(modules),
     recommendation: { plan: choices[0].plan, monthlyCents: choices[0].priceCents + logic + extra,
       savingsCents: chosen.priceCents - choices[0].priceCents },
-    display: { monthly: money(monthly) + '/month', recurring: money(recurring) + '/month',
-      annualBeforeCredit: money(recurring * book.annualPaidMonths) + '/year before transformation credit', serviceFee: service.display } };
+    display: { monthly: money(monthly) + '/month', recurring: money(recurring) + '/month', list: money(list + logic + extra) + '/month',
+      plan: chosen.plan === 'alacarte' ? 'Lite + modules' : book.plans[chosen.plan].name,
+      fit: chosen.plan === 'alacarte' ? (choices[0].plan !== 'alacarte' ? 'Switch to ' + book.plans[choices[0].plan].name + ' and save ' + money(chosen.priceCents - choices[0].priceCents) + '/month.' : 'Lite plus the modules selected is the lowest monthly price.') : money(book.plans[chosen.plan].capCents - editor) + ' of module capacity remains in ' + book.plans[chosen.plan].name + '.',
+      usage: Object.keys(book.usage).filter(function (k) { return modules.indexOf(book.usage[k].module) >= 0; }).map(function (k) { return book.usage[k].included + ' ' + book.usage[k].name + '/cycle'; }),
+      annualBeforeCredit: money(recurring * book.annualPaidMonths) + '/year; annual prepay excludes transformation credit', serviceFee: service.display } };
 }
-module.exports = { quote: quote, serviceFee: fee, money: money };
+function catalog(book) {
+  return M.catalog().map(function (m) {
+    m.priceCents = book.modules[m.key].priceCents; m.priceDisplay = money(m.priceCents) + '/month';
+    m.usageDisplay = Object.keys(book.usage).filter(function (k) { return book.usage[k].module === m.key; })
+      .map(function (k) { return book.usage[k].included + ' ' + book.usage[k].name + '/cycle'; }).join(' · ');
+    return m;
+  });
+}
+module.exports = { quote: quote, serviceFee: fee, money: money, catalog: catalog, dollarInput: dollarInput };

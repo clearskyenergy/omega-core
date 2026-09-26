@@ -605,10 +605,49 @@
     (document.head || document.documentElement).appendChild(st);
   }
 
+  var packageRefreshTimer = null;
+  function packageBillingChrome(ws) {
+    if (packageRefreshTimer) clearTimeout(packageRefreshTimer);
+    packageRefreshTimer = null;
+    var old = document.getElementById('omega-billing-status'); if (old) old.remove();
+    var view = ws && ws.packageAccess;
+    if (!view || !view.packaged || view.staff || view.preview) return;
+    if (view.billingNotice && document.body) {
+      var bar = document.createElement('aside'); bar.id = 'omega-billing-status'; bar.setAttribute('role', 'status');
+      bar.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;z-index:99998;padding:12px 18px;border:1px solid #6e9be0;border-radius:8px;background:#16202b;color:#eef2f6;font:13px/1.5 system-ui;display:flex;flex-wrap:wrap;gap:10px;box-shadow:0 4px 20px #0004';
+      var text = document.createElement('span'); text.textContent = view.billingNotice.text; bar.appendChild(text);
+      if (view.billingNotice.payUrl) { var pay = document.createElement('a'); pay.textContent = 'Pay in QuickBooks'; pay.href = view.billingNotice.payUrl; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.color = '#9fc5ff'; bar.appendChild(pay); }
+      document.body.appendChild(bar);
+    }
+    var user = global.firebase && firebase.auth().currentUser; if (!user || !global.fetch) return;
+    var delay = view.accessUntil && !view.readOnly ? Math.min(60000, Math.max(1, view.accessUntil - Date.now())) : 60000;
+    packageRefreshTimer = setTimeout(function () {
+      if (firebase.auth().currentUser !== user) return;
+      // Close presentation immediately at the recorded deadline, before the
+      // refresh can wait on a network. API and rules enforce it independently.
+      if (view.accessUntil && Date.now() >= view.accessUntil) {
+        view.readOnly = true;
+        if (global.OmegaCaps) { global.OmegaCaps.setPackage(view); global.OmegaCaps.apply('trial'); }
+      }
+      user.getIdToken().then(function (token) { return global.fetch('/api/package-access', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
+        .then(function (r) { if (!r.ok) throw new Error('Package access unavailable'); return r.json(); })
+        .then(function (fresh) {
+          if (firebase.auth().currentUser !== user) return;
+          if (!fresh.packaged || !Array.isArray(fresh.modules) || !Array.isArray(fresh.toolAccess)) { global.location.reload(); return; }
+          T.packageAccess = fresh; ws.packageAccess = fresh;
+          fireEntitlements(mergeEntitlements(ws));
+        }, function () {
+          if (firebase.auth().currentUser !== user) return;
+          view.readOnly = true; view.billingNotice = { text: 'Package access could not be verified. Saved projects remain available; reconnect to continue.', payUrl: null };
+          T.packageAccess = view; ws.packageAccess = view; fireEntitlements(mergeEntitlements(ws));
+        });
+    }, delay);
+  }
   function fireEntitlements(ws) {
     T._ent = true; T._ws = ws;
     try { countDesignWork((ws && ws.orgId) || '', (ws && ws.jdPartnerOf) || ''); } catch (e) {}
     try { paintMarketplaceNav(ws); } catch (e) {}
+    try { packageBillingChrome(ws); } catch (e) {}
     /* The chrome was painted before this record arrived; repaint it now that
        the real name is known, or the header keeps the derived one. */
     try { if (global.OmegaBrand && OmegaBrand.paint) OmegaBrand.paint(ws); } catch (e) {}
@@ -928,7 +967,7 @@
       T._watching = true;
       firebase.auth().onAuthStateChanged(function (user) {
         if (user) { markSession(); setTimeout(function () { loadEntitlements(user); }, 0); }
-        else { T.billing = null; T.member = null; T.role = 'member'; T._ent = false; }
+        else { T.billing = null; T.member = null; T.role = 'member'; T._ent = false; packageBillingChrome(null); }
       });
     } catch (e) { T._watching = false; log('auth watch failed', e && e.message); }
   }

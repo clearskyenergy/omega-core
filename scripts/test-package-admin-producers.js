@@ -16,7 +16,7 @@ var site = require('../api/site-score')._helpers.entitle, rfq = require('../api/
 function setup(keys) {
   db.seed('omega_orgs/example.com', { status: 'active' });
   db.seed('omega_orgs/example.com/members/member', { role: 'member', status: 'active' });
-  db.seed('omega_orgs/example.com/billing/current', { packaged: true, modules: keys, packagingState: 'paid', tier: 'enterprise', toolOverrides: { render: true, sitefinder: true } });
+  db.seed('omega_orgs/example.com/billing/current', { packaged: true, modules: keys, packagingState: 'paid', accessUntil: Date.now() + 86400000, tier: 'enterprise', toolOverrides: { render: true, sitefinder: true } });
 }
 async function refused(fn) { await assert.rejects(fn, function (e) { return e.status === 403; }); count++; }
 async function renderStatus(expected) {

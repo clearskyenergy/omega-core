@@ -63,7 +63,7 @@ async function run() {
         if (url.pathname === '/api/package-access') {
           var projection = view;
           if (route.request().method() === 'POST' && view.staff) {
-            projection = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', modules: route.request().postDataJSON().previewModules }, { status: 'active' }, { role: 'owner' });
+            projection = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: route.request().postDataJSON().previewModules }, { status: 'active' }, { role: 'owner' });
             projection.canPreview = true; projection.preview = true; projection.starters = M.starters();
           }
           return route.fulfill({ contentType: 'application/json', body: JSON.stringify(projection) });
@@ -75,7 +75,7 @@ async function run() {
         if (url.pathname.indexOf('/api/') === 0) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Offline producer"}' });
         return route.continue();
       });
-      view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', modules: packages.lite }, { status: 'active' }, { role: 'owner' });
+      view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: packages.lite }, { status: 'active' }, { role: 'owner' });
       var page = await context.newPage(), errors = [];
       page.on('pageerror', function (e) { errors.push(e.message); });
       await page.goto(base + '/editor.html', { waitUntil: 'domcontentloaded' });
@@ -85,7 +85,7 @@ async function run() {
       await page.waitForTimeout(3000);
       ok(await page.evaluate(function () { return window.__fixtureReads < 100; }), 'empty recent-project result settles');
       for (var name of Object.keys(packages)) {
-        view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', modules: packages[name] }, { status: 'active' }, { role: 'owner' });
+        view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: packages[name] }, { status: 'active' }, { role: 'owner' });
         await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
         for (var workspace of ['l2', 'dcfc', 'bess', 'solarstorage', 'microgrid', 'compute', 'building']) {
           await page.evaluate(function (key) { OmegaWorkspaces.setAll(false); OmegaWorkspaces.setProject(key, null, true); }, workspace);
@@ -140,7 +140,7 @@ async function run() {
       // Tablet landscape: inspect every owned tab, not just the opening Build page.
       await page.setViewportSize({ width: 1024, height: 768 });
       for (var tabletName of Object.keys(packages)) {
-        view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', modules: packages[tabletName] }, { status: 'active' }, { role: 'owner' });
+        view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: packages[tabletName] }, { status: 'active' }, { role: 'owner' });
         await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaWorkspaces.setProject('l2', null, true); OmegaWorkspaces.setAll(true); }, view);
         var tabletFit = await page.evaluate(function () {
           var failures = [], tabs = document.querySelectorAll('#ribbon-tabs .rtab[data-page]');
@@ -160,7 +160,7 @@ async function run() {
         await page.screenshot({ path: path.join(output, tabletName + '-tablet-' + theme + '.png') });
       }
       await page.setViewportSize({ width: 1280, height: 900 });
-      view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', modules: ['lite'] }, { status: 'active' }, { role: 'owner' });
+      view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: ['lite'] }, { status: 'active' }, { role: 'owner' });
       await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
       await page.locator('#omega-package-tab').click();
       await page.waitForFunction(function () { return document.querySelector('#omega-package-menu .opm-price').textContent.indexOf('/month') >= 0; });

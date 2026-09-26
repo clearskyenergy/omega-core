@@ -9,7 +9,7 @@ D.mock('../api/_lib/verify-token', {
   readAsCaller: async function (token, path) { reads.push(path); return /\/members\//.test(path) ? member : org; },
   httpError: function (status, message) { return Object.assign(new Error(message), { status: status }); }
 });
-function setup(keys) { reads = []; member = { role: 'member', status: 'active' }; org = { status: 'active' }; ctx = { caller: caller, tier: 'enterprise', billing: { packaged: true, packagingState: 'paid', modules: keys, toolOverrides: {}, addons: [] } }; }
+function setup(keys) { reads = []; member = { role: 'member', status: 'active' }; org = { status: 'active' }; ctx = { caller: caller, tier: 'enterprise', billing: { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: keys, toolOverrides: {}, addons: [] } }; }
 async function call(file, method, body, query) {
   var result = {}, res = { setHeader: function () {}, status: function (n) { result.status = n; return res; }, json: function (data) { result.body = data; return res; } };
   await require('../api/' + file)({ method: method, headers: { authorization: 'Bearer fixture' }, body: body || {}, query: query || {} }, res);

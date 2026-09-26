@@ -2,7 +2,7 @@
 'use strict';
 var assert = require('assert'), V = require('../api/_lib/verify-token'), handler = require('../api/package-access');
 var original = V.authenticateWithTier, reads = V.readAsCaller, count = 0;
-var caller = { orgId: 'example.com', emailVerified: true, staff: false }, billing = { packaged: true, modules: ['lite'], packagingState: 'paid' };
+var caller = { orgId: 'example.com', emailVerified: true, staff: false }, billing = { packaged: true, modules: ['lite'], packagingState: 'paid', accessUntil: Date.now() + 86400000 };
 V.authenticateWithTier = async function () { return { caller: caller, billing: billing }; };
 V.readAsCaller = async function () { throw new Error('Preview must not access any tenant record'); };
 async function call(body) {

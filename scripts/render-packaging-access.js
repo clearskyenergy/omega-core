@@ -45,7 +45,7 @@ async function run() {
   try {
     for (var plan of ['lite', 'paid']) for (var theme of ['light', 'dark']) {
       var modules = plan === 'lite' ? ['lite'] : ['lite', 'estimate', 'plansets', 'compute'];
-      var view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', modules: modules }, { status: 'active' }, { role: 'owner', status: 'active' }, Date.now());
+      var view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: modules }, { status: 'active' }, { role: 'owner', status: 'active' }, Date.now());
       var context = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: theme });
       await context.addInitScript(init);
       await context.route('**/*', function (route) {
