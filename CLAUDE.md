@@ -811,6 +811,13 @@ tenant. Treat it that way.
   canonical, what still has to be ported, and the decisions pending.
 - `omega-tenant.js` MUST load directly after `omega-brand.js` on every page
   that signs users in. It wraps OmegaBrand.resolve.
+- `omega-splash.js` loads FIRST in `<head>` on every page that signs users
+  in (`scripts/tests/tsplash.js`): the OMEGA mark until the page is known
+  (`omega:auth` signed out, `omega:entitlements`, `OmegaSplash.done()`, or
+  the 4 s cap) and again the moment a link is followed or the page is left.
+  A page that shows its own thing before auth answers holds (`data-hold`)
+  and calls `done()`; the dashboard keeps its boot splash (`data-boot="no"`).
+  Never a flash of another page or the sign-in card. `docs/LOADING-SCREEN.md`.
 - Test as a tenant using `adminDomains` preview, not by editing their data.
 - `npm run check:dashboard` renders the tenant dashboard (`index.html`) in
   Chromium, signed in, with the Firebase compat SDK replaced by
@@ -832,7 +839,11 @@ tenant. Treat it that way.
   the server after a change. A locked tile on a packaged workspace offers
   its module by name and price and opens the Ladder on it; a legacy tenant
   (no packaged record: NextNRG, prepaid) keeps the old request and sees no
-  Ladder. Scenarios lite-ladder, awaiting and legacy-enterprise hold it. It fails on an error, an unanswered
+  Ladder. **Your modules** (`renderModuleCards`, above My Applications) is
+  one card per module: held ones Live in shelf order, bought-not-on ones
+  named, up to three unheld rungs dashed with + Add opening the Ladder on
+  them; the catalog and prices are the server's, never a second list.
+  Scenarios lite-ladder, awaiting and legacy-enterprise hold it. It fails on an error, an unanswered
   `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
   tile. `check:pages` does not cover the dashboard; run this after any
   change to `index.html` or the runtime it loads. The double's own test is
