@@ -45,8 +45,8 @@ company. The floor is **$500 a month**. **Nothing is free.**
 
 1. **Floor: $500/month.** No package, trial or credited month is below it.
 2. **Nothing is free.** No free tier, no free function, no free viewer, no
-   free trial outside a signed package. A trial is a package with a start
-   date and a price. Everything `tier:TIER.ALL` in `omega-tools.js` today
+   free trial beyond the one trial each new organization gets: **14 days at
+   most**, running the proposed package, then they pay (ROADMAP §10.2). Everything `tier:TIER.ALL` in `omega-tools.js` today
    (Grid Atlas, the compute calculators, intake, the financing marketplace,
    the ComEd finder, the EV workbook) is inside a paid module or Lite. The
    public storefront (`/embed/`) is the paying tenant's White Label module
@@ -64,7 +64,8 @@ company. The floor is **$500 a month**. **Nothing is free.**
    90 days, never below $500)**, shown as its own line, never as a lower list
    price.
 7. **Add any time, remove at the review.** A customer may opt in to a module
-   whenever they like (prorated). Modules come off only at the quarterly
+   whenever they like, **paying up front, prorated to their billing date**
+   (the day of the month they signed up; ROADMAP §10.3, §10.5). Modules come off only at the quarterly
    right-size, and unit prices hold for the Initial Term (Agreement
    "Inaugural Pricing").
 8. **Plans are value caps, not fixed lists** (§3.5): Field is Lite + up to
@@ -174,6 +175,12 @@ Everything on the editor side at list: $500 + $250 + $750 + $3,500 + $1,500
 = **$6,500/mo**. With all of Omega Logic: **$9,000/mo** ($108k/yr).
 
 ### 3.5 Plans
+
+Two ways to buy from one menu: **à la carte** (Lite + modules at list) or a
+**tier** (Field, Pro, Enterprise, Platform). Omega Logic is an add-on to
+either. The proposal steers the base; the menu offers the tier when it is
+cheaper. Full rules: ROADMAP §10.1.
+
 
 | Plan | Price | Rule | Saves |
 |---|---|---|---|
@@ -408,9 +415,9 @@ when, PDF path. Accepting runs the same path as §6.1.
    (`A.isTenantAdmin`): the same menu, what they have, what each module adds,
    the price, the usage against included.
 2. Tick a module → shows the new monthly total and today's prorated charge →
-   **Add to my plan** → `POST /api/plan-change` (tenant admin) issues a
-   prorated QuickBooks invoice for the rest of this month and adds the module
-   to next month's invoice → the customer pays the link → the module switches
+   **Add to my plan** → `POST /api/plan-change` (tenant admin) charges the
+   price prorated to the tenant's next billing date (ROADMAP §10.5) and adds
+   the module to the next recurring invoice → the customer pays the link → the module switches
    on when QuickBooks shows it paid (minutes). An accepted opt-in is an Order
    Form amendment (§7).
 3. Removing a module: **request removal at the next review**, never an

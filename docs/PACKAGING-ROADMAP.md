@@ -10,6 +10,24 @@ https://claude.ai/artifact/2Sou93uMRrCsc8K4E2Xg8n (private to the owner).
 
 ---
 
+## Status (update after every PR)
+
+| Phase | PR | State | Left / open questions |
+|---|---|---|---|
+| Docs (this file, VALUE-LADDER, handoff, prototype) | branch `claude/pensive-mendel-hy0eks` | written 2026-09-26, not merged | Tommy to merge to `main` before the build starts |
+| 0 · Decide + fixes | | not started | |
+| A · Polish now | | not started | |
+| 1 · Catalog | | not started | |
+| 2 · Close the leaks | | not started | |
+| 3 · Editor fits the package | | not started | |
+| 4 · Admin panel, signup billing, trial, QuickBooks customer | | not started | |
+| 5 · Subscribe in the editor (Step A) | | not started | |
+| 5b · Card on file (Step B) | | blocked on Tommy | QuickBooks Payments permission |
+| 6 · Proposal tool | | not started | |
+| 7 · Usage and review | | not started | |
+
+---
+
 ## 1. The one rule the repo follows
 
 **A tenant's `modules[]` is the only thing that decides what they pay and
@@ -38,9 +56,9 @@ omega-caps.js MODULE_GRANTS  →  editor ribbon, tools list, command palette, Ja
 
 | Event | Today | After this roadmap |
 |---|---|---|
-| **Self-serve signup** (`api/tenant-signup.js`) | Creates `status:'pending'` with `billing.tier:'trial'` and a **free 30-day trial** | Creates `status:'pending'` with a **proposed package**: `modules[]` from the signup form's customer type (§3.6 starter pack of the catalog), `pricebookVersion`, `status:'awaiting approval'`. No access, no charge. The "being set up" screen shows their proposed package and price. |
+| **Self-serve signup** (`api/tenant-signup.js`) | Creates `status:'pending'` with `billing.tier:'trial'` and a **free 30-day trial** (`TRIAL_DAYS`, default 30) | Collects the **billing details** in §10.4, creates `status:'pending'` with a **proposed package** from the customer type, records `signedUpAt` (this fixes the tenant's **billing date**, §10.3). No access until staff approve. |
 | **Seed** (`scripts/seed-omega-orgs.js`, `tenants/<slug>/tenant.json`) | Writes `tier` | `tenant.json` carries `modules[]` (not `tier`); the seed runs it through `resolve()` and refuses a package under the floor. Legacy `tier` in a seed file is mapped once by the backfill (Phase 3) and then rejected. |
-| **Approve** (`api/tenant-approve.js`) | `status:'active'` + optional `tier` | **Approve requires a package.** Staff confirm or edit `modules[]` in the Package panel; approve calls `tenant-package`, which issues the first QuickBooks invoice and QuickBooks emails the pay link. `status` goes `active` when the first invoice is paid (webhook), not on the click. A trial, if offered, is a priced package with `trialEndsAt` and a card on file (**decide**). |
+| **Approve** (`api/tenant-approve.js`) | `status:'active'` + optional `tier` | **Approve requires a package.** Staff confirm the proposed base (Lite + modules, or a tier) in the Package panel. Approval creates the tenant's **QuickBooks customer** from the signup billing details and starts a **14-day trial** of that package (never longer; §10.2). At trial end the first invoice is issued; the tenant must pay to keep working. |
 | **Console change** (Package panel) | Tier dropdown + add-on boxes | Module ticks → `tenant-package` → QuickBooks invoice → paid → access. |
 | **Customer opt-in** (Your plan) | n/a | Tenant owner/admin adds a module → `plan-change` → prorated QuickBooks invoice → paid → access in minutes. Removal waits for the 90-day review. |
 | **Payment fails** | Grace, then suspend | Same, per module set: after grace the tenant drops to **Lite only** (read access to everything they built), never to nothing, so no project is ever lost. |
@@ -67,11 +85,14 @@ complete, calm product, not a full product with holes in it.**
    canonical order and close up; no gaps, no placeholders. Group captions
    ("1 · Site", "2 · Build", "3 · Size & Configure") renumber so a Lite user
    never sees "1, 3".
-4. **One place for everything else: the Add-ons tab.** A single ribbon tab
-   at the far right, **"+ Modules"**, shows what the tenant doesn't have as
-   a tidy gallery: one card per module with its icon, three things it adds,
-   the price, and **Add** (tenant admin) or **Ask my admin** (member). This
-   is the only upsell surface inside the editor. Nothing else nags.
+4. **One place for everything else: the + Modules tab, where they
+   subscribe.** A single ribbon tab at the far right, **"+ Modules"**, shows
+   what the tenant doesn't have as a tidy gallery: one card per module with
+   its icon, three things it adds, the monthly price and today's prorated
+   charge (§10.5), and **Subscribe** (tenant admin) or **Ask my admin**
+   (member). Subscribing charges them and bills in QuickBooks; the tools
+   appear when the payment is confirmed. This is the only upsell surface
+   inside the editor. Nothing else nags.
 5. **Discovery without clutter.** Command search (Ctrl+K) and Ask Jarvis
    list un-owned tools in a separate "In other modules" section, greyed,
    with the module name. Choosing one opens that module's card, never the
@@ -135,8 +156,8 @@ step, pricing only in `/api/`, verified staff, Admin-SDK-only billing paths,
 | **1 · Catalog** | `api/_lib/modules.js` (modules, tools, ribbon, menu, meters); `pricebook/{version}` + rules + seed; QuickBooks Product/Service per module, plan (idempotent script writing ids into the price book). | Tests: every tool, ribbon button and menu entry in exactly one module; floor enforced; frozen price book immutable. |
 | **2 · Close the leaks** | VALUE-LADDER §4.1: File menu, Summary › Cost, Documentation drawer, Output tab, command palette, Jarvis, `?customerEngine=1`, compute outside its tab. | A tenant without a module cannot reach its tools by any path (test per path). |
 | **3 · Editor fits the package** | §3 above: `data-module`, `MODULE_GRANTS`, `layout()`, + Modules tab, palette "In other modules", package-driven default layout. Backfill `modules[]` for every live tenant from today's tier/add-ons (dry run, flag don't drop). | `check:pages` passes for the five packages; no live tenant loses a tool they use today without a decision. |
-| **4 · Admin Package panel** | Package panel in the admin portal, full spec in §8 (prototype: `docs/design/package-panel-prototype.html`); `POST /api/tenant-package`; webhook writes `modules[]`; `tenant-approve` requires a package; signup proposes one. | Approving a tenant produces a QuickBooks invoice, and access only after QuickBooks shows it paid. |
-| **5 · Customer opt-in** | "Your plan" in Account Settings; `POST /api/plan-change`; + Modules tab wired to it. | A tenant admin adds a module and sees it in the ribbon without staff. |
+| **4 · Admin Package panel** | Package panel in the admin portal, full spec in §8 (prototype: `docs/design/package-panel-prototype.html`); `POST /api/tenant-package`; webhook writes `modules[]`; `tenant-approve` requires a package; signup proposes one. Signup collects billing details; QuickBooks customer at approval; 14-day trial; billing date = signup day (§10.2–10.4). | Approving a tenant produces a QuickBooks invoice, and access only after QuickBooks shows it paid. |
+| **5 · Subscribe in the editor** | + Modules tab and "Your plan" with Subscribe; `POST /api/plan-change`; `api/_lib/proration.js`; pay first via QuickBooks invoice link (§10.5 Step A); auto-steer to a tier when cheaper (§10.1). Step B (card on file) only after Tommy reconnects QuickBooks with the Payments permission. | A tenant admin subscribes to a module in the editor, pays the prorated amount, and sees the tools appear without staff. |
 | **6 · Proposal tool** | `subscription-proposal.html` on the Pro Forma pattern. | A branded proposal and filled order form from a discovery. |
 | **7 · Usage and review** | Server-side usage counters, overage lines on the monthly QuickBooks invoice, the 90-day right-size report in the console. | Overage billed; review lists what to add or remove. |
 
@@ -366,8 +387,8 @@ books with no reconciliation between systems.
 | Catalog | One QuickBooks **Product/Service** per module, per plan (Field, Pro), per overage, plus "Transformation credit" (discount) and "Annual service fee". Created by `scripts/qbo-sync-items.js`; ids stored in the price book as `qboItemId`. Names match the menu exactly. |
 | Customer | One QuickBooks **Customer** per tenant (`OMEGA-<orgId>`, company name, billing email = tenant owner), stored as `billing/current.qboCustomerId`. Same idempotent find-or-create as `qbo-sales.js`. |
 | First invoice | On Activate / Approve: one line per module (or the plan line with its modules in the description), the credit as a discount line, the annual service fee, due on receipt. The invoice's `invoiceLink` (QuickBooks Payments: card or ACH) is the pay link. |
-| Monthly invoice | `api/billing-run.js` (Vercel cron, 1st of the month) issues each packaged tenant's invoice from `modules[]` + last month's overage (`usage/{YYYY-MM}`). Generated by us, not a QuickBooks recurring template, so the lines always match what is switched on. Annual prepay = one invoice for 11 months. |
-| Opt-in mid-month | `plan-change` issues a prorated invoice for the rest of the month; the module joins next month's invoice. |
+| Recurring invoice | `api/billing-run.js` (Vercel cron, **daily**) issues each packaged tenant's invoice **on their billing date** (the day of the month they signed up, §10.3) from `modules[]` + the last cycle's overage (`usage/`). Generated by us, not a QuickBooks recurring template, so the lines always match what is switched on. Annual prepay = one invoice for 11 months, dated on the billing date. |
+| Opt-in mid-cycle | `plan-change` charges a prorated amount to the next billing date (§10.5); the module joins the next recurring invoice at full price. |
 | Paid → access | Intuit webhook → `api/logic-webhook.js` (a hint only) → the worker re-reads the invoice and its payments in QuickBooks → paid ⇒ `modules[]` written and switched on. Nothing is switched on from the webhook body alone. |
 | Unpaid | Past due after the grace period (**decide**, default 10 business days, matching Agreement §4.8 notice) → the tenant drops to Lite; work is never lost. |
 | Voids and refunds | Follow `docs/ACCOUNTING.md`: a payment is voided, never deleted; a reversal seen in QuickBooks puts the tenant back to unpaid. |
@@ -382,11 +403,139 @@ drops the tenant back; the cron issues exactly one invoice per tenant per month.
 
 ---
 
-## 5. Decisions this roadmap adds
+## 10. Tiers and à la carte, trials, the billing date, and paying to opt in
 
-1. Self-serve trial: none (approval + payment first), or a priced package
-   with a card on file and a start date.
+### 10.1 Two ways to buy, one menu
+
+Every tenant has exactly **one base**, plus any **add-ons**:
+
+| | À la carte | Tiers |
+|---|---|---|
+| Base | **Lite** ($500), then each module at its list price | **Field** $1,299 (Lite + up to $1,250 of modules) · **Pro** $2,499 (Lite + up to $3,000, ≤1 Deliverable) · **Enterprise** (annual, quoted) · **Platform** (custom) |
+| Who it suits | A company that needs two or three things | A company that needs most of a shelf; the tier is cheaper than the same modules one by one |
+| Adding a module | Adds its list price | Free while it fits under the tier's cap; past the cap, the next tier or an à la carte add |
+| Omega Logic | Add-on on either model (Office $1,500, all five parts $2,500) | same |
+
+- Tiers are **a discounted amount of the same menu**, so the two models never
+  disagree: `modules[]` is still the only record of what is on.
+- The **proposal steers** the base: discovery recommends Lite + the modules
+  they need this quarter, or the tier those modules fit in, and shows the
+  value in their own numbers (VALUE-LADDER §3.7, §8).
+- **Auto-steer:** when an à la carte tenant's modules would cost more than
+  Field, the menu and the + Modules tab offer "Switch to Field and save $X",
+  one click, prorated (§10.5). Same from Field to Pro.
+- The Subscription Agreement's Tier 1–4 stay; Lite + modules is the new
+  à la carte line on the Order Form.
+
+### 10.2 Trials: 14 days at most, then everyone pays
+
+- One trial per organization, **never longer than 14 days**. Enforced in
+  code (`Math.min(TRIAL_DAYS, 14)` in `api/tenant-signup.js` and in
+  `tenant-package`), not only by an env var. Staff cannot set a longer one.
+- The trial runs the **proposed package**, so the customer experiences the
+  base we are steering them to, not everything.
+- The clock starts at **approval** (they cannot use a pending workspace).
+- Day 11: in-product banner and email: "Your trial ends on <date>. Your plan:
+  <package>, <price>/month."
+- Trial end: the first invoice is issued from QuickBooks (§10.3). Until it
+  is paid the workspace is **read-only** (projects open, nothing new is
+  created or exported) with a **Pay to continue** bar. Never deleted.
+- Existing tenants already on longer trials (Clean Cell, Budderfly, East West
+  Energy) keep their current end dates; the cap applies to new trials. Any
+  change to a live tenant goes through Tommy (**decide**).
+
+### 10.3 The billing date
+
+- A tenant's **billing date** is the day of the month they **signed up**
+  (`signedUpAt`). Every recurring invoice is dated on it.
+- Days 29–31 bill on the last day of shorter months.
+- The first invoice, at trial end, covers **trial end → next billing date**,
+  prorated (§10.5); from then on, a full month on each billing date.
+- Stored as `billing/current.billingDay` (1–31) and `nextInvoiceOn`
+  (YYYY-MM-DD). The daily `api/billing-run.js` invoices every tenant whose
+  `nextInvoiceOn` is today, exactly once (idempotent by tenant + date).
+
+### 10.4 What signup collects (so QuickBooks can bill them)
+
+`start.html` today asks for company name, phone, subdomain, vertical and logo.
+It adds a **Billing** step. Every field maps to the QuickBooks Customer:
+
+| Field | Required | QuickBooks Customer field |
+|---|---|---|
+| Legal company name | yes | `CompanyName` |
+| Billing contact name | yes | `GivenName` / `FamilyName` |
+| Billing email (invoices go here) | yes | `PrimaryEmailAddr` |
+| AP / accounts-payable email (cc) | no | kept on our record, used as the invoice `BillEmailCc` |
+| Billing phone | yes | `PrimaryPhone` |
+| Billing address (line 1–2, city, state, ZIP, country) | yes | `BillAddr` |
+| Website | no | `WebAddr` |
+| Sales-tax exempt? + exemption/resale certificate number (upload optional) | no | `Taxable`, `ResaleNum` (certificate file in Storage, staff-only) |
+| PO number required on invoices? | no | kept on our record, printed on each invoice |
+| Company type (vertical) and approximate team size | yes | our record only; steers the proposal |
+
+- Stored in `omega_orgs/{org}/billing/profile`: **Admin SDK writes only**
+  (through `api/tenant-signup.js` and a tenant-admin `billing-profile`
+  endpoint); readable by the tenant's owner/admin and staff; **never** in
+  `tenant_public`. No card data is ever stored by us.
+- **QuickBooks customer creation:** at approval, `qbo-billing.customer(org)`
+  finds or creates `OMEGA-<orgId>` in ClearSky's company from this profile,
+  idempotent by `requestid`, and stores `qboCustomerId`. A later profile edit
+  updates the QuickBooks customer. Seeded and console-created tenants get the
+  same profile form in the admin Package panel (staff fill it in).
+
+### 10.5 Opting in: pay first, prorated to the billing date
+
+Anywhere a tenant opts in (the editor's + Modules tab, Account Settings
+"Your plan", or accepting a proposal), the flow is the same:
+
+1. The card shows **"$X today, then $Y/month on the <billing day>."**
+   `X = Y × days left until the next billing date ÷ days in this cycle`,
+   rounded to the cent, computed on the server (`api/_lib/proration.js`,
+   pure and tested; the browser only displays what it returns).
+   Inside a tier's cap, Y is $0 and the module switches on immediately.
+2. The tenant admin confirms. `POST /api/plan-change` records the request
+   and charges it:
+   - **Step A (works with today's QuickBooks connection):** a QuickBooks
+     invoice for X is created and its pay link opens. The card shows
+     "Waiting for payment". The module switches on when the worker sees the
+     invoice paid in QuickBooks (usually minutes).
+   - **Step B (instant, card on file):** once ClearSky's QuickBooks is
+     reconnected with the **QuickBooks Payments** permission
+     (`com.intuit.quickbooks.payment`, alongside `…accounting`), the tenant
+     saves a card or bank account once (Intuit's own card form; our server
+     only ever holds Intuit's token). Opting in then charges it immediately,
+     records the payment against the invoice in QuickBooks, and switches the
+     module on in seconds. Recurring invoices on the billing date are charged
+     the same way. Needs an active QuickBooks Payments merchant account and
+     Intuit's production approval for that permission (**decide**).
+3. The module joins the next recurring invoice at full price. Every change
+   is an `admin_audit` row and a billing history row.
+4. Removing a module or dropping a tier: requested any time, takes effect
+   at the next quarterly review; no partial-month refunds (**decide**).
+5. Moving from à la carte up to a tier mid-cycle charges the prorated
+   difference between the old and new monthly totals.
+
+### 10.6 Tests
+
+Proration: first invoice at trial end; a mid-cycle add; billing days 29–31;
+a leap year; an add inside a tier cap costs $0; à la carte → Field
+difference. Trial: never more than 14 days, whatever `TRIAL_DAYS` says;
+read-only after an unpaid trial end, projects still open. Signup: missing
+billing fields refused; profile never reaches `tenant_public`; QuickBooks
+customer created once at approval and updated on edit. Opt-in: nothing
+switches on until QuickBooks shows the invoice paid (Step A) or the charge
+succeeds (Step B).
+
+---
+
+## 11. Decisions this roadmap adds
+
+1. Trial: 14 days maximum from approval (decided 2026-09-26); whether a card
+   is required to start one (default: no, billing details only).
 2. What a tenant keeps on failed payment: Lite (this roadmap) or read-only.
 3. Whether members (not admins) see the + Modules tab at all, or only admins.
 4. Grace period before an unpaid tenant drops to Lite (default 10 business days).
 5. QuickBooks for everyone, or Stripe card autopay offered to tenants who ask.
+6. Step B of §10.5: add the QuickBooks Payments permission and reconnect, so
+   opt-ins and recurring invoices charge a saved card instantly.
+7. Refunds when a module is removed mid-cycle (default: none; removal at review).
