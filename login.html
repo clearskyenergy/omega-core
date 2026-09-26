@@ -297,9 +297,7 @@
              and the first invoice paid by card to open the workspace. The form
              below is the older request path and stays for when it is off. -->
         <div id="suPackaged" style="display:none">
-          <p class="sub">Choose what you need, pay your first invoice by card, and your workspace opens the moment it is paid. A 14-day trial can be requested instead.</p>
-          <a class="btn-primary" id="suStart" href="/start.html" style="width:100%;justify-content:center">Choose your package and start</a>
-          <p class="note" style="text-align:left;margin-top:10px"><a href="/offerings.html">See plans and pricing</a></p>
+          <p class="sub">Create your account with your work email. Then your billing profile, the system you build from our menu, and your first invoice by card: your workspace opens the moment it is paid. A 14-day trial can be requested instead. <a href="/offerings.html">See plans and pricing</a>. Already started? <a id="suStart" href="/start.html">Continue where you left off</a>.</p>
         </div>
         <form id="signupForm" novalidate>
           <div class="field">
@@ -308,7 +306,7 @@
           </div>
           <div class="field">
             <label for="suCompany">Company</label>
-            <input id="suCompany" type="text" autocomplete="organization" placeholder="Roam Energy" required>
+            <input id="suCompany" type="text" autocomplete="off" placeholder="Your company's legal name" required>
           </div>
           <div class="field">
             <label for="suVertical">What you do</label>
@@ -349,6 +347,7 @@
       <div id="paneBlocked" class="choose" style="display:none;">
         <h2 id="blockedTitle">Access pending</h2>
         <p class="sub" id="blockedBody"></p>
+        <a id="blockedNext" class="btn-primary" href="#" style="display:none;width:100%;justify-content:center">Continue</a>
         <a href="mailto:dev@clearsky-usa.com" class="btn-ghost" style="width:100%;justify-content:center">Email ClearSky</a>
         <p class="note" style="text-align:left;"><button type="button" class="link-quiet" id="signOutBtn2">Use a different account</button></p>
       </div>
@@ -892,6 +891,7 @@
       }[reason];
       $("blockedTitle").textContent = copy[0];
       $("blockedBody").textContent = copy[1];
+      const nx = $("blockedNext"); if (nx) nx.style.display = "none";
       loading(false);
       showPane("blocked");
     }
@@ -1052,7 +1052,9 @@
        then the form gives way to the signup page, which pays at the end. */
     fetch('/api/offerings', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (o) {
       if (!o || !o.signup || !o.signup.packaged) return;
-      $("suPackaged").style.display = ''; $("signupForm").style.display = 'none'; $("suLede").style.display = 'none';
+      /* the account form stays: the account is step one; the signup page takes it from there */
+      window.__packagedSignup = true;
+      $("suPackaged").style.display = ''; $("suLede").style.display = 'none';
       $("suStart").href = o.signup.start || '/start.html';
     }).catch(function () {});
     /* ---- Create an account ------------------------------------------------
@@ -1128,6 +1130,27 @@
         return suSay(friendly(err), "error");
       }
 
+      /* Packaged signup: the account is step one. The verification link
+         lands on the signup page with the company carried over; nothing is
+         requested of ClearSky, because paying the first invoice opens the
+         workspace. A colleague of an existing tenant still just goes in. */
+      if (window.__packagedSignup) {
+        /* The company travels in this person's own browser, never in a link
+           or an address that could be forwarded: these companies do not want
+           to be out there. */
+        const next = '/start.html';
+        try { localStorage.setItem('omega:signup-draft', JSON.stringify({ company: company, vertical: vertical, email: email, at: Date.now() })); } catch (_) {}
+        try { await auth.sendEmailVerification(user, { url: location.origin + next }); }
+        catch (_) { try { await auth.sendEmailVerification(user); } catch (_2) {} }
+        let joins = false;
+        try { joins = !!(await readDoc(["omega_orgs", domain])); } catch (_) {}
+        if (joins) { suSay("Your company is already on OMEGA — taking you in.", "info"); showPane("signIn"); return route(user, { quick: true }); }
+        blockedPane("unapproved", null);
+        $("blockedTitle").textContent = "Verify your email, then build your system";
+        $("blockedBody").textContent = "We sent a verification link to " + email + ". Click it, then continue: your billing profile, the system you build from our menu, and your first invoice by card. Your workspace opens the moment it is paid.";
+        const nx = $("blockedNext"); nx.href = next; nx.textContent = "Continue to your billing profile"; nx.style.display = "";
+        return;
+      }
       /* Best effort, and it must not block the flow: an unverified address
          still gets an account, and ClearSky is approving the domain anyway. */
       try { await auth.sendEmailVerification(user); } catch (_) {}

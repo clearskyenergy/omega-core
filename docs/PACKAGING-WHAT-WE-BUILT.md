@@ -29,7 +29,7 @@ deployed, no tenant is packaged. The order to change that is in
 - **One price book**, `api/_lib/pricebook.js`, version `2026-10` (signed off
   2026-09-26; it was `2026-10-proposed` until then),
   frozen once used, disabled until you sign the values off. Annual prepay is
-  eleven months; there is no transformation credit.
+  ten months, two months free; there is no transformation credit.
 - **Trials: 14 days at most, once per organization, starting at approval.**
   The billing day is the signup day; the first invoice is issued at trial
   end; unpaid, the workspace drops to read-only with a ribbon; paid, it
@@ -63,7 +63,7 @@ deployed, no tenant is packaged. The order to change that is in
 | 7 · Usage and review | #142 | Usage counted where a deliverable is produced (EV workbook, closeout ZIP, Site Finder packet, an RFQ), included + packs, the 402 offer at the allowance, overage as a line on the recurring invoice, buy-more packs and auto top-up from Your plan, the 90-day review on the Package tab. |
 | 8 · Omega Logic follows the package | #143 | Office and the four Logic parts are refused by name where they are served; the office menu, hex hub, dashboard and phone app draw only the parts bought; the customer portal is the Customer App part. Legacy Logic tenants unchanged. The release checklist for the whole stack. |
 | 9 · The plant's doors and sign-in | #144 | The bench, the rig and hold/release follow the Plant part; the rules compare a sign-in email lower-cased (Team Hub and terms were refused for a capitalised address); the preview sign-in refusal names the hostname to authorise. |
-| 10A · Sign up, pay in QuickBooks, activate | #146 | The price list anyone can read; *Pay and start now* on signup: the first invoice with QuickBooks' card page, the workspace read-only until it is paid, "I've paid" opens it with the package bought; the fallback to approval when an invoice cannot be issued; the production switch, one rule for every money path. |
+| 10A · Sign up, pay in QuickBooks, activate | #146 (+ the flow as sold: account → verified email → billing profile → build your system with a live price → monthly, or yearly at ten months) | The price list anyone can read; *Pay and start now* on signup: the first invoice with QuickBooks' card page, the workspace read-only until it is paid, "I've paid" opens it with the package bought; the fallback to approval when an invoice cannot be issued; the production switch, one rule for every money path. |
 
 Every phase has a validation document (`PACKAGING-PHASE-N-VALIDATION.md`)
 with what was verified, screenshots and what remains, and a row in

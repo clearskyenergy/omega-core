@@ -443,7 +443,7 @@ Every tenant has exactly **one base**, plus any **add-ons**:
 - The Subscription Agreement's Tier 1–4 stay; Lite + modules is the new
   à la carte line on the Order Form.
 
-Annual prepay charges 11 months for 12, without the transformation credit
+Annual prepay charges 10 months for 12 (two months free, Tommy 2026-09-26; it was 11 until then), without the transformation credit
 (Tommy’s explicit decision, 2026-09-26). The book records this as
 `policy.annualTransformationCredit: false`.
 

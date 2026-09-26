@@ -37,6 +37,16 @@
   .host{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--gold)}
   .hide{display:none}
   .hint{font-size:12px;color:var(--sub);margin-top:6px}
+  .price-panel{margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.03)}
+  .price-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:14px;color:var(--sub)}
+  .price-head b{font-size:22px;color:var(--txt)}
+  .pick-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .pick{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;margin:0;font-weight:400;letter-spacing:0;font-size:13px;color:var(--txt)}
+  .pick.on{border-color:var(--teal);background:rgba(0,169,164,.08)}
+  .pick input{width:auto;margin:3px 0 0}
+  .pick small{display:block;color:var(--sub);font-size:12px;margin-top:2px}
+  .verify{margin-top:14px}
+  @media(max-width:480px){.pick-row{grid-template-columns:1fr}}
 .sq{padding:10px 0;border-bottom:1px solid var(--line,#E2E8F0)}.sq-opts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:4px;font-size:13px}.sq-opts label,.sq-more{display:inline-flex;align-items:center;gap:4px;font-weight:400;font-size:13px;margin:4px 12px 0 0;white-space:nowrap;width:auto}.sq-opts input,.sq-more input[type=checkbox]{width:auto;margin:0}
 </style>
 </head>
@@ -64,7 +74,7 @@
     <div class="who">Signed in as <b id="who-email"></b><a onclick="signOut()">Not you?</a></div>
     <h1>Tell us about your company</h1>
     <p>Your workspace is created for everyone at <b id="who-domain"></b>. Colleagues who sign in with the same email domain join automatically.</p>
-    <label>Company name</label><input id="f-name" placeholder="Acme Energy Partners" maxlength="80">
+    <label>Company name</label><input id="f-name" placeholder="Company name" maxlength="80" autocomplete="off">
     <label>What best describes you?</label>
     <select id="f-vertical">
       <option value="developer">Project developer / owner</option>
@@ -73,11 +83,13 @@
       <option value="oem">Equipment manufacturer (OEM)</option>
     </select>
     <label>Workspace address</label>
-    <div style="display:flex;align-items:center;gap:6px"><input id="f-slug" maxlength="40" style="flex:1" placeholder="acme"><span class="host">.clearskyomega.com</span></div>
+    <div style="display:flex;align-items:center;gap:6px"><input id="f-slug" maxlength="40" style="flex:1" placeholder="yourcompany" autocomplete="off"><span class="host">.clearskyomega.com</span></div>
     <label>Phone <span style="font-weight:400">(optional)</span></label><input id="f-phone" type="tel" autocomplete="tel">
     <label>What are you working on? <span style="font-weight:400">(optional)</span></label><textarea id="f-note" rows="2" placeholder="e.g. 3 BESS sites in ComEd territory, need interconnection screening"></textarea>
+    <div id="verify-note" class="ok verify"><div style="font-weight:700;margin-bottom:6px">Verify your email first</div><div style="color:var(--sub);font-size:14px">We sent a link to <b id="verify-email" style="color:var(--txt)"></b>. Click it, then come back here and press Continue.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn ghost" style="margin:0;width:auto;padding:9px 14px" onclick="resendVerification()">Resend the link</button><button class="btn" style="margin:0;width:auto;padding:9px 14px" onclick="verifiedContinue()">I've verified — continue</button></div></div>
     <button class="btn" id="f-submit" onclick="submitWorkspace()">Request my workspace</button>
-    <div class="hint">Workspaces are reviewed by the ClearSky team, usually within one business day. Any new trial is capped at 14 days. Payment is required to continue afterward.</div>
+    <div class="hint" id="form-hint">Workspaces are reviewed by the ClearSky team, usually within one business day. Any new trial is capped at 14 days. Payment is required to continue afterward.</div>
     <div class="err" id="form-err"></div>
   </div>
 
@@ -96,20 +108,33 @@
   </div>
 
   <div id="step-billing" class="hide">
-    <h1>Billing and your package</h1>
-    <p id="signup-billing-lede">Pay your first invoice now and your workspace opens the moment it is paid. Or request a 14-day trial, which starts when ClearSky approves it; the first invoice then arrives at trial end. Recurring invoices follow your signup day.</p>
+    <h1>Your billing profile</h1>
+    <p id="signup-billing-lede">These details make your customer record in QuickBooks: who is billed, where the invoices go and how you pay. Next you build your system.</p>
     <div id="signup-proposal" class="ok hide"></div>
     <div id="signup-billing-profile" class="obp-grid"></div>
-    <h2>Choose your modules</h2>
-    <p id="signup-package-note">Staff will review this proposed package. Prices and the final invoice are confirmed by the server.</p>
-    <div class="hint" id="signup-package-price"></div>
-    <div id="signup-package-menu"></div>
-    <label for="signup-interval">Billing frequency</label>
-    <select id="signup-interval"><option value="monthly">Monthly</option><option value="annual">Annual prepay · no transformation credit</option></select>
-    <button class="btn" id="billing-pay" onclick="submitWorkspace(true, false, true)">Pay and start now</button>
-    <button class="btn ghost" id="billing-submit" onclick="submitWorkspace(true)">Request a 14-day trial instead</button>
+    <button class="btn" id="billing-continue" onclick="toBuild()">Continue to build your system</button>
     <button class="btn ghost" onclick="backToCompany()">Back to company details</button>
     <div class="err" id="billing-err"></div>
+  </div>
+
+  <!-- STEP 2c: build the system — the one module menu, priced live by the server -->
+  <div id="step-build" class="hide">
+    <h1>Build your system</h1>
+    <p id="signup-package-note">Every system starts with Lite. Add what you need; the price is quoted by the server as you choose, and each module is on the moment its payment clears.</p>
+    <div id="signup-package-menu"></div>
+    <div class="price-panel" id="signup-price-panel">
+      <div class="price-head"><span>Your monthly membership</span><b id="signup-package-price">—</b></div>
+      <div class="hint" id="signup-package-fit"></div>
+      <div class="pick-row">
+        <label class="pick on" id="pick-monthly"><input type="radio" name="signup-interval" value="monthly" checked onchange="intervalChanged()"><span><b>Monthly</b><small id="interval-monthly-price">—</small></span></label>
+        <label class="pick" id="pick-annual"><input type="radio" name="signup-interval" value="annual" onchange="intervalChanged()"><span><b>Yearly · two months free</b><small id="interval-annual-price">—</small></span></label>
+      </div>
+      <div class="hint" id="signup-interval-note">Pay for the year and you pay for ten months of twelve, invoiced once.</div>
+    </div>
+    <button class="btn" id="billing-pay" onclick="submitWorkspace(true, false, true)">Pay and start now</button>
+    <button class="btn ghost" id="billing-submit" onclick="submitWorkspace(true)">Request a 14-day trial instead</button>
+    <button class="btn ghost" onclick="backToBilling()">Back to billing profile</button>
+    <div class="err" id="build-err"></div>
   </div>
 
   <!-- STEP 2b: pay the first invoice; the workspace opens when it is paid -->
@@ -146,7 +171,7 @@
   var auth = firebase.auth(), signupOptions = null, billingForm = null, signupPicker = null, discoveryBuilt = false, recommended = null, proposal = null;
   function qp(k){ var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search); return m ? decodeURIComponent(m[1]) : ''; }
   var $ = function(id){ return document.getElementById(id); };
-  function show(id){ ['step-auth','step-form','step-discovery','step-billing','step-pay','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
+  function show(id){ ['step-auth','step-form','step-discovery','step-billing','step-build','step-pay','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
   /* the offerings page names a package (?plan=field, ?modules=lite,gridatlas); the picker starts there */
   function wantedModules(){ var m = qp('modules'); if (!m || !signupOptions) return null; var keys = signupOptions.modules.map(function (x) { return x.key; }); var out = String(m).split(',').map(function (k) { return k.trim(); }).filter(function (k) { return keys.indexOf(k) >= 0; }); return out.length ? out : null; }
   function wantedPlan(){ var p = qp('plan'); return p && ['field', 'pro', 'auto'].indexOf(p) >= 0 ? p : null; }
@@ -170,6 +195,19 @@
       .then(function () { btn.disabled = false; btn.textContent = "I've paid — open my workspace"; });
   };
   function err(id,msg){ var e=$(id); e.style.display = msg ? 'block' : 'none'; e.textContent = msg||''; }
+  function money(cents){ return '$' + Math.round(cents / 100).toLocaleString('en-US'); }
+  /* monthly or yearly: the two cards on the build step; a proposal fixes it */
+  function intervalValue(){ var r = document.querySelector('input[name="signup-interval"]:checked'); return r ? r.value : 'monthly'; }
+  window.intervalChanged = function(){
+    var v = intervalValue(); $('pick-monthly').className = 'pick' + (v === 'monthly' ? ' on' : ''); $('pick-annual').className = 'pick' + (v === 'annual' ? ' on' : '');
+    $('signup-interval-note').textContent = v === 'annual' ? 'Pay for the year and you pay for ten months of twelve, invoiced once. No transformation credit on annual prepay.' : 'Billed monthly on your signup day. Switch to yearly any time and pay for ten months of twelve.';
+    $('billing-pay').textContent = v === 'annual' ? 'Pay for the year and start now' : 'Pay and start now';
+  };
+  function setInterval_(v, locked){ var rs = document.querySelectorAll('input[name="signup-interval"]'); for (var i = 0; i < rs.length; i++) { rs[i].checked = rs[i].value === v; rs[i].disabled = !!locked; } intervalChanged(); }
+  /* a password account is not verified until its link is clicked, and the server refuses an unverified one: hold here, say so, and offer the link again */
+  function holdForVerification(u){ $('verify-note').style.display = 'block'; $('verify-email').textContent = u.email; $('f-submit').disabled = true; $('form-hint').style.display = 'none'; }
+  window.resendVerification = function(){ var u = auth.currentUser; if (!u) return; u.sendEmailVerification().then(function(){ $('verify-note').querySelector('div').textContent = 'Sent again'; }, function(e){ err('form-err', e.message); }); };
+  window.verifiedContinue = function(){ var u = auth.currentUser; if (!u) return; u.reload().then(function(){ location.reload(); }); };
   function domainOf(email){ return String(email||'').toLowerCase().split('@')[1]||''; }
   function slugOf(d){ return String(d||'').split('.')[0].replace(/[^a-z0-9-]/g,''); }
 
@@ -194,16 +232,38 @@
     var u = auth.currentUser; if(!u) return;
     $('who-email').textContent = u.email; $('who-domain').textContent = domainOf(u.email);
     if(!$('f-slug').value) $('f-slug').value = slugOf(domainOf(u.email));
+    /* the login page left the company in THIS browser (omega:signup-draft), never in a link; it is used once, for this address, and forgotten */
+    try {
+      var draft = JSON.parse(localStorage.getItem('omega:signup-draft') || 'null');
+      if (draft && draft.email === String(u.email || '').toLowerCase()) {
+        if (draft.company && !$('f-name').value.trim()) $('f-name').value = String(draft.company).slice(0, 80);
+        if (['developer', 'epc', 'installer', 'oem'].indexOf(draft.vertical) >= 0) $('f-vertical').value = draft.vertical;
+      }
+      localStorage.removeItem('omega:signup-draft');
+    } catch (e) {}
     show('step-form'); $('f-submit').disabled = true;
     u.getIdToken().then(function (token) { return fetch('/api/tenant-signup', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Signup unavailable'); return j; }); })
-      .then(function (j) { if (auth.currentUser !== u) return; signupOptions = j; $('f-submit').disabled = false; $('f-submit').textContent = j.packaging ? 'Continue' : 'Request my workspace'; loadProposal(); },
-        function (e) { err('form-err', e.message); });
+      .then(function (j) { if (auth.currentUser !== u) return; signupOptions = j; $('f-submit').disabled = false; $('f-submit').textContent = j.packaging ? 'Continue' : 'Request my workspace';
+          if (j.packaging) $('form-hint').textContent = j.payNow ? 'Next: your billing profile, then build your system and pay your first invoice by card. Your workspace opens the moment it is paid.' : 'Next: your billing profile and your package. A 14-day trial starts when ClearSky approves it.';
+          loadProposal(); },
+        function (e) { if (/verify your email/i.test(e.message || '')) { holdForVerification(u); return; } err('form-err', e.message); });
   });
   auth.onAuthStateChanged(function(u){ if(!u) show('step-auth'); });
   $('f-slug').addEventListener('input', function(){ $('host-preview').textContent = ($('f-slug').value||'yourcompany') + '.clearskyomega.com'; });
 
   window.backToCompany = function () { show('step-form'); };
+  window.backToBilling = function () { show('step-billing'); };
+  /* billing profile done: the menu, priced live */
+  window.toBuild = function () {
+    if (!billingForm || !billingForm.valid()) return;
+    var u = auth.currentUser; if (!u) return;
+    var start = proposal ? proposal.view.proposal.selection.modules : (wantedModules() || (recommended ? recommended.recommendation.modules : ['lite']));
+    if (!signupPicker) signupPicker = OmegaPackageMenu.picker($('signup-package-menu'), { catalog: signupOptions.modules, modules: start, readOnly: !!proposal, onChange: quoteSelection });
+    $('billing-pay').style.display = signupOptions.payNow ? '' : 'none';
+    if (proposal) { setInterval_(proposal.view.proposal.selection.interval || 'monthly', true); $('signup-package-note').textContent = 'The package your proposal priced. To change it, ask for a new proposal.'; }
+    quoteSelection(); show('step-build');
+  };
   /* A sent proposal's link (?proposal=&key=) prefills the package the rep priced;
      the key is verified again by the server when the workspace is created. */
   function loadProposal(){
@@ -241,7 +301,7 @@
   }
   window.recommendPackage = function(){
     var u = auth.currentUser; if (!u) return; var btn = $('discovery-recommend'); btn.disabled = true; err('discovery-err', '');
-    u.getIdToken().then(function (tok) { return fetch('/api/subscription-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify({ action: 'recommend', discovery: discoveryValue(), interval: $('signup-interval').value }) }); })
+    u.getIdToken().then(function (tok) { return fetch('/api/subscription-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify({ action: 'recommend', discovery: discoveryValue(), interval: intervalValue() }) }); })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not recommend'); return j; }); })
       .then(function (j) { recommended = j; var box = $('signup-recommended'); box.className = 'ok'; box.style.display = 'block';
         box.textContent = 'Recommended: ' + j.pricing.planDisplay + ' at ' + j.pricing.display.recurring + ' — ' + j.recommendation.modules.map(function (k) { var m = signupOptions.modules.filter(function (x) { return x.key === k; })[0]; return m ? m.name : k; }).join(', ') + (j.value && j.value.display.delta ? '. ' + j.value.display.delta + '.' : '.') + (j.recommendation.next.length ? ' Later: ' + j.recommendation.next.map(function (n) { return n.name; }).join(', ') + '.' : '');
@@ -251,31 +311,35 @@
   window.continueToBilling = function(){ submitWorkspace(false, true); };
   function quoteSelection(){
     var u = auth.currentUser; if (!u || !signupPicker) return;
-    u.getIdToken().then(function (tok) { return fetch('/api/subscription-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify({ action: 'price', selection: { modules: signupPicker.value(), interval: $('signup-interval').value } }) }); })
+    u.getIdToken().then(function (tok) { return fetch('/api/subscription-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify({ action: 'price', selection: { modules: signupPicker.value(), interval: intervalValue() } }) }); })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not price'); return j; }); })
-      .then(function (j) { $('signup-package-price').textContent = j.pricing.planDisplay + ' · ' + j.pricing.display.recurring + (j.pricing.display.fit ? ' · ' + j.pricing.display.fit : ''); }, function () { $('signup-package-price').textContent = ''; });
+      .then(function (j) {
+        var pr = j.pricing, annual = pr.annualPrepayCents, saved = pr.annualSavesCents != null ? pr.annualSavesCents : pr.recurringCents * 12 - annual;
+        $('signup-package-price').textContent = pr.display.recurring;
+        $('signup-package-fit').textContent = (pr.planDisplay || pr.display.plan || '') + (pr.display.fit ? ' · ' + pr.display.fit : '');
+        $('interval-monthly-price').textContent = pr.display.recurring + ', invoiced on your billing day';
+        $('interval-annual-price').textContent = money(annual) + '/year, invoiced once · save ' + money(saved);
+        intervalChanged();
+      }, function () { $('signup-package-price').textContent = '—'; $('signup-package-fit').textContent = ''; });
   }
   window.submitWorkspace = function(fromBilling, fromDiscovery, payNow){
     var u = auth.currentUser; if(!u) return;
     var name=$('f-name').value.trim(); if(name.length<2){ err('form-err','Company name is required.'); return; }
     if (!signupOptions) { err('form-err', 'Wait for signup options to load.'); return; }
     var payload = { companyName:name, vertical:$('f-vertical').value, slug:$('f-slug').value.trim(), phone:$('f-phone').value.trim(), note:$('f-note').value.trim() };
-    var errorId = signupOptions.packaging && fromBilling ? 'billing-err' : 'form-err';
+    var errorId = signupOptions.packaging && fromBilling ? 'build-err' : 'form-err';
     if (signupOptions.packaging && !fromBilling && !fromDiscovery && !proposal) { buildDiscovery(); show('step-discovery'); return; }
     if (signupOptions.packaging && !fromBilling) {
       if (!billingForm) billingForm = OmegaBillingProfile.render($('signup-billing-profile'), { legalName: name, email: u.email, phone: payload.phone, contactName: u.displayName || '', vertical: payload.vertical, address: { country: 'US' } });
-      var start = proposal ? proposal.view.proposal.selection.modules : (wantedModules() || (recommended ? recommended.recommendation.modules : ['lite']));
-      $('billing-pay').style.display = signupOptions.payNow ? '' : 'none';
-      if (!signupOptions.payNow) $('signup-billing-lede').textContent = 'Approval starts your one trial of at most 14 days. Your first QuickBooks invoice arrives at trial end; payment is required to continue. Recurring invoices follow your signup day.';
-      if (!signupPicker) signupPicker = OmegaPackageMenu.picker($('signup-package-menu'), { catalog: signupOptions.modules, modules: start, readOnly: !!proposal, onChange: quoteSelection });
-      if (proposal) { $('signup-interval').value = proposal.view.proposal.selection.interval || 'monthly'; $('signup-interval').disabled = true; $('signup-package-note').textContent = 'The package your proposal priced. To change it, ask for a new proposal.'; }
+      if (!signupOptions.payNow) $('signup-billing-lede').textContent = 'These details make your customer record in QuickBooks. Approval starts your one trial of at most 14 days; your first invoice arrives at trial end. Next you choose your package.';
       document.querySelector('[data-profile-field="vertical"]').value = payload.vertical;
-      quoteSelection(); show('step-billing'); return;
+      show('step-billing'); return;
     }
     if (signupOptions.packaging) {
-      if (!billingForm.valid()) return;
+      if (!billingForm || !billingForm.valid()) { show('step-billing'); return; }
+      if (!signupPicker) { err('build-err', 'Choose your modules first.'); return; }
       payload.billingProfile = billingForm.value(); payload.vertical = payload.billingProfile.vertical;
-      payload.modules = signupPicker.value(); payload.interval = $('signup-interval').value;
+      payload.modules = signupPicker.value(); payload.interval = intervalValue();
       if (proposal) { payload.proposalId = proposal.id; payload.proposalKey = proposal.key; } else if (discoveryBuilt) payload.discovery = discoveryValue();
       if (!proposal && wantedPlan()) payload.plan = wantedPlan();
       if (payNow) payload.payNow = true;

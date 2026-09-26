@@ -171,7 +171,7 @@ full editor, server-engine, write-rule and billing lifecycle validation. See `do
 Phase 4 adds private signup billing profiles, reviewed staff package activation,
 server-priced sandbox invoices and paid reconciliation. New trials start at
 approval, once per organization and at most 14 days. Annual prepay uses the
-11-month price without transformation credit. Packaged billing/profile writes
+10-month price (two months free) without transformation credit. Packaged billing/profile writes
 are Admin SDK only. API and rules enforce the recorded access deadline;
 legacy tier edits cannot modify a packaged subscription. Staff authentication
 requires a literal verified ClearSky domain even with an old role claim.
@@ -214,7 +214,11 @@ invoice by card on QuickBooks' page and is in; `GET /api/offerings` is the
 public price list; signup's pay-now runs the engine's own `activate` with the
 caller marked `selfServe` (recorded in history and audit); "I've paid" is
 `plan-change.reconcileNow` (one look per eight seconds), from the signup
-page (`check-payment`) and the billing bar (`reconcile-now`) alike.
+page (`check-payment`) and the billing bar (`reconcile-now`) alike. The
+flow as sold: account (login.html) → verified email (start.html holds an
+unverified address) → billing profile → *Build your system* (the one
+menu, priced live by the server; Monthly, or Yearly at ten months of
+twelve) → pay. Annual prepay is `annualPaidMonths` = 10 in the book.
 `api/_lib/packaging-mode.js` is the ONE rule for where packaging bills:
 SANDBOX (`QBO_ENV=sandbox`) or LIVE (`PACKAGING_LIVE=true` AND
 `QBO_ENV=production`, both literal), and neither is refused everywhere; the

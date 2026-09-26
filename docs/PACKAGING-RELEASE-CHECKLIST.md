@@ -13,7 +13,7 @@ is to be run by an agent without them.
 
 - [ ] Decisions on record (roadmap §11): $0 module inside a paid tier
       activates at once (option 1); AI Render only in Plan Sets & CAD;
-      Export to Monday stays in Lite; annual prepay is eleven months with no
+      Export to Monday stays in Lite; annual prepay is ten months (two months free) with no
       transformation credit; trials start at approval, once per
       organization, at most 14 days; staff is a verified `@clearsky-usa.com`.
 - [ ] **(Tommy)** Price book values signed off (VALUE-LADDER §11). Until
@@ -132,6 +132,7 @@ so. Record the date and who did it beside each.
 | 5 | As the tenant's owner, add a module from + Modules / Your plan | A prorated change invoice with a pay link; nothing switches on before payment except a $0 module inside a paid tier; after the runner reconciles the payment, the tools appear without staff |
 | 6 | Send a proposal from `subscription-proposal.html`; accept it from `proposal.html` | The prospect lands in signup with the package prefilled; accepting never prices; the proposal reads `accepted`; a proposal for a paid packaged tenant becomes a plan change |
 | 7 | Export an EV workbook past the included count; buy a pack; switch auto top-up on | The 402 offer at the allowance; a paid pack adds units after reconciliation; overage appears as a line on the next recurring invoice; the Package tab's review names it |
+| 10A | From /login create an account with a fresh work address; verify it; the billing profile; build a system (watch the price and the yearly saving); Pay and start now; pay the sandbox invoice; I've paid | The login pane names the next steps and links to the signup page; an unverified address is held with Resend; the build step shows `$…/month` and the yearly card `…/year, invoiced once · save $…`; the pay step opens with QuickBooks' page; paid, the workspace opens with the package bought |
 | 8 | Activate Lite + Office + Plant; open the office, a materials page, the Omega Logic app and the customer portal | Build shown, no Deliver or materials plan; the materials page prints "Materials & Purchasing is not in your Omega Logic package"; the app has four tabs; the customer portal says "not active" until Customer App is added; a legacy tenant shows nothing new |
 
 Then the runners: `vercel.json` schedules `/api/billing-run` daily and

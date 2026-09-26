@@ -30,7 +30,7 @@ async function main() {
   eq(P.quote(M.starters().ev, b, { credit: credit, now: Date.parse(credit.startsAt) - 1 }).creditCents, 0);
   rejects(function () { P.quote(['lite'], b, { credit: { pct: 40, startsAt: credit.startsAt, endsAt: '2027-01-01' }, now: Date.now() }); });
   rejects(function () { P.quote(['lite'], b, { credit: { pct: 100, startsAt: credit.startsAt, endsAt: credit.endsAt }, now: Date.now() }); });
-  eq(P.quote(['lite'], b).annualPrepayBeforeCreditCents, 550000);
+  eq(P.quote(['lite'], b).annualPrepayBeforeCreditCents, 500000); /* ten months of twelve: two months free (2026-09-26) */
   eq(P.quote(['lite'], b).serviceFee.amountCents, 150000);
   var waiver = { mode: 'waived', reason: 'Launch partner' };
   eq(P.quote(['lite'], b, { serviceFee: waiver }).serviceFee.amountCents, 0);

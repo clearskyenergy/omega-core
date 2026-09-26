@@ -87,6 +87,35 @@ the request's own time. And `prepare('activate')` accepts a packaged record
 that is still `pending` (a signup nobody has approved or paid) as its first
 step rather than sending it to plan-change.
 
+## The flow as sold (later on 2026-09-26)
+
+Tommy: *"when I click create an account it asks for all the details for a
+payment profile, then asks them to build their system (the menu, they opt
+in), it prices out their monthly membership, then they pay, monthly or for
+the year with two months of savings."* The pages now walk exactly that:
+
+1. **Create an account** (`login.html`, packaged mode): the account form
+   stays (work email, company, what you do, password). The verification
+   email's continue link is `/start.html?company=&vertical=`, and the pane
+   says what comes next with a *Continue to your billing profile* button.
+   A colleague of an existing tenant still just goes in.
+2. **Verify** (`start.html`): a password account is not verified until its
+   link is clicked and the server refuses an unverified one, so the page
+   holds there, names the address, and offers *Resend* and *I've verified*.
+3. **Your billing profile**: the details that make the QuickBooks customer.
+4. **Build your system**: the one module menu (`OmegaPackageMenu.picker`),
+   *Your monthly membership* quoted by the server as modules change
+   (`subscription-proposal` `price`), and two cards: **Monthly** (invoiced
+   on the billing day) or **Yearly · two months free** (ten months of
+   twelve, invoiced once, the saving shown). `annualPaidMonths` is 10 in
+   the book (it was 11); offerings, the proposal election and the tests
+   follow.
+5. **Pay and start now** (or request the trial), then the pay step.
+
+Renders: the trial and pay-now drives in `render-packaging-billing.js` and
+the proposal and self-serve drives in `render-subscription-proposal.js`
+walk the new steps; `signup-build.png` is the build step.
+
 ## Verified
 
 - `node scripts/test-self-serve-signup.js` — 12 checks on the Firestore

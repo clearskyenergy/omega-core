@@ -237,7 +237,7 @@
     var plan = field(host, 'plan', 'Plan', '', 'select', function (v) { s.plan = v; reprice(); });
     [['auto', 'Lowest monthly price'], ['alacarte', 'Lite + modules'], ['field', 'Field'], ['pro', 'Pro']].forEach(function (p) { var o = el('option', p[1]); o.value = p[0]; plan.appendChild(o); }); plan.value = s.plan || 'auto';
     var interval = field(host, 'interval', 'Billing', '', 'select', function (v) { s.interval = v; reprice(); });
-    [['monthly', 'Monthly invoices'], ['annual', 'Annual prepay (11 months, no credit)']].forEach(function (p) { var o = el('option', p[1]); o.value = p[0]; interval.appendChild(o); }); interval.value = s.interval || 'monthly';
+    [['monthly', 'Monthly invoices'], ['annual', 'Annual prepay (10 months for 12, no credit)']].forEach(function (p) { var o = el('option', p[1]); o.value = p[0]; interval.appendChild(o); }); interval.value = s.interval || 'monthly';
     var credit = field(host, 'credit', 'Transformation credit ' + ctx.defaults.credit.pct + '% · ' + ctx.defaults.credit.days + ' days', '', 'select', function (v) { s.credit = v === 'yes'; reprice(); });
     [['no', 'None'], ['yes', 'Apply the credit']].forEach(function (p) { var o = el('option', p[1]); o.value = p[0]; credit.appendChild(o); }); credit.value = s.credit ? 'yes' : 'no';
     var fee = field(host, 'fee', 'Annual service fee', '', 'select', function (v) { s.serviceFee.mode = v; reprice(); });
