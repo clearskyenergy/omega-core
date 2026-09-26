@@ -369,6 +369,33 @@ body.signed-out #app-body{display:none !important}
 .pm-cat{font-size:22px;font-weight:400;color:#8A93A0;letter-spacing:-.2px;text-align:center;margin-bottom:4px}
 .pm-cat-sub{font-size:11.5px;color:var(--cs-sub);text-align:center;margin-bottom:16px}
 .pm-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+/* Your modules: one card per module (Phase 10B follow-up, 2026-09-26) */
+/* hidden by class, not inline style: the layout editor rewrites every block's style.display when it applies the saved order */
+.dash-block.mod-none{display:none !important}
+.mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:1200px){ .mod-grid{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:520px){ .mod-grid{grid-template-columns:1fr} }
+.mod-card{position:relative;background:#fff;border:1px solid var(--cs-border);border-radius:14px;padding:14px 14px 12px;display:flex;flex-direction:column;gap:8px;min-height:150px;box-shadow:0 2px 8px rgba(0,0,0,.05);transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
+.mod-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(46,134,193,.16);border-color:var(--cs-sky)}
+.mod-card.off{background:transparent;border-style:dashed;box-shadow:none}
+.mod-card.off:hover{transform:none;box-shadow:none;border-color:var(--cs-border)}
+.mod-head{display:flex;align-items:center;gap:10px;padding-right:68px;min-width:0}
+.mod-ico{width:38px;height:38px;border-radius:10px;background:rgba(43,95,168,.10);color:var(--cs-accent);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;flex-shrink:0}
+.mod-ico svg{width:20px;height:20px;stroke:currentColor}
+.mod-card.logic .mod-ico{background:rgba(63,175,198,.14);color:#2A8CA3}
+.mod-card.off .mod-ico{background:var(--cs-bg);color:var(--cs-sub)}
+.mod-name{font-size:14px;font-weight:700;color:var(--cs-navy);line-height:1.2}
+.mod-shelf{font-size:11.5px;color:var(--cs-sub);margin-top:2px}
+.mod-feat{margin:0;padding:0;list-style:none;font-size:12.5px;color:var(--cs-sub);display:flex;flex-direction:column;gap:2px}
+.mod-feat li::before{content:'·';margin-right:6px;color:#9AA5B1}
+.mod-tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
+.mod-chip{font-size:11.5px;padding:3px 9px;border-radius:999px;background:rgba(43,95,168,.08);color:var(--cs-accent);white-space:nowrap}
+.mod-card.off .mod-chip{background:var(--cs-bg);color:var(--cs-sub);opacity:.75}
+.mod-live{position:absolute;top:13px;right:14px;font-size:11px;font-weight:700;color:var(--cs-green);display:flex;align-items:center;gap:5px}
+.mod-live::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--cs-green)}
+.mod-soon{position:absolute;top:13px;right:14px;font-size:11px;font-weight:700;color:var(--cs-sub)}
+.mod-add{position:absolute;top:10px;right:12px;font:600 12px/1 inherit;padding:7px 11px;border-radius:999px;border:1px solid var(--cs-border);background:#fff;color:var(--cs-navy);cursor:pointer}
+.mod-add:hover{border-color:var(--cs-accent);color:var(--cs-accent)}
 @media (max-width:520px){ .pm-grid{grid-template-columns:1fr} }
 .pm-col.wide .pm-grid{grid-template-columns:repeat(3,1fr)}
 @media (max-width:1200px){ .pm-col.wide .pm-grid{grid-template-columns:repeat(2,1fr)} }
@@ -2092,6 +2119,21 @@ window._omegaReady = function(){
 
 
     <div id="dev-fixed">
+    <!-- ══ YOUR MODULES (a packaged workspace; hidden for a legacy plan) ══
+         Tommy, 2026-09-26: "see how it's done as modules... that's good".
+         One card per module held, marked Live; then the rungs not held,
+         dashed, with + Add opening the Ladder on that module. Drawn from
+         the package view's own catalog (the server's), never a second list. -->
+    <div class="dash-block mod-none" data-block="modules" id="dash-modules">
+    <div class="block-head">
+      <div>
+        <div class="block-title">Your modules</div>
+        <div class="block-sub" id="modules-sub">What you hold. Every card below is open to you; the dashed ones are one click to add.</div>
+      </div>
+      <a class="view-all" id="modules-ladder" href="#" onclick="openPackageMenu();return false">The Ladder ›</a>
+    </div>
+    <div class="mod-grid" id="modules-grid"></div>
+    </div><!-- /.dash-block modules -->
     <div class="dash-block" data-block="apps">
     <!-- ══ MY APPLICATIONS ══ -->
     <div class="block-head">
@@ -4597,8 +4639,52 @@ function _fetchModulePrices(){
   var u = currentUser || (auth && auth.currentUser); if (!u || !window.fetch) return;
   u.getIdToken().then(function(tok){ return fetch('/api/package-catalog', { cache:'no-store', headers:{ 'Authorization':'Bearer ' + tok } }); })
     .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(j){ if (!j || !j.modules) return; _modulePrices = {}; j.modules.forEach(function(m){ _modulePrices[m.key] = m.priceDisplay; }); try { applyToolLocks(); } catch(e){} })
+    .then(function(j){ if (!j || !j.modules) return; _modulePrices = {}; j.modules.forEach(function(m){ _modulePrices[m.key] = m.priceDisplay; }); try { applyToolLocks(); } catch(e){} try { renderModuleCards(); } catch(e){} })
     .catch(function(){});
+}
+/* ── Your modules (Tommy, 2026-09-26: "see how it's done as modules... that's good") ──
+   One card per module the workspace holds, marked Live, in shelf order; then
+   what it bought but is not on yet (the first invoice unpaid); then up to
+   three rungs it does not hold, dashed, with + Add opening the Ladder on that
+   module. Everything is the package view's own catalog and the server's
+   prices; there is no second list. A legacy plan shows nothing here. */
+var MOD_SHELF_LABEL = { floor:'Included in every plan', addon:'Add-on', standard:'Standard shelf', premium:'Premium shelf', deliverable:'Deliverable', platform:'Omega Logic' };
+var MOD_SHELF_ORDER = ['floor','addon','standard','premium','deliverable','platform'];
+var MOD_GLYPH = { lite:'\u25C8', gridatlas:'\u2317', storage:'\u25AE', estimate:'\u25A4', evrebates:'\u26A1', plansets:'\u25A7', siteintel:'\u25CE', engineering:'\u2699', finance:'$', compute:'\u25A6', ops:'\u25C9', whitelabel:'\u25EB', permitting:'\u2713', sitefinder:'\u25CE', 'logic-office':'\u25F7', 'logic-plant':'\u2699', 'logic-materials':'\u25A6', 'logic-logistics':'\u279C', 'logic-customer':'\u25CD' };
+function _toolByKey(key){ var all = (window.OMEGATools && OMEGATools.all) ? OMEGATools.all() : []; for (var i=0;i<all.length;i++) if (all[i].key===key) return all[i]; return null; }
+function _moduleCard(m, state){
+  var held = state === 'held', bought = state === 'bought', logic = m.shelf === 'platform';
+  var tools = (m.tools||[]).map(function(k){ var t=_toolByKey(k); return t ? (t.name||k) : null; }).filter(Boolean);
+  var first = (m.tools||[]).map(_toolByKey).filter(function(t){ return t && t.icon; })[0];
+  var ico = first ? '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="'+esc(first.icon)+'"/></svg>' : esc(MOD_GLYPH[m.key]||'\u25C8');
+  var price = !held && _modulePrices && _modulePrices[m.key] ? _modulePrices[m.key] : '';
+  var line = held ? (MOD_SHELF_LABEL[m.shelf]||m.shelf) : bought ? 'Yours \u00B7 opens when the first invoice is paid' : 'Not in your plan' + (price ? ' \u00B7 ' + price : '');
+  var h = '<div class="mod-card'+(held?'':' off')+(logic?' logic':'')+'" data-module="'+esc(m.key)+'" data-held="'+(held?'1':bought?'bought':'0')+'">';
+  h += held ? '<span class="mod-live">Live</span>' : bought ? '<span class="mod-soon">Paid for</span>' : '<button type="button" class="mod-add" data-add-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-add-module\'))">+ Add</button>';
+  h += '<div class="mod-head"><div class="mod-ico">'+ico+'</div><div style="min-width:0"><div class="mod-name">'+esc(logic ? 'Omega Logic \u00B7 '+m.name : m.name)+'</div><div class="mod-shelf">'+esc(line)+'</div></div></div>';
+  h += '<ul class="mod-feat">'+(m.features||[]).slice(0,3).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')+'</ul>';
+  var shown = tools.slice(0, held ? 4 : 3);
+  h += '<div class="mod-tools">'+shown.map(function(n){ return '<span class="mod-chip">'+esc(n)+'</span>'; }).join('')+(tools.length>shown.length?'<span class="mod-chip">+'+(tools.length-shown.length)+'</span>':'')+'</div></div>';
+  return h;
+}
+function renderModuleCards(){
+  var block = document.getElementById('dash-modules'), grid = document.getElementById('modules-grid'); if (!block || !grid) return;
+  var ws = window.OMEGA_WORKSPACE, view = ws && ws.packaged ? ws.packageAccess : null;
+  if (!view || !Array.isArray(view.catalog) || !view.catalog.length){ block.classList.add('mod-none'); grid.innerHTML = ''; return; }
+  var held = view.modules || [], b = (window.OmegaTenant && OmegaTenant.billing) || {};
+  var bought = (b.subscription && Array.isArray(b.subscription.modules)) ? b.subscription.modules : [];
+  var cat = view.catalog.slice().sort(function(a,c){ return MOD_SHELF_ORDER.indexOf(a.shelf) - MOD_SHELF_ORDER.indexOf(c.shelf); });
+  var mine = cat.filter(function(m){ return held.indexOf(m.key) >= 0; });
+  var owed = cat.filter(function(m){ return held.indexOf(m.key) < 0 && bought.indexOf(m.key) >= 0; });
+  var rest = cat.filter(function(m){ return held.indexOf(m.key) < 0 && bought.indexOf(m.key) < 0; });
+  var logicOn = held.indexOf('logic-office') >= 0 || bought.indexOf('logic-office') >= 0;
+  var offer = (logicOn ? rest.filter(function(m){ return m.shelf === 'platform'; }) : []).concat(rest.filter(function(m){ return m.shelf !== 'platform'; })).slice(0, 3);
+  _fetchModulePrices();
+  var plan = b.plan ? b.plan.charAt(0).toUpperCase() + b.plan.slice(1) : (mine.length + owed.length <= 1 ? 'Lite' : 'Lite + modules');
+  var sub = document.getElementById('modules-sub');
+  if (sub) sub.textContent = 'What ' + ((ws && ws.clientName) || 'your workspace') + ' holds on ' + plan + '. Every card below is open to you; the dashed ones are one click to add.';
+  grid.innerHTML = mine.map(function(m){ return _moduleCard(m, 'held'); }).join('') + owed.map(function(m){ return _moduleCard(m, 'bought'); }).join('') + offer.map(function(m){ return _moduleCard(m, 'off'); }).join('');
+  block.classList.remove('mod-none');
 }
 function openBillingPortal(){
   var u = currentUser || (auth && auth.currentUser);
@@ -5631,6 +5717,7 @@ function _paintDash(){
   /* Tiles carry data-tool now, so the plan's locks apply to them too — the
      tier gate ran before this grid was painted. Idempotent. */
   try { if (typeof applyToolLocks === 'function') applyToolLocks(); } catch(e){}
+  try { renderModuleCards(); } catch(e){}
 }
 
 /* Render a tile for a tool that isn't in the shared catalog (direct href). */
