@@ -26,7 +26,8 @@ deployed, no tenant is packaged. The order to change that is in
   carte, with the server steering a tenant to the cheaper of the two.
   Starter packages per vertical (EV installer, solar, developer, EPC, OEM,
   distributor, compute, capital) are what a new signup is proposed.
-- **One price book**, `api/_lib/pricebook.js`, version `2026-10-proposed`,
+- **One price book**, `api/_lib/pricebook.js`, version `2026-10` (signed off
+  2026-09-26; it was `2026-10-proposed` until then),
   frozen once used, disabled until you sign the values off. Annual prepay is
   eleven months; there is no transformation credit.
 - **Trials: 14 days at most, once per organization, starting at approval.**
@@ -124,8 +125,8 @@ else needs your console access.
 7. **QuickBooks Payments** (you, in the browser): the runbook
    `PAYMENTS-BROWSER-SETUP.md`, pasted into Claude in Chrome. Until *Pay
    now* is on an invoice, there is no card page to send anyone to.
-8. **Production** (you, checklist §6 in order): sign the values off (the
-   `VERSION` rename, one PR), seed the book `--live`, sync the items
+8. **Production** (you, checklist §6 in order): the values are signed off
+   (`VERSION` is `2026-10`); seed the book `--live`, sync the items
    `--live`, enable the book, the five Production variables
    (`PACKAGING_LIVE=true` and `QBO_ENV=production` among them), one real
    signup paid and refunded, then existing tenants one at a time from the

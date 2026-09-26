@@ -148,10 +148,10 @@ the audit rows it writes.
       `docs/PAYMENTS-BROWSER-SETUP.md` (it also connects the Stripe
       bookkeeping app; that is not what pays an invoice).
 - [ ] Sandbox acceptance complete for every phase above.
-- [ ] **Sign the values off**: rename `VERSION` in `api/_lib/pricebook.js`
-      from `…-proposed` to the release name (`2026-10`), one PR. A
+- [x] **Sign the values off**: `VERSION` in `api/_lib/pricebook.js` is
+      `2026-10` (renamed from `…-proposed` on 2026-09-26, Tommy's word). A
       `-proposed` book is refused as a production book by its own
-      validation, so this is the one line that cannot be skipped.
+      validation, so this was the one line that could not be skipped.
 - [ ] Seed it for the production company:
       `node scripts/seed-pricebook.js --live --realm=<production realm>`
       (dry run), then `--apply`.
