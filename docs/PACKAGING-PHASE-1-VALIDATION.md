@@ -2,6 +2,8 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
+[Draft PR #136](https://github.com/clearskyenergy/omega-core/pull/136), stacked on Track A.
+
 The single catalog is `api/_lib/modules.js`. It records 19 modules, their
 dependencies, starter packs, capability projection and command ownership.
 The independent inventory checks all 45 registry keys, 192 static commands
