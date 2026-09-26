@@ -175952,7 +175952,7 @@ if (root.console && console.info) {
         typeof OmegaCaps === 'undefined') { setTimeout(gate, 200); return; }
     firebase.auth().onAuthStateChanged(function (u) {
       if (!u) return;
-      OmegaCaps.resolve(firebase.firestore(), u.email).then(function (t) {
+      OmegaCaps.resolve(firebase.firestore(), u.email, u.emailVerified).then(function (t) {
         tier = t;
         var r = OmegaCaps.apply(tier);
         if (window.console)

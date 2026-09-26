@@ -296,25 +296,27 @@
      engineering suite, the export group, all removed from the people
      demoing them.
 
-     These two domains are the same pair isAdmin() uses in firestore.rules
-     and adminDomains uses in the tenant configs. 'internal' is already in
+     Only a verified Firebase email at ClearSky's current staff domain may
+     use this presentation fallback. Server authorization still uses caller.staff. 'internal' is already in
      UNGATED, so it grants everything without inventing a new tier.
 
      A BILLING RECORD STILL WINS IF ONE EXISTS. This is a fallback for the
      absent-record case, not an override — so if ClearSky is ever given a
      real billing doc for testing, that is what applies. */
-  var INTERNAL_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
+  var INTERNAL_DOMAINS = ['clearsky-usa.com'];
 
-  function resolve(db, email) {
+  function resolve(db, email, emailVerified) {
     return new Promise(function (done) {
       try {
         var d = setOrg(email);
-        if (INTERNAL_DOMAINS.indexOf(d) >= 0 && !db) return done('internal');
+        var internal = emailVerified === true && INTERNAL_DOMAINS.indexOf(d) >= 0;
+        setAddons([]);
+        if (internal && !db) return done('internal');
         if (!d || !db) return done('trial');
         db.collection('omega_orgs').doc(d).collection('billing').doc('current').get()
           .then(function (s) {
             var b = s.exists ? (s.data() || {}) : {};
-            if (!s.exists && INTERNAL_DOMAINS.indexOf(d) >= 0) return done('internal');
+            if (!s.exists && internal) return done('internal');
             setAddons(b.addons || []);
             var eff = effectiveTier(b.tier || 'trial', b.capTier);
             if (b.capTier && eff !== normalise(b.tier || 'trial') && global.console) {
@@ -326,7 +328,7 @@
           .catch(function () {
             /* A failed read must not hand out the engineering suite to a
                customer — but it must not lock ClearSky out either. */
-            done(INTERNAL_DOMAINS.indexOf(d) >= 0 ? 'internal' : 'trial');
+            done(internal ? 'internal' : 'trial');
           });
       } catch (e) { done('trial'); }
     });

@@ -15,7 +15,7 @@ https://claude.ai/artifact/2Sou93uMRrCsc8K4E2Xg8n (private to the owner).
 | Phase | PR | State | Left / open questions |
 |---|---|---|---|
 | Docs (this file, VALUE-LADDER, handoff, prototype) | Phase 0 PR | supplied ZIP imported; timing reconciled with approval 2026-09-26 | review with Phase 0 |
-| 0 · Decide + fixes | pending PR | implemented, validating; not merged | PR #133 already merged closeout; verified fallback + new-signup cap; approval-started lifecycle remains Phase 4 |
+| 0 · Decide + fixes | pending draft PR | implemented; npm test + check:pages pass; not merged | PR #133 already merged closeout; verified fallback + new-signup cap; approval-started lifecycle remains Phase 4 |
 | A · Polish now | | not started | |
 | 1 · Catalog | | not started | |
 | 2 · Close the leaks | | not started | |

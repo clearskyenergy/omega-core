@@ -2124,3 +2124,16 @@ returns the year-by-year schedule it already computed; sweep rows drop it so
 server-side site lookups (energy community, PVWatts, URDB) and
 `docs/PROFORMA.md`.
 
+
+## Packaging Phase 0 — September 26, 2026
+
+L2 closeout is already on main via PR #133; no second merge was performed.
+`omega-caps.js` takes verification from the same Firebase user as the email,
+requires literal true plus the current staff domain on all three fallback
+paths, and clears stale add-ons before resolving another account. An existing
+billing record wins. Server authorization continues to use `caller.staff`.
+New signup trials default to and cannot exceed 14 days; repeat signup does
+not rewrite billing. Phase 4 still owns approval-started trials and billing.
+No pricing/modeling engine is changed or moved by this phase; existing engine
+debt above is outside this authentication-only editor edit. No tenant data,
+QuickBooks records, rules or production deployment changed.

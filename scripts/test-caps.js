@@ -93,5 +93,46 @@ ok(C.can('deluxe', 'engineering'),
    'adding an add-on takes nothing away from the plan');
 C.setAddons([]);
 
-console.log('\n' + (fails ? fails + ' of ' + checks + ' FAILED' : 'all ' + checks + ' checks passed') + '\n');
-process.exit(fails ? 1 : 0);
+/* Exercise the asynchronous resolver, not a copy of its domain check. */
+var DB = require('./_lib/firestore-double').DB;
+var fs = require('fs');
+async function resolverChecks() {
+  var missing = new DB();
+  var failed = { collection: function () { return { doc: function () { return {
+    collection: function () { return { doc: function () { return {
+      get: function () { return Promise.reject(new Error('offline')); }
+    }; } }; }
+  }; } }; } };
+  var paths = [null, missing, failed];
+  var people = [
+    ['rep@clearsky-usa.com', true, 'internal'],
+    ['REP@CLEARSKY-USA.COM', true, 'internal'],
+    ['rep@clearsky-usa.com', false, 'trial'],
+    ['rep@clearsky-usa.com', undefined, 'trial'],
+    ['rep@clearsky-usa.com', 'true', 'trial'],
+    ['rep@csebuilders.com', true, 'trial'],
+    ['rep@clearsky-usa.com.evil.example', true, 'trial'],
+    ['designer@tenant.example', true, 'trial']
+  ];
+  for (var i = 0; i < paths.length; i++) {
+    for (var j = 0; j < people.length; j++) {
+      var p = people[j];
+      ok(await C.resolve(paths[i], p[0], p[1]) === p[2],
+        'fallback ' + i + ': ' + p[0] + ' verified=' + p[1] + ' -> ' + p[2]);
+    }
+  }
+  var billed = new DB();
+  billed.seed('omega_orgs/clearsky-usa.com/billing/current', { tier: 'enterprise', capTier: 'standard', addons: ['compute'] });
+  ok(await C.resolve(billed, 'rep@clearsky-usa.com', true) === 'standard', 'billing cap wins over verified internal fallback');
+  ok(C.addons().indexOf('compute') >= 0, 'billing add-ons survive resolution');
+  await C.resolve(failed, 'designer@tenant.example', true);
+  ok(C.addons().length === 0, 'a failed read cannot retain the previous account add-ons');
+  billed.seed('omega_orgs/tenant.example/billing/current', { tier: 'deluxe' });
+  ok(await C.resolve(billed, 'designer@tenant.example', true) === 'deluxe', 'customer billing resolves normally');
+  var editor = fs.readFileSync(path.join(__dirname, '..', 'editor.html'), 'utf8');
+  ok(/OmegaCaps\.resolve\(firebase\.firestore\(\), u\.email, u\.emailVerified\)/.test(editor), 'editor passes verification from the same Firebase user as the email');
+}
+resolverChecks().then(function () {
+  console.log('\n' + (fails ? fails + ' of ' + checks + ' FAILED' : 'all ' + checks + ' checks passed') + '\n');
+  process.exit(fails ? 1 : 0);
+}).catch(function (e) { console.error(e); process.exit(1); });

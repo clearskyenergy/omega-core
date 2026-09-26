@@ -160,12 +160,20 @@ Effective tools for a user =
 `omega-tools.js` computes this on boot. Rules enforce the same on each
 tool's data collections.
 
+The editor's internal fallback requires a literal `emailVerified === true`
+from its Firebase user and the `clearsky-usa.com` domain. An existing billing
+record still wins. Packaging `modules[]` remains planned until the catalog
+and gates land; see `docs/PACKAGING-ROADMAP.md`.
+
 ## Self-serve signup (policy decided 2026-09-06)
 
 Hub host `app.clearskyomega.com` serves `/start.html`. Sign in → if
 `omega_orgs/{emailDomain}` exists, route to its hostname (colleagues
 auto-join as `member`); else the form → `POST /api/tenant-signup` creates
-the tenant `status: 'pending'` on a 30-day trial. Work email only —
+the tenant `status: 'pending'` with a signup trial capped in code at 14 days.
+The Phase 0 cap applies only to new signups; existing trial dates are preserved.
+Packaging Phase 4 moves the one organization trial to approval, with first
+billing at trial end (see `docs/PACKAGING-ROADMAP.md` §10). Work email only —
 public providers in `api/_lib/public-domains.js` are refused. ClearSky
 approves via `POST /api/tenant-approve` (master console button). A pending
 tenant's users see a "being set up" screen from `omega-tenant.js`. Never

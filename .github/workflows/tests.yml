@@ -41,6 +41,7 @@ jobs:
       - name: capacity, sizer, site intel, agent sites
         run: |
           node scripts/test-caps.js
+          node scripts/test-tenant-signup.js
           node scripts/test-bess-sizer.js
           node scripts/test-site-intel.js
           node scripts/test-agent-sites.js
@@ -94,7 +95,7 @@ jobs:
           npm i --no-save --no-audit --no-fund playwright@1.63.0
           npx playwright install --with-deps chromium
       - name: render every office, plant and portal page against stubbed endpoints
-        run: node scripts/render-logic-pages.js
+        run: npm run check:pages
 
   audit:
     name: script references (reporting only)
