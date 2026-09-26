@@ -76,11 +76,9 @@ The existing Phase 2 API tests cover producers separately.
 
 ## Open acceptance and release work
 
-**Export to Monday is unresolved.** VALUE-LADDER §3 and Appendix A place the
-BETA command in Lite. ROADMAP §3.3 says Lite Output contains only Blueprint,
-Proposal, Spec Sheet and Interactive Report. The implementation retains the
-existing catalog allocation pending Tommy's explicit decision; it must not be
-represented as an approved reconciliation.
+**Export to Monday stays in Lite.** Tommy explicitly confirmed this on
+2026-09-26. ROADMAP §3.3 now agrees with VALUE-LADDER and the existing catalog.
+AI Render remains exclusive to Plan Sets & CAD.
 
 The historic browser engine ports, packaged data-write rules, approval-started
 trial and paid QuickBooks lifecycle remain prerequisites to enabling packaged

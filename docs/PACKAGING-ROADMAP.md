@@ -19,7 +19,7 @@ https://claude.ai/artifact/2Sou93uMRrCsc8K4E2Xg8n (private to the owner).
 | A · Polish now | [#135](https://github.com/clearskyenergy/omega-core/pull/135) · [preview](https://omega-core-git-codex-packaging-phase-a-clearsky-usa.vercel.app) | implemented; npm test + check:pages pass; not merged | Seven cards and ribbon polish only. Full workspace filtering, results rail and broader empty states remain later work. |
 | 1 · Catalog | [#136](https://github.com/clearskyenergy/omega-core/pull/136), stacked on #135 | implemented; npm test + check:pages pass; disabled | One catalog/price book; server quotes; sandbox-only item sync. AI Render: Plan Sets & CAD only. Real sandbox apply and later package gates remain. |
 | 2 · Close the leaks | [#137](https://github.com/clearskyenergy/omega-core/pull/137) · [preview](https://omega-core-git-codex-packaging-phase-2-clearsky-usa.vercel.app) | implemented; npm test + check:pages pass; disabled | Catalog-based UI/API gates; eight entry paths covered. Full editor, legacy engine ports and packaged write rules remain release work. See PACKAGING-PHASE-2-VALIDATION.md. |
-| 3 · Editor fits the package | [#138](https://github.com/clearskyenergy/omega-core/pull/138), stacked on #137 | draft, unmerged; local checks green; disabled | 1,870 packaging assertions; 180 full-editor checks, 84 desktop/tablet captures. Project workspaces, shared gallery, staff preview and dry-run planner. Export to Monday ownership conflict still awaits Tommy. See PACKAGING-PHASE-3-VALIDATION.md. |
+| 3 · Editor fits the package | [#138](https://github.com/clearskyenergy/omega-core/pull/138), stacked on #137 | draft, unmerged; local checks green; disabled | 1,870 packaging assertions; 180 full-editor checks, 84 desktop/tablet captures. Project workspaces, shared gallery, staff preview and dry-run planner. Export to Monday stays in Lite, per Tommy’s explicit decision. See PACKAGING-PHASE-3-VALIDATION.md. |
 | 4 · Admin panel, signup billing, trial, QuickBooks customer | | not started | |
 | 5 · Subscribe in the editor (Step A) | | not started | |
 | 5b · Card on file (Step B) | | blocked on Tommy | QuickBooks Payments permission |
@@ -142,7 +142,7 @@ complete, calm product, not a full product with holes in it.**
 
 | Package | Tabs shown | Notes |
 |---|---|---|
-| Lite | File, Edit, Build, Insert, Draw, Annotate, View, Output, Settings, + Modules | Output has Blueprint, Proposal, Spec Sheet, Interactive Report only |
+| Lite | File, Edit, Build, Insert, Draw, Annotate, View, Output, Settings, + Modules | Output has Blueprint, Proposal, Spec Sheet, Interactive Report, and Export to Monday (BETA; Tommy approved Lite ownership on 2026-09-26) |
 | EV installer (Field) | Lite tabs + Estimate + Analyze (Grid Atlas group only) | Output gains Plot Plan, One-Line, Schematic Editor, Permit Sheet |
 | Developer (Field) | Lite tabs + Analyze (Grid Atlas, Storage groups) | Output gains Push to Marketplace, Apply for Financing |
 | EPC (Pro) | All except Compute | Pro layout by default |

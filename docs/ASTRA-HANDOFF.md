@@ -20,6 +20,7 @@ operator assignments below; the source commercial requirements still apply.
   changes and connection/scopes must be made reviewable before application;
   the proposed book remains sandbox-only until price-book sign-off.
 - AI Render belongs only to **Plan Sets & CAD**, not Lite.
+- Export to Monday (BETA) stays in **Lite** (explicit decision, 2026-09-26).
 
 ## 1. What you are building
 
