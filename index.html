@@ -565,16 +565,27 @@ body.signed-out #app-body{display:none !important}
   .ov-val{font-size:30px}
 }
 
-/* ── UPGRADE OVERLAY (locked tools) ── */
-.pm-tile.locked{ position:relative; cursor:pointer; }
-.pm-tile.locked > *:not(.pm-lock){ filter:grayscale(.85) opacity(.45); pointer-events:none; }
+/* ── UPGRADE OVERLAY (locked tools) ──
+   lockTile() locks ANY [data-tool] element — a .pm-tile card or a Quick
+   Access .quick-link — and appends the badge and the overlay, both
+   position:absolute. So the locked element itself must be their containing
+   block. These rules were written for .pm-tile only; a .quick-link has no
+   position of its own, so the overlay escaped to the page, lay invisibly
+   (opacity:0 still hit-tests) over the first screen, and the hover lift —
+   a transform is a containing block too — pulled it into the tile and back
+   out several times a second: the "Upgrade" flashing.
+   A locked tile does not lift either: at its bottom edge the lift alone moves
+   it out from under the pointer, and the overlay would blink there. */
+.locked[data-tool]{ position:relative; cursor:pointer; }
+.locked[data-tool]:hover{ transform:none; }
+.locked[data-tool] > *:not(.pm-lock):not(.pm-lock-badge){ filter:grayscale(.85) opacity(.45); pointer-events:none; }
 .pm-lock{
   position:absolute; inset:0; display:flex; flex-direction:column;
   align-items:center; justify-content:center; gap:6px;
   background:linear-gradient(135deg, rgba(8,56,79,.90), rgba(0,111,154,.88));
   border-radius:inherit; opacity:0; transition:opacity .16s; z-index:3;
 }
-.pm-tile.locked:hover .pm-lock{ opacity:1; }
+.locked[data-tool]:hover .pm-lock{ opacity:1; }
 .pm-lock-badge{
   position:absolute; top:8px; right:8px; z-index:4;
   background:var(--cs-accent); color:#04303a; font-size:9px; font-weight:800;
@@ -5231,7 +5242,8 @@ function lockTile(tile, key){
   badge.textContent = 'Upgrade';
   tile.appendChild(badge);
 
-  var name = tile.querySelector('.pm-name');
+  // .pm-name on a card, .ql-title on a Quick Access tile.
+  var name = tile.querySelector('.pm-name, .ql-title');
   var label = name ? name.textContent : 'This module';
 
   var lock = document.createElement('div');
@@ -5240,15 +5252,15 @@ function lockTile(tile, key){
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+
     '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'+
     '<div class="pm-lock-txt">Upgrade to unlock</div>'+
-    '<div class="pm-lock-sub">'+label+' is available on a higher plan.</div>'+
+    '<div class="pm-lock-sub">'+esc2(label)+' is available on a higher plan.</div>'+
     '<button class="pm-lock-cta" onclick="event.stopPropagation();openUpgrade(this)">Request access</button>';
   tile.appendChild(lock);
 }
 
 function openUpgrade(el){
   var tile = el.closest ? el.closest('[data-tool]') : null;
-  var name = tile ? (tile.querySelector('.pm-name')||{}).textContent : 'this module';
-  showUpgradeModal(name);
+  var name = tile ? (tile.querySelector('.pm-name, .ql-title')||{}).textContent : '';
+  showUpgradeModal(name || 'this module');
 }
 
 function showUpgradeModal(toolName){

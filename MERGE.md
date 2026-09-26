@@ -39,7 +39,7 @@ Supplier/installer edits must be saved before the estimator can price them.
 | `/tenants/osa/` | JV partner portal, whole repo, own shell | osa-main |
 | `/tenants/solela/` | ComEd pipeline shell (index.html) + IL data | solela-main |
 | `/tenants/joules/` | omega-fleet.js, fleet.html, commission.html | joules.ai |
-| `/tenants/tremco/` | tremco-netzero.js, tremco-patches.js, preview | tremco |
+| `/tenants/tremco/` | tremco-netzero.js, preview (tremco-patches.js retired: the locked-tile Upgrade fix is in core `index.html`) | tremco |
 | `/tenants/spatco/` | spatco-ev-estimate.html | SPATCO |
 | `/tenants/cir/` | intake.html, queue.html (CIR's variants) | cir |
 | `/tenants/<others>/` | logos + legacy `config.js` (kept for the fallback path) | each repo |

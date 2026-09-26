@@ -325,24 +325,6 @@ window.CLEARSKY_CONFIG = {
     }
   };
   document.head.appendChild(s);
-
-  /* ⚠ TEMPORARY. Corrects the Quick Access "Upgrade" badge escaping its tile
-     and flickering on hover — a bug in the shared index.html that affects
-     every tenant below Enterprise, not just this one.
-
-     DELETE THIS BLOCK AND THE FILE once the upstream CSS fix ships, or Tremco
-     silently diverges from the platform on something that should be fixed for
-     everyone. See README → "The Upgrade badge flicker". */
-  var p = document.createElement('script');
-  p.src = '/tremco-patches.js';
-  p.async = false;
-  p.onerror = function () {
-    if (window.console && console.warn) {
-      console.warn('[ClearSky-OMEGA] /tremco-patches.js failed to load. '
-        + 'Locked Quick Access tiles will show a misplaced Upgrade badge.');
-    }
-  };
-  document.head.appendChild(p);
 })();
 
 
