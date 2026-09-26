@@ -18,7 +18,7 @@ those, and opt in to more as their work grows. So: (1) ONE catalog of
 sellable **modules**, carved out of the Site Map editor's 186 functions and
 the platform's other tools, with ONE price each for everybody; (2) a
 **Package** panel in the master console where staff build a tenant's menu at
-onboarding, and the price, the Stripe subscription and the access all follow
+onboarding, and the price, the QuickBooks invoice and the access all follow
 from the ticks; (3) a **Your plan** menu inside the customer's own workspace
 where their owner or admin opts in to more modules and pays for them; and (4)
 a **Subscription Proposal** tool, built like the BESS Pro Forma, that turns a
@@ -250,7 +250,17 @@ consultants, drafting, data)? Those numbers feed the value page.
 - `admin/admin-console.js`: tenant drawer, add-on checkboxes (`ADDON_UI`),
   Omega Logic bundle (`/api/logic-onboard` `action:'bundle'`), Tier 1–4
   dropdown with prices.
-- **Stripe is wired**: `api/stripe-create.js` (customer, subscription with ONE
+- **ClearSky's QuickBooks is wired and is the billing system** (Tommy runs
+  the company's books in QuickBooks): `api/_lib/qbo.js` (OAuth tokens, the
+  ClearSky company pinned by `realmId`, `QBO_ENV` sandbox vs production),
+  `api/logic-connect.js` (connect ClearSky's company), `api/_lib/qbo-sales.js`
+  (idempotent Customer + Invoice writes to ClearSky's company, with
+  `invoiceLink` as the pay link; the pattern subscription invoices copy),
+  `api/logic-webhook.js` (Intuit webhook, verified by
+  `QBO_WEBHOOK_VERIFIER_TOKEN`; the event is a hint and the worker re-reads
+  Intuit before trusting a payment). Workspace-own books are a separate path
+  (`api/_lib/ledger-sync.js`) and are never used for ClearSky's billing.
+- **Stripe is also wired** (optional card autopay; see ROADMAP §9): `api/stripe-create.js` (customer, subscription with ONE
   price, or a payment link; staff only), `api/stripe-webhook.js`
   (`invoice.paid` → active, `payment_failed` → grace, `customer.subscription.*`
   → tier from the price's `tier` metadata), `api/stripe-portal.js` (tenant
@@ -335,8 +345,9 @@ them). `resolve(moduleKeys)` → `{ tier, addons[], toolAccess[], caps[] }`.
 ### 5.2 `pricebook/{version}` (Firestore, staff-written, append-only)
 
 `floorCents: 50000`, Lite price and included logins, each module's
-`priceCents`, `stripePriceId`, included usage and `overageCents` +
-`stripeMeteredPriceId`, plan caps (`field: {priceCents:129900,
+`priceCents`, `qboItemId` (the QuickBooks Product/Service for that module,
+and for each plan and each overage), optional `stripePriceId`, included usage
+and `overageCents`, plan caps (`field: {priceCents:129900,
 capCents:125000}`, `pro: {…, capCents:300000, maxDeliverables:1}`), credit,
 service fees. A version is frozen once used; a change is a new version.
 
@@ -344,7 +355,8 @@ service fees. A version is frozen once used; a change is a new version.
 
 In `api/tenant-billing.js` ALLOWED (and nowhere else): `modules[]`,
 `pricebookVersion`, `plan`, `credit {pct, endsAt}`, `builders`, `viewers`,
-`stripeSubscriptionId`. `tier`, `addons` and `toolAccess` become **derived**
+`billingProvider` (`'quickbooks'` default | `'stripe'`), `qboCustomerId`,
+`nextInvoiceOn`, `stripeSubscriptionId` (Stripe path only). `tier`, `addons` and `toolAccess` become **derived**
 from `modules[]` by `modules.resolve()` and are never hand-edited for a
 packaged tenant again.
 
@@ -356,7 +368,8 @@ they would get free usage). Count where the deliverable is produced:
 producing endpoint; `POST /api/usage` (idempotent by client id) for the
 producers that live in the browser today (EV workbook export, closeout ZIP,
 permitting matrix). It is an honest billing counter, not a security boundary;
-say so in the header. Overage reaches Stripe as metered usage records.
+say so in the header. Overage is billed as its own lines on the next
+monthly QuickBooks invoice (quantity over the included amount × `overageCents`).
 
 ### 5.5 `subscription_proposals/{id}` (Admin-SDK only)
 
@@ -376,15 +389,18 @@ when, PDF path. Accepting runs the same path as §6.1.
    fits, credit, first-90-days price, usage included, **floor enforced**.
 2. **Send proposal** (opens the proposal tool prefilled) or **Activate**.
 3. Activate → `POST /api/tenant-package` (staff): validates against the
-   price book → creates or updates the **Stripe subscription with one item
-   per module** (or the plan's price plus its module metadata), metered items
-   for usage, the credit as a Stripe coupon → returns Checkout / the invoice
-   link for the first payment.
-4. `api/stripe-webhook.js` on `customer.subscription.created|updated` and
-   `invoice.paid`: reads the subscription's items (price metadata `module`)
-   → writes `modules[]` → `modules.resolve()` → `tier`, `addons`,
-   `toolAccess`, caps. **What Stripe says is paid is what is switched on.**
-   History row + `admin_audit` row on every change.
+   price book → finds or creates the tenant as a **Customer in ClearSky's
+   QuickBooks** → issues the first **QuickBooks invoice** with one line per
+   module (or one plan line listing its modules), the transformation credit
+   as a discount line, and the annual service fee → returns the invoice's
+   pay link (`invoiceLink`, QuickBooks Payments: card or ACH) for staff to
+   copy, and QuickBooks emails it to the customer.
+4. When the invoice is paid: Intuit's webhook (`api/logic-webhook.js`) is a
+   hint; the worker re-reads the invoice and payment in QuickBooks, and only
+   then writes `modules[]` → `modules.resolve()` → `tier`, `addons`,
+   `toolAccess`, caps. **What QuickBooks shows as paid is what is switched
+   on.** History row + `admin_audit` row on every change. Each month a
+   scheduled job issues the next invoice from `modules[]` + usage (ROADMAP §9).
 
 ### 6.2 Customer side (the menu they opt in from)
 
@@ -392,9 +408,10 @@ when, PDF path. Accepting runs the same path as §6.1.
    (`A.isTenantAdmin`): the same menu, what they have, what each module adds,
    the price, the usage against included.
 2. Tick a module → shows the new monthly total and today's prorated charge →
-   **Add to my plan** → `POST /api/plan-change` (tenant admin) adds the
-   Stripe subscription item (prorated, card on file via the Customer Portal)
-   → the webhook switches it on in seconds. An accepted opt-in is an Order
+   **Add to my plan** → `POST /api/plan-change` (tenant admin) issues a
+   prorated QuickBooks invoice for the rest of this month and adds the module
+   to next month's invoice → the customer pays the link → the module switches
+   on when QuickBooks shows it paid (minutes). An accepted opt-in is an Order
    Form amendment (§7).
 3. Removing a module: **request removal at the next review**, never an
    instant drop (rule 7). Staff see it in the console.
@@ -491,8 +508,9 @@ pricing math only in `/api/`, staff = verified `@clearsky-usa.com`
 - **Phase 0**: merge `claude/level-2-closeout-tool-aqkh73`; Tommy settles
   every **(decide)**; counsel starts §7.
 - **Phase 1, catalog**: `api/_lib/modules.js` + tests (every tool and every
-  ribbon button accounted for); `pricebook/` rules + seed; Stripe Products
-  and Prices per module (script, idempotent, writes ids into the price book).
+  ribbon button accounted for); `pricebook/` rules + seed; QuickBooks
+  Products/Services per module, plan and overage (script, idempotent, writes
+  `qboItemId`s into the price book; sandbox company first).
 - **Phase 2, editor re-gate**: close every leak in §4.1 first (File menu,
   command palette, Jarvis, `?customerEngine=1`, ungated Output tools);
   `MODULE_GRANTS` in `omega-caps.js`; ribbon
@@ -502,8 +520,8 @@ pricing math only in `/api/`, staff = verified `@clearsky-usa.com`
 - **Phase 3, staff Package panel + `tenant-package` + webhook → modules.**
 - **Phase 4, customer Your plan + `plan-change`.**
 - **Phase 5, proposal tool.**
-- **Phase 6, usage meter + Stripe metered overage + the 90-day right-size
-  report.**
+- **Phase 6, usage meter + overage lines on the monthly QuickBooks invoice
+  + the 90-day right-size report.**
 
 Docs to update as phases land: this file, `CLAUDE.md` (Tool gating),
 `docs/WHITE-LABEL.md` (reseller addendum), `MERGE.md`.

@@ -120,15 +120,15 @@ h3.s{margin:0 0 8px;font-size:15px}
             <button class="b p" id="activate" type="button">Activate: create subscription</button>
             <button class="b" id="propose" type="button">Send as proposal</button>
           </div>
-          <div class="note" style="color:inherit;opacity:.65">Prices from price book 2026-10 (proposed). Activate sends the customer a Stripe payment link; modules switch on when the first invoice is paid.</div>
+          <div class="note" style="color:inherit;opacity:.65">Prices from price book 2026-10 (proposed). Activate issues the first invoice from ClearSky's QuickBooks and emails its pay link; modules switch on when QuickBooks shows it paid.</div>
         </aside>
       </div>
     </div>
 
     <div class="pane" id="p-write" hidden>
       <div class="two">
-        <div><h3 class="s">Stripe subscription items</h3><div class="tw"><table><thead><tr><th>Item</th><th>Price id</th><th class="r">Monthly</th></tr></thead><tbody id="w-stripe"></tbody></table></div>
-          <p class="note" style="margin-top:8px">A plan that fits (Field / Pro) bills as one plan price with the modules in its metadata; below Field each module is its own line. Usage over the included amount bills as metered items.</p></div>
+        <div><h3 class="s">QuickBooks invoice lines (ClearSky company)</h3><div class="tw"><table><thead><tr><th>Line</th><th>QuickBooks item</th><th class="r">Monthly</th></tr></thead><tbody id="w-stripe"></tbody></table></div>
+          <p class="note" style="margin-top:8px">A plan that fits (Field / Pro) is one plan line listing its modules; below Field each module is its own line. Usage over the included amount appears as overage lines on next month's invoice. Paid by card or ACH through the invoice's QuickBooks pay link.</p></div>
         <div><h3 class="s">omega_orgs/<span id="w-org"></span>/billing/current</h3><pre id="w-bill"></pre>
           <p class="note" style="margin-top:8px"><code>tier</code>, <code>addons</code> and <code>toolAccess</code> are derived from <code>modules</code>. Nobody edits them by hand for a packaged tenant.</p></div>
       </div>
@@ -262,11 +262,11 @@ function render(){
 function renderWrite(p,ks){
   var a=A[cur], rows=[];
   if(p.ok){
-    if(p.plan==='Field'||p.plan==='Pro') rows.push(['Plan: '+p.plan+' ('+ks.filter(function(k){return B[k].s!=='logic'&&k!=='lite';}).length+' modules in metadata)','price_'+p.plan.toLowerCase()+'_2026_10',p.core]);
-    else ks.filter(function(k){return B[k].s!=='logic';}).forEach(function(k){rows.push([B[k].n,'price_'+k.replace(/-/g,'_')+'_2026_10',B[k].p]);});
-    if(p.logic){ if(p.logic===2500) rows.push(['Omega Logic (all five)','price_logic_all_2026_10',2500]); else ks.filter(function(k){return B[k].s==='logic';}).forEach(function(k){rows.push([B[k].n,'price_'+k.replace(/-/g,'_')+'_2026_10',B[k].p]);}); }
-    ks.filter(function(k){return B[k].use;}).forEach(function(k){rows.push([B[k].n+' overage (metered)','price_'+k+'_over_2026_10','usage']);});
-    if($('credit').checked) rows.push(['Coupon: transformation credit 40% · 3 months, floor $500','coupon_transform_40',-(p.pay-Math.max(500,p.pay*0.6))]);
+    if(p.plan==='Field'||p.plan==='Pro') rows.push(['Plan: '+p.plan+' ('+ks.filter(function(k){return B[k].s!=='logic'&&k!=='lite';}).length+' modules listed on the line)','OMEGA Plan · '+p.plan,p.core]);
+    else ks.filter(function(k){return B[k].s!=='logic';}).forEach(function(k){rows.push([B[k].n,'OMEGA · '+B[k].n,B[k].p]);});
+    if(p.logic){ if(p.logic===2500) rows.push(['Omega Logic (all five)','OMEGA · Omega Logic (all five)',2500]); else ks.filter(function(k){return B[k].s==='logic';}).forEach(function(k){rows.push([B[k].n,'OMEGA · '+B[k].n,B[k].p]);}); }
+    ks.filter(function(k){return B[k].use;}).forEach(function(k){rows.push([B[k].n+' overage','OMEGA · '+B[k].n+' overage','billed next month']);});
+    if($('credit').checked) rows.push(['Transformation credit 40% (first 3 invoices, never below $500)','OMEGA · Transformation credit',-(p.pay-Math.max(500,p.pay*0.6))]);
   }
   $('w-stripe').innerHTML=rows.map(function(r){return '<tr><td>'+esc(r[0])+'</td><td class="num">'+r[1]+'</td><td class="r num">'+(typeof r[2]==='number'?(r[2]<0?'−'+money(-r[2]):money(r[2])):r[2])+'</td></tr>';}).join('')||'<tr><td colspan="3" class="note">Nothing to bill. Lite is required.</td></tr>';
   $('w-org').textContent=a.o;
@@ -274,7 +274,7 @@ function renderWrite(p,ks){
   var addons=[];
   if(sel.compute)addons.push('compute');if(sel.siteintel)addons.push('parcelscreen');if(sel.engineering)addons.push('engineering');if(sel.plansets){addons.push('schematics','exports');}if(sel.permitting)addons.push('permitting');if(sel.whitelabel)addons.push('whitelabel');if(ks.some(function(k){return B[k].s==='logic';}))addons.push('omega-logic');
   var bill={modules:ks,pricebookVersion:'2026-10',plan:p.plan||null,credit:$('credit').checked?{pct:40,endsAt:'+90 days'}:null,builders:3,viewers:10,
-    tier:tier+'   // derived',addons:addons,toolAccess:'[derived from modules by modules.resolve()]',stripeSubscriptionId:'sub_…',status:'awaiting first payment'};
+    tier:tier+'   // derived',addons:addons,toolAccess:'[derived from modules by modules.resolve()]',billingProvider:'quickbooks',qboCustomerId:'OMEGA-'+a.o,nextInvoiceOn:'1st of next month',status:'awaiting first payment'};
   $('w-bill').textContent=JSON.stringify(bill,null,2).replace(/"([a-zA-Z]+)":/g,'$1:');
 }
 function renderCust(p,ks){
@@ -307,7 +307,7 @@ $('shelves').addEventListener('change',function(e){var k=e.target.getAttribute('
 $('starter').addEventListener('click',function(){sel={lite:true};TYPES[$('ctype').value].forEach(function(k){sel[k]=true;});render();toast('Starter pack for '+$('ctype').value+' applied');});
 $('credit').addEventListener('change',render);
 $('accts').addEventListener('click',function(e){var b=e.target.closest('[data-i]');if(b)load(+b.getAttribute('data-i'));});
-$('activate').addEventListener('click',function(){log('staff@clearsky-usa.com','Activated: '+keys().filter(function(k){return k!=='lite';}).map(function(k){return B[k].n;}).join(', ')+'. Payment link sent.');renderHist();toast('Prototype: would create the Stripe subscription and email the payment link');});
+$('activate').addEventListener('click',function(){log('staff@clearsky-usa.com','Activated: '+keys().filter(function(k){return k!=='lite';}).map(function(k){return B[k].n;}).join(', ')+'. Payment link sent.');renderHist();toast('Prototype: would issue the QuickBooks invoice and email its pay link');});
 $('propose').addEventListener('click',function(){log('staff@clearsky-usa.com','Proposal sent ('+price(keys()).plan+')');renderHist();toast('Prototype: would open the proposal tool prefilled');});
 document.querySelector('.tabs').addEventListener('click',function(e){var t=e.target.closest('.tab');if(!t)return;
   [].forEach.call(document.querySelectorAll('.tab'),function(x){x.classList.toggle('on',x===t);});

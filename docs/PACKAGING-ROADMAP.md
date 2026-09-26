@@ -24,9 +24,9 @@ signup / seed / console / customer opt-in
         │  proposes modules[]
         ▼
 api/tenant-package  ── validates against pricebook ── refuses < $500
-        │  creates/updates Stripe subscription (one item per module or plan)
+        │  QuickBooks customer + invoice (one line per module or plan) — §9
         ▼
-stripe-webhook (invoice.paid / subscription.updated)
+logic-webhook (Intuit) → worker re-reads the invoice in QuickBooks: paid?
         │  writes billing/current.modules[] + derived tier/addons/toolAccess
         ▼
 omega-caps.js MODULE_GRANTS  →  editor ribbon, tools list, command palette, Jarvis
@@ -40,9 +40,9 @@ omega-caps.js MODULE_GRANTS  →  editor ribbon, tools list, command palette, Ja
 |---|---|---|
 | **Self-serve signup** (`api/tenant-signup.js`) | Creates `status:'pending'` with `billing.tier:'trial'` and a **free 30-day trial** | Creates `status:'pending'` with a **proposed package**: `modules[]` from the signup form's customer type (§3.6 starter pack of the catalog), `pricebookVersion`, `status:'awaiting approval'`. No access, no charge. The "being set up" screen shows their proposed package and price. |
 | **Seed** (`scripts/seed-omega-orgs.js`, `tenants/<slug>/tenant.json`) | Writes `tier` | `tenant.json` carries `modules[]` (not `tier`); the seed runs it through `resolve()` and refuses a package under the floor. Legacy `tier` in a seed file is mapped once by the backfill (Phase 3) and then rejected. |
-| **Approve** (`api/tenant-approve.js`) | `status:'active'` + optional `tier` | **Approve requires a package.** Staff confirm or edit `modules[]` in the Package panel; approve calls `tenant-package`, which creates the Stripe subscription and emails the payment link. `status` goes `active` when the first invoice is paid (webhook), not on the click. A trial, if offered, is a priced package with `trialEndsAt` and a card on file (**decide**). |
-| **Console change** (Package panel) | Tier dropdown + add-on boxes | Module ticks → `tenant-package` → Stripe → webhook → access. |
-| **Customer opt-in** (Your plan) | n/a | Tenant owner/admin adds a module → `plan-change` → Stripe prorated item → webhook → access in seconds. Removal waits for the 90-day review. |
+| **Approve** (`api/tenant-approve.js`) | `status:'active'` + optional `tier` | **Approve requires a package.** Staff confirm or edit `modules[]` in the Package panel; approve calls `tenant-package`, which issues the first QuickBooks invoice and QuickBooks emails the pay link. `status` goes `active` when the first invoice is paid (webhook), not on the click. A trial, if offered, is a priced package with `trialEndsAt` and a card on file (**decide**). |
+| **Console change** (Package panel) | Tier dropdown + add-on boxes | Module ticks → `tenant-package` → QuickBooks invoice → paid → access. |
+| **Customer opt-in** (Your plan) | n/a | Tenant owner/admin adds a module → `plan-change` → prorated QuickBooks invoice → paid → access in minutes. Removal waits for the 90-day review. |
 | **Payment fails** | Grace, then suspend | Same, per module set: after grace the tenant drops to **Lite only** (read access to everything they built), never to nothing, so no project is ever lost. |
 | **Suspend / cancel** | status only | Unchanged; export window per Agreement §6.5. |
 
@@ -132,13 +132,13 @@ step, pricing only in `/api/`, verified staff, Admin-SDK-only billing paths,
 | Phase | What | Done when |
 |---|---|---|
 | **0 · Decide** | Tommy settles the (decide) items in VALUE-LADDER §11; counsel starts the Agreement changes; merge `claude/level-2-closeout-tool-aqkh73`; fix `csebuilders.com` in `omega-caps.js` (queued task). | Price book values signed off. |
-| **1 · Catalog** | `api/_lib/modules.js` (modules, tools, ribbon, menu, meters); `pricebook/{version}` + rules + seed; Stripe Product/Price per module and plan (idempotent script writing ids into the price book). | Tests: every tool, ribbon button and menu entry in exactly one module; floor enforced; frozen price book immutable. |
+| **1 · Catalog** | `api/_lib/modules.js` (modules, tools, ribbon, menu, meters); `pricebook/{version}` + rules + seed; QuickBooks Product/Service per module, plan (idempotent script writing ids into the price book). | Tests: every tool, ribbon button and menu entry in exactly one module; floor enforced; frozen price book immutable. |
 | **2 · Close the leaks** | VALUE-LADDER §4.1: File menu, Summary › Cost, Documentation drawer, Output tab, command palette, Jarvis, `?customerEngine=1`, compute outside its tab. | A tenant without a module cannot reach its tools by any path (test per path). |
 | **3 · Editor fits the package** | §3 above: `data-module`, `MODULE_GRANTS`, `layout()`, + Modules tab, palette "In other modules", package-driven default layout. Backfill `modules[]` for every live tenant from today's tier/add-ons (dry run, flag don't drop). | `check:pages` passes for the five packages; no live tenant loses a tool they use today without a decision. |
-| **4 · Admin Package panel** | Package panel in the admin portal, full spec in §8 (prototype: `docs/design/package-panel-prototype.html`); `POST /api/tenant-package`; webhook writes `modules[]`; `tenant-approve` requires a package; signup proposes one. | Approving a tenant produces a Stripe subscription and access only after payment. |
+| **4 · Admin Package panel** | Package panel in the admin portal, full spec in §8 (prototype: `docs/design/package-panel-prototype.html`); `POST /api/tenant-package`; webhook writes `modules[]`; `tenant-approve` requires a package; signup proposes one. | Approving a tenant produces a QuickBooks invoice, and access only after QuickBooks shows it paid. |
 | **5 · Customer opt-in** | "Your plan" in Account Settings; `POST /api/plan-change`; + Modules tab wired to it. | A tenant admin adds a module and sees it in the ribbon without staff. |
 | **6 · Proposal tool** | `subscription-proposal.html` on the Pro Forma pattern. | A branded proposal and filled order form from a discovery. |
-| **7 · Usage and review** | Server-side usage counters, Stripe metered overage, the 90-day right-size report in the console. | Overage billed; review lists what to add or remove. |
+| **7 · Usage and review** | Server-side usage counters, overage lines on the monthly QuickBooks invoice, the 90-day right-size report in the console. | Overage billed; review lists what to add or remove. |
 
 Phases 1–3 are the foundation and can run while the proposal and opt-in are
 designed. Phase 3 is the one customers will feel, so it gets the most
@@ -279,7 +279,7 @@ One component, three uses: write the menu once as `/omega-package-menu.js`
   usage, a sentence on room left in Field/Pro or when Field becomes the
   better deal, and the **floor warning** that disables Activate.
 - **Activate** → `POST /api/tenant-package {orgId, modules, pricebookVersion,
-  credit}` → returns the Stripe payment link, shown and copyable.
+  credit}` → returns the QuickBooks invoice pay link, shown and copyable.
   **Send as proposal** → opens the proposal tool prefilled (Phase 6; until
   then disabled with "coming").
 - Logic parts auto-add Office; removing Office removes the parts.
@@ -290,8 +290,8 @@ One component, three uses: write the menu once as `/omega-package-menu.js`
 ### 8.3 What Activate writes tab
 
 Read-only preview from the server (`POST /api/tenant-package` with
-`dryRun:true`): the Stripe items (plan price or one per module, metered
-usage items, credit coupon) and the exact `billing/current` patch
+`dryRun:true`): the QuickBooks invoice lines (plan line or one per module,
+overage lines, credit discount line, service fee) and the QuickBooks customer and the exact `billing/current` patch
 (`modules`, `pricebookVersion`, `plan`, `credit`, logins, derived `tier`,
 `addons`, `toolAccess`). Staff see this before they commit.
 
@@ -314,12 +314,15 @@ existing endpoints; no new store.
 | `api/_lib/modules.js` | new | catalog, starter packs, `resolve()`, `price()` (pure, tested) |
 | `pricebook/{version}` | new collection | staff create, frozen once used; browser read for staff only |
 | `GET /api/package-catalog` | new | modules + current price book for the panel (staff or tenant admin) |
-| `POST /api/tenant-package` | new | staff; `dryRun` or apply; floor enforced; Stripe create/update; history + audit |
-| `api/tenant-billing.js` | changed | ALLOWED += `modules`, `pricebookVersion`, `plan`, `credit`, `builders`, `viewers`, `stripeSubscriptionId` |
-| `api/stripe-webhook.js` | changed | subscription items → `modules[]` → `resolve()` → derived fields |
+| `POST /api/tenant-package` | new | staff; `dryRun` or apply; floor enforced; QuickBooks customer + invoice (Stripe only if the tenant is on the Stripe path); history + audit |
+| `api/tenant-billing.js` | changed | ALLOWED += `modules`, `pricebookVersion`, `plan`, `credit`, `builders`, `viewers`, `billingProvider`, `qboCustomerId`, `nextInvoiceOn` |
+| `api/_lib/qbo-billing.js` | new | subscription invoices in ClearSky's company, modelled on `qbo-sales.js`: customer per tenant, invoice lines from `modules[]` + usage, discount line, `invoiceLink`; idempotent by `requestid` |
+| `api/logic-webhook.js` + worker | changed | an Invoice/Payment event for a subscription invoice → re-read in QuickBooks → paid ⇒ write `modules[]` → `resolve()` |
+| `api/billing-run.js` (cron) | new | 1st of the month: next invoice per packaged tenant; overdue check (grace, then Lite) |
+| `api/stripe-webhook.js` | changed (optional path) | only for tenants with `billingProvider:'stripe'` |
 | `api/tenant-approve.js` | changed | `approve` requires a package (calls tenant-package) |
 | `api/tenant-signup.js` | changed | writes a proposed package, no free trial |
-| `scripts/stripe-sync-prices.js` | new | Products/Prices per module + plan, ids into the price book |
+| `scripts/qbo-sync-items.js` | new | QuickBooks Products/Services per module, plan and overage; ids into the price book; `--sandbox` default, `--live` after sign-off |
 | `scripts/backfill-modules.js` | new | proposes `modules[]` from today's tier/add-ons; dry run default |
 
 ### 8.7 Access
@@ -350,9 +353,40 @@ accent, tags in one style, no empty shelves.
 
 ---
 
+## 9. Billing runs through QuickBooks
+
+Tommy runs ClearSky's books in QuickBooks, and the repo already invoices
+Omega Logic orders from ClearSky's QuickBooks company. Subscriptions use the
+same company and the same code patterns, so every dollar lands in one set of
+books with no reconciliation between systems.
+
+| Piece | How |
+|---|---|
+| Company | ClearSky's QuickBooks company (`api/_lib/qbo.js`, pinned by `realmId`, connected via `api/logic-connect.js`). `QBO_ENV=sandbox` for all development and previews; production only after the price book is signed off. |
+| Catalog | One QuickBooks **Product/Service** per module, per plan (Field, Pro), per overage, plus "Transformation credit" (discount) and "Annual service fee". Created by `scripts/qbo-sync-items.js`; ids stored in the price book as `qboItemId`. Names match the menu exactly. |
+| Customer | One QuickBooks **Customer** per tenant (`OMEGA-<orgId>`, company name, billing email = tenant owner), stored as `billing/current.qboCustomerId`. Same idempotent find-or-create as `qbo-sales.js`. |
+| First invoice | On Activate / Approve: one line per module (or the plan line with its modules in the description), the credit as a discount line, the annual service fee, due on receipt. The invoice's `invoiceLink` (QuickBooks Payments: card or ACH) is the pay link. |
+| Monthly invoice | `api/billing-run.js` (Vercel cron, 1st of the month) issues each packaged tenant's invoice from `modules[]` + last month's overage (`usage/{YYYY-MM}`). Generated by us, not a QuickBooks recurring template, so the lines always match what is switched on. Annual prepay = one invoice for 11 months. |
+| Opt-in mid-month | `plan-change` issues a prorated invoice for the rest of the month; the module joins next month's invoice. |
+| Paid → access | Intuit webhook → `api/logic-webhook.js` (a hint only) → the worker re-reads the invoice and its payments in QuickBooks → paid ⇒ `modules[]` written and switched on. Nothing is switched on from the webhook body alone. |
+| Unpaid | Past due after the grace period (**decide**, default 10 business days, matching Agreement §4.8 notice) → the tenant drops to Lite; work is never lost. |
+| Voids and refunds | Follow `docs/ACCOUNTING.md`: a payment is voided, never deleted; a reversal seen in QuickBooks puts the tenant back to unpaid. |
+| Autopay (optional) | QuickBooks invoices are paid by link each month. A tenant who wants card autopay can be put on the existing Stripe path (`billingProvider:'stripe'`, `api/stripe-*`); Stripe payouts are then recorded in QuickBooks. Default is QuickBooks for everyone (**decide**). |
+| Tax | Invoice lines carry the QuickBooks tax code chosen per item in QuickBooks; the code never computes sales tax. |
+
+**Tests** (on `scripts/_lib/firestore-double.js`, QuickBooks mocked like
+`scripts/test-ledger-sync.js` does): invoice lines equal `modules[]` + usage
++ credit + fee; same request twice creates one invoice; floor refused; a
+webhook without a paid invoice in QuickBooks switches nothing on; a reversal
+drops the tenant back; the cron issues exactly one invoice per tenant per month.
+
+---
+
 ## 5. Decisions this roadmap adds
 
 1. Self-serve trial: none (approval + payment first), or a priced package
    with a card on file and a start date.
 2. What a tenant keeps on failed payment: Lite (this roadmap) or read-only.
 3. Whether members (not admins) see the + Modules tab at all, or only admins.
+4. Grace period before an unpaid tenant drops to Lite (default 10 business days).
+5. QuickBooks for everyone, or Stripe card autopay offered to tenants who ask.

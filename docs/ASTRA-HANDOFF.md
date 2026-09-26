@@ -11,8 +11,8 @@ Owner: Tommy Gilmer (ClearSky). Written 2026-09-26. Repo:
 
 OMEGA is being sold as a **menu of modules** with one price each, a **$500
 floor**, and **nothing free**. Staff build a tenant's package in the admin
-portal; the price, the Stripe subscription and the access all follow from
-the ticks. Customers see the same menu inside their workspace and opt in to
+portal; the price, the QuickBooks invoice and the access all follow from
+the ticks. **Billing runs through ClearSky's QuickBooks** (ROADMAP §9). Customers see the same menu inside their workspace and opt in to
 more. The Site Map editor shows only what the tenant owns, stays tidy while
 doing it, and lays itself out for the project type the user picks (Level 2,
 DCFC, BESS…) without ever removing the draw tools.
@@ -43,23 +43,24 @@ DCFC, BESS…) without ever removing the draw tools.
 - Firestore rules are the security boundary. `billing/*`, `pricebook/*`,
   usage and proposals are Admin-SDK or staff-only writes.
 - Every new source file carries the copyright header.
-- Never commit secrets. Stripe and Firebase Admin keys live in Vercel env vars.
+- Never commit secrets. QuickBooks, Stripe and Firebase Admin keys live in Vercel env vars.
 - Never delete a Firestore document in a migration. Flag, don't drop.
 - Never remove a draw function from any workspace or package.
 - `npm test` and `npm run check:pages` green on every PR.
 
-## 4. Pricing is not final: build in TEST mode
+## 4. Pricing is not final: build against the QuickBooks sandbox
 
 Every number marked **(decide)** in the specs is a proposal. Until Tommy
 signs off:
 
 - Seed the price book as version **`2026-10-proposed`** with `frozen:false`.
-- Create Stripe Products/Prices in **Stripe test mode only**. Preview
-  deployments use the test `STRIPE_SECRET_KEY`.
-- No live Stripe price, subscription or charge is created, and no live
-  tenant's `billing/current` is changed, until Tommy approves the price book
-  in writing. At that point: a new version `2026-10`, `frozen:true`, synced to
-  live Stripe by `scripts/stripe-sync-prices.js --live`.
+- Create QuickBooks Products/Services and invoices in the **QuickBooks
+  sandbox company only** (`QBO_ENV=sandbox` on Preview deployments). If a
+  Stripe path is touched, Stripe test mode only.
+- No item, customer or invoice is created in ClearSky's real QuickBooks
+  company, and no live tenant's `billing/current` is changed, until Tommy
+  approves the price book in writing. At that point: a new version `2026-10`,
+  `frozen:true`, synced to the real company by `scripts/qbo-sync-items.js --live`.
 
 Proposed values to use meanwhile: Lite $500 (3 builders, 10 viewers); Grid
 Atlas $250; Standard $250; Premium $500; Deliverable $750 (+ usage: EV 20/mo
@@ -82,12 +83,17 @@ $3,400/yr Field/Pro, $1,500/yr Lite (proposed), $10,000/yr Enterprise.
   `firebase deploy --only firestore:rules` (project `clearsky-portal`).
   Afterwards grep the live rules for your new helpers, as CLAUDE.md asks.
 - **Vercel env vars** (set by Tommy, never in the repo):
-  `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `FIREBASE_SERVICE_ACCOUNT`,
-  `FIREBASE_PROJECT_ID`, `STRIPE_PORTAL_RETURN_URL`. Test keys on Preview,
+  `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_ENV`, `QBO_REDIRECT_URI`,
+  `QBO_WEBHOOK_VERIFIER_TOKEN`, `FIREBASE_SERVICE_ACCOUNT`,
+  `FIREBASE_PROJECT_ID`; Stripe keys only if the optional Stripe path is used.
+  Sandbox QuickBooks keys on Preview,
   live keys on Production only after §4 sign-off.
-- **Stripe webhook** must send `customer.subscription.created`,
-  `customer.subscription.updated`, `customer.subscription.deleted`,
-  `invoice.paid`, `invoice.payment_failed` to `/api/stripe-webhook`.
+- **QuickBooks webhook** (Intuit developer portal) sends Invoice and Payment
+  events to `/api/logic-webhook`, the endpoint already used for Omega Logic.
+  The sandbox app for previews, the production app after sign-off.
+- **Monthly billing cron**: `api/billing-run.js` scheduled in `vercel.json`
+  for the 1st of the month; it must be idempotent (one invoice per tenant per
+  month) because Vercel may retry.
 - **Migration safety.** Before the Phase 3 backfill touches live tenants:
   `npm run audit` and save the counts; run `scripts/backfill-modules.js` dry
   run and send Tommy the diff; `--apply` only after approval; re-run the audit.
@@ -101,13 +107,13 @@ $3,400/yr Field/Pro, $1,500/yr Lite (proposed), $10,000/yr Enterprise.
 |---|---|---|---|
 | 0 | Merge branch `claude/level-2-closeout-tool-aqkh73` (L2 closeout tool). Remove `csebuilders.com` from `omega-caps.js` `INTERNAL_DOMAINS` and require a verified email for the internal fallback. | Roadmap §4 | tests green |
 | A | **Polish now** (parallel track): project start screen with seven project-type cards; ribbon clean-up (one icon style, label length, remove the duplicate Calibrate Scale and Export for Validation buttons, retire BESS Config/Viability); results rail per project type; empty states. | Roadmap §6.3 | screenshots approved |
-| 1 | Catalog + price book + Stripe test prices. | Roadmap §4, VALUE-LADDER §5 | tests: every tool/ribbon/menu item in exactly one module; floor; frozen book immutable |
+| 1 | Catalog + price book + QuickBooks sandbox items (`scripts/qbo-sync-items.js`). | Roadmap §4, VALUE-LADDER §5 | tests: every tool/ribbon/menu item in exactly one module; floor; frozen book immutable |
 | 2 | Close the gate leaks (File menu, Summary › Cost, Documentation drawer, Output tab, Ctrl+K, Jarvis, `?customerEngine=1`, compute outside its tab). | VALUE-LADDER §4.1 | a test per path |
 | 3 | Editor fits the package (`data-module`, `MODULE_GRANTS`, prune/renumber, + Modules tab) and project-type workspaces with "All tools". Backfill (dry run). | Roadmap §3, §6.1–6.2 | `check:pages`: 5 packages × 7 workspaces |
-| 4 | Admin Package panel + `tenant-package` + webhook → modules; approve requires a package; signup proposes one. | Roadmap §8, §2 | activate → payment link → paid → access, in test mode |
+| 4 | Admin Package panel + `tenant-package` + webhook → modules; approve requires a package; signup proposes one. | Roadmap §8, §2 | activate → QuickBooks invoice → paid in the sandbox → access |
 | 5 | Customer "Your plan" + `plan-change`. | Roadmap §2, §8.4 | tenant admin adds a module without staff |
 | 6 | Subscription proposal tool. | VALUE-LADDER §8 | branded proposal + order form |
-| 7 | Usage counters, metered overage, 90-day review. | VALUE-LADDER §5.4 | overage billed in test mode |
+| 7 | Usage counters, metered overage, 90-day review. | VALUE-LADDER §5.4 | overage lines on the sandbox monthly invoice |
 
 ## 7. Every PR includes
 
@@ -138,7 +144,9 @@ $3,400/yr Field/Pro, $1,500/yr Lite (proposed), $10,000/yr Enterprise.
 | Self-serve trial | none: approval + payment first |
 | Failed payment | drop to Lite, never lose work |
 | + Modules tab for members | shown, with "Ask my admin" |
-| Customer opt-in | instant on payment |
+| Customer opt-in | instant once QuickBooks shows the invoice paid |
+| Billing provider | QuickBooks for every tenant; Stripe autopay only on request |
+| Grace before dropping to Lite | 10 business days |
 | Permitting Matrix while BETA | sold with a beta label, verified jurisdictions listed |
 | Enterprise floor | $150k/yr, quoted by staff |
 | Lite service fee | $1,500/yr |
@@ -149,7 +157,7 @@ $3,400/yr Field/Pro, $1,500/yr Lite (proposed), $10,000/yr Enterprise.
 > repo. Read `CLAUDE.md`, then `docs/ASTRA-HANDOFF.md`, then
 > `docs/VALUE-LADDER-PACKAGING.md` and `docs/PACKAGING-ROADMAP.md`, and open
 > `docs/design/package-panel-prototype.html`. Follow the handoff exactly:
-> test-mode Stripe only, one PR per phase from `main`, Tommy approves every
+> QuickBooks sandbox only (billing runs through ClearSky's QuickBooks, ROADMAP §9), one PR per phase from `main`, Tommy approves every
 > merge and every rules deploy. Start with Phase 0 and the Polish track A in
 > parallel. Before writing code for each phase, post a short plan (files you
 > will touch, tests you will add) and wait for approval. Report back after
