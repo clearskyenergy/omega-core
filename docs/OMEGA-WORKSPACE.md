@@ -59,6 +59,26 @@ is for the office, this is for the whole platform. It replaces the dashboard
   `OmegaTenant.billing`, the package projection and the person's
   `team_members` profile (display name is editable there).
 
+## The package store (packaged tenants)
+
+`marketplace.html` is also where a PACKAGED workspace (`billing.packaged`)
+opts in and pays. Above the tool catalogue it shows the plan strip (plan,
+monthly price, next invoice, modules held, changes waiting for payment) and
+every module on its shelf (Included with every plan · Add-ons · Standard ·
+Premium · Deliverables · Omega Logic) with the server's price from
+`api/package-catalog`, its features, its tools, beta and coverage notes.
+A module the workspace holds reads "In your plan"; any other carries the
+shared subscribe control from `omega-package-menu.js`: Subscribe asks
+`plan-change` for a quote (today, then, activation), "Subscribe and pay"
+applies it by its previewId, and the card then waits for payment with the
+QuickBooks link and a cancel. A $0 addition inside a paid tier switches on
+at once and the page reloads so the server's projection repaints every
+tile. Only an owner or admin manages; a member is told to ask. The tool
+cards below list the whole catalogue for a packaged workspace, and a locked
+tool's action is "Add <Module> to plan", which scrolls to that module. A
+legacy tenant sees the marketplace exactly as before. Nothing in the browser
+prices or grants anything.
+
 ## The journey, mapped
 
 Every door and where it leads once the workspace is home. One rail, one
@@ -74,12 +94,12 @@ ground, one home; the session travels same-origin on every hop.
 | rail, any page | Home | `/workspace` |
 | rail, any page | Projects | `/projects.html`, wearing the same rail with Projects current; a row opens the editor |
 | rail, any page | All tools | `/workspace#tools` |
-| rail, any page | Marketplace | `/marketplace.html`, same rail; "+ Add to dashboard" pins a tool, which the workspace lists under Pinned |
+| rail, any page | Marketplace | `/marketplace.html`, same rail; a packaged workspace sees its plan and the modules to add (the package store); "+ Add to dashboard" pins an open tool, which the workspace lists under Pinned |
 | rail, any page | Quote Desk | `/rfq.html` |
 | rail, any page | Team · Feed | `/workspace#team` |
 | rail, any page | Plan & billing · Settings | the side panels on `/workspace` (`#billing`, `#settings`) |
 | tools grid | a Live tile | the tool, scoped to the org |
-| tools grid | a Locked tile | the side panel naming the plan or module that carries it, with the Marketplace and an email to ClearSky |
+| tools grid | a Locked tile | the side panel naming the plan or module that carries it, with the Marketplace (where a packaged workspace subscribes) and an email to ClearSky |
 | In flight | a project card | `/editor.html?id=…&org=…` |
 | In flight | + New project | the one New Project dialog (`omega-newproject.js`); created projects open in the editor |
 | Around you | Post | writes `team_messages` as the signed-in person |
@@ -111,9 +131,6 @@ to the page, the shell or the runtime they load.
 
 ## Not built (honest list)
 
-- The **marketplace as the package store**: `marketplace.html` still lists
-  tools to pin. The plan is modules from `api/package-catalog` with server
-  prices, "Add to plan" through `plan-change` for a packaged tenant.
 - **Project-scoped tools from the hub.** The Cost Estimator (and the pro
   formas) open standalone as they do today; a `?project=` they preload from,
   and an Estimate action on the project card, is a change to those tools.

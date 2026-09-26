@@ -43,6 +43,24 @@ var DOUBLE_SRC = FD.source();
 var HOST = '127.0.0.1';
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.pdf': 'application/pdf' };
 var apiCalls = [], missing = [], external = [], PACKAGE_VIEW = null;
+/* THE PACKAGE STORE'S ROUTES. The price list is the real one
+   (api/_lib/subscription-pricing on the proposed book, as the packaging
+   render checks answer it). plan-change is answered in the SHAPES the real
+   api/_lib/plan-change.js returns (preview, apply, summary), with the
+   bodies the page posts recorded, so the check can assert what was asked
+   for; the real endpoint's money is covered by render-packaging-billing.js. */
+var STORE = { posts: [], pending: [] };
+function storeRoute(u, method, body) {
+  var B = require('../api/_lib/pricebook'), P = require('../api/_lib/subscription-pricing'), book = B.proposed();
+  if (u === '/api/package-catalog') return { orgId: 'litelabs.example', pricebookVersion: book.version, modules: P.catalog(book), starters: M.starters(), canManage: true };
+  if (method === 'GET') return { orgId: 'litelabs.example', packaged: true, packagingState: 'paid', plan: 'lite', planDisplay: 'Lite', modules: ['lite'], subscription: ['lite'], interval: 'monthly', billingDay: 20, nextInvoiceOn: '2026-10-20', monthlyDisplay: '$149/month', gate: { canApply: true }, pending: STORE.pending, removalRequests: [], recent: [] };
+  STORE.posts.push(body);
+  if (body.action === 'quote') return { orgId: 'litelabs.example', previewId: 'a'.repeat(48), effectiveAt: Date.now(), add: body.add, addNames: body.add.map(function (k) { return M.get(k).name; }), modules: ['lite'].concat(body.add), plan: 'lite', included: false, canApply: true, reason: null, pending: [], steer: null, serviceFeeNote: null,
+    display: { today: 'Pay $200 today (prorated to Oct 20)', then: 'Then $250/month more from Oct 20', activation: 'Switches on when the payment clears' } };
+  if (body.action === 'apply') { var rec = { id: 'change-' + body.previewId, add: body.add, display: '$200', expiresOn: '2026-10-03', paymentLink: 'https://pay.example/inv-1', state: 'unpaid' }; STORE.pending = [rec]; return { state: 'unpaid', changeId: rec.id, display: rec.display, expiresOn: rec.expiresOn, paymentLink: rec.paymentLink }; }
+  if (body.action === 'cancel') { STORE.pending = []; return { state: 'cancelled', changeId: body.changeId }; }
+  return { error: 'render-workspace does not answer ' + body.action };
+}
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], post = req.method === 'POST';
   function json(o, status) { res.writeHead(status || 200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); }
@@ -50,6 +68,9 @@ var srv = http.createServer(function (req, res) {
     apiCalls.push(req.method + ' ' + u);
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
     if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
+    if (u === '/api/package-catalog' || u === '/api/plan-change') {
+      var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {} json(storeRoute(u, req.method, body)); }); return;
+    }
     missing.push(req.method + ' ' + u); return json({ error: 'render-workspace does not answer ' + u }, 404);
   }
   var f = path.join(ROOT, u === '/' ? 'index.html' : u);
@@ -275,7 +296,57 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     return out;
   } });
 
-  /* ══ 6. THE FLOW — Projects and Marketplace with the workspace as home ══
+  /* ══ 6. THE PACKAGE STORE — Lite Labs on the marketplace ══
+     A packaged workspace sees its plan and every module on its shelf with
+     the server's price; Lite is Included; Grid Atlas can be subscribed:
+     quote, then apply, then an invoice waiting for payment — the page posts
+     exactly what plan-change expects and grants nothing itself. A locked
+     tool card points at the module that carries it. */
+  PACKAGE_VIEW = lt.packageView; STORE.posts = []; STORE.pending = [];
+  await (async function () {
+    var errs = [], ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+    await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
+    await ctx.addInitScript(DOUBLE_SRC);
+    await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: lt.user, docs: lt.docs, latency: 8, authDomain: HOST });
+    var p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    await p.goto(base + '/marketplace.html?home=workspace', { waitUntil: 'domcontentloaded' });
+    var shown = await p.waitForFunction(function () { var s = document.getElementById('mkt-store'); return s && !s.hidden && document.querySelectorAll('#mkt-shelves .mkt-mod').length > 5 && document.querySelector('.mkt-mod[data-module-card="gridatlas"] .opm-act button'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
+    ok('store: a packaged workspace sees the package store with its modules and a Subscribe control', shown);
+    /* the billing summary (monthly, next invoice) lands after the price list */
+    await p.waitForFunction(function () { return /\/month/.test(document.getElementById('mkt-plan').textContent); }, null, { timeout: 4000 }).catch(function () {});
+    var st = await p.evaluate(function () {
+      var cards = Array.prototype.map.call(document.querySelectorAll('#mkt-shelves .mkt-mod'), function (c) { return { key: c.getAttribute('data-module-card'), owned: c.classList.contains('owned'), price: (c.querySelector('.mkt-card-cat b') || {}).textContent, act: c.querySelector('.mkt-actions').textContent.trim().slice(0, 30) }; });
+      var ga = document.querySelector('.mkt-card:not(.mkt-mod) .mkt-act.primary[onclick*="gridatlas"]');
+      return { h1: document.querySelector('.mkt-banner h1').textContent, plan: document.getElementById('mkt-plan').textContent.replace(/\s+/g, ' '), cards: cards, gaTool: ga ? ga.textContent : null, shelves: document.querySelectorAll('#mkt-shelves .mkt-shelf').length };
+    });
+    ok('store: the hero reads Your plan and the strip names Lite, the monthly price and the modules held', st.h1 === 'Your plan' && /Lite/.test(st.plan) && /\$149\/month/.test(st.plan) && /1 of \d+ modules/.test(st.plan), st.plan);
+    ok('store: every catalog module is a card with the server\'s price, on its shelf', st.cards.length === M.catalog().length && st.cards.every(function (c) { return /\$\d/.test(c.price); }) && st.shelves >= 5, { n: st.cards.length, shelves: st.shelves });
+    ok('store: Lite is in the plan and every other module offers Subscribe', st.cards.filter(function (c) { return c.owned; }).map(function (c) { return c.key; }).join() === 'lite' && st.cards.filter(function (c) { return !c.owned; }).every(function (c) { return /Subscribe/.test(c.act); }), st.cards.slice(0, 4));
+    ok('store: the locked Grid Atlas TOOL card points at its module', st.gaTool === 'Add Grid Atlas to plan', st.gaTool);
+    /* subscribe: quote, then apply */
+    await p.click('.mkt-mod[data-module-card="gridatlas"] .opm-act button'); await wait(400);
+    var quote = await p.$eval('.mkt-mod[data-module-card="gridatlas"] .opm-act', function (e) { return e.textContent.replace(/\s+/g, ' '); });
+    ok('store: Subscribe asks the server for a quote and shows today, then, and activation with a Subscribe and pay button', STORE.posts.length === 1 && STORE.posts[0].action === 'quote' && STORE.posts[0].add.join() === 'gridatlas' && /Pay \$200 today/.test(quote) && /Subscribe and pay/.test(quote), { posts: STORE.posts, quote: quote.slice(0, 120) });
+    await p.click('.mkt-mod[data-module-card="gridatlas"] .opm-act .opm-primary'); await wait(600);
+    var applied = await p.$eval('.mkt-mod[data-module-card="gridatlas"] .opm-act', function (e) { return { text: e.textContent.replace(/\s+/g, ' '), pay: (e.querySelector('a') || {}).href }; });
+    var ap = STORE.posts[1] || {};
+    ok('store: Subscribe and pay applies the quote by its previewId and shows the invoice with the payment link', ap.action === 'apply' && ap.previewId === 'a'.repeat(48) && ap.add.join() === 'gridatlas' && /(Invoice created: \$200|Waiting for payment · \$200)/.test(applied.text) && applied.pay === 'https://pay.example/inv-1', { post: ap, applied: applied });
+    await wait(600);
+    var after = await p.evaluate(function () { return { badge: (document.querySelector('.mkt-mod[data-module-card="gridatlas"] .mkt-pill') || {}).textContent, strip: document.getElementById('mkt-plan').textContent, cancel: !!document.querySelector('.mkt-mod[data-module-card="gridatlas"] .opm-act button') }; });
+    ok('store: the card now waits for payment, the strip counts the pending change, and the request can be cancelled', after.badge === 'Waiting for payment' && /1 waiting for payment/.test(after.strip) && after.cancel, after);
+    /* a locked tool card scrolls to its module */
+    await p.evaluate(function () { window.scrollTo(0, document.body.scrollHeight); }); await wait(200);
+    await p.click('.mkt-card:not(.mkt-mod) .mkt-act.primary[onclick*="gridatlas"]'); await wait(700);
+    var focused = await p.evaluate(function () { var c = document.querySelector('.mkt-mod[data-selected]'); var r = c && c.getBoundingClientRect(); return { key: c && c.getAttribute('data-module-card'), onScreen: !!(r && r.top >= 0 && r.bottom <= window.innerHeight + 2) }; });
+    ok('store: Add to plan on a tool card scrolls to and marks its module', focused.key === 'gridatlas' && focused.onScreen, focused);
+    ok('store: no uncaught errors and nothing the page granted itself', !errs.length && !missing.length, errs.concat(missing));
+    console.log(JSON.stringify({ scenario: 'store', modules: st.cards.length, posts: STORE.posts.map(function (b) { return b.action; }) }));
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'store-1366.png'), fullPage: true });
+    await ctx.close();
+  })();
+  PACKAGE_VIEW = null;
+
+  /* ══ 7. THE FLOW — Projects and Marketplace with the workspace as home ══
      The legacy pages keep their own topbar and CSS, but their rail becomes
      the workspace rail (adopt), Dashboard points at /workspace, the ground
      is the same grid; and a dashboard visit is sent on to /workspace. */
@@ -289,13 +360,15 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var out = await p.evaluate(function () {
       var items = Array.prototype.filter.call(document.querySelectorAll('#side-nav .sn-item'), function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return (a.querySelector('span') || a).textContent.trim() + (a.classList.contains('active') ? '*' : ''); });
       var home = document.querySelector('a[data-sn="dashboard"]');
-      return { url: location.pathname, items: items, home: home && home.getAttribute('href'), theme: document.body.classList.contains('ows-theme'), grid: /linear-gradient/.test(getComputedStyle(document.body).backgroundImage) };
+      var store = document.getElementById('mkt-store');
+      return { url: location.pathname, items: items, home: home && home.getAttribute('href'), theme: document.body.classList.contains('ows-theme'), grid: /linear-gradient/.test(getComputedStyle(document.body).backgroundImage), store: store ? !store.hidden : null };
     });
     var name = 'flow ' + page;
     if (page === '/') ok(name + ': a dashboard visit with the workspace as home lands on /workspace', /\/workspace$/.test(out.url), out.url);
     else {
       ok(name + ': the rail is the workspace rail with this page current', out.items.join('|') === 'Home|Projects|All tools|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings'.replace(current, current + '*'), out.items);
       ok(name + ': Dashboard points at /workspace and the ground is the blueprint grid', out.home === '/workspace' && out.theme && out.grid, out);
+      if (page === '/marketplace.html') ok(name + ': a legacy (unpackaged) tenant sees no package store', out.store === false, out.store);
       ok(name + ': no uncaught errors', !errs.length, errs);
     }
     console.log(JSON.stringify({ scenario: name, rail: out.items, url: out.url }));

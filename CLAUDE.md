@@ -690,8 +690,11 @@ unsized. Never a second copy of those rules in a page. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
-Design, launch order and the honest list of what is not built:
-`docs/OMEGA-WORKSPACE.md`.
+For a PACKAGED workspace `marketplace.html` is also the package store:
+modules on their shelves with `api/package-catalog`'s prices, opting in
+through the shared `omega-package-menu.js` control and `plan-change`; a
+legacy tenant sees the catalogue as before. Design, launch order and the
+honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 

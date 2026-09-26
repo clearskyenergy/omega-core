@@ -109,6 +109,29 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 .mkt-chip.on .cnt{background:#E1F0EF;color:var(--cs-blue)}
 
 /* ── Category section ── */
+/* ── THE PACKAGE STORE (packaged tenants) ── module cards on the shelves,
+   the subscribe control inside each; the tool cards below point at them. */
+#mkt-store{max-width:1180px;margin:26px auto 0;padding:0 28px}
+#mkt-store[hidden]{display:none}
+.mkt-plan{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;background:#fff;border:1px solid var(--cs-border);border-radius:12px;font-size:13px;color:var(--cs-sub)}
+.mkt-plan b{color:var(--cs-navy)}.mkt-plan .mkt-chip{font-size:12px;padding:3px 9px;border-radius:999px;background:#E2F4F8;color:#2A8CA3;font-weight:600}
+.mkt-plan .mkt-note{margin-left:auto;font-size:12px}
+.mkt-shelf{padding-top:26px}
+.mkt-shelf .mkt-cat-head{margin-bottom:14px}
+.mkt-mod .mkt-cover{height:78px}
+.mkt-mod .mkt-mod-letter{font:700 26px 'DM Sans',sans-serif;color:#fff;opacity:.9}
+.mkt-mod .mkt-card-cat b{color:var(--cs-navy)}
+.mkt-mod ul{margin:8px 0 0;padding-left:16px;color:var(--cs-text);font-size:13px;line-height:1.55}
+.mkt-mod .mkt-mod-tools{margin-top:8px;font-size:12px;color:var(--cs-sub);line-height:1.5}
+.mkt-mod .mkt-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.mkt-mod .mkt-tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#F1FAFC;border:1px solid #DCECF1;color:var(--cs-sub)}
+.mkt-mod .mkt-tag.beta{background:#FFF6E5;border-color:#F0E0B8;color:#8A6D1F}
+.mkt-mod .mkt-actions{margin-top:auto;padding-top:12px}
+.mkt-mod .opm-act{width:100%}.mkt-mod .opm-act .opm-primary{width:100%;padding:10px 12px;border-radius:9px;font:600 13px 'DM Sans',sans-serif}
+.mkt-mod .opm-act button{font-family:'DM Sans',sans-serif;border-radius:9px}
+.mkt-mod[data-selected]{outline:2px solid var(--cs-accent);outline-offset:2px}
+.mkt-mod.owned .mkt-cover{opacity:.85}
+.mkt-store-note{font-size:12.5px;color:var(--cs-sub);margin:14px 0 0;line-height:1.5}
 .mkt-section{padding-top:34px}
 .mkt-cat-head{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700;color:var(--cs-navy);letter-spacing:-.2px;margin:0 0 18px}
 .mkt-cat-head .cnt{color:var(--cs-sub);font-weight:600;font-size:14px}
@@ -817,6 +840,19 @@ window._omegaReady = function(){
       </div>
     </div>
 
+    <!-- THE PACKAGE STORE. Shown only to a PACKAGED workspace (billing.packaged):
+         what it holds, what each module adds and what it costs, from
+         /api/package-catalog; opting in goes through /api/plan-change (pay
+         first, prorated; a $0 addition inside a paid tier switches on at
+         once). A legacy tenant never sees this section and keeps the
+         catalogue below exactly as it was. Nothing here grants access: the
+         tools appear when the server's projection says so. -->
+    <section id="mkt-store" class="opm-host" hidden aria-label="Your plan">
+      <div class="mkt-plan" id="mkt-plan"></div>
+      <div id="mkt-shelves"></div>
+      <p class="mkt-store-note" id="mkt-store-note"></p>
+    </section>
+
     <!-- Sticky category tab bar -->
     <div class="mkt-tabbar">
       <div class="mkt-tabbar-inner" id="mkt-filters"></div>
@@ -853,10 +889,16 @@ window._omegaReady = function(){
 <script>if (window.OmegaWorkspaceShell) OmegaWorkspaceShell.theme();</script>
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-tools.js?v=9"></script>
+<!-- The shared subscribe control (Phase 5): server catalog, server quotes,
+     posts to /api/plan-change. The package store below is built on it. -->
+<script src="/omega-package-menu.js"></script>
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    ClearSky-OMEGA — standalone App Marketplace (ES5, no build step).
+   For a PACKAGED workspace it is also the package store (see #mkt-store):
+   the modules on their shelves with the server's prices, opting in through
+   /api/plan-change. A legacy tenant sees the catalogue as before.
    Same catalog (OMEGATools), same workspace resolution, same Firebase as the
    portal. This page renders ONLY the marketplace — nothing else can appear.
    ══════════════════════════════════════════════════════════════════════ */
@@ -1060,6 +1102,16 @@ function qualifying(){
   var all = OMEGATools.all(), out=[];
   for (var i=0;i<all.length;i++){
     var t = all[i];
+    /* A PACKAGED workspace browses the whole catalogue: isVisible() reads
+       the package's allowlist as visibility and would hide every tool the
+       plan does not carry — the tools the store exists to sell. Only a tool
+       restricted to other orgs, the staff queue and what is not sold at all
+       are left out; whether a tool opens stays isUnlocked()'s answer. */
+    if (STORE.on){
+      if (t.key === 'intake_admin' || STORE.notSold[t.key]) continue;
+      if (t.orgs && t.orgs.length && !(WORKSPACE && WORKSPACE.orgId && t.orgs.indexOf(WORKSPACE.orgId) >= 0)) continue;
+      out.push(t); continue;
+    }
     if (OMEGATools && typeof OMEGATools.isVisible==='function'){ if (OMEGATools.isVisible(t, WORKSPACE)) out.push(t); }
     else out.push(t);
   }
@@ -1159,8 +1211,10 @@ function card(t){
   else open='href="'+esc(hrefFor(t))+'"';
 
   var locked = !t.soon && !isUnlockedHere(t);
+  var mod = locked && STORE.on ? STORE.byTool[t.key] : null;
   var pill='';
   if (t.soon) pill='<span class="mkt-pill soon">Soon</span>';
+  else if (locked && STORE.on) pill='<span class="mkt-pill soon">'+esc(mod ? mod.name : 'Not sold')+'</span>';
   else if (locked) pill='<span class="mkt-pill soon">'+esc(planLabel(t))+' plan</span>';
   else if (req) pill='<span class="mkt-pill inc">Included</span>';
   else if (pinned) pill='<span class="mkt-pill added">Added</span>';
@@ -1169,6 +1223,11 @@ function card(t){
 
   var action;
   if (t.soon){ action='<div class="mkt-actions"><div class="mkt-act disabled">Coming soon</div></div>'; }
+  else if (locked && STORE.on){
+    action = mod
+      ? '<div class="mkt-actions"><button class="mkt-act primary" onclick="storeFocus(&quot;'+esc(mod.key)+'&quot;)">Add '+esc(mod.name)+' to plan</button></div>'
+      : '<div class="mkt-actions"><div class="mkt-act disabled" title="Not part of any package">Not sold separately</div></div>';
+  }
   else if (locked){ action='<div class="mkt-actions"><div class="mkt-act disabled" title="Ask ClearSky to add this to your plan">Included with '+esc(planLabel(t))+'</div></div>'; }
   else if (req || pinned){
     var openBtn='<a class="mkt-act primary" '+open+'>Open</a>';
@@ -1181,7 +1240,7 @@ function card(t){
   var stroke = t.soon ? 'rgba(255,255,255,.55)' : '#ffffff';
   var cover = t.soon ? 'linear-gradient(135deg,#5B6672 0%,#8A93A0 100%)' : coverGradient(t.category);
   var ver = t.version || '1.0.0';
-  var status = req ? 'Included' : (pinned ? 'On dashboard' : 'Available');
+  var status = req ? 'Included' : (pinned ? 'On dashboard' : (locked && STORE.on ? (mod ? 'In ' + mod.name : 'Not sold') : 'Available'));
 
   return '<div class="mkt-card">'
     + '<div class="mkt-cover" style="background:'+cover+'">'
@@ -1198,6 +1257,105 @@ function card(t){
 }
 
 function pmSoon(name){ toast('<b>'+esc(name)+'</b> is coming online soon.'); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   THE PACKAGE STORE — a packaged workspace opts in and pays here.
+   STORE.rows are /api/package-catalog's modules (server prices); owned is
+   the server's projection (omega-tenant.js handed it over); the control is
+   OmegaPackageMenu.subscribeControl, the same one the editor's + Modules
+   gallery and the account page use. Every price and every change is the
+   server's. ES5.
+   ══════════════════════════════════════════════════════════════════════ */
+var STORE = { on:false, rows:[], owned:[], notSold:{}, byTool:{}, control:{ canManage:false, pending:{}, loaded:false }, summary:null };
+var SHELF = { floor:'Included with every plan', addon:'Add-ons', standard:'Standard shelf', premium:'Premium shelf', deliverable:'Deliverables', platform:'Omega Logic' };
+var SHELF_ORDER = ['floor','addon','standard','premium','deliverable','platform'];
+var SHELF_COVER = { floor:'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)', addon:'linear-gradient(135deg,#053A45 0%,#2A8CA3 100%)', standard:'linear-gradient(135deg,#0B2F52 0%,#1B4F8A 100%)', premium:'linear-gradient(135deg,#243B53 0%,#3E6E8E 100%)', deliverable:'linear-gradient(135deg,#16202B 0%,#00807C 100%)', platform:'linear-gradient(135deg,#17293A 0%,#0C1824 100%)' };
+function storeMode(ws){
+  var pa = ws && ws.packageAccess;
+  if (!ws || !ws.packaged || !pa || STORE.on) return;
+  STORE.on = true; STORE.owned = (pa.modules || []).slice();
+  (pa.notSold || []).forEach(function(n){ (n.tools||[]).forEach(function(k){ STORE.notSold[k] = n.reason || 'Not sold'; }); });
+  storeIndex(pa.catalog || []);
+  if (window.OmegaPackageMenu && OmegaPackageMenu.styles) OmegaPackageMenu.styles();
+  var h1 = document.querySelector('.mkt-banner h1'); if (h1) h1.textContent = 'Your plan';
+  setText('mkt-sub', 'What ' + (ws.clientName||'your workspace') + ' holds, what each module adds, and what it costs. A change switches on when its payment clears.');
+  el('mkt-store').hidden = false;
+  paintStore(); paintMarket();
+  /* the price list, then (for an owner or admin) the pending changes */
+  OmegaPackageMenu.api('/api/package-catalog').then(function(r){
+    storeIndex(r.modules || []); STORE.control.canManage = !!r.canManage; paintStore(); paintMarket();
+    if (r.canManage) return OmegaPackageMenu.loadControl().then(function(c){ STORE.control = c; STORE.summary = c.summary || null; paintStore(); });
+  })['catch'](function(){ setText('mkt-store-note', 'Current pricing is unavailable right now. What you hold is shown; try again later to add a module.'); });
+}
+function storeIndex(rows){
+  if (!rows.length) return;
+  STORE.rows = rows; STORE.byTool = {};
+  rows.forEach(function(m){ (m.tools||[]).forEach(function(k){ if (!STORE.byTool[k]) STORE.byTool[k] = m; }); });
+}
+function storeOwned(key){ return STORE.owned.indexOf(key) >= 0; }
+function paintStore(){
+  var plan = el('mkt-plan'), shelves = el('mkt-shelves'); if (!plan || !shelves) return;
+  var b = (window.OmegaTenant && OmegaTenant.billing) || {}, sm = STORE.summary;
+  var planName = (sm && (sm.planDisplay || sm.plan)) || b.plan || 'Packaged';
+  var ownedRows = STORE.rows.filter(function(m){ return storeOwned(m.key); });
+  var h = '<span class="mkt-chip">'+esc(planName)+'</span>';
+  h += '<span><b>'+ownedRows.length+'</b> of '+STORE.rows.length+' modules</span>';
+  if (sm && sm.monthlyDisplay) h += '<span><b>'+esc(sm.monthlyDisplay)+'</b></span>';
+  if (sm && sm.nextInvoiceOn) h += '<span>next invoice '+esc(sm.nextInvoiceOn)+'</span>';
+  if (sm && sm.pending && sm.pending.length) h += '<span class="mkt-chip" style="background:#FFF6E5;color:#8A6D1F">'+sm.pending.length+' waiting for payment</span>';
+  h += '<span class="mkt-note">'+(STORE.control.canManage ? 'Monthly prices. Nothing new is charged for what your plan already covers.' : 'Ask your workspace administrator to add a module.')+'</span>';
+  plan.innerHTML = h;
+  shelves.innerHTML = '';
+  if (!STORE.rows.length){ shelves.innerHTML = '<div class="mkt-empty">Your package is loading…</div>'; return; }
+  SHELF_ORDER.forEach(function(sh){
+    var rows = STORE.rows.filter(function(m){ return m.shelf === sh; }); if (!rows.length) return;
+    var sec = document.createElement('div'); sec.className = 'mkt-shelf';
+    sec.innerHTML = '<div class="mkt-cat-head">'+esc(SHELF[sh]||sh)+'<span class="cnt">('+rows.filter(function(m){ return storeOwned(m.key); }).length+' of '+rows.length+')</span><span class="rule"></span></div><div class="mkt-grid"></div>';
+    var grid = sec.querySelector('.mkt-grid');
+    rows.forEach(function(m){ grid.appendChild(moduleCard(m)); });
+    shelves.appendChild(sec);
+  });
+}
+function moduleCard(m){
+  var owned = storeOwned(m.key), pending = STORE.control.pending && STORE.control.pending[m.key];
+  var card = document.createElement('div'); card.className = 'mkt-card mkt-mod' + (owned ? ' owned' : ''); card.setAttribute('data-module-card', m.key);
+  var tools = (m.tools||[]).map(function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return t ? t.name : k; });
+  var tags = '';
+  if (m.usageDisplay) tags += '<span class="mkt-tag">'+esc(m.usageDisplay)+'</span>';
+  if (m.key === 'lite') tags += '<span class="mkt-tag">Always included</span>';
+  if (m.beta && m.beta.length) tags += '<span class="mkt-tag beta">Beta: '+esc(m.beta.join(', '))+'</span>';
+  if ((m.requires||[]).indexOf('logic-office') >= 0) tags += '<span class="mkt-tag">Needs Office</span>';
+  if (m.coverage) tags += '<span class="mkt-tag">'+esc(m.coverage)+'</span>';
+  if (m.agreement) tags += '<span class="mkt-tag">'+esc(m.agreement)+'</span>';
+  var pill = owned ? '<span class="mkt-pill inc">Included</span>' : pending ? '<span class="mkt-pill soon">Waiting for payment</span>' : '';
+  card.innerHTML = '<div class="mkt-cover" style="background:'+(SHELF_COVER[m.shelf]||SHELF_COVER.floor)+'">'+(pill?'<span class="mkt-cover-badge">'+pill+'</span>':'')+'<span class="mkt-mod-letter">'+esc(m.name.slice(0,1))+'</span></div>'
+    + '<div class="mkt-card-body"><div class="mkt-card-cat">'+esc(SHELF[m.shelf]||m.shelf)+' · <b>'+esc(m.priceDisplay || 'Pricing unavailable')+'</b></div>'
+    + '<div class="mkt-card-name">'+esc(m.name)+'</div>'
+    + '<ul>'+(m.features||[]).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')+'</ul>'
+    + (tools.length ? '<div class="mkt-mod-tools">Tools: '+esc(tools.join(' · '))+'</div>' : '')
+    + (tags ? '<div class="mkt-tags">'+tags+'</div>' : '')
+    + '<div class="mkt-actions"></div></div>';
+  var act = card.querySelector('.mkt-actions');
+  if (owned){ act.innerHTML = '<div class="mkt-act disabled" style="color:#0E6E32;background:#F1FBF4;border-color:#BCE7C9">In your plan</div>'; return card; }
+  if (!STORE.rows.length || !m.priceDisplay){ act.innerHTML = '<div class="mkt-act disabled">Pricing unavailable</div>'; return card; }
+  var host = document.createElement('div'); act.appendChild(host);
+  OmegaPackageMenu.subscribeControl(host, m, { canManage: STORE.control.canManage, pending: STORE.control.pending, onChanged: storeChanged });
+  return card;
+}
+/* after a quote is applied: an addition inside a paid tier is on at once
+   (reload so the server's projection repaints every tile); an invoice is
+   waiting for payment (repaint with the pending state) */
+function storeChanged(r){
+  if (r && r.state === 'active'){ toast('Added. Reloading your tools…'); setTimeout(function(){ window.location.reload(); }, 1500); return; }
+  OmegaPackageMenu.loadControl().then(function(c){ STORE.control = c; STORE.summary = c.summary || STORE.summary; paintStore(); });
+}
+function storeFocus(key){
+  var card = document.querySelector('[data-module-card="'+key+'"]'); if (!card) return;
+  var prev = document.querySelector('.mkt-mod[data-selected]'); if (prev) prev.removeAttribute('data-selected');
+  card.setAttribute('data-selected', '1'); card.scrollIntoView({ behavior:'smooth', block:'center' });
+  var btn = card.querySelector('.opm-act button'); if (btn) btn.focus();
+}
+if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(function(ws){ try { storeMode(ws || window.OMEGA_WORKSPACE); } catch(e){ console.warn('package store', e); } });
 
 /* ── Add / remove from dashboard (shared pin store) ── */
 function toggle(key){
