@@ -328,6 +328,9 @@ async function reconcileNow(db, orgId, caller, now, deps) {
   if (b.paymentCheckedAt && now - b.paymentCheckedAt < 8000) return out(b, { throttled: true });
   await current.set({ paymentCheckedAt: now, paymentCheckedBy: caller.email }, { merge: true });
   try { await S.reconcile(db, orgId, now, deps); } catch (e) { return out(b, { error: e.status && e.status < 500 ? e.message : 'QuickBooks could not be reached; try again in a moment' }); }
+  /* what the look found goes out now, not at the next tick: the tenant's
+     receipt (the first one says the workspace is open) and ClearSky's alert */
+  try { var Runner = require('./package-billing-runner'), mailer = (deps && deps.mail) || require('./mail'); await Runner.deliver(db, orgId, now, mailer); await Runner.staffDeliver(db, now, mailer); } catch (e) {}
   var after = await current.get();
   return out(after.exists ? after.data() : {});
 }

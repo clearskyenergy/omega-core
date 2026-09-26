@@ -21,7 +21,8 @@ function matches(wanted, actual) {
 }
 function driver(book, supplied) {
   var deps = supplied || dependencies(), realm = book.qbo && book.qbo.realmId;
-  async function call(path, body, id) { await I.guard(book, realm, deps); return deps.request(path, body, id, realm); }
+  /* the guard's refusals (mode, realm, a stale connection) are ClearSky's, never the invoice's: reconcile keeps the record as it was */
+  async function call(path, body, id) { try { await I.guard(book, realm, deps); } catch (e) { e.clearsky = true; throw e; } return deps.request(path, body, id, realm); }
   async function customer(orgId, profile, existingId) {
     var wanted = BP.customer(profile, orgId), found;
     if (existingId) found = (await call('customer/' + encodeURIComponent(existingId))).Customer;
@@ -86,20 +87,35 @@ function driver(book, supplied) {
     var number = 'OP-' + key(plan.marker).slice(0, 16);
     var found = ((await call('query?query=' + encodeURIComponent("select * from Invoice where DocNumber = '" + number + "'"))).QueryResponse || {}).Invoice || [];
     if (found.length > 1) fail('Duplicate subscription invoice number');
-    var inv = found[0];
+    var inv = found[0], created = false;
     if (!inv) {
+      /* OMEGA numbers its invoices (OP-…) and finds them again by that
+         number, so a retry never issues twice. QuickBooks honours a supplied
+         number only with "custom transaction numbers" on (Settings → Sales →
+         Sales form content); off, it renumbers and the dedupe above finds
+         nothing. Refuse before creating anything when QuickBooks says so. */
+      var prefs = (await call('preferences')).Preferences;
+      if (prefs && prefs.SalesFormsPrefs && prefs.SalesFormsPrefs.CustomTxnNumbers === false) fail('Turn on custom transaction numbers in QuickBooks (Settings → Sales → Sales form content) before invoicing');
       var payload = { CustomerRef: { value: customerId }, CurrencyRef: { value: 'USD' }, DocNumber: number,
         TxnDate: plan.date, DueDate: plan.date, BillEmail: { Address: profile.email },
         AllowOnlineACHPayment: true, AllowOnlineCreditCardPayment: true, PrivateNote: plan.marker,
         CustomerMemo: { value: (plan.kind === 'change' ? 'OMEGA subscription change ' : plan.kind === 'pack' ? 'OMEGA usage pack ' : 'OMEGA subscription ') + plan.period.start + ' to ' + plan.period.end + (profile.poRequired ? ' · PO ' + profile.poNumber : '') + (plan.memo ? ' · ' + plan.memo : '') },
         Line: await lines(plan) };
       if (profile.apEmail) payload.BillEmailCc = { Address: profile.apEmail };
-      inv = (await call('invoice', payload, key(plan.marker))).Invoice;
+      inv = (await call('invoice', payload, key(plan.marker))).Invoice; created = true;
+      if (inv && inv.DocNumber && inv.DocNumber !== number) fail('QuickBooks renumbered the invoice (' + inv.DocNumber + '): turn on custom transaction numbers, then review invoice ' + inv.Id);
     }
     validateInvoice(inv, plan, customerId);
     var complete = (await call('invoice/' + encodeURIComponent(inv.Id) + '?include=invoiceLink')).Invoice;
     validateInvoice(complete, plan, customerId);
-    return { id: String(inv.Id), totalCents: cents(complete.TotalAmt), payUrl: Policy.paymentLink(complete.InvoiceLink || complete.invoiceLink) };
+    /* QuickBooks emails its own invoice (the PDF and its Pay now button) to
+       the billing address, once, when the invoice was made here. OMEGA's
+       own mail carries the link as well; this one is the accountant's copy.
+       Best effort: a refusal changes nothing about the invoice, and the
+       answer is the same whether the invoice was made now or found again. */
+    if (created) { try { await call('invoice/' + encodeURIComponent(inv.Id) + '/send', {}, key('send:' + plan.marker)); } catch (e) {} }
+    var payUrl = Policy.paymentLink(complete.InvoiceLink || complete.invoiceLink);
+    return { id: String(inv.Id), totalCents: cents(complete.TotalAmt), payUrl: payUrl, payLinkMissing: !payUrl };
   }
   async function reconcile(record) {
     var inv = (await call('invoice/' + encodeURIComponent(record.qboInvoiceId) + '?include=invoiceLink')).Invoice;

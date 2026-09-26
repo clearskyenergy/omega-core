@@ -157,6 +157,7 @@ db.seed('omega_orgs/solo.example', { name: 'Solo', status: 'active', createdAt: 
   assert.match(pk({ packagingState: 'trial', trialEndsAt: ahead(2), accessUntil: ahead(2) }).action, /Send Packed the proposal: trial ends in/);
   assert.equal(pk({ packagingState: 'trial', trialEndsAt: ago(1), accessUntil: ago(1) }).lifecycle, 'read-only');
   assert.equal(pk({ packagingState: 'awaiting_payment', accessUntil: ahead(3) }).lifecycle, 'read-only');
+  var aw = pk({ packagingState: 'awaiting_payment', accessUntil: ahead(3), amountDue: 2250 }); assert.ok(aw.flags.indexOf('awaiting-payment') >= 0, 'the first invoice out is a sale to close'); assert.match(aw.action, /First invoice unpaid: call Packed about the \$2,250/);
   var ro = pk({ packagingState: 'paid', accessUntil: ago(2) });
   assert.equal(ro.lifecycle, 'read-only'); assert.equal(ro.priority, 3); assert.match(ro.action, /Unpaid: send Packed the invoice link/); assert.ok(ro.flags.indexOf('read-only') >= 0);
   assert.equal(pk({ packagingState: 'past_due_lite', accessUntil: ahead(20) }).lifecycle, 'past-due');

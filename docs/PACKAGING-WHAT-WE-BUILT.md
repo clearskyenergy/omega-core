@@ -132,13 +132,20 @@ else needs your console access.
    by phase.
 7. **QuickBooks Payments** (you, in the browser): the runbook
    `PAYMENTS-BROWSER-SETUP.md`, pasted into Claude in Chrome. Until *Pay
-   now* is on an invoice, there is no card page to send anyone to.
+   now* is on an invoice, there is no card page to send anyone to. The same
+   sitting turns on **custom transaction numbers** (Sales form content):
+   OMEGA refuses to invoice while QuickBooks reports it off, because a
+   renumbered invoice can never be found again and a retry would bill twice.
 8. **Production** (you, checklist §6 in order): the values are signed off
    (`VERSION` is `2026-10`); seed the book `--live`, sync the items
    `--live`, enable the book, the five Production variables
    (`PACKAGING_LIVE=true` and `QBO_ENV=production` among them), one real
    signup paid and refunded, then existing tenants one at a time from the
-   Package tab.
+   Package tab. A new workspace opens on `silmarillion.clearskyomega.com`
+   (there is no wildcard for `*.clearskyomega.com`; the slug host is
+   reserved on the record and `TENANT_WILDCARD_LIVE=true` sends people
+   there once Vercel and DNS carry the wildcard). The runner is hourly, and
+   `MAIL_NOTIFY` hears about every payment and anything needing a look.
 
 ## 6. Where everything is
 

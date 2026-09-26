@@ -70,6 +70,8 @@ async function run() {
       }
       if (path.indexOf('invoice/I1') === 0) return { Invoice: storedInvoice };
       if (path === 'payment/P1') return { Payment: payment };
+      if (path === 'preferences') return { Preferences: { SalesFormsPrefs: { CustomTxnNumbers: true } } };
+      if (path === 'invoice/I1/send') return {};
       throw new Error('Unexpected QBO path ' + path);
     } };
   var q = QB.driver(book, deps), p = BP.normalize(profile);

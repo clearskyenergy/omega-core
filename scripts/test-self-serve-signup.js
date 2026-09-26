@@ -28,22 +28,23 @@ mock('../api/_lib/admin', {
   init: function () { return { auth: function () { return { setCustomUserClaims: async function (uid, c) { claims.push([uid, c]); } }; } }; },
   isTenantAdmin: async function (c, org) { var m = await db.doc('omega_orgs/' + org + '/members/' + c.uid).get(); return m.exists && ['owner', 'admin'].indexOf(m.data().role) >= 0; },
   canActInOrg: async function (c, org) { return c.orgId === org; } });
-mock('../api/_lib/mail', { templates: { signupReceived: async function (o) { mails.push(['received', o]); }, signupAlert: async function (o) { mails.push(['alert', o]); }, packageInvoice: async function (o) { mails.push(['invoice', o]); }, approved: async function (o) { mails.push(['approved', o]); } } });
+mock('../api/_lib/mail', { templates: { signupReceived: async function (o) { mails.push(['received', o]); }, signupAlert: async function (o) { mails.push(['alert', o]); }, packageInvoice: async function (o) { mails.push(['invoice', o]); }, approved: async function (o) { mails.push(['approved', o]); },
+  paid: async function (o) { mails.push(['paid', o]); return { ok: true }; }, paidAlert: async function (o) { mails.push(['paid-alert', o]); return { ok: true }; }, billingAlert: async function (o) { mails.push(['billing-alert', o]); return { ok: true }; } } });
 /* the QuickBooks driver: a customer, an invoice with its card-payment page, and a reconciliation the test controls */
-var qbo = { paid: false, failCustomer: false, invoices: [] };
+var qbo = { paid: false, failCustomer: false, invoices: [], noLink: false };
 require('../api/_lib/qbo-billing').driver = function () {
   return { customer: async function (orgId) { if (qbo.failCustomer) { var e = new Error('QuickBooks is down'); e.status = 503; throw e; } return 'C-' + orgId; },
-    invoice: async function (plan) { qbo.invoices.push(plan); return { id: 'INV-' + qbo.invoices.length, totalCents: plan.subtotalCents, payUrl: 'https://connect.intuit.com/pay/inv-' + qbo.invoices.length }; },
+    invoice: async function (plan) { qbo.invoices.push(plan); return { id: 'INV-' + qbo.invoices.length, totalCents: plan.subtotalCents, payUrl: qbo.noLink ? null : 'https://connect.intuit.com/pay/inv-' + qbo.invoices.length, payLinkMissing: qbo.noLink }; },
     reconcile: async function (record) { return { satisfied: qbo.paid, reversed: false, paidCents: qbo.paid ? record.totalCents : 0, payUrl: record.paymentLink }; } };
 };
-var ENV = { PACKAGING_SIGNUP_ENABLED: 'true', PACKAGING_BILLING_ENABLED: 'true', QBO_ENV: 'sandbox', TRIAL_DAYS: '14', PACKAGING_LIVE: '' };
+var ENV = { PACKAGING_SIGNUP_ENABLED: 'true', PACKAGING_BILLING_ENABLED: 'true', QBO_ENV: 'sandbox', TRIAL_DAYS: '14', PACKAGING_LIVE: '', TENANT_WILDCARD_LIVE: '' };
 Object.keys(ENV).forEach(function (k) { process.env[k] = ENV[k]; });
 var signup = require('../api/tenant-signup'), offerings = require('../api/offerings'), planChange = require('../api/plan-change'), S = require('../api/_lib/package-billing'), X = require('../api/_lib/package-access');
 var RES = { setHeader: function () {} };
 function who(email, extra) { return Object.assign({ uid: 'u-' + email.split('@')[0], email: email, orgId: email.split('@')[1], staff: false, claims: { email_verified: true, name: 'Kim Sato' } }, extra || {}); }
 function profile(org) { return H.profile(org, 'Newco Energy LLC'); }
 function body(extra) { return Object.assign({ companyName: 'Newco Energy', vertical: 'oem', slug: 'newco', billingProfile: profile('newco.example'), modules: ['lite', 'gridatlas'], interval: 'monthly' }, extra || {}); }
-function seed() { db = new DB(); qbo.paid = false; qbo.failCustomer = false; qbo.invoices = []; mails = []; claims = []; db.seed('pricebook/' + H.enabledBook().version, H.enabledBook()); caller = who('kim@newco.example'); }
+function seed() { db = new DB(); qbo.paid = false; qbo.failCustomer = false; qbo.noLink = false; qbo.invoices = []; mails = []; claims = []; process.env.TENANT_WILDCARD_LIVE = ''; db.seed('pricebook/' + H.enabledBook().version, H.enabledBook()); caller = who('kim@newco.example'); }
 async function refused(p, status, re) { try { await p; } catch (e) { assert.equal(e.status, status, e.message); if (re) assert.match(e.message, re); return e; } assert.fail('expected a ' + status); }
 var count = 0; async function test(n, f) { await f(); count++; console.log('PASS ' + n); }
 
@@ -66,7 +67,7 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     var opts = await signup({ method: 'GET', query: {} }, RES); assert.equal(opts.payNow, true);
     var r = await signup({ method: 'POST', body: body({ payNow: true }) }, RES);
     assert.equal(r.created, true); assert.equal(r.payNow, true); assert.equal(r.status, 'active'); assert.equal(r.packagingState, 'awaiting_payment');
-    assert.equal(r.paymentLink, 'https://connect.intuit.com/pay/inv-1'); assert.match(r.amountDueDisplay, /^\$[\d,]+/); assert.equal(r.host, 'newco.clearskyomega.com');
+    assert.equal(r.paymentLink, 'https://connect.intuit.com/pay/inv-1'); assert.match(r.amountDueDisplay, /^\$[\d,]+/); assert.equal(r.host, 'silmarillion.clearskyomega.com', 'sent to the open host: no wildcard serves the slug host'); assert.equal(r.reserved, 'newco.clearskyomega.com', 'the slug host is reserved on the record');
     var org = db.data.get('omega_orgs/newco.example'), bill = db.data.get('omega_orgs/newco.example/billing/current'), pub = db.data.get('tenant_public/newco.clearskyomega.com');
     assert.equal(org.status, 'active'); assert.equal(org.approvedBy, 'self-serve'); assert.equal(org.selfServe, true); assert.equal(pub.status, 'active');
     assert.equal(bill.packaged, true); assert.equal(bill.packagingState, 'awaiting_payment'); assert.equal(bill.qboCustomerId, 'C-newco.example'); assert.equal(bill.qboEnv, 'sandbox');
@@ -88,12 +89,18 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     var again = await signup({ method: 'POST', body: body() }, RES);
     assert.equal(again.exists, true); assert.equal(again.payNow, true); assert.equal(again.packagingState, 'awaiting_payment'); assert.match(again.paymentLink, /inv-1/);
     var c1 = await signup({ method: 'POST', body: { action: 'check-payment' } }, RES);
-    assert.equal(c1.paid, false); assert.equal(c1.packagingState, 'awaiting_payment'); assert.equal(c1.host, 'newco.clearskyomega.com');
+    assert.equal(c1.paid, false); assert.equal(c1.packagingState, 'awaiting_payment'); assert.equal(c1.host, 'silmarillion.clearskyomega.com');
     var c2 = await signup({ method: 'POST', body: { action: 'check-payment' } }, RES); assert.equal(c2.throttled, true);
     db.seed('omega_orgs/newco.example/billing/current', Object.assign({}, db.data.get('omega_orgs/newco.example/billing/current'), { paymentCheckedAt: Date.now() - 9000 }));
     qbo.paid = true;
     var c3 = await signup({ method: 'POST', body: { action: 'check-payment' } }, RES);
-    assert.equal(c3.paid, true); assert.equal(c3.packagingState, 'paid'); assert.ok(c3.accessUntil > Date.now()); assert.equal(c3.host, 'newco.clearskyomega.com');
+    assert.equal(c3.paid, true); assert.equal(c3.packagingState, 'paid'); assert.ok(c3.accessUntil > Date.now()); assert.equal(c3.host, 'silmarillion.clearskyomega.com');
+    /* money landed: the tenant's receipt says the workspace is open, ClearSky is told, both at once */
+    var b3 = db.data.get('omega_orgs/newco.example/billing/current'), paidNote = db.data.get('omega_orgs/newco.example/notifications/package-paid-' + b3.firstInvoiceOn);
+    assert.equal(paidNote.packageMail, 'paid'); assert.equal(paidNote.first, true); assert.equal(paidNote.mailState, 'sent');
+    assert.ok(mails.some(function (m) { return m[0] === 'paid' && m[1].first === true && m[1].host === 'silmarillion.clearskyomega.com'; }), 'the customer hears the workspace is open');
+    var staffNote = db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-paid-newco.example-INV-1'); assert.equal(staffNote.staffMail, 'paidAlert'); assert.equal(staffNote.mailState, 'sent');
+    assert.ok(mails.some(function (m) { return m[0] === 'paid-alert' && m[1].company === 'Newco Energy'; }), 'ClearSky hears about the money');
     var bill = db.data.get('omega_orgs/newco.example/billing/current');
     assert.deepEqual(bill.modules, ['lite', 'gridatlas'], 'paid: the package bought is switched on'); assert.equal(bill.amountDue, 0);
     var view = X.project({ staff: false, claims: { email_verified: true } }, bill, db.data.get('omega_orgs/newco.example'), { role: 'owner' }, Date.now());
@@ -114,7 +121,8 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
   await test('when the first invoice cannot be issued, the request falls back to approval and says so; nothing is half-opened', async function () {
     seed(); qbo.failCustomer = true;
     var r = await signup({ method: 'POST', body: body({ payNow: true }) }, RES);
-    assert.equal(r.created, true); assert.equal(r.payNow, false); assert.match(r.payNowError, /could not be issued|QuickBooks/); assert.equal(r.paymentLink, undefined);
+    assert.equal(r.created, true); assert.equal(r.payNow, false); assert.equal(r.payNowError, 'The first invoice could not be issued; your request goes to ClearSky for approval instead', 'the customer hears what happens next, never the engine\'s words'); assert.equal(r.paymentLink, undefined);
+    assert.ok(mails.some(function (m) { return m[0] === 'billing-alert' && /QuickBooks is down/.test(m[1].text); }), 'ClearSky hears why');
     var org = db.data.get('omega_orgs/newco.example'); assert.equal(org.status, 'pending'); assert.equal(org.approvedBy, null); assert.match(org.payNowError, /QuickBooks/);
     assert.equal(db.data.get('tenant_public/newco.clearskyomega.com').status, 'pending');
     var bill = db.data.get('omega_orgs/newco.example/billing/current'); assert.equal(bill.packagingState, 'pending'); assert.equal(bill.paymentLink, undefined);
@@ -171,10 +179,10 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
       var r = await signup({ method: 'POST', body: body({ payNow: true }) }, RES);
       assert.equal(r.payNow, true); assert.equal(r.packagingState, 'awaiting_payment'); assert.match(r.paymentLink, /inv-1/);
       var org = db.data.get('omega_orgs/newco.example'), bill = db.data.get('omega_orgs/newco.example/billing/current');
-      assert.equal(org.packagingSandbox, false, 'a live signup is not a sandbox tenant'); assert.equal(org.packaged, true, 'and is marked packaged for the runner');
+      assert.equal(org.packagingSandbox, false, 'a live signup is not a sandbox tenant'); assert.equal(org.packaged, true, 'and is marked packaged'); assert.equal(org.packagedLive, true, 'and packagedLive: the production runner\'s own mark');
       assert.equal(bill.qboEnv, 'production'); assert.equal(bill.qboRealmId, '9130000000000000'); assert.equal(bill.pricebookVersion, '2026-10');
       /* a sandbox-marked tenant from a preview is not the live runner's */
-      db.seed('omega_orgs/old-preview.example', { status: 'active', packagingSandbox: true, domains: ['old.example'] });
+      db.seed('omega_orgs/old-preview.example', { status: 'active', packagingSandbox: true, packaged: true, domains: ['old.example'] });
       db.seed('omega_orgs/old-preview.example/billing/current', { packaged: true, packagingState: 'paid', modules: ['lite'], pricebookVersion: '2026-10' });
       qbo.paid = true; var tick = await Runner.tick(db, Date.now(), { limit: 5 });
       assert.equal(tick.disabled, undefined, 'the runner runs in live mode'); assert.deepEqual(tick.results.map(function (x) { return x.orgId; }), ['newco.example']);
@@ -207,6 +215,36 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     var g = run(['scripts/qbo-sync-items.js'], { PACKAGING_LIVE: 'true', QBO_ENV: 'production' }); assert.equal(g.code, 0); assert.match(g.out, /"dryRun": true/, 'a dry run needs no confirmation');
   });
 
+  console.log('\nlaunch hardening (2026-09-26)');
+  await test('the address a buyer is sent to is the open host until TENANT_WILDCARD_LIVE says *.clearskyomega.com serves; the slug host waits on the record', async function () {
+    seed(); var opts = await signup({ method: 'GET', query: {} }, RES); assert.equal(opts.homeHost, 'silmarillion.clearskyomega.com'); assert.equal(opts.wildcard, false);
+    process.env.TENANT_WILDCARD_LIVE = 'true'; opts = await signup({ method: 'GET', query: {} }, RES); assert.equal(opts.wildcard, true); assert.equal(opts.homeHost, 'silmarillion.clearskyomega.com', 'nothing to send to without a record');
+    var r = await signup({ method: 'POST', body: body({ payNow: true }) }, RES); assert.equal(r.host, 'newco.clearskyomega.com', 'with the wildcard live the slug host is the address'); assert.equal(r.reserved, 'newco.clearskyomega.com');
+    process.env.TENANT_WILDCARD_LIVE = '';
+    var again = await signup({ method: 'POST', body: body() }, RES); assert.equal(again.exists, true); assert.equal(again.host, 'silmarillion.clearskyomega.com', 'an existing tenant is sent to the open host too');
+  });
+  await test('a reserved label (the front door, plumbing, our names) falls back to the domain slug', async function () {
+    for (var i = 0; i < ['silmarillion', 'login', 'start', 'offerings', 'api', 'omega'].length; i++) {
+      seed(); var r = await signup({ method: 'POST', body: body({ payNow: true, slug: ['silmarillion', 'login', 'start', 'offerings', 'api', 'omega'][i] }) }, RES);
+      assert.equal(r.reserved, 'newco-example.clearskyomega.com', 'refused: ' + ['silmarillion', 'login', 'start', 'offerings', 'api', 'omega'][i]); assert.equal(db.data.get('tenant_public/silmarillion.clearskyomega.com'), undefined);
+    }
+  });
+  await test('the switch on before the seed: the page is told plainly and takes nobody\'s details; a request is refused, not half-made', async function () {
+    db = new DB(); caller = who('kim@newco.example'); mails = [];
+    var opts = await signup({ method: 'GET', query: {} }, RES); assert.equal(opts.packaging, false); assert.match(opts.notReady, /not seeded/);
+    await refused(signup({ method: 'POST', body: body({ payNow: true }) }, RES), 409, /not seeded/);
+    assert.equal(db.data.get('omega_orgs/newco.example'), undefined, 'nothing written');
+    var book = H.enabledBook(); book.enabled = false; db.seed('pricebook/' + book.version, book);
+    opts = await signup({ method: 'GET', query: {} }, RES); assert.equal(opts.packaging, false); assert.match(opts.notReady, /not enabled/);
+  });
+  await test('an invoice without QuickBooks\' pay page is not a dead end: the page says the invoice was emailed, ClearSky hears at once', async function () {
+    seed(); qbo.noLink = true; var r = await signup({ method: 'POST', body: body({ payNow: true }) }, RES);
+    assert.equal(r.payNow, true); assert.equal(r.paymentLink, null); assert.equal(r.payLinkMissing, true); assert.equal(r.billingEmail, 'owner@newco.example');
+    assert.equal(db.data.get('omega_orgs/newco.example/billing/current').packagingState, 'awaiting_payment');
+    assert.ok(mails.some(function (m) { return m[0] === 'billing-alert' && /without a pay link/.test(m[1].text); }), 'ClearSky hears that Payments may be off');
+    assert.equal(mails.filter(function (m) { return m[0] === 'received'; })[0][1].name, 'Kim', 'the welcome mail has a name');
+  });
+
   console.log('\nthe pages');
   await test('signup, login and the workspace carry the path: pay and start, the pay step, the offerings link, "I\'ve paid"', async function () {
     var st = read('start.html'), lg = read('login.html'), of = read('offerings.html'), ot = read('omega-tenant.js');
@@ -221,6 +259,10 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     assert.match(of, /XMLHttpRequest\(\); x\.open\('GET', '\/api\/offerings'\)/); assert.ok(!/firebase|omega-tenant\.js/.test(of), 'the price list is a public page: no sign-in, no tenant runtime');
     assert.ok(!/=>|\blet\s|\bconst\s|`/.test(of.replace(/<!--[\s\S]*?-->/g, '')), 'ES5');
     assert.match(ot, /action: 'reconcile-now'/); assert.match(ot, /paid\.textContent = "I've paid"/);
+    /* launch hardening: /start runs the hub routing on every host and never sends a person to a hostname that may not resolve; no slug is promised; the retired mailbox is gone */
+    assert.match(ot, /if \(T\.hub \|\| onStart\) \{ if \(!global\.OMEGA_NO_HUB_ROUTE\) routeFromHub\(user\); return; \}/); assert.match(ot, /if \(onStart && !T\.hub\) \{ global\.location\.href = '\/'; return; \}/);
+    assert.ok(!/id="f-slug"|host-preview/.test(st), 'no hostname is promised before the wildcard serves it'); assert.match(st, /if \(j\.notReady\)/);
+    assert.ok(!/(support|billing)@csebuilders/.test(ot), 'the retired mailbox is gone from the runtime'); assert.ok(!/'csebuilders\.com'/.test(ot), 'and from the staff preview domains');
   });
   console.log('\n' + count + ' self-serve signup checks passed. No network calls.\n');
 })().catch(function (e) { console.error(e); process.exit(1); });

@@ -127,7 +127,8 @@ async function run() {
     check(payOrg.status === 'active' && payOrg.approvedBy === 'self-serve' && payBill.packagingState === 'awaiting_payment' && invoices === payInvoices + 1, 'pay now: the workspace is opened by its owner, awaiting the first invoice, one invoice issued');
     check(payBill.subscription.modules.join() === 'lite,gridatlas' && payBill.modules.join() === 'lite', 'the URL’s choice is what was bought; Lite is what is on until it is paid');
     check((await pp10.locator('#pay-link').getAttribute('href')) === 'https://connect.intuit.com/pay/fixture' && /\$[\d,]+/.test(await pp10.locator('#pay-amount').textContent()), 'the pay step carries QuickBooks’ card page and the amount');
-    check((await pp10.locator('#pay-host').textContent()) === payOrg.domains[0] && /\.clearskyomega\.com$/.test(payOrg.domains[0]), 'and the address the workspace will open at: ' + payOrg.domains[0]);
+    /* where the person signs in is the OPEN host until the wildcard serves (kit.home); the slug host is only reserved on the record */
+    check((await pp10.locator('#pay-host').textContent()) === 'silmarillion.clearskyomega.com' && /\.clearskyomega\.com$/.test(payOrg.domains[0]) && payOrg.domains[0] !== 'silmarillion.clearskyomega.com', 'and the address to sign in at is the open host, the slug host reserved: ' + payOrg.domains[0]);
     await capture(pp10, 'signup-pay');
     await pp10.locator('#pay-check').click(); await pp10.waitForFunction(function () { return /Not paid yet/.test(document.getElementById('pay-status').textContent); });
     check(db.data.get('omega_orgs/paynow-fixture.example/billing/current').packagingState === 'awaiting_payment', '"I’ve paid" before the payment: QuickBooks says not yet, nothing changes');
@@ -136,10 +137,10 @@ async function run() {
       db.seed('omega_orgs/paynow-fixture.example/billing/current', Object.assign({}, db.data.get('omega_orgs/paynow-fixture.example/billing/current'), { paymentCheckedAt: 0 }));
       await pp10.locator('#pay-check:not([disabled])').click();
       /* paid: the page leaves for the workspace's own address (the route stands in for it) */
-      try { await pp10.waitForURL(function (u) { return u.hostname === payOrg.domains[0]; }, { timeout: 4000 }); break; } catch (e) { if (attempt === 2) throw e; }
+      try { await pp10.waitForURL(function (u) { return u.hostname === 'silmarillion.clearskyomega.com'; }, { timeout: 4000 }); break; } catch (e) { if (attempt === 2) throw e; }
     }
     var paidBill = db.data.get('omega_orgs/paynow-fixture.example/billing/current');
-    check(paidBill.packagingState === 'paid' && paidBill.modules.join() === 'lite,gridatlas' && paidBill.amountDue === 0 && new URL(pp10.url()).hostname === payOrg.domains[0], 'paid: the package bought is switched on and the page opens the workspace at ' + payOrg.domains[0]);
+    check(paidBill.packagingState === 'paid' && paidBill.modules.join() === 'lite,gridatlas' && paidBill.amountDue === 0 && new URL(pp10.url()).hostname === 'silmarillion.clearskyomega.com', 'paid: the package bought is switched on and the page opens the workspace on the open host (the slug host ' + payOrg.domains[0] + ' is reserved until the wildcard serves)');
     check(payErrors.length === 0, payErrors.join('\n')); await payCtx.close(); qbo.paid = false;
     /* Phase 10A: the public price list, from the same book, on a desktop and a phone. */
     for (var theme10 of ['light', 'dark']) {

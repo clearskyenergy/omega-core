@@ -57,7 +57,7 @@
   <!-- STEP 1: sign in -->
   <div id="step-auth">
     <h1>Create your workspace</h1>
-    <p>Site development tools for storage, EV charging, solar and data-center projects. Sign in with your <b>work</b> email to get started — your company gets its own workspace at <span class="host" id="host-preview">yourcompany.clearskyomega.com</span>.</p>
+    <p>Site development tools for storage, EV charging, solar and data-center projects. Sign in with your <b>work</b> email to get started — your company gets its own private workspace, and colleagues at your email domain join it automatically.</p>
     <button class="btn" onclick="signInGoogle()">Continue with Google</button>
     <button class="btn ghost" onclick="toggleEmail()">Use email &amp; password instead</button>
     <div id="email-box" class="hide">
@@ -82,8 +82,10 @@
       <option value="installer">Installer / electrical contractor</option>
       <option value="oem">Equipment manufacturer (OEM)</option>
     </select>
-    <label>Workspace address</label>
-    <div style="display:flex;align-items:center;gap:6px"><input id="f-slug" maxlength="40" style="flex:1" placeholder="yourcompany" autocomplete="off"><span class="host">.clearskyomega.com</span></div>
+    <!-- The workspace address (yourcompany.clearskyomega.com) is reserved on
+         the record by the server and shown once the wildcard serves it
+         (TENANT_WILDCARD_LIVE); until then everyone signs in on the front
+         door, and promising a hostname that does not resolve would be a lie. -->
     <label>Phone <span style="font-weight:400">(optional)</span></label><input id="f-phone" type="tel" autocomplete="tel">
     <label>What are you working on? <span style="font-weight:400">(optional)</span></label><textarea id="f-note" rows="2" placeholder="e.g. 3 BESS sites in ComEd territory, need interconnection screening"></textarea>
     <div id="verify-note" class="ok verify"><div style="font-weight:700;margin-bottom:6px">Verify your email first</div><div style="color:var(--sub);font-size:14px">We sent a link to <b id="verify-email" style="color:var(--txt)"></b>. Click it, then come back here and press Continue.</div>
@@ -142,7 +144,7 @@
     <h1>Pay your first invoice to open your workspace</h1>
     <div class="ok" style="display:block">
       <div style="font-weight:700;margin-bottom:6px" id="pay-name"></div>
-      <div style="color:var(--sub);font-size:14px">Your workspace lives at <span class="host" id="pay-host"></span>. Your first invoice<span id="pay-amount"></span> is ready in QuickBooks; pay it by card on the invoice page and the workspace opens the moment the payment lands.</div>
+      <div style="color:var(--sub);font-size:14px">You will sign in at <span class="host" id="pay-host"></span> with your work email. Your first invoice<span id="pay-amount"></span> is ready in QuickBooks; pay it by card on the invoice page and the workspace opens the moment the payment lands.</div>
     </div>
     <a class="btn" id="pay-link" target="_blank" rel="noopener">Pay now in QuickBooks</a>
     <button class="btn ghost" id="pay-check" onclick="checkPayment(true)">I've paid — open my workspace</button>
@@ -155,7 +157,7 @@
     <h1>Request received</h1>
     <div class="ok" style="display:block">
       <div style="font-weight:700;margin-bottom:6px" id="done-name"></div>
-      <div style="color:var(--sub);font-size:14px">Your workspace will live at <span class="host" id="done-host"></span>. We'll email <b id="done-email" style="color:var(--txt)"></b> when it's approved.</div>
+      <div style="color:var(--sub);font-size:14px">You will sign in at <span class="host" id="done-host"></span>. We'll email <b id="done-email" style="color:var(--txt)"></b> when it's approved.</div>
     </div>
     <button class="btn ghost" onclick="signOut()">Sign out</button>
   </div>
@@ -180,7 +182,7 @@
   function showPay(j, name){
     PAY = j; $('pay-name').textContent = name || $('f-name').value; $('pay-host').textContent = j.host || '';
     $('pay-amount').textContent = j.amountDueDisplay ? ' of ' + j.amountDueDisplay : '';
-    var a = $('pay-link'); if (j.paymentLink) { a.href = j.paymentLink; a.className = 'btn'; } else { a.removeAttribute('href'); a.className = 'btn ghost'; a.textContent = 'The pay link is in your email'; }
+    var a = $('pay-link'); if (j.paymentLink) { a.href = j.paymentLink; a.className = 'btn'; } else { a.removeAttribute('href'); a.className = 'btn ghost'; a.textContent = 'Pay from the invoice QuickBooks emailed' + (j.billingEmail ? ' to ' + j.billingEmail : ' you'); $('pay-status').textContent = 'QuickBooks emailed the invoice itself, with its Pay now button. Pay it there, then press I\'ve paid; we check QuickBooks every few seconds while this page is open.'; }
     show('step-pay'); if (payTimer) clearInterval(payTimer); payTimer = setInterval(function () { if (!document.hidden) checkPayment(false); }, 8000);
   }
   window.checkPayment = function(byHand){
@@ -228,10 +230,9 @@
 
   window.addEventListener('omega:hub', function(ev){
     var d = ev.detail || {};
-    if (d.exists) return;                               /* omega-tenant.js redirects */
+    if (d.exists) return;                               /* omega-tenant.js opens the workspace */
     var u = auth.currentUser; if(!u) return;
     $('who-email').textContent = u.email; $('who-domain').textContent = domainOf(u.email);
-    if(!$('f-slug').value) $('f-slug').value = slugOf(domainOf(u.email));
     /* the login page left the company in THIS browser (omega:signup-draft), never in a link; it is used once, for this address, and forgotten */
     try {
       var draft = JSON.parse(localStorage.getItem('omega:signup-draft') || 'null');
@@ -245,12 +246,13 @@
     u.getIdToken().then(function (token) { return fetch('/api/tenant-signup', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Signup unavailable'); return j; }); })
       .then(function (j) { if (auth.currentUser !== u) return; signupOptions = j; $('f-submit').disabled = false; $('f-submit').textContent = j.packaging ? 'Continue' : 'Request my workspace';
+          /* the switch is on but the price book is not seeded or enabled yet: say so, take nobody's details */
+          if (j.notReady) { $('f-submit').disabled = true; $('form-hint').textContent = j.notReady + '.'; return; }
           if (j.packaging) $('form-hint').textContent = j.payNow ? 'Next: your billing profile, then build your system and pay your first invoice by card. Your workspace opens the moment it is paid.' : 'Next: your billing profile and your package. A 14-day trial starts when ClearSky approves it.';
           loadProposal(); },
         function (e) { if (/verify your email/i.test(e.message || '')) { holdForVerification(u); return; } err('form-err', e.message); });
   });
   auth.onAuthStateChanged(function(u){ if(!u) show('step-auth'); });
-  $('f-slug').addEventListener('input', function(){ $('host-preview').textContent = ($('f-slug').value||'yourcompany') + '.clearskyomega.com'; });
 
   window.backToCompany = function () { show('step-form'); };
   window.backToBilling = function () { show('step-billing'); };
@@ -326,7 +328,7 @@
     var u = auth.currentUser; if(!u) return;
     var name=$('f-name').value.trim(); if(name.length<2){ err('form-err','Company name is required.'); return; }
     if (!signupOptions) { err('form-err', 'Wait for signup options to load.'); return; }
-    var payload = { companyName:name, vertical:$('f-vertical').value, slug:$('f-slug').value.trim(), phone:$('f-phone').value.trim(), note:$('f-note').value.trim() };
+    var payload = { companyName:name, vertical:$('f-vertical').value, phone:$('f-phone').value.trim(), note:$('f-note').value.trim() };
     var errorId = signupOptions.packaging && fromBilling ? 'build-err' : 'form-err';
     if (signupOptions.packaging && !fromBilling && !fromDiscovery && !proposal) { buildDiscovery(); show('step-discovery'); return; }
     if (signupOptions.packaging && !fromBilling) {
