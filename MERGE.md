@@ -2260,6 +2260,13 @@ compares the sign-in email lower-cased in the four team blocks,
 preview hostname when a sign-in is refused for an unauthorised domain. See
 docs/PACKAGING-PHASE-9-VALIDATION.md.
 
+## Loading screen — September 26, 2026
+
+`editor.html` (and 42 other signed-in pages): `<script src="/omega-splash.js?v=1">`
+first in `<head>`, the OMEGA mark until the page is known and again on
+leaving; the editor has no `omega-tenant.js`, so its splash ends at load
++ 400 ms or the 4 s cap. See docs/LOADING-SCREEN.md.
+
 ## Ribbon icons — September 26, 2026
 
 `editor.html`: the ribbon's icon module (`OmegaRibbonIcons`, the light

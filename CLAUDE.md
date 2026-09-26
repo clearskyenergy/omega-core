@@ -796,6 +796,13 @@ tenant. Treat it that way.
   canonical, what still has to be ported, and the decisions pending.
 - `omega-tenant.js` MUST load directly after `omega-brand.js` on every page
   that signs users in. It wraps OmegaBrand.resolve.
+- `omega-splash.js` loads FIRST in `<head>` on every page that signs users
+  in (`scripts/tests/tsplash.js`): the OMEGA mark until the page is known
+  (`omega:auth` signed out, `omega:entitlements`, `OmegaSplash.done()`, or
+  the 4 s cap) and again the moment a link is followed or the page is left.
+  A page that shows its own thing before auth answers holds (`data-hold`)
+  and calls `done()`; the dashboard keeps its boot splash (`data-boot="no"`).
+  Never a flash of another page or the sign-in card. `docs/LOADING-SCREEN.md`.
 - Test as a tenant using `adminDomains` preview, not by editing their data.
 - `npm run check:dashboard` renders the tenant dashboard (`index.html`) in
   Chromium, signed in, with the Firebase compat SDK replaced by
