@@ -2,7 +2,8 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Validated September 26, 2026. Draft PR; not merged.
+Validated September 26, 2026. [Draft PR #134](https://github.com/clearskyenergy/omega-core/pull/134); not merged.
+[Branch preview](https://omega-core-git-codex-packaging-phase-0-clearsky-usa.vercel.app) (Vercel GitHub integration).
 
 PR #133 already merged the Level 2 closeout branch into main. This phase
 therefore adds no duplicate merge. Internal fallback requires a literal
