@@ -28,12 +28,22 @@ def line_start(i): return lines_start[bisect.bisect_right(lines_start, i) - 1]
 def line_text(i):
     a = line_start(i); b = s.find('\n', a); return s[a:b if b >= 0 else len(s)]
 
+# A standalone document built in a template string (an exported report, a
+# printed sheet, a popup window) has no token set: nothing inside it changes.
+DOCS = []
+for m in re.finditer(r'<!DOCTYPE html>|<!doctype html>|<html[ >]', s, re.I):
+    if kind_at(m.start()) != 'script': continue
+    if DOCS and m.start() < DOCS[-1][1]: continue
+    e = s.find('</html>', m.start()); e = e if e > 0 else s.find('`', m.start())
+    DOCS.append((m.start(), e))
+def in_doc(i): return any(a <= i <= b for a, b in DOCS)
+
 EXCL = re.compile(r'fillStyle|strokeStyle|\bctx\b|setAttribute\(|jsPDF|\bpdf\b|\bdoc\.|fill=|stroke=|["\']fill["\']|setDrawColor|sld-sheet|ReportExport|chart|canvas|toDataURL|palette|gradient|swatch|--gb-|:root|^\s*--[\w-]+\s*:|/\*[^*]*\*/', re.I)
 PROP = r'(?:background(?:-color)?|border(?:-(?:top|bottom|left|right|color))?|color|outline|box-shadow|scrollbar-color)'
 def ctx_prop(before):
     m = re.search(PROP + r'\s*:\s*(?:[^;"\'`{}]*?)$', before, re.I)
     return m.group(0).split(':')[0].strip().lower() if m else None
-LIT = re.compile(r'rgba\(255,255,255,\.(?:0[3-9]|1[0-6]?)\)|rgba\(0,0,0,\.(?:1[58]|2[0-5]?|4[05]?|5[05]?|6|7)\)|rgba\(4,10,20,\.\d+\)|rgba\(13,27,42,\.97\)|#16202B|#0F1D30|#0B1626|#1E3A5F|#26364d|#E2EEF9', re.I)
+LIT = re.compile(r'rgba\(255,255,255,\.(?:0[3-9]|1[0-6]?)\)|rgba\(0,0,0,\.(?:1[58]|2[0-5]?|4[05]?|5[05]?|6|7)\)|rgba\(4,10,20,\.\d+\)|rgba\(13,27,42,\.97\)|(?:#16202B|#0F1D30|#0B1626|#1E3A5F|#26364d|#E2EEF9)(?![0-9a-fA-F])', re.I)
 BG = ('background', 'background-color')
 def token(lit, prop, before):
     L = lit.lower()
@@ -75,9 +85,15 @@ NAVY = {
     '#0f2040': 'var(--panel)', 'rgba(10,22,40,.92)': 'var(--scrim)', '#6b8cae': 'var(--sub)',
     '#4a6080': 'var(--sub)', '#0b1e35': 'var(--panel)', '#0d1b2a': 'var(--navy)', '#243b55': 'var(--border)',
     '#e2eaf4': 'var(--text)', '#0e1d33': 'var(--panel)',
+    # the v4.24 :root values written out by hand in dialog builders
+    '#e0e0e0': 'var(--text)', '#e8f0fe': 'var(--text)', '#8ba3c4': 'var(--sub)',
+    '#94a3b8': 'var(--sub)', '#9a9a9a': 'var(--sub)', '#0f1b2e': 'var(--panel)',
+    '#152a45': 'var(--surface)', '#1b2632': 'var(--bg)', '#22303d': 'var(--surface)',
+    '#30404f': 'var(--border)', 'rgba(16,18,22,.86)': 'var(--panel)',
+    '#2a3a49': {'bg': 'var(--blue)', 'border': 'var(--border)'},
 }
 if MODE.startswith('navy'):
-    NL = re.compile('|'.join(re.escape(k) for k in NAVY), re.I)
+    NL = re.compile('(?:' + '|'.join(re.escape(k) for k in NAVY) + ')(?![0-9a-fA-F])', re.I)
     out = []; last = 0; count = collections.Counter()
     for m in NL.finditer(s):
         i = m.start(); k = kind_at(i); before = s[line_start(i):i]; lt = line_text(i)
@@ -85,8 +101,12 @@ if MODE.startswith('navy'):
         elif MODE == 'navy-markup': ok = (k == 'html') and bool(re.search(r'style\s*="[^"]*$', before))
         else:
             ok = (k == 'script') and re.search(PROP + r'\s*:\s*[^;"\'`{}]*$', before, re.I) is not None and bool(re.search(r'style\s*=|cssText|\.style\.|innerHTML|insertAdjacentHTML|<style|createElement\(\s*[\'"]style', lt))
-        if not ok or EXCL.search(lt): continue
+        if not ok or EXCL.search(lt) or in_doc(i): continue
         tok = NAVY[m.group(0).lower()]
+        if isinstance(tok, dict):
+            prop = ctx_prop(before) or ''
+            tok = tok.get('bg') if prop in BG else tok.get('border') if prop.startswith('border') or prop == 'outline' else tok.get('color') if prop == 'color' else None
+            if not tok: continue
         out.append(s[last:i]); out.append(tok); last = m.end(); count[m.group(0) + ' -> ' + tok] += 1
     out.append(s[last:]); open(p, 'w', encoding='utf-8').write(''.join(out))
     print('MODE navy replaced', sum(count.values()))
@@ -105,7 +125,7 @@ for m in LIT.finditer(s):
         cssy = bool(re.search(r'^\s*[a-zA-Z#.\[][^\'"`=]*\{|\}\s*[\'"+]?\s*$|;\s*[\'"+]?\s*$', lt))
         ok = same_string and (styled or cssy)
     if not ok: continue
-    if EXCL.search(lt): skipped['excl ' + m.group(0)] += 1; continue
+    if EXCL.search(lt) or in_doc(i): skipped['excl ' + m.group(0)] += 1; continue
     prop = ctx_prop(before)
     tok = token(m.group(0), prop, before)
     if not tok: skipped[m.group(0) + '|' + str(prop)] += 1; continue
