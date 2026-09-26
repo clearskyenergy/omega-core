@@ -44,8 +44,10 @@ deployed, no tenant is packaged. The order to change that is in
   and pay for what you need to run your business*; every module is a rung
   and each Omega Logic department (Office, Plant, Materials & Purchasing,
   Logistics & Warranty, Customer App) stands on its own. A locked tile
-  offers its rung by name and price. A legacy prepaid account sees none of
-  it and keeps everything.
+  offers its rung by name and price, and the dashboard opens on **Your
+  modules**: one card per module, Live for what is held, dashed with + Add
+  for what is not. A legacy prepaid account sees none of it and keeps
+  everything.
 - **A company signs itself up and pays at the end** (Phase 10A): the
   public price list (`/offerings.html`), the details that make the
   QuickBooks customer, the package it chooses, the first invoice paid by

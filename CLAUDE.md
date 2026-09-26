@@ -817,7 +817,11 @@ tenant. Treat it that way.
   the server after a change. A locked tile on a packaged workspace offers
   its module by name and price and opens the Ladder on it; a legacy tenant
   (no packaged record: NextNRG, prepaid) keeps the old request and sees no
-  Ladder. Scenarios lite-ladder, awaiting and legacy-enterprise hold it. It fails on an error, an unanswered
+  Ladder. **Your modules** (`renderModuleCards`, above My Applications) is
+  one card per module: held ones Live in shelf order, bought-not-on ones
+  named, up to three unheld rungs dashed with + Add opening the Ladder on
+  them; the catalog and prices are the server's, never a second list.
+  Scenarios lite-ladder, awaiting and legacy-enterprise hold it. It fails on an error, an unanswered
   `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
   tile. `check:pages` does not cover the dashboard; run this after any
   change to `index.html` or the runtime it loads. The double's own test is
