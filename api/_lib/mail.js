@@ -145,6 +145,10 @@ function send(to, subject, html, text, opts) {
 /* ── Templates ───────────────────────────────────────────────────────────── */
 var T = {
   signupReceived: function (o) {
+    if (o.payNow) return send(o.email, 'Your ClearSky-OMEGA workspace opens when your first invoice is paid',
+      layout('Pay your first invoice to open your workspace', '<p>Thanks, ' + esc(o.name) + '. Your workspace for <b>' + esc(o.company) + '</b> is set up at <b>' + esc(o.host) + '</b>.</p>'
+        + '<p>Your first invoice' + (o.amountDueDisplay ? ' (' + esc(o.amountDueDisplay) + ')' : '') + ' is ready in QuickBooks. Pay it by card on the invoice page and your workspace opens the moment the payment lands; no approval step, no waiting.</p>'
+        + (o.paymentLink ? button(o.paymentLink, 'Pay the invoice') : '') + '<p>Already paid? Open your workspace and press <b>I\'ve paid</b>; it checks QuickBooks right away.</p>'));
     return send(o.email, 'We received your ClearSky-OMEGA workspace request',
       layout('Request received', '<p>Thanks, ' + esc(o.name) + '. We\'re setting up a workspace for <b>' + esc(o.company) + '</b> at <b>' + esc(o.host) + '</b>.</p>'
         + '<p>The ClearSky team reviews every new workspace — usually within one business day. You\'ll get another email the moment it\'s live.</p>'
@@ -155,6 +159,7 @@ var T = {
     return send(to, '[OMEGA] New workspace request: ' + o.company + ' (' + o.orgId + ')',
       layout('New workspace request', '<table style="font-size:14px;border-collapse:collapse">'
         + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.email) + row('Vertical', o.vertical) + row('Host', o.host) + row('Phone', o.phone || '—') + row('Note', o.note || '—')
+        + row('Path', o.payNow ? 'Pay now (self-serve): the first invoice is issued; nothing to approve' : 'Trial request: approve to start the trial')
         /* The master console is /admin in omega-core. This defaulted to
            https://tools.csebuilders.com/ — a separate Vercel project running the
            legacy build — so the one button in the signup alert took staff to the

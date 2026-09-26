@@ -38,7 +38,7 @@ function approve(org, billing, selected, book, now, configuredTrialDays) {
   // never eats credit days. The book still bounds the window.
   if (selected.credit) selected = Object.assign({}, selected, { credit: Object.assign({}, selected.credit, { startsAt: new Date(end).toISOString(), endsAt: new Date(end + book.credit.days * R.DAY).toISOString() }) });
   return Object.assign({}, selected, grants, { subscription: subscription(selected, now), packaged: true, billingProvider: 'quickbooks', paymentProvider: 'quickbooks',
-    qboEnv: 'sandbox', packagingState: days ? 'trial' : 'awaiting_payment', trialUsedAt: now, trialStartedAt: now, trialEndsAt: end,
+    qboEnv: book.qbo.env, packagingState: days ? 'trial' : 'awaiting_payment', trialUsedAt: now, trialStartedAt: now, trialEndsAt: end,
     billingDay: new Date(signup).getUTCDate(), nextInvoiceOn: R.iso(end), subscriptionStartedAt: now,
     accessUntil: end, status: 'active', amountDue: 0, proposedPackage: null });
 }

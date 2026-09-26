@@ -6,14 +6,14 @@
 'use strict';
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture'), B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules');
-var fixture, org, profile, db, caller, invoices = 0, checks = 0, shots = 0;
-var root = path.join(__dirname, '..'), out = path.join(root, 'docs/screenshots/packaging-phase-4'), out5 = path.join(root, 'docs/screenshots/packaging-phase-5'), out7 = path.join(root, 'docs/screenshots/packaging-phase-7');
+var fixture, org, profile, db, caller, invoices = 0, checks = 0, shots = 0, qbo = { paid: false };
+var root = path.join(__dirname, '..'), out = path.join(root, 'docs/screenshots/packaging-phase-4'), out5 = path.join(root, 'docs/screenshots/packaging-phase-5'), out7 = path.join(root, 'docs/screenshots/packaging-phase-7'), out10 = path.join(root, 'docs/screenshots/packaging-phase-10a');
 H.mockAdmin(function () { return db; }, function () { return caller; });
 fixture = require('./_lib/logic-fixtures'); org = fixture.ORG;
 profile = H.profile(org, fixture.brand.companyName);
 F.mock('../api/_lib/mail', { templates: { signupReceived: async function () {}, signupAlert: async function () {} } });
-H.mockQbo(function () { invoices++; });
-var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change'), '/api/subscription-proposal': require('../api/subscription-proposal'), '/api/usage': require('../api/usage') };
+H.mockQbo(function () { invoices++; }, qbo);
+var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change'), '/api/subscription-proposal': require('../api/subscription-proposal'), '/api/usage': require('../api/usage'), '/api/offerings': require('../api/offerings') };
 /* Phase 5: a tenant whose current cycle is already paid, seen by its owner. */
 function seedPaid(keys, plan, staff) { seed(keys, staff); H.seedPaidTenant(db, { org: org, keys: keys, plan: plan }); }
 function seed(keys, staff) {
@@ -32,7 +32,7 @@ var server = http.createServer(async function (req, res) {
     if (url.pathname === '/api/tenant-systems') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ name: 'Clean Cell · fixture', surfaces: [] })); }
     if (url.pathname === '/config.js') return res.end('window.CLEARSKY_CONFIG={firebase:{}};');
     if (['/omega-brand.js', '/omega-tenant.js', '/omega-whitelabel.js'].includes(url.pathname)) return res.end('');
-    if (!['/admin/tenant.html', '/start.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
+    if (!['/admin/tenant.html', '/start.html', '/offerings.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
     res.setHeader('Content-Type', url.pathname.endsWith('.css') ? 'text/css' : url.pathname.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(fs.readFileSync(path.join(root, url.pathname)));
   } catch (e) { res.statusCode = e.status || 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: e.message })); }
 });
@@ -46,10 +46,10 @@ async function init(context, base) {
   });
 }
 function check(v, text) { assert(v, text); checks++; }
-async function capture(page, name) { var dir = /^(your-plan-usage|your-plan-buy|closeout-usage|package-review)/.test(name) ? out7 : name.indexOf('your-plan') === 0 ? out5 : out; await page.screenshot({ path: path.join(dir, name + '.png'), fullPage: true }); shots++; }
+async function capture(page, name) { var dir = /^(signup-pay|offerings)/.test(name) ? out10 : /^(your-plan-usage|your-plan-buy|closeout-usage|package-review)/.test(name) ? out7 : name.indexOf('your-plan') === 0 ? out5 : out; await page.screenshot({ path: path.join(dir, name + '.png'), fullPage: true }); shots++; }
 async function run() {
   process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.PACKAGING_SIGNUP_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
-  fs.mkdirSync(out, { recursive: true }); fs.mkdirSync(out5, { recursive: true }); fs.mkdirSync(out7, { recursive: true }); await new Promise(function (resolve) { server.listen(0, '127.0.0.1', resolve); }); var base = 'http://127.0.0.1:' + server.address().port;
+  fs.mkdirSync(out, { recursive: true }); fs.mkdirSync(out5, { recursive: true }); fs.mkdirSync(out7, { recursive: true }); fs.mkdirSync(out10, { recursive: true }); await new Promise(function (resolve) { server.listen(0, '127.0.0.1', resolve); }); var base = 'http://127.0.0.1:' + server.address().port;
   var browser = await require(process.env.PLAYWRIGHT || 'playwright').chromium.launch({ executablePath: process.env.CHROME });
   try {
     for (var pack of ['lite', 'field']) for (var theme of ['light', 'dark']) {
@@ -103,6 +103,49 @@ async function run() {
     for (var pair of [['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await sp.locator('[data-profile-field="' + pair[0] + '"]').fill(pair[1]);
     await capture(sp, 'signup-billing'); await sp.locator('#billing-submit').click(); await sp.locator('#step-done').waitFor({ state: 'visible' });
     check(db.data.get('omega_orgs/signup-fixture.example').status === 'pending', 'actual signup endpoint creates pending org'); check(db.data.get('omega_orgs/signup-fixture.example/billing/current').trialEndsAt === undefined, 'signup has no running trial'); await signup.close();
+    /* Phase 10A: the same form, paying at the end. The engine issues the
+       first invoice with QuickBooks' card page on it; the page waits on it,
+       "I've paid" asks QuickBooks now, and a paid invoice opens the workspace. */
+    seed(['lite'], false); caller.email = 'owner@paynow-fixture.example'; caller.orgId = 'paynow-fixture.example'; caller.uid = 'paynow'; qbo.paid = false; var payInvoices = invoices;
+    var payCtx = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(payCtx, base); var pp10 = await payCtx.newPage(), payErrors = []; pp10.on('pageerror', function (e) { payErrors.push(e.message); });
+    await pp10.goto(base + '/start.html?modules=lite,gridatlas'); await pp10.evaluate(function () { window.dispatchEvent(new CustomEvent('omega:hub', { detail: {} })); });
+    await pp10.locator('#f-submit:not([disabled])').waitFor(); await pp10.locator('#f-name').fill('Pay Now Fixture'); await pp10.locator('#f-submit').click();
+    await pp10.locator('#step-discovery').waitFor({ state: 'visible' }); await pp10.locator('#discovery-continue').click(); await pp10.locator('#step-billing').waitFor({ state: 'visible' });
+    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Pay and start now' && (await pp10.locator('#billing-submit').textContent()).indexOf('trial instead') > 0, 'the billing step offers pay-and-start first and the trial second');
+    for (var pair10 of [['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await pp10.locator('[data-profile-field="' + pair10[0] + '"]').fill(pair10[1]);
+    await pp10.locator('#billing-pay').click(); await pp10.locator('#step-pay').waitFor({ state: 'visible' });
+    var payBill = db.data.get('omega_orgs/paynow-fixture.example/billing/current'), payOrg = db.data.get('omega_orgs/paynow-fixture.example');
+    check(payOrg.status === 'active' && payOrg.approvedBy === 'self-serve' && payBill.packagingState === 'awaiting_payment' && invoices === payInvoices + 1, 'pay now: the workspace is opened by its owner, awaiting the first invoice, one invoice issued');
+    check(payBill.subscription.modules.join() === 'lite,gridatlas' && payBill.modules.join() === 'lite', 'the URL’s choice is what was bought; Lite is what is on until it is paid');
+    check((await pp10.locator('#pay-link').getAttribute('href')) === 'https://connect.intuit.com/pay/fixture' && /\$[\d,]+/.test(await pp10.locator('#pay-amount').textContent()), 'the pay step carries QuickBooks’ card page and the amount');
+    check((await pp10.locator('#pay-host').textContent()) === payOrg.domains[0] && /\.clearskyomega\.com$/.test(payOrg.domains[0]), 'and the address the workspace will open at: ' + payOrg.domains[0]);
+    await capture(pp10, 'signup-pay');
+    await pp10.locator('#pay-check').click(); await pp10.waitForFunction(function () { return /Not paid yet/.test(document.getElementById('pay-status').textContent); });
+    check(db.data.get('omega_orgs/paynow-fixture.example/billing/current').packagingState === 'awaiting_payment', '"I’ve paid" before the payment: QuickBooks says not yet, nothing changes');
+    qbo.paid = true;
+    for (var attempt = 0; attempt < 3; attempt++) { /* the page's own eight-second poll may have just spent the throttle; a by-hand look then says so, and the next one is honoured */
+      db.seed('omega_orgs/paynow-fixture.example/billing/current', Object.assign({}, db.data.get('omega_orgs/paynow-fixture.example/billing/current'), { paymentCheckedAt: 0 }));
+      await pp10.locator('#pay-check:not([disabled])').click();
+      /* paid: the page leaves for the workspace's own address (the route stands in for it) */
+      try { await pp10.waitForURL(function (u) { return u.hostname === payOrg.domains[0]; }, { timeout: 4000 }); break; } catch (e) { if (attempt === 2) throw e; }
+    }
+    var paidBill = db.data.get('omega_orgs/paynow-fixture.example/billing/current');
+    check(paidBill.packagingState === 'paid' && paidBill.modules.join() === 'lite,gridatlas' && paidBill.amountDue === 0 && new URL(pp10.url()).hostname === payOrg.domains[0], 'paid: the package bought is switched on and the page opens the workspace at ' + payOrg.domains[0]);
+    check(payErrors.length === 0, payErrors.join('\n')); await payCtx.close(); qbo.paid = false;
+    /* Phase 10A: the public price list, from the same book, on a desktop and a phone. */
+    for (var theme10 of ['light', 'dark']) {
+      seed(['lite'], false); var offCtx = await browser.newContext({ viewport: { width: theme10 === 'light' ? 1280 : 390, height: 960 }, colorScheme: theme10 }); await offCtx.route('**/*', function (r) { return r.request().url().startsWith(base) ? r.continue() : r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); });
+      var op = await offCtx.newPage(), offErrors = []; op.on('pageerror', function (e) { offErrors.push(e.message); }); await op.goto(base + '/offerings.html');
+      await op.waitForFunction(function () { return document.querySelectorAll('#plans .card').length > 0 && document.querySelectorAll('#modules .card').length > 0; });
+      check((await op.locator('#floor').textContent()).indexOf('$500/month') >= 0, 'the floor is the book’s');
+      check(await op.locator('#plans .card').count() === 4, 'Lite, Field, Pro and Enterprise');
+      check(await op.locator('#modules .card').count() === M.catalog().length, 'every module of the one catalog, each with its server-formatted price');
+      check(await op.locator('#modules .card .price').filter({ hasText: /^\$[\d,]+\/month/ }).count() === M.catalog().length, 'no module without a price');
+      check(/^\/start\.html\?plan=field/.test(await op.locator('#plans .card a.btn').nth(1).getAttribute('href')), 'a plan’s button sends the person to signup with that plan');
+      check(await op.locator('#starters a.btn').count() === Object.keys(M.starters()).length && /^\/start\.html\?modules=/.test(await op.locator('#starters a.btn').first().getAttribute('href')), 'a starter’s button carries its modules');
+      check(await op.evaluate(function () { return document.documentElement.scrollWidth <= innerWidth; }), 'no horizontal overflow at ' + (theme10 === 'light' ? 1280 : 390));
+      check(offErrors.length === 0, offErrors.join('\n')); await capture(op, 'offerings-' + (theme10 === 'light' ? 'desktop-light' : 'phone-dark')); await offCtx.close();
+    }
     /* Phase 5: Your plan for a paid tenant admin — quote, pay first, included, removal. */
     for (var theme5 of ['light', 'dark']) {
       seedPaid(M.starters().ev, 'field', false); var invoicesBefore = invoices;

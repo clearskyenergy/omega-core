@@ -17,10 +17,14 @@ function mockAdmin(getDb, getCaller) {
     init: function () { return { auth: function () { return { setCustomUserClaims: async function () {} }; } }; } });
 }
 /* Every sandbox invoice succeeds with a fixed pay link; `onInvoice` counts. */
-function mockQbo(onInvoice) {
+/* The QuickBooks driver double. `state.paid` (optional) is what a
+   reconciliation finds: the render flips it to stand for a card payment. */
+function mockQbo(onInvoice, state) {
+  state = state || {};
   require('../../api/_lib/qbo-billing').driver = function () {
     return { customer: async function () { return 'C-fixture'; },
-      invoice: async function (plan) { onInvoice(plan); return { id: 'I-fixture', totalCents: plan.subtotalCents, payUrl: 'https://connect.intuit.com/pay/fixture' }; } };
+      invoice: async function (plan) { onInvoice(plan); return { id: 'I-fixture', totalCents: plan.subtotalCents, payUrl: 'https://connect.intuit.com/pay/fixture' }; },
+      reconcile: async function (record) { return { satisfied: state.paid === true, reversed: false, paidCents: state.paid === true ? record.totalCents : 0, payUrl: record.paymentLink }; } };
   };
 }
 function enabledBook() { var book = B.proposed(); book.enabled = true; book.qbo.realmId = 'fixture'; return book; }

@@ -38,6 +38,14 @@ deployed, no tenant is packaged. The order to change that is in
   module, plan, overage and pack (`scripts/qbo-sync-items.js`), invoices
   with the online pay link, and a daily runner that reconciles payments.
   The saved-card path (Step B) waits on the Payments permission.
+- **A company signs itself up and pays at the end** (Phase 10A): the
+  public price list (`/offerings.html`), the details that make the
+  QuickBooks customer, the package it chooses, the first invoice paid by
+  card on QuickBooks' page, and the workspace open the moment the payment
+  reconciles, with nobody's approval. One production switch
+  (`PACKAGING_LIVE=true` with `QBO_ENV=production`) moves all of it from
+  the sandbox company to the real one. The card button on an invoice is
+  QuickBooks Payments; Stripe is bookkeeping only (`PAYMENTS-BROWSER-SETUP.md`).
 
 ## 2. Phase by phase
 
@@ -54,6 +62,7 @@ deployed, no tenant is packaged. The order to change that is in
 | 7 · Usage and review | #142 | Usage counted where a deliverable is produced (EV workbook, closeout ZIP, Site Finder packet, an RFQ), included + packs, the 402 offer at the allowance, overage as a line on the recurring invoice, buy-more packs and auto top-up from Your plan, the 90-day review on the Package tab. |
 | 8 · Omega Logic follows the package | #143 | Office and the four Logic parts are refused by name where they are served; the office menu, hex hub, dashboard and phone app draw only the parts bought; the customer portal is the Customer App part. Legacy Logic tenants unchanged. The release checklist for the whole stack. |
 | 9 · The plant's doors and sign-in | #144 | The bench, the rig and hold/release follow the Plant part; the rules compare a sign-in email lower-cased (Team Hub and terms were refused for a capitalised address); the preview sign-in refusal names the hostname to authorise. |
+| 10A · Sign up, pay in QuickBooks, activate | #146 | The price list anyone can read; *Pay and start now* on signup: the first invoice with QuickBooks' card page, the workspace read-only until it is paid, "I've paid" opens it with the package bought; the fallback to approval when an invoice cannot be issued; the production switch, one rule for every money path. |
 
 Every phase has a validation document (`PACKAGING-PHASE-N-VALIDATION.md`)
 with what was verified, screenshots and what remains, and a row in
@@ -112,9 +121,15 @@ else needs your console access.
    `PACKAGING_SIGNUP_ENABLED=true`, `PACKAGING_BILLING_ENABLED=true`,
    `CRON_SECRET`. Then the sandbox acceptance table in checklist §5, phase
    by phase.
-7. **Production** (you): flags on, `QBO_ENV` unset, items synced to the
-   production company with `--live` in its own PR, one tenant at a time
-   from the Package tab.
+7. **QuickBooks Payments** (you, in the browser): the runbook
+   `PAYMENTS-BROWSER-SETUP.md`, pasted into Claude in Chrome. Until *Pay
+   now* is on an invoice, there is no card page to send anyone to.
+8. **Production** (you, checklist §6 in order): sign the values off (the
+   `VERSION` rename, one PR), seed the book `--live`, sync the items
+   `--live`, enable the book, the five Production variables
+   (`PACKAGING_LIVE=true` and `QBO_ENV=production` among them), one real
+   signup paid and refunded, then existing tenants one at a time from the
+   Package tab.
 
 ## 6. Where everything is
 

@@ -209,6 +209,21 @@ a member's (the bench and rig tokens, a tenant admin's hold/release) runs
 part, a legacy or unrecorded one keeps its own rule — and `firestore.rules`
 compares a sign-in email lower-cased in the team blocks, `termsAcceptances`
 and `isAdmin()` (`scripts/tests/tsigninemail.js`), as `admin.js` does.
+Phase 10A: **one system, QuickBooks.** A company signs up, pays its first
+invoice by card on QuickBooks' page and is in; `GET /api/offerings` is the
+public price list; signup's pay-now runs the engine's own `activate` with the
+caller marked `selfServe` (recorded in history and audit); "I've paid" is
+`plan-change.reconcileNow` (one look per eight seconds), from the signup
+page (`check-payment`) and the billing bar (`reconcile-now`) alike.
+`api/_lib/packaging-mode.js` is the ONE rule for where packaging bills:
+SANDBOX (`QBO_ENV=sandbox`) or LIVE (`PACKAGING_LIVE=true` AND
+`QBO_ENV=production`, both literal), and neither is refused everywhere; the
+engine guard, `qbo-items.guard` (every QuickBooks write), the price book,
+signup, the runner and both scripts read it — never a second copy. A book
+whose version ends in `-proposed` is never production; sign-off is renaming
+`VERSION`. Signup and every activation mark the organization `packaged: true`
+(the live runner's query). The card button on a QuickBooks invoice is
+QuickBooks Payments, not Stripe: `docs/PAYMENTS-BROWSER-SETUP.md`.
 
 Packaged editor presentation uses the server catalog through OmegaCaps;
 OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.

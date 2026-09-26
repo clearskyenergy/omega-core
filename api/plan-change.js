@@ -29,6 +29,7 @@ module.exports = A.handler(async function (req, res) {
     case 'pack-quote': return C.packQuote(await require('./_lib/package-billing').context(A.db(), orgId), input.meter, now);
     case 'pack-buy': return C.packBuy(A.db(), orgId, input, caller, now);
     case 'auto-topup': return C.autoTopup(A.db(), orgId, input.enabled, caller, now);
-    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy or auto-topup');
+    case 'reconcile-now': return C.reconcileNow(A.db(), orgId, caller, now);
+    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy, auto-topup or reconcile-now');
   }
 });

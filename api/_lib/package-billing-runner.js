@@ -5,6 +5,7 @@
  */
 'use strict';
 var S = require('./package-billing'), R = require('./proration'), P = require('./subscription-pricing');
+var Mode = require('./packaging-mode');
 var crypto = require('crypto');
 function authorize(req) {
   var secret = process.env.CRON_SECRET, expected = Buffer.from('Bearer ' + (secret || ''));
@@ -52,8 +53,9 @@ async function deliver(db, orgId, now, mailer) {
 async function tick(db, now, options) {
   options = options || {};
   if (process.env.PACKAGING_BILLING_ENABLED !== 'true') return { disabled: true };
-  // Guard before any state change, even the worker cursor. No production run.
-  if (process.env.QBO_ENV !== 'sandbox') return { disabled: true, reason: 'sandbox-required' };
+  // Guard before any state change, even the worker cursor: the sandbox, or
+  // production only under the live switch (packaging-mode).
+  if (!Mode.open()) return { disabled: true, reason: 'sandbox-required' };
   var state = db.doc('integrations/packaging-billing'), id = crypto.randomBytes(12).toString('hex');
   var lease = await db.runTransaction(async function (tx) {
     var snap = await tx.get(state), old = snap.exists ? snap.data() : {};
@@ -63,7 +65,7 @@ async function tick(db, now, options) {
   if (!lease) return { busy: true };
   var count = Math.min(options.limit || 1, 5), results = [], last = lease.cursor || null;
   try {
-    var query = db.collection('omega_orgs').where('packagingSandbox', '==', true).orderBy('__name__').limit(count);
+    var query = db.collection('omega_orgs').where(Mode.live() ? 'packaged' : 'packagingSandbox', '==', true).orderBy('__name__').limit(count);
     if (last) query = query.startAfter(last);
     var rows = await query.get();
     for (var i = 0; i < rows.docs.length; i++) {

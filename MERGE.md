@@ -2259,3 +2259,14 @@ compares the sign-in email lower-cased in the four team blocks,
 `termsAcceptances` and `isAdmin()`; `omega-auth-errors.js` names the
 preview hostname when a sign-in is refused for an unauthorised domain. See
 docs/PACKAGING-PHASE-9-VALIDATION.md.
+
+## Packaging Phase 10A — September 26, 2026
+
+No `editor.html` edit. `start.html` gains *Pay and start now* and the pay
+step (QuickBooks' card page, "I've paid"); `login.html` sends a new company
+to signup and the price list; `offerings.html` and `api/offerings.js` are
+new (the public price list); `omega-tenant.js`'s billing bar gains "I've
+paid". `api/_lib/packaging-mode.js` is the one sandbox-or-live rule; the
+engine, item sync, QuickBooks guard, price book, signup, runner and the two
+scripts read it. See docs/PACKAGING-PHASE-10A-VALIDATION.md and
+docs/PAYMENTS-BROWSER-SETUP.md.

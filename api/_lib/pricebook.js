@@ -61,7 +61,10 @@ function validate(b) {
     var u = b.usage[k]; if (!M.get(u.module)) error('Unknown usage module');
     ['included', 'overageCents', 'packUnits', 'packCents'].forEach(function (f) { integer(u[f], k + ' ' + f, f === 'included' ? 0 : 1); });
   });
-  if (b.version === VERSION && (!b.qbo || b.qbo.env !== 'sandbox')) error('Proposed book requires sandbox');
+  if (!b.qbo || ['sandbox', 'production'].indexOf(b.qbo.env) < 0) error('Price book environment must be sandbox or production');
+  /* "-proposed" says the values are not signed off: such a book is never the production company's */
+  if (b.qbo.env === 'production' && /-proposed$/.test(b.version)) error('A proposed price book is sandbox-only; sign the values off under a release version');
+  if (b.qbo.env === 'production' && !/^[0-9]+$/.test(String(b.qbo.realmId || ''))) error('A production price book names the production realm');
   integer(b.policy.trialDays, 'trial days', 1); if (b.policy.trialDays > 14) error('Trial exceeds 14 days');
   return b;
 }

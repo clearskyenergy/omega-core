@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plans and pricing · ClearSky-OMEGA</title>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     The price list, for anyone: what is for sale, what each module includes,
+     the plans over the menu, the starter packages, the trial. Every number is
+     the server's (GET /api/offerings, the one price book); this page never
+     computes a price. A choice goes to signup with the package named, where
+     the company pays its first invoice by card and the workspace opens. No
+     sign-in here, no Firebase, no tenant runtime: it is a public page. -->
+<style>
+:root{--bg:#f6f8fa;--card:#fff;--ink:#0b2733;--sub:#4b6270;--line:#dbe3e8;--brand:#0f4c81;--accent:#e8552f;--soft:#e9f2fa;--ok:#137a4b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1a22;--card:#152632;--ink:#eef3f6;--sub:#a9bcc7;--line:#274252;--brand:#7fb6e8;--accent:#ff7a52;--soft:#1b3242;--ok:#5ad39a}}
+:root[data-theme="dark"]{--bg:#0e1a22;--card:#152632;--ink:#eef3f6;--sub:#a9bcc7;--line:#274252;--brand:#7fb6e8;--accent:#ff7a52;--soft:#1b3242;--ok:#5ad39a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 16px 60px}
+header.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+header.top b{font-size:18px}header.top a{color:var(--brand);text-decoration:none;font-weight:600}
+h1{font-size:30px;line-height:1.2;margin:8px 0 6px}h2{font-size:20px;margin:34px 0 10px}p.lede{color:var(--sub);max-width:720px;margin:0 0 18px}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;background:var(--soft);color:var(--brand);font-size:12px;font-weight:700;letter-spacing:.3px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:8px}
+.card.plan{border-color:var(--brand);box-shadow:0 6px 24px rgba(15,76,129,.08)}
+.card h3{margin:0;font-size:17px}.price{font-size:26px;font-weight:800;letter-spacing:-.3px}.price small{font-size:13px;font-weight:600;color:var(--sub)}
+.muted{color:var(--sub);font-size:13px}ul.feat{margin:4px 0 0;padding-left:18px;color:var(--sub);font-size:13.5px}ul.feat li{margin:2px 0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;border-radius:10px;border:1px solid var(--brand);background:var(--brand);color:#fff;font-weight:700;text-decoration:none;margin-top:auto;min-height:44px}
+.btn.ghost{background:transparent;color:var(--brand)}.btn.accent{background:var(--accent);border-color:var(--accent)}
+.starters{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}.starters .card{gap:4px}
+.note{background:var(--soft);border-radius:12px;padding:12px 14px;color:var(--ink);font-size:14px}
+#status{color:var(--sub)}footer{margin-top:40px;color:var(--sub);font-size:12.5px}
+@media (max-width:480px){h1{font-size:24px}.price{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top"><b>ClearSky-OMEGA</b><nav><a href="/login">Sign in</a></nav></header>
+  <span class="pill" id="floor">Loading the price list…</span>
+  <h1>Plans and pricing</h1>
+  <p class="lede">A menu of modules, one price each, on a Lite base. Pick a plan that bundles the ones you need, or build your own. Pay your first invoice by card and your workspace opens right away; add a module later from your plan, and it is on the moment it is paid.</p>
+  <p id="status" role="status"></p>
+
+  <h2>Plans</h2>
+  <div class="grid" id="plans"></div>
+
+  <h2>Starter packages by what you do</h2>
+  <p class="lede">What a company like yours usually starts with. Each is a set of modules at their listed prices; nothing is bundled at a discount that a plan does not already give.</p>
+  <div class="starters" id="starters"></div>
+
+  <h2>Every module</h2>
+  <p class="lede">Every module needs Lite. Prices are per month; annual prepay is billed as eleven months. Where a module has a usage allowance it is listed; more can be bought as a pack when you run out.</p>
+  <div class="grid" id="modules"></div>
+
+  <h2>Trial, logins and the service fee</h2>
+  <div class="note" id="terms"></div>
+  <footer>Prices are the platform's current price list and are confirmed on your invoice. Enterprise is an annual contract; <a href="/login" style="color:var(--brand)">talk to us</a>.</footer>
+</div>
+<script>
+/* ES5. The page reads the server's list and draws it; a choice carries the
+   package to signup in the address (?plan=field, ?modules=lite,gridatlas). */
+(function () {
+  function $(id) { return document.getElementById(id); }
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  function start(q) { return (O.signup && O.signup.start ? O.signup.start : '/start.html') + q; }
+  var O = null;
+  function draw(o) {
+    O = o;
+    $('floor').textContent = 'From ' + o.floorDisplay + ' · nothing is free';
+    var plans = $('plans'); plans.textContent = '';
+    var lite = el('div', 'card'); lite.appendChild(el('h3', null, esc(o.lite.name)));
+    lite.appendChild(el('div', 'price', esc(o.lite.monthlyDisplay.replace('/month', '')) + '<small>/month</small>'));
+    lite.appendChild(el('div', 'muted', 'The base every package needs: Site Map, the sandbox, sales and intake, financing, Export to Monday. Service fee ' + esc(o.lite.serviceFeeDisplay) + '.'));
+    lite.appendChild(el('a', 'btn ghost', 'Start with Lite')); lite.lastChild.href = start('?modules=lite'); plans.appendChild(lite);
+    o.plans.forEach(function (p) {
+      var c = el('div', 'card plan'); c.appendChild(el('h3', null, esc(p.name)));
+      c.appendChild(el('div', 'price', esc(p.monthlyDisplay.replace('/month', '')) + '<small>/month</small>'));
+      c.appendChild(el('div', 'muted', esc(p.capDisplay) + '. Service fee ' + esc(p.serviceFeeDisplay) + '.'));
+      c.appendChild(el('a', 'btn accent', 'Choose ' + esc(p.name))); c.lastChild.href = start('?plan=' + encodeURIComponent(p.key)); plans.appendChild(c);
+    });
+    var ent = el('div', 'card'); ent.appendChild(el('h3', null, 'Enterprise'));
+    ent.appendChild(el('div', 'price', 'from ' + esc(o.enterprise.annualFloorDisplay.replace('/year', '')) + '<small>/year</small>'));
+    ent.appendChild(el('div', 'muted', 'Annual contract: setup ' + esc(o.enterprise.setupDisplay) + ', ' + esc(o.enterprise.devHoursMonthly) + ' development hours a month, service fee ' + esc(o.enterprise.serviceFeeDisplay) + '.'));
+    ent.appendChild(el('a', 'btn ghost', 'Talk to us')); ent.lastChild.href = '/login'; plans.appendChild(ent);
+    var byKey = {}; o.modules.forEach(function (m) { byKey[m.key] = m; });
+    var st = $('starters'); st.textContent = '';
+    Object.keys(o.starters).forEach(function (k) {
+      var keys = o.starters[k], c = el('div', 'card'); c.appendChild(el('h3', null, esc(o.starterLabels[k] || k)));
+      c.appendChild(el('div', 'muted', keys.map(function (x) { return byKey[x] ? byKey[x].name : x; }).join(' · ')));
+      c.appendChild(el('a', 'btn ghost', 'Start with this')); c.lastChild.href = start('?modules=' + encodeURIComponent(keys.join(','))); st.appendChild(c);
+    });
+    var mods = $('modules'); mods.textContent = '';
+    o.modules.forEach(function (m) {
+      var c = el('div', 'card'); c.appendChild(el('h3', null, esc(m.name)));
+      c.appendChild(el('div', 'price', esc(m.monthlyDisplay.replace('/month', '')) + '<small>/month</small>'));
+      if (m.usageDisplay) c.appendChild(el('div', 'muted', 'Includes ' + esc(m.usageDisplay)));
+      if (m.features.length) { var ul = el('ul', 'feat'); m.features.forEach(function (f) { ul.appendChild(el('li', null, esc(f))); }); c.appendChild(ul); }
+      if (m.key !== 'lite') { c.appendChild(el('a', 'btn ghost', 'Start with Lite + ' + esc(m.name))); c.lastChild.href = start('?modules=' + encodeURIComponent(['lite'].concat(m.requires.filter(function (r) { return r !== 'lite'; }), [m.key]).join(','))); }
+      mods.appendChild(c);
+    });
+    $('terms').innerHTML = '<b>Trial.</b> ' + esc(o.trial.note) + '<br><b>Logins.</b> ' + esc(o.logins.builders) + ' builders and ' + esc(o.logins.viewers) + ' viewers included; an extra builder is ' + esc(o.logins.builderDisplay) + ' and an extra viewer ' + esc(o.logins.viewerDisplay) + '.<br><b>Annual.</b> ' + esc(o.annual.note) + '<br><b>Service fee.</b> Charged once a year with the first invoice; ClearSky can waive it for the first year on a contract.';
+    $('status').textContent = o.source === 'seeded' ? '' : 'Proposed price list; final prices are confirmed on your invoice.';
+  }
+  var x = new XMLHttpRequest(); x.open('GET', '/api/offerings'); x.onload = function () {
+    try { if (x.status !== 200) throw new Error('HTTP ' + x.status); draw(JSON.parse(x.responseText)); }
+    catch (e) { $('status').textContent = 'The price list could not be loaded. Sign in, or try again in a moment.'; $('floor').textContent = 'Plans and pricing'; }
+  }; x.onerror = function () { $('status').textContent = 'The price list could not be loaded. Try again in a moment.'; $('floor').textContent = 'Plans and pricing'; }; x.send();
+})();
+</script>
+</body>
+</html>

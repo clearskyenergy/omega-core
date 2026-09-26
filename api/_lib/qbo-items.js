@@ -5,6 +5,7 @@
  */
 'use strict';
 var B = require('./pricebook'), M = require('./modules'), crypto = require('crypto');
+var Mode = require('./packaging-mode');
 function fail(message) { var e = new Error(message); e.status = 409; throw e; }
 function items(book) {
   B.validate(book);
@@ -23,12 +24,20 @@ function items(book) {
 }
 function requestId(realm, name) { return crypto.createHash('sha256').update('omega-package-item:' + realm + ':' + name).digest('hex').slice(0, 48); }
 function dependencies() { return { Q: require('./qbo'), request: require('./qbo-sales').request }; }
+/* The one guard every QuickBooks write in packaging passes (the item sync
+   and the billing driver's calls). The company is the mode's
+   (packaging-mode): the sandbox unless PACKAGING_LIVE=true with
+   QBO_ENV=production, and then the production company, with the current
+   book, the process's QuickBooks host and the stored connection all agreeing. */
 async function guard(book, realm, deps) {
-  if (book.version !== B.VERSION || book.qbo.env !== 'sandbox' || deps.Q.ENV !== 'sandbox' || deps.Q.IS_SANDBOX !== true || deps.Q.API_BASE !== 'https://sandbox-quickbooks.api.intuit.com') fail('Packaging item sync is sandbox-only');
-  if (typeof realm !== 'string' || !/^[0-9]+$/.test(realm)) fail('Explicit sandbox realm required');
-  if (book.qbo.realmId && String(book.qbo.realmId) !== realm) fail('Price book sandbox realm mismatch');
+  var want = Mode.env(), base = want === 'sandbox' ? 'https://sandbox-quickbooks.api.intuit.com' : 'https://quickbooks.api.intuit.com';
+  if (book.version !== B.VERSION || book.qbo.env !== want || deps.Q.ENV !== want || deps.Q.IS_SANDBOX !== (want === 'sandbox') || deps.Q.API_BASE !== base) {
+    fail(want === 'sandbox' ? 'Packaging item sync is sandbox-only until PACKAGING_LIVE=true with QBO_ENV=production' : 'Live packaging needs the current book synced to the production company and the process on the production host');
+  }
+  if (typeof realm !== 'string' || !/^[0-9]+$/.test(realm)) fail('Explicit ' + want + ' realm required');
+  if (book.qbo.realmId && String(book.qbo.realmId) !== realm) fail('Price book ' + want + ' realm mismatch');
   var connection = await deps.Q.load();
-  if (!connection || connection.env !== 'sandbox' || String(connection.realmId) !== realm) fail('Stored ClearSky connection is not the requested sandbox');
+  if (!connection || connection.env !== want || String(connection.realmId) !== realm) fail('Stored ClearSky connection is not the requested ' + want);
 }
 async function sync(db, book, options, deps) {
   options = options || {}; B.writable(book);
@@ -69,7 +78,7 @@ async function sync(db, book, options, deps) {
     Object.keys(modulePrices).forEach(function (k) { modulePrices[k].qboItemId = bindings['module:' + k]; });
     var plans = JSON.parse(JSON.stringify(book.plans));
     Object.keys(plans).forEach(function (k) { plans[k].qboItemId = bindings['plan:' + k]; });
-    tx.update(ref, { modules: modulePrices, plans: plans, qbo: { env: 'sandbox', realmId: options.realmId, items: bindings } });
+    tx.update(ref, { modules: modulePrices, plans: plans, qbo: { env: Mode.env(), realmId: options.realmId, items: bindings } });
   });
   return { version: book.version, dryRun: false, realmId: options.realmId, items: bindings };
 }

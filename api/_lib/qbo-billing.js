@@ -1,6 +1,9 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
- * Subscription accounting in ClearSky's explicitly pinned SANDBOX only.
- * No OAuth operations, payment creation, tax calculation, or production fallback.
+ * Subscription accounting in the ONE QuickBooks company the mode names
+ * (api/_lib/packaging-mode.js): the pinned sandbox, or the production company
+ * only under PACKAGING_LIVE=true with QBO_ENV=production. Every call passes
+ * qbo-items' guard first. No OAuth operations, payment creation or tax
+ * calculation, and never a fallback from one company to the other.
  */
 'use strict';
 var crypto = require('crypto'), I = require('./qbo-items'), BP = require('./billing-profile'), Policy = require('./logic-policy');

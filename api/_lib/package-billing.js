@@ -4,6 +4,7 @@
  */
 'use strict';
 var B = require('./pricebook'), P = require('./subscription-pricing'), Policy = require('./package-billing-policy');
+var Mode = require('./packaging-mode');
 var BP = require('./billing-profile'), Q = require('./qbo-billing'), M = require('./modules'), R = require('./proration'), U = require('./usage');
 function fail(message, status) { var e = new Error(message); e.status = status || 409; throw e; }
 function clean(b) { var out = Object.assign({}, b); delete out.activationLock; return out; }
@@ -16,12 +17,22 @@ async function context(db, orgId, version) {
   var book = await B.load(db, version || billing.pricebookVersion || B.VERSION);
   return { root: root, org: rows[0].data(), billing: billing, profile: rows[2].exists ? rows[2].data() : null, book: book };
 }
+/* Two modes, both explicit (api/_lib/packaging-mode.js). SANDBOX: QBO_ENV=sandbox,
+   a tenant marked packagingSandbox, an enabled sandbox book. LIVE:
+   PACKAGING_LIVE=true AND QBO_ENV=production, an enabled book under a release
+   version synced to the production company; every tenant may then buy. */
+var live = Mode.live;
 function guard(c) {
   if (process.env.PACKAGING_BILLING_ENABLED !== 'true') fail('Packaging billing is disabled');
-  if (process.env.QBO_ENV !== 'sandbox') fail('Packaging billing requires QBO_ENV=sandbox');
+  if (Mode.live()) {
+    if (!c.book.enabled || c.book.version !== B.VERSION || c.book.qbo.env !== 'production' || !c.book.qbo.realmId) fail('An enabled price book synced to the production QuickBooks company is required');
+    return;
+  }
+  if (!Mode.sandbox()) fail('Packaging billing requires QBO_ENV=sandbox (or PACKAGING_LIVE=true with QBO_ENV=production)');
   if (c.org.packagingSandbox !== true) fail('An explicitly marked sandbox tenant is required');
   if (!c.book.enabled || c.book.version !== B.VERSION || c.book.qbo.env !== 'sandbox') fail('An enabled proposed sandbox price book is required');
 }
+function canApply(c) { try { guard(c); return true; } catch (e) { return false; } }
 function prepare(c, input, now) {
   if (c.profile && c.profile.syncLock && c.profile.syncLock.until > now) fail('Billing profile update is running; refresh shortly');
   var at = input.effectiveAt == null ? Math.floor(now / 60000) * 60000 : input.effectiveAt;
@@ -31,12 +42,17 @@ function prepare(c, input, now) {
   if (action === 'approve') patch = Policy.approve(c.org, c.billing, selected, c.book, at, process.env.TRIAL_DAYS);
   else if (action === 'activate') {
     if (c.org.status !== 'active') fail('Paid activation requires an active organization');
-    if (c.billing.packaged === true) fail('Use plan-change for an existing packaged subscription');
+    /* a packaged record that is still `pending` is a signup nobody has
+       approved or paid: activation is its first step, not a change */
+    if (c.billing.packaged === true && c.billing.packagingState !== 'pending') fail('Use plan-change for an existing packaged subscription');
     if (c.billing.trialEndsAt != null) fail('Existing trial dates must be preserved; review the legacy tenant separately');
+    /* the signup instant may sit inside the same minute the activation is
+       floored to (pay-at-the-end activates seconds after the record is
+       made): it must exist and not be in the future, judged against now */
     var signup = Policy.instant(c.org.signedUpAt);
-    if (!isFinite(signup) || signup > at) fail('Original signup date is required');
+    if (!isFinite(signup) || signup > now) fail('Original signup date is required');
     patch = Object.assign({}, selected, M.resolve(['lite']), { packaged: true, modules: ['lite'], subscription: Policy.subscription(selected, at), packagingState: 'awaiting_payment',
-      billingProvider: 'quickbooks', paymentProvider: 'quickbooks', qboEnv: 'sandbox',
+      billingProvider: 'quickbooks', paymentProvider: 'quickbooks', qboEnv: c.book.qbo.env,
       proposedPackage: selected, billingDay: new Date(signup).getUTCDate(), nextInvoiceOn: R.iso(at), subscriptionStartedAt: at,
       accessUntil: at, status: 'active' });
   } else fail('Action must be approve or activate', 400);
@@ -53,7 +69,7 @@ function display(c, p) {
     scheduledInvoice: p.action === 'approve' ? Policy.invoice(p.patch, c.book, p.patch.nextInvoiceOn) : null,
     customer: BP.customer(p.profile, c.root.id),
     trialStartsOnApproval: p.action === 'approve', billingDay: p.patch.billingDay,
-    canApply: process.env.PACKAGING_BILLING_ENABLED === 'true' && process.env.QBO_ENV === 'sandbox' && c.org.packagingSandbox === true && c.book.enabled === true,
+    canApply: canApply(c),
     notice: p.action === 'approve' ? 'Approval creates the sandbox customer and starts the one trial. The first invoice is issued at trial end.' : 'Access starts only after the sandbox invoice is confirmed paid.' };
 }
 async function preview(db, orgId, input, now) { var c = await context(db, orgId, input.pricebookVersion); return display(c, prepare(c, input, now)); }
@@ -63,7 +79,10 @@ async function reread(tx, db, c) {
   return { root: c.root, org: rows[0].data(), billing: rows[1].exists ? rows[1].data() : {}, profile: rows[2].data(), book: rows[3].data() };
 }
 async function apply(db, orgId, input, caller, now, deps) {
-  if (!caller.staff) fail('Staff only', 403);
+  /* Staff, or the signup itself paying at the end (api/tenant-signup.js
+     payNow: the caller is the new workspace's owner, marked selfServe by
+     that one path and recorded as such in the history and the audit). */
+  if (!caller.staff && caller.selfServe !== true) fail('Staff only', 403);
   var c = await context(db, orgId, input.pricebookVersion); guard(c);
   var requestBody = Object.assign({}, input); delete requestBody.dryRun; delete requestBody.previewId;
   var requestFingerprint = Q.key(B.stable(requestBody));
@@ -109,8 +128,10 @@ async function apply(db, orgId, input, caller, now, deps) {
       }
       B.freeze(tx, db.doc('pricebook/' + c.book.version), fresh.book, now);
       tx.set(current, patch, { merge: true });
+      if (p.action !== 'approve') tx.set(c.root, { packaged: true, updatedAt: now }, { merge: true });
+      /* the organization record says it is packaged: the live runner finds its tenants by this, as the sandbox runner does by packagingSandbox */
       if (p.action === 'approve') {
-        tx.update(c.root, { status: 'active', approvedAt: now, approvedBy: caller.email, packagingTrialUsedAt: now });
+        tx.update(c.root, { status: 'active', approvedAt: now, approvedBy: caller.email, packagingTrialUsedAt: now, packaged: true });
         (c.org.domains || []).forEach(function (host) { tx.set(db.doc('tenant_public/' + host), { status: 'active', tier: patch.tier }, { merge: true }); });
         tx.set(c.root.collection('notifications').doc('package-approved'), { kind: 'account', read: false, createdAt: now,
           text: 'Your workspace is approved. Your trial ends on ' + R.iso(patch.trialEndsAt) + '.', packageMail: 'approved', mailState: 'pending' });
@@ -118,7 +139,7 @@ async function apply(db, orgId, input, caller, now, deps) {
       var result = { ok: true, orgId: orgId, action: p.action, trialEndsAt: patch.trialEndsAt || null,
         nextInvoiceOn: patch.nextInvoiceOn, paymentLink: patch.paymentLink || null, packagingState: patch.packagingState };
       tx.set(op, { state: 'done', result: result, completedAt: now }, { merge: true });
-      var event = { at: now, by: caller.email, action: 'package-' + p.action, was: clean(c.billing), changed: patch };
+      var event = { at: now, by: caller.email, action: 'package-' + p.action, was: clean(c.billing), changed: patch, selfServe: caller.selfServe === true };
       tx.set(current.collection('history').doc(p.id), event);
       tx.set(c.root.collection('admin_audit').doc(p.id), event);
       return result;
@@ -298,5 +319,5 @@ async function reconcile(db, orgId, now, deps, options) {
   if (bounded) await current.update({ reconcileCursor: rows.docs.length === bounded ? rows.docs[rows.docs.length - 1].data().date : null });
   return { invoices: results };
 }
-module.exports = { context: context, guard: guard, prepare: prepare, display: display, preview: preview, apply: apply,
+module.exports = { context: context, guard: guard, live: live, canApply: canApply, prepare: prepare, display: display, preview: preview, apply: apply,
   issue: issue, reconcile: reconcile, accessAfterInvoices: accessAfterInvoices, displayAfter: displayAfter, kindOf: kindOf, bought: bought };
