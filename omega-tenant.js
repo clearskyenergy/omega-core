@@ -616,7 +616,20 @@
       var bar = document.createElement('aside'); bar.id = 'omega-billing-status'; bar.setAttribute('role', 'status');
       bar.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;z-index:99998;padding:12px 18px;border:1px solid #6e9be0;border-radius:8px;background:#16202b;color:#eef2f6;font:13px/1.5 system-ui;display:flex;flex-wrap:wrap;gap:10px;box-shadow:0 4px 20px #0004';
       var text = document.createElement('span'); text.textContent = view.billingNotice.text; bar.appendChild(text);
-      if (view.billingNotice.payUrl) { var pay = document.createElement('a'); pay.textContent = 'Pay in QuickBooks'; pay.href = view.billingNotice.payUrl; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.color = '#9fc5ff'; bar.appendChild(pay); }
+      if (view.billingNotice.payUrl) {
+        /* "I've paid": ask the platform to look at QuickBooks now (plan-change
+           reconcile-now) instead of waiting for the daily runner; a paid
+           invoice reloads the page into the opened workspace */
+        var paid = document.createElement('button'); paid.type = 'button'; paid.textContent = "I've paid"; paid.style.cssText = 'margin-left:10px;padding:4px 10px;border-radius:6px;border:1px solid #6e9be0;background:transparent;color:#eef2f6;cursor:pointer;font:inherit';
+        paid.onclick = function () {
+          paid.disabled = true; paid.textContent = 'Checking QuickBooks…';
+          user.getIdToken().then(function (token) { return global.fetch('/api/plan-change', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reconcile-now' }) }); })
+            .then(function (r) { return r.json(); })
+            .then(function (j) { if (j && j.paid) { global.location.reload(); return; } paid.disabled = false; paid.textContent = "I've paid"; text.textContent = (j && j.error) ? j.error : 'Not paid yet as far as QuickBooks knows; a card payment shows within a minute.'; },
+              function () { paid.disabled = false; paid.textContent = "I've paid"; });
+        };
+        bar.appendChild(paid);
+        var pay = document.createElement('a'); pay.textContent = 'Pay in QuickBooks'; pay.href = view.billingNotice.payUrl; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.color = '#9fc5ff'; bar.appendChild(pay); }
       document.body.appendChild(bar);
     }
     var user = global.firebase && firebase.auth().currentUser; if (!user || !global.fetch) return;

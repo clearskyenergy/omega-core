@@ -291,7 +291,16 @@
            pays for would be an invented obstacle. -->
       <div id="paneSignup" class="choose" style="display:none;">
         <h2>Create an account</h2>
-        <p class="sub">Use your work email. A ClearSky administrator approves each new company before its tools open up.</p>
+        <p class="sub" id="suLede">Use your work email. A ClearSky administrator approves each new company before its tools open up.</p>
+        <!-- When packaged signup is on (api/offerings says so), the account is
+             made on the signup page: company and billing details, the package,
+             and the first invoice paid by card to open the workspace. The form
+             below is the older request path and stays for when it is off. -->
+        <div id="suPackaged" style="display:none">
+          <p class="sub">Choose what you need, pay your first invoice by card, and your workspace opens the moment it is paid. A 14-day trial can be requested instead.</p>
+          <a class="btn-primary" id="suStart" href="/start.html" style="width:100%;justify-content:center">Choose your package and start</a>
+          <p class="note" style="text-align:left;margin-top:10px"><a href="/offerings.html">See plans and pricing</a></p>
+        </div>
         <form id="signupForm" novalidate>
           <div class="field">
             <label for="suEmail">Work email</label>
@@ -1039,6 +1048,13 @@
       }
     });
 
+    /* Packaged signup on? The public price list says (no sign-in needed);
+       then the form gives way to the signup page, which pays at the end. */
+    fetch('/api/offerings', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (o) {
+      if (!o || !o.signup || !o.signup.packaged) return;
+      $("suPackaged").style.display = ''; $("signupForm").style.display = 'none'; $("suLede").style.display = 'none';
+      $("suStart").href = o.signup.start || '/start.html';
+    }).catch(function () {});
     /* ---- Create an account ------------------------------------------------
        Two things happen and they are deliberately separate: a Firebase Auth
        account (which needs no privilege and exists the moment it is made) and

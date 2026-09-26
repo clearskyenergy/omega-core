@@ -67,15 +67,19 @@ All off by default. Set them in Vercel per environment; never in the repo.
 
 | Variable | Where | Meaning |
 |---|---|---|
-| `QBO_ENV=sandbox` | Preview | every QuickBooks call goes to the sandbox company |
+| `QBO_ENV=sandbox` | Preview | every QuickBooks call goes to the sandbox company (`api/_lib/packaging-mode.js`) |
+| `PACKAGING_LIVE=true` **and** `QBO_ENV=production` | Production only, both literal | LIVE: the production company, an enabled book under a release version, any tenant may buy. One without the other, or `QBO_ENV` unset, is refused everywhere: no invoice, no sync, no runner tick, no packaged signup |
 | `PACKAGING_SIGNUP_ENABLED=true` | Preview | `start.html` collects the billing profile and the discovery answers |
 | `PACKAGING_BILLING_ENABLED=true` | Preview | activation, invoices, reconciliation, plan changes, packs |
 | `CRON_SECRET` (and the billing runner's own secret, per `api/billing-run.js`) | Preview and Production | the authenticated runners: `/api/logic-worker` (five-minute) and `/api/billing-run` (daily: reconcile, recurring invoices, review) |
 | existing Firebase Admin and QuickBooks credentials | as today | no new OAuth scope; Step B (saved card) stays off |
 
-A tenant takes part only when its `omega_orgs/{org}` record carries
-`packagingSandbox: true` (signup writes it in Preview; nothing writes it to
-a live tenant). Applying a package to an unmarked organization is refused.
+In sandbox mode a tenant takes part only when its `omega_orgs/{org}`
+record carries `packagingSandbox: true` (signup writes it in Preview);
+applying a package to an unmarked organization is refused. In live mode
+every tenant may buy, a live signup is not a sandbox tenant, and the daily
+runner finds its tenants by `packaged: true` on the organization record,
+which signup and every activation write.
 
 ## 3. Seeds, sync and backfill
 
@@ -135,18 +139,45 @@ Then the runners: `vercel.json` schedules `/api/billing-run` daily and
 on Production, so in Preview invoke each by hand with its secret and read
 the audit rows it writes.
 
-## 6. Production
+## 6. Production (Phase 10A: in this order, each step checked before the next)
 
+- [ ] **QuickBooks Payments is on** in the production company, with cards
+      and bank transfer allowed on invoices and *Pay now* visible on an
+      invoice preview. Without it no invoice carries a pay link and every
+      pay-at-the-end signup falls back to approval. The browser runbook:
+      `docs/PAYMENTS-BROWSER-SETUP.md` (it also connects the Stripe
+      bookkeeping app; that is not what pays an invoice).
 - [ ] Sandbox acceptance complete for every phase above.
-- [ ] `QBO_ENV` unset (production company), `PACKAGING_*` flags on, the book
-      frozen at the signed-off version, items synced to the production
-      company with `scripts/qbo-sync-items.js --live` in its own PR.
-- [ ] One tenant at a time: mark `packagingSandbox` is **not** the
+- [ ] **Sign the values off**: rename `VERSION` in `api/_lib/pricebook.js`
+      from `…-proposed` to the release name (`2026-10`), one PR. A
+      `-proposed` book is refused as a production book by its own
+      validation, so this is the one line that cannot be skipped.
+- [ ] Seed it for the production company:
+      `node scripts/seed-pricebook.js --live --realm=<production realm>`
+      (dry run), then `--apply`.
+- [ ] Bind the items in the production company, with the process in live
+      mode and the flag as the second confirmation:
+      `PACKAGING_LIVE=true QBO_ENV=production node scripts/qbo-sync-items.js --apply --live --realm=<production realm> --income-account=<id> --taxable|--non-taxable`
+      (dry run first without `--apply`). One without the other is refused.
+- [ ] Enable the book: `node scripts/enable-packaging-sandbox.js` (dry run
+      prints the hash), then `--apply --expected-hash=…`. It enables the
+      current book in either mode; the name is historical.
+- [ ] Vercel **Production** environment: `PACKAGING_SIGNUP_ENABLED=true`,
+      `PACKAGING_BILLING_ENABLED=true`, `PACKAGING_LIVE=true`,
+      `QBO_ENV=production`, `CRON_SECRET`. Redeploy.
+- [ ] One real signup by ClearSky (a company on a ClearSky-controlled
+      domain, a real card): the pay step shows QuickBooks' page, the
+      invoice is in the production company, "I've paid" opens the
+      workspace with the package bought. Then refund the payment and void
+      the invoice in QuickBooks; the runner marks the record reversed.
+- [ ] Existing tenants one at a time: `packagingSandbox` is **not** the
       production gate — production packaging follows the backfilled
       `modules[]` per tenant; cut over a tenant by writing its package from
       the Package tab and watching its first recurring invoice.
 - [ ] Signed-agreement tenants (Fenecon, the OSA JV) stay excluded from
       clickwrap-driven changes until counsel clears them.
+- Once the release version is seeded for production, the sandbox
+  acceptance for that version is over: one Firestore, one `VERSION`.
 
 ## 7. Debt carried into the release (not blocking the merge, blocking "done")
 
