@@ -2583,6 +2583,27 @@ window._omegaReady = function(){
            /api/tenant-billing via the Admin SDK; nothing client-side can write
            it, which is what makes it worth reading. -->
       <div class="acct-sec-title">Billing &amp; plan</div>
+      <!-- Packaged workspace (Phase 10B): what was bought and what is on, the
+           state, the next invoice, the open invoice with its QuickBooks pay
+           link and "I've paid", and the door to add a module: the one package
+           menu (omega-package-menu.js), handed this page's own package view.
+           Filled by renderPackagedBilling(); a legacy tenant never sees it. -->
+      <div id="acct-package" style="display:none">
+        <div id="acct-package-rows"></div>
+        <div id="acct-package-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px"></div>
+        <div class="acct-msg" id="acct-package-msg"></div>
+        <div class="acct-sec-title" style="font-size:12px;opacity:.8">The Ladder</div>
+        <div class="acct-note" id="acct-package-ladder">Build your own experience and pay for what you need to run your business. Every module is an opt-in, and Omega Logic is by department: Office, Plant, Materials &amp; Purchasing, Logistics &amp; Warranty and the Customer App each stand on their own rung.</div>
+        <div class="acct-note" id="acct-package-plan" style="margin-top:8px">—</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class="acct-av-btn" id="acct-package-add" onclick="openPackageMenu(null)">Open the Ladder</button>
+          <a class="acct-av-btn ghost" href="/offerings.html" target="_blank" rel="noopener" style="text-decoration:none">Every rung and its price</a>
+        </div>
+        <div class="acct-msg" id="acct-package-autopay">Each invoice arrives by email on your billing day with its pay link. A card saved on QuickBooks' page pays the next one in one click.</div>
+        <div class="acct-sec-title" style="font-size:12px;opacity:.8">Invoices</div>
+        <div id="acct-package-invoices" class="acct-msg">—</div>
+      </div>
+      <div id="acct-legacy-billing">
       <div class="acct-row"><span class="k">Plan</span><span class="v" id="acct-tier">—</span></div>
       <div class="acct-row"><span class="k">Add-ons</span><span class="v" id="acct-addons">—</span></div>
       <div class="acct-row"><span class="k">Amount due</span><span class="v" id="acct-amt">—</span></div>
@@ -2596,6 +2617,7 @@ window._omegaReady = function(){
       <div class="acct-msg" id="acct-billing-msg"></div>
       <div class="acct-sec-title" style="font-size:12px;opacity:.8">Invoices</div>
       <div id="acct-invoices" class="acct-msg">—</div>
+      </div>
 
       <!-- Deliberately a SECOND list. Invoices above are what Stripe billed;
            this is what ClearSky changed about the terms. Merging them would
@@ -2644,6 +2666,7 @@ window._omegaReady = function(){
 <script src="/omega-brand.js"></script>
 <script src="/omega-tenant.js"></script>
 <script src="/omega-whitelabel.js"></script>
+<script src="/omega-package-menu.js?v=2"></script>
 <!-- Terms of Service acceptance gate. Shared platform file, no tenant data.
      Wraps toggleAuthMode / emailAuth / showApp defined further down, so it
      polls briefly for them rather than assuming script order. -->
@@ -4390,6 +4413,12 @@ function loadBilling(){
   var ref = db.collection('omega_orgs').doc(org).collection('billing').doc('current');
   ref.get().then(function(d){
     var b = (d && d.exists) ? d.data() : {};
+    /* A packaged workspace (the QuickBooks package): its own section; the
+       legacy rows, the Stripe portal and the Stripe invoices stay hidden. */
+    var pk = document.getElementById('acct-package'), lg = document.getElementById('acct-legacy-billing');
+    if (b.packaged === true) { if (pk) pk.style.display = ''; if (lg) lg.style.display = 'none'; renderPackagedBilling(b); return; }
+    if (pk) pk.style.display = 'none'; if (lg) lg.style.display = '';
+    loadInvoices();
     setText('acct-tier',   b.tier || 'not yet priced');
     setText('acct-addons', (b.addons && b.addons.length) ? b.addons.join(', ') : 'none');
     setText('acct-amt',    b.amountDue == null ? '—' : _money(b.amountDue));
@@ -4410,9 +4439,7 @@ function loadBilling(){
        button without one produces a 400 from the endpoint and a dead end. */
     var portal = document.getElementById('acct-portal');
     if (portal && b.stripeCustomerId) portal.style.display = '';
-  }).catch(function(){ /* no billing doc yet — leave the dashes */ });
-
-  loadInvoices();
+  }).catch(function(){ /* no billing doc yet — leave the dashes */ loadInvoices(); });
 
   ref.collection('history').orderBy('at', 'desc').limit(12).get().then(function(sn){
     var host = document.getElementById('acct-billing-history');
@@ -4427,6 +4454,10 @@ function loadBilling(){
       if (c.amountDue != null) parts.push('amount due ' + _money(c.amountDue));
       if (c.subscriptionDue) parts.push('due ' + _acctDay(c.subscriptionDue));
       if (c.addons) parts.push('add-ons: ' + (c.addons.length ? c.addons.join(', ') : 'none'));
+      /* packaged history: the engine's own rows (package-activate, plan-change-apply…) */
+      if (h.action && /^package-|^plan-change|^pack-|^auto-topup/.test(h.action)) parts.unshift(String(h.action).replace(/^package-/, '').replace(/-/g, ' '));
+      if (Array.isArray(c.modules)) parts.push('on: ' + _moduleNames(c.modules).join(', '));
+      if (c.packagingState) parts.push(String(c.packagingState).replace(/_/g, ' '));
       rows.push('<div>' + escHtml(when) + ' — ' + escHtml(parts.join(' · ') || 'terms updated') + '</div>');
     });
     host.innerHTML = rows.join('');
@@ -4469,6 +4500,106 @@ function loadInvoices(){
   });
 }
 
+/* ── PACKAGED BILLING (Phase 10B: pay and change the plan in settings) ──
+   billing/current is readable by the tenant, so the facts come from there;
+   the invoices with their pay links and the monthly figure come from
+   GET /api/plan-change (owner or admin); "I've paid" is the same look at
+   QuickBooks the signup page and the billing bar make (reconcile-now);
+   adding a module opens the one package menu with THIS page's package
+   view, and a change refreshes the view so the tiles follow. */
+function _moduleNames(keys){
+  var view = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.packageAccess) || {}, cat = view.catalog || [];
+  return (keys || []).map(function(k){ for (var i = 0; i < cat.length; i++) if (cat[i].key === k) return cat[i].name; return k; });
+}
+function _stateLabel(b, view){
+  var s = b.packagingState;
+  var text = { awaiting_payment: 'Awaiting your first payment', paid: 'Active', trial: 'Trial', past_due: 'Payment overdue', past_due_lite: 'Overdue · Lite only', pending: 'Awaiting approval' }[s] || (s ? String(s).replace(/_/g, ' ') : '—');
+  if (view && view.readOnly && s !== 'awaiting_payment' && s !== 'pending') text += ' · read-only until paid';
+  return text;
+}
+function _row(k, v, id){ return '<div class="acct-row"><span class="k">' + escHtml(k) + '</span><span class="v"' + (id ? ' id="' + id + '"' : '') + '>' + escHtml(v == null || v === '' ? '—' : String(v)) + '</span></div>'; }
+function renderPackagedBilling(b){
+  var ws = window.OMEGA_WORKSPACE || {}, view = ws.packageAccess || {};
+  var bought = (b.subscription && Array.isArray(b.subscription.modules)) ? b.subscription.modules : (b.modules || ['lite']);
+  var on = b.modules || ['lite'];
+  var rows = _row('Package', _moduleNames(bought).join(', '), 'acct-pk-package');
+  if (bought.join() !== on.join()) rows += _row('On now', _moduleNames(on).join(', ') + (b.packagingState === 'awaiting_payment' ? ' (the rest opens when the first invoice is paid)' : ''), 'acct-pk-on');
+  rows += _row('Status', _stateLabel(b, view), 'acct-pk-status');
+  rows += _row('Billing', (b.interval === 'annual' ? 'Yearly, ten months of twelve' : 'Monthly') + (b.billingDay ? ' · on the ' + b.billingDay + (b.billingDay % 10 === 1 && b.billingDay !== 11 ? 'st' : b.billingDay % 10 === 2 && b.billingDay !== 12 ? 'nd' : b.billingDay % 10 === 3 && b.billingDay !== 13 ? 'rd' : 'th') : ''), 'acct-pk-billing');
+  rows += _row('Monthly membership', '…', 'acct-pk-monthly');
+  rows += _row('Next invoice', b.nextInvoiceOn ? _acctDay(b.nextInvoiceOn) : '—', 'acct-pk-next');
+  if (b.paidThrough) rows += _row('Paid through', _acctDay(b.paidThrough), 'acct-pk-paid');
+  rows += _row('Amount due', b.amountDue == null ? '—' : (b.amountDue > 0 ? _money(b.amountDue) : 'Nothing due'), 'acct-pk-due');
+  document.getElementById('acct-package-rows').innerHTML = rows;
+  var acts = document.getElementById('acct-package-actions'); acts.innerHTML = '';
+  if (b.paymentLink && b.amountDue > 0){
+    var pay = document.createElement('a'); pay.id = 'acct-pk-pay'; pay.className = 'acct-btn'; pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.cssText = 'text-decoration:none;text-align:center;width:auto;flex:1'; pay.textContent = 'Pay in QuickBooks'; acts.appendChild(pay);
+    var paid = document.createElement('button'); paid.id = 'acct-pk-paid-btn'; paid.className = 'acct-btn'; paid.style.cssText = 'width:auto;flex:1;background:#fff;color:var(--cs-navy);border:1.5px solid var(--cs-border)'; paid.textContent = "I've paid"; paid.onclick = function(){ checkPackagePayment(paid); }; acts.appendChild(paid);
+  }
+  var admin = !!(window.OmegaTenant && OmegaTenant.isAdmin && OmegaTenant.isAdmin());
+  var plan = document.getElementById('acct-package-plan'), add = document.getElementById('acct-package-add');
+  if (!admin){
+    plan.textContent = 'Your workspace owner or an administrator climbs the Ladder and pays the invoices. Ask them to add what you need.';
+    add.style.display = 'none';
+    document.getElementById('acct-package-invoices').textContent = 'Invoices are sent to your billing contact; an administrator sees them here.';
+    setText('acct-pk-monthly', '—');
+    return;
+  }
+  add.style.display = '';
+  plan.textContent = b.packagingState === 'paid' ? 'Add a rung any time: it is priced for the rest of this cycle, invoiced in QuickBooks, and on the moment the payment clears.' : 'The Ladder opens once your current invoice is paid.';
+  var u = currentUser || (auth && auth.currentUser); if (!u) return;
+  u.getIdToken().then(function(tok){
+    return fetch('/api/plan-change', { cache:'no-store', headers:{ 'Authorization':'Bearer ' + tok } }).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||r.status); return j; }); });
+  }).then(function(s){
+    setText('acct-pk-monthly', s.monthlyDisplay || '—');
+    if (s.gate && !s.gate.canApply && s.gate.reason) plan.textContent = s.gate.reason;
+    var host = document.getElementById('acct-package-invoices');
+    if (!s.invoices || !s.invoices.length){ host.textContent = 'No invoices issued yet.'; return; }
+    host.innerHTML = s.invoices.map(function(inv){
+      var kind = inv.kind === 'change' ? 'Change' + (inv.names ? ' · ' + inv.names.join(', ') : '') : inv.kind === 'pack' ? 'Usage pack' : 'Subscription';
+      var label = escHtml(_acctDay(inv.date)) + ' — ' + escHtml(inv.display) + ' · ' + escHtml(kind) + ' · ' + escHtml(inv.state);
+      return '<div data-invoice-state="' + escHtml(inv.state) + '">' + label + (inv.paymentLink ? ' · <a href="' + escHtml(inv.paymentLink) + '" target="_blank" rel="noopener">Pay in QuickBooks</a>' : '') + '</div>';
+    }).join('');
+  }).catch(function(e){
+    setText('acct-pk-monthly', '—');
+    document.getElementById('acct-package-invoices').textContent = 'Invoices unavailable — ' + (e.message || e);
+  });
+}
+/* "I've paid": one look at QuickBooks now; paid, the package view is refreshed and the panel repainted. */
+function checkPackagePayment(btn){
+  var u = currentUser || (auth && auth.currentUser); if (!u) return;
+  var msg = document.getElementById('acct-package-msg'); btn.disabled = true; btn.textContent = 'Checking QuickBooks…'; msg.textContent = '';
+  u.getIdToken().then(function(tok){
+    return fetch('/api/plan-change', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tok }, body: JSON.stringify({ action:'reconcile-now' }) }).then(function(r){ return r.json(); });
+  }).then(function(j){
+    if (j && j.paid){ msg.textContent = 'Paid. Your workspace is opening…'; msg.className = 'acct-msg ok'; return (window.OmegaTenant && OmegaTenant.refreshPackage ? OmegaTenant.refreshPackage() : Promise.resolve()).then(function(){ loadBilling(); }); }
+    msg.textContent = (j && j.error) ? j.error : j && j.throttled ? 'QuickBooks was checked a moment ago: not paid yet. Try again in a few seconds.' : 'Not paid yet as far as QuickBooks knows. A card payment shows within a minute; try again then.';
+    btn.disabled = false; btn.textContent = "I've paid";
+  }).catch(function(e){ msg.textContent = 'Could not check — ' + (e.message || e); btn.disabled = false; btn.textContent = "I've paid"; });
+}
+/* the one package menu, handed this page's package view; a change refreshes the view so the tiles and the panel follow */
+function openPackageMenu(moduleKey){
+  var ws = window.OMEGA_WORKSPACE; if (!ws || !ws.packaged || !window.OmegaPackageMenu) return false;
+  return OmegaPackageMenu.open(moduleKey || undefined, { view: ws.packageAccess, onChanged: function(){
+    (window.OmegaTenant && OmegaTenant.refreshPackage ? OmegaTenant.refreshPackage() : Promise.resolve()).then(function(){ try { loadBilling(); } catch(e){} try { if (window.renderApps) renderApps(); } catch(e){} });
+  } });
+}
+/* the module a tool belongs to, from the package view's catalog */
+function _moduleOfTool(key){
+  var view = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.packageAccess) || {}, cat = view.catalog || [];
+  for (var i = 0; i < cat.length; i++) if ((cat[i].tools || []).indexOf(key) >= 0) return cat[i];
+  return null;
+}
+/* prices for the lock overlays: one read of the server catalog per visit */
+var _modulePrices = null, _modulePricesAsked = false;
+function _fetchModulePrices(){
+  if (_modulePricesAsked) return; _modulePricesAsked = true;
+  var u = currentUser || (auth && auth.currentUser); if (!u || !window.fetch) return;
+  u.getIdToken().then(function(tok){ return fetch('/api/package-catalog', { cache:'no-store', headers:{ 'Authorization':'Bearer ' + tok } }); })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){ if (!j || !j.modules) return; _modulePrices = {}; j.modules.forEach(function(m){ _modulePrices[m.key] = m.priceDisplay; }); try { applyToolLocks(); } catch(e){} })
+    .catch(function(){});
+}
 function openBillingPortal(){
   var u = currentUser || (auth && auth.currentUser);
   if (!u) return;
@@ -5254,7 +5385,12 @@ function applyToolLocks(){
 }
 
 function lockTile(tile, key){
-  if(tile.classList.contains('locked')) return;
+  if(tile.classList.contains('locked')){
+    /* already locked: the price may have arrived since */
+    var ws0 = window.OMEGA_WORKSPACE, m0 = ws0 && ws0.packaged ? _moduleOfTool(key) : null, sub0 = tile.querySelector('.pm-lock-sub');
+    if (m0 && sub0 && _modulePrices && _modulePrices[m0.key] && sub0.textContent.indexOf('$') < 0) sub0.textContent = m0.name + ' · ' + _modulePrices[m0.key];
+    return;
+  }
   tile.classList.add('locked');
   // neutralize existing navigation
   tile.removeAttribute('href');
@@ -5274,7 +5410,18 @@ function lockTile(tile, key){
 
   var lock = document.createElement('div');
   lock.className = 'pm-lock';
-  lock.innerHTML =
+  /* A packaged workspace: the tile names the module the tool comes with and
+     its price, and the button opens the one package menu on it; nobody
+     emails anybody. A legacy plan keeps the request. */
+  var ws2 = window.OMEGA_WORKSPACE, mod = ws2 && ws2.packaged ? _moduleOfTool(key) : null;
+  if (ws2 && ws2.packaged){ _fetchModulePrices(); badge.textContent = 'Add'; tile.setAttribute('data-lock-module', mod ? mod.key : ''); }
+  var price = mod && _modulePrices && _modulePrices[mod.key] ? _modulePrices[mod.key] : '';
+  lock.innerHTML = ws2 && ws2.packaged ?
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>'+
+    '<div class="pm-lock-txt">Not in your package</div>'+
+    '<div class="pm-lock-sub">'+esc2(mod ? mod.name + (price ? ' · ' + price : '') : label)+'</div>'+
+    '<button class="pm-lock-cta" onclick="event.stopPropagation();openUpgrade(this)">'+esc2(mod ? 'Add ' + mod.name : 'See your plan')+'</button>'
+  :
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+
     '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'+
     '<div class="pm-lock-txt">Upgrade to unlock</div>'+
@@ -5286,6 +5433,8 @@ function lockTile(tile, key){
 function openUpgrade(el){
   var tile = el.closest ? el.closest('[data-tool]') : null;
   var name = tile ? (tile.querySelector('.pm-name, .ql-title')||{}).textContent : '';
+  var ws = window.OMEGA_WORKSPACE;
+  if (ws && ws.packaged){ var mod = tile ? _moduleOfTool(tile.getAttribute('data-tool')) : null; if (openPackageMenu(mod ? mod.key : null)) return; openAccount(); return; }
   showUpgradeModal(name || 'this module');
 }
 
@@ -5476,9 +5625,9 @@ function _paintDash(){
       if (typeof OMEGATools.isUnlocked === 'function' && !OMEGATools.isUnlocked(st, _PORTAL_WS)) continue;
       html += _tile(st, true); renderedKeys[st.key]=true; count++; starter = true;
     }
-    if (starter) html = '<div class="pm-starter-note" style="grid-column:1/-1;font-size:12.5px;color:var(--cs-sub);padding:2px 2px 6px">A starter set for your plan. Keep what you use, and <a href="/marketplace.html" style="color:var(--cs-accent);font-weight:600">browse the Marketplace</a> for the rest.</div>' + html;
+    if (starter) html = '<div class="pm-starter-note" style="grid-column:1/-1;font-size:12.5px;color:var(--cs-sub);padding:2px 2px 6px">A starter set for your plan. Keep what you use, and <a data-sn="marketplace" href="/marketplace.html" style="color:var(--cs-accent);font-weight:600">browse the Marketplace</a> for the rest.</div>' + html;
   }
-  el.innerHTML = html || '<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--cs-sub)">Nothing to open yet. <a href="/marketplace.html" style="color:var(--cs-accent);font-weight:600">Browse the Marketplace</a> and pin the tools you use.</div>';
+  el.innerHTML = html || '<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--cs-sub)">Nothing to open yet. <a data-sn="marketplace" href="/marketplace.html" style="color:var(--cs-accent);font-weight:600">Browse the Marketplace</a> and pin the tools you use.</div>';
   /* Tiles carry data-tool now, so the plan's locks apply to them too — the
      tier gate ran before this grid was painted. Idempotent. */
   try { if (typeof applyToolLocks === 'function') applyToolLocks(); } catch(e){}

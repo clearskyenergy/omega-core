@@ -241,8 +241,17 @@ async function summary(db, orgId) {
       monthly = q.display.monthly; planDisplay = q.display.plan;
     } catch (e) { monthly = b.monthlyDisplay || null; }
   }
+  /* every invoice the workspace has, newest first: the Account panel lists
+     them with the pay link while unpaid (Phase 10B: pay in settings) */
+  var invoices = rows.slice().reverse().slice(0, 24).map(function (r) {
+    return { id: r.id || r.date, kind: S.kindOf(r), state: r.state, date: r.date, period: r.period || null, totalCents: r.totalCents, display: P.money(r.totalCents),
+      paymentLink: r.state === 'unpaid' ? (r.paymentLink || null) : null, names: r.add ? names(r.add) : null, paidAt: r.paidAt || null };
+  });
   return { orgId: orgId, packaged: b.packaged === true, packagingState: b.packagingState || null, plan: sub.plan || null, planDisplay: planDisplay, modules: b.modules || ['lite'], subscription: sub.modules || ['lite'],
+    moduleNames: names(b.modules || ['lite']), subscriptionNames: names(sub.modules || ['lite']),
     interval: b.interval || 'monthly', billingDay: b.billingDay || null, nextInvoiceOn: b.nextInvoiceOn || null, monthlyDisplay: monthly,
+    accessUntil: b.accessUntil == null ? null : b.accessUntil, paidThrough: b.paidThrough || null, amountDue: b.amountDue == null ? null : b.amountDue,
+    amountDueDisplay: b.amountDue == null ? null : P.money(Math.round(b.amountDue * 100)), paymentLink: b.paymentLink || null, invoices: invoices,
     gate: state(c, Date.now()), pending: pending(rows), removalRequests: b.removalRequests || [],
     recent: rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state !== 'unpaid'; }).slice(-5).map(function (r) { return { id: r.id, add: r.add, names: names(r.add), state: r.state, date: r.date, display: P.money(r.totalCents || 0) }; }) };
 }

@@ -7,6 +7,11 @@
 (function (global) {
   'use strict';
   var dialog, body, trigger, request = 0, control = { canManage: false, pending: {}, loaded: false };
+  /* Where the menu is open outside the editor (the dashboard's Account panel,
+     a locked tile), the page hands over its own package view and a callback;
+     inside the editor OmegaCaps is the view and the refresh. */
+  var host = { view: null, onChanged: null };
+  function packageView() { return host.view || (global.OmegaCaps && global.OmegaCaps.packageAccess()); }
   function api(path, payload) {
     var user = global.firebase && global.firebase.auth().currentUser;
     if (!user || !user.getIdToken || !global.fetch) return Promise.reject(new Error('Sign in to continue'));
@@ -88,24 +93,32 @@
   var lastRows = [];
   function changed(result) {
     var user = global.firebase && global.firebase.auth().currentUser, caps = global.OmegaCaps;
-    var refresh = result && result.state === 'active' && caps && caps.fetchPackage && user ? caps.fetchPackage(user).then(function () { caps.apply('standard'); }, function () {}) : Promise.resolve();
+    var refresh = result && result.state === 'active' && caps && caps.fetchPackage && user && !host.view ? caps.fetchPackage(user).then(function () { caps.apply('standard'); }, function () {}) : Promise.resolve();
+    if (host.onChanged) { try { host.onChanged(result); } catch (e) {} }
     refresh.then(loadControl).then(function () { if (body) render(lastRows, null); });
   }
   function render(rows, focus) {
     if (!body) return; lastRows = rows;
     body.textContent = '';
-    var access = global.OmegaCaps && global.OmegaCaps.packageAccess(), owned = access ? access.modules : [];
+    var access = packageView(), owned = access ? access.modules : [];
     rows.filter(function (m) { return owned.indexOf(m.key) < 0; }).forEach(function (m) { body.appendChild(card(m, m.priceDisplay, focus)); });
     if (!body.children.length) body.appendChild(node('p', 'Your package includes every module in this catalog.'));
     var selected = body.querySelector('[data-selected]'); if (selected) { selected.scrollIntoView({ block: 'nearest' }); selected.focus(); }
   }
-  function open(key) {
+  function open(key, options) {
     close(); trigger = document.activeElement;
-    var view = global.OmegaCaps && global.OmegaCaps.packageAccess(); if (!view) return false;
+    host = { view: options && options.view ? options.view : null, onChanged: options && options.onChanged ? options.onChanged : null };
+    if (!document.getElementById('omega-package-menu-style')) styles();
+    var view = packageView(); if (!view) return false;
     var tokenRequest = ++request;
     dialog = node('div', '', 'opm-backdrop'); dialog.id = 'omega-package-menu';
     var panel = node('div', '', 'opm-dialog'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-labelledby', 'opm-title');
-    var heading = node('h2', 'Add to your workspace'); heading.id = 'opm-title'; panel.appendChild(heading);
+    /* "The Ladder" (Tommy, 2026-09-26): build your own experience and pay
+       for what you need to run your business; each Omega Logic department
+       (Office, Plant, Materials & Purchasing, Logistics & Warranty, Customer
+       App) is its own opt-in on it. */
+    var heading = node('h2', 'The Ladder'); heading.id = 'opm-title'; panel.appendChild(heading);
+    panel.appendChild(node('p', 'Build your own experience and pay for what you need to run your business. Omega Logic is by department: Office, Plant, Materials & Purchasing, Logistics & Warranty and the Customer App are each an opt-in.', 'opm-note'));
     var dismiss = node('button', 'Close'); dismiss.type = 'button'; dismiss.onclick = close; panel.appendChild(dismiss);
     var status = node('p', 'Loading current pricing…', 'opm-note'); status.setAttribute('role', 'status'); panel.appendChild(status);
     body = node('div', '', 'opm-grid'); panel.appendChild(body); dialog.appendChild(panel); document.body.appendChild(dialog);
@@ -127,9 +140,10 @@
       }, function () { if (tokenRequest === request) status.textContent = 'Current pricing is unavailable. Please try again later.'; });
     return true;
   }
-  function tab() {
-    var host = document.getElementById('ribbon-tabs'); if (!host || document.getElementById('omega-package-tab')) return;
-    var style = node('style'); style.textContent =
+  /* the dialog's styles, once, wherever it opens (the editor's tab() used to be the only caller) */
+  function styles() {
+    if (document.getElementById('omega-package-menu-style')) return;
+    var style = node('style'); style.id = 'omega-package-menu-style'; style.textContent =
       '.opm-backdrop{position:fixed;inset:0;z-index:999999;background:#0008;display:flex;align-items:center;justify-content:center;padding:24px}' +
       '.opm-backdrop{--opm-surface:#fff;--opm-text:#14171A;--opm-sub:#5B6672;--opm-border:#E1E7EB;--opm-sunk:#EEF1F3;--opm-blue:#2B5FA8}' +
       '@media(prefers-color-scheme:dark){.opm-backdrop{--opm-surface:#172029;--opm-text:#E6EBF0;--opm-sub:#94A1AE;--opm-border:#26323E;--opm-sunk:#10161D;--opm-blue:#6E9BE0}}' +
@@ -143,7 +157,11 @@
       '.opm-row{display:flex;flex-wrap:wrap;gap:6px}.opm-act button{font:500 13px system-ui;padding:7px 12px;border:1px solid var(--opm-border);border-radius:6px;background:var(--opm-surface);color:var(--opm-text);cursor:pointer}' +
       '.opm-act .opm-primary{background:var(--opm-blue);color:#fff;border-color:var(--opm-blue)}.opm-act a{color:var(--opm-blue)}';
     document.head.appendChild(style);
-    var button = node('button', '+ Modules', 'rtab'); button.id = 'omega-package-tab'; button.type = 'button'; button.onclick = function () { open(); }; host.appendChild(button);
+  }
+  function tab() {
+    var tabs = document.getElementById('ribbon-tabs'); if (!tabs || document.getElementById('omega-package-tab')) return;
+    styles();
+    var button = node('button', 'The Ladder', 'rtab'); button.id = 'omega-package-tab'; button.title = 'The Ladder: build your own experience and pay for what you need'; button.type = 'button'; button.onclick = function () { open(); }; tabs.appendChild(button);
   }
   function staffPreview() {
     var view = global.OmegaCaps && global.OmegaCaps.packageAccess(), bar = document.getElementById('omega-workspace-controls');
@@ -219,5 +237,5 @@
     }
     draw(); return { value: function () { return selected.slice(); }, set: function (keys) { selected = keys.slice(); draw(); if (options.onChange) options.onChange(selected.slice()); } };
   }
-  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker, card: card, subscribeControl: subscribeControl, api: api, styles: tab };
+  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker, card: card, subscribeControl: subscribeControl, api: api, styles: styles };
 })(typeof window !== 'undefined' ? window : this);

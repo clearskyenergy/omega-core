@@ -105,7 +105,8 @@ function lite(host) {
   var orgDoc = { name: 'Lite Labs', slug: 'litelabs', domains: [host], logoUrl: '', vertical: 'installer', shell: 'default', status: 'active', receivesFullBom: false,
     exportBrand: { name: 'Lite Labs', logo: '' }, signup: { email: me, uid: uid }, createdAt: ago(40), approvedAt: ago(39), approvedBy: 'ops@clearsky-usa.com' };
   var billing = { packaged: true, modules: ['lite'], plan: 'Lite', packagingState: 'paid', paidThrough: iso(20).slice(0, 10), accessUntil: iso(25), billingDay: 20,
-    subscription: { modules: ['lite'] }, paymentProvider: 'quickbooks', createdAt: ago(40) };
+    subscription: { modules: ['lite'], plan: 'alacarte', interval: 'monthly' }, interval: 'monthly', nextInvoiceOn: iso(20).slice(0, 10), amountDue: 0,
+    paymentProvider: 'quickbooks', billingProvider: 'quickbooks', qboCustomerId: 'C-lite', qboEnv: 'sandbox', pricebookVersion: require('../../api/_lib/pricebook').VERSION, createdAt: ago(40) };
   var member = { email: me, name: 'Kim Sato', role: 'owner', status: 'active', createdAt: ago(40) };
   docs['omega_orgs/' + org] = orgDoc;
   docs['omega_orgs/' + org + '/billing/current'] = billing;
@@ -118,4 +119,38 @@ function lite(host) {
     packageView: view, liteTools: M.get('lite').tools.slice() };
 }
 
-module.exports = { newco: newco, northstar: northstar, pending: pending, lite: lite, TERMS_VERSION: TERMS_VERSION };
+/* awaiting: a workspace that signed up and paid nothing yet (Phase 10A pay
+   now): active, read-only, Lite on, Grid Atlas bought, the first invoice's
+   pay link on the record. The dashboard shows the bar, the locked tiles and
+   the Account panel's pay button. */
+function awaiting(host) {
+  var org = 'newpay.example', uid = 'uid-newpay-owner', me = 'lee@newpay.example';
+  var docs = merge(pub(host, org, 'Newpay Energy', 'lite', 'installer'), {});
+  var orgDoc = { name: 'Newpay Energy', slug: 'newpay', domains: [host], logoUrl: '', vertical: 'installer', shell: 'default', status: 'active', receivesFullBom: false,
+    exportBrand: { name: 'Newpay Energy', logo: '' }, signup: { email: me, uid: uid }, packaged: true, packagingSandbox: true, signedUpAt: ago(0.1), createdAt: ago(0.1), approvedAt: ago(0.1), approvedBy: 'self-serve', selfServe: true };
+  var billing = { packaged: true, modules: ['lite'], packagingState: 'awaiting_payment', accessUntil: Date.now() - 1000, billingDay: new Date().getUTCDate(), nextInvoiceOn: iso(0).slice(0, 10),
+    subscription: { modules: ['lite', 'gridatlas'], plan: 'alacarte', interval: 'monthly' }, interval: 'monthly', amountDue: 2250, paymentLink: 'https://connect.intuit.com/pay/fixture-first',
+    paymentProvider: 'quickbooks', billingProvider: 'quickbooks', qboCustomerId: 'C-newpay', qboEnv: 'sandbox', pricebookVersion: require('../../api/_lib/pricebook').VERSION, createdAt: ago(0.1) };
+  var member = { email: me, name: 'Lee Park', role: 'owner', status: 'active', createdAt: ago(0.1) };
+  docs['omega_orgs/' + org] = orgDoc; docs['omega_orgs/' + org + '/billing/current'] = billing; docs['omega_orgs/' + org + '/members/' + uid] = member;
+  docs['termsAcceptances/' + uid] = { uid: uid, email: me, orgId: org, version: TERMS_VERSION, acceptedAt: ago(0.1) };
+  var X = require('../../api/_lib/package-access');
+  var view = X.project({ staff: false, claims: { email_verified: true } }, billing, orgDoc, member, Date.now());
+  return { org: org, name: 'Newpay Energy', tier: 'lite', user: { uid: uid, email: me, displayName: 'Lee Park', emailVerified: true }, docs: docs, termsAccepted: true, packageView: view, awaiting: true };
+}
+/* legacyEnterprise: a prepaid legacy account (NextNRG-like, Tommy 2026-09-26:
+   "they paid for the whole year so they will just have everything available
+   to them"). No packaged record, enterprise tier, nothing locked, nothing to
+   upgrade, no Ladder: the account page shows the paid year and that is all. */
+function legacyEnterprise(host) {
+  var org = 'nextgen.example', uid = 'uid-nextgen-paige', me = 'paige@nextgen.example';
+  var docs = merge(pub(host, org, 'NextGen Power', 'enterprise', 'developer'), {});
+  docs['omega_orgs/' + org] = { name: 'NextGen Power', slug: 'nextgen', domains: [host], logoUrl: '', vertical: 'developer', shell: 'default', status: 'active', receivesFullBom: false,
+    exportBrand: { name: 'NextGen Power', logo: '' }, tierLevel: 3, createdAt: ago(400), approvedAt: ago(399), approvedBy: 'ops@clearsky-usa.com' };
+  docs['omega_orgs/' + org + '/billing/current'] = { tier: 'enterprise', addons: ['omega-logic'], toolOverrides: {}, paymentProvider: 'manual', trialEndsAt: null, subscriptionDue: iso(300), amountDue: 0, amountPaid: 150000, lastPaidAt: iso(-65), note: 'Annual contract, paid in full', createdAt: ago(400) };
+  docs['omega_orgs/' + org + '/members/' + uid] = { email: me, name: 'Paige Cole', role: 'owner', status: 'active', createdAt: ago(400) };
+  docs['termsAcceptances/' + uid] = { uid: uid, email: me, orgId: org, version: TERMS_VERSION, acceptedAt: ago(300) };
+  docs['team_members/' + org + '__' + me] = { orgId: org, email: me, name: 'Paige Cole', photo: '', lastSeen: ago(0.2) };
+  return { org: org, name: 'NextGen Power', tier: 'enterprise', user: { uid: uid, email: me, displayName: 'Paige Cole', emailVerified: true }, docs: docs, termsAccepted: true, legacyAllOpen: true };
+}
+module.exports = { newco: newco, northstar: northstar, pending: pending, lite: lite, awaiting: awaiting, legacyEnterprise: legacyEnterprise, TERMS_VERSION: TERMS_VERSION };

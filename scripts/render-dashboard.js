@@ -42,6 +42,16 @@ var shotsAt = (function () { var i = process.argv.indexOf('--shots'); return i >
 if (shotsAt && !fs.existsSync(shotsAt)) fs.mkdirSync(shotsAt, { recursive: true });
 
 var FD = require('./_lib/firebase-double'), FX = require('./_lib/dashboard-fixtures');
+/* Phase 10B: the Account panel's Ladder and invoices are the REAL plan-change
+   library over an in-memory Firestore seeded with the scenario's own records
+   and the price book; the catalog is the real server catalog. No network. */
+var F = require('./_lib/firestore-double'), B = require('../api/_lib/pricebook'), P = require('../api/_lib/subscription-pricing'), M = require('../api/_lib/modules'), C = require('../api/_lib/plan-change');
+var SCENARIO_DOCS = null;
+function serverDb() {
+  var db = new F.DB(); db.serial = true; var book = B.proposed(); book.enabled = true; book.qbo.realmId = 'fixture'; db.seed('pricebook/' + book.version, book);
+  Object.keys(SCENARIO_DOCS || {}).forEach(function (p) { var d = SCENARIO_DOCS[p]; if (d && typeof d === 'object') db.seed(p, JSON.parse(JSON.stringify(d))); });
+  return db;
+}
 var DOUBLE_SRC = FD.source();
 var HOST = '127.0.0.1';
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
@@ -62,6 +72,20 @@ var srv = http.createServer(function (req, res) {
     apiCalls.push(req.method + ' ' + u);
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
     if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
+    /* a legacy tenant's Account panel asks Stripe for its invoices; none is connected here */
+    if (u === '/api/stripe-invoices') return json({ connected: false, invoices: [] });
+    if (u === '/api/package-catalog' && !post) { var bk = B.proposed(); return json({ orgId: PACKAGE_VIEW ? 'fixture' : null, pricebookVersion: bk.version, modules: P.catalog(bk), starters: M.starters(), canManage: true }); }
+    if (u === '/api/plan-change' && PACKAGE_VIEW) {
+      var org = Object.keys(SCENARIO_DOCS || {}).map(function (k) { var m = /^omega_orgs\/([^/]+)\/billing\/current$/.exec(k); return m && m[1]; }).filter(Boolean)[0];
+      var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () {
+        var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks)) : {}; } catch (e) {}
+        var work = !post ? C.summary(serverDb(), org)
+          : body.action === 'quote' ? C.preview(serverDb(), org, body, Date.now())
+          : body.action === 'reconcile-now' ? Promise.resolve({ orgId: org, packaged: true, packagingState: 'awaiting_payment', paid: false, amountDueDisplay: '$2,250', checkedAt: Date.now() })
+          : Promise.reject(new Error('render-dashboard does not answer plan-change ' + body.action));
+        Promise.resolve(work).then(function (j) { json(j); }, function (e) { missing.push('POST /api/plan-change ' + body.action + ': ' + e.message); json({ error: e.message }, e.status || 500); });
+      }); return;
+    }
     missing.push(req.method + ' ' + u); return json({ error: 'render-dashboard does not answer ' + u }, 404);
   }
   var f = path.join(ROOT, u === '/' ? 'index.html' : u);
@@ -72,6 +96,8 @@ var srv = http.createServer(function (req, res) {
 });
 
 var fails = 0, lines = [];
+var SHOTS10B = path.join(ROOT, 'docs/screenshots/packaging-phase-10b'); fs.mkdirSync(SHOTS10B, { recursive: true });
+function shot10b(p, name) { return p.screenshot({ path: path.join(SHOTS10B, name + '.png') }).catch(function () {}); }
 function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + name + (detail !== undefined ? ' ' + JSON.stringify(detail) : '')); } }
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 /* a body of visible text carries none of the words a bug prints */
@@ -86,7 +112,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
      the tenant's fixture installed before any page script runs. */
   async function scenario(name, fx, opts) {
     opts = opts || {};
-    PACKAGE_VIEW = fx.packageView || null;
+    PACKAGE_VIEW = fx.packageView || null; SCENARIO_DOCS = fx.docs || null;
     var errs = [], warns = [], muted = false, ctx = await browser.newContext({ viewport: opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!opts.phone, isMobile: !!opts.phone });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) {
       var url = r.request().url();
@@ -334,6 +360,67 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('lite: the starter set is drawn from Lite alone', starter.note && starter.tools.length > 0 && !outside.length, starter);
     var overlays = await p.$$eval('[data-tool].locked', function (r) { return r.map(function (x) { var o = x.querySelector('.lock-overlay, .tool-lock, [class*="lock"]'); if (!o) return null; var a = x.getBoundingClientRect(), b = o.getBoundingClientRect(); return b.left >= a.left - 2 && b.top >= a.top - 2 && b.right <= a.right + 2 && b.bottom <= a.bottom + 2; }); });
     ok('lite: each lock overlay stays inside its own tile', overlays.every(function (v) { return v !== false; }), overlays);
+    return out;
+  } });
+  /* ══ 6. LITE again — the Account panel's Ladder and a locked tile's "Add" (Phase 10B) ══ */
+  var lt2 = FX.lite(HOST);
+  await scenario('lite-ladder', lt2, { steps: async function (p, shown) {
+    var out = await common(p, shown, lt2, 'lite-ladder');
+    await p.click('button.btn-signout[onclick="openAccount()"]'); await p.waitForSelector('#acct-overlay.show');
+    await p.waitForFunction(function () { var e = document.getElementById('acct-pk-monthly'); return e && /^\$/.test(e.textContent); }, null, { timeout: 8000 });
+    var rows = await p.evaluate(function () { function t(id) { var e = document.getElementById(id); return e ? e.textContent : null; } return { pkg: t('acct-pk-package'), status: t('acct-pk-status'), monthly: t('acct-pk-monthly'), next: t('acct-pk-next'), legacy: getComputedStyle(document.getElementById('acct-legacy-billing')).display, ladder: t('acct-package-ladder'), invoices: t('acct-package-invoices'), add: getComputedStyle(document.getElementById('acct-package-add')).display }; });
+    ok('lite-ladder: the Account panel shows the package, not the legacy rows', rows.legacy === 'none' && rows.pkg === 'Lite' && rows.status === 'Active' && rows.monthly === '$500/month' && /\d{4}/.test(rows.next), rows);
+    ok('lite-ladder: the Ladder is named and says what it is for', /Build your own experience/.test(rows.ladder) && /Office, Plant/.test(rows.ladder) && rows.add !== 'none', rows.ladder);
+    ok('lite-ladder: no invoices yet reads as a sentence', /No invoices issued yet/.test(rows.invoices), rows.invoices);
+    await p.evaluate(function () { var s = document.querySelector('#acct-package'); if (s) s.scrollIntoView(); }); await shot10b(p, 'account-ladder');
+    await p.click('#acct-package-add'); await p.waitForSelector('#omega-package-menu [data-module-card]');
+    await p.waitForFunction(function () { return document.querySelectorAll('#omega-package-menu [data-subscribe] button').length > 0; }, null, { timeout: 8000 });
+    var menu = await p.evaluate(function () { return { title: document.getElementById('opm-title').textContent, cards: document.querySelectorAll('#omega-package-menu [data-module-card]').length, lite: !!document.querySelector('#omega-package-menu [data-module-card="lite"]'), subscribe: document.querySelectorAll('#omega-package-menu [data-subscribe] button').length }; });
+    ok('lite-ladder: the Ladder opens on the dashboard with every rung not yet bought and a Subscribe on each', menu.title === 'The Ladder' && menu.cards === M.catalog().length - 1 && !menu.lite && menu.subscribe === menu.cards, menu);
+    await p.click('#omega-package-menu [data-module-card="gridatlas"] [data-subscribe] button');
+    await p.waitForFunction(function () { return !!document.querySelector('#omega-package-menu [data-module-card="gridatlas"] .opm-quote, #omega-package-menu [data-module-card="gridatlas"] .opm-reason'); }, null, { timeout: 8000 });
+    var quote = await p.$eval('#omega-package-menu [data-module-card="gridatlas"] .opm-act', function (e) { return e.textContent; });
+    ok('lite-ladder: Subscribe brings the server\'s quote for the rest of the cycle', /today/.test(quote) && /\$/.test(quote), quote);
+    await shot10b(p, 'ladder-menu');
+    await p.evaluate(function () { OmegaPackageMenu.close(); }); await p.waitForSelector('#omega-package-menu', { state: 'detached' });
+    await p.evaluate(function () { closeAccount(); });
+    var tile = await p.evaluate(function () { var t = document.querySelector('[data-tool].locked'); if (!t) return null; return { badge: (t.querySelector('.pm-lock-badge') || {}).textContent, cta: (t.querySelector('.pm-lock-cta') || {}).textContent, sub: (t.querySelector('.pm-lock-sub') || {}).textContent, module: t.getAttribute('data-lock-module') }; });
+    ok('lite-ladder: a locked tile offers to add its module by name, with the price', !!tile && tile.badge === 'Add' && /^Add /.test(tile.cta) && /\$[\d,]+\/month/.test(tile.sub) && !!tile.module, tile);
+    await p.evaluate(function () { document.querySelector('[data-tool].locked .pm-lock-cta').click(); });
+    await p.waitForSelector('#omega-package-menu [data-selected]');
+    var sel = await p.$eval('#omega-package-menu [data-selected]', function (e) { return e.getAttribute('data-module-card'); });
+    ok('lite-ladder: the tile\'s Add opens the Ladder on that module', sel === tile.module, { sel: sel, module: tile.module });
+    await p.evaluate(function () { OmegaPackageMenu.close(); });
+    return out;
+  } });
+  /* ══ 7. AWAITING — signed up and paid nothing yet: the bar, the locks, the pay button in settings ══ */
+  var aw = FX.awaiting(HOST);
+  await scenario('awaiting', aw, { steps: async function (p, shown) {
+    var out = await common(p, shown, aw, 'awaiting');
+    var bar = await p.evaluate(function () { var b = document.getElementById('omega-billing-status'); return b ? { pay: !!b.querySelector('a[href*="intuit"]'), paid: Array.prototype.filter.call(b.querySelectorAll('button'), function (x) { return /paid/i.test(x.textContent); }).length } : null; });
+    ok('awaiting: the billing bar carries Pay in QuickBooks and I\'ve paid', !!bar && bar.pay && bar.paid === 1, bar);
+    var tiles = await p.$$eval('[data-tool]', function (r) { return r.map(function (x) { return { tool: x.getAttribute('data-tool'), locked: x.classList.contains('locked') }; }); });
+    var liteTools = M.get('lite').tools, wrong = tiles.filter(function (t) { return (liteTools.indexOf(t.tool) >= 0) === t.locked; });
+    ok('awaiting: Lite is on and the rest is locked until the first invoice is paid', tiles.length > 0 && !wrong.length, wrong);
+    await p.click('button.btn-signout[onclick="openAccount()"]'); await p.waitForSelector('#acct-overlay.show'); await p.waitForSelector('#acct-pk-paid-btn');
+    var rows = await p.evaluate(function () { function t(id) { var e = document.getElementById(id); return e ? e.textContent : null; } return { status: t('acct-pk-status'), on: t('acct-pk-on'), pkg: t('acct-pk-package'), due: t('acct-pk-due'), pay: (document.getElementById('acct-pk-pay') || {}).href, plan: t('acct-package-plan') }; });
+    ok('awaiting: the panel says awaiting the first payment, what was bought and what is on, the amount and the QuickBooks link', /Awaiting your first payment/.test(rows.status) && /Grid Atlas/.test(rows.pkg) && /Lite/.test(rows.on) && /2,250/.test(rows.due) && /intuit/.test(rows.pay || ''), rows);
+    await p.evaluate(function () { var s = document.querySelector('#acct-package'); if (s) s.scrollIntoView(); }); await shot10b(p, 'account-awaiting');
+    await p.click('#acct-pk-paid-btn'); await p.waitForFunction(function () { return /Not paid yet|checked a moment ago/.test(document.getElementById('acct-package-msg').textContent); }, null, { timeout: 8000 });
+    ok('awaiting: the Ladder waits for the first payment', /opens once your current invoice is paid|Pay your current invoice first/.test(rows.plan), rows.plan);
+    return out;
+  } });
+  /* ══ 8. LEGACY, PREPAID — everything open, nothing to upgrade, no Ladder (NextNRG-like) ══ */
+  var le = FX.legacyEnterprise(HOST);
+  await scenario('legacy-enterprise', le, { steps: async function (p, shown) {
+    var out = await common(p, shown, le, 'legacy-enterprise');
+    var locks = await p.evaluate(function () { return { locked: document.querySelectorAll('[data-tool].locked').length, badges: document.querySelectorAll('.pm-lock-badge').length, bar: !!document.getElementById('omega-billing-status'), pending: !!document.getElementById('omega-pending'), tiles: document.querySelectorAll('[data-tool]').length }; });
+    ok('legacy-enterprise: nothing is locked, nothing says upgrade, no billing bar', locks.tiles > 0 && locks.locked === 0 && locks.badges === 0 && !locks.bar && !locks.pending, locks);
+    await p.click('button.btn-signout[onclick="openAccount()"]'); await p.waitForSelector('#acct-overlay.show');
+    await p.waitForFunction(function () { var e = document.getElementById('acct-tier'); return e && e.textContent !== '—'; }, null, { timeout: 8000 });
+    var rows = await p.evaluate(function () { function t(id) { var e = document.getElementById(id); return e ? e.textContent : null; } return { tier: t('acct-tier'), due: t('acct-due'), paid: t('acct-paid'), pkg: getComputedStyle(document.getElementById('acct-package')).display, legacy: getComputedStyle(document.getElementById('acct-legacy-billing')).display, ladder: document.getElementById('acct-overlay').innerText.indexOf('Ladder') >= 0, portal: getComputedStyle(document.getElementById('acct-portal')).display }; });
+    ok('legacy-enterprise: the account page shows the paid year and no Ladder', rows.tier === 'enterprise' && /\d{4}/.test(rows.due) && /150,000/.test(rows.paid) && rows.pkg === 'none' && rows.legacy !== 'none' && !rows.ladder && rows.portal === 'none', rows);
+    await p.evaluate(function () { var s = document.getElementById('acct-legacy-billing'); if (s) s.scrollIntoView(); }); await shot10b(p, 'account-legacy');
     return out;
   } });
   PACKAGE_VIEW = null;

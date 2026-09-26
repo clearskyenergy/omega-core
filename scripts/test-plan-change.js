@@ -111,6 +111,9 @@ async function run() {
   await refused(function () { return req('DELETE', {}); }, /GET or POST/);
   ok((await quote(['siteintel'], staff)).canApply, 'staff may act for a tenant');
   var summary = await req('GET', { orgId: orgId }); equal(summary.packagingState, 'paid'); equal(summary.pending, []); equal(summary.gate.canApply, true);
+  /* Phase 10B: the Account panel reads the invoices and the names off the same summary */
+  equal(summary.invoices.length, 1); equal(summary.invoices[0].kind, 'subscription'); equal(summary.invoices[0].state, 'paid'); equal(summary.invoices[0].paymentLink, null); equal(typeof summary.invoices[0].display, 'string');
+  equal(summary.moduleNames.indexOf('Lite') >= 0 && summary.subscriptionNames.length === summary.subscription.length, true); equal(summary.paidThrough, summary.nextInvoiceOn); equal(summary.amountDue, null);
 
   /* ── Pay first, then the modules ────────────────────────────────── */
   seed(ev, 'field'); var before = calls;

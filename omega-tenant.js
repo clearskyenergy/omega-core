@@ -1026,7 +1026,21 @@
     ready: function (cb) { if (T._ready) { try { cb(T.tenant); } catch (e) {} } else T._readyCbs.push(cb); },
     onEntitlements: function (cb) { if (T._ent) { try { cb(T._ws); } catch (e) {} } else T._entCbs.push(cb); },
     /* For the account-settings page: refresh after a branding save. */
-    refresh: function () { try { global.localStorage.removeItem(CACHE_KEY + T.host); } catch (e) {} resolveHost(); }
+    refresh: function () { try { global.localStorage.removeItem(CACHE_KEY + T.host); } catch (e) {} resolveHost(); },
+    /* After a plan change (the dashboard's Add a module, "I've paid"): ask
+       the server for the package view again and re-fire the entitlements,
+       so the tiles and the billing bar follow without a reload. Resolves
+       to the fresh view, or null when there is nothing packaged to ask. */
+    refreshPackage: function () {
+      var user = global.firebase && firebase.auth().currentUser, ws = T._ws;
+      if (!user || !global.fetch || !ws || !ws.packaged) return Promise.resolve(null);
+      return user.getIdToken().then(function (token) { return global.fetch('/api/package-access', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
+        .then(function (r) { if (!r.ok) throw new Error('Package access unavailable'); return r.json(); })
+        .then(function (fresh) {
+          if (firebase.auth().currentUser !== user || !fresh.packaged || !Array.isArray(fresh.toolAccess)) return null;
+          T.packageAccess = fresh; ws.packageAccess = fresh; fireEntitlements(mergeEntitlements(ws)); return fresh;
+        });
+    }
   };
 
   wrapBrand();
