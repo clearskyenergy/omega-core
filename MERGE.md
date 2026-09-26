@@ -2212,3 +2212,17 @@ the proration and change math lives in `api/_lib/plan-change.js` and
 is now separate from what is switched on (`billing.modules`), so a late
 payment never rewrites the package. The browser-engine debt above remains.
 See docs/PACKAGING-PHASE-5-VALIDATION.md.
+
+
+## Packaging Phase 6 — September 26, 2026
+
+No `editor.html` edit. The Subscription Proposal is a new root tool page on
+the Pro Forma pattern with a companion `subscription-proposal-logic.js`
+that only draws; every figure comes from `POST /api/subscription-proposal`
+on `api/_lib/subscription-proposal.js` and the price book. `brandOf` moved
+out of `api/proforma.js` into `api/_lib/deck-brand.js` so the two decks
+share one brand rule (the Pro Forma keeps `_gate.brandOf`). `start.html`
+gained the discovery step and a proposal prefill; `api/tenant-signup.js`
+stores the answers and accepts a keyed proposal. No draw implementation was
+touched and no financial engine moved; the browser-engine debt above
+remains. See docs/PACKAGING-PHASE-6-VALIDATION.md.

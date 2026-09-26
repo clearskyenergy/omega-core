@@ -20,6 +20,7 @@ var A = require('./_lib/admin');
 var M = require('./_lib/mail');
 var PUBLIC = require('./_lib/public-domains');
 var BP = require('./_lib/billing-profile'), PB = require('./_lib/pricebook'), MOD = require('./_lib/modules'), PR = require('./_lib/subscription-pricing'), POLICY = require('./_lib/package-billing-policy');
+var SP = require('./_lib/subscription-proposal');
 var BASE_HOST = process.env.TENANT_BASE_HOST || 'clearskyomega.com';
 var TRIAL_DAYS = Number(process.env.TRIAL_DAYS || 14);
 var RESERVED = ['app', 'www', 'api', 'alpha', 'next', 'staging', 'demo', 'admin', 'console', 'tools', 'osa', 'billing', 'support', 'mail', 'status'];
@@ -32,18 +33,39 @@ async function signupOptions(db) {
   var book = await PB.load(db, PB.VERSION);
   if (!book.enabled) throw A.httpError(409, 'Packaged signup is not enabled in the price book');
   return { packaging: true, maxTrialDays: Math.min(book.policy.trialDays, 14), pricebookVersion: book.version,
-    modules: PR.catalog(book), starters: MOD.starters(), starterLabels: MOD.starterLabels() };
+    modules: PR.catalog(book), starters: MOD.starters(), starterLabels: MOD.starterLabels(),
+    // Phase 6: signup walks the same discovery a rep would (VALUE-LADDER §3.7).
+    questions: SP.QUESTIONS, answers: SP.ANSWERS, spend: SP.SPEND, unitCosts: SP.UNIT_COSTS };
 }
 async function packagedSignup(req, caller, domain, b, slug, host) {
   var db = A.db(); await signupOptions(db);
   var profile = BP.normalize(b.billingProfile), now = Date.now(), book = await PB.load(db, PB.VERSION);
-  var selected = POLICY.terms({ modules: b.modules || ['lite'], interval: b.interval || 'monthly' }, book, now);
+  /* Phase 6. A signup may carry the discovery answers (stored for the rep who
+     approves it; the recommendation proposes the package when none was
+     picked) or a sent proposal's id and key, in which case the package,
+     terms and credit are the ones the rep proposed and the proposal is
+     accepted in the same transaction that creates the workspace. */
+  var proposal = null, proposalRef = null;
+  if (b.proposalId != null) {
+    if (typeof b.proposalId !== 'string' || !/^sp-[a-f0-9]{16}$/.test(b.proposalId)) throw A.httpError(400, 'Invalid proposal id');
+    proposalRef = db.collection('subscription_proposals').doc(b.proposalId);
+    var ps = await proposalRef.get(); if (!ps.exists) throw A.httpError(404, 'Proposal not found');
+    proposal = ps.data();
+    if (!SP.verifyKey(proposal, b.proposalKey)) throw A.httpError(403, 'This proposal link is not valid');
+    if (proposal.status !== 'sent') throw A.httpError(409, 'This proposal is ' + proposal.status);
+    if (SP.expired(proposal, now)) throw A.httpError(409, 'This proposal has expired; ask for a new one');
+    if (proposal.prospect.domain && proposal.prospect.domain !== domain) throw A.httpError(403, 'This proposal was prepared for ' + proposal.prospect.domain);
+  }
+  var discovery = b.discovery ? SP.discovery(b.discovery) : null, recommendation = discovery ? SP.recommend(discovery, book) : null;
+  var choice = proposal ? proposal.selection : { modules: b.modules || (recommendation ? recommendation.modules : ['lite']), interval: b.interval || 'monthly' };
+  var selected = POLICY.terms(choice, book, now);
   if (b.vertical !== profile.vertical) throw A.httpError(400, 'Company type and billing profile must agree');
   var duration = Math.min(TRIAL_DAYS, 14);
   if (!isFinite(duration) || duration < 0 || Math.floor(duration) !== duration) throw A.httpError(500, 'Invalid trial configuration');
   var ref = db.collection('omega_orgs').doc(domain), name = String(b.companyName).trim();
   var result = await db.runTransaction(async function (tx) {
     var old = await tx.get(ref), publicRef = db.collection('tenant_public').doc(host), publicSnap = await tx.get(publicRef);
+    var proposalSnap = proposalRef ? await tx.get(proposalRef) : null;
     if (old.exists) { var prior = old.data(); return { exists: true, orgId: domain, status: prior.status, host: (prior.domains || [])[0] || null }; }
     if (publicSnap.exists) throw A.httpError(409, 'Workspace address is already in use; choose another');
     var org = { name: name, slug: slug, domains: [host], logoUrl: b.logoUrl || '', vertical: profile.vertical,
@@ -54,7 +76,14 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
     tx.create(ref.collection('billing').doc('profile'), Object.assign({}, profile, { createdAt: now, updatedBy: caller.email }));
     tx.create(ref.collection('billing').doc('current'), { packaged: true, packagingSignup: true, packagingState: 'pending',
       modules: ['lite'], proposedPackage: selected, pricebookVersion: book.version, trialDurationDays: duration,
+      proposalId: proposal ? proposal.id : null, signupDiscovery: discovery ? { discovery: discovery, recommendation: recommendation, at: now } : null,
       billingProvider: 'quickbooks', qboEnv: 'sandbox', createdAt: now });
+    if (proposalSnap) {
+      if (!proposalSnap.exists || proposalSnap.data().status !== 'sent') throw A.httpError(409, 'This proposal is no longer open');
+      tx.update(proposalRef, { status: 'accepted', updatedAt: now, updatedBy: caller.email,
+        acceptance: Object.assign({}, proposalSnap.data().acceptance, { acceptedAt: now, acceptedBy: caller.email, orgId: domain, result: { path: 'signup', state: 'awaiting_approval', host: host } }),
+        history: (proposalSnap.data().history || []).concat([{ at: now, by: caller.email, action: 'accepted', path: 'signup' }]).slice(-50) });
+    }
     tx.create(ref.collection('members').doc(caller.uid), { email: caller.email, name: caller.claims.name || '', role: 'owner', status: 'active', createdAt: now });
     tx.create(publicRef, { orgId: domain, name: name, logoUrl: org.logoUrl, colors: null, exportBrand: org.exportBrand,
       tier: 'trial', vertical: profile.vertical, shell: 'default', domains: [host], status: 'pending', updatedAt: now });

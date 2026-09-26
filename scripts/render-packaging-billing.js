@@ -13,7 +13,7 @@ fixture = require('./_lib/logic-fixtures'); org = fixture.ORG;
 profile = H.profile(org, fixture.brand.companyName);
 F.mock('../api/_lib/mail', { templates: { signupReceived: async function () {}, signupAlert: async function () {} } });
 H.mockQbo(function () { invoices++; });
-var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change') };
+var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change'), '/api/subscription-proposal': require('../api/subscription-proposal') };
 /* Phase 5: a tenant whose current cycle is already paid, seen by its owner. */
 function seedPaid(keys, plan, staff) { seed(keys, staff); H.seedPaidTenant(db, { org: org, keys: keys, plan: plan }); }
 function seed(keys, staff) {
@@ -60,6 +60,7 @@ async function run() {
       check(await page.locator('[data-pp-tab]').count() === 4, 'four tabs');
       check((await page.locator('#pp-monthly').textContent()).includes(pack === 'lite' ? '$500' : '$1,299'), 'server monthly price');
       check(await page.locator('[data-pp-pane="pkg"] [data-module-card]').count() === M.catalog().length, 'one catalog');
+      check(/^\/subscription-proposal\.html\?org=[^&]+&modules=[a-z,-]+&plan=/.test(await page.locator('#pp-proposal').getAttribute('href')), 'Send as proposal opens the tool on this tenant with the rail\u2019s terms');
       await capture(page, pack + '-' + theme + '-package');
       if (pack === 'field' && theme === 'light') {
         var scope = page.locator('[data-pp-pane="pkg"]');
@@ -95,7 +96,10 @@ async function run() {
     }
     seed(['lite'], false); caller.email = 'owner@signup-fixture.example'; caller.orgId = 'signup-fixture.example';
     var signup = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(signup, base); var sp = await signup.newPage(); await sp.goto(base + '/start.html'); await sp.evaluate(function () { window.dispatchEvent(new CustomEvent('omega:hub', { detail: {} })); });
-    await sp.locator('#f-submit:not([disabled])').waitFor(); await sp.locator('#f-name').fill('Signup Fixture'); await sp.locator('#f-submit').click(); await sp.locator('#step-billing').waitFor({ state: 'visible' });
+    await sp.locator('#f-submit:not([disabled])').waitFor(); await sp.locator('#f-name').fill('Signup Fixture'); await sp.locator('#f-submit').click();
+    // Phase 6: the discovery step sits between the company and billing; a signup may skip it.
+    await sp.locator('#step-discovery').waitFor({ state: 'visible' }); check(await sp.locator('#signup-questions .sq').count() === 12, 'signup asks the twelve discovery questions');
+    await sp.locator('#discovery-continue').click(); await sp.locator('#step-billing').waitFor({ state: 'visible' });
     for (var pair of [['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await sp.locator('[data-profile-field="' + pair[0] + '"]').fill(pair[1]);
     await capture(sp, 'signup-billing'); await sp.locator('#billing-submit').click(); await sp.locator('#step-done').waitFor({ state: 'visible' });
     check(db.data.get('omega_orgs/signup-fixture.example').status === 'pending', 'actual signup endpoint creates pending org'); check(db.data.get('omega_orgs/signup-fixture.example/billing/current').trialEndsAt === undefined, 'signup has no running trial'); await signup.close();

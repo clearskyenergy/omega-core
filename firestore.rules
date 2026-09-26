@@ -531,6 +531,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Subscription proposals (Phase 6) are written and read only through
+    // /api/subscription-proposal with the Admin SDK: a rep's draft, the key
+    // that opens the customer's view and the acceptance record never reach
+    // a browser directly, staff browsers included.
+    match /subscription_proposals/{proposalId} {
+      allow read, write: if false;
+    }
+
     match /tools/{toolId} {
       allow read:  if signedIn();
       allow write: if isAdmin();

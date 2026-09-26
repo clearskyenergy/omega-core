@@ -147,6 +147,12 @@
   /* A subscription change re-reads the whole record (the picker, history and
      plan line all move) and stays on the tab the person was using. */
   function reload(keepTab) { return load().then(function () { if (keepTab) tab(keepTab); }); }
+  function proposalHref() {
+    var link = $('proposal'); if (!link) return;
+    var href = '/subscription-proposal.html?org=' + encodeURIComponent(orgId);
+    try { var t = terms(); href += '&modules=' + t.modules.map(encodeURIComponent).join(',') + '&plan=' + encodeURIComponent(t.plan) + '&interval=' + encodeURIComponent(t.interval) + (t.credit ? '&credit=1' : ''); } catch (e) { /* the rail is still being built */ }
+    link.href = href;
+  }
   function render(data, profile) {
     record = data; selected = data.billing.proposedPackage || data.billing; host.textContent = '';
     var heading = el('div', '', 'pp-head'), title = el('div'); title.appendChild(el('h2', data.name)); title.appendChild(el('div', orgId + ' · ' + data.pricebookVersion, 'pp-sub')); heading.appendChild(title); heading.appendChild(el('span', data.billing.packagingState || data.status, 'pp-pill')); host.appendChild(heading);
@@ -163,7 +169,7 @@
       var row = el('div', '', 'pp-row'); row.appendChild(el('span', 'Customer type', 'pp-note'));
       row.appendChild(choice('starter', Object.keys(data.starters).map(function (k) { return [k, (data.starterLabels || {})[k] || k]; }), Object.keys(data.starters)[0]));
       row.appendChild(button('Apply starter pack', function () { picker.set(data.starters[$('starter').value]); })); left.appendChild(row);
-      var menu = el('div'); left.appendChild(menu); picker = global.OmegaPackageMenu.picker(menu, { catalog: data.modules, modules: selected.modules || ['lite'], onChange: refreshQuote });
+      var menu = el('div'); left.appendChild(menu); picker = global.OmegaPackageMenu.picker(menu, { catalog: data.modules, modules: selected.modules || ['lite'], onChange: function (keys) { proposalHref(); refreshQuote(keys); } });
       rail.appendChild(el('div', 'Menu value (list)', 'pp-k')); var list = el('div', 'Loading…', 'pp-big'); list.id = 'pp-list'; rail.appendChild(list);
       [['fits', 'Plan that fits'], ['monthly', 'Monthly charge'], ['first', 'During credit window'], ['fee', 'Service fee / year']].forEach(function (p) { var r = el('div', '', 'pp-stat'); r.appendChild(el('span', p[1])); var v = el('span', '—'); v.id = 'pp-' + p[0]; r.appendChild(v); rail.appendChild(r); });
       rail.appendChild(choice('plan', [['auto', 'Lowest monthly price'], ['alacarte', 'Lite + modules'], ['field', 'Field'], ['pro', 'Pro']], selected.plan || 'auto'));
@@ -181,9 +187,11 @@
       var fit = el('div', '', 'pp-fit'); fit.id = 'pp-fit'; rail.appendChild(fit);
       rail.appendChild(el('div', data.billing.billingDay ? 'Billing day: ' + data.billing.billingDay : 'Billing date follows the original signup day.', 'pp-note'));
       var reviewButton = button('Review activation', review, 'pp-primary'); reviewButton.id = 'pp-review'; reviewButton.disabled = true; rail.appendChild(reviewButton);
-      var proposal = button('Send as proposal · coming'); proposal.disabled = true; rail.appendChild(proposal);
+      // Send as proposal opens the Subscription Proposal tool on this tenant with the
+      // rail's current terms; the link is refreshed whenever the rail changes.
+      var proposal = el('a', 'Send as proposal', 'pp-link'); proposal.id = 'pp-proposal'; proposal.target = '_blank'; proposal.rel = 'noopener'; rail.appendChild(proposal); proposalHref();
       rail.appendChild(el('div', 'Approval starts one trial of at most 14 days. Paid activation waits for QuickBooks payment. Enterprise requires a staff quote.', 'pp-note'));
-      rail.querySelectorAll('input,select').forEach(function (n) { n.onchange = refreshQuote; });
+      rail.querySelectorAll('input,select').forEach(function (n) { n.onchange = function () { proposalHref(); refreshQuote(); }; });
       var two = el('div', '', 'pp-two'); panes.write.appendChild(two);
       [['write-invoice', 'QuickBooks invoice'], ['write-billing', 'Billing record'], ['write-customer', 'QuickBooks customer']].forEach(function (p) { var area = el('div'); area.appendChild(el('h3', p[1])); var pre = el('pre', 'Choose Review activation to load the server preview.'); pre.id = 'pp-' + p[0]; area.appendChild(pre); two.appendChild(area); });
       var applyButton = button('Apply reviewed changes', apply, 'pp-primary'); applyButton.id = 'pp-apply'; applyButton.disabled = true; panes.write.appendChild(applyButton);

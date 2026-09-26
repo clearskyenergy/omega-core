@@ -177,6 +177,15 @@ var T = {
     return send(o.email, 'Your OMEGA subscription invoice is ready',
       layout('Pay to continue', '<p>' + esc(o.text) + '</p>' + (o.paymentLink ? button(o.paymentLink, 'Pay in QuickBooks') : '<p>Open your plan for invoice details.</p>')));
   },
+  /* The Subscription Proposal (Phase 6): the link carries the key that opens
+     the customer's view; the reply goes to the rep who prepared it. */
+  proposalSent: function (o) {
+    return send(o.email, (o.platformName || 'ClearSky-OMEGA') + ' subscription proposal for ' + o.company,
+      layout('Your proposal is ready', '<p>' + (o.contactName ? 'Hello ' + esc(o.contactName) + '. ' : '') + esc(o.sender || 'ClearSky') + ' has prepared a subscription proposal for <b>' + esc(o.company) + '</b>: '
+        + esc(o.planDisplay || '') + ' at ' + esc(o.monthlyDisplay || '') + '.</p>' + button(o.url, 'Open your proposal')
+        + '<p>It is valid until <b>' + esc(o.validUntil || '') + '</b>. Accept it online, or reply to this email with questions.</p>' + (o.note ? '<p>' + esc(o.note) + '</p>' : '')),
+      null, o.replyTo ? { replyTo: o.replyTo } : {});
+  },
   rejected: function (o) {
     return send(o.email, 'About your ClearSky-OMEGA workspace request',
       layout('We couldn\'t set up ' + esc(o.company), '<p>' + esc(o.note || 'We weren\'t able to approve this workspace request.') + '</p>'

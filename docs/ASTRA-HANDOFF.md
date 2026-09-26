@@ -30,6 +30,12 @@ operator assignments below; the source commercial requirements still apply.
   was built on `codex/packaging-phase-5`, stacked on Phase 4, under the same
   sandbox flags; Step B (card on file) stays off. See
   `docs/PACKAGING-PHASE-5-VALIDATION.md`.
+- Phase 6 (the Subscription Proposal tool for the reps, the customer's
+  proposal page, and the same discovery inside self-serve signup) was built
+  on `codex/packaging-phase-6`, stacked on Phase 5. Tommy's direction,
+  2026-09-26: the tool is for every ClearSky sales rep, and a company that
+  signs up walks the same steps, so the system reflects their choices. See
+  `docs/PACKAGING-PHASE-6-VALIDATION.md`.
 
 ## 1. What you are building
 

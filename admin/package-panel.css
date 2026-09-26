@@ -50,3 +50,4 @@ body.package-admin header{background:var(--pkg-navy)}
 #package-panel .opm-quote{font-weight:600}#package-panel .opm-wait{font-weight:600;color:var(--pkg-blue)}#package-panel .opm-reason{color:#B45F06;font-size:12px}#package-panel .opm-row{display:flex;flex-wrap:wrap;gap:6px}
 #package-panel .opm-act .opm-primary{background:var(--pkg-blue);color:#fff;border-color:var(--pkg-blue)}#package-panel .opm-icon{display:inline-flex;width:30px;height:30px;border-radius:7px;align-items:center;justify-content:center;background:var(--pkg-sunk);color:var(--pkg-blue);font-weight:700}
 #package-panel .pp-removals{margin:10px 0 18px}#package-panel .pp-removals .pkm-tag{display:inline-flex;gap:6px;align-items:center;padding:4px 8px}
+#package-panel .pp-link{display:block;margin:6px 0;color:var(--pkg-blue);font-weight:600}

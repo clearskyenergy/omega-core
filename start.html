@@ -37,6 +37,7 @@
   .host{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--gold)}
   .hide{display:none}
   .hint{font-size:12px;color:var(--sub);margin-top:6px}
+.sq{padding:10px 0;border-bottom:1px solid var(--line,#E2E8F0)}.sq-opts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:4px;font-size:13px}.sq-opts label,.sq-more{display:inline-flex;align-items:center;gap:4px;font-weight:400;font-size:13px;margin:4px 12px 0 0;white-space:nowrap;width:auto}.sq-opts input,.sq-more input[type=checkbox]{width:auto;margin:0}
 </style>
 </head>
 <body>
@@ -80,12 +81,28 @@
     <div class="err" id="form-err"></div>
   </div>
 
+  <!-- STEP 2b: how you work today (Phase 6) — the same questions a rep asks -->
+  <div id="step-discovery" class="hide">
+    <h1>How you work today</h1>
+    <p>Twelve quick questions. “This quarter” goes in your starting package; “within the year” we note for later. Then what you pay today, so the price is shown against your own numbers.</p>
+    <div id="signup-questions"></div>
+    <h2>What you pay today, per month <span style="font-weight:400">(optional)</span></h2>
+    <div id="signup-spend" class="obp-grid"></div>
+    <button class="btn" id="discovery-recommend" onclick="recommendPackage()">Recommend my package</button>
+    <div id="signup-recommended" class="hide"></div>
+    <button class="btn" id="discovery-continue" onclick="continueToBilling()">Continue to billing</button>
+    <button class="btn ghost" onclick="backToCompany()">Back to company details</button>
+    <div class="err" id="discovery-err"></div>
+  </div>
+
   <div id="step-billing" class="hide">
     <h1>Billing and your proposed package</h1>
     <p>Approval starts your one trial of at most 14 days. Your first QuickBooks invoice arrives at trial end; payment is required to continue. Recurring invoices follow your signup day.</p>
+    <div id="signup-proposal" class="ok hide"></div>
     <div id="signup-billing-profile" class="obp-grid"></div>
     <h2>Choose your modules</h2>
-    <p>Staff will review this proposed package. Prices and the final invoice are confirmed by the server.</p>
+    <p id="signup-package-note">Staff will review this proposed package. Prices and the final invoice are confirmed by the server.</p>
+    <div class="hint" id="signup-package-price"></div>
     <div id="signup-package-menu"></div>
     <label for="signup-interval">Billing frequency</label>
     <select id="signup-interval"><option value="monthly">Monthly</option><option value="annual">Annual prepay · no transformation credit</option></select>
@@ -112,9 +129,10 @@
 (function(){
   var CFG = window.CLEARSKY_CONFIG;
   if (!firebase.apps.length) firebase.initializeApp(CFG.firebase);
-  var auth = firebase.auth(), signupOptions = null, billingForm = null, signupPicker = null;
+  var auth = firebase.auth(), signupOptions = null, billingForm = null, signupPicker = null, discoveryBuilt = false, recommended = null, proposal = null;
+  function qp(k){ var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search); return m ? decodeURIComponent(m[1]) : ''; }
   var $ = function(id){ return document.getElementById(id); };
-  function show(id){ ['step-auth','step-form','step-billing','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
+  function show(id){ ['step-auth','step-form','step-discovery','step-billing','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
   function err(id,msg){ var e=$(id); e.style.display = msg ? 'block' : 'none'; e.textContent = msg||''; }
   function domainOf(email){ return String(email||'').toLowerCase().split('@')[1]||''; }
   function slugOf(d){ return String(d||'').split('.')[0].replace(/[^a-z0-9-]/g,''); }
@@ -143,29 +161,84 @@
     show('step-form'); $('f-submit').disabled = true;
     u.getIdToken().then(function (token) { return fetch('/api/tenant-signup', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Signup unavailable'); return j; }); })
-      .then(function (j) { if (auth.currentUser !== u) return; signupOptions = j; $('f-submit').disabled = false; $('f-submit').textContent = j.packaging ? 'Continue to billing' : 'Request my workspace'; },
+      .then(function (j) { if (auth.currentUser !== u) return; signupOptions = j; $('f-submit').disabled = false; $('f-submit').textContent = j.packaging ? 'Continue' : 'Request my workspace'; loadProposal(); },
         function (e) { err('form-err', e.message); });
   });
   auth.onAuthStateChanged(function(u){ if(!u) show('step-auth'); });
   $('f-slug').addEventListener('input', function(){ $('host-preview').textContent = ($('f-slug').value||'yourcompany') + '.clearskyomega.com'; });
 
   window.backToCompany = function () { show('step-form'); };
-  window.submitWorkspace = function(fromBilling){
+  /* A sent proposal's link (?proposal=&key=) prefills the package the rep priced;
+     the key is verified again by the server when the workspace is created. */
+  function loadProposal(){
+    var id = qp('proposal'), key = qp('key'); if (!id || !key || !signupOptions || !signupOptions.packaging) return;
+    fetch('/api/subscription-proposal?id=' + encodeURIComponent(id) + '&key=' + encodeURIComponent(key), { cache: 'no-store' })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Proposal not found'); return j; }); })
+      .then(function (j) { if (j.proposal.status !== 'sent') throw new Error('This proposal is ' + j.proposal.status + '.'); proposal = { id: id, key: key, view: j }; if (j.proposal.prospect.company && !$('f-name').value) $('f-name').value = j.proposal.prospect.company;
+        var box = $('signup-proposal'); box.className = 'ok'; box.style.display = 'block'; box.textContent = 'Proposal from ' + ((j.proposal.sender && j.proposal.sender.brand && j.proposal.sender.brand.name) || 'ClearSky') + ': ' + j.proposal.pricing.planDisplay + ' at ' + j.proposal.pricing.display.recurring + (j.proposal.pricing.display.first ? ' (' + j.proposal.pricing.display.first + ')' : '') + '. The package below is the one it priced.'; },
+        function (e) { err('form-err', e.message); });
+  }
+  function buildDiscovery(){
+    if (discoveryBuilt) return; discoveryBuilt = true;
+    var host = $('signup-questions');
+    (signupOptions.questions || []).forEach(function (q) {
+      var row = document.createElement('div'); row.className = 'sq'; var txt = document.createElement('div'); txt.textContent = q.n + '. ' + q.text; row.appendChild(txt);
+      var opts = document.createElement('div'); opts.className = 'sq-opts';
+      [['quarter', 'This quarter'], ['year', 'Within the year'], ['no', 'Not now']].forEach(function (pair) {
+        var lab = document.createElement('label'), r = document.createElement('input'); r.type = 'radio'; r.name = 'q-' + q.key; r.value = pair[0]; r.checked = pair[0] === 'no'; lab.appendChild(r); lab.appendChild(document.createTextNode(' ' + pair[1])); opts.appendChild(lab);
+      });
+      row.appendChild(opts);
+      (q.more || []).forEach(function (m) { var lab = document.createElement('label'); lab.className = 'sq-more'; var c = document.createElement('input'); c.type = 'checkbox'; c.setAttribute('data-flag', m.key); lab.appendChild(c); lab.appendChild(document.createTextNode(' ' + m.text)); row.appendChild(lab); });
+      if (q.count) { var cl = document.createElement('label'); cl.className = 'sq-more'; cl.appendChild(document.createTextNode(q.count.text + ' ')); var ci = document.createElement('input'); ci.type = 'number'; ci.min = '0'; ci.step = '1'; ci.id = 'q-' + q.count.key; ci.style.width = '90px'; cl.appendChild(ci); row.appendChild(cl); }
+      host.appendChild(row);
+    });
+    var spend = $('signup-spend');
+    (signupOptions.spend || []).forEach(function (s) { var lab = document.createElement('label'); lab.textContent = s.text + ' ($)'; var i = document.createElement('input'); i.id = 'spend-' + s.key; i.inputMode = 'decimal'; i.placeholder = '0'; lab.appendChild(i); spend.appendChild(lab); });
+  }
+  function discoveryValue(){
+    var d = { answers: {}, flags: {}, spend: {} };
+    (signupOptions.questions || []).forEach(function (q) { var checked = document.querySelector('input[name="q-' + q.key + '"]:checked'); d.answers[q.key] = checked ? checked.value : 'no';
+      (q.more || []).forEach(function (m) { var c = document.querySelector('input[data-flag="' + m.key + '"]'); d.flags[m.key] = !!(c && c.checked); });
+      if (q.count) { var ci = $('q-' + q.count.key); if (ci && ci.value !== '') d.evPerMonth = ci.value; } });
+    (signupOptions.spend || []).forEach(function (s) { var i = $('spend-' + s.key); if (i && i.value.trim()) d.spend[s.key] = i.value.trim(); });
+    return d;
+  }
+  window.recommendPackage = function(){
+    var u = auth.currentUser; if (!u) return; var btn = $('discovery-recommend'); btn.disabled = true; err('discovery-err', '');
+    u.getIdToken().then(function (tok) { return fetch('/api/subscription-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify({ action: 'recommend', discovery: discoveryValue(), interval: $('signup-interval').value }) }); })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not recommend'); return j; }); })
+      .then(function (j) { recommended = j; var box = $('signup-recommended'); box.className = 'ok'; box.style.display = 'block';
+        box.textContent = 'Recommended: ' + j.pricing.planDisplay + ' at ' + j.pricing.display.recurring + ' — ' + j.recommendation.modules.map(function (k) { var m = signupOptions.modules.filter(function (x) { return x.key === k; })[0]; return m ? m.name : k; }).join(', ') + (j.value && j.value.display.delta ? '. ' + j.value.display.delta + '.' : '.') + (j.recommendation.next.length ? ' Later: ' + j.recommendation.next.map(function (n) { return n.name; }).join(', ') + '.' : '');
+        if (signupPicker) signupPicker.set(j.recommendation.modules); btn.disabled = false; },
+        function (e) { err('discovery-err', e.message); btn.disabled = false; });
+  };
+  window.continueToBilling = function(){ submitWorkspace(false, true); };
+  function quoteSelection(){
+    var u = auth.currentUser; if (!u || !signupPicker) return;
+    u.getIdToken().then(function (tok) { return fetch('/api/subscription-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify({ action: 'price', selection: { modules: signupPicker.value(), interval: $('signup-interval').value } }) }); })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not price'); return j; }); })
+      .then(function (j) { $('signup-package-price').textContent = j.pricing.planDisplay + ' · ' + j.pricing.display.recurring + (j.pricing.display.fit ? ' · ' + j.pricing.display.fit : ''); }, function () { $('signup-package-price').textContent = ''; });
+  }
+  window.submitWorkspace = function(fromBilling, fromDiscovery){
     var u = auth.currentUser; if(!u) return;
     var name=$('f-name').value.trim(); if(name.length<2){ err('form-err','Company name is required.'); return; }
     if (!signupOptions) { err('form-err', 'Wait for signup options to load.'); return; }
     var payload = { companyName:name, vertical:$('f-vertical').value, slug:$('f-slug').value.trim(), phone:$('f-phone').value.trim(), note:$('f-note').value.trim() };
     var errorId = signupOptions.packaging && fromBilling ? 'billing-err' : 'form-err';
+    if (signupOptions.packaging && !fromBilling && !fromDiscovery && !proposal) { buildDiscovery(); show('step-discovery'); return; }
     if (signupOptions.packaging && !fromBilling) {
       if (!billingForm) billingForm = OmegaBillingProfile.render($('signup-billing-profile'), { legalName: name, email: u.email, phone: payload.phone, contactName: u.displayName || '', vertical: payload.vertical, address: { country: 'US' } });
-      if (!signupPicker) signupPicker = OmegaPackageMenu.picker($('signup-package-menu'), { catalog: signupOptions.modules, modules: ['lite'] });
+      var start = proposal ? proposal.view.proposal.selection.modules : (recommended ? recommended.recommendation.modules : ['lite']);
+      if (!signupPicker) signupPicker = OmegaPackageMenu.picker($('signup-package-menu'), { catalog: signupOptions.modules, modules: start, readOnly: !!proposal, onChange: quoteSelection });
+      if (proposal) { $('signup-interval').value = proposal.view.proposal.selection.interval || 'monthly'; $('signup-interval').disabled = true; $('signup-package-note').textContent = 'The package your proposal priced. To change it, ask for a new proposal.'; }
       document.querySelector('[data-profile-field="vertical"]').value = payload.vertical;
-      show('step-billing'); return;
+      quoteSelection(); show('step-billing'); return;
     }
     if (signupOptions.packaging) {
       if (!billingForm.valid()) return;
       payload.billingProfile = billingForm.value(); payload.vertical = payload.billingProfile.vertical;
       payload.modules = signupPicker.value(); payload.interval = $('signup-interval').value;
+      if (proposal) { payload.proposalId = proposal.id; payload.proposalKey = proposal.key; } else if (discoveryBuilt) payload.discovery = discoveryValue();
     }
     var btn=$(signupOptions.packaging ? 'billing-submit' : 'f-submit'); btn.disabled=true; btn.textContent='Creating…'; err(errorId,'');
     u.getIdToken().then(function(tok){

@@ -178,6 +178,17 @@ requires a literal verified ClearSky domain even with an old role claim.
 Flags remain off by default; see docs/PACKAGING-PHASE-4-VALIDATION.md before
 any sandbox enablement or release.
 
+Phase 5 separates what a tenant BOUGHT (`billing/current.subscription`) from
+what is switched on (`billing/current.modules`); `POST /api/plan-change` is
+the one door for a tenant's own additions (pay first, prorated; a $0 addition
+inside a paid tier switches on at once). Phase 6: the Subscription Proposal
+(`subscription-proposal.html`, `proposal.html`, `api/subscription-proposal.js`
+on `api/_lib/subscription-proposal.js`) and the signup discovery in
+`start.html` share ONE set of questions, ONE recommendation and the price
+book; `subscription_proposals` is Admin SDK only; accepting a proposal never
+prices anything — signup, plan-change or activation do. `api/_lib/deck-brand.js`
+is the one brand-of-a-deck rule (Pro Forma and proposal).
+
 Packaged editor presentation uses the server catalog through OmegaCaps;
 OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
 The shared omega-package-menu.js renders catalog features and server-formatted

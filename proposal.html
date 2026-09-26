@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your subscription proposal</title>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     proposal.html — the customer's view of a Subscription Proposal (Phase 6)
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+     Opened from the email: /proposal.html?id=<proposalId>&key=<key>. The key
+     is the credential; the page reads GET /api/subscription-proposal and
+     draws the same deck the rep saw (subscription-proposal-logic.js).
+     Accepting never prices anything here: a company without a workspace is
+     sent to signup with the key; a workspace's owner signs in and the server
+     routes the acceptance through plan-change or activation.
+
+     Loads NO omega-tenant.js, like the customer portal and for the same
+     reason: a prospect has no tenant and this page must open anywhere.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+  :root{--ink:#14171A;--paper:#F1F4F8;--panel:#fff;--line:#DCE3EA;--sub:#5B6672;--blue:#1F4E8C;--bad:#D9482B}
+  @media (prefers-color-scheme:dark){:root{--ink:#E7EEF5;--paper:#0F1720;--panel:#16212C;--line:#2A3946;--sub:#9FB3C4;--blue:#6EA3E8}}
+  *{box-sizing:border-box}[hidden]{display:none!important}
+  body{margin:0;background:var(--paper);color:var(--ink);font:400 15px/1.5 Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+  .hdr{display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--line)}.hdr b{font-size:15px}.hdr span{color:var(--sub);font-size:13px}.hdr .sp{flex:1}
+  main{max-width:960px;margin:0 auto;padding:20px 16px 60px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:16px}
+  .box h1{font-size:19px;margin:0 0 6px}.box p{margin:6px 0;color:var(--sub)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 18px;border-radius:9px;border:1px solid var(--line);background:var(--panel);font-weight:600;font-size:14px;color:var(--ink);text-decoration:none;cursor:pointer}
+  .btn.p{background:var(--blue);color:#fff;border-color:var(--blue)}.btn:disabled{opacity:.55;cursor:not-allowed}.acts{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+  .msg{font-size:14px;margin-top:10px}.msg.bad{color:var(--bad)}.pay{display:inline-block;margin-top:8px;font-weight:600;color:var(--blue)}
+  #deck-box{padding:12px 0}#deck-box .empty{text-align:center;color:var(--sub);padding:60px 0}
+  @media print{.hdr,.box,.acts{display:none!important}main{max-width:none;padding:0}body{background:#fff}}
+</style>
+</head>
+<body>
+<header class="hdr"><b id="brand">Subscription proposal</b><span id="status"></span><span class="sp"></span><button class="btn" id="print" type="button" hidden>Download PDF</button></header>
+<main>
+  <div class="box" id="accept" hidden>
+    <h1 id="accept-title">Accept this proposal</h1>
+    <p id="accept-text"></p>
+    <div class="acts" id="accept-acts"></div>
+    <div class="msg" id="accept-msg"></div>
+  </div>
+  <div id="deck-box"><div class="empty">Loading your proposal…</div></div>
+</main>
+<script src="/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="/subscription-proposal-logic.js"></script>
+<script>
+/* ES5. The key in the address is the credential; nothing else is asked for
+   until the customer chooses to accept from an existing workspace. */
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, text, cls) { var n = document.createElement(tag); if (text) n.textContent = text; if (cls) n.className = cls; return n; }
+  function qp(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search); return m ? decodeURIComponent(m[1]) : ''; }
+  var id = qp('id'), key = qp('key'), view = null, P = window.SubscriptionProposalDeck;
+  function fail(text) { $('deck-box').innerHTML = '<div class="empty">' + P.esc(text) + '</div>'; $('status').textContent = ''; }
+  function fitDeck() { var box = $('deck-box'), frame = box.querySelector('.sp-frame'); if (!frame || !box.clientWidth) return; frame.style.setProperty('--sp-scale', String(Math.max(0.3, Math.min(1, (box.clientWidth - 8) / 816)))); }
+  function draw() {
+    var p = view.proposal, brand = p.sender && p.sender.brand ? p.sender.brand : {};
+    document.title = 'Proposal for ' + p.prospect.company; $('brand').textContent = brand.name || 'Subscription proposal';
+    $('status').textContent = p.status === 'sent' ? 'Valid until ' + P.date(p.acceptance.validUntil) : p.status;
+    if (!$('sp-deck-css')) { var st = document.createElement('style'); st.id = 'sp-deck-css'; st.textContent = P.css(); document.head.appendChild(st); }
+    $('deck-box').innerHTML = P.render(p, brand, { questions: view.questions, acceptUrl: location.href.split('#')[0], trialDays: 14 }); fitDeck();
+    $('print').hidden = false;
+    var box = $('accept'), acts = $('accept-acts'); acts.textContent = ''; box.hidden = false;
+    if (view.accept.how === 'signup') {
+      $('accept-text').textContent = 'Create your workspace with this package. You will enter your billing details, then ' + (brand.name || 'ClearSky') + ' approves the workspace and your trial of at most 14 days starts.';
+      var a = el('a', 'Accept and create your workspace', 'btn p'); a.href = view.accept.signupUrl; acts.appendChild(a);
+    } else if (view.accept.how === 'sign-in') {
+      $('accept-text').textContent = 'Your company already has a workspace' + (view.accept.host ? ' at ' + view.accept.host : '') + '. Sign in as its owner or administrator to accept; the package is then invoiced in QuickBooks and switches on when the payment clears.';
+      var b = el('button', 'Sign in and accept', 'btn p'); b.type = 'button'; b.onclick = signInAndAccept; acts.appendChild(b);
+    } else {
+      $('accept-title').textContent = p.status === 'accepted' ? 'Accepted' : p.status === 'declined' ? 'This proposal was closed' : p.status === 'expired' ? 'This proposal has expired' : 'Proposal';
+      $('accept-text').textContent = p.status === 'accepted' ? 'Thank you. ' + (p.acceptance && p.acceptance.result && p.acceptance.result.paymentLink ? 'Your invoice is ready in QuickBooks.' : 'We are setting things up and will be in touch.') : p.status === 'expired' ? 'Ask ' + (brand.name || 'us') + ' for a fresh one.' : '';
+      if (p.status === 'accepted' && p.acceptance && p.acceptance.result && p.acceptance.result.paymentLink) { var pay = el('a', 'Pay in QuickBooks', 'pay'); pay.href = p.acceptance.result.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; acts.appendChild(pay); }
+    }
+  }
+  function signInAndAccept() {
+    var msg = $('accept-msg'); msg.className = 'msg'; msg.textContent = 'Signing in…';
+    if (window.CLEARSKY_CONFIG && !firebase.apps.length) firebase.initializeApp(window.CLEARSKY_CONFIG.firebase);
+    var auth = firebase.auth(), ready = auth.currentUser ? Promise.resolve(auth.currentUser) : auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).then(function (c) { return c.user; });
+    ready.then(function (u) { return u.getIdToken(); }).then(function (token) {
+      msg.textContent = 'Accepting…';
+      return fetch('/api/subscription-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ action: 'accept', id: id, key: key }) })
+        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not accept'); return j; }); });
+    }).then(function (r) {
+      $('accept-acts').textContent = ''; $('accept-title').textContent = 'Accepted';
+      if (r.path === 'plan-change') { msg.textContent = r.state === 'active' ? 'Added: your tools are switching on.' : 'Your change invoice is ready: ' + r.todayDisplay + '. It switches on when the payment clears' + (r.expiresOn ? '; pay before ' + r.expiresOn : '') + '.'; if (r.paymentLink) { var pay = el('a', 'Pay in QuickBooks', 'pay'); pay.href = r.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; $('accept-acts').appendChild(pay); } }
+      else msg.textContent = 'Thank you. ' + (r.state === 'awaiting_approval' ? 'Your workspace is awaiting approval; the trial starts when it is approved.' : 'ClearSky will activate the package and send your QuickBooks invoice.');
+    }, function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
+  }
+  $('print').onclick = function () { window.print(); };
+  window.addEventListener('resize', fitDeck);
+  if (!id || !key) { fail('This link is incomplete. Open the proposal from the email you received.'); return; }
+  fetch('/api/subscription-proposal?id=' + encodeURIComponent(id) + '&key=' + encodeURIComponent(key), { cache: 'no-store' })
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Proposal not found'); return j; }); })
+    .then(function (j) { view = j; draw(); }, function (e) { fail(e.message); });
+})();
+</script>
+</body>
+</html>
