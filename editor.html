@@ -104741,13 +104741,76 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
   --gold-faint:rgba(62,143,204,.09);
   --shadow-gold:0 0 0 1px rgba(62,143,204,.55);
 
+  /* -- surface relations: every panel, menu and dialog reads these ---- */
+  --scrim:rgba(4,10,20,.72);            /* full-screen dim behind a dialog  */
+  --hover:rgba(255,255,255,.06);        /* row / button hover on a panel    */
+  --hover-strong:rgba(255,255,255,.12); /* pressed / selected fill          */
+  --inset:rgba(0,0,0,.22);              /* sunken field / list well         */
+  --hairline:rgba(255,255,255,.08);     /* faint divider inside a panel     */
+  --shadow:0 10px 30px rgba(0,0,0,.45); /* floating menu / dialog shadow    */
+  --grid-dot:rgba(255,255,255,.07);     /* canvas grid dots                 */
+  --ok:#5EA97B; --warn:#C9A24E; --bad:#C97A72; --on-status:#FFFFFF;
+
   /* -- metrics ------------------------------------------------------- */
   --th:32px; --ribbon-h:78px;
   --radius-sm:2px; --radius-md:4px;
   --ink:#14171A;
 }
 
-/* Accent variants. Chrome stays graphite in all of them — only the single
+/* ---------------------------------------------------------------------- *
+ *  LIGHT CHROME. The same token names with the ribbon's light values, so *
+ *  every panel that reads a token follows the operating system's colour  *
+ *  scheme. data-omega-theme on <html> ("light" | "dark") overrides the   *
+ *  OS; absent means auto. OmegaUI.theme() sets it (see ACCENT / THEME).  *
+ *  The two blocks below are IDENTICAL on purpose: one answers the OS,    *
+ *  the other the explicit choice. Edit both or neither.                  *
+ * ---------------------------------------------------------------------- */
+@media (prefers-color-scheme: light){
+  html:not([data-omega-theme="dark"]){
+    --navy:#FFFFFF; --blue:#E6EEF9; --bg:#F5F4F0; --panel:#FFFFFF;
+    --surface:#EEF1F3; --border:#D7DFE6; --text:#16202B; --sub:#526273;
+    --icon:#526273;
+    --accent:#2B5FA8; --accent-2:#4A7BC4; --on-accent:#FFFFFF;
+    --sky:#2B5FA8; --hl:#2B5FA8; --hl-dim:#E6EEF9;
+    --green:#2E7D4F; --amber:#9A6B00; --red:#B3382E; --purple:#5E57A8;
+    --gold:#2B5FA8; --gold-dark:#1F4680; --gold-pale:#7FA3D6;
+    --gold-faint:rgba(43,95,168,.08); --shadow-gold:0 0 0 1px rgba(43,95,168,.45);
+    --scrim:rgba(22,32,43,.45); --hover:rgba(22,32,43,.05);
+    --hover-strong:rgba(22,32,43,.10); --inset:rgba(22,32,43,.05);
+    --hairline:rgba(22,32,43,.08); --shadow:0 10px 30px rgba(22,32,43,.18);
+    --grid-dot:rgba(22,32,43,.10);
+    --ok:#2E7D4F; --warn:#9A6B00; --bad:#B3382E; --on-status:#FFFFFF;
+    --ink:#16202B;
+    --gb-blue:#2B5FA8; --gb-blue-deep:#E6EEF9; --gb-blue-edge:#B9CDE8;
+    --gb-green:#2E7D4F; --gb-amber:#9A6B00;
+    --gb-card:#FFFFFF; --gb-head1:#EEF1F3; --gb-head2:#F5F4F0; --gb-line:#D7DFE6;
+    --gb-ink:#16202B; --gb-sub:#526273;
+  }
+}
+html[data-omega-theme="light"]{
+  --navy:#FFFFFF; --blue:#E6EEF9; --bg:#F5F4F0; --panel:#FFFFFF;
+  --surface:#EEF1F3; --border:#D7DFE6; --text:#16202B; --sub:#526273;
+  --icon:#526273;
+  --accent:#2B5FA8; --accent-2:#4A7BC4; --on-accent:#FFFFFF;
+  --sky:#2B5FA8; --hl:#2B5FA8; --hl-dim:#E6EEF9;
+  --green:#2E7D4F; --amber:#9A6B00; --red:#B3382E; --purple:#5E57A8;
+  --gold:#2B5FA8; --gold-dark:#1F4680; --gold-pale:#7FA3D6;
+  --gold-faint:rgba(43,95,168,.08); --shadow-gold:0 0 0 1px rgba(43,95,168,.45);
+  --scrim:rgba(22,32,43,.45); --hover:rgba(22,32,43,.05);
+  --hover-strong:rgba(22,32,43,.10); --inset:rgba(22,32,43,.05);
+  --hairline:rgba(22,32,43,.08); --shadow:0 10px 30px rgba(22,32,43,.18);
+  --grid-dot:rgba(22,32,43,.10);
+  --ok:#2E7D4F; --warn:#9A6B00; --bad:#B3382E; --on-status:#FFFFFF;
+  --ink:#16202B;
+  --gb-blue:#2B5FA8; --gb-blue-deep:#E6EEF9; --gb-blue-edge:#B9CDE8;
+  --gb-green:#2E7D4F; --gb-amber:#9A6B00;
+  --gb-card:#FFFFFF; --gb-head1:#EEF1F3; --gb-head2:#F5F4F0; --gb-line:#D7DFE6;
+  --gb-ink:#16202B; --gb-sub:#526273;
+}
+
+
+/* Accent variants. Placed AFTER the light blocks so a chosen accent wins
+   in either scheme. Chrome stays neutral in all of them — only the single
    highlight moves, which is the whole point of a one-accent system. */
 html[data-omega-accent="green"]{
   --accent:#4E9C63; --accent-2:#6FBB84; --on-accent:#0D1710;
@@ -105366,6 +105429,23 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     if (a && a !== 'blue') setAccent(a);
   })();
 
+  /* THEME: 'auto' follows the OS colour scheme (prefers-color-scheme);
+     'light' | 'dark' pin it. Stored on <html> as data-omega-theme, exactly
+     as the accent is, and remembered in localStorage. */
+  function setTheme(name) {
+    var ok = { auto: 1, light: 1, dark: 1 };
+    if (!ok[name]) name = 'auto';
+    if (name === 'auto') document.documentElement.removeAttribute('data-omega-theme');
+    else document.documentElement.setAttribute('data-omega-theme', name);
+    try { localStorage.setItem('omega.ui.theme', name); } catch (e) {}
+    return name;
+  }
+  (function restoreTheme() {
+    var t = null;
+    try { t = localStorage.getItem('omega.ui.theme'); } catch (e) {}
+    if (t && t !== 'auto') setTheme(t);
+  })();
+
   /* ------------------------------------------------------------------ *
    *  B.  TOOLTIP                                                       *
    * ------------------------------------------------------------------ */
@@ -105481,6 +105561,9 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     { name: 'Theme: Graphite + Blue (Autodesk)', desc: 'Neutral chrome with a blue highlight', ico: '\u25D1', run: function () { setAccent('blue'); } },
     { name: 'Theme: Graphite + Brand Green', desc: 'Neutral chrome with the NextNRG green highlight', ico: '\u25D1', run: function () { setAccent('green'); } },
     { name: 'Theme: Graphite + Amber', desc: 'Neutral chrome with an amber highlight', ico: '\u25D1', run: function () { setAccent('amber'); } },
+    { name: 'Theme: Auto (follow the system)', desc: 'Light or dark chrome as the operating system prefers', ico: '\u25D0', run: function () { setTheme('auto'); } },
+    { name: 'Theme: Light', desc: 'Light chrome, easier on the eyes in a bright room', ico: '\u25D0', run: function () { setTheme('light'); } },
+    { name: 'Theme: Dark', desc: 'Graphite chrome', ico: '\u25D0', run: function () { setTheme('dark'); } },
     { name: 'Reconnect chargers to the panel', desc: 'Rebuild the branch trench (and its bollard) for any guided-build charger that lost it', ico: '\u26A1', run: function () { if (window.OmegaEvReconnect) OmegaEvReconnect.reconnectAll(); } },
     { name: 'Re-lay branch conduits along the drawn trench', desc: 'Put every charger branch back on the trench run you drew \u2014 fixes legs that fan straight to the panel and the footage they quote', ico: '\u26A1', run: function () { if (window.OmegaEvRelay) OmegaEvRelay.relayAll(); } },
     { name: 'Interface: restore original colours', desc: 'Turn the colour harmonizer off for this session', ico: '\u21BA', run: function () { OmegaSkin.harmonize(false); } }
@@ -105846,6 +105929,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
   try {
     if (window.OmegaUI) {
       if (!window.OmegaUI.accent) window.OmegaUI.accent = setAccent;
+      if (!window.OmegaUI.theme) window.OmegaUI.theme = setTheme;
       if (!window.OmegaUI.search) window.OmegaUI.search = open;
     }
   } catch (e) {}
