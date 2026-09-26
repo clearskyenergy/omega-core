@@ -112,3 +112,21 @@ jobs:
           node-version: '20'
       - name: every <script src> resolves to a file that exists
         run: node scripts/check-html-scripts.js
+
+  render-dashboard:
+    name: the tenant dashboard boots signed in, in Chromium
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Playwright Chromium
+        run: |
+          npm i --no-save --no-audit --no-fund playwright@1.63.0
+          npx playwright install --with-deps chromium
+      # index.html against scripts/_lib/firebase-double.js and three tenants
+      # (new trial, paying Standard with a locked tile, awaiting approval),
+      # desktop and 390px. check:pages does not cover the dashboard.
+      - name: render the dashboard against the Firebase double
+        run: node scripts/render-dashboard.js

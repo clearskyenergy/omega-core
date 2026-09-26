@@ -778,6 +778,21 @@ tenant. Treat it that way.
 - `omega-tenant.js` MUST load directly after `omega-brand.js` on every page
   that signs users in. It wraps OmegaBrand.resolve.
 - Test as a tenant using `adminDomains` preview, not by editing their data.
+- `npm run check:dashboard` renders the tenant dashboard (`index.html`) in
+  Chromium, signed in, with the Firebase compat SDK replaced by
+  `scripts/_lib/firebase-double.js` and three tenants from
+  `scripts/_lib/dashboard-fixtures.js` (a new trial behind the terms modal, a
+  paying Standard tenant with a locked tile, a workspace awaiting approval),
+  on a desktop and a 390px phone. It fails on an error, an unanswered
+  `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
+  tile. `check:pages` does not cover the dashboard; run this after any
+  change to `index.html` or the runtime it loads. The double's own test is
+  `scripts/tests/tfirebasedouble.js`.
+- The sales agent's board is `GET /api/growth` (staff only, read-only;
+  `api/_lib/growth.js` is the pure judgement, `scripts/tests/tgrowth.js`
+  pins it). It knows stages and next actions, never prices or modules: the
+  catalog and the price book are the packaging build's, in one place each.
+  Design and rungs: `docs/SALES-AGENT.md`.
 - Branding assets: OMEGA mark is white-on-transparent; verify on the navy
   topbar, never by opening the PNG directly.
 - Staging: Vercel's own `*.vercel.app` preview URLs. They are on the
