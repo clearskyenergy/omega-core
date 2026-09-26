@@ -2,10 +2,9 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Draft PR (stacked on Phase 5, [#140](https://github.com/clearskyenergy/omega-core/pull/140));
-the PR link is recorded in the roadmap status table once opened. Vercel
-builds the branch at
-`https://omega-core-git-codex-packaging-phase-6-clearsky-usa.vercel.app`.
+Draft PR [#141](https://github.com/clearskyenergy/omega-core/pull/141),
+stacked on Phase 5 ([#140](https://github.com/clearskyenergy/omega-core/pull/140)).
+[Vercel preview](https://omega-core-git-codex-packaging-phase-6-clearsky-usa.vercel.app).
 No live organization, trial, billing date, QuickBooks record, environment
 variable or deployed rule was changed. Runtime flags remain off by default;
 the proposed book remains disabled in the seed. No email was sent to anyone:
