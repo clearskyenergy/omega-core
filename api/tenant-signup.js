@@ -19,7 +19,7 @@
 var A = require('./_lib/admin');
 var M = require('./_lib/mail');
 var PUBLIC = require('./_lib/public-domains');
-var BP = require('./_lib/billing-profile'), PB = require('./_lib/pricebook'), MOD = require('./_lib/modules'), PR = require('./_lib/subscription-pricing'), POLICY = require('./_lib/package-billing-policy');
+var BP = require('./_lib/billing-profile'), PB = require('./_lib/pricebook'), MOD = require('./_lib/modules'), PR = require('./_lib/subscription-pricing'), POLICY = require('./_lib/package-billing-policy'), S = require('./_lib/package-billing'), Mode = require('./_lib/packaging-mode');
 var SP = require('./_lib/subscription-proposal');
 var BASE_HOST = process.env.TENANT_BASE_HOST || 'clearskyomega.com';
 var TRIAL_DAYS = Number(process.env.TRIAL_DAYS || 14);
@@ -28,11 +28,13 @@ var RESERVED = ['app', 'www', 'api', 'alpha', 'next', 'staging', 'demo', 'admin'
 function slugify(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40); }
 
 async function signupOptions(db) {
-  if (process.env.PACKAGING_SIGNUP_ENABLED !== 'true') return { packaging: false, maxTrialDays: 14 };
-  if (process.env.QBO_ENV !== 'sandbox') throw A.httpError(409, 'Packaged signup is sandbox-only');
+  if (process.env.PACKAGING_SIGNUP_ENABLED !== 'true') return { packaging: false, maxTrialDays: 14, payNow: false };
+  if (!Mode.open()) throw A.httpError(409, 'Packaged signup is sandbox-only until PACKAGING_LIVE=true with QBO_ENV=production');
   var book = await PB.load(db, PB.VERSION);
   if (!book.enabled) throw A.httpError(409, 'Packaged signup is not enabled in the price book');
   return { packaging: true, maxTrialDays: Math.min(book.policy.trialDays, 14), pricebookVersion: book.version,
+    /* pay at the end is offered only where the engine can issue an invoice (the billing flag; the engine's guard has the last word) */
+    payNow: process.env.PACKAGING_BILLING_ENABLED === 'true' && book.enabled === true,
     modules: PR.catalog(book), starters: MOD.starters(), starterLabels: MOD.starterLabels(),
     // Phase 6: signup walks the same discovery a rep would (VALUE-LADDER §3.7).
     questions: SP.QUESTIONS, answers: SP.ANSWERS, spend: SP.SPEND, unitCosts: SP.UNIT_COSTS };
@@ -58,6 +60,8 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
   }
   var discovery = b.discovery ? SP.discovery(b.discovery) : null, recommendation = discovery ? SP.recommend(discovery, book) : null;
   var choice = proposal ? proposal.selection : { modules: b.modules || (recommendation ? recommendation.modules : ['lite']), interval: b.interval || 'monthly' };
+  /* a plan named by the offerings page (?plan=field) is asked for; the server's quote still decides whether it fits */
+  if (!proposal && typeof b.plan === 'string' && ['field', 'pro', 'auto'].indexOf(b.plan) >= 0) choice.plan = b.plan;
   var selected = POLICY.terms(choice, book, now);
   if (b.vertical !== profile.vertical) throw A.httpError(400, 'Company type and billing profile must agree');
   var duration = Math.min(TRIAL_DAYS, 14);
@@ -70,14 +74,14 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
     if (publicSnap.exists) throw A.httpError(409, 'Workspace address is already in use; choose another');
     var org = { name: name, slug: slug, domains: [host], logoUrl: b.logoUrl || '', vertical: profile.vertical,
       shell: 'default', status: 'pending', receivesFullBom: false, exportBrand: { name: name, logo: b.logoUrl || '' },
-      signedUpAt: now, packagingSandbox: true, createdAt: now, updatedAt: now,
+      signedUpAt: now, packaged: true, packagingSandbox: !Mode.live(), createdAt: now, updatedAt: now,
       signup: { email: caller.email, uid: caller.uid, phone: b.phone || null, note: b.note || null } };
     tx.create(ref, org);
     tx.create(ref.collection('billing').doc('profile'), Object.assign({}, profile, { createdAt: now, updatedBy: caller.email }));
     tx.create(ref.collection('billing').doc('current'), { packaged: true, packagingSignup: true, packagingState: 'pending',
       modules: ['lite'], proposedPackage: selected, pricebookVersion: book.version, trialDurationDays: duration,
       proposalId: proposal ? proposal.id : null, signupDiscovery: discovery ? { discovery: discovery, recommendation: recommendation, at: now } : null,
-      billingProvider: 'quickbooks', qboEnv: 'sandbox', createdAt: now });
+      billingProvider: 'quickbooks', qboEnv: book.qbo.env, createdAt: now });
     if (proposalSnap) {
       if (!proposalSnap.exists || proposalSnap.data().status !== 'sent') throw A.httpError(409, 'This proposal is no longer open');
       tx.update(proposalRef, { status: 'accepted', updatedAt: now, updatedBy: caller.email,
@@ -93,11 +97,45 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
   });
   if (!result.created) return result;
   await A.init().auth().setCustomUserClaims(caller.uid, { orgId: domain, role: 'owner' });
-  await Promise.all([M.templates.signupReceived({ email: caller.email, company: name, host: host, packaging: true }),
-    M.templates.signupAlert({ company: name, orgId: domain, email: caller.email, vertical: profile.vertical, host: host, phone: b.phone, note: b.note })]);
+  /* Pay at the end (2026-09-26, Tommy: one system, QuickBooks). The
+     workspace is opened by its owner's payment, nobody's approval: the
+     engine's own activation issues the first invoice now, with QuickBooks'
+     card-payment page on it, and the workspace stays read-only until that
+     invoice reconciles as paid (reconcile-now from the signup page or the
+     workspace, or the daily runner). If the invoice cannot be issued, the
+     request falls back to the approval path and says so. */
+  if (b.payNow === true) {
+    var publicRef2 = db.collection('tenant_public').doc(host);
+    try {
+      await ref.update({ status: 'active', approvedAt: now, approvedBy: 'self-serve', selfServe: true, updatedAt: now });
+      await publicRef2.set({ status: 'active', updatedAt: now }, { merge: true });
+      var input = { action: 'activate', modules: selected.modules, interval: selected.interval, pricebookVersion: book.version };
+      if (selected.plan) input.plan = selected.plan;
+      var previewed = await S.preview(db, domain, input, now);
+      var applied = await S.apply(db, domain, Object.assign({}, input, { dryRun: false, previewId: previewed.previewId, effectiveAt: previewed.effectiveAt }),
+        Object.assign({}, caller, { selfServe: true }), now);
+      var after = (await ref.collection('billing').doc('current').get()).data() || {};
+      Object.assign(result, { status: 'active', payNow: true, packagingState: applied.packagingState, paymentLink: applied.paymentLink || after.paymentLink || null,
+        amountDue: after.amountDue == null ? null : after.amountDue, amountDueDisplay: after.amountDue == null ? null : PR.money(Math.round(after.amountDue * 100)),
+        invoiceDate: applied.nextInvoiceOn ? previewed.invoice && previewed.invoice.date : null, monthlyDisplay: selected.monthlyDisplay || null });
+    } catch (e) {
+      await ref.update({ status: 'pending', approvedAt: null, approvedBy: null, selfServe: null, payNowError: String(e.message || e).slice(0, 200), updatedAt: now });
+      await publicRef2.set({ status: 'pending', updatedAt: now }, { merge: true });
+      Object.assign(result, { payNow: false, payNowError: e.status && e.status < 500 ? e.message : 'The first invoice could not be issued; your request goes to ClearSky for approval instead' });
+    }
+  }
+  await Promise.all([M.templates.signupReceived({ email: caller.email, company: name, host: host, packaging: true, payNow: result.payNow === true, paymentLink: result.paymentLink || null, amountDueDisplay: result.amountDueDisplay || null }),
+    M.templates.signupAlert({ company: name, orgId: domain, email: caller.email, vertical: profile.vertical, host: host, phone: b.phone, note: b.note, payNow: result.payNow === true })]);
   return result;
 }
 
+async function checkPayment(db, caller, domain, ref) {
+  var snap = await ref.get(); if (!snap.exists) throw A.httpError(404, 'No workspace yet for ' + domain);
+  var org = snap.data() || {}, member = await ref.collection('members').doc(caller.uid).get();
+  if (!member.exists || member.data().role !== 'owner' || member.data().status === 'disabled') throw A.httpError(403, 'The workspace owner checks its payment');
+  var r = await require('./_lib/plan-change').reconcileNow(db, domain, caller, Date.now());
+  return Object.assign(r, { host: (org.domains || [])[0] || null, status: org.status || 'active' });
+}
 module.exports = A.handler(function (req) {
   if (req.method !== 'POST' && req.method !== 'GET') throw A.httpError(405, 'GET or POST only');
   var b = req.body || {};
@@ -112,12 +150,23 @@ module.exports = A.handler(function (req) {
 
     var db = A.db(), FV = A.FieldValue();
     var orgRef = db.collection('omega_orgs').doc(domain);
+    /* "I've paid" from the signup page: the owner asks for a look at
+       QuickBooks now (plan-change reconcileNow, throttled) and gets the
+       billing state back with the host to open when it is paid. */
+    if (b.action === 'check-payment') return checkPayment(db, caller, domain, orgRef);
     return orgRef.get().then(function (s) {
       /* ── already a tenant: auto-join. omega-tenant.js self-registers the
            member on their first visit to the tenant host. ── */
       if (s.exists) {
-        var o = s.data();
-        return { exists: true, orgId: domain, name: o.name, status: o.status || 'active', host: (o.domains && o.domains[0]) || null };
+        var o = s.data(), bill = null;
+        return orgRef.collection('billing').doc('current').get().then(function (bs) {
+          bill = bs.exists ? bs.data() : {};
+          var out = { exists: true, orgId: domain, name: o.name, status: o.status || 'active', host: (o.domains && o.domains[0]) || null };
+          /* a workspace waiting for its first payment: the signup page resumes at the pay step */
+          if (bill.packaged === true && bill.packagingState === 'awaiting_payment') Object.assign(out, { payNow: true, packagingState: bill.packagingState, paymentLink: bill.paymentLink || null,
+            amountDue: bill.amountDue == null ? null : bill.amountDue, amountDueDisplay: bill.amountDue == null ? null : PR.money(Math.round(bill.amountDue * 100)) });
+          return out;
+        });
       }
       if (!b.companyName || String(b.companyName).trim().length < 2) throw A.httpError(400, 'companyName is required');
       var vertical = ['oem', 'developer', 'epc', 'installer'].indexOf(b.vertical) >= 0 ? b.vertical : 'developer';

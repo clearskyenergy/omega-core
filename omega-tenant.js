@@ -616,7 +616,20 @@
       var bar = document.createElement('aside'); bar.id = 'omega-billing-status'; bar.setAttribute('role', 'status');
       bar.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;z-index:99998;padding:12px 18px;border:1px solid #6e9be0;border-radius:8px;background:#16202b;color:#eef2f6;font:13px/1.5 system-ui;display:flex;flex-wrap:wrap;gap:10px;box-shadow:0 4px 20px #0004';
       var text = document.createElement('span'); text.textContent = view.billingNotice.text; bar.appendChild(text);
-      if (view.billingNotice.payUrl) { var pay = document.createElement('a'); pay.textContent = 'Pay in QuickBooks'; pay.href = view.billingNotice.payUrl; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.color = '#9fc5ff'; bar.appendChild(pay); }
+      if (view.billingNotice.payUrl) {
+        /* "I've paid": ask the platform to look at QuickBooks now (plan-change
+           reconcile-now) instead of waiting for the daily runner; a paid
+           invoice reloads the page into the opened workspace */
+        var paid = document.createElement('button'); paid.type = 'button'; paid.textContent = "I've paid"; paid.style.cssText = 'margin-left:10px;padding:4px 10px;border-radius:6px;border:1px solid #6e9be0;background:transparent;color:#eef2f6;cursor:pointer;font:inherit';
+        paid.onclick = function () {
+          paid.disabled = true; paid.textContent = 'Checking QuickBooks…';
+          user.getIdToken().then(function (token) { return global.fetch('/api/plan-change', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reconcile-now' }) }); })
+            .then(function (r) { return r.json(); })
+            .then(function (j) { if (j && j.paid) { global.location.reload(); return; } paid.disabled = false; paid.textContent = "I've paid"; text.textContent = (j && j.error) ? j.error : 'Not paid yet as far as QuickBooks knows; a card payment shows within a minute.'; },
+              function () { paid.disabled = false; paid.textContent = "I've paid"; });
+        };
+        bar.appendChild(paid);
+        var pay = document.createElement('a'); pay.textContent = 'Pay in QuickBooks'; pay.href = view.billingNotice.payUrl; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.color = '#9fc5ff'; bar.appendChild(pay); }
       document.body.appendChild(bar);
     }
     var user = global.firebase && firebase.auth().currentUser; if (!user || !global.fetch) return;
@@ -643,8 +656,27 @@
         });
     }, delay);
   }
+  /* Presence from every signed-in page (the sales board reads
+     team_members.lastSeen; until now only the dashboard wrote it, so a
+     person who only opened a tool read as never signed in). The dashboard
+     keeps its own richer write (index.html registerMember, with the
+     person's name) and says so with OMEGA_PRESENCE_BY_PAGE; every other
+     page writes one merge per load here, only for the workspace of the
+     person's own domain (the rules allow no other), and a refused write is
+     silent: presence is a courtesy, never a gate. */
+  var presenceDone = false;
+  function touchPresence(ws) {
+    if (presenceDone || global.OMEGA_PRESENCE_BY_PAGE || !ws || !ws.orgId || ws.pendingApproval) return;
+    if (!global.firebase || !firebase.auth || !firebase.firestore) return;
+    var user = firebase.auth().currentUser; if (!user || !user.email) return;
+    var email = String(user.email).toLowerCase(); if (email.split('@')[1] !== ws.orgId) return;
+    presenceDone = true;
+    firebase.firestore().collection('team_members').doc(ws.orgId + '__' + email)
+      .set({ orgId: ws.orgId, email: email, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {});
+  }
   function fireEntitlements(ws) {
     T._ent = true; T._ws = ws;
+    try { touchPresence(ws); } catch (e) {}
     try { countDesignWork((ws && ws.orgId) || '', (ws && ws.jdPartnerOf) || ''); } catch (e) {}
     try { paintMarketplaceNav(ws); } catch (e) {}
     try { packageBillingChrome(ws); } catch (e) {}

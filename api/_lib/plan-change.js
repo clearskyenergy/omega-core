@@ -302,5 +302,25 @@ async function autoTopup(db, orgId, enabled, caller, now) {
   var id = 'auto-topup-' + now; await current.collection('history').doc(id).set(event); await c.root.collection('admin_audit').doc(id).set(event);
   return { ok: true, autoTopup: enabled };
 }
-module.exports = { quote: quote, preview: preview, apply: apply, cancel: cancel, removal: removal, summary: summary, closure: closure, deltaLines: deltaLines, state: state,
+/* "I've paid": the owner or an administrator asks the platform to look at
+   QuickBooks now rather than wait for the daily runner — after the first
+   invoice at signup, a change invoice, a pack. One look per workspace every
+   eight seconds; the reconciliation itself is the runner's (package-billing
+   reconcile), so nothing is decided here. Returns the billing the pages
+   read: state, the deadline, what is owed and where to pay it. */
+async function reconcileNow(db, orgId, caller, now, deps) {
+  var current = db.doc('omega_orgs/' + orgId + '/billing/current'), snap = await current.get(), b = snap.exists ? snap.data() : {};
+  function out(bill, extra) {
+    return Object.assign({ orgId: orgId, packaged: bill.packaged === true, packagingState: bill.packagingState || null, paid: bill.packagingState === 'paid',
+      paymentLink: bill.paymentLink || null, amountDue: bill.amountDue == null ? null : bill.amountDue, amountDueDisplay: bill.amountDue == null ? null : P.money(Math.round(bill.amountDue * 100)),
+      accessUntil: bill.accessUntil == null ? null : bill.accessUntil, paidThrough: bill.paidThrough || null, nextInvoiceOn: bill.nextInvoiceOn || null, checkedAt: now }, extra || {});
+  }
+  if (b.packaged !== true) return out(b, { skipped: 'not packaged' });
+  if (b.paymentCheckedAt && now - b.paymentCheckedAt < 8000) return out(b, { throttled: true });
+  await current.set({ paymentCheckedAt: now, paymentCheckedBy: caller.email }, { merge: true });
+  try { await S.reconcile(db, orgId, now, deps); } catch (e) { return out(b, { error: e.status && e.status < 500 ? e.message : 'QuickBooks could not be reached; try again in a moment' }); }
+  var after = await current.get();
+  return out(after.exists ? after.data() : {});
+}
+module.exports = { reconcileNow: reconcileNow, quote: quote, preview: preview, apply: apply, cancel: cancel, removal: removal, summary: summary, closure: closure, deltaLines: deltaLines, state: state,
   packQuote: packQuote, packBuy: packBuy, autoTopup: autoTopup };

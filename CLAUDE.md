@@ -209,6 +209,21 @@ a member's (the bench and rig tokens, a tenant admin's hold/release) runs
 part, a legacy or unrecorded one keeps its own rule — and `firestore.rules`
 compares a sign-in email lower-cased in the team blocks, `termsAcceptances`
 and `isAdmin()` (`scripts/tests/tsigninemail.js`), as `admin.js` does.
+Phase 10A: **one system, QuickBooks.** A company signs up, pays its first
+invoice by card on QuickBooks' page and is in; `GET /api/offerings` is the
+public price list; signup's pay-now runs the engine's own `activate` with the
+caller marked `selfServe` (recorded in history and audit); "I've paid" is
+`plan-change.reconcileNow` (one look per eight seconds), from the signup
+page (`check-payment`) and the billing bar (`reconcile-now`) alike.
+`api/_lib/packaging-mode.js` is the ONE rule for where packaging bills:
+SANDBOX (`QBO_ENV=sandbox`) or LIVE (`PACKAGING_LIVE=true` AND
+`QBO_ENV=production`, both literal), and neither is refused everywhere; the
+engine guard, `qbo-items.guard` (every QuickBooks write), the price book,
+signup, the runner and both scripts read it — never a second copy. A book
+whose version ends in `-proposed` is never production; sign-off is renaming
+`VERSION`. Signup and every activation mark the organization `packaged: true`
+(the live runner's query). The card button on a QuickBooks invoice is
+QuickBooks Payments, not Stripe: `docs/PAYMENTS-BROWSER-SETUP.md`.
 
 Packaged editor presentation uses the server catalog through OmegaCaps;
 OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
@@ -778,6 +793,25 @@ tenant. Treat it that way.
 - `omega-tenant.js` MUST load directly after `omega-brand.js` on every page
   that signs users in. It wraps OmegaBrand.resolve.
 - Test as a tenant using `adminDomains` preview, not by editing their data.
+- `npm run check:dashboard` renders the tenant dashboard (`index.html`) in
+  Chromium, signed in, with the Firebase compat SDK replaced by
+  `scripts/_lib/firebase-double.js` and four tenants from
+  `scripts/_lib/dashboard-fixtures.js` (a new trial behind the terms modal, a
+  paying legacy Standard tenant with a locked tile, a workspace awaiting
+  approval, and a PACKAGED tenant on Lite alone whose `/api/package-access`
+  answer is the real projection: Lite's tools open, every other tile
+  locked, the starter set drawn from Lite), on a desktop and a 390px phone.
+  `applyToolLocks` reads a present `toolAccess` array as the allowlist at
+  any length (absent ≠ empty), which is how a package reaches the tiles. It fails on an error, an unanswered
+  `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
+  tile. `check:pages` does not cover the dashboard; run this after any
+  change to `index.html` or the runtime it loads. The double's own test is
+  `scripts/tests/tfirebasedouble.js`.
+- The sales agent's board is `GET /api/growth` (staff only, read-only;
+  `api/_lib/growth.js` is the pure judgement, `scripts/tests/tgrowth.js`
+  pins it). It knows stages and next actions, never prices or modules: the
+  catalog and the price book are the packaging build's, in one place each.
+  Design and rungs: `docs/SALES-AGENT.md`.
 - Branding assets: OMEGA mark is white-on-transparent; verify on the navy
   topbar, never by opening the PNG directly.
 - Staging: Vercel's own `*.vercel.app` preview URLs. They are on the

@@ -372,6 +372,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 .ct-toggle.on .ct-track::after{transform:translateX(17px)}
 .ct-toggle span.lbl{font-size:12px;font-weight:600;color:var(--cs-sub)}
 .ct-toggle.on span.lbl{color:#9A5B00}
+/* the modal's field labels are block, uppercase and spaced (.mrow label); the
+   waived switch is a label too, and inherited all three: the track collapsed
+   to an inline span and the knob sat over the words. The switch keeps its
+   own layout whatever row it is in. */
+.mrow label.ct-toggle{display:flex;text-transform:none;letter-spacing:0;margin-bottom:0}
+.ct-toggle .ct-track{display:inline-block}
 .ct-preview{margin-top:16px;background:var(--cs-navy);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .ct-preview div{font-size:9.5px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
 .ct-preview b{display:block;font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:#fff;margin-top:4px;letter-spacing:-.3px}
