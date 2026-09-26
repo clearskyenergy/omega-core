@@ -2,7 +2,7 @@
  * Pure subscription lifecycle calculations. No browser math or side effects.
  */
 'use strict';
-var M = require('./modules'), P = require('./subscription-pricing'), R = require('./proration');
+var M = require('./modules'), P = require('./subscription-pricing'), R = require('./proration'), U = require('./usage');
 function fail(message) { var e = new Error(message); e.status = 409; throw e; }
 function instant(v) { return typeof v === 'number' ? v : v && typeof v.toMillis === 'function' ? v.toMillis() : Date.parse(v); }
 function trialDays(book, configured) {
@@ -55,7 +55,7 @@ function scaledLines(lines, numerator, denominator) {
   if (out.length) out[0].amountCents += target - rounded;
   return out;
 }
-function invoice(billing, book, on) {
+function invoice(billing, book, on, usage) {
   R.date(on);
   // Modules and plan come from what the tenant bought (the subscription
   // record); interval and logins stay the operational terms staff set.
@@ -90,6 +90,9 @@ function invoice(billing, book, on) {
       Math.max(0, gross - Math.round(book.floorCents * numerator / denominator)));
     if (discount) lines.push({ itemKey: 'credit', name: 'Transformation credit', quantity: 1, amountCents: -discount });
   }
+  // Phase 7: the cycle that ends on this date is billed for what it used over
+  // its allowance (included + packs bought), one line per meter.
+  U.overageLines(usage, book, selected).forEach(function (l) { lines.push(l); });
   var feeDue = first || (billing.serviceFeeNextOn && billing.serviceFeeNextOn <= on), serviceFeeNextOn = billing.serviceFeeNextOn || null, feeNote = null;
   if (feeDue) {
     if (quote.serviceFee.amountCents) lines.push({ itemKey: 'service-fee', name: 'Annual service fee', quantity: 1, amountCents: quote.serviceFee.amountCents });

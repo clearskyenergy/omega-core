@@ -65,7 +65,7 @@
     "test:logic-workflow": "node scripts/test-logic-workflow.js",
     "test:sitelist": "node scripts/test-site-list.js",
     "test:scope": "node scripts/test-partner-scope.js",
-    "test:packaging": "node scripts/test-packaging-catalog.js && node scripts/test-subscription-pricing.js && node scripts/test-qbo-items.js && node scripts/test-package-catalog-api.js && node scripts/test-package-access.js && node scripts/test-package-producers.js && node scripts/test-package-admin-producers.js && node scripts/test-packaging-workspaces.js && node scripts/test-package-preview.js && node scripts/test-packaging-billing-foundation.js && node scripts/test-package-activation.js && node scripts/test-package-billing-api.js && node scripts/test-plan-change.js && node scripts/test-subscription-proposal.js",
+    "test:packaging": "node scripts/test-packaging-catalog.js && node scripts/test-subscription-pricing.js && node scripts/test-qbo-items.js && node scripts/test-package-catalog-api.js && node scripts/test-package-access.js && node scripts/test-package-producers.js && node scripts/test-package-admin-producers.js && node scripts/test-packaging-workspaces.js && node scripts/test-package-preview.js && node scripts/test-packaging-billing-foundation.js && node scripts/test-package-activation.js && node scripts/test-package-billing-api.js && node scripts/test-plan-change.js && node scripts/test-subscription-proposal.js && node scripts/test-usage.js",
     "test:packaging:rules": "node scripts/test-packaging-rules.js"
   }
 }

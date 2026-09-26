@@ -9,7 +9,7 @@
  */
 'use strict';
 var S = require('./package-billing'), B = require('./pricebook'), P = require('./subscription-pricing'), M = require('./modules');
-var R = require('./proration'), Q = require('./qbo-billing'), BP = require('./billing-profile');
+var R = require('./proration'), Q = require('./qbo-billing'), BP = require('./billing-profile'), U = require('./usage');
 function fail(message, status) { var e = new Error(message); e.status = status || 409; throw e; }
 function iso(now) { return R.iso(now); }
 function keys(list, name) {
@@ -246,4 +246,61 @@ async function summary(db, orgId) {
     gate: state(c, Date.now()), pending: pending(rows), removalRequests: b.removalRequests || [],
     recent: rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state !== 'unpaid'; }).slice(-5).map(function (r) { return { id: r.id, add: r.add, names: names(r.add), state: r.state, date: r.date, display: P.money(r.totalCents || 0) }; }) };
 }
-module.exports = { quote: quote, preview: preview, apply: apply, cancel: cancel, removal: removal, summary: summary, closure: closure, deltaLines: deltaLines, state: state };
+/* ── Phase 7: buy more, like credits. A pack is paid first and lasts to the
+   end of the current cycle; reconciliation adds it when QuickBooks shows it
+   paid. Auto top-up is the tenant admin's switch to bill overage instead. */
+function packQuote(c, key, now) {
+  var b = c.billing, gate = state(c, now), m = U.meter(c.book, key);
+  if (!m.billed) fail('This activity is not metered', 400);
+  var owned = M.normalize(b.subscription && Array.isArray(b.subscription.modules) ? b.subscription.modules : b.modules);
+  if (owned.indexOf(m.module) < 0) fail(m.moduleName + ' is not in your package', 400);
+  var cycle = R.cycle(iso(now), b.billingDay || 1), id = Q.key(B.stable({ org: c.root.id, book: c.book.version, meter: key, cycle: cycle, cents: m.packCents, units: m.packUnits }));
+  return { meter: key, module: m.module, name: m.name, units: m.packUnits, cents: m.packCents, display: P.money(m.packCents), previewId: id, effectiveAt: now,
+    cycle: { start: cycle.start, end: cycle.end }, canApply: gate.canApply, reason: gate.reason || null,
+    text: m.packUnits + ' more ' + m.name + ' for ' + P.money(m.packCents) + ', good until ' + cycle.end + '. Billed in QuickBooks; added the moment the payment clears.' };
+}
+async function packBuy(db, orgId, input, caller, now, deps) {
+  var c = await S.context(db, orgId); S.guard(c);
+  var q = packQuote(c, input.meter, now);
+  if (typeof input.previewId !== 'string' || input.previewId !== q.previewId) fail('Refresh the pack offer before buying');
+  var at = input.effectiveAt;
+  if (!Number.isSafeInteger(at) || at > now || now - at > 10 * 60000) fail('Refresh the pack offer');
+  if (!q.canApply) fail(q.reason);
+  var current = c.root.collection('billing').doc('current'), opId = 'pack-' + q.previewId + '-' + at, op = current.collection('operations').doc(opId);
+  var done = await op.get(); if (done.exists && done.data().state === 'done') return done.data().result;
+  var record = { kind: 'pack', id: opId, date: iso(now), period: { start: iso(now), end: q.cycle.end }, pack: { meter: q.meter, units: q.units, cycle: q.cycle },
+    lines: [{ itemKey: 'pack:' + q.meter, name: 'OMEGA \u00b7 ' + q.name + ' \u00d7' + q.units, quantity: 1, amountCents: q.cents }], subtotalCents: q.cents, totalCents: q.cents,
+    pricebookVersion: c.book.version, marker: 'OMEGA pack ' + orgId + ' / ' + iso(now) + ' / ' + q.previewId.slice(0, 12) + ' / ' + at, by: caller.email, createdAt: now };
+  await db.runTransaction(async function (tx) {
+    var old = await tx.get(op); if (old.exists) fail('This pack purchase is already being processed; retry shortly');
+    tx.set(op, { state: 'running', at: now, by: caller.email });
+  });
+  try {
+    var issued = await Q.driver(c.book, deps).invoice(record, BP.stored(c.profile), c.billing.qboCustomerId);
+    return await db.runTransaction(async function (tx) {
+      var live = await tx.get(current), fresh = live.data() || {};
+      var stored = Object.assign({}, record, { state: 'unpaid', qboInvoiceId: issued.id, qboCustomerId: c.billing.qboCustomerId, totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now });
+      tx.set(current.collection('invoices').doc(record.id), stored);
+      tx.update(current, { amountDue: (fresh.amountDue || 0) + issued.totalCents / 100, updatedAt: now, updatedBy: caller.email });
+      tx.set(c.root.collection('notifications').doc('package-pack-' + record.id), { kind: 'billing', read: false, createdAt: now,
+        text: 'Your usage pack invoice is ready: ' + P.money(issued.totalCents) + ' for ' + q.units + ' more ' + q.name + '. Pay in QuickBooks to add them.',
+        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents) });
+      var result = { ok: true, packId: record.id, state: 'awaiting_payment', meter: q.meter, units: q.units, todayCents: issued.totalCents, display: P.money(issued.totalCents), paymentLink: issued.payUrl, expiresOn: q.cycle.end };
+      tx.set(op, { state: 'done', result: result, completedAt: now }, { merge: true });
+      var event = { at: now, by: caller.email, action: 'pack-requested', packId: record.id, changed: { meter: q.meter, units: q.units, totalCents: issued.totalCents, state: 'unpaid' } };
+      tx.set(current.collection('history').doc(record.id), event); tx.set(c.root.collection('admin_audit').doc(record.id), event);
+      return result;
+    });
+  } catch (e) { await op.set({ state: 'retry', failedAt: now }, { merge: true }); throw e; }
+}
+async function autoTopup(db, orgId, enabled, caller, now) {
+  var c = await S.context(db, orgId), current = c.root.collection('billing').doc('current');
+  if (c.billing.packaged !== true) fail('This workspace is not on a subscription package');
+  if (typeof enabled !== 'boolean') fail('enabled must be true or false', 400);
+  await current.update({ autoTopup: enabled, updatedAt: now, updatedBy: caller.email });
+  var event = { at: now, by: caller.email, action: enabled ? 'auto-topup-on' : 'auto-topup-off', was: { autoTopup: c.billing.autoTopup === true }, changed: { autoTopup: enabled, note: enabled ? 'Overage is billed on the next invoice at the per-unit price.' : 'The buy-more prompt returns at the allowance.' } };
+  var id = 'auto-topup-' + now; await current.collection('history').doc(id).set(event); await c.root.collection('admin_audit').doc(id).set(event);
+  return { ok: true, autoTopup: enabled };
+}
+module.exports = { quote: quote, preview: preview, apply: apply, cancel: cancel, removal: removal, summary: summary, closure: closure, deltaLines: deltaLines, state: state,
+  packQuote: packQuote, packBuy: packBuy, autoTopup: autoTopup };

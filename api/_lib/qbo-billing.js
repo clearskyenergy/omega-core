@@ -88,7 +88,7 @@ function driver(book, supplied) {
       var payload = { CustomerRef: { value: customerId }, CurrencyRef: { value: 'USD' }, DocNumber: number,
         TxnDate: plan.date, DueDate: plan.date, BillEmail: { Address: profile.email },
         AllowOnlineACHPayment: true, AllowOnlineCreditCardPayment: true, PrivateNote: plan.marker,
-        CustomerMemo: { value: (plan.kind === 'change' ? 'OMEGA subscription change ' : 'OMEGA subscription ') + plan.period.start + ' to ' + plan.period.end + (profile.poRequired ? ' · PO ' + profile.poNumber : '') + (plan.memo ? ' · ' + plan.memo : '') },
+        CustomerMemo: { value: (plan.kind === 'change' ? 'OMEGA subscription change ' : plan.kind === 'pack' ? 'OMEGA usage pack ' : 'OMEGA subscription ') + plan.period.start + ' to ' + plan.period.end + (profile.poRequired ? ' · PO ' + profile.poNumber : '') + (plan.memo ? ' · ' + plan.memo : '') },
         Line: await lines(plan) };
       if (profile.apEmail) payload.BillEmailCc = { Address: profile.apEmail };
       inv = (await call('invoice', payload, key(plan.marker))).Invoice;

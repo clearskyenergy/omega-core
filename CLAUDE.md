@@ -187,7 +187,13 @@ on `api/_lib/subscription-proposal.js`) and the signup discovery in
 `start.html` share ONE set of questions, ONE recommendation and the price
 book; `subscription_proposals` is Admin SDK only; accepting a proposal never
 prices anything — signup, plan-change or activation do. `api/_lib/deck-brand.js`
-is the one brand-of-a-deck rule (Pro Forma and proposal).
+is the one brand-of-a-deck rule (Pro Forma and proposal). Phase 7:
+`api/_lib/usage.js` is the ONE usage counter (`omega_orgs/{org}/usage/{cycle}`,
+Admin SDK only, idempotent by client id): a metered deliverable is counted
+where it is produced (`POST /api/usage` from the browser tools, server-side
+in `rfq.js`), the allowance is included + packs, overage is billed on the
+recurring invoice, and packs and auto top-up go through `plan-change`. It is
+an honest billing counter, not a security boundary.
 
 Packaged editor presentation uses the server catalog through OmegaCaps;
 OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.

@@ -36,6 +36,9 @@ operator assignments below; the source commercial requirements still apply.
   2026-09-26: the tool is for every ClearSky sales rep, and a company that
   signs up walks the same steps, so the system reflects their choices. See
   `docs/PACKAGING-PHASE-6-VALIDATION.md`.
+- Phase 7 (usage counters, overage on the recurring invoice, buy-more packs,
+  auto top-up, the 90-day review) was built on `codex/packaging-phase-7`,
+  stacked on Phase 6. See `docs/PACKAGING-PHASE-7-VALIDATION.md`.
 
 ## 1. What you are building
 

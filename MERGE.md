@@ -2226,3 +2226,14 @@ gained the discovery step and a proposal prefill; `api/tenant-signup.js`
 stores the answers and accepts a keyed proposal. No draw implementation was
 touched and no financial engine moved; the browser-engine debt above
 remains. See docs/PACKAGING-PHASE-6-VALIDATION.md.
+
+
+## Packaging Phase 7 — September 26, 2026
+
+No `editor.html` edit. `omega-usage.js` is a new shared runtime file; the EV
+cost workbook, the closeout and Site Finder gate their export through
+`POST /api/usage` before producing, and the RFQ endpoint counts a bill of
+materials server-side. All counting, allowance, overage and review math is
+in `api/_lib/usage.js`; the browser draws the server’s badge. No draw
+implementation was touched and no financial engine moved; the
+browser-engine debt above remains. See docs/PACKAGING-PHASE-7-VALIDATION.md.

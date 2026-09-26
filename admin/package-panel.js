@@ -96,6 +96,7 @@
     }
     if (data.canManagePackage) pane.appendChild(el('p', 'This is what the customer sees. Actions here are taken on the customer’s behalf and billed to them.', 'pp-note'));
     var pendingHost = el('div'); pane.appendChild(pendingHost);
+    usagePanel(pane, { review: false });
     pane.appendChild(el('h3', 'In your package'));
     global.OmegaPackageMenu.picker(pane.appendChild(el('div')), { catalog: data.modules, modules: owned, readOnly: true });
     var removals = el('div', '', 'pp-removals'); pane.appendChild(removals);
@@ -143,6 +144,56 @@
       global.OmegaPackageMenu.api('/api/plan-change?orgId=' + encodeURIComponent(orgId)).then(function (summary) { if (ticket === sequence) draw(summary); }, function (e) { if (ticket === sequence) pendingHost.textContent = e.message; });
     }
     refresh();
+  }
+  /* Phase 7: usage this cycle for Your plan (with buy-more and the auto top-up
+     switch for an owner or administrator) and the 90-day review for the
+     Package tab. Every number is the server's (/api/usage). */
+  function usagePanel(pane, options) {
+    var host = el('div', '', 'pp-usage'); pane.appendChild(host); host.appendChild(el('h3', options.review ? 'Usage and the 90-day review' : 'Usage this cycle'));
+    var body = el('div', 'Loading usage…', 'pp-note'); host.appendChild(body);
+    global.OmegaPackageMenu.api('/api/usage?orgId=' + encodeURIComponent(orgId)).then(function (u) {
+      body.textContent = '';
+      if (!u.metered) { body.appendChild(el('p', 'This workspace is not metered.', 'pp-note')); return; }
+      body.appendChild(el('p', 'Cycle ' + u.cycle.start + ' to ' + u.cycle.end + ' · ' + u.cycle.remainingDays + ' days left' + (u.autoTopup ? ' · auto top-up on' : ''), 'pp-note'));
+      var list = el('div', '', 'pp-meters');
+      u.meters.forEach(function (m) {
+        var row = el('div', '', 'pp-meter' + (m.billed && m.pct >= 100 ? ' hot' : '')); row.setAttribute('data-meter', m.key);
+        row.appendChild(el('b', m.moduleName)); row.appendChild(el('span', m.display));
+        if (m.billed) { var bar = el('span', '', 'pp-bar'), fill = el('i'); fill.style.width = Math.min(100, m.pct) + '%'; bar.appendChild(fill); row.appendChild(bar); }
+        if (m.note) row.appendChild(el('span', m.note, 'pp-meter-note'));
+        if (m.billed && m.pct >= 100 && !m.autoTopup && u.canBuy && !options.review) {
+          var buy = button(m.pack.display, function () {
+            buy.disabled = true; buy.textContent = 'Creating your invoice…';
+            global.OmegaPackageMenu.api('/api/plan-change', { action: 'pack-quote', meter: m.key }).then(function (q) { return global.OmegaPackageMenu.api('/api/plan-change', { action: 'pack-buy', meter: m.key, previewId: q.previewId, effectiveAt: q.effectiveAt }); })
+              .then(function (r) { buy.remove(); var a = el('a', 'Pay ' + r.display + ' in QuickBooks', 'pp-pay'); a.href = r.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); row.appendChild(el('span', 'Added the moment the payment clears; good until ' + r.expiresOn + '.', 'pp-meter-note')); },
+                function (e) { buy.disabled = false; buy.textContent = m.pack.display; message(e.message, true); });
+          }, 'pp-primary'); row.appendChild(buy);
+        }
+        list.appendChild(row);
+      });
+      if (!u.meters.length) list.appendChild(el('p', 'No metered module in this package.', 'pp-note'));
+      body.appendChild(list);
+      if (u.canBuy && !options.review) {
+        var lab = el('label', '', 'pp-toggle'), box = el('input'); box.type = 'checkbox'; box.checked = u.autoTopup === true; box.id = 'pp-auto-topup';
+        box.onchange = function () { box.disabled = true; global.OmegaPackageMenu.api('/api/plan-change', { action: 'auto-topup', enabled: box.checked }).then(function () { box.disabled = false; message(box.checked ? 'Auto top-up on: overage is billed on your next invoice.' : 'Auto top-up off: the buy-more prompt returns at the allowance.'); }, function (e) { box.disabled = false; box.checked = !box.checked; message(e.message, true); }); };
+        lab.appendChild(box); lab.appendChild(document.createTextNode(' Auto top-up: keep working past the allowance and bill the overage on the next invoice at the per-unit price')); body.appendChild(lab);
+      }
+      if (options.review && u.review) {
+        var r = u.review; body.appendChild(el('h4', 'Last ' + r.days + ' days (since ' + r.since + ', ' + r.cycles + ' cycle' + (r.cycles === 1 ? '' : 's') + ')'));
+        var table = el('table', '', 'pp-table'), head = el('tr'); ['Module', 'Recorded', 'Included', 'Packs', 'Over'].forEach(function (h) { head.appendChild(el('th', h)); }); table.appendChild(head);
+        r.modules.forEach(function (m) {
+          var meter = r.meters.filter(function (x) { return x.module === m.module; })[0], tr = el('tr');
+          tr.appendChild(el('td', m.name)); tr.appendChild(el('td', meter ? meter.used + ' ' + meter.name.toLowerCase() : (m.note || '—')));
+          tr.appendChild(el('td', meter && meter.billed ? String(meter.included) : '—')); tr.appendChild(el('td', meter && meter.billed ? String(meter.purchased) : '—')); tr.appendChild(el('td', meter && meter.billed ? String(meter.over) : '—'));
+          table.appendChild(tr);
+        });
+        body.appendChild(table);
+        var sug = el('div', '', 'pp-suggestions'); body.appendChild(el('h4', 'What the review suggests'));
+        if (!r.suggestions.length) sug.appendChild(el('p', 'Nothing to add or remove on this evidence.', 'pp-note'));
+        r.suggestions.forEach(function (s) { sug.appendChild(el('p', s.text, 'pp-suggest ' + s.kind)); });
+        body.appendChild(sug);
+      }
+    }, function (e) { body.textContent = e.message; });
   }
   /* A subscription change re-reads the whole record (the picker, history and
      plan line all move) and stays on the tab the person was using. */
@@ -195,6 +246,7 @@
       var two = el('div', '', 'pp-two'); panes.write.appendChild(two);
       [['write-invoice', 'QuickBooks invoice'], ['write-billing', 'Billing record'], ['write-customer', 'QuickBooks customer']].forEach(function (p) { var area = el('div'); area.appendChild(el('h3', p[1])); var pre = el('pre', 'Choose Review activation to load the server preview.'); pre.id = 'pp-' + p[0]; area.appendChild(pre); two.appendChild(area); });
       var applyButton = button('Apply reviewed changes', apply, 'pp-primary'); applyButton.id = 'pp-apply'; applyButton.disabled = true; panes.write.appendChild(applyButton);
+      usagePanel(left, { review: true });
     }
     yourPlan(panes.cust, data);
     history(data.history, panes.hist);

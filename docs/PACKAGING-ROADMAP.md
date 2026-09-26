@@ -24,7 +24,7 @@ https://claude.ai/artifact/2Sou93uMRrCsc8K4E2Xg8n (private to the owner).
 | 5 · Subscribe in the editor (Step A) | [#140](https://github.com/clearskyenergy/omega-core/pull/140) · [preview](https://omega-core-git-codex-packaging-phase-5-clearsky-usa.vercel.app), stacked on #139 | draft, unmerged; npm test + check:pages pass; disabled | `POST /api/plan-change` (quote, apply, cancel, removals), the subscribe control in the + Modules gallery and Your plan, subscription-vs-grant split, change invoices in reconciliation. $0 inside a paid tier activates immediately (option 1, 2026-09-26). See PACKAGING-PHASE-5-VALIDATION.md; a real sandbox change payment and Step B remain. |
 | 5b · Card on file (Step B) | | blocked on Tommy | QuickBooks Payments permission |
 | 6 · Proposal tool | [#141](https://github.com/clearskyenergy/omega-core/pull/141) · [preview](https://omega-core-git-codex-packaging-phase-6-clearsky-usa.vercel.app), stacked on #140 | draft, unmerged; npm test + check:pages pass; disabled | `subscription-proposal.html` for the reps (discovery → package → value → terms → seven-page deck with the Order Form → send), `proposal.html` for the customer, `POST /api/subscription-proposal`; accepting routes through signup, plan-change or activation and never prices. Signup walks the same discovery and stores the answers. See PACKAGING-PHASE-6-VALIDATION.md; a real sandbox send/acceptance and White Label senders remain. |
-| 7 · Usage and review | | not started | |
+| 7 · Usage and review | draft PR pending, stacked on #141 | implemented; npm test + check:pages pass; disabled | Cycle-keyed usage counters (EV applications, site studies, BOM activity), the produce gate with the pack offer, overage lines on the recurring invoice, buy-more packs through reconciliation, auto top-up, the 90-day review on the Package tab and Your plan. Permitting matrices await their producer. See PACKAGING-PHASE-7-VALIDATION.md. |
 
 ---
 
@@ -580,6 +580,15 @@ subscription, and running out of what is included means buying more.
   ×10` …), created by `scripts/qbo-sync-items.js`; purchases are counted in
   `omega_orgs/{org}/usage/{cycle}.purchased{}` by the server, and the
   counter checks included + purchased before producing a deliverable.
+
+**Built (Phase 7).** `api/_lib/usage.js` counts where the deliverable is
+produced (EV workbook export, closeout ZIP, site packet through
+`POST /api/usage`; RFQ server-side), idempotent by client id; the gate
+refuses the next deliverable at the allowance with the pack offer unless
+auto top-up is on; `Policy.invoice` bills the ending cycle's overage;
+`plan-change` sells packs (`pack-quote`, `pack-buy`) and holds the auto
+top-up switch; a paid pack raises `purchased` through reconciliation. The
+permitting matrix has no producer yet, so its meter is not counted.
 
 ### 10.7 The annual service fee: charge, change or waive per tenant
 

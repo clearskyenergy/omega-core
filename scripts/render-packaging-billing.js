@@ -7,13 +7,13 @@
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture'), B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules');
 var fixture, org, profile, db, caller, invoices = 0, checks = 0, shots = 0;
-var root = path.join(__dirname, '..'), out = path.join(root, 'docs/screenshots/packaging-phase-4'), out5 = path.join(root, 'docs/screenshots/packaging-phase-5');
+var root = path.join(__dirname, '..'), out = path.join(root, 'docs/screenshots/packaging-phase-4'), out5 = path.join(root, 'docs/screenshots/packaging-phase-5'), out7 = path.join(root, 'docs/screenshots/packaging-phase-7');
 H.mockAdmin(function () { return db; }, function () { return caller; });
 fixture = require('./_lib/logic-fixtures'); org = fixture.ORG;
 profile = H.profile(org, fixture.brand.companyName);
 F.mock('../api/_lib/mail', { templates: { signupReceived: async function () {}, signupAlert: async function () {} } });
 H.mockQbo(function () { invoices++; });
-var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change'), '/api/subscription-proposal': require('../api/subscription-proposal') };
+var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change'), '/api/subscription-proposal': require('../api/subscription-proposal'), '/api/usage': require('../api/usage') };
 /* Phase 5: a tenant whose current cycle is already paid, seen by its owner. */
 function seedPaid(keys, plan, staff) { seed(keys, staff); H.seedPaidTenant(db, { org: org, keys: keys, plan: plan }); }
 function seed(keys, staff) {
@@ -32,7 +32,7 @@ var server = http.createServer(async function (req, res) {
     if (url.pathname === '/api/tenant-systems') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ name: 'Clean Cell · fixture', surfaces: [] })); }
     if (url.pathname === '/config.js') return res.end('window.CLEARSKY_CONFIG={firebase:{}};');
     if (['/omega-brand.js', '/omega-tenant.js', '/omega-whitelabel.js'].includes(url.pathname)) return res.end('');
-    if (!['/admin/tenant.html', '/start.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
+    if (!['/admin/tenant.html', '/start.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
     res.setHeader('Content-Type', url.pathname.endsWith('.css') ? 'text/css' : url.pathname.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(fs.readFileSync(path.join(root, url.pathname)));
   } catch (e) { res.statusCode = e.status || 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: e.message })); }
 });
@@ -46,17 +46,17 @@ async function init(context, base) {
   });
 }
 function check(v, text) { assert(v, text); checks++; }
-async function capture(page, name) { await page.screenshot({ path: path.join(name.indexOf('your-plan') === 0 ? out5 : out, name + '.png'), fullPage: true }); shots++; }
+async function capture(page, name) { var dir = /^(your-plan-usage|your-plan-buy|closeout-usage|package-review)/.test(name) ? out7 : name.indexOf('your-plan') === 0 ? out5 : out; await page.screenshot({ path: path.join(dir, name + '.png'), fullPage: true }); shots++; }
 async function run() {
   process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.PACKAGING_SIGNUP_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
-  fs.mkdirSync(out, { recursive: true }); fs.mkdirSync(out5, { recursive: true }); await new Promise(function (resolve) { server.listen(0, '127.0.0.1', resolve); }); var base = 'http://127.0.0.1:' + server.address().port;
+  fs.mkdirSync(out, { recursive: true }); fs.mkdirSync(out5, { recursive: true }); fs.mkdirSync(out7, { recursive: true }); await new Promise(function (resolve) { server.listen(0, '127.0.0.1', resolve); }); var base = 'http://127.0.0.1:' + server.address().port;
   var browser = await require(process.env.PLAYWRIGHT || 'playwright').chromium.launch({ executablePath: process.env.CHROME });
   try {
     for (var pack of ['lite', 'field']) for (var theme of ['light', 'dark']) {
       seed(pack === 'lite' ? ['lite'] : M.starters().ev);
       var context = await browser.newContext({ viewport: { width: 1280, height: 960 }, colorScheme: theme }); await init(context, base);
-      var page = await context.newPage(), errors = []; page.on('pageerror', function (e) { errors.push(e.message); });
-      await page.goto(base + '/admin/tenant.html?org=' + org); await page.locator('#pp-review:not([disabled])').waitFor();
+      var page = await context.newPage(), errors = []; page.on('pageerror', function (e) { errors.push(e.message); console.error('[page error]', e.message); });
+      await page.goto(base + '/admin/tenant.html?org=' + org); try { await page.locator('#pp-review:not([disabled])').waitFor(); } catch (e) { console.error('[panel message]', await page.locator('#pp-message').textContent(), '| errors:', errors.join('; ')); throw e; }
       check(await page.locator('[data-pp-tab]').count() === 4, 'four tabs');
       check((await page.locator('#pp-monthly').textContent()).includes(pack === 'lite' ? '$500' : '$1,299'), 'server monthly price');
       check(await page.locator('[data-pp-pane="pkg"] [data-module-card]').count() === M.catalog().length, 'one catalog');
@@ -137,6 +137,39 @@ async function run() {
     await ip.locator('[data-pp-pane="cust"]').getByRole('button', { name: 'Remove at next review' }).first().click();
     await ip.waitForFunction(function () { return document.querySelector('[data-pp-pane="cust"]').textContent.indexOf('Withdraw removal request') >= 0; });
     check((db.data.get('omega_orgs/' + org + '/billing/current').removalRequests || []).length === 1, 'removal is queued, not applied'); await incContext.close();
+    /* Phase 7: usage this cycle on Your plan, the buy-more path, the auto top-up switch, the staff review and the tool badge. */
+    for (var theme7 of ['light', 'dark']) {
+      seedPaid(M.starters().ev, 'field', false); db.seed('omega_orgs/' + org + '/usage/2026-09-20', { cycle: { start: '2026-09-20', end: '2026-10-20' }, counts: { evApplications: 18, boms: 4 }, purchased: {} });
+      var uctx = await browser.newContext({ viewport: { width: 1280, height: 960 }, colorScheme: theme7 }); await init(uctx, base); var up = await uctx.newPage();
+      await up.goto(base + '/admin/tenant.html?org=' + org); await up.locator('[data-pp-tab="cust"]').click();
+      await up.waitForFunction(function () { var n = document.querySelector('.pp-meter[data-meter="evApplications"]'); return n && n.textContent.indexOf('18 of 20 EV applications used this cycle') >= 0; });
+      check((await up.locator('.pp-meter[data-meter="evApplications"]').textContent()).indexOf('2 of 20 EV applications left') >= 0, 'at 90% the quiet note');
+      check((await up.locator('.pp-meter[data-meter="boms"]').textContent()).indexOf('4 bills of materials this cycle') >= 0, 'activity meters are shown without an allowance');
+      check(await up.locator('#pp-auto-topup').count() === 1 && !(await up.locator('#pp-auto-topup').isChecked()), 'the owner sees the auto top-up switch, off by default');
+      await capture(up, 'your-plan-usage-' + theme7);
+      db.seed('omega_orgs/' + org + '/usage/2026-09-20', { cycle: { start: '2026-09-20', end: '2026-10-20' }, counts: { evApplications: 20, boms: 4 }, purchased: {} });
+      await up.reload(); await up.locator('[data-pp-tab="cust"]').click(); await up.locator('.pp-meter[data-meter="evApplications"] button').waitFor();
+      check((await up.locator('.pp-meter[data-meter="evApplications"] button').textContent()) === 'Buy 10 more for $500', 'at the allowance the buy-more offer');
+      var packInvoices = invoices; await up.locator('.pp-meter[data-meter="evApplications"] button').click(); await up.locator('.pp-meter[data-meter="evApplications"] a.pp-pay').waitFor();
+      check(invoices === packInvoices + 1 && (await up.locator('.pp-meter[data-meter="evApplications"] a.pp-pay').textContent()).indexOf('Pay $500 in QuickBooks') >= 0, 'a pack is a QuickBooks invoice, paid first');
+      check(db.data.get('omega_orgs/' + org + '/usage/2026-09-20').purchased.evApplications === undefined, 'nothing is added before the payment');
+      await capture(up, 'your-plan-buy-' + theme7);
+      await up.locator('#pp-auto-topup').check(); await up.waitForFunction(function () { return document.getElementById('pp-message').textContent.indexOf('Auto top-up on') >= 0; });
+      check(db.data.get('omega_orgs/' + org + '/billing/current').autoTopup === true, 'the switch is stored');
+      if (theme7 === 'light') {
+        var cl = await uctx.newPage(); await cl.goto(base + '/ev-closeout.html'); await cl.locator('[data-usage-meter="evApplications"]:not([hidden])').waitFor();
+        check((await cl.locator('[data-usage-meter="evApplications"]').textContent()).indexOf('20 of 20 EV applications used this cycle') >= 0, 'the closeout tool shows the badge beside its export');
+        await cl.locator('[data-usage-meter="evApplications"]').scrollIntoViewIfNeeded(); await capture(cl, 'closeout-usage-badge');
+      }
+      await uctx.close();
+    }
+    seed(M.starters().ev, true); db.seed('omega_orgs/' + org, { name: 'Clean Cell · fixture', status: 'active', packagingSandbox: true, signedUpAt: '2026-08-20T12:00:00Z', domains: ['fixture.example'] });
+    seedPaid(M.starters().ev, 'field', true); db.seed('omega_orgs/' + org + '/usage/2026-09-20', { cycle: { start: '2026-09-20', end: '2026-10-20' }, counts: { evApplications: 27, boms: 4 }, purchased: {} });
+    var rctx = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(rctx, base); var rp = await rctx.newPage();
+    await rp.goto(base + '/admin/tenant.html?org=' + org); await rp.locator('.pp-suggest').first().waitFor();
+    var reviewText = await rp.locator('.pp-usage').first().textContent();
+    check(reviewText.indexOf('7 over') >= 0 && reviewText.indexOf('No usage meter for this module yet') >= 0 && reviewText.indexOf('4 bills of materials') >= 0, 'the review names the overage, the recorded activity and the modules without a meter: ' + reviewText.slice(0, 160));
+    await rp.locator('.pp-usage').first().scrollIntoViewIfNeeded(); await capture(rp, 'package-review-light'); await rctx.close();
     seedPaid(M.starters().ev, 'field', false); caller.role = 'member'; var memberContext = await browser.newContext(); await init(memberContext, base); var mp = await memberContext.newPage();
     await mp.goto(base + '/admin/tenant.html?org=' + org); await mp.locator('[data-pp-tab="cust"]').waitFor().catch(function () {});
     check(await mp.locator('[data-subscribe] .opm-primary').count() === 0, 'a member sees no subscribe action'); await memberContext.close(); caller.role = 'owner';

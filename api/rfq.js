@@ -20,6 +20,16 @@
 'use strict';
 var A = require('./_lib/admin');
 
+/* Phase 7: an RFQ is where a bill of materials leaves the product, so a
+   packaged tenant's BOM activity is counted here (review only, never gated,
+   never a reason to fail the RFQ). */
+function countBom(db, caller, view, rfqId) {
+  if (!view || view.packaged !== true) return Promise.resolve();
+  var PB = require('./_lib/pricebook'), U = require('./_lib/usage');
+  return A.billingOf(caller.orgId).then(function (billing) { return PB.load(db, billing.pricebookVersion || PB.VERSION).then(function (book) {
+    return U.count(db, caller.orgId, billing, book, 'boms', 'rfq:' + rfqId, caller.email, Date.now(), { gate: false, source: 'rfq' }); }); }).then(null, function () {});
+}
+
 module.exports = A.handler(function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   var b = req.body || {};
@@ -30,7 +40,7 @@ module.exports = A.handler(function (req) {
     if (b.action === 'decide')  return decide(caller, b, db, FV);
     if (b.action === 'distributors') return distributors(caller, db);
 
-    await require('./_lib/package-access').withCaller(caller, 'estimate');
+    var packageView = await require('./_lib/package-access').withCaller(caller, 'estimate');
     if (!b.projectId || !Array.isArray(b.bom) || !b.bom.length) throw A.httpError(400, 'projectId and a non-empty bom[] are required');
     return db.collection('projects').doc(String(b.projectId)).get().then(function (ps) {
       if (!ps.exists) throw A.httpError(404, 'project not found');
@@ -173,7 +183,7 @@ module.exports = A.handler(function (req) {
               status: 'sent', quote: null, revealed: named, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
             batch.set(db.collection('omega_orgs').doc(v).collection('notifications').doc(), { text: 'New RFQ (' + recipients[v].lines.length + ' line' + (recipients[v].lines.length === 1 ? '' : 's') + ', ' + recipients[v].scope + ')', kind: 'rfq', rfqId: ref.id, read: false, createdAt: FV.serverTimestamp() });
           });
-          return batch.commit().then(function () { return { ok: true, rfqId: ref.id, recipients: ids }; });
+          return batch.commit().then(function () { return countBom(db, caller, packageView, ref.id); }).then(function () { return { ok: true, rfqId: ref.id, recipients: ids }; });
         });
       });
     });

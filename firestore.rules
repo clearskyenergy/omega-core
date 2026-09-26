@@ -2296,6 +2296,14 @@ service cloud.firestore {
        by the endpoints in a transaction. A browser that could write it would
        reset its own allowance. Stated, like the lines above. */
     match /omega_orgs/{orgId}/geocode_usage/{usageId} { allow read, write: if false; }
+    /* Packaged usage counters (Phase 7): one document per billing cycle,
+       counted by the producing endpoints in a transaction and idempotent by
+       client id (the events subcollection). A browser that could write it
+       would reset its own allowance; it reads its usage through /api/usage. */
+    match /omega_orgs/{orgId}/usage/{cycleId} {
+      allow read, write: if false;
+      match /events/{eventId} { allow read, write: if false; }
+    }
 
     /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
        From docs/firestore.rules.plant.addendum, applied 2026-09-20 and

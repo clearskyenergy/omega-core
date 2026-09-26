@@ -17,7 +17,7 @@ module.exports = A.handler(async function (req, res) {
     if (!(await A.isTenantAdmin(caller, orgId))) throw A.httpError(403, 'Ask your workspace administrator to change the plan');
   }
   if (req.method === 'GET') return C.summary(A.db(), orgId);
-  var fields = ['orgId', 'action', 'add', 'plan', 'previewId', 'effectiveAt', 'changeId', 'remove', 'reason'];
+  var fields = ['orgId', 'action', 'add', 'plan', 'previewId', 'effectiveAt', 'changeId', 'remove', 'reason', 'meter', 'enabled'];
   if (Object.keys(input).some(function (k) { return fields.indexOf(k) < 0; })) throw A.httpError(400, 'Unsupported field');
   var now = Date.now();
   switch (input.action) {
@@ -26,6 +26,9 @@ module.exports = A.handler(async function (req, res) {
     case 'cancel': return C.cancel(A.db(), orgId, input.changeId, caller, now);
     case 'request-removal': return C.removal(A.db(), orgId, input, caller, now, false);
     case 'withdraw-removal': return C.removal(A.db(), orgId, input, caller, now, true);
-    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal or withdraw-removal');
+    case 'pack-quote': return C.packQuote(await require('./_lib/package-billing').context(A.db(), orgId), input.meter, now);
+    case 'pack-buy': return C.packBuy(A.db(), orgId, input, caller, now);
+    case 'auto-topup': return C.autoTopup(A.db(), orgId, input.enabled, caller, now);
+    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy or auto-topup');
   }
 });

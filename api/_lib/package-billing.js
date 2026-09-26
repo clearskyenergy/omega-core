@@ -4,7 +4,7 @@
  */
 'use strict';
 var B = require('./pricebook'), P = require('./subscription-pricing'), Policy = require('./package-billing-policy');
-var BP = require('./billing-profile'), Q = require('./qbo-billing'), M = require('./modules'), R = require('./proration');
+var BP = require('./billing-profile'), Q = require('./qbo-billing'), M = require('./modules'), R = require('./proration'), U = require('./usage');
 function fail(message, status) { var e = new Error(message); e.status = status || 409; throw e; }
 function clean(b) { var out = Object.assign({}, b); delete out.activationLock; return out; }
 function basis(c) { return Q.key(B.stable({ org: c.org, billing: clean(c.billing), profile: c.profile, book: c.book })); }
@@ -142,10 +142,11 @@ async function issue(db, orgId, now, deps) {
   var current = c.root.collection('billing').doc('current'), ref = current.collection('invoices').doc(b.nextInvoiceOn);
   var plan = await db.runTransaction(async function (tx) {
     var existing = await tx.get(ref), live = await tx.get(current), latest = live.data();
+    var ending = R.cycle(R.addDays(b.nextInvoiceOn, -1), latest.billingDay || 1), used = await tx.get(c.root.collection('usage').doc(ending.start));
     if (existing.exists && existing.data().qboInvoiceId) return null;
     if (latest.nextInvoiceOn !== b.nextInvoiceOn) fail('Billing date changed; retry');
     if (latest.invoiceLock && latest.invoiceLock.until > now) fail('Invoice is already being issued');
-    var prepared = existing.exists ? existing.data() : Policy.invoice(latest, c.book, latest.nextInvoiceOn);
+    var prepared = existing.exists ? existing.data() : Policy.invoice(latest, c.book, latest.nextInvoiceOn, used.exists ? used.data() : null);
     prepared.marker = 'OMEGA subscription ' + orgId + ' / ' + prepared.date;
     tx.set(ref, Object.assign({}, prepared, { state: 'prepared', createdAt: prepared.createdAt || now }));
     tx.update(current, { invoiceLock: { date: prepared.date, until: now + 120000 } });
@@ -186,7 +187,7 @@ async function issue(db, orgId, now, deps) {
  * (Phase 5) only ever moves modules into or out of the subscription when
  * QuickBooks shows it paid or reversed; a late payer drops to Lite for a
  * while but never loses the package they bought. */
-function kindOf(r) { return r.kind === 'change' ? 'change' : 'subscription'; }
+function kindOf(r) { return r.kind === 'change' ? 'change' : r.kind === 'pack' ? 'pack' : 'subscription'; }
 function bought(billing, last) {
   var sub = billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription : { modules: last.modules, plan: last.plan };
   return { modules: M.normalize(sub.modules), plan: sub.plan };
@@ -196,7 +197,8 @@ function accessAfterInvoices(billing, records, book, now) {
   var changes = records.filter(function (r) { return kindOf(r) === 'change'; });
   var paid = subs.filter(function (r) { return r.state === 'paid'; }), unpaid = subs.filter(function (r) { return r.state !== 'paid'; });
   var openChanges = changes.filter(function (r) { return r.state === 'unpaid' && r.qboInvoiceId; }).sort(function (a, b) { return a.date.localeCompare(b.date); });
-  var owing = unpaid.concat(openChanges);
+  var openPacks = records.filter(function (r) { return kindOf(r) === 'pack' && r.state === 'unpaid' && r.qboInvoiceId; });
+  var owing = unpaid.concat(openChanges, openPacks);
   var patch = { amountDue: owing.reduce(function (n, r) { return n + Math.max(0, (r.totalCents || 0) - (r.paidCents || 0)); }, 0) / 100 };
   if (subs.length || openChanges.length) patch.paymentLink = unpaid.length && unpaid[0].state !== 'reversed' ? unpaid[0].paymentLink || null : (openChanges.length ? openChanges[0].paymentLink || null : null);
   if (!subs.length) return patch;
@@ -263,6 +265,14 @@ async function reconcile(db, orgId, now, deps, options) {
       var retries = transient ? (snapshot.reconcileRetries || 0) + 1 : 0;
       if (transient && retries >= 3) { error = true; review = true; }
       var subs = invoices.docs.map(function (d) { return d.data(); }).filter(function (r) { return kindOf(r) === 'subscription' && r.qboInvoiceId; });
+      // Phase 7: a pack's cycle usage document is read before any write.
+      var packUsage = kindOf(snapshot) === 'pack' && snapshot.pack ? await tx.get(c.root.collection('usage').doc(snapshot.pack.cycle.start)) : null;
+      if (kindOf(snapshot) === 'pack' && !error && !transient) {
+        var packRolled = subs.some(function (r) { return r.date >= snapshot.pack.cycle.end; });
+        if (state === 'unpaid') state = snapshot.state === 'cancelled' ? 'cancelled' : (packRolled || snapshot.state === 'expired') ? 'expired' : 'unpaid';
+        if (state === 'paid' && snapshot.state !== 'paid') { if (packRolled) review = true; U.addPack(tx, c.root, snapshot.pack, packUsage.exists ? packUsage.data() : null, now); }
+        else if (state === 'reversed' && snapshot.state === 'paid') U.addPack(tx, c.root, Object.assign({}, snapshot.pack, { units: -snapshot.pack.units }), packUsage.exists ? packUsage.data() : null, now);
+      }
       if (kindOf(snapshot) === 'change' && !error && !transient) {
         var rolled = subs.some(function (r) { return snapshot.cycle && snapshot.cycle.end && r.date >= snapshot.cycle.end; });
         if (state === 'unpaid') state = snapshot.state === 'cancelled' ? 'cancelled' : (rolled || snapshot.state === 'expired') ? 'expired' : 'unpaid';
@@ -278,7 +288,7 @@ async function reconcile(db, orgId, now, deps, options) {
       if (state === 'paid' && snapshot.state !== 'paid') patch.lastPaidAt = now;
       tx.update(doc.ref, update); tx.update(current, patch);
       if (snapshot.state !== state || !!snapshot.reconcileError !== error || billing.packagingState !== patch.packagingState) {
-        var event = { at: now, by: 'quickbooks-reconciliation', action: (kindOf(snapshot) === 'change' ? 'change-' : 'invoice-') + state, invoiceId: record.qboInvoiceId, reviewRequired: review,
+        var event = { at: now, by: 'quickbooks-reconciliation', action: (kindOf(snapshot) === 'change' ? 'change-' : kindOf(snapshot) === 'pack' ? 'pack-' : 'invoice-') + state, invoiceId: record.qboInvoiceId, reviewRequired: review,
           was: { state: snapshot.state, packagingState: billing.packagingState }, changed: { state: state, packagingState: patch.packagingState, modules: patch.modules || billing.modules } };
         tx.set(current.collection('history').doc(), event); tx.set(c.root.collection('admin_audit').doc(), event);
       }
