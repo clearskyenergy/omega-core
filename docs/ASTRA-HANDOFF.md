@@ -276,6 +276,25 @@ For each plan: files you'll touch, tests you'll add, screenshots you'll provide,
 - Before any live tenant changes (Phase 3 backfill, trial dates): "Send me
   the dry-run diff and the audit counts first."
 
+### 10.6 One message per phase (set the effort slider first)
+
+The agent cannot change its own effort setting; Tommy sets the slider, then
+sends the message. Each message scopes the work to one phase so the agent
+does not re-read everything or drift into the next phase.
+
+| Phase | Effort | Message |
+|---|---|---|
+| 1 | Extra High | `Phase 1 only: module catalog (api/_lib/modules.js), price book "2026-10-proposed", QuickBooks sandbox items script. Re-read only VALUE-LADDER §3, §5 and ROADMAP §4, §9. Plan first, then build, one PR.` |
+| 2 | Extra High | `Phase 2 only: close every gate leak in VALUE-LADDER §4.1, with a test per path. Re-read only that section and MERGE.md. Plan first, then build, one PR.` |
+| 3 | Extra High | `Phase 3 only: editor fits the package (ROADMAP §3) and project-type workspaces with "All tools" (§6.1–6.2). Backfill as a dry run only. Plan first, then build, one PR.` |
+| 4 | Ultra | `Phase 4 only: admin Package panel (ROADMAP §8, match the prototype), signup billing details, QuickBooks customer at approval, 14-day trial, billing date, service fee control (§10.2–10.4, §10.7). Sandbox only. Plan first, then build, one PR.` |
+| 5 | Ultra | `Phase 5 only: subscribe in the editor and Your plan, proration to the billing date, pay-first via QuickBooks invoice link, buy-more packs, auto-steer to a tier (ROADMAP §10.1, §10.5 Step A, §10.6). Sandbox only. Plan first, then build, one PR.` |
+| 6 | Extra High | `Phase 6 only: subscription proposal tool (VALUE-LADDER §8). Plan first, then build, one PR.` |
+| 7 | Extra High | `Phase 7 only: usage counters, overage lines on the recurring QuickBooks invoice, the 90-day review (VALUE-LADDER §5.4, ROADMAP §10.6). Plan first, then build, one PR.` |
+| Follow-ups | High | screenshots, PR text, label fixes |
+
+After each phase, before the next: `Update the status table in docs/PACKAGING-ROADMAP.md with the PR link and what's left, and commit it.`
+
 ### 10.5 Handing back to Claude
 
 Work continues in Claude Code from Monday. Keep the status table in
