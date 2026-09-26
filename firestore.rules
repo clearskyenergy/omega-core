@@ -498,6 +498,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Packaging price books are server-written, validated and frozen on use.
+    // Even staff browsers cannot thaw or replace one. Tenants receive only
+    // the authorized API projection; no tax/item bindings are public.
+    match /pricebook/{version} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /tools/{toolId} {
       allow read:  if signedIn();
       allow write: if isAdmin();

@@ -558,6 +558,8 @@ Docs to update as phases land: this file, `CLAUDE.md` (Tool gating),
 
 ---
 
+AI Render ownership was resolved by Tommy on 2026-09-26: Plan Sets & CAD only; it is not included in Lite.
+
 ## Appendix A. What lives in the Site Map editor, by module
 
 From the `editor.html` ribbon (tabs File, Edit, Build, Compute, Insert, Draw,
@@ -573,7 +575,7 @@ Status column: `NEW`/`BETA` as the editor's own `OmegaTags` list marks them.
 | Lite | View | Layers, Compass, Coordinates, Crosshair, Native Layer, Dock Left, Diagnose, Conduit Schedule, Solar panel view, 3D Review, Summary, Meters, live takeoff, Presentation, Snapshot, command search |
 | Lite | Output | Blueprint / PDF, Proposal, Spec Sheet, Interactive Report, Export to Monday (BETA) |
 | Lite | Settings / File | Maps key, AI keys, CRM Integration, Sync to CRM, Equipment Library, New/Open/Save projects, share link |
-| Lite | AI | Ask Jarvis (F1), Design with AI (address → sketch), AI Stencil, AI Render, AI bill reader |
+| Lite | AI | Ask Jarvis (F1), Design with AI (address → sketch), AI Stencil, AI bill reader |
 | Grid Atlas | Analyze (today behind `engineering`) | Grid Atlas pre-screen, Grid Pre-Qualify, Find Substation, Substations → map layer, load vs grid ceiling |
 | Storage | Build › Size & Configure; Analyze | BESS Sizer, Solar BESS Sizer, BESS BTM, Solar → BESS, Import Bill, Bill Analysis (NEW), Value Stack (TOU/demand/capacity/ancillary/program), Price Decks, Non-Export Headroom, Energy Balance, 10-year cost of ownership |
 | Estimate/BOM | Estimate (today behind `engineering`) | Construction Cost, Electrical Estimate, Takeoff & Budget (NEW), BOM / Sourcing, Budget CSV, Trench schedule CSV, estimate CSV, cost/spec sheet |

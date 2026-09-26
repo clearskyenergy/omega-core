@@ -162,8 +162,11 @@ tool's data collections.
 
 The editor's internal fallback requires a literal `emailVerified === true`
 from its Firebase user and the `clearsky-usa.com` domain. An existing billing
-record still wins. Packaging `modules[]` remains planned until the catalog
-and gates land; see `docs/PACKAGING-ROADMAP.md`.
+record still wins. Packaging has one server catalog (`api/_lib/modules.js`) and proposed,
+disabled price book (`api/_lib/pricebook.js`). `api/package-catalog` returns
+authorized projections and server quotes. Legacy gates remain active until
+Phases 2–3; do not enable packaged billing before those gates and the billing
+lifecycle are validated. See `docs/PACKAGING-ROADMAP.md`.
 
 ## Self-serve signup (policy decided 2026-09-06)
 

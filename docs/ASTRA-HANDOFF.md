@@ -7,6 +7,20 @@ Owner: Tommy Gilmer (ClearSky). Written 2026-09-26. Repo:
 
 ---
 
+## Execution updates approved by Tommy — 2026-09-26
+
+These later conversation decisions supersede the historical workflow and
+operator assignments below; the source commercial requirements still apply.
+
+- Remaining phase plans have standing implementation approval. PRs are stacked:
+  Track A on Phase 0, then each phase on its predecessor.
+- Tommy assigned release execution (production merges, rules deployment,
+  live billing changes and QuickBooks reconnection) to the agent. Complete
+  implementation and validation before release. Concrete tenant billing
+  changes and connection/scopes must be made reviewable before application;
+  the proposed book remains sandbox-only until price-book sign-off.
+- AI Render belongs only to **Plan Sets & CAD**, not Lite.
+
 ## 1. What you are building
 
 OMEGA is sold as a **menu of modules** with one price each, a **$500
