@@ -112,6 +112,7 @@ h3.s{margin:0 0 8px;font-size:15px}
           <label for="credit"><input type="checkbox" id="credit" checked> Transformation credit 40% · 90 days</label>
           <div class="r"><span>First 90 days</span><span class="num" id="s-first"></span></div>
           <div class="r"><span>Service fee / yr</span><span class="num" id="s-fee"></span></div>
+          <div class="r"><span>Billing date</span><span class="num" id="s-bday"></span></div>
           <hr>
           <div class="r"><span>Included usage</span><span class="num" id="s-use" style="text-align:right"></span></div>
           <div class="fit" id="s-fit"></div>
@@ -179,25 +180,32 @@ var B={};M.forEach(function(m){B[m.k]=m;});
 var TYPES={'EV installer':['evrebates','estimate','gridatlas','plansets'],'Solar / BESS installer':['storage','estimate','plansets'],'Developer':['gridatlas','storage','finance'],'EPC / engineering':['plansets','engineering','estimate','permitting'],'OEM':['whitelabel','storage','estimate'],'Distributor':['whitelabel','estimate'],'Compute / advisor':['compute','gridatlas','siteintel'],'Capital partner':['finance','gridatlas']};
 var LOGIC5=['logic-office','logic-plant','logic-materials','logic-logistics','logic-customer'];
 var A=[
- {n:'Clean Cell',o:'cleancell.us',t:'OEM',st:'Trial ends 30 Sep',w:1,m:['whitelabel','gridatlas','storage','estimate'].concat(LOGIC5)},
- {n:'Concord Energy',o:'concordenergyusa.com',t:'EV installer',st:'Paying · Field',ok:1,m:['evrebates','estimate','gridatlas','plansets']},
- {n:'NextNRG',o:'nextnrg.com',t:'Developer',st:'Enterprise contract',ok:1,m:['storage','finance','compute','gridatlas','siteintel','plansets']},
- {n:'Budderfly',o:'budderfly.com',t:'Developer',st:'Trial ends 16 Oct',w:1,m:['gridatlas','storage','finance']},
- {n:'East West Energy',o:'eastwestenergy.ai',t:'Compute / advisor',st:'Trial ends 16 Oct',w:1,m:['compute','gridatlas','siteintel']},
- {n:'CIR',o:'cleantechir.com',t:'EPC / engineering',st:'Trial',w:1,m:['plansets','engineering','estimate','permitting','gridatlas','siteintel']},
- {n:'FENECON',o:'fenecon.com',t:'OEM',st:'Signed MSA',m:['whitelabel','storage','estimate']},
- {n:'Walters Wholesale',o:'walterswholesale.com',t:'Distributor',st:'Trial',w:1,m:['whitelabel','estimate']},
- {n:'Solela / Chileasing',o:'chileasing.com',t:'Developer',st:'Standard',ok:1,m:['storage','finance']},
- {n:'Helios Energy Advisors',o:'heliosnrgy.com',t:'Capital partner',st:'Partner',m:['finance','gridatlas']},
- {n:'OGI Solar',o:'ogisolar.com',t:'EV installer',st:'Standard · JV member',ok:1,m:['storage','evrebates','estimate']},
- {n:'Green Wolf Strategies',o:'(prospect)',t:'Developer',st:'Discovery',m:[]},
- {n:'Lattice Energy',o:'(prospect)',t:'Developer',st:'Discovery',m:[]},
- {n:'Roam Energy',o:'(prospect)',t:'Developer',st:'Discovery',m:[]},
- {n:'R.E.S. (confirm)',o:'(prospect)',t:'Developer',st:'Discovery',m:[]}
+ {d:16,n:'Clean Cell',o:'cleancell.us',t:'OEM',st:'Trial ends 30 Sep',w:1,m:['whitelabel','gridatlas','storage','estimate'].concat(LOGIC5)},
+ {d:3,n:'Concord Energy',o:'concordenergyusa.com',t:'EV installer',st:'Paying · Field',ok:1,m:['evrebates','estimate','gridatlas','plansets']},
+ {d:22,n:'NextNRG',o:'nextnrg.com',t:'Developer',st:'Enterprise contract',ok:1,m:['storage','finance','compute','gridatlas','siteintel','plansets']},
+ {d:2,n:'Budderfly',o:'budderfly.com',t:'Developer',st:'Trial ends 16 Oct',w:1,m:['gridatlas','storage','finance']},
+ {d:2,n:'East West Energy',o:'eastwestenergy.ai',t:'Compute / advisor',st:'Trial ends 16 Oct',w:1,m:['compute','gridatlas','siteintel']},
+ {d:9,n:'CIR',o:'cleantechir.com',t:'EPC / engineering',st:'Trial',w:1,m:['plansets','engineering','estimate','permitting','gridatlas','siteintel']},
+ {d:12,n:'FENECON',o:'fenecon.com',t:'OEM',st:'Signed MSA',m:['whitelabel','storage','estimate']},
+ {d:19,n:'Walters Wholesale',o:'walterswholesale.com',t:'Distributor',st:'Trial',w:1,m:['whitelabel','estimate']},
+ {d:27,n:'Solela / Chileasing',o:'chileasing.com',t:'Developer',st:'Standard',ok:1,m:['storage','finance']},
+ {d:5,n:'Helios Energy Advisors',o:'heliosnrgy.com',t:'Capital partner',st:'Partner',m:['finance','gridatlas']},
+ {d:14,n:'OGI Solar',o:'ogisolar.com',t:'EV installer',st:'Standard · JV member',ok:1,m:['storage','evrebates','estimate']},
+ {d:26,n:'Green Wolf Strategies',o:'(prospect)',t:'Developer',st:'Discovery',m:[]},
+ {d:26,n:'Lattice Energy',o:'(prospect)',t:'Developer',st:'Discovery',m:[]},
+ {d:26,n:'Roam Energy',o:'(prospect)',t:'Developer',st:'Discovery',m:[]},
+ {d:26,n:'R.E.S. (confirm)',o:'(prospect)',t:'Developer',st:'Discovery',m:[]}
 ];
 var cur=0, sel={}, hist={}, pending=null;
 function $(i){return document.getElementById(i);}
 function money(n){return '$'+Math.round(n).toLocaleString('en-US');}
+function money2(n){return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function ord(d){var s=['th','st','nd','rd'],v=d%100;return d+(s[(v-20)%10]||s[v]||s[0]);}
+function cycle(day){var t=new Date();t.setHours(0,0,0,0);
+  function at(y,m){var last=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(day,last));}
+  var next=at(t.getFullYear(),t.getMonth());if(next<=t)next=at(t.getFullYear(),t.getMonth()+1);
+  var prev=at(next.getFullYear(),next.getMonth()-1);
+  return {left:Math.round((next-t)/864e5),len:Math.round((next-prev)/864e5),label:next.toLocaleDateString('en-US',{month:'short',day:'numeric'})};}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function keys(){return Object.keys(sel).filter(function(k){return sel[k];});}
 
@@ -239,7 +247,7 @@ function render(){
   $('t-name').textContent=a.n; $('t-sub').textContent=a.o+' · '+a.t;
   var st=$('t-status'); st.textContent=a.st; st.className='pill'+(a.w?' warn':a.ok?' ok':'');
   syncChecks();
-  $('s-list').textContent=money(p.list);
+  $('s-list').textContent=money(p.list); $('s-bday').textContent=ord(a.d)+' of each month';
   $('s-floor').hidden=p.ok; $('activate').disabled=!p.ok; $('propose').disabled=!p.ok;
   if(p.ok){
     $('s-plan').textContent=p.plan+(p.logic?' + Logic':'');
@@ -283,12 +291,12 @@ function renderCust(p,ks){
   $('c-total').textContent=p.ok?(p.plan+' · '+money(p.pay)+'/mo'):'-';
   $('c-confirm').innerHTML='';
   if(pending){
-    var after=price(ks.concat([pending])), delta=after.pay-p.pay, pr=Math.round(delta*0.5);
-    $('c-confirm').innerHTML='<div class="confirm"><b>Add '+esc(B[pending].n)+'?</b><span>Your plan goes from '+money(p.pay)+' to '+money(after.pay)+' a month'+(delta===0?' (inside your '+p.plan+' plan, no extra charge)':'')+'. Charged today, prorated: <span class="num">'+money(pr)+'</span>. It switches on as soon as the payment clears.</span><span style="display:flex;gap:8px"><button class="b p" type="button" id="c-yes">Add to my plan</button><button class="b" type="button" id="c-no">Cancel</button></span></div>';
+    var after=price(ks.concat([pending])), delta=after.pay-p.pay, cy=cycle(a.d), pr=Math.round(delta*cy.left/cy.len*100)/100;
+    $('c-confirm').innerHTML='<div class="confirm"><b>Subscribe to '+esc(B[pending].n)+'?</b><span>'+(delta===0?'Inside your '+p.plan+' plan: no extra charge. It switches on now.':'<span class="num">'+money2(pr)+'</span> today'+(after.plan!==p.plan?' (moves you to '+after.plan+', the better deal)':'')+' ('+cy.left+' of '+cy.len+' days left until your billing date, '+cy.label+'), then '+money(after.pay)+' a month on the '+ord(a.d)+'. Billed in QuickBooks; it switches on as soon as the payment clears.')+'</span><span style="display:flex;gap:8px"><button class="b p" type="button" id="c-yes">'+(delta===0?'Turn it on':'Subscribe and pay')+'</button><button class="b" type="button" id="c-no">Cancel</button></span></div>';
   }
   $('c-list').innerHTML=M.filter(function(m){return m.s!=='lite';}).map(function(m){
     var have=!!sel[m.k];
-    return '<div class="cm"><div><div class="n">'+m.n+'</div><div class="d">'+m.d+'</div></div>'+(have?'<span class="have">On · remove at review</span>':'<button class="b" type="button" data-add="'+m.k+'"'+(m.req&&!sel[m.req]?' disabled title="Needs Office"':'')+'>Add · '+money(m.p)+'/mo</button>')+'</div>';
+    return '<div class="cm"><div><div class="n">'+m.n+'</div><div class="d">'+m.d+'</div></div>'+(have?'<span class="have">On · remove at review</span>':'<button class="b" type="button" data-add="'+m.k+'"'+(m.req&&!sel[m.req]?' disabled title="Needs Office"':'')+'>Subscribe · '+money(m.p)+'/mo</button>')+'</div>';
   }).join('');
 }
 function renderHist(){
@@ -316,7 +324,7 @@ $('p-cust').addEventListener('click',function(e){
   var add=e.target.closest('[data-add]');
   if(add){pending=add.getAttribute('data-add');render();return;}
   if(e.target.id==='c-no'){pending=null;render();return;}
-  if(e.target.id==='c-yes'){var k=pending;pending=null;sel[k]=true;log(A[cur].n+' admin','Added '+B[k].n+' from Your plan');render();renderAccts();toast(B[k].n+' added. It switches on when the payment clears.');}
+  if(e.target.id==='c-yes'){var k=pending;pending=null;sel[k]=true;log(A[cur].n+' admin','Added '+B[k].n+' from Your plan');render();renderAccts();toast(B[k].n+': payment requested in QuickBooks. It switches on when the payment clears.');}
 });
 load(0);
 })();

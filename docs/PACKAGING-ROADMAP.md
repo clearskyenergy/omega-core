@@ -515,7 +515,32 @@ Anywhere a tenant opts in (the editor's + Modules tab, Account Settings
 5. Moving from à la carte up to a tier mid-cycle charges the prorated
    difference between the old and new monthly totals.
 
-### 10.6 Tests
+### 10.6 Running out: buy more, like credits
+
+It works the way people already buy software: a new feature is a new
+subscription, and running out of what is included means buying more.
+
+- The three metered modules show usage against what's included this cycle,
+  in the editor where the work happens: "18 of 20 EV applications used".
+- At 80% a quiet note; at 100% the next one asks: **"You've used all 20 EV
+  applications this cycle. Buy 10 more for $500"**. The tenant admin pays
+  first (same flow as §10.5: QuickBooks invoice link now, saved card once
+  Step B is on) and the pack is added the moment it is paid. Members see
+  "Ask my admin".
+- Packs (**decide**, defaults): EV Rebates 10 applications $500; Permitting
+  Matrix 1 matrix $2,500; Site Finder 25 site studies $375. A pack lasts until
+  the end of the current cycle (**decide**: or rolls over once).
+- **Auto top-up** (optional, tenant admin setting, off by default): when the
+  included amount runs out, keep working and bill the overage on the next
+  invoice at the per-unit price. Off means the buy-more prompt.
+- The usage never blocks opening, viewing or exporting finished work; it
+  only gates producing the next metered deliverable.
+- Packs are QuickBooks items like everything else (`OMEGA · EV applications
+  ×10` …), created by `scripts/qbo-sync-items.js`; purchases are counted in
+  `omega_orgs/{org}/usage/{cycle}.purchased{}` by the server, and the
+  counter checks included + purchased before producing a deliverable.
+
+### 10.7 Tests
 
 Proration: first invoice at trial end; a mid-cycle add; billing days 29–31;
 a leap year; an add inside a tier cap costs $0; à la carte → Field
@@ -524,7 +549,9 @@ read-only after an unpaid trial end, projects still open. Signup: missing
 billing fields refused; profile never reaches `tenant_public`; QuickBooks
 customer created once at approval and updated on edit. Opt-in: nothing
 switches on until QuickBooks shows the invoice paid (Step A) or the charge
-succeeds (Step B).
+succeeds (Step B). Buy more: the 21st EV application is refused until a pack
+is paid (auto top-up off), or allowed and billed next invoice (on); a pack
+expires at cycle end; a finished deliverable always opens.
 
 ---
 

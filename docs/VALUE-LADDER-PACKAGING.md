@@ -58,7 +58,9 @@ company. The floor is **$500 a month**. **Nothing is free.**
    logins **(decide: 3)** and viewer logins **(decide: 10)**. Extras are priced
    **(decide: $50 builder, $15 viewer, per month)**. Included means paid for
    inside the plan.
-5. **Deliverable modules carry included usage and an overage price.** Usage
+5. **Deliverable modules carry included usage; when it runs out the tenant
+   buys more** (a pack, paid first, like buying credits) or turns on auto
+   top-up (billed next invoice). ROADMAP §10.6. Usage
    is counted on the server where the deliverable is produced (§5.4).
 6. **Transformation credit** at signing **(decide: 40% off list for the first
    90 days, never below $500)**, shown as its own line, never as a lower list

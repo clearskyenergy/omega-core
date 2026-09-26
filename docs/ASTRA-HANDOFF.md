@@ -23,7 +23,8 @@ they need and shows the value in their own numbers.
   QuickBooks invoice and the access all follow from the ticks.
 - Customers **subscribe to more inside the editor** (+ Modules tab): they
   pay first, prorated to their billing date, billed in QuickBooks, and the
-  tools appear when QuickBooks shows it paid.
+  tools appear when QuickBooks shows it paid. When they run out of included
+  usage they **buy more**, like credits (ROADMAP §10.6).
 - The Site Map editor shows only what the tenant owns, stays tidy while
   doing it, and lays itself out for the project type the user picks
   (Level 2, DCFC, BESS…) without ever removing the draw tools.
@@ -169,6 +170,7 @@ $3,400/yr Field/Pro, $1,500/yr Lite (proposed), $10,000/yr Enterprise.
 | Billing date | day of the month they signed up; 29–31 → last day of short months |
 | Refunds on removal | none; removals take effect at the quarterly review |
 | Card on file (Step B) | off until Tommy approves and reconnects QuickBooks |
+| Running out of included usage | "Buy more" pack, paid first (EV 10 for $500, matrix 1 for $2,500, site studies 25 for $375), lasts to cycle end; auto top-up off by default |
 | Billing provider | QuickBooks for every tenant; Stripe autopay only on request |
 | Grace before dropping to Lite | 10 business days |
 | Permitting Matrix while BETA | sold with a beta label, verified jurisdictions listed |
@@ -224,8 +226,8 @@ MONEY AND PRODUCTION:
 - QuickBooks SANDBOX company only (QBO_ENV=sandbox). Price book "2026-10-proposed".
   Do not create items, customers or invoices in the real QuickBooks company, or change a
   live tenant's billing, trial or billing date, until I approve in writing.
-- Opt-ins are paid first, prorated to the tenant's billing date (the day they signed up).
-  Nothing switches on until QuickBooks shows it paid.
+- Opt-ins are paid first, prorated to the tenant's billing date (the day they signed up),
+  and so are "buy more" usage packs. Nothing switches on until QuickBooks shows it paid.
 - Never reconnect QuickBooks or add an OAuth scope. Never merge to main or deploy
   Firestore/Storage rules. I do all of these after review.
 
