@@ -2,7 +2,8 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Stacked on Phase 3. No live organization, trial, billing date, QuickBooks
+Draft PR [#139](https://github.com/clearskyenergy/omega-core/pull/139),
+stacked on Phase 3. No live organization, trial, billing date, QuickBooks
 record, environment variable or deployed rule was changed. Runtime flags
 remain off by default; the proposed book remains disabled in the seed.
 
