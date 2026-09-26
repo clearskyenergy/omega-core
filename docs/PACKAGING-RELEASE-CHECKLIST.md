@@ -43,7 +43,7 @@ per-phase history and the guide manifests stay attached to their commits.
 | 7 | [#140](https://github.com/clearskyenergy/omega-core/pull/140) | 5 · subscribe in the editor | #139 |
 | 8 | [#141](https://github.com/clearskyenergy/omega-core/pull/141) | 6 · proposal tool and signup discovery | #140 |
 | 9 | [#142](https://github.com/clearskyenergy/omega-core/pull/142) | 7 · usage, packs, review | #141 |
-| 10 | Phase 8 PR (`codex/packaging-phase-8`) | 8 · Omega Logic follows the package | #142 |
+| 10 | [#143](https://github.com/clearskyenergy/omega-core/pull/143) | 8 · Omega Logic follows the package | #142 |
 
 After each merge: `npm test` on `main`; the Vercel production build is
 green; nothing changes for a tenant because every flag is off.

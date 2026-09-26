@@ -41,8 +41,8 @@ operator assignments below; the source commercial requirements still apply.
   stacked on Phase 6. See `docs/PACKAGING-PHASE-7-VALIDATION.md`.
 - Phase 8 (Omega Logic follows the package: the Logic endpoints, chrome and
   apps read `modules[]`; legacy tenants unchanged) was built on
-  `codex/packaging-phase-8`, stacked on Phase 7, with the ordered release
-  checklist for the whole stack. See `docs/PACKAGING-PHASE-8-VALIDATION.md`
+  `codex/packaging-phase-8` (PR #143), stacked on Phase 7, with the ordered
+  release checklist for the whole stack. See `docs/PACKAGING-PHASE-8-VALIDATION.md`
   and `docs/PACKAGING-RELEASE-CHECKLIST.md`.
 
 ## 1. What you are building
