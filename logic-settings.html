@@ -28,5 +28,5 @@ function draw(d){var t=d.config.terms||{},owner=d.owner;
   +card('Links & QR codes','Every URL a tenant hands out — storefront, portal, PO inbox, bench pairing — generated in one place.','ClearSky.','/logic-urls.html'+q,'URL generator')
   +'</div>':'');}
 auth.onAuthStateChanged(function(u){$('content').textContent='';if(!u){$('status').textContent='Sign in through your office to open settings.';return;}if(!org){$('status').textContent='Open settings from your office workspace.';return;}
-  api().then(function(d){OmegaLogicTheme.chrome({org:org,current:'settings',owner:d.owner,team:!!(d.access&&d.access.team),brand:d.brand,who:u.email});$('status').textContent='';draw(d);})['catch'](function(e){$('status').textContent=e.message;});});})();
+  api().then(function(d){OmegaLogicTheme.chrome({org:org,current:'settings',owner:d.owner,team:!!(d.access&&d.access.team),parts:d.access&&d.access.parts,brand:d.brand,who:u.email});$('status').textContent='';draw(d);})['catch'](function(e){$('status').textContent=e.message;});});})();
 </script></body></html>

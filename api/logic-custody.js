@@ -91,7 +91,7 @@ module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET' && req.method !== 'POST') throw A.httpError(405, 'GET or POST only');
   var caller = await A.authenticate(req), b = req.body || {}, org = A.safeOrg(req.method === 'GET' ? req.query.org : b.org);
-  var ctx = await X.authorize(caller, org, false), db = A.db(), now = new Date().toISOString(), by = caller.email;
+  var ctx = await X.authorize(caller, org, false, 'logistics'), db = A.db(), now = new Date().toISOString(), by = caller.email;
   if (!X.subscribed(ctx)) throw A.httpError(403, 'Omega Logic subscription required');
   var brand = require('./_lib/logic-brand')(ctx.org);
 

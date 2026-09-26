@@ -2237,3 +2237,15 @@ materials server-side. All counting, allowance, overage and review math is
 in `api/_lib/usage.js`; the browser draws the server’s badge. No draw
 implementation was touched and no financial engine moved; the
 browser-engine debt above remains. See docs/PACKAGING-PHASE-7-VALIDATION.md.
+
+## Packaging Phase 8 — September 26, 2026
+
+No `editor.html` edit. Omega Logic follows the package: `api/_lib/logic-access.js`
+judges a packaged tenant by `modules[]` and the live grant
+(`package-access.live`, lifted out of the editor projection so both read one
+rule), and every Logic endpoint names the part it serves. The office chrome
+(`omega-logic-theme.js`), the desktop dashboard, the Omega Logic app and
+`logic-settings.html` draw only the parts held; the sandboxes were rebuilt and
+the PDF guides retaken because those screens changed. Nothing moved between
+browser and server; the browser-engine debt above remains. See
+docs/PACKAGING-PHASE-8-VALIDATION.md and docs/PACKAGING-RELEASE-CHECKLIST.md.

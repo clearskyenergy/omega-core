@@ -9,6 +9,21 @@ function instant(v) {
   if (v && typeof v.toMillis === 'function') return v.toMillis();
   return typeof v === 'number' ? v : Date.parse(v);
 }
+/* Is the packaged grant live now: paid, or a trial inside its dates, or the
+ * Lite-only renewal fallback, and always before accessUntil. The one rule
+ * the editor projection and Omega Logic (logic-access) both follow. */
+function live(billing, modules, now) {
+  billing = billing || {}; now = now == null ? Date.now() : now;
+  var state = billing.packagingState, ok = state === 'paid';
+  if (state === 'trial') {
+    var start = instant(billing.trialStartedAt), end = instant(billing.trialEndsAt);
+    ok = isFinite(start) && isFinite(end) && end > start && end - start <= 14 * 86400000 && now >= start && now < end;
+  }
+  // Renewal fallback is a server-written Lite grant after an earlier paid
+  // period. It cannot resurrect premium modules or an unpaid first trial.
+  if (state === 'past_due_lite') ok = modules.length === 1 && modules[0] === 'lite' && isFinite(instant(billing.paidThrough));
+  return ok && billing.accessUntil != null && isFinite(instant(billing.accessUntil)) && now < instant(billing.accessUntil);
+}
 function project(caller, billing, org, member, now) {
   billing = billing || {};
   if (billing.packaged !== true) return { packaged: false };
@@ -21,15 +36,7 @@ function project(caller, billing, org, member, now) {
   var grants;
   try { grants = M.resolve(billing.modules); } catch (e) { deny('Invalid package; contact your administrator'); }
   if (Array.isArray(member.toolAccess)) grants.toolAccess = grants.toolAccess.filter(function (k) { return member.toolAccess.indexOf(k) >= 0; });
-  var state = billing.packagingState, canWork = state === 'paid';
-  if (state === 'trial') {
-    var start = instant(billing.trialStartedAt), end = instant(billing.trialEndsAt);
-    canWork = isFinite(start) && isFinite(end) && end > start && end - start <= 14 * 86400000 && now >= start && now < end;
-  }
-  // Renewal fallback is a server-written Lite grant after an earlier paid
-  // period. It cannot resurrect premium modules or an unpaid first trial.
-  if (state === 'past_due_lite') canWork = grants.modules.length === 1 && grants.modules[0] === 'lite' && isFinite(instant(billing.paidThrough));
-  canWork = canWork && billing.accessUntil != null && isFinite(instant(billing.accessUntil)) && now < instant(billing.accessUntil);
+  var state = billing.packagingState, canWork = live(billing, grants.modules, now);
   var notice = null;
   if (state === 'trial' && canWork && now >= instant(billing.trialStartedAt) + 10 * 86400000) {
     notice = { text: 'Your trial ends on ' + new Date(instant(billing.trialEndsAt)).toISOString().slice(0, 10) + '. Your plan: ' + (billing.plan || 'Lite + modules') + (billing.monthlyDisplay ? ', ' + billing.monthlyDisplay : '') + '.', payUrl: null };
@@ -82,4 +89,4 @@ function customerDrawing(active) {
   v.catalog = M.catalog(); v.notSold = M.notSold(); v.readOnlyRibbon = M.readOnlyRibbon();
   return v;
 }
-module.exports = { customerDrawing: customerDrawing, project: project, requireModule: requireModule, withToken: withToken, withCaller: withCaller };
+module.exports = { customerDrawing: customerDrawing, project: project, requireModule: requireModule, withToken: withToken, withCaller: withCaller, live: live };

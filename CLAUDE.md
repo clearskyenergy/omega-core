@@ -193,7 +193,17 @@ Admin SDK only, idempotent by client id): a metered deliverable is counted
 where it is produced (`POST /api/usage` from the browser tools, server-side
 in `rfq.js`), the allowance is included + packs, overage is billed on the
 recurring invoice, and packs and auto top-up go through `plan-change`. It is
-an honest billing counter, not a security boundary.
+an honest billing counter, not a security boundary. Phase 8: **Omega Logic
+follows the package.** A packaged tenant (`billing.packaged`) is judged by
+`modules[]` alone — Office is `logic-office`, the parts are `logic-plant`,
+`logic-materials`, `logic-logistics`, `logic-customer` — and the grant must be
+live (`package-access.live`, the editor's own rule). `logic-access.authorize(c,
+org, write, part)` refuses a part not bought; `parts(ctx)` is what the office
+endpoint (`access.parts`), the front door and the customer-portal gate
+(`buyer-accounts.context`) report, and what the chrome, the hex hub, the
+dashboard and the Omega Logic app draw. A legacy tenant (addon `omega-logic`)
+is unchanged and holds every part; absent means "everything", a present list
+is the package. Showing a link is never access.
 
 Packaged editor presentation uses the server catalog through OmegaCaps;
 OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.

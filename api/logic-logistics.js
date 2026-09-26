@@ -182,7 +182,7 @@ module.exports=A.handler(async function(req,res){
   res.setHeader('Cache-Control','no-store');
   if(['GET','POST'].indexOf(req.method)<0)throw A.httpError(405,'GET or POST only');
   var c=await A.authenticate(req),b=req.body||{},org=A.safeOrg(req.method==='GET'?req.query.org:b.org);
-  var ctx=await X.authorize(c,org,true),db=A.db();
+  var ctx=await X.authorize(c,org,true,'logistics'),db=A.db();
   if(!X.subscribed(ctx))throw A.httpError(403,'Omega Logic subscription required');
   if(req.method==='GET'&&req.query.freight)return freightGet(db,org,ctx,c,req.query.freight);
   if(req.method==='GET'){

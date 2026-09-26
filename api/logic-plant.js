@@ -52,7 +52,7 @@ async function stockPage(db,org){
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   var caller = await A.authenticate(req), b = req.body || {}, org = A.safeOrg(req.method === 'GET' ? req.query.org : b.org);
-  var ctx = await X.authorize(caller, org, req.method !== 'GET'), db = A.db();
+  var ctx = await X.authorize(caller, org, req.method !== 'GET', 'plant'), db = A.db();
   var flow=Flow.current(ctx.config), configRef=db.collection('omega_orgs').doc(org).collection('fulfillment').doc('config');
   if (req.method === 'GET') {
     if(req.query.map){

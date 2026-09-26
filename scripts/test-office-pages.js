@@ -52,7 +52,7 @@ var APP = read('office/app.html');
 console.log('the Omega Logic app');
 function menu(data, ws) {
   var ctx = { DATA: data, ORG: 'cleancell.us', WS: ws || null, encodeURIComponent: encodeURIComponent };
-  vm.runInNewContext(lift(APP, 'access') + '\n' + lift(APP, 'mayPrice') + '\n' + lift(APP, 'menuPanels') + '\nvar OUT = menuPanels();', ctx);
+  vm.runInNewContext(lift(APP, 'access') + '\n' + lift(APP, 'mayPrice') + '\n' + lift(APP, 'has') + '\n' + lift(APP, 'menuPanels') + '\nvar OUT = menuPanels();', ctx);
   var rows = {}; plain(ctx.OUT).forEach(function (p) { p.rows.forEach(function (r) { rows[r[2]] = r; }); });
   return rows;
 }

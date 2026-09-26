@@ -1,5 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
+var M = require('./modules'), X = require('./package-access');
 var A = require('./admin'), S = require('./office-stage');
 function owner(c) { return String(c.email || '').toLowerCase() === 'tom@clearsky-usa.com' && c.claims.email_verified === true; }
 function requireOwner(c) { if (!owner(c)) throw A.httpError(403, 'Omega Logic control is restricted to the verified ClearSky owner account'); }
@@ -11,17 +12,42 @@ async function context(orgId) {
   if (!rows[0].exists) throw A.httpError(404, 'OEM account not provisioned');
   return { orgId: orgId, org: rows[0].data(), billing: rows[1].exists ? rows[1].data() : {}, config: rows[2].exists ? rows[2].data() : {} };
 }
-function subscribed(ctx) {
-  var b = ctx.billing;
-  return ctx.org.status === 'active' &&
-    ((b.addons || []).indexOf('omega-logic') >= 0 || b.omegaLogic === true) &&
+/* ── Phase 8: Omega Logic follows the package ──────────────────────────
+   A PACKAGED tenant (billing.packaged === true, Phases 1–7) is judged by its
+   package alone: Office in modules[] and the grant live (package-access.live:
+   paid, or a trial inside its dates, and before accessUntil). The parts are
+   the modules bought. A legacy tenant keeps the addon / omegaLogic flags and
+   holds every part; nothing changes for it. The ClearSky owner sees all. */
+var LOGIC_PARTS = { plant: 'logic-plant', materials: 'logic-materials', logistics: 'logic-logistics', customer: 'logic-customer' };
+function packagedModules(ctx, now) {
+  var b = ctx.billing || {}; if (b.packaged !== true) return null;
+  var modules; try { modules = M.normalize(b.modules); } catch (e) { return null; }
+  return X.live(b, modules, now) ? modules : null;
+}
+function subscribed(ctx, now) {
+  var b = ctx.billing || {};
+  if (ctx.org.status !== 'active') return false;
+  if (b.packaged === true) { var m = packagedModules(ctx, now); return !!m && m.indexOf('logic-office') >= 0; }
+  return ((b.addons || []).indexOf('omega-logic') >= 0 || b.omegaLogic === true) &&
     ['suspended', 'cancelled', 'past_due'].indexOf(b.status) < 0;
+}
+/* The Logic parts this workspace holds (plant, materials, logistics, customer). */
+function parts(ctx, now) {
+  var all = Object.keys(LOGIC_PARTS); if (!subscribed(ctx, now)) return [];
+  if (ctx.billing.packaged !== true) return all;
+  var modules = packagedModules(ctx, now) || [];
+  return all.filter(function (p) { return modules.indexOf(LOGIC_PARTS[p]) >= 0; });
+}
+function requirePart(ctx, part) {
+  if (!part) return;
+  if (!LOGIC_PARTS[part]) throw A.httpError(500, 'Unknown Omega Logic part');
+  if (parts(ctx).indexOf(part) < 0) { var e = A.httpError(403, M.get(LOGIC_PARTS[part]).name + ' is not in your Omega Logic package'); e.reason = 'part'; throw e; }
 }
 function enabled(ctx) { return subscribed(ctx) && ctx.config.enabled === true; }
 /* The context also carries the caller's standing in the workspace as
    `member` ({ role, status } off omega_orgs/{org}/members/{uid}; null for
    the ClearSky owner, who is nobody's member). */
-async function authorize(c, org, write) {
+async function authorize(c, org, write, part) {
   if (!c.claims.email_verified) throw A.httpError(403, 'Verify your email first');
   var ctx = await context(org);
   ctx.member = null;
@@ -31,6 +57,7 @@ async function authorize(c, org, write) {
   var d = m.exists ? m.data() : {};
   if (d.status === 'disabled' || !d.role || (write && ['owner', 'admin'].indexOf(d.role) < 0)) throw A.httpError(403, 'An active OEM ' + (write ? 'administrator' : 'member') + ' is required');
   if (!subscribed(ctx)) { var ie = A.httpError(403, 'Omega Logic subscription is not active'); ie.reason = 'inactive'; throw ie; }
+  requirePart(ctx, part);
   ctx.member = { role: d.role, status: d.status || 'active' };
   return ctx;
 }
@@ -61,5 +88,5 @@ async function requirePricer(c, ctx, order) {
   if (!subscribed(ctx)) { var ie = A.httpError(403, 'Omega Logic subscription is not active'); ie.reason = 'inactive'; throw ie; }
   return d.role;
 }
-module.exports = { owner: owner, requireOwner: requireOwner, context: context, subscribed: subscribed, enabled: enabled, authorize: authorize,
+module.exports = { owner: owner, requireOwner: requireOwner, context: context, subscribed: subscribed, enabled: enabled, authorize: authorize, parts: parts, requirePart: requirePart, LOGIC_PARTS: LOGIC_PARTS,
   officeAdmin: officeAdmin, access: access, requirePricer: requirePricer };

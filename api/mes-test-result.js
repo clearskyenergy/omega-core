@@ -188,7 +188,7 @@ function manual(req, body) {
   return A.authenticate(req).then(function (caller) {
     /* owner or admin of this workspace, or ClearSky's owner — the rule
        every Omega Logic write already runs; a member or viewer is refused */
-    return X.authorize(caller, org, true).then(function () {
+    return X.authorize(caller, org, true, 'plant').then(function () {
       if (!rateLimit('person:' + (caller.uid || caller.email))) throw A.httpError(429, 'too many results recorded; wait a minute');
       return record(A.db(), A.FieldValue(), { orgId: org, serial: serial, scanId: 'manual_' + actionId, stationKey: stationKey, passed: passed,
         measurements: measurements, failureCode: failureCode, ncr: ncr, source: 'manual', clientAt: S.clean(body.at, 40) || null,
