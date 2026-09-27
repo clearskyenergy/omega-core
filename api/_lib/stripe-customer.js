@@ -123,7 +123,9 @@ function centsRefusal(cents) {
   return null;
 }
 /* a payment arrived for a figure ClearSky has since changed: nothing more is
-   taken from here until ClearSky has looked and set the figure again */
+   taken from here until ClearSky has looked. A new figure or date releases
+   it, and so does saving the amount due again, the same figure included (the
+   master console and /api/tenant-billing clear stripeDueHold) */
 function holdRefusal(orgId, b) {
   var h = b && b.stripeDueHold, owed = dueOf(orgId, b);
   if (!h || !owed || h.marker !== owed.marker) return null;
@@ -410,7 +412,7 @@ async function settle(db, orgId, invoiceId, stripe, now, by) {
        and the next due, even the same figure and date, is then a new invoice
        (stripeDueSeq). A payment for a figure that has since changed is
        ClearSky's to look at: nothing more is taken from here until ClearSky
-       has set the figure again (stripeDueHold) */
+       has saved the amount due again (stripeDueHold; see holdRefusal) */
     if (matches) changed.amountDue = 0;
     var patch = Object.assign({}, changed, { updatedAt: now, updatedBy: by || 'stripe' });
     if (matches) { patch.stripeDueSeq = (Number(d.stripeDueSeq) || 0) + 1; patch.stripeDueHold = null; }

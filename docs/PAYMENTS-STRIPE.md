@@ -97,9 +97,12 @@ the record directly) voids the stale open invoice the next time the
 workspace's Stripe is touched: opening Plan & billing, the portal, or Pay.
 A payment for a figure that has since changed (paid from Stripe's email
 first) is recorded but leaves `amountDue`, ClearSky gets a `billingAlert`,
-and nothing more is taken from the page (`stripeDueHold`) until ClearSky sets
-the figure again; Pay records any such payment nothing had recorded before
-it bills. The same figure and date billed again after a payment is a new
+and nothing more is taken from the page (`stripeDueHold`) until ClearSky saves
+the amount due again in the master console (or `/api/tenant-billing`). The
+same figure releases it too: ClearSky rolling on to next month before last
+month's emailed invoice was paid keeps next month's figure, and saving it
+is the review. Pay records any such payment nothing had recorded before it
+bills. The same figure and date billed again after a payment is a new
 invoice (`stripeDueSeq`). A balance on the Stripe customer (Stripe applies
 it to the next invoice) is ClearSky's to settle before a card payment here.
 An invoice ClearSky already has open in Stripe (the dashboard, a tier

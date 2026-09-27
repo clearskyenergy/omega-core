@@ -25,7 +25,7 @@
  * checked for an undefined value, which the Admin SDK refuses.
  */
 'use strict';
-var assert = require('assert'), path = require('path'), Module = require('module');
+var assert = require('assert'), fs = require('fs'), path = require('path'), Module = require('module');
 var F = require('./_lib/firestore-double'), SD = require('./_lib/stripe-double').StripeDouble;
 var db, count = 0;
 function env(o) { Object.keys(o).forEach(function (k) { if (o[k] == null) delete process.env[k]; else process.env[k] = o[k]; }); }
@@ -327,6 +327,41 @@ async function reviewed() {
   setDue(1299);
   var rest = await call(owner, { action: 'pay' }, s);
   ok(rest.state === 'open' && s.invoices_[rest.invoiceId].total === 129900, 'once ClearSky sets the figure again (what is left), it is paid as before', rest);
+
+  console.log('\nClearSky keeping the figure it set releases the hold too');
+  /* ClearSky rolls on to October before September's emailed invoice is paid:
+     September is recorded and holds October, and ClearSky saving October's
+     figure unchanged is the review that releases it */
+  async function heldOctober() {
+    fixture(); s = new SD({ livemode: true });
+    a = await call(owner, { action: 'pay' }, s);
+    setDue(1299, '2026-10-02');
+    s.pay(a.invoiceId);
+    await SC.settle(db, ORG, a.invoiceId, s, now, 'stripe');
+  }
+  await heldOctober();
+  await refused('September, paid from Stripe\'s email after ClearSky rolled on, holds October', function () { return call(owner, { action: 'pay' }, s); }, /reviews the account/);
+  var TB = require('../api/tenant-billing');
+  await TB({ method: 'POST', caller: staff, body: { orgId: ORG, tier: 'standard' } });
+  ok(!!bill().stripeDueHold, '...a staff write that leaves the amount due alone (the tier) keeps the hold');
+  await TB({ method: 'POST', caller: staff, body: { orgId: ORG, amountDue: 1299 } });
+  var released = keys(CUR + '/history/').map(function (k) { return db.data.get(k); }).filter(function (h) { return h.changed && h.changed.stripeDueHold === null; })[0];
+  ok(bill().stripeDueHold === null && !!released && released.was.stripeDueHold.invoiceId === a.invoiceId, 'ClearSky saving the same figure through /api/tenant-billing releases it, and the history keeps what it released', released);
+  var oct = await call(owner, { action: 'pay' }, s);
+  ok(oct.state === 'open' && oct.invoiceId !== a.invoiceId && s.invoices_[oct.invoiceId].total === 129900 && s.invoices_[oct.invoiceId].metadata.omegaDueDate === '2026-10-02', '...and October is paid as before', oct);
+
+  /* the master console's own save, run from its source as tadminstanding.js reads it */
+  await heldOctober();
+  var SRC = fs.readFileSync(path.join(__dirname, '../admin/admin-console.js'), 'utf8'), at = SRC.indexOf('function saveTenantBilling('), end = SRC.indexOf('{', at), depth = 0;
+  for (;; end++) { if (SRC[end] === '{') depth++; else if (SRC[end] === '}' && !--depth) break; }
+  var form = { 'tb-tier': 'standard', 'tb-amt': '1299', 'tb-due': '2026-10-02', 'tb-paid': String(bill().amountPaid), 'tb-paidat': bill().lastPaidAt, 'tb-jarvis': 'on' }, msg = { textContent: '' };
+  var page = { getElementById: function (id) { if (id === 'tb-msg-' + ORG) return msg; var f = id.slice(0, -(ORG.length + 1)); return Object.prototype.hasOwnProperty.call(form, f) ? { value: form[f] } : null; } };
+  var saveTenantBilling = new Function('db', 'firebase', 'document', 'currentUser', 'loadTenants', SRC.slice(at, end + 1) + '\nreturn saveTenantBilling;')(
+    db, { firestore: { FieldValue: { serverTimestamp: function () { return now; } } } }, page, { email: staff.email }, function () {});
+  saveTenantBilling(ORG);
+  for (var tick = 0; tick < 200 && !/^(Saved|Failed)/.test(msg.textContent); tick++) await new Promise(function (r) { setImmediate(r); });
+  ok(msg.textContent === 'Saved.' && bill().stripeDueHold === null && bill().amountDue === 1299, 'the master console\'s save, the figure unchanged, releases it too', { msg: msg.textContent, hold: bill().stripeDueHold });
+  ok((await call(owner, { action: 'pay' }, s)).state === 'open', '...and October is paid');
 
   fixture(); s = new SD({ livemode: true }); MAILED = [];
   a = await call(owner, { action: 'pay' }, s);
