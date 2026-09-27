@@ -105,6 +105,14 @@
     '.ows-top{padding:0 14px;gap:8px}.ows-search{display:none}.ows-switch>button{max-width:200px}.ows-content{padding:16px 16px 32px}}',
     '@media (max-width:700px){.ows-tabs.on{display:grid}body.ows-has-tabs .ows-content{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))}}',
     '@media (prefers-reduced-motion:reduce){.ows-rail{transition:none}}',
+    /* a legacy page WEARING the whole chrome (wear): its own #side-nav,
+       #topbar and #main id rules outrank the shell's classes, so the few
+       that matter are restated at higher specificity */
+    'body.ows-worn #side-nav{width:auto;height:100vh;overflow:auto;z-index:auto;display:flex;flex:none}',
+    'body.ows-worn #app-body #topbar{height:56px;padding:0 20px;gap:12px;border-bottom:1px solid var(--ows-line);background:rgba(255,255,255,.92);z-index:30}',
+    'body.ows-worn #app-body #main{max-width:1240px;padding:22px 24px 40px}',
+    '@media (max-width:900px){body.ows-worn #app-body{flex-direction:column}body.ows-worn #side-nav{display:flex;position:fixed;top:0;bottom:0;left:0;width:min(280px,86vw);z-index:65}body.ows-worn #app-body #topbar{height:54px;padding:0 14px;gap:8px}body.ows-worn #app-body #main{padding:16px 16px 32px}}',
+    '@media (max-width:700px){body.ows-worn.ows-has-tabs #app-body #main{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))}}',
     /* legacy pages: the ground only */
     'body.ows-theme{background-color:#F5F4F0;background-image:linear-gradient(rgba(43,95,168,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(43,95,168,.09) 1px,transparent 1px),linear-gradient(rgba(43,95,168,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(43,95,168,.04) 1px,transparent 1px);background-size:120px 120px,120px 120px,24px 24px,24px 24px;background-attachment:fixed}',
     'body.ows-theme #side-nav{background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);background-size:44px 44px}',
@@ -378,17 +386,46 @@
      and the same element ids, so omega-jd-nav.js reveals Joint development
      and the Deal Room here exactly as it does everywhere else. What an
      earlier reveal already showed stays shown. Runs once. */
-  var adopted = false;
+  var adopted = false, worn = false;
+  var REVEALED = ['sn-jv-divider', 'sn-jv-label', 'sn-osa', 'sn-design', 'sn-jda', 'sn-dealroom', 'sn-adm-divider', 'sn-adm-label', 'sn-admin', 'sn-ops'];
+  function remember() {
+    var shown = {};
+    REVEALED.forEach(function (id) { var el = byId(id); if (el && el.style.display !== 'none') shown[id] = true; });
+    var label = byId('sn-design-label'), count = byId('sn-design-n');
+    return { shown: shown, designText: label ? label.textContent : '', countText: count ? count.textContent : '' };
+  }
+  function restore(r) {
+    Object.keys(r.shown).forEach(function (id) { var el = byId(id); if (el) el.style.display = ''; });
+    if (r.designText && byId('sn-design-label')) byId('sn-design-label').textContent = r.designText;
+    if (r.countText && byId('sn-design-n')) byId('sn-design-n').textContent = r.countText;
+  }
   function adopt() {
     var rail = byId('side-nav'); if (adopted || !rail || rail.classList.contains('ows-rail')) return false;
-    var shown = {};
-    ['sn-jv-divider', 'sn-jv-label', 'sn-osa', 'sn-design', 'sn-jda', 'sn-dealroom', 'sn-adm-divider', 'sn-adm-label', 'sn-admin', 'sn-ops'].forEach(function (id) { var el = byId(id); if (el && el.style.display !== 'none') shown[id] = true; });
-    var label = byId('sn-design-label'), designText = label ? label.textContent : '', count = byId('sn-design-n'), countText = count ? count.textContent : '';
+    var r = remember();
     rail.innerHTML = headHtml('ows-head') + '<div class="sn-scroll">' + railHtml({ current: currentKey(), head: false, me: false }) + '</div>';
-    Object.keys(shown).forEach(function (id) { var el = byId(id); if (el) el.style.display = ''; });
-    if (designText && byId('sn-design-label')) byId('sn-design-label').textContent = designText;
-    if (countText && byId('sn-design-n')) byId('sn-design-n').textContent = countText;
+    restore(r);
     adopted = true; return true;
+  }
+  /* THE WHOLE CHROME on a legacy page (the marketplace, the store): once
+     the workspace is home, the page's own sidebar and topbar come off and
+     the shell mounts the rail, the topbar with the company switcher, the
+     phone tab bar and the side panel around the page's #main. The page
+     keeps its markup (the tests that compare the three sidebars read the
+     FILE) and its own sign-in. What omega-jd-nav.js revealed on the old
+     rail stays revealed. Runs once; answers whether it ran. */
+  function wear(opts) {
+    if (worn) return true;
+    if (!wantsWorkspace()) return false;
+    var rail = byId('side-nav'), top = byId('topbar'), main = byId('main');
+    if (!rail || !top || !main) return false;
+    var r = remember();
+    rail.parentNode.removeChild(rail); top.parentNode.removeChild(top);
+    doc.body.classList.add('ows-worn'); main.classList.add('ows-content');
+    var o = { current: currentKey(), tabs: true, search: false };
+    if (opts) for (var k in opts) if (Object.prototype.hasOwnProperty.call(opts, k)) o[k] = opts[k];
+    mount(o);
+    restore(r);
+    worn = adopted = true; return true;
   }
   /* a legacy page (projects, marketplace): the same ground, the same rail
      and the same home once the workspace is home */
@@ -405,5 +442,5 @@
     both(); global.addEventListener('omega:entitlements', both); setTimeout(both, 1500);
   }
 
-  global.OmegaWorkspaceShell = { mount: mount, adopt: adopt, currentKey: currentKey, homeOf: homeOf, paint: paint, badge: badge, section: section, workspaces: workspaces, drawer: drawer, closeDrawer: closeDrawer, toast: toast, signOut: signOut, theme: theme, homeHref: homeHref, wantsWorkspace: wantsWorkspace, closeRail: closeRail, ICON: ICON, PRODUCT: PRODUCT, esc: esc, initials: initials };
+  global.OmegaWorkspaceShell = { mount: mount, adopt: adopt, wear: wear, currentKey: currentKey, homeOf: homeOf, paint: paint, badge: badge, section: section, workspaces: workspaces, drawer: drawer, closeDrawer: closeDrawer, toast: toast, signOut: signOut, theme: theme, homeHref: homeHref, wantsWorkspace: wantsWorkspace, closeRail: closeRail, ICON: ICON, PRODUCT: PRODUCT, esc: esc, initials: initials };
 })(window);
