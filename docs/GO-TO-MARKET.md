@@ -909,7 +909,7 @@ Build Tuesday and Speedrun Friday need a real screen recording. Setup:
 ## 6. Target accounts
 
 - Small shops: `docs/small-shop-targets.csv` (to come).
-- Big organizations: `docs/enterprise-targets.csv` (to come).
+- Big organizations: `docs/enterprise-targets.csv` (25 companies).
 
 `docs/developer-targets.csv` (50 companies, public sources, company-level only; no personal contact data). Read the source before you write: a hook is only as good as its date. Check the growth board and the off-limits list before the first touch; a company that signs up leaves this list.
 

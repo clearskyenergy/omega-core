@@ -306,6 +306,7 @@ else:
     tg_html = '<p class="lede">The researched list of developer accounts lands here next.</p>'
 
 def link(url, text):
+    url = (url or '').split(' | ')[0].strip()   # a row may cite several sources; the first backs the hook
     if url and not url.startswith('http'):
         url = 'https://' + url
     return '<a href="%s" target="_blank" rel="noopener">%s</a>' % (E(url), text) if url.startswith('http') else text
