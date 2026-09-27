@@ -10,18 +10,24 @@
       viewer, staff, a preview, unchecked; the server's figures or none;
       the changes in progress in the contract's words; In Site Map and
       Elsewhere split by the price list's own flag, the catalog ribbon
-      agreeing with it; a legacy plan's modules by the Modules page's own
-      rule (OmegaWorkspaceHub.moduleState with OmegaCaps.editorCan).
+      agreeing with it; read-only for the bill (I've paid) apart from
+      read-only for a viewer (no payment offered); a legacy plan's modules
+      by the Modules page's own rule (OmegaWorkspaceHub.moduleState on the
+      tier OmegaWorkspaceHub.editorCtx names), and its opt-in and opt-out
+      requests only where the Modules page's card shows them in flight.
    2. The copies that cannot be avoided stay copies: the tier names are
       omega-tenant.js's, and the read-only commands an unchecked plan keeps
       are the server's M.readOnlyRibbon().
    3. OmegaCaps: a failed read leaves the plan UNCHECKED (viewing stays,
       producing waits), a failed package fetch too, and retry() replaces
-      the fail-safe without a reload.
+      the fail-safe without a reload — keeping it unchecked while its read
+      is out.
    4. The editor gate: a check that could not run shows its reason and
       Retry, never "not on this plan"; a real refusal says "not on this
-      plan" and links the Modules page; the org's toolAccess allowlist wins
-      and a missing record still fails open.
+      plan" and links the Modules page; a 403 from the package check is a
+      refusal in the server's words, no Retry; a packaged workspace's
+      status is read first; the org's toolAccess allowlist wins and a
+      missing record still fails open.
    5. editor.html mounts the chip and loads the file; never omega-tenant.js.
 
    node scripts/tests/teditorplan.js */
@@ -94,6 +100,26 @@ var trial = projection(['lite', 'storage'], { packagingState: 'trial', trialStar
 var tr = PLAN.summary({ view: trial });
 ok('the trial\'s last days: Live, with the server\'s reminder and no pay button', tr.state === 'live' && tr.notice && /trial ends/i.test(tr.notice.text) && !tr.notice.paid);
 
+/* review #22: a viewer is read-only by role, and in a trial's last days the
+   projection also carries the reminder. That is not an unpaid plan. */
+var TRIAL_END = { packagingState: 'trial', trialStartedAt: NOW - 11 * DAY, trialEndsAt: NOW + 3 * DAY, accessUntil: NOW + 3 * DAY };
+var viewerTrial = projection(['lite', 'storage'], TRIAL_END, { role: 'viewer', status: 'active' });
+var vt = PLAN.summary({ view: viewerTrial, now: NOW });
+ok('fixture: a viewer on a trial\'s last days is read-only with the reminder', viewerTrial.readOnly === true && viewerTrial.billingNotice && !viewerTrial.billingNotice.payUrl);
+ok('a viewer on a live trial\'s last days is View only, not the red billing Read-only', vt.state === 'viewer' && vt.tone !== 'bad' && vt.pill === 'View only', vt);
+ok('and is offered no I\'ve paid (reconcile-now answers an owner or administrator only) and no pay link', !vt.notice.paid && !vt.notice.payUrl);
+ok('and still reads the server\'s reminder, after what a viewer may do', /view projects/.test(vt.notice.text) && /trial ends/i.test(vt.notice.text), vt.notice.text);
+var expiredNoLink = projection(['lite'], { packagingState: 'trial', trialStartedAt: NOW - 20 * DAY, trialEndsAt: NOW - 6 * DAY, accessUntil: NOW - 6 * DAY });
+var enl = PLAN.summary({ view: expiredNoLink, now: NOW });
+ok('an expired trial with no pay link on file is still the bill: Read-only and I\'ve paid', enl.state === 'readonly' && enl.notice.paid === true && !enl.notice.payUrl, enl);
+ok('an expired trial seen by a viewer is the bill too', PLAN.summary({ view: projection(['lite'], { packagingState: 'trial', trialStartedAt: NOW - 20 * DAY, trialEndsAt: NOW - 6 * DAY, accessUntil: NOW - 6 * DAY, paymentLink: PAY }, { role: 'viewer', status: 'active' }), now: NOW }).state === 'readonly');
+/* the server's own word, when the projection carries it */
+var liveViewer = projection(['lite'], { packagingState: 'past_due_lite', paidThrough: '2026-09-01', paymentLink: PAY }, { role: 'viewer', status: 'active' }); liveViewer.live = true;
+var lv = PLAN.summary({ view: liveViewer, now: NOW });
+ok('with the server\'s live flag, a viewer on an overdue Lite is View only with the overdue note and no payment', lv.state === 'viewer' && !lv.notice.paid && !lv.notice.payUrl && /overdue/i.test(lv.notice.text), lv);
+var deadViewer = projection(['lite'], TRIAL_END, { role: 'viewer', status: 'active' }); deadViewer.live = false;
+ok('and live:false is the bill, whatever the dates say', PLAN.summary({ view: deadViewer, now: NOW }).state === 'readonly');
+
 var staff = PLAN.summary({ view: X.project({ staff: true }, { packaged: true }, null, null), offerings: OFFER });
 ok('staff: every module, named as staff', staff.state === 'staff' && staff.plan === 'Staff · every module' && staff.inSiteMap.length + staff.elsewhere.length === CAT.length);
 var preview = projection(['lite']); preview.preview = true; preview.canPreview = true;
@@ -122,14 +148,19 @@ ok('a summary that failed (503, 403) shows the plan and modules, no figures, no 
 var owe = packaged(['lite'], { figures: { amountDue: 125, amountDueDisplay: '$125.00', invoices: [{ state: 'unpaid', kind: 'recurring', paymentLink: PAY }, { state: 'unpaid', kind: 'change', paymentLink: 'https://x.intuit.com/c' }] } });
 ok('an amount due and the recurring invoice\'s pay link, never a change invoice\'s', owe.figures.due === '$125.00' && owe.figures.payUrl === PAY);
 var WORDS = /Subscribe|\bAsk\b|Keep module/;
-ok('no contract-forbidden words in anything the panel says', ![lite, ev, ro, viewer, due, tr, staff, unchecked, fig, owe].some(function (s) { return WORDS.test(JSON.stringify(s)); }));
+ok('no contract-forbidden words in anything the panel says', ![lite, ev, ro, viewer, due, tr, vt, enl, lv, staff, unchecked, fig, owe].some(function (s) { return WORDS.test(JSON.stringify(s)); }));
 
 /* ── 1b · legacy ─────────────────────────────────────────────────────── */
+/* the Modules page's ctx, built as workspace.html's hubCtx() builds it:
+   the tools by omega-tools, Site Map by OmegaWorkspaceHub.editorCtx */
 function legacyCtx(tier, b) {
   var level = PLAN.TIER_LEVEL[b.tier || 'standard'], ws = { orgId: 'tenant.example', tierLevel: level, addons: b.addons || [] };
   if (b.toolOverrides) ws.toolOverrides = b.toolOverrides; if (Array.isArray(b.toolAccess)) ws.toolAccess = b.toolAccess;
-  return { packaged: false, tierLevel: level, addons: ws.addons, modules: [], canOpen: function (k) { var t = TOOLS.byKey(k); return !!t && TOOLS.isUnlocked(t, ws); },
-    tool: function (k) { return TOOLS.byKey(k); }, editorCan: function (c) { return CAPS.editorCan(tier, c); } };
+  var c = { packaged: false, tierLevel: level, addons: ws.addons, modules: [], canOpen: function (k) { var t = TOOLS.byKey(k); return !!t && TOOLS.isUnlocked(t, ws); },
+    tool: function (k) { return TOOLS.byKey(k); } };
+  var e = HUB.editorCtx(CAPS, b, { orgId: 'tenant.example' });
+  c.editorCan = e.editorCan; c.ungated = e.ungated; c.editorTier = e.tier;
+  return c;
 }
 function legacy(tier, billing) {
   CAPS.setAddons(billing && billing.addons || []);
@@ -146,6 +177,16 @@ ok('Compute is only partly included: its tools open, Site Map\'s compute tab doe
   ok(t + ': the chip holds exactly what the Modules page\'s rule holds', same(held, rule), [held, rule]);
 });
 ok('Standard does not hold Plan Sets', keys(legacy('standard', { tier: 'standard' }).inSiteMap).indexOf('plansets') < 0);
+/* the tier is editorCtx's (review brief): the chip's own tier LEVEL made a
+   legacy trial Enterprise for a module with nothing to count */
+var trialHeld = legacy('trial', { tier: 'trial' });
+ok('a legacy trial does not hold White Label: Site Map runs trial, not Enterprise (editorCtx)', keys(trialHeld.elsewhere).indexOf('whitelabel') < 0 && HUB.moduleState(CAT.filter(function (m) { return m.key === 'whitelabel'; })[0], legacyCtx('trial', { tier: 'trial' })) === 'ask', keys(trialHeld.elsewhere));
+ok('Enterprise still holds White Label', keys(legacy('enterprise', { tier: 'enterprise' }).elsewhere).indexOf('whitelabel') >= 0);
+ok('capTier through editorCtx: billed Enterprise, capped Standard holds no Plan Sets', keys(legacy('standard', { tier: 'enterprise', capTier: 'standard' }).inSiteMap).indexOf('plansets') < 0);
+CAPS.setAddons(['permitting']); var addonsBefore = CAPS.addons().join(), orgBefore = CAPS.org();
+PLAN.summary({ tier: 'deluxe', billing: { tier: 'deluxe', addons: ['compute'] }, offerings: OFFER, hub: HUB, tools: TOOLS, caps: CAPS, org: 'other.example', who: { email: 'dana@other.example', emailVerified: true } });
+ok('the chip only reads OmegaCaps: the org and add-ons Site Map is gating with are untouched by its judgement', CAPS.addons().join() === addonsBefore && CAPS.org() === orgBefore, [CAPS.addons(), CAPS.org()]);
+CAPS.setAddons([]);
 ok('a legacy trial holds no module Site Map withholds', keys(legacy('trial', { tier: 'trial' }).inSiteMap.filter(function (r) { return !r.pill; })).every(function (k) { return ['plansets', 'engineering', 'compute', 'siteintel', 'permitting'].indexOf(k) < 0; }));
 var ent = legacy('enterprise', { tier: 'enterprise' }), entLogic = legacy('enterprise', { tier: 'enterprise', addons: ['omega-logic'] });
 ok('Enterprise without the add-on holds no Omega Logic part', !keys(ent.elsewhere).some(function (k) { return /^logic-/.test(k); }));
@@ -159,9 +200,34 @@ var capped = legacy('standard', { tier: 'enterprise', capTier: 'standard' });
 ok('capTier: billed Enterprise, Site Map scoped to Standard, and it says so', capped.plan === 'Enterprise' && /Site Map is set to Standard/.test(capped.note), capped);
 var legacyTrial = legacy('trial', { tier: 'trial', trialEndsAt: '2026-10-09' });
 ok('a legacy trial names its end date', legacyTrial.pill === 'Trial' && /Oct 9, 2026/.test(legacyTrial.notice.text));
-var asked = legacy('standard', { tier: 'standard', optIns: { storage: { status: 'requested' }, finance: { status: 'withdrawn' } }, optOuts: { gridatlas: { status: 'requested' } } });
+var asked = legacy('standard', { tier: 'standard', optIns: { plansets: { status: 'requested' }, finance: { status: 'withdrawn' } }, optOuts: { gridatlas: { status: 'requested' } } });
 var ach = {}; asked.changes.forEach(function (c) { ach[c.key] = c.pill; });
-ok('legacy requests are in progress in the contract\'s words', ach.storage === 'Opt-in requested' && ach.gridatlas === 'Opting out' && !ach.finance, asked.changes);
+ok('legacy requests are in progress in the contract\'s words', ach.plansets === 'Opt-in requested' && ach.gridatlas === 'Opting out' && !ach.finance, asked.changes);
+/* review #10: only package activation closes a request, so one ClearSky met
+   by editing the tier stays 'requested'. The Modules page's card calls it
+   answered; so does the chip, and they read one rule (moduleCard). */
+var STALE = { tier: 'standard', optIns: { storage: { status: 'requested', requestedAt: '2026-09-01' } }, optOuts: { plansets: { status: 'requested', requestedAt: '2026-09-01' } } };
+var stale = legacy('standard', STALE), sch = {}; stale.changes.forEach(function (c) { sch[c.key] = c.pill; });
+var storageM = CAT.filter(function (m) { return m.key === 'storage'; })[0], plansetsM = CAT.filter(function (m) { return m.key === 'plansets'; })[0];
+ok('fixture: Standard holds Storage and not Plan Sets', HUB.moduleState(storageM, legacyCtx('standard', STALE)) === 'held' && HUB.moduleState(plansetsM, legacyCtx('standard', STALE)) === 'ask');
+ok('an opt-in on a module the plan now holds is not "Opt-in requested": the card says Live', !sch.storage && HUB.moduleCard(storageM, legacyCtx('standard', STALE), STALE, null, {}).state === 'live', stale.changes);
+ok('an opt-out of a module the plan no longer holds is not "Opting out": the card says Opt in', !sch.plansets && HUB.moduleCard(plansetsM, legacyCtx('standard', STALE), STALE, null, {}).state === 'available', stale.changes);
+var REQ = { status: 'requested' };
+var agree = [
+  { tier: 'standard', optIns: { plansets: REQ, storage: REQ, compute: REQ }, optOuts: { gridatlas: REQ, evrebates: REQ, engineering: REQ } },
+  { tier: 'deluxe', optIns: { permitting: REQ, plansets: REQ }, optOuts: { storage: REQ, whitelabel: REQ } }
+].every(function (b) {
+  var listed = {}; legacy(b.tier, b).changes.forEach(function (c) { listed[c.key] = c.pill; });
+  return CAT.every(function (m) {
+    var card = HUB.moduleCard(m, legacyCtx(b.tier, b), b, null, {});
+    var inFlight = card.state === 'requested' || card.state === 'removing';
+    return inFlight ? listed[m.key] === card.pill : !listed[m.key];
+  });
+});
+ok('the chip lists exactly the legacy requests the Modules page\'s cards show in flight, in their words', agree);
+var fresher = legacy('standard', { tier: 'standard' }), figsIn = PLAN.summary({ tier: 'standard', billing: { tier: 'standard' }, figures: { optIns: { plansets: { status: 'requested' } }, optOuts: {} }, offerings: OFFER, hub: HUB, tools: TOOLS, caps: CAPS, org: 'tenant.example' });
+ok('the plan-change summary, the fresher record, carries the requests when it has loaded', !fresher.changes.length && figsIn.changes.length === 1 && figsIn.changes[0].pill === 'Opt-in requested');
+ok('before the Modules page\'s libraries load, no request is listed that could contradict them', !PLAN.summary({ tier: 'standard', billing: STALE, offerings: OFFER }).changes.length);
 var bare = PLAN.summary({ tier: 'deluxe', billing: { tier: 'deluxe' } });
 ok('without the price list or the libraries the plan still shows, unlisted', bare.plan === 'Performance' && !bare.listed);
 ok('ClearSky staff with no record are staff', PLAN.summary({ tier: 'internal', offerings: OFFER }).state === 'staff');
@@ -188,6 +254,27 @@ async function capsChecks() {
   ok('producing waits', !CAPS.allowedCommand('', 'openBlueprintExport()') && !CAPS.allowedCommand('', 'openBessSizer()') && !CAPS.allowedCommand('', 'saveProject()') && !CAPS.allowedCommand('rb-place-sub', 'rbInsert()'));
   ok('a button is judged by what it does, not an old module mark', CAPS.allowedElement(elem({ onclick: 'toggleSitePanel()', 'data-module': 'lite' })) && !CAPS.allowedElement(elem({ onclick: 'openPlotPlanExport()', 'data-cap': 'export.plotplan' })));
   ok('the capability set is view only', JSON.stringify(Object.keys(CAPS.setFor('trial'))) === '["view"]');
+
+  /* Retry while its read is still out (review #19): the unchecked plan
+     stays until the answer lands. It was cleared before the read, which
+     showed and unguarded every producing command for as long as the read
+     took. */
+  var held = [];
+  var heldDb = { collection: function () { return { doc: function () { return { collection: function () { return { doc: function () { return { get: function () {
+    return new Promise(function (res, rej) { held.push({ res: res, rej: rej }); }); } }; } }; } }; } }; } };
+  var out = CAPS.retry(heldDb, 'designer@tenant.example', true);
+  var mid = CAPS.packageAccess();
+  ok('a retry in flight keeps the plan unchecked', held.length === 1 && mid && mid.unverified === true && CAPS.unchecked() === true, mid);
+  ok('and shows nothing that produces before the answer does', !CAPS.allowedCommand('', 'openBessSizer()') && !CAPS.allowedCommand('', 'openBlueprintExport()') &&
+    !CAPS.allowedElement(elem({ onclick: 'openBessSizer()', 'data-module': 'engineering' })) && CAPS.allowedCommand('', 'openProjectsModal()'));
+  held[0].rej(new Error('still offline'));
+  ok('a retry that fails again leaves it unchecked', (await out) === 'trial' && CAPS.packageAccess().unverified === true && CAPS.unchecked() === true);
+  held = [];
+  out = CAPS.retry(heldDb, 'designer@tenant.example', true);
+  ok('another retry in flight is still unchecked', CAPS.packageAccess() && CAPS.packageAccess().unverified === true);
+  held[0].res({ exists: true, data: function () { return { tier: 'standard' }; } });
+  ok('and its answer replaces the unchecked plan', (await out) === 'standard' && CAPS.packageAccess() === null && CAPS.unchecked() === false);
+  await CAPS.resolve(failedDb, 'designer@tenant.example', true);
 
   var good = new F.DB(); good.seed('omega_orgs/tenant.example/billing/current', { tier: 'deluxe' });
   var r = await CAPS.retry(good, 'designer@tenant.example', true);
@@ -258,6 +345,35 @@ async function gateChecks() {
   ok('gate: a package check that failed says so, with Retry', /Package access could not be checked/.test(pkg.html) && !/not on this plan/.test(pkg.html) && /omega-gate-retry/.test(pkg.html));
   var noEditor = await runGate(org({ packaged: true }), USER, { fetch: function () { return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ packaged: true, toolAccess: ['gridatlas'] }); } }); } });
   ok('gate: a package without the designer is a plan refusal with the Modules link', /not on this plan/.test(noEditor.html) && /\/workspace#modules/.test(noEditor.html));
+
+  /* review #20: /api/package-access answers 403 on purpose (the org not
+     active, a disabled or roleless member, an unverified email). That is a
+     refusal, never "could not check" with a Retry that hears it again; and
+     a packaged workspace's own status is read before the package is. */
+  function served(status, body) { return function () { return Promise.resolve({ ok: status >= 200 && status < 300, status: status, json: function () { return Promise.resolve(body); } }); }; }
+  function answered(fn) { var n = 0; return { fetch: function () { n++; return fn(); }, calls: function () { return n; } }; }
+  function withStatus(status, billing) { var d = org(billing); d['omega_orgs/' + ORG] = { status: status }; return d; }
+  var server = answered(served(403, { error: 'Active organization membership required' }));
+  var signup = await runGate(withStatus('pending', { packaged: true, packagingState: 'pending' }), USER, { fetch: server.fetch });
+  ok('gate: a packaged self-serve signup awaiting approval is being set up', !signup.allowed && /being set up/.test(signup.html) && !/omega-gate-retry/.test(signup.html) && !/could not/i.test(signup.html), signup.html.slice(0, 120));
+  ok('gate: and its status is read before the package is asked', server.calls() === 0);
+  var off = await runGate(withStatus('suspended', { packaged: true }), USER, { fetch: served(403, { error: 'Active organization membership required' }) });
+  ok('gate: a suspended packaged workspace is not active, not a connection problem', /not active/.test(off.html) && !/omega-gate-retry/.test(off.html) && !/could not/i.test(off.html), off.html.slice(0, 120));
+  var disabled = await runGate(org({ packaged: true }), USER, { fetch: served(403, { error: 'Active organization membership required' }) });
+  ok('gate: a 403 from the package check is a refusal: no Retry, no "could not check"', !disabled.allowed && !/omega-gate-retry/.test(disabled.html) && !/could not/i.test(disabled.html), disabled.html.slice(0, 160));
+  ok('gate: it says why in the server\'s words, and who can change it', /Active organization membership required\./.test(disabled.html) && /owner or administrator/.test(disabled.html) && !/See modules/.test(disabled.html));
+  var real = X.project.bind(X);
+  var viaServer = function (member, caller) { return function () { try { return served(200, real(caller || { emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: NOW + DAY, modules: ['lite'] }, { status: 'active' }, member, NOW))(); } catch (e) { return served(e.status || 503, { error: e.message })(); } }; };
+  var roleless = await runGate(org({ packaged: true }), USER, { fetch: viaServer({ role: 'guest', status: 'active' }) });
+  ok('gate: the real projection\'s refusal for a member without a role reads as a refusal', /Workspace role required/.test(roleless.html) && !/omega-gate-retry/.test(roleless.html), roleless.html.slice(0, 160));
+  var unverified = await runGate(org({ packaged: true }), USER, { fetch: viaServer({ role: 'owner', status: 'active' }, { emailVerified: false }) });
+  ok('gate: and for an unverified email', /Verified email required/.test(unverified.html) && !/omega-gate-retry/.test(unverified.html));
+  var member = await runGate(org({ packaged: true }), USER, { fetch: viaServer({ role: 'member', status: 'active' }) });
+  ok('gate: an active member of a live package gets in', member.allowed);
+  var outage = await runGate(org({ packaged: true }), USER, { fetch: served(503, { error: 'Package access is unavailable' }) });
+  ok('gate: a 503 is still a check that could not run, with Retry', /Package access could not be checked/.test(outage.html) && /omega-gate-retry/.test(outage.html));
+  var expired = await runGate(org({ packaged: true }), USER, { fetch: served(401, { error: 'token has expired' }) });
+  ok('gate: so is a 401 (a fresh token may answer)', /omega-gate-retry/.test(expired.html));
 }
 
 /* ── 5 · editor.html ─────────────────────────────────────────────────── */
@@ -266,6 +382,8 @@ var nav = ed.slice(ed.indexOf('<div id="portal-nav">'), ed.indexOf('<!-- =======
 ok('the chip mounts in the title bar', /<span id="omega-plan" hidden><\/span>/.test(nav));
 ok('the editor loads the plan chip after the one menu and OmegaCaps', ed.indexOf('src="/omega-editor-plan.js"') > ed.indexOf('src="/omega-package-menu.js"') && ed.indexOf('src="/omega-package-menu.js"') > ed.indexOf('src="/omega-caps.js"'));
 ok('the editor still never loads omega-tenant.js', !/src="\/?omega-tenant\.js/.test(ed) && !/script\('\/omega-tenant/.test(planSrc));
+ok('the gate announces who it let in, and the chip re-checks an unchecked plan on it (review #21; render-editor-plan.js drives it)',
+  /dispatchEvent\(new CustomEvent\('omega:editor-access'/.test(gateSrc) && /addEventListener\('omega:editor-access'/.test(planSrc));
 ok('the chip carries no ribbon-command marks, so OmegaCaps never hides it', !/data-module|data-cap|\brbtn\b|rsbtn/.test(planSrc.replace(/data-plan-module/g, '')));
 ok('nothing is priced here: no arithmetic on money, only server strings', !/toFixed|priceCents|\* 100\b|\/ 100\b/.test(planSrc));
 ok('the new file carries the header', /© 2025–2026 ClearSky Energy Solutions LLC\. Proprietary and Confidential\./.test(planSrc));

@@ -36,9 +36,12 @@
    The same trap is here and the same answer applies. A signed-in user whose
    org has no record yet gets in; only an EXPLICIT 'pending', 'suspended' or
    'cancelled', an explicit toolOverrides.editor === false, or a present
-   billing.toolAccess allowlist that leaves the designer out, refuses. Get
-   this backwards and the first thing this file does in production is lock out
-   every paying customer.
+   billing.toolAccess allowlist that leaves the designer out, refuses — and,
+   for a packaged workspace, /api/package-access: a package without the
+   designer, or its 403 for this person (said in the server's words; a check
+   that could not run is never dressed up as one). Get this backwards and
+   the first thing this file does in production is lock out every paying
+   customer.
 
    ── IT IS NOT THE SECURITY BOUNDARY ─────────────────────────────────────
    firestore.rules is. Every project read and write is already scoped by
@@ -140,6 +143,14 @@
       title = 'This workspace is not active';
       body = detail ? esc(detail) : 'Please get in touch and we will sort it out.';
       cta = '';
+    } else if (kind === 'denied') {
+      /* the package check answered, and not for this person: a member the
+         workspace has disabled or given no role, or an email not yet
+         verified. Not a plan to change and not a connection to retry. */
+      title = 'This account cannot open the designer';
+      body = (detail ? esc(detail.replace(/\.?$/, '.')) + ' ' : '')
+           + 'An owner or administrator of your workspace can check your access.';
+      cta = '';
     } else if (kind === 'plan' && detail) {
       /* A check that could not run is not a refusal. This read "The
          designer is not on this plan" for every network blip, telling a
@@ -232,25 +243,42 @@
       var o = exists ? (r[0].data() || {}) : null;
       var bill = (r[1] && r[1].exists) ? (r[1].data() || {}) : null;
 
+      /* The workspace's own status first, packaged or not: a self-serve
+         signup is packaged AND pending until ClearSky approves it, and the
+         package check below refuses it with a 403 that would otherwise be
+         the only thing said. */
+      if (exists) {
+        var status = String(o.status || 'active');
+        if (BLOCKED_STATUS.indexOf(status) >= 0) {
+          return refuse(status === 'pending' ? 'pending' : 'suspended', o.statusNote || '');
+        }
+      }
+
       if (bill && bill.packaged === true) {
         return user.getIdToken().then(function (token) {
           return global.fetch('/api/package-access', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
         }).then(function (response) {
+          /* 403 is the server's answer, not a failed check: this person may
+             not open the workspace's package (a disabled or roleless member,
+             an unverified email). Retry would only hear it again. */
+          if (response.status === 403) {
+            return response.json().then(null, function () { return {}; }).then(function (j) {
+              var denied = new Error('refused'); denied.refused = String((j && j.error) || ''); throw denied;
+            });
+          }
           if (!response.ok) throw new Error('Package access unavailable');
           return response.json();
         }).then(function (view) {
           if (view.packaged !== true || !Array.isArray(view.toolAccess) || view.toolAccess.indexOf('editor') < 0) return refuse('plan');
           return allow({ org: org, packaged: true, readOnly: view.readOnly, reason: 'package' });
-        }).catch(function () { return refuse('plan', 'Package access could not be checked. Retry when connected.'); });
+        }).catch(function (e) {
+          if (e && typeof e.refused === 'string') return refuse('denied', e.refused);
+          return refuse('plan', 'Package access could not be checked. Retry when connected.');
+        });
       }
 
       /* ABSENT COUNTS AS ACTIVE — see the header. */
       if (!exists) return allow({ org: org, reason: 'no-record' });
-
-      var status = String(o.status || 'active');
-      if (BLOCKED_STATUS.indexOf(status) >= 0) {
-        return refuse(status === 'pending' ? 'pending' : 'suspended', o.statusNote || '');
-      }
 
       /* An explicit switch-off is the only entitlement refusal. A missing
          billing record is a tenant nobody has seeded, not a tenant on no

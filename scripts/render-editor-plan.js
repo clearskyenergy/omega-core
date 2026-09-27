@@ -17,9 +17,13 @@
  *                     asked again
  *   staff             Staff · every module
  *   unchecked         a failed billing read keeps viewing (the ribbon is not
- *                     blank), the Ladder tab explains, Retry lands the plan
+ *                     blank), the Ladder tab explains; a Retry whose read is
+ *                     still out shows and runs nothing that produces; a
+ *                     failed one says so; Retry lands the plan; the gate's
+ *                     own Retry after the same blip lands it too
  *   legacy            Performance, its modules by the Modules page's rule,
- *                     no Ladder, no package calls
+ *                     only the requests its cards show in flight, no Ladder,
+ *                     no package calls
  * Fails on a page error, a chip that overflows the title bar, a panel off
  * the screen, or text under 4.5:1 on the chip. No live reads or writes.
  */
@@ -47,9 +51,12 @@ var FIGS = { packaged: true, packagingState: 'paid', planDisplay: 'Lite + module
   amountDue: 0, modules: [], subscription: [], pending: [], removalRequests: [], invoices: [] };
 
 /* the Firebase compat surface the editor touches, offline; billing is
-   window.__billing and a read fails while window.__failBilling is set */
+   window.__billing, a read fails while window.__failBilling is set, and
+   waits while window.__holdBilling is set until window.__release(fail) */
 function fixture() {
   window.__billing = { packaged: true, packagingState: 'paid', modules: ['lite'] }; window.__failBilling = false; window.__reads = 0;
+  window.__holdBilling = false; window.__held = [];
+  window.__release = function (fail) { var held = window.__held; window.__held = []; held.forEach(function (settle) { settle(fail); }); };
   var user = { uid: 'plan-user', email: 'designer@packaging.example', emailVerified: true, displayName: 'Plan Fixture', getIdToken: function () { return Promise.resolve('offline-fixture'); } };
   function snapshot(p) {
     var data = /billing\/current$/.test(p) ? window.__billing :
@@ -59,7 +66,12 @@ function fixture() {
   }
   function ref(p) {
     return { collection: function (n) { return ref(p + '/' + n); }, doc: function (n) { return ref(p + '/' + n); },
-      get: function () { window.__reads++; if (window.__failBilling && /billing\/current$/.test(p)) return Promise.reject(new Error('offline')); return Promise.resolve(snapshot(p)); },
+      get: function () {
+        window.__reads++;
+        if (window.__holdBilling && /billing\/current$/.test(p)) return new Promise(function (resolve, reject) { window.__held.push(function (fail) { if (fail) reject(new Error('offline')); else resolve(snapshot(p)); }); });
+        if (window.__failBilling && /billing\/current$/.test(p)) return Promise.reject(new Error('offline'));
+        return Promise.resolve(snapshot(p));
+      },
       onSnapshot: function (fn) { setTimeout(function () { fn(snapshot(p)); }, 0); return function () {}; },
       where: function () { return this; }, orderBy: function () { return this; }, limit: function () { return this; },
       set: function () { throw new Error('Unexpected fixture write: ' + p); }, update: function () { throw new Error('Unexpected fixture update: ' + p); },
@@ -208,18 +220,56 @@ async function run() {
       } else ok(true, theme + ': (no Ladder tab while unchecked)');
       await openPanel();
       await page.screenshot({ path: path.join(output, theme + '-desktop-unchecked.png') });
-      /* Retry lands the plan: a legacy Performance workspace */
-      await page.evaluate(function () { window.__failBilling = false; window.__billing = { tier: 'deluxe', optIns: { permitting: { status: 'requested' } } }; });
+      /* the plan behind the retries: a legacy Performance workspace with one
+         opt-in still open (Permitting) and one ClearSky met by the tier
+         (Storage, which Performance holds) */
+      await page.evaluate(function () { window.__failBilling = false; window.__billing = { tier: 'deluxe', optIns: { permitting: { status: 'requested' }, storage: { status: 'requested' } } }; });
       var catalogBefore = calls.catalog;
+      /* review #19: a Retry whose read is still out shows nothing that
+         produces, and a click on a hidden producing button is swallowed */
+      function withheld() {
+        var sizers = Array.prototype.filter.call(document.querySelectorAll('[onclick*="openBessSizer"]'), function (el) { return getComputedStyle(el).display !== 'none'; });
+        var hidden = document.querySelector('[data-package-hidden][onclick*="openBessSizer"]'), ran = 0, original = window.openBessSizer;
+        window.openBessSizer = function () { ran++; };
+        try { if (hidden) hidden.click(); } finally { window.openBessSizer = original; }
+        var p = OmegaCaps.packageAccess(), line = document.getElementById('rb-line');
+        return { unchecked: !!(p && p.unverified), line: line ? getComputedStyle(line).display : 'absent', sizers: sizers.length, hidden: !!hidden, ran: ran };
+      }
+      await page.evaluate(function () { window.__holdBilling = true; });
+      await pop.locator('#omega-plan-retry').click();
+      await page.waitForFunction(function () { return window.__held.length > 0; });
+      await page.waitForTimeout(200);
+      var mid = await page.evaluate(withheld);
+      ok(mid.unchecked && mid.line === 'none' && mid.sizers === 0 && mid.hidden && mid.ran === 0, theme + ': a Retry in flight keeps the plan unchecked and shows nothing that produces ' + JSON.stringify(mid));
+      await page.evaluate(function () { window.__holdBilling = false; window.__release(true); });
+      await page.waitForFunction(function () { return /Still could not check your plan/.test((document.getElementById('omega-plan-pop') || {}).textContent || ''); });
+      var after = await page.evaluate(withheld);
+      ok(after.unchecked && after.line === 'none' && after.sizers === 0 && after.ran === 0, theme + ': a Retry that fails again leaves it unchecked and says so ' + JSON.stringify(after));
+      /* Retry lands the plan */
       await pop.locator('#omega-plan-retry').click();
       await page.waitForFunction(function () { return document.querySelector('#omega-plan-chip .oep-v').textContent === 'Performance'; });
       ok(await page.evaluate(function () { return OmegaCaps.packageAccess() === null && document.body.getAttribute('data-tier') === 'deluxe'; }), theme + ': Retry resolves the legacy plan without a reload');
+      await closePanel();
+      /* review #21: the same blip refused the gate too. Its own Retry lets
+         the person in AND checks the plan: no view-only Site Map behind a
+         lifted gate, no second Retry on the chip */
+      await page.evaluate(function () { window.__failBilling = true; return OmegaCaps.resolve(firebase.firestore(), window.__user.email, true).then(function (t) { OmegaCaps.apply(t); }); });
+      await page.waitForFunction(function () { return document.querySelector('#omega-plan-chip').getAttribute('data-state') === 'unchecked'; });
+      await page.evaluate(function () { return OmegaEditorGate.decide(firebase.auth().currentUser); });
+      await page.locator('#omega-gate-retry').waitFor();
+      ok(/could not check your access/i.test(await page.locator('#omega-editor-gate').textContent()), theme + ': the gate says the check could not run, with Retry');
+      await page.evaluate(function () { window.__failBilling = false; });
+      await page.locator('#omega-gate-retry').click();
+      await page.waitForFunction(function () { return !document.getElementById('omega-editor-gate') && document.querySelector('#omega-plan-chip .oep-v').textContent === 'Performance'; }, null, { timeout: 8000 });
+      ok(await page.evaluate(function () { return OmegaCaps.packageAccess() === null && !OmegaCaps.unchecked() && document.body.getAttribute('data-tier') === 'deluxe' && document.querySelector('#omega-plan-chip').getAttribute('data-state') === 'legacy'; }), theme + ': the gate\'s Retry lets them in and lands the plan with it');
       await openPanel();
       await page.waitForFunction(function () { return document.querySelectorAll('#omega-plan-pop .oep-insite .oep-mod').length > 1; });
       var legacyIn = await pop.locator('.oep-insite .oep-mod').allTextContents();
       ok(legacyIn.some(function (t) { return /^Plan Sets & CAD$/.test(t); }), theme + ': Performance holds Plan Sets in Site Map: ' + legacyIn.join('|'));
       ok(legacyIn.some(function (t) { return /^Compute & Data Center.*Partly included$/.test(t); }), theme + ': and Compute only partly');
-      ok(/Opt-in requested/.test(await pop.textContent()), theme + ': the opt-in request is in progress');
+      var changing = await pop.locator('.oep-changing li').allTextContents();
+      ok(changing.length === 1 && changing[0].indexOf(M.get('permitting').name) === 0 && /Opt-in requested/.test(changing[0]), theme + ': the opt-in still open is in progress: ' + JSON.stringify(changing));
+      ok(!changing.some(function (t) { return t.indexOf(M.get('storage').name) === 0; }) && legacyIn.indexOf(M.get('storage').name) >= 0, theme + ': one the tier already met is Live, as on the Modules page, never also "Opt-in requested"');
       ok(await page.locator('#omega-package-tab').count() === 0 && calls.catalog === catalogBefore, theme + ': no Ladder and no package pricing for a legacy plan');
       await page.screenshot({ path: path.join(output, theme + '-desktop-legacy.png') });
       /* the retried plan survives an injected gated button (the gating block re-applies its stale fail-safe tier) */
