@@ -17,6 +17,8 @@ var profile = { legalName: 'Plan Example', contactName: 'Pat Example', email: 'a
 F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, authenticate: async function (req) { return req.caller; }, db: function () { return db; },
   httpError: function (status, text) { var e = new Error(text); e.status = status; return e; }, safeOrg: function (s) { return /^[a-z0-9.-]+\.[a-z]+$/.test(s || '') ? s : null; },
   isTenantAdmin: async function (c, o) { return c.staff || (c.orgId === o && ['owner', 'admin'].indexOf(c.role) >= 0); },
+  /* admin.clientAdmin's meaning on this double (the real one: scripts/tests/tclientadmin.js) */
+  clientAdmin: async function (c, o) { if (c.staff) return true; if (c.orgId !== o || ['owner', 'admin'].indexOf(c.role) < 0) return false; var s = await db.doc('omega_orgs/' + o).get(); return s.exists && s.data().status === 'active'; },
   billingOf: async function (o) { var r = await db.doc('omega_orgs/' + o + '/billing/current').get(); return r.exists ? r.data() : {}; },
   FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; } });
 var C = require('../api/_lib/plan-change'), api = require('../api/plan-change'), res = { setHeader: function () {} };
@@ -110,7 +112,12 @@ async function run() {
   seed(ev, 'field'); db.data.get(root).status = 'suspended'; var g4 = await quote(['siteintel']); ok(/not active/.test(g4.reason));
   seed(ev, 'field');
   await refused(function () { return quote(['siteintel'], member); }, /workspace administrator/);
-  await refused(function () { return quote(['siteintel'], Object.assign({}, owner, { claims: { email_verified: 'true' } })); }, /Verified email/);
+  /* an owner of an active client quotes without a verified email (admin.clientAdmin); the role vouches */
+  ok((await quote(['siteintel'], Object.assign({}, owner, { claims: { email_verified: false } }))).canApply, 'an unverified owner of an active client may change the plan');
+  await refused(function () { return req('GET', { orgId: orgId }, Object.assign({}, member, { claims: { email_verified: 'true' } })); }, /Verified email/);
+  db.data.get(root).status = 'suspended';
+  await refused(function () { return quote(['siteintel'], Object.assign({}, owner, { claims: { email_verified: false } })); }, /Verified email/);
+  seed(ev, 'field');
   await refused(function () { return req('POST', { action: 'quote', add: ['siteintel'], orgId: 'other.example' }); }, /Own organization/);
   await refused(function () { return req('POST', { action: 'quote', add: ['siteintel'], monthlyCents: 1 }); }, /Unsupported field/);
   await refused(function () { return req('POST', { action: 'nope' }); }, /Action must be/);

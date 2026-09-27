@@ -17,7 +17,9 @@ module.exports = A.handler(async function (req, res) {
   var orgId = A.safeOrg(input.orgId || caller.orgId);
   if (!orgId) throw A.httpError(400, 'Valid organization required');
   if (!caller.staff) {
-    if (!caller.claims || caller.claims.email_verified !== true) throw A.httpError(403, 'Verified email required');
+    /* a verified email, or an owner or administrator of an active client
+       (admin.clientAdmin: the role vouches for them); a member reads with one */
+    if ((!caller.claims || caller.claims.email_verified !== true) && !(await A.clientAdmin(caller, orgId))) throw A.httpError(403, 'Verified email required');
     if (orgId !== caller.orgId) throw A.httpError(403, 'Own organization required');
     /* the summary (GET) is the workspace's own billing, which every verified
        member of the org may read (the rules let a member read billing/current;
