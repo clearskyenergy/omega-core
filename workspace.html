@@ -64,7 +64,10 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .num{font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 .sec{display:flex;flex-direction:column;gap:12px}
 /* one view at a time (2026-09-27): the home is the hub and Today; All tools, In flight and Around you are each their own page, reached from the rail, the tabs or the hub — never a scroll */
-#content[data-view] .sec,#content[data-view] .hero{display:none}#content[data-view="home"] .hero{display:grid}#content[data-view="tools"] #tools,#content[data-view="flight"] #flight,#content[data-view="team"] #team{display:flex}
+#content[data-view] .sec,#content[data-view] .hero{display:none}#content[data-view="home"] .hero{display:grid}#content[data-view="tools"] #tools,#content[data-view="modules"] #modules,#content[data-view="flight"] #flight,#content[data-view="team"] #team{display:flex}
+.mods{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}.mods h3{grid-column:1/-1;margin:8px 0 0;font:600 13px "DM Sans",sans-serif;color:var(--ows-ink2)}
+.mod{display:flex;flex-direction:column;gap:6px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:12px 14px;position:relative}.mod.off{border-style:dashed;background:transparent}.mod b{font-size:14px;padding-right:70px}.mod .d{font-size:12.5px;color:var(--ows-ink2)}.mod .st{position:absolute;top:12px;right:12px;font-size:11px;font-weight:600;color:var(--ows-green)}.mod .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px}.mod .price{font:500 13px "DM Mono",monospace;color:var(--ows-ink)}.mod .ows-pill{padding:5px 12px;font-size:12px}
+@media (max-width:560px){.mods{grid-template-columns:1fr;gap:6px}.mod{padding:10px 12px}.mod .d{display:none}}
 .sec .back{align-self:flex-start;color:var(--ows-ink2);font-size:13px;text-decoration:none}.sec .back:hover{color:var(--ows-teal-d)}
 .sec .hd{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}.sec .hd .sub{color:var(--ows-ink2);font-size:13px;margin-top:2px}
 /* notices: approval, trial, read-only */
@@ -149,6 +152,11 @@ body.refused #refused{display:block}body.refused #content{display:none}
           <div class="plan" id="plan"></div>
           <div id="tools-body"></div>
         </section>
+        <section class="sec" id="modules">
+          <a class="back" href="/workspace">‹ Home</a>
+          <div class="hd"><div><h2>Modules</h2><div class="sub" id="modules-sub">Build your own experience and pay for what you need. What you hold is Live; anything else is one click to add.</div></div><a class="ows-pill ghost" data-sn="marketplace" href="/marketplace.html">Marketplace ›</a></div>
+          <div id="modules-body"></div>
+        </section>
         <section class="sec" id="flight">
           <a class="back" href="/workspace">‹ Home</a>
           <div class="hd"><div><h2>In flight</h2><div class="sub">Every project, who has it and how far along it is. A partner on the JDA sees the same board.</div></div><div style="display:flex;gap:8px"><button class="ows-pill primary" type="button" id="new-project">+ New project</button><a class="ows-pill ghost" href="/projects.html">All projects ›</a></div></div>
@@ -180,6 +188,7 @@ body.refused #refused{display:block}body.refused #content{display:none}
 <script src="/omega-workspace-hub.js"></script>
 <script src="/omega-workspace-today.js"></script>
 <script src="/omega-workspace-shell.js"></script>
+<script src="/omega-package-menu.js"></script>
 <script>
 (function () {
 'use strict';
@@ -199,13 +208,13 @@ var DAY = 86400000;
 /* ── the chrome, before anyone is known ─────────────────────────────────── */
 S.mount({ current: 'home', tabs: true, search: search, onNav: function (key) {
   if (key === 'home') { go('home'); return true; }
-  if (key === 'tools' || key === 'team' || key === 'feed') { go(key); return true; }
+  if (key === 'tools' || key === 'modules' || key === 'team' || key === 'feed') { go(key); return true; }
   if (key === 'billing') { billingDrawer(); return true; }
   if (key === 'settings') { settingsDrawer(); return true; }
   if (key === 'projects' && WS) { areaDrawer('projects'); return true; }
   return false;
 } });
-var VIEWS = { home: 'home', tools: 'tools', flight: 'flight', team: 'team', feed: 'team', around: 'team' };
+var VIEWS = { home: 'home', tools: 'tools', modules: 'modules', flight: 'flight', team: 'team', feed: 'team', around: 'team' };
 function go(key) {
   var v = VIEWS[key] || 'home';
   byId('content').setAttribute('data-view', v);
@@ -349,7 +358,7 @@ function presence(m) { var s = (Date.now() - ms(m.lastSeen)) / 60000; return s <
 function render() {
   if (!WS) return;
   TODAY_CACHE = null;
-  renderNotice(); renderHub(); renderToday(); renderTools(); renderFlight(); renderAround();
+  renderNotice(); renderHub(); renderToday(); renderTools(); renderModules(); renderFlight(); renderAround();
   S.badge('home', needs().length);
 }
 function renderNotice() {
@@ -398,6 +407,39 @@ function renderToday() {
   byId('today').innerHTML = h;
   Array.prototype.forEach.call(byId('today').querySelectorAll('[data-need]'), function (b) { b.addEventListener('click', function () { act(needs()[Number(b.getAttribute('data-need'))]); }); });
 }
+/* ── Modules: the Ladder as a page (Tommy, 2026-09-27) ──────────────────
+   One card per module of the package view's own catalog, in shelf order:
+   held ones Live, bought-not-on ones named, the rest with the server's
+   price and + Add, which opens the ONE menu (omega-package-menu.js) on that
+   module; a change re-asks the server. Prices come from /api/package-catalog
+   once, formatted there; nothing here is a second list or a price. */
+var MOD_SHELF = { floor: 'Included in every plan', addon: 'Add-ons', standard: 'Standard shelf', premium: 'Premium shelf', deliverable: 'Deliverables', platform: 'Omega Logic' }, MOD_ORDER = ['floor', 'addon', 'standard', 'premium', 'deliverable', 'platform'];
+var MOD_PRICES = null, MOD_ASKED = false;
+function renderModules() {
+  var b = byId('modules-body'), pa = WS.packageAccess;
+  if (!pa || !pa.packaged || !Array.isArray(pa.catalog) || !pa.catalog.length) {
+    b.innerHTML = '<div class="empty">' + esc(planName()) + ' holds everything on it. Modules are how a packaged plan grows; the Marketplace has the catalog.</div>'; return;
+  }
+  if (!MOD_ASKED) { MOD_ASKED = true; (window.OmegaPackageMenu ? OmegaPackageMenu.api('/api/package-catalog') : Promise.reject(new Error('no menu'))).then(function (j) { MOD_PRICES = {}; (j.modules || []).forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay; }); renderModules(); }, function () {}); }
+  var held = pa.modules || WS.modules || [], bl = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {};
+  var bought = bl.subscription && Array.isArray(bl.subscription.modules) ? bl.subscription.modules : [];
+  var cat = pa.catalog.slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), h = '', shelf = '';
+  cat.forEach(function (m) {
+    if (m.shelf !== shelf) { shelf = m.shelf; h += '<h3>' + esc(MOD_SHELF[shelf] || shelf) + '</h3>'; }
+    var on = held.indexOf(m.key) >= 0, paid = !on && bought.indexOf(m.key) >= 0, price = MOD_PRICES && MOD_PRICES[m.key];
+    h += '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : '0') + '">';
+    h += on ? '<span class="st">● Live</span>' : paid ? '<span class="st" style="color:var(--ows-ink2)">Paid for</span>' : '';
+    h += '<b>' + esc(m.shelf === 'platform' ? 'Omega Logic · ' + m.name : m.name) + '</b><div class="d">' + esc((m.features || []).slice(0, 2).join(' · ')) + '</div>';
+    if (!on) h += '<div class="row"><span class="price">' + esc(paid ? 'Opens when the first invoice is paid' : (price || 'Price on the menu')) + '</span>' + (paid || WS.pendingApproval ? '' : '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">+ Add</button>') + '</div>';
+    h += '</div>';
+  });
+  b.innerHTML = '<div class="mods">' + h + '</div>';
+  Array.prototype.forEach.call(b.querySelectorAll('[data-add-module]'), function (btn) { btn.addEventListener('click', function () { addModule(btn.getAttribute('data-add-module')); }); });
+}
+function addModule(key) {
+  if (!window.OmegaPackageMenu) { window.location.href = '/marketplace.html'; return; }
+  OmegaPackageMenu.open(key, { view: WS.packageAccess, onChanged: function () { MOD_ASKED = false; if (window.OmegaTenant && OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderModules(); } });
+}
 function renderTools() {
   /* the whole catalog, so a locked tile says what a plan carries: only a
      tool restricted to other orgs, the staff queue, and (for a packaged
@@ -409,7 +451,7 @@ function renderTools() {
   if (pa && pa.packaged && Array.isArray(pa.catalog)) p += pa.catalog.filter(function (m) { return WS.modules.indexOf(m.key) >= 0 && m.name !== planName(); }).map(function (m) { return '<span class="ows-chip">' + esc(m.name) + '</span>'; }).join('');
   else if (Array.isArray(WS.addons)) p += WS.addons.map(function (a) { return '<span class="ows-chip">' + esc(a) + '</span>'; }).join('');
   p += '<span class="num" style="color:var(--ows-ink2)">' + openN + ' of ' + total + ' tools open</span>';
-  p += WS.pendingApproval ? '<span class="ows-pill ghost">Locked until approval</span>' : '<a class="ows-pill" href="/marketplace.html">Change plan</a>';
+  p += WS.pendingApproval ? '<span class="ows-pill ghost">Locked until approval</span>' : '<a class="ows-pill" href="' + (pa && pa.packaged ? '/workspace#modules' : '/marketplace.html') + '">Change plan</a>';
   byId('plan').innerHTML = p;
   var h = '';
   function tile(t) {

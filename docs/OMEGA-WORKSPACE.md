@@ -49,6 +49,13 @@ decided 2026-09-26.
   by `data-view` on the content and reached from the rail, the phone tabs,
   the hub or a hash; a "‹ Home" link and the Home tab come back. Nothing
   scrolls to a section any more; `check:workspace` asserts each view.
+- **Modules** (`#modules`) is the Ladder as a page of the workspace: one
+  card per module of the package view's catalog in shelf order, held ones
+  Live, bought-not-on ones named, the rest with the server's price
+  (`/api/package-catalog`, asked once) and + Add, which opens the ONE menu
+  (`omega-package-menu.js`) on that module; a change re-asks the server.
+  Change plan on the plan strip opens it for a packaged workspace; a legacy
+  plan reads that it holds everything and is sent to the Marketplace.
 - **All tools** is the catalog by category, each tile Live, Locked or Soon by
   the one rule (`OMEGATools.isUnlocked` on the merged workspace; nothing opens
   while approval is pending). Locked tiles fold under "N more on other
@@ -104,6 +111,7 @@ ground, one home; the session travels same-origin on every hop.
 | rail, any page | Home | `/workspace` |
 | rail, any page | Projects | `/projects.html`, wearing the same rail with Projects current; a row opens the editor |
 | rail, any page | All tools | `/workspace#tools`, the All tools page alone |
+| rail, any page | Modules | `/workspace#modules`, the Modules page (the Ladder) |
 | rail, any page | Marketplace | `/marketplace.html`, same rail; a packaged workspace sees its plan and the modules to add (the package store); "+ Add to dashboard" pins an open tool, which the workspace lists under Pinned |
 | rail, any page | Quote Desk | `/rfq.html` |
 | rail, any page | Team · Feed | `/workspace#team`, the Around you page alone |
