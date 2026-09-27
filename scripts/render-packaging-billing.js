@@ -128,13 +128,13 @@ async function run() {
     seed(['lite'], false); caller.email = 'owner@signup-fixture.example'; caller.orgId = 'signup-fixture.example';
     var signup = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(signup, base); var sp = await signup.newPage(); await sp.goto(base + '/start.html'); await sp.evaluate(function () { window.dispatchEvent(new CustomEvent('omega:hub', { detail: {} })); });
     await sp.locator('#f-submit:not([disabled])').waitFor(); await sp.locator('#f-name').fill('Signup Fixture'); await sp.locator('#f-submit').click();
-    // Phase 6: the discovery step sits between the company and billing; a signup may skip it.
-    await sp.locator('#step-discovery').waitFor({ state: 'visible' }); check(await sp.locator('#signup-questions .sq').count() === 12, 'signup asks the twelve discovery questions');
-    await sp.locator('#discovery-continue').click(); await sp.locator('#step-billing').waitFor({ state: 'visible' });
-    for (var pair of [['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await sp.locator('[data-profile-field="' + pair[0] + '"]').fill(pair[1]);
-    await capture(sp, 'signup-billing'); await sp.locator('#billing-continue').click(); await sp.locator('#step-build').waitFor({ state: 'visible' });
+    // The guided signup (2026-09-27): what your team does (the twelve questions as one screen of tiles, or skip), your system, billing.
+    await sp.locator('#step-discovery').waitFor({ state: 'visible' }); check(await sp.locator('#signup-questions .sq-tile').count() === 12, 'signup asks the twelve discovery questions as one screen of tiles');
+    await sp.locator('#discovery-continue').click(); await sp.locator('#step-build').waitFor({ state: 'visible' });
     check(await sp.locator('#signup-package-menu [data-module-card]').count() > 0, 'the build step shows the one module menu');
-    await capture(sp, 'signup-build'); await sp.locator('#billing-submit').click(); await sp.locator('#step-done').waitFor({ state: 'visible' });
+    await capture(sp, 'signup-build'); await sp.locator('#build-continue').click(); await sp.locator('#step-billing').waitFor({ state: 'visible' });
+    for (var pair of [['contactName', 'Signup Owner'], ['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await sp.locator('[data-profile-field="' + pair[0] + '"]').fill(pair[1]);
+    await capture(sp, 'signup-billing'); await sp.locator('#billing-submit').click(); await sp.locator('#step-done').waitFor({ state: 'visible' });
     check(db.data.get('omega_orgs/signup-fixture.example').status === 'pending', 'actual signup endpoint creates pending org'); check(db.data.get('omega_orgs/signup-fixture.example/billing/current').trialEndsAt === undefined, 'signup has no running trial'); await signup.close();
     /* Phase 10A: the same form, paying at the end. The engine issues the
        first invoice with QuickBooks' card page on it; the page waits on it,
@@ -143,16 +143,17 @@ async function run() {
     var payCtx = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(payCtx, base); var pp10 = await payCtx.newPage(), payErrors = []; pp10.on('pageerror', function (e) { payErrors.push(e.message); });
     await pp10.goto(base + '/start.html?modules=lite,gridatlas'); await pp10.evaluate(function () { window.dispatchEvent(new CustomEvent('omega:hub', { detail: {} })); });
     await pp10.locator('#f-submit:not([disabled])').waitFor(); await pp10.locator('#f-name').fill('Pay Now Fixture'); await pp10.locator('#f-submit').click();
-    await pp10.locator('#step-discovery').waitFor({ state: 'visible' }); await pp10.locator('#discovery-continue').click(); await pp10.locator('#step-billing').waitFor({ state: 'visible' });
-    for (var pair10 of [['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await pp10.locator('[data-profile-field="' + pair10[0] + '"]').fill(pair10[1]);
-    await pp10.locator('#billing-continue').click(); await pp10.locator('#step-build').waitFor({ state: 'visible' });
+    /* a package named by the offerings page skips the question screen: straight to the system */
+    await pp10.locator('#step-build').waitFor({ state: 'visible' }); check(!(await pp10.locator('#step-discovery').isVisible()), 'a package from the offerings page goes straight to the system');
     /* the build step: the menu, the monthly membership quoted by the server, monthly or yearly at ten months */
     await pp10.waitForFunction(function () { return /^\$[\d,]+\/month$/.test(document.getElementById('signup-package-price').textContent); });
-    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Subscribe' && (await pp10.locator('#billing-submit').textContent()).indexOf('trial instead') > 0, 'the build step offers pay-and-start first and the trial second');
+    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Subscribe' && (await pp10.locator('#billing-submit').textContent()).indexOf('trial instead') > 0, 'billing offers pay-and-start first and the trial second');
     check(/\/year, invoiced once · save \$[\d,]+/.test(await pp10.locator('#interval-annual-price').textContent()), 'the yearly card shows the year\u2019s price and the saving: ' + await pp10.locator('#interval-annual-price').textContent());
     await pp10.locator('#pick-annual input').check();
     check((await pp10.locator('#billing-pay').textContent()).trim() === 'Subscribe yearly' && /ten months of twelve/.test(await pp10.locator('#signup-interval-note').textContent()), 'yearly: the button and the note say so');
     await pp10.locator('#pick-monthly input').check();
+    await pp10.locator('#build-continue').click(); await pp10.locator('#step-billing').waitFor({ state: 'visible' });
+    for (var pair10 of [['contactName', 'Pay Owner'], ['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await pp10.locator('[data-profile-field="' + pair10[0] + '"]').fill(pair10[1]);
     await pp10.locator('#billing-pay').click(); await pp10.locator('#step-pay').waitFor({ state: 'visible' });
     var payBill = db.data.get('omega_orgs/paynow-fixture.example/billing/current'), payOrg = db.data.get('omega_orgs/paynow-fixture.example');
     check(payOrg.status === 'active' && payOrg.approvedBy === 'self-serve' && payBill.packagingState === 'awaiting_payment' && invoices === payInvoices + 1, 'pay now: the workspace is opened by its owner, awaiting the first invoice, one invoice issued');

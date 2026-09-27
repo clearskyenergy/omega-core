@@ -18,10 +18,13 @@
    and waited behind the email link, which read as the old request path.
    It holds that:
      1. a new company's account goes from Create account straight into the
-        signup (How you work today), company carried over, then the billing
-        profile and Build your system, priced, BEFORE the email link is
-        clicked; Subscribe waits for the link (nothing is created), and the
-        click carries the page on by itself to the first invoice;
+        GUIDED signup (2026-09-27), company carried over: what your team
+        does (one screen of tiles, the server's recommendation in the dock
+        as they tap), your system (priced, the fee named), confirm your
+        email (only there; nothing is created before it; a reload resumes
+        at it; the click moves it on by itself), billing (the short form),
+        Subscribe → the first invoice; and Skip, on a phone, with a
+        confirmed address that never sees the email step, to the trial;
      2. a colleague of an existing workspace still goes in;
      3. a signed-in person with no workspace yet goes to signup, including
         one who accepted terms on an empty derived workspace (no projects);
@@ -112,6 +115,9 @@ var SHIM = {
     'export function serverTimestamp(){ return window.firebase.firestore.FieldValue.serverTimestamp(); }'
   ].join('\n')
 };
+var SHOTS = (function () { var i = process.argv.indexOf('--shots'); return i >= 0 ? (process.argv[i + 1] || null) : null; })();
+if (SHOTS && !fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
+async function shot(p, name) { if (!SHOTS) return; await new Promise(function (r) { setTimeout(r, 700); }); await p.screenshot({ path: path.join(SHOTS, name + '.png'), fullPage: true }); }
 var fails = 0; function ok(n, c, d) { console.log((c ? 'ok   ' : 'FAIL ') + n + (c ? '' : ' ' + JSON.stringify(d))); if (!c) fails++; }
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 (async function () {
@@ -159,7 +165,9 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   }
   function visible(p, id) { return p.evaluate(function (i) { var e = document.getElementById(i); return !!e && !e.classList.contains('hide') && getComputedStyle(e).display !== 'none'; }, id); }
 
-  /* 1. a new company: Create account → straight into the signup → billing → build, priced, before the link; Subscribe waits for the click */
+  /* 1. a new company: Create account → the guided signup, company carried over: what your team does (taps, a live
+        suggestion from the server), your system (priced), confirm your email (only here, moving on by itself, and
+        resumed after a reload), billing (the short form), Subscribe → the first invoice */
   seedServer(); posts = [];
   var ctx = await ctxFor({}), p = await ctx.newPage(), t = track(p);
   await p.goto(base + '/login.html', { waitUntil: 'domcontentloaded' });
@@ -171,30 +179,80 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   ok('new account lands on /start.html', /\/start\.html$/.test(new URL(p.url()).pathname), t.nav);
   ok('never visited /workspace on the way', !t.nav.some(function (u) { return /\/workspace/.test(u); }), t.nav);
   await p.waitForFunction(function () { var e = document.getElementById('step-discovery'); return e && !e.classList.contains('hide'); }, null, { timeout: 8000 }).catch(function () {});
-  var st = await p.evaluate(function () { return { form: !document.getElementById('step-form').classList.contains('hide'), discovery: !document.getElementById('step-discovery').classList.contains('hide'), questions: document.querySelectorAll('#signup-questions .sq').length, name: document.getElementById('f-name').value, vertical: document.getElementById('f-vertical').value, note: document.getElementById('f-note').value, banner: getComputedStyle(document.getElementById('verify-note')).display, bannerEmail: document.getElementById('verify-email').textContent, reqWorkspace: /Request my workspace/.test(document.body.innerText) }; });
-  ok('it opens on the signup itself (How you work today), not a company form that asks again', st.discovery && !st.form && st.questions === 12, st);
-  ok('the company, what they do and the note carried over from Create account', st.name === 'NewCo Energy' && st.vertical === 'epc' && st.note === 'Two BESS sites', st);
-  ok('a banner says the link is needed to subscribe, and nothing says "Request my workspace"', st.banner === 'block' && st.bannerEmail === 'kim@newco.example' && !st.reqWorkspace, st);
+  var st = await p.evaluate(function () { return { form: !document.getElementById('step-form').classList.contains('hide'), discovery: !document.getElementById('step-discovery').classList.contains('hide'), tiles: document.querySelectorAll('#signup-questions .sq-tile').length, radios: document.querySelectorAll('#step-discovery input[type=radio]').length, name: document.getElementById('f-name').value, vertical: document.getElementById('f-vertical').value, note: document.getElementById('f-note').value, step: (document.querySelector('#signup-steps li.on') || {}).getAttribute && document.querySelector('#signup-steps li.on').getAttribute('data-step'), steps: !document.getElementById('signup-steps').classList.contains('hide'), skip: !!document.getElementById('discovery-skip'), reqWorkspace: /Request my workspace/.test(document.body.innerText) }; });
+  ok('it opens on one question, a tile per answer (no radio rows), on step 1 of the stepper, with a way to skip', st.discovery && !st.form && st.tiles === 12 && st.radios === 0 && st.steps && st.step === 'work' && st.skip, st);
+  ok('the company, what they do and the note carried over from Create account, and nothing says "Request my workspace"', st.name === 'NewCo Energy' && st.vertical === 'epc' && st.note === 'Two BESS sites' && !st.reqWorkspace, st);
+  await shot(p, 'signup-1-work');
+  /* two taps and a chip: the dock shows the server's own recommendation as they tap */
+  await p.click('.sq-tile[data-q="sites"]'); await p.click('.sq-tile[data-q="storage"]');
+  ok('a tile with more to say opens its chips', await p.evaluate(function () { return !document.querySelector('.sq-more[data-for="sites"]').classList.contains('hide') && document.querySelector('.sq-more[data-for="sell"]').classList.contains('hide'); }));
+  await p.click('.chip[data-flag="sitesMany"]');
+  await p.waitForFunction(function () { return /\$[\d,]+\/month/.test(document.getElementById('signup-live').textContent) && / \+ /.test(document.getElementById('signup-live').textContent); }, null, { timeout: 6000 }).catch(function () {});
+  var live = await p.$eval('#signup-live', function (e) { return e.textContent; });
+  ok('the dock under the tiles is the server\'s recommendation, priced, as they tap', /Grid Atlas|Omega Grid|Intel/.test(live) && /\$[\d,]+\/month/.test(live), live);
+  await shot(p, 'signup-1-work-picked');
+  ok('nothing is created or requested while choosing', !posts.some(function (x) { return /tenant-signup/.test(x); }), posts);
   await p.click('#discovery-continue');
-  await p.waitForSelector('#step-billing:not(.hide)', { timeout: 6000 }).catch(function () {});
-  ok('billing profile opens before the email is verified', await visible(p, 'step-billing'));
-  for (var pair of [['contactName', 'Kim Lee'], ['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await p.locator('[data-profile-field="' + pair[0] + '"]').fill(pair[1]);
-  ok('the billing profile starts from the company', (await p.locator('[data-profile-field="legalName"]').inputValue()) === 'NewCo Energy');
-  await p.click('#billing-continue');
   await p.waitForSelector('#step-build:not(.hide)', { timeout: 6000 }).catch(function () {});
   await p.waitForFunction(function () { return /^\$[\d,]+\/month$/.test(document.getElementById('signup-package-price').textContent); }, null, { timeout: 8000 }).catch(function () {});
-  var build = await p.evaluate(function () { return { cards: document.querySelectorAll('#signup-package-menu [data-module-card]').length, price: document.getElementById('signup-package-price').textContent, pay: document.getElementById('billing-pay').textContent.trim() }; });
-  ok('Build your system: the menu, priced by the server, before the email is verified', build.cards > 0 && /^\$[\d,]+\/month$/.test(build.price) && build.pay === 'Subscribe', build);
-  await p.click('#billing-pay'); await wait(800);
-  var held = await p.evaluate(function () { return { err: document.getElementById('build-err').textContent, build: !document.getElementById('step-build').classList.contains('hide') }; });
-  ok('Subscribe waits for the link: says so and creates nothing', held.build && /Confirm your email to subscribe/.test(held.err) && !posts.some(function (x) { return /tenant-signup/.test(x); }) && !sdb.data.get('omega_orgs/newco.example'), { held: held, posts: posts });
-  /* the person clicks the link in their email */
+  var build = await p.evaluate(function () { return { cards: document.querySelectorAll('#signup-package-menu [data-module-card]').length, checked: Array.prototype.map.call(document.querySelectorAll('#signup-package-menu [data-module-card] input:checked'), function (i) { return i.closest('[data-module-card]').getAttribute('data-module-card'); }), price: document.getElementById('signup-package-price').textContent, next: document.getElementById('build-next').textContent, cont: document.getElementById('build-continue').textContent.trim(), step: document.querySelector('#signup-steps li.on').getAttribute('data-step'), work: document.querySelector('#signup-steps li[data-step="work"]').className }; });
+  ok('Your system: the menu, priced by the server, starting from what they tapped (Lite, Grid Atlas, Site Intel, Storage)', build.cards > 0 && ['lite', 'gridatlas', 'siteintel', 'storage'].every(function (k) { return build.checked.indexOf(k) >= 0; }) && /^\$[\d,]+\/month$/.test(build.price) && build.step === 'system' && build.work === 'done', build);
+  ok('the cart says what is next: the email, then billing', build.cont === 'Continue' && /confirm your email, then billing/.test(build.next), build);
+  await shot(p, 'signup-2-system');
+  await p.click('#build-continue'); await wait(400);
+  var ver = await p.evaluate(function () { return { verify: !document.getElementById('step-verify').classList.contains('hide'), email: document.getElementById('verify-email').textContent, step: document.querySelector('#signup-steps li.on').getAttribute('data-step'), billing: !document.getElementById('step-billing').classList.contains('hide') }; });
+  ok('an unconfirmed address meets one step for it, between the system and billing, and nothing is created', ver.verify && !ver.billing && ver.email === 'kim@newco.example' && ver.step === 'verify' && !posts.some(function (x) { return /tenant-signup/.test(x); }) && !sdb.data.get('omega_orgs/newco.example'), { ver: ver, posts: posts });
+  await shot(p, 'signup-3-verify');
+  /* the email link opens this page again: a reload in the tab lands on the same step, not the start */
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('#step-verify:not(.hide)', { timeout: 8000 }).catch(function () {});
+  ok('a reload (the link opens the page again) resumes at the email step with the system kept', await p.evaluate(function () { return !document.getElementById('step-verify').classList.contains('hide') && document.querySelector('#signup-steps li.on').getAttribute('data-step') === 'verify'; }));
+  /* the person clicks the link in their email: the page moves on by itself */
   await p.evaluate(function () { localStorage.setItem('dbl-clicked', '1'); });
+  await p.waitForSelector('#step-billing:not(.hide)', { timeout: 9000 }).catch(function () {});
+  var bl = await p.evaluate(function () { return { billing: !document.getElementById('step-billing').classList.contains('hide'), verifyDone: document.querySelector('#signup-steps li[data-step="verify"]').className, legal: document.querySelector('[data-profile-field="legalName"]').value, email: document.querySelector('[data-profile-field="email"]').value, more: document.querySelector('#signup-billing-profile details.obp-more').open, vertical: document.querySelector('[data-profile-field="vertical"]').value, shown: Array.prototype.filter.call(document.querySelectorAll('#signup-billing-profile [data-profile-field]'), function (e) { return !e.closest('details:not([open])'); }).length, lines: document.querySelectorAll('#summary-lines li').length, price: document.getElementById('summary-price').textContent, pay: document.getElementById('billing-pay').textContent.trim() }; });
+  ok('the click carries the page on by itself to billing, the email step ticked', bl.billing && bl.verifyDone === 'done', bl);
+  ok('billing is the short form: the company and billing email filled in, the optional fields folded away (company type kept there)', bl.legal === 'NewCo Energy' && bl.email === 'kim@newco.example' && bl.more === false && bl.vertical === 'epc' && bl.shown === 9, bl);
+  ok('the summary carries the system and its price, and Subscribe is the one button', bl.lines === 4 && /^\$[\d,]+\/month$/.test(bl.price) && bl.pay === 'Subscribe', bl);
+  ok('no surprise at the pay step: the first-year service fee the first invoice carries is named before Subscribe, as the server priced it', /first-year service fee of \$[\d,]+/.test(await p.$eval('#summary-fee', function (e) { return e.textContent; })) && /first-year service fee of \$[\d,]+/.test(await p.$eval('#signup-fee', function (e) { return e.textContent; })));
+  for (var pair of [['contactName', 'Kim Lee'], ['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await p.locator('[data-profile-field="' + pair[0] + '"]').fill(pair[1]);
+  await shot(p, 'signup-4-billing');
+  await p.click('#billing-pay');
   await p.waitForSelector('#step-pay:not(.hide)', { timeout: 9000 }).catch(function () {});
   var org = sdb.data.get('omega_orgs/newco.example'), bill = sdb.data.get('omega_orgs/newco.example/billing/current');
-  ok('the click carries the page on by itself: the workspace is made on a verified token and the first invoice is issued', await visible(p, 'step-pay') && org && org.status === 'active' && bill && bill.packagingState === 'awaiting_payment' && invoices === 1 && posts.filter(function (x) { return /tenant-signup pay-now/.test(x); }).every(function (x) { return /verified$/.test(x) && !/unverified/.test(x); }), { posts: posts, org: org && org.status, state: bill && bill.packagingState, invoices: invoices });
-  ok('the banner is gone and the company draft forgotten', await p.evaluate(function () { return getComputedStyle(document.getElementById('verify-note')).display === 'none' && localStorage.getItem('omega:signup-draft') === null; }));
+  ok('Subscribe makes the workspace on a verified token and issues the first invoice for what they chose', await visible(p, 'step-pay') && org && org.status === 'active' && bill && bill.packagingState === 'awaiting_payment' && invoices === 1 && bill.proposedPackage && ['gridatlas', 'siteintel', 'storage'].every(function (k) { return bill.proposedPackage.modules.indexOf(k) >= 0; }) && posts.filter(function (x) { return /tenant-signup pay-now/.test(x); }).every(function (x) { return /verified$/.test(x) && !/unverified/.test(x); }), { posts: posts, org: org && org.status, state: bill && bill.packagingState, invoices: invoices, modules: bill && bill.proposedPackage && bill.proposedPackage.modules });
+  ok('the answers travel with the signup for the rep (tapped = this quarter)', bill && bill.signupDiscovery && bill.signupDiscovery.discovery.answers.sites === 'quarter' && bill.signupDiscovery.discovery.answers.storage === 'quarter' && bill.signupDiscovery.discovery.answers.ev === 'no' && bill.signupDiscovery.discovery.flags.sitesMany === true, bill && bill.signupDiscovery);
+  ok('the company draft is forgotten', await p.evaluate(function () { return localStorage.getItem('omega:signup-draft') === null; }));
+  await shot(p, 'signup-5-pay');
   ok('no page errors', !t.errs.length, t.errs);
+  await ctx.close();
+
+  /* 1b. skip: straight to the menu with Omega Design alone, no suggestion, no answers sent; on a phone */
+  seedServer(); posts = [];
+  ctx = await ctxFor({}, { email: 'ava@skipco.example', emailVerified: true }); p = await ctx.newPage(); t = track(p);
+  await p.setViewportSize({ width: 390, height: 844 });
+  await p.addInitScript(function () { try { localStorage.setItem('omega:signup-draft', JSON.stringify({ company: 'SkipCo', vertical: 'developer', email: 'ava@skipco.example', at: Date.now() })); } catch (e) {} });
+  await p.goto(base + '/start.html', { waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('#step-discovery:not(.hide)', { timeout: 8000 }).catch(function () {});
+  var phone = await p.evaluate(function () { return { overflow: document.documentElement.scrollWidth > window.innerWidth + 1, verifyStep: document.querySelector('#signup-steps li[data-step="verify"]').className, dock: getComputedStyle(document.querySelector('.dock')).position }; });
+  ok('on a phone: no sideways scroll, the dock sticks, and a confirmed address shows its step already ticked', !phone.overflow && phone.dock === 'sticky' && phone.verifyStep === 'done', phone);
+  await shot(p, 'signup-phone-work');
+  await p.click('#discovery-skip');
+  await p.waitForSelector('#step-build:not(.hide)', { timeout: 6000 }).catch(function () {});
+  var sk = await p.evaluate(function () { return { checked: Array.prototype.map.call(document.querySelectorAll('#signup-package-menu [data-module-card] input:checked'), function (i) { return i.closest('[data-module-card]').getAttribute('data-module-card'); }), suggest: !document.getElementById('signup-suggest').classList.contains('hide'), next: document.getElementById('build-next').textContent, overflow: document.documentElement.scrollWidth > window.innerWidth + 1 }; });
+  ok('Skip goes straight to the menu with Omega Design alone and no suggestion; a confirmed address goes straight to billing next', sk.checked.join() === 'lite' && !sk.suggest && /^Next: billing and payment/.test(sk.next) && !sk.overflow, sk);
+  await shot(p, 'signup-phone-system');
+  await p.click('#build-continue');
+  await p.waitForSelector('#step-billing:not(.hide)', { timeout: 6000 }).catch(function () {});
+  ok('a confirmed address never sees the email step', await visible(p, 'step-billing') && !(await visible(p, 'step-verify')));
+  for (var pair2 of [['contactName', 'Ava Lin'], ['phone', '555-0101'], ['teamSize', '2'], ['address.line1', '2 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60602']]) await p.locator('[data-profile-field="' + pair2[0] + '"]').fill(pair2[1]);
+  ok('the billing step fits a phone', await p.evaluate(function () { return document.documentElement.scrollWidth <= window.innerWidth + 1; }));
+  await shot(p, 'signup-phone-billing');
+  await p.click('#billing-submit');
+  await p.waitForSelector('#step-done:not(.hide)', { timeout: 8000 }).catch(function () {});
+  var skb = sdb.data.get('omega_orgs/skipco.example/billing/current');
+  ok('the trial instead: a pending workspace for Omega Design, and no discovery sent for a skip', await visible(p, 'step-done') && skb && skb.proposedPackage.modules.join() === 'lite' && skb.signupDiscovery === null && sdb.data.get('omega_orgs/skipco.example').status === 'pending', skb && { mods: skb.proposedPackage.modules, disc: skb.signupDiscovery });
+  ok('no page errors (skip, phone)', !t.errs.length, t.errs);
   await ctx.close();
 
   /* 2. a colleague of an existing company still goes in */

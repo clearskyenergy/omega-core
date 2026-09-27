@@ -248,18 +248,18 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
   console.log('\nthe pages');
   await test('signup, login and the workspace carry the path: pay and start, the pay step, the offerings link, "I\'ve paid"', async function () {
     var st = read('start.html'), lg = read('login.html'), of = read('offerings.html'), ot = read('omega-tenant.js');
-    assert.match(st, /id="billing-pay" onclick="submitWorkspace\(true, false, true\)">Subscribe</); assert.match(st, /id="billing-submit" onclick="submitWorkspace\(true\)">Request a 14-day trial instead</);
+    assert.match(st, /id="billing-pay" onclick="submitWorkspace\(true\)">Subscribe</); assert.match(st, /id="billing-submit" onclick="submitWorkspace\(false\)">Start with a 14-day trial instead</);
     assert.match(st, /<div id="step-pay" class="hide">/); assert.match(st, /id="pay-link" target="_blank" rel="noopener">Pay now</); assert.match(st, /a\.textContent = j\.amountDueDisplay \? 'Pay ' \+ j\.amountDueDisplay \+ ' securely' : 'Pay securely'/); assert.match(st, /onclick="checkPayment\(true\)">I've paid — open my workspace</);
     assert.match(st, /action: 'check-payment'/);
-    assert.match(st, /id="billing-continue" onclick="toBuild\(\)"/); assert.match(st, /<div id="step-build" class="hide">/); assert.match(st, /name="signup-interval" value="annual"/); assert.match(st, /two months free/);
-    assert.match(st, /if \(j\.emailVerified === false\) checkVerified\(u\);/); assert.ok(!/holdForVerification/.test(st), 'an unverified address is not held at the company form'); assert.match(st, /omega:signup-draft/); assert.ok(!/start\.html\?company=/.test(lg), 'the company never travels in a link');
+    assert.match(st, /id="build-continue" onclick="buildContinue\(\)"/); assert.match(st, /id="discovery-skip" onclick="discoverySkip\(\)"/); assert.match(st, /<div id="step-verify" class="hide">/); assert.match(st, /<div id="step-build" class="hide">/); assert.match(st, /name="signup-interval" value="annual"/); assert.match(st, /two months free/);
+    assert.match(st, /if \(j\.emailVerified === false\) \{ emailOk = false; checkVerified\(u\); \}/); assert.ok(!/holdForVerification/.test(st), 'an unverified address is not held at the company form'); assert.match(st, /omega:signup-draft/); assert.ok(!/start\.html\?company=/.test(lg), 'the company never travels in a link');
     assert.ok(!/Roam Energy|Acme Energy|placeholder="acme"/.test(lg + st), 'no example company names on the forms');
     assert.match(lg, /window\.__packagedSignup = true/); assert.match(lg, /id="blockedNext"/); assert.match(lg, /sendEmailVerification\(user, \{ url: location\.origin \+ next \}\)/); assert.match(st, /if \(j\.payNow\) \{ showPay\(j, name\); return; \}/); assert.match(st, /function wantedModules\(\)/); assert.match(st, /if \(payNow\) payload\.payNow = true;/);
     /* 2026-09-27: making the account signs it in; the "already signed in" listener stands aside so the new company goes to signup, not a derived workspace (scripts/render-signup.js drives it) */
     assert.match(lg, /creatingAccount = true;/); assert.match(lg, /if \(user && !creatingAccount\) route\(/); assert.match(lg, /return toSignup\(\);/); assert.match(lg, /if \(found\.signup && await packagedSignup\) return toSignup\(\);/);
     assert.match(st, /u\.getIdToken\(true\)/); assert.match(st, /watchVerification\(u\)/);
     /* the signup opens before the email link; Subscribe waits for it (render-signup.js drives it) */
-    assert.match(st, /if \(!emailOk\) \{/); assert.match(st, /skipForm = \$\('f-name'\)\.value\.trim\(\)\.length >= 2 && !qp\('proposal'\);/); assert.match(st, /id="f-submit" onclick="submitWorkspace\(\)">Continue</);
+    assert.match(st, /if \(!emailOk\) \{/); assert.match(st, /skipForm = \$\('f-name'\)\.value\.trim\(\)\.length >= 2 && !qp\('proposal'\);/); assert.match(st, /id="f-submit" onclick="companyContinue\(\)">Continue</);
     assert.match(lg, /id="suPackaged"/); assert.match(lg, /fetch\('\/api\/offerings'/); assert.match(lg, /href="\/offerings\.html"/);
     assert.match(of, /XMLHttpRequest\(\); x\.open\('GET', '\/api\/offerings'\)/); assert.ok(!/firebase|omega-tenant\.js/.test(of), 'the price list is a public page: no sign-in, no tenant runtime');
     assert.ok(!/=>|\blet\s|\bconst\s|`/.test(of.replace(/<!--[\s\S]*?-->/g, '')), 'ES5');

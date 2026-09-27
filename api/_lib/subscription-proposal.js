@@ -12,21 +12,24 @@ function fail(message, status) { var e = new Error(message); e.status = status |
 var VALID_DAYS = 30, INITIAL_TERM_MONTHS = 12, MAX_CENTS = 100000000, STATUSES = ['draft', 'sent', 'accepted', 'declined', 'expired'];
 var ANSWERS = ['quarter', 'year', 'no'];
 /* The twelve questions of §3.7. "This quarter" puts the module in the
- * starting package; "within the year" puts it on the next-rung list. */
+ * starting package; "within the year" puts it on the next-rung list.
+ * `short` and `hint` are the same question as one tap: the signup
+ * (start.html) asks "what does your team do?" once, as a tile per question,
+ * and a tapped tile is "this quarter". The rep's proposal asks `text`. */
 var QUESTIONS = [
-  { key: 'design', n: 1, text: 'Do you design sites (BESS, solar, EV, microgrid, data centre)?', adds: ['lite'], later: 'when you start designing sites' },
-  { key: 'sites', n: 2, text: 'Do you find or screen your own sites or grid capacity?', adds: ['gridatlas'], later: 'when you start screening sites and grid capacity yourselves',
+  { key: 'design', n: 1, short: 'Design sites', hint: 'BESS, solar, EV, microgrid, data centre', text: 'Do you design sites (BESS, solar, EV, microgrid, data centre)?', adds: ['lite'], later: 'when you start designing sites' },
+  { key: 'sites', n: 2, short: 'Find sites & grid capacity', hint: 'Screen parcels and hosting capacity', text: 'Do you find or screen your own sites or grid capacity?', adds: ['gridatlas'], later: 'when you start screening sites and grid capacity yourselves',
     more: [{ key: 'sitesMany', text: 'Many sites at a time', adds: ['siteintel'] }, { key: 'sitesIllinois', text: 'Northern Illinois C&I property', adds: ['sitefinder'] }] },
-  { key: 'storage', n: 3, text: 'Do you size storage or model savings or revenue for a customer?', adds: ['storage'], later: 'when you size storage or model a customer’s savings' },
-  { key: 'estimate', n: 4, text: 'Do you price jobs, build a BOM or buy the equipment?', adds: ['estimate'], later: 'when you price jobs or buy equipment' },
-  { key: 'ev', n: 5, text: 'Do you file EV make-ready or rebate applications?', adds: ['evrebates'], later: 'when you file EV rebate applications', count: { key: 'evPerMonth', text: 'Applications a month' } },
-  { key: 'plansets', n: 6, text: 'Do you submit drawings to a utility or an AHJ yourselves?', adds: ['plansets'], later: 'when you submit your own drawings' },
-  { key: 'permitting', n: 7, text: 'Do you need permitting timelines, fees and a Gantt?', adds: ['permitting'], later: 'when a jurisdiction pack you need is verified', where: { key: 'permittingWhere', text: 'Where' } },
-  { key: 'engineering', n: 8, text: 'Do you do electrical engineering in-house or pay for it?', adds: ['engineering'], later: 'when engineering moves in-house' },
-  { key: 'finance', n: 9, text: 'Do you raise capital, sell to investors or need financing?', adds: ['finance'], later: 'when you take a project to investors or lenders' },
-  { key: 'compute', n: 10, text: 'Do you build compute or data-centre sites?', adds: ['compute'], later: 'when you start on compute sites' },
-  { key: 'ops', n: 11, text: 'Do you operate assets after COD?', adds: ['ops'], later: 'when your first assets are in service' },
-  { key: 'sell', n: 12, text: 'Do you sell a product under your own name, take orders, build or ship?', adds: ['whitelabel'], later: 'when you sell under your own name',
+  { key: 'storage', n: 3, short: 'Size storage & model savings', hint: 'Savings or revenue for a customer', text: 'Do you size storage or model savings or revenue for a customer?', adds: ['storage'], later: 'when you size storage or model a customer’s savings' },
+  { key: 'estimate', n: 4, short: 'Price jobs & buy equipment', hint: 'Estimates, BOMs and purchasing', text: 'Do you price jobs, build a BOM or buy the equipment?', adds: ['estimate'], later: 'when you price jobs or buy equipment' },
+  { key: 'ev', n: 5, short: 'EV make-ready & rebates', hint: 'File rebate applications', text: 'Do you file EV make-ready or rebate applications?', adds: ['evrebates'], later: 'when you file EV rebate applications', count: { key: 'evPerMonth', text: 'Applications a month' } },
+  { key: 'plansets', n: 6, short: 'Utility & AHJ drawings', hint: 'Submit plan sets yourselves', text: 'Do you submit drawings to a utility or an AHJ yourselves?', adds: ['plansets'], later: 'when you submit your own drawings' },
+  { key: 'permitting', n: 7, short: 'Permitting', hint: 'Timelines, fees and a Gantt', text: 'Do you need permitting timelines, fees and a Gantt?', adds: ['permitting'], later: 'when a jurisdiction pack you need is verified', where: { key: 'permittingWhere', text: 'Where' } },
+  { key: 'engineering', n: 8, short: 'Electrical engineering', hint: 'In-house or bought in', text: 'Do you do electrical engineering in-house or pay for it?', adds: ['engineering'], later: 'when engineering moves in-house' },
+  { key: 'finance', n: 9, short: 'Raise capital', hint: 'Investors, lenders, financing', text: 'Do you raise capital, sell to investors or need financing?', adds: ['finance'], later: 'when you take a project to investors or lenders' },
+  { key: 'compute', n: 10, short: 'Compute & data centres', hint: 'Build compute sites', text: 'Do you build compute or data-centre sites?', adds: ['compute'], later: 'when you start on compute sites' },
+  { key: 'ops', n: 11, short: 'Operate assets', hint: 'Run what you built after COD', text: 'Do you operate assets after COD?', adds: ['ops'], later: 'when your first assets are in service' },
+  { key: 'sell', n: 12, short: 'Sell your own product', hint: 'Take orders, build and ship', text: 'Do you sell a product under your own name, take orders, build or ship?', adds: ['whitelabel'], later: 'when you sell under your own name',
     more: [{ key: 'sellOrders', text: 'Take orders and run an office', adds: ['logic-office'] }, { key: 'sellBuilds', text: 'Build units in a plant', adds: ['logic-plant'] },
       { key: 'sellParts', text: 'Buy parts and kit them', adds: ['logic-materials'] }, { key: 'sellShips', text: 'Ship, deliver and warrant', adds: ['logic-logistics'] },
       { key: 'sellApp', text: 'Customers track their orders', adds: ['logic-customer'] }] }
