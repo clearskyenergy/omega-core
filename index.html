@@ -5635,6 +5635,21 @@ function _brandToolLinks(){
 }
 function renderPortalApps(ws){
   _PORTAL_WS = ws;
+  /* The grid is first drawn at sign-in, often before omega-tenant.js has
+     merged the package projection: a packaged Lite workspace then read as a
+     tier, and the starter set took Standard tools that the lock pass turned
+     into locked tiles. Draw again with the merged workspace whenever the
+     entitlements land (now, if they already have, and on every refresh). */
+  if (!renderPortalApps._ent){
+    renderPortalApps._ent = true;
+    var again = function(w){
+      if (!w || typeof OMEGATools === 'undefined') return;
+      _PORTAL_WS = w;
+      try { _paintDash(); _paintMarket(); } catch(e){}
+    };
+    if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(again);
+    window.addEventListener('omega:entitlements', function(e){ again(e.detail); });
+  }
   _brandToolLinks();   // ensure Quick Access + tool links carry ?org=
   // omega-tools.js loads cross-origin from the host and may not be ready yet
   // at sign-in. Instead of giving up, wait for it (retry up to ~5s).
