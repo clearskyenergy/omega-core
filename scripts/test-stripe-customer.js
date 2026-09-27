@@ -351,9 +351,21 @@ async function reviewed() {
   fixture(); s = new SD({ livemode: true });
   a = await call(owner, { action: 'pay' }, s);
   setDue(2598);
+  s.voidInvoice(a.invoiceId);
+  /* the void event reads the record, and while it asks Stripe about the old
+     invoice, Pay lands the new one on the record: the event must not write
+     the old one back over it */
+  var retrieve = s.invoices.retrieve, newer = { invoiceId: 'in_newer', marker: ORG + '/2026-09-02/259800', amountCents: 259800, state: 'open', hostedUrl: 'https://invoice.stripe.com/i/acct_double/in_newer' };
+  s.invoices.retrieve = async function (iid) { cur = bill(); cur.stripeDue = newer; db.seed(CUR, cur); return retrieve(iid); };
+  await SC.settle(db, ORG, a.invoiceId, s, now, 'stripe');
+  s.invoices.retrieve = retrieve;
+  ok(bill().stripeDue.invoiceId === 'in_newer' && bill().stripeDue.state === 'open', 'the voided invoice\'s event, racing Pay\'s newer invoice onto the record, leaves the newer one there', bill().stripeDue);
+  fixture(); s = new SD({ livemode: true });
+  a = await call(owner, { action: 'pay' }, s);
+  setDue(2598);
   var b = await call(owner, { action: 'pay' }, s);
   await SC.settle(db, ORG, a.invoiceId, s, now, 'stripe');
-  ok(s.invoices_[a.invoiceId].status === 'void' && bill().stripeDue.invoiceId === b.invoiceId && bill().stripeDue.state === 'open', 'the voided invoice\'s event, arriving after Pay made the new one, leaves the new one on the record', bill().stripeDue);
+  ok(s.invoices_[a.invoiceId].status === 'void' && bill().stripeDue.invoiceId === b.invoiceId && bill().stripeDue.state === 'open', '...and arriving after, the same', bill().stripeDue);
 
   console.log('\nthe same figure and date billed again after a payment');
   fixture(); s = new SD({ livemode: true });
