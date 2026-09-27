@@ -112,6 +112,121 @@
     }
     host.appendChild(button('Subscribe', function () { quote(null); }, 'opm-primary'));
   }
+  /* ── Add to plan, for a workspace billed OUTSIDE the package engine ─────
+     (Tommy, 2026-09-27: "buy them immediately and not email clearsky … add
+     to plan and then charge their credit card or saved payment method").
+     The server prices the module and what it needs (plan-change
+     addon-quote), issues its QuickBooks invoice (addon-buy) and switches it
+     on when QuickBooks shows the invoice paid (reconcile-now: "I've paid",
+     or the hourly runner): api/_lib/addons.js. The card is typed, or a
+     saved one chosen, on QuickBooks' own page, never here. One control for
+     the workspace's Modules page, Your modules on the home and the store.
+       state: { canManage, pending (the billing.addOns.pending entry that
+       adds this module, if one waits), onChanged(result) } */
+  function addOnControl(target, m, state) {
+    target.textContent = ''; target.className = 'opm-act'; target.setAttribute('data-addon', m.key);
+    var title = m.name;
+    if (!state.canManage) { target.appendChild(node('p', 'Ask your workspace owner or an administrator to add it.', 'opm-note')); return; }
+    if (state.pending) { waiting(state.pending, false); return; }
+    target.appendChild(button('Add to plan', quote, 'opm-primary'));
+    function again() { addOnControl(target, m, state); }
+    function failed(e, retry) { target.textContent = ''; target.appendChild(node('p', e.message, 'opm-reason')); target.appendChild(button('Try again', retry || again)); }
+    function quote() {
+      target.textContent = 'Pricing…';
+      api('/api/plan-change', { action: 'addon-quote', add: [m.key] }).then(function (q) {
+        target.textContent = '';
+        /* the plan cannot switch it on exactly (api/_lib/addons.js exact()):
+           never sold here; the server's reason and the recorded request */
+        if (!q.canBuy && q.request) {
+          target.appendChild(node('p', q.reason, 'opm-reason'));
+          var ask = node('div', '', 'opm-row');
+          ask.appendChild(button('Ask ClearSky to include it', request, 'opm-primary'));
+          ask.appendChild(button('Close', again));
+          target.appendChild(ask); return;
+        }
+        target.appendChild(node('p', q.display.today, 'opm-quote'));
+        target.appendChild(node('p', q.display.then, 'opm-note'));
+        if (q.add.length > 1) target.appendChild(node('p', 'Also adds what it needs: ' + q.addNames.filter(function (n, i) { return q.add[i] !== m.key; }).join(', '), 'opm-note'));
+        target.appendChild(node('p', q.display.activation, 'opm-note'));
+        target.appendChild(node('p', q.display.plan, 'opm-note'));
+        if (!q.canBuy) { target.appendChild(node('p', q.reason + (q.detail ? ' (' + q.detail + ')' : ''), 'opm-reason')); target.appendChild(button('Close', again)); return; }
+        if (q.needsProfile) { profile(); return; }
+        var row = node('div', '', 'opm-row');
+        row.appendChild(button(q.included ? 'Turn it on' : 'Pay ' + q.display.amount + ' now', function () { pay(q); }, 'opm-primary'));
+        row.appendChild(button('Cancel', again));
+        target.appendChild(row);
+      }, function (e) { failed(e); });
+    }
+    /* plan-change opt-in: the module and its price on record for ClearSky,
+       who moves the workspace onto a package; nothing is charged */
+    function request() {
+      target.textContent = 'Sending your request…';
+      api('/api/plan-change', { action: 'opt-in', add: [m.key] }).then(function (r) {
+        target.textContent = '';
+        target.appendChild(node('p', 'Requested: ' + (r.names || [title]).join(', ') + (r.display ? ' at ' + r.display : '') + '. ClearSky has it; nothing is charged.', 'opm-quote'));
+        if (state.onChanged) state.onChanged({ state: 'requested', add: r.add || [m.key] });
+      }, function (e) { failed(e, request); });
+    }
+    /* who QuickBooks invoices, asked once (the same form as signup); saved
+       through /api/billing-profile, then the price again */
+    function profile() {
+      var P = global.OmegaBillingProfile;
+      target.appendChild(node('p', 'First, who QuickBooks invoices. It is saved once and used for every invoice.', 'opm-note'));
+      if (!P) { target.appendChild(node('p', 'Add your billing contact on Plan & billing, then come back.', 'opm-reason')); target.appendChild(button('Close', again)); return; }
+      var form = node('div', '', 'opm-profile'), fields = P.render(form, {}); target.appendChild(form);
+      var row = node('div', '', 'opm-row'), save = button('Save and continue', function () {
+        if (!fields.valid()) return;
+        save.disabled = true; save.textContent = 'Saving…';
+        api('/api/billing-profile', { profile: fields.value() }).then(function () { quote(); }, function (e) { save.disabled = false; save.textContent = 'Save and continue'; target.appendChild(node('p', e.message, 'opm-reason')); });
+      }, 'opm-primary');
+      row.appendChild(save); row.appendChild(button('Cancel', again)); target.appendChild(row);
+    }
+    function pay(q) {
+      /* QuickBooks' page opens on THIS click (a tab opened after the answer
+         would be a blocked pop-up) and waits on a note until its address is
+         known; it never holds a reference back to this page */
+      var tab = null;
+      if (!q.included) {
+        try { tab = global.open('', '_blank'); if (tab) { tab.opener = null; tab.document.title = 'Opening QuickBooks…'; tab.document.body.innerHTML = '<p style="font:16px system-ui,sans-serif;padding:32px;color:#14171A">Preparing your invoice in QuickBooks…</p>'; } } catch (e) { tab = null; }
+      }
+      target.textContent = q.included ? 'Turning it on…' : 'Creating your invoice…';
+      api('/api/plan-change', { action: 'addon-buy', add: [m.key], previewId: q.previewId, effectiveAt: q.effectiveAt }).then(function (r) {
+        if (r.state === 'active') { if (tab) { try { tab.close(); } catch (e) {} } target.textContent = ''; target.appendChild(node('p', 'Added. ' + title + ' is on now.', 'opm-quote')); if (state.onChanged) state.onChanged(r); return; }
+        var opened = false;
+        if (tab && r.paymentLink) { try { tab.location.replace(r.paymentLink); opened = true; } catch (e) {} }
+        if (tab && !opened) { try { tab.close(); } catch (e) {} }
+        state.pending = { id: r.addOnId, purpose: 'purchase', add: r.add, names: r.addNames, display: r.display, paymentLink: r.paymentLink, expiresOn: r.expiresOn, payLinkMissing: r.payLinkMissing };
+        waiting(state.pending, opened);
+        if (state.onChanged) state.onChanged(r);
+      }, function (e) { if (tab) { try { tab.close(); } catch (x) {} } failed(e); });
+    }
+    function waiting(p, opened) {
+      target.textContent = '';
+      target.appendChild(node('p', (p.purpose === 'renewal' ? 'Renewal waiting for payment · ' : 'Waiting for payment · ') + p.display + (p.expiresOn ? ' · pay before ' + p.expiresOn : ''), 'opm-wait'));
+      target.appendChild(node('p', opened ? 'QuickBooks\' payment page opened in a new tab: pay by card there, or with the card saved there. It switches on the moment the payment clears.'
+        : p.payLinkMissing ? 'QuickBooks emailed the invoice to your billing address: pay it there and it switches on the moment the payment clears.'
+        : 'Pay by card on QuickBooks\' secure page, or with the card saved there. It switches on the moment the payment clears.', 'opm-note'));
+      var row = node('div', '', 'opm-row');
+      if (p.paymentLink) { var a = link(p.paymentLink, 'Pay ' + p.display + ' in QuickBooks'); a.className = 'opm-paylink'; row.appendChild(a); }
+      var paid = button('I\'ve paid', function () { check(paid); }, p.paymentLink ? '' : 'opm-primary'); row.appendChild(paid);
+      if (p.purpose !== 'renewal') row.appendChild(button('Cancel request', function () { cancelIt(p); }));
+      target.appendChild(row);
+    }
+    function check(btn) {
+      btn.disabled = true; btn.textContent = 'Checking QuickBooks…';
+      api('/api/plan-change', { action: 'reconcile-now' }).then(function (r) {
+        var live = (r && r.addOns && r.addOns.live) || [];
+        if (live.indexOf(m.key) >= 0) { state.pending = null; target.textContent = ''; target.appendChild(node('p', 'Paid. ' + title + ' is on.', 'opm-quote')); if (state.onChanged) state.onChanged({ state: 'active', add: [m.key], live: live }); return; }
+        btn.disabled = false; btn.textContent = 'I\'ve paid';
+        var note = target.querySelector('.opm-check'); if (!note) { note = node('p', '', 'opm-note opm-check'); target.appendChild(note); }
+        note.textContent = r && r.throttled ? 'Checked a moment ago; try again in a few seconds.' : r && r.error ? r.error : 'QuickBooks has not recorded the payment yet. It can take a minute after you pay; try again.';
+      }, function (e) { btn.disabled = false; btn.textContent = 'I\'ve paid'; target.appendChild(node('p', e.message, 'opm-reason')); });
+    }
+    function cancelIt(p) {
+      target.textContent = 'Cancelling…';
+      api('/api/plan-change', { action: 'addon-cancel', addOnId: p.id }).then(function (r) { state.pending = null; if (state.onChanged) state.onChanged(r); again(); }, function (e) { failed(e, function () { waiting(p, false); }); });
+    }
+  }
   /* ── "I'VE PAID" ────────────────────────────────────────────────────────
      Paying happens on the provider's page (Stripe's or QuickBooks'), in another tab; the module switches
      on when the platform sees the payment, which the hourly runner does on
@@ -351,11 +466,12 @@
     dialog = node('div', '', 'opm-backdrop'); dialog.id = 'omega-package-menu';
     var panel = node('div', '', 'opm-dialog'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-labelledby', 'opm-title');
     /* "The Ladder" (Tommy, 2026-09-26): build your own experience and pay
-       for what you need to run your business; each Omega Logic department
-       (Office, Plant, Materials & Purchasing, Logistics & Warranty, Customer
-       App) is its own opt-in on it. */
+       for what you need to run your business; each Omega Logic department is
+       its own opt-in on it. The departments are named from the catalog's
+       Omega Logic shelf (api/_lib/modules.js), never a list kept here. */
     var heading = node('h2', host.legacy ? 'Opt out of a module' : 'The Ladder'); heading.id = 'opm-title'; panel.appendChild(heading);
-    panel.appendChild(node('p', 'Build your own experience and pay for what you need to run your business. Omega Logic is by department: Office, Plant, Materials & Purchasing, Logistics & Warranty and the Customer App are each an opt-in.', 'opm-note'));
+    var depts = (view.catalog || []).filter(function (m) { return m.shelf === 'platform'; }).map(function (m) { return m.name; });
+    panel.appendChild(node('p', 'Build your own experience and pay for what you need to run your business. ' + (depts.length ? 'Omega Logic is by department: ' + sentence(depts) + (depts.length > 1 ? ' are each an opt-in.' : ' is an opt-in.') : 'Each Omega Logic department is its own opt-in.'), 'opm-note'));
     var dismiss = node('button', 'Close'); dismiss.type = 'button'; dismiss.onclick = close; panel.appendChild(dismiss);
     var status = node('p', 'Loading current pricing…', 'opm-note'); status.setAttribute('role', 'status'); panel.appendChild(status);
     body = node('div', '', 'opm-grid'); panel.appendChild(body); dialog.appendChild(panel); document.body.appendChild(dialog);
@@ -408,6 +524,11 @@
       '.opm-act{margin-top:10px;display:grid;gap:6px}.opm-act p{margin:0}.opm-quote{font-weight:600}.opm-wait{font-weight:600;color:var(--opm-blue)}.opm-reason{color:#B45F06;font-size:12px}' +
       '.opm-row{display:flex;flex-wrap:wrap;gap:6px}.opm-act button{font:500 13px system-ui;padding:7px 12px;border:1px solid var(--opm-border);border-radius:6px;background:var(--opm-surface);color:var(--opm-text);cursor:pointer}' +
       '.opm-act .opm-primary{background:var(--opm-blue);color:#fff;border-color:var(--opm-blue)}.opm-act a{color:var(--opm-blue)}' +
+      /* Add to plan (addOnControl): the pay link is a button, the billing contact a short form */
+      '.opm-act a.opm-paylink{display:inline-flex;align-items:center;padding:7px 12px;border-radius:6px;background:var(--opm-blue);border:1px solid var(--opm-blue);color:#fff;text-decoration:none;font:600 13px system-ui}' +
+      '.opm-profile{display:grid;gap:8px;max-height:52vh;overflow:auto;padding:2px}.opm-profile .obp-field{display:grid;gap:3px;font:500 12px system-ui;color:var(--opm-sub)}' +
+      '.opm-profile .obp-field input,.opm-profile .obp-field select{font:14px system-ui;padding:7px 9px;border:1px solid var(--opm-border);border-radius:6px;background:var(--opm-surface);color:var(--opm-text);min-width:0}' +
+      '.opm-profile .obp-field input[type=checkbox]{justify-self:start;width:auto}' +
       '.opm-on{display:flex;align-items:center;gap:10px;margin:-4px 0 4px;font-size:12px;font-weight:600;color:var(--opm-green,#2E7D4F)}' +
       '@media(prefers-color-scheme:dark){html:not([data-omega-theme="light"]) .opm-on{--opm-green:#6FBB84}}html[data-omega-theme="dark"] .opm-on{--opm-green:#6FBB84}' +
       '.opm-dialog .opm-on .opm-link{padding:2px 8px;font:600 12px system-ui;background:transparent;color:var(--opm-blue)}' +
@@ -502,6 +623,6 @@
     }
     draw(); return { value: function () { return selected.slice(); }, set: function (keys) { selected = keys.slice(); draw(); if (options.onChange) options.onChange(selected.slice()); } };
   }
-  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker, card: card, subscribeControl: subscribeControl, loadControl: loadControl, api: api, styles: styles,
+  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker, card: card, subscribeControl: subscribeControl, addOnControl: addOnControl, loadControl: loadControl, api: api, styles: styles,
     notice: notice, where: where, places: places, showMe: showMe };
 })(typeof window !== 'undefined' ? window : this);
