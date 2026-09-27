@@ -18,9 +18,9 @@ a proposal waiting on Tommy, not a settled price.
 > |---|---|---|---|---|
 > | lite | Lite | Omega Design | floor | Core |
 > | gridatlas | Grid Atlas | Omega Grid | addon | Add-on |
-> | storage | Storage Sizing & Revenue | Omega Storage | standard | Pro |
-> | estimate | Estimate, BOM & Procurement | Omega Estimate | standard | Pro |
-> | evrebates | EV Rebates & Closeout | Omega EV | standard | Pro |
+> | storage | Storage Sizing & Revenue | Omega Storage | standard | Plus |
+> | estimate | Estimate, BOM & Procurement | Omega Estimate | standard | Plus |
+> | evrebates | EV Rebates & Closeout | Omega EV | standard | Plus |
 > | plansets | Plan Sets & CAD | Omega Plans | premium | Advanced |
 > | siteintel | Site Intelligence | Omega Intel | premium | Advanced |
 > | engineering | Engineering & Analysis | Omega Engineer | premium | Advanced |
@@ -36,7 +36,8 @@ a proposal waiting on Tommy, not a settled price.
 > | logic-logistics | Logistics & Warranty | Logic Logistics | platform | Omega Logic |
 > | logic-customer | Customer App | Logic Customer App | platform | Omega Logic |
 >
-> Plans keep their names (Lite + modules, Field, Pro, Enterprise). Tool
+> Plans keep their names (Lite + modules, Field, Pro, Enterprise); the
+> standard shelf reads Plus so it is never mistaken for the Pro plan. Tool
 > names (Grid Atlas, Site Finder, …) are a separate list in `omega-tools.js`.
 > QuickBooks items are matched by name when a book is synced: an item
 > synced under an old name keeps it in QuickBooks (invoice lines carry the
