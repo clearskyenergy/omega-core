@@ -340,6 +340,20 @@ async function run() {
     now = at('2026-10-27T13:00:00Z'); tick = await Runner.tick(db, now, { limit: 5, mail: mailer });
     equal(tick.results.filter(function (x) { return x.orgId === ORG; })[0].invoice.date, '2026-10-27', 'and issues the renewal on the billing day');
 
+    /* ══ 6b. The rail: a legacy plan's add-ons are QuickBooks', whatever the
+       package rail (billing-driver.providerOf would send a workspace with no
+       QuickBooks customer to Stripe under PACKAGING_PROVIDER=stripe) ══ */
+    process.env.PACKAGING_PROVIDER = 'stripe';
+    try {
+      now = at('2026-09-27T15:00:00Z'); seed(Object.assign({}, ENTERPRISE, { paymentProvider: 'stripe', stripeCustomerId: 'cus_legacy_plan' }));
+      equal((await quote(['logic-office'])).canBuy, true, 'Stripe as the package rail does not move a legacy plan\'s add-ons: QuickBooks\' guard answers');
+      var rs = await buy(['logic-office']);
+      equal([record(rs.addOnId).provider, calls.invoice, !!record(rs.addOnId).qboInvoiceId], ['quickbooks', 1, true], 'invoiced in QuickBooks, and the record names its rail');
+      equal([bill().stripeCustomerId, bill().paymentProvider], ['cus_legacy_plan', 'stripe'], 'the plan\'s own Stripe customer and payment provider are never touched');
+      paid(record(rs.addOnId)); now += 60000; await reconcile(now);
+      equal(bill().addOns.live, ['logic-office'], 'reconciled from QuickBooks, the rail it was issued on');
+    } finally { delete process.env.PACKAGING_PROVIDER; }
+
     /* ══ 7. Pins: one rule, one map ══ */
     var tenantSrc = fs.readFileSync(path.join(__dirname, '..', 'omega-tenant.js'), 'utf8');
     equal(AO.TIER_LEVEL, JSON.parse(JSON.stringify(vm.runInNewContext('(' + /var TIER_LEVEL = (\{[^}]*\})/.exec(tenantSrc)[1] + ')'))), 'the tier levels are omega-tenant.js\'s');

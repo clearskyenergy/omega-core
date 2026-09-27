@@ -5,7 +5,7 @@
 'use strict';
 var B = require('./pricebook'), P = require('./subscription-pricing'), Policy = require('./package-billing-policy');
 var Mode = require('./packaging-mode');
-var BP = require('./billing-profile'), Q = require('./qbo-billing'), M = require('./modules'), R = require('./proration'), U = require('./usage'), AO = require('./addons');
+var BP = require('./billing-profile'), Q = require('./qbo-billing'), D = require('./billing-driver'), M = require('./modules'), R = require('./proration'), U = require('./usage'), AO = require('./addons');
 function fail(message, status) { var e = new Error(message); e.status = status || 409; throw e; }
 function clean(b) { var out = Object.assign({}, b); delete out.activationLock; return out; }
 function basis(c) { return Q.key(B.stable({ org: c.org, billing: clean(c.billing), profile: c.profile, book: c.book })); }
@@ -17,19 +17,31 @@ async function context(db, orgId, version) {
   var book = await B.load(db, version || billing.pricebookVersion || B.VERSION);
   return { root: root, org: rows[0].data(), billing: billing, profile: rows[2].exists ? rows[2].data() : null, book: book };
 }
-/* Two modes, both explicit (api/_lib/packaging-mode.js). SANDBOX: QBO_ENV=sandbox,
-   a tenant marked packagingSandbox, an enabled sandbox book. LIVE:
-   PACKAGING_LIVE=true AND QBO_ENV=production, an enabled book under a release
-   version synced to the production company; every tenant may then buy. */
+/* Two modes, both explicit (api/_lib/packaging-mode.js), judged for the
+   provider this workspace bills through (billing-driver.providerOf).
+   SANDBOX: a Stripe test key (or QBO_ENV=sandbox), a tenant marked
+   packagingSandbox, an enabled book. LIVE: PACKAGING_LIVE=true AND a live
+   Stripe key (or QBO_ENV=production), an enabled book under a release
+   version (for QuickBooks, synced to the production company); every tenant
+   may then buy. */
 var live = Mode.live;
-function guard(c) {
+/* `rail` names the provider when the caller knows it (a legacy plan's
+   add-ons bill through QuickBooks: api/_lib/addons.js); else the
+   workspace's own (billing-driver.providerOf). */
+function guard(c, rail) {
   if (process.env.PACKAGING_BILLING_ENABLED !== 'true') fail('Packaging billing is disabled');
-  if (Mode.live()) {
+  var provider = rail || D.providerOf(c.billing);
+  if (Mode.live(provider)) {
+    if (provider === 'stripe') {
+      if (!c.book.enabled || c.book.version !== B.VERSION || /-proposed$/.test(c.book.version)) fail('An enabled release price book is required to bill live through Stripe');
+      return;
+    }
     if (!c.book.enabled || c.book.version !== B.VERSION || c.book.qbo.env !== 'production' || !c.book.qbo.realmId) fail('An enabled price book synced to the production QuickBooks company is required');
     return;
   }
-  if (!Mode.sandbox()) fail('Packaging billing requires QBO_ENV=sandbox (or PACKAGING_LIVE=true with QBO_ENV=production)');
+  if (!Mode.sandbox(provider)) fail(provider === 'stripe' ? 'Packaging billing through Stripe needs a Stripe test key (or PACKAGING_LIVE=true with a live key)' : 'Packaging billing requires QBO_ENV=sandbox (or PACKAGING_LIVE=true with QBO_ENV=production)');
   if (c.org.packagingSandbox !== true) fail('An explicitly marked sandbox tenant is required');
+  if (provider === 'stripe') { if (!c.book.enabled || c.book.version !== B.VERSION) fail('An enabled price book is required'); return; }
   if (!c.book.enabled || c.book.version !== B.VERSION || c.book.qbo.env !== 'sandbox') fail('An enabled proposed sandbox price book is required');
 }
 function canApply(c) { try { guard(c); return true; } catch (e) { return false; } }
@@ -57,10 +69,13 @@ function prepare(c, input, now) {
     if (!isFinite(signup)) signup = now;
     if (signup > now) fail('Original signup date is required');
     patch = Object.assign({}, selected, M.resolve(['lite']), { packaged: true, modules: ['lite'], subscription: Policy.subscription(selected, at), packagingState: 'awaiting_payment',
-      billingProvider: 'quickbooks', paymentProvider: 'quickbooks', qboEnv: c.book.qbo.env,
       proposedPackage: selected, billingDay: new Date(signup).getUTCDate(), nextInvoiceOn: R.iso(at), subscriptionStartedAt: at,
       accessUntil: at, status: 'active' });
   } else fail('Action must be approve or activate', 400);
+  /* the rail this workspace bills through, named on the record from the first step */
+  var provider = D.providerOf(c.billing);
+  patch = Object.assign({}, patch, { billingProvider: provider, paymentProvider: provider });
+  if (provider === 'quickbooks') patch.qboEnv = c.book.qbo.env; else delete patch.qboEnv;
   var plan = action === 'activate' ? Policy.invoice(Object.assign({}, patch, selected), c.book, patch.nextInvoiceOn) : null;
   if (plan) plan.marker = 'OMEGA subscription ' + c.root.id + ' / ' + plan.date;
   var source = basis(c), id = Q.key(B.stable({ source: source, action: action, patch: patch, plan: plan }));
@@ -72,7 +87,8 @@ function display(c, p) {
   return { dryRun: true, orgId: c.root.id, previewId: p.id, effectiveAt: p.effectiveAt,
     quote: p.quote, billingPatch: p.patch, invoice: p.plan,
     scheduledInvoice: p.action === 'approve' ? Policy.invoice(p.patch, c.book, p.patch.nextInvoiceOn) : null,
-    customer: BP.customer(p.profile, c.root.id),
+    /* the customer record as the workspace's own rail will get it */
+    customer: D.providerOf(c.billing) === 'stripe' ? require('./stripe-billing').wanted(p.profile, c.root.id) : BP.customer(p.profile, c.root.id), provider: D.providerOf(c.billing),
     trialStartsOnApproval: p.action === 'approve', billingDay: p.patch.billingDay,
     canApply: canApply(c),
     notice: p.action === 'approve' ? 'Approval creates the sandbox customer and starts the one trial. The first invoice is issued at trial end.' : 'Access starts only after the sandbox invoice is confirmed paid.' };
@@ -113,23 +129,23 @@ async function apply(db, orgId, input, caller, now, deps) {
   });
   if (replay) return replay;
   try {
-    var q = Q.driver(c.book, deps), customer = await q.customer(orgId, p.profile, c.billing.qboCustomerId);
+    var provider = D.providerOf(c.billing), q = D.driver(c.book, provider, deps), customer = await q.customer(orgId, p.profile, D.customerId(c.billing, provider));
     var issued = p.plan ? await q.invoice(p.plan, p.profile, customer) : null;
     return await db.runTransaction(async function (tx) {
       var fresh = await reread(tx, db, c);
       guard(fresh);
       if (!fresh.billing.activationLock || fresh.billing.activationLock.id !== p.id || basis(fresh) !== p.source) fail('Activation inputs changed; refresh and retry');
-      var patch = Object.assign({}, p.patch, { qboCustomerId: customer, qboRealmId: c.book.qbo.realmId,
+      var patch = Object.assign({}, p.patch, D.customerFields(provider, customer, c.book), {
         activationLock: null, updatedAt: now, updatedBy: caller.email });
       patch.serviceFee = Object.assign({}, patch.serviceFee, { by: caller.email, at: now });
       if (issued) {
         patch.paymentLink = issued.payUrl; patch.amountDue = issued.totalCents / 100;
         patch.nextInvoiceOn = p.plan.nextInvoiceOn; patch.firstInvoiceOn = p.plan.date; patch.serviceFeeNextOn = p.plan.serviceFeeNextOn;
-        tx.set(current.collection('invoices').doc(p.plan.date), Object.assign({}, p.plan, { state: 'unpaid', qboInvoiceId: issued.id,
-          qboCustomerId: customer, totalCents: issued.totalCents, paymentLink: issued.payUrl, createdAt: now }));
+        tx.set(current.collection('invoices').doc(p.plan.date), Object.assign({}, p.plan, { state: 'unpaid' }, D.invoiceFields(provider, issued.id, customer),
+          { totalCents: issued.totalCents, paymentLink: issued.payUrl, createdAt: now }));
         tx.set(c.root.collection('notifications').doc('package-invoice-' + p.plan.date), { kind: 'billing', read: false, createdAt: now,
-          text: 'Your subscription invoice is ready: ' + P.money(issued.totalCents) + '. Pay in QuickBooks to continue.',
-          packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents) });
+          text: 'Your subscription invoice is ready: ' + P.money(issued.totalCents) + '. Pay it by card on the invoice page to continue.',
+          packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents), payWith: D.name(provider) });
       }
       B.freeze(tx, db.doc('pricebook/' + c.book.version), fresh.book, now);
       tx.set(current, patch, { merge: true });
@@ -167,12 +183,13 @@ async function issue(db, orgId, now, deps) {
   var b = c.billing, today = R.iso(now);
   if (!b.packaged || !b.nextInvoiceOn || b.nextInvoiceOn > today) return { skipped: true };
   if (b.packagingState === 'trial' && Policy.instant(b.trialEndsAt) > now) return { skipped: true };
-  if (!b.qboCustomerId || b.qboRealmId !== c.book.qbo.realmId) fail('Sandbox customer binding is required');
+  var provider = D.providerOf(b), customerOf = D.customerId(b, provider);
+  if (!D.bound(b, provider, c.book)) fail('The billing customer does not belong to this deployment\'s ' + D.name(provider) + ' account');
   var current = c.root.collection('billing').doc('current'), ref = current.collection('invoices').doc(b.nextInvoiceOn);
   var plan = await db.runTransaction(async function (tx) {
     var existing = await tx.get(ref), live = await tx.get(current), latest = live.data();
     var ending = R.cycle(R.addDays(b.nextInvoiceOn, -1), latest.billingDay || 1), used = await tx.get(c.root.collection('usage').doc(ending.start));
-    if (existing.exists && existing.data().qboInvoiceId) return null;
+    if (existing.exists && D.issued(existing.data())) return null;
     if (latest.nextInvoiceOn !== b.nextInvoiceOn) fail('Billing date changed; retry');
     if (latest.invoiceLock && latest.invoiceLock.until > now) fail('Invoice is already being issued');
     var prepared = existing.exists ? existing.data() : Policy.invoice(latest, c.book, latest.nextInvoiceOn, used.exists ? used.data() : null);
@@ -183,24 +200,24 @@ async function issue(db, orgId, now, deps) {
   });
   if (!plan) return { skipped: true, alreadyIssued: true };
   try {
-    var issued = await Q.driver(c.book, deps).invoice(plan, BP.stored(c.profile), b.qboCustomerId);
+    var issued = await D.driver(c.book, provider, deps).invoice(plan, BP.stored(c.profile), customerOf);
     return await db.runTransaction(async function (tx) {
       var live = await tx.get(current), invoice = await tx.get(ref), latest = live.data();
-      if (invoice.data().qboInvoiceId) return { alreadyIssued: true };
+      if (D.issued(invoice.data())) return { alreadyIssued: true };
       if (!latest.invoiceLock || latest.invoiceLock.date !== plan.date) fail('Invoice reservation changed; retry');
       var due = latest.pastDueSince || plan.date;
       var state = latest.packagingState === 'trial' ? 'awaiting_payment' : latest.packagingState;
-      tx.update(ref, { state: 'unpaid', qboInvoiceId: issued.id, qboCustomerId: b.qboCustomerId,
-        totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now });
+      tx.update(ref, Object.assign({ state: 'unpaid' }, D.invoiceFields(provider, issued.id, customerOf),
+        { totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now }));
       tx.update(current, { nextInvoiceOn: plan.nextInvoiceOn, firstInvoiceOn: latest.firstInvoiceOn || plan.date,
         serviceFeeNextOn: plan.serviceFeeNextOn, invoiceLock: null, pastDueSince: due,
         packagingState: state, paymentLink: issued.payUrl, amountDue: issued.totalCents / 100,
         accessUntil: state === 'paid' ? R.date(R.addDays(R.businessDays(due, c.book.policy.failedPaymentGraceBusinessDays), 1)) : latest.accessUntil || now });
-      tx.set(current.collection('history').doc('invoice-' + plan.date), { at: now, by: 'billing-run', action: 'invoice-issued',
-        qboInvoiceId: issued.id, date: plan.date, amountCents: issued.totalCents });
+      tx.set(current.collection('history').doc('invoice-' + plan.date), Object.assign({ at: now, by: 'billing-run', action: 'invoice-issued',
+        date: plan.date, amountCents: issued.totalCents }, D.invoiceFields(provider, issued.id, customerOf)));
       tx.set(c.root.collection('notifications').doc('package-invoice-' + plan.date), { kind: 'billing', read: false, createdAt: now,
-        text: 'Your subscription invoice is ready: ' + P.money(issued.totalCents) + '. Pay in QuickBooks to continue.',
-        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents) });
+        text: 'Your subscription invoice is ready: ' + P.money(issued.totalCents) + '. Pay it by card on the invoice page to continue.',
+        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents), payWith: D.name(provider) });
       return { issued: true, date: plan.date, invoiceId: issued.id, paymentLink: issued.payUrl };
     });
   } catch (e) {
@@ -226,11 +243,11 @@ function bought(billing, last) {
   return { modules: M.normalize(sub.modules), plan: sub.plan };
 }
 function accessAfterInvoices(billing, records, book, now) {
-  var subs = records.filter(function (r) { return kindOf(r) === 'subscription' && r.qboInvoiceId; }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+  var subs = records.filter(function (r) { return kindOf(r) === 'subscription' && D.issued(r); }).sort(function (a, b) { return a.date.localeCompare(b.date); });
   var changes = records.filter(function (r) { return kindOf(r) === 'change'; });
   var paid = subs.filter(function (r) { return r.state === 'paid'; }), unpaid = subs.filter(function (r) { return r.state !== 'paid'; });
-  var openChanges = changes.filter(function (r) { return r.state === 'unpaid' && r.qboInvoiceId; }).sort(function (a, b) { return a.date.localeCompare(b.date); });
-  var openPacks = records.filter(function (r) { return kindOf(r) === 'pack' && r.state === 'unpaid' && r.qboInvoiceId; });
+  var openChanges = changes.filter(function (r) { return r.state === 'unpaid' && D.issued(r); }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+  var openPacks = records.filter(function (r) { return kindOf(r) === 'pack' && r.state === 'unpaid' && D.issued(r); });
   var owing = unpaid.concat(openChanges, openPacks);
   var patch = { amountDue: owing.reduce(function (n, r) { return n + Math.max(0, (r.totalCents || 0) - (r.paidCents || 0)); }, 0) / 100 };
   if (subs.length || openChanges.length) patch.paymentLink = unpaid.length && unpaid[0].state !== 'reversed' ? unpaid[0].paymentLink || null : (openChanges.length ? openChanges[0].paymentLink || null : null);
@@ -282,11 +299,11 @@ function displayAfter(patch, billing, book, now) {
   patch.monthlyCents = q.monthlyCents; patch.monthlyDisplay = q.display.monthly; return patch;
 }
 async function reconcile(db, orgId, now, deps, options) {
-  var c = await context(db, orgId); guard(c);
+  var c = await context(db, orgId), legacy = c.billing.packaged !== true;
   /* a plan billed outside the engine is reconciled only for its add-ons
-     (api/_lib/addons.js); its own tier, amount due and pay link are never
-     this function's to write */
-  var legacy = c.billing.packaged !== true;
+     (api/_lib/addons.js, QuickBooks' rail); its own tier, amount due and
+     pay link are never this function's to write */
+  guard(c, legacy ? 'quickbooks' : undefined);
   if (legacy && !c.billing.addOns) return { skipped: true };
   var current = c.root.collection('billing').doc('current'), collection = current.collection('invoices');
   var query = collection.orderBy('date'), bounded = options && options.limit;
@@ -294,23 +311,26 @@ async function reconcile(db, orgId, now, deps, options) {
     if (c.billing.reconcileCursor) query = query.startAfter(c.billing.reconcileCursor);
     query = query.limit(Math.min(10, Math.max(1, bounded)));
   }
-  var rows = await query.get(), results = [], q = Q.driver(c.book, deps);
+  var rows = await query.get(), results = [], drivers = {};
+  /* each invoice is read back from the provider it was issued on */
+  function driverFor(record) { var p = D.recordProvider(record); return drivers[p] || (drivers[p] = D.driver(c.book, p, deps)); }
   for (var i = 0; i < rows.docs.length; i++) {
-    var doc = rows.docs[i], record = doc.data(); if (!record.qboInvoiceId) continue;
+    var doc = rows.docs[i], record = doc.data(); if (!D.issued(record)) continue;
+    var invoiceId = D.invoiceId(record), providerName = D.name(D.recordProvider(record));
     var receipt, error = false, transient = false, note = null;
     // A failure on ClearSky's side (no status, 5xx, or QuickBooks refusing
     // OUR connection: 401, 403, 429, the guard) keeps the record as it was
     // and is retried; only a validation failure, or three such failures in a
     // row, marks the record for review. Neither cuts the tenant's access.
-    try { receipt = await q.reconcile(record); } catch (e) { note = String(e.message || e).slice(0, 200); if (clearskySide(e)) transient = true; else error = true; }
+    try { receipt = await driverFor(record).reconcile(record); } catch (e) { note = String(e.message || e).slice(0, 200); if (clearskySide(e)) transient = true; else error = true; }
     var state = error || transient ? record.state : receipt.reversed ? 'reversed' : receipt.satisfied ? 'paid' : 'unpaid', review = error;
     await db.runTransaction(async function (tx) {
       var invoices = await tx.get(collection.orderBy('date')), old = await tx.get(doc.ref), live = await tx.get(current);
       var snapshot = old.data(), billing = live.data(), subUpdate = null, addOnMove = null, outside = billing.packaged !== true;
-      if (snapshot.qboInvoiceId !== record.qboInvoiceId) fail('Invoice binding changed');
+      if (D.invoiceId(snapshot) !== invoiceId) fail('Invoice binding changed');
       var retries = transient ? (snapshot.reconcileRetries || 0) + 1 : 0;
       if (transient && retries >= 3) { error = true; review = true; }
-      var subs = invoices.docs.map(function (d) { return d.data(); }).filter(function (r) { return kindOf(r) === 'subscription' && r.qboInvoiceId; });
+      var subs = invoices.docs.map(function (d) { return d.data(); }).filter(function (r) { return kindOf(r) === 'subscription' && D.issued(r); });
       // Phase 7: a pack's cycle usage document is read before any write.
       var packUsage = kindOf(snapshot) === 'pack' && snapshot.pack ? await tx.get(c.root.collection('usage').doc(snapshot.pack.cycle.start)) : null;
       if (kindOf(snapshot) === 'pack' && !error && !transient) {
@@ -342,22 +362,22 @@ async function reconcile(db, orgId, now, deps, options) {
       if (kindOf(snapshot) === 'subscription' && state === 'paid' && snapshot.state !== 'paid') {
         var first = !subs.some(function (r) { return r.state === 'paid' && r.date !== snapshot.date; });
         tx.set(c.root.collection('notifications').doc('package-paid-' + snapshot.date), { kind: 'billing', read: false, createdAt: now, packageMail: 'paid', mailState: 'pending', first: first,
-          text: 'Payment received: ' + P.money(snapshot.totalCents) + (first ? '. Your workspace is open.' : '. Thank you.'), amountDisplay: P.money(snapshot.totalCents), date: snapshot.date, invoiceId: record.qboInvoiceId });
-        tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-paid-' + orgId + '-' + record.qboInvoiceId), { kind: 'payment', read: false, createdAt: now, orgId: orgId, staffMail: 'paidAlert', mailState: 'pending',
-          text: 'Payment received: ' + (c.org.name || orgId) + ' ' + P.money(snapshot.totalCents) + (first ? ' (first invoice: the workspace is open)' : ''), amountDisplay: P.money(snapshot.totalCents), invoiceId: record.qboInvoiceId, first: first });
+          text: 'Payment received: ' + P.money(snapshot.totalCents) + (first ? '. Your workspace is open.' : '. Thank you.'), amountDisplay: P.money(snapshot.totalCents), date: snapshot.date, invoiceId: invoiceId, payWith: providerName });
+        tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-paid-' + orgId + '-' + invoiceId), { kind: 'payment', read: false, createdAt: now, orgId: orgId, staffMail: 'paidAlert', mailState: 'pending',
+          text: 'Payment received: ' + (c.org.name || orgId) + ' ' + P.money(snapshot.totalCents) + (first ? ' (first invoice: the workspace is open)' : ''), amountDisplay: P.money(snapshot.totalCents), invoiceId: invoiceId, payWith: providerName, first: first });
       }
       /* money landed on an add-on: the tenant hears what switched on, ClearSky hears the money */
       if (kindOf(snapshot) === 'addon' && state === 'paid' && snapshot.state !== 'paid') {
         var what = (snapshot.purpose === 'renewal' ? snapshot.modules : snapshot.add) || [], label = what.map(function (k) { var m = M.get(k); return m ? m.name : k; }).join(', ');
         tx.set(c.root.collection('notifications').doc('addon-paid-' + snapshot.id), { kind: 'billing', read: false, createdAt: now, packageMail: 'paid', mailState: 'pending', first: false,
-          text: 'Payment received: ' + P.money(snapshot.totalCents) + '. ' + label + (snapshot.purpose === 'renewal' ? (what.length > 1 ? ' are' : ' is') + ' renewed.' : (what.length > 1 ? ' are' : ' is') + ' on.'), amountDisplay: P.money(snapshot.totalCents), date: snapshot.date, invoiceId: record.qboInvoiceId });
-        tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-paid-' + orgId + '-' + record.qboInvoiceId), { kind: 'payment', read: false, createdAt: now, orgId: orgId, staffMail: 'paidAlert', mailState: 'pending',
-          text: 'Payment received: ' + (c.org.name || orgId) + ' ' + P.money(snapshot.totalCents) + ' (add-on' + (snapshot.purpose === 'renewal' ? ' renewal' : '') + ': ' + label + ')', amountDisplay: P.money(snapshot.totalCents), invoiceId: record.qboInvoiceId, first: false });
+          text: 'Payment received: ' + P.money(snapshot.totalCents) + '. ' + label + (snapshot.purpose === 'renewal' ? (what.length > 1 ? ' are' : ' is') + ' renewed.' : (what.length > 1 ? ' are' : ' is') + ' on.'), amountDisplay: P.money(snapshot.totalCents), date: snapshot.date, invoiceId: invoiceId, payWith: providerName });
+        tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-paid-' + orgId + '-' + invoiceId), { kind: 'payment', read: false, createdAt: now, orgId: orgId, staffMail: 'paidAlert', mailState: 'pending',
+          text: 'Payment received: ' + (c.org.name || orgId) + ' ' + P.money(snapshot.totalCents) + ' (add-on' + (snapshot.purpose === 'renewal' ? ' renewal' : '') + ': ' + label + ')', amountDisplay: P.money(snapshot.totalCents), invoiceId: invoiceId, payWith: providerName, first: false });
       }
       /* a person has to look: once per invoice, in ClearSky's own inbox and by mail */
       if (review && !snapshot.reviewRequired) {
-        tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-review-' + orgId + '-' + record.qboInvoiceId), { kind: 'billing-review', read: false, createdAt: now, orgId: orgId, staffMail: 'billingAlert', mailState: 'pending',
-          text: 'Accounting review: invoice ' + record.qboInvoiceId + ' for ' + (c.org.name || orgId) + (note ? ' (' + note + ')' : '') + '. Access is unchanged until you decide.', invoiceId: record.qboInvoiceId });
+        tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-review-' + orgId + '-' + invoiceId), { kind: 'billing-review', read: false, createdAt: now, orgId: orgId, staffMail: 'billingAlert', mailState: 'pending',
+          text: 'Accounting review: ' + providerName + ' invoice ' + invoiceId + ' for ' + (c.org.name || orgId) + (note ? ' (' + note + ')' : '') + '. Access is unchanged until you decide.', invoiceId: invoiceId });
       }
       var all = invoices.docs.map(function (d) { return d.id === doc.id ? Object.assign({}, d.data(), update) : d.data(); });
       var patch;
@@ -372,16 +392,16 @@ async function reconcile(db, orgId, now, deps, options) {
       }
       tx.update(doc.ref, update); tx.update(current, patch);
       if (outside && (snapshot.state !== state || !!snapshot.reconcileError !== error)) {
-        var added = { at: now, by: 'quickbooks-reconciliation', action: 'addon-' + state, invoiceId: record.qboInvoiceId, reviewRequired: review,
+        var added = { at: now, by: D.recordProvider(record) + '-reconciliation', action: 'addon-' + state, invoiceId: invoiceId, reviewRequired: review,
           was: { state: snapshot.state || null, live: (billing.addOns && billing.addOns.live) || [] }, changed: { state: state, live: patch.addOns.live, addOnState: patch.addOns.state } };
         tx.set(current.collection('history').doc(), added); tx.set(c.root.collection('admin_audit').doc(), added);
       } else if (!outside && (snapshot.state !== state || !!snapshot.reconcileError !== error || billing.packagingState !== patch.packagingState)) {
-        var event = { at: now, by: 'quickbooks-reconciliation', action: (kindOf(snapshot) === 'change' ? 'change-' : kindOf(snapshot) === 'pack' ? 'pack-' : 'invoice-') + state, invoiceId: record.qboInvoiceId, reviewRequired: review,
+        var event = { at: now, by: D.recordProvider(record) + '-reconciliation', action: (kindOf(snapshot) === 'change' ? 'change-' : kindOf(snapshot) === 'pack' ? 'pack-' : 'invoice-') + state, invoiceId: invoiceId, reviewRequired: review,
           was: { state: snapshot.state, packagingState: billing.packagingState }, changed: { state: state, packagingState: patch.packagingState, modules: patch.modules || billing.modules } };
         tx.set(current.collection('history').doc(), event); tx.set(c.root.collection('admin_audit').doc(), event);
       }
     });
-    results.push({ invoiceId: record.qboInvoiceId, kind: kindOf(record), state: state, was: record.state, changed: record.state !== state, reviewRequired: review });
+    results.push({ invoiceId: invoiceId, kind: kindOf(record), state: state, was: record.state, changed: record.state !== state, reviewRequired: review });
   }
   if (bounded) await current.update({ reconcileCursor: rows.docs.length === bounded ? rows.docs[rows.docs.length - 1].data().date : null });
   return { invoices: results };

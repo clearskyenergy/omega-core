@@ -230,6 +230,30 @@ whose version ends in `-proposed` is never production; sign-off is renaming
 (the live runner's query). The card button on a QuickBooks invoice is
 QuickBooks Payments, not Stripe: `docs/PAYMENTS-BROWSER-SETUP.md`.
 
+Phase 10C (2026-09-27): **Stripe is the rail Tommy chose** ("a customer
+creates an account, they add billing and that's all done through Stripe, and
+once they do that it needs to allow them to use what they paid for"),
+switched on by `PACKAGING_PROVIDER=stripe` (literal; unset keeps QuickBooks,
+because production was already taking pay-now signups through QuickBooks and
+a merge must never move a live money path). `packaging-mode.js` now answers
+per provider: Stripe is SANDBOX on a test key and LIVE only under
+`PACKAGING_LIVE=true` with a live key; QuickBooks keeps its `QBO_ENV` rule
+above. `api/_lib/billing-driver.js` is the ONE place that
+says which rail a workspace bills through (its customer record decides, so a
+QuickBooks-billed workspace stays there) and what its records are called;
+the engine, plan-change and the billing profile never name a provider.
+`api/_lib/stripe-billing.js` answers the same `customer`/`invoice`/
+`reconcile` as `qbo-billing.js` with server-priced invoice items on a
+`send_invoice` Stripe invoice (Stripe's hosted page is the card page), and
+`api/stripe-webhook.js` answers an OMEGA package invoice FIRST by running the
+engine's own reconcile, so paid means open within seconds; the runner and
+"I've paid" are the same reconcile. A legacy Stripe tier's
+`stripeCustomerId` never binds a package. QuickBooks-rail tests set
+`PACKAGING_PROVIDER=quickbooks`; the Stripe rail is
+`scripts/test-stripe-billing.js` on `scripts/_lib/stripe-double.js`.
+Runbook and what is not built (autopay, instant refund events, tax):
+`docs/PAYMENTS-STRIPE.md`.
+
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
 `name`, `shelfLabel` (Core · Add-on · Pro · Advanced · By the piece · Omega
@@ -759,7 +783,9 @@ module that would come on only in part, or switch on part of another, is
 not sold here; the quote says why and offers the recorded request
 (`plan-change` `opt-in`). Every Omega Logic department is exact on every
 plan; opening one module's Site Map commands on a legacy plan is not
-built. The one
+built. Add-ons bill through QuickBooks whatever the package rail
+(`addons.RAIL`; `package-billing.guard(c, rail)`), never rebinding a
+legacy Stripe tier's own customer; add-ons on Stripe are not built. The one
 browser control is `OmegaPackageMenu.addOnControl`; `scripts/test-addons.js`
 and `check:workspace` (legacy-add) hold it. A workspace with no `omega_orgs`
 or billing record cannot be billed and is told so. In flight is

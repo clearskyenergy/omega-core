@@ -74,7 +74,7 @@
     if (!state.canManage) { host.appendChild(node('p', 'Ask your workspace administrator to add this module.', 'opm-note')); return; }
     if (pendingChange) {
       host.appendChild(node('p', 'Waiting for payment · ' + pendingChange.display + ' · expires ' + pendingChange.expiresOn, 'opm-wait'));
-      if (pendingChange.paymentLink) host.appendChild(link(pendingChange.paymentLink, 'Pay in QuickBooks'));
+      if (pendingChange.paymentLink) host.appendChild(link(pendingChange.paymentLink, pendingChange.payWith ? 'Pay in ' + pendingChange.payWith : 'Pay the invoice'));
       var check = paidCheck(m, state);
       host.appendChild(check.button); host.appendChild(check.note);
       host.appendChild(button('Cancel request', function () {
@@ -101,7 +101,7 @@
           api('/api/plan-change', body).then(function (r) {
             host.textContent = '';
             if (r.state === 'active') host.appendChild(node('p', 'Added. Your tools are updating…', 'opm-quote'));
-            else { host.appendChild(node('p', 'Invoice created: ' + r.display + '. It switches on when the payment clears; pay before ' + r.expiresOn + '.', 'opm-wait')); if (r.paymentLink) host.appendChild(link(r.paymentLink, 'Pay in QuickBooks')); }
+            else { host.appendChild(node('p', 'Invoice created: ' + r.display + '. It switches on when the payment clears; pay before ' + r.expiresOn + '.', 'opm-wait')); if (r.paymentLink) host.appendChild(link(r.paymentLink, r.payWith ? 'Pay in ' + r.payWith : 'Pay the invoice')); }
             if (state.onChanged) state.onChanged(r);
           }, function (e) { host.textContent = ''; host.appendChild(node('p', e.message, 'opm-reason')); host.appendChild(button('Try again', function () { subscribeControl(host, m, state); })); });
         }, 'opm-primary'));
@@ -228,7 +228,7 @@
     }
   }
   /* ── "I'VE PAID" ────────────────────────────────────────────────────────
-     Paying happens on QuickBooks' page, in another tab; the module switches
+     Paying happens on the provider's page (Stripe's or QuickBooks'), in another tab; the module switches
      on when the platform sees the payment, which the hourly runner does on
      its own. This asks it to look now (plan-change reconcile-now, one look
      per workspace every eight seconds) and then asks the editor's plan
@@ -241,7 +241,7 @@
     var note = node('p', '', 'opm-note'), orgId = state.orgId || (state.summary || {}).orgId || null;
     note.setAttribute('role', 'status');
     var b = button("I've paid", function () {
-      b.disabled = true; b.textContent = 'Checking QuickBooks…'; note.textContent = '';
+      b.disabled = true; b.textContent = 'Checking your payment…'; note.textContent = '';
       var said = null, ask = { action: 'reconcile-now' }; if (orgId) ask.orgId = orgId;
       api('/api/plan-change', ask).then(function (r) { said = r; }, function (e) { said = { error: e.message }; })
         .then(function () { return api('/api/plan-change' + (orgId ? '?orgId=' + encodeURIComponent(orgId) : '')); })
@@ -250,7 +250,7 @@
           if (!still) { (state.onChanged || changed)({ state: 'active', add: [m.key] }); return; }
           b.disabled = false; b.textContent = "I've paid";
           note.textContent = said && said.throttled ? 'Checked a moment ago. Try again in a few seconds.' :
-            said && said.error ? said.error : 'QuickBooks does not show this payment yet. A card payment usually shows within a minute.';
+            said && said.error ? said.error : ((said && said.payWith) || 'The invoice') + ' does not show this payment yet. A card payment usually shows within a minute.';
         }, function () { b.disabled = false; b.textContent = "I've paid"; note.textContent = 'The payment could not be checked right now. Try again in a moment.'; });
     });
     return { button: b, note: note };
@@ -372,7 +372,7 @@
     if (bar.nextSibling !== anchor) anchor.parentNode.insertBefore(bar, anchor);
     bar.textContent = ''; bar.setAttribute('data-notice', key); bar.className = 'opm-notice' + (view.readOnly ? ' opm-bad' : '');
     bar.appendChild(node('span', n.text));
-    if (n.payUrl) bar.appendChild(link(n.payUrl, 'Pay in QuickBooks'));
+    if (n.payUrl) bar.appendChild(link(n.payUrl, n.payWith ? 'Pay in ' + n.payWith : 'Pay the invoice'));
     if (n.refused) { bar.appendChild(link('/workspace', 'Workspace')); return; }
     if (n.retry) {
       var said = node('p', '', 'opm-note'); said.setAttribute('role', 'status');
@@ -390,7 +390,7 @@
       var note = node('p', '', 'opm-note'); note.setAttribute('role', 'status');
       var paid = button("I've paid", function () {
         paid.disabled = true; paid.textContent = 'Checking…'; note.textContent = '';
-        /* a member may not ask QuickBooks to look (an owner's action), so a
+        /* a member may not ask for a look at the payment (an owner's action), so a
            refusal only skips that step; re-reading the plan is theirs too */
         var told = null;
         api('/api/plan-change', { action: 'reconcile-now' }).then(function (j) { told = j; }, function (e) { told = { refused: e.message }; })

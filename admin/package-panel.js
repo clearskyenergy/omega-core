@@ -63,7 +63,7 @@
       preview = { result: data, body: Object.assign({}, body, { previewId: data.previewId, effectiveAt: data.effectiveAt, dryRun: false }) };
       $('write-billing').textContent = JSON.stringify(data.billingPatch, null, 2);
       $('write-customer').textContent = JSON.stringify(data.customer, null, 2);
-      $('write-invoice').textContent = data.invoice ? JSON.stringify(data.invoice, null, 2) : 'No invoice at approval. Scheduled for trial end; QuickBooks will calculate tax:\n\n' + JSON.stringify(data.scheduledInvoice, null, 2);
+      $('write-invoice').textContent = data.invoice ? JSON.stringify(data.invoice, null, 2) : 'No invoice at approval. Scheduled for trial end:\n\n' + JSON.stringify(data.scheduledInvoice, null, 2);
       $('apply').textContent = data.trialStartsOnApproval ? 'Approve and start trial' : 'Activate and create invoice';
       $('apply').disabled = !data.canApply; $('review').disabled = false; message(data.notice); tab('write');
     }, function (e) { $('review').disabled = false; message(e.message, true); });
@@ -92,7 +92,7 @@
       head.textContent = '';
       head.appendChild(el('div', (summary.planDisplay || 'Lite') + (summary.monthlyDisplay ? ' · ' + summary.monthlyDisplay : ''), 'pp-plan-name'));
       head.appendChild(el('div', (summary.billingDay ? 'Billed on the ' + ordinal(summary.billingDay) + ' of each month' : 'Billing date follows the original signup day') + (summary.nextInvoiceOn ? ' · next invoice ' + summary.nextInvoiceOn : '') + (summary.packagingState ? ' · ' + summary.packagingState.replace(/_/g, ' ') : ''), 'pp-note'));
-      if (b.paymentLink) { var pay = el('a', 'Pay in QuickBooks', 'pp-pay'); pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; head.appendChild(pay); }
+      if (b.paymentLink) { var pay = el('a', 'Pay in ' + (b.billingProvider === 'stripe' ? 'Stripe' : 'QuickBooks'), 'pp-pay'); pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; head.appendChild(pay); }
     }
     if (data.canManagePackage) pane.appendChild(el('p', 'This is what the customer sees. Actions here are taken on the customer’s behalf and billed to them.', 'pp-note'));
     var pendingHost = el('div'); pane.appendChild(pendingHost);
@@ -112,7 +112,7 @@
         summary.pending.forEach(function (p) {
           var row = el('div', '', 'pp-pending');
           row.appendChild(el('span', (p.names || p.add).join(', ') + ' · ' + p.display + ' · pay before ' + p.expiresOn));
-          if (p.paymentLink) { var a = el('a', 'Pay in QuickBooks', 'pp-pay'); a.href = p.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); }
+          if (p.paymentLink) { var a = el('a', p.payWith ? 'Pay in ' + p.payWith : 'Pay the invoice', 'pp-pay'); a.href = p.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); }
           pendingHost.appendChild(row);
         });
       }
@@ -161,7 +161,7 @@
           var buy = button(m.pack.display, function () {
             buy.disabled = true; buy.textContent = 'Creating your invoice…';
             global.OmegaPackageMenu.api('/api/plan-change', { action: 'pack-quote', meter: m.key }).then(function (q) { return global.OmegaPackageMenu.api('/api/plan-change', { action: 'pack-buy', meter: m.key, previewId: q.previewId, effectiveAt: q.effectiveAt }); })
-              .then(function (r) { buy.remove(); var a = el('a', 'Pay ' + r.display + ' in QuickBooks', 'pp-pay'); a.href = r.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); row.appendChild(el('span', 'Added the moment the payment clears; good until ' + r.expiresOn + '.', 'pp-meter-note')); },
+              .then(function (r) { buy.remove(); var a = el('a', 'Pay ' + r.display + (r.payWith ? ' in ' + r.payWith : ''), 'pp-pay'); a.href = r.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); row.appendChild(el('span', 'Added the moment the payment clears; good until ' + r.expiresOn + '.', 'pp-meter-note')); },
                 function (e) { buy.disabled = false; buy.textContent = m.pack.display; message(e.message, true); });
           }, 'pp-primary'); row.appendChild(buy);
         }
@@ -290,10 +290,10 @@
       // Send as proposal opens the Subscription Proposal tool on this tenant with the
       // rail's current terms; the link is refreshed whenever the rail changes.
       var proposal = el('a', 'Send as proposal', 'pp-link'); proposal.id = 'pp-proposal'; proposal.target = '_blank'; proposal.rel = 'noopener'; rail.appendChild(proposal); proposalHref();
-      rail.appendChild(el('div', 'Approval starts one trial of at most 14 days. Paid activation waits for QuickBooks payment. Enterprise requires a staff quote.', 'pp-note'));
+      rail.appendChild(el('div', 'Approval starts one trial of at most 14 days. Paid activation waits for the payment (Stripe once PACKAGING_PROVIDER=stripe; QuickBooks for a workspace billed there). Enterprise requires a staff quote.', 'pp-note'));
       rail.querySelectorAll('input,select').forEach(function (n) { n.onchange = function () { proposalHref(); refreshQuote(); }; });
       var two = el('div', '', 'pp-two'); panes.write.appendChild(two);
-      [['write-invoice', 'QuickBooks invoice'], ['write-billing', 'Billing record'], ['write-customer', 'QuickBooks customer']].forEach(function (p) { var area = el('div'); area.appendChild(el('h3', p[1])); var pre = el('pre', 'Choose Review activation to load the server preview.'); pre.id = 'pp-' + p[0]; area.appendChild(pre); two.appendChild(area); });
+      [['write-invoice', 'Invoice'], ['write-billing', 'Billing record'], ['write-customer', 'Billing customer']].forEach(function (p) { var area = el('div'); area.appendChild(el('h3', p[1])); var pre = el('pre', 'Choose Review activation to load the server preview.'); pre.id = 'pp-' + p[0]; area.appendChild(pre); two.appendChild(area); });
       var applyButton = button('Apply reviewed changes', apply, 'pp-primary'); applyButton.id = 'pp-apply'; applyButton.disabled = true; panes.write.appendChild(applyButton);
       usagePanel(left, { review: true });
     }

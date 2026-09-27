@@ -42,6 +42,12 @@
 var M = require('./modules'), P = require('./subscription-pricing'), B = require('./pricebook'), R = require('./proration');
 var Q = require('./qbo-billing'), BP = require('./billing-profile'), Mode = require('./packaging-mode');
 var LOGIC = ['logic-office', 'logic-plant', 'logic-materials', 'logic-logistics', 'logic-customer'];
+/* The rail an add-on bills through: QuickBooks, whatever the deployment's
+   package rail (billing-driver.providerOf moves a PACKAGED workspace to
+   Stripe under PACKAGING_PROVIDER=stripe). A legacy plan may be a Stripe
+   tier whose own customer and paymentProvider are the plan's, never ours
+   to rebind; add-ons on Stripe need a binding of their own (not built). */
+var RAIL = 'quickbooks';
 /* The legacy add-on keys (omega-caps.js ADDON_GRANTS) that switch a module's
    editor capabilities on where the legacy editor gates them (data-cap:
    schematic, riser, export, engineering, compute, permitting). A module whose
@@ -201,7 +207,7 @@ async function records(c) { return (await current(c).collection('invoices').orde
    the billing flag, and the sandbox or the live company). The engine's words
    name flags and realms; a customer hears only that it is not open yet. */
 function payable(c) {
-  try { require('./package-billing').guard(c); return { ok: true }; }
+  try { require('./package-billing').guard(c, RAIL); return { ok: true }; }
   catch (e) { return { ok: false, detail: e.message }; }
 }
 function gate(c, rows, now, x, add) {
@@ -346,7 +352,7 @@ async function buy(db, orgId, input, caller, now, deps) {
   if (!Number.isSafeInteger(at) || at > now || now - at > 10 * 60000) fail('Refresh the price');
   if (!q.canBuy) fail(q.reason);
   if (q.needsProfile) fail('Add your billing contact first: it is who QuickBooks invoices.', 409, 'billing-profile');
-  require('./package-billing').guard(c);
+  require('./package-billing').guard(c, RAIL);
   var today = R.iso(now), id = 'addon-' + q.previewId;
   var record = { kind: 'addon', purpose: 'purchase', id: id, date: today, fresh: q.fresh, billingDay: q.billingDay, cycle: { start: q.cycle.start, end: q.cycle.end },
     period: { start: today, end: q.cycle.end }, add: q.add, lines: q.lines, subtotalCents: q.todayCents, totalCents: q.todayCents, monthlyCents: q.monthlyCents,
@@ -371,8 +377,8 @@ async function buy(db, orgId, input, caller, now, deps) {
       var live1 = await tx.get(cur), invoices = await tx.get(cur.collection('invoices').orderBy('date')), bookRef = db.doc('pricebook/' + c.book.version), bookSnap = await tx.get(bookRef);
       var fresh = live1.data() || {};
       if (!fresh.addOnLock || fresh.addOnLock.id !== id) fail('The purchase moved; retry');
-      var stored = Object.assign({}, record, issued ? { state: 'unpaid', qboInvoiceId: issued.id, qboCustomerId: customer, totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now }
-        : { state: 'paid', qboInvoiceId: null, qboCustomerId: customer, paidCents: 0, paymentLink: null, paidAt: now });
+      var stored = Object.assign({}, record, issued ? { state: 'unpaid', provider: RAIL, qboInvoiceId: issued.id, qboCustomerId: customer, totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now }
+        : { state: 'paid', provider: RAIL, qboInvoiceId: null, qboCustomerId: customer, paidCents: 0, paymentLink: null, paidAt: now });
       tx.set(cur.collection('invoices').doc(id), stored);
       var base = fresh, moved = issued ? null : boughtAfter(fresh, stored, 'unpaid', 'paid');
       if (moved) base = Object.assign({}, fresh, { addOns: Object.assign({}, fresh.addOns || {}, moved) });
@@ -426,7 +432,7 @@ async function cancel(db, orgId, addOnId, caller, now) {
 }
 /* ── The monthly renewal, on the add-on billing day (the hourly runner) ── */
 async function issue(db, orgId, now, deps) {
-  var S = require('./package-billing'), c = await context(db, orgId); S.guard(c);
+  var S = require('./package-billing'), c = await context(db, orgId); S.guard(c, RAIL);
   var b = c.billing, a = b.addOns || {}, today = R.iso(now), bought = order(a.modules || []);
   if (b.packaged === true || !bought.length || !a.nextInvoiceOn || a.nextInvoiceOn > today || a.state !== 'paid' || !a.billingDay) return { skipped: true };
   if (c.org.status !== 'active') return { skipped: true };
@@ -453,7 +459,7 @@ async function issue(db, orgId, now, deps) {
       var live1 = await tx.get(cur), inv = await tx.get(ref), invoices = await tx.get(cur.collection('invoices').orderBy('date')), fresh = live1.data() || {};
       if (inv.data().qboInvoiceId) return { alreadyIssued: true };
       if (!fresh.addOnInvoiceLock || fresh.addOnInvoiceLock.date !== plan.date) fail('Add-on renewal reservation changed; retry');
-      var stored = Object.assign({}, inv.data(), { state: 'unpaid', qboInvoiceId: issued.id, qboCustomerId: b.qboCustomerId, totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now });
+      var stored = Object.assign({}, inv.data(), { state: 'unpaid', provider: RAIL, qboInvoiceId: issued.id, qboCustomerId: b.qboCustomerId, totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now });
       tx.set(ref, stored);
       var all = invoices.docs.map(function (d) { return d.id === id ? stored : d.data(); });
       var patch = settle(fresh, all, c.book, now); patch.addOnInvoiceLock = null;

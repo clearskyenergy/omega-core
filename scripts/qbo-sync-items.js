@@ -18,8 +18,8 @@ async function main() {
     else if (/^--income-account=\d+$/.test(v)) options.incomeAccountId = v.slice(17);
     else throw new Error('Unknown option: [--apply --realm=ID --income-account=ID --taxable|--non-taxable] [--live]');
   });
-  if (options.live && !Mode.live()) throw new Error('--live needs PACKAGING_LIVE=true and QBO_ENV=production in the environment');
-  if (!options.live && Mode.live() && options.apply) throw new Error('The process is in live mode; say --live to sync the production company');
+  if (options.live && !Mode.live('quickbooks')) throw new Error('--live needs PACKAGING_LIVE=true and QBO_ENV=production in the environment');
+  if (!options.live && Mode.live('quickbooks') && options.apply) throw new Error('The process is in live mode; say --live to sync the production company');
   var db = options.apply ? require('../api/_lib/admin').db() : null;
   var book = db ? await B.load(db, B.VERSION) : B.proposed();
   console.log(JSON.stringify(await I.sync(db, book, options), null, 2));

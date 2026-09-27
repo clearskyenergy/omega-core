@@ -274,6 +274,13 @@ yet", and staff see why).
   `addOns.live` itself); on today's ladder Omega Sites is exact on
   Standard and Omega Capital on Deluxe, and Enterprise already holds
   every editor module.
+- **The rail is QuickBooks** (`addons.RAIL`), whatever the package rail:
+  under `PACKAGING_PROVIDER=stripe` a packaged workspace bills through
+  Stripe (`billing-driver`), but a legacy plan's add-ons are still
+  guarded, invoiced and reconciled as QuickBooks' (each record names its
+  `provider`), and a legacy Stripe tier's own customer and
+  `paymentProvider` are never rebound. Add-ons on Stripe need a customer
+  binding of their own (not built).
 - **One purchase waits at a time**; a waiting purchase can be cancelled
   (the QuickBooks invoice stays open until staff void it; a payment after a
   cancel or after its period is honoured and flagged for a person).
