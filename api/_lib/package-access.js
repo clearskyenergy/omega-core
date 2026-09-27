@@ -46,6 +46,16 @@ function project(caller, billing, org, member, now) {
     accessUntil: billing.accessUntil == null ? null : instant(billing.accessUntil), billingNotice: notice,
     tier: grants.tier, addons: grants.addons, caps: grants.caps, toolAccess: grants.toolAccess, catalog: M.catalog(), notSold: M.notSold(), readOnlyRibbon: M.readOnlyRibbon() };
 }
+/* A plan billed OUTSIDE the engine (a legacy tier): what the editor needs to
+ * open exactly the modules it bought as add-ons (Add to plan,
+ * api/_lib/addons.js) and to offer the rest where the plan stops (Opt in):
+ * the add-ons on now, by the add-on engine's own rule, and the catalog whose
+ * ribbon says which module owns each command. Presentation only: the tier
+ * still gates the ribbon, every producer checks the record on its own, and
+ * nothing here is a grant or a price. */
+function legacy(billing, now) {
+  return { packaged: false, addOns: require('./addons').live(billing || {}, now == null ? Date.now() : now), catalog: M.catalog(), notSold: M.notSold() };
+}
 function requireModule(view, key, options) {
   options = options || {};
   if (!view.packaged || view.staff) return;
@@ -89,4 +99,4 @@ function customerDrawing(active) {
   v.catalog = M.catalog(); v.notSold = M.notSold(); v.readOnlyRibbon = M.readOnlyRibbon();
   return v;
 }
-module.exports = { customerDrawing: customerDrawing, project: project, requireModule: requireModule, withToken: withToken, withCaller: withCaller, live: live };
+module.exports = { customerDrawing: customerDrawing, project: project, legacy: legacy, requireModule: requireModule, withToken: withToken, withCaller: withCaller, live: live };

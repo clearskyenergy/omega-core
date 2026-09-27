@@ -291,6 +291,27 @@ tabs), and Jarvis names and opens only `OmegaCaps.tabOpen` tabs
 Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move System) live
 on Draw on every plan, where a package puts them: `LITE` in the Compute
 tab's mover, held to the catalog by `scripts/tests/tlegacygates.js`.
+**Opt in where the plan stops** (Tommy, 2026-09-27: "if there is something
+that they don't have, it shouldn't be blank on the panel. It should say opt
+in and then allow them to add that as a purchase ... linked to the module
+... linked to the payment ... updates their bill"). A ribbon tab the plan
+opens nothing on, where a module for sale has commands, is never removed
+and never an empty ribbon: `OmegaCaps` marks it `data-optin="<modules>"`
+in the strip AND the phone's tab menu (the page's own module first, by the
+same `owners()` rule that hides; `markTabs` legacy, `layout()` packaged),
+and `OmegaPackageMenu.optIn()` shows those modules, the server's price and
+**Opt in** in its place. Opt in is the one purchase each plan already has:
+a package opens The Ladder on the module (plan-change quote/apply, on when
+paid); a legacy plan buys it as an add-on (`addOnDialog` →
+`addOnControl`: addon-quote, addon-buy, QuickBooks' card page, I've paid;
+monthly on its own invoice beside the plan). Paid, the plan is re-read
+(`OmegaCaps.refresh`) and the tab fills; a member is told who to ask
+(`GET /api/plan-change` `canManage`). The mark is an offer, never access:
+the tab's commands stay shut and `tabOpen` still refuses it. A shut tab
+with nothing for sale leaves the phone menu too (`data-tab-shut`); a
+product mode (bess-lite) or Designer still hides a tab. Held by
+`render-legacy-gates.js` (every tier, a bought add-on, a 390px phone) and
+the packaged render checks.
 The shared omega-package-menu.js renders catalog features and server-formatted
 prices. Staff package previews are read-only server projections, never tenant
 impersonation or billing edits. Legacy layout modes apply to unpackaged records.
@@ -787,16 +808,23 @@ paid` = reconcile-now; the hourly runner renews it monthly on the add-on
 billing day; off after an unpaid renewal's grace). Bought is
 `billing/current.addOns.modules`, on is `addOns.live`; on means what the
 legacy readers already honour — a Logic part through `logic-access`, a
-module's tools as `toolOverrides` (and the `toolAccess` allowlist), editor
-capabilities as the legacy add-on keys `omega-caps` reads — and
+module's tools as `toolOverrides` (and the `toolAccess` allowlist), its
+Site Map commands by the module itself (below), and a legacy key only
+where another reader honours one (`addons.LEGACY`: the storefront) — and
 `addOns.granted` makes switching off take back exactly that. It is sold
 only where it switches on EXACTLY (`addons.exact`, Tommy's decision
-2026-09-27): a legacy editor opens Site Map a whole tab at a time, so a
-module that would come on only in part, or switch on part of another, is
-not sold here; the quote says why and offers the recorded request
-(`plan-change` `opt-in`). Every Omega Logic department is exact on every
-plan; opening one module's Site Map commands on a legacy plan is not
-built. Add-ons bill through QuickBooks whatever the package rail
+2026-09-27). A legacy tier opens Site Map a whole tab at a time
+(`data-cap`), so a legacy editor key would open every module on the tab
+(the Compute tab carries Intel's and Engineer's commands); instead the
+editor opens a live add-on's OWN commands, wherever they sit, and nothing
+else on their tab (`omega-caps` `addOnOpens`/`addOnLayout`, from
+`GET /api/package-access`'s legacy answer, `package-access.legacy()`: the
+add-ons on and the catalog's ribbon), and `exact()` simulates exactly that
+(`OmegaWorkspaceHub.moduleEditor` `editorModules`). So every editor module
+is exact on every legacy plan; what is not (the storefront, set up with
+ClearSky) is not sold here: the quote says why and offers the recorded
+request (`plan-change` `opt-in`). Every Omega Logic department is exact on
+every plan. Add-ons bill through QuickBooks whatever the package rail
 (`addons.RAIL`; `package-billing.guard(c, rail)`), never rebinding a
 legacy Stripe tier's own customer; add-ons on Stripe are not built. The one
 browser control is `OmegaPackageMenu.addOnControl`; `scripts/test-addons.js`

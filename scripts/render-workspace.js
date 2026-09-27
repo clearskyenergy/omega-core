@@ -369,18 +369,26 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var legacyOut = await p.locator('#omega-package-menu').textContent();
     ok('northstar: legacy opt-out discloses existing billing and makes an email request without pretending to cancel', /billed outside the package engine/.test(legacyOut) && /does not change access, cancel charges or issue a refund/.test(legacyOut) && /^mailto:/.test(await p.locator('#omega-package-menu a').getAttribute('href')));
     await p.keyboard.press('Escape');
-    /* Add to plan on a module Standard cannot switch on exactly (Storage: its
-       Analyze-tab commands stay shut): the server's reason and the recorded
-       request, never a price to pay (api/_lib/addons.js exact()) */
+    /* Add to plan on Storage: sold on Standard now, exactly (the editor opens
+       its own Analyze and Estimate commands, never the whole tab: omega-caps
+       addOnOpens), so the server's price and Pay, never the request */
     STORE.posts = [];
     await p.click('#modules-body [data-ask-module="storage"]'); await wait(300);
     await p.locator('.ows-drawer [data-addon="storage"] button', { hasText: 'Add to plan' }).click(); await wait(500);
-    var notExact = await p.evaluate(function () { var h = document.querySelector('.ows-drawer [data-addon="storage"]'); return { text: h ? h.textContent.replace(/\s+/g, ' ') : '', buttons: h ? Array.prototype.map.call(h.querySelectorAll('button'), function (b) { return b.textContent.trim(); }) : [] }; });
-    ok('northstar: Add to plan on Storage says in the server\'s words why Standard cannot switch it on alone, and offers the recorded request, never a price to pay', /^Omega Storage cannot be added to your plan on its own/.test(notExact.text) && /whole tab at a time/.test(notExact.text) && !/Pay \$/.test(notExact.text) && notExact.buttons.join() === 'Ask ClearSky to include it,Close', notExact);
+    var exactly = await p.evaluate(function () { var h = document.querySelector('.ows-drawer [data-addon="storage"]'); return { text: h ? h.textContent.replace(/\s+/g, ' ') : '', buttons: h ? Array.prototype.map.call(h.querySelectorAll('button'), function (b) { return b.textContent.trim(); }) : [] }; });
+    ok('northstar: Add to plan on Storage is the server\'s price and Pay, on Standard too (its Site Map commands open with it, exactly)', /^\$[\d,]+ today/.test(exactly.text) && /^Pay \$[\d,]+ now$/.test(exactly.buttons[0] || '') && exactly.buttons.indexOf('Ask ClearSky to include it') < 0, exactly);
+    await p.locator('.ows-drawer [data-addon="storage"] button', { hasText: 'Cancel' }).click(); await wait(200);
+    await p.keyboard.press('Escape'); await wait(200);
+    /* what still cannot be switched on beside the plan (the storefront, set up
+       with ClearSky): the server's reason and the recorded request, never a price */
+    await p.click('#modules-body [data-ask-module="whitelabel"]'); await wait(300);
+    await p.locator('.ows-drawer [data-addon="whitelabel"] button', { hasText: 'Add to plan' }).click(); await wait(500);
+    var notExact = await p.evaluate(function () { var h = document.querySelector('.ows-drawer [data-addon="whitelabel"]'); return { text: h ? h.textContent.replace(/\s+/g, ' ') : '', buttons: h ? Array.prototype.map.call(h.querySelectorAll('button'), function (b) { return b.textContent.trim(); }) : [] }; });
+    ok('northstar: Add to plan on the storefront says in the server\'s words why it cannot be added alone, and offers the recorded request, never a price to pay', /^Omega Storefront is set up with ClearSky, so it cannot be added here on its own\./.test(notExact.text) && !/Pay \$/.test(notExact.text) && notExact.buttons.join() === 'Ask ClearSky to include it,Close', notExact);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'legacy-not-exact.png') });
-    await p.locator('.ows-drawer [data-addon="storage"] button', { hasText: 'Ask ClearSky to include it' }).click(); await wait(400);
-    var asked = await p.$eval('.ows-drawer [data-addon="storage"]', function (e) { return e.textContent.replace(/\s+/g, ' '); });
-    ok('northstar: the request goes on record with its price and nothing is charged', /^Requested: Omega Storage at \$[\d,]+\/month\. ClearSky has it; nothing is charged\./.test(asked) && STORE.posts.map(function (x) { return x.action; }).join() === 'addon-quote,opt-in', { asked: asked, posts: STORE.posts.map(function (x) { return x.action; }) });
+    await p.locator('.ows-drawer [data-addon="whitelabel"] button', { hasText: 'Ask ClearSky to include it' }).click(); await wait(400);
+    var asked = await p.$eval('.ows-drawer [data-addon="whitelabel"]', function (e) { return e.textContent.replace(/\s+/g, ' '); });
+    ok('northstar: the request goes on record with its price and nothing is charged', /^Requested: Omega Storefront at \$[\d,]+\/month\. ClearSky has it; nothing is charged\./.test(asked) && STORE.posts.map(function (x) { return x.action; }).join() === 'addon-quote,addon-quote,opt-in', { asked: asked, posts: STORE.posts.map(function (x) { return x.action; }) });
     await p.keyboard.press('Escape'); await wait(200);
     await p.evaluate(function () { window.location.hash = ''; }); await wait(250);
     var cards = await p.$$eval('#flight-body .pc', function (r) { return r.map(function (x) { return x.querySelector('b').textContent + '|' + (x.querySelector('.why') ? x.querySelector('.why').textContent : '') + '|' + (x.querySelector('.who .nm') ? x.querySelector('.who .nm').textContent : '') + '|' + (x.querySelector('.fin') ? x.querySelector('.fin').textContent : ''); }); });
