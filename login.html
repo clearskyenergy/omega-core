@@ -859,20 +859,26 @@
          person whose company has no omega_orgs record was opened onto an
          empty "Test workspace" instead of the signup they had started.
          Only someone with nothing else counts: no record, no cross-org
-         grant, not staff, no older access request (that one has its own
-         banner) and no accepted terms — every person who has used a legacy
-         workspace that was never seeded has accepted them, and keeps it.
-         route() sends them on only while packaged signup is on, and
-         /start.html re-reads the record itself, so a record this read
-         missed opens the workspace from there. */
+         grant, not staff, not a tenant this page names, no older access
+         request (that one has its own banner), and either no accepted terms
+         or no project under the company. A legacy workspace that was never
+         seeded has both, and keeps it; an account that was opened onto an
+         empty derived workspace before the signup existed (and accepted the
+         terms there) has no project, and goes to signup. A project query
+         that fails counts as "has projects": an unknown is never a reason
+         to move a customer. route() sends them on only while packaged
+         signup is on, and /start.html re-reads the record itself, so a
+         record this read missed opens the workspace from there. */
       let signup = false;
-      if (!logicOrg && !grantOrg && !isAdminDomain && !staffActive &&
+      if (!logicOrg && !grantOrg && !isAdminDomain && !staffActive && !TENANT_NAMES[homeOrg] &&
           dests.length === 1 && dests[0].key === "workspace") {
-        const [req, terms] = await Promise.all([
+        const [req, terms, hasWork] = await Promise.all([
           readDoc(["access_requests", uid]),
-          readDoc(["termsAcceptances", uid])
+          readDoc(["termsAcceptances", uid]),
+          fs.getDocs(fs.query(fs.collection(db, "projects"), fs.where("orgId", "==", homeOrg), fs.limit(1)))
+            .then((snap) => !snap.empty, () => true)
         ]);
-        signup = !req && !terms;
+        signup = !req && (!terms || !hasWork);
       }
 
       return { dests: dests, org: homeOrg, signup: signup };
@@ -1180,15 +1186,16 @@
            or an address that could be forwarded: these companies do not want
            to be out there. */
         const next = '/start.html';
-        try { localStorage.setItem('omega:signup-draft', JSON.stringify({ company: company, vertical: vertical, email: email, at: Date.now() })); } catch (_) {}
+        try { localStorage.setItem('omega:signup-draft', JSON.stringify({ company: company, vertical: vertical, note: note, email: email, at: Date.now() })); } catch (_) {}
         try { await auth.sendEmailVerification(user, { url: location.origin + next }); }
         catch (_) { try { await auth.sendEmailVerification(user); } catch (_2) {} }
         let joins = false;
         try { joins = !!(await readDoc(["omega_orgs", domain])); } catch (_) {}
         if (joins) { suSay("Your company is already on OMEGA — taking you in.", "info"); showPane("signIn"); return route(user, { quick: true }); }
-        /* Straight on to the signup page: it says the link is on its way,
-           waits for the click and carries on to the billing profile, the
-           system and the first invoice. */
+        /* Straight on to the signup page, which opens on the signup itself
+           (how you work, billing profile, build your system, pay) with the
+           company carried over; the link in the email is needed only to
+           subscribe, and the page carries on once it is clicked. */
         return toSignup();
       }
       /* Best effort, and it must not block the flow: an unverified address

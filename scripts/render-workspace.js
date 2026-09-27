@@ -565,7 +565,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   await scenario('legacy-enterprise-opt-out', FX.legacyEnterprise(HOST), { url: '/workspace#modules', steps: async function (p) {
     await p.waitForFunction(function () { return document.querySelectorAll('#modules-body [data-remove-module]').length > 5; });
     await modulesFit(p, 'legacy Enterprise');
-    ok('legacy Enterprise: every optional module has an opt-out, Lite never does', await p.locator('#modules-body [data-remove-module]').count() === M.catalog().length - 1 && await p.locator('#modules-body [data-remove-module="lite"]').count() === 0);
+    /* every module it holds, bar Lite; Omega Storefront is not among them:
+       the public storefront opens only where the tenant record or the add-on
+       switches it on (api/_lib/embed.js), never on the tier, and this
+       tenant has neither */
+    ok('legacy Enterprise: every optional module it holds has an opt-out, Lite never does', await p.locator('#modules-body [data-remove-module]').count() === M.catalog().length - 2 && await p.locator('#modules-body [data-remove-module="lite"]').count() === 0 && await p.locator('#modules-body [data-remove-module="whitelabel"]').count() === 0);
     await p.locator('#modules-body [data-remove-module="logic-office"]').click();
     await p.locator('#omega-package-menu').getByRole('button', { name: 'Opt out', exact: true }).click();
     var link = p.locator('#omega-package-menu a'), draft = decodeURIComponent(await link.getAttribute('href'));

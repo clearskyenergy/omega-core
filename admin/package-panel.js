@@ -229,7 +229,7 @@
       /* add-ons it bought on Add to plan and has on now (api/_lib/addons.js) are held too */
       var ao = b.addOns || null, liveAdd = ao && Array.isArray(ao.live) && typeof ao.accessUntil === 'number' && Date.now() < ao.accessUntil ? ao.live : [];
       var ctx = { packaged: false, modules: [], addons: b.addons || [], addOns: liveAdd, tierLevel: wsLike.tierLevel, tool: function (k) { return !!(T && T.byKey(k)); }, canOpen: function (k) { var t = T && T.byKey(k); return !!t && T.isUnlocked(t, wsLike); },
-        canCap: H && H.capsFor ? H.capsFor(b, orgId) : null, visible: function (k) { var t = T && T.byKey(k); return !!t && T.isVisible(t, wsLike); } };
+        canCap: H && H.capsFor ? H.capsFor(b, orgId) : null, billing: b, whiteLabel: data.whiteLabel || null, visible: function (k) { var t = T && T.byKey(k); return !!t && T.isVisible(t, wsLike); } };
       out.partly = [];
       (data.modules || []).forEach(function (m) { var st = H && T ? H.moduleState(m, ctx) : 'ask'; if (st === 'held') out.held.push(m.key); else if (st === 'part') out.partly.push(m.key); });
       /* a package drawn from what they hold OR partly use: moving a legacy
