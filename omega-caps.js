@@ -641,7 +641,11 @@
         setOrg(email);
         setAddons([]);
         var resolution = ++_packageRequest;
-        setPackage(null);
+        /* LOCKED while the answer is on its way, never open: the previous
+           account's package must not linger, and a packaged workspace must
+           not be clickable while /api/package-access loads. commit() opens
+           what the answer says. */
+        setPackage(pendingPackage());
         read(db, email, emailVerified, false).then(function (plan) {
           if (resolution !== _packageRequest) return done('trial');
           commit(plan); done(plan.tier);
@@ -678,7 +682,9 @@
   }
   var _refreshing = null, _watch = null;
   function refresh(db, user) {
-    if (_refreshing) return _refreshing;
+    /* a read already on its way may have started before the purchase that
+       asked for this one: ask again once it lands, never ride on it */
+    if (_refreshing) return _refreshing.then(function () { return refresh(db, user); });
     if (_package && (_package.staff || _package.preview)) return Promise.resolve({ changed: false, skipped: 'staff' });
     db = db || (_watch && _watch.db && _watch.db());
     user = user || (global.firebase && global.firebase.auth && global.firebase.auth().currentUser);
@@ -732,6 +738,10 @@
     if (!_watch || !_package || _package.staff || _package.preview || _package.readOnly || !_package.accessUntil) return;
     var wait = _package.accessUntil - Date.now();
     if (!(wait < 2147483647)) return;
+    /* this clock is already past the deadline and the server still says
+       open (a clock ahead of the server's): the server decides, asked each
+       minute, instead of a lock that the next answer lifts every second */
+    if (wait <= 0) { _deadline = setTimeout(function () { _deadline = null; ask(true); }, 60000); return; }
     _deadline = setTimeout(function () {
       _deadline = null;
       if (!_package || _package.staff || _package.preview) return;

@@ -242,6 +242,37 @@ async function liveChecks() {
   await new Promise(function (done) { setTimeout(done, 1250); });
   ok(C.packageAccess().readOnly === true, 'at accessUntil the open editor turns read-only by itself');
   ok(announced().some(function (e) { return e.detail.readOnly && !e.detail.wasReadOnly; }), 'and says so');
+  /* sign-in: locked while the answer is on its way, never open */
+  var release, slowDb = { collection: function () { return { doc: function () { return { collection: function () { return { doc: function () { return {
+    get: function () { return new Promise(function (r) { release = r; }); } }; } }; } }; } }; } };
+  var signing = C.resolve(slowDb, user.email, true);
+  ok(C.packageAccess() && C.packageAccess().pending === true && C.packageAccess().readOnly === true,
+     'while sign-in reads the plan the editor is locked, not open',
+     'the read()/commit() split had left it open (and clickable) while /api/package-access loaded');
+  release({ exists: true, data: function () { return { tier: 'standard' }; } });
+  ok(await signing === 'standard' && C.packageAccess() === null, 'and opens what the answer says');
+
+  /* a re-check asked for while another is on its way reads again after it */
+  db.seed(billing, { packaged: true }); answer.status = 200; answer.body = view(['lite']); asked = 0;
+  await C.refresh(db, user); asked = 0;
+  var gate, slowFetch = global.fetch;
+  global.fetch = function () { asked++; var body = answer.body; return new Promise(function (r) { gate = function () { r({ ok: true, status: 200, json: function () { return Promise.resolve(body); } }); }; }); };
+  var first = C.refresh(db, user);
+  await new Promise(function (r) { setTimeout(r, 20); });
+  answer.body = view(['lite', 'storage']);
+  var second = C.refresh(db, user);
+  gate(); await first; await new Promise(function (r) { setTimeout(r, 20); }); gate(); r = await second;
+  ok(asked === 2 && C.packageAccess().modules.indexOf('storage') >= 0,
+     'a refresh asked for mid-read reads again, so a purchase made meanwhile is not missed', 'asked ' + asked);
+  global.fetch = slowFetch;
+
+  /* a clock ahead of the server's: past accessUntil here, still open there */
+  var skewed = view(['lite', 'storage']); skewed.accessUntil = Date.now() - 5000;
+  answer.body = skewed; events.length = 0;
+  await C.refresh(db, user);
+  await new Promise(function (d) { setTimeout(d, 1300); });
+  ok(C.packageAccess().readOnly === false && !announced().some(function (e) { return e.detail.readOnly; }),
+     'a clock ahead of the server does not lock and unlock the editor every second: the server decides');
   delete global.fetch; delete global.firebase;
 }
 

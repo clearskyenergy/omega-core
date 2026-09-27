@@ -75,7 +75,7 @@
     if (pendingChange) {
       host.appendChild(node('p', 'Waiting for payment · ' + pendingChange.display + ' · expires ' + pendingChange.expiresOn, 'opm-wait'));
       if (pendingChange.paymentLink) host.appendChild(link(pendingChange.paymentLink, 'Pay in QuickBooks'));
-      var check = paidCheck(function () { return !control.pending[m.key]; }, function () { changed({ state: 'active', add: [m.key] }); });
+      var check = paidCheck(m, state);
       host.appendChild(check.button); host.appendChild(check.note);
       host.appendChild(button('Cancel request', function () {
         host.textContent = 'Cancelling…';
@@ -119,18 +119,24 @@
      per workspace every eight seconds) and then asks the editor's plan
      again, so the person who just paid sees the tools without a reload.
      The browser decides nothing: `cleared()` reads the server's answer. */
-  function paidCheck(cleared, onCleared) {
-    var note = node('p', '', 'opm-note'); note.setAttribute('role', 'status');
+  function paidCheck(m, state) {
+    /* the workspace the card belongs to (staff act for a tenant in the master
+       console) and the page's own "it changed" (the store, the console, the
+       editor's dialog) */
+    var note = node('p', '', 'opm-note'), orgId = state.orgId || (state.summary || {}).orgId || null;
+    note.setAttribute('role', 'status');
     var b = button("I've paid", function () {
       b.disabled = true; b.textContent = 'Checking QuickBooks…'; note.textContent = '';
-      var said = null;
-      api('/api/plan-change', { action: 'reconcile-now' }).then(function (r) { said = r; }, function (e) { said = { error: e.message }; })
-        .then(loadControl).then(function (fresh) {
-          if (fresh.canManage && cleared()) { onCleared(); return; }
+      var said = null, ask = { action: 'reconcile-now' }; if (orgId) ask.orgId = orgId;
+      api('/api/plan-change', ask).then(function (r) { said = r; }, function (e) { said = { error: e.message }; })
+        .then(function () { return api('/api/plan-change' + (orgId ? '?orgId=' + encodeURIComponent(orgId) : '')); })
+        .then(function (summary) {
+          var still = (summary.pending || []).some(function (p) { return (p.add || []).indexOf(m.key) >= 0; });
+          if (!still) { (state.onChanged || changed)({ state: 'active', add: [m.key] }); return; }
           b.disabled = false; b.textContent = "I've paid";
-          note.textContent = !fresh.canManage ? 'The payment could not be checked right now. Try again in a moment.' : said && said.throttled ? 'Checked a moment ago. Try again in a few seconds.' :
+          note.textContent = said && said.throttled ? 'Checked a moment ago. Try again in a few seconds.' :
             said && said.error ? said.error : 'QuickBooks does not show this payment yet. A card payment usually shows within a minute.';
-        });
+        }, function () { b.disabled = false; b.textContent = "I've paid"; note.textContent = 'The payment could not be checked right now. Try again in a moment.'; });
     });
     return { button: b, note: note };
   }
@@ -195,11 +201,12 @@
     notice();
     /* With The Ladder open the card itself says it ("On your plan · Show
        me"); a toast over the dialog would only cover it. */
-    if (body) { loadControl().then(function () { if (body) render(lastRows, null); }); return; }
+    /* a member's cards stay a member's: only a manager's controls are reloaded */
+    if (body) { (control.canManage ? loadControl() : Promise.resolve()).then(function () { if (body) render(lastRows, null); }); return; }
     if (!document.getElementById('ribbon')) return;
     var added = (d.packaged ? d.added : []).filter(function (k) { return k !== 'lite'; }), removed = d.packaged ? d.removed : [];
     if (d.readOnly && !d.wasReadOnly) return toast('This workspace is read-only now. Saved projects stay available; pay to keep creating and exporting.', link('/workspace#billing', 'Plan & billing'));
-    if (d.recovered) return toast('Your plan is loaded. Your tools are back.');
+    if (d.recovered) return toast(d.readOnly ? 'Your plan is loaded. This workspace is read-only; saved projects stay available.' : 'Your plan is loaded. Your tools are back.', d.readOnly ? link('/workspace#billing', 'Plan & billing') : null);
     if (added.length) {
       var map = places(), hit = null, i;
       for (i = 0; i < added.length && !hit; i++) hit = map[added[i]] ? added[i] : null;
@@ -221,7 +228,8 @@
     var caps = global.OmegaCaps, view = caps && caps.packageAccess(), ribbon = document.getElementById('ribbon'), bar = document.getElementById('omega-plan-notice');
     /* signed in to the editor itself: never the sign-in screen's locked
        placeholder, never the customer's Editor Lite frame (its own access) */
-    var user = global.firebase && global.firebase.auth && global.firebase.auth().currentUser, own = !!user && !/[?&]customerEngine=1(&|$)/.test(global.location.search);
+    var own = false;
+    try { own = !/[?&]customerEngine=1(&|$)/.test(global.location.search) && !!(global.firebase && global.firebase.apps && global.firebase.apps.length && global.firebase.auth().currentUser); } catch (e) { own = false; }
     var n = own && view && !view.staff && !view.preview && (view.billingNotice || (view.pending ? { text: 'Your plan could not be checked. Saved projects stay available; your tools come back when the connection does.', retry: true } : null));
     if (!n || !ribbon || host.view) { if (bar) bar.remove(); return; }
     var key = [n.text, n.payUrl || '', view.readOnly ? 1 : 0].join('|');
