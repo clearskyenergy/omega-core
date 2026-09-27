@@ -388,7 +388,7 @@ async function buy(db, orgId, input, caller, now, deps) {
       if (bookSnap.exists) B.freeze(tx, bookRef, bookSnap.data(), now);
       /* the runner renews and reconciles it: packagedLive is what the live
          runner's query reads (the sandbox runner reads packagingSandbox) */
-      if (Mode.live()) tx.set(c.root, { packagedLive: true, updatedAt: now }, { merge: true });
+      if (Mode.live(RAIL)) tx.set(c.root, { packagedLive: true, updatedAt: now }, { merge: true });
       if (issued) tx.set(c.root.collection('notifications').doc('addon-invoice-' + id), { kind: 'billing', read: false, createdAt: now,
         text: 'Your invoice to add ' + q.addNames.join(', ') + ' is ready: ' + P.money(issued.totalCents) + '. Pay it by card in QuickBooks and it switches on as soon as the payment clears.',
         packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents) });

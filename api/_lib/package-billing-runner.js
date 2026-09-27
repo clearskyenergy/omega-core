@@ -70,12 +70,22 @@ async function staffDeliver(db, now, mailer) {
     } catch (e) { await row.ref.update({ mailState: 'review-required', mailCompletedAt: now }); }
   }
 }
+/* Which tenants this deployment bills, judged over BOTH providers: live
+   when either is live (a QuickBooks-live deployment that moves new signups
+   to Stripe still renews and reconciles its QuickBooks tenants, whether or
+   not the Stripe key is live yet), and running at all when either is open.
+   Each tenant's own provider is still judged by the engine's guard. */
+function scope() {
+  var live = Mode.live('quickbooks') || Mode.live('stripe');
+  return { open: Mode.open('quickbooks') || Mode.open('stripe'), field: live ? 'packagedLive' : 'packagingSandbox' };
+}
 async function tick(db, now, options) {
   options = options || {};
   if (process.env.PACKAGING_BILLING_ENABLED !== 'true') return { disabled: true };
   // Guard before any state change, even the worker cursor: the sandbox, or
   // production only under the live switch (packaging-mode).
-  if (!Mode.open()) return { disabled: true, reason: 'sandbox-required' };
+  var where = scope();
+  if (!where.open) return { disabled: true, reason: 'sandbox-required' };
   var state = db.doc('integrations/packaging-billing'), id = crypto.randomBytes(12).toString('hex');
   var lease = await db.runTransaction(async function (tx) {
     var snap = await tx.get(state), old = snap.exists ? snap.data() : {};
@@ -86,7 +96,7 @@ async function tick(db, now, options) {
   var count = Math.min(options.limit || 1, 10), results = [], last = lease.cursor || null;
   try {
     /* live: the tenants activated or signed up in the production company, and the legacy workspaces with add-ons there (packagedLive); sandbox: the marked sandbox tenants. A sandbox signup is `packaged` too, so that mark alone would send the production runner at it. */
-    var query = db.collection('omega_orgs').where(Mode.live() ? 'packagedLive' : 'packagingSandbox', '==', true).orderBy('__name__').limit(count);
+    var query = db.collection('omega_orgs').where(where.field, '==', true).orderBy('__name__').limit(count);
     if (last) query = query.startAfter(last);
     var rows = await query.get();
     for (var i = 0; i < rows.docs.length; i++) {
@@ -118,4 +128,4 @@ async function tick(db, now, options) {
     await db.runTransaction(async function (tx) { var s = await tx.get(state); if (s.exists && s.data().lock && s.data().lock.id === id) tx.update(state, { lock: null }); });
   }
 }
-module.exports = { authorize: authorize, tick: tick, notice: notice, deliver: deliver, staffDeliver: staffDeliver };
+module.exports = { authorize: authorize, tick: tick, scope: scope, notice: notice, deliver: deliver, staffDeliver: staffDeliver };

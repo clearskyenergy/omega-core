@@ -160,9 +160,9 @@ async function apply(db, orgId, input, caller, now, deps) {
          the live runner finds its tenants by packagedLive (a sandbox signup
          is also `packaged`, and the production runner must never poll it),
          the sandbox runner by packagingSandbox */
-      if (p.action !== 'approve') tx.set(c.root, { packaged: true, packagedLive: Mode.live(), updatedAt: now }, { merge: true });
+      if (p.action !== 'approve') tx.set(c.root, { packaged: true, packagedLive: Mode.live(provider), updatedAt: now }, { merge: true });
       if (p.action === 'approve') {
-        tx.update(c.root, { status: 'active', approvedAt: now, approvedBy: caller.email, packagingTrialUsedAt: now, packaged: true, packagedLive: Mode.live() });
+        tx.update(c.root, { status: 'active', approvedAt: now, approvedBy: caller.email, packagingTrialUsedAt: now, packaged: true, packagedLive: Mode.live(provider) });
         (c.org.domains || []).forEach(function (host) { tx.set(db.doc('tenant_public/' + host), { status: 'active', tier: patch.tier }, { merge: true }); });
         tx.set(c.root.collection('notifications').doc('package-approved'), { kind: 'account', read: false, createdAt: now,
           text: 'Your workspace is approved. Your trial ends on ' + R.iso(patch.trialEndsAt) + '.', packageMail: 'approved', mailState: 'pending' });

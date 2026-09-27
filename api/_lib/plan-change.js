@@ -129,6 +129,11 @@ function quote(c, rows, input, now) {
   var reissued = rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'reversed' && r.cycle && r.cycle.start === cycle.start; }).length;
   if (reissued) basis.reissued = reissued;
   var id = Q.key(B.stable(basis));
+  /* a cancelled change of this cycle for any of these modules whose invoice
+     is still open, asked for on another day (another price, so another id):
+     never a second invoice beside it; pay that one, or ClearSky voids it */
+  var stillOpen = rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'cancelled' && D.issued(r) && r.cycle && r.cycle.start === cycle.start && r.id !== 'change-' + id && (r.add || []).some(function (k) { return add.indexOf(k) >= 0; }); });
+  if (blocked.canApply && stillOpen.length) blocked = { canApply: false, reason: 'Your cancelled request for ' + names(stillOpen[0].add).join(', ') + ' still has an open ' + D.name(D.recordProvider(stillOpen[0])) + ' invoice' + (stillOpen[0].paymentLink ? ' (' + stillOpen[0].paymentLink + ')' : '') + '. Pay that invoice to switch it on, or ask ClearSky to void it and request again.' };
   return { orgId: c.root.id, previewId: id, effectiveAt: now, add: add, addNames: names(add), modules: target, plan: after.plan, planBefore: before.plan, planDisplay: after.display.plan,
     before: { plan: before.plan, monthlyCents: before.monthlyCents, display: before.display.monthly },
     after: { plan: after.plan, monthlyCents: after.monthlyCents, display: after.display.monthly, fit: after.display.fit },

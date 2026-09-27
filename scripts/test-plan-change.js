@@ -214,6 +214,11 @@ async function run() {
   equal([calls, db.data.get(root + '/billing/current/invoices/' + e1.changeId).state, bill().amountDue > 0, bill().paymentLink], [invoicesBefore, 'unpaid', true, e1.paymentLink], 'no second invoice; it is owed and offered again');
   ok(Array.from(db.data.keys()).some(function (k) { return k.indexOf(root + '/admin_audit/' + e1.changeId + '-reopen-') === 0; }), 'and audited');
   equal((await quote(['engineering'])).canApply, false, 'while it waits, the same addition is not offered twice');
+  /* on another day the price differs (another id): never a second invoice beside the still-open cancelled one */
+  await req('POST', { action: 'cancel', changeId: e1.changeId });
+  var nextDay = await C.preview(db, orgId, { add: ['engineering'] }, now + 86400000);
+  ok(nextDay.previewId !== e1.changeId.slice(7), 'another day, another price'); equal(nextDay.canApply, false); ok(/still has an open QuickBooks invoice/.test(nextDay.reason), nextDay.reason);
+  await req('POST', { action: 'apply', add: ['engineering'], orgId: orgId, previewId: e1.changeId.slice(7), effectiveAt: now }).then(function (r) { equal(r.changeId, e1.changeId, 'the same day it revives again'); });
   /* once that invoice is dead (staff voided it), the next request is a new change with its own invoice */
   await req('POST', { action: 'cancel', changeId: e1.changeId });
   receipts[db.data.get(root + '/billing/current/invoices/' + e1.changeId).qboInvoiceId] = { satisfied: false, reversed: true, paidCents: 0, payUrl: null };
