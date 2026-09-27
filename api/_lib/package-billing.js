@@ -6,6 +6,7 @@
 var B = require('./pricebook'), P = require('./subscription-pricing'), Policy = require('./package-billing-policy');
 var Mode = require('./packaging-mode');
 var BP = require('./billing-profile'), Q = require('./qbo-billing'), M = require('./modules'), R = require('./proration'), U = require('./usage');
+var Refer = require('./refer');
 function fail(message, status) { var e = new Error(message); e.status = status || 409; throw e; }
 function clean(b) { var out = Object.assign({}, b); delete out.activationLock; return out; }
 function basis(c) { return Q.key(B.stable({ org: c.org, billing: clean(c.billing), profile: c.profile, book: c.book })); }
@@ -172,13 +173,20 @@ async function issue(db, orgId, now, deps) {
   var plan = await db.runTransaction(async function (tx) {
     var existing = await tx.get(ref), live = await tx.get(current), latest = live.data();
     var ending = R.cycle(R.addDays(b.nextInvoiceOn, -1), latest.billingDay || 1), used = await tx.get(c.root.collection('usage').doc(ending.start));
+    /* Refer & earn: the credits this workspace applied come off a NEW
+       invoice, drawn in this transaction (api/_lib/refer.js draw). A
+       prepared invoice being retried already carries its draw. */
+    var credits = existing.exists ? null : await tx.get(Refer.appliedQuery(db, orgId));
     if (existing.exists && existing.data().qboInvoiceId) return null;
     if (latest.nextInvoiceOn !== b.nextInvoiceOn) fail('Billing date changed; retry');
     if (latest.invoiceLock && latest.invoiceLock.until > now) fail('Invoice is already being issued');
     var prepared = existing.exists ? existing.data() : Policy.invoice(latest, c.book, latest.nextInvoiceOn, used.exists ? used.data() : null);
+    var drawn = credits ? Refer.draw(prepared, credits.docs.map(function (d) { return d.data(); })) : null;
+    if (drawn) prepared = drawn.plan;
     prepared.marker = 'OMEGA subscription ' + orgId + ' / ' + prepared.date;
     tx.set(ref, Object.assign({}, prepared, { state: 'prepared', createdAt: prepared.createdAt || now }));
     tx.update(current, { invoiceLock: { date: prepared.date, until: now + 120000 } });
+    if (drawn) Refer.recordDraws(tx, db, drawn.used, now);
     return prepared;
   });
   if (!plan) return { skipped: true, alreadyIssued: true };
@@ -197,10 +205,13 @@ async function issue(db, orgId, now, deps) {
         packagingState: state, paymentLink: issued.payUrl, amountDue: issued.totalCents / 100,
         accessUntil: state === 'paid' ? R.date(R.addDays(R.businessDays(due, c.book.policy.failedPaymentGraceBusinessDays), 1)) : latest.accessUntil || now });
       tx.set(current.collection('history').doc('invoice-' + plan.date), { at: now, by: 'billing-run', action: 'invoice-issued',
-        qboInvoiceId: issued.id, date: plan.date, amountCents: issued.totalCents });
+        qboInvoiceId: issued.id, date: plan.date, amountCents: issued.totalCents, referralCreditCents: Refer.covered(plan) || null });
+      /* a referral credit that covered the whole invoice leaves nothing to pay: the notice and the mail say so */
+      var credited = Refer.covered(plan), nothingDue = credited > 0 && issued.totalCents === 0;
       tx.set(c.root.collection('notifications').doc('package-invoice-' + plan.date), { kind: 'billing', read: false, createdAt: now,
-        text: 'Your subscription invoice is ready: ' + P.money(issued.totalCents) + '. Pay in QuickBooks to continue.',
-        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents) });
+        text: nothingDue ? 'Your referral credit covered this invoice (' + P.money(credited) + ' off). Nothing to pay.'
+          : 'Your subscription invoice is ready: ' + P.money(issued.totalCents) + (credited ? ', after ' + P.money(credited) + ' of referral credit' : '') + '. Pay in QuickBooks to continue.',
+        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents), covered: nothingDue });
       return { issued: true, date: plan.date, invoiceId: issued.id, paymentLink: issued.payUrl };
     });
   } catch (e) {
@@ -349,6 +360,13 @@ async function reconcile(db, orgId, now, deps, options) {
     results.push({ invoiceId: record.qboInvoiceId, kind: kindOf(record), state: state, was: record.state, changed: record.state !== state, reviewRequired: review });
   }
   if (bounded) await current.update({ reconcileCursor: rows.docs.length === bounded ? rows.docs[rows.docs.length - 1].data().date : null });
+  /* Refer & earn: a workspace another sent is rewarded the first time it
+     pays. Idempotent (one read once it is rewarded), asked whenever a paid
+     subscription invoice is read, so a missed turn is caught on the next;
+     never a reason for billing to fail. */
+  if (results.some(function (r) { return r.kind === 'subscription' && r.state === 'paid'; })) {
+    try { await Refer.onPaid(db, orgId, now, 'quickbooks', options && options.refer); } catch (e) { console.warn('[package-billing] referral reward deferred:', e && e.message); }
+  }
   return { invoices: results };
 }
 module.exports = { context: context, guard: guard, live: live, canApply: canApply, prepare: prepare, display: display, preview: preview, apply: apply,

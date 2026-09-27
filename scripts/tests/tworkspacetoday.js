@@ -23,6 +23,11 @@ ok('a trial with ten days left is a warning naming the days', trial.needs[0].cls
 ok('a trial with a month left is not on the list', b({ trialEndsAt: NOW + 30 * DAY }).needs.length === 0);
 var notice = b({ billingNotice: { text: 'Your trial ends on 2026-10-05.' } });
 ok('a billing notice without read-only is a warning that opens the plan', notice.needs[0].key === 'billing' && notice.needs[0].act.kind === 'billing');
+/* Refer & earn: a code waiting to be applied (GET /api/refer `waiting`) */
+var earned = b({ referralCredits: { count: 1, cents: 50000, display: '$500' }, billingNotice: { text: 'A note.' }, rfqsReceived: [{ rfqId: 'r1', status: 'sent', projectName: 'Elm', createdAt: NOW - DAY }] });
+ok('a referral credit to apply ranks under a billing notice and over a quote to price, and opens Refer & earn', keys(earned).join() === 'billing,credit,price' && earned.needs[1].act.kind === 'refer' && earned.needs[1].cls === 'good' && earned.needs[1].t === 'You earned a $500 referral credit', earned.needs);
+ok('two codes are counted with their sum', /You earned 2 referral credits \(\$1,000\)/.test(b({ referralCredits: { count: 2, display: '$1,000' } }).needs[0].t));
+ok('no code waiting, no row', b({ referralCredits: { count: 0, display: '$0' } }).needs.length === 0 && b({ referralCredits: null }).needs.length === 0);
 
 /* 3 · my to-dos, not the team's */
 var td = b({ todos: [

@@ -42,7 +42,8 @@ var FD = require('./_lib/firebase-double'), FX = require('./_lib/dashboard-fixtu
 /* the public price list is served by api/offerings.view on the proposed
    book; the endpoint's admin library is stood in for (no firebase-admin
    here), as the packaging render checks do */
-require('./_lib/firestore-double').mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, db: function () { return null; } });
+require('./_lib/firestore-double').mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, db: function () { return null; },
+  safeOrg: function (v) { var s = String(v == null ? '' : v).trim().toLowerCase(); return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(s) ? s : ''; } });
 var OFFERINGS = require('../api/offerings'), BOOK = require('../api/_lib/pricebook');
 var DOUBLE_SRC = FD.source();
 var HOST = '127.0.0.1';
@@ -69,6 +70,37 @@ function storeRoute(u, method, body) {
   if (body.action === 'cancel') { STORE.pending = []; return { state: 'cancelled', changeId: body.changeId }; }
   return { error: 'render-workspace does not answer ' + body.action };
 }
+/* REFER & EARN, answered by the REAL library (api/_lib/refer.js) on a
+   Firestore double per tenant, so the page is checked against the shapes
+   the endpoint returns: a link, a company that became a customer and the
+   code it earned (already used), and for the legacy Enterprise tenant a
+   second code waiting to be applied to its bill, invoiced by hand. The
+   bodies the page posts are kept for the checks. */
+var REFER = { dbs: {}, posts: [] }, REFER_MAIL = { templates: { referAlert: async function () { return { ok: true }; }, referInvite: async function () { return { ok: true }; } } };
+function referDb(fx) {
+  if (REFER.dbs[fx.org]) return REFER.dbs[fx.org];
+  var FDB = require('./_lib/firestore-double'), d = new FDB.DB(), t = Date.now(), D = 86400e3, org = fx.org;
+  d.seed('omega_orgs/' + org, { name: fx.name, status: fx.pending ? 'pending' : 'active' });
+  d.seed('omega_orgs/' + org + '/billing/current', { tier: fx.tier || 'standard', paymentProvider: 'manual' });
+  d.seed('refer_links/' + org, { orgId: org, code: 'K7P3QX9D', active: true, createdAt: t - 40 * D });
+  d.seed('refer_signups/harborgrid.example', { referredOrgId: 'harborgrid.example', referredName: 'Harbor Grid', referrerOrgId: org, state: 'rewarded', via: 'link', signedUpAt: t - 30 * D, rewardedAt: t - 20 * D, creditCode: 'CR7K3PQ9XD2M' });
+  d.seed('refer_credits/CR7K3PQ9XD2M', { code: 'CR7K3PQ9XD2M', orgId: org, amountCents: 50000, remainingCents: 0, state: 'used', route: 'invoice', referredOrgId: 'harborgrid.example', referredName: 'Harbor Grid', issuedAt: t - 20 * D, expiresAt: t + 345 * D, appliedAt: t - 19 * D, draws: [{ date: '2026-09-20', cents: 50000 }] });
+  d.seed('refer_invites/' + org + '__pineridge.example', { orgId: org, domain: 'pineridge.example', email: 'jo@pineridge.example', company: 'Pine Ridge Solar', at: t - 3 * D, lastAt: t - 3 * D, count: 1 });
+  if (fx.legacyAllOpen) {
+    d.seed('refer_signups/quarrypower.example', { referredOrgId: 'quarrypower.example', referredName: 'Quarry Power', referrerOrgId: org, state: 'rewarded', via: 'invite', signedUpAt: t - 12 * D, rewardedAt: t - D, creditCode: 'CR9XD2M7K3PQ' });
+    d.seed('refer_credits/CR9XD2M7K3PQ', { code: 'CR9XD2M7K3PQ', orgId: org, amountCents: 50000, remainingCents: 50000, state: 'issued', referredOrgId: 'quarrypower.example', referredName: 'Quarry Power', issuedAt: t - D, expiresAt: t + 364 * D });
+  }
+  REFER.dbs[org] = d; return d;
+}
+function referRoute(fx, method, body) {
+  var R = require('../api/_lib/refer'), d = referDb(fx), now = Date.now(), caller = { uid: fx.user.uid, email: fx.user.email, orgId: fx.org, claims: { email_verified: true, name: fx.user.displayName } };
+  if (method === 'GET') return R.summary(d, fx.org, now, {});
+  REFER.posts.push(body);
+  if (body.action === 'link') return R.link(d, fx.org, caller, now);
+  if (body.action === 'invite') return R.invite(d, fx.org, body, caller, now, { mail: REFER_MAIL });
+  if (body.action === 'apply') return R.apply(d, fx.org, body.code, caller, now, { mail: REFER_MAIL });
+  return Promise.reject(Object.assign(new Error('render-workspace does not answer ' + body.action), { status: 400 }));
+}
 var STAFF_CALLER = false;
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], post = req.method === 'POST';
@@ -93,6 +125,10 @@ var srv = http.createServer(function (req, res) {
       { id: 'in_2', number: 'NS-0002', status: 'paid', amountDue: 1250, created: Date.now() - 10 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_2', pdfUrl: null },
       { id: 'in_1', number: 'NS-0001', status: 'paid', amountDue: 1250, created: Date.now() - 40 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_1', pdfUrl: null } ] });
     if (u === '/api/stripe-portal' && post) return json({ url: 'https://billing.stripe.com/p/session/test_northstar' });
+    if (u === '/api/refer' && CURRENT_FX) {
+      var rc = []; req.on('data', function (c) { rc.push(c); }); req.on('end', function () { var rb = {}; try { rb = rc.length ? JSON.parse(Buffer.concat(rc).toString()) : {}; } catch (e) {}
+        Promise.resolve().then(function () { return referRoute(CURRENT_FX, req.method, rb); }).then(function (j) { json(j); }, function (e) { json({ error: e.message }, e.status || 500); }); }); return;
+    }
     if (u === '/api/package-catalog' || u === '/api/plan-change') {
       var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {} json(storeRoute(u, req.method, body)); }); return;
     }
@@ -202,7 +238,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var product = await p.$eval('#ows-product', function (e) { return e.textContent; }).catch(function () { return ''; });
     ok(name + ': the rail wears the product name', product === 'Omega Workspace', product);
     var rail = await p.$$eval('#side-nav .sn-item', function (r) { return r.filter(function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return a.querySelector('span').textContent.trim(); }); });
-    ok(name + ': the rail is Home · Projects · All tools · Modules · Marketplace · Quote Desk · Team · Feed · Plan & billing · Settings', rail.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings', rail);
+    ok(name + ': the rail is Home · Projects · All tools · Modules · Marketplace · Quote Desk · Team · Feed · Plan & billing · Refer & earn · Settings', rail.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Refer & earn|Settings', rail);
     var board = await p.evaluate(function () { function shown(id) { var e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; } return { flight: shown('flight'), team: shown('team'), tools: shown('tools'), pulse: !!document.querySelector('#pulse .stats .stat'), stats: document.querySelectorAll('#pulse .stats .stat').length, spark: !!document.querySelector('#pulse .spark path'), insight: (document.querySelector('#pulse .insight') || {}).textContent || '', homeMods: Array.prototype.filter.call(document.querySelectorAll('.mod'), function (e) { return e.getClientRects().length > 0; }).length, mymods: !!document.getElementById('mymods') }; });
     ok(name + ': the module cards live on the Modules page, never on the home', board.homeMods === 0 && !board.mymods, board);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '-home-' + p.viewportSize().width + '.png'), fullPage: true });
@@ -352,6 +388,23 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.click('#bill-portal'); await wait(400);
     var opened = await p.evaluate(function () { return window.__opened; });
     ok('northstar: Manage card and autopay opens the Stripe portal (Stripe\'s own page) in a new tab, and the page itself has no card field', opened.length === 1 && /^https:\/\/billing\.stripe\.com\//.test(opened[0]) && bill.cardInputs === 0, { opened: opened, inputs: bill.cardInputs });
+    /* Refer & earn from the rail: the link, an invitation, the credits, the companies (the real library answers) */
+    await p.click('#side-nav .sn-item[data-key="refer"]'); await wait(400);
+    await p.waitForFunction(function () { return !!document.getElementById('refer-url'); }, null, { timeout: 4000 }).catch(function () {});
+    var referView = function () { return p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; var a = document.querySelector('#side-nav .sn-item.active'); return { view: document.getElementById('content').getAttribute('data-view'), cards: Array.prototype.map.call(document.querySelectorAll('#refer-body .bcard h3'), function (h) { return h.firstChild.textContent; }), url: (document.getElementById('refer-url') || {}).value || '', credits: t('refer-credits'), list: t('refer-list'), sub: t('refer-sub'), rail: a ? a.getAttribute('data-key') : '', badge: t('ows-count-refer') }; }); };
+    var rv = await referView();
+    ok('northstar: Refer & earn is a page from the rail: the link, an invitation, the credits and the companies referred', rv.view === 'refer' && rv.rail === 'refer' && rv.cards.join('|') === 'Your link|Invite someone|Your credits|Companies you referred', rv);
+    ok('northstar: the link is the workspace\'s own signup link and the page says what a referral earns', /\/start\?ref=K7P3QX9D$/.test(rv.url) && /earns a \$500 credit code/.test(rv.sub), rv);
+    ok('northstar: a code already taken off an invoice reads Used, and the list has the customer and the invitation still waiting', /CR-7K3PQ-9XD2M/.test(rv.credits) && /Used/.test(rv.credits) && /Harbor Grid/.test(rv.list) && /Customer · credit earned/.test(rv.list) && /Pine Ridge Solar/.test(rv.list) && /Invited/.test(rv.list), rv);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'northstar-refer-1366.png'), fullPage: true });
+    var vpR = p.viewportSize(); await p.setViewportSize({ width: 390, height: 844 }); await wait(200);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'northstar-refer-390.png'), fullPage: true });
+    ok('northstar: Refer & earn fits a phone without scrolling sideways', !(await p.evaluate(function () { return document.documentElement.scrollWidth > document.documentElement.clientWidth + 1; })));
+    await p.setViewportSize(vpR); await wait(150);
+    await p.fill('#ri-email', 'lee@brightfield.example'); await p.fill('#ri-company', 'Brightfield Storage'); await p.click('#refer-send'); await wait(600);
+    rv = await referView();
+    ok('northstar: an invitation posts what the endpoint takes, and the company joins the list', REFER.posts.some(function (b) { return b.action === 'invite' && b.email === 'lee@brightfield.example' && b.company === 'Brightfield Storage'; }) && /Brightfield Storage/.test(rv.list), { posts: REFER.posts, list: rv.list.slice(0, 240) });
+    ok('northstar: no code waiting, no badge and no Today row for it', rv.badge === '' && !(await p.$('#today .next .row[data-key^="credit"]')), rv.badge);
     await p.evaluate(function () { window.location.hash = ''; }); await wait(200);
     /* post a message */
     await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
@@ -466,6 +519,23 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('legacy Enterprise: Office request names every dependent department and preserves the existing agreement', M.catalog().filter(function (m) { return m.shelf === 'platform'; }).every(function (m) { return draft.indexOf(m.name) >= 0; }) && /existing agreement/.test(draft) && /Omega Design remains included/.test(draft));
     await p.keyboard.press('Escape');
     ok('legacy Enterprise: the request can be dismissed without sending', await p.locator('#omega-package-menu').count() === 0);
+    /* Refer & earn: a code waiting is on Today and the rail, and applies to a bill ClearSky invoices by hand */
+    await p.evaluate(function () { window.location.hash = ''; }); await wait(300);
+    var rows = await p.$$eval('#today .next .row', function (r) { return r.map(function (x) { return x.getAttribute('data-key') + ':' + x.querySelector('b').textContent; }); });
+    var badge = await p.$eval('#ows-count-refer', function (e) { return e.textContent; }).catch(function () { return ''; });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'legacy-today-credit-1366.png') });
+    ok('legacy Enterprise: Today says a referral credit is waiting and the rail counts it', rows.some(function (x) { return x === 'credit:You earned a $500 referral credit'; }) && badge === '1', { rows: rows, badge: badge });
+    await p.click('#today .next .row[data-key^="credit"]'); await wait(400);
+    var before = await p.evaluate(function () { return { view: document.getElementById('content').getAttribute('data-view'), apply: !!document.querySelector('#refer-body [data-apply="CR9XD2M7K3PQ"]') }; });
+    ok('legacy Enterprise: the Today row opens Refer & earn, where an owner has Apply to my bill', before.view === 'refer' && before.apply, before);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'legacy-refer-waiting-1366.png'), fullPage: true });
+    await p.click('#refer-body [data-apply="CR9XD2M7K3PQ"]'); await wait(800);
+    var after = await p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { credits: t('refer-credits'), badge: t('ows-count-refer'), apply: !!document.querySelector('#refer-body [data-apply]') }; });
+    ok('legacy Enterprise: applying posts the code; the server routes it to ClearSky, the code reads Applied and the badge clears', REFER.posts.some(function (b) { return b.action === 'apply' && b.code === 'CR9XD2M7K3PQ'; }) && /Applied/.test(after.credits) && /ClearSky takes it off your next invoice/.test(after.credits) && after.badge === '' && !after.apply, after);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'legacy-refer-applied-1366.png'), fullPage: true });
+    await p.click('#side-nav .sn-item[data-key="billing"]'); await wait(500);
+    var owe = await p.$eval('#bill-owe', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });
+    ok('legacy Enterprise: Plan & billing says the credit comes off the next invoice', /Referral credit\s*\$500 off your next invoice/.test(owe), owe.slice(0, 240));
     return {};
   } });
   /* ══ 6. THE PACKAGE STORE — Lite Labs on the marketplace ══
@@ -553,7 +623,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var name = 'flow ' + page;
     if (page === '/') ok(name + (opts.label || '') + ': a dashboard visit with the workspace as home lands on /workspace', /\/workspace$/.test(out.url), out.url);
     else {
-      ok(name + ': the rail is the workspace rail with this page current', out.items.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings'.replace(current, current + '*'), out.items);
+      ok(name + ': the rail is the workspace rail with this page current', out.items.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Refer & earn|Settings'.replace(current, current + '*'), out.items);
       ok(name + ': Dashboard points at /workspace and the ground is the blueprint grid', out.home === '/workspace' && out.theme && out.grid, out);
       if (page === '/marketplace.html') {
         /* a legacy (unpackaged) tenant on the workspace home: the store from the public price list, every module priced and judged against the tier (On your plan · Partly · Ask ClearSky), the plans first, no tool catalogue, the whole chrome */

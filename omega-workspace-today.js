@@ -9,6 +9,8 @@
    input (every list optional):
      now, me (email, lower), orgId
      pendingApproval, readOnly, billingNotice {text, payUrl}, trialEndsAt (ms)
+     referralCredits {count, display}  Refer & earn codes earned and not yet
+                     applied (GET /api/refer `waiting`)
      projects[]      projects the workspace may read (stage, capex, bessKwh,
                      nextAction, updatedAt, createdAt, ownerEmail)
      todos[]         team_todos (text, assignee, due, done, createdBy)
@@ -24,11 +26,12 @@
 
    A row is { key, cls (hot|warn|good|''), score, t, s, cta, href?, act? }.
    act is what the page does when there is no address: { kind: 'billing' |
-   'team' | 'project' | 'tool', id }. The rules and their ranks:
+   'refer' | 'team' | 'project' | 'tool', id }. The rules and their ranks:
 
      100 read-only (unpaid)        90 awaiting approval
       88 trial ends in ≤3 days     85 a to-do of mine is overdue
       80 trial ends in ≤14 days    78 a billing notice
+      77 a referral credit code waiting to be applied to the bill
       76 a request for quote waiting for MY price (I am the vendor)
       74 new quote requests in the referral inbox
       72 vendors answered MY request (compare, accept, reveal)
@@ -109,6 +112,9 @@
     /* the account */
     if (input.readOnly) push({ key: 'readonly', cls: 'hot', score: 100, when: 0, t: 'This workspace is read-only', s: (input.billingNotice && input.billingNotice.text) || 'Pay to continue creating and exporting. Saved work stays available.', cta: input.billingNotice && input.billingNotice.payUrl ? 'Pay' : 'Plan', href: input.billingNotice && input.billingNotice.payUrl || null, act: { kind: 'billing' } });
     else if (input.billingNotice && input.billingNotice.text) push({ key: 'billing', cls: 'warn', score: 78, when: 0, t: 'A note on your plan', s: input.billingNotice.text, cta: input.billingNotice.payUrl ? 'Pay' : 'Plan', href: input.billingNotice.payUrl || null, act: { kind: 'billing' } });
+    /* Refer & earn: a company this workspace sent became a customer; its code waits to be applied */
+    var credits = input.referralCredits;
+    if (credits && n(credits.count) > 0) push({ key: 'credit', cls: 'good', score: 77, when: 0, t: n(credits.count) === 1 ? 'You earned a ' + (credits.display || '') + ' referral credit' : 'You earned ' + credits.count + ' referral credits (' + (credits.display || '') + ')', s: 'A company you referred became a customer. Apply the code to your bill.', cta: 'Apply', act: { kind: 'refer' } });
     if (input.pendingApproval) push({ key: 'approval', cls: 'warn', score: 90, when: 0, t: 'Your workspace is awaiting approval', s: 'Tools stay locked until ClearSky approves it, usually one business day.', cta: 'Plan', act: { kind: 'billing' } });
     var trialEnd = at(input.trialEndsAt);
     if (trialEnd) {

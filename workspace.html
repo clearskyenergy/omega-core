@@ -137,6 +137,16 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .inv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:8px 0;border-bottom:1px solid var(--ows-line);font-size:13px;align-items:center}.inv:last-child{border-bottom:0}.inv b{font-weight:600}.inv small{display:block;color:var(--ows-ink3);font-size:11.5px}
 .inv .amt{font:500 14px "DM Mono",monospace;text-align:right;white-space:nowrap}.inv .st{display:block;font-size:11px;color:var(--ows-ink2);text-align:right}.inv .st.paid{color:var(--ows-green)}.inv .st.unpaid{color:var(--ows-amber)}.inv .ows-pill{justify-self:end}
 .empty{color:var(--ows-ink2);font-size:13px;background:var(--ows-paper);border:1px dashed var(--ows-line2);border-radius:12px;padding:16px 18px;line-height:1.5}.empty b{color:var(--ows-ink)}
+/* refer & earn: the Plan & billing cards (.bcard, .inv), a link row, a form */
+#content[data-view="refer"] #refer{display:flex}
+.refer{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}.refer .full{grid-column:1/-1}
+.linkrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.linkrow input{flex:1 1 200px;min-width:0;border:1px solid var(--ows-line);border-radius:10px;padding:9px 11px;font:500 13px "DM Mono",ui-monospace,monospace;background:var(--ows-sunk);color:var(--ows-ink)}
+.code{font-family:"DM Mono",ui-monospace,monospace;letter-spacing:.04em;overflow-wrap:anywhere}
+.steps{margin:0;padding-left:18px;font-size:12.5px;color:var(--ows-ink2);line-height:1.6}
+.refer .field{margin-bottom:8px}.refer .field small{font-weight:400;color:var(--ows-ink3)}.refer .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 8px}
+.refer textarea{width:100%;box-sizing:border-box;border:1px solid var(--ows-line);border-radius:10px;padding:9px 11px;font:inherit;resize:vertical;min-height:54px}.refer .field input{box-sizing:border-box}
+.refer .inv>div:last-child{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.inv .st.issued{color:var(--ows-teal-d);font-weight:600}.inv .st.applied{color:var(--ows-green)}.inv .st.used,.inv .st.expired,.inv .st.void{color:var(--ows-ink3)}
 /* around you */
 .community{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
 .panel{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
@@ -198,6 +208,11 @@ body.refused #refused{display:block}body.refused #content{display:none}
           <a class="back" href="/workspace">‹ Home</a>
           <div class="hd"><div><h2>Plan &amp; billing</h2><div class="sub" id="billing-sub">What you hold, what you pay, what you owe and when, and your invoices.</div></div><a class="ows-pill ghost" href="/workspace#modules">Modules ›</a></div>
           <div id="billing-body"></div>
+        </section>
+        <section class="sec" id="refer">
+          <a class="back" href="/workspace">‹ Home</a>
+          <div class="hd"><div><h2>Refer &amp; earn</h2><div class="sub" id="refer-sub">Send a company to OMEGA. When it becomes a paying customer, your workspace earns a credit code for its bill.</div></div><a class="ows-pill ghost" href="/workspace#billing">Plan &amp; billing ›</a></div>
+          <div id="refer-body"></div>
         </section>
       </div>
     </main>
@@ -267,11 +282,12 @@ S.mount({ current: 'home', tabs: true, search: search, onNav: function (key) {
   if (key === 'home') { go('home'); return true; }
   if (key === 'tools' || key === 'modules' || key === 'team' || key === 'feed') { go(key); return true; }
   if (key === 'billing') { openBilling(); return true; }
+  if (key === 'refer') { openRefer(); return true; }
   if (key === 'settings') { settingsDrawer(); return true; }
   if (key === 'projects' && WS) { areaDrawer('projects'); return true; }
   return false;
 } });
-var VIEWS = { home: 'home', tools: 'tools', modules: 'modules', flight: 'flight', team: 'team', feed: 'team', around: 'team', billing: 'billing' };
+var VIEWS = { home: 'home', tools: 'tools', modules: 'modules', flight: 'flight', team: 'team', feed: 'team', around: 'team', billing: 'billing', refer: 'refer' };
 function go(key) {
   var v = VIEWS[key] || 'home';
   byId('content').setAttribute('data-view', v);
@@ -328,6 +344,7 @@ window.showApp = function (user) {
   render();
   load();
   loadPulse();
+  loadRefer();
   OmegaTenant.onEntitlements(function (ws) { if (ws) { WS = applyViewAs(ws); window.OMEGA_WORKSPACE = WS; askViewAs(); } S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() }); render(); logicSection(); });
   window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; render(); } });
   route();
@@ -426,13 +443,14 @@ function today() {
   if (TODAY_CACHE) return TODAY_CACHE;
   var pa = WS.packageAccess;
   TODAY_CACHE = TODAY.build({ now: Date.now(), me: ME, orgId: WS.orgId, pendingApproval: !!WS.pendingApproval, readOnly: !!(pa && pa.packaged && pa.readOnly), billingNotice: pa && pa.billingNotice || null, trialEndsAt: trialEnd(),
-    projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived, referrals: DATA.referrals, finance: DATA.finance, canOpen: function (k) { return open(tool(k)); } });
+    projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived, referrals: DATA.referrals, finance: DATA.finance, canOpen: function (k) { return open(tool(k)); },
+    referralCredits: REFER.summary && REFER.summary.waiting && REFER.summary.waiting.count ? REFER.summary.waiting : null });
   return TODAY_CACHE;
 }
 function needs() { return today().needs; }
 function act(r) {
   if (!r || !r.act) return;
-  if (r.act.kind === 'billing') openBilling(); else if (r.act.kind === 'team') go('team'); else if (r.act.kind === 'project') openProject(r.act.id); else if (r.act.kind === 'tool') launch(tool(r.act.id));
+  if (r.act.kind === 'billing') openBilling(); else if (r.act.kind === 'refer') openRefer(); else if (r.act.kind === 'team') go('team'); else if (r.act.kind === 'project') openProject(r.act.id); else if (r.act.kind === 'tool') launch(tool(r.act.id));
 }
 function trialEnd() {
   if (WS.trial && WS.trial.endsAt) return ms(WS.trial.endsAt);
@@ -447,6 +465,7 @@ function render() {
   TODAY_CACHE = null;
   renderNotice(); renderHub(); renderToday(); renderTools(); renderModules(); renderFlight(); renderAround();
   if (byId('content').getAttribute('data-view') === 'billing') renderBilling();
+  if (byId('content').getAttribute('data-view') === 'refer') renderRefer();
   S.badge('home', needs().length);
 }
 function renderNotice() {
@@ -871,7 +890,9 @@ function renderBilling() {
   else if (oweD > 0) h += '<div class="big">' + esc(usd(oweD)) + (bl.subscriptionDue ? '<small>due ' + esc(day(bl.subscriptionDue)) + '</small>' : '') + '</div>';
   else h += '<div class="big">$0<small>nothing is owed</small></div>';
   var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (packaged ? '' : bl.subscriptionDue);
-  h += kv([['Next invoice', nextOn ? (day(nextOn) || nextOn) : ''], ['Paid through', sm && sm.paidThrough ? (day(sm.paidThrough) || sm.paidThrough) : ''], ['Last payment', !packaged && bl.lastPaidAt ? day(bl.lastPaidAt) : '']]);
+  var rs = REFER.summary;
+  h += kv([['Next invoice', nextOn ? (day(nextOn) || nextOn) : ''], ['Paid through', sm && sm.paidThrough ? (day(sm.paidThrough) || sm.paidThrough) : ''], ['Last payment', !packaged && bl.lastPaidAt ? day(bl.lastPaidAt) : ''],
+    ['Referral credit', rs && rs.onBill && rs.onBill.cents ? rs.onBill.display + ' off your next invoice' : ''], ['Credit to apply', rs && rs.waiting && rs.waiting.count ? rs.waiting.display + ' in Refer & earn' : '']]);
   if (packaged) h += '<p>Each invoice arrives by email on your billing day with its pay link. A card saved on QuickBooks’ page pays the next one in one click.</p>';
   h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Pay now</a>' : '') + (packaged ? '<button class="ows-pill" type="button" id="bill-paid"' + (admin ? '' : ' disabled title="An owner or administrator checks with QuickBooks"') + '>I’ve paid</button>' : '') + '</div></div>';
 
@@ -923,6 +944,93 @@ function renderBilling() {
   var portal = byId('bill-portal'); if (portal && admin) portal.addEventListener('click', function () { portal.disabled = true; portal.textContent = 'Opening Stripe…'; OmegaPackageMenu.api('/api/stripe-portal', { orgId: WS.orgId }).then(function (j) { portal.disabled = false; portal.textContent = 'Manage card and autopay'; if (j && j.url) window.open(j.url, '_blank', 'noopener'); else S.toast('Stripe did not return a portal link'); }, function (e) { portal.disabled = false; portal.textContent = 'Manage card and autopay'; S.toast(e.message); }); });
 }
 function billingDrawer() { openBilling(); }
+/* ── Refer & earn (api/refer.js; every rule is api/_lib/refer.js) ─────────
+   The workspace's link and invitations, the credit codes it earned (an
+   owner or administrator applies one to the bill) and the companies it
+   sent. Read once after sign-in, so Today and the rail's badge say when a
+   code is waiting. Nothing is decided here: the amount, who may apply a
+   code and where a credit lands are the server's. */
+var REFER = { summary: null, asked: false, failed: false };
+function loadRefer(force) {
+  if (!window.OmegaPackageMenu || (REFER.asked && !force)) return;
+  REFER.asked = true;
+  OmegaPackageMenu.api('/api/refer').then(function (j) { REFER.summary = j; REFER.failed = false; referChanged(); }, function () { REFER.failed = true; referChanged(); });
+}
+function referChanged() {
+  var s = REFER.summary;
+  S.badge('refer', s && s.waiting ? s.waiting.count : 0);
+  if (!WS) return;
+  TODAY_CACHE = null; renderToday(); S.badge('home', needs().length);
+  var v = byId('content').getAttribute('data-view'); if (v === 'refer') renderRefer(); else if (v === 'billing') renderBilling();
+}
+function openRefer() { go('refer'); renderRefer(); if (REFER.failed) loadRefer(true); }
+/* a calendar date (YYYY-MM-DD) as the day it names, in no time zone */
+function dayOnly(v) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''; }
+var REFER_STATE = { issued: 'Ready to apply', used: 'Used', void: 'Withdrawn', expired: 'Expired' };
+function referCredit(c, admin) {
+  var state = c.state === 'applied' ? (c.route === 'stripe' ? 'On your Stripe balance' : c.remainingCents < c.amountCents ? c.remainingDisplay + ' left' : 'Applied') : (REFER_STATE[c.state] || c.state);
+  var sub = (c.referredName ? 'For referring ' + c.referredName : 'Referral credit') + (c.state === 'issued' && c.expiresOn ? ' · apply by ' + dayOnly(c.expiresOn) : '')
+    + (c.state === 'applied' ? (c.route === 'manual' ? ' · ClearSky takes it off your next invoice' : c.route === 'stripe' ? ' · Stripe takes it off your next invoice' : ' · comes off your next invoice') : '')
+    + (c.draws && c.draws.length ? ' · ' + c.draws.map(function (d) { return d.display + ' off the ' + (dayOnly(d.date) || d.date) + ' invoice'; }).join(', ') : '');
+  var right = c.state === 'issued' && admin ? '<button class="ows-pill sm primary" type="button" data-apply="' + esc(c.code) + '">Apply to my bill</button>' : '<span class="st ' + esc(c.state) + '">' + esc(state) + '</span>';
+  return '<div class="inv"><div><b class="code">' + esc(c.pretty) + '</b><small>' + esc(sub) + '</small></div><div><span class="amt">' + esc(c.display) + '</span>' + right + '</div></div>';
+}
+function renderRefer() {
+  var b = byId('refer-body'); if (!b || !WS) return;
+  var s = REFER.summary, admin = isAdminHere(), me = WS.clientName || 'your workspace';
+  if (!s) { b.innerHTML = '<div class="empty">' + (REFER.failed ? 'Refer &amp; earn is unavailable right now. Try again in a moment.' : 'Loading your link and credits…') + '</div>'; return; }
+  byId('refer-sub').textContent = 'Send a company to OMEGA. When it becomes a paying customer, ' + me + ' earns a ' + s.reward.display + ' credit code for its bill.';
+  var h = '<div class="refer">';
+  /* 1 · the link */
+  h += '<div class="bcard" id="refer-link"><h3>Your link<span class="ows-chip on">' + esc(s.reward.display) + ' each</span></h3>';
+  if (!s.canRefer) h += '<p>' + esc(s.reason || '') + '</p>';
+  else if (!s.link) h += '<p>One link for ' + esc(me) + ': share it as often as you like.</p><div class="acts"><button class="ows-pill primary" type="button" id="refer-make">Get my link</button></div>';
+  else {
+    var mail = 'mailto:?subject=' + encodeURIComponent('Try OMEGA for your project development') + '&body=' + encodeURIComponent('We use ClearSky-OMEGA for site screening, design and sizing. Start your own workspace here: ' + s.link.url);
+    h += '<div class="linkrow"><input id="refer-url" readonly value="' + esc(s.link.url) + '" aria-label="Your referral link"><button class="ows-pill primary" type="button" id="refer-copy">Copy</button></div>';
+    h += '<p>A company that starts its workspace from this link is credited to ' + esc(me) + '. Your code: <b class="code">' + esc(s.link.code) + '</b>.</p>';
+    h += '<div class="acts"><a class="ows-pill" href="' + esc(mail) + '">Share by email</a></div>';
+  }
+  h += '<ol class="steps"><li>Send a company your link, or invite someone here.</li><li>They start their own workspace with their work email.</li><li>When they pay their first invoice, ' + esc(me) + ' gets a ' + esc(s.reward.display) + ' code, by email and on this page.</li><li>An owner or administrator applies it: it comes off your next invoice.</li></ol></div>';
+  /* 2 · an invitation */
+  h += '<div class="bcard" id="refer-invite"><h3>Invite someone</h3>';
+  if (s.canRefer) h += '<form id="refer-form" novalidate><div class="two"><div class="field"><label for="ri-email">Their work email</label><input id="ri-email" type="email" maxlength="200" autocomplete="off"></div><div class="field"><label for="ri-name">Their name <small>optional</small></label><input id="ri-name" maxlength="80" autocomplete="off"></div></div>'
+    + '<div class="field"><label for="ri-company">Company <small>optional</small></label><input id="ri-company" maxlength="120" autocomplete="off"></div><div class="field"><label for="ri-note">A note from you <small>optional</small></label><textarea id="ri-note" maxlength="500" rows="2"></textarea></div>'
+    + '<div class="acts"><button class="ows-pill primary" type="submit" id="refer-send">Send invitation</button></div></form><p>ClearSky emails them your link; a reply comes to you. Up to ' + esc(String(s.reward.invitesPerDay)) + ' a day.</p>';
+  else h += '<p>' + esc(s.reason || '') + '</p>';
+  h += '</div>';
+  /* 3 · the credits */
+  h += '<div class="bcard" id="refer-credits"><h3>Your credits' + (s.waiting.count ? '<span class="ows-chip on">' + esc(s.waiting.display) + ' to apply</span>' : '') + '</h3>';
+  if (s.credits.length) h += s.credits.map(function (c) { return referCredit(c, admin); }).join('');
+  else h += '<div class="big">$0<small>no credits yet</small></div><p>A credit is earned when a company you referred pays its first invoice.</p>';
+  if (s.onBill.cents) h += '<p><b>' + esc(s.onBill.display) + '</b> of applied credit comes off your next invoice' + (s.onBill.cents > s.reward.cents ? 's' : '') + '.</p>';
+  if (admin) h += '<form id="refer-apply" class="linkrow" novalidate><input id="refer-code" placeholder="CR-XXXXX-XXXXX" maxlength="20" autocomplete="off" aria-label="Credit code"><button class="ows-pill" type="submit">Apply a code</button></form>';
+  else if (s.waiting.count) h += '<p>An owner or administrator of ' + esc(me) + ' applies a code to the bill.</p>';
+  h += '</div>';
+  /* 4 · the companies */
+  var ref = s.referrals || [], waitingInv = (s.invites || []).filter(function (i) { return !i.joined; });
+  h += '<div class="bcard full" id="refer-list"><h3>Companies you referred</h3>';
+  h += ref.map(function (r) { var st = r.state === 'rewarded' ? 'Customer · credit earned' : r.state === 'declined' ? 'Not eligible' : 'Signed up · waiting for their first payment'; return '<div class="inv"><div><b>' + esc(r.name) + '</b><small>Signed up ' + esc(dayOnly(r.signedUpOn)) + (r.rewardedOn ? ' · paid ' + esc(dayOnly(r.rewardedOn)) : '') + '</small></div><div><span class="st ' + (r.state === 'rewarded' ? 'paid' : '') + '">' + esc(st) + '</span></div></div>'; }).join('');
+  h += waitingInv.map(function (i) { return '<div class="inv"><div><b>' + esc(i.company || i.email) + '</b><small>' + esc(i.company ? i.email + ' · ' : '') + 'invited ' + esc(dayOnly(i.sentOn)) + (i.count > 1 ? ' · ' + i.count + ' times' : '') + '</small></div><div><span class="st">Invited</span></div></div>'; }).join('');
+  if (!ref.length && !waitingInv.length) h += '<p>Nobody yet. Share your link, or invite someone.</p>';
+  h += '</div></div>';
+  h += '<div class="ows-note" style="margin-top:14px">One credit for each company that becomes a paying OMEGA customer through ' + esc(me) + ', earned when it pays its first invoice. A code is money off this workspace’s bill, not cash; it belongs to ' + esc(me) + ' and lapses a year after it is issued if nobody applies it. Once applied, whatever an invoice does not use carries to the next.</div>';
+  b.innerHTML = h;
+  var mk = byId('refer-make'); if (mk) mk.addEventListener('click', function () { mk.disabled = true; mk.textContent = 'Making your link…'; OmegaPackageMenu.api('/api/refer', { action: 'link' }).then(function () { loadRefer(true); }, function (e) { mk.disabled = false; mk.textContent = 'Get my link'; S.toast(e.message); }); });
+  var cp = byId('refer-copy'); if (cp) cp.addEventListener('click', function () { var u = byId('refer-url'); try { navigator.clipboard.writeText(u.value).then(function () { S.toast('Link copied'); }, function () { u.select(); S.toast('Press Ctrl+C to copy'); }); } catch (e) { u.select(); S.toast('Press Ctrl+C to copy'); } });
+  var f = byId('refer-form'); if (f) f.addEventListener('submit', function (ev) {
+    ev.preventDefault(); var btn = byId('refer-send'), email = byId('ri-email').value.trim(); if (!email) { S.toast('Enter their work email'); return; }
+    btn.disabled = true; btn.textContent = 'Sending…';
+    OmegaPackageMenu.api('/api/refer', { action: 'invite', email: email, name: byId('ri-name').value.trim(), company: byId('ri-company').value.trim(), note: byId('ri-note').value.trim() })
+      .then(function (j) { S.toast(j.text || 'Invitation sent'); loadRefer(true); }, function (e) { btn.disabled = false; btn.textContent = 'Send invitation'; S.toast(e.message); });
+  });
+  function apply(code, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Applying…'; }
+    OmegaPackageMenu.api('/api/refer', { action: 'apply', code: code }).then(function (j) { S.toast(j.text || 'Applied'); loadRefer(true); BILL.asked = false; }, function (e) { if (btn) { btn.disabled = false; btn.textContent = btn.getAttribute('data-apply') ? 'Apply to my bill' : 'Apply a code'; } S.toast(e.message); });
+  }
+  Array.prototype.forEach.call(b.querySelectorAll('[data-apply]'), function (x) { x.addEventListener('click', function () { apply(x.getAttribute('data-apply'), x); }); });
+  var af = byId('refer-apply'); if (af) af.addEventListener('submit', function (ev) { ev.preventDefault(); var v = byId('refer-code').value.trim(); if (!v) { S.toast('Enter the code from your email'); return; } apply(v, af.querySelector('button')); });
+}
 function settingsDrawer() {
   var html = '<div class="field"><label for="set-name">Display name</label><input id="set-name" value="' + esc(who()) + '" maxlength="60"></div><div class="kv"><div><span>Email</span><span>' + esc(ME) + '</span></div><div><span>Workspace</span><span>' + esc(WS.orgId) + '</span></div><div><span>Role</span><span>' + esc(WS.role || 'member') + '</span></div></div>';
   var rows = [{ key: 'save', name: 'Save name', sub: 'Shown to your team and on projects you own', icon: S.ICON.me, cta: 'Save', onClick: saveName }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'out', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];
@@ -960,7 +1068,7 @@ function search(qs) {
 function route() {
   var h = (window.location.hash || '').slice(1);
   if (!h) { go('home'); return; }
-  if (h === 'billing') openBilling(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer();
+  if (h === 'billing') openBilling(); else if (h === 'refer') openRefer(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer();
   else if (h.indexOf('area-') === 0) areaDrawer(h.slice(5));
   else go(h);
 }

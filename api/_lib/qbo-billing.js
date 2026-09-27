@@ -48,16 +48,22 @@ function driver(book, supplied) {
     if (!confirmed || Object.keys(wanted).filter(function (k) { return ['Id', 'SyncToken', 'sparse'].indexOf(k) < 0; }).some(function (k) { return !matches(wanted[k], confirmed[k]); })) fail('QuickBooks did not confirm the billing profile update; review the customer');
     return String(result.Id);
   }
+  /* Every credit on a plan (the transformation credit, a referral credit)
+     is ONE discount on the invoice: QuickBooks takes a single transaction-
+     level discount line, so the credits are summed into it and its
+     description names each. validateInvoice compares the same sum. */
+  function discountOf(plan) {
+    var cents = 0, names = [];
+    plan.lines.forEach(function (l) { if (l.amountCents < 0) { cents += -l.amountCents; names.push(l.name); } });
+    return { cents: cents, description: names.join(' + ') };
+  }
   async function lines(plan) {
-    var rows = [];
+    var rows = [], discount = discountOf(plan);
     for (var i = 0; i < plan.lines.length; i++) {
       var l = plan.lines[i], itemId = book.qbo.items[l.itemKey];
       if (!itemId) fail('Sync sandbox item first: ' + l.itemKey);
-      if (l.amountCents < 0) {
-        // Intuit represents an invoice discount as DiscountLineDetail, not
-        // a negative sales item. The price-book credit item stays the label.
-        rows.push({ Amount: -l.amountCents / 100, Description: l.name, DetailType: 'DiscountLineDetail', DiscountLineDetail: { PercentBased: false } });
-      } else if (l.amountCents > 0) {
+      /* a credit (a negative line) is part of the one discount line added below */
+      if (l.amountCents > 0) {
         var item = (await call('item/' + encodeURIComponent(itemId))).Item;
         if (!item || String(item.Id) !== String(itemId) || item.Active === false) fail('Sandbox item unavailable: ' + l.itemKey);
         var tax = item.SalesTaxCodeRef && item.SalesTaxCodeRef.value;
@@ -69,6 +75,9 @@ function driver(book, supplied) {
       }
     }
     if (!rows.length) fail('Invoice must contain a paid subscription');
+    // Intuit represents an invoice discount as DiscountLineDetail, not a
+    // negative sales item. The price-book credit item stays the label.
+    if (discount.cents) rows.push({ Amount: discount.cents / 100, Description: discount.description.slice(0, 4000), DetailType: 'DiscountLineDetail', DiscountLineDetail: { PercentBased: false } });
     return rows;
   }
   function validateInvoice(inv, plan, customerId) {
@@ -76,8 +85,10 @@ function driver(book, supplied) {
         ((inv.CurrencyRef || {}).value || 'USD') !== 'USD' || inv.PrivateNote !== plan.marker) fail('Subscription invoice identity changed');
     // QuickBooks may re-sequence lines (discounts move after the subtotal),
     // so compare as a multiset of (type, item, amount), not by position.
-    var expected = plan.lines.filter(function (l) { return l.amountCents !== 0; })
-      .map(function (l) { return (l.amountCents < 0 ? 'discount' : 'item:' + book.qbo.items[l.itemKey]) + ':' + Math.abs(l.amountCents); }).sort();
+    // The credits are one discount line (discountOf), compared as their sum.
+    var discount = discountOf(plan).cents;
+    var expected = plan.lines.filter(function (l) { return l.amountCents > 0; })
+      .map(function (l) { return 'item:' + book.qbo.items[l.itemKey] + ':' + l.amountCents; }).concat(discount ? ['discount:' + discount] : []).sort();
     var actual = (inv.Line || []).filter(function (l) { return l.DetailType === 'SalesItemLineDetail' || l.DetailType === 'DiscountLineDetail'; })
       .map(function (a) { return (a.DetailType === 'DiscountLineDetail' ? 'discount' : 'item:' + String(((a.SalesItemLineDetail || {}).ItemRef || {}).value)) + ':' + cents(a.Amount); }).sort();
     if (expected.length !== actual.length || expected.some(function (e, i) { return e !== actual[i]; })) fail('Subscription invoice lines changed; accounting review required');

@@ -44,7 +44,13 @@ module.exports = function (req, res) {
       if (evt.type === 'invoice.paid') {
         patch.lastPaidAt = new Date(evt.created * 1000).toISOString(); patch.amountDue = 0; patch.paymentFailedAt = null;
         if (obj.lines && obj.lines.data[0] && obj.lines.data[0].period) patch.subscriptionDue = new Date(obj.lines.data[0].period.end * 1000).toISOString();
-        return Promise.all([ref.set(patch, { merge: true }), db.collection('omega_orgs').doc(org).set({ status: 'active' }, { merge: true })]);
+        return Promise.all([ref.set(patch, { merge: true }), db.collection('omega_orgs').doc(org).set({ status: 'active' }, { merge: true })]).then(function () {
+          /* Refer & earn (api/_lib/refer.js): a workspace another sent is
+             rewarded when it first pays real money; a $0 invoice is not a
+             payment. Never a reason to fail the webhook Stripe retries. */
+          if (!(obj.amount_paid > 0)) return null;
+          return require('./_lib/refer').onPaid(db, org, Date.now(), 'stripe')['catch'](function (e) { console.warn('[stripe-webhook] referral reward deferred:', e && e.message); });
+        });
       }
       if (evt.type === 'invoice.payment_failed') {
         patch.paymentFailedAt = new Date(evt.created * 1000).toISOString(); patch.amountDue = (obj.amount_due || 0) / 100;

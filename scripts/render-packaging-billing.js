@@ -20,7 +20,7 @@ fixture = require('./_lib/logic-fixtures'); org = fixture.ORG;
 profile = H.profile(org, fixture.brand.companyName);
 F.mock('../api/_lib/mail', { templates: { signupReceived: async function () {}, signupAlert: async function () {} } });
 H.mockQbo(function () { invoices++; }, qbo);
-var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change'), '/api/subscription-proposal': require('../api/subscription-proposal'), '/api/usage': require('../api/usage'), '/api/offerings': require('../api/offerings') };
+var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change'), '/api/subscription-proposal': require('../api/subscription-proposal'), '/api/usage': require('../api/usage'), '/api/offerings': require('../api/offerings'), '/api/refer': require('../api/refer') };
 /* Phase 5: a tenant whose current cycle is already paid, seen by its owner. */
 function seedPaid(keys, plan, staff) { seed(keys, staff); H.seedPaidTenant(db, { org: org, keys: keys, plan: plan }); }
 function seed(keys, staff) {

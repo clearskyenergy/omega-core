@@ -215,8 +215,40 @@ var T = {
         + button('https://' + o.host + '/account-settings.html', 'View your plan')));
   },
   packageInvoice: function (o) {
+    /* o.covered: a referral credit paid the whole invoice (package-billing issue) */
+    if (o.covered) return send(o.email, 'Your OMEGA invoice is covered by your referral credit',
+      layout('Nothing to pay this time', '<p>' + esc(o.text) + '</p><p>QuickBooks sends the invoice for your records. Open your plan for the details.</p>'));
     return send(o.email, 'Your OMEGA subscription invoice is ready',
       layout('Pay to continue', '<p>' + esc(o.text) + '</p>' + (o.paymentLink ? button(o.paymentLink, 'Pay in QuickBooks') : '<p>Open your plan for invoice details.</p>')));
+  },
+  /* ── Refer & earn (api/_lib/refer.js) ──────────────────────────────────
+     An invitation a workspace member sends a company. From the 'dev'
+     mailbox with Reply-To the person who sent it, like a colleague's
+     invitation, and it says plainly that nothing was created in their name. */
+  referInvite: function (o) {
+    var who = o.inviterName || o.inviterEmail;
+    return send(o.email, who + ' at ' + o.workspace + ' invited you to ClearSky-OMEGA',
+      layout('You are invited to ClearSky-OMEGA',
+        '<p>' + (o.name ? 'Hello ' + esc(o.name) + '. ' : '') + '<b>' + esc(who) + '</b> at <b>' + esc(o.workspace) + '</b> thinks OMEGA could help'
+          + (o.company ? ' <b>' + esc(o.company) + '</b>' : ' your team') + ' develop storage, EV charging, solar, microgrid and data-center projects: site screening, design, sizing, interconnection and the paperwork, in one workspace.</p>'
+        + (o.note ? '<p style="border-left:3px solid #22354F;padding-left:14px;color:#8BA3C4">' + esc(o.note) + '</p>' : '')
+        + button(o.url, 'See OMEGA and start')
+        + '<p>Sign in with your work email; your company gets its own private workspace and colleagues at your domain join it.</p>'
+        + '<p style="font-size:13px;color:#8BA3C4">Nothing has been created in your name, and nothing is shared with ' + esc(o.workspace) + ' beyond your company joining through their link. If you were not expecting this, ignore it.</p>'),
+      null, { profile: 'dev', replyTo: o.inviterEmail || undefined });
+  },
+  /* the workspace that sent a company earned its credit */
+  referEarned: function (o) {
+    return send(o.email, 'You earned a ' + o.display + ' credit on ClearSky-OMEGA',
+      layout('You earned a ' + o.display + ' credit', '<p><b>' + esc(o.referredName) + '</b> became an OMEGA customer through your referral. Thank you: ' + esc(o.company) + ' has a <b>' + esc(o.display) + '</b> credit for its bill.</p>'
+        + '<p style="font:600 20px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#E5EEF7;background:#0A1628;border:1px dashed #22354F;border-radius:10px;padding:14px;text-align:center">' + esc(o.code) + '</p>'
+        + button(o.url, 'Apply it to your bill')
+        + '<p>An owner or administrator of your workspace applies it from Refer &amp; earn; it comes off your next invoice. Apply it by <b>' + esc(o.expiresOn) + '</b>.</p>'));
+  },
+  /* ClearSky's copy: a referred signup, a reward, a credit to take off a hand-made invoice */
+  referAlert: function (o) {
+    return send(staffTo(), '[OMEGA] ' + o.subject,
+      layout(o.title || 'Referral', '<p>' + esc(o.text) + '</p>' + (o.orgId ? button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant’s Referrals panel') : '')));
   },
   /* The Subscription Proposal (Phase 6): the link carries the key that opens
      the customer's view; the reply goes to the rep who prepared it. */

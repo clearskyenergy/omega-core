@@ -539,6 +539,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Refer & earn (api/_lib/refer.js): a workspace's share link, who sent
+    // each new workspace, the $500 credit codes and the invitations sent.
+    // Admin SDK only, staff browsers included: a browser that could write a
+    // code, or the record of who referred whom, could credit itself money
+    // off a bill. Members read their own through /api/refer. NOT the
+    // `referrals` quote inbox below; nothing here touches it.
+    match /refer_links/{orgId} { allow read, write: if false; }
+    match /refer_signups/{orgId} { allow read, write: if false; }
+    match /refer_credits/{code} { allow read, write: if false; }
+    match /refer_invites/{inviteId} { allow read, write: if false; }
+
     match /tools/{toolId} {
       allow read:  if signedIn();
       allow write: if isAdmin();

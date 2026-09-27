@@ -115,6 +115,14 @@
 
 <main>
 <section id="package-panel" aria-label="Subscription package"></section>
+  <!-- REFER & EARN: a render of GET /api/refer (the one library is
+       api/_lib/refer.js). Who referred this workspace, the credits it earned
+       and the companies it sent; every button is a POST the endpoint judges
+       (staff only), and each change is audited on the workspace. -->
+  <section id="referrals" aria-label="Referrals">
+    <h2>Referrals <button type="button" class="mini" id="ref-refresh">Refresh</button></h2>
+    <div id="ref-body"><p class="muted">Loading…</p></div>
+  </section>
   <section>
     <h2>Systems <button type="button" class="mini" id="refresh">Refresh</button>
       <a class="mini" id="asjson" href="#" style="text-decoration:none;padding:7px 11px;border:1px solid var(--line);border-radius:8px">JSON</a></h2>
@@ -361,6 +369,71 @@
             function (e) { alert('Refused: ' + ((e && e.message) || 'unknown')); });
   });
 
+  /* ── referrals: GET /api/refer?orgId=&staff=true, actions POSTed back ── */
+  function referApi(body) {
+    var u = firebase.auth().currentUser;
+    if (!u) return Promise.reject(new Error('Sign in required'));
+    return u.getIdToken().then(function (tok) {
+      var opts = { cache: 'no-store', headers: { Authorization: 'Bearer ' + tok } };
+      if (body) { opts.method = 'POST'; opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(Object.assign({ orgId: ORG }, body)); }
+      return fetch('/api/refer' + (body ? '' : '?staff=true&orgId=' + encodeURIComponent(ORG)), opts);
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'refused'); return j; }); });
+  }
+  var REF_LABEL = { signed_up: 'signed up · waiting for its first payment', rewarded: 'paid · credit issued', declined: 'declined' };
+  function drawReferrals(s) {
+    var h = '<div class="grid">'
+      + '<div class="card"><div class="lbl">Share link</div><div class="val" style="font-size:15px">' + (s.link ? esc(s.link.code) : '<span class="muted">not made yet</span>') + '</div>' + (s.link ? '<div class="muted" style="font-size:12px;word-break:break-all">' + esc(s.link.url) + '</div>' : '') + '</div>'
+      + '<div class="card"><div class="lbl">Credits to apply</div><div class="val">' + esc(s.waiting.display) + '</div><div class="muted" style="font-size:12px">' + s.waiting.count + ' code' + (s.waiting.count === 1 ? '' : 's') + '</div></div>'
+      + '<div class="card"><div class="lbl">Applied, still to come off</div><div class="val">' + esc(s.onBill.display) + '</div></div></div>';
+    var r = s.referredBy;
+    h += '<h3 style="font-size:14px;margin:18px 0 6px">Referred by</h3>';
+    if (r) {
+      h += '<p><b>' + esc(r.referrerName || r.referrerOrgId) + '</b> (' + esc(r.referrerOrgId) + ') · ' + esc(REF_LABEL[r.state] || r.state) + ' · by ' + esc(r.via || '') + (r.signedUpOn ? ' · signed up ' + esc(r.signedUpOn) : '') + (r.creditCode ? ' · code ' + esc(r.creditCode) : '') + (r.declineReason ? ' · ' + esc(r.declineReason) : '') + '</p>';
+      if (r.state === 'signed_up') h += '<p><button type="button" class="mini save" data-ref="qualify">It paid: issue the credit</button> <button type="button" class="mini" data-ref="decline">Decline</button> <span class="muted" style="font-size:13px">A payment in QuickBooks or Stripe issues it by itself; this is for a workspace invoiced by hand.</span></p>';
+    } else h += '<p class="muted">Nobody. A referral made outside the link: <input id="ref-by" placeholder="referring workspace, e.g. concordenergyusa.com" style="width:auto;min-width:280px"> <button type="button" class="mini" data-ref="attribute">Record</button></p>';
+    h += '<h3 style="font-size:14px;margin:18px 0 6px">Credits it earned</h3>';
+    if (!s.credits.length) h += '<p class="muted">None.</p>';
+    else {
+      h += '<table><thead><tr><th>Code</th><th>For</th><th>State</th><th>Where</th><th>Left</th><th></th></tr></thead><tbody>';
+      s.credits.forEach(function (c) {
+        var act = '';
+        if (c.state === 'applied' && c.route === 'manual' && c.remainingCents > 0) act += '<button type="button" class="mini" data-ref="settle" data-code="' + esc(c.code) + '">Taken off an invoice</button> ';
+        if (c.state === 'issued' || (c.state === 'applied' && c.route !== 'stripe' && c.remainingCents === c.amountCents)) act += '<button type="button" class="mini" data-ref="void" data-code="' + esc(c.code) + '">Void</button>';
+        h += '<tr style="cursor:default"><td><b>' + esc(c.pretty) + '</b><br><span class="muted" style="font-size:12px">issued ' + esc(c.issuedOn || '') + (c.expiresOn ? ' · lapses ' + esc(c.expiresOn) : '') + '</span></td>'
+          + '<td>' + esc(c.referredName || '') + '<br><span class="muted" style="font-size:12px">' + esc(c.referredOrgId || '') + '</span></td>'
+          + '<td>' + esc(c.state) + (c.appliedBy ? '<br><span class="muted" style="font-size:12px">by ' + esc(c.appliedBy) + '</span>' : '') + (c.settledNote ? '<br><span class="muted" style="font-size:12px">' + esc(c.settledNote) + '</span>' : '') + (c.voidReason ? '<br><span class="muted" style="font-size:12px">' + esc(c.voidReason) + '</span>' : '') + '</td>'
+          + '<td>' + esc(c.route || '—') + (c.stripeError ? '<br><span class="err" style="font-size:12px">' + esc(c.stripeError) + '</span>' : '') + '</td>'
+          + '<td>' + esc(c.remainingDisplay) + '</td><td style="white-space:nowrap">' + act + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+    h += '<h3 style="font-size:14px;margin:18px 0 6px">Companies it referred</h3>';
+    if (!s.referrals.length) h += '<p class="muted">None yet' + (s.invites.length ? ' (' + s.invites.length + ' invited by email)' : '') + '.</p>';
+    else {
+      h += '<table><thead><tr><th>Company</th><th>State</th><th>How</th><th>Signed up</th></tr></thead><tbody>';
+      s.referrals.forEach(function (x) { h += '<tr style="cursor:default"><td><b>' + esc(x.name) + '</b><br><span class="muted" style="font-size:12px">' + esc(x.referredOrgId || '') + '</span></td><td>' + esc(REF_LABEL[x.state] || x.state) + '</td><td>' + esc(x.via || '') + (x.invitedBy ? '<br><span class="muted" style="font-size:12px">' + esc(x.invitedBy) + '</span>' : '') + '</td><td>' + esc(x.signedUpOn || '') + '</td></tr>'; });
+      h += '</tbody></table>';
+    }
+    $('ref-body').innerHTML = h;
+    var btns = $('ref-body').querySelectorAll('button[data-ref]');
+    for (var i = 0; i < btns.length; i++) (function (b) { b.addEventListener('click', function () { referAct(b.getAttribute('data-ref'), b.getAttribute('data-code'), b); }); })(btns[i]);
+  }
+  function referAct(action, code, btn) {
+    var body = { action: action };
+    if (action === 'settle') { var note = prompt('Which invoice did the credit come off? (e.g. "Invoice 1042, Oct 2026")'); if (!note) return; body.code = code; body.note = note; }
+    else if (action === 'void') { var why = prompt('Why is code ' + code + ' withdrawn?'); if (!why) return; body.code = code; body.reason = why; }
+    else if (action === 'decline') { var reason = prompt('Why is this referral declined? No credit will be issued.'); if (!reason) return; body.reason = reason; }
+    else if (action === 'attribute') { body.referrerOrgId = String(($('ref-by') || {}).value || '').trim().toLowerCase(); if (!body.referrerOrgId) return; }
+    else if (action === 'qualify' && !confirm('Issue the referral credit to the workspace that referred ' + ORG + '?')) return;
+    btn.disabled = true;
+    referApi(body).then(function () { loadReferrals(); }, function (e) { btn.disabled = false; alert('Refused: ' + e.message); });
+  }
+  function loadReferrals() {
+    $('ref-body').innerHTML = '<p class="muted">Loading…</p>';
+    referApi(null).then(drawReferrals, function (e) { $('ref-body').innerHTML = '<p class="err">' + esc(e.message) + '</p>'; });
+  }
+  $('ref-refresh').addEventListener('click', loadReferrals);
+
   $('cancel').addEventListener('click', dlgClose);
   $('dlg-form').addEventListener('submit', function (ev) { ev.preventDefault(); dlgClose(); });
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') dlgClose(); });
@@ -371,6 +444,7 @@
     db = firebase.firestore();
     loadSystems();
     loadCustomers();
+    loadReferrals();
     OmegaPackagePanel.mount($('package-panel'), ORG, u);
   });
 })();

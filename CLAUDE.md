@@ -286,6 +286,26 @@ refuses to invoice while QuickBooks' custom transaction numbers are off.
 only support address; csebuilders.com is never written again. See
 `docs/PACKAGING-PHASE-10A-VALIDATION.md` (Launch hardening).
 
+## Refer & earn (2026-09-27)
+
+A workspace sends a company (its link `/start?ref=CODE`, or an invitation
+emailed from Refer & earn, `/workspace#refer`); when that company first
+PAYS, the sender earns a $500 credit code for its own bill.
+`api/_lib/refer.js` is the ONE place for the rules and constants; every
+writer calls it: `api/refer.js` (page + the console's Referrals panel on
+`/admin/tenant`), `tenant-signup` (writes `refer_signups/{newOrg}` WITH the
+workspace, once), `package-billing` (`reconcile` rewards a paid subscription
+invoice; `issue` draws applied credits onto a new invoice in its
+transaction), and the Stripe webhook (`invoice.paid` with money). A signup
+earns nothing. Applied: packaged → the next QuickBooks invoice as a discount,
+never below $0, rest carried; Stripe → customer balance (idempotent per
+code); otherwise ClearSky is told and marks it taken off by hand. A code
+never creates a billing record. QuickBooks takes ONE discount line:
+`qbo-billing` sums every credit into it (no item sync needed).
+`refer_links`, `refer_signups`, `refer_credits`, `refer_invites` are Admin
+SDK only — NOT the `referrals` quote inbox. `docs/REFER-AND-EARN.md`;
+`scripts/test-refer.js`.
+
 ## Tenant resolution order (omega-brand.js)
 
 1. Firestore `tenants/{orgId}` matched by hostname → `domains[]`
