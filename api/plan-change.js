@@ -3,7 +3,9 @@
  * subscribe (pay first), cancel a pending change, request a removal.
  * Members are refused a change and may read the summary; ClearSky staff may
  * act for a tenant. `opt-in` records a priced request on a plan billed
- * outside the engine (nothing charged). Sandbox only.
+ * outside the engine (nothing charged) and `opt-out` its mirror (nothing
+ * removed); both have a dry run for the confirm panel and a withdraw.
+ * Sandbox only.
  */
 'use strict';
 var A = require('./_lib/admin'), C = require('./_lib/plan-change');
@@ -36,6 +38,9 @@ module.exports = A.handler(async function (req, res) {
     case 'auto-topup': return C.autoTopup(A.db(), orgId, input.enabled, caller, now);
     case 'reconcile-now': return C.reconcileNow(A.db(), orgId, caller, now);
     case 'opt-in': return C.optIn(A.db(), orgId, input, caller, now);
-    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy, auto-topup, reconcile-now or opt-in');
+    case 'withdraw-opt-in': return C.withdraw(A.db(), orgId, input, caller, now, 'optIns');
+    case 'opt-out': return C.optOut(A.db(), orgId, input, caller, now);
+    case 'withdraw-opt-out': return C.withdraw(A.db(), orgId, input, caller, now, 'optOuts');
+    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy, auto-topup, reconcile-now, opt-in, withdraw-opt-in, opt-out or withdraw-opt-out');
   }
 });

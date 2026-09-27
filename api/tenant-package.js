@@ -25,7 +25,7 @@ module.exports = A.handler(async function (req, res) {
     // The tenant sees their plan, never staff-internal reasons, realms or
     // the before/after patches that carry staff emails.
     var keep = ['packaged', 'packagingState', 'modules', 'plan', 'interval', 'billingDay', 'nextInvoiceOn', 'paidThrough', 'accessUntil', 'trialEndsAt',
-      'amountDue', 'paymentLink', 'monthlyDisplay', 'builders', 'viewers', 'toolAccess', 'removalRequests', 'subscription', 'pricebookVersion', 'optIns', 'tier', 'addons'];
+      'amountDue', 'paymentLink', 'monthlyDisplay', 'builders', 'viewers', 'toolAccess', 'removalRequests', 'subscription', 'pricebookVersion', 'optIns', 'optOuts', 'tier', 'addons'];
     var shown = {}; keep.forEach(function (k) { if (billing[k] !== undefined) shown[k] = billing[k]; });
     if (billing.serviceFee) shown.serviceFee = { mode: billing.serviceFee.mode, display: billing.serviceFee.display || null, appliesTo: billing.serviceFee.appliesTo || null };
     billing = shown;
