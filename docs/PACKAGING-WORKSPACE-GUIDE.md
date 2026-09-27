@@ -2,7 +2,7 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Choose the project type when starting a site. Build opens with relevant commands first. Use **All tools** to see the rest of the tools your organization owns. Select, draw, annotate, scale, layers and 3D review remain available in every active workspace. Mixed projects combine their selected types.
+Choose the project type when starting a site. Build opens with the project's guided build and its relevant commands first; every other tool your organization owns stays on the ribbon in its usual place (nothing is hidden by the project type, and there is no Designer/Pro switch on a package). Select, draw, annotate, scale, layers and 3D review remain available in every active workspace. Mixed projects combine their selected types.
 
 **+ Modules** is the single place to discover additions. During this implementation preview, the gallery displays server prices; checkout is not enabled. A discovery result in Search or Jarvis opens a module card. It never launches an unowned tool.
 

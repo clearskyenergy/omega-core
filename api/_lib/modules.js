@@ -142,6 +142,24 @@ var BLURBS = {
   'logic-customer': 'The customer app: order status, documents, deliveries and sites, in your customers\' hands under your brand.'
 };
 CATALOG.forEach(function (m) { m.features = FEATURES[m.key]; m.blurb = BLURBS[m.key] || ''; });
+/* What a LEGACY plan (a tier, no package) opens of each module inside the
+ * editor: the legacy caps its commands sit behind (data-cap on the command
+ * or on its tab: Analyze and Estimate need `engineering`, Compute needs
+ * `compute`), '' for commands nothing gates, and a chain ("engineering+
+ * parcelscreen") where a command with its own cap sits on a gated tab and
+ * needs both. The store, the Modules page and
+ * the master console judge a legacy workspace by these AND its standalone
+ * tools (OmegaWorkspaceHub.moduleState), so "On your plan" is what the plan
+ * really opens. Read off the real editor by scripts/render-legacy-gates.js,
+ * which fails when this drifts from it; never a price, never a grant: a
+ * package is judged by modules[] alone. */
+var LEGACY_GATES = {
+  lite: ['', 'compute', 'export.blueprint'], gridatlas: ['engineering'], storage: ['', 'engineering'],
+  estimate: ['', 'engineering'], evrebates: [''], plansets: ['', 'export.oneline', 'export.plotplan'],
+  siteintel: ['', 'compute', 'engineering', 'engineering+parcelscreen'], engineering: ['', 'compute', 'engineering'],
+  finance: ['', 'export'], compute: ['', 'compute'], ops: ['engineering'], permitting: ['']
+};
+CATALOG.forEach(function (m) { m.legacyGates = LEGACY_GATES[m.key] || []; });
 /* Viewing/navigation survives an expired trial; producing commands do not. */
 var READ_ONLY_RIBBON = words('openProjectsModal rbNav rbTab omegaThemePick omegaLoadMap toggleLayersPanel toggleCompassPanel toggleSitePanel toggleMeterPanel toggleDockLeft toggleDiagPanel opToggleCoords')
   .concat(["openRpPanel('summary')", "rpTab('summary')"]);
