@@ -4590,7 +4590,7 @@ function _moduleNames(keys){
 }
 function _stateLabel(b, view){
   var s = b.packagingState;
-  var text = { awaiting_payment: 'Awaiting your first payment', paid: 'Active', trial: 'Trial', past_due: 'Payment overdue', past_due_lite: 'Overdue · Lite only', pending: 'Awaiting approval' }[s] || (s ? String(s).replace(/_/g, ' ') : '—');
+  var text = { awaiting_payment: 'Awaiting your first payment', paid: 'Active', trial: 'Trial', past_due: 'Payment overdue', past_due_lite: 'Overdue · Omega Design only', pending: 'Awaiting approval' }[s] || (s ? String(s).replace(/_/g, ' ') : '—');
   if (view && view.readOnly && s !== 'awaiting_payment' && s !== 'pending') text += ' · read-only until paid';
   return text;
 }
@@ -4683,7 +4683,6 @@ function _fetchModulePrices(){
    three rungs it does not hold, dashed, with + Add opening the Ladder on that
    module. Everything is the package view's own catalog and the server's
    prices; there is no second list. A legacy plan shows nothing here. */
-var MOD_SHELF_LABEL = { floor:'Included in every plan', addon:'Add-on', standard:'Standard shelf', premium:'Premium shelf', deliverable:'Deliverable', platform:'Omega Logic' };
 var MOD_SHELF_ORDER = ['floor','addon','standard','premium','deliverable','platform'];
 var MOD_GLYPH = { lite:'\u25C8', gridatlas:'\u2317', storage:'\u25AE', estimate:'\u25A4', evrebates:'\u26A1', plansets:'\u25A7', siteintel:'\u25CE', engineering:'\u2699', finance:'$', compute:'\u25A6', ops:'\u25C9', whitelabel:'\u25EB', permitting:'\u2713', sitefinder:'\u25CE', 'logic-office':'\u25F7', 'logic-plant':'\u2699', 'logic-materials':'\u25A6', 'logic-logistics':'\u279C', 'logic-customer':'\u25CD' };
 function _toolByKey(key){ var all = (window.OMEGATools && OMEGATools.all) ? OMEGATools.all() : []; for (var i=0;i<all.length;i++) if (all[i].key===key) return all[i]; return null; }
@@ -4693,10 +4692,10 @@ function _moduleCard(m, state){
   var first = (m.tools||[]).map(_toolByKey).filter(function(t){ return t && t.icon; })[0];
   var ico = first ? '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="'+esc(first.icon)+'"/></svg>' : esc(MOD_GLYPH[m.key]||'\u25C8');
   var price = !held && _modulePrices && _modulePrices[m.key] ? _modulePrices[m.key] : '';
-  var line = held ? (MOD_SHELF_LABEL[m.shelf]||m.shelf) : bought ? 'Yours \u00B7 opens when the first invoice is paid' : 'Not in your plan' + (price ? ' \u00B7 ' + price : '');
+  var line = held ? (m.shelfLabel||m.shelf) : bought ? 'Yours \u00B7 opens when the first invoice is paid' : 'Not in your plan' + (price ? ' \u00B7 ' + price : '');
   var h = '<div class="mod-card'+(held?'':' off')+(logic?' logic':'')+'" data-module="'+esc(m.key)+'" data-held="'+(held?'1':bought?'bought':'0')+'">';
   h += held ? '<span class="mod-live">Live</span>' : bought ? '<span class="mod-soon">Paid for</span>' : '<button type="button" class="mod-add" data-add-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-add-module\'))">+ Add</button>';
-  h += '<div class="mod-head"><div class="mod-ico">'+ico+'</div><div style="min-width:0"><div class="mod-name">'+esc(logic ? 'Omega Logic \u00B7 '+m.name : m.name)+'</div><div class="mod-shelf">'+esc(line)+'</div></div></div>';
+  h += '<div class="mod-head"><div class="mod-ico">'+ico+'</div><div style="min-width:0"><div class="mod-name">'+esc(m.name)+'</div><div class="mod-shelf">'+esc(line)+'</div></div></div>';
   h += '<ul class="mod-feat">'+(m.features||[]).slice(0,3).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')+'</ul>';
   if ((held || bought) && m.key !== 'lite') h += '<button type="button" class="ows-pill" data-remove-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-remove-module\'))">Opt out</button>';
   var shown = tools.slice(0, held ? 4 : 3);
@@ -5635,6 +5634,21 @@ function _brandToolLinks(){
 }
 function renderPortalApps(ws){
   _PORTAL_WS = ws;
+  /* The grid is first drawn at sign-in, often before omega-tenant.js has
+     merged the package projection: a packaged Lite workspace then read as a
+     tier, and the starter set took Standard tools that the lock pass turned
+     into locked tiles. Draw again with the merged workspace whenever the
+     entitlements land (now, if they already have, and on every refresh). */
+  if (!renderPortalApps._ent){
+    renderPortalApps._ent = true;
+    var again = function(w){
+      if (!w || typeof OMEGATools === 'undefined') return;
+      _PORTAL_WS = w;
+      try { _paintDash(); _paintMarket(); } catch(e){}
+    };
+    if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(again);
+    window.addEventListener('omega:entitlements', function(e){ again(e.detail); });
+  }
   _brandToolLinks();   // ensure Quick Access + tool links carry ?org=
   // omega-tools.js loads cross-origin from the host and may not be ready yet
   // at sign-in. Instead of giving up, wait for it (retry up to ~5s).

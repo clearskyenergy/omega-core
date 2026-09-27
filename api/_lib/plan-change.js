@@ -17,7 +17,7 @@ function keys(list, name) {
   var out = [];
   list.forEach(function (k) {
     if (typeof k !== 'string' || !M.get(k)) fail('Unknown module', 400);
-    if (k === 'lite') fail('Lite is always included', 400);
+    if (k === 'lite') fail('Omega Design is always included', 400);
     if (out.indexOf(k) < 0) out.push(k);
   });
   return out;
