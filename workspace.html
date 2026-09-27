@@ -64,10 +64,21 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .num{font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 .sec{display:flex;flex-direction:column;gap:12px}
 /* one view at a time (2026-09-27): the home is the hub and Today; All tools, In flight and Around you are each their own page, reached from the rail, the tabs or the hub — never a scroll */
-#content[data-view] .sec,#content[data-view] .hero{display:none}#content[data-view="home"] .hero{display:grid}#content[data-view="tools"] #tools,#content[data-view="modules"] #modules,#content[data-view="flight"] #flight,#content[data-view="team"] #team{display:flex}
-.mods{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}.mods h3{grid-column:1/-1;margin:8px 0 0;font:600 13px "DM Sans",sans-serif;color:var(--ows-ink2)}
-.mod{display:flex;flex-direction:column;gap:6px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:12px 14px;position:relative}.mod.off{border-style:dashed;background:transparent}.mod b{font-size:14px;padding-right:70px}.mod .d{font-size:12.5px;color:var(--ows-ink2)}.mod .st{position:absolute;top:12px;right:12px;font-size:11px;font-weight:600;color:var(--ows-green)}.mod .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px}.mod .price{font:500 13px "DM Mono",monospace;color:var(--ows-ink)}.mod .ows-pill{padding:5px 12px;font-size:12px}
-@media (max-width:560px){.mods{grid-template-columns:1fr;gap:6px}.mod{padding:10px 12px}.mod .d{display:none}}
+#content[data-view] .sec,#content[data-view] .hero{display:none}#content[data-view="home"] .hero{display:grid}#content[data-view="home"] #flight,#content[data-view="home"] #team{display:flex}#content[data-view="home"] .back{display:none}#content[data-view="tools"] #tools,#content[data-view="modules"] #modules,#content[data-view="flight"] #flight,#content[data-view="team"] #team{display:flex}
+/* the Modules page is the menu people buy from: a shelf is a heading with what the shelf is for; a card is the whole story of one module — what it is for, what it does, what is inside, its allowance and what it needs, then the price and the state */
+.mods{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}.mods h3{grid-column:1/-1;margin:14px 0 0;font:600 15px Poppins,"DM Sans",sans-serif;color:var(--ows-ink);display:flex;flex-direction:column;gap:2px}.mods h3:first-child{margin-top:0}.mods h3 small{font:400 12.5px "DM Sans",sans-serif;color:var(--ows-ink2)}
+.mod{display:flex;flex-direction:column;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);overflow:hidden;position:relative;min-width:0}.mod.off{border-style:dashed;background:rgba(255,255,255,.6)}
+.mod .cv{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;color:#fff;flex:none}.mod .cv .ltr{font:700 20px Poppins,"DM Sans",sans-serif;opacity:.92}
+.mod .st{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;white-space:nowrap}.mod .st.live{background:var(--ows-green-soft);color:var(--ows-green)}.mod .st.part{background:var(--ows-amber-soft);color:var(--ows-amber)}
+.mod .bd{display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px;flex:1}
+.mod .nm{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.mod .nm b{font:600 15px "DM Sans",sans-serif;padding:0}.mod .price{font:500 14px "DM Mono",ui-monospace,monospace;color:var(--ows-ink);white-space:nowrap}
+.mod .blurb{margin:0;font-size:12.5px;color:var(--ows-ink2);line-height:1.45}
+.mod .feat{margin:0;padding-left:16px;font-size:12.5px;line-height:1.55;color:var(--ows-ink)}
+.mod .inside{font-size:12px;color:var(--ows-ink2);line-height:1.5}.mod .inside b{color:var(--ows-ink);font-weight:600}
+.mod .meta{display:flex;gap:6px;flex-wrap:wrap}
+.mod .row{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--ows-line)}.mod .row .note{font-size:12px;color:var(--ows-ink2);line-height:1.4}.mod .ows-pill{flex:none}
+#modules-plan{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;font-size:13px}#modules-plan .ows-pill{margin-left:auto}
+@media (max-width:560px){.mods{grid-template-columns:1fr;gap:10px}.mod .cv{height:44px}.mod .bd{padding:10px 12px 12px}}
 .sec .back{align-self:flex-start;color:var(--ows-ink2);font-size:13px;text-decoration:none}.sec .back:hover{color:var(--ows-teal-d)}
 .sec .hd{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}.sec .hd .sub{color:var(--ows-ink2);font-size:13px;margin-top:2px}
 /* notices: approval, trial, read-only */
@@ -125,6 +136,10 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .post{display:flex;gap:8px}.post input{flex:1;min-width:0;border:1px solid var(--ows-line);border-radius:10px;padding:8px 10px;font:inherit;background:var(--ows-sunk)}
 .opt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--ows-line)}.opt b{display:block;font-weight:600}.opt small{color:var(--ows-ink2);font-size:12px;display:block;line-height:1.4}
 .tg{width:42px;height:24px;border-radius:999px;background:var(--ows-line2);position:relative;transition:background .15s;flex:none}.tg::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}.tg[aria-checked="true"]{background:var(--ows-teal-d)}.tg[aria-checked="true"]::after{left:21px}
+.pulse .spark{width:100%;height:44px;display:block}.pulse .spark path{fill:none;stroke:var(--ows-teal-d);stroke-width:2}.pulse .spark .fill{fill:var(--ows-teal-soft);stroke:none}
+.pulse .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pulse .stat{background:var(--ows-sunk);border:1px solid var(--ows-line);border-radius:10px;padding:8px 10px}.pulse .stat .v{font:500 18px "DM Mono",monospace}.pulse .stat .l{font-size:11.5px;color:var(--ows-ink2)}
+.pulse .insight{font-size:12.5px;color:var(--ows-ink2);background:var(--ows-sunk);border-radius:10px;padding:10px 12px;line-height:1.5}.pulse .insight b{color:var(--ows-ink)}
+.people .pr .ows-pill{margin-left:auto;flex:none}
 .kv{display:flex;flex-direction:column}.kv div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--ows-line);font-size:13px}.kv div span:first-child{color:var(--ows-ink2)}.kv div span:last-child{text-align:right;font-weight:600}
 .field label{display:block;font-size:12px;color:var(--ows-ink2);margin-bottom:4px}.field input{width:100%;border:1px solid var(--ows-line);border-radius:10px;padding:9px 11px;font:inherit}
 @media (max-width:1040px){.hero{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -155,6 +170,7 @@ body.refused #refused{display:block}body.refused #content{display:none}
         <section class="sec" id="modules">
           <a class="back" href="/workspace">‹ Home</a>
           <div class="hd"><div><h2>Modules</h2><div class="sub" id="modules-sub">Build your own experience and pay for what you need. What you hold is Live; anything else is one click to add.</div></div><a class="ows-pill ghost" data-sn="marketplace" href="/marketplace.html">Marketplace ›</a></div>
+          <div id="modules-plan"></div>
           <div id="modules-body"></div>
         </section>
         <section class="sec" id="flight">
@@ -200,7 +216,8 @@ var S = window.OmegaWorkspaceShell, HUB = window.OmegaWorkspaceHub, T = window.O
 var esc = S.esc, byId = function (id) { return document.getElementById(id); };
 var WS = null, USER = null, ME = '', PROFILE = null;
 var DATA = { projects: [], todos: [], messages: [], members: [], pinned: [], prefs: null, rfqsSent: [], rfqsReceived: [], referrals: [] };
-var PREFS_DEFAULT = { presence: true, feed: true, partners: true, guides: false };
+var PREFS_DEFAULT = { presence: true, feed: true, pulse: true, partners: true, guides: false };
+var PULSE = null, PULSE_ASKED = false;
 var STAGE_KEYS = ['candidate', 'package', 'submitted', 'interconnect', 'permitting', 'finance', 'construction', 'online'];
 var STAGE_LABEL = { candidate: 'Candidate', package: 'Site package', submitted: 'Submitted to utility', interconnect: 'Interconnection', permitting: 'Permitting', finance: 'Finance ready', construction: 'Construction', online: 'Online' };
 var DAY = 86400000;
@@ -279,6 +296,7 @@ window.showApp = function (user) {
   OmegaNewProject.configure({ db: db, auth: auth, orgId: function () { return WS.orgId; }, ownerName: function () { return who(); }, afterCreate: openProject });
   render();
   load();
+  loadPulse();
   OmegaTenant.onEntitlements(function (ws) { if (ws) { WS = applyViewAs(ws); window.OMEGA_WORKSPACE = WS; askViewAs(); } S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() }); render(); logicSection(); });
   window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; render(); } });
   route();
@@ -444,7 +462,9 @@ function renderToday() {
    the count, else the price and Ask, which is the store on that module.
    Nothing here is a second list or a price. */
 var MOD_SHELF = { floor: 'Included in every plan', addon: 'Add-ons', standard: 'Standard shelf', premium: 'Premium shelf', deliverable: 'Deliverables', platform: 'Omega Logic' }, MOD_ORDER = ['floor', 'addon', 'standard', 'premium', 'deliverable', 'platform'];
-var MOD_PRICES = null, MOD_CATALOG = null, MOD_ASKED = false;
+var MOD_SHELF_SUB = { floor: 'The floor every package stands on.', addon: 'Small and specific: one thing, added to any plan.', standard: 'The working tools of a site: sizing, estimating, rebates. Metered where they produce a deliverable.', premium: 'The deeper work: plan sets, intelligence, engineering, finance, compute, operations, your own storefront.', deliverable: 'Work product you order by the piece: a matrix, a site study.', platform: 'Omega Logic by department. Each part is its own opt-in and needs Office.' };
+var MOD_COVER = { floor: 'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)', addon: 'linear-gradient(135deg,#053A45 0%,#2A8CA3 100%)', standard: 'linear-gradient(135deg,#0B2F52 0%,#1B4F8A 100%)', premium: 'linear-gradient(135deg,#243B53 0%,#3E6E8E 100%)', deliverable: 'linear-gradient(135deg,#16202B 0%,#00807C 100%)', platform: 'linear-gradient(135deg,#17293A 0%,#0C1824 100%)' };
+var MOD_PRICES = null, MOD_CATALOG = null, MOD_ASKED = false, MOD_STARTERS = null, MOD_LABELS = null;
 function askModules(packaged) {
   if (packaged) return (window.OmegaPackageMenu ? OmegaPackageMenu.api('/api/package-catalog') : Promise.reject(new Error('no menu')));
   return new Promise(function (res, rej) {
@@ -452,35 +472,71 @@ function askModules(packaged) {
     catch (e) { rej(e); }
   });
 }
+/* which starter packages carry a module: "Popular with EV installers" */
+function popularWith(key) {
+  if (!MOD_STARTERS || !MOD_LABELS) return [];
+  return Object.keys(MOD_STARTERS).filter(function (k) { return (MOD_STARTERS[k] || []).indexOf(key) >= 0 && MOD_LABELS[k]; }).map(function (k) { return MOD_LABELS[k]; });
+}
 function renderModules() {
-  var b = byId('modules-body'), pa = WS.packageAccess, packaged = !!(pa && pa.packaged && Array.isArray(pa.catalog) && pa.catalog.length);
-  if (!MOD_ASKED) { MOD_ASKED = true; askModules(packaged).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay || m.monthlyDisplay; }); renderModules(); }, function () { MOD_CATALOG = []; renderModules(); }); }
+  var b = byId('modules-body'), strip = byId('modules-plan'), pa = WS.packageAccess, packaged = !!(pa && pa.packaged && Array.isArray(pa.catalog) && pa.catalog.length);
+  if (!MOD_ASKED) { MOD_ASKED = true; askModules(packaged).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay || m.monthlyDisplay; }); MOD_STARTERS = j.starters || null; MOD_LABELS = j.starterLabels || null; renderModules(); }, function () { MOD_CATALOG = []; renderModules(); }); }
   if (!packaged) {
     if (!MOD_CATALOG) { b.innerHTML = '<div class="empty">Loading the catalog…</div>'; return; }
     if (!MOD_CATALOG.length) { b.innerHTML = '<div class="empty">The price list is unavailable right now. The <a href="/marketplace.html">Marketplace</a> has every module; try again later.</div>'; return; }
   }
-  var ctx = hubCtx(), bl = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {};
+  var ctx = hubCtx(), bl = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}, byKey = {};
   var bought = bl.subscription && Array.isArray(bl.subscription.modules) ? bl.subscription.modules : [];
   var cat = (packaged ? pa.catalog : MOD_CATALOG).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), h = '', shelf = '', heldN = 0;
+  (MOD_CATALOG || []).forEach(function (m) { byKey[m.key] = m; });
   cat.forEach(function (m) {
-    if (m.shelf !== shelf) { shelf = m.shelf; h += '<h3>' + esc(MOD_SHELF[shelf] || shelf) + '</h3>'; }
-    var st = HUB.moduleState(m, ctx), on = st === 'held', paid = !on && bought.indexOf(m.key) >= 0, price = MOD_PRICES && MOD_PRICES[m.key];
+    var full = byKey[m.key] || m;
+    if (m.shelf !== shelf) { shelf = m.shelf; h += '<h3>' + esc(MOD_SHELF[shelf] || shelf) + (MOD_SHELF_SUB[shelf] ? '<small>' + esc(MOD_SHELF_SUB[shelf]) + '</small>' : '') + '</h3>'; }
+    var st = HUB.moduleState(m, ctx), on = st === 'held', paid = !on && bought.indexOf(m.key) >= 0, price = (MOD_PRICES && MOD_PRICES[m.key]) || m.priceDisplay || '';
     if (on) heldN++;
+    var name = m.shelf === 'platform' ? 'Omega Logic · ' + m.name : m.name;
+    var tools = (m.tools || []).map(function (k) { return tool(k); }).filter(function (t) { return !!t; });
+    var chips = '';
+    if (m.usageDisplay || full.usageDisplay) chips += '<span class="ows-chip">' + esc(m.usageDisplay || full.usageDisplay) + '</span>';
+    if ((m.requires || full.requires || []).indexOf('logic-office') >= 0) chips += '<span class="ows-chip">Needs Office</span>';
+    if (m.key === 'lite') chips += '<span class="ows-chip">In every package</span>';
+    if (m.beta && m.beta.length) chips += '<span class="ows-chip">Beta: ' + esc(m.beta.join(', ')) + '</span>';
+    if (m.coverage) chips += '<span class="ows-chip">' + esc(m.coverage) + '</span>';
+    var pop = popularWith(m.key); if (pop.length) chips += '<span class="ows-chip">Popular with ' + esc(pop.slice(0, 2).join(' and ')) + '</span>';
+    var state = on ? '<span class="st live">● Live</span>' : paid ? '<span class="st">Paid for</span>' : st === 'part' ? '<span class="st part">Partly on your plan</span>' : '<span class="st">' + (packaged ? 'Add to your plan' : 'Not on your plan') + '</span>';
     h += '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : st === 'part' ? 'part' : '0') + '">';
-    h += on ? '<span class="st">● Live</span>' : paid ? '<span class="st" style="color:var(--ows-ink2)">Paid for</span>' : st === 'part' ? '<span class="st" style="color:var(--ows-amber)">Partly</span>' : '';
-    h += '<b>' + esc(m.shelf === 'platform' ? 'Omega Logic · ' + m.name : m.name) + '</b><div class="d">' + esc((m.features || []).slice(0, 2).join(' · ')) + '</div>';
-    if (!on) {
-      var mt = st === 'part' ? HUB.moduleTools(m, ctx) : null;
-      var note = paid ? 'Opens when the first invoice is paid' : (mt ? mt.open + ' of ' + mt.total + ' tools on your plan · ' : '') + (price || 'Price on the menu');
-      var action = paid || WS.pendingApproval ? '' : packaged ? '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">+ Add</button>' : '<a class="ows-pill primary" href="/marketplace.html#' + esc(m.key) + '" data-ask-module="' + esc(m.key) + '">Ask</a>';
-      h += '<div class="row"><span class="price">' + esc(note) + '</span>' + action + '</div>';
-    }
-    h += '</div>';
+    h += '<div class="cv" style="background:' + (MOD_COVER[m.shelf] || MOD_COVER.floor) + '"><span class="ltr">' + esc(m.name.slice(0, 1)) + '</span>' + state + '</div>';
+    h += '<div class="bd"><div class="nm"><b>' + esc(name) + '</b><span class="price">' + esc(price || 'Price on the menu') + '</span></div>';
+    if (m.blurb || full.blurb) h += '<p class="blurb">' + esc(m.blurb || full.blurb) + '</p>';
+    var feats = m.features || full.features || [];
+    if (feats.length) h += '<ul class="feat">' + feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>';
+    if (tools.length) h += '<div class="inside"><b>Inside:</b> ' + tools.map(function (t) { return esc(t.name); }).join(' · ') + '</div>';
+    else if (m.shelf !== 'platform') h += '<div class="inside"><b>Inside:</b> capabilities of Site Map, the editor</div>';
+    if (chips) h += '<div class="meta">' + chips + '</div>';
+    var mt = st === 'part' ? HUB.moduleTools(m, ctx) : null;
+    var note = on ? 'On your plan' : paid ? 'Opens when the first invoice is paid' : mt ? mt.open + ' of ' + mt.total + ' of its tools are on your plan' : packaged ? 'Pay by card; on when the payment clears' : 'Opt in to add it to your plan';
+    var action = on || paid || WS.pendingApproval ? '' : packaged ? '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">Opt in</button>' : '<button type="button" class="ows-pill primary" data-ask-module="' + esc(m.key) + '" data-price="' + esc(price || '') + '" data-name="' + esc(name) + '">Opt in</button>';
+    h += '<div class="row"><span class="note">' + esc(note) + '</span>' + action + '</div>';
+    h += '</div></div>';
   });
   b.innerHTML = '<div class="mods">' + h + '</div>';
+  if (strip) strip.innerHTML = '<span class="ows-chip on">' + esc(planName()) + '</span><span class="num" style="color:var(--ows-ink2)">' + heldN + ' of ' + cat.length + ' modules Live</span>' + (packaged ? '<span style="color:var(--ows-ink2)">Monthly prices. Nothing new is charged for what your plan already covers.</span>' : '<span style="color:var(--ows-ink2)">Monthly prices from the price list.</span>') + '<a class="ows-pill" data-sn="marketplace" href="/marketplace.html">Plans and the store ›</a>';
   var sub = byId('modules-sub');
-  if (sub) sub.textContent = packaged ? 'Build your own experience and pay for what you need. What you hold is Live; anything else is one click to add.' : planName() + ' holds ' + heldN + ' of ' + cat.length + ' modules for ' + (WS.clientName || 'your workspace') + '. Live ones are on your plan; Ask sends a module to ClearSky, who switches it on.';
+  if (sub) sub.textContent = packaged ? 'Build your own experience and pay for what you need. What you hold is Live; anything else is one click to add.' : planName() + ' holds ' + heldN + ' of ' + cat.length + ' modules for ' + (WS.clientName || 'your workspace') + '. Live ones are on your plan; Opt in adds one.';
   Array.prototype.forEach.call(b.querySelectorAll('[data-add-module]'), function (btn) { btn.addEventListener('click', function () { addModule(btn.getAttribute('data-add-module')); }); });
+  Array.prototype.forEach.call(b.querySelectorAll('[data-ask-module]'), function (btn) { btn.addEventListener('click', function () { optInLegacy(btn.getAttribute('data-ask-module'), btn.getAttribute('data-name'), btn.getAttribute('data-price')); }); });
+}
+/* A workspace on a legacy plan (billed outside the package engine) opts in
+   here too, and is told the truth: the engine takes a card payment only on
+   a subscription package (api/_lib/plan-change.js state()), so the opt-in
+   moves the workspace onto one — ClearSky sets that up and nothing is
+   charged until the first invoice is confirmed. The request names the
+   module and its price. */
+function optInLegacy(key, name, price) {
+  var to = OmegaBrand.upgradeEmail(), co = WS.clientName || WS.orgId;
+  var subject = 'Opt in: ' + name + ' for ' + co, body = co + ' opts in to ' + name + (price ? ' (' + price + ')' : '') + '. Please move the workspace onto a subscription package so it can pay by card, and switch the module on.';
+  S.drawer({ eyebrow: 'Opt in', title: name, sub: price ? price + ', billed monthly by card once the workspace is on a package.' : '', html: '<div class="ows-note"><b>' + esc(co) + '</b> is on the ' + esc(planName()) + ' plan, billed outside the package engine. Opting in moves the workspace onto a subscription package with QuickBooks card payments; ClearSky sets that up within one business day, and nothing is charged until you confirm the first invoice.</div>',
+    rows: [{ key: 'go', name: 'Opt in to ' + name, sub: 'Sends the request to ' + to + ' with the module and its price', href: 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body), icon: S.ICON.billing, cta: 'Send' },
+           { key: 'store', name: 'See it in the store', sub: 'What it adds, what it costs, the plans', href: '/marketplace.html#' + key, icon: S.ICON.marketplace }] });
 }
 function addModule(key) {
   if (!window.OmegaPackageMenu) { window.location.href = '/marketplace.html'; return; }
@@ -541,14 +597,17 @@ function renderAround() {
   }
   if (P.presence) {
     var list = DATA.members.slice().sort(function (x, y) { var o = { on: 0, away: 1, off: 2 }; return o[presence(x)] - o[presence(y)] || String(x.name || '').localeCompare(String(y.name || '')); });
-    h += '<div class="panel"><div class="hd"><h3>People</h3><span class="ows-chip">' + (list.length || 1) + ' in workspace</span></div><div class="people">' + (list.length ? list.map(function (m) { var me = String(m.email || '').toLowerCase() === ME, st = presence(m); return '<div class="pr"><span class="av' + (me ? ' me' : '') + '">' + esc(ini(m.name || m.email)) + '</span><div>' + esc(m.name || String(m.email || '').split('@')[0]) + (me ? ' <small>You · ' + esc(WS.role || 'member') + '</small>' : '<small><span class="dot ' + (st === 'on' ? '' : st) + '"></span> ' + (st === 'on' ? 'In the workspace' : st === 'away' ? 'Seen ' + ago(m.lastSeen) + ' ago' : 'Last seen ' + ago(m.lastSeen) + ' ago') + '</small>') + '</div></div>'; }).join('') : '<div class="empty"><b>You are the whole team here.</b> Anyone with an @' + esc(WS.orgId) + ' address signs in and joins as a member.</div>') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ows-pill" type="button" id="invite">+ Invite a colleague</button></div></div>';
+    h += '<div class="panel"><div class="hd"><h3>People</h3><span class="ows-chip">' + (list.length || 1) + ' in workspace</span></div><div class="people">' + (list.length ? list.map(function (m) { var me = String(m.email || '').toLowerCase() === ME, st = presence(m); return '<div class="pr"><span class="av' + (me ? ' me' : '') + '">' + esc(ini(m.name || m.email)) + '</span><div>' + esc(m.name || String(m.email || '').split('@')[0]) + (me ? ' <small>You · ' + esc(WS.role || 'member') + '</small>' : '<small><span class="dot ' + (st === 'on' ? '' : st) + '"></span> ' + (st === 'on' ? 'In the workspace' : st === 'away' ? 'Seen ' + ago(m.lastSeen) + ' ago' : 'Last seen ' + ago(m.lastSeen) + ' ago') + '</small>') + '</div></div>'; }).join('') : '<div class="empty"><b>You are the whole team here.</b> Anyone with an @' + esc(WS.orgId) + ' address signs in and joins as a member.</div>') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ows-pill" type="button" id="invite">+ Invite</button><a class="ows-pill" href="/projects.html">Share a project</a></div></div>';
   }
+  if (P.pulse) h += pulsePanel();
   if (P.partners) {
+    /* joint development partners on projects, and the vendors who answered this workspace's requests for quote (a recipient is a vendor the workspace itself chose; identity beyond that shows only after a quote is accepted) */
     var partners = {}, org = WS.orgId;
-    DATA.projects.forEach(function (p) { (p.orgsInvolved || []).forEach(function (o) { if (o && o !== org) partners[o] = (partners[o] || 0) + 1; }); });
-    if (WS.jdPartnerOrg && WS.jdPartnerOrg !== org) partners[WS.jdPartnerOrg] = partners[WS.jdPartnerOrg] || 0;
+    DATA.projects.forEach(function (p) { (p.orgsInvolved || []).forEach(function (o) { if (!o || o === org) return; partners[o] = partners[o] || { n: 0, kind: 'jda' }; partners[o].n++; }); });
+    if (WS.jdPartnerOrg && WS.jdPartnerOrg !== org) partners[WS.jdPartnerOrg] = partners[WS.jdPartnerOrg] || { n: 0, kind: 'jda' };
+    DATA.rfqsSent.forEach(function (f) { (f.recipients || []).forEach(function (r) { var v = r.vendorOrgId || r.id; if (!v || v === org) return; if (!partners[v]) partners[v] = { n: 0, kind: 'vendor', quoted: [] }; if (r.status === 'quoted' || r.quote) (partners[v].quoted = partners[v].quoted || []).push(f.name || f.projectName || 'a request'); }); });
     var keys = Object.keys(partners);
-    h += '<div class="panel"><div class="hd"><h3>Partners on your projects</h3><span class="ows-chip">JDA</span></div>' + (keys.length ? '<div class="people">' + keys.map(function (k) { return '<div class="pr"><span class="av partner">' + esc(ini(k.split('.')[0])) + '</span><div>' + esc(k) + '<small>' + (partners[k] ? partners[k] + ' shared project' + (partners[k] === 1 ? '' : 's') : 'Joint development partner') + '</small></div></div>'; }).join('') + '</div>' : '<div class="empty">No partner is on your projects yet. Share one under a joint development agreement and they appear here for that project only.</div>') + '<div class="ows-note" style="font-size:12.5px">A vendor’s identity shows only after a quote is accepted. Before that they see the anonymised opportunity.</div></div>';
+    h += '<div class="panel"><div class="hd"><h3>Partners on your projects</h3><span class="ows-chip">JDA + vendors</span></div>' + (keys.length ? '<div class="people">' + keys.map(function (k) { var x = partners[k], sub = x.kind === 'vendor' ? 'Vendor' + (x.quoted && x.quoted.length ? ' · quoted ' + x.quoted[0] : ' · asked to quote') : (x.n ? x.n + ' shared project' + (x.n === 1 ? '' : 's') : 'Joint development partner'); return '<div class="pr"><span class="av partner">' + esc(ini(k.split('.')[0])) + '</span><div>' + esc(k) + '<small>' + esc(sub) + '</small></div><a class="ows-pill sm" href="' + (x.kind === 'vendor' ? '/rfq.html' : '/jda.html') + '">Open</a></div>'; }).join('') + '</div>' : '<div class="empty">No partner is on your projects yet. Share one under a joint development agreement, or send a request for quote, and they appear here.</div>') + '<div class="ows-note" style="font-size:12.5px">A vendor’s identity shows only after a quote is accepted. Before that they see the anonymised opportunity.</div></div>';
   }
   if (P.guides) {
     h += '<div class="panel"><div class="hd"><h3>Guides</h3><span class="ows-chip">For your tools</span></div><div class="ows-rows">' + [['Omega Logic app', 'The office on a phone', '/guides/Omega-Logic-App.pdf']].map(function (g) { return '<a class="ows-row" href="' + g[2] + '" target="_blank" rel="noopener"><span class="ic">' + S.ICON.file + '</span><div><b>' + esc(g[0]) + '</b><small>' + esc(g[1]) + '</small></div><span class="ows-pill sm ghost">Open</span></a>'; }).join('') + '</div></div>';
@@ -557,6 +616,37 @@ function renderAround() {
   var form = byId('post'); if (form) form.addEventListener('submit', post);
   var inv = byId('invite'); if (inv) inv.addEventListener('click', inviteDrawer);
 }
+/* ── Omega pulse: what the whole platform did this week, counts only ──
+   GET /api/pulse (api/_lib/pulse.js, pure and tested) is the ONE source:
+   nothing here is invented, and a failed read says the pulse is resting */
+function loadPulse() {
+  if (PULSE_ASKED) return; PULSE_ASKED = true;
+  var api = window.OmegaPackageMenu && OmegaPackageMenu.api;
+  if (!api) return;
+  api('/api/pulse').then(function (r) { PULSE = r || null; renderPulseInto(); }, function () { PULSE = { failed: true }; renderPulseInto(); });
+}
+function myHours() {
+  var mine = DATA.projects.filter(function (p) { return Number(p.bessKwh) > 0 && Number(p.bessKw) > 0; }).sort(function (a, b) { return ms(b.updatedAt || b.createdAt) - ms(a.updatedAt || a.createdAt); })[0];
+  return mine ? Number(mine.bessKwh) / Number(mine.bessKw) : 0;
+}
+function sparkline(weeks) {
+  if (!weeks || weeks.length < 2) return '';
+  var W = 260, H = 44, max = Math.max.apply(null, weeks.concat([1])), n = weeks.length;
+  var pts = weeks.map(function (v, i) { return [(i / (n - 1)) * W, H - 4 - (v / max) * (H - 10)]; });
+  var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+  return '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true"><path class="fill" d="' + d + ' L' + W + ' ' + H + ' L0 ' + H + ' Z"/><path d="' + d + '"/></svg>';
+}
+function pulseHtml() {
+  if (!PULSE) return '<div class="empty">Reading the pulse…</div>';
+  if (PULSE.failed) return '<div class="empty">The pulse is resting. Counts come back when the platform answers.</div>';
+  var st = PULSE.stats || {}, mine = myHours(), where = null;
+  if (PULSE.band && mine > 0) where = mine < PULSE.band[0] ? 'below' : mine > PULSE.band[1] ? 'above' : 'in';
+  return sparkline(PULSE.weeks)
+    + '<div class="stats"><div class="stat"><div class="v num">' + esc(String(st.projects || 0)) + '</div><div class="l">projects saved</div></div><div class="stat"><div class="v num">' + esc(String(st.rfqs || 0)) + '</div><div class="l">RFQs sent to vendors</div></div><div class="stat"><div class="v num">' + esc(String(st.financed || 0)) + '</div><div class="l">projects at finance or beyond</div></div><div class="stat"><div class="v num">' + esc(String(st.designers || 0)) + '</div><div class="l">designers active</div></div></div>'
+    + '<div class="insight">' + esc(PULSE.insight || '') + (where ? ' <b>Your latest sized design sits ' + (where === 'in' ? 'in that band' : where + ' it') + '.</b>' : '') + (st.companies ? ' ' + st.companies + ' compan' + (st.companies === 1 ? 'y' : 'ies') + ' building this week.' : '') + '</div>';
+}
+function pulsePanel() { return '<div class="panel pulse" id="pulse"><div class="hd"><h3>Omega pulse</h3><span class="ows-chip">This week · counts only</span></div><div id="pulse-body">' + pulseHtml() + '</div></div>'; }
+function renderPulseInto() { var b = byId('pulse-body'); if (b) b.innerHTML = pulseHtml(); }
 function post(e) {
   e.preventDefault(); var inp = byId('post-text'), text = (inp.value || '').trim(); if (!text) return;
   db.collection('team_messages').add({ orgId: WS.orgId, text: text, authorEmail: ME, authorName: who(), createdAt: firebase.firestore.FieldValue.serverTimestamp() })
@@ -590,18 +680,32 @@ function lockedDrawer(t) {
   S.drawer({ eyebrow: 'Not on your plan', title: t.name, sub: t.desc || '', html: html, rows: rows });
 }
 function billingDrawer() {
-  var b = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}, pa = WS.packageAccess;
+  var b = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}, pa = WS.packageAccess, packaged = !!(pa && pa.packaged);
   function day(v) { var t = ms(v); return t ? new Date(t).toLocaleDateString() : '—'; }
   var kv = [['Plan', planName()], ['Workspace', WS.clientName || WS.orgId], ['Your role', WS.role || 'member']];
-  if (pa && pa.packaged) { kv.push(['Modules', (pa.catalog || []).filter(function (m) { return WS.modules.indexOf(m.key) >= 0; }).map(function (m) { return m.name; }).join(', ') || '—']); if (pa.accessUntil) kv.push(['Access through', day(pa.accessUntil)]); if (pa.readOnly) kv.push(['Status', 'Read-only']); }
+  if (packaged) { kv.push(['Modules', (pa.catalog || []).filter(function (m) { return WS.modules.indexOf(m.key) >= 0; }).map(function (m) { return m.name; }).join(', ') || '—']); if (pa.accessUntil) kv.push(['Access through', day(pa.accessUntil)]); if (pa.readOnly) kv.push(['Status', 'Read-only']); }
   else { kv.push(['Add-ons', (WS.addons || []).join(', ') || 'None']); if (Array.isArray(WS.toolAccess)) kv.push(['Tools on this plan', WS.toolAccess.length]); }
   if (b.amountDue != null) kv.push(['Amount due', money(b.amountDue)]);
   if (b.subscriptionDue) kv.push(['Next payment', day(b.subscriptionDue)]);
   if (trialEnd()) kv.push(['Trial ends', day(trialEnd())]);
-  var html = '<div class="kv">' + kv.map(function (r) { return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</div>';
-  var rows = [{ key: 'plans', name: 'Change plan', sub: 'Add a module, or move up a plan, in the Marketplace', href: '/marketplace.html', icon: S.ICON.marketplace }];
+  var html = '<div class="kv" id="bill-kv">' + kv.map(function (r) { return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</div><div id="bill-more"></div>';
+  /* the Modules page is where a workspace opts in and pays; the store has the plans */
+  var rows = [{ key: 'modules', name: 'Modules: opt in and pay', sub: 'Every module, Live or to add; a packaged workspace pays here by card', href: '/workspace#modules', icon: S.ICON.modules || S.ICON.tools, onClick: function () { S.closeDrawer(); go('modules'); } },
+              { key: 'plans', name: 'Plans and the store', sub: 'Lite, Field, Pro and Enterprise, the starter packages, every price', href: '/marketplace.html', icon: S.ICON.marketplace }];
   if (b.paymentLink) rows.unshift({ key: 'pay', name: 'Pay', sub: 'Your invoice, on the payment page', href: b.paymentLink, newTab: true, icon: S.ICON.billing });
-  S.drawer({ eyebrow: 'Account', title: 'Plan & billing', sub: 'What ' + (WS.clientName || 'this workspace') + ' holds and what it is paying for.', html: html, rows: rows, note: 'Prices and changes are always the server’s: nothing here is priced in the browser.' });
+  S.drawer({ eyebrow: 'Account', title: 'Plan & billing', sub: 'What ' + (WS.clientName || 'this workspace') + ' holds and what it is paying for.', html: html, rows: rows, note: 'Prices and changes are always the server’s: nothing here is priced in the browser.', ready: function () {
+    if (!packaged || !window.OmegaPackageMenu) return;
+    /* the packaged summary: the monthly figure, the next invoice, changes waiting for payment with their QuickBooks links, and "I've paid" */
+    OmegaPackageMenu.loadControl().then(function (c) {
+      var sm = c && c.summary, more = byId('bill-more'); if (!sm || !more) return;
+      var h = '<div class="kv">' + (sm.monthlyDisplay ? '<div><span>Monthly</span><span>' + esc(sm.monthlyDisplay) + '</span></div>' : '') + (sm.nextInvoiceOn ? '<div><span>Next invoice</span><span>' + esc(sm.nextInvoiceOn) + '</span></div>' : '') + (sm.planDisplay ? '<div><span>Package</span><span>' + esc(sm.planDisplay) + '</span></div>' : '') + '</div>';
+      if (sm.pending && sm.pending.length) h += '<div class="eyebrow" style="margin-top:10px">Waiting for payment</div><div class="ows-rows">' + sm.pending.map(function (x) { return '<a class="ows-row" href="' + esc(x.paymentLink || '#') + '" target="_blank" rel="noopener"><span class="ic">' + S.ICON.billing + '</span><div><b>' + esc((x.names || x.add || []).join(', ')) + '</b><small>' + esc(x.display || '') + ' · pay before ' + esc(x.expiresOn || '') + '</small></div><span class="ows-pill sm primary">Pay in QuickBooks</span></a>'; }).join('') + '</div>';
+      if (sm.recent && sm.recent.length) h += '<div class="eyebrow" style="margin-top:10px">Recent invoices</div><div class="kv">' + sm.recent.slice(0, 5).map(function (x) { return '<div><span>' + esc(x.date || '') + '</span><span>' + esc(x.display || x.totalDisplay || '') + (x.state ? ' · ' + esc(x.state) : '') + '</span></div>'; }).join('') + '</div>';
+      h += '<div style="margin-top:10px"><button class="ows-pill" type="button" id="bill-paid">I’ve paid</button></div>';
+      more.innerHTML = h;
+      var paid = byId('bill-paid'); if (paid) paid.addEventListener('click', function () { paid.disabled = true; paid.textContent = 'Checking…'; OmegaPackageMenu.api('/api/plan-change', { action: 'reconcile-now' }).then(function () { S.toast('Checked with QuickBooks'); if (OmegaTenant.refreshPackage) OmegaTenant.refreshPackage(); S.closeDrawer(); }, function (e) { paid.disabled = false; paid.textContent = 'I’ve paid'; S.toast(e.message); }); });
+    }, function () {});
+  } });
 }
 function settingsDrawer() {
   var html = '<div class="field"><label for="set-name">Display name</label><input id="set-name" value="' + esc(who()) + '" maxlength="60"></div><div class="kv"><div><span>Email</span><span>' + esc(ME) + '</span></div><div><span>Workspace</span><span>' + esc(WS.orgId) + '</span></div><div><span>Role</span><span>' + esc(WS.role || 'member') + '</span></div></div>';
@@ -619,7 +723,7 @@ function inviteDrawer() {
   S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Invite a colleague', html: '<div class="ows-note">Anyone with an <b>@' + esc(WS.orgId) + '</b> email signs in at <b>' + esc(link) + '</b> and joins this workspace as a member. No invitation to send: the address is the key.</div>', rows: [{ key: 'copy', name: 'Copy the sign-in link', sub: link, icon: S.ICON.feed, cta: 'Copy', onClick: function () { try { navigator.clipboard.writeText(link).then(function () { S.toast('Copied'); }, function () { S.toast(link); }); } catch (e) { S.toast(link); } } }] });
 }
 function customizeDrawer() {
-  var P = prefs(), opts = [['presence', 'Who is here', 'Teammates in the workspace and what they have open.'], ['feed', 'Workspace feed', 'Saved projects and messages from your team.'], ['partners', 'Partners on your projects', 'Vendors and joint development partners acting on your projects.'], ['guides', 'Guides', 'Short guides for the tools you hold.']];
+  var P = prefs(), opts = [['presence', 'Who is here', 'Teammates in the workspace and what they have open.'], ['feed', 'Workspace feed', 'Saved projects and messages from your team.'], ['pulse', 'Omega pulse', 'What the whole platform did this week, counts only.'], ['partners', 'Partners on your projects', 'Vendors and joint development partners acting on your projects.'], ['guides', 'Guides', 'Short guides for the tools you hold.']];
   S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Customize your home', sub: 'Your plan sets the hub. You choose what else is around it. Saved for you.', html: '<div>' + opts.map(function (o) { return '<div class="opt"><div><b>' + esc(o[1]) + '</b><small>' + esc(o[2]) + '</small></div><button class="tg" type="button" role="switch" aria-checked="' + (P[o[0]] ? 'true' : 'false') + '" data-opt="' + o[0] + '" aria-label="' + esc(o[1]) + '"></button></div>'; }).join('') + '</div>', ready: function (el) {
     Array.prototype.forEach.call(el.querySelectorAll('[data-opt]'), function (t) { t.addEventListener('click', function () { var k = t.getAttribute('data-opt'), p = prefs(); p[k] = !p[k]; t.setAttribute('aria-checked', p[k] ? 'true' : 'false'); DATA.prefs = p; renderToday(); renderAround(); savePrefs(p); }); });
   } });
