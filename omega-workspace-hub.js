@@ -37,7 +37,7 @@
     { key: 'grid',     label: 'Grid',     icon: '⌗', hint: 'capacity, screen', tools: ['gridatlas', 'interconnect', 'comedcap', 'sitefinder', 'interconnectstudy'] },
     { key: 'money',    label: 'Finance',  icon: '$',      hint: 'size, revenue, model', tools: ['batterysizer', 'valuestack', 'isocalc', 'proforma', 'dcfc', 'apartment', 'fleet', 'investment', 'costestimator'] },
     { key: 'sales',    label: 'Sales',    icon: '▤', hint: 'proposals, estimates', tools: ['sales', 'spatco_ev', 'evcostwb', 'computelease'] },
-    { key: 'market',   label: 'Market',   icon: '◈', hint: 'partners, quotes', market: true, tools: ['financing', 'opportunity', 'osaportal'], pages: [['Marketplace', 'Equipment, vendors, quotes', '/marketplace.html'], ['Quote Desk', 'Both ends of a request for quote', '/rfq.html']] },
+    { key: 'market',   label: 'Market',   icon: '◈', hint: 'partners, quotes', market: true, tools: ['financing', 'opportunity', 'osaportal'], pages: [['Marketplace', 'The tools catalogue: BESS, EV and finance tools', '/marketplace.html'], ['Quote Desk', 'Both ends of a request for quote', '/rfq.html']] },
     { key: 'compute',  label: 'Compute',  icon: '▦', hint: 'data centers', tools: ['datacenter', 'computepower'] },
     { key: 'permits',  label: 'Permits',  icon: '✓', hint: 'AHJ, intake', tools: ['permit', 'intake', 'sitelifecycle'] },
     { key: 'ops',      label: 'Operate',  icon: '◉', hint: 'O&M, fleet', tools: ['signal', 'omconsole', 'fieldservice', 'slaintel', 'ownerreport', 'fleetcommand', 'degradation', 'evcloseout'] },

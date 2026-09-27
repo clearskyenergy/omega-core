@@ -54,15 +54,76 @@ var apiCalls = [], missing = [], external = [], PACKAGE_VIEW = null, CURRENT_FX 
    api/_lib/plan-change.js returns (preview, apply, summary), with the
    bodies the page posts recorded, so the check can assert what was asked
    for; the real endpoint's money is covered by render-packaging-billing.js. */
-var STORE = { posts: [], pending: [] };
+/* STORE.pkg is what the packaged workspace holds (Lite alone unless a
+   scenario says otherwise); optIns / optOuts are a legacy plan's recorded
+   requests, as billing/current keeps them. The monthly figure is the price
+   book's own quote (Lite is $500/month), never a number typed here. A reply
+   carrying __status is answered with that status. */
+var STORE = { posts: [], pending: [], pkg: null, optIns: {}, optOuts: {}, failSummary: false };
+function pkgDefault() { return { modules: ['lite'], subscription: ['lite'], removals: [] }; }
+STORE.pkg = pkgDefault();
 function storeRoute(u, method, body) {
   var B = require('../api/_lib/pricebook'), P = require('../api/_lib/subscription-pricing'), book = B.proposed();
+  function names(list) { return (list || []).map(function (k) { return M.get(k) ? M.get(k).name : k; }); }
+  function quote(keys) { try { return P.quote(M.normalize(keys), book, { plan: 'auto' }).display; } catch (e) { return { monthly: null, plan: null }; } }
+  function keysOf(list, field) { if (!Array.isArray(list) || !list.length) return { __status: 400, error: field + ' must list modules' }; if (list.indexOf('lite') >= 0) return { __status: 400, error: 'Lite is always included' }; return null; }
+  var who = (CURRENT_FX && CURRENT_FX.user && CURRENT_FX.user.email) || 'kim@litelabs.example', at = '2026-09-27T12:00:00.000Z';
+  var lb = CURRENT_FX ? (CURRENT_FX.docs['omega_orgs/' + CURRENT_FX.org + '/billing/current'] || {}) : {};
+  function legacyIns() { var o = {}; Object.keys(lb.optIns || {}).forEach(function (k) { o[k] = lb.optIns[k]; }); Object.keys(STORE.optIns).forEach(function (k) { o[k] = STORE.optIns[k]; }); return o; }
+  function legacyOuts() { var o = {}; Object.keys(lb.optOuts || {}).forEach(function (k) { o[k] = lb.optOuts[k]; }); Object.keys(STORE.optOuts).forEach(function (k) { o[k] = STORE.optOuts[k]; }); return o; }
   if (u === '/api/package-catalog') return { orgId: 'litelabs.example', pricebookVersion: book.version, modules: P.catalog(book), starters: M.starters(), canManage: true };
-  if (method === 'GET' && !PACKAGE_VIEW && CURRENT_FX) { var lb = (CURRENT_FX.docs['omega_orgs/' + CURRENT_FX.org + '/billing/current'] || {}); return { orgId: CURRENT_FX.org, packaged: false, packagingState: null, plan: null, planDisplay: null, modules: ['lite'], subscription: ['lite'], moduleNames: ['Lite'], subscriptionNames: ['Lite'], interval: 'monthly', billingDay: null, nextInvoiceOn: null, monthlyDisplay: null, accessUntil: null, paidThrough: null, amountDue: lb.amountDue == null ? null : lb.amountDue, paymentLink: null, invoices: [], gate: { canApply: false, reason: 'This workspace is not on a subscription package.' }, pending: [], removalRequests: [], recent: [] }; }
-  if (method === 'GET') return { orgId: 'litelabs.example', packaged: true, packagingState: 'paid', plan: 'lite', planDisplay: 'Lite', modules: ['lite'], subscription: ['lite'], moduleNames: ['Lite'], subscriptionNames: ['Lite'], paidThrough: '2026-10-20', accessUntil: null, amountDue: null,
-    invoices: [{ id: '2026-09-20', kind: 'subscription', state: 'paid', date: '2026-09-20', period: { start: '2026-09-20', end: '2026-10-20' }, totalCents: 50000, display: '$500', paymentLink: null, names: null, paidAt: '2026-09-21' }].concat(STORE.pending.map(function (x) { return { id: x.id, kind: 'change', state: 'unpaid', date: '2026-09-27', period: null, totalCents: 20000, display: x.display, paymentLink: x.paymentLink, names: (x.add || []).map(function (k) { return M.get(k).name; }), paidAt: null }; })),
-    interval: 'monthly', billingDay: 20, nextInvoiceOn: '2026-10-20', monthlyDisplay: '$149/month', gate: { canApply: true }, pending: STORE.pending, removalRequests: [], recent: [] };
+  if (method === 'GET' && STORE.failSummary) return { __status: 500, error: 'Price book not seeded' };
+  if (method === 'GET' && !PACKAGE_VIEW && CURRENT_FX) { return { orgId: CURRENT_FX.org, packaged: false, packagingState: null, plan: null, planDisplay: null, modules: ['lite'], subscription: ['lite'], moduleNames: ['Lite'], subscriptionNames: ['Lite'], interval: 'monthly', billingDay: null, nextInvoiceOn: null, monthlyDisplay: null, accessUntil: null, paidThrough: null, amountDue: lb.amountDue == null ? null : lb.amountDue, paymentLink: null, invoices: [], gate: { canApply: false, reason: 'This workspace is not on a subscription package.' }, pending: [], removalRequests: [], recent: [], optIns: legacyIns(), optOuts: legacyOuts(), nextReviewOn: null }; }
+  if (method === 'GET') { var q = quote(STORE.pkg.subscription); return { orgId: 'litelabs.example', packaged: true, packagingState: 'paid', plan: 'lite', planDisplay: q.plan, modules: STORE.pkg.modules, subscription: STORE.pkg.subscription, moduleNames: names(STORE.pkg.modules), subscriptionNames: names(STORE.pkg.subscription), paidThrough: '2026-10-20', accessUntil: null, amountDue: null,
+    invoices: [{ id: '2026-09-20', kind: 'subscription', state: 'paid', date: '2026-09-20', period: { start: '2026-09-20', end: '2026-10-20' }, totalCents: 50000, display: '$500', paymentLink: null, names: null, paidAt: '2026-09-21' }].concat(STORE.pending.map(function (x) { return { id: x.id, kind: 'change', state: 'unpaid', date: '2026-09-27', period: null, totalCents: 20000, display: x.display, paymentLink: x.paymentLink, names: names(x.add), paidAt: null }; })),
+    interval: 'monthly', billingDay: 20, nextInvoiceOn: '2026-10-20', monthlyDisplay: q.monthly, gate: { canApply: true }, pending: STORE.pending, removalRequests: STORE.pkg.removals, recent: [], optIns: {}, optOuts: {}, nextReviewOn: '2026-12-20' }; }
   STORE.posts.push(body);
+  /* a legacy plan's opt-in, priced from the book (dryRun writes nothing), and its withdrawal */
+  if (body.action === 'opt-in') {
+    if (PACKAGE_VIEW) return { __status: 409, error: 'This workspace is on a subscription package: add modules through the menu, which prices and invoices them.' };
+    var bad = keysOf(body.add, 'add'); if (bad) return bad;
+    var add = [], cents = 0; body.add.forEach(function (k) { (M.get(k).requires || []).concat([k]).forEach(function (x) { if (x !== 'lite' && add.indexOf(x) < 0) add.push(x); }); });
+    add.forEach(function (k) { cents += book.modules[k].priceCents; });
+    if (body.dryRun === true) return { dryRun: true, add: add, names: names(add), monthlyCents: cents, display: P.money(cents) + '/month', note: 'Recorded with its price; ClearSky moves the workspace onto a package. Nothing is charged before you approve the first invoice.' };
+    var entries = {}; add.forEach(function (k) { entries[k] = STORE.optIns[k] = { key: k, name: M.get(k).name, monthlyCents: book.modules[k].priceCents, display: P.money(book.modules[k].priceCents) + '/month', requestedBy: who, requestedAt: at, status: 'requested' }; });
+    return { ok: true, requested: true, add: add, names: names(add), monthlyCents: cents, display: P.money(cents) + '/month', optIns: entries, requestedAt: at };
+  }
+  if (body.action === 'withdraw-opt-in') {
+    var ins = legacyIns(), wk = (body.add || []).filter(function (k) { return ins[k] && ins[k].status === 'requested'; });
+    if (!wk.length) return { __status: 409, error: 'No request to withdraw' };
+    wk.forEach(function (k) { STORE.optIns[k] = Object.assign({}, ins[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: who }); });
+    return { ok: true, withdrawn: wk, optIns: legacyIns() };
+  }
+  /* a legacy plan's opt-out: a recorded request under the agreement, never a change to the tier */
+  if (body.action === 'opt-out') {
+    if (PACKAGE_VIEW) return { __status: 409, error: 'This workspace is on a subscription package: opt out through the menu, which queues it for the quarterly review.' };
+    var bad2 = keysOf(body.remove, 'remove'); if (bad2) return bad2;
+    var reqd = legacyIns(); if (body.remove.some(function (k) { return reqd[k] && reqd[k].status === 'requested'; })) return { __status: 409, error: 'That module is only requested: cancel the request instead.' };
+    var remove = body.remove.slice(); if (remove.indexOf('logic-office') >= 0 && (lb.addons || []).indexOf('omega-logic') >= 0) M.catalog().forEach(function (m) { if (m.shelf === 'platform' && remove.indexOf(m.key) < 0) remove.push(m.key); });
+    var note = 'Your plan\'s price is set by your agreement, so nothing changes today. ClearSky confirms the effective date and any new price with you in writing; you keep access until then. Lite stays.';
+    if (body.dryRun === true) return { dryRun: true, remove: remove, names: names(remove), note: note };
+    remove.forEach(function (k) { STORE.optOuts[k] = { key: k, name: M.get(k).name, requestedBy: who, requestedAt: at, status: 'requested', reason: body.reason || '' }; });
+    return { ok: true, requested: true, remove: remove, names: names(remove), optOuts: legacyOuts(), requestedAt: at, note: note };
+  }
+  if (body.action === 'withdraw-opt-out') {
+    var outs = legacyOuts(), ok2 = (body.remove || []).filter(function (k) { return outs[k] && outs[k].status === 'requested'; });
+    if (!ok2.length) return { __status: 409, error: 'No request to withdraw' };
+    ok2.forEach(function (k) { STORE.optOuts[k] = Object.assign({}, outs[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: who }); });
+    return { ok: true, withdrawn: ok2, optOuts: legacyOuts() };
+  }
+  /* a packaged opt-out queues for the quarterly review: the dry run names the fee before and after and the review date */
+  if (body.action === 'request-removal' || body.action === 'withdraw-removal') {
+    var withdraw = body.action === 'withdraw-removal', owned = STORE.pkg.subscription, sel = (body.remove || []).slice();
+    if (!sel.length || sel.indexOf('lite') >= 0) return { __status: 400, error: 'Lite is always included' };
+    if (!withdraw) owned.forEach(function (k) { if (sel.indexOf(k) < 0 && (M.get(k).requires || []).some(function (r) { return sel.indexOf(r) >= 0; })) sel.push(k); });
+    var previewId = (withdraw ? 'w' : 'r').repeat(48);
+    if (body.dryRun === true) { var before = quote(owned), after = quote(owned.filter(function (k) { return sel.indexOf(k) < 0; })); return { previewId: previewId, modules: sel, names: names(sel), withdraw: withdraw, beforeDisplay: withdraw ? null : before.monthly, afterDisplay: withdraw ? null : after.monthly, reviewOn: '2026-12-20',
+      note: withdraw ? 'Confirming will withdraw the opt-out request for these modules. Access and billing will stay unchanged.' : 'Confirming queues these modules for the quarterly review with ClearSky. Access and charges stay unchanged until that review; this does not issue a refund.' }; }
+    if (body.previewId !== previewId) return { __status: 400, error: 'Your package changed; review the opt-out request again' };
+    sel.forEach(function (k) { var i = -1; STORE.pkg.removals.forEach(function (r, n) { if (r.module === k) i = n; }); if (withdraw) { if (i >= 0) STORE.pkg.removals.splice(i, 1); } else if (i < 0) STORE.pkg.removals.push({ module: k, requestedAt: Date.parse(at), by: who, reason: '' }); });
+    return { ok: true, removalRequests: STORE.pkg.removals, modules: sel, names: names(sel), note: withdraw ? 'The opt-out request is withdrawn for these modules. Access and billing are unchanged.' : 'Queued for the quarterly review with ClearSky. Access and charges stay unchanged until that review; this does not issue a refund.' };
+  }
+  if (body.action === 'reconcile-now') return { orgId: 'litelabs.example', packaged: true, packagingState: 'paid', paid: true };
   if (body.action === 'quote') return { orgId: 'litelabs.example', previewId: 'a'.repeat(48), effectiveAt: Date.now(), add: body.add, addNames: body.add.map(function (k) { return M.get(k).name; }), modules: ['lite'].concat(body.add), plan: 'lite', included: false, canApply: true, reason: null, pending: [], steer: null, serviceFeeNote: null,
     display: { today: 'Pay $200 today (prorated to Oct 20)', then: 'Then $250/month more from Oct 20', activation: 'Switches on when the payment clears' } };
   if (body.action === 'apply') { var rec = { id: 'change-' + body.previewId, add: body.add, display: '$200', expiresOn: '2026-10-03', paymentLink: 'https://pay.example/inv-1', state: 'unpaid' }; STORE.pending = [rec]; return { state: 'unpaid', changeId: rec.id, display: rec.display, expiresOn: rec.expiresOn, paymentLink: rec.paymentLink }; }
@@ -94,7 +155,7 @@ var srv = http.createServer(function (req, res) {
       { id: 'in_1', number: 'NS-0001', status: 'paid', amountDue: 1250, created: Date.now() - 40 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_1', pdfUrl: null } ] });
     if (u === '/api/stripe-portal' && post) return json({ url: 'https://billing.stripe.com/p/session/test_northstar' });
     if (u === '/api/package-catalog' || u === '/api/plan-change') {
-      var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {} json(storeRoute(u, req.method, body)); }); return;
+      var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {} var r = storeRoute(u, req.method, body), st = r && r.__status; if (st) delete r.__status; json(r, st || 200); }); return;
     }
     missing.push(req.method + ' ' + u); return json({ error: 'render-workspace does not answer ' + u }, 404);
   }
@@ -115,7 +176,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
 
   async function scenario(name, fx, opts) {
     opts = opts || {}; PACKAGE_VIEW = fx.packageView || null; CURRENT_FX = fx;
-    var errs = [], muted = false, ctx = await browser.newContext({ viewport: opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!opts.phone, isMobile: !!opts.phone });
+    var errs = [], muted = false, ctx = await browser.newContext({ viewport: opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!opts.phone, isMobile: !!opts.phone, timezoneId: opts.tz || undefined });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) {
       var url = r.request().url();
       if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '/* firebase is scripts/_lib/firebase-double.js here */' });
@@ -199,6 +260,22 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     out.plan = plan.slice(0, 80);
     return out;
   }
+  /* PLAN & BILLING at a phone's width (the generic checks run only on the
+     view a scenario ends on, which is never billing): no sideways scroll, no
+     stray NaN / undefined / null, the night-sky subscription, the payment
+     method drawn as a card no wider than the phone, and a screenshot. */
+  async function billingPhone(p, name) {
+    var vp = p.viewportSize(); await p.setViewportSize({ width: 390, height: 844 }); await wait(250);
+    var r = await p.evaluate(function () {
+      var b = document.getElementById('billing-body'), hero = document.getElementById('bill-sub'), card = document.querySelector('#bill-card .pmc');
+      return { scroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, text: b ? b.innerText : '', hero: !!hero && hero.classList.contains('bhero') && /gradient/.test(getComputedStyle(hero).backgroundImage), chips: document.querySelectorAll('#bill-sub .bh-mod').length, card: card ? Math.round(card.getBoundingClientRect().width) : 0, footer: /server’s|priced in the browser/.test(b ? b.textContent : '') };
+    });
+    var stray = STRAY.exec(r.text);
+    ok(name + ': Plan & billing at 390px scrolls no sideways, prints no stray value, wears the night-sky subscription with its module chips and draws the payment method as a card within the phone', !r.scroll && !stray && r.hero && r.chips >= 1 && r.card > 0 && r.card <= 358 && !r.footer, { scroll: r.scroll, stray: stray && r.text.slice(Math.max(0, stray.index - 40), stray.index + 30), hero: r.hero, chips: r.chips, card: r.card, footer: r.footer });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '-billing-390.png'), fullPage: true });
+    await p.setViewportSize(vp); await wait(200);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '-billing-1366.png'), fullPage: true });
+  }
   function expectedRing(ws, extra) {
     var TOOLS = require('../omega-tools.js');
     var c = { canOpen: function (k) { var t = TOOLS.byKey(k); return !!t && !ws.pendingApproval && TOOLS.isUnlocked(t, ws); }, tool: function (k) { return TOOLS.byKey(k); }, modules: ws.modules || [], addons: ws.addons || [], hideMarketplace: false };
@@ -220,6 +297,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await wait(800);
     Object.assign(out, await common(p, newco, 'newco'));
     ok('newco: nothing is locked on a trial', out.locked === 0, out.locked);
+    var trialHref = await p.$eval('#today .next .row[data-key="trial"] a.ows-pill', function (a) { return a.getAttribute('href'); }).catch(function () { return null; });
+    ok('newco: the trial row\'s See plans opens the plans shelf on the workspace, not the Marketplace', trialHref === '/workspace#plans', trialHref);
     var empty = await p.$eval('#flight-body', function (e) { return e.textContent; });
     ok('newco: an empty workspace says so in In flight', /No projects yet/.test(empty), empty.slice(0, 60));
     /* + New project opens the one dialog and closes again (In flight is its own page) */
@@ -254,6 +333,10 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.waitForFunction(function () { return document.querySelectorAll('#modules-body .mod').length > 5; }, null, { timeout: 4000 }).catch(function () {});
     var legacyMods = await p.evaluate(function () { return { cards: document.querySelectorAll('#modules-body .mod').length, live: document.querySelectorAll('#modules-body .mod[data-held="1"]').length, part: document.querySelectorAll('#modules-body .mod[data-held="part"]').length, ask: Array.prototype.map.call(document.querySelectorAll('#modules-body [data-ask-module]'), function (a) { return a.textContent.trim(); }), add: document.querySelectorAll('#modules-body [data-add-module]').length, priced: Array.prototype.filter.call(document.querySelectorAll('#modules-body .mod.off .price'), function (e) { return /\$\d/.test(e.textContent); }).length, sub: document.getElementById('modules-sub').textContent }; });
     ok('northstar: a legacy plan\'s Modules page lists every module, Live where the tier holds it, priced with Opt in where it does not, and never the packaged + Add', legacyMods.cards === M.catalog().length && legacyMods.live > 0 && legacyMods.live < legacyMods.cards && legacyMods.add === 0 && legacyMods.ask.length === legacyMods.cards - legacyMods.live && legacyMods.ask.every(function (t) { return t === 'Opt in'; }) && legacyMods.priced === legacyMods.cards - legacyMods.live && /holds \d+ of \d+ modules/.test(legacyMods.sub), legacyMods);
+    await p.evaluate(function () { window.location.hash = '#plans'; }); await wait(400);
+    var lplans = await p.evaluate(function () { var sh = document.getElementById('modules-plans'); return { n: sh.querySelectorAll('.planc').length, on: sh.querySelectorAll('.planc.on').length, note: (sh.querySelector('.plans-note') || {}).textContent || '' }; });
+    ok('northstar: a legacy plan\'s plans shelf says its price is the agreement\'s and marks no book plan as its own', lplans.n === 4 && lplans.on === 0 && /Northstar Development/.test(lplans.note) && /Standard plan, priced by your agreement/.test(lplans.note), lplans);
+    await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(250);
     ok('northstar: Lite has no opt-out, optional held modules do', await p.locator('#modules-body [data-remove-module="lite"]').count() === 0 && await p.locator('#modules-body [data-remove-module]').count() === legacyMods.live + legacyMods.part - 1);
     await p.locator('#modules-body [data-remove-module]').first().click();
     await p.locator('#omega-package-menu').getByRole('button', { name: 'Opt out', exact: true }).click();
@@ -303,7 +386,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.$$eval('#tools-body details', function (d) { d.forEach(function (x) { x.open = true; }); }); await wait(100);
     await p.click('#tools-body .tool.locked[data-tool="investment"]'); await wait(250);
     var why = await p.$eval('.ows-drawer', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });
-    ok('northstar: a locked tile says which plan carries it and offers the Marketplace', /Enterprise/.test(why) && /Marketplace/.test(why), why.slice(0, 160));
+    ok('northstar: a locked tile says which plan and module carry it and offers to opt in to that module here, never the Marketplace', /Enterprise/.test(why) && /Opt in to Investor & Finance/.test(why) && !/Marketplace/.test(why), why.slice(0, 200));
+    var seeIt = await p.$eval('.ows-drawer a.ows-row[data-row="see"]', function (a) { return a.getAttribute('href'); }).catch(function () { return null; });
+    ok('northstar: the locked tile links the module\'s own card on Modules', seeIt === '/workspace#module-finance', seeIt);
     await p.keyboard.press('Escape'); await wait(150);
     /* Plan & billing from the rail: a page with the subscription, what is owed and when, the card, the history */
     await p.click('#side-nav .sn-item[data-key="billing"]'); await wait(600);
@@ -312,6 +397,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: Plan & billing is a page: the subscription, what you owe, the payment method and the history', bill.view === 'billing' && bill.cards.join('|') === 'Your subscription|What you owe|Payment method|Billing history', bill.cards);
     ok('northstar: a Stripe-billed plan says the card lives with Stripe, offers the portal, and says nothing is owed with the next payment date', bill.portal && /Stripe/.test(bill.text) && /nothing is owed/.test(bill.text) && /Next invoice/.test(bill.text) && /Standard/.test(bill.text), bill.text.slice(0, 300));
     ok('northstar: the billing history lists what Stripe billed, each with its invoice page', /NS-0002/.test(bill.text) && /NS-0001/.test(bill.text) && bill.stripeLinks === 2, { links: bill.stripeLinks, text: bill.text.slice(-200) });
+    var hist = await p.evaluate(function () { return { paid: document.querySelectorAll('#bill-hist .spill.paid').length, statusButtons: Array.prototype.filter.call(document.querySelectorAll('#bill-hist a.ows-pill'), function (a) { return /^paid$/i.test(a.textContent.trim()); }).length, times: Array.prototype.map.call(document.querySelectorAll('#bill-hist time'), function (t) { return t.textContent; }), pm: (document.querySelector('#bill-card .pmc') || {}).className, members: /An owner or administrator sees the invoices/.test(document.getElementById('billing-body').textContent), stale: /Marketplace|Plans and the store/.test(document.getElementById('billing-body').textContent) }; });
+    ok('northstar: each invoice carries one status pill (Paid), never a button that says paid, dated in the one style, the card drawn as Stripe\'s, and no link to the store', hist.paid === 2 && hist.statusButtons === 0 && hist.times.every(function (t) { return /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/.test(t); }) && /\bstripe\b/.test(hist.pm) && !hist.stale, hist);
+    await billingPhone(p, 'northstar');
     /* the portal: an owner opens Stripe's own page in a new tab; no card field is ever on this page */
     await p.evaluate(function () { window.__opened = []; window.open = function (u) { window.__opened.push(String(u)); return null; }; });
     await p.click('#bill-portal'); await wait(400);
@@ -382,11 +470,19 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
 
   /* ══ 5. LITE LABS — packaged, Lite alone ══ */
   var lt = FX.lite(HOST);
-  await scenario('lite', lt, { steps: async function (p) {
+  await scenario('lite', lt, { tz: 'America/Chicago', steps: async function (p) {
     await p.evaluate(function () { window.location.hash = '#billing'; });
-    await p.waitForFunction(function () { return /2026-09-20/.test((document.getElementById('bill-hist') || {}).textContent || ''); }, null, { timeout: 5000 }).catch(function () {});
-    var lb = await p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { sub: t('bill-sub'), owe: t('bill-owe'), card: t('bill-card'), hist: t('bill-hist'), inputs: document.querySelectorAll('#billing-body input').length, paid: !!document.getElementById('bill-paid') }; });
-    ok('lite: Plan & billing shows the package (Lite, $149 a month, billed on the 20th), nothing owed with the next invoice, the card on QuickBooks\' own page, the paid invoice, and no card field', /Lite/.test(lb.sub) && /\$149/.test(lb.sub) && /20th/.test(lb.sub) && /nothing is owed/.test(lb.owe) && /Next invoice/.test(lb.owe) && lb.paid && /QuickBooks Payments/.test(lb.card) && /Save this card/.test(lb.card) && /2026-09-20/.test(lb.hist) && /\$500/.test(lb.hist) && lb.inputs === 0, lb);
+    await p.waitForFunction(function () { return !!document.querySelector('#bill-hist time[datetime="2026-09-20"]'); }, null, { timeout: 5000 }).catch(function () {});
+    var lb = await p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { sub: t('bill-sub'), owe: t('bill-owe'), card: t('bill-card'), hist: t('bill-hist'), inputs: document.querySelectorAll('#billing-body input').length, paid: !!document.getElementById('bill-paid'), cards: Array.prototype.map.call(document.querySelectorAll('#billing-body .bcard h3'), function (h) { return h.firstChild.textContent; }).join('|'), time: (document.querySelector('#bill-hist time[datetime="2026-09-20"]') || {}).textContent || '' }; });
+    ok('lite: Plan & billing shows the package at the book\'s price (Lite, $500 a month, billed on the 20th), nothing owed with the next invoice, the card on QuickBooks\' own page, the paid invoice, and no card field', /Lite/.test(lb.sub) && /\$500/.test(lb.sub) && !/\$149/.test(lb.sub) && /20th/.test(lb.sub) && /nothing is owed/.test(lb.owe) && /Next invoice/.test(lb.owe) && lb.paid && /QuickBooks Payments/.test(lb.card) && /Save this card/.test(lb.card) && lb.time === 'Sep 20, 2026' && /\$500/.test(lb.hist) && lb.inputs === 0 && lb.cards === 'Your subscription|What you owe|Payment method|Billing history', lb);
+    ok('lite: a bare date is that calendar day in Chicago (the next invoice on Oct 20, paid Sep 21), never the day before', /Oct 20, 2026/.test(lb.owe) && !/Oct 19/.test(lb.owe + lb.sub) && /paid Sep 21, 2026/.test(lb.hist), { owe: lb.owe, hist: lb.hist });
+    var hero = await p.evaluate(function () { var s = document.getElementById('bill-sub'); return { editor: !!s.querySelector('a[href="/editor"]'), lite: !!s.querySelector('a.bh-mod[href="/workspace#module-lite"]'), add: !!s.querySelector('a.bh-mod.add[href="/workspace#modules"]'), state: (s.querySelector('.bh-state') || {}).textContent, facts: Array.prototype.map.call(s.querySelectorAll('.bh-fact'), function (f) { return f.querySelector('.l').textContent + '=' + f.querySelector('.v').textContent; }) }; });
+    ok('lite: the subscription says Active, carries its modules as chips that open their cards, the facts (billing day, next invoice, modules Live, role) and a link into Site Map, the editor', hero.editor && hero.lite && hero.add && hero.state === 'Active' && hero.facts.join('|') === 'Billing=Monthly, on the 20th|Next invoice=Oct 20, 2026|Modules=1 of ' + M.catalog().length + ' Live|Your role=Owner', hero);
+    await billingPhone(p, 'lite');
+    /* a chip is a place on this page: Lite's card on Modules, marked, without a reload */
+    await p.click('#bill-sub a.bh-mod[href="/workspace#module-lite"]'); await wait(400);
+    var chip = await p.evaluate(function () { return { view: document.getElementById('content').getAttribute('data-view'), hash: location.hash, search: location.search, marked: (document.querySelector('#modules-body .mod[data-selected]') || {}).getAttribute && document.querySelector('#modules-body .mod[data-selected]').getAttribute('data-module') }; });
+    ok('lite: a module chip opens that module\'s card on Modules, marked, in the same page', chip.view === 'modules' && chip.hash === '#module-lite' && /home=workspace/.test(chip.search) && chip.marked === 'lite', chip);
     await p.evaluate(function () { window.location.hash = ''; }); await wait(300);
     var out = await common(p, lt, 'lite');
     var tiles = await p.$$eval('#tools-body .tool', function (r) { return r.map(function (x) { return { tool: x.getAttribute('data-tool'), locked: x.classList.contains('locked'), soon: x.classList.contains('soon') }; }); });
@@ -411,6 +507,17 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('lite: #modules is its own page with one card per catalog module', mods.view === 'modules' && mods.cards.length === M.catalog().length, { view: mods.view, n: mods.cards.length });
     ok('lite: Lite is Live and Grid Atlas carries the server\'s price and + Add', mods.cards.some(function (c) { return c.key === 'lite' && c.held === '1' && !c.add; }) && mods.cards.some(function (c) { return c.key === 'gridatlas' && c.held === '0' && /\$\d/.test(c.price) && c.add; }), mods.cards.filter(function (c) { return c.key === 'lite' || c.key === 'gridatlas'; }));
     ok('lite: Change plan on the plan strip opens the Modules page', mods.change === '/workspace#modules', mods.change);
+    /* #module-<key>: every link to one module lands on its card, marked and in view */
+    await p.evaluate(function () { window.scrollTo(0, 0); window.location.hash = '#module-storage'; }); await wait(500);
+    var focus = await p.evaluate(function () { var c = document.querySelector('#modules-body .mod[data-selected]'), r = c && c.getBoundingClientRect(); return { view: document.getElementById('content').getAttribute('data-view'), key: c && c.getAttribute('data-module'), marked: document.querySelectorAll('#modules-body .mod[data-selected]').length, onScreen: !!(r && r.top >= 0 && r.bottom <= window.innerHeight + 2), rail: (document.querySelector('#side-nav .sn-item.active') || {}).getAttribute && document.querySelector('#side-nav .sn-item.active').getAttribute('data-key') }; });
+    ok('lite: #module-storage opens Modules with the Storage card marked and on screen', focus.view === 'modules' && focus.key === 'storage' && focus.marked === 1 && focus.onScreen && focus.rail === 'modules', focus);
+    /* #plans: the plans shelf, moved here from the marketplace, with this workspace's plan marked */
+    await p.evaluate(function () { window.scrollTo(0, 0); window.location.hash = '#plans'; }); await wait(500);
+    var plans = await p.evaluate(function () { var sh = document.getElementById('modules-plans'), r = sh.getBoundingClientRect(); return { view: document.getElementById('content').getAttribute('data-view'), cards: Array.prototype.map.call(sh.querySelectorAll('.planc'), function (c) { return c.getAttribute('data-plan-card') + '=' + c.querySelector('.pr').textContent; }), mine: Array.prototype.map.call(sh.querySelectorAll('.planc.on'), function (c) { return c.getAttribute('data-plan-card'); }), top: Math.round(r.top), marked: document.querySelectorAll('#modules-body .mod[data-selected]').length, stripPlans: !!document.querySelector('#modules-plan a[href="/workspace#plans"]'), store: !!document.querySelector('#modules a[href^="/marketplace"]') }; });
+    ok('lite: #plans opens Modules scrolled to the plans shelf: Lite, Field, Pro and Enterprise at the book\'s prices, Lite marked as this workspace\'s, and nothing on the page sends a module to the Marketplace', plans.view === 'modules' && plans.cards.join() === 'lite=$500/month,field=$1,299/month,pro=$2,499/month,enterprise=$150,000/year' && plans.mine.join() === 'lite' && plans.top >= 0 && plans.top < 300 && plans.marked === 0 && plans.stripPlans && !plans.store, plans);
+    var inside = await p.evaluate(function () { function line(k) { var c = document.querySelector('#modules-body .mod[data-module="' + k + '"] .inside'); return c ? c.textContent : ''; } return { whitelabel: line('whitelabel'), plant: line('logic-plant'), plansets: line('plansets'), gridatlas: line('gridatlas') }; });
+    ok('lite: a module that lives outside Site Map says where it lives, and one inside says so', /^Lives in your own website/.test(inside.whitelabel) && /^Lives in Omega Logic/.test(inside.plant) && /^Inside Site Map, the editor/.test(inside.plansets) && /^Inside Site Map, the editor · with Grid Atlas/.test(inside.gridatlas) && !/capabilities of Site Map/.test(inside.whitelabel + inside.plant), inside);
+    await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(200);
     if (shotsAt) { var vpm = p.viewportSize(); await p.setViewportSize({ width: 390, height: 844 }); await wait(200); await p.screenshot({ path: path.join(shotsAt, 'lite-modules-390.png') }); await p.setViewportSize(vpm); await wait(150); }
     await p.click('#modules-body [data-add-module="gridatlas"]'); await wait(400);
     var menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, focus: d ? (d.querySelector('[data-module-card][data-selected]') || {}).getAttribute && d.querySelector('[data-module-card][data-selected]').getAttribute('data-module-card') : null }; });
@@ -419,6 +526,57 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('lite: the page asked /api/package-access and nothing it does not answer', apiCalls.some(function (c) { return /package-access/.test(c); }) && !missing.length, { calls: apiCalls, missing: missing });
     return out;
   } });
+
+  /* ══ 5b. LITE LABS, CHANGES IN PROGRESS — Grid Atlas queued to leave at
+     the quarterly review, Storage chosen and waiting for its invoice. Plan
+     & billing lists both with their steps, the review date, a Pay link and
+     Cancel request, which opens the one menu on that module; the chips on
+     the subscription say the same. ══ */
+  var lc = FX.lite(HOST), lcb = lc.docs['omega_orgs/' + lc.org + '/billing/current'];
+  lcb.modules = ['lite', 'gridatlas']; lcb.subscription.modules = ['lite', 'gridatlas']; lcb.removalRequests = [{ module: 'gridatlas', requestedAt: Date.now() - 86400e3, by: lc.user.email, reason: '' }];
+  lc.packageView = require('../api/_lib/package-access').project({ staff: false, claims: { email_verified: true } }, lcb, lc.docs['omega_orgs/' + lc.org], lc.docs['omega_orgs/' + lc.org + '/members/uid-lite-owner'], Date.now());
+  STORE.pkg = { modules: ['lite', 'gridatlas'], subscription: ['lite', 'gridatlas'], removals: lcb.removalRequests.slice() };
+  STORE.pending = [{ id: 'change-storage', add: ['storage'], names: ['Storage Sizing & Revenue'], display: '$200', expiresOn: '2026-10-20', paymentLink: 'https://pay.example/inv-1', state: 'unpaid' }];
+  await scenario('lite-changes', lc, { url: '/workspace#billing', tz: 'America/Chicago', steps: async function (p) {
+    await p.waitForFunction(function () { return document.querySelectorAll('#bill-req .chg-row').length === 2; }, null, { timeout: 5000 }).catch(function () {});
+    var ch = await p.evaluate(function () {
+      var rows = Array.prototype.map.call(document.querySelectorAll('#bill-req .chg-row'), function (r) { return { key: r.getAttribute('data-change'), pill: (r.querySelector('.bpill') || {}).textContent, line: (r.querySelector('small') || {}).textContent, steps: Array.prototype.map.call(r.querySelectorAll('.steps li'), function (li) { return li.textContent + (li.className ? '(' + li.className + ')' : ''); }).join('|'), pay: (r.querySelector('a.ows-pill') || {}).href || null, cancel: (r.querySelector('[data-cancel]') || {}).textContent || null }; });
+      return { rows: rows, cards: Array.prototype.map.call(document.querySelectorAll('#billing-body .bcard h3'), function (h) { return h.firstChild.textContent; }).join('|'), leaving: Array.prototype.map.call(document.querySelectorAll('#bill-sub .bh-mod.leaving'), function (a) { return a.getAttribute('href') + ' ' + a.textContent; }), soon: Array.prototype.map.call(document.querySelectorAll('#bill-sub .bh-mod.soon'), function (a) { return a.getAttribute('href') + ' ' + a.textContent; }), pay: (document.getElementById('bill-pay') || {}).href || null, owe: document.getElementById('bill-owe').textContent.replace(/\s+/g, ' '), open: document.querySelectorAll('#bill-hist .spill.open').length, price: (document.querySelector('#bill-sub .bh-price b') || {}).textContent };
+    });
+    var st = ch.rows.filter(function (r) { return r.key === 'storage'; })[0] || {}, ga = ch.rows.filter(function (r) { return r.key === 'gridatlas'; })[0] || {};
+    ok('lite-changes: Changes in progress sits between the payment method and the history', ch.cards === 'Your subscription|What you owe|Payment method|Changes in progress|Billing history', ch.cards);
+    ok('lite-changes: Storage waits for payment with its invoice, the pay-by date and a Pay link, then Cancel request', st.pill === 'Waiting for payment' && /\$200 invoice · pay by Oct 20, 2026 · switches on when paid/.test(st.line) && st.steps === 'Chosen(done)|Pay by Oct 20, 2026(now)|On' && st.pay === 'https://pay.example/inv-1' && st.cancel === 'Cancel request', st);
+    ok('lite-changes: Grid Atlas is opting out: on, and billed, until the review on Dec 20, no refund, with Cancel request', ga.pill === 'Opting out' && /Stays on, and billed, until your review on Dec 20, 2026\. No refund/.test(ga.line) && /\|Review on Dec 20, 2026\(now\)\|Off$/.test(ga.steps) && ga.cancel === 'Cancel request' && !ga.pay, ga);
+    ok('lite-changes: the subscription\'s chips say the same (Grid Atlas opting out, Storage waiting for payment), the price is the book\'s for what was bought, and what is owed is the $200 with its pay button', ch.leaving.length === 1 && /#module-gridatlas Grid Atlas Opting out/.test(ch.leaving[0]) && ch.soon.length === 1 && /#module-storage .*Waiting for payment/.test(ch.soon[0]) && ch.price === '$750' && ch.pay === 'https://pay.example/inv-1' && /\$200/.test(ch.owe) && /Pay \$200 now/.test(ch.owe) && ch.open === 1, ch);
+    await p.click('#bill-req [data-cancel="gridatlas"]'); await wait(500);
+    var menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, text: d ? d.textContent.replace(/\s+/g, ' ') : '' }; });
+    ok('lite-changes: Cancel request opens the one package menu on that module', menu.open && /Grid Atlas/.test(menu.text), { open: menu.open, text: menu.text.slice(0, 200) });
+    await p.keyboard.press('Escape'); await wait(200);
+    await billingPhone(p, 'lite-changes');
+    return {};
+  } });
+  STORE.pkg = pkgDefault(); STORE.pending = [];
+
+  /* ══ 5c. LITE LABS AS A MEMBER, WITH THE SUMMARY DOWN — a failed read says
+     the invoices could not be loaded, with Retry, never "No invoices yet";
+     once it answers, a member sees every invoice (GET /api/plan-change is
+     readable by any verified member) and no control that changes the plan. ══ */
+  var lm = FX.lite(HOST), lmm = lm.docs['omega_orgs/' + lm.org + '/members/uid-lite-owner'];
+  lmm.role = 'member';
+  lm.packageView = require('../api/_lib/package-access').project({ staff: false, claims: { email_verified: true } }, lm.docs['omega_orgs/' + lm.org + '/billing/current'], lm.docs['omega_orgs/' + lm.org], lmm, Date.now());
+  STORE.failSummary = true;
+  await scenario('lite-member', lm, { url: '/workspace#billing', steps: async function (p) {
+    await p.waitForFunction(function () { return !!document.querySelector('#bill-hist .failed'); }, null, { timeout: 5000 }).catch(function () {});
+    var down = await p.evaluate(function () { var t = function (id) { return (document.getElementById(id) || {}).textContent || ''; }; return { hist: t('bill-hist').replace(/\s+/g, ' '), retry: !!document.querySelector('#bill-hist [data-bill="retry"]'), sub: t('bill-sub').replace(/\s+/g, ' ') }; });
+    ok('lite-member: a summary that did not load says the invoices could not be loaded, with Retry, never "No invoices yet"', /could not be loaded/.test(down.hist) && down.retry && !/No invoices yet/.test(down.hist) && /Price not available right now/.test(down.sub), down);
+    STORE.failSummary = false;
+    await p.click('#bill-hist [data-bill="retry"]');
+    await p.waitForFunction(function () { return !!document.querySelector('#bill-hist time[datetime="2026-09-20"]'); }, null, { timeout: 5000 }).catch(function () {});
+    var up = await p.evaluate(function () { var b = document.getElementById('billing-body'); return { rows: document.querySelectorAll('#bill-hist .irow:not(.head)').length, paid: !!document.getElementById('bill-paid'), cancel: document.querySelectorAll('[data-cancel]').length, stale: /An owner or administrator sees the invoices/.test(b.textContent), role: /Your role\s*Member/.test(document.getElementById('bill-sub').textContent), price: (document.querySelector('#bill-sub .bh-price b') || {}).textContent }; });
+    ok('lite-member: after Retry a member sees the invoices and the price, and no control that changes the plan or checks with QuickBooks', up.rows === 1 && !up.paid && up.cancel === 0 && !up.stale && up.role && up.price === '$500', up);
+    return {};
+  } });
+  STORE.failSummary = false;
 
   await scenario('legacy-enterprise-opt-out', FX.legacyEnterprise(HOST), { url: '/workspace#modules', steps: async function (p) {
     await p.waitForFunction(function () { return document.querySelectorAll('#modules-body [data-remove-module]').length > 5; });
@@ -429,6 +587,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('legacy Enterprise: Office request names every dependent department and preserves the existing agreement', M.catalog().filter(function (m) { return m.shelf === 'platform'; }).every(function (m) { return draft.indexOf(m.name) >= 0; }) && /existing agreement/.test(draft) && /Lite remains included/.test(draft));
     await p.keyboard.press('Escape');
     ok('legacy Enterprise: the request can be dismissed without sending', await p.locator('#omega-package-menu').count() === 0);
+    /* Plan & billing for a plan invoiced by ClearSky and paid by ACH or check */
+    await p.evaluate(function () { window.location.hash = '#billing'; }); await wait(600);
+    var eb = await p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { card: t('bill-card'), hist: t('bill-hist'), sub: t('bill-sub'), pm: (document.querySelector('#bill-card .pmc') || {}).className, paid: document.querySelectorAll('#bill-hist .spill.paid').length }; });
+    ok('legacy Enterprise: the payment method is ClearSky\'s invoice paid by ACH or check under the agreement, never "no billing account", beside the $150,000 paid', /\bmanual\b/.test(eb.pm) && /Invoiced by ClearSky/.test(eb.card) && /ACH or check/.test(eb.card) && !/No billing account|No payment method/.test(eb.card) && /\$150,000/.test(eb.hist) && eb.paid === 1 && /Enterprise plan/.test(eb.sub) && /Priced by your agreement/.test(eb.sub), eb);
+    await billingPhone(p, 'legacy-enterprise');
     return {};
   } });
   /* ══ 6. THE PACKAGE STORE — Lite Labs on the marketplace ══
