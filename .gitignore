@@ -25,3 +25,6 @@ dist/
 scripts/sandbox/index.html
 scripts/sandbox/look-*.png
 scripts/sandbox/ph-*.png
+
+# Rendered go-to-market graphics and page (scripts/marketing/build.py, card.js)
+scripts/marketing/out/

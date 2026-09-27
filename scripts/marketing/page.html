@@ -1,0 +1,274 @@
+<title>Ditch the Stack Campaign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#f3f6f8; --sheet:#ffffff; --ink:#0b2733; --sub:#4b6270; --line:#d5dee5; --rule:#0b2733;
+  --brand:#0f4c81; --brand-ink:#ffffff; --accent:#e8552f; --soft:#e8f1f9; --ok:#137a4b; --ok-soft:#e3f4ec; --warn:#a4460f; --warn-soft:#fdeee6;
+  --display:"Archivo","Arial Narrow",system-ui,sans-serif; --body:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark; --paper:#0c1720; --sheet:#12232e; --ink:#e9f0f4; --sub:#a2b6c1; --line:#27404e; --rule:#a2b6c1;
+  --brand:#86bdf0; --brand-ink:#0c1720; --accent:#ff7a52; --soft:#193140; --ok:#5ad39a; --ok-soft:#133528; --warn:#ffab80; --warn-soft:#3a2216;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark; --paper:#0c1720; --sheet:#12232e; --ink:#e9f0f4; --sub:#a2b6c1; --line:#27404e; --rule:#a2b6c1;
+  --brand:#86bdf0; --brand-ink:#0c1720; --accent:#ff7a52; --soft:#193140; --ok:#5ad39a; --ok-soft:#133528; --warn:#ffab80; --warn-soft:#3a2216;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--body);padding-inline:16px;padding-block:0 64px}
+.wrap{max-width:900px;margin:0 auto}
+.mono{font-family:var(--mono);letter-spacing:.04em}
+a{color:var(--brand)}
+h1,h2,h3,h4{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(30px,6vw,46px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:24px;font-weight:800}
+h3{font-size:17px;font-weight:700}
+h4{font-size:15px;font-weight:700}
+p{margin:0}
+.lede{color:var(--sub);max-width:66ch}
+
+/* title block, the drawing-set convention the marketing site uses */
+.tblock{margin-top:24px;border:2px solid var(--rule);background:var(--sheet);display:grid;grid-template-columns:1fr auto}
+.tblock .main{padding:20px 20px 18px;display:flex;flex-direction:column;gap:10px;border-right:2px solid var(--rule)}
+.tblock .eyebrow{font:500 12px var(--mono);letter-spacing:.12em;color:var(--accent)}
+.tblock .meta{display:grid;grid-template-rows:repeat(4,auto);font:12px var(--mono);min-width:190px}
+.tblock .meta div{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.tblock .meta div:last-child{border-bottom:0}
+.tblock .meta span{color:var(--sub);font-size:10.5px;letter-spacing:.1em}
+.tblock .meta b{font-weight:500;color:var(--ink)}
+@media (max-width:640px){.tblock{grid-template-columns:1fr}.tblock .main{border-right:0;border-bottom:2px solid var(--rule)}.tblock .meta{grid-template-columns:1fr 1fr;grid-template-rows:auto}.tblock .meta div{border-right:1px solid var(--line)}}
+
+nav.sheets{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--line);margin:18px -16px 0;padding:10px 16px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+nav.sheets a{flex:none;text-decoration:none;color:var(--ink);font:500 12.5px var(--mono);letter-spacing:.04em;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--sheet)}
+nav.sheets a:hover,nav.sheets a:focus-visible{border-color:var(--brand);color:var(--brand)}
+
+section{padding-top:40px;display:flex;flex-direction:column;gap:16px;scroll-margin-top:60px}
+.sh{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:2px solid var(--rule);padding-bottom:8px}
+.sh .no{font:500 12px var(--mono);letter-spacing:.12em;color:var(--accent)}
+
+.panel{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:18px}
+.field{display:grid;grid-template-columns:150px 1fr;gap:6px 16px;padding:12px 0;border-bottom:1px solid var(--line)}
+.field:last-child{border-bottom:0}
+.field .k{font:500 12px var(--mono);letter-spacing:.06em;color:var(--sub);padding-top:2px}
+.field .k em{display:block;font-style:normal;color:var(--ok)}
+.field .v{display:flex;flex-direction:column;gap:8px;min-width:0}
+@media (max-width:560px){.field{grid-template-columns:1fr}}
+ul.tags{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+ul.tags li{font-size:12.5px;padding:3px 9px;border-radius:999px;background:var(--soft);color:var(--ink)}
+
+pre.txt{margin:0;white-space:pre-wrap;word-wrap:break-word;font:14.5px/1.55 var(--body);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+pre.txt.small{font-size:13.5px;padding:10px 12px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;cursor:pointer}
+button.copy{font:600 13px var(--body);padding:8px 14px;min-height:38px;border-radius:8px;border:1px solid var(--brand);background:var(--brand);color:var(--brand-ink)}
+button.copy + button.copy{background:transparent;color:var(--brand)}
+button.copy.ok{background:var(--ok);border-color:var(--ok);color:var(--sheet)}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.flt{font:500 13px var(--body);padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:var(--sheet);color:var(--ink)}
+.flt .mono{color:var(--sub);font-size:11.5px}
+.flt.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.flt.on .mono{color:var(--paper);opacity:.75}
+.progress{font:12.5px var(--mono);color:var(--sub)}
+
+.posts{display:flex;flex-direction:column;gap:14px}
+.post{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.post.is-done{opacity:.62}
+.post-h{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:start}
+.day{display:flex;flex-direction:column;border:1.5px solid var(--rule);border-radius:6px;text-align:center;overflow:hidden}
+.day .mono{font-size:11px;padding:4px 0;background:var(--ink);color:var(--paper)}
+.day .dow{font:700 15px var(--display);padding:4px 0}
+.post-t{display:flex;flex-direction:column;gap:6px;min-width:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--soft);color:var(--brand)}
+.chip.fmt{background:transparent;border:1px solid var(--line);color:var(--sub)}
+.chip.li{background:var(--soft);color:var(--brand)}
+.chip.em{background:var(--warn-soft);color:var(--warn)}
+.count{font-size:11.5px;color:var(--sub)}
+.done{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);white-space:nowrap;cursor:pointer}
+.done input{width:18px;height:18px;accent-color:var(--ok)}
+@media (max-width:560px){.post-h{grid-template-columns:56px 1fr}.done{grid-column:1/-1}}
+.shot{display:flex;flex-direction:column;gap:6px}
+.shot img{display:block;width:100%;max-width:300px;height:auto;border-radius:4px;border:1px solid var(--line)}
+.daily{display:grid;gap:8px}
+.daily ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.visual,.subj{font-size:13.5px;color:var(--sub)}
+.lbl{display:inline-block;font-size:10.5px;letter-spacing:.12em;color:var(--accent);margin-right:6px}
+.cmt{display:flex;flex-direction:column;gap:6px}
+code{font:12.5px var(--mono);background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--ink)}
+
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--sheet)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+tr:last-child td,tr:last-child th{border-bottom:0}
+thead th{font:500 11px var(--mono);letter-spacing:.1em;color:var(--sub);text-transform:uppercase;background:var(--paper)}
+tbody th{font-weight:600;width:30%}
+.sub{color:var(--sub);font-size:12.5px}
+td.fit{font-weight:500;text-align:center;width:44px}
+td.f3{color:var(--ok)} td.f2{color:var(--brand)} td.f1{color:var(--sub)}
+.tbl.targets table{min-width:760px}
+
+.steps{display:flex;flex-direction:column;gap:12px}
+.step{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.step-h{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.when{font-size:12px;color:var(--sub);min-width:120px}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:700px){.two{grid-template-columns:1fr}}
+.rules{border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.rules.do{background:var(--ok-soft)} .rules.dont{background:var(--warn-soft)}
+.rules h3{font-size:15px}
+.rules.do h3{color:var(--ok)} .rules.dont h3{color:var(--warn)}
+.rules ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+ol.blk{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:12px;max-width:72ch}
+ol.blk li::marker{font-family:var(--mono);color:var(--accent)}
+ul.plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+footer{margin-top:48px;padding-top:12px;border-top:1px solid var(--line);font:12px var(--mono);color:var(--sub)}
+@media (prefers-reduced-motion:no-preference){button.copy{transition:background .15s}}
+</style>
+
+<div class="wrap">
+  <header class="tblock">
+    <div class="main">
+      <span class="eyebrow">CLEARSKY OMEGA · GO TO MARKET</span>
+      <h1>Ditch the stack.</h1>
+      <p class="lede">The LinkedIn company page, 30 days of posts and the developer campaign, ready to copy. Every price is the public price list; every claim is something the product ships today.</p>
+    </div>
+    <div class="meta">
+      <div><span>SHEETS</span><b>6 · R-001 to IP-401</b></div>
+      <div><span>REVISION</span><b>A · 2026-09-27</b></div>
+      <div><span>STATUS</span><b>Draft for founder</b></div>
+      <div><span>POSTED BY CODE</span><b>Nothing</b></div>
+    </div>
+  </header>
+
+  <nav class="sheets" aria-label="Sections">
+    <a href="#launch">R-001 Before launch</a>
+    <a href="#page">G-101 Company page</a>
+    <a href="#posts">P-201 30 days</a>
+    <a href="#campaign">S-301 Developer campaign</a>
+    <a href="#targets">S-302 Targets</a>
+    <a href="#ip">IP-401 Guardrails</a>
+  </nav>
+
+  <section id="launch">
+    <div class="sh"><span class="no">R-001</span><h2>Before launch</h2></div>
+    <p class="lede">Do these before the first post sends anyone to the site. The first two decide whether a click can turn into a customer.</p>
+    <ol class="blk">%%BLOCKERS%%</ol>
+  </section>
+
+  <section id="page">
+    <div class="sh"><span class="no">G-101</span><h2>Company page</h2></div>
+    <div class="panel">
+      <div class="field"><div class="k">NAME</div><div class="v"><b>%%NAME%%</b></div></div>
+      <div class="field"><div class="k">TAGLINE<em>%%TAGLEN%% / 120</em></div><div class="v"><pre class="txt small" id="f-tag">%%TAGLINE%%</pre><div class="btns"><button class="copy" type="button" data-copy="f-tag">Copy tagline</button></div></div></div>
+      <div class="field"><div class="k">ABOUT<em>%%ABOUTLEN%% / 2,000</em></div><div class="v"><pre class="txt" id="f-about">%%ABOUT%%</pre><div class="btns"><button class="copy" type="button" data-copy="f-about">Copy About</button></div></div></div>
+      <div class="field"><div class="k">SPECIALTIES<em>%%SPECN%% / 20</em></div><div class="v"><ul class="tags">%%SPEC%%</ul><pre class="txt small" id="f-spec" hidden>%%SPECTXT%%</pre><div class="btns"><button class="copy" type="button" data-copy="f-spec">Copy specialties</button></div></div></div>
+      <div class="field"><div class="k">WEBSITE</div><div class="v">%%WEBSITE%%</div></div>
+      <div class="field"><div class="k">INDUSTRY</div><div class="v">%%INDUSTRY%%</div></div>
+      <div class="field"><div class="k">BUTTON</div><div class="v">%%BUTTON%%</div></div>
+    </div>
+  </section>
+
+  <section id="posts">
+    <div class="sh"><span class="no">P-201</span><h2>30 days of posts</h2></div>
+    <p class="lede">Day 1 is a Monday. Put the link in the first comment, not the post; LinkedIn shows posts with outside links to fewer people. Weekend posts are light. Reshare each weekday post from your own profile with a line of your own.</p>
+    <div class="panel daily"><h3>Every day, 10 minutes</h3><ul>%%ENGAGE%%</ul></div>
+    <div class="filters" role="group" aria-label="Filter by theme">%%FILTERS%%</div>
+    <p class="progress" id="progress" aria-live="polite"></p>
+    <div class="posts">%%POSTS%%</div>
+  </section>
+
+  <section id="campaign">
+    <div class="sh"><span class="no">S-301</span><h2>Developer campaign</h2></div>
+    <p class="lede">Small and mid-size developers, about 5 to 300 people, without a big in-house GIS, modelling and CAD team. They stitch together spreadsheets, consultants and subscriptions today, so one record is worth the most to them.</p>
+    <div class="tbl"><table><thead><tr><th>Segment</th><th>Lead with</th></tr></thead><tbody>%%ICP%%</tbody></table></div>
+    <p><b>Titles:</b> %%TITLES%%.</p>
+    <div class="panel">
+      <h3>The offer</h3>
+      <p style="margin-top:8px">A 20-minute live build of one of their sites from an address, then a 14-day trial on their own sites. The package is Lite + Grid Atlas + Storage Sizing &amp; Revenue + Investor &amp; Finance: the Field plan at $1,299 a month, with room for one more $250 module. Annual pays 10 of 12 months. The annual service fee is on the <a href="%%PRICING%%" target="_blank" rel="noopener">price list</a>.</p>
+    </div>
+    <h3>A reason to write now</h3>
+    <ul class="plain">%%HOOKS%%</ul>
+    <h3>The sequence</h3>
+    <p class="lede">Work addresses only, one thread per company, a real postal address and an opt-out in every email, and stop at the first "no". The full outreach rules are in docs/SALES-AGENT.md §5.</p>
+    <div class="steps">%%SEQ%%</div>
+    <h3>Cadence</h3>
+    <div class="tbl"><table><tbody>%%CADENCE%%</tbody></table></div>
+    <h3>Measure</h3>
+    <div class="tbl"><table><tbody>%%METRICS%%</tbody></table></div>
+  </section>
+
+  <section id="targets">
+    <div class="sh"><span class="no">S-302</span><h2>Target accounts</h2></div>
+    %%TARGETS%%
+  </section>
+
+  <section id="ip">
+    <div class="sh"><span class="no">IP-401</span><h2>IP guardrails</h2></div>
+    <p class="lede">Sell the result, never the method. The pricing, scoring and modelling logic runs on ClearSky's servers so nobody can read it in a browser. A screenshot shouldn't give it away either.</p>
+    <div class="two">
+      <div class="rules do"><h3>Do</h3><ul>%%DO%%</ul></div>
+      <div class="rules dont"><h3>Never</h3><ul>%%DONT%%</ul></div>
+    </div>
+  </section>
+
+  <footer>© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. Source: docs/GO-TO-MARKET.md</footer>
+</div>
+
+<script>
+(function () {
+  var KEY = 'omega-gtm-posted';
+  var posted = {};
+  try { posted = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { posted = {}; }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(posted)); } catch (e) {} }
+  var boxes = document.querySelectorAll('input[data-done]');
+  function paint() {
+    var n = 0;
+    for (var i = 0; i < boxes.length; i++) {
+      var id = boxes[i].getAttribute('data-done');
+      boxes[i].checked = !!posted[id];
+      document.getElementById(id).classList.toggle('is-done', !!posted[id]);
+      if (posted[id]) n++;
+    }
+    document.getElementById('progress').textContent = n + ' of 30 posted';
+  }
+  for (var i = 0; i < boxes.length; i++) {
+    boxes[i].addEventListener('change', function (e) {
+      var id = e.target.getAttribute('data-done');
+      if (e.target.checked) posted[id] = true; else delete posted[id];
+      save(); paint();
+    });
+  }
+  paint();
+
+  function selectText(el) {
+    el.hidden = false;
+    var r = document.createRange(); r.selectNodeContents(el);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('button.copy');
+    if (!b) return;
+    var el = document.getElementById(b.getAttribute('data-copy'));
+    var text = el.textContent;
+    var label = b.textContent;
+    function ok() { b.classList.add('ok'); b.textContent = 'Copied'; setTimeout(function () { b.classList.remove('ok'); b.textContent = label; }, 1400); }
+    function fail() { selectText(el); b.textContent = 'Selected, press Copy'; setTimeout(function () { b.textContent = label; }, 2200); }
+    try { navigator.clipboard.writeText(text).then(ok, fail); } catch (err) { fail(); }
+  });
+
+  var flts = document.querySelectorAll('.flt');
+  var posts = document.querySelectorAll('.post');
+  for (var j = 0; j < flts.length; j++) {
+    flts[j].addEventListener('click', function (e) {
+      var f = e.currentTarget.getAttribute('data-f');
+      for (var k = 0; k < flts.length; k++) flts[k].classList.toggle('on', flts[k] === e.currentTarget);
+      for (var m = 0; m < posts.length; m++) posts[m].hidden = !(f === 'all' || posts[m].getAttribute('data-pillar') === f);
+    });
+  }
+})();
+</script>
