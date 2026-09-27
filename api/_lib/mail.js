@@ -151,8 +151,8 @@ function send(to, subject, html, text, opts) {
 function greeting(name) { return name ? 'Thanks, ' + esc(name) + '.' : 'Thanks.'; }
 function staffTo() { return process.env.MAIL_NOTIFY || 'dev@clearsky-usa.com'; }
 var T = {
-  /* A subscription invoice paid (the runner or "I've paid" saw it in
-     QuickBooks). The first one opens the workspace; later ones are receipts. */
+  /* A subscription invoice paid (the runner, the Stripe webhook or "I've
+     paid" saw it on the provider's invoice). The first one opens the workspace; later ones are receipts. */
   paid: function (o) {
     return send(o.email, o.first ? 'Your ClearSky-OMEGA workspace is open' : 'Payment received, thank you',
       layout(o.first ? esc(o.company) + ' is open' : 'Payment received', '<p>' + esc(o.text) + '</p>'
@@ -163,7 +163,7 @@ var T = {
      person has to look at. Both go to MAIL_NOTIFY. */
   paidAlert: function (o) {
     return send(staffTo(), '[OMEGA] Payment received: ' + o.company + (o.amountDisplay ? ' (' + o.amountDisplay + ')' : ''),
-      layout('Payment received', '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Amount', o.amountDisplay || '—') + row('Invoice', o.invoiceId || '—') + row('What', o.first ? 'First invoice: the workspace is open' : 'Recurring invoice') + '</table>'
+      layout('Payment received', '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Amount', o.amountDisplay || '—') + row('Invoice', (o.payWith ? o.payWith + ' ' : '') + (o.invoiceId || '—')) + row('What', o.first ? 'First invoice: the workspace is open' : 'Recurring invoice') + '</table>'
         + button(o.consoleUrl || 'https://silmarillion.clearskyomega.com/admin', 'Open the master console')));
   },
   /* A tenant on a plan billed outside the package engine opted in to a module
@@ -205,8 +205,8 @@ var T = {
   signupReceived: function (o) {
     if (o.payNow) return send(o.email, 'Your ClearSky-OMEGA workspace opens when your first invoice is paid',
       layout('Pay your first invoice to open your workspace', '<p>' + greeting(o.name) + ' Your workspace for <b>' + esc(o.company) + '</b> is set up at <b>' + esc(o.host) + '</b>.</p>'
-        + '<p>Your first invoice' + (o.amountDueDisplay ? ' (' + esc(o.amountDueDisplay) + ')' : '') + ' is ready in QuickBooks. Pay it by card on the invoice page and your workspace opens the moment the payment lands; no approval step, no waiting.</p>'
-        + (o.paymentLink ? button(o.paymentLink, 'Pay the invoice') : '') + '<p>Already paid? Open your workspace and press <b>I\'ve paid</b>; it checks QuickBooks right away.</p>'));
+        + '<p>Your first invoice' + (o.amountDueDisplay ? ' (' + esc(o.amountDueDisplay) + ')' : '') + ' is ready' + (o.payWith ? ' in ' + esc(o.payWith) : '') + '. Pay it by card on the invoice page and your workspace opens the moment the payment lands; no approval step, no waiting.</p>'
+        + (o.paymentLink ? button(o.paymentLink, 'Pay the invoice') : '') + '<p>Already paid? Open your workspace and press <b>I\'ve paid</b>; it checks your payment right away.</p>'));
     return send(o.email, 'We received your ClearSky-OMEGA workspace request',
       layout('Request received', '<p>' + greeting(o.name) + ' We\'re setting up a workspace for <b>' + esc(o.company) + '</b> at <b>' + esc(o.host) + '</b>.</p>'
         + '<p>The ClearSky team reviews every new workspace — usually within one business day. You\'ll get another email the moment it\'s live.</p>'
@@ -233,12 +233,12 @@ var T = {
   },
   trialEnding: function (o) {
     return send(o.email, 'Your OMEGA trial ends on ' + new Date(o.trialEndsAt).toISOString().slice(0, 10),
-      layout('Your trial is ending', '<p>' + esc(o.text) + '</p><p>We will issue your first QuickBooks invoice at trial end. Payment is required to keep creating and exporting.</p>'
+      layout('Your trial is ending', '<p>' + esc(o.text) + '</p><p>We will issue your first invoice at trial end. Payment is required to keep creating and exporting.</p>'
         + button('https://' + o.host + '/account-settings.html', 'View your plan')));
   },
   packageInvoice: function (o) {
     return send(o.email, 'Your OMEGA subscription invoice is ready',
-      layout('Pay to continue', '<p>' + esc(o.text) + '</p>' + (o.paymentLink ? button(o.paymentLink, 'Pay in QuickBooks') : '<p>Open your plan for invoice details.</p>')));
+      layout('Pay to continue', '<p>' + esc(o.text) + '</p>' + (o.paymentLink ? button(o.paymentLink, o.payWith ? 'Pay in ' + o.payWith : 'Pay the invoice') : '<p>Open your plan for invoice details.</p>')));
   },
   /* The Subscription Proposal (Phase 6): the link carries the key that opens
      the customer's view; the reply goes to the rep who prepared it. */

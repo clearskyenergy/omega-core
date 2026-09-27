@@ -5,6 +5,7 @@
  * prove the screens, not hosted acceptance.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture'), M = require('../api/_lib/modules');
 var db, caller, mails = [], sandboxInvoices = 0, checks = 0, shots = 0;

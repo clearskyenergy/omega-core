@@ -938,16 +938,21 @@ window._omegaReady = function(){
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-tools.js?v=9"></script>
 <!-- Site Map's capability ladder, as a LIBRARY: a legacy plan holds a module
-     only when Site Map grants its capabilities on the tier the editor runs,
-     and OmegaWorkspaceHub.editorCtx reads that ladder here exactly as the
-     Modules page and the editor do. Nothing applies it to this page: the
-     runtime hands OmegaCaps a package only where Site Map's #ribbon is. -->
+     only when its tools open AND the Site Map commands it carries are open
+     on the tier the editor runs: the catalogue's legacyGates (read off the
+     real editor), each asked of OmegaWorkspaceHub.editorCtx, the one mirror
+     of OmegaCaps.resolve, exactly as the Modules page, Site Map's plan chip
+     and the admin Package tab judge it. Nothing applies it to this page:
+     the runtime hands OmegaCaps a package only where Site Map's #ribbon is. -->
 <script src="/omega-caps.js"></script>
 <!-- The ONE rule for whether a workspace holds a module (the Modules page
      reads it too), and the ONE menu. On the classic home, which has no
-     Modules page, a locked tool opens that menu on its module in place. -->
+     Modules page, a locked tool opens that menu on its module in place; a
+     module a legacy plan can buy by card asks for the billing profile first
+     (omega-billing-profile.js, the menu's own form). -->
 <script src="/omega-workspace-hub.js"></script>
 <script src="/omega-package-menu.js"></script>
+<script src="/omega-billing-profile.js"></script>
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════
@@ -1289,8 +1294,9 @@ function coverGradient(cat){
 var LOCK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 /* WHY A TOOL IS LOCKED, said once. A module is named only when holding it
    would open the tool: never while the workspace waits on approval (every
-   tool is locked until ClearSky approves it), never Lite (always held) and
-   never a module the workspace already holds, where the lock is the
+   tool is locked until ClearSky approves it), never Omega Design (lite,
+   always held) and never a module the workspace already holds (on its
+   plan, or bought by card as an add-on), where the lock is the
    workspace's product (an allowlist such as Site Map + Grid Atlas) and a
    link to a module the Modules page calls Live would explain nothing.
    Answers { mod } or { why: 'pending' | 'product' | 'notsold' | 'plan' }. */
@@ -1449,40 +1455,55 @@ function catalogueMode(ws){
 }
 /* THE ONE ACTION OF A LOCKED CARD. The workspace home: the module's card on
    the Modules page, where it is opted in to. The classic home: the one menu
-   on that module alone, in place; without the menu, who to ask. */
+   on that module alone, in place; without the menu, to reload. */
 function moduleAction(m){
   var tip = ' title="'+esc(m.name)+': what it adds and how to opt in" aria-label="See '+esc(m.name)+'"';
   if (workspaceHome(WORKSPACE)) return '<a class="mkt-act mod" href="/workspace#module-'+encodeURIComponent(m.key)+'"'+tip+'>See module ›</a>';
   if (window.OmegaPackageMenu && OmegaPackageMenu.open) return '<button type="button" class="mkt-act mod" onclick="openModule(&quot;'+esc(m.key)+'&quot;)"'+tip+'>See module ›</button>';
-  return '<div class="mkt-act disabled">Ask your administrator</div>';
+  return '<div class="mkt-act disabled">Reload to see the module</div>';
 }
 /* what each module is to a plan billed outside the engine (held · part ·
-   ask), by the ONE rule the Modules page reads: its tools open AND Site Map
-   grants its capabilities on the tier the editor runs. That second half is
-   OmegaWorkspaceHub.editorCtx, the one mirror of OmegaCaps.resolve (billed
-   tier capped by capTier, add-on and JV grants, a verified ClearSky
-   address with no record runs 'internal'), so Compute is Partly included
-   on Standard here as it is on the Modules page and in Site Map. */
+   ask), by the ONE rule the Modules page, Site Map's plan chip and the
+   admin Package tab read (OmegaWorkspaceHub.moduleState on the ONE legacy
+   ctx, OmegaWorkspaceHub.legacyCtx): its tools open (only the tools this
+   org can see count) AND the Site Map commands it carries are open on the
+   tier the editor runs (the catalogue's legacyGates, read off the real
+   editor, each asked of editorCtx, the one mirror of OmegaCaps.resolve:
+   billed tier capped by capTier, add-on and JV grants, a verified ClearSky
+   address with no record runs 'internal'). A module bought by card as an
+   add-on (billing.addOns.live while the month paid for lasts,
+   api/_lib/addons.js) is held. So Omega Compute is Partly included on
+   Standard here as it is on the Modules page and in Site Map. The page's
+   own rule is only that nothing opens while ClearSky has not approved the
+   workspace. */
 function moduleStates(){
   var ws = WORKSPACE || {}, H = window.OmegaWorkspaceHub, out = {};
-  var ctx = { packaged:false, modules: ws.modules || [], addons: ws.addons || [], tierLevel: ws.tierLevel,
-    canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && !ws.pendingApproval && isUnlockedHere(t); },
-    tool: function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; } };
   var bl = (window.OmegaTenant && OmegaTenant.billing) || null;   // billing/current, or null when there is no record
-  var e = H && H.editorCtx ? H.editorCtx(window.OmegaCaps, bl, { email: (currentUser && currentUser.email) || '', emailVerified: !!(currentUser && currentUser.emailVerified === true), orgId: ws.orgId }) : null;
-  if (e){ ctx.editorCan = e.editorCan; ctx.ungated = e.ungated; ctx.editorTier = e.tier; }
-  CAT.modules.forEach(function(m){ out[m.key] = H && H.moduleState ? H.moduleState(m, ctx) : 'ask'; });
+  var ctx = H && H.legacyCtx ? H.legacyCtx({ tools: OMEGATools, ws: ws, billing: bl, caps: window.OmegaCaps,
+    who: { email: (currentUser && currentUser.email) || '', emailVerified: !!(currentUser && currentUser.emailVerified === true), orgId: ws.orgId },
+    canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && !ws.pendingApproval && isUnlockedHere(t); } }) : null;
+  CAT.modules.forEach(function(m){ out[m.key] = ctx && H.moduleState ? H.moduleState(m, ctx) : 'ask'; });
   return out;
+}
+/* who may change modules: the workspace's owner or an administrator, or
+   verified ClearSky staff (POST /api/plan-change is the gate either way;
+   the menu shows everybody else who changes them). Undefined when the
+   runtime cannot say, and the menu asks the server. */
+function mayChange(){
+  var u = currentUser || {}, d = String(u.email || '').toLowerCase().split('@')[1] || '';
+  if (d === 'clearsky-usa.com' && u.emailVerified === true) return true;
+  return (window.OmegaTenant && OmegaTenant.isAdmin) ? !!OmegaTenant.isAdmin() : undefined;
 }
 /* the classic home: the one menu, on this module alone. A packaged
    workspace hands over its own package view; any other goes in the menu's
-   legacy mode with the public catalogue and what its plan holds. Who may
-   change modules is the workspace's owner or an administrator. */
+   legacy mode with the public catalogue, what its plan holds and its
+   billing record (the requests on it, and the add-ons it bought by card:
+   billing.addOns, which the menu reads when it is handed no summary). */
 function openModule(key){
   var ws = WORKSPACE || {}, M = window.OmegaPackageMenu;
   if (!M || !M.open || !moduleOf(key)){ toast('The module menu did not load. Reload the page.'); return; }
-  var opts = { single: true, onChanged: moduleChanged };
-  if (window.OmegaTenant && OmegaTenant.isAdmin) opts.admin = OmegaTenant.isAdmin();
+  var opts = { single: true, onChanged: moduleChanged }, admin = mayChange();
+  if (typeof admin === 'boolean') opts.admin = admin;
   if (CAT.packaged) opts.view = ws.packageAccess;
   else {
     var states = moduleStates();
@@ -1499,18 +1520,29 @@ function openModule(key){
    requests as stored and they are merged onto the billing record the menu
    is handed (as the workspace's billingChanged does), so the next open,
    and See every module, read Opt-in requested or Opting out with Cancel
-   request instead of offering again what the server would refuse. */
+   request instead of offering again what the server would refuse.
+   A module bought by card (an add-on, api/_lib/addons.js: bought, paid,
+   its purchase cancelled, or opted out of at the end of the month paid
+   for) is the billing record's own: it is read again, which re-fires the
+   entitlements, so a tool the server switched on opens here without a
+   reload and the next open reads Waiting for payment or Opting out. */
 function moduleChanged(r){
   if (CAT.packaged){ if (window.OmegaTenant && OmegaTenant.refreshPackage){ try { OmegaTenant.refreshPackage(); } catch(e){} } return; }
+  if (!r) return;
   var bl = window.OmegaTenant && OmegaTenant.billing;
-  if (!bl || typeof bl !== 'object' || !r) return;
-  ['optIns', 'optOuts'].forEach(function(f){
+  if (bl && typeof bl === 'object') ['optIns', 'optOuts'].forEach(function(f){
     if (!r[f] || typeof r[f] !== 'object') return;
     var to = {}, was = bl[f] || {};
     Object.keys(was).forEach(function(k){ to[k] = was[k]; });
     Object.keys(r[f]).forEach(function(k){ to[k] = r[f][k]; });
     try { bl[f] = to; } catch(e){}
   });
+  if (r.addOnId || r.addOns || Array.isArray(r.live) || r.ending || r.endsOn || r.state === 'active'){
+    if (r.state === 'active') toast('Opted in. It is on now.');
+    var repaint = function(){ paintMarket(); };
+    if (window.OmegaTenant && OmegaTenant.refreshBilling){ try { OmegaTenant.refreshBilling().then(repaint, repaint); } catch(e){ repaint(); } }
+    else repaint();
+  }
 }
 /* OLD STORE LINKS. /marketplace.html#<module> and #plans were the store's;
    they live on the Modules page now. The classic home has no Modules page,

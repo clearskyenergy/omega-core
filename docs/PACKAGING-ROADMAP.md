@@ -111,10 +111,10 @@ complete, calm product, not a full product with holes in it.**
 6. **Menus follow the same rules.** The File menu, the Output tab, the
    Summary › Cost panel and the Documentation drawer check the same module
    caps as the ribbon (today they are the leaks).
-7. **A tenant's default layout matches what they bought.** The Designer /
-   Pro starting layout is chosen from the package: Lite and installer
-   packages open in Designer; Engineering or Plan Sets open in Pro. The user
-   can still switch.
+7. **A tenant's layout IS what they bought.** (Revised 2026-09-27, "bought =
+   visible".) A package is in neither Designer nor Pro: the editor always shows
+   every tool the package owns, and the switch is not offered. Designer/Pro
+   stays for unpackaged (legacy) plans.
 8. **Their work is never locked.** A drawing that contains, say, a one-line
    made while they had Plan Sets still opens and displays after the module is
    removed; the *tools* to edit or export it are what go. Read, never lose.
@@ -186,7 +186,7 @@ Two layers, never confused:
 | Layer | Decides | Strength | Source |
 |---|---|---|---|
 | **Package** | what the tenant OWNS | hard: un-owned tools are gone (§3) | `billing/current.modules[]` |
-| **Project type** | what is IN FRONT of the user for this project | soft: one click shows everything they own | the project's `type` when it is created |
+| **Project type** | what is FIRST for the user on this project | order only: nothing owned is ever hidden (2026-09-27) | the project's `type` when it is created |
 
 When a user creates or opens a project they pick what they are building:
 **Level 2 EV · DCFC · BESS (behind or in front of the meter) · Solar + Storage ·
@@ -203,9 +203,10 @@ layout, editor.html ~166639), and the L2 / FOM / BTM modes on the Build panel.
    every workspace. A project type only reorders and focuses.
 2. **Relevant first.** The workspace opens on its guided build, puts its
    equipment at the front of Insert, and puts its outputs first on Output.
-3. **Everything else is one click away.** A single **"All tools"** toggle in
-   the ribbon header shows every tool the package owns. Nothing owned is
-   ever unreachable, and the choice is remembered per user.
+3. **Everything else is right there.** (Revised 2026-09-27.) The project type
+   only reorders: its tools lead each group and its guided build leads Build;
+   every other owned tool stays on the ribbon in its usual place. The "All
+   tools" toggle was retired with the hiding it undid.
 4. **Same order and style everywhere.** A workspace chooses which groups
    show first. It never invents new groups, colours or button styles.
 5. **Mixed projects work.** A project can be BESS + Level 2; the workspace
@@ -216,7 +217,7 @@ layout, editor.html ~166639), and the L2 / FOM / BTM modes on the Build panel.
 
 ### 6.2 What each workspace puts forward
 
-| Project type | Opens on | Insert shows first | Analyze / Estimate first | Output first | Tucked behind "All tools" |
+| Project type | Opens on | Insert shows first | Analyze / Estimate first | Output first | After those (still shown) |
 |---|---|---|---|---|---|
 | Level 2 EV | Level 2 guided build | L2 chargers, panelboard, meter, disconnect, bollard, ADA stencils, parking stalls | Electrical Estimate, Construction Cost | Proposal, EV Cost Workbook, Plot Plan, One-Line, L2 Closeout | Compute, BESS sizing, wind/genset/fuel cell, terrain, network proximity |
 | DCFC | DCFC build (+ BESS demand management) | DCFC, transformer, switchgear, BESS pad, bollards | Grid Atlas, Estimate, Energy Balance | Proposal, EV Workbook, Plot Plan, One-Line | Compute, building net-zero, piles |
@@ -246,8 +247,8 @@ Visible polish a customer notices in the first minute, safe to ship alone:
 ### 6.4 Acceptance
 
 `check:pages` gains the seven workspaces × the five packages. It fails if a
-core draw function is missing from any workspace, if "All tools" hides
-anything the package owns, if a workspace shows an un-owned tool, or on the
+core draw function is missing from any workspace, if any tool the package
+owns is not reachable (no toggle), if a workspace shows an un-owned tool, or on the
 tidiness checks in §3.2. Screenshots of each workspace go into the guides.
 
 ---

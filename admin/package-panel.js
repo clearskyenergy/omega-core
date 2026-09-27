@@ -63,7 +63,7 @@
       preview = { result: data, body: Object.assign({}, body, { previewId: data.previewId, effectiveAt: data.effectiveAt, dryRun: false }) };
       $('write-billing').textContent = JSON.stringify(data.billingPatch, null, 2);
       $('write-customer').textContent = JSON.stringify(data.customer, null, 2);
-      $('write-invoice').textContent = data.invoice ? JSON.stringify(data.invoice, null, 2) : 'No invoice at approval. Scheduled for trial end; QuickBooks will calculate tax:\n\n' + JSON.stringify(data.scheduledInvoice, null, 2);
+      $('write-invoice').textContent = data.invoice ? JSON.stringify(data.invoice, null, 2) : 'No invoice at approval. Scheduled for trial end:\n\n' + JSON.stringify(data.scheduledInvoice, null, 2);
       $('apply').textContent = data.trialStartsOnApproval ? 'Approve and start trial' : 'Activate and create invoice';
       $('apply').disabled = !data.canApply; $('review').disabled = false; message(data.notice); tab('write');
     }, function (e) { $('review').disabled = false; message(e.message, true); });
@@ -92,7 +92,7 @@
       head.textContent = '';
       head.appendChild(el('div', (summary.planDisplay || 'Lite') + (summary.monthlyDisplay ? ' · ' + summary.monthlyDisplay : ''), 'pp-plan-name'));
       head.appendChild(el('div', (summary.billingDay ? 'Billed on the ' + ordinal(summary.billingDay) + ' of each month' : 'Billing date follows the original signup day') + (summary.nextInvoiceOn ? ' · next invoice ' + summary.nextInvoiceOn : '') + (summary.packagingState ? ' · ' + summary.packagingState.replace(/_/g, ' ') : ''), 'pp-note'));
-      if (b.paymentLink) { var pay = el('a', 'Pay in QuickBooks', 'pp-pay'); pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; head.appendChild(pay); }
+      if (b.paymentLink) { var pay = el('a', 'Pay in ' + (b.billingProvider === 'stripe' ? 'Stripe' : 'QuickBooks'), 'pp-pay'); pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; head.appendChild(pay); }
     }
     if (data.canManagePackage) pane.appendChild(el('p', 'This is what the customer sees. Actions here are taken on the customer’s behalf and billed to them.', 'pp-note'));
     var pendingHost = el('div'); pane.appendChild(pendingHost);
@@ -112,7 +112,7 @@
         summary.pending.forEach(function (p) {
           var row = el('div', '', 'pp-pending');
           row.appendChild(el('span', (p.names || p.add).join(', ') + ' · ' + p.display + ' · pay before ' + p.expiresOn));
-          if (p.paymentLink) { var a = el('a', 'Pay in QuickBooks', 'pp-pay'); a.href = p.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); }
+          if (p.paymentLink) { var a = el('a', p.payWith ? 'Pay in ' + p.payWith : 'Pay the invoice', 'pp-pay'); a.href = p.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); }
           pendingHost.appendChild(row);
         });
       }
@@ -161,7 +161,7 @@
           var buy = button(m.pack.display, function () {
             buy.disabled = true; buy.textContent = 'Creating your invoice…';
             global.OmegaPackageMenu.api('/api/plan-change', { action: 'pack-quote', meter: m.key }).then(function (q) { return global.OmegaPackageMenu.api('/api/plan-change', { action: 'pack-buy', meter: m.key, previewId: q.previewId, effectiveAt: q.effectiveAt }); })
-              .then(function (r) { buy.remove(); var a = el('a', 'Pay ' + r.display + ' in QuickBooks', 'pp-pay'); a.href = r.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); row.appendChild(el('span', 'Added the moment the payment clears; good until ' + r.expiresOn + '.', 'pp-meter-note')); },
+              .then(function (r) { buy.remove(); var a = el('a', 'Pay ' + r.display + (r.payWith ? ' in ' + r.payWith : ''), 'pp-pay'); a.href = r.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); row.appendChild(el('span', 'Added the moment the payment clears; good until ' + r.expiresOn + '.', 'pp-meter-note')); },
                 function (e) { buy.disabled = false; buy.textContent = m.pack.display; message(e.message, true); });
           }, 'pp-primary'); row.appendChild(buy);
         }
@@ -229,28 +229,44 @@
       if (pays.length) out.lines.push('Pays ' + pays.join(' · '));
     } else {
       /* the tenant's own reading, piece by piece (review finding 24): the
-         tool levels omega-tenant.js gives a billed tier (a trial opens the
-         tools at 3, as the workspace does), and Site Map's half from
-         OmegaWorkspaceHub.editorCtx — the ONE mirror of OmegaCaps.resolve,
-         judged for the tenant's org (its JV grants, its add-ons, capTier),
-         never as the staff member looking — so Holds and the preselection
-         are what the tenant's Modules page and the editor's chip show */
-      var tiers = { trial: 3, standard: 1, pro: 2, deluxe: 2, enterprise: 3, internal: 3, partner: 2 }, lvl = tiers[String(b.tier || '').toLowerCase()], T = global.OMEGATools, H = global.OmegaWorkspaceHub;
-      var wsLike = { tierLevel: typeof lvl === 'number' ? lvl : 1, toolAccess: Array.isArray(b.toolAccess) ? b.toolAccess : null, toolOverrides: b.toolOverrides || null, unlockedTools: b.unlockedTools || null, requiredTools: b.requiredTools || null };
-      var ctx = { packaged: false, modules: [], addons: b.addons || [], tierLevel: wsLike.tierLevel, tool: function (k) { return !!(T && T.byKey(k)); }, canOpen: function (k) { var t = T && T.byKey(k); return !!t && T.isUnlocked(t, wsLike); } };
-      var site = H && H.editorCtx ? H.editorCtx(global.OmegaCaps, b, { orgId: data.orgId || orgId }) : null;
-      if (site) { ctx.editorCan = site.editorCan; ctx.ungated = site.ungated; ctx.editorTier = site.tier; }
-      (data.modules || []).forEach(function (m) { if (H && T && H.moduleState(m, ctx) === 'held') out.held.push(m.key); });
-      /* a trial holds what the trial opens (Holds says so), but nothing is
-         bought yet: the package staff approve, and bill at trial end, starts
-         from Lite plus what the tenant asked for, never the trial's tools */
-      out.preselect = String(b.tier || '').toLowerCase() === 'trial' ? [] : out.held.slice();
+         tool levels omega-tenant.js gives a billed tier (OmegaTenant.tierLevels:
+         a trial opens every tool, as the workspace does; the literal is the
+         same table for a page without omega-tenant.js); Site Map's half from
+         the ONE legacy rule (catalog legacyGates asked of the editor's own
+         ladder for the tier OmegaWorkspaceHub.editorCtx names), judged for the
+         tenant's org (its JV grants, its add-ons, capTier), never as the staff
+         member looking; add-ons it bought by card and has on now are held too
+         (api/_lib/addons.js). Holds, Partly on and the preselection are what
+         the tenant's Modules page and the editor's chip show. */
+      var tiers = (global.OmegaTenant && global.OmegaTenant.tierLevels) || { trial: 3, standard: 1, pro: 2, deluxe: 2, enterprise: 3, internal: 3, partner: 2 }, lvl = tiers[String(b.tier || '').toLowerCase()], T = global.OMEGATools, H = global.OmegaWorkspaceHub;
+      var org = data.orgId || orgId;
+      var wsLike = { orgId: org, tierLevel: typeof lvl === 'number' ? lvl : 1, addons: b.addons || [], toolAccess: Array.isArray(b.toolAccess) ? b.toolAccess : null, toolOverrides: b.toolOverrides || null, unlockedTools: b.unlockedTools || null, requiredTools: b.requiredTools || null };
+      var ao = b.addOns || null;
+      /* the ONE legacy ctx (OmegaWorkspaceHub.legacyCtx), for the workspace
+         with no person; OmegaCaps is passed by name: without it the hub
+         finds none outside a browser window */
+      var ctx = H && H.legacyCtx && T ? H.legacyCtx({ tools: T, ws: wsLike, billing: data.billing || null, caps: global.OmegaCaps, who: { orgId: org } }) : null;
+      out.partly = [];
+      (data.modules || []).forEach(function (m) { var st = ctx ? H.moduleState(m, ctx) : 'ask'; if (st === 'held') out.held.push(m.key); else if (st === 'part') out.partly.push(m.key); });
+      /* a package drawn from what they hold OR partly use: moving a legacy
+         tenant onto one never takes away something it opens today. A trial
+         holds what the trial opens (Holds says so) but has bought nothing:
+         the package staff approve, and bill at trial end, starts from Omega
+         Design plus what the tenant asked for, never the trial's tools */
+      out.preselect = String(b.tier || '').toLowerCase() === 'trial' ? [] : out.held.concat(out.partly);
       out.requested.forEach(function (o) { if (out.preselect.indexOf(o.key) < 0) out.preselect.push(o.key); });
       if (out.preselect.indexOf('lite') < 0) out.preselect.unshift('lite');
       out.lines.push((b.tier ? b.tier.charAt(0).toUpperCase() + b.tier.slice(1) : 'No') + ' tier' + ((b.addons || []).length ? ' · add-ons: ' + b.addons.join(', ') : '') + (Array.isArray(b.toolAccess) ? ' · ' + b.toolAccess.length + ' tools allowlisted' : ''));
       out.lines.push('Holds ' + names(out.held) + ' (what its Modules page shows as Live)');
+      if (out.partly.length) out.lines.push('Partly on: ' + names(out.partly) + ' (some of its tools or editor commands)');
       var pay = []; if (b.amountDue != null) pay.push('$' + Number(b.amountDue || 0).toLocaleString() + ' due'); if (b.subscriptionDue) pay.push('next ' + dayOf(b.subscriptionDue)); if (b.lastPaidAt) pay.push('last paid ' + dayOf(b.lastPaidAt)); if (b.paymentProvider) pay.push('by ' + b.paymentProvider);
       out.lines.push(pay.length ? 'Pays ' + pay.join(' · ') : 'No payment on record');
+      if (ao && Array.isArray(ao.modules) && ao.modules.length) out.lines.push('Add-ons in QuickBooks: ' + names(ao.modules) + (ao.monthlyDisplay ? ' · ' + ao.monthlyDisplay : '') + ' · ' + String(ao.state || 'none').replace(/_/g, ' ') + (ao.nextInvoiceOn ? ' · next invoice ' + dayOf(ao.nextInvoiceOn) : ''));
+      /* an add-on the tenant opted out of on its card (plan-change addon-cancel
+         remove) stops at the end of its paid month and is not renewed: listed,
+         and not preselected. Not an answers() row: resolve-* cannot answer it */
+      var ending = ao && ao.ending ? Object.keys(ao.ending).filter(function (k) { return ao.ending[k] && ao.ending[k].status === 'requested'; }) : [];
+      if (ending.length) { out.lines.push('Add-ons ending: ' + names(ending) + (ao.nextInvoiceOn ? ' on ' + dayOf(ao.nextInvoiceOn) : '') + ' (opted out; not renewed)'); ending.forEach(function (k) { out.preselect = out.preselect.filter(function (x) { return x !== k; }); out.notes[k] = 'Add-on ending'; }); }
     }
     if (out.requested.length) out.lines.push('Requested: ' + out.requested.map(function (o) { return (o.name || o.key) + (o.display ? ' (' + o.display + ')' : '') + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : ''); }).join('; '));
     if (out.optingOut.length) out.lines.push((out.packaged ? 'Opting out at review: ' : 'Opt-out requested: ') + out.optingOut.map(function (o) { return (o.name || o.key) + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : '') + (o.reason ? ' ("' + o.reason + '")' : ''); }).join('; '));
@@ -342,10 +358,10 @@
       // Send as proposal opens the Subscription Proposal tool on this tenant with the
       // rail's current terms; the link is refreshed whenever the rail changes.
       var proposal = el('a', 'Send as proposal', 'pp-link'); proposal.id = 'pp-proposal'; proposal.target = '_blank'; proposal.rel = 'noopener'; rail.appendChild(proposal); proposalHref();
-      rail.appendChild(el('div', 'Approval starts one trial of at most 14 days. Paid activation waits for QuickBooks payment. Enterprise requires a staff quote.', 'pp-note'));
+      rail.appendChild(el('div', 'Approval starts one trial of at most 14 days. Paid activation waits for the payment (Stripe once PACKAGING_PROVIDER=stripe; QuickBooks for a workspace billed there). Enterprise requires a staff quote.', 'pp-note'));
       rail.querySelectorAll('input,select').forEach(function (n) { n.onchange = function () { proposalHref(); refreshQuote(); }; });
       var two = el('div', '', 'pp-two'); panes.write.appendChild(two);
-      [['write-invoice', 'QuickBooks invoice'], ['write-billing', 'Billing record'], ['write-customer', 'QuickBooks customer']].forEach(function (p) { var area = el('div'); area.appendChild(el('h3', p[1])); var pre = el('pre', 'Choose Review activation to load the server preview.'); pre.id = 'pp-' + p[0]; area.appendChild(pre); two.appendChild(area); });
+      [['write-invoice', 'Invoice'], ['write-billing', 'Billing record'], ['write-customer', 'Billing customer']].forEach(function (p) { var area = el('div'); area.appendChild(el('h3', p[1])); var pre = el('pre', 'Choose Review activation to load the server preview.'); pre.id = 'pp-' + p[0]; area.appendChild(pre); two.appendChild(area); });
       var applyButton = button('Apply reviewed changes', apply, 'pp-primary'); applyButton.id = 'pp-apply'; applyButton.disabled = true; panes.write.appendChild(applyButton);
       usagePanel(left, { review: true });
     }

@@ -63,21 +63,20 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .eyebrow{font:500 11px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
 .num{font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 .sec{display:flex;flex-direction:column;gap:12px}
-/* one view at a time (2026-09-27): the home is the hub and Today; All tools, In flight and Around you are each their own page, reached from the rail, the tabs or the hub — never a scroll */
-#content[data-view] .sec,#content[data-view] .hero{display:none}#content[data-view="home"] .hero{display:grid}#content[data-view="home"] #mymods,#content[data-view="home"] #flight,#content[data-view="home"] #team{display:flex}#content[data-view="home"] .back{display:none}#content[data-view="tools"] #tools,#content[data-view="modules"] #modules,#content[data-view="flight"] #flight,#content[data-view="team"] #team,#content[data-view="billing"] #billing{display:flex}
-/* the Modules page is the menu people buy from: a shelf is a heading with what the shelf is for; a card is the whole story of one module — what it is for, what it does, what is inside, its allowance and what it needs, then the price and the state */
-.mods{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}.mods h3{grid-column:1/-1;margin:14px 0 0;font:600 15px Poppins,"DM Sans",sans-serif;color:var(--ows-ink);display:flex;flex-direction:column;gap:2px}.mods h3:first-child{margin-top:0}.mods h3 small{font:400 12.5px "DM Sans",sans-serif;color:var(--ows-ink2)}
+/* one view at a time (2026-09-27): the home is the hub and Today; All tools, Modules, In flight and Around you are each their own page, reached from the rail, the tabs or the hub — never a scroll. The module cards live on Modules only (Tommy, 2026-09-27: "i dont want them to be taking up so much dashboard space") */
+#content[data-view] .sec,#content[data-view] .hero{display:none}#content[data-view="home"] .hero{display:grid}#content[data-view="home"] #flight,#content[data-view="home"] #team{display:flex}#content[data-view="home"] .back{display:none}#content[data-view="tools"] #tools,#content[data-view="modules"] #modules,#content[data-view="flight"] #flight,#content[data-view="team"] #team,#content[data-view="billing"] #billing{display:flex}
+/* the Modules page: the compact cards (Tommy, 2026-09-27: "i love the way the modules are"), Your modules then the rest to add on one grid; a group is a heading with what it means. EVERY WORD FITS ITS CARD ("make sure all the words fit in their space"): the name wraps and the price or shelf drops under it before either is squeezed, a chip wraps inside the card, the note wraps beside or above its buttons; check:workspace measures every card at desktop and phone widths */
+.mods{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}.mods h3{grid-column:1/-1;margin:14px 0 0;font:600 15px Poppins,"DM Sans",sans-serif;color:var(--ows-ink);display:flex;flex-direction:column;gap:2px}.mods h3:first-child{margin-top:0}.mods h3 small{font:400 12.5px "DM Sans",sans-serif;color:var(--ows-ink2);line-height:1.45}
 .mod{display:flex;flex-direction:column;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);overflow:hidden;position:relative;min-width:0}.mod.off{border-style:dashed;background:rgba(255,255,255,.6)}
-.mod .cv{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;color:#fff;flex:none}.mod .cv .ltr{font:700 20px Poppins,"DM Sans",sans-serif;opacity:.92}
+.mod .cv{height:54px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px;color:#fff;flex:none}.mod .cv .ltr{font:700 20px Poppins,"DM Sans",sans-serif;opacity:.92}
 .mod .st{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;white-space:nowrap}.mod .st.live{background:var(--ows-green-soft);color:var(--ows-green)}.mod .st.part{background:var(--ows-amber-soft);color:var(--ows-amber)}.mod .st.wait{background:#FFF4DC;color:#8A5A00}.mod .st.off{background:rgba(255,255,255,.18);color:#fff}
-.mod .bd{display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px;flex:1}
-.mod .nm{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.mod .nm b{font:600 15px "DM Sans",sans-serif;padding:0;min-width:0;flex:1 1 auto}.mod .price{font:500 14px "DM Mono",ui-monospace,monospace;color:var(--ows-ink);white-space:nowrap}
-.mod .blurb{margin:0;font-size:12.5px;color:var(--ows-ink2);line-height:1.45}
-.mod .feat{margin:0;padding-left:16px;font-size:12.5px;line-height:1.55;color:var(--ows-ink)}
-.mod .inside{font-size:12px;color:var(--ows-ink2);line-height:1.5}.mod .inside b{color:var(--ows-ink);font-weight:600}
-.mod .meta{display:flex;gap:6px;flex-wrap:wrap}.mods.compact .mod .blurb,.mods.compact .mod .inside{display:none}.mods.compact .mod .chips{display:flex;gap:6px;flex-wrap:wrap}.mods.compact .mod .chips .ows-chip{font-size:11.5px}.mods.compact .mod.off .chips .ows-chip{opacity:.6}
-.mod .row{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--ows-line)}.mod .row .note{font-size:12px;color:var(--ows-ink2);line-height:1.4}.mod .ows-pill{flex:none}
-.mod .sub-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--ows-ink2);line-height:1.4;margin-top:-2px}.mod .sub-row .linkish{margin-left:auto;background:none;border:0;padding:2px 0;font:600 12px "DM Sans",sans-serif;color:var(--ows-teal-d);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.mod .bd{display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px;flex:1;min-width:0}
+.mod .nm{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 10px}.mod .nm b{font:600 15px "DM Sans",sans-serif;padding:0;min-width:0;overflow-wrap:anywhere}.mod .price{margin-left:auto;font:500 14px "DM Mono",ui-monospace,monospace;color:var(--ows-ink);white-space:nowrap}
+.mod .feat{margin:0;padding-left:16px;font-size:12.5px;line-height:1.55;color:var(--ows-ink);overflow-wrap:anywhere}
+.mod .inside{font-size:12px;color:var(--ows-ink2);line-height:1.5;overflow-wrap:anywhere}.mod .inside b{color:var(--ows-ink);font-weight:600}
+.mod .chips{display:flex;gap:6px;flex-wrap:wrap;min-width:0}.mod .chips .ows-chip{font-size:11.5px;white-space:normal;max-width:100%;overflow-wrap:anywhere;line-height:1.35}.mod.off .chips .ows-chip{opacity:.6}
+.mod .row{margin-top:auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--ows-line)}.mod .row .note{flex:1 1 150px;min-width:0;font-size:12px;color:var(--ows-ink2);line-height:1.4}.mod .row .acts{display:flex;flex-wrap:wrap;gap:6px}.mod .ows-pill{flex:none}
+.mod .sub-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 8px;font-size:11.5px;color:var(--ows-ink2);line-height:1.4;margin-top:-2px}.mod .sub-row span{min-width:0;overflow-wrap:anywhere}.mod .sub-row .linkish{margin-left:auto;background:none;border:0;padding:2px 0;font:600 12px "DM Sans",sans-serif;color:var(--ows-teal-d);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .mod[data-state="removing"],.mod[data-state="awaiting"],.mod[data-state="bought"],.mod[data-state="requested"]{border-color:#E7C77A}.mod .ows-pill[disabled]{opacity:.55;cursor:not-allowed}
 #modules-plan{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;font-size:13px}#modules-plan .ows-pill{margin-left:auto}
 @media (max-width:560px){.mods{grid-template-columns:1fr;gap:10px}.mod .cv{height:44px}.mod .bd{padding:10px 12px 12px}}
@@ -265,10 +264,6 @@ body.ows a.bh-mod{color:#EAF7FB}a.bh-mod:hover{background:rgba(255,255,255,.12)}
           <div id="hub"></div>
           <div class="today" id="today"></div>
         </section>
-        <section class="sec" id="mymods">
-          <div class="hd"><div><h2>Your modules</h2><div class="sub" id="mymods-sub">What you hold is Live; anything else is one click to add.</div></div><a class="ows-pill ghost" href="/workspace#modules" data-go="modules">All modules ›</a></div>
-          <div id="mymods-body"></div>
-        </section>
         <section class="sec" id="tools">
           <a class="back" href="/workspace">‹ Home</a>
           <div class="hd"><div><h2>All tools</h2><div class="sub" id="tools-sub">Every tool in the catalog. Live ones open; locked ones say what plan carries them.</div></div><a class="ows-pill ghost" data-sn="marketplace" href="/marketplace.html">Tools catalogue ›</a></div>
@@ -315,11 +310,14 @@ body.ows a.bh-mod{color:#EAF7FB}a.bh-mod:hover{background:rgba(255,255,255,.12)}
 <script src="/omega-tools.js?v=9"></script>
 <script src="/omega-newproject.js"></script>
 <script src="/omega-hexhub.js"></script>
-<script src="/omega-workspace-hub.js"></script>
+<!-- the editor's own tier ladder, as a library (nothing is applied to this
+     page): the Modules page judges a legacy plan by what Site Map opens -->
 <script src="/omega-caps.js"></script>
+<script src="/omega-workspace-hub.js"></script>
 <script src="/omega-workspace-today.js"></script>
 <script src="/omega-workspace-shell.js"></script>
 <script src="/omega-package-menu.js"></script>
+<script src="/omega-billing-profile.js"></script>
 <script>
 (function () {
 'use strict';
@@ -357,7 +355,7 @@ function askViewAs() {
 }
 function applyViewAs(ws) {
   if (!ws || !VIEWAS_VIEW) return ws;
-  ws.packaged = true; ws.packageAccess = VIEWAS_VIEW; ws.modules = (VIEWAS_VIEW.modules || []).slice(); ws.toolAccess = (VIEWAS_VIEW.toolAccess || []).slice(); ws.toolOverrides = {}; ws.addons = []; ws.viewAs = VIEWAS;
+  ws.packaged = true; ws.packageAccess = VIEWAS_VIEW; ws.modules = (VIEWAS_VIEW.modules || []).slice(); ws.toolAccess = (VIEWAS_VIEW.toolAccess || []).slice(); ws.toolOverrides = {}; ws.addons = []; ws.addOns = []; ws.viewAs = VIEWAS;
   return ws;
 }
 /* ── the chrome, before anyone is known ─────────────────────────────────── */
@@ -386,10 +384,17 @@ function go(key, keepFocus) {
   if (v === 'home' && window.location.hash) { try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (e) {} }
   window.scrollTo({ top: 0, behavior: 'auto' });
 }
-/* A link to /workspace#<somewhere> is a place on THIS page: route to it
-   without a reload (which would also drop ?home= and the scroll). Heard on
-   the document, before omega-splash.js hears it on the window, so the mark
-   never rises over a page that is not leaving. */
+/* A LINK TO A VIEW OF THIS PAGE IS A VIEW CHANGE, NEVER A RELOAD. The tab
+   bar, "Modules ›", "Change plan", a module's card link and the drawers
+   link /workspace#<view>; a reload would put the loading screen up and drop
+   ?home= and the scroll, and when the address carries a query (?tenant=…
+   &via=omega-gateway, ?home=) the browser treats the same page as another
+   URL. Same path, no new query: the hash moves here and route() answers,
+   and a drawer the link sat in closes. Heard on the document (bubbling),
+   so the rail's own onNav has already spoken (a click it handled is left
+   alone) and omega-splash.js, on the window, never raises the mark over a
+   page that is not leaving; a link marked data-leave (the staff preview's
+   Exit, which must drop ?viewas= by really leaving) is left alone too. */
 function nav(href) {
   var m = /^\/workspace(#.*)?$/.exec(String(href || ''));
   if (!m) { window.location.href = href; return; }
@@ -397,10 +402,15 @@ function nav(href) {
   if (window.location.hash === m[1]) route(); else window.location.hash = m[1];
 }
 document.addEventListener('click', function (e) {
-  if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || !WS) return;
-  var a = e.target && e.target.closest ? e.target.closest('a[href^="/workspace#"]') : null;
-  if (!a || a.getAttribute('target')) return;
-  e.preventDefault(); S.closeDrawer(); nav(a.getAttribute('href'));
+  if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+  if (!a || a.target === '_blank' || a.hasAttribute('download') || a.hasAttribute('data-leave')) return;
+  var u; try { u = new URL(a.href, window.location.href); } catch (x) { return; }
+  if (u.origin !== window.location.origin || !/^\/workspace(\.html)?\/?$/.test(u.pathname)) return;
+  if (u.search && u.search !== window.location.search) return;
+  e.preventDefault(); if (S.closeDrawer) S.closeDrawer();
+  if (!u.hash || u.hash === '#') { go('home'); return; }
+  if (window.location.hash === u.hash) { if (WS) route(); } else window.location.hash = u.hash;
 });
 
 /* ── sign-in: the same chain as every signed-in page ────────────────────── */
@@ -455,7 +465,8 @@ window.showApp = function (user) {
   load();
   loadPulse();
   OmegaTenant.onEntitlements(function (ws) { if (ws) { WS = applyViewAs(ws); window.OMEGA_WORKSPACE = WS; askViewAs(); } S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() }); render(); logicSection(); });
-  window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; render(); } });
+  /* a later look (a module added to the plan, a paid invoice) arrives here: the rail's Omega Logic group follows too */
+  window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; render(); logicSection(); } });
   route();
 };
 /* The terms gate wraps showApp NOW, not on its next 50 ms poll: a signed-in
@@ -465,12 +476,14 @@ window.showApp = function (user) {
 try { if (window.OmegaTerms && OmegaTerms.wire) OmegaTerms.wire(); } catch (e) {}
 /* ClearSky staff: the two consoles. A VERIFIED clearsky-usa.com address,
    as isAdmin() in the rules requires; the link grants nothing. */
+var IS_STAFF = false;
 function revealStaff(user) {
   var d = String(user.email || '').toLowerCase().split('@')[1] || '';
   if (d !== 'clearsky-usa.com' || user.emailVerified !== true) return;
+  IS_STAFF = true;
   ['sn-adm-divider', 'sn-adm-label', 'sn-admin', 'sn-ops'].forEach(function (id) { var el = byId(id); if (el) el.style.display = ''; });
 }
-function holds(part) { return (WS && Array.isArray(WS.modules) && WS.modules.indexOf(part) >= 0) || (WS && Array.isArray(WS.addons) && WS.addons.indexOf('omega-logic') >= 0); }
+function holds(part) { return !!WS && HUB.holdsLogic({ modules: WS.modules, addons: WS.addons, addOns: WS.addOns }, part); }
 var logicDone = false;
 function logicSection() {
   if (logicDone || !holds('logic-office')) return; logicDone = true;
@@ -529,19 +542,21 @@ function prefs() { var p = {}; Object.keys(PREFS_DEFAULT).forEach(function (k) {
 /* ── what this person may open: ONE rule, the catalog's ─────────────────── */
 function tool(key) { return T.byKey(key); }
 function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, WS); }
-/* A legacy plan holds a module only when Site Map also grants its
-   capabilities on the tier the editor runs: OmegaWorkspaceHub.editorCtx,
-   the ONE mirror of OmegaCaps.resolve (billed tier capped by capTier, JV
-   grants, a verified ClearSky address with no record runs 'internal'), so
-   the Modules page, the editor's plan chip and the editor give one answer. */
+/* A legacy plan holds a module only when Site Map also grants it on the
+   tier the editor runs: OmegaWorkspaceHub.legacyCtx, the ONE judgement the
+   Modules page, the marketplace, the editor's plan chip and the admin
+   Package tab share (its tools by the catalog's own isUnlocked / isVisible,
+   the modules bought by card and on now, and the editor's half through
+   editorCtx, the ONE mirror of OmegaCaps.resolve: billed tier capped by
+   capTier, JV grants, add-ons, a verified ClearSky address with no record
+   runs 'internal'). A packaged workspace is its projection alone. */
 function hubCtx() {
-  var pa = WS.packageAccess, packaged = !!(pa && pa.packaged);
-  var c = { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], hideMarketplace: !!WS.hideMarketplace, packaged: packaged, tierLevel: WS.tierLevel };
-  if (!packaged) {
-    var rec = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || null;
-    var e = HUB.editorCtx(window.OmegaCaps, rec, { email: ME, emailVerified: !!(USER && USER.emailVerified === true), orgId: WS.orgId });
-    if (e) { c.editorCan = e.editorCan; c.ungated = e.ungated; c.editorTier = e.tier; }
-  }
+  var pa = WS.packageAccess, packaged = !!(pa && pa.packaged), canOpen = function (k) { return open(tool(k)); };
+  if (packaged) return { canOpen: canOpen, tool: tool, modules: WS.modules || [], addons: WS.addons || [], addOns: [], hideMarketplace: !!WS.hideMarketplace, packaged: true, tierLevel: WS.tierLevel, visible: function (k) { var t = tool(k); return !!t && T.isVisible(t, WS); } };
+  var c = HUB.legacyCtx({ tools: T, ws: WS, billing: WS.billing || (window.OmegaTenant && OmegaTenant.billing) || null, caps: window.OmegaCaps, canOpen: canOpen,
+    who: { email: ME, emailVerified: !!(USER && USER.emailVerified === true), orgId: WS.orgId } });
+  /* the hub's own fields for a legacy workspace, as compose() has always read them */
+  c.modules = WS.modules || []; c.hideMarketplace = !!WS.hideMarketplace;
   return c;
 }
 function href(t) { return T.hrefFor(t, WS); }
@@ -589,7 +604,7 @@ function render() {
 function renderNotice() {
   var n = byId('ows-notice'), pa = WS.packageAccess, h = '';
   if (WS.pendingApproval) h = '<div class="notice"><b>Awaiting approval</b><span>' + esc(WS.clientName || WS.orgId) + ' is with the ClearSky team. Tools stay locked until it is approved, usually one business day.</span></div>';
-  if (WS.viewAs) h += '<div class="notice"><b>Viewing as a customer</b><span>' + esc(WS.clientName || WS.orgId) + ' painted as a packaged workspace holding ' + esc((WS.modules || []).join(', ') || 'nothing') + '. Staff preview: nothing is billed and a quote is refused.</span><a class="ows-pill" href="/workspace">Exit</a></div>';
+  if (WS.viewAs) h += '<div class="notice"><b>Viewing as a customer</b><span>' + esc(WS.clientName || WS.orgId) + ' painted as a packaged workspace holding ' + esc((WS.modules || []).join(', ') || 'nothing') + '. Staff preview: nothing is billed and a quote is refused.</span><a class="ows-pill" href="/workspace" data-leave>Exit</a></div>';
   else if (pa && pa.readOnly && pa.billingNotice) h = '<div class="notice bad"><b>Read-only</b><span>' + esc(pa.billingNotice.text) + '</span>' + (pa.billingNotice.payUrl ? '<a class="ows-pill primary sm" href="' + esc(pa.billingNotice.payUrl) + '" target="_blank" rel="noopener">Pay now</a>' : '') + '</div>';
   n.innerHTML = h; n.hidden = !h;
 }
@@ -640,21 +655,26 @@ function renderToday() {
   }); });
 }
 /* ── Modules: the Ladder as a page (Tommy, 2026-09-27) ──────────────────
-   One card per module of the catalog, in shelf order, for EVERY workspace
-   ("they should have all the modules here, but if they are used or given
-   it shows that"). A packaged workspace reads its own projection: held
-   ones Live, bought-not-on ones named, the rest with the server's price
-   (/api/package-catalog, once) and + Add, which opens the ONE menu
-   (omega-package-menu.js) on that module; a change re-asks the server.
-   A legacy workspace reads the PUBLIC price list (/api/offerings, once)
-   and every module is judged by OmegaWorkspaceHub.moduleState: Live when
-   the tier holds it, Partly with the count, else the price and Opt in.
-   The plans shelf closes the page (#plans), and #module-<key> lands on one
-   card. Nothing here is a second list or a price. */
-var MOD_SHELF = { floor: 'Included in every plan', addon: 'Add-ons', standard: 'Standard shelf', premium: 'Premium shelf', deliverable: 'Deliverables', platform: 'Omega Logic' }, MOD_ORDER = ['floor', 'addon', 'standard', 'premium', 'deliverable', 'platform'];
-var MOD_SHELF_SUB = { floor: 'The floor every package stands on.', addon: 'Small and specific: one thing, added to any plan.', standard: 'The working tools of a site: sizing, estimating, rebates. Metered where they produce a deliverable.', premium: 'The deeper work: plan sets, intelligence, engineering, finance, compute, operations, your own storefront.', deliverable: 'Work product you order by the piece: a matrix, a site study.', platform: 'Omega Logic by department. Each part is its own opt-in and needs Office.' };
+   One card per module of the catalog, for EVERY workspace ("they should
+   have all the modules here, but if they are used or given it shows
+   that"), in the compact cards that used to sit on the home ("i love the
+   way the modules are … let them live in their own side page"): Your
+   modules first (Live, or paid for and waiting on the invoice), then the
+   rest to add, each group in shelf order on one grid so a shelf of one
+   never leaves a row empty. Every card is OmegaWorkspaceHub.moduleCard:
+   one status and at most one action (Opt in, Opt out, Cancel request,
+   Pay), which opens the ONE menu (omega-package-menu.js) on that module.
+   A packaged workspace reads its own projection and the server's prices
+   (/api/package-catalog, once). A legacy workspace reads the PUBLIC price
+   list (/api/offerings, once) and every module is judged by the one legacy
+   rule (hubCtx): Live when the plan holds it, Partly with what is on, else
+   the price and Opt in, which asks the server whether the module is bought
+   by card now (a QuickBooks add-on) or recorded as a request. The plans
+   shelf closes the page (#plans), and #module-<key> lands on one card.
+   Nothing here is a second list or a price. */
+var MOD_ORDER = ['floor', 'addon', 'standard', 'premium', 'deliverable', 'platform'];
 var MOD_COVER = { floor: 'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)', addon: 'linear-gradient(135deg,#053A45 0%,#2A8CA3 100%)', standard: 'linear-gradient(135deg,#0B2F52 0%,#1B4F8A 100%)', premium: 'linear-gradient(135deg,#243B53 0%,#3E6E8E 100%)', deliverable: 'linear-gradient(135deg,#16202B 0%,#00807C 100%)', platform: 'linear-gradient(135deg,#17293A 0%,#0C1824 100%)' };
-var MOD_PRICES = null, MOD_CATALOG = null, MOD_ASKED = false, MOD_STARTERS = null, MOD_LABELS = null;
+var MOD_PRICES = null, MOD_CATALOG = null, MOD_ASKED = false;
 /* the PUBLIC price list, asked once: a legacy workspace's modules and every
    workspace's plans shelf read it (the prices are the server's) */
 var OFFER = null, OFFER_P = null;
@@ -674,77 +694,79 @@ function askModules(packaged) {
 }
 /* try the price list again after it failed */
 function retryModules() { OFFER_P = null; OFFER = null; MOD_ASKED = false; MOD_CATALOG = null; renderModules(); }
-/* which starter packages carry a module: "Popular with EV installers" */
-function popularWith(key) {
-  if (!MOD_STARTERS || !MOD_LABELS) return [];
-  return Object.keys(MOD_STARTERS).filter(function (k) { return (MOD_STARTERS[k] || []).indexOf(key) >= 0 && MOD_LABELS[k]; }).map(function (k) { return MOD_LABELS[k]; });
-}
 function renderModules() {
   var b = byId('modules-body'), strip = byId('modules-plan'), pa = WS.packageAccess, packaged = !!(pa && pa.packaged && Array.isArray(pa.catalog) && pa.catalog.length);
   /* Plan & billing names the modules from the same catalog, so it repaints when it lands */
-  if (!MOD_ASKED) { MOD_ASKED = true; askModules(packaged).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay || m.monthlyDisplay; }); MOD_STARTERS = j.starters || null; MOD_LABELS = j.starterLabels || null; renderModules(); if (view() === 'billing') renderBilling(); }, function () { MOD_CATALOG = []; renderModules(); if (view() === 'billing') renderBilling(); }); }
-  renderPlans(); if (packaged) askSummary();   /* a legacy card reads billing/current alone */
+  if (!MOD_ASKED) { MOD_ASKED = true; askModules(packaged).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay || m.monthlyDisplay; }); renderModules(); if (view() === 'billing') renderBilling(); }, function () { MOD_CATALOG = []; renderModules(); if (view() === 'billing') renderBilling(); }); }
+  /* the engine's summary too, packaged or not: a change waiting for
+     payment, the purchase gate and the review date, and a legacy plan's
+     card add-ons as the server sees them (what waits, what ends) where
+     billing/current does not carry them yet */
+  renderPlans(); askSummary();
   if (!packaged) {
     if (!MOD_CATALOG) { b.innerHTML = '<div class="empty">Loading the catalog…</div>'; return; }
     if (!MOD_CATALOG.length) { b.innerHTML = '<div class="empty" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">The price list could not be loaded right now, so the modules cannot be shown.<button class="ows-pill" type="button" id="modules-retry" style="margin-left:auto">Retry</button></div>'; byId('modules-retry').addEventListener('click', retryModules); return; }
   }
   var ctx = hubCtx(), byKey = {};
-  var cat = (packaged ? pa.catalog : MOD_CATALOG).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), h = '', shelf = '', heldN = 0;
+  var cat = (packaged ? pa.catalog : MOD_CATALOG).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), mine = [], rest = [], heldN = 0;
   (MOD_CATALOG || []).forEach(function (m) { byKey[m.key] = m; });
-  cat.forEach(function (m) {
-    var full = byKey[m.key] || m, k = cardOf(m, ctx);
-    if (m.shelf !== shelf) { shelf = m.shelf; h += '<h3>' + esc(MOD_SHELF[shelf] || shelf) + (MOD_SHELF_SUB[shelf] ? '<small>' + esc(MOD_SHELF_SUB[shelf]) + '</small>' : '') + '</h3>'; }
-    if (k.held) heldN++;
-    var name = m.shelf === 'platform' ? 'Omega Logic · ' + m.name : m.name;
-    var tools = (m.tools || []).map(function (k) { return tool(k); }).filter(function (t) { return !!t; });
-    var chips = '';
-    if (m.usageDisplay || full.usageDisplay) chips += '<span class="ows-chip">' + esc(m.usageDisplay || full.usageDisplay) + '</span>';
-    if ((m.requires || full.requires || []).indexOf('logic-office') >= 0) chips += '<span class="ows-chip">Needs Office</span>';
-    if (m.key === 'lite') chips += '<span class="ows-chip">In every package</span>';
-    if (m.beta && m.beta.length) chips += '<span class="ows-chip">Beta: ' + esc(m.beta.join(', ')) + '</span>';
-    if (m.coverage) chips += '<span class="ows-chip">' + esc(m.coverage) + '</span>';
-    var pop = popularWith(m.key); if (pop.length) chips += '<span class="ows-chip">Popular with ' + esc(pop.slice(0, 2).join(' and ')) + '</span>';
-    h += '<div class="mod' + (k.held ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + HELD_ATTR[k.state] + '" data-state="' + esc(k.state) + '">';
-    h += '<div class="cv" style="background:' + (MOD_COVER[m.shelf] || MOD_COVER.floor) + '"><span class="ltr">' + esc(m.name.slice(0, 1)) + '</span>' + pillHtml(k) + '</div>';
-    h += '<div class="bd"><div class="nm"><b>' + esc(name) + '</b><span class="price">' + esc(k.priceLine || 'Price on the menu') + '</span></div>';
-    if (m.blurb || full.blurb) h += '<p class="blurb">' + esc(m.blurb || full.blurb) + '</p>';
-    var feats = m.features || full.features || [];
-    if (feats.length) h += '<ul class="feat">' + feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>';
-    h += '<div class="inside">' + insideLine(m, full, tools) + '</div>';
-    if (chips) h += '<div class="meta">' + chips + '</div>';
-    h += actRow(k) + '</div></div>';
-  });
+  /* Your modules: what the plan holds (Opting out included: it stays on
+     until it goes) and what is bought and waiting on its invoice */
+  var cards = {};
+  cat.forEach(function (m) { var k = cards[m.key] = cardOf(m, ctx); if (k.held) heldN++; (k.held || k.state === 'bought' ? mine : rest).push(m); });
+  function card(m) {
+    var full = byKey[m.key] || m, k = cards[m.key], on = k.held;
+    /* only the tools this workspace can see, the ones the badge counted */
+    var tools = (m.tools || []).map(function (x) { return tool(x); }).filter(function (t) { return !!t && T.isVisible(t, WS); });
+    var needs = '';
+    if (!on) {
+      if (m.usageDisplay || full.usageDisplay) needs += '<span class="ows-chip">' + esc(m.usageDisplay || full.usageDisplay) + '</span>';
+      if ((m.requires || full.requires || []).indexOf('logic-office') >= 0) needs += '<span class="ows-chip">Needs Office</span>';
+      if (m.beta && m.beta.length) needs += '<span class="ows-chip">Beta: ' + esc(m.beta.join(', ')) + '</span>';
+    }
+    return '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + HELD_ATTR[k.state] + '" data-state="' + esc(k.state) + '" data-via="' + esc(k.via || '') + '">'
+      + '<div class="cv" style="background:' + (MOD_COVER[m.shelf] || MOD_COVER.floor) + '"><span class="ltr">' + esc(m.mark || full.mark || m.name.slice(0, 1)) + '</span>' + pillHtml(k) + '</div>'
+      + '<div class="bd"><div class="nm"><b>' + esc(m.name) + '</b><span class="price">' + esc(k.priceLine || 'Price on the menu') + '</span></div>'
+      + '<ul class="feat">' + (m.features || full.features || []).slice(0, 3).map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>'
+      + '<div class="inside">' + insideLine(m, full) + '</div>'
+      + (tools.length ? '<div class="chips">' + tools.slice(0, 4).map(function (t) { return '<span class="ows-chip' + (on ? ' on' : '') + '">' + esc(t.name) + '</span>'; }).join('') + (tools.length > 4 ? '<span class="ows-chip" title="' + esc(tools.slice(4).map(function (t) { return t.name; }).join(', ')) + '">+' + (tools.length - 4) + '</span>' : '') + '</div>' : '')
+      + (needs ? '<div class="chips">' + needs + '</div>' : '')
+      + actRow(k) + '</div></div>';
+  }
+  var h = '';
+  if (mine.length) h += '<h3>Your modules<small>' + esc(heldN + ' Live on your ' + planName() + ' plan. ' + (packaged ? 'An opt-out stays on, and billed, until the quarterly review.' : 'Opting out of a module your plan includes is a request to ClearSky; one added by card stops at the end of the month you paid for.') + ' Omega Design is always included.') + '</small></h3>' + mine.map(card).join('');
+  if (rest.length) h += '<h3>' + (mine.length ? 'Add to your plan' : 'Every module') + '<small>' + esc(WS.pendingApproval ? 'Each one opens once ClearSky approves the workspace.' : packaged ? 'Monthly prices. Opt in shows the price; you pay first and the module is on when the payment clears.' : 'Monthly prices from the price list. Opt in shows how a module is billed before anything is charged: by card on its own QuickBooks invoice where your plan can switch it on by itself, otherwise as a request ClearSky confirms with you. Your plan and its billing stay as they are.') + '</small></h3>' + rest.map(card).join('');
   b.innerHTML = '<div class="mods">' + h + '</div>';
   if (strip) strip.innerHTML = '<span class="ows-chip on">' + esc(planName()) + '</span><span class="num" style="color:var(--ows-ink2)">' + heldN + ' of ' + cat.length + ' modules Live</span>' + (packaged ? '<span style="color:var(--ows-ink2)">Monthly prices. Nothing new is charged for what your plan already covers.</span>' : '<span style="color:var(--ows-ink2)">Monthly prices from the price list.</span>') + '<a class="ows-pill" href="/workspace#plans">Plans ›</a>';
   var sub = byId('modules-sub');
   if (sub) sub.textContent = packaged
-    ? 'Opt in to add a module: you see the price and pay before it switches on. Opt out to remove one: it stays on until your quarterly review. Lite is always included.'
-    : planName() + ' holds ' + heldN + ' of ' + cat.length + ' modules for ' + (WS.clientName || 'your workspace') + ', counted by what Site Map and your tools actually open. Opt in or opt out here; ClearSky confirms the change and its price with you. Lite is always included.';
+    ? 'Opt in to add a module: you see the price and pay before it switches on. Opt out to remove one: it stays on until your quarterly review. Omega Design is always included.'
+    : planName() + ' holds ' + heldN + ' of ' + cat.length + ' modules for ' + (WS.clientName || 'your workspace') + ', counted by what Site Map and your tools actually open. Opt in or opt out here: you see the price and how it is billed before anything changes. Omega Design is always included.';
   wireCards(b);
   markFocus();
-  renderHomeModules(cat, ctx);
 }
 /* ── ONE CARD PER MODULE (OmegaWorkspaceHub.moduleCard): its status, its
-   money line and at most one action, the same on the Modules page and the
-   home row. The action opens the ONE menu on that module (single, with the
+   money line and at most one action, the same on the Modules page and Plan
+   & billing. The action opens the ONE menu on that module (single, with the
    step already chosen), which states the money before anything is written:
-   Opt in → the price, prorated today or on the next monthly invoice;
-   Opt out → what changes and when; Cancel request → nothing about the bill
-   changes. Pay is QuickBooks' own page. ── */
+   Opt in → the price, prorated today, on its own add-on invoice, or on the
+   next monthly invoice; Opt out → what changes and when; Cancel request →
+   nothing about the bill changes. Pay is the invoice's own page (Stripe's
+   or QuickBooks', the rail the server names). ── */
 var HELD_ATTR = { included: '1', live: '1', removing: 'removing', awaiting: 'awaiting', bought: 'bought', requested: 'requested', part: 'part', available: '0' };
 function cardOf(m, ctx) {
-  var pa = WS.packageAccess;
   return HUB.moduleCard(m, ctx || hubCtx(), bill(), BILL.summary, { admin: isAdminHere() && !WS.viewAs, pendingApproval: !!WS.pendingApproval, planName: planName(), company: WS.clientName || WS.orgId, price: (MOD_PRICES && MOD_PRICES[m.key]) || m.priceDisplay || '' });
 }
 function pillHtml(k) { return '<span class="st ' + esc(k.tone) + '">' + (k.tone === 'live' ? '● ' : '') + esc(k.pill) + '</span>'; }
 function actHtml(k) {
   var a = k.action; if (!a) return '';
-  if (a.kind === 'pay') return '<a class="ows-pill primary" data-mod-act="pay" data-module="' + esc(k.key) + '" href="' + esc(a.href) + '" target="_blank" rel="noopener">' + esc(a.label) + '</a>';
+  /* the invoice's own page, on the rail it was issued on (Stripe or QuickBooks; a legacy add-on is always QuickBooks) */
+  if (a.kind === 'pay') return '<a class="ows-pill primary" data-mod-act="pay" data-module="' + esc(k.key) + '" href="' + esc(a.href) + '" target="_blank" rel="noopener"' + (a.payWith ? ' title="Pay on ' + esc(a.payWith) + '’s secure page"' : '') + '>' + esc(a.label) + '</a>';
   if (a.kind === 'billing') return '<a class="ows-pill" data-mod-act="billing" data-module="' + esc(k.key) + '" href="/workspace#billing">' + esc(a.label) + '</a>';
   return '<button type="button" class="ows-pill' + (a.kind === 'add' ? ' primary' : '') + '" data-mod-act="' + esc(a.kind) + '" data-module="' + esc(k.key) + '"' + (a.disabled ? ' disabled' : '') + '>' + esc(a.label) + '</button>';
 }
 function actRow(k) {
-  var h = '<div class="row"><span class="note">' + esc(k.note) + '</span>' + actHtml(k) + '</div>';
+  var a = actHtml(k), h = '<div class="row"><span class="note">' + esc(k.note) + '</span>' + (a ? '<span class="acts">' + a + '</span>' : '') + '</div>';
   if (k.secondary || k.adminLine) h += '<div class="sub-row">' + (k.adminLine ? '<span>' + esc(k.adminLine) + '</span>' : '') + (k.secondary ? '<button type="button" class="linkish" data-mod-act="' + esc(k.secondary.kind) + '" data-module="' + esc(k.key) + '">' + esc(k.secondary.label) + '</button>' : '') + '</div>';
   return h;
 }
@@ -757,7 +779,8 @@ function wireCards(root) {
    tied directly to the editor"). Most are services inside Site Map, the
    editor; the price list says which (offerings' editor flag, else the
    module's own ribbon and capability words). The rest live somewhere else
-   and say where, never "capabilities of Site Map". */
+   and say where, never "capabilities of Site Map". Its tools are the chips
+   under it. */
 var MOD_WHERE = { whitelabel: 'your own website: a branded storefront your customers use, set up with ClearSky', sitefinder: 'Site Finder and Site Discovery, their own pages beside Site Map',
   'logic-office': 'Omega Logic: the office on a computer and the Omega Logic app on a phone', 'logic-plant': 'Omega Logic: the plant board and the Plant app at every bench',
   'logic-materials': 'Omega Logic: materials planning and purchase orders in the office', 'logic-logistics': 'Omega Logic: shipping, receiving and custody in the office', 'logic-customer': 'the customer app your own customers sign in to, run from Omega Logic' };
@@ -767,10 +790,9 @@ function inEditor(m, full) {
   var x = full || m;
   return (x.ribbon || []).length > 0 || (x.caps || []).some(function (c) { return /^(design|view|export)/.test(c); });
 }
-function insideLine(m, full, tools) {
-  var names = tools.filter(function (t) { return t.key !== 'editor'; }).map(function (t) { return esc(t.name); });
-  if (inEditor(m, full)) return '<b>Inside Site Map, the editor</b>' + (names.length ? ' · with ' + names.join(' · ') : '');
-  return '<b>Lives in</b> ' + esc(MOD_WHERE[m.key] || (m.shelf === 'platform' ? 'Omega Logic, outside Site Map' : 'its own pages, outside Site Map')) + (names.length && m.key !== 'sitefinder' ? ' · ' + names.join(' · ') : '');
+function insideLine(m, full) {
+  if (inEditor(m, full)) return '<b>Inside Site Map, the editor</b>';
+  return '<b>Lives in</b> ' + esc(MOD_WHERE[m.key] || (m.shelf === 'platform' ? 'Omega Logic, outside Site Map' : 'its own pages, outside Site Map'));
 }
 /* ── The plans shelf (moved here from the marketplace, 2026-09-27): the
    price list's plans, Lite first and Enterprise last, each with what it
@@ -810,34 +832,6 @@ function renderPlans() {
   if (notes.length) h += '<p class="plans-note">' + esc(notes.join(' ')) + '</p>';
   el.innerHTML = h;
   if (PLAN_FOCUS && view() === 'modules') { PLAN_FOCUS = false; el.scrollIntoView({ block: 'start', behavior: 'auto' }); }
-}
-/* ── Your modules, on the home (the demo's row): what is Live, then what
-   is on its way in or out, then up to three to opt in to; the same cards
-   as the Modules page from the same moduleCard, compact (features and the
-   tools as chips). "All modules ›" is the page. ── */
-function renderHomeModules(cat, ctx) {
-  var b = byId('mymods-body'); if (!b) return;
-  var cards = cat.map(function (m) { return { m: m, k: cardOf(m, ctx) }; });
-  var live = cards.filter(function (c) { return c.k.state === 'live' || c.k.state === 'included'; });
-  var moving = cards.filter(function (c) { return ['awaiting', 'bought', 'removing', 'requested'].indexOf(c.k.state) >= 0; });
-  var rest = cards.filter(function (c) { return c.k.state === 'part' || c.k.state === 'available'; });
-  var h = '';
-  live.concat(moving, rest.slice(0, 3)).forEach(function (c) {
-    var m = c.m, k = c.k, name = m.shelf === 'platform' ? 'Omega Logic · ' + m.name : m.name, tools = (m.tools || []).map(function (x) { return tool(x); }).filter(function (t) { return !!t; });
-    h += '<div class="mod' + (k.held ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + HELD_ATTR[k.state] + '" data-state="' + esc(k.state) + '">'
-      + '<div class="cv" style="background:' + (MOD_COVER[m.shelf] || MOD_COVER.floor) + '"><span class="ltr">' + esc(m.name.slice(0, 1)) + '</span>' + pillHtml(k) + '</div>'
-      + '<div class="bd"><div class="nm"><b>' + esc(name) + '</b><span class="price">' + esc(k.priceLine || '') + '</span></div>'
-      + '<ul class="feat">' + (m.features || []).slice(0, 3).map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>'
-      + (tools.length ? '<div class="chips">' + tools.slice(0, 4).map(function (t) { return '<span class="ows-chip' + (k.held ? ' on' : '') + '">' + esc(t.name) + '</span>'; }).join('') + (tools.length > 4 ? '<span class="ows-chip">+' + (tools.length - 4) + '</span>' : '') + '</div>' : '')
-      + actRow(k) + '</div></div>';
-  });
-  b.innerHTML = '<div class="mods compact">' + h + '</div>';
-  /* the count is every module on the plan, the one opting out included
-     (it stays on, and billed, until it goes): the Modules page's strip and
-     Plan & billing count the same way, so the three never disagree */
-  var heldN = cards.filter(function (c) { return c.k.held; }).length;
-  var sub = byId('mymods-sub'); if (sub) sub.textContent = heldN + ' of ' + cat.length + ' modules Live for ' + (WS.clientName || 'your workspace') + '. ' + (moving.length ? moving.length + ' on the way in or out. ' : '') + (rest.length ? 'Opt in to add one; opt out to remove one.' : 'Every module is on your plan.');
-  wireCards(b);
 }
 function renderTools() {
   /* the whole catalog, so a locked tile says what a plan carries: only a
@@ -1018,12 +1012,17 @@ function lockedDrawer(t) {
   var html = '<div class="ows-note">' + (WS.pendingApproval ? '<b>' + esc(t.name) + '</b> opens once your workspace is approved.'
     : m ? '<b>' + esc(t.name) + '</b> is part of <b>' + esc(m.name) + '</b>' + (price ? ' (' + esc(price) + ')' : '') + (packaged ? ', which ' + esc(co) + ' does not hold yet.' : ', and comes with the ' + esc(tierName) + ' plan. ' + esc(co) + ' is on ' + esc(planName()) + '.')
     : '<b>' + esc(t.name) + '</b> is on the ' + esc(tierName) + ' plan and above. ' + esc(co) + ' is on ' + esc(planName()) + '.') + '</div>';
+  /* a tool a module carries is opted in to here (the one menu: paid by card,
+     on its own invoice, or a recorded request, as the server says); only a
+     tool no module sells is a question for ClearSky */
   var rows = [];
   if (!WS.pendingApproval) {
-    if (m && isAdminHere()) rows.push({ key: 'optin', name: 'Opt in to ' + m.name, sub: (price ? price + ' · ' : '') + (packaged ? 'on when the payment clears' : 'joins your monthly fee once ClearSky moves you to monthly billing'), icon: S.ICON.modules, cta: 'Opt in', onClick: function () { S.closeDrawer(); optInFor(m.key); } });
+    if (m && isAdminHere()) rows.push({ key: 'optin', name: 'Opt in to ' + m.name, sub: (price ? price + ' · ' : '') + (packaged ? 'on when the payment clears' : 'you see how it is billed before anything is charged'), icon: S.ICON.modules, cta: 'Opt in', onClick: function () { S.closeDrawer(); optInFor(m.key); } });
     if (m) rows.push({ key: 'see', name: m.name + ' on Modules', sub: 'What it adds and what is inside', href: '/workspace#module-' + m.key, icon: S.ICON.modules, cta: 'See it' });
-    else rows.push({ key: 'plans', name: 'Compare the plans', sub: 'What each plan carries and what it costs', href: '/workspace#plans', icon: S.ICON.modules });
-    rows.push({ key: 'mail', name: 'Email ClearSky', sub: OmegaBrand.upgradeEmail(), href: 'mailto:' + encodeURIComponent(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Unlock ' + t.name + ' for ' + (WS.clientName || WS.orgId)), icon: S.ICON.feed, cta: 'Email' });
+    else {
+      rows.push({ key: 'plans', name: 'Compare the plans', sub: 'What each plan carries and what it costs', href: '/workspace#plans', icon: S.ICON.modules });
+      rows.push({ key: 'mail', name: 'Email ClearSky', sub: OmegaBrand.upgradeEmail(), href: 'mailto:' + encodeURIComponent(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Unlock ' + t.name + ' for ' + (WS.clientName || WS.orgId)), icon: S.ICON.feed, cta: 'Email' });
+    }
   }
   S.drawer({ eyebrow: 'Not on your plan', title: t.name, sub: t.desc || '', html: html, rows: rows, note: m && !isAdminHere() && !WS.pendingApproval ? 'An owner or administrator of ' + esc(co) + ' opts in to modules.' : '' });
 }
@@ -1033,28 +1032,51 @@ function lockedDrawer(t) {
 function optInFor(key) { moduleMenu(key, 'add'); }
 /* THE ONE MENU on one module (omega-package-menu.js): single shows only
    that module's card, intent goes straight to its add / remove / cancel
-   step, legacy carries what a plan billed outside the engine holds. */
+   step, legacy carries what a plan billed outside the engine holds: its
+   record, the one rule's states and its card add-ons (the summary's view
+   of them when it has been read, else the record's own block), so the
+   menu routes Opt in through the add-on quote first, Opt out of a card
+   add-on to its stop at the end of the month paid for, and Cancel request
+   to whatever is in flight. */
 function moduleMenu(key, intent) {
   if (!window.OmegaPackageMenu) { nav('/workspace#module-' + key); return; }
   var pa = WS.packageAccess, opts = { single: true, intent: intent, admin: isAdminHere() && !WS.viewAs, onChanged: billingChanged };
   if (pa && pa.packaged) opts.view = pa;
   else {
-    var cat = MOD_CATALOG || [], ctx = hubCtx(), states = {};
+    var cat = MOD_CATALOG || [], ctx = hubCtx(), states = {}, bl = bill();
     cat.forEach(function (m) { states[m.key] = HUB.moduleState(m, ctx); });
     opts.view = { modules: cat.filter(function (m) { return states[m.key] === 'held' || states[m.key] === 'part'; }).map(function (m) { return m.key; }), catalog: cat };
-    opts.legacy = { company: WS.clientName || WS.orgId, email: OmegaBrand.upgradeEmail(), billing: bill(), states: states };
+    opts.legacy = { company: WS.clientName || WS.orgId, email: OmegaBrand.upgradeEmail(), billing: bl, states: states, addOns: (BILL.summary && BILL.summary.addOns) || bl.addOns || null };
   }
   OmegaPackageMenu.open(key, opts);
 }
-/* after any change the menu made: the server is asked again, never guessed */
+/* after any change the menu made: the server is asked again, never guessed.
+   A packaged plan re-reads its projection; a legacy one re-reads its
+   billing record (a card add-on switched on, a stop recorded, a purchase
+   cancelled: api/_lib/addons.js wrote it), which re-fires the entitlements,
+   so the tiles, the rail and every card follow without a reload. */
 function billingChanged(r) {
-  var bl = bill();
-  function merge(field) { if (!r || !r[field] || typeof r[field] !== 'object') return; var to = {}, was = bl[field] || {}; Object.keys(was).forEach(function (k) { to[k] = was[k]; }); Object.keys(r[field]).forEach(function (k) { to[k] = r[field][k]; }); try { bl[field] = to; } catch (e) {} }
-  merge('optIns'); merge('optOuts');
-  if (r && Array.isArray(r.removalRequests)) { try { bl.removalRequests = r.removalRequests; } catch (e) {} }
+  mergeAnswer(bill(), r);
+  var pa = WS.packageAccess, packaged = !!(pa && pa.packaged);
+  if (r && r.state === 'active' && !packaged) {
+    var on = r.addNames || r.names || (r.add || []).map(function (k) { var x = (MOD_CATALOG || []).filter(function (m) { return m.key === k; })[0]; return x ? x.name : k; });
+    S.toast('On. ' + (on.join(', ') || 'It') + (on.length > 1 ? ' are' : ' is') + ' on now.');
+  }
   BILL.asked = false; MOD_ASKED = false;
-  if (window.OmegaTenant && OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} }
-  renderModules(); if (view() === 'billing') renderBilling();
+  function repaint() { renderModules(); if (view() === 'billing') renderBilling(); }
+  if (packaged) { if (window.OmegaTenant && OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } repaint(); return; }
+  /* the record read again carries the server's write; the answer is kept on
+     it too until it does, so a card never steps back to where it was */
+  if (window.OmegaTenant && OmegaTenant.refreshBilling) { var p; try { p = OmegaTenant.refreshBilling(); } catch (e) { p = null; } if (p && p.then) { p.then(function () { delete WS.billing; mergeAnswer(bill(), r); repaint(); }, repaint); return; } }
+  repaint();
+}
+/* a write's answer on the billing record the page reads: the requests as
+   stored (optIns, optOuts) and the queued removals */
+function mergeAnswer(bl, r) {
+  if (!bl || !r) return;
+  function merge(field) { if (!r[field] || typeof r[field] !== 'object') return; var to = {}, was = bl[field] || {}; Object.keys(was).forEach(function (k) { to[k] = was[k]; }); Object.keys(r[field]).forEach(function (k) { to[k] = r[field][k]; }); try { bl[field] = to; } catch (e) {} }
+  merge('optIns'); merge('optOuts');
+  if (Array.isArray(r.removalRequests)) { try { bl.removalRequests = r.removalRequests; } catch (e) {} }
 }
 /* ── PLAN & BILLING, as a page (Tommy, 2026-09-27: "it needs to look
    amazing … make sure the editor is linked to how a tenant pays and what
@@ -1062,17 +1084,24 @@ function billingChanged(r) {
    on a desktop:
      · the subscription: the plan, the monthly figure, the modules as chips
        (each one a link to its card), the facts, and Site Map, the editor
+     · modules added to a legacy plan by card (api/_lib/addons.js): each its
+       own monthly line on a QuickBooks invoice beside the plan
      · what is owed and when, with the invoice's own pay button
      · the payment method as a card: QuickBooks, Stripe, paid by ACH or check
        under an agreement, or none yet
      · changes in progress: every module on its way in or out, with its steps
      · the invoices, each with one status: Paid, Open, Overdue or Void
-   Four sources, none of them priced here: billing/current (every member may
-   read it), GET /api/plan-change (the engine's summary; any verified member
-   may read it, a change stays with an owner or administrator), and Stripe's
-   own invoice list and portal for a Stripe-billed plan. A card is only ever
-   entered on QuickBooks' or Stripe's own page. A figure that could not be
-   loaded says so, with Retry; it never reads as "nothing". ── */
+   Its sources, none of them priced here: billing/current (every member may
+   read it), GET /api/plan-change (the engine's summary: subscription vs
+   switched on, the monthly figure, every invoice with its pay link, the
+   add-ons, and the rail the package bills through, `provider` / `payWith`:
+   Stripe under PACKAGING_PROVIDER=stripe, else QuickBooks; any verified
+   member may read it, a change stays with an owner or administrator), and
+   Stripe's own portal (and a legacy Stripe tier's invoice list,
+   /api/stripe-invoices). A card is only ever entered on the payment
+   provider's own page. Add-ons are always QuickBooks' invoices, whatever
+   rail a package uses. A figure that could not be loaded says so, with
+   Retry; it never reads as "nothing". ── */
 var BILL = { summary: null, asked: false, failed: false, stripe: null, stripeAsked: false };
 /* the engine's summary, asked ONCE for Plan & billing and the module cards
    (a change waiting for payment, the purchase gate, the review date); both
@@ -1101,19 +1130,30 @@ function nth(d) { var s = ['th', 'st', 'nd', 'rd'], v = d % 100; return d + (s[(
 function usd(n) { n = Number(n) || 0; return '$' + n.toLocaleString(undefined, { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }); }
 function cents(c) { return usd(Math.round(Number(c) || 0) / 100); }
 function cap1(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
-function isAdminHere() { return WS.role === 'owner' || WS.role === 'admin' || !!WS.staff; }
+/* an owner or administrator manages the plan; so may verified ClearSky staff, whom the server lets act for a tenant (the button is never the gate: plan-change is) */
+function isAdminHere() { return WS.role === 'owner' || WS.role === 'admin' || !!WS.staff || IS_STAFF; }
 var BICON = {
   ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   due: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
   map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>'
 };
+/* the rail a plan bills through: the engine's word for a package (the
+   summary's provider: Stripe under PACKAGING_PROVIDER=stripe, else
+   QuickBooks), else the record's own (a legacy Stripe tier, a QuickBooks
+   customer). Add-ons on a legacy plan are QuickBooks' whatever this says. */
+function railOf(bl, packaged, sm) {
+  if (packaged && sm && sm.provider) return sm.provider;
+  if (bl.billingProvider === 'stripe' || bl.paymentProvider === 'stripe' || (!packaged && bl.stripeCustomerId)) return 'stripe';
+  if (bl.qboCustomerId || bl.paymentProvider === 'quickbooks' || bl.billingProvider === 'quickbooks') return 'quickbooks';
+  return packaged ? 'quickbooks' : null;
+}
 /* everything the page draws, read once per paint */
 function billCtx() {
   var bl = bill(), pa = WS.packageAccess, sm = BILL.summary, now = Date.now();
-  var packaged = !!(bl.packaged === true || (pa && pa.packaged));
-  var stripe = !!(bl.stripeCustomerId || bl.paymentProvider === 'stripe');
-  var qb = !stripe && (packaged || bl.paymentProvider === 'quickbooks' || !!bl.qboCustomerId);
+  var packaged = !!(bl.packaged === true || (pa && pa.packaged)), rail = railOf(bl, packaged, sm);
+  var stripe = rail === 'stripe';
+  var qb = rail === 'quickbooks';
   var trial = !packaged && (bl.tier === 'trial' || trialEnd() > now);
   var manual = !stripe && !qb && !trial && (bl.paymentProvider === 'manual' || !!bl.lastPaidAt || !!bl.amountPaid);
   var cat = (packaged && pa && Array.isArray(pa.catalog) && pa.catalog.length ? pa.catalog : (MOD_CATALOG || [])).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), byKey = {};
@@ -1121,8 +1161,12 @@ function billCtx() {
   var invoices = sm && Array.isArray(sm.invoices) ? sm.invoices : [], unpaid = invoices.filter(function (x) { return x.state === 'unpaid'; });
   var pending = packaged && sm && Array.isArray(sm.pending) ? sm.pending : [];
   var stripeOpen = stripe && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'open'; }) : [];
+  /* a legacy plan's modules added by card (api/_lib/addons.js): the
+     summary's view, else the record's own block */
+  var ao = packaged ? null : (sm && sm.addOns) || (bl.addOns && typeof bl.addOns === 'object' ? bl.addOns : null);
   var c = { bl: bl, pa: pa, sm: sm, now: now, packaged: packaged, stripe: stripe, qb: qb, trial: trial, manual: manual, admin: isAdminHere(), cat: cat, byKey: byKey, invoices: invoices, unpaid: unpaid, pending: pending, stripeOpen: stripeOpen,
-    state: (sm && sm.packagingState) || bl.packagingState || null, co: WS.clientName || WS.orgId };
+    state: (sm && sm.packagingState) || bl.packagingState || null, co: WS.clientName || WS.orgId, ao: ao,
+    payWith: (packaged && sm && sm.payWith) || (stripe ? 'Stripe' : qb ? 'QuickBooks' : ''), addOnOwed: !packaged && unpaid.some(function (x) { return x.kind === 'addon'; }) };
   c.payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || (stripeOpen.length && stripeOpen[0].hostedUrl) || (sm && sm.paymentLink) || bl.paymentLink || null;
   /* the modules: Live, on their way in, on their way out. Read off the SAME
      cards the Modules page and the home row draw (moduleCard), never a
@@ -1149,6 +1193,12 @@ function billCtx() {
     else {
       Object.keys(bl.optOuts || {}).forEach(function (k) { var o = bl.optOuts[k]; if (o && o.status === 'requested') c.leaving[k] = o; });
       Object.keys(bl.optIns || {}).forEach(function (k) { var o = bl.optIns[k]; if (o && o.status === 'requested') c.requested[k] = o; });
+      /* card add-ons: a purchase waiting on its invoice, a stop at the end of the paid month */
+      if (ao) {
+        (ao.pending || []).forEach(function (p) { if ((p.purpose || 'purchase') === 'purchase') (p.add || []).forEach(function (k) { c.coming[k] = { pill: 'Waiting for payment', change: extend1({ kind: 'addon' }, p) }; }); });
+        var ends = Array.isArray(ao.ending) ? ao.ending : Object.keys(ao.ending || {}).filter(function (k) { return ao.ending[k] && ao.ending[k].status === 'requested'; }).map(function (k) { return extend1({ key: k }, ao.ending[k]); });
+        ends.forEach(function (e) { if (e && e.key) c.leaving[e.key] = { kind: 'addon-stop', key: e.key, name: e.name, endsOn: e.endsOn || ao.nextInvoiceOn || null, requestedAt: e.requestedAt || null }; });
+      }
     }
   }
   c.reviewOn = (sm && sm.nextReviewOn) || null;
@@ -1207,6 +1257,13 @@ function oweHtml(c) {
     /* an amount the record says is due that no invoice row carries yet (the first invoice on its way) is still owed */
     var ad = sm.amountDue != null ? sm.amountDue : bl.amountDue; if (!c.unpaid.length && Number(ad) > 0) amount = Number(ad);
   }
+  else if (!c.packaged && c.unpaid.length) {
+    /* a legacy plan's add-on invoices (QuickBooks), and its own plan's amount due beside them */
+    list = c.unpaid.map(function (x) { return { name: invName(x), display: x.display, link: x.paymentLink, date: x.date }; });
+    amount = c.unpaid.reduce(function (t, x) { return t + (Number(x.totalCents) || 0); }, 0) / 100;
+    if (Number(bl.amountDue) > 0) { amount += Number(bl.amountDue); list.push({ name: 'Your plan', display: usd(bl.amountDue), link: bl.paymentLink || null, date: bl.subscriptionDue || '' }); }
+    dueOn = c.unpaid[0].date;
+  }
   else if (c.stripeOpen.length) { amount = c.stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0); list = c.stripeOpen.map(function (x) { return { name: x.number || 'Invoice', display: usd(x.amountDue), link: x.hostedUrl, date: x.created }; }); }
   else if (c.packaged && !sm && !BILL.failed) loading = true;
   else if (c.packaged && BILL.failed) { if (bl.amountDue != null) amount = Number(bl.amountDue) || 0; else unknown = true; }
@@ -1233,11 +1290,39 @@ function oweHtml(c) {
   if (last || !(c.packaged && BILL.failed)) cells.push(['Last payment', last || 'None yet']);
   h += '<div class="owe-when">' + cells.map(function (x) { return '<div><span class="l">' + esc(x[0]) + '</span><span class="v" title="' + esc(x[1]) + '">' + esc(x[1]) + '</span></div>'; }).join('') + '</div>';
   var bday = (sm && sm.billingDay) || bl.billingDay;
-  h += '<p class="fine">' + esc(c.packaged ? 'Each invoice arrives by email' + (bday ? ' on the ' + nth(bday) : '') + ' with its own pay link.' : c.stripe ? 'Stripe charges the card on file on each invoice date.' : c.trial ? 'Nothing is charged during your trial.' : c.manual ? 'ClearSky invoices this plan under your agreement.' : 'Your first invoice arrives by email with its own pay link.') + '</p>';
-  if (c.packaged && c.admin && !WS.viewAs) h += '<button class="linkbtn" type="button" id="bill-paid">Just paid? Check with QuickBooks</button>';
+  h += '<p class="fine">' + esc(c.packaged ? 'Each invoice arrives by email' + (bday ? ' on the ' + nth(bday) : '') + ' with its own pay link' + (c.payWith ? ' to ' + c.payWith + '’s secure page' : '') + '.' + (c.stripe ? ' Your workspace follows the payment within seconds.' : '')
+    : c.addOnOwed ? 'Each add-on invoice arrives by email with its own pay link to QuickBooks’ secure page. Your plan itself is billed as before.'
+    : c.stripe ? 'Stripe charges the card on file on each invoice date.' : c.trial ? 'Nothing is charged during your trial.' : c.manual ? 'ClearSky invoices this plan under your agreement.' : 'Your first invoice arrives by email with its own pay link.') + '</p>';
+  /* "I've paid": the platform looks now instead of the hourly run (a
+     package's rail, or QuickBooks for a legacy plan's add-on invoice) */
+  if ((c.packaged || c.addOnOwed) && c.admin && !WS.viewAs) h += '<button class="linkbtn" type="button" id="bill-paid">' + esc(paidLabel(c)) + '</button>';
   return h + '</section>';
 }
-function invName(x) { return x.kind === 'change' ? 'Opt in: ' + ((x.names || []).join(', ') || 'modules') : x.kind === 'pack' ? 'Pack' : 'Subscription'; }
+/* what an invoice row is called: a package's subscription, a change or a pack, or a module a legacy plan opted in to by card (and its monthly renewal) */
+function invName(x) { return x.kind === 'change' ? 'Opt in: ' + ((x.names || []).join(', ') || 'modules') : x.kind === 'pack' ? 'Pack' : x.kind === 'addon' ? (x.purpose === 'renewal' ? 'Add-ons: ' : 'Opt in: ') + ((x.names || []).join(', ') || 'modules') : 'Subscription'; }
+function paidLabel(c) { return 'Just paid? Check with ' + (c.packaged ? (c.payWith || 'the payment page') : 'QuickBooks'); }
+/* a fresh object from two (ES5: no Object.assign on the kiosk browsers) */
+function extend1(a, b) { var o = {}, k; for (k in a) if (Object.prototype.hasOwnProperty.call(a, k)) o[k] = a[k]; for (k in b) if (Object.prototype.hasOwnProperty.call(b, k)) o[k] = b[k]; return o; }
+/* 1b · modules a legacy plan opted in to by card (api/_lib/addons.js):
+   each its own monthly line on a QuickBooks invoice, beside the plan */
+function addOnsHtml(c) {
+  var ao = c.ao; if (!ao || !((ao.modules || []).length || (ao.pending || []).length)) return '';
+  var stateWord = { paid: 'Active', past_due: 'Renewal due', lapsed: 'Off: renewal unpaid', awaiting_payment: 'Waiting for payment' }[ao.state] || '';
+  function listOf(keys) { return (keys || []).map(function (k) { return modName(c, k); }).join(', '); }
+  var ends = Array.isArray(ao.ending) ? ao.ending.map(function (e) { return e.key; }) : Object.keys(ao.ending || {}).filter(function (k) { return ao.ending[k] && ao.ending[k].status === 'requested'; });
+  var bday = ao.billingDay, monthly = String(ao.monthlyDisplay || '$0'), cut = monthly.lastIndexOf('/');
+  var h = '<section class="bcard" id="bill-addons"><h3>Added to your plan by card' + (stateWord ? '<span class="bpill ' + (ao.state === 'paid' ? 'in' : 'warn') + '">' + esc(stateWord) + '</span>' : '') + '</h3>';
+  h += '<div class="owe-amt ok"><span class="ic">+</span><div><b>' + esc(cut > 0 ? monthly.slice(0, cut) : monthly) + '</b><small>per month, beside your plan</small></div></div>';
+  var cells = [['Modules', (ao.names && ao.names.join(', ')) || listOf(ao.modules) || 'None paid yet'], ['On now', (ao.liveNames && ao.liveNames.join(', ')) || listOf(ao.live) || 'Nothing yet'],
+    ['Billing', bday ? 'Monthly on the ' + nth(bday) + ', in QuickBooks' : 'Starts when the first invoice is paid']];
+  if (ao.nextInvoiceOn) cells.push(['Next invoice', day(ao.nextInvoiceOn) || ao.nextInvoiceOn]);
+  if (ao.paidThrough) cells.push(['Paid through', day(ao.paidThrough) || ao.paidThrough]);
+  if (ends.length) cells.push(['Opting out', listOf(ends) + (ao.nextInvoiceOn ? ', on until ' + day(ao.nextInvoiceOn) : '')]);
+  h += '<div class="owe-when">' + cells.map(function (x) { return '<div><span class="l">' + esc(x[0]) + '</span><span class="v" title="' + esc(x[1]) + '">' + esc(x[1]) + '</span></div>'; }).join('') + '</div>';
+  h += '<p class="fine">Each add-on invoice comes from QuickBooks with its secure payment page. Save your card there and turn on <b>Autopay</b>: every renewal is then charged on its date. Your plan itself is billed as before.</p>';
+  h += '<div class="acts"><button class="ows-pill" type="button" data-bill="modules">Opt in to another module</button></div>';
+  return h + '</section>';
+}
 /* 3 · the payment method: a card, never its digits (we do not hold them) */
 function payHtml(c) {
   var bl = c.bl, kind = c.stripe ? 'stripe' : c.qb ? 'qb' : c.manual ? 'manual' : 'none', h = '<section class="bcard pm" id="bill-card"><h3>Payment method</h3>';
@@ -1246,22 +1331,24 @@ function payHtml(c) {
   h += '<div class="pm-body"><div class="pmc ' + kind + '"><div class="pmc-top"><span class="sub">' + (kind === 'none' ? 'Nothing on file' : 'Pays your invoices') + '</span><span class="chip" aria-hidden="true"></span></div>'
     + '<div class="prov">' + esc(card[0]) + (kind === 'manual' && bl.note ? '<small>' + esc(bl.note) + '</small>' : '') + '</div>'
     + '<div class="pmc-foot"><span>' + esc(card[1]) + '</span>' + (card[2] ? '<span class="auto">' + esc(card[2]) + '</span>' : '') + '</div></div>';
-  var line = { stripe: 'Entered on Stripe’s own page, never on this site. The portal changes the card, turns autopay on or off and downloads any invoice.', qb: 'Entered on QuickBooks’ secure payment page, never on this site.',
+  var line = { stripe: c.packaged ? 'Entered on Stripe’s secure invoice page, never on this site. The Stripe portal keeps the card on file and downloads any invoice.' : 'Entered on Stripe’s own page, never on this site. The portal changes the card, turns autopay on or off and downloads any invoice.', qb: 'Entered on QuickBooks’ secure payment page, never on this site.',
     manual: 'Paid by ACH or check under your agreement. Nothing is kept on file here.', none: 'Nothing is charged until then. A card is only ever entered on the payment provider’s own page, never on this site.' }[kind];
   h += '<div class="pm-side"><p class="fine lock">' + BICON.lock + '<span>' + esc(line) + '</span></p>';
   if (kind === 'qb') h += '<details class="how"><summary>Save a card and turn on autopay</summary><ol><li>Open any invoice’s payment page.</li><li>Tick <b>Save this card</b> as you pay.</li><li>Turn on <b>Autopay</b>: every later invoice is charged on its date.</li></ol></details>';
-  if (kind === 'stripe') h += '<div class="acts"><button class="ows-pill primary" type="button" id="bill-portal"' + (c.admin ? '' : ' disabled title="An owner or administrator manages the card"') + '>Manage card and autopay</button></div>' + (c.admin ? '' : '<p class="fine">An owner or administrator of ' + esc(c.co) + ' opens the portal.</p>');
+  if (kind === 'stripe') h += '<div class="acts"><button class="ows-pill primary" type="button" id="bill-portal"' + (c.admin ? '' : ' disabled title="An owner or administrator manages the card"') + '>' + portalLabel(c) + '</button></div>' + (c.admin ? '' : '<p class="fine">An owner or administrator of ' + esc(c.co) + ' opens the portal.</p>');
   else if (kind === 'qb') h += c.payLink ? '<div class="acts"><a class="ows-pill" href="' + esc(c.payLink) + '" target="_blank" rel="noopener">Open the payment page</a></div>' : '<p class="fine">Your next invoice brings the payment page.</p>';
   else if (kind === 'manual') h += '<div class="acts"><a class="ows-pill" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Statement for ' + c.co) + '">Email for a statement</a></div>';
+  if (c.ao && kind !== 'qb') h += '<p class="fine">Modules added to your plan by card are invoiced in <b>QuickBooks</b>: pay each on QuickBooks’ own page, where a card can be saved with Autopay.</p>';
   return h + '</div></div></section>';
 }
+function portalLabel(c) { return c.packaged ? 'Manage card and invoices' : 'Manage card and autopay'; }
 /* 4 · changes in progress: one row per module on its way in or out, with
    the steps it goes through, in the words the Modules page uses */
 function changeRows(c) {
   var rows = [], review = c.reviewOn ? day(c.reviewOn) : '';
   Object.keys(c.coming).forEach(function (k) {
     var x = c.coming[k], ch = x.change;
-    if (ch) rows.push({ key: k, pill: 'Waiting for payment', tone: 'warn', line: (ch.display || '') + ' invoice · switches on when paid · expires unpaid on ' + (day(ch.expiresOn) || 'the cycle end'), steps: [['Chosen', 'done'], ['Pay before ' + (day(ch.expiresOn) || 'cycle end'), 'now'], ['On', '']], pay: ch.paymentLink, cancel: true });
+    if (ch) rows.push({ key: k, pill: 'Waiting for payment', tone: 'warn', line: (ch.display || '') + ' invoice · switches on when paid · expires unpaid on ' + (day(ch.expiresOn) || 'the cycle end') + (ch.kind === 'addon' ? ' · paid on its own QuickBooks invoice, beside your plan' : ''), steps: [[ch.kind === 'addon' ? 'Opted in' : 'Chosen', 'done'], ['Pay before ' + (day(ch.expiresOn) || 'cycle end'), 'now'], ['On', '']], pay: ch.paymentLink, cancel: true });
     else rows.push({ key: k, pill: 'Bought · not on yet', tone: 'warn', line: 'Switches on when your open invoice is paid.', steps: [['Bought', 'done'], ['Invoice paid', 'now'], ['On', '']], pay: c.payLink, cancel: false });
   });
   Object.keys(c.requested).forEach(function (k) {
@@ -1271,6 +1358,7 @@ function changeRows(c) {
   Object.keys(c.leaving).forEach(function (k) {
     var r = c.leaving[k];
     if (c.packaged) rows.push({ key: k, pill: 'Opting out', tone: 'out', line: 'Stays on, and billed, until ' + (review ? 'your review on ' + review : 'the quarterly review') + '. No refund for time already billed.', steps: [['Requested ' + (day(r.requestedAt) || ''), 'done'], [review ? 'Review on ' + review : 'Quarterly review', 'now'], ['Off', '']], cancel: true });
+    else if (r.kind === 'addon-stop') rows.push({ key: k, name: r.name, pill: 'Opting out', tone: 'out', line: 'Stays on until ' + (day(r.endsOn) || 'the end of the month you paid for') + ', the end of the month you paid for, and is not renewed. No refund for time already paid.', steps: [['Opted out' + (r.requestedAt ? ' ' + day(r.requestedAt) : ''), 'done'], ['On until ' + (day(r.endsOn) || 'the month ends'), 'now'], ['Off', '']], cancel: true });
     else rows.push({ key: k, name: r.name, pill: 'Opting out', tone: 'out', line: 'Requested ' + (day(r.requestedAt) || '') + '. ClearSky confirms the date and any price change in writing; access is unchanged until then.', steps: [['Requested', 'done'], ['ClearSky confirms in writing', 'now'], ['Off', '']], cancel: true });
   });
   return rows;
@@ -1294,21 +1382,26 @@ function histHtml(c) {
   var bl = c.bl, sm = c.sm, rows = [], today0 = isoDay(c.now), empty = '', failed = '';
   if (c.packaged || c.invoices.length) {
     rows = c.invoices.map(function (x) {
-      var state = x.state === 'paid' ? 'paid' : x.state === 'unpaid' ? (x.kind !== 'change' && isoDay(x.date) < today0 ? 'overdue' : 'open') : 'void';
+      var expires = x.kind === 'change' || (x.kind === 'addon' && x.purpose !== 'renewal');
+      var state = x.state === 'paid' ? 'paid' : x.state === 'unpaid' ? (!expires && isoDay(x.date) < today0 ? 'overdue' : 'open') : 'void';
       return { date: x.date, name: invName(x), sub: [x.period ? span(x.period.start, x.period.end) : '', x.paidAt ? 'paid ' + day(x.paidAt) : '', state === 'void' && x.state ? x.state : ''].filter(Boolean).join(' · '), amount: x.display, state: state, link: state === 'open' || state === 'overdue' ? x.paymentLink : null };
     });
-    if (!rows.length) { if (!sm && !BILL.failed) empty = 'Reading your invoices…'; else if (BILL.failed) failed = 'Your invoices could not be loaded right now.'; else empty = 'No invoices yet. The first one arrives by email with its own pay link.'; }
-  } else if (c.stripe) {
+    if (!rows.length && c.packaged) { if (!sm && !BILL.failed) empty = 'Reading your invoices…'; else if (BILL.failed) failed = 'Your invoices could not be loaded right now.'; else empty = 'No invoices yet. The first one arrives by email with its own pay link.'; }
+  }
+  /* a Stripe-billed legacy plan keeps its own history beside any add-on invoices */
+  if (!c.packaged && c.stripe) {
     var st = BILL.stripe;
     if (!st) empty = 'Reading your invoices from Stripe…';
     else if (st.failed) failed = 'The invoice list could not be loaded from Stripe right now.';
     else if (!st.connected) empty = 'No invoices yet: Stripe billing has not been set up for this workspace.';
-    else rows = (st.invoices || []).map(function (inv) {
+    else rows = rows.concat((st.invoices || []).map(function (inv) {
       var state = inv.status === 'paid' ? 'paid' : inv.status === 'open' || inv.status === 'draft' ? 'open' : inv.status === 'uncollectible' ? 'overdue' : 'void';
       return { date: inv.created, name: inv.number || 'Invoice', sub: inv.periodEnd ? 'Period to ' + day(inv.periodEnd) : 'Card through Stripe', amount: inv.amountDue == null ? '' : usd(inv.amountDue), state: state, link: inv.hostedUrl || inv.pdfUrl || null };
-    });
+    }));
+    if (rows.length) { empty = ''; failed = ''; }
     if (st && st.connected && !rows.length && !failed) empty = 'No invoices issued yet.';
-  } else if (bl.lastPaidAt) rows = [{ date: bl.lastPaidAt, name: 'Payment', sub: bl.note || 'Under your agreement', amount: bl.amountPaid ? usd(bl.amountPaid) : '', state: 'paid', link: null }];
+  } else if (c.packaged || c.invoices.length) { /* the engine's list above */ }
+  else if (bl.lastPaidAt) rows = [{ date: bl.lastPaidAt, name: 'Payment', sub: bl.note || 'Under your agreement', amount: bl.amountPaid ? usd(bl.amountPaid) : '', state: 'paid', link: null }];
   else empty = c.trial ? 'No invoices yet. Nothing is charged during your trial.' : 'No invoices on file here. This plan is billed by ClearSky outside the workspace; write to ' + OmegaBrand.upgradeEmail() + ' for a statement.';
   var h = '<section class="bcard full" id="bill-hist"><h3>Billing history</h3>';
   if (rows.length) h += '<div class="itab"><div class="irow head"><span>Date</span><span>Description</span><span>Amount</span><span>Status</span></div>' + rows.map(histRow).join('') + '</div>';
@@ -1320,19 +1413,26 @@ function renderBilling() {
   var b = byId('billing-body'); if (!b || !WS) return;
   var bl = bill();
   askSummary();
-  if (!!(bl.stripeCustomerId || bl.paymentProvider === 'stripe') && !BILL.stripeAsked && window.OmegaPackageMenu) { BILL.stripeAsked = true; OmegaPackageMenu.api('/api/stripe-invoices', { orgId: WS.orgId, limit: 24 }).then(function (j) { BILL.stripe = j; renderBilling(); }, function () { BILL.stripe = { connected: false, failed: true }; renderBilling(); }); }
+  /* a legacy Stripe tier's own invoice list; a package's invoices are the engine's, on whichever rail */
+  var pk = !!(bl.packaged === true || (WS.packageAccess && WS.packageAccess.packaged));
+  if (!pk && railOf(bl, false, null) === 'stripe' && !BILL.stripeAsked && window.OmegaPackageMenu) { BILL.stripeAsked = true; OmegaPackageMenu.api('/api/stripe-invoices', { orgId: WS.orgId, limit: 24 }).then(function (j) { BILL.stripe = j; renderBilling(); }, function () { BILL.stripe = { connected: false, failed: true }; renderBilling(); }); }
   var c = billCtx(), changes = changeRows(c);
-  b.innerHTML = '<div class="bill">' + heroHtml(c) + oweHtml(c) + payHtml(c) + (changes.length ? changesHtml(c, changes) : '') + histHtml(c) + '</div>';
-  var cm = b.querySelector('[data-bill="modules"]'); if (cm) cm.addEventListener('click', function () { nav('/workspace#modules'); });
+  b.innerHTML = '<div class="bill">' + heroHtml(c) + addOnsHtml(c) + oweHtml(c) + payHtml(c) + (changes.length ? changesHtml(c, changes) : '') + histHtml(c) + '</div>';
+  Array.prototype.forEach.call(b.querySelectorAll('[data-bill="modules"]'), function (cm) { cm.addEventListener('click', function () { nav('/workspace#modules'); }); });
   Array.prototype.forEach.call(b.querySelectorAll('[data-bill="retry"]'), function (x) { x.addEventListener('click', function () {
     BILL.asked = false; BILL.failed = false; BILL.summary = null;
     if (BILL.stripe && BILL.stripe.failed) { BILL.stripe = null; BILL.stripeAsked = false; }
     renderBilling();
   }); });
   Array.prototype.forEach.call(b.querySelectorAll('[data-cancel]'), function (x) { x.addEventListener('click', function () { moduleMenu(x.getAttribute('data-cancel'), 'cancel'); }); });
-  var paid = byId('bill-paid'), paidLabel = 'Just paid? Check with QuickBooks';
-  if (paid) paid.addEventListener('click', function () { paid.disabled = true; paid.textContent = 'Checking with QuickBooks…'; OmegaPackageMenu.api('/api/plan-change', { action: 'reconcile-now' }).then(function () { S.toast('Checked with QuickBooks'); BILL.asked = false; if (OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderBilling(); }, function (e) { paid.disabled = false; paid.textContent = paidLabel; S.toast(e.message); }); });
-  var portal = byId('bill-portal'); if (portal && c.admin) portal.addEventListener('click', function () { portal.disabled = true; portal.textContent = 'Opening Stripe…'; OmegaPackageMenu.api('/api/stripe-portal', { orgId: WS.orgId }).then(function (j) { portal.disabled = false; portal.textContent = 'Manage card and autopay'; if (j && j.url) window.open(j.url, '_blank', 'noopener'); else S.toast('Stripe did not return a portal link'); }, function (e) { portal.disabled = false; portal.textContent = 'Manage card and autopay'; S.toast(e.message); }); });
+  var paid = byId('bill-paid'), paidText = paidLabel(c);
+  if (paid) paid.addEventListener('click', function () { paid.disabled = true; paid.textContent = 'Checking your payment…'; OmegaPackageMenu.api('/api/plan-change', { action: 'reconcile-now' }).then(function (r) {
+    /* a legacy plan's add-ons are QuickBooks' (api/_lib/addons.js); a package names its own rail */
+    var ao = r && r.addOns, cleared = !c.packaged && !!ao && !(ao.pending || []).length && (ao.live || []).length > 0;
+    S.toast(cleared ? 'Paid. Your added modules are on.' : 'Checked with ' + ((r && r.payWith) || (c.packaged ? c.payWith : 'QuickBooks') || 'the payment provider')); BILL.asked = false;
+    if (c.packaged) { if (OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderBilling(); } else billingChanged(r);
+  }, function (e) { paid.disabled = false; paid.textContent = paidText; S.toast(e.message); }); });
+  var portal = byId('bill-portal'); if (portal && c.admin) portal.addEventListener('click', function () { portal.disabled = true; portal.textContent = 'Opening Stripe…'; OmegaPackageMenu.api('/api/stripe-portal', { orgId: WS.orgId }).then(function (j) { portal.disabled = false; portal.textContent = portalLabel(c); if (j && j.url) window.open(j.url, '_blank', 'noopener'); else S.toast('Stripe did not return a portal link'); }, function (e) { portal.disabled = false; portal.textContent = portalLabel(c); S.toast(e.message); }); });
 }
 function billingDrawer() { openBilling(); }
 function settingsDrawer() {

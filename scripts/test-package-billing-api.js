@@ -1,5 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('assert'), F = require('./_lib/firestore-double'), B = require('../api/_lib/pricebook');
 var db, calls = 0, count = 0, sent = 0, now = Date.now(), root = 'omega_orgs/package.example';
 var profile = { legalName: 'Test Company', contactName: 'Test Owner', email: 'owner@package.example', phone: '555-0100',

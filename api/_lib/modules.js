@@ -4,42 +4,47 @@
  */
 'use strict';
 function words(s) { return s ? s.split(' ') : []; }
+/* The ONE set of shelf words a customer reads (Tommy, 2026-09-27: the
+   Omega-branded names). Every card, menu, store and proposal takes
+   `shelfLabel` off the record; no page keeps its own copy. */
+var SHELF_LABELS = { floor: 'Core', addon: 'Add-on', standard: 'Pro', premium: 'Advanced', deliverable: 'By the piece', platform: 'Omega Logic' };
 function record(key, name, shelf, tools, caps, ribbon, meter, requires) {
-  return { key: key, name: name, shelf: shelf, tools: words(tools), caps: words(caps),
+  /* the card's letter: the word after the family name (Omega Design is D, Logic Plant is P) */
+  return { key: key, name: name, mark: name.replace(/^(Omega|Logic)\s+/, '').charAt(0), shelf: shelf, shelfLabel: SHELF_LABELS[shelf], tools: words(tools), caps: words(caps),
     ribbon: words(ribbon), menu: [], addons: key === 'lite' ? [] : [key], meter: meter || null,
     requires: requires || (key === 'lite' ? [] : ['lite']) };
 }
 var CATALOG = [
-  record('lite', 'Lite', 'floor', 'editor sandbox sales intake opportunity financing signal',
+  record('lite', 'Omega Design', 'floor', 'editor sandbox sales intake opportunity financing signal',
     'design view export.blueprint',
     'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
-  record('gridatlas', 'Grid Atlas', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
+  record('gridatlas', 'Omega Grid', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
     'openComedPreQual OmegaSubstation.open'),
-  record('storage', 'Storage Sizing & Revenue', 'standard', 'batterysizer proforma valuestack isocalc', 'storage',
+  record('storage', 'Omega Storage', 'standard', 'batterysizer proforma valuestack isocalc', 'storage',
     'openBessSizer openSolarBessSizer openBillImport openNonExportCalc openEnergyBalance openValueStack openBillAnalysis', 'models'),
-  record('estimate', 'Estimate, BOM & Procurement', 'standard', 'costestimator', 'estimate',
+  record('estimate', 'Omega Estimate', 'standard', 'costestimator', 'estimate',
     'openBomSourcing openElectricalEstimate openTakeoffBudget exportBudgetCSV exportTrenchCSV exportEstimateCSV', 'boms'),
-  record('evrebates', 'EV Rebates & Closeout', 'standard', 'evcostwb evcloseout', 'evrebates',
+  record('evrebates', 'Omega EV', 'standard', 'evcostwb evcloseout', 'evrebates',
     'markFutureEV', 'evApplications'),
-  record('plansets', 'Plan Sets & CAD', 'premium', '', 'plansets schematic riser export.plotplan export.oneline',
+  record('plansets', 'Omega Plans', 'premium', '', 'plansets schematic riser export.plotplan export.oneline',
     'openPlotPlanExport openOneLineExport exportSpecsForCADTool d4Open OmegaArch.open OmegaArch.review OmegaSchematicTool.open openRiser openSchematic openPermitSheet openSheetSet openSiteStyles openBuildingDesigner openDesignReview OmegaAIRender.open'),
-  record('siteintel', 'Site Intelligence', 'premium', '', 'siteintel parcelscreen',
+  record('siteintel', 'Omega Intel', 'premium', '', 'siteintel parcelscreen',
     'openScorePanel openNetworkProximity openProjectIntelligence opToggleTerrainKey tlCycle ttCycle e5Open', 'screens'),
-  record('engineering', 'Engineering & Analysis', 'premium', 'conductorsizing powerflow siteoptimizer', 'engineering',
+  record('engineering', 'Omega Engineer', 'premium', 'conductorsizing powerflow siteoptimizer', 'engineering',
     'openDerAnalysis openValidationExport openValidationStatus _valSubmit e3MeteoOpen'),
-  record('finance', 'Investor & Finance', 'premium', 'investment dcfc fleet apartment degradation', 'finance',
+  record('finance', 'Omega Capital', 'premium', 'investment dcfc fleet apartment degradation', 'finance',
     'openMarketplacePush openFinancingApply openBuildingPanel'),
-  record('compute', 'Compute & Data Center', 'premium', 'datacenter computepower computelease', 'compute',
+  record('compute', 'Omega Compute', 'premium', 'datacenter computepower computelease', 'compute',
     'openDcClusterDialog derSetDc'),
-  record('ops', 'Operations', 'premium', 'sitelifecycle omconsole slaintel fieldservice ownerreport fleetcommand', 'ops', 'OmegaOM.open OmegaFleetOM.open'),
-  record('whitelabel', 'White Label Storefront', 'premium', '', 'whitelabel', ''),
-  record('permitting', 'Permitting Matrix', 'deliverable', '', 'permitting', 'OmegaPermitMatrix.open', 'matrices'),
-  record('sitefinder', 'Site Finder', 'deliverable', 'sitefinder sitediscovery', 'sitefinder', '', 'siteStudies'),
-  record('logic-office', 'Office', 'platform', '', 'logic-office', ''),
-  record('logic-plant', 'Plant', 'platform', '', 'logic-plant', '', null, ['lite', 'logic-office']),
-  record('logic-materials', 'Materials & Purchasing', 'platform', '', 'logic-materials', '', null, ['lite', 'logic-office']),
-  record('logic-logistics', 'Logistics & Warranty', 'platform', '', 'logic-logistics', '', null, ['lite', 'logic-office']),
-  record('logic-customer', 'Customer App', 'platform', '', 'logic-customer', '', null, ['lite', 'logic-office'])
+  record('ops', 'Omega Operate', 'premium', 'sitelifecycle omconsole slaintel fieldservice ownerreport fleetcommand', 'ops', 'OmegaOM.open OmegaFleetOM.open'),
+  record('whitelabel', 'Omega Storefront', 'premium', '', 'whitelabel', ''),
+  record('permitting', 'Omega Permits', 'deliverable', '', 'permitting', 'OmegaPermitMatrix.open', 'matrices'),
+  record('sitefinder', 'Omega Sites', 'deliverable', 'sitefinder sitediscovery', 'sitefinder', '', 'siteStudies'),
+  record('logic-office', 'Logic Office', 'platform', '', 'logic-office', ''),
+  record('logic-plant', 'Logic Plant', 'platform', '', 'logic-plant', '', null, ['lite', 'logic-office']),
+  record('logic-materials', 'Logic Purchasing', 'platform', '', 'logic-materials', '', null, ['lite', 'logic-office']),
+  record('logic-logistics', 'Logic Logistics', 'platform', '', 'logic-logistics', '', null, ['lite', 'logic-office']),
+  record('logic-customer', 'Logic Customer App', 'platform', '', 'logic-customer', '', null, ['lite', 'logic-office'])
 ];
 var NOT_SOLD = [
   { key: 'osaportal', reason: 'JV agreement', tools: ['osaportal'], ribbon: [] },
@@ -137,6 +142,24 @@ var BLURBS = {
   'logic-customer': 'The customer app: order status, documents, deliveries and sites, in your customers\' hands under your brand.'
 };
 CATALOG.forEach(function (m) { m.features = FEATURES[m.key]; m.blurb = BLURBS[m.key] || ''; });
+/* What a LEGACY plan (a tier, no package) opens of each module inside the
+ * editor: the legacy caps its commands sit behind (data-cap on the command
+ * or on its tab: Analyze and Estimate need `engineering`, Compute needs
+ * `compute`), '' for commands nothing gates, and a chain ("engineering+
+ * parcelscreen") where a command with its own cap sits on a gated tab and
+ * needs both. The store, the Modules page and
+ * the master console judge a legacy workspace by these AND its standalone
+ * tools (OmegaWorkspaceHub.moduleState), so "On your plan" is what the plan
+ * really opens. Read off the real editor by scripts/render-legacy-gates.js,
+ * which fails when this drifts from it; never a price, never a grant: a
+ * package is judged by modules[] alone. */
+var LEGACY_GATES = {
+  lite: ['', 'compute', 'export.blueprint'], gridatlas: ['engineering'], storage: ['', 'engineering'],
+  estimate: ['', 'engineering'], evrebates: [''], plansets: ['', 'export.oneline', 'export.plotplan'],
+  siteintel: ['', 'compute', 'engineering', 'engineering+parcelscreen'], engineering: ['', 'compute', 'engineering'],
+  finance: ['', 'export'], compute: ['', 'compute'], ops: ['engineering'], permitting: ['']
+};
+CATALOG.forEach(function (m) { m.legacyGates = LEGACY_GATES[m.key] || []; });
 /* Viewing/navigation survives an expired trial; producing commands do not. */
 var READ_ONLY_RIBBON = words('openProjectsModal rbNav rbTab omegaThemePick omegaLoadMap toggleLayersPanel toggleCompassPanel toggleSitePanel toggleMeterPanel toggleDockLeft toggleDiagPanel opToggleCoords')
   .concat(["openRpPanel('summary')", "rpTab('summary')"]);
@@ -153,14 +176,14 @@ var STARTERS = {
 function copy(x) { return JSON.parse(JSON.stringify(x)); }
 function fail(message) { var e = new Error(message); e.status = 400; throw e; }
 function normalize(keys) {
-  if (!Array.isArray(keys) || !keys.length || keys.length > CATALOG.length) fail('Select a package including Lite');
+  if (!Array.isArray(keys) || !keys.length || keys.length > CATALOG.length) fail('Select a package including Omega Design');
   var seen = {};
   keys.forEach(function (k) {
     if (typeof k !== 'string' || !Object.prototype.hasOwnProperty.call(BY_KEY, k)) fail('Unknown module');
     if (seen[k]) fail('Duplicate module: ' + k);
     seen[k] = true;
   });
-  if (!seen.lite) fail('Every package requires Lite');
+  if (!seen.lite) fail('Every package requires Omega Design');
   keys.forEach(function (k) { BY_KEY[k].requires.forEach(function (r) { if (!seen[r]) fail(k + ' requires ' + r); }); });
   return CATALOG.filter(function (m) { return !!seen[m.key]; }).map(function (m) { return m.key; });
 }
@@ -187,7 +210,7 @@ function owners(id, handler) {
   }).map(function (m) { return m.key; });
 }
 module.exports = { catalog: function () { return copy(CATALOG); }, notSold: function () { return copy(NOT_SOLD); },
-  starters: function () { return copy(STARTERS); },
+  starters: function () { return copy(STARTERS); }, shelfLabels: function () { return copy(SHELF_LABELS); },
   starterLabels: function () { return { ev: 'EV installer', solar: 'Solar / BESS installer', developer: 'Developer', epc: 'EPC / engineering', oem: 'OEM', distributor: 'Distributor', compute: 'Compute / advisor', capital: 'Capital partner' }; },
   get: function (key) { return Object.prototype.hasOwnProperty.call(BY_KEY, key) ? copy(BY_KEY[key]) : null; },
   readOnlyRibbon: function () { return copy(READ_ONLY_RIBBON); },

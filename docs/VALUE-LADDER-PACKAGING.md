@@ -9,6 +9,39 @@ including a ribbon-by-ribbon inventory of `editor.html` (Appendix A). Hand this
 file to the builder session as the brief. Every number marked **(decide)** is
 a proposal waiting on Tommy, not a settled price.
 
+> **Names (2026-09-27, Tommy: "we need better module names").** The keys
+> below are unchanged; what a customer reads is Omega-branded, from ONE
+> place, `api/_lib/modules.js` (`name`, `shelfLabel`, `mark`). This spec
+> still uses the old words; read them through this table.
+>
+> | key | was | now | shelf | card label |
+> |---|---|---|---|---|
+> | lite | Lite | Omega Design | floor | Core |
+> | gridatlas | Grid Atlas | Omega Grid | addon | Add-on |
+> | storage | Storage Sizing & Revenue | Omega Storage | standard | Pro |
+> | estimate | Estimate, BOM & Procurement | Omega Estimate | standard | Pro |
+> | evrebates | EV Rebates & Closeout | Omega EV | standard | Pro |
+> | plansets | Plan Sets & CAD | Omega Plans | premium | Advanced |
+> | siteintel | Site Intelligence | Omega Intel | premium | Advanced |
+> | engineering | Engineering & Analysis | Omega Engineer | premium | Advanced |
+> | finance | Investor & Finance | Omega Capital | premium | Advanced |
+> | compute | Compute & Data Center | Omega Compute | premium | Advanced |
+> | ops | Operations | Omega Operate | premium | Advanced |
+> | whitelabel | White Label Storefront | Omega Storefront | premium | Advanced |
+> | permitting | Permitting Matrix | Omega Permits | deliverable | By the piece |
+> | sitefinder | Site Finder | Omega Sites | deliverable | By the piece |
+> | logic-office | Office | Logic Office | platform | Omega Logic |
+> | logic-plant | Plant | Logic Plant | platform | Omega Logic |
+> | logic-materials | Materials & Purchasing | Logic Purchasing | platform | Omega Logic |
+> | logic-logistics | Logistics & Warranty | Logic Logistics | platform | Omega Logic |
+> | logic-customer | Customer App | Logic Customer App | platform | Omega Logic |
+>
+> Plans keep their names (Lite + modules, Field, Pro, Enterprise). Tool
+> names (Grid Atlas, Site Finder, …) are a separate list in `omega-tools.js`.
+> QuickBooks items are matched by name when a book is synced: an item
+> synced under an old name keeps it in QuickBooks (invoice lines carry the
+> new name as their description) until it is renamed there.
+
 ---
 
 ## 0. What we are building, in one paragraph
@@ -99,7 +132,7 @@ and show it. About 90 of the editor's functions. Full list in Appendix A.
 | Group | Inside |
 |---|---|
 | Site setup and map | Site Setup (calibrated satellite backdrop), address search, satellite / aerial / street views, Upload Image + B&W stencil trace, Lock Map, Calibrate Scale, Set Plot, GPS Place, Native Layer, Compass, Layers, Coordinates, Recenter, Dock |
-| Draw and annotate | Select/Move, Line, Polyline, Rectangle, Circle, EV and ADA stencils, Colour, Text Note, Callout Arrow, Dimension, Zone Box, Labels, Duplicate, Undo/Redo, command search (Ctrl+K), Designer/Pro modes |
+| Draw and annotate | Select/Move, Line, Polyline, Rectangle, Circle, EV and ADA stencils, Colour, Text Note, Callout Arrow, Dimension, Zone Box, Labels, Duplicate, Undo/Redo, command search (Ctrl+K) (Designer/Pro modes are for unpackaged plans only; a package shows everything it owns) |
 | Equipment | BESS cabinet and pad, PCS/inverter, transformer, UPS, generator, solar, wind, fuel cell, panelboard, AC disconnect, meter, junction box, EV chargers (L2 + DCFC catalog), utility pole, Source/POI, concrete pad, fence, bollard, hydrant, camera, parking stall array, custom equipment |
 | **Guided builds** | BESS Build, DER Build, Auto Layout, Full Topology, Level 2 Build, DCFC Build, Solar + Storage, BESS Config, Move System, Cluster tools, Fence & Tie, charger pads **(decide: in Lite, as the reason Lite is worth $500)** |
 | Conduit and trench | Conduit runs, MV trench, home-run auto-routing, conduit schedule, BESS run checklist, re-anchor and diagnose |

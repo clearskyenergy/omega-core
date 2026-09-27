@@ -88,8 +88,12 @@
      omega-whitelabel.js hydrate() already fetches omega_orgs/{org} to paint
      the editor, so the mode rides that read rather than costing a second one.
      It lands on CLEARSKY_CONFIG.tenant.editorMode. */
+  /* a real package, not the locked placeholder OmegaCaps holds while the
+     plan loads (or after a failed read): a legacy bess-lite tenant signing in
+     is not a packaged workspace for that moment */
+  function packaged() { var p = global.OmegaCaps && global.OmegaCaps.packageAccess(); return !!(p && !p.pending); }
   function resolve() {
-    if (global.OmegaCaps && global.OmegaCaps.packageAccess()) return DEFAULT_MODE;
+    if (packaged()) return DEFAULT_MODE;
     try {
       var c = global.CLEARSKY_CONFIG || {};
       var t = c.tenant || {};
@@ -124,7 +128,7 @@
   }
 
   function apply(mode) {
-    var m = global.OmegaCaps && global.OmegaCaps.packageAccess() ? DEFAULT_MODE : norm(mode || resolve());
+    var m = packaged() ? DEFAULT_MODE : norm(mode || resolve());
     restore();
     if (m === DEFAULT_MODE) return m;
 
@@ -168,6 +172,13 @@
     if (m === DEFAULT_MODE) return m;
     apply(m);
     watch();
+    /* A package lands after boot (an API call after sign-in) and shows
+       exactly what was bought: give the hidden pages back the moment it
+       does, not at the next tick of the watch. */
+    if (global.document && global.document.addEventListener) {
+      global.document.addEventListener('omega:package', function () { apply(); });
+      global.document.addEventListener('omega:plan-changed', function () { apply(); });
+    }
     return m;
   }
 

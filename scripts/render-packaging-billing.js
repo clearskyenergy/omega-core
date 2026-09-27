@@ -4,6 +4,7 @@
  * QBO is mocked; screenshots prove UI behavior, not hosted payment acceptance.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture'), B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules');
 var R = require('../api/_lib/proration'), P = require('../api/_lib/subscription-pricing');
@@ -41,7 +42,7 @@ var server = http.createServer(async function (req, res) {
     if (url.pathname === '/api/tenant-systems') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ name: 'Clean Cell · fixture', surfaces: [] })); }
     if (url.pathname === '/config.js') return res.end('window.CLEARSKY_CONFIG={firebase:{}};');
     if (['/omega-brand.js', '/omega-tenant.js', '/omega-whitelabel.js'].includes(url.pathname)) return res.end('');
-    if (!['/admin/tenant.html', '/start.html', '/offerings.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html', '/omega-tools.js', '/omega-workspace-hub.js', '/omega-caps.js'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
+    if (!['/admin/tenant.html', '/start.html', '/offerings.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html', '/omega-tools.js', '/omega-caps.js', '/omega-workspace-hub.js'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
     res.setHeader('Content-Type', url.pathname.endsWith('.css') ? 'text/css' : url.pathname.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(fs.readFileSync(path.join(root, url.pathname)));
   } catch (e) { res.statusCode = e.status || 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: e.message })); }
 });
@@ -105,19 +106,24 @@ async function run() {
     seed(['lite']);
     db.seed('omega_orgs/' + org, { name: 'Clean Cell · fixture', status: 'active', domains: ['fixture.example'] });
     db.seed('omega_orgs/' + org + '/billing/current', { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'stripe', amountDue: 0, subscriptionDue: '2026-10-17T00:00:00Z', lastPaidAt: '2026-09-17T00:00:00Z',
-      optIns: { siteintel: { key: 'siteintel', name: 'Site Intelligence', monthlyCents: 50000, display: '$500/month', requestedBy: 'owner@fixture.example', requestedAt: '2026-09-27T12:00:00Z', status: 'requested' } },
-      optOuts: { compute: { key: 'compute', name: 'Compute & Data Center', requestedBy: 'owner@fixture.example', requestedAt: '2026-09-27', status: 'requested', reason: 'Moving compute in-house' } } });
+      optIns: { siteintel: { key: 'siteintel', name: 'Omega Intel', monthlyCents: 50000, display: '$500/month', requestedBy: 'owner@fixture.example', requestedAt: '2026-09-27T12:00:00Z', status: 'requested' } },
+      optOuts: { compute: { key: 'compute', name: 'Omega Compute', requestedBy: 'owner@fixture.example', requestedAt: '2026-09-27', status: 'requested', reason: 'Moving compute in-house' } } });
     var legacyContext = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(legacyContext, base);
     var lp = await legacyContext.newPage(), legacyErrors = []; lp.on('pageerror', function (e) { legacyErrors.push(e.message); });
     await lp.goto(base + '/admin/tenant.html?org=' + org); await lp.locator('#pp-standing').waitFor();
     var standing = (await lp.locator('#pp-standing').textContent()).replace(/\s+/g, ' ');
-    /* Standard runs Site Map at Standard, which does not grant Compute's
-       capability: Compute is only Partly on the tenant's Modules page, so the
-       Package tab does not hold it either (review finding 24) */
-    check(/Today: Standard tier/.test(standing) && /Holds Lite, Grid Atlas, Storage Sizing & Revenue \(/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing)
-      && /Opt-out requested: Compute & Data Center 2026-09-27 by owner@fixture\.example \("Moving compute in-house"\)/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and both requests: ' + standing);
+    /* Standard under the ONE legacy rule (each module's tools, and its Site
+       Map commands by the catalog's legacyGates asked of the editor's own
+       ladder): Omega Design is always held, Omega EV and Omega Permits open in
+       full, the rest only partly (a Core editor has no Analyze, Estimate or
+       Compute tab). The Package tab reads it as the tenant's Modules page
+       does, and preselects what it holds or partly uses (moving it onto a
+       package never takes away something it opens today), plus the opt-in,
+       less the opt-out. */
+    check(/Today: Standard tier/.test(standing) && /Holds Omega Design, Omega EV, Omega Permits \(/.test(standing) && /Partly on: Omega Grid, Omega Storage, Omega Estimate, Omega Plans, Omega Intel, Omega Engineer, Omega Capital, Omega Compute, Omega Sites \(/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Omega Intel \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing)
+      && /Opt-out requested: Omega Compute 2026-09-27 by owner@fixture\.example \("Moving compute in-house"\)/.test(standing), 'the legacy standing names the tier, what it holds and partly uses, what it pays and both requests: ' + standing);
     var picked = await lp.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('[data-pp-pane="pkg"] [data-module-card]'), function (c) { var i = c.querySelector('input'); return i && i.checked; }).map(function (c) { return c.getAttribute('data-module-card'); }).sort(); });
-    check(picked.join() === 'gridatlas,lite,siteintel,storage', 'the picker starts from what the tier holds, plus the opt-in, less the opt-out: ' + picked.join());
+    check(picked.join() === 'engineering,estimate,evrebates,finance,gridatlas,lite,permitting,plansets,sitefinder,siteintel,storage', 'the picker starts from what the tier holds or partly uses, plus the opt-in, less the opt-out: ' + picked.join());
     check((await lp.locator('[data-pp-pane="pkg"] [data-request="compute"]').textContent()) === 'Opt-out requested' && (await lp.locator('[data-pp-pane="pkg"] [data-request="siteintel"]').textContent()) === 'Opt-in requested', 'each request is labelled on its module so staff see why the box is or is not ticked');
     await lp.locator('#pp-review:not([disabled])').waitFor();
     check(/\$/.test(await lp.locator('#pp-monthly').textContent()), 'the rail prices the preselection on the server');
@@ -126,17 +132,21 @@ async function run() {
        onto a package (review finding 3): the real plan-change, staff only */
     check(await lp.locator('#pp-answers [data-answer]').count() === 2 && await lp.locator('[data-answer="optOuts:compute"] button[data-status="done"]').textContent() === 'Mark done' && await lp.locator('[data-answer="optIns:siteintel"] button[data-status="activated"]').textContent() === 'Mark activated', 'each open request carries its answer buttons');
     await lp.locator('[data-answer="optOuts:compute"] button[data-status="done"]').click();
-    await lp.waitForFunction(function () { var n = document.getElementById('pp-standing'); return n && /Answered: Compute & Data Center opt-out done/.test(n.textContent); });
+    await lp.waitForFunction(function () { var n = document.getElementById('pp-standing'); return n && /Answered: Omega Compute opt-out done/.test(n.textContent); });
     var answeredOut = db.data.get('omega_orgs/' + org + '/billing/current').optOuts.compute;
     check(answeredOut.status === 'done' && answeredOut.resolvedBy === 'fixture@clearsky-usa.com' && answeredOut.reason === 'Moving compute in-house' && !/Opt-out requested/.test(await lp.locator('#pp-standing').textContent()), 'Mark done records the answer and the strip no longer lists the request');
     await lp.locator('[data-answer="optIns:siteintel"] button[data-status="declined"]').click();
-    await lp.waitForFunction(function () { var n = document.getElementById('pp-standing'); return n && /Site Intelligence opt-in declined/.test(n.textContent) && !document.getElementById('pp-answers'); });
+    await lp.waitForFunction(function () { var n = document.getElementById('pp-standing'); return n && /Omega Intel opt-in declined/.test(n.textContent) && !document.getElementById('pp-answers'); });
     var repicked = await lp.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('[data-pp-pane="pkg"] [data-module-card]'), function (c) { var i = c.querySelector('input'); return i && i.checked; }).map(function (c) { return c.getAttribute('data-module-card'); }).sort(); });
-    check(db.data.get('omega_orgs/' + org + '/billing/current').optIns.siteintel.status === 'declined' && repicked.join() === 'gridatlas,lite,storage' && db.data.get('omega_orgs/' + org + '/billing/current').tier === 'standard', 'Decline records it, the picker drops the request, and the tier is untouched: ' + repicked.join());
+    check(db.data.get('omega_orgs/' + org + '/billing/current').optIns.siteintel.status === 'declined' && repicked.join() === 'compute,engineering,estimate,evrebates,finance,gridatlas,lite,permitting,plansets,sitefinder,siteintel,storage' && await lp.locator('[data-pp-pane="pkg"] [data-request]').count() === 0 && db.data.get('omega_orgs/' + org + '/billing/current').tier === 'standard', 'Mark done and Decline record the answers: no request is labelled, what the tier opens (Compute again, Intel partly) stays preselected, and the tier is untouched: ' + repicked.join());
     check(legacyErrors.length === 0, legacyErrors.join('\n')); await legacyContext.close();
     /* The one menu on a plan billed outside the engine (2026-09-27): the
        tenant's owner opts in and out by REQUEST, each step states the money
-       before it writes, and Cancel request is the undo. Real plan-change. */
+       before it writes, and Cancel request is the undo. Opt in asks
+       addon-quote first; Omega Grid is not exact on Standard and this
+       workspace takes no card payments (no sandbox), so both answer with the
+       recorded request (the card path is the block after this one). Real
+       plan-change. */
     seed(['lite'], false);
     db.seed('omega_orgs/' + org, { name: 'Clean Cell · fixture', status: 'active', domains: ['fixture.example'] });
     db.seed('omega_orgs/' + org + '/billing/current', { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'stripe' });
@@ -153,7 +163,7 @@ async function run() {
     await openLegacy('gridatlas', { single: true, intent: 'add' });
     await dlg.getByRole('button', { name: 'Request opt-in', exact: true }).waitFor();
     var inText = await dlg.textContent();
-    check(/Opt in to Grid Atlas for \$[\d,]+\/month\?/.test(inText) && /Nothing is charged before you approve that invoice/.test(inText) && !legacyBill().optIns, 'legacy Opt in: the panel names the module and its price, and nothing is written yet');
+    check(/Opt in to Omega Grid for \$[\d,]+\/month\?/.test(inText) && /Nothing is charged before you approve that invoice/.test(inText) && !legacyBill().optIns, 'legacy Opt in: the panel names the module and its price, and nothing is written yet');
     check((await lm.locator('#opm-title').textContent()) === 'The Ladder' && inText.indexOf('Build your own experience') < 0 && /billed by ClearSky under its agreement/.test(inText) && await lm.locator('#opm-every').count() === 1 && await dlg.locator('[data-module-card]').count() === 1, 'the Ladder on one module: its name, the plan it is on, See every module');
     await dlg.getByRole('button', { name: 'Request opt-in', exact: true }).click();
     await dlg.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
@@ -175,7 +185,7 @@ async function run() {
     check((await dlg.locator('.opm-badge').textContent()) === 'Partly included' && await dlg.getByRole('button', { name: 'Opt out', exact: true }).count() === 0, 'a module partly on the plan offers Opt in, never Opt out');
     /* a department on its own names what it needs once: on the card at rest,
        then in the confirm panel (the server's line) instead, never both */
-    var needsOffice = function (t) { return (t.match(/Also adds Office, which Plant needs\./g) || []).length; };
+    var needsOffice = function (t) { return (t.match(/Also adds Logic Office, which Logic Plant needs\./g) || []).length; };
     await openLegacy('logic-plant', { single: true, intent: 'add' });
     await dlg.getByRole('button', { name: 'Request opt-in', exact: true }).waitFor();
     check(needsOffice(await dlg.innerText()) === 1, 'legacy Opt in on Plant names Office once: ' + await dlg.innerText());
@@ -202,6 +212,61 @@ async function run() {
     await dlg.locator('.opm-reason').waitFor();
     check(/Billing is not set up/.test(await dlg.locator('.opm-reason').textContent()) && (await dlg.locator('a[href^="mailto:dev%40clearsky-usa.com"]').count()) === 1, 'when the request cannot be recorded, a small email line is the fallback');
     check(lmErrors.length === 0, lmErrors.join('\n')); await lmCtx.close();
+    /* Opt in BY CARD on a plan billed outside the engine (#177's add-on, in
+       the one card's words): a module the plan switches on EXACTLY (every
+       Omega Logic part) is bought as an add-on on its own QuickBooks invoice.
+       Opt in prices it (addon-quote), "Opt in and pay" issues the invoice
+       (addon-buy), and the card waits for payment with Pay, I've paid and
+       Cancel request (addon-cancel with its id). An add-on on by card opts
+       out on its own card: it stops at the end of the month paid for
+       (addon-cancel with the module), and its Cancel request keeps it
+       (withdraw-addon-cancel). Real plan-change and add-on engine;
+       QuickBooks mocked. */
+    seed(['lite'], false);
+    db.seed('omega_orgs/' + org, { name: 'Clean Cell · fixture', status: 'active', packagingSandbox: true, domains: ['fixture.example'] });
+    db.seed('omega_orgs/' + org + '/billing/current', { tier: 'enterprise', addons: [], toolOverrides: {}, paymentProvider: 'stripe' });
+    var aoCtx = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(aoCtx, base);
+    var ap = await aoCtx.newPage(), aoErrors = []; ap.on('pageerror', function (e) { aoErrors.push(e.message); });
+    await ap.goto(base + '/admin/tenant.html?org=' + org); await ap.locator('[data-pp-tab="cust"]').waitFor();
+    await ap.evaluate(function () { return fetch('/api/offerings').then(function (r) { return r.json(); }).then(function (j) { window.__offer = j.modules; }); });
+    var aoBill = function () { return db.data.get('omega_orgs/' + org + '/billing/current'); };
+    var aoInvoices = function () { var at = 'omega_orgs/' + org + '/billing/current/invoices/'; return Array.from(db.data.keys()).filter(function (p) { return p.indexOf(at) === 0 && p.slice(at.length).indexOf('/') < 0; }).map(function (p) { return db.data.get(p); }).filter(function (r) { return r && r.kind === 'addon'; }); };
+    var openAddOn = function (key, how, states) { return ap.evaluate(function (a) {
+      OmegaPackageMenu.open(a.key, Object.assign({ view: { catalog: window.__offer, modules: ['lite'] }, legacy: { company: 'Clean Cell · fixture', email: 'dev@clearsky-usa.com', billing: a.billing, states: a.states } }, a.how));
+    }, { key: key, how: how || {}, billing: JSON.parse(JSON.stringify(aoBill())), states: states || {} }); };
+    var adlg = ap.locator('#omega-package-menu');
+    await openAddOn('logic-office', { single: true, intent: 'add' }, { 'logic-office': 'ask' });
+    await adlg.getByRole('button', { name: 'Opt in and pay', exact: true }).waitFor();
+    check(!aoBill().addOns && !aoInvoices().length && !/Add to plan|Ask ClearSky|Subscribe|Request opt-in/.test(await adlg.textContent()), 'legacy Opt in on a module its plan switches on exactly: the card price and Opt in and pay, and nothing written yet');
+    await adlg.getByRole('button', { name: 'Opt in and pay', exact: true }).click();
+    await adlg.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
+    var aoBought = aoInvoices();
+    check(aoBought.length === 1 && aoBought[0].state === 'unpaid' && aoBill().addOns.state === 'awaiting_payment' && (await adlg.locator('.opm-badge').textContent()) === 'Waiting for payment'
+      && /^Pay \$[\d,.]+ in QuickBooks$/.test((await adlg.locator('a.opm-paylink').textContent()).trim()) && await adlg.getByRole('button', { name: 'I\'ve paid', exact: true }).count() === 1,
+      'Opt in and pay issues its own QuickBooks invoice; the card waits for payment with Pay, I’ve paid and Cancel request');
+    await adlg.getByRole('button', { name: 'Cancel request', exact: true }).click();
+    await adlg.locator('.opm-primary', { hasText: 'Cancel request' }).click();
+    await adlg.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
+    check(aoInvoices()[0].state === 'cancelled' && !(aoBill().addOns.live || []).length, 'Cancel request withdraws the unpaid purchase (addon-cancel with its id): nothing is on and nothing is charged');
+    db.seed('omega_orgs/' + org + '/billing/current', { tier: 'enterprise', addons: [], toolOverrides: {}, paymentProvider: 'stripe',
+      addOns: { modules: ['logic-office'], live: ['logic-office'], state: 'paid', billingDay: 20, nextInvoiceOn: CYCLE.end, paidThrough: CYCLE.end, accessUntil: Date.now() + 30 * 86400000, pending: [] } });
+    await openAddOn('logic-office', { single: true }, { 'logic-office': 'held' });
+    await adlg.getByRole('button', { name: 'Opt out', exact: true }).waitFor();
+    check((await adlg.locator('.opm-badge').textContent()) === '● On your plan' && /Added to your plan by card · renews on /.test(await adlg.textContent()), 'an add-on on by card: On your plan, and the day it renews');
+    await adlg.getByRole('button', { name: 'Opt out', exact: true }).click();
+    await adlg.locator('.opm-primary', { hasText: 'Opt out' }).waitFor();
+    var aoStopText = await adlg.textContent();
+    check(/Logic Office stays on until \d{4}-\d{2}-\d{2}, the end of the month you paid for, and is not renewed\./.test(aoStopText) && !aoBill().addOns.ending && !aoBill().optOuts && !/Send opt-out request/.test(aoStopText),
+      'Opt out of a card add-on: the server says it stops at the end of the month paid for, never the recorded opt-out, and nothing is written yet');
+    await adlg.locator('.opm-primary', { hasText: 'Opt out' }).click();
+    await adlg.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
+    check(aoBill().addOns.ending['logic-office'].status === 'requested' && aoBill().addOns.live.indexOf('logic-office') >= 0 && !aoBill().optOuts && (await adlg.locator('.opm-badge').textContent()) === 'Opting out',
+      'Opt out records the stop on the add-on; it stays on until then and the card says Opting out');
+    await adlg.getByRole('button', { name: 'Cancel request', exact: true }).click();
+    await adlg.locator('.opm-primary', { hasText: 'Cancel request' }).click();
+    await adlg.getByRole('button', { name: 'Opt out', exact: true }).waitFor();
+    check(aoBill().addOns.ending['logic-office'].status === 'withdrawn' && (await adlg.locator('.opm-badge').textContent()) === '● On your plan', 'Cancel request keeps it (withdraw-addon-cancel): it renews with the add-ons');
+    check(aoErrors.length === 0, aoErrors.join('\n')); await aoCtx.close();
     seed(['lite'], false); var tenantContext = await browser.newContext(); await init(tenantContext, base); var tenantPage = await tenantContext.newPage(); await tenantPage.goto(base + '/admin/tenant.html?org=' + org); await tenantPage.locator('[data-pp-tab="cust"]').waitFor();
     check(await tenantPage.locator('[data-pp-tab]').count() === 2, 'tenant admin only sees plan and history'); check(await tenantPage.locator('#pp-apply').count() === 0, 'tenant cannot activate'); await tenantContext.close();
     for (var width of [1024, 768]) {
@@ -231,10 +296,10 @@ async function run() {
     await pp10.locator('#billing-continue').click(); await pp10.locator('#step-build').waitFor({ state: 'visible' });
     /* the build step: the menu, the monthly membership quoted by the server, monthly or yearly at ten months */
     await pp10.waitForFunction(function () { return /^\$[\d,]+\/month$/.test(document.getElementById('signup-package-price').textContent); });
-    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Pay and start now' && (await pp10.locator('#billing-submit').textContent()).indexOf('trial instead') > 0, 'the build step offers pay-and-start first and the trial second');
+    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Subscribe' && (await pp10.locator('#billing-submit').textContent()).indexOf('trial instead') > 0, 'the build step offers pay-and-start first and the trial second');
     check(/\/year, invoiced once · save \$[\d,]+/.test(await pp10.locator('#interval-annual-price').textContent()), 'the yearly card shows the year\u2019s price and the saving: ' + await pp10.locator('#interval-annual-price').textContent());
     await pp10.locator('#pick-annual input').check();
-    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Pay for the year and start now' && /ten months of twelve/.test(await pp10.locator('#signup-interval-note').textContent()), 'yearly: the button and the note say so');
+    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Subscribe yearly' && /ten months of twelve/.test(await pp10.locator('#signup-interval-note').textContent()), 'yearly: the button and the note say so');
     await pp10.locator('#pick-monthly input').check();
     await pp10.locator('#billing-pay').click(); await pp10.locator('#step-pay').waitFor({ state: 'visible' });
     var payBill = db.data.get('omega_orgs/paynow-fixture.example/billing/current'), payOrg = db.data.get('omega_orgs/paynow-fixture.example');

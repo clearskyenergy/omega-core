@@ -40,8 +40,8 @@ function project(caller, billing, org, member, now) {
   var notice = null;
   if (state === 'trial' && canWork && now >= instant(billing.trialStartedAt) + 10 * 86400000) {
     notice = { text: 'Your trial ends on ' + new Date(instant(billing.trialEndsAt)).toISOString().slice(0, 10) + '. Your plan: ' + (billing.plan || 'Lite + modules') + (billing.monthlyDisplay ? ', ' + billing.monthlyDisplay : '') + '.', payUrl: null };
-  } else if (!canWork) notice = { text: 'This workspace is read-only. Your saved projects remain available. Pay to continue creating and exporting.', payUrl: require('./logic-policy').paymentLink(billing.paymentLink) };
-  else if (state === 'past_due_lite') notice = { text: 'Payment is overdue. Your workspace has returned to Lite. Your saved work remains available.', payUrl: require('./logic-policy').paymentLink(billing.paymentLink) };
+  } else if (!canWork) notice = { text: 'This workspace is read-only. Your saved projects remain available. Pay to continue creating and exporting.', payUrl: require('./billing-driver').payLink(billing.paymentLink), payWith: require('./billing-driver').name(require('./billing-driver').providerOf(billing)) };
+  else if (state === 'past_due_lite') notice = { text: 'Payment is overdue. Your workspace has returned to Omega Design. Your saved work remains available.', payUrl: require('./billing-driver').payLink(billing.paymentLink), payWith: require('./billing-driver').name(require('./billing-driver').providerOf(billing)) };
   /* live: whether the PLAN is paid up (readOnly also covers a viewer's own
      role), so the editor's chip tells a viewer on a live plan "view only"
      and never "read-only until paid" with an I've paid button */

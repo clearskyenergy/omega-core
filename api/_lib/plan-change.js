@@ -2,18 +2,20 @@
  * Phase 5: a tenant adds modules to a paid package. Server-only money math;
  * the browser displays what this returns. Pay first, prorated to the
  * tenant's billing date. A $0 addition inside a tier whose current cycle is
- * already paid in QuickBooks activates immediately (Tommy, 2026-09-26,
- * option 1); anything owed becomes a QuickBooks CHANGE invoice and the
- * modules switch on when package-billing.reconcile sees it paid. Removals
+ * already paid activates immediately (Tommy, 2026-09-26, option 1);
+ * anything owed becomes a CHANGE invoice on the workspace's own rail
+ * (billing-driver: Stripe, or QuickBooks for a workspace billed there) and
+ * the modules switch on when package-billing.reconcile sees it paid. Removals
  * are recorded for the quarterly review and change nothing today. A plan
  * billed outside the engine opts in and out by REQUEST (optIns / optOuts on
- * its billing record, priced where there is a price, ClearSky mailed), and
- * every open request can be withdrawn; activation onto a package answers
- * them (package-billing prepare).
+ * its billing record, priced where there is a price, ClearSky mailed) or, for
+ * a module its plan can switch on exactly, buys it as an add-on by card
+ * (api/_lib/addons.js); every open request can be withdrawn, and activation
+ * onto a package answers them (package-billing prepare).
  */
 'use strict';
 var S = require('./package-billing'), B = require('./pricebook'), P = require('./subscription-pricing'), M = require('./modules');
-var R = require('./proration'), Q = require('./qbo-billing'), BP = require('./billing-profile'), U = require('./usage'), Policy = require('./package-billing-policy');
+var R = require('./proration'), Q = require('./qbo-billing'), D = require('./billing-driver'), BP = require('./billing-profile'), U = require('./usage'), AO = require('./addons'), Policy = require('./package-billing-policy');
 function fail(message, status) { var e = new Error(message); e.status = status || 409; throw e; }
 function iso(now) { return R.iso(now); }
 /* The tenant's records without insisting on the price book: a request that
@@ -59,7 +61,7 @@ function keys(list, name) {
   var out = [];
   list.forEach(function (k) {
     if (typeof k !== 'string' || !M.get(k)) fail('Unknown module', 400);
-    if (k === 'lite') fail('Lite is always included', 400);
+    if (k === 'lite') fail('Omega Design is always included', 400);
     if (out.indexOf(k) < 0) out.push(k);
   });
   return out;
@@ -114,14 +116,14 @@ function state(c, now) {
   if (b.packaged !== true) return { canApply: false, reason: 'This workspace is not on a subscription package.' };
   if (c.org.status !== 'active') return { canApply: false, reason: 'Your workspace is not active.' };
   if (b.packagingState === 'trial') return { canApply: false, reason: 'Your trial runs the package proposed at approval. Additions start after your first payment.' };
-  if (b.packagingState !== 'paid') return { canApply: false, reason: 'Pay your current invoice first. Additions are available once QuickBooks shows it paid.' };
+  if (b.packagingState !== 'paid') return { canApply: false, reason: 'Pay your current invoice first. Additions are available once the payment clears.' };
   if ((b.interval || 'monthly') === 'annual') return { canApply: false, reason: 'Additions to an annual prepay are quoted by ClearSky. Contact support.' };
-  if (!b.billingDay || !b.qboCustomerId) return { canApply: false, reason: 'Billing is not set up for this workspace yet.' };
+  if (!b.billingDay || !D.customerId(b, D.providerOf(b))) return { canApply: false, reason: 'Billing is not set up for this workspace yet.' };
   return { canApply: true };
 }
 function pending(records) {
-  return records.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'unpaid' && r.qboInvoiceId; })
-    .map(function (r) { return { id: r.id, add: r.add, names: names(r.add), plan: r.plan, totalCents: r.totalCents, display: P.money(r.totalCents), paymentLink: r.paymentLink || null, date: r.date, expiresOn: r.cycle.end, state: r.state }; });
+  return records.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'unpaid' && D.issued(r); })
+    .map(function (r) { return { id: r.id, add: r.add, names: names(r.add), plan: r.plan, totalCents: r.totalCents, display: P.money(r.totalCents), paymentLink: r.paymentLink || null, payWith: D.name(D.recordProvider(r)), date: r.date, expiresOn: r.cycle.end, state: r.state }; });
 }
 async function records(c) { return (await c.root.collection('billing').doc('current').collection('invoices').orderBy('date').get()).docs.map(function (d) { return d.data(); }); }
 function names(list) { return (list || []).map(function (k) { return M.get(k) ? M.get(k).name : k; }); }
@@ -155,7 +157,7 @@ function quote(c, rows, input, now) {
       display: 'Switch to ' + (after.recommendation.plan === 'alacarte' ? 'Lite + modules' : book.plans[after.recommendation.plan].name) + ' and save ' + P.money(after.recommendation.savingsCents) + '/month.' };
   }
   var feeNote = after.serviceFee.amountCents !== before.serviceFee.amountCents ? 'Your annual service fee at renewal becomes ' + after.serviceFee.display + ' (now ' + before.serviceFee.display + ').' : null;
-  var blocked = gate.canApply && open.length ? { canApply: false, reason: 'A change is waiting for payment: ' + open[0].add.map(function (k) { return M.get(k).name; }).join(', ') + '. Pay it in QuickBooks or cancel it first.' } : gate;
+  var blocked = gate.canApply && open.length ? { canApply: false, reason: 'A change is waiting for payment: ' + open[0].add.map(function (k) { return M.get(k).name; }).join(', ') + '. Pay it on the invoice page or cancel it first.' } : gate;
   var id = Q.key(B.stable({ org: c.root.id, book: book.version, owned: owned, add: add, plan: after.plan, cycle: cycle, lines: lines, total: totalCents, billing: { plan: sub.plan, credit: b.credit, builders: b.builders, viewers: b.viewers, interval: b.interval, serviceFee: b.serviceFee } }));
   return { orgId: c.root.id, previewId: id, effectiveAt: now, add: add, addNames: names(add), modules: target, plan: after.plan, planBefore: before.plan, planDisplay: after.display.plan,
     before: { plan: before.plan, monthlyCents: before.monthlyCents, display: before.display.monthly },
@@ -166,7 +168,7 @@ function quote(c, rows, input, now) {
     display: {
       today: included ? 'Included in your ' + after.display.plan + ' plan: no charge today.' : P.money(totalCents) + ' today (' + cycle.remainingDays + ' of ' + cycle.days + ' days left until your billing date, ' + cycle.end + ')',
       then: 'then ' + after.display.monthly + ' on the ' + ordinal(b.billingDay || 1) + (monthlyDelta === 0 ? ' (unchanged)' : monthlyDelta > 0 ? ' (up from ' + before.display.monthly + ')' : ' (down from ' + before.display.monthly + ')'),
-      activation: included ? 'It switches on now.' : 'Billed in QuickBooks. It switches on as soon as the payment clears; pay before ' + cycle.end + ' or the request expires.' } };
+      activation: included ? 'It switches on now.' : 'Billed through ' + D.name(D.providerOf(b)) + '. It switches on as soon as the payment clears; pay before ' + cycle.end + ' or the request expires.' } };
 }
 async function preview(db, orgId, input, now) { var c = await S.context(db, orgId); return quote(c, await records(c), input, now); }
 async function apply(db, orgId, input, caller, now, deps) {
@@ -200,13 +202,13 @@ async function apply(db, orgId, input, caller, now, deps) {
   });
   if (replay) return replay;
   try {
-    var issued = null;
-    if (p.todayCents > 0) issued = await Q.driver(c.book, deps).invoice(record, BP.stored(c.profile), c.billing.qboCustomerId);
+    var issued = null, provider = D.providerOf(c.billing), customerOf = D.customerId(c.billing, provider), payWith = D.name(provider);
+    if (p.todayCents > 0) issued = await D.driver(c.book, provider, deps).invoice(record, BP.stored(c.profile), customerOf);
     return await db.runTransaction(async function (tx) {
       var live = await tx.get(current), invoices = await tx.get(current.collection('invoices').orderBy('date')), fresh = live.data() || {};
       if (!fresh.changeLock || fresh.changeLock.id !== record.id) fail('Change inputs moved; retry');
-      var stored = Object.assign({}, record, issued ? { state: 'unpaid', qboInvoiceId: issued.id, qboCustomerId: c.billing.qboCustomerId, totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now }
-        : { state: 'paid', qboInvoiceId: null, qboCustomerId: c.billing.qboCustomerId, paidCents: 0, paymentLink: null, activatedAt: now });
+      var stored = Object.assign({}, record, issued ? Object.assign({ state: 'unpaid' }, D.invoiceFields(provider, issued.id, customerOf), { totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now })
+        : Object.assign({ state: 'paid', provider: provider, paidCents: 0, paymentLink: null, activatedAt: now }, provider === 'stripe' ? { stripeInvoiceId: null, stripeCustomerId: customerOf } : { qboInvoiceId: null, qboCustomerId: customerOf }));
       tx.set(current.collection('invoices').doc(record.id), stored);
       var all = invoices.docs.map(function (d) { return d.data(); }).concat([stored]), after = fresh;
       if (!issued) after = Object.assign({}, fresh, { subscription: Object.assign({}, fresh.subscription || {}, { modules: p.modules, plan: p.plan, changedAt: now }) });
@@ -215,10 +217,10 @@ async function apply(db, orgId, input, caller, now, deps) {
       patch.changeLock = null; patch.updatedAt = now; patch.updatedBy = caller.email;
       tx.update(current, patch);
       if (issued) tx.set(c.root.collection('notifications').doc('package-change-' + record.id), { kind: 'billing', read: false, createdAt: now,
-        text: 'Your subscription change invoice is ready: ' + P.money(issued.totalCents) + '. Pay in QuickBooks to switch on ' + p.add.map(function (k) { return M.get(k).name; }).join(', ') + '.',
-        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents) });
+        text: 'Your subscription change invoice is ready: ' + P.money(issued.totalCents) + '. Pay it on the invoice page to switch on ' + p.add.map(function (k) { return M.get(k).name; }).join(', ') + '.',
+        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents), payWith: payWith });
       var result = { ok: true, changeId: record.id, state: issued ? 'awaiting_payment' : 'active', add: p.add, addNames: names(p.add), plan: p.plan,
-        todayCents: stored.totalCents, display: P.money(stored.totalCents), paymentLink: stored.paymentLink, expiresOn: p.cycle.end, modules: patch.modules || fresh.modules };
+        todayCents: stored.totalCents, display: P.money(stored.totalCents), paymentLink: stored.paymentLink, payWith: payWith, expiresOn: p.cycle.end, modules: patch.modules || fresh.modules };
       tx.set(op, { state: 'done', result: result, completedAt: now }, { merge: true });
       var event = { at: now, by: caller.email, action: issued ? 'change-requested' : 'change-included', changeId: record.id,
         was: { modules: fresh.modules, plan: fresh.plan }, changed: { add: p.add, plan: p.plan, totalCents: stored.totalCents, modules: patch.modules || fresh.modules, state: stored.state } };
@@ -247,8 +249,8 @@ async function cancel(db, orgId, changeId, caller, now) {
     tx.update(ref, { state: 'cancelled', cancelledAt: now, cancelledBy: caller.email });
     var all = invoices.docs.map(function (d) { return d.id === changeId ? Object.assign({}, d.data(), { state: 'cancelled' }) : d.data(); });
     tx.update(current, S.displayAfter(S.accessAfterInvoices(fresh, all, c.book, now), fresh, c.book, now));
-    var event = { at: now, by: caller.email, action: 'change-cancelled', changeId: changeId, invoiceId: r.qboInvoiceId,
-      was: { state: r.state }, changed: { state: 'cancelled', note: 'The QuickBooks invoice stays open until staff void it; a payment after this is flagged for review.' } };
+    var event = { at: now, by: caller.email, action: 'change-cancelled', changeId: changeId, invoiceId: D.invoiceId(r),
+      was: { state: r.state }, changed: { state: 'cancelled', note: 'The ' + D.name(D.recordProvider(r)) + ' invoice stays open until staff void it; a payment after this is flagged for review.' } };
     tx.set(current.collection('history').doc(changeId + '-cancel'), event); tx.set(c.root.collection('admin_audit').doc(changeId + '-cancel'), event);
     return { ok: true, changeId: changeId, state: 'cancelled' };
   });
@@ -338,17 +340,21 @@ async function summary(db, orgId) {
      them with the pay link while unpaid (Phase 10B: pay in settings) */
   var invoices = rows.slice().reverse().slice(0, 24).map(function (r) {
     return { id: r.id || r.date, kind: S.kindOf(r), state: r.state, date: r.date, period: r.period || null, totalCents: r.totalCents, display: P.money(r.totalCents),
-      paymentLink: r.state === 'unpaid' ? (r.paymentLink || null) : null, names: r.add ? names(r.add) : null, paidAt: r.paidAt || null };
+      paymentLink: r.state === 'unpaid' ? (r.paymentLink || null) : null, payWith: D.name(D.recordProvider(r)), names: r.add ? names(r.add) : S.kindOf(r) === 'addon' && r.modules ? names(r.modules) : null,
+      purpose: r.purpose || null, paidAt: r.paidAt || null };
   });
   return { orgId: orgId, packaged: b.packaged === true, packagingState: b.packagingState || null, plan: sub.plan || null, planDisplay: planDisplay, modules: b.modules || ['lite'], subscription: sub.modules || ['lite'],
     moduleNames: names(b.modules || ['lite']), subscriptionNames: names(sub.modules || ['lite']),
     interval: b.interval || 'monthly', billingDay: b.billingDay || null, nextInvoiceOn: b.nextInvoiceOn || null, monthlyDisplay: monthly,
     accessUntil: b.accessUntil == null ? null : b.accessUntil, paidThrough: b.paidThrough || null, amountDue: b.amountDue == null ? null : b.amountDue,
     amountDueDisplay: b.amountDue == null ? null : P.money(Math.round(b.amountDue * 100)), paymentLink: b.paymentLink || null, invoices: invoices,
+    provider: D.providerOf(b), payWith: D.name(D.providerOf(b)),
     gate: state(c, Date.now()), pending: pending(rows), removalRequests: b.removalRequests || [],
     /* what a plan billed outside the engine has asked for, as stored, and
        the day a packaged removal is reviewed: every card reads one summary */
     optIns: b.optIns || {}, optOuts: b.optOuts || {}, nextReviewOn: reviewOn(b, c.book, now),
+    /* a plan billed outside the engine: its add-ons (api/_lib/addons.js), bought, on, owed */
+    addOns: b.packaged === true ? null : AO.view(b, rows, now),
     recent: rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state !== 'unpaid'; }).slice(-5).map(function (r) { return { id: r.id, add: r.add, names: names(r.add), state: r.state, date: r.date, display: P.money(r.totalCents || 0) }; }) };
 }
 /* ── Opt in on a plan billed OUTSIDE the engine (Tommy, 2026-09-27: "when
@@ -375,7 +381,8 @@ async function optIn(db, orgId, input, caller, now) {
   P.catalog(c.book).forEach(function (m) { byKey[m.key] = m; });
   var have = requested(b.optIns);
   var logic = (b.addons || []).indexOf('omega-logic') >= 0 ? LOGIC : [];
-  var wanted = closure(['lite'].concat(logic, have), add);
+  /* a module on now as a paid add-on is held: never requested again, and what it needs is not pulled in */
+  var wanted = closure(['lite'].concat(logic, have, AO.live(b, now)), add);
   if (!wanted.length) fail('Already requested', 409);
   var at = iso(now), entries = {}, cents = 0;
   /* `asked`: the person named this module, or the closure pulled it in
@@ -467,7 +474,7 @@ async function withdraw(db, orgId, input, caller, now, field) {
    access is unchanged until then. It never touches tier, addons or
    toolAccess, and it prices nothing, so it needs no price book. A packaged
    workspace is refused and sent to the menu (request-removal). */
-var OPT_OUT_NOTE = 'Your plan\'s price is set by your agreement, so nothing changes today. ClearSky confirms the effective date and any new price with you in writing; you keep access until then. Lite stays.';
+var OPT_OUT_NOTE = 'Your plan\'s price is set by your agreement, so nothing changes today. ClearSky confirms the effective date and any new price with you in writing; you keep access until then. Omega Design stays.';
 async function optOut(db, orgId, input, caller, now) {
   var c = await bare(db, orgId), b = c.billing, remove = keys(input.remove, 'remove');
   if (b.packaged === true) fail('This workspace is on a subscription package: opt out through the menu, which queues it for the quarterly review.', 409);
@@ -477,6 +484,10 @@ async function optOut(db, orgId, input, caller, now) {
   if (c.org.status !== 'active') fail('Your workspace is not active.', 409);
   var current = c.root.collection('billing').doc('current');
   if (!(await current.get()).exists) fail('Billing is not set up for this workspace yet. Email ClearSky to change the plan.', 409);
+  /* a module on as a paid add-on is left on its own card (addon-cancel remove):
+     it stops at the end of the month paid for, never by a request to ClearSky */
+  var card = AO.live(b, now).filter(function (k) { return remove.indexOf(k) >= 0; });
+  if (card.length) fail(names(card).join(', ') + (card.length > 1 ? ' are add-ons' : ' is an add-on') + ' you pay for by card: opt out on its card, and it stops at the end of the month you paid for.', 409);
   /* an opt-in still open on a module being left: the page offers Opt out
      only on a module the plan HOLDS (OmegaWorkspaceHub.moduleCard), so an
      open opt-in there is stale (ClearSky met it with a tier or add-on edit
@@ -564,7 +575,7 @@ function packQuote(c, key, now) {
   var cycle = R.cycle(iso(now), b.billingDay || 1), id = Q.key(B.stable({ org: c.root.id, book: c.book.version, meter: key, cycle: cycle, cents: m.packCents, units: m.packUnits }));
   return { meter: key, module: m.module, name: m.name, units: m.packUnits, cents: m.packCents, display: P.money(m.packCents), previewId: id, effectiveAt: now,
     cycle: { start: cycle.start, end: cycle.end }, canApply: gate.canApply, reason: gate.reason || null,
-    text: m.packUnits + ' more ' + m.name + ' for ' + P.money(m.packCents) + ', good until ' + cycle.end + '. Billed in QuickBooks; added the moment the payment clears.' };
+    text: m.packUnits + ' more ' + m.name + ' for ' + P.money(m.packCents) + ', good until ' + cycle.end + '. Billed through ' + D.name(D.providerOf(b)) + '; added the moment the payment clears.' };
 }
 async function packBuy(db, orgId, input, caller, now, deps) {
   var c = await S.context(db, orgId); S.guard(c);
@@ -583,16 +594,17 @@ async function packBuy(db, orgId, input, caller, now, deps) {
     tx.set(op, { state: 'running', at: now, by: caller.email });
   });
   try {
-    var issued = await Q.driver(c.book, deps).invoice(record, BP.stored(c.profile), c.billing.qboCustomerId);
+    var provider = D.providerOf(c.billing), customerOf = D.customerId(c.billing, provider);
+    var issued = await D.driver(c.book, provider, deps).invoice(record, BP.stored(c.profile), customerOf);
     return await db.runTransaction(async function (tx) {
       var live = await tx.get(current), fresh = live.data() || {};
-      var stored = Object.assign({}, record, { state: 'unpaid', qboInvoiceId: issued.id, qboCustomerId: c.billing.qboCustomerId, totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now });
+      var stored = Object.assign({}, record, { state: 'unpaid' }, D.invoiceFields(provider, issued.id, customerOf), { totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now });
       tx.set(current.collection('invoices').doc(record.id), stored);
       tx.update(current, { amountDue: (fresh.amountDue || 0) + issued.totalCents / 100, updatedAt: now, updatedBy: caller.email });
       tx.set(c.root.collection('notifications').doc('package-pack-' + record.id), { kind: 'billing', read: false, createdAt: now,
-        text: 'Your usage pack invoice is ready: ' + P.money(issued.totalCents) + ' for ' + q.units + ' more ' + q.name + '. Pay in QuickBooks to add them.',
-        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents) });
-      var result = { ok: true, packId: record.id, state: 'awaiting_payment', meter: q.meter, units: q.units, todayCents: issued.totalCents, display: P.money(issued.totalCents), paymentLink: issued.payUrl, expiresOn: q.cycle.end };
+        text: 'Your usage pack invoice is ready: ' + P.money(issued.totalCents) + ' for ' + q.units + ' more ' + q.name + '. Pay it on the invoice page to add them.',
+        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents), payWith: D.name(provider) });
+      var result = { ok: true, packId: record.id, state: 'awaiting_payment', meter: q.meter, units: q.units, todayCents: issued.totalCents, display: P.money(issued.totalCents), paymentLink: issued.payUrl, payWith: D.name(provider), expiresOn: q.cycle.end };
       tx.set(op, { state: 'done', result: result, completedAt: now }, { merge: true });
       var event = { at: now, by: caller.email, action: 'pack-requested', packId: record.id, changed: { meter: q.meter, units: q.units, totalCents: issued.totalCents, state: 'unpaid' } };
       tx.set(current.collection('history').doc(record.id), event); tx.set(c.root.collection('admin_audit').doc(record.id), event);
@@ -618,14 +630,18 @@ async function autoTopup(db, orgId, enabled, caller, now) {
 async function reconcileNow(db, orgId, caller, now, deps) {
   var current = db.doc('omega_orgs/' + orgId + '/billing/current'), snap = await current.get(), b = snap.exists ? snap.data() : {};
   function out(bill, extra) {
+    /* a plan billed outside the engine answers for its add-ons only: its own
+       amount due and pay link are its own billing's, not this look's */
+    if (bill.packaged !== true) return Object.assign({ orgId: orgId, packaged: false, addOns: AO.view(bill, null, now), checkedAt: now }, extra || {});
     return Object.assign({ orgId: orgId, packaged: bill.packaged === true, packagingState: bill.packagingState || null, paid: bill.packagingState === 'paid',
       paymentLink: bill.paymentLink || null, amountDue: bill.amountDue == null ? null : bill.amountDue, amountDueDisplay: bill.amountDue == null ? null : P.money(Math.round(bill.amountDue * 100)),
-      accessUntil: bill.accessUntil == null ? null : bill.accessUntil, paidThrough: bill.paidThrough || null, nextInvoiceOn: bill.nextInvoiceOn || null, checkedAt: now }, extra || {});
+      accessUntil: bill.accessUntil == null ? null : bill.accessUntil, paidThrough: bill.paidThrough || null, nextInvoiceOn: bill.nextInvoiceOn || null,
+      provider: D.providerOf(bill), payWith: D.name(D.providerOf(bill)), checkedAt: now }, extra || {});
   }
-  if (b.packaged !== true) return out(b, { skipped: 'not packaged' });
+  if (b.packaged !== true && !b.addOns) return out(b, { skipped: 'not packaged' });
   if (b.paymentCheckedAt && now - b.paymentCheckedAt < 8000) return out(b, { throttled: true });
   await current.set({ paymentCheckedAt: now, paymentCheckedBy: caller.email }, { merge: true });
-  try { await S.reconcile(db, orgId, now, deps); } catch (e) { return out(b, { error: e.status && e.status < 500 ? e.message : 'QuickBooks could not be reached; try again in a moment' }); }
+  try { await S.reconcile(db, orgId, now, deps); } catch (e) { return out(b, { error: e.status && e.status < 500 ? e.message : D.name(D.providerOf(b)) + ' could not be reached; try again in a moment' }); }
   /* what the look found goes out now, not at the next tick: the tenant's
      receipt (the first one says the workspace is open) and ClearSky's alert */
   try { var Runner = require('./package-billing-runner'), mailer = (deps && deps.mail) || require('./mail'); await Runner.deliver(db, orgId, now, mailer); await Runner.staffDeliver(db, now, mailer); } catch (e) {}

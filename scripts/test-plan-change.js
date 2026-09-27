@@ -3,6 +3,7 @@
  * with QuickBooks mocked. No network, no live writes.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('assert'), F = require('./_lib/firestore-double');
 var B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules'), S = require('../api/_lib/package-billing');
 var Q = require('../api/_lib/qbo-billing'), R = require('../api/_lib/proration');
@@ -122,7 +123,7 @@ async function run() {
   var summary = await req('GET', { orgId: orgId }); equal(summary.packagingState, 'paid'); equal(summary.pending, []); equal(summary.gate.canApply, true);
   /* Phase 10B: the Account panel reads the invoices and the names off the same summary */
   equal(summary.invoices.length, 1); equal(summary.invoices[0].kind, 'subscription'); equal(summary.invoices[0].state, 'paid'); equal(summary.invoices[0].paymentLink, null); equal(typeof summary.invoices[0].display, 'string');
-  equal(summary.moduleNames.indexOf('Lite') >= 0 && summary.subscriptionNames.length === summary.subscription.length, true); equal(summary.paidThrough, summary.nextInvoiceOn); equal(summary.amountDue, null);
+  equal(summary.moduleNames.indexOf('Omega Design') >= 0 && summary.subscriptionNames.length === summary.subscription.length, true); equal(summary.paidThrough, summary.nextInvoiceOn); equal(summary.amountDue, null);
 
   /* ── Pay first, then the modules ────────────────────────────────── */
   seed(ev, 'field'); var before = calls;
@@ -472,7 +473,7 @@ async function run() {
   var s1 = snapshot(), od = await req('POST', { action: 'opt-out', remove: ['plansets'], dryRun: true });
   equal(snapshot(), s1, 'an opt-out dry run writes nothing'); equal(sentMail, []);
   equal(od, { dryRun: true, remove: ['plansets'], names: [M.get('plansets').name], closes: [],
-    note: 'Your plan\'s price is set by your agreement, so nothing changes today. ClearSky confirms the effective date and any new price with you in writing; you keep access until then. Lite stays.' });
+    note: 'Your plan\'s price is set by your agreement, so nothing changes today. ClearSky confirms the effective date and any new price with you in writing; you keep access until then. Omega Design stays.' });
   var oc = await req('POST', { action: 'opt-out', remove: ['logic-office'], dryRun: true });
   equal(oc.remove, ['logic-office', 'logic-plant', 'logic-materials', 'logic-logistics', 'logic-customer'], 'Office takes every Omega Logic department with it');
   var oo = await req('POST', { action: 'opt-out', remove: ['plansets'], reason: '  Not using it  ' });
@@ -483,7 +484,7 @@ async function run() {
   equal([rows(root + '/billing/current/history/optout-').length, rows(root + '/admin_audit/optout-').length], [1, 1], 'history and audit');
   equal(sentMail.map(function (m) { return m.name; }), ['optOutAlert']); equal([sentMail[0].o.names, sentMail[0].o.reason, sentMail[0].o.tier], [[M.get('plansets').name], 'Not using it', 'standard']);
   await refused(function () { return req('POST', { action: 'opt-out', remove: ['plansets'] }); }, /Already requested/);
-  await refused(function () { return req('POST', { action: 'opt-out', remove: ['lite'], dryRun: true }); }, /Lite is always included/);
+  await refused(function () { return req('POST', { action: 'opt-out', remove: ['lite'], dryRun: true }); }, /Omega Design is always included/);
   /* a held module whose opt-in was met by a tier edit and never answered:
      the opt-out says it closes that request, and does so in the same write */
   var st0 = snapshot(), sd = await req('POST', { action: 'opt-out', remove: ['siteintel'], dryRun: true });
@@ -539,7 +540,7 @@ async function run() {
   await refused(function () { return req('POST', { action: 'resolve-opt-in', add: ['siteintel'], status: 'activated' }, member); }, /workspace administrator/);
   await refused(function () { return req('POST', { action: 'resolve-opt-out', orgId: orgId, remove: ['compute'], status: 'activated' }, staff); }, /Status must be done or declined/);
   await refused(function () { return req('POST', { action: 'resolve-opt-in', orgId: orgId, add: ['siteintel'], status: 'done' }, staff); }, /Status must be activated or declined/);
-  await refused(function () { return req('POST', { action: 'resolve-opt-out', orgId: orgId, remove: ['compute', 'gridatlas'], status: 'done' }, staff); }, /No open request for Grid Atlas/, 'one closed module refuses the whole answer');
+  await refused(function () { return req('POST', { action: 'resolve-opt-out', orgId: orgId, remove: ['compute', 'gridatlas'], status: 'done' }, staff); }, /No open request for Omega Grid/, 'one closed module refuses the whole answer');
   equal(snapshot(), s5, 'a refused answer writes nothing');
   var done = await req('POST', { action: 'resolve-opt-out', orgId: orgId, remove: ['compute'], status: 'done', reason: '  Off from Oct 1 by letter  ' }, staff);
   equal([done.ok, done.resolved, done.status, done.optOuts.plansets.status], [true, ['compute'], 'done', 'requested']);
@@ -556,10 +557,21 @@ async function run() {
   await req('POST', { action: 'resolve-opt-in', orgId: orgId, add: ['estimate'], status: 'declined' }, staff);
   var answered = await req('GET', { orgId: orgId }, member);
   equal([answered.optIns.siteintel.status, answered.optIns.estimate.status, answered.optOuts.compute.status, answered.optOuts.plansets.status], ['activated', 'declined', 'done', 'declined'], 'every card reads the answer from the one summary');
-  await refused(function () { return req('POST', { action: 'resolve-opt-in', orgId: orgId, add: ['siteintel'], status: 'declined' }, staff); }, /No open request for Site Intelligence/, 'an answer is given once');
+  await refused(function () { return req('POST', { action: 'resolve-opt-in', orgId: orgId, add: ['siteintel'], status: 'declined' }, staff); }, /No open request for Omega Intel/, 'an answer is given once');
   seed(ev, 'field'); bill().optOuts = { plansets: { key: 'plansets', status: 'requested' } };
   await refused(function () { return req('POST', { action: 'resolve-opt-out', orgId: orgId, remove: ['plansets'], status: 'done' }, staff); }, /A packaged workspace is answered by activation or the review/);
 
+
+  /* merge: a module on as a paid card add-on (api/_lib/addons.js) */
+  legacy({ addOns: { modules: ['logic-office'], live: ['logic-office'], accessUntil: Date.now() + 10 * 86400000, state: 'paid' } });
+  await refused(function () { return req('POST', { action: 'opt-out', remove: ['logic-office'], dryRun: true }); }, /Logic Office is an add-on you pay for by card: opt out on its card/);
+  await refused(function () { return req('POST', { action: 'opt-out', remove: ['logic-office'] }); }, /add-on you pay for by card/);
+  equal((await req('POST', { action: 'opt-in', add: ['logic-plant'], dryRun: true })).add, ['logic-plant'], 'a live add-on is held: its dependant is requested alone');
+  await refused(function () { return req('POST', { action: 'addon-cancel', addOnId: 'x', remove: ['logic-office'] }); }, /Name a purchase or modules, not both/);
+  var sum = await req('GET', { orgId: orgId }, member);
+  ok(sum.addOns && sum.optIns && sum.optOuts && 'nextReviewOn' in sum, 'the summary carries add-ons and the requests');
+  legacy({ addOns: { modules: ['logic-office'], live: ['logic-office'], accessUntil: Date.now() - 1000, state: 'lapsed' } });
+  equal((await req('POST', { action: 'opt-out', remove: ['logic-office'], dryRun: true })).remove, ['logic-office'], 'a lapsed add-on is not on: the recorded opt-out is open');
   Date.now = realNow;
   console.log('Plan change: ' + count + ' passed; sandbox mock, no network.');
 }

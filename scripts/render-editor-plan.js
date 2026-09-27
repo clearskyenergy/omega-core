@@ -146,7 +146,7 @@ async function run() {
       ok(await chip.isVisible(), theme + ': the chip is in the title bar');
       ok((await chip.locator('.oep-v').textContent()) === 'Lite' && (await chip.locator('.oep-s').textContent()) === '', theme + ': Lite, nothing wrong');
       await openPanel();
-      ok((await pop.locator('.oep-insite .oep-mod').allTextContents()).join() === 'Lite', theme + ': Lite is In Site Map');
+      ok((await pop.locator('.oep-insite .oep-mod').allTextContents()).join() === M.get('lite').name, theme + ': the plan\'s one module, ' + M.get('lite').name + ', is In Site Map');
       ok(await pop.locator('.oep-elsewhere').count() === 0, theme + ': nothing Elsewhere on Lite');
       var links = await pop.locator('.oep-links a').evaluateAll(function (as) { return as.map(function (a) { return [a.getAttribute('href'), a.target, a.textContent]; }); });
       ok(links.length === 2 && links[0][0] === '/workspace#billing' && links[1][0] === '/workspace#modules' && links.every(function (l) { return l[1] === '_blank'; }), theme + ': Plan & billing and Modules, in a new tab: ' + JSON.stringify(links));
@@ -163,7 +163,7 @@ async function run() {
       await page.waitForFunction(function () { return /\$1,480\.00\/month/.test(document.getElementById('omega-plan-pop').textContent); });
       var inside = await pop.locator('.oep-insite .oep-mod').allTextContents(), outside = await pop.locator('.oep-elsewhere .oep-mod').allTextContents();
       ok(inside.join('|') === M.catalog().filter(function (m) { return M.starters().ev.indexOf(m.key) >= 0; }).map(function (m) { return m.name; }).join('|'), theme + ': the EV starter is In Site Map: ' + inside.join('|'));
-      ok(outside.join('|') === 'White Label Storefront|Office', theme + ': White Label and Office are Elsewhere: ' + outside.join('|'));
+      ok(outside.join('|') === M.get('whitelabel').name + '|' + M.get('logic-office').name, theme + ': the Storefront and Logic Office are Elsewhere: ' + outside.join('|'));
       ok(/Oct 1, 2026/.test(await pop.textContent()) && /Next invoice/.test(await pop.textContent()), theme + ': the next invoice, as the server dated it');
       ok(await pop.locator('.oep-mod[href="/workspace#module-gridatlas"][target="_blank"]').count() === 1, theme + ': a module opens its card on the Modules page');
       await page.screenshot({ path: path.join(output, theme + '-desktop-modules.png') });
@@ -176,7 +176,7 @@ async function run() {
       ok(await page.evaluate(function () { return Array.prototype.some.call(document.querySelectorAll('#ribbon-tabs .rtab[data-page]'), function (t) { return getComputedStyle(t).display !== 'none'; }); }), theme + ': read-only keeps the tabs that view');
       await openPanel();
       ok((await pop.locator('.oep-notice-text').textContent()) === expired.billingNotice.text, theme + ': the server\'s own notice');
-      ok((await pop.locator('.oep-notice a.oep-pay-link').getAttribute('href')) === PAY, theme + ': its QuickBooks pay link');
+      ok((await pop.locator('.oep-notice a.oep-pay-link').getAttribute('href')) === PAY && (await pop.locator('.oep-notice a.oep-pay-link').textContent()) === 'Pay in ' + expired.billingNotice.payWith, theme + ': its pay link, named for the rail the server names (' + expired.billingNotice.payWith + ')');
       paid = false;
       await pop.locator('#omega-plan-paid').click();
       await page.waitForFunction(function () { return /Not paid yet/.test(document.getElementById('omega-plan-pop').textContent); });
@@ -221,9 +221,9 @@ async function run() {
       await openPanel();
       await page.screenshot({ path: path.join(output, theme + '-desktop-unchecked.png') });
       /* the plan behind the retries: a legacy Performance workspace with one
-         opt-in still open (Permitting) and one ClearSky met by the tier
-         (Storage, which Performance holds) */
-      await page.evaluate(function () { window.__failBilling = false; window.__billing = { tier: 'deluxe', optIns: { permitting: { status: 'requested' }, storage: { status: 'requested' } } }; });
+         opt-in still open (the Storefront, which Performance does not hold)
+         and one ClearSky met by the tier (Storage, which Performance holds) */
+      await page.evaluate(function () { window.__failBilling = false; window.__billing = { tier: 'deluxe', optIns: { whitelabel: { status: 'requested' }, storage: { status: 'requested' } } }; });
       var catalogBefore = calls.catalog;
       /* review #19: a Retry whose read is still out shows nothing that
          produces, and a click on a hidden producing button is swallowed */
@@ -265,10 +265,10 @@ async function run() {
       await openPanel();
       await page.waitForFunction(function () { return document.querySelectorAll('#omega-plan-pop .oep-insite .oep-mod').length > 1; });
       var legacyIn = await pop.locator('.oep-insite .oep-mod').allTextContents();
-      ok(legacyIn.some(function (t) { return /^Plan Sets & CAD$/.test(t); }), theme + ': Performance holds Plan Sets in Site Map: ' + legacyIn.join('|'));
-      ok(legacyIn.some(function (t) { return /^Compute & Data Center.*Partly included$/.test(t); }), theme + ': and Compute only partly');
+      ok(legacyIn.some(function (t) { return t === M.get('plansets').name; }), theme + ': Performance holds ' + M.get('plansets').name + ' in Site Map: ' + legacyIn.join('|'));
+      ok(legacyIn.some(function (t) { return t.indexOf(M.get('compute').name) === 0 && /Partly included$/.test(t); }), theme + ': and ' + M.get('compute').name + ' only partly');
       var changing = await pop.locator('.oep-changing li').allTextContents();
-      ok(changing.length === 1 && changing[0].indexOf(M.get('permitting').name) === 0 && /Opt-in requested/.test(changing[0]), theme + ': the opt-in still open is in progress: ' + JSON.stringify(changing));
+      ok(changing.length === 1 && changing[0].indexOf(M.get('whitelabel').name) === 0 && /Opt-in requested/.test(changing[0]), theme + ': the opt-in still open is in progress: ' + JSON.stringify(changing));
       ok(!changing.some(function (t) { return t.indexOf(M.get('storage').name) === 0; }) && legacyIn.indexOf(M.get('storage').name) >= 0, theme + ': one the tier already met is Live, as on the Modules page, never also "Opt-in requested"');
       ok(await page.locator('#omega-package-tab').count() === 0 && calls.catalog === catalogBefore, theme + ': no Ladder and no package pricing for a legacy plan');
       await page.screenshot({ path: path.join(output, theme + '-desktop-legacy.png') });

@@ -89,6 +89,17 @@ ok('read-only: the chip says so', ro.state === 'readonly' && ro.suffix === ' · 
 ok('the panel carries the server\'s notice, its pay link and I\'ve paid', ro.notice.text === expired.billingNotice.text && ro.notice.payUrl === PAY && ro.notice.paid === true);
 ok('a read-only workspace still sees its modules', same(keys(ro.inSiteMap), ['lite', 'gridatlas']));
 
+/* the pay words follow the rail the server names (billing-driver payWith) */
+var stripeRo = PLAN.summary({ view: projection(['lite'], { packagingState: 'trial', trialStartedAt: NOW - 20 * DAY, trialEndsAt: NOW - 6 * DAY, accessUntil: NOW - 6 * DAY, paymentLink: PAY, billingProvider: 'stripe', stripeCustomerId: 'cus_plan' }), now: NOW });
+ok('read-only on Stripe: the notice names Stripe as its rail', stripeRo.state === 'readonly' && stripeRo.notice.payWith === 'Stripe', stripeRo.notice);
+ok('read-only on QuickBooks: the notice names QuickBooks', ro.notice.payWith === 'QuickBooks', ro.notice);
+var planText = fs.readFileSync(path.join(ROOT, 'omega-editor-plan.js'), 'utf8');
+ok('the chip keeps no pay page of its own: every pay link is Pay in + the server\'s rail', !/'Pay in QuickBooks'|Checking QuickBooks|as far as QuickBooks/.test(planText) && /function payWords\(payWith\)/.test(planText));
+/* a 403 from the package check is the server saying no (OmegaCaps failedView) */
+var refusedView = CAPS.pendingPackage(); refusedView.refused = 'Workspace role required';
+var refusedChip = PLAN.summary({ view: refusedView });
+ok('a refused plan says so in the server\'s words, with no Retry and nothing to pay', refusedChip.state === 'refused' && refusedChip.notice.text === 'Workspace role required' && !refusedChip.retry && !refusedChip.notice.paid && !refusedChip.listed, refusedChip);
+
 var viewer = PLAN.summary({ view: projection(['lite'], null, { role: 'viewer', status: 'active' }) });
 ok('a viewer on a live plan is read-only by role, told so, and offered no payment', viewer.state === 'viewer' && viewer.suffix === ' · Read-only' && viewer.notice && !viewer.notice.paid && !viewer.notice.payUrl && /view/.test(viewer.notice.text));
 
@@ -140,7 +151,7 @@ ok('the plan takes the server\'s name when it has one', fig.plan === 'Field', fi
 ok('the monthly figure and next invoice are the server\'s, the date as written', fig.figures.monthly === '$1,250.00/month' && fig.figures.next === 'Oct 1, 2026', fig.figures);
 ok('the generic à la carte name gives way to the count', packaged(['lite', 'storage'], { figures: { planDisplay: 'Lite + modules' } }).plan === 'Lite + 1 module');
 var ch = {}; fig.changes.forEach(function (c) { ch[c.key] = c; });
-ok('a change invoice waiting for payment, with its pay link', ch.gridatlas && ch.gridatlas.pill === 'Waiting for payment' && ch.gridatlas.payUrl === PAY && ch.gridatlas.name === 'Grid Atlas');
+ok('a change invoice waiting for payment, with its pay link', ch.gridatlas && ch.gridatlas.pill === 'Waiting for payment' && ch.gridatlas.payUrl === PAY && ch.gridatlas.name === M.get('gridatlas').name && ch.gridatlas.name === 'Omega Grid');
 ok('bought but not on yet', ch.storage && ch.storage.pill === 'Bought · not on yet');
 ok('a queued removal is Opting out', ch.estimate && ch.estimate.pill === 'Opting out');
 var failed = packaged(['lite', 'storage'], { figures: { error: true } });
@@ -152,16 +163,16 @@ ok('no contract-forbidden words in anything the panel says', ![lite, ev, ro, vie
 
 /* ── 1b · legacy ─────────────────────────────────────────────────────── */
 /* the Modules page's ctx, built as workspace.html's hubCtx() builds it:
-   the tools by omega-tools, Site Map by OmegaWorkspaceHub.editorCtx */
+   the ONE legacy ctx (OmegaWorkspaceHub.legacyCtx): the tools by
+   omega-tools, the modules bought by card and on now, Site Map's commands
+   (the catalog's legacyGates) on the tier editorCtx names */
 function legacyCtx(tier, b) {
   var level = PLAN.TIER_LEVEL[b.tier || 'standard'], ws = { orgId: 'tenant.example', tierLevel: level, addons: b.addons || [] };
   if (b.toolOverrides) ws.toolOverrides = b.toolOverrides; if (Array.isArray(b.toolAccess)) ws.toolAccess = b.toolAccess;
-  var c = { packaged: false, tierLevel: level, addons: ws.addons, modules: [], canOpen: function (k) { var t = TOOLS.byKey(k); return !!t && TOOLS.isUnlocked(t, ws); },
-    tool: function (k) { return TOOLS.byKey(k); } };
-  var e = HUB.editorCtx(CAPS, b, { orgId: 'tenant.example' });
-  c.editorCan = e.editorCan; c.ungated = e.ungated; c.editorTier = e.tier;
-  return c;
+  return HUB.legacyCtx({ tools: TOOLS, ws: ws, billing: b, caps: CAPS, who: { orgId: 'tenant.example' } });
 }
+function heldRows(s) { return keys(s.inSiteMap.concat(s.elsewhere).filter(function (r) { return !r.pill; })); }
+function partRows(s) { return keys(s.inSiteMap.concat(s.elsewhere).filter(function (r) { return r.pill === 'Partly included'; })); }
 function legacy(tier, billing) {
   CAPS.setAddons(billing && billing.addons || []);
   return PLAN.summary({ tier: tier, billing: billing, offerings: OFFER, hub: HUB, tools: TOOLS, caps: CAPS, org: 'tenant.example' });
@@ -176,23 +187,32 @@ ok('Compute is only partly included: its tools open, Site Map\'s compute tab doe
   var rule = CAT.filter(function (m) { return HUB.moduleState(m, legacyCtx(t, { tier: t })) === 'held'; }).map(function (m) { return m.key; });
   ok(t + ': the chip holds exactly what the Modules page\'s rule holds', same(held, rule), [held, rule]);
 });
-ok('Standard does not hold Plan Sets', keys(legacy('standard', { tier: 'standard' }).inSiteMap).indexOf('plansets') < 0);
+var stdChip = legacy('standard', { tier: 'standard' });
+ok('Standard does not hold Omega Plans: Site Map prints plot plans and one-lines from Performance up, so it is only partly included', heldRows(stdChip).indexOf('plansets') < 0 && partRows(stdChip).indexOf('plansets') >= 0, [heldRows(stdChip), partRows(stdChip)]);
+ok('Standard holds Omega Design, Omega EV and Omega Permits (the one rule, on the real editor\'s gates)', same(heldRows(stdChip), ['lite', 'evrebates', 'permitting']), heldRows(stdChip));
 /* the tier is editorCtx's (review brief): the chip's own tier LEVEL made a
    legacy trial Enterprise for a module with nothing to count */
 var trialHeld = legacy('trial', { tier: 'trial' });
 ok('a legacy trial does not hold White Label: Site Map runs trial, not Enterprise (editorCtx)', keys(trialHeld.elsewhere).indexOf('whitelabel') < 0 && HUB.moduleState(CAT.filter(function (m) { return m.key === 'whitelabel'; })[0], legacyCtx('trial', { tier: 'trial' })) === 'ask', keys(trialHeld.elsewhere));
 ok('Enterprise still holds White Label', keys(legacy('enterprise', { tier: 'enterprise' }).elsewhere).indexOf('whitelabel') >= 0);
-ok('capTier through editorCtx: billed Enterprise, capped Standard holds no Plan Sets', keys(legacy('standard', { tier: 'enterprise', capTier: 'standard' }).inSiteMap).indexOf('plansets') < 0);
+var cappedChip = legacy('standard', { tier: 'enterprise', capTier: 'standard' });
+ok('capTier through editorCtx: billed Enterprise, capped Standard does not hold Omega Plans', heldRows(cappedChip).indexOf('plansets') < 0 && partRows(cappedChip).indexOf('plansets') >= 0, [heldRows(cappedChip), partRows(cappedChip)]);
 CAPS.setAddons(['permitting']); var addonsBefore = CAPS.addons().join(), orgBefore = CAPS.org();
 PLAN.summary({ tier: 'deluxe', billing: { tier: 'deluxe', addons: ['compute'] }, offerings: OFFER, hub: HUB, tools: TOOLS, caps: CAPS, org: 'other.example', who: { email: 'dana@other.example', emailVerified: true } });
 ok('the chip only reads OmegaCaps: the org and add-ons Site Map is gating with are untouched by its judgement', CAPS.addons().join() === addonsBefore && CAPS.org() === orgBefore, [CAPS.addons(), CAPS.org()]);
 CAPS.setAddons([]);
-ok('a legacy trial holds no module Site Map withholds', keys(legacy('trial', { tier: 'trial' }).inSiteMap.filter(function (r) { return !r.pill; })).every(function (k) { return ['plansets', 'engineering', 'compute', 'siteintel', 'permitting'].indexOf(k) < 0; }));
+/* a module is held only where every Site Map command it carries opens on
+   the tier the editor runs for a trial ('trial', not Enterprise); Omega
+   Design is the floor every plan stands on, always held */
+var trialCaps = HUB.editorCtx(CAPS, { tier: 'trial' }, { orgId: 'tenant.example' });
+ok('a legacy trial holds no module Site Map withholds', trialCaps.tier === 'trial' && heldRows(legacy('trial', { tier: 'trial' })).every(function (k) {
+  return k === 'lite' || (M.get(k).legacyGates || []).every(function (g) { return !g || String(g).split('+').every(function (c) { return trialCaps.canCap(c); }); });
+}) && heldRows(legacy('trial', { tier: 'trial' })).indexOf('plansets') < 0, heldRows(legacy('trial', { tier: 'trial' })));
 var ent = legacy('enterprise', { tier: 'enterprise' }), entLogic = legacy('enterprise', { tier: 'enterprise', addons: ['omega-logic'] });
 ok('Enterprise without the add-on holds no Omega Logic part', !keys(ent.elsewhere).some(function (k) { return /^logic-/.test(k); }));
 ok('the omega-logic add-on puts every part Elsewhere', ['logic-office', 'logic-plant', 'logic-materials', 'logic-logistics', 'logic-customer'].every(function (k) { return keys(entLogic.elsewhere).indexOf(k) >= 0; }));
 var two = legacy('enterprise', { tier: 'enterprise', toolAccess: ['editor', 'gridatlas'] });
-ok('the two-tool product: its allowlist narrows what is held', keys(two.inSiteMap).indexOf('storage') < 0 && two.inSiteMap.some(function (r) { return r.key === 'gridatlas'; }), keys(two.inSiteMap));
+ok('the two-tool product: its allowlist narrows what is held', heldRows(two).indexOf('storage') < 0 && partRows(two).indexOf('storage') >= 0 && two.inSiteMap.some(function (r) { return r.key === 'gridatlas'; }), [heldRows(two), partRows(two)]);
 ok('a missing billing record reads as Standard, as the workspace reads it', legacy('trial', {}).plan === 'Standard');
 ok('an unreadable billing record names the tier Site Map is running', legacy('deluxe', { failed: true }).plan === 'Performance');
 ok('the record on its way shows no chip yet', legacy('deluxe', null).state === 'checking');
@@ -206,12 +226,31 @@ ok('legacy requests are in progress in the contract\'s words', ach.plansets === 
 /* review #10: only package activation closes a request, so one ClearSky met
    by editing the tier stays 'requested'. The Modules page's card calls it
    answered; so does the chip, and they read one rule (moduleCard). */
-var STALE = { tier: 'standard', optIns: { storage: { status: 'requested', requestedAt: '2026-09-01' } }, optOuts: { plansets: { status: 'requested', requestedAt: '2026-09-01' } } };
+var STALE = { tier: 'standard', optIns: { evrebates: { status: 'requested', requestedAt: '2026-09-01' } }, optOuts: { ops: { status: 'requested', requestedAt: '2026-09-01' } } };
 var stale = legacy('standard', STALE), sch = {}; stale.changes.forEach(function (c) { sch[c.key] = c.pill; });
-var storageM = CAT.filter(function (m) { return m.key === 'storage'; })[0], plansetsM = CAT.filter(function (m) { return m.key === 'plansets'; })[0];
-ok('fixture: Standard holds Storage and not Plan Sets', HUB.moduleState(storageM, legacyCtx('standard', STALE)) === 'held' && HUB.moduleState(plansetsM, legacyCtx('standard', STALE)) === 'ask');
-ok('an opt-in on a module the plan now holds is not "Opt-in requested": the card says Live', !sch.storage && HUB.moduleCard(storageM, legacyCtx('standard', STALE), STALE, null, {}).state === 'live', stale.changes);
-ok('an opt-out of a module the plan no longer holds is not "Opting out": the card says Opt in', !sch.plansets && HUB.moduleCard(plansetsM, legacyCtx('standard', STALE), STALE, null, {}).state === 'available', stale.changes);
+var evM = M.get('evrebates'), opsM = M.get('ops');
+ok('fixture: Standard holds Omega EV and not Omega Operate', HUB.moduleState(evM, legacyCtx('standard', STALE)) === 'held' && HUB.moduleState(opsM, legacyCtx('standard', STALE)) === 'ask');
+ok('an opt-in on a module the plan now holds is not "Opt-in requested": the card says Live', !sch.evrebates && HUB.moduleCard(evM, legacyCtx('standard', STALE), STALE, null, {}).state === 'live', stale.changes);
+ok('an opt-out of a module the plan no longer holds is not "Opting out": the card says Opt in', !sch.ops && HUB.moduleCard(opsM, legacyCtx('standard', STALE), STALE, null, {}).state === 'available', stale.changes);
+
+/* a legacy plan's add-ons bought by card (api/_lib/addons.js), read by the
+   same card: on now is held; waiting for payment, or ending at the end of
+   the month paid for, is a change in progress; the pay link names its rail */
+var AO_LIVE = { modules: ['logic-office'], live: ['logic-office'], state: 'paid', accessUntil: NOW + 10 * DAY, nextInvoiceOn: '2026-10-27', pending: [] };
+var aoHeld = legacy('standard', { tier: 'standard', addOns: AO_LIVE });
+ok('a module bought by card and on now is held, Elsewhere', heldRows(aoHeld).indexOf('logic-office') >= 0 && keys(aoHeld.elsewhere).indexOf('logic-office') >= 0 && !aoHeld.changes.length, aoHeld);
+var aoLapsed = legacy('standard', { tier: 'standard', addOns: Object.assign({}, AO_LIVE, { accessUntil: NOW - DAY }) });
+ok('and not once the month it paid for (and the grace) is over', heldRows(aoLapsed).indexOf('logic-office') < 0);
+var AO_WAIT = { modules: [], live: [], state: 'awaiting_payment', pending: [{ id: 'addon-x', purpose: 'purchase', add: ['logic-office'], names: ['Logic Office'], display: '$1,500.00', paymentLink: PAY, payWith: 'QuickBooks', expiresOn: '2026-10-27' }] };
+var aoWait = legacy('standard', { tier: 'standard', addOns: AO_WAIT }), aw = aoWait.changes.filter(function (c) { return c.key === 'logic-office'; })[0];
+ok('an add-on waiting for payment is in progress with its pay link, on its rail', aw && aw.pill === 'Waiting for payment' && aw.payUrl === PAY && aw.payWith === 'QuickBooks', aoWait.changes);
+var AO_END = Object.assign({}, AO_LIVE, { ending: { 'logic-office': { status: 'requested', endsOn: '2026-10-27', requestedAt: '2026-09-27' } } });
+var aoEnd = legacy('standard', { tier: 'standard', addOns: AO_END }), ae = aoEnd.changes.filter(function (c) { return c.key === 'logic-office'; })[0];
+ok('an add-on opted out of on its card is Opting out, and still held until then', ae && ae.pill === 'Opting out' && !ae.payUrl && heldRows(aoEnd).indexOf('logic-office') >= 0, aoEnd.changes);
+var aoSum = PLAN.summary({ tier: 'standard', billing: { tier: 'standard' }, figures: { addOns: { modules: [], live: [], pending: AO_WAIT.pending, ending: [] }, optIns: {}, optOuts: {} }, offerings: OFFER, hub: HUB, tools: TOOLS, caps: CAPS, org: 'tenant.example' });
+ok('the plan-change summary\'s view of the add-ons is read the same way', aoSum.changes.length === 1 && aoSum.changes[0].pill === 'Waiting for payment' && aoSum.changes[0].payUrl === PAY, aoSum.changes);
+var planSrc0 = fs.readFileSync(path.join(ROOT, 'omega-editor-plan.js'), 'utf8');
+ok('the chip builds no legacy ctx of its own: OmegaWorkspaceHub.legacyCtx, the one the Modules page, the marketplace and the admin Package tab build', /hub\.legacyCtx\(/.test(planSrc0) && !/isUnlocked\(/.test(planSrc0) && !/readOnlyCaps/.test(planSrc0));
 var REQ = { status: 'requested' };
 var agree = [
   { tier: 'standard', optIns: { plansets: REQ, storage: REQ, compute: REQ }, optOuts: { gridatlas: REQ, evrebates: REQ, engineering: REQ } },
@@ -279,7 +318,11 @@ async function capsChecks() {
   var good = new F.DB(); good.seed('omega_orgs/tenant.example/billing/current', { tier: 'deluxe' });
   var r = await CAPS.retry(good, 'designer@tenant.example', true);
   ok('retry() finds the real answer and clears the unchecked plan', r === 'deluxe' && CAPS.packageAccess() === null && CAPS.unchecked() === false);
-  ok('after a retry a legacy tier a caller kept from before means the answer', CAPS.apply('trial').tier === 'deluxe' && CAPS.apply('standard').tier === 'deluxe');
+  /* the editor's gating block re-applies OmegaCaps.tier() — the tier last
+     applied, which is the retry's answer — never the tier it read at sign-in,
+     so an injected gated button cannot take the retried plan away */
+  ok('after a retry the tier OmegaCaps last applied is the answer, and the editor re-applies that one', CAPS.tier() === 'deluxe' &&
+    /OmegaCaps\.apply\(\(OmegaCaps\.tier && OmegaCaps\.tier\(\)\) \|\| tier\)/.test(fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8')));
   await CAPS.resolve(good, 'designer@tenant.example', true);
   ok('a fresh resolve (another sign-in) forgets the retry', CAPS.apply('trial').tier === 'trial');
 
