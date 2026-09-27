@@ -1139,6 +1139,18 @@ function billCtx() {
     else if (k.state === 'removing') c.leaving[m.key] = k.record || {};
     else if (k.state === 'requested') c.requested[m.key] = k.record || {};
   });
+  /* the catalogue did not load (the price list is down, or a projection
+     without one): the cards cannot be drawn, but what is in flight is on
+     the records themselves, so a Pay or a Cancel request never disappears
+     with the price list */
+  if (!cat.length) {
+    pending.forEach(function (p) { (p.add || []).forEach(function (k) { c.coming[k] = { pill: 'Waiting for payment', change: p }; }); });
+    if (packaged) (Array.isArray(bl.removalRequests) ? bl.removalRequests : []).forEach(function (r) { if (r && r.module) c.leaving[r.module] = r; });
+    else {
+      Object.keys(bl.optOuts || {}).forEach(function (k) { var o = bl.optOuts[k]; if (o && o.status === 'requested') c.leaving[k] = o; });
+      Object.keys(bl.optIns || {}).forEach(function (k) { var o = bl.optIns[k]; if (o && o.status === 'requested') c.requested[k] = o; });
+    }
+  }
   c.reviewOn = (sm && sm.nextReviewOn) || null;
   return c;
 }
@@ -1249,7 +1261,7 @@ function changeRows(c) {
   var rows = [], review = c.reviewOn ? day(c.reviewOn) : '';
   Object.keys(c.coming).forEach(function (k) {
     var x = c.coming[k], ch = x.change;
-    if (ch) rows.push({ key: k, pill: 'Waiting for payment', tone: 'warn', line: (ch.display || '') + ' invoice · pay by ' + (day(ch.expiresOn) || 'the end of the cycle') + ' · switches on when paid', steps: [['Chosen', 'done'], ['Pay by ' + (day(ch.expiresOn) || 'cycle end'), 'now'], ['On', '']], pay: ch.paymentLink, cancel: true });
+    if (ch) rows.push({ key: k, pill: 'Waiting for payment', tone: 'warn', line: (ch.display || '') + ' invoice · switches on when paid · expires unpaid on ' + (day(ch.expiresOn) || 'the cycle end'), steps: [['Chosen', 'done'], ['Pay before ' + (day(ch.expiresOn) || 'cycle end'), 'now'], ['On', '']], pay: ch.paymentLink, cancel: true });
     else rows.push({ key: k, pill: 'Bought · not on yet', tone: 'warn', line: 'Switches on when your open invoice is paid.', steps: [['Bought', 'done'], ['Invoice paid', 'now'], ['On', '']], pay: c.payLink, cancel: false });
   });
   Object.keys(c.requested).forEach(function (k) {

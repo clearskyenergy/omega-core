@@ -477,8 +477,11 @@ async function optOut(db, orgId, input, caller, now) {
   if (c.org.status !== 'active') fail('Your workspace is not active.', 409);
   var current = c.root.collection('billing').doc('current');
   if (!(await current.get()).exists) fail('Billing is not set up for this workspace yet. Email ClearSky to change the plan.', 409);
-  /* an opt-in that is only requested is not held: cancelling it is the undo */
-  remove.forEach(function (k) { var o = (b.optIns || {})[k]; if (o && o.status === 'requested') fail('That module is only requested: cancel the request instead.', 409); });
+  /* an opt-in still open on a module being left: the page offers Opt out
+     only on a module the plan HOLDS (OmegaWorkspaceHub.moduleCard), so an
+     open opt-in there is stale (ClearSky met it with a tier or add-on edit
+     and never answered it). The opt-out closes it in the same write and the
+     dry run says so; a module merely requested is cancelled, not left. */
   /* Office is what every Omega Logic department stands on: on a workspace
      holding the Omega Logic add-on, opting out of Office opts out of them all */
   var logic = (b.addons || []).indexOf('omega-logic') >= 0;
@@ -486,20 +489,29 @@ async function optOut(db, orgId, input, caller, now) {
   var have = requested(b.optOuts), wanted = all.filter(function (k) { return have.indexOf(k) < 0; });
   if (!wanted.length) fail('Already requested', 409);
   var reason = typeof input.reason === 'string' ? input.reason.trim().slice(0, 300) : '';
-  if (input.dryRun === true) return { dryRun: true, remove: wanted, names: names(wanted), note: OPT_OUT_NOTE };
-  var at = iso(now), entries = {}, id = 'optout-' + Q.key(B.stable({ w: wanted, at: now })), merged = null;
+  var stale = wanted.filter(function (k) { var o = (b.optIns || {})[k]; return !!(o && o.status === 'requested'); });
+  if (input.dryRun === true) return { dryRun: true, remove: wanted, names: names(wanted), closes: names(stale), note: OPT_OUT_NOTE };
+  var at = iso(now), entries = {}, id = 'optout-' + Q.key(B.stable({ w: wanted, at: now })), merged = null, ins = null;
   wanted.forEach(function (k) { entries[k] = { key: k, name: M.get(k).name, requestedBy: caller.email, requestedAt: at, status: 'requested', reason: reason }; });
   var event = { at: now, by: caller.email, action: 'opt-out-requested', changeId: id, was: { tier: b.tier || null, addons: b.addons || [], optOuts: have },
-    changed: { remove: wanted, names: names(wanted), reason: reason, note: 'Recorded for ClearSky to confirm under the agreement. Access and the plan are unchanged.' } };
+    changed: { remove: wanted, names: names(wanted), reason: reason, closed: stale, note: 'Recorded for ClearSky to confirm under the agreement. Access and the plan are unchanged.' } };
   await db.runTransaction(async function (tx) {
     var live = await tx.get(current), fresh = live.data() || {};
     if (!live.exists) fail('Billing is not set up for this workspace yet. Email ClearSky to change the plan.', 409);
     merged = Object.assign({}, fresh.optOuts || {}, entries);
-    tx.set(current, { optOuts: merged, updatedAt: now, updatedBy: caller.email }, { merge: true });
+    var patch = { optOuts: merged, updatedAt: now, updatedBy: caller.email };
+    if (stale.length) {
+      ins = Object.assign({}, fresh.optIns || {});
+      stale.forEach(function (k) { if (ins[k] && ins[k].status === 'requested') ins[k] = Object.assign({}, ins[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: caller.email, withdrawnFor: 'opt-out' }); });
+      patch.optIns = ins;
+    }
+    tx.set(current, patch, { merge: true });
     tx.set(current.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
   });
   await mail('optOutAlert', { company: c.org.name || orgId, orgId: orgId, names: names(wanted), by: caller.email, tier: b.tier || null, reason: reason });
-  return { ok: true, requested: true, remove: wanted, names: names(wanted), optOuts: merged, requestedAt: at, note: OPT_OUT_NOTE };
+  var out = { ok: true, requested: true, remove: wanted, names: names(wanted), closes: names(stale), optOuts: merged, requestedAt: at, note: OPT_OUT_NOTE };
+  if (ins) out.optIns = ins;
+  return out;
 }
 /* ── ClearSky ANSWERS a legacy request under the agreement, without moving
    the workspace onto a package (review finding 3: an opt-out honoured by a

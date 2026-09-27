@@ -367,7 +367,7 @@ async function gateChecks() {
   var roleless = await runGate(org({ packaged: true }), USER, { fetch: viaServer({ role: 'guest', status: 'active' }) });
   ok('gate: the real projection\'s refusal for a member without a role reads as a refusal', /Workspace role required/.test(roleless.html) && !/omega-gate-retry/.test(roleless.html), roleless.html.slice(0, 160));
   var unverified = await runGate(org({ packaged: true }), USER, { fetch: viaServer({ role: 'owner', status: 'active' }, { emailVerified: false }) });
-  ok('gate: and for an unverified email', /Verified email required/.test(unverified.html) && !/omega-gate-retry/.test(unverified.html));
+  ok('gate: and for an unverified email, which is told to verify it, not to ask an administrator', /Verify your email address/.test(unverified.html) && !/owner or administrator/.test(unverified.html) && !/omega-gate-retry/.test(unverified.html));
   var member = await runGate(org({ packaged: true }), USER, { fetch: viaServer({ role: 'member', status: 'active' }) });
   ok('gate: an active member of a live package gets in', member.allowed);
   var outage = await runGate(org({ packaged: true }), USER, { fetch: served(503, { error: 'Package access is unavailable' }) });

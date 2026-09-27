@@ -93,6 +93,8 @@ ok(legacyHolds({ tier: 'deluxe', capTier: 'standard', addons: [] }).indexOf('pla
 });
 var pre = panelStanding({ orgId: 'panel.example', modules: MODS, billing: { tier: 'standard', addons: [], optIns: { siteintel: { status: 'requested', name: 'Site Intelligence' } }, optOuts: { storage: { status: 'requested', name: 'Storage' } } } });
 ok(pre.preselect.slice().sort().join() === 'gridatlas,lite,siteintel', 'the preselection is what it holds, plus the opt-in, less the opt-out: ' + pre.preselect.join());
+var trialPre = panelStanding({ orgId: 'panel.example', modules: MODS, billing: { tier: 'trial', addons: [], optIns: { gridatlas: { status: 'requested', name: 'Grid Atlas' } } } });
+ok(trialPre.held.length > 2 && trialPre.preselect.slice().sort().join() === 'gridatlas,lite', 'a pending trial holds what the trial opens, but the package staff approve (and bill at trial end) starts from Lite plus what it asked for: ' + trialPre.preselect.join());
 var answeredStand = panelStanding({ orgId: 'panel.example', modules: MODS, billing: { tier: 'standard', addons: [], optOuts: { compute: { status: 'done', name: 'Compute & Data Center', resolvedAt: '2026-09-27', resolvedBy: 'staff@clearsky-usa.com' } } } });
 ok(answeredStand.optingOut.length === 0 && answeredStand.lines.some(function (l) { return l === 'Answered: Compute & Data Center opt-out done 2026-09-27 by staff@clearsky-usa.com'; }), 'an answered request is no longer open, and the strip says who answered it');
 var capsAt = TENANT_HTML.indexOf('<script src="/omega-caps.js"></script>'), panelAt = TENANT_HTML.indexOf('<script src="/admin/package-panel.js"></script>');

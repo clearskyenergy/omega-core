@@ -91,6 +91,7 @@ function storeRoute(u, method, body) {
   if (body.action === 'withdraw-opt-in') {
     var ins = legacyIns(), wk = (body.add || []).filter(function (k) { return ins[k] && ins[k].status === 'requested'; });
     if (!wk.length) return { __status: 409, error: 'No request to withdraw' };
+    if (body.dryRun === true) return { dryRun: true, withdrawn: wk, names: names(wk), note: 'Nothing about your bill changes.' };
     wk.forEach(function (k) { STORE.optIns[k] = Object.assign({}, ins[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: who }); });
     return { ok: true, withdrawn: wk, optIns: legacyIns() };
   }
@@ -98,16 +99,18 @@ function storeRoute(u, method, body) {
   if (body.action === 'opt-out') {
     if (PACKAGE_VIEW) return { __status: 409, error: 'This workspace is on a subscription package: opt out through the menu, which queues it for the quarterly review.' };
     var bad2 = keysOf(body.remove, 'remove'); if (bad2) return bad2;
-    var reqd = legacyIns(); if (body.remove.some(function (k) { return reqd[k] && reqd[k].status === 'requested'; })) return { __status: 409, error: 'That module is only requested: cancel the request instead.' };
+    var reqd = legacyIns(), stale = body.remove.filter(function (k) { return reqd[k] && reqd[k].status === 'requested'; });
     var remove = body.remove.slice(); if (remove.indexOf('logic-office') >= 0 && (lb.addons || []).indexOf('omega-logic') >= 0) M.catalog().forEach(function (m) { if (m.shelf === 'platform' && remove.indexOf(m.key) < 0) remove.push(m.key); });
     var note = 'Your plan\'s price is set by your agreement, so nothing changes today. ClearSky confirms the effective date and any new price with you in writing; you keep access until then. Lite stays.';
-    if (body.dryRun === true) return { dryRun: true, remove: remove, names: names(remove), note: note };
+    if (body.dryRun === true) return { dryRun: true, remove: remove, names: names(remove), closes: names(stale), note: note };
     remove.forEach(function (k) { STORE.optOuts[k] = { key: k, name: M.get(k).name, requestedBy: who, requestedAt: at, status: 'requested', reason: body.reason || '' }; });
-    return { ok: true, requested: true, remove: remove, names: names(remove), optOuts: legacyOuts(), requestedAt: at, note: note };
+    stale.forEach(function (k) { STORE.optIns[k] = Object.assign({}, reqd[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: who, withdrawnFor: 'opt-out' }); });
+    return Object.assign({ ok: true, requested: true, remove: remove, names: names(remove), closes: names(stale), optOuts: legacyOuts(), requestedAt: at, note: note }, stale.length ? { optIns: legacyIns() } : {});
   }
   if (body.action === 'withdraw-opt-out') {
     var outs = legacyOuts(), ok2 = (body.remove || []).filter(function (k) { return outs[k] && outs[k].status === 'requested'; });
     if (!ok2.length) return { __status: 409, error: 'No request to withdraw' };
+    if (body.dryRun === true) return { dryRun: true, withdrawn: ok2, names: names(ok2), note: 'Nothing about your bill changes.' };
     ok2.forEach(function (k) { STORE.optOuts[k] = Object.assign({}, outs[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: who }); });
     return { ok: true, withdrawn: ok2, optOuts: legacyOuts() };
   }
@@ -117,7 +120,9 @@ function storeRoute(u, method, body) {
     if (!sel.length || sel.indexOf('lite') >= 0) return { __status: 400, error: 'Lite is always included' };
     if (!withdraw) owned.forEach(function (k) { if (sel.indexOf(k) < 0 && (M.get(k).requires || []).some(function (r) { return sel.indexOf(r) >= 0; })) sel.push(k); });
     var previewId = (withdraw ? 'w' : 'r').repeat(48);
-    if (body.dryRun === true) { var before = quote(owned), after = quote(owned.filter(function (k) { return sel.indexOf(k) < 0; })); return { previewId: previewId, modules: sel, names: names(sel), withdraw: withdraw, beforeDisplay: withdraw ? null : before.monthly, afterDisplay: withdraw ? null : after.monthly, reviewOn: '2026-12-20',
+    /* as the real removal(): "after" takes out everything already queued for that review too, and names it */
+    var queuedR = STORE.pkg.removals.map(function (r) { return r.module; }), leavingR = sel.concat(queuedR.filter(function (k) { return sel.indexOf(k) < 0; }));
+    if (body.dryRun === true) { var before = quote(owned), after = quote(owned.filter(function (k) { return leavingR.indexOf(k) < 0; })); return { previewId: previewId, modules: sel, names: names(sel), withdraw: withdraw, beforeDisplay: withdraw ? null : before.monthly, afterDisplay: withdraw ? null : after.monthly, reviewOn: '2026-12-20', alsoLeaving: withdraw ? [] : names(queuedR.filter(function (k) { return sel.indexOf(k) < 0 && owned.indexOf(k) >= 0; })),
       note: withdraw ? 'Confirming will withdraw the opt-out request for these modules. Access and billing will stay unchanged.' : 'Confirming queues these modules for the quarterly review with ClearSky. Access and charges stay unchanged until that review; this does not issue a refund.' }; }
     if (body.previewId !== previewId) return { __status: 400, error: 'Your package changed; review the opt-out request again' };
     sel.forEach(function (k) { var i = -1; STORE.pkg.removals.forEach(function (r, n) { if (r.module === k) i = n; }); if (withdraw) { if (i >= 0) STORE.pkg.removals.splice(i, 1); } else if (i < 0) STORE.pkg.removals.push({ module: k, requestedAt: Date.parse(at), by: who, reason: '' }); });
@@ -600,7 +605,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     });
     var st = ch.rows.filter(function (r) { return r.key === 'storage'; })[0] || {}, ga = ch.rows.filter(function (r) { return r.key === 'gridatlas'; })[0] || {};
     ok('lite-changes: Changes in progress sits between the payment method and the history', ch.cards === 'Your subscription|What you owe|Payment method|Changes in progress|Billing history', ch.cards);
-    ok('lite-changes: Storage waits for payment with its invoice, the pay-by date and a Pay link, then Cancel request', st.pill === 'Waiting for payment' && /\$200 invoice · pay by Oct 20, 2026 · switches on when paid/.test(st.line) && st.steps === 'Chosen(done)|Pay by Oct 20, 2026(now)|On' && st.pay === 'https://pay.example/inv-1' && st.cancel === 'Cancel request', st);
+    ok('lite-changes: Storage waits for payment with its invoice, the day it expires unpaid and a Pay link, then Cancel request', st.pill === 'Waiting for payment' && /\$200 invoice · switches on when paid · expires unpaid on Oct 20, 2026/.test(st.line) && st.steps === 'Chosen(done)|Pay before Oct 20, 2026(now)|On' && st.pay === 'https://pay.example/inv-1' && st.cancel === 'Cancel request', st);
     ok('lite-changes: Grid Atlas is opting out: on, and billed, until the review on Dec 20, no refund, with Cancel request', ga.pill === 'Opting out' && /Stays on, and billed, until your review on Dec 20, 2026\. No refund/.test(ga.line) && /\|Review on Dec 20, 2026\(now\)\|Off$/.test(ga.steps) && ga.cancel === 'Cancel request' && !ga.pay, ga);
     ok('lite-changes: the subscription\'s chips say the same (Grid Atlas opting out, Storage waiting for payment), the price is the book\'s for what was bought, and what is owed is the $200 with its pay button', ch.leaving.length === 1 && /#module-gridatlas Grid Atlas Opting out/.test(ch.leaving[0]) && ch.soon.length === 1 && /#module-storage .*Waiting for payment/.test(ch.soon[0]) && ch.price === '$750' && ch.pay === 'https://pay.example/inv-1' && /\$200/.test(ch.owe) && /Pay \$200 now/.test(ch.owe) && ch.open === 1, ch);
     await p.click('#bill-req [data-cancel="gridatlas"]'); await wait(500);
@@ -1008,7 +1013,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.keyboard.press('Escape'); await p.waitForSelector('#omega-package-menu', { state: 'detached', timeout: 2000 }).catch(function () {});
     await seeModule(p, 'investment');
     var finAfter = await p.evaluate(MENU_CARD, 'finance'), legacyPosts = STORE.posts.map(function (b) { return b.action + (b.dryRun ? ' (dry run)' : ''); });
-    ok('marketplace (classic home, legacy plan): Cancel request withdraws it, and the next open offers Opt in again; the page asked the server exactly opt-in (dry run), opt-in, withdraw-opt-in', withdrawn && finAfter.state === 'off' && finAfter.buttons.indexOf('Opt in') >= 0 && legacyPosts.join('|') === 'opt-in (dry run)|opt-in|withdraw-opt-in', { withdrawn: withdrawn, after: finAfter, posts: legacyPosts });
+    ok('marketplace (classic home, legacy plan): Cancel request withdraws it, and the next open offers Opt in again; the page asked the server exactly opt-in (dry run), opt-in, withdraw-opt-in (dry run), withdraw-opt-in', withdrawn && finAfter.state === 'off' && finAfter.buttons.indexOf('Opt in') >= 0 && legacyPosts.join('|') === 'opt-in (dry run)|opt-in|withdraw-opt-in (dry run)|withdraw-opt-in', { withdrawn: withdrawn, after: finAfter, posts: legacyPosts });
     await ctx.close();
     STORE.optIns = {}; STORE.optOuts = {}; STORE.posts = [];
     /* a legacy Deluxe plan: Site Map prints plan sets and screens parcels on Deluxe, so the menu must not offer Plan Sets or Site Intelligence as an opt-in */

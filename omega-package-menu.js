@@ -171,20 +171,21 @@
       }, function (e) { failed(e); });
     }
     /* a legacy request: the catalog says what goes with it; the server decides */
+    /* the server's own rule says what a cancel takes back (the withdraw
+       dry run: the modules that need this one, or the prerequisites this
+       request pulled in); the panel names it and writes nothing first */
     function legacyCancel(field, action) {
-      var map = bl[field] || {}, also = Object.keys(map).filter(function (k) {
-        if (k === m.key || !open_(map, k)) return false;
-        var dep = byKey(state, k);
-        return field === 'optIns' ? !!dep && (dep.requires || []).indexOf(m.key) >= 0 : (m.requires || []).indexOf(k) >= 0;
-      });
-      var title = field === 'optIns' ? 'Cancel the opt-in request for ' + m.name + '?' : 'Cancel the opt-out of ' + m.name + '?';
-      var extra = also.length ? (field === 'optIns' ? names(also.map(function (k) { return nameOf(state, k); })) + (also.length > 1 ? ' need' : ' needs') + ' it, so ' + (also.length > 1 ? 'those requests are' : 'that request is') + ' cancelled too.'
-        : 'It needs ' + names(also.map(function (k) { return nameOf(state, k); })) + ', so ' + (also.length > 1 ? 'those are' : 'that is') + ' kept too.') : null;
-      cancelPanel(title, 'Nothing about your bill changes.', extra, function () {
-        busy('Cancelling…');
-        var payload = { action: action }; payload[field === 'optIns' ? 'add' : 'remove'] = [m.key];
-        api('/api/plan-change', withOrg(state, payload)).then(function (r) { remember(state, r); done(r, 'Cancelled. Nothing about your bill changes.'); }, function (e) { failed(e, 'Cancel the request for ' + m.name); });
-      });
+      busy('Checking…');
+      var payload = { action: action }; payload[field === 'optIns' ? 'add' : 'remove'] = [m.key];
+      api('/api/plan-change', withOrg(state, extend({ dryRun: true }, payload))).then(function (q) {
+        var others = (q.names || []).filter(function (n) { return n !== m.name; });
+        var title = field === 'optIns' ? 'Cancel the opt-in request for ' + m.name + '?' : 'Cancel the opt-out of ' + m.name + '?';
+        var extra = others.length ? (field === 'optIns' ? 'This also cancels the request for ' + names(others) + '.' : 'This also keeps ' + names(others) + ', which ' + m.name + ' needs.') : null;
+        cancelPanel(title, q.note || 'Nothing about your bill changes.', extra, function () {
+          busy('Cancelling…');
+          api('/api/plan-change', withOrg(state, payload)).then(function (r) { remember(state, r); done(r, 'Cancelled. Nothing about your bill changes.'); }, function (e) { failed(e, 'Cancel the request for ' + m.name); });
+        });
+      }, function (e) { failed(e, 'Cancel the request for ' + m.name); });
     }
     if (st === 'waiting') { row(el, [button('Cancel request', cancelChange)]); if (step === 'cancel') cancelChange(); return; }
     if (st === 'removing') { row(el, [button('Cancel request', cancelRemoval)]); if (step === 'cancel') cancelRemoval(); return; }
@@ -200,6 +201,7 @@
           el.appendChild(node('p', 'Opt out of ' + names(q.names) + '?', 'opm-quote'));
           el.appendChild(node('p', q.note, 'opm-note'));
           if (q.names.length > 1) el.appendChild(node('p', 'Also opts out of ' + names(q.names.filter(function (n) { return n !== m.name; })) + ', which need' + (q.names.length > 2 ? '' : 's') + ' ' + m.name + '.', 'opm-note'));
+          if (q.closes && q.closes.length) el.appendChild(node('p', 'It also closes your open opt-in request for ' + names(q.closes) + '.', 'opm-note'));
           row(el, [button('Send opt-out request', function () {
             busy('Sending…');
             api('/api/plan-change', withOrg(state, { action: 'opt-out', remove: [m.key] })).then(function (r) { remember(state, r); done(r, 'Sent. ClearSky confirms the date and any price change with you.'); }, function (e) { failed(e, 'Opt out of ' + names(q.names)); });
@@ -211,7 +213,11 @@
         api('/api/plan-change', extend({ dryRun: true }, ask)).then(function (q) {
           el.textContent = '';
           var many = q.names.length > 1, until = q.reviewOn ? 'until your review on ' + when(q.reviewOn) : 'until your next quarterly review';
-          var money = q.beforeDisplay && q.afterDisplay ? (fee(q.beforeDisplay) === fee(q.afterDisplay) ? 'Your monthly fee stays ' + fee(q.beforeDisplay) + '.' : 'From then your monthly fee goes from ' + fee(q.beforeDisplay) + ' to ' + fee(q.afterDisplay) + '.') : 'ClearSky confirms your new monthly fee at the review.';
+          /* both figures are the server's, priced ON the review day (a credit
+             that has ended by then is not in either), and "after" takes out
+             everything already queued for that review, which it names */
+          var leaving = Array.isArray(q.alsoLeaving) ? q.alsoLeaving : [];
+          var money = q.beforeDisplay && q.afterDisplay ? (fee(q.beforeDisplay) === fee(q.afterDisplay) ? 'Your monthly fee stays ' + fee(q.beforeDisplay) + '.' : 'From then your monthly fee goes from ' + fee(q.beforeDisplay) + ' to ' + fee(q.afterDisplay) + ' (both as priced on the review day' + (leaving.length ? ', with ' + names(leaving) + ' already leaving then too' : '') + ').') : 'ClearSky confirms your new monthly fee at the review.';
           el.appendChild(node('p', 'Opt out of ' + names(q.names) + '?', 'opm-quote'));
           el.appendChild(node('p', 'You keep ' + names(q.names) + ', and keep paying for ' + (many ? 'them' : 'it') + ', ' + until + '. ' + money + ' No refund for time already billed.', 'opm-note'));
           if (many) el.appendChild(node('p', 'Also opts out of ' + names(q.names.filter(function (n) { return n !== m.name; })) + ', which need' + (q.names.length > 2 ? '' : 's') + ' ' + m.name + '.', 'opm-note'));

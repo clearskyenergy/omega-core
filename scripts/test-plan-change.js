@@ -471,7 +471,7 @@ async function run() {
   legacy({ addons: ['omega-logic'], optIns: { siteintel: { key: 'siteintel', status: 'requested', requestedAt: '2026-09-25' } } });
   var s1 = snapshot(), od = await req('POST', { action: 'opt-out', remove: ['plansets'], dryRun: true });
   equal(snapshot(), s1, 'an opt-out dry run writes nothing'); equal(sentMail, []);
-  equal(od, { dryRun: true, remove: ['plansets'], names: [M.get('plansets').name],
+  equal(od, { dryRun: true, remove: ['plansets'], names: [M.get('plansets').name], closes: [],
     note: 'Your plan\'s price is set by your agreement, so nothing changes today. ClearSky confirms the effective date and any new price with you in writing; you keep access until then. Lite stays.' });
   var oc = await req('POST', { action: 'opt-out', remove: ['logic-office'], dryRun: true });
   equal(oc.remove, ['logic-office', 'logic-plant', 'logic-materials', 'logic-logistics', 'logic-customer'], 'Office takes every Omega Logic department with it');
@@ -484,18 +484,25 @@ async function run() {
   equal(sentMail.map(function (m) { return m.name; }), ['optOutAlert']); equal([sentMail[0].o.names, sentMail[0].o.reason, sentMail[0].o.tier], [[M.get('plansets').name], 'Not using it', 'standard']);
   await refused(function () { return req('POST', { action: 'opt-out', remove: ['plansets'] }); }, /Already requested/);
   await refused(function () { return req('POST', { action: 'opt-out', remove: ['lite'], dryRun: true }); }, /Lite is always included/);
-  await refused(function () { return req('POST', { action: 'opt-out', remove: ['siteintel'], dryRun: true }); }, /That module is only requested: cancel the request instead\./);
+  /* a held module whose opt-in was met by a tier edit and never answered:
+     the opt-out says it closes that request, and does so in the same write */
+  var st0 = snapshot(), sd = await req('POST', { action: 'opt-out', remove: ['siteintel'], dryRun: true });
+  equal([sd.remove, sd.closes, snapshot()], [['siteintel'], [M.get('siteintel').name], st0], 'the dry run names the stale opt-in it closes and writes nothing');
+  var sa = await req('POST', { action: 'opt-out', remove: ['siteintel'] });
+  equal([sa.closes, sa.optIns.siteintel.status, sa.optIns.siteintel.withdrawnFor, bill().optIns.siteintel.status, bill().optOuts.siteintel.status], [[M.get('siteintel').name], 'withdrawn', 'opt-out', 'withdrawn', 'requested'], 'an opt-out closes the stale opt-in on the same module');
+  await req('POST', { action: 'withdraw-opt-out', remove: ['siteintel'] });
   await refused(function () { return req('POST', { action: 'opt-out', remove: ['gridatlas'] }, member); }, /workspace administrator/);
   await req('POST', { action: 'opt-out', remove: ['logic-office'] });
-  equal(Object.keys(bill().optOuts).sort(), ['logic-customer', 'logic-logistics', 'logic-materials', 'logic-office', 'logic-plant', 'plansets']);
+  equal(Object.keys(bill().optOuts).sort(), ['logic-customer', 'logic-logistics', 'logic-materials', 'logic-office', 'logic-plant', 'plansets', 'siteintel']);
+  equal(bill().optOuts.siteintel.status, 'withdrawn');
   var summ = await req('GET', { orgId: orgId }, member);
-  equal([Object.keys(summ.optOuts).length, summ.optIns.siteintel.status, summ.nextReviewOn], [6, 'requested', null], 'the summary carries both kinds of request; a legacy plan has no review date');
+  equal([Object.keys(summ.optOuts).length, summ.optIns.siteintel.status, summ.nextReviewOn], [7, 'withdrawn', null], 'the summary carries both kinds of request; a legacy plan has no review date');
   /* Cancel request on an opt-out: keeping Plant keeps Office */
   await refused(function () { return req('POST', { action: 'withdraw-opt-out', remove: ['gridatlas'] }); }, /No request to withdraw/);
   var wo = await req('POST', { action: 'withdraw-opt-out', remove: ['logic-plant'] });
   equal(wo.withdrawn.slice().sort(), ['logic-office', 'logic-plant'], 'what it needs is kept too');
   equal(['logic-office', 'logic-plant', 'logic-materials', 'plansets'].map(function (k) { return wo.optOuts[k].status; }), ['withdrawn', 'withdrawn', 'requested', 'requested']);
-  equal([rows(root + '/billing/current/history/optout-withdrawn-').length, rows(root + '/admin_audit/optout-withdrawn-').length], [1, 1]);
+  equal([rows(root + '/billing/current/history/optout-withdrawn-').length, rows(root + '/admin_audit/optout-withdrawn-').length], [2, 2], 'the Site Intelligence cancel above and this one');
   /* no price book seeded yet: an opt-out prices nothing, so it still works,
      and so does the summary; an opt-in (which records a price) says why not */
   db.data.delete('pricebook/' + B.VERSION);

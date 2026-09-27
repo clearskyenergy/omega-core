@@ -241,7 +241,11 @@
       var site = H && H.editorCtx ? H.editorCtx(global.OmegaCaps, b, { orgId: data.orgId || orgId }) : null;
       if (site) { ctx.editorCan = site.editorCan; ctx.ungated = site.ungated; ctx.editorTier = site.tier; }
       (data.modules || []).forEach(function (m) { if (H && T && H.moduleState(m, ctx) === 'held') out.held.push(m.key); });
-      out.preselect = out.held.slice(); out.requested.forEach(function (o) { if (out.preselect.indexOf(o.key) < 0) out.preselect.push(o.key); });
+      /* a trial holds what the trial opens (Holds says so), but nothing is
+         bought yet: the package staff approve, and bill at trial end, starts
+         from Lite plus what the tenant asked for, never the trial's tools */
+      out.preselect = String(b.tier || '').toLowerCase() === 'trial' ? [] : out.held.slice();
+      out.requested.forEach(function (o) { if (out.preselect.indexOf(o.key) < 0) out.preselect.push(o.key); });
       if (out.preselect.indexOf('lite') < 0) out.preselect.unshift('lite');
       out.lines.push((b.tier ? b.tier.charAt(0).toUpperCase() + b.tier.slice(1) : 'No') + ' tier' + ((b.addons || []).length ? ' · add-ons: ' + b.addons.join(', ') : '') + (Array.isArray(b.toolAccess) ? ' · ' + b.toolAccess.length + ' tools allowlisted' : ''));
       out.lines.push('Holds ' + names(out.held) + ' (what its Modules page shows as Live)');

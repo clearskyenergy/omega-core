@@ -23,6 +23,11 @@ M.catalog().forEach(function (module) {
   denied(function () { X.requireModule(project(bill(keys), { status: 'active', role: 'member', toolAccess: [] }), module.key); });
 });
 ['suspended', 'pending', 'cancelled'].forEach(function (status) { denied(function () { project(null, null, null, { status: status }); }); });
+/* live is the PLAN's standing, readOnly also the person's role: a viewer on a paid-up plan is view-only, not "read-only until paid" */
+var viewerLive = project(null, { status: 'active', role: 'viewer' });
+check(function () { assert.equal(lite.live, true); assert.equal(lite.readOnly, false); assert.equal(viewerLive.live, true); assert.equal(viewerLive.readOnly, true); });
+var lapsed = project(Object.assign(bill(), { accessUntil: now - 1000 }));
+check(function () { assert.equal(lapsed.live, false); assert.equal(lapsed.readOnly, true); });
 ['disabled', 'pending', 'invited'].forEach(function (status) { denied(function () { project(null, { status: status, role: 'member' }); }); });
 [false, undefined, 'true'].forEach(function (verified) { denied(function () { project(null, null, Object.assign({}, caller, { emailVerified: verified })); }); });
 denied(function () { project(bill(['lite', 'unknown'])); });

@@ -180,9 +180,13 @@ click and states the money before anything is written.
   on" for a $0 addition inside a paid tier.
 - Packaged **Opt out** → `request-removal` dry run → "You keep X, and keep
   paying for it, until your review on <date>. From then your monthly fee
-  goes from $A to $B. No refund for time already billed." → Request opt-out.
+  goes from $A to $B (both as priced on the review day, with Y already
+  leaving then too). No refund for time already billed." → Request opt-out.
   The review date is the subscription's start plus whole 90-day periods
-  (`book.policy.reviewDays`).
+  (`book.policy.reviewDays`). Both figures are priced at the end of the
+  review day, so a transformation credit counts only if it still runs then,
+  and "after" takes out every opt-out already queued for that review
+  (`alsoLeaving` names them); the staff `removalAlert` carries the same.
 - Legacy **Opt in** → `opt-in` dry run (priced from the book) → Request
   opt-in, recorded on `billing/current.optIns`.
 - Legacy **Opt out** → `opt-out` dry run ("Your plan's price is set by your
@@ -191,7 +195,19 @@ click and states the money before anything is written.
   touched. Office takes every Omega Logic department with it when the
   workspace holds the add-on.
 - **Cancel request** → `cancel` (a pending change), `withdraw-removal`,
-  `withdraw-opt-in` or `withdraw-opt-out`: "Nothing about your bill changes."
+  `withdraw-opt-in` or `withdraw-opt-out`: "Nothing about your bill
+  changes." A legacy withdrawal is priced first by its own dry run, which
+  names everything it takes back: an opt-in cancelled takes the requests
+  that need it AND the prerequisites it pulled in (`asked: false`); an
+  opt-out cancelled keeps what that module needs.
+- A legacy **Opt out** of a module whose opt-in is still open (ClearSky met
+  it with a tier or add-on edit and never answered it) closes that opt-in
+  in the same write; the dry run says so (`closes`).
+- **ClearSky answers a legacy request by hand** from the admin Package tab
+  (`plan-change` `resolve-opt-in` / `resolve-opt-out`, staff only): an
+  opt-out done or declined, an opt-in activated or declined, recorded with
+  who and when, history and audit. Activation answers every open request
+  at once. A trial's preselection there is Lite plus what it asked for.
 
 Every write is history plus `admin_audit`; opt-outs and removals mail
 ClearSky (`optOutAlert`, `removalAlert`). Moving a legacy workspace onto a

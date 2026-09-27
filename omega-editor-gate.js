@@ -148,8 +148,10 @@
          workspace has disabled or given no role, or an email not yet
          verified. Not a plan to change and not a connection to retry. */
       title = 'This account cannot open the designer';
-      body = (detail ? esc(detail.replace(/\.?$/, '.')) + ' ' : '')
-           + 'An owner or administrator of your workspace can check your access.';
+      /* an unverified email is fixed by the person, not an administrator */
+      body = /verified email/i.test(detail || '')
+           ? 'Verify your email address (the link we sent when you signed up), then sign in again.'
+           : (detail ? esc(detail.replace(/\.?$/, '.')) + ' ' : '') + 'An owner or administrator of your workspace can check your access.';
       cta = '';
     } else if (kind === 'plan' && detail) {
       /* A check that could not run is not a refusal. This read "The

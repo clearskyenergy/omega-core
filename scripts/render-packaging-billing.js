@@ -159,7 +159,8 @@ async function run() {
     await dlg.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
     check(legacyBill().optIns.gridatlas.status === 'requested' && (await dlg.locator('.opm-badge').textContent()) === 'Opt-in requested' && await lm.evaluate(function () { return window.__changed.length === 1 && window.__changed[0].requested === true; }), 'Request opt-in records it and the card says Opt-in requested');
     await dlg.getByRole('button', { name: 'Cancel request', exact: true }).click();
-    check(/Nothing about your bill changes\./.test(await dlg.textContent()), 'Cancel request says what it costs: nothing');
+    await dlg.locator('.opm-primary', { hasText: 'Cancel request' }).waitFor();   /* the server's withdraw dry run answered */
+    check(/Nothing about your bill changes\./.test(await dlg.textContent()) && legacyBill().optIns.gridatlas.status === 'requested', 'Cancel request says what it costs: nothing, and the dry run writes nothing');
     await dlg.getByRole('button', { name: 'Cancel request', exact: true }).click();
     await dlg.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
     check(legacyBill().optIns.gridatlas.status === 'withdrawn' && legacyBill().tier === 'standard', 'the request is withdrawn and the plan untouched');

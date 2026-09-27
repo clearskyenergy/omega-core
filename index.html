@@ -6239,6 +6239,9 @@ var _SW_TITLES = { todos:'To-Dos', team:'Team', feed:'Company Feed', msgs:'Messa
         }
         var key = mk[1].toLowerCase();
         if (packaged){ if (typeof openPackageMenu === 'function' && openPackageMenu(key, { single: true }) !== false) return; openBillingPanel(); return; }
+        /* a tenant whose record hides the marketplace is never sent through it
+           (paintMarketplaceNav: no door that is not theirs): Billing & plan */
+        if (w && w.hideMarketplace) { openBillingPanel(); return; }
         window.location.replace('/marketplace.html' + (window.location.search || '') + '#' + encodeURIComponent(key));
       }, 0);
     };

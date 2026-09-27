@@ -228,7 +228,8 @@
     }
     if (packaged && wait) {
       card.state = 'awaiting'; card.pill = 'Waiting for payment'; card.tone = 'wait';
-      card.note = (wait.display ? wait.display + ' invoice · ' : '') + (wait.expiresOn ? 'pay by ' + shortDay(wait.expiresOn) + ' · ' : '') + 'switches on when paid';
+      /* the server expires an unpaid change at its cycle end: said as such, the same words as the menu */
+      card.note = (wait.display ? wait.display + ' invoice · ' : '') + 'switches on when paid' + (wait.expiresOn ? ' · expires unpaid on ' + shortDay(wait.expiresOn) : '');
       card.action = wait.paymentLink ? { kind: 'pay', label: 'Pay' + (wait.display ? ' ' + wait.display : ''), href: wait.paymentLink } : { kind: 'billing', label: 'Plan & billing' };
       card.secondary = { kind: 'cancel', label: 'Cancel request' }; card.record = wait;
     } else if (packaged && st !== 'held' && sub.indexOf(key) >= 0) {

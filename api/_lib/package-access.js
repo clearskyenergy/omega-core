@@ -27,7 +27,7 @@ function live(billing, modules, now) {
 function project(caller, billing, org, member, now) {
   billing = billing || {};
   if (billing.packaged !== true) return { packaged: false };
-  if (caller.staff) return { packaged: true, staff: true, canPreview: true, starters: M.starters(), readOnly: false, modules: M.catalog().map(function (m) { return m.key; }),
+  if (caller.staff) return { packaged: true, staff: true, canPreview: true, starters: M.starters(), live: true, readOnly: false, modules: M.catalog().map(function (m) { return m.key; }),
     caps: ['all'], toolAccess: M.catalog().reduce(function (out, m) { return out.concat(m.tools); }, []), catalog: M.catalog(), notSold: M.notSold(), readOnlyRibbon: M.readOnlyRibbon() };
   if (!(caller.emailVerified === true || caller.claims && caller.claims.email_verified === true)) deny('Verified email required');
   if (!org || org.status !== 'active' || !member || (member.status && member.status !== 'active')) deny('Active organization membership required');
@@ -42,7 +42,10 @@ function project(caller, billing, org, member, now) {
     notice = { text: 'Your trial ends on ' + new Date(instant(billing.trialEndsAt)).toISOString().slice(0, 10) + '. Your plan: ' + (billing.plan || 'Lite + modules') + (billing.monthlyDisplay ? ', ' + billing.monthlyDisplay : '') + '.', payUrl: null };
   } else if (!canWork) notice = { text: 'This workspace is read-only. Your saved projects remain available. Pay to continue creating and exporting.', payUrl: require('./logic-policy').paymentLink(billing.paymentLink) };
   else if (state === 'past_due_lite') notice = { text: 'Payment is overdue. Your workspace has returned to Lite. Your saved work remains available.', payUrl: require('./logic-policy').paymentLink(billing.paymentLink) };
-  return { packaged: true, staff: false, readOnly: !canWork || member.role === 'viewer', modules: grants.modules,
+  /* live: whether the PLAN is paid up (readOnly also covers a viewer's own
+     role), so the editor's chip tells a viewer on a live plan "view only"
+     and never "read-only until paid" with an I've paid button */
+  return { packaged: true, staff: false, live: canWork, readOnly: !canWork || member.role === 'viewer', modules: grants.modules,
     accessUntil: billing.accessUntil == null ? null : instant(billing.accessUntil), billingNotice: notice,
     tier: grants.tier, addons: grants.addons, caps: grants.caps, toolAccess: grants.toolAccess, catalog: M.catalog(), notSold: M.notSold(), readOnlyRibbon: M.readOnlyRibbon() };
 }
