@@ -281,13 +281,30 @@ async function removal(db, orgId, input, caller, now, withdraw) {
   var result = await db.runTransaction(async function (tx) {
     var live = await tx.get(current), fresh = live.data() || {}, list = (fresh.removalRequests || []).slice();
     var selection = removalSelection(fresh, wanted, withdraw), remove = selection.modules;
-    var previewId = Q.key(B.stable({ orgId: orgId, owned: selection.owned, modules: remove, withdraw: !!withdraw }));
+    /* what is already queued is part of the preview: a removal queued or
+       withdrawn between the dry run and the confirm changes the fee from the
+       review, so the confirm must be reviewed again */
+    var queued = list.map(function (r) { return r && r.module; }).filter(function (k) { return typeof k === 'string'; });
+    var previewId = Q.key(B.stable({ orgId: orgId, owned: selection.owned, modules: remove, withdraw: !!withdraw, queued: queued }));
     var note = withdraw ? 'The opt-out request is withdrawn for these modules. Access and billing are unchanged.' : 'Queued for the quarterly review with ClearSky. Access and charges stay unchanged until that review; this does not issue a refund.';
-    /* what the review changes, in money: the fee on what is owned today and
-       on what would be left, and the day it happens. The menu states it
-       before anything is written; the server is the only one that prices. */
-    var money = withdraw ? {} : { beforeDisplay: monthlyFor(fresh, c.book, selection.owned, now),
-      afterDisplay: monthlyFor(fresh, c.book, selection.owned.filter(function (k) { return remove.indexOf(k) < 0; }), now), reviewOn: reviewOn(fresh, c.book, now) };
+    /* what the review changes, in money: the fee on what is owned and on
+       what is left once EVERYTHING queued for that review goes (this request
+       and every opt-out already waiting for it, review finding 0), and the
+       day it happens. Both are priced ON the review day, at its last
+       instant, so a transformation credit counts only if it still runs then:
+       a paid activation's credit ends part-way through the first review day
+       (review finding 1). No review date on record: priced today. The menu
+       states it before anything is written; the server is the only one that
+       prices. */
+    var money = {};
+    if (!withdraw) {
+      var leaving = remove.slice(), also = [];
+      queued.forEach(function (k) { if (leaving.indexOf(k) < 0) { leaving.push(k); also.push(k); } });
+      var rev = reviewOn(fresh, c.book, now), at = rev ? R.date(rev) + R.DAY - 1 : now;
+      money = { beforeDisplay: monthlyFor(fresh, c.book, selection.owned, at),
+        afterDisplay: monthlyFor(fresh, c.book, selection.owned.filter(function (k) { return leaving.indexOf(k) < 0; }), at),
+        reviewOn: rev, alsoLeaving: names(also.filter(function (k) { return selection.owned.indexOf(k) >= 0; })) };
+    }
     if (input.dryRun === true) return Object.assign({ previewId: previewId, modules: remove, names: names(remove), withdraw: !!withdraw,
       note: withdraw ? 'Confirming will withdraw the opt-out request for these modules. Access and billing will stay unchanged.' : 'Confirming queues these modules for the quarterly review with ClearSky. Access and charges stay unchanged until that review; this does not issue a refund.' }, money);
     if (input.previewId !== previewId) fail('Your package changed; review the opt-out request again');
@@ -361,7 +378,10 @@ async function optIn(db, orgId, input, caller, now) {
   var wanted = closure(['lite'].concat(logic, have), add);
   if (!wanted.length) fail('Already requested', 409);
   var at = iso(now), entries = {}, cents = 0;
-  wanted.forEach(function (k) { var m = byKey[k]; cents += m.priceCents; entries[k] = { key: k, name: m.name, monthlyCents: m.priceCents, display: m.priceDisplay, requestedBy: caller.email, requestedAt: at, status: 'requested', pricebookVersion: c.book.version }; });
+  /* `asked`: the person named this module, or the closure pulled it in
+     (Office for Plant). Cancel request takes back a pulled-in module with
+     the last request that needed it, never one asked for on its own. */
+  wanted.forEach(function (k) { var m = byKey[k]; cents += m.priceCents; entries[k] = { key: k, name: m.name, monthlyCents: m.priceCents, display: m.priceDisplay, requestedBy: caller.email, requestedAt: at, status: 'requested', asked: add.indexOf(k) >= 0, pricebookVersion: c.book.version }; });
   var current = c.root.collection('billing').doc('current'), id = 'optin-' + Q.key(B.stable({ w: wanted, at: now }));
   /* the confirm panel: the same closure and price the request would record,
      and nothing written; a workspace with no billing record is refused here
@@ -387,8 +407,12 @@ async function optIn(db, orgId, input, caller, now) {
 /* A request that is still open can be taken back (Cancel request). The
    catalog owns the dependencies both ways: cancelling the opt-in of a module
    also cancels the requested opt-ins that need it (Plant without Office is
-   not a request), and cancelling an opt-OUT of a module keeps what it needs
-   (keeping Plant keeps Office). Nothing about the bill changes either way. */
+   not a request) and the prerequisites that request PULLED IN (asked:
+   false) once nothing still open needs them (cancelling Plant cancels the
+   Office it brought, review finding 2; an Office asked for on its own, or
+   recorded before `asked` existed, stays); cancelling an opt-OUT of a module
+   keeps what it needs (keeping Plant keeps Office). Nothing about the bill
+   changes either way. */
 function withdrawSet(map, wanted, dependents) {
   var open = requested(map), out = [];
   wanted.forEach(function (k) { if (open.indexOf(k) < 0) fail('No request to withdraw', 409); });
@@ -398,11 +422,28 @@ function withdrawSet(map, wanted, dependents) {
     else needs(k).forEach(function (r) { if (r !== 'lite') take(r); });
   }
   wanted.forEach(take);
+  for (var grew = dependents; grew;) {
+    grew = false;
+    open.forEach(function (r) {
+      if (out.indexOf(r) >= 0 || !map[r] || map[r].asked !== false) return;
+      var pulled = out.some(function (o) { return needs(o).indexOf(r) >= 0; });
+      var still = open.some(function (o) { return o !== r && out.indexOf(o) < 0 && needs(o).indexOf(r) >= 0; });
+      if (pulled && !still) { out.push(r); grew = true; }
+    });
+  }
   return out;
 }
 async function withdraw(db, orgId, input, caller, now, field) {
   var c = await bare(db, orgId), optIn = field === 'optIns', wanted = keys(optIn ? input.add : input.remove, 'withdraw');
   var current = c.root.collection('billing').doc('current'), result = null;
+  /* the confirm panel names everything the cancel takes back, from this
+     rule, so the page never carries a second copy of it; nothing written */
+  if (input.dryRun === true) {
+    var snap = await current.get(), seen = snap.exists ? snap.data() || {} : null;
+    if (!seen) fail('No request to withdraw', 409);
+    var would = withdrawSet(Object.assign({}, seen[field] || {}), wanted, optIn);
+    return { dryRun: true, withdrawn: would, names: names(would), note: 'Nothing about your bill changes.' };
+  }
   await db.runTransaction(async function (tx) {
     var live = await tx.get(current), fresh = live.data() || {}, map = Object.assign({}, fresh[field] || {});
     if (!live.exists) fail('No request to withdraw', 409);
@@ -430,6 +471,10 @@ var OPT_OUT_NOTE = 'Your plan\'s price is set by your agreement, so nothing chan
 async function optOut(db, orgId, input, caller, now) {
   var c = await bare(db, orgId), b = c.billing, remove = keys(input.remove, 'remove');
   if (b.packaged === true) fail('This workspace is on a subscription package: opt out through the menu, which queues it for the quarterly review.', 409);
+  /* as optIn: a workspace awaiting approval, suspended or cancelled holds
+     nothing to leave, so it files no request and ClearSky is not mailed one
+     (review finding 9: a pending trial was offered Opt out of White Label) */
+  if (c.org.status !== 'active') fail('Your workspace is not active.', 409);
   var current = c.root.collection('billing').doc('current');
   if (!(await current.get()).exists) fail('Billing is not set up for this workspace yet. Email ClearSky to change the plan.', 409);
   /* an opt-in that is only requested is not held: cancelling it is the undo */
@@ -455,6 +500,46 @@ async function optOut(db, orgId, input, caller, now) {
   });
   await mail('optOutAlert', { company: c.org.name || orgId, orgId: orgId, names: names(wanted), by: caller.email, tier: b.tier || null, reason: reason });
   return { ok: true, requested: true, remove: wanted, names: names(wanted), optOuts: merged, requestedAt: at, note: OPT_OUT_NOTE };
+}
+/* ── ClearSky ANSWERS a legacy request under the agreement, without moving
+   the workspace onto a package (review finding 3: an opt-out honoured by a
+   tier, add-on or toolOverrides edit otherwise stayed "Opting out" for
+   ever, and Cancel request would then record a withdrawal of a removal that
+   already happened). An opt-out is done or declined; an opt-in is
+   activated or declined. Staff only (a verified ClearSky address, as
+   admin.authenticate decides it); the named requests must all be open or
+   nothing is written; the tenant's own words stay on the entry beside the
+   answer; history and admin_audit like every write here. It records the
+   answer and nothing else: the plan itself is changed where it always is
+   (tenant-billing, the master console). A packaged workspace's requests
+   are answered by activation (package-billing prepare) or the review. */
+var ANSWERS = { optOuts: ['done', 'declined'], optIns: ['activated', 'declined'] };
+async function resolve(db, orgId, input, caller, now, field) {
+  if (!caller || caller.staff !== true) fail('Only ClearSky answers a request', 403);
+  var status = input.status;
+  if (ANSWERS[field].indexOf(status) < 0) fail('Status must be ' + ANSWERS[field].join(' or '), 400);
+  var optIn = field === 'optIns', wanted = keys(optIn ? input.add : input.remove, 'answer');
+  var c = await bare(db, orgId);
+  if (c.billing.packaged === true) fail('A packaged workspace is answered by activation or the review', 409);
+  var note = typeof input.reason === 'string' ? input.reason.trim().slice(0, 300) : '';
+  var current = c.root.collection('billing').doc('current'), result = null;
+  await db.runTransaction(async function (tx) {
+    var live = await tx.get(current), fresh = live.data() || {}, map = Object.assign({}, fresh[field] || {}), open = requested(map), at = iso(now);
+    if (!live.exists) fail('No request to answer', 409);
+    wanted.forEach(function (k) { if (open.indexOf(k) < 0) fail('No open request for ' + M.get(k).name, 409); });
+    wanted.forEach(function (k) {
+      var answer = { status: status, resolvedAt: at, resolvedBy: caller.email }; if (note) answer.resolution = note;
+      map[k] = Object.assign({}, map[k], answer);
+    });
+    var id = (optIn ? 'optin-' : 'optout-') + status + '-' + Q.key(B.stable({ w: wanted, status: status, at: now }));
+    var event = { at: now, by: caller.email, action: (optIn ? 'opt-in-' : 'opt-out-') + status, changeId: id, was: { requested: open },
+      changed: { resolved: wanted, names: names(wanted), status: status, note: note || 'Answered by ClearSky under the agreement.' } };
+    var patch = { updatedAt: now, updatedBy: caller.email }; patch[field] = map;
+    tx.set(current, patch, { merge: true });
+    tx.set(current.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
+    result = { ok: true, resolved: wanted, names: names(wanted), status: status }; result[field] = map;
+  });
+  return result;
 }
 /* ── Phase 7: buy more, like credits. A pack is paid first and lasts to the
    end of the current cycle; reconciliation adds it when QuickBooks shows it
@@ -536,4 +621,4 @@ async function reconcileNow(db, orgId, caller, now, deps) {
   return out(after.exists ? after.data() : {});
 }
 module.exports = { reconcileNow: reconcileNow, quote: quote, preview: preview, apply: apply, cancel: cancel, removal: removal, optIn: optIn, summary: summary, closure: closure, deltaLines: deltaLines, state: state,
-  packQuote: packQuote, packBuy: packBuy, autoTopup: autoTopup, optOut: optOut, withdraw: withdraw, reviewOn: reviewOn };
+  packQuote: packQuote, packBuy: packBuy, autoTopup: autoTopup, optOut: optOut, withdraw: withdraw, resolve: resolve, reviewOn: reviewOn };
