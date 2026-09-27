@@ -19,7 +19,8 @@
  * (firestore.rules, members), so it is a grant to that sign-in, and the
  * record and ClearSky's mail say whether the address was verified. Everything
  * that prices, invoices, switches on or reads the billing summary (the
- * add-ons included) still needs a verified email.
+ * add-ons included) needs a verified email, or an owner or administrator of
+ * an active client (admin.clientAdmin).
  */
 'use strict';
 var A = require('./_lib/admin'), C = require('./_lib/plan-change'), AO = require('./_lib/addons');
@@ -32,7 +33,10 @@ module.exports = A.handler(async function (req, res) {
   if (!orgId) throw A.httpError(400, 'Valid organization required');
   if (!caller.staff) {
     var request = req.method === 'POST' && REQUESTS.indexOf(input.action) >= 0;
-    if (!request && (!caller.claims || caller.claims.email_verified !== true)) throw A.httpError(403, 'Verified email required');
+    /* a verified email, or an owner or administrator of an active client
+       (admin.clientAdmin: the role vouches for them); a member reads with one.
+       A REQUEST needs neither: the owner or administrator role, checked below. */
+    if (!request && (!caller.claims || caller.claims.email_verified !== true) && !(await A.clientAdmin(caller, orgId))) throw A.httpError(403, 'Verified email required');
     if (orgId !== caller.orgId) throw A.httpError(403, 'Own organization required');
     /* the summary (GET) is the workspace's own billing, which every verified
        member of the org may read (the rules let a member read billing/current;

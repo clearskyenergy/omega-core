@@ -135,7 +135,8 @@ decided 2026-09-26.
   the opt-outs. A request grants and charges nothing, so an owner or
   administrator files one on the role alone, verified email or not (the
   record and the mail say which); quoting, paying, switching on and the
-  summary still need a verified email. A member is told who files them.
+  summary need a verified email, or an owner or administrator of an active
+  client (`admin.clientAdmin`, below). A member is told who files them.
 - **The module cards live on Modules, not the home** (Tommy, 2026-09-27:
   "i love the way the modules are but i dont want them to be taking up so
   much dashboard space"). The home is the hub, Today, In flight and Around
@@ -267,7 +268,15 @@ click, the waiting card, I've paid, Office Live and Omega Logic on the rail.
 ## Add to plan (a legacy plan's add-ons)
 
 `api/_lib/addons.js`, through `plan-change` (owner, administrator or
-verified ClearSky staff; a member reads). One engine, the package
+verified ClearSky staff; a member reads). An owner or administrator of an
+ACTIVE client needs no verified email, here, on `billing-profile` and on
+the Stripe card door `stripe-customer`
+(`admin.clientAdmin`, Tommy, 2026-09-27: "to opt in, we shouldn't need to
+verify email... they are already a client and customer"): the role on
+`members/{uid}` vouches, because only a person grants it, and a Team
+invitation makes its account unverified. A plain member still reads only
+with a verified email; a pending or suspended workspace, or one with no
+record, still needs one; staff are unchanged. One engine, the package
 engine's own parts: the book, the synced QuickBooks items (`module:<key>`,
 `logic-bundle`), the QuickBooks driver, `package-billing.reconcile` and the
 hourly runner; the engine's guard decides whether a card can be taken at

@@ -36,6 +36,8 @@ F.DB.prototype.runOne = function (fn) {
 F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, authenticate: async function (req) { return req.caller; }, db: function () { return db; },
   httpError: function (status, text) { var e = new Error(text); e.status = status; return e; }, safeOrg: function (s) { return /^[a-z0-9.-]+\.[a-z]+$/.test(s || '') ? s : ''; },
   isTenantAdmin: async function (c, o) { return c.staff || (c.orgId === o && ['owner', 'admin'].indexOf(c.role) >= 0); },
+  /* admin.clientAdmin's meaning on this double (the real one: scripts/tests/tclientadmin.js) */
+  clientAdmin: async function (c, o) { if (c.staff) return true; if (c.orgId !== o || ['owner', 'admin'].indexOf(c.role) < 0) return false; var s = await db.doc('omega_orgs/' + o).get(); return s.exists && s.data().status === 'active'; },
   canActInOrg: async function (c, o) { return c.staff || c.orgId === o; },
   billingOf: async function (o) { var r = await db.doc('omega_orgs/' + o + '/billing/current').get(); return r.exists ? r.data() : {}; },
   FieldValue: function () { return { serverTimestamp: function () { return Date.now(); }, arrayUnion: function () { return []; } }; } });
@@ -102,7 +104,14 @@ async function run() {
 
     /* ── the gates the endpoint keeps ── */
     await refused(function () { return quote(['logic-office'], member); }, /workspace administrator/, 403);
-    await refused(function () { return quote(['logic-office'], Object.assign({}, owner, { claims: { email_verified: false } })); }, /Verified email/, 403);
+    /* an owner of an active client adds without a verified email (admin.clientAdmin: a Team
+       invitation makes its account unverified); a member never, verified or not */
+    var unverified = Object.assign({}, owner, { claims: { email_verified: false } });
+    equal((await quote(['logic-office'], unverified)).canBuy, true, 'an unverified owner of an active client may add to the plan');
+    await refused(function () { return quote(['logic-office'], Object.assign({}, member, { claims: { email_verified: false } })); }, /Verified email/, 403);
+    db.data.get(ROOT).status = 'pending';
+    await refused(function () { return quote(['logic-office'], unverified); }, /Verified email/, 403);
+    db.data.get(ROOT).status = 'active';
     await refused(function () { return req('POST', { action: 'addon-quote', add: ['logic-office'], orgId: 'other.example' }); }, /Own organization/, 403);
     await refused(function () { return req('POST', { action: 'addon-quote', add: ['logic-office'], priceCents: 1 }); }, /Unsupported field/, 400);
     equal((await quote(['logic-office'], Object.assign({}, staff))).canBuy, true, 'verified ClearSky staff may act for a tenant');

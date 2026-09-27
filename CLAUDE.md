@@ -277,7 +277,8 @@ the card is read back from Stripe, never stored. Pay $X with Stripe is one
 `send_invoice` invoice per due date and amount (`metadata.omegaDue`),
 recorded once by the webhook (answered before the tier path) or I've paid;
 `subscriptionDue` stays ClearSky's. A package keeps the engine's rules.
-Stripe → QuickBooks is the Connect to Stripe app, never OMEGA (that would
+An owner or admin of an ACTIVE client needs no verified email here either
+(`admin.clientAdmin`, as on `plan-change`). Stripe → QuickBooks is the Connect to Stripe app, never OMEGA (that would
 book it twice). `scripts/test-stripe-customer.js`.
 
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
@@ -829,7 +830,9 @@ clearsky … add to plan and then charge their credit card or saved payment
 method"). Add to plan is an ADD-ON beside the legacy plan, whose own tier,
 price and billing are never touched: `api/_lib/addons.js` through
 `plan-change` `addon-quote` / `addon-buy` / `addon-cancel` (owner, admin or
-verified staff), the book's list price (the five Logic parts as the bundle),
+verified staff; an owner or admin of an ACTIVE client needs no verified email,
+`admin.clientAdmin`: the role a person granted vouches, and a Team invitation
+makes its account unverified), the book's list price (the five Logic parts as the bundle),
 its own QuickBooks invoice paid by card on QuickBooks' page (or the card
 saved there), Live when `package-billing.reconcile` sees it paid (`I've
 paid` = reconcile-now; the hourly runner renews it monthly on the add-on
@@ -866,7 +869,8 @@ Assign merges only the owner fields onto `projects/{id}`. Plan & billing
 is a page (`#billing`): subscription, what is owed and when, the payment
 method (the Stripe portal or QuickBooks' own payment page; a card is never
 entered on our pages) and the history; `GET /api/plan-change` is readable
-by any verified member, changes stay with an owner or admin. The shell's
+by any verified member (and an active client's owner or admin, verified or
+not), changes stay with an owner or admin. The shell's
 button reset is `:where()` (zero specificity) so a styled button keeps its
 face, and `omega-splash.js` hears link clicks last, so a link the page
 handles itself never raises the mark. Optional held modules offer **Opt out** through the
@@ -880,8 +884,9 @@ history, audit and a mail, ClearSky confirms the date under the agreement,
 and the Package tab preselects without them. A request grants and charges
 nothing, so an owner or administrator files one on the ROLE alone (that
 role is only ever written by ClearSky or the workspace's owner, and the
-record says whether the email was verified); pricing, paying, switching on
-and the summary still need a verified email. A workspace with a billing
+record says whether the email was verified, and the workspace need only
+not be pending, suspended or cancelled); pricing, paying, switching on and
+the summary need a verified email or `admin.clientAdmin`. A workspace with a billing
 record never reads "No billing account yet" on Plan & billing: its payment
 method is Stripe's, or QuickBooks' where ClearSky invoices it there. The
 page never changes billing or grants. Opt-in panels live on

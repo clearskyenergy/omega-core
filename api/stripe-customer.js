@@ -1,7 +1,8 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
  * POST /api/stripe-customer — Plan & billing's Payment method, through Stripe
- * (api/_lib/stripe-customer.js). An owner or administrator of the workspace,
- * or verified ClearSky staff acting for it:
+ * (api/_lib/stripe-customer.js). An owner or administrator of the workspace
+ * (with a verified email, or of an active client: admin.clientAdmin), or
+ * verified ClearSky staff acting for it:
  *   { action: 'view' }    the rail, the card on file read back from Stripe,
  *                         whether a card can be added and the amount due paid
  *   { action: 'card' }    { url } Stripe's "add a payment method" page; links
@@ -25,7 +26,7 @@ module.exports = A.handler(async function (req, res) {
   if (!orgId) throw A.httpError(400, 'Valid organization required');
   if (ACTIONS.indexOf(action) < 0) throw A.httpError(400, 'Action must be ' + ACTIONS.join(', '));
   if (!caller.staff) {
-    if (!caller.claims || caller.claims.email_verified !== true) throw A.httpError(403, 'Verified email required');
+    if ((!caller.claims || caller.claims.email_verified !== true) && !(await A.clientAdmin(caller, orgId))) throw A.httpError(403, 'Verified email required');
     if (orgId !== caller.orgId) throw A.httpError(403, 'Own organization required');
   }
   if (!(await A.isTenantAdmin(caller, orgId))) throw A.httpError(403, 'An owner or administrator of the workspace manages its card');
