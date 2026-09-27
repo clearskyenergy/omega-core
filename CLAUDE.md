@@ -293,7 +293,8 @@ on Draw on every plan, where a package puts them: `LITE` in the Compute
 tab's mover, held to the catalog by `scripts/tests/tlegacygates.js`.
 Omega Storefront (`whitelabel`, no tools, no editor commands) is held where
 the public storefront's own gate opens it, never on the tier:
-`api/_lib/embed.js` `storefrontEntitled` (a `toolOverrides` switch either
+`api/_lib/storefront.js` `storefrontEntitled`, which `api/_lib/embed.js`
+asks (a `toolOverrides` switch either
 way, else the `whitelabel` add-on or the staff-written `whiteLabel.enabled`
 on the tenant record); `OmegaWorkspaceHub.storefront` is its twin, run case
 for case against it by `scripts/tests/tworkspacehub.js`.

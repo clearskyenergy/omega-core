@@ -31,7 +31,7 @@ module.exports = A.handler(async function (req, res) {
     billing = shown;
     rows = rows.map(function (r) { return { at: r.at, action: r.action, changed: r.changed ? { modules: r.changed.modules, plan: r.changed.plan, state: r.changed.state, add: r.changed.add, totalCents: r.changed.totalCents, packagingState: r.changed.packagingState } : null }; });
   }
-  /* whether its storefront is switched on (the flag embed.js reads), so the
+  /* whether its storefront is switched on (the flag the storefront's gate reads), so the
      console judges Omega Storefront by the same gate; nothing else of the
      white label crosses here */
   var wl = c.org.whiteLabel && typeof c.org.whiteLabel === 'object' ? { enabled: c.org.whiteLabel.enabled === true } : null;

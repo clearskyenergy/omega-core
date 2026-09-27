@@ -137,8 +137,8 @@ ok('a trial opens every tool but only the designer in the editor: Storage is par
 ok('Core and Performance hold Lite: its drawing tools (Trace Boundary, Fence & Tie, Move System) live on Draw on every plan, not on the Compute tab', st('lite', perf) === 'held' && st('lite', core) === 'held', [st('lite', perf), st('lite', core)]);
 ok('Trial cannot print a blueprint: Lite is partly on', st('lite', trial) === 'part' && HUB.moduleEditor(MODS.lite, trial).open < HUB.moduleEditor(MODS.lite, trial).total);
 /* Omega Storefront has no tools and no editor commands: it is on exactly
-   where the public storefront's own gate opens it (api/_lib/embed.js
-   storefrontEntitled), a staff flag on the tenant record or the add-on,
+   where the public storefront's own gate opens it (api/_lib/storefront.js
+   storefrontEntitled, which api/_lib/embed.js asks), a staff flag on the tenant record or the add-on,
    never the tier. It used to read "held" wherever the plan opened
    everything, and the storefront then refused that Enterprise tenant. */
 ok('Enterprise without the storefront switched on does not hold Omega Storefront (the storefront refuses it)', st('whitelabel', ent) === 'ask' && st('whitelabel', perf) === 'ask' && st('whitelabel', legacy('partner')) === 'ask', [st('whitelabel', ent), st('whitelabel', legacy('partner'))]);
@@ -147,7 +147,7 @@ ok('so does the whitelabel add-on', st('whitelabel', legacy('standard', { addons
 ok('toolOverrides switches it either way, over the flag and the add-on', st('whitelabel', legacy('trial', { toolOverrides: { whitelabel: true } })) === 'held' && st('whitelabel', legacy('enterprise', { addons: ['whitelabel'], toolOverrides: { whitelabel: false } }, 'x.example', {}, { enabled: true })) === 'ask');
 ok('a white label that is only painted (a name, not switched on) is not the storefront', st('whitelabel', legacy('deluxe', {}, 'x.example', {}, { platformName: 'Cell' })) === 'ask');
 ok('a workspace with no billing record is judged by its tenant record alone', HUB.moduleState(MODS.whitelabel, Object.assign(legacy('trial'), { billing: null, whiteLabel: { enabled: true } })) === 'held');
-var E = require(path.join(ROOT, 'api', '_lib', 'embed.js')), cases = 0, differ = [];
+var E = require(path.join(ROOT, 'api', '_lib', 'storefront.js')), cases = 0, differ = [];
 [undefined, true, false].forEach(function (ov) { [[], ['whitelabel'], ['WhiteLabel'], ['compute']].forEach(function (ad) { [undefined, true, false, 'yes'].forEach(function (en) { [true, false].forEach(function (hasBilling) {
   var b = hasBilling ? { addons: ad, toolOverrides: ov === undefined ? {} : { whitelabel: ov } } : null, wl = en === undefined ? null : { enabled: en };
   cases++; if (HUB.storefront(b, wl) !== E.storefrontEntitled(b, wl)) differ.push(JSON.stringify([b, wl]));
@@ -155,7 +155,7 @@ var E = require(path.join(ROOT, 'api', '_lib', 'embed.js')), cases = 0, differ =
 ok('the store\'s storefront rule is the public storefront\'s own, case for case (' + cases + ' cases)', !differ.length, differ.slice(0, 4));
 var srcOf = function (f) { return require('fs').readFileSync(path.join(ROOT, f), 'utf8'); };
 ok('the workspace, the store and the console hand the storefront gate its inputs', ['workspace.html', 'marketplace.html'].every(function (f) { return /whiteLabel: (WS|ws)\.whiteLabel \|\| null/.test(srcOf(f)) && /billing: (WS|ws)\.billing \|\| \(window\.OmegaTenant/.test(srcOf(f)); }) && /billing: b, whiteLabel: data\.whiteLabel \|\| null/.test(srcOf('admin/package-panel.js')) && /whiteLabel: wl,/.test(srcOf('api/tenant-package.js')));
-ok('the public storefront asks the named rule', /if \(!storefrontEntitled\(billing, wl\)\) throw/.test(srcOf('api/_lib/embed.js')));
+ok('the public storefront asks the named rule', /if \(!SF\.storefrontEntitled\(billing, wl\)\) throw/.test(srcOf('api/_lib/embed.js')));
 ok('a nested gate needs every link: the Compute add-on on Core opens parcel screening only where Analyze is open', HUB.moduleEditor(MODS.siteintel, legacy('standard', { addons: ['compute'] })).open === 2 && HUB.moduleEditor(MODS.siteintel, legacy('deluxe', { addons: ['compute'] })).open === 4);
 var allow = legacy('enterprise', { toolAccess: ['editor', 'gridatlas'] }, 'x.example', { toolAccess: ['editor', 'gridatlas'] });
 var noEditor = legacy('enterprise', {}, 'x.example', { toolAccess: ['gridatlas'] });

@@ -151,7 +151,7 @@
     return open === total ? 'held' : open ? 'part' : 'ask';
   }
   /* Whether the public storefront is on for a legacy workspace: the twin of
-     api/_lib/embed.js storefrontEntitled (a toolOverrides switch either way,
+     api/_lib/storefront.js storefrontEntitled (a toolOverrides switch either way,
      else the 'whitelabel' add-on or whiteLabel.enabled on the tenant record;
      never the tier). scripts/tests/tworkspacehub.js runs both over every case. */
   function storefront(billing, whiteLabel) {
