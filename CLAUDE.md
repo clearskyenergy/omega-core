@@ -807,6 +807,13 @@ agreement. The page never changes billing or grants. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
+It CLICKS EVERY CONTROL on every view (`scripts/_lib/click-sweep.js`, one
+level into each drawer) and fails on an error, a dialog put into the page
+flow instead of over it, a reload in disguise, an overlay Escape leaves
+open or a link to a page the site does not serve (`--only sweep` runs just
+those). `omega-newproject.js` owns its overlay (it once borrowed
+`.modal-bg` from index.html and landed at the foot of the workspace), and
+a `/workspace#view` link is a view change, never a reload.
 Once the workspace is home, `marketplace.html` is THE STORE, not a tool
 catalogue (every tool is All tools on the workspace): the plans and the
 modules on their shelves, wearing the whole workspace chrome

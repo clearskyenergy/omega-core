@@ -118,15 +118,28 @@
      Injected rather than asked of each page, because the two pages had
      drifted on this too: only one carried the scope-grid rules, so the
      other would have rendered the cards as unstyled buttons. Every rule is
-     scoped to the dialog. */
+     scoped to the dialog.
+
+     THE OVERLAY IS THE DIALOG'S OWN. It used to borrow `.modal-bg` from the
+     host page, and only index.html and projects.html carry that rule. The
+     workspace does not, so + New project there appended the dialog to the
+     END OF THE PAGE, in flow, under the rail: the page jumped to the bottom
+     and the dialog sat half off the chrome (Tommy, 2026-09-27). Fixed,
+     hidden until .on, above the shell's rail, tabs and drawer (z 30–70) and
+     below the terms gate and the package menu. On a phone it is a bottom
+     sheet with 16px inputs (smaller ones make iOS zoom the page), as the
+     old dashboard's phone rules made it. check:workspace holds it. */
   function css() {
     if ($('omega-np-css')) return;
     var s = doc.createElement('style');
     s.id = 'omega-np-css';
     s.textContent = [
       '#new-proj-modal{--np-bg:#F5F4F0;--np-card:#fff;--np-ink:#16202B;--np-sub:#526273;--np-line:#D7DFE6;--np-blue:#2B5FA8;--np-on:#EAF0F8}',
+      '#new-proj-modal{position:fixed;inset:0;z-index:500;display:none;align-items:center;justify-content:center;padding:16px;margin:0;background:rgba(8,14,22,.55);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);overscroll-behavior:contain}',
+      '#new-proj-modal.on{display:flex}',
+      'html.omega-np-open,html.omega-np-open body{overflow:hidden}',
       '#new-proj-modal,#new-proj-modal *{box-sizing:border-box}',
-      '#new-proj-modal .modal{width:940px;max-width:94vw;max-height:92vh;overflow:auto;background:var(--np-bg);color:var(--np-ink);padding:28px;border:1px solid var(--np-line);border-radius:16px}',
+      '#new-proj-modal .modal{width:940px;max-width:94vw;max-height:92vh;overflow:auto;background:var(--np-bg);color:var(--np-ink);padding:28px;border:1px solid var(--np-line);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.25);text-align:left}',
       '#new-proj-modal h3{font-size:26px;margin:0 0 6px;letter-spacing:-.6px;color:var(--np-ink)}',
       '#new-proj-modal .np-intro{color:var(--np-sub);margin:0 0 22px;font-size:14px}',
       '#new-proj-modal .np-eyebrow{color:var(--np-blue);font:600 11px/1.5 ui-monospace,monospace;letter-spacing:.12em;margin-bottom:8px}',
@@ -150,6 +163,7 @@
       '#new-proj-modal .mb-create{background:var(--np-blue);color:#fff;border:1px solid var(--np-blue)}',
       '@media(max-width:800px){#new-proj-modal .np-types{grid-template-columns:repeat(3,minmax(0,1fr))}#new-proj-modal .modal{padding:20px}}',
       '@media(max-width:600px){#new-proj-modal .np-types{grid-template-columns:repeat(2,minmax(0,1fr))}}',
+      '@media(max-width:600px){#new-proj-modal{align-items:flex-end;padding:0}#new-proj-modal .modal{width:100%;max-width:100%;max-height:92vh;max-height:92dvh;border-radius:16px 16px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px))}#new-proj-modal input{font-size:16px}#new-proj-modal .mbtns{flex-direction:column-reverse}#new-proj-modal .mbtns button{width:100%}}',
       '@media(max-width:480px){#new-proj-modal .np-details{grid-template-columns:1fr}#new-proj-modal .np-type{padding:12px;min-height:150px}#new-proj-modal .np-type.on{padding:11px}}',
       '[data-theme="dark"] #new-proj-modal,body.dark #new-proj-modal{--np-bg:#10161D;--np-card:#172029;--np-ink:#E6EBF0;--np-sub:#A6B3C0;--np-line:#344452;--np-blue:#6E9BE0;--np-on:#1A2A40}',
       '@media(prefers-color-scheme:dark){html:not([data-theme="light"]) #new-proj-modal{--np-bg:#10161D;--np-card:#172029;--np-ink:#E6EBF0;--np-sub:#A6B3C0;--np-line:#344452;--np-blue:#6E9BE0;--np-on:#1A2A40}}'
@@ -272,12 +286,20 @@
     paintOpens();
 
     m.classList.add('on');
-    global.setTimeout(function () { var n = m.querySelector('.np-type.on') || m.querySelector('.np-type'); if (n) n.focus(); }, 100);
+    hold(true);
+    /* preventScroll: the page behind must not move to where the focus is */
+    global.setTimeout(function () { var n = m.querySelector('.np-type.on') || m.querySelector('.np-type'); if (n) { try { n.focus({ preventScroll: true }); } catch (e) { n.focus(); } } }, 100);
   }
   var returnFocus = null;
+  /* the page behind stays where it is while the panel is up */
+  function hold(on) {
+    var root = doc.documentElement;
+    if (root && root.classList) root.classList[on ? 'add' : 'remove']('omega-np-open');
+  }
   function close() {
-    if (returnFocus && returnFocus.focus) returnFocus.focus();
+    hold(false);
     var m = $('new-proj-modal'); if (m) m.classList.remove('on');
+    if (returnFocus && returnFocus.focus) { try { returnFocus.focus({ preventScroll: true }); } catch (e) { returnFocus.focus(); } }
   }
 
   function wire(m) {
