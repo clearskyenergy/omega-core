@@ -121,7 +121,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     p.on('pageerror', function (e) { if (!muted) errs.push(name + ': ' + e.message); });
     p.on('console', function (m) { if (muted) return; var t = m.text(); if (m.type() === 'error' && !/^Failed to load resource/.test(t)) errs.push(name + ' console: ' + t.slice(0, 240)); });
     var t0 = Date.now();
-    await p.goto(base + (opts.url || '/workspace'), { waitUntil: 'domcontentloaded' });
+    /* the fixtures say shell: 'classic' (the classic dashboard's own check), so the workspace is asked for by name: ?home=workspace, kept ahead of any hash */
+    var target = opts.url || '/workspace', hashAt = target.indexOf('#'), pathPart = hashAt >= 0 ? target.slice(0, hashAt) : target, hashPart = hashAt >= 0 ? target.slice(hashAt) : '';
+    await p.goto(base + pathPart + (pathPart.indexOf('?') >= 0 ? '&' : '?') + 'home=workspace' + hashPart, { waitUntil: 'domcontentloaded' });
     var ready = await p.waitForFunction(function () { return document.body.classList.contains('ready') || !!document.getElementById('ot-modal'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
     var out = { scenario: name, tenant: fx.org, readyMs: Date.now() - t0 };
     ok(name + ': the page answered within 8s', ready, out.readyMs);
@@ -161,7 +163,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok(name + ': the rail wears the product name', product === 'Omega Workspace', product);
     var rail = await p.$$eval('#side-nav .sn-item', function (r) { return r.filter(function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return a.querySelector('span').textContent.trim(); }); });
     ok(name + ': the rail is Home · Projects · All tools · Modules · Marketplace · Quote Desk · Team · Feed · Plan & billing · Settings', rail.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings', rail);
-    var board = await p.evaluate(function () { function shown(id) { var e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; } return { flight: shown('flight'), team: shown('team'), tools: shown('tools'), pulse: !!document.querySelector('#pulse .stats .stat'), stats: document.querySelectorAll('#pulse .stats .stat').length, spark: !!document.querySelector('#pulse .spark path'), insight: (document.querySelector('#pulse .insight') || {}).textContent || '' }; });
+    var board = await p.evaluate(function () { function shown(id) { var e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; } return { flight: shown('flight'), team: shown('team'), tools: shown('tools'), pulse: !!document.querySelector('#pulse .stats .stat'), stats: document.querySelectorAll('#pulse .stats .stat').length, spark: !!document.querySelector('#pulse .spark path'), insight: (document.querySelector('#pulse .insight') || {}).textContent || '', mymods: document.querySelectorAll('#mymods-body .mod').length, mymodsLive: document.querySelectorAll('#mymods-body .mod[data-held="1"]').length }; });
+    ok(name + ': Your modules on the home: the held ones Live and a few to add, from the one catalogue', board.mymods > 0 && board.mymods <= board.mymodsLive + 3, board);
     ok(name + ': the home shows the board (In flight and Around you with the hub) and All tools stays its own page', board.flight && board.team && !board.tools, board);
     ok(name + ': the Omega pulse draws four counts, the eight-week line and the insight from /api/pulse', board.pulse && board.stats === 4 && board.spark && /hour duration|Not enough/.test(board.insight), board);
     var hub = await p.$$eval('#hub .hx', function (r) { return r.map(function (g) { return g.getAttribute('data-hub'); }); });
@@ -482,6 +485,18 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await ctx.close();
   }
   await flow('/projects.html', 'Projects'); await flow('/marketplace.html', 'Marketplace'); await flow('/', '');
+  /* the classic choice: a browser that asked for the classic dashboard is sent there from /workspace, and index keeps it (the same rule on both pages, so no loop) */
+  await (async function () {
+    var ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+    await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); if (/Chart\.js/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.Chart=function(){};window.Chart.register=function(){};' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
+    await ctx.addInitScript(DOUBLE_SRC);
+    await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: ns.user, docs: ns.docs, latency: 8, authDomain: HOST });
+    var p = await ctx.newPage();
+    await p.goto(base + '/workspace?home=classic', { waitUntil: 'domcontentloaded' }); await wait(3500);
+    var where = await p.evaluate(function () { return { path: location.pathname, app: !!document.getElementById('app') && getComputedStyle(document.getElementById('app')).display !== 'none' }; });
+    ok('classic choice: /workspace?home=classic lands on the classic dashboard and stays', where.path === '/' && where.app, where);
+    await ctx.close();
+  })();
   /* The DEFAULT, with nothing asked for in the address: a tenant whose record
      does not say classic, and a DERIVED workspace (no org record, no public
      pin: ClearSky's own on the open host) with the handler lagging behind

@@ -74,6 +74,16 @@ decided 2026-09-26.
   (`plan-change.js` `state()`); its Opt in says so and sends the request
   that moves the workspace onto a package, naming the module and its
   price. Self-serve conversion of a legacy plan is NOT built (below).
+- **Your modules on the home** (the demo's row): the held modules Live in
+  shelf order, then up to three not held with Opt in, compact cards from
+  the same catalogue and the same rule as the Modules page; "All modules ›"
+  is the page.
+- **The login lands on the workspace.** `login.html`'s workspace route and
+  a tenant's own host both go to `/workspace`; the workspace sends a
+  classic choice (`?home=classic`, `shell: 'classic'`, a partner-type
+  workspace) to the classic dashboard by the same `homeOf()` rule, so the
+  two never bounce each other. `check:workspace` asks for the workspace by
+  name (`?home=workspace`) because its fixtures say `shell: 'classic'`.
 - **The way back.** The classic dashboard carries "Open Omega Workspace"
   beside Edit Dashboard and a Home section in Account settings; both are
   `/?home=workspace`, which flips the browser's choice.
