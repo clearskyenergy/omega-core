@@ -3,6 +3,7 @@
  * Maps and producing APIs use offline adapters; no live reads/writes/charges.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var M = require('../api/_lib/modules'), X = require('../api/_lib/package-access');
 var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture');

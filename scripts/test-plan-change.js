@@ -3,6 +3,7 @@
  * with QuickBooks mocked. No network, no live writes.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('assert'), F = require('./_lib/firestore-double');
 var B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules'), S = require('../api/_lib/package-billing');
 var Q = require('../api/_lib/qbo-billing'), R = require('../api/_lib/proration');
