@@ -707,7 +707,15 @@ real catalogs. Every tool tile is Live, Locked or Soon by that same rule;
 a locked tile explains, never hides. Today is `omega-workspace-today.js`
 (pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
 both ends of the Quote Desk, the referral inbox, projects ready, stalled or
-unsized. Never a second copy of those rules in a page. Opt-in panels live on
+unsized. Never a second copy of those rules in a page. The home is the BOARD: the hub and Today, then In flight and Around you
+(feed, People, the Omega pulse, Partners); only All tools and Modules are
+their own pages (`data-view`). The Omega pulse is `GET /api/pulse`
+(`api/_lib/pulse.js`, pure, `tpulse.js`): platform-wide COUNTS ONLY from
+the most recent rows, never a name. The Modules page lists every module
+for every workspace (`OmegaWorkspaceHub.moduleState`, the ONE held/partly/
+ask rule shared with the store); a module not held carries Opt in: the one
+menu and a QuickBooks invoice for a packaged workspace, the request that
+moves a legacy one onto a package. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.

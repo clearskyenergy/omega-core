@@ -43,12 +43,40 @@ decided 2026-09-26.
   quotes back of sent, requests to price, new quote requests, or sites
   online. The referral inbox itself stays on the classic dashboard;
   `?stay=classic` visits it once without changing the browser's home.
-- **One view at a time** (2026-09-27). The home is the hub and Today, and
-  nothing below it. All tools (`#tools`), In flight (`#flight`) and Around
-  you (`#team`, `#feed`) are each their own page inside `/workspace`, drawn
-  by `data-view` on the content and reached from the rail, the phone tabs,
-  the hub or a hash; a "‹ Home" link and the Home tab come back. Nothing
-  scrolls to a section any more; `check:workspace` asserts each view.
+- **The home is the board** (2026-09-27, after a day as hub-and-Today
+  alone: "where did all this cool shit go?"). The hub and Today, then In
+  flight and Around you — the feed, People (+ Invite, Share a project),
+  the **Omega pulse** and Partners on your projects (joint development
+  partners and the vendors who answered this workspace's requests for
+  quote, each with Open). Only the catalogue pages leave the home: All
+  tools (`#tools`) and Modules (`#modules`) are their own pages inside
+  `/workspace`, drawn by `data-view` on the content; `#flight`, `#team`
+  and `#feed` open that part alone with a "‹ Home" link. `go()` switches
+  the view and marks the rail and the tabs.
+- **Omega pulse** is `GET /api/pulse` (`api/_lib/pulse.js`, pure and pinned
+  by `tpulse.js`): what the whole platform did this week as COUNTS ONLY —
+  projects saved, requests for quote sent, projects at finance or beyond,
+  designers active, companies building — an eight-week line of project
+  saves, and one sentence of insight (the median battery duration of the
+  week's sized projects, as a band; the reader's own latest sized design
+  placed in, above or below it). The endpoint reads the most recent rows
+  (capped at 500 each) with the Admin SDK; nothing in the answer names a
+  company, a person or a project. A failed read says the pulse is resting.
+- **Plan & billing opens the Modules page** ("Modules: opt in and pay") and
+  the store; for a packaged workspace the panel also shows the monthly
+  figure, the next invoice, changes waiting for payment with their
+  QuickBooks links, recent invoices and *I've paid* (reconcile-now).
+- **Opt in, never Ask.** Every module not held carries **Opt in**. A
+  packaged workspace opts in on the one menu (`omega-package-menu.js`): a
+  server quote, "Subscribe and pay", a QuickBooks invoice with the card
+  button. A workspace on a legacy plan is billed outside the package engine,
+  which takes a card payment only on a subscription package
+  (`plan-change.js` `state()`); its Opt in says so and sends the request
+  that moves the workspace onto a package, naming the module and its
+  price. Self-serve conversion of a legacy plan is NOT built (below).
+- **The way back.** The classic dashboard carries "Open Omega Workspace"
+  beside Edit Dashboard and a Home section in Account settings; both are
+  `/?home=workspace`, which flips the browser's choice.
 - **Modules** (`#modules`) lists EVERY module of the catalog in shelf
   order, for every workspace, marked by whether it is used or given
   (Tommy, 2026-09-27). `OmegaWorkspaceHub.moduleState` is the ONE rule,
@@ -168,6 +196,9 @@ ground, one home; the session travels same-origin on every hop.
 | phone tab bar | Home · Projects · Tools · Team · Me | the same five destinations |
 | rail | Sign out | ends the session, `/login.html` |
 | Settings panel | Classic dashboard | `/?home=classic`, the old home on this browser |
+| classic dashboard | Open Omega Workspace · Account settings › Home | `/?home=workspace`, back to the new home on this browser |
+| Plan & billing panel | Modules: opt in and pay | `/workspace#modules` |
+| Modules page | Opt in | a packaged workspace: the one menu, a server quote and a QuickBooks invoice; a legacy one: the request that moves it onto a package |
 
 ## Launch — home by default
 
@@ -199,6 +230,12 @@ to the page, the shell or the runtime they load.
 - **Phone install** (manifest, shell service worker, an entry in
   `api/_lib/kit.js`, a guide): the page is responsive with the tab bar; the
   install pattern is the next pass.
+- **Self-serve conversion of a legacy plan.** A workspace billed outside
+  the package engine cannot pay for a module by card until it is on a
+  subscription package; today ClearSky moves it (`tenant-package`
+  activation). A one-click "move me onto a package and invoice the first
+  month" is the next billing feature: it needs the engine to accept a
+  legacy record as the starting point of a quote.
 - The projects page keeps its own TOPBAR (tenant chip, tabs, avatar) and
   its own page layout; only its rail, ground and home link are the
   workspace's. The marketplace wears the whole chrome (`wear()`); giving

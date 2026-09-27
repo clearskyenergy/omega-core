@@ -88,6 +88,7 @@ if (partly) { var pt = HUB.moduleTools(partly, std1); ok('a partly held module c
 var pk = ctxFor({ orgId: 'x', tierLevel: 1, modules: ['lite'], packaged: true, toolAccess: ['editor'] }, { packaged: true, modules: ['lite'] });
 ok('a packaged workspace holds exactly what its projection lists', HUB.moduleState(MODS.lite, pk) === 'held' && HUB.moduleState(MODS.gridatlas, pk) === 'open');
 ok('an unknown module is asked for', HUB.moduleState(null, ent3) === 'ask');
+M.catalog().forEach(function (m) { ok('module ' + m.key + ' says what it is for, in one sentence, with no price in it', typeof m.blurb === 'string' && m.blurb.length > 40 && !/\$\d/.test(m.blurb), m.blurb); });
 
 console.log('tworkspacehub: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

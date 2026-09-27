@@ -122,6 +122,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 .mkt-mod .mkt-cover{height:78px}
 .mkt-mod .mkt-mod-letter{font:700 26px 'DM Sans',sans-serif;color:#fff;opacity:.9}
 .mkt-mod .mkt-card-cat b{color:var(--cs-navy)}
+.mkt-mod .mkt-blurb{margin:8px 0 0;font-size:12.5px;color:var(--cs-sub);line-height:1.45}
 .mkt-mod ul{margin:8px 0 0;padding-left:16px;color:var(--cs-text);font-size:13px;line-height:1.55}
 .mkt-mod .mkt-mod-tools{margin-top:8px;font-size:12px;color:var(--cs-sub);line-height:1.5}
 .mkt-mod .mkt-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
@@ -1470,6 +1471,7 @@ function moduleCard(m){
   card.innerHTML = '<div class="mkt-cover" style="background:'+(SHELF_COVER[m.shelf]||SHELF_COVER.floor)+'">'+(pill?'<span class="mkt-cover-badge">'+pill+'</span>':'')+'<span class="mkt-mod-letter">'+esc(m.name.slice(0,1))+'</span></div>'
     + '<div class="mkt-card-body"><div class="mkt-card-cat">'+esc(SHELF[m.shelf]||m.shelf||'')+' · <b>'+esc(m.priceDisplay || m.monthlyDisplay || 'Pricing unavailable')+'</b></div>'
     + '<div class="mkt-card-name">'+esc(m.name)+'</div>'
+    + (m.blurb ? '<p class="mkt-blurb">'+esc(m.blurb)+'</p>' : '')
     + '<ul>'+(m.features||[]).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')+'</ul>'
     + (tools.length ? '<div class="mkt-mod-tools">Tools: '+esc(tools.join(' · '))+'</div>' : '')
     + (tags ? '<div class="mkt-tags">'+tags+'</div>' : '')
