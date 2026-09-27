@@ -61,6 +61,7 @@ function storeRoute(u, method, body) {
   if (body.action === 'cancel') { STORE.pending = []; return { state: 'cancelled', changeId: body.changeId }; }
   return { error: 'render-workspace does not answer ' + body.action };
 }
+var STAFF_CALLER = false;
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], post = req.method === 'POST';
   function json(o, status) { res.writeHead(status || 200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); }
@@ -68,6 +69,16 @@ var srv = http.createServer(function (req, res) {
     apiCalls.push(req.method + ' ' + u);
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
     if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
+    if (u === '/api/package-access' && post) {
+      /* the staff preview, as api/package-access.js projects it (the real projection, staff only) */
+      var pc = []; req.on('data', function (c) { pc.push(c); }); req.on('end', function () {
+        var pb = {}; try { pb = JSON.parse(Buffer.concat(pc).toString()); } catch (e) {}
+        if (!STAFF_CALLER) return json({ error: 'Staff preview only' }, 403);
+        var X = require('../api/_lib/package-access'), mods = M.normalize(pb.previewModules);
+        var pv = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: mods }, { status: 'active' }, { role: 'owner' }, Date.now());
+        pv.canPreview = true; pv.preview = true; pv.starters = M.starters(); json(pv);
+      }); return;
+    }
     if (u === '/api/package-catalog' || u === '/api/plan-change') {
       var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {} json(storeRoute(u, req.method, body)); }); return;
     }
@@ -103,7 +114,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     p.on('pageerror', function (e) { if (!muted) errs.push(name + ': ' + e.message); });
     p.on('console', function (m) { if (muted) return; var t = m.text(); if (m.type() === 'error' && !/^Failed to load resource/.test(t)) errs.push(name + ' console: ' + t.slice(0, 240)); });
     var t0 = Date.now();
-    await p.goto(base + '/workspace', { waitUntil: 'domcontentloaded' });
+    await p.goto(base + (opts.url || '/workspace'), { waitUntil: 'domcontentloaded' });
     var ready = await p.waitForFunction(function () { return document.body.classList.contains('ready') || !!document.getElementById('ot-modal'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
     var out = { scenario: name, tenant: fx.org, readyMs: Date.now() - t0 };
     ok(name + ': the page answered within 8s', ready, out.readyMs);
@@ -142,7 +153,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var product = await p.$eval('#ows-product', function (e) { return e.textContent; }).catch(function () { return ''; });
     ok(name + ': the rail wears the product name', product === 'Omega Workspace', product);
     var rail = await p.$$eval('#side-nav .sn-item', function (r) { return r.filter(function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return a.querySelector('span').textContent.trim(); }); });
-    ok(name + ': the rail is Home · Projects · All tools · Marketplace · Quote Desk · Team · Feed · Plan & billing · Settings', rail.join('|') === 'Home|Projects|All tools|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings', rail);
+    ok(name + ': the rail is Home · Projects · All tools · Modules · Marketplace · Quote Desk · Team · Feed · Plan & billing · Settings', rail.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings', rail);
     var hub = await p.$$eval('#hub .hx', function (r) { return r.map(function (g) { return g.getAttribute('data-hub'); }); });
     ok(name + ': the hub has Today in the centre and a ring of at most six', hub[0] === 'today' && hub.length >= 3 && hub.length <= 7, hub);
     out.hub = hub;
@@ -151,6 +162,20 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     out.tiles = tiles.length; out.locked = tiles.filter(function (t) { return t.locked; }).length;
     var plan = await p.$eval('#plan', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); }).catch(function () { return ''; });
     ok(name + ': the plan strip says how many tools are open', /\d+ of \d+ tools open/.test(plan), plan);
+    /* one view at a time (2026-09-27): the home is the hub and Today; All tools is its own page */
+    var views = await p.evaluate(function () { var v = function (id) { return getComputedStyle(document.getElementById(id)).display !== 'none'; }; return { view: document.getElementById('content').getAttribute('data-view'), hub: getComputedStyle(document.querySelector('#content .hero')).display !== 'none', tools: v('tools'), flight: v('flight'), team: v('team') }; });
+    ok(name + ': the home shows the hub and Today alone', views.view === 'home' && views.hub && !views.tools && !views.flight && !views.team, views);
+    await p.evaluate(function () { window.location.hash = '#tools'; }); await wait(200);
+    views = await p.evaluate(function () { var v = function (id) { return getComputedStyle(document.getElementById(id)).display !== 'none'; }; return { view: document.getElementById('content').getAttribute('data-view'), hub: getComputedStyle(document.querySelector('#content .hero')).display !== 'none', tools: v('tools'), flight: v('flight'), rail: (document.querySelector('#side-nav .sn-item.active') || {}).getAttribute && document.querySelector('#side-nav .sn-item.active').getAttribute('data-key') }; });
+    ok(name + ': #tools opens All tools as its own page and marks it on the rail', views.view === 'tools' && views.tools && !views.hub && !views.flight && views.rail === 'tools', views);
+    /* condensed on a phone (2026-09-27): a tool is one short row, the catalog fits in a few screens */
+    var vp0 = p.viewportSize(); await p.setViewportSize({ width: 390, height: 844 }); await wait(200);
+    var row = await p.$eval('#tools-body .tool', function (e) { var r = e.getBoundingClientRect(); return { h: r.height, w: r.width, desc: getComputedStyle(e.querySelector('.d')).display, dir: getComputedStyle(e).flexDirection }; });
+    ok(name + ': on a phone a tool is one compact row', row.h < 64 && row.w > 300 && row.desc === 'none' && row.dir === 'row', row);
+    await p.setViewportSize(vp0); await wait(150);
+    await p.click('#tools .back'); await wait(150);
+    var back = await p.evaluate(function () { return { view: document.getElementById('content').getAttribute('data-view'), hash: window.location.hash }; });
+    ok(name + ': Home brings the hub back and clears the hash', back.view === 'home' && back.hash === '', back);
     out.plan = plan.slice(0, 80);
     return out;
   }
@@ -177,12 +202,15 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('newco: nothing is locked on a trial', out.locked === 0, out.locked);
     var empty = await p.$eval('#flight-body', function (e) { return e.textContent; });
     ok('newco: an empty workspace says so in In flight', /No projects yet/.test(empty), empty.slice(0, 60));
-    /* + New project opens the one dialog and closes again */
+    /* + New project opens the one dialog and closes again (In flight is its own page) */
+    await p.evaluate(function () { window.location.hash = '#flight'; }); await wait(150);
+    ok('newco: #flight opens In flight as its own page', await p.evaluate(function () { return document.getElementById('content').getAttribute('data-view') === 'flight'; }));
     await p.click('#new-project'); await wait(300);
     var open = await p.$eval('#np-name', function (e) { return !!(e.offsetWidth || e.offsetHeight); }).catch(function () { return false; });
     ok('newco: + New project opens the New Project dialog', open);
     await p.click('.mb-cancel').catch(function () {}); await wait(200);
     /* Customize: a toggle saves to the person's own layout record only */
+    await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
     await p.click('#customize'); await wait(250);
     await p.click('.tg[data-opt="guides"]'); await wait(900);
     var saved = await p.evaluate(function () { return window.__firebaseDouble.store.log.filter(function (w) { return /^dashboard_layouts\//.test(w.path); }).map(function (w) { return { path: w.path, guides: w.data.workspace && w.data.workspace.guides }; }); });
@@ -202,6 +230,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: the ring is exactly what omega-workspace-hub composes for this workspace', out.hub.join() === want.join(), { got: out.hub, want: want });
     ok('northstar: Site Investment Analysis (Enterprise) is locked on Standard', await p.$('#tools-body .tool.locked[data-tool="investment"]') !== null);
     ok('northstar: Site Map is live', await p.$('#tools-body .tool.live[data-tool="editor"]') !== null);
+    await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(200);
+    var legacyMods = await p.evaluate(function () { return { cards: document.querySelectorAll('#modules-body .mod').length, live: document.querySelectorAll('#modules-body .mod[data-held="1"]').length, add: document.querySelectorAll('#modules-body [data-add-module]').length, sub: document.getElementById('modules-sub').textContent }; });
+    ok('northstar: a legacy plan\'s Modules page shows every module Live and nothing to add', legacyMods.cards === M.catalog().length && legacyMods.live === legacyMods.cards && legacyMods.add === 0 && /holds every module/.test(legacyMods.sub), legacyMods);
     var cards = await p.$$eval('#flight-body .pc', function (r) { return r.map(function (x) { return x.querySelector('b').textContent; }); });
     ok('northstar: In flight lists the four projects', cards.length === 4, cards);
     var kpi = await p.$$eval('#today .kpi .v', function (r) { return r.map(function (x) { return x.textContent; }); });
@@ -214,12 +245,21 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var feed = await p.$eval('#feed', function (e) { return e.textContent; });
     ok('northstar: People lists both teammates and the feed carries Raj\'s message', people === 2 && /interconnection study came back clean/.test(feed), { people: people });
     /* the side panel from a hub cell */
+    await p.evaluate(function () { window.location.hash = ''; }); await wait(150);
     await p.click('#hub .hx[data-hub="design"]'); await wait(300);
     var drawer = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, rows: e.querySelectorAll('.ows-row').length, locked: e.querySelectorAll('.ows-row.locked').length }; }).catch(function () { return null; });
     ok('northstar: a hub cell opens the side panel with the area\'s tools, Deluxe ones locked', drawer && /Design/.test(drawer.title) && drawer.rows >= 4 && drawer.locked >= 1, drawer);
     await p.keyboard.press('Escape'); await wait(200);
     ok('northstar: Escape closes it', (await p.$('.ows-drawer')) === null);
+    /* every hex opens the side panel, never a spot on the page (2026-09-27) */
+    for (var hx of [['today', /Today/], ['projects', /Projects/], ['team', /Team/]]) {
+      await p.click('#hub .hx[data-hub="' + hx[0] + '"]'); await wait(300);
+      var hd = await p.evaluate(function () { var d = document.querySelector('.ows-drawer'); return { title: d ? d.querySelector('h2').textContent : '', view: document.getElementById('content').getAttribute('data-view') }; });
+      ok('northstar: the ' + hx[0] + ' hex opens the side panel and stays on the home', hx[1].test(hd.title) && hd.view === 'home', hd);
+      await p.keyboard.press('Escape'); await wait(150);
+    }
     /* a locked tile explains instead of opening (locked tiles fold under a per-category line) */
+    await p.evaluate(function () { window.location.hash = '#tools'; }); await wait(150);
     await p.$$eval('#tools-body details', function (d) { d.forEach(function (x) { x.open = true; }); }); await wait(100);
     await p.click('#tools-body .tool.locked[data-tool="investment"]'); await wait(250);
     var why = await p.$eval('.ows-drawer', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });
@@ -231,6 +271,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: Plan & billing shows the plan and the next payment', /Plan/.test(bill) && /Next payment/.test(bill), bill.slice(0, 160));
     await p.keyboard.press('Escape'); await wait(150);
     /* post a message */
+    await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
+    ok('northstar: #team opens Around you as its own page', await p.evaluate(function () { return document.getElementById('content').getAttribute('data-view') === 'team' && getComputedStyle(document.getElementById('team')).display !== 'none'; }));
     await p.fill('#post-text', 'Geotech booked for Maple Yard'); await p.click('#post button[type="submit"]'); await wait(500);
     var posted = await p.evaluate(function () { return window.__firebaseDouble.store.log.filter(function (w) { return /^team_messages\//.test(w.path); }).map(function (w) { return w.data.authorEmail + ':' + w.data.text; }); });
     ok('northstar: a post writes one team_messages document as the signed-in person', posted.length === 1 && posted[0] === ns.user.email + ':Geotech booked for Maple Yard', posted);
@@ -260,6 +302,23 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     return out;
   } });
 
+  /* ══ 3b. VIEW AS A CUSTOMER — a staff member paints the workspace as a Lite customer ══ */
+  STAFF_CALLER = true;
+  await scenario('viewas', ns, { url: '/workspace?viewas=lite', steps: async function (p) {
+    await p.waitForFunction(function () { return window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.viewAs; }, null, { timeout: 6000 }).catch(function () {});
+    var va = await p.evaluate(function () { var w = window.OMEGA_WORKSPACE; return { viewAs: w.viewAs, packaged: w.packaged, modules: w.modules, orgId: w.orgId, notice: (document.getElementById('ows-notice') || {}).textContent || '', plan: document.getElementById('plan').textContent.replace(/\s+/g, ' ') }; });
+    ok('viewas: the workspace paints as a packaged Lite customer, scope unchanged', va.viewAs === 'lite' && va.packaged && va.modules.join() === 'lite' && va.orgId === ns.org, va);
+    ok('viewas: a banner says it is a staff preview with an Exit', /Viewing as a customer/.test(va.notice) && /Exit/.test(va.notice), va.notice.slice(0, 80));
+    ok('viewas: the plan strip reads Lite with fewer tools open', /Lite/.test(va.plan) && /\d+ of \d+ tools open/.test(va.plan), va.plan);
+    ok('viewas: Site Investment Analysis is locked as it is for a Lite customer', await p.$('#tools-body .tool.locked[data-tool="investment"]') !== null);
+    await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(400);
+    var vm = await p.evaluate(function () { return { cards: document.querySelectorAll('#modules-body .mod').length, add: document.querySelectorAll('#modules-body [data-add-module]').length, live: document.querySelectorAll('#modules-body .mod[data-held="1"]').length }; });
+    ok('viewas: the Modules page shows the customer\'s view: Lite Live, the rest to add', vm.cards === M.catalog().length && vm.live === 1 && vm.add === vm.cards - 1, vm);
+    ok('viewas: nothing was written', !(await p.evaluate(function () { return window.__firebaseDouble.store.log.some(function (w) { return /^omega_orgs\//.test(w.path); }); })));
+    return {};
+  } });
+  STAFF_CALLER = false;
+
   /* ══ 4. PENDING — not yet approved ══ */
   var pend = FX.pending(HOST);
   await scenario('pending', pend, { steps: async function (p) {
@@ -287,11 +346,23 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('lite: locked tools fold under a per-category line and stay out of the way', folded.n >= 5 && folded.closed >= 4, folded);
     var co = await p.$eval('#ows-co-sub', function (e) { return e.textContent; });
     ok('lite: the switcher says Lite, the same word as the plan strip', /Lite/.test(co), co);
+    await p.evaluate(function () { window.location.hash = '#tools'; }); await wait(150);
     await p.$$eval('#tools-body details', function (d) { d.forEach(function (x) { x.open = true; }); }); await wait(100);
     await p.click('#tools-body .tool.locked[data-tool="gridatlas"]'); await wait(250);
     var why = await p.$eval('.ows-drawer', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });
     ok('lite: a locked tile names the module that carries it', /Grid Atlas/.test(why) && /part of/.test(why), why.slice(0, 160));
     await p.keyboard.press('Escape');
+    /* the Modules page (2026-09-27): the Ladder as a page of the workspace */
+    await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(400);
+    var mods = await p.evaluate(function () { return { view: document.getElementById('content').getAttribute('data-view'), cards: Array.prototype.map.call(document.querySelectorAll('#modules-body .mod'), function (c) { return { key: c.getAttribute('data-module'), held: c.getAttribute('data-held'), price: (c.querySelector('.price') || {}).textContent || '', add: !!c.querySelector('[data-add-module]') }; }), change: (document.querySelector('#plan a.ows-pill') || {}).getAttribute && document.querySelector('#plan a.ows-pill').getAttribute('href') }; });
+    ok('lite: #modules is its own page with one card per catalog module', mods.view === 'modules' && mods.cards.length === M.catalog().length, { view: mods.view, n: mods.cards.length });
+    ok('lite: Lite is Live and Grid Atlas carries the server\'s price and + Add', mods.cards.some(function (c) { return c.key === 'lite' && c.held === '1' && !c.add; }) && mods.cards.some(function (c) { return c.key === 'gridatlas' && c.held === '0' && /\$\d/.test(c.price) && c.add; }), mods.cards.filter(function (c) { return c.key === 'lite' || c.key === 'gridatlas'; }));
+    ok('lite: Change plan on the plan strip opens the Modules page', mods.change === '/workspace#modules', mods.change);
+    if (shotsAt) { var vpm = p.viewportSize(); await p.setViewportSize({ width: 390, height: 844 }); await wait(200); await p.screenshot({ path: path.join(shotsAt, 'lite-modules-390.png') }); await p.setViewportSize(vpm); await wait(150); }
+    await p.click('#modules-body [data-add-module="gridatlas"]'); await wait(400);
+    var menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, focus: d ? (d.querySelector('[data-module-card][data-selected]') || {}).getAttribute && d.querySelector('[data-module-card][data-selected]').getAttribute('data-module-card') : null }; });
+    ok('lite: + Add opens the one package menu on that module', menu.open && menu.focus === 'gridatlas', menu);
+    await p.keyboard.press('Escape'); await wait(150);
     ok('lite: the page asked /api/package-access and nothing it does not answer', apiCalls.some(function (c) { return /package-access/.test(c); }) && !missing.length, { calls: apiCalls, missing: missing });
     return out;
   } });
@@ -379,7 +450,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var name = 'flow ' + page;
     if (page === '/') ok(name + (opts.label || '') + ': a dashboard visit with the workspace as home lands on /workspace', /\/workspace$/.test(out.url), out.url);
     else {
-      ok(name + ': the rail is the workspace rail with this page current', out.items.join('|') === 'Home|Projects|All tools|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings'.replace(current, current + '*'), out.items);
+      ok(name + ': the rail is the workspace rail with this page current', out.items.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings'.replace(current, current + '*'), out.items);
       ok(name + ': Dashboard points at /workspace and the ground is the blueprint grid', out.home === '/workspace' && out.theme && out.grid, out);
       if (page === '/marketplace.html') ok(name + ': a legacy (unpackaged) tenant sees no package store', out.store === false, out.store);
       ok(name + ': no uncaught errors', !errs.length, errs);
