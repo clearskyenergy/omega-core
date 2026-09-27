@@ -107,6 +107,7 @@ tr:last-child td,tr:last-child th{border-bottom:0}
 thead th{font:500 11px var(--mono);letter-spacing:.1em;color:var(--sub);text-transform:uppercase;background:var(--paper)}
 tbody th{font-weight:600;width:30%}
 .sub{color:var(--sub);font-size:12.5px}
+.sub.risk{color:var(--warn);font-weight:600}
 td.fit{font-weight:500;text-align:center;width:44px}
 td.f3{color:var(--ok)} td.f2{color:var(--brand)} td.f1{color:var(--sub)}
 .tbl.targets table{min-width:760px}
@@ -138,7 +139,7 @@ footer{margin-top:48px;padding-top:12px;border-top:1px solid var(--line);font:12
       <p class="lede">The LinkedIn company page, 30 days of posts and the developer campaign, ready to copy. Built to get comments: the same seven game series every week. No prices anywhere; every claim is something the product ships today.</p>
     </div>
     <div class="meta">
-      <div><span>SHEETS</span><b>6 · R-001 to IP-401</b></div>
+      <div><span>SHEETS</span><b>9 · R-001 to IP-401</b></div>
       <div><span>REVISION</span><b>A · 2026-09-27</b></div>
       <div><span>STATUS</span><b>Draft for founder</b></div>
       <div><span>POSTED BY CODE</span><b>Nothing</b></div>
@@ -150,7 +151,10 @@ footer{margin-top:48px;padding-top:12px;border-top:1px solid var(--line);font:12
     <a href="#page">G-101 Company page</a>
     <a href="#posts">P-201 30 days</a>
     <a href="#campaign">S-301 Developer campaign</a>
-    <a href="#targets">S-302 Targets</a>
+    <a href="#targets">S-302 Developer targets</a>
+    <a href="#small">S-303 Small shops</a>
+    <a href="#enterprise">S-304 Big orgs</a>
+    <a href="#ads">S-305 Ads</a>
     <a href="#ip">IP-401 Guardrails</a>
   </nav>
 
@@ -205,6 +209,14 @@ footer{margin-top:48px;padding-top:12px;border-top:1px solid var(--line);font:12
   <section id="targets">
     <div class="sh"><span class="no">S-302</span><h2>Target accounts</h2></div>
     %%TARGETS%%
+  </section>
+
+  %%PLAYBOOKS%%
+
+  <section id="ads">
+    <div class="sh"><span class="no">S-305</span><h2>Ads</h2></div>
+    <p class="lede">Paid reach for the page, from its ad credit. Real people, targeted; never bought followers.</p>
+    <div class="tbl"><table><tbody>%%ADS%%</tbody></table></div>
   </section>
 
   <section id="ip">

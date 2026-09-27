@@ -44,8 +44,10 @@ def public_strings():
     for p in POSTS:
         yield p['text']; yield p['comment']; yield p.get('answer', '')
         yield json.dumps([p['card'], p.get('answer_card')], ensure_ascii=False)
-    for q in SEQUENCE:
+    for q in SEQUENCE + [q for b in PLAYBOOKS for q in b['sequence']]:
         yield q['text']; yield q.get('subject', '')
+    for b in PLAYBOOKS:
+        yield b['pitch']; yield b['offer']
 for t in public_strings():
     assert '$' not in t and '/offerings' not in t and 'price list' not in t.lower(), t[:120]
 
@@ -61,10 +63,15 @@ for p in POSTS:
             cards.append(dict(p['answer_card'], id=cid(p) + '-answer', **meta))
 json.dump(cards, open(os.path.join(OUT, 'cards.json'), 'w'), indent=1, ensure_ascii=False)
 
-targets = []
-if os.path.exists(TARGETS):
-    with open(TARGETS, newline='') as f:
-        targets = list(csv.DictReader(f))
+def read_csv(path):
+    if not os.path.exists(path):
+        return []
+    with open(path, newline='') as f:
+        return list(csv.DictReader(f))
+
+targets = read_csv(TARGETS)
+small_targets = read_csv(os.path.join(REPO, 'docs/small-shop-targets.csv'))
+ent_targets = read_csv(os.path.join(REPO, 'docs/enterprise-targets.csv'))
 
 # ---------- Markdown (the repo copy) ----------
 md = []
@@ -164,7 +171,34 @@ w('\n**Measure**\n')
 w('| | |\n|---|---|')
 for a, b in METRICS: w('| %s | %s |' % (a, b))
 w('')
+for b in PLAYBOOKS:
+    w('## 5%s. %s\n' % ('b' if b['key'] == 'small' else 'c', b['headline']))
+    w('**Who.** %s\n' % b['who'])
+    w('**Signal.** %s\n' % b['signal'])
+    w('**Pitch.** %s\n' % b['pitch'])
+    w('**Offer.** %s\n' % b['offer'])
+    w('**Finding them on LinkedIn**\n')
+    for h, t in b['search']: w('- **%s:** %s' % (h, t))
+    w('')
+    if b.get('discovery'):
+        w('**Discovery questions** (the call, not the message)\n')
+        for x in b['discovery']: w('- ' + x)
+        w('')
+    for q in b['sequence']:
+        w('#### %s · %s · %s\n' % (q['when'], q['channel'], q['name']))
+        if q.get('subject'): w('Subject: `%s`\n' % q['subject'])
+        w('```text\n' + fill(q['text']) + '\n```\n')
+    w('**Careful**\n')
+    for x in b['guard']: w('- ' + x)
+    w('')
+w('## 5d. Ads (the page\'s ad credit)\n')
+w('| | |\n|---|---|')
+for a_, b_ in ADS: w('| %s | %s |' % (a_, b_))
+w('')
 w('## 6. Target accounts\n')
+for label, path, rows in (('Small shops', 'docs/small-shop-targets.csv', small_targets), ('Big organizations', 'docs/enterprise-targets.csv', ent_targets)):
+    w('- %s: `%s` (%s).' % (label, path, ('%d companies' % len(rows)) if rows else 'to come'))
+w('')
 if targets:
     w('`docs/developer-targets.csv` (%d companies, public sources, company-level '
       'only; no personal contact data). Read the source before you write: a '
@@ -260,6 +294,57 @@ if targets:
 else:
     tg_html = '<p class="lede">The researched list of developer accounts lands here next.</p>'
 
+def link(url, text):
+    if url and not url.startswith('http'):
+        url = 'https://' + url
+    return '<a href="%s" target="_blank" rel="noopener">%s</a>' % (E(url), text) if url.startswith('http') else text
+
+def small_table(rows):
+    if not rows:
+        return '<p class="lede">The researched list of small shops lands here next.</p>'
+    out = []
+    for t in sorted(rows, key=lambda r: (-int(r.get('fit') or 0), r.get('company', ''))):
+        out.append('<tr><td class="fit f%s mono">%s</td><td><b>%s</b><div class="sub">%s</div></td><td>%s</td><td>%s<div class="sub">%s</div></td></tr>'
+                   % (E(t.get('fit', '')), E(t.get('fit', '')), link(t.get('website', ''), E(t.get('company', ''))), E(t.get('hq', '')),
+                      E(t.get('markets', '')), link(t.get('evidence_url', ''), E(t.get('hook', '') or 'source')), E(t.get('fit_reason', ''))))
+    return ('<p class="lede">%d small shops from public sources, company level only. Fit 3 is strongest.</p><div class="tbl targets"><table><thead><tr>'
+            '<th>Fit</th><th>Company</th><th>Markets</th><th>Reason to write now</th></tr></thead><tbody>%s</tbody></table></div>' % (len(rows), ''.join(out)))
+
+def ent_table(rows):
+    if not rows:
+        return '<p class="lede">The researched list of big organizations lands here next.</p>'
+    out = []
+    for t in sorted(rows, key=lambda r: (-int(r.get('fit') or 0), r.get('company', ''))):
+        risk = t.get('risk', '')
+        cls = ' risk' if 'competitor' in risk.lower() else ''
+        out.append('<tr><td class="fit f%s mono">%s</td><td><b>%s</b><div class="sub">%s</div></td><td>%s<div class="sub">%s</div></td><td>%s<div class="sub%s">%s</div></td><td>%s</td></tr>'
+                   % (E(t.get('fit', '')), E(t.get('fit', '')), link(t.get('website', ''), E(t.get('company', ''))), E(t.get('type', '')),
+                      E(t.get('entry_team', '')), E(t.get('wedge', '')), E(t.get('known_tools', '') or 'Nothing public'), cls, E(risk),
+                      link(t.get('evidence_url', ''), E(t.get('hook', '') or 'source'))))
+    return ('<p class="lede">%d big organizations. Read the risk before anything else: a competitor gets no demo and no trial.</p><div class="tbl targets"><table><thead><tr>'
+            '<th>Fit</th><th>Company</th><th>Way in</th><th>Their tools · risk</th><th>Reason to write now</th></tr></thead><tbody>%s</tbody></table></div>' % (len(rows), ''.join(out)))
+
+def playbook_html(b):
+    h = ['<section id="%s"><div class="sh"><span class="no">%s</span><h2>%s</h2></div>' % (b['key'], b['sheet'], E(b['headline']))]
+    h.append('<p class="lede">%s</p>' % E(b['who']))
+    h.append('<div class="panel"><div class="field"><div class="k">SIGNAL</div><div class="v">%s</div></div><div class="field"><div class="k">PITCH</div><div class="v">%s</div></div><div class="field"><div class="k">OFFER</div><div class="v">%s</div></div></div>'
+             % (E(b['signal']), E(b['pitch']), E(b['offer'])))
+    h.append('<h3>Finding them on LinkedIn</h3><div class="tbl"><table><tbody>%s</tbody></table></div>' % ''.join('<tr><th>%s</th><td>%s</td></tr>' % (E(x), E(y)) for x, y in b['search']))
+    if b.get('discovery'):
+        h.append('<h3>Discovery questions, for the call</h3><ul class="plain">%s</ul>' % ''.join('<li>%s</li>' % E(x) for x in b['discovery']))
+    h.append('<h3>The messages</h3><div class="steps">')
+    for i, q in enumerate(b['sequence']):
+        sid = '%s-s%d' % (b['key'], i)
+        sub = '<p class="subj"><span class="lbl mono">SUBJECT</span> <code>%s</code></p>' % E(q['subject']) if q.get('subject') else ''
+        h.append('<article class="step"><div class="step-h"><span class="mono when">%s</span><span class="chip li">%s</span><h4>%s</h4></div>%s<pre class="txt" id="%s">%s</pre><div class="btns">%s</div></article>'
+                 % (E(q['when']), E(q['channel']), E(q['name']), sub, sid, E(fill(q['text'])), copybtn(sid, 'Copy')))
+    h.append('</div><div class="rules dont"><h3>Careful</h3><ul>%s</ul></div>' % ''.join('<li>%s</li>' % E(x) for x in b['guard']))
+    h.append(small_table(small_targets) if b['key'] == 'small' else ent_table(ent_targets))
+    h.append('</section>')
+    return ''.join(h)
+
+playbooks_html = ''.join(playbook_html(b) for b in PLAYBOOKS)
+ads_html = ''.join('<tr><th>%s</th><td>%s</td></tr>' % (E(a), E(b)) for a, b in ADS)
 spec = ''.join('<li>%s</li>' % E(x) for x in PAGE['specialties'])
 icp = ''.join('<tr><td>%s</td><td>%s</td></tr>' % (E(a), E(b)) for a, b in ICP)
 hooks = ''.join('<li>%s</li>' % E(x) for x in HOOKS)
@@ -281,7 +366,7 @@ for k, v in {
     '%%CADENCE%%': cad, '%%METRICS%%': met, '%%TARGETS%%': tg_html, '%%TCOUNT%%': str(len(targets)) if targets else 'next',
     '%%ENGAGE%%': ''.join('<li>%s</li>' % E(x) for x in ENGAGE),
     '%%DO%%': do, '%%DONT%%': dont, '%%BLOCKERS%%': blk,
-    '%%TRIAL%%': E(LINKS['trial']),
+    '%%TRIAL%%': E(LINKS['trial']), '%%PLAYBOOKS%%': playbooks_html, '%%ADS%%': ads_html,
 }.items():
     page = page.replace(k, v)
 assert '%%' not in page, page[page.index('%%'):page.index('%%') + 40]

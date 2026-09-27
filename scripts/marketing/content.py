@@ -633,6 +633,84 @@ If the timing's wrong, no problem. The trial is here whenever it's useful: {tria
 ClearSky OMEGA · {postal address}"""),
 ]
 
+# Two more audiences beside the developers: the small shops that need basic
+# design and estimating, and the big organizations that may already have
+# tools. Nothing here is sent by code; a person sends every message and
+# invite from their own LinkedIn (Premium) and mailbox.
+PLAYBOOKS = [
+ dict(key='small', sheet='S-303', name='Small shops',
+  headline='Small shops: a design and estimating department in a browser',
+  who='Commercial solar, storage and EV installers, small EPCs and electrical contractors, about 3 to 100 people, where the owner, a PM or one estimator does layouts and estimates by hand, in spreadsheets and CAD, one job at a time.',
+  signal='Best signal: a current job post for a solar designer, PV designer, CAD drafter, estimator or pre-construction role. They are paying to build what OMEGA does. Next best: a utility or state approved-contractor list, a new C&I project, a new office.',
+  pitch='Type an address, pick the build, and OMEGA places the equipment, checks the fire-code separations, draws the one-line and writes the bill of materials and the estimate. A small team designs and quotes like a big one.',
+  offer='Send an address from a job you are quoting now and we build it live with you in 20 minutes. Then 14 days on your own jobs. Pricing on the call.',
+  search=[
+      ('Jobs (the hiring signal)', 'Jobs search, past month: "solar designer" OR "PV designer" OR "solar estimator" OR "CAD drafter" solar OR "pre-construction" solar. Every company that comes back is a lead.'),
+      ('People', 'Titles: Owner, President, Operations Manager, Estimating Manager, Estimator, Project Manager, Director of Pre-construction. Keywords: solar OR "energy storage" OR "EV charging". Company size 2–50 and 51–200. Your states first.'),
+      ('Companies', 'Industries: Solar Electric Power Generation, Renewable Energy Power Generation, Electrical contractors (Specialty Trade Contractors). Size 2–200.'),
+  ],
+  sequence=[
+      dict(when='Day 1', channel='LinkedIn', name='Connection request (under 300 characters)',
+           text="""Hi {First}, saw {Company} is growing its design and estimating side. We built a tool that does the layout, the one-line and the estimate from an address, so a small team can quote like a big one. Would be good to connect."""),
+      dict(when='After they accept', channel='LinkedIn', name='DM',
+           text="""Thanks for connecting, {First}. Most shops your size do layouts and estimates one job at a time, in spreadsheets and CAD. OMEGA does the layout, the one-line, the bill of materials and the estimate from an address, in one place. Send me an address from a job you're quoting and I'll build it live with you in 20 minutes. Worth a look?"""),
+      dict(when='Not connected', channel='InMail', name='InMail (Premium credit)', subject='Your next {solar / battery / EV} layout',
+           text="""{First}, saw {hook}.
+
+If your team does layouts and estimates by hand, here's a faster way: type an address, pick the build, and OMEGA places the equipment, checks the fire-code separations, draws the one-line and writes the bill of materials and the estimate.
+
+Send me an address from a job you're quoting and I'll build it with you live in 20 minutes. No prep on your side.
+
+{Sender}, ClearSky OMEGA"""),
+      dict(when='A week later', channel='LinkedIn', name='Follow-up',
+           text="""{First}, one more idea: this week's Build Tuesday post shows a {build} going from an address to a layout. If you'd rather see it on one of your own jobs, the offer stands: one address, 20 minutes. {post link}"""),
+  ],
+  guard=[
+      'Their job post is public, so it is fair to mention; never mention anything you learned any other way.',
+      'Build their site live in your own workspace; never send them a file of it before they have a workspace and have accepted the terms.',
+  ]),
+ dict(key='enterprise', sheet='S-304', name='Big organizations',
+  headline='Big organizations: find the team their tools miss',
+  who='Large developers and IPPs with a distributed, C&I or community-solar arm; large EPCs with a solar, storage or EV practice; utility DER and EV programs; battery OEMs and integrators with a dealer or installer channel.',
+  signal='Most have tools already. Do not pitch a replacement. Find the smaller team the big tools do not serve: DG or C&I origination screening dozens of small sites, a regional office, an interconnection team, or a channel of installers who need to quote the company\'s product.',
+  pitch='OMEGA runs alongside the tools they have: dozens of small sites screened and laid out fast enough to make small projects worth doing, proposals for field sales, and a white-labelled version for their installer network.',
+  offer='A 30-minute session on a handful of their own sites (under NDA if they bring their data), then a scoped pilot: one team, one region, 90 days, written up before it starts. Pricing on the call.',
+  search=[
+      ('Companies', 'Company size 1,001+ (and 501–1,000) in Renewable Energy Power Generation, Utilities and Construction; or upload the enterprise list as a company list.'),
+      ('People (the entry team, not the C-suite)', 'Titles: Director or VP of Distributed Generation, C&I Origination, Community Solar Development, Interconnection Manager, Channel Partner or Dealer Program Manager, Regional Development Director.'),
+      ('Signals', 'A new DG or C&I team, a state or utility program win, a channel or dealer program launch, job posts for GIS analysts or solar designers in a regional office.'),
+  ],
+  discovery=[
+      'How long from a site lead to a first layout with an estimate, and who does it?',
+      'How many sites does origination screen a month, and how many get a real look?',
+      'Where do numbers get re-keyed between origination, engineering and finance?',
+      'What do your installers or channel partners use to quote your product?',
+      'Which projects are too small to be worth your current process?',
+  ],
+  sequence=[
+      dict(when='Day 1', channel='LinkedIn', name='Connection request (under 300 characters)',
+           text="""Hi {First}, I work with development teams on early-stage screening and design. Saw {hook}. Would be good to connect."""),
+      dict(when='After they accept', channel='LinkedIn', name='DM: a question, not a pitch',
+           text="""{First}, a question rather than a pitch: when your team gets a batch of small C&I or DG sites, how long does it take to get from a list to a first layout with an estimate? We built OMEGA for exactly that stretch, and it runs alongside the tools you already have. If it's useful, I can show it on a handful of your sites, under NDA if you'd rather."""),
+      dict(when='For an OEM or integrator', channel='LinkedIn', name='DM: the channel angle',
+           text="""{First}, how do your installers quote your systems today? We run a version of OMEGA under a manufacturer's own name, so its dealers size, lay out and quote the product the same way every time. Happy to show you how that looks."""),
+  ],
+  guard=[
+      'Check the risk column first. A company that sells design or screening software is a competitor: no demo, no trial, decline its signup at approval.',
+      'Demo in the sandbox with invented data. How the model works and what data sits behind it is for a signed NDA only, and even then show outputs.',
+      'No trial workspace without a named sponsor who has accepted the terms. A pilot is scoped (one team, one region, 90 days) and written up first.',
+      'Never send exports of model internals or a screen of the admin console, and never name another customer.',
+      'Several people per company is fine (origination, engineering, finance), one thread each; never a blast.',
+  ]),
+]
+
+ADS = [
+    ('Budget', 'The page\'s ad credit, over about two weeks. Most of it on small shops; a small slice on a company-list audience.'),
+    ('Small shops', 'Company size 2–200; industries Solar Electric Power Generation, Renewable Energy Power Generation and electrical contractors; titles Owner, President, Operations Manager, Estimator, Project Manager, Solar Designer; United States. Creative: the Build Tuesday or Score Your Stack card. Call to action: Follow.'),
+    ('Company list', 'Upload the developer and enterprise lists as a company list (Matched Audiences). Show them Field Notes and Site Leaderboard posts, so the name is familiar before the first message.'),
+    ('Developers', 'Titles VP or Director of Development, Development Manager, Interconnection Manager, Head of Origination, Founder or CEO; company size 11–500. Creative: the Drop a Site card.'),
+]
+
 HOOKS = [
     'A project announcement (MW, MWh, market, date)',
     'A new interconnection queue entry in a public ISO or utility queue',
