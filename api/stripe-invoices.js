@@ -44,7 +44,21 @@ module.exports = A.handler(function (req) {
           throw A.httpError(500, 'STRIPE_SECRET_KEY is not set on this deployment');
         }
         var stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-        return stripe.invoices.list({ customer: cust, limit: limit }).then(function (res) {
+        /* The card on file, as Plan & billing names it ("Visa ending 4242"):
+           read from Stripe each time, never stored here. The customer's
+           invoice default first (api/stripe-checkout.js sets it), else the
+           first card attached. A refusal is "not known", never an error: the
+           invoices are what this endpoint is for. */
+        var card = stripe.customers.retrieve(cust, { expand: ['invoice_settings.default_payment_method'] }).then(function (c) {
+          var pm = c && !c.deleted && c.invoice_settings && c.invoice_settings.default_payment_method;
+          if (pm && typeof pm === 'object' && pm.card) return pm;
+          return stripe.paymentMethods.list({ customer: cust, type: 'card', limit: 1 }).then(function (l) { return (l && l.data && l.data[0]) || null; });
+        }).then(function (pm) {
+          var k = pm && pm.card;
+          return k ? { brand: String(k.brand || 'card'), last4: String(k.last4 || ''), expMonth: k.exp_month || null, expYear: k.exp_year || null } : null;
+        }, function () { return null; });
+        return Promise.all([stripe.invoices.list({ customer: cust, limit: limit }), card]).then(function (both) {
+          var res = both[0];
           var rows = (res.data || []).map(function (inv) {
             return {
               id: inv.id,
@@ -62,7 +76,7 @@ module.exports = A.handler(function (req) {
               pdfUrl: inv.invoice_pdf || null
             };
           });
-          return { connected: true, orgId: orgId, customer: cust, invoices: rows };
+          return { connected: true, orgId: orgId, customer: cust, invoices: rows, card: both[1] };
         });
       });
   });

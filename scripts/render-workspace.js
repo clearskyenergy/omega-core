@@ -88,6 +88,11 @@ function storeRoute(u, method, body) {
    waiting for payment (the page must send the quote's own id), and "I've
    paid" answers paid once the scenario says the payment landed. */
 var ADDON = { paid: false, entry: null, bought: [] };
+/* Pay by card on a plan ClearSky bills (api/stripe-checkout.js): every post
+   the page makes, Stripe's Checkout address for pay and card, and the
+   confirm on the way back; STRIPE_INV (when a scenario sets it) is what
+   /api/stripe-invoices answers after the payment lands, card and receipt */
+var CHECKOUT = { posts: [] }, STRIPE_INV = null;
 var PAY_URL = 'https://connect.intuit.com/portal/app/CommerceNetwork/view/scs-render-test';
 function addOnRoute(body) {
   var AO = require('../api/_lib/addons'), B = require('../api/_lib/pricebook'), book = B.proposed(); book.enabled = true;
@@ -126,6 +131,16 @@ var srv = http.createServer(function (req, res) {
         pv.canPreview = true; pv.preview = true; pv.starters = M.starters(); json(pv);
       }); return;
     }
+    if (u === '/api/stripe-checkout' && post) {
+      var cc = []; req.on('data', function (c) { cc.push(c); }); req.on('end', function () {
+        var cb = {}; try { cb = JSON.parse(Buffer.concat(cc).toString()); } catch (e) {}
+        CHECKOUT.posts.push(cb);
+        if (cb.action === 'pay' || cb.action === 'card') return json({ url: 'https://checkout.stripe.com/c/pay/cs_test_render' + (cb.action === 'pay' ? 'Pay' : 'Card') });
+        if (cb.action === 'confirm') return json({ orgId: CURRENT_FX && CURRENT_FX.org, state: /Card$/.test(cb.sessionId || '') ? 'saved' : 'paid', display: '$1,299', amountDue: 0 });
+        json({ error: 'Action must be pay, card or confirm' }, 400);
+      }); return;
+    }
+    if (u === '/api/stripe-invoices' && post && STRIPE_INV) return json(Object.assign({ connected: true, orgId: CURRENT_FX && CURRENT_FX.org }, STRIPE_INV));
     if (u === '/api/stripe-invoices' && post) return json({ connected: true, orgId: CURRENT_FX && CURRENT_FX.org, invoices: [
       { id: 'in_2', number: 'NS-0002', status: 'paid', amountDue: 1250, created: Date.now() - 10 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_2', pdfUrl: null },
       { id: 'in_1', number: 'NS-0001', status: 'paid', amountDue: 1250, created: Date.now() - 40 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_1', pdfUrl: null } ] });
@@ -617,6 +632,59 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('legacy add: Plan & billing lists what was added to the plan, what it costs a month and that it is on', !!bill && /Added to your plan/.test(bill) && /\$1,500/.test(bill) && /Office/.test(bill) && /Active/.test(bill), bill);
     return {};
   } });
+  /* ══ 5b2. PAY BY CARD — a plan ClearSky bills outside the package engine
+     (paymentProvider 'manual'), $1,299 owed. Plan & billing's Payment method
+     said "No billing account yet … Ask ClearSky" (Tommy, 2026-09-27: "that
+     should be where stripe lives and they can input and make a payment").
+     Now: Stripe, Pay $1,299 by card and Add a card; the click opens Stripe's
+     Checkout in a new tab with the action alone (the server reads what is
+     owed); the page follows the record when it is back in front; and back
+     from Stripe with ?paid= it confirms the session and cleans the address.
+     No card field is ever on this page. ══ */
+  var DAYMS = 86400e3, mc = FX.northstar(HOST), mcBill = 'omega_orgs/' + mc.org + '/billing/current';
+  mc.docs[mcBill] = { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'manual', trialEndsAt: null, amountDue: 1299, amountPaid: 1299,
+    subscriptionDue: new Date(Date.now() - 25 * DAYMS).toISOString().slice(0, 10), lastPaidAt: new Date(Date.now() - 56 * DAYMS).toISOString().slice(0, 10) };
+  CHECKOUT.posts = []; STRIPE_INV = null;
+  await scenario('manual-card', mc, { url: '/workspace#billing', steps: async function (p) {
+    function look() { return p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { sub: t('bill-sub'), owe: t('bill-owe'), card: t('bill-card'), hist: t('bill-hist'), toast: t('ows-toast'), buttons: Array.prototype.map.call(document.querySelectorAll('#bill-card .acts button'), function (b) { return b.textContent.trim() + (b.disabled ? ' (disabled)' : ''); }), owePay: !!document.querySelector('#bill-owe [data-bill="pay-card"]'), mail: document.querySelectorAll('#bill-card a[href^="mailto:"]').length, fields: document.querySelectorAll('#billing-body input, #billing-body iframe, #billing-body textarea').length, at: window.location.search + window.location.hash }; }); }
+    await p.waitForFunction(function () { return !!document.getElementById('bill-card'); }, null, { timeout: 5000 }).catch(function () {});
+    var before = await look();
+    ok('manual card: Payment method is Stripe, no card yet, with Pay $1,299 by card and Add a card; never Ask ClearSky or a mail link, never a card field on this page', /Stripe/.test(before.card) && /None yet/.test(before.card) && before.buttons.join('|') === 'Pay $1,299 by card|Add a card' && !/Ask ClearSky|No billing account/.test(before.card) && before.mail === 0 && before.fields === 0, before);
+    ok('manual card: What you owe shows the $1,299 due with Pay now, and the plan reads Invoiced by ClearSky until it is paid by card', /\$1,299/.test(before.owe) && before.owePay && /Invoiced by ClearSky/.test(before.sub), before);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'manual-card-billing.png'), fullPage: true });
+    await p.evaluate(function () { window.__opened = []; window.open = function (u) { var rec = { url: u || '', replaced: null, closed: false }; window.__opened.push(rec); return { opener: 1, document: { title: '', body: {} }, location: { replace: function (x) { rec.replaced = x; } }, close: function () { rec.closed = true; } }; }; });
+    await p.click('#bill-card [data-bill="pay-card"]'); await wait(500);
+    var opened = await p.evaluate(function () { return window.__opened; });
+    ok('manual card: Pay by card opens Stripe Checkout in a new tab on the click, asking the server with the action alone (never an amount)', opened.length === 1 && /^https:\/\/checkout\.stripe\.com\//.test(opened[0].replaced || '') && CHECKOUT.posts.length === 1 && CHECKOUT.posts[0].action === 'pay' && CHECKOUT.posts[0].orgId === mc.org && Object.keys(CHECKOUT.posts[0]).sort().join() === 'action,orgId', { opened: opened, posts: CHECKOUT.posts });
+    /* the payment lands (the webhook wrote the record) and this tab comes back to the front */
+    STRIPE_INV = { card: { brand: 'visa', last4: '4242', expMonth: 12, expYear: 2028 }, invoices: [{ id: 'in_cc', number: 'CC-0003', status: 'paid', amountDue: 1299, created: Date.now(), hostedUrl: 'https://invoice.stripe.com/i/test_cc', pdfUrl: null }] };
+    await p.evaluate(function (a) { var st = window.__firebaseDouble.store, cur = JSON.parse(JSON.stringify(st.docs[a.path])); Object.assign(cur, { amountDue: 0, lastPaidAt: new Date().toISOString(), paymentProvider: 'stripe', stripeCustomerId: 'cus_render', subscriptionDue: a.next }); st.put(a.path, cur); window.dispatchEvent(new Event('focus')); }, { path: mcBill, next: new Date(Date.now() + 5 * DAYMS).toISOString().slice(0, 10) });
+    await p.waitForFunction(function () { return /Visa ending 4242/.test((document.getElementById('bill-card') || {}).textContent || ''); }, null, { timeout: 5000 }).catch(function () {});
+    var after = await look();
+    ok('manual card: back in front after paying, the page follows the record: nothing owed, By card through Stripe, the card Stripe keeps (Visa ending 4242) with Manage card, the receipt in the history', /Payment received/.test(after.toast) && /nothing is owed/.test(after.owe) && /By card through Stripe/.test(after.sub) && /Visa ending 4242 · expires 12\/28/.test(after.card) && after.buttons.join('|') === 'Manage card' && /CC-0003/.test(after.hist), after);
+    /* Stripe's tab lands back here with the session id: confirmed, said, and the address cleaned */
+    var origin = new URL(p.url()).origin;
+    await p.goto(origin + '/workspace?home=workspace&paid=cs_test_renderPay#billing', { waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(function () { return /by card/.test((document.getElementById('ows-toast') || {}).textContent || ''); }, null, { timeout: 8000 }).catch(function () {});
+    var back = await look();
+    ok('manual card: back from Stripe with ?paid= the page confirms that session with the server, says it is paid, and takes the session id off the address', CHECKOUT.posts.some(function (x) { return x.action === 'confirm' && x.sessionId === 'cs_test_renderPay' && x.orgId === mc.org; }) && /Paid \$1,299 by card/.test(back.toast) && !/paid=|cs_test/.test(back.at) && /home=workspace/.test(back.at) && /#billing$/.test(back.at), { back: back, posts: CHECKOUT.posts });
+    STRIPE_INV = null;
+    return {};
+  } });
+  /* the same page as a member: the buttons are there, disabled, and say who pays */
+  var mcMember = FX.northstar(HOST); mcMember.docs[mcBill] = mc.docs[mcBill];
+  mcMember.user = { uid: 'uid-northstar-raj', email: 'raj@northstar.example', displayName: 'Raj Patel', emailVerified: true };
+  mcMember.docs['termsAcceptances/uid-northstar-raj'] = { uid: 'uid-northstar-raj', email: 'raj@northstar.example', orgId: mc.org, version: FX.TERMS_VERSION, acceptedAt: new Date().toISOString() };
+  CHECKOUT.posts = [];
+  await scenario('manual-card-member', mcMember, { url: '/workspace#billing', steps: async function (p) {
+    await p.waitForFunction(function () { return !!document.getElementById('bill-card'); }, null, { timeout: 5000 }).catch(function () {});
+    var m = await p.evaluate(function () { var c = document.getElementById('bill-card'); return { text: c ? c.textContent.replace(/\s+/g, ' ') : '', disabled: Array.prototype.map.call(document.querySelectorAll('#billing-body [data-bill="pay-card"], #billing-body [data-bill="add-card"]'), function (b) { return b.disabled; }) }; });
+    ok('manual card (member): Pay by card and Add a card are shown disabled, and the card says an owner or administrator pays', m.disabled.length >= 2 && m.disabled.every(Boolean) && /owner or administrator/.test(m.text), m);
+    await p.click('#bill-card [data-bill="pay-card"]', { force: true }).catch(function () {}); await wait(300);
+    ok('manual card (member): a click posts nothing', !CHECKOUT.posts.length, CHECKOUT.posts);
+    return {};
+  } });
+
   /* ══ 5c. EVERY CLICK (Tommy, 2026-09-27: "we need to make sure every click
      every link doesnt bug") ══
      scripts/_lib/click-sweep.js clicks every visible control on every view
@@ -671,6 +739,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   await scenario('sweep northstar-phone', FX.northstar(HOST), { phone: true, steps: async function (p) { return sweepAll(p, 'sweep northstar-phone', true); } });
   await scenario('sweep lite', FX.lite(HOST), { steps: async function (p) { return sweepAll(p, 'sweep lite'); } });
   await scenario('sweep pending', FX.pending(HOST), { steps: async function (p) { return sweepAll(p, 'sweep pending'); } });
+  await scenario('sweep manual-card', mc, { steps: async function (p) { return sweepAll(p, 'sweep manual-card'); } });
 
   /* the same sweep on the two pages the workspace sends people to that
      wear its chrome: Projects and the store (Marketplace), as a Standard

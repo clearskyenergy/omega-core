@@ -78,8 +78,9 @@ to Stripe; only `billingProvider: 'stripe'` on a packaged record does.
    - URL: `https://silmarillion.clearskyomega.com/api/stripe-webhook`.
    - Events: `invoice.paid`, `invoice.payment_succeeded`, `invoice.voided`,
      `invoice.marked_uncollectible`, `invoice.payment_failed`,
-     `invoice.updated`, plus the legacy tier events already on the
-     endpoint (`customer.subscription.*`).
+     `invoice.updated`, `checkout.session.completed` (a plan paid by card,
+     below), plus the legacy tier events already on the endpoint
+     (`customer.subscription.*`).
    - Copy nothing out of the dashboard by hand into a chat. The signing
      secret goes straight into Vercel.
 4. **Branding** (Settings → Branding): logo and colours for the hosted
@@ -102,6 +103,60 @@ under a release version: live refuses a `-proposed` book. The Stripe rail
 needs **no item sync**. `scripts/qbo-sync-items.js` is the QuickBooks
 rail's alone.
 
+## A plan ClearSky bills, paid by card (2026-09-27)
+
+Tommy, on Plan & billing's *Payment method*, which said "No billing account
+yet … Ask ClearSky" with $1,299 owed on the same page: *"that should be where
+stripe lives and they can input and make a payment."*
+
+A workspace that is **not packaged** and whose plan is **not invoiced in
+QuickBooks** (`paymentProvider` `manual`, `stripe` or unset: the legacy
+tiers ClearSky bills) now pays by card on the workspace's Plan & billing
+page. This is the legacy side and does not read `PACKAGING_PROVIDER`: it
+runs wherever `STRIPE_SECRET_KEY` is set, like the portal and Editor Lite.
+
+- **Pay $X by card** (Payment method) and **Pay now** (What you owe) call
+  `POST /api/stripe-checkout { action: 'pay' }`. The server reads
+  `billing/current.amountDue` and opens a Stripe **Checkout** session for
+  exactly that, card only, saving the card on the customer
+  (`setup_future_usage`), with a receipt invoice (`invoice_creation`).
+  The browser sends no amount. Refused: a package, a QuickBooks plan, a
+  Stripe subscription or an open Stripe invoice (that invoice is the pay
+  page), nothing owed, a member (owner or administrator only), an
+  unverified email.
+- **Add a card** is the same endpoint with `action: 'card'`: a setup-mode
+  Checkout that charges nothing.
+- **The customer** is the one on `stripeCustomerId`, else one made then
+  (metadata `orgId`, the legacy tenant mark; never a package's `omegaOrg`)
+  and written back before Checkout opens.
+- **Stripe's page opens in a new tab** on the click, like every pay page
+  here. Back from Stripe it lands on `/workspace?paid=<session>#billing`
+  (or `?card=`), which asks the server to `confirm` that session; the tab
+  that started it re-reads the record when it is back in front.
+- **Recording.** `checkout.session.completed` and `confirm` run the same
+  `record()`: one transaction appends
+  `billing/current/history/stripe-<session>` (a second delivery finds it
+  and changes nothing) and writes `stripeCustomerId`,
+  `paymentProvider: 'stripe'`, and for a payment `lastPaidAt`,
+  `amountPaid`, `amountDue` less what was paid and `subscriptionDue` one
+  period on (monthly, or a year for `interval: 'annual'`) when the due
+  paid in full is still the one on record. The card becomes the customer's
+  default. ClearSky gets the usual *Payment received* mail. A payment the
+  record cannot take (the workspace moved onto a package meanwhile, or
+  another Stripe customer is on it) is kept as a history row marked
+  `review`, the record is left alone and ClearSky gets *Billing needs a
+  look*.
+- **The receipt invoice and the intents carry `omegaPlanPay`.** The
+  webhook acknowledges them and nothing else: the tenant branch's
+  `invoice.paid` would otherwise set `subscriptionDue` to the day the card
+  was charged.
+- **The card on file** is named on the page from `/api/stripe-invoices`
+  (brand, last four, expiry), read from Stripe each time and never stored.
+
+Tests: `scripts/test-stripe-checkout.js` (in `npm test`) and the
+`manual-card` scenarios of `npm run check:workspace` (the click sweep
+included).
+
 ## Testing it in test mode
 
 With the Preview variables above, sign up a workspace at
@@ -115,6 +170,14 @@ opens within seconds of the webhook. Try these too:
 
 ## What is not built
 
+- **Autopay for a plan ClearSky bills.** Pay by card keeps the card as the
+  customer's default, but nothing charges it on the due date: ClearSky
+  still sets `amountDue`, and the person pays it on Plan & billing. A
+  Stripe subscription for the tier would be the way to charge it by
+  itself.
+- **ACH for a plan ClearSky bills.** Checkout there is card only (a bank
+  debit settles days later; `record()` takes a payment that is paid when
+  the session completes).
 - **Autopay.** Invoices are `send_invoice`: each is paid from its link. The
   Stripe portal keeps a card on file and downloads invoices, but nothing
   charges it automatically yet (the book's `policy.savedCardEnabled` is

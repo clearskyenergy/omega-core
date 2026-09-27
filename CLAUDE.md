@@ -818,7 +818,14 @@ last, never online, a finance-marketplace deal riding on its project) and
 Assign merges only the owner fields onto `projects/{id}`. Plan & billing
 is a page (`#billing`): subscription, what is owed and when, the payment
 method (the Stripe portal or QuickBooks' own payment page; a card is never
-entered on our pages) and the history; `GET /api/plan-change` is readable
+entered on our pages) and the history. A plan ClearSky bills outside the
+engine (not packaged, not `paymentProvider: 'quickbooks'`) pays by card
+there: `POST /api/stripe-checkout` opens Stripe Checkout for
+`billing/current.amountDue` as the server reads it (or saves a card), and
+the webhook's `checkout.session.completed` and the page's return
+(`confirm`) run ONE `record()` (history row `stripe-<session>`, next due a
+period on); its receipt invoice is marked `omegaPlanPay` so the tenant
+branch never sees it (`scripts/test-stripe-checkout.js`); `GET /api/plan-change` is readable
 by any verified member, changes stay with an owner or admin. The shell's
 button reset is `:where()` (zero specificity) so a styled button keeps its
 face, and `omega-splash.js` hears link clicks last, so a link the page

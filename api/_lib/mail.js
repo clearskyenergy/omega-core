@@ -163,7 +163,7 @@ var T = {
      person has to look at. Both go to MAIL_NOTIFY. */
   paidAlert: function (o) {
     return send(staffTo(), '[OMEGA] Payment received: ' + o.company + (o.amountDisplay ? ' (' + o.amountDisplay + ')' : ''),
-      layout('Payment received', '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Amount', o.amountDisplay || '—') + row('Invoice', (o.payWith ? o.payWith + ' ' : '') + (o.invoiceId || '—')) + row('What', o.first ? 'First invoice: the workspace is open' : 'Recurring invoice') + '</table>'
+      layout('Payment received', '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Amount', o.amountDisplay || '—') + row('Invoice', (o.payWith ? o.payWith + ' ' : '') + (o.invoiceId || '—')) + row('What', o.what || (o.first ? 'First invoice: the workspace is open' : 'Recurring invoice')) + '</table>'
         + button(o.consoleUrl || 'https://silmarillion.clearskyomega.com/admin', 'Open the master console')));
   },
   /* A tenant on a plan billed outside the package engine opted in to a module

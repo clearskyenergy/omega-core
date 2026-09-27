@@ -29,7 +29,7 @@ QuickBooks; legacy tenants are billed outside the package engine.
 | Opt in, packaged | Modules page or store | The one menu: server quote → Subscribe and pay → QuickBooks invoice with the card button; on when paid | `POST /api/plan-change` (quote, apply, cancel, reconcile-now) |
 | Add to plan, legacy | Modules page, store, a locked tile | The module joins the plan as its own monthly line: the server's quote (the module and what it needs), the billing contact once, **Pay now** opens QuickBooks' page (a new card or the saved one), the card waits with the pay link and *I've paid*, Live the moment QuickBooks shows it paid; renewed monthly, off after an unpaid renewal's grace; the plan underneath is untouched. Sold only where it switches on exactly (every Omega Logic department; an editor module whose Site Map tab the plan cannot open alone says why and offers **Ask ClearSky to include it**, the recorded request) | `POST /api/plan-change` `addon-quote`, `addon-buy`, `addon-cancel`, `reconcile-now`, `opt-in` (owner or admin; `api/_lib/addons.js` `exact()`) |
 | Marketplace | `/marketplace.html` | The store in the workspace chrome: plan strip, Plans shelf (Lite, Field, Pro, Enterprise, starters, logins, annual, trial), every module priced; `#<module>` lands on one | `GET /api/offerings` (public) or `api/package-catalog` (packaged) |
-| Plan & billing | rail → `/workspace#billing` | A page: your subscription (plan, modules bought and on, monthly, billing day), what you owe and when (unpaid invoices with pay links, next invoice, *I've paid*), the payment method (Stripe portal for the card and autopay, or QuickBooks' own payment page), additions waiting, billing history | `GET /api/plan-change` (any verified member), `POST /api/stripe-invoices`, `POST /api/stripe-portal` |
+| Plan & billing | rail → `/workspace#billing` | A page: your subscription (plan, modules bought and on, monthly, billing day), what you owe and when (unpaid invoices with pay links, next invoice, *I've paid*), the payment method (a plan ClearSky bills: Stripe, with *Pay $X by card* and *Add a card* on Stripe's Checkout in a new tab and the card on file by brand and last four; a package: the Stripe portal or QuickBooks' own payment page), additions waiting, billing history | `GET /api/plan-change` (any verified member), `POST /api/stripe-invoices`, `POST /api/stripe-portal`, `POST /api/stripe-checkout` (owner or admin) |
 | Projects | `/projects.html` | Legacy page wearing the workspace rail (own topbar still) | `OmegaWorkspaceShell.theme()` |
 | In flight | home board | What needs something first (offers on a finance-marketplace deal, a next action, a package to submit, a stall), then what was touched last; never online; each card says why and who has it, with **Assign** | `OmegaWorkspaceToday.board`; `projects/{id}` owner merge |
 | Admin Package tab | `/admin/tenant?org=` (staff) | Opens on what the tenant holds and pays today (a legacy tier's Live modules by the shared rule, plus any opt-in request); staff change it and Review activation | `admin/package-panel.js` `standing()`, `OmegaWorkspaceHub.moduleState` |
@@ -74,9 +74,11 @@ QuickBooks; legacy tenants are billed outside the package engine.
    is the honest source for richer signals once the twin exposes them.
 9. **Today's actions.** A "Size" row opens the sizer; a row could carry the
    project id into the editor so the person lands on the right site.
-10. **The saved card by brand and last four** on Plan & billing, read back
-   from Stripe or QuickBooks Payments (the page says where the card lives
-   and never holds one).
+10. **The saved card by brand and last four** from QuickBooks Payments.
+   Stripe's is shown (read back by `/api/stripe-invoices`, never stored);
+   a QuickBooks-billed page still says where the card lives. Charging a
+   saved Stripe card on the due date by itself (autopay for a plan ClearSky
+   bills) is not built either: `docs/PAYMENTS-STRIPE.md`.
 11. **Person-level assignment across a JDA.** Assign lists this workspace's
    people only; a partner's staff needs a `team_members` read widening that
    has not been designed (see CLAUDE.md, Silmarillion 2.0).

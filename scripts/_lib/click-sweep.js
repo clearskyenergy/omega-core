@@ -353,7 +353,12 @@ async function run(p, opts) {
     st.offscreen.forEach(function (f) { problem('offscreen', control, f); });
     if (st.sideways) problem('sideways', control, 'the page scrolls sideways');
     st.links.forEach(function (l) { var lp3 = linkProblem(l.href, l.abs); if (lp3) problem('link', control + ' › "' + l.label + '"', lp3); });
-    st.opened.forEach(function (u) { var lp4 = linkProblem(u, u); if (lp4) problem('link', control, 'window.open to ' + lp4); });
+    /* a BLANK tab opened on the click is the popup-blocker-safe way to show
+       a page the server names a moment later (QuickBooks', Stripe's): the
+       click may open one tab, an answer that arrives after it may not. The
+       sweep's window.open returns no tab, so the page shows that address as
+       a link instead, and the link is what gets checked. */
+    st.opened.forEach(function (u) { if (u === '' || u === 'about:blank') return; var lp4 = linkProblem(u, u); if (lp4) problem('link', control, 'window.open to ' + lp4); });
     st.left = left.length > 0;
     return st;
   }

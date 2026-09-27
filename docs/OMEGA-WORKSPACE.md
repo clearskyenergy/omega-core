@@ -69,11 +69,17 @@ decided 2026-09-26.
   figure, the billing day, since, access through); *What you owe* (unpaid
   invoices with their QuickBooks pay links, the next invoice, paid
   through, *I've paid* = reconcile-now for an owner or admin; Stripe's
-  open invoices for a Stripe-billed plan); *Payment method* (a Stripe plan
-  opens the Stripe Customer Portal through `POST /api/stripe-portal` for
-  the card and autopay; a QuickBooks plan saves the card on QuickBooks'
-  own invoice payment page with Autopay; card details are never entered
-  on our pages); *Billing history* (the engine's invoices from
+  open invoices for a Stripe-billed plan); *Payment method* (a package on
+  Stripe opens the Stripe Customer Portal through `POST /api/stripe-portal`;
+  a plan ClearSky bills outside the engine and not in QuickBooks, a legacy
+  tier such as Concord's Standard, is **Stripe**: *Pay $X by card* and
+  *Add a card* open Stripe's Checkout in a new tab through
+  `POST /api/stripe-checkout` (what is owed is the server's reading of
+  `billing/current.amountDue`), the card on file is named from
+  `/api/stripe-invoices` (brand and last four, never stored), and *Manage
+  card* opens the portal once there is one; a QuickBooks plan saves the
+  card on QuickBooks' own invoice payment page with Autopay; card details
+  are never entered on our pages); *Billing history* (the engine's invoices from
   `GET /api/plan-change`, which every verified member may read; a Stripe
   plan's from `POST /api/stripe-invoices`). Additions waiting (a legacy
   opt-in with its price, a packaged change waiting for payment) are listed
@@ -318,7 +324,8 @@ ground, one home; the session travels same-origin on every hop.
 | rail, any page | Team · Feed | `/workspace#team`, the Around you page alone |
 | rail, any page | Plan & billing | `/workspace#billing`, the Plan & billing page |
 | rail, any page | Settings | the side panel on `/workspace` (`#settings`) |
-| Plan & billing | Manage card and autopay (Stripe) | the Stripe Customer Portal in a new tab |
+| Plan & billing | Manage card · Manage card and autopay (Stripe) | the Stripe Customer Portal in a new tab |
+| Plan & billing | Pay $X by card · Pay now · Add a card (a plan ClearSky bills) | Stripe Checkout in a new tab (`POST /api/stripe-checkout`); back from Stripe on `/workspace?paid=`/`?card=` `#billing`, which confirms the session |
 | Plan & billing | Pay · Open the payment page (QuickBooks) | the invoice's QuickBooks payment page, where the card is saved and Autopay turned on |
 | In flight | Assign · Reassign | the side panel of the workspace's people; a pick writes the project's owner |
 | tools grid | a Live tile | the tool, scoped to the org |

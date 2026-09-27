@@ -12,11 +12,17 @@
                              console enforces the flip — never on first miss)
    customer.subscription.* → tier from price metadata `tier`, subscriptionDue
    …except a supplier's CUSTOMER's Editor Lite subscription, which
-   api/customer-subscribe.js webhook() takes first (customers/{id}.editorLite)
+   api/customer-subscribe.js webhook() takes first (customers/{id}.editorLite),
+   and a workspace paying its plan by card on Checkout (metadata
+   omegaPlanPay), which api/stripe-checkout.js webhook() takes before both:
+   checkout.session.completed is the payment; its receipt invoice and its
+   intents go no further, so invoice.paid below never moves subscriptionDue
+   to the day the card was charged
    Vercel must NOT parse the body (we need the raw bytes for the signature). */
 'use strict';
 var A = require('./_lib/admin');
 var CustomerLite = require('./customer-subscribe');
+var PlanPay = require('./stripe-checkout');
 var StripeBilling = require('./_lib/stripe-billing');
 
 /* A package invoice event: reconcile that workspace now and send what it
@@ -45,6 +51,12 @@ module.exports = function (req, res) {
     catch (e) { return res.status(400).send('bad signature'); }
     var pkgOrg = StripeBilling.eventOrg(evt);
     if (pkgOrg) return packageEvent(pkgOrg, module.exports.deps).then(function (r) { res.status(200).json({ received: true, package: r }); });
+    /* A workspace paying its plan by card (api/stripe-checkout.js), marked
+       omegaPlanPay on the session, the receipt invoice and the intents:
+       answered here and never handed to the branches below. Anything else
+       returns null and runs below exactly as before. */
+    return PlanPay.webhook(evt, stripe).then(function (plan) {
+    if (plan) return res.status(200).json({ received: true, planPay: plan });
     /* A tenant's CUSTOMER paying for Editor Lite (api/customer-subscribe.js,
        metadata kind 'customer-editor-lite', or a Stripe customer on the
        stripe_customers pointer) is answered FIRST and never reaches the
@@ -85,6 +97,7 @@ module.exports = function (req, res) {
       }
       return null;
     }).then(function () { res.status(200).json({ received: true }); });
+    });
     });
   }).catch(function (e) { console.error('[stripe-webhook]', e); res.status(500).end(); });
 };

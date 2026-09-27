@@ -333,6 +333,7 @@ window.showApp = function (user) {
   /* a later look (a module added to the plan, a paid invoice) arrives here: the rail's Omega Logic group follows too */
   window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; render(); logicSection(); } });
   route();
+  checkoutReturn();
 };
 /* The terms gate wraps showApp NOW, not on its next 50 ms poll: a signed-in
    visit whose auth answers inside that window (a cached session, the render
@@ -830,10 +831,16 @@ function lockedDrawer(t) {
        tier's invoices): Stripe hosts the card page, we never touch card data
      · a QuickBooks-billed workspace keeps its card on QuickBooks' payment
        page (Save this card + Autopay on the invoice), never on this site.
+     · POST /api/stripe-checkout for a plan billed outside the engine and not
+       invoiced in QuickBooks (a legacy tier ClearSky bills): Pay by card
+       opens Stripe's Checkout for what the record says is owed, Add a card
+       saves one; Stripe's page opens in its own tab and comes back here
+       with ?paid= / ?card= and the session id, which the page confirms
+       (the webhook records the same, whichever lands first).
    Requested additions on a plan billed outside the engine (optIns) are
    listed with their price until ClearSky moves the workspace onto a
    package. ── */
-var BILL = { summary: null, asked: false, failed: false, stripe: null, stripeAsked: false };
+var BILL = { summary: null, asked: false, failed: false, stripe: null, stripeAsked: false, away: null };
 function openBilling() { go('billing'); renderBilling(); }
 function bill() { return WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}; }
 /* what an invoice row is called: a package's subscription, a change or a pack, or a module added to a legacy plan */
@@ -847,6 +854,8 @@ function renderBilling() {
   /* the rail: the engine's word for a package, else the record's (a legacy Stripe tier, a QuickBooks customer) */
   var prov = packaged && sm && sm.provider ? sm.provider : (bl.billingProvider === 'stripe' || bl.paymentProvider === 'stripe' || (!packaged && bl.stripeCustomerId)) ? 'stripe' : (bl.qboCustomerId || bl.paymentProvider === 'quickbooks' || bl.billingProvider === 'quickbooks') ? 'quickbooks' : null;
   var stripe = prov === 'stripe', qb = prov === 'quickbooks' || (packaged && !prov), payWith = stripe ? 'Stripe' : qb ? 'QuickBooks' : '';
+  /* a plan billed outside the engine is paid by card on Stripe's Checkout (api/stripe-checkout.js), unless QuickBooks invoices it */
+  var cardRail = !packaged && bl.paymentProvider !== 'quickbooks';
   if (!BILL.asked && window.OmegaPackageMenu) { BILL.asked = true; OmegaPackageMenu.api('/api/plan-change').then(function (j) { BILL.summary = j; renderBilling(); }, function () { BILL.failed = true; renderBilling(); }); }
   if (stripe && !packaged && !BILL.stripeAsked && window.OmegaPackageMenu) { BILL.stripeAsked = true; OmegaPackageMenu.api('/api/stripe-invoices', { orgId: WS.orgId, limit: 24 }).then(function (j) { BILL.stripe = j; renderBilling(); }, function () { BILL.stripe = { connected: false, failed: true }; renderBilling(); }); }
   function kv(rows) { return '<div class="kv">' + rows.filter(function (r) { return r[1] !== '' && r[1] != null; }).map(function (r) { return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</div>'; }
@@ -857,6 +866,10 @@ function renderBilling() {
   var pending = sm && Array.isArray(sm.pending) ? sm.pending : [];
   var optIns = bl.optIns && typeof bl.optIns === 'object' ? Object.keys(bl.optIns).map(function (k) { var o = bl.optIns[k] || {}; o.key = k; return o; }).filter(function (o) { return o.status !== 'declined' && o.status !== 'activated'; }) : [];
   var payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || (stripeOpen.length && stripeOpen[0].hostedUrl) || bl.paymentLink || null;
+  /* what the plan owes, payable by card here: the server's own refusals mirrored (a Stripe subscription or an open Stripe invoice has its own page; the server decides) */
+  var dueC = Math.round((Number(bl.amountDue) || 0) * 100), stripeKnown = !stripe || !!BILL.stripe;
+  var cardPay = cardRail && !bl.stripeSubscriptionId && dueC >= 50 && dueC <= 99999999 && !stripeOpen.length && stripeKnown;
+  var payCardBtn = function (text, cls) { return '<button class="ows-pill' + (cls ? ' ' + cls : '') + '" type="button" data-bill="pay-card"' + (admin ? '' : ' disabled title="An owner or administrator pays by card"') + '>' + esc(text) + '</button>'; };
   var h = '<div class="bill">';
 
   /* 1 · the subscription */
@@ -869,7 +882,7 @@ function renderBilling() {
   h += kv([['Workspace', WS.clientName || WS.orgId], ['Plan', packaged ? ((sm && sm.planDisplay) || planName()) : planName()],
     ['Modules', packaged ? (mods.join(', ') || (sm || BILL.failed ? '—' : 'Loading…')) : ''], ['Add-ons', packaged ? '' : ((WS.addons || []).join(', ') || 'None')],
     ['Tools on this plan', !packaged && Array.isArray(WS.toolAccess) ? String(WS.toolAccess.length) : ''],
-    ['Billing', packaged && sm ? (sm.interval === 'annual' ? 'Annual prepay' : 'Monthly, on the ' + (sm.billingDay ? sm.billingDay + (sm.billingDay === 1 || sm.billingDay === 21 || sm.billingDay === 31 ? 'st' : sm.billingDay === 2 || sm.billingDay === 22 ? 'nd' : sm.billingDay === 3 || sm.billingDay === 23 ? 'rd' : 'th') : 'signup day')) : (bl.interval === 'annual' ? 'Annual prepay' : stripe ? 'By card through Stripe' : bl.paymentProvider === 'quickbooks' ? 'By invoice through QuickBooks' : bl.paymentProvider === 'manual' ? 'Invoiced by ClearSky' : '')],
+    ['Billing', packaged && sm ? (sm.interval === 'annual' ? 'Annual prepay' : 'Monthly, on the ' + (sm.billingDay ? sm.billingDay + (sm.billingDay === 1 || sm.billingDay === 21 || sm.billingDay === 31 ? 'st' : sm.billingDay === 2 || sm.billingDay === 22 ? 'nd' : sm.billingDay === 3 || sm.billingDay === 23 ? 'rd' : 'th') : 'signup day')) : (bl.interval === 'annual' ? 'Annual prepay' : bl.paymentProvider === 'stripe' || bl.stripeSubscriptionId ? 'By card through Stripe' : bl.paymentProvider === 'quickbooks' ? 'By invoice through QuickBooks' : bl.paymentProvider === 'manual' ? 'Invoiced by ClearSky' : '')],
     ['Since', day(bl.subscription && bl.subscription.since) || day(bl.subscriptionStartedAt) || day(bl.createdAt)], ['Access through', packaged ? day((sm && sm.accessUntil) || (pa && pa.accessUntil)) : ''], ['Trial ends', trialEnd() ? day(trialEnd()) : ''], ['Your role', WS.role || 'member']]);
   if (notOn.length) h += '<p><b>Bought, not on yet:</b> ' + esc(notOn.join(', ')) + '. They switch on when the invoice for them is paid.</p>';
   if (pa && pa.readOnly) h += '<p><b>Read-only</b> until the current invoice is paid.</p>';
@@ -897,7 +910,7 @@ function renderBilling() {
     h += '<div class="big">' + esc(moneyC(oweC)) + '<small>' + unpaid.length + (unpaid.length === 1 ? ' invoice open' : ' invoices open') + '</small></div>';
     h += unpaid.map(function (x) { return '<div class="inv"><div><b>' + esc(invLabel(x)) + '</b><small>Issued ' + esc(x.date || '') + (x.period ? ' · ' + esc(x.period.start) + ' to ' + esc(x.period.end) : '') + '</small></div><div><span class="amt">' + esc(x.display || '') + '</span>' + (x.paymentLink ? '<a class="ows-pill sm primary" href="' + esc(x.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st unpaid">Unpaid</span>') + '</div></div>'; }).join('');
     /* a plan billed outside the engine may owe on its own paper too */
-    if (!packaged && oweD > 0) h += '<div class="inv"><div><b>Your plan</b><small>' + esc(bl.subscriptionDue ? 'due ' + (day(bl.subscriptionDue) || '') : 'billed by ClearSky') + '</small></div><div><span class="amt">' + esc(usd(oweD)) + '</span>' + (bl.paymentLink ? '<a class="ows-pill sm" href="' + esc(bl.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : '') + '</div></div>';
+    if (!packaged && oweD > 0) h += '<div class="inv"><div><b>Your plan</b><small>' + esc(bl.subscriptionDue ? 'due ' + (day(bl.subscriptionDue) || '') : 'billed by ClearSky') + '</small></div><div><span class="amt">' + esc(usd(oweD)) + '</span>' + (bl.paymentLink ? '<a class="ows-pill sm" href="' + esc(bl.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : cardPay ? payCardBtn('Pay by card', 'sm') : '') + '</div></div>';
   } else if (stripeOpen.length) {
     h += '<div class="big">' + esc(usd(stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0))) + '<small>' + stripeOpen.length + (stripeOpen.length === 1 ? ' invoice open' : ' invoices open') + '</small></div>';
     h += stripeOpen.map(function (x) { return '<div class="inv"><div><b>' + esc(x.number || 'Invoice') + '</b><small>Issued ' + esc(x.created ? new Date(x.created).toLocaleDateString() : '') + '</small></div><div><span class="amt">' + esc(usd(x.amountDue)) + '</span>' + (x.hostedUrl ? '<a class="ows-pill sm primary" href="' + esc(x.hostedUrl) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st unpaid">Open</span>') + '</div></div>'; }).join('');
@@ -909,23 +922,33 @@ function renderBilling() {
   var addOnOwed = !packaged && unpaid.some(function (x) { return x.kind === 'addon'; });
   if (packaged) h += stripe ? '<p>Each invoice arrives by email on your billing day with its pay link: pay it by card on Stripe’s secure page, and your workspace follows the payment within seconds.</p>' : '<p>Each invoice arrives by email on your billing day with its pay link. A card saved on QuickBooks’ page pays the next one in one click.</p>';
   else if (addOnOwed) h += '<p>Each add-on invoice arrives by email with its pay link. A card saved on QuickBooks’ page pays the next one in one click.</p>';
-  h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Pay now</a>' : '') + (packaged || addOnOwed ? '<button class="ows-pill" type="button" id="bill-paid"' + (admin ? '' : ' disabled title="An owner or administrator checks the payment"') + '>I’ve paid</button>' : '') + '</div></div>';
+  else if (cardPay && !payLink) h += '<p>Pay it by card on Stripe’s secure page. The payment shows here within seconds.</p>';
+  h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Pay now</a>' : cardPay ? payCardBtn('Pay now', 'primary') : '') + (packaged || addOnOwed ? '<button class="ows-pill" type="button" id="bill-paid"' + (admin ? '' : ' disabled title="An owner or administrator checks the payment"') + '>I’ve paid</button>' : '') + '</div></div>';
 
-  /* 3 · the payment method */
+  /* 3 · the payment method: a package's rail, else Stripe for a plan ClearSky bills (Tommy, 2026-09-27: "that should be where stripe lives and they can input and make a payment"), else QuickBooks */
   h += '<div class="bcard" id="bill-card"><h3>Payment method</h3>';
-  if (stripe) {
+  if (packaged && stripe) {
     h += kv([['Provider', 'Stripe'], ['Card on file', 'Managed in the Stripe portal']]);
-    h += packaged ? '<p>Your card is entered on <b>Stripe’s secure invoice page</b>, never on this site. The Stripe portal keeps the card on file and downloads any invoice.</p>' : '<p>Your card is entered and stored with <b>Stripe</b>, on Stripe’s own page. Nothing about it is kept on this site. The portal also turns autopay on or off and downloads any invoice.</p>';
-    h += '<div class="acts"><button class="ows-pill primary" type="button" id="bill-portal"' + (admin ? '' : ' disabled title="An owner or administrator manages the card"') + '>' + (packaged ? 'Manage card and invoices' : 'Manage card and autopay') + '</button></div>';
+    h += '<p>Your card is entered on <b>Stripe’s secure invoice page</b>, never on this site. The Stripe portal keeps the card on file and downloads any invoice.</p>';
+    h += '<div class="acts"><button class="ows-pill primary" type="button" id="bill-portal"' + (admin ? '' : ' disabled title="An owner or administrator manages the card"') + '>Manage card and invoices</button></div>';
     if (!admin) h += '<p>An owner or administrator of ' + esc(WS.clientName || 'this workspace') + ' opens the portal.</p>';
+  } else if (cardRail) {
+    /* the card itself is Stripe's: /api/stripe-invoices names it (brand, last four), nothing about it is stored here */
+    var sc = BILL.stripe && BILL.stripe.card, onStripe = bl.paymentProvider === 'stripe' || !!bl.stripeSubscriptionId;
+    var cardName = sc ? (String(sc.brand || 'card').charAt(0).toUpperCase() + String(sc.brand || 'card').slice(1)) + ' ending ' + (sc.last4 || '') + (sc.expMonth && sc.expYear ? ' · expires ' + ('0' + sc.expMonth).slice(-2) + '/' + String(sc.expYear).slice(-2) : '') : '';
+    var keeps = !!sc || onStripe, portalName = bl.stripeSubscriptionId ? 'Manage card and autopay' : 'Manage card';
+    h += kv([['Provider', 'Stripe'], ['Card on file', cardName || (stripe && !BILL.stripe ? 'Checking…' : onStripe ? 'Managed in the Stripe portal' : 'None yet')]]);
+    h += keeps ? '<p>Your card is kept by <b>Stripe</b>, on Stripe’s own page. Nothing about it is kept on this site. ' + (cardPay ? 'Pay what is owed with it on Stripe’s secure page; ' : '') + 'the Stripe portal changes it and downloads your receipts' + (bl.stripeSubscriptionId ? ' and turns autopay on or off' : '') + '.</p>'
+      : '<p>Pay by card on <b>Stripe’s secure page</b>: you type the card there, never on this site, and Stripe keeps it for your next payment. Nothing is charged until you pay.</p>';
+    h += '<div class="acts">' + (cardPay ? payCardBtn('Pay ' + usd(dueC / 100) + ' by card', 'primary') : '')
+      + (keeps ? '<button class="ows-pill' + (cardPay ? '' : ' primary') + '" type="button" id="bill-portal"' + (admin ? '' : ' disabled title="An owner or administrator manages the card"') + '>' + portalName + '</button>'
+        : '<button class="ows-pill' + (cardPay ? '' : ' primary') + '" type="button" data-bill="add-card"' + (admin ? '' : ' disabled title="An owner or administrator keeps the card"') + '>Add a card</button>') + '</div>';
+    if (!admin) h += '<p>An owner or administrator of ' + esc(WS.clientName || 'this workspace') + ' pays and keeps the card.</p>';
     if (ao) h += '<p>Modules added to your plan are invoiced in <b>QuickBooks</b>: pay each on QuickBooks’ own page, where a card can be saved with Autopay.</p>';
-  } else if (qb) {
+  } else {
     h += kv([['Provider', 'QuickBooks Payments'], ['Card on file', bl.autopay === true ? 'Saved · autopay on' : bl.autopay === false ? 'Not saved yet' : 'Saved on your invoice page']]);
     h += '<p>Your card is entered on <b>QuickBooks’ secure payment page</b>, never on this site. When you pay an invoice there, tick <b>Save this card</b> and turn on <b>Autopay</b>: every later invoice is charged on its date, and you can change the card from any invoice.</p>';
     h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Open the payment page</a>' : '<span class="ows-chip">Your next invoice brings the link</span>') + '</div>';
-  } else {
-    h += '<p><b>No billing account yet.</b> Your first invoice sets it up: it arrives by email with a secure payment page where a card can be saved. Nothing is charged until then.</p>';
-    h += '<div class="acts"><a class="ows-pill" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Billing for ' + (WS.clientName || WS.orgId)) + '">Ask ClearSky</a></div>';
   }
   h += '</div>';
 
@@ -947,10 +970,12 @@ function renderBilling() {
   }
   /* a Stripe-billed plan keeps its own history beside any add-on invoices */
   if (!packaged && stripe) {
-    var st = BILL.stripe;
+    var st = BILL.stripe, stInv = st && st.connected ? st.invoices || [] : [];
     if (!st) h += '<p>Loading your invoices…</p>';
+    /* nothing from Stripe yet (a card saved, not used): the last payment on record still shows */
+    else if (!stInv.length && bl.lastPaidAt) h += '<div class="inv"><div><b>Last payment</b><small>' + esc(day(bl.lastPaidAt)) + '</small></div><div><span class="amt">' + esc(bl.amountPaid ? usd(bl.amountPaid) : '') + '</span><span class="st paid">paid</span></div></div>';
     else if (!st.connected) h += '<p>' + (st.failed ? 'The invoice list is unavailable right now.' : 'No invoices yet; billing has not been set up for this workspace.') + '</p>';
-    else if (!(st.invoices || []).length) h += '<p>No invoices issued yet.</p>';
+    else if (!stInv.length) h += '<p>No invoices issued yet.</p>';
     else h += st.invoices.map(function (inv) { var link = inv.hostedUrl || inv.pdfUrl; return '<div class="inv"><div><b>' + esc(inv.number || 'Invoice') + '</b><small>' + esc(inv.created ? new Date(inv.created).toLocaleDateString() : '') + '</small></div><div><span class="amt">' + esc(inv.amountDue == null ? '' : usd(inv.amountDue)) + '</span>' + (link ? '<a class="ows-pill sm" href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(inv.status || 'Open') + '</a>' : '<span class="st ' + esc(inv.status || '') + '">' + esc(inv.status || '') + '</span>') + '</div></div>'; }).join('');
   } else if (packaged || invoices.length) { /* the engine's list above */ }
   else if (bl.lastPaidAt) h += '<div class="inv"><div><b>Last payment</b><small>' + esc(day(bl.lastPaidAt)) + '</small></div><div><span class="amt">' + esc(bl.amountPaid ? usd(bl.amountPaid) : '') + '</span><span class="st paid">paid</span></div></div>';
@@ -964,7 +989,70 @@ function renderBilling() {
     var ao = r && r.addOns, cleared = !packaged && !!ao && !(ao.pending || []).length && (ao.live || []).length > 0;
     S.toast(cleared ? 'Paid. Your added modules are on.' : 'Checked with ' + ((r && r.payWith) || (packaged ? payWith : 'QuickBooks') || 'the payment provider')); BILL.asked = false;
     if (packaged) { if (OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderBilling(); } else addOnChanged(); }, function (e) { paid.disabled = false; paid.textContent = 'I’ve paid'; S.toast(e.message); }); });
-  var portal = byId('bill-portal'); if (portal && admin) portal.addEventListener('click', function () { portal.disabled = true; portal.textContent = 'Opening Stripe…'; OmegaPackageMenu.api('/api/stripe-portal', { orgId: WS.orgId }).then(function (j) { portal.disabled = false; portal.textContent = packaged ? 'Manage card and invoices' : 'Manage card and autopay'; if (j && j.url) window.open(j.url, '_blank', 'noopener'); else S.toast('Stripe did not return a portal link'); }, function (e) { portal.disabled = false; portal.textContent = packaged ? 'Manage card and invoices' : 'Manage card and autopay'; S.toast(e.message); }); });
+  var portal = byId('bill-portal'); if (portal && admin) portal.addEventListener('click', function () { var label = portal.textContent; portal.disabled = true; portal.textContent = 'Opening Stripe…'; OmegaPackageMenu.api('/api/stripe-portal', { orgId: WS.orgId }).then(function (j) { portal.disabled = false; portal.textContent = label; if (j && j.url) window.open(j.url, '_blank', 'noopener'); else S.toast('Stripe did not return a portal link'); }, function (e) { portal.disabled = false; portal.textContent = label; S.toast(e.message); }); });
+  if (admin) Array.prototype.forEach.call(b.querySelectorAll('[data-bill="pay-card"], [data-bill="add-card"]'), function (btn) { btn.addEventListener('click', function () { cardCheckout(btn.getAttribute('data-bill') === 'pay-card' ? 'pay' : 'card', btn); }); });
+}
+/* Pay by card / Add a card: Stripe's Checkout in its own tab, as every pay
+   page here opens (the tab opens on the click, so no popup blocker stops
+   it, and Stripe's address loads into it when the server answers). What is
+   charged is the server's reading of billing/current, never this page's.
+   Back from Stripe, that tab lands on ?paid= / ?card= (checkoutReturn);
+   this one looks at the record again when it is next in front. */
+function cardCheckout(action, btn) {
+  if (!window.OmegaPackageMenu || btn.disabled) return;
+  var label = btn.textContent, tab = null, old = byId('bill-go');
+  if (old) old.parentNode.removeChild(old);
+  try { tab = window.open('', '_blank'); if (tab) { tab.opener = null; tab.document.title = 'Opening Stripe…'; tab.document.body.innerHTML = '<p style="font:16px system-ui,sans-serif;padding:32px;color:#14171A">Opening Stripe’s secure page…</p>'; } } catch (e) { tab = null; }
+  btn.disabled = true; btn.textContent = 'Opening Stripe…';
+  OmegaPackageMenu.api('/api/stripe-checkout', { action: action, orgId: WS.orgId }).then(function (j) {
+    btn.disabled = false; btn.textContent = label;
+    var url = j && /^https:\/\//.test(j.url || '') ? j.url : null, opened = false;
+    if (!url) { if (tab) { try { tab.close(); } catch (e) {} } S.toast('Stripe did not return its page. Nothing was charged.'); return; }
+    if (tab) { try { tab.location.replace(url); opened = true; } catch (e) {} }
+    BILL.away = billMark(bill());
+    if (opened) { S.toast(action === 'pay' ? 'Pay on Stripe’s page in the new tab. This page follows the payment.' : 'Add your card on Stripe’s page in the new tab.'); return; }
+    /* no tab (a blocker, a kiosk): the same page behind a link the person follows */
+    var go = document.createElement('a'); go.id = 'bill-go'; go.className = 'ows-pill primary'; go.href = url; go.target = '_blank'; go.rel = 'noopener'; go.textContent = 'Continue to Stripe';
+    btn.parentNode.insertBefore(go, btn.nextSibling);
+  }, function (e) { btn.disabled = false; btn.textContent = label; if (tab) { try { tab.close(); } catch (x) {} } S.toast(e.message); });
+}
+/* what a payment or a saved card changes on the record */
+function billMark(bl) { bl = bl || {}; return [bl.amountDue, ms(bl.lastPaidAt), bl.paymentProvider, bl.stripeCustomerId, ms(bl.subscriptionDue)].join('|'); }
+/* the record read again (and Stripe's list and card with it), then the page */
+function billingChanged() {
+  delete WS.billing; BILL.stripe = null; BILL.stripeAsked = false; BILL.asked = false;
+  var done = function () { if (byId('content').getAttribute('data-view') === 'billing') renderBilling(); };
+  if (window.OmegaTenant && OmegaTenant.refreshBilling) OmegaTenant.refreshBilling().then(done, done); else done();
+}
+/* back in front after Stripe's tab: one read of the record (a member may);
+   a change means the payment or the card landed, and the page follows */
+window.addEventListener('focus', function () {
+  if (!BILL.away || !WS || !db) return;
+  var was = BILL.away;
+  db.collection('omega_orgs').doc(WS.orgId).collection('billing').doc('current').get().then(function (snap) {
+    var r = snap.exists ? snap.data() : null;
+    if (!r || BILL.away !== was || billMark(r) === was) return;
+    BILL.away = null;
+    S.toast(String(ms(r.lastPaidAt)) !== was.split('|')[1] ? 'Payment received. Thank you.' : 'Your card is saved with Stripe.');
+    billingChanged();
+  }, function () {});
+});
+/* Back from Stripe's Checkout (api/stripe-checkout.js success address):
+   ?paid=<session> or ?card=<session>. The page asks the server to record
+   what that session did (the webhook records the same; whichever is first
+   writes, the other finds it written), says so, and the address loses the
+   session id at once, so a reload never asks again. */
+var CHECKOUT_BACK = (function () { var m = /[?&](paid|card)=(cs_(?:test|live)_[A-Za-z0-9]+)/.exec(window.location.search || ''); return m ? { kind: m[1], id: m[2] } : null; })();
+function checkoutReturn() {
+  if (!CHECKOUT_BACK || !WS || !window.OmegaPackageMenu) return;
+  var back = CHECKOUT_BACK; CHECKOUT_BACK = null;
+  try { var q = (window.location.search || '').replace(/([?&])(paid|card)=[^&#]*(&|$)/, '$1').replace(/[?&]$/, ''); history.replaceState(null, '', window.location.pathname + q + window.location.hash); } catch (e) {}
+  S.toast(back.kind === 'paid' ? 'Checking your payment with Stripe…' : 'Checking your card with Stripe…');
+  OmegaPackageMenu.api('/api/stripe-checkout', { action: 'confirm', orgId: WS.orgId, sessionId: back.id }).then(function (r) {
+    var st = r && r.state;
+    S.toast(st === 'paid' ? 'Paid' + (r.display ? ' ' + r.display : '') + ' by card. Thank you.' : st === 'saved' ? 'Your card is saved with Stripe.' : st === 'review' ? 'Stripe took the payment; ClearSky is matching it to your plan.' : st === 'expired' ? 'That Stripe page expired. Nothing was charged.' : 'Stripe has not confirmed it yet. It shows here within a minute.');
+    billingChanged();
+  }, function (e) { S.toast(e.message); });
 }
 function billingDrawer() { openBilling(); }
 function settingsDrawer() {
