@@ -129,6 +129,22 @@ function addOnRoute(body) {
     return { ok: true, addOnId: ADDON.entry.id, state: 'awaiting_payment', add: q.add, addNames: q.addNames, todayCents: q.todayCents, display: q.display.amount, paymentLink: PAY_URL, payLinkMissing: false, expiresOn: q.cycle.end, monthlyDisplay: q.monthlyDisplay, live: [] };
   } finally { process.env.PACKAGING_BILLING_ENABLED = env.b; process.env.QBO_ENV = env.q; if (env.b === undefined) delete process.env.PACKAGING_BILLING_ENABLED; if (env.q === undefined) delete process.env.QBO_ENV; }
 }
+/* Plan & billing's card through Stripe (api/stripe-customer.js), answered
+   in the real endpoint's shapes from the scenario's own billing record (the
+   endpoint itself is scripts/test-stripe-customer.js's). The pages it hands
+   back are Stripe's; a check catches the tab going there. */
+var CARD = { posts: [], dueOpen: null, paid: false, invoices: null };
+function cardRoute(body) {
+  CARD.posts.push(body.action);
+  var fx = CURRENT_FX, bl = (fx && fx.docs['omega_orgs/' + fx.org + '/billing/current']) || {}, packaged = bl.packaged === true, linked = !!bl.stripeCustomerId, owe = Number(bl.amountDue) || 0;
+  var due = !packaged && owe > 0 ? { cents: Math.round(owe * 100), display: '$' + owe.toLocaleString('en-US'), date: bl.subscriptionDue ? String(bl.subscriptionDue).slice(0, 10) : null, open: CARD.dueOpen } : null;
+  if (body.action === 'view') return { orgId: fx.org, rail: 'stripe', packaged: packaged, linked: linked, mode: 'live', card: linked ? { type: 'card', brand: 'visa', last4: '4242', label: 'Visa ending 4242', expires: '12/2030' } : null, canLink: true, reason: null, due: due, canPay: !!due && !bl.paymentLink, payReason: due ? null : 'Nothing is owed right now.' };
+  if (body.action === 'card') return { url: 'https://billing.stripe.com/p/session/test_card' };
+  if (body.action === 'portal') return { url: 'https://billing.stripe.com/p/session/test_portal' };
+  if (body.action === 'pay') { CARD.dueOpen = { invoiceId: 'in_due', url: 'https://invoice.stripe.com/i/acct_fixture/in_due', number: 'CS-0001' }; return { state: 'open', url: CARD.dueOpen.url, invoiceId: 'in_due', display: due ? due.display : '' }; }
+  if (body.action === 'check') return CARD.paid ? { state: 'paid', invoiceId: 'in_due', recorded: true, due: null } : { state: 'open', invoiceId: 'in_due', recorded: false, due: due };
+  return { error: 'render-workspace does not answer ' + body.action };
+}
 var STAFF_CALLER = false;
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], post = req.method === 'POST';
@@ -149,10 +165,11 @@ var srv = http.createServer(function (req, res) {
         pv.canPreview = true; pv.preview = true; pv.starters = M.starters(); json(pv);
       }); return;
     }
-    if (u === '/api/stripe-invoices' && post) return json({ connected: true, orgId: CURRENT_FX && CURRENT_FX.org, invoices: [
+    if (u === '/api/stripe-invoices' && post) return json({ connected: true, orgId: CURRENT_FX && CURRENT_FX.org, invoices: CARD.invoices || [
       { id: 'in_2', number: 'NS-0002', status: 'paid', amountDue: 1250, created: Date.now() - 10 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_2', pdfUrl: null },
       { id: 'in_1', number: 'NS-0001', status: 'paid', amountDue: 1250, created: Date.now() - 40 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_1', pdfUrl: null } ] });
     if (u === '/api/stripe-portal' && post) return json({ url: 'https://billing.stripe.com/p/session/test_northstar' });
+    if (u === '/api/stripe-customer' && post) { var cb = []; req.on('data', function (c) { cb.push(c); }); req.on('end', function () { var body = {}; try { body = JSON.parse(Buffer.concat(cb).toString()); } catch (e) {} json(cardRoute(body)); }); return; }
     if (u === '/api/package-catalog' || u === '/api/plan-change') {
       var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {}
         Promise.resolve().then(function () { return storeRoute(u, req.method, body); }).then(function (o) { json(o); }, function (e) { json({ error: e.message }, e.status || 500); }); }); return;
@@ -493,11 +510,17 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: Plan & billing is a page: the subscription, what you owe, the payment method and the history', bill.view === 'billing' && bill.cards.join('|') === 'Your subscription|What you owe|Payment method|Billing history', bill.cards);
     ok('northstar: a Stripe-billed plan says the card lives with Stripe, offers the portal, and says nothing is owed with the next payment date', bill.portal && /Stripe/.test(bill.text) && /nothing is owed/.test(bill.text) && /Next invoice/.test(bill.text) && /Standard/.test(bill.text), bill.text.slice(0, 300));
     ok('northstar: the billing history lists what Stripe billed, each with its invoice page', /NS-0002/.test(bill.text) && /NS-0001/.test(bill.text) && bill.stripeLinks === 2, { links: bill.stripeLinks, text: bill.text.slice(-200) });
-    /* the portal: an owner opens Stripe's own page in a new tab; no card field is ever on this page */
-    await p.evaluate(function () { window.__opened = []; window.open = function (u) { window.__opened.push(String(u)); return null; }; });
-    await p.click('#bill-portal'); await wait(400);
-    var opened = await p.evaluate(function () { return window.__opened; });
-    ok('northstar: Manage card and autopay opens the Stripe portal (Stripe\'s own page) in a new tab, and the page itself has no card field', opened.length === 1 && /^https:\/\/billing\.stripe\.com\//.test(opened[0]) && bill.cardInputs === 0, { opened: opened, inputs: bill.cardInputs });
+    /* the card on file, read back from Stripe (api/stripe-customer.js); the
+       portal is Stripe's own page, opened in THIS tab (a window opened after
+       the server's answer is a pop-up a phone blocks) and it comes back to
+       Plan & billing; no card field is ever on this page */
+    await p.waitForFunction(function () { return /Visa ending 4242/.test((document.getElementById('bill-card') || {}).textContent || ''); }, null, { timeout: 4000 }).catch(function () {});
+    var cardTxt = await p.$eval('#bill-card', function (e) { return e.textContent.replace(/\s+/g, ' '); });
+    ok('northstar: the card on file is read back from Stripe (brand, last four, expiry), with Change card and Invoices and receipts', /Card on file\s*Visa ending 4242/.test(cardTxt) && /Expires\s*12\/2030/.test(cardTxt) && /Change card/.test(cardTxt) && /Invoices and receipts/.test(cardTxt) && !/QuickBooks/.test(cardTxt), cardTxt);
+    var went = []; await p.route(/^https:\/\/billing\.stripe\.com\//, function (r) { went.push(r.request().url()); return r.abort('aborted'); });
+    await p.click('#bill-portal'); await wait(600);
+    await p.evaluate(function () { if (window.OmegaSplash) window.OmegaSplash.done(); });
+    ok('northstar: Invoices and receipts opens the Stripe portal (Stripe\'s own page) in this tab, and the page itself has no card field', went.length === 1 && /^https:\/\/billing\.stripe\.com\//.test(went[0]) && CARD.posts.indexOf('portal') >= 0 && bill.cardInputs === 0, { went: went, posts: CARD.posts, inputs: bill.cardInputs });
     await p.evaluate(function () { window.location.hash = ''; }); await wait(200);
     /* post a message */
     await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
@@ -646,7 +669,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.evaluate(function () { window.location.hash = '#billing'; });
     await p.waitForFunction(function () { return !!document.getElementById('bill-req'); }, null, { timeout: 4000 }).catch(function () {});
     var lb = await p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { card: t('bill-card'), req: t('bill-req'), keeps: Array.prototype.map.call(document.querySelectorAll('#bill-req [data-keep]'), function (b) { return b.getAttribute('data-keep'); }) }; });
-    ok('legacy Enterprise: Plan & billing says ClearSky invoices it, never "No billing account yet" (Concord, 2026-09-27)', /Invoiced by ClearSky/.test(lb.card) && !/No billing account/.test(lb.card), lb.card);
+    ok('legacy Enterprise: the payment method is Stripe\'s, never "No billing account yet" (Concord, 2026-09-27)', /Stripe/.test(lb.card) && !/No billing account/.test(lb.card), lb.card);
     ok('legacy Enterprise: Requested changes lists the five opt-outs, each with Keep', lb.keeps.length === 5 && /Opt out · Logic Office/.test(lb.req), lb);
     await p.click('#bill-req [data-keep="logic-plant"]');
     await p.waitForFunction(function () { return document.querySelectorAll('#bill-req [data-keep]').length === 3; }, null, { timeout: 4000 }).catch(function () {});
@@ -695,6 +718,87 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.evaluate(function () { window.location.hash = '#billing'; }); await wait(500);
     var bill = await p.evaluate(function () { var c = document.getElementById('bill-addons'); return c ? c.textContent.replace(/\s+/g, ' ') : null; });
     ok('legacy add: Plan & billing lists what was added to the plan, what it costs a month and that it is on', !!bill && /Added to your plan/.test(bill) && /\$1,500/.test(bill) && /Office/.test(bill) && /Active/.test(bill), bill);
+    return {};
+  } });
+
+  /* ══ 5b'. CONCORD — a legacy plan ClearSky billed by hand, $1,299 past due
+     and no billing account yet (Tommy, 2026-09-27, on this card: "This
+     payment method should be linked to the stripe payment system we built
+     with quickbooks. Stripe collects and takes the payment"). Payment
+     method offers Add a card with Stripe and What you owe offers Pay $1,299
+     with Stripe, each Stripe's own page in THIS tab; back from Stripe the
+     open invoice has its page and I've paid, and paid it reads nothing owed
+     with the payment in the history. Never "No billing account yet", never a
+     mail to ClearSky, never a card field; a member is told who pays. ══ */
+  function concordFx(role) {
+    var fx = FX.legacyEnterprise(HOST), orgPath = 'omega_orgs/' + fx.org, dayMs = 86400e3;
+    fx.docs[orgPath] = Object.assign({}, fx.docs[orgPath], { name: 'Concord Energy', tierLevel: 1 });
+    fx.billPath = orgPath + '/billing/current';
+    fx.docs[fx.billPath] = { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'manual', trialEndsAt: null, subscriptionDue: new Date(Date.now() - 25 * dayMs).toISOString().slice(0, 10),
+      amountDue: 1299, amountPaid: 1299, lastPaidAt: new Date(Date.now() - 56 * dayMs).toISOString().slice(0, 10), createdAt: fx.docs[fx.billPath].createdAt };
+    if (role) fx.docs[orgPath + '/members/' + fx.user.uid].role = role;
+    CARD.posts = []; CARD.dueOpen = null; CARD.paid = false; CARD.invoices = null;
+    return fx;
+  }
+  function billText(p) {
+    return p.evaluate(function () {
+      var g = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; };
+      return { owe: g('bill-owe'), card: g('bill-card'), sub: g('bill-sub'), hist: g('bill-hist'), add: g('bill-card-add'), pay: g('bill-stripe-pay'), check: !!document.getElementById('bill-stripe-check'),
+        mail: document.querySelectorAll('#bill-card a[href^="mailto:"], #bill-owe a[href^="mailto:"]').length, inputs: document.querySelectorAll('#billing-body input').length };
+    });
+  }
+  var cc = concordFx();
+  await scenario('concord-billing', cc, { url: '/workspace#billing', steps: async function (p) {
+    await p.waitForSelector('#bill-stripe-pay', { timeout: 6000 }).catch(function () {});
+    var a = await billText(p);
+    ok('concord: the Payment method card is linked to Stripe: Add a card with Stripe, no card on file yet; never "No billing account yet", never a mail to ClearSky, never a card field', /Pay by card with Stripe/.test(a.card) && /Card on file\s*None yet/.test(a.card) && a.add === 'Add a card with Stripe' && !/No billing account yet|Ask ClearSky/.test(a.card) && a.mail === 0 && a.inputs === 0, a);
+    ok('concord: What you owe is ClearSky\'s $1,299, with Pay $1,299 with Stripe', /\$1,299/.test(a.owe) && a.pay === 'Pay $1,299 with Stripe' && !a.check, a.owe);
+    ok('concord: the plan still reads as ClearSky billed it, and the last payment stands in the history', /Invoiced by ClearSky/.test(a.sub) && /Last payment/.test(a.hist) && /\$1,299/.test(a.hist), { sub: a.sub, hist: a.hist });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'concord-billing-stripe.png'), fullPage: true });
+    var went = []; await p.route(/^https:\/\/(billing|invoice)\.stripe\.com\//, function (r) { went.push(r.request().url()); return r.abort('aborted'); });
+    await p.click('#bill-card-add'); await wait(600);
+    await p.evaluate(function () { if (window.OmegaSplash) window.OmegaSplash.done(); });
+    ok('concord: Add a card with Stripe asks the server for Stripe\'s add-a-card page and goes there in this tab', CARD.posts.indexOf('card') >= 0 && went.length === 1 && /^https:\/\/billing\.stripe\.com\//.test(went[0]), { posts: CARD.posts, went: went });
+    await p.click('#bill-stripe-pay'); await wait(600);
+    await p.evaluate(function () { if (window.OmegaSplash) window.OmegaSplash.done(); });
+    ok('concord: Pay $1,299 with Stripe goes to Stripe\'s invoice page in this tab', CARD.posts.indexOf('pay') >= 0 && went.length === 2 && /^https:\/\/invoice\.stripe\.com\//.test(went[1]), { posts: CARD.posts, went: went });
+    /* back from Stripe by the browser's Back: the page asks again */
+    await p.evaluate(function () { window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })); });
+    await p.waitForSelector('#bill-stripe-check', { timeout: 5000 }).catch(function () {});
+    var b = await p.evaluate(function () { var x = document.querySelector('#bill-owe a[href^="https://invoice.stripe.com/"]'); return { link: x ? x.getAttribute('href') : null, target: x ? x.target : null, check: !!document.getElementById('bill-stripe-check'), pay: !!document.getElementById('bill-stripe-pay') }; });
+    ok('concord: back from Stripe, the open invoice has its page (a new tab) and I\'ve paid, and never a second Pay with Stripe', b.link === 'https://invoice.stripe.com/i/acct_fixture/in_due' && b.target === '_blank' && b.check && !b.pay, b);
+    await p.click('#bill-stripe-check'); await wait(500);
+    var notYet = await p.$eval('#ows-toast', function (e) { return e.textContent; }).catch(function () { return ''; });
+    ok('concord: I\'ve paid before Stripe has the payment says so', /does not show the payment yet/.test(notYet), notYet);
+    /* the payment lands: the server's record reads paid (what api/_lib/stripe-customer.js settle writes) */
+    var paidRec = Object.assign({}, cc.docs[cc.billPath], { amountDue: 0, amountPaid: 2598, lastPaidAt: new Date().toISOString(), paymentFailedAt: null, paymentProvider: 'stripe', stripeCustomerId: 'cus_concord_fixture', stripeLivemode: true,
+      stripeDue: { invoiceId: 'in_due', marker: cc.org + '/x/129900', amountCents: 129900, dueDate: null, number: 'CS-0001', hostedUrl: 'https://invoice.stripe.com/i/acct_fixture/in_due', state: 'paid', issuedAt: Date.now(), issuedBy: cc.user.email } });
+    cc.docs[cc.billPath] = paidRec; CARD.paid = true; CARD.dueOpen = null;
+    CARD.invoices = [{ id: 'in_due', number: 'CS-0001', status: 'paid', amountDue: 1299, created: Date.now(), hostedUrl: 'https://invoice.stripe.com/i/acct_fixture/in_due', pdfUrl: null }];
+    await p.evaluate(function (a) { window.__firebaseDouble.store.put(a.path, a.rec); }, { path: cc.billPath, rec: paidRec });
+    await p.click('#bill-stripe-check'); await wait(300);
+    await p.waitForFunction(function () { return /nothing is owed/.test((document.getElementById('bill-owe') || {}).textContent || ''); }, null, { timeout: 5000 }).catch(function () {});
+    await p.waitForFunction(function () { return /Visa ending 4242/.test((document.getElementById('bill-card') || {}).textContent || ''); }, null, { timeout: 5000 }).catch(function () {});
+    var c = await billText(p);
+    ok('concord: paid: nothing is owed and the past due date is gone, the plan pays by card through Stripe, the card is on file, and Stripe\'s invoice is in the history', /nothing is owed/.test(c.owe) && !/Next invoice/.test(c.owe) && /By card through Stripe/.test(c.sub) && /Visa ending 4242/.test(c.card) && /Invoices and receipts/.test(c.card) && /CS-0001/.test(c.hist) && !c.check && !c.pay, c);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'concord-billing-paid.png'), fullPage: true });
+    return { posts: CARD.posts.slice() };
+  } });
+  await scenario('concord-billing-phone', concordFx(), { phone: true, url: '/workspace#billing', steps: async function (p) {
+    await p.waitForSelector('#bill-stripe-pay', { timeout: 6000 }).catch(function () {});
+    var a = await billText(p), fit = await p.evaluate(function () {
+      return ['bill-card-add', 'bill-stripe-pay'].map(function (id) { var e = document.getElementById(id), r = e ? e.getBoundingClientRect() : null; return !!r && r.width > 0 && r.left >= 0 && r.right <= window.innerWidth; });
+    });
+    ok('concord on a phone: Add a card with Stripe and Pay $1,299 with Stripe are on the screen, whole', a.add === 'Add a card with Stripe' && a.pay === 'Pay $1,299 with Stripe' && fit.every(Boolean), { a: a, fit: fit });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'concord-billing-phone.png'), fullPage: true });
+    return {};
+  } });
+  var ccm = concordFx('member');
+  await scenario('concord-member', ccm, { url: '/workspace#billing', steps: async function (p) {
+    await p.waitForFunction(function () { return /\$1,299/.test((document.getElementById('bill-owe') || {}).textContent || ''); }, null, { timeout: 6000 }).catch(function () {});
+    await wait(400);
+    var m = await billText(p);
+    ok('concord member: sees what is owed and that an owner or administrator pays it and adds the card through Stripe; no buttons, and the page never asks the server for the card', /\$1,299/.test(m.owe) && /pays it by card through Stripe/.test(m.owe) && /adds the card/.test(m.card) && !m.add && !m.pay && !m.check && CARD.posts.length === 0 && m.inputs === 0, { m: m, posts: CARD.posts });
     return {};
   } });
   /* ══ 5c. EVERY CLICK (Tommy, 2026-09-27: "we need to make sure every click
@@ -751,6 +855,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   await scenario('sweep northstar-phone', FX.northstar(HOST), { phone: true, steps: async function (p) { return sweepAll(p, 'sweep northstar-phone', true); } });
   await scenario('sweep lite', FX.lite(HOST), { steps: async function (p) { return sweepAll(p, 'sweep lite'); } });
   await scenario('sweep pending', FX.pending(HOST), { steps: async function (p) { return sweepAll(p, 'sweep pending'); } });
+  await scenario('sweep concord', concordFx(), { steps: async function (p) { return sweepAll(p, 'sweep concord'); } });
+  CARD.posts = []; CARD.dueOpen = null; CARD.paid = false; CARD.invoices = null;
 
   /* the same sweep on the two pages the workspace sends people to that
      wear its chrome: Projects and the store (Marketplace), as a Standard

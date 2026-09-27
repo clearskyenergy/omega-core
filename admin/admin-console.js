@@ -2810,6 +2810,11 @@ function saveTenantBilling(orgId){
   ref.get().then(function(snap){
     var before=snap.exists?snap.data():{};
     if (before.packaged === true) throw new Error('Use the Package panel for this subscription.');
+    /* A Stripe payment for an earlier figure holds Plan & billing's Pay
+       (stripeDueHold, api/_lib/stripe-customer.js) until ClearSky has looked:
+       saving the amount due here, the same figure included, is that look,
+       and the history row keeps the hold it released. */
+    if (before.stripeDueHold && patch.amountDue !== undefined) patch.stripeDueHold = null;
     var write=Object.assign({}, patch, {
       updatedAt: FV.serverTimestamp(),
       updatedBy: (currentUser && currentUser.email) || 'console'

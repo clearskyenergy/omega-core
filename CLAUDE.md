@@ -263,6 +263,23 @@ engine's own reconcile, so paid means open within seconds; the runner and
 Runbook and what is not built (autopay, instant refund events, tax):
 `docs/PAYMENTS-STRIPE.md`.
 
+Plan & billing's Payment method is **linked to Stripe** (2026-09-27, Tommy:
+"This payment method should be linked to the stripe payment system we built
+with quickbooks. Stripe collects and takes the payment"): `POST
+/api/stripe-customer` on `api/_lib/stripe-customer.js` is the ONE door for
+a workspace's card and, for a plan billed outside the engine (not
+`paymentProvider: 'quickbooks'`), the amount ClearSky set as due. Add a card
+links the legacy tier's own `stripeCustomerId` once (a Stripe TEST key
+only for a `packagingSandbox` workspace, because the one database is
+production's; a binding made in the other mode is never overwritten) and
+opens the portal's add-a-payment-method flow, back to `/workspace#billing`;
+the card is read back from Stripe, never stored. Pay $X with Stripe is one
+`send_invoice` invoice per due date and amount (`metadata.omegaDue`),
+recorded once by the webhook (answered before the tier path) or I've paid;
+`subscriptionDue` stays ClearSky's. A package keeps the engine's rules.
+Stripe → QuickBooks is the Connect to Stripe app, never OMEGA (that would
+book it twice). `scripts/test-stripe-customer.js`.
+
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
 `name`, `shelfLabel` (Core · Add-on · Plus · Advanced · By the piece · Omega
@@ -864,9 +881,10 @@ and the Package tab preselects without them. A request grants and charges
 nothing, so an owner or administrator files one on the ROLE alone (that
 role is only ever written by ClearSky or the workspace's owner, and the
 record says whether the email was verified); pricing, paying, switching on
-and the summary still need a verified email. A legacy plan ClearSky
-invoices reads "Invoiced by ClearSky" on Plan & billing, never "No billing
-account yet". The page never changes billing or grants. Opt-in panels live on
+and the summary still need a verified email. A workspace with a billing
+record never reads "No billing account yet" on Plan & billing: its payment
+method is Stripe's, or QuickBooks' where ClearSky invoices it there. The
+page never changes billing or grants. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
