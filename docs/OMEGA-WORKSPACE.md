@@ -91,10 +91,10 @@ decided 2026-09-26.
   the admin Package tab; the card then reads *Requested* with its price.
   Nothing is charged until the first invoice is confirmed. Self-serve
   conversion of a legacy plan is NOT built (below).
-- **Your modules on the home** (the demo's row): the held modules Live in
-  shelf order, then up to three not held with Opt in, compact cards from
-  the same catalogue and the same rule as the Modules page; "All modules ›"
-  is the page.
+- **The module cards live on Modules, not the home** (Tommy, 2026-09-27:
+  "i love the way the modules are but i dont want them to be taking up so
+  much dashboard space"). The home is the hub, Today, In flight and Around
+  you; `check:workspace` fails if a module card is drawn there.
 - **The login lands on the workspace.** `login.html`'s workspace route and
   a tenant's own host both go to `/workspace`; the workspace sends a
   classic choice (`?home=classic`, `shell: 'classic'`, a partner-type
@@ -104,9 +104,17 @@ decided 2026-09-26.
 - **The way back.** The classic dashboard carries "Open Omega Workspace"
   beside Edit Dashboard and a Home section in Account settings; both are
   `/?home=workspace`, which flips the browser's choice.
-- **Modules** (`#modules`) lists EVERY module of the catalog in shelf
-  order, for every workspace, marked by whether it is used or given
-  (Tommy, 2026-09-27). `OmegaWorkspaceHub.moduleState` is the ONE rule,
+- **Modules** (`#modules`) lists EVERY module of the catalog, for every
+  workspace, marked by whether it is used or given (Tommy, 2026-09-27), in
+  the compact cards that used to sit on the home: **Your modules** (Live,
+  or paid for and waiting on the invoice) first, then **Add to your plan**,
+  each in shelf order on one grid, so a shelf of one never leaves a row
+  empty. A card is the letter on its shelf's colour and its state, the name
+  with its shelf (held) or its price, three things it does, the tools
+  inside as chips, what it needs, then the note with Opt in / Opt out.
+  Every word fits its card: the name wraps and the price drops under it, a
+  chip wraps inside the card; `check:workspace` measures every card from
+  1366px to a 360px phone and fails on anything outside or clipped. `OmegaWorkspaceHub.moduleState` is the ONE rule,
   shared with the marketplace store and pinned by `tworkspacehub.js`: a
   packaged workspace holds what its projection lists; a legacy one holds a
   module when every tool it carries is open on its tier (Omega Logic by the
