@@ -18,6 +18,8 @@
  *     table lists one the editor no longer has (drift either way);
  *   - for any tier, the table and OmegaCaps.canWith predict a command to be
  *     open or closed and the editor disagrees;
+ *   - Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move
+ *     System) are not on Draw, shown and runnable, on every plan;
  *   - Search tools (Ctrl+K) or Ask Jarvis lists or runs a command on a tab
  *     the plan hides, or Jarvis is told of or opens such a tab. They run a
  *     command by clicking it, so they reached what the ribbon did not show.
@@ -139,7 +141,7 @@ async function boot(browser, base, tier, addons) {
     return { leaked: leaked, listed: listed.length, blockedTabs: blockedTabs, jarvisTabs: jarvisTabs, named: hidden.length };
   });
   rows.ran = {};
-  for (var id of ['rb-valuestack', 'rb-compute-cost']) {
+  for (var id of ['rb-valuestack', 'rb-compute-cost', 'rb-trace-boundary']) {
     var before = await page.evaluate(function (id) {
       var el = document.getElementById(id); if (!el) return null;
       window.__ran = false; el.addEventListener('click', function () { window.__ran = true; }, { capture: true, once: true });
@@ -160,6 +162,20 @@ async function boot(browser, base, tier, addons) {
       return { opened: opened, active: active ? active.getAttribute('data-page') : null };
     }, tab);
   }
+  /* Omega Design's drawing tools live on Draw on every plan, where a
+     package puts them, not on the Compute tab a legacy tier below
+     Enterprise hides. Draw is a Pro tab, so Pro is where they are seen. */
+  rows.lite = await page.evaluate(function () {
+    if (window.OmegaMode) OmegaMode.set('pro');
+    window.rbTab('draw');
+    var names = OmegaCommands.list().map(function (c) { return c.name; });
+    return ['rb-trace-boundary', 'rb-fence-tie', 'rb-move-system'].map(function (id) {
+      var el = document.getElementById(id), page = el && el.closest('.ribbon-page'), lbl = el && el.querySelector('.rb-lbl');
+      var name = lbl ? lbl.innerHTML.replace(/<br\s*\/?>/gi, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim() : '';
+      return { id: id, page: page ? page.getAttribute('data-page') : null, shown: !!(el && el.offsetParent && el.getBoundingClientRect().width > 0),
+        open: !!el && OmegaCaps.allowedElement(el), listed: names.indexOf(name) >= 0 };
+    });
+  });
   await context.close();
   rows.shownBlockedTabs = shownBlockedTabs;
   return { rows: rows, errors: errors };
@@ -214,12 +230,14 @@ async function run() {
       /* run by name: Search tools (Ctrl+K) and Ask Jarvis */
       var b = seen[tier].rows.byName, ran = seen[tier].rows.ran, jt = seen[tier].rows.jarvisTab;
       ok(b.listed > 0 && !b.leaked.length, tier + ': Search tools lists nothing from a tab the plan hides (' + b.named + ' hidden)' + (b.leaked.length ? ': ' + b.leaked.slice(0, 8).join('; ') : ''));
-      [['rb-valuestack', 'engineering'], ['rb-compute-cost', 'compute']].forEach(function (c) {
-        var open = C.canWith(plan.tier, c[1], { addons: plan.addons });
+      [['rb-valuestack', 'engineering'], ['rb-compute-cost', 'compute'], ['rb-trace-boundary', '']].forEach(function (c) {
+        var open = !c[1] || C.canWith(plan.tier, c[1], { addons: plan.addons });
         ok(ran[c[0]] === open, tier + ': ' + c[0] + ' (behind ' + c[1] + ') ' + (open ? 'runs' : 'does not run') + ' by name (Search tools, Jarvis): ran=' + ran[c[0]]);
       });
       ok(!b.blockedTabs.some(function (t) { return b.jarvisTabs.indexOf(t) >= 0; }) && b.jarvisTabs.indexOf('home') >= 0,
          tier + ': Jarvis is told only the tabs the plan opens: ' + b.jarvisTabs.join(','));
+      var misplaced = seen[tier].rows.lite.filter(function (l) { return !(l.page === 'draw' && l.shown && l.open && l.listed); });
+      ok(!misplaced.length, tier + ': Trace Boundary, Fence & Tie and Move System sit on Draw, shown in Pro, open and in Search tools' + (misplaced.length ? ': ' + JSON.stringify(misplaced) : ''));
       ['analyze', 'compute'].forEach(function (tab) {
         var open = C.canWith(plan.tier, tab === 'compute' ? 'compute' : 'engineering', { addons: plan.addons });
         ok(jt[tab].opened === open && jt[tab].active === (open ? tab : 'home'),

@@ -54,5 +54,21 @@ M.catalog().forEach(function (m) {
 var chains = [].concat.apply([], M.catalog().map(function (m) { return (m.legacyGates || []).filter(function (g) { return g.indexOf('+') > 0; }); }));
 ok('a chain names the tab first, then the command\'s own cap', chains.every(function (g) { var p = g.split('+'); return p.length === 2 && live[p[0]] && live[p[1]]; }), chains);
 
+/* The Compute tab's mover sends Omega Design's commands to Lite's page on
+   a legacy plan, as a package does: a legacy tier below Enterprise hides
+   the Compute tab, so a Lite command left there is one the plan cannot
+   reach. Its list is held to the catalog, so a Lite command added to the
+   Compute tab's PLAN cannot be stranded there again. */
+var plan = /var PLAN = \{([\s\S]*?)\};/.exec(html), liteList = /var LITE_PAGE = '([a-z]+)', LITE = \[([^\]]*)\];/.exec(html);
+ok('the Compute tab\'s mover names a plan and its Lite list', !!plan && !!liteList);
+if (plan && liteList) {
+  var ids = (plan[1].match(/'[^']+'/g) || []).map(function (q) { return q.slice(1, -1); });
+  var lite = M.get('lite'), owned = ids.filter(function (id) { return lite.ribbon.indexOf('#' + id) >= 0; }).sort();
+  var listed = (liteList[2].match(/'[^']+'/g) || []).map(function (q) { return q.slice(1, -1); }).sort();
+  ok('the mover\'s Lite list is exactly the Compute-tab commands the catalog gives Lite', owned.length === 3 && JSON.stringify(owned) === JSON.stringify(listed), { catalog: owned, mover: listed });
+  ok('and sends them to Lite\'s page in the catalog (' + lite.editorPage + ')', liteList[1] === lite.editorPage, liteList[1]);
+  ok('so no Omega Design command sits behind the Compute tab on a legacy plan', (lite.legacyGates || []).indexOf('compute') < 0, lite.legacyGates);
+}
+
 console.log('tlegacygates: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
