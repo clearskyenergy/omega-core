@@ -259,6 +259,26 @@ engine's own reconcile, so paid means open within seconds; the runner and
 Runbook and what is not built (autopay, instant refund events, tax):
 `docs/PAYMENTS-STRIPE.md`.
 
+Billing review rules (2026-09-27, adversarial review of both rails; each is
+pinned by a test that fails without it): a reversed cycle is superseded by
+a LATER cycle paid in full, and any paid invoice (cycle or add-on) that is
+reversed tells a person once; reconcile READS an invoice issued under an
+earlier price book (only issuing needs the current `VERSION`), pages the
+runner by document id, and keeps a newer verdict over a stale read; the
+runner (`scope()`) bills when either provider is open and live when either
+is live, and `packagedLive` follows the workspace's own provider; under
+`PACKAGING_LIVE=true` a test key is closed, never a sandbox, and a Stripe
+test-mode grant is never honoured. A cancel never leaves a second payable
+invoice beside the first: on Stripe it voids the invoice; on QuickBooks the
+same request the same day revives the cancelled change or add-on on its
+invoice and another id is refused while that invoice is open. A paid
+change or add-on on the billing day waits for the renewal. A package binds
+only its OWN Stripe customer (`legacyStripeCustomerId` keeps the tier's),
+the webhook's tier path never writes to a packaged workspace (it flags an
+old subscription still charging), and a paid package invoice with no OMEGA
+record is answered 500 and flagged, never absorbed. A partial refund stays
+paid with a review; a dispute is decided by its outcome (lost reverses).
+
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
 `name`, `shelfLabel` (Core · Add-on · Plus · Advanced · By the piece · Omega
