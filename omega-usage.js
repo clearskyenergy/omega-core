@@ -62,7 +62,13 @@
         buy.onclick = function () {
           buy.disabled = true; buy.textContent = 'Creating your invoice…';
           api('/api/plan-change', { action: 'pack-quote', meter: meter }).then(function (q) { return api('/api/plan-change', { action: 'pack-buy', meter: meter, previewId: q.previewId, effectiveAt: q.effectiveAt }); })
-            .then(function (r) { buy.remove(); var a = node('a', 'Pay ' + r.display + ' in QuickBooks'); a.href = r.paymentLink; a.target = '_blank'; a.rel = 'noopener'; host.appendChild(a); host.appendChild(node('span', 'The pack is added the moment the payment clears.', 'note')); },
+            .then(function (r) {
+              buy.remove();
+              /* the Stripe card rail: the card on file paid and the pack is on; else our pay link, in this tab */
+              if (r.charged) { host.appendChild(node('span', 'Charged ' + r.display + ' to your card on file. The pack is added.', 'note')); return; }
+              var card = r.rail === 'stripe', a = node('a', 'Pay ' + r.display + (card ? ' by card' : ' in QuickBooks')); a.href = r.paymentLink; if (!card) { a.target = '_blank'; a.rel = 'noopener'; }
+              if (r.paymentLink || !card) host.appendChild(a);
+              host.appendChild(node('span', (r.cardDeclined ? 'Your card on file was declined. ' : '') + 'The pack is added the moment the payment clears.', 'note')); },
               function (e) { buy.disabled = false; buy.textContent = m.pack.display; host.appendChild(node('span', e.message, 'over')); });
         };
         host.appendChild(buy);

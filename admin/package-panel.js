@@ -92,7 +92,7 @@
       head.textContent = '';
       head.appendChild(el('div', (summary.planDisplay || 'Lite') + (summary.monthlyDisplay ? ' · ' + summary.monthlyDisplay : ''), 'pp-plan-name'));
       head.appendChild(el('div', (summary.billingDay ? 'Billed on the ' + ordinal(summary.billingDay) + ' of each month' : 'Billing date follows the original signup day') + (summary.nextInvoiceOn ? ' · next invoice ' + summary.nextInvoiceOn : '') + (summary.packagingState ? ' · ' + summary.packagingState.replace(/_/g, ' ') : ''), 'pp-note'));
-      if (b.paymentLink) { var pay = el('a', 'Pay in QuickBooks', 'pp-pay'); pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; head.appendChild(pay); }
+      if (b.paymentLink) { var byCard = /\/api\/package-pay\?/.test(b.paymentLink), pay = el('a', byCard ? 'Pay by card' : 'Pay in QuickBooks', 'pp-pay'); pay.href = b.paymentLink; if (!byCard) { pay.target = '_blank'; pay.rel = 'noopener'; } head.appendChild(pay); }
     }
     if (data.canManagePackage) pane.appendChild(el('p', 'This is what the customer sees. Actions here are taken on the customer’s behalf and billed to them.', 'pp-note'));
     var pendingHost = el('div'); pane.appendChild(pendingHost);
@@ -112,7 +112,8 @@
         summary.pending.forEach(function (p) {
           var row = el('div', '', 'pp-pending');
           row.appendChild(el('span', (p.names || p.add).join(', ') + ' · ' + p.display + ' · pay before ' + p.expiresOn));
-          if (p.paymentLink) { var a = el('a', 'Pay in QuickBooks', 'pp-pay'); a.href = p.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); }
+          /* the Stripe card rail: our signed pay link opens Stripe's checkout in this tab */
+          if (p.paymentLink) { var card = summary.rail === 'stripe', a = el('a', card ? 'Pay by card' : 'Pay in QuickBooks', 'pp-pay'); a.href = p.paymentLink; if (!card) { a.target = '_blank'; a.rel = 'noopener'; } row.appendChild(a); }
           pendingHost.appendChild(row);
         });
       }
@@ -161,7 +162,13 @@
           var buy = button(m.pack.display, function () {
             buy.disabled = true; buy.textContent = 'Creating your invoice…';
             global.OmegaPackageMenu.api('/api/plan-change', { action: 'pack-quote', meter: m.key }).then(function (q) { return global.OmegaPackageMenu.api('/api/plan-change', { action: 'pack-buy', meter: m.key, previewId: q.previewId, effectiveAt: q.effectiveAt }); })
-              .then(function (r) { buy.remove(); var a = el('a', 'Pay ' + r.display + ' in QuickBooks', 'pp-pay'); a.href = r.paymentLink; a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a); row.appendChild(el('span', 'Added the moment the payment clears; good until ' + r.expiresOn + '.', 'pp-meter-note')); },
+              .then(function (r) {
+                buy.remove();
+                /* the Stripe card rail: the card on file paid and the pack is on; else our pay link, in this tab */
+                if (r.charged) { row.appendChild(el('span', 'Charged ' + r.display + ' to the card on file; the pack is added, good until ' + r.expiresOn + '.', 'pp-meter-note')); return; }
+                var card = r.rail === 'stripe', a = el('a', 'Pay ' + r.display + (card ? ' by card' : ' in QuickBooks'), 'pp-pay'); a.href = r.paymentLink; if (!card) { a.target = '_blank'; a.rel = 'noopener'; }
+                if (r.paymentLink || !card) row.appendChild(a);
+                row.appendChild(el('span', (r.cardDeclined ? 'The card on file was declined. ' : '') + 'Added the moment the payment clears; good until ' + r.expiresOn + '.', 'pp-meter-note')); },
                 function (e) { buy.disabled = false; buy.textContent = m.pack.display; message(e.message, true); });
           }, 'pp-primary'); row.appendChild(buy);
         }

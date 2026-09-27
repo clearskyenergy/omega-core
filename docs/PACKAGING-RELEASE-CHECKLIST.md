@@ -74,7 +74,10 @@ All off by default. Set them in Vercel per environment; never in the repo.
 | `CRON_SECRET` (and the billing runner's own secret, per `api/billing-run.js`) | Preview and Production | the authenticated runners: `/api/logic-worker` (five-minute) and `/api/billing-run` (hourly since 2026-09-26: reconcile, recurring invoices, review, the payment and review mails; ten workspaces a tick, the cursor carrying on) |
 | `TENANT_WILDCARD_LIVE=true` | Production, only once `*.clearskyomega.com` is attached on Vercel and its DNS record exists | until then every link, redirect and mail sends a person to the open host `silmarillion.clearskyomega.com` (`api/_lib/kit.js` `home()`, the one rule) and the slug host stays reserved on the record. Off by default: the wildcard does not exist today (WHITE-LABEL.md) |
 | `SUPPORT_EMAIL` | Production | the address in the mail footer (`api/_lib/mail.js`); the refusal screen's twin in `omega-tenant.js` is a literal, change both. Default `dev@clearsky-usa.com`, the mailbox that exists; csebuilders.com is retired |
-| existing Firebase Admin and QuickBooks credentials | as today | no new OAuth scope; Step B (saved card) stays off |
+| `PACKAGING_RAIL=stripe` | Preview first; Production only through the *Card rail* block in §6 | optional, literal. Every workspace signed up or activated from then on pays by card on Stripe's hosted Checkout, card kept on file for renewals, additions and packs (`api/_lib/packaging-mode.js` `rail()`). Unset or anything else: QuickBooks invoices, the default. The rail is fixed on a workspace when it starts, so turning this off moves nobody back; the two variables below stay while any card workspace exists |
+| `STRIPE_PACKAGING_SECRET_KEY` | Preview: a test key; Production: a live key | the Stripe rail's key (`stripeKey()`): only `sk_test_`/`rk_test_` in SANDBOX, only `sk_live_`/`rk_live_` in LIVE; a key of the other mode is no key and card payments refuse to start. Unset, the shared `STRIPE_SECRET_KEY` is used when its mode agrees. It also keys the pay-link signatures: rolling it invalidates every pay link already issued |
+| `STRIPE_PACKAGING_WEBHOOK_SECRET` | the environment whose host the endpoint names, one per Stripe mode | the signing secret of `https://<host>/api/package-stripe-webhook`, registered in that Stripe mode with the seven events in the endpoint's header; without it the endpoint refuses every event (503). Not `STRIPE_WEBHOOK_SECRET`, which belongs to the legacy `/api/stripe-webhook` |
+| existing Firebase Admin and QuickBooks credentials | as today | no new OAuth scope; Step B (a saved card through QuickBooks Payments) stays off; a saved card exists only on the Stripe rail |
 
 In sandbox mode a tenant takes part only when its `omega_orgs/{org}`
 record carries `packagingSandbox: true` (signup writes it in Preview);
@@ -198,6 +201,24 @@ the audit rows it writes.
       invoice is in the production company, "I've paid" opens the
       workspace with the package bought. Then refund the payment and void
       the invoice in QuickBooks; the runner marks the record reversed.
+- [ ] **Card rail (optional; only if card payments are wanted).** First the
+      same proof on Preview in test mode (card `4242 4242 4242 4242`). Then,
+      with the book enabled, the Production variables in and the QuickBooks
+      signup above passed: `docs/PAYMENTS-BROWSER-SETUP.md` Part 4 in live
+      mode. The Stripe account activated; `STRIPE_PACKAGING_SECRET_KEY`
+      (a live key) and `STRIPE_PACKAGING_WEBHOOK_SECRET` (the live endpoint
+      `https://silmarillion.clearskyomega.com/api/package-stripe-webhook`,
+      its seven events) in Production; one signed test event answered `200`
+      *ignored*; Stripe's customer emails off; then `PACKAGING_RAIL=stripe`
+      and redeploy. Prove it with one real card payment by ClearSky (a
+      company on a ClearSky-controlled domain): the pay step opens Stripe
+      Checkout, the payer comes back to Plan & billing with the workspace
+      open and the card on file, ClearSky's `paidAlert` says *by card
+      (Stripe)*, and after the Connect to Stripe app's next sync QuickBooks
+      holds a sales receipt for it and no OMEGA invoice. Then refund the
+      whole payment in Stripe and confirm the record reads `reversed` (the
+      `charge.refunded` event settles it at once; the hourly runner finds it
+      otherwise).
 - [ ] Existing tenants one at a time: `packagingSandbox` is **not** the
       production gate — production packaging follows the backfilled
       `modules[]` per tenant; cut over a tenant by writing its package from
@@ -210,7 +231,8 @@ the audit rows it writes.
 ## 7. Debt carried into the release (not blocking the merge, blocking "done")
 
 - Step B (saved card, instant charge) needs the QuickBooks Payments
-  permission on a reconnect (Tommy); pay-first uses the invoice link.
+  permission on a reconnect (Tommy); pay-first uses the invoice link. Both
+  exist on the Stripe rail (`PACKAGING_RAIL=stripe`, §2 and §6).
 - A cancelled change does not void its QuickBooks invoice; removals are
   recorded, not executed; annual and Enterprise changes are quoted by staff.
 - Permitting matrices are priced but not counted (no producer); storage

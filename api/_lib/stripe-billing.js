@@ -126,7 +126,7 @@ function lineItems(record) {
   var description = lines.map(function (l) { return l.name + ' ' + (l.amountCents < 0 ? '−' + money(-l.amountCents) : money(l.amountCents)); }).join('; ').slice(0, 500);
   return [{ quantity: 1, price_data: { currency: 'usd', unit_amount: record.totalCents, product_data: { name: (name + span).slice(0, 250), description: description || undefined } } }];
 }
-var CONSENT = 'Your card is kept on file for this workspace: its subscription is charged on the billing date, and any module or pack you confirm is charged when you confirm it. Change or remove the card from Plan & billing.';
+var CONSENT = 'Your card is kept on file for this workspace: its subscription is charged on the billing date, and any module or pack you confirm is charged when you confirm it. Paying an invoice with another card makes that card the one on file; to remove it, ask ClearSky.';
 
 function driver(book, supplied) {
   async function customer(orgId, profile, existingId) {
@@ -282,7 +282,7 @@ async function keepCard(db, x, pi, s) {
   if (!pmId) return;
   await call(function () { return s.customers.update(x.record.stripe.customerId, { invoice_settings: { default_payment_method: pmId } }, { idempotencyKey: key('omega-package-default-card:' + x.record.stripe.customerId + ':' + pmId) }); });
   var card = pm && pm.card ? { brand: pm.card.brand || null, last4: pm.card.last4 || null, expMonth: pm.card.exp_month || null, expYear: pm.card.exp_year || null } : null;
-  await x.current.set({ stripe: { cardOnFile: true, card: card, cardSavedAt: Date.now() } }, { merge: true });
+  await x.current.update({ 'stripe.cardOnFile': true, 'stripe.card': card, 'stripe.cardSavedAt': Date.now() });
 }
 async function settle(db, org, recordId, now, supplied) {
   var S = require('./package-billing'), out = await S.reconcile(db, org, now, supplied ? { stripe: supplied } : undefined, { only: recordId });

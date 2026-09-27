@@ -229,6 +229,36 @@ whose version ends in `-proposed` is never production; sign-off is renaming
 (the live runner's query). The card button on a QuickBooks invoice is
 QuickBooks Payments, not Stripe: `docs/PAYMENTS-BROWSER-SETUP.md`.
 
+Stripe rail (2026-09-27): **card on the spot, behind one switch** (Tommy:
+"charge people on the spot with Stripe"). `api/_lib/stripe-billing.js` is a
+second driver beside QuickBooks' (the same customer / invoice / reconcile /
+guard), so the engine keeps ONE paid transition and ONE access rule.
+**Off by default:** `packaging-mode.js`
+`rail()` is `'stripe'` only under `PACKAGING_RAIL=stripe`, literal; anything
+else keeps QuickBooks invoices. The rail is fixed on a workspace when it
+starts (`billing/current.billingProvider`) and each invoice record names the
+rail that issued it, so turning the switch off moves nobody back.
+`stripeKey()` is `STRIPE_PACKAGING_SECRET_KEY`, else `STRIPE_SECRET_KEY`: a
+test key only in SANDBOX, a live key only in LIVE, a key of the other mode
+is no key (`stripeModeOk()` holds events to the same). **One rail per
+charge:** a card-paid record has NO OMEGA QuickBooks invoice, because
+Stripe's QuickBooks app books the payment as a sales receipt; an invoice
+beside it would count the revenue twice. The pay link is ours —
+`/api/package-pay?o=&r=&s=`, signed, durable, mailable — and opens hosted
+Checkout for that one record (card only, saved off-session; card data never
+touches OMEGA); Checkout returns to the same path with `&cs=`, which
+re-reads the session, keeps the card, settles that record and sends the
+payer to `/workspace?checkout=done#billing` on `kit.js` `home()`. Events go
+to their own endpoint, `/api/package-stripe-webhook`
+(`STRIPE_PACKAGING_WEBHOOK_SECRET`), a hint that is re-read from Stripe.
+Namespace: metadata `kind: 'omega-package'` + `org`, never `orgId`; the
+customer at `billing/current.stripe.customerId`, never the top-level
+`stripeCustomerId`. Renewals, confirmed additions and packs charge the card
+on file at once; a decline (or a bank asking for the cardholder) falls back
+to the pay link. The legacy `/api/stripe-webhook` never applies anything to
+a packaged workspace, and `stripe-create` refuses one. Turning it on:
+`docs/PAYMENTS-BROWSER-SETUP.md` Part 4.
+
 Packaged editor presentation uses the server catalog through OmegaCaps;
 OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
 The shared omega-package-menu.js renders catalog features and server-formatted

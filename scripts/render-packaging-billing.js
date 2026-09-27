@@ -13,13 +13,15 @@ var R = require('../api/_lib/proration'), P = require('../api/_lib/subscription-
    are computed by the same library, never a figure copied from one day. */
 var CYCLE = R.cycle(R.iso(Date.now()), 20);
 
-var fixture, org, profile, db, caller, invoices = 0, checks = 0, shots = 0, qbo = { paid: false };
+var fixture, org, profile, db, caller, invoices = 0, checks = 0, shots = 0, qbo = { paid: false }, cardInvoices = 0, paymentLooks = 0;
 var root = path.join(__dirname, '..'), out = path.join(root, 'docs/screenshots/packaging-phase-4'), out5 = path.join(root, 'docs/screenshots/packaging-phase-5'), out7 = path.join(root, 'docs/screenshots/packaging-phase-7'), out10 = path.join(root, 'docs/screenshots/packaging-phase-10a');
 H.mockAdmin(function () { return db; }, function () { return caller; });
 fixture = require('./_lib/logic-fixtures'); org = fixture.ORG;
 profile = H.profile(org, fixture.brand.companyName);
 F.mock('../api/_lib/mail', { templates: { signupReceived: async function () {}, signupAlert: async function () {} } });
 H.mockQbo(function () { invoices++; }, qbo);
+/* the Stripe card rail's driver: only the card pay-now scenario sets PACKAGING_RAIL=stripe, so only it reaches this */
+H.mockStripe(function () { cardInvoices++; });
 var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change'), '/api/subscription-proposal': require('../api/subscription-proposal'), '/api/usage': require('../api/usage'), '/api/offerings': require('../api/offerings') };
 /* Phase 5: a tenant whose current cycle is already paid, seen by its owner. */
 function seedPaid(keys, plan, staff) { seed(keys, staff); H.seedPaidTenant(db, { org: org, keys: keys, plan: plan }); }
@@ -35,6 +37,7 @@ var server = http.createServer(async function (req, res) {
   try {
     var url = new URL(req.url, 'http://localhost');
     if (routes[url.pathname]) { var chunks = []; for await (var chunk of req) chunks.push(chunk); var body = chunks.length ? JSON.parse(Buffer.concat(chunks)) : {};
+      if (url.pathname === '/api/tenant-signup' && body.action === 'check-payment') paymentLooks++;
       var result = await routes[url.pathname]({ method: req.method, headers: req.headers, query: Object.fromEntries(url.searchParams), body: body }, res); res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify(result)); }
     if (url.pathname === '/api/tenant-systems') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ name: 'Clean Cell · fixture', surfaces: [] })); }
     if (url.pathname === '/config.js') return res.end('window.CLEARSKY_CONFIG={firebase:{}};');
@@ -168,6 +171,39 @@ async function run() {
     var paidBill = db.data.get('omega_orgs/paynow-fixture.example/billing/current');
     check(paidBill.packagingState === 'paid' && paidBill.modules.join() === 'lite,gridatlas' && paidBill.amountDue === 0 && new URL(pp10.url()).hostname === 'silmarillion.clearskyomega.com', 'paid: the package bought is switched on and the page opens the workspace on the open host (the slug host ' + payOrg.domains[0] + ' is reserved until the wildcard serves)');
     check(payErrors.length === 0, payErrors.join('\n')); await payCtx.close(); qbo.paid = false;
+    /* The Stripe CARD RAIL (PACKAGING_RAIL=stripe, 2026-09-27): the same form
+       and the same engine, the first invoice on Stripe. The pay step is one
+       button, "Pay <amount> by card", to OUR signed link (/api/package-pay)
+       in the SAME tab: Stripe's checkout comes back to the workspace, which
+       the server has settled by then, so there is no "I've paid" and no look
+       every eight seconds. */
+    process.env.PACKAGING_RAIL = 'stripe';
+    try {
+      seed(['lite'], false); caller.email = 'owner@cardnow-fixture.example'; caller.orgId = 'cardnow-fixture.example'; caller.uid = 'cardnow';
+      var cardInv = cardInvoices, qbInv = invoices, looks = paymentLooks;
+      var cardCtx = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(cardCtx, base); var cp10 = await cardCtx.newPage(), cardErrors = []; cp10.on('pageerror', function (e) { cardErrors.push(e.message); });
+      await cp10.goto(base + '/start.html?modules=lite,gridatlas'); await cp10.evaluate(function () { window.dispatchEvent(new CustomEvent('omega:hub', { detail: {} })); });
+      await cp10.locator('#f-submit:not([disabled])').waitFor(); await cp10.locator('#f-name').fill('Card Now Fixture'); await cp10.locator('#f-submit').click();
+      await cp10.locator('#step-discovery').waitFor({ state: 'visible' }); await cp10.locator('#discovery-continue').click(); await cp10.locator('#step-billing').waitFor({ state: 'visible' });
+      for (var pairC of [['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await cp10.locator('[data-profile-field="' + pairC[0] + '"]').fill(pairC[1]);
+      await cp10.locator('#billing-continue').click(); await cp10.locator('#step-build').waitFor({ state: 'visible' });
+      await cp10.waitForFunction(function () { return /^\$[\d,]+\/month$/.test(document.getElementById('signup-package-price').textContent); });
+      await cp10.locator('#billing-pay').click(); await cp10.locator('#step-pay').waitFor({ state: 'visible' });
+      var cardBill = db.data.get('omega_orgs/cardnow-fixture.example/billing/current'), recPath = 'omega_orgs/cardnow-fixture.example/billing/current/invoices/';
+      var cardRecs = Array.from(db.data.keys()).filter(function (k) { return k.indexOf(recPath) === 0 && k.slice(recPath.length).indexOf('/') < 0; }).map(function (k) { return db.data.get(k); });
+      check(cardBill.billingProvider === 'stripe' && cardBill.paymentProvider === 'stripe-checkout' && cardBill.packagingState === 'awaiting_payment' && cardInvoices === cardInv + 1 && invoices === qbInv, 'card rail: the workspace pays by card, one Stripe invoice and no QuickBooks invoice');
+      check(cardRecs.length === 1 && cardRecs[0].provider === 'stripe' && /^stp_/.test(cardRecs[0].stripeRef || '') && !cardRecs[0].qboInvoiceId && cardRecs[0].state === 'unpaid', 'card rail: the first invoice record is the Stripe rail\u2019s, unpaid: ' + JSON.stringify(cardRecs.map(function (r) { return { provider: r.provider, ref: r.stripeRef, qbo: r.qboInvoiceId, state: r.state }; })));
+      var link = cp10.locator('#pay-link'), href = await link.getAttribute('href'), amount = P.money(Math.round((cardBill.amountDue || 0) * 100));
+      check(new RegExp('^https://silmarillion\\.clearskyomega\\.com/api/package-pay\\?o=cardnow-fixture\\.example&r=[^&]+&s=[a-f0-9]{40}$').test(href || '') && href === cardBill.paymentLink, 'card rail: the pay step carries OUR signed pay link, the one on the record: ' + href);
+      check((await link.textContent()).trim() === 'Pay ' + amount + ' by card' && (await link.getAttribute('target')) === null, 'card rail: one primary button, "Pay ' + amount + ' by card", in the same tab: ' + (await link.textContent()) + ' / target ' + (await link.getAttribute('target')));
+      check(!(await cp10.locator('#pay-check').isVisible()) && /kept on file for your renewals/.test(await cp10.locator('#pay-status').textContent()) && !/QuickBooks/.test(await cp10.locator('#step-pay').textContent()), 'card rail: no "I\u2019ve paid", the card is kept on file for renewals, and no QuickBooks word on the pay step');
+      await cp10.waitForTimeout(8800);
+      check(paymentLooks === looks, 'card rail: no look every eight seconds (' + (paymentLooks - looks) + ' check-payment calls)');
+      var tabs = cardCtx.pages().length;
+      await Promise.all([cp10.waitForURL(function (u) { return u.hostname === 'silmarillion.clearskyomega.com'; }, { timeout: 5000 }), link.click()]);
+      check(new URL(cp10.url()).pathname === '/api/package-pay' && cardCtx.pages().length === tabs, 'card rail: Pay by card follows the link in the same tab (Stripe\u2019s checkout stands behind it): ' + cp10.url());
+      check(cardErrors.length === 0, cardErrors.join('\n')); await cardCtx.close();
+    } finally { delete process.env.PACKAGING_RAIL; }
     /* Phase 10A: the public price list, from the same book, on a desktop and a phone. */
     for (var theme10 of ['light', 'dark']) {
       seed(['lite'], false); var offCtx = await browser.newContext({ viewport: { width: theme10 === 'light' ? 1280 : 390, height: 960 }, colorScheme: theme10 }); await offCtx.route('**/*', function (r) { return r.request().url().startsWith(base) ? r.continue() : r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); });

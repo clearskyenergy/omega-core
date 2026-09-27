@@ -22,6 +22,15 @@
     }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Request refused'); if (global.firebase.auth().currentUser !== user) throw new Error('Account changed'); return j; }); });
   }
   function link(href, text) { var a = node('a', text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; }
+  /* The Stripe card rail (2026-09-27): our own signed pay link
+     (/api/package-pay) opens Stripe's checkout in THIS tab and Stripe sends
+     the payer back to Plan & billing, settled; QuickBooks' page keeps its
+     new tab. */
+  function ownPay(href) { return /^https:\/\/[^\/?#]+\/api\/package-pay\?/.test(String(href || '')); }
+  function payButton(href, text) { var a = node('a', text, 'opm-primary opm-pay'); a.href = href; a.setAttribute('data-pay', 'card'); return a; }
+  /* what a card change said (charged, declined, ready to pay), kept for the
+     module's control when the page redraws it after the change */
+  var said = {};
   function button(text, fn, cls) { var b = node('button', text, cls); b.type = 'button'; b.onclick = fn; return b; }
   function removalControl(target, m, state) {
     if (m.key === 'lite') { target.appendChild(node('p', 'Lite is the baseline and is always included.', 'opm-note')); return; }
@@ -69,12 +78,13 @@
      { moduleKey: pendingChange }, onChanged(result), actor }. */
   function subscribeControl(host, m, state) {
     host.textContent = ''; host.className = 'opm-act'; host.setAttribute('data-subscribe', m.key);
+    if (said[m.key]) { if (host.closest && host.closest('[data-module-card]')) host.appendChild(node('p', said[m.key].text, said[m.key].cls)); delete said[m.key]; }
     if (m.key === 'lite' || state.owned || ((state.summary || {}).subscription || []).indexOf(m.key) >= 0) { removalControl(host, m, state); return; }
     var pendingChange = state.pending && state.pending[m.key];
     if (!state.canManage) { host.appendChild(node('p', 'Ask your workspace administrator to add this module.', 'opm-note')); return; }
     if (pendingChange) {
       host.appendChild(node('p', 'Waiting for payment · ' + pendingChange.display + ' · expires ' + pendingChange.expiresOn, 'opm-wait'));
-      if (pendingChange.paymentLink) host.appendChild(link(pendingChange.paymentLink, 'Pay in QuickBooks'));
+      if (pendingChange.paymentLink) host.appendChild(ownPay(pendingChange.paymentLink) ? payButton(pendingChange.paymentLink, 'Pay ' + pendingChange.display + ' by card') : link(pendingChange.paymentLink, 'Pay in QuickBooks'));
       host.appendChild(button('Cancel request', function () {
         host.textContent = 'Cancelling…';
         api('/api/plan-change', { action: 'cancel', changeId: pendingChange.id }).then(function (r) { if (state.onChanged) state.onChanged(r); }, function (e) { host.textContent = e.message; });
@@ -94,11 +104,19 @@
         if (!q.canApply) { host.appendChild(node('p', q.reason, 'opm-reason')); host.appendChild(button('Close', function () { subscribeControl(host, m, state); })); return; }
         var row = node('div', '', 'opm-row');
         row.appendChild(button(q.included ? 'Turn it on' : 'Subscribe and pay', function () {
-          host.textContent = q.included ? 'Turning it on…' : 'Creating your invoice…';
+          host.textContent = q.included ? 'Turning it on…' : q.rail === 'stripe' ? (q.cardOnFile ? 'Charging your ' + q.cardOnFile + '…' : 'Preparing your card payment…') : 'Creating your invoice…';
           var body = { action: 'apply', add: [m.key], previewId: q.previewId, effectiveAt: q.effectiveAt }; if (plan) body.plan = plan;
           api('/api/plan-change', body).then(function (r) {
             host.textContent = '';
-            if (r.state === 'active') host.appendChild(node('p', 'Added. Your tools are updating…', 'opm-quote'));
+            /* the card on file paid: the modules are on already (the server settled it in the same request) */
+            if (r.charged) { said[m.key] = { text: 'Switched on. Charged ' + r.display + ' to ' + (r.card || 'your card on file') + '.', cls: 'opm-quote' }; host.appendChild(node('p', said[m.key].text, said[m.key].cls)); }
+            else if (r.state === 'active') host.appendChild(node('p', 'Added. Your tools are updating…', 'opm-quote'));
+            else if (r.rail === 'stripe' || ownPay(r.paymentLink)) {
+              said[m.key] = r.cardDeclined ? { text: 'Your card on file was declined, so nothing was charged. Pay ' + r.display + ' by card to switch it on; pay before ' + r.expiresOn + '.', cls: 'opm-reason' }
+                : { text: 'Ready to pay: ' + r.display + ' by card. It switches on the moment the payment clears; pay before ' + r.expiresOn + '.', cls: 'opm-wait' };
+              host.appendChild(node('p', said[m.key].text, said[m.key].cls));
+              if (r.paymentLink) host.appendChild(payButton(r.paymentLink, 'Pay ' + r.display + ' by card'));
+            }
             else { host.appendChild(node('p', 'Invoice created: ' + r.display + '. It switches on when the payment clears; pay before ' + r.expiresOn + '.', 'opm-wait')); if (r.paymentLink) host.appendChild(link(r.paymentLink, 'Pay in QuickBooks')); }
             if (state.onChanged) state.onChanged(r);
           }, function (e) { host.textContent = ''; host.appendChild(node('p', e.message, 'opm-reason')); host.appendChild(button('Try again', function () { subscribeControl(host, m, state); })); });
@@ -213,7 +231,8 @@
       '.opm-icon{display:inline-flex;width:30px;height:30px;border-radius:7px;align-items:center;justify-content:center;background:var(--opm-sunk);color:var(--opm-blue);font-weight:700}' +
       '.opm-act{margin-top:10px;display:grid;gap:6px}.opm-act p{margin:0}.opm-quote{font-weight:600}.opm-wait{font-weight:600;color:var(--opm-blue)}.opm-reason{color:#B45F06;font-size:12px}' +
       '.opm-row{display:flex;flex-wrap:wrap;gap:6px}.opm-act button{font:500 13px system-ui;padding:7px 12px;border:1px solid var(--opm-border);border-radius:6px;background:var(--opm-surface);color:var(--opm-text);cursor:pointer}' +
-      '.opm-act .opm-primary{background:var(--opm-blue);color:#fff;border-color:var(--opm-blue)}.opm-act a{color:var(--opm-blue)}';
+      '.opm-act .opm-primary{background:var(--opm-blue);color:#fff;border-color:var(--opm-blue)}.opm-act a{color:var(--opm-blue)}' +
+      '.opm-act a.opm-pay{display:inline-block;justify-self:start;font:500 13px system-ui;padding:7px 12px;border:1px solid var(--opm-blue);border-radius:6px;background:var(--opm-blue);color:#fff;text-decoration:none}';
     document.head.appendChild(style);
   }
   function tab() {

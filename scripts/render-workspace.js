@@ -24,8 +24,12 @@
    approval is pending), the side panel opening from a hub cell, Customize
    saving only to the person's own layout record, the phone rail; and the
    FLOW: the projects and marketplace pages wearing the workspace rail and
-   the dashboard sending a workspace-home visit on. Not on the npm test
-   chain: needs the pre-installed Chromium.
+   the dashboard sending a workspace-home visit on; and the STRIPE CARD RAIL
+   on the real plan-change engine (a first invoice paid by card through our
+   /api/package-pay link in the same tab, the ?checkout=done landing on the
+   workspace and on the classic home, a module charged to the card on file
+   and one the bank declines). Not on the npm test chain: needs the
+   pre-installed Chromium.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var fs = require('fs'), path = require('path'), http = require('http'), os = require('os');
@@ -70,13 +74,69 @@ function storeRoute(u, method, body) {
   return { error: 'render-workspace does not answer ' + body.action };
 }
 var STAFF_CALLER = false;
+/* THE STRIPE CARD RAIL (2026-09-27), on the REAL engine. A card scenario
+   answers /api/plan-change and /api/package-access from the real libraries
+   (api/_lib/plan-change.js, api/_lib/package-access.js) over an in-memory
+   Firestore seeded with the scenario's own records and the enabled sandbox
+   book, so the words, the rail, the card on file and the pay links the page
+   shows are the server's own. Stripe itself is a DOUBLE of the driver
+   (api/_lib/stripe-billing.js driver(): customer / invoice / reconcile):
+   `CARD.charge` says what the card on file does ('succeeded' | 'failed'),
+   and the pay link is our signed /api/package-pay shape. Nothing is sent to
+   Stripe, and no mail leaves (the mailer is a double too). */
+var C = require('../api/_lib/plan-change'), SB = require('../api/_lib/stripe-billing'), XA = require('../api/_lib/package-access'), FDB = require('./_lib/firestore-double');
+var CARD = null, CARD_ORIGINAL = { driver: SB.driver, close: SB.close }, CARD_ENV = {};
+var CARD_MAIL = { sent: [], templates: new Proxy({}, { get: function (t, name) { return async function (o) { CARD_MAIL.sent.push(String(name)); return { ok: true }; }; } }) };
+function cardDriver() {
+  return { guard: function () {}, customer: async function (orgId) { return 'cus_fixture' + orgId.split('.')[0]; },
+    invoice: async function (plan, profile, customerId, opts) {
+      var cents = plan.totalCents || (plan.lines || []).reduce(function (n, l) { return n + l.amountCents; }, 0), n = ++CARD.charges;
+      return { id: SB.refOf(plan.marker), totalCents: cents, payLinkMissing: false, provider: 'stripe',
+        payUrl: 'https://' + opts.host + '/api/package-pay?o=' + encodeURIComponent(opts.org) + '&r=' + encodeURIComponent(opts.recordId) + '&s=' + ('0123456789abcdef'.repeat(3)).slice(0, 40),
+        charge: CARD.charge ? { paymentIntentId: 'pi_fixture' + n, status: CARD.charge, code: CARD.charge === 'failed' ? 'card_declined' : null } : null };
+    },
+    reconcile: async function (record) { var paid = !!(record.stripe && (record.stripe.paymentIntents || []).length); return { satisfied: paid, reversed: false, paidCents: paid ? record.totalCents : 0, payUrl: record.paymentLink || null, review: null }; } };
+}
+function cardStart(fx, charge) {
+  var db = new FDB.DB(); db.serial = true; var book = BOOK.proposed(); book.enabled = true; book.qbo.realmId = 'fixture'; db.seed('pricebook/' + book.version, book);
+  Object.keys(fx.docs).forEach(function (k) { if (/^omega_orgs\//.test(k)) db.seed(k, JSON.parse(JSON.stringify(fx.docs[k]))); });
+  ['PACKAGING_BILLING_ENABLED', 'QBO_ENV'].forEach(function (k) { CARD_ENV[k] = process.env[k]; });
+  process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
+  SB.driver = function () { return cardDriver(); }; SB.close = async function () {};
+  CARD = { db: db, org: fx.org, charge: charge || null, charges: 0, posts: [], visits: [], caller: { staff: false, uid: fx.user.uid, email: fx.user.email, orgId: fx.org, role: 'owner', claims: { email_verified: true } } };
+}
+function cardStop() {
+  Object.keys(CARD_ENV).forEach(function (k) { if (CARD_ENV[k] === undefined) delete process.env[k]; else process.env[k] = CARD_ENV[k]; });
+  SB.driver = CARD_ORIGINAL.driver; SB.close = CARD_ORIGINAL.close; CARD = null;
+}
+function cardBilling() { return CARD.db.data.get('omega_orgs/' + CARD.org + '/billing/current') || {}; }
+function cardView() {
+  var root = 'omega_orgs/' + CARD.org, member = Object.keys(CURRENT_FX.docs).filter(function (k) { return k.indexOf(root + '/members/') === 0; }).map(function (k) { return CURRENT_FX.docs[k]; })[0];
+  return XA.project({ staff: false, claims: { email_verified: true } }, cardBilling(), CARD.db.data.get(root), member, Date.now());
+}
+function cardRoute(method, body) {
+  var now = Date.now();
+  if (method === 'GET') return C.summary(CARD.db, CARD.org);
+  CARD.posts.push(body);
+  if (body.action === 'quote') return C.preview(CARD.db, CARD.org, body, now);
+  if (body.action === 'apply') return C.apply(CARD.db, CARD.org, body, CARD.caller, now, { mail: CARD_MAIL });
+  if (body.action === 'cancel') return C.cancel(CARD.db, CARD.org, body.changeId, CARD.caller, now);
+  if (body.action === 'reconcile-now') return C.reconcileNow(CARD.db, CARD.org, CARD.caller, now, { mail: CARD_MAIL });
+  return Promise.reject(new Error('render-workspace does not answer plan-change ' + body.action));
+}
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], post = req.method === 'POST';
   function json(o, status) { res.writeHead(status || 200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); }
   if (u.indexOf('/api/') === 0) {
     apiCalls.push(req.method + ' ' + u);
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
-    if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
+    if (u === '/api/package-access' && !post) return json(CARD ? cardView() : PACKAGE_VIEW || { packaged: false });
+    if (u === '/api/plan-change' && CARD) {
+      var cc = []; req.on('data', function (c) { cc.push(c); }); req.on('end', function () {
+        var body = {}; try { body = cc.length ? JSON.parse(Buffer.concat(cc).toString()) : {}; } catch (e) {}
+        Promise.resolve().then(function () { return cardRoute(req.method, body); }).then(function (j) { json(j); }, function (e) { if (!e.status || e.status >= 500) missing.push(req.method + ' /api/plan-change ' + (body.action || '') + ': ' + e.message); json({ error: e.message }, e.status || 500); });
+      }); return;
+    }
     if (u === '/api/offerings' && !post) return json(OFFERINGS.view(BOOK.proposed(), 'proposed'));
     if (u === '/api/pulse' && !post) { var PL = require('../api/_lib/pulse'), nowP = Date.now(); return json(PL.build({ projects: [{ updatedAt: nowP - 3600e3, stage: 'candidate', bessKwh: 2000, bessKw: 1000, orgId: 'a' }, { updatedAt: nowP - 86400e3, stage: 'finance', bessKwh: 4000, bessKw: 1000, orgId: 'b' }, { updatedAt: nowP - 9 * 86400e3, stage: 'online', orgId: 'a' }], rfqs: [{ createdAt: nowP - 7200e3 }], members: [{ lastSeen: nowP - 60e3 }, { lastSeen: nowP - 40 * 86400e3 }] }, nowP, { projects: 500, rfqs: 500, members: 500 })); }
     if (u === '/api/package-access' && post) {
@@ -120,6 +180,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       var url = r.request().url();
       if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '/* firebase is scripts/_lib/firebase-double.js here */' });
       if (/fonts\.(googleapis|gstatic)\.com/.test(url)) return r.fulfill({ status: 200, contentType: 'text/css', body: '' });
+      /* the card rail's pay link: a stand-in for Stripe's checkout, so following it can be watched */
+      if (CARD && /^https:\/\/[^/]+\/api\/package-pay\?/.test(url)) { CARD.visits.push(url); return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><meta charset="utf-8"><title>Checkout</title><p>Stripe checkout stands in here.</p>' }); }
       external.push(name + ': ' + url.slice(0, 120)); return r.abort();
     });
     await ctx.addInitScript(DOUBLE_SRC);
@@ -431,6 +493,115 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('legacy Enterprise: the request can be dismissed without sending', await p.locator('#omega-package-menu').count() === 0);
     return {};
   } });
+  /* ══ 5c. THE STRIPE CARD RAIL — awaiting the first payment by card ══
+     The server says rail 'stripe': every pay button reads "Pay by card" and
+     is OUR signed link (/api/package-pay), followed in the SAME tab (Stripe's
+     checkout comes back to Plan & billing); no QuickBooks word on the page. */
+  var fxBeforeCard = CURRENT_FX, ca = FX.cardAwaiting(HOST); cardStart(ca);
+  function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms || 6000 }).then(function () { return true; }, function () { return false; }); }
+  await scenario('card-awaiting', ca, { url: '/workspace#billing', steps: async function (p) {
+    await p.waitForFunction(function () { return /Pay by card/.test((document.getElementById('bill-owe') || {}).textContent || '') && /\$2,250/.test((document.getElementById('bill-owe') || {}).textContent || ''); }, null, { timeout: 6000 }).catch(function () {});
+    var cb = await p.evaluate(function () {
+      function a(el) { return el ? { text: el.textContent.trim(), href: el.getAttribute('href'), target: el.getAttribute('target') } : null; }
+      var body = document.getElementById('billing-body');
+      return { view: document.getElementById('content').getAttribute('data-view'), notice: a(document.querySelector('#ows-notice a')), owe: a(document.querySelector('#bill-owe .acts a')),
+        links: Array.prototype.map.call(body.querySelectorAll('a[href*="/api/package-pay"]'), a), text: body.textContent.replace(/\s+/g, ' '), card: (document.getElementById('bill-card') || {}).textContent || '' };
+    });
+    ok('card-awaiting: #billing opens Plan & billing', cb.view === 'billing', cb.view);
+    ok('card-awaiting: the read-only notice pays by card through our signed link, in the same tab', !!cb.notice && cb.notice.text === 'Pay by card' && cb.notice.href === ca.payLink && cb.notice.target === null, cb.notice);
+    ok('card-awaiting: What you owe says the amount and offers "Pay by card" to /api/package-pay, no new tab', !!cb.owe && cb.owe.text === 'Pay by card' && cb.owe.href === ca.payLink && cb.owe.target === null && /\$2,250/.test(cb.text), cb.owe);
+    ok('card-awaiting: every pay link on the page is ours, reads "Pay by card" and stays in the tab', cb.links.length >= 3 && cb.links.every(function (l) { return l.text === 'Pay by card' && l.target === null && /^https:\/\/[^/]+\/api\/package-pay\?o=cardpay\.example&r=\d{4}-\d{2}-\d{2}&s=[a-f0-9]{40}$/.test(l.href); }), cb.links);
+    ok('card-awaiting: the payment method is a card through Stripe, none on file yet, and no QuickBooks word anywhere in Plan & billing', /Card, through Stripe/.test(cb.card) && /None yet/.test(cb.card) && !/QuickBooks/.test(cb.text), { card: cb.card.slice(0, 200), qb: /QuickBooks/.test(cb.text) });
+    /* Today leads with the read-only row, its button the same link */
+    await p.evaluate(function () { window.location.hash = ''; }); await wait(300);
+    var row = await p.evaluate(function () { var a = document.querySelector('#today .next .row[data-key="readonly"] a'); return a ? { text: a.textContent, href: a.getAttribute('href'), target: a.getAttribute('target') } : null; });
+    ok('card-awaiting: Today\'s read-only row says "Pay by card" and follows our link in the same tab', !!row && row.text === 'Pay by card' && row.href === ca.payLink && row.target === null, row);
+    await p.evaluate(function () { window.location.hash = '#billing'; }); await wait(400);
+    return { payLinks: cb.links.length };
+  }, after: async function (p, ctx) {
+    var tabs = ctx.pages().length;
+    await Promise.all([p.waitForURL(/\/api\/package-pay\?/, { timeout: 5000 }).catch(function () {}), p.click('#bill-owe .acts a')]);
+    ok('card-awaiting: Pay by card opens the checkout in the same tab (no new window)', /\/api\/package-pay\?o=cardpay\.example/.test(p.url()) && ctx.pages().length === tabs && CARD.visits.length === 1, { url: p.url(), tabs: ctx.pages().length, visits: CARD.visits.length });
+    return { followed: p.url().replace(/^https?:\/\/[^/]+/, '').slice(0, 60) };
+  } });
+  cardStop();
+
+  /* ══ 5d. THE STRIPE CARD RAIL — back from Checkout, then a module charged to the card on file ══
+     /api/package-pay sends the payer to /workspace?checkout=done#billing:
+     a toast, Plan & billing open, the package and the summary asked again,
+     the parameter gone. The card on file is named from the summary. Then the
+     one package menu adds Grid Atlas: the server's quote (rail-aware words),
+     the card on file charged in the same request, the module on; and a card
+     the bank declines leaves the change waiting on our pay link. */
+  var cp = FX.cardPaid(HOST); cardStart(cp, 'succeeded'); var cpFrom = apiCalls.length;
+  await scenario('card-return', cp, { url: '/workspace?checkout=done#billing', steps: async function (p) {
+    await p.waitForFunction(function () { return /Visa ending 4242/.test((document.getElementById('bill-card') || {}).textContent || ''); }, null, { timeout: 6000 }).catch(function () {});
+    await wait(400);
+    var land = await p.evaluate(function () { return { toast: (document.getElementById('ows-toast') || {}).textContent || '', view: document.getElementById('content').getAttribute('data-view'), search: location.search, hash: location.hash, card: document.getElementById('bill-card').textContent.replace(/\s+/g, ' '), owe: document.getElementById('bill-owe').textContent.replace(/\s+/g, ' '), text: document.getElementById('billing-body').textContent }; });
+    ok('card-return: the landing says the payment was received', land.toast === 'Payment received — your workspace is being updated', land.toast);
+    ok('card-return: Plan & billing is open and the checkout parameter is gone (a reload does not say it twice)', land.view === 'billing' && !/checkout=/.test(land.search) && land.hash === '#billing', { search: land.search, hash: land.hash, view: land.view });
+    var calls = apiCalls.slice(cpFrom);
+    ok('card-return: the landing asked the server again for the package and the summary', calls.filter(function (c) { return c === 'GET /api/package-access'; }).length >= 2 && calls.filter(function (c) { return c === 'GET /api/plan-change'; }).length >= 2, calls);
+    ok('card-return: the card on file is the summary\'s: "Visa ending 4242 · charged on your billing date", with its expiry', /Visa ending 4242 · charged on your billing date/.test(land.card) && /12\/2030/.test(land.card), land.card.slice(0, 200));
+    ok('card-return: nothing owed, and no QuickBooks word in Plan & billing', /nothing is owed/.test(land.owe) && !/QuickBooks/.test(land.text), land.owe.slice(0, 120));
+    /* + Add Grid Atlas: the server's quote, charged to the card on file, on at once */
+    await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(400);
+    if (!(await until(p, function () { return !!document.querySelector('#modules-body [data-add-module="gridatlas"]'); }))) { ok('card-return: the Modules page offers + Add on Grid Atlas', false); return {}; }
+    await p.click('#modules-body [data-add-module="gridatlas"]');
+    var ga = '#omega-package-menu [data-module-card="gridatlas"] .opm-act';
+    var subscribable = await until(p, function (sel) { var b = document.querySelector(sel + ' button'); return b && b.textContent === 'Subscribe'; }, ga);
+    ok('card-return: + Add opens the one package menu with Subscribe on Grid Atlas', subscribable);
+    if (!subscribable) return {};
+    await p.click(ga + ' button');
+    ok('card-return: Subscribe asks the server for a quote', await until(p, function (sel) { return /Subscribe and pay/.test((document.querySelector(sel) || {}).textContent || ''); }, ga));
+    var quote = await p.$eval(ga, function (e) { return e.textContent.replace(/\s+/g, ' '); });
+    ok('card-return: the quote is the server\'s, in card words: today\'s prorated amount and "Charged to your Visa ending 4242 now"', /\$[\d,.]+ today/.test(quote) && /Charged to your Visa ending 4242 now/.test(quote) && !/QuickBooks/.test(quote), quote.slice(0, 220));
+    await p.click(ga + ' .opm-primary');
+    var charged = await p.waitForFunction(function (sel) { return /Switched on\. Charged \$[\d,.]+ to Visa ending 4242\./.test((document.querySelector(sel) || {}).textContent || ''); }, ga, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
+    var gaNow = cardBilling();
+    ok('card-return: confirming charges the card on file and says so: "Switched on. Charged $… to Visa ending 4242."', charged, await p.$eval(ga, function (e) { return e.textContent; }).catch(function () { return ''; }));
+    ok('card-return: the module is on in the same request (the engine settled the charge)', (gaNow.modules || []).indexOf('gridatlas') >= 0 && CARD.posts.filter(function (b) { return b.action === 'apply'; }).length === 1, gaNow.modules);
+    /* the menu redraws after the change: Grid Atlas is now held (its opt-out), the message kept */
+    ok('card-return: after the redraw Grid Atlas is held and its card still says what was charged', await until(p, function (sel) { var e = document.querySelector(sel), b = e && e.querySelector('button'); return !!b && b.textContent === 'Opt out' && /Switched on\. Charged/.test(e.textContent); }, ga));
+    /* a card the bank declines: the change waits on our pay link, same tab */
+    CARD.charge = 'failed';
+    var st = '#omega-package-menu [data-module-card="storage"] .opm-act';
+    if (!(await until(p, function (sel) { var b = document.querySelector(sel + ' button'); return b && b.textContent === 'Subscribe'; }, st))) { ok('card-return: Storage offers Subscribe', false); return {}; }
+    await p.click(st + ' button');
+    if (!(await until(p, function (sel) { return /Subscribe and pay/.test((document.querySelector(sel) || {}).textContent || ''); }, st))) { ok('card-return: Storage is quoted', false); return {}; }
+    await p.click(st + ' .opm-primary');
+    await p.waitForFunction(function (sel) { var e = document.querySelector(sel); return e && /declined/.test(e.textContent) && e.querySelector('a[data-pay="card"]'); }, st, { timeout: 8000 }).catch(function () {});
+    var dec = await p.evaluate(function (sel) { var e = document.querySelector(sel), a = e && e.querySelector('a[data-pay="card"]'); return { text: e ? e.textContent.replace(/\s+/g, ' ') : '', pay: a ? { text: a.textContent, href: a.getAttribute('href'), target: a.getAttribute('target') } : null }; }, st);
+    ok('card-return: a declined card says so and offers "Pay $… by card" on our /api/package-pay link, in the same tab', /Your card on file was declined, so nothing was charged/.test(dec.text) && !!dec.pay && /^Pay \$[\d,.]+ by card$/.test(dec.pay.text) && /^https:\/\/[^/]+\/api\/package-pay\?o=cardpaid\.example&r=change-[a-f0-9]{48}&s=[a-f0-9]{40}$/.test(dec.pay.href) && dec.pay.target === null, dec);
+    ok('card-return: the declined change is not on', (cardBilling().modules || []).indexOf('storage') < 0, cardBilling().modules);
+    await p.keyboard.press('Escape'); await wait(200);
+    /* Plan & billing lists the change waiting on its card payment */
+    await p.evaluate(function () { window.location.hash = '#billing'; }); await wait(300);
+    await p.waitForFunction(function () { return !!document.querySelector('#bill-req a[href*="/api/package-pay"]'); }, null, { timeout: 6000 }).catch(function () {});
+    var req = await p.evaluate(function () { var a = document.querySelector('#bill-req a[href*="/api/package-pay"]'); return a ? { text: a.textContent, target: a.getAttribute('target'), row: a.closest('.inv').textContent.replace(/\s+/g, ' ') } : null; });
+    ok('card-return: Plan & billing lists the waiting change with "Pay by card", same tab', !!req && req.text === 'Pay by card' && req.target === null && /Storage/.test(req.row), req);
+    return { charges: CARD.charges, mails: CARD_MAIL.sent.length };
+  } });
+  /* a classic-shell tenant: /workspace carries ?checkout= to the classic home, which opens the Account panel on Billing & plan */
+  await (async function () {
+    var errs = [], ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+    await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); if (/Chart\.js/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.Chart=function(){};window.Chart.register=function(){};' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
+    await ctx.addInitScript(DOUBLE_SRC);
+    await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: cp.user, docs: cp.docs, latency: 8, authDomain: HOST });
+    var p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    CURRENT_FX = cp;
+    await p.goto(base + '/workspace?home=classic&checkout=done', { waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(function () { return location.pathname === '/' && document.getElementById('acct-overlay') && document.getElementById('acct-overlay').classList.contains('show'); }, null, { timeout: 8000 }).catch(function () {});
+    await p.waitForFunction(function () { return /Visa ending 4242/.test((document.getElementById('acct-package-autopay') || {}).textContent || ''); }, null, { timeout: 6000 }).catch(function () {});
+    var cl = await p.evaluate(function () { function t(id) { var e = document.getElementById(id); return e ? e.textContent : ''; } return { path: location.pathname, search: location.search, overlay: document.getElementById('acct-overlay').classList.contains('show'), pkg: getComputedStyle(document.getElementById('acct-package')).display, msg: t('acct-package-msg'), autopay: t('acct-package-autopay'), plan: t('acct-package-plan') }; });
+    ok('card-return (classic): /workspace carries ?checkout=done to the classic home, which opens Billing & plan in the Account panel and says the payment was received', cl.path === '/' && cl.overlay && cl.pkg !== 'none' && cl.msg === 'Payment received — your workspace is being updated', cl);
+    ok('card-return (classic): the parameter is dropped, and the panel names the card on file and charges additions to it', !/checkout=/.test(cl.search) && /Visa ending 4242/.test(cl.autopay) && /charged to the card on file/.test(cl.plan), cl);
+    ok('card-return (classic): no uncaught errors', !errs.length, errs);
+    console.log(JSON.stringify({ scenario: 'card-return (classic)', path: cl.path, search: cl.search }));
+    await ctx.close();
+  })();
+  cardStop(); CURRENT_FX = fxBeforeCard;
+
   /* ══ 6. THE PACKAGE STORE — Lite Labs on the marketplace ══
      A packaged workspace sees its plan and every module on its shelf with
      the server's price; Lite is Included; Grid Atlas can be subscribed:

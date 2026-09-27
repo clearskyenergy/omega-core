@@ -439,6 +439,29 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('awaiting: the Ladder waits for the first payment', /opens once your current invoice is paid|Pay your current invoice first/.test(rows.plan), rows.plan);
     return out;
   } });
+  /* ══ 7b. AWAITING, ON THE STRIPE CARD RAIL — the same moment paid by card:
+     the bar and the Account panel say "Pay by card" and follow OUR signed
+     link (/api/package-pay) in the same tab; no QuickBooks word. The panel's
+     invoices are the real plan-change summary over the fixture's records. ══ */
+  var cad = FX.cardAwaiting(HOST);
+  await scenario('card-awaiting', cad, { steps: async function (p, shown) {
+    var out = await common(p, shown, cad, 'card-awaiting');
+    var bar = await p.evaluate(function () { var b = document.getElementById('omega-billing-status'), a = b && b.querySelector('a'); return b ? { text: b.textContent, pay: a ? { text: a.textContent, href: a.getAttribute('href'), target: a.getAttribute('target') } : null, paid: Array.prototype.filter.call(b.querySelectorAll('button'), function (x) { return /paid/i.test(x.textContent); }).length } : null; });
+    ok('card-awaiting: the billing bar says "Pay by card" on our signed link, in the same tab, beside I\'ve paid', !!bar && !!bar.pay && bar.pay.text === 'Pay by card' && bar.pay.href === cad.payLink && bar.pay.target === null && bar.paid === 1 && !/QuickBooks/.test(bar.text), bar);
+    await p.click('button.btn-signout[onclick="openAccount()"]'); await p.waitForSelector('#acct-overlay.show'); await p.waitForSelector('#acct-pk-paid-btn');
+    await p.waitForFunction(function () { return /Pay by card/.test((document.getElementById('acct-package-invoices') || {}).textContent || ''); }, null, { timeout: 8000 }).catch(function () {});
+    var acct = await p.evaluate(function () {
+      function a(el) { return el ? { text: el.textContent, href: el.getAttribute('href'), target: el.getAttribute('target') } : null; }
+      function t(id) { var e = document.getElementById(id); return e ? e.textContent : ''; }
+      return { pay: a(document.getElementById('acct-pk-pay')), inv: a(document.querySelector('#acct-package-invoices a')), autopay: t('acct-package-autopay'), status: t('acct-pk-status'), due: t('acct-pk-due'), panel: t('acct-package') };
+    });
+    ok('card-awaiting: the Account panel\'s pay button reads "Pay by card" and follows our link in the same tab', !!acct.pay && acct.pay.text === 'Pay by card' && acct.pay.href === cad.payLink && acct.pay.target === null && /Awaiting your first payment/.test(acct.status) && /2,250/.test(acct.due), acct);
+    ok('card-awaiting: the invoice list pays by card through the same link, and no QuickBooks word is in the panel', !!acct.inv && acct.inv.text === 'Pay by card' && acct.inv.href === cad.payLink && acct.inv.target === null && /Stripe/.test(acct.autopay) && !/QuickBooks/.test(acct.panel), acct);
+    await p.click('#acct-pk-paid-btn'); await p.waitForFunction(function () { return /Not paid yet|checked a moment ago/.test(document.getElementById('acct-package-msg').textContent); }, null, { timeout: 8000 }).catch(function () {});
+    var said = await p.$eval('#acct-package-msg', function (e) { return e.textContent; });
+    ok('card-awaiting: I\'ve paid answers in card words', /Not paid yet\. A card payment shows as soon as Stripe confirms it/.test(said) && !/QuickBooks/.test(said), said);
+    return out;
+  } });
   /* ══ 8. LEGACY, PREPAID — everything open, nothing to upgrade, no Ladder (NextNRG-like) ══ */
   var le = FX.legacyEnterprise(HOST);
   await scenario('legacy-enterprise', le, { steps: async function (p, shown) {

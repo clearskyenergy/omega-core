@@ -27,6 +27,22 @@ function mockQbo(onInvoice, state) {
       reconcile: async function (record) { return { satisfied: state.paid === true, reversed: false, paidCents: state.paid === true ? record.totalCents : 0, payUrl: record.paymentLink }; } };
   };
 }
+/* The Stripe CARD RAIL's driver double (api/_lib/stripe-billing.js driver():
+   the same customer / invoice / reconcile contract). No card is on file at
+   signup, so the first invoice waits on OUR signed pay link
+   (https://<home>/api/package-pay?o=&r=&s=), as the real driver answers;
+   `state.paid` is what a reconciliation finds. Nothing reaches Stripe. */
+function mockStripe(onInvoice, state) {
+  state = state || {};
+  var SB = require('../../api/_lib/stripe-billing');
+  SB.driver = function () {
+    return { guard: function () {}, customer: async function (orgId) { return 'cus_fixture' + String(orgId).split('.')[0].replace(/[^A-Za-z0-9]/g, ''); },
+      invoice: async function (plan, profile, customerId, opts) { onInvoice(plan);
+        return { id: SB.refOf(plan.marker), totalCents: plan.subtotalCents, provider: 'stripe', payLinkMissing: false, charge: null,
+          payUrl: 'https://' + opts.host + '/api/package-pay?o=' + encodeURIComponent(opts.org) + '&r=' + encodeURIComponent(opts.recordId) + '&s=' + '5f'.repeat(20) }; },
+      reconcile: async function (record) { return { satisfied: state.paid === true, reversed: false, paidCents: state.paid === true ? record.totalCents : 0, payUrl: record.paymentLink, review: null }; } };
+  };
+}
 function enabledBook() { var book = B.proposed(); book.enabled = true; book.qbo.realmId = 'fixture'; return book; }
 function profile(org, companyName) {
   return { legalName: companyName || 'Clean Cell — test fixture', contactName: 'Fixture Owner', email: 'owner@' + org, phone: '555-0100',
@@ -47,4 +63,4 @@ function seedPaidTenant(db, o) {
   if (o.member) db.seed('omega_orgs/' + o.org + '/members/' + o.member, { role: 'owner', status: 'active' });
   return cycle;
 }
-module.exports = { mockAdmin: mockAdmin, mockQbo: mockQbo, enabledBook: enabledBook, profile: profile, seedPaidTenant: seedPaidTenant };
+module.exports = { mockAdmin: mockAdmin, mockQbo: mockQbo, mockStripe: mockStripe, enabledBook: enabledBook, profile: profile, seedPaidTenant: seedPaidTenant };

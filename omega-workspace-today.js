@@ -8,7 +8,8 @@
 
    input (every list optional):
      now, me (email, lower), orgId
-     pendingApproval, readOnly, billingNotice {text, payUrl}, trialEndsAt (ms)
+     pendingApproval, readOnly, billingNotice {text, payUrl, card}, trialEndsAt (ms)
+                     (card: the Stripe card rail; its pay button says so)
      projects[]      projects the workspace may read (stage, capex, bessKwh,
                      nextAction, updatedAt, createdAt, ownerEmail)
      todos[]         team_todos (text, assignee, due, done, createdBy)
@@ -105,10 +106,11 @@
     var projects = input.projects || [], todos = input.todos || [], sent = input.rfqsSent || [], received = input.rfqsReceived || [], referrals = input.referrals || [], finance = input.finance || [];
     var canOpen = typeof input.canOpen === 'function' ? input.canOpen : function () { return false; };
     function push(r) { rows.push(r); }
+    function payCta(n) { return n.card === true ? 'Pay by card' : 'Pay'; }
 
     /* the account */
-    if (input.readOnly) push({ key: 'readonly', cls: 'hot', score: 100, when: 0, t: 'This workspace is read-only', s: (input.billingNotice && input.billingNotice.text) || 'Pay to continue creating and exporting. Saved work stays available.', cta: input.billingNotice && input.billingNotice.payUrl ? 'Pay' : 'Plan', href: input.billingNotice && input.billingNotice.payUrl || null, act: { kind: 'billing' } });
-    else if (input.billingNotice && input.billingNotice.text) push({ key: 'billing', cls: 'warn', score: 78, when: 0, t: 'A note on your plan', s: input.billingNotice.text, cta: input.billingNotice.payUrl ? 'Pay' : 'Plan', href: input.billingNotice.payUrl || null, act: { kind: 'billing' } });
+    if (input.readOnly) push({ key: 'readonly', cls: 'hot', score: 100, when: 0, t: 'This workspace is read-only', s: (input.billingNotice && input.billingNotice.text) || 'Pay to continue creating and exporting. Saved work stays available.', cta: input.billingNotice && input.billingNotice.payUrl ? payCta(input.billingNotice) : 'Plan', href: input.billingNotice && input.billingNotice.payUrl || null, act: { kind: 'billing' } });
+    else if (input.billingNotice && input.billingNotice.text) push({ key: 'billing', cls: 'warn', score: 78, when: 0, t: 'A note on your plan', s: input.billingNotice.text, cta: input.billingNotice.payUrl ? payCta(input.billingNotice) : 'Plan', href: input.billingNotice.payUrl || null, act: { kind: 'billing' } });
     if (input.pendingApproval) push({ key: 'approval', cls: 'warn', score: 90, when: 0, t: 'Your workspace is awaiting approval', s: 'Tools stay locked until ClearSky approves it, usually one business day.', cta: 'Plan', act: { kind: 'billing' } });
     var trialEnd = at(input.trialEndsAt);
     if (trialEnd) {

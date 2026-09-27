@@ -30,7 +30,7 @@ function driverFor(book, rail, deps) {
 /* What an issued invoice record holds about its rail. */
 function issuedFields(rail, issued, customer, orgId) {
   if (rail !== 'stripe') return { qboInvoiceId: issued.id, qboCustomerId: customer };
-  var charged = issued.charge && issued.charge.paymentIntentId && issued.charge.status === 'succeeded' ? [issued.charge.paymentIntentId] : [];
+  var charged = issued.charge && issued.charge.paymentIntentId && issued.charge.status !== 'failed' ? [issued.charge.paymentIntentId] : [];
   return { provider: 'stripe', stripeRef: issued.id, stripe: { customerId: customer, org: orgId, env: Mode.env(), paymentIntents: charged, sessions: [], sessionCount: 0,
     lastCharge: issued.charge ? { status: issued.charge.status, code: issued.charge.code || null } : null } };
 }
@@ -249,7 +249,7 @@ async function issue(db, orgId, now, deps) {
         serviceFeeNextOn: plan.serviceFeeNextOn, invoiceLock: null, pastDueSince: due,
         packagingState: state, paymentLink: issued.payUrl, amountDue: issued.totalCents / 100,
         accessUntil: state === 'paid' ? R.date(R.addDays(R.businessDays(due, c.book.policy.failedPaymentGraceBusinessDays), 1)) : latest.accessUntil || now });
-      var charged = issued.charge && issued.charge.status === 'succeeded', declined = issued.charge && issued.charge.status === 'failed';
+      var charged = issued.charge && issued.charge.paymentIntentId && issued.charge.status !== 'failed', declined = issued.charge && issued.charge.status === 'failed';
       tx.set(current.collection('history').doc('invoice-' + plan.date), Object.assign({ at: now, by: 'billing-run', action: 'invoice-issued',
         date: plan.date, amountCents: issued.totalCents, rail: rail }, rail === 'stripe' ? { invoiceId: issued.id, charge: issued.charge ? { status: issued.charge.status, code: issued.charge.code || null } : null } : { qboInvoiceId: issued.id }));
       /* a renewal charged to the card on file needs no "pay" mail: the receipt follows when it settles */
@@ -410,6 +410,10 @@ async function reconcile(db, orgId, now, deps, options) {
         tx.set(current.collection('history').doc(), event); tx.set(c.root.collection('admin_audit').doc(), event);
       }
     });
+    /* paid some other way while a card checkout was still open: close it at Stripe, so nobody pays twice */
+    if (recordRail(record) === 'stripe' && state === 'paid' && record.state !== 'paid' && record.stripe && record.stripe.openSession) {
+      try { await require('./stripe-billing').close(record, deps && deps.stripe); } catch (e) { console.warn('[package-billing] open checkout not closed:', e && e.message); }
+    }
     results.push({ invoiceId: invoiceRef(record), recordId: doc.id, kind: kindOf(record), state: state, was: record.state, changed: record.state !== state, reviewRequired: review });
   }
   if (bounded) await current.update({ reconcileCursor: rows.docs.length === bounded ? rows.docs[rows.docs.length - 1].data().date : null });

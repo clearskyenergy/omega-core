@@ -145,7 +145,7 @@
     <h1>Pay your first invoice to open your workspace</h1>
     <div class="ok" style="display:block">
       <div style="font-weight:700;margin-bottom:6px" id="pay-name"></div>
-      <div style="color:var(--sub);font-size:14px">You will sign in at <span class="host" id="pay-host"></span> with your work email. Your first invoice<span id="pay-amount"></span> is ready in QuickBooks; pay it by card on the invoice page and the workspace opens the moment the payment lands.</div>
+      <div style="color:var(--sub);font-size:14px">You will sign in at <span class="host" id="pay-host"></span> with your work email. Your first invoice<span id="pay-amount"></span> <span id="pay-where">is ready in QuickBooks; pay it by card on the invoice page</span> and the workspace opens the moment the payment lands.</div>
     </div>
     <a class="btn" id="pay-link" target="_blank" rel="noopener">Pay now in QuickBooks</a>
     <button class="btn ghost" id="pay-check" onclick="checkPayment(true)">I've paid — open my workspace</button>
@@ -183,8 +183,31 @@
   function showPay(j, name){
     PAY = j; $('pay-name').textContent = name || $('f-name').value; $('pay-host').textContent = j.host || '';
     $('pay-amount').textContent = j.amountDueDisplay ? ' of ' + j.amountDueDisplay : '';
+    if (payTimer) { clearInterval(payTimer); payTimer = null; }
+    if (j.rail === 'stripe') { showCardPay(j); return; }
     var a = $('pay-link'); if (j.paymentLink) { a.href = j.paymentLink; a.className = 'btn'; } else { a.removeAttribute('href'); a.className = 'btn ghost'; a.textContent = 'Pay from the invoice QuickBooks emailed' + (j.billingEmail ? ' to ' + j.billingEmail : ' you'); $('pay-status').textContent = 'QuickBooks emailed the invoice itself, with its Pay now button. Pay it there, then press I\'ve paid; we check QuickBooks every few seconds while this page is open.'; }
     show('step-pay'); if (payTimer) clearInterval(payTimer); payTimer = setInterval(function () { if (!document.hidden) checkPayment(false); }, 8000);
+  }
+  /* The Stripe card rail (the server says rail: 'stripe'): our signed pay
+     link (/api/package-pay) opens Stripe's own checkout in THIS tab and
+     Stripe sends the payer back to the workspace, which the server has
+     already settled by then. So no look every eight seconds and no "I've
+     paid" here: one button, and the card is kept on file for renewals. */
+  function showCardPay(j){
+    var a = $('pay-link');
+    a.removeAttribute('target'); a.removeAttribute('rel');
+    $('pay-where').textContent = 'is ready; pay it by card on Stripe’s secure page';
+    $('pay-check').style.display = 'none';
+    if (j.paymentLink) {
+      a.href = j.paymentLink; a.className = 'btn';
+      a.textContent = 'Pay ' + (j.amountDueDisplay ? j.amountDueDisplay + ' ' : '') + 'by card';
+      $('pay-status').textContent = 'Your card is kept on file for your renewals: each invoice is charged to it on your billing day. Once the payment goes through you land in your workspace. The invoice is also in your email.';
+    } else {
+      a.removeAttribute('href'); a.className = 'btn ghost';
+      a.textContent = 'Pay by card from the invoice we emailed' + (j.billingEmail ? ' to ' + j.billingEmail : ' you');
+      $('pay-status').textContent = 'The invoice email has the pay link. Your card is kept on file for your renewals, and your workspace opens as soon as the payment goes through.';
+    }
+    show('step-pay');
   }
   window.checkPayment = function(byHand){
     var u = auth.currentUser; if (!u || !PAY) return; var btn = $('pay-check'); if (byHand) { btn.disabled = true; btn.textContent = 'Checking QuickBooks…'; }
@@ -334,7 +357,8 @@
     if (signupOptions.packaging && !fromBilling && !fromDiscovery && !proposal) { buildDiscovery(); show('step-discovery'); return; }
     if (signupOptions.packaging && !fromBilling) {
       if (!billingForm) billingForm = OmegaBillingProfile.render($('signup-billing-profile'), { legalName: name, email: u.email, phone: payload.phone, contactName: u.displayName || '', vertical: payload.vertical, address: { country: 'US' } });
-      if (!signupOptions.payNow) $('signup-billing-lede').textContent = 'These details make your customer record in QuickBooks. Approval starts your one trial of at most 14 days; your first invoice arrives at trial end. Next you choose your package.';
+      if (signupOptions.rail === 'stripe') $('signup-billing-lede').textContent = signupOptions.payNow ? 'These details say who is billed and where receipts go. Next you build your system; you pay by card at the end and the card is kept on file for renewals.' : 'These details say who is billed and where receipts go. Approval starts your one trial of at most 14 days; your first invoice, payable by card, arrives at trial end. Next you choose your package.';
+      else if (!signupOptions.payNow) $('signup-billing-lede').textContent = 'These details make your customer record in QuickBooks. Approval starts your one trial of at most 14 days; your first invoice arrives at trial end. Next you choose your package.';
       document.querySelector('[data-profile-field="vertical"]').value = payload.vertical;
       show('step-billing'); return;
     }

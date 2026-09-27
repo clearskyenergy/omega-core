@@ -181,7 +181,8 @@ merged. Nothing else can show until step 6 above.
   bar and Your plan carry it today.
 - The admin console's Tenants & Users card and Client Inventory tiers still
   show the legacy plan and prices (Phase 10).
-- A Stripe driver. Not needed to launch; the seam is documented.
+- A Stripe driver. Not needed to launch; the seam is documented. *(Built
+  2026-09-27 behind `PACKAGING_RAIL`, off: see Stripe rail below.)*
 - A production book and a sandbox book share one Firestore under one
   `VERSION`: once the release version is seeded for production, the sandbox
   acceptance for that version is over. `enable-packaging-sandbox.js` keeps
@@ -271,3 +272,50 @@ re-issues or closes by hand); a rate cap on signups; a transactional
 "I've paid" throttle (two clicks inside eight seconds may both look);
 `tenant_public.tier` stays `trial` after a paid activation (nothing reads it
 for access).
+
+## Stripe rail (2026-09-27)
+
+Tommy, 2026-09-27: *"charge people on the spot with Stripe"*. The day
+before, Stripe had been set aside for QuickBooks ("I can't get Stripe, use
+QuickBooks") and the driver was listed above as not built. It is now
+built, behind one switch that is off (commit `0f3b8f2`):
+
+- **A second driver, the same engine.** `api/_lib/stripe-billing.js`
+  answers the QuickBooks driver's contract (`customer`, `invoice`,
+  `reconcile`, `guard`), so `package-billing.reconcile` stays the one paid
+  transition and `accessAfterInvoices` the one access rule. The rail is
+  `packaging-mode.js` `rail()`: `'stripe'` only under
+  `PACKAGING_RAIL=stripe`, literal. It is recorded on the workspace when it
+  starts (`billingProvider`; `paymentProvider` `'stripe-checkout'`) and on
+  each invoice record (`provider`, `stripeRef`), and every record is read
+  back from the rail that issued it. `stripeKey()` takes a test key only
+  in SANDBOX and a live key only in LIVE.
+- **On the spot.** The first invoice is paid on Stripe's hosted Checkout
+  through OMEGA's signed, durable pay link (`/api/package-pay`); Checkout's
+  return re-reads the session, keeps the card, settles that record, mails
+  the receipt and opens Plan & billing. After that the card on file is
+  charged off-session: a renewal when the runner issues it, a confirmed
+  addition or pack in the same request (plan-change answers
+  `charged: true`, state `active` or `added`); a decline answers
+  `cardDeclined: true` and the record waits on its pay link. A charge already made for a record is found again before charging.
+- **One rail per charge.** A card-paid record has no OMEGA QuickBooks
+  invoice; Stripe's QuickBooks app books the payment as a sales receipt,
+  so the revenue is counted once.
+- **Its own webhook and namespace.** `/api/package-stripe-webhook`
+  (`STRIPE_PACKAGING_WEBHOOK_SECRET`) claims only `kind: 'omega-package'`
+  objects of this mode, dedupes by event id and re-reads Stripe; metadata
+  names `org`, never `orgId`, and the customer is
+  `billing/current.stripe.customerId`, never the top-level
+  `stripeCustomerId`. The legacy `/api/stripe-webhook` now ignores packaged
+  workspaces and answers once; `stripe-create` refuses them.
+
+**QuickBooks remains the default rail until `PACKAGING_RAIL=stripe`.** A
+workspace already on QuickBooks invoices stays on them. The change set no
+environment variable (`PACKAGING_RAIL`, `STRIPE_PACKAGING_SECRET_KEY`,
+`STRIPE_PACKAGING_WEBHOOK_SECRET` are Tommy's to set in Vercel), registered
+no webhook, and has not been click-tested: no test-mode or live card
+payment has gone through it. Turning it on is
+`docs/PAYMENTS-BROWSER-SETUP.md` Part 4 and the checklist's *Card rail*
+block (§6). Tests: `scripts/test-stripe-billing.js` (offline,
+on a Stripe double, in `npm run test:packaging`); the existing packaging,
+signup, launch-hardening, Editor Lite and ledger suites pass unchanged.

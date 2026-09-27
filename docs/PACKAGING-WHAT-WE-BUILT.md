@@ -55,7 +55,8 @@ deployed, no tenant is packaged. The order to change that is in
   reconciles, with nobody's approval. One production switch
   (`PACKAGING_LIVE=true` with `QBO_ENV=production`) moves all of it from
   the sandbox company to the real one. The card button on an invoice is
-  QuickBooks Payments; Stripe is bookkeeping only (`PAYMENTS-BROWSER-SETUP.md`).
+  QuickBooks Payments; Stripe is bookkeeping only (`PAYMENTS-BROWSER-SETUP.md`)
+  unless the card rail is switched on (§4).
 
 ## 2. Phase by phase
 
@@ -92,13 +93,20 @@ packaged world asks of it (six items). It is the next piece of work.
 
 ## 4. Not built, on purpose or not yet
 
-- Step B, the saved card and instant charge: needs the QuickBooks Payments
-  permission on a reconnect.
+- Step B, the saved card and instant charge, **on the QuickBooks rail**:
+  needs the QuickBooks Payments permission on a reconnect. Both now exist
+  on the **Stripe rail** (2026-09-27): the first invoice is paid on
+  Stripe's hosted Checkout, the card is kept on file, and renewals,
+  confirmed additions and packs are charged to it at once (a decline falls
+  back to the pay link). It is off until `PACKAGING_RAIL=stripe`;
+  QuickBooks invoices stay the default, and no card payment has been made
+  in either Stripe mode yet (`PAYMENTS-BROWSER-SETUP.md` Part 4).
 - Permitting matrices are priced but not counted (the producer does not
   exist); storage models and site screens are not counted.
 - Packs do not roll over; a cancelled change does not void its QuickBooks
-  invoice; removals are recorded, not executed; annual and Enterprise
-  changes are quoted by staff.
+  invoice (on the Stripe rail its open checkout is closed); removals are
+  recorded, not executed; annual and Enterprise changes are quoted by
+  staff.
 - The proposal deck is browser print; senders are staff only.
 - No sandbox click-through has been performed with the connected
   QuickBooks company; the flags have never been on outside tests.

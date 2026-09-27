@@ -127,7 +127,14 @@ function quote(c, rows, input, now) {
   var feeNote = after.serviceFee.amountCents !== before.serviceFee.amountCents ? 'Your annual service fee at renewal becomes ' + after.serviceFee.display + ' (now ' + before.serviceFee.display + ').' : null;
   var words = railWords(b);
   var blocked = gate.canApply && open.length ? { canApply: false, reason: 'A change is waiting for payment: ' + open[0].add.map(function (k) { return M.get(k).name; }).join(', ') + '. Pay it ' + words.where + ' or cancel it first.' } : gate;
-  var id = Q.key(B.stable({ org: c.root.id, book: book.version, owned: owned, add: add, plan: after.plan, cycle: cycle, lines: lines, total: totalCents, billing: { plan: sub.plan, credit: b.credit, builders: b.builders, viewers: b.viewers, interval: b.interval, serviceFee: b.serviceFee } }));
+  var basis = { org: c.root.id, book: book.version, owned: owned, add: add, plan: after.plan, cycle: cycle, lines: lines, total: totalCents, billing: { plan: sub.plan, credit: b.credit, builders: b.builders, viewers: b.viewers, interval: b.interval, serviceFee: b.serviceFee } };
+  /* the same addition asked for again after a cancel in this cycle is a NEW
+     change: without this its id — and so its operation and its invoice
+     record — would be the cancelled one's, and apply would hand back the
+     cancelled result and its dead pay link */
+  var reopened = rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'cancelled' && r.cycle && r.cycle.start === cycle.start; }).length;
+  if (reopened) basis.reopened = reopened;
+  var id = Q.key(B.stable(basis));
   return { orgId: c.root.id, previewId: id, effectiveAt: now, add: add, addNames: names(add), modules: target, plan: after.plan, planBefore: before.plan, planDisplay: after.display.plan,
     before: { plan: before.plan, monthlyCents: before.monthlyCents, display: before.display.monthly },
     after: { plan: after.plan, monthlyCents: after.monthlyCents, display: after.display.monthly, fit: after.display.fit },

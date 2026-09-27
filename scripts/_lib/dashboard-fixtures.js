@@ -156,6 +156,69 @@ function awaiting(host) {
   var view = X.project({ staff: false, claims: { email_verified: true } }, billing, orgDoc, member, Date.now());
   return { org: org, name: 'Newpay Energy', tier: 'lite', user: { uid: uid, email: me, displayName: 'Lee Park', emailVerified: true }, docs: docs, termsAccepted: true, packageView: view, awaiting: true };
 }
+/* The Stripe CARD RAIL (2026-09-27, PACKAGING_RAIL=stripe): a workspace that
+   pays by card through Stripe Checkout. Its pay link is OUR signed link
+   (https://<home>/api/package-pay?o=&r=&s=), which opens Stripe's checkout
+   in the same tab and comes back to Plan & billing settled. The signature
+   here is a fixture's: nothing verifies it and nothing is ever fetched. */
+var CARD_SIG = 'f1c7a2e9b04d3c5a6e8f7b1d2c3a4e5f60718293';
+function cardPayLink(org, recordId) { return 'https://silmarillion.clearskyomega.com/api/package-pay?o=' + encodeURIComponent(org) + '&r=' + encodeURIComponent(recordId) + '&s=' + CARD_SIG; }
+function cardProfile(org, name) {
+  return { legalName: name, contactName: 'Fixture Owner', email: 'ap@' + org, phone: '555-0100', address: { line1: '1 Fixture Way', city: 'Chicago', state: 'IL', postalCode: '60601', country: 'US' }, vertical: 'installer', teamSize: 3 };
+}
+/* cardAwaiting: signed up on the card rail and paid nothing yet — the
+   awaiting shape above with the first invoice on Stripe (no card on file). */
+function cardAwaiting(host) {
+  var org = 'cardpay.example', uid = 'uid-cardpay-owner', me = 'rae@cardpay.example', today = iso(0).slice(0, 10), link = cardPayLink(org, today);
+  var docs = merge(pub(host, org, 'Cardpay Solar', 'lite', 'installer'), {});
+  var orgDoc = { name: 'Cardpay Solar', slug: 'cardpay', domains: [host], logoUrl: '', vertical: 'installer', shell: 'classic', status: 'active', receivesFullBom: false,
+    exportBrand: { name: 'Cardpay Solar', logo: '' }, signup: { email: me, uid: uid }, packaged: true, packagingSandbox: true, signedUpAt: ago(0.1), createdAt: ago(0.1), approvedAt: ago(0.1), approvedBy: 'self-serve', selfServe: true };
+  var billing = { packaged: true, modules: ['lite'], packagingState: 'awaiting_payment', accessUntil: Date.now() - 1000, billingDay: new Date().getUTCDate(), nextInvoiceOn: today,
+    subscription: { modules: ['lite', 'gridatlas'], plan: 'alacarte', interval: 'monthly' }, interval: 'monthly', amountDue: 2250, paymentLink: link,
+    paymentProvider: 'stripe-checkout', billingProvider: 'stripe', stripe: { customerId: 'cus_fixturecardpay', env: 'sandbox', since: Date.now() - 3600e3 },
+    qboEnv: 'sandbox', pricebookVersion: require('../../api/_lib/pricebook').VERSION, createdAt: ago(0.1) };
+  var member = { email: me, name: 'Rae Kim', role: 'owner', status: 'active', createdAt: ago(0.1) };
+  docs['omega_orgs/' + org] = orgDoc; docs['omega_orgs/' + org + '/billing/current'] = billing; docs['omega_orgs/' + org + '/members/' + uid] = member;
+  docs['omega_orgs/' + org + '/billing/profile'] = cardProfile(org, 'Cardpay Solar');
+  /* the first invoice, on the card rail: no QuickBooks invoice, our pay link */
+  docs['omega_orgs/' + org + '/billing/current/invoices/' + today] = { date: today, period: { start: today, end: iso(30).slice(0, 10) }, modules: ['lite', 'gridatlas'], plan: 'alacarte', lines: [], subtotalCents: 225000, totalCents: 225000,
+    state: 'unpaid', provider: 'stripe', stripeRef: 'stp_fixturecardpay0001', stripe: { customerId: 'cus_fixturecardpay', org: org, env: 'sandbox', paymentIntents: [], sessions: [], sessionCount: 0, lastCharge: null },
+    paymentLink: link, issuedAt: Date.now() - 3600e3, marker: 'OMEGA subscription ' + org + ' / ' + today, pricebookVersion: require('../../api/_lib/pricebook').VERSION };
+  docs['termsAcceptances/' + uid] = { uid: uid, email: me, orgId: org, version: TERMS_VERSION, acceptedAt: ago(0.1) };
+  var X = require('../../api/_lib/package-access');
+  var view = X.project({ staff: false, claims: { email_verified: true } }, billing, orgDoc, member, Date.now());
+  return { org: org, name: 'Cardpay Solar', tier: 'lite', user: { uid: uid, email: me, displayName: 'Rae Kim', emailVerified: true }, docs: docs, termsAccepted: true, packageView: view, awaiting: true, card: true, payLink: link };
+}
+/* cardPaid: a paid workspace on the card rail with a Visa ending 4242 on
+   file (saved by its first Checkout), billed on the 20th, the current cycle's
+   subscription paid by card. The shape api/_lib/plan-change.js quotes and
+   charges against (packagingSandbox, an enabled sandbox book, a profile). */
+function cardPaid(host) {
+  var R = require('../../api/_lib/proration'), M = require('../../api/_lib/modules'), BK = require('../../api/_lib/pricebook');
+  var org = 'cardpaid.example', uid = 'uid-cardpaid-owner', me = 'noa@cardpaid.example', cycle = R.cycle(R.iso(Date.now()), 20), keys = ['lite'];
+  var docs = merge(pub(host, org, 'Cardpaid Storage', 'lite', 'developer'), {});
+  var orgDoc = { name: 'Cardpaid Storage', slug: 'cardpaid', domains: [host], logoUrl: '', vertical: 'developer', shell: 'classic', status: 'active', receivesFullBom: false,
+    exportBrand: { name: 'Cardpaid Storage', logo: '' }, signup: { email: me, uid: uid }, packaged: true, packagingSandbox: true, signedUpAt: '2026-08-20T12:00:00Z', createdAt: ago(40), approvedAt: ago(40), approvedBy: 'self-serve', selfServe: true };
+  var billing = Object.assign({ packaged: true, packagingState: 'paid', modules: keys, plan: 'Lite', billingDay: 20, interval: 'monthly',
+    pricebookVersion: BK.VERSION, subscriptionStartedAt: Date.parse('2026-08-20T12:00:00Z'), firstInvoiceOn: '2026-08-20', nextInvoiceOn: cycle.end, serviceFeeNextOn: '2027-08-20',
+    paidThrough: cycle.end, accessUntil: Date.parse(cycle.end + 'T00:00:00Z') + 20 * DAY, amountDue: 0, builders: 3, viewers: 10,
+    subscription: { modules: keys, plan: 'alacarte', interval: 'monthly', builders: 3, viewers: 10, since: Date.parse('2026-08-20T12:00:00Z') },
+    paymentProvider: 'stripe-checkout', billingProvider: 'stripe', qboEnv: 'sandbox',
+    stripe: { customerId: 'cus_fixturecardpaid', env: 'sandbox', since: Date.parse('2026-08-20T12:00:00Z'), cardOnFile: true, card: { brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030 } }, createdAt: ago(40) }, M.resolve(keys));
+  var member = { email: me, name: 'Noa Reyes', role: 'owner', status: 'active', createdAt: ago(40) };
+  docs['omega_orgs/' + org] = orgDoc; docs['omega_orgs/' + org + '/billing/current'] = billing; docs['omega_orgs/' + org + '/members/' + uid] = member;
+  docs['omega_orgs/' + org + '/billing/profile'] = cardProfile(org, 'Cardpaid Storage');
+  docs['omega_orgs/' + org + '/billing/current/invoices/' + cycle.start] = { date: cycle.start, period: { start: cycle.start, end: cycle.end }, modules: keys, plan: 'alacarte', lines: [], subtotalCents: 50000, totalCents: 50000,
+    state: 'paid', paidCents: 50000, paidAt: Date.parse(cycle.start + 'T12:00:00Z'), provider: 'stripe', stripeRef: 'stp_fixturecardpaid001',
+    stripe: { customerId: 'cus_fixturecardpaid', org: org, env: 'sandbox', paymentIntents: ['pi_fixturecardpaid'], sessions: [], sessionCount: 0, lastCharge: { status: 'succeeded', code: null } },
+    paymentLink: null, marker: 'OMEGA subscription ' + org + ' / ' + cycle.start, pricebookVersion: BK.VERSION };
+  docs['termsAcceptances/' + uid] = { uid: uid, email: me, orgId: org, version: TERMS_VERSION, acceptedAt: ago(30) };
+  docs['team_members/' + org + '__' + me] = { orgId: org, email: me, name: 'Noa Reyes', photo: '', lastSeen: ago(1) };
+  var X = require('../../api/_lib/package-access');
+  var view = X.project({ staff: false, claims: { email_verified: true } }, billing, orgDoc, member, Date.now());
+  return { org: org, name: 'Cardpaid Storage', tier: 'lite', user: { uid: uid, email: me, displayName: 'Noa Reyes', emailVerified: true }, docs: docs, termsAccepted: true, packageView: view, card: true, cycle: cycle,
+    liteTools: M.get('lite').tools.slice() };
+}
 /* legacyEnterprise: a prepaid legacy account (NextNRG-like, Tommy 2026-09-26:
    "they paid for the whole year so they will just have everything available
    to them"). No packaged record, enterprise tier, nothing locked, nothing to
@@ -171,4 +234,4 @@ function legacyEnterprise(host) {
   docs['team_members/' + org + '__' + me] = { orgId: org, email: me, name: 'Paige Cole', photo: '', lastSeen: ago(0.2) };
   return { org: org, name: 'NextGen Power', tier: 'enterprise', user: { uid: uid, email: me, displayName: 'Paige Cole', emailVerified: true }, docs: docs, termsAccepted: true, legacyAllOpen: true };
 }
-module.exports = { newco: newco, northstar: northstar, pending: pending, lite: lite, awaiting: awaiting, legacyEnterprise: legacyEnterprise, TERMS_VERSION: TERMS_VERSION };
+module.exports = { newco: newco, northstar: northstar, pending: pending, lite: lite, awaiting: awaiting, cardAwaiting: cardAwaiting, cardPaid: cardPaid, legacyEnterprise: legacyEnterprise, TERMS_VERSION: TERMS_VERSION };

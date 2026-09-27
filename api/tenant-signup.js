@@ -56,6 +56,8 @@ async function signupOptions(db) {
   return Object.assign(facts, { packaging: true, maxTrialDays: Math.min(book.policy.trialDays, 14), pricebookVersion: book.version,
     /* pay at the end is offered only where the engine can issue an invoice (the billing flag; the engine's guard has the last word) */
     payNow: process.env.PACKAGING_BILLING_ENABLED === 'true' && book.enabled === true,
+    /* how a workspace signing up now pays (api/_lib/packaging-mode.js rail()) */
+    rail: Mode.rail(),
     modules: PR.catalog(book), starters: MOD.starters(), starterLabels: MOD.starterLabels(),
     // Phase 6: signup walks the same discovery a rep would (VALUE-LADDER §3.7).
     questions: SP.QUESTIONS, answers: SP.ANSWERS, spend: SP.SPEND, unitCosts: SP.UNIT_COSTS });

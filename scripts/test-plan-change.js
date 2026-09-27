@@ -206,6 +206,11 @@ async function run() {
   var paidCancelled = await S.reconcile(db, orgId, now + 60000, {});
   equal(db.data.get(root + '/billing/current/invoices/' + r6.changeId).state, 'paid', 'paying a cancelled change is honoured');
   equal(paidCancelled.invoices[paidCancelled.invoices.length - 1].reviewRequired, true, 'and flagged for a person'); equal(bill().modules.indexOf('siteintel') >= 0, true);
+  /* the same addition asked for again after a cancel in the cycle is a NEW change: never the cancelled one's result or its dead pay link */
+  var e1 = await apply(['engineering']); await req('POST', { action: 'cancel', changeId: e1.changeId });
+  var e2 = await apply(['engineering']); ok(e2.changeId !== e1.changeId, 'a re-request after a cancel is a new change'); equal(e2.state, 'awaiting_payment');
+  equal(db.data.get(root + '/billing/current/invoices/' + e1.changeId).state, 'cancelled', 'the cancelled change stays cancelled');
+  equal(db.data.get(root + '/billing/current/invoices/' + e2.changeId).state, 'unpaid', 'the new change waits for its own payment');
 
   /* ── Concurrency and stale previews ────────────────────────────── */
   seed(ev, 'field'); before = calls; var q12 = await quote(['siteintel']);

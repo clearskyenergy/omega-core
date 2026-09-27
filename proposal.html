@@ -77,8 +77,9 @@
       var b = el('button', 'Sign in and accept', 'btn p'); b.type = 'button'; b.onclick = signInAndAccept; acts.appendChild(b);
     } else {
       $('accept-title').textContent = p.status === 'accepted' ? 'Accepted' : p.status === 'declined' ? 'This proposal was closed' : p.status === 'expired' ? 'This proposal has expired' : 'Proposal';
-      $('accept-text').textContent = p.status === 'accepted' ? 'Thank you. ' + (p.acceptance && p.acceptance.result && p.acceptance.result.paymentLink ? 'Your invoice is ready in QuickBooks.' : 'We are setting things up and will be in touch.') : p.status === 'expired' ? 'Ask ' + (brand.name || 'us') + ' for a fresh one.' : '';
-      if (p.status === 'accepted' && p.acceptance && p.acceptance.result && p.acceptance.result.paymentLink) { var pay = el('a', 'Pay in QuickBooks', 'pay'); pay.href = p.acceptance.result.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; acts.appendChild(pay); }
+      var acceptedLink = p.acceptance && p.acceptance.result && p.acceptance.result.paymentLink, acceptedCard = !!acceptedLink && /\/api\/package-pay\?/.test(acceptedLink);
+      $('accept-text').textContent = p.status === 'accepted' ? 'Thank you. ' + (acceptedLink ? (acceptedCard ? 'Your invoice is ready to pay by card.' : 'Your invoice is ready in QuickBooks.') : 'We are setting things up and will be in touch.') : p.status === 'expired' ? 'Ask ' + (brand.name || 'us') + ' for a fresh one.' : '';
+      if (p.status === 'accepted' && acceptedLink) { var pay = el('a', acceptedCard ? 'Pay by card' : 'Pay in QuickBooks', 'pay'); pay.href = acceptedLink; if (!acceptedCard) { pay.target = '_blank'; pay.rel = 'noopener'; } acts.appendChild(pay); }
     }
   }
   function signInAndAccept() {
@@ -91,7 +92,7 @@
         .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not accept'); return j; }); });
     }).then(function (r) {
       $('accept-acts').textContent = ''; $('accept-title').textContent = 'Accepted';
-      if (r.path === 'plan-change') { msg.textContent = r.state === 'active' ? 'Added: your tools are switching on.' : 'Your change invoice is ready: ' + r.todayDisplay + '. It switches on when the payment clears' + (r.expiresOn ? '; pay before ' + r.expiresOn : '') + '.'; if (r.paymentLink) { var pay = el('a', 'Pay in QuickBooks', 'pay'); pay.href = r.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; $('accept-acts').appendChild(pay); } }
+      if (r.path === 'plan-change') { msg.textContent = r.state === 'active' ? 'Added: your tools are switching on.' : 'Your change invoice is ready: ' + r.todayDisplay + '. It switches on when the payment clears' + (r.expiresOn ? '; pay before ' + r.expiresOn : '') + '.'; if (r.paymentLink) { var byCard = /\/api\/package-pay\?/.test(r.paymentLink), pay = el('a', byCard ? 'Pay by card' : 'Pay in QuickBooks', 'pay'); pay.href = r.paymentLink; if (!byCard) { pay.target = '_blank'; pay.rel = 'noopener'; } $('accept-acts').appendChild(pay); } }
       else msg.textContent = 'Thank you. ' + (r.state === 'awaiting_approval' ? 'Your workspace is awaiting approval; the trial starts when it is approved.' : 'ClearSky will activate the package and send your QuickBooks invoice.');
     }, function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
   }

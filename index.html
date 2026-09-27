@@ -3026,7 +3026,7 @@ var _omegaOnAuth = function (user, tries) {
        where home is (wantsWorkspace() is false while it is unknown). */
     var goHome = function (w) {
       if (!(window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace(w || window.OMEGA_WORKSPACE))) return false;
-      showRedirecting('Omega'); window.location.replace('/workspace'); return true;
+      showRedirecting('Omega'); window.location.replace('/workspace' + (_CHECKOUT ? '?checkout=' + _CHECKOUT + '#billing' : '')); return true;
     };
     if (goHome(ws)) return;
     /* ASK, do not listen. The entitlements may already have landed while this
@@ -3038,6 +3038,7 @@ var _omegaOnAuth = function (user, tries) {
     else window.addEventListener('omega:entitlements', function (e) { goHome(e.detail); });
     showApp(user);
     applyToolLocks();   // gate tools by workspace.unlockedTools (demo Enterprise = all unlocked)
+    _checkoutLanding(); // back from a card payment (the Stripe rail): the Account panel on Billing & plan
     (function () {
       if (!db || !ws.orgId) return;
       db.collection('omega_orgs').doc(ws.orgId).get()
@@ -4595,8 +4596,19 @@ function _stateLabel(b, view){
   return text;
 }
 function _row(k, v, id){ return '<div class="acct-row"><span class="k">' + escHtml(k) + '</span><span class="v"' + (id ? ' id="' + id + '"' : '') + '>' + escHtml(v == null || v === '' ? '—' : String(v)) + '</span></div>'; }
+/* The Stripe card rail (2026-09-27): our signed pay link opens Stripe's
+   checkout in THIS tab and comes back settled; QuickBooks' page keeps its new
+   tab and its words. _pkgCard is the rail of the panel last drawn. */
+var _pkgCard = false;
+function _pkgPayLink(a, url, card, qbText){
+  a.href = url;
+  if (card){ a.removeAttribute('target'); a.removeAttribute('rel'); a.textContent = 'Pay by card'; }
+  else { a.target = '_blank'; a.rel = 'noopener'; a.textContent = qbText; }
+  return a;
+}
 function renderPackagedBilling(b){
   var ws = window.OMEGA_WORKSPACE || {}, view = ws.packageAccess || {};
+  var card = _pkgCard = b.billingProvider === 'stripe' || !!(view.billingNotice && view.billingNotice.card);
   var bought = (b.subscription && Array.isArray(b.subscription.modules)) ? b.subscription.modules : (b.modules || ['lite']);
   var on = b.modules || ['lite'];
   var rows = _row('Package', _moduleNames(bought).join(', '), 'acct-pk-package');
@@ -4610,11 +4622,13 @@ function renderPackagedBilling(b){
   document.getElementById('acct-package-rows').innerHTML = rows;
   var acts = document.getElementById('acct-package-actions'); acts.innerHTML = '';
   if (b.paymentLink && b.amountDue > 0){
-    var pay = document.createElement('a'); pay.id = 'acct-pk-pay'; pay.className = 'acct-btn'; pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.cssText = 'text-decoration:none;text-align:center;width:auto;flex:1'; pay.textContent = 'Pay in QuickBooks'; acts.appendChild(pay);
+    var pay = document.createElement('a'); pay.id = 'acct-pk-pay'; pay.className = 'acct-btn'; pay.style.cssText = 'text-decoration:none;text-align:center;width:auto;flex:1'; _pkgPayLink(pay, b.paymentLink, card, 'Pay in QuickBooks'); acts.appendChild(pay);
     var paid = document.createElement('button'); paid.id = 'acct-pk-paid-btn'; paid.className = 'acct-btn'; paid.style.cssText = 'width:auto;flex:1;background:#fff;color:var(--cs-navy);border:1.5px solid var(--cs-border)'; paid.textContent = "I've paid"; paid.onclick = function(){ checkPackagePayment(paid); }; acts.appendChild(paid);
   }
   var admin = !!(window.OmegaTenant && OmegaTenant.isAdmin && OmegaTenant.isAdmin());
   var plan = document.getElementById('acct-package-plan'), add = document.getElementById('acct-package-add');
+  var autopay = document.getElementById('acct-package-autopay');
+  if (card && autopay) autopay.textContent = 'Your card is entered only on Stripe\u2019s secure page and kept on file: it is charged on your billing day, and each receipt arrives by email.';
   if (!admin){
     plan.textContent = 'Your workspace owner or an administrator climbs the Ladder and pays the invoices. Ask them to add what you need.';
     add.style.display = 'none';
@@ -4623,34 +4637,67 @@ function renderPackagedBilling(b){
     return;
   }
   add.style.display = '';
-  plan.textContent = b.packagingState === 'paid' ? 'Add a rung any time: it is priced for the rest of this cycle, invoiced in QuickBooks, and on the moment the payment clears.' : 'The Ladder opens once your current invoice is paid.';
+  plan.textContent = b.packagingState === 'paid' ? (card ? 'Add a rung any time: it is priced for the rest of this cycle, charged to the card on file, and on the moment the charge clears.' : 'Add a rung any time: it is priced for the rest of this cycle, invoiced in QuickBooks, and on the moment the payment clears.') : 'The Ladder opens once your current invoice is paid.';
   var u = currentUser || (auth && auth.currentUser); if (!u) return;
   u.getIdToken().then(function(tok){
     return fetch('/api/plan-change', { cache:'no-store', headers:{ 'Authorization':'Bearer ' + tok } }).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||r.status); return j; }); });
   }).then(function(s){
     setText('acct-pk-monthly', s.monthlyDisplay || '—');
+    if (s.rail === 'stripe') card = _pkgCard = true;
+    if (card && autopay && s.card && s.card.display) autopay.textContent = 'Your card on file (' + s.card.display + ') is charged on your billing day; each receipt arrives by email. Card details are entered only on Stripe\u2019s secure page.';
     if (s.gate && !s.gate.canApply && s.gate.reason) plan.textContent = s.gate.reason;
     var host = document.getElementById('acct-package-invoices');
     if (!s.invoices || !s.invoices.length){ host.textContent = 'No invoices issued yet.'; return; }
     host.innerHTML = s.invoices.map(function(inv){
       var kind = inv.kind === 'change' ? 'Change' + (inv.names ? ' · ' + inv.names.join(', ') : '') : inv.kind === 'pack' ? 'Usage pack' : 'Subscription';
       var label = escHtml(_acctDay(inv.date)) + ' — ' + escHtml(inv.display) + ' · ' + escHtml(kind) + ' · ' + escHtml(inv.state);
-      return '<div data-invoice-state="' + escHtml(inv.state) + '">' + label + (inv.paymentLink ? ' · <a href="' + escHtml(inv.paymentLink) + '" target="_blank" rel="noopener">Pay in QuickBooks</a>' : '') + '</div>';
+      return '<div data-invoice-state="' + escHtml(inv.state) + '">' + label + (inv.paymentLink ? (card ? ' · <a href="' + escHtml(inv.paymentLink) + '">Pay by card</a>' : ' · <a href="' + escHtml(inv.paymentLink) + '" target="_blank" rel="noopener">Pay in QuickBooks</a>') : '') + '</div>';
     }).join('');
   }).catch(function(e){
     setText('acct-pk-monthly', '—');
     document.getElementById('acct-package-invoices').textContent = 'Invoices unavailable — ' + (e.message || e);
   });
 }
+/* Checkout's return on the CLASSIC home (the Stripe card rail): Stripe comes
+   back to /workspace?checkout=done|cancelled|pending, which carries it here
+   for a classic-shell tenant (workspace.html classicBounce). The server
+   settled the record before sending the payer back: open the Account panel
+   on Billing & plan once the entitlements are known, say what happened,
+   re-ask the package and repaint, and drop the parameter so a reload does
+   not say it twice. A workspace-home visit is carried on to /workspace with
+   it (goHome) and the landing there says it instead. */
+var _CHECKOUT = (function(){ var m = /[?&]checkout=(done|cancelled|pending)(?=&|$)/.exec(location.search || ''); return m ? m[1] : null; })();
+function _checkoutLanding(){
+  if (!_CHECKOUT) return;
+  var what = _CHECKOUT, done = false;
+  var words = { done: 'Payment received \u2014 your workspace is being updated', cancelled: 'Nothing was charged', pending: 'Your payment is being confirmed' }[what];
+  function land(){
+    if (done) return;
+    if (window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace && OmegaWorkspaceShell.wantsWorkspace(window.OMEGA_WORKSPACE)) return;
+    done = true; _CHECKOUT = null;
+    try {
+      var rest = (location.search || '').replace(/^\?/, '').split('&').filter(function(kv){ return kv && kv.split('=')[0] !== 'checkout'; }).join('&');
+      history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+    } catch(e){}
+    openAccount();
+    var msg = document.getElementById('acct-package-msg');
+    if (msg){ msg.textContent = words; msg.className = 'acct-msg' + (what === 'done' ? ' ok' : ''); }
+    var sec = document.getElementById('acct-package'); if (sec && sec.scrollIntoView) { try { sec.scrollIntoView({ block: 'start' }); } catch(e){} }
+    var p = null; try { p = window.OmegaTenant && OmegaTenant.refreshPackage ? OmegaTenant.refreshPackage() : null; } catch(e){}
+    Promise.resolve(p).then(function(){ loadBilling(); }, function(){ loadBilling(); });
+  }
+  if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(function(){ land(); }); else land();
+}
 /* "I've paid": one look at QuickBooks now; paid, the package view is refreshed and the panel repainted. */
 function checkPackagePayment(btn){
   var u = currentUser || (auth && auth.currentUser); if (!u) return;
-  var msg = document.getElementById('acct-package-msg'); btn.disabled = true; btn.textContent = 'Checking QuickBooks…'; msg.textContent = '';
+  var card = _pkgCard, msg = document.getElementById('acct-package-msg'); btn.disabled = true; btn.textContent = card ? 'Checking your payment…' : 'Checking QuickBooks…'; msg.textContent = '';
   u.getIdToken().then(function(tok){
     return fetch('/api/plan-change', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tok }, body: JSON.stringify({ action:'reconcile-now' }) }).then(function(r){ return r.json(); });
   }).then(function(j){
     if (j && j.paid){ msg.textContent = 'Paid. Your workspace is opening…'; msg.className = 'acct-msg ok'; return (window.OmegaTenant && OmegaTenant.refreshPackage ? OmegaTenant.refreshPackage() : Promise.resolve()).then(function(){ loadBilling(); }); }
-    msg.textContent = (j && j.error) ? j.error : j && j.throttled ? 'QuickBooks was checked a moment ago: not paid yet. Try again in a few seconds.' : 'Not paid yet as far as QuickBooks knows. A card payment shows within a minute; try again then.';
+    msg.textContent = (j && j.error) ? j.error : card ? (j && j.throttled ? 'The payment was checked a moment ago: not paid yet. Try again in a few seconds.' : 'Not paid yet. A card payment shows as soon as Stripe confirms it; try again in a moment.')
+      : j && j.throttled ? 'QuickBooks was checked a moment ago: not paid yet. Try again in a few seconds.' : 'Not paid yet as far as QuickBooks knows. A card payment shows within a minute; try again then.';
     btn.disabled = false; btn.textContent = "I've paid";
   }).catch(function(e){ msg.textContent = 'Could not check — ' + (e.message || e); btn.disabled = false; btn.textContent = "I've paid"; });
 }
