@@ -75,6 +75,9 @@ function state(c, now) {
   if (b.packagingState === 'trial') return { canApply: false, reason: 'Your trial runs the package proposed at approval. Additions start after your first payment.' };
   if (b.packagingState !== 'paid') return { canApply: false, reason: 'Pay your current invoice first. Additions are available once the payment clears.' };
   if ((b.interval || 'monthly') === 'annual') return { canApply: false, reason: 'Additions to an annual prepay are quoted by ClearSky. Contact support.' };
+  /* the renewal is due and not issued yet: a change now would bill the whole
+     new cycle and the renewal would bill it again */
+  if (b.nextInvoiceOn && b.nextInvoiceOn <= iso(now)) return { canApply: false, reason: 'Your renewal is being issued today. Add modules once it has gone through; that usually takes under an hour.' };
   if (!b.billingDay || !D.customerId(b, D.providerOf(b))) return { canApply: false, reason: 'Billing is not set up for this workspace yet.' };
   return { canApply: true };
 }
@@ -115,7 +118,14 @@ function quote(c, rows, input, now) {
   }
   var feeNote = after.serviceFee.amountCents !== before.serviceFee.amountCents ? 'Your annual service fee at renewal becomes ' + after.serviceFee.display + ' (now ' + before.serviceFee.display + ').' : null;
   var blocked = gate.canApply && open.length ? { canApply: false, reason: 'A change is waiting for payment: ' + open[0].add.map(function (k) { return M.get(k).name; }).join(', ') + '. Pay it on the invoice page or cancel it first.' } : gate;
-  var id = Q.key(B.stable({ org: c.root.id, book: book.version, owned: owned, add: add, plan: after.plan, cycle: cycle, lines: lines, total: totalCents, billing: { plan: sub.plan, credit: b.credit, builders: b.builders, viewers: b.viewers, interval: b.interval, serviceFee: b.serviceFee } }));
+  var basis = { org: c.root.id, book: book.version, owned: owned, add: add, plan: after.plan, cycle: cycle, lines: lines, total: totalCents, billing: { plan: sub.plan, credit: b.credit, builders: b.builders, viewers: b.viewers, interval: b.interval, serviceFee: b.serviceFee } };
+  /* the same addition asked for again after a cancel in this cycle is a NEW
+     change: without this its id — and so its operation and its invoice
+     record — would be the cancelled one's, and apply would hand back the
+     cancelled result and its dead pay link */
+  var reopened = rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'cancelled' && r.cycle && r.cycle.start === cycle.start; }).length;
+  if (reopened) basis.reopened = reopened;
+  var id = Q.key(B.stable(basis));
   return { orgId: c.root.id, previewId: id, effectiveAt: now, add: add, addNames: names(add), modules: target, plan: after.plan, planBefore: before.plan, planDisplay: after.display.plan,
     before: { plan: before.plan, monthlyCents: before.monthlyCents, display: before.display.monthly },
     after: { plan: after.plan, monthlyCents: after.monthlyCents, display: after.display.monthly, fit: after.display.fit },
@@ -258,7 +268,7 @@ async function removal(db, orgId, input, caller, now, withdraw) {
   });
 }
 async function summary(db, orgId) {
-  var c = await S.context(db, orgId), rows = await records(c), b = c.billing, now = Date.now(), monthly = null, planDisplay = null;
+  var c = await S.context(db, orgId, null, { lenient: true }), rows = c.org.missingRecord ? [] : await records(c), b = c.billing, now = Date.now(), monthly = null, planDisplay = null;
   var sub = b.subscription && Array.isArray(b.subscription.modules) ? b.subscription : { modules: b.modules, plan: b.plan };
   if (b.packaged === true) {
     try {
@@ -294,7 +304,8 @@ async function summary(db, orgId) {
    addition lands on the monthly invoice. Nothing is charged here. A
    packaged workspace is refused and sent to quote/apply. */
 async function optIn(db, orgId, input, caller, now) {
-  var c = await S.context(db, orgId), b = c.billing;
+  if (orgId === 'clearsky-usa.com') fail('This is ClearSky\'s own workspace: every module is already on for ClearSky staff. To try buying a module, use a test workspace.', 409);
+  var c = await S.context(db, orgId, null, { lenient: true }), b = c.billing;
   if (b.packaged === true) fail('This workspace is on a subscription package: add modules through the menu, which prices and invoices them.', 409);
   if (c.org.status !== 'active') fail('Your workspace is not active.', 409);
   var add = keys(input.add, 'add'), byKey = {};

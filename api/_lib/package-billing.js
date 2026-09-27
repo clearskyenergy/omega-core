@@ -9,13 +9,20 @@ var BP = require('./billing-profile'), Q = require('./qbo-billing'), D = require
 function fail(message, status) { var e = new Error(message); e.status = status || 409; throw e; }
 function clean(b) { var out = Object.assign({}, b); delete out.activationLock; return out; }
 function basis(c) { return Q.key(B.stable({ org: c.org, billing: clean(c.billing), profile: c.profile, book: c.book })); }
-async function context(db, orgId, version) {
-  var root = db.doc('omega_orgs/' + orgId);
+async function context(db, orgId, version, options) {
+  var root = db.doc('omega_orgs/' + orgId), lenient = !!(options && options.lenient);
   var rows = await Promise.all([root.get(), root.collection('billing').doc('current').get(), root.collection('billing').doc('profile').get()]);
-  if (!rows[0].exists) fail('Organization not found', 404);
+  if (!rows[0].exists && !lenient) fail('Organization not found', 404);
   var billing = rows[1].exists ? rows[1].data() : {};
-  var book = await B.load(db, version || billing.pricebookVersion || B.VERSION);
-  return { root: root, org: rows[0].data(), billing: billing, profile: rows[2].exists ? rows[2].data() : null, book: book };
+  /* lenient (a request that moves no money: a legacy opt-in, the summary):
+     a legacy tenant with no omega_orgs record yet reads as active, exactly
+     as every gate fails OPEN on a missing record; an unseeded book reads as
+     the code's own, exactly as the public price list (api/offerings) does.
+     Every write that moves money still runs guard(), which refuses both. */
+  var book;
+  try { book = await B.load(db, version || billing.pricebookVersion || B.VERSION); }
+  catch (e) { if (!lenient || !/not seeded/i.test(String(e && e.message))) throw e; book = B.proposed(); }
+  return { root: root, org: rows[0].exists ? rows[0].data() : { status: 'active', missingRecord: true }, billing: billing, profile: rows[2].exists ? rows[2].data() : null, book: book };
 }
 /* Two modes, both explicit (api/_lib/packaging-mode.js), judged for the
    provider this workspace bills through (billing-driver.providerOf).

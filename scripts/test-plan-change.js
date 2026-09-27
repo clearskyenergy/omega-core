@@ -207,6 +207,16 @@ async function run() {
   var paidCancelled = await S.reconcile(db, orgId, now + 60000, {});
   equal(db.data.get(root + '/billing/current/invoices/' + r6.changeId).state, 'paid', 'paying a cancelled change is honoured');
   equal(paidCancelled.invoices[paidCancelled.invoices.length - 1].reviewRequired, true, 'and flagged for a person'); equal(bill().modules.indexOf('siteintel') >= 0, true);
+  /* the same addition asked for again after a cancel in the cycle is a NEW change: never the cancelled one's result or its dead pay link */
+  var e1 = await apply(['engineering']); await req('POST', { action: 'cancel', changeId: e1.changeId });
+  var e2 = await apply(['engineering']); ok(e2.changeId !== e1.changeId, 'a re-request after a cancel is a new change'); equal(e2.state, 'awaiting_payment');
+  equal(db.data.get(root + '/billing/current/invoices/' + e1.changeId).state, 'cancelled', 'the cancelled change stays cancelled');
+  equal(db.data.get(root + '/billing/current/invoices/' + e2.changeId).state, 'unpaid', 'the new change waits for its own payment');
+  /* the billing day, before the renewal is issued: no additions (the change would bill the whole new cycle, and the renewal again) */
+  seed(ev, 'field'); var dueDay = bill().nextInvoiceOn;
+  var early = await C.preview(db, orgId, { add: ['siteintel'] }, Date.parse(dueDay + 'T01:00:00Z'));
+  equal(early.canApply, false); ok(/renewal is being issued today/.test(early.reason), early.reason);
+  equal((await C.preview(db, orgId, { add: ['siteintel'] }, Date.parse(dueDay + 'T01:00:00Z') - 86400000)).canApply, true, 'the day before, additions are open');
 
   /* ── Concurrency and stale previews ────────────────────────────── */
   seed(ev, 'field'); before = calls; var q12 = await quote(['siteintel']);
@@ -336,6 +346,16 @@ async function run() {
   ok(!db.data.has(root + '/billing/current'), 'a request never creates a billing record');
   seed(ev, 'field');
   await refused(function () { return req('POST', { action: 'opt-in', add: ['siteintel'] }); }, /subscription package/);
+  /* a legacy workspace with no omega_orgs record yet (every gate fails open on one): opt-in and the summary work, never "Organization not found" */
+  db = new F.DB(); db.serial = true;
+  db.seed(root + '/billing/current', { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'stripe' });
+  var noRecord = await req('GET', { orgId: orgId }); equal([noRecord.packaged, noRecord.invoices], [false, []], 'the summary reads a workspace with no record, and an unseeded book as the code\'s');
+  var oiNo = await req('POST', { action: 'opt-in', add: ['siteintel'] });
+  equal([oiNo.requested, oiNo.display, bill().optIns.siteintel.status], [true, '$500/month', 'requested'], 'the opt-in is recorded with its price');
+  ok(!db.data.has(root), 'and no organization record is made');
+  await refused(function () { return C.apply(db, orgId, { add: ['siteintel'], previewId: 'a'.repeat(48), effectiveAt: now }, owner, now); }, /Organization not found/);
+  /* ClearSky's own workspace holds every module already: it is told so, never "Organization not found" */
+  await refused(function () { return C.optIn(db, 'clearsky-usa.com', { add: ['siteintel'] }, staff, now); }, /ClearSky's own workspace/);
 
   Date.now = realNow;
   console.log('Plan change: ' + count + ' passed; sandbox mock, no network.');
