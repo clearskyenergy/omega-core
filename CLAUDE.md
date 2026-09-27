@@ -295,6 +295,13 @@ tabs), and Jarvis names and opens only `OmegaCaps.tabOpen` tabs
 Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move System) live
 on Draw on every plan, where a package puts them: `LITE` in the Compute
 tab's mover, held to the catalog by `scripts/tests/tlegacygates.js`.
+Omega Storefront (`whitelabel`, no tools, no editor commands) is held where
+the public storefront's own gate opens it, never on the tier:
+`api/_lib/storefront.js` `storefrontEntitled`, which `api/_lib/embed.js`
+asks (a `toolOverrides` switch either
+way, else the `whitelabel` add-on or the staff-written `whiteLabel.enabled`
+on the tenant record); `OmegaWorkspaceHub.storefront` is its twin, run case
+for case against it by `scripts/tests/tworkspacehub.js`.
 The shared omega-package-menu.js renders catalog features and server-formatted
 prices. Staff package previews are read-only server projections, never tenant
 impersonation or billing edits. Legacy layout modes apply to unpackaged records.
