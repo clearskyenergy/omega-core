@@ -99,6 +99,7 @@ async function sync(db, book, options, deps) {
     if (matches.length > 1) fail('Two QuickBooks items for ' + p.name + ': ' + matches.map(function (m) { return m.item.Name + ' (' + m.item.Id + ')'; }).join(' and ') + '; keep one and make the other inactive');
     var item = matches[0] && matches[0].item, as = matches[0] ? matches[0].name : p.name;
     if (item && as !== p.name && Math.round(Number(item.UnitPrice) * 100) !== p.priceCents) fail('Existing item needs accounting review: ' + as + ' is not the price book\'s ' + p.name + ' (price ' + item.UnitPrice + ', book ' + (p.priceCents / 100) + ')');
+    if (!item && options.noCreate) fail('No QuickBooks item named ' + p.name + (p.formerNames && p.formerNames.length ? ' or ' + p.formerNames.join(' or ') : '') + ' (bind never creates; rename or create it in QuickBooks first)');
     if (!item) {
       item = (await call('item', { Name: p.name, Type: 'Service', IncomeAccountRef: { value: options.incomeAccountId },
         UnitPrice: p.priceCents / 100, Taxable: options.taxable }, requestId(options.realmId, p.name))).Item;

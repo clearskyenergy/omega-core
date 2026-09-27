@@ -187,7 +187,7 @@ the audit rows it writes.
       mode and the flag as the second confirmation:
       `PACKAGING_LIVE=true QBO_ENV=production node scripts/qbo-sync-items.js --apply --live --realm=<production realm> --income-account=<id> --taxable|--non-taxable`
       (dry run first without `--apply`). One without the other is refused.
-- [ ] Enable the book: `node scripts/enable-packaging-sandbox.js` (dry run
+- [ ] Enable the book, either from a browser — `/admin/pricebook.html` signed in as a verified clearsky-usa.com address (Bind items, then Enable; `api/pricebook-admin.js` runs the same rule, `api/_lib/pricebook-enable.js`, with the deployment's credentials) — or from a terminal: `node scripts/enable-packaging-sandbox.js` (dry run
       prints the hash), then `--apply --expected-hash=…`. It enables the
       current book in either mode; the name is historical.
 - [ ] Vercel **Production** environment: `PACKAGING_SIGNUP_ENABLED=true`,
