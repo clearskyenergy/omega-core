@@ -86,6 +86,9 @@ function state(c, now) {
   if (b.packagingState === 'trial') return { canApply: false, reason: 'Your trial runs the package proposed at approval. Additions start after your first payment.' };
   if (b.packagingState !== 'paid') return { canApply: false, reason: 'Pay your current invoice first. Additions are available once it is paid.' };
   if ((b.interval || 'monthly') === 'annual') return { canApply: false, reason: 'Additions to an annual prepay are quoted by ClearSky. Contact support.' };
+  /* the renewal is due and not issued yet: a change now would bill the whole
+     new cycle and the renewal would bill it again */
+  if (b.nextInvoiceOn && b.nextInvoiceOn <= iso(now)) return { canApply: false, reason: 'Your renewal is being issued today. Add modules once it has gone through; that usually takes under an hour.' };
   if (!b.billingDay || !S.customerOf(b)) return { canApply: false, reason: 'Billing is not set up for this workspace yet.' };
   return { canApply: true };
 }
@@ -96,6 +99,16 @@ function pending(records) {
 async function records(c) { return (await c.root.collection('billing').doc('current').collection('invoices').orderBy('date').get()).docs.map(function (d) { return d.data(); }); }
 function names(list) { return (list || []).map(function (k) { return M.get(k) ? M.get(k).name : k; }); }
 function ordinal(d) { var s = ['th', 'st', 'nd', 'rd'], v = d % 100; return d + (s[(v - 20) % 10] || s[v] || s[0]); }
+/* On the card rail the invoice record is written BEFORE the card is charged
+   (as the renewal's 'prepared' record is), so a charge whose request dies
+   before its final write still has a record for Stripe's event and the
+   runner to settle — never money nobody can see. */
+function preparedRecord(c, orgId, record, cents) {
+  if (S.railOf(c.billing) !== 'stripe' || !(cents > 0)) return null;
+  var SB = require('./stripe-billing');
+  return Object.assign({}, record, { state: 'prepared' }, S.issuedFields('stripe', { id: SB.refOf(record.marker), charge: null }, S.customerOf(c.billing), orgId),
+    { totalCents: cents, paymentLink: SB.payLink(SB.homeOf(c.org), orgId, record.id), preparedAt: record.createdAt });
+}
 /* Pure quote from a loaded context. `rows` are the tenant's invoice records. */
 function quote(c, rows, input, now) {
   var b = c.billing, book = c.book, gate = state(c, now), open = pending(rows);
@@ -167,6 +180,7 @@ async function apply(db, orgId, input, caller, now, deps) {
   var record = { kind: 'change', id: 'change-' + p.previewId, date: iso(now), cycle: { start: p.cycle.start, end: p.cycle.end }, period: { start: iso(now), end: p.cycle.end },
     add: p.add, modules: p.modules, plan: p.plan, planBefore: p.planBefore, lines: p.lines, subtotalCents: p.todayCents, totalCents: p.todayCents, pricebookVersion: c.book.version,
     marker: 'OMEGA change ' + orgId + ' / ' + iso(now) + ' / ' + p.previewId.slice(0, 12), by: caller.email, createdAt: now, monthlyCents: p.after.monthlyCents };
+  var prepared = preparedRecord(c, orgId, record, p.todayCents);
   var replay = await db.runTransaction(async function (tx) {
     var old = await tx.get(op), live = await tx.get(current), invoices = await tx.get(current.collection('invoices').orderBy('date'));
     if (old.exists && old.data().state === 'done') return old.data().result;
@@ -175,6 +189,7 @@ async function apply(db, orgId, input, caller, now, deps) {
     if (fresh.changeLock && fresh.changeLock.until > now) fail('A change is already being processed; retry shortly');
     tx.set(current, { changeLock: { id: record.id, until: now + 120000 } }, { merge: true });
     tx.set(op, { state: 'running', at: now, by: caller.email, requestFingerprint: fingerprint }, { merge: true });
+    if (prepared) tx.set(current.collection('invoices').doc(record.id), prepared);
     return null;
   });
   if (replay) return replay;
@@ -185,7 +200,7 @@ async function apply(db, orgId, input, caller, now, deps) {
     return await db.runTransaction(async function (tx) {
       var live = await tx.get(current), invoices = await tx.get(current.collection('invoices').orderBy('date')), fresh = live.data() || {};
       if (!fresh.changeLock || fresh.changeLock.id !== record.id) fail('Change inputs moved; retry');
-      var stored = Object.assign({}, record, issued ? Object.assign({ state: 'unpaid' }, S.issuedFields(rail, issued, S.customerOf(c.billing), orgId), { totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now })
+      var stored = Object.assign({}, record, issued ? Object.assign({ state: 'unpaid' }, S.issuedFields(rail, issued, S.customerOf(c.billing), orgId), { totalCents: issued.totalCents, paymentLink: charged ? null : issued.payUrl, issuedAt: now })
         : { state: 'paid', qboInvoiceId: null, qboCustomerId: c.billing.qboCustomerId || null, paidCents: 0, paymentLink: null, activatedAt: now });
       tx.set(current.collection('invoices').doc(record.id), stored);
       var all = invoices.docs.map(function (d) { return d.data(); }).concat([stored]), after = fresh;
@@ -209,7 +224,10 @@ async function apply(db, orgId, input, caller, now, deps) {
     }).then(async function (result) {
       /* the card on file paid: settle the change now, so the modules are on when this answers */
       var settled = await S.settleCharged(db, orgId, rail, issued, record.id, now, deps);
-      if (!settled || settled.state !== 'paid') return result;
+      if (!charged) return result;
+      /* charged but not settled in this request (Stripe slow to answer): it IS
+         paid; the webhook or the runner switches it on. Never a pay button. */
+      if (!settled || settled.state !== 'paid') { result = Object.assign({}, result, { state: 'charged', charged: true, paymentLink: null, card: cardName(card(c.billing)) }); await op.set({ result: result }, { merge: true }); return result; }
       try { var Runner = require('./package-billing-runner'), mailer = (deps && deps.mail) || require('./mail'); await Runner.deliver(db, orgId, now, mailer); await Runner.staffDeliver(db, now, mailer); } catch (e) {}
       var after = (await current.get()).data() || {};
       result = Object.assign({}, result, { state: 'active', charged: true, paymentLink: null, modules: after.modules || result.modules, card: cardName(card(after)) });
@@ -380,16 +398,18 @@ async function packBuy(db, orgId, input, caller, now, deps) {
   var record = { kind: 'pack', id: opId, date: iso(now), period: { start: iso(now), end: q.cycle.end }, pack: { meter: q.meter, units: q.units, cycle: q.cycle },
     lines: [{ itemKey: 'pack:' + q.meter, name: 'OMEGA \u00b7 ' + q.name + ' \u00d7' + q.units, quantity: 1, amountCents: q.cents }], subtotalCents: q.cents, totalCents: q.cents,
     pricebookVersion: c.book.version, marker: 'OMEGA pack ' + orgId + ' / ' + iso(now) + ' / ' + q.previewId.slice(0, 12) + ' / ' + at, by: caller.email, createdAt: now };
+  var prepared = preparedRecord(c, orgId, record, q.cents);
   await db.runTransaction(async function (tx) {
     var old = await tx.get(op); if (old.exists) fail('This pack purchase is already being processed; retry shortly');
     tx.set(op, { state: 'running', at: now, by: caller.email });
+    if (prepared) tx.set(current.collection('invoices').doc(record.id), prepared);
   });
   try {
     var rail = S.railOf(c.billing), issued = await S.driverFor(c.book, rail, deps).invoice(record, BP.stored(c.profile), S.customerOf(c.billing), { org: orgId, recordId: record.id, host: require('./stripe-billing').homeOf(c.org) });
     var charged = !!(issued.charge && issued.charge.status === 'succeeded'), declined = !!(issued.charge && issued.charge.status === 'failed');
     var result = await db.runTransaction(async function (tx) {
       var live = await tx.get(current), fresh = live.data() || {};
-      var stored = Object.assign({}, record, { state: 'unpaid' }, S.issuedFields(rail, issued, S.customerOf(c.billing), orgId), { totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now });
+      var stored = Object.assign({}, record, { state: 'unpaid' }, S.issuedFields(rail, issued, S.customerOf(c.billing), orgId), { totalCents: issued.totalCents, paymentLink: charged ? null : issued.payUrl, issuedAt: now });
       tx.set(current.collection('invoices').doc(record.id), stored);
       tx.update(current, { amountDue: (fresh.amountDue || 0) + issued.totalCents / 100, updatedAt: now, updatedBy: caller.email });
       if (!charged) tx.set(c.root.collection('notifications').doc('package-pack-' + record.id), { kind: 'billing', read: false, createdAt: now,
@@ -403,7 +423,7 @@ async function packBuy(db, orgId, input, caller, now, deps) {
       return result;
     });
     var settled = await S.settleCharged(db, orgId, rail, issued, record.id, now, deps);
-    if (settled && settled.state === 'paid') { result = Object.assign({}, result, { state: 'added', charged: true, paymentLink: null }); await op.set({ result: result }, { merge: true }); }
+    if (charged) { result = Object.assign({}, result, { state: settled && settled.state === 'paid' ? 'added' : 'charged', charged: true, paymentLink: null }); await op.set({ result: result }, { merge: true }); }
     return result;
   } catch (e) { await op.set({ state: 'retry', failedAt: now }, { merge: true }); throw e; }
 }

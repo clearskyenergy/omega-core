@@ -109,7 +109,7 @@
           api('/api/plan-change', body).then(function (r) {
             host.textContent = '';
             /* the card on file paid: the modules are on already (the server settled it in the same request) */
-            if (r.charged) { said[m.key] = { text: 'Switched on. Charged ' + r.display + ' to ' + (r.card || 'your card on file') + '.', cls: 'opm-quote' }; host.appendChild(node('p', said[m.key].text, said[m.key].cls)); }
+            if (r.charged) { said[m.key] = { text: (r.state === 'charged' ? 'Charged ' + r.display + ' to ' + (r.card || 'your card on file') + '. It switches on within a minute.' : 'Switched on. Charged ' + r.display + ' to ' + (r.card || 'your card on file') + '.'), cls: 'opm-quote' }; host.appendChild(node('p', said[m.key].text, said[m.key].cls)); }
             else if (r.state === 'active') host.appendChild(node('p', 'Added. Your tools are updating…', 'opm-quote'));
             else if (r.rail === 'stripe' || ownPay(r.paymentLink)) {
               said[m.key] = r.cardDeclined ? { text: 'Your card on file was declined, so nothing was charged. Pay ' + r.display + ' by card to switch it on; pay before ' + r.expiresOn + '.', cls: 'opm-reason' }

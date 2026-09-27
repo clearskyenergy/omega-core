@@ -35,12 +35,14 @@ module.exports = function (req, res) {
       res.setHeader('Location', out.url); res.status(303).end();
     });
   }).catch(function (e) {
-    var status = e && e.status || 500;
-    if (status >= 500) console.error('[package-pay]', e);
-    /* the engine's words name modes and keys; the payer hears what to do */
-    var text = status === 404 ? 'This invoice was not found. Open Plan & billing in your workspace for the current one.'
-      : status < 500 ? String(e.message || 'This invoice cannot be paid here.')
+    var status = e && e.status || 500, ours = !(e && (e.stripeType || e.clearsky)) && status < 500;
+    if (!ours) console.error('[package-pay]', e);
+    /* only the engine's own refusals (cancelled, expired, already charged)
+       are shown; Stripe's text (keys, account and object ids) and anything
+       on ClearSky's side get the plain message */
+    var text = status === 404 && ours ? 'This invoice was not found. Open Plan & billing in your workspace for the current one.'
+      : ours ? String(e.message || 'This invoice cannot be paid here.')
       : 'Card payments are not available right now. Nothing was charged; try again in a few minutes, or reply to your invoice email.';
-    return page(res, status < 500 ? status : 503, status === 409 ? 'This invoice cannot be paid by card now' : 'Payment could not be started', text);
+    return page(res, ours ? status : 503, ours && status === 409 ? 'This invoice cannot be paid by card now' : 'Payment could not be started', text);
   });
 };

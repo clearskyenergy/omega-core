@@ -153,7 +153,9 @@ function driver(book, supplied) {
     var cus = await call(function () { return s.customers.retrieve(customerId); });
     if (!cus || cus.deleted || !cus.metadata || cus.metadata.kind !== KIND || cus.metadata.org !== opts.org) fail('The Stripe customer belongs to another account; accounting review required');
     var pm = idOf(cus.invoice_settings && cus.invoice_settings.default_payment_method);
-    if (!pm) return out;
+    /* opts.offSession === false: the engine holds the card (a workspace whose
+       invoice was refunded or charged back is never charged again unasked) */
+    if (!pm || opts.offSession === false) return out;
     /* Stripe keeps an idempotency key for about a day and the runner retries
        for longer: a charge already made for this record (a crash between the
        charge and our write) is found again, never made twice. A list is read
@@ -212,12 +214,16 @@ function driver(book, supplied) {
       }
     }
     var net = Math.max(0, received - Math.min(back, received));
-    var reversed = succeeded > 0 && (net === 0 || lost);
+    /* reversed: everything went back, or a lost dispute took the net below
+       the total (a lost dispute on a DUPLICATE payment leaves one full
+       payment standing: still paid) */
+    var reversed = succeeded > 0 && (net === 0 || (lost && net < record.totalCents));
     /* a partial refund is a concession somebody decided: the invoice stays
-       paid (the net is reported); paying twice is money to give back */
+       paid (the net is reported); paying twice is money to give back, and
+       once it is given back the note goes */
     var satisfied = !reversed && received >= record.totalCents;
     return { satisfied: satisfied, reversed: reversed, paidCents: net, payUrl: record.paymentLink || null,
-      review: received > record.totalCents ? 'paid more than once: refund the difference' : open ? 'a dispute is open' : null };
+      review: net > record.totalCents ? 'paid more than once: refund the difference' : open ? 'a dispute is open' : null };
   }
   return { customer: customer, invoice: invoice, reconcile: reconcile, guard: function () { return guard(book); } };
 }
@@ -232,17 +238,49 @@ async function load(db, org, recordId) {
   return { root: root, current: current, ref: ref, org: rows[0].data(), billing: billing, record: record };
 }
 function done(org, what) { return 'https://' + homeOf(org) + '/workspace?checkout=' + what + '#billing'; }
+/* The engine's own switch (package-billing.guard: the billing flag, the
+   mode, an enabled book, a marked sandbox tenant) holds for a mailed pay
+   link too: turning packaged billing off stops cards being taken. */
+async function engineOpen(db, org) {
+  var S = require('./package-billing');
+  try { S.guard(await S.context(db, org)); } catch (e) { fail('Card payments are paused for this workspace right now; nothing was charged', 503, { clearsky: true }); }
+}
+/* ClearSky's inbox, once per id: a card payment a person has to look at. */
+async function reviewAlert(db, org, id, text) {
+  try {
+    var ref = db.doc('omega_orgs/clearsky-usa.com/notifications/billing-review-' + id);
+    await db.runTransaction(async function (tx) {
+      var old = await tx.get(ref); if (old.exists) return;
+      tx.set(ref, { kind: 'billing-review', read: false, createdAt: Date.now(), orgId: org, staffMail: 'billingAlert', mailState: 'pending', text: String(text).slice(0, 600) });
+    });
+  } catch (e) { console.error('[stripe-billing] review alert not written:', e && e.message); }
+}
+var LIVE_PI = ['succeeded', 'processing', 'requires_capture'];
 async function checkout(db, org, recordId, now, supplied) {
   var x = await load(db, org, recordId), r = x.record, st = r.stripe;
   if (r.state === 'paid') return { url: done(x.org, 'done'), paid: true };
   if (r.state !== 'unpaid') fail(r.state === 'cancelled' ? 'This change was cancelled' : r.state === 'expired' ? 'This invoice expired at the end of its cycle' : 'This invoice cannot be paid now', 409);
   if (!x.billing.stripe || x.billing.stripe.customerId !== st.customerId || x.billing.stripe.env !== Mode.env()) fail('This workspace\'s card billing changed; ask ClearSky', 409);
+  await engineOpen(db, org);
   guard(null); var s = client(supplied);
+  /* a charge already on this invoice (the card on file, charged a moment
+     ago; a checkout just paid): settle it and never offer a second payment */
+  var prior = st.paymentIntents || [];
+  for (var i = 0; i < prior.length; i++) {
+    var had = await call(function () { return s.paymentIntents.retrieve(prior[i]); });
+    if (had && LIVE_PI.indexOf(had.status) >= 0) {
+      try { await settle(db, org, recordId, now, supplied); } catch (e) { console.warn('[stripe-billing] settle before checkout:', e && e.message); }
+      if ((await x.ref.get()).data().state === 'paid') return { url: done(x.org, 'done'), paid: true };
+      fail('This invoice was already charged to your card; it shows as paid within a few minutes', 409);
+    }
+  }
   var open = st.openSession;
-  if (open && open.id && open.expiresAt > now + 5 * 60000) {
+  if (open && open.id) {
     var cur = await call(function () { return s.checkout.sessions.retrieve(open.id); });
-    if (cur && cur.status === 'open' && cur.url && ours(cur.metadata, org, recordId, r.stripeRef)) return { url: cur.url };
     if (cur && cur.status === 'complete') return returned(db, org, recordId, cur.id, now, supplied);
+    if (cur && cur.status === 'open' && cur.url && ours(cur.metadata, org, recordId, r.stripeRef) && open.expiresAt > now + 5 * 60000) return { url: cur.url };
+    /* about to lapse: close it before opening the next, so one invoice never has two payable checkouts */
+    if (cur && cur.status === 'open') { try { await call(function () { return s.checkout.sessions.expire(open.id); }); } catch (e) { console.warn('[stripe-billing] old checkout not closed:', e && e.message); } }
   }
   var host = homeOf(x.org), n = (st.sessionCount || 0) + 1;
   var session = await call(function () {
@@ -255,37 +293,55 @@ async function checkout(db, org, recordId, now, supplied) {
       { idempotencyKey: key('omega-package-checkout:' + r.stripeRef + ':' + n) });
   });
   if (!session || !session.id || !session.url) fail('Stripe did not open a checkout', 502, { clearsky: true });
-  await db.runTransaction(async function (tx) {
+  var moved = await db.runTransaction(async function (tx) {
     var fresh = (await tx.get(x.ref)).data(), fst = fresh.stripe || {};
+    /* cancelled or paid while the session was being made: never hand it out */
+    if (fresh.state !== 'unpaid') return fresh.state;
     var list = (fst.sessions || []).filter(function (id) { return id !== session.id; }).concat([session.id]).slice(-10);
     tx.update(x.ref, { 'stripe.sessions': list, 'stripe.sessionCount': Math.max(fst.sessionCount || 0, n),
       'stripe.openSession': { id: session.id, url: session.url, expiresAt: (session.expires_at || 0) * 1000 || now + 23 * 3600000 } });
+    return null;
   });
+  if (moved) {
+    try { await call(function () { return s.checkout.sessions.expire(session.id); }); } catch (e) { console.warn('[stripe-billing] checkout not closed:', e && e.message); }
+    if (moved === 'paid') return { url: done(x.org, 'done'), paid: true };
+    fail(moved === 'cancelled' ? 'This change was cancelled' : 'This invoice cannot be paid now', 409);
+  }
   return { url: session.url };
 }
 /* Attach a Stripe payment to its record (idempotent), then settle that record. */
-async function attach(db, x, piId, sessionId) {
+async function attach(db, x, piId, sessionId, now) {
   await db.runTransaction(async function (tx) {
     var fresh = (await tx.get(x.ref)).data(), fst = fresh.stripe || {};
     var pis = (fst.paymentIntents || []).slice(), sessions = (fst.sessions || []).slice();
     if (piId && pis.indexOf(piId) < 0) pis.push(piId);
     if (sessionId && sessions.indexOf(sessionId) < 0) sessions.push(sessionId);
-    var patch = { 'stripe.paymentIntents': pis.slice(-20), 'stripe.sessions': sessions.slice(-10) };
+    var patch = { 'stripe.paymentIntents': pis.slice(-20), 'stripe.sessions': sessions.slice(-10), 'stripe.lastReturnAt': now || Date.now() };
     if (fst.openSession && fst.openSession.id === sessionId) patch['stripe.openSession'] = null;
     tx.update(x.ref, patch);
   });
 }
 /* The card that paid becomes the card on file (what renewals and confirmed
-   additions are charged to); the workspace keeps its brand and last four. */
+   additions are charged to) when there is none yet, or when the one on file
+   was just declined for this invoice. A pay link is public (it is mailed),
+   so paying one never replaces a working card on file. billing/current is
+   readable by any signed-in account at the domain: it keeps the brand and
+   the last four digits only, never the expiry. */
 async function keepCard(db, x, pi, s) {
   var pm = pi && pi.payment_method && typeof pi.payment_method === 'object' ? pi.payment_method : null, pmId = idOf(pi && pi.payment_method);
   if (!pmId) return;
-  await call(function () { return s.customers.update(x.record.stripe.customerId, { invoice_settings: { default_payment_method: pmId } }, { idempotencyKey: key('omega-package-default-card:' + x.record.stripe.customerId + ':' + pmId) }); });
-  var card = pm && pm.card ? { brand: pm.card.brand || null, last4: pm.card.last4 || null, expMonth: pm.card.exp_month || null, expYear: pm.card.exp_year || null } : null;
+  var cus = await call(function () { return s.customers.retrieve(x.record.stripe.customerId); });
+  var onFile = idOf(cus && cus.invoice_settings && cus.invoice_settings.default_payment_method);
+  var declined = x.record.stripe && x.record.stripe.lastCharge && x.record.stripe.lastCharge.status === 'failed';
+  if (onFile && onFile !== pmId && !declined) return;
+  if (onFile !== pmId) await call(function () { return s.customers.update(x.record.stripe.customerId, { invoice_settings: { default_payment_method: pmId } }, { idempotencyKey: key('omega-package-default-card:' + x.record.stripe.customerId + ':' + pmId) }); });
+  var card = pm && pm.card ? { brand: pm.card.brand || null, last4: pm.card.last4 || null } : null;
   await x.current.update({ 'stripe.cardOnFile': true, 'stripe.card': card, 'stripe.cardSavedAt': Date.now() });
 }
 async function settle(db, org, recordId, now, supplied) {
-  var S = require('./package-billing'), out = await S.reconcile(db, org, now, supplied ? { stripe: supplied } : undefined, { only: recordId });
+  var S = require('./package-billing'), out;
+  /* reconcile throws only when the engine refuses to run (its guard): that is ClearSky's to fix, so a caller retries */
+  try { out = await S.reconcile(db, org, now, supplied ? { stripe: supplied } : undefined, { only: recordId }); } catch (e) { e.clearsky = true; throw e; }
   try { var Runner = require('./package-billing-runner'), mailer = require('./mail'); await Runner.deliver(db, org, now, mailer); await Runner.staffDeliver(db, now, mailer); } catch (e) { console.warn('[stripe-billing] mail after settle:', e && e.message); }
   return (out.invoices || [])[0] || null;
 }
@@ -293,14 +349,29 @@ async function settle(db, org, recordId, now, supplied) {
 async function returned(db, org, recordId, sessionId, now, supplied) {
   if (typeof sessionId !== 'string' || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId)) fail('Invalid checkout session', 400);
   var x = await load(db, org, recordId); guard(null);
+  var st = x.record.stripe || {};
   var s = client(supplied), cs = await call(function () { return s.checkout.sessions.retrieve(sessionId, { expand: ['payment_intent', 'payment_intent.payment_method'] }); });
   if (!cs || !ours(cs.metadata, org, recordId, x.record.stripeRef) || idOf(cs.customer) !== x.record.stripe.customerId || !Mode.stripeModeOk(cs.livemode)) fail('This checkout does not belong to this invoice', 403);
   if (cs.status !== 'complete' || cs.payment_status !== 'paid') return { url: done(x.org, cs.status === 'expired' ? 'cancelled' : 'pending') };
   var pi = cs.payment_intent && typeof cs.payment_intent === 'object' ? cs.payment_intent : await call(function () { return s.paymentIntents.retrieve(idOf(cs.payment_intent), { expand: ['payment_method'] }); });
-  await attach(db, x, idOf(pi), cs.id);
+  /* THIS payment already applied (the payer's return and Stripe's event
+     both land here, a reload, a loop on the URL): nothing more to do. A
+     different payment — paid twice — is always attached, never skipped. */
+  var known = (st.paymentIntents || []).indexOf(idOf(pi)) >= 0;
+  if (known && x.record.state === 'paid') return { url: done(x.org, 'done'), paid: true };
+  if (known && st.lastReturnAt && now - st.lastReturnAt < 8000) return { url: done(x.org, 'pending'), paid: true };
+  await attach(db, x, idOf(pi), cs.id, now);
   try { await keepCard(db, x, pi, s); } catch (e) { console.warn('[stripe-billing] card on file not saved:', e && e.message); }
-  await settle(db, org, recordId, now, supplied);
-  return { url: done(x.org, 'done'), paid: true };
+  /* the money is taken: the payer is never shown an error from here on;
+     what did not settle is finished by the webhook or the runner, and a
+     person hears about anything they cannot finish */
+  try { await settle(db, org, recordId, now, supplied); }
+  catch (e) {
+    if (!e.clearsky) await reviewAlert(db, org, 'stripe-' + cs.id, 'A card payment for ' + org + ' (invoice record ' + recordId + ') was taken but not applied: ' + e.message + '. Access is unchanged until you decide.');
+    return { url: done(x.org, 'pending'), paid: true };
+  }
+  var after = (await x.ref.get()).data();
+  return { url: done(x.org, after.state === 'paid' ? 'done' : 'pending'), paid: true };
 }
 /* Stripe's event → the same path. Returns null for anything that is not a
    packaged-billing object, so the endpoint answers 200 and Stripe stops. */
@@ -319,12 +390,13 @@ async function webhook(db, evt, now, supplied) {
   if (!Mode.stripeModeOk(evt.livemode) || m.env !== Mode.env()) return { ignored: 'another Stripe mode' };
   var org = require('./admin').safeOrg(m.org), recordId = m.record;
   if (!org || !validRecordId(recordId)) return { ignored: 'no workspace record' };
-  var eref = db.doc('stripe_events/' + evt.id);
+  var eref = db.doc('stripe_events/' + evt.id), attempts = 0;
   var claim = await db.runTransaction(async function (tx) {
     var old = await tx.get(eref), o = old.exists ? old.data() : null;
     if (o && o.state === 'done') return 'duplicate';
     if (o && o.state === 'processing' && o.at > now - 120000) return 'busy';
-    tx.set(eref, { kind: KIND, type: evt.type, org: org, record: recordId, state: 'processing', at: now, attempts: ((o && o.attempts) || 0) + 1 });
+    attempts = ((o && o.attempts) || 0) + 1;
+    tx.set(eref, { kind: KIND, type: evt.type, org: org, record: recordId, state: 'processing', at: now, attempts: attempts });
     return 'claimed';
   });
   if (claim === 'duplicate') return { duplicate: true };
@@ -337,7 +409,7 @@ async function webhook(db, evt, now, supplied) {
         s = s || client(supplied);
         var pi = await call(function () { return s.paymentIntents.retrieve(obj.id, { expand: ['payment_method'] }); });
         if (!ours(pi.metadata, org, recordId, x.record.stripeRef) || idOf(pi.customer) !== x.record.stripe.customerId) fail('The payment does not belong to this invoice', 409);
-        await attach(db, x, pi.id, null);
+        await attach(db, x, pi.id, null, now);
         try { await keepCard(db, x, pi, s); } catch (e) { console.warn('[stripe-billing] card on file not saved:', e && e.message); }
       }
       result = await settle(db, org, recordId, now, supplied);
@@ -352,6 +424,14 @@ async function webhook(db, evt, now, supplied) {
     return { applied: true, org: org, record: recordId, state: result && (result.state || (result.paid ? 'paid' : null)) || null };
   } catch (e) {
     await eref.set({ state: 'failed', error: String(e && e.message || e).slice(0, 300), failedAt: Date.now() }, { merge: true });
+    /* money that arrived and could not be applied is never acknowledged in
+       silence: Stripe is asked to come back a few times (its invoice record
+       may not be written yet), then a person is told */
+    if (/succeeded|completed/.test(evt.type) && !e.clearsky) {
+      /* only a record not written yet is worth waiting for; anything else a person sees now */
+      if (e.status === 404 && attempts < 5) { e.clearsky = true; e.status = 503; }
+      else await reviewAlert(db, org, 'stripe-' + evt.id, 'A card payment for ' + org + ' (' + evt.type + ', invoice record ' + recordId + ') could not be applied: ' + e.message + '. Look it up in Stripe; access is unchanged until you decide.');
+    }
     throw e;
   }
 }
@@ -365,5 +445,5 @@ async function close(record, supplied) {
   await call(function () { return s.checkout.sessions.expire(open.id); });
   return true;
 }
-module.exports = { KIND: KIND, driver: driver, close: close, key: key, refOf: refOf, payLink: payLink, verifyLink: verifyLink, safePayLink: safePayLink, homeOf: homeOf,
+module.exports = { KIND: KIND, driver: driver, close: close, reviewAlert: reviewAlert, engineOpen: engineOpen, key: key, refOf: refOf, payLink: payLink, verifyLink: verifyLink, safePayLink: safePayLink, homeOf: homeOf,
   lineItems: lineItems, checkout: checkout, returned: returned, settle: settle, webhook: webhook, wrap: wrap, validRecordId: validRecordId };

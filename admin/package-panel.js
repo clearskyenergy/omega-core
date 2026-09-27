@@ -165,7 +165,7 @@
               .then(function (r) {
                 buy.remove();
                 /* the Stripe card rail: the card on file paid and the pack is on; else our pay link, in this tab */
-                if (r.charged) { row.appendChild(el('span', 'Charged ' + r.display + ' to the card on file; the pack is added, good until ' + r.expiresOn + '.', 'pp-meter-note')); return; }
+                if (r.charged) { row.appendChild(el('span', 'Charged ' + r.display + ' to the card on file; the pack is ' + (r.state === 'charged' ? 'added within a minute' : 'added') + ', good until ' + r.expiresOn + '.', 'pp-meter-note')); return; }
                 var card = r.rail === 'stripe', a = el('a', 'Pay ' + r.display + (card ? ' by card' : ' in QuickBooks'), 'pp-pay'); a.href = r.paymentLink; if (!card) { a.target = '_blank'; a.rel = 'noopener'; }
                 if (r.paymentLink || !card) row.appendChild(a);
                 row.appendChild(el('span', (r.cardDeclined ? 'The card on file was declined. ' : '') + 'Added the moment the payment clears; good until ' + r.expiresOn + '.', 'pp-meter-note')); },

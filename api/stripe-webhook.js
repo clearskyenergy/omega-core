@@ -46,7 +46,12 @@ module.exports = function (req, res) {
          old subscription's events must never zero what it owes, reactivate
          it or set its tier: acknowledged, not applied. */
       return ref.get().then(function (bs) {
-      if (bs.exists && bs.data().packaged === true) return res.status(200).json({ ignored: 'packaged workspace: billed by the packaging engine' });
+      if (bs.exists && bs.data().packaged === true) {
+        /* an OLD Stripe subscription still billing a workspace now on a package is double billing: a person must cancel it */
+        var money = /^invoice\.(paid|payment_failed)$|^customer\.subscription\.(created|updated)$/.test(evt.type);
+        var alert = money ? require('./_lib/stripe-billing').reviewAlert(db, org, 'legacy-' + evt.id, 'A legacy Stripe ' + evt.type + ' arrived for ' + org + ', which is now on a package (customer ' + cus + '). If an old Stripe subscription is still charging it, cancel it in Stripe; the package is billed separately.') : Promise.resolve();
+        return alert.then(function () { res.status(200).json({ ignored: 'packaged workspace: billed by the packaging engine' }); });
+      }
       var patch = { updatedAt: FV.serverTimestamp(), lastStripeEvent: evt.type };
       if (evt.type === 'invoice.paid') {
         patch.lastPaidAt = new Date(evt.created * 1000).toISOString(); patch.amountDue = 0; patch.paymentFailedAt = null;

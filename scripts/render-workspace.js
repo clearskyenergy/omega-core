@@ -100,8 +100,9 @@ function cardDriver() {
 function cardStart(fx, charge) {
   var db = new FDB.DB(); db.serial = true; var book = BOOK.proposed(); book.enabled = true; book.qbo.realmId = 'fixture'; db.seed('pricebook/' + book.version, book);
   Object.keys(fx.docs).forEach(function (k) { if (/^omega_orgs\//.test(k)) db.seed(k, JSON.parse(JSON.stringify(fx.docs[k]))); });
-  ['PACKAGING_BILLING_ENABLED', 'QBO_ENV'].forEach(function (k) { CARD_ENV[k] = process.env[k]; });
-  process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
+  ['PACKAGING_BILLING_ENABLED', 'QBO_ENV', 'STRIPE_PACKAGING_SECRET_KEY'].forEach(function (k) { CARD_ENV[k] = process.env[k]; });
+  /* a deployment on the card rail always has a test key in sandbox mode (the engine signs pay links with it) */
+  process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox'; process.env.STRIPE_PACKAGING_SECRET_KEY = 'sk_test_renderFixture0';
   SB.driver = function () { return cardDriver(); }; SB.close = async function () {};
   CARD = { db: db, org: fx.org, charge: charge || null, charges: 0, posts: [], visits: [], caller: { staff: false, uid: fx.user.uid, email: fx.user.email, orgId: fx.org, role: 'owner', claims: { email_verified: true } } };
 }
@@ -579,7 +580,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('card-return: Plan & billing is open and the checkout parameter is gone (a reload does not say it twice)', land.view === 'billing' && !/checkout=/.test(land.search) && land.hash === '#billing', { search: land.search, hash: land.hash, view: land.view });
     var calls = apiCalls.slice(cpFrom);
     ok('card-return: the landing asked the server again for the package and the summary', calls.filter(function (c) { return c === 'GET /api/package-access'; }).length >= 2 && calls.filter(function (c) { return c === 'GET /api/plan-change'; }).length >= 2, calls);
-    ok('card-return: the card on file is the summary\'s: "Visa ending 4242 · charged on your billing date", with its expiry', /Visa ending 4242 · charged on your billing date/.test(land.card) && /12\/2030/.test(land.card), land.card.slice(0, 200));
+    ok('card-return: the card on file is the summary\'s: "Visa ending 4242 · charged on your billing date" (brand and last four only)', /Visa ending 4242 · charged on your billing date/.test(land.card), land.card.slice(0, 200));
     ok('card-return: nothing owed, and no QuickBooks word in Plan & billing', /nothing is owed/.test(land.owe) && !/QuickBooks/.test(land.text), land.owe.slice(0, 120));
     /* + Add Grid Atlas: the server's quote, charged to the card on file, on at once */
     await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(400);

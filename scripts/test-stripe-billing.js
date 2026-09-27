@@ -281,7 +281,8 @@ async function run() {
   equal([rec2.stripe.sessions, rec2.stripe.sessionCount], [[open1.id, rec2.stripe.openSession.id], 2]);
   clock = rec2.stripe.openSession.expiresAt - 4 * 60000; var retrieves = stripe.count('checkout.sessions.retrieve');
   var c3 = await SB.checkout(db, ORG, FIRST, clock, stripe);
-  ok(c3.url !== c2.url, 'a session with under five minutes left is not handed out'); equal(stripe.count('checkout.sessions.retrieve'), retrieves, 'nor even read');
+  ok(c3.url !== c2.url, 'a session with under five minutes left is not handed out'); equal(stripe.count('checkout.sessions.retrieve'), retrieves + 1, 'it is read once');
+  ok(stripe.callsOf('checkout.sessions.expire').some(function (a) { return a[0] === rec2.stripe.openSession.id; }), 'and closed before the next is made: one invoice never has two payable checkouts');
   equal(record(FIRST).stripe.sessionCount, 3); clock = START;
   await refused(function () { return SB.checkout(db, ORG, '2027-01-20', clock, stripe); }, /not found/, 404);
   db.seed(CUR + '/invoices/2026-08-20', { date: '2026-08-20', state: 'unpaid', qboInvoiceId: 'I-1', totalCents: 100 });
@@ -329,7 +330,7 @@ async function run() {
   equal(recP.stripe.paymentIntents, [paid.paymentIntent.id]); ok(recP.stripe.sessions.indexOf(sid) >= 0);
   equal([bP.packagingState, bP.modules, bP.lastPaidAt, bP.paymentLink, bP.amountDue], ['paid', M.normalize(['lite', 'evrebates']), clock, null, 0], 'paid: the subscription is on');
   equal(bP.subscription.modules, M.normalize(['lite', 'evrebates']));
-  equal(bP.stripe.card, { brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030 }); equal([bP.stripe.cardOnFile, bP.stripe.customerId, bP.stripe.env], [true, cus, 'sandbox'], 'the card is kept beside the customer, which stays');
+  equal(bP.stripe.card, { brand: 'visa', last4: '4242' }, 'brand and last four only: billing/current is readable by any account at the domain, so no expiry'); equal([bP.stripe.cardOnFile, bP.stripe.customerId, bP.stripe.env], [true, cus, 'sandbox'], 'the card is kept beside the customer, which stays');
   equal(stripe.callsOf('customers.update').pop()[1], { invoice_settings: { default_payment_method: paid.paymentMethod } }, 'the card that paid is the default for renewals');
   equal(stripe.object(cus).invoice_settings.default_payment_method, paid.paymentMethod);
   var paidNote = note('package-paid-' + FIRST);
@@ -400,7 +401,7 @@ async function run() {
   equal(await C.apply(db, ORG, { add: ['engineering'], previewId: q.previewId, effectiveAt: q.effectiveAt }, OWNER, clock, { stripe: stripe }), ch, 'a retry returns the charged result');
   equal(stripe.count('paymentIntents.create'), creates2, 'and charges nothing again');
   var summary = await C.summary(db, ORG);
-  equal([summary.rail, summary.card], ['stripe', { display: 'Visa ending 4242', expMonth: 12, expYear: 2030 }], 'Plan & billing shows the rail and the card');
+  equal([summary.rail, summary.card], ['stripe', { display: 'Visa ending 4242', expMonth: null, expYear: null }], 'Plan & billing shows the rail and the card');
   var pq = C.packQuote(await S.context(db, ORG), 'evApplications', clock);
   equal(pq.rail, 'stripe'); ok(/Charged to your Visa ending 4242/.test(pq.text), pq.text);
   var pk = await C.packBuy(db, ORG, { meter: 'evApplications', previewId: pq.previewId, effectiveAt: clock }, OWNER, clock, { stripe: stripe });
@@ -621,8 +622,11 @@ async function run() {
     var res = response(); await legacy(req, res); return res;
   }
   var pkgBefore = JSON.stringify([db.data.get(ROOT), db.data.get(CUR)]);
-  r = await legacyPost(stripe.event('invoice.paid', { id: 'in_old', customer: 'cus_OLDLEGACY1', metadata: { orgId: ORG }, lines: { data: [{ period: { end: t + 30 * 86400 } }] } }));
+  var oldPaid = stripe.event('invoice.paid', { id: 'in_old', customer: 'cus_OLDLEGACY1', metadata: { orgId: ORG }, lines: { data: [{ period: { end: t + 30 * 86400 } }] } });
+  r = await legacyPost(oldPaid);
   equal([r.code, r.writes], [200, 1], 'a packaged workspace\'s legacy invoice.paid: answered once'); ok(/packaged workspace/.test(r.body.ignored), JSON.stringify(r.body));
+  var oldNote = staffNote('billing-review-legacy-' + oldPaid.id);
+  ok(oldNote && oldNote.staffMail === 'billingAlert' && /cancel it in Stripe/.test(oldNote.text), 'and a person is told an old subscription may still be charging it');
   r = await legacyPost(stripe.event('invoice.payment_failed', { id: 'in_old2', customer: 'cus_OLDLEGACY1', amount_due: 50000 }));
   equal([r.code, r.writes], [200, 1]); ok(/packaged workspace/.test(r.body.ignored), 'found by its old customer id, still left alone');
   r = await legacyPost(stripe.event('customer.subscription.deleted', { id: 'sub_old', customer: 'cus_OLDLEGACY1', metadata: { orgId: ORG }, items: { data: [] } }));
@@ -684,6 +688,75 @@ async function run() {
   equal([qa.result.rail, bill().billingProvider, record(FIRST).provider, qInvoices], ['stripe', 'stripe', 'stripe', 0], 'signed up on cards: stays on cards when the switch is off');
   pin(); qboForbidden();
 
+  /* ── n) the review's fixes ──────────────────────────────────────────── */
+  /* packaged billing switched off: a mailed pay link opens nothing */
+  tenant(); await activate(); pin({ PACKAGING_BILLING_ENABLED: null }); var createsOff = stripe.count('checkout.sessions.create');
+  await refused(function () { return SB.checkout(db, ORG, FIRST, clock, stripe); }, /paused/, 503);
+  equal(stripe.count('checkout.sessions.create'), createsOff, 'billing switched off: no card is taken through an old link'); pin();
+  /* charged, but Stripe was slow to confirm: it says charged, and its link never takes a second payment */
+  await paidCardTenant(); clock = Date.parse('2026-09-27T12:00:00Z');
+  var qn = await C.preview(db, ORG, { add: ['engineering'] }, clock);
+  stripe.fail('paymentIntents.retrieve', { type: 'StripeRateLimitError', statusCode: 429 });
+  var cn = await C.apply(db, ORG, { add: ['engineering'], previewId: qn.previewId, effectiveAt: qn.effectiveAt }, OWNER, clock, { stripe: stripe });
+  equal([cn.state, cn.charged, cn.paymentLink, record(cn.changeId).paymentLink], ['charged', true, null, null], 'charged but not yet settled: it says charged and offers no payment');
+  var createsN = stripe.count('checkout.sessions.create'), visitN = await SB.checkout(db, ORG, cn.changeId, clock, stripe);
+  equal([visitN.paid, record(cn.changeId).state, stripe.count('checkout.sessions.create')], [true, 'paid', createsN], 'its link settles the charge it finds and opens no second checkout');
+  ok(bill().modules.indexOf('engineering') >= 0, 'and the module is on');
+  /* and while Stripe still cannot confirm it, the link refuses: never a second payment */
+  await paidCardTenant(); clock = Date.parse('2026-09-27T12:00:00Z');
+  var qs2 = await C.preview(db, ORG, { add: ['engineering'] }, clock);
+  stripe.fail('paymentIntents.retrieve', { type: 'StripeRateLimitError', statusCode: 429 });
+  var cs2 = await C.apply(db, ORG, { add: ['engineering'], previewId: qs2.previewId, effectiveAt: qs2.effectiveAt }, OWNER, clock, { stripe: stripe });
+  stripe.fail('paymentIntents.retrieve', { skip: 1, type: 'StripeRateLimitError', statusCode: 429 });
+  var createsS = stripe.count('checkout.sessions.create');
+  await refused(function () { return SB.checkout(db, ORG, cs2.changeId, clock, stripe); }, /already charged/, 409);
+  equal([record(cs2.changeId).state, stripe.count('checkout.sessions.create')], ['unpaid', createsS], 'the charge is unconfirmed: the link refuses, no checkout is opened');
+  /* the card is charged, then the request dies before its last write: the record was written first, and Stripe's event settles it */
+  await paidCardTenant(); clock = Date.parse('2026-09-27T12:00:00Z');
+  var qk = await C.preview(db, ORG, { add: ['storage'] }, clock), armed = true, killedPi = null;
+  stripe.on('paymentIntents.create', function (pi) { if (armed) { armed = false; killedPi = pi; throw new Error('the function was killed'); } });
+  var died = null; try { await C.apply(db, ORG, { add: ['storage'], previewId: qk.previewId, effectiveAt: qk.effectiveAt }, OWNER, clock, { stripe: stripe }); } catch (e) { died = e; }
+  var kid = 'change-' + qk.previewId, kRec = record(kid);
+  ok(died && killedPi, 'the card was charged and the request died');
+  equal([kRec && kRec.state, kRec && kRec.provider, kRec && kRec.stripeRef, killedPi.metadata.record], ['prepared', 'stripe', SB.refOf(kRec.marker), kid], 'the record was written before the charge');
+  equal((await SB.webhook(db, stripe.event('payment_intent.succeeded', killedPi), clock, stripe)).applied, true);
+  equal([record(kid).state, bill().modules.indexOf('storage') >= 0], ['paid', true], 'Stripe\'s event settles the orphan-to-be: paid, on');
+  /* a payment whose record never appears: Stripe is asked back, then a person is told */
+  var ghostId = 'change-' + 'a'.repeat(48), ghostPi = await stripe.paymentIntents.create({ amount: 5000, currency: 'usd', customer: bill().stripe.customerId, payment_method: stripe.saveCard(bill().stripe.customerId, VISA), off_session: true, confirm: true, metadata: META(ghostId, 'stp_ghost') });
+  var ghost = stripe.event('payment_intent.succeeded', ghostPi);
+  for (var g = 0; g < 4; g++) { var eg = await refused(function () { return SB.webhook(db, ghost, clock, stripe); }, /not found/, 503); equal(eg.clearsky, true); }
+  equal(staffNote('billing-review-stripe-' + ghost.id), undefined, 'not yet: its record may still be written');
+  await refused(function () { return SB.webhook(db, ghost, clock, stripe); }, /not found/, 404);
+  ok(staffNote('billing-review-stripe-' + ghost.id) && /could not be applied/.test(staffNote('billing-review-stripe-' + ghost.id).text), 'the fifth time a person is told');
+  /* a refunded (reversed) workspace: the renewal is issued, the card is not charged unasked, and a pay link never replaces the working card */
+  await paidCardTenant(); var refundedPi = record(FIRST).stripe.paymentIntents[0];
+  stripe.refund(refundedPi, record(FIRST).totalCents); await S.reconcile(db, ORG, clock, { stripe: stripe });
+  equal([record(FIRST).state, bill().reissueRequired], ['reversed', true]);
+  var renewal = bill().nextInvoiceOn, createsR = stripe.count('paymentIntents.create'); clock = Date.parse(renewal + 'T09:00:00Z');
+  var held = await S.issue(db, ORG, clock, { stripe: stripe });
+  equal([held.issued, held.charge, stripe.count('paymentIntents.create'), record(renewal).state], [true, null, createsR, 'unpaid'], 'refunded: the renewal waits on its link, the card is not charged');
+  await pay(renewal, MC);
+  equal([record(renewal).state, bill().stripe.card.last4], ['paid', '4242'], 'paid by link with another card: the working card on file stays');
+  /* the billing day, before the renewal is issued: no additions (the change would bill the whole cycle and the renewal again) */
+  await paidCardTenant(); clock = Date.parse(bill().nextInvoiceOn + 'T01:00:00Z');
+  var qd = await C.preview(db, ORG, { add: ['engineering'] }, clock);
+  equal(qd.canApply, false); ok(/renewal is being issued today/.test(qd.reason), qd.reason); clock = START;
+  /* paid twice, then the duplicate is lost in a dispute: one full payment stands */
+  await paidCardTenant(); rec = record(FIRST);
+  var dupSid = await foreignSession(META(FIRST, rec.stripeRef), rec.totalCents); await SB.returned(db, ORG, FIRST, dupSid, clock, stripe);
+  equal([record(FIRST).state, record(FIRST).reviewRequired, record(FIRST).stripe.paymentIntents.length], ['paid', true, 2], 'a second payment is attached, never skipped');
+  stripe.dispute(record(FIRST).stripe.paymentIntents[1], 'lost'); await S.reconcile(db, ORG, clock, { stripe: stripe });
+  equal([record(FIRST).state, record(FIRST).paidCents, bill().packagingState], ['paid', rec.totalCents, 'paid'], 'the duplicate lost in a dispute: still paid');
+  /* paid twice, the duplicate refunded: the note goes */
+  await paidCardTenant(); rec = record(FIRST);
+  var dup2 = await foreignSession(META(FIRST, rec.stripeRef), rec.totalCents); await SB.returned(db, ORG, FIRST, dup2, clock, stripe);
+  stripe.refund(record(FIRST).stripe.paymentIntents[1], rec.totalCents); await S.reconcile(db, ORG, clock, { stripe: stripe });
+  equal([record(FIRST).state, record(FIRST).reviewRequired, record(FIRST).reconcileNote], ['paid', false, null], 'the duplicate refunded: nothing left to look at');
+  /* the public pay page never shows Stripe's own words (keys, account and object ids) */
+  tenant(); await activate(); var lk = new URL(record(FIRST).paymentLink);
+  stripe.fail('checkout.sessions.create', { type: 'StripeAuthenticationError', statusCode: 401, message: 'Invalid API Key provided: sk_test_****abcd' });
+  var shown = await visit({ o: lk.searchParams.get('o'), r: lk.searchParams.get('r'), s: lk.searchParams.get('s') });
+  ok(shown.code === 503 && !/sk_test|Invalid API Key|Stripe:/.test(String(shown.body)) && /not available right now/.test(String(shown.body)), 'a Stripe error reads as the plain message');
   console.log('Stripe rail: ' + count + ' passed; Stripe and Firestore doubles, no network.');
 }
 function flipLast(s) { return s.slice(0, -1) + (s.slice(-1) === '0' ? '1' : '0'); }

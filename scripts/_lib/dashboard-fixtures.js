@@ -204,7 +204,7 @@ function cardPaid(host) {
     paidThrough: cycle.end, accessUntil: Date.parse(cycle.end + 'T00:00:00Z') + 20 * DAY, amountDue: 0, builders: 3, viewers: 10,
     subscription: { modules: keys, plan: 'alacarte', interval: 'monthly', builders: 3, viewers: 10, since: Date.parse('2026-08-20T12:00:00Z') },
     paymentProvider: 'stripe-checkout', billingProvider: 'stripe', qboEnv: 'sandbox',
-    stripe: { customerId: 'cus_fixturecardpaid', env: 'sandbox', since: Date.parse('2026-08-20T12:00:00Z'), cardOnFile: true, card: { brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030 } }, createdAt: ago(40) }, M.resolve(keys));
+    stripe: { customerId: 'cus_fixturecardpaid', env: 'sandbox', since: Date.parse('2026-08-20T12:00:00Z'), cardOnFile: true, card: { brand: 'visa', last4: '4242' } }, createdAt: ago(40) }, M.resolve(keys));
   var member = { email: me, name: 'Noa Reyes', role: 'owner', status: 'active', createdAt: ago(40) };
   docs['omega_orgs/' + org] = orgDoc; docs['omega_orgs/' + org + '/billing/current'] = billing; docs['omega_orgs/' + org + '/members/' + uid] = member;
   docs['omega_orgs/' + org + '/billing/profile'] = cardProfile(org, 'Cardpaid Storage');

@@ -237,17 +237,20 @@ async function issue(db, orgId, now, deps) {
   });
   if (!plan) return { skipped: true, alreadyIssued: true };
   try {
-    var issued = await driverFor(c.book, rail, deps).invoice(plan, BP.stored(c.profile), customerOf(b), { org: orgId, recordId: plan.date, host: require('./stripe-billing').homeOf(c.org) });
+    /* a workspace whose invoice was refunded or charged back is never charged again unasked: the renewal waits on its pay link */
+    var hold = b.packagingState === 'unpaid' || b.reissueRequired === true;
+    var issued = await driverFor(c.book, rail, deps).invoice(plan, BP.stored(c.profile), customerOf(b), { org: orgId, recordId: plan.date, host: require('./stripe-billing').homeOf(c.org), offSession: !hold });
+    var paidNow = !!(issued.charge && issued.charge.status === 'succeeded');
     return await db.runTransaction(async function (tx) {
       var live = await tx.get(current), invoice = await tx.get(ref), latest = live.data();
       if (invoiceRef(invoice.data())) return { alreadyIssued: true };
       if (!latest.invoiceLock || latest.invoiceLock.date !== plan.date) fail('Invoice reservation changed; retry');
       var due = latest.pastDueSince || plan.date;
       var state = latest.packagingState === 'trial' ? 'awaiting_payment' : latest.packagingState;
-      tx.update(ref, Object.assign({ state: 'unpaid' }, issuedFields(rail, issued, customerOf(b), orgId), { totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now }));
+      tx.update(ref, Object.assign({ state: 'unpaid' }, issuedFields(rail, issued, customerOf(b), orgId), { totalCents: issued.totalCents, paymentLink: paidNow ? null : issued.payUrl, issuedAt: now }));
       tx.update(current, { nextInvoiceOn: plan.nextInvoiceOn, firstInvoiceOn: latest.firstInvoiceOn || plan.date,
         serviceFeeNextOn: plan.serviceFeeNextOn, invoiceLock: null, pastDueSince: due,
-        packagingState: state, paymentLink: issued.payUrl, amountDue: issued.totalCents / 100,
+        packagingState: state, paymentLink: paidNow ? null : issued.payUrl, amountDue: issued.totalCents / 100,
         accessUntil: state === 'paid' ? R.date(R.addDays(R.businessDays(due, c.book.policy.failedPaymentGraceBusinessDays), 1)) : latest.accessUntil || now });
       var charged = issued.charge && issued.charge.paymentIntentId && issued.charge.status !== 'failed', declined = issued.charge && issued.charge.status === 'failed';
       tx.set(current.collection('history').doc('invoice-' + plan.date), Object.assign({ at: now, by: 'billing-run', action: 'invoice-issued',
