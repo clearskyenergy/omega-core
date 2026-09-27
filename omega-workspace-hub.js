@@ -138,12 +138,27 @@
     if (ctx.packaged) return has(ctx.modules, m.key) ? 'held' : 'open';
     if (has(ctx.addOns, m.key)) return 'held';
     if (/^logic-/.test(m.key)) return holdsLogic(ctx, m.key) ? 'held' : 'ask';
+    /* the storefront opens nothing in the editor and has no tools: it is on
+       exactly where the public storefront's own gate opens it (a staff flag
+       on the tenant record or the add-on, never the tier), so the page hands
+       over the billing record and the tenant's whiteLabel block */
+    if (m.key === 'whitelabel' && ctx.billing !== undefined) return storefront(ctx.billing, ctx.whiteLabel) ? 'held' : 'ask';
     var t = moduleTools(m, ctx), e = moduleEditor(m, ctx), total = t.total + e.total, open = t.open + e.open;
-    /* nothing to measure (the storefront): held where the plan opens
-       everything, asked of the ladder when the page has it (a trial's tool
-       level is Enterprise's, but its plan is not) */
+    /* nothing to measure: held where the plan opens everything, asked of
+       the ladder when the page has it (a trial's tool level is Enterprise's,
+       but its plan is not) */
     if (!total) return (ctx.canCap ? ctx.canCap('all') : ctx.tierLevel >= 3) ? 'held' : 'ask';
     return open === total ? 'held' : open ? 'part' : 'ask';
+  }
+  /* Whether the public storefront is on for a legacy workspace: the twin of
+     api/_lib/storefront.js storefrontEntitled (a toolOverrides switch either way,
+     else the 'whitelabel' add-on or whiteLabel.enabled on the tenant record;
+     never the tier). scripts/tests/tworkspacehub.js runs both over every case. */
+  function storefront(billing, whiteLabel) {
+    var b = billing || {}, overrides = b.toolOverrides || {}, addons = b.addons || [], wl = whiteLabel || {};
+    return overrides.whitelabel === true
+      || (overrides.whitelabel !== false
+          && (addons.indexOf('whitelabel') >= 0 || wl.enabled === true));
   }
   /* What "Partly" means, in one line, from the same two halves moduleState
      weighs: never "4 of 4 of its tools" under a Partly badge because the
@@ -167,7 +182,7 @@
     var tier = billing.tier || ((caps.INTERNAL_DOMAINS || []).indexOf(String(org || '').toLowerCase()) >= 0 ? 'internal' : 'trial');
     return function (cap) { return caps.canWith(tier, cap, { addons: billing.addons || [], org: org || '', capTier: billing.capTier || null }); };
   }
-  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleNote: moduleNote, capsFor: capsFor, holdsLogic: holdsLogic, RING_MAX: RING_MAX };
+  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleNote: moduleNote, capsFor: capsFor, storefront: storefront, holdsLogic: holdsLogic, RING_MAX: RING_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceHub = API;
 })(typeof window !== 'undefined' ? window : null);
