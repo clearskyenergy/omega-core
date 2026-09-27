@@ -18,9 +18,9 @@ a proposal waiting on Tommy, not a settled price.
 > |---|---|---|---|---|
 > | lite | Lite | Omega Design | floor | Core |
 > | gridatlas | Grid Atlas | Omega Grid | addon | Add-on |
-> | storage | Storage Sizing & Revenue | Omega Storage | standard | Pro |
-> | estimate | Estimate, BOM & Procurement | Omega Estimate | standard | Pro |
-> | evrebates | EV Rebates & Closeout | Omega EV | standard | Pro |
+> | storage | Storage Sizing & Revenue | Omega Storage | standard | Plus |
+> | estimate | Estimate, BOM & Procurement | Omega Estimate | standard | Plus |
+> | evrebates | EV Rebates & Closeout | Omega EV | standard | Plus |
 > | plansets | Plan Sets & CAD | Omega Plans | premium | Advanced |
 > | siteintel | Site Intelligence | Omega Intel | premium | Advanced |
 > | engineering | Engineering & Analysis | Omega Engineer | premium | Advanced |
@@ -36,7 +36,8 @@ a proposal waiting on Tommy, not a settled price.
 > | logic-logistics | Logistics & Warranty | Logic Logistics | platform | Omega Logic |
 > | logic-customer | Customer App | Logic Customer App | platform | Omega Logic |
 >
-> Plans keep their names (Lite + modules, Field, Pro, Enterprise). Tool
+> Plans keep their names (Lite + modules, Field, Pro, Enterprise); the
+> standard shelf reads Plus so it is never mistaken for the Pro plan. Tool
 > names (Grid Atlas, Site Finder, …) are a separate list in `omega-tools.js`.
 > QuickBooks items are matched by name when a book is synced: an item
 > synced under an old name keeps it in QuickBooks (invoice lines carry the
@@ -338,6 +339,11 @@ these, each with a test:
 5. **The command palette (Ctrl+K) and Ask Jarvis run hidden buttons.** They
    index every ribbon button, including those the gate removed, and click
    them by name (105492, 105558). They must read the same module check.
+   *Closed:* for a package in Phase 2 (#137); for a legacy plan on
+   2026-09-27, where the gate sits on the tab (Analyze, Estimate, Compute)
+   and not on the commands in it: `OmegaCaps.allowedElement` judges every
+   `data-cap` from the tab in, and Jarvis names and opens only
+   `OmegaCaps.tabOpen` tabs. A Core plan had 46 hidden commands a name away.
 6. **`?customerEngine=1` switches the gate off entirely** (4491, 175932).
 7. **Parcel Screen needs both `parcelscreen` and `engineering`** because it
    lives inside the Analyze tab; Grid Atlas pre-screen, Find Substation,

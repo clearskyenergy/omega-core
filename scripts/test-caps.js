@@ -93,6 +93,71 @@ ok(C.can('deluxe', 'engineering'),
    'adding an add-on takes nothing away from the plan');
 C.setAddons([]);
 
+/* ── RUN BY NAME: SEARCH TOOLS (Ctrl+K) AND ASK JARVIS ─────────────────
+   Both run a command by clicking it, so they reach commands the ribbon
+   does not show. A legacy tier puts the gate on the TAB (Analyze needs
+   engineering, Compute needs compute), not on each command inside it, and
+   allowedElement() used to say yes to everything on a legacy plan. */
+console.log('\nRun by name\n');
+function node(attrs, parent) {
+  return { parentElement: parent || null, attrs: attrs || {},
+    getAttribute: function (k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null; },
+    hasAttribute: function (k) { return Object.prototype.hasOwnProperty.call(this.attrs, k); },
+    classList: { contains: function () { return false; } } };
+}
+var ribbon = node({}), tabRow = node({});
+var analyzeTab = node({ 'data-page': 'analyze', 'data-cap': 'engineering' }, tabRow);
+var analyzePage = node({ 'data-page': 'analyze', 'data-cap': 'engineering' }, ribbon);
+var computePage = node({ 'data-page': 'compute', 'data-module': 'compute', 'data-cap': 'compute' }, ribbon);
+var homePage = node({ 'data-page': 'home' }, ribbon);
+var valueStack = node({ id: 'rb-valuestack' }, node({}, analyzePage));
+var parcel = node({ id: 'rb-parcel-screen', 'data-cap': 'parcelscreen' }, analyzePage);
+var computeCost = node({ id: 'rb-compute-cost' }, computePage);
+var siteSetup = node({}, homePage);
+var tabDom = { 'analyze': [analyzeTab, analyzePage], compute: [null, computePage], home: [null, homePage] };
+var savedQuery = global.document.querySelector;
+global.document.querySelector = function (sel) {
+  var m = /data-page="([^"]+)"/.exec(sel); var pair = m && tabDom[m[1]];
+  return pair ? (sel.indexOf('.rtab') >= 0 ? pair[0] : pair[1]) : null;
+};
+var empty = { querySelectorAll: function () { return []; } };
+ok(!C.allowedElement(valueStack) && C.allowedElement(siteSetup),
+   'before the plan is read, a command on a gated tab is closed and an ungated one is open (trial\'s answer)');
+C.apply('standard', empty);
+ok(!C.allowedElement(valueStack),
+   'Core: Search tools and Jarvis cannot run Value Stack, which sits on the Analyze tab Core does not have',
+   'the gate is on the tab, not the command; the palette used to check only the command');
+ok(!C.allowedElement(computeCost), 'Core: nor anything on the Compute tab');
+ok(C.allowedElement(siteSetup), 'Core: an ungated Build command still runs by name');
+ok(!C.tabOpen('analyze') && !C.tabOpen('compute') && C.tabOpen('home') && C.tabOpen('nowhere'),
+   'Core: Jarvis may not open the Analyze or Compute tab; Build, and a tab no gate touches, are open');
+C.apply('deluxe', empty);
+ok(C.allowedElement(valueStack) && C.allowedElement(parcel) && C.tabOpen('analyze'),
+   'Performance: the Analyze tab and everything on it run by name');
+ok(!C.allowedElement(computeCost) && !C.tabOpen('compute'), 'Performance: the Compute tab does not');
+C.setAddons(['compute']); C.apply('standard', empty);
+ok(!C.allowedElement(parcel),
+   'Core with the Compute add-on: Parcel Screen is granted, but it sits on Analyze, which is not: both gates must pass');
+ok(C.allowedElement(computeCost) && C.tabOpen('compute'), 'Core with the Compute add-on: the Compute tab runs by name');
+C.setAddons([]); C.apply('enterprise', empty);
+ok(C.allowedElement(valueStack) && C.allowedElement(parcel) && C.allowedElement(computeCost) && C.tabOpen('analyze') && C.tabOpen('compute'),
+   'Enterprise: every command and tab runs by name');
+C.apply('standard', empty);
+ok(C.allowedElement(null), 'no element is not a gated element (unchanged)');
+C.setPackage({ packaged: true, staff: true, modules: [], caps: [], toolAccess: [], catalog: [] });
+ok(C.allowedElement(valueStack), 'a staff package preview is not narrowed by the legacy tier underneath it');
+C.setPackage(C.pendingPackage(true));
+ok(!C.allowedElement(valueStack) && !C.tabOpen('analyze'), 'the sign-in lock still refuses a gated command and tab');
+C.setPackage(null); C.apply('trial', empty);
+global.document.querySelector = savedQuery;
+var palette = require('fs').readFileSync(path.join(__dirname, '..', 'editor.html'), 'utf8');
+ok(/if \(caps && !caps\.allowedElement\(el\)\) \{\s*if \(!view \|\|/.test(palette) &&
+   /if \(it\.el && window\.OmegaCaps && !OmegaCaps\.allowedElement\(it\.el\)\) return false;/.test(palette),
+   'the palette indexes and runs only what allowedElement() allows, so Jarvis (the same index and run) does too');
+var jarvis = require('fs').readFileSync(path.join(__dirname, '..', 'omega-jarvis-help.js'), 'utf8');
+ok(/OmegaCaps\.tabOpen\(page\)/.test(jarvis) && /\.filter\(function \(t\) \{ return tabOpen\(/.test(jarvis),
+   'Ask Jarvis lists and opens only the tabs the plan opens');
+
 /* Exercise the asynchronous resolver, not a copy of its domain check. */
 var DB = require('./_lib/firestore-double').DB;
 var fs = require('fs');

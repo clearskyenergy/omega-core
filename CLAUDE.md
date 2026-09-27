@@ -219,7 +219,12 @@ page (`check-payment`) and the billing bar (`reconcile-now`) alike. The
 flow as sold: account (login.html) → verified email (start.html holds an
 unverified address) → billing profile → *Build your system* (the one
 menu, priced live by the server; Monthly, or Yearly at ten months of
-twelve) → pay. Annual prepay is `annualPaidMonths` = 10 in the book.
+twelve) → pay. Create account goes straight to `/start.html` (making the
+account signs it in, so login's auth listener stands aside while the form
+routes it), and a signed-in person with no `omega_orgs` record, grant,
+access request or terms acceptance is sent there too instead of a derived
+workspace; `scripts/render-signup.js` (in `check:pages`) holds both.
+Annual prepay is `annualPaidMonths` = 10 in the book.
 `api/_lib/packaging-mode.js` is the ONE rule for where packaging bills:
 SANDBOX (`QBO_ENV=sandbox`) or LIVE (`PACKAGING_LIVE=true` AND
 `QBO_ENV=production`, both literal), and neither is refused everywhere; the
@@ -256,7 +261,7 @@ Runbook and what is not built (autopay, instant refund events, tax):
 
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
-`name`, `shelfLabel` (Core · Add-on · Pro · Advanced · By the piece · Omega
+`name`, `shelfLabel` (Core · Add-on · Plus · Advanced · By the piece · Omega
 Logic) and `mark` (the card letter) live ONLY in `api/_lib/modules.js`, and
 every page reads them off the record — never a page's own shelf map. Keys and
 plan names (Lite + modules, Field, Pro) are unchanged; the table is in
@@ -277,7 +282,15 @@ workspace's store tells the truth: `OmegaWorkspaceHub.moduleState` measures
 a module by its standalone tools AND what the editor opens of it
 (`api/_lib/modules.js` `legacyGates`, read off the real editor by
 `scripts/render-legacy-gates.js`, asked of the editor's own ladder through
-`OmegaCaps.canWith` / `capsFor`); no legacy access changes.
+`OmegaCaps.canWith` / `capsFor`); no legacy access changes. One legacy
+narrowing, the owner's call (2026-09-27): Search tools (Ctrl+K) and Ask
+Jarvis run only what `OmegaCaps.allowedElement` allows, which on a legacy
+plan is every `data-cap` from the tab in to the command (a tier gates whole
+tabs), and Jarvis names and opens only `OmegaCaps.tabOpen` tabs
+(`render-legacy-gates.js`). So nothing is stranded behind a hidden tab,
+Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move System) live
+on Draw on every plan, where a package puts them: `LITE` in the Compute
+tab's mover, held to the catalog by `scripts/tests/tlegacygates.js`.
 The shared omega-package-menu.js renders catalog features and server-formatted
 prices. Staff package previews are read-only server projections, never tenant
 impersonation or billing edits. Legacy layout modes apply to unpackaged records.
@@ -807,6 +820,13 @@ agreement. The page never changes billing or grants. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
+It CLICKS EVERY CONTROL on every view (`scripts/_lib/click-sweep.js`, one
+level into each drawer) and fails on an error, a dialog put into the page
+flow instead of over it, a reload in disguise, an overlay Escape leaves
+open or a link to a page the site does not serve (`--only sweep` runs just
+those). `omega-newproject.js` owns its overlay (it once borrowed
+`.modal-bg` from index.html and landed at the foot of the workspace), and
+a `/workspace#view` link is a view change, never a reload.
 Once the workspace is home, `marketplace.html` is THE STORE, not a tool
 catalogue (every tool is All tools on the workspace): the plans and the
 modules on their shelves, wearing the whole workspace chrome

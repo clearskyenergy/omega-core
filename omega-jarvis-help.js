@@ -216,9 +216,16 @@
       if (e && typeof root.selEl === 'function') { root.selEl(e.id); return true; } return false; } },
     save: { label: 'Save the project', fn: function () { if (typeof root.saveProject === 'function') { root.saveProject(); return true; } return false; } }
   };
-  function tabByPage(page) { return doc.querySelector('#ribbon-tabs .rtab[data-page="' + String(page || '').replace(/"/g, '') + '"]'); }
+  /* A tab the plan hides is not one Jarvis may name or open: rbTab() on it
+     would switch every page off and leave an empty ribbon. Asked of
+     OmegaCaps, the rule that hid it. */
+  function tabOpen(page) { return !(root.OmegaCaps && typeof root.OmegaCaps.tabOpen === 'function') || root.OmegaCaps.tabOpen(page); }
+  function tabByPage(page) {
+    var t = doc.querySelector('#ribbon-tabs .rtab[data-page="' + String(page || '').replace(/"/g, '') + '"]');
+    return t && tabOpen(page) ? t : null;
+  }
   function tabs() {
-    return Array.prototype.slice.call(doc.querySelectorAll('#ribbon-tabs .rtab[data-page]')).map(function (t) {
+    return Array.prototype.slice.call(doc.querySelectorAll('#ribbon-tabs .rtab[data-page]')).filter(function (t) { return tabOpen(t.getAttribute('data-page')); }).map(function (t) {
       return { id: t.getAttribute('data-page'), label: (t.textContent || '').trim() };
     });
   }

@@ -55,7 +55,7 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     assert.equal(o.source, 'seeded'); assert.equal(o.floorDisplay, '$500/month'); assert.equal(o.lite.monthlyDisplay, '$500/month');
     assert.deepEqual(o.plans.map(function (p) { return p.name + ' ' + p.monthlyDisplay; }), ['Field $1,299/month', 'Pro $2,499/month']);
     assert.ok(o.modules.length >= 19 && o.modules.every(function (m) { return /^\$[\d,]+\/month$/.test(m.monthlyDisplay) && Array.isArray(m.features); }));
-    assert.ok(o.starters.ev && o.starterLabels.ev); assert.equal(o.trial.days, 14); assert.equal(o.annual.paidMonths, 10); assert.equal(o.annual.freeMonths, 2); assert.match(o.annual.note, /2 months free/); assert.equal(o.signup.packaged, true); assert.equal(o.signup.payNow, true); assert.equal(o.signup.start, '/start.html');
+    assert.ok(o.starters.ev && o.starterLabels.ev); assert.equal(o.trial.days, 14); assert.equal(o.annual.paidMonths, 10); assert.equal(o.annual.freeMonths, 2); assert.match(o.annual.note, /2 months free/); assert.equal(o.signup.packaged, true); assert.equal(o.signup.payNow, true); assert.equal(o.signup.start, '/start.html'); assert.equal(o.signup.payWith, process.env.PACKAGING_PROVIDER === 'stripe' ? 'Stripe' : 'QuickBooks');
     var text = JSON.stringify(o); assert.ok(!/realmId|items|qbo|token|secret/.test(text), 'no realm, item ids or secrets in the public list');
     db = new DB(); var p = await offerings({ method: 'GET' }, RES); assert.equal(p.source, 'proposed', 'unseeded: the repo\'s proposed book, and it says so');
     await refused(offerings({ method: 'POST' }, RES), 405);
@@ -255,6 +255,9 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     assert.match(st, /holdForVerification\(u\)/); assert.match(st, /omega:signup-draft/); assert.ok(!/start\.html\?company=/.test(lg), 'the company never travels in a link');
     assert.ok(!/Roam Energy|Acme Energy|placeholder="acme"/.test(lg + st), 'no example company names on the forms');
     assert.match(lg, /window\.__packagedSignup = true/); assert.match(lg, /id="blockedNext"/); assert.match(lg, /sendEmailVerification\(user, \{ url: location\.origin \+ next \}\)/); assert.match(st, /if \(j\.payNow\) \{ showPay\(j, name\); return; \}/); assert.match(st, /function wantedModules\(\)/); assert.match(st, /if \(payNow\) payload\.payNow = true;/);
+    /* 2026-09-27: making the account signs it in; the "already signed in" listener stands aside so the new company goes to signup, not a derived workspace (scripts/render-signup.js drives it) */
+    assert.match(lg, /creatingAccount = true;/); assert.match(lg, /if \(user && !creatingAccount\) route\(/); assert.match(lg, /return toSignup\(\);/); assert.match(lg, /if \(found\.signup && await packagedSignup\) return toSignup\(\);/);
+    assert.match(st, /u\.getIdToken\(true\)/); assert.match(st, /watchVerification\(u\)/);
     assert.match(lg, /id="suPackaged"/); assert.match(lg, /fetch\('\/api\/offerings'/); assert.match(lg, /href="\/offerings\.html"/);
     assert.match(of, /XMLHttpRequest\(\); x\.open\('GET', '\/api\/offerings'\)/); assert.ok(!/firebase|omega-tenant\.js/.test(of), 'the price list is a public page: no sign-in, no tenant runtime');
     assert.ok(!/=>|\blet\s|\bconst\s|`/.test(of.replace(/<!--[\s\S]*?-->/g, '')), 'ES5');

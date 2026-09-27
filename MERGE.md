@@ -2349,3 +2349,12 @@ a project created anywhere else. `wizMode` is still saved by the editor and
 still restores the BESS wizard's market. Tests:
 `scripts/tests/tprojectkinds.js` (npm test); `teditortheme.js` records the
 three tab ids and `np-market` as retired.
+
+## New Project dialog — September 27, 2026
+
+`editor.html`: the editor's own New Project dialog is no longer a BESS
+dialog. Its title reads New Project (was New BESS Project), the name example
+is neutral, a blank name saves as "New Project", and its `project.created`
+event sends `vertical: null` until a type is chosen (as `omega-newproject.js`
+and `omega-intake.js` do) instead of `'bess'`. Pinned in
+`scripts/tests/tprojectkinds.js`.

@@ -25380,7 +25380,7 @@ function newProject() {
 }
 
 async function createNewProject() {
-  const name = document.getElementById('np-name').value.trim() || 'New BESS Project';
+  const name = document.getElementById('np-name').value.trim() || 'New Project';
   const address = document.getElementById('np-addr').value.trim();
   const customer = document.getElementById('np-customer').value.trim();
   const offtaker = (document.getElementById('np-offtaker')||{}).value.trim() || '';
@@ -25401,7 +25401,9 @@ async function createNewProject() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: 'bess', source: 'editor-modal' }); } catch (e) {}
+    /* No type is chosen here, so no vertical (null, as omega-newproject.js and
+       omega-intake.js send when they do not know one) — not 'bess' by default. */
+    try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: null, source: 'editor-modal' }); } catch (e) {}
     document.getElementById('new-proj-modal').style.display='none';
     document.getElementById('proj-modal').style.display='none';
     const basePath = window.location.pathname.endsWith('.html') 
@@ -49343,13 +49345,13 @@ async function exportPermitPDF() {
 <div id="new-proj-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:10000;align-items:center;justify-content:center">
   <div style="background:var(--navy);border:1px solid var(--border);border-radius:12px;width:min(480px,95vw);box-shadow:0 20px 60px rgba(0,0,0,.6)">
     <div style="padding:20px 24px;border-bottom:1px solid var(--border)">
-      <div style="font-size:16px;font-weight:700;color:var(--text)">＋ New BESS Project</div>
+      <div style="font-size:16px;font-weight:700;color:var(--text)">＋ New Project</div>
       <div style="font-size:11px;color:var(--sub);margin-top:3px">Creates a blank project and opens the editor</div>
     </div>
     <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">
       <div>
         <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--sub);display:block;margin-bottom:5px">Project Name</label>
-        <input id="np-name" type="text" placeholder="e.g. BESS Project" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-size:13px;font-family:inherit;box-sizing:border-box">
+        <input id="np-name" type="text" placeholder="e.g. Acme Plaza" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-size:13px;font-family:inherit;box-sizing:border-box">
       </div>
       <div>
         <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--sub);display:block;margin-bottom:5px">Site Address</label>
@@ -166172,13 +166174,15 @@ if (root.console && console.info) {
      'omega-compass' and the .op-panel frames (COORDINATES, TERRAIN KEY)
      came later than this list: OmegaPanels.wrap() moves #o2-coords and
      #tl-key inside an .op-panel, so hiding the inner id left the frame
-     and its title bar on the report. */
+     and its title bar on the report. 'viewcube' (the TOP/N-S-E-W gizmo)
+     and 'nav-bar' (the + / - / fit buttons) sit top-right of #sc and
+     were on every report image too. */
   var OVERLAYS = [
     'omega-ladder', 'rr-stale', 'lgd', 'lgd-items', 'eng-legend',
     'zc', 'zc-unlock', 'zpct', 'ruler', 'ruler-bar', 'ruler-lbl',
     'banner', 'rr-mapbadge', 'o2-coords', 'tl-key', 'snapring',
     'cal-ov', 'sub-props', 'omega-extype', 'omega-compass',
-    'op-o2-coords', 'op-tl-key'
+    'op-o2-coords', 'op-tl-key', 'viewcube', 'nav-bar'
   ];
 
   /* Class-based overlays the ids miss. NEVER '.cel': that is the wrapper
@@ -167437,7 +167441,7 @@ if (root.console && console.info) {
 
     var bnd = null;
     try { bnd = root.OmegaSiteRoles && root.OmegaSiteRoles.boundary(); } catch (e) {}
-    add('Traced parcel', !!bnd, 'Build \u203a Trace Boundary');
+    add('Traced parcel', !!bnd, 'Draw \u203a Trace Boundary');
 
     var nEx = 0;
     try { nEx = (root.OmegaSiteRoles && root.OmegaSiteRoles.exclusions() || []).length; } catch (e) {}
@@ -173125,6 +173129,15 @@ if (root.console && console.info) {
     design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', 'rb-supply-link', 'rb-move-system', 'rb-feas-csv'],
     size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-optimise', 'rb-compute-cost', 'rb-compute-lease']
   };
+  /* ── OMEGA DESIGN'S DRAWING TOOLS LIVE ON DRAW, ON EVERY PLAN ────────
+     Trace Boundary, Fence & Tie and Move System are Omega Design (lite)
+     commands in api/_lib/modules.js. Under a package this mover sends them
+     to Lite's page, Draw; on a legacy plan it kept them here, on a tab a
+     legacy tier below Enterprise hides, so those plans reached them only
+     through Search tools, which no longer runs what a plan hides. One
+     address per tool: a legacy plan puts them where a package does.
+     scripts/tests/tlegacygates.js holds this list to the catalog. */
+  var LITE_PAGE = 'draw', LITE = ['rb-trace-boundary', 'rb-fence-tie', 'rb-move-system'];
   function panel(key) {
     return document.querySelector('#ribbon .ribbon-page[data-page="compute"] .rpanel[data-ct="' + key + '"] .rpanel-body');
   }
@@ -173163,6 +173176,9 @@ if (root.console && console.info) {
             if (home && el.parentNode !== home) { home.appendChild(el); moved++; }
             return;
           }
+        } else if (LITE.indexOf(id) >= 0) {
+          var draw = document.querySelector('#ribbon .ribbon-page[data-page="' + LITE_PAGE + '"] .rpanel-body');
+          if (draw) { if (el.parentNode !== draw) { draw.appendChild(el); moved++; } return; }
         }
         var want = prev ? prev.nextSibling : body.firstChild;
         if (el.parentNode !== body || el !== want) {
