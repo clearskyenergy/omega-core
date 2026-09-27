@@ -114,6 +114,9 @@ with a quote), `account-awaiting.png` (the first invoice unpaid),
 `account-legacy.png` (a prepaid legacy account), `modules.png` (Your modules on
 the paid Lite tenant).
 
+Regenerate them with `node scripts/render-dashboard.js --evidence`. A plain
+`npm run check:dashboard` leaves them as committed.
+
 ## Not built
 
 - Removing a module from the Ladder is still a request (`removalRequests`),
