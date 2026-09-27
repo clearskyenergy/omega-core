@@ -2,8 +2,10 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Status: **design, with the first rung built** (the board endpoint, §3).
-Written 2026-09-26. Companion to `docs/VALUE-LADDER-PACKAGING.md` (what we
+Status: **rungs 1 and 2 built, 3a built** (2026-09-27): the board (§3), the
+sales database, the website's demo form, the harvest, the Claude Code agent
+and JARVIS's Sales view (§11). Sending stays a person's (rung 3b is not
+built, on purpose). Written 2026-09-26. Companion to `docs/VALUE-LADDER-PACKAGING.md` (what we
 sell and for how much) and `docs/PACKAGING-ROADMAP.md` (how the package,
 the trial and the billing get built). Those two own the catalog, the price
 book, the proposal tool and every screen a customer buys from; this file
@@ -48,10 +50,10 @@ when it steps up.
 
 Two things exist and do nothing, worth knowing before assuming they work:
 `omega_orgs/clearsky-usa.com/notifications` is written at signup and read by
-nothing; and `mail.js`'s footer and `config.js`'s `upgradeEmail` /
-`supportEmail` still say `csebuilders.com`, which is retired as a staff
-domain, so the dashboard's "Request access" mailto goes to an address
-nobody has confirmed is read (§10, decision 1).
+nothing; and the product's support address is now dev@clearsky-usa.com everywhere
+(`mail.js` SUPPORT_EMAIL, `omega-tenant.js`, `config.js`), and so is the
+website's (2026-09-27: every footer, the contact form, the legacy login
+page). csebuilders.com is never written again.
 
 ---
 
@@ -148,7 +150,11 @@ propose. "Send the proposal" is the whole instruction; the proposal tool
 
 ---
 
-## 4. How the agent runs (rung 2, to build)
+## 4. How the agent runs (rung 2: built 2026-09-27, §11)
+
+As built, `growth_log` is `sales_activity` (one log for every touch, the
+agent's included) and `growth_config` is `sales_config`; the routine below is
+`.claude/agents/sales-agent.md`, run by `/sales` or by JARVIS.
 
 A **Claude Code routine** on weekday mornings, in this repository's cloud
 environment, with the founder's own Gmail and Calendar connectors. Each
@@ -194,7 +200,7 @@ the words are in the ladder:
 
 ---
 
-## 5. Bringing in new accounts (rung 3, to build)
+## 5. Bringing in new accounts (rung 3a: built 2026-09-27, §11)
 
 The fifteen targets come first; they are named, half are already in the
 product, and their trial dates are known. For everybody else the sources
@@ -333,10 +339,13 @@ the founder makes, not a milestone the agent reaches.
 
 ## 10. Decisions for Tommy
 
-1. **Sender identity.** Whose name and mailbox: `tom@clearsky-usa.com`, or
-   a `sales@clearsky-usa.com` the founder reads. Same decision fixes
-   `config.js` `upgradeEmail` / `supportEmail` and `mail.js`'s footer, which
-   still point at `csebuilders.com`.
+1. **Sender identity and postal address.** Decided in part (2026-09-27): the
+   website and the product answer at dev@clearsky-usa.com. The cold-email
+   sender and the postal address every cold email carries are still open;
+   they are two fields in JARVIS › Sales › Agent settings (`sales_config`),
+   and until both are set the server refuses to log a cold draft. The sender
+   must be a clearsky-usa.com mailbox (the endpoint refuses gmail.com and
+   csebuilders.com).
 2. **Whether the agent ever sends** (rung 3), on which rows, with what
    daily cap; and whether prospects (people who never signed up) may be
    emailed by it at all, or only drafted.
@@ -351,15 +360,89 @@ the founder makes, not a milestone the agent reaches.
 
 ---
 
-## 11. Not built
+## 11. What was built on 2026-09-27, and how to switch it on
 
-- Rungs 2 and 3: the machine credential and scope, `growth_log`,
-  `growth_config`, `growth_suppressions`, `prospects`, the routine itself,
-  Gmail drafting, sending, bounce handling, the harvest script, prospect
-  scoring, reply and conversion rates.
+**The database** (Firestore, Admin SDK only; `firestore.rules` closes each
+explicitly). `api/_lib/sales.js` is the one rule for all of it (pure;
+`scripts/tests/tsales.js`):
+
+| Collection | What |
+|---|---|
+| `sales_prospects/{domain}` | a company, keyed by its work domain (a public mailbox is keyed by the address); stage `target → contacted → demo → trial → proposal → won/lost` (the twin's words); contacts, evidence, sources, next action, score |
+| `sales_candidates/{companyKey}` | a name a harvest found, with its evidence (project counts in a public record); researched into a prospect or skipped, never written to |
+| `sales_activity/{id}` | every touch, one flat log: `demo-request`, `email-drafted`, `email-sent`, `reply`, `call`, `meeting`, `proposal-sent`, `linkedin-drafted` / `-published` / `-stats`, `approval-nudge`, `research`, `stage`, `suppressed`, `note`, `agent-run` |
+| `sales_suppressions/{email or *@domain}` | do not contact; nothing removes a row |
+| `sales_config/current` | the agent's switch, sender, postal address, daily draft cap, demo link, LinkedIn channel, extra off-limits domains |
+| `sales_counters/{name}` | the demo form's daily cap and the agent's daily draft count |
+
+**The doors.** `GET|POST /api/sales` (a verified ClearSky person, or
+ClearSky's ADMIN machine key with `sales:read` / `sales:write`;
+`agent-auth.staffOrAgent`). `GET /api/growth` also takes that key with
+`growth:read`. `POST /api/demo-request` is public: the website's form, with a
+honeypot, 5 a minute per address and 100 a day; it stores the lead before it
+says "Received" and mails dev@clearsky-usa.com with Reply-To the visitor.
+
+**The rules the server enforces, not the agent's good manners:** a stage moves
+forward only on the key (won, lost and backwards are a person's); a draft to
+the off-limits floor (FENECON, the OSA JV firms, Lionheart, ourselves) or a
+suppressed address is refused; a cold draft (they never wrote to us and are
+not a customer, both READ from the records) is refused until the sender and
+the postal address are set; a public mailbox that never wrote to us is
+refused; the agent's drafts are capped per day; `lintPost` refuses a price, a
+link to `/offerings` or a coming-soon feature sold as live in a LinkedIn post.
+
+**The agent.** `.claude/agents/sales-agent.md` (the morning run, step by
+step) and `/sales` (`.claude/skills/sales/`). Its hands are
+`scripts/sales-cli.js`; it drafts in Gmail, never sends. JARVIS runs the same
+agent (`~/jarvis/.claude/agents/sales-agent.md` is a link to this one;
+`~/jarvis/bin/sales` is the CLI; `/sales` in JARVIS's Claude Code;
+`bin/sales-daily` files the vault note `04 - Jarvis/Sales.md` weekdays 7:40
+Central and raises one notification when something waits).
+
+**The harvest.** `scripts/harvest-prospects.js` with the registry
+`scripts/_lib/prospect-sources.js` (five New York open datasets on
+2026-09-27: commercial solar, retail storage, storage interconnections,
+Charge Ready NY, large renewables; about 900 companies at the first pass) and
+`--csv` for any sheet (the account master list, a trade-show export), mapped
+by `S.guessProspectMapping`. Dry by default.
+
+**The dashboard.** JARVIS › Sales (`mission.html`, the rail) and a Sales panel
+on the Command Center: signups waiting (linked to the console), time to
+approve, demo requests and time to answer, drafts waiting to send, replies,
+LinkedIn posts and the leads they brought (the website keeps the utm tags of
+the first visit, `omega-attribution.js` in clearsky-omega-site), the funnel,
+top prospects, the activity log, a form to log a reply, a call or a post's
+numbers, and the agent's settings. "What to change" is
+`S.suggestions()`: each line names the number it came from.
+`npm run check:sales` renders it in Chromium against the real endpoint.
+
+**Switching it on (once):**
+1. Mint the key (staff, where the service account is):
+   `FIREBASE_SERVICE_ACCOUNT="$(cat sa.json)" node scripts/agent-key.js --org clearsky-usa.com --admin --label "sales agent" --scopes growth:read,sales:read,sales:write --apply`.
+   It prints once. Put it in `~/jarvis/.jarvis/sales.key` (or
+   `~/.config/omega/sales.key`, or `OMEGA_SALES_KEY` in a cloud environment's
+   secrets). Never in a repository.
+2. JARVIS › Sales › Agent settings: the switch, the sender, the postal
+   address, the demo link.
+3. On the Mac: `~/jarvis/bin/install-agents --apply --only jarvis-sales`.
+4. File the first names: `node scripts/harvest-prospects.js --all --apply`,
+   and the master list with `--csv`.
+5. Each morning: `/sales` (or "run the sales agent" to JARVIS), then clear
+   Gmail Drafts and approve on the console.
+
+## 12. Not built
+
+- Rung 3b: sending by the agent, bounce handling, a scheduled cloud run (a
+  Claude Code routine needs the key as an environment secret first; the
+  Mac's launchd job files the note but drafts nothing on its own).
+- A LinkedIn connector: there is none in the session; posts go to Gmail
+  drafts (`linkedinChannel: gmail-drafts`) until a scheduler that posts to
+  company pages is connected.
+- Signup attribution: a demo request carries its utm source; a self-serve
+  signup (`start.html`) does not yet.
+- Harvest sources beyond New York; email discovery (the agent records only
+  published addresses, never a guessed pattern).
 - Presence from pages other than the dashboard; tool-use signals from the
   twin.
-- Any rules for the `growth_*` collections (none exist yet because nothing
-  writes them).
-- A staff page for the board. The endpoint is the product for now; a page
-  belongs with the console the packaging build is rewriting.
+- A page for the board on the master console: JARVIS's Sales view is the
+  page; the console is the packaging build's.

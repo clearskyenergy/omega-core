@@ -365,7 +365,7 @@ function doRegister() {
       if (err && err.code === "app/not-allowlisted") {
         showAuthErr("That email isn't on the allowlist for " +
           (ROLE_LABELS[STATE.regRole] || "that role").toLowerCase() +
-          " access yet. Register as a developer or originator, or contact info@csebuilders.com to be added.");
+          " access yet. Register as a developer or originator, or contact dev@clearsky-usa.com to be added.");
       } else {
         showAuthErr(friendlyAuthError(err));
       }

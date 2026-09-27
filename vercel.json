@@ -311,6 +311,9 @@
       "maxDuration": 30,
       "includeFiles": "data/{fiber,fiber-api}/**"
     },
+    "api/sales.js": {
+      "maxDuration": 60
+    },
     "api/agent/*.js": {
       "maxDuration": 30,
       "includeFiles": "omega-site-intel.js"

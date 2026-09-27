@@ -3705,5 +3705,29 @@ service cloud.firestore {
     match /agent_keys/{keyId} {
       allow read, write: if false;
     }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       THE SALES DATABASE  —  sales_*                           ← SERVER ONLY
+       ════════════════════════════════════════════════════════════════════════
+       ClearSky's own book: prospects (companies and the people at them,
+       with where we found them), harvested names still to be researched,
+       every touch (demo requests with the words
+       a visitor typed, drafts, sends, replies, LinkedIn posts), the
+       do-not-contact list, the agent's switch and sender, and the public
+       demo form's daily counter. Written and read ONLY by api/sales.js and
+       api/demo-request.js through the Admin SDK (api/_lib/sales.js is the
+       rule). JARVIS and the console read it through /api/sales with a staff
+       token; the sales agent through its ClearSky-held key.
+
+       Explicit rather than the implicit deny, for the reason agent_keys
+       gives: a later "allow read: if isAdmin()" pasted in a hurry would put
+       every prospect's name and email in any ClearSky browser session, and
+       a suppression list a client can write is a list anyone can empty. */
+    match /sales_prospects/{id}    { allow read, write: if false; }
+    match /sales_activity/{id}     { allow read, write: if false; }
+    match /sales_candidates/{id}   { allow read, write: if false; }
+    match /sales_suppressions/{id} { allow read, write: if false; }
+    match /sales_config/{id}       { allow read, write: if false; }
+    match /sales_counters/{id}     { allow read, write: if false; }
   }
 }

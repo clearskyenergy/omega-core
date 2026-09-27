@@ -20,7 +20,9 @@
    domain (ogisolar.com), not "OGI" and not "osa". The key then sees the
    deals that firm is on, exactly as that firm's people do in the OSA
    portfolio, and files new sites as that firm's referrals.
-   --admin (ClearSky only) sees every deal; pair it with --org csebuilders.com.
+   --admin (ClearSky only) sees every deal; pair it with --org clearsky-usa.com
+   (csebuilders.com was retired 2026-09-24). The sales agent's key is an admin
+   key with --scopes growth:read,sales:read,sales:write (docs/SALES-AGENT.md §11).
 
    ── DRY RUN BY DEFAULT ────────────────────────────────────────────────
    Prints the plan and writes nothing. Pass --apply to write.
@@ -61,7 +63,7 @@ if (!LIST && !REVOKE) {
   if (!LABEL) usage('--label is required: say who holds this key, e.g. "CFA/OGI JV GPT". It is what the audit line on every site will show.');
   if (!SCOPES.length) usage('--scopes must include at least one of ' + Auth.SCOPES.join(', '));
   if (EXPIRES && isNaN(Date.parse(EXPIRES))) usage('--expires must be a date.');
-  if (ADMIN && !/(^|\.)(clearsky-usa|csebuilders)\.com$/.test(ORG)) usage('--admin is for a ClearSky org only.');
+  if (ADMIN && !/(^|\.)clearsky-usa\.com$/.test(ORG)) usage('--admin is for a ClearSky org only (clearsky-usa.com).');
 }
 
 function connect() {
