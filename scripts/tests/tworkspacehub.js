@@ -148,6 +148,31 @@ c = card(MODS.plansets, stdE); ok('a legacy module not held is Opt in, priced fr
 c = card(MODS.gridatlas, PK(['lite', 'gridatlas']), {}, null, { admin: false }); ok('a member sees the status and who changes it, and no button', c.pill === 'Live' && !c.action && /owner or administrator of Northstar/.test(c.adminLine), c);
 c = card(MODS.gridatlas, PK(['lite']), { subscription: { modules: ['lite', 'gridatlas'] }, paymentLink: 'https://qb/p' }, null, { admin: false }); ok('a member may still pay an open invoice', c.action && c.action.kind === 'pay', c);
 c = card(MODS.gridatlas, PK(['lite']), {}, null, { pendingApproval: true }); ok('a workspace awaiting approval opens nothing yet', !c.action && /Opens when ClearSky approves Northstar/.test(c.note), c);
+/* review #9: a module ON the plan of a workspace awaiting approval offers
+   no Opt out either (it would file a request, an audit row and a staff
+   mail about a plan ClearSky has not approved) */
+c = card(MODS.gridatlas, PK(['lite', 'gridatlas']), {}, null, { pendingApproval: true }); ok('awaiting approval: a packaged module on the plan reads Live and offers no Opt out', c.state === 'live' && !c.action && !c.secondary && /opens when ClearSky approves Northstar/.test(c.note), c);
+c = card(MODS.plansets, delE, {}, null, { pendingApproval: true }); ok('awaiting approval: a legacy module on the plan offers no Opt out', c.state === 'live' && !c.action && !c.secondary, c);
+ok('awaiting approval: no card on any plan carries an action', [stdE, delE, entE, trialE, PK(['lite']), PK(['lite', 'gridatlas', 'logic-office'])].every(function (cx) { return M.catalog().every(function (m) { var k = card(m, cx, { optIns: { plansets: { status: 'requested' } }, optOuts: { gridatlas: { status: 'requested' } } }, { pending: [{ add: ['storage'], paymentLink: 'https://qb/pay' }] }, { pendingApproval: true }); return !k.action && !k.secondary; }); }));
+/* review #8: the money column is the bare price on every card; the words
+   that say where a held module is billed are in the note (the column is
+   nowrap beside the name, and "$1,500/month · in your monthly fee" ran
+   past a phone's card edge) */
+c = card(MODS.gridatlas, PK(['lite', 'gridatlas'])); ok('a packaged Live module\'s money column is the bare price, the note says it is in the monthly fee', c.priceLine === '$250/month' && /in your monthly fee/.test(c.note), c);
+ok('every card\'s money column is short: a price or a few words, never price and words', [stdE, delE, entE, trialE, PK(['lite']), PK(['lite', 'gridatlas', 'estimate', 'engineering', 'siteintel', 'logic-office', 'storage'])].every(function (cx) { return M.catalog().every(function (m) { var k = card(m, cx, {}, null, { price: '$1,500/month' }); return String(k.priceLine).length <= 22 && !/·/.test(k.priceLine); }); }));
+/* review #10: ONE precedence. The card carries the record its state rests
+   on, and Plan & billing lists what is in flight from the cards; a request
+   the plan already answered is never in flight */
+c = card(MODS.plansets, stdE, { optIns: { plansets: { status: 'requested', requestedAt: '2026-09-27', display: '$500/month' } } }); ok('a requested opt-in carries its request as the card\'s record', c.state === 'requested' && c.record && c.record.display === '$500/month', c);
+c = card(MODS.plansets, delE, { optOuts: { plansets: { status: 'requested', requestedAt: '2026-09-27' } } }); ok('a legacy opt-out carries its request as the card\'s record', c.state === 'removing' && c.record && c.record.requestedAt === '2026-09-27', c);
+c = card(MODS.plansets, delE, { optIns: { plansets: { status: 'requested', requestedAt: '2026-09-01' } } }); ok('a stale opt-in (the plan now holds the module) is Live, with no record in flight', c.state === 'live' && !c.record && c.action.kind === 'remove', c);
+c = card(MODS.plansets, stdE, { optOuts: { plansets: { status: 'requested', requestedAt: '2026-09-01' } } }); ok('a stale opt-out (the plan no longer holds the module) is simply on offer, with no record in flight', c.state === 'available' && !c.record && c.action.kind === 'add', c);
+c = card(MODS.gridatlas, PK(['lite', 'gridatlas']), { removalRequests: [{ module: 'gridatlas', requestedAt: 5 }] }); ok('a queued packaged opt-out carries the removal as its record', c.state === 'removing' && c.record && c.record.requestedAt === 5, c);
+c = card(MODS.gridatlas, PK(['lite']), {}, { pending: [{ add: ['gridatlas'], display: '$200', paymentLink: 'https://qb/pay' }] }); ok('a change invoice is the awaiting card\'s record', c.state === 'awaiting' && c.record && c.record.paymentLink === 'https://qb/pay', c);
+c = card(MODS.gridatlas, PK(['lite', 'gridatlas']), {}, { removalRequests: [{ module: 'gridatlas', requestedAt: 7 }] }); ok('the summary\'s removals stand in where billing/current carries none', c.state === 'removing' && c.record.requestedAt === 7, c);
+c = card(MODS.plansets, stdE, {}, { optIns: { plansets: { status: 'requested', requestedAt: '2026-09-27' } } }); ok('the summary\'s opt-ins stand in where billing/current carries none', c.state === 'requested', c);
+c = card(MODS.gridatlas, PK(['lite']), {}, { subscription: ['lite', 'gridatlas'] }); ok('the summary\'s subscription stands in where billing/current carries none', c.state === 'bought', c);
+c = card(MODS.plansets, stdE, { optIns: {} }, { optIns: { plansets: { status: 'requested' } } }); ok('billing/current\'s own answer wins over the summary\'s', c.state === 'available', c);
 var everyState = [];
 [stdE, delE, entE, trialE, PK(['lite']), PK(['lite', 'gridatlas', 'logic-office'])].forEach(function (cx) { M.catalog().forEach(function (m) { var k = card(m, cx); everyState.push(k);
   ok('card ' + m.key + ' never offers Opt out unless it is Live', !(k.action && k.action.kind === 'remove') || k.state === 'live', k);

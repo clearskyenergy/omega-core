@@ -71,7 +71,7 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .mod .cv{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;color:#fff;flex:none}.mod .cv .ltr{font:700 20px Poppins,"DM Sans",sans-serif;opacity:.92}
 .mod .st{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;white-space:nowrap}.mod .st.live{background:var(--ows-green-soft);color:var(--ows-green)}.mod .st.part{background:var(--ows-amber-soft);color:var(--ows-amber)}.mod .st.wait{background:#FFF4DC;color:#8A5A00}.mod .st.off{background:rgba(255,255,255,.18);color:#fff}
 .mod .bd{display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px;flex:1}
-.mod .nm{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.mod .nm b{font:600 15px "DM Sans",sans-serif;padding:0}.mod .price{font:500 14px "DM Mono",ui-monospace,monospace;color:var(--ows-ink);white-space:nowrap}
+.mod .nm{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.mod .nm b{font:600 15px "DM Sans",sans-serif;padding:0;min-width:0;flex:1 1 auto}.mod .price{font:500 14px "DM Mono",ui-monospace,monospace;color:var(--ows-ink);white-space:nowrap}
 .mod .blurb{margin:0;font-size:12.5px;color:var(--ows-ink2);line-height:1.45}
 .mod .feat{margin:0;padding-left:16px;font-size:12.5px;line-height:1.55;color:var(--ows-ink)}
 .mod .inside{font-size:12px;color:var(--ows-ink2);line-height:1.5}.mod .inside b{color:var(--ows-ink);font-weight:600}
@@ -432,10 +432,15 @@ function bind(user, n, t) {
    (?home=classic sticks), a tenant whose record says shell: 'classic', or a
    partner-type workspace is sent to the classic dashboard: the same rule
    index.html reads (OmegaWorkspaceShell.homeOf), so the two never bounce
-   each other. ?stay=classic is carried across for that one visit. */
+   each other. ?stay=classic is carried across for that one visit, and so
+   is a place the classic dashboard has too (Site Map's plan chip and the
+   editor gate link /workspace#billing, #modules and #module-<key>):
+   index.html opens the Account panel's Billing & plan, Your modules, or the
+   one menu on that module. Any other hash is this page's alone. */
 function classicBounce(ws) {
   if (S.homeOf(ws) !== 'classic') return false;
-  window.location.replace(/[?&]stay=classic\b/.test(window.location.search || '') ? '/?stay=classic' : '/');
+  var h = window.location.hash || '', keep = /^#(billing|modules|module-[a-z0-9-]+)$/i.test(h) ? h : '';
+  window.location.replace((/[?&]stay=classic\b/.test(window.location.search || '') ? '/?stay=classic' : '/') + keep);
   return true;
 }
 /* showApp is wrapped by omega-terms.js: it runs once the terms are accepted */
@@ -827,7 +832,11 @@ function renderHomeModules(cat, ctx) {
       + actRow(k) + '</div></div>';
   });
   b.innerHTML = '<div class="mods compact">' + h + '</div>';
-  var sub = byId('mymods-sub'); if (sub) sub.textContent = live.length + ' of ' + cat.length + ' modules Live for ' + (WS.clientName || 'your workspace') + '. ' + (moving.length ? moving.length + ' on the way in or out. ' : '') + (rest.length ? 'Opt in to add one; opt out to remove one.' : 'Every module is on your plan.');
+  /* the count is every module on the plan, the one opting out included
+     (it stays on, and billed, until it goes): the Modules page's strip and
+     Plan & billing count the same way, so the three never disagree */
+  var heldN = cards.filter(function (c) { return c.k.held; }).length;
+  var sub = byId('mymods-sub'); if (sub) sub.textContent = heldN + ' of ' + cat.length + ' modules Live for ' + (WS.clientName || 'your workspace') + '. ' + (moving.length ? moving.length + ' on the way in or out. ' : '') + (rest.length ? 'Opt in to add one; opt out to remove one.' : 'Every module is on your plan.');
   wireCards(b);
 }
 function renderTools() {
@@ -1115,22 +1124,21 @@ function billCtx() {
   var c = { bl: bl, pa: pa, sm: sm, now: now, packaged: packaged, stripe: stripe, qb: qb, trial: trial, manual: manual, admin: isAdminHere(), cat: cat, byKey: byKey, invoices: invoices, unpaid: unpaid, pending: pending, stripeOpen: stripeOpen,
     state: (sm && sm.packagingState) || bl.packagingState || null, co: WS.clientName || WS.orgId };
   c.payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || (stripeOpen.length && stripeOpen[0].hostedUrl) || (sm && sm.paymentLink) || bl.paymentLink || null;
-  /* the modules: Live, on their way in, on their way out */
+  /* the modules: Live, on their way in, on their way out. Read off the SAME
+     cards the Modules page and the home row draw (moduleCard), never a
+     second reading of the requests: an opt-in the plan already holds, or an
+     opt-out of a module it no longer holds, is not in flight here either,
+     and the chips, the count and Changes in progress agree with the cards */
   c.live = []; c.coming = {}; c.leaving = {}; c.requested = {};
-  if (packaged) {
-    var on = (sm && Array.isArray(sm.modules) ? sm.modules : WS.modules) || [];
-    var bought = sm && Array.isArray(sm.subscription) ? sm.subscription : (bl.subscription && Array.isArray(bl.subscription.modules) ? bl.subscription.modules : on);
-    c.live = cat.filter(function (m) { return on.indexOf(m.key) >= 0; });
-    pending.forEach(function (x) { (x.add || []).forEach(function (k) { c.coming[k] = { pill: 'Waiting for payment', change: x }; }); });
-    bought.forEach(function (k) { if (on.indexOf(k) < 0 && !c.coming[k]) c.coming[k] = { pill: 'Bought · not on yet' }; });
-    ((sm && sm.removalRequests) || bl.removalRequests || []).forEach(function (r) { if (r && r.module) c.leaving[r.module] = r; });
-  } else {
-    var hc = hubCtx();
-    c.live = cat.filter(function (m) { return HUB.moduleState(m, hc) === 'held'; });
-    var ins = bl.optIns || (sm && sm.optIns) || {}, outs = bl.optOuts || (sm && sm.optOuts) || {};
-    Object.keys(ins).forEach(function (k) { if (ins[k] && ins[k].status === 'requested') c.requested[k] = ins[k]; });
-    Object.keys(outs).forEach(function (k) { if (outs[k] && outs[k].status === 'requested') c.leaving[k] = outs[k]; });
-  }
+  var hc = hubCtx();
+  cat.forEach(function (m) {
+    var k = cardOf(m, hc);
+    if (k.held) c.live.push(m);
+    if (k.state === 'awaiting') c.coming[m.key] = { pill: k.pill, change: k.record };
+    else if (k.state === 'bought') c.coming[m.key] = { pill: k.pill };
+    else if (k.state === 'removing') c.leaving[m.key] = k.record || {};
+    else if (k.state === 'requested') c.requested[m.key] = k.record || {};
+  });
   c.reviewOn = (sm && sm.nextReviewOn) || null;
   return c;
 }
@@ -1178,7 +1186,10 @@ function heroHtml(c) {
 }
 /* 2 · what is owed and when */
 function oweHtml(c) {
-  var bl = c.bl, sm = c.sm, pa = c.pa, amount = null, list = [], dueOn = '', unknown = false, loading = false;
+  /* dueOn is an invoice's ISSUE date on a packaged plan (its oldest unpaid
+     invoice) and the DUE date on a legacy one (billing/current's
+     subscriptionDue, the master console's "Next payment"): each says which */
+  var bl = c.bl, sm = c.sm, pa = c.pa, amount = null, list = [], dueOn = '', dueWord = 'issued', unknown = false, loading = false;
   if (c.packaged && sm) {
     amount = c.unpaid.reduce(function (t, x) { return t + (Number(x.totalCents) || 0); }, 0) / 100; list = c.unpaid.map(function (x) { return { name: invName(x), display: x.display, link: x.paymentLink, date: x.date }; }); dueOn = c.unpaid.length ? c.unpaid[0].date : '';
     /* an amount the record says is due that no invoice row carries yet (the first invoice on its way) is still owed */
@@ -1187,13 +1198,13 @@ function oweHtml(c) {
   else if (c.stripeOpen.length) { amount = c.stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0); list = c.stripeOpen.map(function (x) { return { name: x.number || 'Invoice', display: usd(x.amountDue), link: x.hostedUrl, date: x.created }; }); }
   else if (c.packaged && !sm && !BILL.failed) loading = true;
   else if (c.packaged && BILL.failed) { if (bl.amountDue != null) amount = Number(bl.amountDue) || 0; else unknown = true; }
-  else { amount = bl.amountDue != null ? Number(bl.amountDue) || 0 : 0; dueOn = bl.subscriptionDue || ''; }
+  else { amount = bl.amountDue != null ? Number(bl.amountDue) || 0 : 0; dueOn = bl.subscriptionDue || ''; dueWord = 'due'; }
   var due = amount > 0, n = list.length;
   var h = '<section class="bcard owe" id="bill-owe"><h3>What you owe</h3>';
   if (loading) h += '<div class="owe-amt"><span class="ic">…</span><div><b>…</b><small>Reading what is due</small></div></div>';
   else if (unknown) h += '<div class="owe-amt"><span class="ic">?</span><div><b>—</b><small>The figures could not be loaded right now.</small></div></div>';
   else h += '<div class="owe-amt ' + (due ? 'due' : 'ok') + '"><span class="ic">' + (due ? BICON.due : BICON.ok) + '</span><div><b>' + esc(usd(amount)) + '</b><small>'
-    + (due ? (n ? n + (n === 1 ? ' invoice open' : ' invoices open') : 'Due') + (dueOn ? ' · issued ' + esc(day(dueOn)) : '') : 'All paid up · nothing is owed') + '</small></div></div>';
+    + (due ? (n ? n + (n === 1 ? ' invoice open' : ' invoices open') : 'Due') + (dueOn && day(dueOn) ? (dueWord === 'due' && !n ? ' ' : ' · ' + dueWord + ' ') + esc(day(dueOn)) : '') : 'All paid up · nothing is owed') + '</small></div></div>';
   if (c.packaged && BILL.failed) h += '<p class="failed">' + (unknown ? 'The invoice list could not be loaded.' : 'From your billing record; the invoice list could not be loaded.') + '<button class="ows-pill sm" type="button" data-bill="retry">Retry</button></p>';
   if (due && c.payLink) h += '<a class="ows-pill primary paybtn" id="bill-pay" href="' + esc(c.payLink) + '" target="_blank" rel="noopener">Pay ' + esc(n === 1 ? list[0].display : usd(amount)) + ' now</a>';
   else if (due) h += '<p class="fine">The invoice arrives by email with its own pay link.</p>';
@@ -1355,7 +1366,22 @@ function route() {
   else if (h.indexOf('area-') === 0) areaDrawer(h.slice(5));
   else if (h.indexOf('module-') === 0) focusModule(h.slice(7));
   else if (h === 'plans') focusPlans();
+  else if (h.indexOf('launch-') === 0) launchFromLink(h.slice(7));
   else go(h);
+}
+/* #launch-<tool>: the home, then the tool as its tile opens it (launch():
+   locked explains, Site Map and the sandbox start the new-project flow,
+   the rest open their page). A page that cannot start that flow itself (the
+   marketplace's Open on an action tool) links here. It waits for the
+   entitlements, so a tool is judged by the plan, never by a tier guessed
+   before the plan is read; go('home') has already dropped the hash, so a
+   reload does not open it twice. */
+function launchFromLink(key) {
+  go('home');
+  var t = tool(String(key || '').toLowerCase()), done = false;
+  if (!t) return;
+  var run = function () { if (done) return; done = true; if (t.soon) { S.toast(t.name + ' is coming soon'); return; } launch(t); };
+  if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(run); else run();
 }
 /* #module-<key>: the Modules page, that module's card marked and in view
    (every link to one module lands here, the marketplace's included) */
