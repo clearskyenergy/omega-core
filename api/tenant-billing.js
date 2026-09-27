@@ -101,6 +101,11 @@ module.exports = A.handler(function (req) {
       /* The whole block is written back, merged here, so the history row's
          before/after is the block and a price left out is not wiped. */
       if (lite) patch.customerEditorLite = Object.assign({}, before.customerEditorLite || {}, lite, { currency: 'USD' });
+      /* A Stripe payment for an earlier figure holds Plan & billing's Pay
+         (stripeDueHold, _lib/stripe-customer.js) until ClearSky has looked:
+         a staff write of the amount due, the same figure included, is that
+         look, and the history row keeps the hold it released. */
+      if (before.stripeDueHold && Object.prototype.hasOwnProperty.call(patch, 'amountDue')) patch.stripeDueHold = null;
       patch.updatedAt = FV.serverTimestamp();
       patch.updatedBy = caller.email;
       return ref.set(patch, { merge: true }).then(function () {
