@@ -36,7 +36,7 @@ Links used everywhere below (change them here once, e.g. for a vanity redirect o
 
 **Every day, 10 minutes** (the founder or whoever runs the page):
 
-- Answer every Drop a Site entry within 24 hours: run it in Grid Atlas and reply with results only (nearest substations and lines, published hosting capacity). Never explain how the screen works.
+- Answer every Drop a Site entry within 24 hours: run it in Grid Atlas and reply with results only (nearest substations and lines, published hosting capacity). Paste the results to the daily run and it sends back a "Site screened" card per entry to reply with. Never explain how the screen works, and never name the entrant's site more precisely than they did.
 - Reply to every comment on the day's post. A reply that asks a question back doubles the thread.
 - Everyone who comments BUILD or guesses closest gets a direct message offering a live build of their site.
 - Comment on 3 posts from target accounts (docs/developer-targets.csv): a fact or a question, never a pitch.

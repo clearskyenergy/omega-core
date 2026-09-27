@@ -571,12 +571,20 @@ NEWS_RULES = [
 ]
 
 ENGAGE = [
-    'Answer every Drop a Site entry within 24 hours: run it in Grid Atlas and reply with results only (nearest substations and lines, published hosting capacity). Never explain how the screen works.',
+    'Answer every Drop a Site entry within 24 hours: run it in Grid Atlas and reply with results only (nearest substations and lines, published hosting capacity). Paste the results to the daily run and it sends back a "Site screened" card per entry to reply with. Never explain how the screen works, and never name the entrant\'s site more precisely than they did.',
     'Reply to every comment on the day\'s post. A reply that asks a question back doubles the thread.',
     'Everyone who comments BUILD or guesses closest gets a direct message offering a live build of their site.',
     'Comment on 3 posts from target accounts (docs/developer-targets.csv): a fact or a question, never a pitch.',
     'Invite 10–20 relevant connections to follow the page.',
 ]
+
+# The Drop a Site reply card. The founder runs each entry in Grid Atlas and
+# pastes what it shows; the daily run renders one card per entry. Every value
+# comes from the tool; nothing is estimated. tone: go | maybe | no.
+REPLY_CARD_EXAMPLE = dict(kind='result', entry='#3', headline='Near [town], [state]',
+    rows=[['Nearest substation', '[distance] · [kV]'], ['Lines nearby', '[count] within [distance]'],
+          ['Published hosting capacity', '[value or "not published"]'], ['Parcel', '[acres]']],
+    verdict='Worth a closer look', tone='go')
 
 PILLARS = {
     'drop': 'Drop a Site', 'build': 'Build Tuesday', 'quiz': 'Guess & Spot', 'stack': 'Count Your Stack',

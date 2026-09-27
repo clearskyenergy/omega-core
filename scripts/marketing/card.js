@@ -92,6 +92,12 @@ var CSS = FONTS + [
   '.laps div{display:flex;gap:16px;align-items:center}.laps b{flex:none;font:500 22px Plex,monospace;color:#0b2733;background:#86bdf0;width:44px;height:44px;display:grid;place-items:center}',
   '.plan svg{width:100%;height:auto;display:block}',
   '.radar svg{width:100%;height:auto;display:block;max-height:560px}',
+  '.res{display:flex;flex-direction:column;border-top:1px solid rgba(233,240,244,.28)}',
+  '.res div{display:grid;grid-template-columns:1fr auto;gap:20px;padding:22px 0;border-bottom:1px solid rgba(233,240,244,.28);font:400 34px/1.2 Inter,sans-serif}',
+  '.res div span{color:#9fb6c3}.res div b{font:500 36px Plex,monospace;color:#fff;text-align:right}',
+  '.verdict{align-self:flex-start;font:700 38px Archivo,sans-serif;padding:14px 22px;border:3px solid currentColor}',
+  '.verdict.go{color:#5ad39a}.verdict.maybe{color:#ffc857}.verdict.no{color:#ff5a4f}',
+  '.stamp{font:500 22px Plex,monospace;letter-spacing:.14em;color:#ff7a52}',
   '.tb{display:grid;grid-template-columns:auto 1fr auto;border-top:2px solid rgba(233,240,244,.6);font:500 19px Plex,monospace;letter-spacing:.08em}',
   '.tb>div{padding:16px 22px;border-right:1px solid rgba(233,240,244,.35);display:flex;flex-direction:column;gap:5px;justify-content:center;min-width:0}',
   '.tb>div:last-child{border-right:0}',
@@ -152,6 +158,13 @@ function inner(c) {
   } else if (c.kind === 'plan') {
     h += '<h1 style="font-size:84px">' + esc(c.headline) + '</h1>';
     h += '<div class="plan">' + sitePlan(c.variant, c.flag, c.flagText) + '</div>';
+  } else if (c.kind === 'result') {
+    /* A Drop a Site reply: what the screen found, as the founder read it
+       off the tool. Results only; never how the screen works. */
+    h += '<div class="stamp">SITE SCREENED ✓ ' + esc(c.entry || '') + '</div>';
+    h += '<h1 style="font-size:84px">' + esc(c.headline) + '</h1>';
+    h += '<div class="res">' + (c.rows || []).map(function (r) { return '<div><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('') + '</div>';
+    if (c.verdict) h += '<div class="verdict ' + esc(c.tone || 'maybe') + '">' + esc(c.verdict) + '</div>';
   } else if (c.kind === 'drop') {
     h += '<div class="radar">' + radar() + '</div>';
     h += '<h1>' + esc(c.headline) + '</h1>';

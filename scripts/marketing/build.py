@@ -61,6 +61,7 @@ for p in POSTS:
         cards.append(dict(p['card'], id=cid(p), **meta))
         if p.get('answer_card'):
             cards.append(dict(p['answer_card'], id=cid(p) + '-answer', **meta))
+cards.append(dict(REPLY_CARD_EXAMPLE, id='reply-example', sheet='A-000', project='Drop a Site'))
 json.dump(cards, open(os.path.join(OUT, 'cards.json'), 'w'), indent=1, ensure_ascii=False)
 
 def read_csv(path):
@@ -365,6 +366,7 @@ for k, v in {
     '%%ICP%%': icp, '%%TITLES%%': E(TITLES), '%%HOOKS%%': hooks, '%%SEQ%%': ''.join(seq_html),
     '%%CADENCE%%': cad, '%%METRICS%%': met, '%%TARGETS%%': tg_html, '%%TCOUNT%%': str(len(targets)) if targets else 'next',
     '%%ENGAGE%%': ''.join('<li>%s</li>' % E(x) for x in ENGAGE),
+    '%%REPLY%%': '<div class="shot"><img src="cards/reply-example.png" alt="Site screened reply card (template)" loading="lazy" width="1080" height="1350"><span class="sub">The reply card, with blanks where the tool\'s results go.</span></div>',
     '%%DO%%': do, '%%DONT%%': dont, '%%BLOCKERS%%': blk,
     '%%TRIAL%%': E(LINKS['trial']), '%%PLAYBOOKS%%': playbooks_html, '%%ADS%%': ads_html,
 }.items():
