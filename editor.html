@@ -166149,13 +166149,15 @@ if (root.console && console.info) {
      'omega-compass' and the .op-panel frames (COORDINATES, TERRAIN KEY)
      came later than this list: OmegaPanels.wrap() moves #o2-coords and
      #tl-key inside an .op-panel, so hiding the inner id left the frame
-     and its title bar on the report. */
+     and its title bar on the report. 'viewcube' (the TOP/N-S-E-W gizmo)
+     and 'nav-bar' (the + / - / fit buttons) sit top-right of #sc and
+     were on every report image too. */
   var OVERLAYS = [
     'omega-ladder', 'rr-stale', 'lgd', 'lgd-items', 'eng-legend',
     'zc', 'zc-unlock', 'zpct', 'ruler', 'ruler-bar', 'ruler-lbl',
     'banner', 'rr-mapbadge', 'o2-coords', 'tl-key', 'snapring',
     'cal-ov', 'sub-props', 'omega-extype', 'omega-compass',
-    'op-o2-coords', 'op-tl-key'
+    'op-o2-coords', 'op-tl-key', 'viewcube', 'nav-bar'
   ];
 
   /* Class-based overlays the ids miss. NEVER '.cel': that is the wrapper
