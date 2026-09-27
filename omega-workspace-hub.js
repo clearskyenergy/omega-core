@@ -135,7 +135,109 @@
     if (!total) return (ctx.tierLevel >= 3) ? 'held' : 'ask';
     return open === total ? 'held' : open ? 'part' : 'ask';
   }
-  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, RING_MAX: RING_MAX };
+  /* ── ONE CARD, ONE STATUS, AT MOST ONE ACTION (Tommy, 2026-09-27: "the
+     opt in and opt out stuff you need to make that make sense"). Every
+     surface that shows a module to a workspace — the Modules page, the
+     home row, Plan & billing's changes in progress — reads its card here,
+     so a module can never say Live in one place and Opt in in another.
+       m        the catalog entry (key, name, shelf, tools, caps)
+       ctx      as moduleState takes it
+       billing  billing/current as the workspace reads it: subscription,
+                optIns{}, optOuts{}, removalRequests[], paymentLink
+       summary  GET /api/plan-change, or null while it loads or failed:
+                pending[], gate{canApply, reason}, nextReviewOn
+       opts     { admin, pendingApproval, planName, company, price }
+     A state, first match wins:
+       included  Lite, the floor every plan stands on
+       awaiting  a change invoice for it is open (packaged)
+       bought    in the subscription, not switched on yet (packaged)
+       removing  an opt-out is queued (packaged: for the review; legacy:
+                 with ClearSky)
+       live      on the plan
+       requested an opt-in is recorded, waiting on ClearSky (legacy)
+       part      some of it is on the plan (legacy)
+       available not on the plan
+     The words are the contract's: Opt in, Opt out, Cancel request; never
+     Subscribe or Ask. The action is what the button does; the ONE menu
+     (omega-package-menu.js) confirms it and states the money before
+     anything is written. Nothing here prices: the price is the server's
+     display string, handed in. */
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  /* a calendar day as people read it; 'YYYY-MM-DD' is that day wherever
+     the reader is (new Date('2026-12-20') is the 19th in Chicago) */
+  function shortDay(v) {
+    if (!v) return '';
+    var s = String(v), d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (d) return MON[+d[2] - 1] + ' ' + (+d[3]);
+    var t = new Date(typeof v === 'number' ? v : s);
+    return isNaN(t.getTime()) ? '' : MON[t.getMonth()] + ' ' + t.getDate();
+  }
+  function listed(obj, key) { var o = obj && typeof obj === 'object' ? obj[key] : null; return o && o.status === 'requested' ? o : null; }
+  function moduleCard(m, ctx, billing, summary, opts) {
+    ctx = ctx || {}; billing = billing || {}; opts = opts || {};
+    var key = m && m.key, packaged = !!ctx.packaged, price = opts.price || '', plan = opts.planName || 'your plan', co = opts.company || 'your workspace';
+    var card = { key: key, state: 'available', pill: 'Not on your plan', tone: 'off', held: false, priceLine: price, note: '', action: null, secondary: null, adminLine: '' };
+    var st = moduleState(m, ctx);
+    var sub = billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription.modules : [];
+    var wait = null;
+    ((summary && summary.pending) || []).forEach(function (p) { if (!wait && Array.isArray(p.add) && p.add.indexOf(key) >= 0) wait = p; });
+    var queued = null;
+    (Array.isArray(billing.removalRequests) ? billing.removalRequests : []).forEach(function (r) { if (r && r.module === key) queued = r; });
+    var optOut = !packaged ? listed(billing.optOuts, key) : null, optIn = !packaged ? listed(billing.optIns, key) : null;
+    if (key === 'lite') {
+      card.state = 'included'; card.pill = 'Live · always included'; card.tone = 'live'; card.held = true;
+      card.priceLine = 'In every plan'; card.note = 'The floor every plan stands on.';
+      return card;
+    }
+    if (packaged && wait) {
+      card.state = 'awaiting'; card.pill = 'Waiting for payment'; card.tone = 'wait';
+      card.note = (wait.display ? wait.display + ' invoice · ' : '') + (wait.expiresOn ? 'pay by ' + shortDay(wait.expiresOn) + ' · ' : '') + 'switches on when paid';
+      card.action = wait.paymentLink ? { kind: 'pay', label: 'Pay' + (wait.display ? ' ' + wait.display : ''), href: wait.paymentLink } : { kind: 'billing', label: 'Plan & billing' };
+      card.secondary = { kind: 'cancel', label: 'Cancel request' };
+    } else if (packaged && st !== 'held' && sub.indexOf(key) >= 0) {
+      card.state = 'bought'; card.pill = 'Bought · not on yet'; card.tone = 'wait';
+      card.note = 'Switches on when your open invoice is paid.';
+      card.action = billing.paymentLink ? { kind: 'pay', label: 'Pay now', href: billing.paymentLink } : { kind: 'billing', label: 'Plan & billing' };
+    } else if ((packaged && queued && st === 'held') || (optOut && (st === 'held' || st === 'part'))) {
+      card.state = 'removing'; card.pill = 'Opting out'; card.tone = 'wait'; card.held = true;
+      var review = (queued && queued.reviewOn) || (summary && summary.nextReviewOn) || null;
+      card.note = packaged
+        ? 'Stays on, and billed, until ' + (review ? 'your review on ' + shortDay(review) : 'your next quarterly review') + '.'
+        : 'Requested ' + shortDay(optOut.requestedAt) + '. ClearSky confirms the date and any price change in writing; access is unchanged until then.';
+      card.action = { kind: 'cancel', label: 'Cancel request' };
+    } else if (st === 'held') {
+      card.state = 'live'; card.pill = 'Live'; card.tone = 'live'; card.held = true;
+      card.priceLine = packaged ? (price ? price + ' · in your monthly fee' : 'In your plan') : 'Included in ' + plan;
+      card.note = 'On your plan.';
+      card.action = { kind: 'remove', label: 'Opt out' };
+    } else if (optIn) {
+      card.state = 'requested'; card.pill = 'Opt-in requested'; card.tone = 'wait';
+      card.priceLine = optIn.display || price;
+      card.note = 'Requested ' + shortDay(optIn.requestedAt) + (optIn.display || price ? ' at ' + (optIn.display || price) : '') + '. It joins your monthly invoice once ClearSky moves you to monthly billing; nothing is charged before you approve that invoice.';
+      card.action = { kind: 'cancel', label: 'Cancel request' };
+    } else if (st === 'part') {
+      var t = moduleTools(m, ctx), e = moduleEditor(m, ctx), bits = [];
+      if (t.total) bits.push(t.open + ' of ' + t.total + ' tools');
+      if (e.total) bits.push(e.open + ' of ' + e.total + ' Site Map features');
+      card.state = 'part'; card.pill = 'Partly included'; card.tone = 'part';
+      card.note = (bits.length ? bits.join(' and ') + (bits.length > 1 || (t.open + e.open) !== 1 ? ' are' : ' is') + ' in ' + plan + '. ' : 'Part of it is in ' + plan + '. ') + 'Opting in adds the rest' + (price ? ' for ' + price : '') + '.';
+      card.action = { kind: 'add', label: 'Opt in' + (price ? ' · ' + price : '') };
+    } else {
+      var gate = summary && summary.gate;
+      card.note = packaged
+        ? (gate && gate.canApply === false && gate.reason ? gate.reason : 'Prorated today, then ' + (price || 'its monthly price') + '.')
+        : 'Adds ' + (price || 'its monthly price') + ' once ClearSky moves you to monthly billing.';
+      card.action = { kind: 'add', label: 'Opt in' + (price ? ' · ' + price : '') };
+      if (packaged && gate && gate.canApply === false) card.action.disabled = true;
+    }
+    /* who may press it: a workspace waiting on approval opens nothing yet;
+       anyone but an owner or administrator reads the card and is told who
+       changes it (the server refuses them too) */
+    if (opts.pendingApproval && !card.held) { card.note = 'Opens when ClearSky approves ' + co + '.'; card.action = null; card.secondary = null; }
+    else if (opts.admin === false && card.action && card.action.kind !== 'billing') { card.action = card.action.kind === 'pay' ? card.action : null; card.secondary = null; card.adminLine = 'An owner or administrator of ' + co + ' changes modules.'; }
+    return card;
+  }
+  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleCard: moduleCard, shortDay: shortDay, RING_MAX: RING_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceHub = API;
 })(typeof window !== 'undefined' ? window : null);

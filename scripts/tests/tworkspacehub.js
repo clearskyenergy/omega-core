@@ -105,6 +105,39 @@ ok('the engineering add-on widens what a Standard editor holds', HUB.moduleState
 ok('the counts say how much of a module the editor grants', (function (e) { return e.total > 0 && e.open === 0; })(HUB.moduleEditor(MODS.plansets, stdE)));
 CAPS.setAddons([]);
 
+/* 6 · one card, one status, at most one action (2026-09-27: "the opt in
+   and opt out stuff you need to make that make sense"). Every state the
+   Modules page, the home row and Plan & billing show comes from
+   moduleCard, in the contract's words. */
+var PK = function (mods) { return ctxFor({ orgId: 'x', tierLevel: 1, modules: mods, packaged: true, toolAccess: ['editor'] }, { packaged: true, modules: mods }); };
+var O = { planName: 'Standard', company: 'Northstar', price: '$250/month', admin: true };
+function card(m, ctx, bl, sm, o) { var oo = {}; Object.keys(O).forEach(function (k) { oo[k] = O[k]; }); Object.keys(o || {}).forEach(function (k) { oo[k] = o[k]; }); return HUB.moduleCard(m, ctx, bl || {}, sm || null, oo); }
+var c;
+c = card(MODS.lite, stdE); ok('Lite is live, always included, with no action', c.state === 'included' && c.pill === 'Live · always included' && !c.action, c);
+c = card(MODS.gridatlas, PK(['lite', 'gridatlas'])); ok('a packaged held module is Live and offers Opt out', c.state === 'live' && c.pill === 'Live' && c.action.kind === 'remove' && c.action.label === 'Opt out', c);
+c = card(MODS.gridatlas, PK(['lite'])); ok('a packaged module not held offers Opt in with its price and the proration', c.state === 'available' && c.pill === 'Not on your plan' && c.action.kind === 'add' && c.action.label === 'Opt in · $250/month' && /Prorated today/.test(c.note), c);
+c = card(MODS.gridatlas, PK(['lite']), {}, { gate: { canApply: false, reason: 'Pay your current invoice first.' } }); ok('a closed purchase gate says why and disables Opt in', c.action.disabled === true && c.note === 'Pay your current invoice first.', c);
+c = card(MODS.gridatlas, PK(['lite']), {}, { pending: [{ add: ['gridatlas'], display: '$200.00', paymentLink: 'https://qb/pay', expiresOn: '2026-10-20' }] });
+ok('an open change invoice reads Waiting for payment, pays through QuickBooks and can be cancelled', c.state === 'awaiting' && c.pill === 'Waiting for payment' && c.action.kind === 'pay' && c.action.href === 'https://qb/pay' && c.secondary.label === 'Cancel request' && /pay by Oct 20/.test(c.note), c);
+c = card(MODS.gridatlas, PK(['lite']), { subscription: { modules: ['lite', 'gridatlas'] }, paymentLink: 'https://qb/p' }); ok('bought but not on yet: Pay now, never Opt out and never "Paid"', c.state === 'bought' && c.pill === 'Bought · not on yet' && c.action.kind === 'pay' && !/Paid/.test(c.pill + c.note), c);
+c = card(MODS.gridatlas, PK(['lite', 'gridatlas']), { removalRequests: [{ module: 'gridatlas', requestedAt: '2026-09-27T12:00:00Z' }] }, { nextReviewOn: '2026-12-20' });
+ok('a queued packaged opt-out stays on and billed until the review, and can be cancelled', c.state === 'removing' && c.pill === 'Opting out' && c.held && /until your review on Dec 20/.test(c.note) && c.action.label === 'Cancel request', c);
+c = card(MODS.plansets, delE, { optOuts: { plansets: { status: 'requested', requestedAt: '2026-09-27' } } }); ok('a legacy opt-out is with ClearSky and access is unchanged', c.state === 'removing' && /Requested Sep 27/.test(c.note) && /access is unchanged/.test(c.note) && c.action.kind === 'cancel', c);
+c = card(MODS.plansets, delE); ok('a legacy held module reads Included in the plan and offers Opt out', c.state === 'live' && c.priceLine === 'Included in Standard' && c.action.kind === 'remove', c);
+c = card(MODS.plansets, stdE, { optIns: { plansets: { status: 'requested', requestedAt: '2026-09-27', display: '$500/month' } } }); ok('a legacy opt-in is requested with its price and can be cancelled', c.state === 'requested' && c.pill === 'Opt-in requested' && /at \$500\/month/.test(c.note) && c.action.label === 'Cancel request', c);
+c = card(MODS.plansets, stdE, { optIns: { plansets: { status: 'withdrawn' } } }); ok('a withdrawn opt-in is simply available again', c.state === 'available' && c.action.kind === 'add', c);
+c = card(MODS.compute, stdE); ok('partly included: says how much, offers Opt in for the rest, never Opt out', c.state === 'part' && c.pill === 'Partly included' && c.action.kind === 'add' && /Site Map features/.test(c.note) && /adds the rest/.test(c.note), c);
+c = card(MODS.plansets, stdE); ok('a legacy module not held is Opt in, priced from the list, joining the monthly bill through ClearSky', c.state === 'available' && /once ClearSky moves you to monthly billing/.test(c.note) && c.action.label === 'Opt in · $250/month', c);
+c = card(MODS.gridatlas, PK(['lite', 'gridatlas']), {}, null, { admin: false }); ok('a member sees the status and who changes it, and no button', c.pill === 'Live' && !c.action && /owner or administrator of Northstar/.test(c.adminLine), c);
+c = card(MODS.gridatlas, PK(['lite']), { subscription: { modules: ['lite', 'gridatlas'] }, paymentLink: 'https://qb/p' }, null, { admin: false }); ok('a member may still pay an open invoice', c.action && c.action.kind === 'pay', c);
+c = card(MODS.gridatlas, PK(['lite']), {}, null, { pendingApproval: true }); ok('a workspace awaiting approval opens nothing yet', !c.action && /Opens when ClearSky approves Northstar/.test(c.note), c);
+var everyState = [];
+[stdE, delE, entE, trialE, PK(['lite']), PK(['lite', 'gridatlas', 'logic-office'])].forEach(function (cx) { M.catalog().forEach(function (m) { var k = card(m, cx); everyState.push(k);
+  ok('card ' + m.key + ' never offers Opt out unless it is Live', !(k.action && k.action.kind === 'remove') || k.state === 'live', k);
+  ok('card ' + m.key + ' uses the contract words', !/Subscribe|\bAsk\b|Keep module/.test(k.pill + ' ' + k.note + ' ' + (k.action ? k.action.label : '')), k); }); });
+ok('the pills are the contract pills', everyState.every(function (k) { return ['Live', 'Live · always included', 'Opting out', 'Waiting for payment', 'Bought · not on yet', 'Opt-in requested', 'Partly included', 'Not on your plan'].indexOf(k.pill) >= 0; }));
+ok('a calendar day is that day wherever the reader is', HUB.shortDay('2026-12-20') === 'Dec 20' && HUB.shortDay('2026-01-01') === 'Jan 1' && HUB.shortDay('') === '');
+
 M.catalog().forEach(function (m) { ok('module ' + m.key + ' says what it is for, in one sentence, with no price in it', typeof m.blurb === 'string' && m.blurb.length > 40 && !/\$\d/.test(m.blurb), m.blurb); });
 
 console.log('tworkspacehub: ' + pass + ' passed, ' + fail + ' failed');
