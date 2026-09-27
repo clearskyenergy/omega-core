@@ -78,23 +78,14 @@ decided 2026-09-26.
   plan's from `POST /api/stripe-invoices`). Additions waiting (a legacy
   opt-in with its price, a packaged change waiting for payment) are listed
   between them.
-- **Opt in, never Ask.** Every module not held carries **Opt in**. A
-  packaged workspace opts in on the one menu (`omega-package-menu.js`): a
-  server quote, "Subscribe and pay", a QuickBooks invoice with the card
-  button. A workspace on a legacy plan is billed outside the package engine,
-  which takes a card payment only on a subscription package
-  (`plan-change.js` `state()`); its Opt in is **Add to my monthly fee**:
-  `POST /api/plan-change {action:'opt-in', add}` (owner or admin) prices
-  the module and what it requires from the book, records it on
-  `billing/current.optIns` with who and when (history and `admin_audit`
-  rows) and mails ClearSky, who moves the workspace onto a package from
-  the admin Package tab; the card then reads *Requested* with its price.
-  Nothing is charged until the first invoice is confirmed. Self-serve
-  conversion of a legacy plan is NOT built (below).
-- **Your modules on the home** (the demo's row): the held modules Live in
-  shelf order, then up to three not held with Opt in, compact cards from
-  the same catalogue and the same rule as the Modules page; "All modules ›"
-  is the page.
+- **Opt in and Opt out** are on the Modules page, one card and one action
+  per module, through the one menu; see *Modules, opt in and opt out*
+  below. A legacy plan's requests are recorded with their price and
+  ClearSky moves the workspace onto a package; self-serve conversion of a
+  legacy plan is NOT built (below).
+- **Your modules on the home** (the demo's row): Live modules, then what is
+  on its way in or out, then up to three to opt in to, compact cards from
+  the same `moduleCard` as the Modules page; "All modules ›" is the page.
 - **The login lands on the workspace.** `login.html`'s workspace route and
   a tenant's own host both go to `/workspace`; the workspace sends a
   classic choice (`?home=classic`, `shell: 'classic'`, a partner-type
@@ -105,18 +96,14 @@ decided 2026-09-26.
   beside Edit Dashboard and a Home section in Account settings; both are
   `/?home=workspace`, which flips the browser's choice.
 - **Modules** (`#modules`) lists EVERY module of the catalog in shelf
-  order, for every workspace, marked by whether it is used or given
-  (Tommy, 2026-09-27). `OmegaWorkspaceHub.moduleState` is the ONE rule,
-  shared with the marketplace store and pinned by `tworkspacehub.js`: a
-  packaged workspace holds what its projection lists; a legacy one holds a
-  module when every tool it carries is open on its tier (Omega Logic by the
-  `omega-logic` add-on; a capabilities-only module on Enterprise), is
-  Partly on it with the count, else asks. A packaged workspace's prices
-  are `/api/package-catalog`'s (asked once) and + Add opens the ONE menu
-  (`omega-package-menu.js`) on that module; a legacy workspace's are the
-  public price list's (`/api/offerings`, asked once) and Ask is the store
-  on that module (`/marketplace.html#<module>`), where ClearSky is asked to
-  switch it on. Change plan on a packaged plan strip opens the page.
+  order, for every workspace, then the plans shelf (`#plans`).
+  `OmegaWorkspaceHub.moduleState` decides what a workspace holds (a
+  packaged one what its projection lists; a legacy one when its tools open
+  and Site Map grants its capabilities on the tier; Omega Logic by the
+  `omega-logic` add-on) and `moduleCard` turns it into the card. A packaged
+  workspace's prices are `/api/package-catalog`'s; a legacy one's the
+  public price list's (`/api/offerings`). Change plan on the plan strip
+  opens the page for every workspace.
 - **View as a customer** (staff): `/workspace?viewas=lite` (a starter key
   or a comma list of module keys) paints the signed-in workspace as a
   packaged customer holding those modules, through the same server
@@ -156,53 +143,93 @@ decided 2026-09-26.
 - **Settings** is a side panel reading the person's `team_members`
   profile (display name is editable there) and the classic-home switch.
 
-## The store (every workspace whose home is the workspace)
+## Modules, opt in and opt out (2026-09-27)
 
-`marketplace.html` is what is for sale, not a tool catalogue: the tools,
-live or locked, are All tools on the workspace (Tommy, 2026-09-27: "the
-marketplace is different than the modules and packages they can buy to
-upgrade their systems"). Once the workspace is home the page wears the
-whole workspace chrome: `OmegaWorkspaceShell.wear()` takes its own sidebar
-and topbar off and mounts the rail, the topbar with the company switcher,
-the phone tab bar and the side panel around the page's `#main`; the markup
-stays in the file for the classic home, which is what the sidebar tests
-compare. What omega-jd-nav.js revealed stays revealed.
+Tommy, 2026-09-27: "the opt in and opt out stuff you need to make that
+make sense ... the modules are paid services tied directly to the editor,
+and you need to make sure the editor is linked to how a tenant pays and
+what their modules are". Modules are bought on the workspace's **Modules**
+page, never in the marketplace.
 
-The page shows, in order: a compact head with a search box that narrows
-the shelves in place; the plan strip (plan, modules held, tools open, and
-for a packaged workspace the monthly price, the next invoice and changes
-waiting for payment); the **Plans** shelf from the public price list
-`GET /api/offerings` (Lite, Field, Pro, Enterprise with the service fee;
-the starter packages by what you do; the logins, the annual and the trial
-notes); then every module on its shelf (Included with every plan · Add-ons
-· Standard · Premium · Deliverables · Omega Logic) with its price, features
-and tools.
+**One card, one status, one action.** `OmegaWorkspaceHub.moduleCard(m,
+ctx, billing, summary, opts)` (pure, ES5, `tworkspacehub.js` §6) decides
+every card the Modules page, the home row and Plan & billing show. First
+match wins:
 
-- A PACKAGED workspace (`billing.packaged`) prices from
-  `api/package-catalog` and opts in and pays here: a held module reads
-  "In your plan"; any other carries the shared subscribe control from
-  `omega-package-menu.js`: Subscribe asks `plan-change` for a quote
-  (today, then, activation), "Subscribe and pay" applies it by its
-  previewId, and the card then waits for payment with the QuickBooks link
-  and a cancel. A $0 addition inside a paid tier switches on at once. Only
-  an owner or admin manages; a member is told to ask.
-- Any other workspace reads the public price list and is judged against
-  its legacy tier: a module reads "On your plan" when every tool it
-  carries is open (Omega Logic when the `omega-logic` addon is held; a
-  capabilities-only module on Enterprise), "Partly on your plan" with the
-  count, else "Ask ClearSky to add it", an email to the upgrade address
-  naming the module and its price. Nothing is charged here; ClearSky
-  switches a legacy tenant on.
-- `/marketplace.html#<module>` lands on and marks that module; a locked
-  tile on the workspace links there when it knows the module.
-- A tenant on the classic home (`shell: 'classic'`) keeps the tool
-  catalogue, its categories and "+ Add to dashboard".
+| state | pill | action | when |
+|---|---|---|---|
+| included | Live · always included | none | Lite, the floor |
+| awaiting | Waiting for payment | Pay (QuickBooks), Cancel request | a change invoice for it is open (packaged) |
+| bought | Bought · not on yet | Pay now | in the subscription, not on until the invoice is paid |
+| removing | Opting out | Cancel request | packaged: queued for the quarterly review; legacy: an opt-out request with ClearSky |
+| live | Live | Opt out | on the plan |
+| requested | Opt-in requested | Cancel request | a legacy opt-in waiting on ClearSky |
+| part | Partly included | Opt in | some of its tools / Site Map features are on the plan |
+| available | Not on your plan | Opt in | the rest |
 
-Nothing in the browser prices or grants anything. `check:workspace`
-renders the store for a packaged workspace (quote → pay → waiting for
-payment, the deep link) and for a legacy tenant (every module priced from
-the price list, some on its plan and some to ask for, the plans first, the
-catalogue folded away, the whole chrome on desktop and phone).
+A member (not an owner or administrator) and a staff preview see the status
+and "An owner or administrator of … changes modules", no button (a member
+may still open a Pay link). A workspace awaiting approval opens nothing.
+
+**Every action is the one menu** (`omega-package-menu.js`, "The Ladder")
+opened on that module with `{ single: true, intent }`: it skips the first
+click and states the money before anything is written.
+
+- Packaged **Opt in** → `plan-change` `quote` (today, then, activation) →
+  "Opt in and pay" (`apply`, a QuickBooks invoice; on when paid) or "Turn it
+  on" for a $0 addition inside a paid tier.
+- Packaged **Opt out** → `request-removal` dry run → "You keep X, and keep
+  paying for it, until your review on <date>. From then your monthly fee
+  goes from $A to $B. No refund for time already billed." → Request opt-out.
+  The review date is the subscription's start plus whole 90-day periods
+  (`book.policy.reviewDays`).
+- Legacy **Opt in** → `opt-in` dry run (priced from the book) → Request
+  opt-in, recorded on `billing/current.optIns`.
+- Legacy **Opt out** → `opt-out` dry run ("Your plan's price is set by your
+  agreement, so nothing changes today …") → Send opt-out request, recorded on
+  `billing/current.optOuts`; the tier, add-ons and toolAccess are never
+  touched. Office takes every Omega Logic department with it when the
+  workspace holds the add-on.
+- **Cancel request** → `cancel` (a pending change), `withdraw-removal`,
+  `withdraw-opt-in` or `withdraw-opt-out`: "Nothing about your bill changes."
+
+Every write is history plus `admin_audit`; opt-outs and removals mail
+ClearSky (`optOutAlert`, `removalAlert`). Moving a legacy workspace onto a
+package (the admin Package tab, preselected on what it holds plus its
+opt-ins minus its opt-outs) marks each opt-in activated or declined and each
+opt-out done.
+
+**The Modules page agrees with Site Map.** A legacy plan holds a module
+only when its tools open AND the editor grants its capabilities on the tier
+it runs (`OmegaCaps.editorCan(effectiveTier(tier, capTier), cap)`,
+`omega-caps.js` loaded on the workspace). A module says where it lives:
+"Inside Site Map, the editor" (twelve of nineteen) or where else (White
+Label, Site Finder, the Omega Logic departments).
+
+**Site Map shows how the workspace pays.** `omega-editor-plan.js` draws a
+plan chip in the editor's `#portal-nav`: the plan (· Read-only / · Payment
+due), a popover with the modules in Site Map and elsewhere, the monthly
+figure and next invoice (`GET /api/plan-change`; a failure shows the plan
+without figures), changes in progress, the read-only notice with its pay
+link and *I've paid* (reconcile-now, then re-apply), and links to Plan &
+billing and Modules in a new tab. A failed billing read leaves the plan
+"unchecked": navigation stays, producing controls are hidden, Retry
+re-checks without a reload.
+
+## The marketplace is the tools (again)
+
+Tommy, 2026-09-27: "the marketplace should be the old tools that we had,
+we are going to maybe retire that or phase it out but for now keep it".
+`marketplace.html` is the tool catalogue for every workspace: every tool,
+the categories, search and pinning, in the workspace chrome where the
+workspace is home (`OmegaWorkspaceShell.wear()`) and in its own sidebar on
+the classic home. It sells nothing. A locked tool names the module that
+carries it (a packaged workspace's own catalog, else `GET /api/offerings`)
+and **See module ›** goes to `/workspace#module-<key>`; on the classic home,
+which has no Modules page, it opens the one menu on that module in place.
+Old store links forward: `/marketplace.html#<module>` → `/workspace#module-
+<key>`, `#plans` → `/workspace#plans`. The plans shelf lives at the end of
+the Modules page.
 
 ## The journey, mapped
 
@@ -221,7 +248,7 @@ ground, one home; the session travels same-origin on every hop.
 | rail, any page | Projects | `/projects.html`, wearing the same rail with Projects current; a row opens the editor |
 | rail, any page | All tools | `/workspace#tools`, the All tools page alone |
 | rail, any page | Modules | `/workspace#modules`, the Modules page (the Ladder as a quick view for a packaged workspace) |
-| rail, any page | Marketplace | `/marketplace.html`, the store in the whole workspace chrome: the plans and the modules with the server's prices; a packaged workspace subscribes, any other asks ClearSky |
+| rail, any page | Marketplace | `/marketplace.html`, the tools catalogue in the whole workspace chrome; a locked tool names its module and links to its card on Modules |
 | rail, any page | Quote Desk | `/rfq.html` |
 | rail, any page | Team · Feed | `/workspace#team`, the Around you page alone |
 | rail, any page | Plan & billing | `/workspace#billing`, the Plan & billing page |
@@ -243,7 +270,7 @@ ground, one home; the session travels same-origin on every hop.
 | Settings panel | Classic dashboard | `/?home=classic`, the old home on this browser |
 | classic dashboard | Open Omega Workspace · Account settings › Home | `/?home=workspace`, back to the new home on this browser |
 | Plan & billing | Change modules | `/workspace#modules` |
-| Modules page | Opt in | a packaged workspace: the one menu, a server quote and a QuickBooks invoice; a legacy one: *Add to my monthly fee*, a request recorded with the server's price (`plan-change` `opt-in`) that ClearSky turns into a package |
+| Modules page | Opt in · Opt out · Cancel request | the one menu on that module, the money stated first: a packaged workspace quotes and pays on QuickBooks' page or queues an opt-out for the review; a legacy one records the request with its price (`plan-change` `opt-in` / `opt-out`) for ClearSky to confirm |
 
 ## Launch — home by default
 
@@ -293,7 +320,12 @@ to the page, the shell or the runtime they load.
   its own page layout; only its rail, ground and home link are the
   workspace's. The marketplace wears the whole chrome (`wear()`); giving
   the projects page the same is the next consistency pass.
-- The store's plan cards are the price list's facts: moving a packaged
+- The plans shelf's cards are the price list's facts: moving a packaged
   workspace to another plan from a plan card (through `plan-change` with a
-  `plan`) is not wired; the subscribe control's steer on a module quote
-  is the way today.
+  `plan`) is not wired; the menu's steer on a module quote is the way today.
+- **The review date's anchor.** A packaged opt-out lands at the first
+  review on or after today counted from the subscription's start in whole
+  90-day periods; whether it should instead follow approval or calendar
+  quarters is Tommy's call.
+- **The plan chip in Editor Lite.** Editor Lite hides `#portal-nav`, so
+  the chip is on Site Map only.

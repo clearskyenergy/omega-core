@@ -2324,3 +2324,39 @@ honours the switch. Tests: `scripts/tests/teditortheme.js` (npm test),
 `scripts/render-editor-theme.js` (check:pages; screenshots in
 `docs/screenshots/editor-theme/`). Design and what is not done:
 `docs/EDITOR-THEME.md`.
+
+## Site Map shows how the workspace pays — September 27, 2026
+
+"You need to make sure the editor is linked to how a tenant pays and what
+their modules are" (Tommy). `editor.html` gains one script include
+(`/omega-editor-plan.js`, after `/omega-package-menu.js`) and one mount,
+`<span id="omega-plan" hidden>` in `#portal-nav`. No other editor edit.
+`omega-editor-plan.js` paints a plan chip on the `omega:package` /
+`omega:tier` events `omega-caps.js` already sends: the plan (· Read-only or
+· Payment due), a popover with the modules in Site Map and elsewhere (the
+`/api/offerings` `editor` flag), the monthly figure and next invoice from
+`GET /api/plan-change` (any failure shows the plan without figures),
+changes in progress, the read-only notice with its pay link and *I've paid*
+(reconcile-now, then the package is re-fetched and re-applied), and links
+to `/workspace#billing` and `#modules` in a new tab. A legacy plan's modules
+are `OmegaWorkspaceHub.moduleState` with `OmegaCaps.editorCan` (the same
+rule the workspace's Modules page reads); `omega-tools.js` and
+`omega-workspace-hub.js` load only when the popover first opens.
+`omega-tenant.js` is still never loaded. The tier names and the read-only
+command list are copies of `omega-tenant.js` and `M.readOnlyRibbon()`;
+`scripts/tests/teditorplan.js` fails if either drifts.
+
+`omega-caps.js`: a failed billing read or package fetch leaves the plan
+"unchecked" — navigation and read-only commands stay, producing controls
+are hidden (never greyed), the Ladder tab opens the chip's popover with
+Retry, and `OmegaCaps.retry()` re-checks without a reload. The
+`GOVERNED`/`governs`/`editorCan` block (the editor's tier ladder as the
+Modules page reads it) is unchanged by this.
+
+`omega-editor-gate.js`: a failed check shows its own message with Retry
+instead of "not on this plan"; the real refusal keeps "not on this plan"
+and adds "See modules ›". A legacy `billing.toolAccess` array without
+`editor` now refuses (absent = whatever the plan includes); a missing
+`omega_orgs` record still fails open. Not built: the chip in Editor Lite
+(it hides `#portal-nav`). Tests: `scripts/tests/teditorplan.js` (npm test),
+`scripts/render-editor-plan.js` (check:pages).

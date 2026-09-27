@@ -711,46 +711,57 @@ unsized. Never a second copy of those rules in a page. The home is the BOARD: th
 (feed, People, the Omega pulse, Partners); only All tools and Modules are
 their own pages (`data-view`). The Omega pulse is `GET /api/pulse`
 (`api/_lib/pulse.js`, pure, `tpulse.js`): platform-wide COUNTS ONLY from
-the most recent rows, never a name. The Modules page lists every module
-for every workspace (`OmegaWorkspaceHub.moduleState`, the ONE held/partly/
-ask rule shared with the store); a module not held carries Opt in: the one
-menu and a QuickBooks invoice for a packaged workspace, the request that
-moves a legacy one onto a package (`plan-change` `opt-in`: priced from the
-book, recorded on `billing/current.optIns` with history and audit, ClearSky
-mailed; the admin Package tab opens preselected on what the tenant holds
-plus that request; nothing is charged). In flight is
-`OmegaWorkspaceToday.board` (what needs something, then what was touched
-last, never online, a finance-marketplace deal riding on its project) and
-Assign merges only the owner fields onto `projects/{id}`. Plan & billing
-is a page (`#billing`): subscription, what is owed and when, the payment
-method (the Stripe portal or QuickBooks' own payment page; a card is never
-entered on our pages) and the history; `GET /api/plan-change` is readable
-by any verified member, changes stay with an owner or admin. The shell's
-button reset is `:where()` (zero specificity) so a styled button keeps its
-face, and `omega-splash.js` hears link clicks last, so a link the page
-handles itself never raises the mark. Optional held modules offer **Opt out** through the
-same shared menu. Packaged opt-outs preview the server's dependency set,
-then queue for the existing quarterly review (no immediate access, charge
-or refund change); Keep module withdraws the request. Lite is mandatory.
-Legacy opt-outs prepare a ClearSky email request under the existing
-agreement. The page never changes billing or grants. Opt-in panels live on
+the most recent rows, never a name. **Modules are paid services of the editor** (Tommy, 2026-09-27). The
+Modules page (`#modules`; `#module-<key>` lands on one card, `#plans` on the
+plans shelf) lists every module for every workspace, and every card — the
+page, the home row, Plan & billing's *Changes in progress* — reads ONE rule,
+`OmegaWorkspaceHub.moduleCard(m, ctx, billing, summary, opts)` on top of
+`moduleState`: one status (Live · Live, always included · Opting out ·
+Waiting for payment · Bought, not on yet · Opt-in requested · Partly
+included · Not on your plan) and at most one action. The words are **Opt
+in**, **Opt out** and **Cancel request** (never Subscribe, Ask or Keep
+module); each opens the ONE menu (`omega-package-menu.js`, "The Ladder")
+with `{ single, intent }`, which states the money before anything is
+written: a packaged Opt in is `plan-change` quote → apply (pay on
+QuickBooks' page), a packaged Opt out queues for the quarterly review with
+the fee before → after and the review date, a legacy Opt in / Opt out is a
+RECORDED request (`plan-change` `opt-in` / `opt-out`, dry run first, on
+`billing/current.optIns` / `optOuts`, history, audit, ClearSky mailed; the
+tier is never touched) and Cancel request withdraws any of them. Activation
+resolves the requests (activated / declined / done). A legacy plan holds a
+module only when its tools open AND Site Map grants its capabilities on the
+tier it runs (`OmegaCaps.editorCan`, loaded by workspace.html), so the page
+and the editor give one answer. **The editor shows how the workspace pays**:
+`omega-editor-plan.js` puts a plan chip in `#portal-nav` (plan, modules in
+Site Map and elsewhere, the monthly figure and next invoice from
+`GET /api/plan-change`, read-only notice with the pay link and *I've paid*;
+links to `/workspace#billing` and `#modules`); a failed billing read keeps
+navigation and hides producing controls ("unchecked", `OmegaCaps.retry()`),
+and the gate honours a legacy `billing.toolAccess` without `editor`. In
+flight is `OmegaWorkspaceToday.board` (what needs something, then what was
+touched last, never online, a finance-marketplace deal riding on its
+project) and Assign merges only the owner fields onto `projects/{id}`. Plan
+& billing is a page (`#billing`), phone first: the subscription, what is
+owed and when with the invoice's own Pay, the payment method as a card
+(QuickBooks, Stripe's portal, or invoiced by ClearSky under an agreement; a
+card is never entered on our pages), changes in progress and the history;
+`GET /api/plan-change` is readable by any verified member (invoices shown
+read-only), changes stay with an owner or admin. The shell's button reset
+is `:where()` (zero specificity) so a styled button keeps its face, and
+`omega-splash.js` hears link clicks last, so a link the page handles itself
+never raises the mark. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
-Once the workspace is home, `marketplace.html` is THE STORE, not a tool
-catalogue (every tool is All tools on the workspace): the plans and the
-modules on their shelves, wearing the whole workspace chrome
-(`OmegaWorkspaceShell.wear()` takes a legacy page's own sidebar and topbar
-off and mounts the rail, the switcher topbar and the phone tab bar around
-its `#main`; the markup stays for the classic home and the tests that
-read it). A PACKAGED workspace prices from `api/package-catalog` and opts
-in through the shared `omega-package-menu.js` control and `plan-change`;
-any other workspace reads the PUBLIC price list `GET /api/offerings`,
-each module judged against its tier (On your plan · Partly · Ask
-ClearSky, an email), and never pays here. `/marketplace.html#<module>`
-lands on that module. A tenant on the classic home keeps the tool
-catalogue and pinning. Design, launch order and the honest list of what
-is not built: `docs/OMEGA-WORKSPACE.md`.
+**`marketplace.html` is the TOOLS catalogue again** for every workspace
+(kept for now; it may be phased out): every tool, categories, search and
+pinning, wearing the workspace chrome where the workspace is home
+(`OmegaWorkspaceShell.wear()`). It sells nothing: a locked tool names the
+module that carries it (the package's catalog, else `GET /api/offerings`)
+and links to `/workspace#module-<key>`; on the classic home it opens the one
+menu on that module in place. `/marketplace.html#<module>` and `#plans`
+forward to the Modules page. Design, launch order and the honest list of
+what is not built: `docs/OMEGA-WORKSPACE.md`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
