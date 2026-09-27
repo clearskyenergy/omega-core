@@ -62,14 +62,17 @@
   }
   function setProject(type, scopes, openBuild) {
     selected = normalize(type, scopes); refresh();
-    if (openBuild && global.OmegaCaps && global.OmegaCaps.packageAccess() && typeof global.rbTab === 'function') global.rbTab('home');
+    if (openBuild && owned() && typeof global.rbTab === 'function') global.rbTab('home');
     results(); return selected.slice();
   }
   /* "All tools" is retired with the hiding it undid (see apply): every
      owned tool is always on the ribbon. Kept as an inert call so an older
      caller cannot break; it hides and remembers nothing. */
   function setAll() { refresh(); return true; }
-  function refresh() { if (global.OmegaCaps && global.OmegaCaps.packageAccess()) global.OmegaCaps.apply('standard'); }
+  /* a real package, not the lock OmegaCaps holds while the plan loads: a
+     legacy project opening during sign-in must not paint package chrome */
+  function owned() { var v = global.OmegaCaps && global.OmegaCaps.packageAccess(); return !!(v && !v.pending); }
+  function refresh() { if (owned()) global.OmegaCaps.apply('standard'); }
   function apply(scope) {
     if (!scope || !scope.querySelectorAll) return;
     var view = global.OmegaCaps && global.OmegaCaps.packageAccess();

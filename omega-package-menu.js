@@ -230,7 +230,7 @@
        placeholder, never the customer's Editor Lite frame (its own access) */
     var own = false;
     try { own = !/[?&]customerEngine=1(&|$)/.test(global.location.search) && !!(global.firebase && global.firebase.apps && global.firebase.apps.length && global.firebase.auth().currentUser); } catch (e) { own = false; }
-    var n = own && view && !view.staff && !view.preview && (view.billingNotice || (view.pending ? { text: 'Your plan could not be checked. Saved projects stay available; your tools come back when the connection does.', retry: true } : null));
+    var n = own && view && !view.staff && !view.preview && (view.billingNotice || (view.pending && !view.loading ? { text: 'Your plan could not be checked. Saved projects stay available; your tools come back when the connection does.', retry: true } : null));
     if (!n || !ribbon || host.view) { if (bar) bar.remove(); return; }
     var key = [n.text, n.payUrl || '', view.readOnly ? 1 : 0].join('|');
     if (bar && bar.getAttribute('data-notice') === key) return;
@@ -385,7 +385,9 @@
     document.head.appendChild(style);
   }
   function tab() {
-    var tabs = document.getElementById('ribbon-tabs'); if (!tabs || document.getElementById('omega-package-tab')) return;
+    var tabs = document.getElementById('ribbon-tabs'), view = global.OmegaCaps && global.OmegaCaps.packageAccess();
+    if (view && view.loading) return;
+    if (!tabs || document.getElementById('omega-package-tab')) return;
     styles();
     var button = node('button', 'The Ladder', 'rtab'); button.id = 'omega-package-tab'; button.title = 'The Ladder: build your own experience and pay for what you need'; button.type = 'button'; button.onclick = function () { open(); }; tabs.appendChild(button);
   }

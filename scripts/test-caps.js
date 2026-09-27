@@ -246,8 +246,8 @@ async function liveChecks() {
   var release, slowDb = { collection: function () { return { doc: function () { return { collection: function () { return { doc: function () { return {
     get: function () { return new Promise(function (r) { release = r; }); } }; } }; } }; } }; } };
   var signing = C.resolve(slowDb, user.email, true);
-  ok(C.packageAccess() && C.packageAccess().pending === true && C.packageAccess().readOnly === true,
-     'while sign-in reads the plan the editor is locked, not open',
+  ok(C.packageAccess() && C.packageAccess().pending === true && C.packageAccess().loading === true && C.packageAccess().readOnly === true,
+     'while sign-in reads the plan the editor is locked (marked loading, not failed), not open',
      'the read()/commit() split had left it open (and clickable) while /api/package-access loaded');
   release({ exists: true, data: function () { return { tier: 'standard' }; } });
   ok(await signing === 'standard' && C.packageAccess() === null, 'and opens what the answer says');

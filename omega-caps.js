@@ -175,7 +175,10 @@
      it from tiers, addons, query strings or a second browser module table. */
   var _package = null, _packageRequest = 0, MODULE_GRANTS = {}, _packageSignature = null, _tier = null;
   var COMMANDS = '.rbtn,.rsbtn,.rb-fly-item,#app-menu .menu-item,[data-module],[data-cap]';
-  function pendingPackage() { return { packaged: true, pending: true, readOnly: true, modules: [], caps: [], toolAccess: [], catalog: [], notSold: [] }; }
+  /* The locked projection: signed out, a read that failed, a 403, or (with
+     `loading`) the moment between sign-in and the answer. Nothing else may
+     read a pending view as "this workspace has a package". */
+  function pendingPackage(loading) { return { packaged: true, pending: true, loading: loading === true, readOnly: true, modules: [], caps: [], toolAccess: [], catalog: [], notSold: [] }; }
   function setPackage(view) {
     var previous = _package;
     _package = view && view.packaged === true ? view : null;
@@ -645,7 +648,7 @@
            account's package must not linger, and a packaged workspace must
            not be clickable while /api/package-access loads. commit() opens
            what the answer says. */
-        setPackage(pendingPackage());
+        setPackage(pendingPackage(true));
         read(db, email, emailVerified, false).then(function (plan) {
           if (resolution !== _packageRequest) return done('trial');
           commit(plan); done(plan.tier);

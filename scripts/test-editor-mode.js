@@ -80,6 +80,9 @@ ok('a tenant record with no editorMode is the full platform', M.resolve() === 'f
 global.CLEARSKY_CONFIG = { tenant: { editorMode: 'bess-lite' } };
 global.OmegaCaps = { packageAccess: function () { return { packaged: true, modules: ['lite', 'compute'] }; } };
 ok('under a package, resolve() is the full platform even for a bess-lite tenant', M.resolve() === 'full');
+global.OmegaCaps = { packageAccess: function () { return { packaged: true, pending: true, loading: true, modules: [] }; } };
+ok('the lock OmegaCaps holds while a legacy plan loads is not a package: bess-lite still applies', M.resolve() === 'bess-lite',
+   'boot() runs during the sign-in read; reading the lock as a package gave a bess-lite tenant the full editor for the session');
 delete global.OmegaCaps;
 ok('  and without one the tenant layout applies again', M.resolve() === 'bess-lite');
 delete global.CLEARSKY_CONFIG;

@@ -554,7 +554,8 @@ function renderModules() {
     var req = !packaged && !on && bl.optIns && bl.optIns[m.key] && bl.optIns[m.key].status !== 'declined' && bl.optIns[m.key].status !== 'activated' ? bl.optIns[m.key] : null;
     if (on) heldN++;
     var name = m.shelf === 'platform' ? 'Omega Logic · ' + m.name : m.name;
-    var tools = (m.tools || []).map(function (k) { return tool(k); }).filter(function (t) { return !!t; });
+    /* only the tools this workspace can see, the ones the badge counted */
+    var tools = (m.tools || []).map(function (k) { return tool(k); }).filter(function (t) { return !!t && T.isVisible(t, WS); });
     var chips = '';
     if (m.usageDisplay || full.usageDisplay) chips += '<span class="ows-chip">' + esc(m.usageDisplay || full.usageDisplay) + '</span>';
     if ((m.requires || full.requires || []).indexOf('logic-office') >= 0) chips += '<span class="ows-chip">Needs Office</span>';
