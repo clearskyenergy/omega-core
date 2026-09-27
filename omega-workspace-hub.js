@@ -132,7 +132,10 @@
        what the editor does (2026-09-27: "the modules are paid services tied
        directly to the editor") */
     var t = moduleTools(m, ctx), e = moduleEditor(m, ctx), open = t.open + e.open, total = t.total + e.total;
-    if (!total) return (ctx.tierLevel >= 3) ? 'held' : 'ask';
+    /* nothing to count (White Label): held where Site Map grants everything
+       (enterprise, internal, partner), judged by the editor's own tier when
+       editorCtx gave one — a trial is NOT Enterprise here — else by level */
+    if (!total) return (typeof ctx.ungated === 'boolean' ? ctx.ungated : ctx.tierLevel >= 3) ? 'held' : 'ask';
     return open === total ? 'held' : open ? 'part' : 'ask';
   }
   /* ── ONE CARD, ONE STATUS, AT MOST ONE ACTION (Tommy, 2026-09-27: "the
@@ -163,6 +166,32 @@
      anything is written. Nothing here prices: the price is the server's
      display string, handed in, shown once on the card (the button says
      only Opt in; the menu repeats the figure before anything is sent). */
+  /* ── THE SITE MAP HALF OF THE LEGACY RULE, once (the Modules page, the
+     marketplace, the editor's plan chip and the admin Package tab all ask
+     it): which tier Site Map runs for this billing record and person, and
+     ctx fields for moduleState. It mirrors OmegaCaps.resolve exactly:
+     setOrg (JV grants) and setAddons first; a verified ClearSky address with
+     no billing record runs 'internal'; otherwise the billed tier capped by
+     capTier, and a missing tier is 'trial'.
+       caps     window.OmegaCaps (the library; nothing is applied to a page)
+       billing  billing/current, or null when there is no record
+       who      { email, emailVerified, orgId } — the person the editor
+                resolves for; staff judging a tenant pass the tenant's orgId
+                and no email
+     Answers { tier, ungated, editorCan } to merge into a ctx, or null when
+     the library is absent (then nothing is counted, as before). ── */
+  function editorCtx(caps, billing, who) {
+    if (!caps || typeof caps.editorCan !== 'function') return null;
+    who = who || {};
+    var bl = billing || {}, org = String(who.orgId || '').toLowerCase(), eff;
+    try {
+      var own = caps.setOrg(who.email || (org ? '@' + org : ''));
+      caps.setAddons(Array.isArray(bl.addons) ? bl.addons : []);
+      var internal = !billing && who.emailVerified === true && (caps.INTERNAL_DOMAINS || []).indexOf(own) >= 0 && (!org || org === own);
+      eff = internal ? 'internal' : caps.effectiveTier(bl.tier || 'trial', bl.capTier);
+    } catch (e) { return null; }
+    return { tier: eff, ungated: caps.can(eff, 'all') === true, editorCan: function (cap) { return caps.editorCan(eff, cap); } };
+  }
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   /* a calendar day as people read it; 'YYYY-MM-DD' is that day wherever
      the reader is (new Date('2026-12-20') is the 19th in Chicago) */
@@ -238,7 +267,7 @@
     else if (opts.admin === false && card.action && card.action.kind !== 'billing') { card.action = card.action.kind === 'pay' ? card.action : null; card.secondary = null; card.adminLine = 'An owner or administrator of ' + co + ' changes modules.'; }
     return card;
   }
-  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleCard: moduleCard, shortDay: shortDay, RING_MAX: RING_MAX };
+  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleCard: moduleCard, editorCtx: editorCtx, shortDay: shortDay, RING_MAX: RING_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceHub = API;
 })(typeof window !== 'undefined' ? window : null);

@@ -644,7 +644,10 @@
       // refresh can wait on a network. API and rules enforce it independently.
       if (view.accessUntil && Date.now() >= view.accessUntil) {
         view.readOnly = true;
-        if (global.OmegaCaps) { global.OmegaCaps.setPackage(view); global.OmegaCaps.apply('trial'); }
+        /* only a page with Site Map's ribbon: the workspace loads OmegaCaps
+           as a library (editorCan) and its module cards carry data-module,
+           which the ribbon guard would hide and swallow clicks on */
+        if (global.OmegaCaps && document.getElementById('ribbon')) { global.OmegaCaps.setPackage(view); global.OmegaCaps.apply('trial'); }
       }
       user.getIdToken().then(function (token) { return global.fetch('/api/package-access', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
         .then(function (r) { if (!r.ok) throw new Error('Package access unavailable'); return r.json(); })

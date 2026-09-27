@@ -525,16 +525,17 @@ function prefs() { var p = {}; Object.keys(PREFS_DEFAULT).forEach(function (k) {
 function tool(key) { return T.byKey(key); }
 function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, WS); }
 /* A legacy plan holds a module only when Site Map also grants its
-   capabilities on the tier the editor runs (OmegaCaps.editorCan, the SAME
-   ladder the editor applies, billed tier capped by capTier): the Modules
-   page, the editor's plan chip and the editor itself give one answer. */
+   capabilities on the tier the editor runs: OmegaWorkspaceHub.editorCtx,
+   the ONE mirror of OmegaCaps.resolve (billed tier capped by capTier, JV
+   grants, a verified ClearSky address with no record runs 'internal'), so
+   the Modules page, the editor's plan chip and the editor give one answer. */
 function hubCtx() {
   var pa = WS.packageAccess, packaged = !!(pa && pa.packaged);
   var c = { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], hideMarketplace: !!WS.hideMarketplace, packaged: packaged, tierLevel: WS.tierLevel };
-  if (!packaged && window.OmegaCaps && OmegaCaps.editorCan) {
-    var bl = bill(), eff = null;
-    try { OmegaCaps.setOrg(ME); OmegaCaps.setAddons(bl.addons || []); eff = OmegaCaps.effectiveTier(bl.tier || 'trial', bl.capTier); } catch (e) { eff = null; }
-    if (eff) c.editorCan = function (cap) { return OmegaCaps.editorCan(eff, cap); };
+  if (!packaged) {
+    var rec = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || null;
+    var e = HUB.editorCtx(window.OmegaCaps, rec, { email: ME, emailVerified: !!(USER && USER.emailVerified === true), orgId: WS.orgId });
+    if (e) { c.editorCan = e.editorCan; c.ungated = e.ungated; c.editorTier = e.tier; }
   }
   return c;
 }

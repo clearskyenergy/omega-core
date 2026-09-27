@@ -105,6 +105,23 @@ ok('the engineering add-on widens what a Standard editor holds', HUB.moduleState
 ok('the counts say how much of a module the editor grants', (function (e) { return e.total > 0 && e.open === 0; })(HUB.moduleEditor(MODS.plansets, stdE)));
 CAPS.setAddons([]);
 
+/* 5b · editorCtx: the ONE mirror of OmegaCaps.resolve every surface asks */
+function viaCtx(billing, who, level) { var c = ctxFor({ orgId: (who && who.orgId) || 'x', tierLevel: level, addons: (billing && billing.addons) || [] }, { tierLevel: level, packaged: false }), e = HUB.editorCtx(CAPS, billing, who); Object.keys(e).forEach(function (k) { c[k] = e[k]; }); return c; }
+var trialC = viaCtx({ tier: 'trial' }, { email: 'a@newco.example', orgId: 'newco.example' }, 3);
+ok('editorCtx: a trial runs Site Map as trial and is not Enterprise for a module with nothing to count (White Label)', trialC.tier === 'trial' && trialC.ungated === false && HUB.moduleState(MODS.whitelabel, trialC) === 'ask', [trialC.tier, HUB.moduleState(MODS.whitelabel, trialC)]);
+var entC = viaCtx({ tier: 'enterprise' }, { email: 'a@big.example', orgId: 'big.example' }, 3);
+ok('editorCtx: Enterprise is ungated and holds White Label', entC.ungated === true && HUB.moduleState(MODS.whitelabel, entC) === 'held');
+var capC = viaCtx({ tier: 'enterprise', capTier: 'standard' }, { email: 'a@big.example', orgId: 'big.example' }, 3);
+ok('editorCtx: capTier scopes Site Map below the billed tier, as the editor does', capC.tier === 'standard' && HUB.moduleState(MODS.plansets, capC) === 'ask', capC.tier);
+var intC = viaCtx(null, { email: 'ann@clearsky-usa.com', emailVerified: true, orgId: 'clearsky-usa.com' }, 3);
+ok('editorCtx: a verified ClearSky address with no billing record runs internal, as OmegaCaps.resolve does', intC.tier === 'internal' && intC.ungated && HUB.moduleState(MODS.plansets, intC) === 'held', intC.tier);
+var unv = viaCtx(null, { email: 'ann@clearsky-usa.com', emailVerified: false, orgId: 'clearsky-usa.com' }, 3);
+ok('editorCtx: an unverified ClearSky address is not internal', unv.tier === 'trial', unv.tier);
+var staffJudge = HUB.editorCtx(CAPS, { tier: 'deluxe' }, { orgId: 'northstar.example' });
+ok('editorCtx: staff judging a tenant by orgId get the tenant\'s tier, never internal', staffJudge.tier === 'deluxe' && staffJudge.editorCan('export.plotplan') === true);
+ok('editorCtx: without the library nothing is counted', HUB.editorCtx(null, {}, {}) === null);
+CAPS.setAddons([]);
+
 /* 6 · one card, one status, at most one action (2026-09-27: "the opt in
    and opt out stuff you need to make that make sense"). Every state the
    Modules page, the home row and Plan & billing show comes from
