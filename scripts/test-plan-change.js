@@ -47,6 +47,11 @@ async function apply(add, caller, plan) {
   var q = await quote(add, caller, plan), body = { action: 'apply', add: add, orgId: orgId, previewId: q.previewId, effectiveAt: q.effectiveAt }; if (plan) body.plan = plan;
   return req('POST', body, caller);
 }
+async function removal(remove, withdraw, caller) {
+  var body = { action: withdraw ? 'withdraw-removal' : 'request-removal', remove: remove };
+  var q = await req('POST', Object.assign({}, body, { dryRun: true }), caller);
+  return req('POST', Object.assign({}, body, { previewId: q.previewId }), caller);
+}
 async function run() {
   process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
   var now = Date.parse('2026-09-26T12:00:00Z'), realNow = Date.now; Date.now = function () { return now; };
@@ -271,15 +276,40 @@ async function run() {
 
   /* ── Removals wait for the review ──────────────────────────────── */
   seed(ev, 'field');
-  var rm = await req('POST', { action: 'request-removal', remove: ['plansets'], reason: 'Not using it' });
+  var beforeRemoval = B.stable(Array.from(db.data.entries())), qRemove = await req('POST', { action: 'request-removal', remove: ['plansets'], dryRun: true });
+  equal(B.stable(Array.from(db.data.entries())), beforeRemoval, 'opt-out preview writes nothing');
+  equal(qRemove.names, [M.get('plansets').name]); ok(/quarterly review/.test(qRemove.note) && /charges stay unchanged/.test(qRemove.note));
+  var rm = await req('POST', { action: 'request-removal', remove: ['plansets'], reason: 'Not using it', previewId: qRemove.previewId });
   equal(rm.removalRequests.map(function (r) { return r.module; }), ['plansets']); equal(mods(), evSorted, 'access unchanged');
   await refused(function () { return req('POST', { action: 'request-removal', remove: ['lite'] }); }, /always included/);
   await refused(function () { return req('POST', { action: 'request-removal', remove: ['siteintel'] }); }, /not in your package/);
   await refused(function () { return req('POST', { action: 'request-removal', remove: ['plansets'] }, member); }, /workspace administrator/);
-  var rm2 = await req('POST', { action: 'request-removal', remove: ['plansets', 'gridatlas'] }); equal(rm2.removalRequests.length, 2, 'no duplicates');
-  var wd = await req('POST', { action: 'withdraw-removal', remove: ['plansets'] }); equal(wd.removalRequests.map(function (r) { return r.module; }), ['gridatlas']);
+  var rm2 = await removal(['plansets', 'gridatlas']); equal(rm2.removalRequests.length, 2, 'no duplicates');
+  var wd = await removal(['plansets'], true); equal(wd.removalRequests.map(function (r) { return r.module; }), ['gridatlas']);
   equal((await req('GET', { orgId: orgId })).removalRequests.length, 1);
   ok(Array.from(db.data.keys()).filter(function (p) { return p.indexOf('/admin_audit/removal-') >= 0; }).length === 3, 'every removal change is audited');
+  await refused(function () { return req('POST', { action: 'request-removal', remove: ['plansets'] }); }, /review the opt-out/);
+  await refused(function () { return removal(['lite'], true); }, /always included/);
+  await refused(function () { return req('POST', { action: 'request-removal', orgId: 'another.example', remove: ['plansets'], dryRun: true }); }, /Own organization required/);
+  var staffPreview = await req('POST', { action: 'request-removal', orgId: orgId, remove: ['plansets'], dryRun: true }, staff);
+  var staffRemoval = await req('POST', { action: 'request-removal', orgId: orgId, remove: ['plansets'], previewId: staffPreview.previewId }, staff);
+  ok(staffRemoval.removalRequests.some(function (r) { return r.module === 'plansets' && r.by === staff.email; }), 'staff removal targets the selected tenant');
+  var logic = M.catalog().filter(function (m) { return m.key === 'lite' || m.shelf === 'platform'; }).map(function (m) { return m.key; });
+  seed(logic, 'alacarte');
+  var qOffice = await req('POST', { action: 'request-removal', remove: ['logic-office'], dryRun: true });
+  equal(qOffice.modules, logic.filter(function (k) { return k !== 'lite'; }), 'Office preview names every dependent department');
+  var qbCalls = calls, originalSub = B.stable(bill().subscription), originalGrant = mods();
+  await removal(['logic-office']);
+  equal(bill().removalRequests.map(function (r) { return r.module; }), qOffice.modules);
+  equal(B.stable(bill().subscription), originalSub, 'request leaves the paid subscription unchanged'); equal(mods(), originalGrant); equal(calls, qbCalls, 'opt-out sends no invoice or refund');
+  await removal(['logic-plant'], true);
+  equal(bill().removalRequests.map(function (r) { return r.module; }), ['logic-materials', 'logic-logistics', 'logic-customer'], 'keeping Plant also withdraws the Office removal');
+  seed(['lite', 'logic-office'], 'alacarte');
+  var stale = await req('POST', { action: 'request-removal', remove: ['logic-office'], dryRun: true });
+  bill().subscription.modules.push('logic-plant');
+  await refused(function () { return req('POST', { action: 'request-removal', remove: ['logic-office'], previewId: stale.previewId }); }, /review the opt-out/, 'new dependencies require a new preview');
+  bill().packaged = false;
+  await refused(function () { return req('POST', { action: 'request-removal', remove: ['logic-office'], dryRun: true }); }, /not on a subscription package/);
 
   Date.now = realNow;
   console.log('Plan change: ' + count + ' passed; sandbox mock, no network.');

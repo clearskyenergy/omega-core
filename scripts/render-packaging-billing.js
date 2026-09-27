@@ -171,7 +171,8 @@ async function run() {
       await pp.goto(base + '/admin/tenant.html?org=' + org); await pp.locator('[data-pp-tab="cust"]').waitFor(); await pp.locator('[data-pp-tab="cust"]').click();
       await pp.locator('[data-subscribe="siteintel"] button').waitFor();
       check((await pp.locator('.pp-plan-name').textContent()).indexOf('$1,299') >= 0, 'Your plan shows the server monthly price');
-      check(await pp.locator('[data-subscribe]').count() === M.catalog().length - M.starters().ev.length, 'one subscribe control per unowned module');
+      check(await pp.locator('.pp-cards [data-subscribe]').count() === M.catalog().length - M.starters().ev.length, 'one subscribe control per unowned module');
+      check(await pp.locator('.pp-removals [data-subscribe]').count() === M.starters().ev.length - 1, 'one opt-out control per owned optional module');
       await pp.locator('[data-subscribe="siteintel"] button').click();
       await pp.waitForFunction(function () { var n = document.querySelector('[data-subscribe="siteintel"] .opm-quote'); return n && n.textContent.indexOf('today') >= 0; });
       var quoteText = await pp.locator('[data-subscribe="siteintel"]').textContent();
@@ -196,8 +197,9 @@ async function run() {
     await ip.waitForFunction(function () { return document.querySelector('[data-pp-pane="cust"] [data-module-card="storage"].on'); });
     check(invoices === includedBefore, 'an included addition creates no invoice'); check(db.data.get('omega_orgs/' + org + '/billing/current').modules.indexOf('storage') >= 0, 'and switches on immediately inside the paid tier');
     await capture(ip, 'your-plan-included');
-    await ip.locator('[data-pp-pane="cust"]').getByRole('button', { name: 'Remove at next review' }).first().click();
-    await ip.waitForFunction(function () { return document.querySelector('[data-pp-pane="cust"]').textContent.indexOf('Withdraw removal request') >= 0; });
+    await ip.locator('[data-pp-pane="cust"]').getByRole('button', { name: 'Opt out', exact: true }).first().click();
+    await ip.locator('[data-pp-pane="cust"]').getByRole('button', { name: 'Confirm opt-out request', exact: true }).click();
+    await ip.waitForFunction(function () { return document.querySelector('[data-pp-pane="cust"]').textContent.indexOf('Keep module') >= 0; });
     check((db.data.get('omega_orgs/' + org + '/billing/current').removalRequests || []).length === 1, 'removal is queued, not applied'); await incContext.close();
     /* Phase 7: usage this cycle on Your plan, the buy-more path, the auto top-up switch, the staff review and the tool badge. */
     for (var theme7 of ['light', 'dark']) {

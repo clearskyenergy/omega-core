@@ -17,7 +17,7 @@ module.exports = A.handler(async function (req, res) {
     if (!(await A.isTenantAdmin(caller, orgId))) throw A.httpError(403, 'Ask your workspace administrator to change the plan');
   }
   if (req.method === 'GET') return C.summary(A.db(), orgId);
-  var fields = ['orgId', 'action', 'add', 'plan', 'previewId', 'effectiveAt', 'changeId', 'remove', 'reason', 'meter', 'enabled'];
+  var fields = ['orgId', 'action', 'add', 'plan', 'previewId', 'effectiveAt', 'changeId', 'remove', 'reason', 'meter', 'enabled', 'dryRun'];
   if (Object.keys(input).some(function (k) { return fields.indexOf(k) < 0; })) throw A.httpError(400, 'Unsupported field');
   var now = Date.now();
   switch (input.action) {
