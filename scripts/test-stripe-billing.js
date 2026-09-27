@@ -420,7 +420,7 @@ async function run() {
   var w = await C.apply(db, ORG, { add: ['engineering'], previewId: q3.previewId, effectiveAt: q3.effectiveAt }, OWNER, clock, { stripe: stripe });
   equal([w.state, w.rail, w.paymentLink, w.charged, w.cardDeclined], ['awaiting_payment', 'stripe', SB.payLink(HOME, ORG, w.changeId), undefined, undefined]);
   equal(SB.verifyLink(ORG, w.changeId, new URL(w.paymentLink).searchParams.get('s')), true); equal(stripe.count('paymentIntents.create'), creates3, 'nothing to charge');
-  var nW = note('package-change-' + w.changeId); equal(nW.provider, 'stripe'); ok(/Pay by card to switch on Engineering/.test(nW.text), nW.text);
+  var nW = note('package-change-' + w.changeId); equal(nW.provider, 'stripe'); ok(/Pay by card to switch on Omega Engineer/.test(nW.text), nW.text);
   ok(bill().modules.indexOf('engineering') < 0, 'nothing on before payment');
   /* cancelling a card change closes its Checkout (plan-change makes its own client: the stub) */
   await SB.checkout(db, ORG, w.changeId, clock, stripe); var wSid = record(w.changeId).stripe.openSession.id; made.length = 0;

@@ -219,6 +219,39 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     return out;
   }
 
+  /* every word on a module card fits inside its card (Tommy, 2026-09-27:
+     "make sure all the words fit in their space"): at desktop, tablet and
+     phone widths no name, price, feature, chip, note or button runs past
+     its card or is clipped in its own box, and the page never scrolls
+     sideways. Your modules come first, then the rest to add. */
+  async function modulesFit(p, name) {
+    var vp0 = p.viewportSize(), widths = [1366, 1180, 1024, 820, 390, 360], bad = [], order = null;
+    for (var wi = 0; wi < widths.length; wi++) {
+      await p.setViewportSize({ width: widths[wi], height: 900 }); await wait(200);
+      var r = await p.evaluate(function () {
+        var out = [], cards = document.querySelectorAll('#modules-body .mod');
+        Array.prototype.forEach.call(cards, function (c) {
+          var k = c.getAttribute('data-module'), cr = c.getBoundingClientRect();
+          if (c.scrollWidth > c.clientWidth + 1) out.push(k + ': the card is wider than its box');
+          Array.prototype.forEach.call(c.querySelectorAll('.ltr,.st,.nm b,.price,.feat li,.ows-chip,.note,.ows-pill'), function (e) {
+            var er = e.getBoundingClientRect(); if (!er.width) return;
+            if (er.left < cr.left - 0.5 || er.right > cr.right + 0.5) out.push(k + ': "' + e.textContent.trim() + '" runs outside the card');
+            else if (e.scrollWidth > e.clientWidth + 1) out.push(k + ': "' + e.textContent.trim() + '" is clipped in its box');
+          });
+        });
+        return { out: out, n: cards.length, sideways: document.documentElement.scrollWidth > window.innerWidth + 1, heads: Array.prototype.map.call(document.querySelectorAll('#modules-body h3'), function (h) { return h.firstChild.textContent; }), held: Array.prototype.map.call(cards, function (c) { return c.getAttribute('data-held'); }) };
+      });
+      if (shotsAt && (widths[wi] === 1366 || widths[wi] === 390)) await p.screenshot({ path: path.join(shotsAt, name.replace(/\W+/g, '-').toLowerCase() + '-modules-' + widths[wi] + '.png'), fullPage: true });
+      if (!r.n) bad.push(widths[wi] + 'px: no cards');
+      if (r.sideways) bad.push(widths[wi] + 'px: the page scrolls sideways');
+      r.out.forEach(function (o) { bad.push(widths[wi] + 'px ' + o); });
+      if (!order) order = r;
+    }
+    await p.setViewportSize(vp0); await wait(150);
+    ok(name + ': every word on every module card fits inside its card, desktop to phone', !bad.length, bad.slice(0, 8));
+    var mine = order.held.filter(function (h) { return h === '1' || h === 'bought'; }).length;
+    ok(name + ': Your modules come first, then the rest to add', order.heads[0] === (mine ? 'Your modules' : 'Every module') && order.held.slice(0, mine).every(function (h) { return h === '1' || h === 'bought'; }) && (order.heads.length === 1 || order.heads[1] === 'Add to your plan'), { heads: order.heads, held: order.held });
+  }
   /* every signed-in visit, whichever tenant */
   async function common(p, fx, name) {
     var out = {};
@@ -232,8 +265,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok(name + ': the rail wears the product name', product === 'Omega Workspace', product);
     var rail = await p.$$eval('#side-nav .sn-item', function (r) { return r.filter(function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return a.querySelector('span').textContent.trim(); }); });
     ok(name + ': the rail is Home · Projects · All tools · Modules · Marketplace · Quote Desk · Team · Feed · Plan & billing · Settings', rail.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings', rail);
-    var board = await p.evaluate(function () { function shown(id) { var e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; } return { flight: shown('flight'), team: shown('team'), tools: shown('tools'), pulse: !!document.querySelector('#pulse .stats .stat'), stats: document.querySelectorAll('#pulse .stats .stat').length, spark: !!document.querySelector('#pulse .spark path'), insight: (document.querySelector('#pulse .insight') || {}).textContent || '', mymods: document.querySelectorAll('#mymods-body .mod').length, mymodsLive: document.querySelectorAll('#mymods-body .mod[data-held="1"]').length }; });
-    ok(name + ': Your modules on the home: the held ones Live and a few to add, from the one catalogue', board.mymods > 0 && board.mymods <= board.mymodsLive + 3, board);
+    var board = await p.evaluate(function () { function shown(id) { var e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; } return { flight: shown('flight'), team: shown('team'), tools: shown('tools'), pulse: !!document.querySelector('#pulse .stats .stat'), stats: document.querySelectorAll('#pulse .stats .stat').length, spark: !!document.querySelector('#pulse .spark path'), insight: (document.querySelector('#pulse .insight') || {}).textContent || '', homeMods: Array.prototype.filter.call(document.querySelectorAll('.mod'), function (e) { return e.getClientRects().length > 0; }).length, mymods: !!document.getElementById('mymods') }; });
+    ok(name + ': the module cards live on the Modules page, never on the home', board.homeMods === 0 && !board.mymods, board);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '-home-' + p.viewportSize().width + '.png'), fullPage: true });
     ok(name + ': the home shows the board (In flight and Around you with the hub) and All tools stays its own page', board.flight && board.team && !board.tools, board);
     ok(name + ': the Omega pulse draws four counts, the eight-week line and the insight from /api/pulse', board.pulse && board.stats === 4 && board.spark && /hour duration|Not enough/.test(board.insight), board);
     var hub = await p.$$eval('#hub .hx', function (r) { return r.map(function (g) { return g.getAttribute('data-hub'); }); });
@@ -316,6 +350,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.waitForFunction(function () { return document.querySelectorAll('#modules-body .mod').length > 5; }, null, { timeout: 4000 }).catch(function () {});
     var legacyMods = await p.evaluate(function () { return { cards: document.querySelectorAll('#modules-body .mod').length, live: document.querySelectorAll('#modules-body .mod[data-held="1"]').length, part: document.querySelectorAll('#modules-body .mod[data-held="part"]').length, ask: Array.prototype.map.call(document.querySelectorAll('#modules-body [data-ask-module]'), function (a) { return a.textContent.trim(); }), add: document.querySelectorAll('#modules-body [data-add-module]').length, priced: Array.prototype.filter.call(document.querySelectorAll('#modules-body .mod.off .price'), function (e) { return /\$\d/.test(e.textContent); }).length, sub: document.getElementById('modules-sub').textContent }; });
     ok('northstar: a legacy plan\'s Modules page lists every module, Live where the tier holds it, priced with Opt in where it does not, and never the packaged + Add', legacyMods.cards === M.catalog().length && legacyMods.live > 0 && legacyMods.live < legacyMods.cards && legacyMods.add === 0 && legacyMods.ask.length === legacyMods.cards - legacyMods.live && legacyMods.ask.every(function (t) { return t === 'Opt in'; }) && legacyMods.priced === legacyMods.cards - legacyMods.live && /holds \d+ of \d+ modules/.test(legacyMods.sub), legacyMods);
+    await modulesFit(p, 'northstar');
     ok('northstar: Lite has no opt-out, optional held modules do', await p.locator('#modules-body [data-remove-module="lite"]').count() === 0 && await p.locator('#modules-body [data-remove-module]').count() === legacyMods.live + legacyMods.part - 1);
     await p.locator('#modules-body [data-remove-module]').first().click();
     await p.locator('#omega-package-menu').getByRole('button', { name: 'Opt out', exact: true }).click();
@@ -465,13 +500,14 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.$$eval('#tools-body details', function (d) { d.forEach(function (x) { x.open = true; }); }); await wait(100);
     await p.click('#tools-body .tool.locked[data-tool="gridatlas"]'); await wait(250);
     var why = await p.$eval('.ows-drawer', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });
-    ok('lite: a locked tile names the module that carries it', /Grid Atlas/.test(why) && /part of/.test(why), why.slice(0, 160));
+    ok('lite: a locked tile names the module that carries it', /Omega Grid/.test(why) && /part of/.test(why), why.slice(0, 160));
     await p.keyboard.press('Escape');
     /* the Modules page (2026-09-27): the Ladder as a page of the workspace */
     await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(400);
     var mods = await p.evaluate(function () { return { view: document.getElementById('content').getAttribute('data-view'), cards: Array.prototype.map.call(document.querySelectorAll('#modules-body .mod'), function (c) { return { key: c.getAttribute('data-module'), held: c.getAttribute('data-held'), price: (c.querySelector('.price') || {}).textContent || '', add: !!c.querySelector('[data-add-module]') }; }), change: (document.querySelector('#plan a.ows-pill') || {}).getAttribute && document.querySelector('#plan a.ows-pill').getAttribute('href') }; });
     ok('lite: #modules is its own page with one card per catalog module', mods.view === 'modules' && mods.cards.length === M.catalog().length, { view: mods.view, n: mods.cards.length });
     ok('lite: Lite is Live and Grid Atlas carries the server\'s price and + Add', mods.cards.some(function (c) { return c.key === 'lite' && c.held === '1' && !c.add; }) && mods.cards.some(function (c) { return c.key === 'gridatlas' && c.held === '0' && /\$\d/.test(c.price) && c.add; }), mods.cards.filter(function (c) { return c.key === 'lite' || c.key === 'gridatlas'; }));
+    await modulesFit(p, 'lite');
     ok('lite: Change plan on the plan strip opens the Modules page', mods.change === '/workspace#modules', mods.change);
     if (shotsAt) { var vpm = p.viewportSize(); await p.setViewportSize({ width: 390, height: 844 }); await wait(200); await p.screenshot({ path: path.join(shotsAt, 'lite-modules-390.png') }); await p.setViewportSize(vpm); await wait(150); }
     await p.click('#modules-body [data-add-module="gridatlas"]'); await wait(400);
@@ -484,11 +520,12 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
 
   await scenario('legacy-enterprise-opt-out', FX.legacyEnterprise(HOST), { url: '/workspace#modules', steps: async function (p) {
     await p.waitForFunction(function () { return document.querySelectorAll('#modules-body [data-remove-module]').length > 5; });
+    await modulesFit(p, 'legacy Enterprise');
     ok('legacy Enterprise: every optional module has an opt-out, Lite never does', await p.locator('#modules-body [data-remove-module]').count() === M.catalog().length - 1 && await p.locator('#modules-body [data-remove-module="lite"]').count() === 0);
     await p.locator('#modules-body [data-remove-module="logic-office"]').click();
     await p.locator('#omega-package-menu').getByRole('button', { name: 'Opt out', exact: true }).click();
     var link = p.locator('#omega-package-menu a'), draft = decodeURIComponent(await link.getAttribute('href'));
-    ok('legacy Enterprise: Office request names every dependent department and preserves the existing agreement', M.catalog().filter(function (m) { return m.shelf === 'platform'; }).every(function (m) { return draft.indexOf(m.name) >= 0; }) && /existing agreement/.test(draft) && /Lite remains included/.test(draft));
+    ok('legacy Enterprise: Office request names every dependent department and preserves the existing agreement', M.catalog().filter(function (m) { return m.shelf === 'platform'; }).every(function (m) { return draft.indexOf(m.name) >= 0; }) && /existing agreement/.test(draft) && /Omega Design remains included/.test(draft));
     await p.keyboard.press('Escape');
     ok('legacy Enterprise: the request can be dismissed without sending', await p.locator('#omega-package-menu').count() === 0);
     return {};

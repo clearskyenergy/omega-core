@@ -111,7 +111,7 @@ async function run() {
     var lp = await legacyContext.newPage(), legacyErrors = []; lp.on('pageerror', function (e) { legacyErrors.push(e.message); });
     await lp.goto(base + '/admin/tenant.html?org=' + org); await lp.locator('#pp-standing').waitFor();
     var standing = (await lp.locator('#pp-standing').textContent()).replace(/\s+/g, ' ');
-    check(/Today: Standard tier/.test(standing) && /Holds Lite, Grid Atlas, Storage Sizing & Revenue, Compute & Data Center/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and the request: ' + standing);
+    check(/Today: Standard tier/.test(standing) && /Holds Omega Design, Omega Grid, Omega Storage, Omega Compute/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and the request: ' + standing);
     var picked = await lp.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('[data-pp-pane="pkg"] [data-module-card]'), function (c) { var i = c.querySelector('input'); return i && i.checked; }).map(function (c) { return c.getAttribute('data-module-card'); }).sort(); });
     check(picked.join() === 'compute,gridatlas,lite,siteintel,storage', 'the picker starts from what the tier holds plus the request: ' + picked.join());
     await lp.locator('#pp-review:not([disabled])').waitFor();

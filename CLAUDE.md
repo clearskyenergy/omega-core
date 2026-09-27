@@ -229,6 +229,17 @@ whose version ends in `-proposed` is never production; sign-off is renaming
 (the live runner's query). The card button on a QuickBooks invoice is
 QuickBooks Payments, not Stripe: `docs/PAYMENTS-BROWSER-SETUP.md`.
 
+Module display names are Omega-branded (2026-09-27): `lite` reads Omega
+Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
+`name`, `shelfLabel` (Core · Add-on · Pro · Advanced · By the piece · Omega
+Logic) and `mark` (the card letter) live ONLY in `api/_lib/modules.js`, and
+every page reads them off the record — never a page's own shelf map. Keys and
+plan names (Lite + modules, Field, Pro) are unchanged; the table is in
+`docs/VALUE-LADDER-PACKAGING.md`. QuickBooks items keep the name they
+were made under: the item sync binds an existing item by its current name or
+by a former one (`qbo-items.js` FORMER_NAMES), so a rename never makes a
+second catalog; rename the item in QuickBooks whenever you like.
+
 Stripe rail (2026-09-27): **card on the spot, behind one switch** (Tommy:
 "charge people on the spot with Stripe"). `api/_lib/stripe-billing.js` is a
 second driver beside QuickBooks' (the same customer / invoice / reconcile /

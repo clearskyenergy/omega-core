@@ -7,9 +7,27 @@
 var B = require('./pricebook'), M = require('./modules'), crypto = require('crypto');
 var Mode = require('./packaging-mode');
 function fail(message) { var e = new Error(message); e.status = 409; throw e; }
+/* The names a module's QuickBooks item was made under before the modules
+   were given Omega-branded names (2026-09-27). The production company's 19
+   module items were created under these (items 25-43) before any sync ran,
+   so the sync binds an item by its current name OR a former one — a rename
+   in modules.js never makes a second catalog, and the item can be renamed in
+   QuickBooks whenever it suits. A former-name match must also carry the
+   book's price, so an unrelated item that happens to be called "Operations"
+   is refused, never bound. When a module name changes again, add the old
+   one here. */
+var FORMER_NAMES = {
+  'module:lite': ['Lite'], 'module:gridatlas': ['Grid Atlas'], 'module:storage': ['Storage Sizing & Revenue'],
+  'module:estimate': ['Estimate, BOM & Procurement'], 'module:evrebates': ['EV Rebates & Closeout'], 'module:plansets': ['Plan Sets & CAD'],
+  'module:siteintel': ['Site Intelligence'], 'module:engineering': ['Engineering & Analysis'], 'module:finance': ['Investor & Finance'],
+  'module:compute': ['Compute & Data Center'], 'module:ops': ['Operations'], 'module:whitelabel': ['White Label Storefront'],
+  'module:permitting': ['Permitting Matrix'], 'module:sitefinder': ['Site Finder'], 'module:logic-office': ['Office'],
+  'module:logic-plant': ['Plant'], 'module:logic-materials': ['Materials & Purchasing'], 'module:logic-logistics': ['Logistics & Warranty'],
+  'module:logic-customer': ['Customer App']
+};
 function items(book) {
   B.validate(book);
-  var out = M.catalog().map(function (m) { return { key: 'module:' + m.key, name: m.name, priceCents: book.modules[m.key].priceCents }; });
+  var out = M.catalog().map(function (m) { var k = 'module:' + m.key, x = { key: k, name: m.name, priceCents: book.modules[m.key].priceCents }; if (FORMER_NAMES[k]) x.formerNames = FORMER_NAMES[k].filter(function (n) { return n !== m.name; }); return x; });
   Object.keys(book.plans).forEach(function (k) { out.push({ key: 'plan:' + k, name: book.plans[k].name, priceCents: book.plans[k].priceCents }); });
   out.push({ key: 'logic-bundle', name: book.logicBundle.name, priceCents: book.logicBundle.priceCents });
   ['builder', 'viewer'].forEach(function (k) { out.push({ key: 'login:' + k, name: 'Additional ' + k + ' logins', priceCents: book.logins[k + 'Cents'] }); });
@@ -71,16 +89,22 @@ async function sync(db, book, options, deps) {
   if (!account || String(account.Id) !== options.incomeAccountId || account.Active === false || account.AccountType !== 'Income') fail('Selected sandbox income account is not active Income');
   var bindings = {};
   for (var i = 0; i < plan.length; i++) {
-    var p = plan[i], sql = "select * from Item where Name = '" + p.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "' and Active IN (true, false)";
-    var found = ((await call('query?query=' + encodeURIComponent(sql))).QueryResponse || {}).Item || [];
-    if (found.length > 1) fail('Ambiguous QuickBooks item name: ' + p.name);
-    var item = found[0];
+    var p = plan[i], names = [p.name].concat(p.formerNames || []), matches = [];
+    for (var n = 0; n < names.length; n++) {
+      var sql = "select * from Item where Name = '" + names[n].replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "' and Active IN (true, false)";
+      var found = ((await call('query?query=' + encodeURIComponent(sql))).QueryResponse || {}).Item || [];
+      if (found.length > 1) fail('Ambiguous QuickBooks item name: ' + names[n]);
+      if (found[0] && !matches.some(function (m) { return String(m.item.Id) === String(found[0].Id); })) matches.push({ name: names[n], item: found[0] });
+    }
+    if (matches.length > 1) fail('Two QuickBooks items for ' + p.name + ': ' + matches.map(function (m) { return m.item.Name + ' (' + m.item.Id + ')'; }).join(' and ') + '; keep one and make the other inactive');
+    var item = matches[0] && matches[0].item, as = matches[0] ? matches[0].name : p.name;
+    if (item && as !== p.name && Math.round(Number(item.UnitPrice) * 100) !== p.priceCents) fail('Existing item needs accounting review: ' + as + ' is not the price book\'s ' + p.name + ' (price ' + item.UnitPrice + ', book ' + (p.priceCents / 100) + ')');
     if (!item) {
       item = (await call('item', { Name: p.name, Type: 'Service', IncomeAccountRef: { value: options.incomeAccountId },
         UnitPrice: p.priceCents / 100, Taxable: options.taxable }, requestId(options.realmId, p.name))).Item;
     }
-    var why = review(item, p.name, options);
-    if (why) fail('Existing item needs accounting review: ' + p.name + ' (' + why + ')');
+    var why = review(item, as, options);
+    if (why) fail('Existing item needs accounting review: ' + as + ' (' + why + ')');
     if (book.qbo.items[p.key] && book.qbo.items[p.key] !== String(item.Id)) fail('Existing item binding changed');
     bindings[p.key] = String(item.Id);
   }
@@ -97,4 +121,4 @@ async function sync(db, book, options, deps) {
   });
   return { version: book.version, dryRun: false, realmId: options.realmId, items: bindings };
 }
-module.exports = { items: items, sync: sync, guard: guard, requestId: requestId };
+module.exports = { items: items, sync: sync, guard: guard, requestId: requestId, FORMER_NAMES: FORMER_NAMES };

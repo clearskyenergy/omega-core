@@ -30,10 +30,10 @@ async function main() {
   await I.sync(db, b, opts, deps); eq(writes, 32);
   var saved = await B.load(db, b.version); eq(Object.keys(saved.qbo.items).length, 32); eq(saved.modules.lite.qboItemId, '1');
   await I.sync(db, saved, opts, deps); eq(writes, 32, 'retry creates nothing');
-  rows.Lite.Active = false; await refuses(function () { return I.sync(db, saved, opts, deps); }, /accounting review/); eq(writes, 32); rows.Lite.Active = true;
+  rows['Omega Design'].Active = false; await refuses(function () { return I.sync(db, saved, opts, deps); }, /accounting review/); eq(writes, 32); rows['Omega Design'].Active = true;
   /* The refusal names what to fix: the account an item made by hand carries, or its tax treatment. */
-  rows.Lite.IncomeAccountRef = { value: '9', name: 'Sales' }; await refuses(function () { return I.sync(db, saved, opts, deps); }, /review: Lite \(income account is 9 Sales, not 7\)/); eq(writes, 32); rows.Lite.IncomeAccountRef = { value: '7' };
-  rows.Lite.Taxable = true; await refuses(function () { return I.sync(db, saved, opts, deps); }, /review: Lite \(taxable\)/); eq(writes, 32); rows.Lite.Taxable = false;
+  rows['Omega Design'].IncomeAccountRef = { value: '9', name: 'Sales' }; await refuses(function () { return I.sync(db, saved, opts, deps); }, /review: Omega Design \(income account is 9 Sales, not 7\)/); eq(writes, 32); rows['Omega Design'].IncomeAccountRef = { value: '7' };
+  rows['Omega Design'].Taxable = true; await refuses(function () { return I.sync(db, saved, opts, deps); }, /review: Omega Design \(taxable\)/); eq(writes, 32); rows['Omega Design'].Taxable = false;
   saved.frozen = true; var before = calls; await refuses(function () { return I.sync(db, saved, opts, deps); }, /immutable/); eq(calls, before);
   saved.frozen = false; saved.qbo.realmId = '999'; await refuses(function () { return I.sync(db, saved, opts, deps); }, /realm mismatch/); eq(calls, before);
   /* Simulate a price book frozen during network I/O. The final transaction
@@ -42,6 +42,32 @@ async function main() {
   deps.request = async function () { var out = await prior.apply(null, arguments); db.data.get('pricebook/' + b.version).frozen = true; return out; };
   await refuses(function () { return I.sync(db, fresh, opts, deps); }, /immutable/);
   eq((await B.load(db, b.version)).frozen, true);
+  /* ── A company whose module items were made BEFORE the Omega-branded names
+     (the production company, items 25-43): every item is bound by its former
+     name and nothing is created; two items for one module, or a former-name
+     item at another price, is refused, never guessed. ── */
+  async function company(extra) {
+    var db2 = new DB(); db2.serial = true; var b2 = B.proposed(); await B.seed(db2, b2, true);
+    var shelf = {}, made = 0, id = 100;
+    I.items(b2).forEach(function (p) { var name = p.formerNames && p.formerNames.length ? p.formerNames[0] : p.name; shelf[name] = { Id: String(++id), Name: name, Type: 'Service', Active: true, UnitPrice: p.priceCents / 100, IncomeAccountRef: { value: '7' }, Taxable: false }; });
+    if (extra) extra(shelf);
+    var deps2 = { Q: deps.Q, request: async function (path, body) {
+      if (path.indexOf('account/') === 0) return { Account: { Id: '7', Active: true, AccountType: 'Income' } };
+      if (path.indexOf('query?') === 0) { var nm = /Name = '((?:[^'\\]|\\.)+)'/.exec(decodeURIComponent(path.split('query=')[1]))[1].replace(/\\(.)/g, '$1'); return { QueryResponse: { Item: shelf[nm] ? [shelf[nm]] : [] } }; }
+      made++; var item = Object.assign({ Id: String(++id), Active: true }, body); shelf[body.Name] = item; return { Item: item };
+    } };
+    return { db: db2, book: b2, deps: deps2, shelf: shelf, made: function () { return made; } };
+  }
+  var co = await company(), bound = await I.sync(co.db, co.book, opts, co.deps);
+  eq(co.made(), 0, 'items made under the old names are bound, never made again');
+  eq(bound.items['module:lite'], co.shelf.Lite.Id, 'Omega Design binds the item still called Lite');
+  eq(bound.items['module:logic-materials'], co.shelf['Materials & Purchasing'].Id, 'Logic Purchasing binds Materials & Purchasing');
+  eq(bound.items['plan:field'], co.shelf.Field.Id, 'plans keep their names');
+  eq(Object.keys(bound.items).length, 32); eq((await B.load(co.db, co.book.version)).modules.lite.qboItemId, co.shelf.Lite.Id);
+  var both = await company(function (sh) { sh['Omega Design'] = Object.assign({}, sh.Lite, { Id: '999', Name: 'Omega Design' }); });
+  await refuses(function () { return I.sync(both.db, both.book, opts, both.deps); }, /Two QuickBooks items for Omega Design/); eq(both.made(), 0);
+  var other = await company(function (sh) { sh.Operations.UnitPrice = 42; });
+  await refuses(function () { return I.sync(other.db, other.book, opts, other.deps); }, /Operations is not the price book.s Omega Operate/); eq(other.made(), 0);
   console.log('QuickBooks sandbox item sync: ' + count + ' passed; no network calls.');
 }
 main().catch(function (e) { console.error(e); process.exitCode = 1; });
