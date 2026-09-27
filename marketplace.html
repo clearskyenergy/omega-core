@@ -1354,7 +1354,10 @@ function storeMode(ws){
   paintStore(); paintMarket();
   /* the public price list: the plans, the starters, the logins — and, for
      a workspace that is not packaged, the modules and their prices */
-  fetchOffer().then(function(o){ if (!o) { if (!packaged) setText('mkt-store-note', 'The price list is unavailable right now. Try again later.'); return; } STORE.offer = o; if (!packaged && o.modules) storeIndex(o.modules); paintStore(); });
+  fetchOffer().then(function(o){
+    if (!o || !Array.isArray(o.modules) || !o.modules.length) { setText('mkt-store-note', 'The price list is unavailable right now. Try again later.'); if (!packaged) { var e = el('mkt-shelves'); if (e) e.innerHTML = '<div class="mkt-empty">The price list is unavailable right now. Try again later.</div>'; } return; }
+    STORE.offer = o; if (!packaged) storeIndex(o.modules); paintStore();
+  });
   if (!packaged) return;
   /* the packaged price list, then (for an owner or admin) the pending changes */
   OmegaPackageMenu.api('/api/package-catalog').then(function(r){
