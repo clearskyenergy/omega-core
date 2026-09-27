@@ -281,6 +281,31 @@ async function run() {
   equal((await req('GET', { orgId: orgId })).removalRequests.length, 1);
   ok(Array.from(db.data.keys()).filter(function (p) { return p.indexOf('/admin_audit/removal-') >= 0; }).length === 3, 'every removal change is audited');
 
+
+  /* ── Opt in on a plan billed outside the engine (2026-09-27) ────── */
+  db = new F.DB(); db.serial = true;
+  var legacyBook = B.proposed(); legacyBook.enabled = true; db.seed('pricebook/' + legacyBook.version, legacyBook);
+  db.seed(root, { name: 'Plan Example', status: 'active', domains: ['plan.example'] });
+  db.seed(root + '/billing/current', { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'stripe' });
+  db.seed(root + '/members/owner', { role: 'owner', status: 'active' });
+  var oi = await req('POST', { action: 'opt-in', add: ['siteintel'] });
+  equal(oi.requested, true); equal(oi.add, ['siteintel']); equal(oi.display, '$500/month'); equal(oi.optIns.siteintel.status, 'requested'); equal(oi.optIns.siteintel.requestedBy, owner.email);
+  equal(bill().optIns.siteintel.display, '$500/month'); equal(bill().tier, 'standard', 'the plan itself is untouched');
+  ok(Array.from(db.data.keys()).filter(function (p) { return p.indexOf(root + '/billing/current/history/optin-') === 0; }).length === 1, 'one history row');
+  ok(Array.from(db.data.keys()).filter(function (p) { return p.indexOf(root + '/admin_audit/optin-') === 0; }).length === 1, 'one audit row');
+  await refused(function () { return req('POST', { action: 'opt-in', add: ['siteintel'] }); }, /Already requested/);
+  var oi2 = await req('POST', { action: 'opt-in', add: ['logic-plant'] });
+  equal(oi2.add.slice().sort(), ['logic-office', 'logic-plant'], 'a Logic part brings Office when the workspace holds no Omega Logic');
+  equal(Object.keys(bill().optIns).sort(), ['logic-office', 'logic-plant', 'siteintel']);
+  await refused(function () { return req('POST', { action: 'opt-in', add: ['siteintel'] }, member); }, /workspace administrator/);
+  var memberSummary = await req('GET', { orgId: orgId }, member); equal(memberSummary.packaged, false, 'a member reads the summary');
+  await refused(function () { return req('GET', { orgId: orgId }, Object.assign({}, member, { claims: { email_verified: false } })); }, /Verified email/);
+  db.data.delete(root + '/billing/current');
+  await refused(function () { return req('POST', { action: 'opt-in', add: ['estimate'] }); }, /Billing is not set up/);
+  ok(!db.data.has(root + '/billing/current'), 'a request never creates a billing record');
+  seed(ev, 'field');
+  await refused(function () { return req('POST', { action: 'opt-in', add: ['siteintel'] }); }, /subscription package/);
+
   Date.now = realNow;
   console.log('Plan change: ' + count + ' passed; sandbox mock, no network.');
 }

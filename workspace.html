@@ -298,10 +298,13 @@ auth.onAuthStateChanged(function (user) {
   }
   nullSeen = 0; bind(user, 0);
 });
-function bind(user, n) {
+function bind(user, n, t) {
+  /* never show the workspace through an unwrapped showApp while the terms runtime is loaded but has not wrapped it */
+  t = t || 0;
+  if (window.OmegaTerms && !(window.showApp && window.showApp.__ot) && t < 40) { setTimeout(function () { bind(user, n, t + 1); }, 50); return; }
   var ws = OmegaBrand.resolve(user.email || '', WORKSPACES);
   if (!ws) {
-    if (n < 8) { setTimeout(function () { bind(user, n + 1); }, 250); return; }
+    if (n < 8) { setTimeout(function () { bind(user, n + 1, t); }, 250); return; }
     document.body.classList.add('ready', 'refused');
     byId('refused').innerHTML = '<b>' + esc(OmegaBrand.accessMessage(user.email, WORKSPACES)) + '</b><p style="margin:10px 0 0"><button class="ows-pill" type="button" onclick="OmegaWorkspaceShell.signOut()">Sign out</button></p>';
     return;
@@ -334,6 +337,11 @@ window.showApp = function (user) {
   window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; render(); } });
   route();
 };
+/* The terms gate wraps showApp NOW, not on its next 50 ms poll: a signed-in
+   visit whose auth answers inside that window (a cached session, the render
+   check's double) called the bare function and skipped the Terms of Service
+   modal. omega-terms.js's wire() is idempotent. */
+try { if (window.OmegaTerms && OmegaTerms.wire) OmegaTerms.wire(); } catch (e) {}
 /* ClearSky staff: the two consoles. A VERIFIED clearsky-usa.com address,
    as isAdmin() in the rules requires; the link grants nothing. */
 function revealStaff(user) {
@@ -690,10 +698,10 @@ function renderFlight() {
   b.innerHTML = '<div class="proj">' + cards.map(function (c) {
     if (c.kind === 'finance') return '<article class="pc fin-only" data-fin="' + esc(c.id) + '"><a class="pc-main" href="/portals/finance/"><span class="stage">Finance marketplace</span><b>' + esc(c.name) + '</b><div class="meta"><span>' + esc(c.finance.note) + '</span></div><div class="why ' + esc(c.whyCls) + '">' + esc(c.why) + '</div></a><div class="who"><span class="av">$</span><span class="nm">Deal room</span></div></article>';
     var p = byPid[c.id] || {}, i = Math.max(0, STAGE_KEYS.indexOf(p.stage)), pct = Math.round(i / (STAGE_KEYS.length - 1) * 100);
-    var owner = ownerOf(p), mine = String(p.ownerEmail || '').toLowerCase() === ME;
+    var owner = ownerOf(p), mine = String(p.ownerEmail || '').toLowerCase() === ME, ours = !p.orgId || p.orgId === WS.orgId;
     var size = p.bessKwh ? (p.bessKwh >= 1000 ? (p.bessKwh / 1000).toFixed(1) + ' MWh' : p.bessKwh + ' kWh') : (p.address || p.utility || '');
     return '<article class="pc" data-proj="' + esc(c.id) + '"><button class="pc-main" type="button" data-open="' + esc(c.id) + '"><span class="stage">' + esc(STAGE_LABEL[p.stage] || 'Candidate') + '</span><b>' + esc(p.name || 'Untitled') + '</b><div class="meta"><span>' + esc(size) + '</span><span class="num">' + pct + '%</span></div><div class="bar"><i style="width:' + pct + '%"></i></div><div class="why ' + esc(c.whyCls) + '">' + esc(c.why) + '</div>' + (c.finance ? '<span class="fin">Finance marketplace · ' + esc(c.finance.note) + '</span>' : '') + '</button>'
-      + '<div class="who"><span class="av' + (mine ? ' me' : '') + '">' + esc(ini(owner || '?')) + '</span><span class="nm">' + (mine ? 'You' : esc(owner || 'Unassigned')) + '</span><button class="ows-pill sm' + (owner ? ' ghost' : ' primary') + '" type="button" data-assign="' + esc(c.id) + '">' + (owner ? 'Reassign' : 'Assign') + '</button></div></article>';
+      + '<div class="who"><span class="av' + (mine ? ' me' : '') + '">' + esc(ini(owner || '?')) + '</span><span class="nm">' + (mine ? 'You' : esc(owner || 'Unassigned')) + '</span>' + (ours ? '<button class="ows-pill sm' + (owner ? ' ghost' : ' primary') + '" type="button" data-assign="' + esc(c.id) + '">' + (owner ? 'Reassign' : 'Assign') + '</button>' : '<span class="ows-chip">Partner\'s project</span>') + '</div></article>';
   }).join('') + '</div>';
   Array.prototype.forEach.call(b.querySelectorAll('[data-open]'), function (x) { x.addEventListener('click', function () { openProject(x.getAttribute('data-open')); }); });
   Array.prototype.forEach.call(b.querySelectorAll('[data-assign]'), function (x) { x.addEventListener('click', function () { assignDrawer(x.getAttribute('data-assign')); }); });
@@ -707,6 +715,8 @@ function renderFlight() {
    signed in. */
 function assignDrawer(id) {
   var p = null; DATA.projects.forEach(function (x) { if (x.id === id) p = x; }); if (!p) return;
+  /* a JDA partner's project is assigned by its own workspace: this one cannot list their people (CLAUDE.md, Silmarillion 2.0) */
+  if (p.orgId && p.orgId !== WS.orgId) return;
   var people = DATA.members.slice().sort(function (a, b) { return String(a.name || a.email).localeCompare(String(b.name || b.email)); });
   if (!people.some(function (m) { return String(m.email || '').toLowerCase() === ME; })) people.unshift({ email: ME, name: who() });
   var cur = String(p.ownerEmail || '').toLowerCase();
@@ -841,22 +851,25 @@ function renderBilling() {
   if (!BILL.asked && window.OmegaPackageMenu) { BILL.asked = true; OmegaPackageMenu.api('/api/plan-change').then(function (j) { BILL.summary = j; renderBilling(); }, function () { BILL.failed = true; renderBilling(); }); }
   if (stripe && !BILL.stripeAsked && window.OmegaPackageMenu) { BILL.stripeAsked = true; OmegaPackageMenu.api('/api/stripe-invoices', { orgId: WS.orgId, limit: 24 }).then(function (j) { BILL.stripe = j; renderBilling(); }, function () { BILL.stripe = { connected: false, failed: true }; renderBilling(); }); }
   function kv(rows) { return '<div class="kv">' + rows.filter(function (r) { return r[1] !== '' && r[1] != null; }).map(function (r) { return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</div>'; }
-  function moneyC(c) { return '$' + (Math.round(c) / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+  function usd(n) { n = Number(n) || 0; return '$' + n.toLocaleString(undefined, { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }); }
+  function moneyC(c) { return usd(Math.round(c) / 100); }
+  var stripeOpen = stripe && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'open'; }) : [];
   var invoices = sm && Array.isArray(sm.invoices) ? sm.invoices : [], unpaid = invoices.filter(function (x) { return x.state === 'unpaid'; });
   var pending = sm && Array.isArray(sm.pending) ? sm.pending : [];
   var optIns = bl.optIns && typeof bl.optIns === 'object' ? Object.keys(bl.optIns).map(function (k) { var o = bl.optIns[k] || {}; o.key = k; return o; }).filter(function (o) { return o.status !== 'declined' && o.status !== 'activated'; }) : [];
-  var payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || bl.paymentLink || null;
+  var payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || (stripeOpen.length && stripeOpen[0].hostedUrl) || bl.paymentLink || null;
   var h = '<div class="bill">';
 
   /* 1 · the subscription */
   var mods = packaged ? (sm ? sm.subscriptionNames : (pa && pa.catalog ? pa.catalog.filter(function (m) { return WS.modules.indexOf(m.key) >= 0; }).map(function (m) { return m.name; }) : [])) : [];
   var onNames = packaged && sm ? sm.moduleNames : null, notOn = onNames ? (sm.subscriptionNames || []).filter(function (n) { return onNames.indexOf(n) < 0; }) : [];
   h += '<div class="bcard" id="bill-sub"><h3>Your subscription<span class="ows-chip on">' + esc(planName()) + '</span></h3>';
-  h += '<div class="big">' + esc((sm && sm.monthlyDisplay) || bl.monthlyDisplay || (packaged ? '—' : (bl.amountDue ? money(bl.amountDue) : '—'))) + (sm && sm.interval === 'annual' ? '<small>billed yearly</small>' : (sm && sm.monthlyDisplay) || bl.monthlyDisplay ? '<small>per month</small>' : '') + '</div>';
+  var monthly = (sm && sm.monthlyDisplay) || bl.monthlyDisplay || '';
+  h += monthly ? '<div class="big">' + esc(String(monthly).replace(/\/month$/, '')) + '<small>' + (sm && sm.interval === 'annual' ? 'billed yearly' : 'per month') + '</small></div>' : '<div class="big">' + esc(planName()) + '<small>plan</small></div>';
   h += kv([['Workspace', WS.clientName || WS.orgId], ['Plan', packaged ? ((sm && sm.planDisplay) || planName()) : planName()],
     ['Modules', packaged ? (mods.join(', ') || (sm || BILL.failed ? '—' : 'Loading…')) : ''], ['Add-ons', packaged ? '' : ((WS.addons || []).join(', ') || 'None')],
     ['Tools on this plan', !packaged && Array.isArray(WS.toolAccess) ? String(WS.toolAccess.length) : ''],
-    ['Billing', sm ? (sm.interval === 'annual' ? 'Annual prepay' : 'Monthly, on the ' + (sm.billingDay ? sm.billingDay + (sm.billingDay === 1 ? 'st' : sm.billingDay === 2 ? 'nd' : sm.billingDay === 3 ? 'rd' : 'th') : 'signup day')) : (bl.interval === 'annual' ? 'Annual prepay' : bl.paymentProvider === 'stripe' ? 'Monthly by card (Stripe)' : bl.paymentProvider === 'quickbooks' ? 'Monthly by invoice (QuickBooks)' : bl.paymentProvider === 'manual' ? 'Invoiced by ClearSky' : '')],
+    ['Billing', packaged && sm ? (sm.interval === 'annual' ? 'Annual prepay' : 'Monthly, on the ' + (sm.billingDay ? sm.billingDay + (sm.billingDay === 1 || sm.billingDay === 21 || sm.billingDay === 31 ? 'st' : sm.billingDay === 2 || sm.billingDay === 22 ? 'nd' : sm.billingDay === 3 || sm.billingDay === 23 ? 'rd' : 'th') : 'signup day')) : (bl.interval === 'annual' ? 'Annual prepay' : stripe ? 'By card through Stripe' : bl.paymentProvider === 'quickbooks' ? 'By invoice through QuickBooks' : bl.paymentProvider === 'manual' ? 'Invoiced by ClearSky' : '')],
     ['Since', day(bl.subscription && bl.subscription.since) || day(bl.subscriptionStartedAt) || day(bl.createdAt)], ['Access through', packaged ? day((sm && sm.accessUntil) || (pa && pa.accessUntil)) : ''], ['Trial ends', trialEnd() ? day(trialEnd()) : ''], ['Your role', WS.role || 'member']]);
   if (notOn.length) h += '<p><b>Bought, not on yet:</b> ' + esc(notOn.join(', ')) + '. They switch on when the invoice for them is paid.</p>';
   if (pa && pa.readOnly) h += '<p><b>Read-only</b> until the current invoice is paid.</p>';
@@ -868,8 +881,11 @@ function renderBilling() {
   if (unpaid.length) {
     h += '<div class="big">' + esc(moneyC(oweC)) + '<small>' + unpaid.length + (unpaid.length === 1 ? ' invoice open' : ' invoices open') + '</small></div>';
     h += unpaid.map(function (x) { return '<div class="inv"><div><b>' + esc(x.kind === 'change' ? 'Change: ' + (x.names || []).join(', ') : x.kind === 'pack' ? 'Pack' : 'Subscription') + '</b><small>Issued ' + esc(x.date || '') + (x.period ? ' · ' + esc(x.period.start) + ' to ' + esc(x.period.end) : '') + '</small></div><div><span class="amt">' + esc(x.display || '') + '</span>' + (x.paymentLink ? '<a class="ows-pill sm primary" href="' + esc(x.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st unpaid">Unpaid</span>') + '</div></div>'; }).join('');
+  } else if (stripeOpen.length) {
+    h += '<div class="big">' + esc(usd(stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0))) + '<small>' + stripeOpen.length + (stripeOpen.length === 1 ? ' invoice open' : ' invoices open') + '</small></div>';
+    h += stripeOpen.map(function (x) { return '<div class="inv"><div><b>' + esc(x.number || 'Invoice') + '</b><small>Issued ' + esc(x.created ? new Date(x.created).toLocaleDateString() : '') + '</small></div><div><span class="amt">' + esc(usd(x.amountDue)) + '</span>' + (x.hostedUrl ? '<a class="ows-pill sm primary" href="' + esc(x.hostedUrl) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st unpaid">Open</span>') + '</div></div>'; }).join('');
   } else if (packaged && !sm && !BILL.failed) h += '<p>Loading your invoices…</p>';
-  else if (oweD > 0) h += '<div class="big">' + esc(money(oweD)) + (bl.subscriptionDue ? '<small>due ' + esc(day(bl.subscriptionDue)) + '</small>' : '') + '</div>';
+  else if (oweD > 0) h += '<div class="big">' + esc(usd(oweD)) + (bl.subscriptionDue ? '<small>due ' + esc(day(bl.subscriptionDue)) + '</small>' : '') + '</div>';
   else h += '<div class="big">$0<small>nothing is owed</small></div>';
   var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (packaged ? '' : bl.subscriptionDue);
   h += kv([['Next invoice', nextOn ? (day(nextOn) || nextOn) : ''], ['Paid through', sm && sm.paidThrough ? (day(sm.paidThrough) || sm.paidThrough) : ''], ['Last payment', !packaged && bl.lastPaidAt ? day(bl.lastPaidAt) : '']]);
@@ -913,8 +929,8 @@ function renderBilling() {
     if (!st) h += '<p>Loading your invoices…</p>';
     else if (!st.connected) h += '<p>' + (st.failed ? 'The invoice list is unavailable right now.' : 'No invoices yet; billing has not been set up for this workspace.') + '</p>';
     else if (!(st.invoices || []).length) h += '<p>No invoices issued yet.</p>';
-    else h += st.invoices.map(function (inv) { var link = inv.hostedUrl || inv.pdfUrl; return '<div class="inv"><div><b>' + esc(inv.number || 'Invoice') + '</b><small>' + esc(inv.created ? new Date(inv.created).toLocaleDateString() : '') + '</small></div><div><span class="amt">' + esc(inv.amountDue == null ? '' : money(inv.amountDue)) + '</span>' + (link ? '<a class="ows-pill sm" href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(inv.status || 'Open') + '</a>' : '<span class="st ' + esc(inv.status || '') + '">' + esc(inv.status || '') + '</span>') + '</div></div>'; }).join('');
-  } else if (bl.lastPaidAt) h += '<div class="inv"><div><b>Last payment</b><small>' + esc(day(bl.lastPaidAt)) + '</small></div><div><span class="amt">' + esc(bl.amountPaid ? money(bl.amountPaid) : '') + '</span><span class="st paid">paid</span></div></div>';
+    else h += st.invoices.map(function (inv) { var link = inv.hostedUrl || inv.pdfUrl; return '<div class="inv"><div><b>' + esc(inv.number || 'Invoice') + '</b><small>' + esc(inv.created ? new Date(inv.created).toLocaleDateString() : '') + '</small></div><div><span class="amt">' + esc(inv.amountDue == null ? '' : usd(inv.amountDue)) + '</span>' + (link ? '<a class="ows-pill sm" href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(inv.status || 'Open') + '</a>' : '<span class="st ' + esc(inv.status || '') + '">' + esc(inv.status || '') + '</span>') + '</div></div>'; }).join('');
+  } else if (bl.lastPaidAt) h += '<div class="inv"><div><b>Last payment</b><small>' + esc(day(bl.lastPaidAt)) + '</small></div><div><span class="amt">' + esc(bl.amountPaid ? usd(bl.amountPaid) : '') + '</span><span class="st paid">paid</span></div></div>';
   else h += '<p>No invoices on file here. This plan is billed by ClearSky outside the workspace; write to <a href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '">' + esc(OmegaBrand.upgradeEmail()) + '</a> for a statement.</p>';
   h += '</div></div>';
   h += '<div class="ows-note" style="margin-top:14px">Prices and changes are always the server’s: nothing here is priced in the browser. Card details are entered only on the payment provider’s own page.</div>';

@@ -27,10 +27,13 @@ QuickBooks; legacy tenants are billed outside the package engine.
 | All tools | `/workspace#tools` | Every tool by category, Live / Locked / Soon; a locked tile explains which plan or module carries it and links the Marketplace on that module | `OMEGATools.isUnlocked()` |
 | Modules | `/workspace#modules` | Every module in shelf order, detailed (what it is for, features, what is inside, allowance, needs, popular with, price); Live where held, Partly with the count, else **Opt in** | `OmegaWorkspaceHub.moduleState()` (the ONE held/partly/ask rule, shared with the store) |
 | Opt in, packaged | Modules page or store | The one menu: server quote → Subscribe and pay → QuickBooks invoice with the card button; on when paid | `POST /api/plan-change` (quote, apply, cancel, reconcile-now) |
-| Opt in, legacy | Modules page | The engine cannot charge a legacy plan; the panel says so and sends the request that moves the workspace onto a package, naming the module and its price | `plan-change.js state()` refuses non-packaged |
+| Opt in, legacy | Modules page | *Add to my monthly fee*: the request is recorded on the plan with the server's price (who, when, history, audit) and ClearSky is mailed; the card reads *Requested*; ClearSky moves the workspace onto a package, where the addition lands on the monthly invoice. Nothing is charged until the first invoice is confirmed | `POST /api/plan-change` `opt-in` (owner or admin; refuses a packaged workspace) |
 | Marketplace | `/marketplace.html` | The store in the workspace chrome: plan strip, Plans shelf (Lite, Field, Pro, Enterprise, starters, logins, annual, trial), every module priced; `#<module>` lands on one | `GET /api/offerings` (public) or `api/package-catalog` (packaged) |
-| Plan & billing | rail → side panel | Plan, workspace, role, modules; for packaged: monthly, next invoice, pending changes with pay links, recent invoices, "I've paid"; opens the Modules page | `GET /api/plan-change` summary |
+| Plan & billing | rail → `/workspace#billing` | A page: your subscription (plan, modules bought and on, monthly, billing day), what you owe and when (unpaid invoices with pay links, next invoice, *I've paid*), the payment method (Stripe portal for the card and autopay, or QuickBooks' own payment page), additions waiting, billing history | `GET /api/plan-change` (any verified member), `POST /api/stripe-invoices`, `POST /api/stripe-portal` |
 | Projects | `/projects.html` | Legacy page wearing the workspace rail (own topbar still) | `OmegaWorkspaceShell.theme()` |
+| In flight | home board | What needs something first (offers on a finance-marketplace deal, a next action, a package to submit, a stall), then what was touched last; never online; each card says why and who has it, with **Assign** | `OmegaWorkspaceToday.board`; `projects/{id}` owner merge |
+| Admin Package tab | `/admin/tenant?org=` (staff) | Opens on what the tenant holds and pays today (a legacy tier's Live modules by the shared rule, plus any opt-in request); staff change it and Review activation | `admin/package-panel.js` `standing()`, `OmegaWorkspaceHub.moduleState` |
+| Site Map (editor) | Settings tab › Appearance | Light (white top, grey ground, buttons with faces), Dark, or Auto | `OmegaUI.theme()`, `omega.ui.theme` in the browser |
 | Classic home | `/?home=classic` | The old dashboard; "Open Omega Workspace" and Account settings › Home flip back with `/?home=workspace` | `homeOf()` |
 
 ## 3. What is built and verified
@@ -46,7 +49,9 @@ QuickBooks; legacy tenants are billed outside the package engine.
 ## 4. Not built — the next improvements to the journey, in order
 
 1. **Self-serve conversion of a legacy plan.** A legacy workspace's Opt in
-   sends a request today. Build: `plan-change` accepts a legacy record as
+   is recorded with its price today (`billing/current.optIns`) and ClearSky
+   activates a package from the admin tab, which opens preselected on it.
+   Build: `plan-change` accepts a legacy record as
    the starting point of a quote (Lite + the module, prorated), creates the
    packaged record and the first QuickBooks invoice, and the module opens
    when paid. Needs the packaging flags live (`PACKAGING_LIVE`, `QBO_ENV`)
@@ -67,6 +72,12 @@ QuickBooks; legacy tenants are billed outside the package engine.
    is the honest source for richer signals once the twin exposes them.
 8. **Today's actions.** A "Size" row opens the sizer; a row could carry the
    project id into the editor so the person lands on the right site.
+9. **The saved card by brand and last four** on Plan & billing, read back
+   from Stripe or QuickBooks Payments (the page says where the card lives
+   and never holds one).
+10. **Person-level assignment across a JDA.** Assign lists this workspace's
+   people only; a partner's staff needs a `team_members` read widening that
+   has not been designed (see CLAUDE.md, Silmarillion 2.0).
 
 ## 5. Guardrails the next assistant must keep
 

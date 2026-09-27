@@ -166,6 +166,15 @@ var T = {
       layout('Payment received', '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Amount', o.amountDisplay || '—') + row('Invoice', o.invoiceId || '—') + row('What', o.first ? 'First invoice: the workspace is open' : 'Recurring invoice') + '</table>'
         + button(o.consoleUrl || 'https://silmarillion.clearskyomega.com/admin', 'Open the master console')));
   },
+  /* A tenant on a plan billed outside the package engine opted in to a module
+     with its price on record (plan-change opt-in). ClearSky moves the
+     workspace onto a package from the admin tenant page. */
+  optInAlert: function (o) {
+    return send(staffTo(), '[OMEGA] Opt-in: ' + o.names.join(', ') + ' for ' + o.company + (o.display ? ' (' + o.display + ')' : ''),
+      layout('A workspace opted in', '<p>' + esc(o.company) + ' asked for <b>' + esc(o.names.join(', ')) + '</b> at <b>' + esc(o.display || '') + '</b>, added to its monthly fee. It is on the ' + esc(o.tier || 'legacy') + ' plan, billed outside the package engine: move it onto a subscription package and switch the module on. Nothing has been charged.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + row('Modules', o.names.join(', ')) + row('Monthly', o.display || '—') + '</table>'
+        + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
+  },
   billingAlert: function (o) {
     return send(staffTo(), '[OMEGA] Billing needs a look: ' + o.company,
       layout('Billing needs a look', '<p>' + esc(o.text) + '</p><table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + (o.invoiceId ? row('Invoice', o.invoiceId) : '') + '</table>'

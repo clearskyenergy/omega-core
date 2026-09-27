@@ -57,3 +57,8 @@ body.package-admin header{background:var(--pkg-navy)}
 #package-panel .pp-meter-note{font-size:12px;color:#B45F06}#package-panel .pp-toggle{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;color:var(--pkg-sub)}
 #package-panel .pp-table{width:100%;border-collapse:collapse;font-size:13px}#package-panel .pp-table th{text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--pkg-sub);padding:4px 6px}#package-panel .pp-table td{padding:6px;border-bottom:1px solid var(--pkg-border)}
 #package-panel .pp-suggest{padding:8px 10px;border-radius:6px;background:var(--pkg-sunk);margin:6px 0}#package-panel .pp-suggest.more{border-left:3px solid #B45F06}#package-panel .pp-suggest.remove{border-left:3px solid var(--pkg-sub)}#package-panel .pp-suggest.steer{border-left:3px solid var(--pkg-blue)}
+
+/* what the tenant holds and pays today, above the picker (2026-09-27) */
+.pp-standing{margin:0 0 12px;padding:10px 12px;border:1px solid var(--line,#D7DFE6);border-radius:8px;background:var(--surface,#F5F7FA);font-size:13px;line-height:1.5}
+.pp-standing b{display:block;margin-bottom:2px}
+.pp-standing .pp-note{margin-top:6px}

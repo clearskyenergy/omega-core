@@ -73,15 +73,19 @@
   });
   /* a page restored from the back-forward cache is already painted */
   window.addEventListener('pageshow', function (e) { if (e.persisted) finish(); });
-  /* leaving: the mark, before the next page can paint */
-  d.addEventListener('click', function (e) {
+  /* leaving: the mark, before the next page can paint. Heard LAST (the
+     window, bubbling), so a link the page handles itself — the workspace
+     rail's Plan & billing, an area panel — has already said so with
+     preventDefault and is left alone; in the capture phase this ran first
+     and put the mark over a page that never left, for the 4 s cap. */
+  window.addEventListener('click', function (e) {
     var t = e.target, a = t && t.closest ? t.closest('a[href]') : null;
     if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target === '_blank' || a.hasAttribute('download')) return;
     var href = a.getAttribute('href') || '';
     if (!href || /^(#|javascript:|mailto:|tel:|sms:)/i.test(href)) return;
     try { var u = new URL(a.href, location.href); if (u.origin !== location.origin) return; if (u.pathname === location.pathname && u.search === location.search && u.hash) return; } catch (x) { return; }
     show();
-  }, true);
+  });
   window.addEventListener('beforeunload', function () { show(); });
   window.OmegaSplash = { show: show, done: finish, get active() { return !done; } };
   if (boot) show(); else done = true;

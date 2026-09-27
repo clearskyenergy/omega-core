@@ -62,18 +62,35 @@ decided 2026-09-26.
   placed in, above or below it). The endpoint reads the most recent rows
   (capped at 500 each) with the Admin SDK; nothing in the answer names a
   company, a person or a project. A failed read says the pulse is resting.
-- **Plan & billing opens the Modules page** ("Modules: opt in and pay") and
-  the store; for a packaged workspace the panel also shows the monthly
-  figure, the next invoice, changes waiting for payment with their
-  QuickBooks links, recent invoices and *I've paid* (reconcile-now).
+- **Plan & billing is a page** (`#billing`, 2026-09-27: "a way to securely
+  put in their payment details … billing history … active subscriptions …
+  what they owe and when"). Four cards, none priced in the browser:
+  *Your subscription* (plan, modules bought and switched on, the monthly
+  figure, the billing day, since, access through); *What you owe* (unpaid
+  invoices with their QuickBooks pay links, the next invoice, paid
+  through, *I've paid* = reconcile-now for an owner or admin; Stripe's
+  open invoices for a Stripe-billed plan); *Payment method* (a Stripe plan
+  opens the Stripe Customer Portal through `POST /api/stripe-portal` for
+  the card and autopay; a QuickBooks plan saves the card on QuickBooks'
+  own invoice payment page with Autopay; card details are never entered
+  on our pages); *Billing history* (the engine's invoices from
+  `GET /api/plan-change`, which every verified member may read; a Stripe
+  plan's from `POST /api/stripe-invoices`). Additions waiting (a legacy
+  opt-in with its price, a packaged change waiting for payment) are listed
+  between them.
 - **Opt in, never Ask.** Every module not held carries **Opt in**. A
   packaged workspace opts in on the one menu (`omega-package-menu.js`): a
   server quote, "Subscribe and pay", a QuickBooks invoice with the card
   button. A workspace on a legacy plan is billed outside the package engine,
   which takes a card payment only on a subscription package
-  (`plan-change.js` `state()`); its Opt in says so and sends the request
-  that moves the workspace onto a package, naming the module and its
-  price. Self-serve conversion of a legacy plan is NOT built (below).
+  (`plan-change.js` `state()`); its Opt in is **Add to my monthly fee**:
+  `POST /api/plan-change {action:'opt-in', add}` (owner or admin) prices
+  the module and what it requires from the book, records it on
+  `billing/current.optIns` with who and when (history and `admin_audit`
+  rows) and mails ClearSky, who moves the workspace onto a package from
+  the admin Package tab; the card then reads *Requested* with its price.
+  Nothing is charged until the first invoice is confirmed. Self-serve
+  conversion of a legacy plan is NOT built (below).
 - **Your modules on the home** (the demo's row): the held modules Live in
   shelf order, then up to three not held with Opt in, compact cards from
   the same catalogue and the same rule as the Modules page; "All modules ›"
@@ -114,16 +131,30 @@ decided 2026-09-26.
   plans" per category; a locked tile explains which plan or module carries
   it and points at the Marketplace. The plan strip says what the workspace
   holds and how many tools are open.
-- **In flight** lists projects (own org plus `orgsInvolved`), stage, owner
-  and a progress bar from the stage index.
+- **In flight is the board** (`OmegaWorkspaceToday.board`, 2026-09-27: "a
+  combo of anything that was done last, any undone projects, or anything
+  we have sent to the finance marketplace and need to follow up"): what
+  needs something first (offers waiting on a deal, a next action, a
+  package to submit, a stalled project), then what was touched last; a
+  site that is online is off it. A deal the person sent to the finance
+  marketplace (`fin_projects` where `developerUid` is them, with its
+  `offers`) rides on its project's card as a chip, or is a card of its
+  own. Every card says why it is there, who has it, and carries
+  **Assign** (or Reassign): the workspace's people from `team_members`,
+  and one merge of `ownerEmail`, `ownerName`, `assignedBy`, `assignedAt`
+  onto the project (the rules allow a same-org update that leaves `orgId`
+  and the roster alone).
+- **Needs you** adds the finance marketplace (offers waiting for an
+  answer, a review at ClearSky older than a week, an awarded room not
+  finished, a draft, an open deal with no offer in ten days) and folds
+  every unsized candidate into ONE row. The whole row is the target.
 - **Around you**: the workspace feed (messages and project saves), People
   (`team_members` presence: in the workspace under 15 minutes, seen within a
   day, else last seen), Partners on your projects (the other orgs on
   `orgsInvolved`), Guides. Each is an opt-in kept on
   `dashboard_layouts/{org}__{uid}.workspace`.
-- **Plan & billing** and **Settings** are side panels reading
-  `OmegaTenant.billing`, the package projection and the person's
-  `team_members` profile (display name is editable there).
+- **Settings** is a side panel reading the person's `team_members`
+  profile (display name is editable there) and the classic-home switch.
 
 ## The store (every workspace whose home is the workspace)
 
@@ -193,7 +224,11 @@ ground, one home; the session travels same-origin on every hop.
 | rail, any page | Marketplace | `/marketplace.html`, the store in the whole workspace chrome: the plans and the modules with the server's prices; a packaged workspace subscribes, any other asks ClearSky |
 | rail, any page | Quote Desk | `/rfq.html` |
 | rail, any page | Team · Feed | `/workspace#team`, the Around you page alone |
-| rail, any page | Plan & billing · Settings | the side panels on `/workspace` (`#billing`, `#settings`) |
+| rail, any page | Plan & billing | `/workspace#billing`, the Plan & billing page |
+| rail, any page | Settings | the side panel on `/workspace` (`#settings`) |
+| Plan & billing | Manage card and autopay (Stripe) | the Stripe Customer Portal in a new tab |
+| Plan & billing | Pay · Open the payment page (QuickBooks) | the invoice's QuickBooks payment page, where the card is saved and Autopay turned on |
+| In flight | Assign · Reassign | the side panel of the workspace's people; a pick writes the project's owner |
 | tools grid | a Live tile | the tool, scoped to the org |
 | tools grid | a Locked tile | the side panel naming the plan or module that carries it, with the Marketplace opened on that module (`#<module>`) and an email to ClearSky |
 | In flight | a project card | `/editor.html?id=…&org=…` |
@@ -207,8 +242,8 @@ ground, one home; the session travels same-origin on every hop.
 | rail | Sign out | ends the session, `/login.html` |
 | Settings panel | Classic dashboard | `/?home=classic`, the old home on this browser |
 | classic dashboard | Open Omega Workspace · Account settings › Home | `/?home=workspace`, back to the new home on this browser |
-| Plan & billing panel | Modules: opt in and pay | `/workspace#modules` |
-| Modules page | Opt in | a packaged workspace: the one menu, a server quote and a QuickBooks invoice; a legacy one: the request that moves it onto a package |
+| Plan & billing | Change modules | `/workspace#modules` |
+| Modules page | Opt in | a packaged workspace: the one menu, a server quote and a QuickBooks invoice; a legacy one: *Add to my monthly fee*, a request recorded with the server's price (`plan-change` `opt-in`) that ClearSky turns into a package |
 
 ## Launch — home by default
 
@@ -242,10 +277,18 @@ to the page, the shell or the runtime they load.
   install pattern is the next pass.
 - **Self-serve conversion of a legacy plan.** A workspace billed outside
   the package engine cannot pay for a module by card until it is on a
-  subscription package; today ClearSky moves it (`tenant-package`
-  activation). A one-click "move me onto a package and invoice the first
-  month" is the next billing feature: it needs the engine to accept a
-  legacy record as the starting point of a quote.
+  subscription package. Its Opt in is RECORDED with the server's price
+  (`billing/current.optIns`, history, `admin_audit`, a mail to ClearSky)
+  and the admin Package tab opens preselected on what it holds plus the
+  request; ClearSky activates, and the addition lands on the monthly
+  invoice. A one-click "move me onto a package and invoice the first
+  month" needs the engine to accept a legacy record as the start of a
+  quote.
+- **A saved card shown by brand and last four.** The page says where the
+  card lives (Stripe's portal, QuickBooks' payment page) and never holds
+  one; reading the brand and last four back from Stripe or QuickBooks
+  Payments is not wired. `billing/current.autopay` is shown when staff set
+  it.
 - The projects page keeps its own TOPBAR (tenant chip, tabs, avatar) and
   its own page layout; only its rail, ground and home link are the
   workspace's. The marketplace wears the whole chrome (`wear()`); giving
