@@ -128,10 +128,10 @@ function held(orgId, b, key, now) {
    without the add-on shortcut: every module bought must be held, and no
    other module may gain anything (Omega Design, always included, aside).
    An Omega Logic part is exact on every plan: logic-access reads
-   addOns.live itself. What is still not exact (a module with nothing to
-   switch on beside the plan, the storefront below Enterprise) is not sold
-   here; the quote says why and offers the recorded request (plan-change
-   opt-in). */
+   addOns.live itself. What is still not exact (a module with no tools and
+   no commands to switch on beside the plan: the storefront, set up with
+   ClearSky) is not sold here; the quote says why and offers the recorded
+   request (plan-change opt-in). */
 function exact(orgId, b, keys, now) {
   var mine = order(keys).filter(function (k) { return !isLogic(k); });
   if (!mine.length) return { exact: true, partial: [], spill: [], shut: [] };
