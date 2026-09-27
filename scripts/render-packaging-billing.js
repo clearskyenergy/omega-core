@@ -12,6 +12,8 @@ var R = require('../api/_lib/proration'), P = require('../api/_lib/subscription-
    which usage cycle is current move every midnight; the expectations below
    are computed by the same library, never a figure copied from one day. */
 var CYCLE = R.cycle(R.iso(Date.now()), 20);
+/* 'YYYY-MM-DD' as the menu prints it: "Oct 20, 2026" */
+function longDay(iso) { var d = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso); return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+d[2] - 1] + ' ' + (+d[3]) + ', ' + d[1]; }
 
 var fixture, org, profile, db, caller, invoices = 0, checks = 0, shots = 0, qbo = { paid: false };
 var root = path.join(__dirname, '..'), out = path.join(root, 'docs/screenshots/packaging-phase-4'), out5 = path.join(root, 'docs/screenshots/packaging-phase-5'), out7 = path.join(root, 'docs/screenshots/packaging-phase-7'), out10 = path.join(root, 'docs/screenshots/packaging-phase-10a');
@@ -142,10 +144,10 @@ async function run() {
     var lm = await lmCtx.newPage(), lmErrors = []; lm.on('pageerror', function (e) { lmErrors.push(e.message); });
     await lm.goto(base + '/admin/tenant.html?org=' + org); await lm.locator('[data-pp-tab="cust"]').waitFor();
     await lm.evaluate(function () { return fetch('/api/offerings').then(function (r) { return r.json(); }).then(function (j) { window.__offer = j.modules; window.__changed = []; }); });
-    var openLegacy = function (key, how) { return lm.evaluate(function (a) {
+    var openLegacy = function (key, how, billing) { return lm.evaluate(function (a) {
       OmegaPackageMenu.open(a.key, Object.assign({ view: { catalog: window.__offer, modules: ['lite', 'storage'] }, onChanged: function (r) { window.__changed.push(r); },
-        legacy: { company: 'Clean Cell · fixture', email: 'dev@clearsky-usa.com', billing: {}, states: { storage: 'held', gridatlas: 'ask', compute: 'part' } } }, a.how));
-    }, { key: key, how: how || {} }); };
+        legacy: { company: 'Clean Cell · fixture', email: 'dev@clearsky-usa.com', billing: a.billing, states: { storage: 'held', gridatlas: 'ask', compute: 'part' } } }, a.how));
+    }, { key: key, how: how || {}, billing: billing || {} }); };
     var legacyBill = function () { return db.data.get('omega_orgs/' + org + '/billing/current'); };
     var dlg = lm.locator('#omega-package-menu');
     await openLegacy('gridatlas', { single: true, intent: 'add' });
@@ -170,6 +172,27 @@ async function run() {
     await openLegacy('compute', { single: true });
     await dlg.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
     check((await dlg.locator('.opm-badge').textContent()) === 'Partly included' && await dlg.getByRole('button', { name: 'Opt out', exact: true }).count() === 0, 'a module partly on the plan offers Opt in, never Opt out');
+    /* a department on its own names what it needs once: on the card at rest,
+       then in the confirm panel (the server's line) instead, never both */
+    var needsOffice = function (t) { return (t.match(/Also adds Office, which Plant needs\./g) || []).length; };
+    await openLegacy('logic-plant', { single: true, intent: 'add' });
+    await dlg.getByRole('button', { name: 'Request opt-in', exact: true }).waitFor();
+    check(needsOffice(await dlg.innerText()) === 1, 'legacy Opt in on Plant names Office once: ' + await dlg.innerText());
+    await dlg.getByRole('button', { name: 'Not now', exact: true }).click();
+    await dlg.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
+    check(needsOffice(await dlg.innerText()) === 1, 'and once on the card at rest');
+    /* only activation closes a legacy request, so one stays open after
+       ClearSky acts on it through the tier: the plan wins, as on the Modules
+       page. Storage is held with an old opt-in, Grid Atlas is off with an old
+       opt-out, Compute is partly held with an open opt-out. */
+    await openLegacy('storage', {}, { optIns: { storage: { key: 'storage', status: 'requested', requestedAt: '2026-09-01T00:00:00Z' } },
+      optOuts: { gridatlas: { key: 'gridatlas', status: 'requested', requestedAt: '2026-09-01' }, compute: { key: 'compute', status: 'requested', requestedAt: '2026-09-02' } } });
+    await dlg.locator('[data-subscribe="gridatlas"] button').first().waitFor();
+    var staleCard = async function (k) { return { badge: await dlg.locator('[data-module-card="' + k + '"] .opm-badge').textContent(), buttons: await dlg.locator('[data-subscribe="' + k + '"] button').allTextContents() }; };
+    var heldIn = await staleCard('storage'), offOut = await staleCard('gridatlas'), partOut = await staleCard('compute');
+    check(heldIn.badge === '● On your plan' && heldIn.buttons.join() === 'Opt out', 'held, with an opt-in still open: On your plan and Opt out, as the Modules page says: ' + JSON.stringify(heldIn));
+    check(offOut.badge === '' && offOut.buttons.join() === 'Opt in', 'off the plan, with an opt-out still open: Opt in, never Opting out: ' + JSON.stringify(offOut));
+    check(partOut.badge === 'Opting out' && partOut.buttons.join() === 'Cancel request', 'partly held with an open opt-out: Opting out and Cancel request: ' + JSON.stringify(partOut));
     await openLegacy('storage', { admin: false });
     await dlg.locator('[data-subscribe="storage"]').filter({ hasText: 'changes modules' }).waitFor();
     check(await dlg.locator('[data-subscribe] button').count() === 0 && /An owner or administrator of Clean Cell · fixture changes modules\./.test(await dlg.locator('[data-subscribe="storage"]').textContent()), 'a member reads who changes modules, and gets no buttons');
@@ -265,10 +288,15 @@ async function run() {
       check(quoteText.indexOf('service fee') >= 0, 'plan change discloses the service fee change');
       await capture(pp, 'your-plan-quote-' + theme5);
       await pp.locator('[data-subscribe="siteintel"]').getByRole('button', { name: 'Opt in and pay' }).click();
-      await pp.waitForFunction(function () { var n = document.querySelector('[data-subscribe="siteintel"] .opm-wait'); return n && n.textContent.indexOf('Invoice created') >= 0; });
+      var created = await (await pp.waitForFunction(function () { var n = document.querySelector('[data-subscribe="siteintel"] .opm-wait'); return n && n.textContent.indexOf('Invoice created') >= 0 ? n.textContent : null; })).jsonValue();
       check(invoices === invoicesBefore + 1, 'exactly one change invoice'); check(db.data.get('omega_orgs/' + org + '/billing/current').modules.indexOf('siteintel') < 0, 'nothing switches on before payment');
+      /* the change expires on the billing date it was priced to, the day the
+         renewal is issued: the menu says pay BEFORE it, as the quote does */
+      check(created.indexOf('Pay before ' + longDay(CYCLE.end) + '; unpaid, the request expires that day.') >= 0 && !/pay by/i.test(created), 'the invoice line says to pay before the day an unpaid request expires: ' + created);
       await pp.waitForFunction(function () { return document.querySelector('.pp-pending'); });
       check((await pp.locator('.pp-pending').textContent()).indexOf('pay before ' + CYCLE.end) >= 0, 'pending change lists its expiry');
+      var waitLine = await pp.locator('[data-subscribe="siteintel"]').innerText();
+      check(/Waiting for payment · \$[\d,.]+ · pay before /.test(waitLine) && waitLine.indexOf('pay before ' + longDay(CYCLE.end)) >= 0 && waitLine.indexOf('Unpaid, the request expires on ' + longDay(CYCLE.end) + '.') >= 0, 'the waiting card says the same: ' + waitLine);
       await capture(pp, 'your-plan-waiting-' + theme5);
       check(planErrors.length === 0, planErrors.join('\n')); await planContext.close();
     }

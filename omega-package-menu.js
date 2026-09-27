@@ -14,7 +14,11 @@
      a callback and how to open; inside the editor OmegaCaps is the view. */
   var host = { view: null, onChanged: null, legacy: null, single: false, admin: undefined, company: null, key: null, options: null };
   /* opened with an intent ('add' | 'remove' | 'cancel'): the card for that
-     module goes straight to that step's confirm panel, once */
+     module goes straight to that step's confirm panel, once. The first
+     loaded render of that card spends it whether or not the card is in the
+     state the intent names (an Opt out opened on a module already opting
+     out): an intent left armed would fire the opposite step, unasked, the
+     moment a Cancel request redraws the card. */
   var intent = null;
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   function packageView() { return host.view || (global.OmegaCaps && global.OmegaCaps.packageAccess()); }
@@ -43,17 +47,23 @@
   function nameOf(state, key) { var m = byKey(state, key); return m ? m.name : key; }
   function company(state) { return (state.legacy && state.legacy.company) || state.company || host.company || 'your workspace'; }
   function canChange(state) { return state.admin === false ? false : state.admin === true ? true : !!state.canManage; }
-  function wants(key, kind) { if (intent && intent.key === key && intent.kind === kind) { intent = null; return true; } return false; }
   function withOrg(state, payload) { if (state.orgId) payload.orgId = state.orgId; return payload; }
   /* Where a module stands for this workspace: one answer per card, and the
      card's badge, price line and one control all follow it. */
   function standing(m, state) {
     if (m.key === 'lite') return 'lite';
     if (state.legacy) {
+      /* what the plan holds first, then the requests on it: the precedence of
+         OmegaWorkspaceHub.moduleCard, so the menu, the Modules page and Plan
+         & billing tell one story. Only activation closes a legacy request,
+         so one stays open after ClearSky acts on it through the tier or an
+         add-on: an opt-out counts only while the module is held (or partly),
+         an opt-in only while it is not held. Nothing known about the plan
+         (no states, no owned list): the record is all there is. */
       var bl = state.legacy.billing || {}, st = (state.legacy.states || {})[m.key];
-      if (open_(bl.optOuts, m.key)) return 'opting-out';
-      if (open_(bl.optIns, m.key)) return 'requested';
-      if (!st) st = state.owned || (state.ownedModules || []).indexOf(m.key) >= 0 ? 'held' : 'ask';
+      if (!st && (state.owned || Array.isArray(state.ownedModules))) st = state.owned || state.ownedModules.indexOf(m.key) >= 0 ? 'held' : 'ask';
+      if (open_(bl.optOuts, m.key) && (!st || st === 'held' || st === 'part')) return 'opting-out';
+      if (open_(bl.optIns, m.key) && st !== 'held') return 'requested';
       return st === 'held' ? 'on' : st === 'part' ? 'part' : 'off';
     }
     var sum = state.summary || {}, on = !!state.owned || (sum.modules || []).indexOf(m.key) >= 0, bought = (sum.subscription || []).indexOf(m.key) >= 0;
@@ -64,11 +74,15 @@
   }
   var BADGE = { lite: '● On your plan', on: '● On your plan', removing: 'Opting out', 'opting-out': 'Opting out', waiting: 'Waiting for payment', bought: 'Bought · not on yet', requested: 'Opt-in requested', part: 'Partly included' };
   var HELD = { lite: 1, on: 1, removing: 1, 'opting-out': 1, bought: 1 };
+  function cardOf(el) { var card = el; while (card && !(card.className && /(^| )opm-card( |$)/.test(card.className))) card = card.parentNode; return card && card.querySelector ? card : null; }
+  /* the card's own "Also adds …" line speaks while the card is at rest; an
+     Opt in confirm panel states the server's own line in its place */
+  function needsLine(el, show) { var card = cardOf(el), line = card && card.querySelector('.opm-needs'); if (line) line.hidden = !show; }
   /* the card around a control follows the control's answer, so the badge and
      the price line never disagree with the button under them */
   function paintCard(el, st) {
-    var card = el; while (card && !(card.className && /(^| )opm-card( |$)/.test(card.className))) card = card.parentNode;
-    if (!card || !card.querySelector) return;
+    var card = cardOf(el);
+    if (!card) return;
     var badge = card.querySelector('.opm-badge'), price = card.querySelector('.opm-price');
     if (badge) { badge.textContent = BADGE[st] || ''; badge.hidden = !BADGE[st]; badge.className = 'opm-badge' + (st === 'on' || st === 'lite' ? ' on' : ''); }
     if (price) price.textContent = HELD[st] ? 'In your plan' : card.getAttribute('data-price') || (card.getAttribute('data-loading') ? '' : 'Pricing unavailable');
@@ -80,9 +94,12 @@
      catalog, ownedModules, orgId, company, loading, onChanged(result) }. */
   function subscribeControl(el, m, state) {
     el.textContent = ''; el.className = 'opm-act'; el.setAttribute('data-subscribe', m.key);
-    var st = standing(m, state); paintCard(el, st);
+    var st = standing(m, state); paintCard(el, st); needsLine(el, true);
     if (st === 'lite') { el.appendChild(node('p', 'Lite is the baseline and is always included.', 'opm-note')); return; }
     if (state.loading) return;
+    /* the intent is spent here, on the first loaded render of its card,
+       whatever the card turns out to be (see `intent`) */
+    var step = intent && intent.key === m.key ? intent.kind : null; if (step) intent = null;
     var admin = canChange(state);
     function again() { subscribeControl(el, m, state); }
     function failed(e, fallback) {
@@ -105,8 +122,12 @@
     var sum = state.summary || {}, bl = (state.legacy && state.legacy.billing) || {}, p = state.pending && state.pending[m.key];
     /* a short bold line says where it stands; the note under it says what that means for the bill */
     function standingLine(text, note) { el.appendChild(node('p', text, 'opm-wait')); if (note) el.appendChild(node('p', note, 'opm-note')); }
+    /* expiresOn is the billing date the change was priced up to: that day the
+       renewal is issued and an unpaid change expires (a later payment only
+       reaches ClearSky's review), so the last day to pay is the day BEFORE,
+       as the server's own quote says: "pay before …" */
     if (st === 'waiting') {
-      standingLine('Waiting for payment · ' + p.display + (p.expiresOn ? ' · pay by ' + when(p.expiresOn) : ''), 'It switches on when the payment clears.');
+      standingLine('Waiting for payment · ' + p.display + (p.expiresOn ? ' · pay before ' + when(p.expiresOn) : ''), 'It switches on when the payment clears.' + (p.expiresOn ? ' Unpaid, the request expires on ' + when(p.expiresOn) + '.' : ''));
       if (p.paymentLink) el.appendChild(link(p.paymentLink, 'Pay in QuickBooks'));
     } else if (st === 'removing') {
       standingLine('Opting out · ' + (sum.nextReviewOn ? 'review on ' + when(sum.nextReviewOn) : 'at the next quarterly review'), 'It stays on, and billed, until your review; no refund for time already billed.');
@@ -165,10 +186,10 @@
         api('/api/plan-change', withOrg(state, payload)).then(function (r) { remember(state, r); done(r, 'Cancelled. Nothing about your bill changes.'); }, function (e) { failed(e, 'Cancel the request for ' + m.name); });
       });
     }
-    if (st === 'waiting') { row(el, [button('Cancel request', cancelChange)]); if (wants(m.key, 'cancel')) cancelChange(); return; }
-    if (st === 'removing') { row(el, [button('Cancel request', cancelRemoval)]); if (wants(m.key, 'cancel')) cancelRemoval(); return; }
-    if (st === 'requested') { var c1 = function () { legacyCancel('optIns', 'withdraw-opt-in'); }; row(el, [button('Cancel request', c1)]); if (wants(m.key, 'cancel')) c1(); return; }
-    if (st === 'opting-out') { var c2 = function () { legacyCancel('optOuts', 'withdraw-opt-out'); }; row(el, [button('Cancel request', c2)]); if (wants(m.key, 'cancel')) c2(); return; }
+    if (st === 'waiting') { row(el, [button('Cancel request', cancelChange)]); if (step === 'cancel') cancelChange(); return; }
+    if (st === 'removing') { row(el, [button('Cancel request', cancelRemoval)]); if (step === 'cancel') cancelRemoval(); return; }
+    if (st === 'requested') { var c1 = function () { legacyCancel('optIns', 'withdraw-opt-in'); }; row(el, [button('Cancel request', c1)]); if (step === 'cancel') c1(); return; }
+    if (st === 'opting-out') { var c2 = function () { legacyCancel('optOuts', 'withdraw-opt-out'); }; row(el, [button('Cancel request', c2)]); if (step === 'cancel') c2(); return; }
 
     /* ── Opt out (of what is on, or bought and waiting for its invoice) ── */
     if (st === 'on' || st === 'bought') {
@@ -201,13 +222,13 @@
         }, function (e) { failed(e); });
       };
       row(el, [button('Opt out', out)]);
-      if (wants(m.key, 'remove')) out();
+      if (step === 'remove') out();
       return;
     }
 
     /* ── Opt in ── */
     function quote(plan) {
-      busy('Pricing…');
+      needsLine(el, false); busy('Pricing…');
       var ask = withOrg(state, { action: 'quote', add: [m.key] }); if (plan) ask.plan = plan;
       api('/api/plan-change', ask).then(function (q) {
         el.textContent = '';
@@ -223,14 +244,14 @@
           api('/api/plan-change', go).then(function (r) {
             el.textContent = '';
             if (r.state === 'active') el.appendChild(node('p', 'On. Your tools are updating…', 'opm-quote'));
-            else { el.appendChild(node('p', 'Invoice created: ' + r.display + '. It switches on when the payment clears; pay by ' + when(r.expiresOn) + '.', 'opm-wait')); if (r.paymentLink) el.appendChild(link(r.paymentLink, 'Pay in QuickBooks')); }
+            else { el.appendChild(node('p', 'Invoice created: ' + r.display + '. It switches on when the payment clears.' + (r.expiresOn ? ' Pay before ' + when(r.expiresOn) + '; unpaid, the request expires that day.' : ''), 'opm-wait')); if (r.paymentLink) el.appendChild(link(r.paymentLink, 'Pay in QuickBooks')); }
             if (state.onChanged) state.onChanged(r);
           }, function (e) { failed(e); });
         }, 'opm-primary'), q.steer ? button(q.steer.display, function () { quote(q.steer.plan); }) : null, button('Not now', again)]);
       }, function (e) { failed(e); });
     }
     function legacyIn() {
-      busy('Pricing…');
+      needsLine(el, false); busy('Pricing…');
       api('/api/plan-change', withOrg(state, { action: 'opt-in', add: [m.key], dryRun: true })).then(function (q) {
         el.textContent = '';
         el.appendChild(node('p', 'Opt in to ' + names(q.names) + ' for ' + q.display + '?', 'opm-quote'));
@@ -244,7 +265,7 @@
     }
     var add = state.legacy ? legacyIn : function () { quote(null); };
     row(el, [button('Opt in', add, 'opm-primary')]);
-    if (wants(m.key, 'add')) add();
+    if (step === 'add') add();
   }
   /* a legacy write answers with the requests as stored; the menu's copy of
      the plan follows so the card redraws in its new state */
@@ -279,10 +300,12 @@
     if (m.coverage) el.appendChild(node('p', m.coverage, 'opm-note'));
     if (m.agreement) el.appendChild(node('p', m.agreement, 'opm-note'));
     var state = cardState(m);
-    /* one module on its own: say what else it brings before the button */
+    /* one module on its own: say what else it brings before the button —
+       only what an Opt in would still add (not held, not already asked for
+       or waiting on an invoice), and only on a card that can still opt in */
     if (host.single && dialog) {
-      var need = (m.requires || []).filter(function (k) { var dep = byKey(state, k), at = dep && standing(dep, cardState(dep)); return k !== 'lite' && dep && !HELD[at] && at !== 'requested'; });
-      if (need.length && !HELD[standing(m, state)]) el.appendChild(node('p', 'Also adds ' + names(need.map(function (k) { return nameOf(state, k); })) + ', which ' + m.name + ' needs.', 'opm-needs'));
+      var own = standing(m, state), need = (m.requires || []).filter(function (k) { var dep = byKey(state, k), at = dep && standing(dep, cardState(dep)); return k !== 'lite' && dep && !HELD[at] && at !== 'requested' && at !== 'waiting'; });
+      if (need.length && !HELD[own] && own !== 'waiting' && own !== 'requested') el.appendChild(node('p', 'Also adds ' + names(need.map(function (k) { return nameOf(state, k); })) + ', which ' + m.name + ' needs.', 'opm-needs'));
     }
     // The control posts to the server; listing never changes modules[].
     subscribeControl(el.appendChild(node('div')), m, state);
