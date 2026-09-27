@@ -109,11 +109,12 @@ async function run() {
     var lp = await legacyContext.newPage(), legacyErrors = []; lp.on('pageerror', function (e) { legacyErrors.push(e.message); });
     await lp.goto(base + '/admin/tenant.html?org=' + org); await lp.locator('#pp-standing').waitFor();
     var standing = (await lp.locator('#pp-standing').textContent()).replace(/\s+/g, ' ');
-    check(/Today: Standard tier/.test(standing) && /Holds Omega EV, Omega Permits \(/.test(standing) && /Partly on: Omega Design, Omega Grid, Omega Storage, Omega Estimate, Omega Plans, Omega Intel, Omega Engineer, Omega Capital, Omega Compute, Omega Sites \(/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and the request: ' + standing);
+    check(/Today: Standard tier/.test(standing) && /Holds Omega Design, Omega EV, Omega Permits \(/.test(standing) && /Partly on: Omega Grid, Omega Storage, Omega Estimate, Omega Plans, Omega Intel, Omega Engineer, Omega Capital, Omega Compute, Omega Sites \(/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and the request: ' + standing);
     var picked = await lp.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('[data-pp-pane="pkg"] [data-module-card]'), function (c) { var i = c.querySelector('input'); return i && i.checked; }).map(function (c) { return c.getAttribute('data-module-card'); }).sort(); });
     /* the store tells the truth (2026-09-27): a Core tenant's editor has no Analyze, Estimate or Compute tab, so it holds
-       only what opens in full (the permitting matrix) and is partly on the rest; the picker starts from both, plus the
-       request, so moving it onto a package never takes away something it opens today */
+       what opens in full (Omega Design, whose drawing tools live on Draw on every plan; EV; the permitting matrix) and is
+       partly on the rest; the picker starts from both, plus the request, so moving it onto a package never takes away
+       something it opens today */
     check(picked.join() === 'compute,engineering,estimate,evrebates,finance,gridatlas,lite,permitting,plansets,sitefinder,siteintel,storage', 'the picker starts from what the tier holds or partly uses, plus the request: ' + picked.join());
     await lp.locator('#pp-review:not([disabled])').waitFor();
     check(/\$/.test(await lp.locator('#pp-monthly').textContent()), 'the rail prices the preselection on the server');

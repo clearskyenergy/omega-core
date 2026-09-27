@@ -134,7 +134,7 @@ ok('a module with only editor commands says so', HUB.moduleNote(MODS.plansets, c
 ok('one open tool reads "is"', HUB.moduleNote(MODS.sitefinder, core) === '1 of 2 of its tools is on your plan', HUB.moduleNote(MODS.sitefinder, core));
 ok('ClearSky\'s own workspace with no tier on record reads as the editor opens it (internal)', HUB.capsFor({}, 'clearsky-usa.com', CAPS)('compute') === true && HUB.capsFor({}, 'clearsky-usa.com', CAPS)('export.plotplan') === true);
 ok('a trial opens every tool but only the designer in the editor: Storage is partly on, Plan Sets partly', st('storage', trial) === 'part' && st('plansets', trial) === 'part', [st('storage', trial), st('plansets', trial)]);
-ok('Lite is partly on below Enterprise: three drawing controls sit on the Compute tab', st('lite', perf) === 'part' && st('lite', core) === 'part');
+ok('Core and Performance hold Lite: its drawing tools (Trace Boundary, Fence & Tie, Move System) live on Draw on every plan, not on the Compute tab', st('lite', perf) === 'held' && st('lite', core) === 'held', [st('lite', perf), st('lite', core)]);
 ok('Trial cannot print a blueprint: Lite is partly on', st('lite', trial) === 'part' && HUB.moduleEditor(MODS.lite, trial).open < HUB.moduleEditor(MODS.lite, trial).total);
 ok('a module with neither tools nor editor commands keeps the Enterprise rule', st('whitelabel', ent) === 'held' && st('whitelabel', perf) === 'ask');
 ok('...asked of the ladder, not the tool level: a trial (tool level 3) does not hold the storefront, a partner does', st('whitelabel', trial) === 'ask' && st('whitelabel', legacy('partner')) === 'held', [st('whitelabel', trial), st('whitelabel', legacy('partner'))]);

@@ -277,7 +277,15 @@ workspace's store tells the truth: `OmegaWorkspaceHub.moduleState` measures
 a module by its standalone tools AND what the editor opens of it
 (`api/_lib/modules.js` `legacyGates`, read off the real editor by
 `scripts/render-legacy-gates.js`, asked of the editor's own ladder through
-`OmegaCaps.canWith` / `capsFor`); no legacy access changes.
+`OmegaCaps.canWith` / `capsFor`); no legacy access changes. One legacy
+narrowing, the owner's call (2026-09-27): Search tools (Ctrl+K) and Ask
+Jarvis run only what `OmegaCaps.allowedElement` allows, which on a legacy
+plan is every `data-cap` from the tab in to the command (a tier gates whole
+tabs), and Jarvis names and opens only `OmegaCaps.tabOpen` tabs
+(`render-legacy-gates.js`). So nothing is stranded behind a hidden tab,
+Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move System) live
+on Draw on every plan, where a package puts them: `LITE` in the Compute
+tab's mover, held to the catalog by `scripts/tests/tlegacygates.js`.
 The shared omega-package-menu.js renders catalog features and server-formatted
 prices. Staff package previews are read-only server projections, never tenant
 impersonation or billing edits. Legacy layout modes apply to unpackaged records.

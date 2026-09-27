@@ -225,8 +225,27 @@
     if (!_package.readOnly) return true;
     return (_package.readOnlyRibbon || []).some(function (s) { return matches(s, id, handler); });
   }
+  /* ── A COMMAND ON A TAB THE PLAN HID IS NOT RUN BY NAME ──────────────
+     Search tools (Ctrl+K) and Ask Jarvis run a ribbon command by clicking
+     it, so they reach commands the ribbon does not show. Under a package
+     the rest of allowedElement() refuses those. On a legacy plan it said
+     yes to everything, and a legacy tier hides whole tabs with the gate on
+     the TAB, not on each command (Analyze and Estimate need engineering,
+     Compute needs compute), so a Core plan ran 46 hidden commands by
+     name. A legacy command is open when every data-cap from its tab in to
+     the command is on the plan: the chain apply() hides by, asked of the
+     same ladder, so a command injected since the last pass is judged too.
+     Before the plan is read that is trial's answer, as everywhere else. */
+  function legacyOpen(el) {
+    for (var n = el; n && n.getAttribute; n = n.parentElement) {
+      var cap = n.getAttribute('data-cap');
+      if (cap && !can(_tier || 'trial', cap)) return false;
+    }
+    return true;
+  }
   function allowedElement(el) {
-    if (!_package || _package.staff) return true;
+    if (!_package) return legacyOpen(el);
+    if (_package.staff) return true;
     if (!el || !el.getAttribute) return false;
     var module = el.getAttribute('data-module'), cap = el.getAttribute('data-cap');
     if (module && !_package.modules.some(function (k) { return module.split(/\s+/).indexOf(k) >= 0; })) return false;
@@ -265,6 +284,20 @@
       }
     }
     return removed;
+  }
+  /* Whether a ribbon tab is one the plan opens, for anything that switches
+     tabs by name (Ask Jarvis): the tab and its page are judged by the same
+     rule that hides them, and a tab neither gate touches is open. */
+  function tabOpen(page) {
+    var doc = global.document;
+    if (!doc || !doc.querySelector || !page) return true;
+    var key = String(page).replace(/["\\]/g, '');
+    var nodes = [doc.querySelector('#ribbon-tabs .rtab[data-page="' + key + '"]'), doc.querySelector('#ribbon .ribbon-page[data-page="' + key + '"]')];
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n && (n.hasAttribute('data-cap') || n.hasAttribute('data-module')) && !allowedElement(n)) return false;
+    }
+    return true;
   }
   function commandPage(el, destination) {
     if (!_package || !el || !global.document) return destination;
@@ -794,7 +827,7 @@
     setOrg: setOrg, orgOf: orgOf, org: function () { return _org; },
     effectiveTier: effectiveTier, setPackage: setPackage, packageAccess: function () { return _package; },
     MODULE_GRANTS: MODULE_GRANTS, owners: owners, commandPage: commandPage, layout: layout,
-    guardLaunchers: guardLaunchers, pendingPackage: pendingPackage, fetchPackage: fetchPackage, allowedElement: allowedElement, allowedCommand: allowedCommand, commandSelector: COMMANDS,
+    guardLaunchers: guardLaunchers, pendingPackage: pendingPackage, fetchPackage: fetchPackage, allowedElement: allowedElement, allowedCommand: allowedCommand, tabOpen: tabOpen, commandSelector: COMMANDS,
     refresh: refresh, watchPlan: watchPlan, tier: function () { return _tier; }, grants: grants, canWith: canWith
   };
 })(typeof window !== 'undefined' ? window : this);

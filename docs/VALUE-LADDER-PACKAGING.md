@@ -339,6 +339,11 @@ these, each with a test:
 5. **The command palette (Ctrl+K) and Ask Jarvis run hidden buttons.** They
    index every ribbon button, including those the gate removed, and click
    them by name (105492, 105558). They must read the same module check.
+   *Closed:* for a package in Phase 2 (#137); for a legacy plan on
+   2026-09-27, where the gate sits on the tab (Analyze, Estimate, Compute)
+   and not on the commands in it: `OmegaCaps.allowedElement` judges every
+   `data-cap` from the tab in, and Jarvis names and opens only
+   `OmegaCaps.tabOpen` tabs. A Core plan had 46 hidden commands a name away.
 6. **`?customerEngine=1` switches the gate off entirely** (4491, 175932).
 7. **Parcel Screen needs both `parcelscreen` and `engineering`** because it
    lives inside the Analyze tab; Grid Atlas pre-screen, Find Substation,

@@ -167441,7 +167441,7 @@ if (root.console && console.info) {
 
     var bnd = null;
     try { bnd = root.OmegaSiteRoles && root.OmegaSiteRoles.boundary(); } catch (e) {}
-    add('Traced parcel', !!bnd, 'Build \u203a Trace Boundary');
+    add('Traced parcel', !!bnd, 'Draw \u203a Trace Boundary');
 
     var nEx = 0;
     try { nEx = (root.OmegaSiteRoles && root.OmegaSiteRoles.exclusions() || []).length; } catch (e) {}
@@ -173129,6 +173129,15 @@ if (root.console && console.info) {
     design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', 'rb-supply-link', 'rb-move-system', 'rb-feas-csv'],
     size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-optimise', 'rb-compute-cost', 'rb-compute-lease']
   };
+  /* ── OMEGA DESIGN'S DRAWING TOOLS LIVE ON DRAW, ON EVERY PLAN ────────
+     Trace Boundary, Fence & Tie and Move System are Omega Design (lite)
+     commands in api/_lib/modules.js. Under a package this mover sends them
+     to Lite's page, Draw; on a legacy plan it kept them here, on a tab a
+     legacy tier below Enterprise hides, so those plans reached them only
+     through Search tools, which no longer runs what a plan hides. One
+     address per tool: a legacy plan puts them where a package does.
+     scripts/tests/tlegacygates.js holds this list to the catalog. */
+  var LITE_PAGE = 'draw', LITE = ['rb-trace-boundary', 'rb-fence-tie', 'rb-move-system'];
   function panel(key) {
     return document.querySelector('#ribbon .ribbon-page[data-page="compute"] .rpanel[data-ct="' + key + '"] .rpanel-body');
   }
@@ -173167,6 +173176,9 @@ if (root.console && console.info) {
             if (home && el.parentNode !== home) { home.appendChild(el); moved++; }
             return;
           }
+        } else if (LITE.indexOf(id) >= 0) {
+          var draw = document.querySelector('#ribbon .ribbon-page[data-page="' + LITE_PAGE + '"] .rpanel-body');
+          if (draw) { if (el.parentNode !== draw) { draw.appendChild(el); moved++; } return; }
         }
         var want = prev ? prev.nextSibling : body.firstChild;
         if (el.parentNode !== body || el !== want) {

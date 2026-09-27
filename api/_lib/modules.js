@@ -154,7 +154,7 @@ CATALOG.forEach(function (m) { m.features = FEATURES[m.key]; m.blurb = BLURBS[m.
  * which fails when this drifts from it; never a price, never a grant: a
  * package is judged by modules[] alone. */
 var LEGACY_GATES = {
-  lite: ['', 'compute', 'export.blueprint'], gridatlas: ['engineering'], storage: ['', 'engineering'],
+  lite: ['', 'export.blueprint'], gridatlas: ['engineering'], storage: ['', 'engineering'],
   estimate: ['', 'engineering'], evrebates: [''], plansets: ['', 'export.oneline', 'export.plotplan'],
   siteintel: ['', 'compute', 'engineering', 'engineering+parcelscreen'], engineering: ['', 'compute', 'engineering'],
   finance: ['', 'export'], compute: ['', 'compute'], ops: ['engineering'], permitting: ['']
