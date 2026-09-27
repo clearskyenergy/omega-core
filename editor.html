@@ -2,6 +2,26 @@
 <html lang="en">
 <head>
 <script src="/omega-splash.js?v=1"></script>
+<script id="omega-theme-boot">
+/* THE CHROME'S THEME, pinned before anything paints (2026-09-27). DARK, the
+   graphite chrome, unless this browser chose otherwise on Settings >
+   Appearance or in the command palette: 'light', or 'auto' (follow the
+   operating system). Tommy: "Default for the editor viewing should be dark
+   mode." The choice is localStorage 'omega.ui.theme'; nothing stored, an
+   unknown value or storage that refuses all read as dark. This is the ONE
+   reading of it: OmegaUI.theme() (omega-ui-js) writes it and the Appearance
+   buttons mark what omegaThemeChoice() says. data-omega-theme on <html> is
+   what the token set reads (docs/EDITOR-THEME.md): "light" | "dark" pin a
+   scheme, absent follows the OS. */
+function omegaThemeChoice(){
+  var t = null;
+  try { t = localStorage.getItem('omega.ui.theme'); } catch (e) {}
+  return (t === 'light' || t === 'auto') ? t : 'dark';
+}
+(function(t){
+  if (t !== 'auto') document.documentElement.setAttribute('data-omega-theme', t);
+})(omegaThemeChoice());
+</script>
 <script>
 /* EARLY SAFETY STUBS - must load before anything that can fire a callback.
 
@@ -2378,21 +2398,21 @@ window.onerror = function(msg, src, line, col, err) {
     <div class="rpanel" id="rp-appearance">
       <div class="rpanel-body">
         <button class="rbtn" type="button" data-theme-pick="light" onclick="omegaThemePick('light')" title="Light chrome: white top, grey ground, easier in a bright room"><span class="rb-ico">&#9788;</span><span class="rb-lbl">Light</span></button>
-        <button class="rbtn" type="button" data-theme-pick="dark" onclick="omegaThemePick('dark')" title="Dark chrome (graphite)"><span class="rb-ico">&#9790;</span><span class="rb-lbl">Dark</span></button>
+        <button class="rbtn" type="button" data-theme-pick="dark" onclick="omegaThemePick('dark')" title="Dark chrome (graphite), the default"><span class="rb-ico">&#9790;</span><span class="rb-lbl">Dark</span></button>
         <button class="rbtn" type="button" data-theme-pick="auto" onclick="omegaThemePick('auto')" title="Follow the operating system's colour scheme"><span class="rb-ico">&#9680;</span><span class="rb-lbl">Auto</span></button>
       </div>
       <div class="rpanel-cap">Appearance</div>
     </div>
   </div>
 </div>
-<script>
-/* Appearance (Settings tab, 2026-09-27): Light / Dark / Auto. OmegaUI.theme()
-   (the command palette's own switch, further down) pins data-omega-theme on
-   <html> and remembers it in localStorage 'omega.ui.theme'; this only calls
-   it and marks the choice in force. */
+<script id="omega-theme-pick">
+/* Appearance (Settings tab, 2026-09-27): Light / Dark (the default) / Auto.
+   OmegaUI.theme() (the command palette's own switch, further down) pins
+   data-omega-theme on <html> and remembers it in localStorage
+   'omega.ui.theme'; this only calls it and marks the choice in force, as
+   omegaThemeChoice() in <head> reads it (nothing chosen is Dark). */
 function omegaThemeMark(){
-  var t = 'auto';
-  try{ t = localStorage.getItem('omega.ui.theme') || 'auto'; }catch(e){}
+  var t = omegaThemeChoice();
   var bs = document.querySelectorAll('[data-theme-pick]');
   for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('on', bs[i].getAttribute('data-theme-pick') === t);
 }
@@ -104815,6 +104835,8 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
  *  every panel that reads a token follows the operating system's colour  *
  *  scheme. data-omega-theme on <html> ("light" | "dark") overrides the   *
  *  OS; absent means auto. OmegaUI.theme() sets it (see ACCENT / THEME).  *
+ *  The editor pins "dark" in <head> unless the person picked Light or    *
+ *  Auto (omega-theme-boot), so the OS block below answers Auto only.     *
  *  The two blocks below are IDENTICAL on purpose: one answers the OS,    *
  *  the other the explicit choice. Edit both or neither.                  *
  * ---------------------------------------------------------------------- */
@@ -105487,22 +105509,21 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     if (a && a !== 'blue') setAccent(a);
   })();
 
-  /* THEME: 'auto' follows the OS colour scheme (prefers-color-scheme);
-     'light' | 'dark' pin it. Stored on <html> as data-omega-theme, exactly
-     as the accent is, and remembered in localStorage. */
+  /* THEME: 'dark' (the default) | 'light' pin the chrome; 'auto' follows the
+     OS colour scheme (prefers-color-scheme). Stored on <html> as
+     data-omega-theme (absent = follow the OS), exactly as the accent is, and
+     remembered in localStorage. Restored in <head>, before first paint, by
+     omegaThemeChoice(), where nothing remembered is dark (2026-09-27); the
+     Appearance buttons on the Settings tab are re-marked on every change. */
   function setTheme(name) {
     var ok = { auto: 1, light: 1, dark: 1 };
-    if (!ok[name]) name = 'auto';
+    if (!ok[name]) name = 'dark';
     if (name === 'auto') document.documentElement.removeAttribute('data-omega-theme');
     else document.documentElement.setAttribute('data-omega-theme', name);
     try { localStorage.setItem('omega.ui.theme', name); } catch (e) {}
+    if (typeof window.omegaThemeMark === 'function') window.omegaThemeMark();
     return name;
   }
-  (function restoreTheme() {
-    var t = null;
-    try { t = localStorage.getItem('omega.ui.theme'); } catch (e) {}
-    if (t && t !== 'auto') setTheme(t);
-  })();
 
   /* ------------------------------------------------------------------ *
    *  B.  TOOLTIP                                                       *
@@ -105621,7 +105642,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     { name: 'Theme: Graphite + Amber', desc: 'Neutral chrome with an amber highlight', ico: '\u25D1', run: function () { setAccent('amber'); } },
     { name: 'Theme: Auto (follow the system)', desc: 'Light or dark chrome as the operating system prefers', ico: '\u25D0', run: function () { setTheme('auto'); } },
     { name: 'Theme: Light', desc: 'Light chrome, easier on the eyes in a bright room', ico: '\u25D0', run: function () { setTheme('light'); } },
-    { name: 'Theme: Dark', desc: 'Graphite chrome', ico: '\u25D0', run: function () { setTheme('dark'); } },
+    { name: 'Theme: Dark', desc: 'Graphite chrome, the default', ico: '\u25D0', run: function () { setTheme('dark'); } },
     { name: 'Reconnect chargers to the panel', desc: 'Rebuild the branch trench (and its bollard) for any guided-build charger that lost it', ico: '\u26A1', run: function () { if (window.OmegaEvReconnect) OmegaEvReconnect.reconnectAll(); } },
     { name: 'Re-lay branch conduits along the drawn trench', desc: 'Put every charger branch back on the trench run you drew \u2014 fixes legs that fan straight to the panel and the footage they quote', ico: '\u26A1', run: function () { if (window.OmegaEvRelay) OmegaEvRelay.relayAll(); } },
     { name: 'Interface: restore original colours', desc: 'Turn the colour harmonizer off for this session', ico: '\u21BA', run: function () { OmegaSkin.harmonize(false); } }

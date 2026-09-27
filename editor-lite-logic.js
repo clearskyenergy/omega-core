@@ -64,6 +64,11 @@
     say(module === 'bess' ? 'Set a target, then place the system step by step on the canvas.' : 'The guided build will confirm the equipment and layout before placement.');
   }
   function engineStyle(doc) {
+    // The engine wears the shell's light chrome. The editor on its own is
+    // dark unless a person picks otherwise (docs/EDITOR-THEME.md); this pins
+    // the attribute its tokens read, and never writes omega.ui.theme, the
+    // choice the full editor keeps for this browser.
+    doc.documentElement.setAttribute('data-omega-theme', 'light');
     var s = doc.createElement('style'); s.id = 'omega-lite-chrome';
     s.textContent = 'html,body{width:100%!important;height:100%!important;overflow:hidden!important;margin:0!important;background:#f1f9fc!important}' +
       '#portal-nav,#tb,#ribbon-tabs,#ribbon,#doc-tabs,#tabs,#lp,#rp,#rr,#omg-firstrun,#omega-compass,#o2-tb,#statusbar,#scorep,#d4,#d4-scrim,#e5-terrain,.op-panel,#o2-coords,#rr-mapbadge{display:none!important}' +

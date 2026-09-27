@@ -33,7 +33,7 @@ QuickBooks; legacy tenants are billed outside the package engine.
 | Projects | `/projects.html` | Legacy page wearing the workspace rail (own topbar still) | `OmegaWorkspaceShell.theme()` |
 | In flight | home board | What needs something first (offers on a finance-marketplace deal, a next action, a package to submit, a stall), then what was touched last; never online; each card says why and who has it, with **Assign** | `OmegaWorkspaceToday.board`; `projects/{id}` owner merge |
 | Admin Package tab | `/admin/tenant?org=` (staff) | Opens on what the tenant holds and pays today (a legacy tier's Live modules by the shared rule, plus any opt-in request); staff change it and Review activation | `admin/package-panel.js` `standing()`, `OmegaWorkspaceHub.moduleState` |
-| Site Map (editor) | Settings tab › Appearance | Light (white top, grey ground, buttons with faces), Dark, or Auto | `OmegaUI.theme()`, `omega.ui.theme` in the browser |
+| Site Map (editor) | Settings tab › Appearance | Dark (the default until a person picks otherwise), Light (white top, grey ground, buttons with faces), or Auto (follow the operating system) | `OmegaUI.theme()`, `omega.ui.theme` in the browser; pinned in `<head>` by `omegaThemeChoice()` |
 | Classic home | `/?home=classic` | The old dashboard; "Open Omega Workspace" and Account settings › Home flip back with `/?home=workspace` | `homeOf()` |
 
 ## 3. What is built and verified

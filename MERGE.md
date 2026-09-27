@@ -2349,3 +2349,28 @@ a project created anywhere else. `wizMode` is still saved by the editor and
 still restores the BESS wizard's market. Tests:
 `scripts/tests/tprojectkinds.js` (npm test); `teditortheme.js` records the
 three tab ids and `np-market` as retired.
+
+## Editor dark by default — September 27, 2026
+
+`editor.html`: Tommy: "Default for the editor viewing should be dark mode."
+Nothing chosen used to mean Auto, so a computer set to light opened the
+editor in the light chrome. `<script id="omega-theme-boot">`, second in
+`<head>` after the splash, now pins `data-omega-theme="dark"` before any
+stylesheet unless this browser picked Light or Auto; `omegaThemeChoice()`
+there is the one reading of `omega.ui.theme` and never writes it, so no one
+is recorded as having chosen. Settings › Appearance marks Dark when nothing
+was chosen; `OmegaUI.theme()` takes an unknown name as dark (it was auto)
+and re-marks the Appearance buttons on every change (a command-palette pick
+used to leave them stale); omega-ui-js's `restoreTheme()` is gone, because
+the head does it before first paint. The token set, the Light and Auto
+choices and any stored choice are unchanged. Editor Lite, the one page that
+frames the editor, keeps its engine light: `engineStyle()` in
+`editor-lite-logic.js` sets `data-omega-theme="light"` on it without
+writing the stored choice; before, the engine showed whatever the editor
+would (with nothing chosen, the OS's scheme). Tests:
+`scripts/tests/teditortheme.js` runs the three scripts and `engineStyle()`
+in a sandbox against every stored value; `scripts/render-editor-theme.js`
+boots them on a light OS in Chromium
+(`docs/screenshots/editor-theme/default-light-os-settings.png`) and runs
+Editor Lite's `engineStyle()` on them in a frame on a dark OS.
+Design: `docs/EDITOR-THEME.md` (*The switch*).
