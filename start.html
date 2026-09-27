@@ -112,7 +112,7 @@
 
   <div id="step-billing" class="hide">
     <h1>Your billing profile</h1>
-    <p id="signup-billing-lede">These details make your customer record in QuickBooks: who is billed, where the invoices go and how you pay. Next you build your system.</p>
+    <p id="signup-billing-lede">These details make your billing record: who is billed, where the invoices go and how you pay. Next you build your system.</p>
     <div id="signup-proposal" class="ok hide"></div>
     <div id="signup-billing-profile" class="obp-grid"></div>
     <button class="btn" id="billing-continue" onclick="toBuild()">Continue to build your system</button>
@@ -145,11 +145,11 @@
     <h1>Pay your first invoice to open your workspace</h1>
     <div class="ok" style="display:block">
       <div style="font-weight:700;margin-bottom:6px" id="pay-name"></div>
-      <div style="color:var(--sub);font-size:14px">You will sign in at <span class="host" id="pay-host"></span> with your work email. Your first invoice<span id="pay-amount"></span> is ready in QuickBooks; pay it by card on the invoice page and the workspace opens the moment the payment lands.</div>
+      <div style="color:var(--sub);font-size:14px">You will sign in at <span class="host" id="pay-host"></span> with your work email. Your first invoice<span id="pay-amount"></span> is ready<span id="pay-where"></span>; pay it by card on the invoice page and the workspace opens the moment the payment lands.</div>
     </div>
-    <a class="btn" id="pay-link" target="_blank" rel="noopener">Pay now in QuickBooks</a>
+    <a class="btn" id="pay-link" target="_blank" rel="noopener">Pay now</a>
     <button class="btn ghost" id="pay-check" onclick="checkPayment(true)">I've paid — open my workspace</button>
-    <p class="hint" id="pay-status">We check QuickBooks every few seconds while this page is open. The invoice is also in your email; your workspace opens as soon as it is paid, from anywhere.</p>
+    <p class="hint" id="pay-status">We check your payment every few seconds while this page is open. The invoice is also in your email; your workspace opens as soon as it is paid, from anywhere.</p>
     <div class="err" id="pay-err"></div>
   </div>
 
@@ -178,22 +178,25 @@
   /* the offerings page names a package (?plan=field, ?modules=lite,gridatlas); the picker starts there */
   function wantedModules(){ var m = qp('modules'); if (!m || !signupOptions) return null; var keys = signupOptions.modules.map(function (x) { return x.key; }); var out = String(m).split(',').map(function (k) { return k.trim(); }).filter(function (k) { return keys.indexOf(k) >= 0; }); return out.length ? out : null; }
   function wantedPlan(){ var p = qp('plan'); return p && ['field', 'pro', 'auto'].indexOf(p) >= 0 ? p : null; }
-  /* the pay step: the first invoice's card-payment page, and a look at QuickBooks on request or every eight seconds */
+  /* the pay step: the first invoice's card-payment page (Stripe's, or QuickBooks' for a workspace billed there), and a look at the payment on request or every eight seconds */
   var PAY = null, payTimer = null;
+  function payWith(){ return (PAY && PAY.payWith) || (signupOptions && signupOptions.payWith) || ''; }
   function showPay(j, name){
     PAY = j; $('pay-name').textContent = name || $('f-name').value; $('pay-host').textContent = j.host || '';
     $('pay-amount').textContent = j.amountDueDisplay ? ' of ' + j.amountDueDisplay : '';
-    var a = $('pay-link'); if (j.paymentLink) { a.href = j.paymentLink; a.className = 'btn'; } else { a.removeAttribute('href'); a.className = 'btn ghost'; a.textContent = 'Pay from the invoice QuickBooks emailed' + (j.billingEmail ? ' to ' + j.billingEmail : ' you'); $('pay-status').textContent = 'QuickBooks emailed the invoice itself, with its Pay now button. Pay it there, then press I\'ve paid; we check QuickBooks every few seconds while this page is open.'; }
+    $('pay-where').textContent = payWith() ? ' in ' + payWith() : '';
+    var a = $('pay-link'); a.textContent = payWith() ? 'Pay now in ' + payWith() : 'Pay now';
+    if (j.paymentLink) { a.href = j.paymentLink; a.className = 'btn'; } else { a.removeAttribute('href'); a.className = 'btn ghost'; a.textContent = 'Pay from the invoice ' + (payWith() || 'we') + ' emailed' + (j.billingEmail ? ' to ' + j.billingEmail : ' you'); $('pay-status').textContent = (payWith() || 'We') + ' emailed the invoice itself, with its Pay button. Pay it there, then press I\'ve paid; we check your payment every few seconds while this page is open.'; }
     show('step-pay'); if (payTimer) clearInterval(payTimer); payTimer = setInterval(function () { if (!document.hidden) checkPayment(false); }, 8000);
   }
   window.checkPayment = function(byHand){
-    var u = auth.currentUser; if (!u || !PAY) return; var btn = $('pay-check'); if (byHand) { btn.disabled = true; btn.textContent = 'Checking QuickBooks…'; }
+    var u = auth.currentUser; if (!u || !PAY) return; var btn = $('pay-check'); if (byHand) { btn.disabled = true; btn.textContent = 'Checking your payment…'; }
     u.getIdToken().then(function (tok) { return fetch('/api/tenant-signup', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify({ action: 'check-payment' }) }); })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not check'); return j; }); })
       .then(function (j) {
         if (j.paid) { clearInterval(payTimer); $('pay-status').textContent = 'Paid. Opening your workspace…'; location.href = 'https://' + (j.host || PAY.host) + '/'; return; }
         if (j.paymentLink && j.paymentLink !== PAY.paymentLink) { PAY.paymentLink = j.paymentLink; $('pay-link').href = j.paymentLink; }
-        $('pay-status').textContent = j.error ? j.error : j.throttled ? 'QuickBooks was checked a moment ago: not paid yet. Try again in a few seconds.' : byHand ? 'Not paid yet as far as QuickBooks knows. A card payment shows within a minute; try again then.' : 'Waiting for the payment… we check QuickBooks every few seconds.';
+        $('pay-status').textContent = j.error ? j.error : j.throttled ? 'Your payment was checked a moment ago: not paid yet. Try again in a few seconds.' : byHand ? 'Not paid yet as far as ' + (payWith() || 'the invoice') + ' shows. A card payment shows within a minute; try again then.' : 'Waiting for the payment… we check every few seconds.';
       })['catch'](function (e) { err('pay-err', e.message); })
       .then(function () { btn.disabled = false; btn.textContent = "I've paid — open my workspace"; });
   };
@@ -334,7 +337,8 @@
     if (signupOptions.packaging && !fromBilling && !fromDiscovery && !proposal) { buildDiscovery(); show('step-discovery'); return; }
     if (signupOptions.packaging && !fromBilling) {
       if (!billingForm) billingForm = OmegaBillingProfile.render($('signup-billing-profile'), { legalName: name, email: u.email, phone: payload.phone, contactName: u.displayName || '', vertical: payload.vertical, address: { country: 'US' } });
-      if (!signupOptions.payNow) $('signup-billing-lede').textContent = 'These details make your customer record in QuickBooks. Approval starts your one trial of at most 14 days; your first invoice arrives at trial end. Next you choose your package.';
+      if (signupOptions.payWith) $('signup-billing-lede').textContent = 'These details make your customer record in ' + signupOptions.payWith + ': who is billed, where the invoices go and how you pay. Your card is entered on ' + signupOptions.payWith + (/s$/.test(signupOptions.payWith) ? '\u2019' : '\u2019s') + ' secure page, never here. Next you build your system.';
+      if (!signupOptions.payNow) $('signup-billing-lede').textContent = 'These details make your customer record' + (signupOptions.payWith ? ' in ' + signupOptions.payWith : '') + '. Approval starts your one trial of at most 14 days; your first invoice arrives at trial end. Next you choose your package.';
       document.querySelector('[data-profile-field="vertical"]').value = payload.vertical;
       show('step-billing'); return;
     }

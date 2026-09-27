@@ -74,7 +74,7 @@
     if (!state.canManage) { host.appendChild(node('p', 'Ask your workspace administrator to add this module.', 'opm-note')); return; }
     if (pendingChange) {
       host.appendChild(node('p', 'Waiting for payment · ' + pendingChange.display + ' · expires ' + pendingChange.expiresOn, 'opm-wait'));
-      if (pendingChange.paymentLink) host.appendChild(link(pendingChange.paymentLink, 'Pay in QuickBooks'));
+      if (pendingChange.paymentLink) host.appendChild(link(pendingChange.paymentLink, pendingChange.payWith ? 'Pay in ' + pendingChange.payWith : 'Pay the invoice'));
       host.appendChild(button('Cancel request', function () {
         host.textContent = 'Cancelling…';
         api('/api/plan-change', { action: 'cancel', changeId: pendingChange.id }).then(function (r) { if (state.onChanged) state.onChanged(r); }, function (e) { host.textContent = e.message; });
@@ -99,7 +99,7 @@
           api('/api/plan-change', body).then(function (r) {
             host.textContent = '';
             if (r.state === 'active') host.appendChild(node('p', 'Added. Your tools are updating…', 'opm-quote'));
-            else { host.appendChild(node('p', 'Invoice created: ' + r.display + '. It switches on when the payment clears; pay before ' + r.expiresOn + '.', 'opm-wait')); if (r.paymentLink) host.appendChild(link(r.paymentLink, 'Pay in QuickBooks')); }
+            else { host.appendChild(node('p', 'Invoice created: ' + r.display + '. It switches on when the payment clears; pay before ' + r.expiresOn + '.', 'opm-wait')); if (r.paymentLink) host.appendChild(link(r.paymentLink, r.payWith ? 'Pay in ' + r.payWith : 'Pay the invoice')); }
             if (state.onChanged) state.onChanged(r);
           }, function (e) { host.textContent = ''; host.appendChild(node('p', e.message, 'opm-reason')); host.appendChild(button('Try again', function () { subscribeControl(host, m, state); })); });
         }, 'opm-primary'));

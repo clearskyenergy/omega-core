@@ -16,7 +16,7 @@ module.exports = A.handler(async function (req, res) {
     return S.apply(A.db(), orgId, input, caller, Date.now());
   }
   var c = await S.context(A.db(), orgId), billing = Object.assign({}, c.billing);
-  billing.paymentLink = require('./_lib/logic-policy').paymentLink(billing.paymentLink);
+  billing.paymentLink = require('./_lib/billing-driver').payLink(billing.paymentLink);
   delete billing.activationLock; delete billing.invoiceLock; delete billing.changeLock;
   var history = await c.root.collection('billing').doc('current').collection('history').orderBy('at', 'desc').limit(100).get();
   var audit = caller.staff ? await c.root.collection('admin_audit').orderBy('at', 'desc').limit(100).get() : { docs: [] };

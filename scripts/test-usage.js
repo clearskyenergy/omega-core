@@ -5,6 +5,7 @@
  * 90-day review. Firestore double; QuickBooks and mail are stand-ins.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('assert'), F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture');
 var db, caller, qbo = { invoices: 0, plans: [] }, receipts = {}, count = 0;
 H.mockAdmin(function () { return db; }, function () { return caller; });

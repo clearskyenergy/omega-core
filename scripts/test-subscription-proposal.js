@@ -4,6 +4,7 @@
  * Mail and QuickBooks are stand-ins; no network, no live writes.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('assert'), F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture');
 var db, caller, mails = [], qbo = { invoices: 0 }, count = 0;
 H.mockAdmin(function () { return db; }, function () { return caller; });

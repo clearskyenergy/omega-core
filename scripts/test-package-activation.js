@@ -1,5 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('assert'), DB = require('./_lib/firestore-double').DB;
 var B = require('../api/_lib/pricebook'), S = require('../api/_lib/package-billing'), Q = require('../api/_lib/qbo-billing');
 var count = 0, original = Q.driver, calls = 0, receipts = {};
