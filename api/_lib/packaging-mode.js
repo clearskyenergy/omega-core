@@ -42,7 +42,10 @@ function configured(p) {
   var q = qboEnv(); return q === 'production' || q === 'sandbox' ? q : null;
 }
 function live(p) { return process.env.PACKAGING_LIVE === 'true' && configured(p) === 'production'; }
-function sandbox(p) { return configured(p) === 'sandbox'; }
+/* a deployment under the live switch never bills in test mode: a provider
+   whose key is still a test key there is closed, not a sandbox (else a
+   stranger's test-card payment would open real modules in production) */
+function sandbox(p) { return process.env.PACKAGING_LIVE !== 'true' && configured(p) === 'sandbox'; }
 /* what a price book, a stored connection and the provider's host must be */
 function env(p) { return live(p) ? 'production' : 'sandbox'; }
 /* whether packaging may bill at all */

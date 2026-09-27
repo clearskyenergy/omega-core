@@ -20,6 +20,9 @@ module.exports = A.handler(function (req) {
   var limit = Math.min(Math.max(parseInt(b.limit, 10) || 12, 1), 50);
 
   return A.authenticate(req).then(function (caller) {
+    /* an email/password account can be opened on any address: invoices (with
+       the billing contact, address and PDFs) need a VERIFIED one */
+    if (!caller.staff && !(caller.claims && caller.claims.email_verified === true)) throw A.httpError(403, 'Verified email required');
     var orgId = String(b.orgId || caller.orgId || '').toLowerCase();
     if (!orgId) throw A.httpError(400, 'orgId required');
     /* A tenant reads their own invoices; staff read anyone's. Without this a
@@ -32,6 +35,9 @@ module.exports = A.handler(function (req) {
       .collection('billing').doc('current').get()
       .then(function (snap) {
         var bill = snap.exists ? snap.data() : {};
+        /* a PACKAGED workspace's invoices are the engine's (Plan & billing,
+           GET /api/plan-change, owners and admins): never this legacy list */
+        if (bill.packaged === true && !caller.staff) return { connected: false, orgId: orgId, invoices: [], note: 'Subscription invoices are listed in Plan & billing.' };
         var cust = bill.stripeCustomerId;
         if (!cust) return { connected: false, orgId: orgId, invoices: [],
                             note: 'No Stripe customer for this organisation yet.' };

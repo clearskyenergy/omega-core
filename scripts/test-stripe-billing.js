@@ -54,6 +54,8 @@ async function driverChecks() {
   ok('a live key under PACKAGING_LIVE=true is live', Mode.live() && Mode.env() === 'production');
   var testObjects = new SD({ livemode: false });
   await refused('live mode never bills a test-mode customer', function () { return ST.driver(book(), { stripe: testObjects }).customer('stripe.example', profile); }, /live mode/);
+  env({ STRIPE_SECRET_KEY: 'sk_test_double' });
+  ok('under the live switch a test key is closed, never a sandbox: no test-card payment opens anything in production', !Mode.open('stripe') && !Mode.sandbox('stripe') && !Mode.live('stripe'));
   env({ PACKAGING_LIVE: null, STRIPE_SECRET_KEY: 'rk_test_double' });
   ok('a restricted test key is the sandbox too', Mode.sandbox());
   env({ STRIPE_SECRET_KEY: 'sk_test_double', PACKAGING_PROVIDER: 'quickbooks', QBO_ENV: 'sandbox' });
@@ -326,6 +328,19 @@ async function webhookChecks() {
   } finally { Module._load = load; Hook && (Hook.deps = null); }
 }
 
+async function legacyEndpointChecks() {
+  console.log('\nthe legacy invoice list and portal: verified people only, and never a package\'s invoices');
+  var db = fixture(); db.data.get(root + '/billing/current').stripeCustomerId = 'cus_pkg'; db.data.get(root + '/billing/current').packaged = true;
+  var invoicesApi = require('../api/stripe-invoices'), portalApi = require('../api/stripe-portal');
+  function post(api, body) { return new Promise(function (resolve) { var res = { code: 200, setHeader: function () {}, status: function (c) { res.code = c; return res; }, json: function (b) { resolve({ code: res.code, body: b }); }, end: function () { resolve({ code: res.code }); } };
+    Promise.resolve(api({ method: 'POST', body: body || {}, headers: {} }, res)).then(function (out) { if (out !== undefined) resolve({ code: 200, body: out }); }, function (e) { resolve({ code: e.status || 500, body: { error: e.message } }); }); }); }
+  var saved = CALLER.claims; CALLER.claims = {};
+  var r1 = await post(invoicesApi); ok('an unverified address at the domain gets no invoices', r1.code === 403 && /Verified email/.test(r1.body.error), r1);
+  var r2 = await post(portalApi); ok('...and no billing portal', r2.code === 403 && /Verified email/.test(r2.body.error), r2);
+  CALLER.claims = { email_verified: true };
+  var r3 = await post(invoicesApi); ok('a packaged workspace\'s invoices are Plan & billing\'s, never this list', r3.code === 200 && r3.body.connected === false && r3.body.invoices.length === 0, r3);
+  CALLER.claims = saved;
+}
 async function pricebookChecks() {
   console.log('\nthe price book turns on for the Stripe rail without QuickBooks items');
   var PE = require('../api/_lib/pricebook-enable'), db = new DB(); db.serial = true;
@@ -349,6 +364,7 @@ async function pricebookChecks() {
   await driverChecks();
   await engineChecks();
   await webhookChecks();
+  await legacyEndpointChecks();
   await pricebookChecks();
   console.log('\nstripe billing: ' + count + ' passed, 0 failed');
 })().catch(function (e) { console.error(e); process.exit(1); });

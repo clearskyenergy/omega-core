@@ -123,7 +123,7 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     var r = await signup({ method: 'POST', body: body({ payNow: true }) }, RES);
     assert.equal(r.created, true); assert.equal(r.payNow, false); assert.equal(r.payNowError, 'The first invoice could not be issued; your request goes to ClearSky for approval instead', 'the customer hears what happens next, never the engine\'s words'); assert.equal(r.paymentLink, undefined);
     assert.ok(mails.some(function (m) { return m[0] === 'billing-alert' && /QuickBooks is down/.test(m[1].text); }), 'ClearSky hears why');
-    var org = db.data.get('omega_orgs/newco.example'); assert.equal(org.status, 'pending'); assert.equal(org.approvedBy, null); assert.match(org.payNowError, /QuickBooks/);
+    var org = db.data.get('omega_orgs/newco.example'); assert.equal(org.status, 'pending'); assert.equal(org.approvedBy, null); assert.equal(org.payNowError, true, 'the org record (readable at the domain) says only that it failed; the provider\'s words went to ClearSky');
     assert.equal(db.data.get('tenant_public/newco.clearskyomega.com').status, 'pending');
     var bill = db.data.get('omega_orgs/newco.example/billing/current'); assert.equal(bill.packagingState, 'pending'); assert.equal(bill.paymentLink, undefined);
     assert.equal(mails.filter(function (m) { return m[0] === 'received'; })[0][1].payNow, false);
