@@ -67,7 +67,7 @@ ok('Office alone earns Orders and not Plant or Deliver', officeOnly.ring.some(fu
 var rows = HUB.items('money', ctxFor({ orgId: 'x', tierLevel: 1 }));
 ok('Money lists the Standard sizers open and the Deluxe models locked, open first', rows.length > 3 && !rows[0].locked && rows.some(function (r) { return r.locked; }) && rows.filter(function (r) { return r.locked; }).every(function (r, i, arr) { return rows.indexOf(r) >= rows.length - arr.length; }), rows.map(function (r) { return r.key + (r.locked ? ':locked' : ''); }));
 ok('a row carries the catalog\'s name', rows.every(function (r) { return r.name && TOOLS.byKey(r.key).name === r.name; }));
-ok('Projects panel names its page', HUB.items('projects', ctxFor({ orgId: 'x' }))[0].href === '/projects.html');
+ok('Projects panel names In flight and its page', (function (r) { return r[0].href === '#flight' && r[1].href === '/projects.html'; })(HUB.items('projects', ctxFor({ orgId: 'x' }))));
 ok('an unknown area is empty', HUB.items('nope', ctxFor({})).length === 0);
 
 console.log('tworkspacehub: ' + pass + ' passed, ' + fail + ' failed');

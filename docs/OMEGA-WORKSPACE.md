@@ -43,6 +43,28 @@ decided 2026-09-26.
   quotes back of sent, requests to price, new quote requests, or sites
   online. The referral inbox itself stays on the classic dashboard;
   `?stay=classic` visits it once without changing the browser's home.
+- **One view at a time** (2026-09-27). The home is the hub and Today, and
+  nothing below it. All tools (`#tools`), In flight (`#flight`) and Around
+  you (`#team`, `#feed`) are each their own page inside `/workspace`, drawn
+  by `data-view` on the content and reached from the rail, the phone tabs,
+  the hub or a hash; a "‹ Home" link and the Home tab come back. Nothing
+  scrolls to a section any more; `check:workspace` asserts each view.
+- **Modules** (`#modules`) is the Ladder as a page of the workspace: one
+  card per module of the package view's catalog in shelf order, held ones
+  Live, bought-not-on ones named, the rest with the server's price
+  (`/api/package-catalog`, asked once) and + Add, which opens the ONE menu
+  (`omega-package-menu.js`) on that module; a change re-asks the server.
+  Change plan on the plan strip opens it for a packaged workspace; a legacy
+  plan (no packaged record) sees every module of the server's catalog Live
+  and nothing to add.
+- **View as a customer** (staff): `/workspace?viewas=lite` (a starter key
+  or a comma list of module keys) paints the signed-in workspace as a
+  packaged customer holding those modules, through the same server
+  projection the editor's staff preview uses (`POST /api/package-access`
+  `previewModules`, refused to anyone but verified ClearSky staff). Paint,
+  never scope: the org stays your own, nothing is billed, a quote is
+  refused, a banner says so and Exit is the plain address. `check:workspace`
+  scenario `viewas`.
 - **All tools** is the catalog by category, each tile Live, Locked or Soon by
   the one rule (`OMEGATools.isUnlocked` on the merged workspace; nothing opens
   while approval is pending). Locked tiles fold under "N more on other
@@ -60,53 +82,27 @@ decided 2026-09-26.
   `OmegaTenant.billing`, the package projection and the person's
   `team_members` profile (display name is editable there).
 
-## The store (every workspace whose home is the workspace)
+## The package store (packaged tenants)
 
-`marketplace.html` is what is for sale, not a tool catalogue: the tools,
-live or locked, are All tools on the workspace (Tommy, 2026-09-27: "the
-marketplace is different than the modules and packages they can buy to
-upgrade their systems"). Once the workspace is home the page wears the
-whole workspace chrome: `OmegaWorkspaceShell.wear()` takes its own sidebar
-and topbar off and mounts the rail, the topbar with the company switcher,
-the phone tab bar and the side panel around the page's `#main`; the markup
-stays in the file for the classic home, which is what the sidebar tests
-compare. What omega-jd-nav.js revealed stays revealed.
-
-The page shows, in order: a compact head with a search box that narrows
-the shelves in place; the plan strip (plan, modules held, tools open, and
-for a packaged workspace the monthly price, the next invoice and changes
-waiting for payment); the **Plans** shelf from the public price list
-`GET /api/offerings` (Lite, Field, Pro, Enterprise with the service fee;
-the starter packages by what you do; the logins, the annual and the trial
-notes); then every module on its shelf (Included with every plan · Add-ons
-· Standard · Premium · Deliverables · Omega Logic) with its price, features
-and tools.
-
-- A PACKAGED workspace (`billing.packaged`) prices from
-  `api/package-catalog` and opts in and pays here: a held module reads
-  "In your plan"; any other carries the shared subscribe control from
-  `omega-package-menu.js`: Subscribe asks `plan-change` for a quote
-  (today, then, activation), "Subscribe and pay" applies it by its
-  previewId, and the card then waits for payment with the QuickBooks link
-  and a cancel. A $0 addition inside a paid tier switches on at once. Only
-  an owner or admin manages; a member is told to ask.
-- Any other workspace reads the public price list and is judged against
-  its legacy tier: a module reads "On your plan" when every tool it
-  carries is open (Omega Logic when the `omega-logic` addon is held; a
-  capabilities-only module on Enterprise), "Partly on your plan" with the
-  count, else "Ask ClearSky to add it", an email to the upgrade address
-  naming the module and its price. Nothing is charged here; ClearSky
-  switches a legacy tenant on.
-- `/marketplace.html#<module>` lands on and marks that module; a locked
-  tile on the workspace links there when it knows the module.
-- A tenant on the classic home (`shell: 'classic'`) keeps the tool
-  catalogue, its categories and "+ Add to dashboard".
-
-Nothing in the browser prices or grants anything. `check:workspace`
-renders the store for a packaged workspace (quote → pay → waiting for
-payment, the deep link) and for a legacy tenant (every module priced from
-the price list, some on its plan and some to ask for, the plans first, the
-catalogue folded away, the whole chrome on desktop and phone).
+`marketplace.html` is also where a PACKAGED workspace (`billing.packaged`)
+opts in and pays: the full-page Ladder (the dashboard's Your modules cards
+and Account panel open the same catalogue as a dialog). Above the tool
+catalogue it shows the plan strip (plan,
+monthly price, next invoice, modules held, changes waiting for payment) and
+every module on its shelf (Included with every plan · Add-ons · Standard ·
+Premium · Deliverables · Omega Logic) with the server's price from
+`api/package-catalog`, its features, its tools, beta and coverage notes.
+A module the workspace holds reads "In your plan"; any other carries the
+shared subscribe control from `omega-package-menu.js`: Subscribe asks
+`plan-change` for a quote (today, then, activation), "Subscribe and pay"
+applies it by its previewId, and the card then waits for payment with the
+QuickBooks link and a cancel. A $0 addition inside a paid tier switches on
+at once and the page reloads so the server's projection repaints every
+tile. Only an owner or admin manages; a member is told to ask. The tool
+cards below list the whole catalogue for a packaged workspace, and a locked
+tool's action is "Add <Module> to plan", which scrolls to that module. A
+legacy tenant sees the marketplace exactly as before. Nothing in the browser
+prices or grants anything.
 
 ## The journey, mapped
 
@@ -116,19 +112,21 @@ ground, one home; the session travels same-origin on every hop.
 | From | Click | To |
 |---|---|---|
 | Sign-in (`login.html`, `index.html` card) | signs in | `index.html` sends on to `/workspace` once the tenant's shell is known, unless it is `classic`, the workspace is a partner portfolio, or the browser asked for the classic page |
-| `/workspace` hub | Today | scrolls to Needs you |
-| `/workspace` hub | Projects · Design · Grid · Finance · Sales · Market … | the side panel for that area: its pages and tools, locked ones marked; Open goes to the tool (`OMEGATools.hrefFor`) or opens the New Project dialog for Site Map and the sandbox |
-| `/workspace` hub | Team | scrolls to Around you |
+| `/workspace` hub | Today | the side panel listing what needs you (the Today card's rows) |
+| `/workspace` hub | Projects | the side panel: In flight, All projects, recent projects |
+| `/workspace` hub | Design · Grid · Finance · Sales · Market … | the side panel for that area: its pages and tools, locked ones marked; Open goes to the tool (`OMEGATools.hrefFor`) or opens the New Project dialog for Site Map and the sandbox |
+| `/workspace` hub | Team | the side panel: Team, Feed |
 | `/workspace` hub | Orders · Plant · Deliver (a workspace holding Omega Logic) | the panel, then `/omega-logic`, `/plant/…`, `/logic-logistics.html` |
 | rail, any page | Home | `/workspace` |
 | rail, any page | Projects | `/projects.html`, wearing the same rail with Projects current; a row opens the editor |
-| rail, any page | All tools | `/workspace#tools` |
-| rail, any page | Marketplace | `/marketplace.html`, the store in the whole workspace chrome: the plans and the modules with the server's prices; a packaged workspace subscribes, any other asks ClearSky |
+| rail, any page | All tools | `/workspace#tools`, the All tools page alone |
+| rail, any page | Modules | `/workspace#modules`, the Modules page (the Ladder) |
+| rail, any page | Marketplace | `/marketplace.html`, same rail; a packaged workspace sees its plan and the modules to add (the package store); "+ Add to dashboard" pins an open tool, which the workspace lists under Pinned |
 | rail, any page | Quote Desk | `/rfq.html` |
-| rail, any page | Team · Feed | `/workspace#team` |
+| rail, any page | Team · Feed | `/workspace#team`, the Around you page alone |
 | rail, any page | Plan & billing · Settings | the side panels on `/workspace` (`#billing`, `#settings`) |
 | tools grid | a Live tile | the tool, scoped to the org |
-| tools grid | a Locked tile | the side panel naming the plan or module that carries it, with the Marketplace opened on that module (`#<module>`) and an email to ClearSky |
+| tools grid | a Locked tile | the side panel naming the plan or module that carries it, with the Marketplace (where a packaged workspace subscribes) and an email to ClearSky |
 | In flight | a project card | `/editor.html?id=…&org=…` |
 | In flight | + New project | the one New Project dialog (`omega-newproject.js`); created projects open in the editor |
 | Around you | Post | writes `team_messages` as the signed-in person |
@@ -170,11 +168,7 @@ to the page, the shell or the runtime they load.
 - **Phone install** (manifest, shell service worker, an entry in
   `api/_lib/kit.js`, a guide): the page is responsive with the tab bar; the
   install pattern is the next pass.
-- The projects page keeps its own TOPBAR (tenant chip, tabs, avatar) and
-  its own page layout; only its rail, ground and home link are the
-  workspace's. The marketplace wears the whole chrome (`wear()`); giving
-  the projects page the same is the next consistency pass.
-- The store's plan cards are the price list's facts: moving a packaged
-  workspace to another plan from a plan card (through `plan-change` with a
-  `plan`) is not wired; the subscribe control's steer on a module quote
-  is the way today.
+- The projects and marketplace pages keep their own TOPBAR (tenant chip,
+  tabs, avatar) and their own page layout; only their rail, ground and home
+  link are the workspace's. Adopting the shell's topbar there is the next
+  consistency pass.
