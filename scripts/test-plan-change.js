@@ -7,7 +7,7 @@ process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBo
 var assert = require('assert'), F = require('./_lib/firestore-double');
 var B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules'), S = require('../api/_lib/package-billing');
 var Q = require('../api/_lib/qbo-billing'), R = require('../api/_lib/proration');
-var count = 0, calls = 0, receipts = {}, db, failures = {}, midflight = {}, originalDriver = Q.driver;
+var count = 0, calls = 0, receipts = {}, db, failures = {}, midflight = {}, invoiceFail = 0, originalDriver = Q.driver;
 var orgId = 'plan.example', root = 'omega_orgs/' + orgId, ev = M.starters().ev;
 var staff = { staff: true, uid: 'staff', email: 'staff@clearsky-usa.com', claims: { email_verified: true } };
 var owner = { staff: false, uid: 'owner', email: 'owner@' + orgId, orgId: orgId, role: 'owner', claims: { email_verified: true } };
@@ -57,7 +57,7 @@ async function run() {
   process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
   var now = Date.parse('2026-09-26T12:00:00Z'), realNow = Date.now; Date.now = function () { return now; };
   Q.driver = function () { return { customer: async function () { calls++; return 'C1'; },
-    invoice: async function (plan) { calls++; var id = plan.kind === 'change' ? 'I-' + plan.marker.slice(-12) : 'I-' + plan.date; return { id: id, totalCents: plan.subtotalCents, payUrl: 'https://connect.intuit.com/pay/' + id }; },
+    invoice: async function (plan) { calls++; if (invoiceFail > 0) { invoiceFail--; var down = new Error('QuickBooks request failed (503)'); down.status = 503; throw down; } var id = plan.kind === 'change' ? 'I-' + plan.marker.slice(-12) : 'I-' + plan.date; return { id: id, totalCents: plan.subtotalCents, payUrl: 'https://connect.intuit.com/pay/' + id }; },
     reconcile: async function (record) { if (midflight[record.qboInvoiceId]) { var hook = midflight[record.qboInvoiceId]; delete midflight[record.qboInvoiceId]; hook(); } if (failures[record.qboInvoiceId]) { var e = new Error('QuickBooks request failed (503)'); e.status = failures[record.qboInvoiceId]; throw e; } return receipts[record.qboInvoiceId] || (record.state === 'paid' ? { satisfied: true, reversed: false, paidCents: record.totalCents, payUrl: null } : { satisfied: false, reversed: false, paidCents: 0, payUrl: 'https://connect.intuit.com/pay/x' }); } }; };
 
   /* ── Money math ─────────────────────────────────────────────────── */
@@ -374,6 +374,14 @@ async function run() {
   receipts['I-change-eee'] = { satisfied: true, reversed: false, paidCents: 1000, payUrl: null };
   await S.reconcile(db, orgId, now, {});
   equal([db.data.get(root + '/billing/current/invoices/change-ddd').state, bill().subscription.modules.indexOf('siteintel') >= 0], ['reversed', true], 'the other paid change still covers it');
+
+  /* a pack purchase that failed is resumed by asking again, never refused for ever (the same marker: no second invoice) */
+  seed(ev, 'field'); invoiceFail = 1; var pq = C.packQuote(await S.context(db, orgId), 'evApplications', now);
+  await refused(function () { return C.packBuy(db, orgId, { meter: 'evApplications', previewId: pq.previewId, effectiveAt: now }, owner, now); }, /503/);
+  var pb = await C.packBuy(db, orgId, { meter: 'evApplications', previewId: pq.previewId, effectiveAt: now }, owner, now);
+  equal(pb.state, 'awaiting_payment', 'the same purchase asked again after it failed resumes it');
+  var before2 = calls; equal((await C.packBuy(db, orgId, { meter: 'evApplications', previewId: pq.previewId, effectiveAt: now }, owner, now)).packId, pb.packId, 'and once done, asking again returns the same purchase');
+  equal(calls, before2, 'without asking QuickBooks again');
 
   /* ── Opt in on a plan billed outside the engine (2026-09-27) ────── */
   db = new F.DB(); db.serial = true;

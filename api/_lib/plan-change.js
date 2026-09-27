@@ -78,6 +78,9 @@ function state(c, now) {
   if (!b.billingDay || !D.customerId(b, D.providerOf(b))) return { canApply: false, reason: 'Billing is not set up for this workspace yet.' };
   return { canApply: true };
 }
+/* a change whose invoice can no longer be paid: voided or refunded at the
+   provider ('reversed'), or cancelled with its invoice voided at once (Stripe) */
+function dead(r) { return r.state === 'reversed' || (r.state === 'cancelled' && r.voided === true); }
 function pending(records) {
   return records.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'unpaid' && D.issued(r); })
     .map(function (r) { return { id: r.id, add: r.add, names: names(r.add), plan: r.plan, totalCents: r.totalCents, display: P.money(r.totalCents), paymentLink: r.paymentLink || null, payWith: D.name(D.recordProvider(r)), date: r.date, expiresOn: r.cycle.end, state: r.state }; });
@@ -126,13 +129,13 @@ function quote(c, rows, input, now) {
      invoice rather than issuing a second one a customer could also pay.
      Only when that invoice is dead (voided or refunded: 'reversed') is the
      next request a new change, with its own id and invoice. */
-  var reissued = rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'reversed' && r.cycle && r.cycle.start === cycle.start; }).length;
+  var reissued = rows.filter(function (r) { return S.kindOf(r) === 'change' && dead(r) && r.cycle && r.cycle.start === cycle.start; }).length;
   if (reissued) basis.reissued = reissued;
   var id = Q.key(B.stable(basis));
   /* a cancelled change of this cycle for any of these modules whose invoice
      is still open, asked for on another day (another price, so another id):
      never a second invoice beside it; pay that one, or ClearSky voids it */
-  var stillOpen = rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'cancelled' && D.issued(r) && r.cycle && r.cycle.start === cycle.start && r.id !== 'change-' + id && (r.add || []).some(function (k) { return add.indexOf(k) >= 0; }); });
+  var stillOpen = rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'cancelled' && !dead(r) && D.issued(r) && r.cycle && r.cycle.start === cycle.start && r.id !== 'change-' + id && (r.add || []).some(function (k) { return add.indexOf(k) >= 0; }); });
   if (blocked.canApply && stillOpen.length) blocked = { canApply: false, reason: 'Your cancelled request for ' + names(stillOpen[0].add).join(', ') + ' still has an open ' + D.name(D.recordProvider(stillOpen[0])) + ' invoice' + (stillOpen[0].paymentLink ? ' (' + stillOpen[0].paymentLink + ')' : '') + '. Pay that invoice to switch it on, or ask ClearSky to void it and request again.' };
   return { orgId: c.root.id, previewId: id, effectiveAt: now, add: add, addNames: names(add), modules: target, plan: after.plan, planBefore: before.plan, planDisplay: after.display.plan,
     before: { plan: before.plan, monthlyCents: before.monthlyCents, display: before.display.monthly },
@@ -156,6 +159,7 @@ async function apply(db, orgId, input, caller, now, deps) {
   if (done.exists && done.data().state === 'done') {
     if (done.data().requestFingerprint !== fingerprint) fail('A change id cannot be reused with different inputs');
     var mine = current.collection('invoices').doc('change-' + input.previewId), had = await mine.get();
+    if (had.exists && dead(had.data())) fail('Your package changed; review the current quote before subscribing');
     if (had.exists && had.data().state === 'cancelled') return revive(db, c, mine, input, done.data().result, caller, now);
     return done.data().result;
   }
@@ -221,7 +225,7 @@ async function revive(db, c, ref, input, result, caller, now) {
   return db.runTransaction(async function (tx) {
     var snap = await tx.get(ref), live = await tx.get(current), invoices = await tx.get(current.collection('invoices').orderBy('date')), fresh = live.data() || {};
     var rows = invoices.docs.map(function (d) { return d.data(); }), r = snap.data();
-    if (!r || r.state !== 'cancelled') fail('Your package changed; review the current quote before subscribing');
+    if (!r || r.state !== 'cancelled' || dead(r)) fail('Your package changed; review the current quote before subscribing');
     /* still the same request, still allowed: nothing else is waiting, the cycle and the price are unchanged */
     var again = quote(Object.assign({}, c, { billing: fresh }), rows, input, now);
     if (again.previewId !== input.previewId) fail('Your package changed; review the current quote before subscribing');
@@ -235,20 +239,27 @@ async function revive(db, c, ref, input, result, caller, now) {
     return Object.assign({}, result, { state: 'awaiting_payment', paymentLink: r.paymentLink || result.paymentLink || null, reopened: true });
   });
 }
-async function cancel(db, orgId, changeId, caller, now) {
+async function cancel(db, orgId, changeId, caller, now, deps) {
   var c = await S.context(db, orgId);
   if (typeof changeId !== 'string' || !/^change-[a-f0-9]{48}$/.test(changeId)) fail('Invalid change id', 400);
   var current = c.root.collection('billing').doc('current'), ref = current.collection('invoices').doc(changeId);
+  /* on Stripe the invoice is voided first, so it cannot be paid after the
+     tenant said no (a paid one is refused: it is switching on). QuickBooks'
+     stays open until staff void it, as before. */
+  var before = await ref.get(), voided = false;
+  if (before.exists && S.kindOf(before.data()) === 'change' && before.data().state === 'unpaid' && D.recordProvider(before.data()) === 'stripe') {
+    await D.driver(c.book, 'stripe', deps).voidOpen(before.data()); voided = true;
+  }
   return db.runTransaction(async function (tx) {
     // Every read before any write, as Firestore transactions require.
     var snap = await tx.get(ref), live = await tx.get(current), invoices = await tx.get(current.collection('invoices').orderBy('date')), fresh = live.data() || {};
     if (!snap.exists || S.kindOf(snap.data()) !== 'change') fail('No such change', 404);
     var r = snap.data(); if (r.state !== 'unpaid') fail('Only a change waiting for payment can be cancelled');
-    tx.update(ref, { state: 'cancelled', cancelledAt: now, cancelledBy: caller.email });
+    tx.update(ref, Object.assign({ state: 'cancelled', cancelledAt: now, cancelledBy: caller.email }, voided ? { voided: true, paymentLink: null } : {}));
     var all = invoices.docs.map(function (d) { return d.id === changeId ? Object.assign({}, d.data(), { state: 'cancelled' }) : d.data(); });
     tx.update(current, S.displayAfter(S.accessAfterInvoices(fresh, all, c.book, now), fresh, c.book, now));
     var event = { at: now, by: caller.email, action: 'change-cancelled', changeId: changeId, invoiceId: D.invoiceId(r),
-      was: { state: r.state }, changed: { state: 'cancelled', note: 'The ' + D.name(D.recordProvider(r)) + ' invoice stays open until staff void it; a payment after this is flagged for review.' } };
+      was: { state: r.state }, changed: { state: 'cancelled', note: voided ? 'Its Stripe invoice was voided, so it cannot be paid.' : 'The ' + D.name(D.recordProvider(r)) + ' invoice stays open until staff void it; a payment after this is flagged for review.' } };
     tx.set(current.collection('history').doc(changeId + '-cancel'), event); tx.set(c.root.collection('admin_audit').doc(changeId + '-cancel'), event);
     return { ok: true, changeId: changeId, state: 'cancelled' };
   });
@@ -390,7 +401,10 @@ async function packBuy(db, orgId, input, caller, now, deps) {
     lines: [{ itemKey: 'pack:' + q.meter, name: 'OMEGA \u00b7 ' + q.name + ' \u00d7' + q.units, quantity: 1, amountCents: q.cents }], subtotalCents: q.cents, totalCents: q.cents,
     pricebookVersion: c.book.version, marker: 'OMEGA pack ' + orgId + ' / ' + iso(now) + ' / ' + q.previewId.slice(0, 12) + ' / ' + at, by: caller.email, createdAt: now };
   await db.runTransaction(async function (tx) {
-    var old = await tx.get(op); if (old.exists) fail('This pack purchase is already being processed; retry shortly');
+    /* the same offer asked again after it failed resumes it: the same marker,
+       so the provider hands back the invoice it already made, never a second */
+    var old = await tx.get(op), o = old.exists ? old.data() : null;
+    if (o && o.state !== 'retry' && !(o.state === 'running' && o.at < now - 120000)) fail('This pack purchase is already being processed; retry shortly');
     tx.set(op, { state: 'running', at: now, by: caller.email });
   });
   try {

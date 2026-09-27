@@ -213,6 +213,18 @@ async function engineChecks() {
   ok('...and Omega Grid is not on until it is paid', db.data.get(root + '/billing/current').modules.indexOf('gridatlas') < 0);
   stripe.pay(changeRec.stripeInvoiceId); await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
   ok('paid: Omega Grid joins the subscription and is on', db.data.get(root + '/billing/current').modules.indexOf('gridatlas') >= 0 && db.data.get(root + '/billing/current').subscription.modules.indexOf('gridatlas') >= 0);
+  var q2 = await C.preview(db, orgId, { add: ['estimate'] }, dueAt + 3000);
+  var ch2 = await C.apply(db, orgId, { add: ['estimate'], previewId: q2.previewId, effectiveAt: dueAt + 3000 }, CALLER, dueAt + 3000, deps), rec2 = db.data.get(root + '/billing/current/invoices/' + ch2.changeId);
+  await C.cancel(db, orgId, ch2.changeId, CALLER, dueAt + 4000, deps);
+  var cancelled2 = db.data.get(root + '/billing/current/invoices/' + ch2.changeId);
+  ok('a cancelled Stripe change is voided at Stripe: it cannot be paid after the tenant said no', stripe.invoices_[rec2.stripeInvoiceId].status === 'void' && cancelled2.state === 'cancelled' && cancelled2.voided === true && cancelled2.paymentLink === null, cancelled2);
+  var q3 = await C.preview(db, orgId, { add: ['estimate'] }, dueAt + 5000);
+  ok('asked again, it is a new change with its own invoice (a voided one is never revived)', q3.canApply === true && q3.previewId !== q2.previewId, q3);
+  var ch3 = await C.apply(db, orgId, { add: ['estimate'], previewId: q3.previewId, effectiveAt: dueAt + 5000 }, CALLER, dueAt + 5000, deps), rec3 = db.data.get(root + '/billing/current/invoices/' + ch3.changeId);
+  stripe.pay(rec3.stripeInvoiceId);
+  await refused('a change already paid at Stripe cannot be cancelled: it is switching on', function () { return C.cancel(db, orgId, ch3.changeId, CALLER, dueAt + 6000, deps); }, /already paid/);
+  ok('...and stays waiting for the reconcile that switches it on', db.data.get(root + '/billing/current/invoices/' + ch3.changeId).state === 'unpaid');
+  await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
   stripe.refund(first.stripeInvoiceId, 10000); await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
   var firstNow = db.data.get(invoices[0]);
   ok('a goodwill refund on a paid cycle: still paid, the workspace stays open, and a person is told once', firstNow.state === 'paid' && firstNow.reviewRequired === true && db.data.get(root + '/billing/current').packagingState === 'paid'
