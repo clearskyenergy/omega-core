@@ -53,7 +53,7 @@ async function run() {
   auth.currentUser = { uid:'designer', email:'designer@fixture.example' };
   M.configure({ orgId:function () { return ''; } }); M.create();
   check(db.data.size === before && /workspace/.test(alerts.pop()), 'missing tenant cannot create');
-  ['index.html','projects.html'].forEach(function (file) {
+  ['index.html','projects.html','workspace.html'].forEach(function (file) {
     var html = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
     check(/src="\/omega-newproject\.js"/.test(html) && /OmegaNewProject\.configure/.test(html), file + ' uses the shared creator');
   });
