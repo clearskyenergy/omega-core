@@ -55,7 +55,7 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     assert.equal(o.source, 'seeded'); assert.equal(o.floorDisplay, '$500/month'); assert.equal(o.lite.monthlyDisplay, '$500/month');
     assert.deepEqual(o.plans.map(function (p) { return p.name + ' ' + p.monthlyDisplay; }), ['Field $1,299/month', 'Pro $2,499/month']);
     assert.ok(o.modules.length >= 19 && o.modules.every(function (m) { return /^\$[\d,]+\/month$/.test(m.monthlyDisplay) && Array.isArray(m.features); }));
-    assert.ok(o.starters.ev && o.starterLabels.ev); assert.equal(o.trial.days, 14); assert.equal(o.annual.paidMonths, 10); assert.equal(o.annual.freeMonths, 2); assert.match(o.annual.note, /2 months free/); assert.equal(o.signup.packaged, true); assert.equal(o.signup.payNow, true); assert.equal(o.signup.start, '/start.html');
+    assert.ok(o.starters.ev && o.starterLabels.ev); assert.equal(o.trial.days, 14); assert.equal(o.annual.paidMonths, 10); assert.equal(o.annual.freeMonths, 2); assert.match(o.annual.note, /2 months free/); assert.equal(o.signup.packaged, true); assert.equal(o.signup.payNow, true); assert.equal(o.signup.start, '/start.html'); assert.equal(o.signup.payWith, process.env.PACKAGING_PROVIDER === 'stripe' ? 'Stripe' : 'QuickBooks');
     var text = JSON.stringify(o); assert.ok(!/realmId|items|qbo|token|secret/.test(text), 'no realm, item ids or secrets in the public list');
     db = new DB(); var p = await offerings({ method: 'GET' }, RES); assert.equal(p.source, 'proposed', 'unseeded: the repo\'s proposed book, and it says so');
     await refused(offerings({ method: 'POST' }, RES), 405);
