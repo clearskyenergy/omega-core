@@ -22,12 +22,24 @@
  *     System) are not on Draw, shown and runnable, on every plan;
  *   - Search tools (Ctrl+K) or Ask Jarvis lists or runs a command on a tab
  *     the plan hides, or Jarvis is told of or opens such a tab. They run a
- *     command by clicking it, so they reached what the ribbon did not show.
+ *     command by clicking it, so they reached what the ribbon did not show;
+ *   - a tab the plan opens nothing on is not an Opt in (Tommy, 2026-09-27:
+ *     "it shouldn't be blank on the panel. It should say opt in"): in the
+ *     strip and the phone's tab menu alike it names the modules whose
+ *     commands sit on it, opening it shows them with Opt in and never a
+ *     command, and a shut tab with nothing for sale is in neither;
+ *   - a module bought as an add-on (the server's legacy answer, served here
+ *     from package-access.legacy()) does not open exactly its own commands:
+ *     Core with Omega Compute gets Compute's commands, and Intel's and
+ *     Engineer's on the same tab stay shut, in the ribbon and by name;
+ *   - on a 390px phone, Compute from the tab menu is not the Opt in with
+ *     its button on screen, or Opt in does not reach plan-change's
+ *     addon-quote (and a member is told who to ask).
  * `node scripts/render-legacy-gates.js --print` prints the table to paste.
  */
 'use strict';
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
-var M = require('../api/_lib/modules');
+var M = require('../api/_lib/modules'), X = require('../api/_lib/package-access'), P = require('../api/_lib/subscription-pricing'), BOOK = require('../api/_lib/pricebook').proposed();
 var ROOT = path.join(__dirname, '..');
 var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium;
 var PRINT = process.argv.indexOf('--print') >= 0;
@@ -39,10 +51,12 @@ var server = http.createServer(function (req, res) {
 });
 /* A legacy tenant: billing/current has a tier and no `packaged`. */
 function fixture(plan) {
-  var tier = plan.tier, addons = plan.addons;
+  var tier = plan.tier;
+  /* the billing record, mutable so a scenario can record a payment */
+  window.__fixtureBilling = plan;
   var user = { uid: 'legacy-user', email: 'designer@legacy.example', emailVerified: true, displayName: 'Legacy Designer', getIdToken: function () { return Promise.resolve('offline-fixture'); } };
   function snapshot(p) {
-    var data = /billing\/current$/.test(p) ? { tier: tier, addons: addons } :
+    var data = /billing\/current$/.test(p) ? window.__fixtureBilling :
       /^omega_orgs\/[^/]+$/.test(p) ? { name: 'Legacy preview', status: 'active', domains: [location.hostname] } :
       /members\//.test(p) ? { role: 'owner', status: 'active' } : null;
     return { exists: !!data, id: p.split('/').pop(), data: function () { return data; }, docs: [], empty: true, forEach: function () {} };
@@ -79,7 +93,8 @@ function survey(catalogIds) {
     var chain = [], n = el, page = el.closest('.ribbon-page');
     for (; n && n.getAttribute; n = n.parentElement) { var c = n.getAttribute('data-cap'); if (c) chain.unshift(c); }
     out.push({ id: el.id || '', onclick: el.getAttribute('onclick') || '', gate: chain.join('+'),
-      page: page ? page.getAttribute('data-page') : '', blocked: !!el.closest('[data-cap-blocked]'), fly: el.classList.contains('rb-fly-item') });
+      page: page ? page.getAttribute('data-page') : '', blocked: !!el.closest('[data-cap-blocked]'), fly: el.classList.contains('rb-fly-item'),
+      open: OmegaCaps.allowedElement(el), addonHidden: el.hasAttribute('data-addon-hidden') });
   }
   var nodes = document.querySelectorAll('#ribbon .rbtn,#ribbon .rsbtn,.rb-fly-item,#app-menu .menu-item');
   for (var i = 0; i < nodes.length; i++) take(nodes[i]);
@@ -95,15 +110,43 @@ function owners(id, handler) {
   var exact = id ? OWNERS.filter(function (m) { return m.ribbon.indexOf('#' + id) >= 0; }) : [];
   return (exact.length ? exact.map(function (m) { return m.key; }) : M.owners('', handler));
 }
-async function boot(browser, base, tier, addons) {
-  var context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await context.addInitScript(fixture, { tier: tier, addons: addons || [] });
-  await context.route('**/*', function (route) {
-    var url = new URL(route.request().url());
+/* The server's answers the editor asks for, and nothing that produces: the
+   legacy answer (the add-ons on and the catalog, package-access.legacy()),
+   the public price list, and the billing summary and the add-on quote
+   (plan-change); every producer is offline. `api` records what was posted. */
+var PAY_URL = 'https://connect.intuit.com/portal/app/CommerceNetwork/view/render-legacy-gates';
+function answer(route, status, body) { return route.fulfill({ status: status, contentType: 'application/json', body: JSON.stringify(body) }); }
+function serve(context, base, billing, api) {
+  return context.route('**/*', function (route) {
+    var url = new URL(route.request().url()), req = route.request();
     if (url.origin !== base) return route.fulfill({ status: 200, body: '' });
-    if (url.pathname.indexOf('/api/') === 0) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Offline producer"}' });
+    if (url.pathname === '/api/package-access') return answer(route, 200, X.legacy(billing, Date.now()));
+    if (url.pathname === '/api/offerings') return answer(route, 200, { modules: P.catalog(BOOK) });
+    if (url.pathname === '/api/plan-change' && req.method() === 'GET') return answer(route, 200, { orgId: 'legacy.example', packaged: false, canManage: api.canManage, addOns: null, pending: [] });
+    if (url.pathname === '/api/plan-change') {
+      var body = JSON.parse(req.postData() || '{}'); api.posts.push(body);
+      /* the purchase: an invoice waiting on QuickBooks' page; "I've paid" finds it paid once the scenario says so */
+      if (body.action === 'addon-buy') return answer(route, 200, { ok: true, addOnId: 'addon-' + new Array(49).join('a'), state: 'awaiting_payment', add: body.add, addNames: body.add.map(function (k) { return M.get(k).name; }),
+        todayCents: 50000, display: '$500.00', paymentLink: PAY_URL, payLinkMissing: false, expiresOn: '2026-10-26', live: [] });
+      if (body.action === 'reconcile-now') return answer(route, 200, { orgId: 'legacy.example', packaged: false, checkedAt: Date.now(), addOns: { live: api.paid ? billing.addOns.live.slice() : [], pending: [] } });
+      if (body.action !== 'addon-quote') return answer(route, 503, { error: 'Offline producer' });
+      return answer(route, 200, { orgId: 'legacy.example', previewId: new Array(49).join('a'), effectiveAt: Date.now(), add: body.add, addNames: body.add.map(function (k) { return M.get(k).name; }),
+        canBuy: true, request: false, included: false, needsProfile: false, todayCents: 50000, display: { amount: '$500.00', today: '$500.00 today, for 2026-09-27 to 2026-10-26',
+          then: 'then $500/month on the 27th, on its own invoice beside your plan', activation: 'Pay by card on QuickBooks\' secure page. It switches on the moment the payment clears.', plan: 'Your plan and its billing stay exactly as they are.' } });
+    }
+    if (url.pathname.indexOf('/api/') === 0) return answer(route, 503, { error: 'Offline producer' });
     return route.continue();
   });
+}
+function billingOf(tier, addons, live) {
+  var b = { tier: tier, addons: addons || [] };
+  if (live) b.addOns = { modules: live, live: live, accessUntil: Date.now() + 20 * 86400000 };
+  return b;
+}
+async function boot(browser, base, tier, addons, live) {
+  var context = await browser.newContext({ viewport: { width: 1440, height: 900 } }), billing = billingOf(tier, addons, live);
+  await context.addInitScript(fixture, billing);
+  await serve(context, base, billing, { canManage: true, posts: [] });
   var page = await context.newPage(), errors = [];
   page.on('pageerror', function (e) { errors.push(e.message); });
   await page.goto(base + '/editor.html', { waitUntil: 'domcontentloaded' });
@@ -132,7 +175,7 @@ async function boot(browser, base, tier, addons) {
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i], name = label(el);
       if (!name || el.hasAttribute('data-omega-retired') || el.hasAttribute('data-packaging-retired')) continue;
-      (el.closest('[data-cap-blocked]') ? hidden : open).push(name);
+      (el.closest('[data-cap-blocked]') || el.hasAttribute('data-addon-hidden') ? hidden : open).push(name);
     }
     var listed = OmegaCommands.list().map(function (c) { return c.name; });
     var leaked = hidden.filter(function (n, k) { return hidden.indexOf(n) === k && open.indexOf(n) < 0 && listed.indexOf(n) >= 0; });
@@ -162,6 +205,30 @@ async function boot(browser, base, tier, addons) {
       return { opened: opened, active: active ? active.getAttribute('data-page') : null };
     }, tab);
   }
+  /* Opt in where the plan stops: every tab the plan opens nothing on, in
+     Pro (Designer curates tabs of its own), opened one by one */
+  rows.optin = await page.evaluate(async function () {
+    if (window.OmegaMode) OmegaMode.set('pro');
+    var out = { tabs: [], shut: [] }, tabs = document.querySelectorAll('#ribbon-tabs .rtab[data-page]');
+    /* the panel follows the tab by an observer: a microtask, before the next paint */
+    function settle() { return new Promise(function (r) { setTimeout(r, 30); }); }
+    for (var i = 0; i < tabs.length; i++) {
+      var t = tabs[i], key = t.getAttribute('data-page'); if (key === '__file') continue;
+      var menu = document.querySelector('#ribbon-tab-menu [onclick="rbHamburgerPick(\'' + key + '\')"]');
+      if (!t.hasAttribute('data-cap-blocked')) { if (t.hasAttribute('data-optin') || (menu && (menu.hasAttribute('data-optin') || menu.hasAttribute('data-tab-shut')))) out.shut.push('open tab marked: ' + key); continue; }
+      window.rbTab(key); await settle();
+      var panel = document.getElementById('omega-optin'), pg = document.querySelector('#ribbon .ribbon-page[data-page="' + key + '"]');
+      out.tabs.push({ page: key, optin: t.getAttribute('data-optin'), menu: menu ? menu.getAttribute('data-optin') : 'missing', menuShut: !!(menu && menu.hasAttribute('data-tab-shut')),
+        shown: getComputedStyle(t).display !== 'none', panel: !!(panel && panel.offsetParent), label: panel ? (panel.querySelector('.oin-lead b') || {}).textContent : null,
+        offered: panel ? Array.prototype.map.call(panel.querySelectorAll('[data-optin-module]'), function (m) { return m.getAttribute('data-optin-module'); }) : [],
+        buttons: panel ? panel.querySelectorAll('[data-optin-module] .oin-go').length : 0, primary: pg.getAttribute('data-module'),
+        commands: Array.prototype.filter.call(pg.querySelectorAll('.rbtn,.rsbtn'), function (b) { return !!b.offsetParent; }).length, open: OmegaCaps.tabOpen(key) });
+    }
+    window.rbTab('home'); await settle();
+    var after = document.getElementById('omega-optin');
+    out.closed = !after || !after.offsetParent;
+    return out;
+  });
   /* Omega Design's drawing tools live on Draw on every plan, where a
      package puts them, not on the Compute tab a legacy tier below
      Enterprise hides. Draw is a Pro tab, so Pro is where they are seen. */
@@ -180,6 +247,72 @@ async function boot(browser, base, tier, addons) {
   rows.shownBlockedTabs = shownBlockedTabs;
   return { rows: rows, errors: errors };
 }
+/* The screenshot's case: a Core plan on a 390px phone picks Compute from the
+   tab menu. It must say Opt in with its button on screen, and Opt in must
+   reach plan-change's addon-quote (a member is told who to ask). */
+async function phone(browser, base) {
+  var context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  var billing = billingOf('standard'), api = { canManage: true, posts: [] }, out = { errors: [] };
+  await context.addInitScript(fixture, billing);
+  await serve(context, base, billing, api);
+  var page = await context.newPage();
+  page.on('pageerror', function (e) { out.errors.push(e.message); });
+  await page.goto(base + '/editor.html', { waitUntil: 'domcontentloaded' });
+  await page.evaluate(function () { firebase.auth().currentUser = window.__fixtureUser; window.__fixtureListeners.forEach(function (fn) { fn(window.__fixtureUser); }); });
+  await page.waitForFunction(function () { return window.OmegaCaps && document.body.getAttribute('data-tier') === 'standard' && OmegaCaps.legacyView(); });
+  await page.waitForTimeout(4000);
+  await page.evaluate(function () { if (window.OmegaMode) OmegaMode.set('pro'); OmegaCaps.apply(OmegaCaps.tier()); });
+  await page.click('#ribbon-hamburger');
+  out.menu = await page.evaluate(function () {
+    var item = document.querySelector('#ribbon-tab-menu .rtm-item[onclick*="\'compute\'"]');
+    return { shown: !!(item && item.offsetParent), optin: item && item.getAttribute('data-optin'), says: item && getComputedStyle(item, '::after').content };
+  });
+  await page.click('#ribbon-tab-menu .rtm-item[onclick*="\'compute\'"]');
+  await page.waitForTimeout(300);
+  out.panel = await page.evaluate(function () {
+    var p = document.getElementById('omega-optin'), go = p && p.querySelector('[data-optin-module="compute"] .oin-go'), r = go && go.getBoundingClientRect(), first = p && p.querySelector('[data-optin-module]');
+    var lead = p && p.querySelector('.oin-lead b'), lr = lead && lead.getBoundingClientRect();
+    return { label: document.getElementById('ribbon-hamburger-lbl').textContent, shown: !!(p && p.offsetParent), first: first ? first.getAttribute('data-optin-module') : null,
+      inView: !!r && r.width > 0 && r.left >= 0 && r.right <= window.innerWidth, leadInView: !!lr && lr.width > 0 && lr.left >= 0 && lr.right <= window.innerWidth,
+      said: lead ? lead.textContent : null, text: p ? p.textContent : '' };
+  });
+  await page.click('#omega-optin [data-optin-module="compute"] .oin-go');
+  await page.waitForSelector('#omega-package-menu [data-addon="compute"] button');
+  out.dialog = await page.evaluate(function () { return { title: document.getElementById('opm-title').textContent, button: document.querySelector('#omega-package-menu [data-addon="compute"] button').textContent }; });
+  await page.click('#omega-package-menu [data-addon="compute"] button');
+  await page.waitForSelector('#omega-package-menu [data-addon="compute"] .opm-quote');
+  out.quote = await page.evaluate(function () { var b = document.querySelector('#omega-package-menu [data-addon="compute"] .opm-row .opm-primary'); return b ? b.textContent : null; });
+  api.canManage = false;
+  await page.evaluate(function () { OmegaPackageMenu.close(); });
+  await page.click('#omega-optin [data-optin-module="compute"] .oin-go');
+  await page.waitForSelector('#omega-package-menu [data-addon="compute"] .opm-note');
+  out.member = await page.evaluate(function () { return document.querySelector('#omega-package-menu [data-addon="compute"]').textContent; });
+  out.posted = api.posts.slice();
+  /* the owner buys it: Pay opens QuickBooks' page, "I've paid" finds it paid,
+     the plan is read again and the Compute tab opens with Compute's commands */
+  api.canManage = true;
+  await page.evaluate(function () { OmegaPackageMenu.close(); });
+  await page.click('#omega-optin [data-optin-module="compute"] .oin-go');
+  await page.locator('#omega-package-menu [data-addon="compute"] button', { hasText: 'Add to plan' }).click();
+  await page.locator('#omega-package-menu [data-addon="compute"] button', { hasText: 'Pay $500.00 now' }).click();
+  await page.locator('#omega-package-menu [data-addon="compute"] button', { hasText: "I've paid" }).waitFor();
+  out.waiting = await page.evaluate(function () { var h = document.querySelector('#omega-package-menu [data-addon="compute"]'), a = h.querySelector('a.opm-paylink'); return { text: h.textContent, pay: a ? a.getAttribute('href') : null }; });
+  var live = { modules: ['compute'], live: ['compute'], accessUntil: Date.now() + 20 * 86400000 };
+  billing.addOns = live; api.paid = true;
+  await page.evaluate(function (a) { window.__fixtureBilling.addOns = a; }, live);
+  await page.locator('#omega-package-menu [data-addon="compute"] button', { hasText: "I've paid" }).click();
+  await page.waitForFunction(function () { return OmegaCaps.addOnsOn().indexOf('compute') >= 0 && !document.getElementById('omega-package-menu'); }, null, { timeout: 15000 });
+  await page.waitForTimeout(400);
+  out.after = await page.evaluate(function () {
+    var pg = document.querySelector('#ribbon .ribbon-page[data-page="compute"]'), p = document.getElementById('omega-optin'), t = document.getElementById('omega-plan-toast');
+    return { label: document.getElementById('ribbon-hamburger-lbl').textContent, shown: Array.prototype.filter.call(pg.querySelectorAll('.rbtn'), function (b) { return !!b.offsetParent && OmegaCaps.allowedElement(b); }).length,
+      offer: !!(p && p.offsetParent), menu: document.querySelector('#ribbon-tab-menu .rtm-item[onclick*="\'compute\'"]').getAttribute('data-optin'), toast: t ? t.textContent : null, open: OmegaCaps.tabOpen('compute') };
+  });
+  out.actions = api.posts.map(function (b) { return b.action; });
+  await context.close();
+  return out;
+}
+function sameSet(a, b) { return a.slice().sort().join() === b.slice().sort().join(); }
 async function run() {
   await new Promise(function (resolve) { server.listen(0, '127.0.0.1', resolve); });
   var base = 'http://127.0.0.1:' + server.address().port;
@@ -190,6 +323,9 @@ async function run() {
     for (var t = 0; t < tiers.length; t++) seen[tiers[t]] = await boot(browser, base, tiers[t]);
     /* a Core plan with the Compute add-on: parcelscreen without engineering, compute without enterprise */
     var ADDON = 'standard+compute'; seen[ADDON] = await boot(browser, base, 'standard', ['compute']);
+    /* a Core plan that BOUGHT Omega Compute (Add to plan): live in the server's legacy answer, no key on the record */
+    var BOUGHT = 'standard, Omega Compute bought'; seen[BOUGHT] = await boot(browser, base, 'standard', [], ['compute']);
+    var onPhone = await phone(browser, base);
     var full = seen.enterprise;
     ok(!full.errors.length, 'no editor errors on a legacy boot: ' + full.errors.join('; '));
     /* the gates each module's commands sit behind, from the fullest ribbon */
@@ -226,7 +362,19 @@ async function run() {
       ok(!wrong.length, tier + ': every module command is open exactly when its gate says so' + (wrong.length ? ': ' + wrong.slice(0, 8).join('; ') : ''));
       var missing = full.rows.filter(function (r) { return r.gate === '' && owners(r.id, r.onclick).length && !seen[tier].rows.some(function (x) { return x.id === r.id && x.onclick === r.onclick; }); });
       ok(!missing.length, tier + ': no ungated command is missing from this tier\'s editor' + (missing.length ? ': ' + missing.slice(0, 8).map(function (r) { return r.id || r.onclick.slice(0, 40); }).join('; ') : ''));
-      ok(!seen[tier].rows.shownBlockedTabs.length, tier + ': a tab its plan does not open is not shown: ' + seen[tier].rows.shownBlockedTabs.join(', '));
+      /* Opt in where the plan stops (Tommy, 2026-09-27): shown only as that */
+      ok(!seen[tier].rows.shownBlockedTabs.filter(function (k) { return !seen[tier].rows.optin.tabs.some(function (t) { return t.page === k && t.optin !== null; }); }).length,
+         tier + ': a tab its plan does not open is shown only as an Opt in: ' + seen[tier].rows.shownBlockedTabs.join(', '));
+      ok(!seen[tier].rows.optin.shut.length, tier + ': a tab the plan opens carries no Opt in: ' + seen[tier].rows.optin.shut.join('; '));
+      seen[tier].rows.optin.tabs.forEach(function (t) {
+        var want = []; full.rows.forEach(function (r) { if (r.page === t.page) owners(r.id, r.onclick).forEach(function (k) { if (k !== 'lite' && M.get(k) && want.indexOf(k) < 0) want.push(k); }); });
+        ok(t.shown && t.optin !== null && t.optin === t.menu && !t.menuShut, tier + ': ' + t.page + ' is an Opt in in the strip and the phone\'s tab menu alike: ' + JSON.stringify(t));
+        ok(sameSet(t.offered, want) && t.optin === t.offered.join(' ') && (!t.primary || t.offered[0] === t.primary),
+           tier + ': ' + t.page + ' offers every module whose commands sit on it, its own first: ' + t.offered.join(',') + ' / ' + want.join(','));
+        ok(t.panel && t.label === t.page.charAt(0).toUpperCase() + t.page.slice(1) + ' is not on your plan' && t.buttons === t.offered.length && t.commands === 0 && !t.open,
+           tier + ': opening ' + t.page + ' shows Opt in for each, never one of its commands, and Jarvis still may not open it: ' + JSON.stringify(t));
+      });
+      ok(seen[tier].rows.optin.closed, tier + ': leaving an Opt in tab puts the ribbon back');
       /* run by name: Search tools (Ctrl+K) and Ask Jarvis */
       var b = seen[tier].rows.byName, ran = seen[tier].rows.ran, jt = seen[tier].rows.jarvisTab;
       ok(b.listed > 0 && !b.leaked.length, tier + ': Search tools lists nothing from a tab the plan hides (' + b.named + ' hidden)' + (b.leaked.length ? ': ' + b.leaked.slice(0, 8).join('; ') : ''));
@@ -244,7 +392,37 @@ async function run() {
            tier + ': Jarvis ' + (open ? 'opens' : 'refuses to open') + ' the ' + tab + ' tab (and leaves the ribbon where it was): ' + JSON.stringify(jt[tab]));
       });
     });
-    console.log('Legacy editor gates: ' + count + ' checks; ' + tiers.length + ' legacy tiers and Core with the Compute add-on booted in the full editor, offline.');
+    /* Core that bought Omega Compute: exactly its commands, nothing of Intel's or Engineer's on its tab */
+    var bought = seen[BOUGHT];
+    ok(!bought.errors.length, 'no editor errors with an add-on: ' + bought.errors.join('; '));
+    var mine = bought.rows.filter(function (r) { return r.page === 'compute' && owners(r.id, r.onclick).indexOf('compute') >= 0; });
+    var theirs = bought.rows.filter(function (r) { var own = owners(r.id, r.onclick); return r.page === 'compute' && own.length && own.indexOf('compute') < 0; });
+    ok(mine.length >= 10 && mine.every(function (r) { return r.open && !r.addonHidden; }), BOUGHT + ': every Omega Compute command on its tab is open (' + mine.length + ')');
+    ok(theirs.length >= 4 && theirs.every(function (r) { return !r.open && r.addonHidden; }), BOUGHT + ': Intel\'s and Engineer\'s commands on the same tab stay shut: ' + theirs.map(function (r) { return r.id + ':' + r.open; }).join(', '));
+    var drift = bought.rows.filter(function (r) {
+      var own = owners(r.id, r.onclick); if (!own.some(function (k) { return gates[k]; })) return false;
+      var predicted = own.indexOf('compute') >= 0 || !r.gate || r.gate.split('+').every(function (g) { return C.canWith('standard', g, {}); });
+      return predicted !== r.open;
+    });
+    ok(!drift.length, BOUGHT + ': every module command is open exactly when it is Compute\'s or the tier opens it' + (drift.length ? ': ' + drift.slice(0, 8).map(function (r) { return r.id || r.onclick.slice(0, 40); }).join('; ') : ''));
+    ok(!C.canWith('standard', 'compute', {}) && bought.rows.byName.jarvisTabs.indexOf('compute') >= 0 && bought.rows.jarvisTab.compute.opened === true, BOUGHT + ': Jarvis may open the Compute tab now; the tier is still Core');
+    ok(bought.rows.ran['rb-compute-cost'] === true && bought.rows.ran['rb-valuestack'] === false, BOUGHT + ': by name, Compute Cost runs and Value Stack (Storage, on Analyze) does not');
+    ok(!bought.rows.byName.leaked.length, BOUGHT + ': Search tools lists nothing that stays shut: ' + bought.rows.byName.leaked.join('; '));
+    ok(bought.rows.optin.tabs.map(function (t) { return t.page; }).sort().join() === 'analyze,estimate', BOUGHT + ': Analyze and Estimate are still Opt in, Compute is not: ' + JSON.stringify(bought.rows.optin.tabs.map(function (t) { return t.page; })));
+    /* the phone: Compute from the tab menu says Opt in, and Opt in is the purchase */
+    ok(!onPhone.errors.length, 'no editor errors on a phone: ' + onPhone.errors.join('; '));
+    ok(onPhone.menu.shown && /^compute\b/.test(onPhone.menu.optin || '') && onPhone.menu.says === '"Opt in"', 'phone: the tab menu lists Compute as an Opt in: ' + JSON.stringify(onPhone.menu));
+    ok(onPhone.panel.label === 'Compute' && onPhone.panel.shown && onPhone.panel.first === 'compute' && onPhone.panel.inView && onPhone.panel.leadInView && onPhone.panel.said === 'Compute is not on your plan' && /Omega Compute/.test(onPhone.panel.text) && /\$[\d,]+\/month/.test(onPhone.panel.text),
+       'phone: picking it shows Omega Compute with its price and Opt in on screen, not an empty ribbon: ' + JSON.stringify(onPhone.panel));
+    ok(onPhone.dialog.title === 'Opt in: Omega Compute' && onPhone.dialog.button === 'Add to plan', 'phone: Opt in opens the purchase for that module: ' + JSON.stringify(onPhone.dialog));
+    ok(onPhone.quote === 'Pay $500.00 now' && onPhone.posted.some(function (b) { return b.action === 'addon-quote' && JSON.stringify(b.add) === '["compute"]'; }), 'phone: Add to plan asks plan-change for the server\'s price and offers to pay it: ' + onPhone.quote);
+    ok(/Ask your workspace owner or an administrator to add it\./.test(onPhone.member) && onPhone.posted.filter(function (b) { return b.action === 'addon-quote'; }).length === 1, 'phone: a member is told who to ask, and nothing is priced for them');
+    ok(/Waiting for payment · \$500\.00/.test(onPhone.waiting.text) && onPhone.waiting.pay === PAY_URL, 'phone: Pay issues the invoice and hands over QuickBooks\' page; it waits for the payment: ' + JSON.stringify(onPhone.waiting));
+    ok(onPhone.after.label === 'Compute' && onPhone.after.shown >= 5 && !onPhone.after.offer && onPhone.after.menu === null && onPhone.after.open,
+       'phone: paid, the plan is read again and the Compute tab opens with Omega Compute\'s commands, no Opt in left: ' + JSON.stringify(onPhone.after));
+    ok(/Omega Compute is on\. Find it on the Compute tab\./.test(onPhone.after.toast || ''), 'phone: and the editor says what switched on and where: ' + onPhone.after.toast);
+    ok(onPhone.actions.join() === 'addon-quote,addon-quote,addon-buy,reconcile-now', 'phone: quote, buy, then the payment check, and nothing else: ' + onPhone.actions.join());
+    console.log('Legacy editor gates: ' + count + ' checks; ' + tiers.length + ' legacy tiers, Core with the Compute key, Core with Omega Compute bought and a Core phone booted in the full editor, offline.');
   } finally { await browser.close(); server.close(); }
 }
 run().catch(function (e) { console.error(e); server.close(); process.exitCode = 1; });

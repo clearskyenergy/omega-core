@@ -161,6 +161,8 @@ var DBREF = { db: null }, CALLER = { staff: false, uid: 'uid-owner', email: 'own
 F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, authenticate: async function () { return CALLER; }, db: function () { return DBREF.db; },
   safeOrg: function (x) { return /^[a-z0-9.-]+\.[a-z]+$/.test(x || '') ? x : null; }, orgOf: function (x) { return x.split('@')[1]; },
   isTenantAdmin: async function (c, o) { return c.staff || c.orgId === o && c.role === 'owner'; },
+  /* the real rule (admin.js): staff, or an owner/admin of a workspace whose record is active */
+  clientAdmin: async function (c, o) { if (c.staff) return true; if (!(c.orgId === o && c.role === 'owner')) return false; var r = await DBREF.db.doc('omega_orgs/' + o).get(); return r.exists && r.data().status === 'active'; },
   billingOf: async function (o) { var r = await DBREF.db.doc('omega_orgs/' + o + '/billing/current').get(); return r.exists ? r.data() : {}; },
   httpError: function (status, message) { var e = new Error(message); e.status = status; return e; },
   FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; },
@@ -361,9 +363,15 @@ async function legacyEndpointChecks() {
   var invoicesApi = require('../api/stripe-invoices'), portalApi = require('../api/stripe-portal');
   function post(api, body) { return new Promise(function (resolve) { var res = { code: 200, setHeader: function () {}, status: function (c) { res.code = c; return res; }, json: function (b) { resolve({ code: res.code, body: b }); }, end: function () { resolve({ code: res.code }); } };
     Promise.resolve(api({ method: 'POST', body: body || {}, headers: {} }, res)).then(function (out) { if (out !== undefined) resolve({ code: 200, body: out }); }, function (e) { resolve({ code: e.status || 500, body: { error: e.message } }); }); }); }
-  var saved = CALLER.claims; CALLER.claims = {};
-  var r1 = await post(invoicesApi); ok('an unverified address at the domain gets no invoices', r1.code === 403 && /Verified email/.test(r1.body.error), r1);
-  var r2 = await post(portalApi); ok('...and no billing portal', r2.code === 403 && /Verified email/.test(r2.body.error), r2);
+  var saved = CALLER.claims, role = CALLER.role; CALLER.claims = {}; CALLER.role = 'member';
+  var r1 = await post(invoicesApi); ok('an unverified member at the domain gets no invoices', r1.code === 403 && /Verified email/.test(r1.body.error), r1);
+  var r2 = await post(portalApi); ok('...and no billing portal', r2.code === 403, r2);
+  /* an owner of an ACTIVE client needs no verified email (admin.clientAdmin, #200): a Team invitation leaves it unverified */
+  CALLER.role = 'owner';
+  var r1b = await post(invoicesApi); ok('an unverified owner of an active client reads its invoice list (#200)', r1b.code === 200, r1b);
+  db.data.get(root).status = 'pending';
+  var r2b = await post(portalApi); ok('...but not while the workspace is pending', r2b.code === 403 && /Verified email/.test(r2b.body.error), r2b);
+  db.data.get(root).status = 'active'; CALLER.role = role;
   CALLER.claims = { email_verified: true };
   var r3 = await post(invoicesApi); ok('a packaged workspace\'s invoices are Plan & billing\'s, never this list', r3.code === 200 && r3.body.connected === false && r3.body.invoices.length === 0, r3);
   CALLER.claims = saved;

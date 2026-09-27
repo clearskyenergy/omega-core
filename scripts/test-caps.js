@@ -149,6 +149,47 @@ ok(C.allowedElement(valueStack), 'a staff package preview is not narrowed by the
 C.setPackage(C.pendingPackage(true));
 ok(!C.allowedElement(valueStack) && !C.tabOpen('analyze'), 'the sign-in lock still refuses a gated command and tab');
 C.setPackage(null); C.apply('trial', empty);
+
+/* ── A LEGACY ADD-ON OPENS ITS OWN MODULE, EXACTLY ─────────────────────
+   Add to plan sells a module beside a legacy tier. A key would open the
+   whole tab (the Compute tab carries Intel's and Engineer's commands too),
+   so the editor opens the add-on's OWN commands, by the catalog's ribbon,
+   from the server's legacy answer (package-access.legacy()). */
+console.log('\nAdd-ons by module\n');
+var CAT = require('../api/_lib/modules');
+function el(kind, attrs, parent) {
+  var n = node(attrs, parent), kids = [];
+  n.kind = kind; n.kids = kids; n.id = (attrs && attrs.id) || ''; if (parent && parent.kids) parent.kids.push(n);
+  n.classList = { contains: function (c) { return (kind === 'page' && c === 'ribbon-page') || (kind === 'tab' && c === 'rtab'); } };
+  n.matches = function (sel) { return kind === 'tab' ? sel.indexOf('.rtab') >= 0 : kind === 'page' ? sel.indexOf('.ribbon-page') >= 0 : kind === 'command' ? sel.indexOf('.rbtn') >= 0 : false; };
+  n.querySelectorAll = function () { var out = []; (function walk(x) { x.kids.forEach(function (k) { if (k.kind === 'command') out.push(k); walk(k); }); })(n); return out; };
+  return n;
+}
+var cTab = el('tab', { 'data-page': 'compute', 'data-module': 'compute', 'data-cap': 'compute' }, tabRow);
+var cPage = el('page', { 'data-page': 'compute', 'data-module': 'compute', 'data-cap': 'compute' }, ribbon);
+var aPage = el('page', { 'data-page': 'analyze', 'data-cap': 'engineering' }, ribbon);
+var cGroup = el('group', {}, cPage);
+var cCost = el('command', { id: 'rb-compute-cost', onclick: 'rbRun(estimateComputeCost)' }, cGroup);
+var cBuildable = el('command', { id: 'rb-buildable' }, cGroup);
+var aValue = el('command', { id: 'rb-valuestack' }, aPage);
+var schematicSide = el('section', { id: 'schematic-sec', 'data-cap': 'schematic' }, null);
+tabDom.compute = [cTab, cPage]; tabDom.analyze = [analyzeTab, aPage];
+function legacyAnswer(addOns) { return { packaged: false, addOns: addOns, catalog: CAT.catalog(), notSold: CAT.notSold() }; }
+C.setLegacy(legacyAnswer([])); C.apply('standard', empty);
+ok(!C.allowedElement(cCost) && !C.tabOpen('compute'), 'Core with nothing bought: the Compute tab and its commands stay shut');
+C.setLegacy(legacyAnswer(['compute'])); C.apply('standard', empty);
+ok(C.allowedElement(cCost) && C.tabOpen('compute'), 'Core with Omega Compute bought: its own commands run, and the tab opens for them');
+ok(!C.allowedElement(cBuildable), '...but Omega Intel\'s Buildable Area, on the same tab, stays shut: the add-on is exactly its own module');
+ok(!C.allowedElement(aValue) && !C.tabOpen('analyze'), '...and nothing on a tab the add-on has no command on');
+ok(!C.can('standard', 'compute'), 'the tier is untouched: the add-on is not a whole-tab key');
+ok(!C.allowedElement(schematicSide), 'a side section follows the module\'s caps: not Compute\'s');
+C.setLegacy(legacyAnswer(['plansets'])); C.apply('standard', empty);
+ok(C.allowedElement(schematicSide) && !C.allowedElement(cCost), 'Omega Plans opens the schematic section by its caps, and nothing of Compute');
+C.setLegacy({ packaged: true, addOns: ['compute'], catalog: CAT.catalog() });
+ok(C.legacyView() === null && !C.allowedElement(cCost), 'a packaged answer is never read as a legacy one');
+C.setLegacy(legacyAnswer(['compute'])); C.setPackage({ packaged: true, modules: ['lite'], caps: ['design'], toolAccess: ['editor'], catalog: CAT.catalog(), notSold: CAT.notSold() });
+ok(C.addOnsOn().length === 0 && !C.allowedElement(cCost), 'under a package the package alone decides: a legacy add-on list means nothing');
+C.setPackage(null); C.setLegacy(null); C.apply('trial', empty);
 global.document.querySelector = savedQuery;
 var palette = require('fs').readFileSync(path.join(__dirname, '..', 'editor.html'), 'utf8');
 ok(/if \(caps && !caps\.allowedElement\(el\)\) \{\s*if \(!view \|\|/.test(palette) &&
@@ -257,6 +298,34 @@ async function liveChecks() {
   db.seed(billing, { tier: 'deluxe', addons: ['compute'] });
   r = await C.refresh(db, user);
   ok(r.changed && C.can(C.tier(), 'compute'), 'the add-on ClearSky switches on after the purchase unlocks it');
+
+  /* Add to plan: a legacy plan's add-ons come with the catalog from the
+     server (package-access.legacy()); a dropped connection keeps what is on
+     screen, and a module that switched on is announced by name */
+  var CAT = require('../api/_lib/modules'), legacyAsked = 0, legacyNow = { status: 200, body: { packaged: false, addOns: ['compute'], catalog: CAT.catalog(), notSold: CAT.notSold() } };
+  global.fetch = function (url) { legacyAsked++; ok(url === '/api/package-access', 'asked of the one projection'); return Promise.resolve({ ok: legacyNow.status === 200, status: legacyNow.status, json: function () { return Promise.resolve(legacyNow.body); } }); };
+  db.seed(billing, { tier: 'standard' });
+  ok(await C.resolve(db, user.email, true) === 'standard' && C.addOnsOn().join() === 'compute' && C.legacyView() && legacyAsked === 1,
+     'signing in on Core reads its add-ons and the catalog from the server');
+  C.apply('standard'); events.length = 0;
+  legacyNow.body = { packaged: false, addOns: ['storage', 'compute'], catalog: CAT.catalog(), notSold: CAT.notSold() };
+  r = await C.refresh(db, user);
+  ok(r.changed && r.addOnsAdded.join() === 'storage' && !r.addOnsRemoved.length && announced().length === 1,
+     'a module paid for as an add-on while the editor is open switches on, and is announced by name', JSON.stringify(r));
+  legacyNow.status = 503; events.length = 0;
+  r = await C.refresh(db, user);
+  ok(!r.changed && !announced().length && C.addOnsOn().join() === 'storage,compute', 'a dropped connection keeps the add-ons on screen');
+  legacyNow.status = 200; legacyNow.body = { packaged: true, modules: ['lite'], caps: [], toolAccess: [], catalog: [] };
+  r = await C.refresh(db, user);
+  ok(!r.changed && C.addOnsOn().join() === 'storage,compute', 'an answer that is not a legacy one is never read as one');
+  legacyNow.body = { packaged: false, addOns: [], catalog: CAT.catalog(), notSold: CAT.notSold() };
+  r = await C.refresh(db, user);
+  ok(r.changed && r.addOnsRemoved.join() === 'storage,compute' && !C.addOnsOn().length, 'add-ons that lapsed go away, and are named');
+  db.seed(billing, { tier: 'enterprise' }); legacyAsked = 0;
+  r = await C.refresh(db, user);
+  ok(legacyAsked === 0 && C.legacyView() === null, 'a plan that opens everything never asks');
+  db.seed(billing, { tier: 'deluxe', addons: ['compute'] }); await C.refresh(db, user);
+  delete global.fetch;
 
   function view(modules, extra) {
     return X.project({ emailVerified: true }, Object.assign({ packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: modules }, extra || {}),

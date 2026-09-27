@@ -29,7 +29,7 @@ QuickBooks; legacy tenants are billed outside the package engine.
 | Opt in, packaged | Modules page or store | The one menu: server quote → Subscribe and pay → QuickBooks invoice with the card button; on when paid | `POST /api/plan-change` (quote, apply, cancel, reconcile-now) |
 | Add to plan, legacy | Modules page, store, a locked tile | The module joins the plan as its own monthly line: the server's quote (the module and what it needs), the billing contact once, **Pay now** opens QuickBooks' page (a new card or the saved one), the card waits with the pay link and *I've paid*, Live the moment QuickBooks shows it paid; renewed monthly, off after an unpaid renewal's grace; the plan underneath is untouched. Sold only where it switches on exactly (every Omega Logic department; an editor module whose Site Map tab the plan cannot open alone says why and offers **Ask ClearSky to include it**, the recorded request) | `POST /api/plan-change` `addon-quote`, `addon-buy`, `addon-cancel`, `reconcile-now`, `opt-in` (owner or admin; `api/_lib/addons.js` `exact()`) |
 | Marketplace | `/marketplace.html` | The store in the workspace chrome: plan strip, Plans shelf (Lite, Field, Pro, Enterprise, starters, logins, annual, trial), every module priced; `#<module>` lands on one | `GET /api/offerings` (public) or `api/package-catalog` (packaged) |
-| Plan & billing | rail → `/workspace#billing` | A page: your subscription (plan, modules bought and on, monthly, billing day), what you owe and when (unpaid invoices with pay links, next invoice, *I've paid*), the payment method (Stripe portal for the card and autopay, or QuickBooks' own payment page), additions waiting, billing history | `GET /api/plan-change` (any verified member), `POST /api/stripe-invoices`, `POST /api/stripe-portal` |
+| Plan & billing | rail → `/workspace#billing` | A page: your subscription (plan, modules bought and on, monthly, billing day), what you owe and when (unpaid invoices with pay links, next invoice, *I've paid*), the payment method (linked to Stripe: the card on file read back, Add a card with Stripe, the portal, and Pay $X with Stripe for the amount ClearSky set as due; or QuickBooks' own payment page for a QuickBooks plan), additions waiting, billing history | `GET /api/plan-change` (any verified member), `POST /api/stripe-invoices`, `POST /api/stripe-customer` (owner or admin) |
 | Projects | `/projects.html` | Legacy page wearing the workspace rail (own topbar still) | `OmegaWorkspaceShell.theme()` |
 | In flight | home board | What needs something first (offers on a finance-marketplace deal, a next action, a package to submit, a stall), then what was touched last; never online; each card says why and who has it, with **Assign** | `OmegaWorkspaceToday.board`; `projects/{id}` owner merge |
 | Admin Package tab | `/admin/tenant?org=` (staff) | Opens on what the tenant holds and pays today (a legacy tier's Live modules by the shared rule, plus any opt-in request); staff change it and Review activation | `admin/package-panel.js` `standing()`, `OmegaWorkspaceHub.moduleState` |
@@ -48,13 +48,13 @@ QuickBooks; legacy tenants are billed outside the package engine.
 
 ## 4. Not built — the next improvements to the journey, in order
 
-1. **Exact delivery of any editor module on a legacy plan.** Add to plan
-   sells only what switches on exactly (`addons.exact()`): a legacy editor
-   opens Site Map a whole tab at a time, so most editor modules below
-   Enterprise are a recorded request today. Opening exactly the bought
-   module's commands (the editor's legacy gate by command ownership, as a
-   package's is, with `/api/package-access` projecting the add-on
-   modules' ribbon) makes every one of them buyable on every plan.
+1. ~~**Exact delivery of any editor module on a legacy plan.**~~ Built
+   2026-09-27 with the editor's Opt in: the editor opens exactly a live
+   add-on's own commands (`omega-caps` `addOnOpens`, from
+   `/api/package-access`'s legacy answer: the add-ons on and the catalog's
+   ribbon), so `addons.exact()` sells every editor module on every plan
+   (the storefront aside), and a tab the plan stops at says Opt in and buys
+   the module there (`docs/OMEGA-WORKSPACE.md`, *Opt in in the editor*).
 2. **Moving a legacy plan onto a package, self-serve.** A legacy plan buys
    modules today as add-ons beside its plan (Add to plan,
    `api/_lib/addons.js`); re-pricing the whole plan as a package stays

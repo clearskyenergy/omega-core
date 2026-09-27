@@ -6,10 +6,14 @@ var A = require('./_lib/admin');
 module.exports = A.handler(function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   return A.authenticate(req).then(function (caller) {
-    if (!caller.staff && !(caller.claims && caller.claims.email_verified === true)) throw A.httpError(403, 'Verified email required');
     var orgId = (req.body && req.body.orgId) || caller.orgId;
+    var verified = caller.staff || (caller.claims && caller.claims.email_verified === true);
     return A.isTenantAdmin(caller, orgId).then(function (ok) {
       if (!ok) throw A.httpError(403, 'tenant admin only');
+      /* a verified email, or an administrator of an active client (admin.clientAdmin) */
+      return verified || A.clientAdmin(caller, orgId);
+    }).then(function (ok) {
+      if (!ok) throw A.httpError(403, 'Verified email required');
       return A.billingOf(orgId).then(function (bill) {
         if (!bill.stripeCustomerId) throw A.httpError(409, 'no Stripe customer on this account yet — ask ClearSky to set up billing');
         var stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);

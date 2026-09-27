@@ -34,7 +34,12 @@
  *   a module's tools      toolOverrides[tool] = true (and the toolAccess
  *                         allowlist, when the workspace has one): what
  *                         ClearSky used to do by hand in the master console
- *   editor capabilities   the legacy add-on keys omega-caps reads (LEGACY)
+ *   its Site Map commands the editor opens exactly the module's own
+ *                         commands while addOns.live lists it (omega-caps,
+ *                         from package-access.legacy(): the add-ons on and
+ *                         the catalog's ribbon), as a package's are, never a
+ *                         whole tab (2026-09-27, the editor's Opt in)
+ *   anything else         the legacy key its reader honours (LEGACY)
  * Which modules the plan already holds is the pages' own rule,
  * OmegaWorkspaceHub.moduleState, run here on the tools catalog.
  */
@@ -48,12 +53,13 @@ var LOGIC = ['logic-office', 'logic-plant', 'logic-materials', 'logic-logistics'
    tier whose own customer and paymentProvider are the plan's, never ours
    to rebind; add-ons on Stripe need a binding of their own (not built). */
 var RAIL = 'quickbooks';
-/* The legacy add-on keys (omega-caps.js ADDON_GRANTS) that switch a module's
-   editor capabilities on where the legacy editor gates them (data-cap:
-   schematic, riser, export, engineering, compute, permitting). A module whose
-   capabilities the legacy editor does not gate needs none. Pinned against
-   omega-caps and the catalog by scripts/test-addons.js. */
-var LEGACY = { plansets: ['schematics', 'exports'], siteintel: ['parcelscreen'], engineering: ['engineering'], compute: ['compute'], permitting: ['permitting'], whitelabel: ['whitelabel'] };
+/* The legacy add-on keys a module's OTHER readers honour. Never an editor
+   key: the keys omega-caps reads (ADDON_GRANTS: compute, engineering,
+   schematics, exports …) open a whole Site Map tab (data-cap), every
+   module's commands on it with the one bought, so a live add-on's editor
+   half is opened by the module itself instead (omega-caps, exactly its own
+   commands, from package-access.legacy()). Pinned by scripts/test-addons.js. */
+var LEGACY = { whitelabel: ['whitelabel'] };
 /* omega-tenant.js TIER_LEVEL: the level a legacy workspace's tiles are
    judged at. scripts/test-addons.js asserts the two are the same. */
 var TIER_LEVEL = { trial: 3, standard: 1, pro: 2, deluxe: 2, enterprise: 3, internal: 3, partner: 2 };
@@ -92,10 +98,12 @@ function workspace(orgId, b) {
 /* The pages' own judge of a legacy module (workspace.html hubCtx,
    marketplace.html moduleCtx): its tools on the tools catalog and its Site
    Map commands on the editor's own ladder (omega-caps.js, the file the
-   editor runs: it loads here as a module, its browser parts untouched). */
-function judge(orgId, b) {
+   editor runs: it loads here as a module, its browser parts untouched).
+   `editorOn`: the add-ons whose own commands the editor opens (addOns.live,
+   or what a purchase would leave on). */
+function judge(orgId, b, editorOn) {
   var T = require('../../omega-tools.js'), HUB = require('../../omega-workspace-hub.js'), CAPS = require('../../omega-caps.js').OmegaCaps, ws = workspace(orgId, b);
-  return { HUB: HUB, ctx: { packaged: false, modules: [], addons: ws.addons, addOns: [], tierLevel: ws.tierLevel,
+  return { HUB: HUB, ctx: { packaged: false, modules: [], addons: ws.addons, addOns: [], tierLevel: ws.tierLevel, editorModules: editorOn || [],
     canOpen: function (k) { var t = T.byKey(k); return !!t && T.isUnlocked(t, ws); }, tool: function (k) { return T.byKey(k); },
     visible: function (k) { var t = T.byKey(k); return !!t && T.isVisible(t, ws); }, canCap: HUB.capsFor(b, orgId, CAPS) } };
 }
@@ -109,30 +117,34 @@ function held(orgId, b, key, now) {
   var j = judge(orgId, b); j.ctx.addOns = live(b, now);
   return j.HUB.moduleState(m, j.ctx) === 'held';
 }
-/* ── Sold only when it switches on EXACTLY (Tommy's decision, 2026-09-27;
-   opening exactly one module's Site Map commands on a legacy plan is the
-   next step, not built). A legacy plan's editor opens Site Map a whole tab at a
-   time (data-cap), so an add-on key may leave part of a module off (Omega
-   Storage on Standard: its tools, not its Analyze-tab commands) or switch
-   on part of another (Omega Engineer's key opens Grid's and Storage's
-   commands too). The purchase is simulated on the record the grants would
-   write and judged by the same rule as the pages, without the add-on
-   shortcut: every module bought must be held, and no other module may gain
-   anything (Omega Design, always included, aside). An Omega Logic part is
-   exact on every plan: logic-access reads addOns.live itself. What is not
-   exact is not sold here; the quote says why and offers the recorded
+/* ── Sold only when it switches on EXACTLY (Tommy's decision, 2026-09-27).
+   A legacy plan's editor opens Site Map a whole tab at a time (data-cap), so
+   a legacy key would leave part of a module off (Omega Storage on Standard:
+   its tools, not its Analyze-tab commands) or switch on part of another
+   (Omega Compute's tab carries Intel's and Engineer's commands too). So the
+   editor opens a live add-on's OWN commands instead, wherever they sit and
+   nothing else on their tab (omega-caps, by the catalog's ribbon): the
+   Opt in the editor offers where the plan stops is a purchase on every plan.
+   The purchase is simulated on the record the grants would write and the
+   add-ons it would leave on, and judged by the same rule as the pages,
+   without the add-on shortcut: every module bought must be held, and no
+   other module may gain anything (Omega Design, always included, aside).
+   An Omega Logic part is exact on every plan: logic-access reads
+   addOns.live itself. What is still not exact (a module with no tools and
+   no commands to switch on beside the plan: the storefront, set up with
+   ClearSky) is not sold here; the quote says why and offers the recorded
    request (plan-change opt-in). */
 function exact(orgId, b, keys, now) {
   var mine = order(keys).filter(function (k) { return !isLogic(k); });
   if (!mine.length) return { exact: true, partial: [], spill: [], shut: [] };
-  var g = grant(b, order(live(b, now).concat(keys)));
+  var have = live(b, now), on = order(have.concat(keys)), g = grant(b, on);
   var after = Object.assign({}, b, { toolOverrides: g.toolOverrides, addons: g.addons }, g.toolAccess ? { toolAccess: g.toolAccess } : {});
-  function measure(bill) {
-    var j = judge(orgId, bill), out = {};
+  function measure(bill, editorOn) {
+    var j = judge(orgId, bill, editorOn), out = {};
     M.catalog().forEach(function (m) { var t = j.HUB.moduleTools(m, j.ctx), e = j.HUB.moduleEditor(m, j.ctx); out[m.key] = { state: j.HUB.moduleState(m, j.ctx), open: t.open + e.open, shut: e.open < e.total }; });
     return out;
   }
-  var was = measure(b), will = measure(after);
+  var was = measure(b, have), will = measure(after, on);
   var partial = mine.filter(function (k) { return will[k].state !== 'held'; });
   var spill = M.catalog().map(function (m) { return m.key; }).filter(function (k) { return k !== 'lite' && keys.indexOf(k) < 0 && will[k].open > was[k].open; });
   return { exact: !partial.length && !spill.length, partial: partial, spill: spill, shut: partial.filter(function (k) { return will[k].shut; }) };

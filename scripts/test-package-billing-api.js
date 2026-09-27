@@ -10,6 +10,8 @@ var owner = { staff: false, uid: 'owner', email: profile.email, orgId: 'package.
 F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, authenticate: async function (req) { return req.caller; }, db: function () { return db; },
   httpError: function (status, text) { var e = new Error(text); e.status = status; return e; }, safeOrg: function (s) { return /^[a-z0-9.-]+\.[a-z]+$/.test(s || '') ? s : null; },
   isTenantAdmin: async function (c, o) { return c.orgId === o && ['owner', 'admin'].indexOf(c.role) >= 0; },
+  /* admin.clientAdmin's meaning on this double (the real one: scripts/tests/tclientadmin.js) */
+  clientAdmin: async function (c, o) { if (c.staff) return true; if (c.orgId !== o || ['owner', 'admin'].indexOf(c.role) < 0) return false; var s = await db.doc('omega_orgs/' + o).get(); return s.exists && s.data().status === 'active'; },
   init: function () { return { storage: function () { return { bucket: function () { return { file: function () { return { getMetadata: async function () { return [{ size: '10', contentType: 'application/pdf' }]; } }; } }; } }; } }; },
   FieldValue: function () { return { serverTimestamp: function () { return now; } }; } });
 F.mock('../api/_lib/mail', { templates: { approved: async function () { sent++; return { ok: true }; } } });
@@ -30,6 +32,11 @@ async function run() {
   await denied(function () { return packageApi(req('GET', { orgId: 'other.example' }, owner), res); }, 403);
   await denied(function () { return profileApi(req('GET', {}, Object.assign({}, owner, { role: 'member' })), res); }, 403);
   await denied(function () { return profileApi(req('GET', {}, Object.assign({}, owner, { claims: { email_verified: 'true' } })), res); }, 403);
+  /* the same unverified owner once the workspace is an active client: the role vouches (admin.clientAdmin) */
+  db.data.get(root).status = 'active';
+  equal((await profileApi(req('GET', {}, Object.assign({}, owner, { claims: { email_verified: false } })), res)).profile.email, owner.email);
+  await denied(function () { return profileApi(req('GET', {}, Object.assign({}, owner, { role: 'member', claims: { email_verified: false } })), res); }, 403);
+  db.data.get(root).status = 'pending';
   equal((await profileApi(req('GET', {}, owner), res)).profile.email, owner.email);
   await denied(function () { return legacyBilling(req('POST', { orgId: 'package.example', trialEndsAt: '2099-01-01' })); }, 409);
   await denied(function () { return legacyBilling(req('POST', { orgId: 'package.example', tier: 'enterprise' })); }, 409);

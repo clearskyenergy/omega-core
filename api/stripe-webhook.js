@@ -5,6 +5,10 @@
    back from Stripe; the event is only the wake-up), so a paid card opens
    exactly what was bought within seconds. The hourly runner and "I've paid"
    run the same reconcile, so a lost event only delays, never decides.
+   Next, a plan's AMOUNT DUE paid from Plan & billing (metadata omegaDue,
+   written by _lib/stripe-customer.js): read back from Stripe and recorded
+   once (amountDue, lastPaidAt, amountPaid, the receipt), never by the tier
+   path below, which would move subscriptionDue to the invoice's own date.
    Everything else is the LEGACY Stripe tier path, unchanged:
    invoice.paid            → lastPaidAt, subscriptionDue, status active
    invoice.payment_failed  → paymentFailedAt (status flips to 'suspended'
@@ -18,6 +22,7 @@
 var A = require('./_lib/admin');
 var CustomerLite = require('./customer-subscribe');
 var StripeBilling = require('./_lib/stripe-billing');
+var StripeCustomer = require('./_lib/stripe-customer');
 
 /* A package invoice event: reconcile the invoice it is about now (that one
    alone, so a long history never delays it; the access rule still reads
@@ -59,6 +64,23 @@ function orphanCheck(evt, org) {
   });
 }
 var ANSWERED = {};
+/* A plan's amount-due invoice event: settle reads the invoice back (the
+   event is only the wake-up) and records a payment once; the receipt and
+   ClearSky's alert go out. A refusal that is not a fault (not this
+   workspace's invoice, another customer: a 4xx) is acknowledged. */
+function dueEvent(org, invoiceId, stripe, deps) {
+  var db = A.db(), now = Date.now(), client = (deps && (deps.stripe || (deps.billing && deps.billing.stripe))) || stripe;
+  return StripeCustomer.settle(db, org, invoiceId, client, now, 'stripe').then(function (r) {
+    if (!r.recorded) return { orgId: org, state: r.state };
+    return StripeCustomer.deliver(db, org, now, deps && deps.mail).then(function () { return { orgId: org, state: r.state, recorded: true }; });
+  }, function (e) {
+    /* ours (e.status) or Stripe's own (e.statusCode, e.g. a draft deleted in the dashboard): a 4xx is acknowledged, never retried for days */
+    var code = e && (e.status || e.statusCode);
+    if (code && code < 500) return { orgId: org, ignored: String(e.message || e).slice(0, 200) };
+    throw e;
+  });
+}
+
 function rawBody(req) { return new Promise(function (res, rej) { var c = []; req.on('data', function (d) { c.push(d); }); req.on('end', function () { res(Buffer.concat(c)); }); req.on('error', rej); }); }
 
 module.exports = function (req, res) {
@@ -75,6 +97,8 @@ module.exports = function (req, res) {
         res.status(200).json({ received: true, package: r });
       });
     });
+    var dueOrg = StripeCustomer.eventOrg(evt);
+    if (dueOrg) return dueEvent(dueOrg, evt.data.object.id, stripe, module.exports.deps).then(function (r) { res.status(200).json({ received: true, due: r }); });
     /* A tenant's CUSTOMER paying for Editor Lite (api/customer-subscribe.js,
        metadata kind 'customer-editor-lite', or a Stripe customer on the
        stripe_customers pointer) is answered FIRST and never reaches the
@@ -144,3 +168,4 @@ module.exports.config = { api: { bodyParser: false } };
 /* tests hand the engine a Stripe double and a mailer here */
 module.exports.deps = null;
 module.exports.packageEvent = packageEvent;
+module.exports.dueEvent = dueEvent;
