@@ -339,7 +339,7 @@
           if (q.closes && q.closes.length) el.appendChild(node('p', 'It also closes your open opt-in request for ' + names(q.closes) + '.', 'opm-note'));
           row(el, [button('Send opt-out request', function () {
             busy('Sending…');
-            api('/api/plan-change', withOrg(state, { action: 'opt-out', remove: [m.key] })).then(function (r) { remember(state, r); done(r, 'Sent. ClearSky confirms the date and any price change with you.'); }, function (e) { failed(e, 'Opt out of ' + names(q.names)); });
+            api('/api/plan-change', withOrg(state, { action: 'opt-out', remove: [m.key], previewId: q.previewId })).then(function (r) { remember(state, r); done(r, 'Sent. ClearSky confirms the date and any price change with you.'); }, function (e) { failed(e, 'Opt out of ' + names(q.names)); });
           }, 'opm-primary'), button('Not now', again)]);
         }, function (e) { failed(e, 'Opt out of ' + m.name); });
       } : function () {

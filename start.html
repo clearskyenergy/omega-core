@@ -288,7 +288,15 @@
     }, 5000);
   }
   function checkVerified(u){ verifiedNow(u).then(function (ok) { if (ok) confirmed(u); else watchVerification(u); }, function () { watchVerification(u); }); }
-  window.resendVerification = function(){ var u = auth.currentUser; if (!u) return; u.sendEmailVerification().then(function(){ $('verify-title').textContent = 'Link sent again'; }, function(e){ $('verify-title').textContent = e.message; }); };
+  /* Back on this tab (a phone opens the link in the mail app, then here):
+     look at once instead of at the next tick. */
+  function lookNow(){ var u = auth.currentUser; if (!verifyTimer || !u || document.hidden) return; verifiedNow(u).then(function (ok) { if (ok && verifyTimer) confirmed(u); }, function () {}); }
+  document.addEventListener('visibilitychange', lookNow); window.addEventListener('focus', lookNow);
+  /* Every link we send brings them back to this page (the Continue button on
+     Firebase's "email verified" page), as the one from Create account does;
+     a host Firebase does not accept as a continue address gets the plain link. */
+  function sendLink(u){ return u.sendEmailVerification({ url: location.origin + '/start.html' })['catch'](function () { return u.sendEmailVerification(); }); }
+  window.resendVerification = function(){ var u = auth.currentUser; if (!u) return; sendLink(u).then(function(){ $('verify-title').textContent = 'Link sent again'; }, function(e){ $('verify-title').textContent = e.message; }); };
   window.verifiedContinue = function(){ var u = auth.currentUser; if (!u) return; verifiedNow(u).then(function (ok) { if (ok) confirmed(u); else $('verify-title').textContent = 'Not confirmed yet: click the link in the email, then press this again'; }, function (e) { $('verify-title').textContent = e.message; }); };
   function domainOf(email){ return String(email||'').toLowerCase().split('@')[1]||''; }
   function slugOf(d){ return String(d||'').split('.')[0].replace(/[^a-z0-9-]/g,''); }
@@ -302,7 +310,7 @@
     var em=$('em').value.trim(), pw=$('pw').value;
     if(!em||!pw){ err('auth-err','Email and password are required.'); return; }
     auth.signInWithEmailAndPassword(em,pw)['catch'](function(e){
-      if (e.code==='auth/user-not-found') return auth.createUserWithEmailAndPassword(em,pw).then(function(c){ return c.user.sendEmailVerification(); })['catch'](function(e2){ err('auth-err', e2.message); });
+      if (e.code==='auth/user-not-found') return auth.createUserWithEmailAndPassword(em,pw).then(function(c){ return sendLink(c.user); })['catch'](function(e2){ err('auth-err', e2.message); });
       err('auth-err', e.message);
     });
   };

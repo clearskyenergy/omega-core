@@ -66,7 +66,7 @@ function northstar(host) {
   var docs = merge(pub(host, org, 'Northstar Development', 'standard', 'developer'), {});
   docs['omega_orgs/' + org] = { name: 'Northstar Development', slug: 'northstar', domains: [host], logoUrl: '', vertical: 'developer', shell: 'classic', status: 'active', receivesFullBom: false,
     exportBrand: { name: 'Northstar Development', logo: '' }, createdAt: ago(120), approvedAt: ago(119), approvedBy: 'ops@clearsky-usa.com' };
-  docs['omega_orgs/' + org + '/billing/current'] = { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'stripe', trialEndsAt: null, subscriptionDue: iso(20), amountDue: 0, lastPaidAt: iso(-10), createdAt: ago(120) };
+  docs['omega_orgs/' + org + '/billing/current'] = { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'stripe', stripeCustomerId: 'cus_northstar_fixture', stripeLivemode: true, trialEndsAt: null, subscriptionDue: iso(20), amountDue: 0, lastPaidAt: iso(-10), createdAt: ago(120) };
   docs['omega_orgs/' + org + '/members/' + uid] = { email: me, name: 'Ann Lee', role: 'owner', status: 'active', createdAt: ago(120) };
   docs['omega_orgs/' + org + '/members/uid-northstar-raj'] = { email: peer, name: 'Raj Patel', role: 'member', status: 'active', createdAt: ago(60) };
   docs['termsAcceptances/' + uid] = { uid: uid, email: me, orgId: org, version: TERMS_VERSION, acceptedAt: ago(30) };

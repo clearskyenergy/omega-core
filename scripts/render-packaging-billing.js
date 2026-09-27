@@ -102,12 +102,15 @@ async function run() {
        what it holds and pays today (Tommy, 2026-09-27: "it should have selected
        what they have … what they are paying for and subscribed for"): the
        modules its tier opens — the same rule the tenant's Modules page shows as
-       Live — plus its opt-in request, and the strip says so. */
+       Live — plus its opt-in request, less its opt-out request, and the strip
+       says so. */
     seed(['lite']);
     db.seed('omega_orgs/' + org, { name: 'Clean Cell · fixture', status: 'active', domains: ['fixture.example'] });
     db.seed('omega_orgs/' + org + '/billing/current', { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'stripe', amountDue: 0, subscriptionDue: '2026-10-17T00:00:00Z', lastPaidAt: '2026-09-17T00:00:00Z',
       optIns: { siteintel: { key: 'siteintel', name: 'Omega Intel', monthlyCents: 50000, display: '$500/month', requestedBy: 'owner@fixture.example', requestedAt: '2026-09-27T12:00:00Z', status: 'requested' } },
-      optOuts: { compute: { key: 'compute', name: 'Omega Compute', requestedBy: 'owner@fixture.example', requestedAt: '2026-09-27', status: 'requested', reason: 'Moving compute in-house' } } });
+      /* and one withdrawn opt-out (#197): a request taken back is not a request */
+      optOuts: { compute: { key: 'compute', name: 'Omega Compute', requestedBy: 'owner@fixture.example', requestedAt: '2026-09-27', status: 'requested', reason: 'Moving compute in-house' },
+        finance: { key: 'finance', name: 'Omega Capital', requestedBy: 'owner@fixture.example', requestedAt: '2026-09-26T13:00:00Z', status: 'withdrawn' } } });
     var legacyContext = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(legacyContext, base);
     var lp = await legacyContext.newPage(), legacyErrors = []; lp.on('pageerror', function (e) { legacyErrors.push(e.message); });
     await lp.goto(base + '/admin/tenant.html?org=' + org); await lp.locator('#pp-standing').waitFor();
@@ -121,7 +124,7 @@ async function run() {
        package never takes away something it opens today), plus the opt-in,
        less the opt-out. */
     check(/Today: Standard tier/.test(standing) && /Holds Omega Design, Omega EV, Omega Permits \(/.test(standing) && /Partly on: Omega Grid, Omega Storage, Omega Estimate, Omega Plans, Omega Intel, Omega Engineer, Omega Capital, Omega Compute, Omega Sites \(/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Omega Intel \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing)
-      && /Opt-out requested: Omega Compute 2026-09-27 by owner@fixture\.example \("Moving compute in-house"\)/.test(standing), 'the legacy standing names the tier, what it holds and partly uses, what it pays and both requests: ' + standing);
+      && /Opt-out requested: Omega Compute 2026-09-27 by owner@fixture\.example \("Moving compute in-house"\) \(confirm the date under the agreement\)/.test(standing) && !/Omega Capital 2026/.test(standing), 'the legacy standing names the tier, what it holds and partly uses, what it pays and both requests (a withdrawn one is not a request): ' + standing);
     var picked = await lp.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('[data-pp-pane="pkg"] [data-module-card]'), function (c) { var i = c.querySelector('input'); return i && i.checked; }).map(function (c) { return c.getAttribute('data-module-card'); }).sort(); });
     check(picked.join() === 'engineering,estimate,evrebates,finance,gridatlas,lite,permitting,plansets,sitefinder,siteintel,storage', 'the picker starts from what the tier holds or partly uses, plus the opt-in, less the opt-out: ' + picked.join());
     check((await lp.locator('[data-pp-pane="pkg"] [data-request="compute"]').textContent()) === 'Opt-out requested' && (await lp.locator('[data-pp-pane="pkg"] [data-request="siteintel"]').textContent()) === 'Opt-in requested', 'each request is labelled on its module so staff see why the box is or is not ticked');
@@ -328,6 +331,8 @@ async function run() {
       await op.waitForFunction(function () { return document.querySelectorAll('#plans .card').length > 0 && document.querySelectorAll('#modules .card').length > 0; });
       check((await op.locator('#floor').textContent()).indexOf('$500/month') >= 0, 'the floor is the book’s');
       check(await op.locator('#plans .card').count() === 4, 'Lite, Field, Pro and Enterprise');
+      var entCard = (await op.locator('#plans .card').nth(3).textContent()).replace(/\s+/g, ' ');
+      check(/Enterprise/.test(entCard) && /Contact for pricing/.test(entCard) && !/\$/.test(entCard), 'Enterprise is contact for pricing and names no figure: ' + entCard);
       check(await op.locator('#modules .card').count() === M.catalog().length, 'every module of the one catalog, each with its server-formatted price');
       check(await op.locator('#modules .card .price').filter({ hasText: /^\$[\d,]+\/month/ }).count() === M.catalog().length, 'no module without a price');
       check(/^\/start\.html\?plan=field/.test(await op.locator('#plans .card a.btn').nth(1).getAttribute('href')), 'a plan’s button sends the person to signup with that plan');

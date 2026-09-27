@@ -50,6 +50,16 @@ var FD = require('./_lib/firebase-double'), FX = require('./_lib/dashboard-fixtu
    here), as the packaging render checks do */
 require('./_lib/firestore-double').mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, db: function () { return null; } });
 var OFFERINGS = require('../api/offerings'), BOOK = require('../api/_lib/pricebook');
+/* the page reads the billing record from Firestore (OmegaTenant.refreshBilling):
+   put the fixture's record, with the requests the stub below recorded on it
+   (a legacy plan's optIns / optOuts), into the browser's double, as a reload
+   would read it */
+async function mirrorBilling(p) {
+  var fx = CURRENT_FX, at = 'omega_orgs/' + fx.org + '/billing/current', lb = fx.docs[at] || {};
+  function merged(field) { var o = {}; Object.keys(lb[field] || {}).forEach(function (k) { o[k] = lb[field][k]; }); Object.keys(STORE[field]).forEach(function (k) { o[k] = STORE[field][k]; }); return o; }
+  var doc = Object.assign({}, lb, { optIns: merged('optIns'), optOuts: merged('optOuts') });
+  await p.evaluate(function (a) { window.__firebaseDouble.store.put(a.path, a.doc); }, { path: at, doc: JSON.parse(JSON.stringify(doc)) });
+}
 var DOUBLE_SRC = FD.source();
 var HOST = '127.0.0.1';
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.pdf': 'application/pdf' };
@@ -99,12 +109,16 @@ function storeRoute(u, method, body) {
     var entries = {}; add.forEach(function (k) { entries[k] = STORE.optIns[k] = { key: k, name: M.get(k).name, monthlyCents: book.modules[k].priceCents, display: P.money(book.modules[k].priceCents) + '/month', requestedBy: who, requestedAt: at, status: 'requested' }; });
     return { ok: true, requested: true, add: add, names: names(add), monthlyCents: cents, display: P.money(cents) + '/month', optIns: entries, requestedAt: at };
   }
+  /* a withdrawal takes back what the library's ONE rule says goes with it
+     (api/_lib/plan-change.js withdrawSet: cancelling an opt-in takes back
+     what needs it; keeping a module keeps what it needs) */
+  function withdrawn(map, list, dependents) { try { return { keys: require('../api/_lib/plan-change').withdrawSet(map, list || [], dependents) }; } catch (e) { return { error: { __status: e.status || 409, error: e.message } }; } }
   if (body.action === 'withdraw-opt-in') {
-    var ins = legacyIns(), wk = (body.add || []).filter(function (k) { return ins[k] && ins[k].status === 'requested'; });
-    if (!wk.length) return { __status: 409, error: 'No request to withdraw' };
+    var ins = legacyIns(), wi = withdrawn(ins, body.add, true); if (wi.error) return wi.error;
+    var wk = wi.keys;
     if (body.dryRun === true) return { dryRun: true, withdrawn: wk, names: names(wk), note: 'Nothing about your bill changes.' };
     wk.forEach(function (k) { STORE.optIns[k] = Object.assign({}, ins[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: who }); });
-    return { ok: true, withdrawn: wk, optIns: legacyIns() };
+    return { ok: true, withdrawn: wk, names: names(wk), optIns: legacyIns() };
   }
   /* a legacy plan's opt-out: a recorded request under the agreement, never a change to the tier */
   if (body.action === 'opt-out') {
@@ -113,17 +127,20 @@ function storeRoute(u, method, body) {
     var reqd = legacyIns(), stale = body.remove.filter(function (k) { return reqd[k] && reqd[k].status === 'requested'; });
     var remove = body.remove.slice(); if (remove.indexOf('logic-office') >= 0 && (lb.addons || []).indexOf('omega-logic') >= 0) M.catalog().forEach(function (m) { if (m.shelf === 'platform' && remove.indexOf(m.key) < 0) remove.push(m.key); });
     var note = 'Your plan\'s price is set by your agreement, so nothing changes today. ClearSky confirms the effective date and any new price with you in writing; you keep access until then. Omega Design stays.';
-    if (body.dryRun === true) return { dryRun: true, remove: remove, names: names(remove), closes: names(stale), note: note };
+    /* the preview guard (#197): the dry run's id, and an apply that names another is refused */
+    var outPreview = 'o'.repeat(48);
+    if (body.dryRun === true) return { dryRun: true, previewId: outPreview, remove: remove, names: names(remove), closes: names(stale), note: note };
+    if (body.previewId != null && body.previewId !== outPreview) return { __status: 409, error: 'Your plan changed; review the opt-out request again' };
     remove.forEach(function (k) { STORE.optOuts[k] = { key: k, name: M.get(k).name, requestedBy: who, requestedAt: at, status: 'requested', reason: body.reason || '' }; });
     stale.forEach(function (k) { STORE.optIns[k] = Object.assign({}, reqd[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: who, withdrawnFor: 'opt-out' }); });
     return Object.assign({ ok: true, requested: true, remove: remove, names: names(remove), closes: names(stale), optOuts: legacyOuts(), requestedAt: at, note: note }, stale.length ? { optIns: legacyIns() } : {});
   }
   if (body.action === 'withdraw-opt-out') {
-    var outs = legacyOuts(), ok2 = (body.remove || []).filter(function (k) { return outs[k] && outs[k].status === 'requested'; });
-    if (!ok2.length) return { __status: 409, error: 'No request to withdraw' };
+    var outs = legacyOuts(), wo = withdrawn(outs, body.remove, false); if (wo.error) return wo.error;
+    var ok2 = wo.keys;
     if (body.dryRun === true) return { dryRun: true, withdrawn: ok2, names: names(ok2), note: 'Nothing about your bill changes.' };
     ok2.forEach(function (k) { STORE.optOuts[k] = Object.assign({}, outs[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: who }); });
-    return { ok: true, withdrawn: ok2, optOuts: legacyOuts() };
+    return { ok: true, withdrawn: ok2, names: names(ok2), optOuts: legacyOuts() };
   }
   /* a packaged opt-out queues for the quarterly review: the dry run names the fee before and after and the review date */
   if (body.action === 'request-removal' || body.action === 'withdraw-removal') {
@@ -203,6 +220,22 @@ function addOnRoute(body) {
     return { ok: true, addOnId: ADDON.entry.id, state: 'awaiting_payment', add: q.add, addNames: q.addNames, todayCents: q.todayCents, display: q.display.amount, paymentLink: PAY_URL, payLinkMissing: false, payWith: 'QuickBooks', expiresOn: q.cycle.end, monthlyDisplay: q.monthlyDisplay, live: [] };
   } finally { process.env.PACKAGING_BILLING_ENABLED = env.b; process.env.QBO_ENV = env.q; if (env.b === undefined) delete process.env.PACKAGING_BILLING_ENABLED; if (env.q === undefined) delete process.env.QBO_ENV; }
 }
+/* Plan & billing's card through Stripe (api/stripe-customer.js), answered
+   in the real endpoint's shapes from the scenario's own billing record (the
+   endpoint itself is scripts/test-stripe-customer.js's). The pages it hands
+   back are Stripe's; a check catches the tab going there. */
+var CARD = { posts: [], dueOpen: null, paid: false, invoices: null };
+function cardRoute(body) {
+  CARD.posts.push(body.action);
+  var fx = CURRENT_FX, bl = (fx && fx.docs['omega_orgs/' + fx.org + '/billing/current']) || {}, packaged = bl.packaged === true, linked = !!bl.stripeCustomerId, owe = Number(bl.amountDue) || 0;
+  var due = !packaged && owe > 0 ? { cents: Math.round(owe * 100), display: '$' + owe.toLocaleString('en-US'), date: bl.subscriptionDue ? String(bl.subscriptionDue).slice(0, 10) : null, open: CARD.dueOpen } : null;
+  if (body.action === 'view') return { orgId: fx.org, rail: 'stripe', packaged: packaged, linked: linked, mode: 'live', card: linked ? { type: 'card', brand: 'visa', last4: '4242', label: 'Visa ending 4242', expires: '12/2030' } : null, canLink: true, reason: null, due: due, canPay: !!due && !bl.paymentLink, payReason: due ? null : 'Nothing is owed right now.' };
+  if (body.action === 'card') return { url: 'https://billing.stripe.com/p/session/test_card' };
+  if (body.action === 'portal') return { url: 'https://billing.stripe.com/p/session/test_portal' };
+  if (body.action === 'pay') { CARD.dueOpen = { invoiceId: 'in_due', url: 'https://invoice.stripe.com/i/acct_fixture/in_due', number: 'CS-0001' }; return { state: 'open', url: CARD.dueOpen.url, invoiceId: 'in_due', display: due ? due.display : '' }; }
+  if (body.action === 'check') return CARD.paid ? { state: 'paid', invoiceId: 'in_due', recorded: true, due: null } : { state: 'open', invoiceId: 'in_due', recorded: false, due: due };
+  return { error: 'render-workspace does not answer ' + body.action };
+}
 var STAFF_CALLER = false;
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], post = req.method === 'POST';
@@ -223,12 +256,14 @@ var srv = http.createServer(function (req, res) {
         pv.canPreview = true; pv.preview = true; pv.starters = M.starters(); json(pv);
       }); return;
     }
-    if (u === '/api/stripe-invoices' && post) return json({ connected: true, orgId: CURRENT_FX && CURRENT_FX.org, invoices: [
+    if (u === '/api/stripe-invoices' && post) return json({ connected: true, orgId: CURRENT_FX && CURRENT_FX.org, invoices: CARD.invoices || [
       { id: 'in_2', number: 'NS-0002', status: 'paid', amountDue: 1250, created: Date.now() - 10 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_2', pdfUrl: null },
       { id: 'in_1', number: 'NS-0001', status: 'paid', amountDue: 1250, created: Date.now() - 40 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_1', pdfUrl: null } ] });
     if (u === '/api/stripe-portal' && post) return json({ url: 'https://billing.stripe.com/p/session/test_northstar' });
+    if (u === '/api/stripe-customer' && post) { var cb = []; req.on('data', function (c) { cb.push(c); }); req.on('end', function () { var body = {}; try { body = JSON.parse(Buffer.concat(cb).toString()); } catch (e) {} json(cardRoute(body)); }); return; }
     if (u === '/api/package-catalog' || u === '/api/plan-change') {
-      var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {} try { var r = storeRoute(u, req.method, body), st = r && r.__status; if (st) delete r.__status; json(r, st || 200); } catch (e) { json({ error: e.message }, e.status || 500); } }); return;
+      var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {}
+        Promise.resolve().then(function () { return storeRoute(u, req.method, body); }).then(function (r) { var st = r && r.__status; if (st) delete r.__status; json(r, st || 200); }, function (e) { json({ error: e.message }, e.status || 500); }); }); return;
     }
     missing.push(req.method + ' ' + u); return json({ error: 'render-workspace does not answer ' + u }, 404);
   }
@@ -499,6 +534,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.evaluate(function () { window.location.hash = '#plans'; }); await wait(400);
     var lplans = await p.evaluate(function () { var sh = document.getElementById('modules-plans'); return { n: sh.querySelectorAll('.planc').length, on: sh.querySelectorAll('.planc.on').length, note: (sh.querySelector('.plans-note') || {}).textContent || '' }; });
     ok('northstar: a legacy plan\'s plans shelf says its price is the agreement\'s and marks no book plan as its own', lplans.n === 4 && lplans.on === 0 && /Northstar Development/.test(lplans.note) && /Standard plan, priced by your agreement/.test(lplans.note), lplans);
+    /* Enterprise is a contract (2026-09-27: "contact for pricing"): no figure, a way to reach ClearSky */
+    var ent = await p.evaluate(function () { var c = document.querySelector('#modules-plans .planc[data-plan-card="enterprise"]'), a = c && c.querySelector('a[href^="mailto:"]'); return c ? { text: c.textContent.replace(/\s+/g, ' '), contact: a ? a.getAttribute('href') : '' } : null; });
+    ok('northstar: Enterprise on the plans shelf reads Contact for pricing, names no figure and offers Contact ClearSky', !!ent && /Contact for pricing/.test(ent.text) && !/\$/.test(ent.text) && /^mailto:/.test(ent.contact) && /Contact ClearSky/.test(ent.text), ent);
     await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(250);
     /* OPT OUT → the one menu on that module, straight to its step, the money said, a recorded request (never an email) */
     var outKey = live[0].key, posts0 = STORE.posts.length;
@@ -536,6 +574,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.keyboard.press('Escape'); await wait(300);
     var afterIn = (await modsNow()).rows.filter(function (r) { return r.key === inKey; })[0];
     ok('northstar: the opt-in is recorded once and the card reads Opt-in requested with Cancel request', STORE.posts.slice(posts1).map(function (b) { return b.action + (b.dryRun ? '?' : ''); }).join() === 'addon-quote,opt-in?,opt-in' && afterIn.state === 'requested' && afterIn.acts[0] === 'cancel:Cancel request', afterIn);
+    /* ...and read back as the page does after a reload: what the server recorded is on the billing record */
+    await mirrorBilling(p);
+    await p.evaluate(function () { return window.OmegaTenant.refreshBilling(); }); await wait(400);
+    var reread = (await modsNow()).rows.filter(function (r) { return r.key === inKey; })[0];
+    ok('northstar: read again from the billing record, the recorded opt-in still reads Opt-in requested with Cancel request', reread.state === 'requested' && reread.pill === 'Opt-in requested' && reread.acts[0] === 'cancel:Cancel request', reread);
     await p.click('#modules-body .mod[data-module="' + inKey + '"] [data-mod-act="cancel"]');
     await p.locator('#omega-package-menu .opm-primary', { hasText: 'Cancel request' }).click(); await wait(400);
     await p.keyboard.press('Escape'); await wait(300);
@@ -607,11 +650,17 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var hist = await p.evaluate(function () { return { paid: document.querySelectorAll('#bill-hist .spill.paid').length, statusButtons: Array.prototype.filter.call(document.querySelectorAll('#bill-hist a.ows-pill'), function (a) { return /^paid$/i.test(a.textContent.trim()); }).length, times: Array.prototype.map.call(document.querySelectorAll('#bill-hist time'), function (t) { return t.textContent; }), pm: (document.querySelector('#bill-card .pmc') || {}).className, members: /An owner or administrator sees the invoices/.test(document.getElementById('billing-body').textContent), stale: /Marketplace|Plans and the store/.test(document.getElementById('billing-body').textContent) }; });
     ok('northstar: each invoice carries one status pill (Paid), never a button that says paid, dated in the one style, the card drawn as Stripe\'s, and no link to the store', hist.paid === 2 && hist.statusButtons === 0 && hist.times.every(function (t) { return /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/.test(t); }) && /\bstripe\b/.test(hist.pm) && !hist.stale, hist);
     await billingPhone(p, 'northstar');
-    /* the portal: an owner opens Stripe's own page in a new tab; no card field is ever on this page */
-    await p.evaluate(function () { window.__opened = []; window.open = function (u) { window.__opened.push(String(u)); return null; }; });
-    await p.click('#bill-portal'); await wait(400);
-    var opened = await p.evaluate(function () { return window.__opened; });
-    ok('northstar: Manage card and autopay opens the Stripe portal (Stripe\'s own page) in a new tab, and the page itself has no card field', opened.length === 1 && /^https:\/\/billing\.stripe\.com\//.test(opened[0]) && bill.cardInputs === 0, { opened: opened, inputs: bill.cardInputs });
+    /* the card on file, read back from Stripe (api/stripe-customer.js); the
+       portal is Stripe's own page, opened in THIS tab (a window opened after
+       the server's answer is a pop-up a phone blocks) and it comes back to
+       Plan & billing; no card field is ever on this page */
+    await p.waitForFunction(function () { return /Visa ending 4242/.test((document.getElementById('bill-card') || {}).textContent || ''); }, null, { timeout: 4000 }).catch(function () {});
+    var cardTxt = await p.$eval('#bill-card', function (e) { return e.textContent.replace(/\s+/g, ' '); });
+    ok('northstar: the card on file is read back from Stripe (brand, last four, expiry), with Change card and Invoices and receipts', /Card on file\s*Visa ending 4242/.test(cardTxt) && /Expires\s*12\/2030/.test(cardTxt) && /Change card/.test(cardTxt) && /Invoices and receipts/.test(cardTxt) && !/QuickBooks/.test(cardTxt), cardTxt);
+    var went = []; await p.route(/^https:\/\/billing\.stripe\.com\//, function (r) { went.push(r.request().url()); return r.abort('aborted'); });
+    await p.click('#bill-portal'); await wait(600);
+    await p.evaluate(function () { if (window.OmegaSplash) window.OmegaSplash.done(); });
+    ok('northstar: Invoices and receipts opens the Stripe portal (Stripe\'s own page) in this tab, and the page itself has no card field', went.length === 1 && /^https:\/\/billing\.stripe\.com\//.test(went[0]) && CARD.posts.indexOf('portal') >= 0 && bill.cardInputs === 0, { went: went, posts: CARD.posts, inputs: bill.cardInputs });
     await p.evaluate(function () { window.location.hash = ''; }); await wait(200);
     /* post a message */
     await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
@@ -753,7 +802,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     /* #plans: the plans shelf, moved here from the marketplace, with this workspace's plan marked */
     await p.evaluate(function () { window.scrollTo(0, 0); window.location.hash = '#plans'; }); await wait(500);
     var plans = await p.evaluate(function () { var sh = document.getElementById('modules-plans'), r = sh.getBoundingClientRect(); return { view: document.getElementById('content').getAttribute('data-view'), cards: Array.prototype.map.call(sh.querySelectorAll('.planc'), function (c) { return c.getAttribute('data-plan-card') + '=' + c.querySelector('.pr').textContent; }), mine: Array.prototype.map.call(sh.querySelectorAll('.planc.on'), function (c) { return c.getAttribute('data-plan-card'); }), top: Math.round(r.top), marked: document.querySelectorAll('#modules-body .mod[data-selected]').length, stripPlans: !!document.querySelector('#modules-plan a[href="/workspace#plans"]'), store: !!document.querySelector('#modules a[href^="/marketplace"]') }; });
-    ok('lite: #plans opens Modules scrolled to the plans shelf: Lite, Field, Pro and Enterprise at the book\'s prices, Lite marked as this workspace\'s, and nothing on the page sends a module to the Marketplace', plans.view === 'modules' && plans.cards.join() === 'lite=$500/month,field=$1,299/month,pro=$2,499/month,enterprise=$150,000/year' && plans.mine.join() === 'lite' && plans.top >= 0 && plans.top < 300 && plans.marked === 0 && plans.stripPlans && !plans.store, plans);
+    ok('lite: #plans opens Modules scrolled to the plans shelf: Lite, Field, Pro at the book\'s prices and Enterprise as Contact for pricing, Lite marked as this workspace\'s, and nothing on the page sends a module to the Marketplace', plans.view === 'modules' && plans.cards.join() === 'lite=$500/month,field=$1,299/month,pro=$2,499/month,enterprise=Contact for pricing' && plans.mine.join() === 'lite' && plans.top >= 0 && plans.top < 300 && plans.marked === 0 && plans.stripPlans && !plans.store, plans);
     var inside = await p.evaluate(function () { function line(k) { var c = document.querySelector('#modules-body .mod[data-module="' + k + '"] .inside'); return c ? c.textContent : ''; } return { whitelabel: line('whitelabel'), plant: line('logic-plant'), plansets: line('plansets'), gridatlas: line('gridatlas') }; });
     ok('lite: a module that lives outside Site Map says where it lives, and one inside says so', /^Lives in your own website/.test(inside.whitelabel) && /^Lives in Omega Logic/.test(inside.plant) && /^Inside Site Map, the editor/.test(inside.plansets) && /^Inside Site Map, the editor$/.test(inside.gridatlas) && !/capabilities of Site Map/.test(inside.whitelabel + inside.plant), inside);
     await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(200);
@@ -825,6 +874,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   } });
   STORE.failSummary = false;
 
+  STORE.optIns = {}; STORE.optOuts = {};
   await scenario('legacy-enterprise-opt-out', FX.legacyEnterprise(HOST), { url: '/workspace#modules', steps: async function (p) {
     await p.waitForFunction(function () { return document.querySelectorAll('#modules-body [data-mod-act="remove"]').length > 5; });
     await modulesFit(p, 'legacy Enterprise');
@@ -842,6 +892,33 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var eb = await p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { card: t('bill-card'), hist: t('bill-hist'), sub: t('bill-sub'), pm: (document.querySelector('#bill-card .pmc') || {}).className, paid: document.querySelectorAll('#bill-hist .spill.paid').length }; });
     ok('legacy Enterprise: the payment method is ClearSky\'s invoice paid by ACH or check under the agreement, never "no billing account", beside the $150,000 paid', /\bmanual\b/.test(eb.pm) && /Invoiced by ClearSky/.test(eb.card) && /ACH or check/.test(eb.card) && !/No billing account|No payment method/.test(eb.card) && /\$150,000/.test(eb.hist) && eb.paid === 1 && /Enterprise plan/.test(eb.sub) && /Priced by your agreement/.test(eb.sub), eb);
     await billingPhone(p, 'legacy-enterprise');
+    /* sent, then one department kept from Plan & billing (#197): the payment
+       method is Stripe's door, Changes in progress lists the five opt-outs,
+       and Cancel request on Plant keeps Plant and the Office it needs */
+    await p.evaluate(function () { window.location.hash = '#modules'; });
+    await p.waitForFunction(function () { return document.querySelectorAll('#modules-body [data-mod-act="remove"]').length > 5; }, null, { timeout: 4000 }).catch(function () {});
+    await p.locator('#modules-body [data-mod-act="remove"][data-module="logic-office"]').click();
+    await p.locator('#omega-package-menu').getByRole('button', { name: 'Send opt-out request' }).click();
+    await p.waitForFunction(function () { var d = document.getElementById('omega-package-menu'); return !!d && /Sent\./.test(d.textContent); }, null, { timeout: 4000 }).catch(function () {});
+    await p.keyboard.press('Escape'); await wait(150);
+    await p.evaluate(function () { window.location.hash = '#billing'; });
+    await p.waitForFunction(function () { return document.querySelectorAll('#bill-req .chg-row').length === 5; }, null, { timeout: 4000 }).catch(function () {});
+    var lb = await p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { card: t('bill-card'), req: t('bill-req'), rows: Array.prototype.map.call(document.querySelectorAll('#bill-req .chg-row'), function (r) { return { key: r.getAttribute('data-change'), pill: (r.querySelector('.bpill') || {}).textContent, cancel: !!r.querySelector('[data-cancel]') }; }) }; });
+    ok('legacy Enterprise: the payment method is Stripe\'s, never "No billing account yet" (Concord, 2026-09-27)', /Stripe/.test(lb.card) && !/No billing account/.test(lb.card), lb.card);
+    ok('legacy Enterprise: Changes in progress lists the five opt-outs, each Opting out with Cancel request', lb.rows.length === 5 && lb.rows.every(function (r) { return r.pill === 'Opting out' && r.cancel; }) && /Logic Office/.test(lb.req), lb);
+    await p.click('#bill-req [data-cancel="logic-plant"]');
+    await p.locator('#omega-package-menu .opm-primary', { hasText: 'Cancel request' }).waitFor({ timeout: 4000 });
+    var keepText = (await p.locator('#omega-package-menu').textContent()).replace(/\s+/g, ' ');
+    ok('legacy Enterprise: Cancel request on Plant says it also keeps the Office Plant needs, and that nothing about the bill changes', /also keeps Logic Office/.test(keepText) && /Nothing about your bill changes/.test(keepText), keepText.slice(0, 300));
+    await p.locator('#omega-package-menu .opm-primary', { hasText: 'Cancel request' }).click(); await wait(500);
+    await p.keyboard.press('Escape');
+    await p.waitForFunction(function () { return document.querySelectorAll('#bill-req [data-cancel]').length === 3; }, null, { timeout: 4000 }).catch(function () {});
+    var left = await p.$$eval('#bill-req [data-cancel]', function (r) { return r.map(function (b) { return b.getAttribute('data-cancel'); }); });
+    ok('legacy Enterprise: Cancel request on Plant keeps Plant and the Office it needs; the other three stay requested', left.join() === 'logic-materials,logic-logistics,logic-customer' && STORE.posts[STORE.posts.length - 1].action === 'withdraw-opt-out', left);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'legacy-billing-requests-1366.png'), fullPage: true });
+    await p.setViewportSize({ width: 390, height: 844 }); await wait(250);
+    ok('legacy Enterprise: Plan & billing with requests fits a 390px phone (no sideways scroll)', await p.evaluate(function () { return document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1; }));
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'legacy-billing-requests-390.png'), fullPage: true });
     return {};
   } });
 
@@ -919,7 +996,87 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('legacy add: Plan & billing lists what was added by card, what it costs a month, that it is on, and that it is invoiced in QuickBooks', !!bill && /Added to your plan by card/.test(bill) && /\$1,500/.test(bill) && /Logic Office/.test(bill) && /Active/.test(bill) && /QuickBooks/.test(bill), bill);
     return {};
   } });
-  addOnReset();
+  addOnReset(); STORE.optIns = {}; STORE.optOuts = {};
+  /* ══ 5b'. CONCORD — a legacy plan ClearSky billed by hand, $1,299 past due
+     and no billing account yet (Tommy, 2026-09-27, on this card: "This
+     payment method should be linked to the stripe payment system we built
+     with quickbooks. Stripe collects and takes the payment"). Payment
+     method offers Add a card with Stripe and What you owe offers Pay $1,299
+     with Stripe, each Stripe's own page in THIS tab; back from Stripe the
+     open invoice has its page and I've paid, and paid it reads nothing owed
+     with the payment in the history. Never "No billing account yet", never a
+     mail to ClearSky, never a card field; a member is told who pays. ══ */
+  function concordFx(role) {
+    var fx = FX.legacyEnterprise(HOST), orgPath = 'omega_orgs/' + fx.org, dayMs = 86400e3;
+    fx.docs[orgPath] = Object.assign({}, fx.docs[orgPath], { name: 'Concord Energy', tierLevel: 1 });
+    fx.billPath = orgPath + '/billing/current';
+    fx.docs[fx.billPath] = { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'manual', trialEndsAt: null, subscriptionDue: new Date(Date.now() - 25 * dayMs).toISOString().slice(0, 10),
+      amountDue: 1299, amountPaid: 1299, lastPaidAt: new Date(Date.now() - 56 * dayMs).toISOString().slice(0, 10), createdAt: fx.docs[fx.billPath].createdAt };
+    if (role) fx.docs[orgPath + '/members/' + fx.user.uid].role = role;
+    CARD.posts = []; CARD.dueOpen = null; CARD.paid = false; CARD.invoices = null;
+    return fx;
+  }
+  function billText(p) {
+    return p.evaluate(function () {
+      var g = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; };
+      return { owe: g('bill-owe'), card: g('bill-card'), sub: g('bill-sub'), hist: g('bill-hist'), add: g('bill-card-add'), pay: g('bill-stripe-pay'), check: !!document.getElementById('bill-stripe-check'),
+        mail: document.querySelectorAll('#bill-card a[href^="mailto:"], #bill-owe a[href^="mailto:"]').length, inputs: document.querySelectorAll('#billing-body input').length };
+    });
+  }
+  var cc = concordFx();
+  await scenario('concord-billing', cc, { url: '/workspace#billing', steps: async function (p) {
+    await p.waitForSelector('#bill-stripe-pay', { timeout: 6000 }).catch(function () {});
+    var a = await billText(p);
+    ok('concord: the Payment method card is linked to Stripe: Add a card with Stripe, no card on file yet; never "No billing account yet", never a mail to ClearSky, never a card field', /Pay by card with Stripe/.test(a.card) && /Card on file\s*None yet/.test(a.card) && a.add === 'Add a card with Stripe' && !/No billing account yet|Ask ClearSky/.test(a.card) && a.mail === 0 && a.inputs === 0, a);
+    ok('concord: What you owe is ClearSky\'s $1,299, with Pay $1,299 with Stripe', /\$1,299/.test(a.owe) && a.pay === 'Pay $1,299 with Stripe' && !a.check, a.owe);
+    ok('concord: the plan still reads as ClearSky billed it, and the last payment stands in the history', /Invoiced by ClearSky/.test(a.sub) && /Last payment/.test(a.hist) && /\$1,299/.test(a.hist), { sub: a.sub, hist: a.hist });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'concord-billing-stripe.png'), fullPage: true });
+    var went = []; await p.route(/^https:\/\/(billing|invoice)\.stripe\.com\//, function (r) { went.push(r.request().url()); return r.abort('aborted'); });
+    await p.click('#bill-card-add'); await wait(600);
+    await p.evaluate(function () { if (window.OmegaSplash) window.OmegaSplash.done(); });
+    ok('concord: Add a card with Stripe asks the server for Stripe\'s add-a-card page and goes there in this tab', CARD.posts.indexOf('card') >= 0 && went.length === 1 && /^https:\/\/billing\.stripe\.com\//.test(went[0]), { posts: CARD.posts, went: went });
+    await p.click('#bill-stripe-pay'); await wait(600);
+    await p.evaluate(function () { if (window.OmegaSplash) window.OmegaSplash.done(); });
+    ok('concord: Pay $1,299 with Stripe goes to Stripe\'s invoice page in this tab', CARD.posts.indexOf('pay') >= 0 && went.length === 2 && /^https:\/\/invoice\.stripe\.com\//.test(went[1]), { posts: CARD.posts, went: went });
+    /* back from Stripe by the browser's Back: the page asks again */
+    await p.evaluate(function () { window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })); });
+    await p.waitForSelector('#bill-stripe-check', { timeout: 5000 }).catch(function () {});
+    var b = await p.evaluate(function () { var x = document.querySelector('#bill-owe a[href^="https://invoice.stripe.com/"]'); return { link: x ? x.getAttribute('href') : null, target: x ? x.target : null, check: !!document.getElementById('bill-stripe-check'), pay: !!document.getElementById('bill-stripe-pay') }; });
+    ok('concord: back from Stripe, the open invoice has its page (a new tab) and I\'ve paid, and never a second Pay with Stripe', b.link === 'https://invoice.stripe.com/i/acct_fixture/in_due' && b.target === '_blank' && b.check && !b.pay, b);
+    await p.click('#bill-stripe-check'); await wait(500);
+    var notYet = await p.$eval('#ows-toast', function (e) { return e.textContent; }).catch(function () { return ''; });
+    ok('concord: I\'ve paid before Stripe has the payment says so', /does not show the payment yet/.test(notYet), notYet);
+    /* the payment lands: the server's record reads paid (what api/_lib/stripe-customer.js settle writes) */
+    var paidRec = Object.assign({}, cc.docs[cc.billPath], { amountDue: 0, amountPaid: 2598, lastPaidAt: new Date().toISOString(), paymentFailedAt: null, paymentProvider: 'stripe', stripeCustomerId: 'cus_concord_fixture', stripeLivemode: true,
+      stripeDue: { invoiceId: 'in_due', marker: cc.org + '/x/129900', amountCents: 129900, dueDate: null, number: 'CS-0001', hostedUrl: 'https://invoice.stripe.com/i/acct_fixture/in_due', state: 'paid', issuedAt: Date.now(), issuedBy: cc.user.email } });
+    cc.docs[cc.billPath] = paidRec; CARD.paid = true; CARD.dueOpen = null;
+    CARD.invoices = [{ id: 'in_due', number: 'CS-0001', status: 'paid', amountDue: 1299, created: Date.now(), hostedUrl: 'https://invoice.stripe.com/i/acct_fixture/in_due', pdfUrl: null }];
+    await p.evaluate(function (a) { window.__firebaseDouble.store.put(a.path, a.rec); }, { path: cc.billPath, rec: paidRec });
+    await p.click('#bill-stripe-check'); await wait(300);
+    await p.waitForFunction(function () { return /nothing is owed/.test((document.getElementById('bill-owe') || {}).textContent || ''); }, null, { timeout: 5000 }).catch(function () {});
+    await p.waitForFunction(function () { return /Visa ending 4242/.test((document.getElementById('bill-card') || {}).textContent || ''); }, null, { timeout: 5000 }).catch(function () {});
+    var c = await billText(p);
+    ok('concord: paid: nothing is owed and the past due date is gone, the plan pays by card through Stripe, the card is on file, and Stripe\'s invoice is in the history', /nothing is owed/.test(c.owe) && !/Next invoice/.test(c.owe) && /By card through Stripe/.test(c.sub) && /Visa ending 4242/.test(c.card) && /Invoices and receipts/.test(c.card) && /CS-0001/.test(c.hist) && !c.check && !c.pay, c);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'concord-billing-paid.png'), fullPage: true });
+    return { posts: CARD.posts.slice() };
+  } });
+  await scenario('concord-billing-phone', concordFx(), { phone: true, url: '/workspace#billing', steps: async function (p) {
+    await p.waitForSelector('#bill-stripe-pay', { timeout: 6000 }).catch(function () {});
+    var a = await billText(p), fit = await p.evaluate(function () {
+      return ['bill-card-add', 'bill-stripe-pay'].map(function (id) { var e = document.getElementById(id), r = e ? e.getBoundingClientRect() : null; return !!r && r.width > 0 && r.left >= 0 && r.right <= window.innerWidth; });
+    });
+    ok('concord on a phone: Add a card with Stripe and Pay $1,299 with Stripe are on the screen, whole', a.add === 'Add a card with Stripe' && a.pay === 'Pay $1,299 with Stripe' && fit.every(Boolean), { a: a, fit: fit });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'concord-billing-phone.png'), fullPage: true });
+    return {};
+  } });
+  var ccm = concordFx('member');
+  await scenario('concord-member', ccm, { url: '/workspace#billing', steps: async function (p) {
+    await p.waitForFunction(function () { return /\$1,299/.test((document.getElementById('bill-owe') || {}).textContent || ''); }, null, { timeout: 6000 }).catch(function () {});
+    await wait(400);
+    var m = await billText(p);
+    ok('concord member: sees what is owed and that an owner or administrator pays it and adds the card through Stripe; no buttons, and the page never asks the server for the card', /\$1,299/.test(m.owe) && /pays it by card through Stripe/.test(m.owe) && /adds the card/.test(m.card) && !m.add && !m.pay && !m.check && CARD.posts.length === 0 && m.inputs === 0, { m: m, posts: CARD.posts });
+    return {};
+  } });
   /* ══ 5c″. EVERY CLICK (Tommy, 2026-09-27: "we need to make sure every click
      every link doesnt bug") ══
      scripts/_lib/click-sweep.js clicks every visible control on every view
@@ -974,6 +1131,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   await scenario('sweep northstar-phone', FX.northstar(HOST), { phone: true, steps: async function (p) { return sweepAll(p, 'sweep northstar-phone', true); } });
   await scenario('sweep lite', FX.lite(HOST), { steps: async function (p) { return sweepAll(p, 'sweep lite'); } });
   await scenario('sweep pending', FX.pending(HOST), { steps: async function (p) { return sweepAll(p, 'sweep pending'); } });
+  await scenario('sweep concord', concordFx(), { steps: async function (p) { return sweepAll(p, 'sweep concord'); } });
+  CARD.posts = []; CARD.dueOpen = null; CARD.paid = false; CARD.invoices = null;
 
   /* the same sweep on the two pages the workspace sends people to that
      wear its chrome: Projects and the tools catalogue (Marketplace), as a Standard
@@ -1453,6 +1612,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   async function flow(page, current, opts) {
     opts = opts || {};
     if (ONLY && !ONLY.test('flow')) return;
+    if (page === '/marketplace.html') { CURRENT_FX = ns; PACKAGE_VIEW = null; STORE.posts = []; }
     var errs = [], ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); if (/Chart\.js/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.Chart=function(){};window.Chart.register=function(){};' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
     await ctx.addInitScript(DOUBLE_SRC);

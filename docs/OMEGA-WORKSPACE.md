@@ -70,17 +70,36 @@ decided 2026-09-26.
   invoices with their pay links, worded for the rail each is on
   (`payWith`: Stripe or QuickBooks), the next invoice, paid through,
   *I've paid* = reconcile-now for an owner or admin; Stripe's open
-  invoices for a Stripe-billed legacy plan); *Payment method* (a Stripe plan
-  opens the Stripe Customer Portal through `POST /api/stripe-portal` for
-  the card and autopay; a QuickBooks plan saves the card on QuickBooks'
-  own invoice payment page with Autopay; card details are never entered
-  on our pages); *Billing history* (the engine's invoices from
-  `GET /api/plan-change`, which every verified member may read; a Stripe
-  plan's from `POST /api/stripe-invoices`). *Changes in progress* (a
+  invoices for a Stripe-billed legacy plan; and, for a plan billed outside
+  the engine on the Stripe rail, **Pay $X with Stripe** for the amount
+  ClearSky set as due: one Stripe invoice per due date and amount, paid on
+  Stripe's hosted page with the card on file or a new one, then its page
+  and **I've paid** until the webhook or the check records it once);
+  *Payment method* (**linked to Stripe**, Tommy 2026-09-27: "This payment
+  method should be linked to the stripe payment system we built with
+  quickbooks. Stripe collects and takes the payment and sends it to
+  quickbooks which is our account". Every plan billed outside the package
+  engine that ClearSky does not invoice through QuickBooks, and a package
+  on the Stripe rail, has its card with Stripe: `POST /api/stripe-customer`
+  on `api/_lib/stripe-customer.js` reads the card on file back from Stripe
+  (brand, last four, expiry; never stored), **Add a card with Stripe**
+  links the workspace's one Stripe customer the first time and opens the
+  portal's add-a-payment-method flow (the card becomes the default for
+  invoices), and **Invoices and receipts** is the portal; each is Stripe's
+  own page in this tab, back to `/workspace#billing`. A QuickBooks plan
+  saves the card on QuickBooks' own invoice payment page with Autopay;
+  card details are never entered on our pages, and a workspace with a
+  billing record never reads "No billing account yet". The books:
+  Stripe's payments reach ClearSky's QuickBooks through the Connect to
+  Stripe app, never through OMEGA; `docs/PAYMENTS-STRIPE.md`); *Billing
+  history* (the engine's invoices from `GET /api/plan-change`, which every
+  verified member, and an active client's owner or admin, may read; a
+  Stripe plan's from `POST /api/stripe-invoices`). *Changes in progress* (a
   packaged change waiting for payment or queued for the review, a legacy
-  add-on waiting for payment or ending, a recorded opt-in or opt-out) are
-  listed between them, read from the same `moduleCard` as the Modules
-  page, so a request the plan has already answered is never shown.
+  add-on waiting for payment or ending, a recorded opt-in or opt-out, each
+  with when and by whom it was asked) are listed between them, read from
+  the same `moduleCard` as the Modules page, so a request the plan has
+  already answered is never shown.
 - **Opt in and Opt out, never Ask.** Every module not held carries **Opt
   in** and every optional held one **Opt out**: one card and one action per
   module on the Modules page, through the one menu; see *Modules, opt in
@@ -96,6 +115,20 @@ decided 2026-09-26.
   on a legacy plan* below). Everywhere else a legacy Opt in or Opt out is a
   request recorded with its price that ClearSky confirms. Self-serve
   conversion of a whole legacy plan onto a package is NOT built (below).
+- **A request is filed on the role alone** (Tommy, 2026-09-27: "i want it
+  to opt in and out, this needs to work"). A request grants and charges
+  nothing, so an owner or administrator files one without a verified
+  email: `POST /api/plan-change` `opt-in`, `withdraw-opt-in`, `opt-out`,
+  `withdraw-opt-out`, `request-removal` and `withdraw-removal` check the
+  role and the workspace (a missing org status reads active; pending,
+  suspended or cancelled refuse), and the record, the history and
+  `admin_audit` rows and ClearSky's mail say whether the email was
+  verified (`emailVerified`). Quoting, paying, switching on, add-on stops
+  and the summary need a verified email, or an owner or administrator of
+  an active client (`admin.clientAdmin`, below). A member is told who
+  files them. A legacy opt-out's dry run carries a `previewId`; applying
+  a different one is refused ("review the opt-out request again"), so
+  what was confirmed is what is recorded.
 - **The module cards live on Modules, not the home** (Tommy, 2026-09-27:
   "i love the way the modules are but i dont want them to be taking up so
   much dashboard space"). The home is the hub, Today, In flight and Around
@@ -114,7 +147,9 @@ decided 2026-09-26.
   the compact cards that used to sit on the home: **Your modules** (Live,
   opting out, or bought and waiting on the invoice) first, then the rest to
   add, each in shelf order on one grid, so a shelf of one never leaves a
-  row empty; the plans shelf closes the page (`#plans`). A card is the
+  row empty; the plans shelf closes the page (`#plans`; Enterprise reads
+  *Contact for pricing* with **Contact ClearSky** and no figure, as
+  `/api/offerings` and the price page do). A card is the
   letter on its shelf's colour and its status, the name with its price
   line, three things it does, where it lives, the tools inside as chips,
   what it needs, then the note with its one action. Every word fits its
@@ -313,10 +348,18 @@ forward: `/marketplace.html#<module>` → `/workspace#module-<key>`, `#plans`
 ## Opt in by card on a legacy plan (add-ons)
 
 `api/_lib/addons.js`, through `plan-change` (owner, administrator or
-verified ClearSky staff; a member reads). The card says Opt in; the menu
-asks `addon-quote` and, where the plan can switch the module on exactly,
-sells it as an ADD-ON (built as "Add to plan", #177). One engine, the
-package engine's own parts: the book, the synced QuickBooks items
+verified ClearSky staff; a member reads). An owner or administrator of an
+ACTIVE client needs no verified email, here, on `billing-profile` and on
+the Stripe card door `stripe-customer`
+(`admin.clientAdmin`, Tommy, 2026-09-27: "to opt in, we shouldn't need to
+verify email... they are already a client and customer"): the role on
+`members/{uid}` vouches, because only a person grants it, and a Team
+invitation makes its account unverified. A plain member still reads only
+with a verified email; a pending or suspended workspace, or one with no
+record, still needs one; staff are unchanged. The card says Opt in; the
+menu asks `addon-quote` and, where the plan can switch the module on
+exactly, sells it as an ADD-ON (built as "Add to plan", #177). One engine,
+the package engine's own parts: the book, the synced QuickBooks items
 (`module:<key>`, `logic-bundle`), the QuickBooks driver,
 `package-billing.reconcile` and the hourly runner; the engine's guard
 decides whether a card can be taken at all (a closed engine says "Card
@@ -433,7 +476,9 @@ ground, one home; the session travels same-origin on every hop.
 | rail, any page | Team · Feed | `/workspace#team`, the Around you page alone |
 | rail, any page | Plan & billing | `/workspace#billing`, the Plan & billing page |
 | rail, any page | Settings | the side panel on `/workspace` (`#settings`) |
-| Plan & billing | Manage card and autopay (Stripe) | the Stripe Customer Portal in a new tab |
+| Plan & billing | Add a card with Stripe · Change card | Stripe's add-a-payment-method page (the customer portal's flow), in this tab, back to `/workspace#billing`; the first time it links the workspace's Stripe customer |
+| Plan & billing | Invoices and receipts · Manage card and invoices (Stripe) | the Stripe Customer Portal, in this tab, back to `/workspace#billing` |
+| Plan & billing | Pay $X with Stripe | Stripe's hosted invoice page for the amount ClearSky set as due, in this tab; then its page and *I've paid* |
 | Plan & billing | Pay · Open the payment page (QuickBooks) | the invoice's QuickBooks payment page, where the card is saved and Autopay turned on |
 | In flight | Assign · Reassign | the side panel of the workspace's people; a pick writes the project's owner |
 | tools grid | a Live tile | the tool, scoped to the org |
@@ -486,16 +531,20 @@ to the page, the shell or the runtime they load.
   plan buys exact modules as add-ons beside its plan (opt in by card,
   above) and records a request for the rest;
   moving the whole workspace onto a subscription package (re-pricing what
-  its tier holds today) stays ClearSky's, from the admin Package tab.
+  its tier holds today) stays ClearSky's, from the admin Package tab,
+  which opens preselected on what it holds plus its recorded opt-ins, less
+  its opt-outs (`billing/current.optOuts`, no figure: a legacy price is
+  the agreement's). Neither request changes access or a charge by itself.
 - **One-click charge of a saved card from the workspace.** The card is
   charged on QuickBooks' own page (a saved card there pays in one click;
   Autopay pays renewals). Charging it from our server needs the QuickBooks
   Payments permission on a reconnect (roadmap §10.5 Step B).
-- **A saved card shown by brand and last four.** The page says where the
-  card lives (Stripe's portal, QuickBooks' payment page) and never holds
-  one; reading the brand and last four back from Stripe or QuickBooks
-  Payments is not wired. `billing/current.autopay` is shown when staff set
-  it.
+- **A saved card shown by brand and last four from QuickBooks Payments.**
+  Stripe's half is built (`POST /api/stripe-customer` reads the card on
+  file back, never stored); a QuickBooks plan's page says where the card
+  lives (QuickBooks' payment page) and never holds one. Reading it back
+  from QuickBooks Payments is not wired. `billing/current.autopay` is
+  shown when staff set it.
 - The projects page keeps its own TOPBAR (tenant chip, tabs, avatar) and
   its own page layout; only its rail, ground and home link are the
   workspace's. The marketplace wears the whole chrome (`wear()`); giving

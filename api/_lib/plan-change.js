@@ -259,10 +259,15 @@ async function cancel(db, orgId, changeId, caller, now) {
  * dependents; keeping a dependent also keeps its prerequisites. Lite stays.
  * This is a review request, never an immediate grant or invoice change. */
 function removalSelection(billing, wanted, withdraw) {
-  if (billing.packaged !== true) fail('This workspace is not on a subscription package');
-  var owned = M.normalize(billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription.modules : billing.modules), selected = wanted.slice();
+  /* a plan billed outside the engine opts out by request (opt-out); a page
+     from before that door existed still posts here, and is told to reload */
+  if (billing.packaged !== true) fail('This workspace is not on a subscription package: Opt out sends ClearSky a request instead (reload the page).');
+  var owned = M.normalize(billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription.modules : billing.modules);
   wanted.forEach(function (k) { if (owned.indexOf(k) < 0) fail(M.get(k).name + ' is not in your package', 400); });
-  var changed = true;
+  return { owned: owned, modules: closeOver(owned, wanted, withdraw) };
+}
+function closeOver(owned, wanted, withdraw) {
+  var selected = wanted.slice(), changed = true;
   while (changed) {
     changed = false;
     owned.forEach(function (k) {
@@ -272,13 +277,13 @@ function removalSelection(billing, wanted, withdraw) {
       if (!withdraw && selected.indexOf(k) < 0 && M.get(k).requires.some(function (r) { return selected.indexOf(r) >= 0; })) { selected.push(k); changed = true; }
     });
   }
-  return { owned: owned, modules: owned.filter(function (k) { return selected.indexOf(k) >= 0; }) };
+  return owned.filter(function (k) { return selected.indexOf(k) >= 0; });
 }
 /* Removals never change access today; they queue for the quarterly review.
  * Dry run and apply read the same current subscription inside a transaction;
  * a changed dependency set requires the owner to review it again. */
 async function removal(db, orgId, input, caller, now, withdraw) {
-  var c = await S.context(db, orgId), wanted = keys(input.remove, 'remove');
+  var c = await S.context(db, orgId), wanted = keys(input.remove, 'remove'), verified = emailVerified(caller);
   var current = c.root.collection('billing').doc('current'), sent = null;
   var result = await db.runTransaction(async function (tx) {
     var live = await tx.get(current), fresh = live.data() || {}, list = (fresh.removalRequests || []).slice();
@@ -317,14 +322,14 @@ async function removal(db, orgId, input, caller, now, withdraw) {
     });
     tx.update(current, { removalRequests: list, updatedAt: now, updatedBy: caller.email });
     var id = 'removal-' + Q.key(B.stable({ w: wanted, withdraw: !!withdraw, at: now }));
-    var event = { at: now, by: caller.email, action: withdraw ? 'removal-withdrawn' : 'removal-requested', changed: { modules: remove, removalRequests: list, note: note } };
+    var event = { at: now, by: caller.email, emailVerified: verified, action: withdraw ? 'removal-withdrawn' : 'removal-requested', changed: { modules: remove, removalRequests: list, note: note } };
     tx.set(current.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
     if (!withdraw) sent = Object.assign({ names: names(remove), reason: typeof input.reason === 'string' ? input.reason.slice(0, 300) : '' }, money);
     return { ok: true, removalRequests: list, modules: remove, names: names(remove), note: note };
   });
   /* ClearSky hears about an opt-out the moment it is queued, with the date
      and the fee it moves to, so the review is prepared rather than found */
-  if (sent) await mail('removalAlert', Object.assign({ company: c.org.name || orgId, orgId: orgId, by: caller.email }, sent));
+  if (sent) await mail('removalAlert', Object.assign({ company: c.org.name || orgId, orgId: orgId, by: caller.email, verified: verified }, sent));
   return result;
 }
 async function summary(db, orgId) {
@@ -371,24 +376,33 @@ async function summary(db, orgId) {
    packaged workspace is refused and sent to quote/apply. */
 var LOGIC = ['logic-office', 'logic-plant', 'logic-materials', 'logic-logistics', 'logic-customer'];
 var NO_BILLING = 'Billing is not set up for this workspace yet. Email ClearSky and the module is added when it is.';
+/* what the SERVER knows a legacy record holds of Omega Logic: every
+   department, by its add-on (opting out of Office takes them all) */
+function legacyLogic(b) { return (b.addons || []).indexOf('omega-logic') >= 0 ? LOGIC.slice() : []; }
+/* a missing status is a legacy record, active (tenantActive() in the rules and
+   omega-tenant.js read it the same way); only an explicit one refuses */
+function activeHere(c) { if ((c.org.status || 'active') !== 'active') fail('Your workspace is not active.', 409); }
+/* a REQUEST is filed on the owner or administrator ROLE alone (api/plan-change.js);
+   the entry, the history and audit rows and ClearSky's mail say whether the
+   address was verified */
+function emailVerified(caller) { return !!(caller && (caller.staff || (caller.claims && caller.claims.email_verified === true))); }
 function needs(k) { return (M.get(k) || { requires: [] }).requires; }
-function requested(map) { return Object.keys(map || {}).filter(function (k) { return map[k] && map[k].status === 'requested'; }); }
+function requested(map) { return Object.keys(map || {}).filter(function (k) { return map[k] && map[k].status === 'requested' && !!M.get(k); }); }
 async function optIn(db, orgId, input, caller, now) {
   var c = await S.context(db, orgId), b = c.billing;
   if (b.packaged === true) fail('This workspace is on a subscription package: add modules through the menu, which prices and invoices them.', 409);
-  if (c.org.status !== 'active') fail('Your workspace is not active.', 409);
-  var add = keys(input.add, 'add'), byKey = {};
+  activeHere(c);
+  var add = keys(input.add, 'add'), byKey = {}, verified = emailVerified(caller);
   P.catalog(c.book).forEach(function (m) { byKey[m.key] = m; });
   var have = requested(b.optIns);
-  var logic = (b.addons || []).indexOf('omega-logic') >= 0 ? LOGIC : [];
   /* a module on now as a paid add-on is held: never requested again, and what it needs is not pulled in */
-  var wanted = closure(['lite'].concat(logic, have, AO.live(b, now)), add);
+  var wanted = closure(['lite'].concat(legacyLogic(b), have, AO.live(b, now)), add);
   if (!wanted.length) fail('Already requested', 409);
   var at = iso(now), entries = {}, cents = 0;
   /* `asked`: the person named this module, or the closure pulled it in
      (Office for Plant). Cancel request takes back a pulled-in module with
      the last request that needed it, never one asked for on its own. */
-  wanted.forEach(function (k) { var m = byKey[k]; cents += m.priceCents; entries[k] = { key: k, name: m.name, monthlyCents: m.priceCents, display: m.priceDisplay, requestedBy: caller.email, requestedAt: at, status: 'requested', asked: add.indexOf(k) >= 0, pricebookVersion: c.book.version }; });
+  wanted.forEach(function (k) { var m = byKey[k]; cents += m.priceCents; entries[k] = { key: k, name: m.name, monthlyCents: m.priceCents, display: m.priceDisplay, requestedBy: caller.email, requestedAt: at, status: 'requested', asked: add.indexOf(k) >= 0, emailVerified: verified, pricebookVersion: c.book.version }; });
   var current = c.root.collection('billing').doc('current'), id = 'optin-' + Q.key(B.stable({ w: wanted, at: now }));
   /* the confirm panel: the same closure and price the request would record,
      and nothing written; a workspace with no billing record is refused here
@@ -398,7 +412,7 @@ async function optIn(db, orgId, input, caller, now) {
     return { dryRun: true, add: wanted, names: names(wanted), monthlyCents: cents, display: P.money(cents) + '/month',
       note: 'We record this with its price and tell ClearSky, who moves ' + (c.org.name || 'the workspace') + ' onto monthly billing within one business day; your first invoice carries it. Nothing is charged before you approve that invoice.' };
   }
-  var event = { at: now, by: caller.email, action: 'opt-in-requested', changeId: id, was: { tier: b.tier || null, addons: b.addons || [], optIns: have },
+  var event = { at: now, by: caller.email, emailVerified: verified, action: 'opt-in-requested', changeId: id, was: { tier: b.tier || null, addons: b.addons || [], optIns: have },
     changed: { add: wanted, names: names(wanted), monthlyCents: cents, note: 'Recorded with its price; ClearSky moves the workspace onto a package. Nothing charged.' } };
   await db.runTransaction(async function (tx) {
     var live = await tx.get(current), fresh = live.data() || {};
@@ -408,7 +422,7 @@ async function optIn(db, orgId, input, caller, now) {
     tx.set(current, { optIns: Object.assign({}, fresh.optIns || {}, entries), updatedAt: now, updatedBy: caller.email }, { merge: true });
     tx.set(current.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
   });
-  await mail('optInAlert', { company: c.org.name || orgId, orgId: orgId, names: names(wanted), display: P.money(cents) + '/month', by: caller.email, tier: b.tier || null });
+  await mail('optInAlert', { company: c.org.name || orgId, orgId: orgId, names: names(wanted), display: P.money(cents) + '/month', by: caller.email, verified: verified, tier: b.tier || null });
   return { ok: true, requested: true, add: wanted, names: names(wanted), monthlyCents: cents, display: P.money(cents) + '/month', optIns: entries, requestedAt: at };
 }
 /* A request that is still open can be taken back (Cancel request). The
@@ -442,7 +456,12 @@ function withdrawSet(map, wanted, dependents) {
 }
 async function withdraw(db, orgId, input, caller, now, field) {
   var c = await bare(db, orgId), optIn = field === 'optIns', wanted = keys(optIn ? input.add : input.remove, 'withdraw');
-  var current = c.root.collection('billing').doc('current'), result = null;
+  /* a package's own doors: a change waiting for payment is cancelled, and a
+     removal waiting for the review withdrawn, on the menu (cancel,
+     withdraw-removal); a legacy request never lives on a packaged record */
+  if (c.billing.packaged === true) fail(optIn ? 'This workspace is on a subscription package: a change waiting for payment is cancelled on the menu.'
+    : 'This workspace is on a subscription package: an opt-out waiting for the review is withdrawn on the menu.', 409);
+  var current = c.root.collection('billing').doc('current'), result = null, verified = emailVerified(caller);
   /* the confirm panel names everything the cancel takes back, from this
      rule, so the page never carries a second copy of it; nothing written */
   if (input.dryRun === true) {
@@ -457,13 +476,16 @@ async function withdraw(db, orgId, input, caller, now, field) {
     var gone = withdrawSet(map, wanted, optIn), at = iso(now);
     gone.forEach(function (k) { map[k] = Object.assign({}, map[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: caller.email }); });
     var id = (optIn ? 'optin-withdrawn-' : 'optout-withdrawn-') + Q.key(B.stable({ w: gone, at: now }));
-    var event = { at: now, by: caller.email, action: optIn ? 'opt-in-withdrawn' : 'opt-out-withdrawn', changeId: id, was: { requested: requested(fresh[field]) },
+    var event = { at: now, by: caller.email, emailVerified: verified, action: optIn ? 'opt-in-withdrawn' : 'opt-out-withdrawn', changeId: id, was: { requested: requested(fresh[field]) },
       changed: { withdrawn: gone, names: names(gone), note: 'Withdrawn before ClearSky acted on it. Nothing about the bill changes.' } };
     var patch = { updatedAt: now, updatedBy: caller.email }; patch[field] = map;
     tx.set(current, patch, { merge: true });
     tx.set(current.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
     result = { ok: true, withdrawn: gone, names: names(gone) }; result[field] = map;
   });
+  /* ClearSky hears a withdrawal as it heard the request, so nothing is
+     prepared for a change the workspace no longer wants */
+  await mail(optIn ? 'optInAlert' : 'optOutAlert', { company: c.org.name || orgId, orgId: orgId, names: result.names, by: caller.email, verified: verified, tier: c.billing.tier || null, withdrawn: true });
   return result;
 }
 /* ── Opt out on a plan billed OUTSIDE the engine: the mirror of optIn. The
@@ -481,8 +503,8 @@ async function optOut(db, orgId, input, caller, now) {
   /* as optIn: a workspace awaiting approval, suspended or cancelled holds
      nothing to leave, so it files no request and ClearSky is not mailed one
      (review finding 9: a pending trial was offered Opt out of White Label) */
-  if (c.org.status !== 'active') fail('Your workspace is not active.', 409);
-  var current = c.root.collection('billing').doc('current');
+  activeHere(c);
+  var current = c.root.collection('billing').doc('current'), verified = emailVerified(caller);
   if (!(await current.get()).exists) fail('Billing is not set up for this workspace yet. Email ClearSky to change the plan.', 409);
   /* a module on as a paid add-on is left on its own card (addon-cancel remove):
      it stops at the end of the month paid for, never by a request to ClearSky */
@@ -495,16 +517,22 @@ async function optOut(db, orgId, input, caller, now) {
      dry run says so; a module merely requested is cancelled, not left. */
   /* Office is what every Omega Logic department stands on: on a workspace
      holding the Omega Logic add-on, opting out of Office opts out of them all */
-  var logic = (b.addons || []).indexOf('omega-logic') >= 0;
-  var all = remove.slice(); if (logic && all.indexOf('logic-office') >= 0) LOGIC.forEach(function (k) { if (all.indexOf(k) < 0) all.push(k); });
+  var logic = legacyLogic(b);
+  var all = remove.slice(); if (all.indexOf('logic-office') >= 0) logic.forEach(function (k) { if (all.indexOf(k) < 0) all.push(k); });
   var have = requested(b.optOuts), wanted = all.filter(function (k) { return have.indexOf(k) < 0; });
   if (!wanted.length) fail('Already requested', 409);
   var reason = typeof input.reason === 'string' ? input.reason.trim().slice(0, 300) : '';
   var stale = wanted.filter(function (k) { var o = (b.optIns || {})[k]; return !!(o && o.status === 'requested'); });
-  if (input.dryRun === true) return { dryRun: true, remove: wanted, names: names(wanted), closes: names(stale), note: OPT_OUT_NOTE };
+  /* the confirm panel's fingerprint: what leaves and what it closes. A plan
+     that moved between the preview and the confirm (another opt-out, an
+     Omega Logic add-on, an opt-in answered) is reviewed again. Optional, so a
+     caller without a preview still files the request as recorded here */
+  var previewId = Q.key(B.stable({ orgId: orgId, legacy: true, remove: wanted, closes: stale }));
+  if (input.dryRun === true) return { dryRun: true, previewId: previewId, remove: wanted, names: names(wanted), closes: names(stale), note: OPT_OUT_NOTE };
+  if (input.previewId != null && input.previewId !== previewId) fail('Your plan changed; review the opt-out request again');
   var at = iso(now), entries = {}, id = 'optout-' + Q.key(B.stable({ w: wanted, at: now })), merged = null, ins = null;
-  wanted.forEach(function (k) { entries[k] = { key: k, name: M.get(k).name, requestedBy: caller.email, requestedAt: at, status: 'requested', reason: reason }; });
-  var event = { at: now, by: caller.email, action: 'opt-out-requested', changeId: id, was: { tier: b.tier || null, addons: b.addons || [], optOuts: have },
+  wanted.forEach(function (k) { entries[k] = { key: k, name: M.get(k).name, requestedBy: caller.email, requestedAt: at, status: 'requested', reason: reason, emailVerified: verified }; });
+  var event = { at: now, by: caller.email, emailVerified: verified, action: 'opt-out-requested', changeId: id, was: { tier: b.tier || null, addons: b.addons || [], optOuts: have },
     changed: { remove: wanted, names: names(wanted), reason: reason, closed: stale, note: 'Recorded for ClearSky to confirm under the agreement. Access and the plan are unchanged.' } };
   await db.runTransaction(async function (tx) {
     var live = await tx.get(current), fresh = live.data() || {};
@@ -519,7 +547,7 @@ async function optOut(db, orgId, input, caller, now) {
     tx.set(current, patch, { merge: true });
     tx.set(current.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
   });
-  await mail('optOutAlert', { company: c.org.name || orgId, orgId: orgId, names: names(wanted), by: caller.email, tier: b.tier || null, reason: reason });
+  await mail('optOutAlert', { company: c.org.name || orgId, orgId: orgId, names: names(wanted), by: caller.email, verified: verified, tier: b.tier || null, reason: reason });
   var out = { ok: true, requested: true, remove: wanted, names: names(wanted), closes: names(stale), optOuts: merged, requestedAt: at, note: OPT_OUT_NOTE };
   if (ins) out.optIns = ins;
   return out;
@@ -649,4 +677,4 @@ async function reconcileNow(db, orgId, caller, now, deps) {
   return out(after.exists ? after.data() : {});
 }
 module.exports = { reconcileNow: reconcileNow, quote: quote, preview: preview, apply: apply, cancel: cancel, removal: removal, optIn: optIn, summary: summary, closure: closure, deltaLines: deltaLines, state: state,
-  packQuote: packQuote, packBuy: packBuy, autoTopup: autoTopup, optOut: optOut, withdraw: withdraw, resolve: resolve, reviewOn: reviewOn };
+  packQuote: packQuote, packBuy: packBuy, autoTopup: autoTopup, optOut: optOut, withdraw: withdraw, withdrawSet: withdrawSet, resolve: resolve, reviewOn: reviewOn };

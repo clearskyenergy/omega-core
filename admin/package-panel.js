@@ -269,7 +269,9 @@
       if (ending.length) { out.lines.push('Add-ons ending: ' + names(ending) + (ao.nextInvoiceOn ? ' on ' + dayOf(ao.nextInvoiceOn) : '') + ' (opted out; not renewed)'); ending.forEach(function (k) { out.preselect = out.preselect.filter(function (x) { return x !== k; }); out.notes[k] = 'Add-on ending'; }); }
     }
     if (out.requested.length) out.lines.push('Requested: ' + out.requested.map(function (o) { return (o.name || o.key) + (o.display ? ' (' + o.display + ')' : '') + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : ''); }).join('; '));
-    if (out.optingOut.length) out.lines.push((out.packaged ? 'Opting out at review: ' : 'Opt-out requested: ') + out.optingOut.map(function (o) { return (o.name || o.key) + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : '') + (o.reason ? ' ("' + o.reason + '")' : ''); }).join('; '));
+    /* a legacy opt-out is ClearSky's to date under the agreement (the tenant
+       keeps access until then); a packaged one leaves at the review */
+    if (out.optingOut.length) out.lines.push((out.packaged ? 'Opting out at review: ' : 'Opt-out requested: ') + out.optingOut.map(function (o) { return (o.name || o.key) + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : '') + (o.reason ? ' ("' + o.reason + '")' : ''); }).join('; ') + (out.packaged ? '' : ' (confirm the date under the agreement)'));
     /* what ClearSky already answered by hand (plan-change resolve-*), so the
        strip says why a request is no longer listed */
     var answered = [];

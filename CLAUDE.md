@@ -263,6 +263,24 @@ engine's own reconcile, so paid means open within seconds; the runner and
 Runbook and what is not built (autopay, instant refund events, tax):
 `docs/PAYMENTS-STRIPE.md`.
 
+Plan & billing's Payment method is **linked to Stripe** (2026-09-27, Tommy:
+"This payment method should be linked to the stripe payment system we built
+with quickbooks. Stripe collects and takes the payment"): `POST
+/api/stripe-customer` on `api/_lib/stripe-customer.js` is the ONE door for
+a workspace's card and, for a plan billed outside the engine (not
+`paymentProvider: 'quickbooks'`), the amount ClearSky set as due. Add a card
+links the legacy tier's own `stripeCustomerId` once (a Stripe TEST key
+only for a `packagingSandbox` workspace, because the one database is
+production's; a binding made in the other mode is never overwritten) and
+opens the portal's add-a-payment-method flow, back to `/workspace#billing`;
+the card is read back from Stripe, never stored. Pay $X with Stripe is one
+`send_invoice` invoice per due date and amount (`metadata.omegaDue`),
+recorded once by the webhook (answered before the tier path) or I've paid;
+`subscriptionDue` stays ClearSky's. A package keeps the engine's rules.
+An owner or admin of an ACTIVE client needs no verified email here either
+(`admin.clientAdmin`, as on `plan-change`). Stripe → QuickBooks is the Connect to Stripe app, never OMEGA (that would
+book it twice). `scripts/test-stripe-customer.js`.
+
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
 `name`, `shelfLabel` (Core · Add-on · Plus · Advanced · By the piece · Omega
@@ -834,9 +852,11 @@ says Opt in either way; the menu asks `plan-change` `addon-quote` first.
 By card is an ADD-ON beside the legacy plan, whose own tier, price and
 billing are never touched: `api/_lib/addons.js` through `plan-change`
 `addon-quote` / `addon-buy` / `addon-cancel` / `withdraw-addon-cancel`
-(owner, admin or verified staff), the book's list price (the five Logic
-parts as the bundle), its own QuickBooks invoice paid by card on QuickBooks'
-page (or the card saved there) — **Opt in and pay**, the billing contact
+(owner, admin or verified staff; an owner or admin of an ACTIVE client
+needs no verified email, `admin.clientAdmin`: the role a person granted
+vouches, and a Team invitation makes its account unverified), the book's
+list price (the five Logic parts as the bundle), its own QuickBooks invoice
+paid by card on QuickBooks' page (or the card saved there) — **Opt in and pay**, the billing contact
 asked once first if there is none — then *Waiting for payment* with Pay,
 *I've paid* (reconcile-now) and Cancel request (`addon-cancel {addOnId}`,
 only while unpaid); Live when `package-billing.reconcile` sees it paid; the
@@ -859,9 +879,17 @@ not sold by card; the quote says why (`request: true`) and the menu offers
 **Request opt-in**, the RECORDED request (`plan-change` `opt-in` /
 `opt-out`, dry run first, on `billing/current.optIns` / `optOuts`, history,
 audit, ClearSky mailed; the tier is never touched; Cancel request is
-`withdraw-opt-in` / `withdraw-opt-out`). Card payments not yet open (the
+`withdraw-opt-in` / `withdraw-opt-out`; an opt-out's dry run carries a
+`previewId` the apply must match). Card payments not yet open (the
 engine guard; flags are off by default) answer `request: true` too, so a
-legacy Opt in never dead-ends. A legacy tier opens Site Map a whole tab at a
+legacy Opt in never dead-ends. A REQUEST (`plan-change` `opt-in` /
+`withdraw-opt-in` / `opt-out` / `withdraw-opt-out` / `request-removal` /
+`withdraw-removal`) grants and charges nothing, so an owner or
+administrator files one on the ROLE alone (a missing org status reads
+active; pending, suspended or cancelled refuse); the record, the audit
+row and ClearSky's mail say whether the email was verified
+(`emailVerified`); pricing, paying, switching on, add-on stops and the
+summary need a verified email or `admin.clientAdmin`. A legacy tier opens Site Map a whole tab at a
 time (`data-cap`), so the editor opens a live add-on's OWN commands instead,
 wherever they sit, and nothing else on their tab (`omega-caps`
 `addOnOpens`/`addOnLayout`, from `GET /api/package-access`'s legacy answer),
@@ -901,11 +929,15 @@ and the editor strip's Try again), and the gate honours a legacy
 last, never online, a finance-marketplace deal riding on its project) and
 Assign merges only the owner fields onto `projects/{id}`. Plan & billing is
 a page (`#billing`), phone first: the subscription, what is owed and when
-with the invoice's own Pay, the payment method as a card (QuickBooks,
-Stripe's portal, or invoiced by ClearSky under an agreement; a card is
-never entered on our pages), changes in progress and the history;
-`GET /api/plan-change` is readable by any verified member (invoices shown
-read-only), changes stay with an owner or admin. The shell's button reset
+with the invoice's own Pay, the payment method as a card (linked to Stripe
+for a plan billed outside the engine: the card read back, Add a card with
+Stripe, Invoices and receipts, Pay $X with Stripe, all `POST
+/api/stripe-customer` on Stripe's own pages in this tab; QuickBooks' page
+where ClearSky invoices through QuickBooks; a card is never entered on our
+pages), changes in progress and the history. A workspace with a billing
+record never reads "No billing account yet". `GET /api/plan-change` is
+readable by any verified member and by an active client's owner or admin
+(invoices shown read-only), changes stay with an owner or admin. The shell's button reset
 is `:where()` (zero specificity) so a styled button keeps its face, and
 `omega-splash.js` hears link clicks last, so a link the page handles itself
 never raises the mark. Opt-in panels live on
@@ -931,8 +963,10 @@ pinning, wearing the workspace chrome where the workspace is home
 module that carries it (the package's catalog, else `GET /api/offerings`)
 and links to `/workspace#module-<key>`; on the classic home it opens the one
 menu on that module in place. `/marketplace.html#<module>` and `#plans`
-forward to the Modules page. Design, launch order and the honest list of
-what is not built: `docs/OMEGA-WORKSPACE.md`.
+forward to the Modules page. Enterprise is "Contact for pricing":
+`/api/offerings`, the price page and the Modules page's plans shelf publish
+no Enterprise figure (the book keeps it for the contract). Design, launch
+order and the honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 

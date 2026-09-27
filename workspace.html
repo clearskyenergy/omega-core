@@ -142,6 +142,7 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .planc .nm{display:flex;align-items:center;justify-content:space-between;gap:8px;font:600 16px Poppins,"DM Sans",sans-serif}
 .planc .pr{font:500 24px/1.1 "DM Mono",ui-monospace,monospace;letter-spacing:-.02em;font-variant-numeric:tabular-nums}.planc .pr span{font:500 13px "DM Sans",sans-serif;color:var(--ows-ink2);letter-spacing:0;margin-left:3px}
 .planc ul{margin:0;padding-left:16px;font-size:12.5px;line-height:1.55}.planc .fee{margin-top:auto;padding-top:8px;border-top:1px solid var(--ows-line);font-size:12px;color:var(--ows-ink2)}
+.planc .pr.ask{font:600 17px/1.2 Poppins,"DM Sans",sans-serif;letter-spacing:0}.planc .contact{margin-top:auto;align-self:flex-start}
 .starters{display:flex;gap:8px;flex-wrap:wrap}.starter{display:inline-flex;flex-direction:column;gap:1px;padding:7px 11px;border-radius:10px;background:var(--ows-paper);border:1px solid var(--ows-line);font-size:12px;color:var(--ows-ink2);min-width:0;max-width:100%}.starter b{color:var(--ows-ink);font-weight:600}
 @media (max-width:560px){.plans{grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:82%;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;-webkit-overflow-scrolling:touch}.planc{scroll-snap-align:start}
   .starters{flex-wrap:nowrap;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;-webkit-overflow-scrolling:touch}.starter{flex:0 0 72%;scroll-snap-align:start}}
@@ -812,17 +813,19 @@ function renderPlans() {
   var byKey = {}; (o.modules || []).forEach(function (m) { byKey[m.key] = m; });
   var plans = (o.lite ? [{ key: 'lite', name: o.lite.name || 'Lite', monthlyDisplay: o.lite.monthlyDisplay, lines: (byKey.lite && byKey.lite.features || []).concat(['Opt in to any module on top']), fee: o.lite.serviceFeeDisplay }] : [])
     .concat((o.plans || []).map(function (p) { return { key: p.key, name: p.name, monthlyDisplay: p.monthlyDisplay, lines: ['Lite and ' + String(p.capDisplay || '').replace(/^À la carte /, '') + ', one price'], fee: p.serviceFeeDisplay }; }));
-  if (o.enterprise && !plans.some(function (p) { return p.key === 'enterprise'; })) plans.push({ key: 'enterprise', name: 'Enterprise', monthlyDisplay: o.enterprise.annualFloorDisplay, lines: ['Every module, on a contract', 'Setup ' + o.enterprise.setupDisplay, o.enterprise.devHoursMonthly + ' development hours a month'], fee: o.enterprise.serviceFeeDisplay });
+  /* Enterprise is a contract priced with ClearSky (Tommy, 2026-09-27: "contact for pricing"): the price list says so and names no figure */
+  if (o.enterprise && !plans.some(function (p) { return p.key === 'enterprise'; })) plans.push({ key: 'enterprise', name: o.enterprise.name || 'Enterprise', monthlyDisplay: o.enterprise.priceDisplay || 'Contact for pricing', lines: [o.enterprise.summary || 'Every module, on a contract', o.enterprise.note || ''], fee: '', contact: true });
   var cur = currentPlanKey(), pa = WS.packageAccess, co = WS.clientName || 'This workspace';
   var h = '<h3>Plans<small>A plan bundles modules at one monthly price. Lite with modules opted in one at a time is the other way; either is billed monthly, or yearly at ten months of twelve.</small></h3>';
   if (!(pa && pa.packaged)) h += '<p class="plans-note"><b>' + esc(co) + '</b> is on the ' + esc(planName()) + ' plan, priced by your agreement. These are the plans a workspace moves onto: opting in to a module starts that move, and ClearSky confirms it with you.</p>';
   h += '<div class="plans">' + plans.map(function (p) {
-    var on = !!cur && cur === String(p.key).toLowerCase(), pr = String(p.monthlyDisplay || ''), cut = pr.lastIndexOf('/');
+    var on = !!cur && cur === String(p.key).toLowerCase(), pr = String(p.monthlyDisplay || ''), cut = p.contact ? -1 : pr.lastIndexOf('/');
     return '<div class="planc' + (on ? ' on' : '') + '" data-plan-card="' + esc(p.key) + '"><div class="band" style="background:' + (PLAN_BAND[p.key] || MOD_COVER.floor) + '"></div>'
       + '<div class="nm">' + esc(p.name) + (on ? '<span class="ows-chip on">Your plan</span>' : '') + '</div>'
-      + '<div class="pr">' + (cut > 0 ? esc(pr.slice(0, cut)) + '<span>' + esc(pr.slice(cut)) + '</span>' : esc(pr)) + '</div>'
+      + '<div class="pr' + (p.contact ? ' ask' : '') + '">' + (cut > 0 ? esc(pr.slice(0, cut)) + '<span>' + esc(pr.slice(cut)) + '</span>' : esc(pr)) + '</div>'
       + '<ul>' + p.lines.filter(Boolean).map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>'
-      + (p.fee ? '<div class="fee">Service fee ' + esc(p.fee) + '</div>' : '') + '</div>';
+      + (p.fee ? '<div class="fee">Service fee ' + esc(p.fee) + '</div>' : '')
+      + (p.contact ? '<a class="ows-pill sm contact" href="mailto:' + esc(encodeURIComponent(OmegaBrand.upgradeEmail())) + '?subject=' + esc(encodeURIComponent('Enterprise pricing for ' + (WS.clientName || WS.orgId))) + '">Contact ClearSky</a>' : '') + '</div>';
   }).join('') + '</div>';
   var starters = o.starters ? Object.keys(o.starters).map(function (k) { return '<span class="starter"><b>' + esc((o.starterLabels || {})[k] || k) + '</b>' + esc(o.starters[k].map(function (x) { return byKey[x] ? byKey[x].name : x; }).join(' · ')) + '</span>'; }).join('') : '';
   if (starters) h += '<div class="eyebrow">Starter packages, by what you do</div><div class="starters">' + starters + '</div>';
@@ -1063,6 +1066,10 @@ function billingChanged(r) {
     S.toast('On. ' + (on.join(', ') || 'It') + (on.length > 1 ? ' are' : ' is') + ' on now.');
   }
   BILL.asked = false; MOD_ASKED = false;
+  /* no answer: a card saved, a payment made or an invoice closed on
+     Stripe's own page (stripeGo, stripeCheck, Back from Stripe), so what
+     Stripe holds is asked again too */
+  if (!r) { BILL.stripeAsked = false; BILL.stripe = null; BILL.cardAsked = false; BILL.card = null; }
   function repaint() { renderModules(); if (view() === 'billing') renderBilling(); }
   if (packaged) { if (window.OmegaTenant && OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } repaint(); return; }
   /* the record read again carries the server's write; the answer is kept on
@@ -1097,12 +1104,20 @@ function mergeAnswer(bl, r) {
    add-ons, and the rail the package bills through, `provider` / `payWith`:
    Stripe under PACKAGING_PROVIDER=stripe, else QuickBooks; any verified
    member may read it, a change stays with an owner or administrator), and
-   Stripe's own portal (and a legacy Stripe tier's invoice list,
-   /api/stripe-invoices). A card is only ever entered on the payment
-   provider's own page. Add-ons are always QuickBooks' invoices, whatever
-   rail a package uses. A figure that could not be loaded says so, with
-   Retry; it never reads as "nothing". ── */
-var BILL = { summary: null, asked: false, failed: false, stripe: null, stripeAsked: false };
+   POST /api/stripe-customer for a workspace whose card is Stripe's (a
+   package on the Stripe rail, and every plan billed outside the engine
+   that ClearSky does not invoice through QuickBooks; Tommy, 2026-09-27:
+   "This payment method should be linked to the stripe payment system"):
+   the card on file read back from Stripe, never stored; Add a card with
+   Stripe (links the workspace's Stripe customer the first time); the
+   portal; and the amount ClearSky set as due paid with Pay $X with Stripe
+   on Stripe's invoice page, then I've paid. Every page is Stripe's own, in
+   this tab, and comes back here; /api/stripe-invoices lists a
+   Stripe-billed plan's invoices. A card is only ever entered on the
+   payment provider's own page, never typed here. Add-ons are always
+   QuickBooks' invoices, whatever rail a package uses. A figure that could
+   not be loaded says so, with Retry; it never reads as "nothing". ── */
+var BILL = { summary: null, asked: false, failed: false, stripe: null, stripeAsked: false, card: null, cardAsked: false };
 /* the engine's summary, asked ONCE for Plan & billing and the module cards
    (a change waiting for payment, the purchase gate, the review date); both
    repaint when it lands */
@@ -1138,36 +1153,57 @@ var BICON = {
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
   map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>'
 };
-/* the rail a plan bills through: the engine's word for a package (the
-   summary's provider: Stripe under PACKAGING_PROVIDER=stripe, else
-   QuickBooks), else the record's own (a legacy Stripe tier, a QuickBooks
-   customer). Add-ons on a legacy plan are QuickBooks' whatever this says. */
-function railOf(bl, packaged, sm) {
-  if (packaged && sm && sm.provider) return sm.provider;
-  if (bl.billingProvider === 'stripe' || bl.paymentProvider === 'stripe' || (!packaged && bl.stripeCustomerId)) return 'stripe';
-  if (bl.qboCustomerId || bl.paymentProvider === 'quickbooks' || bl.billingProvider === 'quickbooks') return 'quickbooks';
-  return packaged ? 'quickbooks' : null;
+/* the rail a PACKAGE bills through: the engine's word (the summary's
+   provider: Stripe under PACKAGING_PROVIDER=stripe, else QuickBooks), else
+   the record's own. A plan billed OUTSIDE the engine pays by card through
+   Stripe unless ClearSky invoices it through QuickBooks (legacyRail: the
+   rule of api/_lib/stripe-customer.js railOf, whose own answer is used
+   once it has come). Add-ons on a legacy plan are QuickBooks' whatever
+   either says. */
+function railOf(bl, sm) {
+  if (sm && sm.provider) return sm.provider;
+  if (bl.billingProvider === 'stripe' || bl.paymentProvider === 'stripe') return 'stripe';
+  return 'quickbooks';
+}
+function legacyRail(bl, hasBill, cv) {
+  if (cv && cv.rail) return cv.rail;
+  if (!hasBill) return null;
+  return (bl.paymentProvider === 'quickbooks' || bl.billingProvider === 'quickbooks') && !bl.stripeCustomerId ? 'quickbooks' : 'stripe';
 }
 /* everything the page draws, read once per paint */
 function billCtx() {
   var bl = bill(), pa = WS.packageAccess, sm = BILL.summary, now = Date.now();
-  var packaged = !!(bl.packaged === true || (pa && pa.packaged)), rail = railOf(bl, packaged, sm);
+  var packaged = !!(bl.packaged === true || (pa && pa.packaged)), hasBill = !!(WS.billing || (window.OmegaTenant && OmegaTenant.billing)), cv = BILL.card;
+  var rail = packaged ? railOf(bl, sm) : legacyRail(bl, hasBill, cv);
   var stripe = rail === 'stripe';
   var qb = rail === 'quickbooks';
+  /* a plan Stripe already bills: it has invoices of its own to list (a
+     legacy plan on the Stripe rail that ClearSky invoices by hand has not) */
+  var stripeBilled = !packaged && (!!bl.stripeCustomerId || bl.paymentProvider === 'stripe' || bl.billingProvider === 'stripe');
   var trial = !packaged && (bl.tier === 'trial' || trialEnd() > now);
-  var manual = !stripe && !qb && !trial && (bl.paymentProvider === 'manual' || !!bl.lastPaidAt || !!bl.amountPaid);
+  var manual = !packaged && !stripeBilled && !qb && !trial && (bl.paymentProvider === 'manual' || !!bl.lastPaidAt || !!bl.amountPaid);
   var cat = (packaged && pa && Array.isArray(pa.catalog) && pa.catalog.length ? pa.catalog : (MOD_CATALOG || [])).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), byKey = {};
   cat.forEach(function (m) { byKey[m.key] = m; });
   var invoices = sm && Array.isArray(sm.invoices) ? sm.invoices : [], unpaid = invoices.filter(function (x) { return x.state === 'unpaid'; });
   var pending = packaged && sm && Array.isArray(sm.pending) ? sm.pending : [];
-  var stripeOpen = stripe && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'open'; }) : [];
+  var stripeOpen = stripeBilled && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'open'; }) : [];
   /* a legacy plan's modules added by card (api/_lib/addons.js): the
      summary's view, else the record's own block */
   var ao = packaged ? null : (sm && sm.addOns) || (bl.addOns && typeof bl.addOns === 'object' ? bl.addOns : null);
-  var c = { bl: bl, pa: pa, sm: sm, now: now, packaged: packaged, stripe: stripe, qb: qb, trial: trial, manual: manual, admin: isAdminHere(), cat: cat, byKey: byKey, invoices: invoices, unpaid: unpaid, pending: pending, stripeOpen: stripeOpen,
+  var c = { bl: bl, pa: pa, sm: sm, now: now, packaged: packaged, hasBill: hasBill, rail: rail, stripe: stripe, stripeBilled: stripeBilled, qb: qb, trial: trial, manual: manual, admin: isAdminHere(), cat: cat, byKey: byKey, invoices: invoices, unpaid: unpaid, pending: pending, stripeOpen: stripeOpen,
     state: (sm && sm.packagingState) || bl.packagingState || null, co: WS.clientName || WS.orgId, ao: ao,
     payWith: (packaged && sm && sm.payWith) || (stripe ? 'Stripe' : qb ? 'QuickBooks' : ''), addOnOwed: !packaged && unpaid.some(function (x) { return x.kind === 'addon'; }) };
-  c.payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || (stripeOpen.length && stripeOpen[0].hostedUrl) || (sm && sm.paymentLink) || bl.paymentLink || null;
+  /* the card through Stripe (POST /api/stripe-customer 'view'): the card on
+     file read back from Stripe, whether one may be linked here and what is
+     owed there; asked for an owner or administrator only */
+  c.cv = cv; c.linked = !!bl.stripeCustomerId;
+  c.cardAsk = stripe && c.admin && hasBill && !WS.viewAs && (!packaged || c.linked);
+  /* the plan's amount due (ClearSky's figure), paid by card through Stripe
+     when ClearSky has not set a payment link of its own; the invoice for
+     it, once made, is the server's (view.due.open) */
+  c.stripeDue = !packaged && stripe && Number(bl.amountDue) > 0 && !bl.paymentLink;
+  c.dueOpen = c.stripeDue && cv && cv.due && cv.due.open ? cv.due.open : null;
+  c.payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || (stripeOpen.length && stripeOpen[0].hostedUrl) || (sm && sm.paymentLink) || bl.paymentLink || (c.dueOpen && c.dueOpen.url) || null;
   /* the modules: Live, on their way in, on their way out. Read off the SAME
      cards the Modules page and the home row draw (moduleCard), never a
      second reading of the requests: an opt-in the plan already holds, or an
@@ -1208,6 +1244,14 @@ function modName(c, k, o) { var m = c.byKey[k]; return (m && m.name) || (o && o.
 function cover(c, k) { var m = c.byKey[k]; return MOD_COVER[m && m.shelf] || MOD_COVER.floor; }
 function fact(l, v) { return '<div class="bh-fact"><div class="l">' + esc(l) + '</div><div class="v" title="' + esc(v) + '">' + esc(v) + '</div></div>'; }
 
+/* the next invoice's date: the engine's, else the record's; a legacy
+   plan's due date that has passed with nothing owed is history, not the
+   next invoice */
+function nextInvoice(c) {
+  var bl = c.bl, sm = c.sm, nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (c.packaged ? '' : bl.subscriptionDue);
+  if (!c.packaged && !(Number(bl.amountDue) > 0) && nextOn && ms(nextOn) && ms(nextOn) < Date.now() - 86400000) nextOn = '';
+  return nextOn || '';
+}
 /* 1 · the subscription, in the hub's night sky */
 function heroHtml(c) {
   var bl = c.bl, sm = c.sm, pa = c.pa, st = ['', 'Active'];
@@ -1223,7 +1267,7 @@ function heroHtml(c) {
   h += '<div class="bh-main"><div class="bh-plan"><b>' + esc(plan) + '</b><small>' + esc(c.co) + (since ? ' · since ' + esc(since) : '') + '</small></div>';
   if (monthly) { var cut = String(monthly).lastIndexOf('/'); h += '<div class="bh-price"><b>' + esc(cut > 0 ? monthly.slice(0, cut) : monthly) + '</b><span>' + esc(cut > 0 ? monthly.slice(cut) : '') + '</span><small>' + (annual ? 'Billed yearly: ten months of twelve' : 'Billed monthly') + '</small></div>'; }
   else if (c.packaged && !sm && !BILL.failed) h += '<div class="bh-price words"><b>…</b><small>Reading your price</small></div>';
-  else h += '<div class="bh-price words"><b>' + esc(c.trial ? 'No charge during your trial' : c.packaged ? 'Price not available right now' : c.stripe ? 'Billed through Stripe' : 'Priced by your agreement') + '</b>' + (c.packaged && BILL.failed ? '<small>Retry below</small>' : '') + '</div>';
+  else h += '<div class="bh-price words"><b>' + esc(c.trial ? 'No charge during your trial' : c.packaged ? 'Price not available right now' : c.stripeBilled ? 'Billed through Stripe' : 'Priced by your agreement') + '</b>' + (c.packaged && BILL.failed ? '<small>Retry below</small>' : '') + '</div>';
   h += '</div>';
   /* the modules as chips: each one a link to its card on the Modules page */
   var chips = [], shown = 0, MAX = 6;
@@ -1239,8 +1283,8 @@ function heroHtml(c) {
   if (chips.length) h += '<div class="bh-mods">' + chips.join('') + '</div>';
   else if (!c.cat.length && MOD_CATALOG === null) h += '<div class="bh-mods"><span class="bh-mod soon"><i></i>Reading your modules…</span></div>';
   var cadence = c.packaged ? (annual ? 'Yearly, prepaid' : 'Monthly' + ((sm && sm.billingDay) || bl.billingDay ? ', on the ' + nth((sm && sm.billingDay) || bl.billingDay) : ''))
-    : annual ? 'Yearly' : c.trial ? 'Trial' : c.stripe ? 'By card, Stripe' : c.qb ? 'By invoice' : c.manual ? 'Invoiced by ClearSky' : 'Not set up yet';
-  var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (c.packaged ? '' : bl.subscriptionDue);
+    : annual ? 'Yearly' : c.trial ? 'Trial' : c.stripeBilled ? 'By card through Stripe' : c.qb ? 'By invoice' : c.manual ? 'Invoiced by ClearSky' : 'Not set up yet';
+  var nextOn = nextInvoice(c);
   h += '<div class="bh-facts">' + fact('Billing', cadence) + fact('Next invoice', day(nextOn) || 'None scheduled') + fact('Modules', c.cat.length ? c.live.length + ' of ' + c.cat.length + ' Live' : MOD_CATALOG === null ? 'Loading…' : 'Unavailable') + fact('Your role', WS.staff && !WS.role ? 'ClearSky staff' : cap1(WS.role || 'member')) + '</div>';
   h += '<p class="bh-editor">' + BICON.map + '<span>Your modules are services inside Site Map, the editor, and Omega Logic: what this plan holds is what they open, the day it is paid.</span></p>';
   h += '<div class="acts"><button class="ows-pill primary" type="button" data-bill="modules">Change modules</button>' + (WS.pendingApproval ? '' : '<a class="ows-pill" href="/editor">Open the editor ›</a>') + '<a class="ows-pill" href="/workspace#plans">Compare plans</a></div>';
@@ -1261,7 +1305,7 @@ function oweHtml(c) {
     /* a legacy plan's add-on invoices (QuickBooks), and its own plan's amount due beside them */
     list = c.unpaid.map(function (x) { return { name: invName(x), display: x.display, link: x.paymentLink, date: x.date }; });
     amount = c.unpaid.reduce(function (t, x) { return t + (Number(x.totalCents) || 0); }, 0) / 100;
-    if (Number(bl.amountDue) > 0) { amount += Number(bl.amountDue); list.push({ name: 'Your plan', display: usd(bl.amountDue), link: bl.paymentLink || null, date: bl.subscriptionDue || '' }); }
+    if (Number(bl.amountDue) > 0) { amount += Number(bl.amountDue); list.push({ name: 'Your plan', display: usd(bl.amountDue), link: bl.paymentLink || (c.dueOpen && c.dueOpen.url) || null, date: bl.subscriptionDue || '' }); }
     dueOn = c.unpaid[0].date;
   }
   else if (c.stripeOpen.length) { amount = c.stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0); list = c.stripeOpen.map(function (x) { return { name: x.number || 'Invoice', display: usd(x.amountDue), link: x.hostedUrl, date: x.created }; }); }
@@ -1276,23 +1320,37 @@ function oweHtml(c) {
     + (due ? (n ? n + (n === 1 ? ' invoice open' : ' invoices open') : 'Due') + (dueOn && day(dueOn) ? (dueWord === 'due' && !n ? ' ' : ' · ' + dueWord + ' ') + esc(day(dueOn)) : '') : 'All paid up · nothing is owed') + '</small></div></div>';
   if (c.packaged && BILL.failed) h += '<p class="failed">' + (unknown ? 'The invoice list could not be loaded.' : 'From your billing record; the invoice list could not be loaded.') + '<button class="ows-pill sm" type="button" data-bill="retry">Retry</button></p>';
   if (due && c.payLink) h += '<a class="ows-pill primary paybtn" id="bill-pay" href="' + esc(c.payLink) + '" target="_blank" rel="noopener">Pay ' + esc(n === 1 ? list[0].display : usd(amount)) + ' now</a>';
-  else if (due) h += '<p class="fine">The invoice arrives by email with its own pay link.</p>';
+  else if (due && !c.stripeDue) h += '<p class="fine">The invoice arrives by email with its own pay link.</p>';
+  /* the plan's amount due, through Stripe (POST /api/stripe-customer): Stripe's
+     invoice page takes the card (the one on file, or a new one), and it is
+     recorded here the moment Stripe has it. An invoice Stripe already holds
+     open for this workspace is the way to pay, never a second one beside it. */
+  if (c.stripeDue) {
+    var cv = c.cv, dueActs = '';
+    if (!c.admin) h += '<p class="fine">An owner or administrator of ' + esc(WS.clientName || 'this workspace') + ' pays it by card through Stripe.</p>';
+    else if (c.dueOpen) { h += '<p class="fine">Your Stripe invoice is ready: pay it by card on Stripe’s secure page, with the card on file or a new one.</p>'; dueActs = (c.payLink === c.dueOpen.url ? '' : '<a class="ows-pill primary" href="' + esc(c.dueOpen.url) + '" target="_blank" rel="noopener">Pay ' + esc(cv.due.display) + ' on Stripe</a>') + '<button class="ows-pill" type="button" id="bill-stripe-check">' + (c.addOnOwed ? 'I’ve paid on Stripe' : 'I’ve paid') + '</button>'; }
+    else if (c.stripeOpen.length) { /* listed above with its Pay */ }
+    else if (cv && cv.canPay && cv.due) { h += '<p class="fine">Pay it by card on Stripe’s secure page, with the card on file or a new one. It is recorded here the moment Stripe has it.</p>'; dueActs = '<button class="ows-pill primary" type="button" id="bill-stripe-pay">Pay ' + esc(cv.due.display) + ' with Stripe</button>'; }
+    else if (cv && cv.payReason) h += '<p class="fine">' + esc(cv.payReason) + '</p>';
+    if (dueActs) h += '<div class="acts">' + dueActs + '</div>';
+  }
   if (n > 1) h += '<div>' + list.map(function (x) { return '<div class="irow"><div class="ds"><b>' + esc(x.name) + '</b><small>Issued ' + esc(day(x.date)) + '</small></div><span class="amt">' + esc(x.display || '') + '</span><span class="st">' + (x.link ? '<a class="ows-pill sm primary" href="' + esc(x.link) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="spill open">Open</span>') + '</span></div>'; }).join('') + '</div>';
   if (c.packaged && (pa && pa.readOnly || c.state === 'awaiting_payment')) {
     var until = (sm && sm.accessUntil) || (pa && pa.accessUntil);
     h += '<p class="warnline">' + (pa && pa.readOnly ? '<b>Read-only</b> until the invoice is paid: saved work stays open to read.' : until && ms(until) > c.now ? '<b>Access until ' + esc(day(until)) + ':</b> pay before then.' : '<b>Pay the first invoice</b> to open the modules you chose.') + '</p>';
   }
-  var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (c.packaged ? '' : bl.subscriptionDue);
-  var paidLast = c.invoices.filter(function (x) { return x.state === 'paid'; })[0], stripePaid = c.stripe && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'paid'; })[0] : null;
+  var nextOn = nextInvoice(c);
+  var paidLast = c.invoices.filter(function (x) { return x.state === 'paid'; })[0], stripePaid = c.stripeBilled && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'paid'; })[0] : null;
   var last = paidLast ? paidLast.display + ' · ' + day(paidLast.paidAt || paidLast.date) : stripePaid ? usd(stripePaid.amountDue) + ' · ' + day(stripePaid.created) : bl.lastPaidAt ? (bl.amountPaid ? usd(bl.amountPaid) + ' · ' : '') + day(bl.lastPaidAt) : '';
-  var cells = [['Next invoice', day(nextOn) || 'None scheduled']];
+  /* a plan billed outside the engine with no next invoice on file names none (a past due date paid is history) */
+  var cells = nextOn || c.packaged ? [['Next invoice', day(nextOn) || 'None scheduled']] : [];
   if (c.packaged) cells.push(['Paid through', day((sm && sm.paidThrough) || bl.paidThrough) || 'Not yet']); else if (c.trial) cells.push(['Trial ends', trialEnd() ? day(trialEnd()) : 'Not set']);
   if (last || !(c.packaged && BILL.failed)) cells.push(['Last payment', last || 'None yet']);
   h += '<div class="owe-when">' + cells.map(function (x) { return '<div><span class="l">' + esc(x[0]) + '</span><span class="v" title="' + esc(x[1]) + '">' + esc(x[1]) + '</span></div>'; }).join('') + '</div>';
   var bday = (sm && sm.billingDay) || bl.billingDay;
   h += '<p class="fine">' + esc(c.packaged ? 'Each invoice arrives by email' + (bday ? ' on the ' + nth(bday) : '') + ' with its own pay link' + (c.payWith ? ' to ' + c.payWith + '’s secure page' : '') + '.' + (c.stripe ? ' Your workspace follows the payment within seconds.' : '')
     : c.addOnOwed ? 'Each add-on invoice arrives by email with its own pay link to QuickBooks’ secure page. Your plan itself is billed as before.'
-    : c.stripe ? 'Stripe charges the card on file on each invoice date.' : c.trial ? 'Nothing is charged during your trial.' : c.manual ? 'ClearSky invoices this plan under your agreement.' : 'Your first invoice arrives by email with its own pay link.') + '</p>';
+    : c.stripeBilled ? 'Stripe charges the card on file on each invoice date.' : c.trial ? 'Nothing is charged during your trial.' : c.manual ? 'ClearSky invoices this plan under your agreement.' : 'Your first invoice arrives by email with its own pay link.') + '</p>';
   /* "I've paid": the platform looks now instead of the hourly run (a
      package's rail, or QuickBooks for a legacy plan's add-on invoice) */
   if ((c.packaged || c.addOnOwed) && c.admin && !WS.viewAs) h += '<button class="linkbtn" type="button" id="bill-paid">' + esc(paidLabel(c)) + '</button>';
@@ -1323,25 +1381,54 @@ function addOnsHtml(c) {
   h += '<div class="acts"><button class="ows-pill" type="button" data-bill="modules">Opt in to another module</button></div>';
   return h + '</section>';
 }
-/* 3 · the payment method: a card, never its digits (we do not hold them) */
+/* 3 · the payment method: a card, never its digits (we do not hold them).
+   A package pays on its rail (Stripe's or QuickBooks' invoice page). A plan
+   billed outside the engine is linked to Stripe (Tommy, 2026-09-27: "This
+   payment method should be linked to the stripe payment system") unless
+   ClearSky invoices it through QuickBooks: the card on file read back from
+   Stripe (POST /api/stripe-customer 'view'), Add a card with Stripe, and
+   Invoices and receipts (Stripe's portal), each Stripe's own page in this
+   tab. Until a card is on file the card says how the plan is paid today:
+   ClearSky's invoice by ACH or check, or nothing yet. A workspace with a
+   billing record never reads "No billing account yet". */
 function payHtml(c) {
-  var bl = c.bl, kind = c.stripe ? 'stripe' : c.qb ? 'qb' : c.manual ? 'manual' : 'none', h = '<section class="bcard pm" id="bill-card"><h3>Payment method</h3>';
-  var card = { stripe: ['Stripe', 'Kept by Stripe', 'Autopay in portal'], qb: ['QuickBooks Payments', bl.autopay === true ? 'Card saved' : 'Kept by QuickBooks', bl.autopay === true ? 'Autopay on' : 'Autopay not set'],
-    manual: ['Invoiced by ClearSky', bl.lastPaidAt ? 'Paid ' + day(bl.lastPaidAt) : 'Under your agreement', 'ACH or check'], none: ['No payment method yet', c.trial ? 'Not needed during your trial' : 'Your first invoice sets it up', ''] }[kind];
+  var bl = c.bl, cv = c.cv, h = '<section class="bcard pm" id="bill-card"><h3>Payment method</h3>';
+  var kind = c.packaged ? (c.stripe ? 'stripe' : 'qb') : !c.hasBill ? 'none' : c.qb ? 'qb' : c.stripe && (c.linked || (cv && cv.card)) ? 'stripe' : c.manual ? 'manual' : 'none';
+  /* the Stripe door on a plan billed outside the engine (never a trial's first thing to do) */
+  var door = !c.packaged && c.stripe && kind !== 'qb', stripeNone = door && kind === 'none' && !c.trial;
+  var onFile = cv && cv.card ? cv.card.label : c.cardAsk && !cv ? 'Checking with Stripe…' : c.cardAsk && !cv.failed && !(c.linked && cv.reason) ? 'None yet' : c.linked || c.packaged ? 'Kept by Stripe' : 'None yet';
+  var expires = cv && cv.card && cv.card.expires ? cv.card.expires : '';
+  var card = { stripe: ['Stripe', onFile, expires ? 'Expires ' + expires : ''], qb: ['QuickBooks Payments', bl.autopay === true ? 'Card saved' : 'Kept by QuickBooks', bl.autopay === true ? 'Autopay on' : 'Autopay not set'],
+    manual: ['Invoiced by ClearSky', bl.lastPaidAt ? 'Paid ' + day(bl.lastPaidAt) : 'Under your agreement', 'ACH or check'],
+    none: stripeNone ? ['Stripe', 'No card on file yet', ''] : ['No payment method yet', c.trial ? 'Not needed during your trial' : 'Your first invoice sets it up', ''] }[kind];
   h += '<div class="pm-body"><div class="pmc ' + kind + '"><div class="pmc-top"><span class="sub">' + (kind === 'none' ? 'Nothing on file' : 'Pays your invoices') + '</span><span class="chip" aria-hidden="true"></span></div>'
     + '<div class="prov">' + esc(card[0]) + (kind === 'manual' && bl.note ? '<small>' + esc(bl.note) + '</small>' : '') + '</div>'
     + '<div class="pmc-foot"><span>' + esc(card[1]) + '</span>' + (card[2] ? '<span class="auto">' + esc(card[2]) + '</span>' : '') + '</div></div>';
-  var line = { stripe: c.packaged ? 'Entered on Stripe’s secure invoice page, never on this site. The Stripe portal keeps the card on file and downloads any invoice.' : 'Entered on Stripe’s own page, never on this site. The portal changes the card, turns autopay on or off and downloads any invoice.', qb: 'Entered on QuickBooks’ secure payment page, never on this site.',
-    manual: 'Paid by ACH or check under your agreement. Nothing is kept on file here.', none: 'Nothing is charged until then. A card is only ever entered on the payment provider’s own page, never on this site.' }[kind];
-  h += '<div class="pm-side"><p class="fine lock">' + BICON.lock + '<span>' + esc(line) + '</span></p>';
+  var line = { stripe: c.packaged ? esc('Entered on Stripe’s secure invoice page, never on this site. The Stripe portal keeps the card on file and downloads any invoice.') : 'Your card is kept by <b>Stripe</b>, on Stripe’s own secure page; nothing about it is stored on this site. Stripe takes each payment.',
+    qb: esc('Entered on QuickBooks’ secure payment page, never on this site.'), manual: esc('Paid by ACH or check under your agreement. Nothing is kept on file here.'),
+    none: stripeNone ? '' : esc('Nothing is charged until then. A card is only ever entered on the payment provider’s own page, never on this site.') }[kind];
+  h += '<div class="pm-side">' + (line ? '<p class="fine lock">' + BICON.lock + '<span>' + line + '</span></p>' : '');
   if (kind === 'qb') h += '<details class="how"><summary>Save a card and turn on autopay</summary><ol><li>Open any invoice’s payment page.</li><li>Tick <b>Save this card</b> as you pay.</li><li>Turn on <b>Autopay</b>: every later invoice is charged on its date.</li></ol></details>';
-  if (kind === 'stripe') h += '<div class="acts"><button class="ows-pill primary" type="button" id="bill-portal"' + (c.admin ? '' : ' disabled title="An owner or administrator manages the card"') + '>' + portalLabel(c) + '</button></div>' + (c.admin ? '' : '<p class="fine">An owner or administrator of ' + esc(c.co) + ' opens the portal.</p>');
-  else if (kind === 'qb') h += c.payLink ? '<div class="acts"><a class="ows-pill" href="' + esc(c.payLink) + '" target="_blank" rel="noopener">Open the payment page</a></div>' : '<p class="fine">Your next invoice brings the payment page.</p>';
-  else if (kind === 'manual') h += '<div class="acts"><a class="ows-pill" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Statement for ' + c.co) + '">Email for a statement</a></div>';
+  if (kind === 'qb') h += c.payLink ? '<div class="acts"><a class="ows-pill" href="' + esc(c.payLink) + '" target="_blank" rel="noopener">Open the payment page</a></div>' : '<p class="fine">Your next invoice brings the payment page.</p>';
+  if (kind === 'stripe' || (door && (kind === 'manual' || stripeNone))) {
+    /* the card, read back from Stripe: added and changed on Stripe's own page
+       (the portal's add-a-payment-method flow, which makes it the default
+       for every invoice), shown here, never kept here */
+    h += '<div class="kv">' + [['Card on file', onFile], ['Expires', expires]].filter(function (r) { return !!r[1]; }).map(function (r) { return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</div>';
+    if (kind !== 'stripe') h += '<p class="fine"><b>Pay by card with Stripe.</b> Add your card on Stripe’s own secure page; nothing about it is stored on this site, and nothing is charged until you pay.</p>';
+  }
+  var addCard = door && c.admin && cv && cv.canLink ? '<button class="ows-pill primary" type="button" id="bill-card-add">' + (cv.card ? 'Change card' : 'Add a card with Stripe') + '</button>' : '';
+  var portalBtn = kind === 'stripe' && (c.packaged || c.linked) ? '<button class="ows-pill' + (addCard ? '' : ' primary') + '" type="button" id="bill-portal"' + (c.admin ? '' : ' disabled title="An owner or administrator manages the card"') + '>' + portalLabel(c) + '</button>' : '';
+  if (addCard || portalBtn) h += '<div class="acts">' + addCard + portalBtn + '</div>';
+  if (kind === 'stripe' || (door && !c.trial)) {
+    if (!c.admin) h += '<p class="fine">An owner or administrator of ' + esc(c.co) + (c.linked || c.packaged ? ' manages the card.' : ' adds the card.') + '</p>';
+    else if (cv && cv.reason && !cv.canLink) h += '<p class="fine">' + esc(cv.reason) + '</p>';
+  }
   if (c.ao && kind !== 'qb') h += '<p class="fine">Modules added to your plan by card are invoiced in <b>QuickBooks</b>: pay each on QuickBooks’ own page, where a card can be saved with Autopay.</p>';
   return h + '</div></div></section>';
 }
-function portalLabel(c) { return c.packaged ? 'Manage card and invoices' : 'Manage card and autopay'; }
+/* the Stripe portal: a package's card and invoices, a legacy plan's invoices and receipts */
+function portalLabel(c) { return c.packaged ? 'Manage card and invoices' : 'Invoices and receipts'; }
 /* 4 · changes in progress: one row per module on its way in or out, with
    the steps it goes through, in the words the Modules page uses */
 function changeRows(c) {
@@ -1353,16 +1440,17 @@ function changeRows(c) {
   });
   Object.keys(c.requested).forEach(function (k) {
     var o = c.requested[k], price = o.display ? o.display + (/\//.test(o.display) ? '' : '/month') : '';
-    rows.push({ key: k, name: o.name, pill: 'Opt-in requested', tone: 'in', line: 'Requested ' + (day(o.requestedAt) || '') + (price ? ' at ' + price : '') + '. It joins your monthly invoice once ClearSky moves you to monthly billing; nothing is charged before you approve that invoice.', steps: [['Requested', 'done'], ['ClearSky sets up monthly billing', 'now'], ['First invoice', ''], ['On', '']], cancel: true });
+    rows.push({ key: k, name: o.name, pill: 'Opt-in requested', tone: 'in', line: 'Requested ' + (day(o.requestedAt) || '') + byWho(o.requestedBy) + (price ? ' at ' + price : '') + '. It joins your monthly invoice once ClearSky moves you to monthly billing; nothing is charged before you approve that invoice.', steps: [['Requested', 'done'], ['ClearSky sets up monthly billing', 'now'], ['First invoice', ''], ['On', '']], cancel: true });
   });
   Object.keys(c.leaving).forEach(function (k) {
     var r = c.leaving[k];
-    if (c.packaged) rows.push({ key: k, pill: 'Opting out', tone: 'out', line: 'Stays on, and billed, until ' + (review ? 'your review on ' + review : 'the quarterly review') + '. No refund for time already billed.', steps: [['Requested ' + (day(r.requestedAt) || ''), 'done'], [review ? 'Review on ' + review : 'Quarterly review', 'now'], ['Off', '']], cancel: true });
+    if (c.packaged) rows.push({ key: k, pill: 'Opting out', tone: 'out', line: 'Stays on, and billed, until ' + (review ? 'your review on ' + review : 'the quarterly review') + '. No refund for time already billed.' + (r.by ? ' Requested by ' + r.by + '.' : ''), steps: [['Requested ' + (day(r.requestedAt) || ''), 'done'], [review ? 'Review on ' + review : 'Quarterly review', 'now'], ['Off', '']], cancel: true });
     else if (r.kind === 'addon-stop') rows.push({ key: k, name: r.name, pill: 'Opting out', tone: 'out', line: 'Stays on until ' + (day(r.endsOn) || 'the end of the month you paid for') + ', the end of the month you paid for, and is not renewed. No refund for time already paid.', steps: [['Opted out' + (r.requestedAt ? ' ' + day(r.requestedAt) : ''), 'done'], ['On until ' + (day(r.endsOn) || 'the month ends'), 'now'], ['Off', '']], cancel: true });
-    else rows.push({ key: k, name: r.name, pill: 'Opting out', tone: 'out', line: 'Requested ' + (day(r.requestedAt) || '') + '. ClearSky confirms the date and any price change in writing; access is unchanged until then.', steps: [['Requested', 'done'], ['ClearSky confirms in writing', 'now'], ['Off', '']], cancel: true });
+    else rows.push({ key: k, name: r.name, pill: 'Opting out', tone: 'out', line: 'Requested ' + (day(r.requestedAt) || '') + byWho(r.requestedBy) + '. ClearSky confirms the date and any price change in writing; access is unchanged until then.', steps: [['Requested', 'done'], ['ClearSky confirms in writing', 'now'], ['Off', '']], cancel: true });
   });
   return rows;
 }
+function byWho(email) { return email ? ' by ' + email : ''; }
 function changesHtml(c, rows) {
   var h = '<section class="bcard full chg" id="bill-req"><h3>Changes in progress</h3>';
   h += rows.map(function (r) {
@@ -1388,8 +1476,10 @@ function histHtml(c) {
     });
     if (!rows.length && c.packaged) { if (!sm && !BILL.failed) empty = 'Reading your invoices…'; else if (BILL.failed) failed = 'Your invoices could not be loaded right now.'; else empty = 'No invoices yet. The first one arrives by email with its own pay link.'; }
   }
-  /* a Stripe-billed legacy plan keeps its own history beside any add-on invoices */
-  if (!c.packaged && c.stripe) {
+  /* a Stripe-billed legacy plan keeps its own history beside any add-on
+     invoices; until Stripe has billed it, the last payment ClearSky
+     recorded stands */
+  if (!c.packaged && c.stripeBilled) {
     var st = BILL.stripe;
     if (!st) empty = 'Reading your invoices from Stripe…';
     else if (st.failed) failed = 'The invoice list could not be loaded from Stripe right now.';
@@ -1401,27 +1491,30 @@ function histHtml(c) {
     if (rows.length) { empty = ''; failed = ''; }
     if (st && st.connected && !rows.length && !failed) empty = 'No invoices issued yet.';
   } else if (c.packaged || c.invoices.length) { /* the engine's list above */ }
-  else if (bl.lastPaidAt) rows = [{ date: bl.lastPaidAt, name: 'Payment', sub: bl.note || 'Under your agreement', amount: bl.amountPaid ? usd(bl.amountPaid) : '', state: 'paid', link: null }];
+  else if (bl.lastPaidAt) rows = [{ date: bl.lastPaidAt, name: 'Last payment', sub: bl.note || 'Under your agreement', amount: bl.amountPaid ? usd(bl.amountPaid) : '', state: 'paid', link: null }];
   else empty = c.trial ? 'No invoices yet. Nothing is charged during your trial.' : 'No invoices on file here. This plan is billed by ClearSky outside the workspace; write to ' + OmegaBrand.upgradeEmail() + ' for a statement.';
   var h = '<section class="bcard full" id="bill-hist"><h3>Billing history</h3>';
   if (rows.length) h += '<div class="itab"><div class="irow head"><span>Date</span><span>Description</span><span>Amount</span><span>Status</span></div>' + rows.map(histRow).join('') + '</div>';
   else if (failed) h += '<p class="failed">' + esc(failed) + '<button class="ows-pill sm" type="button" data-bill="retry">Retry</button></p>';
   else h += '<p class="fine">' + esc(empty) + '</p>';
+  /* a plan ClearSky invoices by hand: its statements come from ClearSky */
+  if (c.manual) h += '<div class="acts"><a class="ows-pill sm" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Statement for ' + c.co) + '">Email for a statement</a></div>';
   return h + '</section>';
 }
 function renderBilling() {
   var b = byId('billing-body'); if (!b || !WS) return;
-  var bl = bill();
   askSummary();
-  /* a legacy Stripe tier's own invoice list; a package's invoices are the engine's, on whichever rail */
-  var pk = !!(bl.packaged === true || (WS.packageAccess && WS.packageAccess.packaged));
-  if (!pk && railOf(bl, false, null) === 'stripe' && !BILL.stripeAsked && window.OmegaPackageMenu) { BILL.stripeAsked = true; OmegaPackageMenu.api('/api/stripe-invoices', { orgId: WS.orgId, limit: 24 }).then(function (j) { BILL.stripe = j; renderBilling(); }, function () { BILL.stripe = { connected: false, failed: true }; renderBilling(); }); }
   var c = billCtx(), changes = changeRows(c);
+  /* a Stripe-billed legacy plan's own invoice list; a package's invoices are the engine's, on whichever rail */
+  if (c.stripeBilled && !BILL.stripeAsked && window.OmegaPackageMenu) { BILL.stripeAsked = true; OmegaPackageMenu.api('/api/stripe-invoices', { orgId: WS.orgId, limit: 24 }).then(function (j) { BILL.stripe = j; renderBilling(); }, function () { BILL.stripe = { connected: false, failed: true }; renderBilling(); }); }
+  /* the card on file and what Stripe can do here: the server's answer, for an owner or administrator */
+  if (c.cardAsk && !BILL.cardAsked && window.OmegaPackageMenu) { BILL.cardAsked = true; OmegaPackageMenu.api('/api/stripe-customer', { orgId: WS.orgId, action: 'view' }).then(function (j) { BILL.card = j; renderBilling(); }, function (e) { BILL.card = { failed: true, reason: e.message }; renderBilling(); }); }
   b.innerHTML = '<div class="bill">' + heroHtml(c) + addOnsHtml(c) + oweHtml(c) + payHtml(c) + (changes.length ? changesHtml(c, changes) : '') + histHtml(c) + '</div>';
   Array.prototype.forEach.call(b.querySelectorAll('[data-bill="modules"]'), function (cm) { cm.addEventListener('click', function () { nav('/workspace#modules'); }); });
   Array.prototype.forEach.call(b.querySelectorAll('[data-bill="retry"]'), function (x) { x.addEventListener('click', function () {
     BILL.asked = false; BILL.failed = false; BILL.summary = null;
     if (BILL.stripe && BILL.stripe.failed) { BILL.stripe = null; BILL.stripeAsked = false; }
+    if (BILL.card && BILL.card.failed) { BILL.card = null; BILL.cardAsked = false; }
     renderBilling();
   }); });
   Array.prototype.forEach.call(b.querySelectorAll('[data-cancel]'), function (x) { x.addEventListener('click', function () { moduleMenu(x.getAttribute('data-cancel'), 'cancel'); }); });
@@ -1432,8 +1525,37 @@ function renderBilling() {
     S.toast(cleared ? 'Paid. Your added modules are on.' : 'Checked with ' + ((r && r.payWith) || (c.packaged ? c.payWith : 'QuickBooks') || 'the payment provider')); BILL.asked = false;
     if (c.packaged) { if (OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderBilling(); } else billingChanged(r);
   }, function (e) { paid.disabled = false; paid.textContent = paidText; S.toast(e.message); }); });
-  var portal = byId('bill-portal'); if (portal && c.admin) portal.addEventListener('click', function () { portal.disabled = true; portal.textContent = 'Opening Stripe…'; OmegaPackageMenu.api('/api/stripe-portal', { orgId: WS.orgId }).then(function (j) { portal.disabled = false; portal.textContent = portalLabel(c); if (j && j.url) window.open(j.url, '_blank', 'noopener'); else S.toast('Stripe did not return a portal link'); }, function (e) { portal.disabled = false; portal.textContent = portalLabel(c); S.toast(e.message); }); });
+  /* Stripe's own pages, in this tab (api/stripe-customer.js): the portal, the add-a-card page, the plan's invoice */
+  [['bill-portal', 'portal', 'Opening Stripe…'], ['bill-card-add', 'card', 'Opening Stripe…'], ['bill-stripe-pay', 'pay', 'Preparing your Stripe invoice…']].forEach(function (x) { var el = byId(x[0]); if (el && c.admin) el.addEventListener('click', function () { stripeGo(el, x[1], x[2]); }); });
+  var chk = byId('bill-stripe-check'); if (chk && c.admin) chk.addEventListener('click', function () { stripeCheck(chk); });
 }
+/* Stripe's own page, in THIS tab (api/stripe-customer.js): the card page and
+   the portal come back to Plan & billing by themselves, and a window opened
+   after the server's answer is a pop-up a phone blocks without a word */
+function stripeGo(btn, action, busy) {
+  var was = btn.textContent; btn.disabled = true; btn.textContent = busy;
+  OmegaPackageMenu.api('/api/stripe-customer', { orgId: WS.orgId, action: action }).then(function (j) {
+    if (j && j.url) { window.location.assign(j.url); return; }
+    btn.disabled = false; btn.textContent = was;
+    S.toast(j && j.state === 'paid' ? 'Already paid. Thank you.' : j && j.emailed ? 'Stripe emailed the invoice to your billing address; pay it from there.' : 'Stripe did not return its page; try again.');
+    billingChanged();
+  }, function (e) { btn.disabled = false; btn.textContent = was; S.toast(e.message); });
+}
+/* I've paid, for the plan's Stripe invoice: the server reads it back from Stripe */
+function stripeCheck(btn) {
+  var was = btn.textContent; btn.disabled = true; btn.textContent = 'Checking Stripe…';
+  OmegaPackageMenu.api('/api/stripe-customer', { orgId: WS.orgId, action: 'check' }).then(function (r) {
+    if (r && r.state === 'paid') { S.toast('Paid. Thank you.'); billingChanged(); return; }
+    btn.disabled = false; btn.textContent = was;
+    S.toast(r && r.throttled ? 'Checked a moment ago; try again in a few seconds.' : 'Stripe does not show the payment yet. A card payment shows within a minute.');
+  }, function (e) { btn.disabled = false; btn.textContent = was; S.toast(e.message); });
+}
+/* a card saved, a payment made, an invoice closed: billingChanged() with
+   no answer (the ONE repaint after any change, above) also asks Stripe
+   again for the card, the invoices and what is due. Back from Stripe's
+   page by the browser's Back: the page may be the one it left, so it asks
+   again */
+window.addEventListener('pageshow', function (e) { if (e.persisted && WS && byId('content').getAttribute('data-view') === 'billing') billingChanged(); });
 function billingDrawer() { openBilling(); }
 function settingsDrawer() {
   var html = '<div class="field"><label for="set-name">Display name</label><input id="set-name" value="' + esc(who()) + '" maxlength="60"></div><div class="kv"><div><span>Email</span><span>' + esc(ME) + '</span></div><div><span>Workspace</span><span>' + esc(WS.orgId) + '</span></div><div><span>Role</span><span>' + esc(WS.role || 'member') + '</span></div></div>';

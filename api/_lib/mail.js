@@ -170,18 +170,27 @@ var T = {
      with its price on record (plan-change opt-in). ClearSky moves the
      workspace onto a package from the admin tenant page. */
   optInAlert: function (o) {
+    if (o.withdrawn) return send(staffTo(), '[OMEGA] Opt-in withdrawn: ' + o.names.join(', ') + ' for ' + o.company,
+      layout('An opt-in was withdrawn', '<p>' + esc(o.company) + ' withdrew its request for <b>' + esc(o.names.join(', ')) + '</b>. Do not switch it on; nothing was charged.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Withdrawn by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + '</table>'
+        + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
     return send(staffTo(), '[OMEGA] Opt-in: ' + o.names.join(', ') + ' for ' + o.company + (o.display ? ' (' + o.display + ')' : ''),
       layout('A workspace opted in', '<p>' + esc(o.company) + ' asked for <b>' + esc(o.names.join(', ')) + '</b> at <b>' + esc(o.display || '') + '</b>, added to its monthly fee. It is on the ' + esc(o.tier || 'legacy') + ' plan, billed outside the package engine: move it onto a subscription package and switch the module on. Nothing has been charged.</p>'
-        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + row('Modules', o.names.join(', ')) + row('Monthly', o.display || '—') + '</table>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + row('Monthly', o.display || '—') + '</table>'
         + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
   },
   /* The mirror: that tenant asked to opt OUT (plan-change opt-out). Its
      price is set by its agreement, so nothing changed: ClearSky confirms the
-     effective date and any new price in writing, then moves the plan. */
+     effective date and any new price in writing, then moves the plan. A
+     request taken back (withdraw-opt-out) is heard the same way: keep it on. */
   optOutAlert: function (o) {
+    if (o.withdrawn) return send(staffTo(), '[OMEGA] Opt-out withdrawn: ' + o.names.join(', ') + ' for ' + o.company,
+      layout('An opt-out was withdrawn', '<p>' + esc(o.company) + ' withdrew its opt-out of <b>' + esc(o.names.join(', ')) + '</b>: keep them on. Nothing about the bill changes.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Withdrawn by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + '</table>'
+        + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
     return send(staffTo(), '[OMEGA] Opt-out: ' + o.names.join(', ') + ' for ' + o.company,
       layout('A workspace asked to opt out', '<p>' + esc(o.company) + ' asked to opt out of <b>' + esc(o.names.join(', ')) + '</b>. It is on the ' + esc(o.tier || 'legacy') + ' plan, billed outside the package engine under its agreement: nothing has changed. Confirm the effective date and any new price with them in writing; they keep access until then.</p>'
-        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + row('Modules', o.names.join(', ')) + row('Reason', o.reason || '—') + '</table>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + row('Reason', o.reason || '—') + '</table>'
         + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
   },
   /* A packaged tenant queued an opt-out for the quarterly review
@@ -192,7 +201,7 @@ var T = {
   removalAlert: function (o) {
     return send(staffTo(), '[OMEGA] Opting out at review: ' + o.names.join(', ') + ' for ' + o.company,
       layout('An opt-out is queued for the review', '<p>' + esc(o.company) + ' asked to opt out of <b>' + esc(o.names.join(', ')) + '</b> at its quarterly review' + (o.reviewOn ? ' on <b>' + esc(o.reviewOn) + '</b>' : '') + '. Nothing changes before then: it keeps the modules and keeps paying for them, and no refund is due for time already billed.</p>'
-        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + row('Modules', o.names.join(', ')) + row('Review', o.reviewOn || 'next quarterly review')
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + row('Review', o.reviewOn || 'next quarterly review')
         + (o.alsoLeaving && o.alsoLeaving.length ? row('Also leaving at that review', o.alsoLeaving.join(', ')) : '')
         + row('Monthly fee', o.beforeDisplay && o.afterDisplay ? o.beforeDisplay + ' → ' + o.afterDisplay : '—') + row('Reason', o.reason || '—') + '</table>'
         + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
@@ -287,6 +296,8 @@ var T = {
   }
 };
 function row(k, v) { return '<tr><td style="padding:4px 12px 4px 0;color:#8BA3C4;white-space:nowrap;vertical-align:top">' + esc(k) + '</td><td style="padding:4px 0">' + esc(v) + '</td></tr>'; }
+/* a plan request filed by an owner or administrator on the role alone says so */
+function verifiedRow(o) { return o.verified === false ? row('Email verified', 'No (an owner or administrator by role)') : ''; }
 
 module.exports = { send: send, templates: T, layout: layout, wlLayout: wlLayout, button: button, esc: esc, row: row,
   configured: function (p) { return !!tx(p); } };

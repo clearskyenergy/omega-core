@@ -1360,7 +1360,7 @@ function _priceBookStrip(){
   var parts = [];
   if (o.lite && o.lite.monthlyDisplay) parts.push('<b>Lite</b> ' + esc(o.lite.monthlyDisplay));
   (o.plans || []).forEach(function(pl){ parts.push('<b>' + esc(pl.name) + '</b> ' + esc(pl.monthlyDisplay || '')); });
-  if (o.enterprise && o.enterprise.annualFloorDisplay) parts.push('<b>Enterprise</b> from ' + esc(o.enterprise.annualFloorDisplay));
+  if (o.enterprise) parts.push('<b>Enterprise</b> ' + esc(o.enterprise.priceDisplay || 'contact for pricing'));
   if (o.logins && o.logins.builderDisplay) parts.push('logins ' + esc(o.logins.builderDisplay) + ' / ' + esc(o.logins.viewerDisplay || ''));
   var mods = (o.modules || []).map(function(m){ return esc(m.name) + ' ' + esc(m.monthlyDisplay || ''); }).join(' \u00b7 ');
   return '<div id="cl-pricebook-strip" class="sub-txt" style="margin:6px 0 12px;line-height:1.7">'
@@ -2810,6 +2810,11 @@ function saveTenantBilling(orgId){
   ref.get().then(function(snap){
     var before=snap.exists?snap.data():{};
     if (before.packaged === true) throw new Error('Use the Package panel for this subscription.');
+    /* A Stripe payment for an earlier figure holds Plan & billing's Pay
+       (stripeDueHold, api/_lib/stripe-customer.js) until ClearSky has looked:
+       saving the amount due here, the same figure included, is that look,
+       and the history row keeps the hold it released. */
+    if (before.stripeDueHold && patch.amountDue !== undefined) patch.stripeDueHold = null;
     var write=Object.assign({}, patch, {
       updatedAt: FV.serverTimestamp(),
       updatedBy: (currentUser && currentUser.email) || 'console'
