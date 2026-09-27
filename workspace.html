@@ -97,6 +97,11 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .tool.locked{background:transparent;border-style:dashed}.tool.locked .ico{background:var(--ows-sunk);color:var(--ows-ink3)}.tool.locked b{color:var(--ows-ink2)}.tool.locked .st{color:var(--ows-ink3)}.tool.locked:hover{transform:none;box-shadow:none}
 .more summary{cursor:pointer;font-size:12.5px;color:var(--ows-ink2);padding:6px 0;list-style:none;display:inline-flex;align-items:center;gap:6px}.more summary::-webkit-details-marker{display:none}.more summary::before{content:"\25B8";color:var(--ows-ink3)}.more[open] summary::before{content:"\25BE"}.more .grid{margin-top:8px}
 .tool.soon{opacity:.7}.tool.soon .st{color:var(--ows-amber)}
+/* CONDENSED on a phone (Tommy, 2026-09-27): one compact row per tool, the
+   description on one line, the whole catalog readable without a scroll a
+   screen long per category; two-up on a tablet. */
+@media (max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.tool{min-height:0;padding:10px 12px;gap:4px}.tool .ico{width:28px;height:28px;border-radius:8px}.tool .ico svg{width:15px;height:15px}.tool b{font-size:13px}.tool .d{font-size:11.5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical}.tool .st{top:9px;right:10px;font-size:10px}.cat{gap:6px}}
+@media (max-width:560px){.grid{grid-template-columns:1fr;gap:6px}.tool{flex-direction:row;align-items:center;padding:8px 10px;gap:10px}.tool .t{flex:1;min-width:0;padding-right:52px;gap:8px}.tool .t b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tool .d{display:none}.tool .st{top:50%;transform:translateY(-50%)}.tool:hover{transform:none}}
 /* in flight */
 .proj{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
 .pc{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;text-align:left;color:inherit;width:100%}.pc:hover{box-shadow:var(--ows-shadow)}

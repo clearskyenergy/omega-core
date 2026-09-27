@@ -151,6 +151,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     out.tiles = tiles.length; out.locked = tiles.filter(function (t) { return t.locked; }).length;
     var plan = await p.$eval('#plan', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); }).catch(function () { return ''; });
     ok(name + ': the plan strip says how many tools are open', /\d+ of \d+ tools open/.test(plan), plan);
+    /* condensed on a phone (2026-09-27): a tool is one short row, the catalog fits in a few screens */
+    var vp0 = p.viewportSize(); await p.setViewportSize({ width: 390, height: 844 }); await wait(200);
+    var row = await p.$eval('#tools-body .tool', function (e) { var r = e.getBoundingClientRect(); return { h: r.height, w: r.width, desc: getComputedStyle(e.querySelector('.d')).display, dir: getComputedStyle(e).flexDirection }; });
+    ok(name + ': on a phone a tool is one compact row', row.h < 64 && row.w > 300 && row.desc === 'none' && row.dir === 'row', row);
+    await p.setViewportSize(vp0); await wait(150);
     out.plan = plan.slice(0, 80);
     return out;
   }
