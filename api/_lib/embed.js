@@ -221,12 +221,7 @@ function resolve(req, opts) {
            than on the key, so switching it off in one place switches off
            every installation — and so a key that outlives a downgrade stops
            working instead of quietly continuing to serve. */
-        var addons = billing.addons || [];
-        var overrides = billing.toolOverrides || {};
-        var entitled = overrides.whitelabel === true
-          || (overrides.whitelabel !== false
-              && (addons.indexOf('whitelabel') >= 0 || wl.enabled === true));
-        if (!entitled) throw A.httpError(403, 'this storefront is not enabled on this account');
+        if (!storefrontEntitled(billing, wl)) throw A.httpError(403, 'this storefront is not enabled on this account');
 
         return {
           key: key,
@@ -287,8 +282,22 @@ function handler(fn) {
   });
 }
 
+/* Whether a workspace runs the public storefront (Omega Storefront, the
+   `whitelabel` module on a legacy plan): a toolOverrides switch either way,
+   else the 'whitelabel' add-on or the staff-written whiteLabel.enabled on the
+   tenant record. Never the tier. The ONE rule; the store's twin is
+   OmegaWorkspaceHub.storefront, held to it by scripts/tests/tworkspacehub.js,
+   so "On your plan" is what this gate opens. */
+function storefrontEntitled(billing, whiteLabel) {
+  var b = billing || {}, overrides = b.toolOverrides || {}, addons = b.addons || [], wl = whiteLabel || {};
+  return overrides.whitelabel === true
+    || (overrides.whitelabel !== false
+        && (addons.indexOf('whitelabel') >= 0 || wl.enabled === true));
+}
+
 module.exports = {
   resolve: resolve,
+  storefrontEntitled: storefrontEntitled,
   handler: handler,
   /* TEST SEAM. The bucket lives in module memory, so a suite that exercises
      more than one case against one key trips its own limiter and every
