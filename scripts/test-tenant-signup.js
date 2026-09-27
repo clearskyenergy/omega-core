@@ -82,7 +82,12 @@ async function run() {
     caller.claims.email_verified = unverified;
     await assert.rejects(packaged(packagedRequest), /verify your email/);
     check(db.data.size === 1, 'unverified signup refused: ' + unverified);
+    /* 2026-09-27: the options open before the link is clicked, and say it is not verified yet; the workspace does not */
+    var early = await packaged({ method: 'GET' });
+    check(early.packaging === true && early.emailVerified === false && db.data.size === 1, 'unverified caller reads the signup options, told it is unverified, nothing written: ' + unverified);
+    await assert.rejects(packaged({ method: 'POST', headers: {}, body: { action: 'check-payment' } }), /verify your email/);
   }
+  check((await packaged({ method: 'GET' })).emailVerified === false, 'still unverified');
   caller.claims.email_verified = true;
   process.env.QBO_ENV = 'production';
   await assert.rejects(packaged(packagedRequest), /sandbox-only/);

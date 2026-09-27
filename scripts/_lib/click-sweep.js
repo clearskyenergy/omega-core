@@ -45,9 +45,10 @@
        overlays: '#ows-overlay, #new-proj-modal.on, body.ows-rail-open',
        reveal: [{ within: '#side-nav', open: async function (p) {…} }],
        inner: '.ows-row',                 // one level in: action buttons in what a click opened
+       last: '.pin-btn.remove',           // clicked after everything else (they take things away)
        served: sweep.servedBy(ROOT)       // (pathname) → true when the site serves it
      });
-     r = { controls, clicks, held[], read[], skipped[], innerSkipped[], problems[{ kind, control, detail }] }
+     r = { controls, clicks, held[], read[], tabs[], frames[], skipped[], innerSkipped[], hidden[], problems[{ kind, control, detail }] }
 
    Needs Playwright ≥ 1.23 (route.fallback). Not a test on its own: the
    caller decides what a problem fails.
@@ -94,6 +95,8 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 function tagIn(arg) {
   var scope = arg.scope, sel = arg.sel, skip = arg.skip, reveal = arg.reveal, start = arg.start;
   var vw = window.innerWidth, out = [], n = start;
+  /* an earlier tagging of this view may have left a number on a control that has since moved */
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sweep]'), function (e) { if (Number(e.getAttribute('data-sweep')) >= start) e.removeAttribute('data-sweep'); });
   var roots = Array.prototype.slice.call(document.querySelectorAll(scope));
   var seen = [];
   roots.forEach(function (root) {
@@ -121,6 +124,8 @@ function tagIn(arg) {
    click opened, tagged data-sweep-inner=<n> */
 function innerIn(arg) {
   var out = [];
+  /* a panel that stays in the page between clicks still carries the last numbering */
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sweep-inner]'), function (e) { e.removeAttribute('data-sweep-inner'); });
   Array.prototype.forEach.call(document.querySelectorAll(arg.overlays), function (o) {
     if (o === document.body) return;
     Array.prototype.forEach.call(o.querySelectorAll(arg.inner), function (el) {
@@ -132,6 +137,16 @@ function innerIn(arg) {
     });
   });
   return out;
+}
+
+/* in the page: how many controls are showing (to know when a view that
+   paints in more than one answer has finished) */
+function countIn(arg) {
+  var n = 0;
+  Array.prototype.forEach.call(document.querySelectorAll(arg.scope), function (root) {
+    Array.prototype.forEach.call(root.querySelectorAll(arg.sel), function (el) { if (el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden') n++; });
+  });
+  return n;
 }
 
 /* in the page: what the last click left behind */
@@ -168,9 +183,12 @@ async function run(p, opts) {
   var sel = CLICKABLE + (opts.clickable ? ', ' + opts.clickable : '');
   var settle = opts.settle || 260;
   var reveal = opts.reveal || [];
-  var report = { clicks: 0, held: [], read: [], problems: [], controls: 0, skipped: [], innerSkipped: [] };
+  var report = { clicks: 0, held: [], read: [], problems: [], controls: 0, skipped: [], innerSkipped: [], hidden: [], frames: [], tabs: [] };
   var current = null, held = [], innerSeen = {};
-  function problem(kind, control, detail) { report.problems.push({ kind: kind, control: control, detail: detail }); }
+  var said = {};
+  function problem(kind, control, detail) { var k = kind + '|' + control + '|' + detail; if (said[k]) return; said[k] = true; report.problems.push({ kind: kind, control: control, detail: detail }); }
+  /* why Playwright could not click: the line that names the cause, not the first */
+  function why(e) { var lines = String(e && e.message || e).split('\n'); var cause = lines.filter(function (l) { return /intercepts pointer events|not visible|not stable|not enabled|detached|outside of the viewport|strict mode/.test(l); }).pop(); return (lines[0] + (cause ? ' — ' + cause.trim() : '')).slice(0, 260); }
   function onError(e) { if (current) problem('error', current, String(e && e.message || e).slice(0, 240)); }
   function onConsole(m) { if (current && m.type() === 'error' && !/^Failed to load resource/.test(m.text())) problem('error', current, 'console: ' + m.text().slice(0, 240)); }
   p.on('pageerror', onError); p.on('console', onConsole);
@@ -191,8 +209,26 @@ async function run(p, opts) {
   await p.route('**/*', function (r) {
     var q = r.request();
     if (q.isNavigationRequest() && q.frame() === p.mainFrame()) { held.push(q.url()); return r.abort('aborted'); }
+    /* a page a click loads into a frame is a link too: named, checked, let through */
+    if (q.isNavigationRequest() && current && /^https?:/.test(q.url())) { report.frames.push(current + ' → ' + q.url()); var lpf = linkProblem(q.url(), q.url()); if (lpf) problem('link', current, 'loads into a frame ' + lpf); }
     return r.fallback();
   });
+  /* a new tab (window.open kept from before the stub, target=_blank set on
+     the fly) is a link too: its address is named and checked, and it never
+     loads — the page under test is this one */
+  var ctx = p.context();
+  async function popupRoute(r) {
+    /* a new tab's first request comes before its page is known: any top-level frame that is not this page's */
+    var q = r.request(), top = false; try { var fr = q.frame(); top = fr !== p.mainFrame() && !fr.parentFrame(); } catch (e) { top = true; }
+    if (top && q.isNavigationRequest()) {
+      report.tabs.push((current || '(no click)') + ' → ' + q.url());
+      var lpt = linkProblem(q.url(), q.url()); if (lpt && current) problem('link', current, 'opens a tab at ' + lpt);
+      return r.abort('aborted');
+    }
+    return r.fallback();
+  }
+  function onPopup(pg) { setTimeout(function () { pg.close().catch(function () {}); }, 400); }
+  await ctx.route('**/*', popupRoute); p.on('popup', onPopup);
   await p.evaluate(function () {
     window.__sweepOpened = [];
     window.open = function (u) { window.__sweepOpened.push(String(u)); return null; };
@@ -217,8 +253,20 @@ async function run(p, opts) {
     var scope = (opts.scope || 'body') + (vi === 0 && opts.chrome ? ', ' + opts.chrome : '');
     var revealSel = reveal.map(function (x) { return x.within; });
     var viewStart = next;
+    /* a view that paints in two answers (a price list, then the plan) is
+       listed once it has stopped changing: three equal counts in a row */
+    for (var still = 0, last = -1, tries = 0; still < 3 && tries < 30; tries++) {
+      var cnt = await p.evaluate(countIn, { scope: scope, sel: sel });
+      still = cnt === last ? still + 1 : 0; last = cnt; if (still < 3) await wait(250);
+    }
     var items = await p.evaluate(tagIn, { scope: scope, sel: sel, skip: opts.skip || '', reveal: revealSel, start: viewStart });
     next += items.length; report.controls += items.length;
+    /* controls that take something off the page (Remove, unpin) go last, so
+       what they remove has had its own click first */
+    if (opts.last) {
+      var lastIs = await p.evaluate(function (a) { return Array.prototype.map.call(document.querySelectorAll(a.sel), function (e) { return e.getAttribute('data-sweep'); }).filter(Boolean); }, { sel: opts.last });
+      items = items.filter(function (x) { return lastIs.indexOf(String(x.i)) < 0; }).concat(items.filter(function (x) { return lastIs.indexOf(String(x.i)) >= 0; }).map(function (x) { x.takesAway = true; return x; }));
+    }
     for (var k = 0; k < items.length; k++) {
       var it = items[k], control = view.name + ': ' + it.label;
       /* a new tab or a mail link is read, not followed */
@@ -235,12 +283,16 @@ async function run(p, opts) {
         if (!same || same.label !== it.label) { report.skipped.push(control); continue; }
       }
       if (it.reveal !== null && it.reveal !== undefined && reveal[it.reveal].open) { await reveal[it.reveal].open(p); await wait(settle); }
+      /* an earlier click folded it away (an expander, a list that toggles): state, not a fault */
+      if (!(await p.locator('[data-sweep="' + it.i + '"]').isVisible())) { report.hidden.push(control); continue; }
       var before = await p.evaluate(function () { return location.pathname + location.search; });
       var heldAt = held.length;
       current = control;
       try { await p.locator('[data-sweep="' + it.i + '"]').click({ timeout: 2500 }); report.clicks++; }
-      catch (e) { problem('click', control, String(e.message || e).split('\n')[0].slice(0, 200)); current = null; await closeAll(control); await view.enter(p); continue; }
-      await wait(settle);
+      catch (e) { problem('click', control, why(e)); current = null; await closeAll(control); await view.enter(p); continue; }
+      /* what a Remove takes away is redrawn after its write: let the page
+         finish moving, or the next click lands on whatever slid under it */
+      await wait(it.takesAway ? settle + 900 : settle);
       var st = await judge(control, it, before, heldAt);
       if (!st) { current = null; break; }
       /* one level in: each action button in what this click opened, once */
@@ -260,7 +312,7 @@ async function run(p, opts) {
           var before2 = await p.evaluate(function () { return location.pathname + location.search; }), heldAt2 = held.length;
           current = ic;
           try { await p.locator('[data-sweep-inner="' + hit.j + '"]').click({ timeout: 2500 }); report.clicks++; report.controls++; }
-          catch (e) { problem('click', ic, String(e.message || e).split('\n')[0].slice(0, 200)); current = null; continue; }
+          catch (e) { problem('click', ic, why(e)); current = null; continue; }
           await wait(settle);
           var st2 = await judge(ic, null, before2, heldAt2);
           current = null;
@@ -274,7 +326,7 @@ async function run(p, opts) {
       await view.enter(p); await wait(60);
     }
   }
-  await p.unroute('**/*');
+  await p.unroute('**/*'); await ctx.unroute('**/*', popupRoute); p.off('popup', onPopup);
   p.off('pageerror', onError); p.off('console', onConsole);
   return report;
 

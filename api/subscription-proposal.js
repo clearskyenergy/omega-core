@@ -173,7 +173,12 @@ module.exports = A.handler(async function (req, res) {
   if (Object.keys(input).some(function (k) { return FIELDS.indexOf(k) < 0; })) fail(400, 'Unsupported field');
   if (ACTIONS.indexOf(input.action) < 0) fail(400, 'Action must be one of ' + ACTIONS.join(', '));
   if (STAFF_ONLY.indexOf(input.action) >= 0 && !caller.staff) fail(403, 'Staff only');
-  if (!caller.staff && (!caller.claims || caller.claims.email_verified !== true)) fail(403, 'Verified email required');
+  /* recommend and price are arithmetic on the price book (public on
+     /api/offerings): a new account is quoted on the signup page before its
+     email link is clicked. Everything that writes, sends, accepts or names a
+     sender still needs the verified address. */
+  var quoteOnly = (input.action === 'recommend' || input.action === 'price') && input.prospect == null;
+  if (!caller.staff && !quoteOnly && (!caller.claims || caller.claims.email_verified !== true)) fail(403, 'Verified email required');
   var bk = await B.load(db, caller.staff && input.pricebookVersion ? input.pricebookVersion : B.VERSION);
   switch (input.action) {
     case 'context': return context(db, caller, input, bk);

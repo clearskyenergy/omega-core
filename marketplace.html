@@ -998,7 +998,7 @@ function resolveWorkspace(email){
            accountTier:'Account', allowedDomain:d, derived:true };
 }
 
-var CFG, auth, db, currentUser=null, currentOrg=null, WORKSPACE=null;
+var CFG, auth, db, currentUser=null, currentOrg=null, WORKSPACE=null, BOUND=null;
 var _PINNED=[];
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -1051,6 +1051,14 @@ function onAuth(user, tries){
     el('auth-screen').style.display='flex'; el('app').style.display='none';
     return;
   }
+  /* THE BOUND WORKSPACE WINS. resolveWorkspace() is a stand-in built from
+     the email (no plan, no modules); omega-tenant.js's entitlements are the
+     workspace. When they landed first, this used to overwrite them with the
+     stand-in, and the store (switched on once, from the entitlements) drew
+     every module against a plan with no tier: no Add to plan anywhere,
+     modules marked held that are not (check:workspace's click sweep caught
+     it, one visit in six). */
+  if (BOUND && BOUND.orgId === ws.orgId) ws = BOUND;
   currentUser = user; WORKSPACE = ws; currentOrg = ws.orgId;
   window.OMEGA_WORKSPACE = ws; window.CS_BRAND = ws.clientName;
   el('auth-screen').style.display='none'; el('app').style.display='flex';
@@ -1391,6 +1399,8 @@ function moduleCtx(){
   return { packaged: STORE.packaged, modules: STORE.packaged ? STORE.owned : (ws.modules || []), addons: ws.addons || [], addOns: STORE.packaged ? [] : (ws.addOns || []), tierLevel: ws.tierLevel, canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && isUnlockedHere(t); }, tool: function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; },
     /* what the editor opens of a legacy module, on the editor's own ladder (the store tells the truth) */
     canCap: STORE.packaged ? null : OmegaWorkspaceHub.capsFor(ws.billing || (window.OmegaTenant && OmegaTenant.billing), ws.orgId),
+    /* the storefront is on where its own gate opens it (the tenant record's whiteLabel, the add-on) */
+    billing: ws.billing || (window.OmegaTenant && OmegaTenant.billing) || null, whiteLabel: ws.whiteLabel || null,
     visible: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && OMEGATools.isVisible(t, ws); } };
 }
 function moduleTools(m){ return (m.tools||[]).map(function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; }).filter(function(t){ return !!t && OMEGATools.isVisible(t, WORKSPACE || {}); }); }
@@ -1549,9 +1559,13 @@ function focusHash(){
 }
 window.addEventListener('hashchange', function(){ STORE.focused = ''; focusHash(); });
 if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(function(ws){
+  /* the entitlements are the workspace from here on, whichever answer came first */
+  if (ws) { BOUND = ws; WORKSPACE = ws; window.OMEGA_WORKSPACE = ws; }
   ws = ws || window.OMEGA_WORKSPACE;
   try { wearChrome(ws); } catch(e){ console.warn('workspace chrome', e); }
+  var wasOn = STORE.on;
   try { storeMode(ws); } catch(e){ console.warn('package store', e); }
+  if (wasOn) { try { paintStore(); paintMarket(); } catch(e){ console.warn('package store', e); } }
 });
 
 /* ── Add / remove from dashboard (shared pin store) ── */

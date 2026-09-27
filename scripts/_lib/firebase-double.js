@@ -418,7 +418,12 @@
     var st = storageStub(); function storageFn() { return st; }
     var fb = {
       apps: apps, SDK_VERSION: 'double',
-      initializeApp: function (options, name) { var app = { name: name || '[DEFAULT]', options: options || {}, auth: authFn, firestore: firestoreFn, storage: storageFn }; if (apps.some(function (a) { return a.name === app.name; })) { var e = new Error('Firebase: Firebase App named \'' + app.name + '\' already exists (app/duplicate-app).'); e.code = 'app/duplicate-app'; throw e; } apps.push(app); return app; },
+      /* as the real SDK (v9 compat) does: a second initializeApp with the SAME
+         options hands back the app that exists; only different options are a
+         duplicate-app error. Throwing on the same options killed projects.html
+         (it initializes after omega-tenant.js) in every render check while
+         production was fine, so the Projects page was never really tested. */
+      initializeApp: function (options, name) { var app = { name: name || '[DEFAULT]', options: options || {}, auth: authFn, firestore: firestoreFn, storage: storageFn }; var had = apps.filter(function (a) { return a.name === app.name; })[0]; if (had) { if (JSON.stringify(had.options) === JSON.stringify(app.options)) return had; var e = new Error('Firebase: Firebase App named \'' + app.name + '\' already exists with different options or config (app/duplicate-app).'); e.code = 'app/duplicate-app'; throw e; } apps.push(app); return app; },
       app: function (name) { var a = apps.filter(function (x) { return x.name === (name || '[DEFAULT]'); })[0]; if (!a) { var e = new Error('Firebase: No Firebase App \'' + (name || '[DEFAULT]') + '\' has been created - call Firebase App.initializeApp() (app/no-app).'); e.code = 'app/no-app'; throw e; } return a; },
       auth: authFn, firestore: firestoreFn, storage: storageFn,
       analytics: function () { return { logEvent: function () {} }; }
