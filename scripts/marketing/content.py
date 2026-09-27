@@ -586,6 +586,66 @@ REPLY_CARD_EXAMPLE = dict(kind='result', entry='#3', headline='Near [town], [sta
           ['Published hosting capacity', '[value or "not published"]'], ['Parcel', '[acres]']],
     verdict='Worth a closer look', tone='go')
 
+# The screen recordings behind Build Tuesday and Speedrun Friday. Button
+# names are the editor's own (Build, Estimate and Output tabs). A person
+# records; nothing here is generated. Build Tuesday may be trimmed; a
+# Speedrun is one take with a clock on screen, and its time is only ever the
+# real one.
+RECORDING_SETUP = [
+    'Record on a computer, not a phone: macOS Shift-Command-5, "Record Selected Portion", around the browser window only.',
+    'Browser full screen (Control-Command-F) so the address bar, bookmarks and other tabs are off camera. Notifications off.',
+    'A fresh project in your own workspace, on a real commercial or industrial address you are free to show (never a customer\'s site or a site under negotiation).',
+    'For a Speedrun, open the Clock app\'s stopwatch in a small window inside the recorded area and start it on camera. One take, no cuts.',
+    'Post the video with its card as the thumbnail, and one line of on-screen text or captions: most people watch muted.',
+]
+RECORDING_NEVER = [
+    'The inputs and assumptions panels (BESS Sizer inputs, value-stack settings, pro forma assumptions): show the result screen only.',
+    'Unit costs and rate columns in the estimate or BOM: show quantities, or the total for a second, never the rates.',
+    'The Output tab\'s API Keys and AI Tokens panels, Settings, the console, or your project list (it names customers).',
+    'The address bar, any other company\'s name or data, and any email or chat window.',
+]
+RECORDINGS = [
+    dict(days='2', name='BESS build', length='30–60 s, trimmed', steps=[
+        'Build tab → 1 · Site → Site Setup: type the address, lock the map.',
+        '2 · Build → BESS Build: place the battery; the trench snaps BESS → transformer → switchgear → meter → POI.',
+        'Pause on the separation check (NFPA 855) for two seconds.',
+        'Output tab → One-Line: the one-line appears from the same model.',
+        'Estimate tab → BOM: two seconds on the quantities.']),
+    dict(days='5', name='Speedrun: address to proposal', length='one take, clock on screen', steps=[
+        'Start the stopwatch on camera.',
+        'Site Setup: the address.',
+        'Grid Atlas: the substations and lines around the site (crop nothing, but do not open data-source panels).',
+        'BESS Build: the layout.',
+        '3 · Size & Configure → BESS Sizer: go straight to the result screen.',
+        'Output tab → Proposal. Stop the clock. Post the real time.']),
+    dict(days='9', name='EV fast-charging hub', length='30–60 s, trimmed', steps=[
+        'Site Setup: a lot or a depot.',
+        'Build tab → DCFC: the chargers, switchgear and transformer land.',
+        'The load checked against what the grid can serve.',
+        'The DCFC pro forma result: utilization, IRR, payback. The result, not the inputs.']),
+    dict(days='12', name='Speedrun: 10 sites ranked', length='one take, clock on screen', steps=[
+        'Start the stopwatch.',
+        'Load a folder of 10 site KMZs into the parcel screening register (your own pipeline with the names changed, or public sample parcels).',
+        'The ranked list appears. Show the rank and the score, never the factors or weights behind it.',
+        'Open the top 3 and lay out the first one. Stop the clock.']),
+    dict(days='16', name='Compute campus', length='30–60 s, trimmed', steps=[
+        'Compute tab → Compute Build on a large parcel.',
+        'The load asked for against what the grid will carry: the gap.',
+        'The generation and storage that close it. Say on screen that Compute is in limited trial.']),
+    dict(days='19', name='Speedrun: move it once', length='one take, clock on screen', steps=[
+        'Start the stopwatch on a finished BESS layout.',
+        'Select the battery and drag it about 40 feet.',
+        'The trench re-routes; the conduit schedule re-counts; the estimate total updates. Stop the clock.']),
+    dict(days='23', name='Solar + storage', length='30–60 s, trimmed', steps=[
+        'Site Setup: a C&I roof or ground site.',
+        'Build tab → Solar + Storage: the single-pass flow from the POI to the array.',
+        'Solar → BESS Sizer: the battery sized to what was drawn. Result screen only.',
+        'The pro forma result.']),
+    dict(days='26', name='Speedrun rematch: the full run', length='one take, clock on screen', steps=[
+        'The day-5 run again, plus the one-line and the estimate, after a month of practice.',
+        'Say on screen whether you beat the day-5 time. Post the real time either way.']),
+]
+
 PILLARS = {
     'drop': 'Drop a Site', 'build': 'Build Tuesday', 'quiz': 'Guess & Spot', 'stack': 'Count Your Stack',
     'speed': 'Speedrun Friday', 'board': 'Site Leaderboard', 'teach': 'Field Notes', 'talk': 'Conversation',

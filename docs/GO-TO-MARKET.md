@@ -825,6 +825,78 @@ Hi {First}, I work with development teams on early-stage screening and design. S
 - Never send exports of model internals or a screen of the admin console, and never name another customer.
 - Several people per company is fine (origination, engineering, finance), one thread each; never a blast.
 
+## 4a. The recordings
+
+Build Tuesday and Speedrun Friday need a real screen recording. Setup:
+
+- Record on a computer, not a phone: macOS Shift-Command-5, "Record Selected Portion", around the browser window only.
+- Browser full screen (Control-Command-F) so the address bar, bookmarks and other tabs are off camera. Notifications off.
+- A fresh project in your own workspace, on a real commercial or industrial address you are free to show (never a customer's site or a site under negotiation).
+- For a Speedrun, open the Clock app's stopwatch in a small window inside the recorded area and start it on camera. One take, no cuts.
+- Post the video with its card as the thumbnail, and one line of on-screen text or captions: most people watch muted.
+
+**Never on camera:**
+
+- The inputs and assumptions panels (BESS Sizer inputs, value-stack settings, pro forma assumptions): show the result screen only.
+- Unit costs and rate columns in the estimate or BOM: show quantities, or the total for a second, never the rates.
+- The Output tab's API Keys and AI Tokens panels, Settings, the console, or your project list (it names customers).
+- The address bar, any other company's name or data, and any email or chat window.
+
+**Day 2 · BESS build** (30–60 s, trimmed)
+
+1. Build tab → 1 · Site → Site Setup: type the address, lock the map.
+2. 2 · Build → BESS Build: place the battery; the trench snaps BESS → transformer → switchgear → meter → POI.
+3. Pause on the separation check (NFPA 855) for two seconds.
+4. Output tab → One-Line: the one-line appears from the same model.
+5. Estimate tab → BOM: two seconds on the quantities.
+
+**Day 5 · Speedrun: address to proposal** (one take, clock on screen)
+
+1. Start the stopwatch on camera.
+2. Site Setup: the address.
+3. Grid Atlas: the substations and lines around the site (crop nothing, but do not open data-source panels).
+4. BESS Build: the layout.
+5. 3 · Size & Configure → BESS Sizer: go straight to the result screen.
+6. Output tab → Proposal. Stop the clock. Post the real time.
+
+**Day 9 · EV fast-charging hub** (30–60 s, trimmed)
+
+1. Site Setup: a lot or a depot.
+2. Build tab → DCFC: the chargers, switchgear and transformer land.
+3. The load checked against what the grid can serve.
+4. The DCFC pro forma result: utilization, IRR, payback. The result, not the inputs.
+
+**Day 12 · Speedrun: 10 sites ranked** (one take, clock on screen)
+
+1. Start the stopwatch.
+2. Load a folder of 10 site KMZs into the parcel screening register (your own pipeline with the names changed, or public sample parcels).
+3. The ranked list appears. Show the rank and the score, never the factors or weights behind it.
+4. Open the top 3 and lay out the first one. Stop the clock.
+
+**Day 16 · Compute campus** (30–60 s, trimmed)
+
+1. Compute tab → Compute Build on a large parcel.
+2. The load asked for against what the grid will carry: the gap.
+3. The generation and storage that close it. Say on screen that Compute is in limited trial.
+
+**Day 19 · Speedrun: move it once** (one take, clock on screen)
+
+1. Start the stopwatch on a finished BESS layout.
+2. Select the battery and drag it about 40 feet.
+3. The trench re-routes; the conduit schedule re-counts; the estimate total updates. Stop the clock.
+
+**Day 23 · Solar + storage** (30–60 s, trimmed)
+
+1. Site Setup: a C&I roof or ground site.
+2. Build tab → Solar + Storage: the single-pass flow from the POI to the array.
+3. Solar → BESS Sizer: the battery sized to what was drawn. Result screen only.
+4. The pro forma result.
+
+**Day 26 · Speedrun rematch: the full run** (one take, clock on screen)
+
+1. The day-5 run again, plus the one-line and the estimate, after a month of practice.
+2. Say on screen whether you beat the day-5 time. Post the real time either way.
+
 ## 5d. Ads (the page's ad credit)
 
 | | |

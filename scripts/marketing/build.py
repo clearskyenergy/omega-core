@@ -192,6 +192,16 @@ for b in PLAYBOOKS:
     w('**Careful**\n')
     for x in b['guard']: w('- ' + x)
     w('')
+w('## 4a. The recordings\n')
+w('Build Tuesday and Speedrun Friday need a real screen recording. Setup:\n')
+for x in RECORDING_SETUP: w('- ' + x)
+w('\n**Never on camera:**\n')
+for x in RECORDING_NEVER: w('- ' + x)
+w('')
+for r in RECORDINGS:
+    w('**Day %s · %s** (%s)\n' % (r['days'], r['name'], r['length']))
+    for n, x in enumerate(r['steps'], 1): w('%d. %s' % (n, x))
+    w('')
 w('## 5d. Ads (the page\'s ad credit)\n')
 w('| | |\n|---|---|')
 for a_, b_ in ADS: w('| %s | %s |' % (a_, b_))
@@ -345,6 +355,11 @@ def playbook_html(b):
     return ''.join(h)
 
 playbooks_html = ''.join(playbook_html(b) for b in PLAYBOOKS)
+rec_html = ('<div class="two"><div class="rules do"><h3>Setup</h3><ul>%s</ul></div><div class="rules dont"><h3>Never on camera</h3><ul>%s</ul></div></div>'
+            % (''.join('<li>%s</li>' % E(x) for x in RECORDING_SETUP), ''.join('<li>%s</li>' % E(x) for x in RECORDING_NEVER)))
+rec_html += '<div class="steps">' + ''.join(
+    '<article class="step"><div class="step-h"><span class="mono when">DAY %s</span><span class="chip">%s</span><h4>%s</h4></div><ol class="blk">%s</ol></article>'
+    % (E(r['days']), E(r['length']), E(r['name']), ''.join('<li>%s</li>' % E(x) for x in r['steps'])) for r in RECORDINGS) + '</div>'
 ads_html = ''.join('<tr><th>%s</th><td>%s</td></tr>' % (E(a), E(b)) for a, b in ADS)
 spec = ''.join('<li>%s</li>' % E(x) for x in PAGE['specialties'])
 icp = ''.join('<tr><td>%s</td><td>%s</td></tr>' % (E(a), E(b)) for a, b in ICP)
@@ -368,7 +383,7 @@ for k, v in {
     '%%ENGAGE%%': ''.join('<li>%s</li>' % E(x) for x in ENGAGE),
     '%%REPLY%%': '<div class="shot"><img src="cards/reply-example.png" alt="Site screened reply card (template)" loading="lazy" width="1080" height="1350"><span class="sub">The reply card, with blanks where the tool\'s results go.</span></div>',
     '%%DO%%': do, '%%DONT%%': dont, '%%BLOCKERS%%': blk,
-    '%%TRIAL%%': E(LINKS['trial']), '%%PLAYBOOKS%%': playbooks_html, '%%ADS%%': ads_html,
+    '%%TRIAL%%': E(LINKS['trial']), '%%PLAYBOOKS%%': playbooks_html, '%%RECORDINGS%%': rec_html, '%%ADS%%': ads_html,
 }.items():
     page = page.replace(k, v)
 assert '%%' not in page, page[page.index('%%'):page.index('%%') + 40]
