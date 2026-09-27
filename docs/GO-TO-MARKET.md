@@ -32,7 +32,7 @@ Sell the result, never the method. The pricing, scoring, dispatch and modelling 
 
 - Show inputs, formulas, weights or assumption tables: scoring, dispatch, value-stack math, cost bands, unit rates, eligibility rules. They run on the server so nobody can read them, so don't put them in a screenshot either.
 - Show a real customer's workspace, project, address, bill or equipment list.
-- Name or show the logo of a customer without their written permission. Accounts under a signed agreement (FENECON, the OSA joint venture) and anyone mid-negotiation are never named.
+- Name or show the logo of a customer without their written permission. Accounts under a signed agreement (the off-limits list in docs/SALES-AGENT.md §5) and anyone mid-negotiation are never named.
 - Name data vendors, financing partners, the architecture, the database, internal tools or internal codenames.
 - Claim what does not ship. The AHJ portal, the procurement marketplace, aggregators and offtakers are coming soon. Site Finder covers northern Illinois (ComEd) only. The Permitting Matrix is beta and verified jurisdiction by jurisdiction. Compute is in limited trial.
 - Invent numbers: no hours saved, customer counts or savings unless they come from the product, the price list or a clearly labelled example.
@@ -679,7 +679,7 @@ ClearSky OMEGA · {postal address}
 
 ## 6. Target accounts
 
-`docs/developer-targets.csv` (to come).
+`docs/developer-targets.csv` (50 companies, public sources, company-level only; no personal contact data). Read the source before you write: a hook is only as good as its date. Check the growth board and the off-limits list before the first touch; a company that signs up leaves this list.
 
 ## 7. The daily routine (once a channel is picked)
 
