@@ -919,6 +919,8 @@ window._omegaReady = function(){
 <script>if (window.OmegaWorkspaceShell) OmegaWorkspaceShell.theme();</script>
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-tools.js?v=9"></script>
+<!-- the ONE rule for whether a workspace holds a module (the Modules page reads it too) -->
+<script src="/omega-workspace-hub.js"></script>
 <!-- The shared subscribe control (Phase 5): server catalog, server quotes,
      posts to /api/plan-change. The package store below is built on it. -->
 <script src="/omega-package-menu.js"></script>
@@ -1377,18 +1379,17 @@ function storeIndex(rows){
   rows.forEach(function(m){ (m.tools||[]).forEach(function(k){ if (!STORE.byTool[k]) STORE.byTool[k] = m; }); });
 }
 function storeOwned(key){ return STORE.owned.indexOf(key) >= 0; }
-/* held · pending · part · ask (· open, a packaged module to subscribe to) */
+/* held · pending · part · ask (· open, a packaged module to subscribe to):
+   OmegaWorkspaceHub.moduleState is the rule, shared with the workspace's
+   Modules page; only 'pending' (an invoice waiting) is this page's own */
+function moduleCtx(){
+  var ws = WORKSPACE || {};
+  return { packaged: STORE.packaged, modules: STORE.packaged ? STORE.owned : (ws.modules || []), addons: ws.addons || [], tierLevel: ws.tierLevel, canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && isUnlockedHere(t); }, tool: function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; } };
+}
 function moduleTools(m){ return (m.tools||[]).map(function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; }).filter(function(t){ return !!t; }); }
 function moduleState(m){
-  if (STORE.packaged) return storeOwned(m.key) ? 'held' : (STORE.control.pending && STORE.control.pending[m.key]) ? 'pending' : 'open';
-  var ws = WORKSPACE || {};
-  if (/^logic-/.test(m.key)) return (Array.isArray(ws.addons) && ws.addons.indexOf('omega-logic') >= 0) ? 'held' : 'ask';
-  var tools = moduleTools(m);
-  /* a module of editor capabilities alone (plan sets, site intelligence,
-     the storefront): the legacy Enterprise tier carries every capability */
-  if (!tools.length) return ws.tierLevel >= 3 ? 'held' : 'ask';
-  var open = tools.filter(isUnlockedHere).length;
-  return open === tools.length ? 'held' : open ? 'part' : 'ask';
+  if (STORE.packaged && !storeOwned(m.key) && STORE.control.pending && STORE.control.pending[m.key]) return 'pending';
+  return OmegaWorkspaceHub.moduleState(m, moduleCtx());
 }
 function askHref(m){
   var ws = WORKSPACE || {}, to = (window.OmegaBrand && OmegaBrand.upgradeEmail) ? OmegaBrand.upgradeEmail() : 'dev@clearsky-usa.com', who = ws.clientName || ws.orgId || 'our workspace';
@@ -1476,8 +1477,8 @@ function moduleCard(m){
   var act = card.querySelector('.mkt-actions');
   if (owned){ act.innerHTML = '<div class="mkt-act disabled" style="color:#0E6E32;background:#F1FBF4;border-color:#BCE7C9">'+(STORE.packaged ? 'In your plan' : 'On your plan')+'</div>'; return card; }
   if (!STORE.packaged){
-    var all = moduleTools(m), open = all.filter(isUnlockedHere).length;
-    act.innerHTML = (st === 'part' ? '<div class="mkt-state">'+open+' of '+all.length+' of its tools are on your plan.</div>' : '')
+    var mt = OmegaWorkspaceHub.moduleTools(m, moduleCtx());
+    act.innerHTML = (st === 'part' ? '<div class="mkt-state">'+mt.open+' of '+mt.total+' of its tools are on your plan.</div>' : '')
       + '<a class="mkt-act primary ask" href="'+askHref(m)+'">Ask ClearSky to add it</a>';
     return card;
   }

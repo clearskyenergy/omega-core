@@ -342,7 +342,7 @@ function prefs() { var p = {}; Object.keys(PREFS_DEFAULT).forEach(function (k) {
 /* ── what this person may open: ONE rule, the catalog's ─────────────────── */
 function tool(key) { return T.byKey(key); }
 function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, WS); }
-function hubCtx() { return { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], hideMarketplace: !!WS.hideMarketplace }; }
+function hubCtx() { var pa = WS.packageAccess; return { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], hideMarketplace: !!WS.hideMarketplace, packaged: !!(pa && pa.packaged), tierLevel: WS.tierLevel }; }
 function href(t) { return T.hrefFor(t, WS); }
 function launch(t) {
   if (!t) return;
@@ -432,36 +432,54 @@ function renderToday() {
   Array.prototype.forEach.call(byId('today').querySelectorAll('[data-need]'), function (b) { b.addEventListener('click', function () { act(needs()[Number(b.getAttribute('data-need'))]); }); });
 }
 /* ── Modules: the Ladder as a page (Tommy, 2026-09-27) ──────────────────
-   One card per module of the package view's own catalog, in shelf order:
-   held ones Live, bought-not-on ones named, the rest with the server's
-   price and + Add, which opens the ONE menu (omega-package-menu.js) on that
-   module; a change re-asks the server. Prices come from /api/package-catalog
-   once, formatted there; nothing here is a second list or a price. */
+   One card per module of the catalog, in shelf order, for EVERY workspace
+   ("they should have all the modules here, but if they are used or given
+   it shows that"). A packaged workspace reads its own projection: held
+   ones Live, bought-not-on ones named, the rest with the server's price
+   (/api/package-catalog, once) and + Add, which opens the ONE menu
+   (omega-package-menu.js) on that module; a change re-asks the server.
+   A legacy workspace reads the PUBLIC price list (/api/offerings, once)
+   and every module is judged by OmegaWorkspaceHub.moduleState, the rule
+   the marketplace store shares: Live when the tier holds it, Partly with
+   the count, else the price and Ask, which is the store on that module.
+   Nothing here is a second list or a price. */
 var MOD_SHELF = { floor: 'Included in every plan', addon: 'Add-ons', standard: 'Standard shelf', premium: 'Premium shelf', deliverable: 'Deliverables', platform: 'Omega Logic' }, MOD_ORDER = ['floor', 'addon', 'standard', 'premium', 'deliverable', 'platform'];
 var MOD_PRICES = null, MOD_CATALOG = null, MOD_ASKED = false;
+function askModules(packaged) {
+  if (packaged) return (window.OmegaPackageMenu ? OmegaPackageMenu.api('/api/package-catalog') : Promise.reject(new Error('no menu')));
+  return new Promise(function (res, rej) {
+    try { var x = new XMLHttpRequest(); x.open('GET', '/api/offerings'); x.onload = function () { try { var j = JSON.parse(x.responseText); if (x.status === 200 && j && Array.isArray(j.modules)) res(j); else rej(new Error('unavailable')); } catch (e) { rej(e); } }; x.onerror = function () { rej(new Error('unavailable')); }; x.send(); }
+    catch (e) { rej(e); }
+  });
+}
 function renderModules() {
   var b = byId('modules-body'), pa = WS.packageAccess, packaged = !!(pa && pa.packaged && Array.isArray(pa.catalog) && pa.catalog.length);
-  if (!MOD_ASKED) { MOD_ASKED = true; (window.OmegaPackageMenu ? OmegaPackageMenu.api('/api/package-catalog') : Promise.reject(new Error('no menu'))).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay; }); renderModules(); }, function () { MOD_CATALOG = []; renderModules(); }); }
-  /* a legacy plan (no packaged record) holds everything: every module of the
-     server's catalog is Live on it, and there is nothing to add */
+  if (!MOD_ASKED) { MOD_ASKED = true; askModules(packaged).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay || m.monthlyDisplay; }); renderModules(); }, function () { MOD_CATALOG = []; renderModules(); }); }
   if (!packaged) {
     if (!MOD_CATALOG) { b.innerHTML = '<div class="empty">Loading the catalog…</div>'; return; }
-    if (!MOD_CATALOG.length) { b.innerHTML = '<div class="empty">' + esc(planName()) + ' holds everything on it. Modules are how a packaged plan grows; the Marketplace has the catalog.</div>'; return; }
-    var sub = byId('modules-sub'); if (sub) sub.textContent = planName() + ' holds every module. Each one is Live for ' + (WS.clientName || 'your workspace') + '.';
+    if (!MOD_CATALOG.length) { b.innerHTML = '<div class="empty">The price list is unavailable right now. The <a href="/marketplace.html">Marketplace</a> has every module; try again later.</div>'; return; }
   }
-  var held = packaged ? (pa.modules || WS.modules || []) : MOD_CATALOG.map(function (m) { return m.key; }), bl = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {};
+  var ctx = hubCtx(), bl = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {};
   var bought = bl.subscription && Array.isArray(bl.subscription.modules) ? bl.subscription.modules : [];
-  var cat = (packaged ? pa.catalog : MOD_CATALOG).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), h = '', shelf = '';
+  var cat = (packaged ? pa.catalog : MOD_CATALOG).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), h = '', shelf = '', heldN = 0;
   cat.forEach(function (m) {
     if (m.shelf !== shelf) { shelf = m.shelf; h += '<h3>' + esc(MOD_SHELF[shelf] || shelf) + '</h3>'; }
-    var on = held.indexOf(m.key) >= 0, paid = !on && bought.indexOf(m.key) >= 0, price = MOD_PRICES && MOD_PRICES[m.key];
-    h += '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : '0') + '">';
-    h += on ? '<span class="st">● Live</span>' : paid ? '<span class="st" style="color:var(--ows-ink2)">Paid for</span>' : '';
+    var st = HUB.moduleState(m, ctx), on = st === 'held', paid = !on && bought.indexOf(m.key) >= 0, price = MOD_PRICES && MOD_PRICES[m.key];
+    if (on) heldN++;
+    h += '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : st === 'part' ? 'part' : '0') + '">';
+    h += on ? '<span class="st">● Live</span>' : paid ? '<span class="st" style="color:var(--ows-ink2)">Paid for</span>' : st === 'part' ? '<span class="st" style="color:var(--ows-amber)">Partly</span>' : '';
     h += '<b>' + esc(m.shelf === 'platform' ? 'Omega Logic · ' + m.name : m.name) + '</b><div class="d">' + esc((m.features || []).slice(0, 2).join(' · ')) + '</div>';
-    if (!on) h += '<div class="row"><span class="price">' + esc(paid ? 'Opens when the first invoice is paid' : (price || 'Price on the menu')) + '</span>' + (paid || WS.pendingApproval ? '' : '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">+ Add</button>') + '</div>';
+    if (!on) {
+      var mt = st === 'part' ? HUB.moduleTools(m, ctx) : null;
+      var note = paid ? 'Opens when the first invoice is paid' : (mt ? mt.open + ' of ' + mt.total + ' tools on your plan · ' : '') + (price || 'Price on the menu');
+      var action = paid || WS.pendingApproval ? '' : packaged ? '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">+ Add</button>' : '<a class="ows-pill primary" href="/marketplace.html#' + esc(m.key) + '" data-ask-module="' + esc(m.key) + '">Ask</a>';
+      h += '<div class="row"><span class="price">' + esc(note) + '</span>' + action + '</div>';
+    }
     h += '</div>';
   });
   b.innerHTML = '<div class="mods">' + h + '</div>';
+  var sub = byId('modules-sub');
+  if (sub) sub.textContent = packaged ? 'Build your own experience and pay for what you need. What you hold is Live; anything else is one click to add.' : planName() + ' holds ' + heldN + ' of ' + cat.length + ' modules for ' + (WS.clientName || 'your workspace') + '. Live ones are on your plan; Ask sends a module to ClearSky, who switches it on.';
   Array.prototype.forEach.call(b.querySelectorAll('[data-add-module]'), function (btn) { btn.addEventListener('click', function () { addModule(btn.getAttribute('data-add-module')); }); });
 }
 function addModule(key) {
