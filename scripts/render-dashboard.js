@@ -84,6 +84,10 @@ var srv = http.createServer(function (req, res) {
     if (u === '/api/package-access' && !post) { var pv = PACKAGE_VIEW || { packaged: false }; return setTimeout(function () { json(pv); }, PACKAGE_VIEW ? 1500 : 0); }
     /* a legacy tenant's Account panel asks Stripe for its invoices; none is connected here */
     if (u === '/api/stripe-invoices') return json({ connected: false, invoices: [] });
+    /* ...and a tenant linked to Stripe (Northstar) has Manage billing &
+       receipts, which the sweep clicks: the portal session api/stripe-portal.js
+       returns. The sweep's own window.open stub keeps it on this machine. */
+    if (u === '/api/stripe-portal' && post) return json({ url: 'https://billing.stripe.com/p/session/test_fixture' });
     if (u === '/api/package-catalog' && !post) { var bk = B.proposed(); return json({ orgId: PACKAGE_VIEW ? 'fixture' : null, pricebookVersion: bk.version, modules: P.catalog(bk), starters: M.starters(), canManage: true }); }
     if (u === '/api/plan-change' && PACKAGE_VIEW) {
       var org = Object.keys(SCENARIO_DOCS || {}).map(function (k) { var m = /^omega_orgs\/([^/]+)\/billing\/current$/.exec(k); return m && m[1]; }).filter(Boolean)[0];
