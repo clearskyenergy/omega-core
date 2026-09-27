@@ -57,7 +57,7 @@ function order(keys) {
   var set = {}; (keys || []).forEach(function (k) { if (typeof k === 'string') set[k] = true; });
   return M.catalog().map(function (m) { return m.key; }).filter(function (k) { return set[k] && k !== 'lite'; });
 }
-function label(k) { var m = M.get(k); return m ? (m.shelf === 'platform' ? 'Omega Logic · ' : '') + m.name : k; }
+function label(k) { var m = M.get(k); return m ? m.name : k; }
 function names(keys) { return order(keys).map(label); }
 function sum(lines) { return lines.reduce(function (n, l) { return n + l.amountCents; }, 0); }
 function isAddon(r) { return !!r && r.kind === 'addon'; }
@@ -130,7 +130,7 @@ function wanted(list) {
   var out = [];
   list.forEach(function (k) {
     if (typeof k !== 'string' || !M.get(k)) fail('Unknown module', 400);
-    if (k === 'lite') fail('Lite is always included', 400);
+    if (k === 'lite') fail('Omega Design is always included', 400);
     if (out.indexOf(k) < 0) out.push(k);
   });
   return out;

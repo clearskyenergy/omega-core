@@ -95,7 +95,7 @@ async function run() {
     equal((await quote(['logic-plant'])).add, ['logic-office', 'logic-plant'], 'a part brings Office, which it needs');
     equal((await quote(['logic-office', 'logic-office'])).add, ['logic-office'], 'a repeated module is counted once');
     await refused(function () { return quote(['storage']); }, /Already on your plan/, 409);
-    await refused(function () { return quote(['lite']); }, /Lite is always included/, 400);
+    await refused(function () { return quote(['lite']); }, /Omega Design is always included/, 400);
     await refused(function () { return quote(['nonsense']); }, /Unknown module/, 400);
     await refused(function () { return quote([]); }, /Choose at least one module/, 400);
 
@@ -143,7 +143,7 @@ async function run() {
     equal(a1.accessUntil, untilOf('2026-10-27'), 'on until the paid period and the book\'s grace');
     equal([bill().amountDue, bill().paymentLink, bill().lastPaidAt], [0, 'https://legacy.example/pay-the-contract', undefined], 'the plan\'s amount due, pay link and last payment stay the plan\'s');
     equal(db.data.get(ROOT + '/notifications/addon-paid-' + r1.addOnId).packageMail, 'paid', 'the tenant hears it is on');
-    ok(/Omega Logic · Office is on/.test(db.data.get(ROOT + '/notifications/addon-paid-' + r1.addOnId).text), 'by name');
+    ok(/Logic Office is on/.test(db.data.get(ROOT + '/notifications/addon-paid-' + r1.addOnId).text), 'by name');
     equal(db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-paid-' + ORG + '-' + buy1.qboInvoiceId).staffMail, 'paidAlert', 'ClearSky hears the money');
     ctx = await X.context(ORG);
     equal([X.subscribed(ctx, now), X.parts(ctx, now)], [true, []], 'Office on; no department bought yet');
@@ -154,8 +154,8 @@ async function run() {
 
     /* ── the summary and "I've paid" read the add-ons ── */
     var sum = await req('GET', {});
-    equal(sum.packaged, false); equal(sum.addOns.live, ['logic-office']); equal(sum.addOns.names, ['Omega Logic · Office']); equal(sum.addOns.monthlyDisplay, '$1,500/month');
-    equal(sum.invoices.map(function (x) { return [x.kind, x.purpose, x.state, (x.names || []).join()]; }), [['addon', 'purchase', 'paid', 'Office']]);
+    equal(sum.packaged, false); equal(sum.addOns.live, ['logic-office']); equal(sum.addOns.names, ['Logic Office']); equal(sum.addOns.monthlyDisplay, '$1,500/month');
+    equal(sum.invoices.map(function (x) { return [x.kind, x.purpose, x.state, (x.names || []).join()]; }), [['addon', 'purchase', 'paid', 'Logic Office']]);
     now += 60000;
     var look = await req('POST', { action: 'reconcile-now' });
     equal([look.packaged, look.addOns.live], [false, ['logic-office']]);

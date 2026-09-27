@@ -348,7 +348,7 @@ async function reconcile(db, orgId, now, deps, options) {
       }
       /* money landed on an add-on: the tenant hears what switched on, ClearSky hears the money */
       if (kindOf(snapshot) === 'addon' && state === 'paid' && snapshot.state !== 'paid') {
-        var what = (snapshot.purpose === 'renewal' ? snapshot.modules : snapshot.add) || [], label = what.map(function (k) { var m = M.get(k); return m ? (m.shelf === 'platform' ? 'Omega Logic · ' : '') + m.name : k; }).join(', ');
+        var what = (snapshot.purpose === 'renewal' ? snapshot.modules : snapshot.add) || [], label = what.map(function (k) { var m = M.get(k); return m ? m.name : k; }).join(', ');
         tx.set(c.root.collection('notifications').doc('addon-paid-' + snapshot.id), { kind: 'billing', read: false, createdAt: now, packageMail: 'paid', mailState: 'pending', first: false,
           text: 'Payment received: ' + P.money(snapshot.totalCents) + '. ' + label + (snapshot.purpose === 'renewal' ? (what.length > 1 ? ' are' : ' is') + ' renewed.' : (what.length > 1 ? ' are' : ' is') + ' on.'), amountDisplay: P.money(snapshot.totalCents), date: snapshot.date, invoiceId: record.qboInvoiceId });
         tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-paid-' + orgId + '-' + record.qboInvoiceId), { kind: 'payment', read: false, createdAt: now, orgId: orgId, staffMail: 'paidAlert', mailState: 'pending',

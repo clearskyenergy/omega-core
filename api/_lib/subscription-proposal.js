@@ -172,13 +172,13 @@ function orderForm(rec, book) {
   var pr = rec.pricing, p = rec.prospect, lite = book.modules.lite.priceCents;
   var schedule = rec.selection.modules.map(function (k) {
     var m = M.get(k), u = pr.usage.filter(function (x) { return x.module === k; })[0];
-    return { module: k, name: m.name, shelf: m.shelf, unitCents: book.modules[k].priceCents, unitDisplay: P.money(book.modules[k].priceCents) + '/month',
+    return { module: k, name: m.name, shelf: m.shelf, shelfLabel: m.shelfLabel, unitCents: book.modules[k].priceCents, unitDisplay: P.money(book.modules[k].priceCents) + '/month',
       included: u ? u.included + ' ' + u.name + '/cycle' : '', overage: u ? u.overageDisplay : '', features: m.features || [] };
   });
   return { title: 'Order Form', agreement: rec.terms.agreement, pricebookVersion: book.version, date: rec.sentAt || rec.updatedAt || rec.createdAt,
     customer: { company: p.company, domain: p.domain, contactName: p.contactName, email: p.email, phone: p.phone, address: p.address },
     supplier: rec.sender && rec.sender.brand ? rec.sender.brand.name : 'ClearSky Energy Solutions LLC',
-    lite: { name: 'Lite (Site Map core)', unitCents: lite, unitDisplay: P.money(lite) + '/month' },
+    lite: { name: 'Omega Design (Site Map core)', unitCents: lite, unitDisplay: P.money(lite) + '/month' },
     plan: pr.plan === 'alacarte' ? { key: 'alacarte', name: 'Lite + modules (à la carte)', rule: pr.planRule, monthlyDisplay: pr.display.recurring } : { key: pr.plan, name: book.plans[pr.plan].name, rule: pr.planRule, monthlyDisplay: pr.display.recurring },
     schedule: schedule, lines: pr.lines.map(function (l) { return { itemKey: l.itemKey, name: l.name, quantity: l.quantity, amountCents: l.amountCents, display: P.money(l.amountCents), modules: l.modules || null }; }),
     logins: { builders: pr.logins.builders, viewers: pr.logins.viewers, extraBuilder: P.money(pr.logins.extraBuilderCents) + '/month each', extraViewer: P.money(pr.logins.extraViewerCents) + '/month each' },
