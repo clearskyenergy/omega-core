@@ -266,9 +266,29 @@ async function webhookChecks() {
   } finally { Module._load = load; Hook && (Hook.deps = null); }
 }
 
+async function pricebookChecks() {
+  console.log('\nthe price book turns on for the Stripe rail without QuickBooks items');
+  var PE = require('../api/_lib/pricebook-enable'), db = new DB(); db.serial = true;
+  var b = B.proposed(); db.seed('pricebook/' + b.version, b);
+  var st = await PE.status(db, { Q: { load: async function () { return null; } } });
+  ok('the staff page is told the rail and the mode, and no binding is asked of Stripe', st.provider === 'stripe' && st.mode === 'sandbox' && st.items.missing.length > 0);
+  var dry = await PE.enable(db, false);
+  ok('the dry run names Stripe and no QuickBooks company', dry.provider === 'stripe' && dry.realm === null && dry.dryRun === true && db.data.get('pricebook/' + b.version).enabled === false);
+  await refused('it still needs the hash it showed', function () { return PE.enable(db, true, 'wrong'); }, /expected-hash/);
+  await PE.enable(db, true, dry.expectedHash);
+  ok('enabled with every QuickBooks item unbound: Stripe is handed amounts, not items', db.data.get('pricebook/' + b.version).enabled === true);
+  var db2 = new DB(); db2.serial = true; db2.seed('pricebook/' + b.version, B.proposed());
+  env({ STRIPE_SECRET_KEY: 'sk_live_double' });
+  await refused('a live key without the live switch enables nothing', function () { return PE.enable(db2, false); }, /test key/);
+  env({ STRIPE_SECRET_KEY: 'sk_test_double', PACKAGING_PROVIDER: 'quickbooks', QBO_ENV: 'sandbox' });
+  await refused('on the QuickBooks rail the binding still comes first', function () { return PE.enable(db2, false); }, /Bind every QuickBooks item/);
+  env({ PACKAGING_PROVIDER: 'stripe', QBO_ENV: null });
+}
+
 (async function () {
   await driverChecks();
   await engineChecks();
   await webhookChecks();
+  await pricebookChecks();
   console.log('\nstripe billing: ' + count + ' passed, 0 failed');
 })().catch(function (e) { console.error(e); process.exit(1); });

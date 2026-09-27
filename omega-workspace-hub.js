@@ -85,37 +85,84 @@
     });
     return out.concat(open, locked);
   }
-  /* ── DOES THIS WORKSPACE HOLD A MODULE? One rule for the Modules page
-     and the marketplace store (Tommy, 2026-09-27: every module listed,
-     marked by whether it is used or given). ctx as compose() takes it,
-     plus packaged (bool) and tierLevel (the legacy tier).
+  /* ── DOES THIS WORKSPACE HOLD A MODULE? One rule for the Modules page,
+     the marketplace store and the master console (Tommy, 2026-09-27: every
+     module listed, marked by whether it is used or given). ctx as compose()
+     takes it, plus packaged (bool), tierLevel (the legacy tier) and canCap
+     (a legacy cap → bool, from capsFor(): the SAME ladder the editor
+     applies).
        packaged   held when the server's projection lists it, else open
        legacy     an Omega Logic part: held by the omega-logic add-on;
-                  a module of tools: held when every tool it carries is
-                  open on the tier, part when some are, else ask;
-                  a module of editor capabilities alone (plan sets, site
-                  intelligence, the storefront): held on Enterprise, the
-                  legacy tier that carries every capability, else ask.
-     Answers 'held' | 'part' | 'ask' | 'open'. Showing a state is never
-     access: the tools and the editor check the same plan. */
+                  any other module is measured on BOTH halves of what it
+                  is: its standalone tools (ctx.canOpen: the tier, the
+                  allowlist, the overrides) and its commands in the editor
+                  (catalog legacyGates, each gate asked of ctx.canCap).
+                  Held when every part is open, part when some are, else
+                  ask. A module with neither (the storefront) is held on
+                  Enterprise.
+     "Store tells the truth" (Tommy, 2026-09-27): a Performance tenant who
+     produces plot plans in the editor holds Plan Sets, and a Core tenant
+     whose Analyze tab is closed does not hold Storage just because the
+     Battery Sizer page opens. Answers 'held' | 'part' | 'ask' | 'open'.
+     Showing a state is never access: the tools and the editor check the
+     same plan. */
   function moduleTools(m, ctx) {
     ctx = ctx || {};
     var total = 0, open = 0;
     ((m && m.tools) || []).forEach(function (k) {
       if (ctx.tool && !ctx.tool(k)) return;
+      /* a tool this org can never see (another org's, ClearSky's own) is
+         not part of what it can hold, so it never keeps a module "partly" */
+      if (ctx.visible && !ctx.visible(k)) return;
       total++; if (ctx.canOpen && ctx.canOpen(k)) open++;
     });
     return { open: open, total: total };
+  }
+  function moduleEditor(m, ctx) {
+    ctx = ctx || {};
+    var gates = (m && m.legacyGates) || [], open = 0;
+    if (!gates.length || !ctx.canCap) return { open: 0, total: 0 };
+    /* the editor is a tool too: an allowlist without it opens none of them */
+    var editor = !ctx.tool || !ctx.tool('editor') || !ctx.canOpen || ctx.canOpen('editor');
+    /* a gate may be a chain ("engineering+parcelscreen": a command with its
+       own cap on a gated tab); every link must be open */
+    if (editor) gates.forEach(function (g) { if (!g || String(g).split('+').every(function (c) { return ctx.canCap(c); })) open++; });
+    return { open: open, total: gates.length };
   }
   function moduleState(m, ctx) {
     ctx = ctx || {}; if (!m) return 'ask';
     if (ctx.packaged) return has(ctx.modules, m.key) ? 'held' : 'open';
     if (/^logic-/.test(m.key)) return holdsLogic(ctx, m.key) ? 'held' : 'ask';
-    var t = moduleTools(m, ctx);
-    if (!t.total) return (ctx.tierLevel >= 3) ? 'held' : 'ask';
-    return t.open === t.total ? 'held' : t.open ? 'part' : 'ask';
+    var t = moduleTools(m, ctx), e = moduleEditor(m, ctx), total = t.total + e.total, open = t.open + e.open;
+    /* nothing to measure (the storefront): held where the plan opens
+       everything, asked of the ladder when the page has it (a trial's tool
+       level is Enterprise's, but its plan is not) */
+    if (!total) return (ctx.canCap ? ctx.canCap('all') : ctx.tierLevel >= 3) ? 'held' : 'ask';
+    return open === total ? 'held' : open ? 'part' : 'ask';
   }
-  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, RING_MAX: RING_MAX };
+  /* What "Partly" means, in one line, from the same two halves moduleState
+     weighs: never "4 of 4 of its tools" under a Partly badge because the
+     missing half is in the editor. */
+  function moduleNote(m, ctx) {
+    var t = moduleTools(m, ctx), e = moduleEditor(m, ctx), bits = [];
+    if (t.total) bits.push(t.open + ' of ' + t.total + ' of its tools');
+    if (e.total) bits.push(e.open === e.total ? 'all of its commands in Site Map' : e.open ? 'some of its commands in Site Map' : 'none of its commands in Site Map');
+    return bits.length ? bits.join(' and ') + (bits.length > 1 || t.open !== 1 || !t.total ? ' are' : ' is') + ' on your plan' : '';
+  }
+  /* ctx.canCap for a legacy workspace: its billing record asked of
+     OmegaCaps.canWith, exactly as the editor asks it at sign-in (tier, else
+     trial; capTier; add-ons; the JV carve-out by org). Null when the page
+     has no OmegaCaps, and moduleState then measures the tools alone. */
+  function capsFor(billing, org, caps) {
+    caps = caps || (root && root.OmegaCaps);
+    if (!caps || !caps.canWith) return null;
+    billing = billing || {};
+    /* no tier on record: trial, as the editor reads it, except ClearSky's own
+       workspace, which the editor opens in full (its internal fallback) */
+    var tier = billing.tier || ((caps.INTERNAL_DOMAINS || []).indexOf(String(org || '').toLowerCase()) >= 0 ? 'internal' : 'trial');
+    return function (cap) { return caps.canWith(tier, cap, { addons: billing.addons || [], org: org || '', capTier: billing.capTier || null }); };
+  }
+  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleNote: moduleNote, capsFor: capsFor, RING_MAX: RING_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceHub = API;
 })(typeof window !== 'undefined' ? window : null);

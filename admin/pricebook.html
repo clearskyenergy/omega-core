@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script src="/omega-splash.js?v=1"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Price book — ClearSky OMEGA admin</title>
+<!-- admin/pricebook.html — turn the current price book on, for ClearSky staff.
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     A render of GET /api/pricebook-admin and two buttons that POST to it. The
+     rule (api/_lib/pricebook-enable.js) is the script's; the endpoint refuses
+     anyone who is not a verified clearsky-usa.com address. -->
+<style>
+:root{--bg:#0b1726;--card:#10233a;--ink:#e8eef5;--ink2:#9fb2c6;--ok:#3ecf8e;--bad:#ff7a6b;--line:#1e3550;--btn:#1f8f8a}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "DM Sans",system-ui,sans-serif}
+main{max-width:640px;margin:0 auto;padding:24px 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-top:14px}
+h1{font-size:22px;margin:0 0 4px}.muted{color:var(--ink2)}
+.row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}
+.ok{color:var(--ok)}.bad{color:var(--bad)}code{font:13px "DM Mono",monospace;word-break:break-all}
+button{background:var(--btn);color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px inherit;cursor:pointer;margin-top:12px}
+button[disabled]{opacity:.45;cursor:default}#msg{margin-top:12px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<main>
+  <h1>Price book</h1>
+  <div class="muted" id="who">Signing in…</div>
+  <div class="card" id="state"><div class="muted">Loading…</div></div>
+  <div class="card">
+    <div><b>1. Bind QuickBooks items</b> <span class="muted">— finds each item by its exact name in the connected company. Creates nothing that exists.</span></div>
+    <button type="button" id="bind" disabled>Bind items</button>
+    <div style="margin-top:14px"><b>2. Turn the book on</b> <span class="muted">— signup and billing start using it.</span></div>
+    <button type="button" id="enable" disabled>Enable price book</button>
+    <div id="msg" class="muted"></div>
+  </div>
+</main>
+<script src="/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script>
+/* ES5 */
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  var S = null;
+  function call(method, body) {
+    var u = firebase.auth().currentUser;
+    if (!u) return Promise.reject(new Error('Sign in required'));
+    return u.getIdToken().then(function (tok) {
+      var o = { method: method, headers: { Authorization: 'Bearer ' + tok } };
+      if (body) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(body); }
+      return fetch('/api/pricebook-admin', o);
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); });
+  }
+  function row(k, v, good) { return '<div class="row"><span>' + esc(k) + '</span><span class="' + (good === true ? 'ok' : good === false ? 'bad' : '') + '">' + esc(v) + '</span></div>'; }
+  function draw(s) {
+    S = s;
+    var c = s.connection || {}, realmOk = !!(c.realmId && s.bookRealm && c.realmId === s.bookRealm), stripe = s.provider === 'stripe';
+    /* the Stripe rail carries no QuickBooks items: the rows below are the QuickBooks rail's, and binding never gates enabling it */
+    var h = row('Version', s.version) + row('Enabled', s.enabled ? 'yes' : 'no', s.enabled)
+      + row('Billing through', stripe ? 'Stripe' : 'QuickBooks') + row('Billing mode', s.mode, s.mode === 'live') + row('Book company', (s.bookEnv || '—') + ' · ' + (s.bookRealm || 'none'), stripe ? undefined : !!s.bookRealm)
+      + row('Connected QuickBooks', (c.env || '—') + ' · ' + (c.realmId || 'none'), s.bookRealm ? realmOk : !!c.realmId)
+      + row('Items bound', s.items.bound + ' of ' + s.items.total, s.items.bound === s.items.total)
+      + (s.frozen || s.used ? row('Book', 'used or frozen', false) : '');
+    if (s.items.missing.length) h += '<div class="muted" style="margin-top:8px">Missing: <code>' + esc(s.items.missing.join(', ')) + '</code></div>';
+    $('state').innerHTML = h;
+    $('bind').disabled = s.enabled || s.items.bound === s.items.total;
+    $('enable').disabled = s.enabled || (!stripe && s.items.bound !== s.items.total) || s.mode === 'off';
+    if (s.enabled) $('msg').innerHTML = '<span class="ok">The price book is on. Signup and billing use it.</span>';
+  }
+  function load() { return call('GET').then(draw, function (e) { $('state').innerHTML = '<div class="bad">' + esc(e.message) + '</div>'; }); }
+  function run(btn, body, done) {
+    btn.disabled = true; $('msg').textContent = 'Working…';
+    call('POST', body).then(function (r) { $('msg').innerHTML = '<span class="ok">' + esc(done) + '</span>'; return load(); },
+      function (e) { $('msg').innerHTML = '<span class="bad">Refused: ' + esc(e.message) + '</span>'; btn.disabled = false; });
+  }
+  $('bind').addEventListener('click', function () { run($('bind'), { action: 'bind' }, 'Items bound.'); });
+  $('enable').addEventListener('click', function () {
+    if (!S || !window.confirm('Turn on price book ' + S.version + '? Signup and billing will start charging from it.')) return;
+    run($('enable'), { action: 'enable', expectedHash: S.expectedHash }, 'Enabled.');
+  });
+  firebase.auth().onAuthStateChanged(function (u) {
+    if (!u) { $('who').textContent = 'Sign in at /login.html as a clearsky-usa.com address, then reopen this page.'; return; }
+    $('who').textContent = 'Signed in as ' + u.email;
+    load();
+  });
+})();
+</script>
+</body>
+</html>

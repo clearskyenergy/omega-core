@@ -223,14 +223,20 @@
       var pays = []; if (b.monthlyDisplay) pays.push(String(b.monthlyDisplay)); if (b.nextInvoiceOn) pays.push('next invoice ' + dayOf(b.nextInvoiceOn)); if (b.paidThrough) pays.push('paid through ' + dayOf(b.paidThrough)); if (b.packagingState) pays.push(b.packagingState);
       if (pays.length) out.lines.push('Pays ' + pays.join(' · '));
     } else {
-      var tiers = { trial: 0, standard: 1, deluxe: 2, enterprise: 3 }, lvl = tiers[String(b.tier || '').toLowerCase()], T = global.OMEGATools, H = global.OmegaWorkspaceHub;
-      var wsLike = { tierLevel: typeof lvl === 'number' ? lvl : 1, toolAccess: Array.isArray(b.toolAccess) ? b.toolAccess : null, toolOverrides: b.toolOverrides || null, unlockedTools: b.unlockedTools || null, requiredTools: b.requiredTools || null };
-      var ctx = { packaged: false, modules: [], addons: b.addons || [], tierLevel: wsLike.tierLevel, tool: function (k) { return !!(T && T.byKey(k)); }, canOpen: function (k) { var t = T && T.byKey(k); return !!t && T.isUnlocked(t, wsLike); } };
-      (data.modules || []).forEach(function (m) { if (H && T && H.moduleState(m, ctx) === 'held') out.held.push(m.key); });
-      out.preselect = out.held.slice(); out.requested.forEach(function (o) { if (out.preselect.indexOf(o.key) < 0) out.preselect.push(o.key); });
+      /* the tier's tool level as the tenant's own pages read it (omega-tenant.js: a trial opens every tool) */
+      var tiers = (global.OmegaTenant && global.OmegaTenant.tierLevels) || {}, lvl = tiers[String(b.tier || '').toLowerCase()], T = global.OMEGATools, H = global.OmegaWorkspaceHub;
+      var wsLike = { orgId: orgId, tierLevel: typeof lvl === 'number' ? lvl : 1, toolAccess: Array.isArray(b.toolAccess) ? b.toolAccess : null, toolOverrides: b.toolOverrides || null, unlockedTools: b.unlockedTools || null, requiredTools: b.requiredTools || null };
+      var ctx = { packaged: false, modules: [], addons: b.addons || [], tierLevel: wsLike.tierLevel, tool: function (k) { return !!(T && T.byKey(k)); }, canOpen: function (k) { var t = T && T.byKey(k); return !!t && T.isUnlocked(t, wsLike); },
+        canCap: H && H.capsFor ? H.capsFor(b, orgId) : null, visible: function (k) { var t = T && T.byKey(k); return !!t && T.isVisible(t, wsLike); } };
+      out.partly = [];
+      (data.modules || []).forEach(function (m) { var st = H && T ? H.moduleState(m, ctx) : 'ask'; if (st === 'held') out.held.push(m.key); else if (st === 'part') out.partly.push(m.key); });
+      /* a package drawn from what they hold OR partly use: moving a legacy
+         tenant onto one never takes away something they open today */
+      out.preselect = out.held.concat(out.partly); out.requested.forEach(function (o) { if (out.preselect.indexOf(o.key) < 0) out.preselect.push(o.key); });
       if (out.preselect.indexOf('lite') < 0) out.preselect.unshift('lite');
       out.lines.push((b.tier ? b.tier.charAt(0).toUpperCase() + b.tier.slice(1) : 'No') + ' tier' + ((b.addons || []).length ? ' · add-ons: ' + b.addons.join(', ') : '') + (Array.isArray(b.toolAccess) ? ' · ' + b.toolAccess.length + ' tools allowlisted' : ''));
       out.lines.push('Holds ' + names(out.held) + ' (what its Modules page shows as Live)');
+      if (out.partly.length) out.lines.push('Partly on: ' + names(out.partly) + ' (some of its tools or editor commands)');
       var pay = []; if (b.amountDue != null) pay.push('$' + Number(b.amountDue || 0).toLocaleString() + ' due'); if (b.subscriptionDue) pay.push('next ' + dayOf(b.subscriptionDue)); if (b.lastPaidAt) pay.push('last paid ' + dayOf(b.lastPaidAt)); if (b.paymentProvider) pay.push('by ' + b.paymentProvider);
       out.lines.push(pay.length ? 'Pays ' + pay.join(' · ') : 'No payment on record');
     }
