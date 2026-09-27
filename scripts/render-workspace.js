@@ -522,11 +522,10 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: after Cancel request the module is Live again with Opt out', backLive.state === 'live' && backLive.acts[0] === 'remove:Opt out' && STORE.posts[STORE.posts.length - 1].action === 'withdraw-opt-out', backLive);
     /* OPT IN → the server says first whether the plan can switch it on by
        itself (plan-change addon-quote, api/_lib/addons.js exact()): on
-       Standard a module whose commands sit on a tab the plan keeps shut
-       cannot, so the menu says why in the server's words and records the
+       the storefront never is (ClearSky sets it up), so the menu says why in the server's words and records the
        request with its price, never a price to pay now; the card reads
        Opt-in requested */
-    var inKey = avail[0].key, posts1 = STORE.posts.length;
+    var inKey = 'whitelabel', posts1 = STORE.posts.length;
     await p.click('#modules-body .mod[data-module="' + inKey + '"] [data-mod-act="add"]');
     await p.locator('#omega-package-menu').getByRole('button', { name: 'Request opt-in' }).waitFor({ timeout: 4000 });
     var inPanel = await p.locator('#omega-package-menu').textContent();
@@ -543,6 +542,14 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var inBack = (await modsNow()).rows.filter(function (r) { return r.key === inKey; })[0];
     ok('northstar: a cancelled opt-in is simply on offer again', inBack.state === 'available' && /^add:Opt in/.test(inBack.acts[0]) && STORE.posts[STORE.posts.length - 1].action === 'withdraw-opt-in', inBack);
     await p.keyboard.press('Escape');
+    /* an editor module the plan can switch on exactly (the editor opens a
+       live add-on's own commands, never the whole tab) is a card purchase:
+       the server's price today and Opt in and pay, never the request */
+    await p.click('#modules-body .mod[data-module="storage"] [data-mod-act="add"]');
+    await p.locator('#omega-package-menu').getByRole('button', { name: 'Opt in and pay' }).waitFor({ timeout: 4000 });
+    var buyPanel = (await p.locator('#omega-package-menu').textContent()).replace(/\s+/g, ' ');
+    ok('northstar: Opt in on Storage, which Standard switches on exactly as an add-on, is a card purchase: the server\'s price and Opt in and pay, never a request', /\$[\d,]+/.test(buyPanel) && !/Request opt-in/.test(buyPanel), buyPanel.slice(0, 400));
+    await p.keyboard.press('Escape'); await wait(300);
     await p.evaluate(function () { window.location.hash = ''; }); await wait(250);
     var cards = await p.$$eval('#flight-body .pc', function (r) { return r.map(function (x) { return x.querySelector('b').textContent + '|' + (x.querySelector('.why') ? x.querySelector('.why').textContent : '') + '|' + (x.querySelector('.who .nm') ? x.querySelector('.who .nm').textContent : '') + '|' + (x.querySelector('.fin') ? x.querySelector('.fin').textContent : ''); }); });
     ok('northstar: In flight is the board: the three projects with a next action (Maple carrying its deal in review at ClearSky), then Quarry Road untouched and unassigned; Old Mill, online, is off it',

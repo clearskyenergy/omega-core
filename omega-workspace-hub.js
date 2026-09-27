@@ -98,9 +98,11 @@
   /* ── DOES THIS WORKSPACE HOLD A MODULE? One rule for the Modules page,
      the marketplace store and the master console (Tommy, 2026-09-27: every
      module listed, marked by whether it is used or given). ctx as compose()
-     takes it, plus packaged (bool), tierLevel (the legacy tier) and canCap
+     takes it, plus packaged (bool), tierLevel (the legacy tier), canCap
      (a legacy cap → bool, from capsFor(): the SAME ladder the editor
-     applies).
+     applies) and editorModules (add-ons whose own commands the editor
+     opens, whatever gates their tab: what api/_lib/addons.js exact()
+     simulates a purchase with).
        packaged   held when the server's projection lists it, else open
        legacy     bought as an add-on and on now (ctx.addOns): held;
                   an Omega Logic part: held by the omega-logic add-on;
@@ -144,6 +146,10 @@
     if (!gates.length || !can) return { open: 0, total: 0 };
     /* the editor is a tool too: an allowlist without it opens none of them */
     var editor = !ctx.tool || !ctx.tool('editor') || !ctx.canOpen || ctx.canOpen('editor');
+    /* an add-on the plan has on (ctx.editorModules): the editor opens
+       exactly its own commands, whatever gates the tab they sit on
+       (omega-caps, by the catalog's ribbon) */
+    if (editor && has(ctx.editorModules, m.key)) return { open: gates.length, total: gates.length };
     /* a gate may be a chain ("engineering+parcelscreen": a command with its
        own cap on a gated tab); every link must be open */
     if (editor) gates.forEach(function (g) { if (!g || String(g).split('+').every(function (c) { return can(c); })) open++; });

@@ -1,8 +1,8 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
  * A tenant's owner or administrator changes their own package: quote,
  * subscribe (pay first), cancel a pending change, request a removal.
- * Members are refused a change and may read the summary; ClearSky staff may
- * act for a tenant. A plan billed outside the engine opts in and out: a
+ * Members are refused a change and may read the summary (`canManage` says
+ * whether the caller may change it); ClearSky staff may act for a tenant. A plan billed outside the engine opts in and out: a
  * module its plan switches on exactly is bought as an ADD-ON by card
  * (`addon-quote` prices it, `addon-buy` issues the QuickBooks invoice and it
  * switches on when paid; `addon-cancel` with `addOnId` withdraws a purchase
@@ -31,7 +31,14 @@ module.exports = A.handler(async function (req, res) {
        Plan & billing shows it); a CHANGE stays with an owner or administrator */
     if (req.method !== 'GET' && !(await A.isTenantAdmin(caller, orgId))) throw A.httpError(403, 'Ask your workspace administrator to change the plan');
   }
-  if (req.method === 'GET') return C.summary(A.db(), orgId);
+  if (req.method === 'GET') {
+    var summary = await C.summary(A.db(), orgId);
+    /* whether THIS caller may change it, by the gate a change runs: the
+       editor's Opt in offers the purchase to an owner or an administrator
+       and tells anyone else who to ask */
+    summary.canManage = await A.isTenantAdmin(caller, orgId);
+    return summary;
+  }
   var fields = ['orgId', 'action', 'add', 'plan', 'previewId', 'effectiveAt', 'changeId', 'addOnId', 'remove', 'reason', 'meter', 'enabled', 'dryRun', 'status'];
   if (Object.keys(input).some(function (k) { return fields.indexOf(k) < 0; })) throw A.httpError(400, 'Unsupported field');
   var now = Date.now();

@@ -175,6 +175,14 @@ var noEditor = legacy('enterprise', {}, 'x.example', { toolAccess: ['gridatlas']
 ok('an allowlist without the editor opens none of its commands', st('plansets', noEditor) === 'ask' && st('storage', noEditor) === 'ask', [st('plansets', noEditor), st('storage', noEditor)]);
 ok('Site Map + Grid Atlas (Clean Cell): Plan Sets opens in the editor, Storage only partly', st('plansets', allow) === 'held' && st('storage', allow) === 'part', [st('plansets', allow), st('storage', allow)]);
 ok('Omega Logic is still judged by the add-on alone', st('logic-office', ent) === 'ask');
+/* an add-on the editor opens by the module (editorModules: what api/_lib/addons.js
+   exact() simulates a purchase with): all of its own commands, whatever gates
+   their tab, and not one of another module's that share it */
+var coreCompute = Object.assign({}, core, { editorModules: ['compute'] });
+ok('an add-on opens every one of its own commands in Site Map', HUB.moduleEditor(MODS.compute, coreCompute).open === HUB.moduleEditor(MODS.compute, coreCompute).total && st('compute', coreCompute) === 'held', HUB.moduleEditor(MODS.compute, coreCompute));
+ok('...and nothing of the modules that share its tab', HUB.moduleEditor(MODS.siteintel, coreCompute).open === HUB.moduleEditor(MODS.siteintel, core).open && HUB.moduleEditor(MODS.engineering, coreCompute).open === HUB.moduleEditor(MODS.engineering, core).open);
+ok('an allowlist without the editor opens none of an add-on\'s commands either', HUB.moduleEditor(MODS.plansets, Object.assign({}, noEditor, { editorModules: ['plansets'] })).open === 0);
+ok('the storefront has no commands to open: the add-on rule changes nothing for it', st('whitelabel', Object.assign({}, perf, { editorModules: ['whitelabel'] })) === 'ask');
 ok('a packaged workspace is never judged by legacy gates', HUB.moduleState(MODS.plansets, Object.assign({}, perf, { packaged: true, modules: ['lite'] })) === 'open');
 /* the whole ladder on the real catalog: what each legacy plan holds */
 function holds(ctx, want) { return M.catalog().filter(function (m) { return HUB.moduleState(m, ctx) === want; }).map(function (m) { return m.key; }).join(); }

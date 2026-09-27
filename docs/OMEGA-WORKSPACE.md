@@ -339,30 +339,44 @@ request instead of a dead end).
   through `logic-access` (`parts()`, so the office, the apps, the
   customer portal and the bench doors follow); a module's tools as
   `toolOverrides[tool] = true` (and the `toolAccess` allowlist when there
-  is one), what ClearSky used to do by hand; the editor's capabilities by
-  the legacy add-on keys `omega-caps.js` reads (`addons.LEGACY`, the same
-  map as the Package tab prototype; `test-addons.js` pins it to the
-  catalog). `addOns.granted` remembers what was written so switching off
-  takes back exactly that, never a value staff set.
+  is one), what ClearSky used to do by hand; its Site Map commands by the
+  module itself: the editor opens exactly a live add-on's own commands,
+  wherever they sit (`omega-caps.js` `addOnOpens`, from the legacy answer of
+  `GET /api/package-access`: the add-ons on and the catalog's ribbon), and
+  a legacy key only where another reader honours one (`addons.LEGACY`: the
+  storefront's; never an editor key, which opens a whole tab).
+  `addOns.granted` remembers what was written so switching off takes back
+  exactly that, never a value staff set.
 - **Never sold twice**: the server asks the pages' own rule
   (`OmegaWorkspaceHub.moduleState` on the tools catalog and the editor's
   own ladder, `omega-caps.js`, with the same `canCap` and `visible` the
   pages pass) before it prices, and live add-ons count as held there (a
   recorded opt-in never asks for one again, nor for what it needs).
 - **Sold only when it switches on exactly** (Tommy's decision, 2026-09-27):
-  a legacy editor opens Site Map a whole tab at a time (`data-cap`), so an
-  add-on key can leave part of a module off (Omega Storage on Standard: its
-  tools, not its Analyze-tab commands) or switch on part of another (Omega
-  Engineer's key opens Grid's and Storage's commands too). `addons.exact()`
-  simulates the grants and judges them by the pages' rule without the
-  add-on shortcut: every module bought must be held after, and no other
-  module (Omega Design aside) may gain anything. What is not exact is not
-  sold by card: the quote says why (`request: true`) and the menu offers
-  **Request opt-in**, the recorded request (`plan-change` `opt-in`: priced,
-  on record, ClearSky told, nothing charged). Every Omega Logic department
-  is exact on every plan (`logic-access` reads `addOns.live` itself); on
-  today's ladder Omega Sites is exact on Standard and Omega Capital on
-  Deluxe, and Enterprise already holds every editor module.
+  a legacy editor opens Site Map a whole tab at a time (`data-cap`), so a
+  legacy key would open every module on the tab (the Compute tab carries
+  Intel's and Engineer's commands) or leave part of the bought one shut.
+  The editor opens a live add-on's OWN commands instead and nothing else on
+  their tab (`addOnLayout` hides the rest), and `addons.exact()` simulates
+  exactly that on the pages' rule (`moduleEditor` with `editorModules`):
+  every module bought must be held after, and no other module (Omega Design
+  aside) may gain anything. So every editor module is exact on every legacy
+  plan. What is still not exact (the storefront: nothing to switch on beside
+  the plan, a reseller addendum) is not sold here: the quote says why
+  (`request: true`) and the control offers **Ask ClearSky to include it**,
+  the recorded request (`plan-change` `opt-in`: priced, on record, ClearSky
+  told, nothing charged). Every Omega Logic department is exact on every
+  plan (`logic-access` reads `addOns.live` itself).
+- **Opt in in the editor** (Tommy, 2026-09-27: "it shouldn't be blank on
+  the panel. It should say opt in and then allow them to add that as a
+  purchase"): a ribbon tab the plan opens nothing on, where a module for
+  sale has commands, is an Opt in in the strip and the phone's tab menu
+  (`data-optin`); opening it shows those modules with the price and Opt in
+  (`OmegaPackageMenu.optIn`), never an empty ribbon. On a legacy plan Opt in
+  opens this purchase for the module (`addOnDialog` → `addOnControl`); on a
+  package it opens The Ladder on it. Paid, the plan is re-read and the tab
+  fills (`OmegaCaps.refresh`); a member is told who to ask (`canManage` on
+  `GET /api/plan-change`).
 - **The rail is QuickBooks** (`addons.RAIL`), whatever the package rail:
   under `PACKAGING_PROVIDER=stripe` a packaged workspace bills through
   Stripe (`billing-driver`), but a legacy plan's add-ons are still
@@ -393,18 +407,9 @@ request instead of a dead end).
 - **Not here**: a legacy plan with no `omega_orgs` record or no billing
   record cannot be billed (the quote says so); a packaged workspace uses
   the Ladder; moving the whole workspace onto a package stays ClearSky's
-  (the admin Package tab, which lists the add-ons, the ones ending, and
-  counts live ones as held; cancel an open add-on purchase before
-  activating). **Not built:** opening exactly one bought module's Site Map
-  commands on a legacy plan (the editor's legacy gate by command
-  ownership, as a package's is), which would make every editor module
-  exact on every plan.
-
-Nothing in the browser prices or grants anything. `check:workspace` walks
-a legacy Enterprise plan opting in to Logic Office by card (scenario
-legacy-add): the server's quote, QuickBooks' page opened on the click, the
-waiting card, *I've paid*, Office Live and Omega Logic on the rail;
-`scripts/test-addons.js` holds the engine.
+  (the admin Package tab, which now also lists the add-ons). Built since:
+  opening exactly one bought module's Site Map commands on a legacy plan
+  (above), which made every editor module exact on every plan.
 
 ## The journey, mapped
 

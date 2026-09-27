@@ -61,7 +61,12 @@ async function run() {
       await page.waitForFunction(function () { return document.querySelector('#rp-tab-cost').hasAttribute('data-package-hidden') === (OmegaCaps.packageAccess().modules.length === 1); });
       await page.evaluate(function (theme) { document.documentElement.setAttribute('data-theme', theme); document.body.setAttribute('data-theme', theme); document.getElementById('fixture-note').textContent = (OmegaCaps.packageAccess().modules.length === 1 ? 'Lite' : 'Lite + Estimate + Plan Sets + Compute') + ' · ' + theme + ' · offline editor controls'; rbTab('output'); }, theme);
       ok(await page.locator('#rp-tab-cost').evaluate(function (el) { return el.hasAttribute('data-package-hidden'); }) === (plan === 'lite'), 'Summary Cost');
-      ok(await page.locator('.rtab[data-page="estimate"]').isVisible() === (plan === 'paid'), 'Estimate tab follows module, not legacy Engineering cap');
+      /* the module, not the legacy Engineering cap, decides the tab: open with
+         Omega Estimate, an Opt in (its commands shut) without it */
+      var estimateTab = await page.evaluate(function () { var t = document.querySelector('.rtab[data-page="estimate"]'), pg = document.querySelector('.ribbon-page[data-page="estimate"]');
+        return { shown: getComputedStyle(t).display !== 'none', optin: t.getAttribute('data-optin'), open: OmegaCaps.tabOpen('estimate'), commands: Array.prototype.filter.call(pg.querySelectorAll('.rbtn,.rsbtn'), function (b) { return OmegaCaps.allowedElement(b); }).length }; });
+      ok(estimateTab.shown && (plan === 'paid' ? estimateTab.optin === null && estimateTab.open && estimateTab.commands > 0 : estimateTab.optin === 'estimate' && !estimateTab.open && estimateTab.commands === 0),
+         'Estimate tab follows module, not legacy Engineering cap: ' + JSON.stringify(estimateTab));
       var names = await page.evaluate(function () { return OmegaCommands.list().filter(function (x) { return x.action !== 'view-module'; }).map(function (x) { return x.name; }).join('|'); });
       ok(/Plot Plan/.test(names) === (plan === 'paid'), 'palette/Jarvis list');
       await page.evaluate(function () { openPlotPlanExport(); d4Open(); openRpPanel('cost'); rpTab('cost'); OmegaAIRender.open(); _guidedPick('compute'); });

@@ -303,6 +303,27 @@ asks (a `toolOverrides` switch either
 way, else the `whitelabel` add-on or the staff-written `whiteLabel.enabled`
 on the tenant record); `OmegaWorkspaceHub.storefront` is its twin, run case
 for case against it by `scripts/tests/tworkspacehub.js`.
+**Opt in where the plan stops** (Tommy, 2026-09-27: "if there is something
+that they don't have, it shouldn't be blank on the panel. It should say opt
+in and then allow them to add that as a purchase ... linked to the module
+... linked to the payment ... updates their bill"). A ribbon tab the plan
+opens nothing on, where a module for sale has commands, is never removed
+and never an empty ribbon: `OmegaCaps` marks it `data-optin="<modules>"`
+in the strip AND the phone's tab menu (the page's own module first, by the
+same `owners()` rule that hides; `markTabs` legacy, `layout()` packaged),
+and `OmegaPackageMenu.optIn()` shows those modules, the server's price and
+**Opt in** in its place. Opt in is the one purchase each plan already has:
+a package opens The Ladder on the module (plan-change quote/apply, on when
+paid); a legacy plan buys it as an add-on (`addOnDialog` →
+`addOnControl`: addon-quote, addon-buy, QuickBooks' card page, I've paid;
+monthly on its own invoice beside the plan). Paid, the plan is re-read
+(`OmegaCaps.refresh`) and the tab fills; a member is told who to ask
+(`GET /api/plan-change` `canManage`). The mark is an offer, never access:
+the tab's commands stay shut and `tabOpen` still refuses it. A shut tab
+with nothing for sale leaves the phone menu too (`data-tab-shut`); a
+product mode (bess-lite) or Designer still hides a tab. Held by
+`render-legacy-gates.js` (every tier, a bought add-on, a 390px phone) and
+the packaged render checks.
 The shared omega-package-menu.js renders catalog features and server-formatted
 prices. Staff package previews are read-only server projections, never tenant
 impersonation or billing edits. Legacy layout modes apply to unpackaged records.
@@ -840,9 +861,14 @@ not sold by card; the quote says why (`request: true`) and the menu offers
 audit, ClearSky mailed; the tier is never touched; Cancel request is
 `withdraw-opt-in` / `withdraw-opt-out`). Card payments not yet open (the
 engine guard; flags are off by default) answer `request: true` too, so a
-legacy Opt in never dead-ends. Every Omega Logic department is exact on
-every plan; opening one module's Site Map commands on a legacy plan is not
-built. Add-ons bill through QuickBooks whatever the package rail
+legacy Opt in never dead-ends. A legacy tier opens Site Map a whole tab at a
+time (`data-cap`), so the editor opens a live add-on's OWN commands instead,
+wherever they sit, and nothing else on their tab (`omega-caps`
+`addOnOpens`/`addOnLayout`, from `GET /api/package-access`'s legacy answer),
+and `exact()` simulates exactly that (`moduleEditor` `editorModules`): every
+editor module is exact on every legacy plan, and a tab the plan stops at says
+Opt in and buys the module there. Every Omega Logic department is exact on
+every plan. Add-ons bill through QuickBooks whatever the package rail
 (`addons.RAIL`; `package-billing.guard(c, rail)`), so an add-on's Pay reads
 the add-on's own `payWith`, never the package's; a legacy Stripe tier's own
 customer is never rebound; add-ons on Stripe are not built.

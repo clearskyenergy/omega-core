@@ -399,6 +399,8 @@ async function run() {
   equal(Object.keys(bill().optIns).sort(), ['logic-office', 'logic-plant', 'siteintel']);
   await refused(function () { return req('POST', { action: 'opt-in', add: ['siteintel'] }, member); }, /workspace administrator/);
   var memberSummary = await req('GET', { orgId: orgId }, member); equal(memberSummary.packaged, false, 'a member reads the summary');
+  equal([memberSummary.canManage, (await req('GET', { orgId: orgId })).canManage, (await req('GET', { orgId: orgId }, staff)).canManage], [false, true, true],
+    'the summary says who may change the plan, by the gate a change runs (the editor\'s Opt in offers the purchase only to them)');
   await refused(function () { return req('GET', { orgId: orgId }, Object.assign({}, member, { claims: { email_verified: false } })); }, /Verified email/);
   db.data.delete(root + '/billing/current');
   await refused(function () { return req('POST', { action: 'opt-in', add: ['estimate'] }); }, /Billing is not set up/);

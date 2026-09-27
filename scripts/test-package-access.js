@@ -90,4 +90,17 @@ var buyer = X.customerDrawing(true); C.setPackage(buyer);
 check(function () { assert.equal(C.allowedCommand('', 'openBessSizer()'), false); });
 check(function () { assert.equal(C.allowedCommand('', 'openBlueprintExport()'), true); });
 C.setPackage(C.pendingPackage()); check(function () { assert.equal(C.allowedCommand('', 'openBlueprintExport()'), false); });
+/* A legacy plan (billed outside the engine): its add-ons on now, by the add-on
+   engine's own rule, and the catalog whose ribbon the editor opens them by
+   and offers the rest with (Opt in). Never a price, never a grant. */
+var legacyBill = { tier: 'standard', addons: [], addOns: { modules: ['compute', 'storage'], live: ['storage', 'compute'], accessUntil: now + 86400000 } };
+var lv = X.legacy(legacyBill, now);
+check(function () { assert.equal(lv.packaged, false); assert.deepEqual(lv.addOns, ['storage', 'compute']); });
+check(function () { assert.deepEqual(lv.catalog.map(function (m) { return m.key; }), M.catalog().map(function (m) { return m.key; })); assert.deepEqual(lv.notSold, M.notSold()); });
+check(function () { assert(lv.catalog.every(function (m) { return Array.isArray(m.ribbon) && m.priceCents === undefined && m.priceDisplay === undefined; }), 'ribbon ownership, no prices'); });
+check(function () { assert.deepEqual(X.legacy(legacyBill, now + 86400000).addOns, [], 'nothing is on past accessUntil'); });
+check(function () { assert.deepEqual(X.legacy({ tier: 'deluxe' }, now).addOns, []); assert.deepEqual(X.legacy(undefined, now).addOns, []); });
+check(function () { assert.deepEqual(X.project(caller, legacyBill, org, member, now), { packaged: false }, 'producers still read a legacy plan as unpackaged'); });
+var endpoint = fs.readFileSync(require('path').join(__dirname, '..', 'api', 'package-access.js'), 'utf8');
+check(function () { assert(/packaged !== true\) return res\.status\(200\)\.json\(X\.legacy\(ctx\.billing, Date\.now\(\)\)\)/.test(endpoint), 'the endpoint answers a legacy plan with legacy()'); });
 console.log('Package access: ' + count + ' passed; no network calls.');

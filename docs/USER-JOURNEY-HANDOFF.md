@@ -53,14 +53,13 @@ to Plan & billing and Modules.
 
 ## 4. Not built — the next improvements to the journey, in order
 
-1. **Exact delivery of any editor module on a legacy plan.** A legacy
-   plan opts in by card only where the module switches on exactly
-   (`addons.exact()`): a legacy editor opens Site Map a whole tab at a
-   time, so most editor modules below Enterprise are a recorded request
-   today. Opening exactly the bought module's commands (the editor's
-   legacy gate by command ownership, as a package's is, with
-   `/api/package-access` projecting the add-on modules' ribbon) makes
-   every one of them buyable by card on every plan.
+1. ~~**Exact delivery of any editor module on a legacy plan.**~~ Built
+   2026-09-27 with the editor's Opt in: the editor opens exactly a live
+   add-on's own commands (`omega-caps` `addOnOpens`, from
+   `/api/package-access`'s legacy answer: the add-ons on and the catalog's
+   ribbon), so `addons.exact()` sells every editor module on every plan
+   (the storefront aside), and a tab the plan stops at says Opt in and buys
+   the module there (`docs/OMEGA-WORKSPACE.md`, *Opt in in the editor*).
 2. **Moving a legacy plan onto a package, self-serve.** A legacy plan buys
    exact modules as add-ons beside its plan (`api/_lib/addons.js`) and
    records a request for the rest (`billing/current.optIns`); re-pricing
