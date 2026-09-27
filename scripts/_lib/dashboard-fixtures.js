@@ -84,6 +84,13 @@ function northstar(host) {
     docs['projects/' + p[0]] = { orgId: org, orgsInvolved: [org], name: p[1], type: 'bess', stage: p[5], bessKwh: p[2], capex: p[3], incentive: Math.round(p[3] * 0.3), annualRevenue: Math.round(p[3] * 0.11),
       utility: p[4], program: 'ConnectedSolutions', nextAction: 'Review', ownerEmail: me, ownerName: 'Ann Lee', quoted: p[5] !== 'package', createdAt: ago(p[6]), updatedAt: ago(p[6] / 2) };
   });
+  /* a candidate nobody has picked up yet (the workspace's Assign), and a
+     deal sent to the finance marketplace nine days ago that ClearSky has
+     not published (api/dealroom-open.js writes this shape; the sponsor
+     reads it by developerUid) */
+  docs['projects/p-quarry'] = { orgId: org, orgsInvolved: [org], name: 'Quarry Road', type: 'bess', stage: 'candidate', address: '14 Quarry Rd, Lowell, MA', utility: 'National Grid', createdAt: ago(2), updatedAt: ago(2) };
+  docs['fin_projects/fin-maple'] = { name: 'Maple Yard Storage', address: 'Maple Yard', state: 'MA', mw: 4, capexUsd: 6400000, stage: 'package', status: 'review', awardedTo: null, developerUid: uid, orgName: 'Northstar Development',
+    sourceProjectId: 'p-maple', room: { state: 'ordered', forOrg: '', forOrgId: '', history: [] }, createdAt: ago(9), updatedAt: ago(9) };
   /* a request for quote from the Riverside BOM: two vendors asked, one has
      answered (the workspace's Today counts it; api/rfq.js is what writes
      these shapes) */

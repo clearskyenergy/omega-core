@@ -43,7 +43,13 @@
     /* the ground: the website\'s blueprint grid, fixed so content scrolls over it */
     'body.ows{margin:0;background-color:var(--ows-page);background-image:linear-gradient(var(--ows-grid-major) 1px,transparent 1px),linear-gradient(90deg,var(--ows-grid-major) 1px,transparent 1px),linear-gradient(var(--ows-grid-minor) 1px,transparent 1px),linear-gradient(90deg,var(--ows-grid-minor) 1px,transparent 1px);background-size:120px 120px,120px 120px,24px 24px,24px 24px;background-attachment:fixed;color:var(--ows-ink);font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}',
     'body.ows *,body.ows *::before,body.ows *::after{box-sizing:border-box}',
-    'body.ows button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}body.ows a{color:inherit;text-decoration:none}',
+    /* the button reset sits at ZERO specificity (:where), so any styled button
+       (.ows-pill, a page's .pc card or .tool tile, the package menu's own
+       buttons) keeps its background and border. As `body.ows button` it
+       outranked every single-class rule and stripped them all: project cards
+       with no ground and a Needs-you button that read as bare text (Tommy,
+       2026-09-27). Unclassed buttons still get the reset. */
+    ':where(body.ows button){font:inherit;color:inherit;background:none;border:0;cursor:pointer}body.ows a{color:inherit;text-decoration:none}',
     'body.ows :focus-visible{outline:2px solid var(--ows-teal);outline-offset:2px}',
     '.ows-app{display:grid;grid-template-columns:224px minmax(0,1fr);min-height:100vh}',
     /* the rail */
