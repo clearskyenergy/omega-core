@@ -69,11 +69,27 @@ decided 2026-09-26.
   figure, the billing day, since, access through); *What you owe* (unpaid
   invoices with their QuickBooks pay links, the next invoice, paid
   through, *I've paid* = reconcile-now for an owner or admin; Stripe's
-  open invoices for a Stripe-billed plan); *Payment method* (a Stripe plan
-  opens the Stripe Customer Portal through `POST /api/stripe-portal` for
-  the card and autopay; a QuickBooks plan saves the card on QuickBooks'
-  own invoice payment page with Autopay; card details are never entered
-  on our pages); *Billing history* (the engine's invoices from
+  open invoices for a Stripe-billed plan); *Payment method* (**linked to
+  Stripe**, Tommy 2026-09-27: "This payment method should be linked to the
+  stripe payment system we built with quickbooks. Stripe collects and takes
+  the payment and sends it to quickbooks which is our account". Every plan
+  billed outside the package engine that ClearSky does not invoice through
+  QuickBooks, and a package on the Stripe rail, has its card with Stripe:
+  `POST /api/stripe-customer` on `api/_lib/stripe-customer.js` reads the
+  card on file back from Stripe (brand, last four, expiry; never stored),
+  **Add a card with Stripe** links the workspace's one Stripe customer the
+  first time and opens the portal's add-a-payment-method flow (the card
+  becomes the default for invoices), and **Invoices and receipts** is the
+  portal; each is Stripe's own page in this tab, back to
+  `/workspace#billing`. What you owe offers **Pay $X with Stripe** for the
+  amount ClearSky set as due: one Stripe invoice per due date and amount,
+  paid on Stripe's hosted page with the card on file or a new one, then
+  its page and **I've paid** until the webhook or the check records it
+  once. A QuickBooks plan saves the card on QuickBooks' own invoice
+  payment page with Autopay; card details are never entered on our pages.
+  The books: Stripe's payments reach ClearSky's QuickBooks through the
+  Connect to Stripe app, never through OMEGA; `docs/PAYMENTS-STRIPE.md`);
+  *Billing history* (the engine's invoices from
   `GET /api/plan-change`, which every verified member may read; a Stripe
   plan's from `POST /api/stripe-invoices`). Additions waiting (a legacy
   opt-in with its price, a packaged change waiting for payment) are listed
@@ -318,7 +334,9 @@ ground, one home; the session travels same-origin on every hop.
 | rail, any page | Team · Feed | `/workspace#team`, the Around you page alone |
 | rail, any page | Plan & billing | `/workspace#billing`, the Plan & billing page |
 | rail, any page | Settings | the side panel on `/workspace` (`#settings`) |
-| Plan & billing | Manage card and autopay (Stripe) | the Stripe Customer Portal in a new tab |
+| Plan & billing | Add a card with Stripe · Change card | Stripe's add-a-payment-method page (the customer portal's flow), in this tab, back to `/workspace#billing`; the first time it links the workspace's Stripe customer |
+| Plan & billing | Invoices and receipts · Manage card and invoices (Stripe) | the Stripe Customer Portal, in this tab, back to `/workspace#billing` |
+| Plan & billing | Pay $X with Stripe | Stripe's hosted invoice page for the amount ClearSky set as due, in this tab; then its page and *I've paid* |
 | Plan & billing | Pay · Open the payment page (QuickBooks) | the invoice's QuickBooks payment page, where the card is saved and Autopay turned on |
 | In flight | Assign · Reassign | the side panel of the workspace's people; a pick writes the project's owner |
 | tools grid | a Live tile | the tool, scoped to the org |

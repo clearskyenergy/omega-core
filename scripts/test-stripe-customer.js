@@ -1,0 +1,319 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+ * Plan & billing's Payment method, linked to Stripe (api/stripe-customer.js
+ * on api/_lib/stripe-customer.js; Tommy, 2026-09-27: "This payment method
+ * should be linked to the stripe payment system we built with quickbooks.
+ * Stripe collects and takes the payment and sends it to quickbooks which is
+ * our account").
+ *
+ *   the door      an owner or administrator (or verified staff) of their own
+ *                 workspace; a member reads the record, never this
+ *   the card      Add a card links ONE Stripe customer (never a second, even
+ *                 two admins at once), opens Stripe's add-a-payment-method
+ *                 flow back to /workspace#billing, and the card is read back
+ *                 from Stripe, never stored
+ *   the amount    ClearSky's amountDue is ONE Stripe invoice per due date and
+ *                 amount, paid on Stripe's page; I've paid and the webhook
+ *                 record it once (amountDue 0, lastPaidAt, amountPaid, the
+ *                 receipt, ClearSky's alert), never through the tier path;
+ *                 a changed figure voids the stale invoice, a stale payment
+ *                 is ClearSky's review, an open invoice ClearSky made is
+ *                 never doubled
+ *   the guards    a test key never binds a real tenant (the one database is
+ *                 production's), a binding in the other mode is never
+ *                 overwritten, a package and a QuickBooks plan keep their rail
+ * Firestore and Stripe doubles; nothing reaches the network. Every write is
+ * checked for an undefined value, which the Admin SDK refuses.
+ */
+'use strict';
+var assert = require('assert'), path = require('path'), Module = require('module');
+var F = require('./_lib/firestore-double'), SD = require('./_lib/stripe-double').StripeDouble;
+var db, count = 0;
+function env(o) { Object.keys(o).forEach(function (k) { if (o[k] == null) delete process.env[k]; else process.env[k] = o[k]; }); }
+env({ STRIPE_SECRET_KEY: 'sk_live_double', PACKAGING_PROVIDER: null, PACKAGING_LIVE: null, QBO_ENV: null });
+
+/* ── the Admin SDK refuses undefined anywhere in a write: so does this ── */
+function defined(v, at) {
+  if (v === undefined) throw new Error('undefined written at ' + at);
+  if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { defined(v[k], at + '.' + k); });
+}
+var runOne = F.DB.prototype.runOne;
+F.DB.prototype.runOne = function (fn) {
+  return runOne.call(this, function (tx) {
+    return fn({ get: tx.get, create: function (r, v) { defined(v, r.path); return tx.create(r, v); }, set: function (r, v, o) { defined(v, r.path); return tx.set(r, v, o); }, update: function (r, v) { defined(v, r.path); return tx.update(r, v); } });
+  });
+};
+['set', 'update', 'create'].forEach(function (k) { var orig = F.Ref.prototype[k]; F.Ref.prototype[k] = function (v, o) { defined(v, this.path); return orig.call(this, v, o); }; });
+
+F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, authenticate: async function (req) { return req.caller; }, db: function () { return db; },
+  httpError: function (status, text) { var e = new Error(text); e.status = status; return e; }, safeOrg: function (s) { return /^[a-z0-9.-]+\.[a-z]+$/.test(s || '') ? s : ''; },
+  orgOf: function (x) { return String(x).split('@')[1]; },
+  isTenantAdmin: async function (c, o) { if (c.staff) return true; if (c.orgId !== o) return false; var m = await db.doc('omega_orgs/' + o + '/members/' + c.uid).get(); return m.exists && m.data().status !== 'disabled' && ['owner', 'admin'].indexOf(m.data().role) >= 0; },
+  canActInOrg: async function (c, o) { return c.staff || c.orgId === o; },
+  billingOf: async function (o) { var r = await db.doc('omega_orgs/' + o + '/billing/current').get(); return r.exists ? r.data() : {}; },
+  FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; },
+  init: function () { return { auth: function () { return { setCustomUserClaims: async function () {} }; } }; } });
+var SC = require('../api/_lib/stripe-customer'), api = require('../api/stripe-customer');
+
+var MAILED = [];
+var mailer = { templates: new Proxy({}, { get: function (t, name) { return async function (o) { MAILED.push({ template: name, email: o.email, text: o.text, invoiceId: o.invoiceId }); return { ok: true }; }; } }) };
+
+var ORG = 'concord.example', ROOT = 'omega_orgs/' + ORG, CUR = ROOT + '/billing/current', HOST = 'concord.clearskyomega.com';
+var owner = { staff: false, uid: 'u-owner', email: 'pat@concord.example', orgId: ORG, claims: { email_verified: true } };
+var admin2 = Object.assign({}, owner, { uid: 'u-admin', email: 'sam@concord.example' });
+var member = Object.assign({}, owner, { uid: 'u-member', email: 'lee@concord.example' });
+var staff = { staff: true, uid: 'u-staff', email: 'tom@clearsky-usa.com', orgId: 'clearsky-usa.com', claims: { email_verified: true } };
+function fixture(billing, org) {
+  db = new F.DB(); db.serial = true;
+  db.seed(ROOT, Object.assign({ name: 'Concord Energy', status: 'active', domains: [HOST] }, org || {}));
+  if (billing !== null) db.seed(CUR, billing || { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'manual', amountDue: 1299, subscriptionDue: '2026-09-02', amountPaid: 1299, lastPaidAt: '2026-08-02' });
+  db.seed(ROOT + '/members/u-owner', { role: 'owner', status: 'active', email: owner.email });
+  db.seed(ROOT + '/members/u-admin', { role: 'admin', status: 'active', email: admin2.email });
+  db.seed(ROOT + '/members/u-member', { role: 'member', status: 'active', email: member.email });
+  MAILED = [];
+}
+function bill() { return db.data.get(CUR); }
+function keys(prefix) { return Array.from(db.data.keys()).filter(function (k) { return k.indexOf(prefix) === 0; }); }
+function call(caller, body, stripe, host) { api.deps = { stripe: stripe === undefined ? null : stripe, mail: mailer }; return api({ method: 'POST', caller: caller, body: body || {}, headers: { host: host || HOST } }, { setHeader: function () {} }); }
+function ok(v, text, detail) { if (!v) { console.error('FAIL ' + text + (detail !== undefined ? '\n   ' + JSON.stringify(detail).slice(0, 500) : '')); process.exitCode = 1; throw new Error(text); } count++; console.log('  ok   ' + text); }
+async function refused(text, fn, re, status) {
+  var e = await fn().then(function () { return null; }, function (x) { return x; });
+  ok(!!e && re.test(e.message) && (!status || e.status === status), text, e ? { message: e.message, status: e.status } : 'was not refused');
+  return e;
+}
+
+async function door() {
+  console.log('\nthe door: an owner or administrator of their own workspace, or verified staff');
+  fixture(); var s = new SD({ livemode: true });
+  await refused('an unverified email is refused', function () { return call(Object.assign({}, owner, { claims: {} }), { action: 'view' }, s); }, /Verified email/, 403);
+  await refused('another workspace is refused', function () { return call(owner, { orgId: 'other.example', action: 'view' }, s); }, /Own organization/, 403);
+  await refused('a member is refused: the card is the owner\'s and the administrators\'', function () { return call(member, { action: 'card' }, s); }, /owner or administrator/, 403);
+  await refused('an unknown field is refused', function () { return call(owner, { action: 'view', amount: 1 }, s); }, /Unsupported field/, 400);
+  await refused('an unknown action is refused', function () { return call(owner, { action: 'refund' }, s); }, /Action must be/, 400);
+  var v = await call(staff, { orgId: ORG, action: 'view' }, s);
+  ok(v.orgId === ORG && v.rail === 'stripe', 'verified ClearSky staff may act for a tenant', v);
+  ok(s.calls.length === 0, '...and a workspace with no Stripe customer costs no Stripe call to view', s.calls);
+}
+
+async function card() {
+  console.log('\nAdd a card: one Stripe customer, Stripe\'s own page, back to Plan & billing');
+  fixture(); var s = new SD({ livemode: true });
+  var v = await call(owner, { action: 'view' }, s);
+  ok(v.rail === 'stripe' && v.linked === false && v.canLink === true && v.card === null && v.reason === null, 'a plan ClearSky invoiced by hand ("manual") is Stripe\'s to link: the card can be added', v);
+  ok(v.due && v.due.cents === 129900 && v.due.display === '$1,299' && v.due.date === '2026-09-02' && v.due.open === null && v.canPay === true, 'the amount due is ClearSky\'s own figure, payable through Stripe', v.due);
+  var r = await call(owner, { action: 'card' }, s);
+  var sess = s.sessions[0], b = bill(), cus = s.customers_[b.stripeCustomerId];
+  ok(/^https:\/\/billing\.stripe\.com\//.test(r.url) && s.sessions.length === 1, 'Add a card answers with Stripe\'s own page', r);
+  ok(sess.flow && sess.flow.type === 'payment_method_update' && sess.flow.after_completion.type === 'redirect' && sess.flow.after_completion.redirect.return_url === 'https://' + HOST + '/workspace#billing' && sess.return_url === 'https://' + HOST + '/workspace#billing',
+    'it is the add-a-payment-method flow (the card becomes the default for invoices) and it comes back to Plan & billing on the same host', sess);
+  ok(/^cus_/.test(b.stripeCustomerId) && b.stripeLivemode === true && b.paymentProvider === 'stripe' && b.stripeLinkedBy === owner.email && b.stripeLinkLock === null, 'the workspace is bound to its Stripe customer, in live mode, and now pays by card through Stripe', b);
+  ok(cus.email === owner.email && cus.name === 'Concord Energy' && cus.metadata.orgId === ORG && cus.metadata.omegaOrg === ORG, 'the customer is the workspace (its name, the owner\'s address with no billing contact saved, both marks the webhook and the engine read)', cus);
+  var hist = db.data.get(CUR + '/history/stripe-linked-' + b.stripeCustomerId);
+  ok(hist && hist.was.paymentProvider === 'manual' && hist.changed.paymentProvider === 'stripe' && hist.by === owner.email && db.data.get(ROOT + '/admin_audit/stripe-linked-' + b.stripeCustomerId), 'the link is a history row and an audit row: who, what it was', hist);
+  await call(admin2, { action: 'card' }, s);
+  ok(s.all('customers').length === 1 && s.sessions[1].customer === b.stripeCustomerId, 'asked again (another administrator): the same customer, never a second');
+  s.saveCard(b.stripeCustomerId);
+  v = await call(owner, { action: 'view' }, s);
+  ok(v.linked && v.card && v.card.label === 'Visa ending 4242' && v.card.expires === '12/2030' && v.canLink, 'the card is read back from Stripe: brand, last four, expiry', v.card);
+  ok(!/4242|visa/i.test(JSON.stringify(bill())), '...and nothing about it is written to the workspace\'s record');
+  var p = await call(owner, { action: 'portal' }, s);
+  ok(/^https:\/\/billing\.stripe\.com\//.test(p.url) && s.sessions[2].flow === null, 'Invoices and receipts is the plain portal for the same customer', s.sessions[2]);
+
+  console.log('\nthe billing contact, when one is saved, is who Stripe writes to');
+  fixture(); db.seed(CUR.replace('current', 'profile'), { legalName: 'Concord Energy LLC', email: 'ap@concord.example', contactName: 'AP' });
+  var s2 = new SD({ livemode: true }); await call(owner, { action: 'card' }, s2);
+  var c2 = s2.all('customers')[0];
+  ok(c2.email === 'ap@concord.example' && c2.name === 'Concord Energy LLC', 'the billing profile names the customer and its receipts address', c2);
+  fixture(); var s3 = new SD({ livemode: true });
+  await refused('staff with no billing contact on file never gives Stripe a ClearSky address', function () { return call(staff, { orgId: ORG, action: 'card' }, s3); }, /billing contact/);
+  ok(s3.all('customers').length === 0 && !bill().stripeCustomerId && !bill().stripeLinkLock, '...nothing was made, and the lock is released');
+
+  console.log('\ntwo administrators at once: one customer');
+  fixture(); var s4 = new SD({ livemode: true });
+  var both = await Promise.all([call(owner, { action: 'card' }, s4).catch(function (e) { return e; }), call(admin2, { action: 'card' }, s4).catch(function (e) { return e; })]);
+  ok(s4.all('customers').length === 1 && bill().stripeCustomerId === s4.all('customers')[0].id && both.some(function (x) { return x && x.url; }), 'one customer is made and bound; the other click waits or is told to try again', both.map(function (x) { return x.url || x.message; }));
+  var again = await call(admin2, { action: 'card' }, s4);
+  ok(!!again.url && s4.all('customers').length === 1, '...and a retry opens the page for the same one');
+
+  console.log('\nStripe\'s side can refuse: said plainly');
+  fixture(); var s5 = new SD({ livemode: true, portalRefuses: true });
+  await refused('a customer portal nobody switched on is ClearSky\'s to switch on, said in words', function () { return call(owner, { action: 'card' }, s5); }, /customer portal is not switched on/, 409);
+  fixture(Object.assign({}, bill(), { stripeCustomerId: 'cus_other', stripeLivemode: true })); var s6 = new SD({ livemode: true });
+  s6.customers_.cus_other = { id: 'cus_other', object: 'customer', livemode: true, email: 'x@other.example', metadata: { orgId: 'other.example' } };
+  await refused('a customer on the record marked for another workspace is never used', function () { return call(owner, { action: 'card' }, s6); }, /another workspace/);
+  s6.customers_.cus_other = { id: 'cus_other', object: 'customer', livemode: true, deleted: true };
+  await refused('a customer deleted in Stripe is ClearSky\'s to relink', function () { return call(owner, { action: 'card' }, s6); }, /deleted in Stripe/);
+  ok(bill().stripeCustomerId === 'cus_other', '...and neither refusal overwrote the binding');
+}
+
+async function paying() {
+  console.log('\nthe amount due, paid by card on Stripe\'s page');
+  fixture(); var s = new SD({ livemode: true }), now = Date.parse('2026-09-27T15:00:00Z');
+  var r = await call(owner, { action: 'pay' }, s);
+  var b = bill(), inv = s.invoices_[r.invoiceId], lines = s.all('items').filter(function (x) { return x.invoice === r.invoiceId; });
+  ok(r.state === 'open' && /^https:\/\/invoice\.stripe\.com\//.test(r.url) && r.display === '$1,299', 'Pay answers with Stripe\'s hosted invoice page for $1,299', r);
+  ok(inv.collection_method === 'send_invoice' && inv.currency === 'usd' && inv.total === 129900 && inv.status === 'open' && inv.metadata.omegaDue === ORG + '/2026-09-02/129900' && inv.metadata.omegaOrg === ORG && !inv.metadata.omegaPackage && !inv.metadata.orgId,
+    'one send_invoice invoice in dollars for ClearSky\'s figure, marked with the due date and amount, never as a package invoice', inv);
+  ok(lines.length === 1 && lines[0].amount === 129900 && lines[0].description === 'OMEGA Standard plan · due Sep 2, 2026', 'one line: the plan and its due date', lines);
+  ok(/^cus_/.test(b.stripeCustomerId) && b.stripeDue.invoiceId === r.invoiceId && b.stripeDue.state === 'open' && b.stripeDue.hostedUrl === r.url, 'paying links the customer first and keeps the open invoice on the record', b.stripeDue);
+  ok(s.sent.length === 1 && s.sent[0] === r.invoiceId, 'Stripe emails the invoice once: the accountant\'s copy');
+  var r2 = await call(owner, { action: 'pay' }, s);
+  ok(r2.invoiceId === r.invoiceId && s.all('invoices').length === 1 && s.sent.length === 1, 'asked again (a second tab, a retry): the same invoice, nothing new, nothing re-sent');
+  var v = await call(owner, { action: 'view' }, s);
+  ok(v.due.open && v.due.open.url === r.url, 'the page is told the invoice is open, with its page', v.due);
+  var c = await SC.check(db, await SC.context(db, ORG), owner, s, now, mailer);
+  ok(c.state === 'open' && !c.recorded && bill().amountDue === 1299, 'I\'ve paid before paying: still open, nothing recorded', c);
+  var t = await SC.check(db, await SC.context(db, ORG), owner, s, now + 2000, mailer);
+  ok(t.throttled === true, 'one look every eight seconds', t);
+
+  s.pay(r.invoiceId);
+  c = await SC.check(db, await SC.context(db, ORG), owner, s, now + 9000, mailer);
+  b = bill();
+  ok(c.state === 'paid' && c.recorded === true && c.matches === true, 'paid on Stripe\'s page: I\'ve paid records it', c);
+  ok(b.amountDue === 0 && b.lastPaidAt === new Date(1790000000 * 1000).toISOString() && b.amountPaid === 2598 && b.paymentFailedAt === null && b.stripeDue.state === 'paid' && b.subscriptionDue === '2026-09-02',
+    'nothing owed, the payment dated as Stripe dated it, paid to date grows by what was paid, and ClearSky\'s schedule is left as ClearSky set it', b);
+  var hist = db.data.get(CUR + '/history/stripe-paid-' + r.invoiceId);
+  ok(hist && hist.was.amountDue === 1299 && hist.changed.amountDue === 0 && hist.amountCents === 129900, 'one history row: what it was, what it is', hist);
+  ok(MAILED.some(function (m) { return m.template === 'paid' && m.email === owner.email && /\$1,299 by card through Stripe/.test(m.text); }) && MAILED.some(function (m) { return m.template === 'paidAlert' && m.invoiceId === r.invoiceId; }),
+    'the tenant\'s receipt (to the customer\'s address; there is no billing profile) and ClearSky\'s alert went out', MAILED);
+  var mails = MAILED.length;
+  c = await SC.check(db, await SC.context(db, ORG), owner, s, now + 20000, mailer);
+  ok(c.state === 'paid' && !c.recorded && bill().amountPaid === 2598 && MAILED.length === mails, 'looked at again: recorded once, mailed once');
+  await refused('nothing owed: nothing to pay', function () { return call(owner, { action: 'pay' }, s); }, /Nothing is owed/);
+
+  console.log('\na figure that changes: the stale invoice is voided, a stale payment is ClearSky\'s review');
+  fixture(); s = new SD({ livemode: true });
+  var a = await call(owner, { action: 'pay' }, s);
+  var cur = bill(); cur.amountDue = 2598; cur.subscriptionDue = '2026-10-02'; db.seed(CUR, cur);
+  var bnew = await call(owner, { action: 'pay' }, s);
+  ok(s.invoices_[a.invoiceId].status === 'void' && s.invoices_[bnew.invoiceId].total === 259800 && bnew.invoiceId !== a.invoiceId, 'ClearSky changed the figure: the old invoice is voided, the new one bills the new figure', { old: s.invoices_[a.invoiceId].status, total: s.invoices_[bnew.invoiceId].total });
+  fixture(); s = new SD({ livemode: true });
+  a = await call(owner, { action: 'pay' }, s);
+  cur = bill(); cur.amountDue = 500; db.seed(CUR, cur);
+  s.pay(a.invoiceId);
+  var st = await SC.settle(db, ORG, a.invoiceId, s, now, 'stripe');
+  ok(st.recorded && st.matches === false && bill().amountDue === 500 && bill().amountPaid === 2598, 'a payment for a figure that has since changed is recorded, and the amount due is left as it is', bill());
+  ok(!!db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-' + ORG + '-' + a.invoiceId), '...and ClearSky is asked to look');
+
+  console.log('\nan invoice ClearSky already has open in Stripe is never doubled');
+  fixture(); s = new SD({ livemode: true });
+  await call(owner, { action: 'card' }, s);
+  var byHand = await s.invoices.create({ customer: bill().stripeCustomerId, collection_method: 'send_invoice', days_until_due: 7, currency: 'usd', metadata: {} });
+  await s.invoiceItems.create({ customer: bill().stripeCustomerId, invoice: byHand.id, amount: 129900, currency: 'usd', description: 'September' });
+  await s.invoices.finalizeInvoice(byHand.id, {});
+  await refused('the dashboard\'s open invoice is the way to pay', function () { return call(owner, { action: 'pay' }, s); }, /already has an open invoice/);
+  ok(s.all('invoices').length === 1, '...and no second invoice was made');
+
+  console.log('\na customer ClearSky made by hand, and Stripe saying no');
+  fixture(Object.assign({}, bill(), { stripeCustomerId: 'cus_byhand', stripeLivemode: true }));
+  s = new SD({ livemode: true }); s.customers_.cus_byhand = { id: 'cus_byhand', object: 'customer', livemode: true, metadata: { orgId: ORG } };
+  r = await call(owner, { action: 'pay' }, s);
+  ok(s.customers_.cus_byhand.email === owner.email && s.invoices_[r.invoiceId].customer === 'cus_byhand' && s.all('customers').length === 1, 'a customer made in the dashboard with no address gets the billing contact\'s before Stripe is asked to send it an invoice', s.customers_.cus_byhand);
+  s.invoices.list = async function () { var e = new Error('Invalid API Key provided'); e.type = 'StripeAuthenticationError'; e.statusCode = 401; throw e; };
+  await refused('Stripe\'s own refusal is said as Stripe\'s (409), never as our 500', function () { return call(owner, { action: 'pay' }, s); }, /^Stripe refused: Invalid API Key/, 409);
+
+  console.log('\nwhen paying from here does not apply');
+  fixture(Object.assign({}, bill(), { paymentLink: 'https://buy.stripe.com/test_link' }));
+  s = new SD({ livemode: true });
+  await refused('ClearSky set a payment link of its own: that is the way to pay', function () { return call(owner, { action: 'pay' }, s); }, /payment link/);
+  v = await call(owner, { action: 'view' }, s);
+  ok(v.canPay === false && /payment link/.test(v.payReason), '...and the page is told why', v);
+  fixture({ tier: 'standard', paymentProvider: 'manual', amountDue: 0.3, subscriptionDue: '2026-09-02' });
+  await refused('below Stripe\'s minimum card payment', function () { return call(owner, { action: 'pay' }, new SD({ livemode: true })); }, /minimum/);
+}
+
+async function webhook() {
+  console.log('\nthe webhook records a paid amount due once, never through the tier path');
+  fixture(); var s = new SD({ livemode: true });
+  var r = await call(owner, { action: 'pay' }, s);
+  s.pay(r.invoiceId);
+  var load = Module._load, Hook;
+  Module._load = function (request) { if (request === 'stripe') return function () { return { webhooks: { constructEvent: function (buf, sig) { if (sig !== 'signed') throw new Error('bad'); return JSON.parse(String(buf)); } } }; }; return load.apply(this, arguments); };
+  try {
+    delete require.cache[require.resolve('../api/stripe-webhook')];
+    Hook = require('../api/stripe-webhook'); Hook.deps = { stripe: s, mail: mailer };
+    var hook = function (evt) {
+      return new Promise(function (resolve) {
+        var listeners = {}, req = { method: 'POST', headers: { 'stripe-signature': 'signed' }, on: function (n, f) { listeners[n] = f; return req; } };
+        var res = { code: 200, status: function (c) { res.code = c; return res; }, json: function (b) { resolve({ code: res.code, body: b }); }, send: function (b) { resolve({ code: res.code, body: b }); }, end: function () { resolve({ code: res.code }); } };
+        Hook(req, res); setImmediate(function () { listeners.data(Buffer.from(JSON.stringify(evt))); listeners.end(); });
+      });
+    };
+    var got = await hook(s.event('invoice.paid', r.invoiceId)), b = bill();
+    ok(got.code === 200 && got.body.due && got.body.due.recorded === true, 'invoice.paid is answered as the plan\'s amount due', got.body);
+    ok(b.amountDue === 0 && b.amountPaid === 2598 && b.subscriptionDue === '2026-09-02' && b.lastStripeEvent === undefined && db.data.get(ROOT).status === 'active', 'recorded; and the tier path never ran (it would have moved the due date to the invoice\'s own)', b);
+    var again = await hook(s.event('invoice.payment_succeeded', r.invoiceId));
+    ok(again.code === 200 && !again.body.due.recorded && bill().amountPaid === 2598, 'the same payment again (another event, a retry) is not counted twice', again.body);
+    var foreign = await hook({ id: 'evt_x', type: 'invoice.paid', data: { object: { id: 'in_zzz', object: 'invoice', metadata: { omegaDue: 'x', omegaOrg: 'nobody.example' } } } });
+    ok(foreign.code === 200 && /no Stripe customer|not this workspace/.test(foreign.body.due.ignored || ''), 'an invoice for a workspace that is not bound is acknowledged and changes nothing', foreign.body);
+  } finally { Module._load = load; if (Hook) Hook.deps = null; }
+  ok(SC.eventOrg(s.event('invoice.paid', r.invoiceId)) === ORG, 'which events are a plan\'s amount due: ours');
+  ok(SC.eventOrg({ type: 'invoice.paid', data: { object: { object: 'invoice', metadata: { omegaPackage: 'true', omegaOrg: ORG, omegaDue: 'x' } } } }) === null
+    && SC.eventOrg({ type: 'invoice.paid', data: { object: { object: 'invoice', metadata: { orgId: ORG } } } }) === null
+    && SC.eventOrg({ type: 'customer.updated', data: { object: { object: 'customer', metadata: { omegaDue: 'x', omegaOrg: ORG } } } }) === null
+    && SC.eventOrg({ type: 'invoice.paid', data: { object: { object: 'invoice', metadata: { omegaDue: 'x', omegaOrg: '../omega_orgs' } } } }) === null,
+    '...never a package invoice, a tier invoice, a customer event or a mark that is not a workspace');
+}
+
+async function guards() {
+  console.log('\nthe one database is production\'s: a test key never binds a real tenant');
+  fixture(); env({ STRIPE_SECRET_KEY: 'sk_test_double' }); var s = new SD({ livemode: false });
+  var v = await call(owner, { action: 'view' }, s);
+  ok(v.canLink === false && /test mode/.test(v.reason) && v.canPay === false, 'a preview deployment (test key) tells a real workspace no', v);
+  await refused('...and refuses to link it', function () { return call(owner, { action: 'card' }, s); }, /test mode/);
+  ok(!bill().stripeCustomerId && s.calls.length === 0, '...before any Stripe call, writing nothing', s.calls);
+  fixture(undefined, { packagingSandbox: true }); s = new SD({ livemode: false });
+  var r = await call(owner, { action: 'card' }, s);
+  ok(!!r.url && bill().stripeLivemode === false, 'a sandbox workspace links in test mode');
+  env({ STRIPE_SECRET_KEY: 'sk_live_double' });
+  v = await call(owner, { action: 'view' }, new SD({ livemode: true }));
+  ok(!v.canLink && /test account; this deployment uses Stripe’s live mode/.test(v.reason), 'a binding made in the other mode is named, never used', v);
+  await refused('...and never overwritten', function () { return call(owner, { action: 'card' }, new SD({ livemode: true })); }, /test account/);
+  ok(bill().stripeLivemode === false, '...the binding is as it was');
+  env({ STRIPE_SECRET_KEY: null });
+  fixture(); v = await call(owner, { action: 'view' }, null);
+  ok(/not set up/.test(v.reason) && !v.canLink, 'no Stripe key: the page is told plainly', v);
+  await refused('...and an action is a 503', function () { return call(owner, { action: 'card' }, null); }, /not set up/, 503);
+  env({ STRIPE_SECRET_KEY: 'sk_live_double' });
+
+  console.log('\nthe rail stays where it is');
+  fixture({ packaged: true, billingProvider: 'quickbooks', paymentProvider: 'quickbooks', qboCustomerId: 'C1', modules: ['lite'], amountDue: 500 });
+  s = new SD({ livemode: true });
+  v = await call(owner, { action: 'view' }, s);
+  ok(v.rail === 'quickbooks' && !v.canLink && /QuickBooks/.test(v.reason), 'a package billed through QuickBooks keeps its card on QuickBooks\' page', v);
+  await refused('...Add a card is refused', function () { return call(owner, { action: 'card' }, s); }, /billed by its package/);
+  await refused('...and so is paying from here', function () { return call(owner, { action: 'pay' }, s); }, /billed by its package/);
+  fixture({ packaged: true, billingProvider: 'stripe', paymentProvider: 'stripe', stripeCustomerId: 'cus_pkg', stripeLivemode: true, modules: ['lite'] });
+  s = new SD({ livemode: true }); s.customers_.cus_pkg = { id: 'cus_pkg', object: 'customer', livemode: true, email: 'ap@concord.example', metadata: { omegaOrg: ORG, omegaPackage: 'true' } }; s.saveCard('cus_pkg', { brand: 'mastercard', last4: '4444', exp_month: 3, exp_year: 2029 });
+  v = await call(owner, { action: 'view' }, s);
+  ok(v.rail === 'stripe' && v.card.label === 'Mastercard ending 4444' && v.card.expires === '03/2029' && v.canLink && v.due === null, 'a package on the Stripe rail: its card is read back, and it may change it', v);
+  r = await call(owner, { action: 'card' }, s);
+  ok(r.url && s.sessions[0].customer === 'cus_pkg' && s.all('customers').length === 1, '...on its own customer, the engine\'s');
+  await refused('...its invoices stay the engine\'s', function () { return call(owner, { action: 'pay' }, s); }, /billed by its package/);
+  fixture({ packaged: true, billingProvider: 'stripe', paymentProvider: 'stripe', modules: ['lite'] });
+  await refused('a package with no customer yet: its first invoice links the card', function () { return call(owner, { action: 'portal' }, new SD({ livemode: true })); }, /first Stripe invoice/);
+  fixture({ tier: 'standard', paymentProvider: 'quickbooks', amountDue: 1299 });
+  v = await call(owner, { action: 'view' }, new SD({ livemode: true }));
+  ok(v.rail === 'quickbooks' && !v.canLink, 'a plan ClearSky invoices through QuickBooks keeps its card there', v);
+  fixture({ tier: 'standard', paymentProvider: 'manual', qboCustomerId: 'C9', addOns: { modules: ['logic-office'] }, amountDue: 1299 });
+  v = await call(owner, { action: 'view' }, new SD({ livemode: true }));
+  ok(v.rail === 'stripe' && v.canLink, 'add-ons billed in QuickBooks do not move the plan\'s own card off Stripe', v);
+  fixture(null);
+  v = await call(owner, { action: 'view' }, new SD({ livemode: true }));
+  ok(v.rail === null && !v.canLink && /sets up billing/.test(v.reason), 'no billing record: ClearSky sets it up first', v);
+  await refused('...and nothing is linked', function () { return call(owner, { action: 'card' }, new SD({ livemode: true })); }, /sets up billing/);
+  fixture(undefined, { status: 'pending' });
+  await refused('a workspace waiting for approval is not billed yet', function () { return call(owner, { action: 'card' }, new SD({ livemode: true })); }, /approves/);
+
+  console.log('\nback to Plan & billing on the host the person came from');
+  ok(SC.returnUrl('concord.clearskyomega.com') === 'https://concord.clearskyomega.com/workspace#billing' && SC.returnUrl('127.0.0.1:4100') === 'http://127.0.0.1:4100/workspace#billing'
+    && SC.returnUrl('evil.example/x') === 'https://silmarillion.clearskyomega.com/workspace#billing' && SC.returnUrl('') === 'https://silmarillion.clearskyomega.com/workspace#billing', 'a host that is not a host is the open front door');
+}
+
+(async function () {
+  await door();
+  await card();
+  await paying();
+  await webhook();
+  await guards();
+  console.log('\nstripe customer: ' + count + ' passed, 0 failed');
+})().catch(function (e) { console.error(e); process.exit(1); });
