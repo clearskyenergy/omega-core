@@ -1309,7 +1309,7 @@ function _standing(bill, org){
       return { key: 'current', chip: 'good', label: 'Active' };
     }
     if (ps === 'trial') return { key: 'trialend', chip: 'warn', label: 'Trial ends ' + new Date(bill.trialEndsAt).toLocaleDateString() };
-    if (ps === 'past_due_lite') return { key: 'overdue', chip: 'bad', label: 'Past due · Lite only' };
+    if (ps === 'past_due_lite') return { key: 'overdue', chip: 'bad', label: 'Past due · Omega Design only' };
     if (ps === 'unpaid') return { key: 'overdue', chip: 'bad', label: 'Unpaid' };
     if (ps === 'awaiting_payment') return { key: 'awaiting', chip: 'warn', label: 'Awaiting first payment' };
     if (ps === 'pending' || (org && (org.status || '') === 'pending')) return { key: 'pending', chip: 'warn', label: 'Package proposed' };

@@ -324,7 +324,7 @@ async function run() {
       var withStorage = M.normalize(M.starters().ev.concat(['siteintel', 'storage']));
       await billing(Object.assign({ subscription: Object.assign({}, (await db.doc(BILLING).get()).data().subscription, { modules: withStorage }) }, M.resolve(withStorage)));
       await page.evaluate(function () { rbTab('home'); window.dispatchEvent(new Event('focus')); });
-      await page.waitForFunction(function () { var t = document.getElementById('omega-plan-toast'); return t && /Storage Sizing & Revenue is on/.test(t.textContent); });
+      await page.waitForFunction(function () { var t = document.getElementById('omega-plan-toast'); return t && /Omega Storage is on/.test(t.textContent); });
       ok(await page.evaluate(storageAllowed) === true, 'a module added elsewhere opens when the editor window comes back');
       ok(/on the .+ tab/.test(await page.locator('#omega-plan-toast').textContent()), 'the toast says where it is');
       await page.screenshot({ path: path.join(output5, 'editor-focus-toast-' + theme + '.png') });

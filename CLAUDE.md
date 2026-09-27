@@ -229,6 +229,14 @@ whose version ends in `-proposed` is never production; sign-off is renaming
 (the live runner's query). The card button on a QuickBooks invoice is
 QuickBooks Payments, not Stripe: `docs/PAYMENTS-BROWSER-SETUP.md`.
 
+Module display names are Omega-branded (2026-09-27): `lite` reads Omega
+Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
+`name`, `shelfLabel` (Core · Add-on · Pro · Advanced · By the piece · Omega
+Logic) and `mark` (the card letter) live ONLY in `api/_lib/modules.js`, and
+every page reads them off the record — never a page's own shelf map. Keys and
+plan names (Lite + modules, Field, Pro) are unchanged; the table is in
+`docs/VALUE-LADDER-PACKAGING.md`.
+
 Packaged editor presentation uses the server catalog through OmegaCaps.
 **Bought = visible** (2026-09-27): under a package the package is the only
 thing that hides a tool. The project type (OmegaWorkspaces) puts its tools

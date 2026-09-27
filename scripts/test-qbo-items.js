@@ -30,7 +30,7 @@ async function main() {
   await I.sync(db, b, opts, deps); eq(writes, 32);
   var saved = await B.load(db, b.version); eq(Object.keys(saved.qbo.items).length, 32); eq(saved.modules.lite.qboItemId, '1');
   await I.sync(db, saved, opts, deps); eq(writes, 32, 'retry creates nothing');
-  rows.Lite.Active = false; await refuses(function () { return I.sync(db, saved, opts, deps); }, /accounting review/); eq(writes, 32); rows.Lite.Active = true;
+  rows['Omega Design'].Active = false; await refuses(function () { return I.sync(db, saved, opts, deps); }, /accounting review/); eq(writes, 32); rows['Omega Design'].Active = true;
   saved.frozen = true; var before = calls; await refuses(function () { return I.sync(db, saved, opts, deps); }, /immutable/); eq(calls, before);
   saved.frozen = false; saved.qbo.realmId = '999'; await refuses(function () { return I.sync(db, saved, opts, deps); }, /realm mismatch/); eq(calls, before);
   /* Simulate a price book frozen during network I/O. The final transaction

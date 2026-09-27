@@ -24,7 +24,7 @@
   function link(href, text) { var a = node('a', text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; }
   function button(text, fn, cls) { var b = node('button', text, cls); b.type = 'button'; b.onclick = fn; return b; }
   function removalControl(target, m, state) {
-    if (m.key === 'lite') { target.appendChild(node('p', 'Lite is the baseline and is always included.', 'opm-note')); return; }
+    if (m.key === 'lite') { target.appendChild(node('p', 'Omega Design is the baseline and is always included.', 'opm-note')); return; }
     if (!state.canManage) { target.appendChild(node('p', 'Ask your workspace administrator to opt out of this module.', 'opm-note')); return; }
     var queued = ((state.summary || {}).removalRequests || []).some(function (r) { return r.module === m.key; });
     if (queued) target.appendChild(node('p', 'Opt-out requested · quarterly review. Access and charges remain unchanged.', 'opm-wait'));
@@ -40,7 +40,7 @@
         if (state.legacy) {
           var mail = node('a', 'Email opt-out request');
           mail.href = 'mailto:' + encodeURIComponent(state.legacy.email) + '?subject=' + encodeURIComponent('Opt out: ' + m.name + ' for ' + state.legacy.company)
-            + '&body=' + encodeURIComponent('Please review the opt-out of ' + q.names.join(', ') + ' for ' + state.legacy.company + '. Confirm the effective date and any billing change under our existing agreement. Lite remains included.');
+            + '&body=' + encodeURIComponent('Please review the opt-out of ' + q.names.join(', ') + ' for ' + state.legacy.company + '. Confirm the effective date and any billing change under our existing agreement. Omega Design remains included.');
           target.appendChild(mail);
         } else target.appendChild(button(queued ? 'Confirm keep modules' : 'Confirm opt-out request', function () {
           target.textContent = 'Saving request…';
@@ -62,7 +62,7 @@
       if (owned.indexOf(row.key) >= 0 && remove.indexOf(row.key) < 0 && (row.requires || []).some(function (k) { return remove.indexOf(k) >= 0; })) { remove.push(row.key); changed = true; }
     }); }
     return { names: rows.filter(function (row) { return remove.indexOf(row.key) >= 0; }).map(function (row) { return row.name; }),
-      note: 'This workspace is billed outside the package engine. ClearSky will confirm the effective date and any billing change under your existing agreement. Sending the request does not change access, cancel charges or issue a refund. Lite remains included.' };
+      note: 'This workspace is billed outside the package engine. ClearSky will confirm the effective date and any billing change under your existing agreement. Sending the request does not change access, cancel charges or issue a refund. Omega Design remains included.' };
   }
   /* One control, three places: the editor's + Modules gallery, Your plan in
      the account pages, and the staff record. state: { canManage, pending:
@@ -269,7 +269,7 @@
   function close() { if (dialog) dialog.remove(); if (keydown) document.removeEventListener('keydown', keydown); keydown = null; dialog = body = null; request++; if (trigger && trigger.focus) trigger.focus(); }
   function card(m, price, focus) {
     var el = node('section', '', 'opm-card'); el.setAttribute('data-module-card', m.key);
-    el.appendChild(node('span', m.name.slice(0, 1), 'opm-icon'));
+    el.appendChild(node('span', m.mark || m.name.slice(0, 1), 'opm-icon'));
     el.appendChild(node('h3', m.name));
     var view = packageView(), owned = view && (view.modules || []).indexOf(m.key) >= 0;
     if (owned && !host.legacy) {
@@ -336,7 +336,7 @@
     render(view.catalog || [], key); dismiss.focus();
     if (host.legacy) {
       control = { canManage: true, pending: {}, loaded: true };
-      status.textContent = 'Review the request before sending it to ClearSky. Lite is always included.';
+      status.textContent = 'Review the request before sending it to ClearSky. Omega Design is always included.';
       render((view.catalog || []).filter(function (m) { return m.key === key; }), key); return true;
     }
     var user = global.firebase && global.firebase.auth().currentUser;
@@ -345,7 +345,7 @@
       .then(function (r) { if (!r.ok) throw new Error('unavailable'); return r.json(); })
       .then(function (result) {
         if (tokenRequest !== request || !body || global.firebase.auth().currentUser !== user) return;
-        status.textContent = 'Monthly prices. Additions switch on when payment clears. Optional modules can be opted out at the quarterly review; Lite is always included.';
+        status.textContent = 'Monthly prices. Additions switch on when payment clears. Optional modules can be opted out at the quarterly review; Omega Design is always included.';
         control = { canManage: false, pending: {}, loaded: false }; render(result.modules, key);
         if (result.canManage) loadControl().then(function () { if (tokenRequest === request && body) render(result.modules, key); });
       }, function () { if (tokenRequest === request) status.textContent = 'Current pricing is unavailable. Please try again later.'; });
@@ -442,7 +442,7 @@
       rows.forEach(function (m) {
         if (!shelves[m.shelf]) {
           var shelf = node('div', '', 'pkm-shelf');
-          shelf.appendChild(node('h4', { floor: 'Floor', addon: 'Add-on', standard: 'Standard', premium: 'Premium', deliverable: 'Deliverable', platform: 'Omega Logic' }[m.shelf] || m.shelf));
+          shelf.appendChild(node('h4', m.shelfLabel || m.shelf));
           var grid = node('div', '', 'pkm-mods'); shelf.appendChild(grid); shelves[m.shelf] = grid; host.appendChild(shelf);
         }
         var owned = selected.indexOf(m.key) >= 0, item = node('label', '', 'pkm-mod' + (owned ? ' on' : ''));
