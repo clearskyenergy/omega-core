@@ -138,7 +138,9 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
         if (!u) return u;
         var minted = sessionStorage.getItem('dbl-minted') === '1';
         if (minted) u.emailVerified = true;
-        u.reload = function () { if (localStorage.getItem('dbl-clicked') === '1') u.emailVerified = true; return Promise.resolve(); };
+        u.reload = function () { window.__reloads = (window.__reloads || 0) + 1; if (localStorage.getItem('dbl-clicked') === '1') u.emailVerified = true; return Promise.resolve(); };
+        /* what a verification link was sent with: its continue address (Firebase's Continue button) */
+        u.sendEmailVerification = function (o) { (window.__verifySends = window.__verifySends || []).push(o && o.url ? o.url : null); return Promise.resolve(); };
         u.getIdToken = function (force) {
           if (force && u.emailVerified) { minted = true; sessionStorage.setItem('dbl-minted', '1'); }
           return Promise.resolve('tok|' + u.email + '|' + (minted || (u.emailVerified && !u.__unverifiedAtStart) ? 1 : 0) + '|' + u.uid);
@@ -188,8 +190,23 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   await p.click('#billing-pay'); await wait(800);
   var held = await p.evaluate(function () { return { err: document.getElementById('build-err').textContent, build: !document.getElementById('step-build').classList.contains('hide') }; });
   ok('Subscribe waits for the link: says so and creates nothing', held.build && /Confirm your email to subscribe/.test(held.err) && !posts.some(function (x) { return /tenant-signup/.test(x); }) && !sdb.data.get('omega_orgs/newco.example'), { held: held, posts: posts });
-  /* the person clicks the link in their email */
+  /* Resend the link: a new link whose Continue button brings them back to the signup */
+  await p.click('#verify-note button[onclick="resendVerification()"]'); await wait(200);
+  var resent = await p.evaluate(function () { return { title: document.getElementById('verify-title').textContent, sends: window.__verifySends || [] }; });
+  ok('Resend the link sends a new link that brings them back to the signup', resent.title === 'Link sent again' && resent.sends.length === 1 && /^http:\/\/127\.0\.0\.1:\d+\/start\.html$/.test(resent.sends[0] || ''), resent);
+  /* "I've clicked it" before the click: said plainly, nothing made */
+  await p.click('#verify-note button[onclick="verifiedContinue()"]'); await wait(300);
+  var early = await p.evaluate(function () { return document.getElementById('verify-title').textContent; });
+  ok('"I\'ve clicked it" before the click says it is not confirmed yet and makes nothing', /^Not confirmed yet/.test(early) && !posts.some(function (x) { return /tenant-signup/.test(x); }), { title: early, posts: posts });
+  /* away in the mail app: the tab is hidden and asks nobody; the click happens there */
+  await p.evaluate(function () { window.__hidden = true; Object.defineProperty(document, 'hidden', { configurable: true, get: function () { return window.__hidden === true; } }); window.__reloads = 0; });
   await p.evaluate(function () { localStorage.setItem('dbl-clicked', '1'); });
+  await wait(5600);
+  var away = await p.evaluate(function () { return { reloads: window.__reloads, build: !document.getElementById('step-build').classList.contains('hide') }; });
+  ok('while the tab is hidden it asks Firebase nothing and makes nothing', away.reloads === 0 && away.build && !posts.some(function (x) { return /tenant-signup/.test(x); }), { away: away, posts: posts });
+  /* back on the tab: it looks at once (not at the next five-second tick) and carries on */
+  var back = await p.evaluate(function () { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); return window.__reloads; });
+  ok('coming back to the tab asks Firebase at once', back === 1, back);
   await p.waitForSelector('#step-pay:not(.hide)', { timeout: 9000 }).catch(function () {});
   var org = sdb.data.get('omega_orgs/newco.example'), bill = sdb.data.get('omega_orgs/newco.example/billing/current');
   ok('the click carries the page on by itself: the workspace is made on a verified token and the first invoice is issued', await visible(p, 'step-pay') && org && org.status === 'active' && bill && bill.packagingState === 'awaiting_payment' && invoices === 1 && posts.filter(function (x) { return /tenant-signup pay-now/.test(x); }).every(function (x) { return /verified$/.test(x) && !/unverified/.test(x); }), { posts: posts, org: org && org.status, state: bill && bill.packagingState, invoices: invoices });
