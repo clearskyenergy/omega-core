@@ -107635,7 +107635,10 @@ button[style*="linear-gradient"][aria-disabled="true"]{
      'designer' from before is not applied. A legacy workspace keeps the
      switch exactly as it was, and gets its saved choice back if a package
      goes away mid-session. */
-  function packaged() { return !!(window.OmegaCaps && OmegaCaps.packageAccess && OmegaCaps.packageAccess()); }
+  /* a real package: not the locked placeholder OmegaCaps holds while the
+     plan loads, after a failed read or a refusal (a legacy account signing
+     in must keep its switch) */
+  function packaged() { var p = window.OmegaCaps && OmegaCaps.packageAccess && OmegaCaps.packageAccess(); return !!(p && !p.pending); }
 
   /* ------------------------------------------------------------------ *
    *  1. THE DESIGNER SET                                               *
@@ -107976,7 +107979,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       if (mode !== 'pro') set('pro', true, true); else paintSwitch();
       return;
     }
-    if (!heldByPackage) return;
+    if (!heldByPackage) { paintSwitch(); return; }
     heldByPackage = false;
     var saved = null;
     try { saved = localStorage.getItem(KEY); } catch (e) {}

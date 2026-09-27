@@ -198,7 +198,7 @@ async function liveChecks() {
       { status: 'active' }, { role: 'owner', status: 'active' }, Date.now());
   }
   var answer = { status: 200, body: view(['lite']) }, asked = 0;
-  global.fetch = function () { asked++; return Promise.resolve({ ok: answer.status === 200, status: answer.status, json: function () { return Promise.resolve(answer.body); } }); };
+  global.fetch = function () { asked++; return Promise.resolve({ ok: answer.status === 200, status: answer.status, json: function () { return Promise.resolve(answer.status === 200 ? answer.body : { error: answer.error || 'Package access is unavailable' }); } }); };
   db.seed(billing, { packaged: true });
   r = await C.refresh(db, user);
   ok(r.changed && r.packaged && !r.wasPackaged && C.packageAccess().modules.join() === 'lite',
@@ -215,10 +215,12 @@ async function liveChecks() {
   r = await C.refresh(db, user);
   ok(!r.changed && r.unavailable && C.packageAccess().modules.indexOf('storage') >= 0,
      'an unreachable server keeps what is on screen (the API still refuses production on its own)');
-  answer.status = 403;
+  answer.status = 403; answer.error = 'Active organization membership required';
   r = await C.refresh(db, user);
   ok(r.changed && r.readOnly && C.packageAccess().readOnly && !C.packageAccess().modules.length,
      'a 403 is the server saying no: the editor locks');
+  ok(r.refused === 'Active organization membership required' && C.packageAccess().refused === r.refused,
+     'and says why, in the server\'s words: a refusal is not a connection problem and not a bill to pay');
   answer.status = 200; answer.body = view(['lite', 'storage']);
   r = await C.refresh(db, user);
   ok(r.recovered && !r.added.length && !r.readOnly, 'coming back from the lock is "recovered", not a list of new purchases');
@@ -235,13 +237,25 @@ async function liveChecks() {
   r = await C.refresh(db, user);
   ok(r.skipped === 'staff' && asked === 0 && C.packageAccess().preview === true, 'a staff preview is never re-checked away');
 
-  /* The deadline closes the tools on the clock, before the network answers. */
+  /* At the deadline the server decides; the editor's own clock only when the server cannot answer. */
   answer.body = view(['lite', 'storage'], { accessUntil: Date.now() - 1 });
   C.setPackage(view(['lite', 'storage'], { accessUntil: Date.now() + 40 })); C.apply('standard'); events.length = 0;
   C.watchPlan(function () { return db; });
   await new Promise(function (done) { setTimeout(done, 1250); });
   ok(C.packageAccess().readOnly === true, 'at accessUntil the open editor turns read-only by itself');
   ok(announced().some(function (e) { return e.detail.readOnly && !e.detail.wasReadOnly; }), 'and says so');
+  answer.status = 503;
+  C.setPackage(view(['lite', 'storage'], { accessUntil: Date.now() + 40 })); C.apply('standard'); events.length = 0;
+  C.watchPlan(function () { return db; });
+  await new Promise(function (done) { setTimeout(done, 1250); });
+  ok(C.packageAccess().readOnly === true && C.packageAccess().modules.indexOf('storage') >= 0,
+     'with the server out of reach at the deadline, the editor closes on its own clock');
+  answer.status = 200; answer.body = view(['lite', 'storage']);
+  C.setPackage(view(['lite', 'storage'], { accessUntil: Date.now() + 40 })); C.apply('standard'); events.length = 0;
+  C.watchPlan(function () { return db; });
+  await new Promise(function (done) { setTimeout(done, 1250); });
+  ok(C.packageAccess().readOnly === false && !announced().length,
+     'a clock that crosses the deadline ahead of the server\'s closes nothing and says nothing: the server still says open');
   /* sign-in: locked while the answer is on its way, never open */
   var release, slowDb = { collection: function () { return { doc: function () { return { collection: function () { return { doc: function () { return {
     get: function () { return new Promise(function (r) { release = r; }); } }; } }; } }; } }; } };

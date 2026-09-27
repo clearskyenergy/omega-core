@@ -330,6 +330,16 @@ async function run() {
       await page.screenshot({ path: path.join(output5, 'editor-focus-toast-' + theme + '.png') });
       await page.locator('#omega-plan-toast').getByRole('button', { name: 'Show me', exact: true }).click();
       ok(await page.evaluate(function () { var el = document.querySelector('[data-opm-spot]'); return !!el && OmegaCaps.owners(el.id || '', el.getAttribute('onclick') || '').indexOf('storage') >= 0 && !document.getElementById('omega-plan-toast'); }), 'the toast\'s Show me points at a Storage tool');
+      ok(await page.evaluate(function () { var el = document.querySelector('[data-opm-spot]'); return !!el && document.activeElement === el; }), 'and keyboard focus lands on it');
+      ok(await page.evaluate(function () { var live = document.getElementById('omega-plan-live'); return !!live && live.getAttribute('aria-live') === 'polite' && /Omega Storage is on/.test(live.textContent); }), 'the toast is announced through the one live region');
+      await page.setViewportSize({ width: 390, height: 844 });
+      var narrow = await page.evaluate(function () {
+        document.dispatchEvent(new CustomEvent('omega:plan-changed', { detail: { changed: true, packaged: true, wasPackaged: true, added: ['storage'], removed: [], readOnly: false, wasReadOnly: false } }));
+        var r = document.getElementById('omega-plan-toast').getBoundingClientRect(); document.getElementById('omega-plan-toast').remove();
+        return { width: Math.round(r.width), left: Math.round(r.left), right: Math.round(r.right) };
+      });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      ok(narrow.width >= 340 && narrow.left >= 0 && narrow.right <= 390, 'on a 390px phone the toast spans the screen: ' + JSON.stringify(narrow));
       /* The access deadline passes with the editor open: the tools close on
          the clock, the strip says why and how to pay, and paying opens them. */
       await billing({ accessUntil: Date.now() + 2500, paymentLink: 'https://connect.intuit.com/pay/fixture' });

@@ -389,7 +389,14 @@
     if (!user || !user.getIdToken || !global.fetch) return Promise.reject(new Error('Package access unavailable'));
     return user.getIdToken().then(function (token) {
       return global.fetch('/api/package-access', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
-    }).then(function (r) { if (!r.ok) { var e = new Error('Package access unavailable'); e.status = r.status; throw e; } return r.json(); })
+    }).then(function (r) {
+      if (r.ok) return r.json();
+      /* the server's own reason travels with a refusal: "Verified email
+         required", "Active organization membership required", ... */
+      return r.json().then(function (j) { return j && j.error; }, function () { return null; }).then(function (why) {
+        var e = new Error(why || 'Package access unavailable'); e.status = r.status; if (why) e.reason = why; throw e;
+      });
+    })
       .then(function (v) { if (global.firebase && global.firebase.auth().currentUser !== user) throw new Error('Account changed'); if (!v || v.packaged !== true) throw new Error('Package access changed; reload'); return v; });
   }
   function fetchPackage(user) {
@@ -625,7 +632,12 @@
         if (!user || user.email !== email) return { tier: 'trial', addons: [], view: pendingPackage() };
         return projection(user).then(function (view) { return { tier: view.tier || 'standard', addons: [], view: view }; }, function (e) {
           if (refreshing && e.status !== 403) return { transient: true };
-          return { tier: 'trial', addons: [], view: pendingPackage() };
+          /* a 403 is the server saying no to THIS person (unverified, not a
+             member yet, disabled): locked, and said as that, never as a
+             connection problem or a bill to pay */
+          var locked = pendingPackage();
+          if (e.status === 403) locked.refused = e.reason || 'Your access to this workspace\'s tools was refused.';
+          return { tier: 'trial', addons: [], view: locked };
         });
       }
       var eff = effectiveTier(b.tier || 'trial', b.capTier);
@@ -679,7 +691,7 @@
   function standing() {
     if (_package) {
       var editor = _package.staff || (_package.toolAccess || []).indexOf('editor') >= 0;
-      return { packaged: true, pending: _package.pending === true, staff: _package.staff === true, readOnly: _package.readOnly === true, editor: editor, modules: editor ? (_package.modules || []).slice() : [] };
+      return { packaged: true, pending: _package.pending === true, refused: _package.refused || null, staff: _package.staff === true, readOnly: _package.readOnly === true, editor: editor, modules: editor ? (_package.modules || []).slice() : [] };
     }
     return { packaged: false, tier: _tier || 'trial', caps: Object.keys(setFor(_tier || 'trial')).sort() };
   }
@@ -707,7 +719,7 @@
      load that failed and has now come through is `recovered`, not a list of
      new purchases: those modules were always the workspace's. */
   function settle(before) {
-    var after = standing(), diff = { changed: JSON.stringify(before) !== JSON.stringify(after), packaged: after.packaged, wasPackaged: before.packaged, recovered: before.pending === true && !after.pending,
+    var after = standing(), diff = { changed: JSON.stringify(before) !== JSON.stringify(after), packaged: after.packaged, wasPackaged: before.packaged, recovered: before.pending === true && !after.pending, refused: after.refused || null,
       readOnly: after.packaged ? after.readOnly || !after.editor : false, wasReadOnly: before.packaged ? before.readOnly || !before.editor : false, added: [], removed: [] };
     if (after.packaged && !diff.recovered) {
       var was = before.packaged ? before.modules : [];
@@ -727,9 +739,9 @@
      When the window comes back (the person was paying in QuickBooks, or
      away long enough for something to change), every ten minutes while it
      is in front of them, and at the recorded access deadline. At the
-     deadline the tools close at once, before the network answers — the same
-     rule omega-tenant.js follows on the dashboard; the API and the rules
-     enforce the deadline on their own. */
+     deadline the server decides (its clock is the one that counts) and the
+     editor closes on its own clock only when the server cannot be reached;
+     the API and the rules enforce the deadline on their own either way. */
   var FOCUS_GAP = 15000, EVERY = 600000, _lastAsk = 0, _deadline = null;
   function ask(force) {
     var now = Date.now();
@@ -745,14 +757,21 @@
        open (a clock ahead of the server's): the server decides, asked each
        minute, instead of a lock that the next answer lifts every second */
     if (wait <= 0) { _deadline = setTimeout(function () { _deadline = null; ask(true); }, 60000); return; }
+    /* At the deadline the server is asked first: a clock that runs ahead of
+       the server's would otherwise close the tools, hear "open" and open
+       them again (and close them a minute later). Only when the server
+       cannot answer does the editor close on its own clock. */
     _deadline = setTimeout(function () {
       _deadline = null;
       if (!_package || _package.staff || _package.preview) return;
-      if (_package.accessUntil && Date.now() >= _package.accessUntil) {
-        var before = standing();
-        setPackage(Object.assign({}, _package, { readOnly: true })); apply(_tier || 'standard'); settle(before);
-      }
-      ask(true);
+      ask(true).then(function (r) {
+        if (!r || !r.unavailable || !_package || _package.staff || _package.preview || _package.readOnly) return;
+        if (!_package.accessUntil || Date.now() < _package.accessUntil) return;
+        var before = standing(), locked = {}, k;
+        for (k in _package) if (Object.prototype.hasOwnProperty.call(_package, k)) locked[k] = _package[k];
+        locked.readOnly = true;
+        setPackage(locked); apply(_tier || 'standard'); settle(before);
+      });
     }, Math.max(0, wait) + 1000);
   }
   function watchPlan(getDb) {

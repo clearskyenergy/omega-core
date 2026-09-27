@@ -172,6 +172,8 @@
     if (typeof global.rbTab === 'function') global.rbTab(hit.page);
     hit.el.setAttribute('data-opm-spot', '1');
     if (hit.el.scrollIntoView) hit.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    /* keyboard focus goes where the eye is sent */
+    if (hit.el.focus) { try { hit.el.focus({ preventScroll: true }); } catch (e) { hit.el.focus(); } }
     setTimeout(function () { hit.el.removeAttribute('data-opm-spot'); }, 2600);
     return true;
   }
@@ -183,12 +185,25 @@
      that nobody asked where to find, or the tools someone was using vanish.
      One line, what moved, where it is, and a way to it. */
   var toastTimer = null;
+  /* One live region, in the page before anything is said into it: a region
+     inserted already filled in is often not announced by screen readers. */
+  function announce(text) {
+    var live = document.getElementById('omega-plan-live');
+    if (!live) {
+      live = node('div'); live.id = 'omega-plan-live'; live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
+      live.style.cssText = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0';
+      document.body.appendChild(live);
+    }
+    live.textContent = '';
+    setTimeout(function () { live.textContent = text; }, 60);
+  }
   function toast(text, action) {
     styles();
     var old = document.getElementById('omega-plan-toast'); if (old) old.remove();
     if (toastTimer) clearTimeout(toastTimer);
-    var t = node('div', '', 'opm-toast'); t.id = 'omega-plan-toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite');
+    var t = node('div', '', 'opm-toast'); t.id = 'omega-plan-toast';
     t.appendChild(node('span', text));
+    announce(text);
     if (action) t.appendChild(action);
     t.appendChild(button('Dismiss', function () { t.remove(); }, 'opm-x'));
     document.body.appendChild(t);
@@ -205,6 +220,7 @@
     if (body) { (control.canManage ? loadControl() : Promise.resolve()).then(function () { if (body) render(lastRows, null); }); return; }
     if (!document.getElementById('ribbon')) return;
     var added = (d.packaged ? d.added : []).filter(function (k) { return k !== 'lite'; }), removed = d.packaged ? d.removed : [];
+    if (d.refused) return toast(d.refused + ' Saved projects stay available. Your workspace administrator can check your access.', link('/workspace', 'Workspace'));
     if (d.readOnly && !d.wasReadOnly) return toast('This workspace is read-only now. Saved projects stay available; pay to keep creating and exporting.', link('/workspace#billing', 'Plan & billing'));
     if (d.recovered) return toast(d.readOnly ? 'Your plan is loaded. This workspace is read-only; saved projects stay available.' : 'Your plan is loaded. Your tools are back.', d.readOnly ? link('/workspace#billing', 'Plan & billing') : null);
     if (added.length) {
@@ -230,7 +246,8 @@
        placeholder, never the customer's Editor Lite frame (its own access) */
     var own = false;
     try { own = !/[?&]customerEngine=1(&|$)/.test(global.location.search) && !!(global.firebase && global.firebase.apps && global.firebase.apps.length && global.firebase.auth().currentUser); } catch (e) { own = false; }
-    var n = own && view && !view.staff && !view.preview && (view.billingNotice || (view.pending && !view.loading ? { text: 'Your plan could not be checked. Saved projects stay available; your tools come back when the connection does.', retry: true } : null));
+    var n = own && view && !view.staff && !view.preview && (view.refused ? { text: view.refused + ' Saved projects stay available. Your workspace administrator can check your access.', refused: true } :
+      view.billingNotice || (view.pending && !view.loading ? { text: 'Your plan could not be checked. Saved projects stay available; your tools come back when the connection does.', retry: true } : null));
     if (!n || !ribbon || host.view) { if (bar) bar.remove(); return; }
     var key = [n.text, n.payUrl || '', view.readOnly ? 1 : 0].join('|');
     if (bar && bar.getAttribute('data-notice') === key) return;
@@ -241,17 +258,35 @@
     bar.textContent = ''; bar.setAttribute('data-notice', key); bar.className = 'opm-notice' + (view.readOnly ? ' opm-bad' : '');
     bar.appendChild(node('span', n.text));
     if (n.payUrl) bar.appendChild(link(n.payUrl, 'Pay in QuickBooks'));
-    if (n.retry) bar.appendChild(button('Try again', function () { if (caps.refresh) caps.refresh(); }));
-    else if (n.payUrl || view.readOnly) {
+    if (n.refused) { bar.appendChild(link('/workspace', 'Workspace')); return; }
+    if (n.retry) {
+      var said = node('p', '', 'opm-note'); said.setAttribute('role', 'status');
+      var again = button('Try again', function () {
+        again.disabled = true; again.textContent = 'Checking…'; said.textContent = '';
+        (caps.refresh ? caps.refresh() : Promise.resolve(null)).then(function (r) {
+          if (!again.isConnected) return;
+          again.disabled = false; again.textContent = 'Try again';
+          said.textContent = !r || r.unavailable ? 'Still can\'t reach the server. Check the connection and try again.' : '';
+        });
+      });
+      bar.appendChild(again); bar.appendChild(said); return;
+    }
+    if (n.payUrl || view.readOnly) {
       var note = node('p', '', 'opm-note'); note.setAttribute('role', 'status');
       var paid = button("I've paid", function () {
         paid.disabled = true; paid.textContent = 'Checking…'; note.textContent = '';
         /* a member may not ask QuickBooks to look (an owner's action), so a
            refusal only skips that step; re-reading the plan is theirs too */
-        api('/api/plan-change', { action: 'reconcile-now' }).then(null, function () {}).then(function () { return caps.refresh ? caps.refresh() : null; }).then(function (r) {
-          paid.disabled = false; paid.textContent = "I've paid";
-          if (!r || !r.changed) note.textContent = 'Not showing as paid yet. A card payment usually shows within a minute.';
-        });
+        var told = null;
+        api('/api/plan-change', { action: 'reconcile-now' }).then(function (j) { told = j; }, function (e) { told = { refused: e.message }; })
+          .then(function () { return caps.refresh ? caps.refresh() : null; }).then(function (r) {
+            if (!paid.isConnected) return;
+            paid.disabled = false; paid.textContent = "I've paid";
+            if (r && r.changed) return;
+            note.textContent = r && r.unavailable ? 'Can\'t reach the server right now. Try again in a moment.' :
+              told && told.throttled ? 'Checked a moment ago. Try again in a few seconds.' :
+              told && told.error ? told.error : 'Not showing as paid yet. A card payment usually shows within a minute.';
+          });
       });
       bar.appendChild(paid); bar.appendChild(link('/workspace#billing', 'Plan & billing')); bar.appendChild(note);
       return;
@@ -266,7 +301,9 @@
     }, function () { control = { canManage: false, pending: {}, loaded: true }; return control; });
   }
   function node(tag, text, cls) { var el = document.createElement(tag); if (text) el.textContent = text; if (cls) el.className = cls; return el; }
-  function close() { if (dialog) dialog.remove(); if (keydown) document.removeEventListener('keydown', keydown); keydown = null; dialog = body = null; request++; if (trigger && trigger.focus) trigger.focus(); }
+  /* focus goes back only when a dialog was open: from a toast's Show me,
+     "trigger" is whatever had focus the last time The Ladder opened */
+  function close() { var had = !!dialog; if (dialog) dialog.remove(); if (keydown) document.removeEventListener('keydown', keydown); keydown = null; dialog = body = null; request++; if (had && trigger && trigger.focus) trigger.focus(); trigger = null; }
   function card(m, price, focus) {
     var el = node('section', '', 'opm-card'); el.setAttribute('data-module-card', m.key);
     el.appendChild(node('span', m.mark || m.name.slice(0, 1), 'opm-icon'));
@@ -378,7 +415,7 @@
       '.opm-notice{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:7px 14px;font:12.5px/1.45 system-ui;background:var(--panel,#16202B);color:var(--text,#E6EBF0);border-bottom:1px solid var(--border,#26323E);border-left:3px solid var(--accent,#4A8FD8)}' +
       '.opm-notice.opm-bad{border-left-color:var(--warn,#C9A24E)}.opm-notice span{flex:1 1 320px}.opm-notice a{color:var(--accent,#4A8FD8);font-weight:600}.opm-notice p{margin:0;flex-basis:100%;color:var(--sub,#94A1AE)}.opm-notice p:empty{display:none}' +
       '.opm-notice button,.opm-toast button{font:600 12px system-ui;padding:5px 11px;border-radius:6px;border:1px solid var(--border,#26323E);background:transparent;color:var(--text,#E6EBF0);cursor:pointer}' +
-      '.opm-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:1000000;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;max-width:min(620px,calc(100vw - 32px));padding:12px 14px 12px 16px;border-radius:10px;border:1px solid var(--border,#26323E);background:var(--panel,#16202B);color:var(--text,#E6EBF0);font:13px/1.45 system-ui;box-shadow:0 10px 32px #0006}' +
+      '.opm-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:1000000;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;width:max-content;max-width:min(620px,calc(100vw - 32px));box-sizing:border-box;padding:12px 14px 12px 16px;border-radius:10px;border:1px solid var(--border,#26323E);background:var(--panel,#16202B);color:var(--text,#E6EBF0);font:13px/1.45 system-ui;box-shadow:0 10px 32px #0006}' +
       '.opm-toast span{flex:1 1 260px}.opm-toast a{color:var(--accent,#4A8FD8);font-weight:600}.opm-toast .opm-primary{background:var(--accent,#4A8FD8);border-color:var(--accent,#4A8FD8);color:var(--on-accent,#fff)}.opm-toast .opm-x{border-color:transparent;color:var(--sub,#94A1AE)}' +
       '[data-opm-spot]{outline:2px solid var(--accent,#4A8FD8)!important;outline-offset:2px;border-radius:6px;animation:opm-spot 1.3s ease-in-out 2}' +
       '@keyframes opm-spot{50%{outline-color:transparent}}@media(prefers-reduced-motion:reduce){[data-opm-spot]{animation:none}}';
