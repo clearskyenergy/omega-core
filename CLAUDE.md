@@ -216,14 +216,18 @@ public price list; signup's pay-now runs the engine's own `activate` with the
 caller marked `selfServe` (recorded in history and audit); "I've paid" is
 `plan-change.reconcileNow` (one look per eight seconds), from the signup
 page (`check-payment`) and the billing bar (`reconcile-now`) alike. The
-flow as sold: account (login.html) → verified email (start.html holds an
-unverified address) → billing profile → *Build your system* (the one
-menu, priced live by the server; Monthly, or Yearly at ten months of
-twelve) → pay. Create account goes straight to `/start.html` (making the
-account signs it in, so login's auth listener stands aside while the form
-routes it), and a signed-in person with no `omega_orgs` record, grant,
-access request or terms acceptance is sent there too instead of a derived
-workspace; `scripts/render-signup.js` (in `check:pages`) holds both.
+flow as sold: account (login.html) → *How you work today* → billing
+profile → *Build your system* (the one menu, priced live by the server;
+Monthly, or Yearly at ten months of twelve) → pay. Create account goes
+straight into that signup on `/start.html` with the company carried over
+(making the account signs it in, so login's auth listener stands aside
+while the form routes it); the signup options and quotes open before the
+email link is clicked, and only creating the workspace (Subscribe or the
+trial) needs the verified address, which the page waits for and then
+carries on by itself. A signed-in person with no `omega_orgs` record,
+grant or access request, not a named tenant, and without both accepted
+terms and a project under the company, is sent there too instead of a
+derived workspace; `scripts/render-signup.js` (in `check:pages`) holds it.
 Annual prepay is `annualPaidMonths` = 10 in the book.
 `api/_lib/packaging-mode.js` is the ONE rule for where packaging bills:
 SANDBOX (`QBO_ENV=sandbox`) or LIVE (`PACKAGING_LIVE=true` AND
