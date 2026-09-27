@@ -822,7 +822,12 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
      the module that carries it, the server's catalogue, and links to that
      module on the Modules page; an old store link (#<module>, #plans) is
      sent there. On the classic home, which has no Modules page, See module
-     opens the one menu in place. */
+     opens the one menu in place, told what a legacy plan holds by the ONE
+     rule with Site Map's half (editorCtx), and a request made there is the
+     page's plan until it is withdrawn. A lock that is not a module's
+     (awaiting approval, a two-tool product) says why. Site Map's Open
+     launches it on the workspace. And the cards are judged on the
+     runtime's merged workspace even when it lands first. */
   PACKAGE_VIEW = lt.packageView; STORE.posts = []; STORE.pending = [];
   /* which module carries a tool: the first in catalogue order, the page's rule */
   var CARRIES = {}; M.catalog().forEach(function (m) { (m.tools || []).forEach(function (k) { if (!CARRIES[k]) CARRIES[k] = m; }); });
@@ -833,19 +838,68 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     });
   };
   function badLocked(cards) { return cards.filter(function (c) { var m = CARRIES[c.tool]; return c.locked && m && !(c.module === m.key && c.pill === m.name && c.inLine === 'In ' + m.name && c.href === '/workspace#module-' + m.key && c.act === 'See module ›'); }); }
-  async function marketContext(fx) {
+  /* opts.lateMenu: serve /omega-package-menu.js that many ms late. It is a
+     blocking script between omega-tenant.js's auth listener and the page's
+     own, so the entitlements land on config's tenant BEFORE the page's
+     onAuth runs: the race a slow network gives a pinned host. */
+  async function marketContext(fx, opts) {
     var ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
+    if (opts && opts.lateMenu) await ctx.route(/\/omega-package-menu\.js/, function (r) { setTimeout(function () { r.continue().catch(function () {}); }, opts.lateMenu); });
     await ctx.addInitScript(DOUBLE_SRC);
     await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: fx.user, docs: fx.docs, latency: 8, authDomain: HOST });
     return ctx;
+  }
+  /* THE POST-ENTITLEMENT STATE. The cards are painted several times on the
+     way in (the page's own workspace, the runtime's entitlements, the price
+     list, the pins); only the last paint is the answer. Checks and clicks
+     wait for it: the runtime's merged workspace IS the page's, the price
+     list has landed and the pin store answered. A check that took the
+     first matching card was flaky, and a race that left the page on an
+     unmerged workspace looked like a slow page. */
+  function marketSettled(p, ms) {
+    return p.waitForFunction(function () {
+      return !!(window.OmegaTenant && OmegaTenant.workspace && window.WORKSPACE === OmegaTenant.workspace && window.CAT && CAT.modules.length && CAT.pins && document.querySelectorAll('#market-grid .mkt-card').length > 10);
+    }, null, { timeout: ms || 8000 }).then(function () { return true; }, function () { return false; });
+  }
+  /* Site Map's capability ladder, loaded as the page loads it (a library,
+     nothing applied), for the legacy states the classic home's menu reads */
+  var CAPS_BOX = { console: console }; require('vm').runInNewContext(fs.readFileSync(path.join(ROOT, 'omega-caps.js'), 'utf8'), CAPS_BOX);
+  /* what the ONE rule says a legacy plan holds, from the page's own catalogue
+     and tool locks and the editor's tier (OmegaWorkspaceHub.editorCtx): the
+     marketplace must give the Modules page's and Site Map's answer */
+  function legacyExpected(page, billing, who) {
+    var e = HUB.editorCtx(CAPS_BOX.OmegaCaps, billing, who), out = {};
+    var c = { packaged: false, modules: [], addons: (billing && billing.addons) || [], tierLevel: page.tierLevel, canOpen: function (k) { return page.open[k] === true; }, tool: function (k) { return Object.prototype.hasOwnProperty.call(page.open, k) ? { key: k } : null; } };
+    Object.keys(e || {}).forEach(function (k) { c[k] = e[k]; });
+    page.modules.forEach(function (m) { out[m.key] = HUB.moduleState(m, c); });
+    return out;
+  }
+  var LEGACY_PAGE = function () {
+    var open = {}; OMEGATools.all().forEach(function (t) { open[t.key] = isUnlockedHere(t); });
+    return { states: moduleStates(), open: open, tierLevel: WORKSPACE.tierLevel, modules: CAT.modules.map(function (m) { return { key: m.key, tools: m.tools || [], caps: m.caps || [] }; }) };
+  };
+  /* the one menu's card for a module: its state (the badge follows it) and its buttons */
+  var MENU_CARD = function (key) {
+    var d = document.getElementById('omega-package-menu'), c = d && d.querySelector('[data-module-card="' + key + '"]');
+    return { open: !!d, card: !!c, state: c ? c.getAttribute('data-state') : '', badge: c ? ((c.querySelector('.opm-badge') || {}).textContent || '') : '', buttons: c ? Array.prototype.map.call(c.querySelectorAll('.opm-act button'), function (b) { return b.textContent.trim(); }) : [], text: c ? c.innerText.replace(/\s+/g, ' ') : '' };
+  };
+  /* press a button on a module's card in the one menu, by its words */
+  async function menuPress(p, key, words) {
+    var h = await p.waitForFunction(function (a) { var c = document.querySelector('#omega-package-menu [data-module-card="' + a.key + '"]'); if (!c) return null; var b = Array.prototype.filter.call(c.querySelectorAll('.opm-act button'), function (x) { return x.textContent.trim() === a.words && !x.disabled; })[0]; return b || null; }, { key: key, words: words }, { timeout: 5000 }).catch(function () { return null; });
+    if (!h) return false; var el = h.asElement(); if (!el) return false; await el.click(); return true;
+  }
+  /* See module on a tool's card, on the classic home, until the menu answers */
+  async function seeModule(p, tool) {
+    for (var tries = 0; tries < 3 && !(await p.$('#omega-package-menu')); tries++) { await p.click('#market-grid .mkt-card[data-tool="' + tool + '"] button.mkt-act').catch(function () {}); await p.waitForSelector('#omega-package-menu', { timeout: 1500 }).catch(function () {}); }
+    return !!(await p.$('#omega-package-menu'));
   }
   await (async function () {
     var errs = [], navs = [], calls0 = apiCalls.length, ctx = await marketContext(lt);
     var p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
     p.on('framenavigated', function (f) { if (f === p.mainFrame()) navs.push(f.url().slice(base.length)); });
     await p.goto(base + '/marketplace.html?home=workspace', { waitUntil: 'domcontentloaded' });
-    var shown = await p.waitForFunction(function () { return document.querySelectorAll('#market-grid .mkt-card').length > 10 && !!document.querySelector('#market-grid .mkt-card[data-tool="gridatlas"] a.mkt-act'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
+    var shown = (await marketSettled(p)) && !!(await p.$('#market-grid .mkt-card[data-tool="gridatlas"] a.mkt-act'));
     ok('marketplace: a packaged workspace on the workspace home sees the tool catalogue, locked Grid Atlas among it', shown);
     var st = await p.evaluate(function () {
       function vis(sel) { var e = document.querySelector(sel); if (!e) return false; var r = e.getBoundingClientRect(); return getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden' && r.height > 0; }
@@ -864,7 +918,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('marketplace: every locked tool names the module that carries it (pill and "In <module>") and See module links to it on the Modules page', lockedN > 10 && real.filter(function (c) { return c.locked && !CARRIES[c.tool]; }).length === 0 && !bad.length, bad.slice(0, 3));
     var ga = st.cards.filter(function (c) { return c.tool === 'gridatlas'; })[0] || {}, ed = st.cards.filter(function (c) { return c.tool === 'editor'; })[0] || {};
     ok('marketplace: Grid Atlas reads In Grid Atlas · See module › and links /workspace#module-gridatlas', ga.pill === 'Grid Atlas' && ga.inLine === 'In Grid Atlas' && ga.act === 'See module ›' && ga.href === '/workspace#module-gridatlas', ga);
-    ok('marketplace: Site Map, in Lite, offers Open', !ed.locked && ed.act === 'Open' && ed.tag === 'A', ed);
+    /* an action tool starts a new project, and on the workspace home that is the workspace's own launch, never "/" (which sends a workspace-home visit on to the hub and stops there) */
+    var sb = st.cards.filter(function (c) { return c.tool === 'sandbox'; })[0] || {};
+    ok('marketplace: Site Map, in Lite, offers Open, and Open launches it on the workspace (/workspace#launch-editor); so does the Sandbox', !ed.locked && ed.act === 'Open' && ed.tag === 'A' && ed.href === '/workspace#launch-editor' && !sb.locked && sb.href === '/workspace#launch-sandbox', { editor: ed, sandbox: sb });
     await p.evaluate(function () { window.scrollTo(0, 900); }); await wait(250);
     var stick = await p.$eval('.mkt-tabbar', function (e) { return Math.round(e.getBoundingClientRect().top); });
     ok('marketplace: the category bar sticks under the workspace\'s 56px topbar', stick === 56, stick);
@@ -895,9 +951,10 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     /* the classic home has no Modules page: See module opens the one menu in place, and so does an old link */
     ctx = await marketContext(lt); p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
     await p.goto(base + '/marketplace.html?home=classic', { waitUntil: 'domcontentloaded' });
-    await p.waitForFunction(function () { return !!document.querySelector('#market-grid .mkt-card[data-tool="gridatlas"] button.mkt-act'); }, null, { timeout: 8000 }).catch(function () {});
-    var classic = await p.evaluate(function () { var c = document.querySelector('#market-grid .mkt-card[data-tool="gridatlas"]'), b = c && c.querySelector('.mkt-actions .mkt-act'); return { worn: document.body.classList.contains('ows-worn'), act: b ? b.tagName + ' ' + b.textContent.trim() : '', inLine: c ? ((c.querySelector('.mkt-in') || {}).textContent || '').trim() : '', links: document.querySelectorAll('#market-grid a[href^="/workspace"]').length }; });
-    ok('marketplace (classic home): the catalogue keeps its own chrome; a locked tool names its module and See module is a button, never a link to the workspace', !classic.worn && classic.act === 'BUTTON See module ›' && classic.inLine === 'In Grid Atlas' && !classic.links, classic);
+    var settledC = await marketSettled(p);
+    var classic = await p.evaluate(function () { var c = document.querySelector('#market-grid .mkt-card[data-tool="gridatlas"]'), b = c && c.querySelector('.mkt-actions .mkt-act'), ed = document.querySelector('#market-grid .mkt-card[data-tool="editor"] .mkt-actions a.mkt-act'); return { worn: document.body.classList.contains('ows-worn'), act: b ? b.tagName + ' ' + b.textContent.trim() : '', inLine: c ? ((c.querySelector('.mkt-in') || {}).textContent || '').trim() : '', links: document.querySelectorAll('#market-grid a[href^="/workspace"]').length, editorHref: ed ? ed.getAttribute('href') : '', caps: !!(window.OmegaCaps && OmegaCaps.editorCan), armed: !!(window.OmegaCaps && OmegaCaps.packageAccess()) }; });
+    ok('marketplace (classic home): the catalogue keeps its own chrome; a locked tool names its module and See module is a button, never a link to the workspace; Site Map\'s Open is the dashboard\'s "/", where it always started', settledC && !classic.worn && classic.act === 'BUTTON See module ›' && classic.inLine === 'In Grid Atlas' && !classic.links && classic.editorHref === '/', classic);
+    ok('marketplace: Site Map\'s capability ladder is on the page as a library and never armed (no package handed to OmegaCaps, so its ribbon guard cannot swallow See module)', classic.caps && !classic.armed, classic);
     await p.click('#market-grid .mkt-card[data-tool="gridatlas"] button.mkt-act'); await wait(500);
     var menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, card: !!(d && d.querySelector('[data-module-card="gridatlas"]')) }; });
     ok('marketplace (classic home): See module opens the one menu on Grid Atlas, in place', menu.open && menu.card, menu);
@@ -907,14 +964,77 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { path: location.pathname, open: !!d, card: !!(d && d.querySelector('[data-module-card="gridatlas"]')) }; });
     ok('marketplace (classic home): an old link /marketplace.html#gridatlas stays and opens the menu on it', menu.path === '/marketplace.html' && menu.open && menu.card, menu);
     await ctx.close();
+    /* THE RACE (2026-09-27 review): the entitlements land before the page's
+       own sign-in handler. The page keeps the runtime's merged workspace, or
+       every card is judged by no plan (every tool Open, no module named) on
+       a page that still believes it is packaged. */
+    ctx = await marketContext(lt, { lateMenu: 700 });
+    await ctx.addInitScript(function () { var v; Object.defineProperty(window, 'OMEGA_WORKSPACE', { configurable: true, get: function () { return v; }, set: function (x) { if (window.__entFirst === undefined) window.__entFirst = !!(window.OmegaTenant && OmegaTenant.workspace); v = x; } }); });
+    p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    await p.goto(base + '/marketplace.html?home=workspace', { waitUntil: 'domcontentloaded' });
+    var raced = await marketSettled(p), rc = await p.evaluate(MARKET_CARDS), rs = await p.evaluate(function () { return { first: window.__entFirst, same: !!(window.OmegaTenant && window.WORKSPACE === OmegaTenant.workspace), packaged: CAT.packaged }; });
+    var rga = rc.filter(function (c) { return c.tool === 'gridatlas'; })[0] || {}, rWrong = rc.filter(function (c) { return c.act !== 'Coming soon' && (lt.liteTools.indexOf(c.tool) >= 0) === c.locked; });
+    ok('marketplace (entitlements before the page\'s own sign-in): the page keeps the runtime\'s merged workspace; Lite\'s tools open, Grid Atlas stays locked and names its module', rs.first === true && raced && rs.same && rs.packaged && !rWrong.length && rga.act === 'See module ›' && rga.href === '/workspace#module-gridatlas', { state: rs, settled: raced, gridatlas: rga, wrong: rWrong.slice(0, 3).map(function (c) { return c.tool + ':' + c.act; }) });
+    await ctx.close();
     /* a legacy plan on the classic home: the same menu, in its legacy mode, on the module the public price list names */
-    PACKAGE_VIEW = null; ctx = await marketContext(ns); p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    PACKAGE_VIEW = null; STORE.optIns = {}; STORE.optOuts = {}; STORE.posts = [];
+    ctx = await marketContext(ns); p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
     await p.goto(base + '/marketplace.html?home=classic', { waitUntil: 'domcontentloaded' });
-    await p.waitForFunction(function () { return !!document.querySelector('#market-grid .mkt-card[data-tool="investment"] button.mkt-act'); }, null, { timeout: 8000 }).catch(function () {});
-    /* the price list repaints the cards when it lands: a click on the card it replaced is lost, so click until the menu answers */
-    for (var tries = 0; tries < 3 && !(await p.$('#omega-package-menu')); tries++) { await p.click('#market-grid .mkt-card[data-tool="investment"] button.mkt-act').catch(function () {}); await p.waitForSelector('#omega-package-menu', { timeout: 1500 }).catch(function () {}); }
-    menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, card: !!(d && d.querySelector('[data-module-card="finance"]')) }; });
-    ok('marketplace (classic home, legacy plan): See module on Site Investment Analysis opens the one menu on Investor & Finance', menu.open && menu.card, menu);
+    var settledL = await marketSettled(p);
+    /* what the menu is told a legacy plan holds is the ONE rule's answer, Site Map's half included (OmegaWorkspaceHub.editorCtx) */
+    var who = { email: ns.user.email, emailVerified: true, orgId: ns.org }, lp = await p.evaluate(LEGACY_PAGE), want = legacyExpected(lp, ns.docs['omega_orgs/' + ns.org + '/billing/current'], who);
+    var lDiff = Object.keys(want).filter(function (k) { return lp.states[k] !== want[k]; }).map(function (k) { return k + ':' + lp.states[k] + '≠' + want[k]; });
+    ok('marketplace (classic home, legacy Standard): the plan the menu is told is the Modules page\'s and Site Map\'s: Compute Partly included (Site Map shows compute only on Enterprise), Plan Sets and Site Intelligence not on the plan', settledL && lp.modules.length > 10 && !lDiff.length && lp.states.compute === 'part' && lp.states.plansets === 'ask' && lp.states.siteintel === 'ask', { settled: settledL, diff: lDiff, compute: lp.states.compute });
+    var opened = await seeModule(p, 'investment');
+    menu = await p.evaluate(MENU_CARD, 'finance');
+    ok('marketplace (classic home, legacy plan): See module on Site Investment Analysis opens the one menu on Investor & Finance', opened && menu.open && menu.card, menu);
+    await p.click('#opm-every').catch(function () {}); await p.waitForSelector('#omega-package-menu [data-module-card="compute"]', { timeout: 3000 }).catch(function () {});
+    var comp = await p.evaluate(MENU_CARD, 'compute');
+    ok('marketplace (classic home, legacy Standard): See every module shows Compute Partly included with Opt in, never On your plan with Opt out', comp.card && comp.state === 'part' && comp.badge === 'Partly included' && comp.buttons.indexOf('Opt out') < 0 && comp.buttons.indexOf('Opt in') >= 0, comp);
+    /* a legacy request is the page's plan from then on: See every module and the next open read Opt-in requested with Cancel request, and a withdrawal reads Opt in again */
+    await p.keyboard.press('Escape'); await p.waitForSelector('#omega-package-menu', { state: 'detached', timeout: 2000 }).catch(function () {});
+    await seeModule(p, 'investment');
+    var asked = (await menuPress(p, 'finance', 'Opt in')) && (await menuPress(p, 'finance', 'Request opt-in'));
+    await p.waitForFunction(function () { var c = document.querySelector('#omega-package-menu [data-module-card="finance"]'); return !!c && c.getAttribute('data-state') === 'requested'; }, null, { timeout: 4000 }).catch(function () {});
+    var fin = await p.evaluate(MENU_CARD, 'finance');
+    await p.click('#opm-every').catch(function () {}); await p.waitForSelector('#omega-package-menu [data-module-card="compute"]', { timeout: 3000 }).catch(function () {});
+    var finEvery = await p.evaluate(MENU_CARD, 'finance');
+    await p.keyboard.press('Escape'); await p.waitForSelector('#omega-package-menu', { state: 'detached', timeout: 2000 }).catch(function () {});
+    await seeModule(p, 'investment');
+    var finAgain = await p.evaluate(MENU_CARD, 'finance');
+    ok('marketplace (classic home, legacy plan): after Request opt-in, Investor & Finance reads Opt-in requested with Cancel request in the menu, on See every module and on the next open', asked && fin.state === 'requested' && finEvery.state === 'requested' && finAgain.state === 'requested' && finAgain.badge === 'Opt-in requested' && finAgain.buttons.join('|') === 'Cancel request', { asked: asked, now: fin.state, every: finEvery.state, again: finAgain });
+    var withdrawn = (await menuPress(p, 'finance', 'Cancel request')) && (await menuPress(p, 'finance', 'Cancel request'));
+    await p.waitForFunction(function () { var c = document.querySelector('#omega-package-menu [data-module-card="finance"]'); return !!c && c.getAttribute('data-state') === 'off'; }, null, { timeout: 4000 }).catch(function () {});
+    await p.keyboard.press('Escape'); await p.waitForSelector('#omega-package-menu', { state: 'detached', timeout: 2000 }).catch(function () {});
+    await seeModule(p, 'investment');
+    var finAfter = await p.evaluate(MENU_CARD, 'finance'), legacyPosts = STORE.posts.map(function (b) { return b.action + (b.dryRun ? ' (dry run)' : ''); });
+    ok('marketplace (classic home, legacy plan): Cancel request withdraws it, and the next open offers Opt in again; the page asked the server exactly opt-in (dry run), opt-in, withdraw-opt-in', withdrawn && finAfter.state === 'off' && finAfter.buttons.indexOf('Opt in') >= 0 && legacyPosts.join('|') === 'opt-in (dry run)|opt-in|withdraw-opt-in', { withdrawn: withdrawn, after: finAfter, posts: legacyPosts });
+    await ctx.close();
+    STORE.optIns = {}; STORE.optOuts = {}; STORE.posts = [];
+    /* a legacy Deluxe plan: Site Map prints plan sets and screens parcels on Deluxe, so the menu must not offer Plan Sets or Site Intelligence as an opt-in */
+    var dx = FX.northstar(HOST); Object.keys(dx.docs).forEach(function (k) { if (/^tenant_public\//.test(k) || k === 'omega_orgs/' + dx.org + '/billing/current') dx.docs[k].tier = 'deluxe'; });
+    ctx = await marketContext(dx); p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    await p.goto(base + '/marketplace.html?home=classic', { waitUntil: 'domcontentloaded' });
+    var settledD = await marketSettled(p), dp = await p.evaluate(LEGACY_PAGE), dWant = legacyExpected(dp, dx.docs['omega_orgs/' + dx.org + '/billing/current'], { email: dx.user.email, emailVerified: true, orgId: dx.org });
+    var dDiff = Object.keys(dWant).filter(function (k) { return dp.states[k] !== dWant[k]; }).map(function (k) { return k + ':' + dp.states[k] + '≠' + dWant[k]; });
+    await seeModule(p, 'investment'); await p.click('#opm-every').catch(function () {}); await p.waitForSelector('#omega-package-menu [data-module-card="plansets"]', { timeout: 3000 }).catch(function () {});
+    var dm = await p.evaluate(function (keys) { var o = {}; keys.forEach(function (k) { var c = document.querySelector('#omega-package-menu [data-module-card="' + k + '"]'); o[k] = c ? c.getAttribute('data-state') : ''; }); return o; }, ['plansets', 'siteintel', 'compute']);
+    ok('marketplace (classic home, legacy Deluxe): Plan Sets and Site Intelligence are On your plan and Compute is Partly included, as the Modules page and Site Map say', settledD && !dDiff.length && dp.states.plansets === 'held' && dp.states.siteintel === 'held' && dp.states.compute === 'part' && dm.plansets === 'on' && dm.siteintel === 'on' && dm.compute === 'part', { settled: settledD, diff: dDiff, menu: dm });
+    await ctx.close();
+    /* a lock that is not a module's says why, and never points at a module the Modules page calls Live */
+    var pd = FX.pending(HOST); ctx = await marketContext(pd); p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    await p.goto(base + '/marketplace.html?home=workspace', { waitUntil: 'domcontentloaded' });
+    var settledP = await marketSettled(p), pc = (await p.evaluate(MARKET_CARDS)).filter(function (c) { return c.act !== 'Coming soon'; });
+    var pBad = pc.filter(function (c) { return !(c.locked && !c.module && c.pill === 'Awaiting approval' && c.act === 'Opens when ClearSky approves ' + pd.name); }), pLite = await p.evaluate(function () { return document.querySelectorAll('#market-grid a[href="/workspace#module-lite"], #market-grid [data-module="lite"]').length; });
+    ok('marketplace (awaiting approval): every tool is locked and says it opens when ClearSky approves ' + pd.name + '; no card names a module, and none points at Lite', settledP && pc.length > 20 && !pBad.length && !pLite, { settled: settledP, bad: pBad.slice(0, 3), lite: pLite });
+    await ctx.close();
+    var cc = FX.northstar(HOST); cc.docs['omega_orgs/' + cc.org + '/billing/current'].toolAccess = ['editor', 'gridatlas'];
+    ctx = await marketContext(cc); p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    await p.goto(base + '/marketplace.html?home=workspace', { waitUntil: 'domcontentloaded' });
+    var settledA = await marketSettled(p), ac = await p.evaluate(MARKET_CARDS), aLite = await p.evaluate(function () { return document.querySelectorAll('#market-grid a[href="/workspace#module-lite"], #market-grid [data-module="lite"]').length; });
+    function aCard(k) { return ac.filter(function (c) { return c.tool === k; })[0] || {}; }
+    var aSb = aCard('sandbox'), aIc = aCard('interconnect');
+    ok('marketplace (a two-tool product, billing toolAccess [editor, gridatlas]): Site Map and Grid Atlas open; a Lite tool outside the product says so instead of pointing at Lite; a Grid Atlas tool outside it names Grid Atlas', settledA && !aCard('editor').locked && !aCard('gridatlas').locked && aSb.locked && !aSb.module && aSb.pill === 'Not in your workspace' && aSb.act === 'Not part of this workspace\'s product' && !aLite && aIc.locked && aIc.module === 'gridatlas' && aIc.href === '/workspace#module-gridatlas', { settled: settledA, sandbox: aSb, interconnect: aIc, lite: aLite });
     ok('marketplace: no uncaught errors and no /api/ route this check does not answer', !errs.length && !missing.length, errs.concat(missing));
     console.log(JSON.stringify({ scenario: 'marketplace', cards: st.cards.length, locked: lockedN, posts: STORE.posts.length }));
     await ctx.close();
@@ -945,7 +1065,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     }, opts.lagMs);
     var p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
     await p.goto(base + page + (opts.query !== undefined ? opts.query : '?home=workspace'), { waitUntil: 'domcontentloaded' }); await wait(opts.lagMs ? 4000 : 2500);
-    if (page === '/marketplace.html') await p.waitForFunction(function () { return document.querySelectorAll('#market-grid .mkt-card').length > 10 && !!document.querySelector('#market-grid .mkt-card.locked a.mkt-act'); }, null, { timeout: 5000 }).catch(function () {});
+    var settledF = page === '/marketplace.html' ? await marketSettled(p, 5000) : true;
     var out = await p.evaluate(function () {
       var items = Array.prototype.filter.call(document.querySelectorAll('#side-nav .sn-item'), function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return (a.querySelector('span') || a).textContent.trim() + (a.classList.contains('active') ? '*' : ''); });
       var home = document.querySelector('a[data-sn="dashboard"]');
@@ -963,7 +1083,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
         /* a legacy (unpackaged) Standard tenant on the workspace home: the tool catalogue in the workspace chrome, no store; a locked tool names the module that carries it (the public price list's) and links to it on the Modules page, a tool no module carries says the plan, a live one opens */
         var real = out.cards.filter(function (c) { return c.act !== 'Coming soon'; }), live = real.filter(function (c) { return !c.locked; }), locked = real.filter(function (c) { return c.locked; });
         var byPlan = locked.filter(function (c) { return !CARRIES[c.tool]; }), inv = out.cards.filter(function (c) { return c.tool === 'investment'; })[0] || {};
-        ok(name + ': a legacy tenant sees the tool catalogue in the workspace chrome: no store, the category bar and every tool', !out.store && out.catalogue && out.worn && out.cards.length > 30 && !/\bSubscribe\b|Ask ClearSky/.test(out.text) && !out.mailto, { store: out.store, catalogue: out.catalogue, worn: out.worn, cards: out.cards.length, mailto: out.mailto });
+        ok(name + ': a legacy tenant sees the tool catalogue in the workspace chrome: no store, the category bar and every tool', settledF && !out.store && out.catalogue && out.worn && out.cards.length > 30 && !/\bSubscribe\b|Ask ClearSky/.test(out.text) && !out.mailto, { settled: settledF, store: out.store, catalogue: out.catalogue, worn: out.worn, cards: out.cards.length, mailto: out.mailto });
+        var edF = out.cards.filter(function (c) { return c.tool === 'editor'; })[0] || {}, sbF = out.cards.filter(function (c) { return c.tool === 'sandbox'; })[0] || {};
+        ok(name + ': Site Map\'s and the Sandbox\'s Open start them on the workspace (/workspace#launch-<tool>), not at "/", which only sends a workspace-home visit back to the hub', edF.act === 'Open' && edF.href === '/workspace#launch-editor' && sbF.act === 'Open' && sbF.href === '/workspace#launch-sandbox', { editor: edF, sandbox: sbF });
         ok(name + ': every locked tool names the module that carries it and links to it on the Modules page (Site Investment Analysis → /workspace#module-finance); a tool no module carries names its plan; the live ones open', locked.length > byPlan.length && !badLocked(real).length && inv.href === '/workspace#module-finance' && inv.inLine === 'In ' + M.get('finance').name && byPlan.every(function (c) { return /^Included with /.test(c.act); }) && live.length > 10 && live.every(function (c) { return c.act === 'Open'; }), { bad: badLocked(real).slice(0, 3), investment: inv, byPlan: byPlan.map(function (c) { return c.tool + ':' + c.act; }) });
         ok(name + ': the head reads Marketplace', out.h1 === 'Marketplace', out.h1);
         await p.setViewportSize({ width: 390, height: 844 }); await wait(300);

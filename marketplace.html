@@ -937,6 +937,12 @@ window._omegaReady = function(){
 <script>if (window.OmegaWorkspaceShell) OmegaWorkspaceShell.theme();</script>
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-tools.js?v=9"></script>
+<!-- Site Map's capability ladder, as a LIBRARY: a legacy plan holds a module
+     only when Site Map grants its capabilities on the tier the editor runs,
+     and OmegaWorkspaceHub.editorCtx reads that ladder here exactly as the
+     Modules page and the editor do. Nothing applies it to this page: the
+     runtime hands OmegaCaps a package only where Site Map's #ribbon is. -->
+<script src="/omega-caps.js"></script>
 <!-- The ONE rule for whether a workspace holds a module (the Modules page
      reads it too), and the ONE menu. On the classic home, which has no
      Modules page, a locked tool opens that menu on its module in place. -->
@@ -1066,6 +1072,17 @@ function onAuth(user, tries){
     el('auth-screen').style.display='flex'; el('app').style.display='none';
     return;
   }
+  /* ── THE ENTITLEMENTS MAY HAVE LANDED FIRST ────────────────────────────
+     omega-tenant.js listens for the sign-in before this page does, and on a
+     host that pins a tenant it merges the billing, the package and the
+     allowlist onto config's tenant the moment they are read. When that
+     beats this handler, catalogueMode() has already adopted the merged
+     object; replacing it with the bare one resolveWorkspace() builds left
+     every card judged by no plan at all (every tool Open, no module named)
+     while the page still believed it was packaged. Keep the one object the
+     runtime merged (OmegaTenant.workspace is null until it has). */
+  var merged = window.OmegaTenant && OmegaTenant.workspace;
+  if (merged && merged.orgId === ws.orgId) ws = merged;
   currentUser = user; WORKSPACE = ws; currentOrg = ws.orgId;
   window.OMEGA_WORKSPACE = ws; window.CS_BRAND = ws.clientName;
   el('auth-screen').style.display='none'; el('app').style.display='flex';
@@ -1137,7 +1154,7 @@ function loadCatalog(ws){
   (function wait(){
     if (typeof OMEGATools==='undefined'){ if(++tries<60){ setTimeout(wait,100); } else { setHTML('market-grid','<div class="mkt-empty">Catalog unavailable. Check omega-tools.js.</div>'); } return; }
     var afterHydrate = function(){
-      loadPins(ws.orgId, function(keys){ _PINNED = keys||[]; paintFilters(); paintMarket(); });
+      loadPins(ws.orgId, function(keys){ _PINNED = keys||[]; CAT.pins = true; paintFilters(); paintMarket(); });
     };
     if (typeof OMEGATools.hydrate==='function'){ OMEGATools.hydrate(db, afterHydrate); }
     else { afterHydrate(); }
@@ -1231,6 +1248,9 @@ function setCat(c){ MKT_CAT=c; paintFilters(); paintMarket(); }
 function paintMarket(){
   var grid=el('market-grid'); if(!grid) return;
   var tools=qualifying();
+  /* what a plan billed outside the engine holds, once per paint: a locked
+     card names a module only when holding it would open the tool (lockOf) */
+  CAT.states = CAT.packaged ? null : moduleStates();
   var q=''; var sb=el('mkt-search'); if(sb&&sb.value) q=sb.value.toLowerCase();
   function match(t){ if(!q) return true;
     return (t.name&&t.name.toLowerCase().indexOf(q)>=0) || (t.desc&&t.desc.toLowerCase().indexOf(q)>=0) || (catLabel(t.category).toLowerCase().indexOf(q)>=0); }
@@ -1263,22 +1283,47 @@ function coverGradient(cat){
 /* A tool card. A LOCKED one names the module that carries it (CAT.byTool,
    the server's catalogue): "In <module>", then its one action, See module,
    which is that module's card on the workspace's Modules page, or on the
-   classic home the one menu in place (moduleAction). A live tool opens,
+   classic home the one menu in place (moduleAction) — unless the lock is
+   not a module's (lockOf), when it says why instead. A live tool opens,
    and pins to the dashboard (classic) or to All tools (the workspace). */
 var LOCK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+/* WHY A TOOL IS LOCKED, said once. A module is named only when holding it
+   would open the tool: never while the workspace waits on approval (every
+   tool is locked until ClearSky approves it), never Lite (always held) and
+   never a module the workspace already holds, where the lock is the
+   workspace's product (an allowlist such as Site Map + Grid Atlas) and a
+   link to a module the Modules page calls Live would explain nothing.
+   Answers { mod } or { why: 'pending' | 'product' | 'notsold' | 'plan' }. */
+function moduleHeld(m){
+  var ws = WORKSPACE || {}, pa = ws.packageAccess;
+  if (!m || m.key === 'lite') return true;
+  if (CAT.packaged) return (((pa && pa.modules) || ws.modules || []).indexOf(m.key) >= 0);
+  return !!(CAT.states && CAT.states[m.key] === 'held');
+}
+function lockOf(t){
+  var ws = WORKSPACE || {}, m = CAT.byTool[t.key] || null;
+  if (ws.pendingApproval) return { why:'pending' };
+  if (m && !moduleHeld(m)) return { mod:m };
+  if (m || (!CAT.packaged && Array.isArray(ws.toolAccess))) return { why:'product' };
+  return { why: CAT.packaged ? 'notsold' : 'plan' };
+}
 function card(t){
-  var req=isRequired(t), pinned=isPinned(t.key), home=workspaceHome(WORKSPACE);
+  var ws=WORKSPACE||{}, req=isRequired(t), pinned=isPinned(t.key), home=workspaceHome(WORKSPACE);
   var open;
   if (t.soon) open='onclick="pmSoon(&quot;'+esc(t.name)+'&quot;)"';
-  else if (t.action) open='href="/"';   // action tools live on the portal
+  /* an action tool (Site Map, the Sandbox) starts a new project, and the
+     home owns that flow: on the workspace its own launch (#launch-<key>,
+     the same gate, then the new-project dialog); on the classic home the
+     dashboard at "/", where it always ran */
+  else if (t.action) open = home ? 'href="/workspace#launch-'+esc(encodeURIComponent(t.key))+'"' : 'href="/"';
   else open='href="'+esc(hrefFor(t))+'"';
 
   var locked = !t.soon && !isUnlockedHere(t);
-  var mod = locked ? (CAT.byTool[t.key] || null) : null;
+  var lock = locked ? lockOf(t) : {}, mod = lock.mod || null, why = lock.why || '';
   var pill='';
   if (t.soon) pill='<span class="mkt-pill soon">Soon</span>';
   else if (mod) pill='<span class="mkt-pill lock">'+LOCK_ICON+esc(mod.name)+'</span>';
-  else if (locked) pill='<span class="mkt-pill soon">'+esc(CAT.packaged ? 'Not sold' : planLabel(t)+' plan')+'</span>';
+  else if (locked) pill='<span class="mkt-pill soon">'+esc(why === 'pending' ? 'Awaiting approval' : why === 'product' ? 'Not in your workspace' : why === 'notsold' ? 'Not sold' : planLabel(t)+' plan')+'</span>';
   else if (req) pill='<span class="mkt-pill inc">Included</span>';
   else if (pinned) pill='<span class="mkt-pill added">'+(home ? 'Pinned' : 'Added')+'</span>';
   else if (t.badge==='invest') pill='<span class="mkt-pill invest">Investors</span>';
@@ -1287,8 +1332,9 @@ function card(t){
   var action;
   if (t.soon){ action='<div class="mkt-act disabled">Coming soon</div>'; }
   else if (mod){ action=moduleAction(mod); }
-  else if (locked){ action = CAT.packaged
-      ? '<div class="mkt-act disabled" title="Not part of any module">Not sold separately</div>'
+  else if (locked){ action = why === 'pending' ? '<div class="mkt-act disabled">Opens when ClearSky approves '+esc(ws.clientName || 'your workspace')+'</div>'
+      : why === 'product' ? '<div class="mkt-act disabled">Not part of this workspace\'s product</div>'
+      : why === 'notsold' ? '<div class="mkt-act disabled" title="Not part of any module">Not sold separately</div>'
       : '<div class="mkt-act disabled">Included with '+esc(planLabel(t))+'</div>'; }
   else {
     var pinWord = pinned ? (home ? 'Unpin' : 'Remove') : (home ? 'Pin' : '+ Add');
@@ -1300,7 +1346,7 @@ function card(t){
   var stroke = t.soon ? 'rgba(255,255,255,.55)' : '#ffffff';
   var cover = t.soon ? 'linear-gradient(135deg,#5B6672 0%,#8A93A0 100%)' : locked ? 'linear-gradient(135deg,#4A5D78 0%,#93A6BD 100%)' : coverGradient(t.category);
   var ver = t.version || '1.0.0';
-  var status = t.soon ? 'Soon' : locked ? (CAT.packaged ? 'Not sold' : 'Locked') : req ? 'Included' : pinned ? (home ? 'Pinned' : 'On dashboard') : 'Available';
+  var status = t.soon ? 'Soon' : locked ? (why === 'pending' ? 'Awaiting approval' : why === 'notsold' ? 'Not sold' : 'Locked') : req ? 'Included' : pinned ? (home ? 'Pinned' : 'On dashboard') : 'Available';
   var meta = mod ? '<div class="mkt-card-meta mkt-in">'+LOCK_ICON+'<span>In <b>'+esc(mod.name)+'</b></span></div>'
     : '<div class="mkt-card-meta"><span>Version: <b>'+esc(ver)+'</b></span><span>'+esc(status)+'</span></div>';
 
@@ -1338,7 +1384,9 @@ function pmSoon(name){ toast('<b>'+esc(name)+'</b> is coming online soon.'); }
    the Modules page. Showing a module is never access: the tools open when
    the server says so. ES5.
    ═════════════════════════════════════════════════════════════════ */
-var CAT = { packaged:false, notSold:{}, modules:[], byKey:{}, byTool:{}, asked:false, opened:'', who:'' };
+/* states: what a legacy plan holds, per paint (moduleStates); pins: the
+   pin store has answered, so the cards are painted with the pins */
+var CAT = { packaged:false, notSold:{}, modules:[], byKey:{}, byTool:{}, asked:false, opened:'', who:'', states:null, pins:false };
 function workspaceHome(ws){ return !!(window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace && OmegaWorkspaceShell.wantsWorkspace(ws)); }
 function planNameOf(ws){
   ws = ws || WORKSPACE || {}; var pa = ws.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {};
@@ -1409,12 +1457,20 @@ function moduleAction(m){
   return '<div class="mkt-act disabled">Ask your administrator</div>';
 }
 /* what each module is to a plan billed outside the engine (held · part ·
-   ask), by the ONE rule the Modules page reads */
+   ask), by the ONE rule the Modules page reads: its tools open AND Site Map
+   grants its capabilities on the tier the editor runs. That second half is
+   OmegaWorkspaceHub.editorCtx, the one mirror of OmegaCaps.resolve (billed
+   tier capped by capTier, add-on and JV grants, a verified ClearSky
+   address with no record runs 'internal'), so Compute is Partly included
+   on Standard here as it is on the Modules page and in Site Map. */
 function moduleStates(){
   var ws = WORKSPACE || {}, H = window.OmegaWorkspaceHub, out = {};
   var ctx = { packaged:false, modules: ws.modules || [], addons: ws.addons || [], tierLevel: ws.tierLevel,
-    canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && isUnlockedHere(t); },
+    canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && !ws.pendingApproval && isUnlockedHere(t); },
     tool: function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; } };
+  var bl = (window.OmegaTenant && OmegaTenant.billing) || null;   // billing/current, or null when there is no record
+  var e = H && H.editorCtx ? H.editorCtx(window.OmegaCaps, bl, { email: (currentUser && currentUser.email) || '', emailVerified: !!(currentUser && currentUser.emailVerified === true), orgId: ws.orgId }) : null;
+  if (e){ ctx.editorCan = e.editorCan; ctx.ungated = e.ungated; ctx.editorTier = e.tier; }
   CAT.modules.forEach(function(m){ out[m.key] = H && H.moduleState ? H.moduleState(m, ctx) : 'ask'; });
   return out;
 }
@@ -1437,10 +1493,24 @@ function openModule(key){
   if (M.open(key, opts) === false) toast('The module menu did not load. Reload the page.');
 }
 /* after a change in the menu: a packaged workspace asks the server for its
-   package again (the entitlements re-fire and repaint the cards); a legacy
-   request switches nothing on, so the cards stay as they are */
-function moduleChanged(){
-  if (CAT.packaged && window.OmegaTenant && OmegaTenant.refreshPackage){ try { OmegaTenant.refreshPackage(); } catch(e){} }
+   package again (the entitlements re-fire and repaint the cards). A legacy
+   request switches nothing on, so the cards stay as they are, but the
+   request itself is the page's plan now: the server answers with the
+   requests as stored and they are merged onto the billing record the menu
+   is handed (as the workspace's billingChanged does), so the next open,
+   and See every module, read Opt-in requested or Opting out with Cancel
+   request instead of offering again what the server would refuse. */
+function moduleChanged(r){
+  if (CAT.packaged){ if (window.OmegaTenant && OmegaTenant.refreshPackage){ try { OmegaTenant.refreshPackage(); } catch(e){} } return; }
+  var bl = window.OmegaTenant && OmegaTenant.billing;
+  if (!bl || typeof bl !== 'object' || !r) return;
+  ['optIns', 'optOuts'].forEach(function(f){
+    if (!r[f] || typeof r[f] !== 'object') return;
+    var to = {}, was = bl[f] || {};
+    Object.keys(was).forEach(function(k){ to[k] = was[k]; });
+    Object.keys(r[f]).forEach(function(k){ to[k] = r[f][k]; });
+    try { bl[f] = to; } catch(e){}
+  });
 }
 /* OLD STORE LINKS. /marketplace.html#<module> and #plans were the store's;
    they live on the Modules page now. The classic home has no Modules page,
