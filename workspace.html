@@ -63,20 +63,18 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .eyebrow{font:500 11px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
 .num{font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 .sec{display:flex;flex-direction:column;gap:12px}
-/* one view at a time (2026-09-27): the home is the hub and Today; All tools, In flight and Around you are each their own page, reached from the rail, the tabs or the hub — never a scroll */
-#content[data-view] .sec,#content[data-view] .hero{display:none}#content[data-view="home"] .hero{display:grid}#content[data-view="home"] #mymods,#content[data-view="home"] #flight,#content[data-view="home"] #team{display:flex}#content[data-view="home"] .back{display:none}#content[data-view="tools"] #tools,#content[data-view="modules"] #modules,#content[data-view="flight"] #flight,#content[data-view="team"] #team,#content[data-view="billing"] #billing{display:flex}
-/* the Modules page is the menu people buy from: a shelf is a heading with what the shelf is for; a card is the whole story of one module — what it is for, what it does, what is inside, its allowance and what it needs, then the price and the state */
-.mods{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}.mods h3{grid-column:1/-1;margin:14px 0 0;font:600 15px Poppins,"DM Sans",sans-serif;color:var(--ows-ink);display:flex;flex-direction:column;gap:2px}.mods h3:first-child{margin-top:0}.mods h3 small{font:400 12.5px "DM Sans",sans-serif;color:var(--ows-ink2)}
+/* one view at a time (2026-09-27): the home is the hub and Today; All tools, Modules, In flight and Around you are each their own page, reached from the rail, the tabs or the hub — never a scroll. The module cards live on Modules only (Tommy, 2026-09-27: "i dont want them to be taking up so much dashboard space") */
+#content[data-view] .sec,#content[data-view] .hero{display:none}#content[data-view="home"] .hero{display:grid}#content[data-view="home"] #flight,#content[data-view="home"] #team{display:flex}#content[data-view="home"] .back{display:none}#content[data-view="tools"] #tools,#content[data-view="modules"] #modules,#content[data-view="flight"] #flight,#content[data-view="team"] #team,#content[data-view="billing"] #billing{display:flex}
+/* the Modules page: the compact cards (Tommy, 2026-09-27: "i love the way the modules are"), Your modules then the rest to add on one grid; a group is a heading with what it means. EVERY WORD FITS ITS CARD ("make sure all the words fit in their space"): the name wraps and the price or shelf drops under it before either is squeezed, a chip wraps inside the card, the note wraps beside or above its buttons; check:workspace measures every card at desktop and phone widths */
+.mods{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}.mods h3{grid-column:1/-1;margin:14px 0 0;font:600 15px Poppins,"DM Sans",sans-serif;color:var(--ows-ink);display:flex;flex-direction:column;gap:2px}.mods h3:first-child{margin-top:0}.mods h3 small{font:400 12.5px "DM Sans",sans-serif;color:var(--ows-ink2);line-height:1.45}
 .mod{display:flex;flex-direction:column;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);overflow:hidden;position:relative;min-width:0}.mod.off{border-style:dashed;background:rgba(255,255,255,.6)}
-.mod .cv{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;color:#fff;flex:none}.mod .cv .ltr{font:700 20px Poppins,"DM Sans",sans-serif;opacity:.92}
+.mod .cv{height:54px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px;color:#fff;flex:none}.mod .cv .ltr{font:700 20px Poppins,"DM Sans",sans-serif;opacity:.92}
 .mod .st{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;white-space:nowrap}.mod .st.live{background:var(--ows-green-soft);color:var(--ows-green)}.mod .st.part{background:var(--ows-amber-soft);color:var(--ows-amber)}
-.mod .bd{display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px;flex:1}
-.mod .nm{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.mod .nm b{font:600 15px "DM Sans",sans-serif;padding:0}.mod .price{font:500 14px "DM Mono",ui-monospace,monospace;color:var(--ows-ink);white-space:nowrap}
-.mod .blurb{margin:0;font-size:12.5px;color:var(--ows-ink2);line-height:1.45}
-.mod .feat{margin:0;padding-left:16px;font-size:12.5px;line-height:1.55;color:var(--ows-ink)}
-.mod .inside{font-size:12px;color:var(--ows-ink2);line-height:1.5}.mod .inside b{color:var(--ows-ink);font-weight:600}
-.mod .meta{display:flex;gap:6px;flex-wrap:wrap}.mods.compact .mod .blurb,.mods.compact .mod .inside{display:none}.mods.compact .mod .chips{display:flex;gap:6px;flex-wrap:wrap}.mods.compact .mod .chips .ows-chip{font-size:11.5px}.mods.compact .mod.off .chips .ows-chip{opacity:.6}
-.mod .row{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--ows-line)}.mod .row .note{font-size:12px;color:var(--ows-ink2);line-height:1.4}.mod .ows-pill{flex:none}
+.mod .bd{display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px;flex:1;min-width:0}
+.mod .nm{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 10px}.mod .nm b{font:600 15px "DM Sans",sans-serif;padding:0;min-width:0;overflow-wrap:anywhere}.mod .price{margin-left:auto;font:500 14px "DM Mono",ui-monospace,monospace;color:var(--ows-ink);white-space:nowrap}
+.mod .feat{margin:0;padding-left:16px;font-size:12.5px;line-height:1.55;color:var(--ows-ink);overflow-wrap:anywhere}
+.mod .chips{display:flex;gap:6px;flex-wrap:wrap;min-width:0}.mod .chips .ows-chip{font-size:11.5px;white-space:normal;max-width:100%;overflow-wrap:anywhere;line-height:1.35}.mod.off .chips .ows-chip{opacity:.6}
+.mod .row{margin-top:auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--ows-line)}.mod .row .note{flex:1 1 150px;min-width:0;font-size:12px;color:var(--ows-ink2);line-height:1.4}.mod .row .acts{display:flex;flex-wrap:wrap;gap:6px}.mod .ows-pill{flex:none}
 #modules-plan{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;font-size:13px}#modules-plan .ows-pill{margin-left:auto}
 @media (max-width:560px){.mods{grid-template-columns:1fr;gap:10px}.mod .cv{height:44px}.mod .bd{padding:10px 12px 12px}}
 .sec .back{align-self:flex-start;color:var(--ows-ink2);font-size:13px;text-decoration:none}.sec .back:hover{color:var(--ows-teal-d)}
@@ -173,10 +171,6 @@ body.refused #refused{display:block}body.refused #content{display:none}
         <section class="hero">
           <div id="hub"></div>
           <div class="today" id="today"></div>
-        </section>
-        <section class="sec" id="mymods">
-          <div class="hd"><div><h2>Your modules</h2><div class="sub" id="mymods-sub">What you hold is Live; anything else is one click to add.</div></div><a class="ows-pill ghost" href="/workspace#modules" data-go="modules">All modules ›</a></div>
-          <div id="mymods-body"></div>
         </section>
         <section class="sec" id="tools">
           <a class="back" href="/workspace">‹ Home</a>
@@ -509,21 +503,24 @@ function renderToday() {
   }); });
 }
 /* ── Modules: the Ladder as a page (Tommy, 2026-09-27) ──────────────────
-   One card per module of the catalog, in shelf order, for EVERY workspace
-   ("they should have all the modules here, but if they are used or given
-   it shows that"). A packaged workspace reads its own projection: held
-   ones Live, bought-not-on ones named, the rest with the server's price
-   (/api/package-catalog, once) and + Add, which opens the ONE menu
-   (omega-package-menu.js) on that module; a change re-asks the server.
-   A legacy workspace reads the PUBLIC price list (/api/offerings, once)
-   and every module is judged by OmegaWorkspaceHub.moduleState, the rule
-   the marketplace store shares: Live when the tier holds it, Partly with
-   the count, else the price and Ask, which is the store on that module.
-   Nothing here is a second list or a price. */
+   One card per module of the catalog, for EVERY workspace ("they should
+   have all the modules here, but if they are used or given it shows
+   that"), in the compact cards that used to sit on the home ("i love the
+   way the modules are … let them live in their own side page"): Your
+   modules first (Live, or paid for and waiting on the invoice), then the
+   rest to add, each group in shelf order on one grid so a shelf of one
+   never leaves a row empty. A packaged workspace reads its own
+   projection: held ones Live, bought-not-on ones named, the rest with the
+   server's price (/api/package-catalog, once) and Opt in, which opens the
+   ONE menu (omega-package-menu.js) on that module; a change re-asks the
+   server. A legacy workspace reads the PUBLIC price list (/api/offerings,
+   once) and every module is judged by OmegaWorkspaceHub.moduleState, the
+   rule the marketplace store shares: Live when the tier holds it, Partly
+   with the count, else the price and Opt in. Nothing here is a second list
+   or a price. */
 var MOD_SHELF = { floor: 'Included in every plan', addon: 'Add-ons', standard: 'Standard shelf', premium: 'Premium shelf', deliverable: 'Deliverables', platform: 'Omega Logic' }, MOD_ORDER = ['floor', 'addon', 'standard', 'premium', 'deliverable', 'platform'];
-var MOD_SHELF_SUB = { floor: 'The floor every package stands on.', addon: 'Small and specific: one thing, added to any plan.', standard: 'The working tools of a site: sizing, estimating, rebates. Metered where they produce a deliverable.', premium: 'The deeper work: plan sets, intelligence, engineering, finance, compute, operations, your own storefront.', deliverable: 'Work product you order by the piece: a matrix, a site study.', platform: 'Omega Logic by department. Each part is its own opt-in and needs Office.' };
 var MOD_COVER = { floor: 'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)', addon: 'linear-gradient(135deg,#053A45 0%,#2A8CA3 100%)', standard: 'linear-gradient(135deg,#0B2F52 0%,#1B4F8A 100%)', premium: 'linear-gradient(135deg,#243B53 0%,#3E6E8E 100%)', deliverable: 'linear-gradient(135deg,#16202B 0%,#00807C 100%)', platform: 'linear-gradient(135deg,#17293A 0%,#0C1824 100%)' };
-var MOD_PRICES = null, MOD_CATALOG = null, MOD_ASKED = false, MOD_STARTERS = null, MOD_LABELS = null;
+var MOD_PRICES = null, MOD_CATALOG = null, MOD_ASKED = false;
 function askModules(packaged) {
   if (packaged) return (window.OmegaPackageMenu ? OmegaPackageMenu.api('/api/package-catalog') : Promise.reject(new Error('no menu')));
   return new Promise(function (res, rej) {
@@ -531,91 +528,52 @@ function askModules(packaged) {
     catch (e) { rej(e); }
   });
 }
-/* which starter packages carry a module: "Popular with EV installers" */
-function popularWith(key) {
-  if (!MOD_STARTERS || !MOD_LABELS) return [];
-  return Object.keys(MOD_STARTERS).filter(function (k) { return (MOD_STARTERS[k] || []).indexOf(key) >= 0 && MOD_LABELS[k]; }).map(function (k) { return MOD_LABELS[k]; });
-}
 function renderModules() {
   var b = byId('modules-body'), strip = byId('modules-plan'), pa = WS.packageAccess, packaged = !!(pa && pa.packaged && Array.isArray(pa.catalog) && pa.catalog.length);
-  if (!MOD_ASKED) { MOD_ASKED = true; askModules(packaged).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay || m.monthlyDisplay; }); MOD_STARTERS = j.starters || null; MOD_LABELS = j.starterLabels || null; renderModules(); }, function () { MOD_CATALOG = []; renderModules(); }); }
+  if (!MOD_ASKED) { MOD_ASKED = true; askModules(packaged).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay || m.monthlyDisplay; }); renderModules(); }, function () { MOD_CATALOG = []; renderModules(); }); }
   if (!packaged) {
     if (!MOD_CATALOG) { b.innerHTML = '<div class="empty">Loading the catalog…</div>'; return; }
     if (!MOD_CATALOG.length) { b.innerHTML = '<div class="empty">The price list is unavailable right now. The <a href="/marketplace.html">Marketplace</a> has every module; try again later.</div>'; return; }
   }
   var ctx = hubCtx(), bl = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}, byKey = {};
   var bought = bl.subscription && Array.isArray(bl.subscription.modules) ? bl.subscription.modules : [];
-  var cat = (packaged ? pa.catalog : MOD_CATALOG).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), h = '', shelf = '', heldN = 0;
+  var cat = (packaged ? pa.catalog : MOD_CATALOG).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), mine = [], rest = [], heldN = 0;
   (MOD_CATALOG || []).forEach(function (m) { byKey[m.key] = m; });
-  cat.forEach(function (m) {
-    var full = byKey[m.key] || m;
-    if (m.shelf !== shelf) { shelf = m.shelf; h += '<h3>' + esc(MOD_SHELF[shelf] || shelf) + (MOD_SHELF_SUB[shelf] ? '<small>' + esc(MOD_SHELF_SUB[shelf]) + '</small>' : '') + '</h3>'; }
-    var st = HUB.moduleState(m, ctx), on = st === 'held', paid = !on && bought.indexOf(m.key) >= 0, price = (MOD_PRICES && MOD_PRICES[m.key]) || m.priceDisplay || '';
+  cat.forEach(function (m) { var on = HUB.moduleState(m, ctx) === 'held'; if (on) heldN++; (on || bought.indexOf(m.key) >= 0 ? mine : rest).push(m); });
+  function card(m) {
+    var full = byKey[m.key] || m, st = HUB.moduleState(m, ctx), on = st === 'held', paid = !on && bought.indexOf(m.key) >= 0, price = (MOD_PRICES && MOD_PRICES[m.key]) || m.priceDisplay || '';
+    /* a legacy plan's add-on waiting for its QuickBooks payment (Add to plan: api/_lib/addons.js) */
     var wait = !packaged && !on ? addOnWaiting(m.key) : null;
     var req = !packaged && !on && !wait && bl.optIns && bl.optIns[m.key] && bl.optIns[m.key].status !== 'declined' && bl.optIns[m.key].status !== 'activated' ? bl.optIns[m.key] : null;
-    if (on) heldN++;
     var name = m.shelf === 'platform' ? 'Omega Logic · ' + m.name : m.name;
     var tools = (m.tools || []).map(function (k) { return tool(k); }).filter(function (t) { return !!t; });
-    var chips = '';
-    if (m.usageDisplay || full.usageDisplay) chips += '<span class="ows-chip">' + esc(m.usageDisplay || full.usageDisplay) + '</span>';
-    if ((m.requires || full.requires || []).indexOf('logic-office') >= 0) chips += '<span class="ows-chip">Needs Office</span>';
-    if (m.key === 'lite') chips += '<span class="ows-chip">In every package</span>';
-    if (m.beta && m.beta.length) chips += '<span class="ows-chip">Beta: ' + esc(m.beta.join(', ')) + '</span>';
-    if (m.coverage) chips += '<span class="ows-chip">' + esc(m.coverage) + '</span>';
-    var pop = popularWith(m.key); if (pop.length) chips += '<span class="ows-chip">Popular with ' + esc(pop.slice(0, 2).join(' and ')) + '</span>';
-    var state = on ? '<span class="st live">● Live</span>' : paid ? '<span class="st">Paid for</span>' : wait ? '<span class="st">Waiting for payment</span>' : req ? '<span class="st">Requested</span>' : st === 'part' ? '<span class="st part">Partly on your plan</span>' : '<span class="st">' + (packaged ? 'Add to your plan' : 'Not on your plan') + '</span>';
-    h += '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : wait ? 'waiting' : req ? 'requested' : st === 'part' ? 'part' : '0') + '">';
-    h += '<div class="cv" style="background:' + (MOD_COVER[m.shelf] || MOD_COVER.floor) + '"><span class="ltr">' + esc(m.name.slice(0, 1)) + '</span>' + state + '</div>';
-    h += '<div class="bd"><div class="nm"><b>' + esc(name) + '</b><span class="price">' + esc(price || 'Price on the menu') + '</span></div>';
-    if (m.blurb || full.blurb) h += '<p class="blurb">' + esc(m.blurb || full.blurb) + '</p>';
-    var feats = m.features || full.features || [];
-    if (feats.length) h += '<ul class="feat">' + feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>';
-    if (tools.length) h += '<div class="inside"><b>Inside:</b> ' + tools.map(function (t) { return esc(t.name); }).join(' · ') + '</div>';
-    else if (m.shelf !== 'platform') h += '<div class="inside"><b>Inside:</b> capabilities of Site Map, the editor</div>';
-    if (chips) h += '<div class="meta">' + chips + '</div>';
+    var state = on ? '<span class="st live">● Live</span>' : paid ? '<span class="st">Paid for</span>' : wait ? '<span class="st">Waiting for payment</span>' : req ? '<span class="st">Requested</span>' : st === 'part' ? '<span class="st part">Partly on your plan</span>' : '<span class="st">Not in your plan</span>';
+    var needs = '';
+    if (!on) {
+      if (m.usageDisplay || full.usageDisplay) needs += '<span class="ows-chip">' + esc(m.usageDisplay || full.usageDisplay) + '</span>';
+      if ((m.requires || full.requires || []).indexOf('logic-office') >= 0) needs += '<span class="ows-chip">Needs Office</span>';
+      if (m.beta && m.beta.length) needs += '<span class="ows-chip">Beta: ' + esc(m.beta.join(', ')) + '</span>';
+    }
     var mt = st === 'part' ? HUB.moduleTools(m, ctx) : null;
-    var note = on ? 'On your plan' : paid ? 'Opens when the first invoice is paid' : wait ? wait.display + ' waiting for payment in QuickBooks; on the moment it clears'
-      : req ? 'Requested ' + (day(req.requestedAt) || '') + ' at ' + (req.display || price || '') + '; add it now, pay by card and it switches on' : mt ? mt.open + ' of ' + mt.total + ' of its tools are on your plan'
-      : packaged ? 'Pay by card; on when the payment clears' : 'Add to plan: ' + (price ? price + ' beside your plan, ' : '') + 'paid by card; on the moment it clears';
+    var note = on ? '' : paid ? 'Opens when the first invoice is paid' : wait ? wait.display + ' waiting for payment in QuickBooks; on the moment it clears' : req ? 'Requested ' + (day(req.requestedAt) || '') + '; add it now and pay by card' : WS.pendingApproval ? 'Opens once ClearSky approves the workspace' : mt ? mt.open + ' of ' + mt.total + ' of its tools are on your plan' : packaged ? 'Pay by card; on when the payment clears' : 'Pay by card; on the moment it clears';
     var action = on || paid || WS.pendingApproval ? '' : packaged ? '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">Opt in</button>' : '<button type="button" class="ows-pill primary" data-ask-module="' + esc(m.key) + '" data-price="' + esc(price || '') + '" data-name="' + esc(name) + '">' + (wait ? 'Pay' : 'Add to plan') + '</button>';
     action += moduleOptOut(m, on || paid || st === 'part');
-    h += '<div class="row"><span class="note">' + esc(note) + '</span>' + action + '</div>';
-    h += '</div></div>';
-  });
+    return '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : wait ? 'waiting' : req ? 'requested' : st === 'part' ? 'part' : '0') + '">'
+      + '<div class="cv" style="background:' + (MOD_COVER[m.shelf] || MOD_COVER.floor) + '"><span class="ltr">' + esc(m.name.slice(0, 1)) + '</span>' + state + '</div>'
+      + '<div class="bd"><div class="nm"><b>' + esc(name) + '</b><span class="price">' + esc(on ? (MOD_SHELF[m.shelf] || '') : (price || 'Price on the menu')) + '</span></div>'
+      + '<ul class="feat">' + (m.features || full.features || []).slice(0, 3).map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>'
+      + (tools.length ? '<div class="chips">' + tools.slice(0, 4).map(function (t) { return '<span class="ows-chip' + (on ? ' on' : '') + '">' + esc(t.name) + '</span>'; }).join('') + (tools.length > 4 ? '<span class="ows-chip" title="' + esc(tools.slice(4).map(function (t) { return t.name; }).join(', ')) + '">+' + (tools.length - 4) + '</span>' : '') + '</div>' : '')
+      + (needs ? '<div class="chips">' + needs + '</div>' : '')
+      + (note || action ? '<div class="row">' + (note ? '<span class="note">' + esc(note) + '</span>' : '') + (action ? '<span class="acts">' + action + '</span>' : '') + '</div>' : '')
+      + '</div></div>';
+  }
+  var h = '';
+  if (mine.length) h += '<h3>Your modules<small>' + esc(heldN + ' Live on your ' + planName() + ' plan. ' + (packaged ? 'An opt-out waits for the quarterly review.' : 'An opt-out is a request to ClearSky.') + ' Lite is always included.') + '</small></h3>' + mine.map(card).join('');
+  if (rest.length) h += '<h3>' + (mine.length ? 'Add to your plan' : 'Every module') + '<small>' + esc(WS.pendingApproval ? 'Each one opens once ClearSky approves the workspace.' : packaged ? 'Monthly prices. Opt in pays by card; the module is on when the payment clears.' : 'Monthly prices from the price list. Add to plan pays by card on QuickBooks\u2019 secure page (or with the card saved there); the module is on the moment the payment clears. Your plan and its billing stay as they are.') + '</small></h3>' + rest.map(card).join('');
   b.innerHTML = '<div class="mods">' + h + '</div>';
   if (strip) strip.innerHTML = '<span class="ows-chip on">' + esc(planName()) + '</span><span class="num" style="color:var(--ows-ink2)">' + heldN + ' of ' + cat.length + ' modules Live</span>' + (packaged ? '<span style="color:var(--ows-ink2)">Monthly prices. Nothing new is charged for what your plan already covers.</span>' : '<span style="color:var(--ows-ink2)">Monthly prices from the price list.</span>') + '<a class="ows-pill" data-sn="marketplace" href="/marketplace.html">Plans and the store ›</a>';
   var sub = byId('modules-sub');
   if (sub) sub.textContent = packaged ? 'Build your own experience. Opt in to add modules or request an opt-out at the quarterly review. Lite is always included.' : planName() + ' holds ' + heldN + ' of ' + cat.length + ' modules for ' + (WS.clientName || 'your workspace') + '. Add a module to your plan and pay by card; it switches on the moment the payment clears. Opt-outs go through ClearSky. Lite is always included.';
-  Array.prototype.forEach.call(b.querySelectorAll('[data-add-module]'), function (btn) { btn.addEventListener('click', function () { addModule(btn.getAttribute('data-add-module')); }); });
-  Array.prototype.forEach.call(b.querySelectorAll('[data-ask-module]'), function (btn) { btn.addEventListener('click', function () { addToPlan(btn.getAttribute('data-ask-module'), btn.getAttribute('data-name'), btn.getAttribute('data-price')); }); });
-  wireModuleOptOut(b, cat, ctx, packaged);
-  renderHomeModules(cat, ctx, packaged, bought);
-}
-/* ── Your modules, on the home (the demo's row): held ones Live in shelf
-   order, then up to three not held with Opt in; the same cards as the
-   Modules page, compact (features and the tools as chips), and the same
-   rule. "All modules ›" is the page. ── */
-function renderHomeModules(cat, ctx, packaged, bought) {
-  var b = byId('mymods-body'); if (!b) return;
-  var held = [], rest = [];
-  cat.forEach(function (m) { (HUB.moduleState(m, ctx) === 'held' ? held : rest).push(m); });
-  var show = held.concat(rest.slice(0, 3)), h = '';
-  show.forEach(function (m) {
-    var st = HUB.moduleState(m, ctx), on = st === 'held', paid = !on && bought.indexOf(m.key) >= 0, price = (MOD_PRICES && MOD_PRICES[m.key]) || m.priceDisplay || '';
-    var name = m.shelf === 'platform' ? 'Omega Logic · ' + m.name : m.name, tools = (m.tools || []).map(function (k) { return tool(k); }).filter(function (t) { return !!t; });
-    var wait = !packaged && !on ? addOnWaiting(m.key) : null;
-    var state = on ? '<span class="st live">● Live</span>' : paid ? '<span class="st">Paid for</span>' : wait ? '<span class="st">Waiting for payment</span>' : st === 'part' ? '<span class="st part">Partly on your plan</span>' : '<span class="st">Not in your plan</span>';
-    h += '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : wait ? 'waiting' : st === 'part' ? 'part' : '0') + '">'
-      + '<div class="cv" style="background:' + (MOD_COVER[m.shelf] || MOD_COVER.floor) + '"><span class="ltr">' + esc(m.name.slice(0, 1)) + '</span>' + state + '</div>'
-      + '<div class="bd"><div class="nm"><b>' + esc(name) + '</b><span class="price">' + esc(on ? (MOD_SHELF[m.shelf] || '') : price) + '</span></div>'
-      + '<ul class="feat">' + (m.features || []).slice(0, 3).map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>'
-      + (tools.length ? '<div class="chips">' + tools.slice(0, 4).map(function (t) { return '<span class="ows-chip' + (on ? ' on' : '') + '">' + esc(t.name) + '</span>'; }).join('') + (tools.length > 4 ? '<span class="ows-chip">+' + (tools.length - 4) + '</span>' : '') + '</div>' : '')
-      + (on || paid || WS.pendingApproval ? '' : '<div class="row"><span class="note">' + esc(packaged ? 'Pay by card; on when the payment clears' : wait ? wait.display + ' waiting for payment' : 'Add to plan, pay by card') + '</span>' + (packaged ? '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">Opt in</button>' : '<button type="button" class="ows-pill primary" data-ask-module="' + esc(m.key) + '" data-price="' + esc(price || '') + '" data-name="' + esc(name) + '">' + (wait ? 'Pay' : 'Add to plan') + '</button>') + '</div>')
-      + (moduleOptOut(m, on || paid || st === 'part') ? '<div class="row">' + moduleOptOut(m, on || paid || st === 'part') + '</div>' : '')
-      + '</div></div>';
-  });
-  b.innerHTML = '<div class="mods compact">' + h + '</div>';
-  var sub = byId('mymods-sub'); if (sub) sub.textContent = held.length + ' of ' + cat.length + ' modules Live for ' + (WS.clientName || 'your workspace') + '. ' + (rest.length ? 'Anything else is one click to add.' : 'Every module is on your plan.');
   Array.prototype.forEach.call(b.querySelectorAll('[data-add-module]'), function (btn) { btn.addEventListener('click', function () { addModule(btn.getAttribute('data-add-module')); }); });
   Array.prototype.forEach.call(b.querySelectorAll('[data-ask-module]'), function (btn) { btn.addEventListener('click', function () { addToPlan(btn.getAttribute('data-ask-module'), btn.getAttribute('data-name'), btn.getAttribute('data-price')); }); });
   wireModuleOptOut(b, cat, ctx, packaged);
