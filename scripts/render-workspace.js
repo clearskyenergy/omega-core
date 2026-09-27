@@ -410,29 +410,37 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await menu.getByRole('button', { name: 'Opt out', exact: true }).waitFor({ timeout: 4000 });
     await p.keyboard.press('Escape'); await wait(200);
     ok('northstar: Keep module withdraws the request and the card offers Opt out again', await p.locator('#modules-body .mod[data-module="' + outKey + '"][data-optout]').count() === 0 && (await p.locator('#modules-body [data-remove-module="' + outKey + '"]').textContent()) === 'Opt out');
-    /* Add to plan on a module Standard cannot switch on exactly (Storage: its
-       Analyze-tab commands stay shut): the server's reason and the recorded
-       request, never a price to pay (api/_lib/addons.js exact()) */
+    /* Add to plan on Storage: sold on Standard now, exactly (the editor opens
+       its own Analyze and Estimate commands, never the whole tab: omega-caps
+       addOnOpens), so the server's price and Pay, never the request */
     STORE.posts = [];
     await p.click('#modules-body [data-ask-module="storage"]'); await wait(300);
     await p.locator('.ows-drawer [data-addon="storage"] button', { hasText: 'Add to plan' }).click(); await wait(500);
-    var notExact = await p.evaluate(function () { var h = document.querySelector('.ows-drawer [data-addon="storage"]'); return { text: h ? h.textContent.replace(/\s+/g, ' ') : '', buttons: h ? Array.prototype.map.call(h.querySelectorAll('button'), function (b) { return b.textContent.trim(); }) : [] }; });
-    ok('northstar: Add to plan on Storage says in the server\'s words why Standard cannot switch it on alone, and offers the recorded request, never a price to pay', /^Omega Storage cannot be added to your plan on its own/.test(notExact.text) && /whole tab at a time/.test(notExact.text) && !/Pay \$/.test(notExact.text) && notExact.buttons.join() === 'Ask ClearSky to include it,Close', notExact);
+    var exactly = await p.evaluate(function () { var h = document.querySelector('.ows-drawer [data-addon="storage"]'); return { text: h ? h.textContent.replace(/\s+/g, ' ') : '', buttons: h ? Array.prototype.map.call(h.querySelectorAll('button'), function (b) { return b.textContent.trim(); }) : [] }; });
+    ok('northstar: Add to plan on Storage is the server\'s price and Pay, on Standard too (its Site Map commands open with it, exactly)', /^\$[\d,]+ today/.test(exactly.text) && /^Pay \$[\d,]+ now$/.test(exactly.buttons[0] || '') && exactly.buttons.indexOf('Ask ClearSky to include it') < 0, exactly);
+    await p.locator('.ows-drawer [data-addon="storage"] button', { hasText: 'Cancel' }).click(); await wait(200);
+    await p.keyboard.press('Escape'); await wait(200);
+    /* what still cannot be switched on beside the plan (the storefront, set up
+       with ClearSky): the server's reason and the recorded request, never a price */
+    await p.click('#modules-body [data-ask-module="whitelabel"]'); await wait(300);
+    await p.locator('.ows-drawer [data-addon="whitelabel"] button', { hasText: 'Add to plan' }).click(); await wait(500);
+    var notExact = await p.evaluate(function () { var h = document.querySelector('.ows-drawer [data-addon="whitelabel"]'); return { text: h ? h.textContent.replace(/\s+/g, ' ') : '', buttons: h ? Array.prototype.map.call(h.querySelectorAll('button'), function (b) { return b.textContent.trim(); }) : [] }; });
+    ok('northstar: Add to plan on the storefront says in the server\'s words why it cannot be added alone, and offers the recorded request, never a price to pay', /^Omega Storefront is set up with ClearSky, so it cannot be added here on its own\./.test(notExact.text) && !/Pay \$/.test(notExact.text) && notExact.buttons.join() === 'Ask ClearSky to include it,Close', notExact);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'legacy-not-exact.png') });
-    await p.locator('.ows-drawer [data-addon="storage"] button', { hasText: 'Ask ClearSky to include it' }).click(); await wait(400);
-    var asked = await p.$eval('.ows-drawer [data-addon="storage"]', function (e) { return e.textContent.replace(/\s+/g, ' '); });
-    ok('northstar: the request goes on record with its price and nothing is charged', /^Requested: Omega Storage at \$[\d,]+\/month\. ClearSky has it; nothing is charged\./.test(asked) && STORE.posts.map(function (x) { return x.action; }).join() === 'addon-quote,opt-in', { asked: asked, posts: STORE.posts.map(function (x) { return x.action; }) });
+    await p.locator('.ows-drawer [data-addon="whitelabel"] button', { hasText: 'Ask ClearSky to include it' }).click(); await wait(400);
+    var asked = await p.$eval('.ows-drawer [data-addon="whitelabel"]', function (e) { return e.textContent.replace(/\s+/g, ' '); });
+    ok('northstar: the request goes on record with its price and nothing is charged', /^Requested: Omega Storefront at \$[\d,]+\/month\. ClearSky has it; nothing is charged\./.test(asked) && STORE.posts.map(function (x) { return x.action; }).join() === 'addon-quote,addon-quote,opt-in', { asked: asked, posts: STORE.posts.map(function (x) { return x.action; }) });
     await p.keyboard.press('Escape'); await wait(200);
     /* ...and taking that request back: what the server recorded, read back as the page does after a reload */
     await mirrorBilling(p);
     await p.evaluate(function () { return window.OmegaTenant.refreshBilling(); }); await wait(400);
-    ok('northstar: the recorded request reads Requested on its card', (await p.locator('#modules-body [data-ask-module="storage"]').textContent()) === 'Requested');
+    ok('northstar: the recorded request reads Requested on its card', (await p.locator('#modules-body [data-ask-module="whitelabel"]').textContent()) === 'Requested');
     STORE.posts = [];
-    await p.click('#modules-body [data-ask-module="storage"]'); await wait(300);
+    await p.click('#modules-body [data-ask-module="whitelabel"]'); await wait(300);
     ok('northstar: a requested module offers Withdraw the request, never a second purchase', await p.locator('.ows-drawer .ows-row[data-row="withdraw"]').count() === 1 && await p.locator('.ows-drawer [data-addon]').count() === 0);
     await p.click('.ows-drawer .ows-row[data-row="withdraw"]');
-    var back = await p.waitForFunction(function () { var b = document.querySelector('#modules-body [data-ask-module="storage"]'); return !!b && b.textContent === 'Add to plan' && !document.getElementById('ows-overlay'); }, null, { timeout: 4000 }).then(function () { return true; }, function () { return false; });
-    ok('northstar: Withdraw takes the request back through plan-change and the card offers Add to plan again', back && STORE.posts.some(function (b) { return b.action === 'withdraw-opt-in' && b.add[0] === 'storage'; }), STORE.posts);
+    var back = await p.waitForFunction(function () { var b = document.querySelector('#modules-body [data-ask-module="whitelabel"]'); return !!b && b.textContent === 'Add to plan' && !document.getElementById('ows-overlay'); }, null, { timeout: 4000 }).then(function () { return true; }, function () { return false; });
+    ok('northstar: Withdraw takes the request back through plan-change and the card offers Add to plan again', back && STORE.posts.some(function (b) { return b.action === 'withdraw-opt-in' && b.add[0] === 'whitelabel'; }), STORE.posts);
     await p.evaluate(function () { window.location.hash = ''; }); await wait(250);
     var cards = await p.$$eval('#flight-body .pc', function (r) { return r.map(function (x) { return x.querySelector('b').textContent + '|' + (x.querySelector('.why') ? x.querySelector('.why').textContent : '') + '|' + (x.querySelector('.who .nm') ? x.querySelector('.who .nm').textContent : '') + '|' + (x.querySelector('.fin') ? x.querySelector('.fin').textContent : ''); }); });
     ok('northstar: In flight is the board: the three projects with a next action (Maple carrying its deal in review at ClearSky), then Quarry Road untouched and unassigned; Old Mill, online, is off it',

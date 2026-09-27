@@ -264,16 +264,21 @@
     return !el.hasAttribute('data-packaging-retired') && !el.hasAttribute('data-omega-retired') && !el.hasAttribute('data-shelf-dupe') && !el.classList.contains('omega-gated-hidden');
   }
   function places() {
-    var caps = global.OmegaCaps, out = {}; if (!caps || !caps.packageAccess() || !document.getElementById('ribbon')) return out;
+    /* a package, or a legacy plan whose catalog came with its add-ons */
+    var caps = global.OmegaCaps, out = {}; if (!caps || !(caps.packageAccess() || (caps.legacyView && caps.legacyView())) || !document.getElementById('ribbon')) return out;
     var els = document.querySelectorAll('#ribbon .ribbon-page .rbtn,#ribbon .ribbon-page .rsbtn');
     for (var i = 0; i < els.length; i++) {
-      var el = els[i]; if (!usable(el) || el.hasAttribute('data-package-hidden') || el.hasAttribute('data-cap-blocked')) continue;
+      var el = els[i]; if (!usable(el) || !caps.allowedElement(el)) continue;
       var own = caps.owners(el.id || '', el.getAttribute('onclick') || ''); if (!own.length) continue;
       var page = el.closest('.ribbon-page').getAttribute('data-page'), tab = document.querySelector('#ribbon-tabs .rtab[data-page="' + page + '"]');
       if (!tab) continue;
       own.forEach(function (key) {
-        var grant = caps.MODULE_GRANTS[key] || {}, held = out[key];
-        if (held && (held.page === grant.editorPage || page !== grant.editorPage)) return;
+        /* the module's own page wins: its editorPage, else the tab that
+           carries its name (data-module: Compute's commands are on Compute,
+           though Compute Build sits on Build) */
+        var grant = caps.MODULE_GRANTS[key] || {}, held = out[key], named = document.querySelector('#ribbon .ribbon-page[data-module="' + key + '"]');
+        var home = grant.editorPage || (named ? named.getAttribute('data-page') : null);
+        if (held && (held.page === home || page !== home)) return;
         out[key] = { el: el, page: page, tab: tab.textContent.replace(/\s+/g, ' ').trim() };
       });
     }
@@ -335,7 +340,8 @@
     /* a member's cards stay a member's: only a manager's controls are reloaded */
     if (body) { (control.canManage ? loadControl() : Promise.resolve()).then(function () { if (body) render(lastRows, null); }); return; }
     if (!document.getElementById('ribbon')) return;
-    var added = (d.packaged ? d.added : []).filter(function (k) { return k !== 'lite'; }), removed = d.packaged ? d.removed : [];
+    /* a package's modules, or the add-ons a legacy plan switched on or off */
+    var added = (d.packaged ? d.added : d.addOnsAdded || []).filter(function (k) { return k !== 'lite'; }), removed = d.packaged ? d.removed : d.addOnsRemoved || [];
     if (d.refused) return toast(d.refused + ' Saved projects stay available. Your workspace administrator can check your access.', link('/workspace', 'Workspace'));
     if (d.readOnly && !d.wasReadOnly) return toast('This workspace is read-only now. Saved projects stay available; pay to keep creating and exporting.', link('/workspace#billing', 'Plan & billing'));
     if (d.recovered) return toast(d.readOnly ? 'Your plan is loaded. This workspace is read-only; saved projects stay available.' : 'Your plan is loaded. Your tools are back.', d.readOnly ? link('/workspace#billing', 'Plan & billing') : null);
@@ -356,12 +362,14 @@
      actually disappear, said nothing, and a read-only workspace opened on a
      near-empty ribbon with no reason given. The same server notice
      (package-access billingNotice), the same pay link, and "I've paid". */
+  /* signed in to the editor itself: never the sign-in screen's locked
+     placeholder, never the customer's Editor Lite frame (its own access) */
+  function ownEditor() {
+    try { return !/[?&]customerEngine=1(&|$)/.test(global.location.search) && !!(global.firebase && global.firebase.apps && global.firebase.apps.length && global.firebase.auth().currentUser); } catch (e) { return false; }
+  }
   function notice() {
     var caps = global.OmegaCaps, view = caps && caps.packageAccess(), ribbon = document.getElementById('ribbon'), bar = document.getElementById('omega-plan-notice');
-    /* signed in to the editor itself: never the sign-in screen's locked
-       placeholder, never the customer's Editor Lite frame (its own access) */
-    var own = false;
-    try { own = !/[?&]customerEngine=1(&|$)/.test(global.location.search) && !!(global.firebase && global.firebase.apps && global.firebase.apps.length && global.firebase.auth().currentUser); } catch (e) { own = false; }
+    var own = ownEditor();
     var n = own && view && !view.staff && !view.preview && (view.refused ? { text: view.refused + ' Saved projects stay available. Your workspace administrator can check your access.', refused: true } :
       view.billingNotice || (view.pending && !view.loading ? { text: 'Your plan could not be checked. Saved projects stay available; your tools come back when the connection does.', retry: true } : null));
     if (!n || !ribbon || host.view) { if (bar) bar.remove(); return; }
@@ -413,7 +421,8 @@
   function loadControl() {
     return api('/api/plan-change').then(function (summary) {
       var pending = {}; (summary.pending || []).forEach(function (p) { (p.add || []).forEach(function (k) { pending[k] = p; }); });
-      control = { canManage: true, pending: pending, loaded: true, summary: summary }; return control;
+      /* a member reads the summary too; the server says who may change it */
+      control = { canManage: summary.canManage !== false, pending: pending, loaded: true, summary: summary }; return control;
     }, function () { control = { canManage: false, pending: {}, loaded: true }; return control; });
   }
   function node(tag, text, cls) { var el = document.createElement(tag); if (text) el.textContent = text; if (cls) el.className = cls; return el; }
@@ -484,16 +493,7 @@
     var status = node('p', 'Loading current pricing…', 'opm-note'); status.setAttribute('role', 'status'); panel.appendChild(status);
     body = node('div', '', 'opm-grid'); panel.appendChild(body); dialog.appendChild(panel); document.body.appendChild(dialog);
     dialog.addEventListener('click', function (e) { if (e.target === dialog) close(); });
-    keydown = function (e) {
-      if (e.key === 'Escape') { e.preventDefault(); close(); }
-      if (e.key === 'Tab') {
-        var focusable = panel.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),[tabindex="0"]');
-        var first = focusable[0], last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
-      }
-    };
-    document.addEventListener('keydown', keydown);
+    trap(panel);
     render(view.catalog || [], key); dismiss.focus();
     if (host.legacy) {
       control = { canManage: host.legacy.canManage !== false, pending: {}, loaded: true };
@@ -511,6 +511,148 @@
         if (result.canManage) loadControl().then(function () { if (tokenRequest === request && body) render(result.modules, key); });
       }, function () { if (tokenRequest === request) status.textContent = 'Current pricing is unavailable. Please try again later.'; });
     return true;
+  }
+  /* Escape closes; Tab stays inside the dialog */
+  function trap(panel) {
+    keydown = function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      if (e.key === 'Tab') {
+        var focusable = panel.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),[tabindex="0"]');
+        var first = focusable[0], last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', keydown);
+  }
+  /* ── OPT IN, WHERE THE PLAN STOPS ───────────────────────────────────────
+     Tommy, 2026-09-27: "if there is something that they don't have, it
+     shouldn't be blank on the panel. It should say opt in and then allow
+     them to add that as a purchase ... linked to the module ... linked to
+     the payment ... something that updates their bill so that we can bill
+     them for it." OmegaCaps marks a tab the plan opens nothing on where a
+     module for sale has commands (data-optin: the same owners() rule that
+     hides them). While it is the tab on screen, the ribbon shows those
+     modules, the server's price and Opt in, instead of nothing. Opt in is
+     the ONE purchase each kind of plan already has: a package opens The
+     Ladder on the module (plan-change quote and apply, the invoice on its
+     own rail, on when paid); a plan billed outside the engine adds it to
+     the plan (addOnControl: addon-quote, addon-buy, QuickBooks' card page,
+     I've paid; on when paid, renewed monthly on its own invoice beside the
+     plan). Nothing here prices, grants or opens a command: when the
+     payment clears the plan is read again (OmegaCaps.refresh) and the tab
+     fills by itself. */
+  var lockPrices = null, lockAsked = null, lockWatch = null;
+  function optIn() {
+    var caps = global.OmegaCaps, ribbon = document.getElementById('ribbon');
+    if (!caps || !caps.lockedTabs || !ribbon) return;
+    var strip = document.getElementById('ribbon-tabs');
+    /* whoever switches the tab (a click, the phone's menu, Search tools) */
+    if (!lockWatch && strip && global.MutationObserver) { lockWatch = new MutationObserver(function () { optIn(); }); lockWatch.observe(strip, { attributes: true, subtree: true, attributeFilter: ['class'] }); }
+    var active = document.querySelector('#ribbon-tabs .rtab.active'), page = active && active.getAttribute('data-page'), lock = null;
+    if (active && active.hasAttribute('data-optin') && !active.hasAttribute('data-omega-mode-hidden')) caps.lockedTabs().forEach(function (l) { if (l.page === page) lock = l; });
+    var panel = document.getElementById('omega-optin');
+    if (!lock || !ownEditor()) { if (panel) panel.className = 'oin'; return; }
+    styles();
+    if (!panel) { panel = node('div'); panel.id = 'omega-optin'; panel.setAttribute('role', 'region'); }
+    if (panel.parentNode !== ribbon) ribbon.appendChild(panel);
+    var view = caps.packageAccess(), key = [page, lock.modules.join(' '), view ? 'package' : 'plan', lockPrices ? 'priced' : ''].join('|');
+    var shown = panel.className === 'oin oin-on' && panel.getAttribute('data-page') === page;
+    if (panel.getAttribute('data-for') !== key) { drawLock(panel, lock); panel.setAttribute('data-for', key); }
+    panel.setAttribute('aria-label', lock.label + ' is not on your plan'); panel.setAttribute('data-page', page);
+    panel.className = 'oin oin-on';
+    /* the ribbon is one scroller for every tab: the offer opens at its start,
+       not wherever the last tab was scrolled to (on a phone, past its title) */
+    if (!shown) { ribbon.scrollLeft = 0; ribbon.scrollTop = 0; }
+    askPrices(view);
+  }
+  function drawLock(panel, lock) {
+    var grants = global.OmegaCaps.MODULE_GRANTS;
+    panel.textContent = '';
+    var lead = node('div', '', 'oin-lead'), many = lock.modules.length > 1;
+    lead.appendChild(node('b', lock.label + ' is not on your plan'));
+    lead.appendChild(node('span', !lock.modules.length ? 'Its tools come with a module you can add to your plan.'
+      : 'Opt in to ' + (many ? 'the module you need' : 'add ' + nameOf(lock.modules[0])) + '. ' + (many ? 'Each switches' : 'It switches') + ' on when the payment clears.'));
+    panel.appendChild(lead);
+    lock.modules.forEach(function (key) {
+      var m = grants[key] || { key: key, name: key }, row = node('div', '', 'oin-mod'), text = node('div', '', 'oin-text'), line = node('small');
+      row.setAttribute('data-optin-module', key);
+      row.appendChild(node('span', m.mark || String(m.name).charAt(0), 'oin-mark'));
+      text.appendChild(node('b', m.name));
+      if (lockPrices && lockPrices[key]) line.appendChild(node('span', lockPrices[key], 'oin-price'));
+      if ((m.features || [])[0]) line.appendChild(node('span', (line.firstChild ? ' · ' : '') + m.features[0], 'oin-feat'));
+      text.appendChild(line);
+      row.appendChild(text);
+      var go = button('Opt in', function () { optInTo(key); }, 'oin-go'); go.setAttribute('aria-label', 'Opt in to ' + m.name);
+      row.appendChild(go); panel.appendChild(row);
+    });
+    /* the server did not say which module: the workspace's Modules page
+       does, in a new tab (the drawing here may not be saved) */
+    if (!lock.modules.length) { var row = node('div', '', 'oin-mod'), a = link('/workspace#modules', 'Opt in on Modules'); a.className = 'oin-go'; row.appendChild(a); panel.appendChild(row); }
+  }
+  /* the price list the plan buys from: a package's (its own book) or the public one */
+  function askPrices(view) {
+    var want = view ? 'package' : 'plan';
+    if (lockAsked === want) return;
+    lockAsked = want;
+    var ask = view ? api('/api/package-catalog') : global.fetch ? global.fetch('/api/offerings').then(function (r) { if (!r.ok) throw new Error('unavailable'); return r.json(); }) : Promise.reject(new Error('unavailable'));
+    ask.then(function (j) {
+      if (lockAsked !== want) return;
+      var out = {}; (j.modules || []).forEach(function (m) { if (m.priceDisplay) out[m.key] = m.priceDisplay; });
+      lockPrices = out; optIn();
+    }, function () {
+      /* no price list: the offer stands without prices (the quote has the
+         server's), and it is asked again a minute later, never in a loop */
+      setTimeout(function () { if (lockAsked === want) lockAsked = null; }, 60000);
+    });
+  }
+  function optInTo(key) {
+    var caps = global.OmegaCaps;
+    if (caps && caps.packageAccess()) return open(key);
+    return addOnDialog(key);
+  }
+  /* Opt in on a plan billed outside the engine: the module's card and the
+     Add to plan control. Who may buy and what already waits for payment
+     come from the workspace's own billing summary; when it cannot be read
+     the server still decides on the first press. */
+  function addOnDialog(key) {
+    var caps = global.OmegaCaps, m = caps && caps.MODULE_GRANTS[key];
+    if (!m) return false;
+    close(); trigger = document.activeElement;
+    host = { view: null, onChanged: null, legacy: null };
+    styles();
+    dialog = node('div', '', 'opm-backdrop'); dialog.id = 'omega-package-menu';
+    var panel = node('div', '', 'opm-dialog opm-one'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-labelledby', 'opm-title');
+    var heading = node('h2', 'Opt in: ' + m.name); heading.id = 'opm-title'; panel.appendChild(heading);
+    if (m.blurb) panel.appendChild(node('p', m.blurb, 'opm-note'));
+    var dismiss = button('Close', close); panel.appendChild(dismiss);
+    var card = node('section', '', 'opm-card'); card.setAttribute('data-module-card', key);
+    card.appendChild(node('span', m.mark || String(m.name).charAt(0), 'opm-icon'));
+    card.appendChild(node('h3', m.name));
+    var list = node('ul'); (m.features || []).forEach(function (f) { list.appendChild(node('li', f)); }); card.appendChild(list);
+    card.appendChild(node('p', (lockPrices && lockPrices[key]) || 'Priced when you add it', 'opm-price'));
+    card.appendChild(node('p', 'Added to your plan as its own monthly line. Your plan and its billing stay as they are.', 'opm-note'));
+    var act = node('div', 'Loading…', 'opm-act'); card.appendChild(act);
+    panel.appendChild(card); dialog.appendChild(panel); document.body.appendChild(dialog);
+    dialog.addEventListener('click', function (e) { if (e.target === dialog) close(); });
+    trap(panel); dismiss.focus();
+    var token = ++request;
+    function control(state) { if (token !== request || !act.isConnected) return; state.onChanged = bought; addOnControl(act, m, state); }
+    api('/api/plan-change').then(function (s) {
+      var waiting = null;
+      (((s && s.addOns) || {}).pending || []).forEach(function (p) { if (!waiting && (p.add || []).indexOf(key) >= 0) waiting = p; });
+      control({ canManage: s.canManage !== false, pending: waiting });
+    }, function () { control({ canManage: true, pending: null }); });
+    return true;
+  }
+  /* paid (or nothing owed): read the plan again; when it moved, the tab
+     fills and the toast says where, so the dialog steps aside. When the
+     plan could not be read, "Paid. … is on." stays on screen and the next
+     re-check (focus, ten minutes) opens the tab. */
+  function bought(r) {
+    var caps = global.OmegaCaps;
+    if (!r || r.state !== 'active' || !caps || !caps.refresh) return;
+    caps.refresh().then(function (d) { if (d && d.changed) close(); }, function () {});
   }
   /* the dialog's styles, once, wherever it opens (the editor's tab() used to be the only caller) */
   function styles() {
@@ -547,7 +689,24 @@
       '.opm-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:1000000;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;width:max-content;max-width:min(620px,calc(100vw - 32px));box-sizing:border-box;padding:12px 14px 12px 16px;border-radius:10px;border:1px solid var(--border,#26323E);background:var(--panel,#16202B);color:var(--text,#E6EBF0);font:13px/1.45 system-ui;box-shadow:0 10px 32px #0006}' +
       '.opm-toast span{flex:1 1 260px}.opm-toast a{color:var(--accent,#4A8FD8);font-weight:600}.opm-toast .opm-primary{background:var(--accent,#4A8FD8);border-color:var(--accent,#4A8FD8);color:var(--on-accent,#fff)}.opm-toast .opm-x{border-color:transparent;color:var(--sub,#94A1AE)}' +
       '[data-opm-spot]{outline:2px solid var(--accent,#4A8FD8)!important;outline-offset:2px;border-radius:6px;animation:opm-spot 1.3s ease-in-out 2}' +
-      '@keyframes opm-spot{50%{outline-color:transparent}}@media(prefers-reduced-motion:reduce){[data-opm-spot]{animation:none}}';
+      '@keyframes opm-spot{50%{outline-color:transparent}}@media(prefers-reduced-motion:reduce){[data-opm-spot]{animation:none}}' +
+      /* Opt in where the plan stops: in the ribbon, in the editor's own tokens, both themes */
+      '#omega-optin{display:none}#omega-optin.oin-on{display:flex;align-items:stretch;flex:0 0 auto;min-width:100%;height:100%;box-sizing:border-box}' +
+      '.oin-lead{display:flex;flex-direction:column;justify-content:center;gap:3px;flex:0 0 auto;width:230px;scroll-snap-align:start;padding:6px 14px;box-sizing:border-box;border-right:1px solid var(--border,#26323E);font:11.5px/1.4 system-ui,sans-serif;color:var(--sub,#94A1AE)}' +
+      '.oin-lead b{font-size:12.5px;color:var(--text,#E6EBF0)}' +
+      '.oin-mod{display:flex;align-items:center;gap:10px;flex:0 0 auto;max-width:360px;padding:6px 14px;box-sizing:border-box;border-right:1px solid var(--border,#26323E)}' +
+      '.oin-mark{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;background:var(--hover,#1E2A36);color:var(--accent,#4A8FD8);font:700 13px system-ui,sans-serif}' +
+      '.oin-text{display:flex;flex-direction:column;gap:2px;min-width:0}.oin-text b{font:600 12.5px system-ui,sans-serif;color:var(--text,#E6EBF0);white-space:nowrap}' +
+      '.oin-text small{font:11px/1.35 system-ui,sans-serif;color:var(--sub,#94A1AE);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.oin-text small:empty{display:none}' +
+      '.oin-go{flex:0 0 auto;padding:7px 14px;border-radius:6px;border:1px solid var(--accent,#4A8FD8);background:var(--accent,#4A8FD8);color:var(--on-accent,#fff);font:600 12px system-ui,sans-serif;white-space:nowrap;text-decoration:none;cursor:pointer}' +
+      '.oin-go:focus-visible{outline:2px solid var(--text,#E6EBF0);outline-offset:2px}' +
+      /* under a package the ribbon wraps its groups; the offer wraps with it */
+      'body[data-packaged-editor="1"] #omega-optin.oin-on{flex:1 1 100%;width:100%;min-width:0;flex-wrap:wrap;height:auto}' +
+      'body.omega-dock-left #omega-optin.oin-on{flex-direction:column;height:auto}body.omega-dock-left .oin-lead,body.omega-dock-left .oin-mod{width:auto;max-width:none;border-right:none;border-bottom:1px solid var(--hairline,#26323E)}' +
+      /* a phone: the first module and its Opt in fit the screen, the next one peeks */
+      '@media(max-width:520px){.oin-lead{width:124px;padding:6px 10px}.oin-lead span,.oin-mark,.oin-feat{display:none}' +
+      '.oin-mod{flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;max-width:190px;padding:6px 10px}.oin-go{padding:5px 12px}}' +
+      '.opm-dialog.opm-one{width:560px}';
     document.head.appendChild(style);
   }
   function tab() {
@@ -632,5 +791,5 @@
     draw(); return { value: function () { return selected.slice(); }, set: function (keys) { selected = keys.slice(); draw(); if (options.onChange) options.onChange(selected.slice()); } };
   }
   global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker, card: card, subscribeControl: subscribeControl, addOnControl: addOnControl, loadControl: loadControl, api: api, styles: styles,
-    notice: notice, where: where, places: places, showMe: showMe };
+    notice: notice, where: where, places: places, showMe: showMe, optIn: optIn, addOnDialog: addOnDialog };
 })(typeof window !== 'undefined' ? window : this);

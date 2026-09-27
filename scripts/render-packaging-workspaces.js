@@ -134,14 +134,19 @@ async function run() {
         await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
         for (var workspace of ['l2', 'dcfc', 'bess', 'solarstorage', 'microgrid', 'compute', 'building']) {
           await page.evaluate(function (key) { OmegaWorkspaces.setProject(key, null, true); }, workspace);
+          /* a paid-only tab is an Opt in under Lite (Tommy, 2026-09-27: never a
+             blank panel), shown with its modules and none of its commands */
           if (name === 'lite') ok(await page.evaluate(function () {
-            return ['analyze','estimate','compute'].every(function (key) { return getComputedStyle(document.querySelector('#ribbon-tabs [data-page="' + key + '"]')).display === 'none'; });
-          }), 'Lite omits paid-only tabs');
+            return ['analyze','estimate','compute'].every(function (key) { var t = document.querySelector('#ribbon-tabs [data-page="' + key + '"]'), pg = document.querySelector('#ribbon .ribbon-page[data-page="' + key + '"]');
+              return getComputedStyle(t).display !== 'none' && !!t.getAttribute('data-optin') && !OmegaCaps.tabOpen(key) && !Array.prototype.some.call(pg.querySelectorAll('.rbtn,.rsbtn'), function (b) { return OmegaCaps.allowedElement(b); }); });
+          }), 'Lite shows its paid-only tabs only as Opt in, their commands shut');
           var state = await page.evaluate(function () {
             var C = OmegaCaps, tabs = document.querySelectorAll('#ribbon-tabs .rtab[data-page]'), failures = [];
             function visible(el) { return getComputedStyle(el).display !== 'none' && !el.hidden; }
             for (var i = 0; i < tabs.length; i++) {
               var key = tabs[i].getAttribute('data-page'); if (key === '__file' || !visible(tabs[i])) continue;
+              /* an Opt in tab holds nothing this package opens: its offer is checked below */
+              if (tabs[i].hasAttribute('data-optin')) { if (!C.lockedTabs().some(function (l) { return l.page === key && l.modules.length; })) failures.push('offer without modules ' + key); continue; }
               rbTab(key); C.apply('standard');
               var pg = document.querySelector('#ribbon .ribbon-page[data-page="' + key + '"]');
               if (!pg || !visible(pg)) { failures.push('empty tab ' + key); continue; }
@@ -181,6 +186,22 @@ async function run() {
             return failures;
           }, workspace);
           ok(!unreachable.length, name + '/' + workspace + ': every owned tool shows, no toggle: ' + unreachable.join('; '));
+          if (name === 'lite' && workspace === 'l2') {
+            /* the offer where the plan stops, and Opt in on it: The Ladder on that module */
+            var offer = await page.evaluate(async function () {
+              rbTab('compute'); await new Promise(function (r) { setTimeout(r, 40); });
+              var p = document.getElementById('omega-optin'), out = { shown: !!(p && p.offsetParent), offered: p ? Array.prototype.map.call(p.querySelectorAll('[data-optin-module]'), function (m) { return m.getAttribute('data-optin-module'); }) : [],
+                fits: !!p && p.scrollWidth <= document.getElementById('ribbon').clientWidth + 2 };
+              p.querySelector('[data-optin-module="compute"] .oin-go').click();
+              await new Promise(function (r) { setTimeout(r, 40); });
+              out.ladder = !!document.querySelector('#omega-package-menu [data-module-card="compute"][data-selected]');
+              OmegaPackageMenu.close(); rbTab('home'); await new Promise(function (r) { setTimeout(r, 40); });
+              out.closed = !p.offsetParent;
+              return out;
+            });
+            ok(offer.shown && offer.offered.join() === 'compute' && offer.fits && offer.ladder && offer.closed,
+               'Lite: the Compute tab offers Omega Compute with Opt in, which opens The Ladder on it: ' + JSON.stringify(offer));
+          }
           await page.evaluate(function () { rbTab('home'); OmegaCaps.apply('standard'); });
           await page.screenshot({ path: path.join(output, name + '-' + workspace + '-' + theme + '.png') });
         }
@@ -198,6 +219,9 @@ async function run() {
             rbTab(key); OmegaCaps.apply('standard');
             var pg = document.querySelector('#ribbon .ribbon-page[data-page="' + key + '"]');
             if (pg && pg.scrollWidth > document.getElementById('ribbon').clientWidth + 2) failures.push(key);
+            /* an Opt in wraps inside the ribbon too (drawn on the next tick; checked when present) */
+            var offer = tabs[t].hasAttribute('data-optin') && document.getElementById('omega-optin');
+            if (offer && offer.offsetParent && offer.scrollWidth > document.getElementById('ribbon').clientWidth + 2) failures.push('offer ' + key);
           }
           var bar = document.getElementById('omega-workspace-controls');
           if (bar && bar.scrollWidth > window.innerWidth + 2) failures.push('workspace header');
