@@ -255,6 +255,9 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     assert.match(st, /holdForVerification\(u\)/); assert.match(st, /omega:signup-draft/); assert.ok(!/start\.html\?company=/.test(lg), 'the company never travels in a link');
     assert.ok(!/Roam Energy|Acme Energy|placeholder="acme"/.test(lg + st), 'no example company names on the forms');
     assert.match(lg, /window\.__packagedSignup = true/); assert.match(lg, /id="blockedNext"/); assert.match(lg, /sendEmailVerification\(user, \{ url: location\.origin \+ next \}\)/); assert.match(st, /if \(j\.payNow\) \{ showPay\(j, name\); return; \}/); assert.match(st, /function wantedModules\(\)/); assert.match(st, /if \(payNow\) payload\.payNow = true;/);
+    /* 2026-09-27: making the account signs it in; the "already signed in" listener stands aside so the new company goes to signup, not a derived workspace (scripts/render-signup.js drives it) */
+    assert.match(lg, /creatingAccount = true;/); assert.match(lg, /if \(user && !creatingAccount\) route\(/); assert.match(lg, /return toSignup\(\);/); assert.match(lg, /if \(found\.signup && await packagedSignup\) return toSignup\(\);/);
+    assert.match(st, /u\.getIdToken\(true\)/); assert.match(st, /watchVerification\(u\)/);
     assert.match(lg, /id="suPackaged"/); assert.match(lg, /fetch\('\/api\/offerings'/); assert.match(lg, /href="\/offerings\.html"/);
     assert.match(of, /XMLHttpRequest\(\); x\.open\('GET', '\/api\/offerings'\)/); assert.ok(!/firebase|omega-tenant\.js/.test(of), 'the price list is a public page: no sign-in, no tenant runtime');
     assert.ok(!/=>|\blet\s|\bconst\s|`/.test(of.replace(/<!--[\s\S]*?-->/g, '')), 'ES5');
