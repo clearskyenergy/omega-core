@@ -311,6 +311,17 @@ async function webhookChecks() {
     var bill = db.data.get(root + '/billing/current');
     ok('a signed invoice.paid opens exactly what was bought', good.code === 200 && good.body.package && bill.packagingState === 'paid' && bill.modules.join() === 'lite,storage', good.body);
     ok('...and the legacy tier path never ran: no tier, no lastStripeEvent, status untouched', bill.lastStripeEvent === undefined && bill.tier !== 'trial' && db.data.get(root).status === 'active');
+    /* an event is about ONE invoice: the handler reads that one back, never the whole history first */
+    var cyc = await S.issue(db, orgId, Date.parse(bill.nextInvoiceOn + 'T12:00:00Z'), deps);
+    var newer = Array.from(db.data.keys()).filter(function (k) { return k.indexOf(root + '/billing/current/invoices/') === 0; }).map(function (k) { return db.data.get(k); })
+      .filter(function (r) { return r.stripeInvoiceId && r.stripeInvoiceId !== inv.stripeInvoiceId; })[0];
+    stripe.pay(newer.stripeInvoiceId);
+    var reads0 = stripe.calls.filter(function (c) { return c === 'invoices.retrieve'; }).length;
+    var one = await call(stripe.event('invoice.paid', newer.stripeInvoiceId), 'signed');
+    var reads = stripe.calls.filter(function (c) { return c === 'invoices.retrieve'; }).length - reads0, seen = one.body.package.reconciled.invoices;
+    ok('a package invoice.paid reconciles only the invoice it is about (a long history never delays it)', !!cyc && one.code === 200 && seen.length === 1
+      && seen[0].invoiceId === newer.stripeInvoiceId && seen[0].state === 'paid' && reads === 1 && db.data.get(root + '/billing/current').packagingState === 'paid', { seen: seen, reads: reads });
+    bill = db.data.get(root + '/billing/current');
     /* a paid package invoice no OMEGA record holds: a person is told, and Stripe is asked back (never absorbed with a 200) */
     var loose = await ST.driver(book(), deps).invoice(plan('OMEGA subscription stripe.example / orphan'), BP.normalize(profile), bill.stripeCustomerId);
     stripe.pay(loose.id);

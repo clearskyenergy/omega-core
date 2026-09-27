@@ -19,13 +19,15 @@ var A = require('./_lib/admin');
 var CustomerLite = require('./customer-subscribe');
 var StripeBilling = require('./_lib/stripe-billing');
 
-/* A package invoice event: reconcile that workspace now and send what it
-   found (the tenant's receipt, ClearSky's alert). A refusal that is the
-   workspace's (billing switched off, not packaged: a 4xx) is acknowledged
-   so Stripe stops retrying; anything else is a 500 and Stripe retries. */
-function packageEvent(org, deps) {
+/* A package invoice event: reconcile the invoice it is about now (that one
+   alone, so a long history never delays it; the access rule still reads
+   them all) and send what it found (the tenant's receipt, ClearSky's
+   alert). A refusal that is the workspace's (billing switched off, not
+   packaged: a 4xx) is acknowledged so Stripe stops retrying; anything else
+   is a 500 and Stripe retries. */
+function packageEvent(org, deps, invoiceId) {
   var db = A.db(), now = Date.now(), S = require('./_lib/package-billing'), Runner = require('./_lib/package-billing-runner');
-  return S.reconcile(db, org, now, deps && deps.billing).then(function (r) {
+  return S.reconcile(db, org, now, deps && deps.billing, invoiceId ? { only: invoiceId } : undefined).then(function (r) {
     var mailer = (deps && deps.mail) || require('./_lib/mail');
     return Runner.deliver(db, org, now, mailer).then(function () { return Runner.staffDeliver(db, now, mailer); }, function () {}).then(function () { return { orgId: org, reconciled: r }; });
   }, function (e) {
@@ -67,7 +69,7 @@ module.exports = function (req, res) {
     try { evt = stripe.webhooks.constructEvent(buf, req.headers['stripe-signature'], process.env.STRIPE_WEBHOOK_SECRET); }
     catch (e) { return res.status(400).send('bad signature'); }
     var pkgOrg = StripeBilling.eventOrg(evt);
-    if (pkgOrg) return packageEvent(pkgOrg, module.exports.deps).then(function (r) {
+    if (pkgOrg) return packageEvent(pkgOrg, module.exports.deps, evt.data.object && evt.data.object.id).then(function (r) {
       return orphanCheck(evt, pkgOrg).then(function (orphan) {
         if (orphan) return res.status(500).json({ received: true, package: r, orphan: true });
         res.status(200).json({ received: true, package: r });

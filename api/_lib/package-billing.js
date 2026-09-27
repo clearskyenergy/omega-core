@@ -350,6 +350,8 @@ async function reconcile(db, orgId, now, deps, options) {
   function driverFor(record) { var p = D.recordProvider(record); return drivers[p] || (drivers[p] = D.driver(c.book, p, deps)); }
   for (var i = 0; i < rows.docs.length; i++) {
     var doc = rows.docs[i], record = doc.data(); if (!D.issued(record)) continue;
+    /* a Stripe event is about ONE invoice: that record alone is read back (the access rule below still reads them all) */
+    if (options && options.only && D.invoiceId(record) !== String(options.only)) continue;
     var invoiceId = D.invoiceId(record), providerName = D.name(D.recordProvider(record));
     var receipt, error = false, transient = false, note = null;
     // A failure on ClearSky's side (no status, 5xx, or QuickBooks refusing
