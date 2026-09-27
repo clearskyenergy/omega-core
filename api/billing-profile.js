@@ -6,7 +6,8 @@ module.exports = A.handler(async function (req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') throw A.httpError(405, 'GET or POST required');
   var caller = await A.authenticate(req), input = req.method === 'GET' ? req.query || {} : req.body || {};
   var orgId = A.safeOrg(input.orgId || caller.orgId);
-  if (!orgId || (!caller.staff && (!caller.claims || caller.claims.email_verified !== true || !(await A.isTenantAdmin(caller, orgId))))) throw A.httpError(403, 'Tenant administrator required');
+  /* an owner or administrator needs no email link (api/_lib/roles.js): the role is the server's */
+  if (!orgId || (!caller.staff && !(await A.isTenantAdmin(caller, orgId)))) throw A.httpError(403, 'Tenant administrator required');
   var db = A.db(), ref = db.doc('omega_orgs/' + orgId + '/billing/profile');
   if (req.method === 'GET') {
     var snap = await ref.get();

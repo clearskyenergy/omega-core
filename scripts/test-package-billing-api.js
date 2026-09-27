@@ -29,7 +29,8 @@ async function run() {
   await denied(function () { return packageApi(req('POST', { modules: ['lite'] }, owner), res); }, 403);
   await denied(function () { return packageApi(req('GET', { orgId: 'other.example' }, owner), res); }, 403);
   await denied(function () { return profileApi(req('GET', {}, Object.assign({}, owner, { role: 'member' })), res); }, 403);
-  await denied(function () { return profileApi(req('GET', {}, Object.assign({}, owner, { claims: { email_verified: 'true' } })), res); }, 403);
+  /* the owner reads the billing profile without the email link: the role is the server's (api/_lib/roles.js) */
+  equal((await profileApi(req('GET', {}, Object.assign({}, owner, { claims: { email_verified: 'true' } })), res)).profile.email, owner.email);
   equal((await profileApi(req('GET', {}, owner), res)).profile.email, owner.email);
   await denied(function () { return legacyBilling(req('POST', { orgId: 'package.example', trialEndsAt: '2099-01-01' })); }, 409);
   await denied(function () { return legacyBilling(req('POST', { orgId: 'package.example', tier: 'enterprise' })); }, 409);

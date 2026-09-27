@@ -9,7 +9,7 @@
  * still records a priced request. The engine's guard decides where it bills.
  */
 'use strict';
-var A = require('./_lib/admin'), C = require('./_lib/plan-change'), AO = require('./_lib/addons');
+var A = require('./_lib/admin'), C = require('./_lib/plan-change'), AO = require('./_lib/addons'), R = require('./_lib/roles');
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'private, no-store');
   if (req.method !== 'GET' && req.method !== 'POST') throw A.httpError(405, 'GET or POST required');
@@ -17,7 +17,9 @@ module.exports = A.handler(async function (req, res) {
   var orgId = A.safeOrg(input.orgId || caller.orgId);
   if (!orgId) throw A.httpError(400, 'Valid organization required');
   if (!caller.staff) {
-    if (!caller.claims || caller.claims.email_verified !== true) throw A.httpError(403, 'Verified email required');
+    /* the email link: an owner or administrator changes their own plan
+       without it (api/_lib/roles.js); a member reading the summary needs it */
+    if (!(await R.settled(caller, orgId, A.isTenantAdmin))) throw A.httpError(403, 'Verified email required');
     if (orgId !== caller.orgId) throw A.httpError(403, 'Own organization required');
     /* the summary (GET) is the workspace's own billing, which every verified
        member of the org may read (the rules let a member read billing/current;

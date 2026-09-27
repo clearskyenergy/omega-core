@@ -102,7 +102,9 @@ async function run() {
 
     /* ── the gates the endpoint keeps ── */
     await refused(function () { return quote(['logic-office'], member); }, /workspace administrator/, 403);
-    await refused(function () { return quote(['logic-office'], Object.assign({}, owner, { claims: { email_verified: false } })); }, /Verified email/, 403);
+    /* the email link (2026-09-27, Tommy: "i shouldnt have to do it"): the owner adds to the plan without it; a member who has not confirmed is still asked (api/_lib/roles.js) */
+    equal((await quote(['logic-office'], Object.assign({}, owner, { claims: { email_verified: false } }))).canBuy, true, 'the owner adds to the plan without having clicked the email link');
+    await refused(function () { return quote(['logic-office'], Object.assign({}, member, { claims: { email_verified: false } })); }, /Verified email/, 403);
     await refused(function () { return req('POST', { action: 'addon-quote', add: ['logic-office'], orgId: 'other.example' }); }, /Own organization/, 403);
     await refused(function () { return req('POST', { action: 'addon-quote', add: ['logic-office'], priceCents: 1 }); }, /Unsupported field/, 400);
     equal((await quote(['logic-office'], Object.assign({}, staff))).canBuy, true, 'verified ClearSky staff may act for a tenant');

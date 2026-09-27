@@ -110,7 +110,9 @@ async function run() {
   seed(ev, 'field'); db.data.get(root).status = 'suspended'; var g4 = await quote(['siteintel']); ok(/not active/.test(g4.reason));
   seed(ev, 'field');
   await refused(function () { return quote(['siteintel'], member); }, /workspace administrator/);
-  await refused(function () { return quote(['siteintel'], Object.assign({}, owner, { claims: { email_verified: 'true' } })); }, /Verified email/);
+  /* the email link is the literal true for a member; the owner is known by the role and needs none (api/_lib/roles.js) */
+  await refused(function () { return quote(['siteintel'], Object.assign({}, member, { claims: { email_verified: 'true' } })); }, /Verified email/);
+  ok(!!(await quote(['siteintel'], Object.assign({}, owner, { claims: { email_verified: 'true' } }))).previewId, 'the owner is quoted without having clicked the email link');
   await refused(function () { return req('POST', { action: 'quote', add: ['siteintel'], orgId: 'other.example' }); }, /Own organization/);
   await refused(function () { return req('POST', { action: 'quote', add: ['siteintel'], monthlyCents: 1 }); }, /Unsupported field/);
   await refused(function () { return req('POST', { action: 'nope' }); }, /Action must be/);
@@ -331,6 +333,9 @@ async function run() {
   await refused(function () { return req('POST', { action: 'opt-in', add: ['siteintel'] }, member); }, /workspace administrator/);
   var memberSummary = await req('GET', { orgId: orgId }, member); equal(memberSummary.packaged, false, 'a member reads the summary');
   await refused(function () { return req('GET', { orgId: orgId }, Object.assign({}, member, { claims: { email_verified: false } })); }, /Verified email/);
+  /* the owner reads and changes their own plan without the email link (api/_lib/roles.js); another org's unconfirmed owner is still refused */
+  equal((await req('GET', { orgId: orgId }, Object.assign({}, owner, { claims: { email_verified: false } }))).packaged, false, 'the owner reads the plan without having clicked the email link');
+  await refused(function () { return req('GET', { orgId: 'other.example' }, Object.assign({}, owner, { claims: { email_verified: false } })); }, /Verified email/);
   db.data.delete(root + '/billing/current');
   await refused(function () { return req('POST', { action: 'opt-in', add: ['estimate'] }); }, /Billing is not set up/);
   ok(!db.data.has(root + '/billing/current'), 'a request never creates a billing record');

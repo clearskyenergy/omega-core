@@ -28,7 +28,9 @@ async function main() {
   await denied('POST', { modules: ['lite'], serviceFee: { mode: 'waived', reason: 'Forged' } }, 400);
   await denied('POST', { modules: ['lite'], credit: { pct: 100 } }, 400);
   await denied('DELETE', {}, 405);
-  caller.claims.email_verified = false; await denied('GET', {}, 403); caller.claims.email_verified = true;
+  /* the email link: the owner reads the priced menu without it; anyone else is asked (api/_lib/roles.js) */
+  caller.claims.email_verified = false; out = await req(); assert.equal(out.quote.monthlyCents, 50000); count++;
+  caller.uid = 'm1'; db.seed('omega_orgs/example.com/members/m1', { role: 'member', status: 'active' }); await denied('GET', {}, 403); caller.uid = 'owner'; caller.claims.email_verified = true;
   db.seed('omega_orgs/example.com/members/owner', { status: 'disabled' }); await denied('GET', {}, 403);
   caller.staff = true; out = await req(); assert.equal(out.quote.monthlyCents, 50000); count++;
   assert.equal(db.data.has('omega_orgs/example.com/billing/current'), false); count++;

@@ -27,7 +27,7 @@
  * path that moves money (plan-change, activation, signup).
  */
 'use strict';
-var A = require('./_lib/admin'), SP = require('./_lib/subscription-proposal'), B = require('./_lib/pricebook'), M = require('./_lib/modules'), P = require('./_lib/subscription-pricing');
+var A = require('./_lib/admin'), R = require('./_lib/roles'), SP = require('./_lib/subscription-proposal'), B = require('./_lib/pricebook'), M = require('./_lib/modules'), P = require('./_lib/subscription-pricing');
 var Policy = require('./_lib/package-billing-policy'), DECK = require('./_lib/deck-brand'), C = require('./_lib/plan-change'), S = require('./_lib/package-billing'), MAIL = require('./_lib/mail');
 var STAFF_ORG = 'clearsky-usa.com', BASE = process.env.PUBLIC_BASE_URL || 'https://silmarillion.clearskyomega.com';
 var ACTIONS = ['context', 'recommend', 'price', 'save', 'send', 'decline', 'accept'], STAFF_ONLY = ['context', 'save', 'send', 'decline'];
@@ -135,7 +135,7 @@ async function accept(db, caller, input, bk, now) {
   if (caller.staff) fail(403, 'A customer accepts their own proposal; staff activate from the Package tab');
   var orgId = record.prospect.domain;
   if (!orgId || !(await db.doc('omega_orgs/' + orgId).get()).exists) fail(409, 'Sign up with this proposal to accept it');
-  if (!caller.claims || caller.claims.email_verified !== true) fail(403, 'Verified email required');
+  if (!(await R.settled(caller, orgId, A.isTenantAdmin))) fail(403, 'Verified email required');
   if (caller.orgId !== orgId) fail(403, 'Own organization required');
   if (!(await A.isTenantAdmin(caller, orgId))) fail(403, 'Ask your workspace administrator to accept');
   var c = await S.context(db, orgId), result;
@@ -175,10 +175,12 @@ module.exports = A.handler(async function (req, res) {
   if (STAFF_ONLY.indexOf(input.action) >= 0 && !caller.staff) fail(403, 'Staff only');
   /* recommend and price are arithmetic on the price book (public on
      /api/offerings): a new account is quoted on the signup page before its
-     email link is clicked. Everything that writes, sends, accepts or names a
-     sender still needs the verified address. */
+     email link is clicked. Everything that writes, sends or names a sender
+     still needs the verified address; accepting is the workspace owner's or an
+     administrator's, who need no link (api/_lib/roles.js). */
   var quoteOnly = (input.action === 'recommend' || input.action === 'price') && input.prospect == null;
-  if (!caller.staff && !quoteOnly && (!caller.claims || caller.claims.email_verified !== true)) fail(403, 'Verified email required');
+  /* accept asks its own question: the workspace's owner or administrator needs no link (api/_lib/roles.js) */
+  if (!caller.staff && !quoteOnly && input.action !== 'accept' && !R.verified(caller)) fail(403, 'Verified email required');
   var bk = await B.load(db, caller.staff && input.pricebookVersion ? input.pricebookVersion : B.VERSION);
   switch (input.action) {
     case 'context': return context(db, caller, input, bk);
