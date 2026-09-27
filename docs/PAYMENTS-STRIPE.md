@@ -113,6 +113,58 @@ opens within seconds of the webhook. Try these too:
 - Void an open invoice: it reads as reversed.
 - Pay a change invoice: the added module switches on.
 
+## QuickBooks invoices paid by card (a legacy tier, 2026-09-27)
+
+A workspace on a legacy tier that ClearSky invoices by hand in QuickBooks
+(Concord Energy was the first) pays those invoices by card through this
+same rail. Tommy: *"we want this to be like any payment page and we want to
+use what you built with the stripe quickbooks account."*
+
+1. **Bind** the workspace to its QuickBooks customer. In the master console
+   (Commercial terms), enter the QuickBooks customer number and press
+   **Bind**. The number is in the customer page's address (`nameId=…`).
+   `api/tenant-billing.js` confirms it in the connected QuickBooks company
+   and records `billing/current.invoicedTo` with that company and the name
+   QuickBooks has. This is never the engine's `qboCustomerId`.
+2. **Plan & billing** reads the invoices from QuickBooks
+   (`POST /api/qbo-invoices`): what is open, what is overdue and what was
+   paid.
+3. **Pay** (an owner or administrator) makes the workspace's Stripe
+   customer (`stripeCustomerId`, found again by `metadata.omegaOrg`). It
+   then makes one `send_invoice` Stripe invoice for that QuickBooks
+   invoice's open balance:
+   - It is marked `omegaQboInvoice`, `omegaQboBalanceCents` and
+     `omegaOrg`, never `omegaPackage`.
+   - Stripe does not email it; the customer is already on the page.
+   - The customer is sent to its hosted page. A retry finds the same page.
+   - If QuickBooks' balance changed, the old page is voided and a new one
+     is made.
+   - A refund makes the invoice payable again.
+4. **Paid.** `invoice.paid` records `lastPaidAt` only
+   (`stripe-webhook.qboInvoiceEvent`, which runs before the legacy tier
+   branch, so the tier and the amount due are left alone). The statement
+   reads Stripe itself. The invoice shows *paid by card · being recorded
+   in QuickBooks*, and Pay is not offered for it again.
+
+**When it is on.** Pay goes through Stripe only when both are true:
+- the deployment's rail is Stripe (`PACKAGING_PROVIDER=stripe`);
+- the Stripe key is in the same mode as the QuickBooks company: a live key
+  with `QBO_ENV=production`, a test key with the sandbox.
+
+A test card never marks a real invoice paid. Until then, Pay is the
+invoice's own QuickBooks page (QuickBooks Payments), when QuickBooks
+offers one.
+
+**The books.** OMEGA never writes the payment into QuickBooks. The Connect
+to Stripe app imports it (as a sales receipt, per
+`PAYMENTS-BROWSER-SETUP.md` Part 3), and writing it as well would book it
+twice. Until someone closes it, the QuickBooks invoice still reads open
+in QuickBooks (and in A/R aging). Close it one of two ways:
+- apply the payment to the invoice and remove the duplicate receipt; or
+- void the invoice against the receipt.
+
+After either, the statement shows the invoice paid by card.
+
 ## What is not built
 
 - **Autopay.** Invoices are `send_invoice`: each is paid from its link. The
@@ -127,7 +179,11 @@ opens within seconds of the webhook. Try these too:
   items.
 - **Books.** Stripe payments reach QuickBooks through the *Connect to
   Stripe* bookkeeping app (`docs/PAYMENTS-BROWSER-SETUP.md` Part 3), not
-  through OMEGA.
+  through OMEGA. For a QuickBooks invoice paid by card (above), closing
+  the invoice against the app's receipt is a bookkeeping step, not
+  automatic.
+- **Paying several QuickBooks invoices in one go.** Pay is per invoice.
+  *Pay now* is the oldest open one.
 - **Moving a workspace between rails.** A QuickBooks-billed workspace stays
   on QuickBooks. Moving one means a person closing its QuickBooks
   subscription and re-activating it on Stripe; there is no one-click move.

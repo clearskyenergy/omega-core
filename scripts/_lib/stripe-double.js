@@ -1,7 +1,7 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
  * An in-memory Stripe for the packaging tests: the subset of the API that
- * api/_lib/stripe-billing.js calls (customers, invoices, invoice items,
- * charges), with Stripe's idempotency rule (the same key replays the first
+ * api/_lib/stripe-billing.js and api/qbo-invoices.js call (customers,
+ * invoices, invoice items, charges), with Stripe's idempotency rule (the same key replays the first
  * answer; the same key with different parameters is refused), livemode on
  * every object, and the hosted invoice URL on invoice.stripe.com. The test
  * plays the customer with pay(), refund(), void() and edit(). Nothing here
@@ -31,6 +31,8 @@ function StripeDouble(options) {
     var lines = Object.keys(self.items_).map(function (k) { return self.items_[k]; }).filter(function (it) { return it.invoice === inv.id; });
     var total = lines.reduce(function (n, l) { return n + l.amount; }, 0);
     if (inv.status === 'draft') inv.total = total; else if (inv.total == null) inv.total = total;
+    /* as Stripe: amount_due stays the total once paid; amount_remaining is what is left */
+    inv.amount_due = inv.total; inv.amount_remaining = inv.status === 'paid' || inv.status === 'void' ? 0 : inv.total - (inv.amount_paid || 0);
     return inv;
   }
   this.customers = {
@@ -69,7 +71,14 @@ function StripeDouble(options) {
         inv.hosted_invoice_url = options.noLink ? null : 'https://invoice.stripe.com/i/acct_double/' + iid; return invoiceView(inv);
       });
     },
-    sendInvoice: async function (iid, p, o) { return once('invoices.sendInvoice', { id: iid }, o, function () { self.sent.push(iid); return invoiceView(self.invoices_[iid]); }); }
+    sendInvoice: async function (iid, p, o) { return once('invoices.sendInvoice', { id: iid }, o, function () { self.sent.push(iid); return invoiceView(self.invoices_[iid]); }); },
+    voidInvoice: async function (iid, p, o) {
+      return once('invoices.voidInvoice', { id: iid }, o, function () {
+        var inv = self.invoices_[iid]; if (!inv) missing('invoice: ' + iid);
+        if (inv.status !== 'open' && inv.status !== 'uncollectible') fail('You can only void an open or uncollectible invoice');
+        inv.status = 'void'; return invoiceView(inv);
+      });
+    }
   };
   this.invoiceItems = {
     create: async function (p, o) {
@@ -88,7 +97,8 @@ function StripeDouble(options) {
   this.pay = function (iid) {
     var inv = self.invoices_[iid]; if (!inv || inv.status !== 'open') throw new Error('not payable: ' + iid);
     var ch = { id: id('ch'), object: 'charge', amount: inv.total, amount_refunded: 0, refunded: false, disputed: false, dispute: null, livemode: self.livemode };
-    self.charges_[ch.id] = ch; inv.status = 'paid'; inv.amount_paid = inv.total; inv.charge = ch.id; return inv;
+    self.charges_[ch.id] = ch; inv.status = 'paid'; inv.amount_paid = inv.total; inv.charge = ch.id;
+    inv.status_transitions = Object.assign({}, inv.status_transitions, { paid_at: Math.floor(Date.now() / 1000) }); return inv;
   };
   this.refund = function (iid, cents) { var inv = self.invoices_[iid], ch = self.charges_[inv.charge]; ch.amount_refunded = cents == null ? ch.amount : cents; ch.refunded = ch.amount_refunded >= ch.amount; };
   this.dispute = function (iid) { var inv = self.invoices_[iid], ch = self.charges_[inv.charge]; ch.disputed = true; ch.dispute = 'dp_double'; };

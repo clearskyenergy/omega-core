@@ -171,4 +171,28 @@ function legacyEnterprise(host) {
   docs['team_members/' + org + '__' + me] = { orgId: org, email: me, name: 'Paige Cole', photo: '', lastSeen: ago(0.2) };
   return { org: org, name: 'NextGen Power', tier: 'enterprise', user: { uid: uid, email: me, displayName: 'Paige Cole', emailVerified: true }, docs: docs, termsAccepted: true, legacyAllOpen: true };
 }
-module.exports = { newco: newco, northstar: northstar, pending: pending, lite: lite, awaiting: awaiting, legacyEnterprise: legacyEnterprise, TERMS_VERSION: TERMS_VERSION };
+/* legacyQuickbooks: a legacy Standard tier ClearSky invoices BY HAND from its
+   QuickBooks (Concord-like, 2026-09-27: "they do have a qb account and we
+   have an outstanding bill with them"). The record carries only what was
+   typed into the master console, as date-only strings: a due date 24 days
+   gone, a payment 55 days ago and $1,299 "paid to date". With
+   { bound: true } staff have bound its QuickBooks customer
+   (billing/current.invoicedTo), and render-workspace.js answers
+   /api/qbo-invoices with QuickBooks' own statement for it. */
+function dateOnly(daysAhead) { return new Date(Date.now() + daysAhead * DAY).toISOString().slice(0, 10); }
+function legacyQuickbooks(host, opts) {
+  opts = opts || {};
+  var org = 'harbor.example', uid = 'uid-harbor-morgan', me = 'morgan@harbor.example';
+  var docs = merge(pub(host, org, 'Harbor Solar', 'standard', 'installer'), {});
+  docs['omega_orgs/' + org] = { name: 'Harbor Solar', slug: 'harbor', domains: [host], logoUrl: '', vertical: 'installer', shell: 'classic', status: 'active', receivesFullBom: false,
+    exportBrand: { name: 'Harbor Solar', logo: '' }, createdAt: ago(55), approvedAt: ago(55), approvedBy: 'ops@clearsky-usa.com' };
+  var bill = { tier: 'standard', addons: ['engineering', 'schematics', 'exports', 'permitting'], toolOverrides: {}, paymentProvider: 'manual', trialEndsAt: null,
+    subscriptionDue: dateOnly(-24), amountDue: 1299, amountPaid: 1299, lastPaidAt: dateOnly(-55), createdAt: ago(55) };
+  if (opts.bound) { bill.paymentProvider = 'quickbooks'; bill.invoicedTo = { provider: 'quickbooks', customerId: '8', realmId: '9130000000000000', name: 'Pat Example', boundAt: Date.now() - DAY, boundBy: 'ops@clearsky-usa.com' }; }
+  docs['omega_orgs/' + org + '/billing/current'] = bill;
+  docs['omega_orgs/' + org + '/members/' + uid] = { email: me, name: 'Morgan Reyes', role: 'admin', status: 'active', createdAt: ago(55) };
+  docs['termsAcceptances/' + uid] = { uid: uid, email: me, orgId: org, version: TERMS_VERSION, acceptedAt: ago(50) };
+  docs['team_members/' + org + '__' + me] = { orgId: org, email: me, name: 'Morgan Reyes', photo: '', lastSeen: ago(0.2) };
+  return { org: org, name: 'Harbor Solar', tier: 'standard', user: { uid: uid, email: me, displayName: 'Morgan Reyes', emailVerified: true }, docs: docs, termsAccepted: true };
+}
+module.exports = { newco: newco, northstar: northstar, pending: pending, lite: lite, awaiting: awaiting, legacyEnterprise: legacyEnterprise, legacyQuickbooks: legacyQuickbooks, TERMS_VERSION: TERMS_VERSION };

@@ -2424,6 +2424,20 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
   h+=' <span id="tb-msg-'+esc(orgId)+'" class="sub-txt"></span>';
   h+='<div class="sub-txt" style="margin-top:8px">Provider: '+esc(bill.paymentProvider||'\u2014')
    + (bill.stripeCustomerId?(' \u00b7 Stripe '+esc(bill.stripeCustomerId)):'')+'</div>';
+  /* The QuickBooks customer ClearSky invoices this tier to by hand: bound
+     here, the workspace's Plan & billing shows QuickBooks' own invoices,
+     what is open or overdue and the pay link, instead of the figures typed
+     above. /api/tenant-billing confirms the number in QuickBooks and keeps
+     the name QuickBooks has for it, so a typo reads as a stranger's name. */
+  var inv2=bill.invoicedTo&&bill.invoicedTo.provider==='quickbooks'?bill.invoicedTo:null;
+  h+='<div class="sub-txt" style="margin-top:8px">QuickBooks customer: '
+   + (inv2?('<b>'+esc(inv2.name||'?')+'</b> (#'+esc(inv2.customerId)+')'):'not bound \u2014 Plan &amp; billing shows only the figures above')+'</div>';
+  h+='<div style="display:flex;gap:6px;align-items:center;margin-top:6px">'
+   + '<input id="tb-qbo-'+esc(orgId)+'" type="text" inputmode="numeric" value="'+esc(inv2?inv2.customerId:'')+'" placeholder="QuickBooks customer number, e.g. 8"'
+   + ' style="flex:1;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px;font:500 12.5px system-ui">'
+   + '<button onclick="bindTenantQuickbooks(&quot;'+esc(orgId)+'&quot;)">'+(inv2?'Rebind':'Bind')+'</button>'
+   + (inv2?'<button onclick="bindTenantQuickbooks(&quot;'+esc(orgId)+'&quot;,true)">Unbind</button>':'')
+   + '</div><span id="tb-qbo-msg-'+esc(orgId)+'" class="sub-txt"></span>';
   } else {
     /* a packaged workspace: the facts, in words, and the one door for changes */
     var onNow = Array.isArray(bill.modules) ? bill.modules : [], bought = _pkgModules(bill), sdp = _standing(bill, org);
@@ -2772,6 +2786,24 @@ function createLogicAdministrator(orgId){
   pw.value='';
   _authedPost('/api/logic-onboard',body).then(function(r){msg.textContent=(r.created?'Account created. ':'Existing sign-in retained. ')+r.note;})
     .catch(function(e){msg.textContent='Not completed: '+e.message;});
+}
+
+/* Bind (or unbind) the QuickBooks customer a legacy tier is invoiced to. Through
+   /api/tenant-billing, never a direct write: the endpoint asks QuickBooks
+   whether the number is a customer of the connected company, records the
+   company and the name, sets the provider to QuickBooks and appends the
+   history row. The confirm step shows the name before the page trusts it. */
+function bindTenantQuickbooks(orgId, unbind){
+  var msg=document.getElementById('tb-qbo-msg-'+orgId), el=document.getElementById('tb-qbo-'+orgId);
+  var id=el?String(el.value||'').trim():'';
+  if(!unbind && !/^\d{1,20}$/.test(id)){ if(msg) msg.textContent='Enter the QuickBooks customer number (digits only; it is in the customer page URL, nameId=…).'; return; }
+  if(unbind && !window.confirm('Unbind the QuickBooks customer from '+orgId+'? Plan & billing goes back to the figures typed in this panel.')) return;
+  if(msg) msg.textContent=unbind?'Unbinding…':'Asking QuickBooks…';
+  _authedPost('/api/tenant-billing',{orgId:orgId,invoicedTo:unbind?null:{provider:'quickbooks',customerId:id}}).then(function(r){
+    var b=r&&r.invoicedTo;
+    if(msg) msg.textContent=b?('Bound to '+(b.name||'?')+' (QuickBooks #'+b.customerId+'). If that is not '+orgId+'’s billing contact, rebind it now.'):'Unbound.';
+    loadTenants();
+  }).catch(function(e){ if(msg) msg.textContent='Not bound — '+(e.message||e); });
 }
 
 function saveTenantBilling(orgId){

@@ -2,7 +2,8 @@
    omega_orgs/{orgId}/billing/current.
    Body: { orgId, tier?, addons?, toolOverrides?, paymentLink?, amountDue?,
            subscriptionDue?, trialEndsAt?, autopay?, paymentProvider?,
-           customerEditorLite?: { monthlyPriceCents?, yearlyPriceCents? } }
+           customerEditorLite?: { monthlyPriceCents?, yearlyPriceCents? },
+           invoicedTo?: { provider: 'quickbooks', customerId } | null }
 
    WHY THIS IS AN ENDPOINT AND NOT A CLIENT WRITE. The rules already allow
    isAdmin() to write billing/current directly, so a console could just call
@@ -18,7 +19,8 @@ var A = require('./_lib/admin');
    unknown key should not fail a legitimate tier change. */
 var ALLOWED = ['tier', 'addons', 'toolOverrides', 'paymentLink', 'amountDue',
                'subscriptionDue', 'trialEndsAt', 'autopay', 'paymentProvider',
-               'stripeCustomerId', 'toolAccess', 'status', 'customerEditorLite'];
+               'stripeCustomerId', 'toolAccess', 'status', 'customerEditorLite',
+               'invoicedTo'];
 var STATUSES = ['active', 'past_due', 'suspended', 'cancelled'];
 var TIERS = ['trial', 'standard', 'deluxe', 'enterprise', 'partner', 'internal'];
 
@@ -43,6 +45,34 @@ function litePrices(given) {
   });
   if (!Object.keys(out).length) throw A.httpError(400, 'customerEditorLite: give monthlyPriceCents and/or yearlyPriceCents');
   return out;
+}
+
+/* invoicedTo: the QuickBooks customer ClearSky invoices this LEGACY tier to
+   by hand, which /api/qbo-invoices reads for the workspace's Plan & billing
+   (api/_lib/qbo-statement.js says why it is not the packaging engine's
+   qboCustomerId). QuickBooks confirms the customer in the connected company
+   before anything is written, and the record keeps that company and the
+   name QuickBooks has for it: a mistyped number shows up as a stranger's
+   name here, in the console and on the workspace's own page, instead of
+   quietly showing somebody else's invoices. null unbinds. */
+function confirmCustomer(given, caller) {
+  if (given === null) return Promise.resolve(null);
+  if (!given || typeof given !== 'object' || Array.isArray(given) || given.provider !== 'quickbooks') {
+    return Promise.reject(A.httpError(400, "invoicedTo must be { provider: 'quickbooks', customerId } or null"));
+  }
+  var St = require('./_lib/qbo-statement'), id = St.customerId(given.customerId);
+  if (!id) return Promise.reject(A.httpError(400, 'invoicedTo.customerId must be the QuickBooks customer number (digits only)'));
+  var Q = require('./_lib/qbo'), S = require('./_lib/qbo-sales');
+  return Q.accessToken().then(function (auth) {
+    return S.request('query?query=' + encodeURIComponent(St.customerSql(id)), null, null, auth.realmId).then(function (r) {
+      var c = ((r && r.QueryResponse) || {}).Customer || [];
+      c = c.filter(function (x) { return String(x.Id) === id; })[0];
+      if (!c) throw A.httpError(404, 'QuickBooks has no customer ' + id + ' in the connected company');
+      if (c.Active === false) throw A.httpError(409, 'QuickBooks customer ' + id + ' (' + c.DisplayName + ') is inactive');
+      return { provider: 'quickbooks', customerId: id, realmId: String(auth.realmId), name: String(c.DisplayName || '').slice(0, 120) || null,
+        boundAt: Date.now(), boundBy: caller.email };
+    });
+  });
 }
 
 module.exports = A.handler(function (req) {
@@ -98,6 +128,13 @@ module.exports = A.handler(function (req) {
       if (before.packaged === true && Object.keys(patch).some(function (key) { return key !== 'customerEditorLite'; })) {
         throw A.httpError(409, 'Packaged billing is payment-controlled; use the reviewed Package panel');
       }
+      return (patch.invoicedTo === undefined ? Promise.resolve() : confirmCustomer(patch.invoicedTo, caller).then(function (bound) {
+        patch.invoicedTo = bound;
+        /* bound to QuickBooks is billed through QuickBooks, unless this same
+           request says otherwise */
+        if (bound && !Object.prototype.hasOwnProperty.call(b, 'paymentProvider')) patch.paymentProvider = 'quickbooks';
+      })).then(function () { return before; });
+    }).then(function (before) {
       /* The whole block is written back, merged here, so the history row's
          before/after is the block and a price left out is not wiped. */
       if (lite) patch.customerEditorLite = Object.assign({}, before.customerEditorLite || {}, lite, { currency: 'USD' });
@@ -115,7 +152,11 @@ module.exports = A.handler(function (req) {
           .collection('billing').doc('current').collection('history').add({
             at: FV.serverTimestamp(), by: caller.email, changed: patch, was: was
           });
-      }).then(function () { return { ok: true, orgId: orgId, changed: Object.keys(patch) }; });
+      }).then(function () {
+        var out = { ok: true, orgId: orgId, changed: Object.keys(patch) };
+        if (patch.invoicedTo !== undefined) out.invoicedTo = patch.invoicedTo;
+        return out;
+      });
     });
   });
 });

@@ -267,7 +267,7 @@ ok('the served folder is tenant.json, products.json and icons/, nothing else (a 
    ccServed.every(function (f) { return f === CC + 'tenant.json' || f === CC + 'products.json' || /^tenants\/cleancell\/icons\/[\w-]+\.svg$/.test(f); }), ccServed);
 
 var T = JSON.parse(read(CC + 'tenant.json'));
-var BILLING = ['tier', 'addons', 'trialEndsAt', 'subscriptionDue', 'amountDue', 'paymentLink', 'stripeCustomerId', 'lastPaidAt', 'autopay', 'paymentProvider', 'toolOverrides', 'capexPerKwh', 'capexPerKw'];
+var BILLING = ['tier', 'addons', 'trialEndsAt', 'subscriptionDue', 'amountDue', 'paymentLink', 'stripeCustomerId', 'lastPaidAt', 'autopay', 'paymentProvider', 'toolOverrides', 'capexPerKwh', 'capexPerKw', 'invoicedTo', 'amountPaid'];
 var under = [], billing = [], long = [];
 (function walk(o, at) {
   if (Array.isArray(o)) { o.forEach(function (v, i) { walk(v, at + '[' + i + ']'); }); return; }

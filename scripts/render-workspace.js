@@ -42,12 +42,53 @@ var FD = require('./_lib/firebase-double'), FX = require('./_lib/dashboard-fixtu
 /* the public price list is served by api/offerings.view on the proposed
    book; the endpoint's admin library is stood in for (no firebase-admin
    here), as the packaging render checks do */
-require('./_lib/firestore-double').mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, db: function () { return null; } });
+/* /api/qbo-invoices is the REAL endpoint and the real statement rules
+   (api/_lib/qbo-statement.js): only Firestore (the current fixture's billing
+   record, in the shared double) and ClearSky's QuickBooks (QB_ROWS, dated
+   from today) are stood in for, so the page is checked against what the
+   server actually sends. */
+var FSD = require('./_lib/firestore-double'), CURRENT_FX = null, SERVER_DB = null;
+/* the server's Firestore for the scenario: the fixture's org and billing record, kept for the whole visit (a Pay writes the Stripe customer) */
+function billingDb() {
+  if (SERVER_DB && SERVER_DB.fx === CURRENT_FX) return SERVER_DB;
+  SERVER_DB = new FSD.DB(); SERVER_DB.fx = CURRENT_FX;
+  ['', '/billing/current'].forEach(function (tail) { var k = CURRENT_FX && 'omega_orgs/' + CURRENT_FX.org + tail; if (k && CURRENT_FX.docs[k]) SERVER_DB.seed(k, CURRENT_FX.docs[k]); });
+  return SERVER_DB;
+}
+FSD.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, db: billingDb,
+  safeOrg: function (v) { var s = String(v == null ? '' : v).trim().toLowerCase(); return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(s) ? s : ''; },
+  authenticate: async function () { var u = CURRENT_FX.user; return { uid: u.uid, email: u.email, orgId: CURRENT_FX.org, staff: false, claims: { email_verified: true } }; },
+  /* the fixture's member record says who administers the workspace */
+  isTenantAdmin: async function (c, o) { var m = CURRENT_FX && CURRENT_FX.docs['omega_orgs/' + o + '/members/' + c.uid]; return !!m && m.status !== 'disabled' && (m.role === 'owner' || m.role === 'admin'); },
+  FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; } });
+var QB_REALM = '9130000000000000', QB_LINK = 'https://connect.intuit.com/portal/app/CommerceNetwork/view/scs-v1-render-fixture';
+function qbDay(n) { return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
+function qbRows() {
+  var who = { value: '8', name: 'Pat Example' };
+  return { invoices: [
+    { Id: '33', DocNumber: '1001263', TxnDate: qbDay(-24), DueDate: qbDay(-24), TotalAmt: 1299, Balance: 1299, CustomerRef: who },
+    { Id: '23', DocNumber: '1001259', TxnDate: qbDay(-41), DueDate: qbDay(-41), TotalAmt: 199.98, Balance: 0, CustomerRef: who },
+    { Id: '17', DocNumber: '1001258', TxnDate: qbDay(-44), DueDate: qbDay(-44), TotalAmt: 800, Balance: 0, CustomerRef: who } ],
+    payments: [
+    { Id: 'p1', TxnDate: qbDay(-43), TotalAmt: 800, CustomerRef: { value: '8' }, Line: [{ Amount: 800, LinkedTxn: [{ TxnId: '17', TxnType: 'Invoice' }] }] },
+    { Id: 'p2', TxnDate: qbDay(-40), TotalAmt: 199.98, CustomerRef: { value: '8' }, Line: [{ Amount: 199.98, LinkedTxn: [{ TxnId: '23', TxnType: 'Invoice' }] }] } ] };
+}
+FSD.mock('../api/_lib/qbo', { ENV: 'sandbox', accessToken: async function () { return { token: 'render', realmId: QB_REALM }; } });
+FSD.mock('../api/_lib/qbo-sales', { request: async function (path, body, id, realm) {
+  if (body || String(realm) !== QB_REALM) throw new Error('render-workspace: QuickBooks is read-only here, in one company');
+  var rows = qbRows(), sql = decodeURIComponent((/^query\?query=([^&]*)/.exec(path) || [])[1] || '');
+  if (/ from Invoice /.test(sql)) return { QueryResponse: { Invoice: rows.invoices } };
+  if (/ from Payment /.test(sql)) return { QueryResponse: { Payment: rows.payments } };
+  var one = /^invoice\/(\d+)(\?include=invoiceLink)?$/.exec(path);
+  if (one) return { Invoice: Object.assign({}, rows.invoices.filter(function (x) { return x.Id === one[1]; })[0], one[2] ? { InvoiceLink: QB_LINK } : {}) };
+  throw new Error('render-workspace: no QuickBooks answer for ' + path);
+} });
+var QBO_INVOICES = require('../api/qbo-invoices'), STRIPE_DOUBLE = require('./_lib/stripe-double').StripeDouble;
 var OFFERINGS = require('../api/offerings'), BOOK = require('../api/_lib/pricebook');
 var DOUBLE_SRC = FD.source();
 var HOST = '127.0.0.1';
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.pdf': 'application/pdf' };
-var apiCalls = [], missing = [], external = [], PACKAGE_VIEW = null, CURRENT_FX = null;
+var apiCalls = [], missing = [], external = [], PACKAGE_VIEW = null, STRIPE_PAGES = [];
 /* THE PACKAGE STORE'S ROUTES. The price list is the real one
    (api/_lib/subscription-pricing on the proposed book, as the packaging
    render checks answer it). plan-change is answered in the SHAPES the real
@@ -97,6 +138,12 @@ var srv = http.createServer(function (req, res) {
       { id: 'in_2', number: 'NS-0002', status: 'paid', amountDue: 1250, created: Date.now() - 10 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_2', pdfUrl: null },
       { id: 'in_1', number: 'NS-0001', status: 'paid', amountDue: 1250, created: Date.now() - 40 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_1', pdfUrl: null } ] });
     if (u === '/api/stripe-portal' && post) return json({ url: 'https://billing.stripe.com/p/session/test_northstar' });
+    if (u === '/api/qbo-invoices' && post) {
+      var qc = []; req.on('data', function (c) { qc.push(c); }); req.on('end', function () {
+        var qb = {}; try { qb = JSON.parse(Buffer.concat(qc).toString()); } catch (e) {}
+        QBO_INVOICES({ method: 'POST', body: qb, caller: null }, { setHeader: function () {} }).then(function (o) { json(o); }, function (e) { json({ error: e.message }, e.status || 500); });
+      }); return;
+    }
     if (u === '/api/package-catalog' || u === '/api/plan-change') {
       var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {} json(storeRoute(u, req.method, body)); }); return;
     }
@@ -119,11 +166,14 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
 
   async function scenario(name, fx, opts) {
     opts = opts || {}; PACKAGE_VIEW = fx.packageView || null; CURRENT_FX = fx;
-    var errs = [], muted = false, ctx = await browser.newContext({ viewport: opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!opts.phone, isMobile: !!opts.phone });
+    /* opts.tz: the reader's time zone (a billing date is a calendar date wherever it is read) */
+    var errs = [], muted = false, ctx = await browser.newContext(Object.assign({ viewport: opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!opts.phone, isMobile: !!opts.phone }, opts.tz ? { timezoneId: opts.tz } : {}));
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) {
       var url = r.request().url();
       if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '/* firebase is scripts/_lib/firebase-double.js here */' });
       if (/fonts\.(googleapis|gstatic)\.com/.test(url)) return r.fulfill({ status: 200, contentType: 'text/css', body: '' });
+      /* Stripe's hosted page, where a Pay lands (api/qbo-invoices pay): answered here, never fetched */
+      if (/^https:\/\/invoice\.stripe\.com\//.test(url)) { STRIPE_PAGES.push(url); return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Stripe</title><p>Stripe hosted invoice page (render stand-in)</p>' }); }
       external.push(name + ': ' + url.slice(0, 120)); return r.abort();
     });
     await ctx.addInitScript(DOUBLE_SRC);
@@ -480,6 +530,58 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('legacy Enterprise: the request can be dismissed without sending', await p.locator('#omega-package-menu').count() === 0);
     return {};
   } });
+  /* ══ 5c. A LEGACY TIER CLEARSKY INVOICES FROM QUICKBOOKS (Concord, 2026-09-27) ══
+     Read in Chicago, where a date-only due date used to print the day
+     before. Unbound (only the figures typed into the console): "Invoiced by
+     ClearSky", never "No billing account yet"; the amount was due on its own
+     calendar date; "Paid to date" is a running total, not a last payment.
+     Bound, on the Stripe rail: QuickBooks' own statement (the REAL
+     /api/qbo-invoices on doubles), the overdue invoice with Pay, and Pay
+     opening Stripe's page for exactly its balance; paid there, the page
+     reads it paid and the Stripe portal keeps the card. */
+  function calDay(isoDate) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate); return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+  function billText(p) { return p.evaluate(function () { var g = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { sub: g('bill-sub'), owe: g('bill-owe'), card: g('bill-card'), hist: g('bill-hist'), histRows: document.querySelectorAll('#bill-hist .inv').length, pays: document.querySelectorAll('#billing-body [data-qbpay]').length, portal: !!document.getElementById('bill-portal'), inputs: document.querySelectorAll('#billing-body input').length }; }); }
+  function setEnv(k, v) { if (v === undefined || v === null) delete process.env[k]; else process.env[k] = v; }
+  var hq = FX.legacyQuickbooks(HOST), hqBill = hq.docs['omega_orgs/' + hq.org + '/billing/current'], callsAt = apiCalls.length;
+  await scenario('legacy-quickbooks-unbound', hq, { url: '/workspace#billing', tz: 'America/Chicago', steps: async function (p) {
+    await p.waitForFunction(function () { return /Paid to date/.test((document.getElementById('bill-hist') || {}).textContent || ''); }, null, { timeout: 6000 }).catch(function () {});
+    var t = await billText(p);
+    ok('legacy QuickBooks, unbound: a customer who has paid and owes reads "Invoiced by ClearSky", never "No billing account yet"', /Invoiced by ClearSky/.test(t.card) && !/No billing account/.test(t.card + t.owe), t.card);
+    ok('legacy QuickBooks, unbound: $1,299 was due on its own calendar date in Chicago (not the day before), and a passed date is not the next invoice', /\$1,299/.test(t.owe) && t.owe.indexOf('was due ' + calDay(hqBill.subscriptionDue)) >= 0 && !/Next invoice/.test(t.owe), { owe: t.owe, due: calDay(hqBill.subscriptionDue) });
+    ok('legacy QuickBooks, unbound: $1,299 is "Paid to date" with the last payment\'s own date, never a $1,299 last payment', /Paid to date/.test(t.hist) && /\$1,299/.test(t.hist) && t.hist.indexOf('last payment ' + calDay(hqBill.lastPaidAt)) >= 0 && !/Last payment/.test(t.hist), t.hist);
+    ok('legacy QuickBooks, unbound: QuickBooks is not asked about a customer nobody bound', !apiCalls.slice(callsAt).some(function (c) { return /qbo-invoices/.test(c); }), apiCalls.slice(callsAt));
+    return {};
+  } });
+  var hb = FX.legacyQuickbooks(HOST, { bound: true }), qbSd = new STRIPE_DOUBLE({ livemode: false }), envWas = { p: process.env.PACKAGING_PROVIDER, k: process.env.STRIPE_SECRET_KEY };
+  setEnv('PACKAGING_PROVIDER', 'stripe'); setEnv('STRIPE_SECRET_KEY', 'sk_test_render'); QBO_INVOICES.deps = { stripe: qbSd }; STRIPE_PAGES = [];
+  await scenario('legacy-quickbooks', hb, { url: '/workspace#billing', tz: 'America/Chicago', steps: async function (p, ctx) {
+    await p.waitForFunction(function () { return /Invoice 1001263/.test((document.getElementById('bill-owe') || {}).textContent || ''); }, null, { timeout: 6000 }).catch(function () {});
+    var t = await billText(p), due = calDay(qbDay(-24));
+    ok('legacy QuickBooks: the payment method is Stripe\'s page for invoices to the bound customer, never "No billing account yet"', /Stripe/.test(t.card) && /Invoices toPat Example/.test(t.card) && /Added on Stripe’s page when you pay/.test(t.card) && !/No billing account/.test(t.card + t.owe) && !t.portal, t.card);
+    ok('legacy QuickBooks: what is owed is QuickBooks\' open invoice, overdue by its days, due on its calendar date, with Pay', /\$1,299/.test(t.owe) && /1 invoice open · overdue/.test(t.owe) && /Invoice 1001263/.test(t.owe) && /24 days overdue/.test(t.owe) && t.owe.indexOf('due ' + due) >= 0 && /Pay now/.test(t.owe) && t.pays >= 2, { owe: t.owe, due: due, pays: t.pays });
+    ok('legacy QuickBooks: a due date gone by is not the next invoice; the last payment is QuickBooks\' own', !/Next invoice/.test(t.owe) && t.owe.indexOf('Last payment' + calDay(qbDay(-40)) + ' · $199.98') >= 0, t.owe);
+    ok('legacy QuickBooks: the history is every QuickBooks invoice with when each was paid, and the plan is billed by invoice through QuickBooks', t.histRows === 3 && t.hist.indexOf('paid ' + calDay(qbDay(-40))) >= 0 && t.hist.indexOf('paid ' + calDay(qbDay(-43))) >= 0 && /\$800/.test(t.hist) && /\$199\.98/.test(t.hist) && /By invoice through QuickBooks/.test(t.sub) && !/Paid to date/.test(t.hist), { hist: t.hist, sub: t.sub });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'legacy-quickbooks-billing-1366.png'), fullPage: true });
+    /* Pay now: Stripe's own page, in a tab opened on the press */
+    var popup = ctx.waitForEvent('page', { timeout: 8000 });
+    await p.click('#bill-owe .acts [data-qbpay]');
+    var tab = await popup.catch(function () { return null; });
+    if (tab) await tab.waitForURL(/^https:\/\/invoice\.stripe\.com\//, { timeout: 8000 }).catch(function () {});
+    var made = qbSd.all('invoices').filter(function (i) { return i.metadata && i.metadata.omegaQboInvoice === '33'; });
+    ok('legacy QuickBooks: Pay now opens Stripe\'s own page in a new tab, for exactly that invoice\'s open balance', !!tab && made.length === 1 && made[0].total === 129900 && made[0].status === 'open' && tab.url() === made[0].hosted_invoice_url && STRIPE_PAGES.indexOf(made[0].hosted_invoice_url) >= 0, { url: tab && tab.url(), made: made.map(function (i) { return { id: i.id, total: i.total, status: i.status, url: i.hosted_invoice_url }; }) });
+    if (tab) await tab.close();
+    /* paid on Stripe's page; the customer comes back to the workspace */
+    if (made[0]) qbSd.pay(made[0].id);
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(function () { return /nothing is owed/.test((document.getElementById('bill-owe') || {}).textContent || ''); }, null, { timeout: 8000 }).catch(function () {});
+    t = await billText(p);
+    var paidOn = made[0] && made[0].id ? new Date(qbSd.all('invoices').filter(function (i) { return i.id === made[0].id; })[0].status_transitions.paid_at * 1000).toISOString().slice(0, 10) : '';
+    ok('legacy QuickBooks: paid on Stripe\'s page, it reads paid ("being recorded in QuickBooks"), nothing offers Pay, and the Stripe portal keeps the card', /nothing is owed/.test(t.owe) && t.hist.indexOf('paid by card ' + calDay(paidOn)) >= 0 && /being recorded in QuickBooks/.test(t.hist) && t.pays === 0 && t.portal && /Managed in the Stripe portal/.test(t.card), t);
+    ok('legacy QuickBooks: no card field anywhere on the page', t.inputs === 0, t.inputs);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'legacy-quickbooks-paid-1366.png'), fullPage: true });
+    return {};
+  } });
+  setEnv('PACKAGING_PROVIDER', envWas.p); setEnv('STRIPE_SECRET_KEY', envWas.k); QBO_INVOICES.deps = null;
   /* ══ 6. THE PACKAGE STORE — Lite Labs on the marketplace ══
      A packaged workspace sees its plan and every module on its shelf with
      the server's price; Lite is Included; Grid Atlas can be subscribed:

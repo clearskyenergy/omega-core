@@ -771,7 +771,19 @@ Assign merges only the owner fields onto `projects/{id}`. Plan & billing
 is a page (`#billing`): subscription, what is owed and when, the payment
 method (the Stripe portal or QuickBooks' own payment page; a card is never
 entered on our pages) and the history; `GET /api/plan-change` is readable
-by any verified member, changes stay with an owner or admin. The shell's
+by any verified member, changes stay with an owner or admin. A legacy tier
+ClearSky invoices by hand in QuickBooks is bound to its QuickBooks
+customer on `billing/current.invoicedTo` (staff, the console's Bind →
+`api/tenant-billing.js`, confirmed in the connected company; NEVER the
+engine's `qboCustomerId`, which activation and the billing profile would
+try to adopt). Plan & billing then shows QuickBooks' own statement
+(`POST /api/qbo-invoices`, rules in `api/_lib/qbo-statement.js`), not the
+figures typed into the console. On the Stripe rail (`PACKAGING_PROVIDER=stripe`
+and a key in the QuickBooks company's mode) Pay is Stripe's page for one
+invoice's open balance ("like any payment page"). A card payment reads
+paid at once. The Connect to Stripe app books it in QuickBooks; OMEGA
+never writes it there (`docs/PAYMENTS-STRIPE.md`). A billing date is a
+CALENDAR date: `day()` / `_acctDay()` never shift 2026-09-03 to the 2nd. The shell's
 button reset is `:where()` (zero specificity) so a styled button keeps its
 face, and `omega-splash.js` hears link clicks last, so a link the page
 handles itself never raises the mark. Optional held modules offer **Opt out** through the

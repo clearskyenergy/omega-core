@@ -149,8 +149,11 @@ of this: every permission on that screen is **Read-only**, which is right
 - Do not sign OMEGA's invoices, customers or items up for anything here;
   OMEGA creates those itself through the API.
 - Do not add Stripe payment links, Stripe Checkout or "Pay with Stripe"
-  to any QuickBooks invoice or template. QuickBooks invoices are paid with
-  QuickBooks Payments.
+  to any QuickBooks invoice or template. On its own page a QuickBooks
+  invoice is paid with QuickBooks Payments. (OMEGA's Plan & billing can
+  take the card for one on Stripe's page instead, on the Stripe rail,
+  without touching the QuickBooks invoice: `PAYMENTS-STRIPE.md`,
+  *QuickBooks invoices paid by card*.)
 - Do not change the QuickBooks OAuth app, developer keys, or the
   connected apps list beyond the Stripe connector.
 

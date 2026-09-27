@@ -78,6 +78,31 @@ decided 2026-09-26.
   plan's from `POST /api/stripe-invoices`). Additions waiting (a legacy
   opt-in with its price, a packaged change waiting for payment) are listed
   between them.
+- **A legacy tier ClearSky invoices by hand in QuickBooks** (Concord,
+  2026-09-27: the page said "No billing account yet … Nothing is charged
+  until then" to a customer QuickBooks was chasing for an overdue $1,299).
+  Staff bind the workspace to its QuickBooks customer in the master
+  console (*QuickBooks customer* → Bind: `POST /api/tenant-billing
+  {invoicedTo}` confirms the number in the connected company and keeps
+  the company and the name; `billing/current.invoicedTo`, never the
+  engine's `qboCustomerId`, which the package engine would try to adopt).
+  Plan & billing then reads QuickBooks' own statement (`POST
+  /api/qbo-invoices`, rules in `api/_lib/qbo-statement.js`): every
+  invoice, what is open and how many days overdue, when each was paid,
+  the last payment. The figures typed into the console are only the
+  fallback. **Pay** is like any payment page (Tommy: "we want to use what
+  you built with the stripe quickbooks account"): on the Stripe rail
+  (`PACKAGING_PROVIDER=stripe`, and a Stripe key in the same mode as the
+  QuickBooks company) it opens Stripe's own page for exactly that
+  invoice's open balance, the Stripe portal keeps the card, and the
+  invoice reads *paid by card · being recorded in QuickBooks* the moment
+  Stripe confirms it, until the Connect to Stripe app's booking lets
+  QuickBooks say so too. OMEGA never writes that payment into QuickBooks
+  (`docs/PAYMENTS-STRIPE.md`, *QuickBooks invoices paid by card*). Off
+  the Stripe rail, Pay is the invoice's own QuickBooks page when
+  QuickBooks offers one. A billing date is a calendar date: `day()` shows
+  2026-09-03 as Sep 3 wherever it is read (it used to read Sep 2 across
+  the Americas).
 - **Opt in, never Ask.** Every module not held carries **Opt in**. A
   packaged workspace opts in on the one menu (`omega-package-menu.js`): a
   server quote, "Subscribe and pay", a QuickBooks invoice with the card

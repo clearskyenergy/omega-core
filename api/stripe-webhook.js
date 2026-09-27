@@ -34,6 +34,27 @@ function packageEvent(org, deps) {
   });
 }
 
+/* A card payment of a QuickBooks invoice (api/qbo-invoices.js `pay`: metadata
+   omegaQboInvoice and omegaOrg, never omegaPackage). Plan & billing reads
+   Stripe itself, so the event only records when the workspace last paid. The
+   legacy tier branch below must never see it: it would move subscriptionDue
+   to this invoice's period and zero amountDue, and QuickBooks still owns
+   what is owed until the Connect to Stripe app books the payment there. */
+function qboInvoiceEvent(evt) {
+  var o = evt && evt.data && evt.data.object, m = (o && o.metadata) || {};
+  if (!o || o.object !== 'invoice' || !m.omegaQboInvoice) return null;
+  var org = A.safeOrg(m.omegaOrg);
+  if (!org) return Promise.resolve({ ignored: 'no workspace on the invoice' });
+  if (evt.type !== 'invoice.paid') return Promise.resolve({ orgId: org, qboInvoice: String(m.omegaQboInvoice), ignored: evt.type });
+  var db = A.db(), FV = A.FieldValue(), ref = db.collection('omega_orgs').doc(org).collection('billing').doc('current');
+  return ref.get().then(function (s) {
+    var bill = s.exists ? s.data() : {};
+    if (!bill.stripeCustomerId || String(bill.stripeCustomerId) !== String(o.customer)) return { orgId: org, ignored: 'not this workspace’s Stripe customer' };
+    return ref.set({ lastPaidAt: new Date(evt.created * 1000).toISOString(), lastStripeEvent: evt.type, updatedAt: FV.serverTimestamp() }, { merge: true })
+      .then(function () { return { orgId: org, qboInvoice: String(m.omegaQboInvoice), paid: true }; });
+  });
+}
+
 function rawBody(req) { return new Promise(function (res, rej) { var c = []; req.on('data', function (d) { c.push(d); }); req.on('end', function () { res(Buffer.concat(c)); }); req.on('error', rej); }); }
 
 module.exports = function (req, res) {
@@ -45,6 +66,8 @@ module.exports = function (req, res) {
     catch (e) { return res.status(400).send('bad signature'); }
     var pkgOrg = StripeBilling.eventOrg(evt);
     if (pkgOrg) return packageEvent(pkgOrg, module.exports.deps).then(function (r) { res.status(200).json({ received: true, package: r }); });
+    var qbo = qboInvoiceEvent(evt);
+    if (qbo) return qbo.then(function (r) { res.status(200).json({ received: true, quickbooksInvoice: r }); });
     /* A tenant's CUSTOMER paying for Editor Lite (api/customer-subscribe.js,
        metadata kind 'customer-editor-lite', or a Stripe customer on the
        stripe_customers pointer) is answered FIRST and never reaches the
@@ -97,3 +120,4 @@ module.exports.config = { api: { bodyParser: false } };
 /* tests hand the engine a Stripe double and a mailer here */
 module.exports.deps = null;
 module.exports.packageEvent = packageEvent;
+module.exports.qboInvoiceEvent = qboInvoiceEvent;
