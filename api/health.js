@@ -29,7 +29,8 @@ var EXPECTED = {
   REGRID_TOKEN:             'parcel lookup outside the county feeds (api/parcel falls back to county GIS)',
   OMEGA_AGENT_LINK_SECRET:  'signs the KMZ download links /api/agent/site-outline hands to a ChatGPT agent; falls back to a digest of the service-account key when unset',
   STRIPE_SECRET_KEY:        'billing: checkout, customer portal, subscriptions',
-  STRIPE_WEBHOOK_SECRET:    'billing events from Stripe (paid, cancelled) — the webhook rejects every event without it'
+  STRIPE_WEBHOOK_SECRET:    'billing events from Stripe (paid, cancelled) — the webhook rejects every event without it',
+  STRIPE_PACKAGING_WEBHOOK_SECRET: 'packaged card payments (Stripe rail): /api/package-stripe-webhook rejects every event without it'
 };
 /* Read with a default that is right for production; listed so the dialog can
    say "using default" instead of "missing". Only GOOGLE_MAPS_API_KEY used to
@@ -46,7 +47,9 @@ var SHAPE = {
   GEMINI_API_KEY:        shape(function (v) { return /^AIza[0-9A-Za-z_-]{20,}$/.test(v); }, 'a Google AI key, which starts with AIza'),
   ANTHROPIC_API_KEY:     shape(function (v) { return /^sk-ant-[A-Za-z0-9_-]{20,}$/.test(v); }, 'an Anthropic key, which starts with sk-ant-'),
   STRIPE_SECRET_KEY:     shape(function (v) { return /^(sk|rk)_(live|test)_[A-Za-z0-9]+$/.test(v); }, 'a Stripe secret key, which starts with sk_live_ or sk_test_'),
-  STRIPE_WEBHOOK_SECRET: shape(function (v) { return /^whsec_[A-Za-z0-9]+$/.test(v); }, 'a Stripe webhook signing secret, which starts with whsec_')
+  STRIPE_WEBHOOK_SECRET: shape(function (v) { return /^whsec_[A-Za-z0-9]+$/.test(v); }, 'a Stripe webhook signing secret, which starts with whsec_'),
+  STRIPE_PACKAGING_WEBHOOK_SECRET: shape(function (v) { return /^whsec_[A-Za-z0-9]+$/.test(v); }, 'a Stripe webhook signing secret, which starts with whsec_'),
+  STRIPE_PACKAGING_SECRET_KEY: shape(function (v) { return /^(sk|rk)_(live|test)_[A-Za-z0-9]+$/.test(v); }, 'a Stripe secret key, which starts with sk_live_ or sk_test_')
 };
 var DEFAULTED = {
   FIREBASE_PROJECT_ID: 'clearsky-portal',

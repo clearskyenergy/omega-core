@@ -40,6 +40,13 @@ module.exports = function (req, res) {
     return byCustomer.then(function (org) {
       if (!org) return res.status(200).json({ ignored: cus ? 'no org for ' + cus : 'no customer on ' + evt.type });
       var ref = db.collection('omega_orgs').doc(org).collection('billing').doc('current');
+      /* A PACKAGED workspace is paid and switched on only by the packaging
+         engine (api/package-stripe-webhook.js on the Stripe rail). A legacy
+         tenant moved onto a package keeps its old stripeCustomerId, and its
+         old subscription's events must never zero what it owes, reactivate
+         it or set its tier: acknowledged, not applied. */
+      return ref.get().then(function (bs) {
+      if (bs.exists && bs.data().packaged === true) return res.status(200).json({ ignored: 'packaged workspace: billed by the packaging engine' });
       var patch = { updatedAt: FV.serverTimestamp(), lastStripeEvent: evt.type };
       if (evt.type === 'invoice.paid') {
         patch.lastPaidAt = new Date(evt.created * 1000).toISOString(); patch.amountDue = 0; patch.paymentFailedAt = null;
@@ -59,7 +66,8 @@ module.exports = function (req, res) {
         return ref.set(patch, { merge: true });
       }
       return null;
-    }).then(function () { res.status(200).json({ received: true }); });
+      });
+    }).then(function () { if (!res.headersSent) res.status(200).json({ received: true }); });
     });
   }).catch(function (e) { console.error('[stripe-webhook]', e); res.status(500).end(); });
 };

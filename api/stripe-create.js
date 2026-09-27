@@ -16,6 +16,8 @@ module.exports = A.handler(function (req) {
     var billRef = db.collection('omega_orgs').doc(b.orgId).collection('billing').doc('current');
     return billRef.get().then(function (s) {
       var cur = s.exists ? s.data() : {};
+      /* a packaged workspace pays through the packaging engine (its rail), never a legacy Stripe customer */
+      if (cur.packaged === true) throw A.httpError(409, 'Packaged billing is payment-controlled; use the Package tab');
       var cust = cur.stripeCustomerId ? stripe.customers.retrieve(cur.stripeCustomerId)
         : stripe.customers.create({ email: b.email, name: b.orgId, metadata: { orgId: b.orgId } });
       return cust.then(function (c) {

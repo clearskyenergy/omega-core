@@ -25,7 +25,7 @@ async function notice(db, orgId, now) {
     var old = await tx.get(ref); if (old.exists) return;
     tx.create(ref, { kind: 'billing', read: false, createdAt: now, packageMail: 'trialEnding', mailState: 'pending',
       text: 'Your trial ends on ' + R.iso(end) + '. Your plan: ' + quote.plan + ', ' + quote.display.monthly + '.',
-      plan: quote.plan, monthlyDisplay: quote.display.monthly });
+      plan: quote.plan, monthlyDisplay: quote.display.monthly, provider: S.railOf(b) });
   });
 }
 async function deliver(db, orgId, now, mailer) {

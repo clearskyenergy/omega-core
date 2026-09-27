@@ -183,8 +183,11 @@ var T = {
   signupReceived: function (o) {
     if (o.payNow) return send(o.email, 'Your ClearSky-OMEGA workspace opens when your first invoice is paid',
       layout('Pay your first invoice to open your workspace', '<p>' + greeting(o.name) + ' Your workspace for <b>' + esc(o.company) + '</b> is set up at <b>' + esc(o.host) + '</b>.</p>'
-        + '<p>Your first invoice' + (o.amountDueDisplay ? ' (' + esc(o.amountDueDisplay) + ')' : '') + ' is ready in QuickBooks. Pay it by card on the invoice page and your workspace opens the moment the payment lands; no approval step, no waiting.</p>'
-        + (o.paymentLink ? button(o.paymentLink, 'Pay the invoice') : '') + '<p>Already paid? Open your workspace and press <b>I\'ve paid</b>; it checks QuickBooks right away.</p>'));
+        + (o.rail === 'stripe'
+          ? '<p>Your first invoice' + (o.amountDueDisplay ? ' (' + esc(o.amountDueDisplay) + ')' : '') + ' is ready. Pay it by card and your workspace opens the moment the payment lands; no approval step, no waiting. The card is kept on file for your renewals.</p>'
+            + (o.paymentLink ? button(o.paymentLink, 'Pay by card') : '') + '<p>Already paid? Open your workspace; it shows the payment as soon as Stripe confirms it.</p>'
+          : '<p>Your first invoice' + (o.amountDueDisplay ? ' (' + esc(o.amountDueDisplay) + ')' : '') + ' is ready in QuickBooks. Pay it by card on the invoice page and your workspace opens the moment the payment lands; no approval step, no waiting.</p>'
+            + (o.paymentLink ? button(o.paymentLink, 'Pay the invoice') : '') + '<p>Already paid? Open your workspace and press <b>I\'ve paid</b>; it checks QuickBooks right away.</p>')));
     return send(o.email, 'We received your ClearSky-OMEGA workspace request',
       layout('Request received', '<p>' + greeting(o.name) + ' We\'re setting up a workspace for <b>' + esc(o.company) + '</b> at <b>' + esc(o.host) + '</b>.</p>'
         + '<p>The ClearSky team reviews every new workspace — usually within one business day. You\'ll get another email the moment it\'s live.</p>'
@@ -211,12 +214,12 @@ var T = {
   },
   trialEnding: function (o) {
     return send(o.email, 'Your OMEGA trial ends on ' + new Date(o.trialEndsAt).toISOString().slice(0, 10),
-      layout('Your trial is ending', '<p>' + esc(o.text) + '</p><p>We will issue your first QuickBooks invoice at trial end. Payment is required to keep creating and exporting.</p>'
+      layout('Your trial is ending', '<p>' + esc(o.text) + '</p><p>' + (o.provider === 'stripe' ? 'Your first invoice is issued at trial end, payable by card.' : 'We will issue your first QuickBooks invoice at trial end.') + ' Payment is required to keep creating and exporting.</p>'
         + button('https://' + o.host + '/account-settings.html', 'View your plan')));
   },
   packageInvoice: function (o) {
     return send(o.email, 'Your OMEGA subscription invoice is ready',
-      layout('Pay to continue', '<p>' + esc(o.text) + '</p>' + (o.paymentLink ? button(o.paymentLink, 'Pay in QuickBooks') : '<p>Open your plan for invoice details.</p>')));
+      layout('Pay to continue', '<p>' + esc(o.text) + '</p>' + (o.paymentLink ? button(o.paymentLink, o.provider === 'stripe' ? 'Pay by card' : 'Pay in QuickBooks') : '<p>Open your plan for invoice details.</p>')));
   },
   /* The Subscription Proposal (Phase 6): the link carries the key that opens
      the customer's view; the reply goes to the rep who prepared it. */

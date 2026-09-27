@@ -103,7 +103,8 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
     tx.create(ref.collection('billing').doc('current'), { packaged: true, packagingSignup: true, packagingState: 'pending',
       modules: ['lite'], proposedPackage: selected, pricebookVersion: book.version, trialDurationDays: duration,
       proposalId: proposal ? proposal.id : null, signupDiscovery: discovery ? { discovery: discovery, recommendation: recommendation, at: now } : null,
-      billingProvider: 'quickbooks', qboEnv: book.qbo.env, createdAt: now });
+      /* the rail this workspace pays on, fixed now (api/_lib/packaging-mode.js rail()) */
+      billingProvider: Mode.rail(), qboEnv: book.qbo.env, createdAt: now });
     if (proposalSnap) {
       if (!proposalSnap.exists || proposalSnap.data().status !== 'sent') throw A.httpError(409, 'This proposal is no longer open');
       tx.update(proposalRef, { status: 'accepted', updatedAt: now, updatedBy: caller.email,
@@ -137,7 +138,7 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
       var applied = await S.apply(db, domain, Object.assign({}, input, { dryRun: false, previewId: previewed.previewId, effectiveAt: previewed.effectiveAt }),
         Object.assign({}, caller, { selfServe: true }), now);
       var after = (await ref.collection('billing').doc('current').get()).data() || {};
-      Object.assign(result, { status: 'active', payNow: true, packagingState: applied.packagingState, paymentLink: applied.paymentLink || after.paymentLink || null,
+      Object.assign(result, { status: 'active', payNow: true, rail: applied.rail || 'quickbooks', packagingState: applied.packagingState, paymentLink: applied.paymentLink || after.paymentLink || null,
         amountDue: after.amountDue == null ? null : after.amountDue, amountDueDisplay: after.amountDue == null ? null : PR.money(Math.round(after.amountDue * 100)),
         invoiceDate: applied.nextInvoiceOn ? previewed.invoice && previewed.invoice.date : null, monthlyDisplay: selected.monthlyDisplay || null, billingEmail: profile.email || caller.email });
       /* an invoice without QuickBooks' pay page (Payments off, or the link not
@@ -155,7 +156,7 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
     }
   }
   var first = (caller.claims.name || caller.email.split('@')[0]).split(' ')[0];
-  await Promise.all([M.templates.signupReceived({ email: caller.email, name: first, company: name, host: result.host, packaging: true, payNow: result.payNow === true, paymentLink: result.paymentLink || null, amountDueDisplay: result.amountDueDisplay || null }),
+  await Promise.all([M.templates.signupReceived({ email: caller.email, name: first, company: name, host: result.host, packaging: true, payNow: result.payNow === true, rail: result.rail || 'quickbooks', paymentLink: result.paymentLink || null, amountDueDisplay: result.amountDueDisplay || null }),
     M.templates.signupAlert({ company: name, orgId: domain, email: caller.email, vertical: profile.vertical, host: result.host, reserved: host, phone: b.phone, note: b.note, payNow: result.payNow === true })]);
   return result;
 }
@@ -194,7 +195,7 @@ module.exports = A.handler(function (req) {
           bill = bs.exists ? bs.data() : {};
           var out = { exists: true, orgId: domain, name: o.name, status: o.status || 'active', host: homeOf(o) };
           /* a workspace waiting for its first payment: the signup page resumes at the pay step */
-          if (bill.packaged === true && bill.packagingState === 'awaiting_payment') Object.assign(out, { payNow: true, packagingState: bill.packagingState, paymentLink: bill.paymentLink || null,
+          if (bill.packaged === true && bill.packagingState === 'awaiting_payment') Object.assign(out, { payNow: true, rail: S.railOf(bill), packagingState: bill.packagingState, paymentLink: bill.paymentLink || null,
             amountDue: bill.amountDue == null ? null : bill.amountDue, amountDueDisplay: bill.amountDue == null ? null : PR.money(Math.round(bill.amountDue * 100)) });
           return out;
         });

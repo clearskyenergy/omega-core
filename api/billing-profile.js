@@ -41,7 +41,9 @@ module.exports = A.handler(async function (req, res) {
     tx.set(ref, { syncLock: { id: id, until: now + 120000 } }, { merge: true });
   });
   try {
-    if (c.billing.qboCustomerId) await Q.driver(c.book).customer(orgId, profile, c.billing.qboCustomerId);
+    /* the billing customer on the workspace's rail follows the profile */
+    if (S.railOf(c.billing) === 'stripe') { if (S.customerOf(c.billing)) await S.driverFor(c.book, 'stripe').customer(orgId, profile, S.customerOf(c.billing)); }
+    else if (c.billing.qboCustomerId) await Q.driver(c.book).customer(orgId, profile, c.billing.qboCustomerId);
     await db.runTransaction(async function (tx) {
       var s = await tx.get(ref), b = await tx.get(current), old = s.data();
       if (!old.syncLock || old.syncLock.id !== id) throw A.httpError(409, 'Billing profile update changed; retry');
