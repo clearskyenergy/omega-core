@@ -331,17 +331,60 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: Site Map is live', await p.$('#tools-body .tool.live[data-tool="editor"]') !== null);
     await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(200);
     await p.waitForFunction(function () { return document.querySelectorAll('#modules-body .mod').length > 5; }, null, { timeout: 4000 }).catch(function () {});
-    var legacyMods = await p.evaluate(function () { return { cards: document.querySelectorAll('#modules-body .mod').length, live: document.querySelectorAll('#modules-body .mod[data-held="1"]').length, part: document.querySelectorAll('#modules-body .mod[data-held="part"]').length, ask: Array.prototype.map.call(document.querySelectorAll('#modules-body [data-ask-module]'), function (a) { return a.textContent.trim(); }), add: document.querySelectorAll('#modules-body [data-add-module]').length, priced: Array.prototype.filter.call(document.querySelectorAll('#modules-body .mod.off .price'), function (e) { return /\$\d/.test(e.textContent); }).length, sub: document.getElementById('modules-sub').textContent }; });
-    ok('northstar: a legacy plan\'s Modules page lists every module, Live where the tier holds it, priced with Opt in where it does not, and never the packaged + Add', legacyMods.cards === M.catalog().length && legacyMods.live > 0 && legacyMods.live < legacyMods.cards && legacyMods.add === 0 && legacyMods.ask.length === legacyMods.cards - legacyMods.live && legacyMods.ask.every(function (t) { return t === 'Opt in'; }) && legacyMods.priced === legacyMods.cards - legacyMods.live && /holds \d+ of \d+ modules/.test(legacyMods.sub), legacyMods);
+    /* ONE card per module from OmegaWorkspaceHub.moduleCard: one status in
+       the contract's words and at most one action on its row */
+    function modsNow() { return p.evaluate(function () {
+      var mods = Array.prototype.slice.call(document.querySelectorAll('#modules-body .mod'));
+      return { cards: mods.length, sub: document.getElementById('modules-sub').textContent, text: document.getElementById('modules-body').textContent,
+        rows: mods.map(function (m) { var a = m.querySelectorAll('.row [data-mod-act]'); return { key: m.getAttribute('data-module'), held: m.getAttribute('data-held'), state: m.getAttribute('data-state'), pill: (m.querySelector('.cv .st') || {}).textContent || '', price: (m.querySelector('.price') || {}).textContent || '', acts: Array.prototype.map.call(a, function (b) { return b.getAttribute('data-mod-act') + ':' + b.textContent.trim(); }), note: (m.querySelector('.row .note') || {}).textContent || '' }; }) }; }); }
+    if (shotsAt) { await p.screenshot({ path: path.join(shotsAt, 'northstar-modules-1366.png'), fullPage: true }); var vpn = p.viewportSize(); await p.setViewportSize({ width: 390, height: 844 }); await wait(250); await p.screenshot({ path: path.join(shotsAt, 'northstar-modules-390.png'), fullPage: true }); await p.setViewportSize(vpn); await wait(200); }
+    var legacyMods = await modsNow(), byK = {}; legacyMods.rows.forEach(function (r) { byK[r.key] = r; });
+    var live = legacyMods.rows.filter(function (r) { return r.state === 'live'; }), part = legacyMods.rows.filter(function (r) { return r.state === 'part'; }), avail = legacyMods.rows.filter(function (r) { return r.state === 'available'; });
+    var PILLS = ['● Live', '● Live · always included', 'Opting out', 'Waiting for payment', 'Bought · not on yet', 'Opt-in requested', 'Partly included', 'Not on your plan'];
+    ok('northstar: a legacy plan\'s Modules page lists every module, each with one contract pill and at most one action', legacyMods.cards === M.catalog().length && legacyMods.rows.every(function (r) { return PILLS.indexOf(r.pill) >= 0 && r.acts.length <= 1; }) && /holds \d+ of \d+ modules/.test(legacyMods.sub) && !/Subscribe|Keep module|\bAsk\b/.test(legacyMods.text), legacyMods.rows.filter(function (r) { return PILLS.indexOf(r.pill) < 0 || r.acts.length > 1; }));
+    ok('northstar: Lite is always included with no action; every other Live module offers Opt out and reads Included in Standard', byK.lite.state === 'included' && !byK.lite.acts.length && live.length > 0 && live.every(function (r) { return r.acts[0] === 'remove:Opt out' && r.price === 'Included in Standard'; }), live);
+    ok('northstar: a partly included module says how much and offers Opt in for the rest, never Opt out', part.length > 0 && part.every(function (r) { return /^add:Opt in/.test(r.acts[0]) && /adds the rest/.test(r.note); }), part);
+    ok('northstar: a module not on the plan is priced and offers Opt in with that price, joining the monthly bill through ClearSky', avail.length > 0 && avail.every(function (r) { return /\$\d/.test(r.price) && r.acts[0] === 'add:Opt in' && r.note.indexOf(r.price) >= 0 && /once ClearSky moves you to monthly billing/.test(r.note); }), avail.slice(0, 3));
+    ok('northstar: the Modules page agrees with Site Map: Plan Sets is not held on Standard although no tool of its is locked', byK.plansets && byK.plansets.state !== 'live', byK.plansets);
     await p.evaluate(function () { window.location.hash = '#plans'; }); await wait(400);
     var lplans = await p.evaluate(function () { var sh = document.getElementById('modules-plans'); return { n: sh.querySelectorAll('.planc').length, on: sh.querySelectorAll('.planc.on').length, note: (sh.querySelector('.plans-note') || {}).textContent || '' }; });
     ok('northstar: a legacy plan\'s plans shelf says its price is the agreement\'s and marks no book plan as its own', lplans.n === 4 && lplans.on === 0 && /Northstar Development/.test(lplans.note) && /Standard plan, priced by your agreement/.test(lplans.note), lplans);
     await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(250);
-    ok('northstar: Lite has no opt-out, optional held modules do', await p.locator('#modules-body [data-remove-module="lite"]').count() === 0 && await p.locator('#modules-body [data-remove-module]').count() === legacyMods.live + legacyMods.part - 1);
-    await p.locator('#modules-body [data-remove-module]').first().click();
-    await p.locator('#omega-package-menu').getByRole('button', { name: 'Opt out', exact: true }).click();
-    var legacyOut = await p.locator('#omega-package-menu').textContent();
-    ok('northstar: legacy opt-out discloses existing billing and makes an email request without pretending to cancel', /billed outside the package engine/.test(legacyOut) && /does not change access, cancel charges or issue a refund/.test(legacyOut) && /^mailto:/.test(await p.locator('#omega-package-menu a').getAttribute('href')));
+    /* OPT OUT → the one menu on that module, straight to its step, the money said, a recorded request (never an email) */
+    var outKey = live[0].key, posts0 = STORE.posts.length;
+    await p.click('#modules-body .mod[data-module="' + outKey + '"] [data-mod-act="remove"]');
+    await p.locator('#omega-package-menu').getByRole('button', { name: 'Send opt-out request' }).waitFor({ timeout: 4000 });
+    var outPanel = await p.evaluate(function () { var m = document.getElementById('omega-package-menu'); return { text: m.textContent, cards: m.querySelectorAll('section').length }; });
+    ok('northstar: Opt out opens the one menu on that module alone, straight to the opt-out, saying nothing changes today and access stays', outPanel.cards === 1 && /nothing changes today/.test(outPanel.text) && /you keep access until then/.test(outPanel.text) && /Lite stays/.test(outPanel.text), outPanel);
+    await p.locator('#omega-package-menu').getByRole('button', { name: 'Send opt-out request' }).click(); await wait(400);
+    var outPosts = STORE.posts.slice(posts0).map(function (b) { return b.action + (b.dryRun ? '?' : '') + ':' + (b.remove || b.add || []).join(','); });
+    ok('northstar: the opt-out is priced first and then recorded as one request', outPosts.join('|') === 'opt-out?:' + outKey + '|opt-out:' + outKey, outPosts);
+    await p.keyboard.press('Escape'); await wait(300);
+    var afterOut = (await modsNow()).rows.filter(function (r) { return r.key === outKey; })[0];
+    ok('northstar: the card now reads Opting out, access unchanged, with Cancel request', afterOut.state === 'removing' && afterOut.pill === 'Opting out' && afterOut.acts[0] === 'cancel:Cancel request' && /access is unchanged/.test(afterOut.note), afterOut);
+    /* CANCEL REQUEST → nothing about the bill changes; the card is Live again */
+    await p.click('#modules-body .mod[data-module="' + outKey + '"] [data-mod-act="cancel"]');
+    await p.locator('#omega-package-menu').getByRole('button', { name: 'Cancel request' }).first().waitFor({ timeout: 4000 });
+    ok('northstar: Cancel request says nothing about the bill changes', /Nothing about your bill changes/.test(await p.locator('#omega-package-menu').textContent()));
+    await p.locator('#omega-package-menu .opm-primary', { hasText: 'Cancel request' }).click(); await wait(400);
+    await p.keyboard.press('Escape'); await wait(300);
+    var backLive = (await modsNow()).rows.filter(function (r) { return r.key === outKey; })[0];
+    ok('northstar: after Cancel request the module is Live again with Opt out', backLive.state === 'live' && backLive.acts[0] === 'remove:Opt out' && STORE.posts[STORE.posts.length - 1].action === 'withdraw-opt-out', backLive);
+    /* OPT IN → the price first, then one recorded request; the card reads Opt-in requested */
+    var inKey = avail[0].key, posts1 = STORE.posts.length;
+    await p.click('#modules-body .mod[data-module="' + inKey + '"] [data-mod-act="add"]');
+    await p.locator('#omega-package-menu').getByRole('button', { name: 'Request opt-in' }).waitFor({ timeout: 4000 });
+    var inPanel = await p.locator('#omega-package-menu').textContent();
+    ok('northstar: Opt in states the monthly price and that nothing is charged before the first invoice is approved', /Opt in to .* for \$[\d,]+\/month\?/.test(inPanel) && /Nothing is charged/.test(inPanel), inPanel.slice(0, 400));
+    await p.locator('#omega-package-menu').getByRole('button', { name: 'Request opt-in' }).click(); await wait(400);
+    await p.keyboard.press('Escape'); await wait(300);
+    var afterIn = (await modsNow()).rows.filter(function (r) { return r.key === inKey; })[0];
+    ok('northstar: the opt-in is recorded once and the card reads Opt-in requested with Cancel request', STORE.posts.slice(posts1).map(function (b) { return b.action + (b.dryRun ? '?' : ''); }).join() === 'opt-in?,opt-in' && afterIn.state === 'requested' && afterIn.acts[0] === 'cancel:Cancel request', afterIn);
+    await p.click('#modules-body .mod[data-module="' + inKey + '"] [data-mod-act="cancel"]');
+    await p.locator('#omega-package-menu .opm-primary', { hasText: 'Cancel request' }).click(); await wait(400);
+    await p.keyboard.press('Escape'); await wait(300);
+    var inBack = (await modsNow()).rows.filter(function (r) { return r.key === inKey; })[0];
+    ok('northstar: a cancelled opt-in is simply on offer again', inBack.state === 'available' && /^add:Opt in/.test(inBack.acts[0]) && STORE.posts[STORE.posts.length - 1].action === 'withdraw-opt-in', inBack);
     await p.keyboard.press('Escape');
     await p.evaluate(function () { window.location.hash = ''; }); await wait(250);
     var cards = await p.$$eval('#flight-body .pc', function (r) { return r.map(function (x) { return x.querySelector('b').textContent + '|' + (x.querySelector('.why') ? x.querySelector('.why').textContent : '') + '|' + (x.querySelector('.who .nm') ? x.querySelector('.who .nm').textContent : '') + '|' + (x.querySelector('.fin') ? x.querySelector('.fin').textContent : ''); }); });
@@ -448,8 +491,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('viewas: the plan strip reads Lite with fewer tools open', /Lite/.test(va.plan) && /\d+ of \d+ tools open/.test(va.plan), va.plan);
     ok('viewas: Site Investment Analysis is locked as it is for a Lite customer', await p.$('#tools-body .tool.locked[data-tool="investment"]') !== null);
     await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(400);
-    var vm = await p.evaluate(function () { return { cards: document.querySelectorAll('#modules-body .mod').length, add: document.querySelectorAll('#modules-body [data-add-module]').length, live: document.querySelectorAll('#modules-body .mod[data-held="1"]').length }; });
-    ok('viewas: the Modules page shows the customer\'s view: Lite Live, the rest to add', vm.cards === M.catalog().length && vm.live === 1 && vm.add === vm.cards - 1, vm);
+    var vm = await p.evaluate(function () { return { cards: document.querySelectorAll('#modules-body .mod').length, acts: document.querySelectorAll('#modules-body [data-mod-act]').length, live: document.querySelectorAll('#modules-body .mod[data-held="1"]').length, off: document.querySelectorAll('#modules-body .mod[data-state="available"]').length }; });
+    ok('viewas: the Modules page shows the customer\'s view (Lite Live, the rest not on the plan) and a staff preview offers no button that changes it', vm.cards === M.catalog().length && vm.live === 1 && vm.off === vm.cards - 1 && vm.acts === 0, vm);
     ok('viewas: nothing was written', !(await p.evaluate(function () { return window.__firebaseDouble.store.log.some(function (w) { return /^omega_orgs\//.test(w.path); }); })));
     return {};
   } });
@@ -503,9 +546,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.keyboard.press('Escape');
     /* the Modules page (2026-09-27): the Ladder as a page of the workspace */
     await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(400);
-    var mods = await p.evaluate(function () { return { view: document.getElementById('content').getAttribute('data-view'), cards: Array.prototype.map.call(document.querySelectorAll('#modules-body .mod'), function (c) { return { key: c.getAttribute('data-module'), held: c.getAttribute('data-held'), price: (c.querySelector('.price') || {}).textContent || '', add: !!c.querySelector('[data-add-module]') }; }), change: (document.querySelector('#plan a.ows-pill') || {}).getAttribute && document.querySelector('#plan a.ows-pill').getAttribute('href') }; });
+    var mods = await p.evaluate(function () { return { view: document.getElementById('content').getAttribute('data-view'), cards: Array.prototype.map.call(document.querySelectorAll('#modules-body .mod'), function (c) { return { key: c.getAttribute('data-module'), held: c.getAttribute('data-held'), price: (c.querySelector('.price') || {}).textContent || '', add: !!c.querySelector('[data-mod-act="add"]') }; }), change: (document.querySelector('#plan a.ows-pill') || {}).getAttribute && document.querySelector('#plan a.ows-pill').getAttribute('href') }; });
     ok('lite: #modules is its own page with one card per catalog module', mods.view === 'modules' && mods.cards.length === M.catalog().length, { view: mods.view, n: mods.cards.length });
-    ok('lite: Lite is Live and Grid Atlas carries the server\'s price and + Add', mods.cards.some(function (c) { return c.key === 'lite' && c.held === '1' && !c.add; }) && mods.cards.some(function (c) { return c.key === 'gridatlas' && c.held === '0' && /\$\d/.test(c.price) && c.add; }), mods.cards.filter(function (c) { return c.key === 'lite' || c.key === 'gridatlas'; }));
+    ok('lite: Lite is Live and Grid Atlas carries the server\'s price and Opt in', mods.cards.some(function (c) { return c.key === 'lite' && c.held === '1' && !c.add; }) && mods.cards.some(function (c) { return c.key === 'gridatlas' && c.held === '0' && /\$\d/.test(c.price) && c.add; }), mods.cards.filter(function (c) { return c.key === 'lite' || c.key === 'gridatlas'; }));
     ok('lite: Change plan on the plan strip opens the Modules page', mods.change === '/workspace#modules', mods.change);
     /* #module-<key>: every link to one module lands on its card, marked and in view */
     await p.evaluate(function () { window.scrollTo(0, 0); window.location.hash = '#module-storage'; }); await wait(500);
@@ -519,9 +562,10 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('lite: a module that lives outside Site Map says where it lives, and one inside says so', /^Lives in your own website/.test(inside.whitelabel) && /^Lives in Omega Logic/.test(inside.plant) && /^Inside Site Map, the editor/.test(inside.plansets) && /^Inside Site Map, the editor · with Grid Atlas/.test(inside.gridatlas) && !/capabilities of Site Map/.test(inside.whitelabel + inside.plant), inside);
     await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(200);
     if (shotsAt) { var vpm = p.viewportSize(); await p.setViewportSize({ width: 390, height: 844 }); await wait(200); await p.screenshot({ path: path.join(shotsAt, 'lite-modules-390.png') }); await p.setViewportSize(vpm); await wait(150); }
-    await p.click('#modules-body [data-add-module="gridatlas"]'); await wait(400);
-    var menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, focus: d ? (d.querySelector('[data-module-card][data-selected]') || {}).getAttribute && d.querySelector('[data-module-card][data-selected]').getAttribute('data-module-card') : null }; });
-    ok('lite: + Add opens the one package menu on that module', menu.open && menu.focus === 'gridatlas', menu);
+    await p.click('#modules-body [data-mod-act="add"][data-module="gridatlas"]');
+    await p.locator('#omega-package-menu').getByRole('button', { name: 'Opt in and pay' }).waitFor({ timeout: 4000 }).catch(function () {});
+    var menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, cards: d ? d.querySelectorAll('section').length : 0, text: d ? d.textContent.replace(/\s+/g, ' ') : '' }; });
+    ok('lite: Opt in opens the one package menu on Grid Atlas alone, already priced: today\'s charge, the monthly price after, and Opt in and pay', menu.open && menu.cards === 1 && /Grid Atlas/.test(menu.text) && /Pay \$200 today/.test(menu.text) && /Then \$250\/month more/.test(menu.text) && /Opt in and pay/.test(menu.text), { cards: menu.cards, text: menu.text.slice(0, 300) });
     await p.keyboard.press('Escape'); await wait(150);
     ok('lite: the page asked /api/package-access and nothing it does not answer', apiCalls.some(function (c) { return /package-access/.test(c); }) && !missing.length, { calls: apiCalls, missing: missing });
     return out;
@@ -553,6 +597,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('lite-changes: Cancel request opens the one package menu on that module', menu.open && /Grid Atlas/.test(menu.text), { open: menu.open, text: menu.text.slice(0, 200) });
     await p.keyboard.press('Escape'); await wait(200);
     await billingPhone(p, 'lite-changes');
+    if (shotsAt) { await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(600); await p.screenshot({ path: path.join(shotsAt, 'lite-changes-modules-1366.png'), fullPage: true }); }
     return {};
   } });
   STORE.pkg = pkgDefault(); STORE.pending = [];
@@ -579,14 +624,16 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   STORE.failSummary = false;
 
   await scenario('legacy-enterprise-opt-out', FX.legacyEnterprise(HOST), { url: '/workspace#modules', steps: async function (p) {
-    await p.waitForFunction(function () { return document.querySelectorAll('#modules-body [data-remove-module]').length > 5; });
-    ok('legacy Enterprise: every optional module has an opt-out, Lite never does', await p.locator('#modules-body [data-remove-module]').count() === M.catalog().length - 1 && await p.locator('#modules-body [data-remove-module="lite"]').count() === 0);
-    await p.locator('#modules-body [data-remove-module="logic-office"]').click();
-    await p.locator('#omega-package-menu').getByRole('button', { name: 'Opt out', exact: true }).click();
-    var link = p.locator('#omega-package-menu a'), draft = decodeURIComponent(await link.getAttribute('href'));
-    ok('legacy Enterprise: Office request names every dependent department and preserves the existing agreement', M.catalog().filter(function (m) { return m.shelf === 'platform'; }).every(function (m) { return draft.indexOf(m.name) >= 0; }) && /existing agreement/.test(draft) && /Lite remains included/.test(draft));
-    await p.keyboard.press('Escape');
-    ok('legacy Enterprise: the request can be dismissed without sending', await p.locator('#omega-package-menu').count() === 0);
+    await p.waitForFunction(function () { return document.querySelectorAll('#modules-body [data-mod-act="remove"]').length > 5; });
+    var entMods = await p.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('#modules-body .mod'), function (m) { var a = m.querySelector('.row [data-mod-act]'); return m.getAttribute('data-module') + ':' + m.getAttribute('data-state') + ':' + (a ? a.getAttribute('data-mod-act') : ''); }); });
+    ok('legacy Enterprise: every Live module offers Opt out, a partly included one Opt in, and Lite nothing; Enterprise holds all but what its tools only partly open', entMods.every(function (x) { var q = x.split(':'); return q[0] === 'lite' ? q[1] === 'included' && !q[2] : q[1] === 'live' ? q[2] === 'remove' : q[1] === 'part' && q[2] === 'add'; }) && entMods.filter(function (x) { return /:live:/.test(x); }).length >= M.catalog().length - 3, entMods);
+    var postsE = STORE.posts.length;
+    await p.locator('#modules-body [data-mod-act="remove"][data-module="logic-office"]').click();
+    await p.locator('#omega-package-menu').getByRole('button', { name: 'Send opt-out request' }).waitFor({ timeout: 4000 });
+    var draft = (await p.locator('#omega-package-menu').textContent()).replace(/\s+/g, ' ');
+    ok('legacy Enterprise: opting out of Office names every department that needs it and keeps the agreement: nothing changes today, access stays, Lite stays', M.catalog().filter(function (m) { return m.shelf === 'platform' && m.key !== 'logic-office'; }).every(function (m) { return draft.indexOf(m.name) >= 0; }) && /nothing changes today/.test(draft) && /Lite stays/.test(draft), draft.slice(0, 400));
+    await p.keyboard.press('Escape'); await wait(200);
+    ok('legacy Enterprise: the request can be dismissed without sending (only the price-free dry run was asked)', await p.locator('#omega-package-menu').count() === 0 && STORE.posts.slice(postsE).every(function (b) { return b.dryRun === true; }) && STORE.posts.length > postsE);
     /* Plan & billing for a plan invoiced by ClearSky and paid by ACH or check */
     await p.evaluate(function () { window.location.hash = '#billing'; }); await wait(600);
     var eb = await p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { card: t('bill-card'), hist: t('bill-hist'), sub: t('bill-sub'), pm: (document.querySelector('#bill-card .pmc') || {}).className, paid: document.querySelectorAll('#bill-hist .spill.paid').length }; });
@@ -692,7 +739,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     PACKAGE_VIEW = null; ctx = await marketContext(ns); p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
     await p.goto(base + '/marketplace.html?home=classic', { waitUntil: 'domcontentloaded' });
     await p.waitForFunction(function () { return !!document.querySelector('#market-grid .mkt-card[data-tool="investment"] button.mkt-act'); }, null, { timeout: 8000 }).catch(function () {});
-    await p.click('#market-grid .mkt-card[data-tool="investment"] button.mkt-act').catch(function () {}); await wait(500);
+    /* the price list repaints the cards when it lands: a click on the card it replaced is lost, so click until the menu answers */
+    for (var tries = 0; tries < 3 && !(await p.$('#omega-package-menu')); tries++) { await p.click('#market-grid .mkt-card[data-tool="investment"] button.mkt-act').catch(function () {}); await p.waitForSelector('#omega-package-menu', { timeout: 1500 }).catch(function () {}); }
     menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, card: !!(d && d.querySelector('[data-module-card="finance"]')) }; });
     ok('marketplace (classic home, legacy plan): See module on Site Investment Analysis opens the one menu on Investor & Finance', menu.open && menu.card, menu);
     ok('marketplace: no uncaught errors and no /api/ route this check does not answer', !errs.length && !missing.length, errs.concat(missing));

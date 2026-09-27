@@ -161,7 +161,8 @@
      Subscribe or Ask. The action is what the button does; the ONE menu
      (omega-package-menu.js) confirms it and states the money before
      anything is written. Nothing here prices: the price is the server's
-     display string, handed in. */
+     display string, handed in, shown once on the card (the button says
+     only Opt in; the menu repeats the figure before anything is sent). */
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   /* a calendar day as people read it; 'YYYY-MM-DD' is that day wherever
      the reader is (new Date('2026-12-20') is the 19th in Chicago) */
@@ -186,7 +187,7 @@
     var optOut = !packaged ? listed(billing.optOuts, key) : null, optIn = !packaged ? listed(billing.optIns, key) : null;
     if (key === 'lite') {
       card.state = 'included'; card.pill = 'Live · always included'; card.tone = 'live'; card.held = true;
-      card.priceLine = 'In every plan'; card.note = 'The floor every plan stands on.';
+      card.priceLine = 'In every plan'; card.note = 'Always on. Nothing to opt in to or out of.';
       return card;
     }
     if (packaged && wait) {
@@ -221,13 +222,13 @@
       if (e.total) bits.push(e.open + ' of ' + e.total + ' Site Map features');
       card.state = 'part'; card.pill = 'Partly included'; card.tone = 'part';
       card.note = (bits.length ? bits.join(' and ') + (bits.length > 1 || (t.open + e.open) !== 1 ? ' are' : ' is') + ' in ' + plan + '. ' : 'Part of it is in ' + plan + '. ') + 'Opting in adds the rest' + (price ? ' for ' + price : '') + '.';
-      card.action = { kind: 'add', label: 'Opt in' + (price ? ' · ' + price : '') };
+      card.action = { kind: 'add', label: 'Opt in' };
     } else {
       var gate = summary && summary.gate;
       card.note = packaged
         ? (gate && gate.canApply === false && gate.reason ? gate.reason : 'Prorated today, then ' + (price || 'its monthly price') + '.')
         : 'Adds ' + (price || 'its monthly price') + ' once ClearSky moves you to monthly billing.';
-      card.action = { kind: 'add', label: 'Opt in' + (price ? ' · ' + price : '') };
+      card.action = { kind: 'add', label: 'Opt in' };
       if (packaged && gate && gate.canApply === false) card.action.disabled = true;
     }
     /* who may press it: a workspace waiting on approval opens nothing yet;
