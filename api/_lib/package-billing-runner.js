@@ -85,7 +85,7 @@ async function tick(db, now, options) {
   if (!lease) return { busy: true };
   var count = Math.min(options.limit || 1, 10), results = [], last = lease.cursor || null;
   try {
-    /* live: the tenants activated or signed up in the production company (packagedLive); sandbox: the marked sandbox tenants. A sandbox signup is `packaged` too, so that mark alone would send the production runner at it. */
+    /* live: the tenants activated or signed up in the production company, and the legacy workspaces with add-ons there (packagedLive); sandbox: the marked sandbox tenants. A sandbox signup is `packaged` too, so that mark alone would send the production runner at it. */
     var query = db.collection('omega_orgs').where(Mode.live() ? 'packagedLive' : 'packagingSandbox', '==', true).orderBy('__name__').limit(count);
     if (last) query = query.startAfter(last);
     var rows = await query.get();
@@ -99,6 +99,14 @@ async function tick(db, now, options) {
           var payment = await S.reconcile(db, org.id, now, options.qbo, { limit: 2 });
           await deliver(db, org.id, now, options.mail || require('./mail'));
           results.push({ orgId: org.id, invoice: invoice, payment: payment });
+        } else if (c.billing.packaged !== true && c.billing.addOns) {
+          /* add-ons on a plan billed outside the engine (api/_lib/addons.js):
+             the monthly renewal on its billing day, then the same look at
+             QuickBooks every invoice gets; the plan itself is never billed here */
+          var renewal = c.org.status === 'active' ? await require('./addons').issue(db, org.id, now, options.qbo) : { skipped: true };
+          var paid = await S.reconcile(db, org.id, now, options.qbo, { limit: 2 });
+          await deliver(db, org.id, now, options.mail || require('./mail'));
+          results.push({ orgId: org.id, addOns: true, invoice: renewal, payment: paid });
         }
       } catch (e) { results.push({ orgId: org.id, reviewRequired: true, error: String(e.message).slice(0, 200) }); }
       last = org.id;
