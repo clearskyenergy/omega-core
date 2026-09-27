@@ -61,6 +61,7 @@ async function sync(db, book, options, deps) {
     var found = ((await call('query?query=' + encodeURIComponent(sql))).QueryResponse || {}).Item || [];
     if (found.length > 1) fail('Ambiguous QuickBooks item name: ' + p.name);
     var item = found[0];
+    if (!item && options.noCreate) fail('No QuickBooks item named ' + p.name + ' (bind never creates; rename or create it in QuickBooks first)');
     if (!item) {
       item = (await call('item', { Name: p.name, Type: 'Service', IncomeAccountRef: { value: options.incomeAccountId },
         UnitPrice: p.priceCents / 100, Taxable: options.taxable }, requestId(options.realmId, p.name))).Item;
