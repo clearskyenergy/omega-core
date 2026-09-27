@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
  * The staff price-book endpoint: staff only, status names what is missing,
- * bind reads the income account off the existing Lite item and binds by name,
+ * bind reads the income account off an existing item, binds by name and never creates,
  * enable needs the shown hash and refuses unbound items. No network. */
 'use strict';
 var assert = require('assert'), F = require('./_lib/firestore-double'), B = require('../api/_lib/pricebook'), I = require('../api/_lib/qbo-items');
@@ -31,6 +31,10 @@ async function run() {
   ok(s.enabled === false && s.items.bound === 0 && s.items.missing.length === s.items.total, 'status names every missing binding');
   await assert.rejects(function () { return api({ method: 'POST', caller: staff, body: { action: 'enable', expectedHash: s.expectedHash } }, res); }, /Bind every/); count++;
   await assert.rejects(function () { return api({ method: 'POST', caller: staff, body: { action: 'bind', extra: 1 } }, res); }, /Unsupported/); count++;
+  var gone = I.items(book)[1].name, keep = names[gone]; delete names[gone];
+  await assert.rejects(function () { return api({ method: 'POST', caller: staff, body: { action: 'bind' } }, res); }, /No QuickBooks item named/); count++;
+  ok(created === 0 && !(db.data.get('pricebook/' + book.version).qbo.items || {})[I.items(book)[1].key], 'a missing name is refused and nothing is created or bound');
+  names[gone] = keep;
   var b = await api({ method: 'POST', caller: staff, body: { action: 'bind' } }, res);
   ok(b.ok && Object.keys(b.items).length === I.items(book).length && created === 0, 'bind finds every existing item by name and creates none');
   s = await api({ method: 'GET', caller: staff }, res);

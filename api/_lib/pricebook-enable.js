@@ -51,9 +51,13 @@ async function bind(db, deps) {
   var book = await B.load(db, B.VERSION), conn = await deps.Q.load();
   if (!conn || !conn.realmId) fail('No QuickBooks company is connected');
   var realm = String(conn.realmId);
-  var q = await deps.request('query?query=' + encodeURIComponent("select * from Item where Name = 'Lite'"), null, null, realm);
-  var lite = ((q && q.QueryResponse) || {}).Item || [];
-  if (lite.length !== 1 || !lite[0].IncomeAccountRef) fail('Expected exactly one QuickBooks item named Lite with an income account');
-  return I.sync(db, book, { apply: true, realmId: realm, incomeAccountId: String(lite[0].IncomeAccountRef.value), taxable: lite[0].Taxable === true }, deps);
+  var names = I.items(book).map(function (i) { return i.name; }), found = null;
+  for (var i = 0; i < names.length && !found; i++) {
+    var q = await deps.request('query?query=' + encodeURIComponent("select * from Item where Name = '" + names[i].replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'"), null, null, realm);
+    var hit = ((q && q.QueryResponse) || {}).Item || [];
+    if (hit.length === 1 && hit[0].IncomeAccountRef) found = hit[0];
+  }
+  if (!found) fail('None of the book\'s item names exist in the connected QuickBooks company');
+  return I.sync(db, book, { apply: true, noCreate: true, realmId: realm, incomeAccountId: String(found.IncomeAccountRef.value), taxable: found.Taxable === true }, deps);
 }
 module.exports = { status: status, enable: enable, bind: bind, missing: missing, hash: hash };
