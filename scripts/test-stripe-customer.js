@@ -48,6 +48,7 @@ F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, authenticat
   httpError: function (status, text) { var e = new Error(text); e.status = status; return e; }, safeOrg: function (s) { return /^[a-z0-9.-]+\.[a-z]+$/.test(s || '') ? s : ''; },
   orgOf: function (x) { return String(x).split('@')[1]; },
   isTenantAdmin: async function (c, o) { if (c.staff) return true; if (c.orgId !== o) return false; var m = await db.doc('omega_orgs/' + o + '/members/' + c.uid).get(); return m.exists && m.data().status !== 'disabled' && ['owner', 'admin'].indexOf(m.data().role) >= 0; },
+  clientAdmin: async function (c, o) { if (c.staff) return true; if (c.orgId !== o) return false; var m = await db.doc('omega_orgs/' + o + '/members/' + c.uid).get(), r = await db.doc('omega_orgs/' + o).get(); return m.exists && m.data().status !== 'disabled' && ['owner', 'admin'].indexOf(m.data().role) >= 0 && r.exists && r.data().status === 'active'; },
   canActInOrg: async function (c, o) { return c.staff || c.orgId === o; },
   billingOf: async function (o) { var r = await db.doc('omega_orgs/' + o + '/billing/current').get(); return r.exists ? r.data() : {}; },
   FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; },
@@ -84,7 +85,12 @@ async function refused(text, fn, re, status) {
 async function door() {
   console.log('\nthe door: an owner or administrator of their own workspace, or verified staff');
   fixture(); var s = new SD({ livemode: true });
-  await refused('an unverified email is refused', function () { return call(Object.assign({}, owner, { claims: {} }), { action: 'view' }, s); }, /Verified email/, 403);
+  var uv = await call(Object.assign({}, owner, { claims: {} }), { action: 'view' }, s);
+  ok(uv.orgId === ORG, 'an unverified owner of an active client may: the role vouches (admin.clientAdmin; a Team invitation makes its account unverified)', uv);
+  await refused('an unverified member is refused', function () { return call(Object.assign({}, member, { claims: {} }), { action: 'view' }, s); }, /Verified email/, 403);
+  fixture(undefined, { status: 'pending' });
+  await refused('an unverified owner of a workspace still pending approval is refused', function () { return call(Object.assign({}, owner, { claims: {} }), { action: 'view' }, s); }, /Verified email/, 403);
+  fixture();
   await refused('another workspace is refused', function () { return call(owner, { orgId: 'other.example', action: 'view' }, s); }, /Own organization/, 403);
   await refused('a member is refused: the card is the owner\'s and the administrators\'', function () { return call(member, { action: 'card' }, s); }, /owner or administrator/, 403);
   await refused('an unknown field is refused', function () { return call(owner, { action: 'view', amount: 1 }, s); }, /Unsupported field/, 400);

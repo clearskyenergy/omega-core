@@ -67,8 +67,9 @@ sends it to quickbooks which is our account."* It does not need
 `PACKAGING_PROVIDER`: it is the legacy tier's own Stripe customer, on the
 same `STRIPE_SECRET_KEY` as `stripe-create.js` and the portal.
 
-1. **Add a card with Stripe** (an owner or administrator; verified staff may
-   act for a tenant). The first time, it links the workspace's one Stripe
+1. **Add a card with Stripe** (an owner or administrator, whose email need
+   not be verified when the workspace is an active client,
+   `admin.clientAdmin`; verified staff may act for a tenant). The first time, it links the workspace's one Stripe
    customer: `billing/current.stripeCustomerId`, the field `stripe-create.js`
    writes and the webhook's tier path finds a workspace by, marked
    `metadata.orgId` and `omegaOrg`, named after the billing contact (else the

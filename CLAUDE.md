@@ -277,7 +277,8 @@ the card is read back from Stripe, never stored. Pay $X with Stripe is one
 `send_invoice` invoice per due date and amount (`metadata.omegaDue`),
 recorded once by the webhook (answered before the tier path) or I've paid;
 `subscriptionDue` stays ClearSky's. A package keeps the engine's rules.
-Stripe → QuickBooks is the Connect to Stripe app, never OMEGA (that would
+An owner or admin of an ACTIVE client needs no verified email here either
+(`admin.clientAdmin`, as on `plan-change`). Stripe → QuickBooks is the Connect to Stripe app, never OMEGA (that would
 book it twice). `scripts/test-stripe-customer.js`.
 
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega

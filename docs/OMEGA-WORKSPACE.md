@@ -249,7 +249,8 @@ click, the waiting card, I've paid, Office Live and Omega Logic on the rail.
 
 `api/_lib/addons.js`, through `plan-change` (owner, administrator or
 verified ClearSky staff; a member reads). An owner or administrator of an
-ACTIVE client needs no verified email, here and on `billing-profile`
+ACTIVE client needs no verified email, here, on `billing-profile` and on
+the Stripe card door `stripe-customer`
 (`admin.clientAdmin`, Tommy, 2026-09-27: "to opt in, we shouldn't need to
 verify email... they are already a client and customer"): the role on
 `members/{uid}` vouches, because only a person grants it, and a Team
