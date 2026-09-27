@@ -372,7 +372,7 @@ function renderHub() {
   var items = [{ key: 'today', label: c.centre.label, icon: c.centre.icon, hint: c.centre.hint, badge: n || '' }].concat(c.ring.map(function (a) {
     return { key: a.key, label: a.label, icon: a.icon, hint: a.hint, badge: a.key === 'team' && myTodos ? myTodos : (a.key === 'projects' && DATA.projects.length ? DATA.projects.length : '') };
   }));
-  OmegaHexHub.render(byId('hub'), { items: items, title: 'Where to?', caption: (WS.clientName || WS.orgId) + ' · ' + first(), onPick: function (key) { if (key === 'today') { go('home'); return; } if (key === 'team') { go('team'); return; } if (key === 'projects') { go('flight'); return; } areaDrawer(key); } });
+  OmegaHexHub.render(byId('hub'), { items: items, title: 'Where to?', caption: (WS.clientName || WS.orgId) + ' · ' + first(), onPick: function (key) { if (key === 'today') { todayDrawer(); return; } areaDrawer(key); } });
   var held = heldChips(), hb = byId('hub').querySelector('.hexhub');
   if (hb && held) { var d = document.createElement('div'); d.className = 'held'; d.innerHTML = held; hb.appendChild(d); }
 }
@@ -528,6 +528,12 @@ function areaDrawer(key) {
   if (key === 'projects') rows = rows.concat(DATA.projects.slice(0, 6).map(function (p) { return { key: 'proj:' + p.id, name: p.name || 'Untitled', sub: (STAGE_LABEL[p.stage] || 'Candidate') + ' · ' + ago(p.updatedAt || p.createdAt), icon: S.ICON.projects, onClick: function () { openProject(p.id); } }; }));
   var why = a.always ? 'Every workspace has this.' : a.logic ? 'Shown because this workspace holds Omega Logic ' + esc(a.label) + '.' : 'Shown because at least one of these tools is open on your plan. A locked one says what carries it.';
   S.drawer({ eyebrow: WS.clientName || WS.orgId, title: a.icon + ' ' + a.label, sub: a.hint, rows: rows, note: why + ' Showing a link is never access: every tool checks the same plan.', onLocked: function (r) { S.closeDrawer(); lockedDrawer(tool(r.key)); } });
+}
+/* Every hex opens the side panel (Tommy, 2026-09-27): the centre lists what
+   needs you; a row acts as the Today card does. Nothing on the hub moves the page. */
+function todayDrawer() {
+  var rows = needs().map(function (r, i) { return { key: 'need:' + i, name: r.t, sub: r.s, href: r.href || null, newTab: !!(r.href && /^https?:/.test(r.href)), icon: S.ICON.home, onClick: r.href ? null : function () { S.closeDrawer(); act(r); } }; });
+  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: '◷ Today', sub: 'what needs you', rows: rows, html: rows.length ? '' : '<div class="ows-note">Nothing needs you right now.</div>', note: 'The same list as the Today card, ranked highest first.' });
 }
 function lockedDrawer(t) {
   if (!t) return;

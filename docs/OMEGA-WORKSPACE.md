@@ -103,10 +103,10 @@ ground, one home; the session travels same-origin on every hop.
 | From | Click | To |
 |---|---|---|
 | Sign-in (`login.html`, `index.html` card) | signs in | `index.html` sends on to `/workspace` once the tenant's shell is known, unless it is `classic`, the workspace is a partner portfolio, or the browser asked for the classic page |
-| `/workspace` hub | Today | the home view (hub and Today) |
-| `/workspace` hub | Projects | the In flight page (`#flight`) |
+| `/workspace` hub | Today | the side panel listing what needs you (the Today card's rows) |
+| `/workspace` hub | Projects | the side panel: In flight, All projects, recent projects |
 | `/workspace` hub | Design · Grid · Finance · Sales · Market … | the side panel for that area: its pages and tools, locked ones marked; Open goes to the tool (`OMEGATools.hrefFor`) or opens the New Project dialog for Site Map and the sandbox |
-| `/workspace` hub | Team | the Around you page (`#team`) |
+| `/workspace` hub | Team | the side panel: Team, Feed |
 | `/workspace` hub | Orders · Plant · Deliver (a workspace holding Omega Logic) | the panel, then `/omega-logic`, `/plant/…`, `/logic-logistics.html` |
 | rail, any page | Home | `/workspace` |
 | rail, any page | Projects | `/projects.html`, wearing the same rail with Projects current; a row opens the editor |

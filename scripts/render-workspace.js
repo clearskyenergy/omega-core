@@ -240,6 +240,13 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: a hub cell opens the side panel with the area\'s tools, Deluxe ones locked', drawer && /Design/.test(drawer.title) && drawer.rows >= 4 && drawer.locked >= 1, drawer);
     await p.keyboard.press('Escape'); await wait(200);
     ok('northstar: Escape closes it', (await p.$('.ows-drawer')) === null);
+    /* every hex opens the side panel, never a spot on the page (2026-09-27) */
+    for (var hx of [['today', /Today/], ['projects', /Projects/], ['team', /Team/]]) {
+      await p.click('#hub .hx[data-hub="' + hx[0] + '"]'); await wait(300);
+      var hd = await p.evaluate(function () { var d = document.querySelector('.ows-drawer'); return { title: d ? d.querySelector('h2').textContent : '', view: document.getElementById('content').getAttribute('data-view') }; });
+      ok('northstar: the ' + hx[0] + ' hex opens the side panel and stays on the home', hx[1].test(hd.title) && hd.view === 'home', hd);
+      await p.keyboard.press('Escape'); await wait(150);
+    }
     /* a locked tile explains instead of opening (locked tiles fold under a per-category line) */
     await p.evaluate(function () { window.location.hash = '#tools'; }); await wait(150);
     await p.$$eval('#tools-body details', function (d) { d.forEach(function (x) { x.open = true; }); }); await wait(100);
