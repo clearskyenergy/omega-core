@@ -1386,24 +1386,34 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.click('#opm-every').catch(function () {}); await p.waitForSelector('#omega-package-menu [data-module-card="compute"]', { timeout: 3000 }).catch(function () {});
     var comp = await p.evaluate(MENU_CARD, 'compute');
     ok('marketplace (classic home, legacy Standard): See every module shows Compute Partly included with Opt in, never On your plan with Opt out', comp.card && comp.state === 'part' && comp.badge === 'Partly included' && comp.buttons.indexOf('Opt out') < 0 && comp.buttons.indexOf('Opt in') >= 0, comp);
-    /* a legacy request is the page's plan from then on: See every module and the next open read Opt-in requested with Cancel request, and a withdrawal reads Opt in again */
+    /* Omega Capital switches on EXACTLY on Standard (the editor opens a live
+       add-on's own commands): its Opt in is the card purchase, Opt in and
+       pay at the server's price, never the recorded request */
     await p.keyboard.press('Escape'); await p.waitForSelector('#omega-package-menu', { state: 'detached', timeout: 2000 }).catch(function () {});
     await seeModule(p, 'investment');
-    var asked = (await menuPress(p, 'finance', 'Opt in')) && (await menuPress(p, 'finance', 'Request opt-in'));
-    await p.waitForFunction(function () { var c = document.querySelector('#omega-package-menu [data-module-card="finance"]'); return !!c && c.getAttribute('data-state') === 'requested'; }, null, { timeout: 4000 }).catch(function () {});
-    var fin = await p.evaluate(MENU_CARD, 'finance');
-    await p.click('#opm-every').catch(function () {}); await p.waitForSelector('#omega-package-menu [data-module-card="compute"]', { timeout: 3000 }).catch(function () {});
-    var finEvery = await p.evaluate(MENU_CARD, 'finance');
+    var capOpt = await menuPress(p, 'finance', 'Opt in');
+    var capBuy = await p.locator('#omega-package-menu [data-module-card="finance"] button', { hasText: 'Opt in and pay' }).waitFor({ timeout: 4000 }).then(function () { return true; }, function () { return false; });
+    var capText = (await p.evaluate(MENU_CARD, 'finance')).text;
+    ok('marketplace (classic home, legacy plan): Opt in on Omega Capital, which Standard switches on exactly, is the card purchase at the server\'s price (Opt in and pay), never a request', capOpt && capBuy && /\$[\d,]+/.test(capText) && !/Request opt-in/.test(capText), capText.slice(0, 300));
+    /* the storefront is ALWAYS a request (ClearSky sets it up): Request opt-in
+       makes it the page's plan from then on (See every module and the next
+       open read Opt-in requested with Cancel request), and a withdrawal reads
+       Opt in again */
+    await p.click('#opm-every').catch(function () {}); await p.waitForSelector('#omega-package-menu [data-module-card="whitelabel"]', { timeout: 3000 }).catch(function () {});
+    var wl0 = await p.evaluate(MENU_CARD, 'whitelabel');
+    STORE.posts = [];
+    var asked = (await menuPress(p, 'whitelabel', 'Opt in')) && (await menuPress(p, 'whitelabel', 'Request opt-in'));
+    await p.waitForFunction(function () { var c = document.querySelector('#omega-package-menu [data-module-card="whitelabel"]'); return !!c && c.getAttribute('data-state') === 'requested'; }, null, { timeout: 4000 }).catch(function () {});
+    var wl1 = await p.evaluate(MENU_CARD, 'whitelabel');
     await p.keyboard.press('Escape'); await p.waitForSelector('#omega-package-menu', { state: 'detached', timeout: 2000 }).catch(function () {});
     await seeModule(p, 'investment');
-    var finAgain = await p.evaluate(MENU_CARD, 'finance');
-    ok('marketplace (classic home, legacy plan): after Request opt-in, Omega Capital reads Opt-in requested with Cancel request in the menu, on See every module and on the next open', asked && fin.state === 'requested' && finEvery.state === 'requested' && finAgain.state === 'requested' && finAgain.badge === 'Opt-in requested' && finAgain.buttons.join('|') === 'Cancel request', { asked: asked, now: fin.state, every: finEvery.state, again: finAgain });
-    var withdrawn = (await menuPress(p, 'finance', 'Cancel request')) && (await menuPress(p, 'finance', 'Cancel request'));
-    await p.waitForFunction(function () { var c = document.querySelector('#omega-package-menu [data-module-card="finance"]'); return !!c && c.getAttribute('data-state') === 'part'; }, null, { timeout: 4000 }).catch(function () {});
-    await p.keyboard.press('Escape'); await p.waitForSelector('#omega-package-menu', { state: 'detached', timeout: 2000 }).catch(function () {});
-    await seeModule(p, 'investment');
-    var finAfter = await p.evaluate(MENU_CARD, 'finance'), legacyPosts = STORE.posts.map(function (b) { return b.action + (b.dryRun ? ' (dry run)' : ''); });
-    ok('marketplace (classic home, legacy plan): Cancel request withdraws it, and the next open offers Opt in again (partly on, as before); the page asked the server exactly addon-quote (not exact on Standard: the recorded request), opt-in (dry run), opt-in, withdraw-opt-in (dry run), withdraw-opt-in', withdrawn && finAfter.state === 'part' && finAfter.buttons.indexOf('Opt in') >= 0 && legacyPosts.join('|') === 'addon-quote|opt-in (dry run)|opt-in|withdraw-opt-in (dry run)|withdraw-opt-in', { withdrawn: withdrawn, after: finAfter, posts: legacyPosts });
+    await p.click('#opm-every').catch(function () {}); await p.waitForSelector('#omega-package-menu [data-module-card="whitelabel"]', { timeout: 3000 }).catch(function () {});
+    var wlAgain = await p.evaluate(MENU_CARD, 'whitelabel');
+    ok('marketplace (classic home, legacy plan): after Request opt-in, Omega Storefront reads Opt-in requested with Cancel request in the menu and on the next open', asked && wl1.state === 'requested' && wlAgain.state === 'requested' && wlAgain.badge === 'Opt-in requested' && wlAgain.buttons.indexOf('Cancel request') >= 0, { before: wl0, now: wl1, again: wlAgain });
+    var withdrawn = (await menuPress(p, 'whitelabel', 'Cancel request')) && (await menuPress(p, 'whitelabel', 'Cancel request'));
+    await p.waitForFunction(function (st) { var c = document.querySelector('#omega-package-menu [data-module-card="whitelabel"]'); return !!c && c.getAttribute('data-state') === st; }, wl0.state, { timeout: 4000 }).catch(function () {});
+    var wlAfter = await p.evaluate(MENU_CARD, 'whitelabel'), legacyPosts = STORE.posts.map(function (b) { return b.action + (b.dryRun ? ' (dry run)' : ''); });
+    ok('marketplace (classic home, legacy plan): Cancel request withdraws it and the card offers Opt in again as before; the page asked the server exactly addon-quote (the storefront is never sold by card: the recorded request), opt-in (dry run), opt-in, withdraw-opt-in (dry run), withdraw-opt-in', withdrawn && wlAfter.state === wl0.state && wlAfter.buttons.indexOf('Opt in') >= 0 && legacyPosts.join('|') === 'addon-quote|opt-in (dry run)|opt-in|withdraw-opt-in (dry run)|withdraw-opt-in', { withdrawn: withdrawn, after: wlAfter, posts: legacyPosts });
     await ctx.close();
     STORE.optIns = {}; STORE.optOuts = {}; STORE.posts = [];
     /* a legacy Deluxe plan: Site Map prints plan sets and screens parcels on Deluxe, so the menu must not offer Plan Sets or Site Intelligence as an opt-in */
