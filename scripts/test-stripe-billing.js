@@ -112,7 +112,7 @@ async function driverChecks() {
   s.pay(inv.id); r = await d.reconcile(record);
   ok('paid by card: satisfied, the whole amount', r.satisfied === true && r.reversed === false && r.paidCents === 70000 && r.payUrl === null, r);
   s.refund(inv.id, 20000); r = await d.reconcile(record);
-  ok('a partial refund: no longer satisfied, what is left counted', r.satisfied === false && r.reversed === false && r.paidCents === 50000, r);
+  ok('a partial refund: still paid (a concession somebody made), what is left counted, and a person is told', r.satisfied === true && r.reversed === false && r.paidCents === 50000 && /part of the payment was refunded/.test(r.review || ''), r);
   s.refund(inv.id); r = await d.reconcile(record);
   ok('a full refund: reversed', r.reversed === true && r.satisfied === false, r);
   var inv2 = await d.invoice(plan('OMEGA subscription stripe.example / void'), BP.normalize(profile), c1);
@@ -126,6 +126,19 @@ async function driverChecks() {
   s.pay(inv4.id); s.dispute(inv4.id);
   await refused('a disputed payment is an accounting review', function () { return d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / dispute'), { stripeInvoiceId: inv4.id, stripeCustomerId: c1, totalCents: 70000 })); }, /disputed/);
   await refused('an invoice is never read against another customer', function () { return d.reconcile(Object.assign({}, record, { stripeCustomerId: other })); }, /customer mismatch/);
+  var inv5 = await d.invoice(plan('OMEGA subscription stripe.example / credit'), BP.normalize(profile), c1);
+  s.credit(inv5.id, 30000); r = await d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / credit'), { stripeInvoiceId: inv5.id, stripeCustomerId: c1, totalCents: 70000 }));
+  ok('paid partly from the customer\'s credit balance: paid in full, never read unpaid for ever', r.satisfied === true && r.paidCents === 70000 && !r.review, r);
+  var inv6 = await d.invoice(plan('OMEGA subscription stripe.example / void-cancel'), BP.normalize(profile), c1), rec6 = Object.assign({}, plan('OMEGA subscription stripe.example / void-cancel'), { stripeInvoiceId: inv6.id, stripeCustomerId: c1, totalCents: 70000 });
+  ok('a cancelled change\'s open invoice is voided at Stripe, so it cannot be paid', (await d.voidOpen(rec6)).voided === true && s.invoices_[inv6.id].status === 'void');
+  ok('...and voiding again is harmless', (await d.voidOpen(rec6)).voided === true);
+  var inv7 = await d.invoice(plan('OMEGA subscription stripe.example / paid-cancel'), BP.normalize(profile), c1); s.pay(inv7.id);
+  await refused('a paid invoice is never voided: the change is switching on', function () { return d.voidOpen(Object.assign({}, rec6, { stripeInvoiceId: inv7.id })); }, /already paid/);
+  /* Stripe's own words (key fragments, account ids) never reach a tenant */
+  var loud = new SD(), dl = ST.driver(book(), { stripe: loud }), cl = await dl.customer('stripe.example', profile);
+  loud.invoices.list = async function () { var e = new Error('Invalid API Key provided: sk_live_****abcd on account acct_123'); e.type = 'StripeAuthenticationError'; e.statusCode = 401; throw e; };
+  var quiet = await refused('a Stripe error reads as a plain refusal', function () { return dl.invoice(plan('OMEGA subscription stripe.example / loud'), BP.normalize(profile), cl); }, /Stripe refused the request/);
+  ok('...with no key, account or mode in it, and it is ClearSky\'s side (retried)', !/sk_|acct_|Invalid API Key/.test(quiet.message) && quiet.clearsky === true && quiet.status === 502, quiet.message);
 
   console.log('\nwhich events are an OMEGA package invoice');
   ok('a package invoice event names its workspace', ST.eventOrg(s.event('invoice.paid', inv.id)) === 'stripe.example');
@@ -200,6 +213,10 @@ async function engineChecks() {
   ok('...and Omega Grid is not on until it is paid', db.data.get(root + '/billing/current').modules.indexOf('gridatlas') < 0);
   stripe.pay(changeRec.stripeInvoiceId); await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
   ok('paid: Omega Grid joins the subscription and is on', db.data.get(root + '/billing/current').modules.indexOf('gridatlas') >= 0 && db.data.get(root + '/billing/current').subscription.modules.indexOf('gridatlas') >= 0);
+  stripe.refund(first.stripeInvoiceId, 10000); await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
+  var firstNow = db.data.get(invoices[0]);
+  ok('a goodwill refund on a paid cycle: still paid, the workspace stays open, and a person is told once', firstNow.state === 'paid' && firstNow.reviewRequired === true && db.data.get(root + '/billing/current').packagingState === 'paid'
+    && !!db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-' + orgId + '-' + first.stripeInvoiceId), firstNow);
   stripe.refund(next.stripeInvoiceId); await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
   ok('a refunded cycle is reversed: access is cut to what was paid for', db.data.get(root + '/billing/current/invoices/' + issued.date).state === 'reversed' && db.data.get(root + '/billing/current').packagingState === 'unpaid');
 

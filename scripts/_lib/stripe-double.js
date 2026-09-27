@@ -69,7 +69,14 @@ function StripeDouble(options) {
         inv.hosted_invoice_url = options.noLink ? null : 'https://invoice.stripe.com/i/acct_double/' + iid; return invoiceView(inv);
       });
     },
-    sendInvoice: async function (iid, p, o) { return once('invoices.sendInvoice', { id: iid }, o, function () { self.sent.push(iid); return invoiceView(self.invoices_[iid]); }); }
+    sendInvoice: async function (iid, p, o) { return once('invoices.sendInvoice', { id: iid }, o, function () { self.sent.push(iid); return invoiceView(self.invoices_[iid]); }); },
+    voidInvoice: async function (iid, p, o) {
+      return once('invoices.voidInvoice', { id: iid }, o, function () {
+        var inv = self.invoices_[iid]; if (!inv) missing('invoice: ' + iid);
+        if (inv.status !== 'open' && inv.status !== 'void') fail('You can only void an open invoice');
+        inv.status = 'void'; return invoiceView(inv);
+      });
+    }
   };
   this.invoiceItems = {
     create: async function (p, o) {
@@ -87,11 +94,14 @@ function StripeDouble(options) {
   /* ── the customer's side ── */
   this.pay = function (iid) {
     var inv = self.invoices_[iid]; if (!inv || inv.status !== 'open') throw new Error('not payable: ' + iid);
-    var ch = { id: id('ch'), object: 'charge', amount: inv.total, amount_refunded: 0, refunded: false, disputed: false, dispute: null, livemode: self.livemode };
+    var ch = { id: id('ch'), object: 'charge', amount: inv.total, amount_refunded: 0, refunded: false, disputed: false, livemode: self.livemode };
     self.charges_[ch.id] = ch; inv.status = 'paid'; inv.amount_paid = inv.total; inv.charge = ch.id; return inv;
   };
   this.refund = function (iid, cents) { var inv = self.invoices_[iid], ch = self.charges_[inv.charge]; ch.amount_refunded = cents == null ? ch.amount : cents; ch.refunded = ch.amount_refunded >= ch.amount; };
-  this.dispute = function (iid) { var inv = self.invoices_[iid], ch = self.charges_[inv.charge]; ch.disputed = true; ch.dispute = 'dp_double'; };
+  /* a chargeback: the Charge carries `disputed` (API 2024-06-20 has no `dispute` field on it) */
+  this.dispute = function (iid) { var inv = self.invoices_[iid], ch = self.charges_[inv.charge]; ch.disputed = true; };
+  /* the customer's credit balance (a negative balance) applied when the invoice is finalized */
+  this.credit = function (iid, cents) { var inv = self.invoices_[iid]; inv.starting_balance = -cents; inv.ending_balance = 0; inv.amount_paid = inv.total - cents; inv.status = 'paid'; };
   this.voidInvoice = function (iid) { self.invoices_[iid].status = 'void'; };
   this.uncollectible = function (iid) { self.invoices_[iid].status = 'uncollectible'; };
   /* someone edits an open invoice's line in the dashboard */

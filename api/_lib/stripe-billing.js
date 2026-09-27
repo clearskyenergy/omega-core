@@ -181,18 +181,51 @@ function driver(book, supplied) {
     await validate(inv, record, record.stripeCustomerId);
     if (inv.total !== record.totalCents) fail('Subscription invoice total changed; accounting review required');
     var paid = inv.amount_paid || 0, refunded = inv.post_payment_credit_notes_amount || 0;
+    /* what Stripe settled without a card: the customer's credit balance, and a
+       credit note issued before payment. Stripe calls such an invoice paid;
+       counting card money alone read it unpaid for ever. */
+    var credited = (inv.starting_balance < 0 && inv.ending_balance != null ? Math.max(0, inv.ending_balance - inv.starting_balance) : 0) + (inv.pre_payment_credit_notes_amount || 0);
     /* money that came back: a refund on the charge, or a credit note issued after payment */
     if (paid > 0 && inv.charge) {
       var charge = typeof inv.charge === 'string' ? await S.charges.retrieve(inv.charge) : inv.charge;
       if (charge && charge.amount_refunded) refunded = Math.max(refunded, charge.amount_refunded);
-      if (charge && charge.dispute && charge.disputed) fail('The payment on ' + inv.id + ' is disputed; accounting review required');
+      /* a chargeback: `disputed` is the Charge's own flag (there is no `dispute` field in this API version) */
+      if (charge && charge.disputed) fail('The payment on ' + inv.id + ' is disputed; accounting review required');
     }
-    if (inv.status === 'paid' && paid > 0 && refunded >= paid) return { satisfied: false, reversed: true, paidCents: 0, payUrl: null };
-    var net = Math.max(0, paid - refunded);
-    return { satisfied: inv.status === 'paid' && net >= record.totalCents, reversed: false, paidCents: Math.min(record.totalCents, net),
+    var covered = paid + credited;
+    if (inv.status === 'paid' && covered > 0 && refunded >= covered) return { satisfied: false, reversed: true, paidCents: 0, payUrl: null };
+    var net = Math.max(0, covered - refunded);
+    /* paid, with PART of it given back (a goodwill refund, a partial credit
+       note): a concession somebody made. It stays paid and a person is told;
+       reading it unpaid dropped a paying tenant to Omega Design with nothing to pay. */
+    if (inv.status === 'paid') return { satisfied: true, reversed: false, paidCents: Math.min(record.totalCents, net), payUrl: null,
+      review: refunded > 0 ? 'part of the payment was refunded (' + (refunded / 100).toFixed(2) + ' of ' + (covered / 100).toFixed(2) + ')' : null };
+    return { satisfied: false, reversed: false, paidCents: Math.min(record.totalCents, net),
       payUrl: inv.status === 'open' ? payLink(inv.hosted_invoice_url) : null };
   }
-  return { provider: 'stripe', name: 'Stripe', customer: customer, invoice: invoice, reconcile: reconcile, guard: guard };
+  /* A cancelled change's invoice is voided at Stripe, so it cannot be paid
+     after the tenant said no. Paid already: refused (it is switching on). */
+  async function voidOpen(record) {
+    guard();
+    var inv = same(await S.invoices.retrieve(record.stripeInvoiceId), 'invoice');
+    if (String(inv.customer) !== String(record.stripeCustomerId)) fail('Subscription customer mismatch');
+    if (inv.status === 'void' || inv.status === 'uncollectible') return { voided: true };
+    if (inv.status === 'paid') fail('This change is already paid; it switches on within a minute');
+    if (inv.status !== 'open') fail('This change\'s invoice cannot be voided (' + inv.status + '); review');
+    await S.invoices.voidInvoice(inv.id, {}, { idempotencyKey: key('omega-void:' + inv.id) });
+    return { voided: true };
+  }
+  /* Stripe's own words stay in the log: its messages carry key fragments,
+     account ids and modes. The caller gets a plain refusal on ClearSky's side
+     (retried like any other: reconcile keeps the record as it was). */
+  function plain(e) {
+    if (!e || typeof e.type !== 'string' || !/^Stripe/.test(e.type)) throw e;
+    console.error('[stripe-billing]', e.type, e.code || '', e.message);
+    var x = new Error('Stripe refused the request' + (e.code ? ' (' + e.code + ')' : '') + '; nothing was changed. Try again, or ClearSky will look.');
+    x.status = 502; x.clearsky = true; x.stripeType = e.type; x.stripeCode = e.code || null; throw x;
+  }
+  function wrapped(fn) { return function () { return fn.apply(null, arguments).catch(plain); }; }
+  return { provider: 'stripe', name: 'Stripe', customer: wrapped(customer), invoice: wrapped(invoice), reconcile: wrapped(reconcile), voidOpen: wrapped(voidOpen), guard: guard };
 }
 /* The workspace a Stripe event is about, when it is an OMEGA package
    invoice (metadata written by invoice() above); null for everything else,
