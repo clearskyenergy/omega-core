@@ -10,7 +10,7 @@
  */
 'use strict';
 var S = require('./package-billing'), B = require('./pricebook'), P = require('./subscription-pricing'), M = require('./modules');
-var R = require('./proration'), Q = require('./qbo-billing'), D = require('./billing-driver'), BP = require('./billing-profile'), U = require('./usage');
+var R = require('./proration'), Q = require('./qbo-billing'), D = require('./billing-driver'), BP = require('./billing-profile'), U = require('./usage'), AO = require('./addons');
 function fail(message, status) { var e = new Error(message); e.status = status || 409; throw e; }
 function iso(now) { return R.iso(now); }
 function keys(list, name) {
@@ -270,7 +270,8 @@ async function summary(db, orgId) {
      them with the pay link while unpaid (Phase 10B: pay in settings) */
   var invoices = rows.slice().reverse().slice(0, 24).map(function (r) {
     return { id: r.id || r.date, kind: S.kindOf(r), state: r.state, date: r.date, period: r.period || null, totalCents: r.totalCents, display: P.money(r.totalCents),
-      paymentLink: r.state === 'unpaid' ? (r.paymentLink || null) : null, payWith: D.name(D.recordProvider(r)), names: r.add ? names(r.add) : null, paidAt: r.paidAt || null };
+      paymentLink: r.state === 'unpaid' ? (r.paymentLink || null) : null, payWith: D.name(D.recordProvider(r)), names: r.add ? names(r.add) : S.kindOf(r) === 'addon' && r.modules ? names(r.modules) : null,
+      purpose: r.purpose || null, paidAt: r.paidAt || null };
   });
   return { orgId: orgId, packaged: b.packaged === true, packagingState: b.packagingState || null, plan: sub.plan || null, planDisplay: planDisplay, modules: b.modules || ['lite'], subscription: sub.modules || ['lite'],
     moduleNames: names(b.modules || ['lite']), subscriptionNames: names(sub.modules || ['lite']),
@@ -279,6 +280,8 @@ async function summary(db, orgId) {
     amountDueDisplay: b.amountDue == null ? null : P.money(Math.round(b.amountDue * 100)), paymentLink: b.paymentLink || null, invoices: invoices,
     provider: D.providerOf(b), payWith: D.name(D.providerOf(b)),
     gate: state(c, Date.now()), pending: pending(rows), removalRequests: b.removalRequests || [],
+    /* a plan billed outside the engine: its add-ons (api/_lib/addons.js), bought, on, owed */
+    addOns: b.packaged === true ? null : AO.view(b, rows, now),
     recent: rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state !== 'unpaid'; }).slice(-5).map(function (r) { return { id: r.id, add: r.add, names: names(r.add), state: r.state, date: r.date, display: P.money(r.totalCents || 0) }; }) };
 }
 /* ── Opt in on a plan billed OUTSIDE the engine (Tommy, 2026-09-27: "when
@@ -385,12 +388,15 @@ async function autoTopup(db, orgId, enabled, caller, now) {
 async function reconcileNow(db, orgId, caller, now, deps) {
   var current = db.doc('omega_orgs/' + orgId + '/billing/current'), snap = await current.get(), b = snap.exists ? snap.data() : {};
   function out(bill, extra) {
+    /* a plan billed outside the engine answers for its add-ons only: its own
+       amount due and pay link are its own billing's, not this look's */
+    if (bill.packaged !== true) return Object.assign({ orgId: orgId, packaged: false, addOns: AO.view(bill, null, now), checkedAt: now }, extra || {});
     return Object.assign({ orgId: orgId, packaged: bill.packaged === true, packagingState: bill.packagingState || null, paid: bill.packagingState === 'paid',
       paymentLink: bill.paymentLink || null, amountDue: bill.amountDue == null ? null : bill.amountDue, amountDueDisplay: bill.amountDue == null ? null : P.money(Math.round(bill.amountDue * 100)),
       accessUntil: bill.accessUntil == null ? null : bill.accessUntil, paidThrough: bill.paidThrough || null, nextInvoiceOn: bill.nextInvoiceOn || null,
       provider: D.providerOf(bill), payWith: D.name(D.providerOf(bill)), checkedAt: now }, extra || {});
   }
-  if (b.packaged !== true) return out(b, { skipped: 'not packaged' });
+  if (b.packaged !== true && !b.addOns) return out(b, { skipped: 'not packaged' });
   if (b.paymentCheckedAt && now - b.paymentCheckedAt < 8000) return out(b, { throttled: true });
   await current.set({ paymentCheckedAt: now, paymentCheckedBy: caller.email }, { merge: true });
   try { await S.reconcile(db, orgId, now, deps); } catch (e) { return out(b, { error: e.status && e.status < 500 ? e.message : D.name(D.providerOf(b)) + ' could not be reached; try again in a moment' }); }
