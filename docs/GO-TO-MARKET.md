@@ -2,38 +2,44 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Status: **draft for the founder, written 2026-09-27.** Companion to `docs/SALES-AGENT.md` (the growth board, outreach rules, CAN-SPAM, off-limits accounts) and `docs/VALUE-LADDER-PACKAGING.md` (the modules). Every price here is the public price list (`GET /api/offerings`, book `2026-10`); if the book changes, change this file. Nothing here is published by code; a person posts and sends.
+Status: **draft for the founder, written 2026-09-27.** Companion to `docs/SALES-AGENT.md` (the growth board, outreach rules, CAN-SPAM, off-limits accounts) and `docs/VALUE-LADDER-PACKAGING.md` (the modules). No price appears in anything public: pricing is for the call (founder decision, 2026-09-27), and build.py refuses a dollar sign in a post, a card, a comment, an answer or an email. Nothing here is published by code; a person posts and sends.
 
 ## 0. The message
 
-**Ditch the stack.** A developer runs one project through six to ten tools (grid data, GIS, a sizing sheet, CAD, an estimate, a pro forma, a data room, RFQs by email) and re-keys the numbers at every hand-off. ClearSky OMEGA is one record from the first look at a parcel to the day the project is funded: screen, design, size, price, finance, operate. One login, priced per workspace, from $500 a month, 14-day trial.
+**Ditch the stack.** A developer runs one project through six to ten tools (grid data, GIS, a sizing sheet, CAD, an estimate, a pro forma, a data room, RFQs by email) and re-keys the numbers at every hand-off. ClearSky OMEGA is one record from the first look at a parcel to the day the project is funded: screen, design, size, price, finance, operate. One login, 14-day trial.
+
+**Engagement first.** Seven game series, the same every week: Drop a Site (Mon), Build Tuesday, Guess & Spot (Wed), Count Your Stack (Thu), Speedrun Friday, Site Leaderboard (Sat), Field Notes (Sun). Each asks for one small thing in the comments. They show speed, scale and ease, never the method.
 
 Links used everywhere below (change them here once, e.g. for a vanity redirect on the marketing site):
 
 - `{site}` https://www.clearskyomega.com
-- `{pricing}` https://silmarillion.clearskyomega.com/offerings
 - `{trial}` https://silmarillion.clearskyomega.com/start
 - `{demo}` https://www.clearskyomega.com/contact.html
 
 ## 1. The voice
 
-- First line under 12 words, a claim or a number, strong enough to stop a scroll. Never "Excited to announce".
-- One idea per post. Short lines. A point of view a developer would argue with or forward.
-- Specific over clever: MW, MWh, feeders, NTP, COD, NFPA 855, the 8,760. The reader's world, in their words.
-- End on a line that lands or a question worth answering. Link in the first comment. Three hashtags at most.
-- Nothing invented: a number is from the product, the public price list, a cited source, or labelled as an example.
+- Engagement first. Every post asks for one small thing: a comment, a guess, a vote, an address, a score.
+- The same seven series every week (Drop a Site, Build Tuesday, Guess & Spot, Count Your Stack, Speedrun Friday, Site Leaderboard, Field Notes), so people know what is coming and come back.
+- First line under 12 words, a claim, a number or a challenge, strong enough to stop a scroll. Never "Excited to announce".
+- Show speed, scale and ease; never the method. A real timer from a real recording, a real count of sites, the result on screen.
+- No prices, plans, discounts or links to the price list. Pricing is for the call.
+- Specific over clever: MW, feeders, NTP, COD, NFPA 855, the 8,760. Short lines. Three hashtags at most.
+- Nothing invented: a number is from the product, a recording, a cited source, or labelled illustrative.
 
 **News-driven posts.** Timely posts earn follows that calendar posts do not. Rules:
 
 - A timely post replaces the calendar post only for news from the last 72 hours that developers are discussing: interconnection rules (FERC, an ISO queue reform), a state storage or solar program, a battery permit fight or moratorium, an equipment price or tariff shock, a large-load announcement straining a grid.
 - Verify the facts at the primary source or two independent reports; the source goes in the first comment.
-- Shape: the news in one line, the take (what it changes about how a developer picks and proves a site), then the one OMEGA capability that answers it, in the product's own words.
+- Shape: the news in one line, the take (what it changes about how a developer picks and proves a site), a question for the comments, then the one OMEGA capability that answers it.
 - Never gloat about a company's loss, never name a prospect in a negative story, never tag a company to pitch it.
+- Never move a series day (Drop a Site, Speedrun Friday) for news; post the news the next open day instead.
 
 **Every day, 10 minutes** (the founder or whoever runs the page):
 
-- Comment on 3 posts from target accounts (docs/developer-targets.csv): add a fact or a question, never a pitch.
-- Reply to every comment on the page's posts within the day.
+- Answer every Drop a Site entry within 24 hours: run it in Grid Atlas and reply with results only (nearest substations and lines, published hosting capacity). Never explain how the screen works.
+- Reply to every comment on the day's post. A reply that asks a question back doubles the thread.
+- Everyone who comments BUILD or guesses closest gets a direct message offering a live build of their site.
+- Comment on 3 posts from target accounts (docs/developer-targets.csv): a fact or a question, never a pitch.
 - Invite 10–20 relevant connections to follow the page.
 
 ## 1a. IP guardrails for anything public
@@ -44,7 +50,8 @@ Sell the result, never the method. The pricing, scoring, dispatch and modelling 
 
 - Show outputs: a finished layout, a one-line, a headroom answer, a result chart, a price-list page.
 - Take every screenshot and video in the sandbox (the sample workspace with invented data) or from the published guides.
-- Describe what a module does in the words of the public price list, and link to it.
+- Show speed, scale and ease: a real timer from a real recording, a real count of sites, the finished layout or ranking on screen.
+- Answer a Drop a Site entry with results only: distances, voltages, published hosting capacity.
 - Say "beta", "limited trial" or "coming soon" wherever the product does.
 - Run live demos in the sandbox, or inside a trial workspace after the prospect has accepted the terms at sign-in. Those terms forbid reverse engineering and using the platform to build a competing product.
 - Keep deep technical diligence (how a model works, what data sits behind it) for a signed NDA.
@@ -56,12 +63,14 @@ Sell the result, never the method. The pricing, scoring, dispatch and modelling 
 - Name or show the logo of a customer without their written permission. Accounts under a signed agreement (the off-limits list in docs/SALES-AGENT.md §5) and anyone mid-negotiation are never named.
 - Name data vendors, financing partners, the architecture, the database, internal tools or internal codenames.
 - Claim what does not ship. The AHJ portal, the procurement marketplace, aggregators and offtakers are coming soon. Site Finder covers northern Illinois (ComEd) only. The Permitting Matrix is beta and verified jurisdiction by jurisdiction. Compute is in limited trial.
-- Invent numbers: no hours saved, customer counts or savings unless they come from the product, the price list or a clearly labelled example.
+- Invent numbers: no hours saved, times, customer counts or savings unless they come from the product, a recording or a clearly labelled example.
+- Post a price, a plan, a discount, or a link to the price list or the signup page. Pricing is for the call (founder decision, 2026-09-27).
+- Show how a ranking or a score is made: the factors, their weights, the data sources behind them. Show the rank and the result.
 
 ## 2. Before launch
 
 1. **Fix the website contact before sending anyone there.** The footer on www.clearskyomega.com still lists an info@ address on the retired legacy domain, and "Request a demo" should reach a clearsky-usa.com inbox somebody reads. The site also lists an AHJ Approval Portal, which the product marks coming soon. Bring the site in line with what ships.
-2. **Decide whether prospects can pay on day one.** Card payment at signup is built but switched off in production, so today a signup waits for ClearSky approval, then runs a 14-day trial, then gets an invoice. Turning it on is the release checklist in docs/PACKAGING-RELEASE-CHECKLIST.md.
+2. **Know where prices still show.** The posts no longer mention or link to prices, but the public price list (silmarillion.clearskyomega.com/offerings) and the package step of signup still show them to anyone who finds them. Hiding them is a product change: say if you want it. Card payment at signup is also still switched off in production.
 3. **Approve signups the same day.** The growth board (GET /api/growth) flags a signup waiting a day or more. A campaign that drives signups needs someone approving them daily.
 4. **Pick the posting channel.** There is no LinkedIn connector in this session. Connect a scheduler that posts to LinkedIn company pages (Typefully or Metricool are in the connector directory; check that it supports company pages) and a daily routine can queue each post for approval. Without one, the routine can put each day's post in Gmail drafts to paste by hand.
 5. **Pick the sender and the postal address.** Cold email needs a monitored clearsky-usa.com mailbox (docs/SALES-AGENT.md §10, decision 1) and a real postal address in every message. Never send cold email from a personal gmail.com address.
@@ -75,9 +84,9 @@ Sell the result, never the method. The pricing, scoring, dispatch and modelling 
 | Tagline (111/120) | One platform from parcel to funded project. Screen, design, size, price and finance energy sites on one record. |
 | Website | https://www.clearskyomega.com |
 | Industry | Software Development |
-| Button | Sign up → https://silmarillion.clearskyomega.com/start |
+| Button | Visit website → https://www.clearskyomega.com |
 
-**About** (1509/2,000 characters)
+**About** (1441/2,000 characters)
 
 ```text
 Developers run one project through a stack of disconnected tools: a grid-data subscription, a GIS seat, a sizing spreadsheet, CAD, an estimating sheet, a pro forma, a data room and an inbox full of RFQs. Every hand-off is re-keyed, and by the time a lender opens the model the numbers no longer match the drawing.
@@ -91,7 +100,7 @@ ClearSky OMEGA replaces the stack with one record, from the first look at a parc
 • Finance: investment analysis and a financing application built from the numbers already on the record.
 • Operate: O&M, SLAs, field service and owner reporting once the asset is built.
 
-Built for developers, EPCs, installers and equipment makers. It runs in any browser with nothing to install. Pricing is per workspace, not per seat, and starts at $500 a month. Every new company gets a 14-day trial.
+Built for developers, EPCs, installers and equipment makers. It runs in any browser with nothing to install. Every new company gets a 14-day trial.
 
 Start at clearskyomega.com.
 ```
@@ -102,142 +111,122 @@ Start at clearskyomega.com.
 
 Day 1 is a Monday. One post a day; weekend posts are light. The link goes in the first comment, not the post. Up to three hashtags. The founder reshares weekday posts from their own profile with a line of their own.
 
-### Day 1 (Mon) · Launch: ditch the stack
+### Day 1 (Mon) · Launch: Drop a Site
 
-*Ditch the stack · Image.* Visual: The card. No other company's name or logo on anything. Graphic: `day01.png` (stack).
-
-```text
-Eight tools. Three versions of the same number. One lender who notices.
-
-That's how most battery projects reach financing: a grid-data subscription, a GIS seat, a sizing spreadsheet, CAD, an estimating sheet, a pro forma, a data room and an inbox full of RFQs.
-
-Every hand-off gets re-keyed. Every re-key is a chance for the drawing and the model to disagree.
-
-ClearSky OMEGA is one record from the first look at a parcel to the day the project is funded. Screen it, design it, size it, price it, finance it, run it.
-
-Ditch the stack.
-
-#EnergyStorage #BESS #RenewableEnergy
-```
-
-First comment: What's included, and the public price list: https://silmarillion.clearskyomega.com/offerings
-
-### Day 2 (Tue) · Stop optioning land the grid cannot serve
-
-*Screen · Image.* Visual: The card. Optional second image: a sandbox Grid Atlas screenshot with the coordinates cropped out. Graphic: `day02.png` (statement).
+*Drop a Site · Image.* Visual: The card. Answer each entry within 24 hours with results only (nearest substations and lines, published hosting capacity), never how the screen works. A Grid Atlas screenshot is fine with the coordinates cropped. Graphic: `day01.png` (drop).
 
 ```text
-Stop optioning land the grid can't serve.
+We built ClearSky OMEGA so a developer can screen, design and build an energy site in one place instead of eight tools.
 
-It's the most expensive mistake in development, and it usually happens before anyone has looked at a substation.
+Talk is cheap. Let's play.
 
-In OMEGA the grid is the first layer you see around a parcel: substations and lines, hosting capacity where the utility publishes it, and an interconnection pre-screen against the fast-track screens.
+Drop an address or a ZIP code in the comments. We'll screen the grid around the first 10 and reply with what we find: the nearest substations and lines, and the hosting capacity where the utility publishes it.
 
-"Can this site take 5 MW?" gets asked on day one, before the study deposit.
+Commercial and industrial sites only. No sign-up, no catch.
 
-That's Grid Atlas. With Lite underneath, it starts at $750 a month.
+Every Monday from here on. Drop a site.
 
-#Interconnection #EnergyStorage #SolarDevelopment
+#EnergyStorage #Interconnection #BESS
 ```
 
-First comment: Price list: https://silmarillion.clearskyomega.com/offerings
+First comment: Want your whole pipeline screened, not one site? Comment BUILD or send us a message and we'll set up a live build.
 
-### Day 3 (Wed) · The fire marshal and the layout
+### Day 2 (Tue) · Build Tuesday: a battery site
 
-*Design · Video.* Visual: Best: a 30–45 s sandbox recording (address, BESS Build, the layout drawing itself, the separation check). Without a recording, post the card. Graphic: `day03.png` (statement).
+*Build Tuesday · Video.* Visual: Best with a 30–60 s sandbox recording of exactly these steps (the card is its cover). Without a recording, post the card. Graphic: `day02.png` (stopwatch).
 
 ```text
-The best-looking battery layout is worthless if the fire marshal kills it.
+Build Tuesday.
 
-OMEGA's guided BESS build places the pads, the PCS and the transformer, draws the fence, and routes the conduit and trench home runs. Separations are checked against NFPA 855 and IFC 1207 while you draw.
+Type an address. Pick BESS Build. Watch it lay out.
 
-The layout you show the landowner on Tuesday is one your engineer can still build on Friday.
+Pads, PCS, transformer, fence, conduit and trench home runs, placed for you, with NFPA 855 and IFC 1207 separations checked while it draws. Then the one-line and the bill of materials, from the same model.
 
-#BESS #NFPA855 #EnergyStorage
+No re-keying. No waiting on a drafter for the concept.
+
+What should we build next Tuesday: an EV hub, solar + storage, or a data center? Vote in the comments.
+
+#BESS #EnergyStorage #SiteDesign
 ```
 
-First comment: Try it on your own sites for 14 days: https://silmarillion.clearskyomega.com/start
+### Day 3 (Wed) · Spot the problem
 
-### Day 4 (Thu) · Sized on one hour of the year
-
-*Size & model · Image.* Visual: The card. Optional: a sandbox value-stack result chart (results only, never the inputs or assumptions). Graphic: `day04.png` (statement).
+*Guess & Spot · Image.* Visual: The card. Tomorrow's run posts the answer card as a comment on this post. Graphic: `day03.png` (plan).
 
 ```text
-If your battery was sized to the peak, it was sized on one hour of the year.
+Spot the problem.
 
-That's what a peak-shaving estimate is: the worst hour of the month, multiplied out. A guess with a spreadsheet around it.
+One of these four battery units gets the layout sent back by the fire marshal. Which one, and why?
 
-OMEGA sizes storage against the site's real load and real tariff, then runs the system through all 8,760 hours: demand charges, time-of-use, capacity and the programs the site can enroll in. The pro forma reads from that dispatch.
+Answer in the comments. We'll post the answer tomorrow.
 
-When the lender asks where a number came from, the answer is an hour of the year. Not a cell.
-
-#EnergyStorage #ValueStack #BESS
+#BESS #NFPA855 #FireSafety
 ```
 
-First comment: Storage Sizing & Revenue is one module on the public price list: https://silmarillion.clearskyomega.com/offerings
+Next day, as a comment on this post with `day03-answer.png`: Answer: unit 1. It sits closer to the existing building than the fire code allows (NFPA 855 and IFC 1207 set the separations; your AHJ has the final word). In OMEGA the separations are checked the moment you place a unit, so it never reaches the fire marshal.
 
-### Day 5 (Fri) · No "contact sales for pricing"
+### Day 4 (Thu) · Count your stack
 
-*Offer · Image.* Visual: The card. Graphic: `day05.png` (list).
+*Count Your Stack · Image.* Visual: The card. Graphic: `day04.png` (checklist).
 
 ```text
-No "contact sales for pricing." Here's ours.
+Count your stack.
 
-• Lite, $500 a month: design sites on live satellite, guided builds, blueprints and customer proposals.
-• Add a module for each thing you do, from $250: Grid Atlas, Storage Sizing & Revenue, Plan Sets & CAD, Investor & Finance and more.
-• Per workspace, not per seat. Lite includes 3 builders and 10 viewers.
-• Pay for the year and you pay for 10 months.
+Tick every tool that touches one of your projects before NTP:
 
-Plans carry an annual service fee; it's on the list too. Every new company gets a 14-day trial on its own sites.
+☐ Grid or hosting-capacity data
+☐ GIS seat or analyst
+☐ Sizing spreadsheet
+☐ CAD seat or drafter
+☐ Estimating sheet
+☐ Pro forma model
+☐ Data room
+☐ RFQs by email
 
-#EnergySoftware #CleanEnergy
+Now write what each one costs you a month. That total is the number to beat.
+
+Comment your score. 6 or more and you're carrying the stack OMEGA was built to replace.
+
+#EnergyStorage #ProjectDevelopment #SolarDevelopment
 ```
 
-First comment: The full list: https://silmarillion.clearskyomega.com/offerings · Start a trial: https://silmarillion.clearskyomega.com/start
+### Day 5 (Fri) · Speedrun Friday: guess the time
 
-### Day 6 (Sat) · Poll: how many tools?
-
-*Conversation · Poll.* Visual: LinkedIn poll, one week. Options: 1–3 · 4–6 · 7–9 · 10 or more
+*Speedrun Friday · Image.* Visual: Record the run first (sandbox, clock on screen, one take). Post this card at 8 AM; post the video at noon with the real time. Never state a time you did not record. Graphic: `day05.png` (stopwatch).
 
 ```text
-Developers: how many software tools touch one of your projects before notice to proceed?
+Speedrun Friday.
 
-Count the subscriptions, the spreadsheets and the consultants' files.
+An address to a battery layout, sized, with a proposal. One take, clock on screen, no cuts.
+
+Before you watch: how long does it take? Guess in the comments.
+
+Closest guess gets a live build of their own site with us.
+
+Video drops at noon.
+
+#BESS #EnergyStorage #ProjectDevelopment
 ```
 
-### Day 7 (Sun) · Where do the numbers stop agreeing?
+### Day 6 (Sat) · Site Leaderboard: 36 sites
 
-*Conversation · Image.* Visual: The card. Graphic: `day07.png` (statement).
+*Site Leaderboard · Image.* Visual: The card (illustrative). Better: run a real folder through the screening register and post that ranking with the site names removed. Graphic: `day06.png` (leaderboard).
 
 ```text
-Where do your numbers stop agreeing?
+36 sites. One sitting. Three worth the drive.
 
-For most teams it's one hand-off. The layout changes and the estimate doesn't. Or the pro forma is two revisions behind the sizing.
+Drop a folder of site KMZs into OMEGA's screening register and it ranks them: terrain, buildable area, the grid picture alongside. Your week goes to the top of the list, not the bottom.
 
-Which hand-off breaks your numbers most often? Tell us in the comments.
+What's the most sites you've screened in one week the old way? Be honest.
+
+(Sample sites, illustrative scores.)
+
+#SiteSelection #SolarDevelopment #EnergyStorage
 ```
 
-### Day 8 (Mon) · The lender believes neither
+### Day 7 (Sun) · A hosting capacity map is a filter
 
-*Finance · Image.* Visual: The card. Optional: the sandbox investment analysis summary (outputs only). Graphic: `day08.png` (statement).
-
-```text
-If your site plan and your pro forma disagree, your lender believes neither.
-
-In OMEGA the investment analysis reads the same record as the layout, the sizing and the estimate. Change the battery and the model follows.
-
-When you're ready, apply for financing or put the project in front of capital from the project itself, with the evidence already attached. Nobody rebuilds the model for the data room.
-
-That's Investor & Finance, $500 a month on top of Lite.
-
-#ProjectFinance #EnergyStorage #CleanEnergyFinance
-```
-
-First comment: Price list: https://silmarillion.clearskyomega.com/offerings
-
-### Day 9 (Tue) · A hosting capacity map is a filter
-
-*Teach · Image.* Visual: The card. Graphic: `day09.png` (compare).
+*Field Notes · Image.* Visual: The card. Graphic: `day07.png` (compare).
 
 ```text
 A hosting capacity map is a filter. Not an answer.
@@ -246,52 +235,106 @@ It tells you roughly how much new generation a feeder section could take on the 
 
 It doesn't tell you what's already in the queue ahead of you, how old the study is, or what the upgrade costs if you're over the line.
 
-The answer comes from a study. The filter decides which sites deserve one.
+We put the filter next to every parcel, so the sites that fail it never get optioned.
 
-We put the filter next to the parcel, so the sites that fail it never get optioned.
+What's the worst surprise a hosting map ever gave you?
 
 #Interconnection #HostingCapacity #SolarDevelopment
 ```
 
-### Day 10 (Wed) · Move the battery 40 feet
+### Day 8 (Mon) · Drop a Site: data center edition
 
-*Draw · Video.* Visual: Best: a 15–20 s sandbox recording (drag the compartment, the trench re-routes, the count changes). Without one, post the card. Graphic: `day10.png` (list).
-
-```text
-Move the battery 40 feet. Now update everything that depended on where it was.
-
-The trench. The conduit schedule. The quantities. The estimate.
-
-In OMEGA the plot plan, the one-line and the takeoff read the same model. Move a compartment and the trench re-routes, the schedule re-counts and the estimate follows.
-
-Plan Sets & CAD also exports for your CAD team (in beta).
-
-#BESS #Engineering #EPC
-```
-
-First comment: Try it on your own site: https://silmarillion.clearskyomega.com/start
-
-### Day 11 (Thu) · Five quotes, five call lists
-
-*Price & RFQ · Image.* Visual: The card. Graphic: `day11.png` (statement).
+*Drop a Site · Image.* Visual: The card. Same rules as every Drop a Site: results only, within 24 hours. Graphic: `day08.png` (drop).
 
 ```text
-Ask five vendors for a quote and you're on five call lists. For good.
+Drop a Site: data center edition.
 
-The bill of materials in OMEGA writes itself as equipment lands on the drawing. When you're ready, send a request for quote to the vendors on it.
+Comment an address or a ZIP where you think a data center could land. We'll screen the grid around the first 10 and reply with the nearest substations and lines, plus the hosting capacity where the utility publishes it.
 
-Each vendor sees only their own lines. Your company stays anonymous until you accept a quote.
+Commercial and industrial sites only.
 
-Cleaner comparisons, fewer emails, and nobody calls before you're ready.
+Data centers don't shop for acreage. They shop for interconnection. Let's see who's got it.
 
-#Procurement #EnergyStorage #BESS
+#DataCenters #Interconnection #PoweredLand
 ```
 
-First comment: Estimate, BOM & Procurement is on the price list: https://silmarillion.clearskyomega.com/offerings
+### Day 9 (Tue) · Build Tuesday: a fast-charging hub
 
-### Day 12 (Fri) · A developer's week, one record
+*Build Tuesday · Video.* Visual: Best with a 30–60 s sandbox recording (the card is its cover). Without one, post the card. Graphic: `day09.png` (stopwatch).
 
-*Ditch the stack · Carousel.* Visual: Upload the PDF as a document post (Add a document), titled "A developer's week". Graphic: `day12.png` (carousel).
+```text
+Build Tuesday: a fast-charging hub.
+
+Type an address. Pick DCFC Build. The chargers, switchgear and transformer land on the site, the load gets checked against what the grid can serve, and a DCFC pro forma fills in: utilization, IRR, payback.
+
+Add a battery to shave the demand charge and watch the payback move.
+
+What should we build next Tuesday?
+
+#EVCharging #DCFC #EVInfrastructure
+```
+
+### Day 10 (Wed) · Quiz: what a hosting map tells you
+
+*Guess & Spot · Image.* Visual: The card. Tomorrow's run posts the answer as a comment. Graphic: `day10.png` (quiz).
+
+```text
+Quiz.
+
+Which of these can a utility's hosting capacity map actually tell you?
+
+A) Your place in the queue
+B) Your upgrade cost
+C) Roughly what a feeder could take when it was studied
+D) When your study will finish
+
+Answer in the comments. Answer tomorrow.
+
+#Interconnection #HostingCapacity #SolarDevelopment
+```
+
+Next day, as a comment on this post: Answer: C. A hosting capacity map shows roughly how much a feeder section could take when the utility studied it. The queue, the upgrade cost and the study timeline are not on it. It's a first filter, and OMEGA puts that filter next to every parcel.
+
+### Day 11 (Thu) · Count your re-keys
+
+*Count Your Stack · Image.* Visual: The card. Graphic: `day11.png` (checklist).
+
+```text
+The re-key tax.
+
+Count how many times one number gets typed twice on a project:
+
+☐ Layout → estimate
+☐ Sizing → pro forma
+☐ Estimate → RFQ
+☐ Pro forma → lender model
+☐ Drawing → permit set
+☐ Site list → CRM
+
+Every tick is time gone and a chance to be wrong. In OMEGA they all read the same record.
+
+Comment your count.
+
+#ProjectDevelopment #EnergyStorage
+```
+
+### Day 12 (Fri) · Speedrun Friday: 10 sites
+
+*Speedrun Friday · Image.* Visual: Record the run first (sandbox or a real folder with names removed, clock on screen, one take). Card at 8 AM, video at noon with the real time. Graphic: `day12.png` (stopwatch).
+
+```text
+Speedrun Friday: 10 sites, screened and ranked.
+
+One folder of KMZs in, a ranked list out, then layouts on the top three. Clock on screen, one take.
+
+Guess the time before the video drops at noon. Closest guess gets a live build of their own site.
+
+#SiteSelection #EnergyStorage #SolarDevelopment
+```
+
+### Day 13 (Sat) · A developer's week, one record
+
+*Site Leaderboard · Carousel.* Visual: Upload the PDF as a document post (Add a document), titled "A developer's week". Graphic: `day13.png` (carousel).
 
 ```text
 A developer's week, on one record.
@@ -304,25 +347,9 @@ Fri: run the investment analysis and send it to capital.
 
 Same project, same numbers, one login. Swipe through →
 
+How long does that week take you today?
+
 #ProjectDevelopment #EnergyStorage #SolarDevelopment
-```
-
-First comment: 14 days on your own sites: https://silmarillion.clearskyomega.com/start
-
-### Day 13 (Sat) · NFPA 855 in one paragraph
-
-*Teach · Image.* Visual: The card. Graphic: `day13.png` (statement).
-
-```text
-NFPA 855 in one paragraph, for people who draw site plans.
-
-It sets the rules for installing stationary battery systems: how much energy each group can hold, how far apart the groups sit, how far they sit from buildings and other exposures, and what large-scale fire testing lets you change. Your AHJ adopts it through its fire code, sometimes with local amendments.
-
-If the layout you show a landowner ignores it, the site you sold them shrinks at permitting.
-
-Always confirm with your AHJ and your engineer.
-
-#NFPA855 #BESS #FireSafety
 ```
 
 ### Day 14 (Sun) · Why we built it (founder)
@@ -341,9 +368,53 @@ Now any developer can work from it. If you want to see it on one of your own sit
 [Founder: rewrite this in your own words before it goes out.]
 ```
 
-### Day 15 (Mon) · What one platform replaces
+### Day 15 (Mon) · Drop a Site: the one nobody wants
 
-*Ditch the stack · Image.* Visual: The card. Graphic: `day15.png` (list).
+*Drop a Site · Image.* Visual: The card. Results only, within 24 hours. Graphic: `day15.png` (drop).
+
+```text
+Drop a Site: the one nobody wants.
+
+Comment the site everyone told you wouldn't work. We'll screen the grid around the first 10 and reply with what's actually there.
+
+Commercial and industrial sites only.
+
+#EnergyStorage #Interconnection #SolarDevelopment
+```
+
+### Day 16 (Tue) · Build Tuesday: a compute campus
+
+*Build Tuesday · Video.* Visual: Best with a sandbox recording (the card is its cover). Graphic: `day16.png` (stopwatch).
+
+```text
+Build Tuesday: a compute campus.
+
+Start with the load you want. OMEGA lays out the campus against what the grid will carry, shows the gap, and sizes the generation and storage that closes it. You know whether the site can hold the load before anyone signs anything.
+
+Compute & Data Center is in limited trial. Want in? Say so in the comments.
+
+#DataCenters #Interconnection #PoweredLand
+```
+
+### Day 17 (Wed) · Spot the problem, round 2
+
+*Guess & Spot · Image.* Visual: The card. Tomorrow's run posts the answer card as a comment. Graphic: `day17.png` (plan).
+
+```text
+Spot the problem, round 2.
+
+The fire truck needs to get in. Which unit is in its way?
+
+Answer in the comments. Answer tomorrow.
+
+#BESS #FireSafety #SiteDesign
+```
+
+Next day, as a comment on this post with `day17-answer.png`: Answer: unit 3. It's parked in the fire access lane, and the AHJ will send it back. In OMEGA the fix is one drag: move the unit, and the trench, the conduit schedule and the estimate follow.
+
+### Day 18 (Thu) · What one platform replaces
+
+*Count Your Stack · Image.* Visual: The card. Graphic: `day18.png` (list).
 
 ```text
 Ditch the stack: what one platform replaces.
@@ -356,194 +427,145 @@ Estimating sheets and RFQs by email → Estimate, BOM & Procurement
 The analyst-built pro forma → Investor & Finance
 An asset-management platform → Operations
 
-One platform, priced per module, on one record.
+Add up what you pay for the left column today. That's the number to beat.
 
 #EnergyStorage #SolarDevelopment #CleanEnergy
 ```
 
-First comment: Every module and its price: https://silmarillion.clearskyomega.com/offerings
+### Day 19 (Fri) · Speedrun Friday: move it once
 
-### Day 16 (Tue) · 50 parcels, three site visits
-
-*Screen · Image.* Visual: The card. Optional: the sandbox parcel screening register with sample sites. Graphic: `day16.png` (statement).
+*Speedrun Friday · Image.* Visual: Record the revision first (sandbox, clock on screen). Card at 8 AM, video at noon with the real time. Graphic: `day19.png` (stopwatch).
 
 ```text
-50 parcels. Which three deserve a site visit?
+Speedrun Friday: move it once.
 
-Drop a folder of site KMZs into OMEGA's parcel screening register and get them ranked. Terrain from USGS 3DEP LiDAR, buildable area after exclusions, and network proximity for compute sites, with the grid picture alongside.
+Drag the battery 40 feet. Count what updates on its own: the trench re-routes, the conduit schedule re-counts, the estimate follows.
 
-Spend the drive time on the sites that pass.
+Guess how long the whole revision takes. Video at noon.
 
-That's Site Intelligence, $500 a month on top of Lite.
-
-#SiteSelection #SolarDevelopment #CommunitySolar
+#BESS #Engineering #EPC
 ```
-
-First comment: Price list: https://silmarillion.clearskyomega.com/offerings
-
-### Day 17 (Wed) · One person designs, twenty look
-
-*Offer · Image.* Visual: The card. Graphic: `day17.png` (statement).
-
-```text
-One person designs. Twenty people look.
-
-Most software charges for every one of them.
-
-OMEGA is priced per workspace. Lite includes 3 builders and 10 viewers, so the land rep, the finance lead and the partner EPC can open the same record without another license.
-
-#EnergySoftware #ProjectDevelopment
-```
-
-First comment: How pricing works: https://silmarillion.clearskyomega.com/offerings
-
-### Day 18 (Thu) · Compute: shopping for interconnection
-
-*Screen · Image.* Visual: The card. Optional: a sandbox compute campus layout. Graphic: `day18.png` (statement).
-
-```text
-Data-center developers aren't shopping for acreage. They're shopping for interconnection.
-
-OMEGA lays out a compute campus against what the grid will carry, sizes the generation and storage that closes the gap, and tells you whether the site can hold the load before anyone signs anything.
-
-Compute & Data Center is in limited trial. If you're siting load, ask us for access.
-
-#DataCenters #Interconnection #PoweredLand
-```
-
-First comment: Ask for access: https://www.clearskyomega.com/contact.html
-
-### Day 19 (Fri) · 14 days on your own sites
-
-*Offer · Image.* Visual: The card. Graphic: `day19.png` (statement).
-
-```text
-Try it on your own sites for 14 days.
-
-Sign up with your work email, tell us what you build, and we open a workspace for your company. Bring an address and a utility bill and we'll build the first site with you.
-
-One trial per company. Link in the comments.
-
-#EnergyStorage #SolarDevelopment #EVCharging
-```
-
-First comment: Start here: https://silmarillion.clearskyomega.com/start
 
 ### Day 20 (Sat) · Poll: what slows your pipeline?
 
-*Conversation · Poll.* Visual: LinkedIn poll, one week. Options: Interconnection · Land and site control · Financing · Equipment and pricing
+*Conversation · Poll.* Visual: LinkedIn poll, one week. Options: Interconnection · Land and site control · Financing · Equipment and supply
 
 ```text
 What slows your pipeline down most right now?
 ```
 
-### Day 21 (Sun) · Why hourly beats peak
+### Day 21 (Sun) · Model the year, not the peak
 
-*Teach · Image.* Visual: The card. Graphic: `day21.png` (compare).
+*Field Notes · Image.* Visual: The card. Graphic: `day21.png` (statement).
 
 ```text
-Why hourly beats peak.
+If your battery was sized to the peak, it was sized on one hour of the year.
 
-A peak-shaving estimate asks one question: how much can the battery take off the worst hour of the month?
+A peak-shaving estimate is the worst hour of the month, multiplied out. OMEGA runs the system through all 8,760 hours instead: demand charges, time-of-use, capacity, the programs the site can enroll in, and the battery's own limits.
 
-An 8,760 asks it for every hour of the year, against the tariff, the programs and the battery's own limits: state of charge, cycles and round-trip losses. The two answers can be far apart, and lenders know it.
+When the lender asks where a number came from, the answer is an hour of the year. Not a cell.
 
-Model the year, not the peak.
+How was your last battery sized?
 
-#EnergyStorage #BESS #ValueStack
+#EnergyStorage #ValueStack #BESS
 ```
 
-### Day 22 (Mon) · Fast-charging hubs
+### Day 22 (Mon) · Drop a Site: fleet depot edition
 
-*Design · Image.* Visual: The card. Optional: a sandbox DCFC build. Graphic: `day22.png` (statement).
+*Drop a Site · Image.* Visual: The card. Results only, within 24 hours. Graphic: `day22.png` (drop).
 
 ```text
-Building a fast-charging hub? Start with the service, not the chargers.
+Drop a Site: fleet depot edition.
 
-In OMEGA a DCFC build lays out the chargers, the switchgear and the transformer on the site, checks the load against what the grid can serve, and feeds a DCFC pro forma with utilization, IRR and payback on the same record.
+Comment a depot, a truck stop or a lot where you'd put fast chargers. We'll screen the grid around the first 10 and reply with what's there.
 
-Add storage to shave the demand charge and watch the model move.
+Commercial and industrial sites only.
 
-#EVCharging #DCFC #EVInfrastructure
+#EVCharging #FleetElectrification #DCFC
 ```
 
-First comment: 14-day trial: https://silmarillion.clearskyomega.com/start
+### Day 23 (Tue) · Build Tuesday: solar + storage
 
-### Day 23 (Tue) · COD is day one of the asset
-
-*Operate · Image.* Visual: The card. Graphic: `day23.png` (statement).
+*Build Tuesday · Video.* Visual: Best with a sandbox recording (the card is its cover). Graphic: `day23.png` (stopwatch).
 
 ```text
-COD is the start of the asset, not the end of the project.
+Build Tuesday: solar + storage.
 
-OMEGA's Operations module keeps the same record after it's built: O&M, SLA and contract tracking, field service and dispatch, and owner reporting.
+Address in. The array laid out, the battery sized to the load and the tariff, the whole system dispatched across 8,760 hours, and a pro forma that reads from it.
 
-The drawing your team made in year zero is the one the technician opens in year eight.
+What should we build next?
 
-#AssetManagement #EnergyStorage #OandM
+#SolarPlusStorage #EnergyStorage #CommercialSolar
 ```
 
-First comment: Operations on the price list: https://silmarillion.clearskyomega.com/offerings
+### Day 24 (Wed) · What kills more battery projects?
 
-### Day 24 (Wed) · Address to proposal, timed
-
-*Design · Video.* Visual: A one-take sandbox recording with a clock on screen: address, grid check, layout, sizing, proposal. Post the real time; never write a time before you record it. The card is the cover. Graphic: `day24.png` (statement).
+*Guess & Spot · Image.* Visual: The card. Next week's run can share the tally from the comments. Graphic: `day24.png` (quiz).
 
 ```text
-Address to proposal, timed.
+No right answer on this one. Tell us what you've lived.
 
-We start the clock, type an address and build a battery site from nothing: grid check, layout, sizing, proposal. The clock stays on screen the whole time.
+What kills more battery projects?
 
-No cuts. Watch the time at the end.
+A) Interconnection
+B) Local permits
+C) Financing
+D) Equipment and supply
+
+We'll share the tally next week.
+
+#EnergyStorage #BESS #Interconnection
+```
+
+### Day 25 (Thu) · Five quotes, five call lists
+
+*Count Your Stack · Image.* Visual: The card. Graphic: `day25.png` (statement).
+
+```text
+Ask five vendors for a quote and you're on five call lists. For good.
+
+The bill of materials in OMEGA writes itself as equipment lands on the drawing. When you're ready, send a request for quote to the vendors on it.
+
+Each vendor sees only their own lines. Your company stays anonymous until you accept a quote.
+
+How many vendors call you a week?
+
+#Procurement #EnergyStorage #BESS
+```
+
+### Day 26 (Fri) · Speedrun Friday: the full run
+
+*Speedrun Friday · Image.* Visual: Record the full run first (sandbox, clock on screen, one take). Card at 8 AM, video at noon with the real time. Graphic: `day26.png` (stopwatch).
+
+```text
+Speedrun Friday: the full run.
+
+Address to a proposal a customer could sign: grid check, layout, sizing, one-line and estimate, proposal. One take, no cuts, clock on screen.
+
+Guess the time. Closest guess gets a live build of their own site. Video at noon.
 
 #BESS #EnergyStorage #ProjectDevelopment
 ```
 
-First comment: Do it on your own site: https://silmarillion.clearskyomega.com/start
+### Day 27 (Sat) · Site Leaderboard: 24 C&I sites
 
-### Day 25 (Thu) · A report ends; a record keeps working
-
-*Ditch the stack · Image.* Visual: The card. Graphic: `day25.png` (statement).
+*Site Leaderboard · Image.* Visual: The card (illustrative). Better: a real folder's ranking with the site names removed. Graphic: `day27.png` (leaderboard).
 
 ```text
-A consultant's report ends when the invoice does.
+24 C&I sites. One sitting. Here's the top of the board.
 
-A record keeps working. Every site you screen, draw and model in OMEGA stays in your workspace, so the next project starts from the last one: your equipment, your layouts, your assumptions, your team's notes.
+Every site ranked, every one with the grid picture alongside. The bottom of the list costs you nothing, because you never drive there.
 
-Ditch the stack. Keep the record.
+Which would you visit first, and why?
 
-#ProjectDevelopment #EnergyStorage
-```
+(Sample sites, illustrative scores.)
 
-### Day 26 (Fri) · The developer setup
-
-*Offer · Image.* Visual: The card. Graphic: `day26.png` (list).
-
-```text
-The setup most developers start with:
-
-Lite + Grid Atlas + Storage Sizing & Revenue + Investor & Finance.
-
-Screen the grid, design the site, size and model the storage, and take it to capital. On the Field plan that's $1,299 a month, with room for one more $250 module. Pay for the year and you pay for 10 months. Plans carry an annual service fee; it's on the public price list.
-
-14-day trial for new companies. Link in the comments.
-
-#EnergyStorage #SolarDevelopment #ProjectFinance
-```
-
-First comment: Price list: https://silmarillion.clearskyomega.com/offerings · Start a trial: https://silmarillion.clearskyomega.com/start
-
-### Day 27 (Sat) · Cancel one subscription
-
-*Conversation · Image.* Visual: The card. Graphic: `day27.png` (statement).
-
-```text
-If you could cancel one software subscription tomorrow and not miss it, which one would it be?
+#SiteSelection #EnergyStorage #CommercialSolar
 ```
 
 ### Day 28 (Sun) · What a lender looks for
 
-*Teach · Image.* Visual: The card. Graphic: `day28.png` (list).
+*Field Notes · Image.* Visual: The card. Graphic: `day28.png` (list).
 
 ```text
 What a lender looks for in a storage pro forma.
@@ -556,24 +578,26 @@ What a lender looks for in a storage pro forma.
 
 OMEGA keeps the dispatch, the degradation, warranty and augmentation model, the layout and the estimate on one record.
 
+What would you add?
+
 #ProjectFinance #EnergyStorage
 ```
 
-### Day 29 (Mon) · Four weeks, one message
+### Day 29 (Mon) · Drop a Site: this time we build it
 
-*Offer · Image.* Visual: The card, or reuse the day-1 card. Graphic: `day29.png` (statement).
+*Drop a Site · Image.* Visual: The card. For the first 3 entries, build a layout in OMEGA and reply with a screenshot of the layout only. Graphic: `day29.png` (drop).
 
 ```text
-Four weeks, one message: ditch the stack.
+Four weeks of Drop a Site. One more round, and this time we build it.
 
-Screen, design, size, price, finance and operate an energy project on one record, in a browser, priced per workspace.
+Comment an address. The first 3 get a layout, not just a screen: the equipment placed, the separations checked, the site drawn.
 
-If you've followed along and haven't tried it, this is the week. 14 days on your own sites, or 30 minutes where we build one of your sites live with you.
+Commercial and industrial sites only.
 
-#EnergyStorage #SolarDevelopment #CleanEnergy
+Ditch the stack.
+
+#EnergyStorage #BESS #SiteDesign
 ```
-
-First comment: Trial: https://silmarillion.clearskyomega.com/start · Live walkthrough: https://www.clearskyomega.com/contact.html
 
 ### Day 30 (Tue) · Live build (event)
 
@@ -605,7 +629,7 @@ First comment: [Event link]
 
 Small to mid-size (about 5–300 people), without a large in-house GIS, modelling and CAD department. Titles: Founder or CEO (under 30 people); VP or Director of Development; Head of Origination; Interconnection Manager; Development Manager; Project Finance lead.
 
-**The offer.** A 20-minute live build of one of their sites from an address, then a 14-day trial on their own sites. The starting package is Lite + Grid Atlas + Storage Sizing & Revenue + Investor & Finance, which is the Field plan ($1,299 a month, room for one more $250 module; annual pays 10 of 12 months; plus the annual service fee on the price list).
+**The offer.** A 20-minute live build of one of their sites from an address, then a 14-day trial on their own sites. Pricing is for the call, never in writing, until the founder says otherwise; the starting package and its price are docs/VALUE-LADDER-PACKAGING.md §3.6 and the price book.
 
 **Reasons to write now** (one per message, specific and dated):
 
@@ -652,9 +676,7 @@ Thanks for connecting, {First}. We built ClearSky OMEGA so a development team ca
 Subject: `Re: {Company} and {market} sites`
 
 ```text
-{First}, one thing I should have said: pricing is per workspace, not per seat. Your whole development team works from the same record, from $500 a month, and the setup most developers start with is on our public price list: https://silmarillion.clearskyomega.com/offerings
-
-I can open a 14-day trial for your company so you can run your own sites. Worth it?
+{First}, easier than a call: send me one of your sites (an address is enough) and I'll screen it before we talk. The grid picture around it, what fits on the parcel, a first layout. No prep on your side.
 
 {Sender}
 ClearSky OMEGA · {postal address}
@@ -696,9 +718,9 @@ ClearSky OMEGA · {postal address}
 
 | | |
 |---|---|
-| Weekly | Posts published, follower change, link clicks, accounts touched, replies, walkthroughs booked, trial requests |
+| Weekly | Comments per post, Drop a Site entries, guesses and votes, new followers, profile visits, BUILD requests, live builds booked, trial requests |
 | Monthly | Trials approved, trials that built a project, trials converted to paid, paid revenue added |
-| Starting targets (adjust after week 2) | 5 conversations and 2 trial requests a week |
+| Starting targets (adjust after week 2) | 10+ comments on each series post, 5 live builds booked and 2 trial requests a week |
 
 ## 6. Target accounts
 

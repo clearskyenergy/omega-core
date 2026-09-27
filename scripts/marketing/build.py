@@ -31,9 +31,23 @@ assert len(PAGE['about']) <= 2000, len(PAGE['about'])
 assert len(PAGE['specialties']) <= 20
 assert [p['day'] for p in POSTS] == list(range(1, 31))
 assert len(SEQUENCE[0]['text']) <= 300
+KINDS = ('statement', 'list', 'compare', 'stack', 'carousel', 'quiz', 'checklist', 'leaderboard', 'stopwatch', 'plan', 'drop')
 for p in POSTS:
     assert len(p['text']) <= 3000, p['day']
-    assert p['card'] is None or p['card']['kind'] in ('statement', 'list', 'compare', 'stack', 'carousel'), p['day']
+    assert not p.get('answer_card') or p.get('answer'), p['day']
+    assert p['card'] is None or p['card']['kind'] in KINDS, p['day']
+
+# No prices in anything public (founder decision, 2026-09-27): refuse a
+# dollar sign or a price-list link in every string that leaves the building.
+def public_strings():
+    yield PAGE['tagline']; yield PAGE['about']
+    for p in POSTS:
+        yield p['text']; yield p['comment']; yield p.get('answer', '')
+        yield json.dumps([p['card'], p.get('answer_card')], ensure_ascii=False)
+    for q in SEQUENCE:
+        yield q['text']; yield q.get('subject', '')
+for t in public_strings():
+    assert '$' not in t and '/offerings' not in t and 'price list' not in t.lower(), t[:120]
 
 def cid(p):
     return 'day%02d' % p['day']
@@ -41,7 +55,10 @@ def cid(p):
 cards = []
 for p in POSTS:
     if p['card']:
-        cards.append(dict(p['card'], id=cid(p), sheet='%s-%d' % (SHEET_LETTER[p['pillar']], 100 + p['day']), project='Ditch the stack'))
+        meta = dict(sheet='%s-%d' % (SHEET_LETTER[p['pillar']], 100 + p['day']), project=PILLARS[p['pillar']])
+        cards.append(dict(p['card'], id=cid(p), **meta))
+        if p.get('answer_card'):
+            cards.append(dict(p['answer_card'], id=cid(p) + '-answer', **meta))
 json.dump(cards, open(os.path.join(OUT, 'cards.json'), 'w'), indent=1, ensure_ascii=False)
 
 targets = []
@@ -57,16 +74,21 @@ w('© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.\n
 w('Status: **draft for the founder, written 2026-09-27.** Companion to '
   '`docs/SALES-AGENT.md` (the growth board, outreach rules, CAN-SPAM, '
   'off-limits accounts) and `docs/VALUE-LADDER-PACKAGING.md` (the modules). '
-  'Every price here is the public price list (`GET /api/offerings`, book '
-  '`2026-10`); if the book changes, change this file. Nothing here is '
-  'published by code; a person posts and sends.\n')
+  'No price appears in anything public: pricing is for the call (founder '
+  'decision, 2026-09-27), and build.py refuses a dollar sign in a post, a '
+  'card, a comment, an answer or an email. Nothing here is published by '
+  'code; a person posts and sends.\n')
 w('## 0. The message\n')
 w('**Ditch the stack.** A developer runs one project through six to ten tools '
   '(grid data, GIS, a sizing sheet, CAD, an estimate, a pro forma, a data room, '
   'RFQs by email) and re-keys the numbers at every hand-off. ClearSky OMEGA is '
   'one record from the first look at a parcel to the day the project is funded: '
-  'screen, design, size, price, finance, operate. One login, priced per '
-  'workspace, from $500 a month, 14-day trial.\n')
+  'screen, design, size, price, finance, operate. One login, 14-day trial.\n')
+w('**Engagement first.** Seven game series, the same every week: Drop a Site '
+  '(Mon), Build Tuesday, Guess & Spot (Wed), Count Your Stack (Thu), '
+  'Speedrun Friday, Site Leaderboard (Sat), Field Notes (Sun). Each asks for '
+  'one small thing in the comments. They show speed, scale and ease, never '
+  'the method.\n')
 w('Links used everywhere below (change them here once, e.g. for a vanity '
   'redirect on the marketing site):\n')
 for k, v in LINKS.items():
@@ -114,6 +136,8 @@ for p in POSTS:
     w('```text\n' + fill(p['text']) + '\n```\n')
     if p['comment']:
         w('First comment: ' + fill(p['comment']).replace('\n', ' · ') + '\n')
+    if p.get('answer'):
+        w('Next day, as a comment on this post%s: %s\n' % (' with `%s-answer.png`' % cid(p) if p.get('answer_card') else '', p['answer']))
 w('## 5. The developer campaign\n')
 w('**Who**\n')
 w('| Segment | Lead with |\n|---|---|')
@@ -121,10 +145,9 @@ for a, b in ICP: w('| %s | %s |' % (a, b))
 w('\nSmall to mid-size (about 5–300 people), without a large in-house GIS, '
   'modelling and CAD department. Titles: %s.\n' % TITLES)
 w('**The offer.** A 20-minute live build of one of their sites from an '
-  'address, then a 14-day trial on their own sites. The starting package is '
-  'Lite + Grid Atlas + Storage Sizing & Revenue + Investor & Finance, which is '
-  'the Field plan ($1,299 a month, room for one more $250 module; annual pays '
-  '10 of 12 months; plus the annual service fee on the price list).\n')
+  'address, then a 14-day trial on their own sites. Pricing is for the call, '
+  'never in writing, until the founder says otherwise; the starting package '
+  'and its price are docs/VALUE-LADDER-PACKAGING.md §3.6 and the price book.\n')
 w('**Reasons to write now** (one per message, specific and dated):\n')
 for x in HOOKS: w('- ' + x)
 w('\n**The sequence** (outreach rules: `docs/SALES-AGENT.md` §5; work '
@@ -185,6 +208,11 @@ for p in POSTS:
     parts.append('<pre class="txt" id="%s-t">%s</pre>' % (pid, E(text)))
     parts.append('<p class="visual"><span class="lbl mono">VISUAL</span> %s</p>' % E(p['visual']))
     btns = [copybtn(pid + '-t', 'Copy post')]
+    if p.get('answer'):
+        parts.append('<div class="cmt"><span class="lbl mono">NEXT DAY · THE ANSWER, AS A COMMENT</span><pre class="txt small" id="%s-a">%s</pre></div>' % (pid, E(p['answer'])))
+        if p.get('answer_card'):
+            parts.append('<div class="shot"><img src="cards/%s-answer.png" alt="The answer" loading="lazy" width="1080" height="1350"></div>' % cid(p))
+        btns.append(copybtn(pid + '-a', 'Copy answer'))
     if p['comment']:
         c = fill(p['comment'])
         parts.append('<div class="cmt"><span class="lbl mono">FIRST COMMENT</span><pre class="txt small" id="%s-c">%s</pre></div>' % (pid, E(c)))
@@ -253,7 +281,7 @@ for k, v in {
     '%%CADENCE%%': cad, '%%METRICS%%': met, '%%TARGETS%%': tg_html, '%%TCOUNT%%': str(len(targets)) if targets else 'next',
     '%%ENGAGE%%': ''.join('<li>%s</li>' % E(x) for x in ENGAGE),
     '%%DO%%': do, '%%DONT%%': dont, '%%BLOCKERS%%': blk,
-    '%%PRICING%%': E(LINKS['pricing']), '%%TRIAL%%': E(LINKS['trial']),
+    '%%TRIAL%%': E(LINKS['trial']),
 }.items():
     page = page.replace(k, v)
 assert '%%' not in page, page[page.index('%%'):page.index('%%') + 40]

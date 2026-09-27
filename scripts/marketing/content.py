@@ -4,12 +4,12 @@
 # content.py — THE one source for the go-to-market kit. build.py renders it
 # into docs/GO-TO-MARKET.md, the copy-and-paste page and cards.json;
 # card.js renders cards.json into the post graphics. Change the words here,
-# never in a rendered file. Every price is the public price list
-# (GET /api/offerings, book 2026-10); every claim is something that ships.
+# never in a rendered file. No price appears in anything public (pricing is
+# for the call; build.py refuses a dollar sign); every claim is something that
+# ships.
 
 LINKS = {
     'site': 'https://www.clearskyomega.com',
-    'pricing': 'https://silmarillion.clearskyomega.com/offerings',
     'trial': 'https://silmarillion.clearskyomega.com/start',
     'demo': 'https://www.clearskyomega.com/contact.html',
 }
@@ -19,7 +19,7 @@ PAGE = {
     'tagline': 'One platform from parcel to funded project. Screen, design, size, price and finance energy sites on one record.',
     'website': LINKS['site'],
     'industry': 'Software Development',
-    'button': 'Sign up → ' + LINKS['trial'],
+    'button': 'Visit website → ' + LINKS['site'],
     'about': (
         "Developers run one project through a stack of disconnected tools: a grid-data subscription, a GIS seat, "
         "a sizing spreadsheet, CAD, an estimating sheet, a pro forma, a data room and an inbox full of RFQs. Every "
@@ -34,7 +34,7 @@ PAGE = {
         "• Finance: investment analysis and a financing application built from the numbers already on the record.\n"
         "• Operate: O&M, SLAs, field service and owner reporting once the asset is built.\n\n"
         "Built for developers, EPCs, installers and equipment makers. It runs in any browser with nothing to install. "
-        "Pricing is per workspace, not per seat, and starts at $500 a month. Every new company gets a 14-day trial.\n\n"
+        "Every new company gets a 14-day trial.\n\n"
         "Start at clearskyomega.com."
     ),
     'specialties': [
@@ -46,128 +46,129 @@ PAGE = {
     ],
 }
 
-# Day 1 is a Monday. pillar: stack | screen | design | size | draw | price | finance | operate | teach | offer | talk
-# fmt: Image | Video | Carousel | Poll | Text. card: the graphic card.js renders (None: no graphic).
+# Day 1 is Monday 2026-09-28. Every week runs the same seven series, so
+# people know what is coming and come back for it:
+#   Mon Drop a Site · Tue Build Tuesday · Wed Guess & Spot · Thu Count Your Stack
+#   Fri Speedrun Friday · Sat Site Leaderboard · Sun Field Notes
+# card: the graphic card.js renders (None: no graphic). answer: for a quiz,
+# the reveal the next day's run posts as a comment on this post (answer_card
+# is its graphic). No prices anywhere public: pricing is for the call.
 POSTS = [
- dict(day=1, pillar='stack', fmt='Image', title='Launch: ditch the stack',
-  visual="The card. No other company's name or logo on anything.",
-  text="""Eight tools. Three versions of the same number. One lender who notices.
+ dict(day=1, pillar='drop', fmt='Image', title='Launch: Drop a Site',
+  visual="The card. Answer each entry within 24 hours with results only (nearest substations and lines, published hosting capacity), never how the screen works. A Grid Atlas screenshot is fine with the coordinates cropped.",
+  text="""We built ClearSky OMEGA so a developer can screen, design and build an energy site in one place instead of eight tools.
 
-That's how most battery projects reach financing: a grid-data subscription, a GIS seat, a sizing spreadsheet, CAD, an estimating sheet, a pro forma, a data room and an inbox full of RFQs.
+Talk is cheap. Let's play.
 
-Every hand-off gets re-keyed. Every re-key is a chance for the drawing and the model to disagree.
+Drop an address or a ZIP code in the comments. We'll screen the grid around the first 10 and reply with what we find: the nearest substations and lines, and the hosting capacity where the utility publishes it.
 
-ClearSky OMEGA is one record from the first look at a parcel to the day the project is funded. Screen it, design it, size it, price it, finance it, run it.
+Commercial and industrial sites only. No sign-up, no catch.
 
-Ditch the stack.
+Every Monday from here on. Drop a site.
 
-#EnergyStorage #BESS #RenewableEnergy""",
-  comment="What's included, and the public price list: {pricing}",
-  card=dict(kind='stack', eyebrow='The development stack', headline='Ditch the stack.',
-            tiles=['Grid data', 'GIS', 'Sizing sheet', 'CAD', 'Estimate', 'Pro forma', 'Data room', 'RFQ inbox'],
-            oneTitle='One record', oneSub='Parcel to funded project. Screen, design, size, price, finance, operate.')),
+#EnergyStorage #Interconnection #BESS""",
+  comment="Want your whole pipeline screened, not one site? Comment BUILD or send us a message and we'll set up a live build.",
+  card=dict(kind='drop', eyebrow='Drop a Site · every Monday', headline="Drop a site. We'll screen it.",
+            sub='Comment an address or a ZIP. The first 10 get the grid picture around it, in the replies.',
+            prompt='Comment an address or ZIP')),
 
- dict(day=2, pillar='screen', fmt='Image', title='Stop optioning land the grid cannot serve',
-  visual="The card. Optional second image: a sandbox Grid Atlas screenshot with the coordinates cropped out.",
-  text="""Stop optioning land the grid can't serve.
+ dict(day=2, pillar='build', fmt='Video', title='Build Tuesday: a battery site',
+  visual="Best with a 30–60 s sandbox recording of exactly these steps (the card is its cover). Without a recording, post the card.",
+  text="""Build Tuesday.
 
-It's the most expensive mistake in development, and it usually happens before anyone has looked at a substation.
+Type an address. Pick BESS Build. Watch it lay out.
 
-In OMEGA the grid is the first layer you see around a parcel: substations and lines, hosting capacity where the utility publishes it, and an interconnection pre-screen against the fast-track screens.
+Pads, PCS, transformer, fence, conduit and trench home runs, placed for you, with NFPA 855 and IFC 1207 separations checked while it draws. Then the one-line and the bill of materials, from the same model.
 
-"Can this site take 5 MW?" gets asked on day one, before the study deposit.
+No re-keying. No waiting on a drafter for the concept.
 
-That's Grid Atlas. With Lite underneath, it starts at $750 a month.
+What should we build next Tuesday: an EV hub, solar + storage, or a data center? Vote in the comments.
 
-#Interconnection #EnergyStorage #SolarDevelopment""",
-  comment="Price list: {pricing}",
-  card=dict(kind='statement', eyebrow='Screen', headline='Know the ceiling before you buy the dirt.',
-            sub='Substations, lines, hosting capacity and an interconnection pre-screen around every parcel. Day one, not after the study deposit.',
-            kicker='Grid Atlas · from $750/month with Lite')),
-
- dict(day=3, pillar='design', fmt='Video', title='The fire marshal and the layout',
-  visual="Best: a 30–45 s sandbox recording (address, BESS Build, the layout drawing itself, the separation check). Without a recording, post the card.",
-  text="""The best-looking battery layout is worthless if the fire marshal kills it.
-
-OMEGA's guided BESS build places the pads, the PCS and the transformer, draws the fence, and routes the conduit and trench home runs. Separations are checked against NFPA 855 and IFC 1207 while you draw.
-
-The layout you show the landowner on Tuesday is one your engineer can still build on Friday.
-
-#BESS #NFPA855 #EnergyStorage""",
-  comment="Try it on your own sites for 14 days: {trial}",
-  card=dict(kind='statement', eyebrow='Design', headline='The fire code checks your layout while you draw it.',
-            sub='Guided BESS build: pads, PCS, transformer, fence, conduit and trench, with NFPA 855 and IFC 1207 separations checked live.',
-            kicker='Guided builds are in Lite · $500/month')),
-
- dict(day=4, pillar='size', fmt='Image', title='Sized on one hour of the year',
-  visual="The card. Optional: a sandbox value-stack result chart (results only, never the inputs or assumptions).",
-  text="""If your battery was sized to the peak, it was sized on one hour of the year.
-
-That's what a peak-shaving estimate is: the worst hour of the month, multiplied out. A guess with a spreadsheet around it.
-
-OMEGA sizes storage against the site's real load and real tariff, then runs the system through all 8,760 hours: demand charges, time-of-use, capacity and the programs the site can enroll in. The pro forma reads from that dispatch.
-
-When the lender asks where a number came from, the answer is an hour of the year. Not a cell.
-
-#EnergyStorage #ValueStack #BESS""",
-  comment="Storage Sizing & Revenue is one module on the public price list: {pricing}",
-  card=dict(kind='statement', eyebrow='Size & model', big='8,760', headline='Model the year, not the peak.',
-            sub='Sized to the real load and tariff. Dispatched every hour. The pro forma reads from the dispatch.',
-            kicker='Storage Sizing & Revenue · $250/month')),
-
- dict(day=5, pillar='offer', fmt='Image', title='No "contact sales for pricing"',
-  visual="The card.",
-  text="""No "contact sales for pricing." Here's ours.
-
-• Lite, $500 a month: design sites on live satellite, guided builds, blueprints and customer proposals.
-• Add a module for each thing you do, from $250: Grid Atlas, Storage Sizing & Revenue, Plan Sets & CAD, Investor & Finance and more.
-• Per workspace, not per seat. Lite includes 3 builders and 10 viewers.
-• Pay for the year and you pay for 10 months.
-
-Plans carry an annual service fee; it's on the list too. Every new company gets a 14-day trial on its own sites.
-
-#EnergySoftware #CleanEnergy""",
-  comment="The full list: {pricing}\nStart a trial: {trial}",
-  card=dict(kind='list', eyebrow='Pricing', headline='Our prices are public.',
-            rows=[['Lite', '$500/month'], ['Grid Atlas', '+$250'], ['Storage Sizing & Revenue', '+$250'],
-                  ['Investor & Finance', '+$500'], ['Logins', '3 builders + 10 viewers'], ['Pay annually', '10 months for 12']],
-            kicker='14-day trial for every new company')),
-
- dict(day=6, pillar='talk', fmt='Poll', title='Poll: how many tools?',
-  visual="LinkedIn poll, one week. Options: 1–3 · 4–6 · 7–9 · 10 or more",
-  text="""Developers: how many software tools touch one of your projects before notice to proceed?
-
-Count the subscriptions, the spreadsheets and the consultants' files.""",
-  comment="", card=None),
-
- dict(day=7, pillar='talk', fmt='Image', title='Where do the numbers stop agreeing?',
-  visual="The card.",
-  text="""Where do your numbers stop agreeing?
-
-For most teams it's one hand-off. The layout changes and the estimate doesn't. Or the pro forma is two revisions behind the sizing.
-
-Which hand-off breaks your numbers most often? Tell us in the comments.""",
+#BESS #EnergyStorage #SiteDesign""",
   comment="",
-  card=dict(kind='statement', eyebrow='Question', headline='Where do your numbers stop agreeing?',
-            sub="The layout changes and the estimate doesn't. The pro forma is two revisions behind the sizing. Which hand-off breaks yours?")),
+  card=dict(kind='stopwatch', eyebrow='Build Tuesday', headline='Type an address. Watch it build.', clock='GO',
+            laps=['Address', 'BESS Build', 'Layout, NFPA 855 checked', 'One-line', 'Bill of materials'],
+            prompt='Vote: what do we build next week?')),
 
- dict(day=8, pillar='finance', fmt='Image', title='The lender believes neither',
-  visual="The card. Optional: the sandbox investment analysis summary (outputs only).",
-  text="""If your site plan and your pro forma disagree, your lender believes neither.
+ dict(day=3, pillar='quiz', fmt='Image', title='Spot the problem',
+  visual="The card. Tomorrow's run posts the answer card as a comment on this post.",
+  text="""Spot the problem.
 
-In OMEGA the investment analysis reads the same record as the layout, the sizing and the estimate. Change the battery and the model follows.
+One of these four battery units gets the layout sent back by the fire marshal. Which one, and why?
 
-When you're ready, apply for financing or put the project in front of capital from the project itself, with the evidence already attached. Nobody rebuilds the model for the data room.
+Answer in the comments. We'll post the answer tomorrow.
 
-That's Investor & Finance, $500 a month on top of Lite.
+#BESS #NFPA855 #FireSafety""",
+  comment="",
+  card=dict(kind='plan', variant='building', eyebrow='Spot the problem · Wednesday', headline='Which unit gets rejected?',
+            prompt='Comment 1, 2, 3 or 4, and why'),
+  answer="""Answer: unit 1. It sits closer to the existing building than the fire code allows (NFPA 855 and IFC 1207 set the separations; your AHJ has the final word). In OMEGA the separations are checked the moment you place a unit, so it never reaches the fire marshal.""",
+  answer_card=dict(kind='plan', variant='building', flag=1, flagText='Unit 1: too close to the building',
+                   eyebrow='The answer', headline='Unit 1.')),
 
-#ProjectFinance #EnergyStorage #CleanEnergyFinance""",
-  comment="Price list: {pricing}",
-  card=dict(kind='statement', eyebrow='Finance', headline='The number the lender sees should be the number the drawing makes.',
-            sub='Investment analysis on the same record as the layout, the sizing and the estimate. Apply for financing from the project.',
-            kicker='Investor & Finance · $500/month')),
+ dict(day=4, pillar='stack', fmt='Image', title='Count your stack',
+  visual="The card.",
+  text="""Count your stack.
 
- dict(day=9, pillar='teach', fmt='Image', title='A hosting capacity map is a filter',
+Tick every tool that touches one of your projects before NTP:
+
+☐ Grid or hosting-capacity data
+☐ GIS seat or analyst
+☐ Sizing spreadsheet
+☐ CAD seat or drafter
+☐ Estimating sheet
+☐ Pro forma model
+☐ Data room
+☐ RFQs by email
+
+Now write what each one costs you a month. That total is the number to beat.
+
+Comment your score. 6 or more and you're carrying the stack OMEGA was built to replace.
+
+#EnergyStorage #ProjectDevelopment #SolarDevelopment""",
+  comment="",
+  card=dict(kind='checklist', eyebrow='Count Your Stack · Thursday', headline='Score your stack.',
+            items=['Grid or hosting-capacity data', 'GIS seat or analyst', 'Sizing spreadsheet', 'CAD seat or drafter',
+                   'Estimating sheet', 'Pro forma model', 'Data room', 'RFQs by email'],
+            scale=[['0–2', 'Lean'], ['3–5', 'Heavy'], ['6–8', 'Ditch it']],
+            prompt='Comment your score')),
+
+ dict(day=5, pillar='speed', fmt='Image', title='Speedrun Friday: guess the time',
+  visual="Record the run first (sandbox, clock on screen, one take). Post this card at 8 AM; post the video at noon with the real time. Never state a time you did not record.",
+  text="""Speedrun Friday.
+
+An address to a battery layout, sized, with a proposal. One take, clock on screen, no cuts.
+
+Before you watch: how long does it take? Guess in the comments.
+
+Closest guess gets a live build of their own site with us.
+
+Video drops at noon.
+
+#BESS #EnergyStorage #ProjectDevelopment""",
+  comment="",
+  card=dict(kind='stopwatch', eyebrow='Speedrun Friday', headline='Guess our time.', clock='?:??',
+            laps=['Address', 'Grid check', 'BESS layout', 'Sizing', 'Proposal'],
+            prompt='Guess in the comments · video at noon')),
+
+ dict(day=6, pillar='board', fmt='Image', title='Site Leaderboard: 36 sites',
+  visual="The card (illustrative). Better: run a real folder through the screening register and post that ranking with the site names removed.",
+  text="""36 sites. One sitting. Three worth the drive.
+
+Drop a folder of site KMZs into OMEGA's screening register and it ranks them: terrain, buildable area, the grid picture alongside. Your week goes to the top of the list, not the bottom.
+
+What's the most sites you've screened in one week the old way? Be honest.
+
+(Sample sites, illustrative scores.)
+
+#SiteSelection #SolarDevelopment #EnergyStorage""",
+  comment="",
+  card=dict(kind='leaderboard', eyebrow='Site Leaderboard · Saturday', headline='36 sites. Top 3 win.',
+            note='Illustrative · sample sites',
+            rows=[['Site 14', 92], ['Site 03', 88], ['Site 27', 85], ['Site 09', 71], ['Site 31', 66], ['Site 18', 58]],
+            more='+ 30 more, ranked', prompt='Most sites you screened in one week?')),
+
+ dict(day=7, pillar='teach', fmt='Image', title='A hosting capacity map is a filter',
   visual="The card.",
   text="""A hosting capacity map is a filter. Not an answer.
 
@@ -175,49 +176,105 @@ It tells you roughly how much new generation a feeder section could take on the 
 
 It doesn't tell you what's already in the queue ahead of you, how old the study is, or what the upgrade costs if you're over the line.
 
-The answer comes from a study. The filter decides which sites deserve one.
+We put the filter next to every parcel, so the sites that fail it never get optioned.
 
-We put the filter next to the parcel, so the sites that fail it never get optioned.
+What's the worst surprise a hosting map ever gave you?
 
 #Interconnection #HostingCapacity #SolarDevelopment""",
   comment="",
-  card=dict(kind='compare', eyebrow='Field notes', headline='What a hosting capacity map tells you.',
+  card=dict(kind='compare', eyebrow='Field Notes · Sunday', headline='What a hosting capacity map tells you.',
             cols=[dict(title='Tells you', items=['How much new generation a feeder section could take', 'On the day the utility ran the study']),
                   dict(title="Doesn't tell you", items=["Who's in the queue ahead of you", 'How old the study is', "What the upgrade costs if you're over"])])),
 
- dict(day=10, pillar='draw', fmt='Video', title='Move the battery 40 feet',
-  visual="Best: a 15–20 s sandbox recording (drag the compartment, the trench re-routes, the count changes). Without one, post the card.",
-  text="""Move the battery 40 feet. Now update everything that depended on where it was.
+ dict(day=8, pillar='drop', fmt='Image', title='Drop a Site: data center edition',
+  visual="The card. Same rules as every Drop a Site: results only, within 24 hours.",
+  text="""Drop a Site: data center edition.
 
-The trench. The conduit schedule. The quantities. The estimate.
+Comment an address or a ZIP where you think a data center could land. We'll screen the grid around the first 10 and reply with the nearest substations and lines, plus the hosting capacity where the utility publishes it.
 
-In OMEGA the plot plan, the one-line and the takeoff read the same model. Move a compartment and the trench re-routes, the schedule re-counts and the estimate follows.
+Commercial and industrial sites only.
 
-Plan Sets & CAD also exports for your CAD team (in beta).
+Data centers don't shop for acreage. They shop for interconnection. Let's see who's got it.
 
-#BESS #Engineering #EPC""",
-  comment="Try it on your own site: {trial}",
-  card=dict(kind='list', eyebrow='Draw', headline='Move it once.',
-            rows=[['Trench', 're-routes'], ['Conduit schedule', 're-counts'], ['Estimate', 'follows'],
-                  ['Plot plan, one-line, takeoff', 'one model']])),
+#DataCenters #Interconnection #PoweredLand""",
+  comment="",
+  card=dict(kind='drop', eyebrow='Drop a Site · data center edition', headline='Where would you put 50 MW?',
+            sub='Comment an address or a ZIP. The first 10 get the grid picture around it.', prompt='Comment an address or ZIP')),
 
- dict(day=11, pillar='price', fmt='Image', title='Five quotes, five call lists',
+ dict(day=9, pillar='build', fmt='Video', title='Build Tuesday: a fast-charging hub',
+  visual="Best with a 30–60 s sandbox recording (the card is its cover). Without one, post the card.",
+  text="""Build Tuesday: a fast-charging hub.
+
+Type an address. Pick DCFC Build. The chargers, switchgear and transformer land on the site, the load gets checked against what the grid can serve, and a DCFC pro forma fills in: utilization, IRR, payback.
+
+Add a battery to shave the demand charge and watch the payback move.
+
+What should we build next Tuesday?
+
+#EVCharging #DCFC #EVInfrastructure""",
+  comment="",
+  card=dict(kind='stopwatch', eyebrow='Build Tuesday', headline='An EV hub, from an address.', clock='GO',
+            laps=['Address', 'DCFC Build', 'Load vs. grid', 'DCFC pro forma', 'Add storage'], prompt='What do we build next week?')),
+
+ dict(day=10, pillar='quiz', fmt='Image', title='Quiz: what a hosting map tells you',
+  visual="The card. Tomorrow's run posts the answer as a comment.",
+  text="""Quiz.
+
+Which of these can a utility's hosting capacity map actually tell you?
+
+A) Your place in the queue
+B) Your upgrade cost
+C) Roughly what a feeder could take when it was studied
+D) When your study will finish
+
+Answer in the comments. Answer tomorrow.
+
+#Interconnection #HostingCapacity #SolarDevelopment""",
+  comment="",
+  card=dict(kind='quiz', eyebrow='Quiz · Wednesday', headline='What does a hosting map actually tell you?',
+            options=['Your place in the queue', 'Your upgrade cost', 'Feeder headroom when studied', 'When your study finishes'],
+            prompt='Comment A, B, C or D'),
+  answer="""Answer: C. A hosting capacity map shows roughly how much a feeder section could take when the utility studied it. The queue, the upgrade cost and the study timeline are not on it. It's a first filter, and OMEGA puts that filter next to every parcel."""),
+
+ dict(day=11, pillar='stack', fmt='Image', title='Count your re-keys',
   visual="The card.",
-  text="""Ask five vendors for a quote and you're on five call lists. For good.
+  text="""The re-key tax.
 
-The bill of materials in OMEGA writes itself as equipment lands on the drawing. When you're ready, send a request for quote to the vendors on it.
+Count how many times one number gets typed twice on a project:
 
-Each vendor sees only their own lines. Your company stays anonymous until you accept a quote.
+☐ Layout → estimate
+☐ Sizing → pro forma
+☐ Estimate → RFQ
+☐ Pro forma → lender model
+☐ Drawing → permit set
+☐ Site list → CRM
 
-Cleaner comparisons, fewer emails, and nobody calls before you're ready.
+Every tick is time gone and a chance to be wrong. In OMEGA they all read the same record.
 
-#Procurement #EnergyStorage #BESS""",
-  comment="Estimate, BOM & Procurement is on the price list: {pricing}",
-  card=dict(kind='statement', eyebrow='Price & RFQ', headline='Get the quotes. Keep your number.',
-            sub='Each vendor sees only their own lines. Your name appears when you accept a quote, not before.',
-            kicker='Estimate, BOM & Procurement · $250/month')),
+Comment your count.
 
- dict(day=12, pillar='stack', fmt='Carousel', title="A developer's week, one record",
+#ProjectDevelopment #EnergyStorage""",
+  comment="",
+  card=dict(kind='checklist', eyebrow='Count Your Stack · Thursday', headline='Count your re-keys.',
+            items=['Layout → estimate', 'Sizing → pro forma', 'Estimate → RFQ', 'Pro forma → lender model',
+                   'Drawing → permit set', 'Site list → CRM'],
+            scale=[['0–1', 'Clean'], ['2–3', 'Leaky'], ['4–6', 'Ditch it']], prompt='Comment your count')),
+
+ dict(day=12, pillar='speed', fmt='Image', title='Speedrun Friday: 10 sites',
+  visual="Record the run first (sandbox or a real folder with names removed, clock on screen, one take). Card at 8 AM, video at noon with the real time.",
+  text="""Speedrun Friday: 10 sites, screened and ranked.
+
+One folder of KMZs in, a ranked list out, then layouts on the top three. Clock on screen, one take.
+
+Guess the time before the video drops at noon. Closest guess gets a live build of their own site.
+
+#SiteSelection #EnergyStorage #SolarDevelopment""",
+  comment="",
+  card=dict(kind='stopwatch', eyebrow='Speedrun Friday', headline='10 sites. Guess our time.', clock='?:??',
+            laps=['Load 10 KMZs', 'Grid picture', 'Terrain + buildable area', 'Rank', 'Top 3 layouts'],
+            prompt='Guess in the comments · video at noon')),
+
+ dict(day=13, pillar='board', fmt='Carousel', title="A developer's week, one record",
   visual="Upload the PDF as a document post (Add a document), titled \"A developer's week\".",
   text="""A developer's week, on one record.
 
@@ -229,8 +286,10 @@ Fri: run the investment analysis and send it to capital.
 
 Same project, same numbers, one login. Swipe through →
 
+How long does that week take you today?
+
 #ProjectDevelopment #EnergyStorage #SolarDevelopment""",
-  comment="14 days on your own sites: {trial}",
+  comment="",
   card=dict(kind='carousel', slides=[
       dict(eyebrow='Swipe →', headline="A developer's week, on one record.", sub='Five days. One project. One login.'),
       dict(eyebrow='Monday · Screen', headline='Screen five parcels against the grid.', sub='Substations, lines, hosting capacity and a pre-screen for each.'),
@@ -238,23 +297,7 @@ Same project, same numbers, one login. Swipe through →
       dict(eyebrow='Wednesday · Size', headline='Size the storage against the tariff.', sub='Every hour of the year, not the peak.'),
       dict(eyebrow='Thursday · Price', headline='Pull the one-line, the BOM and the estimate.', sub='From the same model. Send the RFQ from the BOM.'),
       dict(eyebrow='Friday · Finance', headline='Run the investment analysis. Send it to capital.', sub='The same numbers as the drawing.'),
-      dict(eyebrow='Start here', headline='Ditch the stack.', sub='14-day trial for new companies.', kicker='clearskyomega.com')])),
-
- dict(day=13, pillar='teach', fmt='Image', title='NFPA 855 in one paragraph',
-  visual="The card.",
-  text="""NFPA 855 in one paragraph, for people who draw site plans.
-
-It sets the rules for installing stationary battery systems: how much energy each group can hold, how far apart the groups sit, how far they sit from buildings and other exposures, and what large-scale fire testing lets you change. Your AHJ adopts it through its fire code, sometimes with local amendments.
-
-If the layout you show a landowner ignores it, the site you sold them shrinks at permitting.
-
-Always confirm with your AHJ and your engineer.
-
-#NFPA855 #BESS #FireSafety""",
-  comment="",
-  card=dict(kind='statement', eyebrow='Field notes', headline='NFPA 855 in one paragraph.',
-            sub='How much energy each group can hold. How far apart the groups sit. How far from buildings and other exposures. What large-scale fire testing lets you change.',
-            kicker='Confirm with your AHJ and your engineer.')),
+      dict(eyebrow='Your move', headline='Ditch the stack.', sub='Comment BUILD and we\'ll build one of your sites live.', kicker='clearskyomega.com')])),
 
  dict(day=14, pillar='talk', fmt='Text', title='Why we built it (founder)',
   visual="A real photo of the founder on a site, if there is one. Post from the founder's own profile; the company page reshares.",
@@ -269,7 +312,49 @@ Now any developer can work from it. If you want to see it on one of your own sit
 [Founder: rewrite this in your own words before it goes out.]""",
   comment="", card=None),
 
- dict(day=15, pillar='stack', fmt='Image', title='What one platform replaces',
+ dict(day=15, pillar='drop', fmt='Image', title='Drop a Site: the one nobody wants',
+  visual="The card. Results only, within 24 hours.",
+  text="""Drop a Site: the one nobody wants.
+
+Comment the site everyone told you wouldn't work. We'll screen the grid around the first 10 and reply with what's actually there.
+
+Commercial and industrial sites only.
+
+#EnergyStorage #Interconnection #SolarDevelopment""",
+  comment="",
+  card=dict(kind='drop', eyebrow='Drop a Site · Monday', headline='Drop the site nobody wants.',
+            sub='Comment an address or a ZIP. The first 10 get the grid picture around it.', prompt='Comment an address or ZIP')),
+
+ dict(day=16, pillar='build', fmt='Video', title='Build Tuesday: a compute campus',
+  visual="Best with a sandbox recording (the card is its cover).",
+  text="""Build Tuesday: a compute campus.
+
+Start with the load you want. OMEGA lays out the campus against what the grid will carry, shows the gap, and sizes the generation and storage that closes it. You know whether the site can hold the load before anyone signs anything.
+
+Compute & Data Center is in limited trial. Want in? Say so in the comments.
+
+#DataCenters #Interconnection #PoweredLand""",
+  comment="",
+  card=dict(kind='stopwatch', eyebrow='Build Tuesday', headline='A compute campus, from the load.', clock='GO',
+            laps=['Parcel', 'Load ask', 'Grid ceiling', 'The gap', 'Generation + storage'], prompt='Want into the trial? Comment')),
+
+ dict(day=17, pillar='quiz', fmt='Image', title='Spot the problem, round 2',
+  visual="The card. Tomorrow's run posts the answer card as a comment.",
+  text="""Spot the problem, round 2.
+
+The fire truck needs to get in. Which unit is in its way?
+
+Answer in the comments. Answer tomorrow.
+
+#BESS #FireSafety #SiteDesign""",
+  comment="",
+  card=dict(kind='plan', variant='lane', eyebrow='Spot the problem · Wednesday', headline='Which unit blocks the truck?',
+            prompt='Comment 1, 2, 3 or 4'),
+  answer="""Answer: unit 3. It's parked in the fire access lane, and the AHJ will send it back. In OMEGA the fix is one drag: move the unit, and the trench, the conduit schedule and the estimate follow.""",
+  answer_card=dict(kind='plan', variant='lane', flag=3, flagText='Unit 3: inside the fire access lane',
+                   eyebrow='The answer', headline='Unit 3.')),
+
+ dict(day=18, pillar='stack', fmt='Image', title='What one platform replaces',
   visual="The card.",
   text="""Ditch the stack: what one platform replaces.
 
@@ -281,168 +366,139 @@ Estimating sheets and RFQs by email → Estimate, BOM & Procurement
 The analyst-built pro forma → Investor & Finance
 An asset-management platform → Operations
 
-One platform, priced per module, on one record.
+Add up what you pay for the left column today. That's the number to beat.
 
 #EnergyStorage #SolarDevelopment #CleanEnergy""",
-  comment="Every module and its price: {pricing}",
-  card=dict(kind='list', eyebrow='Ditch the stack', headline='What one platform replaces.',
+  comment="",
+  card=dict(kind='list', eyebrow='Count Your Stack · Thursday', headline='What one platform replaces.',
             rows=[['Grid and hosting-capacity data', 'Grid Atlas'], ['Site-screening consultant, GIS time', 'Site Intelligence'],
                   ['Sizing and revenue spreadsheets', 'Storage Sizing & Revenue'], ['CAD seat, outsourced drafting', 'Plan Sets & CAD'],
                   ['Estimating sheets, RFQs by email', 'Estimate, BOM & Procurement'], ['The analyst-built pro forma', 'Investor & Finance'],
                   ['An asset-management platform', 'Operations']])),
 
- dict(day=16, pillar='screen', fmt='Image', title='50 parcels, three site visits',
-  visual="The card. Optional: the sandbox parcel screening register with sample sites.",
-  text="""50 parcels. Which three deserve a site visit?
+ dict(day=19, pillar='speed', fmt='Image', title='Speedrun Friday: move it once',
+  visual="Record the revision first (sandbox, clock on screen). Card at 8 AM, video at noon with the real time.",
+  text="""Speedrun Friday: move it once.
 
-Drop a folder of site KMZs into OMEGA's parcel screening register and get them ranked. Terrain from USGS 3DEP LiDAR, buildable area after exclusions, and network proximity for compute sites, with the grid picture alongside.
+Drag the battery 40 feet. Count what updates on its own: the trench re-routes, the conduit schedule re-counts, the estimate follows.
 
-Spend the drive time on the sites that pass.
+Guess how long the whole revision takes. Video at noon.
 
-That's Site Intelligence, $500 a month on top of Lite.
-
-#SiteSelection #SolarDevelopment #CommunitySolar""",
-  comment="Price list: {pricing}",
-  card=dict(kind='statement', eyebrow='Screen', big='50 → 3', headline='Spend the drive time on the sites that pass.',
-            sub='Rank a folder of site KMZs: terrain from USGS 3DEP LiDAR, buildable area after exclusions, network proximity.',
-            kicker='Site Intelligence · $500/month')),
-
- dict(day=17, pillar='offer', fmt='Image', title='One person designs, twenty look',
-  visual="The card.",
-  text="""One person designs. Twenty people look.
-
-Most software charges for every one of them.
-
-OMEGA is priced per workspace. Lite includes 3 builders and 10 viewers, so the land rep, the finance lead and the partner EPC can open the same record without another license.
-
-#EnergySoftware #ProjectDevelopment""",
-  comment="How pricing works: {pricing}",
-  card=dict(kind='statement', eyebrow='Pricing', headline='One person designs. Twenty people look.',
-            sub='Priced per workspace, not per seat. Lite includes 3 builders and 10 viewers.', kicker='Lite · $500/month')),
-
- dict(day=18, pillar='screen', fmt='Image', title='Compute: shopping for interconnection',
-  visual="The card. Optional: a sandbox compute campus layout.",
-  text="""Data-center developers aren't shopping for acreage. They're shopping for interconnection.
-
-OMEGA lays out a compute campus against what the grid will carry, sizes the generation and storage that closes the gap, and tells you whether the site can hold the load before anyone signs anything.
-
-Compute & Data Center is in limited trial. If you're siting load, ask us for access.
-
-#DataCenters #Interconnection #PoweredLand""",
-  comment="Ask for access: {demo}",
-  card=dict(kind='statement', eyebrow='Compute', headline='Data centers shop for interconnection, not acreage.',
-            sub='Lay out a compute campus against what the grid will carry. Size the generation and storage that closes the gap.',
-            kicker='Compute & Data Center · limited trial')),
-
- dict(day=19, pillar='offer', fmt='Image', title='14 days on your own sites',
-  visual="The card.",
-  text="""Try it on your own sites for 14 days.
-
-Sign up with your work email, tell us what you build, and we open a workspace for your company. Bring an address and a utility bill and we'll build the first site with you.
-
-One trial per company. Link in the comments.
-
-#EnergyStorage #SolarDevelopment #EVCharging""",
-  comment="Start here: {trial}",
-  card=dict(kind='statement', eyebrow='Trial', big='14 days', headline='Your sites. Your numbers.',
-            sub="Sign up with your work email. Bring an address and a utility bill, and we'll build the first site with you.",
-            kicker='One trial per company')),
+#BESS #Engineering #EPC""",
+  comment="",
+  card=dict(kind='stopwatch', eyebrow='Speedrun Friday', headline='One drag. Guess the time.', clock='?:??',
+            laps=['Drag the battery', 'Trench re-routes', 'Schedule re-counts', 'Estimate follows'],
+            prompt='Guess in the comments · video at noon')),
 
  dict(day=20, pillar='talk', fmt='Poll', title='Poll: what slows your pipeline?',
-  visual="LinkedIn poll, one week. Options: Interconnection · Land and site control · Financing · Equipment and pricing",
+  visual="LinkedIn poll, one week. Options: Interconnection · Land and site control · Financing · Equipment and supply",
   text="""What slows your pipeline down most right now?""",
   comment="", card=None),
 
- dict(day=21, pillar='teach', fmt='Image', title='Why hourly beats peak',
+ dict(day=21, pillar='teach', fmt='Image', title='Model the year, not the peak',
   visual="The card.",
-  text="""Why hourly beats peak.
+  text="""If your battery was sized to the peak, it was sized on one hour of the year.
 
-A peak-shaving estimate asks one question: how much can the battery take off the worst hour of the month?
+A peak-shaving estimate is the worst hour of the month, multiplied out. OMEGA runs the system through all 8,760 hours instead: demand charges, time-of-use, capacity, the programs the site can enroll in, and the battery's own limits.
 
-An 8,760 asks it for every hour of the year, against the tariff, the programs and the battery's own limits: state of charge, cycles and round-trip losses. The two answers can be far apart, and lenders know it.
+When the lender asks where a number came from, the answer is an hour of the year. Not a cell.
 
-Model the year, not the peak.
+How was your last battery sized?
 
-#EnergyStorage #BESS #ValueStack""",
+#EnergyStorage #ValueStack #BESS""",
   comment="",
-  card=dict(kind='compare', eyebrow='Field notes', headline='Peak estimate vs. 8,760.',
-            cols=[dict(title='Peak estimate', items=['One hour of the month', 'Multiplied out', 'No state of charge, cycling or losses']),
-                  dict(title='8,760', items=['Every hour of the year', 'Against the real tariff and programs', "Within the battery's own limits"])])),
+  card=dict(kind='statement', eyebrow='Field Notes · Sunday', big='8,760', headline='Model the year, not the peak.',
+            sub='Sized to the real load and tariff. Dispatched every hour. The pro forma reads from the dispatch.')),
 
- dict(day=22, pillar='design', fmt='Image', title='Fast-charging hubs',
-  visual="The card. Optional: a sandbox DCFC build.",
-  text="""Building a fast-charging hub? Start with the service, not the chargers.
+ dict(day=22, pillar='drop', fmt='Image', title='Drop a Site: fleet depot edition',
+  visual="The card. Results only, within 24 hours.",
+  text="""Drop a Site: fleet depot edition.
 
-In OMEGA a DCFC build lays out the chargers, the switchgear and the transformer on the site, checks the load against what the grid can serve, and feeds a DCFC pro forma with utilization, IRR and payback on the same record.
+Comment a depot, a truck stop or a lot where you'd put fast chargers. We'll screen the grid around the first 10 and reply with what's there.
 
-Add storage to shave the demand charge and watch the model move.
+Commercial and industrial sites only.
 
-#EVCharging #DCFC #EVInfrastructure""",
-  comment="14-day trial: {trial}",
-  card=dict(kind='statement', eyebrow='EV charging', headline='Start with the service, not the chargers.',
-            sub='A DCFC build lays out chargers, switchgear and transformer, checks the load against the grid, and feeds a pro forma with utilization, IRR and payback.')),
+#EVCharging #FleetElectrification #DCFC""",
+  comment="",
+  card=dict(kind='drop', eyebrow='Drop a Site · fleet depot edition', headline="Drop a depot. We'll screen it.",
+            sub='Comment an address or a ZIP. The first 10 get the grid picture around it.', prompt='Comment an address or ZIP')),
 
- dict(day=23, pillar='operate', fmt='Image', title='COD is day one of the asset',
+ dict(day=23, pillar='build', fmt='Video', title='Build Tuesday: solar + storage',
+  visual="Best with a sandbox recording (the card is its cover).",
+  text="""Build Tuesday: solar + storage.
+
+Address in. The array laid out, the battery sized to the load and the tariff, the whole system dispatched across 8,760 hours, and a pro forma that reads from it.
+
+What should we build next?
+
+#SolarPlusStorage #EnergyStorage #CommercialSolar""",
+  comment="",
+  card=dict(kind='stopwatch', eyebrow='Build Tuesday', headline='Solar + storage, from an address.', clock='GO',
+            laps=['Address', 'Solar + Storage build', 'Battery sized to the tariff', '8,760 dispatch', 'Pro forma'],
+            prompt='What do we build next?')),
+
+ dict(day=24, pillar='quiz', fmt='Image', title='What kills more battery projects?',
+  visual="The card. Next week's run can share the tally from the comments.",
+  text="""No right answer on this one. Tell us what you've lived.
+
+What kills more battery projects?
+
+A) Interconnection
+B) Local permits
+C) Financing
+D) Equipment and supply
+
+We'll share the tally next week.
+
+#EnergyStorage #BESS #Interconnection""",
+  comment="",
+  card=dict(kind='quiz', eyebrow='Vote · Wednesday', headline='What kills more battery projects?',
+            options=['Interconnection', 'Local permits', 'Financing', 'Equipment and supply'], prompt='Comment A, B, C or D')),
+
+ dict(day=25, pillar='stack', fmt='Image', title='Five quotes, five call lists',
   visual="The card.",
-  text="""COD is the start of the asset, not the end of the project.
+  text="""Ask five vendors for a quote and you're on five call lists. For good.
 
-OMEGA's Operations module keeps the same record after it's built: O&M, SLA and contract tracking, field service and dispatch, and owner reporting.
+The bill of materials in OMEGA writes itself as equipment lands on the drawing. When you're ready, send a request for quote to the vendors on it.
 
-The drawing your team made in year zero is the one the technician opens in year eight.
+Each vendor sees only their own lines. Your company stays anonymous until you accept a quote.
 
-#AssetManagement #EnergyStorage #OandM""",
-  comment="Operations on the price list: {pricing}",
-  card=dict(kind='statement', eyebrow='Operate', headline='COD is day one of the asset.',
-            sub='O&M, SLAs, field service and owner reporting, on the same record your team drew in year zero.',
-            kicker='Operations · $500/month')),
+How many vendors call you a week?
 
- dict(day=24, pillar='design', fmt='Video', title='Address to proposal, timed',
-  visual="A one-take sandbox recording with a clock on screen: address, grid check, layout, sizing, proposal. Post the real time; never write a time before you record it. The card is the cover.",
-  text="""Address to proposal, timed.
+#Procurement #EnergyStorage #BESS""",
+  comment="",
+  card=dict(kind='statement', eyebrow='Count Your Stack · Thursday', headline='Get the quotes. Keep your number.',
+            sub='Each vendor sees only their own lines. Your name appears when you accept a quote, not before.')),
 
-We start the clock, type an address and build a battery site from nothing: grid check, layout, sizing, proposal. The clock stays on screen the whole time.
+ dict(day=26, pillar='speed', fmt='Image', title='Speedrun Friday: the full run',
+  visual="Record the full run first (sandbox, clock on screen, one take). Card at 8 AM, video at noon with the real time.",
+  text="""Speedrun Friday: the full run.
 
-No cuts. Watch the time at the end.
+Address to a proposal a customer could sign: grid check, layout, sizing, one-line and estimate, proposal. One take, no cuts, clock on screen.
+
+Guess the time. Closest guess gets a live build of their own site. Video at noon.
 
 #BESS #EnergyStorage #ProjectDevelopment""",
-  comment="Do it on your own site: {trial}",
-  card=dict(kind='statement', eyebrow='Timed', headline='Address to proposal. Clock on screen.', sub='One take. No cuts.')),
-
- dict(day=25, pillar='stack', fmt='Image', title='A report ends; a record keeps working',
-  visual="The card.",
-  text="""A consultant's report ends when the invoice does.
-
-A record keeps working. Every site you screen, draw and model in OMEGA stays in your workspace, so the next project starts from the last one: your equipment, your layouts, your assumptions, your team's notes.
-
-Ditch the stack. Keep the record.
-
-#ProjectDevelopment #EnergyStorage""",
   comment="",
-  card=dict(kind='statement', eyebrow='Ditch the stack', headline='A report ends when the invoice does. A record keeps working.',
-            sub='Every site you screen, draw and model stays in your workspace. The next project starts from the last.')),
+  card=dict(kind='stopwatch', eyebrow='Speedrun Friday', headline='The full run. Guess our time.', clock='?:??',
+            laps=['Grid check', 'Layout', 'Sizing', 'One-line + estimate', 'Proposal'], prompt='Guess in the comments · video at noon')),
 
- dict(day=26, pillar='offer', fmt='Image', title='The developer setup',
-  visual="The card.",
-  text="""The setup most developers start with:
+ dict(day=27, pillar='board', fmt='Image', title='Site Leaderboard: 24 C&I sites',
+  visual="The card (illustrative). Better: a real folder's ranking with the site names removed.",
+  text="""24 C&I sites. One sitting. Here's the top of the board.
 
-Lite + Grid Atlas + Storage Sizing & Revenue + Investor & Finance.
+Every site ranked, every one with the grid picture alongside. The bottom of the list costs you nothing, because you never drive there.
 
-Screen the grid, design the site, size and model the storage, and take it to capital. On the Field plan that's $1,299 a month, with room for one more $250 module. Pay for the year and you pay for 10 months. Plans carry an annual service fee; it's on the public price list.
+Which would you visit first, and why?
 
-14-day trial for new companies. Link in the comments.
+(Sample sites, illustrative scores.)
 
-#EnergyStorage #SolarDevelopment #ProjectFinance""",
-  comment="Price list: {pricing}\nStart a trial: {trial}",
-  card=dict(kind='list', eyebrow='For developers', headline='The developer setup.',
-            rows=[['Lite', '$500'], ['Grid Atlas', '$250'], ['Storage Sizing & Revenue', '$250'], ['Investor & Finance', '$500'],
-                  ['On the Field plan', '$1,299/month']],
-            kicker='Room for one more $250 module · annual pays 10 of 12')),
-
- dict(day=27, pillar='talk', fmt='Image', title='Cancel one subscription',
-  visual="The card.",
-  text="""If you could cancel one software subscription tomorrow and not miss it, which one would it be?""",
+#SiteSelection #EnergyStorage #CommercialSolar""",
   comment="",
-  card=dict(kind='statement', eyebrow='Question', headline='Cancel one subscription tomorrow. Which one?', sub="The one you wouldn't miss.")),
+  card=dict(kind='leaderboard', eyebrow='Site Leaderboard · Saturday', headline='24 sites. Who makes the cut?',
+            note='Illustrative · sample sites',
+            rows=[['Site 07', 94], ['Site 19', 90], ['Site 02', 83], ['Site 11', 77], ['Site 23', 62], ['Site 05', 49]],
+            more='+ 18 more, ranked', prompt='Which one would you visit first?')),
 
  dict(day=28, pillar='teach', fmt='Image', title='What a lender looks for',
   visual="The card.",
@@ -456,25 +512,28 @@ Screen the grid, design the site, size and model the storage, and take it to cap
 
 OMEGA keeps the dispatch, the degradation, warranty and augmentation model, the layout and the estimate on one record.
 
+What would you add?
+
 #ProjectFinance #EnergyStorage""",
   comment="",
-  card=dict(kind='list', eyebrow='Field notes', headline='What a lender looks for in a storage pro forma.',
+  card=dict(kind='list', eyebrow='Field Notes · Sunday', headline='What a lender looks for in a storage pro forma.',
             rows=[['1 · Revenue tied to an hourly dispatch'], ['2 · Degradation and its warranty, by year'], ['3 · Augmentation: when, and what it costs'],
                   ['4 · Every assumption, with its source'], ['5 · A layout and estimate that match the model']])),
 
- dict(day=29, pillar='offer', fmt='Image', title='Four weeks, one message',
-  visual="The card, or reuse the day-1 card.",
-  text="""Four weeks, one message: ditch the stack.
+ dict(day=29, pillar='drop', fmt='Image', title='Drop a Site: this time we build it',
+  visual="The card. For the first 3 entries, build a layout in OMEGA and reply with a screenshot of the layout only.",
+  text="""Four weeks of Drop a Site. One more round, and this time we build it.
 
-Screen, design, size, price, finance and operate an energy project on one record, in a browser, priced per workspace.
+Comment an address. The first 3 get a layout, not just a screen: the equipment placed, the separations checked, the site drawn.
 
-If you've followed along and haven't tried it, this is the week. 14 days on your own sites, or 30 minutes where we build one of your sites live with you.
+Commercial and industrial sites only.
 
-#EnergyStorage #SolarDevelopment #CleanEnergy""",
-  comment="Trial: {trial}\nLive walkthrough: {demo}",
-  card=dict(kind='statement', eyebrow='Four weeks, one message', headline='Ditch the stack.',
-            sub='Screen, design, size, price, finance and operate on one record. 14 days on your own sites.',
-            kicker="Or 30 minutes: we'll build one of your sites live")),
+Ditch the stack.
+
+#EnergyStorage #BESS #SiteDesign""",
+  comment="",
+  card=dict(kind='drop', eyebrow='Drop a Site · final round', headline='This time, we build it.',
+            sub='Comment an address. The first 3 get a layout, not just a screen.', prompt='Comment an address')),
 
  dict(day=30, pillar='talk', fmt='Image', title='Live build (event)',
   visual="Create a LinkedIn Event or Live first; fill in the date and time in the text. The card is the cover.",
@@ -487,37 +546,42 @@ Register below.
 #EnergyStorage #BESS #ProjectDevelopment""",
   comment="[Event link]",
   card=dict(kind='statement', eyebrow='Live', headline='Send an address. Watch it get built.',
-            sub='Three sites, live: grid check, layout, sizing and a first pro forma in 30 minutes.', kicker='Register: link in the comments')),
+            sub='Three sites, live: grid check, layout, sizing and a first pro forma in 30 minutes.', prompt='Register: link in the comments')),
 ]
 
-SHEET_LETTER = {'stack': 'G', 'screen': 'A', 'design': 'D', 'size': 'E', 'draw': 'E', 'price': 'C',
-                'finance': 'F', 'operate': 'O', 'teach': 'T', 'offer': 'P', 'talk': 'Q'}
+SHEET_LETTER = {'drop': 'A', 'build': 'D', 'quiz': 'Q', 'stack': 'G', 'speed': 'S', 'board': 'R',
+                'teach': 'T', 'talk': 'C', 'offer': 'P'}
 
 VOICE = [
-    'First line under 12 words, a claim or a number, strong enough to stop a scroll. Never "Excited to announce".',
-    'One idea per post. Short lines. A point of view a developer would argue with or forward.',
-    'Specific over clever: MW, MWh, feeders, NTP, COD, NFPA 855, the 8,760. The reader\'s world, in their words.',
-    'End on a line that lands or a question worth answering. Link in the first comment. Three hashtags at most.',
-    'Nothing invented: a number is from the product, the public price list, a cited source, or labelled as an example.',
+    'Engagement first. Every post asks for one small thing: a comment, a guess, a vote, an address, a score.',
+    'The same seven series every week (Drop a Site, Build Tuesday, Guess & Spot, Count Your Stack, Speedrun Friday, Site Leaderboard, Field Notes), so people know what is coming and come back.',
+    'First line under 12 words, a claim, a number or a challenge, strong enough to stop a scroll. Never "Excited to announce".',
+    'Show speed, scale and ease; never the method. A real timer from a real recording, a real count of sites, the result on screen.',
+    'No prices, plans, discounts or links to the price list. Pricing is for the call.',
+    'Specific over clever: MW, feeders, NTP, COD, NFPA 855, the 8,760. Short lines. Three hashtags at most.',
+    'Nothing invented: a number is from the product, a recording, a cited source, or labelled illustrative.',
 ]
 
 NEWS_RULES = [
     'A timely post replaces the calendar post only for news from the last 72 hours that developers are discussing: interconnection rules (FERC, an ISO queue reform), a state storage or solar program, a battery permit fight or moratorium, an equipment price or tariff shock, a large-load announcement straining a grid.',
     'Verify the facts at the primary source or two independent reports; the source goes in the first comment.',
-    'Shape: the news in one line, the take (what it changes about how a developer picks and proves a site), then the one OMEGA capability that answers it, in the product\'s own words.',
+    'Shape: the news in one line, the take (what it changes about how a developer picks and proves a site), a question for the comments, then the one OMEGA capability that answers it.',
     'Never gloat about a company\'s loss, never name a prospect in a negative story, never tag a company to pitch it.',
+    'Never move a series day (Drop a Site, Speedrun Friday) for news; post the news the next open day instead.',
 ]
 
 ENGAGE = [
-    'Comment on 3 posts from target accounts (docs/developer-targets.csv): add a fact or a question, never a pitch.',
-    'Reply to every comment on the page\'s posts within the day.',
+    'Answer every Drop a Site entry within 24 hours: run it in Grid Atlas and reply with results only (nearest substations and lines, published hosting capacity). Never explain how the screen works.',
+    'Reply to every comment on the day\'s post. A reply that asks a question back doubles the thread.',
+    'Everyone who comments BUILD or guesses closest gets a direct message offering a live build of their site.',
+    'Comment on 3 posts from target accounts (docs/developer-targets.csv): a fact or a question, never a pitch.',
     'Invite 10–20 relevant connections to follow the page.',
 ]
 
 PILLARS = {
-    'stack': 'Ditch the stack', 'screen': 'Screen', 'design': 'Design', 'size': 'Size & model',
-    'draw': 'Draw', 'price': 'Price & RFQ', 'finance': 'Finance', 'operate': 'Operate',
-    'teach': 'Teach', 'offer': 'Offer', 'talk': 'Conversation',
+    'drop': 'Drop a Site', 'build': 'Build Tuesday', 'quiz': 'Guess & Spot', 'stack': 'Count Your Stack',
+    'speed': 'Speedrun Friday', 'board': 'Site Leaderboard', 'teach': 'Field Notes', 'talk': 'Conversation',
+    'offer': 'Invitation',
 }
 
 ICP = [
@@ -550,12 +614,10 @@ Not the right person, or not interested? Reply "no" and I won't write again.""")
       text="""Thanks for connecting, {First}. We built ClearSky OMEGA so a development team can screen, design, size, price and finance a site in one place instead of six tools. If it would help, I can build one of your sites live in 20 minutes from an address. Open to it?"""),
     dict(when='Day 4', channel='Email', name='Email 2 (reply in the same thread)',
       subject='Re: {Company} and {market} sites',
-      text="""{First}, one thing I should have said: pricing is per workspace, not per seat. Your whole development team works from the same record, from $500 a month, and the setup most developers start with is on our public price list: {pricing}
-
-I can open a 14-day trial for your company so you can run your own sites. Worth it?
+      text="""{First}, easier than a call: send me one of your sites (an address is enough) and I'll screen it before we talk. The grid picture around it, what fits on the parcel, a first layout. No prep on your side.
 
 {Sender}
-ClearSky OMEGA · {postal address}
+ClearSky OMEGA \u00b7 {postal address}
 Reply "no" and I won't write again."""),
     dict(when='Day 8', channel='LinkedIn', name='DM 2',
       text="""{First}, we posted a short clip of a battery site going from an address to a one-line and a pro forma. Thought of your {market} work: {post link}"""),
@@ -588,16 +650,17 @@ CADENCE = [
 ]
 
 METRICS = [
-    ('Weekly', 'Posts published, follower change, link clicks, accounts touched, replies, walkthroughs booked, trial requests'),
+    ('Weekly', 'Comments per post, Drop a Site entries, guesses and votes, new followers, profile visits, BUILD requests, live builds booked, trial requests'),
     ('Monthly', 'Trials approved, trials that built a project, trials converted to paid, paid revenue added'),
-    ('Starting targets (adjust after week 2)', '5 conversations and 2 trial requests a week'),
+    ('Starting targets (adjust after week 2)', '10+ comments on each series post, 5 live builds booked and 2 trial requests a week'),
 ]
 
 # Sell the result, never the method.
 GUARDRAILS_DO = [
     'Show outputs: a finished layout, a one-line, a headroom answer, a result chart, a price-list page.',
     'Take every screenshot and video in the sandbox (the sample workspace with invented data) or from the published guides.',
-    'Describe what a module does in the words of the public price list, and link to it.',
+    'Show speed, scale and ease: a real timer from a real recording, a real count of sites, the finished layout or ranking on screen.',
+    'Answer a Drop a Site entry with results only: distances, voltages, published hosting capacity.',
     'Say "beta", "limited trial" or "coming soon" wherever the product does.',
     'Run live demos in the sandbox, or inside a trial workspace after the prospect has accepted the terms at sign-in. Those terms forbid reverse engineering and using the platform to build a competing product.',
     'Keep deep technical diligence (how a model works, what data sits behind it) for a signed NDA.',
@@ -608,14 +671,16 @@ GUARDRAILS_DONT = [
     'Name or show the logo of a customer without their written permission. Accounts under a signed agreement (the off-limits list in docs/SALES-AGENT.md \u00a75) and anyone mid-negotiation are never named.',
     'Name data vendors, financing partners, the architecture, the database, internal tools or internal codenames.',
     'Claim what does not ship. The AHJ portal, the procurement marketplace, aggregators and offtakers are coming soon. Site Finder covers northern Illinois (ComEd) only. The Permitting Matrix is beta and verified jurisdiction by jurisdiction. Compute is in limited trial.',
-    'Invent numbers: no hours saved, customer counts or savings unless they come from the product, the price list or a clearly labelled example.',
+    'Invent numbers: no hours saved, times, customer counts or savings unless they come from the product, a recording or a clearly labelled example.',
+    'Post a price, a plan, a discount, or a link to the price list or the signup page. Pricing is for the call (founder decision, 2026-09-27).',
+    'Show how a ranking or a score is made: the factors, their weights, the data sources behind them. Show the rank and the result.',
 ]
 
 BLOCKERS = [
     ('Fix the website contact before sending anyone there.',
      "The footer on www.clearskyomega.com still lists an info@ address on the retired legacy domain, and \"Request a demo\" should reach a clearsky-usa.com inbox somebody reads. The site also lists an AHJ Approval Portal, which the product marks coming soon. Bring the site in line with what ships."),
-    ('Decide whether prospects can pay on day one.',
-     'Card payment at signup is built but switched off in production, so today a signup waits for ClearSky approval, then runs a 14-day trial, then gets an invoice. Turning it on is the release checklist in docs/PACKAGING-RELEASE-CHECKLIST.md.'),
+    ('Know where prices still show.',
+     'The posts no longer mention or link to prices, but the public price list (silmarillion.clearskyomega.com/offerings) and the package step of signup still show them to anyone who finds them. Hiding them is a product change: say if you want it. Card payment at signup is also still switched off in production.'),
     ('Approve signups the same day.',
      'The growth board (GET /api/growth) flags a signup waiting a day or more. A campaign that drives signups needs someone approving them daily.'),
     ('Pick the posting channel.',
