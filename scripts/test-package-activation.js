@@ -96,7 +96,14 @@ async function run() {
   equal(db.data.get(root + '/billing/current').modules, ['lite', 'storage']);
   receipts['2026-10-10'] = { reversed: true, satisfied: false, paidCents: 0, payUrl: null };
   await S.reconcile(db, orgId, Date.parse('2026-11-06T12:00:00Z'));
-  equal(db.data.get(root + '/billing/current').packagingState, 'unpaid');
+  /* an earlier cycle refunded while a later one is paid: the later payment keeps the workspace open, and a person is told */
+  equal(db.data.get(root + '/billing/current').packagingState, 'paid');
+  equal(db.data.get(root + '/billing/current/invoices/2026-10-10').reviewRequired, true);
+  equal(!!db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-' + orgId + '-' + db.data.get(root + '/billing/current/invoices/2026-10-10').qboInvoiceId), true);
+  /* every paid cycle reversed: nothing paid covers now, the workspace locks until a person re-issues */
+  receipts['2026-10-20'] = { reversed: true, satisfied: false, paidCents: 0, payUrl: null };
+  await S.reconcile(db, orgId, Date.parse('2026-11-06T12:00:00Z'));
+  equal([db.data.get(root + '/billing/current').packagingState, db.data.get(root + '/billing/current').reissueRequired, db.data.get(root + '/billing/current').accessUntil], ['awaiting_payment', true, Date.parse('2026-11-06T12:00:00Z')]);
   console.log('Package activation: ' + count + ' passed; sandbox mock, no network.');
 }
 run().catch(function (e) { console.error(e); process.exitCode = 1; }).finally(function () { Q.driver = original; delete process.env.PACKAGING_BILLING_ENABLED; });
