@@ -12,6 +12,7 @@
      node scripts/render-dashboard.js --shots DIR  # plus screenshots, all in DIR
      node scripts/render-dashboard.js --evidence   # rewrite the committed phase 10B
                                                    # screenshots (docs/screenshots/)
+     node scripts/render-dashboard.js --only sweep  # scenarios whose name matches
      npm run check:dashboard                       # writes nothing into the repo
 
    It is the check that a signed-in visit paints, for the three first-run
@@ -22,7 +23,9 @@
    answer, a request that would have left the machine, sideways scroll, and
    on each product assertion below (splash gone, greeting, the tenant's name,
    the tiles, a locked tile's overlay INSIDE its tile, the counts, the terms
-   gate recording an acceptance, no stray writes, sign-out).
+   gate recording an acceptance, no stray writes, sign-out), and on EVERY
+   CLICK: scripts/_lib/click-sweep.js clicks every control on the page as
+   four tenants (see the sweep scenarios at the end).
 
    Why a double and not the emulator: the emulator answers the SDK's network
    protocol and needs Java and the SDK's own transport; the double answers
@@ -41,6 +44,8 @@ var SANDBOX_CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 var CHROME = process.env.CHROME || (fs.existsSync(SANDBOX_CHROME) ? SANDBOX_CHROME : chromium.executablePath());
 if (!fs.existsSync(CHROME)) { console.log('render-dashboard: Chromium not found (' + CHROME + '); skipped'); process.exit(0); }
 var shotsAt = (function () { var i = process.argv.indexOf('--shots'); return i >= 0 ? (process.argv[i + 1] || os.tmpdir()) : null; })();
+/* --only <regex>: run the scenarios whose name matches (the sweeps take a while) */
+var ONLY = (function () { var i = process.argv.indexOf('--only'); return i >= 0 && process.argv[i + 1] ? new RegExp(process.argv[i + 1]) : null; })();
 if (shotsAt && !fs.existsSync(shotsAt)) fs.mkdirSync(shotsAt, { recursive: true });
 
 var FD = require('./_lib/firebase-double'), FX = require('./_lib/dashboard-fixtures');
@@ -124,6 +129,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   /* One scenario: a fresh browser context (its own storage and double),
      the tenant's fixture installed before any page script runs. */
   async function scenario(name, fx, opts) {
+    if (ONLY && !ONLY.test(name)) return {};
     opts = opts || {};
     PACKAGE_VIEW = fx.packageView || null; SCENARIO_DOCS = fx.docs || null;
     var errs = [], warns = [], muted = false, ctx = await browser.newContext({ viewport: opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!opts.phone, isMobile: !!opts.phone });
@@ -464,6 +470,66 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('legacy-enterprise: no Your modules block (a legacy plan is left alone)', legacyMods === 'none', legacyMods);
     return out;
   } });
+  PACKAGE_VIEW = null;
+
+  /* ══ EVERY CLICK (Tommy, 2026-09-27: "we need to make sure every click
+     every link doesnt bug") ══
+     scripts/_lib/click-sweep.js clicks every visible control on the
+     dashboard — the sidebar, the topbar, every widget, the tool tiles, the
+     Account panel's own buttons one level in — as a Standard tenant on a
+     desktop and a phone, a packaged Lite tenant and a legacy Enterprise
+     one. A click that would leave is held at the door and its address
+     checked against what the site serves; a new tab or a mail link is read.
+     It fails on an error, anything put into the page flow instead of over
+     it, a panel off the screen, sideways scroll, a reload in disguise, an
+     overlay Escape leaves open, a link the site does not serve, and a
+     control that cannot be clicked. Sign out is left to its own check. */
+  /* REMOVE ON A STARTER TILE keeps the rest (the sweep found it pinning the
+     removed tool instead: the dashboard kept that one tile and dropped the
+     other five) */
+  await scenario('starter-remove', FX.lite(HOST), { steps: async function (p) {
+    var before = await p.$$eval('#dash-grid .pm-tile[data-tool]', function (r) { return r.map(function (t) { return t.getAttribute('data-tool'); }); });
+    var gone = before[1];
+    await p.locator('#dash-grid .pm-tile[data-tool="' + gone + '"] .pin-btn.remove').click(); await wait(900);
+    var after = await p.$$eval('#dash-grid .pm-tile[data-tool]', function (r) { return r.map(function (t) { return t.getAttribute('data-tool'); }); });
+    var saved = await p.evaluate(function () { var w = window.__firebaseDouble.store.log.filter(function (x) { return /prefs\/pinned$/.test(x.path); }).pop(); return w ? w.data.keys : null; });
+    var want = before.filter(function (k) { return k !== gone; });
+    ok('starter-remove: Remove on a starter tile takes that tile away and keeps the other ' + want.length, before.length >= 2 && after.join() === want.join(), { before: before, removed: gone, after: after });
+    ok('starter-remove: the starter set, less the removed tool, is saved as the pins', !!saved && saved.join() === want.join(), saved);
+    return { starter: before, after: after };
+  } });
+
+  var SWEEP = require('./_lib/click-sweep'), SERVED = SWEEP.servedBy(ROOT);
+  var DASH_OVERLAYS = '#new-proj-modal.on, #claim-modal.on, #video-modal.on, #acct-overlay.show, #convo-modal.show, #sw.sw-open, .tb-nav.open, #upgrade-modal, #omega-package-menu, #ot-modal, #ows-overlay';
+  async function sweepDash(p, name, phone) {
+    var r = await SWEEP.run(p, {
+      views: [{ name: 'dashboard', enter: async function (pg) { await pg.evaluate(function () { window.scrollTo(0, 0); }); } }],
+      scope: '#app',
+      skip: '[onclick*="signOut"], #ows-signout',
+      inner: '.acct-overlay.show button, #sw.sw-open button',
+      last: '.pin-btn.remove, .db-remove, #acct-av-remove',
+      overlays: DASH_OVERLAYS,
+      reveal: phone ? [{ within: '.tb-nav', open: async function (pg) { if (!(await pg.evaluate(function () { var n = document.querySelector('.tb-nav'); return !!(n && n.classList.contains('open')); }))) await pg.click('#tb-burger'); } }] : [],
+      forceClose: function (pg) { return pg.evaluate(function () {
+        [['new-proj-modal', 'on'], ['claim-modal', 'on'], ['video-modal', 'on'], ['acct-overlay', 'show'], ['convo-modal', 'show'], ['sw', 'sw-open']].forEach(function (x) { var e = document.getElementById(x[0]); if (e) e.classList.remove(x[1]); });
+        var n = document.querySelector('.tb-nav'); if (n) n.classList.remove('open');
+        ['omega-package-menu', 'ows-overlay', 'upgrade-modal'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); });
+        document.documentElement.classList.remove('omega-np-open'); document.body.style.overflow = '';
+      }); },
+      served: SERVED
+    });
+    /* a pinned tile's Remove takes its tile (and the next Remove's place) off the page: those are named, not failed */
+    var gone = r.hidden.length + r.skipped.length;
+    ok(name + ': every control still on the page when its turn came was clicked or read (' + r.clicks + ' clicked, ' + r.read.length + ' read, ' + gone + ' taken away by an earlier click, of ' + r.controls + ')', r.controls > 20 && r.clicks + r.read.length + gone >= r.controls && gone <= Math.max(6, Math.ceil(r.controls / 5)), r.hidden.concat(r.skipped));
+    var kinds = {}; r.problems.forEach(function (x) { (kinds[x.kind] = kinds[x.kind] || []).push(x.control + ' — ' + x.detail); });
+    var WHAT = { error: 'no click throws or logs an error', flow: 'no click puts anything into the page flow (a dialog, a panel) instead of over it', offscreen: 'every panel a click opens is inside the screen', sideways: 'no click makes the page scroll sideways', reload: 'a click that stays on the page never reloads it or raises the loading screen', escape: 'Escape closes whatever a click opened', link: 'every link and every page a click goes to is one the site serves', click: 'every control can be clicked (nothing covers it)' };
+    Object.keys(WHAT).forEach(function (k) { ok(name + ': ' + WHAT[k], !kinds[k], (kinds[k] || []).slice(0, 10)); });
+    return { controls: r.controls, clicked: r.clicks, read: r.read.length, leaves: r.held.length, problems: r.problems.length, changedByAnEarlierClick: r.hidden.concat(r.skipped), tabs: r.tabs, frames: r.frames };
+  }
+  await scenario('sweep northstar', FX.northstar(HOST), { steps: async function (p) { return sweepDash(p, 'sweep northstar'); } });
+  await scenario('sweep northstar-phone', FX.northstar(HOST), { phone: true, steps: async function (p) { return sweepDash(p, 'sweep northstar-phone', true); } });
+  await scenario('sweep lite', FX.lite(HOST), { steps: async function (p) { return sweepDash(p, 'sweep lite'); } });
+  await scenario('sweep legacy-enterprise', FX.legacyEnterprise(HOST), { steps: async function (p) { return sweepDash(p, 'sweep legacy-enterprise'); } });
   PACKAGE_VIEW = null;
 
   ok('no /api/ route was called that this check does not answer', !missing.length, missing);
