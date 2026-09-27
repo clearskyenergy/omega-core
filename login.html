@@ -445,7 +445,7 @@
        via=omega-gateway, so a handoff from the chooser passes straight
        through to the portal while somebody arriving cold at the bare domain
        still gets the branded login. */
-    workspace:   PORTAL + "/",                      // a tenant's own OMEGA workspace
+    workspace:   PORTAL + "/workspace",             // a tenant's own Omega Workspace (the classic dashboard is a choice on it)
     admin:       PORTAL + "/admin/",                // ClearSky admin console
     ops:         "https://alpha.clearskyomega.com", // ops console (reps)
     financing:   PORTAL + "/portals/finance/",
@@ -569,7 +569,7 @@
      read during resolve(). */
   function portalFor(org, host) {
     if (TENANT_PORTALS[org]) return TENANT_PORTALS[org];
-    if (host) return "https://" + String(host).replace(/^https?:\/\//, "").replace(/\/+$/, "") + "/";
+    if (host) return "https://" + String(host).replace(/^https?:\/\//, "").replace(/\/+$/, "") + "/workspace";
     return ROUTES.workspace;
   }
 
