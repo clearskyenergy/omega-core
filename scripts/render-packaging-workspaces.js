@@ -115,7 +115,12 @@ async function run() {
         OmegaCaps.setPackage(null); OmegaCaps.apply('standard'); await wait();
         var back = OmegaMode.get() === 'designer' && getComputedStyle(document.getElementById('omg-switch')).display !== 'none';
         OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); await wait();
-        return back && OmegaMode.get() === 'pro' && getComputedStyle(document.getElementById('omg-switch')).display === 'none';
+        var held = OmegaMode.get() === 'pro' && getComputedStyle(document.getElementById('omg-switch')).display === 'none';
+        /* again, on the same tier: no omega:tier this time, only the body attribute says the package went */
+        OmegaCaps.setPackage(null); OmegaCaps.apply('standard'); await wait();
+        var again = OmegaMode.get() === 'designer';
+        OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); await wait();
+        return back && held && again && OmegaMode.get() === 'pro';
       }), 'a package going away gives a legacy account its saved Designer choice and the switch back; the package taking over ends it again');
       ok(await page.evaluate(function () { return !document.getElementById('omega-workspace-controls'); }), 'a customer has no workspace bar above the ribbon (it only carried All tools)');
       ok(await page.evaluate(function () {

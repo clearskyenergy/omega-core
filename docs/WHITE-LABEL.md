@@ -983,9 +983,10 @@ document's surfaces:
 ### Packaged workspace presentation (Phase 3, disabled pending rollout)
 
 When billing/current.packaged is true, the server modules projection governs
-editor tools. The legacy bess-lite presentation filter no longer competes
-with project focus: All tools restores every owned tool, while seven project
-types prioritize relevant commands. Existing drawings remain mounted.
+editor tools. The legacy bess-lite presentation filter stands aside under a
+package, and nothing else hides an owned tool (2026-09-27, "bought =
+visible"): the seven project types only put relevant commands first, and
+there is no Designer/Pro or All tools. Existing drawings remain mounted.
 A staff package preview changes presentation only; it does not change the
 resolved organization, customer records, module purchases or billing dates.
 

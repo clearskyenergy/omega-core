@@ -107970,6 +107970,9 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     if (packaged()) {
       heldByPackage = true;
       var hint = document.getElementById('omg-firstrun'); if (hint) hint.remove();
+      /* the retired Compute mode hides tabs and moves tools; a package lands
+         on the full owned ribbon even if it was switched on from the console */
+      try { if (window.OmegaComputeMode && OmegaComputeMode.isOn && OmegaComputeMode.isOn()) OmegaComputeMode.off(); } catch (e) {}
       if (mode !== 'pro') set('pro', true, true); else paintSwitch();
       return;
     }
