@@ -622,23 +622,34 @@
      what did a later retry() find instead. */
   var _failSafe = false, _retried = null;
 
-  function resolve(db, email, emailVerified) {
-    _failSafe = false; _retried = null;
+  function resolve(db, email, emailVerified, keep) {
+    /* keep (retry() only): an UNCHECKED plan stays in place until a real
+       answer replaces it. Clearing it before the read restored every hidden
+       producing command and switched the click guard off for as long as
+       the read took — seconds, offline — which is the engineering suite
+       handed to a plan nobody has checked. A legacy or internal answer
+       clears it just before done(); a packaged one moves straight to the
+       pending package; a failure leaves it as it was. */
+    var held = keep === true && !!(_package && _package.unverified);
+    if (!held) _failSafe = false;
+    _retried = null;
     return new Promise(function (done) {
       try {
         var d = setOrg(email);
         var internal = emailVerified === true && INTERNAL_DOMAINS.indexOf(d) >= 0;
         setAddons([]);
         var resolution = ++_packageRequest;
-        setPackage(null);
-        if (internal && !db) return done('internal');
+        var answered = function (t) { if (held) { setPackage(null); _failSafe = false; } done(t); };
+        if (!held) setPackage(null);
+        if (internal && !db) return answered('internal');
         if (!d || !db) return done('trial');
         db.collection('omega_orgs').doc(d).collection('billing').doc('current').get()
           .then(function (s) {
             if (resolution !== _packageRequest) return done('trial');
             var b = s.exists ? (s.data() || {}) : {};
-            if (!s.exists && internal) return done('internal');
+            if (!s.exists && internal) return answered('internal');
             if (b.packaged === true) {
+              _failSafe = false;
               setPackage(pendingPackage());
               var user = global.firebase && global.firebase.auth().currentUser;
               if (!user || user.email !== email) return done('trial');
@@ -650,15 +661,16 @@
               console.info('[caps] billed ' + b.tier + ', editor capped to ' + eff +
                            ' by capTier on billing/current');
             }
-            done(eff);
+            answered(eff);
           })
           .catch(function () {
             if (resolution !== _packageRequest) return done('trial');
             /* A failed read must not hand out the engineering suite to a
                customer — but it must not lock ClearSky out either. It
                leaves the plan unchecked: viewing stays, producing waits. */
-            if (!internal) { setPackage(unverifiedPackage()); _failSafe = true; }
-            done(internal ? 'internal' : 'trial');
+            if (internal) return answered('internal');
+            setPackage(unverifiedPackage()); _failSafe = true;
+            done('trial');
           });
       } catch (e) { done('trial'); }
     });
@@ -673,10 +685,12 @@
      caller that re-applies a legacy tier by itself. Once a retry has a real
      answer, a legacy apply() uses that answer, or the next injected button
      would take the plan away again. A new resolve() — another sign-in —
-     clears it. */
+     clears it. While the read is out the unchecked plan stays exactly as it
+     was (resolve's keep): Retry never shows a producing command before the
+     answer does. */
   function retry(db, email, emailVerified) {
     var wasUnchecked = _failSafe;
-    return resolve(db, email, emailVerified).then(function (t) {
+    return resolve(db, email, emailVerified, true).then(function (t) {
       if (wasUnchecked && !_failSafe) _retried = t;
       apply(t);
       return t;

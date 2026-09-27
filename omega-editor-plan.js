@@ -30,8 +30,10 @@
    OmegaCaps never hides it and it needs no catalog owner. Every figure is
    the server's. Every module state is the ONE rule the workspace's Modules
    page uses: the server's projection for a packaged workspace,
-   OmegaWorkspaceHub.moduleState for a legacy one, with OmegaCaps.editorCan
-   so that "held" means Site Map opens it. Showing a module is never access.
+   OmegaWorkspaceHub.moduleState for a legacy one, on the tier
+   OmegaWorkspaceHub.editorCtx names (the one mirror of OmegaCaps.resolve)
+   so that "held" means Site Map opens it; a legacy request is in progress
+   only where moduleCard says so. Showing a module is never access.
 
    Not built: Editor Lite hides #portal-nav, so it has no chip.
 
@@ -54,11 +56,11 @@
   var TEXT = {
     unchecked: 'Your plan could not be checked, so Site Map shows only what opens and views your projects. Module pricing could not be loaded either.',
     viewer: 'You can open and view projects in this workspace. An owner or administrator makes the changes.',
+    readOnly: 'This workspace is read-only. Your saved projects remain available.',
     notPaid: 'Not paid yet as far as QuickBooks knows; a card payment shows within a minute.'
   };
 
   function has(list, k) { return Array.isArray(list) && list.indexOf(k) >= 0; }
-  function each(obj, fn) { if (obj && typeof obj === 'object') Object.keys(obj).forEach(function (k) { fn(k, obj[k]); }); }
   function byKey(rows) { var out = {}; (rows || []).forEach(function (m) { if (m && m.key) out[m.key] = m; }); return out; }
   function namesOf(rows) { var out = {}; (rows || []).forEach(function (m) { if (m && m.key) out[m.key] = m.name || m.key; }); return out; }
 
@@ -96,11 +98,11 @@
     out.listed = true;
   }
 
-  /* What is on its way in or out, in the contract's words. The plan-change
-     summary is the fresher record; a legacy workspace's own billing record
-     carries its opt-in and opt-out requests when the summary is not there. */
-  function changes(figs, billing, names) {
-    var out = [], seen = {}, f = figs || {}, b = billing || {};
+  /* What a PACKAGED workspace has on its way in or out, in the contract's
+     words, from the plan-change summary: a change invoice waiting for
+     payment, bought but not on yet, a removal queued for the review. */
+  function changes(figs, names) {
+    var out = [], seen = {}, f = figs || {};
     function add(k, pill, payUrl) {
       if (!k || seen[k + '|' + pill]) return;
       seen[k + '|' + pill] = 1;
@@ -109,9 +111,36 @@
     (f.pending || []).forEach(function (p) { (p && p.add || []).forEach(function (k) { add(k, 'Waiting for payment', p.paymentLink); }); });
     if (Array.isArray(f.subscription) && Array.isArray(f.modules)) f.subscription.forEach(function (k) { if (f.modules.indexOf(k) < 0) add(k, 'Bought · not on yet'); });
     (f.removalRequests || []).forEach(function (r) { add(r && r.module, 'Opting out'); });
-    each(f.optIns || b.optIns, function (k, r) { if (r && r.status === 'requested') add(k, 'Opt-in requested'); });
-    each(f.optOuts || b.optOuts, function (k, r) { if (r && r.status === 'requested') add(k, 'Opting out'); });
     return out;
+  }
+
+  /* A LEGACY workspace's opt-in and opt-out requests, as the Modules page's
+     own card reads them (OmegaWorkspaceHub.moduleCard): only ClearSky's
+     package activation closes a request, so one ClearSky met by editing
+     the tier stays 'requested' on the record — an opt-in on a module the
+     plan now holds, an opt-out of one it no longer holds. The card calls
+     those answered, and so does the chip: a module never reads Live on the
+     Modules page and "Opt-in requested" here. The summary is the fresher
+     record, the billing record the fallback. */
+  function requests(rows, ctx, figs, billing, hub) {
+    var f = figs || {}, b = billing || {}, out = [];
+    var rec = { optIns: f.optIns || b.optIns || {}, optOuts: f.optOuts || b.optOuts || {} };
+    function open(map, k) { return !!(map[k] && map[k].status === 'requested'); }
+    rows.forEach(function (m) {
+      if (!m || !m.key || !(open(rec.optIns, m.key) || open(rec.optOuts, m.key))) return;
+      var card = hub.moduleCard(m, ctx, rec, null, {});
+      if (card.state === 'requested' || card.state === 'removing') out.push({ key: m.key, name: m.name || m.key, pill: card.pill, payUrl: null });
+    });
+    return out;
+  }
+
+  /* OmegaCaps as editorCtx may read it and never write it: the rule sets
+     the org and add-ons first (its mirror of resolve), and in Site Map those
+     are the page's live gating state, already set by resolve from the same
+     record. The chip shows; it never decides. */
+  function readOnlyCaps(caps) {
+    return { editorCan: caps.editorCan, can: caps.can, effectiveTier: caps.effectiveTier, INTERNAL_DOMAINS: caps.INTERNAL_DOMAINS,
+      setOrg: function (email) { return caps.orgOf(email); }, setAddons: function () { return caps.addons ? caps.addons() : []; } };
   }
 
   /* the server's figures, as the server formatted them */
@@ -132,7 +161,25 @@
     return extra ? 'Lite + ' + extra + (extra === 1 ? ' module' : ' modules') : 'Lite';
   }
 
-  function packaged(out, view, figs, offers) {
+  /* Is the workspace read-only because of the BILL, or only for this
+     person? The projection is read-only for either (package-access.js:
+     !live || a viewer), and a notice rides along in both — a viewer on the
+     last days of a live trial carries the trial's reminder — so "read-only
+     with a notice" named every such viewer's plan unpaid, in red, with an
+     I've paid that only answers an owner or administrator. The server's
+     own `live`, when it sends it, decides. Without it: a notice with a pay
+     link, or one while the recorded deadline has passed, is the bill; the
+     trial's reminder has no pay link and comes only while the trial runs. */
+  function billReadOnly(view, now) {
+    if (!view.readOnly) return false;
+    if (typeof view.live === 'boolean') return !view.live;
+    var notice = view.billingNotice;
+    if (!notice) return false;
+    if (notice.payUrl) return true;
+    return !(typeof view.accessUntil === 'number' && view.accessUntil > now);
+  }
+
+  function packaged(out, view, figs, offers, now) {
     if (view.unverified) {
       out.state = 'unchecked'; out.tone = 'warn'; out.plan = 'Plan not checked'; out.pill = 'Not checked';
       out.notice = { text: TEXT.unchecked }; out.retry = true;
@@ -145,16 +192,18 @@
     if (view.staff) { out.state = 'staff'; out.tone = 'ok'; out.plan = 'Staff · every module'; out.pill = 'Staff'; return out; }
     if (view.preview) { out.state = 'preview'; out.tone = 'muted'; out.plan = 'Preview · ' + packagedName(held, null); out.pill = 'Presentation preview'; return out; }
     out.plan = packagedName(held, figs);
-    out.changes = changes(figs, null, namesOf(rows));
+    out.changes = changes(figs, namesOf(rows));
     out.figures = figures(figs);
     var notice = view.billingNotice;
-    if (view.readOnly && notice) {
+    if (billReadOnly(view, now)) {
       out.state = 'readonly'; out.tone = 'bad'; out.suffix = ' · Read-only'; out.pill = 'Read-only';
-      out.notice = { text: notice.text, payUrl: notice.payUrl || null, paid: true };
+      out.notice = { text: notice ? notice.text : TEXT.readOnly, payUrl: (notice && notice.payUrl) || null, paid: true };
     } else if (view.readOnly) {
-      /* read-only while the plan is live is the person's role, not the bill */
+      /* read-only while the plan is live is the person's role, not the bill:
+         the server's note (the trial's reminder, an overdue Lite) is passed
+         on as words, with no payment to make or confirm */
       out.state = 'viewer'; out.tone = 'muted'; out.suffix = ' · Read-only'; out.pill = 'View only';
-      out.notice = { text: TEXT.viewer };
+      out.notice = { text: TEXT.viewer + (notice && notice.text ? ' ' + notice.text : '') };
     } else if (notice && notice.payUrl) {
       /* still working, but overdue: Lite is what is left (past_due_lite) */
       out.state = 'due'; out.tone = 'warn'; out.suffix = ' · Payment due'; out.pill = 'Payment due';
@@ -167,8 +216,8 @@
   }
 
   function legacy(out, input, figs, offers) {
-    var eff = String(input.tier || '').toLowerCase(), caps = input.caps, rows = input.offerings && input.offerings.modules;
-    var libs = !!(input.hub && input.tools && caps && rows);
+    var eff = String(input.tier || '').toLowerCase(), caps = input.caps, hub = input.hub, rows = input.offerings && input.offerings.modules;
+    var libs = !!(hub && input.tools && caps && rows);
     if (eff === 'internal') {
       out.state = 'staff'; out.tone = 'ok'; out.plan = 'Staff · every module'; out.pill = 'Staff';
       if (rows) place(out, rows, function () { return 'held'; }, offers);
@@ -182,25 +231,35 @@
     var label = function (t) { return TIER_LABEL[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Standard'); };
     out.state = 'legacy'; out.tone = 'ok'; out.plan = label(billed); out.pill = billed === 'trial' ? 'Trial' : 'Live';
     if (billed === 'trial' && b && b.trialEndsAt && day(b.trialEndsAt)) out.notice = { text: 'Your trial ends on ' + day(b.trialEndsAt) + '.' };
+    /* Which tier Site Map runs for this record and person: the ONE mirror
+       of OmegaCaps.resolve (OmegaWorkspaceHub.editorCtx) that the Modules
+       page asks too, so both judge a module on the same tier — a legacy
+       trial is not Enterprise for a module with nothing to count. A record
+       that could not be read leaves the tier Site Map is running. */
+    var who = input.who || {}, e = null;
+    if (b && hub && hub.editorCtx && caps && caps.orgOf) e = hub.editorCtx(readOnlyCaps(caps), b, { email: who.email || '', emailVerified: who.emailVerified === true, orgId: input.org || '' });
+    if (!e && caps && caps.editorCan && caps.can) e = { tier: eff, ungated: caps.can(eff, 'all') === true, editorCan: function (c) { return caps.editorCan(eff, c); } };
+    var site = e ? e.tier : eff;
     /* capTier: the plan is billed at one tier and Site Map scoped below it */
-    if (b && b.tier && caps && caps.normalise && caps.normalise(b.tier) !== caps.normalise(eff) && caps.LADDER && caps.LADDER.indexOf(caps.normalise(eff)) >= 0) {
-      out.note = 'Site Map is set to ' + label(caps.normalise(eff)) + ' on this workspace.';
+    if (b && b.tier && caps && caps.normalise && caps.normalise(b.tier) !== caps.normalise(site) && caps.LADDER && caps.LADDER.indexOf(caps.normalise(site)) >= 0) {
+      out.note = 'Site Map is set to ' + label(caps.normalise(site)) + ' on this workspace.';
     }
     out.figures = figures(figs);
-    out.changes = changes(figs, b, namesOf(rows));
+    /* nothing is listed, requests included, until the module states are known */
     if (!libs) return out;
     /* the Modules page's own rule (OmegaWorkspaceHub.moduleState): a module
        is held when its tools open on this plan AND Site Map grants its
-       capabilities on the tier it is running (OmegaCaps.editorCan) */
+       capabilities on the tier editorCtx names */
     var level = TIER_LEVEL[billed] != null ? TIER_LEVEL[billed] : 1;
     var ws = { orgId: input.org || '', tierLevel: level, addons: (b && b.addons) || [] };
     if (b && b.toolOverrides) ws.toolOverrides = b.toolOverrides;
     if (b && Array.isArray(b.toolAccess)) ws.toolAccess = b.toolAccess;   // absent ≠ empty
     var tools = input.tools, ctx = { packaged: false, tierLevel: level, addons: ws.addons, modules: [],
       canOpen: function (k) { var t = tools.byKey(k); return !!t && tools.isUnlocked(t, ws); },
-      tool: function (k) { return tools.byKey(k); },
-      editorCan: function (c) { return caps.editorCan(eff, c); } };
-    place(out, rows, function (m) { return input.hub.moduleState(m, ctx); }, offers);
+      tool: function (k) { return tools.byKey(k); } };
+    if (e) { ctx.editorCan = e.editorCan; ctx.ungated = e.ungated; ctx.editorTier = e.tier; }
+    place(out, rows, function (m) { return hub.moduleState(m, ctx); }, offers);
+    if (hub.moduleCard) out.changes = requests(rows, ctx, figs, b, hub);
     return out;
   }
 
@@ -209,7 +268,9 @@
      Map is running), billing (a legacy billing/current record, {} when
      there is none, {failed:true} when it could not be read), offerings
      (GET /api/offerings), figures (GET /api/plan-change, or {error}),
-     hub, tools, caps (the runtime libraries), org }. Pure. */
+     hub, tools, caps (the runtime libraries), org, who ({ email,
+     emailVerified } of the person Site Map resolved for), now (ms) }.
+     Pure: OmegaCaps is only read. */
   function summary(input) {
     input = input || {};
     var view = input.view && input.view.packaged === true ? input.view : null;
@@ -217,7 +278,7 @@
     var offers = byKey(input.offerings && input.offerings.modules);
     var out = { state: 'checking', tone: 'muted', plan: '', suffix: '', pill: '', notice: null, note: '', figures: null,
       inSiteMap: [], elsewhere: [], changes: [], notHeld: 0, listed: false, retry: false, links: LINKS.slice() };
-    if (view) return packaged(out, view, figs, offers);
+    if (view) return packaged(out, view, figs, offers, typeof input.now === 'number' ? input.now : Date.now());
     if (input.tier) return legacy(out, input, figs, offers);
     return out;
   }
@@ -315,9 +376,10 @@
     if ((live || S.tier) && S.figures && Date.now() - S.figuresAt > 60000) { S.figures = null; loadFigures(); }
   }
   function inputs() {
-    var C = caps();
+    var C = caps(), u = currentUser();
     return { view: S.view, tier: S.tier, billing: S.billing, offerings: S.offerings && !S.offerings.error ? S.offerings : null, figures: S.figures,
-      hub: global.OmegaWorkspaceHub || null, tools: global.OMEGATools || null, caps: C, org: C && C.org ? C.org() : '' };
+      hub: global.OmegaWorkspaceHub || null, tools: global.OMEGATools || null, caps: C, org: C && C.org ? C.org() : '',
+      who: u ? { email: u.email || '', emailVerified: u.emailVerified === true } : null };
   }
 
   /* ── The package again, without a reload: after "I've paid", at the
@@ -339,7 +401,7 @@
   }
   function retry() {
     var C = caps(), u = currentUser();
-    if (!C || !C.retry || !u || !global.firebase || !global.firebase.firestore) return;
+    if (S.busy === 'retry' || !C || !C.retry || !u || !global.firebase || !global.firebase.firestore) return;
     S.busy = 'retry'; S.message = ''; paint();
     C.retry(global.firebase.firestore(), u.email, u.emailVerified).then(null, function () {}).then(function () {
       S.busy = ''; S.billing = null; S.figures = null; S.figuresAt = 0;
@@ -604,5 +666,15 @@
      summary says may have changed with it */
   doc.addEventListener('omega:package', function () { S.figures = null; S.figuresAt = 0; schedule(); });
   doc.addEventListener('omega:tier', schedule);
+  /* The editor gate let this person in (its own Retry after a blip, or a
+     first read that worked where OmegaCaps' failed): a plan OmegaCaps left
+     UNCHECKED is asked again here, through the chip's own Retry so its busy
+     state and answer read the same. Without it the gate lifted onto a
+     view-only Site Map and a second Retry on the chip. */
+  global.addEventListener('omega:editor-access', function () {
+    var C = caps(), p = C && C.packageAccess ? C.packageAccess() : null;
+    if (engineOnly() || S.fixed || S.busy === 'retry' || !C || !C.retry) return;
+    if ((C.unchecked && C.unchecked()) || (p && p.unverified)) retry();
+  });
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', schedule); else schedule();
 })(typeof window !== 'undefined' ? window : this);
