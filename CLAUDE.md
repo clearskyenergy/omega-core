@@ -256,7 +256,7 @@ Runbook and what is not built (autopay, instant refund events, tax):
 
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
-`name`, `shelfLabel` (Core · Add-on · Pro · Advanced · By the piece · Omega
+`name`, `shelfLabel` (Core · Add-on · Plus · Advanced · By the piece · Omega
 Logic) and `mark` (the card letter) live ONLY in `api/_lib/modules.js`, and
 every page reads them off the record — never a page's own shelf map. Keys and
 plan names (Lite + modules, Field, Pro) are unchanged; the table is in
