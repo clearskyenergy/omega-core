@@ -21,14 +21,14 @@ window.CLEARSKY_CONFIG = {
     measurementId:     'G-8D92GNW555'
   },
   /* Domains allowed to preview ANY tenant's portal (staff). */
-  adminDomains: ['csebuilders.com', 'clearsky-usa.com'],
+  adminDomains: ['clearsky-usa.com'],
   /* Zero-config auto-tenant is OFF on real hosts: every workspace must
      exist in omega_orgs (self-serve via /start.html, or seeded). Preview
      hosts still allow it for development. */
   autoTenant: false,
   platformName: 'ClearSky-OMEGA',
-  upgradeEmail: 'sales@csebuilders.com',
-  supportEmail: 'support@csebuilders.com',
+  upgradeEmail: 'dev@clearsky-usa.com',
+  supportEmail: 'dev@clearsky-usa.com',
   hub: 'https://app.clearskyomega.com'
 };
 

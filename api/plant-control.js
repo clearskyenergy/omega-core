@@ -10,6 +10,7 @@
 'use strict';
 
 var A = require('./_lib/admin');
+var X = require('./_lib/logic-access');
 var P = require('./_lib/plant');
 
 function clean(value, max) {
@@ -64,6 +65,9 @@ module.exports = A.handler(function (req) {
       var firstUnit = first.data() || {};
       return mayControl(db, caller, firstUnit.orgId).then(function (admin) {
         if (!admin) throw A.httpError(403, 'Only a tenant administrator may control a quality hold.');
+        /* Phase 9: a hold or release is the Plant part's (a packaged workspace must hold it) */
+        return X.requirePartIfPackaged(firstUnit.orgId, 'plant');
+      }).then(function () {
         var scanRef = db.collection('plant_scans').doc(org + '__control_' + id);
         return db.runTransaction(function (tx) {
           return Promise.all([tx.get(unitRef), tx.get(scanRef)]).then(function (rows) {

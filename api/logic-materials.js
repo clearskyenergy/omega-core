@@ -77,7 +77,7 @@ module.exports = A.handler(async function (req, res) {
   if (['GET', 'POST'].indexOf(req.method) < 0) throw A.httpError(405, 'GET or POST only');
   var b = req.body || {}, caller = await A.authenticate(req);
   var org = A.safeOrg(req.method === 'GET' ? req.query.org : b.org);
-  var ctx = await X.authorize(caller, org, req.method === 'POST');
+  var ctx = await X.authorize(caller, org, req.method === 'POST', 'materials');
   var db = A.db(), root = db.collection('omega_orgs').doc(org);
   var catalogRef = root.collection('storefront').doc('config'), stockRef = root.collection('fulfillment').doc('materials');
   var poCol = root.collection('purchase_orders'), supRef = root.collection('fulfillment').doc('suppliers');

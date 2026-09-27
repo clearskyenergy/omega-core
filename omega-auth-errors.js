@@ -68,8 +68,19 @@
   }
 
   /* The message to show. Never a code, never a vendor name. */
+  /* On a Vercel preview the "unauthorised domain" refusal is a setup step,
+     not a fault: the preview's hostname is not on the authentication
+     project's list of authorised domains yet (there are no wildcards, so
+     every branch's hostname is added by hand), and a password sign-in does
+     not check that list. Say so, with the hostname, to the person testing
+     the build; on any other host the message is unchanged. */
+  function previewHost() {
+    try { var h = root.location && root.location.hostname; return h && /\.vercel\.app$/i.test(h) ? String(h).toLowerCase() : ''; } catch (e) { return ''; }
+  }
   function text(err, fallback) {
     var code = codeOf(err);
+    if (code === 'auth/unauthorized-domain' && previewHost())
+      return 'This preview address, ' + previewHost() + ', isn’t on the authorised domains list of the sign-in project yet. Add it under Authentication → Settings → Authorised domains, or sign in with your email and password, which doesn’t check that list.';
     if (code && KNOWN[code]) return KNOWN[code];
 
     /* An unrecognised code, or none. If the caller supplied its own wording

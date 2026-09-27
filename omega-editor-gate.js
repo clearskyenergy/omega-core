@@ -58,7 +58,7 @@
   'use strict';
 
   var ORG_ALIAS = { 'fenecon.de': 'fenecon.com', 'fenecon.us': 'fenecon.com' };
-  var STAFF = ['clearsky-usa.com', 'csebuilders.com'];
+  var STAFF = ['clearsky-usa.com'];
   var BLOCKED_STATUS = ['pending', 'suspended', 'cancelled'];
   var MAX_WAIT_MS = 12000;
 
@@ -187,7 +187,7 @@
   function decide(user) {
     var email = String(user.email || '').toLowerCase();
     var org = orgOf(email);
-    if (STAFF.indexOf(org) >= 0) return Promise.resolve(allow({ org: org, staff: true, reason: 'staff' }));
+    if (user.emailVerified === true && STAFF.indexOf(org) >= 0) return Promise.resolve(allow({ org: org, staff: true, reason: 'staff' }));
     if (!org) { refuse('signed-out'); return Promise.resolve(); }
 
     var fb = global.firebase;
@@ -195,7 +195,8 @@
       /* No Firestore on the page at all. Signed in is the requirement that
          matters and it is met; refusing here would lock people out over a
          script that failed to load. */
-      return Promise.resolve(allow({ org: org, reason: 'no-firestore' }));
+      refuse('plan', 'Workspace access could not be checked. Retry when connected.');
+      return Promise.resolve();
     }
 
     var db = fb.firestore();
@@ -206,6 +207,18 @@
       var exists = r[0] && r[0].exists;
       var o = exists ? (r[0].data() || {}) : null;
       var bill = (r[1] && r[1].exists) ? (r[1].data() || {}) : null;
+
+      if (bill && bill.packaged === true) {
+        return user.getIdToken().then(function (token) {
+          return global.fetch('/api/package-access', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+        }).then(function (response) {
+          if (!response.ok) throw new Error('Package access unavailable');
+          return response.json();
+        }).then(function (view) {
+          if (view.packaged !== true || !Array.isArray(view.toolAccess) || view.toolAccess.indexOf('editor') < 0) return refuse('plan');
+          return allow({ org: org, packaged: true, readOnly: view.readOnly, reason: 'package' });
+        }).catch(function () { return refuse('plan', 'Package access could not be checked. Retry when connected.'); });
+      }
 
       /* ABSENT COUNTS AS ACTIVE — see the header. */
       if (!exists) return allow({ org: org, reason: 'no-record' });
@@ -238,7 +251,7 @@
       /* The read failed — offline, rules hiccup, no network. Signed in is
          still true, and a designer that refuses on a flaky read is a support
          call from somebody who is paying. */
-      return allow({ org: org, reason: 'read-failed' });
+      return refuse('plan', 'Workspace access could not be checked. Retry when connected.');
     });
   }
 
@@ -251,7 +264,7 @@
       try {
         if (global.parent !== global && global.parent.location.origin === global.location.origin &&
             /^\/editor-lite(?:\.html)?\/?$/.test(global.parent.location.pathname) &&
-            global.parent.OmegaBuyerEngine && global.parent.OmegaBuyerEngine.authorized === true) {
+            global.parent.OmegaBuyerEngine && global.parent.OmegaBuyerEngine.authorized === true && global.parent.OmegaBuyerEngine.packageAccess && global.parent.OmegaBuyerEngine.packageAccess.packaged === true) {
           allow({ reason: 'customer-drawing-engine' }); return;
         }
       } catch (e) {}

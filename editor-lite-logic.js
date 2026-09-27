@@ -307,7 +307,8 @@
         if (!data.access.active) throw new Error('Editor Lite requires an active customer subscription or an approved trial. Your free customer account remains available.');
         quoteControls(data.products);
         data = { org: data.org, name: data.brand.name, logoUrl: data.brand.logoUrl, brand: data.brand,
-          modules: data.access.modules, expiresAt: data.access.expiresAt, note: 'Customer design workspace · ' + (data.access.status === 'owner-access' ? 'ClearSky owner access · no subscription required' : data.access.status + ' access') + '. Designs remain separate from supplier staff projects.' };
+          packageAccess: data.packageAccess, modules: data.access.modules, expiresAt: data.access.expiresAt, note: 'Customer design workspace · ' + (data.access.status === 'owner-access' ? 'ClearSky owner access · no subscription required' : data.access.status + ' access') + '. Designs remain separate from supplier staff projects.' };
+        window.OmegaBuyerEngine.packageAccess = data.packageAccess;
         window.OmegaBuyerEngine.authorized = true;
       }
       context = data; $('brandName').textContent = data.name;

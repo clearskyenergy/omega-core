@@ -84,7 +84,7 @@
     if (body.lat == null && !body.address)
       return Promise.reject(new Error('No coordinates and no address — nothing to look up.'));
 
-    var list = candidates(), i = 0, lastErr = null;
+    var list = ['/api/grid-atlas'], i = 0, lastErr = null, token = null; // Never retry a paid gate on an older external deployment.
 
     function attempt() {
       if (i >= list.length) {
@@ -102,7 +102,7 @@
       } catch (e) {}
       return fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify(body),
         signal: ctl ? ctl.signal : undefined
       }).then(function (r) {
@@ -127,7 +127,10 @@
         return attempt();
       });
     }
-    return attempt();
+    return idToken().then(function (t) {
+      if (!t) throw new Error('Sign in to run Grid Atlas');
+      token = t; return attempt();
+    });
   }
 
   /* Nearest substation and the highest voltage seen, which is what a screen

@@ -1248,8 +1248,8 @@ module.exports = function handler(req, res) {
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST.' });
 
-  return auth.authenticateWithTier(req).then(function (a) {
-    if (!a.caller.staff && (a.billing.toolOverrides || {}).gridatlas === false) throw auth.httpError(403, 'Grid Atlas access required.');
+  return auth.authenticateWithTier(req).then(function (ctx) { return require('./_lib/package-access').withToken(req, ctx, ["siteintel", "gridatlas", "compute"]); }).then(function (a) {
+    if (!a.caller.staff && !a.packageAccess && (a.billing.toolOverrides || {}).gridatlas === false) throw auth.httpError(403, 'Grid Atlas access required.');
     var body = (req.body && typeof req.body === 'object') ? req.body : {};
     var lat = Number(body.lat), lon = Number(body.lng != null ? body.lng : body.lon);
     if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0))

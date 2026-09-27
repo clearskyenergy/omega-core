@@ -6,8 +6,8 @@ var auth=require('./_lib/verify-token');
 module.exports=function(req,res){
  res.setHeader('Cache-Control','private, no-store');
  if(req.method!=='GET')return res.status(405).json({error:'GET required'});
- return auth.authenticateWithTier(req).then(async function(a){
-  if(!a.caller.staff && (a.billing.toolOverrides||{}).gridatlas===false)throw auth.httpError(403,'Grid Atlas access required.');
+ return auth.authenticateWithTier(req).then(function (ctx) { return require('./_lib/package-access').withToken(req, ctx, "gridatlas"); }).then(async function(a){
+  if(!a.caller.staff && !a.packageAccess && (a.billing.toolOverrides||{}).gridatlas===false)throw auth.httpError(403,'Grid Atlas access required.');
   var key=process.env.FIBER_VENDOR_KEY,base=process.env.FIBER_VENDOR_BASE;
   if(!key||!base)throw auth.httpError(503,'Licensed fiber source is not connected.');
   var bbox=String((req.query||{}).bbox||'').split(',').map(Number);

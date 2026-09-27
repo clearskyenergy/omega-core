@@ -89,6 +89,7 @@
      the editor, so the mode rides that read rather than costing a second one.
      It lands on CLEARSKY_CONFIG.tenant.editorMode. */
   function resolve() {
+    if (global.OmegaCaps && global.OmegaCaps.packageAccess()) return DEFAULT_MODE;
     try {
       var c = global.CLEARSKY_CONFIG || {};
       var t = c.tenant || {};
@@ -123,7 +124,7 @@
   }
 
   function apply(mode) {
-    var m = norm(mode || resolve());
+    var m = global.OmegaCaps && global.OmegaCaps.packageAccess() ? DEFAULT_MODE : norm(mode || resolve());
     restore();
     if (m === DEFAULT_MODE) return m;
 

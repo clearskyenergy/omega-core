@@ -15,10 +15,10 @@ var check = toolEngine.validate;
 module.exports = function(req,res){
   res.setHeader('Cache-Control','private, no-store');
   if(req.method!=='POST') return res.status(405).json({error:'POST required'});
-  return auth.authenticateWithTier(req).then(function(a){
+  return auth.authenticateWithTier(req).then(function (ctx) { return require('./_lib/package-access').withToken(req, ctx, "storage"); }).then(function(a){
     var addons=a.billing.addons||[];
     var overrides=a.billing.toolOverrides||{};
-    if(!a.caller.staff && (overrides.batterysizer===false || (['standard','deluxe','enterprise','partner','internal'].indexOf(a.tier)<0 && overrides.batterysizer!==true && addons.indexOf('engineering')<0))) throw auth.httpError(403,'The Battery Sizer is not included in the '+a.tier+' plan. '
+    if(!a.caller.staff && !a.packageAccess && (overrides.batterysizer===false || (['standard','deluxe','enterprise','partner','internal'].indexOf(a.tier)<0 && overrides.batterysizer!==true && addons.indexOf('engineering')<0))) throw auth.httpError(403,'The Battery Sizer is not included in the '+a.tier+' plan. '
       +'It is available on Standard and above, or with the Engineering add-on.');
     var b=req.body||{};
 

@@ -1,0 +1,101 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+'use strict';
+var assert = require('assert'), DB = require('./_lib/firestore-double').DB;
+var B = require('../api/_lib/pricebook'), S = require('../api/_lib/package-billing'), Q = require('../api/_lib/qbo-billing');
+var count = 0, original = Q.driver, calls = 0, receipts = {};
+function equal(a, b) { assert.deepStrictEqual(a, b); count++; }
+async function refused(fn, re) { await assert.rejects(fn, re); count++; }
+var orgId = 'packaging.example', root = 'omega_orgs/' + orgId, now = Date.parse('2026-09-26T12:00:00Z');
+var profile = { legalName: 'Sandbox Example', contactName: 'Alex Example', email: 'ap@packaging.example', phone: '555-0100',
+  address: { line1: '1 Example', city: 'Chicago', state: 'IL', postalCode: '60601', country: 'US' }, vertical: 'developer', teamSize: 3 };
+function fixture() {
+  var db = new DB(); db.serial = true;
+  var book = B.proposed(); book.enabled = true; book.qbo.realmId = '123';
+  db.seed('pricebook/' + book.version, book);
+  db.seed(root, { status: 'pending', signedUpAt: '2026-09-20T12:00:00Z', packagingSandbox: true, domains: ['sandbox.packaging.example'] });
+  db.seed(root + '/billing/current', { packagingSignup: true, proposedPackage: { modules: ['lite'], interval: 'monthly' } });
+  db.seed(root + '/billing/profile', profile); return db;
+}
+var input = { action: 'approve', modules: ['lite', 'storage'], credit: false, pricebookVersion: B.VERSION };
+var staff = { staff: true, email: 'staff@clearsky-usa.com' };
+async function request(db, body) { var v = await S.preview(db, orgId, body, now); return Object.assign({}, body, { effectiveAt: v.effectiveAt, previewId: v.previewId }); }
+async function run() {
+  process.env.PACKAGING_BILLING_ENABLED = 'true';
+  process.env.QBO_ENV = 'sandbox';
+  Q.driver = function () { return { customer: async function () { calls++; return 'C1'; }, invoice: async function (plan) { calls++; return { id: 'I-' + plan.date, totalCents: plan.subtotalCents, payUrl: 'https://connect.intuit.com/pay/test' }; }, reconcile: async function (record) { return receipts[record.date] || { satisfied: false, paidCents: 0, payUrl: 'https://connect.intuit.com/pay/test' }; } }; };
+  var db = fixture(), before = JSON.stringify(Array.from(db.data.entries())), body = await request(db, input);
+  equal(JSON.stringify(Array.from(db.data.entries())), before); equal(calls, 0);
+  var preview = await S.preview(db, orgId, body, now);
+  equal(preview.billingPatch.trialEndsAt - preview.billingPatch.trialStartedAt, 14 * 86400000);
+  equal(preview.invoice, null);
+  equal(preview.billingDay, 20);
+  await refused(function () { return S.apply(db, orgId, body, { staff: false }, now); }, /Staff only/);
+  var result = await S.apply(db, orgId, body, staff, now);
+  equal(result.packagingState, 'trial'); equal(calls, 1);
+  equal(db.data.get(root).status, 'active');
+  equal(db.data.get(root + '/billing/current').modules, ['lite', 'storage']);
+  equal(db.data.get(root + '/billing/current').proposedPackage, null);
+  equal(db.data.get('pricebook/' + B.VERSION).frozen, true);
+  equal(db.data.get(root + '/billing/current').trialStartedAt, now);
+  equal(await S.apply(db, orgId, body, staff, now + 86400000), result); equal(calls, 1);
+  await refused(function () { return S.apply(db, orgId, Object.assign({}, body, { modules: ['lite'] }), staff, now); }, /different inputs/);
+  await refused(function () { return S.preview(db, orgId, input, now); }, /pending/);
+  equal(Array.from(db.data.keys()).filter(function (p) { return p.indexOf('/history/') >= 0; }).length, 1);
+  equal(Array.from(db.data.keys()).filter(function (p) { return p.indexOf('/admin_audit/') >= 0; }).length, 1);
+  equal(Object.keys(db.data.get('tenant_public/sandbox.packaging.example')).sort(), ['status', 'tier']);
+  db = fixture(); body = await request(db, input); var oldCalls = calls;
+  db.data.get(root).packagingSandbox = false;
+  await refused(function () { return S.apply(db, orgId, body, staff, now); }, /sandbox tenant/); equal(calls, oldCalls);
+  db = fixture(); body = await request(db, input); db.data.get('pricebook/' + B.VERSION).enabled = false;
+  await refused(function () { return S.apply(db, orgId, body, staff, now); }, /enabled/); equal(calls, oldCalls);
+  db = fixture(); body = await request(db, input); db.data.get(root + '/billing/profile').phone = '555-9999';
+  await refused(function () { return S.apply(db, orgId, body, staff, now); }, /Preview changed/); equal(calls, oldCalls);
+  db = fixture(); body = await request(db, input);
+  var results = await Promise.allSettled([S.apply(db, orgId, body, staff, now), S.apply(db, orgId, body, staff, now)]);
+  equal(results.filter(function (r) { return r.status === 'fulfilled'; }).length, 1);
+  equal(calls, oldCalls + 1);
+  db = fixture(); db.data.get(root).status = 'active';
+  body = await request(db, Object.assign({}, input, { action: 'activate' }));
+  var activation = await S.apply(db, orgId, body, staff, now);
+  equal(activation.packagingState, 'awaiting_payment');
+  equal(db.data.get(root + '/billing/current').modules, ['lite']);
+  equal(db.data.get(root + '/billing/current').proposedPackage.modules, ['lite', 'storage']);
+  equal(db.data.get(root + '/billing/current/invoices/2026-09-26').state, 'unpaid');
+  equal(db.data.get(root + '/billing/current').trialStartedAt, undefined);
+  receipts['2026-09-26'] = { satisfied: true, paidCents: 50000, payUrl: null };
+  await S.reconcile(db, orgId, now, {});
+  equal(db.data.get(root + '/billing/current').modules, ['lite', 'storage']);
+  equal(db.data.get(root + '/billing/current').packagingState, 'paid');
+  db = fixture(); body = await request(db, input); await S.apply(db, orgId, body, staff, now);
+  var ending = now + 14 * 86400000, beforeIssue = calls;
+  equal(await S.issue(db, orgId, ending - 1), { skipped: true });
+  equal(calls, beforeIssue);
+  var due = await S.issue(db, orgId, ending);
+  equal(due.date, '2026-10-10'); equal(calls, beforeIssue + 1);
+  equal(db.data.get(root + '/billing/current/invoices/2026-10-10').modules, ['lite', 'storage']);
+  equal(await S.issue(db, orgId, ending), { skipped: true }); equal(calls, beforeIssue + 1);
+  equal(db.data.get(root + '/billing/current').packagingState, 'awaiting_payment');
+  await S.reconcile(db, orgId, ending);
+  equal(db.data.get(root + '/billing/current').packagingState, 'awaiting_payment');
+  receipts['2026-10-10'] = { satisfied: true, paidCents: 50000, payUrl: null };
+  await S.reconcile(db, orgId, ending);
+  equal(db.data.get(root + '/billing/current').packagingState, 'paid');
+  var historyCount = Array.from(db.data.keys()).filter(function (p) { return p.indexOf('/history/') >= 0; }).length;
+  await S.reconcile(db, orgId, ending + 1000);
+  equal(Array.from(db.data.keys()).filter(function (p) { return p.indexOf('/history/') >= 0; }).length, historyCount);
+  await S.issue(db, orgId, Date.parse('2026-10-20T12:00:00Z'));
+  await S.reconcile(db, orgId, Date.parse('2026-10-21T12:00:00Z'));
+  equal(db.data.get(root + '/billing/current').modules, ['lite', 'storage']);
+  await S.reconcile(db, orgId, Date.parse('2026-11-06T12:00:00Z'));
+  equal(db.data.get(root + '/billing/current').packagingState, 'past_due_lite');
+  equal(db.data.get(root + '/billing/current').modules, ['lite']);
+  receipts['2026-10-20'] = { satisfied: true, paidCents: 50000, payUrl: null };
+  await S.reconcile(db, orgId, Date.parse('2026-11-06T12:00:00Z'));
+  equal(db.data.get(root + '/billing/current').packagingState, 'paid');
+  equal(db.data.get(root + '/billing/current').modules, ['lite', 'storage']);
+  receipts['2026-10-10'] = { reversed: true, satisfied: false, paidCents: 0, payUrl: null };
+  await S.reconcile(db, orgId, Date.parse('2026-11-06T12:00:00Z'));
+  equal(db.data.get(root + '/billing/current').packagingState, 'unpaid');
+  console.log('Package activation: ' + count + ' passed; sandbox mock, no network.');
+}
+run().catch(function (e) { console.error(e); process.exitCode = 1; }).finally(function () { Q.driver = original; delete process.env.PACKAGING_BILLING_ENABLED; });

@@ -160,16 +160,117 @@ Effective tools for a user =
 `omega-tools.js` computes this on boot. Rules enforce the same on each
 tool's data collections.
 
+The editor's internal fallback requires a literal `emailVerified === true`
+from its Firebase user and the `clearsky-usa.com` domain. An existing billing
+record still wins. Packaging has one server catalog (`api/_lib/modules.js`) and proposed,
+disabled price book (`api/_lib/pricebook.js`). `api/package-catalog` returns
+authorized projections and server quotes. Packaged records use the server access projection introduced in Phase 2;
+unpackaged records keep legacy gates. Do not enable packaged billing before
+full editor, server-engine, write-rule and billing lifecycle validation. See `docs/PACKAGING-ROADMAP.md`.
+
+Phase 4 adds private signup billing profiles, reviewed staff package activation,
+server-priced sandbox invoices and paid reconciliation. New trials start at
+approval, once per organization and at most 14 days. Annual prepay uses the
+10-month price (two months free) without transformation credit. Packaged billing/profile writes
+are Admin SDK only. API and rules enforce the recorded access deadline;
+legacy tier edits cannot modify a packaged subscription. Staff authentication
+requires a literal verified ClearSky domain even with an old role claim.
+Flags remain off by default; see docs/PACKAGING-PHASE-4-VALIDATION.md before
+any sandbox enablement or release.
+
+Phase 5 separates what a tenant BOUGHT (`billing/current.subscription`) from
+what is switched on (`billing/current.modules`); `POST /api/plan-change` is
+the one door for a tenant's own additions (pay first, prorated; a $0 addition
+inside a paid tier switches on at once). Phase 6: the Subscription Proposal
+(`subscription-proposal.html`, `proposal.html`, `api/subscription-proposal.js`
+on `api/_lib/subscription-proposal.js`) and the signup discovery in
+`start.html` share ONE set of questions, ONE recommendation and the price
+book; `subscription_proposals` is Admin SDK only; accepting a proposal never
+prices anything — signup, plan-change or activation do. `api/_lib/deck-brand.js`
+is the one brand-of-a-deck rule (Pro Forma and proposal). Phase 7:
+`api/_lib/usage.js` is the ONE usage counter (`omega_orgs/{org}/usage/{cycle}`,
+Admin SDK only, idempotent by client id): a metered deliverable is counted
+where it is produced (`POST /api/usage` from the browser tools, server-side
+in `rfq.js`), the allowance is included + packs, overage is billed on the
+recurring invoice, and packs and auto top-up go through `plan-change`. It is
+an honest billing counter, not a security boundary. Phase 8: **Omega Logic
+follows the package.** A packaged tenant (`billing.packaged`) is judged by
+`modules[]` alone — Office is `logic-office`, the parts are `logic-plant`,
+`logic-materials`, `logic-logistics`, `logic-customer` — and the grant must be
+live (`package-access.live`, the editor's own rule). `logic-access.authorize(c,
+org, write, part)` refuses a part not bought; `parts(ctx)` is what the office
+endpoint (`access.parts`), the front door and the customer-portal gate
+(`buyer-accounts.context`) report, and what the chrome, the hex hub, the
+dashboard and the Omega Logic app draw. A legacy tenant (addon `omega-logic`)
+is unchanged and holds every part; absent means "everything", a present list
+is the package. Showing a link is never access. Phase 9: a door that is not
+a member's (the bench and rig tokens, a tenant admin's hold/release) runs
+`requirePartIfPackaged(org, 'plant')` — a packaged workspace must hold the
+part, a legacy or unrecorded one keeps its own rule — and `firestore.rules`
+compares a sign-in email lower-cased in the team blocks, `termsAcceptances`
+and `isAdmin()` (`scripts/tests/tsigninemail.js`), as `admin.js` does.
+Phase 10A: **one system, QuickBooks.** A company signs up, pays its first
+invoice by card on QuickBooks' page and is in; `GET /api/offerings` is the
+public price list; signup's pay-now runs the engine's own `activate` with the
+caller marked `selfServe` (recorded in history and audit); "I've paid" is
+`plan-change.reconcileNow` (one look per eight seconds), from the signup
+page (`check-payment`) and the billing bar (`reconcile-now`) alike. The
+flow as sold: account (login.html) → verified email (start.html holds an
+unverified address) → billing profile → *Build your system* (the one
+menu, priced live by the server; Monthly, or Yearly at ten months of
+twelve) → pay. Annual prepay is `annualPaidMonths` = 10 in the book.
+`api/_lib/packaging-mode.js` is the ONE rule for where packaging bills:
+SANDBOX (`QBO_ENV=sandbox`) or LIVE (`PACKAGING_LIVE=true` AND
+`QBO_ENV=production`, both literal), and neither is refused everywhere; the
+engine guard, `qbo-items.guard` (every QuickBooks write), the price book,
+signup, the runner and both scripts read it — never a second copy. A book
+whose version ends in `-proposed` is never production; sign-off is renaming
+`VERSION`. Signup and every activation mark the organization `packaged: true`
+(the live runner's query). The card button on a QuickBooks invoice is
+QuickBooks Payments, not Stripe: `docs/PAYMENTS-BROWSER-SETUP.md`.
+
+Module display names are Omega-branded (2026-09-27): `lite` reads Omega
+Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
+`name`, `shelfLabel` (Core · Add-on · Pro · Advanced · By the piece · Omega
+Logic) and `mark` (the card letter) live ONLY in `api/_lib/modules.js`, and
+every page reads them off the record — never a page's own shelf map. Keys and
+plan names (Lite + modules, Field, Pro) are unchanged; the table is in
+`docs/VALUE-LADDER-PACKAGING.md`.
+
+Packaged editor presentation uses the server catalog through OmegaCaps;
+OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
+The shared omega-package-menu.js renders catalog features and server-formatted
+prices. Staff package previews are read-only server projections, never tenant
+impersonation or billing edits. Legacy layout modes apply to unpackaged records.
+
 ## Self-serve signup (policy decided 2026-09-06)
 
 Hub host `app.clearskyomega.com` serves `/start.html`. Sign in → if
 `omega_orgs/{emailDomain}` exists, route to its hostname (colleagues
 auto-join as `member`); else the form → `POST /api/tenant-signup` creates
-the tenant `status: 'pending'` on a 30-day trial. Work email only —
+the tenant `status: 'pending'` with a signup trial capped in code at 14 days.
+The Phase 0 cap applies only to new signups; existing trial dates are preserved.
+Packaging Phase 4 moves the one organization trial to approval, with first
+billing at trial end (see `docs/PACKAGING-ROADMAP.md` §10). Work email only —
 public providers in `api/_lib/public-domains.js` are refused. ClearSky
 approves via `POST /api/tenant-approve` (master console button). A pending
 tenant's users see a "being set up" screen from `omega-tenant.js`. Never
 let a browser create `omega_orgs` directly.
+
+Launch hardening (2026-09-26): **where a person is sent is ONE rule**,
+`api/_lib/kit.js` `home(org, { wildcard })`: an attached hostname, else the
+open host `silmarillion.clearskyomega.com`, and a `<slug>.clearskyomega.com`
+host only under `TENANT_WILDCARD_LIVE=true`, because no wildcard record
+exists; the slug host is only reserved on the record. `/start` runs the
+hub routing on every host and never leaves the origin outside a hub. The
+billing engine's own bookkeeping never cuts access: a reconcile error only
+flags `reconciliationRequired` (401/403/429 and the guard are retried), the
+live runner finds tenants by `packagedLive` and runs hourly, a paid
+invoice mails the tenant (`paid`) and ClearSky (`paidAlert`), the driver
+refuses to invoice while QuickBooks' custom transaction numbers are off.
+`SUPPORT_EMAIL` (mail.js) and its literal twin in `omega-tenant.js` are the
+only support address; csebuilders.com is never written again. See
+`docs/PACKAGING-PHASE-10A-VALIDATION.md` (Launch hardening).
 
 ## Tenant resolution order (omega-brand.js)
 
@@ -596,6 +697,69 @@ is not built.
   camera a printed label and requires the passport and the bench to open.
 - Chromium render checks for all of it: `npm run check:pages`.
 
+## Omega Workspace — the home (2026-09-26)
+
+`workspace.html` is the hub-first home of a signed-in workspace: index.html
+sends a signed-in visit on once the entitlements say where home is. A
+tenant keeps the classic dashboard with `omega_orgs/{org}.shell = 'classic'`
+(a partner-type workspace keeps it too), a browser with `?home=classic`
+(`?stay=classic` for one visit), and `OmegaWorkspaceShell.homeOf()` is the
+ONE rule index.html, the workspace and the legacy pages read. The dashboard
+fixtures say `shell: 'classic'` for that reason. `omega-workspace-shell.js` is the one
+chrome (rail, topbar, switcher, the website's blueprint grid, side panel,
+toast, phone tab bar); a page never builds its own rail. The hub is
+`omega-hexhub.js` drawn from `omega-workspace-hub.js`, which composes the
+six cells from `OMEGATools.isUnlocked()` — showing a cell is never access —
+and `scripts/tests/tworkspacehub.js` asserts every key it names against the
+real catalogs. Every tool tile is Live, Locked or Soon by that same rule;
+a locked tile explains, never hides. Today is `omega-workspace-today.js`
+(pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
+both ends of the Quote Desk, the referral inbox, projects ready, stalled or
+unsized. Never a second copy of those rules in a page. The home is the BOARD: the hub and Today, then In flight and Around you
+(feed, People, the Omega pulse, Partners); only All tools and Modules are
+their own pages (`data-view`). The Omega pulse is `GET /api/pulse`
+(`api/_lib/pulse.js`, pure, `tpulse.js`): platform-wide COUNTS ONLY from
+the most recent rows, never a name. The Modules page lists every module
+for every workspace (`OmegaWorkspaceHub.moduleState`, the ONE held/partly/
+ask rule shared with the store); a module not held carries Opt in: the one
+menu and a QuickBooks invoice for a packaged workspace, the request that
+moves a legacy one onto a package (`plan-change` `opt-in`: priced from the
+book, recorded on `billing/current.optIns` with history and audit, ClearSky
+mailed; the admin Package tab opens preselected on what the tenant holds
+plus that request; nothing is charged). In flight is
+`OmegaWorkspaceToday.board` (what needs something, then what was touched
+last, never online, a finance-marketplace deal riding on its project) and
+Assign merges only the owner fields onto `projects/{id}`. Plan & billing
+is a page (`#billing`): subscription, what is owed and when, the payment
+method (the Stripe portal or QuickBooks' own payment page; a card is never
+entered on our pages) and the history; `GET /api/plan-change` is readable
+by any verified member, changes stay with an owner or admin. The shell's
+button reset is `:where()` (zero specificity) so a styled button keeps its
+face, and `omega-splash.js` hears link clicks last, so a link the page
+handles itself never raises the mark. Optional held modules offer **Opt out** through the
+same shared menu. Packaged opt-outs preview the server's dependency set,
+then queue for the existing quarterly review (no immediate access, charge
+or refund change); Keep module withdraws the request. Lite is mandatory.
+Legacy opt-outs prepare a ClearSky email request under the existing
+agreement. The page never changes billing or grants. Opt-in panels live on
+`dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
+renders it as four tenants on the Firebase double; run it and
+`check:dashboard` after any change to the page, the shell or the runtime.
+Once the workspace is home, `marketplace.html` is THE STORE, not a tool
+catalogue (every tool is All tools on the workspace): the plans and the
+modules on their shelves, wearing the whole workspace chrome
+(`OmegaWorkspaceShell.wear()` takes a legacy page's own sidebar and topbar
+off and mounts the rail, the switcher topbar and the phone tab bar around
+its `#main`; the markup stays for the classic home and the tests that
+read it). A PACKAGED workspace prices from `api/package-catalog` and opts
+in through the shared `omega-package-menu.js` control and `plan-change`;
+any other workspace reads the PUBLIC price list `GET /api/offerings`,
+each module judged against its tier (On your plan · Partly · Ask
+ClearSky, an email), and never pays here. `/marketplace.html#<module>`
+lands on that module. A tenant on the classic home keeps the tool
+catalogue and pinning. Design, launch order and the honest list of what
+is not built: `docs/OMEGA-WORKSPACE.md`.
+
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
 Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by
@@ -692,8 +856,8 @@ tenant. Treat it that way.
 - **Staff by email domain needs a VERIFIED email** (`email_verified`
   is the literal `true`; absent is not verified). A Firebase password account
   can be opened on any address without proving it. One rule in four places:
-  `verify-token.js` `verifyIdToken()`, `admin.js` `authenticate()` (the
-  explicit `role: 'staff'` claim still counts), `isAdmin()` in
+  `verify-token.js` `verifyIdToken()`, `admin.js` `authenticate()` (an old
+  `role: 'staff'` claim cannot bypass verified-domain identity), `isAdmin()` in
   `firestore.rules`, `isAdminDomain()` in `storage.rules`. Never decide staff
   with `isStaffEmail()` on a caller; read `caller.staff`.
   `scripts/tests/tstaffverified.js` holds it.
@@ -718,7 +882,54 @@ tenant. Treat it that way.
   canonical, what still has to be ported, and the decisions pending.
 - `omega-tenant.js` MUST load directly after `omega-brand.js` on every page
   that signs users in. It wraps OmegaBrand.resolve.
+- `omega-splash.js` loads FIRST in `<head>` on every page that signs users
+  in (`scripts/tests/tsplash.js`): the OMEGA mark until the page is known
+  (`omega:auth` signed out, `omega:entitlements`, `OmegaSplash.done()`, or
+  the 4 s cap) and again the moment a link is followed or the page is left.
+  A page that shows its own thing before auth answers holds (`data-hold`)
+  and calls `done()`; the dashboard keeps its boot splash (`data-boot="no"`).
+  Never a flash of another page or the sign-in card. `docs/LOADING-SCREEN.md`.
 - Test as a tenant using `adminDomains` preview, not by editing their data.
+- `npm run check:dashboard` renders the tenant dashboard (`index.html`) in
+  Chromium, signed in, with the Firebase compat SDK replaced by
+  `scripts/_lib/firebase-double.js` and four tenants from
+  `scripts/_lib/dashboard-fixtures.js` (a new trial behind the terms modal, a
+  paying legacy Standard tenant with a locked tile, a workspace awaiting
+  approval, and a PACKAGED tenant on Lite alone whose `/api/package-access`
+  answer is the real projection: Lite's tools open, every other tile
+  locked, the starter set drawn from Lite), on a desktop and a 390px phone.
+  `applyToolLocks` reads a present `toolAccess` array as the allowlist at
+  any length (absent ≠ empty), which is how a package reaches the tiles.
+  Phase 10B: the Account panel's Billing & plan has a packaged section
+  (`renderPackagedBilling`: facts from `billing/current`, the priced figure
+  and `invoices[]` from `GET /api/plan-change`, *I've paid* = reconcile-now)
+  and **The Ladder** ("build your own experience and pay for what you need";
+  each Omega Logic department its own opt-in): `OmegaPackageMenu.open(key,
+  { view, onChanged })` is the ONE menu, handed the page's own package view
+  where `OmegaCaps` is absent, and `OmegaTenant.refreshPackage()` re-asks
+  the server after a change. A locked tile on a packaged workspace offers
+  its module by name and price and opens the Ladder on it; a legacy tenant
+  (no packaged record: NextNRG, prepaid) keeps the old request and sees no
+  Ladder. **Your modules** (`renderModuleCards`, above My Applications) is
+  one card per module: held ones Live in shelf order, bought-not-on ones
+  named, up to three unheld rungs dashed with + Add opening the Ladder on
+  them; the catalog and prices are the server's, never a second list.
+  Scenarios lite-ladder, awaiting and legacy-enterprise hold it.
+  The master console (`admin/admin-console.js`) reads a packaged tenant
+  by its state machine: `_standing` has a key per state, plan and module
+  keys become the price book's words from `GET /api/offerings`
+  (`STATE.priceBook`, fetched at boot, never a copy), Manage sends a
+  packaged workspace to its Package tab, and Client Inventory carries the
+  book above the legacy roster tiers (`scripts/tests/tadminstanding.js`). It fails on an error, an unanswered
+  `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
+  tile. `check:pages` does not cover the dashboard; run this after any
+  change to `index.html` or the runtime it loads. The double's own test is
+  `scripts/tests/tfirebasedouble.js`.
+- The sales agent's board is `GET /api/growth` (staff only, read-only;
+  `api/_lib/growth.js` is the pure judgement, `scripts/tests/tgrowth.js`
+  pins it). It knows stages and next actions, never prices or modules: the
+  catalog and the price book are the packaging build's, in one place each.
+  Design and rungs: `docs/SALES-AGENT.md`.
 - Branding assets: OMEGA mark is white-on-transparent; verify on the navy
   topbar, never by opening the PNG directly.
 - Staging: Vercel's own `*.vercel.app` preview URLs. They are on the

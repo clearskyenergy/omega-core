@@ -75,13 +75,18 @@ function tx(profile) {
 }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+/* The address a customer may write to. csebuilders.com was retired on
+   2026-09-24 (no mailbox answers there); dev@clearsky-usa.com is the mailbox
+   that exists. Make support@clearsky-usa.com an alias of it and set
+   SUPPORT_EMAIL, and omega-tenant.js SUPPORT_EMAIL, in the same sitting. */
+var SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'dev@clearsky-usa.com';
 function layout(title, bodyHtml) {
   return '<div style="background:#0A1628;padding:32px 16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">'
     + '<div style="max-width:560px;margin:0 auto;background:#0F1F38;border:1px solid #22354F;border-radius:14px;padding:32px;color:#E5EEF7">'
     + '<div style="font-size:11px;letter-spacing:.22em;color:#00A9A4;font-weight:700;margin-bottom:12px">CLEARSKY-OMEGA</div>'
     + '<div style="font-size:22px;font-weight:700;margin-bottom:12px">' + esc(title) + '</div>'
     + '<div style="font-size:15px;line-height:1.6;color:#C7D4E6">' + bodyHtml + '</div>'
-    + '<div style="margin-top:28px;padding-top:16px;border-top:1px solid #22354F;font-size:12px;color:#8BA3C4">ClearSky Energy Solutions · Clinton, Iowa · <a href="mailto:support@csebuilders.com" style="color:#00A9A4">support@csebuilders.com</a></div>'
+    + '<div style="margin-top:28px;padding-top:16px;border-top:1px solid #22354F;font-size:12px;color:#8BA3C4">ClearSky Energy Solutions · Clinton, Iowa · <a href="mailto:' + esc(SUPPORT_EMAIL) + '" style="color:#00A9A4">' + esc(SUPPORT_EMAIL) + '</a></div>'
     + '</div></div>';
 }
 /* ── THE SAME CARD WITH NONE OF OUR MARKS ─────────────────────────────────
@@ -143,18 +148,54 @@ function send(to, subject, html, text, opts) {
 }
 
 /* ── Templates ───────────────────────────────────────────────────────────── */
+function greeting(name) { return name ? 'Thanks, ' + esc(name) + '.' : 'Thanks.'; }
+function staffTo() { return process.env.MAIL_NOTIFY || 'dev@clearsky-usa.com'; }
 var T = {
+  /* A subscription invoice paid (the runner or "I've paid" saw it in
+     QuickBooks). The first one opens the workspace; later ones are receipts. */
+  paid: function (o) {
+    return send(o.email, o.first ? 'Your ClearSky-OMEGA workspace is open' : 'Payment received, thank you',
+      layout(o.first ? esc(o.company) + ' is open' : 'Payment received', '<p>' + esc(o.text) + '</p>'
+        + (o.first ? '<p>Sign in with your work email. Colleagues at your domain join automatically; you are the workspace owner.</p>' : '')
+        + button('https://' + o.host + '/', o.first ? 'Open your workspace' : 'Open ' + o.host)));
+  },
+  /* ClearSky hears about money the moment it lands, and about anything a
+     person has to look at. Both go to MAIL_NOTIFY. */
+  paidAlert: function (o) {
+    return send(staffTo(), '[OMEGA] Payment received: ' + o.company + (o.amountDisplay ? ' (' + o.amountDisplay + ')' : ''),
+      layout('Payment received', '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Amount', o.amountDisplay || '—') + row('Invoice', o.invoiceId || '—') + row('What', o.first ? 'First invoice: the workspace is open' : 'Recurring invoice') + '</table>'
+        + button(o.consoleUrl || 'https://silmarillion.clearskyomega.com/admin', 'Open the master console')));
+  },
+  /* A tenant on a plan billed outside the package engine opted in to a module
+     with its price on record (plan-change opt-in). ClearSky moves the
+     workspace onto a package from the admin tenant page. */
+  optInAlert: function (o) {
+    return send(staffTo(), '[OMEGA] Opt-in: ' + o.names.join(', ') + ' for ' + o.company + (o.display ? ' (' + o.display + ')' : ''),
+      layout('A workspace opted in', '<p>' + esc(o.company) + ' asked for <b>' + esc(o.names.join(', ')) + '</b> at <b>' + esc(o.display || '') + '</b>, added to its monthly fee. It is on the ' + esc(o.tier || 'legacy') + ' plan, billed outside the package engine: move it onto a subscription package and switch the module on. Nothing has been charged.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + row('Modules', o.names.join(', ')) + row('Monthly', o.display || '—') + '</table>'
+        + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
+  },
+  billingAlert: function (o) {
+    return send(staffTo(), '[OMEGA] Billing needs a look: ' + o.company,
+      layout('Billing needs a look', '<p>' + esc(o.text) + '</p><table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + (o.invoiceId ? row('Invoice', o.invoiceId) : '') + '</table>'
+        + button(o.consoleUrl || 'https://silmarillion.clearskyomega.com/admin', 'Open the master console')));
+  },
   signupReceived: function (o) {
+    if (o.payNow) return send(o.email, 'Your ClearSky-OMEGA workspace opens when your first invoice is paid',
+      layout('Pay your first invoice to open your workspace', '<p>' + greeting(o.name) + ' Your workspace for <b>' + esc(o.company) + '</b> is set up at <b>' + esc(o.host) + '</b>.</p>'
+        + '<p>Your first invoice' + (o.amountDueDisplay ? ' (' + esc(o.amountDueDisplay) + ')' : '') + ' is ready in QuickBooks. Pay it by card on the invoice page and your workspace opens the moment the payment lands; no approval step, no waiting.</p>'
+        + (o.paymentLink ? button(o.paymentLink, 'Pay the invoice') : '') + '<p>Already paid? Open your workspace and press <b>I\'ve paid</b>; it checks QuickBooks right away.</p>'));
     return send(o.email, 'We received your ClearSky-OMEGA workspace request',
-      layout('Request received', '<p>Thanks, ' + esc(o.name) + '. We\'re setting up a workspace for <b>' + esc(o.company) + '</b> at <b>' + esc(o.host) + '</b>.</p>'
+      layout('Request received', '<p>' + greeting(o.name) + ' We\'re setting up a workspace for <b>' + esc(o.company) + '</b> at <b>' + esc(o.host) + '</b>.</p>'
         + '<p>The ClearSky team reviews every new workspace — usually within one business day. You\'ll get another email the moment it\'s live.</p>'
-        + '<p>Your 30-day trial starts on approval, not today.</p>'));
+        + (o.packaging ? '<p>Your one trial starts on approval and lasts at most 14 days. Payment is required to continue after it ends.</p>' : '<p>Your trial is capped at 14 days. We will confirm your workspace access and trial dates after review.</p>')));
   },
   signupAlert: function (o) {
     var to = process.env.MAIL_NOTIFY || 'dev@clearsky-usa.com';
     return send(to, '[OMEGA] New workspace request: ' + o.company + ' (' + o.orgId + ')',
       layout('New workspace request', '<table style="font-size:14px;border-collapse:collapse">'
         + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.email) + row('Vertical', o.vertical) + row('Host', o.host) + row('Phone', o.phone || '—') + row('Note', o.note || '—')
+        + row('Path', o.payNow ? 'Pay now (self-serve): the first invoice is issued; nothing to approve' : 'Trial request: approve to start the trial')
         /* The master console is /admin in omega-core. This defaulted to
            https://tools.csebuilders.com/ — a separate Vercel project running the
            legacy build — so the one button in the signup alert took staff to the
@@ -166,7 +207,25 @@ var T = {
       layout(esc(o.company) + ' is ready', '<p>Your workspace has been approved. Sign in with your ' + esc(o.orgId) + ' email:</p>'
         + button('https://' + o.host + '/', 'Open ' + o.host)
         + '<p>Colleagues at <b>' + esc(o.orgId) + '</b> can sign in at the same address and will join automatically. You\'re the workspace owner — invite, promote and manage them from Account settings.</p>'
-        + (o.trialEndsAt ? '<p>Your trial runs until <b>' + esc(String(o.trialEndsAt).slice(0, 10)) + '</b>.</p>' : '')));
+        + (o.trialEndsAt ? '<p>Your trial runs until <b>' + esc(new Date(o.trialEndsAt).toISOString().slice(0, 10)) + '</b>.</p>' : '')));
+  },
+  trialEnding: function (o) {
+    return send(o.email, 'Your OMEGA trial ends on ' + new Date(o.trialEndsAt).toISOString().slice(0, 10),
+      layout('Your trial is ending', '<p>' + esc(o.text) + '</p><p>We will issue your first QuickBooks invoice at trial end. Payment is required to keep creating and exporting.</p>'
+        + button('https://' + o.host + '/account-settings.html', 'View your plan')));
+  },
+  packageInvoice: function (o) {
+    return send(o.email, 'Your OMEGA subscription invoice is ready',
+      layout('Pay to continue', '<p>' + esc(o.text) + '</p>' + (o.paymentLink ? button(o.paymentLink, 'Pay in QuickBooks') : '<p>Open your plan for invoice details.</p>')));
+  },
+  /* The Subscription Proposal (Phase 6): the link carries the key that opens
+     the customer's view; the reply goes to the rep who prepared it. */
+  proposalSent: function (o) {
+    return send(o.email, (o.platformName || 'ClearSky-OMEGA') + ' subscription proposal for ' + o.company,
+      layout('Your proposal is ready', '<p>' + (o.contactName ? 'Hello ' + esc(o.contactName) + '. ' : '') + esc(o.sender || 'ClearSky') + ' has prepared a subscription proposal for <b>' + esc(o.company) + '</b>: '
+        + esc(o.planDisplay || '') + ' at ' + esc(o.monthlyDisplay || '') + '.</p>' + button(o.url, 'Open your proposal')
+        + '<p>It is valid until <b>' + esc(o.validUntil || '') + '</b>. Accept it online, or reply to this email with questions.</p>' + (o.note ? '<p>' + esc(o.note) + '</p>' : '')),
+      null, o.replyTo ? { replyTo: o.replyTo } : {});
   },
   rejected: function (o) {
     return send(o.email, 'About your ClearSky-OMEGA workspace request',

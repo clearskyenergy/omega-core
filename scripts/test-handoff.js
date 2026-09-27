@@ -376,8 +376,8 @@ Promise.resolve()
   .then(function (r) { ok('billing with no tier does not lock anybody out', r.allowed === true); })
 
   .then(function () {
-    return runGate({ 'omega_orgs/csebuilders.com': { status: 'suspended' } },
-                   { email: 'tommy@csebuilders.com' });
+    return runGate({ 'omega_orgs/clearsky-usa.com': { status: 'suspended' } },
+                   { email: 'tommy@clearsky-usa.com', emailVerified: true });
   })
   .then(function (r) {
     ok('ClearSky staff pass even against a suspended record', r.allowed === true, r.access);
@@ -397,8 +397,8 @@ function finishGate() {
    out every paying customer on the first deploy. */
 ok('a MISSING org record fails OPEN, as the rules do',
    /if \(!exists\) return allow\(/.test(gate), 'missing-record path');
-ok('and a failed read fails open too',
-   /reason: 'read-failed'/.test(gate));
+ok('a failed read refuses until access can be checked',
+   /Workspace access could not be checked/.test(gate) && !/reason: 'read-failed'/.test(gate));
 ok('only an EXPLICIT override refuses on entitlement',
    /ov\.editor === false/.test(gate));
 ok('the gate paints BEFORE auth answers, not after',

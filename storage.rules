@@ -89,11 +89,37 @@ service firebase.storage {
       return request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
+    /* One additional Firestore document per upload. Together with the
+       existing project roster lookup this stays within Storage's two-doc
+       access limit. Finished files remain readable after payment lapses. */
+    function packageUploadOpen() {
+      let path = /databases/(default)/documents/omega_orgs/$(userOrg())/billing/current;
+      return isAdminDomain() || !firestore.exists(path)
+        || firestore.get(path).data.get('packaged', false) != true
+        || packageUploadPeriod(firestore.get(path).data);
+    }
+    function packageUploadPeriod(b) {
+      let now = request.time.toMillis();
+      let state = b.get('packagingState', '');
+      return request.auth.token.get('email_verified', false) == true
+        && b.get('accessUntil', 0) is number && now < b.get('accessUntil', 0)
+        && (state == 'paid'
+          || (state == 'past_due_lite' && b.get('modules', []) == ['lite'] && b.get('paidThrough', '') != '')
+          || (state == 'trial' && b.get('trialStartedAt', 0) is number && b.get('trialEndsAt', 0) is number
+            && now >= b.get('trialStartedAt', 0) && now < b.get('trialEndsAt', 0)
+            && b.get('trialEndsAt', 0) - b.get('trialStartedAt', 0) <= 1209600000));
+    }
+    match /billing-certificates/{orgId}/{fileName} {
+      allow read: if isAdminDomain();
+      allow create, update: if isAdminDomain() && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType in ['application/pdf', 'image/png', 'image/jpeg'];
+      allow delete: if false;
+    }
 
     /* -------- SiteMap Designer exports (unchanged) -------- */
     match /mapimg/{orgId}/{projectId}/{fileName} {
       allow read:  if signedIn() && (orgId == userOrg() || isAdminDomain());
-      allow write: if signedIn() && (orgId == userOrg() || isAdminDomain()) && okImage();
+      allow write: if signedIn() && (orgId == userOrg() || isAdminDomain()) && packageUploadOpen() && okImage();
     }
 
     /* ============================================================
@@ -274,7 +300,7 @@ service firebase.storage {
           );
       }
       allow read:  if signedIn() && (isAdminDomain() || onProject());
-      allow write: if signedIn() && (isAdminDomain() || onProject()) && okFile();
+      allow write: if signedIn() && (isAdminDomain() || onProject()) && packageUploadOpen() && okFile();
     }
 
     /* -------- Quote documents  —  rfqs/{rfqId}/{vendorOrgId}/{file} --------

@@ -9,7 +9,7 @@ async function run(opts){
  var auth={httpError:error,authenticateWithTier:function(req){if(!req.headers.authorization)return Promise.reject(error(401,'missing bearer token'));return Promise.resolve({caller:{staff:!!opts.staff,orgId:'example.com',uid:'test'},billing:{toolOverrides:opts.denied?{gridatlas:false}:{}},tier:'trial'});},
  readAsCaller:function(token,p){calls++;return Promise.resolve(p.indexOf('/members/')>=0?(opts.member===undefined?{status:'active',toolAccess:['gridatlas']}:opts.member):{status:opts.orgStatus||'active'});}};
  var engine={parseRequest:real.parseRequest,screen:function(){screened++;return {site_has_fiber:null};}};
- var sandbox={module:{exports:{}},require:function(name){return name==='./_lib/verify-token'?auth:engine;},Promise:Promise};vm.runInNewContext(source,sandbox);
+ var sandbox={module:{exports:{}},require:function(name){return name==='./_lib/verify-token'?auth:name==='./_lib/package-access'?require('../api/_lib/package-access'):engine;},Promise:Promise};vm.runInNewContext(source,sandbox);
  var res={setHeader:function(k,v){result.headers[k]=v;},status:function(s){result.status=s;return res;},json:function(j){result.body=j;return res;}};
  await sandbox.module.exports({method:opts.method||'GET',query:opts.query||{lat:41,lon:-87},headers:opts.noToken?{}:{authorization:'Bearer test'}},res);
  result.calls=calls;result.screened=screened;return result;

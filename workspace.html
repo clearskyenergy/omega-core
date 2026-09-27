@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════════
+  ClearSky-OMEGA · Omega Workspace — the home of a workspace
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  ONE HOME, BUILT FROM WHAT THE WORKSPACE HOLDS.
+
+  This is the home of a signed-in workspace (index.html sends a signed-in
+  visit here); a tenant keeps the classic dashboard with
+  omega_orgs/{org}.shell = 'classic', a browser with ?home=classic. It opens the way Omega Logic opens: a
+  hex hub of where to go, Today beside it, and everything else below.
+
+    the hub      omega-hexhub.js draws it; omega-workspace-hub.js decides the
+                 six cells from what OMEGATools.isUnlocked() says this person
+                 may open. Showing a cell is never access.
+    Today        what needs this person, ranked by omega-workspace-today.js
+                 (pure, tested): the account, their to-dos, quotes at both
+                 ends of the Quote Desk, the referral inbox, projects that
+                 are ready, stalled or unsized — from records the rules
+                 already let them read.
+    All tools    the whole catalog, by category, each tile Live or Locked by
+                 the same rule the old dashboard's applyToolLocks() used
+                 (OMEGATools.isUnlocked on the merged workspace; nothing opens
+                 while approval is pending). A locked tile explains, never
+                 hides: what they have and what they are paying for.
+    In flight    projects, with who has each one and how far along it is.
+    Around you   the team's feed and messages, who is here (team_members
+                 presence), the partners on shared projects. Each panel is an
+                 opt-in kept on dashboard_layouts/{org}__{uid}.workspace.
+
+  Tenant-neutral: no customer name, logo or domain. Sign-in and the workspace
+  come from the same chain every signed-in page uses (omega-brand →
+  omega-tenant → omega-whitelabel → omega-tools); the terms gate wraps
+  showApp() here exactly as on the dashboard. The chrome is
+  omega-workspace-shell.js, shared with the projects and marketplace pages.
+  ES5 in this file. Render check: npm run check:workspace.
+  ═══════════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- The OMEGA loading screen on the way OUT (data-boot="no": this page has
+     its own boot splash below), so a click to Projects or a tool never
+     flashes the next page. -->
+<script src="/omega-splash.js?v=1" data-boot="no"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="author" content="ClearSky Energy Solutions LLC">
+<meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">
+<title>Omega Workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* the page's own sections; the chrome's rules live in omega-workspace-shell.js */
+html,body{margin:0}
+#boot{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:#F5F4F0;color:#556B82;font:500 13px "DM Sans",system-ui,sans-serif}
+#boot .m{width:46px;height:46px;border-radius:12px;background:radial-gradient(circle at 30% 30%,#17293A,#050A11);display:grid;place-items:center;font:700 26px Poppins,sans-serif;color:#2FE3C8;box-shadow:inset 0 0 0 1px rgba(53,198,244,.35)}
+body.ready #boot{display:none}
+#refused{display:none;max-width:520px;margin:60px auto;padding:24px;background:#fff;border:1px solid #E4E8EC;border-radius:14px;color:#14171A;line-height:1.5}
+body.refused #refused{display:block}body.refused #content{display:none}
+#content{display:none}body.ready:not(.refused) #content{display:flex;flex-direction:column;gap:22px}
+.ows-content h2{margin:0;font:600 16px Poppins,"DM Sans",sans-serif;text-wrap:balance}
+.eyebrow{font:500 11px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
+.num{font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.sec{display:flex;flex-direction:column;gap:12px}
+/* one view at a time (2026-09-27): the home is the hub and Today; All tools, Modules, In flight and Around you are each their own page, reached from the rail, the tabs or the hub — never a scroll. The module cards live on Modules only (Tommy, 2026-09-27: "i dont want them to be taking up so much dashboard space") */
+#content[data-view] .sec,#content[data-view] .hero{display:none}#content[data-view="home"] .hero{display:grid}#content[data-view="home"] #flight,#content[data-view="home"] #team{display:flex}#content[data-view="home"] .back{display:none}#content[data-view="tools"] #tools,#content[data-view="modules"] #modules,#content[data-view="flight"] #flight,#content[data-view="team"] #team,#content[data-view="billing"] #billing{display:flex}
+/* the Modules page: the compact cards (Tommy, 2026-09-27: "i love the way the modules are"), Your modules then the rest to add on one grid; a group is a heading with what it means. EVERY WORD FITS ITS CARD ("make sure all the words fit in their space"): the name wraps and the price or shelf drops under it before either is squeezed, a chip wraps inside the card, the note wraps beside or above its buttons; check:workspace measures every card at desktop and phone widths */
+.mods{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}.mods h3{grid-column:1/-1;margin:14px 0 0;font:600 15px Poppins,"DM Sans",sans-serif;color:var(--ows-ink);display:flex;flex-direction:column;gap:2px}.mods h3:first-child{margin-top:0}.mods h3 small{font:400 12.5px "DM Sans",sans-serif;color:var(--ows-ink2);line-height:1.45}
+.mod{display:flex;flex-direction:column;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);overflow:hidden;position:relative;min-width:0}.mod.off{border-style:dashed;background:rgba(255,255,255,.6)}
+.mod .cv{height:54px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px;color:#fff;flex:none}.mod .cv .ltr{font:700 20px Poppins,"DM Sans",sans-serif;opacity:.92}
+.mod .st{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;white-space:nowrap}.mod .st.live{background:var(--ows-green-soft);color:var(--ows-green)}.mod .st.part{background:var(--ows-amber-soft);color:var(--ows-amber)}
+.mod .bd{display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px;flex:1;min-width:0}
+.mod .nm{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 10px}.mod .nm b{font:600 15px "DM Sans",sans-serif;padding:0;min-width:0;overflow-wrap:anywhere}.mod .price{margin-left:auto;font:500 14px "DM Mono",ui-monospace,monospace;color:var(--ows-ink);white-space:nowrap}
+.mod .feat{margin:0;padding-left:16px;font-size:12.5px;line-height:1.55;color:var(--ows-ink);overflow-wrap:anywhere}
+.mod .chips{display:flex;gap:6px;flex-wrap:wrap;min-width:0}.mod .chips .ows-chip{font-size:11.5px;white-space:normal;max-width:100%;overflow-wrap:anywhere;line-height:1.35}.mod.off .chips .ows-chip{opacity:.6}
+.mod .row{margin-top:auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--ows-line)}.mod .row .note{flex:1 1 150px;min-width:0;font-size:12px;color:var(--ows-ink2);line-height:1.4}.mod .row .acts{display:flex;flex-wrap:wrap;gap:6px}.mod .ows-pill{flex:none}
+#modules-plan{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;font-size:13px}#modules-plan .ows-pill{margin-left:auto}
+@media (max-width:560px){.mods{grid-template-columns:1fr;gap:10px}.mod .cv{height:44px}.mod .bd{padding:10px 12px 12px}}
+.sec .back{align-self:flex-start;color:var(--ows-ink2);font-size:13px;text-decoration:none}.sec .back:hover{color:var(--ows-teal-d)}
+.sec .hd{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}.sec .hd .sub{color:var(--ows-ink2);font-size:13px;margin-top:2px}
+/* notices: approval, trial, read-only */
+.notice{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:10px;font-size:13px;background:var(--ows-amber-soft);color:var(--ows-ink);border:1px solid transparent}
+.notice b{color:var(--ows-amber)}.notice .ows-pill{margin-left:auto}.notice.bad{background:#FDECEC}.notice.bad b{color:#C0392B}
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,460px) minmax(0,1fr);gap:20px;align-items:stretch}
+#hub .hexhub{margin:0;padding:16px 14px 10px;height:100%;display:flex;flex-direction:column}#hub .hexhub h2{text-align:left;margin:0 6px 2px;font-size:20px}#hub .hexhub .hh-cap{text-align:left;margin:0 6px 4px}
+#hub .hexhub svg{margin-top:auto;margin-bottom:auto}
+#hub .held{position:relative;display:flex;gap:6px;flex-wrap:wrap;margin:8px 4px 0}
+#hub .held .ows-chip{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#C9D6E2}#hub .held .ows-chip.on{background:rgba(47,227,200,.12);color:#2FE3C8}
+.today{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:18px 20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.today .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}.today h2{font-size:18px}.today .sub{color:var(--ows-ink2);font-size:13px;margin-top:2px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.kpi{background:var(--ows-sunk);border:1px solid var(--ows-line);border-radius:12px;padding:10px 12px;min-width:0}.kpi .v{font:500 20px/1.1 "DM Mono",monospace;font-variant-numeric:tabular-nums}.kpi .l{font-size:11.5px;color:var(--ows-ink2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kpi .d{font:400 11px "DM Mono",monospace;margin-top:4px;color:var(--ows-ink3)}.kpi .d.up{color:var(--ows-green)}.kpi .d.warn{color:var(--ows-amber)}
+.next{display:flex;flex-direction:column;gap:6px}
+.next .row{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 12px 9px 10px;border:1px solid var(--ows-line);border-radius:10px;background:var(--ows-paper)}
+.next .row .bar{width:4px;min-height:30px;height:100%;border-radius:2px;background:var(--ows-brand)}.next .row.warn .bar{background:var(--ows-amber)}.next .row.good .bar{background:var(--ows-green)}.next .row.hot .bar{background:var(--ows-coral)}
+.next .row b{font-weight:600;display:block}.next .row small{color:var(--ows-ink2);font-size:12px}
+.presence{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ows-ink2);padding-top:10px;border-top:1px solid var(--ows-line)}
+.avs{display:flex}.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:10.5px;font-weight:700;background:var(--ows-brand);flex:none;overflow:hidden}.av img{width:100%;height:100%;object-fit:cover}.avs .av{border:2px solid var(--ows-paper);margin-left:-6px}.avs .av:first-child{margin-left:0}.av.me{background:var(--ows-teal-d)}.av.partner{background:var(--ows-teal-d)}.av.sys{background:var(--ows-ink3)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ows-green);display:inline-block}.dot.away{background:var(--ows-amber)}.dot.off{background:var(--ows-ink3)}
+/* tools */
+.plan{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;font-size:13px}
+.plan .ows-pill{margin-left:auto}
+.cat{display:flex;flex-direction:column;gap:10px}.cat h3{margin:6px 0 0;font:600 13px "DM Sans",sans-serif;color:var(--ows-ink2)}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.tool{position:relative;display:flex;flex-direction:column;gap:8px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:14px;min-height:120px;color:inherit;transition:transform .15s,box-shadow .15s;text-align:left}
+.tool:hover{transform:translateY(-2px);box-shadow:var(--ows-shadow)}.tool .t{display:flex;align-items:center;gap:10px;padding-right:58px}
+.tool .ico{width:36px;height:36px;border-radius:10px;background:var(--ows-brand-soft);color:var(--ows-brand-ink);display:grid;place-items:center;flex:none}.tool .ico svg{width:18px;height:18px}
+.tool b{font-weight:600;font-size:14px;display:block}.tool .d{color:var(--ows-ink2);font-size:12.5px;line-height:1.4}
+.tool .st{position:absolute;top:12px;right:12px;font-size:11px;font-weight:600;color:var(--ows-green);display:flex;gap:5px;align-items:center}
+.tool.locked{background:transparent;border-style:dashed}.tool.locked .ico{background:var(--ows-sunk);color:var(--ows-ink3)}.tool.locked b{color:var(--ows-ink2)}.tool.locked .st{color:var(--ows-ink3)}.tool.locked:hover{transform:none;box-shadow:none}
+.more summary{cursor:pointer;font-size:12.5px;color:var(--ows-ink2);padding:6px 0;list-style:none;display:inline-flex;align-items:center;gap:6px}.more summary::-webkit-details-marker{display:none}.more summary::before{content:"\25B8";color:var(--ows-ink3)}.more[open] summary::before{content:"\25BE"}.more .grid{margin-top:8px}
+.tool.soon{opacity:.7}.tool.soon .st{color:var(--ows-amber)}
+/* CONDENSED on a phone (Tommy, 2026-09-27): one compact row per tool, the
+   description on one line, the whole catalog readable without a scroll a
+   screen long per category; two-up on a tablet. */
+@media (max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.tool{min-height:0;padding:10px 12px;gap:4px}.tool .ico{width:28px;height:28px;border-radius:8px}.tool .ico svg{width:15px;height:15px}.tool b{font-size:13px}.tool .d{font-size:11.5px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical}.tool .st{top:9px;right:10px;font-size:10px}.cat{gap:6px}}
+@media (max-width:560px){.grid{grid-template-columns:1fr;gap:6px}.tool{flex-direction:row;align-items:center;padding:8px 10px;gap:10px}.tool .t{flex:1;min-width:0;padding-right:52px;gap:8px}.tool .t b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tool .d{display:none}.tool .st{top:50%;transform:translateY(-50%)}.tool:hover{transform:none}}
+/* in flight */
+.proj{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.pc{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;text-align:left;color:inherit;width:100%}.pc:hover{box-shadow:var(--ows-shadow)}
+.pc .stage{font:500 11px "DM Mono",monospace;color:var(--ows-ink3);letter-spacing:.05em;text-transform:uppercase}.pc b{font-weight:600}.pc .meta{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--ows-ink2)}.pc .meta span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc .bar{height:5px;border-radius:3px;background:var(--ows-sunk);overflow:hidden}.pc .bar i{display:block;height:100%;background:var(--ows-brand);border-radius:3px}
+.pc .who{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ows-ink2);margin-top:auto;padding-top:8px;border-top:1px solid var(--ows-line)}.pc .who .av{width:20px;height:20px;font-size:9px}.pc .who .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pc .who .ows-pill{margin-left:auto;flex:none}
+/* the card's face is one button (open); Assign is its own control beneath, so the two never nest */
+.pc-main{display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:0;text-align:left;color:inherit;width:100%;cursor:pointer;font:inherit}
+.pc .why{font-size:12px;color:var(--ows-ink2);line-height:1.35}.pc .why.good{color:var(--ows-green)}.pc .why.warn{color:var(--ows-amber)}.pc .why.hot{color:var(--ows-coral)}
+.pc .fin{font:500 11px "DM Mono",monospace;color:var(--ows-teal-d);background:var(--ows-teal-soft);border-radius:6px;padding:3px 7px;align-self:flex-start}
+.next .row{cursor:pointer;transition:box-shadow .12s}.next .row:hover{box-shadow:var(--ows-shadow)}
+/* plan & billing */
+.bill{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}.bill .full{grid-column:1/-1}
+.bcard{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.bcard h3{margin:0;font:600 14px "DM Sans",sans-serif;display:flex;align-items:center;gap:8px}.bcard h3 .ows-chip{margin-left:auto}
+.bcard .big{font:500 26px "DM Mono",monospace;letter-spacing:-.01em;line-height:1.1}.bcard .big small{font:400 12px "DM Sans",sans-serif;color:var(--ows-ink2);margin-left:8px}
+.bcard p{margin:0;font-size:12.5px;color:var(--ows-ink2);line-height:1.5}.bcard p b{color:var(--ows-ink)}.bcard .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:6px}
+.inv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:8px 0;border-bottom:1px solid var(--ows-line);font-size:13px;align-items:center}.inv:last-child{border-bottom:0}.inv b{font-weight:600}.inv small{display:block;color:var(--ows-ink3);font-size:11.5px}
+.inv .amt{font:500 14px "DM Mono",monospace;text-align:right;white-space:nowrap}.inv .st{display:block;font-size:11px;color:var(--ows-ink2);text-align:right}.inv .st.paid{color:var(--ows-green)}.inv .st.unpaid{color:var(--ows-amber)}.inv .ows-pill{justify-self:end}
+.empty{color:var(--ows-ink2);font-size:13px;background:var(--ows-paper);border:1px dashed var(--ows-line2);border-radius:12px;padding:16px 18px;line-height:1.5}.empty b{color:var(--ows-ink)}
+/* around you */
+.community{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.panel{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel .hd{display:flex;justify-content:space-between;align-items:center;gap:10px}.panel h3{margin:0;font:600 14px "DM Sans",sans-serif}
+.feed .ev{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;padding:8px 0;border-bottom:1px solid var(--ows-line);align-items:start;font-size:13px}.feed .ev:last-child{border-bottom:0}
+.feed .ev .when{color:var(--ows-ink3);font:400 11.5px "DM Mono",monospace;white-space:nowrap}.feed .ev span.t{color:var(--ows-ink2)}.feed .ev b{font-weight:600}
+.people{display:flex;flex-direction:column;gap:8px}.people .pr{display:flex;align-items:center;gap:10px;font-size:13px}.people .pr .av{width:28px;height:28px;font-size:11px}.people .pr small{display:block;color:var(--ows-ink3);font-size:11.5px}.people .pr>div{min-width:0}
+.post{display:flex;gap:8px}.post input{flex:1;min-width:0;border:1px solid var(--ows-line);border-radius:10px;padding:8px 10px;font:inherit;background:var(--ows-sunk)}
+.opt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--ows-line)}.opt b{display:block;font-weight:600}.opt small{color:var(--ows-ink2);font-size:12px;display:block;line-height:1.4}
+.tg{width:42px;height:24px;border-radius:999px;background:var(--ows-line2);position:relative;transition:background .15s;flex:none}.tg::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}.tg[aria-checked="true"]{background:var(--ows-teal-d)}.tg[aria-checked="true"]::after{left:21px}
+.pulse .spark{width:100%;height:44px;display:block}.pulse .spark path{fill:none;stroke:var(--ows-teal-d);stroke-width:2}.pulse .spark .fill{fill:var(--ows-teal-soft);stroke:none}
+.pulse .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pulse .stat{background:var(--ows-sunk);border:1px solid var(--ows-line);border-radius:10px;padding:8px 10px}.pulse .stat .v{font:500 18px "DM Mono",monospace}.pulse .stat .l{font-size:11.5px;color:var(--ows-ink2)}
+.pulse .insight{font-size:12.5px;color:var(--ows-ink2);background:var(--ows-sunk);border-radius:10px;padding:10px 12px;line-height:1.5}.pulse .insight b{color:var(--ows-ink)}
+.people .pr .ows-pill{margin-left:auto;flex:none}
+.kv{display:flex;flex-direction:column}.kv div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--ows-line);font-size:13px}.kv div span:first-child{color:var(--ows-ink2)}.kv div span:last-child{text-align:right;font-weight:600}
+.field label{display:block;font-size:12px;color:var(--ows-ink2);margin-bottom:4px}.field input{width:100%;border:1px solid var(--ows-line);border-radius:10px;padding:9px 11px;font:inherit}
+@media (max-width:1040px){.hero{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:700px){.next .row{grid-template-columns:4px minmax(0,1fr)}.next .row .ows-pill{grid-column:2;justify-self:start}}
+@media (prefers-reduced-motion:reduce){.tool,.tg,.tg::after{transition:none}}
+</style>
+</head>
+<body class="ows">
+<div id="boot"><span class="m">Ω</span><span>Opening your workspace…</span></div>
+<div class="ows-app">
+  <nav id="side-nav"></nav>
+  <div class="ows-main">
+    <header id="topbar"></header>
+    <main id="main" class="ows-content">
+      <div id="refused"></div>
+      <div id="content" data-view="home">
+        <div id="ows-notice" hidden></div>
+        <section class="hero">
+          <div id="hub"></div>
+          <div class="today" id="today"></div>
+        </section>
+        <section class="sec" id="tools">
+          <a class="back" href="/workspace">‹ Home</a>
+          <div class="hd"><div><h2>All tools</h2><div class="sub" id="tools-sub">Every tool in the catalog. Live ones open; locked ones say what plan carries them.</div></div><a class="ows-pill ghost" href="/marketplace.html">Marketplace ›</a></div>
+          <div class="plan" id="plan"></div>
+          <div id="tools-body"></div>
+        </section>
+        <section class="sec" id="modules">
+          <a class="back" href="/workspace">‹ Home</a>
+          <div class="hd"><div><h2>Modules</h2><div class="sub" id="modules-sub">Build your own experience and pay for what you need. What you hold is Live; anything else is one click to add.</div></div><a class="ows-pill ghost" data-sn="marketplace" href="/marketplace.html">Marketplace ›</a></div>
+          <div id="modules-plan"></div>
+          <div id="modules-body"></div>
+        </section>
+        <section class="sec" id="flight">
+          <a class="back" href="/workspace">‹ Home</a>
+          <div class="hd"><div><h2>In flight</h2><div class="sub">Every project, who has it and how far along it is. A partner on the JDA sees the same board.</div></div><div style="display:flex;gap:8px"><button class="ows-pill primary" type="button" id="new-project">+ New project</button><a class="ows-pill ghost" href="/projects.html">All projects ›</a></div></div>
+          <div id="flight-body"></div>
+        </section>
+        <section class="sec" id="team">
+          <a class="back" href="/workspace">‹ Home</a>
+          <div class="hd"><div><h2>Around you</h2><div class="sub">Your team, your partners. Turn panels on or off in Customize.</div></div><button class="ows-pill" type="button" id="customize">⚙ Customize</button></div>
+          <div class="community" id="around"></div>
+        </section>
+        <section class="sec" id="billing">
+          <a class="back" href="/workspace">‹ Home</a>
+          <div class="hd"><div><h2>Plan &amp; billing</h2><div class="sub" id="billing-sub">What you hold, what you pay, what you owe and when, and your invoices.</div></div><a class="ows-pill ghost" href="/workspace#modules">Modules ›</a></div>
+          <div id="billing-body"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-auth-errors.js?v=1"></script>
+<script src="/omega-jd-nav.js?v=1"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-terms.js"></script>
+<script src="/omega-tools.js?v=9"></script>
+<script src="/omega-newproject.js"></script>
+<script src="/omega-hexhub.js"></script>
+<script src="/omega-workspace-hub.js"></script>
+<script src="/omega-workspace-today.js"></script>
+<script src="/omega-workspace-shell.js"></script>
+<script src="/omega-package-menu.js"></script>
+<script>
+(function () {
+'use strict';
+var CFG = window.CLEARSKY_CONFIG || {};
+try { firebase.initializeApp(CFG.firebase); } catch (e) { if (!/already exists/.test(String(e && e.message))) throw e; }
+var auth = firebase.auth(), db = firebase.firestore();
+var WORKSPACES = CFG.workspaces || {};
+var S = window.OmegaWorkspaceShell, HUB = window.OmegaWorkspaceHub, T = window.OMEGATools, TODAY = window.OmegaWorkspaceToday;
+var esc = S.esc, byId = function (id) { return document.getElementById(id); };
+var WS = null, USER = null, ME = '', PROFILE = null;
+var DATA = { projects: [], todos: [], messages: [], members: [], pinned: [], prefs: null, rfqsSent: [], rfqsReceived: [], referrals: [], finance: [] };
+var PREFS_DEFAULT = { presence: true, feed: true, pulse: true, partners: true, guides: false };
+var PULSE = null, PULSE_ASKED = false;
+var STAGE_KEYS = ['candidate', 'package', 'submitted', 'interconnect', 'permitting', 'finance', 'construction', 'online'];
+var STAGE_LABEL = { candidate: 'Candidate', package: 'Site package', submitted: 'Submitted to utility', interconnect: 'Interconnection', permitting: 'Permitting', finance: 'Finance ready', construction: 'Construction', online: 'Online' };
+var DAY = 86400000;
+
+/* ── View as a customer (staff, 2026-09-27) ─────────────────────────────
+   ?viewas=lite (a starter key or a comma list of module keys) paints this
+   workspace as a PACKAGED customer holding those modules: the same server
+   projection the editor's staff preview uses (POST /api/package-access
+   {previewModules}, refused to anyone but verified ClearSky staff), copied
+   over the entitlements. It changes the paint and never the scope: nothing
+   is billed, plan-change refuses a workspace that is not packaged, and the
+   URL is the only memory of it. */
+var VIEWAS = (function () { var m = /[?&]viewas=([^&#]+)/.exec(window.location.search); return m ? decodeURIComponent(m[1]).toLowerCase() : null; })();
+var VIEWAS_VIEW = null, VIEWAS_ASKED = false;
+function askViewAs() {
+  if (!VIEWAS || VIEWAS_ASKED || !window.OmegaPackageMenu) return; VIEWAS_ASKED = true;
+  var keys = VIEWAS.split(',').map(function (k) { return k.trim(); }).filter(Boolean);
+  OmegaPackageMenu.api('/api/package-access', { previewModules: keys }).then(function (v) {
+    if (v && v.starters && v.starters[VIEWAS] && keys.length === 1) return OmegaPackageMenu.api('/api/package-access', { previewModules: v.starters[VIEWAS] });
+    return v;
+  }).then(function (v) { if (v && v.preview) { VIEWAS_VIEW = v; WS = applyViewAs(WS); window.OMEGA_WORKSPACE = WS; render(); } }, function () { VIEWAS = null; });
+}
+function applyViewAs(ws) {
+  if (!ws || !VIEWAS_VIEW) return ws;
+  ws.packaged = true; ws.packageAccess = VIEWAS_VIEW; ws.modules = (VIEWAS_VIEW.modules || []).slice(); ws.toolAccess = (VIEWAS_VIEW.toolAccess || []).slice(); ws.toolOverrides = {}; ws.addons = []; ws.viewAs = VIEWAS;
+  return ws;
+}
+/* ── the chrome, before anyone is known ─────────────────────────────────── */
+S.mount({ current: 'home', tabs: true, search: search, onNav: function (key) {
+  if (key === 'home') { go('home'); return true; }
+  if (key === 'tools' || key === 'modules' || key === 'team' || key === 'feed') { go(key); return true; }
+  if (key === 'billing') { openBilling(); return true; }
+  if (key === 'settings') { settingsDrawer(); return true; }
+  if (key === 'projects' && WS) { areaDrawer('projects'); return true; }
+  return false;
+} });
+var VIEWS = { home: 'home', tools: 'tools', modules: 'modules', flight: 'flight', team: 'team', feed: 'team', around: 'team', billing: 'billing' };
+function go(key) {
+  var v = VIEWS[key] || 'home';
+  byId('content').setAttribute('data-view', v);
+  var mark = v === 'home' ? 'home' : v === 'flight' ? 'projects' : v;
+  Array.prototype.forEach.call(document.querySelectorAll('#side-nav .sn-item'), function (a) { a.classList.toggle('active', a.getAttribute('data-key') === mark); });
+  Array.prototype.forEach.call(document.querySelectorAll('.ows-tabs a'), function (a) { a.classList.toggle('active', a.getAttribute('data-tab') === mark); });
+  if (v === 'home' && window.location.hash) { try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (e) {} }
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+/* ── sign-in: the same chain as every signed-in page ────────────────────── */
+var nullSeen = 0, tries = 0;
+auth.onAuthStateChanged(function (user) {
+  if (!user) {
+    var had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+    if (nullSeen++ < (had ? 20 : 4)) { setTimeout(function () { if (!auth.currentUser && nullSeen >= (had ? 20 : 4)) window.location.href = '/'; }, 400); return; }
+    if (!auth.currentUser) window.location.href = '/';
+    return;
+  }
+  nullSeen = 0; bind(user, 0);
+});
+function bind(user, n, t) {
+  /* never show the workspace through an unwrapped showApp while the terms runtime is loaded but has not wrapped it */
+  t = t || 0;
+  if (window.OmegaTerms && !(window.showApp && window.showApp.__ot) && t < 40) { setTimeout(function () { bind(user, n, t + 1); }, 50); return; }
+  var ws = OmegaBrand.resolve(user.email || '', WORKSPACES);
+  if (!ws) {
+    if (n < 8) { setTimeout(function () { bind(user, n + 1, t); }, 250); return; }
+    document.body.classList.add('ready', 'refused');
+    byId('refused').innerHTML = '<b>' + esc(OmegaBrand.accessMessage(user.email, WORKSPACES)) + '</b><p style="margin:10px 0 0"><button class="ows-pill" type="button" onclick="OmegaWorkspaceShell.signOut()">Sign out</button></p>';
+    return;
+  }
+  WS = ws; window.OMEGA_WORKSPACE = ws; USER = user; ME = String(user.email || '').toLowerCase();
+  window.showApp(user);
+}
+/* THE CLASSIC CHOICE. A browser that chose the classic dashboard
+   (?home=classic sticks), a tenant whose record says shell: 'classic', or a
+   partner-type workspace is sent to the classic dashboard: the same rule
+   index.html reads (OmegaWorkspaceShell.homeOf), so the two never bounce
+   each other. ?stay=classic is carried across for that one visit. */
+function classicBounce(ws) {
+  if (S.homeOf(ws) !== 'classic') return false;
+  window.location.replace(/[?&]stay=classic\b/.test(window.location.search || '') ? '/?stay=classic' : '/');
+  return true;
+}
+/* showApp is wrapped by omega-terms.js: it runs once the terms are accepted */
+window.showApp = function (user) {
+  if (classicBounce(WS)) return;
+  document.body.classList.add('ready');
+  S.paint({ ws: WS, user: user });
+  try { OmegaJdNav.reveal(user.email); } catch (e) {}
+  revealStaff(user);
+  OmegaNewProject.configure({ db: db, auth: auth, orgId: function () { return WS.orgId; }, ownerName: function () { return who(); }, afterCreate: openProject });
+  render();
+  load();
+  loadPulse();
+  OmegaTenant.onEntitlements(function (ws) { if (ws) { WS = applyViewAs(ws); window.OMEGA_WORKSPACE = WS; askViewAs(); } S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() }); render(); logicSection(); });
+  window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; render(); } });
+  route();
+};
+/* The terms gate wraps showApp NOW, not on its next 50 ms poll: a signed-in
+   visit whose auth answers inside that window (a cached session, the render
+   check's double) called the bare function and skipped the Terms of Service
+   modal. omega-terms.js's wire() is idempotent. */
+try { if (window.OmegaTerms && OmegaTerms.wire) OmegaTerms.wire(); } catch (e) {}
+/* ClearSky staff: the two consoles. A VERIFIED clearsky-usa.com address,
+   as isAdmin() in the rules requires; the link grants nothing. */
+function revealStaff(user) {
+  var d = String(user.email || '').toLowerCase().split('@')[1] || '';
+  if (d !== 'clearsky-usa.com' || user.emailVerified !== true) return;
+  ['sn-adm-divider', 'sn-adm-label', 'sn-admin', 'sn-ops'].forEach(function (id) { var el = byId(id); if (el) el.style.display = ''; });
+}
+function holds(part) { return (WS && Array.isArray(WS.modules) && WS.modules.indexOf(part) >= 0) || (WS && Array.isArray(WS.addons) && WS.addons.indexOf('omega-logic') >= 0); }
+var logicDone = false;
+function logicSection() {
+  if (logicDone || !holds('logic-office')) return; logicDone = true;
+  var items = [{ key: 'orders', label: 'Orders', icon: 'quotes', href: '/omega-logic#orders' }];
+  if (holds('logic-plant')) items.push({ key: 'plant', label: 'Plant', icon: 'settings', href: '/plant/manager.html' });
+  if (holds('logic-logistics')) items.push({ key: 'deliver', label: 'Deliver', icon: 'projects', href: '/logic-logistics.html' });
+  items.push({ key: 'officeapp', label: 'Office app', icon: 'me', href: '/office/app' });
+  S.section('Omega Logic', items);
+}
+function who() { return (PROFILE && PROFILE.name) || (USER && USER.displayName) || (ME ? ME.split('@')[0] : ''); }
+function first() { return who().split(' ')[0]; }
+function ini(name) { return S.initials(name); }
+
+/* ── reads the rules already grant ───────────────────────────────────────── */
+function load() {
+  var org = WS.orgId; if (!org) return;
+  function q2(coll, field) { return db.collection(coll).where(field, '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }); }
+  function q(coll) { return db.collection(coll).where('orgId', '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }); }
+  Promise.all([
+    q('projects'),
+    db.collection('projects').where('orgsInvolved', 'array-contains', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }),
+    q('team_todos'), q('team_messages'), q('team_members'),
+    T.loadPinned(db, org),
+    USER ? db.collection('dashboard_layouts').doc(org + '__' + USER.uid).get().then(function (d) { return d.exists ? (d.data() || {}).workspace || null : null; })['catch'](function () { return null; }) : Promise.resolve(null),
+    db.collection('team_members').doc(org + '__' + ME).get().then(function (d) { return d.exists ? d.data() : null; })['catch'](function () { return null; }),
+    /* requests for quote I sent, each with its recipients (the Quote Desk's own reads) */
+    db.collection('rfqs').where('sourceOrgId', '==', org).get().then(function (s) {
+      var out = [], jobs = [];
+      s.forEach(function (d) { var f = d.data() || {}; f.id = d.id; f.recipients = []; out.push(f); jobs.push(d.ref.collection('recipients').get().then(function (rs) { rs.forEach(function (x) { var w = x.data() || {}; w.id = x.id; f.recipients.push(w); }); })['catch'](function () {})); });
+      return Promise.all(jobs).then(function () { return out; });
+    })['catch'](function () { return []; }),
+    /* requests addressed to this workspace as the vendor */
+    new Promise(function (res) { try { db.collectionGroup('recipients').where('vendorOrgId', '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var w = d.data() || {}; w.id = d.id; w.rfqId = d.ref.parent && d.ref.parent.parent ? d.ref.parent.parent.id : ''; out.push(w); }); res(out); }, function () { res([]); }); } catch (e) { res([]); } }),
+    q2('referrals', 'toOrgId'),
+    /* deals I sent to the finance marketplace, with their offers: the rules
+       let the sponsor (developerUid) read both */
+    USER ? db.collection('fin_projects').where('developerUid', '==', USER.uid).get().then(function (s) {
+      var out = [], jobs = [];
+      s.forEach(function (d) { var f = d.data() || {}; f.id = d.id; f.offers = []; out.push(f); jobs.push(d.ref.collection('offers').get().then(function (os) { os.forEach(function (x) { var o = x.data() || {}; o.id = x.id; f.offers.push(o); }); })['catch'](function () {})); });
+      return Promise.all(jobs).then(function () { return out; });
+    })['catch'](function () { return []; }) : Promise.resolve([])
+  ]).then(function (r) {
+    var seen = {}; DATA.projects = [];
+    r[0].concat(r[1]).forEach(function (p) { if (!seen[p.id]) { seen[p.id] = 1; DATA.projects.push(p); } });
+    DATA.projects.sort(function (a, b) { return ms(b.updatedAt || b.createdAt) - ms(a.updatedAt || a.createdAt); });
+    DATA.todos = r[2]; DATA.messages = r[3]; DATA.members = r[4]; DATA.pinned = r[5] || []; DATA.prefs = r[6]; PROFILE = r[7]; DATA.rfqsSent = r[8]; DATA.rfqsReceived = r[9]; DATA.referrals = r[10]; DATA.finance = r[11] || [];
+    S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() });
+    render();
+  });
+}
+function ms(t) { if (!t) return 0; if (t.toDate) return t.toDate().getTime(); if (t.seconds) return t.seconds * 1000; var d = new Date(t); return isNaN(d) ? 0 : d.getTime(); }
+function ago(t) { var m = (Date.now() - ms(t)) / 60000; if (m < 1) return 'now'; if (m < 60) return Math.round(m) + 'm'; if (m < 1440) return Math.round(m / 60) + 'h'; var d = Math.round(m / 1440); return d === 1 ? 'Yesterday' : d + 'd'; }
+function money(n) { n = Number(n) || 0; return n >= 1e6 ? '$' + (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? '$' + Math.round(n / 1e3) + 'k' : '$' + Math.round(n); }
+function prefs() { var p = {}; Object.keys(PREFS_DEFAULT).forEach(function (k) { p[k] = DATA.prefs && typeof DATA.prefs[k] === 'boolean' ? DATA.prefs[k] : PREFS_DEFAULT[k]; }); return p; }
+
+/* ── what this person may open: ONE rule, the catalog's ─────────────────── */
+function tool(key) { return T.byKey(key); }
+function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, WS); }
+function hubCtx() { var pa = WS.packageAccess; return { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], hideMarketplace: !!WS.hideMarketplace, packaged: !!(pa && pa.packaged), tierLevel: WS.tierLevel }; }
+function href(t) { return T.hrefFor(t, WS); }
+function launch(t) {
+  if (!t) return;
+  if (!open(t)) { lockedDrawer(t); return; }
+  if (t.action) { var seed = String(t.action).split(':')[1] || 'bess'; OmegaNewProject.open(seed); return; }
+  var h = href(t); if (h) window.location.href = h;
+}
+function openProject(id) {
+  var slug = WS && WS.allowedDomain ? String(WS.allowedDomain).split('.')[0] : '';
+  window.location.href = '/editor.html?id=' + encodeURIComponent(id) + (slug ? '&org=' + encodeURIComponent(slug) : '');
+}
+function toolIcon(t) { return t && t.icon ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="' + esc(t.icon) + '"/></svg>' : S.ICON.tools; }
+
+/* ── Today: what needs this person, derived by omega-workspace-today.js ── */
+var TODAY_CACHE = null;
+function today() {
+  if (TODAY_CACHE) return TODAY_CACHE;
+  var pa = WS.packageAccess;
+  TODAY_CACHE = TODAY.build({ now: Date.now(), me: ME, orgId: WS.orgId, pendingApproval: !!WS.pendingApproval, readOnly: !!(pa && pa.packaged && pa.readOnly), billingNotice: pa && pa.billingNotice || null, trialEndsAt: trialEnd(),
+    projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived, referrals: DATA.referrals, finance: DATA.finance, canOpen: function (k) { return open(tool(k)); } });
+  return TODAY_CACHE;
+}
+function needs() { return today().needs; }
+function act(r) {
+  if (!r || !r.act) return;
+  if (r.act.kind === 'billing') openBilling(); else if (r.act.kind === 'team') go('team'); else if (r.act.kind === 'project') openProject(r.act.id); else if (r.act.kind === 'tool') launch(tool(r.act.id));
+}
+function trialEnd() {
+  if (WS.trial && WS.trial.endsAt) return ms(WS.trial.endsAt);
+  try { var t = OmegaBrand.trial(WS); if (t && t.endsAt) return t.endsAt.getTime(); } catch (e) {}
+  return 0;
+}
+function presence(m) { var s = (Date.now() - ms(m.lastSeen)) / 60000; return s < 15 ? 'on' : s < 1440 ? 'away' : 'off'; }
+
+/* ── render ─────────────────────────────────────────────────────────────── */
+function render() {
+  if (!WS) return;
+  TODAY_CACHE = null;
+  renderNotice(); renderHub(); renderToday(); renderTools(); renderModules(); renderFlight(); renderAround();
+  if (byId('content').getAttribute('data-view') === 'billing') renderBilling();
+  S.badge('home', needs().length);
+}
+function renderNotice() {
+  var n = byId('ows-notice'), pa = WS.packageAccess, h = '';
+  if (WS.pendingApproval) h = '<div class="notice"><b>Awaiting approval</b><span>' + esc(WS.clientName || WS.orgId) + ' is with the ClearSky team. Tools stay locked until it is approved, usually one business day.</span></div>';
+  if (WS.viewAs) h += '<div class="notice"><b>Viewing as a customer</b><span>' + esc(WS.clientName || WS.orgId) + ' painted as a packaged workspace holding ' + esc((WS.modules || []).join(', ') || 'nothing') + '. Staff preview: nothing is billed and a quote is refused.</span><a class="ows-pill" href="/workspace">Exit</a></div>';
+  else if (pa && pa.readOnly && pa.billingNotice) h = '<div class="notice bad"><b>Read-only</b><span>' + esc(pa.billingNotice.text) + '</span>' + (pa.billingNotice.payUrl ? '<a class="ows-pill primary sm" href="' + esc(pa.billingNotice.payUrl) + '" target="_blank" rel="noopener">Pay now</a>' : '') + '</div>';
+  n.innerHTML = h; n.hidden = !h;
+}
+function renderHub() {
+  var c = HUB.compose(hubCtx()), n = needs().length, myTodos = DATA.todos.filter(function (x) { return !x.done && String(x.assignee || '').toLowerCase() === ME; }).length;
+  var items = [{ key: 'today', label: c.centre.label, icon: c.centre.icon, hint: c.centre.hint, badge: n || '' }].concat(c.ring.map(function (a) {
+    return { key: a.key, label: a.label, icon: a.icon, hint: a.hint, badge: a.key === 'team' && myTodos ? myTodos : (a.key === 'projects' && DATA.projects.length ? DATA.projects.length : '') };
+  }));
+  OmegaHexHub.render(byId('hub'), { items: items, title: 'Where to?', caption: (WS.clientName || WS.orgId) + ' · ' + first(), onPick: function (key) { if (key === 'today') { todayDrawer(); return; } areaDrawer(key); } });
+  var held = heldChips(), hb = byId('hub').querySelector('.hexhub');
+  if (hb && held) { var d = document.createElement('div'); d.className = 'held'; d.innerHTML = held; hb.appendChild(d); }
+}
+function planName() { var pa = WS.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {}; if (WS.viewAs) return (WS.modules || []).indexOf('lite') >= 0 && (WS.modules || []).length === 1 ? 'Lite' : 'Lite + modules'; if (pa && pa.packaged) return b.plan || 'Packaged'; return WS.accountTier || (WS.tierLevel >= 3 ? 'Enterprise' : WS.tierLevel === 2 ? 'Deluxe' : WS.tierLevel === 1 ? 'Standard' : 'Plan'); }
+function heldChips() {
+  var out = ['<span class="ows-chip on">' + esc(planName()) + (trialEnd() && trialEnd() > Date.now() ? ' · trial' : '') + '</span>'];
+  if (WS.packageAccess && WS.packageAccess.packaged && Array.isArray(WS.packageAccess.catalog)) {
+    WS.packageAccess.catalog.filter(function (m) { return WS.modules.indexOf(m.key) >= 0 && m.name !== planName(); }).slice(0, 5).forEach(function (m) { out.push('<span class="ows-chip">' + esc(m.name) + '</span>'); });
+  } else if (Array.isArray(WS.addons) && WS.addons.length) WS.addons.slice(0, 5).forEach(function (a) { out.push('<span class="ows-chip">' + esc(a) + '</span>'); });
+  var n = T.catalog().filter(function (t) { return !t.soon && open(t) && T.isVisible(t, WS); }).length;
+  out.push('<span class="ows-chip">' + n + ' tools open</span>');
+  return out.join('');
+}
+function renderToday() {
+  var hour = new Date().getHours(), greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  var td = today(), rows = td.needs;
+  var h = '<div class="hd"><div><h2 id="ows-greet">' + greet + ', ' + esc(first()) + '</h2><div class="sub">' + esc(WS.clientName || WS.orgId) + ' · ' + esc(planName()) + (WS.vertical ? ' · ' + esc(WS.vertical) : '') + '</div></div><span class="ows-pill ghost" id="ows-date">' + new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }) + '</span></div>';
+  h += '<div class="kpis">' + td.kpis.map(function (k) { return '<div class="kpi" data-kpi="' + esc(k.key) + '"><div class="v">' + esc(k.value) + '</div><div class="l">' + esc(k.label) + '</div>' + (k.delta ? '<div class="d ' + esc(k.tone || '') + '">' + esc(k.delta) + '</div>' : '') + '</div>'; }).join('') + '</div>';
+  h += '<div class="eyebrow">Needs you</div><div class="next">';
+  if (!rows.length) h += '<div class="empty">Nothing is waiting on you. Start a project, or open Site Map and draw one.</div>';
+  rows.forEach(function (r, i) { h += '<div class="row ' + esc(r.cls) + '" data-key="' + esc(r.key) + '" data-row="' + i + '"><i class="bar"></i><div><b>' + esc(r.t) + '</b><small>' + esc(r.s) + '</small></div>' + (r.href ? '<a class="ows-pill sm" href="' + esc(r.href) + '"' + (/^https?:/.test(r.href) ? ' target="_blank" rel="noopener"' : '') + '>' + esc(r.cta) + '</a>' : '<button class="ows-pill sm" type="button" data-need="' + i + '">' + esc(r.cta) + '</button>') + '</div>'; });
+  if (td.more) h += '<div class="eyebrow" style="padding:4px 0">+ ' + td.more + ' more under Team and In flight</div>';
+  h += '</div>';
+  if (prefs().presence) {
+    var others = DATA.members.filter(function (m) { return String(m.email || '').toLowerCase() !== ME; }), on = others.filter(function (m) { return presence(m) === 'on'; });
+    h += '<div class="presence"><span class="avs"><span class="av me">' + esc(ini(who())) + '</span>' + on.slice(0, 4).map(function (m) { return '<span class="av">' + esc(ini(m.name || m.email)) + '</span>'; }).join('') + '</span>';
+    if (!others.length) h += '<span>Just you here. Anyone with an <b>@' + esc(WS.orgId) + '</b> address signs in and joins this workspace.</span>';
+    else if (!on.length) h += '<span>' + others.length + ' teammate' + (others.length === 1 ? '' : 's') + ' on this workspace. Nobody else is in right now.</span>';
+    else h += '<span>You and ' + on.map(function (m) { return '<b>' + esc(String(m.name || m.email).split(' ')[0]) + '</b>'; }).join(', ') + ' are in the workspace now.</span>';
+    h += '</div>';
+  }
+  byId('today').innerHTML = h;
+  Array.prototype.forEach.call(byId('today').querySelectorAll('[data-need]'), function (b) { b.addEventListener('click', function () { act(needs()[Number(b.getAttribute('data-need'))]); }); });
+  /* the row is the target, not only its pill (Tommy, 2026-09-27: "my cursor is over it but nothing is going") */
+  Array.prototype.forEach.call(byId('today').querySelectorAll('.next .row[data-row]'), function (row) { row.addEventListener('click', function (e) {
+    if (e.target && e.target.closest && e.target.closest('a,button')) return;
+    var r = needs()[Number(row.getAttribute('data-row'))]; if (!r) return;
+    if (r.href) { if (/^https?:/.test(r.href)) window.open(r.href, '_blank', 'noopener'); else window.location.href = r.href; } else act(r);
+  }); });
+}
+/* ── Modules: the Ladder as a page (Tommy, 2026-09-27) ──────────────────
+   One card per module of the catalog, for EVERY workspace ("they should
+   have all the modules here, but if they are used or given it shows
+   that"), in the compact cards that used to sit on the home ("i love the
+   way the modules are … let them live in their own side page"): Your
+   modules first (Live, or paid for and waiting on the invoice), then the
+   rest to add, each group in shelf order on one grid so a shelf of one
+   never leaves a row empty. A packaged workspace reads its own
+   projection: held ones Live, bought-not-on ones named, the rest with the
+   server's price (/api/package-catalog, once) and Opt in, which opens the
+   ONE menu (omega-package-menu.js) on that module; a change re-asks the
+   server. A legacy workspace reads the PUBLIC price list (/api/offerings,
+   once) and every module is judged by OmegaWorkspaceHub.moduleState, the
+   rule the marketplace store shares: Live when the tier holds it, Partly
+   with the count, else the price and Opt in. Nothing here is a second list
+   or a price. */
+var MOD_ORDER = ['floor', 'addon', 'standard', 'premium', 'deliverable', 'platform'];
+var MOD_COVER = { floor: 'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)', addon: 'linear-gradient(135deg,#053A45 0%,#2A8CA3 100%)', standard: 'linear-gradient(135deg,#0B2F52 0%,#1B4F8A 100%)', premium: 'linear-gradient(135deg,#243B53 0%,#3E6E8E 100%)', deliverable: 'linear-gradient(135deg,#16202B 0%,#00807C 100%)', platform: 'linear-gradient(135deg,#17293A 0%,#0C1824 100%)' };
+var MOD_PRICES = null, MOD_CATALOG = null, MOD_ASKED = false;
+function askModules(packaged) {
+  if (packaged) return (window.OmegaPackageMenu ? OmegaPackageMenu.api('/api/package-catalog') : Promise.reject(new Error('no menu')));
+  return new Promise(function (res, rej) {
+    try { var x = new XMLHttpRequest(); x.open('GET', '/api/offerings'); x.onload = function () { try { var j = JSON.parse(x.responseText); if (x.status === 200 && j && Array.isArray(j.modules)) res(j); else rej(new Error('unavailable')); } catch (e) { rej(e); } }; x.onerror = function () { rej(new Error('unavailable')); }; x.send(); }
+    catch (e) { rej(e); }
+  });
+}
+function renderModules() {
+  var b = byId('modules-body'), strip = byId('modules-plan'), pa = WS.packageAccess, packaged = !!(pa && pa.packaged && Array.isArray(pa.catalog) && pa.catalog.length);
+  if (!MOD_ASKED) { MOD_ASKED = true; askModules(packaged).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay || m.monthlyDisplay; }); renderModules(); }, function () { MOD_CATALOG = []; renderModules(); }); }
+  if (!packaged) {
+    if (!MOD_CATALOG) { b.innerHTML = '<div class="empty">Loading the catalog…</div>'; return; }
+    if (!MOD_CATALOG.length) { b.innerHTML = '<div class="empty">The price list is unavailable right now. The <a href="/marketplace.html">Marketplace</a> has every module; try again later.</div>'; return; }
+  }
+  var ctx = hubCtx(), bl = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}, byKey = {};
+  var bought = bl.subscription && Array.isArray(bl.subscription.modules) ? bl.subscription.modules : [];
+  var cat = (packaged ? pa.catalog : MOD_CATALOG).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), mine = [], rest = [], heldN = 0;
+  (MOD_CATALOG || []).forEach(function (m) { byKey[m.key] = m; });
+  cat.forEach(function (m) { var on = HUB.moduleState(m, ctx) === 'held'; if (on) heldN++; (on || bought.indexOf(m.key) >= 0 ? mine : rest).push(m); });
+  function card(m) {
+    var full = byKey[m.key] || m, st = HUB.moduleState(m, ctx), on = st === 'held', paid = !on && bought.indexOf(m.key) >= 0, price = (MOD_PRICES && MOD_PRICES[m.key]) || m.priceDisplay || '';
+    var req = !packaged && !on && bl.optIns && bl.optIns[m.key] && bl.optIns[m.key].status !== 'declined' && bl.optIns[m.key].status !== 'activated' ? bl.optIns[m.key] : null;
+    var name = m.name;
+    var tools = (m.tools || []).map(function (k) { return tool(k); }).filter(function (t) { return !!t; });
+    var state = on ? '<span class="st live">● Live</span>' : paid ? '<span class="st">Paid for</span>' : req ? '<span class="st">Requested</span>' : st === 'part' ? '<span class="st part">Partly on your plan</span>' : '<span class="st">Not in your plan</span>';
+    var needs = '';
+    if (!on) {
+      if (m.usageDisplay || full.usageDisplay) needs += '<span class="ows-chip">' + esc(m.usageDisplay || full.usageDisplay) + '</span>';
+      if ((m.requires || full.requires || []).indexOf('logic-office') >= 0) needs += '<span class="ows-chip">Needs Office</span>';
+      if (m.beta && m.beta.length) needs += '<span class="ows-chip">Beta: ' + esc(m.beta.join(', ')) + '</span>';
+    }
+    var mt = st === 'part' ? HUB.moduleTools(m, ctx) : null;
+    var note = on ? '' : paid ? 'Opens when the first invoice is paid' : req ? 'Requested ' + (day(req.requestedAt) || '') + '; joins your monthly fee once ClearSky moves you onto a package' : WS.pendingApproval ? 'Opens once ClearSky approves the workspace' : mt ? mt.open + ' of ' + mt.total + ' of its tools are on your plan' : packaged ? 'Pay by card; on when the payment clears' : 'Added to your monthly fee';
+    var action = on || paid || WS.pendingApproval ? '' : packaged ? '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">Opt in</button>' : '<button type="button" class="ows-pill' + (req ? '' : ' primary') + '" data-ask-module="' + esc(m.key) + '" data-price="' + esc(price || '') + '" data-name="' + esc(name) + '">' + (req ? 'Requested' : 'Opt in') + '</button>';
+    action += moduleOptOut(m, on || paid || st === 'part');
+    return '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : req ? 'requested' : st === 'part' ? 'part' : '0') + '">'
+      + '<div class="cv" style="background:' + (MOD_COVER[m.shelf] || MOD_COVER.floor) + '"><span class="ltr">' + esc(m.mark || full.mark || m.name.slice(0, 1)) + '</span>' + state + '</div>'
+      + '<div class="bd"><div class="nm"><b>' + esc(name) + '</b><span class="price">' + esc(on ? (m.shelfLabel || full.shelfLabel || '') : (price || 'Price on the menu')) + '</span></div>'
+      + '<ul class="feat">' + (m.features || full.features || []).slice(0, 3).map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>'
+      + (tools.length ? '<div class="chips">' + tools.slice(0, 4).map(function (t) { return '<span class="ows-chip' + (on ? ' on' : '') + '">' + esc(t.name) + '</span>'; }).join('') + (tools.length > 4 ? '<span class="ows-chip" title="' + esc(tools.slice(4).map(function (t) { return t.name; }).join(', ')) + '">+' + (tools.length - 4) + '</span>' : '') + '</div>' : '')
+      + (needs ? '<div class="chips">' + needs + '</div>' : '')
+      + (note || action ? '<div class="row">' + (note ? '<span class="note">' + esc(note) + '</span>' : '') + (action ? '<span class="acts">' + action + '</span>' : '') + '</div>' : '')
+      + '</div></div>';
+  }
+  var h = '';
+  if (mine.length) h += '<h3>Your modules<small>' + esc(heldN + ' Live on your ' + planName() + ' plan. ' + (packaged ? 'An opt-out waits for the quarterly review.' : 'An opt-out is a request to ClearSky.') + ' Omega Design is always included.') + '</small></h3>' + mine.map(card).join('');
+  if (rest.length) h += '<h3>' + (mine.length ? 'Add to your plan' : 'Every module') + '<small>' + esc(WS.pendingApproval ? 'Each one opens once ClearSky approves the workspace.' : packaged ? 'Monthly prices. Opt in pays by card; the module is on when the payment clears.' : 'Monthly prices from the price list. Opt in adds it to your monthly fee; nothing is charged until you confirm the first invoice.') + '</small></h3>' + rest.map(card).join('');
+  b.innerHTML = '<div class="mods">' + h + '</div>';
+  if (strip) strip.innerHTML = '<span class="ows-chip on">' + esc(planName()) + '</span><span class="num" style="color:var(--ows-ink2)">' + heldN + ' of ' + cat.length + ' modules Live</span>' + (packaged ? '<span style="color:var(--ows-ink2)">Monthly prices. Nothing new is charged for what your plan already covers.</span>' : '<span style="color:var(--ows-ink2)">Monthly prices from the price list.</span>') + '<a class="ows-pill" data-sn="marketplace" href="/marketplace.html">Plans and the store ›</a>';
+  var sub = byId('modules-sub');
+  if (sub) sub.textContent = packaged ? 'Build your own experience. Opt in to add modules or request an opt-out at the quarterly review. Omega Design is always included.' : planName() + ' holds ' + heldN + ' of ' + cat.length + ' modules for ' + (WS.clientName || 'your workspace') + '. Request opt-ins or opt-outs through ClearSky. Omega Design is always included.';
+  Array.prototype.forEach.call(b.querySelectorAll('[data-add-module]'), function (btn) { btn.addEventListener('click', function () { addModule(btn.getAttribute('data-add-module')); }); });
+  Array.prototype.forEach.call(b.querySelectorAll('[data-ask-module]'), function (btn) { btn.addEventListener('click', function () { optInLegacy(btn.getAttribute('data-ask-module'), btn.getAttribute('data-name'), btn.getAttribute('data-price')); }); });
+  wireModuleOptOut(b, cat, ctx, packaged);
+}
+function moduleOptOut(m, held) {
+  if (!held || m.key === 'lite' || WS.pendingApproval) return '';
+  return '<button type="button" class="ows-pill" data-remove-module="' + esc(m.key) + '">Opt out</button>';
+}
+function wireModuleOptOut(root, cat, ctx, packaged) {
+  Array.prototype.forEach.call(root.querySelectorAll('[data-remove-module]'), function (btn) { btn.addEventListener('click', function () {
+    var key = btn.getAttribute('data-remove-module');
+    if (packaged) { addModule(key); return; }
+    var held = cat.filter(function (m) { var st = HUB.moduleState(m, ctx); return st === 'held' || st === 'part'; }).map(function (m) { return m.key; });
+    OmegaPackageMenu.open(key, { view: { modules: held, catalog: cat }, legacy: { company: WS.clientName || WS.orgId, email: OmegaBrand.upgradeEmail() } });
+  }); });
+}
+/* A workspace on a legacy plan (billed outside the package engine) opts in
+   here too, and is told the truth: the engine takes a card payment only on
+   a subscription package (api/_lib/plan-change.js state()), so the opt-in
+   moves the workspace onto one — ClearSky sets that up and nothing is
+   charged until the first invoice is confirmed. The request names the
+   module and its price. */
+/* ── Opt in on a plan billed outside the package engine (Tommy, 2026-09-27:
+   "it should be using the pricing and adding this to my monthly subscription
+   fee"). A packaged workspace pays here by card through the one menu. A
+   legacy plan cannot be charged by the engine yet, so the request is
+   RECORDED on the workspace's own billing record with the server's price
+   (POST /api/plan-change opt-in, an owner or administrator), listed on Plan
+   & billing, and ClearSky is told; ClearSky moves the workspace onto a
+   subscription package, where the addition lands on the monthly invoice.
+   Nothing is charged until the first invoice is confirmed. ── */
+function optInLegacy(key, name, price) {
+  var to = OmegaBrand.upgradeEmail(), co = WS.clientName || WS.orgId, bl = bill(), req = bl.optIns && bl.optIns[key] && bl.optIns[key].status !== 'declined' ? bl.optIns[key] : null;
+  var subject = 'Opt in: ' + name + ' for ' + co, body = co + ' opts in to ' + name + (price ? ' (' + price + ')' : '') + '. Please move the workspace onto a subscription package so it can pay by card, and switch the module on.';
+  var html = '<div class="ows-note">' + (req
+    ? '<b>Requested ' + esc(day(req.requestedAt) || '') + '</b>' + (req.requestedBy ? ' by ' + esc(req.requestedBy) : '') + ' at <b>' + esc(req.display || price || '') + '</b>. ClearSky moves <b>' + esc(co) + '</b> onto a subscription package and switches it on; the price joins your monthly invoice and nothing is charged until you confirm the first one.'
+    : '<b>' + esc(name) + '</b> is <b>' + esc(price || 'priced on the menu') + '</b>, added to your monthly fee. ' + esc(co) + ' is on the ' + esc(planName()) + ' plan, billed outside the package engine, so the request is recorded on your plan with its price and ClearSky moves the workspace onto a subscription package with card payments within one business day. Nothing is charged until you confirm the first invoice.') + '</div><div id="optin-msg" class="ows-note" hidden></div>';
+  var rows = [];
+  if (!req) rows.push({ key: 'go', name: 'Add to my monthly fee', sub: (price ? price + ' · ' : '') + 'recorded on your plan and sent to ClearSky', icon: S.ICON.billing, cta: 'Add', onClick: function () { optInRequest(key, name, price); } });
+  rows.push({ key: 'bill', name: 'Plan & billing', sub: 'Your subscription, what you owe, your invoices', icon: S.ICON.billing, onClick: function () { S.closeDrawer(); openBilling(); } });
+  rows.push({ key: 'store', name: 'See it in the store', sub: 'What it adds, what it costs, the plans', href: '/marketplace.html#' + key, icon: S.ICON.marketplace });
+  rows.push({ key: 'mail', name: 'Email ClearSky instead', sub: to, href: 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body), icon: S.ICON.feed, cta: 'Email' });
+  S.drawer({ eyebrow: 'Opt in', title: name, sub: price ? price + ', added to your monthly fee' : '', html: html, rows: rows });
+}
+function optInRequest(key, name, price) {
+  var msg = byId('optin-msg'); if (msg) { msg.hidden = false; msg.textContent = 'Recording…'; }
+  if (!window.OmegaPackageMenu) { if (msg) msg.textContent = 'Email ClearSky below instead.'; return; }
+  OmegaPackageMenu.api('/api/plan-change', { action: 'opt-in', add: [key] }).then(function (r) {
+    var bl = bill(); bl.optIns = bl.optIns || {};
+    Object.keys(r.optIns || {}).forEach(function (k) { bl.optIns[k] = r.optIns[k]; });
+    if (!r.optIns) bl.optIns[key] = { key: key, name: name, display: r.display || price || '', requestedAt: new Date().toISOString(), requestedBy: ME, status: 'requested' };
+    WS.billing = bl; if (window.OmegaTenant && OmegaTenant.billing) { try { OmegaTenant.billing.optIns = bl.optIns; } catch (e) {} }
+    S.closeDrawer(); S.toast('Added ' + name + (r.display ? ' at ' + r.display : '') + ' to your monthly fee, pending ClearSky');
+    renderModules(); BILL.asked = false; if (byId('content').getAttribute('data-view') === 'billing') renderBilling();
+  }, function (e) { if (msg) { msg.hidden = false; msg.innerHTML = '<b>Not recorded:</b> ' + esc(e.message) + '. Email ClearSky below instead.'; } });
+}
+function addModule(key) {
+  if (!window.OmegaPackageMenu) { window.location.href = '/marketplace.html'; return; }
+  OmegaPackageMenu.open(key, { view: WS.packageAccess, onChanged: function () { MOD_ASKED = false; if (window.OmegaTenant && OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderModules(); } });
+}
+function renderTools() {
+  /* the whole catalog, so a locked tile says what a plan carries: only a
+     tool restricted to other orgs, the staff queue, and (for a packaged
+     workspace) what is not sold at all are left out */
+  var pa = WS.packageAccess, unsold = {};
+  if (pa && pa.packaged && Array.isArray(pa.notSold)) pa.notSold.forEach(function (n) { (n.tools || []).forEach(function (k) { unsold[k] = true; }); });
+  var all = T.catalog().filter(function (t) { if (t.key === 'intake_admin' || unsold[t.key]) return false; if (t.orgs && t.orgs.length) return !!(WS.orgId && t.orgs.indexOf(WS.orgId) >= 0); return true; }), openN = all.filter(function (t) { return !t.soon && open(t); }).length, total = all.filter(function (t) { return !t.soon; }).length;
+  var p = '<span class="ows-chip on">' + esc(planName()) + '</span>';
+  if (pa && pa.packaged && Array.isArray(pa.catalog)) p += pa.catalog.filter(function (m) { return WS.modules.indexOf(m.key) >= 0 && m.name !== planName(); }).map(function (m) { return '<span class="ows-chip">' + esc(m.name) + '</span>'; }).join('');
+  else if (Array.isArray(WS.addons)) p += WS.addons.map(function (a) { return '<span class="ows-chip">' + esc(a) + '</span>'; }).join('');
+  p += '<span class="num" style="color:var(--ows-ink2)">' + openN + ' of ' + total + ' tools open</span>';
+  p += WS.pendingApproval ? '<span class="ows-pill ghost">Locked until approval</span>' : '<a class="ows-pill" href="' + (pa && pa.packaged ? '/workspace#modules' : '/marketplace.html') + '">Change plan</a>';
+  byId('plan').innerHTML = p;
+  var h = '';
+  function tile(t) {
+    var st = t.soon ? 'soon' : open(t) ? 'live' : 'locked';
+    return '<button class="tool ' + st + '" type="button" data-tool="' + esc(t.key) + '"><span class="st">' + (st === 'live' ? '<span class="dot"></span>Live' : st === 'soon' ? 'Soon' : 'Locked') + '</span><div class="t"><span class="ico">' + toolIcon(t) + '</span><b>' + esc(t.name) + '</b></div><div class="d">' + esc(t.desc || '') + '</div></button>';
+  }
+  var pinned = T.pinnedTools(DATA.pinned, WS);
+  if (pinned.length) h += '<div class="cat"><h3>Pinned</h3><div class="grid">' + pinned.map(tile).join('') + '</div></div>';
+  T.CATEGORIES.forEach(function (c) {
+    var list = all.filter(function (t) { return t.category === c.key; }); if (!list.length) return;
+    var live = list.filter(function (t) { return open(t) || t.soon; }), locked = list.filter(function (t) { return !open(t) && !t.soon; });
+    h += '<div class="cat"><h3>' + esc(c.label) + ' <span class="num" style="color:var(--ows-ink3);font-weight:400">' + list.filter(function (t) { return open(t) && !t.soon; }).length + '/' + list.length + '</span></h3>'
+      + (live.length ? '<div class="grid">' + live.map(tile).join('') + '</div>' : '')
+      + (locked.length ? '<details class="more"' + (live.length ? '' : ' open') + '><summary>' + locked.length + ' more on ' + (WS.pendingApproval ? 'approval' : 'other plans') + '</summary><div class="grid">' + locked.map(tile).join('') + '</div></details>' : '') + '</div>';
+  });
+  byId('tools-body').innerHTML = h;
+  Array.prototype.forEach.call(byId('tools-body').querySelectorAll('[data-tool]'), function (b) { b.addEventListener('click', function () { var t = tool(b.getAttribute('data-tool')); if (t && t.soon) { S.toast(t.name + ' is coming soon'); return; } launch(t); }); });
+}
+function ownerOf(p) { return p.ownerName || (p.ownerEmail ? String(p.ownerEmail).split('@')[0] : (p.createdBy && p.createdBy.email ? String(p.createdBy.email).split('@')[0] : (typeof p.createdBy === 'string' ? p.createdBy.split('@')[0] : ''))); }
+/* ── In flight (Tommy, 2026-09-27): "a combo of anything that was done last,
+   any undone projects, or anything we have sent to the finance marketplace
+   and need to follow up". OmegaWorkspaceToday.board is the one rule: what
+   needs something first (an offer to answer, a next action, a package to
+   submit, a stall), then what was touched last; never a site that is online;
+   a deal on the marketplace rides on its project's card or stands alone.
+   Every card says why it is there, and who has it, with Assign. ── */
+function renderFlight() {
+  var b = byId('flight-body');
+  var cards = TODAY.board({ now: Date.now(), projects: DATA.projects, finance: DATA.finance, max: 8 }), byPid = {};
+  DATA.projects.forEach(function (p) { byPid[p.id] = p; });
+  if (!cards.length) { b.innerHTML = '<div class="empty"><b>No projects yet.</b> Start one and it appears here with its stage, its owner and how far along it is.</div>'; return; }
+  b.innerHTML = '<div class="proj">' + cards.map(function (c) {
+    if (c.kind === 'finance') return '<article class="pc fin-only" data-fin="' + esc(c.id) + '"><a class="pc-main" href="/portals/finance/"><span class="stage">Finance marketplace</span><b>' + esc(c.name) + '</b><div class="meta"><span>' + esc(c.finance.note) + '</span></div><div class="why ' + esc(c.whyCls) + '">' + esc(c.why) + '</div></a><div class="who"><span class="av">$</span><span class="nm">Deal room</span></div></article>';
+    var p = byPid[c.id] || {}, i = Math.max(0, STAGE_KEYS.indexOf(p.stage)), pct = Math.round(i / (STAGE_KEYS.length - 1) * 100);
+    var owner = ownerOf(p), mine = String(p.ownerEmail || '').toLowerCase() === ME, ours = !p.orgId || p.orgId === WS.orgId;
+    var size = p.bessKwh ? (p.bessKwh >= 1000 ? (p.bessKwh / 1000).toFixed(1) + ' MWh' : p.bessKwh + ' kWh') : (p.address || p.utility || '');
+    return '<article class="pc" data-proj="' + esc(c.id) + '"><button class="pc-main" type="button" data-open="' + esc(c.id) + '"><span class="stage">' + esc(STAGE_LABEL[p.stage] || 'Candidate') + '</span><b>' + esc(p.name || 'Untitled') + '</b><div class="meta"><span>' + esc(size) + '</span><span class="num">' + pct + '%</span></div><div class="bar"><i style="width:' + pct + '%"></i></div><div class="why ' + esc(c.whyCls) + '">' + esc(c.why) + '</div>' + (c.finance ? '<span class="fin">Finance marketplace · ' + esc(c.finance.note) + '</span>' : '') + '</button>'
+      + '<div class="who"><span class="av' + (mine ? ' me' : '') + '">' + esc(ini(owner || '?')) + '</span><span class="nm">' + (mine ? 'You' : esc(owner || 'Unassigned')) + '</span>' + (ours ? '<button class="ows-pill sm' + (owner ? ' ghost' : ' primary') + '" type="button" data-assign="' + esc(c.id) + '">' + (owner ? 'Reassign' : 'Assign') + '</button>' : '<span class="ows-chip">Partner\'s project</span>') + '</div></article>';
+  }).join('') + '</div>';
+  Array.prototype.forEach.call(b.querySelectorAll('[data-open]'), function (x) { x.addEventListener('click', function () { openProject(x.getAttribute('data-open')); }); });
+  Array.prototype.forEach.call(b.querySelectorAll('[data-assign]'), function (x) { x.addEventListener('click', function () { assignDrawer(x.getAttribute('data-assign')); }); });
+}
+/* ── Assign a project to a teammate (Tommy, 2026-09-27) ──────────────────
+   A project's owner is ownerEmail / ownerName on the record, what the card
+   and the classic dashboard read. Anyone in the workspace may assign: the
+   rules allow a same-org update that leaves orgId and the JDA roster alone,
+   and this writes only the owner fields plus who assigned it and when. The
+   list is the workspace's team_members: everyone at the domain who has
+   signed in. */
+function assignDrawer(id) {
+  var p = null; DATA.projects.forEach(function (x) { if (x.id === id) p = x; }); if (!p) return;
+  /* a JDA partner's project is assigned by its own workspace: this one cannot list their people (CLAUDE.md, Silmarillion 2.0) */
+  if (p.orgId && p.orgId !== WS.orgId) return;
+  var people = DATA.members.slice().sort(function (a, b) { return String(a.name || a.email).localeCompare(String(b.name || b.email)); });
+  if (!people.some(function (m) { return String(m.email || '').toLowerCase() === ME; })) people.unshift({ email: ME, name: who() });
+  var cur = String(p.ownerEmail || '').toLowerCase();
+  var rows = people.map(function (m) { var em = String(m.email || '').toLowerCase(), nm = m.name || em.split('@')[0]; return { key: 'to:' + em, name: nm + (em === ME ? ' (you)' : ''), sub: em === cur ? 'Has it now' : em, icon: S.ICON.me, cta: em === cur ? 'Keep' : 'Assign', onClick: function () { if (em === cur) { S.closeDrawer(); return; } assign(p, em, nm); } }; });
+  if (cur) rows.push({ key: 'none', name: 'Unassign', sub: 'Leave it with nobody for now', icon: S.ICON.projects, cta: 'Clear', onClick: function () { assign(p, '', ''); } });
+  S.drawer({ eyebrow: 'Assign', title: p.name || 'Untitled', sub: cur ? 'With ' + ownerOf(p) + ' today.' : 'Nobody has this project yet.', rows: rows, note: 'Everyone at <b>@' + esc(WS.orgId) + '</b> who has signed in is listed. The project stays in this workspace; only who has it changes.' });
+}
+function assign(p, email, name) {
+  var FV = firebase.firestore.FieldValue, patch = { ownerEmail: email, ownerName: name, assignedBy: ME, assignedAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() };
+  db.collection('projects').doc(p.id).set(patch, { merge: true }).then(function () {
+    p.ownerEmail = email; p.ownerName = name; p.updatedAt = new Date();
+    S.closeDrawer(); TODAY_CACHE = null; renderFlight(); renderToday(); S.toast(email ? 'Assigned to ' + name : 'Unassigned');
+  }, function (err) { S.toast('Could not assign: ' + (err && err.message)); });
+}
+function feedItems() {
+  var out = DATA.messages.map(function (m) { return { at: ms(m.createdAt), who: m.authorName || String(m.authorEmail || '').split('@')[0], text: m.text || '', me: String(m.authorEmail || '').toLowerCase() === ME }; });
+  DATA.projects.forEach(function (p) { var owner = p.ownerName || String(p.ownerEmail || '').split('@')[0] || 'Someone'; out.push({ at: ms(p.updatedAt || p.createdAt), who: owner, text: (p.stage ? 'moved ' : 'saved ') + (p.name || 'a project') + (p.stage ? ' to ' + (STAGE_LABEL[p.stage] || p.stage) : ''), me: String(p.ownerEmail || '').toLowerCase() === ME }); });
+  return out.filter(function (x) { return x.at > 0; }).sort(function (a, b) { return b.at - a.at; }).slice(0, 8);
+}
+function renderAround() {
+  var P = prefs(), h = '', a = byId('around');
+  if (P.feed) {
+    var items = feedItems();
+    h += '<div class="panel" id="feed"><div class="hd"><h3>Workspace feed</h3><span class="ows-chip">Team</span></div><div class="feed">' + (items.length ? items.map(function (e) { return '<div class="ev"><span class="av' + (e.me ? ' me' : '') + '">' + esc(ini(e.who)) + '</span><div><b>' + esc(e.me ? 'You' : e.who) + '</b> <span class="t">' + esc(e.text) + '</span></div><span class="when">' + esc(ago(e.at)) + '</span></div>'; }).join('') : '<div class="empty">Nothing yet. A saved project or a message to the team lands here.</div>') + '</div><form class="post" id="post"><input id="post-text" placeholder="Post a message to your team…" maxlength="500" aria-label="Message"><button class="ows-pill primary" type="submit">Post</button></form></div>';
+  }
+  if (P.presence) {
+    var list = DATA.members.slice().sort(function (x, y) { var o = { on: 0, away: 1, off: 2 }; return o[presence(x)] - o[presence(y)] || String(x.name || '').localeCompare(String(y.name || '')); });
+    h += '<div class="panel"><div class="hd"><h3>People</h3><span class="ows-chip">' + (list.length || 1) + ' in workspace</span></div><div class="people">' + (list.length ? list.map(function (m) { var me = String(m.email || '').toLowerCase() === ME, st = presence(m); return '<div class="pr"><span class="av' + (me ? ' me' : '') + '">' + esc(ini(m.name || m.email)) + '</span><div>' + esc(m.name || String(m.email || '').split('@')[0]) + (me ? ' <small>You · ' + esc(WS.role || 'member') + '</small>' : '<small><span class="dot ' + (st === 'on' ? '' : st) + '"></span> ' + (st === 'on' ? 'In the workspace' : st === 'away' ? 'Seen ' + ago(m.lastSeen) + ' ago' : 'Last seen ' + ago(m.lastSeen) + ' ago') + '</small>') + '</div></div>'; }).join('') : '<div class="empty"><b>You are the whole team here.</b> Anyone with an @' + esc(WS.orgId) + ' address signs in and joins as a member.</div>') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ows-pill" type="button" id="invite">+ Invite</button><a class="ows-pill" href="/projects.html">Share a project</a></div></div>';
+  }
+  if (P.pulse) h += pulsePanel();
+  if (P.partners) {
+    /* joint development partners on projects, and the vendors who answered this workspace's requests for quote (a recipient is a vendor the workspace itself chose; identity beyond that shows only after a quote is accepted) */
+    var partners = {}, org = WS.orgId;
+    DATA.projects.forEach(function (p) { (p.orgsInvolved || []).forEach(function (o) { if (!o || o === org) return; partners[o] = partners[o] || { n: 0, kind: 'jda' }; partners[o].n++; }); });
+    if (WS.jdPartnerOrg && WS.jdPartnerOrg !== org) partners[WS.jdPartnerOrg] = partners[WS.jdPartnerOrg] || { n: 0, kind: 'jda' };
+    DATA.rfqsSent.forEach(function (f) { (f.recipients || []).forEach(function (r) { var v = r.vendorOrgId || r.id; if (!v || v === org) return; if (!partners[v]) partners[v] = { n: 0, kind: 'vendor', quoted: [] }; if (r.status === 'quoted' || r.quote) (partners[v].quoted = partners[v].quoted || []).push(f.name || f.projectName || 'a request'); }); });
+    var keys = Object.keys(partners);
+    h += '<div class="panel"><div class="hd"><h3>Partners on your projects</h3><span class="ows-chip">JDA + vendors</span></div>' + (keys.length ? '<div class="people">' + keys.map(function (k) { var x = partners[k], sub = x.kind === 'vendor' ? 'Vendor' + (x.quoted && x.quoted.length ? ' · quoted ' + x.quoted[0] : ' · asked to quote') : (x.n ? x.n + ' shared project' + (x.n === 1 ? '' : 's') : 'Joint development partner'); return '<div class="pr"><span class="av partner">' + esc(ini(k.split('.')[0])) + '</span><div>' + esc(k) + '<small>' + esc(sub) + '</small></div><a class="ows-pill sm" href="' + (x.kind === 'vendor' ? '/rfq.html' : '/jda.html') + '">Open</a></div>'; }).join('') + '</div>' : '<div class="empty">No partner is on your projects yet. Share one under a joint development agreement, or send a request for quote, and they appear here.</div>') + '<div class="ows-note" style="font-size:12.5px">A vendor’s identity shows only after a quote is accepted. Before that they see the anonymised opportunity.</div></div>';
+  }
+  if (P.guides) {
+    h += '<div class="panel"><div class="hd"><h3>Guides</h3><span class="ows-chip">For your tools</span></div><div class="ows-rows">' + [['Omega Logic app', 'The office on a phone', '/guides/Omega-Logic-App.pdf']].map(function (g) { return '<a class="ows-row" href="' + g[2] + '" target="_blank" rel="noopener"><span class="ic">' + S.ICON.file + '</span><div><b>' + esc(g[0]) + '</b><small>' + esc(g[1]) + '</small></div><span class="ows-pill sm ghost">Open</span></a>'; }).join('') + '</div></div>';
+  }
+  a.innerHTML = h || '<div class="empty">Every panel is off. Turn one on in Customize.</div>';
+  var form = byId('post'); if (form) form.addEventListener('submit', post);
+  var inv = byId('invite'); if (inv) inv.addEventListener('click', inviteDrawer);
+}
+/* ── Omega pulse: what the whole platform did this week, counts only ──
+   GET /api/pulse (api/_lib/pulse.js, pure and tested) is the ONE source:
+   nothing here is invented, and a failed read says the pulse is resting */
+function loadPulse() {
+  if (PULSE_ASKED) return; PULSE_ASKED = true;
+  var api = window.OmegaPackageMenu && OmegaPackageMenu.api;
+  if (!api) return;
+  api('/api/pulse').then(function (r) { PULSE = r || null; renderPulseInto(); }, function () { PULSE = { failed: true }; renderPulseInto(); });
+}
+function myHours() {
+  var mine = DATA.projects.filter(function (p) { return Number(p.bessKwh) > 0 && Number(p.bessKw) > 0; }).sort(function (a, b) { return ms(b.updatedAt || b.createdAt) - ms(a.updatedAt || a.createdAt); })[0];
+  return mine ? Number(mine.bessKwh) / Number(mine.bessKw) : 0;
+}
+function sparkline(weeks) {
+  if (!weeks || weeks.length < 2) return '';
+  var W = 260, H = 44, max = Math.max.apply(null, weeks.concat([1])), n = weeks.length;
+  var pts = weeks.map(function (v, i) { return [(i / (n - 1)) * W, H - 4 - (v / max) * (H - 10)]; });
+  var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ');
+  return '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true"><path class="fill" d="' + d + ' L' + W + ' ' + H + ' L0 ' + H + ' Z"/><path d="' + d + '"/></svg>';
+}
+function pulseHtml() {
+  if (!PULSE) return '<div class="empty">Reading the pulse…</div>';
+  if (PULSE.failed) return '<div class="empty">The pulse is resting. Counts come back when the platform answers.</div>';
+  var st = PULSE.stats || {}, mine = myHours(), where = null;
+  if (PULSE.band && mine > 0) where = mine < PULSE.band[0] ? 'below' : mine > PULSE.band[1] ? 'above' : 'in';
+  return sparkline(PULSE.weeks)
+    + '<div class="stats"><div class="stat"><div class="v num">' + esc(String(st.projects || 0)) + '</div><div class="l">projects saved</div></div><div class="stat"><div class="v num">' + esc(String(st.rfqs || 0)) + '</div><div class="l">RFQs sent to vendors</div></div><div class="stat"><div class="v num">' + esc(String(st.financed || 0)) + '</div><div class="l">projects at finance or beyond</div></div><div class="stat"><div class="v num">' + esc(String(st.designers || 0)) + '</div><div class="l">designers active</div></div></div>'
+    + '<div class="insight">' + esc(PULSE.insight || '') + (where ? ' <b>Your latest sized design sits ' + (where === 'in' ? 'in that band' : where + ' it') + '.</b>' : '') + (st.companies ? ' ' + st.companies + ' compan' + (st.companies === 1 ? 'y' : 'ies') + ' building this week.' : '') + '</div>';
+}
+function pulsePanel() { return '<div class="panel pulse" id="pulse"><div class="hd"><h3>Omega pulse</h3><span class="ows-chip">This week · counts only</span></div><div id="pulse-body">' + pulseHtml() + '</div></div>'; }
+function renderPulseInto() { var b = byId('pulse-body'); if (b) b.innerHTML = pulseHtml(); }
+function post(e) {
+  e.preventDefault(); var inp = byId('post-text'), text = (inp.value || '').trim(); if (!text) return;
+  db.collection('team_messages').add({ orgId: WS.orgId, text: text, authorEmail: ME, authorName: who(), createdAt: firebase.firestore.FieldValue.serverTimestamp() })
+    .then(function () { inp.value = ''; DATA.messages.push({ orgId: WS.orgId, text: text, authorEmail: ME, authorName: who(), createdAt: new Date() }); renderAround(); S.toast('Posted to your team'); })
+    ['catch'](function (err) { S.toast('Could not post: ' + (err && err.message)); });
+}
+
+/* ── the side panels ────────────────────────────────────────────────────── */
+function areaDrawer(key) {
+  var a = null; HUB.AREAS.forEach(function (x) { if (x.key === key) a = x; }); if (!a) return;
+  var rows = HUB.items(key, hubCtx()).map(function (r) {
+    if (r.page) return { key: 'p:' + r.href, name: r.name, sub: r.sub, href: r.href, icon: S.ICON.projects, onClick: r.href.charAt(0) === '#' ? function () { S.closeDrawer(); go(r.href.slice(1)); } : null };
+    var t = tool(r.key); return { key: r.key, name: r.name, sub: r.sub, locked: r.locked, icon: toolIcon(t), href: r.locked ? null : (t.action ? null : href(t)), onClick: function () { S.closeDrawer(); launch(t); } };
+  });
+  if (key === 'projects') rows = rows.concat(DATA.projects.slice(0, 6).map(function (p) { return { key: 'proj:' + p.id, name: p.name || 'Untitled', sub: (STAGE_LABEL[p.stage] || 'Candidate') + ' · ' + ago(p.updatedAt || p.createdAt), icon: S.ICON.projects, onClick: function () { openProject(p.id); } }; }));
+  var why = a.always ? 'Every workspace has this.' : a.logic ? 'Shown because this workspace holds Omega Logic ' + esc(a.label) + '.' : 'Shown because at least one of these tools is open on your plan. A locked one says what carries it.';
+  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: a.icon + ' ' + a.label, sub: a.hint, rows: rows, note: why + ' Showing a link is never access: every tool checks the same plan.', onLocked: function (r) { S.closeDrawer(); lockedDrawer(tool(r.key)); } });
+}
+/* Every hex opens the side panel (Tommy, 2026-09-27): the centre lists what
+   needs you; a row acts as the Today card does. Nothing on the hub moves the page. */
+function todayDrawer() {
+  var rows = needs().map(function (r, i) { return { key: 'need:' + i, name: r.t, sub: r.s, href: r.href || null, newTab: !!(r.href && /^https?:/.test(r.href)), icon: S.ICON.home, onClick: r.href ? null : function () { S.closeDrawer(); act(r); } }; });
+  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: '◷ Today', sub: 'what needs you', rows: rows, html: rows.length ? '' : '<div class="ows-note">Nothing needs you right now.</div>', note: 'The same list as the Today card, ranked highest first.' });
+}
+function lockedDrawer(t) {
+  if (!t) return;
+  var pa = WS.packageAccess, mods = pa && Array.isArray(pa.catalog) ? pa.catalog.filter(function (m) { return (m.tools || []).indexOf(t.key) >= 0; }) : [];
+  var tierName = ['everyone', 'Standard', 'Deluxe', 'Enterprise'][typeof t.tier === 'number' ? t.tier : 1] || 'a higher plan';
+  var html = '<div class="ows-note">' + (WS.pendingApproval ? '<b>' + esc(t.name) + '</b> opens once your workspace is approved.' : mods.length ? '<b>' + esc(t.name) + '</b> is part of ' + mods.map(function (m) { return '<b>' + esc(m.name) + '</b>'; }).join(' and ') + ', which ' + esc(WS.clientName || 'this workspace') + ' does not hold yet.' : '<b>' + esc(t.name) + '</b> is on the ' + esc(tierName) + ' plan and above. ' + esc(WS.clientName || 'This workspace') + ' is on ' + esc(planName()) + '.') + '</div>';
+  var rows = WS.pendingApproval ? [] : [{ key: 'plan', name: mods.length ? 'Add ' + mods[0].name + ' in the Marketplace' : 'See plans in the Marketplace', sub: 'What each plan and module carries, and what it costs', href: '/marketplace.html' + (mods.length ? '#' + mods[0].key : ''), icon: S.ICON.marketplace }, { key: 'ask', name: 'Ask ClearSky to switch it on', sub: OmegaBrand.upgradeEmail(), href: 'mailto:' + encodeURIComponent(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Unlock ' + t.name + ' for ' + (WS.clientName || WS.orgId)), icon: S.ICON.feed, cta: 'Email' }];
+  S.drawer({ eyebrow: 'Not on your plan', title: t.name, sub: t.desc || '', html: html, rows: rows });
+}
+/* ── Plan & billing, as a page (Tommy, 2026-09-27): what the workspace holds
+   and pays for, what it owes and when, a secure way to keep a card, and the
+   invoices. Four sources, none of them priced here:
+     · billing/current (the tenant's own record; every member may read it)
+     · GET /api/plan-change (the engine's summary: subscription vs switched on,
+       the monthly figure, every invoice with its QuickBooks pay link)
+     · POST /api/stripe-invoices and /api/stripe-portal for a workspace billed
+       through Stripe: Stripe hosts the card page, we never touch card data
+     · a QuickBooks-billed workspace keeps its card on QuickBooks' payment
+       page (Save this card + Autopay on the invoice), never on this site.
+   Requested additions on a plan billed outside the engine (optIns) are
+   listed with their price until ClearSky moves the workspace onto a
+   package. ── */
+var BILL = { summary: null, asked: false, failed: false, stripe: null, stripeAsked: false };
+function openBilling() { go('billing'); renderBilling(); }
+function bill() { return WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}; }
+function day(v) { var t = ms(v); return t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''; }
+function isAdminHere() { return WS.role === 'owner' || WS.role === 'admin' || !!WS.staff; }
+function renderBilling() {
+  var b = byId('billing-body'); if (!b || !WS) return;
+  var bl = bill(), pa = WS.packageAccess, packaged = !!(bl.packaged === true || (pa && pa.packaged)), sm = BILL.summary, admin = isAdminHere();
+  var stripe = !!(bl.stripeCustomerId || bl.paymentProvider === 'stripe'), qb = packaged || bl.paymentProvider === 'quickbooks' || !!bl.qboCustomerId;
+  if (!BILL.asked && window.OmegaPackageMenu) { BILL.asked = true; OmegaPackageMenu.api('/api/plan-change').then(function (j) { BILL.summary = j; renderBilling(); }, function () { BILL.failed = true; renderBilling(); }); }
+  if (stripe && !BILL.stripeAsked && window.OmegaPackageMenu) { BILL.stripeAsked = true; OmegaPackageMenu.api('/api/stripe-invoices', { orgId: WS.orgId, limit: 24 }).then(function (j) { BILL.stripe = j; renderBilling(); }, function () { BILL.stripe = { connected: false, failed: true }; renderBilling(); }); }
+  function kv(rows) { return '<div class="kv">' + rows.filter(function (r) { return r[1] !== '' && r[1] != null; }).map(function (r) { return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</div>'; }
+  function usd(n) { n = Number(n) || 0; return '$' + n.toLocaleString(undefined, { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }); }
+  function moneyC(c) { return usd(Math.round(c) / 100); }
+  var stripeOpen = stripe && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'open'; }) : [];
+  var invoices = sm && Array.isArray(sm.invoices) ? sm.invoices : [], unpaid = invoices.filter(function (x) { return x.state === 'unpaid'; });
+  var pending = sm && Array.isArray(sm.pending) ? sm.pending : [];
+  var optIns = bl.optIns && typeof bl.optIns === 'object' ? Object.keys(bl.optIns).map(function (k) { var o = bl.optIns[k] || {}; o.key = k; return o; }).filter(function (o) { return o.status !== 'declined' && o.status !== 'activated'; }) : [];
+  var payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || (stripeOpen.length && stripeOpen[0].hostedUrl) || bl.paymentLink || null;
+  var h = '<div class="bill">';
+
+  /* 1 · the subscription */
+  var heldNames = pa && Array.isArray(pa.catalog) ? pa.catalog.filter(function (m) { return (WS.modules || []).indexOf(m.key) >= 0; }).map(function (m) { return m.name; }) : [];
+  var mods = packaged ? ((sm && Array.isArray(sm.subscriptionNames) && sm.subscriptionNames.length) ? sm.subscriptionNames : heldNames) : [];
+  var onNames = packaged && sm && Array.isArray(sm.moduleNames) ? sm.moduleNames : null, notOn = onNames && Array.isArray(sm.subscriptionNames) ? sm.subscriptionNames.filter(function (n) { return onNames.indexOf(n) < 0; }) : [];
+  h += '<div class="bcard" id="bill-sub"><h3>Your subscription<span class="ows-chip on">' + esc(planName()) + '</span></h3>';
+  var monthly = (sm && sm.monthlyDisplay) || bl.monthlyDisplay || '';
+  h += monthly ? '<div class="big">' + esc(String(monthly).replace(/\/month$/, '')) + '<small>' + (sm && sm.interval === 'annual' ? 'billed yearly' : 'per month') + '</small></div>' : '<div class="big">' + esc(planName()) + '<small>plan</small></div>';
+  h += kv([['Workspace', WS.clientName || WS.orgId], ['Plan', packaged ? ((sm && sm.planDisplay) || planName()) : planName()],
+    ['Modules', packaged ? (mods.join(', ') || (sm || BILL.failed ? '—' : 'Loading…')) : ''], ['Add-ons', packaged ? '' : ((WS.addons || []).join(', ') || 'None')],
+    ['Tools on this plan', !packaged && Array.isArray(WS.toolAccess) ? String(WS.toolAccess.length) : ''],
+    ['Billing', packaged && sm ? (sm.interval === 'annual' ? 'Annual prepay' : 'Monthly, on the ' + (sm.billingDay ? sm.billingDay + (sm.billingDay === 1 || sm.billingDay === 21 || sm.billingDay === 31 ? 'st' : sm.billingDay === 2 || sm.billingDay === 22 ? 'nd' : sm.billingDay === 3 || sm.billingDay === 23 ? 'rd' : 'th') : 'signup day')) : (bl.interval === 'annual' ? 'Annual prepay' : stripe ? 'By card through Stripe' : bl.paymentProvider === 'quickbooks' ? 'By invoice through QuickBooks' : bl.paymentProvider === 'manual' ? 'Invoiced by ClearSky' : '')],
+    ['Since', day(bl.subscription && bl.subscription.since) || day(bl.subscriptionStartedAt) || day(bl.createdAt)], ['Access through', packaged ? day((sm && sm.accessUntil) || (pa && pa.accessUntil)) : ''], ['Trial ends', trialEnd() ? day(trialEnd()) : ''], ['Your role', WS.role || 'member']]);
+  if (notOn.length) h += '<p><b>Bought, not on yet:</b> ' + esc(notOn.join(', ')) + '. They switch on when the invoice for them is paid.</p>';
+  if (pa && pa.readOnly) h += '<p><b>Read-only</b> until the current invoice is paid.</p>';
+  h += '<div class="acts"><button class="ows-pill primary" type="button" data-bill="modules">Change modules</button><a class="ows-pill" href="/marketplace.html">Plans and the store</a></div></div>';
+
+  /* 2 · what you owe */
+  h += '<div class="bcard" id="bill-owe"><h3>What you owe</h3>';
+  var oweC = unpaid.reduce(function (t, x) { return t + (Number(x.totalCents) || 0); }, 0), oweD = bl.amountDue != null ? Number(bl.amountDue) || 0 : 0;
+  if (unpaid.length) {
+    h += '<div class="big">' + esc(moneyC(oweC)) + '<small>' + unpaid.length + (unpaid.length === 1 ? ' invoice open' : ' invoices open') + '</small></div>';
+    h += unpaid.map(function (x) { return '<div class="inv"><div><b>' + esc(x.kind === 'change' ? 'Change: ' + (x.names || []).join(', ') : x.kind === 'pack' ? 'Pack' : 'Subscription') + '</b><small>Issued ' + esc(x.date || '') + (x.period ? ' · ' + esc(x.period.start) + ' to ' + esc(x.period.end) : '') + '</small></div><div><span class="amt">' + esc(x.display || '') + '</span>' + (x.paymentLink ? '<a class="ows-pill sm primary" href="' + esc(x.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st unpaid">Unpaid</span>') + '</div></div>'; }).join('');
+  } else if (stripeOpen.length) {
+    h += '<div class="big">' + esc(usd(stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0))) + '<small>' + stripeOpen.length + (stripeOpen.length === 1 ? ' invoice open' : ' invoices open') + '</small></div>';
+    h += stripeOpen.map(function (x) { return '<div class="inv"><div><b>' + esc(x.number || 'Invoice') + '</b><small>Issued ' + esc(x.created ? new Date(x.created).toLocaleDateString() : '') + '</small></div><div><span class="amt">' + esc(usd(x.amountDue)) + '</span>' + (x.hostedUrl ? '<a class="ows-pill sm primary" href="' + esc(x.hostedUrl) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st unpaid">Open</span>') + '</div></div>'; }).join('');
+  } else if (packaged && !sm && !BILL.failed) h += '<p>Loading your invoices…</p>';
+  else if (oweD > 0) h += '<div class="big">' + esc(usd(oweD)) + (bl.subscriptionDue ? '<small>due ' + esc(day(bl.subscriptionDue)) + '</small>' : '') + '</div>';
+  else h += '<div class="big">$0<small>nothing is owed</small></div>';
+  var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (packaged ? '' : bl.subscriptionDue);
+  h += kv([['Next invoice', nextOn ? (day(nextOn) || nextOn) : ''], ['Paid through', sm && sm.paidThrough ? (day(sm.paidThrough) || sm.paidThrough) : ''], ['Last payment', !packaged && bl.lastPaidAt ? day(bl.lastPaidAt) : '']]);
+  if (packaged) h += '<p>Each invoice arrives by email on your billing day with its pay link. A card saved on QuickBooks’ page pays the next one in one click.</p>';
+  h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Pay now</a>' : '') + (packaged ? '<button class="ows-pill" type="button" id="bill-paid"' + (admin ? '' : ' disabled title="An owner or administrator checks with QuickBooks"') + '>I’ve paid</button>' : '') + '</div></div>';
+
+  /* 3 · the payment method */
+  h += '<div class="bcard" id="bill-card"><h3>Payment method</h3>';
+  if (stripe) {
+    h += kv([['Provider', 'Stripe'], ['Card on file', 'Managed in the Stripe portal']]);
+    h += '<p>Your card is entered and stored with <b>Stripe</b>, on Stripe’s own page. Nothing about it is kept on this site. The portal also turns autopay on or off and downloads any invoice.</p>';
+    h += '<div class="acts"><button class="ows-pill primary" type="button" id="bill-portal"' + (admin ? '' : ' disabled title="An owner or administrator manages the card"') + '>Manage card and autopay</button></div>';
+    if (!admin) h += '<p>An owner or administrator of ' + esc(WS.clientName || 'this workspace') + ' opens the portal.</p>';
+  } else if (qb) {
+    h += kv([['Provider', 'QuickBooks Payments'], ['Card on file', bl.autopay === true ? 'Saved · autopay on' : bl.autopay === false ? 'Not saved yet' : 'Saved on your invoice page']]);
+    h += '<p>Your card is entered on <b>QuickBooks’ secure payment page</b>, never on this site. When you pay an invoice there, tick <b>Save this card</b> and turn on <b>Autopay</b>: every later invoice is charged on its date, and you can change the card from any invoice.</p>';
+    h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Open the payment page</a>' : '<span class="ows-chip">Your next invoice brings the link</span>') + '</div>';
+  } else {
+    h += '<p><b>No billing account yet.</b> Your first invoice sets it up: it arrives by email with a secure payment page where a card can be saved. Nothing is charged until then.</p>';
+    h += '<div class="acts"><a class="ows-pill" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Billing for ' + (WS.clientName || WS.orgId)) + '">Ask ClearSky</a></div>';
+  }
+  h += '</div>';
+
+  /* 4 · requested additions / changes waiting for payment */
+  if (optIns.length || pending.length) {
+    h += '<div class="bcard" id="bill-req"><h3>Additions</h3>';
+    h += optIns.map(function (o) { return '<div class="inv"><div><b>' + esc(o.name || o.key) + '</b><small>Requested ' + esc(day(o.requestedAt) || '') + (o.requestedBy ? ' by ' + esc(o.requestedBy) : '') + ' · ClearSky moves the workspace onto a package and switches it on; nothing is charged until you confirm the first invoice</small></div><div><span class="amt">' + esc(o.display || '') + '</span><span class="st">Requested</span></div></div>'; }).join('');
+    h += pending.map(function (x) { return '<div class="inv"><div><b>' + esc((x.names || []).join(', ')) + '</b><small>Pay before ' + esc(x.expiresOn || '') + ' · on when the payment clears</small></div><div><span class="amt">' + esc(x.display || '') + '</span>' + (x.paymentLink ? '<a class="ows-pill sm primary" href="' + esc(x.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : '') + '</div></div>'; }).join('');
+    h += '</div>';
+  }
+
+  /* 5 · billing history */
+  h += '<div class="bcard full" id="bill-hist"><h3>Billing history</h3>';
+  if (packaged || invoices.length) {
+    if (invoices.length) h += invoices.map(function (x) { return '<div class="inv"><div><b>' + esc(x.kind === 'change' ? 'Change: ' + (x.names || []).join(', ') : x.kind === 'pack' ? 'Pack' : 'Subscription') + '</b><small>' + esc(x.date || '') + (x.period ? ' · ' + esc(x.period.start) + ' to ' + esc(x.period.end) : '') + (x.paidAt ? ' · paid ' + esc(day(x.paidAt) || x.paidAt) : '') + '</small></div><div><span class="amt">' + esc(x.display || '') + '</span>' + (x.state === 'unpaid' && x.paymentLink ? '<a class="ows-pill sm primary" href="' + esc(x.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st ' + esc(x.state || '') + '">' + esc(x.state || '') + '</span>') + '</div></div>'; }).join('');
+    else if (!sm && !BILL.failed) h += '<p>Loading your invoices…</p>';
+    else if (BILL.failed && !admin) h += '<p>An owner or administrator sees the invoices here. Yours arrive by email.</p>';
+    else h += '<p>No invoices yet.</p>';
+  } else if (stripe) {
+    var st = BILL.stripe;
+    if (!st) h += '<p>Loading your invoices…</p>';
+    else if (!st.connected) h += '<p>' + (st.failed ? 'The invoice list is unavailable right now.' : 'No invoices yet; billing has not been set up for this workspace.') + '</p>';
+    else if (!(st.invoices || []).length) h += '<p>No invoices issued yet.</p>';
+    else h += st.invoices.map(function (inv) { var link = inv.hostedUrl || inv.pdfUrl; return '<div class="inv"><div><b>' + esc(inv.number || 'Invoice') + '</b><small>' + esc(inv.created ? new Date(inv.created).toLocaleDateString() : '') + '</small></div><div><span class="amt">' + esc(inv.amountDue == null ? '' : usd(inv.amountDue)) + '</span>' + (link ? '<a class="ows-pill sm" href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(inv.status || 'Open') + '</a>' : '<span class="st ' + esc(inv.status || '') + '">' + esc(inv.status || '') + '</span>') + '</div></div>'; }).join('');
+  } else if (bl.lastPaidAt) h += '<div class="inv"><div><b>Last payment</b><small>' + esc(day(bl.lastPaidAt)) + '</small></div><div><span class="amt">' + esc(bl.amountPaid ? usd(bl.amountPaid) : '') + '</span><span class="st paid">paid</span></div></div>';
+  else h += '<p>No invoices on file here. This plan is billed by ClearSky outside the workspace; write to <a href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '">' + esc(OmegaBrand.upgradeEmail()) + '</a> for a statement.</p>';
+  h += '</div></div>';
+  h += '<div class="ows-note" style="margin-top:14px">Prices and changes are always the server’s: nothing here is priced in the browser. Card details are entered only on the payment provider’s own page.</div>';
+  b.innerHTML = h;
+  var cm = b.querySelector('[data-bill="modules"]'); if (cm) cm.addEventListener('click', function () { go('modules'); });
+  var paid = byId('bill-paid'); if (paid && admin) paid.addEventListener('click', function () { paid.disabled = true; paid.textContent = 'Checking…'; OmegaPackageMenu.api('/api/plan-change', { action: 'reconcile-now' }).then(function () { S.toast('Checked with QuickBooks'); BILL.asked = false; if (OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderBilling(); }, function (e) { paid.disabled = false; paid.textContent = 'I’ve paid'; S.toast(e.message); }); });
+  var portal = byId('bill-portal'); if (portal && admin) portal.addEventListener('click', function () { portal.disabled = true; portal.textContent = 'Opening Stripe…'; OmegaPackageMenu.api('/api/stripe-portal', { orgId: WS.orgId }).then(function (j) { portal.disabled = false; portal.textContent = 'Manage card and autopay'; if (j && j.url) window.open(j.url, '_blank', 'noopener'); else S.toast('Stripe did not return a portal link'); }, function (e) { portal.disabled = false; portal.textContent = 'Manage card and autopay'; S.toast(e.message); }); });
+}
+function billingDrawer() { openBilling(); }
+function settingsDrawer() {
+  var html = '<div class="field"><label for="set-name">Display name</label><input id="set-name" value="' + esc(who()) + '" maxlength="60"></div><div class="kv"><div><span>Email</span><span>' + esc(ME) + '</span></div><div><span>Workspace</span><span>' + esc(WS.orgId) + '</span></div><div><span>Role</span><span>' + esc(WS.role || 'member') + '</span></div></div>';
+  var rows = [{ key: 'save', name: 'Save name', sub: 'Shown to your team and on projects you own', icon: S.ICON.me, cta: 'Save', onClick: saveName }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'out', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];
+  S.drawer({ eyebrow: 'Account', title: 'Settings', html: html, rows: rows });
+}
+function saveName() {
+  var v = (byId('set-name').value || '').trim(); if (!v) return;
+  db.collection('team_members').doc(WS.orgId + '__' + ME).set({ orgId: WS.orgId, email: ME, name: v }, { merge: true })
+    .then(function () { PROFILE = PROFILE || {}; PROFILE.name = v; S.paint({ ws: WS, user: USER, displayName: v }); render(); S.closeDrawer(); S.toast('Saved'); })
+    ['catch'](function (err) { S.toast('Could not save: ' + (err && err.message)); });
+}
+function inviteDrawer() {
+  var link = window.location.origin + '/';
+  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Invite a colleague', html: '<div class="ows-note">Anyone with an <b>@' + esc(WS.orgId) + '</b> email signs in at <b>' + esc(link) + '</b> and joins this workspace as a member. No invitation to send: the address is the key.</div>', rows: [{ key: 'copy', name: 'Copy the sign-in link', sub: link, icon: S.ICON.feed, cta: 'Copy', onClick: function () { try { navigator.clipboard.writeText(link).then(function () { S.toast('Copied'); }, function () { S.toast(link); }); } catch (e) { S.toast(link); } } }] });
+}
+function customizeDrawer() {
+  var P = prefs(), opts = [['presence', 'Who is here', 'Teammates in the workspace and what they have open.'], ['feed', 'Workspace feed', 'Saved projects and messages from your team.'], ['pulse', 'Omega pulse', 'What the whole platform did this week, counts only.'], ['partners', 'Partners on your projects', 'Vendors and joint development partners acting on your projects.'], ['guides', 'Guides', 'Short guides for the tools you hold.']];
+  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Customize your home', sub: 'Your plan sets the hub. You choose what else is around it. Saved for you.', html: '<div>' + opts.map(function (o) { return '<div class="opt"><div><b>' + esc(o[1]) + '</b><small>' + esc(o[2]) + '</small></div><button class="tg" type="button" role="switch" aria-checked="' + (P[o[0]] ? 'true' : 'false') + '" data-opt="' + o[0] + '" aria-label="' + esc(o[1]) + '"></button></div>'; }).join('') + '</div>', ready: function (el) {
+    Array.prototype.forEach.call(el.querySelectorAll('[data-opt]'), function (t) { t.addEventListener('click', function () { var k = t.getAttribute('data-opt'), p = prefs(); p[k] = !p[k]; t.setAttribute('aria-checked', p[k] ? 'true' : 'false'); DATA.prefs = p; renderToday(); renderAround(); savePrefs(p); }); });
+  } });
+}
+var saveT;
+function savePrefs(p) {
+  clearTimeout(saveT); saveT = setTimeout(function () {
+    if (!USER) return;
+    db.collection('dashboard_layouts').doc(WS.orgId + '__' + USER.uid).set({ workspace: p, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {});
+  }, 500);
+}
+function search(qs) {
+  qs = String(qs || '').toLowerCase().trim();
+  Array.prototype.forEach.call(document.querySelectorAll('#tools-body .tool'), function (t) { t.style.display = !qs || t.textContent.toLowerCase().indexOf(qs) >= 0 ? '' : 'none'; });
+  Array.prototype.forEach.call(document.querySelectorAll('#flight-body .pc'), function (t) { t.style.display = !qs || t.textContent.toLowerCase().indexOf(qs) >= 0 ? '' : 'none'; });
+  if (qs) go('tools');
+}
+function route() {
+  var h = (window.location.hash || '').slice(1);
+  if (!h) { go('home'); return; }
+  if (h === 'billing') openBilling(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer();
+  else if (h.indexOf('area-') === 0) areaDrawer(h.slice(5));
+  else go(h);
+}
+window.addEventListener('hashchange', function () { if (WS) route(); });
+Array.prototype.forEach.call(document.querySelectorAll('#content .sec .back'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); go('home'); }); });
+byId('customize').addEventListener('click', customizeDrawer);
+byId('new-project').addEventListener('click', function () { if (WS && WS.pendingApproval) { S.toast('Projects open once your workspace is approved'); return; } OmegaNewProject.open('bess'); });
+window.WORKSPACE_PAGE = { render: render, needs: needs, data: DATA };
+})();
+</script>
+</body>
+</html>

@@ -48,6 +48,11 @@
 var A = require('./_lib/admin');
 var P = require('./_lib/plant');
 var S = require('./_lib/plant-station');
+var X = require('./_lib/logic-access');
+/* Phase 9: the bench is the Plant part's. A paired station of a PACKAGED
+   workspace scans only while Plant is in the package (a legacy workspace,
+   or one with no record yet, is unchanged). */
+function plantDoor(checked) { return X.requirePartIfPackaged(checked.data.orgId, 'plant').then(function () { return checked; }); }
 var W = require('./_lib/plant-work');
 
 /* The product list is the one place a bench's steps are written down
@@ -180,7 +185,7 @@ module.exports = A.handler(function (req, res) {
   if (!stationId || !token) throw A.httpError(401, 'this scanner is not paired');
   if (b.action === 'describe') {
     if (!rateLimit(stationId)) throw A.httpError(429, 'too many requests from this station');
-    return S.verify(A.db(), stationId, token).then(async function (checked) {
+    return S.verify(A.db(), stationId, token).then(plantDoor).then(async function (checked) {
       var st = checked.data, org = await A.db().collection('omega_orgs').doc(st.orgId).get();
       var describeFlow = st.roaming ? require('./_lib/plant-flow').current((await A.db().collection('omega_orgs').doc(st.orgId).collection('fulfillment').doc('config').get()).data() || {}) : null;
       return { ok: true, station: st.station, stationLabel: st.label || st.station, roaming: st.roaming === true,
@@ -196,9 +201,9 @@ module.exports = A.handler(function (req, res) {
 
   var db = A.db(), FV = A.FieldValue();
   if (b.action === 'issue' || b.action === 'step-done') {
-    return S.verify(db, stationId, token).then(function (checked) { return issueOrStep(db, FV, b, checked, scanId, serial); });
+    return S.verify(db, stationId, token).then(plantDoor).then(function (checked) { return issueOrStep(db, FV, b, checked, scanId, serial); });
   }
-  return S.verify(db, stationId, token).then(function (checked) {
+  return S.verify(db, stationId, token).then(plantDoor).then(function (checked) {
     var stRef = checked.ref, st = checked.data;
     var orgId = String(st.orgId || '').toLowerCase();
     /* THE STATION COMES OFF THE RECORD, NEVER THE REQUEST (stationOf). */

@@ -5,11 +5,11 @@ var evidence=require('./_lib/fiber-evidence');
 module.exports=function(req,res) {
   res.setHeader('Cache-Control','private, no-store');
   if(req.method!=='GET') return res.status(405).json({error:'GET required'});
-  return auth.authenticateWithTier(req).then(function(a) {
-    if(!a.caller.staff && (a.billing.toolOverrides||{}).gridatlas===false)
+  return auth.authenticateWithTier(req).then(function (ctx) { return require('./_lib/package-access').withToken(req, ctx, ["gridatlas", "siteintel", "compute"]); }).then(function(a) {
+    if(!a.caller.staff && !a.packageAccess && (a.billing.toolOverrides||{}).gridatlas===false)
       throw auth.httpError(403,'Grid Atlas access required.');
     // Grid Atlas is TIER.ALL in this Omega snapshot; still verify member and org status.
-    if(a.caller.staff) return a;
+    if(a.caller.staff || a.packageAccess) return a;
     var token=String(req.headers.authorization||'').replace(/^Bearer /,'');
     return Promise.all([
       auth.readAsCaller(token,'omega_orgs/'+encodeURIComponent(a.caller.orgId)),

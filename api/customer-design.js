@@ -25,6 +25,7 @@ module.exports = A.handler(async function (req, res) {
        750 KB and a hundred of them would be read for a name each. */
     var rows = await scope.projects.orderBy('updatedAt', 'desc').select('name', 'module', 'updatedAt', 'revision').limit(100).get();
     return { org: org, customerId: scope.account.id, brand: require('./_lib/logic-brand')(scope.ctx.org),
+      packageAccess: require('./_lib/package-access').customerDrawing(scope.grant.active),
       access: scope.grant, designProducts:require('./_lib/logic-catalog').designs(storefront.exists?storefront.data():{}),products: Pt.orderables(products).map(function(p){return {sku:B.clean(p.sku,64),name:B.clean(p.name||p.sku,120)};}),
       projects: rows.docs.map(function (r) { var d = r.data(); return { id: r.id, name: d.name, module: d.module, updatedAt: d.updatedAt, revision: d.revision }; }), limited: rows.size === 100 };
   }

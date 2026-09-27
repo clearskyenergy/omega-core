@@ -261,17 +261,16 @@ async function viaVertex(b64img, prompt, aspect) {
    reads billing before doing work; this one now does the same. A
    suspended tenant, or an org whose billing carries
    toolOverrides.render === false, is refused before the provider is
-   called. In degraded mode (no Firestore credential on the server) the
-   caller is still a verified Firebase identity, so the render proceeds. */
+   called. An unavailable entitlement read refuses before spending provider funds. */
 async function entitled(req) {
   const caller = await A.authenticate(req);          // throws 401
-  if (typeof A.isDegraded === 'function' && A.isDegraded()) return caller;
   if (caller.staff) return caller;
   const snap = await A.db().collection('omega_orgs').doc(caller.orgId).get();
   const org = snap.exists ? (snap.data() || {}) : null;
   if (!org || (org.status || 'active') !== 'active') throw A.httpError(403, 'tenant is not active');
   const bill = await A.billingOf(caller.orgId);
-  if (bill && bill.toolOverrides && bill.toolOverrides.render === false)
+  const access = await require('./_lib/package-access').withCaller(caller, 'plansets');
+  if (!access.packaged && bill && bill.toolOverrides && bill.toolOverrides.render === false)
     throw A.httpError(403, 'AI render is switched off for this organisation');
   return caller;
 }

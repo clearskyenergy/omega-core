@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" onerror="void 0"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" onerror="void 0"></script>
 <script src="/config.js" onerror="void 0"></script>
+<script src="/omega-usage.js"></script>
 <script src="/omega-tools.js" onerror="void 0"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" onerror="window._XLFAIL=1"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="window._ZIPFAIL=1"></script>
@@ -228,6 +229,7 @@ table.pv td.num{text-align:right;font-variant-numeric:tabular-nums}
   <button class="btn" id="btnRates" onclick="openRateSettings()"
           title="Set the labour and material rates every sheet is priced from">Settings</button>
   <button class="btn p" id="btnExport" onclick="exportWorkbook()">Export workbook</button>
+  <span data-usage-meter="evApplications" hidden></span>
 </div>
 
 <div class="wrap">
@@ -6644,7 +6646,10 @@ function uiPdfCard(){
   return h;
 }
 
-function exportWorkbook(){
+function exportWorkbook(counted){
+  /* Phase 7: the export is the deliverable; the server counts it against the
+     cycle's EV applications first and may refuse with the pack offer. */
+  if(window.OmegaUsage && counted!==true){ var picked=[]; for(var pi=0;pi<FORMS.length;pi++) if(PICK[FORMS[pi].id]) picked.push(FORMS[pi].id); OmegaUsage.count('evApplications', 'workbook:'+document.title+':'+picked.join(',')).then(function(){ exportWorkbook(true); }, function(e){ OmegaUsage.explain(e); }); return; }
   if(window._XLFAIL || typeof ExcelJS==='undefined'){
     alert('The Excel writer did not load. Check the connection and reload the page.');
     return;

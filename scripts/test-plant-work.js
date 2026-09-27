@@ -20,7 +20,7 @@ var W = require('../api/_lib/plant-work'), P = require('../api/_lib/plant'), M =
 /* api/_lib/admin.js needs firebase-admin; nothing here does. The mock goes
    in before anything that requires it (logic-catalog, the endpoint). */
 var db = null;
-var A = { db: function () { return db; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; },
+var A = { /* the same shape rule as api/_lib/admin.js safeOrg (the plant door reads the org record by it) */ safeOrg: function (v) { var x = String(v == null ? '' : v).trim().toLowerCase(); return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(x) ? x : ''; }, db: function () { return db; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; },
   FieldValue: function () { return { serverTimestamp: function () { return 'ts'; } }; } };
 function mock(p, e) { require.cache[require.resolve(p)] = { id: require.resolve(p), filename: require.resolve(p), loaded: true, exports: e }; }
 mock('../api/_lib/admin', A);

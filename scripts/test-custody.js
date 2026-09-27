@@ -193,7 +193,11 @@ var NOW = '2026-09-05T12:00:00Z';
     var again = await post({ action: 'detail', serial: 'S009', reseller: 'Valley Power Partners' }); assert.equal(again.action, 'duplicate');
     await rejects(post({ action: 'detail', serial: 'S009', commissioningReportUrl: 'http://not-https' }), 400, /HTTPS/);
     var r2 = await get({ view: 'register' }); var s9b = r2.rows.filter(function (x) { return x.serial === 'S009'; })[0]; assert.equal(s9b.reseller, 'Valley Power Partners'); assert.equal(s9b.endCustomer, 'Fresno Cold Storage'); assert.equal(s9b.status, 'assigned', 'a detail never moves the unit');
-    var ev = await get({ serial: 'S009' }); assert.equal(ev.events[0].type, 'detail'); assert.match(ev.events[0].note, /reseller: Valley Power Partners/);
+    var ev = await get({ serial: 'S009' });
+    // In-memory operations may share a millisecond; timestamp ties have no
+    // guaranteed order. Assert the one detail event and its content.
+    var details = ev.events.filter(function (e) { return e.type === 'detail'; });
+    assert.equal(details.length, 1); assert.match(details[0].note, /reseller: Valley Power Partners/);
   });
 
   console.log('\nreplacement and import');

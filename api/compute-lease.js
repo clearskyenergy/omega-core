@@ -801,8 +801,8 @@ module.exports = function (req, res) {
   }
   if (req.method !== 'POST') return res.status(405).json({ build: BUILD, error: 'GET or POST.' });
 
-  return auth.authenticateWithTier(req).then(function (a) {
-    if (!a.caller.staff && (a.billing.toolOverrides || {})[TOOL_KEY] === false)
+  return auth.authenticateWithTier(req).then(function (ctx) { return require('./_lib/package-access').withToken(req, ctx, "compute"); }).then(function (a) {
+    if (!a.caller.staff && !a.packageAccess && (a.billing.toolOverrides || {})[TOOL_KEY] === false)
       throw auth.httpError(403, 'Compute Lease access required.');
     var token = String(req.headers.authorization || '').replace(/^Bearer /, '');
 
@@ -827,7 +827,7 @@ module.exports = function (req, res) {
         throw auth.httpError(403, 'An active Omega organisation is required.');
       if (!member || (member.status && member.status !== 'active'))
         throw auth.httpError(403, 'An active organisation membership is required.');
-      if (Array.isArray(member.toolAccess) && member.toolAccess.indexOf(TOOL_KEY) < 0)
+      if (!a.packageAccess && Array.isArray(member.toolAccess) && member.toolAccess.indexOf(TOOL_KEY) < 0)
         throw auth.httpError(403, 'Compute Lease access required.');
       a.org = org;
       return a;

@@ -39,6 +39,13 @@ ok(/Contact your account administrator\.$/.test(A.text(null)),
    'so does no error at all');
 ok(/Contact your account administrator\.$/.test(A.text(new Error('Firebase: Error (auth/internal-error).'))),
    'so does an internal error');
+globalThis.location = { hostname: 'omega-core-git-codex-packaging-phase-9-clearsky-usa.vercel.app' };
+var preview = A.text({ code: 'auth/unauthorized-domain' });
+ok(/omega-core-git-codex-packaging-phase-9-clearsky-usa\.vercel\.app/.test(preview) && /Authorised domains/.test(preview) && /email and password/.test(preview) && !/firebase/i.test(preview),
+   'on a Vercel preview, an unauthorised domain names the hostname to add and offers email and password, with no vendor name');
+globalThis.location = { hostname: 'app.clearskyomega.com' };
+ok(/^This site isn’t authorised for sign-in\. Contact your account administrator\.$/.test(A.text({ code: 'auth/unauthorized-domain' })), 'on a real host the message is the plain one');
+delete globalThis.location;
 ok(A.text({ code: 'auth/user-disabled' }).indexOf('Contact your account administrator') > 0,
    'a disabled account says who to contact, because the reader can do nothing else');
 

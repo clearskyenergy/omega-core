@@ -99,6 +99,10 @@
      which is the hostname lock doing exactly what it should to a host nobody
      told it about. */
   var HUB_HOSTS = ['app.clearskyomega.com', 'clearskyomega.com', 'www.clearskyomega.com'];
+  /* The address a refused person may write to. csebuilders.com was retired
+     on 2026-09-24 and nothing answers there; api/_lib/mail.js SUPPORT_EMAIL
+     is the server twin, change both together. */
+  var SUPPORT_EMAIL = 'dev@clearsky-usa.com';
 
   /* ── HOSTS THAT SERVE EVERY TENANT INLINE ────────────────────────────────
      A HUB dispatches: a signed-in user is redirected to their own org's
@@ -265,7 +269,7 @@
       c.tenant.shell = pub.shell || c.tenant.shell || 'default';
       c.tenant.vertical = pub.vertical || c.tenant.vertical || null;
     }
-    if (!c.adminDomains) c.adminDomains = ['csebuilders.com', 'clearsky-usa.com'];
+    if (!c.adminDomains) c.adminDomains = ['clearsky-usa.com'];
     applyColors(c.tenant.colors);
   }
   function applyColors(colors) {
@@ -283,7 +287,7 @@
     var d = document.createElement('div');
     d.setAttribute('style', 'position:fixed;inset:0;background:#0A1628;color:#E5EEF7;z-index:99999;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;padding:24px;text-align:center');
     d.innerHTML = '<div style="max-width:520px"><div style="font-size:22px;font-weight:700;margin-bottom:10px">This portal is not available at this address</div>'
-      + '<div style="font-size:14px;color:#8BA3C4;line-height:1.5">' + String(msg).replace(/</g, '&lt;') + '<br><br>If you believe this is an error, contact support@csebuilders.com.</div></div>';
+      + '<div style="font-size:14px;color:#8BA3C4;line-height:1.5">' + String(msg).replace(/</g, '&lt;') + '<br><br>If you believe this is an error, contact ' + SUPPORT_EMAIL + '.</div></div>';
     document.body ? document.body.appendChild(d) : document.addEventListener('DOMContentLoaded', function () { document.body.appendChild(d); });
   }
 
@@ -425,13 +429,19 @@
        intersection is left empty rather than widened — omega-tools.js and
        the api/ tool gates both read a present-but-empty allowlist as "none",
        which is the safe way to be wrong about an allowlist. */
-    var orgAccess = (b.toolAccess && b.toolAccess.length) ? b.toolAccess : null;
-    var memAccess = (T.member && T.member.toolAccess && T.member.toolAccess.length)
-                      ? T.member.toolAccess : null;
+    var orgAccess = Array.isArray(b.toolAccess) ? b.toolAccess : null;
+    var memAccess = T.member && Array.isArray(T.member.toolAccess) ? T.member.toolAccess : null;
     if (orgAccess && memAccess) {
       ws.toolAccess = memAccess.filter(function (k) { return orgAccess.indexOf(k) >= 0; });
     } else if (orgAccess || memAccess) {
       ws.toolAccess = (orgAccess || memAccess).slice();
+    }
+    ws.packaged = b.packaged === true || !!(T.packageAccess && T.packageAccess.packaged);
+    if (ws.packaged) {
+      ws.packageAccess = T.packageAccess || { packaged: true, modules: [], caps: [], toolAccess: [], readOnly: true };
+      ws.modules = ws.packageAccess.modules.slice();
+      ws.toolAccess = ws.packageAccess.toolAccess.slice();
+      ws.toolOverrides = {}; ws.addons = [];
     }
     ws.role = T.role;
     ws.orgStatus = T.status;
@@ -599,10 +609,81 @@
     (document.head || document.documentElement).appendChild(st);
   }
 
+  var packageRefreshTimer = null;
+  function packageBillingChrome(ws) {
+    if (packageRefreshTimer) clearTimeout(packageRefreshTimer);
+    packageRefreshTimer = null;
+    var old = document.getElementById('omega-billing-status'); if (old) old.remove();
+    var view = ws && ws.packageAccess;
+    if (!view || !view.packaged || view.staff || view.preview) return;
+    if (view.billingNotice && document.body) {
+      var bar = document.createElement('aside'); bar.id = 'omega-billing-status'; bar.setAttribute('role', 'status');
+      bar.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;z-index:99998;padding:12px 18px;border:1px solid #6e9be0;border-radius:8px;background:#16202b;color:#eef2f6;font:13px/1.5 system-ui;display:flex;flex-wrap:wrap;gap:10px;box-shadow:0 4px 20px #0004';
+      var text = document.createElement('span'); text.textContent = view.billingNotice.text; bar.appendChild(text);
+      if (view.billingNotice.payUrl) {
+        /* "I've paid": ask the platform to look at QuickBooks now (plan-change
+           reconcile-now) instead of waiting for the daily runner; a paid
+           invoice reloads the page into the opened workspace */
+        var paid = document.createElement('button'); paid.type = 'button'; paid.textContent = "I've paid"; paid.style.cssText = 'margin-left:10px;padding:4px 10px;border-radius:6px;border:1px solid #6e9be0;background:transparent;color:#eef2f6;cursor:pointer;font:inherit';
+        paid.onclick = function () {
+          paid.disabled = true; paid.textContent = 'Checking QuickBooks…';
+          user.getIdToken().then(function (token) { return global.fetch('/api/plan-change', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reconcile-now' }) }); })
+            .then(function (r) { return r.json(); })
+            .then(function (j) { if (j && j.paid) { global.location.reload(); return; } paid.disabled = false; paid.textContent = "I've paid"; text.textContent = (j && j.error) ? j.error : 'Not paid yet as far as QuickBooks knows; a card payment shows within a minute.'; },
+              function () { paid.disabled = false; paid.textContent = "I've paid"; });
+        };
+        bar.appendChild(paid);
+        var pay = document.createElement('a'); pay.textContent = 'Pay in QuickBooks'; pay.href = view.billingNotice.payUrl; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.color = '#9fc5ff'; bar.appendChild(pay); }
+      document.body.appendChild(bar);
+    }
+    var user = global.firebase && firebase.auth().currentUser; if (!user || !global.fetch) return;
+    var delay = view.accessUntil && !view.readOnly ? Math.min(60000, Math.max(1, view.accessUntil - Date.now())) : 60000;
+    packageRefreshTimer = setTimeout(function () {
+      if (firebase.auth().currentUser !== user) return;
+      // Close presentation immediately at the recorded deadline, before the
+      // refresh can wait on a network. API and rules enforce it independently.
+      if (view.accessUntil && Date.now() >= view.accessUntil) {
+        view.readOnly = true;
+        if (global.OmegaCaps) { global.OmegaCaps.setPackage(view); global.OmegaCaps.apply('trial'); }
+      }
+      user.getIdToken().then(function (token) { return global.fetch('/api/package-access', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
+        .then(function (r) { if (!r.ok) throw new Error('Package access unavailable'); return r.json(); })
+        .then(function (fresh) {
+          if (firebase.auth().currentUser !== user) return;
+          if (!fresh.packaged || !Array.isArray(fresh.modules) || !Array.isArray(fresh.toolAccess)) { global.location.reload(); return; }
+          T.packageAccess = fresh; ws.packageAccess = fresh;
+          fireEntitlements(mergeEntitlements(ws));
+        }, function () {
+          if (firebase.auth().currentUser !== user) return;
+          view.readOnly = true; view.billingNotice = { text: 'Package access could not be verified. Saved projects remain available; reconnect to continue.', payUrl: null };
+          T.packageAccess = view; ws.packageAccess = view; fireEntitlements(mergeEntitlements(ws));
+        });
+    }, delay);
+  }
+  /* Presence from every signed-in page (the sales board reads
+     team_members.lastSeen; until now only the dashboard wrote it, so a
+     person who only opened a tool read as never signed in). The dashboard
+     keeps its own richer write (index.html registerMember, with the
+     person's name) and says so with OMEGA_PRESENCE_BY_PAGE; every other
+     page writes one merge per load here, only for the workspace of the
+     person's own domain (the rules allow no other), and a refused write is
+     silent: presence is a courtesy, never a gate. */
+  var presenceDone = false;
+  function touchPresence(ws) {
+    if (presenceDone || global.OMEGA_PRESENCE_BY_PAGE || !ws || !ws.orgId || ws.pendingApproval) return;
+    if (!global.firebase || !firebase.auth || !firebase.firestore) return;
+    var user = firebase.auth().currentUser; if (!user || !user.email) return;
+    var email = String(user.email).toLowerCase(); if (email.split('@')[1] !== ws.orgId) return;
+    presenceDone = true;
+    firebase.firestore().collection('team_members').doc(ws.orgId + '__' + email)
+      .set({ orgId: ws.orgId, email: email, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {});
+  }
   function fireEntitlements(ws) {
     T._ent = true; T._ws = ws;
+    try { touchPresence(ws); } catch (e) {}
     try { countDesignWork((ws && ws.orgId) || '', (ws && ws.jdPartnerOf) || ''); } catch (e) {}
     try { paintMarketplaceNav(ws); } catch (e) {}
+    try { packageBillingChrome(ws); } catch (e) {}
     /* The chrome was painted before this record arrived; repaint it now that
        the real name is known, or the header keeps the derived one. */
     try { if (global.OmegaBrand && OmegaBrand.paint) OmegaBrand.paint(ws); } catch (e) {}
@@ -623,8 +704,13 @@
         var o = s.data(), host = (o.domains && o.domains[0]) || null;
         T.org = o; T.status = o.status || 'active';
         if (T.status === 'pending') { pendingBanner(o, user, null); lockedEntitlements(); return; }
-        if (host && host !== T.host && !onStart) { global.location.href = 'https://' + host + global.location.pathname + global.location.search; return; }
-        if (host && host !== T.host && onStart) { global.location.href = 'https://' + host + '/'; return; }
+        /* A HUB dispatches to the workspace's own hostname. Anywhere else
+           (the open host, a tenant host) the workspace is served HERE: a
+           slug host under clearskyomega.com may not resolve at all (no
+           wildcard record; walters./roam. never did), so /start on the
+           front door opens the dashboard on the same origin. */
+        if (host && host !== T.host && T.hub) { global.location.href = 'https://' + host + (onStart ? '/' : global.location.pathname + global.location.search); return; }
+        if (onStart && !T.hub) { global.location.href = '/'; return; }
         try { global.dispatchEvent(new CustomEvent('omega:hub', { detail: { exists: true, org: o } })); } catch (e) {}
       } else {
         if (!onStart) { global.location.href = '/start.html'; return; }
@@ -637,9 +723,28 @@
      reads, so an empty list draws every tool in the state the UI already has
      for "not on your plan" — no second locked-out design to build or keep in
      step. */
+  /* ── WAIT FOR THE OBJECT THESE FLAGS HAVE TO LAND ON ──────────────────
+     index.html sets window.OMEGA_WORKSPACE inside ITS auth handler, and two
+     handlers on the same event have no defined order. Lose that race and ws
+     is null, mergeEntitlements returns null, and everything just read off
+     the org record — the name, the tier, toolAccess, hideMarketplace, the
+     shell that says where home is — is dropped on the floor with no error
+     anywhere. So wait for it. A couple of seconds is far longer than the gap
+     between two callbacks on the same event, and if it never arrives we fire
+     with whatever config had, which is the old behaviour. Every branch of
+     loadEntitlements that fires a real answer goes through here. */
+  function fireWhenBound(org, user, tries) {
+    var ws = global.OMEGA_WORKSPACE || cfg().tenant || null;
+    if (!ws && (tries || 0) < 20) {
+      setTimeout(function () { fireWhenBound(org, user, (tries || 0) + 1); }, 100);
+      return;
+    }
+    fireEntitlements(mergeEntitlements(ws || baseWorkspace(org, user)));
+  }
   function lockedEntitlements() {
     var ws = mergeEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || {}) || {};
-    ws.unlockedTools = [];
+    ws.unlockedTools = []; ws.toolAccess = [];
+    if (ws.packaged) ws.packageAccess = { packaged: true, modules: [], caps: [], toolAccess: [], readOnly: true };
     ws.pendingApproval = true;
     fireEntitlements(ws);
   }
@@ -728,7 +833,12 @@
     /* a page that is its own front door (Omega Logic: /office/app, /logic,
        /omega-logic) sets OMEGA_NO_HUB_ROUTE: it resolves the workspace
        itself, including cross-company grants the hub would send to signup */
-    if (T.hub) { if (!global.OMEGA_NO_HUB_ROUTE) routeFromHub(user); return; }
+    /* The signup page (/start) runs the hub's routing on EVERY host. The
+       front door is silmarillion, an OPEN host, and until 2026-09-26 only
+       app./www. dispatched, so the page there never heard omega:hub and
+       stood still with nothing to do. */
+    var onStart = /\/start(\.html)?$/.test(String(global.location && global.location.pathname || ''));
+    if (T.hub || onStart) { if (!global.OMEGA_NO_HUB_ROUTE) routeFromHub(user); return; }
     var org = orgIdFor(user); if (!org) return;
     var uid = user.uid;
     var ref = d.collection('omega_orgs').doc(org);
@@ -737,12 +847,37 @@
        the org record, and with it the tenant's name and every flag on it,
        because a member document happened to be unreadable. */
     function soft(p) { return p.then(function (s) { return s; },
-                                     function () { return { exists: false }; }); }
+                                     function () { return { exists: false, failed: true }; }); }
     Promise.all([
       soft(ref.get()),
       soft(ref.collection('billing').doc('current').get()),
       soft(ref.collection('members').doc(uid).get())
     ]).then(function (r) {
+      T.packageAccess = null;
+      if (r[1].failed) throw new Error('Could not verify workspace billing');
+      var bill = r[1].exists ? r[1].data() : {};
+      if (bill.packaged !== true) return r;
+      T.packageAccess = { packaged: true, modules: [], caps: [], toolAccess: [], readOnly: true };
+      var enrollment = Promise.resolve();
+      if (!r[2].exists && !r[2].failed && r[0].exists && r[0].data().status === 'active' && user.emailVerified === true) {
+        // Preserve colleague auto-join before asking the server for membership.
+        // Existing rules permit only this caller's active member record.
+        enrollment = ref.collection('members').doc(uid).set({
+          email: String(user.email || '').toLowerCase(), name: user.displayName || '',
+          role: 'member', status: 'active', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(function () { return ref.collection('members').doc(uid).get(); })
+          .then(function (member) { r[2] = member; });
+      }
+      return enrollment.then(function () { return user.getIdToken(); }).then(function (token) {
+        return global.fetch('/api/package-access', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+      }).then(function (response) {
+        if (!response.ok) throw new Error('Could not verify package access');
+        return response.json();
+      }).then(function (view) {
+        if (view.packaged !== true || !Array.isArray(view.toolAccess)) throw new Error('Package access changed; reload');
+        T.packageAccess = view; return r;
+      });
+    }).then(function (r) {
       T.org = r[0].exists ? r[0].data() : null;
       T.billing = r[1].exists ? r[1].data() : null;
       T.member = r[2].exists ? r[2].data() : null;
@@ -766,9 +901,15 @@
             lockedEntitlements();
             return;
           }
-          fireEntitlements(mergeEntitlements(baseWorkspace(org, user)));
+          /* The SAME wait as the record branch below. This fired at once
+             onto an object of its own, and a dashboard whose auth handler
+             was still resolving the workspace then published a fresh one
+             with no shell on it and a listener the event had already
+             passed — so a derived workspace (ClearSky's own, on the open
+             host) never left the classic page. */
+          fireWhenBound(org, user);
         })['catch'](function () {
-          fireEntitlements(mergeEntitlements(baseWorkspace(org, user)));
+          fireWhenBound(org, user);
         });
       }
 
@@ -797,7 +938,7 @@
          was. Nothing here is a security boundary — Firestore rules are, and
          they do not care whether a browser is still holding a token. */
       if (T.status === 'suspended' || T.status === 'cancelled') {
-        refuse('Your organisation\'s account is ' + T.status + '. Contact billing@csebuilders.com to restore access.');
+        refuse('Your organisation\'s account is ' + T.status + '. Contact ' + SUPPORT_EMAIL + ' to restore access.');
         return;
       }
       if (T.member && T.member.status === 'disabled') {
@@ -815,27 +956,10 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         })['catch'](function () {});
       }
-      /* ── WAIT FOR THE OBJECT THESE FLAGS HAVE TO LAND ON ────────────────
-         index.html sets window.OMEGA_WORKSPACE inside ITS auth handler, and
-         two handlers on the same event have no defined order. Lose that race
-         and ws is null, mergeEntitlements returns null, and everything just
-         read off the org record — the name, the tier, toolAccess,
-         hideMarketplace — is dropped on the floor with no error anywhere.
-
-         So wait for it. A couple of seconds is far longer than the gap
-         between two callbacks on the same event, and if it never arrives we
-         fire with whatever config had, which is the old behaviour. */
-      (function applyWhenReady(tries) {
-        var ws = global.OMEGA_WORKSPACE || cfg().tenant || null;
-        if (!ws && (tries || 0) < 20) {
-          setTimeout(function () { applyWhenReady((tries || 0) + 1); }, 100);
-          return;
-        }
-        fireEntitlements(mergeEntitlements(ws || baseWorkspace(org, user)));
-      })(0);
+      fireWhenBound(org, user);
     })['catch'](function (err) {
-      log('entitlements read failed; config.js tier stands', err && err.message);
-      fireEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || null);
+      log('entitlements unavailable; tools remain closed', err && err.message);
+      lockedEntitlements();
     });
   }
 
@@ -895,8 +1019,11 @@
     try {
       T._watching = true;
       firebase.auth().onAuthStateChanged(function (user) {
+        /* the loading screen (omega-splash.js) waits on this: signed out ends
+           it, signed in waits for the entitlements */
+        try { global.dispatchEvent(new CustomEvent('omega:auth', { detail: { user: !!user } })); } catch (e) {}
         if (user) { markSession(); setTimeout(function () { loadEntitlements(user); }, 0); }
-        else { T.billing = null; T.member = null; T.role = 'member'; T._ent = false; }
+        else { T.billing = null; T.member = null; T.role = 'member'; T._ent = false; packageBillingChrome(null); }
       });
     } catch (e) { T._watching = false; log('auth watch failed', e && e.message); }
   }
@@ -910,6 +1037,9 @@
     get member() { return T.member; },
     get role() { return T.role; },
     get status() { return T.status; },
+    /* The workspace the entitlements were merged onto, or null before they
+       land: the one object that carries the org record's shell. */
+    get workspace() { return T._ent ? (T._ws || null) : null; },
     get refused() { return T.refused || null; },
     get hub() { return !!T.hub; },
     /* Did this TAB have a signed-in user? Pages use it to tell a slow restore
@@ -923,7 +1053,21 @@
     ready: function (cb) { if (T._ready) { try { cb(T.tenant); } catch (e) {} } else T._readyCbs.push(cb); },
     onEntitlements: function (cb) { if (T._ent) { try { cb(T._ws); } catch (e) {} } else T._entCbs.push(cb); },
     /* For the account-settings page: refresh after a branding save. */
-    refresh: function () { try { global.localStorage.removeItem(CACHE_KEY + T.host); } catch (e) {} resolveHost(); }
+    refresh: function () { try { global.localStorage.removeItem(CACHE_KEY + T.host); } catch (e) {} resolveHost(); },
+    /* After a plan change (the dashboard's Add a module, "I've paid"): ask
+       the server for the package view again and re-fire the entitlements,
+       so the tiles and the billing bar follow without a reload. Resolves
+       to the fresh view, or null when there is nothing packaged to ask. */
+    refreshPackage: function () {
+      var user = global.firebase && firebase.auth().currentUser, ws = T._ws;
+      if (!user || !global.fetch || !ws || !ws.packaged) return Promise.resolve(null);
+      return user.getIdToken().then(function (token) { return global.fetch('/api/package-access', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
+        .then(function (r) { if (!r.ok) throw new Error('Package access unavailable'); return r.json(); })
+        .then(function (fresh) {
+          if (firebase.auth().currentUser !== user || !fresh.packaged || !Array.isArray(fresh.toolAccess)) return null;
+          T.packageAccess = fresh; ws.packageAccess = fresh; fireEntitlements(mergeEntitlements(ws)); return fresh;
+        });
+    }
   };
 
   wrapBrand();

@@ -1043,7 +1043,7 @@ function applyCors(req, res) {
     res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,X-Grid-Atlas-Key');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   res.setHeader('Access-Control-Max-Age', '86400');
 }
 
@@ -1065,7 +1065,7 @@ module.exports = async function handler(req, res) {
         + (process.env.GOOGLE_GEOCODING_KEY ? ', then Google' : ' (no Google key set, not needed)'),
       addressHandling: 'Unit and building designators are stripped, then the address is '
         + 'retried progressively less specific until something matches.',
-      authRequired: !!process.env.GRID_ATLAS_KEY,
+      authRequired: true,
       dataSources: {
         primary:  'HIFLD Open (ArcGIS) \u2014 transmission lines, power plants; substations from SUB_SOURCES mirrors',
         subSources: SUB_SOURCES,
@@ -1092,14 +1092,13 @@ module.exports = async function handler(req, res) {
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST.' });
 
-  /* Optional shared secret. Set GRID_ATLAS_KEY once OGI is calling this, so
-     the endpoint is not simply open. Skipped when unset so it works from the
-     console on day one without ceremony. */
-  const want = process.env.GRID_ATLAS_KEY;
-  if (want) {
-    const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-    if (got !== want) return res.status(401).json({ error: 'Bad or missing key.' });
-  }
+  // Platform scoring uses the same verified organization/package as the UI.
+  // A shared key has no org or membership and cannot grant a paid module.
+  try {
+    const auth = require('./_lib/verify-token');
+    const ctx = await auth.authenticateWithTier(req);
+    await require('./_lib/package-access').withToken(req, ctx, ['gridatlas', 'siteintel', 'sitefinder', 'compute']);
+  } catch (e) { return res.status(e.status || 503).json({ error: e.status ? e.message : 'Grid access unavailable' }); }
 
   SOURCES.substations = SOURCES.lines = SOURCES.plants = SOURCES.pipelines = null;
   BUNDLE = null;

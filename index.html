@@ -19,6 +19,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script src="/omega-splash.js?v=1" data-boot="no"></script>
 <!-- OMEGA SSO handoff. Must be the FIRST script in the head, and served from
      THIS origin (not clearskyomega.com) — same as the NextNRG deployment.
      Only acts when it sees #omega_sso= in the URL; a normal visit falls
@@ -369,6 +370,33 @@ body.signed-out #app-body{display:none !important}
 .pm-cat{font-size:22px;font-weight:400;color:#8A93A0;letter-spacing:-.2px;text-align:center;margin-bottom:4px}
 .pm-cat-sub{font-size:11.5px;color:var(--cs-sub);text-align:center;margin-bottom:16px}
 .pm-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+/* Your modules: one card per module (Phase 10B follow-up, 2026-09-26) */
+/* hidden by class, not inline style: the layout editor rewrites every block's style.display when it applies the saved order */
+.dash-block.mod-none{display:none !important}
+.mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:1200px){ .mod-grid{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:520px){ .mod-grid{grid-template-columns:1fr} }
+.mod-card{position:relative;background:#fff;border:1px solid var(--cs-border);border-radius:14px;padding:14px 14px 12px;display:flex;flex-direction:column;gap:8px;min-height:150px;box-shadow:0 2px 8px rgba(0,0,0,.05);transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
+.mod-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(46,134,193,.16);border-color:var(--cs-sky)}
+.mod-card.off{background:transparent;border-style:dashed;box-shadow:none}
+.mod-card.off:hover{transform:none;box-shadow:none;border-color:var(--cs-border)}
+.mod-head{display:flex;align-items:center;gap:10px;padding-right:68px;min-width:0}
+.mod-ico{width:38px;height:38px;border-radius:10px;background:rgba(43,95,168,.10);color:var(--cs-accent);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;flex-shrink:0}
+.mod-ico svg{width:20px;height:20px;stroke:currentColor}
+.mod-card.logic .mod-ico{background:rgba(63,175,198,.14);color:#2A8CA3}
+.mod-card.off .mod-ico{background:var(--cs-bg);color:var(--cs-sub)}
+.mod-name{font-size:14px;font-weight:700;color:var(--cs-navy);line-height:1.2}
+.mod-shelf{font-size:11.5px;color:var(--cs-sub);margin-top:2px}
+.mod-feat{margin:0;padding:0;list-style:none;font-size:12.5px;color:var(--cs-sub);display:flex;flex-direction:column;gap:2px}
+.mod-feat li::before{content:'·';margin-right:6px;color:#9AA5B1}
+.mod-tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
+.mod-chip{font-size:11.5px;padding:3px 9px;border-radius:999px;background:rgba(43,95,168,.08);color:var(--cs-accent);white-space:nowrap}
+.mod-card.off .mod-chip{background:var(--cs-bg);color:var(--cs-sub);opacity:.75}
+.mod-live{position:absolute;top:13px;right:14px;font-size:11px;font-weight:700;color:var(--cs-green);display:flex;align-items:center;gap:5px}
+.mod-live::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--cs-green)}
+.mod-soon{position:absolute;top:13px;right:14px;font-size:11px;font-weight:700;color:var(--cs-sub)}
+.mod-add{position:absolute;top:10px;right:12px;font:600 12px/1 inherit;padding:7px 11px;border-radius:999px;border:1px solid var(--cs-border);background:#fff;color:var(--cs-navy);cursor:pointer}
+.mod-add:hover{border-color:var(--cs-accent);color:var(--cs-accent)}
 @media (max-width:520px){ .pm-grid{grid-template-columns:1fr} }
 .pm-col.wide .pm-grid{grid-template-columns:repeat(3,1fr)}
 @media (max-width:1200px){ .pm-col.wide .pm-grid{grid-template-columns:repeat(2,1fr)} }
@@ -565,16 +593,28 @@ body.signed-out #app-body{display:none !important}
   .ov-val{font-size:30px}
 }
 
-/* ── UPGRADE OVERLAY (locked tools) ── */
-.pm-tile.locked{ position:relative; cursor:pointer; }
-.pm-tile.locked > *:not(.pm-lock){ filter:grayscale(.85) opacity(.45); pointer-events:none; }
+/* ── UPGRADE OVERLAY (locked tools) ──
+   lockTile() locks ANY [data-tool] element — a .pm-tile card or a Quick
+   Access .quick-link — and appends the badge and the overlay, both
+   position:absolute. So the locked element itself must be their containing
+   block. These rules were written for .pm-tile only; a .quick-link has no
+   position of its own, so the overlay escaped to the page, lay invisibly
+   (opacity:0 still hit-tests) over the first screen, and the hover lift —
+   a transform is a containing block too — pulled it into the tile and back
+   out several times a second: the "Upgrade" flashing.
+   A locked tile does not lift either: at its bottom edge the lift alone moves
+   it out from under the pointer, and the overlay would blink there.
+   scripts/render-dashboard.js measures the overlay against its tile. */
+.locked[data-tool]{ position:relative; cursor:pointer; }
+.locked[data-tool]:hover{ transform:none; }
+.locked[data-tool] > *:not(.pm-lock):not(.pm-lock-badge){ filter:grayscale(.85) opacity(.45); pointer-events:none; }
 .pm-lock{
   position:absolute; inset:0; display:flex; flex-direction:column;
   align-items:center; justify-content:center; gap:6px;
   background:linear-gradient(135deg, rgba(8,56,79,.90), rgba(0,111,154,.88));
   border-radius:inherit; opacity:0; transition:opacity .16s; z-index:3;
 }
-.pm-tile.locked:hover .pm-lock{ opacity:1; }
+.locked[data-tool]:hover .pm-lock{ opacity:1; }
 .pm-lock-badge{
   position:absolute; top:8px; right:8px; z-index:4;
   background:var(--cs-accent); color:#04303a; font-size:9px; font-weight:800;
@@ -618,7 +658,7 @@ body.signed-out #app-body{display:none !important}
 .th-assignee{font-weight:600;color:var(--cs-blue)}
 .th-due{color:#B26A00}
 .th-due.over{color:var(--cs-red);font-weight:600}
-.th-del{background:none;border:none;color:#C9C7C2;cursor:pointer;font-size:15px;line-height:1;padding:0 2px;flex:none}
+.th-del{background:none;border:none;color:#C9C7C2;cursor:pointer;font-size:15px;line-height:1;padding:0 2px;flex:none;min-width:40px;min-height:40px;display:inline-flex;align-items:center;justify-content:center}
 .th-del:hover{color:var(--cs-red)}
 
 /* composer */
@@ -706,7 +746,7 @@ body.signed-out #app-body{display:none !important}
 .acct-modal{background:#fff;border-radius:18px;width:440px;max-width:94vw;max-height:90vh;overflow-y:auto;box-shadow:0 30px 70px rgba(0,0,0,.3)}
 .acct-head{padding:22px 24px 16px;border-bottom:1px solid var(--cs-border);display:flex;align-items:center;justify-content:space-between}
 .acct-head h3{font-size:18px;font-weight:800;color:var(--cs-navy)}
-.acct-close{background:none;border:none;font-size:22px;line-height:1;color:var(--cs-sub);cursor:pointer}
+.acct-close{background:none;border:none;font-size:22px;line-height:1;color:var(--cs-sub);cursor:pointer;min-width:40px;min-height:40px}
 .acct-close:hover{color:var(--cs-navy)}
 .acct-body{padding:20px 24px 24px}
 .acct-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(221,216,208,.5);font-size:13px}
@@ -795,7 +835,7 @@ body{background:#F4F6F8}
   box-shadow:0 0 0 4px rgba(0,112,242,.12),0 1px 3px rgba(16,40,64,.18)}
 
 /* ── Quick Access tiles: brighter, crisp, hover ── */
-.quick-link{border:1px solid var(--pol-border) !important;box-shadow:var(--pol-shadow) !important;
+.quick-link{border:1px solid var(--pol-border) !important;box-shadow:var(--pol-shadow) !important;position:relative;cursor:pointer;
   transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease}
 .quick-link:hover{transform:translateY(-2px);box-shadow:var(--pol-shadow-hover) !important;
   border-color:var(--pol-blue) !important}
@@ -1162,7 +1202,27 @@ body{overflow-x:hidden}
 /* Mobile: sidebar collapses; the existing hamburger drawer handles nav */
 @media (max-width:900px){
   #app{flex-direction:column}
-  #side-nav{display:none}   /* mobile uses the top hamburger drawer instead */
+  /* The drawer script moves #side-nav INTO the hamburger drawer at this
+     width (it used to be display:none here, which left To-Dos, Team, Feed,
+     Chat, Quote Desk, JD and Deal Room with no way in on a phone). Until it
+     has moved, hide it in its desktop slot. */
+  #app > #side-nav{display:none}
+  .tb-nav.has-sidenav .tb-tab{display:none}   /* the sidebar carries every tab and more */
+  /* In the drawer the sidebar is a light panel, not the navy rail: the
+     drawer paints a white fill behind its children (the ::before above),
+     so the rail's own palette would leave light-grey labels on white. It
+     stays positioned (relative, not the rail's sticky) so it sits above
+     that fill and scrolls with the drawer. */
+  .tb-nav #side-nav{display:flex;position:relative;z-index:1;width:auto;height:auto;max-height:none;overflow:visible;margin:0 12px 14px;border-radius:12px;background:#F4F7FA;color:#16202B}
+  .tb-nav #side-nav .sn-head{display:none}     /* the drawer already says who and where */
+  .tb-nav #side-nav .sn-scroll{overflow:visible;padding:8px}
+  .tb-nav #side-nav .sn-item{color:#16202B}
+  .tb-nav #side-nav .sn-item:hover{background:rgba(0,112,242,.08);color:#0B2A3D}
+  .tb-nav #side-nav .sn-item.active{background:#1264A3;color:#fff}
+  .tb-nav #side-nav .sn-app{color:#3B4A5A}
+  .tb-nav #side-nav .sn-app:hover{background:rgba(0,112,242,.08);color:#0B2A3D}
+  .tb-nav #side-nav .sn-divider{background:#DCE3EA}
+  .tb-nav #side-nav .sn-section-label{color:#6B7A8D}
   #app-body #main{padding:20px 14px 48px}
 }
 
@@ -1216,11 +1276,11 @@ body.dash-editing #bld-overlay{display:flex;position:relative;z-index:5}
 .bld-editing-hint{background:#EAF3FF;border:1px solid #BBD9FF;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#0B4F9E;margin-bottom:12px}
 
 /* ── Builder: config panel (#2) + view-mode canvas (#4) ── */
-#bld-config{position:fixed;top:0;right:-360px;width:340px;height:100vh;background:#fff;z-index:2147483600;
+#bld-config{position:fixed;top:0;right:-360px;width:340px;height:100vh;height:100dvh;background:#fff;z-index:2147483600;
   box-shadow:-8px 0 30px rgba(16,40,64,.16);transition:right .24s ease;display:flex;flex-direction:column}
 #bld-config.open{right:0}
 .cfg-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--pol-border,#E1E6EC);font:700 15px/1 'DM Sans',sans-serif;color:var(--cs-navy,#16202B)}
-.cfg-x{border:none;background:none;font-size:22px;cursor:pointer;color:var(--sub,#556B82);line-height:1}
+.cfg-x{border:none;background:none;font-size:22px;cursor:pointer;color:var(--sub,#556B82);line-height:1;min-width:40px;min-height:40px}
 .cfg-body{flex:1;overflow-y:auto;padding:20px}
 .cfg-row{margin-bottom:16px}
 .cfg-row label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--sub,#556B82);margin-bottom:6px}
@@ -1254,7 +1314,7 @@ body.dash-editing #edit-bar{opacity:1 !important;pointer-events:auto !important;
 
 /* Team Workspace hidden until a Workspace sidebar item is clicked (not a permanent dashboard block) */
 /* Team Workspace as a right-edge slide-in drawer (dashboard stays behind) */
-#sw{position:fixed;top:0;right:0;height:100vh;width:min(760px,92vw);max-width:760px;
+#sw{position:fixed;top:0;right:0;height:100vh;height:100dvh;width:min(760px,92vw);max-width:760px;
   background:#fff;z-index:2147483500;box-shadow:-12px 0 40px rgba(16,40,64,.22);
   transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);
   display:flex;flex-direction:column;border-radius:0}
@@ -1333,11 +1393,11 @@ body.dash-edit-on .db-bar{display:flex;align-items:center;gap:10px;padding:5px 8
 .db-remove{background:rgba(224,87,79,.22);color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font:600 11px/1 'DM Sans',sans-serif}
 .db-remove:hover{background:rgba(224,87,79,.42)}
 /* palette */
-#dash-palette{position:fixed;top:0;right:-320px;width:300px;height:100vh;background:#fff;z-index:2147483600;
+#dash-palette{position:fixed;top:0;right:-320px;width:300px;height:100vh;height:100dvh;background:#fff;z-index:2147483600;
   box-shadow:-10px 0 30px rgba(16,40,64,.18);transition:right .24s ease;display:flex;flex-direction:column}
 #dash-palette.open{right:0}
 .dp-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--pol-border,#E1E6EC);font:700 15px/1 'DM Sans',sans-serif;color:var(--cs-navy,#16202B)}
-.dp-x{border:none;background:none;font-size:22px;cursor:pointer;color:var(--sub,#556B82)}
+.dp-x{border:none;background:none;font-size:22px;cursor:pointer;color:var(--sub,#556B82);min-width:40px;min-height:40px}
 .dp-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
 .dp-item{text-align:left;padding:12px 14px;border:1px solid var(--pol-border,#E1E6EC);border-radius:10px;background:#fff;cursor:pointer;font:600 13px/1 'DM Sans',sans-serif;color:var(--ink,#14171A)}
 .dp-item:hover:not([disabled]){border-color:var(--sap-blue,#2B5FA8);color:var(--sap-blue,#2B5FA8)}
@@ -1874,7 +1934,7 @@ window._omegaReady = function(){
                               <div class="th-compose">
                                 <textarea class="th-input" id="th-msg-text" rows="2" placeholder="Post a message to your team…" maxlength="600"></textarea>
                                 <div class="th-compose-row" style="justify-content:flex-end">
-                                  <button class="th-send" id="th-msg-btn" onclick="postMessage()">Post</button>
+                                  <button class="th-send" id="th-msg-btn" onclick="postTeamMessage()">Post</button>
                                 </div>
                               </div>
                             </div>
@@ -1966,6 +2026,8 @@ window._omegaReady = function(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         <span>Add Widget</span>
       </button>
+      <!-- the way back: this browser chose the classic home (?home=classic sticks); ?home=workspace flips it and the workspace opens -->
+      <a class="edit-toggle" id="go-workspace" href="/?home=workspace" style="text-decoration:none"><span class="et-label">Open Omega Workspace ›</span></a>
       <button class="edit-toggle" id="edit-toggle-btn" onclick="DASH.toggle()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
         <span class="et-label">Edit Dashboard</span>
@@ -2060,6 +2122,21 @@ window._omegaReady = function(){
 
 
     <div id="dev-fixed">
+    <!-- ══ YOUR MODULES (a packaged workspace; hidden for a legacy plan) ══
+         Tommy, 2026-09-26: "see how it's done as modules... that's good".
+         One card per module held, marked Live; then the rungs not held,
+         dashed, with + Add opening the Ladder on that module. Drawn from
+         the package view's own catalog (the server's), never a second list. -->
+    <div class="dash-block mod-none" data-block="modules" id="dash-modules">
+    <div class="block-head">
+      <div>
+        <div class="block-title">Your modules</div>
+        <div class="block-sub" id="modules-sub">What you hold. Every card below is open to you; the dashed ones are one click to add.</div>
+      </div>
+      <a class="view-all" id="modules-ladder" href="#" onclick="openPackageMenu();return false">The Ladder ›</a>
+    </div>
+    <div class="mod-grid" id="modules-grid"></div>
+    </div><!-- /.dash-block modules -->
     <div class="dash-block" data-block="apps">
     <!-- ══ MY APPLICATIONS ══ -->
     <div class="block-head">
@@ -2083,9 +2160,6 @@ window._omegaReady = function(){
     <div class="pm-toast" id="pm-toast"></div>
 
     </div><!-- /.dash-block apps -->
-    <div class="dash-block" data-block="quick">
-    <!-- ══ QUICK LINKS (Open Project Portal / Site Map / Compute / How It Works) ══ -->
-    </div><!-- /.dash-block quick -->
     <div class="dash-block" data-block="command">
     <div class="block-head">
       <div><div class="block-title">Quick Access</div></div>
@@ -2284,7 +2358,7 @@ window._omegaReady = function(){
     <div class="block-head">
       <div>
         <div class="block-title">Project Portfolio</div>
-        <div class="block-sub">Sample rows shown until projects are tagged — replace via Firestore or the constants above</div>
+        <div class="block-sub">Every project you own — stage, storage, capex, incentives and what happens next</div>
       </div>
       <button class="block-toggle" id="portfolio-toggle" onclick="togglePortfolio()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -2313,33 +2387,10 @@ window._omegaReady = function(){
 
 
     </div><!-- /.dash-block portfolio -->
-    <div class="dash-block" data-block="guides">
-    <!-- ══ GUIDES & TRAINING (tutorial PDF + video walkthrough) ══ -->
-    <div class="block-head" style="margin-top:26px">
-      <div><div class="block-title">Guides &amp; Training</div></div>
-    </div>
-    <div class="quick-row">
-      <!-- Guided Build Walkthrough → open the tutorial page -->
-      <a class="quick-link" href="guided-build-walkthrough.html" target="_blank" rel="noopener">
-        <div class="ql-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
-        <div class="ql-title">Guided Build Walkthrough</div>
-        <div class="ql-desc">Step-by-step SiteMap Designer tutorial</div>
-      </a>
-      <!-- Download tutorial as PDF (tenant-branded) -->
-      <a class="quick-link" href="guided-build-walkthrough.pdf" download>
-        <div class="ql-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
-        <div class="ql-title">Download Tutorial (PDF)</div>
-        <div class="ql-desc"><span id="ql-brand">Workspace</span>-branded walkthrough</div>
-      </a>
-      <!-- Guided Build video tutorial -->
-      <a class="quick-link" onclick="openVideoTutorial()">
-        <div class="ql-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
-        <div class="ql-title">Video Tutorial</div>
-        <div class="ql-desc">Watch the guided build video</div>
-      </a>
-    </div>
-
-    </div><!-- /.dash-block guides -->
+    <!-- Guides & Training lived here: a walkthrough page, a branded PDF and a
+         video tile. None of the three assets exists yet (the links 404ed on
+         every tenant's dashboard), so the block is out until one does — the
+         markup is in git history; #video-modal below is still wired. -->
     </div><!-- /#dev-fixed -->
     </div><!-- /#dev-main -->
 
@@ -2499,6 +2550,13 @@ window._omegaReady = function(){
     </div>
     <div class="acct-body">
 
+      <!-- Home: the classic dashboard or the Omega Workspace. ?home=workspace
+           on this browser flips back (OmegaWorkspaceShell.homeOf is the rule). -->
+      <div class="acct-profile" id="acct-home" style="border-bottom:1px solid var(--cs-border);padding-bottom:16px;margin-bottom:16px">
+        <div style="font:600 14px 'DM Sans',sans-serif;margin-bottom:4px">Home</div>
+        <div style="font-size:13px;color:var(--cs-sub);margin-bottom:10px">You are on the classic dashboard. The Omega Workspace is the new home: the hub, Today, your modules and the store.</div>
+        <a class="acct-btn" href="/?home=workspace" style="display:inline-block;text-decoration:none">Switch to Omega Workspace</a>
+      </div>
       <!-- Profile: display name + avatar (shown across the Team Hub) -->
       <div class="acct-profile">
         <div class="acct-av-wrap">
@@ -2577,6 +2635,27 @@ window._omegaReady = function(){
            /api/tenant-billing via the Admin SDK; nothing client-side can write
            it, which is what makes it worth reading. -->
       <div class="acct-sec-title">Billing &amp; plan</div>
+      <!-- Packaged workspace (Phase 10B): what was bought and what is on, the
+           state, the next invoice, the open invoice with its QuickBooks pay
+           link and "I've paid", and the door to add a module: the one package
+           menu (omega-package-menu.js), handed this page's own package view.
+           Filled by renderPackagedBilling(); a legacy tenant never sees it. -->
+      <div id="acct-package" style="display:none">
+        <div id="acct-package-rows"></div>
+        <div id="acct-package-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px"></div>
+        <div class="acct-msg" id="acct-package-msg"></div>
+        <div class="acct-sec-title" style="font-size:12px;opacity:.8">The Ladder</div>
+        <div class="acct-note" id="acct-package-ladder">Build your own experience and pay for what you need to run your business. Every module is an opt-in, and Omega Logic is by department: Office, Plant, Materials &amp; Purchasing, Logistics &amp; Warranty and the Customer App each stand on their own rung.</div>
+        <div class="acct-note" id="acct-package-plan" style="margin-top:8px">—</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class="acct-av-btn" id="acct-package-add" onclick="openPackageMenu(null)">Open the Ladder</button>
+          <a class="acct-av-btn ghost" href="/offerings.html" target="_blank" rel="noopener" style="text-decoration:none">Every rung and its price</a>
+        </div>
+        <div class="acct-msg" id="acct-package-autopay">Each invoice arrives by email on your billing day with its pay link. A card saved on QuickBooks' page pays the next one in one click.</div>
+        <div class="acct-sec-title" style="font-size:12px;opacity:.8">Invoices</div>
+        <div id="acct-package-invoices" class="acct-msg">—</div>
+      </div>
+      <div id="acct-legacy-billing">
       <div class="acct-row"><span class="k">Plan</span><span class="v" id="acct-tier">—</span></div>
       <div class="acct-row"><span class="k">Add-ons</span><span class="v" id="acct-addons">—</span></div>
       <div class="acct-row"><span class="k">Amount due</span><span class="v" id="acct-amt">—</span></div>
@@ -2590,6 +2669,7 @@ window._omegaReady = function(){
       <div class="acct-msg" id="acct-billing-msg"></div>
       <div class="acct-sec-title" style="font-size:12px;opacity:.8">Invoices</div>
       <div id="acct-invoices" class="acct-msg">—</div>
+      </div>
 
       <!-- Deliberately a SECOND list. Invoices above are what Stripe billed;
            this is what ClearSky changed about the terms. Merging them would
@@ -2638,6 +2718,7 @@ window._omegaReady = function(){
 <script src="/omega-brand.js"></script>
 <script src="/omega-tenant.js"></script>
 <script src="/omega-whitelabel.js"></script>
+<script src="/omega-package-menu.js?v=2"></script>
 <!-- Terms of Service acceptance gate. Shared platform file, no tenant data.
      Wraps toggleAuthMode / emailAuth / showApp defined further down, so it
      polls briefly for them rather than assuming script order. -->
@@ -2666,6 +2747,11 @@ window._omegaReady = function(){
      Tenant-neutral; belongs upstream beside omega-assets.js. -->
 <script src="/omega-fleet.js"></script>
 <script src="/omega-tools.js?v=9"></script>
+<!-- Omega Workspace's chrome. Loaded here for ONE function, wantsWorkspace():
+     the rule for where "home" is for this person (omega_orgs.shell =
+     'workspace', or ?home=workspace on this browser). The rule lives in that
+     file so this page, the workspace and the legacy pages cannot disagree. -->
+<script src="/omega-workspace-shell.js"></script>
 <!-- ONE New Project dialog for every page that has one. There were two,
      behind the same button and the same function names, and they wrote
      different documents. -->
@@ -2719,6 +2805,7 @@ var PORTAL_DEFAULT_DOMAIN = OmegaBrand.defaultDomain(WORKSPACES);
 // Defaults to null; every consumer must handle "no workspace yet".
 var WORKSPACE = null;
 window.OMEGA_WORKSPACE = null;
+window.OMEGA_PRESENCE_BY_PAGE = true;   /* this page writes its own team_members presence (registerMember); omega-tenant.js writes it on every other page */
 
 // ══════════ FIREBASE INIT ══════════
 let CFG, auth, db, currentUser = null, currentOrg = null;
@@ -2896,6 +2983,11 @@ var _omegaOnAuth = function (user, tries) {
         setTimeout(function () { _omegaOnAuth(user, (tries || 0) + 1); }, 250);
         return;
       }
+      /* Refused: this is the sign-in card's screen, and only that. Without
+         these two lines the shell (sidebar, empty topbar, zero KPIs) sat in
+         normal flow under the card, scrollable, with a user present. */
+      document.body.classList.add('signed-out');
+      showLogin();
       showAuthErr(OmegaBrand.accessMessage(email, WORKSPACES));
       return;
     }
@@ -2924,6 +3016,26 @@ var _omegaOnAuth = function (user, tries) {
        is already up; this only ever narrows what is offered. A failed read
        must not lock a paying customer out of tools they have — so on any
        error the tier decides, exactly as it did before. */
+    /* ── OMEGA WORKSPACE IS HOME ─────────────────────────────────────────
+       A signed-in visit goes on to workspace.html, the hub-first home, on
+       the same origin with the same session — unless the tenant's record
+       says shell: 'classic', the workspace is a partner portfolio, or this
+       browser asked for the classic page (?home=classic; ?stay=classic for
+       one visit). The shell may only be known once omega-tenant.js has read
+       the org record, so nobody is sent on before the entitlements say
+       where home is (wantsWorkspace() is false while it is unknown). */
+    var goHome = function (w) {
+      if (!(window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace(w || window.OMEGA_WORKSPACE))) return false;
+      showRedirecting('Omega'); window.location.replace('/workspace'); return true;
+    };
+    if (goHome(ws)) return;
+    /* ASK, do not listen. The entitlements may already have landed while this
+       handler was still resolving the workspace (a derived workspace answers
+       at once; a real host waits for its pin), and a listener added now has
+       missed that event for good. onEntitlements() answers immediately with
+       the merged workspace when they are known and waits when they are not. */
+    if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(function (w) { goHome(w); });
+    else window.addEventListener('omega:entitlements', function (e) { goHome(e.detail); });
     showApp(user);
     applyToolLocks();   // gate tools by workspace.unlockedTools (demo Enterprise = all unlocked)
     (function () {
@@ -2944,7 +3056,8 @@ var _omegaOnAuth = function (user, tries) {
           if (!snap.exists) return;
           var b = snap.data() || {};
           var changed = false;
-          if (Array.isArray(b.toolAccess) && b.toolAccess.length) {
+          if (b.packaged === true) return; // omega-tenant owns the server package projection.
+          if (Array.isArray(b.toolAccess)) {
             ws.toolAccess = b.toolAccess.slice(); changed = true;
           }
           if (b.toolOverrides && typeof b.toolOverrides === 'object' &&
@@ -2993,6 +3106,7 @@ function showRedirecting(name){
 function showLogin() {
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
+  document.body.style.overflow = '';   // a drawer's scroll lock never outlives the session
 }
 
 /* Resolve the friendliest available name: saved profile → Firebase displayName
@@ -3000,7 +3114,7 @@ function showLogin() {
 function _greetName(user) {
   if (_myProfile && _myProfile.name) return _myProfile.name;
   if (user && user.displayName) return user.displayName;
-  if (user && user.email) return user.email;
+  if (user && user.email) return String(user.email).split('@')[0];
   return 'there';
 }
 /* (Re)render the welcome line + topbar name. Called at sign-in and again once
@@ -3382,7 +3496,9 @@ function _arc(cx,cy,r,a0,a1){
 var _wgDonutChart=null, _wgValueChart=null;
 
 function renderWidgets(k, counts){
-  if (typeof Chart === 'undefined'){ return; } /* CDN not ready yet */
+  /* The numbers paint whether or not Chart.js arrived (a kiosk browser that
+     blocks the CDN used to get two blank cards); only the canvases need it. */
+  var hasChart = (typeof Chart !== 'undefined');
 
   /* ── DONUT: portfolio by grouped stage (Chart.js) ── */
   var groups = WG_GROUPS.map(function(g){
@@ -3395,7 +3511,7 @@ function renderWidgets(k, counts){
   var dCanvas = document.getElementById('wg-donut-canvas');
   if (_wgDonutChart){ _wgDonutChart.destroy(); _wgDonutChart=null; }
   var hasData = total>0;
-  _wgDonutChart = new Chart(dCanvas, {
+  _wgDonutChart = !hasChart ? null : new Chart(dCanvas, {
     type:'doughnut',
     data:{
       labels: hasData ? groups.map(function(g){return g.label;}) : ['No sites'],
@@ -3446,7 +3562,7 @@ function renderWidgets(k, counts){
   if (_wgValueChart){ _wgValueChart.destroy(); _wgValueChart=null; }
   var g1=vCanvas.getContext('2d').createLinearGradient(0,0,0,160);
   g1.addColorStop(0,'rgba(46,156,60,.22)'); g1.addColorStop(1,'rgba(46,156,60,0)');
-  _wgValueChart = new Chart(vCanvas, {
+  _wgValueChart = !hasChart ? null : new Chart(vCanvas, {
     type:'line',
     data:{ labels:MO, datasets:[
       { label:'Portfolio capex', data:capSeries, borderColor:'#2E9C3C', backgroundColor:g1,
@@ -3960,7 +4076,7 @@ function renderMessages(msgs){
   box.innerHTML = h;
 }
 
-function postMessage(){
+function postTeamMessage(){
   var el = document.getElementById('th-msg-text');
   var text = (el.value||'').trim();
   if (!text){ el.focus(); return; }
@@ -4355,6 +4471,14 @@ function _providerId(){
    Everything degrades to "—" rather than erroring. A tenant with no billing
    document is the normal state for an account ClearSky has not priced yet,
    and a red failure on the account page for that is noise. */
+/* Billing dates arrive as ISO strings (stripe-webhook, tenant-signup) and were
+   printed raw: "trial ends 2026-10-26T14:03:11.512Z". A day is enough. */
+function _acctDay(v){
+  if (!v) return '';
+  var d = (v && v.toDate) ? v.toDate() : new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
 function _money(n){
   n = Number(n);
   if (!isFinite(n)) return '—';
@@ -4366,6 +4490,12 @@ function loadBilling(){
   var ref = db.collection('omega_orgs').doc(org).collection('billing').doc('current');
   ref.get().then(function(d){
     var b = (d && d.exists) ? d.data() : {};
+    /* A packaged workspace (the QuickBooks package): its own section; the
+       legacy rows, the Stripe portal and the Stripe invoices stay hidden. */
+    var pk = document.getElementById('acct-package'), lg = document.getElementById('acct-legacy-billing');
+    if (b.packaged === true) { if (pk) pk.style.display = ''; if (lg) lg.style.display = 'none'; renderPackagedBilling(b); return; }
+    if (pk) pk.style.display = 'none'; if (lg) lg.style.display = '';
+    loadInvoices();
     setText('acct-tier',   b.tier || 'not yet priced');
     setText('acct-addons', (b.addons && b.addons.length) ? b.addons.join(', ') : 'none');
     setText('acct-amt',    b.amountDue == null ? '—' : _money(b.amountDue));
@@ -4373,8 +4503,8 @@ function loadBilling(){
        account reads "nothing due" while money has already changed hands —
        which is the version a customer disputes. */
     setText('acct-paid',   b.amountPaid == null ? '—'
-                           : _money(b.amountPaid) + (b.lastPaidAt ? (' on ' + b.lastPaidAt) : ''));
-    setText('acct-due',    b.subscriptionDue || (b.trialEndsAt ? ('trial ends ' + b.trialEndsAt) : '—'));
+                           : _money(b.amountPaid) + (b.lastPaidAt ? (' on ' + _acctDay(b.lastPaidAt)) : ''));
+    setText('acct-due',    b.subscriptionDue ? _acctDay(b.subscriptionDue) : (b.trialEndsAt ? ('trial ends ' + _acctDay(b.trialEndsAt)) : '—'));
     if (b.note){
       setText('acct-note', b.note);
       var nr = document.getElementById('acct-note-row'); if (nr) nr.style.display = '';
@@ -4386,9 +4516,7 @@ function loadBilling(){
        button without one produces a 400 from the endpoint and a dead end. */
     var portal = document.getElementById('acct-portal');
     if (portal && b.stripeCustomerId) portal.style.display = '';
-  }).catch(function(){ /* no billing doc yet — leave the dashes */ });
-
-  loadInvoices();
+  }).catch(function(){ /* no billing doc yet — leave the dashes */ loadInvoices(); });
 
   ref.collection('history').orderBy('at', 'desc').limit(12).get().then(function(sn){
     var host = document.getElementById('acct-billing-history');
@@ -4401,8 +4529,12 @@ function loadBilling(){
       var parts = [];
       if (c.tier) parts.push('plan → ' + c.tier);
       if (c.amountDue != null) parts.push('amount due ' + _money(c.amountDue));
-      if (c.subscriptionDue) parts.push('due ' + c.subscriptionDue);
+      if (c.subscriptionDue) parts.push('due ' + _acctDay(c.subscriptionDue));
       if (c.addons) parts.push('add-ons: ' + (c.addons.length ? c.addons.join(', ') : 'none'));
+      /* packaged history: the engine's own rows (package-activate, plan-change-apply…) */
+      if (h.action && /^package-|^plan-change|^pack-|^auto-topup/.test(h.action)) parts.unshift(String(h.action).replace(/^package-/, '').replace(/-/g, ' '));
+      if (Array.isArray(c.modules)) parts.push('on: ' + _moduleNames(c.modules).join(', '));
+      if (c.packagingState) parts.push(String(c.packagingState).replace(/_/g, ' '));
       rows.push('<div>' + escHtml(when) + ' — ' + escHtml(parts.join(' · ') || 'terms updated') + '</div>');
     });
     host.innerHTML = rows.join('');
@@ -4445,6 +4577,150 @@ function loadInvoices(){
   });
 }
 
+/* ── PACKAGED BILLING (Phase 10B: pay and change the plan in settings) ──
+   billing/current is readable by the tenant, so the facts come from there;
+   the invoices with their pay links and the monthly figure come from
+   GET /api/plan-change (owner or admin); "I've paid" is the same look at
+   QuickBooks the signup page and the billing bar make (reconcile-now);
+   adding a module opens the one package menu with THIS page's package
+   view, and a change refreshes the view so the tiles follow. */
+function _moduleNames(keys){
+  var view = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.packageAccess) || {}, cat = view.catalog || [];
+  return (keys || []).map(function(k){ for (var i = 0; i < cat.length; i++) if (cat[i].key === k) return cat[i].name; return k; });
+}
+function _stateLabel(b, view){
+  var s = b.packagingState;
+  var text = { awaiting_payment: 'Awaiting your first payment', paid: 'Active', trial: 'Trial', past_due: 'Payment overdue', past_due_lite: 'Overdue · Omega Design only', pending: 'Awaiting approval' }[s] || (s ? String(s).replace(/_/g, ' ') : '—');
+  if (view && view.readOnly && s !== 'awaiting_payment' && s !== 'pending') text += ' · read-only until paid';
+  return text;
+}
+function _row(k, v, id){ return '<div class="acct-row"><span class="k">' + escHtml(k) + '</span><span class="v"' + (id ? ' id="' + id + '"' : '') + '>' + escHtml(v == null || v === '' ? '—' : String(v)) + '</span></div>'; }
+function renderPackagedBilling(b){
+  var ws = window.OMEGA_WORKSPACE || {}, view = ws.packageAccess || {};
+  var bought = (b.subscription && Array.isArray(b.subscription.modules)) ? b.subscription.modules : (b.modules || ['lite']);
+  var on = b.modules || ['lite'];
+  var rows = _row('Package', _moduleNames(bought).join(', '), 'acct-pk-package');
+  if (bought.join() !== on.join()) rows += _row('On now', _moduleNames(on).join(', ') + (b.packagingState === 'awaiting_payment' ? ' (the rest opens when the first invoice is paid)' : ''), 'acct-pk-on');
+  rows += _row('Status', _stateLabel(b, view), 'acct-pk-status');
+  rows += _row('Billing', (b.interval === 'annual' ? 'Yearly, ten months of twelve' : 'Monthly') + (b.billingDay ? ' · on the ' + b.billingDay + (b.billingDay % 10 === 1 && b.billingDay !== 11 ? 'st' : b.billingDay % 10 === 2 && b.billingDay !== 12 ? 'nd' : b.billingDay % 10 === 3 && b.billingDay !== 13 ? 'rd' : 'th') : ''), 'acct-pk-billing');
+  rows += _row('Monthly membership', '…', 'acct-pk-monthly');
+  rows += _row('Next invoice', b.nextInvoiceOn ? _acctDay(b.nextInvoiceOn) : '—', 'acct-pk-next');
+  if (b.paidThrough) rows += _row('Paid through', _acctDay(b.paidThrough), 'acct-pk-paid');
+  rows += _row('Amount due', b.amountDue == null ? '—' : (b.amountDue > 0 ? _money(b.amountDue) : 'Nothing due'), 'acct-pk-due');
+  document.getElementById('acct-package-rows').innerHTML = rows;
+  var acts = document.getElementById('acct-package-actions'); acts.innerHTML = '';
+  if (b.paymentLink && b.amountDue > 0){
+    var pay = document.createElement('a'); pay.id = 'acct-pk-pay'; pay.className = 'acct-btn'; pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.cssText = 'text-decoration:none;text-align:center;width:auto;flex:1'; pay.textContent = 'Pay in QuickBooks'; acts.appendChild(pay);
+    var paid = document.createElement('button'); paid.id = 'acct-pk-paid-btn'; paid.className = 'acct-btn'; paid.style.cssText = 'width:auto;flex:1;background:#fff;color:var(--cs-navy);border:1.5px solid var(--cs-border)'; paid.textContent = "I've paid"; paid.onclick = function(){ checkPackagePayment(paid); }; acts.appendChild(paid);
+  }
+  var admin = !!(window.OmegaTenant && OmegaTenant.isAdmin && OmegaTenant.isAdmin());
+  var plan = document.getElementById('acct-package-plan'), add = document.getElementById('acct-package-add');
+  if (!admin){
+    plan.textContent = 'Your workspace owner or an administrator climbs the Ladder and pays the invoices. Ask them to add what you need.';
+    add.style.display = 'none';
+    document.getElementById('acct-package-invoices').textContent = 'Invoices are sent to your billing contact; an administrator sees them here.';
+    setText('acct-pk-monthly', '—');
+    return;
+  }
+  add.style.display = '';
+  plan.textContent = b.packagingState === 'paid' ? 'Add a rung any time: it is priced for the rest of this cycle, invoiced in QuickBooks, and on the moment the payment clears.' : 'The Ladder opens once your current invoice is paid.';
+  var u = currentUser || (auth && auth.currentUser); if (!u) return;
+  u.getIdToken().then(function(tok){
+    return fetch('/api/plan-change', { cache:'no-store', headers:{ 'Authorization':'Bearer ' + tok } }).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||r.status); return j; }); });
+  }).then(function(s){
+    setText('acct-pk-monthly', s.monthlyDisplay || '—');
+    if (s.gate && !s.gate.canApply && s.gate.reason) plan.textContent = s.gate.reason;
+    var host = document.getElementById('acct-package-invoices');
+    if (!s.invoices || !s.invoices.length){ host.textContent = 'No invoices issued yet.'; return; }
+    host.innerHTML = s.invoices.map(function(inv){
+      var kind = inv.kind === 'change' ? 'Change' + (inv.names ? ' · ' + inv.names.join(', ') : '') : inv.kind === 'pack' ? 'Usage pack' : 'Subscription';
+      var label = escHtml(_acctDay(inv.date)) + ' — ' + escHtml(inv.display) + ' · ' + escHtml(kind) + ' · ' + escHtml(inv.state);
+      return '<div data-invoice-state="' + escHtml(inv.state) + '">' + label + (inv.paymentLink ? ' · <a href="' + escHtml(inv.paymentLink) + '" target="_blank" rel="noopener">Pay in QuickBooks</a>' : '') + '</div>';
+    }).join('');
+  }).catch(function(e){
+    setText('acct-pk-monthly', '—');
+    document.getElementById('acct-package-invoices').textContent = 'Invoices unavailable — ' + (e.message || e);
+  });
+}
+/* "I've paid": one look at QuickBooks now; paid, the package view is refreshed and the panel repainted. */
+function checkPackagePayment(btn){
+  var u = currentUser || (auth && auth.currentUser); if (!u) return;
+  var msg = document.getElementById('acct-package-msg'); btn.disabled = true; btn.textContent = 'Checking QuickBooks…'; msg.textContent = '';
+  u.getIdToken().then(function(tok){
+    return fetch('/api/plan-change', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tok }, body: JSON.stringify({ action:'reconcile-now' }) }).then(function(r){ return r.json(); });
+  }).then(function(j){
+    if (j && j.paid){ msg.textContent = 'Paid. Your workspace is opening…'; msg.className = 'acct-msg ok'; return (window.OmegaTenant && OmegaTenant.refreshPackage ? OmegaTenant.refreshPackage() : Promise.resolve()).then(function(){ loadBilling(); }); }
+    msg.textContent = (j && j.error) ? j.error : j && j.throttled ? 'QuickBooks was checked a moment ago: not paid yet. Try again in a few seconds.' : 'Not paid yet as far as QuickBooks knows. A card payment shows within a minute; try again then.';
+    btn.disabled = false; btn.textContent = "I've paid";
+  }).catch(function(e){ msg.textContent = 'Could not check — ' + (e.message || e); btn.disabled = false; btn.textContent = "I've paid"; });
+}
+/* the one package menu, handed this page's package view; a change refreshes the view so the tiles and the panel follow */
+function openPackageMenu(moduleKey){
+  var ws = window.OMEGA_WORKSPACE; if (!ws || !ws.packaged || !window.OmegaPackageMenu) return false;
+  return OmegaPackageMenu.open(moduleKey || undefined, { view: ws.packageAccess, onChanged: function(){
+    (window.OmegaTenant && OmegaTenant.refreshPackage ? OmegaTenant.refreshPackage() : Promise.resolve()).then(function(){ try { loadBilling(); } catch(e){} try { if (window.renderApps) renderApps(); } catch(e){} });
+  } });
+}
+/* the module a tool belongs to, from the package view's catalog */
+function _moduleOfTool(key){
+  var view = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.packageAccess) || {}, cat = view.catalog || [];
+  for (var i = 0; i < cat.length; i++) if ((cat[i].tools || []).indexOf(key) >= 0) return cat[i];
+  return null;
+}
+/* prices for the lock overlays: one read of the server catalog per visit */
+var _modulePrices = null, _modulePricesAsked = false;
+function _fetchModulePrices(){
+  if (_modulePricesAsked) return; _modulePricesAsked = true;
+  var u = currentUser || (auth && auth.currentUser); if (!u || !window.fetch) return;
+  u.getIdToken().then(function(tok){ return fetch('/api/package-catalog', { cache:'no-store', headers:{ 'Authorization':'Bearer ' + tok } }); })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){ if (!j || !j.modules) return; _modulePrices = {}; j.modules.forEach(function(m){ _modulePrices[m.key] = m.priceDisplay; }); try { applyToolLocks(); } catch(e){} try { renderModuleCards(); } catch(e){} })
+    .catch(function(){});
+}
+/* ── Your modules (Tommy, 2026-09-26: "see how it's done as modules... that's good") ──
+   One card per module the workspace holds, marked Live, in shelf order; then
+   what it bought but is not on yet (the first invoice unpaid); then up to
+   three rungs it does not hold, dashed, with + Add opening the Ladder on that
+   module. Everything is the package view's own catalog and the server's
+   prices; there is no second list. A legacy plan shows nothing here. */
+var MOD_SHELF_ORDER = ['floor','addon','standard','premium','deliverable','platform'];
+var MOD_GLYPH = { lite:'\u25C8', gridatlas:'\u2317', storage:'\u25AE', estimate:'\u25A4', evrebates:'\u26A1', plansets:'\u25A7', siteintel:'\u25CE', engineering:'\u2699', finance:'$', compute:'\u25A6', ops:'\u25C9', whitelabel:'\u25EB', permitting:'\u2713', sitefinder:'\u25CE', 'logic-office':'\u25F7', 'logic-plant':'\u2699', 'logic-materials':'\u25A6', 'logic-logistics':'\u279C', 'logic-customer':'\u25CD' };
+function _toolByKey(key){ var all = (window.OMEGATools && OMEGATools.all) ? OMEGATools.all() : []; for (var i=0;i<all.length;i++) if (all[i].key===key) return all[i]; return null; }
+function _moduleCard(m, state){
+  var held = state === 'held', bought = state === 'bought', logic = m.shelf === 'platform';
+  var tools = (m.tools||[]).map(function(k){ var t=_toolByKey(k); return t ? (t.name||k) : null; }).filter(Boolean);
+  var first = (m.tools||[]).map(_toolByKey).filter(function(t){ return t && t.icon; })[0];
+  var ico = first ? '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="'+esc(first.icon)+'"/></svg>' : esc(MOD_GLYPH[m.key]||'\u25C8');
+  var price = !held && _modulePrices && _modulePrices[m.key] ? _modulePrices[m.key] : '';
+  var line = held ? (m.shelfLabel||m.shelf) : bought ? 'Yours \u00B7 opens when the first invoice is paid' : 'Not in your plan' + (price ? ' \u00B7 ' + price : '');
+  var h = '<div class="mod-card'+(held?'':' off')+(logic?' logic':'')+'" data-module="'+esc(m.key)+'" data-held="'+(held?'1':bought?'bought':'0')+'">';
+  h += held ? '<span class="mod-live">Live</span>' : bought ? '<span class="mod-soon">Paid for</span>' : '<button type="button" class="mod-add" data-add-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-add-module\'))">+ Add</button>';
+  h += '<div class="mod-head"><div class="mod-ico">'+ico+'</div><div style="min-width:0"><div class="mod-name">'+esc(m.name)+'</div><div class="mod-shelf">'+esc(line)+'</div></div></div>';
+  h += '<ul class="mod-feat">'+(m.features||[]).slice(0,3).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')+'</ul>';
+  if ((held || bought) && m.key !== 'lite') h += '<button type="button" class="ows-pill" data-remove-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-remove-module\'))">Opt out</button>';
+  var shown = tools.slice(0, held ? 4 : 3);
+  h += '<div class="mod-tools">'+shown.map(function(n){ return '<span class="mod-chip">'+esc(n)+'</span>'; }).join('')+(tools.length>shown.length?'<span class="mod-chip">+'+(tools.length-shown.length)+'</span>':'')+'</div></div>';
+  return h;
+}
+function renderModuleCards(){
+  var block = document.getElementById('dash-modules'), grid = document.getElementById('modules-grid'); if (!block || !grid) return;
+  var ws = window.OMEGA_WORKSPACE, view = ws && ws.packaged ? ws.packageAccess : null;
+  if (!view || !Array.isArray(view.catalog) || !view.catalog.length){ block.classList.add('mod-none'); grid.innerHTML = ''; return; }
+  var held = view.modules || [], b = (window.OmegaTenant && OmegaTenant.billing) || {};
+  var bought = (b.subscription && Array.isArray(b.subscription.modules)) ? b.subscription.modules : [];
+  var cat = view.catalog.slice().sort(function(a,c){ return MOD_SHELF_ORDER.indexOf(a.shelf) - MOD_SHELF_ORDER.indexOf(c.shelf); });
+  var mine = cat.filter(function(m){ return held.indexOf(m.key) >= 0; });
+  var owed = cat.filter(function(m){ return held.indexOf(m.key) < 0 && bought.indexOf(m.key) >= 0; });
+  var rest = cat.filter(function(m){ return held.indexOf(m.key) < 0 && bought.indexOf(m.key) < 0; });
+  var logicOn = held.indexOf('logic-office') >= 0 || bought.indexOf('logic-office') >= 0;
+  var offer = (logicOn ? rest.filter(function(m){ return m.shelf === 'platform'; }) : []).concat(rest.filter(function(m){ return m.shelf !== 'platform'; })).slice(0, 3);
+  _fetchModulePrices();
+  var plan = b.plan ? b.plan.charAt(0).toUpperCase() + b.plan.slice(1) : (mine.length + owed.length <= 1 ? 'Lite' : 'Lite + modules');
+  var sub = document.getElementById('modules-sub');
+  if (sub) sub.textContent = 'What ' + ((ws && ws.clientName) || 'your workspace') + ' holds on ' + plan + '. Every card below is open to you; the dashed ones are one click to add.';
+  grid.innerHTML = mine.map(function(m){ return _moduleCard(m, 'held'); }).join('') + owed.map(function(m){ return _moduleCard(m, 'bought'); }).join('') + offer.map(function(m){ return _moduleCard(m, 'off'); }).join('');
+  block.classList.remove('mod-none');
+}
 function openBillingPortal(){
   var u = currentUser || (auth && auth.currentUser);
   if (!u) return;
@@ -5184,7 +5460,15 @@ function applyToolLocks(){
   if(!ws){ return; }
   // Enterprise / internal tiers see everything — never lock. Unless an
   // explicit allowlist says otherwise; see the note below.
-  if(!(ws.toolAccess && ws.toolAccess.length) &&
+  /* …unless the workspace is awaiting approval: omega-tenant.js hands over
+     unlockedTools = [] with pendingApproval set, and a signup on a trial
+     record is tier level 3, so this return used to leave every tool live
+     under the "awaiting approval" strip. */
+  /* Absent ≠ empty (CLAUDE.md): a present toolAccess array is the
+     allowlist at any length — omega-tenant.js hands a PACKAGED workspace
+     its package's tools that way, [] included when read-only — so the
+     tier's early return is only for a workspace with no list at all. */
+  if(!Array.isArray(ws.toolAccess) && !ws.pendingApproval &&
      (ws.tierLevel >= 3 || ws.accountTier === 'Enterprise' || ws.accountTier === 'Internal')){ return; }
   // Prefer an explicit unlockedTools allowlist; otherwise fall back to the
   // requiredTools defined per workspace. If neither exists, unlock everything
@@ -5193,8 +5477,13 @@ function applyToolLocks(){
      enterprise/internal early return above — that return exists so a tier-3
      account is not accidentally locked out, and an explicit allowlist is not
      an accident. Checked before the list is chosen for that reason. */
-  var list = (ws.toolAccess && ws.toolAccess.length) ? ws.toolAccess
+  var list = Array.isArray(ws.toolAccess) ? ws.toolAccess
            : (ws.unlockedTools || ws.requiredTools);
+  /* Awaiting approval: nothing opens, whatever the tier says. omega-tenant.js
+     hands over unlockedTools = [] once, but every later OmegaBrand.resolve()
+     re-merges the workspace and recomputes the list from the (trial) tier, so
+     the [] did not survive to this read. The flag does. */
+  if (ws.pendingApproval) list = [];
   if(!list){ return; }
   var unlocked = {};
   for(var i=0;i<list.length;i++){ unlocked[list[i]] = true; }
@@ -5217,7 +5506,12 @@ function applyToolLocks(){
 }
 
 function lockTile(tile, key){
-  if(tile.classList.contains('locked')) return;
+  if(tile.classList.contains('locked')){
+    /* already locked: the price may have arrived since */
+    var ws0 = window.OMEGA_WORKSPACE, m0 = ws0 && ws0.packaged ? _moduleOfTool(key) : null, sub0 = tile.querySelector('.pm-lock-sub');
+    if (m0 && sub0 && _modulePrices && _modulePrices[m0.key] && sub0.textContent.indexOf('$') < 0) sub0.textContent = m0.name + ' · ' + _modulePrices[m0.key];
+    return;
+  }
   tile.classList.add('locked');
   // neutralize existing navigation
   tile.removeAttribute('href');
@@ -5231,24 +5525,38 @@ function lockTile(tile, key){
   badge.textContent = 'Upgrade';
   tile.appendChild(badge);
 
-  var name = tile.querySelector('.pm-name');
+  // .pm-name on a card, .ql-title on a Quick Access tile.
+  var name = tile.querySelector('.pm-name, .ql-title');
   var label = name ? name.textContent : 'This module';
 
   var lock = document.createElement('div');
   lock.className = 'pm-lock';
-  lock.innerHTML =
+  /* A packaged workspace: the tile names the module the tool comes with and
+     its price, and the button opens the one package menu on it; nobody
+     emails anybody. A legacy plan keeps the request. */
+  var ws2 = window.OMEGA_WORKSPACE, mod = ws2 && ws2.packaged ? _moduleOfTool(key) : null;
+  if (ws2 && ws2.packaged){ _fetchModulePrices(); badge.textContent = 'Add'; tile.setAttribute('data-lock-module', mod ? mod.key : ''); }
+  var price = mod && _modulePrices && _modulePrices[mod.key] ? _modulePrices[mod.key] : '';
+  lock.innerHTML = ws2 && ws2.packaged ?
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>'+
+    '<div class="pm-lock-txt">Not in your package</div>'+
+    '<div class="pm-lock-sub">'+esc2(mod ? mod.name + (price ? ' · ' + price : '') : label)+'</div>'+
+    '<button class="pm-lock-cta" onclick="event.stopPropagation();openUpgrade(this)">'+esc2(mod ? 'Add ' + mod.name : 'See your plan')+'</button>'
+  :
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+
     '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'+
     '<div class="pm-lock-txt">Upgrade to unlock</div>'+
-    '<div class="pm-lock-sub">'+label+' is available on a higher plan.</div>'+
+    '<div class="pm-lock-sub">'+esc2(label)+' is available on a higher plan.</div>'+
     '<button class="pm-lock-cta" onclick="event.stopPropagation();openUpgrade(this)">Request access</button>';
   tile.appendChild(lock);
 }
 
 function openUpgrade(el){
   var tile = el.closest ? el.closest('[data-tool]') : null;
-  var name = tile ? (tile.querySelector('.pm-name')||{}).textContent : 'this module';
-  showUpgradeModal(name);
+  var name = tile ? (tile.querySelector('.pm-name, .ql-title')||{}).textContent : '';
+  var ws = window.OMEGA_WORKSPACE;
+  if (ws && ws.packaged){ var mod = tile ? _moduleOfTool(tile.getAttribute('data-tool')) : null; if (openPackageMenu(mod ? mod.key : null)) return; openAccount(); return; }
+  showUpgradeModal(name || 'this module');
 }
 
 function showUpgradeModal(toolName){
@@ -5263,7 +5571,7 @@ function showUpgradeModal(toolName){
         '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'+
       '</div>'+
       '<div style="font-size:19px;font-weight:700;color:#16202B;margin-bottom:8px">Unlock '+esc2(toolName)+'</div>'+
-      '<div style="font-size:13px;color:#5B6672;line-height:1.55;margin-bottom:22px">Your OMEGA demo workspace currently includes the <b>Site Designer &amp; permit engine</b>. '+esc2(toolName)+' is part of the full ClearSky-OMEGA suite \u2014 financial modeling, investor underwriting, procurement, and more.</div>'+
+      '<div style="font-size:13px;color:#5B6672;line-height:1.55;margin-bottom:22px"><b>'+esc2(toolName)+'</b> is not part of your current plan. Request access and it is switched on for your whole workspace \u2014 no new sign-in, no data to move.</div>'+
       '<a href="mailto:'+encodeURIComponent(OmegaBrand.upgradeEmail())+'?subject=Unlock%20'+encodeURIComponent(toolName)+'" style="display:block;background:linear-gradient(135deg,#2B5FA8,#2B5FA8);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:13px;border-radius:10px;margin-bottom:10px">Request access</a>'+
       '<button onclick="document.getElementById(\'upgrade-modal\').remove()" style="background:none;border:none;color:#5B6672;font-size:13px;cursor:pointer;font-family:inherit">Maybe later</button>'+
     '</div>';
@@ -5326,6 +5634,21 @@ function _brandToolLinks(){
 }
 function renderPortalApps(ws){
   _PORTAL_WS = ws;
+  /* The grid is first drawn at sign-in, often before omega-tenant.js has
+     merged the package projection: a packaged Lite workspace then read as a
+     tier, and the starter set took Standard tools that the lock pass turned
+     into locked tiles. Draw again with the merged workspace whenever the
+     entitlements land (now, if they already have, and on every refresh). */
+  if (!renderPortalApps._ent){
+    renderPortalApps._ent = true;
+    var again = function(w){
+      if (!w || typeof OMEGATools === 'undefined') return;
+      _PORTAL_WS = w;
+      try { _paintDash(); _paintMarket(); } catch(e){}
+    };
+    if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(again);
+    window.addEventListener('omega:entitlements', function(e){ again(e.detail); });
+  }
   _brandToolLinks();   // ensure Quick Access + tool links carry ?org=
   // omega-tools.js loads cross-origin from the host and may not be ready yet
   // at sign-in. Instead of giving up, wait for it (retry up to ~5s).
@@ -5424,12 +5747,32 @@ function _paintDash(){
     });
     renderedKeys[ct.key] = true;
   }
-  el.innerHTML = html || '<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--cs-sub)">No tools pinned yet. Add some from the marketplace below.</div>';
+  /* Pass 3: nothing required and nothing pinned — the state every self-serve
+     workspace opens in, and it used to be an empty grid pointing at a
+     marketplace that is not on this page. A starter set instead: the first
+     tools this plan can open, in catalogue order. Pin to keep; the tiles say
+     so. */
+  var starter = false;
+  if (count === 0){
+    for (var s=0;s<tools.length;s++){
+      if (count >= DASH_MAX) break;
+      var st = tools[s];
+      if (renderedKeys[st.key] || st.soon) continue;
+      if (typeof OMEGATools.isUnlocked === 'function' && !OMEGATools.isUnlocked(st, _PORTAL_WS)) continue;
+      html += _tile(st, true); renderedKeys[st.key]=true; count++; starter = true;
+    }
+    if (starter) html = '<div class="pm-starter-note" style="grid-column:1/-1;font-size:12.5px;color:var(--cs-sub);padding:2px 2px 6px">A starter set for your plan. Keep what you use, and <a data-sn="marketplace" href="/marketplace.html" style="color:var(--cs-accent);font-weight:600">browse the Marketplace</a> for the rest.</div>' + html;
+  }
+  el.innerHTML = html || '<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--cs-sub)">Nothing to open yet. <a data-sn="marketplace" href="/marketplace.html" style="color:var(--cs-accent);font-weight:600">Browse the Marketplace</a> and pin the tools you use.</div>';
+  /* Tiles carry data-tool now, so the plan's locks apply to them too — the
+     tier gate ran before this grid was painted. Idempotent. */
+  try { if (typeof applyToolLocks === 'function') applyToolLocks(); } catch(e){}
+  try { renderModuleCards(); } catch(e){}
 }
 
 /* Render a tile for a tool that isn't in the shared catalog (direct href). */
 function _localTile(t){
-  return '<div class="pm-tile app">'
+  return '<div class="pm-tile app" data-tool="'+esc(t.key)+'">'
     + '<a class="pm-open" href="'+esc(t.href)+'" style="text-decoration:none;color:inherit;display:block">'
     +   '<div class="pm-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="'+PORTAL_STROKE+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="'+t.icon+'"/></svg></div>'
     +   '<div class="pm-name">'+esc(t.name)+'</div>'
@@ -5503,7 +5846,7 @@ function _tile(t, onDash){
   var badgeTxt = t.badge ? (t.badge==='invest'?'Investors':(t.badge==='new'?'New':t.badge)) : (t.soon?'Soon':'');
   var badge = badgeTxt ? '<span class="pm-badge '+esc(t.badge||'')+'">'+esc(badgeTxt)+'</span>' : '';
 
-  return '<div class="pm-tile app">'+badge
+  return '<div class="pm-tile app" data-tool="'+esc(t.key)+'">'+badge
     + '<a class="pm-open" '+open+' style="text-decoration:none;color:inherit;display:block">'
     +   '<div class="pm-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="'+t.icon+'"/></svg></div>'
     +   '<div class="pm-name">'+esc(t.name)+'</div>'
@@ -5599,6 +5942,25 @@ function _dashCapMsg(msg){
     // restore it exactly on desktop. On mobile we move it onto document.body so its
     // position:fixed isn't trapped by the sticky topbar's stacking context.
     var navHome = nav.parentNode, navNext = nav.nextSibling;
+    /* The sidebar comes along. Its ids (#sn-*) are what every reveal targets
+       — staff nav, JD partners, the pinned apps list — so it is MOVED, not
+       copied, and moved back at desktop widths. */
+    var side = document.getElementById('side-nav'),
+        sideHome = side ? side.parentNode : null, sideNext = side ? side.nextSibling : null;
+    function placeSide(mobile){
+      if (!side) return;
+      if (mobile){
+        var acts = nav.querySelector('.tb-drawer-actions');
+        if (side.parentNode !== nav || (acts && side.nextSibling !== acts)) nav.insertBefore(side, acts || null);
+        nav.classList.add('has-sidenav');
+      } else {
+        nav.classList.remove('has-sidenav');
+        if (side.parentNode !== sideHome && sideHome){
+          if (sideNext && sideNext.parentNode === sideHome) sideHome.insertBefore(side, sideNext);
+          else sideHome.appendChild(side);
+        }
+      }
+    }
 
     // Reparent + inline background depending on viewport width.
     //  ≤900px  → drawer: fixed, on document.body, solid white
@@ -5618,6 +5980,7 @@ function _dashCapMsg(msg){
         nav.style.backgroundColor = '';
         nav.style.opacity = '';
       }
+      placeSide(mobile);
     }
     place();
     window.addEventListener('resize', place);
@@ -5630,11 +5993,15 @@ function _dashCapMsg(msg){
                      '<button class="btn-signout" onclick="closeNav();signOut()">Sign out</button>';
     nav.insertBefore(who, nav.firstChild);
     nav.appendChild(acts);
+    placeSide(window.innerWidth <= 900);   // the sidebar sits above Account / Sign out
 
     b.addEventListener('click', toggleNav);
     s.addEventListener('click', closeNav);
     nav.addEventListener('click', function(e){
-      if(e.target.closest && e.target.closest('.tb-tab')) closeNav();
+      if(!e.target.closest) return;
+      /* a tab, a sidebar entry or a pinned app: the drawer's job is done.
+         The My Applications expander stays open. */
+      if(e.target.closest('.tb-tab') || e.target.closest('.sn-item:not(.sn-toggle)') || e.target.closest('.sn-app')) closeNav();
     });
     document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeNav(); });
   }
@@ -5709,6 +6076,10 @@ var AN_TYPE_COLORS  = { bess:'#2B5FA8', dcfc:'#2B5FA8', solar:'#F0A030', other:'
 
 function renderCharts(a){
   window._lastAgg = a;   // cache for the dashboard builder
+  /* The board's own chart cards draw from this cache; mount() drew them on a
+     timer that could beat this roll-up, leaving empty canvases until the
+     next edit. Redraw now that the numbers exist. */
+  if (window.DASH && DASH.redraw) setTimeout(function(){ try { DASH.redraw(); } catch(e){} }, 0);
   if (typeof Chart === 'undefined') return;
   var STAGE = (typeof STAGE_KEYS!=='undefined')?STAGE_KEYS:Object.keys(a.counts||{});
   var LBL = (typeof STAGE_LABEL!=='undefined')?STAGE_LABEL:{};
@@ -5809,7 +6180,17 @@ var _SW_TITLES = { todos:'To-Dos', team:'Team', feed:'Company Feed', msgs:'Messa
   var MAP = { todos:'todos', team:'team', feed:'feed', chat:'msgs' };
   function fromHash(){
     var h = String(location.hash || '').replace('#','').toLowerCase();
-    if (MAP[h] && typeof snWork === 'function') snWork(null, MAP[h]);
+    if (!MAP[h] || typeof snWork !== 'function') return;
+    /* Not before sign-in. The drawer locks page scroll, and a hash arriving
+       with an expired session (Projects links here as /#todos) froze the
+       sign-in card under the lock — on a phone the Google button was below
+       the fold and unreachable. Wait for the workspace, then open. */
+    if (!document.body.classList.contains('auth-ready') || document.body.classList.contains('signed-out')){
+      var once = function(){ window.removeEventListener('omega:entitlements', once); fromHash(); };
+      window.addEventListener('omega:entitlements', once);
+      return;
+    }
+    snWork(null, MAP[h]);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fromHash);
   else fromHash();
@@ -5890,7 +6271,7 @@ function _paintSideApps(){
           if (t.key==='editor'){
             html += '<a class="sn-app" href="#" onclick="if(typeof openNewProjectModal===\'function\'){openNewProjectModal(\'bess\');}return false;"><span class="sn-app-dot"></span>'+label+'</a>';
           } else {
-            var href = _withOrg((typeof OMEGATools!=='undefined' && OMEGATools.hrefFor)?OMEGATools.hrefFor(t):'#');
+            var href = _withOrg((typeof OMEGATools!=='undefined' && OMEGATools.hrefFor)?OMEGATools.hrefFor(t, _PORTAL_WS):'#');
             html += '<a class="sn-app" href="'+href+'"><span class="sn-app-dot"></span>'+label+'</a>';
           }
           n++;
@@ -6498,10 +6879,24 @@ var DASH = (function(){
   function togglePalette(){ var p=document.getElementById('dash-palette'); if(p.classList.contains('open')) closePalette(); else openPalette(); }
   function openPalette(){
     var p=document.getElementById('dash-palette');
-    p.querySelector('.dp-body').innerHTML = _visibleAddable().map(function(a){
+    var items = _visibleAddable().map(function(a){
       var already = state.added.some(function(x){return x.type===a.type;});
       return '<button class="dp-item" onclick="DASH.addWidget(\''+a.type+'\')" '+(already?'disabled':'')+'>'+a.name+(already?' ✓':'')+'</button>';
-    }).join('');
+    });
+    /* A built-in block that was removed. restoreBlock() existed and nothing
+       called it, so "Remove" on Portfolio Command Center was permanent. */
+    var hidden = state.hidden.filter(function(k){ return !!byKey(k); });
+    if (hidden.length){
+      items.push('<div class="dp-sep" style="margin:10px 0 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--cs-sub)">Bring back</div>');
+      hidden.forEach(function(k){
+        /* a block key is a data-block attribute (command, apps, portfolio…);
+           one that would not round-trip through an onclick string is skipped
+           rather than restored under another name */
+        if (String(k).replace(/[^\w-]/g,'') !== k) return;
+        items.push('<button class="dp-item" onclick="DASH.restoreBlock(\''+k+'\')">↩ '+escHtml(_blockLabel(byKey(k),k))+'</button>');
+      });
+    }
+    p.querySelector('.dp-body').innerHTML = items.join('');
     p.classList.add('open');
   }
   function closePalette(){ var p=document.getElementById('dash-palette'); if(p) p.classList.remove('open'); }
@@ -6735,7 +7130,10 @@ var TC={bess:'#2B5FA8',dcfc:'#2B5FA8',solar:'#F0A030',
     toggle:toggle,
     togglePalette:togglePalette,
     addWidget:addWidget,
+    restoreBlock:restoreBlock,
     refresh:function(){ apply(); _drawAdded(); },
+    /* the charts only, once the project roll-up has landed */
+    redraw:function(){ _drawAdded(); },
     _state:function(){ return state; }
   };
 })();
@@ -6947,6 +7345,11 @@ var TASKFLOW = (function(){
                   + 'color:#8a1c12;border:1px solid #f5c6c0;font-weight:600;font-size:13px">'
                   + escHtml(_status)+'</div>';
     if (!_proj){ host.innerHTML=statusBar+'<div class="tf-empty">Select a project above to see its task flow.</div>'; _renderProgress(); return; }
+    if (!_flow.length){
+      host.innerHTML = statusBar+'<div class="tf-empty">No phases yet.</div>'
+                     + '<button class="tf-add-phase" onclick="TASKFLOW.addPhase()">+ Add phase</button>';
+      _renderProgress(); return;
+    }
     if (_view<0 || _view>=_flow.length) _view = activeStep();
     var active = activeStep();
 

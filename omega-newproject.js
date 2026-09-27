@@ -75,8 +75,27 @@
     { key: 'l2',        legacy: 'l2',        label: 'Level 2 EV',
       desc: '240V 1Ø off an existing service',  opens: 'Level 2 charging layout' },
     { key: 'microgrid', legacy: 'microgrid', label: 'Microgrid',
-      desc: 'Islanding, transfer, critical loads',   opens: 'microgrid one-line' }
+      desc: 'Islanding, transfer, critical loads',   opens: 'DER build' },
+    { key: 'building', legacy: 'building', label: 'Building / Net-Zero',
+      desc: 'Building, rooftop solar and loads', opens: 'building design' }
   ];
+
+  /* Presentation presets expand to the EXISTING siteScopes vocabulary.
+     This is not a module/price catalog or an entitlement grant. */
+  var CARDS = [
+    { key:'l2', label:'Level 2 EV', desc:'Everyday charging at work and home.', scopes:['l2'], icon:'M8 21V5h8v16M6 21h12M10 8h4v5h-4zM16 7h3l2 3v7a2 2 0 0 1-4 0v-2' },
+    { key:'dcfc', label:'DCFC', desc:'Fast charging with utility coordination.', scopes:['dcfc'], icon:'M4 21V4h12v17M2 21h16M10 7l-3 5h4l-2 5M16 6h3l3 4v7h-3' },
+    { key:'bess', label:'BESS', desc:'Behind or in front of the meter.', scopes:['bess'], icon:'M3 5h8v16H3zM13 5h8v16h-8zM5 2h4M15 2h4M5 9h4M15 9h4M5 13h4M15 13h4M5 17h4M15 17h4' },
+    { key:'solarstorage', label:'Solar + Storage', desc:'Generate on site. Store for later.', scopes:['der','bess'], icon:'M2 5h12l2 10H1zM6 5l-1 10M10 5l1 10M2 10h13M8 15v5M4 20h8M18 9h5v12h-5zM19 6h3' },
+    { key:'microgrid', label:'DER / Microgrid', desc:'Connect generation and critical loads.', scopes:['microgrid'], icon:'M10 9h4v6h-4zM2 2h5v5H2zM17 2h5v5h-5zM2 17h5v5H2zM17 17h5v5h-5zM7 7l3 3M14 10l3-3M7 17l3-3M14 14l3 3' },
+    { key:'compute', label:'Compute campus', desc:'Plan power for a growing campus.', scopes:['compute'], icon:'M3 3h18v6H3zM3 10h18v6H3zM3 17h18v5H3zM6 6h1M6 13h1M6 20h1M12 6h6M12 13h6M12 20h6' },
+    { key:'building', label:'Building / Net-Zero', desc:'Buildings, loads and rooftop energy.', scopes:['building'], icon:'M3 22V7l9-5 9 5v15M1 22h22M7 9h2M15 9h2M7 13h2M15 13h2M10 22v-5h4v5' }
+  ];
+  function cards() { return CFG.scopes || CARDS; }
+  function cardScopes(card) { return card.scopes || [card.key]; }
+  function illustration(card) {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="' + esc(card.icon || CARDS[2].icon) + '"/></svg>';
+  }
 
   var CFG = {
     db: null, auth: null,
@@ -105,23 +124,35 @@
     var s = doc.createElement('style');
     s.id = 'omega-np-css';
     s.textContent = [
-      '#new-proj-modal .modal{width:560px;max-width:94vw}',
-      '.np-hint-lbl{font-weight:500;color:#9AA8B4;letter-spacing:.3px}',
-      '.np-types{display:grid;grid-template-columns:1fr 1fr;gap:9px}',
-      '@media(max-width:560px){.np-types{grid-template-columns:1fr}}',
-      '.np-type{border:1.5px solid var(--cs-border,#E1E6EC);border-radius:10px;padding:11px 13px;',
-        'cursor:pointer;background:#fff;text-align:left;font-family:inherit;',
-        'transition:border-color .12s,background .12s}',
-      '.np-type:hover{border-color:#BFD4E8}',
-      '.np-type.on{border-color:var(--cs-sky,#2E7DD1);background:#F4F9FF}',
-      '.np-type b{display:block;font-size:13px;font-weight:700;color:var(--cs-text,#12212F);letter-spacing:-.1px}',
-      '.np-type span{display:block;font-size:11.5px;color:var(--cs-sub,#6B7A88);margin-top:2px;line-height:1.4}',
-      '.np-type:focus-visible{outline:2px solid var(--cs-sky,#2E7DD1);outline-offset:2px}',
-      /* Not decoration: the selection changes which tools the editor starts
-         on, and somebody who ticks four boxes should see that before they
-         commit to it. */
-      '.np-opens{font-size:12px;color:var(--cs-sub,#6B7A88);margin-top:10px;line-height:1.5}',
-      '.np-opens.none{color:#B3261E}'
+      '#new-proj-modal{--np-bg:#F5F4F0;--np-card:#fff;--np-ink:#16202B;--np-sub:#526273;--np-line:#D7DFE6;--np-blue:#2B5FA8;--np-on:#EAF0F8}',
+      '#new-proj-modal,#new-proj-modal *{box-sizing:border-box}',
+      '#new-proj-modal .modal{width:940px;max-width:94vw;max-height:92vh;overflow:auto;background:var(--np-bg);color:var(--np-ink);padding:28px;border:1px solid var(--np-line);border-radius:16px}',
+      '#new-proj-modal h3{font-size:26px;margin:0 0 6px;letter-spacing:-.6px;color:var(--np-ink)}',
+      '#new-proj-modal .np-intro{color:var(--np-sub);margin:0 0 22px;font-size:14px}',
+      '#new-proj-modal .np-eyebrow{color:var(--np-blue);font:600 11px/1.5 ui-monospace,monospace;letter-spacing:.12em;margin-bottom:8px}',
+      '#new-proj-modal .np-types{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}',
+      '#new-proj-modal .np-type{position:relative;min-height:154px;border:1px solid var(--np-line);border-radius:10px;padding:16px;text-align:left;font-family:inherit;cursor:pointer;background:var(--np-card);color:var(--np-ink)}',
+      '#new-proj-modal .np-type:hover{border-color:var(--np-blue)}',
+      '#new-proj-modal .np-type.on{border:2px solid var(--np-blue);padding:15px;background:var(--np-on)}',
+      '#new-proj-modal .np-type.on:after{content:"✓";position:absolute;right:12px;top:10px;color:var(--np-blue);font-weight:700}',
+      '#new-proj-modal .np-type svg{display:block;width:36px;height:36px;margin-bottom:14px;fill:none;stroke:var(--np-blue);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}',
+      '#new-proj-modal .np-type b{display:block;font-size:14px;line-height:1.4}',
+      '#new-proj-modal .np-type span{display:block;color:var(--np-sub);font-size:12px;line-height:1.5;margin-top:5px}',
+      '#new-proj-modal :focus-visible{outline:3px solid var(--np-blue);outline-offset:3px}',
+      '#new-proj-modal .np-opens{font-size:12px;color:var(--np-sub);min-height:20px;margin:12px 0 20px;line-height:1.5}',
+      '#new-proj-modal .np-details{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}',
+      '#new-proj-modal .np-details .mrow{margin:0}#new-proj-modal .np-address{grid-column:1/-1}',
+      '#new-proj-modal label{display:block;color:var(--np-sub);font-size:12px;margin-bottom:6px}',
+      '#new-proj-modal input{box-sizing:border-box;width:100%;min-height:42px;background:var(--np-card);color:var(--np-ink);border:1px solid var(--np-line);border-radius:6px;padding:10px;font:inherit;font-size:14px}',
+      '#new-proj-modal .mbtns{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}',
+      '#new-proj-modal .mbtns button{min-height:42px;border-radius:6px;padding:10px 16px;font:600 13px system-ui;cursor:pointer}',
+      '#new-proj-modal .mb-cancel{background:var(--np-card);color:var(--np-ink);border:1px solid var(--np-line)}',
+      '#new-proj-modal .mb-create{background:var(--np-blue);color:#fff;border:1px solid var(--np-blue)}',
+      '@media(max-width:800px){#new-proj-modal .np-types{grid-template-columns:repeat(3,minmax(0,1fr))}#new-proj-modal .modal{padding:20px}}',
+      '@media(max-width:600px){#new-proj-modal .np-types{grid-template-columns:repeat(2,minmax(0,1fr))}}',
+      '@media(max-width:480px){#new-proj-modal .np-details{grid-template-columns:1fr}#new-proj-modal .np-type{padding:12px;min-height:150px}#new-proj-modal .np-type.on{padding:11px}}',
+      '[data-theme="dark"] #new-proj-modal,body.dark #new-proj-modal{--np-bg:#10161D;--np-card:#172029;--np-ink:#E6EBF0;--np-sub:#A6B3C0;--np-line:#344452;--np-blue:#6E9BE0;--np-on:#1A2A40}',
+      '@media(prefers-color-scheme:dark){html:not([data-theme="light"]) #new-proj-modal{--np-bg:#10161D;--np-card:#172029;--np-ink:#E6EBF0;--np-sub:#A6B3C0;--np-line:#344452;--np-blue:#6E9BE0;--np-on:#1A2A40}}'
     ].join('');
     (doc.head || doc.documentElement).appendChild(s);
   }
@@ -136,50 +167,58 @@
     m.className = 'modal-bg';
     m.id = 'new-proj-modal';
     m.innerHTML =
-      '<div class="modal">' +
-        '<h3>New Project</h3>' +
-        '<div class="mrow"><label>Project / Site Name</label>' +
-          '<input id="np-name" placeholder="e.g. Riverside BESS 5MWh"></div>' +
-        '<div class="mrow"><label>Site Address</label>' +
-          '<input id="np-addr" placeholder="e.g. 1234 Main St, Clinton, IA 52732"></div>' +
-        '<div class="mrow"><label>Project Type ' +
-          '<span class="np-hint-lbl">&mdash; pick everything this site includes</span></label>' +
-          '<div class="np-types" id="np-types"></div>' +
-          '<div class="np-opens" id="np-opens"></div></div>' +
-        '<div class="mrow"><label>Client / Customer</label>' +
+      '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="np-title">' +
+        '<div class="np-eyebrow">NEW PROJECT</div><h3 id="np-title">What are you building?</h3>' +
+        '<p class="np-intro">Choose a starting point. Select more than one for a mixed site.</p>' +
+        '<div class="np-types" id="np-types" role="group" aria-label="Project types"></div>' +
+        '<div class="np-opens" id="np-opens" role="status"></div>' +
+        '<div class="np-details"><div class="mrow"><label for="np-name">Project / Site Name</label>' +
+          '<input id="np-name" placeholder="e.g. Riverside energy project" required></div>' +
+        '<div class="mrow"><label for="np-client">Client / Customer</label>' +
           '<input id="np-client" placeholder="e.g. City of Clinton"></div>' +
-        '<div class="mbtns">' +
-          '<button class="mb-cancel" type="button" data-np="cancel">Cancel</button>' +
-          '<button class="mb-create" type="button" data-np="create">Create &amp; Open Editor →</button>' +
-        '</div>' +
+        '<div class="mrow np-address"><label for="np-addr">Site Address</label>' +
+          '<input id="np-addr" placeholder="Street address, city and state"></div></div>' +
+        '<div class="mbtns"><button class="mb-cancel" type="button" data-np="cancel">Cancel</button>' +
+          '<button class="mb-create" type="button" data-np="create">Create &amp; Open Editor →</button></div>' +
       '</div>';
     doc.body.appendChild(m);
     m.addEventListener('click', function (e) { if (e.target === m) close(); });
+    m.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      if (e.key !== 'Tab') return;
+      var focusable = m.querySelectorAll('button:not([disabled]),input:not([disabled])');
+      var first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && doc.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && doc.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
     return m;
   }
 
   /* ── the scope grid ──────────────────────────────────────────────────── */
   function primaryType() {
-    var L = scopes();
-    for (var i = 0; i < L.length; i++) if (picked[L[i].key]) return L[i].legacy;
+    var selected = selectedKeys(), L = scopes();
+    for (var i = 0; i < L.length; i++) if (selected.indexOf(L[i].key) >= 0) return L[i].legacy;
     return 'other';
   }
   function selectedKeys() {
-    var L = scopes(), out = [];
-    for (var i = 0; i < L.length; i++) if (picked[L[i].key]) out.push(L[i].key);
+    var L = cards(), wanted = {}, out = [];
+    for (var i = 0; i < L.length; i++) if (picked[L[i].key]) {
+      cardScopes(L[i]).forEach(function (key) { wanted[key] = true; });
+    }
+    scopes().forEach(function (scope) { if (wanted[scope.key]) out.push(scope.key); });
     return out;
   }
   function paintOpens() {
     var el = $('np-opens'); if (!el) return;
-    var L = scopes(), parts = [];
-    for (var i = 0; i < L.length; i++) if (picked[L[i].key]) parts.push(L[i].opens);
+    var L = cards(), parts = [];
+    for (var i = 0; i < L.length; i++) if (picked[L[i].key]) parts.push(L[i].label);
     if (!parts.length) {
       el.className = 'np-opens none';
       el.textContent = 'Pick at least one, so the editor knows which tools to open with.';
       return;
     }
     el.className = 'np-opens';
-    el.textContent = 'Opens with ' + (parts.length === 1 ? parts[0]
+    el.textContent = 'Project includes ' + (parts.length === 1 ? parts[0]
       : parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1]) + '.';
   }
   function toggle(key) {
@@ -194,10 +233,10 @@
   function renderTypes() {
     var host = $('np-types'); if (!host) return;
     if (host.getAttribute('data-built')) return;
-    var L = scopes(), html = '';
+    var L = cards(), html = '';
     for (var i = 0; i < L.length; i++) {
       html += '<button type="button" class="np-type" data-k="' + esc(L[i].key) + '" aria-pressed="false">'
-            + '<b>' + esc(L[i].label) + '</b><span>' + esc(L[i].desc) + '</span></button>';
+            + illustration(L[i]) + '<b>' + esc(L[i].label) + '</b><span>' + esc(L[i].desc) + '</span></button>';
     }
     host.innerHTML = html;
     var btns = host.querySelectorAll('.np-type');
@@ -209,6 +248,7 @@
 
   /* ── open / close ────────────────────────────────────────────────────── */
   function open(seed) {
+    returnFocus = doc.activeElement;
     var m = ensure();
     renderTypes();
     wire(m);
@@ -219,7 +259,9 @@
        a sandbox is deliberately undecided, and the "pick at least one" line
        asks rather than assuming a battery. */
     picked = {};
-    var L = scopes(), i;
+    var L = cards(), i;
+    var aliases = { solar:'solarstorage', der:'microgrid', ev:'dcfc', evl2:'l2', level2:'l2', datacenter:'compute', netzero:'building' };
+    seed = aliases[seed] || seed;
     for (i = 0; i < L.length; i++) if (L[i].key === seed || L[i].legacy === seed) picked[L[i].key] = true;
     var btns = doc.querySelectorAll('#np-types .np-type');
     for (i = 0; i < btns.length; i++) {
@@ -230,9 +272,11 @@
     paintOpens();
 
     m.classList.add('on');
-    global.setTimeout(function () { var n = $('np-name'); if (n) n.focus(); }, 100);
+    global.setTimeout(function () { var n = m.querySelector('.np-type.on') || m.querySelector('.np-type'); if (n) n.focus(); }, 100);
   }
+  var returnFocus = null;
   function close() {
+    if (returnFocus && returnFocus.focus) returnFocus.focus();
     var m = $('new-proj-modal'); if (m) m.classList.remove('on');
   }
 
@@ -330,7 +374,7 @@
 
   global.OmegaNewProject = {
     configure: configure, open: open, close: close, create: create,
-    SCOPES: SCOPES, selected: selectedKeys, primaryType: primaryType,
+    SCOPES: SCOPES, CARDS: CARDS, selected: selectedKeys, primaryType: primaryType,
     VERSION: 'newproject/1.0'
   };
 

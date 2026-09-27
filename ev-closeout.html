@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" onerror="void 0"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" onerror="void 0"></script>
 <script src="/config.js" onerror="void 0"></script>
+<script src="/omega-usage.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="window._ZIPFAIL=1"></script>
 <!--
   LEVEL 2 PROJECT CLOSEOUT
@@ -156,6 +157,7 @@ table.t tr.tot td{font-weight:700;background:#FBF9F6;border-top:2px solid var(--
     <button class="btn" onclick="exportJSON()">Save file</button>
     <button class="btn" onclick="printPackage()">Print package</button>
     <button class="btn p" onclick="exportZip()">Export ZIP</button>
+    <span data-usage-meter="evApplications" hidden></span>
     <span class="tb-who" id="tbWho"></span>
   </div>
   <div class="tabs" id="tabs"></div>
@@ -872,7 +874,9 @@ function importJSON(inp){
   };
   rd.readAsText(f); inp.value='';
 }
-function exportZip(){
+function exportZip(counted){
+  /* Phase 7: the closeout package is a deliverable of EV Rebates & Closeout. */
+  if(window.OmegaUsage && counted!==true){ OmegaUsage.count('evApplications', 'closeout:'+(C&&C.p?(C.p.projectName||C.p.address||''):'')).then(function(){ exportZip(true); }, function(e){ OmegaUsage.explain(e); }); return; }
   if(window._ZIPFAIL || typeof JSZip==='undefined'){ alert('The ZIP library did not load. Use Print package and the CSV buttons instead.'); return; }
   var zip=new JSZip(), root=safeName(C.p.projectName||C.p.address)+'_L2_closeout';
   var doc='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Closeout summary</title><style>body{font-family:Arial,sans-serif;font-size:12px;max-width:900px;margin:24px auto}table{width:100%;border-collapse:collapse;margin-bottom:8px}th,td{border:1px solid #999;padding:4px 6px;text-align:left}td.num,th.num{text-align:right}h2{border-bottom:2px solid #000;font-size:14px;margin-top:22px}.sig{display:flex;gap:40px;margin-top:30px}.sig div{flex:1;border-top:1px solid #000;padding-top:4px}</style></head><body>'+summaryHTML()+'</body></html>';
