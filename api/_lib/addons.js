@@ -83,8 +83,9 @@ function workspace(orgId, b) {
 }
 /* Does the plan (with its live add-ons) already hold this module? The
    Modules page and the store ask OmegaWorkspaceHub.moduleState; so does
-   this, on the same tools catalog, so the server never sells what the page
-   shows as Live. */
+   this, on the tools catalog as omega-tools.js seeds it (publish-tools keeps
+   the live catalog in step), so the server never sells what a page shows
+   as Live. */
 function held(orgId, b, key, now) {
   var m = M.get(key); if (!m || key === 'lite') return true;
   var T = require('../../omega-tools.js'), HUB = require('../../omega-workspace-hub.js'), ws = workspace(orgId, b);
@@ -173,6 +174,8 @@ function gate(c, rows, now) {
 /* ── The quote: pure, from a loaded context and the invoice records ────── */
 function quote(c, rows, input, now, staff) {
   var b = c.billing, book = c.book, a = b.addOns || {}, orgId = c.root.id, today = R.iso(now);
+  /* a package is judged by its own projection, never by the legacy rule below */
+  if (b.packaged === true) fail('This workspace is on a subscription package: add modules on the Ladder, which prices and invoices them.', 409);
   var have = live(b, now), inCycle = !!a.billingDay && a.state === 'paid' && have.length > 0;
   var add = closure(function (k) { return held(orgId, b, k, now); }, wanted(input.add));
   if (!add.length) fail('Already on your plan', 409);

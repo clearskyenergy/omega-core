@@ -202,8 +202,9 @@ org, write, part)` refuses a part not bought; `parts(ctx)` is what the office
 endpoint (`access.parts`), the front door and the customer-portal gate
 (`buyer-accounts.context`) report, and what the chrome, the hex hub, the
 dashboard and the Omega Logic app draw. A legacy tenant (addon `omega-logic`)
-is unchanged and holds every part; absent means "everything", a present list
-is the package. Showing a link is never access. Phase 9: a door that is not
+is unchanged and holds every part; one without it holds the parts it bought
+on Add to plan while they are paid (`addons.live`, below); absent means
+"everything", a present list is the package. Showing a link is never access. Phase 9: a door that is not
 a member's (the bench and rig tokens, a tenant admin's hold/release) runs
 `requirePartIfPackaged(org, 'plant')` — a packaged workspace must hold the
 part, a legacy or unrecorded one keeps its own rule — and `firestore.rules`
@@ -713,12 +714,26 @@ their own pages (`data-view`). The Omega pulse is `GET /api/pulse`
 (`api/_lib/pulse.js`, pure, `tpulse.js`): platform-wide COUNTS ONLY from
 the most recent rows, never a name. The Modules page lists every module
 for every workspace (`OmegaWorkspaceHub.moduleState`, the ONE held/partly/
-ask rule shared with the store); a module not held carries Opt in: the one
-menu and a QuickBooks invoice for a packaged workspace, the request that
-moves a legacy one onto a package (`plan-change` `opt-in`: priced from the
-book, recorded on `billing/current.optIns` with history and audit, ClearSky
-mailed; the admin Package tab opens preselected on what the tenant holds
-plus that request; nothing is charged). In flight is
+ask rule shared with the store); a module not held carries Opt in (the one
+menu and a QuickBooks invoice) for a packaged workspace and **Add to plan**
+for a legacy one (Tommy, 2026-09-27: "buy them immediately and not email
+clearsky … add to plan and then charge their credit card or saved payment
+method"). Add to plan is an ADD-ON beside the legacy plan, whose own tier,
+price and billing are never touched: `api/_lib/addons.js` through
+`plan-change` `addon-quote` / `addon-buy` / `addon-cancel` (owner, admin or
+verified staff), the book's list price (the five Logic parts as the bundle),
+its own QuickBooks invoice paid by card on QuickBooks' page (or the card
+saved there), Live when `package-billing.reconcile` sees it paid (`I've
+paid` = reconcile-now; the hourly runner renews it monthly on the add-on
+billing day; off after an unpaid renewal's grace). Bought is
+`billing/current.addOns.modules`, on is `addOns.live`; on means what the
+legacy readers already honour — a Logic part through `logic-access`, a
+module's tools as `toolOverrides` (and the `toolAccess` allowlist), editor
+capabilities as the legacy add-on keys `omega-caps` reads — and
+`addOns.granted` makes switching off take back exactly that. The one
+browser control is `OmegaPackageMenu.addOnControl`; `scripts/test-addons.js`
+and `check:workspace` (legacy-add) hold it. A workspace with no `omega_orgs`
+or billing record cannot be billed and is told so. In flight is
 `OmegaWorkspaceToday.board` (what needs something, then what was touched
 last, never online, a finance-marketplace deal riding on its project) and
 Assign merges only the owner fields onto `projects/{id}`. Plan & billing
@@ -746,8 +761,8 @@ its `#main`; the markup stays for the classic home and the tests that
 read it). A PACKAGED workspace prices from `api/package-catalog` and opts
 in through the shared `omega-package-menu.js` control and `plan-change`;
 any other workspace reads the PUBLIC price list `GET /api/offerings`,
-each module judged against its tier (On your plan · Partly · Ask
-ClearSky, an email), and never pays here. `/marketplace.html#<module>`
+each module judged against its tier (On your plan · Partly · Add to
+plan, the same `addOnControl`: the server's price, QuickBooks' card page). `/marketplace.html#<module>`
 lands on that module. A tenant on the classic home keeps the tool
 catalogue and pinning. Design, launch order and the honest list of what
 is not built: `docs/OMEGA-WORKSPACE.md`.

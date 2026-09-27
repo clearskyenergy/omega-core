@@ -25,9 +25,9 @@ QuickBooks; legacy tenants are billed outside the package engine.
 | Sign in | `login.html` → `/workspace` | Firebase Auth; the gateway lands on the workspace; the workspace sends a classic choice to the classic dashboard | `OmegaWorkspaceShell.homeOf()` (workspace unless `omega_orgs/{org}.shell = 'classic'`, a partner-type workspace, or `?home=classic` on this browser) |
 | Home | `/workspace` | Hex hub (Today in the centre, six cells composed from what the person may open), Today (four numbers, "Needs you" ranked), In flight (project cards), Around you (feed, People, Omega pulse, Partners) | `omega-workspace-hub.js` composes the hub; `omega-workspace-today.js` ranks Today; `GET /api/pulse` for the pulse |
 | All tools | `/workspace#tools` | Every tool by category, Live / Locked / Soon; a locked tile explains which plan or module carries it and links the Marketplace on that module | `OMEGATools.isUnlocked()` |
-| Modules | `/workspace#modules` | Every module as a compact card: **Your modules** (Live, or paid for) first, then **Add to your plan**, each in shelf order (features, the tools inside, allowance, needs, price); Live where held, Partly with the count, else **Opt in** | `OmegaWorkspaceHub.moduleState()` (the ONE held/partly/ask rule, shared with the store) |
+| Modules | `/workspace#modules` | Every module as a compact card: **Your modules** (Live, or paid for) first, then **Add to your plan**, each in shelf order (features, the tools inside, allowance, needs, price); Live where held, Partly with the count, else **Opt in** (a package) or **Add to plan** (a legacy plan) | `OmegaWorkspaceHub.moduleState()` (the ONE held/partly/ask rule, shared with the store) |
 | Opt in, packaged | Modules page or store | The one menu: server quote → Subscribe and pay → QuickBooks invoice with the card button; on when paid | `POST /api/plan-change` (quote, apply, cancel, reconcile-now) |
-| Opt in, legacy | Modules page | *Add to my monthly fee*: the request is recorded on the plan with the server's price (who, when, history, audit) and ClearSky is mailed; the card reads *Requested*; ClearSky moves the workspace onto a package, where the addition lands on the monthly invoice. Nothing is charged until the first invoice is confirmed | `POST /api/plan-change` `opt-in` (owner or admin; refuses a packaged workspace) |
+| Add to plan, legacy | Modules page, store, a locked tile | The module joins the plan as its own monthly line: the server's quote (the module and what it needs), the billing contact once, **Pay now** opens QuickBooks' page (a new card or the saved one), the card waits with the pay link and *I've paid*, Live the moment QuickBooks shows it paid; renewed monthly, off after an unpaid renewal's grace; the plan underneath is untouched | `POST /api/plan-change` `addon-quote`, `addon-buy`, `addon-cancel`, `reconcile-now` (owner or admin; `api/_lib/addons.js`) |
 | Marketplace | `/marketplace.html` | The store in the workspace chrome: plan strip, Plans shelf (Lite, Field, Pro, Enterprise, starters, logins, annual, trial), every module priced; `#<module>` lands on one | `GET /api/offerings` (public) or `api/package-catalog` (packaged) |
 | Plan & billing | rail → `/workspace#billing` | A page: your subscription (plan, modules bought and on, monthly, billing day), what you owe and when (unpaid invoices with pay links, next invoice, *I've paid*), the payment method (Stripe portal for the card and autopay, or QuickBooks' own payment page), additions waiting, billing history | `GET /api/plan-change` (any verified member), `POST /api/stripe-invoices`, `POST /api/stripe-portal` |
 | Projects | `/projects.html` | Legacy page wearing the workspace rail (own topbar still) | `OmegaWorkspaceShell.theme()` |
@@ -48,15 +48,10 @@ QuickBooks; legacy tenants are billed outside the package engine.
 
 ## 4. Not built — the next improvements to the journey, in order
 
-1. **Self-serve conversion of a legacy plan.** A legacy workspace's Opt in
-   is recorded with its price today (`billing/current.optIns`) and ClearSky
-   activates a package from the admin tab, which opens preselected on it.
-   Build: `plan-change` accepts a legacy record as
-   the starting point of a quote (Lite + the module, prorated), creates the
-   packaged record and the first QuickBooks invoice, and the module opens
-   when paid. Needs the packaging flags live (`PACKAGING_LIVE`, `QBO_ENV`)
-   and the engine guard; see `api/_lib/plan-change.js state()` and
-   `api/_lib/package-billing.js`.
+1. **Moving a legacy plan onto a package, self-serve.** A legacy plan buys
+   modules today as add-ons beside its plan (Add to plan,
+   `api/_lib/addons.js`); re-pricing the whole plan as a package stays
+   ClearSky's, from the admin Package tab, which lists the add-ons.
 2. **Plan changes from a plan card.** The store's plan cards are facts;
    moving a packaged workspace to another plan (`plan-change` with `plan`)
    is only reachable through a module quote's steer.

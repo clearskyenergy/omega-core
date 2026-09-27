@@ -88,6 +88,16 @@ if (partly) { var pt = HUB.moduleTools(partly, std1); ok('a partly held module c
 var pk = ctxFor({ orgId: 'x', tierLevel: 1, modules: ['lite'], packaged: true, toolAccess: ['editor'] }, { packaged: true, modules: ['lite'] });
 ok('a packaged workspace holds exactly what its projection lists', HUB.moduleState(MODS.lite, pk) === 'held' && HUB.moduleState(MODS.gridatlas, pk) === 'open');
 ok('an unknown module is asked for', HUB.moduleState(null, ent3) === 'ask');
+/* Add to plan on a legacy plan (api/_lib/addons.js): what it bought and has on now is held, part by part */
+var entBought = ctxFor({ orgId: 'x', tierLevel: 3 }, { tierLevel: 3, packaged: false, addOns: ['logic-office', 'logic-plant'] });
+ok('a Logic part bought as an add-on is held; one not bought is still asked for', HUB.moduleState(MODS['logic-office'], entBought) === 'held' && HUB.moduleState(MODS['logic-plant'], entBought) === 'held' && HUB.moduleState(MODS['logic-customer'], entBought) === 'ask');
+ok('holdsLogic answers part by part for a legacy plan with add-ons', HUB.holdsLogic(entBought, 'logic-office') && HUB.holdsLogic(entBought, 'logic-plant') && !HUB.holdsLogic(entBought, 'logic-logistics'));
+ok('the hub earns the Plant area from a bought part and not Deliver', HUB.compose(entBought).ring.map(function (a) { return a.key; }).indexOf('plant') >= 0 && HUB.compose(entBought).ring.map(function (a) { return a.key; }).indexOf('deliver') < 0, HUB.compose(entBought).ring.map(function (a) { return a.key; }));
+var stdBought = ctxFor({ orgId: 'x', tierLevel: 1 }, { tierLevel: 1, packaged: false, addOns: ['plansets'] });
+ok('a capabilities-only module bought as an add-on is held on Standard', HUB.moduleState(MODS.plansets, stdBought) === 'held');
+var pkIgnores = ctxFor({ orgId: 'x', tierLevel: 1, modules: ['lite'], packaged: true, toolAccess: ['editor'] }, { packaged: true, modules: ['lite'], addOns: ['gridatlas'] });
+ok('a packaged workspace is judged by its projection alone, never by add-ons', HUB.moduleState(MODS.gridatlas, pkIgnores) === 'open');
+ok('holdsLogic survives a missing context', HUB.holdsLogic(null, 'logic-office') === false);
 M.catalog().forEach(function (m) { ok('module ' + m.key + ' says what it is for, in one sentence, with no price in it', typeof m.blurb === 'string' && m.blurb.length > 40 && !/\$\d/.test(m.blurb), m.blurb); });
 
 console.log('tworkspacehub: ' + pass + ' passed, ' + fail + ' failed');

@@ -611,7 +611,7 @@ function addToPlan(key, name, price) {
   var wait = addOnWaiting(key), co = WS.clientName || WS.orgId;
   var html = '<div class="ows-note">' + (wait
     ? '<b>' + esc(name) + '</b> is waiting for payment: <b>' + esc(wait.display || '') + '</b> on its QuickBooks invoice. Pay by card there, or with the card saved there, and it switches on the moment the payment clears.'
-    : '<b>' + esc(name) + '</b> is <b>' + esc(price || 'priced below') + '</b>, added to ' + esc(co) + '’s plan as its own monthly line. Pay by card on QuickBooks’ secure page (a card saved there pays in one click) and it switches on the moment the payment clears. Your ' + esc(planName()) + ' plan and its billing stay as they are.')
+    : '<b>' + esc(name) + '</b> is <b>' + esc(price || 'priced below') + '</b>, added to ' + esc(co) + '’s ' + esc(planName()) + ' plan as its own monthly line.')
     + '</div><div class="opm-host"><div id="addon-host"></div></div>';
   var rows = [{ key: 'bill', name: 'Plan & billing', sub: 'Your subscription, what you owe, your invoices', icon: S.ICON.billing, onClick: function () { S.closeDrawer(); openBilling(); } },
     { key: 'store', name: 'See it in the store', sub: 'What it adds, what it costs, the plans', href: '/marketplace.html#' + key, icon: S.ICON.marketplace }];
