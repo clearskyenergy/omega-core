@@ -77,6 +77,36 @@ async function run() {
       /* the title bar stays white in light while the ground under it is grey; a ribbon button has a face */
       var top = await page.evaluate(function () { var tb = getComputedStyle(document.getElementById('tb')).backgroundColor, bg = getComputedStyle(document.body).backgroundColor, rb = document.querySelector('#ribbon .ribbon-page.active .rbtn'); return { tb: tb, body: bg, face: rb ? getComputedStyle(rb).backgroundColor : '' }; });
       ok(scheme === 'light' ? (top.tb === 'rgb(255, 255, 255)' && top.body === 'rgb(233, 236, 239)' && top.face !== 'rgba(0, 0, 0, 0)') : (top.body === 'rgb(44, 47, 51)'), scheme + ': title bar ' + top.tb + ', ground ' + top.body + ', button face ' + top.face);
+      /* Equipment labels (2026-09-27, 21 Hoosac St): the name pill under every
+         placed element is forced dark in both themes because it sits on
+         satellite imagery, so its ink must be light in both. It was
+         var(--text) — near-black in light — and read dark-on-dark on the canvas
+         and on the report's site map. A long name must wrap inside the pill,
+         not run out past its end, which it also did. */
+      var labels = await page.evaluate(function () {
+        var host = document.createElement('div');
+        host.className = 'cel'; host.style.cssText = 'position:absolute;left:640px;top:420px;width:40px;height:40px';
+        host.innerHTML = '<div class="eq-lbl-wrap" style="position:absolute;left:20px;top:46px;transform:translate(-50%,0)">'
+          + '<div class="nd-lbl">Autel AC Elite \u00d72 \u2014 dual pedestal</div>'
+          + '<div class="nd-spec">240V 1\u00d8 -- NEMA 3R -- sized per EVSE continuous load</div></div>';
+        document.body.appendChild(host);
+        var out = ['.nd-lbl', '.nd-spec'].map(function (sel) {
+          var t = host.querySelector(sel), cs = getComputedStyle(t);
+          var fg = C.parse(cs.color), bg = C.ground(t);
+          var r = t.getBoundingClientRect();
+          return { sel: sel, color: cs.color, contrast: C.contrast(C.over(fg, bg), bg), overflow: t.scrollWidth - t.clientWidth,
+                   width: Math.round(r.width), lines: Math.round((r.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)) / parseFloat(cs.lineHeight)) };
+        });
+        host.remove();
+        return out;
+      });
+      labels.forEach(function (x) {
+        ok(x.contrast >= 4.5, scheme + ': equipment label ' + x.sel + ' contrast ' + x.contrast.toFixed(2) + ':1 (' + x.color + ')');
+        ok(x.overflow <= 1, scheme + ': equipment label ' + x.sel + ' keeps a long name inside its pill (overflow ' + x.overflow + 'px)');
+        /* and wraps only when it has to: the pill is sized to its text, so
+           this name is two lines in a full-width pill, not one word a line */
+        ok(x.width >= 150 && x.lines <= 3, scheme + ': equipment label ' + x.sel + ' uses the pill width (' + x.width + 'px, ' + x.lines + ' lines)');
+      });
       for (var p of PANELS) {
         await page.evaluate(function (fn) { (new Function('return (' + fn + ')'))()(); }, p.open.toString());
         var r = await page.evaluate(function (spec) {
