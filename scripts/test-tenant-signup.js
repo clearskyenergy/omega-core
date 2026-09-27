@@ -2,6 +2,7 @@
 /* Signup trial ceiling and preservation of existing billing.
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('node:assert/strict');
 var F = require('./_lib/firestore-double');
 var db, claimsWrites = 0, mailWrites = 0, checks = 0;

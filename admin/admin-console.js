@@ -2432,7 +2432,7 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
      + '<div>Package: '+esc(_pkgModuleNames(bought).join(', ') || '\u2014')+(bought.join() !== onNow.join() && onNow.length ? ' (on now: '+esc(_pkgModuleNames(onNow).join(', '))+')' : '')+'</div>'
      + '<div>Standing: <span class="chip '+sdp.chip+'">'+esc(sdp.label)+'</span></div>'
      + (bill.nextInvoiceOn ? '<div>Next invoice: '+esc(bill.nextInvoiceOn)+(bill.paidThrough ? ' \u00b7 paid through '+esc(bill.paidThrough) : '')+'</div>' : '')
-     + (Number(bill.amountDue||0) > 0 ? '<div>Amount due: $'+Number(bill.amountDue).toLocaleString()+(bill.paymentLink ? ' \u00b7 <a href="'+esc(bill.paymentLink)+'" target="_blank" rel="noopener">QuickBooks pay link</a>' : '')+'</div>' : '')
+     + (Number(bill.amountDue||0) > 0 ? '<div>Amount due: $'+Number(bill.amountDue).toLocaleString()+(bill.paymentLink ? ' \u00b7 <a href="'+esc(bill.paymentLink)+'" target="_blank" rel="noopener">'+(bill.billingProvider === 'stripe' ? 'Stripe' : 'QuickBooks')+' pay link</a>' : '')+'</div>' : '')
      + (bill.reconcileNote ? '<div>Review: '+esc(bill.reconcileNote)+'</div>' : '')
      + '</div>'
      + '<p style="margin:10px 0 4px"><button onclick="location.href=&quot;/admin/tenant.html?org='+encodeURIComponent(orgId)+'&quot;">Open the Package tab</button></p>'

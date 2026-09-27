@@ -60,16 +60,17 @@ button[disabled]{opacity:.45;cursor:default}#msg{margin-top:12px;white-space:pre
   function row(k, v, good) { return '<div class="row"><span>' + esc(k) + '</span><span class="' + (good === true ? 'ok' : good === false ? 'bad' : '') + '">' + esc(v) + '</span></div>'; }
   function draw(s) {
     S = s;
-    var c = s.connection || {}, realmOk = !!(c.realmId && s.bookRealm && c.realmId === s.bookRealm);
+    var c = s.connection || {}, realmOk = !!(c.realmId && s.bookRealm && c.realmId === s.bookRealm), stripe = s.provider === 'stripe';
+    /* the Stripe rail carries no QuickBooks items: the rows below are the QuickBooks rail's, and binding never gates enabling it */
     var h = row('Version', s.version) + row('Enabled', s.enabled ? 'yes' : 'no', s.enabled)
-      + row('Billing mode', s.mode, s.mode === 'live') + row('Book company', (s.bookEnv || '—') + ' · ' + (s.bookRealm || 'none'), !!s.bookRealm)
+      + row('Billing through', stripe ? 'Stripe' : 'QuickBooks') + row('Billing mode', s.mode, s.mode === 'live') + row('Book company', (s.bookEnv || '—') + ' · ' + (s.bookRealm || 'none'), stripe ? undefined : !!s.bookRealm)
       + row('Connected QuickBooks', (c.env || '—') + ' · ' + (c.realmId || 'none'), s.bookRealm ? realmOk : !!c.realmId)
       + row('Items bound', s.items.bound + ' of ' + s.items.total, s.items.bound === s.items.total)
       + (s.frozen || s.used ? row('Book', 'used or frozen', false) : '');
     if (s.items.missing.length) h += '<div class="muted" style="margin-top:8px">Missing: <code>' + esc(s.items.missing.join(', ')) + '</code></div>';
     $('state').innerHTML = h;
     $('bind').disabled = s.enabled || s.items.bound === s.items.total;
-    $('enable').disabled = s.enabled || s.items.bound !== s.items.total;
+    $('enable').disabled = s.enabled || (!stripe && s.items.bound !== s.items.total) || s.mode === 'off';
     if (s.enabled) $('msg').innerHTML = '<span class="ok">The price book is on. Signup and billing use it.</span>';
   }
   function load() { return call('GET').then(draw, function (e) { $('state').innerHTML = '<div class="bad">' + esc(e.message) + '</div>'; }); }
