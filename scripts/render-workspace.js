@@ -594,53 +594,109 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await billingPhone(p, 'legacy-enterprise');
     return {};
   } });
-  /* ══ 6. THE PACKAGE STORE — Lite Labs on the marketplace ══
-     A packaged workspace sees its plan and every module on its shelf with
-     the server's price; Lite is Included; Grid Atlas can be subscribed:
-     quote, then apply, then an invoice waiting for payment — the page posts
-     exactly what plan-change expects and grants nothing itself. A locked
-     tool card points at the module that carries it. */
+  /* ══ 6. THE MARKETPLACE IS THE TOOLS — Lite Labs (packaged) ══
+     Tommy, 2026-09-27: "the marketplace should be the old tools that we
+     had ... but the modules are paid services tied directly to the
+     editor". The page is the tool catalogue in the workspace's chrome:
+     every tool, live or locked, and no store (no plans, no module
+     shelves; nothing subscribes, opts in or posts). A locked tool names
+     the module that carries it, the server's catalogue, and links to that
+     module on the Modules page; an old store link (#<module>, #plans) is
+     sent there. On the classic home, which has no Modules page, See module
+     opens the one menu in place. */
   PACKAGE_VIEW = lt.packageView; STORE.posts = []; STORE.pending = [];
-  await (async function () {
-    var errs = [], ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+  /* which module carries a tool: the first in catalogue order, the page's rule */
+  var CARRIES = {}; M.catalog().forEach(function (m) { (m.tools || []).forEach(function (k) { if (!CARRIES[k]) CARRIES[k] = m; }); });
+  var MARKET_CARDS = function () {
+    return Array.prototype.map.call(document.querySelectorAll('#market-grid .mkt-card'), function (c) {
+      var a = c.querySelector('.mkt-actions .mkt-act');
+      return { tool: c.getAttribute('data-tool'), locked: c.classList.contains('locked'), module: c.getAttribute('data-module'), pill: ((c.querySelector('.mkt-cover-badge') || {}).textContent || '').trim(), inLine: ((c.querySelector('.mkt-card-meta.mkt-in') || {}).textContent || '').trim(), act: a ? a.textContent.trim() : '', tag: a ? a.tagName : '', href: (a && a.getAttribute('href')) || '' };
+    });
+  };
+  function badLocked(cards) { return cards.filter(function (c) { var m = CARRIES[c.tool]; return c.locked && m && !(c.module === m.key && c.pill === m.name && c.inLine === 'In ' + m.name && c.href === '/workspace#module-' + m.key && c.act === 'See module ›'); }); }
+  async function marketContext(fx) {
+    var ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
     await ctx.addInitScript(DOUBLE_SRC);
-    await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: lt.user, docs: lt.docs, latency: 8, authDomain: HOST });
+    await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: fx.user, docs: fx.docs, latency: 8, authDomain: HOST });
+    return ctx;
+  }
+  await (async function () {
+    var errs = [], navs = [], calls0 = apiCalls.length, ctx = await marketContext(lt);
     var p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    p.on('framenavigated', function (f) { if (f === p.mainFrame()) navs.push(f.url().slice(base.length)); });
     await p.goto(base + '/marketplace.html?home=workspace', { waitUntil: 'domcontentloaded' });
-    var shown = await p.waitForFunction(function () { var s = document.getElementById('mkt-store'); return s && !s.hidden && document.querySelectorAll('#mkt-shelves .mkt-mod').length > 5 && document.querySelector('.mkt-mod[data-module-card="gridatlas"] .opm-act button'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
-    ok('store: a packaged workspace sees the package store with its modules and a Subscribe control', shown);
-    /* the billing summary (monthly, next invoice) lands after the price list */
-    await p.waitForFunction(function () { return /\/month/.test(document.getElementById('mkt-plan').textContent); }, null, { timeout: 4000 }).catch(function () {});
-    await p.waitForFunction(function () { return document.querySelectorAll('.mkt-planc').length >= 3; }, null, { timeout: 4000 }).catch(function () {});
+    var shown = await p.waitForFunction(function () { return document.querySelectorAll('#market-grid .mkt-card').length > 10 && !!document.querySelector('#market-grid .mkt-card[data-tool="gridatlas"] a.mkt-act'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
+    ok('marketplace: a packaged workspace on the workspace home sees the tool catalogue, locked Grid Atlas among it', shown);
     var st = await p.evaluate(function () {
-      var cards = Array.prototype.map.call(document.querySelectorAll('#mkt-shelves .mkt-mod'), function (c) { return { key: c.getAttribute('data-module-card'), owned: c.classList.contains('owned'), price: (c.querySelector('.mkt-card-cat b') || {}).textContent, act: c.querySelector('.mkt-actions').textContent.trim().slice(0, 30) }; });
-      var ga = document.querySelector('.mkt-card:not(.mkt-mod) .mkt-act.primary[onclick*="gridatlas"]');
-      return { h1: document.querySelector('.mkt-banner h1').textContent, plan: document.getElementById('mkt-plan').textContent.replace(/\s+/g, ' '), cards: cards, gaTool: ga ? ga.textContent : null, worn: document.body.classList.contains('ows-worn') && !!document.querySelector('#topbar.ows-top') && !!document.querySelector('#side-nav.ows-rail'), tabs: !!document.querySelector('.ows-tabs'), plans: document.querySelectorAll('.mkt-planc').length, yourPlan: document.querySelector('.mkt-planc.on') ? document.querySelector('.mkt-planc.on').getAttribute('data-plan-card') : null, catalogHidden: getComputedStyle(document.getElementById('market-grid')).display === 'none', shelves: document.querySelectorAll('#mkt-shelves .mkt-shelf').length };
+      function vis(sel) { var e = document.querySelector(sel); if (!e) return false; var r = e.getBoundingClientRect(); return getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden' && r.height > 0; }
+      var link = document.querySelector('#mkt-sub a');
+      return { h1: (document.querySelector('.mkt-banner h1') || {}).textContent, store: !!document.getElementById('mkt-store'), shelves: document.querySelectorAll('.mkt-mod, .mkt-planc, .mkt-shelf, #mkt-shelves').length,
+        worn: document.body.classList.contains('ows-worn') && !!document.querySelector('#topbar.ows-top') && !!document.querySelector('#side-nav.ows-rail'), tabs: !!document.querySelector('.ows-tabs'),
+        grid: vis('#market-grid'), tabbar: vis('.mkt-tabbar'), chips: document.querySelectorAll('#mkt-filters .mkt-chip').length, modulesLink: link ? link.getAttribute('href') : null,
+        text: document.getElementById('main').innerText, mailto: document.querySelectorAll('#main a[href^="mailto:"]').length };
     });
-    ok('store: the head reads Marketplace and the strip names Lite, the monthly price and the modules held', st.h1 === 'Marketplace' && /Lite/.test(st.plan) && /\$149\/month/.test(st.plan) && /1 of \d+ modules/.test(st.plan), st.plan);
-    ok('store: every catalog module is a card with the server\'s price, on its shelf', st.cards.length === M.catalog().length && st.cards.every(function (c) { return /\$\d/.test(c.price); }) && st.shelves >= 5, { n: st.cards.length, shelves: st.shelves });
-    ok('store: Lite is in the plan and every other module offers Subscribe', st.cards.filter(function (c) { return c.owned; }).map(function (c) { return c.key; }).join() === 'lite' && st.cards.filter(function (c) { return !c.owned; }).every(function (c) { return /Subscribe/.test(c.act); }), st.cards.slice(0, 4));
-    ok('store: the page wears the workspace chrome with the phone tab bar, the Plans shelf is the price list\'s with Lite marked as this workspace\'s, and the tool catalogue is folded away', st.worn && st.tabs && st.plans >= 4 && st.yourPlan === 'lite' && st.catalogHidden, { worn: st.worn, tabs: st.tabs, plans: st.plans, yourPlan: st.yourPlan, catalogHidden: st.catalogHidden });
-    /* subscribe: quote, then apply */
-    await p.click('.mkt-mod[data-module-card="gridatlas"] .opm-act button'); await wait(400);
-    var quote = await p.$eval('.mkt-mod[data-module-card="gridatlas"] .opm-act', function (e) { return e.textContent.replace(/\s+/g, ' '); });
-    ok('store: Subscribe asks the server for a quote and shows today, then, and activation with a Subscribe and pay button', STORE.posts.length === 1 && STORE.posts[0].action === 'quote' && STORE.posts[0].add.join() === 'gridatlas' && /Pay \$200 today/.test(quote) && /Subscribe and pay/.test(quote), { posts: STORE.posts, quote: quote.slice(0, 120) });
-    await p.click('.mkt-mod[data-module-card="gridatlas"] .opm-act .opm-primary'); await wait(600);
-    var applied = await p.$eval('.mkt-mod[data-module-card="gridatlas"] .opm-act', function (e) { return { text: e.textContent.replace(/\s+/g, ' '), pay: (e.querySelector('a') || {}).href }; });
-    var ap = STORE.posts[1] || {};
-    ok('store: Subscribe and pay applies the quote by its previewId and shows the invoice with the payment link', ap.action === 'apply' && ap.previewId === 'a'.repeat(48) && ap.add.join() === 'gridatlas' && /(Invoice created: \$200|Waiting for payment · \$200)/.test(applied.text) && applied.pay === 'https://pay.example/inv-1', { post: ap, applied: applied });
-    await wait(600);
-    var after = await p.evaluate(function () { return { badge: (document.querySelector('.mkt-mod[data-module-card="gridatlas"] .mkt-pill') || {}).textContent, strip: document.getElementById('mkt-plan').textContent, cancel: !!document.querySelector('.mkt-mod[data-module-card="gridatlas"] .opm-act button') }; });
-    ok('store: the card now waits for payment, the strip counts the pending change, and the request can be cancelled', after.badge === 'Waiting for payment' && /1 waiting for payment/.test(after.strip) && after.cancel, after);
-    /* a locked tile on the workspace links /marketplace.html#<module>: the page lands on that module */
+    st.cards = await p.evaluate(MARKET_CARDS);
+    ok('marketplace: the head reads Marketplace and points at Modules; the page wears the workspace chrome with the phone tab bar; the category bar and the cards are on the page, not folded away', st.h1 === 'Marketplace' && st.modulesLink === '/workspace#modules' && st.worn && st.tabs && st.grid && st.tabbar && st.chips >= 5, { h1: st.h1, link: st.modulesLink, worn: st.worn, tabs: st.tabs, grid: st.grid, tabbar: st.tabbar, chips: st.chips });
+    ok('marketplace: no store: no #mkt-store, no plan or module shelves, and nothing reads Subscribe or Ask ClearSky or mails anyone', !st.store && !st.shelves && !/\bSubscribe\b|Ask ClearSky/.test(st.text) && !st.mailto, { store: st.store, shelves: st.shelves, mailto: st.mailto, subscribe: /\bSubscribe\b/.test(st.text) });
+    var real = st.cards.filter(function (c) { return c.act !== 'Coming soon'; }), wrongLock = real.filter(function (c) { return (lt.liteTools.indexOf(c.tool) >= 0) === c.locked; });
+    ok('marketplace: Lite\'s tools are live and every other tool is listed, locked (' + st.cards.length + ' cards)', st.cards.length > 20 && !wrongLock.length, wrongLock.slice(0, 4));
+    var lockedN = real.filter(function (c) { return c.locked; }).length, bad = badLocked(real);
+    ok('marketplace: every locked tool names the module that carries it (pill and "In <module>") and See module links to it on the Modules page', lockedN > 10 && real.filter(function (c) { return c.locked && !CARRIES[c.tool]; }).length === 0 && !bad.length, bad.slice(0, 3));
+    var ga = st.cards.filter(function (c) { return c.tool === 'gridatlas'; })[0] || {}, ed = st.cards.filter(function (c) { return c.tool === 'editor'; })[0] || {};
+    ok('marketplace: Grid Atlas reads In Grid Atlas · See module › and links /workspace#module-gridatlas', ga.pill === 'Grid Atlas' && ga.inLine === 'In Grid Atlas' && ga.act === 'See module ›' && ga.href === '/workspace#module-gridatlas', ga);
+    ok('marketplace: Site Map, in Lite, offers Open', !ed.locked && ed.act === 'Open' && ed.tag === 'A', ed);
+    await p.evaluate(function () { window.scrollTo(0, 900); }); await wait(250);
+    var stick = await p.$eval('.mkt-tabbar', function (e) { return Math.round(e.getBoundingClientRect().top); });
+    ok('marketplace: the category bar sticks under the workspace\'s 56px topbar', stick === 56, stick);
+    if (shotsAt) { await p.evaluate(function () { window.scrollTo(0, 0); }); await p.screenshot({ path: path.join(shotsAt, 'marketplace-packaged-1366.png'), fullPage: true }); }
+    await p.setViewportSize({ width: 390, height: 844 }); await wait(300);
+    await p.evaluate(function () { window.scrollTo(0, 900); }); await wait(250);
+    var phone = await p.evaluate(function () {
+      var lefts = {}; Array.prototype.forEach.call(document.querySelectorAll('#market-grid .mkt-card'), function (c) { lefts[Math.round(c.getBoundingClientRect().left)] = 1; });
+      var tabs = document.querySelector('.ows-tabs');
+      return { scroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, columns: Object.keys(lefts).length, tabs: !!tabs && getComputedStyle(tabs).display === 'grid', stick: Math.round(document.querySelector('.mkt-tabbar').getBoundingClientRect().top) };
+    });
+    ok('marketplace: on a phone the cards are one column, the category bar sticks under the 54px topbar, the tab bar shows and nothing scrolls sideways', !phone.scroll && phone.columns === 1 && phone.stick === 54 && phone.tabs, phone);
+    if (shotsAt) { await p.evaluate(function () { window.scrollTo(0, 0); }); await p.screenshot({ path: path.join(shotsAt, 'marketplace-packaged-390.png') }); }
+    await p.setViewportSize({ width: 1366, height: 900 });
+    ok('marketplace: the page asked for no quote, change or package catalogue and posted nothing', !STORE.posts.length && !apiCalls.slice(calls0).some(function (c) { return /package-catalog|plan-change/.test(c); }), apiCalls.slice(calls0));
+    /* old store links: a module, then the plans, now live on the Modules page */
+    navs = [];
     await p.goto(base + '/marketplace.html?home=workspace#storage', { waitUntil: 'domcontentloaded' });
-    await p.waitForFunction(function () { return !!document.querySelector('.mkt-mod[data-selected]'); }, null, { timeout: 6000 }).catch(function () {});
-    var focused = await p.evaluate(function () { var c = document.querySelector('.mkt-mod[data-selected]'); var r = c && c.getBoundingClientRect(); return { key: c && c.getAttribute('data-module-card'), onScreen: !!(r && r.top >= 0 && r.bottom <= window.innerHeight + 2) }; });
-    ok('store: /marketplace.html#storage lands on and marks the Storage module', focused.key === 'storage' && focused.onScreen, focused);
-    ok('store: no uncaught errors and nothing the page granted itself', !errs.length && !missing.length, errs.concat(missing));
-    console.log(JSON.stringify({ scenario: 'store', modules: st.cards.length, posts: STORE.posts.map(function (b) { return b.action; }) }));
-    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'store-1366.png'), fullPage: true });
+    await p.waitForFunction(function () { return location.pathname === '/workspace'; }, null, { timeout: 8000 }).catch(function () {});
+    var fwd = navs.filter(function (u) { return /^\/workspace/.test(u); })[0] || '';
+    ok('marketplace: an old store link /marketplace.html#storage is sent on to /workspace#module-storage', fwd === '/workspace?home=workspace#module-storage', navs);
+    navs = [];
+    await p.goto(base + '/marketplace.html?home=workspace#plans', { waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(function () { return location.pathname === '/workspace'; }, null, { timeout: 8000 }).catch(function () {});
+    fwd = navs.filter(function (u) { return /^\/workspace/.test(u); })[0] || '';
+    ok('marketplace: /marketplace.html#plans is sent on to /workspace#plans', fwd === '/workspace?home=workspace#plans', navs);
+    await ctx.close();
+    /* the classic home has no Modules page: See module opens the one menu in place, and so does an old link */
+    ctx = await marketContext(lt); p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    await p.goto(base + '/marketplace.html?home=classic', { waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(function () { return !!document.querySelector('#market-grid .mkt-card[data-tool="gridatlas"] button.mkt-act'); }, null, { timeout: 8000 }).catch(function () {});
+    var classic = await p.evaluate(function () { var c = document.querySelector('#market-grid .mkt-card[data-tool="gridatlas"]'), b = c && c.querySelector('.mkt-actions .mkt-act'); return { worn: document.body.classList.contains('ows-worn'), act: b ? b.tagName + ' ' + b.textContent.trim() : '', inLine: c ? ((c.querySelector('.mkt-in') || {}).textContent || '').trim() : '', links: document.querySelectorAll('#market-grid a[href^="/workspace"]').length }; });
+    ok('marketplace (classic home): the catalogue keeps its own chrome; a locked tool names its module and See module is a button, never a link to the workspace', !classic.worn && classic.act === 'BUTTON See module ›' && classic.inLine === 'In Grid Atlas' && !classic.links, classic);
+    await p.click('#market-grid .mkt-card[data-tool="gridatlas"] button.mkt-act'); await wait(500);
+    var menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, card: !!(d && d.querySelector('[data-module-card="gridatlas"]')) }; });
+    ok('marketplace (classic home): See module opens the one menu on Grid Atlas, in place', menu.open && menu.card, menu);
+    await p.keyboard.press('Escape'); await wait(200);
+    await p.goto(base + '/marketplace.html?home=classic#gridatlas', { waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(function () { return !!document.getElementById('omega-package-menu'); }, null, { timeout: 8000 }).catch(function () {});
+    menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { path: location.pathname, open: !!d, card: !!(d && d.querySelector('[data-module-card="gridatlas"]')) }; });
+    ok('marketplace (classic home): an old link /marketplace.html#gridatlas stays and opens the menu on it', menu.path === '/marketplace.html' && menu.open && menu.card, menu);
+    await ctx.close();
+    /* a legacy plan on the classic home: the same menu, in its legacy mode, on the module the public price list names */
+    PACKAGE_VIEW = null; ctx = await marketContext(ns); p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    await p.goto(base + '/marketplace.html?home=classic', { waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(function () { return !!document.querySelector('#market-grid .mkt-card[data-tool="investment"] button.mkt-act'); }, null, { timeout: 8000 }).catch(function () {});
+    await p.click('#market-grid .mkt-card[data-tool="investment"] button.mkt-act').catch(function () {}); await wait(500);
+    menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, card: !!(d && d.querySelector('[data-module-card="finance"]')) }; });
+    ok('marketplace (classic home, legacy plan): See module on Site Investment Analysis opens the one menu on Investor & Finance', menu.open && menu.card, menu);
+    ok('marketplace: no uncaught errors and no /api/ route this check does not answer', !errs.length && !missing.length, errs.concat(missing));
+    console.log(JSON.stringify({ scenario: 'marketplace', cards: st.cards.length, locked: lockedN, posts: STORE.posts.length }));
     await ctx.close();
   })();
   PACKAGE_VIEW = null;
@@ -669,28 +725,32 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     }, opts.lagMs);
     var p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
     await p.goto(base + page + (opts.query !== undefined ? opts.query : '?home=workspace'), { waitUntil: 'domcontentloaded' }); await wait(opts.lagMs ? 4000 : 2500);
-    if (page === '/marketplace.html') await p.waitForFunction(function () { return document.querySelectorAll('#mkt-shelves .mkt-mod').length > 5 && document.querySelectorAll('.mkt-planc').length >= 3; }, null, { timeout: 5000 }).catch(function () {});
+    if (page === '/marketplace.html') await p.waitForFunction(function () { return document.querySelectorAll('#market-grid .mkt-card').length > 10 && !!document.querySelector('#market-grid .mkt-card.locked a.mkt-act'); }, null, { timeout: 5000 }).catch(function () {});
     var out = await p.evaluate(function () {
       var items = Array.prototype.filter.call(document.querySelectorAll('#side-nav .sn-item'), function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return (a.querySelector('span') || a).textContent.trim() + (a.classList.contains('active') ? '*' : ''); });
       var home = document.querySelector('a[data-sn="dashboard"]');
-      var store = document.getElementById('mkt-store');
-      return { url: location.pathname, items: items, home: home && home.getAttribute('href'), theme: document.body.classList.contains('ows-theme'), grid: /linear-gradient/.test(getComputedStyle(document.body).backgroundImage), store: store ? !store.hidden : null, worn: document.body.classList.contains('ows-worn') && !!document.querySelector('#topbar.ows-top') && !!document.querySelector('#side-nav.ows-rail'), h1: (document.querySelector('.mkt-banner h1') || {}).textContent || '', mods: Array.prototype.map.call(document.querySelectorAll('#mkt-shelves .mkt-mod'), function (c) { return { key: c.getAttribute('data-module-card'), state: c.getAttribute('data-state'), price: (c.querySelector('.mkt-card-cat b') || {}).textContent || '' }; }), plans: document.querySelectorAll('.mkt-planc').length, catalogHidden: store ? getComputedStyle(document.getElementById('market-grid')).display === 'none' : null };
+      function vis(sel) { var e = document.querySelector(sel); return !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0; }
+      return { url: location.pathname, items: items, home: home && home.getAttribute('href'), theme: document.body.classList.contains('ows-theme'), grid: /linear-gradient/.test(getComputedStyle(document.body).backgroundImage), worn: document.body.classList.contains('ows-worn') && !!document.querySelector('#topbar.ows-top') && !!document.querySelector('#side-nav.ows-rail'), h1: (document.querySelector('.mkt-banner h1') || {}).textContent || '',
+        store: !!document.getElementById('mkt-store') || !!document.querySelector('.mkt-mod, .mkt-planc'), catalogue: vis('#market-grid') && vis('.mkt-tabbar'), text: (document.getElementById('main') || document.body).innerText, mailto: document.querySelectorAll('#main a[href^="mailto:"]').length };
     });
+    if (page === '/marketplace.html') out.cards = await p.evaluate(MARKET_CARDS);
     var name = 'flow ' + page;
     if (page === '/') ok(name + (opts.label || '') + ': a dashboard visit with the workspace as home lands on /workspace', /\/workspace$/.test(out.url), out.url);
     else {
       ok(name + ': the rail is the workspace rail with this page current', out.items.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings'.replace(current, current + '*'), out.items);
       ok(name + ': Dashboard points at /workspace and the ground is the blueprint grid', out.home === '/workspace' && out.theme && out.grid, out);
       if (page === '/marketplace.html') {
-        /* a legacy (unpackaged) tenant on the workspace home: the store from the public price list, every module priced and judged against the tier (On your plan · Partly · Ask ClearSky), the plans first, no tool catalogue, the whole chrome */
-        var held = out.mods.filter(function (m) { return m.state === 'held'; }).length, ask = out.mods.filter(function (m) { return m.state === 'ask' || m.state === 'part'; }).length;
-        ok(name + ': a legacy tenant sees the store: every catalog module priced from the price list, some on its plan and some to ask for', out.store === true && out.mods.length === M.catalog().length && out.mods.every(function (m) { return /\$\d/.test(m.price); }) && held > 0 && ask > 0, { store: out.store, n: out.mods.length, held: held, ask: ask });
-        ok(name + ': the head reads Marketplace, the Plans shelf is first and the tool catalogue is folded away', out.h1 === 'Marketplace' && out.plans >= 4 && out.catalogHidden === true, { h1: out.h1, plans: out.plans, catalogHidden: out.catalogHidden });
-        ok(name + ': the page wears the whole workspace chrome', out.worn, out.worn);
+        /* a legacy (unpackaged) Standard tenant on the workspace home: the tool catalogue in the workspace chrome, no store; a locked tool names the module that carries it (the public price list's) and links to it on the Modules page, a tool no module carries says the plan, a live one opens */
+        var real = out.cards.filter(function (c) { return c.act !== 'Coming soon'; }), live = real.filter(function (c) { return !c.locked; }), locked = real.filter(function (c) { return c.locked; });
+        var byPlan = locked.filter(function (c) { return !CARRIES[c.tool]; }), inv = out.cards.filter(function (c) { return c.tool === 'investment'; })[0] || {};
+        ok(name + ': a legacy tenant sees the tool catalogue in the workspace chrome: no store, the category bar and every tool', !out.store && out.catalogue && out.worn && out.cards.length > 30 && !/\bSubscribe\b|Ask ClearSky/.test(out.text) && !out.mailto, { store: out.store, catalogue: out.catalogue, worn: out.worn, cards: out.cards.length, mailto: out.mailto });
+        ok(name + ': every locked tool names the module that carries it and links to it on the Modules page (Site Investment Analysis → /workspace#module-finance); a tool no module carries names its plan; the live ones open', locked.length > byPlan.length && !badLocked(real).length && inv.href === '/workspace#module-finance' && inv.inLine === 'In ' + M.get('finance').name && byPlan.every(function (c) { return /^Included with /.test(c.act); }) && live.length > 10 && live.every(function (c) { return c.act === 'Open'; }), { bad: badLocked(real).slice(0, 3), investment: inv, byPlan: byPlan.map(function (c) { return c.tool + ':' + c.act; }) });
+        ok(name + ': the head reads Marketplace', out.h1 === 'Marketplace', out.h1);
         await p.setViewportSize({ width: 390, height: 844 }); await wait(300);
-        var phone = await p.evaluate(function () { var tabs = document.querySelector('.ows-tabs'), burger = document.getElementById('ows-burger'); return { scroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, tabs: !!tabs && getComputedStyle(tabs).display === 'grid', burger: !!burger && getComputedStyle(burger).display !== 'none', railHidden: getComputedStyle(document.getElementById('side-nav')).transform !== 'none' }; });
-        ok(name + ': on a phone the tab bar and the burger show, the rail is off-canvas and nothing scrolls sideways', !phone.scroll && phone.tabs && phone.burger && phone.railHidden, phone);
-        if (shotsAt) { await p.screenshot({ path: path.join(shotsAt, 'marketplace-390.png'), fullPage: true }); await p.setViewportSize({ width: 1366, height: 900 }); await wait(200); await p.screenshot({ path: path.join(shotsAt, 'marketplace-1366.png'), fullPage: true }); }
+        await p.evaluate(function () { window.scrollTo(0, 1200); }); await wait(250);
+        var phone = await p.evaluate(function () { var tabs = document.querySelector('.ows-tabs'), burger = document.getElementById('ows-burger'); return { scroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, tabs: !!tabs && getComputedStyle(tabs).display === 'grid', burger: !!burger && getComputedStyle(burger).display !== 'none', railHidden: getComputedStyle(document.getElementById('side-nav')).transform !== 'none', stick: Math.round(document.querySelector('.mkt-tabbar').getBoundingClientRect().top) }; });
+        ok(name + ': on a phone the tab bar and the burger show, the rail is off-canvas, the category bar sticks under the 54px topbar and nothing scrolls sideways', !phone.scroll && phone.tabs && phone.burger && phone.railHidden && phone.stick === 54, phone);
+        if (shotsAt) { await p.evaluate(function () { window.scrollTo(0, 0); }); await p.screenshot({ path: path.join(shotsAt, 'marketplace-390.png'), fullPage: true }); await p.setViewportSize({ width: 1366, height: 900 }); await wait(200); await p.screenshot({ path: path.join(shotsAt, 'marketplace-1366.png'), fullPage: true }); }
       }
       ok(name + ': no uncaught errors', !errs.length, errs);
     }
