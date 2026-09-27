@@ -202,8 +202,9 @@ org, write, part)` refuses a part not bought; `parts(ctx)` is what the office
 endpoint (`access.parts`), the front door and the customer-portal gate
 (`buyer-accounts.context`) report, and what the chrome, the hex hub, the
 dashboard and the Omega Logic app draw. A legacy tenant (addon `omega-logic`)
-is unchanged and holds every part; absent means "everything", a present list
-is the package. Showing a link is never access. Phase 9: a door that is not
+is unchanged and holds every part; one without it holds the parts it bought
+on Add to plan while they are paid (`addons.live`, below); absent means
+"everything", a present list is the package. Showing a link is never access. Phase 9: a door that is not
 a member's (the bench and rig tokens, a tenant admin's hold/release) runs
 `requirePartIfPackaged(org, 'plant')` — a packaged workspace must hold the
 part, a legacy or unrecorded one keeps its own rule — and `firestore.rules`
@@ -229,6 +230,30 @@ whose version ends in `-proposed` is never production; sign-off is renaming
 (the live runner's query). The card button on a QuickBooks invoice is
 QuickBooks Payments, not Stripe: `docs/PAYMENTS-BROWSER-SETUP.md`.
 
+Phase 10C (2026-09-27): **Stripe is the rail Tommy chose** ("a customer
+creates an account, they add billing and that's all done through Stripe, and
+once they do that it needs to allow them to use what they paid for"),
+switched on by `PACKAGING_PROVIDER=stripe` (literal; unset keeps QuickBooks,
+because production was already taking pay-now signups through QuickBooks and
+a merge must never move a live money path). `packaging-mode.js` now answers
+per provider: Stripe is SANDBOX on a test key and LIVE only under
+`PACKAGING_LIVE=true` with a live key; QuickBooks keeps its `QBO_ENV` rule
+above. `api/_lib/billing-driver.js` is the ONE place that
+says which rail a workspace bills through (its customer record decides, so a
+QuickBooks-billed workspace stays there) and what its records are called;
+the engine, plan-change and the billing profile never name a provider.
+`api/_lib/stripe-billing.js` answers the same `customer`/`invoice`/
+`reconcile` as `qbo-billing.js` with server-priced invoice items on a
+`send_invoice` Stripe invoice (Stripe's hosted page is the card page), and
+`api/stripe-webhook.js` answers an OMEGA package invoice FIRST by running the
+engine's own reconcile, so paid means open within seconds; the runner and
+"I've paid" are the same reconcile. A legacy Stripe tier's
+`stripeCustomerId` never binds a package. QuickBooks-rail tests set
+`PACKAGING_PROVIDER=quickbooks`; the Stripe rail is
+`scripts/test-stripe-billing.js` on `scripts/_lib/stripe-double.js`.
+Runbook and what is not built (autopay, instant refund events, tax):
+`docs/PAYMENTS-STRIPE.md`.
+
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
 `name`, `shelfLabel` (Core · Add-on · Pro · Advanced · By the piece · Omega
@@ -237,8 +262,22 @@ every page reads them off the record — never a page's own shelf map. Keys and
 plan names (Lite + modules, Field, Pro) are unchanged; the table is in
 `docs/VALUE-LADDER-PACKAGING.md`.
 
-Packaged editor presentation uses the server catalog through OmegaCaps;
-OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
+Packaged editor presentation uses the server catalog through OmegaCaps.
+**Bought = visible** (2026-09-27): under a package the package is the only
+thing that hides a tool. The project type (OmegaWorkspaces) puts its tools
+and guided build first and hides nothing; "All tools" and the per-user
+toggle are retired; Designer/Pro and the retired Compute mode do not apply
+(the editor is always the full owned ribbon, a saved Designer choice is not
+applied, and the legacy choice comes back if the package goes). The plan is
+re-read in place (`OmegaCaps.refresh`) when the window regains focus, every
+ten minutes and at `accessUntil`, so what is paid for opens and what lapses
+closes without a reload; The Ladder has "I've paid" (reconcile-now) and
+Show me, and the editor shows the server's billing notice. A LEGACY
+workspace's store tells the truth: `OmegaWorkspaceHub.moduleState` measures
+a module by its standalone tools AND what the editor opens of it
+(`api/_lib/modules.js` `legacyGates`, read off the real editor by
+`scripts/render-legacy-gates.js`, asked of the editor's own ladder through
+`OmegaCaps.canWith` / `capsFor`); no legacy access changes.
 The shared omega-package-menu.js renders catalog features and server-formatted
 prices. Staff package previews are read-only server projections, never tenant
 impersonation or billing edits. Legacy layout modes apply to unpackaged records.
@@ -721,12 +760,35 @@ their own pages (`data-view`). The Omega pulse is `GET /api/pulse`
 (`api/_lib/pulse.js`, pure, `tpulse.js`): platform-wide COUNTS ONLY from
 the most recent rows, never a name. The Modules page lists every module
 for every workspace (`OmegaWorkspaceHub.moduleState`, the ONE held/partly/
-ask rule shared with the store); a module not held carries Opt in: the one
-menu and a QuickBooks invoice for a packaged workspace, the request that
-moves a legacy one onto a package (`plan-change` `opt-in`: priced from the
-book, recorded on `billing/current.optIns` with history and audit, ClearSky
-mailed; the admin Package tab opens preselected on what the tenant holds
-plus that request; nothing is charged). In flight is
+ask rule shared with the store); a module not held carries Opt in (the one
+menu and a QuickBooks invoice) for a packaged workspace and **Add to plan**
+for a legacy one (Tommy, 2026-09-27: "buy them immediately and not email
+clearsky … add to plan and then charge their credit card or saved payment
+method"). Add to plan is an ADD-ON beside the legacy plan, whose own tier,
+price and billing are never touched: `api/_lib/addons.js` through
+`plan-change` `addon-quote` / `addon-buy` / `addon-cancel` (owner, admin or
+verified staff), the book's list price (the five Logic parts as the bundle),
+its own QuickBooks invoice paid by card on QuickBooks' page (or the card
+saved there), Live when `package-billing.reconcile` sees it paid (`I've
+paid` = reconcile-now; the hourly runner renews it monthly on the add-on
+billing day; off after an unpaid renewal's grace). Bought is
+`billing/current.addOns.modules`, on is `addOns.live`; on means what the
+legacy readers already honour — a Logic part through `logic-access`, a
+module's tools as `toolOverrides` (and the `toolAccess` allowlist), editor
+capabilities as the legacy add-on keys `omega-caps` reads — and
+`addOns.granted` makes switching off take back exactly that. It is sold
+only where it switches on EXACTLY (`addons.exact`, Tommy's decision
+2026-09-27): a legacy editor opens Site Map a whole tab at a time, so a
+module that would come on only in part, or switch on part of another, is
+not sold here; the quote says why and offers the recorded request
+(`plan-change` `opt-in`). Every Omega Logic department is exact on every
+plan; opening one module's Site Map commands on a legacy plan is not
+built. Add-ons bill through QuickBooks whatever the package rail
+(`addons.RAIL`; `package-billing.guard(c, rail)`), never rebinding a
+legacy Stripe tier's own customer; add-ons on Stripe are not built. The one
+browser control is `OmegaPackageMenu.addOnControl`; `scripts/test-addons.js`
+and `check:workspace` (legacy-add) hold it. A workspace with no `omega_orgs`
+or billing record cannot be billed and is told so. In flight is
 `OmegaWorkspaceToday.board` (what needs something, then what was touched
 last, never online, a finance-marketplace deal riding on its project) and
 Assign merges only the owner fields onto `projects/{id}`. Plan & billing
@@ -761,8 +823,8 @@ its `#main`; the markup stays for the classic home and the tests that
 read it). A PACKAGED workspace prices from `api/package-catalog` and opts
 in through the shared `omega-package-menu.js` control and `plan-change`;
 any other workspace reads the PUBLIC price list `GET /api/offerings`,
-each module judged against its tier (On your plan · Partly · Ask
-ClearSky, an email), and never pays here. `/marketplace.html#<module>`
+each module judged against its tier (On your plan · Partly · Add to
+plan, the same `addOnControl`: the server's price, QuickBooks' card page). `/marketplace.html#<module>`
 lands on that module. A tenant on the classic home keeps the tool
 catalogue and pinning. Design, launch order and the honest list of what
 is not built: `docs/OMEGA-WORKSPACE.md`.
@@ -921,7 +983,9 @@ tenant. Treat it that way.
   one card per module: held ones Live in shelf order, bought-not-on ones
   named, up to three unheld rungs dashed with + Add opening the Ladder on
   them; the catalog and prices are the server's, never a second list.
-  Scenarios lite-ladder, awaiting and legacy-enterprise hold it.
+  Scenarios lite-ladder, awaiting and legacy-enterprise hold it; their five
+  screenshots are committed evidence, rewritten only by `--evidence` (a plain
+  run writes nothing into the repo; `--shots DIR` puts every shot in DIR).
   The master console (`admin/admin-console.js`) reads a packaged tenant
   by its state machine: `_standing` has a key per state, plan and module
   keys become the price book's words from `GET /api/offerings`

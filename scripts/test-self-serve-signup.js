@@ -37,7 +37,7 @@ require('../api/_lib/qbo-billing').driver = function () {
     invoice: async function (plan) { qbo.invoices.push(plan); return { id: 'INV-' + qbo.invoices.length, totalCents: plan.subtotalCents, payUrl: qbo.noLink ? null : 'https://connect.intuit.com/pay/inv-' + qbo.invoices.length, payLinkMissing: qbo.noLink }; },
     reconcile: async function (record) { return { satisfied: qbo.paid, reversed: false, paidCents: qbo.paid ? record.totalCents : 0, payUrl: record.paymentLink }; } };
 };
-var ENV = { PACKAGING_SIGNUP_ENABLED: 'true', PACKAGING_BILLING_ENABLED: 'true', QBO_ENV: 'sandbox', TRIAL_DAYS: '14', PACKAGING_LIVE: '', TENANT_WILDCARD_LIVE: '' };
+var ENV = { PACKAGING_PROVIDER: 'quickbooks', PACKAGING_SIGNUP_ENABLED: 'true', PACKAGING_BILLING_ENABLED: 'true', QBO_ENV: 'sandbox', TRIAL_DAYS: '14', PACKAGING_LIVE: '', TENANT_WILDCARD_LIVE: '' };
 Object.keys(ENV).forEach(function (k) { process.env[k] = ENV[k]; });
 var signup = require('../api/tenant-signup'), offerings = require('../api/offerings'), planChange = require('../api/plan-change'), S = require('../api/_lib/package-billing'), X = require('../api/_lib/package-access');
 var RES = { setHeader: function () {} };
@@ -248,8 +248,8 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
   console.log('\nthe pages');
   await test('signup, login and the workspace carry the path: pay and start, the pay step, the offerings link, "I\'ve paid"', async function () {
     var st = read('start.html'), lg = read('login.html'), of = read('offerings.html'), ot = read('omega-tenant.js');
-    assert.match(st, /id="billing-pay" onclick="submitWorkspace\(true, false, true\)">Pay and start now</); assert.match(st, /id="billing-submit" onclick="submitWorkspace\(true\)">Request a 14-day trial instead</);
-    assert.match(st, /<div id="step-pay" class="hide">/); assert.match(st, /id="pay-link" target="_blank" rel="noopener">Pay now in QuickBooks</); assert.match(st, /onclick="checkPayment\(true\)">I've paid — open my workspace</);
+    assert.match(st, /id="billing-pay" onclick="submitWorkspace\(true, false, true\)">Subscribe</); assert.match(st, /id="billing-submit" onclick="submitWorkspace\(true\)">Request a 14-day trial instead</);
+    assert.match(st, /<div id="step-pay" class="hide">/); assert.match(st, /id="pay-link" target="_blank" rel="noopener">Pay now</); assert.match(st, /a\.textContent = j\.amountDueDisplay \? 'Pay ' \+ j\.amountDueDisplay \+ ' securely' : 'Pay securely'/); assert.match(st, /onclick="checkPayment\(true\)">I've paid — open my workspace</);
     assert.match(st, /action: 'check-payment'/);
     assert.match(st, /id="billing-continue" onclick="toBuild\(\)"/); assert.match(st, /<div id="step-build" class="hide">/); assert.match(st, /name="signup-interval" value="annual"/); assert.match(st, /two months free/);
     assert.match(st, /holdForVerification\(u\)/); assert.match(st, /omega:signup-draft/); assert.ok(!/start\.html\?company=/.test(lg), 'the company never travels in a link');

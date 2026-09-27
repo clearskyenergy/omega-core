@@ -4,6 +4,7 @@
  * QBO is mocked; screenshots prove UI behavior, not hosted payment acceptance.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture'), B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules');
 var R = require('../api/_lib/proration'), P = require('../api/_lib/subscription-pricing');
@@ -39,7 +40,7 @@ var server = http.createServer(async function (req, res) {
     if (url.pathname === '/api/tenant-systems') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ name: 'Clean Cell · fixture', surfaces: [] })); }
     if (url.pathname === '/config.js') return res.end('window.CLEARSKY_CONFIG={firebase:{}};');
     if (['/omega-brand.js', '/omega-tenant.js', '/omega-whitelabel.js'].includes(url.pathname)) return res.end('');
-    if (!['/admin/tenant.html', '/start.html', '/offerings.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html', '/omega-tools.js', '/omega-workspace-hub.js'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
+    if (!['/admin/tenant.html', '/start.html', '/offerings.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html', '/omega-tools.js', '/omega-caps.js', '/omega-workspace-hub.js'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
     res.setHeader('Content-Type', url.pathname.endsWith('.css') ? 'text/css' : url.pathname.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(fs.readFileSync(path.join(root, url.pathname)));
   } catch (e) { res.statusCode = e.status || 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: e.message })); }
 });
@@ -108,9 +109,12 @@ async function run() {
     var lp = await legacyContext.newPage(), legacyErrors = []; lp.on('pageerror', function (e) { legacyErrors.push(e.message); });
     await lp.goto(base + '/admin/tenant.html?org=' + org); await lp.locator('#pp-standing').waitFor();
     var standing = (await lp.locator('#pp-standing').textContent()).replace(/\s+/g, ' ');
-    check(/Today: Standard tier/.test(standing) && /Holds Omega Design, Omega Grid, Omega Storage, Omega Compute/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and the request: ' + standing);
+    check(/Today: Standard tier/.test(standing) && /Holds Omega EV, Omega Permits \(/.test(standing) && /Partly on: Omega Design, Omega Grid, Omega Storage, Omega Estimate, Omega Plans, Omega Intel, Omega Engineer, Omega Capital, Omega Compute, Omega Sites \(/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and the request: ' + standing);
     var picked = await lp.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('[data-pp-pane="pkg"] [data-module-card]'), function (c) { var i = c.querySelector('input'); return i && i.checked; }).map(function (c) { return c.getAttribute('data-module-card'); }).sort(); });
-    check(picked.join() === 'compute,gridatlas,lite,siteintel,storage', 'the picker starts from what the tier holds plus the request: ' + picked.join());
+    /* the store tells the truth (2026-09-27): a Core tenant's editor has no Analyze, Estimate or Compute tab, so it holds
+       only what opens in full (the permitting matrix) and is partly on the rest; the picker starts from both, plus the
+       request, so moving it onto a package never takes away something it opens today */
+    check(picked.join() === 'compute,engineering,estimate,evrebates,finance,gridatlas,lite,permitting,plansets,sitefinder,siteintel,storage', 'the picker starts from what the tier holds or partly uses, plus the request: ' + picked.join());
     await lp.locator('#pp-review:not([disabled])').waitFor();
     check(/\$/.test(await lp.locator('#pp-monthly').textContent()), 'the rail prices the preselection on the server');
     await capture(lp, 'legacy-standing'); check(legacyErrors.length === 0, legacyErrors.join('\n')); await legacyContext.close();
@@ -143,10 +147,10 @@ async function run() {
     await pp10.locator('#billing-continue').click(); await pp10.locator('#step-build').waitFor({ state: 'visible' });
     /* the build step: the menu, the monthly membership quoted by the server, monthly or yearly at ten months */
     await pp10.waitForFunction(function () { return /^\$[\d,]+\/month$/.test(document.getElementById('signup-package-price').textContent); });
-    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Pay and start now' && (await pp10.locator('#billing-submit').textContent()).indexOf('trial instead') > 0, 'the build step offers pay-and-start first and the trial second');
+    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Subscribe' && (await pp10.locator('#billing-submit').textContent()).indexOf('trial instead') > 0, 'the build step offers pay-and-start first and the trial second');
     check(/\/year, invoiced once · save \$[\d,]+/.test(await pp10.locator('#interval-annual-price').textContent()), 'the yearly card shows the year\u2019s price and the saving: ' + await pp10.locator('#interval-annual-price').textContent());
     await pp10.locator('#pick-annual input').check();
-    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Pay for the year and start now' && /ten months of twelve/.test(await pp10.locator('#signup-interval-note').textContent()), 'yearly: the button and the note say so');
+    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Subscribe yearly' && /ten months of twelve/.test(await pp10.locator('#signup-interval-note').textContent()), 'yearly: the button and the note say so');
     await pp10.locator('#pick-monthly input').check();
     await pp10.locator('#billing-pay').click(); await pp10.locator('#step-pay').waitFor({ state: 'visible' });
     var payBill = db.data.get('omega_orgs/paynow-fixture.example/billing/current'), payOrg = db.data.get('omega_orgs/paynow-fixture.example');

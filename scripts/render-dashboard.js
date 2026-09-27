@@ -9,8 +9,10 @@
    SDK and fonts, the chart CDN and every /api/ call are answered here.
 
      node scripts/render-dashboard.js              # a JSON line per scenario
-     node scripts/render-dashboard.js --shots DIR  # plus screenshots
-     npm run check:dashboard
+     node scripts/render-dashboard.js --shots DIR  # plus screenshots, all in DIR
+     node scripts/render-dashboard.js --evidence   # rewrite the committed phase 10B
+                                                   # screenshots (docs/screenshots/)
+     npm run check:dashboard                       # writes nothing into the repo
 
    It is the check that a signed-in visit paints, for the three first-run
    shapes the product has (a brand-new trial workspace behind the terms
@@ -99,8 +101,16 @@ var srv = http.createServer(function (req, res) {
 });
 
 var fails = 0, lines = [];
-var SHOTS10B = path.join(ROOT, 'docs/screenshots/packaging-phase-10b'); fs.mkdirSync(SHOTS10B, { recursive: true });
-function shot10b(p, name) { return p.screenshot({ path: path.join(SHOTS10B, name + '.png') }).catch(function () {}); }
+/* The five phase 10B screenshots are COMMITTED evidence
+   (docs/PACKAGING-PHASE-10B-VALIDATION.md). They were rewritten on every
+   run, so a plain check:dashboard left five modified PNGs in the working
+   tree for somebody's next `git add -A` to commit. Now: --evidence rewrites
+   them in place, --shots DIR puts them in DIR with the rest, and neither
+   writes nothing. Each capture is followed by an explicit wait or by reads
+   of state that had already settled, so skipping it changes no assertion. */
+var SHOTS10B = process.argv.indexOf('--evidence') >= 0 ? path.join(ROOT, 'docs/screenshots/packaging-phase-10b') : shotsAt;
+if (SHOTS10B) fs.mkdirSync(SHOTS10B, { recursive: true });
+function shot10b(p, name) { return SHOTS10B ? p.screenshot({ path: path.join(SHOTS10B, name + '.png') }).catch(function () {}) : Promise.resolve(); }
 function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + name + (detail !== undefined ? ' ' + JSON.stringify(detail) : '')); } }
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 /* a body of visible text carries none of the words a bug prints */
@@ -380,7 +390,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.waitForFunction(function () { var e = document.getElementById('acct-pk-monthly'); return e && /^\$/.test(e.textContent); }, null, { timeout: 8000 });
     var rows = await p.evaluate(function () { function t(id) { var e = document.getElementById(id); return e ? e.textContent : null; } return { pkg: t('acct-pk-package'), status: t('acct-pk-status'), monthly: t('acct-pk-monthly'), next: t('acct-pk-next'), legacy: getComputedStyle(document.getElementById('acct-legacy-billing')).display, ladder: t('acct-package-ladder'), invoices: t('acct-package-invoices'), add: getComputedStyle(document.getElementById('acct-package-add')).display }; });
     ok('lite-ladder: the Account panel shows the package, not the legacy rows', rows.legacy === 'none' && rows.pkg === 'Omega Design' && rows.status === 'Active' && rows.monthly === '$500/month' && /\d{4}/.test(rows.next), rows);
-    ok('lite-ladder: the Ladder is named and says what it is for', /Build your own experience/.test(rows.ladder) && /Office, Plant/.test(rows.ladder) && rows.add !== 'none', rows.ladder);
+    ok('lite-ladder: the Ladder is named and says what it is for', /Build your own experience/.test(rows.ladder) && M.catalog().filter(function (m) { return m.shelf === 'platform'; }).every(function (m) { return rows.ladder.indexOf(m.name) >= 0; }) && !/Materials & Purchasing|Logistics & Warranty/.test(rows.ladder) && rows.add !== 'none', rows.ladder);
     ok('lite-ladder: no invoices yet reads as a sentence', /No invoices issued yet/.test(rows.invoices), rows.invoices);
     await p.evaluate(function () { var s = document.querySelector('#acct-package'); if (s) s.scrollIntoView(); }); await shot10b(p, 'account-ladder');
     await p.click('#acct-package-add'); await p.waitForSelector('#omega-package-menu [data-module-card]');

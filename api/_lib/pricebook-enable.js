@@ -9,6 +9,11 @@
  *           passes the QuickBooks guard (the mode's company, the current book,
  *           the stored connection) and flips `enabled` in a transaction that
  *           re-reads the book; the caller must hand back the hash it was shown.
+ *           On the Stripe rail (PACKAGING_PROVIDER=stripe) the book carries no
+ *           QuickBooks items: Stripe is handed the server's amounts line by
+ *           line, so enable() needs the Stripe mode (a test key, or a live key
+ *           under PACKAGING_LIVE=true; a -proposed book never live), not a
+ *           binding or the QuickBooks guard.
  * bind()    the item sync against the company the mode names, finding each
  *           item by its exact name (never creating one that exists), with the
  *           income account and taxability read off the existing Lite item so
@@ -23,8 +28,8 @@ async function status(db, deps) {
   deps = deps || { Q: require('./qbo') };
   var book = await B.load(db, B.VERSION), conn = await deps.Q.load();
   var gaps = missing(book);
-  return { version: book.version, enabled: !!book.enabled, frozen: !!book.frozen, used: book.usedAt != null,
-    mode: Mode.live() ? 'live' : Mode.env() || 'off', bookEnv: book.qbo && book.qbo.env, bookRealm: book.qbo && book.qbo.realmId ? String(book.qbo.realmId) : null,
+  return { version: book.version, enabled: !!book.enabled, frozen: !!book.frozen, used: book.usedAt != null, provider: Mode.provider(),
+    mode: Mode.live() ? 'live' : Mode.open() ? Mode.env() : 'off', bookEnv: book.qbo && book.qbo.env, bookRealm: book.qbo && book.qbo.realmId ? String(book.qbo.realmId) : null,
     connection: conn ? { env: conn.env || null, realmId: conn.realmId ? String(conn.realmId) : null } : null,
     items: { total: I.items(book).length, bound: I.items(book).length - gaps.length, missing: gaps },
     expectedHash: hash(book) };
@@ -33,12 +38,16 @@ async function enable(db, apply, expectedHash, deps) {
   var book = await B.load(db, B.VERSION);
   if (book.enabled) return { version: book.version, enabled: true, unchanged: true };
   B.writable(book);
-  if (missing(book).length) fail('Bind every QuickBooks item first');
+  var stripe = Mode.provider() === 'stripe';
+  if (stripe) {
+    if (!Mode.open('stripe')) fail('The Stripe rail needs a Stripe test key, or PACKAGING_LIVE=true with a live key');
+    if (Mode.live('stripe') && /-proposed$/.test(book.version)) fail('A proposed price book is never live; sign the values off under a release version');
+  } else if (missing(book).length) fail('Bind every QuickBooks item first');
   var h = hash(book);
-  var result = { dryRun: !apply, version: book.version, realm: book.qbo.realmId, before: false, after: true, expectedHash: h };
+  var result = { dryRun: !apply, version: book.version, provider: Mode.provider(), realm: stripe ? null : book.qbo.realmId, before: false, after: true, expectedHash: h };
   if (!apply) return result;
   if (expectedHash !== h) fail('Review the current dry run and supply its --expected-hash');
-  await I.guard(book, String(book.qbo.realmId), deps || { Q: require('./qbo') });
+  if (!stripe) await I.guard(book, String(book.qbo.realmId), deps || { Q: require('./qbo') });
   await db.runTransaction(async function (tx) {
     var ref = db.doc('pricebook/' + book.version), snap = await tx.get(ref), fresh = snap.data(); B.writable(fresh);
     if (B.stable(fresh) !== B.stable(book)) fail('Book changed; repeat the dry run');

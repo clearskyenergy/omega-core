@@ -436,12 +436,20 @@
     } else if (orgAccess || memAccess) {
       ws.toolAccess = (orgAccess || memAccess).slice();
     }
+    /* ── ADD-ONS ON A PLAN BILLED OUTSIDE THE ENGINE ─────────────────────
+       What a legacy workspace bought on Add to plan and has switched on now
+       (billing.addOns.live, written only by the server: api/_lib/addons.js),
+       while its paid period lasts. Their tools arrive as toolOverrides the
+       server wrote; this list is what the hub, the Modules page and the
+       Omega Logic rail read (OmegaWorkspaceHub.holdsLogic, moduleState). */
+    var ao = b.addOns;
+    ws.addOns = ao && Array.isArray(ao.live) && typeof ao.accessUntil === 'number' && Date.now() < ao.accessUntil ? ao.live.slice() : [];
     ws.packaged = b.packaged === true || !!(T.packageAccess && T.packageAccess.packaged);
     if (ws.packaged) {
       ws.packageAccess = T.packageAccess || { packaged: true, modules: [], caps: [], toolAccess: [], readOnly: true };
       ws.modules = ws.packageAccess.modules.slice();
       ws.toolAccess = ws.packageAccess.toolAccess.slice();
-      ws.toolOverrides = {}; ws.addons = [];
+      ws.toolOverrides = {}; ws.addons = []; ws.addOns = [];
     }
     ws.role = T.role;
     ws.orgStatus = T.status;
@@ -621,19 +629,19 @@
       bar.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;z-index:99998;padding:12px 18px;border:1px solid #6e9be0;border-radius:8px;background:#16202b;color:#eef2f6;font:13px/1.5 system-ui;display:flex;flex-wrap:wrap;gap:10px;box-shadow:0 4px 20px #0004';
       var text = document.createElement('span'); text.textContent = view.billingNotice.text; bar.appendChild(text);
       if (view.billingNotice.payUrl) {
-        /* "I've paid": ask the platform to look at QuickBooks now (plan-change
+        /* "I've paid": ask the platform to look at the invoice now (plan-change
            reconcile-now) instead of waiting for the daily runner; a paid
            invoice reloads the page into the opened workspace */
         var paid = document.createElement('button'); paid.type = 'button'; paid.textContent = "I've paid"; paid.style.cssText = 'margin-left:10px;padding:4px 10px;border-radius:6px;border:1px solid #6e9be0;background:transparent;color:#eef2f6;cursor:pointer;font:inherit';
         paid.onclick = function () {
-          paid.disabled = true; paid.textContent = 'Checking QuickBooks…';
+          paid.disabled = true; paid.textContent = 'Checking your payment…';
           user.getIdToken().then(function (token) { return global.fetch('/api/plan-change', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reconcile-now' }) }); })
             .then(function (r) { return r.json(); })
-            .then(function (j) { if (j && j.paid) { global.location.reload(); return; } paid.disabled = false; paid.textContent = "I've paid"; text.textContent = (j && j.error) ? j.error : 'Not paid yet as far as QuickBooks knows; a card payment shows within a minute.'; },
+            .then(function (j) { if (j && j.paid) { global.location.reload(); return; } paid.disabled = false; paid.textContent = "I've paid"; text.textContent = (j && j.error) ? j.error : 'Not paid yet as far as ' + (view.billingNotice.payWith || 'the invoice') + ' shows; a card payment shows within a minute.'; },
               function () { paid.disabled = false; paid.textContent = "I've paid"; });
         };
         bar.appendChild(paid);
-        var pay = document.createElement('a'); pay.textContent = 'Pay in QuickBooks'; pay.href = view.billingNotice.payUrl; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.color = '#9fc5ff'; bar.appendChild(pay); }
+        var pay = document.createElement('a'); pay.textContent = view.billingNotice.payWith ? 'Pay in ' + view.billingNotice.payWith : 'Pay now'; pay.href = view.billingNotice.payUrl; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.color = '#9fc5ff'; bar.appendChild(pay); }
       document.body.appendChild(bar);
     }
     var user = global.firebase && firebase.auth().currentUser; if (!user || !global.fetch) return;
@@ -644,7 +652,9 @@
       // refresh can wait on a network. API and rules enforce it independently.
       if (view.accessUntil && Date.now() >= view.accessUntil) {
         view.readOnly = true;
-        if (global.OmegaCaps) { global.OmegaCaps.setPackage(view); global.OmegaCaps.apply('trial'); }
+        /* the editor's command gate, on the editor only: the store pages load
+           omega-caps.js for its legacy ladder (capsFor) and have no ribbon */
+        if (global.OmegaCaps && global.document.getElementById('ribbon')) { global.OmegaCaps.setPackage(view); global.OmegaCaps.apply('trial'); }
       }
       user.getIdToken().then(function (token) { return global.fetch('/api/package-access', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
         .then(function (r) { if (!r.ok) throw new Error('Package access unavailable'); return r.json(); })
@@ -1034,6 +1044,9 @@
     get tenant() { return T.tenant; },
     get org() { return T.org; },
     get billing() { return T.billing; },
+    /* the legacy tier → tool level every page reads (the master console's
+       package panel included), so the tenant and ClearSky see one answer */
+    get tierLevels() { var out = {}; for (var k in TIER_LEVEL) out[k] = TIER_LEVEL[k]; return out; },
     get member() { return T.member; },
     get role() { return T.role; },
     get status() { return T.status; },
@@ -1067,6 +1080,19 @@
           if (firebase.auth().currentUser !== user || !fresh.packaged || !Array.isArray(fresh.toolAccess)) return null;
           T.packageAccess = fresh; ws.packageAccess = fresh; fireEntitlements(mergeEntitlements(ws)); return fresh;
         });
+    },
+    /* After an add-on on a plan billed OUTSIDE the engine switches on (Add to
+       plan, "I've paid": api/_lib/addons.js): read the workspace's billing
+       record again (a member may) and re-fire the entitlements, so the tiles
+       (the toolOverrides the server wrote), the Modules page and the Omega
+       Logic rail follow without a reload. Resolves to the record, or null. */
+    refreshBilling: function () {
+      var ws = T._ws, d = db(), org = ws && ws.orgId;
+      if (!org || !d || ws.packaged) return Promise.resolve(null);
+      return d.collection('omega_orgs').doc(org).collection('billing').doc('current').get().then(function (s) {
+        if (!s.exists) return null;
+        T.billing = s.data(); fireEntitlements(mergeEntitlements(ws)); return T.billing;
+      });
     }
   };
 
