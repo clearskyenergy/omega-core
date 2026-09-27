@@ -715,7 +715,12 @@ the most recent rows, never a name. The Modules page lists every module
 for every workspace (`OmegaWorkspaceHub.moduleState`, the ONE held/partly/
 ask rule shared with the store); a module not held carries Opt in: the one
 menu and a QuickBooks invoice for a packaged workspace, the request that
-moves a legacy one onto a package. Opt-in panels live on
+moves a legacy one onto a package. Optional held modules offer **Opt out** through the
+same shared menu. Packaged opt-outs preview the server's dependency set,
+then queue for the existing quarterly review (no immediate access, charge
+or refund change); Keep module withdraws the request. Lite is mandatory.
+Legacy opt-outs prepare a ClearSky email request under the existing
+agreement. The page never changes billing or grants. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.

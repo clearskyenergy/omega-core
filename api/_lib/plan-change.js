@@ -211,25 +211,49 @@ async function cancel(db, orgId, changeId, caller, now) {
     return { ok: true, changeId: changeId, state: 'cancelled' };
   });
 }
-/* Removals never change access today; they queue for the quarterly review. */
+/* The catalog owns every dependency. Removing a prerequisite includes its
+ * dependents; keeping a dependent also keeps its prerequisites. Lite stays.
+ * This is a review request, never an immediate grant or invoice change. */
+function removalSelection(billing, wanted, withdraw) {
+  if (billing.packaged !== true) fail('This workspace is not on a subscription package');
+  var owned = M.normalize(billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription.modules : billing.modules), selected = wanted.slice();
+  wanted.forEach(function (k) { if (owned.indexOf(k) < 0) fail(M.get(k).name + ' is not in your package', 400); });
+  var changed = true;
+  while (changed) {
+    changed = false;
+    owned.forEach(function (k) {
+      if (withdraw && selected.indexOf(k) >= 0) M.get(k).requires.forEach(function (r) {
+        if (r !== 'lite' && selected.indexOf(r) < 0) { selected.push(r); changed = true; }
+      });
+      if (!withdraw && selected.indexOf(k) < 0 && M.get(k).requires.some(function (r) { return selected.indexOf(r) >= 0; })) { selected.push(k); changed = true; }
+    });
+  }
+  return { owned: owned, modules: owned.filter(function (k) { return selected.indexOf(k) >= 0; }) };
+}
+/* Removals never change access today; they queue for the quarterly review.
+ * Dry run and apply read the same current subscription inside a transaction;
+ * a changed dependency set requires the owner to review it again. */
 async function removal(db, orgId, input, caller, now, withdraw) {
-  var c = await S.context(db, orgId), b = c.billing;
-  if (b.packaged !== true) fail('This workspace is not on a subscription package');
-  var wanted = keys(input.remove, 'remove'), owned = M.normalize(b.subscription && b.subscription.modules ? b.subscription.modules : b.modules);
+  var c = await S.context(db, orgId), wanted = keys(input.remove, 'remove');
   var current = c.root.collection('billing').doc('current');
   return db.runTransaction(async function (tx) {
     var live = await tx.get(current), fresh = live.data() || {}, list = (fresh.removalRequests || []).slice();
-    wanted.forEach(function (k) {
-      if (owned.indexOf(k) < 0) fail(M.get(k).name + ' is not in your package', 400);
+    var selection = removalSelection(fresh, wanted, withdraw), remove = selection.modules;
+    var previewId = Q.key(B.stable({ orgId: orgId, owned: selection.owned, modules: remove, withdraw: !!withdraw }));
+    var note = withdraw ? 'The opt-out request is withdrawn for these modules. Access and billing are unchanged.' : 'Queued for the quarterly review with ClearSky. Access and charges stay unchanged until that review; this does not issue a refund.';
+    if (input.dryRun === true) return { previewId: previewId, modules: remove, names: names(remove), withdraw: !!withdraw,
+      note: withdraw ? 'Confirming will withdraw the opt-out request for these modules. Access and billing will stay unchanged.' : 'Confirming queues these modules for the quarterly review with ClearSky. Access and charges stay unchanged until that review; this does not issue a refund.' };
+    if (input.previewId !== previewId) fail('Your package changed; review the opt-out request again');
+    remove.forEach(function (k) {
       var i = -1; list.forEach(function (r, n) { if (r.module === k) i = n; });
       if (withdraw) { if (i >= 0) list.splice(i, 1); }
       else if (i < 0) list.push({ module: k, requestedAt: now, by: caller.email, reason: typeof input.reason === 'string' ? input.reason.slice(0, 300) : '' });
     });
     tx.update(current, { removalRequests: list, updatedAt: now, updatedBy: caller.email });
     var id = 'removal-' + Q.key(B.stable({ w: wanted, withdraw: !!withdraw, at: now }));
-    var event = { at: now, by: caller.email, action: withdraw ? 'removal-withdrawn' : 'removal-requested', changed: { modules: wanted, removalRequests: list, note: 'Takes effect at the quarterly review; access is unchanged.' } };
+    var event = { at: now, by: caller.email, action: withdraw ? 'removal-withdrawn' : 'removal-requested', changed: { modules: remove, removalRequests: list, note: note } };
     tx.set(current.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
-    return { ok: true, removalRequests: list };
+    return { ok: true, removalRequests: list, modules: remove, names: names(remove), note: note };
   });
 }
 async function summary(db, orgId) {

@@ -105,7 +105,7 @@
     function draw(summary) {
       headline(summary);
       var pending = {}; (summary.pending || []).forEach(function (p) { (p.add || []).forEach(function (k) { pending[k] = p; }); });
-      var state = { canManage: true, pending: pending, onChanged: function () { setTimeout(function () { reload('cust'); }, 400); } };
+      var state = { canManage: true, pending: pending, summary: summary, orgId: orgId, onChanged: function () { setTimeout(function () { reload('cust'); }, 400); } };
       pendingHost.textContent = '';
       if (summary.pending && summary.pending.length) {
         pendingHost.appendChild(el('h3', 'Waiting for payment'));
@@ -118,24 +118,20 @@
       }
       if (summary.gate && !summary.gate.canApply) pendingHost.appendChild(el('p', summary.gate.reason, 'pp-note'));
       cards.textContent = '';
-      data.modules.filter(function (m) { return owned.indexOf(m.key) < 0; }).forEach(function (m) {
+      data.modules.filter(function (m) { return (summary.subscription || owned).indexOf(m.key) < 0; }).forEach(function (m) {
         var card = global.OmegaPackageMenu.card(m, m.priceDisplay);
         global.OmegaPackageMenu.subscribeControl(card.querySelector('.opm-act'), m, state);
         cards.appendChild(card);
       });
       if (!cards.children.length) cards.appendChild(el('p', 'Your package includes every module in the catalog.', 'pp-note'));
       removals.textContent = '';
-      var requested = {}; (summary.removalRequests || []).forEach(function (r) { requested[r.module] = r; });
       var list = el('div', '', 'pp-row');
-      owned.filter(function (k) { return k !== 'lite'; }).forEach(function (k) {
+      (summary.subscription || owned).filter(function (k) { return k !== 'lite'; }).forEach(function (k) {
         var m = data.modules.filter(function (x) { return x.key === k; })[0]; if (!m) return;
         var wrap = el('span', '', 'pkm-tag');
         wrap.appendChild(document.createTextNode(m.name + ' '));
-        var b2 = button(requested[k] ? 'Withdraw removal request' : 'Remove at next review', function () {
-          b2.disabled = true;
-          global.OmegaPackageMenu.api('/api/plan-change', { action: requested[k] ? 'withdraw-removal' : 'request-removal', remove: [k] }).then(function () { refresh(); }, function (e) { message(e.message, true); b2.disabled = false; });
-        });
-        wrap.appendChild(b2); list.appendChild(wrap);
+        global.OmegaPackageMenu.subscribeControl(wrap.appendChild(el('span')), m, state);
+        list.appendChild(wrap);
       });
       if (list.children.length) { removals.appendChild(el('p', 'Removals take effect at the quarterly review; your access is unchanged until then.', 'pp-note')); removals.appendChild(list); }
     }
