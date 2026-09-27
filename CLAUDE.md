@@ -791,7 +791,9 @@ clearsky … add to plan and then charge their credit card or saved payment
 method"). Add to plan is an ADD-ON beside the legacy plan, whose own tier,
 price and billing are never touched: `api/_lib/addons.js` through
 `plan-change` `addon-quote` / `addon-buy` / `addon-cancel` (owner, admin or
-verified staff), the book's list price (the five Logic parts as the bundle),
+verified staff; an owner or admin of an ACTIVE client needs no verified email,
+`admin.clientAdmin`: the role a person granted vouches, and a Team invitation
+makes its account unverified), the book's list price (the five Logic parts as the bundle),
 its own QuickBooks invoice paid by card on QuickBooks' page (or the card
 saved there), Live when `package-billing.reconcile` sees it paid (`I've
 paid` = reconcile-now; the hourly runner renews it monthly on the add-on
@@ -819,7 +821,8 @@ Assign merges only the owner fields onto `projects/{id}`. Plan & billing
 is a page (`#billing`): subscription, what is owed and when, the payment
 method (the Stripe portal or QuickBooks' own payment page; a card is never
 entered on our pages) and the history; `GET /api/plan-change` is readable
-by any verified member, changes stay with an owner or admin. The shell's
+by any verified member (and an active client's owner or admin, verified or
+not), changes stay with an owner or admin. The shell's
 button reset is `:where()` (zero specificity) so a styled button keeps its
 face, and `omega-splash.js` hears link clicks last, so a link the page
 handles itself never raises the mark. Optional held modules offer **Opt out** through the
