@@ -25380,7 +25380,7 @@ function newProject() {
 }
 
 async function createNewProject() {
-  const name = document.getElementById('np-name').value.trim() || 'New BESS Project';
+  const name = document.getElementById('np-name').value.trim() || 'New Project';
   const address = document.getElementById('np-addr').value.trim();
   const customer = document.getElementById('np-customer').value.trim();
   const offtaker = (document.getElementById('np-offtaker')||{}).value.trim() || '';
@@ -25401,7 +25401,9 @@ async function createNewProject() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: 'bess', source: 'editor-modal' }); } catch (e) {}
+    /* No type is chosen here, so no vertical (null, as omega-newproject.js and
+       omega-intake.js send when they do not know one) — not 'bess' by default. */
+    try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: null, source: 'editor-modal' }); } catch (e) {}
     document.getElementById('new-proj-modal').style.display='none';
     document.getElementById('proj-modal').style.display='none';
     const basePath = window.location.pathname.endsWith('.html') 
@@ -49343,13 +49345,13 @@ async function exportPermitPDF() {
 <div id="new-proj-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:10000;align-items:center;justify-content:center">
   <div style="background:var(--navy);border:1px solid var(--border);border-radius:12px;width:min(480px,95vw);box-shadow:0 20px 60px rgba(0,0,0,.6)">
     <div style="padding:20px 24px;border-bottom:1px solid var(--border)">
-      <div style="font-size:16px;font-weight:700;color:var(--text)">＋ New BESS Project</div>
+      <div style="font-size:16px;font-weight:700;color:var(--text)">＋ New Project</div>
       <div style="font-size:11px;color:var(--sub);margin-top:3px">Creates a blank project and opens the editor</div>
     </div>
     <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">
       <div>
         <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--sub);display:block;margin-bottom:5px">Project Name</label>
-        <input id="np-name" type="text" placeholder="e.g. BESS Project" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-size:13px;font-family:inherit;box-sizing:border-box">
+        <input id="np-name" type="text" placeholder="e.g. Acme Plaza" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-size:13px;font-family:inherit;box-sizing:border-box">
       </div>
       <div>
         <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--sub);display:block;margin-bottom:5px">Site Address</label>
