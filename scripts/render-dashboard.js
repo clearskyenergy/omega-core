@@ -383,7 +383,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.click('#acct-package-add'); await p.waitForSelector('#omega-package-menu [data-module-card]');
     await p.waitForFunction(function () { return document.querySelectorAll('#omega-package-menu [data-subscribe] button').length > 0; }, null, { timeout: 8000 });
     var menu = await p.evaluate(function () { return { title: document.getElementById('opm-title').textContent, cards: document.querySelectorAll('#omega-package-menu [data-module-card]').length, lite: !!document.querySelector('#omega-package-menu [data-module-card="lite"]'), subscribe: document.querySelectorAll('#omega-package-menu [data-subscribe] button').length }; });
-    ok('lite-ladder: the Ladder opens on the dashboard with every rung not yet bought and a Subscribe on each', menu.title === 'The Ladder' && menu.cards === M.catalog().length - 1 && !menu.lite && menu.subscribe === menu.cards, menu);
+    ok('lite-ladder: the Ladder includes mandatory Lite and Subscribe on each optional rung', menu.title === 'The Ladder' && menu.cards === M.catalog().length && menu.lite && menu.subscribe === menu.cards - 1, menu);
     await p.click('#omega-package-menu [data-module-card="gridatlas"] [data-subscribe] button');
     await p.waitForFunction(function () { return !!document.querySelector('#omega-package-menu [data-module-card="gridatlas"] .opm-quote, #omega-package-menu [data-module-card="gridatlas"] .opm-reason'); }, null, { timeout: 8000 });
     var quote = await p.$eval('#omega-package-menu [data-module-card="gridatlas"] .opm-act', function (e) { return e.textContent; });

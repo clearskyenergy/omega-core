@@ -728,7 +728,12 @@ entered on our pages) and the history; `GET /api/plan-change` is readable
 by any verified member, changes stay with an owner or admin. The shell's
 button reset is `:where()` (zero specificity) so a styled button keeps its
 face, and `omega-splash.js` hears link clicks last, so a link the page
-handles itself never raises the mark. Opt-in panels live on
+handles itself never raises the mark. Optional held modules offer **Opt out** through the
+same shared menu. Packaged opt-outs preview the server's dependency set,
+then queue for the existing quarterly review (no immediate access, charge
+or refund change); Keep module withdraws the request. Lite is mandatory.
+Legacy opt-outs prepare a ClearSky email request under the existing
+agreement. The page never changes billing or grants. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.

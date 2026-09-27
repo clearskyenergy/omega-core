@@ -158,6 +158,36 @@ Nothing new is required. To exercise this phase in the sandbox:
 
 ## Remaining acceptance and release debt
 
+### Opt out of optional modules (2026-09-27)
+
+The Modules page, home module cards, classic dashboard and shared Ladder
+now offer **Opt out** for held optional modules. Lite is always included:
+it has no opt-out control and the endpoint refuses it. The shared menu
+shows held modules as well as additions; an owner or administrator can
+request an opt-out and later choose **Keep module** to withdraw it.
+
+This preserves the signed price book's quarterly review policy. Before
+confirmation, the server previews the complete selection and the menu says
+that access and charges remain unchanged until ClearSky reviews it; the
+request does not issue a refund. `request-removal` and `withdraw-removal`
+first take `dryRun: true`, then the returned `previewId`. The transaction
+rechecks the current subscription and catalog dependencies. Opting out of
+Office includes its held departments; keeping a department also keeps
+Office. A new dependency or changed subscription requires another preview.
+Requests and withdrawals retain the existing billing history and audit.
+
+Legacy workspaces billed outside the package engine can prepare an email
+opt-out request through the same ClearSky contact path as opt-in. The menu
+names the affected modules and makes clear that ClearSky must confirm the
+effective date and any billing change under the existing agreement. It
+does not convert the legacy subscription or change its access.
+
+Coverage: `scripts/test-plan-change.js` checks no-write preview, mandatory
+Lite, authorization, dependent removals and withdrawals, stale previews,
+and unchanged subscriptions, grants and QuickBooks calls. The real endpoint
+flow is exercised by `scripts/render-packaging-workspaces.js`; legacy
+Modules requests are exercised by `check:workspace`.
+
 Phase 5's own:
 
 - Cancel does not void the QuickBooks invoice; a change paid after expiry or
