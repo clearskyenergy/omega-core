@@ -13,6 +13,9 @@ var output5 = process.env.WORKSPACE_SHOTS || path.join(ROOT, 'docs/screenshots/p
  * QuickBooks is a stand-in that counts invoices. The mock must be installed
  * before the handler is required. */
 var LIVE_ORG = 'packaging.example', db = null, caller = null, live = false, sandboxInvoices = 0;
+/* every plan-change POST the menu made, 'action' or 'action:dry': a step
+   nobody clicked shows up here */
+var posted = [];
 H.mockAdmin(function () { return db; }, function () { return caller; }); H.mockQbo(function () { sandboxInvoices++; });
 process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
 var planChange = require('../api/plan-change');
@@ -20,11 +23,25 @@ async function liveProjection() { var snap = await db.doc('omega_orgs/' + LIVE_O
 function json(route, status, body) { return route.fulfill({ status: status, contentType: 'application/json', body: JSON.stringify(body) }); }
 async function liveChange(route) {
   var req = route.request(), url = new URL(req.url()), body = req.method() === 'POST' ? req.postDataJSON() : {};
+  if (body && body.action) posted.push(body.action + (body.dryRun ? ':dry' : ''));
   try { return json(route, 200, await planChange({ method: req.method(), headers: {}, query: Object.fromEntries(url.searchParams), body: body }, { setHeader: function () {} })); }
   catch (e) { return json(route, e.status || 500, { error: e.message }); }
 }
 var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium, count = 0;
 function ok(value, label) { assert(value, label); count++; }
+/* where a module's card in the menu settles after a write redraws it: at
+   rest on its one button ('rest'), or on a confirm panel ('confirm') */
+async function settled(page, key, label) {
+  var handle = await page.waitForFunction(function (a) {
+    var c = document.querySelector('#omega-package-menu [data-subscribe="' + a.key + '"]'), found = null; if (!c) return null;
+    Array.prototype.forEach.call(c.querySelectorAll('button'), function (b) {
+      if (['Opt in and pay', 'Turn it on', 'Request opt-out'].indexOf(b.textContent) >= 0) found = 'confirm';
+      else if (!found && b.textContent === a.label) found = 'rest';
+    });
+    return found;
+  }, { key: key, label: label }, { timeout: 15000 });
+  return handle.jsonValue();
+}
 var server = http.createServer(function (req, res) {
   var pathname = new URL(req.url, 'http://localhost').pathname, file = path.resolve(ROOT, '.' + pathname);
   if (!file.startsWith(ROOT + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
@@ -221,11 +238,22 @@ async function run() {
       ok(await page.evaluate(function () { return OmegaCaps.packageAccess().modules.indexOf('siteintel') < 0; }), 'nothing switches on before the payment clears');
       ok((await siteintel.textContent()).indexOf('Waiting for payment') >= 0 && await siteintel.getByRole('link', { name: 'Pay in QuickBooks' }).count() === 1, 'the card waits for payment with the QuickBooks pay link');
       await page.screenshot({ path: path.join(output5, 'editor-subscribe-waiting-' + theme + '.png') });
+      /* the change expires on the billing date it was priced to (the renewal
+         is issued that day), so the card says pay BEFORE it, as the quote did */
+      var waiting = await siteintel.innerText();
+      ok(/Waiting for payment · \$[\d,.]+ · pay before [A-Z][a-z]{2} \d{1,2}, \d{4}/.test(waiting) && /Unpaid, the request expires on [A-Z][a-z]{2} \d{1,2}, \d{4}\./.test(waiting) && !/pay by/i.test(waiting), 'the waiting card says to pay before the day an unpaid request expires: ' + waiting);
+      /* an intent the card cannot take is spent, never kept: opened to Opt in
+         on a module already waiting for payment, the card offers Cancel
+         request, and cancelling lands on a plain Opt in, not a fresh quote */
+      await page.evaluate(function () { OmegaPackageMenu.open('siteintel', { single: true, intent: 'add' }); });
+      await siteintel.getByRole('button', { name: 'Cancel request' }).waitFor();
       /* Cancel request states what it does before it does it */
       await siteintel.getByRole('button', { name: 'Cancel request' }).click();
       ok(/Nothing is switched on and nothing is charged/.test(await siteintel.textContent()) && await siteintel.getByRole('button', { name: 'Not now' }).count() === 1, 'the cancel panel says what it costs: nothing');
+      var mark = posted.length;
       await siteintel.getByRole('button', { name: 'Cancel request' }).click();
-      await siteintel.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
+      var afterCancel = await settled(page, 'siteintel', 'Opt in');
+      ok(afterCancel === 'rest' && posted.slice(mark).indexOf('quote') < 0, 'cancelled, the card rests on Opt in and quotes nothing nobody asked for: ' + afterCancel + ' after ' + posted.slice(mark).join());
       var changes = (await db.collection('omega_orgs').doc(LIVE_ORG).collection('billing').doc('current').collection('invoices').get()).docs.map(function (d) { return d.data(); }).filter(function (r) { return r.kind === 'change'; });
       ok(changes.length === 1 && changes[0].state === 'cancelled', 'a cancelled change stays on record, marked cancelled');
       await page.locator('#omega-package-menu').getByRole('button', { name: 'Close', exact: true }).first().click();
@@ -272,10 +300,42 @@ async function run() {
       await page.locator('#opm-every').click();
       await page.waitForFunction(function () { return document.querySelectorAll('#omega-package-menu [data-module-card]').length > 1; });
       ok(await page.locator('#omega-package-menu [data-module-card]').count() === M.catalog().length, 'See every module opens the whole Ladder');
+      /* the same for Opt out: queued, then opened to Opt out again, the card
+         says Opting out; Cancel request lands on a plain Opt out, never on an
+         opt-out panel nobody asked for */
+      await storage.getByRole('button', { name: 'Opt out', exact: true }).click();
+      await storage.getByRole('button', { name: 'Request opt-out', exact: true }).click();
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
+      await page.evaluate(function () { OmegaPackageMenu.open('storage', { single: true, intent: 'remove' }); });
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
+      ok(/Opting out · review on/.test(await storage.textContent()) && await storage.getByRole('button', { name: 'Request opt-out', exact: true }).count() === 0, 'opened to Opt out on a module already opting out, the card says so and offers Cancel request');
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).click();
+      await storage.getByRole('button', { name: 'Not now', exact: true }).waitFor();
+      mark = posted.length;
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).click();
+      var afterKeep = await settled(page, 'storage', 'Opt out');
+      ok(afterKeep === 'rest' && posted.slice(mark).indexOf('request-removal:dry') < 0 && (await db.doc('omega_orgs/' + LIVE_ORG + '/billing/current').get()).data().removalRequests.length === 0, 'kept, the card rests on Opt out and prices no opt-out nobody asked for: ' + afterKeep + ' after ' + posted.slice(mark).join());
+      /* a department on its own names what it needs: once, on the card at
+         rest, and once in the quote (the server's line), never both */
+      var plant = page.locator('#omega-package-menu [data-module-card="logic-plant"]'), needsOffice = function (t) { return (t.match(/Also adds Office, which Plant needs\./g) || []).length; };
       await page.evaluate(function () { OmegaPackageMenu.open('logic-plant', { single: true, intent: 'add' }); });
-      await page.locator('#omega-package-menu [data-module-card="logic-plant"] .opm-quote').waitFor();
-      ok(/Also adds Office, which Plant needs\./.test(await page.locator('#omega-package-menu [data-module-card="logic-plant"]').textContent()), 'a department names what it needs before the price');
+      await plant.locator('.opm-quote').waitFor();
+      ok(needsOffice(await plant.innerText()) === 1, 'the quote names what Plant needs, once: ' + await plant.innerText());
       ok((await page.locator('#omega-package-menu').textContent()).indexOf('Build your own experience') >= 0, 'opened on a department, the Omega Logic sentence is said');
+      await plant.getByRole('button', { name: 'Not now', exact: true }).click();
+      await plant.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
+      ok(needsOffice(await plant.innerText()) === 1, 'at rest, a department names what it needs before the price');
+      /* Plant and Office wait on one invoice: opened on Plant's Cancel request,
+         the card never says it "also adds" what that invoice already carries */
+      await plant.getByRole('button', { name: 'Opt in', exact: true }).click();
+      await plant.getByRole('button', { name: 'Opt in and pay', exact: true }).click();
+      await plant.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
+      await page.evaluate(function () { OmegaPackageMenu.open('logic-plant', { single: true, intent: 'cancel' }); });
+      await plant.getByRole('button', { name: 'Not now', exact: true }).waitFor();
+      var plantCancel = await plant.innerText();
+      ok(/Cancel the Office and Plant request\?/.test(plantCancel) && needsOffice(plantCancel) === 0, 'waiting on one invoice with Office, Plant adds nothing more: ' + plantCancel);
+      await plant.getByRole('button', { name: 'Cancel request', exact: true }).click();
+      ok(await settled(page, 'logic-plant', 'Opt in') === 'rest' && needsOffice(await plant.innerText()) === 1, 'cancelled, the card at rest names what Plant needs again');
       await page.evaluate(function () { OmegaPackageMenu.open('storage', { admin: false }); });
       await page.waitForFunction(function () { var c = document.querySelector('#omega-package-menu [data-subscribe="storage"]'); return c && /changes modules/.test(c.textContent); });
       ok(await page.locator('#omega-package-menu [data-subscribe] button').count() === 0 && /An owner or administrator of your workspace changes modules\./.test(await page.locator('#omega-package-menu [data-subscribe="storage"]').textContent()), 'admin:false shows who changes modules, and no buttons');
