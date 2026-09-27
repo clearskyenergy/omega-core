@@ -343,6 +343,10 @@
   }
   function shellOf(ws) {
     if (ws && ws.shell) return ws.shell;
+    /* The object a page holds may not be the one the entitlements were
+       merged onto (index.html publishes its own after resolving); the
+       runtime's is the one that carries the org record's answer. */
+    try { var m = global.OmegaTenant && OmegaTenant.workspace; if (m && m.shell) return m.shell; } catch (e) {}
     try { var t = global.CLEARSKY_CONFIG && global.CLEARSKY_CONFIG.tenant; if (t && t.shell) return t.shell; } catch (e) {}
     return null;
   }

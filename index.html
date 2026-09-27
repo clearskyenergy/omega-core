@@ -3015,10 +3015,18 @@ var _omegaOnAuth = function (user, tries) {
        one visit). The shell may only be known once omega-tenant.js has read
        the org record, so nobody is sent on before the entitlements say
        where home is (wantsWorkspace() is false while it is unknown). */
-    if (window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace(ws)) { showRedirecting('Omega'); window.location.replace('/workspace'); return; }
-    window.addEventListener('omega:entitlements', function (e) {
-      if (window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace(e.detail || window.OMEGA_WORKSPACE)) window.location.replace('/workspace');
-    });
+    var goHome = function (w) {
+      if (!(window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace(w || window.OMEGA_WORKSPACE))) return false;
+      showRedirecting('Omega'); window.location.replace('/workspace'); return true;
+    };
+    if (goHome(ws)) return;
+    /* ASK, do not listen. The entitlements may already have landed while this
+       handler was still resolving the workspace (a derived workspace answers
+       at once; a real host waits for its pin), and a listener added now has
+       missed that event for good. onEntitlements() answers immediately with
+       the merged workspace when they are known and waits when they are not. */
+    if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(function (w) { goHome(w); });
+    else window.addEventListener('omega:entitlements', function (e) { goHome(e.detail); });
     showApp(user);
     applyToolLocks();   // gate tools by workspace.unlockedTools (demo Enterprise = all unlocked)
     (function () {
