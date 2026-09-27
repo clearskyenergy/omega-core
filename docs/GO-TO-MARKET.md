@@ -825,6 +825,136 @@ Hi {First}, I work with development teams on early-stage screening and design. S
 - Never send exports of model internals or a screen of the admin console, and never name another customer.
 - Several people per company is fine (origination, engineering, finance), one thread each; never a blast.
 
+## 5e. Account plays
+
+Messages written for one company, from facts checked at the source. Two people per company in the first week at most; after a week of silence, one follow-up:
+
+```text
+{First}, one more thing that might be useful: our Speedrun Friday posts show a folder of sites screened and ranked in one take, clock on screen. {post link}
+
+If you'd rather see it on your own list, the offer stands: 30 minutes, under NDA.
+```
+
+### EDPR NA Distributed Generation
+
+**Facts.** More than 70 MWp built in 2025; more than 400 MWp of solar and storage across 570+ active sites in 27 states; expanding into community solar in Illinois, Maine and Maryland; Fortune 100 clients across big tech, pharmaceutical, food and beverage, automotive and healthcare. Source: edprnadg.com, 2025 year in review, 2025-12-09 (checked 2026-09-27).
+
+**Why now.** Multi-site corporate programs are a list of sites that all need a first answer at once, and new states mean new utilities and parcels nobody has screened.
+
+#### C&I origination: the Fortune 100 multi-site programs
+
+*Titles: Director or VP of C&I Origination, Business Development, Corporate Programs*
+
+LinkedIn · Connection request
+
+```text
+Hi {First}, saw EDPR NA DG's 2025 review: 570+ active sites in 27 states and Fortune 100 programs across tech, pharma and food. I work on screening many sites at once for teams like yours. Would be good to connect.
+```
+
+LinkedIn · After they accept
+
+```text
+Thanks for connecting, {First}. A question rather than a pitch: when a corporate client hands your team 40 or 50 of their sites, how long does it take to get a first answer on each one?
+
+We built ClearSky OMEGA for that stretch. It ranks a whole folder of sites at once with the grid around each one, then gives a first layout, and a storage sizing wherever you have the utility bill. It sits upstream of the engineering you already do.
+
+If it's useful, I'll run a handful of sites from a public list, or yours under NDA, and walk you through the ranked result in 30 minutes.
+```
+
+InMail · If not connected · subject `570 sites, and the next 50 from one client`
+
+```text
+{First}, congratulations on a record 2025: more than 70 MWp built and 570+ active sites across 27 states.
+
+One question from the outside: when a Fortune 100 client hands your team a list of their facilities, how long does it take to get a first answer on each one?
+
+ClearSky OMEGA ranks a whole folder of sites at once with the grid around each one, then gives a first layout, and a storage sizing wherever you have the utility bill. It sits upstream of the engineering you already do, so your engineers only see the sites that pass.
+
+Worth 30 minutes on a handful of sites? A public sample list, or yours under NDA.
+
+{Sender}, ClearSky OMEGA
+```
+
+#### Community solar in the new states (Illinois, Maine, Maryland)
+
+*Titles: Development Manager or Director, Community Solar; Site Acquisition; with Illinois, Maine or Maryland in the headline or location*
+
+LinkedIn · Connection request
+
+```text
+Hi {First}, saw EDPR NA DG is expanding community solar into Illinois, Maine and Maryland. I work with development teams on screening new-market parcels against the grid early. Would be good to connect.
+```
+
+LinkedIn · After they accept
+
+```text
+Thanks, {First}. New states mean new utilities, new hosting maps and a lot of parcels nobody has looked at yet. How is your team deciding which ones get a site visit in {state}?
+
+ClearSky OMEGA puts the substations, lines and published hosting capacity beside every parcel and ranks a whole folder of sites at once, so the drive time goes to the ones that pass. In ComEd territory it also reads ComEd's own capacity data.
+
+Happy to show it on a few public parcels in {state}, 30 minutes.
+```
+
+### Nexamp
+
+**Facts.** Closed a $300 million aggregation securitization facility with Crédit Agricole CIB to finance community solar, commercial and industrial, and other distributed generation and storage assets across multiple regions. Source: nexamp.com, 2026-06-09 (checked 2026-09-27).
+
+**Why now.** More capital means more sites to sort through, and Nexamp has a mature engineering stack: OMEGA belongs upstream of it (screening, first layouts, storage fit), never pitched as a replacement.
+
+#### Regional development and site origination
+
+*Titles: Development Manager or Director (regional), Director of Origination, Site Acquisition Manager*
+
+LinkedIn · Connection request
+
+```text
+Hi {First}, saw Nexamp's $300M facility with Crédit Agricole CIB. I work with development teams on the stretch before engineering: which sites deserve a real look. Would be good to connect.
+```
+
+LinkedIn · After they accept
+
+```text
+Thanks for connecting, {First}. A question: before a site reaches your engineering team, how many does your team screen to find one worth the work?
+
+ClearSky OMEGA sits in that stretch. It ranks a folder of candidate sites at once with the grid beside each one, then gives a first layout, and a storage sizing where you have the load data, for the sites that pass. Your engineering hours go to the survivors. It doesn't replace your design stack.
+
+Worth 30 minutes on a few public parcels in one of your markets?
+```
+
+InMail · If not connected · subject `Before sites reach your engineers`
+
+```text
+{First}, congratulations on the $300M facility with Crédit Agricole CIB. More capital usually means more sites to sort through.
+
+How many does your team screen to find one worth engineering?
+
+ClearSky OMEGA works upstream of your design tools. It ranks a whole folder of candidate sites with the grid around each one, then gives a first layout, and a storage sizing with an hourly dispatch where you have the load data, for the sites that pass. Your engineers only see the survivors.
+
+30 minutes on a handful of parcels in one of your markets? Public ones, or yours under NDA.
+
+{Sender}, ClearSky OMEGA
+```
+
+#### Interconnection
+
+*Titles: Interconnection Manager or Director, Grid Integration*
+
+LinkedIn · Connection request
+
+```text
+Hi {First}, I work with community solar teams on the early grid read: substations, lines and hosting capacity beside every parcel before an application goes in. Would be good to connect.
+```
+
+LinkedIn · After they accept
+
+```text
+Thanks, {First}. Curious how your team decides which sites are worth an interconnection application.
+
+ClearSky OMEGA puts the substations, lines and published hosting capacity beside each parcel and runs a pre-screen against the fast-track screens, so weak sites drop out before anyone pays for a study.
+
+Would it help to see it on a few sites in one of your utilities?
+```
+
 ## 4a. The recordings
 
 Build Tuesday and Speedrun Friday need a real screen recording. Setup:

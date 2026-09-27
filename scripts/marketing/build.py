@@ -8,7 +8,7 @@
 #
 #   python3 scripts/marketing/build.py [out]      (default scripts/marketing/out)
 #   node scripts/marketing/card.js <out>/cards.json <out>/cards
-import csv, html, json, os, sys
+import csv, html, json, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from content import *
 
@@ -48,8 +48,21 @@ def public_strings():
         yield q['text']; yield q.get('subject', '')
     for b in PLAYBOOKS:
         yield b['pitch']; yield b['offer']
+    yield PLAY_FOLLOWUP
+    for a in ACCOUNT_PLAYS:
+        for pe in a['personas']:
+            for m in pe['messages']:
+                yield m['text']; yield m.get('subject', '')
+for a in ACCOUNT_PLAYS:
+    for pe in a['personas']:
+        for m in pe['messages']:
+            if m['name'] == 'Connection request':
+                assert len(m['text'].replace('{First}', 'Christopher')) <= 300, (a['company'], len(m['text']))
+# A dollar figure in millions or billions is a company's news (a financing,
+# a program); anything else with a dollar sign is treated as a price.
+PRICE = re.compile(r'\$\s?\d[\d,]*(\.\d+)?(?!\d|[.,]\d|\s?(M|B|bn|million|billion)\b)')
 for t in public_strings():
-    assert '$' not in t and '/offerings' not in t and 'price list' not in t.lower(), t[:120]
+    assert not PRICE.search(t) and '/offerings' not in t and 'price list' not in t.lower(), t[:120]
 
 def cid(p):
     return 'day%02d' % p['day']
@@ -192,6 +205,19 @@ for b in PLAYBOOKS:
     w('**Careful**\n')
     for x in b['guard']: w('- ' + x)
     w('')
+w('## 5e. Account plays\n')
+w('Messages written for one company, from facts checked at the source. Two people per company in the first week at most; after a week of silence, one follow-up:\n')
+w('```text\n' + PLAY_FOLLOWUP + '\n```\n')
+for a in ACCOUNT_PLAYS:
+    w('### %s\n' % a['company'])
+    w('**Facts.** %s\n' % a['facts'])
+    w('**Why now.** %s\n' % a['why'])
+    for pe in a['personas']:
+        w('#### %s\n' % pe['who'])
+        w('*%s*\n' % pe['find'])
+        for m in pe['messages']:
+            w('%s · %s%s\n' % (m['channel'], m['name'], (' · subject `%s`' % m['subject']) if m.get('subject') else ''))
+            w('```text\n' + m['text'] + '\n```\n')
 w('## 4a. The recordings\n')
 w('Build Tuesday and Speedrun Friday need a real screen recording. Setup:\n')
 for x in RECORDING_SETUP: w('- ' + x)
@@ -355,7 +381,23 @@ def playbook_html(b):
     h.append('</section>')
     return ''.join(h)
 
-playbooks_html = ''.join(playbook_html(b) for b in PLAYBOOKS)
+def plays_html():
+    h = ['<section id="plays"><div class="sh"><span class="no">S-306</span><h2>Account plays</h2></div>',
+         '<p class="lede">Messages written for one company, from facts checked at the source. Two people per company in the first week at most. Never mention their tools or job posts; their own sites only under NDA.</p>']
+    for n, a in enumerate(ACCOUNT_PLAYS):
+        h.append('<div class="panel"><h3>%s</h3><p class="sub" style="margin-top:6px">%s</p><p style="margin-top:8px">%s</p></div>' % (E(a['company']), E(a['facts']), E(a['why'])))
+        for k, pe in enumerate(a['personas']):
+            h.append('<h4>%s</h4><p class="sub">%s</p><div class="steps">' % (E(pe['who']), E(pe['find'])))
+            for j, m in enumerate(pe['messages']):
+                mid = 'play-%d-%d-%d' % (n, k, j)
+                sub = '<p class="subj"><span class="lbl mono">SUBJECT</span> <code>%s</code></p>' % E(m['subject']) if m.get('subject') else ''
+                h.append('<article class="step"><div class="step-h"><span class="chip li">%s</span><h4>%s</h4></div>%s<pre class="txt" id="%s">%s</pre><div class="btns">%s</div></article>'
+                         % (E(m['channel']), E(m['name']), sub, mid, E(m['text']), copybtn(mid, 'Copy')))
+            h.append('</div>')
+    h.append('<h4>After a week of silence, once</h4><pre class="txt" id="play-fu">%s</pre><div class="btns">%s</div></section>' % (E(PLAY_FOLLOWUP), copybtn('play-fu', 'Copy')))
+    return ''.join(h)
+
+playbooks_html = ''.join(playbook_html(b) for b in PLAYBOOKS) + plays_html()
 rec_html = ('<div class="two"><div class="rules do"><h3>Setup</h3><ul>%s</ul></div><div class="rules dont"><h3>Never on camera</h3><ul>%s</ul></div></div>'
             % (''.join('<li>%s</li>' % E(x) for x in RECORDING_SETUP), ''.join('<li>%s</li>' % E(x) for x in RECORDING_NEVER)))
 rec_html += '<div class="steps">' + ''.join(
