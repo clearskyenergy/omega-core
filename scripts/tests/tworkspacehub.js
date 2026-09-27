@@ -99,7 +99,8 @@ var CAPS = global.OmegaCaps;
 var LEVEL = Function('return ' + /var TIER_LEVEL = (\{[^}]+\});/.exec(require('fs').readFileSync(path.join(ROOT, 'omega-tenant.js'), 'utf8'))[1])();
 function legacy(tier, billing, org, ws) {
   var b = Object.assign({ tier: tier }, billing || {});
-  return ctxFor(Object.assign({ orgId: org || 'x.example', tierLevel: LEVEL[tier] }, ws || {}), { tierLevel: LEVEL[tier], packaged: false, canCap: HUB.capsFor(b, org || 'x.example', CAPS) });
+  var w = Object.assign({ orgId: org || 'x.example', tierLevel: LEVEL[tier] }, ws || {});
+  return ctxFor(w, { tierLevel: LEVEL[tier], packaged: false, canCap: HUB.capsFor(b, org || 'x.example', CAPS), visible: function (k) { var t = TOOLS.byKey(k); return !!t && TOOLS.isVisible(t, w); } });
 }
 function st(key, ctx) { return HUB.moduleState(MODS[key], ctx); }
 ok('every catalog module carries legacyGates (the editor\'s gates, read off the editor)', M.catalog().every(function (m) { return Array.isArray(m.legacyGates); }));
@@ -117,11 +118,17 @@ ok('the JV carve-out holds Compute for a JV partner on Performance', st('compute
 ok('capTier narrows what the store says, as it narrows the editor', st('plansets', legacy('enterprise', { capTier: 'standard' })) === 'part');
 ok('the Permitting matrix opens at every legacy tier (its old gate is on a retired button): held', ['trial', 'standard', 'deluxe'].every(function (t) { return st('permitting', legacy(t)) === 'held'; }));
 ok('Enterprise holds every editor module', ['lite', 'gridatlas', 'storage', 'estimate', 'plansets', 'siteintel', 'engineering', 'finance', 'compute', 'ops', 'permitting'].every(function (k) { return st(k, ent) === 'held'; }), ['lite', 'plansets', 'siteintel'].map(function (k) { return k + ':' + st(k, ent); }));
-ok('EV Rebates stays partly on outside ClearSky: its cost workbook is a ClearSky-only tool', st('evrebates', ent) === 'part');
+ok('a tool this org can never see (ClearSky\'s own EV workbook) never keeps EV Rebates partly on', st('evrebates', ent) === 'held' && st('evrebates', core) === 'held', [st('evrebates', ent), st('evrebates', core)]);
+ok('the note under Partly names both halves, never "4 of 4 of its tools" alone', HUB.moduleNote(MODS.storage, core) === '4 of 4 of its tools and some of its commands in Site Map are on your plan', HUB.moduleNote(MODS.storage, core));
+ok('a module with only editor commands says so', HUB.moduleNote(MODS.plansets, core) === 'some of its commands in Site Map are on your plan', HUB.moduleNote(MODS.plansets, core));
+ok('one open tool reads "is"', HUB.moduleNote(MODS.sitefinder, core) === '1 of 2 of its tools is on your plan', HUB.moduleNote(MODS.sitefinder, core));
+ok('ClearSky\'s own workspace with no tier on record reads as the editor opens it (internal)', HUB.capsFor({}, 'clearsky-usa.com', CAPS)('compute') === true && HUB.capsFor({}, 'clearsky-usa.com', CAPS)('export.plotplan') === true);
 ok('a trial opens every tool but only the designer in the editor: Storage is partly on, Plan Sets partly', st('storage', trial) === 'part' && st('plansets', trial) === 'part', [st('storage', trial), st('plansets', trial)]);
 ok('Lite is partly on below Enterprise: three drawing controls sit on the Compute tab', st('lite', perf) === 'part' && st('lite', core) === 'part');
 ok('Trial cannot print a blueprint: Lite is partly on', st('lite', trial) === 'part' && HUB.moduleEditor(MODS.lite, trial).open < HUB.moduleEditor(MODS.lite, trial).total);
 ok('a module with neither tools nor editor commands keeps the Enterprise rule', st('whitelabel', ent) === 'held' && st('whitelabel', perf) === 'ask');
+ok('...asked of the ladder, not the tool level: a trial (tool level 3) does not hold the storefront, a partner does', st('whitelabel', trial) === 'ask' && st('whitelabel', legacy('partner')) === 'held', [st('whitelabel', trial), st('whitelabel', legacy('partner'))]);
+ok('a nested gate needs every link: the Compute add-on on Core opens parcel screening only where Analyze is open', HUB.moduleEditor(MODS.siteintel, legacy('standard', { addons: ['compute'] })).open === 2 && HUB.moduleEditor(MODS.siteintel, legacy('deluxe', { addons: ['compute'] })).open === 4);
 var allow = legacy('enterprise', { toolAccess: ['editor', 'gridatlas'] }, 'x.example', { toolAccess: ['editor', 'gridatlas'] });
 var noEditor = legacy('enterprise', {}, 'x.example', { toolAccess: ['gridatlas'] });
 ok('an allowlist without the editor opens none of its commands', st('plansets', noEditor) === 'ask' && st('storage', noEditor) === 'ask', [st('plansets', noEditor), st('storage', noEditor)]);

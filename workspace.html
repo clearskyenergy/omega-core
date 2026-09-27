@@ -411,7 +411,8 @@ function tool(key) { return T.byKey(key); }
 function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, WS); }
 function hubCtx() { var pa = WS.packageAccess, packaged = !!(pa && pa.packaged); return { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], hideMarketplace: !!WS.hideMarketplace, packaged: packaged, tierLevel: WS.tierLevel,
   /* a legacy module is also measured by what the editor opens of it, on the editor's own ladder */
-  canCap: packaged ? null : HUB.capsFor(WS.billing || (window.OmegaTenant && OmegaTenant.billing), WS.orgId) }; }
+  canCap: packaged ? null : HUB.capsFor(WS.billing || (window.OmegaTenant && OmegaTenant.billing), WS.orgId),
+  visible: function (k) { var t = tool(k); return !!t && T.isVisible(t, WS); } }; }
 function href(t) { return T.hrefFor(t, WS); }
 function launch(t) {
   if (!t) return;
@@ -571,8 +572,8 @@ function renderModules() {
     if (tools.length) h += '<div class="inside"><b>Inside:</b> ' + tools.map(function (t) { return esc(t.name); }).join(' · ') + '</div>';
     else if (m.shelf !== 'platform') h += '<div class="inside"><b>Inside:</b> capabilities of Site Map, the editor</div>';
     if (chips) h += '<div class="meta">' + chips + '</div>';
-    var mt = st === 'part' ? HUB.moduleTools(m, ctx) : null;
-    var note = on ? 'On your plan' : paid ? 'Opens when the first invoice is paid' : req ? 'Requested ' + (day(req.requestedAt) || '') + ' at ' + (req.display || price || '') + '; joins your monthly fee once ClearSky moves you onto a package' : mt ? mt.open + ' of ' + mt.total + ' of its tools are on your plan' : packaged ? 'Pay by card; on when the payment clears' : 'Opt in: ' + (price ? price + ' added to your monthly fee' : 'added to your monthly fee');
+    var mt = st === 'part' ? HUB.moduleNote(m, ctx) : null;
+    var note = on ? 'On your plan' : paid ? 'Opens when the first invoice is paid' : req ? 'Requested ' + (day(req.requestedAt) || '') + ' at ' + (req.display || price || '') + '; joins your monthly fee once ClearSky moves you onto a package' : mt ? mt : packaged ? 'Pay by card; on when the payment clears' : 'Opt in: ' + (price ? price + ' added to your monthly fee' : 'added to your monthly fee');
     var action = on || paid || WS.pendingApproval ? '' : packaged ? '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">Opt in</button>' : '<button type="button" class="ows-pill' + (req ? '' : ' primary') + '" data-ask-module="' + esc(m.key) + '" data-price="' + esc(price || '') + '" data-name="' + esc(name) + '">' + (req ? 'Requested' : 'Opt in') + '</button>';
     action += moduleOptOut(m, on || paid || st === 'part');
     h += '<div class="row"><span class="note">' + esc(note) + '</span>' + action + '</div>';

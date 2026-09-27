@@ -33,10 +33,11 @@ var server = http.createServer(function (req, res) {
   res.setHeader('Content-Type', mime[path.extname(file)] || 'application/octet-stream'); res.end(fs.readFileSync(file));
 });
 /* A legacy tenant: billing/current has a tier and no `packaged`. */
-function fixture(tier) {
+function fixture(plan) {
+  var tier = plan.tier, addons = plan.addons;
   var user = { uid: 'legacy-user', email: 'designer@legacy.example', emailVerified: true, displayName: 'Legacy Designer', getIdToken: function () { return Promise.resolve('offline-fixture'); } };
   function snapshot(p) {
-    var data = /billing\/current$/.test(p) ? { tier: tier } :
+    var data = /billing\/current$/.test(p) ? { tier: tier, addons: addons } :
       /^omega_orgs\/[^/]+$/.test(p) ? { name: 'Legacy preview', status: 'active', domains: [location.hostname] } :
       /members\//.test(p) ? { role: 'owner', status: 'active' } : null;
     return { exists: !!data, id: p.split('/').pop(), data: function () { return data; }, docs: [], empty: true, forEach: function () {} };
@@ -68,8 +69,11 @@ function survey(catalogIds) {
     if (!el || seen.indexOf(el) >= 0) return; seen.push(el);
     if (el.hasAttribute('data-packaging-retired') || el.hasAttribute('data-omega-retired') || el.hasAttribute('data-shelf-dupe') ||
         el.classList.contains('omega-gated-hidden') || el.classList.contains('omega-soon')) return;
-    var gate = el.closest('[data-cap]'), page = el.closest('.ribbon-page');
-    out.push({ id: el.id || '', onclick: el.getAttribute('onclick') || '', gate: gate ? gate.getAttribute('data-cap') : '',
+    /* every data-cap from the outermost container in to the command: a
+       command on the Analyze page that also carries its own cap needs both */
+    var chain = [], n = el, page = el.closest('.ribbon-page');
+    for (; n && n.getAttribute; n = n.parentElement) { var c = n.getAttribute('data-cap'); if (c) chain.unshift(c); }
+    out.push({ id: el.id || '', onclick: el.getAttribute('onclick') || '', gate: chain.join('+'),
       page: page ? page.getAttribute('data-page') : '', blocked: !!el.closest('[data-cap-blocked]'), fly: el.classList.contains('rb-fly-item') });
   }
   var nodes = document.querySelectorAll('#ribbon .rbtn,#ribbon .rsbtn,.rb-fly-item,#app-menu .menu-item');
@@ -79,9 +83,16 @@ function survey(catalogIds) {
 }
 var count = 0;
 function ok(value, label) { assert(value, label); count++; }
-async function boot(browser, base, tier) {
+/* who owns a command, by the editor's own rule (omega-caps.js owners): an
+   exact #id claim wins over a handler match */
+var OWNERS = M.catalog().concat(M.notSold());
+function owners(id, handler) {
+  var exact = id ? OWNERS.filter(function (m) { return m.ribbon.indexOf('#' + id) >= 0; }) : [];
+  return (exact.length ? exact.map(function (m) { return m.key; }) : M.owners('', handler));
+}
+async function boot(browser, base, tier, addons) {
   var context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await context.addInitScript(fixture, tier);
+  await context.addInitScript(fixture, { tier: tier, addons: addons || [] });
   await context.route('**/*', function (route) {
     var url = new URL(route.request().url());
     if (url.origin !== base) return route.fulfill({ status: 200, body: '' });
@@ -99,7 +110,12 @@ async function boot(browser, base, tier) {
   var ids = [];
   M.catalog().forEach(function (m) { m.ribbon.forEach(function (s) { if (s.charAt(0) === '#') ids.push(s.slice(1)); }); });
   var rows = await page.evaluate(survey, ids);
+  /* a blocked tab is really gone, not just flagged */
+  var shownBlockedTabs = await page.evaluate(function () {
+    return Array.prototype.filter.call(document.querySelectorAll('#ribbon-tabs .rtab[data-cap-blocked]'), function (t) { return getComputedStyle(t).display !== 'none'; }).map(function (t) { return t.getAttribute('data-page'); });
+  });
   await context.close();
+  rows.shownBlockedTabs = shownBlockedTabs;
   return { rows: rows, errors: errors };
 }
 async function run() {
@@ -110,22 +126,24 @@ async function run() {
   try {
     var tiers = ['enterprise', 'deluxe', 'standard', 'trial'], seen = {};
     for (var t = 0; t < tiers.length; t++) seen[tiers[t]] = await boot(browser, base, tiers[t]);
+    /* a Core plan with the Compute add-on: parcelscreen without engineering, compute without enterprise */
+    var ADDON = 'standard+compute'; seen[ADDON] = await boot(browser, base, 'standard', ['compute']);
     var full = seen.enterprise;
     ok(!full.errors.length, 'no editor errors on a legacy boot: ' + full.errors.join('; '));
     /* the gates each module's commands sit behind, from the fullest ribbon */
     var gates = {};
     keys.forEach(function (k) { gates[k] = []; });
     full.rows.forEach(function (r) {
-      M.owners(r.id, r.onclick).forEach(function (k) {
+      owners(r.id, r.onclick).forEach(function (k) {
         if (!gates[k]) return;
         if (gates[k].indexOf(r.gate) < 0) gates[k].push(r.gate);
       });
     });
     keys.forEach(function (k) { gates[k].sort(); });
     if (PRINT) {
-      console.log(JSON.stringify(gates, null, 1));
+      console.log(JSON.stringify(gates));
       /* and which commands carry each gate, to read the table by */
-      full.rows.forEach(function (r) { var own = M.owners(r.id, r.onclick).filter(function (k) { return gates[k]; }); if (own.length && r.gate) console.log('  ' + own.join('+') + ' · ' + r.gate + ' · ' + (r.page || '-') + ' · ' + (r.id || r.onclick.slice(0, 60))); });
+      full.rows.forEach(function (r) { var own = owners(r.id, r.onclick).filter(function (k) { return gates[k]; }); if (own.length && r.gate) console.log('  ' + own.join('+') + ' · ' + r.gate + ' · ' + (r.page || '-') + ' · ' + (r.id || r.onclick.slice(0, 60))); });
       return;
     }
     catalog.forEach(function (m) {
@@ -136,18 +154,19 @@ async function run() {
     global.window = global; global.document = { documentElement: {}, body: { setAttribute: function () {}, getAttribute: function () { return null; } }, querySelectorAll: function () { return []; }, addEventListener: function () {}, dispatchEvent: function () {} };
     require('../omega-caps.js');
     var C = global.OmegaCaps;
-    tiers.forEach(function (tier) {
-      var wrong = [];
+    tiers.concat([ADDON]).forEach(function (tier) {
+      var wrong = [], plan = tier === ADDON ? { tier: 'standard', addons: ['compute'] } : { tier: tier, addons: [] };
       seen[tier].rows.forEach(function (r) {
-        if (!M.owners(r.id, r.onclick).some(function (k) { return gates[k]; })) return;
-        var predicted = !r.gate || C.canWith(tier, r.gate, {});
+        if (!owners(r.id, r.onclick).some(function (k) { return gates[k]; })) return;
+        var predicted = !r.gate || r.gate.split('+').every(function (g) { return C.canWith(plan.tier, g, { addons: plan.addons }); });
         if (predicted === r.blocked) wrong.push((r.id || r.onclick.slice(0, 40)) + ' gate=' + r.gate + ' blocked=' + r.blocked);
       });
       ok(!wrong.length, tier + ': every module command is open exactly when its gate says so' + (wrong.length ? ': ' + wrong.slice(0, 8).join('; ') : ''));
-      var missing = full.rows.filter(function (r) { return r.gate === '' && M.owners(r.id, r.onclick).length && !seen[tier].rows.some(function (x) { return x.id === r.id && x.onclick === r.onclick; }); });
+      var missing = full.rows.filter(function (r) { return r.gate === '' && owners(r.id, r.onclick).length && !seen[tier].rows.some(function (x) { return x.id === r.id && x.onclick === r.onclick; }); });
       ok(!missing.length, tier + ': no ungated command is missing from this tier\'s editor' + (missing.length ? ': ' + missing.slice(0, 8).map(function (r) { return r.id || r.onclick.slice(0, 40); }).join('; ') : ''));
+      ok(!seen[tier].rows.shownBlockedTabs.length, tier + ': a tab its plan does not open is not shown: ' + seen[tier].rows.shownBlockedTabs.join(', '));
     });
-    console.log('Legacy editor gates: ' + count + ' checks; ' + tiers.length + ' legacy tiers booted in the full editor, offline.');
+    console.log('Legacy editor gates: ' + count + ' checks; ' + tiers.length + ' legacy tiers and Core with the Compute add-on booted in the full editor, offline.');
   } finally { await browser.close(); server.close(); }
 }
 run().catch(function (e) { console.error(e); server.close(); process.exitCode = 1; });

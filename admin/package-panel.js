@@ -225,9 +225,9 @@
     } else {
       /* the tier's tool level as the tenant's own pages read it (omega-tenant.js: a trial opens every tool) */
       var tiers = (global.OmegaTenant && global.OmegaTenant.tierLevels) || {}, lvl = tiers[String(b.tier || '').toLowerCase()], T = global.OMEGATools, H = global.OmegaWorkspaceHub;
-      var wsLike = { tierLevel: typeof lvl === 'number' ? lvl : 1, toolAccess: Array.isArray(b.toolAccess) ? b.toolAccess : null, toolOverrides: b.toolOverrides || null, unlockedTools: b.unlockedTools || null, requiredTools: b.requiredTools || null };
+      var wsLike = { orgId: orgId, tierLevel: typeof lvl === 'number' ? lvl : 1, toolAccess: Array.isArray(b.toolAccess) ? b.toolAccess : null, toolOverrides: b.toolOverrides || null, unlockedTools: b.unlockedTools || null, requiredTools: b.requiredTools || null };
       var ctx = { packaged: false, modules: [], addons: b.addons || [], tierLevel: wsLike.tierLevel, tool: function (k) { return !!(T && T.byKey(k)); }, canOpen: function (k) { var t = T && T.byKey(k); return !!t && T.isUnlocked(t, wsLike); },
-        canCap: H && H.capsFor ? H.capsFor(b, orgId) : null };
+        canCap: H && H.capsFor ? H.capsFor(b, orgId) : null, visible: function (k) { var t = T && T.byKey(k); return !!t && T.isVisible(t, wsLike); } };
       out.partly = [];
       (data.modules || []).forEach(function (m) { var st = H && T ? H.moduleState(m, ctx) : 'ask'; if (st === 'held') out.held.push(m.key); else if (st === 'part') out.partly.push(m.key); });
       /* a package drawn from what they hold OR partly use: moving a legacy
