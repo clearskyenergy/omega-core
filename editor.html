@@ -25383,24 +25383,25 @@ async function createNewProject() {
   const name = document.getElementById('np-name').value.trim() || 'New BESS Project';
   const address = document.getElementById('np-addr').value.trim();
   const customer = document.getElementById('np-customer').value.trim();
-  const market = (document.getElementById('np-market')||{}).value || 'BTM';
   const offtaker = (document.getElementById('np-offtaker')||{}).value.trim() || '';
   if(!_currentUser) { alert('Please sign in first'); return; }
   try {
+    /* Created without a BTM/FOM market (2026-09-27): the dialog no longer
+       asks, so the BESS wizard's market is unconfirmed and asked when that
+       wizard runs, as for a project created anywhere else. */
     const ref = await _db.collection('projects').add({
       uid: _currentUser.uid,
       orgId: (typeof _projOrgId==='function') ? _projOrgId() : 'clearsky.com',
       name, address, customer,
-      wizMode: market,          // BTM / FOM — the BESS wizard's market (restored on load)
       offtaker: offtaker || null,
       elements:[], conduits:[], bessList:[],
       wizDone:[], pxPerFt:null, unitLabel:'ft',
-      // Store address + market in mapState so _loadProject picks it up
+      // Store address in mapState so _loadProject picks it up
       mapState: { address },
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: 'bess', market: market, source: 'editor-modal' }); } catch (e) {}
+    try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: 'bess', source: 'editor-modal' }); } catch (e) {}
     document.getElementById('new-proj-modal').style.display='none';
     document.getElementById('proj-modal').style.display='none';
     const basePath = window.location.pathname.endsWith('.html') 
@@ -49358,18 +49359,10 @@ async function exportPermitPDF() {
         <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--sub);display:block;margin-bottom:5px">Customer / Site Owner</label>
         <input id="np-customer" type="text" placeholder="e.g. Acme Properties LLC" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-size:13px;font-family:inherit;box-sizing:border-box">
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div>
-          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--sub);display:block;margin-bottom:5px">Market</label>
-          <select id="np-market" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-size:13px;font-family:inherit;box-sizing:border-box">
-            <option value="BTM">BTM — Behind the Meter</option>
-            <option value="FOM">FTM / FOM — Front of Meter</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--sub);display:block;margin-bottom:5px">Off-taker</label>
-          <input id="np-offtaker" type="text" placeholder="e.g. ComEd / PJM / tenant" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-size:13px;font-family:inherit;box-sizing:border-box">
-        </div>
+      <!-- No BTM/FOM market here: not every project is a battery. The BESS wizard asks for it when it runs. -->
+      <div>
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--sub);display:block;margin-bottom:5px">Off-taker</label>
+        <input id="np-offtaker" type="text" placeholder="e.g. ComEd / PJM / tenant" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-size:13px;font-family:inherit;box-sizing:border-box">
       </div>
     </div>
     <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">

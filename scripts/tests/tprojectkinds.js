@@ -11,7 +11,9 @@
  * what the record declared (type, siteScopes while they agree with it, the EV
  * wizard's L2/EVSE) plus what is on its plan, read by the editor's OWN
  * collectors (evChargerTotals, _findBessPads, derTotals), which now take a
- * saved record as well as the live drawing.
+ * saved record as well as the live drawing. Then: "remove the BTM/FOM market
+ * field from new project too" — the editor's own New Project dialog asks no
+ * market; the BESS wizard asks when it runs.
  *
  * The functions are grabbed straight out of editor.html and run in a vm with
  * the few globals they touch. Static: node, no browser. */
@@ -107,5 +109,10 @@ var render = fn('renderProjectsList'), filter = fn('filterProjects'), recent = f
 ok(render.indexOf('wizMode') < 0 && render.indexOf('_projKindLabels(p)') > 0, 'a row wears its kinds, not the market');
 ok(filter.indexOf('wizMode') < 0 && filter.indexOf('_projKindLabels(p)') > 0, 'every project is listed and search finds a kind');
 ok(recent.indexOf('p.wizMode') < 0 && recent.indexOf('_projKindLabels(p)') > 0, 'Home → Recent names the same kinds');
+/* the editor's own New Project dialog asks no market either: the BESS wizard asks when it runs */
+var create = fn('createNewProject');
+ok(SRC.indexOf('id="np-market"') < 0 && create.indexOf('np-market') < 0 && !/\bwizMode\s*:/.test(create) && !/\bmarket\s*:/.test(create),
+  'New Project has no BTM/FOM market field and creates a project without one');
+ok(SRC.indexOf('id="np-offtaker"') > 0 && create.indexOf('np-offtaker') > 0, 'New Project still takes the off-taker');
 
 console.log('project kinds: ' + count + ' checks passed.');

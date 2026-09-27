@@ -2341,6 +2341,11 @@ plan, read by the editor's own collectors — `evChargerTotals`,
 argument read the live drawing exactly as before. Nothing declared and
 nothing placed is no label. The labels are `OmegaProjectTypes`' (a `short`
 on each type; `norm()` and `short()` exposed). Search matches a kind, and
-Home → Recent wears the same labels. `wizMode` is still saved and still
-restores the BESS wizard's market. Tests: `scripts/tests/tprojectkinds.js`
-(npm test); `teditortheme.js` records the three tab ids as retired.
+Home → Recent wears the same labels. Then "remove the BTM/FOM market field
+from new project too": the editor's own New Project dialog drops its Market
+select (`np-market`) and creates the project without a `wizMode`, so the
+BESS wizard's market is unconfirmed and asked when that wizard runs, as for
+a project created anywhere else. `wizMode` is still saved by the editor and
+still restores the BESS wizard's market. Tests:
+`scripts/tests/tprojectkinds.js` (npm test); `teditortheme.js` records the
+three tab ids and `np-market` as retired.

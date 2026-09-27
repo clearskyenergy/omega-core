@@ -95,7 +95,8 @@ var base = null;
 var RETIRED = {
   'proj-tab-all': 'Projects list: the BTM/FOM tabs are gone, every project is listed with its kind (2026-09-27)',
   'proj-tab-btm': 'Projects list: the BTM/FOM tabs are gone, every project is listed with its kind (2026-09-27)',
-  'proj-tab-fom': 'Projects list: the BTM/FOM tabs are gone, every project is listed with its kind (2026-09-27)'
+  'proj-tab-fom': 'Projects list: the BTM/FOM tabs are gone, every project is listed with its kind (2026-09-27)',
+  'np-market': 'New Project: no BTM/FOM market field; the BESS wizard asks when it runs (2026-09-27)'
 };
 if (base) {
   var before = ids(base), after = ids(src), lost = before.filter(function (i) { return after.indexOf(i) < 0 && !RETIRED[i]; });
