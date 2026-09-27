@@ -216,14 +216,18 @@ public price list; signup's pay-now runs the engine's own `activate` with the
 caller marked `selfServe` (recorded in history and audit); "I've paid" is
 `plan-change.reconcileNow` (one look per eight seconds), from the signup
 page (`check-payment`) and the billing bar (`reconcile-now`) alike. The
-flow as sold: account (login.html) → verified email (start.html holds an
-unverified address) → billing profile → *Build your system* (the one
-menu, priced live by the server; Monthly, or Yearly at ten months of
-twelve) → pay. Create account goes straight to `/start.html` (making the
-account signs it in, so login's auth listener stands aside while the form
-routes it), and a signed-in person with no `omega_orgs` record, grant,
-access request or terms acceptance is sent there too instead of a derived
-workspace; `scripts/render-signup.js` (in `check:pages`) holds both.
+flow as sold: account (login.html) → *How you work today* → billing
+profile → *Build your system* (the one menu, priced live by the server;
+Monthly, or Yearly at ten months of twelve) → pay. Create account goes
+straight into that signup on `/start.html` with the company carried over
+(making the account signs it in, so login's auth listener stands aside
+while the form routes it); the signup options and quotes open before the
+email link is clicked, and only creating the workspace (Subscribe or the
+trial) needs the verified address, which the page waits for and then
+carries on by itself. A signed-in person with no `omega_orgs` record,
+grant or access request, not a named tenant, and without both accepted
+terms and a project under the company, is sent there too instead of a
+derived workspace; `scripts/render-signup.js` (in `check:pages`) holds it.
 Annual prepay is `annualPaidMonths` = 10 in the book.
 `api/_lib/packaging-mode.js` is the ONE rule for where packaging bills:
 SANDBOX (`QBO_ENV=sandbox`) or LIVE (`PACKAGING_LIVE=true` AND
@@ -291,6 +295,13 @@ tabs), and Jarvis names and opens only `OmegaCaps.tabOpen` tabs
 Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move System) live
 on Draw on every plan, where a package puts them: `LITE` in the Compute
 tab's mover, held to the catalog by `scripts/tests/tlegacygates.js`.
+Omega Storefront (`whitelabel`, no tools, no editor commands) is held where
+the public storefront's own gate opens it, never on the tier:
+`api/_lib/storefront.js` `storefrontEntitled`, which `api/_lib/embed.js`
+asks (a `toolOverrides` switch either
+way, else the `whitelabel` add-on or the staff-written `whiteLabel.enabled`
+on the tenant record); `OmegaWorkspaceHub.storefront` is its twin, run case
+for case against it by `scripts/tests/tworkspacehub.js`.
 **Opt in where the plan stops** (Tommy, 2026-09-27: "if there is something
 that they don't have, it shouldn't be blank on the panel. It should say opt
 in and then allow them to add that as a purchase ... linked to the module

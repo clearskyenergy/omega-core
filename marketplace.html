@@ -1391,6 +1391,8 @@ function moduleCtx(){
   return { packaged: STORE.packaged, modules: STORE.packaged ? STORE.owned : (ws.modules || []), addons: ws.addons || [], addOns: STORE.packaged ? [] : (ws.addOns || []), tierLevel: ws.tierLevel, canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && isUnlockedHere(t); }, tool: function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; },
     /* what the editor opens of a legacy module, on the editor's own ladder (the store tells the truth) */
     canCap: STORE.packaged ? null : OmegaWorkspaceHub.capsFor(ws.billing || (window.OmegaTenant && OmegaTenant.billing), ws.orgId),
+    /* the storefront is on where its own gate opens it (the tenant record's whiteLabel, the add-on) */
+    billing: ws.billing || (window.OmegaTenant && OmegaTenant.billing) || null, whiteLabel: ws.whiteLabel || null,
     visible: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && OMEGATools.isVisible(t, ws); } };
 }
 function moduleTools(m){ return (m.tools||[]).map(function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; }).filter(function(t){ return !!t && OMEGATools.isVisible(t, WORKSPACE || {}); }); }

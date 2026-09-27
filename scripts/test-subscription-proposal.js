@@ -79,6 +79,12 @@ async function run() {
   equal(open.pricing.display.recurring, '$1,299/month', '… and sees its price');
   var priced = await post({ action: 'price', selection: { modules: ['lite', 'storage'] }, discovery: EV }, member);
   equal([priced.pricing.plan, priced.pricing.recurringCents, priced.value.spendTodayCents], ['alacarte', 75000, 280000], 'a selection is priced à la carte when that is cheaper');
+  /* 2026-09-27: a new account is quoted on the signup page before its email link is clicked; nothing that writes, sends, accepts or names a sender opens to it */
+  var newcomer = Object.assign({}, member, { email: 'new@fresh.example', orgId: 'fresh.example', claims: { email_verified: false } });
+  equal((await post({ action: 'recommend', discovery: EV }, newcomer)).recommendation.modules, rec.modules, 'an unverified signup is recommended its package');
+  equal((await post({ action: 'price', selection: { modules: ['lite', 'storage'] } }, newcomer)).pricing.recurringCents, 75000, '… and priced');
+  await refused(function () { return post({ action: 'price', selection: { modules: ['lite'] }, prospect: PROSPECT }, newcomer); }, /Verified email required/, 'a priced proposal preview (it names the sender) still needs the verified address');
+  await refused(function () { return post({ action: 'accept', id: 'sp-0000000000000000', key: 'a'.repeat(48) }, newcomer); }, /Verified email required/, 'accepting still needs the verified address');
   var saved = await post({ action: 'save', prospect: PROSPECT, discovery: EV, selection: { modules: rec.modules, credit: true }, notes: 'Met at the ComEd event.' });
   check(/^sp-[a-f0-9]{16}$/.test(saved.id) && saved.proposal.status === 'draft', 'save creates a draft with an id');
   equal(saved.proposal.pricing.recurringCents, 129900, 'the saved record carries the server price');
