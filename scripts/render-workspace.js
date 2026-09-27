@@ -185,6 +185,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     });
     await ctx.addInitScript(DOUBLE_SRC);
     await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: fx.user, docs: fx.docs, latency: 8, authDomain: HOST });
+    /* a scenario's own clock or shim, before any page script runs */
+    if (opts.init) await ctx.addInitScript(opts.init);
     var p = await ctx.newPage();
     p.on('pageerror', function (e) { if (!muted) errs.push(name + ': ' + e.message); });
     p.on('console', function (m) { if (muted) return; var t = m.text(); if (m.type() === 'error' && !/^Failed to load resource/.test(t)) errs.push(name + ' console: ' + t.slice(0, 240)); });
@@ -508,6 +510,15 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('pending: the ring holds only the always-on areas', out.hub.join() === 'today,projects,market,team', out.hub);
     var needs = await p.$eval('#today .next', function (e) { return e.textContent; });
     ok('pending: Needs you leads with approval', /awaiting approval/.test(needs), needs.slice(0, 80));
+    /* review #9: a workspace awaiting approval changes no module, not even
+       one on its plan, and a trial is not Enterprise: White Label (nothing
+       to count) is not Live on a trial, as Site Map does not run it there */
+    await p.evaluate(function () { window.location.hash = '#modules'; });
+    await p.waitForFunction(function () { return document.querySelectorAll('#modules-body .mod').length > 5; }, null, { timeout: 5000 }).catch(function () {});
+    var pm = await p.evaluate(function () { function st(sel) { return Array.prototype.map.call(document.querySelectorAll(sel), function (m) { return m.getAttribute('data-module') + ':' + m.getAttribute('data-state'); }); } return { page: st('#modules-body .mod'), home: st('#mymods-body .mod'), acts: document.querySelectorAll('#modules-body [data-mod-act], #mymods-body [data-mod-act]').length, wl: (document.querySelector('#modules-body .mod[data-module="whitelabel"] .cv .st') || {}).textContent || '' }; });
+    ok('pending: no module card, on the Modules page or the home row, offers any action while approval is pending', pm.page.length === M.catalog().length && pm.home.length > 0 && pm.acts === 0, pm);
+    ok('pending: White Label reads Not on your plan on a trial, never Live', pm.page.indexOf('whitelabel:available') >= 0 && pm.wl === 'Not on your plan', { wl: pm.wl, page: pm.page });
+    await p.evaluate(function () { window.location.hash = ''; }); await wait(200);
     return out;
   } });
 
@@ -596,6 +607,12 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var menu = await p.evaluate(function () { var d = document.getElementById('omega-package-menu'); return { open: !!d, text: d ? d.textContent.replace(/\s+/g, ' ') : '' }; });
     ok('lite-changes: Cancel request opens the one package menu on that module', menu.open && /Grid Atlas/.test(menu.text), { open: menu.open, text: menu.text.slice(0, 200) });
     await p.keyboard.press('Escape'); await wait(200);
+    /* review #11: one count everywhere. Grid Atlas is opting out but stays
+       on, and billed, until the review, so it is Live on the home row, the
+       Modules page's strip and Plan & billing alike */
+    var counts = await p.evaluate(function () { var f = Array.prototype.filter.call(document.querySelectorAll('#bill-sub .bh-fact'), function (x) { return x.querySelector('.l').textContent === 'Modules'; })[0]; return { hero: f ? f.querySelector('.v').textContent : '', home: (document.getElementById('mymods-sub') || {}).textContent || '', strip: (document.getElementById('modules-plan') || {}).textContent || '' }; });
+    var liveOf = '2 of ' + M.catalog().length;
+    ok('lite-changes: the home row, the Modules strip and Plan & billing count the same modules Live (Lite and Grid Atlas, which stays on until the review)', counts.hero === liveOf + ' Live' && counts.home.indexOf(liveOf + ' modules Live for Lite Labs. 2 on the way in or out.') === 0 && counts.strip.indexOf(liveOf + ' modules Live') >= 0, counts);
     await billingPhone(p, 'lite-changes');
     if (shotsAt) { await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(600); await p.screenshot({ path: path.join(shotsAt, 'lite-changes-modules-1366.png'), fullPage: true }); }
     return {};
@@ -641,6 +658,161 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await billingPhone(p, 'legacy-enterprise');
     return {};
   } });
+
+  /* ══ 5d. LITE LABS HOLDING FIVE MODULES, ON A PHONE (review #8) — the
+     money column beside a module's name is the bare price, so a long name
+     and a four-figure price (Office, $1,500/month) stay inside the card at
+     390px and on a desktop, on the Modules page and the home row alike. ══ */
+  var HELD = ['lite', 'estimate', 'engineering', 'siteintel', 'logic-office', 'storage'];
+  var lh = FX.lite(HOST), lhb = lh.docs['omega_orgs/' + lh.org + '/billing/current'];
+  lhb.modules = HELD.slice(); lhb.subscription.modules = HELD.slice();
+  lh.packageView = require('../api/_lib/package-access').project({ staff: false, claims: { email_verified: true } }, lhb, lh.docs['omega_orgs/' + lh.org], lh.docs['omega_orgs/' + lh.org + '/members/uid-lite-owner'], Date.now());
+  STORE.pkg = { modules: HELD.slice(), subscription: HELD.slice(), removals: [] };
+  /* every visible card: the price inside the card's content box, the name on at most two lines */
+  function pricesFit(p) { return p.evaluate(function () {
+    var bad = [], n = 0;
+    Array.prototype.forEach.call(document.querySelectorAll('#modules-body .mod, #mymods-body .mod'), function (c) {
+      var bd = c.querySelector('.bd'), pr = c.querySelector('.nm .price'), nm = c.querySelector('.nm b');
+      if (!bd || !pr || !nm || !bd.getBoundingClientRect().width || !pr.textContent) return;
+      n++;
+      var edge = bd.getBoundingClientRect().right - parseFloat(getComputedStyle(bd).paddingRight), over = Math.round(pr.getBoundingClientRect().right - edge), tall = nm.getBoundingClientRect().height > 2.8 * parseFloat(getComputedStyle(nm).fontSize);
+      if (over > 1 || tall) bad.push(c.getAttribute('data-module') + ' "' + pr.textContent + '" ' + (over > 1 ? 'past the edge by ' + over + 'px' : '') + (tall ? ' name on three lines or more' : ''));
+    });
+    return { cards: n, bad: bad };
+  }); }
+  await scenario('lite-held', lh, { url: '/workspace#modules', steps: async function (p) {
+    await p.waitForFunction(function () { return document.querySelectorAll('#modules-body .mod[data-state="live"]').length >= 5; }, null, { timeout: 6000 }).catch(function () {});
+    var cols = await p.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('#modules-body .mod[data-state="live"]'), function (m) { return m.getAttribute('data-module') + '=' + m.querySelector('.price').textContent + '|' + m.querySelector('.row .note').textContent; }); });
+    ok('lite-held: a Live module\'s money column is its bare price and the note says it is in the monthly fee', cols.length === HELD.length - 1 && cols.every(function (x) { return /=\$[\d,]+\/month\|On your plan · in your monthly fee\.$/.test(x); }), cols);
+    var out = {}, views = [['modules', '#modules'], ['home', '']];
+    for (var vi = 0; vi < views.length; vi++) {
+      await p.evaluate(function (h) { window.location.hash = h; }, views[vi][1]); await wait(300);
+      for (var w of [390, 1366, 1024]) {
+        await p.setViewportSize({ width: w, height: 844 }); await wait(200);
+        var fit = await pricesFit(p);
+        ok('lite-held: on ' + views[vi][0] + ' at ' + w + 'px every card keeps its price inside the card and its name on two lines at most', fit.cards >= 5 && !fit.bad.length, fit);
+        out[views[vi][0] + '@' + w] = fit.cards;
+      }
+    }
+    await p.setViewportSize({ width: 390, height: 844 }); await wait(200);
+    return out;
+  } });
+  STORE.pkg = pkgDefault();
+
+  /* ══ 5e. NEWPAY, AWAITING ITS FIRST PAYMENT (reviews #7, #23) — read-only
+     with its deadline passed, so omega-tenant.js's deadline repaint runs
+     (its 60 s timer cut to 1.5 s here). The workspace loads OmegaCaps as a
+     library only: the repaint drives the ribbon on a page that has one, so
+     no module card is hidden and every card's action still reaches the
+     page: Opt in opens the one menu and Pay now reaches QuickBooks. ══ */
+  var awx = FX.awaiting(HOST);
+  STORE.pkg = { modules: ['lite'], subscription: ['lite', 'gridatlas'], removals: [] };
+  await scenario('awaiting', awx, { url: '/workspace#modules', init: function () {
+    var st = window.setTimeout;
+    window.setTimeout = function (fn, ms) { var a = Array.prototype.slice.call(arguments); if (ms === 60000) a[1] = 1500; return st.apply(window, a); };
+    window.__hiddenMods = 0;
+    document.addEventListener('DOMContentLoaded', function () {
+      new MutationObserver(function (list) { list.forEach(function (m) { if (m.target.classList && m.target.classList.contains('mod') && m.target.hasAttribute('data-package-hidden')) window.__hiddenMods++; }); }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['data-package-hidden', 'style'] });
+    });
+  }, steps: async function (p) {
+    await p.waitForFunction(function () { return document.querySelectorAll('#modules-body .mod').length > 5; }, null, { timeout: 6000 }).catch(function () {});
+    function repaints() { return apiCalls.filter(function (c) { return c === 'GET /api/package-access'; }).length; }
+    var n0 = repaints(), t0 = Date.now();
+    while (repaints() < n0 + 2 && Date.now() - t0 < 12000) await wait(250);
+    await wait(500);
+    var seen = await p.evaluate(function () {
+      function cards(sel) { return Array.prototype.map.call(document.querySelectorAll(sel), function (m) { return { key: m.getAttribute('data-module'), hidden: m.hasAttribute('data-package-hidden') || getComputedStyle(m).display === 'none' }; }); }
+      var pa = window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.packageAccess;
+      return { page: cards('#modules-body .mod'), home: cards('#mymods-body .mod'), everHidden: window.__hiddenMods, readOnly: !!(pa && pa.readOnly), ribbonDriven: !!(window.OmegaCaps && OmegaCaps.packageAccess && OmegaCaps.packageAccess()) };
+    });
+    ok('awaiting: the deadline repaint ran on a read-only workspace', repaints() - n0 >= 2 && seen.readOnly, { repaints: repaints() - n0, readOnly: seen.readOnly });
+    ok('awaiting: no module card on the Modules page or the home row was ever hidden, and OmegaCaps was never handed the package here', seen.page.length === M.catalog().length && seen.home.length > 0 && !seen.page.concat(seen.home).some(function (c) { return c.hidden; }) && !seen.everHidden && !seen.ribbonDriven, { everHidden: seen.everHidden, ribbonDriven: seen.ribbonDriven, hidden: seen.page.concat(seen.home).filter(function (c) { return c.hidden; }).map(function (c) { return c.key; }) });
+    /* Pay now on the bought module reaches the page (a listener on the document hears it; it is stopped there so nothing leaves the machine) */
+    var pay = await p.evaluate(function () {
+      var a = document.querySelector('#modules-body .mod[data-module="gridatlas"] a[data-mod-act="pay"]'); if (!a) return null;
+      var reached = false, h = function (e) { reached = true; e.preventDefault(); };
+      document.addEventListener('click', h);
+      var ev = new MouseEvent('click', { bubbles: true, cancelable: true, view: window }); a.dispatchEvent(ev);
+      document.removeEventListener('click', h);
+      return { href: a.getAttribute('href'), label: a.textContent, reached: reached };
+    });
+    ok('awaiting: Grid Atlas, bought and not on yet, offers Pay now and the click reaches the page (QuickBooks\' own page)', !!pay && pay.reached && /connect\.intuit\.com/.test(pay.href) && pay.label === 'Pay now', pay);
+    /* Opt in still opens the one menu on that module */
+    var sel = '#modules-body .mod[data-module="storage"] [data-mod-act="add"]';
+    await p.$eval(sel, function (b) { b.scrollIntoView({ block: 'center' }); }).catch(function () {});
+    await p.click(sel).catch(function () {});
+    var menu = await p.waitForSelector('#omega-package-menu [data-module-card="storage"]', { timeout: 4000 }).then(function () { return true; }, function () { return false; });
+    ok('awaiting: Opt in on a card still opens the one menu on that module after the deadline repaint', menu);
+    await p.keyboard.press('Escape'); await wait(200);
+    return {};
+  } });
+  STORE.pkg = pkgDefault(); STORE.posts = [];
+
+  /* ══ 5f. NORTHSTAR WITH REQUESTS THE PLAN HAS ALREADY ANSWERED (reviews
+     #10, #12) — a legacy Standard plan invoiced by ClearSky with $5,000 due
+     on Nov 21. Storage was asked for and the plan now holds it; Plan Sets
+     was asked to go and the plan no longer holds it: neither is in flight
+     anywhere. Investor & Finance is asked for and Grid Atlas asked to go:
+     both are, on the cards, the chips and Changes in progress alike. What
+     is owed says when it is DUE, never that it was issued then. ══ */
+  var nsx = FX.northstar(HOST), nxb = nsx.docs['omega_orgs/' + nsx.org + '/billing/current'];
+  nxb.paymentProvider = 'manual'; nxb.amountDue = 5000; nxb.subscriptionDue = '2026-11-21';
+  nxb.optIns = { storage: { key: 'storage', name: M.get('storage').name, status: 'requested', requestedAt: '2026-09-01', display: '$250/month' }, finance: { key: 'finance', name: M.get('finance').name, status: 'requested', requestedAt: '2026-09-20', display: '$500/month' } };
+  nxb.optOuts = { plansets: { key: 'plansets', name: M.get('plansets').name, status: 'requested', requestedAt: '2026-09-01' }, gridatlas: { key: 'gridatlas', name: M.get('gridatlas').name, status: 'requested', requestedAt: '2026-09-20' } };
+  STORE.optIns = {}; STORE.optOuts = {};
+  await scenario('northstar-stale', nsx, { url: '/workspace#modules', steps: async function (p) {
+    await p.waitForFunction(function () { return document.querySelectorAll('#modules-body .mod').length > 5; }, null, { timeout: 6000 }).catch(function () {});
+    var st = await p.evaluate(function () { function map(sel) { var o = {}; Array.prototype.forEach.call(document.querySelectorAll(sel), function (m) { o[m.getAttribute('data-module')] = m.getAttribute('data-state'); }); return o; } return { page: map('#modules-body .mod'), home: map('#mymods-body .mod') }; });
+    ok('northstar-stale: the Modules page reads each request by the one precedence (Storage Live, Plan Sets on offer, Investor & Finance requested, Grid Atlas opting out)', st.page.storage === 'live' && st.page.plansets === 'available' && st.page.finance === 'requested' && st.page.gridatlas === 'removing', st.page);
+    ok('northstar-stale: the home row says the same', Object.keys(st.home).length > 0 && Object.keys(st.home).every(function (k) { return st.home[k] === st.page[k]; }), st.home);
+    await p.evaluate(function () { window.location.hash = '#billing'; });
+    await p.waitForFunction(function () { return !!document.getElementById('bill-owe'); }, null, { timeout: 5000 }).catch(function () {});
+    await wait(400);
+    var b = await p.evaluate(function () {
+      function txt(e) { return e ? e.textContent.replace(/\s+/g, ' ').trim() : ''; }
+      var f = Array.prototype.filter.call(document.querySelectorAll('#bill-sub .bh-fact'), function (x) { return x.querySelector('.l').textContent === 'Modules'; })[0];
+      return { rows: Array.prototype.map.call(document.querySelectorAll('#bill-req .chg-row'), function (r) { return r.getAttribute('data-change') + ':' + txt(r.querySelector('.bpill')); }),
+        soon: Array.prototype.map.call(document.querySelectorAll('#bill-sub .bh-mod.soon'), function (a) { return a.getAttribute('href'); }), leaving: Array.prototype.map.call(document.querySelectorAll('#bill-sub .bh-mod.leaving'), function (a) { return a.getAttribute('href'); }),
+        storageChip: txt(document.querySelector('#bill-sub a.bh-mod[href="/workspace#module-storage"]')), fact: f ? txt(f.querySelector('.v')) : '', strip: txt(document.getElementById('modules-plan')), owe: txt(document.getElementById('bill-owe').querySelector('.owe-amt')) };
+    });
+    ok('northstar-stale: Changes in progress lists only what is in flight (Investor & Finance requested, Grid Atlas opting out), never the answered requests', b.rows.join('|') === 'finance:Opt-in requested|gridatlas:Opting out', b.rows);
+    ok('northstar-stale: the subscription\'s chips agree: Storage is a plain Live chip, only Investor & Finance is on its way in and only Grid Atlas on its way out', b.soon.join() === '/workspace#module-finance' && b.leaving.join() === '/workspace#module-gridatlas' && !/requested/.test(b.storageChip) && /Storage/.test(b.storageChip), b);
+    var heldN = Object.keys(st.page).filter(function (k) { return ['included', 'live', 'removing'].indexOf(st.page[k]) >= 0; }).length;
+    ok('northstar-stale: Plan & billing counts the modules Live as the Modules page does', b.fact === heldN + ' of ' + M.catalog().length + ' Live' && b.strip.indexOf(heldN + ' of ' + M.catalog().length + ' modules Live') >= 0, { fact: b.fact, strip: b.strip, heldN: heldN });
+    ok('northstar-stale: a legacy plan\'s amount due says when it is due (Nov 21, 2026), never "issued"', /\$5,000/.test(b.owe) && /Due Nov 21, 2026/.test(b.owe) && !/issued/.test(b.owe), b.owe);
+    return {};
+  } });
+  STORE.optIns = {}; STORE.optOuts = {};
+
+  /* ══ 5g. CLEARSKY'S OWN WORKSPACE (review #13) — a verified
+     @clearsky-usa.com address with no billing record runs Site Map as
+     'internal' (OmegaCaps.resolve), so the Modules page says so too: the
+     editor's capability modules read Live, not "Not on your plan". ══ */
+  var cso = FX.northstar(HOST); Object.keys(cso.docs).forEach(function (k) { if (/^(omega_orgs|tenant_public)\//.test(k)) delete cso.docs[k]; });
+  cso.user = { uid: cso.user.uid, email: 'tommy@clearsky-usa.com', displayName: 'Tommy G', emailVerified: true };
+  await scenario('clearsky-own', cso, { url: '/workspace#modules', steps: async function (p) {
+    await p.waitForFunction(function () { return document.querySelectorAll('#modules-body .mod').length > 5; }, null, { timeout: 8000 }).catch(function () {});
+    var own = await p.evaluate(function () { var o = {}; Array.prototype.forEach.call(document.querySelectorAll('#modules-body .mod'), function (m) { o[m.getAttribute('data-module')] = m.getAttribute('data-state'); }); return { org: window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.orgId, states: o }; });
+    ok('clearsky-own: a verified ClearSky address with no billing record sees Plan Sets, Site Intelligence, Permitting and White Label Live, as Site Map runs them', own.org === 'clearsky-usa.com' && ['plansets', 'siteintel', 'permitting', 'whitelabel', 'engineering'].every(function (k) { return own.states[k] === 'live'; }) && own.states['logic-office'] !== 'live', own);
+    return {};
+  } });
+
+  /* ══ 5h. #launch-<tool> (review #14) — a page that cannot start a tool's
+     flow itself (the marketplace's Open on Site Map) links here: the home,
+     then the tool as its tile opens it, the hash dropped; a locked tool
+     explains. ══ */
+  await scenario('launch', FX.northstar(HOST), { url: '/workspace#launch-editor', steps: async function (p) {
+    var np = await p.waitForFunction(function () { var e = document.getElementById('np-name'); return !!(e && (e.offsetWidth || e.offsetHeight)); }, null, { timeout: 6000 }).then(function () { return true; }, function () { return false; });
+    var at = await p.evaluate(function () { return { view: document.getElementById('content').getAttribute('data-view'), hash: window.location.hash }; });
+    ok('launch: /workspace#launch-editor opens the home and starts Site Map\'s New Project flow, and drops the hash', np && at.view === 'home' && at.hash === '', at);
+    await p.click('.mb-cancel').catch(function () {}); await wait(200);
+    await p.evaluate(function () { window.location.hash = '#launch-investment'; }); await wait(500);
+    var why = await p.$eval('.ows-drawer', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });
+    ok('launch: #launch-<a locked tool> explains in its drawer instead of opening', /Opt in to Investor & Finance/.test(why), why.slice(0, 160));
+    await p.keyboard.press('Escape'); await wait(150);
+    return {};
+  } });
+
   /* ══ 6. THE MARKETPLACE IS THE TOOLS — Lite Labs (packaged) ══
      Tommy, 2026-09-27: "the marketplace should be the old tools that we
      had ... but the modules are paid services tied directly to the
@@ -816,6 +988,21 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.goto(base + '/workspace?home=classic', { waitUntil: 'domcontentloaded' }); await wait(3500);
     var where = await p.evaluate(function () { return { path: location.pathname, app: !!document.getElementById('app') && getComputedStyle(document.getElementById('app')).display !== 'none' }; });
     ok('classic choice: /workspace?home=classic lands on the classic dashboard and stays', where.path === '/' && where.app, where);
+    /* review #27: Site Map's plan chip and the editor gate link
+       /workspace#billing, #modules and #module-<key>; a classic home keeps
+       the place: the Account panel at Billing & plan, and the one menu on
+       the module (a legacy plan opens it on the marketplace, where the
+       classic home keeps it) */
+    var acctErrs = []; p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) acctErrs.push(e.message); });
+    await p.goto(base + '/workspace#billing', { waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(function () { var o = document.getElementById('acct-overlay'); return location.pathname === '/' && !!o && o.classList.contains('show'); }, null, { timeout: 8000 }).catch(function () {});
+    var acct = await p.evaluate(function () { var o = document.getElementById('acct-overlay'), t = Array.prototype.filter.call(document.querySelectorAll('#acct-overlay .acct-sec-title'), function (e) { return /^Billing/.test(e.textContent); })[0], r = t && t.getBoundingClientRect(); return { path: location.pathname, hash: location.hash, open: !!o && o.classList.contains('show'), billingInView: !!(r && r.height > 0 && r.top >= 0 && r.top < window.innerHeight) }; });
+    ok('classic choice: /workspace#billing on a classic home lands on the dashboard with the Account panel open at Billing & plan', acct.path === '/' && acct.hash === '#billing' && acct.open && acct.billingInView, acct);
+    await p.goto(base + '/workspace#module-gridatlas', { waitUntil: 'domcontentloaded' });
+    var mod = await p.waitForFunction(function () { return location.pathname === '/marketplace.html' && !!document.querySelector('#omega-package-menu [data-module-card="gridatlas"]'); }, null, { timeout: 10000 }).then(function () { return true; }, function () { return false; });
+    var modAt = await p.evaluate(function () { return location.pathname + location.hash; });
+    ok('classic choice: /workspace#module-gridatlas on a classic home (a legacy plan) opens the one menu on Grid Atlas where the classic home keeps it', mod && modAt === '/marketplace.html#gridatlas', modAt);
+    ok('classic choice: no uncaught errors on the way', !acctErrs.length, acctErrs);
     await ctx.close();
   })();
   /* The DEFAULT, with nothing asked for in the address: a tenant whose record

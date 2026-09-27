@@ -148,8 +148,15 @@
        billing  billing/current as the workspace reads it: subscription,
                 optIns{}, optOuts{}, removalRequests[], paymentLink
        summary  GET /api/plan-change, or null while it loads or failed:
-                pending[], gate{canApply, reason}, nextReviewOn
+                pending[], gate{canApply, reason}, nextReviewOn; its
+                subscription, removalRequests, optIns and optOuts stand in
+                only where billing/current carries none
        opts     { admin, pendingApproval, planName, company, price }
+     The card carries the record its state rests on (record: the change
+     invoice, the queued removal, the opt-out or the opt-in), so Plan &
+     billing lists what is in flight FROM the cards: a request the plan has
+     already answered (an opt-in on a module now held, an opt-out on one no
+     longer held) is never shown as in flight anywhere.
      A state, first match wins:
        included  Lite, the floor every plan stands on
        awaiting  a change invoice for it is open (packaged)
@@ -206,14 +213,14 @@
   function moduleCard(m, ctx, billing, summary, opts) {
     ctx = ctx || {}; billing = billing || {}; opts = opts || {};
     var key = m && m.key, packaged = !!ctx.packaged, price = opts.price || '', plan = opts.planName || 'your plan', co = opts.company || 'your workspace';
-    var card = { key: key, state: 'available', pill: 'Not on your plan', tone: 'off', held: false, priceLine: price, note: '', action: null, secondary: null, adminLine: '' };
-    var st = moduleState(m, ctx);
-    var sub = billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription.modules : [];
+    var card = { key: key, state: 'available', pill: 'Not on your plan', tone: 'off', held: false, priceLine: price, note: '', action: null, secondary: null, adminLine: '', record: null };
+    var st = moduleState(m, ctx), sm = summary || {};
+    var sub = billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription.modules : Array.isArray(sm.subscription) ? sm.subscription : [];
     var wait = null;
-    ((summary && summary.pending) || []).forEach(function (p) { if (!wait && Array.isArray(p.add) && p.add.indexOf(key) >= 0) wait = p; });
+    (sm.pending || []).forEach(function (p) { if (!wait && Array.isArray(p.add) && p.add.indexOf(key) >= 0) wait = p; });
     var queued = null;
-    (Array.isArray(billing.removalRequests) ? billing.removalRequests : []).forEach(function (r) { if (r && r.module === key) queued = r; });
-    var optOut = !packaged ? listed(billing.optOuts, key) : null, optIn = !packaged ? listed(billing.optIns, key) : null;
+    (Array.isArray(billing.removalRequests) ? billing.removalRequests : Array.isArray(sm.removalRequests) ? sm.removalRequests : []).forEach(function (r) { if (r && r.module === key) queued = r; });
+    var optOut = !packaged ? listed(billing.optOuts || sm.optOuts, key) : null, optIn = !packaged ? listed(billing.optIns || sm.optIns, key) : null;
     if (key === 'lite') {
       card.state = 'included'; card.pill = 'Live · always included'; card.tone = 'live'; card.held = true;
       card.priceLine = 'In every plan'; card.note = 'Always on. Nothing to opt in to or out of.';
@@ -223,7 +230,7 @@
       card.state = 'awaiting'; card.pill = 'Waiting for payment'; card.tone = 'wait';
       card.note = (wait.display ? wait.display + ' invoice · ' : '') + (wait.expiresOn ? 'pay by ' + shortDay(wait.expiresOn) + ' · ' : '') + 'switches on when paid';
       card.action = wait.paymentLink ? { kind: 'pay', label: 'Pay' + (wait.display ? ' ' + wait.display : ''), href: wait.paymentLink } : { kind: 'billing', label: 'Plan & billing' };
-      card.secondary = { kind: 'cancel', label: 'Cancel request' };
+      card.secondary = { kind: 'cancel', label: 'Cancel request' }; card.record = wait;
     } else if (packaged && st !== 'held' && sub.indexOf(key) >= 0) {
       card.state = 'bought'; card.pill = 'Bought · not on yet'; card.tone = 'wait';
       card.note = 'Switches on when your open invoice is paid.';
@@ -234,17 +241,20 @@
       card.note = packaged
         ? 'Stays on, and billed, until ' + (review ? 'your review on ' + shortDay(review) : 'your next quarterly review') + '.'
         : 'Requested ' + shortDay(optOut.requestedAt) + '. ClearSky confirms the date and any price change in writing; access is unchanged until then.';
-      card.action = { kind: 'cancel', label: 'Cancel request' };
+      card.action = { kind: 'cancel', label: 'Cancel request' }; card.record = packaged ? queued : optOut;
     } else if (st === 'held') {
+      /* the money column carries the bare price, as every other card does
+         (with the words beside it, a long name and a four-figure price ran
+         past the card's edge on a phone); the note says where it is billed */
       card.state = 'live'; card.pill = 'Live'; card.tone = 'live'; card.held = true;
-      card.priceLine = packaged ? (price ? price + ' · in your monthly fee' : 'In your plan') : 'Included in ' + plan;
-      card.note = 'On your plan.';
+      card.priceLine = packaged ? (price || 'In your plan') : 'Included in ' + plan;
+      card.note = packaged && price ? 'On your plan · in your monthly fee.' : 'On your plan.';
       card.action = { kind: 'remove', label: 'Opt out' };
     } else if (optIn) {
       card.state = 'requested'; card.pill = 'Opt-in requested'; card.tone = 'wait';
       card.priceLine = optIn.display || price;
       card.note = 'Requested ' + shortDay(optIn.requestedAt) + (optIn.display || price ? ' at ' + (optIn.display || price) : '') + '. It joins your monthly invoice once ClearSky moves you to monthly billing; nothing is charged before you approve that invoice.';
-      card.action = { kind: 'cancel', label: 'Cancel request' };
+      card.action = { kind: 'cancel', label: 'Cancel request' }; card.record = optIn;
     } else if (st === 'part') {
       var t = moduleTools(m, ctx), e = moduleEditor(m, ctx), bits = [];
       if (t.total) bits.push(t.open + ' of ' + t.total + ' tools');
@@ -260,10 +270,12 @@
       card.action = { kind: 'add', label: 'Opt in' };
       if (packaged && gate && gate.canApply === false) card.action.disabled = true;
     }
-    /* who may press it: a workspace waiting on approval opens nothing yet;
-       anyone but an owner or administrator reads the card and is told who
-       changes it (the server refuses them too) */
-    if (opts.pendingApproval && !card.held) { card.note = 'Opens when ClearSky approves ' + co + '.'; card.action = null; card.secondary = null; }
+    /* who may press it: a workspace waiting on approval changes nothing yet,
+       a module on its plan included (an opt-out filed before approval would
+       mail ClearSky a request about a plan it has not approved); anyone but
+       an owner or administrator reads the card and is told who changes it
+       (the server refuses them too) */
+    if (opts.pendingApproval) { card.note = card.held ? 'On your plan. It opens when ClearSky approves ' + co + '.' : 'Opens when ClearSky approves ' + co + '.'; card.action = null; card.secondary = null; }
     else if (opts.admin === false && card.action && card.action.kind !== 'billing') { card.action = card.action.kind === 'pay' ? card.action : null; card.secondary = null; card.adminLine = 'An owner or administrator of ' + co + ' changes modules.'; }
     return card;
   }
