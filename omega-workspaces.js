@@ -15,7 +15,7 @@
   var aliases = { evl2: 'l2', level2: 'l2', ev: 'dcfc', evdcfc: 'dcfc', storage: 'bess', battery: 'bess',
     solar: 'solarstorage', pv: 'solarstorage', solarbess: 'solarstorage', 'solar+storage': 'solarstorage',
     der: 'microgrid', datacenter: 'compute', netzero: 'building' };
-  var selected = [], identity = '', all = false;
+  var selected = [], identity = '';
   function normalize(type, scopes) {
     var input = Array.isArray(scopes) && scopes.length ? scopes.slice() : [type], out = [];
     if (input.indexOf('der') >= 0 && input.indexOf('bess') >= 0) {
@@ -56,50 +56,52 @@
     if (!keys.length || !cats.length) return 0;
     return cats.some(function (k) { return focus.indexOf(k) >= 0; }) ? 1 : -1;
   }
-  function storageKey() { return identity ? 'omega.workspace.all.' + identity : null; }
   function setIdentity(uid) {
     if (identity === String(uid || '')) return;
-    identity = String(uid || ''); all = false;
-    try { if (storageKey()) all = global.localStorage.getItem(storageKey()) === '1'; } catch (e) {}
-    refresh();
+    identity = String(uid || ''); refresh();
   }
   function setProject(type, scopes, openBuild) {
     selected = normalize(type, scopes); refresh();
-    if (openBuild && global.OmegaCaps && global.OmegaCaps.packageAccess() && typeof global.rbTab === 'function') global.rbTab('home');
+    if (openBuild && owned() && typeof global.rbTab === 'function') global.rbTab('home');
     results(); return selected.slice();
   }
-  function setAll(value) {
-    all = value === true;
-    try { if (storageKey()) global.localStorage.setItem(storageKey(), all ? '1' : '0'); } catch (e) {}
-    refresh(); return all;
-  }
-  function refresh() { if (global.OmegaCaps && global.OmegaCaps.packageAccess()) global.OmegaCaps.apply('standard'); }
+  /* "All tools" is retired with the hiding it undid (see apply): every
+     owned tool is always on the ribbon. Kept as an inert call so an older
+     caller cannot break; it hides and remembers nothing. */
+  function setAll() { refresh(); return true; }
+  /* a real package, not the lock OmegaCaps holds while the plan loads: a
+     legacy project opening during sign-in must not paint package chrome */
+  function owned() { var v = global.OmegaCaps && global.OmegaCaps.packageAccess(); return !!(v && !v.pending); }
+  function refresh() { if (owned()) global.OmegaCaps.apply('standard'); }
   function apply(scope) {
     if (!scope || !scope.querySelectorAll) return;
     var view = global.OmegaCaps && global.OmegaCaps.packageAccess();
     if (!view) return;
-    if (global.document && global.document.body) global.document.body.setAttribute('data-workspace-all', all ? '1' : '0');
+    /* ── WHAT THEY OWN IS WHAT THEY SEE (Tommy, 2026-09-27) ──────────────
+       A project type used to HIDE the owned tools it judged irrelevant
+       (data-workspace-hidden) behind an "All tools" toggle, so a module
+       somebody had just paid for could be missing from the ribbon because
+       the project was Level 2. Three filters stood between a purchase and
+       its buttons: the package, Designer/Pro and this. Now the package is
+       the only one: the project type puts its tools FIRST in each group and
+       its guided build at the front, and hides nothing. */
     var nodes = scope.querySelectorAll('#ribbon .rbtn,#ribbon .rsbtn');
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i], page = el.closest('.ribbon-page'), pg = page && page.getAttribute('data-page');
       var score = relevance(el.getAttribute('onclick'), el.id, pg);
-      el.toggleAttribute('data-workspace-hidden', !all && score < 0);
+      el.removeAttribute('data-workspace-hidden');
       el.setAttribute('data-workspace-priority', score > 0 ? '1' : '0');
       // Reorder within an existing group; never move a control to a new group.
       var holder = el.parentNode && el.parentNode.classList.contains('rbtn-wrap') ? el.parentNode : el;
-      holder.style.order = !all && score > 0 ? '-1' : '';
-      if (!all && selected.length && presets[selected[0]].guide === el.getAttribute('onclick')) holder.style.order = '-2';
+      holder.style.order = score > 0 ? '-1' : '';
+      if (selected.length && presets[selected[0]].guide === el.getAttribute('onclick')) holder.style.order = '-2';
     }
-    var label = global.document.getElementById('omega-workspace-label');
-    if (label) label.textContent = selected.map(function (k) { return presets[k].label; }).join(' + ') || 'Project workspace';
-    var toggle = global.document.getElementById('omega-workspace-all');
-    if (toggle) { toggle.setAttribute('aria-pressed', all ? 'true' : 'false'); toggle.textContent = 'All tools'; }
   }
   function results() {
     var view = global.OmegaCaps && global.OmegaCaps.packageAccess();
     if (!view || !global.document) return;
     var rail = global.document.querySelector('#rr .rr-body'); if (!rail) return;
-    rail.style.display = 'flex'; rail.style.flexDirection = 'column';
+    style();
     var stale = global.document.getElementById('rr-stale'); if (stale) stale.style.order = '-3';
     var emphasis = selected.indexOf('bess') >= 0 || selected.indexOf('solarstorage') >= 0;
     var groups = rail.querySelectorAll('.rr-grp');
@@ -109,7 +111,6 @@
     }
     var power = global.document.getElementById('rr-b-power');
     if (!power) return;
-    power.style.display = 'flex'; power.style.flexDirection = 'column';
     var rows = power.querySelectorAll('.rr-row');
     var ev = selected.indexOf('l2') >= 0 || selected.indexOf('dcfc') >= 0;
     var compute = selected.indexOf('compute') >= 0, have = false;
@@ -140,7 +141,30 @@
       empty.appendChild(button);
     }
   }
+  /* The rail's column layout (so `order` can put this project's numbers
+     first) as a rule, never an inline display: an inline flex beat the
+     rail's own collapse rules, so a packaged user could not close the
+     Results rail or its POWER group. */
+  function style() {
+    if (global.document.getElementById('omega-workspaces-style')) return;
+    var st = global.document.createElement('style'); st.id = 'omega-workspaces-style';
+    st.textContent = 'body[data-packaged-editor="1"] #rr:not(.rr-collapsed) .rr-body{display:flex;flex-direction:column}' +
+      'body[data-packaged-editor="1"] .rr-grp:not(.rr-shut) #rr-b-power{display:flex;flex-direction:column}';
+    (global.document.head || global.document.body).appendChild(st);
+  }
+  /* A package that goes away takes its ordering with it (OmegaCaps.setPackage(null)). */
+  function reset() {
+    var d = global.document; if (!d || !d.querySelectorAll) return;
+    var nodes = d.querySelectorAll('[data-workspace-priority],[data-workspace-hidden]');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i], holder = el.parentNode && el.parentNode.classList && el.parentNode.classList.contains('rbtn-wrap') ? el.parentNode : el;
+      holder.style.order = ''; el.removeAttribute('data-workspace-priority'); el.removeAttribute('data-workspace-hidden');
+    }
+    var rows = d.querySelectorAll('#rr .rr-grp,#rr-b-power .rr-row,#rr-stale');
+    for (var r = 0; r < rows.length; r++) rows[r].style.order = '';
+    var empty = d.getElementById('omega-workspace-empty'); if (empty) empty.remove();
+  }
   global.OmegaWorkspaces = { presets: presets, normalize: normalize, relevance: relevance, core: core,
-    results: results, setProject: setProject, setIdentity: setIdentity, setAll: setAll, all: function () { return all; },
-    selected: function () { return selected.slice(); }, apply: apply };
+    results: results, setProject: setProject, setIdentity: setIdentity, setAll: setAll, all: function () { return true; },
+    selected: function () { return selected.slice(); }, apply: apply, reset: reset };
 })(typeof window !== 'undefined' ? window : this);
