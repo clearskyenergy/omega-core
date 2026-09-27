@@ -82,7 +82,9 @@ function live(billing, now) {
 /* The legacy workspace as the tools catalog judges it: the org's own grant
    fields (omega-tenant.js mergeEntitlements, without a member's list). */
 function workspace(orgId, b) {
-  var ws = { orgId: orgId, toolOverrides: b.toolOverrides || {}, addons: b.addons || [] };
+  /* the older billing.omegaLogic flag holds all of Omega Logic, as logic-access wholeLogic() reads it: judged, never written */
+  var addons = (b.addons || []).slice(); if (b.omegaLogic === true && addons.indexOf('omega-logic') < 0) addons.push('omega-logic');
+  var ws = { orgId: orgId, toolOverrides: b.toolOverrides || {}, addons: addons };
   if (b.tier && TIER_LEVEL[b.tier] != null) ws.tierLevel = TIER_LEVEL[b.tier];
   if (Array.isArray(b.toolAccess)) ws.toolAccess = b.toolAccess.slice();
   return ws;
@@ -230,6 +232,9 @@ function quote(c, rows, input, now, staff) {
   /* a package is judged by its own projection, never by the legacy rule below */
   if (b.packaged === true) fail('This workspace is on a subscription package: add modules on the Ladder, which prices and invoices them.', 409);
   var have = live(b, now), inCycle = !!a.billingDay && a.state === 'paid' && have.length > 0;
+  /* the add-on renewal is due and not issued yet: a purchase now would start
+     the next cycle and the renewal would be skipped (a free month) */
+  var renewalDue = inCycle && !!a.nextInvoiceOn && a.nextInvoiceOn <= today;
   var add = closure(function (k) { return held(orgId, b, k, now); }, wanted(input.add));
   if (!add.length) fail('Already on your plan', 409);
   var day = inCycle ? a.billingDay : new Date(now).getUTCDate(), cycle = R.cycle(today, day);
@@ -237,8 +242,20 @@ function quote(c, rows, input, now, staff) {
   var lines = inCycle ? deltaLines(before, after, add, book, cycle.remainingDays, cycle.days) : after.lines.map(function (l) { return Object.assign({}, l); });
   var total = sum(lines);
   if (total < 0) { lines = []; total = 0; }
-  var included = total === 0, g = gate(c, rows, now, exact(orgId, b, add, now), add), needsProfile = !(c.profile && c.profile.legalName);
-  var previewId = Q.key(B.stable({ org: orgId, book: book.version, have: inCycle ? have : [], add: add, fresh: !inCycle, day: day, cycle: cycle, lines: lines, total: total }));
+  var included = total === 0, needsProfile = !(c.profile && c.profile.legalName);
+  var g = renewalDue ? { canBuy: false, reason: 'Your add-on renewal is being issued today. Add modules once it has gone through; that usually takes under an hour.' } : gate(c, rows, now, exact(orgId, b, add, now), add);
+  var basis = { org: orgId, book: book.version, have: inCycle ? have : [], add: add, fresh: !inCycle, day: day, cycle: cycle, lines: lines, total: total };
+  /* a purchase whose invoice is dead (voided or refunded: 'reversed') makes
+     the next request of this cycle a new purchase, with its own invoice */
+  var reissued = (rows || []).filter(function (r) { return isAddon(r) && r.purpose !== 'renewal' && r.state === 'reversed' && r.cycle && r.cycle.start === cycle.start; }).length;
+  if (reissued) basis.reissued = reissued;
+  var previewId = Q.key(B.stable(basis));
+  /* cancel never voids the QuickBooks invoice: a cancelled purchase of any of
+     these modules whose invoice is still open, asked for again with another
+     id (another day, another set), is never a second invoice beside it; the
+     same request the same day revives it (buy) */
+  var stillOpen = (rows || []).filter(function (r) { return isAddon(r) && r.purpose !== 'renewal' && r.state === 'cancelled' && r.qboInvoiceId && r.id !== 'addon-' + previewId && (r.add || []).some(function (k) { return add.indexOf(k) >= 0; }); })[0];
+  if (g.canBuy && stillOpen) g = { canBuy: false, reason: 'Your cancelled request for ' + names(stillOpen.add).join(', ') + ' still has an open QuickBooks invoice' + (stillOpen.paymentLink ? ' (' + stillOpen.paymentLink + ')' : '') + '. Pay that invoice to switch it on, or ask ClearSky to void it and add it again.' };
   var then = after.display + ' on the ' + ordinal(day) + ', on its own invoice beside your plan' + (inCycle ? ' (add-ons were ' + before.display + ')' : '');
   var out = { orgId: orgId, previewId: previewId, effectiveAt: now, add: add, addNames: names(add), requested: order(wanted(input.add)), lines: lines, todayCents: total,
     monthlyCents: after.monthlyCents, monthlyBeforeCents: before.monthlyCents, monthlyDisplay: after.display, billingDay: day, fresh: !inCycle, included: included,
@@ -324,14 +341,26 @@ function settle(billing, rows, book, now) {
 /* A purchase moving to paid or reversed changes what was bought. Paid after
    a cancel or after its period passed is still honoured (the customer paid)
    and the caller flags it for a person. */
-function boughtAfter(billing, record, from, to) {
+function boughtAfter(billing, record, from, to, rows) {
   var a = billing.addOns || {}, bought = order(a.modules || []);
   if (record.purpose === 'renewal') return null;
   if (to === 'paid' && from !== 'paid') {
-    var next = record.fresh ? order(record.add) : order(bought.concat(record.add || []));
-    return { modules: next, billingDay: record.fresh || !a.billingDay ? record.billingDay : a.billingDay };
+    /* a fresh purchase replaces what was bought only while nothing is on: a
+       late payment of a cancelled or expired one, landing after a later
+       purchase is paid, adds to it and never switches that off */
+    var replace = record.fresh && ['paid', 'past_due'].indexOf(a.state) < 0;
+    var next = replace ? order(record.add) : order(bought.concat(record.add || []));
+    return { modules: next, billingDay: replace || !a.billingDay ? record.billingDay : a.billingDay };
   }
-  if (to === 'reversed' && from === 'paid') return { modules: bought.filter(function (k) { return (record.add || []).indexOf(k) < 0; }), billingDay: a.billingDay || null };
+  if (to === 'reversed' && from === 'paid') {
+    /* a module stays while a LATER paid add-on invoice still covers it (the
+       renewal that billed it, a purchase after it); a part never outlives
+       what it requires */
+    var covered = function (k) { return (rows || []).some(function (r) { return isAddon(r) && r.id !== record.id && r.state === 'paid' && r.period && record.period && r.period.end > record.period.end && ((r.purpose === 'renewal' ? r.modules : r.add) || []).indexOf(k) >= 0; }); };
+    var keep = bought.filter(function (k) { return (record.add || []).indexOf(k) < 0 || covered(k); });
+    keep = keep.filter(function (k) { return M.get(k).requires.every(function (q) { return q === 'lite' || keep.indexOf(q) >= 0; }); });
+    return { modules: keep, billingDay: a.billingDay || null };
+  }
   return null;
 }
 
@@ -344,6 +373,9 @@ async function buy(db, orgId, input, caller, now, deps) {
   var done = await op.get();
   if (done.exists && done.data().state === 'done') {
     if (done.data().requestFingerprint !== fingerprint) fail('A purchase id cannot be reused with different inputs');
+    var mine = cur.collection('invoices').doc('addon-' + input.previewId), had = await mine.get();
+    if (had.exists && had.data().state === 'reversed') fail('The price changed; review it again before paying');
+    if (had.exists && had.data().state === 'cancelled') return revive(db, c, mine, input, done.data().result, caller, now);
     return done.data().result;
   }
   var rows = await records(c), q = quote(c, rows, input, now, caller.staff);
@@ -410,6 +442,28 @@ async function buy(db, orgId, input, caller, now, deps) {
     throw e;
   }
 }
+/* The same purchase asked for again after its cancel, while its QuickBooks
+   invoice is still open: it waits for payment again on that invoice, never
+   a second one. Re-checked as a request (same price, nothing else waiting). */
+async function revive(db, c, ref, input, result, caller, now) {
+  var cur = current(c);
+  return db.runTransaction(async function (tx) {
+    var snap = await tx.get(ref), live0 = await tx.get(cur), invoices = await tx.get(cur.collection('invoices').orderBy('date')), fresh = live0.data() || {};
+    var rows = invoices.docs.map(function (d) { return d.data(); }), r = snap.data();
+    if (!r || r.state !== 'cancelled') fail('Your plan changed; review the price again');
+    var again = quote(Object.assign({}, c, { billing: fresh }), rows, input, now);
+    if (again.previewId !== input.previewId) fail('Your plan changed; review the price again');
+    if (!again.canBuy) fail(again.reason);
+    tx.update(ref, { state: 'unpaid', cancelledAt: null, cancelledBy: null, reopenedAt: now, reopenedBy: caller.email });
+    var all = rows.map(function (d) { return d.id === r.id ? Object.assign({}, d, { state: 'unpaid' }) : d; });
+    var patch = settle(fresh, all, c.book, now); patch.updatedAt = now; patch.updatedBy = caller.email;
+    tx.update(cur, patch);
+    var event = { at: now, by: caller.email, action: 'addon-reopened', changeId: r.id, invoiceId: r.qboInvoiceId || null,
+      was: { state: 'cancelled' }, changed: { state: 'unpaid', note: 'Asked for again after its cancel: it waits on the same QuickBooks invoice, never a second one.' } };
+    tx.set(cur.collection('history').doc(r.id + '-reopen-' + now), event); tx.set(c.root.collection('admin_audit').doc(r.id + '-reopen-' + now), event);
+    return Object.assign({}, result, { state: 'awaiting_payment', paymentLink: r.paymentLink || result.paymentLink || null, reopened: true });
+  });
+}
 /* Cancel a purchase still waiting for payment. The QuickBooks invoice stays
    open until staff void it; a payment after this is honoured and flagged. */
 async function cancel(db, orgId, addOnId, caller, now) {
@@ -444,7 +498,11 @@ async function issue(db, orgId, now, deps) {
     var fa = fresh.addOns || {};
     if (fa.nextInvoiceOn !== on || fa.state !== 'paid') fail('Add-on billing date changed; retry');
     if (fresh.addOnInvoiceLock && fresh.addOnInvoiceLock.until > now) fail('The add-on renewal is already being issued');
-    var mods = order(fa.modules || []), p = price(mods, c.book), cycle = R.cycle(on, fa.billingDay);
+    /* all of Omega Logic on the contract (logic-access wholeLogic): its parts are no longer billed here */
+    var whole = (fresh.addons || []).indexOf('omega-logic') >= 0 || fresh.omegaLogic === true;
+    var mods = order(fa.modules || []).filter(function (k) { return !(whole && isLogic(k)); });
+    if (!mods.length) return null;
+    var p = price(mods, c.book), cycle = R.cycle(on, fa.billingDay);
     var prepared = existing.exists ? existing.data() : { kind: 'addon', purpose: 'renewal', id: id, date: on, period: { start: on, end: cycle.end }, modules: mods, lines: p.lines,
       subtotalCents: p.monthlyCents, totalCents: p.monthlyCents, monthlyCents: p.monthlyCents, pricebookVersion: c.book.version,
       marker: 'OMEGA add-on ' + orgId + ' / ' + on, memo: 'Add-ons: ' + names(mods).join(', '), createdAt: now };

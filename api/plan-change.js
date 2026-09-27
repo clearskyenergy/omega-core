@@ -28,6 +28,8 @@ module.exports = A.handler(async function (req, res) {
   var fields = ['orgId', 'action', 'add', 'plan', 'previewId', 'effectiveAt', 'changeId', 'addOnId', 'remove', 'reason', 'meter', 'enabled', 'dryRun'];
   if (Object.keys(input).some(function (k) { return fields.indexOf(k) < 0; })) throw A.httpError(400, 'Unsupported field');
   var now = Date.now();
+  /* ClearSky's own workspace holds every module for staff: never sold an add-on (cancel stays, to withdraw one made before) */
+  if ((input.action === 'addon-quote' || input.action === 'addon-buy') && orgId === 'clearsky-usa.com') throw A.httpError(409, 'This is ClearSky\'s own workspace: every module is already on for ClearSky staff. To try buying a module, use a test workspace.');
   switch (input.action) {
     case 'quote': return C.preview(A.db(), orgId, input, now);
     case 'apply': return C.apply(A.db(), orgId, input, caller, now);

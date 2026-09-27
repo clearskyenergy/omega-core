@@ -364,7 +364,7 @@ async function reconcile(db, orgId, now, deps, options) {
          its verdict is newer than this one, which is dropped */
       if (snapshot.state !== record.state) { state = snapshot.state; return; }
       /* money that was received went back: a person looks, once */
-      if (kindOf(snapshot) === 'subscription' && state === 'reversed' && snapshot.state === 'paid' && !error && !transient) { review = true; note = note || 'a paid invoice was refunded or voided'; }
+      if ((kindOf(snapshot) === 'subscription' || kindOf(snapshot) === 'addon') && state === 'reversed' && snapshot.state === 'paid' && !error && !transient) { review = true; note = note || 'a paid invoice was refunded or voided'; }
       var retries = transient ? (snapshot.reconcileRetries || 0) + 1 : 0;
       if (transient && retries >= 3) { error = true; review = true; }
       var subs = invoices.docs.map(function (d) { return d.data(); }).filter(function (r) { return kindOf(r) === 'subscription' && D.issued(r); });
@@ -392,7 +392,7 @@ async function reconcile(db, orgId, now, deps, options) {
           if (state === 'unpaid') state = snapshot.state === 'cancelled' ? 'cancelled' : (passed || snapshot.state === 'expired') ? 'expired' : 'unpaid';
           if (state === 'paid' && snapshot.state !== 'paid' && (passed || snapshot.state === 'cancelled' || snapshot.state === 'expired')) review = true;
         }
-        addOnMove = AO.boughtAfter(billing, snapshot, snapshot.state, state);
+        addOnMove = AO.boughtAfter(billing, snapshot, snapshot.state, state, invoices.docs.map(function (d) { return d.data(); }));
       }
       var update = { state: state, reconcileError: error, reconcileRetries: retries, reconciledAt: now, reviewRequired: review, reconcileNote: error || transient ? note : null };
       if (!error && !transient) { update.paymentLink = receipt.payUrl || null; update.paidCents = receipt.paidCents; }

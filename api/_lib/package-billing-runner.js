@@ -113,7 +113,11 @@ async function tick(db, now, options) {
           /* add-ons on a plan billed outside the engine (api/_lib/addons.js):
              the monthly renewal on its billing day, then the same look at
              QuickBooks every invoice gets; the plan itself is never billed here */
-          var renewal = c.org.status === 'active' ? await require('./addons').issue(db, org.id, now, options.qbo) : { skipped: true };
+          /* a renewal QuickBooks refuses never stops the reconcile below: it is
+             what takes the grants back once the paid period and its grace pass */
+          var renewal;
+          try { renewal = c.org.status === 'active' ? await require('./addons').issue(db, org.id, now, options.qbo) : { skipped: true }; }
+          catch (e) { renewal = { reviewRequired: true, error: String(e.message).slice(0, 200) }; }
           var paid = await S.reconcile(db, org.id, now, options.qbo, { limit: 2 });
           await deliver(db, org.id, now, options.mail || require('./mail'));
           results.push({ orgId: org.id, addOns: true, invoice: renewal, payment: paid });
