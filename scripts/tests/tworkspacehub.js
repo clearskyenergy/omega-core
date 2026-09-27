@@ -88,6 +88,23 @@ if (partly) { var pt = HUB.moduleTools(partly, std1); ok('a partly held module c
 var pk = ctxFor({ orgId: 'x', tierLevel: 1, modules: ['lite'], packaged: true, toolAccess: ['editor'] }, { packaged: true, modules: ['lite'] });
 ok('a packaged workspace holds exactly what its projection lists', HUB.moduleState(MODS.lite, pk) === 'held' && HUB.moduleState(MODS.gridatlas, pk) === 'open');
 ok('an unknown module is asked for', HUB.moduleState(null, ent3) === 'ask');
+/* 5 · the Modules page says what Site Map does (2026-09-27): a legacy plan
+   holds a module only when the editor's tier ladder grants its capabilities,
+   judged by the SAME OmegaCaps the editor runs */
+global.window = global; require(path.join(ROOT, 'omega-caps.js')); var CAPS = global.OmegaCaps;
+function legacy(tier, level, addons) { CAPS.setAddons(addons || []); var c = ctxFor({ orgId: 'x', tierLevel: level, addons: addons || [] }, { tierLevel: level, packaged: false }); c.editorCan = function (cap) { return CAPS.editorCan(tier, cap); }; return c; }
+var stdE = legacy('standard', 1), delE = legacy('deluxe', 2), entE = legacy('enterprise', 3), trialE = legacy('trial', 3);
+ok('the editor governs its ladder words and nothing a package invented', CAPS.governs('export.plotplan') && CAPS.governs('compute') && CAPS.governs('schematic') && !CAPS.governs('storage') && !CAPS.governs('gridatlas') && !CAPS.governs('all'));
+ok('Standard does not hold Compute: its tools open, but Site Map shows the compute tab only on Enterprise', HUB.moduleState(MODS.compute, stdE) === 'part', HUB.moduleState(MODS.compute, stdE));
+ok('Deluxe holds Plan Sets: the editor prints plot plans, one-lines, schematics and risers on Deluxe', HUB.moduleState(MODS.plansets, delE) === 'held', HUB.moduleState(MODS.plansets, delE));
+ok('Standard does not hold Plan Sets', HUB.moduleState(MODS.plansets, stdE) === 'ask', HUB.moduleState(MODS.plansets, stdE));
+ok('a legacy trial holds no editor-capability module although every tool opens', HUB.moduleState(MODS.plansets, trialE) !== 'held' && HUB.moduleState(MODS.engineering, trialE) !== 'held', [HUB.moduleState(MODS.plansets, trialE), HUB.moduleState(MODS.engineering, trialE)]);
+ok('Lite is held on every plan, the floor', ['standard', 'deluxe', 'enterprise', 'trial'].every(function (t, i) { return HUB.moduleState(MODS.lite, [stdE, delE, entE, trialE][i]) === 'held'; }));
+ok('on Enterprise the editor takes nothing away: every module reads as its tools alone say', M.catalog().every(function (m) { return HUB.moduleState(m, entE) === HUB.moduleState(m, ent3); }), M.catalog().map(function (m) { return m.key + ':' + HUB.moduleState(m, entE) + '/' + HUB.moduleState(m, ent3); }));
+ok('the engineering add-on widens what a Standard editor holds', HUB.moduleState(MODS.engineering, legacy('standard', 1, ['engineering'])) !== 'ask');
+ok('the counts say how much of a module the editor grants', (function (e) { return e.total > 0 && e.open === 0; })(HUB.moduleEditor(MODS.plansets, stdE)));
+CAPS.setAddons([]);
+
 M.catalog().forEach(function (m) { ok('module ' + m.key + ' says what it is for, in one sentence, with no price in it', typeof m.blurb === 'string' && m.blurb.length > 40 && !/\$\d/.test(m.blurb), m.blurb); });
 
 console.log('tworkspacehub: ' + pass + ' passed, ' + fail + ' failed');

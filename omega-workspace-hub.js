@@ -107,15 +107,35 @@
     });
     return { open: open, total: total };
   }
+  /* The capabilities of a module that the LEGACY editor decides, and how
+     many of them this tier grants. ctx.editorCan(cap) answers true / false
+     for a capability on the editor's tier ladder and null for one it does
+     not check (OmegaCaps.editorCan). Without it, nothing is counted. */
+  function moduleEditor(m, ctx) {
+    ctx = ctx || {};
+    var total = 0, open = 0;
+    if (typeof ctx.editorCan !== 'function') return { open: 0, total: 0 };
+    ((m && m.caps) || []).forEach(function (c) {
+      var v = ctx.editorCan(c);
+      if (v === null || v === undefined) return;
+      total++; if (v) open++;
+    });
+    return { open: open, total: total };
+  }
   function moduleState(m, ctx) {
     ctx = ctx || {}; if (!m) return 'ask';
     if (ctx.packaged) return has(ctx.modules, m.key) ? 'held' : 'open';
+    if (m.key === 'lite') return 'held';        /* the floor every plan stands on */
     if (/^logic-/.test(m.key)) return holdsLogic(ctx, m.key) ? 'held' : 'ask';
-    var t = moduleTools(m, ctx);
-    if (!t.total) return (ctx.tierLevel >= 3) ? 'held' : 'ask';
-    return t.open === t.total ? 'held' : t.open ? 'part' : 'ask';
+    /* a legacy plan holds a module when its tools open AND Site Map grants
+       the module's editor capabilities on this tier: the Modules page says
+       what the editor does (2026-09-27: "the modules are paid services tied
+       directly to the editor") */
+    var t = moduleTools(m, ctx), e = moduleEditor(m, ctx), open = t.open + e.open, total = t.total + e.total;
+    if (!total) return (ctx.tierLevel >= 3) ? 'held' : 'ask';
+    return open === total ? 'held' : open ? 'part' : 'ask';
   }
-  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, RING_MAX: RING_MAX };
+  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, RING_MAX: RING_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceHub = API;
 })(typeof window !== 'undefined' ? window : null);

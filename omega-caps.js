@@ -413,6 +413,28 @@
     return out;
   }
 
+  /* Does the LEGACY tier ladder decide this capability at all? A package's
+     module capabilities ('storage', 'estimate', 'gridatlas' …) are not on the
+     ladder, so a legacy editor never checks them; the ladder's own words
+     (design, view, export.*, schematic, riser, engineering, parcelscreen,
+     compute, permitting) are. The workspace Modules page asks this so that
+     "what you hold" there is what Site Map opens (2026-09-27). */
+  var GOVERNED = null;
+  function governs(cap) {
+    if (!GOVERNED) {
+      GOVERNED = {};
+      var k, i;
+      for (k in GRANTS) if (Object.prototype.hasOwnProperty.call(GRANTS, k)) for (i = 0; i < GRANTS[k].length; i++) GOVERNED[GRANTS[k][i]] = 1;
+      for (k in ADDON_GRANTS) if (Object.prototype.hasOwnProperty.call(ADDON_GRANTS, k)) for (i = 0; i < ADDON_GRANTS[k].length; i++) GOVERNED[ADDON_GRANTS[k][i]] = 1;
+      for (i = 0; i < JV_GRANTS.length; i++) GOVERNED[JV_GRANTS[i]] = 1;
+      delete GOVERNED.all;
+    }
+    var c = String(cap || ''), dot = c.indexOf('.');
+    return !!(GOVERNED[c] || (dot > 0 && GOVERNED[c.slice(0, dot)]));
+  }
+  /* true/false for a capability the ladder decides, null for one it does not */
+  function editorCan(tier, cap) { return governs(cap) ? can(tier, cap) : null; }
+
   function can(tier, cap) {
     var s = setFor(tier);
     if (s.all) return true;
@@ -593,7 +615,7 @@
     ADDON_GRANTS: ADDON_GRANTS, setAddons: setAddons, addons: function () { return _addons.slice(); },
     LADDER: LADDER, GRANTS: GRANTS,
     JV_ORGS: JV_ORGS, JV_GRANTS: JV_GRANTS, INTERNAL_DOMAINS: INTERNAL_DOMAINS,
-    normalise: normalise, setFor: setFor, can: can, apply: apply, resolve: resolve,
+    normalise: normalise, setFor: setFor, can: can, governs: governs, editorCan: editorCan, apply: apply, resolve: resolve,
     setOrg: setOrg, orgOf: orgOf, org: function () { return _org; },
     effectiveTier: effectiveTier, setPackage: setPackage, packageAccess: function () { return _package; },
     MODULE_GRANTS: MODULE_GRANTS, owners: owners, commandPage: commandPage, layout: layout,
