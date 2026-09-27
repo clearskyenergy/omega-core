@@ -26,7 +26,7 @@ function pk(b) { return fns.standing(Object.assign({ packaged: true }, b), { sta
 ok(pk({ packagingState: 'paid', nextInvoiceOn: later }).key === 'current' && pk({ packagingState: 'paid', nextInvoiceOn: later }).label === 'Active', 'paid, invoice far off: current');
 ok(pk({ packagingState: 'paid', nextInvoiceOn: soon }).key === 'duesoon' && pk({ packagingState: 'paid', nextInvoiceOn: soon }).chip === 'good', 'paid, invoice inside 14 days: due soon, still good');
 ok(pk({ packagingState: 'awaiting_payment', amountDue: 2250 }).key === 'awaiting' && /first payment/i.test(pk({ packagingState: 'awaiting_payment' }).label), 'awaiting the first payment has its own key');
-ok(pk({ packagingState: 'past_due_lite' }).key === 'overdue' && /Lite/.test(pk({ packagingState: 'past_due_lite' }).label), 'past due on Lite is overdue and says so');
+ok(pk({ packagingState: 'past_due_lite' }).key === 'overdue' && /Omega Design/.test(pk({ packagingState: 'past_due_lite' }).label), 'past due on Lite is overdue and says so');
 ok(pk({ packagingState: 'unpaid' }).key === 'overdue', 'unpaid is overdue');
 ok(pk({ packagingState: 'trial', trialEndsAt: Date.now() + 3 * DAY }).key === 'trialend', 'a trial is always ending (14 days at most)');
 ok(pk({ packagingState: 'pending' }).key === 'pending' && fns.standing({ packaged: true, packagingState: 'pending' }, { status: 'pending' }).key === 'pending', 'a proposed package is pending, packaged or not');

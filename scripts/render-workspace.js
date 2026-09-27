@@ -438,7 +438,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.$$eval('#tools-body details', function (d) { d.forEach(function (x) { x.open = true; }); }); await wait(100);
     await p.click('#tools-body .tool.locked[data-tool="gridatlas"]'); await wait(250);
     var why = await p.$eval('.ows-drawer', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });
-    ok('lite: a locked tile names the module that carries it', /Grid Atlas/.test(why) && /part of/.test(why), why.slice(0, 160));
+    ok('lite: a locked tile names the module that carries it', /Omega Grid/.test(why) && /part of/.test(why), why.slice(0, 160));
     await p.keyboard.press('Escape');
     /* the Modules page (2026-09-27): the Ladder as a page of the workspace */
     await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(400);
@@ -463,7 +463,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.locator('#modules-body [data-remove-module="logic-office"]').click();
     await p.locator('#omega-package-menu').getByRole('button', { name: 'Opt out', exact: true }).click();
     var link = p.locator('#omega-package-menu a'), draft = decodeURIComponent(await link.getAttribute('href'));
-    ok('legacy Enterprise: Office request names every dependent department and preserves the existing agreement', M.catalog().filter(function (m) { return m.shelf === 'platform'; }).every(function (m) { return draft.indexOf(m.name) >= 0; }) && /existing agreement/.test(draft) && /Lite remains included/.test(draft));
+    ok('legacy Enterprise: Office request names every dependent department and preserves the existing agreement', M.catalog().filter(function (m) { return m.shelf === 'platform'; }).every(function (m) { return draft.indexOf(m.name) >= 0; }) && /existing agreement/.test(draft) && /Omega Design remains included/.test(draft));
     await p.keyboard.press('Escape');
     ok('legacy Enterprise: the request can be dismissed without sending', await p.locator('#omega-package-menu').count() === 0);
     return {};

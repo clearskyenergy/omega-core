@@ -1317,7 +1317,6 @@ function pmSoon(name){ toast('<b>'+esc(name)+'</b> is coming online soon.'); }
    server's; nothing here grants access. ES5.
    ═════════════════════════════════════════════════════════════════ */
 var STORE = { on:false, packaged:false, rows:[], owned:[], notSold:{}, byTool:{}, control:{ canManage:false, pending:{}, loaded:false }, summary:null, offer:null, focused:false, who:'' };
-var SHELF = { floor:'Included with every plan', addon:'Add-ons', standard:'Standard shelf', premium:'Premium shelf', deliverable:'Deliverables', platform:'Omega Logic' };
 var SHELF_ORDER = ['floor','addon','standard','premium','deliverable','platform'];
 var SHELF_COVER = { floor:'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)', addon:'linear-gradient(135deg,#053A45 0%,#2A8CA3 100%)', standard:'linear-gradient(135deg,#0B2F52 0%,#1B4F8A 100%)', premium:'linear-gradient(135deg,#243B53 0%,#3E6E8E 100%)', deliverable:'linear-gradient(135deg,#16202B 0%,#00807C 100%)', platform:'linear-gradient(135deg,#17293A 0%,#0C1824 100%)' };
 function workspaceHome(ws){ return !!(window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace && OmegaWorkspaceShell.wantsWorkspace(ws)); }
@@ -1420,7 +1419,7 @@ function paintStore(){
   SHELF_ORDER.forEach(function(sh){
     var rows = STORE.rows.filter(function(m){ return m.shelf === sh; }); if (!rows.length) return;
     var sec = document.createElement('div'); sec.className = 'mkt-shelf';
-    sec.innerHTML = '<div class="mkt-cat-head">'+esc(SHELF[sh]||sh)+'<span class="cnt">('+rows.filter(function(m){ return moduleState(m) === 'held'; }).length+' of '+rows.length+')</span><span class="rule"></span></div><div class="mkt-grid"></div>';
+    sec.innerHTML = '<div class="mkt-cat-head">'+esc(rows[0].shelfLabel||sh)+'<span class="cnt">('+rows.filter(function(m){ return moduleState(m) === 'held'; }).length+' of '+rows.length+')</span><span class="rule"></span></div><div class="mkt-grid"></div>';
     var grid = sec.querySelector('.mkt-grid');
     rows.forEach(function(m){ grid.appendChild(moduleCard(m)); });
     shelves.appendChild(sec);
@@ -1468,8 +1467,8 @@ function moduleCard(m){
   if (m.coverage) tags += '<span class="mkt-tag">'+esc(m.coverage)+'</span>';
   if (m.agreement) tags += '<span class="mkt-tag">'+esc(m.agreement)+'</span>';
   var pill = owned ? '<span class="mkt-pill inc">'+(STORE.packaged ? 'Included' : 'On your plan')+'</span>' : pending ? '<span class="mkt-pill soon">Waiting for payment</span>' : st === 'part' ? '<span class="mkt-pill soon">Partly on your plan</span>' : '';
-  card.innerHTML = '<div class="mkt-cover" style="background:'+(SHELF_COVER[m.shelf]||SHELF_COVER.floor)+'">'+(pill?'<span class="mkt-cover-badge">'+pill+'</span>':'')+'<span class="mkt-mod-letter">'+esc(m.name.slice(0,1))+'</span></div>'
-    + '<div class="mkt-card-body"><div class="mkt-card-cat">'+esc(SHELF[m.shelf]||m.shelf||'')+' · <b>'+esc(m.priceDisplay || m.monthlyDisplay || 'Pricing unavailable')+'</b></div>'
+  card.innerHTML = '<div class="mkt-cover" style="background:'+(SHELF_COVER[m.shelf]||SHELF_COVER.floor)+'">'+(pill?'<span class="mkt-cover-badge">'+pill+'</span>':'')+'<span class="mkt-mod-letter">'+esc(m.mark||m.name.slice(0,1))+'</span></div>'
+    + '<div class="mkt-card-body"><div class="mkt-card-cat">'+esc(m.shelfLabel||m.shelf||'')+' · <b>'+esc(m.priceDisplay || m.monthlyDisplay || 'Pricing unavailable')+'</b></div>'
     + '<div class="mkt-card-name">'+esc(m.name)+'</div>'
     + (m.blurb ? '<p class="mkt-blurb">'+esc(m.blurb)+'</p>' : '')
     + '<ul>'+(m.features||[]).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')+'</ul>'
