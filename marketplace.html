@@ -927,6 +927,7 @@ window._omegaReady = function(){
 <!-- The shared subscribe control (Phase 5): server catalog, server quotes,
      posts to /api/plan-change. The package store below is built on it. -->
 <script src="/omega-package-menu.js"></script>
+<script src="/omega-billing-profile.js"></script>
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════
@@ -1312,8 +1313,10 @@ function pmSoon(name){ toast('<b>'+esc(name)+'</b> is coming online soon.'); }
    OmegaPackageMenu.subscribeControl opts in through /api/plan-change), and
    the PUBLIC price list /api/offerings for a workspace that is not
    packaged — whose modules read "On your plan" when every tool they carry
-   is open on the legacy tier, "Partly" when some are, and otherwise offer
-   an email to ClearSky, who switches things on for a legacy tenant. The
+   is open on the legacy tier (or it was added to the plan), "Partly" when
+   some are, and otherwise carry Add to plan: the server's price, a
+   QuickBooks invoice paid by card on QuickBooks' page, on the moment the
+   payment clears (OmegaPackageMenu.addOnControl, api/_lib/addons.js). The
    Plans shelf, the starter packages, the logins, the annual and trial
    notes are the price list's for both. Every price and every change is the
    server's; nothing here grants access. ES5.
@@ -1386,7 +1389,7 @@ function storeOwned(key){ return STORE.owned.indexOf(key) >= 0; }
    Modules page; only 'pending' (an invoice waiting) is this page's own */
 function moduleCtx(){
   var ws = WORKSPACE || {};
-  return { packaged: STORE.packaged, modules: STORE.packaged ? STORE.owned : (ws.modules || []), addons: ws.addons || [], tierLevel: ws.tierLevel, canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && isUnlockedHere(t); }, tool: function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; },
+  return { packaged: STORE.packaged, modules: STORE.packaged ? STORE.owned : (ws.modules || []), addons: ws.addons || [], addOns: STORE.packaged ? [] : (ws.addOns || []), tierLevel: ws.tierLevel, canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && isUnlockedHere(t); }, tool: function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; },
     /* what the editor opens of a legacy module, on the editor's own ladder (the store tells the truth) */
     canCap: STORE.packaged ? null : OmegaWorkspaceHub.capsFor(ws.billing || (window.OmegaTenant && OmegaTenant.billing), ws.orgId),
     visible: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && OMEGATools.isVisible(t, ws); } };
@@ -1400,20 +1403,28 @@ function contactHref(plan){
   var ws = WORKSPACE || {}, to = (window.OmegaBrand && OmegaBrand.upgradeEmail) ? OmegaBrand.upgradeEmail() : 'dev@clearsky-usa.com', who = ws.clientName || ws.orgId || 'our workspace';
   return 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(plan + ' pricing for ' + who) + '&body=' + encodeURIComponent('Please contact us about ' + plan + ' pricing for ' + who + '.');
 }
-/* what the one control needs for a legacy plan: its requests on the
-   workspace's billing record, and whether this person files them (an
-   owner or administrator; plan-change decides again) */
-function legacyState(owned){
-  var ws = WORKSPACE || {}, b = (window.OmegaTenant && OmegaTenant.billing) || ws.billing || {};
-  return { canManage: !!(window.OmegaTenant && OmegaTenant.isAdmin && OmegaTenant.isAdmin()), owned: owned,
-    legacy: { company: ws.clientName || ws.orgId || 'our workspace', email: (window.OmegaBrand && OmegaBrand.upgradeEmail) ? OmegaBrand.upgradeEmail() : 'dev@clearsky-usa.com', optIns: b.optIns || {}, optOuts: b.optOuts || {} },
-    onChanged: legacyChanged };
+/* who may add to a plan billed outside the engine: its owner or an
+   administrator, or verified ClearSky staff (plan-change is the gate) */
+function legacyManage(){
+  var ws = WORKSPACE || {}, u = currentUser || {}, d = String(u.email || '').toLowerCase().split('@')[1] || '';
+  return ws.role === 'owner' || ws.role === 'admin' || (d === 'clearsky-usa.com' && u.emailVerified === true);
 }
+/* the add-on purchase waiting for payment that adds this module, if any */
+function addOnWaiting(key){
+  var a = ((window.OmegaTenant && OmegaTenant.billing) || {}).addOns, list = a && Array.isArray(a.pending) ? a.pending : [];
+  for (var i = 0; i < list.length; i++) if ((list[i].add || []).indexOf(key) >= 0) return list[i];
+  return null;
+}
+/* after a purchase, a payment or a cancel: the billing record again, then
+   the shelves. A request's answer (an opt-out, Keep, a withdrawn opt-in)
+   carries its whole map, so the shelves paint from it at once. */
 function legacyChanged(r){
-  var b = (window.OmegaTenant && OmegaTenant.billing) || (WORKSPACE || {}).billing;
-  if (b) ['optIns', 'optOuts'].forEach(function(k){ if (r && r[k]) b[k] = Object.assign({}, b[k] || {}, r[k]); });
-  if (r && r.note) toast(esc(r.note)); else if (r && r.requested && r.display) toast(esc('Requested ' + (r.names || []).join(', ') + ' at ' + r.display + ', pending ClearSky'));
-  paintStore();
+  var b = window.OmegaTenant && OmegaTenant.billing;
+  if (b && r) ['optIns', 'optOuts'].forEach(function(k){ if (r[k]) b[k] = Object.assign({}, b[k] || {}, r[k]); });
+  if (r && (r.optIns || r.optOuts)) { if (r.note) toast(esc(r.note)); paintStore(); return; }
+  if (r && r.state === 'active') toast('Added. It is on now.');
+  var done = function(){ paintStore(); paintMarket(); };
+  if (window.OmegaTenant && OmegaTenant.refreshBilling) OmegaTenant.refreshBilling().then(done, done); else done();
 }
 function paintStore(){
   var plan = el('mkt-plan'), shelves = el('mkt-shelves'); if (!plan || !shelves) return;
@@ -1429,7 +1440,7 @@ function paintStore(){
   } else {
     var tools = qualifying(), openN = tools.filter(function(t){ return !t.soon && isUnlockedHere(t); }).length, total = tools.filter(function(t){ return !t.soon; }).length;
     h += '<span><b>'+openN+'</b> of '+total+' tools open</span>';
-    note = 'Monthly prices from the price list. Opt in to add a module to your monthly fee or opt out of one: each is a request ClearSky confirms, never charged here. To change plans, ask ClearSky.';
+    note = 'Monthly prices from the price list. Add a module to your plan and pay by card on QuickBooks\u2019 secure page (or with the card saved there): it switches on the moment the payment clears. An opt-out is a request ClearSky confirms under your agreement. Your plan and its billing stay as they are; moving up a plan stays with ClearSky.';
   }
   h += '<span class="mkt-note">'+note+'</span>';
   plan.innerHTML = h;
@@ -1498,16 +1509,20 @@ function moduleCard(m){
     + (tags ? '<div class="mkt-tags">'+tags+'</div>' : '')
     + '<div class="mkt-actions"></div></div>';
   var act = card.querySelector('.mkt-actions');
+  /* a plan billed outside the engine: Add to plan (the one control,
+     OmegaPackageMenu.addOnControl: the server's price, QuickBooks' card
+     page, on the moment the payment clears) for what it does not hold, and
+     the recorded opt-out request for what it does (Keep module takes it
+     back). Omega Design is always included: never an Add to plan. */
   if (!STORE.packaged){
-    /* a plan billed outside the package engine opts in and out through the
-       one control (omega-package-menu.js): each a request plan-change
-       records for ClearSky to confirm, withdrawable until then; a Partly
-       module offers both */
     if (st === 'part') act.innerHTML = '<div class="mkt-state">'+esc(OmegaWorkspaceHub.moduleNote(m, moduleCtx()))+'.</div>';
-    /* Omega Design answers "always included"; a held module, or one already asked out, opts out (or Keep); any other opts in, and a Partly one may also opt out */
-    var lb = (window.OmegaTenant && OmegaTenant.billing) || (WORKSPACE || {}).billing || {}, leaving = !!(lb.optOuts && lb.optOuts[m.key] && lb.optOuts[m.key].status === 'requested');
-    var mainHost = document.createElement('div'); act.appendChild(mainHost); OmegaPackageMenu.subscribeControl(mainHost, m, legacyState(owned || leaving));
-    if (!owned && !leaving && st === 'part' && m.key !== 'lite'){ var outHost = document.createElement('div'); act.appendChild(outHost); OmegaPackageMenu.subscribeControl(outHost, m, legacyState(true)); }
+    var lb = (window.OmegaTenant && OmegaTenant.billing) || {}, leaving = !!(lb.optOuts && lb.optOuts[m.key] && lb.optOuts[m.key].status === 'requested');
+    if (!owned && !leaving && m.key !== 'lite') { var addHost = document.createElement('div'); act.appendChild(addHost); OmegaPackageMenu.addOnControl(addHost, m, { canManage: legacyManage(), pending: addOnWaiting(m.key), onChanged: legacyChanged }); }
+    if (owned || st === 'part' || leaving) {
+      var legacyHost = document.createElement('div'); act.appendChild(legacyHost);
+      OmegaPackageMenu.subscribeControl(legacyHost, m, { canManage: legacyManage(), owned: true, onChanged: legacyChanged,
+        legacy: { company: (WORKSPACE || {}).clientName || (WORKSPACE || {}).orgId || 'our workspace', email: OmegaBrand.upgradeEmail(), optOuts: lb.optOuts || {} } });
+    }
     return card;
   }
   if (!STORE.rows.length || !m.priceDisplay){ act.innerHTML = '<div class="mkt-act disabled">Pricing unavailable</div>'; return card; }

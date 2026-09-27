@@ -111,11 +111,12 @@ async function run() {
     var lp = await legacyContext.newPage(), legacyErrors = []; lp.on('pageerror', function (e) { legacyErrors.push(e.message); });
     await lp.goto(base + '/admin/tenant.html?org=' + org); await lp.locator('#pp-standing').waitFor();
     var standing = (await lp.locator('#pp-standing').textContent()).replace(/\s+/g, ' ');
-    check(/Today: Standard tier/.test(standing) && /Holds Omega EV, Omega Permits \(/.test(standing) && /Partly on: Omega Design, Omega Grid, Omega Storage, Omega Estimate, Omega Plans, Omega Intel, Omega Engineer, Omega Capital, Omega Compute, Omega Sites \(/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing) && /Opt-out requested: Omega Capital 2026-09-27 by owner@fixture\.example/.test(standing) && !/Omega Compute 2026/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and both requests (a withdrawn one is not a request): ' + standing);
+    check(/Today: Standard tier/.test(standing) && /Holds Omega Design, Omega EV, Omega Permits \(/.test(standing) && /Partly on: Omega Grid, Omega Storage, Omega Estimate, Omega Plans, Omega Intel, Omega Engineer, Omega Capital, Omega Compute, Omega Sites \(/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing) && /Opt-out requested: Omega Capital 2026-09-27 by owner@fixture\.example/.test(standing) && !/Omega Compute 2026/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and both requests (a withdrawn one is not a request): ' + standing);
     var picked = await lp.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('[data-pp-pane="pkg"] [data-module-card]'), function (c) { var i = c.querySelector('input'); return i && i.checked; }).map(function (c) { return c.getAttribute('data-module-card'); }).sort(); });
     /* the store tells the truth (2026-09-27): a Core tenant's editor has no Analyze, Estimate or Compute tab, so it holds
-       only what opens in full (the permitting matrix) and is partly on the rest; the picker starts from both, plus the
-       request, so moving it onto a package never takes away something it opens today */
+       what opens in full (Omega Design, whose drawing tools live on Draw on every plan; EV; the permitting matrix) and is
+       partly on the rest; the picker starts from both, plus the opt-in request, less the opt-out request (Omega
+       Capital), so moving it onto a package never takes away something it opens today that it did not ask to drop */
     check(picked.join() === 'compute,engineering,estimate,evrebates,gridatlas,lite,permitting,plansets,sitefinder,siteintel,storage', 'the picker starts from what the tier holds or partly uses, plus the opt-in, less the opt-out: ' + picked.join());
     await lp.locator('#pp-review:not([disabled])').waitFor();
     check(/\$/.test(await lp.locator('#pp-monthly').textContent()), 'the rail prices the preselection on the server');
@@ -149,10 +150,10 @@ async function run() {
     await pp10.locator('#billing-continue').click(); await pp10.locator('#step-build').waitFor({ state: 'visible' });
     /* the build step: the menu, the monthly membership quoted by the server, monthly or yearly at ten months */
     await pp10.waitForFunction(function () { return /^\$[\d,]+\/month$/.test(document.getElementById('signup-package-price').textContent); });
-    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Pay and start now' && (await pp10.locator('#billing-submit').textContent()).indexOf('trial instead') > 0, 'the build step offers pay-and-start first and the trial second');
+    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Subscribe' && (await pp10.locator('#billing-submit').textContent()).indexOf('trial instead') > 0, 'the build step offers pay-and-start first and the trial second');
     check(/\/year, invoiced once · save \$[\d,]+/.test(await pp10.locator('#interval-annual-price').textContent()), 'the yearly card shows the year\u2019s price and the saving: ' + await pp10.locator('#interval-annual-price').textContent());
     await pp10.locator('#pick-annual input').check();
-    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Pay for the year and start now' && /ten months of twelve/.test(await pp10.locator('#signup-interval-note').textContent()), 'yearly: the button and the note say so');
+    check((await pp10.locator('#billing-pay').textContent()).trim() === 'Subscribe yearly' && /ten months of twelve/.test(await pp10.locator('#signup-interval-note').textContent()), 'yearly: the button and the note say so');
     await pp10.locator('#pick-monthly input').check();
     await pp10.locator('#billing-pay').click(); await pp10.locator('#step-pay').waitFor({ state: 'visible' });
     var payBill = db.data.get('omega_orgs/paynow-fixture.example/billing/current'), payOrg = db.data.get('omega_orgs/paynow-fixture.example');

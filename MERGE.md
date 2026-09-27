@@ -2324,3 +2324,37 @@ honours the switch. Tests: `scripts/tests/teditortheme.js` (npm test),
 `scripts/render-editor-theme.js` (check:pages; screenshots in
 `docs/screenshots/editor-theme/`). Design and what is not done:
 `docs/EDITOR-THEME.md`.
+
+## Projects list — September 27, 2026
+
+`editor.html`: the Projects modal (File → Open Projects…) loses its All /
+BTM / FOM tabs and lists every project, and each row names what kind of
+project it is — BESS, DCFC, L2, Solar, DER, Data center, Building — where
+it used to wear the BESS wizard's market (every save writes one, BTM by
+default, so a Level 2 job read "BTM"). Tommy: "we dont need BTM or FOM just
+show all the projects … but they should tell what kind of project they are
+i.e bess L2 DCFC etc". `_projKinds(p)` is the one rule: what the record
+declared (`type`; the New Project dialog's `siteScopes` while they still
+include that type; the EV wizard's `L2` / `EVSE`), then what is on its
+plan, read by the editor's own collectors — `evChargerTotals`,
+`_findBessPads` and `derTotals` now take a saved record, and with no
+argument read the live drawing exactly as before. Nothing declared and
+nothing placed is no label. The labels are `OmegaProjectTypes`' (a `short`
+on each type; `norm()` and `short()` exposed). Search matches a kind, and
+Home → Recent wears the same labels. Then "remove the BTM/FOM market field
+from new project too": the editor's own New Project dialog drops its Market
+select (`np-market`) and creates the project without a `wizMode`, so the
+BESS wizard's market is unconfirmed and asked when that wizard runs, as for
+a project created anywhere else. `wizMode` is still saved by the editor and
+still restores the BESS wizard's market. Tests:
+`scripts/tests/tprojectkinds.js` (npm test); `teditortheme.js` records the
+three tab ids and `np-market` as retired.
+
+## New Project dialog — September 27, 2026
+
+`editor.html`: the editor's own New Project dialog is no longer a BESS
+dialog. Its title reads New Project (was New BESS Project), the name example
+is neutral, a blank name saves as "New Project", and its `project.created`
+event sends `vertical: null` until a type is chosen (as `omega-newproject.js`
+and `omega-intake.js` do) instead of `'bess'`. Pinned in
+`scripts/tests/tprojectkinds.js`.

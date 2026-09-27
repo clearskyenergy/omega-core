@@ -1,6 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
-var M = require('./modules'), X = require('./package-access');
+var M = require('./modules'), X = require('./package-access'), AO = require('./addons');
 var A = require('./admin'), S = require('./office-stage');
 function owner(c) { return String(c.email || '').toLowerCase() === 'tom@clearsky-usa.com' && c.claims.email_verified === true; }
 function requireOwner(c) { if (!owner(c)) throw A.httpError(403, 'Omega Logic control is restricted to the verified ClearSky owner account'); }
@@ -16,25 +16,33 @@ async function context(orgId) {
    A PACKAGED tenant (billing.packaged === true, Phases 1–7) is judged by its
    package alone: Office in modules[] and the grant live (package-access.live:
    paid, or a trial inside its dates, and before accessUntil). The parts are
-   the modules bought. A legacy tenant keeps the addon / omegaLogic flags and
-   holds every part; nothing changes for it. The ClearSky owner sees all. */
+   the modules bought. A legacy tenant with the addon / omegaLogic flags
+   holds every part; nothing changes for it. A legacy tenant WITHOUT them
+   holds the parts it bought as add-ons (api/_lib/addons.js live(): paid, and
+   before the add-ons' accessUntil), Office first, each part its own.
+   The ClearSky owner sees all. */
 var LOGIC_PARTS = { plant: 'logic-plant', materials: 'logic-materials', logistics: 'logic-logistics', customer: 'logic-customer' };
 function packagedModules(ctx, now) {
   var b = ctx.billing || {}; if (b.packaged !== true) return null;
   var modules; try { modules = M.normalize(b.modules); } catch (e) { return null; }
   return X.live(b, modules, now) ? modules : null;
 }
+function wholeLogic(b) { return (b.addons || []).indexOf('omega-logic') >= 0 || b.omegaLogic === true; }
 function subscribed(ctx, now) {
   var b = ctx.billing || {};
   if (ctx.org.status !== 'active') return false;
   if (b.packaged === true) { var m = packagedModules(ctx, now); return !!m && m.indexOf('logic-office') >= 0; }
-  return ((b.addons || []).indexOf('omega-logic') >= 0 || b.omegaLogic === true) &&
+  return (wholeLogic(b) || AO.live(b, now).indexOf('logic-office') >= 0) &&
     ['suspended', 'cancelled', 'past_due'].indexOf(b.status) < 0;
 }
 /* The Logic parts this workspace holds (plant, materials, logistics, customer). */
 function parts(ctx, now) {
   var all = Object.keys(LOGIC_PARTS); if (!subscribed(ctx, now)) return [];
-  if (ctx.billing.packaged !== true) return all;
+  if (ctx.billing.packaged !== true) {
+    if (wholeLogic(ctx.billing)) return all;
+    var bought = AO.live(ctx.billing, now);
+    return all.filter(function (p) { return bought.indexOf(LOGIC_PARTS[p]) >= 0; });
+  }
   var modules = packagedModules(ctx, now) || [];
   return all.filter(function (p) { return modules.indexOf(LOGIC_PARTS[p]) >= 0; });
 }
@@ -45,16 +53,17 @@ function requirePart(ctx, part) {
 }
 /* A door that is not a member's — a bench or rig token (api/mes-scan.js,
    api/mes-test-result.js), a tenant administrator's hold or release
-   (api/plant-control.js): a PACKAGED workspace must hold the part, judged
-   exactly as authorize() judges a member; a legacy workspace, or one with
-   no omega_orgs record yet, is left to the door's own rule (null). */
+   (api/plant-control.js): a workspace that holds Omega Logic by parts (a
+   package, or add-ons on a legacy plan) must hold the part, judged exactly
+   as authorize() judges a member; a legacy workspace holding all of it, or
+   one with no omega_orgs record yet, is left to the door's own rule (null). */
 async function requirePartIfPackaged(orgId, part) {
   orgId = A.safeOrg(orgId);
   if (!orgId) throw A.httpError(400, 'Valid org required');
   var root = A.db().collection('omega_orgs').doc(orgId);
   var rows = await Promise.all([root.get(), root.collection('billing').doc('current').get()]);
   var billing = rows[1].exists ? rows[1].data() || {} : {};
-  if (billing.packaged !== true) return null;
+  if (billing.packaged !== true && (wholeLogic(billing) || !billing.addOns)) return null;
   var ctx = { orgId: orgId, org: rows[0].exists ? rows[0].data() || {} : {}, billing: billing, config: {}, member: null };
   if (!subscribed(ctx)) { var ie = A.httpError(403, 'Omega Logic subscription is not active'); ie.reason = 'inactive'; throw ie; }
   requirePart(ctx, part);

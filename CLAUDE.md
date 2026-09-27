@@ -202,8 +202,9 @@ org, write, part)` refuses a part not bought; `parts(ctx)` is what the office
 endpoint (`access.parts`), the front door and the customer-portal gate
 (`buyer-accounts.context`) report, and what the chrome, the hex hub, the
 dashboard and the Omega Logic app draw. A legacy tenant (addon `omega-logic`)
-is unchanged and holds every part; absent means "everything", a present list
-is the package. Showing a link is never access. Phase 9: a door that is not
+is unchanged and holds every part; one without it holds the parts it bought
+on Add to plan while they are paid (`addons.live`, below); absent means
+"everything", a present list is the package. Showing a link is never access. Phase 9: a door that is not
 a member's (the bench and rig tokens, a tenant admin's hold/release) runs
 `requirePartIfPackaged(org, 'plant')` — a packaged workspace must hold the
 part, a legacy or unrecorded one keeps its own rule — and `firestore.rules`
@@ -215,10 +216,19 @@ public price list; signup's pay-now runs the engine's own `activate` with the
 caller marked `selfServe` (recorded in history and audit); "I've paid" is
 `plan-change.reconcileNow` (one look per eight seconds), from the signup
 page (`check-payment`) and the billing bar (`reconcile-now`) alike. The
-flow as sold: account (login.html) → verified email (start.html holds an
-unverified address) → billing profile → *Build your system* (the one
-menu, priced live by the server; Monthly, or Yearly at ten months of
-twelve) → pay. Annual prepay is `annualPaidMonths` = 10 in the book.
+flow as sold: account (login.html) → *How you work today* → billing
+profile → *Build your system* (the one menu, priced live by the server;
+Monthly, or Yearly at ten months of twelve) → pay. Create account goes
+straight into that signup on `/start.html` with the company carried over
+(making the account signs it in, so login's auth listener stands aside
+while the form routes it); the signup options and quotes open before the
+email link is clicked, and only creating the workspace (Subscribe or the
+trial) needs the verified address, which the page waits for and then
+carries on by itself. A signed-in person with no `omega_orgs` record,
+grant or access request, not a named tenant, and without both accepted
+terms and a project under the company, is sent there too instead of a
+derived workspace; `scripts/render-signup.js` (in `check:pages`) holds it.
+Annual prepay is `annualPaidMonths` = 10 in the book.
 `api/_lib/packaging-mode.js` is the ONE rule for where packaging bills:
 SANDBOX (`QBO_ENV=sandbox`) or LIVE (`PACKAGING_LIVE=true` AND
 `QBO_ENV=production`, both literal), and neither is refused everywhere; the
@@ -255,7 +265,7 @@ Runbook and what is not built (autopay, instant refund events, tax):
 
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
-`name`, `shelfLabel` (Core · Add-on · Pro · Advanced · By the piece · Omega
+`name`, `shelfLabel` (Core · Add-on · Plus · Advanced · By the piece · Omega
 Logic) and `mark` (the card letter) live ONLY in `api/_lib/modules.js`, and
 every page reads them off the record — never a page's own shelf map. Keys and
 plan names (Lite + modules, Field, Pro) are unchanged; the table is in
@@ -276,7 +286,15 @@ workspace's store tells the truth: `OmegaWorkspaceHub.moduleState` measures
 a module by its standalone tools AND what the editor opens of it
 (`api/_lib/modules.js` `legacyGates`, read off the real editor by
 `scripts/render-legacy-gates.js`, asked of the editor's own ladder through
-`OmegaCaps.canWith` / `capsFor`); no legacy access changes.
+`OmegaCaps.canWith` / `capsFor`); no legacy access changes. One legacy
+narrowing, the owner's call (2026-09-27): Search tools (Ctrl+K) and Ask
+Jarvis run only what `OmegaCaps.allowedElement` allows, which on a legacy
+plan is every `data-cap` from the tab in to the command (a tier gates whole
+tabs), and Jarvis names and opens only `OmegaCaps.tabOpen` tabs
+(`render-legacy-gates.js`). So nothing is stranded behind a hidden tab,
+Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move System) live
+on Draw on every plan, where a package puts them: `LITE` in the Compute
+tab's mover, held to the catalog by `scripts/tests/tlegacygates.js`.
 The shared omega-package-menu.js renders catalog features and server-formatted
 prices. Staff package previews are read-only server projections, never tenant
 impersonation or billing edits. Legacy layout modes apply to unpackaged records.
@@ -759,13 +777,37 @@ their own pages (`data-view`). The Omega pulse is `GET /api/pulse`
 (`api/_lib/pulse.js`, pure, `tpulse.js`): platform-wide COUNTS ONLY from
 the most recent rows, never a name. The Modules page lists every module
 for every workspace (`OmegaWorkspaceHub.moduleState`, the ONE held/partly/
-ask rule shared with the store); a module not held carries Opt in: the one
-menu and a QuickBooks invoice for a packaged workspace, the request that
-moves a legacy one onto a package (`plan-change` `opt-in`: priced from the
-book, recorded on `billing/current.optIns` with history and audit, ClearSky
-mailed; the admin Package tab opens preselected on what the tenant holds
-plus that request; nothing is charged; `withdraw-opt-in` takes it back;
-Omega Design never carries one). In flight is
+ask rule shared with the store); a module not held carries Opt in (the one
+menu and a QuickBooks invoice) for a packaged workspace and **Add to plan**
+for a legacy one (Tommy, 2026-09-27: "buy them immediately and not email
+clearsky … add to plan and then charge their credit card or saved payment
+method"). Add to plan is an ADD-ON beside the legacy plan, whose own tier,
+price and billing are never touched: `api/_lib/addons.js` through
+`plan-change` `addon-quote` / `addon-buy` / `addon-cancel` (owner, admin or
+verified staff), the book's list price (the five Logic parts as the bundle),
+its own QuickBooks invoice paid by card on QuickBooks' page (or the card
+saved there), Live when `package-billing.reconcile` sees it paid (`I've
+paid` = reconcile-now; the hourly runner renews it monthly on the add-on
+billing day; off after an unpaid renewal's grace). Bought is
+`billing/current.addOns.modules`, on is `addOns.live`; on means what the
+legacy readers already honour — a Logic part through `logic-access`, a
+module's tools as `toolOverrides` (and the `toolAccess` allowlist), editor
+capabilities as the legacy add-on keys `omega-caps` reads — and
+`addOns.granted` makes switching off take back exactly that. It is sold
+only where it switches on EXACTLY (`addons.exact`, Tommy's decision
+2026-09-27): a legacy editor opens Site Map a whole tab at a time, so a
+module that would come on only in part, or switch on part of another, is
+not sold here; the quote says why and offers the recorded request
+(`plan-change` `opt-in`; `withdraw-opt-in` takes it back, and the card
+then reads Requested with Withdraw). Omega Design never carries Add to
+plan (always included; the server refuses it). Every Omega Logic department is exact on every
+plan; opening one module's Site Map commands on a legacy plan is not
+built. Add-ons bill through QuickBooks whatever the package rail
+(`addons.RAIL`; `package-billing.guard(c, rail)`), never rebinding a
+legacy Stripe tier's own customer; add-ons on Stripe are not built. The one
+browser control is `OmegaPackageMenu.addOnControl`; `scripts/test-addons.js`
+and `check:workspace` (legacy-add) hold it. A workspace with no `omega_orgs`
+or billing record cannot be billed and is told so. In flight is
 `OmegaWorkspaceToday.board` (what needs something, then what was touched
 last, never online, a finance-marketplace deal riding on its project) and
 Assign merges only the owner fields onto `projects/{id}`. Plan & billing
@@ -793,6 +835,13 @@ account yet". The page never changes billing or grants. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
+It CLICKS EVERY CONTROL on every view (`scripts/_lib/click-sweep.js`, one
+level into each drawer) and fails on an error, a dialog put into the page
+flow instead of over it, a reload in disguise, an overlay Escape leaves
+open or a link to a page the site does not serve (`--only sweep` runs just
+those). `omega-newproject.js` owns its overlay (it once borrowed
+`.modal-bg` from index.html and landed at the foot of the workspace), and
+a `/workspace#view` link is a view change, never a reload.
 Once the workspace is home, `marketplace.html` is THE STORE, not a tool
 catalogue (every tool is All tools on the workspace): the plans and the
 modules on their shelves, wearing the whole workspace chrome
@@ -802,11 +851,11 @@ its `#main`; the markup stays for the classic home and the tests that
 read it). A PACKAGED workspace prices from `api/package-catalog` and opts
 in through the shared `omega-package-menu.js` control and `plan-change`;
 any other workspace reads the PUBLIC price list `GET /api/offerings`,
-each module judged against its tier (On your plan · Partly · Opt in), opts
-in and out through the same shared control by the recorded requests
-above, and never pays here. Enterprise is "Contact for pricing": the
-public list publishes no Enterprise figure (the book keeps it for the
-contract). `/marketplace.html#<module>`
+each module judged against its tier (On your plan · Partly · Add to
+plan, the same `addOnControl`: the server's price, QuickBooks' card page;
+a held module's Opt out is the recorded request above, with Keep module).
+Enterprise is "Contact for pricing": the public list publishes no
+Enterprise figure (the book keeps it for the contract). `/marketplace.html#<module>`
 lands on that module. A tenant on the classic home keeps the tool
 catalogue and pinning. Design, launch order and the honest list of what
 is not built: `docs/OMEGA-WORKSPACE.md`.

@@ -1578,9 +1578,9 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
   OFFICE_VIEW = null;
 
   /* ── Phase 8: Omega Logic follows the package ─────────────────────────
-     The sample workspace bought Office and Plant only (access.parts). The
-     desktop menu, the hex hub and the Omega Logic app draw nothing of
-     Materials & Purchasing or Logistics & Warranty — no Deliver, no
+     The sample workspace bought Logic Office and Logic Plant only
+     (access.parts). The desktop menu, the hex hub and the Omega Logic app
+     draw nothing of Logic Purchasing or Logic Logistics — no Deliver, no
      materials plan, no Sites tab — and call none of their endpoints. */
   OFFICE_VIEW = { parts: ['plant'] };
   await check('package-parts', '/omega-logic?org=cleancell.us', async function (p) {

@@ -24,19 +24,20 @@
   function link(href, text) { var a = node('a', text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; }
   function button(text, fn, cls) { var b = node('button', text, cls); b.type = 'button'; b.onclick = fn; return b; }
   /* A plan billed outside the package engine (state.legacy: { company,
-     email, optIns, optOuts, canManage }) opts in and out through the same
-     endpoint (Tommy, 2026-09-27: "i want it to opt in and out, this needs
-     to work"): plan-change records the request on the workspace's billing
-     record with who and when and tells ClearSky, who confirms it; the
-     server works out the modules that go with it. Nothing here changes a
-     grant or a price. Email stays as the way out when a request is refused. */
+     email, optOuts, canManage }) opts OUT through the same endpoint (Tommy,
+     2026-09-27: "i want it to opt in and out, this needs to work"; it opts
+     in with Add to plan, addOnControl below): plan-change records the
+     request on the workspace's billing record with who and when and tells
+     ClearSky, who confirms it under the agreement; the server works out the
+     modules that go with it and Keep module takes it back. Nothing here
+     changes a grant or a price. Email stays as the way out when a request
+     is refused. */
   function asked(state, map, key) { var r = state.legacy && state.legacy[map] && state.legacy[map][key]; return r && r.status === 'requested' ? r : null; }
-  function emailInstead(target, m, state, optIn) {
+  function emailInstead(target, m, state) {
     var l = state.legacy; if (!l || !l.email) return;
     var mail = node('a', 'Email ClearSky instead');
-    mail.href = 'mailto:' + encodeURIComponent(l.email) + '?subject=' + encodeURIComponent((optIn ? 'Opt in: ' : 'Opt out: ') + m.name + ' for ' + l.company)
-      + '&body=' + encodeURIComponent(optIn ? l.company + ' opts in to ' + m.name + (m.priceDisplay ? ' (' + m.priceDisplay + ')' : '') + ', added to our monthly fee. Please switch it on.'
-        : 'Please review the opt-out of ' + m.name + ' for ' + l.company + '. Confirm the effective date and any billing change under our existing agreement. Omega Design remains included.');
+    mail.href = 'mailto:' + encodeURIComponent(l.email) + '?subject=' + encodeURIComponent('Opt out: ' + m.name + ' for ' + l.company)
+      + '&body=' + encodeURIComponent('Please review the opt-out of ' + m.name + ' for ' + l.company + '. Confirm the effective date and any billing change under our existing agreement. Omega Design remains included.');
     target.appendChild(mail);
   }
   function removalControl(target, m, state) {
@@ -61,36 +62,8 @@
         target.appendChild(button('Cancel', function () { subscribeControl(target, m, state); }));
       }, failed);
     }
-    function failed(e) { target.textContent = ''; target.appendChild(node('p', e.message, 'opm-reason')); if (!queued) emailInstead(target, m, state, false); target.appendChild(button('Try again', review)); }
+    function failed(e) { target.textContent = ''; target.appendChild(node('p', e.message, 'opm-reason')); if (!queued) emailInstead(target, m, state); target.appendChild(button('Try again', review)); }
     target.appendChild(button(queued ? 'Keep module' : 'Opt out', review));
-  }
-  /* Opt in on such a plan: the server's price, added to the monthly fee once
-     ClearSky switches it on; nothing is charged until the first invoice is
-     confirmed. A request can be withdrawn until then. */
-  function legacyOptIn(host, m, state) {
-    var mine = asked(state, 'optIns', m.key);
-    if (!state.canManage) { host.appendChild(node('p', mine ? 'Requested · ClearSky switches it on.' : 'Ask your workspace administrator to opt in to this module.', 'opm-note')); return; }
-    function failed(e) { host.textContent = ''; host.appendChild(node('p', e.message, 'opm-reason')); if (!mine) emailInstead(host, m, state, true); host.appendChild(button('Try again', function () { subscribeControl(host, m, state); })); }
-    if (mine) {
-      host.appendChild(node('p', 'Requested · ' + (mine.display || m.priceDisplay || '') + ' joins your monthly fee when ClearSky switches it on', 'opm-wait'));
-      host.appendChild(button('Withdraw request', function () {
-        host.textContent = 'Withdrawing…';
-        api('/api/plan-change', { action: 'withdraw-opt-in', add: [m.key] }).then(function (r) { host.textContent = r.note; if (state.onChanged) state.onChanged(r); }, failed);
-      }));
-      return;
-    }
-    host.appendChild(button('Opt in', function () {
-      host.textContent = '';
-      host.appendChild(node('p', (m.priceDisplay || 'Priced on the menu') + ', added to your monthly fee', 'opm-quote'));
-      host.appendChild(node('p', 'Your plan is billed by ClearSky, so the request is recorded with this price and ClearSky switches the module on. Nothing is charged until you confirm the first invoice.', 'opm-note'));
-      var row = node('div', '', 'opm-row');
-      row.appendChild(button('Add to my monthly fee', function () {
-        host.textContent = 'Recording…';
-        api('/api/plan-change', { action: 'opt-in', add: [m.key] }).then(function (r) { host.textContent = 'Requested: ' + r.names.join(', ') + ' at ' + r.display + '.'; if (state.onChanged) state.onChanged(r); }, failed);
-      }, 'opm-primary'));
-      row.appendChild(button('Cancel', function () { subscribeControl(host, m, state); }));
-      host.appendChild(row);
-    }, 'opm-primary'));
   }
   /* One control, three places: the editor's + Modules gallery, Your plan in
      the account pages, and the staff record. state: { canManage, pending:
@@ -98,7 +71,6 @@
   function subscribeControl(host, m, state) {
     host.textContent = ''; host.className = 'opm-act'; host.setAttribute('data-subscribe', m.key);
     if (m.key === 'lite' || state.owned || ((state.summary || {}).subscription || []).indexOf(m.key) >= 0) { removalControl(host, m, state); return; }
-    if (state.legacy) { legacyOptIn(host, m, state); return; }
     var pendingChange = state.pending && state.pending[m.key];
     if (!state.canManage) { host.appendChild(node('p', 'Ask your workspace administrator to add this module.', 'opm-note')); return; }
     if (pendingChange) {
@@ -140,6 +112,121 @@
       }, function (e) { host.textContent = ''; host.appendChild(node('p', e.message, 'opm-reason')); host.appendChild(button('Try again', function () { subscribeControl(host, m, state); })); });
     }
     host.appendChild(button('Subscribe', function () { quote(null); }, 'opm-primary'));
+  }
+  /* ── Add to plan, for a workspace billed OUTSIDE the package engine ─────
+     (Tommy, 2026-09-27: "buy them immediately and not email clearsky … add
+     to plan and then charge their credit card or saved payment method").
+     The server prices the module and what it needs (plan-change
+     addon-quote), issues its QuickBooks invoice (addon-buy) and switches it
+     on when QuickBooks shows the invoice paid (reconcile-now: "I've paid",
+     or the hourly runner): api/_lib/addons.js. The card is typed, or a
+     saved one chosen, on QuickBooks' own page, never here. One control for
+     the workspace's Modules page, Your modules on the home and the store.
+       state: { canManage, pending (the billing.addOns.pending entry that
+       adds this module, if one waits), onChanged(result) } */
+  function addOnControl(target, m, state) {
+    target.textContent = ''; target.className = 'opm-act'; target.setAttribute('data-addon', m.key);
+    var title = m.name;
+    if (!state.canManage) { target.appendChild(node('p', 'Ask your workspace owner or an administrator to add it.', 'opm-note')); return; }
+    if (state.pending) { waiting(state.pending, false); return; }
+    target.appendChild(button('Add to plan', quote, 'opm-primary'));
+    function again() { addOnControl(target, m, state); }
+    function failed(e, retry) { target.textContent = ''; target.appendChild(node('p', e.message, 'opm-reason')); target.appendChild(button('Try again', retry || again)); }
+    function quote() {
+      target.textContent = 'Pricing…';
+      api('/api/plan-change', { action: 'addon-quote', add: [m.key] }).then(function (q) {
+        target.textContent = '';
+        /* the plan cannot switch it on exactly (api/_lib/addons.js exact()):
+           never sold here; the server's reason and the recorded request */
+        if (!q.canBuy && q.request) {
+          target.appendChild(node('p', q.reason, 'opm-reason'));
+          var ask = node('div', '', 'opm-row');
+          ask.appendChild(button('Ask ClearSky to include it', request, 'opm-primary'));
+          ask.appendChild(button('Close', again));
+          target.appendChild(ask); return;
+        }
+        target.appendChild(node('p', q.display.today, 'opm-quote'));
+        target.appendChild(node('p', q.display.then, 'opm-note'));
+        if (q.add.length > 1) target.appendChild(node('p', 'Also adds what it needs: ' + q.addNames.filter(function (n, i) { return q.add[i] !== m.key; }).join(', '), 'opm-note'));
+        target.appendChild(node('p', q.display.activation, 'opm-note'));
+        target.appendChild(node('p', q.display.plan, 'opm-note'));
+        if (!q.canBuy) { target.appendChild(node('p', q.reason + (q.detail ? ' (' + q.detail + ')' : ''), 'opm-reason')); target.appendChild(button('Close', again)); return; }
+        if (q.needsProfile) { profile(); return; }
+        var row = node('div', '', 'opm-row');
+        row.appendChild(button(q.included ? 'Turn it on' : 'Pay ' + q.display.amount + ' now', function () { pay(q); }, 'opm-primary'));
+        row.appendChild(button('Cancel', again));
+        target.appendChild(row);
+      }, function (e) { failed(e); });
+    }
+    /* plan-change opt-in: the module and its price on record for ClearSky,
+       who moves the workspace onto a package; nothing is charged */
+    function request() {
+      target.textContent = 'Sending your request…';
+      api('/api/plan-change', { action: 'opt-in', add: [m.key] }).then(function (r) {
+        target.textContent = '';
+        target.appendChild(node('p', 'Requested: ' + (r.names || [title]).join(', ') + (r.display ? ' at ' + r.display : '') + '. ClearSky has it; nothing is charged.', 'opm-quote'));
+        if (state.onChanged) state.onChanged({ state: 'requested', add: r.add || [m.key] });
+      }, function (e) { failed(e, request); });
+    }
+    /* who QuickBooks invoices, asked once (the same form as signup); saved
+       through /api/billing-profile, then the price again */
+    function profile() {
+      var P = global.OmegaBillingProfile;
+      target.appendChild(node('p', 'First, who QuickBooks invoices. It is saved once and used for every invoice.', 'opm-note'));
+      if (!P) { target.appendChild(node('p', 'Add your billing contact on Plan & billing, then come back.', 'opm-reason')); target.appendChild(button('Close', again)); return; }
+      var form = node('div', '', 'opm-profile'), fields = P.render(form, {}); target.appendChild(form);
+      var row = node('div', '', 'opm-row'), save = button('Save and continue', function () {
+        if (!fields.valid()) return;
+        save.disabled = true; save.textContent = 'Saving…';
+        api('/api/billing-profile', { profile: fields.value() }).then(function () { quote(); }, function (e) { save.disabled = false; save.textContent = 'Save and continue'; target.appendChild(node('p', e.message, 'opm-reason')); });
+      }, 'opm-primary');
+      row.appendChild(save); row.appendChild(button('Cancel', again)); target.appendChild(row);
+    }
+    function pay(q) {
+      /* QuickBooks' page opens on THIS click (a tab opened after the answer
+         would be a blocked pop-up) and waits on a note until its address is
+         known; it never holds a reference back to this page */
+      var tab = null;
+      if (!q.included) {
+        try { tab = global.open('', '_blank'); if (tab) { tab.opener = null; tab.document.title = 'Opening QuickBooks…'; tab.document.body.innerHTML = '<p style="font:16px system-ui,sans-serif;padding:32px;color:#14171A">Preparing your invoice in QuickBooks…</p>'; } } catch (e) { tab = null; }
+      }
+      target.textContent = q.included ? 'Turning it on…' : 'Creating your invoice…';
+      api('/api/plan-change', { action: 'addon-buy', add: [m.key], previewId: q.previewId, effectiveAt: q.effectiveAt }).then(function (r) {
+        if (r.state === 'active') { if (tab) { try { tab.close(); } catch (e) {} } target.textContent = ''; target.appendChild(node('p', 'Added. ' + title + ' is on now.', 'opm-quote')); if (state.onChanged) state.onChanged(r); return; }
+        var opened = false;
+        if (tab && r.paymentLink) { try { tab.location.replace(r.paymentLink); opened = true; } catch (e) {} }
+        if (tab && !opened) { try { tab.close(); } catch (e) {} }
+        state.pending = { id: r.addOnId, purpose: 'purchase', add: r.add, names: r.addNames, display: r.display, paymentLink: r.paymentLink, expiresOn: r.expiresOn, payLinkMissing: r.payLinkMissing };
+        waiting(state.pending, opened);
+        if (state.onChanged) state.onChanged(r);
+      }, function (e) { if (tab) { try { tab.close(); } catch (x) {} } failed(e); });
+    }
+    function waiting(p, opened) {
+      target.textContent = '';
+      target.appendChild(node('p', (p.purpose === 'renewal' ? 'Renewal waiting for payment · ' : 'Waiting for payment · ') + p.display + (p.expiresOn ? ' · pay before ' + p.expiresOn : ''), 'opm-wait'));
+      target.appendChild(node('p', opened ? 'QuickBooks\' payment page opened in a new tab: pay by card there, or with the card saved there. It switches on the moment the payment clears.'
+        : p.payLinkMissing ? 'QuickBooks emailed the invoice to your billing address: pay it there and it switches on the moment the payment clears.'
+        : 'Pay by card on QuickBooks\' secure page, or with the card saved there. It switches on the moment the payment clears.', 'opm-note'));
+      var row = node('div', '', 'opm-row');
+      if (p.paymentLink) { var a = link(p.paymentLink, 'Pay ' + p.display + ' in QuickBooks'); a.className = 'opm-paylink'; row.appendChild(a); }
+      var paid = button('I\'ve paid', function () { check(paid); }, p.paymentLink ? '' : 'opm-primary'); row.appendChild(paid);
+      if (p.purpose !== 'renewal') row.appendChild(button('Cancel request', function () { cancelIt(p); }));
+      target.appendChild(row);
+    }
+    function check(btn) {
+      btn.disabled = true; btn.textContent = 'Checking QuickBooks…';
+      api('/api/plan-change', { action: 'reconcile-now' }).then(function (r) {
+        var live = (r && r.addOns && r.addOns.live) || [];
+        if (live.indexOf(m.key) >= 0) { state.pending = null; target.textContent = ''; target.appendChild(node('p', 'Paid. ' + title + ' is on.', 'opm-quote')); if (state.onChanged) state.onChanged({ state: 'active', add: [m.key], live: live }); return; }
+        btn.disabled = false; btn.textContent = 'I\'ve paid';
+        var note = target.querySelector('.opm-check'); if (!note) { note = node('p', '', 'opm-note opm-check'); target.appendChild(note); }
+        note.textContent = r && r.throttled ? 'Checked a moment ago; try again in a few seconds.' : r && r.error ? r.error : 'QuickBooks has not recorded the payment yet. It can take a minute after you pay; try again.';
+      }, function (e) { btn.disabled = false; btn.textContent = 'I\'ve paid'; target.appendChild(node('p', e.message, 'opm-reason')); });
+    }
+    function cancelIt(p) {
+      target.textContent = 'Cancelling…';
+      api('/api/plan-change', { action: 'addon-cancel', addOnId: p.id }).then(function (r) { state.pending = null; if (state.onChanged) state.onChanged(r); again(); }, function (e) { failed(e, function () { waiting(p, false); }); });
+    }
   }
   /* ── "I'VE PAID" ────────────────────────────────────────────────────────
      Paying happens on the provider's page (Stripe's or QuickBooks'), in another tab; the module switches
@@ -387,11 +474,12 @@
     dialog = node('div', '', 'opm-backdrop'); dialog.id = 'omega-package-menu';
     var panel = node('div', '', 'opm-dialog'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-labelledby', 'opm-title');
     /* "The Ladder" (Tommy, 2026-09-26): build your own experience and pay
-       for what you need to run your business; each Omega Logic department
-       (Office, Plant, Materials & Purchasing, Logistics & Warranty, Customer
-       App) is its own opt-in on it. */
+       for what you need to run your business; each Omega Logic department is
+       its own opt-in on it. The departments are named from the catalog's
+       Omega Logic shelf (api/_lib/modules.js), never a list kept here. */
     var heading = node('h2', host.legacy ? 'Opt out of a module' : 'The Ladder'); heading.id = 'opm-title'; panel.appendChild(heading);
-    panel.appendChild(node('p', 'Build your own experience and pay for what you need to run your business. Omega Logic is by department: Office, Plant, Materials & Purchasing, Logistics & Warranty and the Customer App are each an opt-in.', 'opm-note'));
+    var depts = (view.catalog || []).filter(function (m) { return m.shelf === 'platform'; }).map(function (m) { return m.name; });
+    panel.appendChild(node('p', 'Build your own experience and pay for what you need to run your business. ' + (depts.length ? 'Omega Logic is by department: ' + sentence(depts) + (depts.length > 1 ? ' are each an opt-in.' : ' is an opt-in.') : 'Each Omega Logic department is its own opt-in.'), 'opm-note'));
     var dismiss = node('button', 'Close'); dismiss.type = 'button'; dismiss.onclick = close; panel.appendChild(dismiss);
     var status = node('p', 'Loading current pricing…', 'opm-note'); status.setAttribute('role', 'status'); panel.appendChild(status);
     body = node('div', '', 'opm-grid'); panel.appendChild(body); dialog.appendChild(panel); document.body.appendChild(dialog);
@@ -444,6 +532,11 @@
       '.opm-act{margin-top:10px;display:grid;gap:6px}.opm-act p{margin:0}.opm-quote{font-weight:600}.opm-wait{font-weight:600;color:var(--opm-blue)}.opm-reason{color:#B45F06;font-size:12px}' +
       '.opm-row{display:flex;flex-wrap:wrap;gap:6px}.opm-act button{font:500 13px system-ui;padding:7px 12px;border:1px solid var(--opm-border);border-radius:6px;background:var(--opm-surface);color:var(--opm-text);cursor:pointer}' +
       '.opm-act .opm-primary{background:var(--opm-blue);color:#fff;border-color:var(--opm-blue)}.opm-act a{color:var(--opm-blue)}' +
+      /* Add to plan (addOnControl): the pay link is a button, the billing contact a short form */
+      '.opm-act a.opm-paylink{display:inline-flex;align-items:center;padding:7px 12px;border-radius:6px;background:var(--opm-blue);border:1px solid var(--opm-blue);color:#fff;text-decoration:none;font:600 13px system-ui}' +
+      '.opm-profile{display:grid;gap:8px;max-height:52vh;overflow:auto;padding:2px}.opm-profile .obp-field{display:grid;gap:3px;font:500 12px system-ui;color:var(--opm-sub)}' +
+      '.opm-profile .obp-field input,.opm-profile .obp-field select{font:14px system-ui;padding:7px 9px;border:1px solid var(--opm-border);border-radius:6px;background:var(--opm-surface);color:var(--opm-text);min-width:0}' +
+      '.opm-profile .obp-field input[type=checkbox]{justify-self:start;width:auto}' +
       '.opm-on{display:flex;align-items:center;gap:10px;margin:-4px 0 4px;font-size:12px;font-weight:600;color:var(--opm-green,#2E7D4F)}' +
       '@media(prefers-color-scheme:dark){html:not([data-omega-theme="light"]) .opm-on{--opm-green:#6FBB84}}html[data-omega-theme="dark"] .opm-on{--opm-green:#6FBB84}' +
       '.opm-dialog .opm-on .opm-link{padding:2px 8px;font:600 12px system-ui;background:transparent;color:var(--opm-blue)}' +
@@ -538,6 +631,6 @@
     }
     draw(); return { value: function () { return selected.slice(); }, set: function (keys) { selected = keys.slice(); draw(); if (options.onChange) options.onChange(selected.slice()); } };
   }
-  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker, card: card, subscribeControl: subscribeControl, loadControl: loadControl, api: api, styles: styles,
+  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker, card: card, subscribeControl: subscribeControl, addOnControl: addOnControl, loadControl: loadControl, api: api, styles: styles,
     notice: notice, where: where, places: places, showMe: showMe };
 })(typeof window !== 'undefined' ? window : this);

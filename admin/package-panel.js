@@ -229,7 +229,9 @@
       /* the tier's tool level as the tenant's own pages read it (omega-tenant.js: a trial opens every tool) */
       var tiers = (global.OmegaTenant && global.OmegaTenant.tierLevels) || {}, lvl = tiers[String(b.tier || '').toLowerCase()], T = global.OMEGATools, H = global.OmegaWorkspaceHub;
       var wsLike = { orgId: orgId, tierLevel: typeof lvl === 'number' ? lvl : 1, toolAccess: Array.isArray(b.toolAccess) ? b.toolAccess : null, toolOverrides: b.toolOverrides || null, unlockedTools: b.unlockedTools || null, requiredTools: b.requiredTools || null };
-      var ctx = { packaged: false, modules: [], addons: b.addons || [], tierLevel: wsLike.tierLevel, tool: function (k) { return !!(T && T.byKey(k)); }, canOpen: function (k) { var t = T && T.byKey(k); return !!t && T.isUnlocked(t, wsLike); },
+      /* add-ons it bought on Add to plan and has on now (api/_lib/addons.js) are held too */
+      var ao = b.addOns || null, liveAdd = ao && Array.isArray(ao.live) && typeof ao.accessUntil === 'number' && Date.now() < ao.accessUntil ? ao.live : [];
+      var ctx = { packaged: false, modules: [], addons: b.addons || [], addOns: liveAdd, tierLevel: wsLike.tierLevel, tool: function (k) { return !!(T && T.byKey(k)); }, canOpen: function (k) { var t = T && T.byKey(k); return !!t && T.isUnlocked(t, wsLike); },
         canCap: H && H.capsFor ? H.capsFor(b, orgId) : null, visible: function (k) { var t = T && T.byKey(k); return !!t && T.isVisible(t, wsLike); } };
       out.partly = [];
       (data.modules || []).forEach(function (m) { var st = H && T ? H.moduleState(m, ctx) : 'ask'; if (st === 'held') out.held.push(m.key); else if (st === 'part') out.partly.push(m.key); });
@@ -243,6 +245,7 @@
       if (out.partly.length) out.lines.push('Partly on: ' + names(out.partly) + ' (some of its tools or editor commands)');
       var pay = []; if (b.amountDue != null) pay.push('$' + Number(b.amountDue || 0).toLocaleString() + ' due'); if (b.subscriptionDue) pay.push('next ' + dayOf(b.subscriptionDue)); if (b.lastPaidAt) pay.push('last paid ' + dayOf(b.lastPaidAt)); if (b.paymentProvider) pay.push('by ' + b.paymentProvider);
       out.lines.push(pay.length ? 'Pays ' + pay.join(' · ') : 'No payment on record');
+      if (ao && Array.isArray(ao.modules) && ao.modules.length) out.lines.push('Add-ons in QuickBooks: ' + names(ao.modules) + (ao.monthlyDisplay ? ' · ' + ao.monthlyDisplay : '') + ' · ' + String(ao.state || 'none').replace(/_/g, ' ') + (ao.nextInvoiceOn ? ' · next invoice ' + dayOf(ao.nextInvoiceOn) : ''));
     }
     if (out.requested.length) out.lines.push('Requested: ' + out.requested.map(function (o) { return (o.name || o.key) + (o.display ? ' (' + o.display + ')' : '') + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : ''); }).join('; '));
     if (out.optOuts.length) out.lines.push('Opt-out requested: ' + out.optOuts.map(function (o) { return (o.name || o.key) + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : ''); }).join('; ') + ' (confirm the date under the agreement)');

@@ -88,6 +88,16 @@ if (partly) { var pt = HUB.moduleTools(partly, std1); ok('a partly held module c
 var pk = ctxFor({ orgId: 'x', tierLevel: 1, modules: ['lite'], packaged: true, toolAccess: ['editor'] }, { packaged: true, modules: ['lite'] });
 ok('a packaged workspace holds exactly what its projection lists', HUB.moduleState(MODS.lite, pk) === 'held' && HUB.moduleState(MODS.gridatlas, pk) === 'open');
 ok('an unknown module is asked for', HUB.moduleState(null, ent3) === 'ask');
+/* Add to plan on a legacy plan (api/_lib/addons.js): what it bought and has on now is held, part by part */
+var entBought = ctxFor({ orgId: 'x', tierLevel: 3 }, { tierLevel: 3, packaged: false, addOns: ['logic-office', 'logic-plant'] });
+ok('a Logic part bought as an add-on is held; one not bought is still asked for', HUB.moduleState(MODS['logic-office'], entBought) === 'held' && HUB.moduleState(MODS['logic-plant'], entBought) === 'held' && HUB.moduleState(MODS['logic-customer'], entBought) === 'ask');
+ok('holdsLogic answers part by part for a legacy plan with add-ons', HUB.holdsLogic(entBought, 'logic-office') && HUB.holdsLogic(entBought, 'logic-plant') && !HUB.holdsLogic(entBought, 'logic-logistics'));
+ok('the hub earns the Plant area from a bought part and not Deliver', HUB.compose(entBought).ring.map(function (a) { return a.key; }).indexOf('plant') >= 0 && HUB.compose(entBought).ring.map(function (a) { return a.key; }).indexOf('deliver') < 0, HUB.compose(entBought).ring.map(function (a) { return a.key; }));
+var stdBought = ctxFor({ orgId: 'x', tierLevel: 1 }, { tierLevel: 1, packaged: false, addOns: ['plansets'] });
+ok('a capabilities-only module bought as an add-on is held on Standard', HUB.moduleState(MODS.plansets, stdBought) === 'held');
+var pkIgnores = ctxFor({ orgId: 'x', tierLevel: 1, modules: ['lite'], packaged: true, toolAccess: ['editor'] }, { packaged: true, modules: ['lite'], addOns: ['gridatlas'] });
+ok('a packaged workspace is judged by its projection alone, never by add-ons', HUB.moduleState(MODS.gridatlas, pkIgnores) === 'open');
+ok('holdsLogic survives a missing context', HUB.holdsLogic(null, 'logic-office') === false);
 /* 5 · the store tells the truth about a LEGACY plan (Tommy, 2026-09-27):
    a module is measured by its standalone tools AND what the editor opens of
    it (catalog legacyGates, asked of the editor's own ladder, OmegaCaps).
@@ -124,7 +134,7 @@ ok('a module with only editor commands says so', HUB.moduleNote(MODS.plansets, c
 ok('one open tool reads "is"', HUB.moduleNote(MODS.sitefinder, core) === '1 of 2 of its tools is on your plan', HUB.moduleNote(MODS.sitefinder, core));
 ok('ClearSky\'s own workspace with no tier on record reads as the editor opens it (internal)', HUB.capsFor({}, 'clearsky-usa.com', CAPS)('compute') === true && HUB.capsFor({}, 'clearsky-usa.com', CAPS)('export.plotplan') === true);
 ok('a trial opens every tool but only the designer in the editor: Storage is partly on, Plan Sets partly', st('storage', trial) === 'part' && st('plansets', trial) === 'part', [st('storage', trial), st('plansets', trial)]);
-ok('Lite is partly on below Enterprise: three drawing controls sit on the Compute tab', st('lite', perf) === 'part' && st('lite', core) === 'part');
+ok('Core and Performance hold Lite: its drawing tools (Trace Boundary, Fence & Tie, Move System) live on Draw on every plan, not on the Compute tab', st('lite', perf) === 'held' && st('lite', core) === 'held', [st('lite', perf), st('lite', core)]);
 ok('Trial cannot print a blueprint: Lite is partly on', st('lite', trial) === 'part' && HUB.moduleEditor(MODS.lite, trial).open < HUB.moduleEditor(MODS.lite, trial).total);
 ok('a module with neither tools nor editor commands keeps the Enterprise rule', st('whitelabel', ent) === 'held' && st('whitelabel', perf) === 'ask');
 ok('...asked of the ladder, not the tool level: a trial (tool level 3) does not hold the storefront, a partner does', st('whitelabel', trial) === 'ask' && st('whitelabel', legacy('partner')) === 'held', [st('whitelabel', trial), st('whitelabel', legacy('partner'))]);
