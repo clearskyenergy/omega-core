@@ -448,7 +448,7 @@ function render() {
 function renderNotice() {
   var n = byId('ows-notice'), pa = WS.packageAccess, h = '';
   if (WS.pendingApproval) h = '<div class="notice"><b>Awaiting approval</b><span>' + esc(WS.clientName || WS.orgId) + ' is with the ClearSky team. Tools stay locked until it is approved, usually one business day.</span></div>';
-  if (WS.viewAs) h += '<div class="notice"><b>Viewing as a customer</b><span>' + esc(WS.clientName || WS.orgId) + ' painted as a packaged workspace holding ' + esc((WS.modules || []).join(', ') || 'nothing') + '. Staff preview: nothing is billed and a quote is refused.</span><a class="ows-pill" href="/workspace">Exit</a></div>';
+  if (WS.viewAs) h += '<div class="notice"><b>Viewing as a customer</b><span>' + esc(WS.clientName || WS.orgId) + ' painted as a packaged workspace holding ' + esc((WS.modules || []).join(', ') || 'nothing') + '. Staff preview: nothing is billed and a quote is refused.</span><a class="ows-pill" href="/workspace" data-leave>Exit</a></div>';
   else if (pa && pa.readOnly && pa.billingNotice) h = '<div class="notice bad"><b>Read-only</b><span>' + esc(pa.billingNotice.text) + '</span>' + (pa.billingNotice.payUrl ? '<a class="ows-pill primary sm" href="' + esc(pa.billingNotice.payUrl) + '" target="_blank" rel="noopener">Pay now</a>' : '') + '</div>';
   n.innerHTML = h; n.hidden = !h;
 }
@@ -959,6 +959,26 @@ function route() {
   else go(h);
 }
 window.addEventListener('hashchange', function () { if (WS) route(); });
+/* A LINK TO A VIEW OF THIS PAGE IS A VIEW CHANGE, NEVER A RELOAD. The tab
+   bar, "Modules ›", "Change plan" and the drawers link /workspace#<view>;
+   when the address carries a query (?tenant=…&via=omega-gateway, ?home=)
+   that is a different URL, so the browser reloaded the whole workspace,
+   put the loading screen up and dropped the query. Same path, no new query:
+   the hash moves here and route() answers. Heard on the document (bubbling)
+   so the rail's own onNav has already spoken; a click it handled is left
+   alone, and so is a link marked data-leave (the staff preview's Exit, which
+   must drop ?viewas= by really leaving). */
+document.addEventListener('click', function (e) {
+  if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+  if (!a || a.target === '_blank' || a.hasAttribute('download') || a.hasAttribute('data-leave')) return;
+  var u; try { u = new URL(a.href, window.location.href); } catch (x) { return; }
+  if (u.origin !== window.location.origin || !/^\/workspace(\.html)?\/?$/.test(u.pathname)) return;
+  if (u.search && u.search !== window.location.search) return;
+  e.preventDefault();
+  if (!u.hash || u.hash === '#') { go('home'); return; }
+  if (window.location.hash === u.hash) { if (WS) route(); } else window.location.hash = u.hash;
+});
 Array.prototype.forEach.call(document.querySelectorAll('#content .sec .back'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); go('home'); }); });
 byId('customize').addEventListener('click', customizeDrawer);
 byId('new-project').addEventListener('click', function () { if (WS && WS.pendingApproval) { S.toast('Projects open once your workspace is approved'); return; } OmegaNewProject.open('bess'); });

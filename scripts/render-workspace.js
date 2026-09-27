@@ -13,6 +13,7 @@
 
      node scripts/render-workspace.js              # a JSON line per scenario
      node scripts/render-workspace.js --shots DIR  # plus screenshots
+     node scripts/render-workspace.js --only sweep # scenarios whose name matches
      npm run check:workspace
 
    It fails on an uncaught error, a console error, a call to an /api/ route
@@ -24,8 +25,11 @@
    approval is pending), the side panel opening from a hub cell, Customize
    saving only to the person's own layout record, the phone rail; and the
    FLOW: the projects and marketplace pages wearing the workspace rail and
-   the dashboard sending a workspace-home visit on. Not on the npm test
-   chain: needs the pre-installed Chromium.
+   the dashboard sending a workspace-home visit on; + New project as a
+   panel over the page (never at its foot); and EVERY CLICK: every control
+   on every view, as four tenants on a desktop and a phone, through
+   scripts/_lib/click-sweep.js. Not on the npm test chain: needs the
+   pre-installed Chromium, and the sweeps take a few minutes.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var fs = require('fs'), path = require('path'), http = require('http'), os = require('os');
@@ -36,6 +40,8 @@ var SANDBOX_CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 var CHROME = process.env.CHROME || (fs.existsSync(SANDBOX_CHROME) ? SANDBOX_CHROME : chromium.executablePath());
 if (!fs.existsSync(CHROME)) { console.log('render-workspace: Chromium not found (' + CHROME + '); skipped'); process.exit(0); }
 var shotsAt = (function () { var i = process.argv.indexOf('--shots'); return i >= 0 ? (process.argv[i + 1] || os.tmpdir()) : null; })();
+/* --only <regex>: run the scenarios whose name matches (the sweeps take a while) */
+var ONLY = (function () { var i = process.argv.indexOf('--only'); return i >= 0 && process.argv[i + 1] ? new RegExp(process.argv[i + 1]) : null; })();
 if (shotsAt && !fs.existsSync(shotsAt)) fs.mkdirSync(shotsAt, { recursive: true });
 
 var FD = require('./_lib/firebase-double'), FX = require('./_lib/dashboard-fixtures'), HUB = require('../omega-workspace-hub'), M = require('../api/_lib/modules');
@@ -114,6 +120,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   var browser = await chromium.launch({ executablePath: CHROME });
 
   async function scenario(name, fx, opts) {
+    if (ONLY && !ONLY.test(name)) return {};
     opts = opts || {}; PACKAGE_VIEW = fx.packageView || null; CURRENT_FX = fx;
     var errs = [], muted = false, ctx = await browser.newContext({ viewport: opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!opts.phone, isMobile: !!opts.phone });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) {
@@ -190,6 +197,45 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var mine = order.held.filter(function (h) { return h === '1' || h === 'bought'; }).length;
     ok(name + ': Your modules come first, then the rest to add', order.heads[0] === (mine ? 'Your modules' : 'Every module') && order.held.slice(0, mine).every(function (h) { return h === '1' || h === 'bought'; }) && (order.heads.length === 1 || order.heads[1] === 'Add to your plan'), { heads: order.heads, held: order.held });
   }
+  /* + NEW PROJECT IS A PANEL OVER THE PAGE (Tommy, 2026-09-27: "when i
+     click new project it does this and break the page"; "this should be a
+     pannel that pops up"). The old check asked only whether the name field
+     was visible, and it was: at the foot of the page, where the workspace
+     had appended the dialog in flow because the overlay rule lived on the
+     old dashboard. So: fixed, covering the screen, the panel inside it, the
+     page behind neither moving nor growing, focus inside; the backdrop,
+     Escape and Cancel each close it and hand the page back. From In flight,
+     where the button is. */
+  async function newProjectPanel(p, name) {
+    await p.evaluate(function () { window.location.hash = '#flight'; }); await wait(200);
+    var before = await p.evaluate(function () { return { y: Math.round(window.scrollY), h: document.documentElement.scrollHeight, kids: document.body.children.length }; });
+    async function openIt() { await p.click('#new-project'); await wait(350); }
+    function state() {
+      return p.evaluate(function () {
+        var bg = document.getElementById('new-proj-modal'), box = bg && bg.querySelector('.modal'), vw = window.innerWidth, vh = window.innerHeight;
+        if (!bg) return { missing: true };
+        var cs = getComputedStyle(bg), b = bg.getBoundingClientRect(), r = box.getBoundingClientRect();
+        return { position: cs.position, display: cs.display, covers: b.left <= 0 && b.top <= 0 && b.width >= vw - 1 && b.height >= vh - 1, panel: [r.left, r.top, r.right, r.bottom].map(Math.round), inView: r.left >= 0 && r.top >= 0 && r.right <= vw + 0.5 && r.bottom <= vh + 0.5, overChrome: document.elementFromPoint(vw - 4, 4) === bg,
+          y: Math.round(window.scrollY), h: document.documentElement.scrollHeight, focusIn: bg.contains(document.activeElement), held: document.documentElement.classList.contains('omega-np-open'), on: bg.classList.contains('on') };
+      });
+    }
+    await openIt();
+    var s = await state();
+    ok(name + ': + New project opens a panel over the page (fixed, covering the screen, the panel inside it and over the chrome), not at the foot of the page', s.position === 'fixed' && s.display === 'flex' && s.covers && s.inView && s.overChrome, s);
+    ok(name + ': opening it neither scrolls nor grows the page behind', s.y === before.y && s.h === before.h, { before: before, after: { y: s.y, h: s.h } });
+    ok(name + ': focus is in the panel and the page behind is held still', s.focusIn && s.held, s);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '-new-project-' + p.viewportSize().width + '.png') });
+    var vp = p.viewportSize();
+    await p.mouse.click(vp.width - 4, 4); await wait(200);
+    var a = await state();
+    ok(name + ': a click on the backdrop closes it', !a.on && a.display === 'none', a);
+    await openIt(); await p.keyboard.press('Escape'); await wait(200);
+    var e = await state();
+    ok(name + ': Escape closes it', !e.on && e.display === 'none', e);
+    await openIt(); await p.click('#new-proj-modal .mb-cancel'); await wait(200);
+    var c = await state();
+    ok(name + ': Cancel closes it and hands the page back where it was', !c.on && !c.held && c.y === before.y && c.h === before.h, { before: before, after: c });
+  }
   /* every signed-in visit, whichever tenant */
   async function common(p, fx, name) {
     var out = {};
@@ -259,10 +305,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     /* + New project opens the one dialog and closes again (In flight is its own page) */
     await p.evaluate(function () { window.location.hash = '#flight'; }); await wait(150);
     ok('newco: #flight opens In flight as its own page', await p.evaluate(function () { return document.getElementById('content').getAttribute('data-view') === 'flight'; }));
-    await p.click('#new-project'); await wait(300);
-    var open = await p.$eval('#np-name', function (e) { return !!(e.offsetWidth || e.offsetHeight); }).catch(function () { return false; });
-    ok('newco: + New project opens the New Project dialog', open);
-    await p.click('.mb-cancel').catch(function () {}); await wait(200);
+    await newProjectPanel(p, 'newco');
     /* Customize: a toggle saves to the person's own layout record only */
     await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
     await p.click('#customize'); await wait(250);
@@ -382,6 +425,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar-phone: the tab bar is Home · Projects · Tools · Team · Me', tabs.join('|') === 'Home|Projects|Tools|Team|Me', tabs);
     var hubW = await p.$eval('#hub svg', function (s) { var r = s.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; });
     ok('northstar-phone: the hub draws at phone width', hubW.w > 280 && hubW.h > 200, hubW);
+    await newProjectPanel(p, 'northstar-phone');
+    await p.click('#new-project'); await wait(350);
+    var sheet = await p.evaluate(function () { var r = document.querySelector('#new-proj-modal .modal').getBoundingClientRect(), inp = getComputedStyle(document.getElementById('np-name')); return { bottom: Math.round(r.bottom), vh: window.innerHeight, width: Math.round(r.width), vw: window.innerWidth, font: parseFloat(inp.fontSize) }; });
+    ok('northstar-phone: on a phone the panel is a bottom sheet, full width, with 16px inputs (smaller ones make iOS zoom the page)', Math.abs(sheet.bottom - sheet.vh) <= 1 && sheet.width === sheet.vw && sheet.font >= 16, sheet);
+    await p.keyboard.press('Escape'); await wait(200);
     return out;
   } });
 
@@ -399,6 +447,12 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('viewas: the Modules page shows the customer\'s view: Lite Live, the rest to add', vm.cards === M.catalog().length && vm.live === 1 && vm.add === vm.cards - 1, vm);
     ok('viewas: nothing was written', !(await p.evaluate(function () { return window.__firebaseDouble.store.log.some(function (w) { return /^omega_orgs\//.test(w.path); }); })));
     return {};
+  }, after: async function (p, ctx, mute) {
+    /* Exit really leaves: /workspace#view links change the view in place, but this one must drop ?viewas= */
+    var nav = p.waitForNavigation({ timeout: 4000 }).then(function () { return p.url(); }, function () { return p.url(); });
+    await p.click('#ows-notice a[data-leave]'); var url = await nav; mute();
+    ok('viewas: Exit leaves the preview (a real visit, without ?viewas=)', !/viewas=/.test(url), url);
+    return { afterExit: url.replace(/^https?:\/\/[^/]+/, '') };
   } });
   STAFF_CALLER = false;
 
@@ -468,6 +522,61 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('legacy Enterprise: the request can be dismissed without sending', await p.locator('#omega-package-menu').count() === 0);
     return {};
   } });
+  /* ══ 5b. EVERY CLICK (Tommy, 2026-09-27: "we need to make sure every click
+     every link doesnt bug") ══
+     scripts/_lib/click-sweep.js clicks every visible control on every view
+     of the workspace (the home, All tools with every fold open, Modules, In
+     flight, Around you, Plan & billing) and in the chrome around it (rail,
+     topbar, switcher, the phone's tab bar and its rail drawer), one at a
+     time, as four tenants on a desktop and a phone. A click that would leave
+     is held at the door and its address checked against what the site
+     serves; a new tab or a mail link is read. It fails on an error, anything
+     put into the page flow instead of over it, a panel off the screen,
+     sideways scroll, a reload in disguise (the loading screen, or the
+     address changing, for a click that stayed), an overlay Escape leaves
+     open, a link to an address the site does not serve, and a control that
+     cannot be clicked. The address carries a query (?home=workspace, as
+     ?tenant=…&via=… does on a real host), which is what turned every
+     /workspace#view link into a full reload. */
+  var SWEEP = require('./_lib/click-sweep'), SERVED = SWEEP.servedBy(ROOT);
+  var SWEEP_VIEWS = ['home', 'tools', 'modules', 'flight', 'team', 'billing'].map(function (v) {
+    return { name: v, enter: async function (p) {
+      /* back to the view (and nothing else) only when a click moved it: billing paints itself on entry */
+      var moved = await p.evaluate(function (v) {
+        var here = document.getElementById('content').getAttribute('data-view'), hash = (window.location.hash || '').slice(1);
+        if (here === v && (v === 'home' ? !hash : hash === v)) { window.scrollTo(0, 0); return false; }
+        if (v === 'home') { if (window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search); window.dispatchEvent(new HashChangeEvent('hashchange')); }
+        else if (hash !== v) window.location.hash = '#' + v;
+        else window.dispatchEvent(new HashChangeEvent('hashchange'));
+        return true;
+      }, v);
+      if (moved) await wait(120);
+      await p.evaluate(function () { Array.prototype.forEach.call(document.querySelectorAll('#content details'), function (d) { d.open = true; }); window.scrollTo(0, 0); });
+    } };
+  });
+  async function sweepAll(p, name, phone) {
+    var r = await SWEEP.run(p, {
+      views: SWEEP_VIEWS, scope: '#content', chrome: '#side-nav, #topbar, .ows-tabs',
+      clickable: '.next .row[data-row], [data-need], [data-opt]',
+      skip: '#ows-signout', inner: '.ows-row',
+      overlays: '#ows-overlay, #new-proj-modal.on, #ows-menu, #omega-package-menu, #ot-modal, body.ows-rail-open',
+      reveal: phone ? [{ within: '#side-nav', open: async function (pg) { if (!(await pg.evaluate(function () { return document.body.classList.contains('ows-rail-open'); }))) await pg.click('#ows-burger'); } }] : [],
+      forceClose: function (pg) { return pg.evaluate(function () { ['ows-overlay', 'ows-menu', 'omega-package-menu'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); }); var m = document.getElementById('new-proj-modal'); if (m) m.classList.remove('on'); document.documentElement.classList.remove('omega-np-open'); document.body.classList.remove('ows-rail-open'); }); },
+      served: SERVED
+    });
+    ok(name + ': every control on every view was clicked or read (' + r.clicks + ' clicked, ' + r.read.length + ' read, of ' + r.controls + ')', r.controls > 30 && r.clicks + r.read.length >= r.controls - r.problems.filter(function (x) { return x.kind === 'click'; }).length && !r.skipped.length, r.skipped.slice(0, 8));
+    var kinds = {}; r.problems.forEach(function (x) { (kinds[x.kind] = kinds[x.kind] || []).push(x.control + ' — ' + x.detail); });
+    ['error', 'flow', 'offscreen', 'sideways', 'reload', 'escape', 'link', 'click'].forEach(function (k) {
+      var what = { error: 'no click throws or logs an error', flow: 'no click puts anything into the page flow (a dialog, a panel) instead of over it', offscreen: 'every panel a click opens is inside the screen', sideways: 'no click makes the page scroll sideways', reload: 'a click that stays on the page never reloads it or raises the loading screen', escape: 'Escape closes whatever a click opened', link: 'every link and every page a click goes to is one the site serves', click: 'every control can be clicked (nothing covers it)' }[k];
+      ok(name + ': ' + what, !kinds[k], (kinds[k] || []).slice(0, 8));
+    });
+    return { controls: r.controls, clicked: r.clicks, read: r.read.length, leaves: r.held.length, problems: r.problems.length, innerChanged: r.innerSkipped.length };
+  }
+  await scenario('sweep northstar', FX.northstar(HOST), { steps: async function (p) { return sweepAll(p, 'sweep northstar'); } });
+  await scenario('sweep northstar-phone', FX.northstar(HOST), { phone: true, steps: async function (p) { return sweepAll(p, 'sweep northstar-phone', true); } });
+  await scenario('sweep lite', FX.lite(HOST), { steps: async function (p) { return sweepAll(p, 'sweep lite'); } });
+  await scenario('sweep pending', FX.pending(HOST), { steps: async function (p) { return sweepAll(p, 'sweep pending'); } });
+
   /* ══ 6. THE PACKAGE STORE — Lite Labs on the marketplace ══
      A packaged workspace sees its plan and every module on its shelf with
      the server's price; Lite is Included; Grid Atlas can be subscribed:
@@ -475,7 +584,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
      exactly what plan-change expects and grants nothing itself. A locked
      tool card points at the module that carries it. */
   PACKAGE_VIEW = lt.packageView; STORE.posts = []; STORE.pending = [];
-  await (async function () {
+  if (!ONLY || ONLY.test('store')) await (async function () {
     var errs = [], ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
     await ctx.addInitScript(DOUBLE_SRC);
@@ -525,6 +634,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
      is the same grid; and a dashboard visit is sent on to /workspace. */
   async function flow(page, current, opts) {
     opts = opts || {};
+    if (ONLY && !ONLY.test('flow')) return;
     var errs = [], ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); if (/Chart\.js/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.Chart=function(){};window.Chart.register=function(){};' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
     await ctx.addInitScript(DOUBLE_SRC);
@@ -573,7 +683,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   }
   await flow('/projects.html', 'Projects'); await flow('/marketplace.html', 'Marketplace'); await flow('/', '');
   /* the classic choice: a browser that asked for the classic dashboard is sent there from /workspace, and index keeps it (the same rule on both pages, so no loop) */
-  await (async function () {
+  if (!ONLY || ONLY.test('flow')) await (async function () {
     var ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); if (/Chart\.js/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.Chart=function(){};window.Chart.register=function(){};' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
     await ctx.addInitScript(DOUBLE_SRC);
