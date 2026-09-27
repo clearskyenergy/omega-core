@@ -75,9 +75,6 @@ function state(c, now) {
   if (b.packagingState === 'trial') return { canApply: false, reason: 'Your trial runs the package proposed at approval. Additions start after your first payment.' };
   if (b.packagingState !== 'paid') return { canApply: false, reason: 'Pay your current invoice first. Additions are available once the payment clears.' };
   if ((b.interval || 'monthly') === 'annual') return { canApply: false, reason: 'Additions to an annual prepay are quoted by ClearSky. Contact support.' };
-  /* the renewal is due and not issued yet: a change now would bill the whole
-     new cycle and the renewal would bill it again */
-  if (b.nextInvoiceOn && b.nextInvoiceOn <= iso(now)) return { canApply: false, reason: 'Your renewal is being issued today. Add modules once it has gone through; that usually takes under an hour.' };
   if (!b.billingDay || !D.customerId(b, D.providerOf(b))) return { canApply: false, reason: 'Billing is not set up for this workspace yet.' };
   return { canApply: true };
 }
@@ -118,13 +115,19 @@ function quote(c, rows, input, now) {
   }
   var feeNote = after.serviceFee.amountCents !== before.serviceFee.amountCents ? 'Your annual service fee at renewal becomes ' + after.serviceFee.display + ' (now ' + before.serviceFee.display + ').' : null;
   var blocked = gate.canApply && open.length ? { canApply: false, reason: 'A change is waiting for payment: ' + open[0].add.map(function (k) { return M.get(k).name; }).join(', ') + '. Pay it on the invoice page or cancel it first.' } : gate;
+  /* the renewal is due and not issued yet: a paid change now would bill the
+     whole new cycle, and the renewal would bill it again once the change is
+     in the subscription (a $0 addition or a pack bills nothing twice) */
+  if (blocked.canApply && totalCents > 0 && b.nextInvoiceOn && b.nextInvoiceOn <= today) blocked = { canApply: false, reason: 'Your renewal is being issued today. Add modules once it has gone through; that usually takes under an hour.' };
   var basis = { org: c.root.id, book: book.version, owned: owned, add: add, plan: after.plan, cycle: cycle, lines: lines, total: totalCents, billing: { plan: sub.plan, credit: b.credit, builders: b.builders, viewers: b.viewers, interval: b.interval, serviceFee: b.serviceFee } };
-  /* the same addition asked for again after a cancel in this cycle is a NEW
-     change: without this its id — and so its operation and its invoice
-     record — would be the cancelled one's, and apply would hand back the
-     cancelled result and its dead pay link */
-  var reopened = rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'cancelled' && r.cycle && r.cycle.start === cycle.start; }).length;
-  if (reopened) basis.reopened = reopened;
+  /* The same addition asked for again in this cycle has the same id as the
+     one asked for before. Cancelled, its invoice is still open at the
+     provider (cancel never voids it), so apply REVIVES that change on that
+     invoice rather than issuing a second one a customer could also pay.
+     Only when that invoice is dead (voided or refunded: 'reversed') is the
+     next request a new change, with its own id and invoice. */
+  var reissued = rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state === 'reversed' && r.cycle && r.cycle.start === cycle.start; }).length;
+  if (reissued) basis.reissued = reissued;
   var id = Q.key(B.stable(basis));
   return { orgId: c.root.id, previewId: id, effectiveAt: now, add: add, addNames: names(add), modules: target, plan: after.plan, planBefore: before.plan, planDisplay: after.display.plan,
     before: { plan: before.plan, monthlyCents: before.monthlyCents, display: before.display.monthly },
@@ -147,6 +150,8 @@ async function apply(db, orgId, input, caller, now, deps) {
   var done = await op.get();
   if (done.exists && done.data().state === 'done') {
     if (done.data().requestFingerprint !== fingerprint) fail('A change id cannot be reused with different inputs');
+    var mine = current.collection('invoices').doc('change-' + input.previewId), had = await mine.get();
+    if (had.exists && had.data().state === 'cancelled') return revive(db, c, mine, input, done.data().result, caller, now);
     return done.data().result;
   }
   var rows = await records(c), p = quote(c, rows, input, now);
@@ -203,6 +208,27 @@ async function apply(db, orgId, input, caller, now, deps) {
     });
     throw e;
   }
+}
+/* The same change asked for again after its cancel, while its invoice is
+   still open at the provider: it waits for payment again on that invoice. */
+async function revive(db, c, ref, input, result, caller, now) {
+  var current = c.root.collection('billing').doc('current');
+  return db.runTransaction(async function (tx) {
+    var snap = await tx.get(ref), live = await tx.get(current), invoices = await tx.get(current.collection('invoices').orderBy('date')), fresh = live.data() || {};
+    var rows = invoices.docs.map(function (d) { return d.data(); }), r = snap.data();
+    if (!r || r.state !== 'cancelled') fail('Your package changed; review the current quote before subscribing');
+    /* still the same request, still allowed: nothing else is waiting, the cycle and the price are unchanged */
+    var again = quote(Object.assign({}, c, { billing: fresh }), rows, input, now);
+    if (again.previewId !== input.previewId) fail('Your package changed; review the current quote before subscribing');
+    if (!again.canApply) fail(again.reason);
+    tx.update(ref, { state: 'unpaid', cancelledAt: null, cancelledBy: null, reopenedAt: now, reopenedBy: caller.email });
+    var all = rows.map(function (d) { return d.id === r.id ? Object.assign({}, d, { state: 'unpaid' }) : d; });
+    tx.update(current, S.displayAfter(S.accessAfterInvoices(fresh, all, c.book, now), fresh, c.book, now));
+    var event = { at: now, by: caller.email, action: 'change-reopened', changeId: r.id, invoiceId: D.invoiceId(r),
+      was: { state: 'cancelled' }, changed: { state: 'unpaid', note: 'Asked for again after its cancel: it waits on the same ' + D.name(D.recordProvider(r)) + ' invoice, never a second one.' } };
+    tx.set(current.collection('history').doc(r.id + '-reopen-' + now), event); tx.set(c.root.collection('admin_audit').doc(r.id + '-reopen-' + now), event);
+    return Object.assign({}, result, { state: 'awaiting_payment', paymentLink: r.paymentLink || result.paymentLink || null, reopened: true });
+  });
 }
 async function cancel(db, orgId, changeId, caller, now) {
   var c = await S.context(db, orgId);

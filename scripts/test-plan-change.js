@@ -207,16 +207,33 @@ async function run() {
   var paidCancelled = await S.reconcile(db, orgId, now + 60000, {});
   equal(db.data.get(root + '/billing/current/invoices/' + r6.changeId).state, 'paid', 'paying a cancelled change is honoured');
   equal(paidCancelled.invoices[paidCancelled.invoices.length - 1].reviewRequired, true, 'and flagged for a person'); equal(bill().modules.indexOf('siteintel') >= 0, true);
-  /* the same addition asked for again after a cancel in the cycle is a NEW change: never the cancelled one's result or its dead pay link */
-  var e1 = await apply(['engineering']); await req('POST', { action: 'cancel', changeId: e1.changeId });
-  var e2 = await apply(['engineering']); ok(e2.changeId !== e1.changeId, 'a re-request after a cancel is a new change'); equal(e2.state, 'awaiting_payment');
-  equal(db.data.get(root + '/billing/current/invoices/' + e1.changeId).state, 'cancelled', 'the cancelled change stays cancelled');
-  equal(db.data.get(root + '/billing/current/invoices/' + e2.changeId).state, 'unpaid', 'the new change waits for its own payment');
-  /* the billing day, before the renewal is issued: no additions (the change would bill the whole new cycle, and the renewal again) */
-  seed(ev, 'field'); var dueDay = bill().nextInvoiceOn;
-  var early = await C.preview(db, orgId, { add: ['siteintel'] }, Date.parse(dueDay + 'T01:00:00Z'));
+  /* the same addition asked for again after a cancel: its invoice is still open at the provider, so the change waits on it again, never a second invoice */
+  var e1 = await apply(['engineering']); await req('POST', { action: 'cancel', changeId: e1.changeId }); var invoicesBefore = calls;
+  var e2 = await apply(['engineering']);
+  equal([e2.changeId, e2.state, e2.reopened, e2.paymentLink], [e1.changeId, 'awaiting_payment', true, e1.paymentLink], 'a re-request after a cancel revives the same change on the same invoice');
+  equal([calls, db.data.get(root + '/billing/current/invoices/' + e1.changeId).state, bill().amountDue > 0, bill().paymentLink], [invoicesBefore, 'unpaid', true, e1.paymentLink], 'no second invoice; it is owed and offered again');
+  ok(Array.from(db.data.keys()).some(function (k) { return k.indexOf(root + '/admin_audit/' + e1.changeId + '-reopen-') === 0; }), 'and audited');
+  equal((await quote(['engineering'])).canApply, false, 'while it waits, the same addition is not offered twice');
+  /* once that invoice is dead (staff voided it), the next request is a new change with its own invoice */
+  await req('POST', { action: 'cancel', changeId: e1.changeId });
+  receipts[db.data.get(root + '/billing/current/invoices/' + e1.changeId).qboInvoiceId] = { satisfied: false, reversed: true, paidCents: 0, payUrl: null };
+  await S.reconcile(db, orgId, now + 180000, {}); equal(db.data.get(root + '/billing/current/invoices/' + e1.changeId).state, 'reversed');
+  var e3 = await apply(['engineering']); ok(e3.changeId !== e1.changeId, 'after a void, a re-request is a new change'); equal([e3.state, calls], ['awaiting_payment', invoicesBefore + 1]);
+  equal(db.data.get(root + '/billing/current/invoices/' + e3.changeId).state, 'unpaid', 'the new change waits for its own payment');
+  /* a revive is still a request: never beside another change waiting for payment */
+  seed(ev, 'field'); var f1 = await apply(['engineering']); await req('POST', { action: 'cancel', changeId: f1.changeId });
+  await apply(['siteintel']); var fq = await quote(['engineering']); equal(fq.previewId, f1.changeId.slice(7));
+  await refused(function () { return req('POST', { action: 'apply', add: ['engineering'], orgId: orgId, previewId: fq.previewId, effectiveAt: fq.effectiveAt }); }, /waiting for payment/);
+  equal(db.data.get(root + '/billing/current/invoices/' + f1.changeId).state, 'cancelled', 'and it stays cancelled');
+  /* the billing day, before the renewal is issued: no PAID additions (the change would bill the whole new cycle, and the renewal again) */
+  seed(ev, 'field'); var dueDay = bill().nextInvoiceOn, dueAt = Date.parse(dueDay + 'T01:00:00Z');
+  var early = await C.preview(db, orgId, { add: ['siteintel'] }, dueAt);
   equal(early.canApply, false); ok(/renewal is being issued today/.test(early.reason), early.reason);
-  equal((await C.preview(db, orgId, { add: ['siteintel'] }, Date.parse(dueDay + 'T01:00:00Z') - 86400000)).canApply, true, 'the day before, additions are open');
+  equal((await C.preview(db, orgId, { add: ['siteintel'] }, dueAt - 86400000)).canApply, true, 'the day before, additions are open');
+  equal(C.packQuote(await S.context(db, orgId), 'evApplications', dueAt).canApply, true, 'a pack bills nothing twice: open on the billing day');
+  seed(['lite', 'evrebates', 'estimate'], 'field'); dueDay = bill().nextInvoiceOn;
+  var free = await C.preview(db, orgId, { add: ['storage'] }, Date.parse(dueDay + 'T01:00:00Z'));
+  equal([free.included, free.canApply], [true, true], 'a $0 addition inside the tier bills nothing twice: open on the billing day');
 
   /* ── Concurrency and stale previews ────────────────────────────── */
   seed(ev, 'field'); before = calls; var q12 = await quote(['siteintel']);
