@@ -250,6 +250,14 @@ async function engineChecks() {
     && D.providerOf({ packaged: true, billingProvider: 'quickbooks', stripeCustomerId: 'cus_x', qboCustomerId: 'C9' }) === 'quickbooks');
   env({ PACKAGING_PROVIDER: 'stripe' });
 
+  console.log('\na tenant moving off an old Stripe subscription onto a package');
+  var ldb = fixture(), lstripe = new SD(), lb = ldb.data.get(root + '/billing/current');
+  Object.assign(lb, { packaged: false, packagingSignup: false, packagingState: null, billingProvider: null, tier: 'standard', stripeSubscriptionId: 'sub_oldtier' });
+  var lv = await S.preview(ldb, orgId, input, NOW);
+  await S.apply(ldb, orgId, Object.assign({}, input, { previewId: lv.previewId, effectiveAt: lv.effectiveAt }), Object.assign({}, CALLER, { staff: true, email: 'ops@clearsky-usa.com' }), NOW, { stripe: lstripe });
+  var legacyNote = ldb.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-legacy-sub-' + orgId);
+  ok('ClearSky is told to cancel the old subscription so the card is not charged twice', legacyNote && /sub_oldtier/.test(legacyNote.text) && legacyNote.staffMail === 'billingAlert', legacyNote);
+
   console.log('\na customer from the other Stripe mode is never billed');
   var mdb = fixture(); var live = new SD({ livemode: true });
   var mv = await S.preview(mdb, orgId, input, NOW);
@@ -288,6 +296,29 @@ async function webhookChecks() {
     var bill = db.data.get(root + '/billing/current');
     ok('a signed invoice.paid opens exactly what was bought', good.code === 200 && good.body.package && bill.packagingState === 'paid' && bill.modules.join() === 'lite,storage', good.body);
     ok('...and the legacy tier path never ran: no tier, no lastStripeEvent, status untouched', bill.lastStripeEvent === undefined && bill.tier !== 'trial' && db.data.get(root).status === 'active');
+    /* a paid package invoice no OMEGA record holds: a person is told, and Stripe is asked back (never absorbed with a 200) */
+    var loose = await ST.driver(book(), deps).invoice(plan('OMEGA subscription stripe.example / orphan'), BP.normalize(profile), bill.stripeCustomerId);
+    stripe.pay(loose.id);
+    var orphan = await call(stripe.event('invoice.paid', loose.id), 'signed');
+    var orphanNote = db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-orphan-' + loose.id);
+    ok('a paid invoice with no OMEGA record: 500 so Stripe retries, and ClearSky is told', orphan.code === 500 && orphan.body.orphan === true && orphanNote && orphanNote.staffMail === 'billingAlert' && /no OMEGA invoice record/.test(orphanNote.text), orphan.body);
+    await call(stripe.event('invoice.paid', loose.id), 'signed');
+    ok('...once, however often Stripe comes back', Array.from(db.data.keys()).filter(function (k) { return k.indexOf('/notifications/billing-orphan-') >= 0; }).length === 1);
+    /* the tier path never writes to a packaged workspace; an old subscription still charging it is flagged */
+    db.collectionGroup = function (name) {
+      return { where: function (field, op, value) { return { limit: function () { return { get: async function () {
+        var docs = []; db.data.forEach(function (v, p) { var parts = p.split('/'); if (parts[parts.length - 2] === name && v[field] === value) docs.push({ ref: { parent: { parent: { id: parts[parts.length - 3] } } } }); });
+        return { empty: !docs.length, docs: docs };
+      } }; } }; } };
+    };
+    var beforeTier = JSON.stringify([db.data.get(root), db.data.get(root + '/billing/current')]);
+    var tierEvt = { id: 'evt_oldtier', type: 'invoice.paid', created: 1790000000, data: { object: { id: 'in_oldtier', object: 'invoice', customer: bill.stripeCustomerId, metadata: {}, amount_paid: 9900, lines: { data: [{ period: { end: 1792600000 } }] } } } };
+    var tier = await call(tierEvt, 'signed');
+    ok('a non-package invoice on a packaged workspace\'s customer: answered once, nothing written', tier.code === 200 && /packaged workspace/.test(tier.body.ignored || '') && JSON.stringify([db.data.get(root), db.data.get(root + '/billing/current')]) === beforeTier, tier.body);
+    ok('...and ClearSky is told an old subscription may still be charging it', /cancel it in Stripe/.test((db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-legacy-evt_oldtier') || {}).text || ''));
+    var nobody = await call({ id: 'evt_nobody', type: 'invoice.paid', created: 1790000000, data: { object: { id: 'in_x', object: 'invoice', customer: 'cus_nobody', metadata: {} } } }, 'signed');
+    ok('an event for no workspace is answered once', nobody.code === 200 && /no org/.test(nobody.body.ignored || ''));
+    delete db.collectionGroup;
     env({ PACKAGING_BILLING_ENABLED: 'false' });
     var off = await call(stripe.event('invoice.paid', inv.stripeInvoiceId), 'signed');
     env({ PACKAGING_BILLING_ENABLED: 'true' });
