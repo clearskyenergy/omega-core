@@ -63,6 +63,9 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .eyebrow{font:500 11px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
 .num{font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 .sec{display:flex;flex-direction:column;gap:12px}
+/* one view at a time (2026-09-27): the home is the hub and Today; All tools, In flight and Around you are each their own page, reached from the rail, the tabs or the hub — never a scroll */
+#content[data-view] .sec,#content[data-view] .hero{display:none}#content[data-view="home"] .hero{display:grid}#content[data-view="tools"] #tools,#content[data-view="flight"] #flight,#content[data-view="team"] #team{display:flex}
+.sec .back{align-self:flex-start;color:var(--ows-ink2);font-size:13px;text-decoration:none}.sec .back:hover{color:var(--ows-teal-d)}
 .sec .hd{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}.sec .hd .sub{color:var(--ows-ink2);font-size:13px;margin-top:2px}
 /* notices: approval, trial, read-only */
 .notice{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:10px;font-size:13px;background:var(--ows-amber-soft);color:var(--ows-ink);border:1px solid transparent}
@@ -134,22 +137,25 @@ body.refused #refused{display:block}body.refused #content{display:none}
     <header id="topbar"></header>
     <main id="main" class="ows-content">
       <div id="refused"></div>
-      <div id="content">
+      <div id="content" data-view="home">
         <div id="ows-notice" hidden></div>
         <section class="hero">
           <div id="hub"></div>
           <div class="today" id="today"></div>
         </section>
         <section class="sec" id="tools">
+          <a class="back" href="/workspace">‹ Home</a>
           <div class="hd"><div><h2>All tools</h2><div class="sub" id="tools-sub">Every tool in the catalog. Live ones open; locked ones say what plan carries them.</div></div><a class="ows-pill ghost" href="/marketplace.html">Marketplace ›</a></div>
           <div class="plan" id="plan"></div>
           <div id="tools-body"></div>
         </section>
         <section class="sec" id="flight">
+          <a class="back" href="/workspace">‹ Home</a>
           <div class="hd"><div><h2>In flight</h2><div class="sub">Every project, who has it and how far along it is. A partner on the JDA sees the same board.</div></div><div style="display:flex;gap:8px"><button class="ows-pill primary" type="button" id="new-project">+ New project</button><a class="ows-pill ghost" href="/projects.html">All projects ›</a></div></div>
           <div id="flight-body"></div>
         </section>
         <section class="sec" id="team">
+          <a class="back" href="/workspace">‹ Home</a>
           <div class="hd"><div><h2>Around you</h2><div class="sub">Your team, your partners. Turn panels on or off in Customize.</div></div><button class="ows-pill" type="button" id="customize">⚙ Customize</button></div>
           <div class="community" id="around"></div>
         </section>
@@ -192,14 +198,23 @@ var DAY = 86400000;
 
 /* ── the chrome, before anyone is known ─────────────────────────────────── */
 S.mount({ current: 'home', tabs: true, search: search, onNav: function (key) {
-  if (key === 'home') { window.scrollTo({ top: 0, behavior: 'smooth' }); return true; }
+  if (key === 'home') { go('home'); return true; }
   if (key === 'tools' || key === 'team' || key === 'feed') { go(key); return true; }
   if (key === 'billing') { billingDrawer(); return true; }
   if (key === 'settings') { settingsDrawer(); return true; }
   if (key === 'projects' && WS) { areaDrawer('projects'); return true; }
   return false;
 } });
-function go(key) { var el = byId(key === 'feed' ? 'around' : key); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+var VIEWS = { home: 'home', tools: 'tools', flight: 'flight', team: 'team', feed: 'team', around: 'team' };
+function go(key) {
+  var v = VIEWS[key] || 'home';
+  byId('content').setAttribute('data-view', v);
+  var mark = v === 'home' ? 'home' : v === 'flight' ? 'projects' : v;
+  Array.prototype.forEach.call(document.querySelectorAll('#side-nav .sn-item'), function (a) { a.classList.toggle('active', a.getAttribute('data-key') === mark); });
+  Array.prototype.forEach.call(document.querySelectorAll('.ows-tabs a'), function (a) { a.classList.toggle('active', a.getAttribute('data-tab') === mark); });
+  if (v === 'home' && window.location.hash) { try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (e) {} }
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
 
 /* ── sign-in: the same chain as every signed-in page ────────────────────── */
 var nullSeen = 0, tries = 0;
@@ -348,7 +363,7 @@ function renderHub() {
   var items = [{ key: 'today', label: c.centre.label, icon: c.centre.icon, hint: c.centre.hint, badge: n || '' }].concat(c.ring.map(function (a) {
     return { key: a.key, label: a.label, icon: a.icon, hint: a.hint, badge: a.key === 'team' && myTodos ? myTodos : (a.key === 'projects' && DATA.projects.length ? DATA.projects.length : '') };
   }));
-  OmegaHexHub.render(byId('hub'), { items: items, title: 'Where to?', caption: (WS.clientName || WS.orgId) + ' · ' + first(), onPick: function (key) { if (key === 'today') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; } if (key === 'team') { go('team'); return; } areaDrawer(key); } });
+  OmegaHexHub.render(byId('hub'), { items: items, title: 'Where to?', caption: (WS.clientName || WS.orgId) + ' · ' + first(), onPick: function (key) { if (key === 'today') { go('home'); return; } if (key === 'team') { go('team'); return; } if (key === 'projects') { go('flight'); return; } areaDrawer(key); } });
   var held = heldChips(), hb = byId('hub').querySelector('.hexhub');
   if (hb && held) { var d = document.createElement('div'); d.className = 'held'; d.innerHTML = held; hb.appendChild(d); }
 }
@@ -530,12 +545,13 @@ function search(qs) {
 }
 function route() {
   var h = (window.location.hash || '').slice(1);
-  if (!h) return;
+  if (!h) { go('home'); return; }
   if (h === 'billing') billingDrawer(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer();
   else if (h.indexOf('area-') === 0) areaDrawer(h.slice(5));
   else go(h);
 }
 window.addEventListener('hashchange', function () { if (WS) route(); });
+Array.prototype.forEach.call(document.querySelectorAll('#content .sec .back'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); go('home'); }); });
 byId('customize').addEventListener('click', customizeDrawer);
 byId('new-project').addEventListener('click', function () { if (WS && WS.pendingApproval) { S.toast('Projects open once your workspace is approved'); return; } OmegaNewProject.open('bess'); });
 window.WORKSPACE_PAGE = { render: render, needs: needs, data: DATA };

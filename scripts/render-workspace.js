@@ -151,11 +151,20 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     out.tiles = tiles.length; out.locked = tiles.filter(function (t) { return t.locked; }).length;
     var plan = await p.$eval('#plan', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); }).catch(function () { return ''; });
     ok(name + ': the plan strip says how many tools are open', /\d+ of \d+ tools open/.test(plan), plan);
+    /* one view at a time (2026-09-27): the home is the hub and Today; All tools is its own page */
+    var views = await p.evaluate(function () { var v = function (id) { return getComputedStyle(document.getElementById(id)).display !== 'none'; }; return { view: document.getElementById('content').getAttribute('data-view'), hub: getComputedStyle(document.querySelector('#content .hero')).display !== 'none', tools: v('tools'), flight: v('flight'), team: v('team') }; });
+    ok(name + ': the home shows the hub and Today alone', views.view === 'home' && views.hub && !views.tools && !views.flight && !views.team, views);
+    await p.evaluate(function () { window.location.hash = '#tools'; }); await wait(200);
+    views = await p.evaluate(function () { var v = function (id) { return getComputedStyle(document.getElementById(id)).display !== 'none'; }; return { view: document.getElementById('content').getAttribute('data-view'), hub: getComputedStyle(document.querySelector('#content .hero')).display !== 'none', tools: v('tools'), flight: v('flight'), rail: (document.querySelector('#side-nav .sn-item.active') || {}).getAttribute && document.querySelector('#side-nav .sn-item.active').getAttribute('data-key') }; });
+    ok(name + ': #tools opens All tools as its own page and marks it on the rail', views.view === 'tools' && views.tools && !views.hub && !views.flight && views.rail === 'tools', views);
     /* condensed on a phone (2026-09-27): a tool is one short row, the catalog fits in a few screens */
     var vp0 = p.viewportSize(); await p.setViewportSize({ width: 390, height: 844 }); await wait(200);
     var row = await p.$eval('#tools-body .tool', function (e) { var r = e.getBoundingClientRect(); return { h: r.height, w: r.width, desc: getComputedStyle(e.querySelector('.d')).display, dir: getComputedStyle(e).flexDirection }; });
     ok(name + ': on a phone a tool is one compact row', row.h < 64 && row.w > 300 && row.desc === 'none' && row.dir === 'row', row);
     await p.setViewportSize(vp0); await wait(150);
+    await p.click('#tools .back'); await wait(150);
+    var back = await p.evaluate(function () { return { view: document.getElementById('content').getAttribute('data-view'), hash: window.location.hash }; });
+    ok(name + ': Home brings the hub back and clears the hash', back.view === 'home' && back.hash === '', back);
     out.plan = plan.slice(0, 80);
     return out;
   }
@@ -182,12 +191,15 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('newco: nothing is locked on a trial', out.locked === 0, out.locked);
     var empty = await p.$eval('#flight-body', function (e) { return e.textContent; });
     ok('newco: an empty workspace says so in In flight', /No projects yet/.test(empty), empty.slice(0, 60));
-    /* + New project opens the one dialog and closes again */
+    /* + New project opens the one dialog and closes again (In flight is its own page) */
+    await p.evaluate(function () { window.location.hash = '#flight'; }); await wait(150);
+    ok('newco: #flight opens In flight as its own page', await p.evaluate(function () { return document.getElementById('content').getAttribute('data-view') === 'flight'; }));
     await p.click('#new-project'); await wait(300);
     var open = await p.$eval('#np-name', function (e) { return !!(e.offsetWidth || e.offsetHeight); }).catch(function () { return false; });
     ok('newco: + New project opens the New Project dialog', open);
     await p.click('.mb-cancel').catch(function () {}); await wait(200);
     /* Customize: a toggle saves to the person's own layout record only */
+    await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
     await p.click('#customize'); await wait(250);
     await p.click('.tg[data-opt="guides"]'); await wait(900);
     var saved = await p.evaluate(function () { return window.__firebaseDouble.store.log.filter(function (w) { return /^dashboard_layouts\//.test(w.path); }).map(function (w) { return { path: w.path, guides: w.data.workspace && w.data.workspace.guides }; }); });
@@ -219,12 +231,14 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var feed = await p.$eval('#feed', function (e) { return e.textContent; });
     ok('northstar: People lists both teammates and the feed carries Raj\'s message', people === 2 && /interconnection study came back clean/.test(feed), { people: people });
     /* the side panel from a hub cell */
+    await p.evaluate(function () { window.location.hash = ''; }); await wait(150);
     await p.click('#hub .hx[data-hub="design"]'); await wait(300);
     var drawer = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, rows: e.querySelectorAll('.ows-row').length, locked: e.querySelectorAll('.ows-row.locked').length }; }).catch(function () { return null; });
     ok('northstar: a hub cell opens the side panel with the area\'s tools, Deluxe ones locked', drawer && /Design/.test(drawer.title) && drawer.rows >= 4 && drawer.locked >= 1, drawer);
     await p.keyboard.press('Escape'); await wait(200);
     ok('northstar: Escape closes it', (await p.$('.ows-drawer')) === null);
     /* a locked tile explains instead of opening (locked tiles fold under a per-category line) */
+    await p.evaluate(function () { window.location.hash = '#tools'; }); await wait(150);
     await p.$$eval('#tools-body details', function (d) { d.forEach(function (x) { x.open = true; }); }); await wait(100);
     await p.click('#tools-body .tool.locked[data-tool="investment"]'); await wait(250);
     var why = await p.$eval('.ows-drawer', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });
@@ -236,6 +250,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: Plan & billing shows the plan and the next payment', /Plan/.test(bill) && /Next payment/.test(bill), bill.slice(0, 160));
     await p.keyboard.press('Escape'); await wait(150);
     /* post a message */
+    await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
+    ok('northstar: #team opens Around you as its own page', await p.evaluate(function () { return document.getElementById('content').getAttribute('data-view') === 'team' && getComputedStyle(document.getElementById('team')).display !== 'none'; }));
     await p.fill('#post-text', 'Geotech booked for Maple Yard'); await p.click('#post button[type="submit"]'); await wait(500);
     var posted = await p.evaluate(function () { return window.__firebaseDouble.store.log.filter(function (w) { return /^team_messages\//.test(w.path); }).map(function (w) { return w.data.authorEmail + ':' + w.data.text; }); });
     ok('northstar: a post writes one team_messages document as the signed-in person', posted.length === 1 && posted[0] === ns.user.email + ':Geotech booked for Maple Yard', posted);
@@ -292,6 +308,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('lite: locked tools fold under a per-category line and stay out of the way', folded.n >= 5 && folded.closed >= 4, folded);
     var co = await p.$eval('#ows-co-sub', function (e) { return e.textContent; });
     ok('lite: the switcher says Lite, the same word as the plan strip', /Lite/.test(co), co);
+    await p.evaluate(function () { window.location.hash = '#tools'; }); await wait(150);
     await p.$$eval('#tools-body details', function (d) { d.forEach(function (x) { x.open = true; }); }); await wait(100);
     await p.click('#tools-body .tool.locked[data-tool="gridatlas"]'); await wait(250);
     var why = await p.$eval('.ows-drawer', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });

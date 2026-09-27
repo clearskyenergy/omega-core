@@ -43,6 +43,12 @@ decided 2026-09-26.
   quotes back of sent, requests to price, new quote requests, or sites
   online. The referral inbox itself stays on the classic dashboard;
   `?stay=classic` visits it once without changing the browser's home.
+- **One view at a time** (2026-09-27). The home is the hub and Today, and
+  nothing below it. All tools (`#tools`), In flight (`#flight`) and Around
+  you (`#team`, `#feed`) are each their own page inside `/workspace`, drawn
+  by `data-view` on the content and reached from the rail, the phone tabs,
+  the hub or a hash; a "‹ Home" link and the Home tab come back. Nothing
+  scrolls to a section any more; `check:workspace` asserts each view.
 - **All tools** is the catalog by category, each tile Live, Locked or Soon by
   the one rule (`OMEGATools.isUnlocked` on the merged workspace; nothing opens
   while approval is pending). Locked tiles fold under "N more on other
@@ -90,16 +96,17 @@ ground, one home; the session travels same-origin on every hop.
 | From | Click | To |
 |---|---|---|
 | Sign-in (`login.html`, `index.html` card) | signs in | `index.html` sends on to `/workspace` once the tenant's shell is known, unless it is `classic`, the workspace is a partner portfolio, or the browser asked for the classic page |
-| `/workspace` hub | Today | scrolls to Needs you |
-| `/workspace` hub | Projects · Design · Grid · Finance · Sales · Market … | the side panel for that area: its pages and tools, locked ones marked; Open goes to the tool (`OMEGATools.hrefFor`) or opens the New Project dialog for Site Map and the sandbox |
-| `/workspace` hub | Team | scrolls to Around you |
+| `/workspace` hub | Today | the home view (hub and Today) |
+| `/workspace` hub | Projects | the In flight page (`#flight`) |
+| `/workspace` hub | Design · Grid · Finance · Sales · Market … | the side panel for that area: its pages and tools, locked ones marked; Open goes to the tool (`OMEGATools.hrefFor`) or opens the New Project dialog for Site Map and the sandbox |
+| `/workspace` hub | Team | the Around you page (`#team`) |
 | `/workspace` hub | Orders · Plant · Deliver (a workspace holding Omega Logic) | the panel, then `/omega-logic`, `/plant/…`, `/logic-logistics.html` |
 | rail, any page | Home | `/workspace` |
 | rail, any page | Projects | `/projects.html`, wearing the same rail with Projects current; a row opens the editor |
-| rail, any page | All tools | `/workspace#tools` |
+| rail, any page | All tools | `/workspace#tools`, the All tools page alone |
 | rail, any page | Marketplace | `/marketplace.html`, same rail; a packaged workspace sees its plan and the modules to add (the package store); "+ Add to dashboard" pins an open tool, which the workspace lists under Pinned |
 | rail, any page | Quote Desk | `/rfq.html` |
-| rail, any page | Team · Feed | `/workspace#team` |
+| rail, any page | Team · Feed | `/workspace#team`, the Around you page alone |
 | rail, any page | Plan & billing · Settings | the side panels on `/workspace` (`#billing`, `#settings`) |
 | tools grid | a Live tile | the tool, scoped to the org |
 | tools grid | a Locked tile | the side panel naming the plan or module that carries it, with the Marketplace (where a packaged workspace subscribes) and an email to ClearSky |
