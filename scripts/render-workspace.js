@@ -350,13 +350,26 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
      The legacy pages keep their own topbar and CSS, but their rail becomes
      the workspace rail (adopt), Dashboard points at /workspace, the ground
      is the same grid; and a dashboard visit is sent on to /workspace. */
-  async function flow(page, current) {
+  async function flow(page, current, opts) {
+    opts = opts || {};
     var errs = [], ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); if (/Chart\.js/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.Chart=function(){};window.Chart.register=function(){};' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
     await ctx.addInitScript(DOUBLE_SRC);
-    await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: ns.user, docs: ns.docs, latency: 8, authDomain: HOST });
+    await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: opts.user || ns.user, docs: opts.docs || ns.docs, latency: 8, authDomain: HOST });
+    /* THE RACE the default home has to survive: the dashboard's own auth
+       handler resolves the workspace late (a real host waits for its pin),
+       so it publishes window.OMEGA_WORKSPACE and reaches the redirect AFTER
+       the entitlements fired. It must ask the runtime, not listen for an
+       event that has passed. */
+    if (opts.lagMs) await ctx.addInitScript(function (lag) {
+      var t0 = Date.now(), iv = setInterval(function () {
+        if (!window.OmegaBrand || !window.OmegaBrand._tenantWrapped) return;
+        clearInterval(iv); var orig = window.OmegaBrand.resolve;
+        window.OmegaBrand.resolve = function (email, reg) { return Date.now() - t0 < lag ? null : orig(email, reg); };
+      }, 5);
+    }, opts.lagMs);
     var p = await ctx.newPage(); p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
-    await p.goto(base + page + '?home=workspace', { waitUntil: 'domcontentloaded' }); await wait(2500);
+    await p.goto(base + page + (opts.query !== undefined ? opts.query : '?home=workspace'), { waitUntil: 'domcontentloaded' }); await wait(opts.lagMs ? 4000 : 2500);
     var out = await p.evaluate(function () {
       var items = Array.prototype.filter.call(document.querySelectorAll('#side-nav .sn-item'), function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return (a.querySelector('span') || a).textContent.trim() + (a.classList.contains('active') ? '*' : ''); });
       var home = document.querySelector('a[data-sn="dashboard"]');
@@ -364,17 +377,26 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       return { url: location.pathname, items: items, home: home && home.getAttribute('href'), theme: document.body.classList.contains('ows-theme'), grid: /linear-gradient/.test(getComputedStyle(document.body).backgroundImage), store: store ? !store.hidden : null };
     });
     var name = 'flow ' + page;
-    if (page === '/') ok(name + ': a dashboard visit with the workspace as home lands on /workspace', /\/workspace$/.test(out.url), out.url);
+    if (page === '/') ok(name + (opts.label || '') + ': a dashboard visit with the workspace as home lands on /workspace', /\/workspace$/.test(out.url), out.url);
     else {
       ok(name + ': the rail is the workspace rail with this page current', out.items.join('|') === 'Home|Projects|All tools|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings'.replace(current, current + '*'), out.items);
       ok(name + ': Dashboard points at /workspace and the ground is the blueprint grid', out.home === '/workspace' && out.theme && out.grid, out);
       if (page === '/marketplace.html') ok(name + ': a legacy (unpackaged) tenant sees no package store', out.store === false, out.store);
       ok(name + ': no uncaught errors', !errs.length, errs);
     }
-    console.log(JSON.stringify({ scenario: name, rail: out.items, url: out.url }));
+    console.log(JSON.stringify({ scenario: name + (opts.label || ''), rail: out.items, url: out.url }));
     await ctx.close();
   }
   await flow('/projects.html', 'Projects'); await flow('/marketplace.html', 'Marketplace'); await flow('/', '');
+  /* The DEFAULT, with nothing asked for in the address: a tenant whose record
+     does not say classic, and a DERIVED workspace (no org record, no public
+     pin: ClearSky's own on the open host) with the handler lagging behind
+     the entitlements. Neither has ?home=; both must land on /workspace. */
+  var noShell = FX.northstar(HOST); Object.keys(noShell.docs).forEach(function (k) { if (/^(omega_orgs|tenant_public)\//.test(k)) delete noShell.docs[k].shell; });
+  await flow('/', '', { label: ' (no shell on the record, no ?home=)', query: '', docs: noShell.docs, user: noShell.user });
+  var derived = FX.northstar(HOST); Object.keys(derived.docs).forEach(function (k) { if (/^(omega_orgs|tenant_public)\//.test(k)) delete derived.docs[k]; });
+  derived.user = { uid: derived.user.uid, email: 'tommy@clearsky-usa.example', displayName: 'Tommy G', emailVerified: true };
+  await flow('/', '', { label: ' (derived workspace, handler lags)', query: '', docs: derived.docs, user: derived.user, lagMs: 1200 });
 
   await browser.close(); srv.close();
   ok('no request would have left the machine', !external.length, external.slice(0, 5));
