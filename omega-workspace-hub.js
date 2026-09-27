@@ -17,7 +17,8 @@
 
    ctx = { canOpen(toolKey) → bool, tool(toolKey) → catalog entry | null,
            modules[] (a packaged workspace's), addons[] (a legacy one's),
-           hideMarketplace }
+           addOns[] (the modules a legacy one bought as add-ons and has on
+           now: billing.addOns.live, api/_lib/addons.js), hideMarketplace }
 
    Showing a cell is never access: every tool page and endpoint still checks.
    Projects and Team are always in the ring (a workspace with no projects
@@ -47,8 +48,9 @@
   function byKey(key) { for (var i = 0; i < AREAS.length; i++) if (AREAS[i].key === key) return AREAS[i]; return null; }
   function has(list, k) { return Array.isArray(list) && list.indexOf(k) >= 0; }
   /* does this workspace hold an Omega Logic part: a packaged one by module,
-     a legacy one by the omega-logic add-on (which holds every part) */
-  function holdsLogic(ctx, part) { return has(ctx.modules, part) || has(ctx.addons, 'omega-logic'); }
+     a legacy one by the omega-logic add-on (which holds every part) or by
+     the part bought as an add-on to its plan */
+  function holdsLogic(ctx, part) { ctx = ctx || {}; return has(ctx.modules, part) || has(ctx.addons, 'omega-logic') || has(ctx.addOns, part); }
   function openTools(area, ctx) {
     var out = [];
     (area.tools || []).forEach(function (k) { if (ctx.canOpen && ctx.canOpen(k)) out.push(k); });
@@ -92,7 +94,8 @@
      (a legacy cap → bool, from capsFor(): the SAME ladder the editor
      applies).
        packaged   held when the server's projection lists it, else open
-       legacy     an Omega Logic part: held by the omega-logic add-on;
+       legacy     bought as an add-on and on now (ctx.addOns): held;
+                  an Omega Logic part: held by the omega-logic add-on;
                   any other module is measured on BOTH halves of what it
                   is: its standalone tools (ctx.canOpen: the tier, the
                   allowlist, the overrides) and its commands in the editor
@@ -105,7 +108,8 @@
      whose Analyze tab is closed does not hold Storage just because the
      Battery Sizer page opens. Answers 'held' | 'part' | 'ask' | 'open'.
      Showing a state is never access: the tools and the editor check the
-     same plan. */
+     same plan. The server asks this same rule before it sells an add-on
+     (api/_lib/addons.js held()), and an add-on's grants open both halves. */
   function moduleTools(m, ctx) {
     ctx = ctx || {};
     var total = 0, open = 0;
@@ -132,6 +136,7 @@
   function moduleState(m, ctx) {
     ctx = ctx || {}; if (!m) return 'ask';
     if (ctx.packaged) return has(ctx.modules, m.key) ? 'held' : 'open';
+    if (has(ctx.addOns, m.key)) return 'held';
     if (/^logic-/.test(m.key)) return holdsLogic(ctx, m.key) ? 'held' : 'ask';
     var t = moduleTools(m, ctx), e = moduleEditor(m, ctx), total = t.total + e.total, open = t.open + e.open;
     /* nothing to measure (the storefront): held where the plan opens
@@ -162,7 +167,7 @@
     var tier = billing.tier || ((caps.INTERNAL_DOMAINS || []).indexOf(String(org || '').toLowerCase()) >= 0 ? 'internal' : 'trial');
     return function (cap) { return caps.canWith(tier, cap, { addons: billing.addons || [], org: org || '', capTier: billing.capTier || null }); };
   }
-  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleNote: moduleNote, capsFor: capsFor, RING_MAX: RING_MAX };
+  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleNote: moduleNote, capsFor: capsFor, holdsLogic: holdsLogic, RING_MAX: RING_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceHub = API;
 })(typeof window !== 'undefined' ? window : null);
