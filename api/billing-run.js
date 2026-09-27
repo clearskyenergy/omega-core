@@ -5,5 +5,5 @@ module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') throw A.httpError(405, 'GET only');
   Runner.authorize(req);
-  return Runner.tick(A.db(), Date.now(), { limit: 5 });
+  return Runner.tick(A.db(), Date.now(), { limit: 10 });
 });

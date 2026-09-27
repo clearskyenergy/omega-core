@@ -2260,6 +2260,13 @@ compares the sign-in email lower-cased in the four team blocks,
 preview hostname when a sign-in is refused for an unauthorised domain. See
 docs/PACKAGING-PHASE-9-VALIDATION.md.
 
+## Loading screen — September 26, 2026
+
+`editor.html` (and 42 other signed-in pages): `<script src="/omega-splash.js?v=1">`
+first in `<head>`, the OMEGA mark until the page is known and again on
+leaving; the editor has no `omega-tenant.js`, so its splash ends at load
++ 400 ms or the 4 s cap. See docs/LOADING-SCREEN.md.
+
 ## Ribbon icons — September 26, 2026
 
 `editor.html`: the ribbon's icon module (`OmegaRibbonIcons`, the light
@@ -2286,3 +2293,34 @@ paid". `api/_lib/packaging-mode.js` is the one sandbox-or-live rule; the
 engine, item sync, QuickBooks guard, price book, signup, runner and the two
 scripts read it. See docs/PACKAGING-PHASE-10A-VALIDATION.md and
 docs/PAYMENTS-BROWSER-SETUP.md.
+
+## Editor chrome theme — September 26, 2026
+
+`editor.html`: after the ribbon went light, "make the outside parts match
+our theme a little more, easier on the eyes" (Tommy). One token set in
+`<style id="omega-ui-theme">` now carries both schemes: the graphite values
+stay the `:root` default, the ribbon's light values (`--bg #F5F4F0`,
+`--panel #FFFFFF`, `--surface #EEF1F3`, `--border #D7DFE6`, `--text
+#16202B`, `--sub #526273`, `--accent #2B5FA8`, `--hl-dim #E6EEF9`, `--icon
+#526273`, `--navy #FFFFFF`, `--blue #E6EEF9`) apply under
+`prefers-color-scheme: light` for `html:not([data-omega-theme="dark"])` and
+again under `html[data-omega-theme="light"]`; new relation tokens `--scrim`,
+`--hover`, `--hover-strong`, `--inset`, `--hairline`, `--shadow`,
+`--grid-dot`, `--ok/--warn/--bad/--on-status` have both values.
+`OmegaUI.theme('auto'|'light'|'dark')` persists `data-omega-theme` exactly
+as the accent is persisted; the command palette gains Theme: Auto / Light /
+Dark. The ribbon's scoped light block collapsed to
+`#tb,#ribbon{background:var(--navy)}`. About 2,170 lines were retokenised
+by `scripts/_lib/editor-theme-retoken.py` (style blocks, inline panel
+markup, the JS dialog builders and every full-screen scrim → `var(--scrim)`);
+the File menu, hamburger items, side panels, legend, canvas furniture,
+bars, modals, compass, diagnostics, address chip, site panel, meters, SOS,
+ARR and Project Intelligence read tokens; coloured headings tuned for a
+dark ground read `--accent-2/--green/--amber/--purple`; dark `--gold` is
+`#5CA6DF` (5.9:1 on `--panel`). Left as data: draw swatches, status chips,
+gradient buttons, the SLD paper sheet, chart and canvas paints, exported
+HTML/PDF documents. No id, class or behaviour changed; `omega-package-menu.js`
+honours the switch. Tests: `scripts/tests/teditortheme.js` (npm test),
+`scripts/render-editor-theme.js` (check:pages; screenshots in
+`docs/screenshots/editor-theme/`). Design and what is not done:
+`docs/EDITOR-THEME.md`.

@@ -61,6 +61,21 @@ section, no Ladder, no *Add* badges and no billing bar: the Account panel
 shows the plan, the paid amount and the next payment date as before. That
 is NextNRG: enterprise, the year paid, everything open.
 
+**Your modules (later on 2026-09-26).** Tommy, on a workspace mock-up: *"see
+how it's done as modules... that's good"*. The dashboard now opens, above My
+Applications, on one card per module: what the workspace holds, marked
+**Live**, in shelf order (Included in every plan, Add-on, Standard shelf,
+Premium shelf, Deliverable, Omega Logic); then what it bought but is not on
+yet (*Yours · opens when the first invoice is paid*); then up to three rungs
+it does not hold, dashed, *Not in your plan · $…/month* with **+ Add**, which
+opens the Ladder on that module. Each card carries the module's three
+feature lines and its tool chips (+N), all from the package view's own
+catalog (`/api/package-access`) and the server's prices
+(`/api/package-catalog`): there is no second list. Omega Logic's departments
+are offered first once Office is held. The header reads *What <company>
+holds on <plan>*; *The Ladder ›* opens the whole menu. A legacy plan sees no
+block (`renderModuleCards`, `#dash-modules`).
+
 ## Verified
 
 - `npm run check:dashboard` — eight scenarios on the real `index.html`
@@ -84,6 +99,10 @@ is NextNRG: enterprise, the year paid, everything open.
     billing bar; the account page shows the paid year and no Ladder.
   - the five earlier scenarios unchanged (newco, northstar, northstar-phone,
     pending, lite).
+  - **lite-ladder** also holds Your modules: Lite live in the catalog's
+    words, three dashed rungs priced by the server, a card's + Add opening
+    the Ladder on that module; **awaiting**: a bought-but-not-on module says
+    so with no Add; **legacy-enterprise**: no block.
 - `scripts/test-plan-change.js` asserts the summary's invoices and names.
 - Full `npm test` and `npm run check:pages` pass on the branch.
 
@@ -92,7 +111,8 @@ is NextNRG: enterprise, the year paid, everything open.
 `docs/screenshots/packaging-phase-10b/`: `account-ladder.png` (the paid
 Lite tenant's panel), `ladder-menu.png` (the Ladder open on the dashboard
 with a quote), `account-awaiting.png` (the first invoice unpaid),
-`account-legacy.png` (a prepaid legacy account).
+`account-legacy.png` (a prepaid legacy account), `modules.png` (Your modules on
+the paid Lite tenant).
 
 ## Not built
 
@@ -103,5 +123,16 @@ with a quote), `account-awaiting.png` (the first invoice unpaid),
   Payments permission; the panel says what is true: each invoice arrives
   with its pay link, a card saved on QuickBooks' page pays the next in one
   click.
-- The admin console's Tenants & Users card and Client Inventory tiers
-  (Phase 10).
+- ~~The admin console's Tenants & Users card and Client Inventory tiers
+  (Phase 10).~~ Done later on 2026-09-26 (`codex/admin-packages`): a
+  packaged workspace's row shows its plan and modules in the price book's
+  words with the monthly figure, the next invoice and the amount due with
+  the QuickBooks pay link; standing has a key per state (*Awaiting first
+  payment*, *Active · invoice <date>*, *Accounting review* with access
+  unchanged, *First invoice voided*, *Package proposed*) and the pills,
+  the filter and the broadcast list share them; Manage shows a package
+  summary and *Open the Package tab* instead of the legacy tier form;
+  Client Inventory carries the book from `GET /api/offerings`
+  (`scripts/tests/tadminstanding.js`, in `npm test`). Still legacy: the
+  contract engine's numeric defaults in `admin/index.html` and the
+  roster's own Core / Performance / Enterprise tiers.

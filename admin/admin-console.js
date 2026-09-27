@@ -404,6 +404,7 @@ function renderEverything(){
   /* Reads Firestore rather than STATE, so it is fired once here and refreshed
      by its own button — not on every re-render, which would put a collection
      read behind every unrelated edit on this page. */
+  loadPriceBook();
   loadTenants();
   renderQuickBooks();
 }
@@ -594,6 +595,7 @@ function renderClients(){
   var fh='';
   for (var i=0;i<filters.length;i++){ fh += '<button class="fpill'+(clFilter===filters[i][0]?' on':'')+'" onclick="setClFilter(&quot;'+filters[i][0]+'&quot;)">'+filters[i][1]+'</button>'; }
   document.getElementById('cl-filters').innerHTML = fh;
+  var pbEl = document.getElementById('cl-pricebook'); if (pbEl) pbEl.innerHTML = _priceBookStrip();
 
   var rows='';
   for (var j=0;j<STATE.clients.length;j++){
@@ -1293,12 +1295,25 @@ function _authedPost(path, body){
    collapsing them hides the one you can still fix. */
 function _standing(bill, org){
   if (bill && bill.packaged === true) {
-    var ps = bill.packagingState;
-    if (ps === 'paid') return { key: 'current', chip: 'good', label: 'Active' };
+    /* A PACKAGED workspace is judged by its state machine (api/_lib/package-billing.js),
+       never by the legacy due date. Each state has its own key so the pills,
+       the filter and the broadcast list agree; the label says what a person
+       does next. */
+    var ps = bill.packagingState, DAYp = 86400000, nowp = Date.now();
+    /* a reconciliation a person has to look at: access is unchanged (the engine never cuts it for our own bookkeeping), the chip says so */
+    if (bill.reconciliationRequired === true) return { key: 'review', chip: 'warn', label: (ps === 'paid' ? 'Active · ' : '') + 'Accounting review' };
+    if (bill.reissueRequired === true) return { key: 'overdue', chip: 'bad', label: 'First invoice voided' };
+    if (ps === 'paid') {
+      var nxt = bill.nextInvoiceOn ? Date.parse(bill.nextInvoiceOn) : NaN;
+      if (!isNaN(nxt) && nxt - nowp < 14 * DAYp) return { key: 'duesoon', chip: 'good', label: 'Active · invoice ' + bill.nextInvoiceOn };
+      return { key: 'current', chip: 'good', label: 'Active' };
+    }
     if (ps === 'trial') return { key: 'trialend', chip: 'warn', label: 'Trial ends ' + new Date(bill.trialEndsAt).toLocaleDateString() };
-    if (ps === 'past_due_lite' || ps === 'unpaid') return { key: 'overdue', chip: 'bad', label: 'Past due' };
-    if (ps === 'awaiting_payment') return { key: 'overdue', chip: 'warn', label: 'Awaiting payment' };
-    return { key: 'unpriced', chip: 'warn', label: ps === 'reconciliation_required' ? 'Accounting review' : 'Package review' };
+    if (ps === 'past_due_lite') return { key: 'overdue', chip: 'bad', label: 'Past due · Lite only' };
+    if (ps === 'unpaid') return { key: 'overdue', chip: 'bad', label: 'Unpaid' };
+    if (ps === 'awaiting_payment') return { key: 'awaiting', chip: 'warn', label: 'Awaiting first payment' };
+    if (ps === 'pending' || (org && (org.status || '') === 'pending')) return { key: 'pending', chip: 'warn', label: 'Package proposed' };
+    return { key: 'unpriced', chip: 'warn', label: 'Package review' };
   }
 
   if ((org.status||'') === 'pending') return { key:'pending', label:'pending approval', chip:'warn' };
@@ -1312,6 +1327,46 @@ function _standing(bill, org){
   if (!isNaN(trial) && trial - now < 14*DAY)             return { key:'trialend', label:'trial ending',   chip:'warn' };
   if ((bill.tier||'') === 'trial')                       return { key:'trial',    label:'trial',          chip:'neutral' };
   return { key:'current', label:'current', chip:'good' };
+}
+
+/* ── THE PRICE BOOK, FROM THE SERVER ─────────────────────────────────────
+   GET /api/offerings is the public price list (plans, modules, logins) as the
+   server formats it. The console reads names and prices from it and never
+   carries a copy: a packaged tenant's plan key (alacarte | field | pro) and
+   module keys become words here, and Client Inventory shows the book above
+   the legacy roster tiers. */
+STATE.priceBook = null;
+function loadPriceBook(){
+  if (!window.fetch) return;
+  fetch('/api/offerings', { cache: 'no-store' }).then(function(r){ return r.ok ? r.json() : null; }).then(function(o){
+    if (!o) return; STATE.priceBook = o;
+    try { if (STATE.tenants && STATE.tenants.length) renderTenants(); } catch(e){}
+    try { renderClients(); } catch(e){}
+  }).catch(function(){});
+}
+function _pkgPlanName(bill){
+  var p = bill.plan || (bill.subscription && bill.subscription.plan) || (bill.proposedPackage && bill.proposedPackage.plan) || '';
+  var book = STATE.priceBook, hit = book && book.plans ? book.plans.filter(function(x){ return x.key === p; })[0] : null;
+  if (hit) return hit.name;
+  return { alacarte: 'Lite + modules', field: 'Field', pro: 'Pro', enterprise: 'Enterprise' }[p] || (p ? String(p) : 'Lite + modules');
+}
+function _pkgModules(bill){ return (bill.subscription && Array.isArray(bill.subscription.modules)) ? bill.subscription.modules : Array.isArray(bill.modules) ? bill.modules : (bill.proposedPackage && bill.proposedPackage.modules) || []; }
+function _pkgModuleNames(keys){
+  var names = {}; ((STATE.priceBook && STATE.priceBook.modules) || []).forEach(function(m){ names[m.key] = m.name; });
+  return (keys || []).map(function(k){ return names[k] || k; });
+}
+function _priceBookStrip(){
+  var o = STATE.priceBook; if (!o) return '<div class="sub-txt" style="margin:6px 0 10px">Price book: loading from /api/offerings\u2026</div>';
+  var parts = [];
+  if (o.lite && o.lite.monthlyDisplay) parts.push('<b>Lite</b> ' + esc(o.lite.monthlyDisplay));
+  (o.plans || []).forEach(function(pl){ parts.push('<b>' + esc(pl.name) + '</b> ' + esc(pl.monthlyDisplay || '')); });
+  if (o.enterprise && o.enterprise.annualFloorDisplay) parts.push('<b>Enterprise</b> from ' + esc(o.enterprise.annualFloorDisplay));
+  if (o.logins && o.logins.builderDisplay) parts.push('logins ' + esc(o.logins.builderDisplay) + ' / ' + esc(o.logins.viewerDisplay || ''));
+  var mods = (o.modules || []).map(function(m){ return esc(m.name) + ' ' + esc(m.monthlyDisplay || ''); }).join(' \u00b7 ');
+  return '<div id="cl-pricebook-strip" class="sub-txt" style="margin:6px 0 12px;line-height:1.7">'
+    + '<div><b>Price book ' + esc(o.pricebookVersion || '') + '</b>' + (o.source ? ' (' + esc(o.source) + ')' : '') + ': ' + parts.join(' \u00b7 ') + '</div>'
+    + '<div>Modules: ' + mods + '</div>'
+    + '<div>The Core / Performance / Enterprise tiers below are the legacy roster\u2019s. A packaged workspace is priced by the book and managed on its Package tab.</div></div>';
 }
 
 var tnFilter = 'all', tnSort = 'name';
@@ -1958,7 +2013,7 @@ function renderTenants(){
       return '<div class="info-card"><div class="ic-top"><div>'
         + '<div class="ic-name">'+esc(r.name||r._id)+'</div>'
         + '<div class="ic-sub">'+esc(r._id)+(r.vertical?' · '+esc(r.vertical):'')+'</div></div>'
-        + '<span class="chip warn">pending</span></div>'
+        + '<span class="chip warn">' + (r._bill && r._bill.packaged === true ? 'pending \u00b7 packaged' : 'pending') + '</span></div>'
         + '<div class="ic-actions">'
         + '<button onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;approve&quot;)">Approve</button>'
         + '<button class="danger" onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;reject&quot;)">Reject</button>'
@@ -1968,8 +2023,8 @@ function renderTenants(){
 
   var counts={all:rows.length};
   rows.forEach(function(r){ var k=_standing(r._bill,r).key; counts[k]=(counts[k]||0)+1; });
-  var pills=[['all','All'],['overdue','Overdue'],['duesoon','Due soon'],['trialend','Trial ending'],
-             ['unpriced','Not priced'],['current','Current']];
+  var pills=[['all','All'],['awaiting','Awaiting payment'],['overdue','Overdue'],['duesoon','Due soon'],['trialend','Trial ending'],
+             ['review','Accounting review'],['pending','Pending'],['unpriced','Not priced'],['current','Current']];
   var fh=pills.map(function(f){
     var n=counts[f[0]]||0;
     return '<button class="fpill'+(tnFilter===f[0]?' on':'')+'" onclick="setTnFilter(&quot;'+f[0]+'&quot;)">'
@@ -2010,13 +2065,16 @@ function renderTenants(){
        +  '<th>Tenant</th><th>orgId</th><th>Plan</th><th>Standing</th><th>Account</th><th>Actions</th>'
        +  '</tr></thead><tbody>';
   shown.forEach(function(r){
-    var st=r.status||'active', bill=r._bill||{}, sd=_standing(bill,r);
-    var due = bill.subscriptionDue ? ('due '+esc(bill.subscriptionDue)) : '';
-    var amt = (Number(bill.amountDue||0)>0) ? ('$'+Number(bill.amountDue).toLocaleString()) : '';
+    var st=r.status||'active', bill=r._bill||{}, sd=_standing(bill,r), packaged = bill.packaged === true;
+    var due = packaged ? (bill.nextInvoiceOn ? 'next invoice ' + esc(bill.nextInvoiceOn) : '') : (bill.subscriptionDue ? ('due '+esc(bill.subscriptionDue)) : '');
+    var amt = (Number(bill.amountDue||0)>0) ? ('$'+Number(bill.amountDue).toLocaleString() + (packaged ? ' due' : '') + (packaged && bill.paymentLink ? ' \u00b7 <a href="' + esc(bill.paymentLink) + '" target="_blank" rel="noopener">pay link</a>' : '')) : '';
     var sub = [due,amt].filter(Boolean).join(' \u00b7 ');
+    var planCell = packaged
+      ? esc(_pkgPlanName(bill)) + '<div class="sub-txt">' + esc(_pkgModuleNames(_pkgModules(bill)).join(', ')) + (bill.monthlyDisplay ? ' \u00b7 ' + esc(bill.monthlyDisplay) : '') + '</div>'
+      : esc(bill.tier || '\u2014');
     html += '<tr><td class="site-nm"><a href="/admin/tenant.html?org='+encodeURIComponent(r._id)+'">'+esc(r.name||r._id)+'</a></td>'
          +  '<td class="sub-txt">'+esc(r._id)+'</td>'
-         +  '<td>'+esc(bill.packaged ? bill.plan || 'Proposed package' : bill.tier || '\u2014')+(bill.packaged ? '<div class="sub-txt">'+esc(bill.monthlyDisplay || '')+'</div>' : '')+'</td>'
+         +  '<td>'+planCell+'</td>'
          +  '<td><span class="chip '+sd.chip+'">'+esc(sd.label)+'</span>'
          +    (sub?('<div class="sub-txt">'+sub+'</div>'):'')+'</td>'
          +  '<td><span class="chip '+_tnStatusChip(st)+'">'+esc(st)+'</span></td>'
@@ -2025,6 +2083,7 @@ function renderTenants(){
               ? '<button class="btn-ghost" onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;reactivate&quot;)">Reactivate</button>'
               : '<button class="btn-ghost" onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;suspend&quot;)">Suspend</button>')
          +  ' <button class="btn-ghost" onclick="openTenantDetail(&quot;'+esc(r._id)+'&quot;)">Manage</button>'
+         +  (packaged ? ' <a class="btn-ghost" style="text-decoration:none;display:inline-block" href="/admin/tenant.html?org='+encodeURIComponent(r._id)+'">Package</a>' : '')
          +  ' <button class="btn-ghost" onclick="openBroadcast(&quot;'+esc(r._id)+'&quot;)">Message</button>'
          +  '</td></tr>'
          +  '<tr id="tn-users-'+esc(r._id).replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:none"><td colspan="6" style="background:#F7F9FB"></td></tr>';
@@ -2264,7 +2323,7 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
              ['partner','partner \u2014 JV / channel'],
              ['internal','internal \u2014 ClearSky']];
   h+='<div><div class="block-title" style="font-size:13px;margin-bottom:8px">Commercial terms</div>';
-  h+='<a href="/admin/tenant.html?org='+encodeURIComponent(orgId)+'">Open Package panel</a>';
+  if (bill.packaged !== true) h+='<a href="/admin/tenant.html?org='+encodeURIComponent(orgId)+'">Move this workspace to a package (Package tab)</a>';
   if (bill.packaged !== true) {
   h+=logicEnrollmentHtml(orgId, bill);
   h+='<label class="sub-txt" style="display:block;margin-bottom:10px">Plan'
@@ -2365,7 +2424,20 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
   h+=' <span id="tb-msg-'+esc(orgId)+'" class="sub-txt"></span>';
   h+='<div class="sub-txt" style="margin-top:8px">Provider: '+esc(bill.paymentProvider||'\u2014')
    + (bill.stripeCustomerId?(' \u00b7 Stripe '+esc(bill.stripeCustomerId)):'')+'</div>';
-  } else { h+='<p class="sub-txt">'+esc(bill.plan || 'Lite + modules')+' · '+esc(bill.monthlyDisplay || '')+' · '+esc(bill.packagingState || '')+'</p><p class="sub-txt">Modules and billing changes are managed in the Package panel.</p>'; }
+  } else {
+    /* a packaged workspace: the facts, in words, and the one door for changes */
+    var onNow = Array.isArray(bill.modules) ? bill.modules : [], bought = _pkgModules(bill), sdp = _standing(bill, org);
+    h+='<div id="tb-package-'+esc(orgId)+'" class="sub-txt" style="line-height:1.75">'
+     + '<div><b style="color:var(--cs-navy)">'+esc(_pkgPlanName(bill))+'</b>'+(bill.monthlyDisplay ? ' \u00b7 '+esc(bill.monthlyDisplay) : '')+(bill.interval ? ' \u00b7 '+(bill.interval === 'annual' ? 'yearly, ten months of twelve' : 'monthly') : '')+'</div>'
+     + '<div>Package: '+esc(_pkgModuleNames(bought).join(', ') || '\u2014')+(bought.join() !== onNow.join() && onNow.length ? ' (on now: '+esc(_pkgModuleNames(onNow).join(', '))+')' : '')+'</div>'
+     + '<div>Standing: <span class="chip '+sdp.chip+'">'+esc(sdp.label)+'</span></div>'
+     + (bill.nextInvoiceOn ? '<div>Next invoice: '+esc(bill.nextInvoiceOn)+(bill.paidThrough ? ' \u00b7 paid through '+esc(bill.paidThrough) : '')+'</div>' : '')
+     + (Number(bill.amountDue||0) > 0 ? '<div>Amount due: $'+Number(bill.amountDue).toLocaleString()+(bill.paymentLink ? ' \u00b7 <a href="'+esc(bill.paymentLink)+'" target="_blank" rel="noopener">QuickBooks pay link</a>' : '')+'</div>' : '')
+     + (bill.reconcileNote ? '<div>Review: '+esc(bill.reconcileNote)+'</div>' : '')
+     + '</div>'
+     + '<p style="margin:10px 0 4px"><button onclick="location.href=&quot;/admin/tenant.html?org='+encodeURIComponent(orgId)+'&quot;">Open the Package tab</button></p>'
+     + '<p class="sub-txt">Modules, activation, the price and every billing change are made on the Package tab. The legacy tier fields do not apply to a packaged workspace.</p>';
+  }
   h+='</div>';
 
   /* ── Identity & usage ── */

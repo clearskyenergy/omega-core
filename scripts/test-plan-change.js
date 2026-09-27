@@ -234,11 +234,15 @@ async function run() {
   seed(ev, 'field'); failures['I-2026-09-20'] = 503;
   await S.reconcile(db, orgId, now, {}); equal(bill().packagingState, 'paid', 'one failed poll changes nothing'); equal(db.data.get(root + '/billing/current/invoices/2026-09-20').reconcileRetries, 1);
   await S.reconcile(db, orgId, now, {}); await S.reconcile(db, orgId, now, {});
-  equal(bill().packagingState, 'reconciliation_required', 'three in a row is a person\'s problem');
+  equal(bill().packagingState, 'paid', 'three in a row is a person\'s problem, never the tenant\'s: access stays as last read'); equal(bill().reconciliationRequired, true, 'and it is flagged for the console');
+  equal(db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-' + orgId + '-I-2026-09-20').staffMail, 'billingAlert', 'ClearSky hears about it');
   delete failures['I-2026-09-20']; receipts['I-2026-09-20'] = { satisfied: true, reversed: false, paidCents: 1, payUrl: null };
-  await S.reconcile(db, orgId, now, {}); equal(bill().packagingState, 'paid', 'and a good read clears it'); equal(db.data.get(root + '/billing/current/invoices/2026-09-20').reconcileRetries, 0);
+  await S.reconcile(db, orgId, now, {}); equal(bill().packagingState, 'paid', 'and a good read clears it'); equal(db.data.get(root + '/billing/current/invoices/2026-09-20').reconcileRetries, 0); equal(bill().reconciliationRequired, false);
   seed(ev, 'field'); failures['I-2026-09-20'] = 409; await S.reconcile(db, orgId, now, {});
-  equal(bill().packagingState, 'reconciliation_required', 'a validation failure is reviewed at once'); delete failures['I-2026-09-20'];
+  equal(bill().packagingState, 'paid', 'a validation failure is reviewed at once, access unchanged'); equal(bill().reconciliationRequired, true); delete failures['I-2026-09-20'];
+  // QuickBooks refusing OUR connection (401/403/429) is ClearSky's problem: retried, never the tenant's review, never a lock.
+  seed(ev, 'field'); failures['I-2026-09-20'] = 403; await S.reconcile(db, orgId, now, {});
+  equal(bill().packagingState, 'paid'); equal(bill().reconciliationRequired, false, 'a 403 is retried like a 5xx'); equal(db.data.get(root + '/billing/current/invoices/2026-09-20').reconcileRetries, 1); delete failures['I-2026-09-20'];
   // Line validation does not depend on the order QuickBooks returns lines in.
   var bookQ = B.proposed(); bookQ.qbo.realmId = '123'; bookQ.qbo.items = { 'module:storage': '11', credit: '12', 'service-fee': '13' };
   var deps = { Q: { ENV: 'sandbox', IS_SANDBOX: true, API_BASE: 'https://sandbox-quickbooks.api.intuit.com', load: async function () { return { env: 'sandbox', realmId: '123' }; } },

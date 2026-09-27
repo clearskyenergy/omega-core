@@ -144,8 +144,17 @@ function judge(t, now) {
     /* packaged, unpaid: the trial ended, or the access deadline passed, or
        the first invoice waits. Saved work stays; nothing new is made. */
     flags.push('read-only');
-    priority = 3; action = 'Unpaid: send ' + name + ' the invoice link or close the workspace';
-    why = 'The workspace is read-only until the invoice is paid' + (b.accessUntil ? ' (access ended ' + fmtDate(b.accessUntil) + ')' : '') + '. Saved work stays; nothing new is made.';
+    if (String(b.packagingState || '').toLowerCase() === 'awaiting_payment') {
+      /* signed up and chose a package (pay at the end, Phase 10A): the first
+         invoice is out and the workspace opens the moment it is paid. That is
+         a sale to close, not a lapse to chase. */
+      flags.push('awaiting-payment');
+      priority = 3; action = 'First invoice unpaid: call ' + name + (n(b.amountDue) > 0 ? ' about the $' + n(b.amountDue).toLocaleString('en-US') : '');
+      why = 'They signed up and built their system; the workspace opens the moment the first invoice is paid in QuickBooks. Offer to walk them through the pay page.';
+    } else {
+      priority = 3; action = 'Unpaid: send ' + name + ' the invoice link or close the workspace';
+      why = 'The workspace is read-only until the invoice is paid' + (b.accessUntil ? ' (access ended ' + fmtDate(b.accessUntil) + ')' : '') + '. Saved work stays; nothing new is made.';
+    }
   } else if (life === 'past-due') {
     flags.push('past-due');
     priority = 3; action = 'Payment overdue: reach ' + name + ' before access is affected';

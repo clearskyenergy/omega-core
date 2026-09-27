@@ -60,6 +60,11 @@ below in order, in the tabs already open. Rules that do not bend:
    and settings, open **Sales** → **Invoice payments** (older layout:
    **Online delivery** / **Online payments**). Turn ON **Cards** (credit
    and debit) and ON **Bank transfer (ACH)**. Save.
+3b. Still in **Account and settings** → **Sales** → **Sales form content**:
+   turn ON **Custom transaction numbers**. Save. OMEGA numbers its invoices
+   (`OP-…`) and finds them again by that number so a retry never issues
+   twice; with this off QuickBooks renumbers them and OMEGA refuses to
+   invoice at all. Report "Custom transaction numbers: on/off".
 4. Open **Sales** → **Online delivery**: set invoice email to include the
    **online payment link** / "Online invoice" (the full invoice with the
    Pay now button). Leave "Show short summary" and any automatic reminders
@@ -146,6 +151,7 @@ of this: every permission on that screen is **Read-only**, which is right
 ```
 QuickBooks Payments: on | pending approval (since …) | not started — waiting on: …
   Cards: on/off   Bank transfer: on/off   Pay now visible on an invoice preview: yes/no
+  Custom transaction numbers: on/off
   Deposits to: <bank account name>   Fees to: <expense account name>
 Stripe account: active | pending (needs: …)
   Descriptor: CLEARSKY OMEGA   Customer emails: off   Keys created: none

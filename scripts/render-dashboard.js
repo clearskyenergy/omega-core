@@ -140,6 +140,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok(name + ': auth answered within 8s (the splash came down)', ready, tReady);
     var steps = opts.steps || function () { return {}; };
     await wait(1400);   /* entitlements, listeners, the tools grid, the widgets */
+    /* a packaged workspace paints twice: once on the Firestore records and
+       again when /api/package-access answers. On a slow runner the checks
+       read between the two and saw a starter set drawn from the tier; wait
+       for the bound workspace to carry the projection and the grid to follow. */
+    if (fx.packageView) await p.waitForFunction(function () { var w = window.OMEGA_WORKSPACE; return !!(w && w.packageAccess && document.querySelectorAll('#dash-grid .pm-tile').length); }, null, { timeout: 8000 }).catch(function () {});
     var shown = await p.evaluate(function () {
       var g = function (id) { var e = document.getElementById(id); return e ? getComputedStyle(e).display : 'missing'; };
       return { splash: g('boot-splash'), auth: g('auth-screen'), app: g('app'), pending: !!document.getElementById('omega-pending'), terms: !!document.getElementById('ot-modal') };
@@ -283,9 +288,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   }, after: async function (p, ctx, mute) {
     /* sign out from the topbar: the session ends and the page goes to the front door.
        What login.html then logs (it imports Google's module SDK, stubbed here) is not the dashboard's. */
-    var nav = p.waitForNavigation({ timeout: 4000 }).then(function () { return p.url(); }, function () { return p.url(); });
+    /* mute at the COMMIT of the navigation, before login.html's own scripts run: on a slow runner
+       its stubbed module import threw before the load event, and the dashboard was blamed */
+    var nav = p.waitForURL(function (u) { return /\/login\.html$/.test(u.pathname); }, { timeout: 4000, waitUntil: 'commit' }).then(function () { mute(); return p.url(); }, function () { mute(); return p.url(); });
     await p.click('.tb-user .btn-signout:last-child');
-    var url = await nav; mute();
+    var url = await nav;
     ok('northstar: Sign Out ends the session and goes to /login.html', /\/login\.html$/.test(url), url);
     return { afterSignOut: url.replace(/^https?:\/\/[^/]+/, '') };
   } });
@@ -391,6 +398,23 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var sel = await p.$eval('#omega-package-menu [data-selected]', function (e) { return e.getAttribute('data-module-card'); });
     ok('lite-ladder: the tile\'s Add opens the Ladder on that module', sel === tile.module, { sel: sel, module: tile.module });
     await p.evaluate(function () { OmegaPackageMenu.close(); });
+    /* Your modules (2026-09-26, Tommy: "see how it's done as modules... that's good") */
+    var mods = await p.evaluate(function () {
+      var blk = document.getElementById('dash-modules'); if (!blk || getComputedStyle(blk).display === 'none') return null;
+      var cards = [].slice.call(document.querySelectorAll('#modules-grid .mod-card'));
+      return { sub: document.getElementById('modules-sub').textContent, held: cards.filter(function (c) { return c.getAttribute('data-held') === '1'; }).map(function (c) { return c.getAttribute('data-module'); }),
+        off: cards.filter(function (c) { return c.getAttribute('data-held') === '0'; }).map(function (c) { return c.getAttribute('data-module'); }),
+        live: document.querySelectorAll('#modules-grid .mod-live').length, adds: document.querySelectorAll('#modules-grid .mod-add').length,
+        feats: cards.map(function (c) { return c.querySelectorAll('.mod-feat li').length; }), chips: cards.map(function (c) { return c.querySelectorAll('.mod-chip').length; }),
+        priced: cards.filter(function (c) { return c.getAttribute('data-held') === '0' && /\$[\d,]+\/month/.test(c.querySelector('.mod-shelf').textContent); }).length,
+        names: cards.map(function (c) { return c.querySelector('.mod-name').textContent; }) };
+    });
+    ok('lite-ladder: Your modules shows Lite live, in the words of the catalog, and three dashed rungs priced by the server', !!mods && mods.held.join() === 'lite' && mods.off.length === 3 && mods.live === 1 && mods.adds === 3 && mods.feats.every(function (n) { return n === 3; }) && mods.chips[0] >= 3 && mods.priced === 3 && /holds on Lite\./.test(mods.sub) && mods.names[0] === 'Lite', mods);
+    await p.evaluate(function () { document.getElementById('dash-modules').scrollIntoView(); }); await shot10b(p, 'modules');
+    await p.click('#modules-grid .mod-card.off .mod-add'); await p.waitForSelector('#omega-package-menu [data-selected]');
+    var selMod = await p.$eval('#omega-package-menu [data-selected]', function (e) { return e.getAttribute('data-module-card'); });
+    ok('lite-ladder: a card\'s + Add opens the Ladder on that module', selMod === mods.off[0], { sel: selMod, first: mods.off[0] });
+    await p.evaluate(function () { OmegaPackageMenu.close(); });
     return out;
   } });
   /* ══ 7. AWAITING — signed up and paid nothing yet: the bar, the locks, the pay button in settings ══ */
@@ -406,6 +430,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var rows = await p.evaluate(function () { function t(id) { var e = document.getElementById(id); return e ? e.textContent : null; } return { status: t('acct-pk-status'), on: t('acct-pk-on'), pkg: t('acct-pk-package'), due: t('acct-pk-due'), pay: (document.getElementById('acct-pk-pay') || {}).href, plan: t('acct-package-plan') }; });
     ok('awaiting: the panel says awaiting the first payment, what was bought and what is on, the amount and the QuickBooks link', /Awaiting your first payment/.test(rows.status) && /Grid Atlas/.test(rows.pkg) && /Lite/.test(rows.on) && /2,250/.test(rows.due) && /intuit/.test(rows.pay || ''), rows);
     await p.evaluate(function () { var s = document.querySelector('#acct-package'); if (s) s.scrollIntoView(); }); await shot10b(p, 'account-awaiting');
+    var awMods = await p.evaluate(function () { return { bought: [].slice.call(document.querySelectorAll('#modules-grid [data-held="bought"]')).map(function (c) { return c.getAttribute('data-module') + ':' + c.querySelector('.mod-shelf').textContent; }), live: document.querySelectorAll('#modules-grid .mod-live').length }; });
+    ok('awaiting: a module bought but not yet on says so on its card, with no Add', awMods.live === 1 && awMods.bought.length === 1 && /^gridatlas:Yours/.test(awMods.bought[0]) && /first invoice is paid/.test(awMods.bought[0]), awMods);
     await p.click('#acct-pk-paid-btn'); await p.waitForFunction(function () { return /Not paid yet|checked a moment ago/.test(document.getElementById('acct-package-msg').textContent); }, null, { timeout: 8000 });
     ok('awaiting: the Ladder waits for the first payment', /opens once your current invoice is paid|Pay your current invoice first/.test(rows.plan), rows.plan);
     return out;
@@ -421,6 +447,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var rows = await p.evaluate(function () { function t(id) { var e = document.getElementById(id); return e ? e.textContent : null; } return { tier: t('acct-tier'), due: t('acct-due'), paid: t('acct-paid'), pkg: getComputedStyle(document.getElementById('acct-package')).display, legacy: getComputedStyle(document.getElementById('acct-legacy-billing')).display, ladder: document.getElementById('acct-overlay').innerText.indexOf('Ladder') >= 0, portal: getComputedStyle(document.getElementById('acct-portal')).display }; });
     ok('legacy-enterprise: the account page shows the paid year and no Ladder', rows.tier === 'enterprise' && /\d{4}/.test(rows.due) && /150,000/.test(rows.paid) && rows.pkg === 'none' && rows.legacy !== 'none' && !rows.ladder && rows.portal === 'none', rows);
     await p.evaluate(function () { var s = document.getElementById('acct-legacy-billing'); if (s) s.scrollIntoView(); }); await shot10b(p, 'account-legacy');
+    var legacyMods = await p.evaluate(function () { var b = document.getElementById('dash-modules'); return b ? getComputedStyle(b).display : 'missing'; });
+    ok('legacy-enterprise: no Your modules block (a legacy plan is left alone)', legacyMods === 'none', legacyMods);
     return out;
   } });
   PACKAGE_VIEW = null;

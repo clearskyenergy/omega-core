@@ -26,7 +26,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="/omega-splash.js?v=1" data-hold="1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/png" href="/omega-logo.png">
   <link rel="apple-touch-icon" href="/omega-logo.png">
   <meta name="description" content="Log in to OMEGA — the ClearSky Energy Solutions operating platform.">
@@ -535,6 +536,7 @@
   };
 
   function showPane(name) {
+    if (window.OmegaSplash) OmegaSplash.done();   /* the page is known: a pane is what it shows */
     ui.signIn.style.display  = name === "signIn"  ? "" : "none";
     ui.signup.style.display  = name === "signup"  ? "" : "none";
     ui.choose.style.display  = name === "choose"  ? "" : "none";
@@ -878,6 +880,7 @@
     }
 
     function blockedPane(reason, role) {
+      if (window.OmegaSplash) OmegaSplash.done();
       const copy = {
         "suspended": ["Account paused",
           "This OMEGA account has been paused. ClearSky can lift it — email dev@clearsky-usa.com and we'll sort it out."],

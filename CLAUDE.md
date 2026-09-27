@@ -249,6 +249,21 @@ approves via `POST /api/tenant-approve` (master console button). A pending
 tenant's users see a "being set up" screen from `omega-tenant.js`. Never
 let a browser create `omega_orgs` directly.
 
+Launch hardening (2026-09-26): **where a person is sent is ONE rule**,
+`api/_lib/kit.js` `home(org, { wildcard })`: an attached hostname, else the
+open host `silmarillion.clearskyomega.com`, and a `<slug>.clearskyomega.com`
+host only under `TENANT_WILDCARD_LIVE=true`, because no wildcard record
+exists; the slug host is only reserved on the record. `/start` runs the
+hub routing on every host and never leaves the origin outside a hub. The
+billing engine's own bookkeeping never cuts access: a reconcile error only
+flags `reconciliationRequired` (401/403/429 and the guard are retried), the
+live runner finds tenants by `packagedLive` and runs hourly, a paid
+invoice mails the tenant (`paid`) and ClearSky (`paidAlert`), the driver
+refuses to invoice while QuickBooks' custom transaction numbers are off.
+`SUPPORT_EMAIL` (mail.js) and its literal twin in `omega-tenant.js` are the
+only support address; csebuilders.com is never written again. See
+`docs/PACKAGING-PHASE-10A-VALIDATION.md` (Launch hardening).
+
 ## Tenant resolution order (omega-brand.js)
 
 1. Firestore `tenants/{orgId}` matched by hostname → `domains[]`
@@ -674,6 +689,34 @@ is not built.
   camera a printed label and requires the passport and the bench to open.
 - Chromium render checks for all of it: `npm run check:pages`.
 
+## Omega Workspace — the home (2026-09-26)
+
+`workspace.html` is the hub-first home of a signed-in workspace: index.html
+sends a signed-in visit on once the entitlements say where home is. A
+tenant keeps the classic dashboard with `omega_orgs/{org}.shell = 'classic'`
+(a partner-type workspace keeps it too), a browser with `?home=classic`
+(`?stay=classic` for one visit), and `OmegaWorkspaceShell.homeOf()` is the
+ONE rule index.html, the workspace and the legacy pages read. The dashboard
+fixtures say `shell: 'classic'` for that reason. `omega-workspace-shell.js` is the one
+chrome (rail, topbar, switcher, the website's blueprint grid, side panel,
+toast, phone tab bar); a page never builds its own rail. The hub is
+`omega-hexhub.js` drawn from `omega-workspace-hub.js`, which composes the
+six cells from `OMEGATools.isUnlocked()` — showing a cell is never access —
+and `scripts/tests/tworkspacehub.js` asserts every key it names against the
+real catalogs. Every tool tile is Live, Locked or Soon by that same rule;
+a locked tile explains, never hides. Today is `omega-workspace-today.js`
+(pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
+both ends of the Quote Desk, the referral inbox, projects ready, stalled or
+unsized. Never a second copy of those rules in a page. Opt-in panels live on
+`dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
+renders it as four tenants on the Firebase double; run it and
+`check:dashboard` after any change to the page, the shell or the runtime.
+For a PACKAGED workspace `marketplace.html` is also the package store:
+modules on their shelves with `api/package-catalog`'s prices, opting in
+through the shared `omega-package-menu.js` control and `plan-change`; a
+legacy tenant sees the catalogue as before. Design, launch order and the
+honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
+
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
 Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by
@@ -796,6 +839,13 @@ tenant. Treat it that way.
   canonical, what still has to be ported, and the decisions pending.
 - `omega-tenant.js` MUST load directly after `omega-brand.js` on every page
   that signs users in. It wraps OmegaBrand.resolve.
+- `omega-splash.js` loads FIRST in `<head>` on every page that signs users
+  in (`scripts/tests/tsplash.js`): the OMEGA mark until the page is known
+  (`omega:auth` signed out, `omega:entitlements`, `OmegaSplash.done()`, or
+  the 4 s cap) and again the moment a link is followed or the page is left.
+  A page that shows its own thing before auth answers holds (`data-hold`)
+  and calls `done()`; the dashboard keeps its boot splash (`data-boot="no"`).
+  Never a flash of another page or the sign-in card. `docs/LOADING-SCREEN.md`.
 - Test as a tenant using `adminDomains` preview, not by editing their data.
 - `npm run check:dashboard` renders the tenant dashboard (`index.html`) in
   Chromium, signed in, with the Firebase compat SDK replaced by
@@ -817,7 +867,17 @@ tenant. Treat it that way.
   the server after a change. A locked tile on a packaged workspace offers
   its module by name and price and opens the Ladder on it; a legacy tenant
   (no packaged record: NextNRG, prepaid) keeps the old request and sees no
-  Ladder. Scenarios lite-ladder, awaiting and legacy-enterprise hold it. It fails on an error, an unanswered
+  Ladder. **Your modules** (`renderModuleCards`, above My Applications) is
+  one card per module: held ones Live in shelf order, bought-not-on ones
+  named, up to three unheld rungs dashed with + Add opening the Ladder on
+  them; the catalog and prices are the server's, never a second list.
+  Scenarios lite-ladder, awaiting and legacy-enterprise hold it.
+  The master console (`admin/admin-console.js`) reads a packaged tenant
+  by its state machine: `_standing` has a key per state, plan and module
+  keys become the price book's words from `GET /api/offerings`
+  (`STATE.priceBook`, fetched at boot, never a copy), Manage sends a
+  packaged workspace to its Package tab, and Client Inventory carries the
+  book above the legacy roster tiers (`scripts/tests/tadminstanding.js`). It fails on an error, an unanswered
   `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
   tile. `check:pages` does not cover the dashboard; run this after any
   change to `index.html` or the runtime it loads. The double's own test is
