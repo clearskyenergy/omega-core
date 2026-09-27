@@ -49,6 +49,45 @@
   .verify{margin-top:14px}
   @media(max-width:480px){.pick-row{grid-template-columns:1fr}}
 .sq{padding:10px 0;border-bottom:1px solid var(--line,#E2E8F0)}.sq-opts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:4px;font-size:13px}.sq-opts label,.sq-more{display:inline-flex;align-items:center;gap:4px;font-weight:400;font-size:13px;margin:4px 12px 0 0;white-space:nowrap;width:auto}.sq-opts input,.sq-more input[type=checkbox]{width:auto;margin:0}
+
+  /* Build your system as a shop (Tommy, 2026-09-27): a wide page, square cards in a grid, the cart on the right */
+  body.wide .card{max-width:1120px}
+  .shop{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start;margin-top:6px}
+  .cart{position:sticky;top:18px}
+  .cart .price-panel{margin-top:0}
+  .cart .btn{margin-top:12px}
+  #signup-package-menu .pkm-shelf{margin:0 0 14px}
+  #signup-package-menu .pkm-shelf h4{margin:0 0 8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--sub);font-weight:700}
+  #signup-package-menu .pkm-mods{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:10px}
+  #signup-package-menu .pkm-mod{position:relative;display:flex!important;flex-direction:column;gap:6px;min-height:138px;margin:0;padding:12px 12px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.03);cursor:pointer;letter-spacing:0;font-weight:400;color:var(--txt);transition:border-color .15s,background .15s,transform .15s}
+  #signup-package-menu .pkm-mod:hover{border-color:#34507A;transform:translateY(-1px)}
+  #signup-package-menu .pkm-mod.on{border-color:var(--teal);background:rgba(0,169,164,.09)}
+  #signup-package-menu .pkm-mod input{position:absolute;top:10px;right:10px;width:16px;height:16px;margin:0;accent-color:var(--teal)}
+  #signup-package-menu .pkm-name{display:flex;flex-direction:column;gap:2px;padding-right:22px}
+  #signup-package-menu .pkm-name b{font-size:14px;line-height:1.25}
+  #signup-package-menu .pkm-price{font-size:13px;color:var(--gold);font-weight:600}
+  #signup-package-menu .pkm-desc{font-size:12px;line-height:1.4;color:var(--sub);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  #signup-package-menu .pkm-desc + .pkm-desc{display:none}
+  #signup-package-menu .pkm-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
+  #signup-package-menu .pkm-tag{font-size:10px;padding:2px 6px;border-radius:999px;border:1px solid var(--line);color:var(--sub)}
+  #signup-package-menu .pkm-tag.beta{color:var(--gold);border-color:rgba(245,185,66,.4)}
+  #signup-package-menu .pkm-mod.sug:not(.on){border-style:dashed;border-color:var(--teal)}
+  #signup-package-menu .pkm-tag.sug{color:#fff;background:var(--teal);border-color:var(--teal)}
+  .suggest{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:10px 12px;border:1px solid rgba(0,169,164,.4);background:rgba(0,169,164,.08);border-radius:10px;font-size:13px}
+  .suggest b{color:var(--txt)}
+  .suggest button{margin-left:auto;background:transparent;border:1px solid var(--teal);color:var(--teal);border-radius:999px;padding:6px 12px;font:600 12px inherit;cursor:pointer}
+  #signup-package-menu .pkm-desc,#signup-package-menu .pkm-tags{grid-column:auto}
+  #signup-package-menu .pkm-name{justify-content:flex-start;flex-wrap:nowrap}
+  #signup-package-menu .pkm-mod input{position:absolute!important;top:10px;right:10px;margin:0!important}
+  #signup-package-menu .pkm-tag{font:10px system-ui,sans-serif;background:transparent;white-space:nowrap;border-radius:999px}
+  #signup-package-menu .pkm-tag.beta{background:transparent}
+  #signup-package-menu .pkm-price{font:600 13px system-ui,sans-serif}
+  a.btn{text-align:center;text-decoration:none;box-sizing:border-box}
+  .cart-lines{list-style:none;margin:10px 0 0;padding:0;font-size:13px;color:var(--sub);max-height:180px;overflow:auto}
+  .cart-lines li{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+  .cart-lines li span:last-child{color:var(--txt)}
+  .secure{font-size:12px;color:var(--sub);text-align:center;margin-top:8px}
+  @media(max-width:860px){.shop{grid-template-columns:1fr}.cart{position:static}#signup-package-menu .pkm-mods{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
 </style>
 </head>
 <body>
@@ -123,26 +162,35 @@
   <!-- STEP 2c: build the system — the one module menu, priced live by the server -->
   <div id="step-build" class="hide">
     <h1>Build your system</h1>
-    <p id="signup-package-note">Every system starts with Lite. Add what you need; the price is quoted by the server as you choose, and each module is on the moment its payment clears.</p>
-    <div id="signup-package-menu"></div>
-    <div class="price-panel" id="signup-price-panel">
-      <div class="price-head"><span>Your monthly membership</span><b id="signup-package-price">—</b></div>
-      <div class="hint" id="signup-package-fit"></div>
-      <div class="pick-row">
-        <label class="pick on" id="pick-monthly"><input type="radio" name="signup-interval" value="monthly" checked onchange="intervalChanged()"><span><b>Monthly</b><small id="interval-monthly-price">—</small></span></label>
-        <label class="pick" id="pick-annual"><input type="radio" name="signup-interval" value="annual" onchange="intervalChanged()"><span><b>Yearly · two months free</b><small id="interval-annual-price">—</small></span></label>
+    <p id="signup-package-note">Every system starts with Omega Design. Pick what you need; the price updates as you choose, and each module switches on the moment your payment clears.</p>
+    <div class="shop">
+      <div>
+        <div class="suggest hide" id="signup-suggest"></div>
+        <div id="signup-package-menu"></div>
       </div>
-      <div class="hint" id="signup-interval-note">Pay for the year and you pay for ten months of twelve, invoiced once.</div>
+      <div class="cart">
+        <div class="price-panel" id="signup-price-panel">
+          <div class="price-head"><span>Your membership</span><b id="signup-package-price">—</b></div>
+          <div class="hint" id="signup-package-fit"></div>
+          <ul class="cart-lines" id="signup-cart"></ul>
+          <div class="pick-row">
+            <label class="pick on" id="pick-monthly"><input type="radio" name="signup-interval" value="monthly" checked onchange="intervalChanged()"><span><b>Monthly</b><small id="interval-monthly-price">—</small></span></label>
+            <label class="pick" id="pick-annual"><input type="radio" name="signup-interval" value="annual" onchange="intervalChanged()"><span><b>Yearly · two months free</b><small id="interval-annual-price">—</small></span></label>
+          </div>
+          <div class="hint" id="signup-interval-note">Pay for the year and you pay for ten months of twelve, invoiced once.</div>
+        </div>
+        <button class="btn" id="billing-pay" onclick="submitWorkspace(true, false, true)">Subscribe</button>
+        <div class="secure" id="signup-secure">Secure card checkout. Cancel or change modules any time.</div>
+        <button class="btn ghost" id="billing-submit" onclick="submitWorkspace(true)">Request a 14-day trial instead</button>
+        <button class="btn ghost" onclick="backToBilling()">Back to billing profile</button>
+        <div class="err" id="build-err"></div>
+      </div>
     </div>
-    <button class="btn" id="billing-pay" onclick="submitWorkspace(true, false, true)">Pay and start now</button>
-    <button class="btn ghost" id="billing-submit" onclick="submitWorkspace(true)">Request a 14-day trial instead</button>
-    <button class="btn ghost" onclick="backToBilling()">Back to billing profile</button>
-    <div class="err" id="build-err"></div>
   </div>
 
   <!-- STEP 2b: pay the first invoice; the workspace opens when it is paid -->
   <div id="step-pay" class="hide">
-    <h1>Pay your first invoice to open your workspace</h1>
+    <h1>Complete your subscription</h1>
     <div class="ok" style="display:block">
       <div style="font-weight:700;margin-bottom:6px" id="pay-name"></div>
       <div style="color:var(--sub);font-size:14px">You will sign in at <span class="host" id="pay-host"></span> with your work email. Your first invoice<span id="pay-amount"></span> is ready<span id="pay-where"></span>; pay it by card on the invoice page and the workspace opens the moment the payment lands.</div>
@@ -174,7 +222,7 @@
   var auth = firebase.auth(), signupOptions = null, billingForm = null, signupPicker = null, discoveryBuilt = false, recommended = null, proposal = null;
   function qp(k){ var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search); return m ? decodeURIComponent(m[1]) : ''; }
   var $ = function(id){ return document.getElementById(id); };
-  function show(id){ if (window.OmegaSplash) OmegaSplash.done(); ['step-auth','step-form','step-discovery','step-billing','step-build','step-pay','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
+  function show(id){ if (window.OmegaSplash) OmegaSplash.done(); document.body.classList.toggle('wide', id === 'step-build'); ['step-auth','step-form','step-discovery','step-billing','step-build','step-pay','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
   /* the offerings page names a package (?plan=field, ?modules=lite,gridatlas); the picker starts there */
   function wantedModules(){ var m = qp('modules'); if (!m || !signupOptions) return null; var keys = signupOptions.modules.map(function (x) { return x.key; }); var out = String(m).split(',').map(function (k) { return k.trim(); }).filter(function (k) { return keys.indexOf(k) >= 0; }); return out.length ? out : null; }
   function wantedPlan(){ var p = qp('plan'); return p && ['field', 'pro', 'auto'].indexOf(p) >= 0 ? p : null; }
@@ -184,8 +232,8 @@
   function showPay(j, name){
     PAY = j; $('pay-name').textContent = name || $('f-name').value; $('pay-host').textContent = j.host || '';
     $('pay-amount').textContent = j.amountDueDisplay ? ' of ' + j.amountDueDisplay : '';
-    $('pay-where').textContent = payWith() ? ' in ' + payWith() : '';
-    var a = $('pay-link'); a.textContent = payWith() ? 'Pay now in ' + payWith() : 'Pay now';
+    $('pay-where').textContent = '';
+    var a = $('pay-link'); a.textContent = j.amountDueDisplay ? 'Pay ' + j.amountDueDisplay + ' securely' : 'Pay securely';
     if (j.paymentLink) { a.href = j.paymentLink; a.className = 'btn'; } else { a.removeAttribute('href'); a.className = 'btn ghost'; a.textContent = 'Pay from the invoice ' + (payWith() || 'we') + ' emailed' + (j.billingEmail ? ' to ' + j.billingEmail : ' you'); $('pay-status').textContent = (payWith() || 'We') + ' emailed the invoice itself, with its Pay button. Pay it there, then press I\'ve paid; we check your payment every few seconds while this page is open.'; }
     show('step-pay'); if (payTimer) clearInterval(payTimer); payTimer = setInterval(function () { if (!document.hidden) checkPayment(false); }, 8000);
   }
@@ -207,7 +255,7 @@
   window.intervalChanged = function(){
     var v = intervalValue(); $('pick-monthly').className = 'pick' + (v === 'monthly' ? ' on' : ''); $('pick-annual').className = 'pick' + (v === 'annual' ? ' on' : '');
     $('signup-interval-note').textContent = v === 'annual' ? 'Pay for the year and you pay for ten months of twelve, invoiced once. No transformation credit on annual prepay.' : 'Billed monthly on your signup day. Switch to yearly any time and pay for ten months of twelve.';
-    $('billing-pay').textContent = v === 'annual' ? 'Pay for the year and start now' : 'Pay and start now';
+    $('billing-pay').textContent = v === 'annual' ? 'Subscribe yearly' : 'Subscribe';
   };
   function setInterval_(v, locked){ var rs = document.querySelectorAll('input[name="signup-interval"]'); for (var i = 0; i < rs.length; i++) { rs[i].checked = rs[i].value === v; rs[i].disabled = !!locked; } intervalChanged(); }
   /* a password account is not verified until its link is clicked, and the server refuses an unverified one: hold here, say so, and offer the link again */
@@ -261,11 +309,39 @@
   window.backToCompany = function () { show('step-form'); };
   window.backToBilling = function () { show('step-billing'); };
   /* billing profile done: the menu, priced live */
+  /* the suggestion (Tommy: "make it auto suggest"): the server's own recommendation
+     from the discovery answers, picked for them and marked; they can change it */
+  function suggestQuietly(){
+    var u = auth.currentUser; if (!u) return;
+    u.getIdToken().then(function (tok) { return fetch('/api/subscription-proposal', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify({ action: 'recommend', discovery: discoveryValue(), interval: intervalValue() }) }); })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (!j || !j.recommendation) return; recommended = j; if (signupPicker) signupPicker.set(j.recommendation.modules); markSuggested(); }, function () {});
+  }
+  function modName(k){ var m = (signupOptions.modules || []).filter(function (x) { return x.key === k; })[0]; return m ? m.name : k; }
+  function markSuggested(){
+    var keys = recommended && recommended.recommendation ? recommended.recommendation.modules : [];
+    Array.prototype.forEach.call(document.querySelectorAll('#signup-package-menu .pkm-mod'), function (c) {
+      var on = keys.indexOf(c.getAttribute('data-module-card')) >= 0 && c.getAttribute('data-module-card') !== 'lite';
+      c.classList.toggle('sug', on);
+      var t = c.querySelector('.pkm-tag.sug');
+      if (on && !t) { var tags = c.querySelector('.pkm-tags'); var s1 = document.createElement('span'); s1.className = 'pkm-tag sug'; s1.textContent = 'Suggested'; if (tags) tags.insertBefore(s1, tags.firstChild); }
+      if (!on && t) t.parentNode.removeChild(t);
+    });
+    var box = $('signup-suggest');
+    if (!keys.length) { box.className = 'suggest hide'; return; }
+    var cur = signupPicker ? signupPicker.value().slice().sort().join() : '', same = cur === keys.slice().sort().join();
+    box.className = 'suggest';
+    box.innerHTML = '';
+    var t1 = document.createElement('span'); t1.innerHTML = '<b>Suggested for you:</b> '; t1.appendChild(document.createTextNode(keys.map(modName).join(' + ') + (recommended.pricing && recommended.pricing.display ? ' · ' + recommended.pricing.display.recurring : '')));
+    box.appendChild(t1);
+    if (!same) { var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Use suggestion'; b.onclick = function () { signupPicker.set(keys); }; box.appendChild(b); }
+  }
   window.toBuild = function () {
     if (!billingForm || !billingForm.valid()) return;
     var u = auth.currentUser; if (!u) return;
     var start = proposal ? proposal.view.proposal.selection.modules : (wantedModules() || (recommended ? recommended.recommendation.modules : ['lite']));
-    if (!signupPicker) signupPicker = OmegaPackageMenu.picker($('signup-package-menu'), { catalog: signupOptions.modules, modules: start, readOnly: !!proposal, onChange: quoteSelection });
+    if (!signupPicker) signupPicker = OmegaPackageMenu.picker($('signup-package-menu'), { catalog: signupOptions.modules, modules: start, readOnly: !!proposal, onChange: function () { markSuggested(); quoteSelection(); } });
+    if (!proposal && !wantedModules()) { if (recommended) markSuggested(); else suggestQuietly(); }
     $('billing-pay').style.display = signupOptions.payNow ? '' : 'none';
     if (proposal) { setInterval_(proposal.view.proposal.selection.interval || 'monthly', true); $('signup-package-note').textContent = 'The package your proposal priced. To change it, ask for a new proposal.'; }
     quoteSelection(); show('step-build');
@@ -322,6 +398,8 @@
       .then(function (j) {
         var pr = j.pricing, annual = pr.annualPrepayCents, saved = pr.annualSavesCents != null ? pr.annualSavesCents : pr.recurringCents * 12 - annual;
         $('signup-package-price').textContent = pr.display.recurring;
+        var cart = $('signup-cart'); cart.innerHTML = '';
+        (signupPicker ? signupPicker.value() : []).forEach(function (k) { var m = (signupOptions.modules || []).filter(function (x) { return x.key === k; })[0]; if (!m) return; var li = document.createElement('li'), a1 = document.createElement('span'), a2 = document.createElement('span'); a1.textContent = m.name; a2.textContent = m.priceDisplay || ''; li.appendChild(a1); li.appendChild(a2); cart.appendChild(li); });
         $('signup-package-fit').textContent = (pr.planDisplay || pr.display.plan || '') + (pr.display.fit ? ' · ' + pr.display.fit : '');
         $('interval-monthly-price').textContent = pr.display.recurring + ', invoiced on your billing day';
         $('interval-annual-price').textContent = money(annual) + '/year, invoiced once · save ' + money(saved);

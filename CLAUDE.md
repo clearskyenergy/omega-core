@@ -976,7 +976,9 @@ tenant. Treat it that way.
   one card per module: held ones Live in shelf order, bought-not-on ones
   named, up to three unheld rungs dashed with + Add opening the Ladder on
   them; the catalog and prices are the server's, never a second list.
-  Scenarios lite-ladder, awaiting and legacy-enterprise hold it.
+  Scenarios lite-ladder, awaiting and legacy-enterprise hold it; their five
+  screenshots are committed evidence, rewritten only by `--evidence` (a plain
+  run writes nothing into the repo; `--shots DIR` puts every shot in DIR).
   The master console (`admin/admin-console.js`) reads a packaged tenant
   by its state machine: `_standing` has a key per state, plan and module
   keys become the price book's words from `GET /api/offerings`

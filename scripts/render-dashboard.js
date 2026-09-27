@@ -9,8 +9,10 @@
    SDK and fonts, the chart CDN and every /api/ call are answered here.
 
      node scripts/render-dashboard.js              # a JSON line per scenario
-     node scripts/render-dashboard.js --shots DIR  # plus screenshots
-     npm run check:dashboard
+     node scripts/render-dashboard.js --shots DIR  # plus screenshots, all in DIR
+     node scripts/render-dashboard.js --evidence   # rewrite the committed phase 10B
+                                                   # screenshots (docs/screenshots/)
+     npm run check:dashboard                       # writes nothing into the repo
 
    It is the check that a signed-in visit paints, for the three first-run
    shapes the product has (a brand-new trial workspace behind the terms
@@ -99,8 +101,16 @@ var srv = http.createServer(function (req, res) {
 });
 
 var fails = 0, lines = [];
-var SHOTS10B = path.join(ROOT, 'docs/screenshots/packaging-phase-10b'); fs.mkdirSync(SHOTS10B, { recursive: true });
-function shot10b(p, name) { return p.screenshot({ path: path.join(SHOTS10B, name + '.png') }).catch(function () {}); }
+/* The five phase 10B screenshots are COMMITTED evidence
+   (docs/PACKAGING-PHASE-10B-VALIDATION.md). They were rewritten on every
+   run, so a plain check:dashboard left five modified PNGs in the working
+   tree for somebody's next `git add -A` to commit. Now: --evidence rewrites
+   them in place, --shots DIR puts them in DIR with the rest, and neither
+   writes nothing. Each capture is followed by an explicit wait or by reads
+   of state that had already settled, so skipping it changes no assertion. */
+var SHOTS10B = process.argv.indexOf('--evidence') >= 0 ? path.join(ROOT, 'docs/screenshots/packaging-phase-10b') : shotsAt;
+if (SHOTS10B) fs.mkdirSync(SHOTS10B, { recursive: true });
+function shot10b(p, name) { return SHOTS10B ? p.screenshot({ path: path.join(SHOTS10B, name + '.png') }).catch(function () {}) : Promise.resolve(); }
 function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + name + (detail !== undefined ? ' ' + JSON.stringify(detail) : '')); } }
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 /* a body of visible text carries none of the words a bug prints */
