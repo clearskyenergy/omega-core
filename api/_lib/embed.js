@@ -68,6 +68,7 @@
    ═══════════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var A = require('./admin');
+var SF = require('./storefront');
 
 /* ── Rate limiting ─────────────────────────────────────────────────────── */
 var WINDOW_MS = 60000;
@@ -221,12 +222,7 @@ function resolve(req, opts) {
            than on the key, so switching it off in one place switches off
            every installation — and so a key that outlives a downgrade stops
            working instead of quietly continuing to serve. */
-        var addons = billing.addons || [];
-        var overrides = billing.toolOverrides || {};
-        var entitled = overrides.whitelabel === true
-          || (overrides.whitelabel !== false
-              && (addons.indexOf('whitelabel') >= 0 || wl.enabled === true));
-        if (!entitled) throw A.httpError(403, 'this storefront is not enabled on this account');
+        if (!SF.storefrontEntitled(billing, wl)) throw A.httpError(403, 'this storefront is not enabled on this account');
 
         return {
           key: key,
