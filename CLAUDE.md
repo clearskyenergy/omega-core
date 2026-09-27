@@ -238,8 +238,22 @@ every page reads them off the record — never a page's own shelf map. Keys and
 plan names (Lite + modules, Field, Pro) are unchanged; the table is in
 `docs/VALUE-LADDER-PACKAGING.md`.
 
-Packaged editor presentation uses the server catalog through OmegaCaps;
-OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
+Packaged editor presentation uses the server catalog through OmegaCaps.
+**Bought = visible** (2026-09-27): under a package the package is the only
+thing that hides a tool. The project type (OmegaWorkspaces) puts its tools
+and guided build first and hides nothing; "All tools" and the per-user
+toggle are retired; Designer/Pro and the retired Compute mode do not apply
+(the editor is always the full owned ribbon, a saved Designer choice is not
+applied, and the legacy choice comes back if the package goes). The plan is
+re-read in place (`OmegaCaps.refresh`) when the window regains focus, every
+ten minutes and at `accessUntil`, so what is paid for opens and what lapses
+closes without a reload; The Ladder has "I've paid" (reconcile-now) and
+Show me, and the editor shows the server's billing notice. A LEGACY
+workspace's store tells the truth: `OmegaWorkspaceHub.moduleState` measures
+a module by its standalone tools AND what the editor opens of it
+(`api/_lib/modules.js` `legacyGates`, read off the real editor by
+`scripts/render-legacy-gates.js`, asked of the editor's own ladder through
+`OmegaCaps.canWith` / `capsFor`); no legacy access changes.
 The shared omega-package-menu.js renders catalog features and server-formatted
 prices. Staff package previews are read-only server projections, never tenant
 impersonation or billing edits. Legacy layout modes apply to unpackaged records.
@@ -738,7 +752,14 @@ billing day; off after an unpaid renewal's grace). Bought is
 legacy readers already honour — a Logic part through `logic-access`, a
 module's tools as `toolOverrides` (and the `toolAccess` allowlist), editor
 capabilities as the legacy add-on keys `omega-caps` reads — and
-`addOns.granted` makes switching off take back exactly that. The one
+`addOns.granted` makes switching off take back exactly that. It is sold
+only where it switches on EXACTLY (`addons.exact`, Tommy's decision
+2026-09-27): a legacy editor opens Site Map a whole tab at a time, so a
+module that would come on only in part, or switch on part of another, is
+not sold here; the quote says why and offers the recorded request
+(`plan-change` `opt-in`). Every Omega Logic department is exact on every
+plan; opening one module's Site Map commands on a legacy plan is not
+built. The one
 browser control is `OmegaPackageMenu.addOnControl`; `scripts/test-addons.js`
 and `check:workspace` (legacy-add) hold it. A workspace with no `omega_orgs`
 or billing record cannot be billed and is told so. In flight is

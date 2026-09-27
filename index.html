@@ -2645,7 +2645,7 @@ window._omegaReady = function(){
         <div id="acct-package-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px"></div>
         <div class="acct-msg" id="acct-package-msg"></div>
         <div class="acct-sec-title" style="font-size:12px;opacity:.8">The Ladder</div>
-        <div class="acct-note" id="acct-package-ladder">Build your own experience and pay for what you need to run your business. Every module is an opt-in, and Omega Logic is by department: Office, Plant, Materials &amp; Purchasing, Logistics &amp; Warranty and the Customer App each stand on their own rung.</div>
+        <div class="acct-note" id="acct-package-ladder">Build your own experience and pay for what you need to run your business. Every module is an opt-in, and each Omega Logic department stands on its own rung.</div>
         <div class="acct-note" id="acct-package-plan" style="margin-top:8px">—</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           <button class="acct-av-btn" id="acct-package-add" onclick="openPackageMenu(null)">Open the Ladder</button>
@@ -4608,6 +4608,9 @@ function renderPackagedBilling(b){
   if (b.paidThrough) rows += _row('Paid through', _acctDay(b.paidThrough), 'acct-pk-paid');
   rows += _row('Amount due', b.amountDue == null ? '—' : (b.amountDue > 0 ? _money(b.amountDue) : 'Nothing due'), 'acct-pk-due');
   document.getElementById('acct-package-rows').innerHTML = rows;
+  /* the Ladder names Omega Logic's departments from the catalog, never a list of this page's own */
+  var depts = (view.catalog || []).filter(function(m){ return m.shelf === 'platform'; }).map(function(m){ return m.name; }), ladder = document.getElementById('acct-package-ladder');
+  if (ladder && depts.length) ladder.textContent = 'Build your own experience and pay for what you need to run your business. Every module is an opt-in, and Omega Logic is by department: ' + (depts.length > 1 ? depts.slice(0, -1).join(', ') + ' and ' + depts[depts.length - 1] + ' each stand on their own rung.' : depts[0] + ' stands on its own rung.');
   var acts = document.getElementById('acct-package-actions'); acts.innerHTML = '';
   if (b.paymentLink && b.amountDue > 0){
     var pay = document.createElement('a'); pay.id = 'acct-pk-pay'; pay.className = 'acct-btn'; pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.cssText = 'text-decoration:none;text-align:center;width:auto;flex:1'; pay.textContent = 'Pay in QuickBooks'; acts.appendChild(pay);

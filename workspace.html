@@ -217,6 +217,7 @@ body.refused #refused{display:block}body.refused #content{display:none}
 <script src="/omega-tools.js?v=9"></script>
 <script src="/omega-newproject.js"></script>
 <script src="/omega-hexhub.js"></script>
+<script src="/omega-caps.js"></script>
 <script src="/omega-workspace-hub.js"></script>
 <script src="/omega-workspace-today.js"></script>
 <script src="/omega-workspace-shell.js"></script>
@@ -406,7 +407,10 @@ function prefs() { var p = {}; Object.keys(PREFS_DEFAULT).forEach(function (k) {
 /* ── what this person may open: ONE rule, the catalog's ─────────────────── */
 function tool(key) { return T.byKey(key); }
 function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, WS); }
-function hubCtx() { var pa = WS.packageAccess; return { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], addOns: WS.addOns || [], hideMarketplace: !!WS.hideMarketplace, packaged: !!(pa && pa.packaged), tierLevel: WS.tierLevel }; }
+function hubCtx() { var pa = WS.packageAccess, packaged = !!(pa && pa.packaged); return { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], addOns: WS.addOns || [], hideMarketplace: !!WS.hideMarketplace, packaged: packaged, tierLevel: WS.tierLevel,
+  /* a legacy module is also measured by what the editor opens of it, on the editor's own ladder */
+  canCap: packaged ? null : HUB.capsFor(WS.billing || (window.OmegaTenant && OmegaTenant.billing), WS.orgId),
+  visible: function (k) { var t = tool(k); return !!t && T.isVisible(t, WS); } }; }
 function href(t) { return T.hrefFor(t, WS); }
 function launch(t) {
   if (!t) return;
@@ -546,7 +550,8 @@ function renderModules() {
     var wait = !packaged && !on ? addOnWaiting(m.key) : null;
     var req = !packaged && !on && !wait && bl.optIns && bl.optIns[m.key] && bl.optIns[m.key].status !== 'declined' && bl.optIns[m.key].status !== 'activated' ? bl.optIns[m.key] : null;
     var name = m.name;
-    var tools = (m.tools || []).map(function (k) { return tool(k); }).filter(function (t) { return !!t; });
+    /* only the tools this workspace can see, the ones the badge counted */
+    var tools = (m.tools || []).map(function (k) { return tool(k); }).filter(function (t) { return !!t && T.isVisible(t, WS); });
     var state = on ? '<span class="st live">● Live</span>' : paid ? '<span class="st">Paid for</span>' : wait ? '<span class="st">Waiting for payment</span>' : req ? '<span class="st">Requested</span>' : st === 'part' ? '<span class="st part">Partly on your plan</span>' : '<span class="st">Not in your plan</span>';
     var needs = '';
     if (!on) {
@@ -554,8 +559,9 @@ function renderModules() {
       if ((m.requires || full.requires || []).indexOf('logic-office') >= 0) needs += '<span class="ows-chip">Needs Office</span>';
       if (m.beta && m.beta.length) needs += '<span class="ows-chip">Beta: ' + esc(m.beta.join(', ')) + '</span>';
     }
-    var mt = st === 'part' ? HUB.moduleTools(m, ctx) : null;
-    var note = on ? '' : paid ? 'Opens when the first invoice is paid' : wait ? wait.display + ' waiting for payment in QuickBooks; on the moment it clears' : req ? 'Requested ' + (day(req.requestedAt) || '') + '; add it now and pay by card' : WS.pendingApproval ? 'Opens once ClearSky approves the workspace' : mt ? mt.open + ' of ' + mt.total + ' of its tools are on your plan' : packaged ? 'Pay by card; on when the payment clears' : 'Pay by card; on the moment it clears';
+    /* "Partly" explained from both halves it weighs (tools and Site Map), never "4 of 4 of its tools" under a Partly badge */
+    var mt = st === 'part' ? HUB.moduleNote(m, ctx) : null;
+    var note = on ? '' : paid ? 'Opens when the first invoice is paid' : wait ? wait.display + ' waiting for payment in QuickBooks; on the moment it clears' : req ? 'Requested ' + (day(req.requestedAt) || '') + '; ClearSky has the request' : WS.pendingApproval ? 'Opens once ClearSky approves the workspace' : mt ? mt : packaged ? 'Pay by card; on when the payment clears' : 'Pay by card; on the moment it clears';
     var action = on || paid || WS.pendingApproval ? '' : packaged ? '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">Opt in</button>' : '<button type="button" class="ows-pill primary" data-ask-module="' + esc(m.key) + '" data-price="' + esc(price || '') + '" data-name="' + esc(name) + '">' + (wait ? 'Pay' : 'Add to plan') + '</button>';
     action += moduleOptOut(m, on || paid || st === 'part');
     return '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : wait ? 'waiting' : req ? 'requested' : st === 'part' ? 'part' : '0') + '">'

@@ -64,6 +64,8 @@ function storeRoute(u, method, body) {
     interval: 'monthly', billingDay: 20, nextInvoiceOn: '2026-10-20', monthlyDisplay: '$149/month', gate: { canApply: true }, pending: STORE.pending, removalRequests: [], recent: [] };
   STORE.posts.push(body);
   if (/^addon-/.test(body.action || '') || (body.action === 'reconcile-now' && !PACKAGE_VIEW)) return addOnRoute(body);
+  /* the recorded request (plan-change opt-in): the module with its book price, nothing charged */
+  if (body.action === 'opt-in') return { ok: true, requested: true, add: body.add, names: body.add.map(function (k) { return M.get(k).name; }), display: P.money(body.add.reduce(function (n, k) { return n + book.modules[k].priceCents; }, 0)) + '/month' };
   if (body.action === 'quote') return { orgId: 'litelabs.example', previewId: 'a'.repeat(48), effectiveAt: Date.now(), add: body.add, addNames: body.add.map(function (k) { return M.get(k).name; }), modules: ['lite'].concat(body.add), plan: 'lite', included: false, canApply: true, reason: null, pending: [], steer: null, serviceFeeNote: null,
     display: { today: 'Pay $200 today (prorated to Oct 20)', then: 'Then $250/month more from Oct 20', activation: 'Switches on when the payment clears' } };
   if (body.action === 'apply') { var rec = { id: 'change-' + body.previewId, add: body.add, display: '$200', expiresOn: '2026-10-03', paymentLink: 'https://pay.example/inv-1', state: 'unpaid' }; STORE.pending = [rec]; return { state: 'unpaid', changeId: rec.id, display: rec.display, expiresOn: rec.expiresOn, paymentLink: rec.paymentLink }; }
@@ -320,6 +322,19 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var legacyOut = await p.locator('#omega-package-menu').textContent();
     ok('northstar: legacy opt-out discloses existing billing and makes an email request without pretending to cancel', /billed outside the package engine/.test(legacyOut) && /does not change access, cancel charges or issue a refund/.test(legacyOut) && /^mailto:/.test(await p.locator('#omega-package-menu a').getAttribute('href')));
     await p.keyboard.press('Escape');
+    /* Add to plan on a module Standard cannot switch on exactly (Storage: its
+       Analyze-tab commands stay shut): the server's reason and the recorded
+       request, never a price to pay (api/_lib/addons.js exact()) */
+    STORE.posts = [];
+    await p.click('#modules-body [data-ask-module="storage"]'); await wait(300);
+    await p.locator('.ows-drawer [data-addon="storage"] button', { hasText: 'Add to plan' }).click(); await wait(500);
+    var notExact = await p.evaluate(function () { var h = document.querySelector('.ows-drawer [data-addon="storage"]'); return { text: h ? h.textContent.replace(/\s+/g, ' ') : '', buttons: h ? Array.prototype.map.call(h.querySelectorAll('button'), function (b) { return b.textContent.trim(); }) : [] }; });
+    ok('northstar: Add to plan on Storage says in the server\'s words why Standard cannot switch it on alone, and offers the recorded request, never a price to pay', /^Omega Storage cannot be added to your plan on its own/.test(notExact.text) && /whole tab at a time/.test(notExact.text) && !/Pay \$/.test(notExact.text) && notExact.buttons.join() === 'Ask ClearSky to include it,Close', notExact);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'legacy-not-exact.png') });
+    await p.locator('.ows-drawer [data-addon="storage"] button', { hasText: 'Ask ClearSky to include it' }).click(); await wait(400);
+    var asked = await p.$eval('.ows-drawer [data-addon="storage"]', function (e) { return e.textContent.replace(/\s+/g, ' '); });
+    ok('northstar: the request goes on record with its price and nothing is charged', /^Requested: Omega Storage at \$[\d,]+\/month\. ClearSky has it; nothing is charged\./.test(asked) && STORE.posts.map(function (x) { return x.action; }).join() === 'addon-quote,opt-in', { asked: asked, posts: STORE.posts.map(function (x) { return x.action; }) });
+    await p.keyboard.press('Escape'); await wait(200);
     await p.evaluate(function () { window.location.hash = ''; }); await wait(250);
     var cards = await p.$$eval('#flight-body .pc', function (r) { return r.map(function (x) { return x.querySelector('b').textContent + '|' + (x.querySelector('.why') ? x.querySelector('.why').textContent : '') + '|' + (x.querySelector('.who .nm') ? x.querySelector('.who .nm').textContent : '') + '|' + (x.querySelector('.fin') ? x.querySelector('.fin').textContent : ''); }); });
     ok('northstar: In flight is the board: the three projects with a next action (Maple carrying its deal in review at ClearSky), then Quarry Road untouched and unassigned; Old Mill, online, is off it',

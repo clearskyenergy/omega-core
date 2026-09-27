@@ -652,7 +652,9 @@
       // refresh can wait on a network. API and rules enforce it independently.
       if (view.accessUntil && Date.now() >= view.accessUntil) {
         view.readOnly = true;
-        if (global.OmegaCaps) { global.OmegaCaps.setPackage(view); global.OmegaCaps.apply('trial'); }
+        /* the editor's command gate, on the editor only: the store pages load
+           omega-caps.js for its legacy ladder (capsFor) and have no ribbon */
+        if (global.OmegaCaps && global.document.getElementById('ribbon')) { global.OmegaCaps.setPackage(view); global.OmegaCaps.apply('trial'); }
       }
       user.getIdToken().then(function (token) { return global.fetch('/api/package-access', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
         .then(function (r) { if (!r.ok) throw new Error('Package access unavailable'); return r.json(); })
@@ -1042,6 +1044,9 @@
     get tenant() { return T.tenant; },
     get org() { return T.org; },
     get billing() { return T.billing; },
+    /* the legacy tier → tool level every page reads (the master console's
+       package panel included), so the tenant and ClearSky see one answer */
+    get tierLevels() { var out = {}; for (var k in TIER_LEVEL) out[k] = TIER_LEVEL[k]; return out; },
     get member() { return T.member; },
     get role() { return T.role; },
     get status() { return T.status; },

@@ -98,6 +98,54 @@ ok('a capabilities-only module bought as an add-on is held on Standard', HUB.mod
 var pkIgnores = ctxFor({ orgId: 'x', tierLevel: 1, modules: ['lite'], packaged: true, toolAccess: ['editor'] }, { packaged: true, modules: ['lite'], addOns: ['gridatlas'] });
 ok('a packaged workspace is judged by its projection alone, never by add-ons', HUB.moduleState(MODS.gridatlas, pkIgnores) === 'open');
 ok('holdsLogic survives a missing context', HUB.holdsLogic(null, 'logic-office') === false);
+/* 5 · the store tells the truth about a LEGACY plan (Tommy, 2026-09-27):
+   a module is measured by its standalone tools AND what the editor opens of
+   it (catalog legacyGates, asked of the editor's own ladder, OmegaCaps).
+   Nobody's access changes; only what the store SAYS they hold. */
+global.window = global; global.document = { documentElement: {}, body: { setAttribute: function () {}, getAttribute: function () { return null; } }, querySelectorAll: function () { return []; }, addEventListener: function () {}, dispatchEvent: function () {} };
+require(path.join(ROOT, 'omega-caps.js'));
+var CAPS = global.OmegaCaps;
+/* the tier → tool level the tenant's pages read, taken from omega-tenant.js itself (a trial opens every tool) */
+var LEVEL = Function('return ' + /var TIER_LEVEL = (\{[^}]+\});/.exec(require('fs').readFileSync(path.join(ROOT, 'omega-tenant.js'), 'utf8'))[1])();
+function legacy(tier, billing, org, ws) {
+  var b = Object.assign({ tier: tier }, billing || {});
+  var w = Object.assign({ orgId: org || 'x.example', tierLevel: LEVEL[tier] }, ws || {});
+  return ctxFor(w, { tierLevel: LEVEL[tier], packaged: false, canCap: HUB.capsFor(b, org || 'x.example', CAPS), visible: function (k) { var t = TOOLS.byKey(k); return !!t && TOOLS.isVisible(t, w); } });
+}
+function st(key, ctx) { return HUB.moduleState(MODS[key], ctx); }
+ok('every catalog module carries legacyGates (the editor\'s gates, read off the editor)', M.catalog().every(function (m) { return Array.isArray(m.legacyGates); }));
+ok('capsFor asks the editor\'s own ladder', HUB.capsFor({ tier: 'deluxe' }, 'x.example', CAPS)('export.plotplan') === true && HUB.capsFor({ tier: 'standard' }, 'x.example', CAPS)('export.plotplan') === false);
+ok('capsFor reads a missing tier as trial, as the editor does', HUB.capsFor({}, 'x.example', CAPS)('export.blueprint') === false);
+ok('without OmegaCaps the page falls back to the tools alone', HUB.capsFor({ tier: 'deluxe' }, 'x', {}) === null && HUB.moduleState(MODS.plansets, std1) === 'ask');
+var perf = legacy('deluxe'), core = legacy('standard'), trial = legacy('trial'), ent = legacy('enterprise');
+ok('Performance produces plot plans and one-lines in the editor: it holds Plan Sets', st('plansets', perf) === 'held', st('plansets', perf));
+ok('Core has Plan Sets\' permit and sheet tools but not the plot plan: partly', st('plansets', core) === 'part', st('plansets', core));
+ok('Core\'s Analyze tab is closed: Storage is partly on, not held', st('storage', core) === 'part', st('storage', core));
+ok('Performance opens Analyze and every storage tool: held', st('storage', perf) === 'held', st('storage', perf));
+ok('Compute\'s editor tab is Enterprise: Core is partly on, even though the compute pages open', st('compute', core) === 'part', st('compute', core));
+ok('the Compute add-on on Performance holds Compute', st('compute', legacy('deluxe', { addons: ['compute'] })) === 'held');
+ok('the JV carve-out holds Compute for a JV partner on Performance', st('compute', legacy('deluxe', {}, 'sunesol.com')) === 'held');
+ok('capTier narrows what the store says, as it narrows the editor', st('plansets', legacy('enterprise', { capTier: 'standard' })) === 'part');
+ok('the Permitting matrix opens at every legacy tier (its old gate is on a retired button): held', ['trial', 'standard', 'deluxe'].every(function (t) { return st('permitting', legacy(t)) === 'held'; }));
+ok('Enterprise holds every editor module', ['lite', 'gridatlas', 'storage', 'estimate', 'plansets', 'siteintel', 'engineering', 'finance', 'compute', 'ops', 'permitting'].every(function (k) { return st(k, ent) === 'held'; }), ['lite', 'plansets', 'siteintel'].map(function (k) { return k + ':' + st(k, ent); }));
+ok('a tool this org can never see (ClearSky\'s own EV workbook) never keeps EV Rebates partly on', st('evrebates', ent) === 'held' && st('evrebates', core) === 'held', [st('evrebates', ent), st('evrebates', core)]);
+ok('the note under Partly names both halves, never "4 of 4 of its tools" alone', HUB.moduleNote(MODS.storage, core) === '4 of 4 of its tools and some of its commands in Site Map are on your plan', HUB.moduleNote(MODS.storage, core));
+ok('a module with only editor commands says so', HUB.moduleNote(MODS.plansets, core) === 'some of its commands in Site Map are on your plan', HUB.moduleNote(MODS.plansets, core));
+ok('one open tool reads "is"', HUB.moduleNote(MODS.sitefinder, core) === '1 of 2 of its tools is on your plan', HUB.moduleNote(MODS.sitefinder, core));
+ok('ClearSky\'s own workspace with no tier on record reads as the editor opens it (internal)', HUB.capsFor({}, 'clearsky-usa.com', CAPS)('compute') === true && HUB.capsFor({}, 'clearsky-usa.com', CAPS)('export.plotplan') === true);
+ok('a trial opens every tool but only the designer in the editor: Storage is partly on, Plan Sets partly', st('storage', trial) === 'part' && st('plansets', trial) === 'part', [st('storage', trial), st('plansets', trial)]);
+ok('Lite is partly on below Enterprise: three drawing controls sit on the Compute tab', st('lite', perf) === 'part' && st('lite', core) === 'part');
+ok('Trial cannot print a blueprint: Lite is partly on', st('lite', trial) === 'part' && HUB.moduleEditor(MODS.lite, trial).open < HUB.moduleEditor(MODS.lite, trial).total);
+ok('a module with neither tools nor editor commands keeps the Enterprise rule', st('whitelabel', ent) === 'held' && st('whitelabel', perf) === 'ask');
+ok('...asked of the ladder, not the tool level: a trial (tool level 3) does not hold the storefront, a partner does', st('whitelabel', trial) === 'ask' && st('whitelabel', legacy('partner')) === 'held', [st('whitelabel', trial), st('whitelabel', legacy('partner'))]);
+ok('a nested gate needs every link: the Compute add-on on Core opens parcel screening only where Analyze is open', HUB.moduleEditor(MODS.siteintel, legacy('standard', { addons: ['compute'] })).open === 2 && HUB.moduleEditor(MODS.siteintel, legacy('deluxe', { addons: ['compute'] })).open === 4);
+var allow = legacy('enterprise', { toolAccess: ['editor', 'gridatlas'] }, 'x.example', { toolAccess: ['editor', 'gridatlas'] });
+var noEditor = legacy('enterprise', {}, 'x.example', { toolAccess: ['gridatlas'] });
+ok('an allowlist without the editor opens none of its commands', st('plansets', noEditor) === 'ask' && st('storage', noEditor) === 'ask', [st('plansets', noEditor), st('storage', noEditor)]);
+ok('Site Map + Grid Atlas (Clean Cell): Plan Sets opens in the editor, Storage only partly', st('plansets', allow) === 'held' && st('storage', allow) === 'part', [st('plansets', allow), st('storage', allow)]);
+ok('Omega Logic is still judged by the add-on alone', st('logic-office', ent) === 'ask');
+ok('a packaged workspace is never judged by legacy gates', HUB.moduleState(MODS.plansets, Object.assign({}, perf, { packaged: true, modules: ['lite'] })) === 'open');
+
 M.catalog().forEach(function (m) { ok('module ' + m.key + ' says what it is for, in one sentence, with no price in it', typeof m.blurb === 'string' && m.blurb.length > 40 && !/\$\d/.test(m.blurb), m.blurb); });
 
 console.log('tworkspacehub: ' + pass + ' passed, ' + fail + ' failed');

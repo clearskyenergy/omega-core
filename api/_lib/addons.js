@@ -81,6 +81,16 @@ function workspace(orgId, b) {
   if (Array.isArray(b.toolAccess)) ws.toolAccess = b.toolAccess.slice();
   return ws;
 }
+/* The pages' own judge of a legacy module (workspace.html hubCtx,
+   marketplace.html moduleCtx): its tools on the tools catalog and its Site
+   Map commands on the editor's own ladder (omega-caps.js, the file the
+   editor runs: it loads here as a module, its browser parts untouched). */
+function judge(orgId, b) {
+  var T = require('../../omega-tools.js'), HUB = require('../../omega-workspace-hub.js'), CAPS = require('../../omega-caps.js').OmegaCaps, ws = workspace(orgId, b);
+  return { HUB: HUB, ctx: { packaged: false, modules: [], addons: ws.addons, addOns: [], tierLevel: ws.tierLevel,
+    canOpen: function (k) { var t = T.byKey(k); return !!t && T.isUnlocked(t, ws); }, tool: function (k) { return T.byKey(k); },
+    visible: function (k) { var t = T.byKey(k); return !!t && T.isVisible(t, ws); }, canCap: HUB.capsFor(b, orgId, CAPS) } };
+}
 /* Does the plan (with its live add-ons) already hold this module? The
    Modules page and the store ask OmegaWorkspaceHub.moduleState; so does
    this, on the tools catalog as omega-tools.js seeds it (publish-tools keeps
@@ -88,9 +98,44 @@ function workspace(orgId, b) {
    as Live. */
 function held(orgId, b, key, now) {
   var m = M.get(key); if (!m || key === 'lite') return true;
-  var T = require('../../omega-tools.js'), HUB = require('../../omega-workspace-hub.js'), ws = workspace(orgId, b);
-  return HUB.moduleState(m, { packaged: false, modules: [], addons: ws.addons, addOns: live(b, now), tierLevel: ws.tierLevel,
-    canOpen: function (k) { var t = T.byKey(k); return !!t && T.isUnlocked(t, ws); }, tool: function (k) { return T.byKey(k); } }) === 'held';
+  var j = judge(orgId, b); j.ctx.addOns = live(b, now);
+  return j.HUB.moduleState(m, j.ctx) === 'held';
+}
+/* ── Sold only when it switches on EXACTLY (Tommy's decision, 2026-09-27;
+   opening exactly one module's Site Map commands on a legacy plan is the
+   next step, not built). A legacy plan's editor opens Site Map a whole tab at a
+   time (data-cap), so an add-on key may leave part of a module off (Omega
+   Storage on Standard: its tools, not its Analyze-tab commands) or switch
+   on part of another (Omega Engineer's key opens Grid's and Storage's
+   commands too). The purchase is simulated on the record the grants would
+   write and judged by the same rule as the pages, without the add-on
+   shortcut: every module bought must be held, and no other module may gain
+   anything (Omega Design, always included, aside). An Omega Logic part is
+   exact on every plan: logic-access reads addOns.live itself. What is not
+   exact is not sold here; the quote says why and offers the recorded
+   request (plan-change opt-in). */
+function exact(orgId, b, keys, now) {
+  var mine = order(keys).filter(function (k) { return !isLogic(k); });
+  if (!mine.length) return { exact: true, partial: [], spill: [], shut: [] };
+  var g = grant(b, order(live(b, now).concat(keys)));
+  var after = Object.assign({}, b, { toolOverrides: g.toolOverrides, addons: g.addons }, g.toolAccess ? { toolAccess: g.toolAccess } : {});
+  function measure(bill) {
+    var j = judge(orgId, bill), out = {};
+    M.catalog().forEach(function (m) { var t = j.HUB.moduleTools(m, j.ctx), e = j.HUB.moduleEditor(m, j.ctx); out[m.key] = { state: j.HUB.moduleState(m, j.ctx), open: t.open + e.open, shut: e.open < e.total }; });
+    return out;
+  }
+  var was = measure(b), will = measure(after);
+  var partial = mine.filter(function (k) { return will[k].state !== 'held'; });
+  var spill = M.catalog().map(function (m) { return m.key; }).filter(function (k) { return k !== 'lite' && keys.indexOf(k) < 0 && will[k].open > was[k].open; });
+  return { exact: !partial.length && !spill.length, partial: partial, spill: spill, shut: partial.filter(function (k) { return will[k].shut; }) };
+}
+function listed(keys) { var n = names(keys); return n.length < 2 ? n.join('') : n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1]; }
+function why(x, add) {
+  var tail = ' ClearSky can include it by moving the workspace onto a package, where each module is priced on its own.';
+  var setup = x.partial.filter(function (k) { return x.shut.indexOf(k) < 0; }), many;
+  if (setup.length) { many = setup.length > 1; return listed(setup) + (many ? ' are' : ' is') + ' set up with ClearSky, so ' + (many ? 'they' : 'it') + ' cannot be added here on ' + (many ? 'their' : 'its') + ' own.' + tail; }
+  if (x.shut.length) { many = x.shut.length > 1; return listed(x.shut) + ' cannot be added to your plan on ' + (many ? 'their' : 'its') + ' own: on your plan Site Map opens ' + (many ? 'their' : 'its') + ' commands a whole tab at a time, so ' + (many ? 'they' : 'it') + ' would be only partly on.' + tail; }
+  return listed(add) + ' cannot be added to your plan on ' + (add.length > 1 ? 'their' : 'its') + ' own: on your plan ' + (add.length > 1 ? 'they' : 'it') + ' would also switch on part of ' + listed(x.spill) + '.' + tail;
 }
 
 /* The add-ons' own monthly price: each module at the book's list price, the
@@ -159,11 +204,13 @@ function payable(c) {
   try { require('./package-billing').guard(c); return { ok: true }; }
   catch (e) { return { ok: false, detail: e.message }; }
 }
-function gate(c, rows, now) {
+function gate(c, rows, now, x, add) {
   var b = c.billing;
   if (b.packaged === true) return { canBuy: false, reason: 'This workspace is on a subscription package: add modules on the Ladder, which prices and invoices them.' };
   if (!c.billingExists) return { canBuy: false, reason: 'Your workspace has no plan on record yet, so nothing can be added to it. ClearSky sets the plan up once; then Add to plan works here.' };
   if (c.org.status !== 'active') return { canBuy: false, reason: 'Your workspace is not active.' };
+  /* not exact on this plan: never sold here; the recorded request instead */
+  if (x && !x.exact) return { canBuy: false, reason: why(x, add), request: true };
   var open = pending(rows);
   if (open.length) return { canBuy: false, reason: (open[0].purpose === 'renewal' ? 'Your add-on renewal is waiting for payment' : 'An add-on is waiting for payment: ' + open[0].names.join(', ')) + '. Pay it' + (open[0].purpose === 'renewal' ? '' : ' or cancel it') + ' first.' };
   var pay = payable(c);
@@ -184,13 +231,13 @@ function quote(c, rows, input, now, staff) {
   var lines = inCycle ? deltaLines(before, after, add, book, cycle.remainingDays, cycle.days) : after.lines.map(function (l) { return Object.assign({}, l); });
   var total = sum(lines);
   if (total < 0) { lines = []; total = 0; }
-  var included = total === 0, g = gate(c, rows, now), needsProfile = !(c.profile && c.profile.legalName);
+  var included = total === 0, g = gate(c, rows, now, exact(orgId, b, add, now), add), needsProfile = !(c.profile && c.profile.legalName);
   var previewId = Q.key(B.stable({ org: orgId, book: book.version, have: inCycle ? have : [], add: add, fresh: !inCycle, day: day, cycle: cycle, lines: lines, total: total }));
   var then = after.display + ' on the ' + ordinal(day) + ', on its own invoice beside your plan' + (inCycle ? ' (add-ons were ' + before.display + ')' : '');
   var out = { orgId: orgId, previewId: previewId, effectiveAt: now, add: add, addNames: names(add), requested: order(wanted(input.add)), lines: lines, todayCents: total,
     monthlyCents: after.monthlyCents, monthlyBeforeCents: before.monthlyCents, monthlyDisplay: after.display, billingDay: day, fresh: !inCycle, included: included,
     cycle: { start: cycle.start, end: cycle.end, days: cycle.days, remainingDays: cycle.remainingDays }, activation: included ? 'immediate' : 'on-payment',
-    canBuy: g.canBuy, reason: g.reason || null, needsProfile: needsProfile, pending: pending(rows), payment: 'quickbooks',
+    canBuy: g.canBuy, reason: g.reason || null, request: g.request === true, needsProfile: needsProfile, pending: pending(rows), payment: 'quickbooks',
     display: {
       amount: P.money(total),
       today: included ? 'Nothing to pay today: it is covered by the add-ons you already pay for.' : P.money(total) + ' today, for ' + (inCycle ? cycle.remainingDays + ' of ' + cycle.days + ' days until your add-on billing date, ' + cycle.end : today + ' to ' + cycle.end),
@@ -434,4 +481,4 @@ function view(billing, rows, now) {
     accessUntil: a.accessUntil == null ? null : a.accessUntil, pending: rows ? pending(rows) : (a.pending || []) };
 }
 module.exports = { LOGIC: LOGIC, LEGACY: LEGACY, TIER_LEVEL: TIER_LEVEL, live: live, held: held, price: price, quote: quote, preview: preview, buy: buy, cancel: cancel,
-  issue: issue, settle: settle, grant: grant, boughtAfter: boughtAfter, pending: pending, view: view, context: context, records: records, isAddon: isAddon };
+  issue: issue, settle: settle, grant: grant, exact: exact, boughtAfter: boughtAfter, pending: pending, view: view, context: context, records: records, isAddon: isAddon };

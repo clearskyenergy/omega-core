@@ -127,9 +127,12 @@ decided 2026-09-26.
   1366px to a 360px phone and fails on anything outside or clipped. `OmegaWorkspaceHub.moduleState` is the ONE rule,
   shared with the marketplace store and pinned by `tworkspacehub.js`: a
   packaged workspace holds what its projection lists; a legacy one holds a
-  module when every tool it carries is open on its tier (Omega Logic by the
-  `omega-logic` add-on; a capabilities-only module on Enterprise), is
-  Partly on it with the count, else asks. A packaged workspace's prices
+  module when everything it carries is open on its plan: its standalone
+  tools AND its commands in the editor (catalog `legacyGates`, asked of the
+  editor's own ladder, `OmegaCaps.canWith`; "the store tells the truth",
+  2026-09-27). Omega Logic by the `omega-logic` add-on; a module with
+  neither tools nor editor commands on Enterprise. Partly on it with the
+  count, else asks. A packaged workspace's prices
   are `/api/package-catalog`'s (asked once) and + Add opens the ONE menu
   (`omega-package-menu.js`) on that module; a legacy workspace's are the
   public price list's (`/api/offerings`, asked once) and Ask is the store
@@ -206,12 +209,12 @@ and tools.
   an owner or admin manages; a member is told to ask.
 - Any other workspace reads the public price list and is judged against
   its legacy tier: a module reads "On your plan" when every tool it
-  carries is open (Omega Logic when the `omega-logic` addon is held; a
-  capabilities-only module on Enterprise) or when it was added to the
-  plan, "Partly on your plan" with the count, else carries **Add to plan**,
-  the same control as the Modules page (the server's price, QuickBooks'
-  card page, Live when paid). An owner or administrator buys; a member is
-  told to ask one.
+  carries AND every editor command it has is open (the same rule as the
+  Modules page; Omega Logic when the `omega-logic` addon is held) or when it
+  was added to the plan, "Partly on your plan" with what is on of both
+  halves, else it carries **Add to plan**, the same control as the Modules
+  page (the server's price, QuickBooks' card page, Live when paid). An
+  owner or administrator buys; a member is told to ask one.
 - `/marketplace.html#<module>` lands on and marks that module; a locked
   tile on the workspace links there when it knows the module.
 - A tenant on the classic home (`shell: 'classic'`) keeps the tool
@@ -253,8 +256,24 @@ yet", and staff see why).
   catalog). `addOns.granted` remembers what was written so switching off
   takes back exactly that, never a value staff set.
 - **Never sold twice**: the server asks the pages' own rule
-  (`OmegaWorkspaceHub.moduleState` on the seeded tools catalog) before it
-  prices, and live add-ons count as held there.
+  (`OmegaWorkspaceHub.moduleState` on the tools catalog and the editor's
+  own ladder, `omega-caps.js`, with the same `canCap` and `visible` the
+  pages pass) before it prices, and live add-ons count as held there.
+- **Sold only when it switches on exactly** (Tommy's decision, 2026-09-27):
+  a legacy editor opens Site Map a whole tab at a time (`data-cap`), so an
+  add-on key can leave part of a module off (Omega Storage on Standard: its
+  tools, not its Analyze-tab commands) or switch on part of another (Omega
+  Engineer's key opens Grid's and Storage's commands too). `addons.exact()`
+  simulates the grants and judges them by the pages' rule without the
+  add-on shortcut: every module bought must be held after, and no other
+  module (Omega Design aside) may gain anything. What is not exact is not
+  sold here: the quote says why (`request: true`) and the control offers
+  **Ask ClearSky to include it**, the recorded request (`plan-change`
+  `opt-in`: priced, on record, ClearSky told, nothing charged). Every Omega
+  Logic department is exact on every plan (`logic-access` reads
+  `addOns.live` itself); on today's ladder Omega Sites is exact on
+  Standard and Omega Capital on Deluxe, and Enterprise already holds
+  every editor module.
 - **One purchase waits at a time**; a waiting purchase can be cancelled
   (the QuickBooks invoice stays open until staff void it; a payment after a
   cancel or after its period is honoured and flagged for a person).
@@ -265,7 +284,10 @@ yet", and staff see why).
 - **Not here**: a legacy plan with no `omega_orgs` record or no billing
   record cannot be billed (the quote says so); a packaged workspace uses
   the Ladder; moving the whole workspace onto a package stays ClearSky's
-  (the admin Package tab, which now also lists the add-ons).
+  (the admin Package tab, which now also lists the add-ons). **Not built:**
+  opening exactly one bought module's Site Map commands on a legacy plan
+  (the editor's legacy gate by command ownership, as a package's is), which
+  would make every editor module exact on every plan.
 
 ## The journey, mapped
 
