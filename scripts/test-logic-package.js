@@ -8,7 +8,7 @@
    — paid, or a trial inside its dates, and before accessUntil
    (package-access.live, the one rule the editor projection follows too).
    The PARTS are the modules bought: Plant (logic-plant), Materials &
-   Purchasing (logic-materials), Logistics & Warranty (logic-logistics),
+   Purchasing (logic-materials), Logic Logistics (logic-logistics),
    Customer App (logic-customer). logic-access.authorize(caller, org,
    write, part) refuses a part not held with a plain sentence; a legacy
    subscription (addons: omega-logic) is unchanged and holds every part;
@@ -76,10 +76,10 @@ function seed() {
     assert.equal(X.subscribed(ctx), true); assert.deepEqual(X.parts(ctx), ['plant', 'materials']);
     assert.equal(ctx.member.role, 'admin');
     await X.authorize(c, 'acme.example', true, 'plant'); await X.authorize(c, 'acme.example', false, 'materials');
-    var e = await refused(X.authorize(c, 'acme.example', false, 'logistics'), 403, /^Logistics & Warranty is not in your Omega Logic package$/, 'part');
+    var e = await refused(X.authorize(c, 'acme.example', false, 'logistics'), 403, /^Logic Logistics is not in your Omega Logic package$/, 'part');
     assert.equal(e.reason, 'part');
-    await refused(X.authorize(c, 'acme.example', true, 'customer'), 403, /^Customer App is not in your Omega Logic package$/, 'part');
-    await refused(X.authorize(who('pat@acme.example'), 'acme.example', false, 'logistics'), 403, /Logistics & Warranty/, 'part');
+    await refused(X.authorize(c, 'acme.example', true, 'customer'), 403, /^Logic Customer App is not in your Omega Logic package$/, 'part');
+    await refused(X.authorize(who('pat@acme.example'), 'acme.example', false, 'logistics'), 403, /Logic Logistics/, 'part');
     await refused(X.authorize(who('pat@acme.example'), 'acme.example', true, 'plant'), 403, /administrator is required/, undefined);
     assert.throws(function () { X.requirePart(ctx, 'bench'); }, /Unknown Omega Logic part/, 'a part the code does not name is a bug, not a refusal');
     X.requirePart(ctx, null); X.requirePart(ctx, '');
@@ -149,7 +149,7 @@ function seed() {
     seed();
     var ctx = await X.requirePartIfPackaged('acme.example', 'plant');
     assert.equal(ctx.orgId, 'acme.example'); assert.deepEqual(X.parts(ctx), ['plant', 'materials']);
-    await refused(X.requirePartIfPackaged('acme.example', 'logistics'), 403, /^Logistics & Warranty is not in your Omega Logic package$/, 'part');
+    await refused(X.requirePartIfPackaged('acme.example', 'logistics'), 403, /^Logic Logistics is not in your Omega Logic package$/, 'part');
     await refused(X.requirePartIfPackaged('nooffice.example', 'plant'), 403, /subscription is not active/, 'inactive');
     assert.equal(await X.requirePartIfPackaged('oldco.example', 'plant'), null, 'a legacy subscription: not judged here');
     assert.equal(await X.requirePartIfPackaged('nobody.example', 'plant'), null, 'no omega_orgs record, no billing: not judged here');
@@ -283,7 +283,7 @@ function seed() {
     assert.deepEqual(all.customers, ['Customers', 'Customer hub on the desktop', 'Customer app', 'Customer portal']);
     var plant = menu(Object.assign({ access: { role: 'admin', prices: 'workspace', team: true, parts: ['plant'] } }, admin));
     assert.deepEqual(Object.keys(plant), ['sales', 'customers', 'plant', 'stock', 'money', 'setup', 'help']);
-    assert.deepEqual(plant.stock, ['Stock', 'Inventory'], 'finished units are the plant\'s; the plan and the POs are Materials & Purchasing\'s');
+    assert.deepEqual(plant.stock, ['Stock', 'Inventory'], 'finished units are the plant\'s; the plan and the POs are Logic Purchasing\'s');
     assert.deepEqual(plant.customers, ['Customers', 'Customer hub on the desktop'], 'no Customer App part: the customer app and portal are not offered');
     assert.deepEqual(plant.help, ['Omega Logic app guide', 'Plant app guide']);
     var mat = menu(Object.assign({ access: { role: 'admin', prices: 'workspace', team: true, parts: ['materials', 'customer'] } }, admin));
