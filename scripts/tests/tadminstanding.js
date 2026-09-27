@@ -43,12 +43,12 @@ var pills = /var pills=\[([\s\S]*?)\];/.exec(SRC)[1];
 ok(fns.plan({ plan: 'field' }) === 'Field' && fns.plan({ plan: 'alacarte' }) === 'Lite + modules' && fns.plan({}) === 'Lite + modules', 'plan keys read as words before the book loads');
 ok(fns.names(['lite', 'gridatlas']).join() === 'lite,gridatlas', 'module keys stay keys before the book loads');
 STATE.priceBook = { pricebookVersion: '2026-10', source: 'seeded', lite: { monthlyDisplay: '$500/month' }, plans: [{ key: 'field', name: 'Field', monthlyDisplay: '$1,299/month' }, { key: 'pro', name: 'Pro', monthlyDisplay: '$2,499/month' }],
-  enterprise: { annualFloorDisplay: '$150,000/year' }, logins: { builderDisplay: '$50/month', viewerDisplay: '$15/month' }, modules: [{ key: 'lite', name: 'Lite', monthlyDisplay: '$500/month' }, { key: 'gridatlas', name: 'Grid Atlas', monthlyDisplay: '$250/month' }] };
+  enterprise: { name: 'Enterprise', priceDisplay: 'Contact for pricing' }, logins: { builderDisplay: '$50/month', viewerDisplay: '$15/month' }, modules: [{ key: 'lite', name: 'Lite', monthlyDisplay: '$500/month' }, { key: 'gridatlas', name: 'Grid Atlas', monthlyDisplay: '$250/month' }] };
 ok(fns.plan({ plan: 'pro' }) === 'Pro' && fns.names(['lite', 'gridatlas']).join(', ') === 'Lite, Grid Atlas', 'with the book loaded the words are the book\'s');
 ok(fns.modules({ subscription: { modules: ['lite', 'gridatlas'] }, modules: ['lite'] }).join() === 'lite,gridatlas', 'the package is what was bought, not what is on');
 ok(fns.modules({ proposedPackage: { modules: ['lite', 'storage'] } }).join() === 'lite,storage', 'a proposed package counts before activation');
 var strip = fns.strip();
-ok(/Price book 2026-10/.test(strip) && /Field<\/b> \$1,299\/month/.test(strip) && /Grid Atlas \$250\/month/.test(strip) && /Enterprise<\/b> from \$150,000\/year/.test(strip) && /legacy roster/.test(strip), 'the inventory strip prints the book, server-formatted');
+ok(/Price book 2026-10/.test(strip) && /Field<\/b> \$1,299\/month/.test(strip) && /Grid Atlas \$250\/month/.test(strip) && /Enterprise<\/b> Contact for pricing/.test(strip) && !/150,000/.test(strip) && /legacy roster/.test(strip), 'the inventory strip prints the book, server-formatted');
 ok(!/1299|2499|150000/.test(grab('_priceBookStrip')), 'and carries no price of its own');
 ok(/fetch\('\/api\/offerings'/.test(grab('loadPriceBook')) && /loadPriceBook\(\);\n  loadTenants\(\);/.test(SRC), 'the book is fetched at boot, before the tenants');
 ok(/id="cl-pricebook"/.test(HTML), 'Client Inventory has the strip');

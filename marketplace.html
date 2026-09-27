@@ -155,6 +155,7 @@ body.ows-worn .mkt-shelf:first-child{padding-top:0}
 .mkt-planc b{font:600 15px 'DM Sans',sans-serif;color:#14171A;padding-right:70px}.mkt-planc .pr{font:500 18px 'DM Mono',ui-monospace,monospace;color:#14171A}
 .mkt-planc small{color:#556B82;font-size:12px;line-height:1.45}
 .mkt-planc .mkt-pill{position:absolute;top:12px;right:12px}
+.mkt-planc .mkt-contact{margin-top:auto;align-self:flex-start;flex:0 0 auto}
 .mkt-starters{display:flex;flex-wrap:wrap;gap:8px}
 .mkt-starter{font-size:12px;padding:6px 10px;border-radius:10px;background:#fff;border:1px solid #E4E8EC;color:#556B82;line-height:1.4}
 .mkt-starter b{color:#14171A;display:block;font-size:12.5px}
@@ -1408,6 +1409,10 @@ function moduleState(m){
   if (STORE.packaged && !storeOwned(m.key) && STORE.control.pending && STORE.control.pending[m.key]) return 'pending';
   return OmegaWorkspaceHub.moduleState(m, moduleCtx());
 }
+function contactHref(plan){
+  var ws = WORKSPACE || {}, to = (window.OmegaBrand && OmegaBrand.upgradeEmail) ? OmegaBrand.upgradeEmail() : 'dev@clearsky-usa.com', who = ws.clientName || ws.orgId || 'our workspace';
+  return 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(plan + ' pricing for ' + who) + '&body=' + encodeURIComponent('Please contact us about ' + plan + ' pricing for ' + who + '.');
+}
 /* who may add to a plan billed outside the engine: its owner or an
    administrator, or verified ClearSky staff (plan-change is the gate) */
 function legacyManage(){
@@ -1420,8 +1425,13 @@ function addOnWaiting(key){
   for (var i = 0; i < list.length; i++) if ((list[i].add || []).indexOf(key) >= 0) return list[i];
   return null;
 }
-/* after a purchase, a payment or a cancel: the billing record again, then the shelves */
+/* after a purchase, a payment or a cancel: the billing record again, then
+   the shelves. A request's answer (an opt-out, Keep, a withdrawn opt-in)
+   carries its whole map, so the shelves paint from it at once. */
 function legacyChanged(r){
+  var b = window.OmegaTenant && OmegaTenant.billing;
+  if (b && r) ['optIns', 'optOuts'].forEach(function(k){ if (r[k]) b[k] = Object.assign({}, b[k] || {}, r[k]); });
+  if (r && (r.optIns || r.optOuts)) { if (r.note) toast(esc(r.note)); paintStore(); return; }
   if (r && r.state === 'active') toast('Added. It is on now.');
   var done = function(){ paintStore(); paintMarket(); };
   if (window.OmegaTenant && OmegaTenant.refreshBilling) OmegaTenant.refreshBilling().then(done, done); else done();
@@ -1440,7 +1450,7 @@ function paintStore(){
   } else {
     var tools = qualifying(), openN = tools.filter(function(t){ return !t.soon && isUnlockedHere(t); }).length, total = tools.filter(function(t){ return !t.soon; }).length;
     h += '<span><b>'+openN+'</b> of '+total+' tools open</span>';
-    note = 'Monthly prices from the price list. Add a module to your plan and pay by card on QuickBooks\u2019 secure page (or with the card saved there): it switches on the moment the payment clears. Your plan and its billing stay as they are; moving up a plan stays with ClearSky.';
+    note = 'Monthly prices from the price list. Add a module to your plan and pay by card on QuickBooks\u2019 secure page (or with the card saved there): it switches on the moment the payment clears. An opt-out is a request ClearSky confirms under your agreement. Your plan and its billing stay as they are; moving up a plan stays with ClearSky.';
   }
   h += '<span class="mkt-note">'+note+'</span>';
   plan.innerHTML = h;
@@ -1466,13 +1476,15 @@ function plansShelf(o){
   var cur = STORE.packaged ? String(((window.OmegaTenant && OmegaTenant.billing) || {}).plan || '').toLowerCase() : '';
   var plans = (o.lite ? [{ key:'lite', name:o.lite.name || 'Lite', monthlyDisplay:o.lite.monthlyDisplay, capDisplay:(byKey.lite && byKey.lite.features ? byKey.lite.features.join(' · ') : 'The floor every package stands on'), serviceFeeDisplay:o.lite.serviceFeeDisplay }] : []).concat(o.plans || []);
   /* Enterprise is a contract, listed apart from the plans in the book */
-  if (o.enterprise && !plans.some(function(p){ return String(p.key).toLowerCase() === 'enterprise'; })) plans.push({ key:'enterprise', name:'Enterprise', monthlyDisplay:o.enterprise.annualFloorDisplay || '', capDisplay:'Every module, on a contract', serviceFeeDisplay:o.enterprise.serviceFeeDisplay });
+  /* Enterprise is a contract priced with ClearSky (Tommy, 2026-09-27: "contact for pricing"): the price list says so and names no figure */
+  if (o.enterprise && !plans.some(function(p){ return String(p.key).toLowerCase() === 'enterprise'; })) plans.push({ key:'enterprise', name:o.enterprise.name || 'Enterprise', monthlyDisplay:o.enterprise.priceDisplay || 'Contact for pricing', capDisplay:o.enterprise.summary || 'Every module, on a contract', note:o.enterprise.note || '', contact:true });
   var cards = '';
   plans.forEach(function(p){
     var on = !!cur && cur === String(p.key).toLowerCase();
     cards += '<div class="mkt-planc'+(on?' on':'')+'" data-plan-card="'+esc(p.key)+'">'+(on?'<span class="mkt-pill inc">Your plan</span>':'')+'<b>'+esc(p.name)+'</b><span class="pr">'+esc(p.monthlyDisplay||'')+'</span><small>'+esc(p.capDisplay||'')+'</small>'
       + (p.serviceFeeDisplay ? '<small>Service fee: '+esc(p.serviceFeeDisplay)+'</small>' : '')
-      + (p.key === 'enterprise' && o.enterprise ? '<small>'+esc(o.enterprise.annualFloorDisplay)+' floor · setup '+esc(o.enterprise.setupDisplay)+' · '+esc(String(o.enterprise.devHoursMonthly))+' development hours a month</small>' : '')
+      + (p.note ? '<small>'+esc(p.note)+'</small>' : '')
+      + (p.contact ? '<a class="mkt-act ghost mkt-contact" href="'+contactHref(p.name)+'">Contact ClearSky</a>' : '')
       + '</div>';
   });
   var starters = '';
@@ -1510,14 +1522,16 @@ function moduleCard(m){
   /* a plan billed outside the engine: Add to plan (the one control,
      OmegaPackageMenu.addOnControl: the server's price, QuickBooks' card
      page, on the moment the payment clears) for what it does not hold, and
-     the opt-out request for what it does */
+     the recorded opt-out request for what it does (Keep module takes it
+     back). Omega Design is always included: never an Add to plan. */
   if (!STORE.packaged){
     if (st === 'part') act.innerHTML = '<div class="mkt-state">'+esc(OmegaWorkspaceHub.moduleNote(m, moduleCtx()))+'.</div>';
-    if (!owned) { var addHost = document.createElement('div'); act.appendChild(addHost); OmegaPackageMenu.addOnControl(addHost, m, { canManage: legacyManage(), pending: addOnWaiting(m.key), onChanged: legacyChanged }); }
-    if (owned || st === 'part') {
+    var lb = (window.OmegaTenant && OmegaTenant.billing) || {}, leaving = !!(lb.optOuts && lb.optOuts[m.key] && lb.optOuts[m.key].status === 'requested');
+    if (!owned && !leaving && m.key !== 'lite') { var addHost = document.createElement('div'); act.appendChild(addHost); OmegaPackageMenu.addOnControl(addHost, m, { canManage: legacyManage(), pending: addOnWaiting(m.key), onChanged: legacyChanged }); }
+    if (owned || st === 'part' || leaving) {
       var legacyHost = document.createElement('div'); act.appendChild(legacyHost);
-      OmegaPackageMenu.subscribeControl(legacyHost, m, { canManage: true, owned: true, catalog: STORE.rows, ownedModules: STORE.rows.filter(function (row) { var s = moduleState(row); return s === 'held' || s === 'part'; }).map(function (row) { return row.key; }),
-        legacy: { company: (WORKSPACE || {}).clientName || (WORKSPACE || {}).orgId || 'our workspace', email: OmegaBrand.upgradeEmail() } });
+      OmegaPackageMenu.subscribeControl(legacyHost, m, { canManage: legacyManage(), owned: true, onChanged: legacyChanged,
+        legacy: { company: (WORKSPACE || {}).clientName || (WORKSPACE || {}).orgId || 'our workspace', email: OmegaBrand.upgradeEmail(), optOuts: lb.optOuts || {} } });
     }
     return card;
   }

@@ -206,14 +206,17 @@
      switched on (modules). A legacy tenant: the modules its tier, add-ons and
      allowlist open — the SAME rule the tenant's own Modules page shows as Live
      (OmegaWorkspaceHub.moduleState on the real tool catalog) — plus anything it
-     opted in to with a price on record (billing.optIns, plan-change opt-in).
-     The picker starts from that; staff change it and Review activation. */
+     opted in to with a price on record (billing.optIns, plan-change opt-in),
+     less anything it asked to opt out of (billing.optOuts; ClearSky confirms
+     the date under the agreement). The picker starts from that; staff change
+     it and Review activation. */
   function dayOf(v) { if (!v) return ''; if (typeof v === 'string') return v.slice(0, 10); var sec = v._seconds || v.seconds; if (sec) return new Date(sec * 1000).toISOString().slice(0, 10); return ''; }
   function standing(data) {
-    var b = data.billing || {}, byKey = {}, out = { packaged: b.packaged === true, held: [], bought: [], on: [], requested: [], preselect: ['lite'], lines: [] };
+    var b = data.billing || {}, byKey = {}, out = { packaged: b.packaged === true, held: [], bought: [], on: [], requested: [], optOuts: [], preselect: ['lite'], lines: [] };
     (data.modules || []).forEach(function (m) { byKey[m.key] = m; });
     function names(keys) { return keys.map(function (k) { return byKey[k] ? byKey[k].name : k; }).join(', ') || 'nothing'; }
     Object.keys(b.optIns || {}).forEach(function (k) { var o = b.optIns[k]; if (o && o.status === 'requested') out.requested.push(Object.assign({ key: k }, o)); });
+    Object.keys(b.optOuts || {}).forEach(function (k) { var o = b.optOuts[k]; if (o && o.status === 'requested' && !out.packaged) out.optOuts.push(Object.assign({ key: k }, o)); });
     if (out.packaged) {
       out.bought = (b.subscription && Array.isArray(b.subscription.modules) && b.subscription.modules.length ? b.subscription.modules : b.modules) || ['lite']; out.on = b.modules || [];
       out.preselect = out.bought.slice();
@@ -235,6 +238,7 @@
       /* a package drawn from what they hold OR partly use: moving a legacy
          tenant onto one never takes away something they open today */
       out.preselect = out.held.concat(out.partly); out.requested.forEach(function (o) { if (out.preselect.indexOf(o.key) < 0) out.preselect.push(o.key); });
+      out.preselect = out.preselect.filter(function (k) { return k === 'lite' || !out.optOuts.some(function (o) { return o.key === k; }); });
       if (out.preselect.indexOf('lite') < 0) out.preselect.unshift('lite');
       out.lines.push((b.tier ? b.tier.charAt(0).toUpperCase() + b.tier.slice(1) : 'No') + ' tier' + ((b.addons || []).length ? ' · add-ons: ' + b.addons.join(', ') : '') + (Array.isArray(b.toolAccess) ? ' · ' + b.toolAccess.length + ' tools allowlisted' : ''));
       out.lines.push('Holds ' + names(out.held) + ' (what its Modules page shows as Live)');
@@ -244,6 +248,7 @@
       if (ao && Array.isArray(ao.modules) && ao.modules.length) out.lines.push('Add-ons in QuickBooks: ' + names(ao.modules) + (ao.monthlyDisplay ? ' · ' + ao.monthlyDisplay : '') + ' · ' + String(ao.state || 'none').replace(/_/g, ' ') + (ao.nextInvoiceOn ? ' · next invoice ' + dayOf(ao.nextInvoiceOn) : ''));
     }
     if (out.requested.length) out.lines.push('Requested: ' + out.requested.map(function (o) { return (o.name || o.key) + (o.display ? ' (' + o.display + ')' : '') + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : ''); }).join('; '));
+    if (out.optOuts.length) out.lines.push('Opt-out requested: ' + out.optOuts.map(function (o) { return (o.name || o.key) + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : ''); }).join('; ') + ' (confirm the date under the agreement)');
     return out;
   }
   function render(data, profile) {
@@ -264,7 +269,7 @@
       var strip = el('div', '', 'pp-standing'); strip.id = 'pp-standing';
       strip.appendChild(el('b', stand.packaged ? 'Today: on a subscription package' : 'Today: ' + stand.lines[0]));
       stand.lines.slice(stand.packaged ? 0 : 1).forEach(function (l) { strip.appendChild(el('div', l)); });
-      strip.appendChild(el('div', data.billing.proposedPackage ? 'Preselected from the proposal on file.' : stand.packaged ? 'Preselected from what it subscribes to; change it and Review activation.' : 'Preselected from what the tier opens today plus any opt-in request; change it and Review activation moves the tenant onto a package, where additions land on the monthly invoice.', 'pp-note'));
+      strip.appendChild(el('div', data.billing.proposedPackage ? 'Preselected from the proposal on file.' : stand.packaged ? 'Preselected from what it subscribes to; change it and Review activation.' : 'Preselected from what the tier opens today plus any opt-in request, less any opt-out request; change it and Review activation moves the tenant onto a package, where additions land on the monthly invoice.', 'pp-note'));
       left.appendChild(strip);
       var row = el('div', '', 'pp-row'); row.appendChild(el('span', 'Customer type', 'pp-note'));
       row.appendChild(choice('starter', Object.keys(data.starters).map(function (k) { return [k, (data.starterLabels || {})[k] || k]; }), Object.keys(data.starters)[0]));

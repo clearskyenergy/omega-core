@@ -23,46 +23,47 @@
   }
   function link(href, text) { var a = node('a', text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; }
   function button(text, fn, cls) { var b = node('button', text, cls); b.type = 'button'; b.onclick = fn; return b; }
+  /* A plan billed outside the package engine (state.legacy: { company,
+     email, optOuts, canManage }) opts OUT through the same endpoint (Tommy,
+     2026-09-27: "i want it to opt in and out, this needs to work"; it opts
+     in with Add to plan, addOnControl below): plan-change records the
+     request on the workspace's billing record with who and when and tells
+     ClearSky, who confirms it under the agreement; the server works out the
+     modules that go with it and Keep module takes it back. Nothing here
+     changes a grant or a price. Email stays as the way out when a request
+     is refused. */
+  function asked(state, map, key) { var r = state.legacy && state.legacy[map] && state.legacy[map][key]; return r && r.status === 'requested' ? r : null; }
+  function emailInstead(target, m, state) {
+    var l = state.legacy; if (!l || !l.email) return;
+    var mail = node('a', 'Email ClearSky instead');
+    mail.href = 'mailto:' + encodeURIComponent(l.email) + '?subject=' + encodeURIComponent('Opt out: ' + m.name + ' for ' + l.company)
+      + '&body=' + encodeURIComponent('Please review the opt-out of ' + m.name + ' for ' + l.company + '. Confirm the effective date and any billing change under our existing agreement. Omega Design remains included.');
+    target.appendChild(mail);
+  }
   function removalControl(target, m, state) {
     if (m.key === 'lite') { target.appendChild(node('p', 'Omega Design is the baseline and is always included.', 'opm-note')); return; }
     if (!state.canManage) { target.appendChild(node('p', 'Ask your workspace administrator to opt out of this module.', 'opm-note')); return; }
-    var queued = ((state.summary || {}).removalRequests || []).some(function (r) { return r.module === m.key; });
-    if (queued) target.appendChild(node('p', 'Opt-out requested · quarterly review. Access and charges remain unchanged.', 'opm-wait'));
+    var mine = asked(state, 'optOuts', m.key), queued = state.legacy ? !!mine : ((state.summary || {}).removalRequests || []).some(function (r) { return r.module === m.key; });
+    if (queued) target.appendChild(node('p', state.legacy ? 'Opt-out requested' + (mine.requestedAt ? ' ' + String(mine.requestedAt).slice(0, 10) : '') + ' · ClearSky confirms the date under your agreement. Access and charges are unchanged until then.' : 'Opt-out requested · quarterly review. Access and charges remain unchanged.', 'opm-wait'));
     function review() {
       target.textContent = 'Reviewing…';
-      var action = queued ? 'withdraw-removal' : 'request-removal';
-      var preview = state.legacy ? Promise.resolve(legacyRemoval(m, state)) : api('/api/plan-change', { action: action, orgId: state.orgId || (state.summary || {}).orgId, remove: [m.key], dryRun: true });
-      preview.then(function (q) {
+      var action = queued ? 'withdraw-removal' : 'request-removal', orgId = state.orgId || (state.summary || {}).orgId;
+      api('/api/plan-change', { action: action, orgId: orgId, remove: [m.key], dryRun: true }).then(function (q) {
         target.textContent = '';
         target.appendChild(node('p', (queued ? 'Keep: ' : 'Opt out: ') + q.names.join(', '), 'opm-quote'));
         target.appendChild(node('p', q.note, 'opm-note'));
         if (q.names.length > 1) target.appendChild(node('p', queued ? 'The modules it needs are kept too.' : 'This includes the modules that depend on it.', 'opm-note'));
-        if (state.legacy) {
-          var mail = node('a', 'Email opt-out request');
-          mail.href = 'mailto:' + encodeURIComponent(state.legacy.email) + '?subject=' + encodeURIComponent('Opt out: ' + m.name + ' for ' + state.legacy.company)
-            + '&body=' + encodeURIComponent('Please review the opt-out of ' + q.names.join(', ') + ' for ' + state.legacy.company + '. Confirm the effective date and any billing change under our existing agreement. Omega Design remains included.');
-          target.appendChild(mail);
-        } else target.appendChild(button(queued ? 'Confirm keep modules' : 'Confirm opt-out request', function () {
+        target.appendChild(button(queued ? 'Confirm keep modules' : 'Confirm opt-out request', function () {
           target.textContent = 'Saving request…';
-          api('/api/plan-change', { action: action, orgId: state.orgId || (state.summary || {}).orgId, remove: [m.key], previewId: q.previewId }).then(function (r) {
+          api('/api/plan-change', { action: action, orgId: orgId, remove: [m.key], previewId: q.previewId }).then(function (r) {
             target.textContent = r.note; if (state.onChanged) state.onChanged(r);
           }, failed);
         }, 'opm-primary'));
         target.appendChild(button('Cancel', function () { subscribeControl(target, m, state); }));
       }, failed);
     }
-    function failed(e) { target.textContent = ''; target.appendChild(node('p', e.message, 'opm-reason')); target.appendChild(button('Try again', review)); }
+    function failed(e) { target.textContent = ''; target.appendChild(node('p', e.message, 'opm-reason')); if (!queued) emailInstead(target, m, state); target.appendChild(button('Try again', review)); }
     target.appendChild(button(queued ? 'Keep module' : 'Opt out', review));
-  }
-  /* Legacy billing stays on its existing support path. Catalog dependencies
-     only explain the request; this browser never changes a grant or price. */
-  function legacyRemoval(m, state) {
-    var remove = [m.key], changed = true, rows = state.catalog || [], owned = state.ownedModules || [];
-    while (changed) { changed = false; rows.forEach(function (row) {
-      if (owned.indexOf(row.key) >= 0 && remove.indexOf(row.key) < 0 && (row.requires || []).some(function (k) { return remove.indexOf(k) >= 0; })) { remove.push(row.key); changed = true; }
-    }); }
-    return { names: rows.filter(function (row) { return remove.indexOf(row.key) >= 0; }).map(function (row) { return row.name; }),
-      note: 'This workspace is billed outside the package engine. ClearSky will confirm the effective date and any billing change under your existing agreement. Sending the request does not change access, cancel charges or issue a refund. Omega Design remains included.' };
   }
   /* One control, three places: the editor's + Modules gallery, Your plan in
      the account pages, and the staff record. state: { canManage, pending:
@@ -444,13 +445,20 @@
     if (m.coverage) el.appendChild(node('p', m.coverage, 'opm-note'));
     if (m.agreement) el.appendChild(node('p', m.agreement, 'opm-note'));
     // The control posts to the server; listing never changes modules[].
-    subscribeControl(el.appendChild(node('div')), m, { canManage: control.canManage, pending: control.pending, summary: control.summary, owned: owned, legacy: host.legacy, catalog: view && view.catalog, ownedModules: view && view.modules, onChanged: changed });
+    subscribeControl(el.appendChild(node('div')), m, { canManage: control.canManage, pending: control.pending, summary: control.summary, owned: owned, legacy: host.legacy, onChanged: changed });
     if (m.key === focus) { el.tabIndex = -1; el.setAttribute('data-selected', '1'); }
     return el;
   }
   var lastRows = [];
   function changed(result) {
     var caps = global.OmegaCaps;
+    if (host.legacy) {
+      /* a legacy request changes the record, never the tools: repaint from the answer */
+      ['optIns', 'optOuts'].forEach(function (k) { if (result && result[k]) host.legacy[k] = Object.assign({}, host.legacy[k] || {}, result[k]); });
+      if (host.onChanged) { try { host.onChanged(result); } catch (e) {} }
+      if (body) render(lastRows, null);
+      return;
+    }
     /* Re-read in place (OmegaCaps.refresh): the tools appear, the toast says
        where, and the ribbon never blinks through the locked state. */
     var refresh = result && result.state === 'active' && caps && caps.refresh && !host.view ? caps.refresh().then(null, function () {}) : Promise.resolve();
@@ -488,7 +496,7 @@
     trap(panel);
     render(view.catalog || [], key); dismiss.focus();
     if (host.legacy) {
-      control = { canManage: true, pending: {}, loaded: true };
+      control = { canManage: host.legacy.canManage !== false, pending: {}, loaded: true };
       status.textContent = 'Review the request before sending it to ClearSky. Omega Design is always included.';
       render((view.catalog || []).filter(function (m) { return m.key === key; }), key); return true;
     }

@@ -6,10 +6,25 @@
  * add-on: `addon-quote` prices it, `addon-buy` issues the QuickBooks invoice
  * (pay by card, or the card saved there) and it switches on when paid,
  * `addon-cancel` withdraws one still waiting (api/_lib/addons.js). `opt-in`
- * still records a priced request. The engine's guard decides where it bills.
+ * still records a priced request and `withdraw-opt-in` takes it back; on
+ * such a plan request-removal / withdraw-removal record an opt-out the same
+ * way. The engine's guard decides where it bills.
+ *
+ * A REQUEST (opt-in, withdraw-opt-in, request-removal, withdraw-removal)
+ * grants nothing and charges nothing: it is recorded with who asked and
+ * ClearSky confirms it with the workspace. An owner or administrator may file
+ * one on the ROLE alone (Tommy, 2026-09-27: "it's an admin so it's already
+ * verified, it's on their tenant"): that role is written only by ClearSky or
+ * the workspace's own owner through the server, never by a browser
+ * (firestore.rules, members), so it is a grant to that sign-in, and the
+ * record and ClearSky's mail say whether the address was verified. Everything
+ * that prices, invoices, switches on or reads the billing summary (the
+ * add-ons included) needs a verified email, or an owner or administrator of
+ * an active client (admin.clientAdmin).
  */
 'use strict';
 var A = require('./_lib/admin'), C = require('./_lib/plan-change'), AO = require('./_lib/addons');
+var REQUESTS = ['opt-in', 'withdraw-opt-in', 'request-removal', 'withdraw-removal'];
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'private, no-store');
   if (req.method !== 'GET' && req.method !== 'POST') throw A.httpError(405, 'GET or POST required');
@@ -17,9 +32,11 @@ module.exports = A.handler(async function (req, res) {
   var orgId = A.safeOrg(input.orgId || caller.orgId);
   if (!orgId) throw A.httpError(400, 'Valid organization required');
   if (!caller.staff) {
+    var request = req.method === 'POST' && REQUESTS.indexOf(input.action) >= 0;
     /* a verified email, or an owner or administrator of an active client
-       (admin.clientAdmin: the role vouches for them); a member reads with one */
-    if ((!caller.claims || caller.claims.email_verified !== true) && !(await A.clientAdmin(caller, orgId))) throw A.httpError(403, 'Verified email required');
+       (admin.clientAdmin: the role vouches for them); a member reads with one.
+       A REQUEST needs neither: the owner or administrator role, checked below. */
+    if (!request && (!caller.claims || caller.claims.email_verified !== true) && !(await A.clientAdmin(caller, orgId))) throw A.httpError(403, 'Verified email required');
     if (orgId !== caller.orgId) throw A.httpError(403, 'Own organization required');
     /* the summary (GET) is the workspace's own billing, which every verified
        member of the org may read (the rules let a member read billing/current;
@@ -50,9 +67,10 @@ module.exports = A.handler(async function (req, res) {
     case 'auto-topup': return C.autoTopup(A.db(), orgId, input.enabled, caller, now);
     case 'reconcile-now': return C.reconcileNow(A.db(), orgId, caller, now);
     case 'opt-in': return C.optIn(A.db(), orgId, input, caller, now);
+    case 'withdraw-opt-in': return C.withdrawOptIn(A.db(), orgId, input, caller, now);
     case 'addon-quote': return AO.preview(A.db(), orgId, input, now, caller.staff);
     case 'addon-buy': return AO.buy(A.db(), orgId, input, caller, now);
     case 'addon-cancel': return AO.cancel(A.db(), orgId, input.addOnId, caller, now);
-    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy, auto-topup, reconcile-now, opt-in, addon-quote, addon-buy or addon-cancel');
+    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy, auto-topup, reconcile-now, opt-in, withdraw-opt-in, addon-quote, addon-buy or addon-cancel');
   }
 });
