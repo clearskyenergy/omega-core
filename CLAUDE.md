@@ -219,7 +219,12 @@ page (`check-payment`) and the billing bar (`reconcile-now`) alike. The
 flow as sold: account (login.html) → verified email (start.html holds an
 unverified address) → billing profile → *Build your system* (the one
 menu, priced live by the server; Monthly, or Yearly at ten months of
-twelve) → pay. Annual prepay is `annualPaidMonths` = 10 in the book.
+twelve) → pay. Create account goes straight to `/start.html` (making the
+account signs it in, so login's auth listener stands aside while the form
+routes it), and a signed-in person with no `omega_orgs` record, grant,
+access request or terms acceptance is sent there too instead of a derived
+workspace; `scripts/render-signup.js` (in `check:pages`) holds both.
+Annual prepay is `annualPaidMonths` = 10 in the book.
 `api/_lib/packaging-mode.js` is the ONE rule for where packaging bills:
 SANDBOX (`QBO_ENV=sandbox`) or LIVE (`PACKAGING_LIVE=true` AND
 `QBO_ENV=production`, both literal), and neither is refused everywhere; the

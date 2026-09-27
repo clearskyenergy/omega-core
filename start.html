@@ -261,7 +261,7 @@
   /* a password account is not verified until its link is clicked, and the server refuses an unverified one: hold here, say so, and offer the link again */
   function holdForVerification(u){ $('verify-note').style.display = 'block'; $('verify-email').textContent = u.email; $('f-submit').disabled = true; $('form-hint').style.display = 'none'; }
   window.resendVerification = function(){ var u = auth.currentUser; if (!u) return; u.sendEmailVerification().then(function(){ $('verify-note').querySelector('div').textContent = 'Sent again'; }, function(e){ err('form-err', e.message); }); };
-  window.verifiedContinue = function(){ var u = auth.currentUser; if (!u) return; u.reload().then(function(){ location.reload(); }); };
+  window.verifiedContinue = function(){ var u = auth.currentUser; if (!u) return; verifiedNow(u).then(function (ok) { if (ok) { location.reload(); return; } err('form-err', 'That address is not verified yet. Click the link in the email we sent to ' + u.email + ', then press this again.'); }, function (e) { err('form-err', e.message); }); };
   function domainOf(email){ return String(email||'').toLowerCase().split('@')[1]||''; }
   function slugOf(d){ return String(d||'').split('.')[0].replace(/[^a-z0-9-]/g,''); }
 
@@ -295,15 +295,37 @@
       localStorage.removeItem('omega:signup-draft');
     } catch (e) {}
     show('step-form'); $('f-submit').disabled = true;
-    u.getIdToken().then(function (token) { return fetch('/api/tenant-signup', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
+    loadOptions(u, false);
+  });
+  /* The server reads "verified" off the ID token, and a token minted before
+     the link was clicked still says no for up to an hour, reload or not. So
+     a refusal for an unverified address asks Firebase again, and when the
+     address is verified now, mints a fresh token and carries on; otherwise
+     the page holds and looks again every few seconds, so the click in the
+     email moves this page on by itself. */
+  var verifyTimer = null;
+  function verifiedNow(u){ return u.reload().then(function () { return u.emailVerified === true ? u.getIdToken(true).then(function () { return true; }) : false; }); }
+  function watchVerification(u){
+    if (verifyTimer) return;
+    verifyTimer = setInterval(function () {
+      if (document.hidden || auth.currentUser !== u) return;
+      verifiedNow(u).then(function (ok) { if (ok && verifyTimer) { clearInterval(verifyTimer); verifyTimer = null; $('verify-note').style.display = 'none'; $('form-hint').style.display = ''; err('form-err', ''); loadOptions(u, true); } }, function () {});
+    }, 5000);
+  }
+  function loadOptions(u, fresh){
+    u.getIdToken(!!fresh).then(function (token) { return fetch('/api/tenant-signup', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Signup unavailable'); return j; }); })
       .then(function (j) { if (auth.currentUser !== u) return; signupOptions = j; $('f-submit').disabled = false; $('f-submit').textContent = j.packaging ? 'Continue' : 'Request my workspace';
           /* the switch is on but the price book is not seeded or enabled yet: say so, take nobody's details */
           if (j.notReady) { $('f-submit').disabled = true; $('form-hint').textContent = j.notReady + '.'; return; }
           if (j.packaging) $('form-hint').textContent = j.payNow ? 'Next: your billing profile, then build your system and pay your first invoice by card. Your workspace opens the moment it is paid.' : 'Next: your billing profile and your package. A 14-day trial starts when ClearSky approves it.';
           loadProposal(); },
-        function (e) { if (/verify your email/i.test(e.message || '')) { holdForVerification(u); return; } err('form-err', e.message); });
-  });
+        function (e) {
+          if (!/verify your email/i.test(e.message || '')) { err('form-err', e.message); return; }
+          if (fresh) { holdForVerification(u); watchVerification(u); return; }
+          verifiedNow(u).then(function (ok) { if (ok) loadOptions(u, true); else { holdForVerification(u); watchVerification(u); } }, function () { holdForVerification(u); watchVerification(u); });
+        });
+  }
   auth.onAuthStateChanged(function(u){ if(!u) show('step-auth'); });
 
   window.backToCompany = function () { show('step-form'); };

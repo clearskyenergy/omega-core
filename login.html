@@ -854,7 +854,28 @@
       if (staffActive && staffRole === "none" && !dests.length) return { blocked: "pending-role" };
       if (!dests.length) return { blocked: "no-workspace" };
 
-      return { dests: dests, org: homeOrg };
+      /* ── NO WORKSPACE YET: THE SIGNUP PAGE, NOT A DERIVED ONE ──────────
+         The open host derives a workspace from any email domain, so a
+         person whose company has no omega_orgs record was opened onto an
+         empty "Test workspace" instead of the signup they had started.
+         Only someone with nothing else counts: no record, no cross-org
+         grant, not staff, no older access request (that one has its own
+         banner) and no accepted terms — every person who has used a legacy
+         workspace that was never seeded has accepted them, and keeps it.
+         route() sends them on only while packaged signup is on, and
+         /start.html re-reads the record itself, so a record this read
+         missed opens the workspace from there. */
+      let signup = false;
+      if (!logicOrg && !grantOrg && !isAdminDomain && !staffActive &&
+          dests.length === 1 && dests[0].key === "workspace") {
+        const [req, terms] = await Promise.all([
+          readDoc(["access_requests", uid]),
+          readDoc(["termsAcceptances", uid])
+        ]);
+        signup = !req && !terms;
+      }
+
+      return { dests: dests, org: homeOrg, signup: signup };
     }
 
     /* ---- Hand the session to the destination ------------------------------ */
@@ -901,6 +922,7 @@
 
     /* ---- The whole flow, once a user exists ------------------------------- */
     let routing = false;
+    let creatingAccount = false;   /* the signup form routes the account it makes */
     async function route(user, opts) {
       if (routing) return;
       routing = true;
@@ -912,6 +934,7 @@
 
         const found = await resolve(user);
         if (found.blocked) { routing = false; return blockedPane(found.blocked, found.role); }
+        if (found.signup && await packagedSignup) return toSignup();
 
         /* ── ALWAYS ASK WHEN THERE IS MORE THAN ONE ────────────────────
            This used to remember the last choice and go straight there,
@@ -1053,13 +1076,22 @@
 
     /* Packaged signup on? The public price list says (no sign-in needed);
        then the form gives way to the signup page, which pays at the end. */
-    fetch('/api/offerings', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (o) {
-      if (!o || !o.signup || !o.signup.packaged) return;
+    const packagedSignup = fetch('/api/offerings', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (o) {
+      if (!o || !o.signup || !o.signup.packaged) return false;
       /* the account form stays: the account is step one; the signup page takes it from there */
       window.__packagedSignup = true;
       $("suPackaged").style.display = ''; $("suLede").style.display = 'none';
       $("suStart").href = o.signup.start || '/start.html';
-    }).catch(function () {});
+      return true;
+    }).catch(function () { return false; });
+
+    /* The signup page: company, how you work, billing profile, build your
+       system, pay. It holds an address that is not verified yet and moves on
+       by itself once the link is clicked. */
+    function toSignup() {
+      loading(true, "Opening <b>your signup</b>");
+      window.location.replace("/start.html");
+    }
     /* ---- Create an account ------------------------------------------------
        Two things happen and they are deliberately separate: a Firebase Auth
        account (which needs no privilege and exists the moment it is made) and
@@ -1115,11 +1147,17 @@
       const btn = $("suSubmit");
       btn.disabled = true;
       suSay("Creating your account…");
+      /* Making the account signs it in, and the "already signed in" listener
+         below would route it at once: the new person was opened onto the
+         workspace before this handler could send them to signup. This
+         handler routes a new account, so the listener stands aside. */
+      creatingAccount = true;
       let user = null;
       try {
         const cred = await auth.createUserWithEmailAndPassword(A, email, pass);
         user = cred.user;
       } catch (err) {
+        creatingAccount = false;
         btn.disabled = false;
         const c = (err && err.code) || "";
         if (c.indexOf("email-already-in-use") > -1) {
@@ -1137,7 +1175,7 @@
          lands on the signup page with the company carried over; nothing is
          requested of ClearSky, because paying the first invoice opens the
          workspace. A colleague of an existing tenant still just goes in. */
-      if (window.__packagedSignup) {
+      if (await packagedSignup) {
         /* The company travels in this person's own browser, never in a link
            or an address that could be forwarded: these companies do not want
            to be out there. */
@@ -1148,11 +1186,10 @@
         let joins = false;
         try { joins = !!(await readDoc(["omega_orgs", domain])); } catch (_) {}
         if (joins) { suSay("Your company is already on OMEGA — taking you in.", "info"); showPane("signIn"); return route(user, { quick: true }); }
-        blockedPane("unapproved", null);
-        $("blockedTitle").textContent = "Verify your email, then build your system";
-        $("blockedBody").textContent = "We sent a verification link to " + email + ". Click it, then continue: your billing profile, the system you build from our menu, and your first invoice by card. Your workspace opens the moment it is paid.";
-        const nx = $("blockedNext"); nx.href = next; nx.textContent = "Continue to your billing profile"; nx.style.display = "";
-        return;
+        /* Straight on to the signup page: it says the link is on its way,
+           waits for the click and carries on to the billing profile, the
+           system and the first invoice. */
+        return toSignup();
       }
       /* Best effort, and it must not block the flow: an unverified address
          still gets an account, and ClearSky is approving the domain anyway. */
@@ -1226,7 +1263,7 @@
       say("Signed out. Enter your work email to continue.", "info");
     } else {
       auth.onAuthStateChanged(A, (user) => {
-        if (user) route(user, { quick: params.get("go") === "1" });
+        if (user && !creatingAccount) route(user, { quick: params.get("go") === "1" });
       });
     }
   }
