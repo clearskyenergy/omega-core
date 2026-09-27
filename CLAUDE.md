@@ -854,8 +854,10 @@ add-ons on and the catalog's ribbon), and `exact()` simulates exactly that
 (`OmegaWorkspaceHub.moduleEditor` `editorModules`). So every editor module
 is exact on every legacy plan; what is not (the storefront, set up with
 ClearSky) is not sold here: the quote says why and offers the recorded
-request (`plan-change` `opt-in`). Every Omega Logic department is exact on
-every plan. Add-ons bill through QuickBooks whatever the package rail
+request (`plan-change` `opt-in`; `withdraw-opt-in` takes it back, and the
+card then reads Requested with Withdraw). Omega Design never carries Add to
+plan (always included; the server refuses it). Every Omega Logic department
+is exact on every plan. Add-ons bill through QuickBooks whatever the package rail
 (`addons.RAIL`; `package-billing.guard(c, rail)`), never rebinding a
 legacy Stripe tier's own customer; add-ons on Stripe are not built. The one
 browser control is `OmegaPackageMenu.addOnControl`; `scripts/test-addons.js`
@@ -875,8 +877,19 @@ handles itself never raises the mark. Optional held modules offer **Opt out** th
 same shared menu. Packaged opt-outs preview the server's dependency set,
 then queue for the existing quarterly review (no immediate access, charge
 or refund change); Keep module withdraws the request. Lite is mandatory.
-Legacy opt-outs prepare a ClearSky email request under the existing
-agreement. The page never changes billing or grants. Opt-in panels live on
+Legacy opt-outs are recorded the same way (Tommy, 2026-09-27: "i want it
+to opt in and out, this needs to work"): `request-removal` /
+`withdraw-removal` on a legacy record write `billing/current.optOuts` with
+history, audit and a mail, ClearSky confirms the date under the agreement,
+and the Package tab preselects without them. A request grants and charges
+nothing, so an owner or administrator files one on the ROLE alone (that
+role is only ever written by ClearSky or the workspace's owner, and the
+record says whether the email was verified, and the workspace need only
+not be pending, suspended or cancelled); pricing, paying, switching on and
+the summary need a verified email or `admin.clientAdmin`. A workspace with a billing
+record never reads "No billing account yet" on Plan & billing: its payment
+method is Stripe's, or QuickBooks' where ClearSky invoices it there. The
+page never changes billing or grants. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
@@ -902,7 +915,10 @@ read it). A PACKAGED workspace prices from `api/package-catalog` and opts
 in through the shared `omega-package-menu.js` control and `plan-change`;
 any other workspace reads the PUBLIC price list `GET /api/offerings`,
 each module judged against its tier (On your plan · Partly · Add to
-plan, the same `addOnControl`: the server's price, QuickBooks' card page). `/marketplace.html#<module>`
+plan, the same `addOnControl`: the server's price, QuickBooks' card page;
+a held module's Opt out is the recorded request above, with Keep module).
+Enterprise is "Contact for pricing": the public list publishes no
+Enterprise figure (the book keeps it for the contract). `/marketplace.html#<module>`
 lands on that module. A tenant on the classic home keeps the tool
 catalogue and pinning. Design, launch order and the honest list of what
 is not built: `docs/OMEGA-WORKSPACE.md`.

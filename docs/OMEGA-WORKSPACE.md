@@ -91,8 +91,9 @@ decided 2026-09-26.
   Connect to Stripe app, never through OMEGA; `docs/PAYMENTS-STRIPE.md`);
   *Billing history* (the engine's invoices from
   `GET /api/plan-change`, which every verified member may read; a Stripe
-  plan's from `POST /api/stripe-invoices`). Additions waiting (a legacy
-  opt-in with its price, a packaged change waiting for payment) are listed
+  plan's from `POST /api/stripe-invoices`). *Requested changes* (a recorded
+  opt-in with its price and a legacy opt-out, each with Withdraw or Keep
+  for an owner or administrator; a packaged change waiting for payment) sit
   between them.
 - **Opt in, never Ask.** Every module not held carries a way to buy it,
   never an email. A packaged workspace opts in on the one menu
@@ -115,8 +116,27 @@ decided 2026-09-26.
   new card, or the card saved there. The card waits with the pay link,
   **I've paid** (`reconcile-now`) and Cancel; the moment QuickBooks shows
   it paid, it is Live. `api/_lib/addons.js` is the one engine; see *Add to
-  plan* below. Old recorded requests (`billing/current.optIns`) still show
-  on Plan & billing.
+  plan* below. A module the plan cannot switch on exactly is asked for
+  instead (`opt-in`, recorded on `billing/current.optIns`); its card then
+  reads *Requested* and **Withdraw the request** (`withdraw-opt-in`) takes
+  it back. Omega Design never carries Add to plan (it is always included;
+  the server refuses it).
+- **Opt out, and taking a request back** (Tommy, 2026-09-27: "i want it to
+  opt in and out, this needs to work"). A legacy workspace's **Opt out**
+  opens the one menu, which previews what goes with it from the server
+  (Office takes the Logic departments that need it, bought as add-ons or
+  not) and **Confirm** records it: `request-removal` on a legacy record
+  writes `billing/current.optOuts[key]` with who and when, history and
+  `admin_audit` rows, and mails ClearSky, who confirms the date and any
+  change to the invoice under the agreement. Access and charges stay until
+  then. **Keep module** (`withdraw-removal`) takes an opt-out back, on the
+  Modules page, in the store and in Plan & billing's *Requested changes*.
+  The admin Package tab lists both kinds of request and preselects without
+  the opt-outs. A request grants and charges nothing, so an owner or
+  administrator files one on the role alone, verified email or not (the
+  record and the mail say which); quoting, paying, switching on and the
+  summary need a verified email, or an owner or administrator of an active
+  client (`admin.clientAdmin`, below). A member is told who files them.
 - **The module cards live on Modules, not the home** (Tommy, 2026-09-27:
   "i love the way the modules are but i dont want them to be taking up so
   much dashboard space"). The home is the hub, Today, In flight and Around
@@ -408,7 +428,13 @@ to the page, the shell or the runtime they load.
 - **Self-serve conversion of a legacy plan onto a package.** A legacy
   plan buys modules as add-ons beside its plan (Add to plan, above);
   moving the whole workspace onto a subscription package (re-pricing what
-  its tier holds today) stays ClearSky's, from the admin Package tab.
+  its tier holds today) stays ClearSky's, from the admin Package tab,
+  which opens preselected on what it holds plus its recorded opt-ins, less
+  its opt-outs (`billing/current.optOuts`, no figure: a legacy price is
+  the agreement's). Neither request changes access or a charge by itself.
+- **Self-serve opt-out of a paid add-on.** An add-on stops when a renewal
+  stays unpaid past the grace; turning one off from the workspace is the
+  recorded opt-out ClearSky confirms, not an immediate cancel.
 - **One-click charge of a saved card from the workspace.** The card is
   charged on QuickBooks' own page (a saved card there pays in one click;
   Autopay pays renewals). Charging it from our server needs the QuickBooks

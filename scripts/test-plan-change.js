@@ -26,6 +26,7 @@ function equal(a, b, text) { assert.deepStrictEqual(a, b, text); count++; }
 function ok(v, text) { assert(v, text); count++; }
 async function refused(fn, re) { await assert.rejects(fn, re); count++; }
 function bill() { return db.data.get(root + '/billing/current'); }
+function requestedKeys(map) { return Object.keys(map || {}).filter(function (k) { return map[k].status === 'requested'; }); }
 function mods() { return bill().modules.slice().sort(); }
 var evSorted = ev.slice().sort();
 function req(method, body, caller) { return api({ method: method, query: body, body: body, caller: caller || owner, headers: {} }, res); }
@@ -317,7 +318,8 @@ async function run() {
   bill().subscription.modules.push('logic-plant');
   await refused(function () { return req('POST', { action: 'request-removal', remove: ['logic-office'], previewId: stale.previewId }); }, /review the opt-out/, 'new dependencies require a new preview');
   bill().packaged = false;
-  await refused(function () { return req('POST', { action: 'request-removal', remove: ['logic-office'], dryRun: true }); }, /not on a subscription package/);
+  var flipped = await req('POST', { action: 'request-removal', remove: ['logic-office'], dryRun: true });
+  equal(flipped.legacy, true, 'a plan that is not a package records its opt-out for ClearSky (below) instead of refusing it');
 
 
   /* ── Opt in on a plan billed outside the engine (2026-09-27) ────── */
@@ -345,6 +347,80 @@ async function run() {
   ok(!db.data.has(root + '/billing/current'), 'a request never creates a billing record');
   seed(ev, 'field');
   await refused(function () { return req('POST', { action: 'opt-in', add: ['siteintel'] }); }, /subscription package/);
+
+  /* ── "Opt in and out, this needs to work" (2026-09-27) ──────────────
+     A legacy workspace invoiced by ClearSky (Concord's shape: manual, a
+     paid tier, add-ons, no status written on an old record), its admin a
+     password account that never verified the mailbox. */
+  function legacy(extraBilling, org) {
+    db = new F.DB(); db.serial = true;
+    var lb = B.proposed(); lb.enabled = true; db.seed('pricebook/' + lb.version, lb);
+    db.seed(root, Object.assign({ name: 'Plan Example', domains: ['plan.example'] }, org || {}));
+    db.seed(root + '/billing/current', Object.assign({ tier: 'standard', addons: ['engineering', 'permitting'], toolOverrides: {}, paymentProvider: 'manual', amountDue: 1299, lastPaidAt: '2026-08-02' }, extraBilling || {}));
+    db.seed(root + '/members/owner', { role: 'owner', status: 'active' });
+  }
+  var admin = Object.assign({}, owner, { uid: 'admin1', email: 'test@' + orgId, role: 'admin', claims: { email_verified: false } });
+  function rows(prefix) { return Array.from(db.data.keys()).filter(function (p) { return p.indexOf(prefix) === 0; }).map(function (p) { return db.data.get(p); }); }
+  legacy();
+  var noStatus = await req('POST', { action: 'opt-in', add: ['siteintel'] });
+  equal(noStatus.requested, true, 'an old record with no status is an active workspace (the rules and omega-tenant.js read it so)');
+  var byRole = await req('POST', { action: 'opt-in', add: ['finance'] }, admin);
+  equal(byRole.add, ['finance'], 'an administrator by role files an opt-in without a verified mailbox');
+  equal(bill().optIns.finance.emailVerified, false); equal(bill().optIns.siteintel.emailVerified, true, 'the record says whether the address was verified');
+  ok(rows(root + '/admin_audit/optin-').some(function (e) { return e.emailVerified === false && e.by === admin.email; }), 'and so does the audit row');
+  await refused(function () { return quote(['siteintel'], admin); }, /Verified email/, 'pricing a package change still needs a verified email');
+  await refused(function () { return req('POST', { action: 'reconcile-now' }, admin); }, /Verified email/, 'so does asking for a payment');
+  await refused(function () { return req('GET', { orgId: orgId }, admin); }, /Verified email/, 'and reading the billing summary');
+  var unverifiedMember = Object.assign({}, member, { claims: { email_verified: false } });
+  await refused(function () { return req('POST', { action: 'opt-in', add: ['estimate'] }, unverifiedMember); }, /workspace administrator/, 'the role is the grant: a member cannot file one either way');
+  await refused(function () { return req('POST', { action: 'request-removal', remove: ['engineering'], dryRun: true }, unverifiedMember); }, /workspace administrator/);
+  await refused(function () { return req('POST', { action: 'opt-in', add: ['estimate'], orgId: orgId }, Object.assign({}, admin, { orgId: 'other.example' })); }, /Own organization/, 'the role is for its own workspace only');
+  /* withdraw an opt-in: the department that needs a withdrawn Office goes with it */
+  await req('POST', { action: 'opt-in', add: ['logic-plant'] }, admin);
+  equal(Object.keys(bill().optIns).sort(), ['finance', 'logic-office', 'logic-plant', 'siteintel']);
+  var wd = await req('POST', { action: 'withdraw-opt-in', add: ['logic-office'] }, admin);
+  equal(wd.add, ['logic-office', 'logic-plant'], 'withdrawing Office withdraws the department that needs it');
+  equal(bill().optIns['logic-office'].status, 'withdrawn'); equal(bill().optIns['logic-plant'].withdrawnBy, admin.email); equal(bill().optIns.siteintel.status, 'requested', 'the others stay requested');
+  equal(wd.optIns.finance.status, 'requested', 'the answer carries the whole map, for the page to repaint from');
+  await refused(function () { return req('POST', { action: 'withdraw-opt-in', add: ['logic-office'] }, admin); }, /No opt-in is waiting/);
+  var again = await req('POST', { action: 'opt-in', add: ['logic-plant'] }, admin);
+  equal(again.add.slice().sort(), ['logic-office', 'logic-plant'], 'a withdrawn module can be asked for again');
+  ok(rows(root + '/admin_audit/optin-withdrawn-').length === 1, 'the withdrawal is audited');
+  /* opt out: recorded, never a grant or a charge, reviewed first */
+  var before = B.stable(bill());
+  var q = await req('POST', { action: 'request-removal', remove: ['engineering'], dryRun: true }, admin);
+  equal(q.legacy, true); equal(q.names, [M.get('engineering').name]); ok(/under your agreement/.test(q.note) && /stay as they are/.test(q.note), 'the preview says ClearSky confirms it under the agreement');
+  equal(B.stable(bill()), before, 'a preview writes nothing');
+  await refused(function () { return req('POST', { action: 'request-removal', remove: ['engineering'], previewId: 'x'.repeat(48) }, admin); }, /review the opt-out/);
+  var out = await req('POST', { action: 'request-removal', remove: ['engineering'], previewId: q.previewId }, admin);
+  equal(out.requested, true); equal(out.optOuts.engineering.status, 'requested'); equal(out.optOuts.engineering.requestedBy, admin.email); equal(out.optOuts.engineering.emailVerified, false);
+  equal(bill().tier, 'standard'); equal(bill().addons, ['engineering', 'permitting'], 'the tier and its add-ons are untouched: access stays until ClearSky acts');
+  equal(bill().amountDue, 1299, 'and so is what is owed');
+  ok(rows(root + '/billing/current/history/optout-').length === 1 && rows(root + '/admin_audit/optout-')[0].action === 'opt-out-requested', 'history and audit rows');
+  await refused(function () { return req('POST', { action: 'request-removal', remove: ['engineering'], dryRun: true }, admin); }, /Already requested/);
+  var keepQ = await req('POST', { action: 'withdraw-removal', remove: ['engineering'], dryRun: true }, admin);
+  var kept = await req('POST', { action: 'withdraw-removal', remove: ['engineering'], previewId: keepQ.previewId }, admin);
+  equal(kept.withdrawn, true); equal(bill().optOuts.engineering.status, 'withdrawn'); equal(bill().optOuts.engineering.withdrawnBy, admin.email);
+  await refused(function () { return req('POST', { action: 'withdraw-removal', remove: ['engineering'], dryRun: true }, admin); }, /No opt-out is waiting/);
+  /* Omega Logic, held by its add-on: Office takes the departments with it, keeping one keeps Office */
+  legacy({ tier: 'enterprise', addons: ['omega-logic'] }, { status: 'active' });
+  var qo = await req('POST', { action: 'request-removal', remove: ['logic-office'], dryRun: true });
+  equal(qo.modules, ['logic-office', 'logic-plant', 'logic-materials', 'logic-logistics', 'logic-customer'], 'opting out of Office names every department that needs it');
+  await req('POST', { action: 'request-removal', remove: ['logic-office'], previewId: qo.previewId });
+  var kq = await req('POST', { action: 'withdraw-removal', remove: ['logic-plant'], dryRun: true });
+  equal(kq.modules, ['logic-office', 'logic-plant'], 'keeping Plant keeps Office too');
+  await req('POST', { action: 'withdraw-removal', remove: ['logic-plant'], previewId: kq.previewId });
+  equal(requestedKeys(bill().optOuts), ['logic-materials', 'logic-logistics', 'logic-customer']);
+  legacy({}, { status: 'suspended' });
+  await refused(function () { return req('POST', { action: 'request-removal', remove: ['engineering'], dryRun: true }); }, /not active/);
+  await refused(function () { return req('POST', { action: 'opt-in', add: ['estimate'] }); }, /not active/, 'only an explicit status refuses');
+  legacy(); db.data.delete(root + '/billing/current');
+  await refused(function () { return req('POST', { action: 'request-removal', remove: ['engineering'], dryRun: true }); }, /Billing is not set up/);
+  ok(!db.data.has(root + '/billing/current'), 'an opt-out never creates a billing record');
+  seed(ev, 'field');
+  await refused(function () { return req('POST', { action: 'withdraw-opt-in', add: ['siteintel'] }); }, /subscription package/);
+  var packagedOut = await req('POST', { action: 'request-removal', remove: ['gridatlas'], dryRun: true }, Object.assign({}, owner, { uid: 'owner', claims: { email_verified: false } }));
+  ok(!packagedOut.legacy && packagedOut.modules.indexOf('gridatlas') >= 0, 'a packaged workspace keeps the quarterly-review removal (a request too)');
 
   Date.now = realNow;
   console.log('Plan change: ' + count + ' passed; sandbox mock, no network.');
