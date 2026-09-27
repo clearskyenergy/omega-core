@@ -126,7 +126,13 @@ async function driverChecks() {
   await refused('a line edited on Stripe\'s side is an accounting review, never a silent change', function () { return d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / edit'), { stripeInvoiceId: inv3.id, stripeCustomerId: c1, totalCents: 70000 })); }, /lines changed|total changed/);
   var inv4 = await d.invoice(plan('OMEGA subscription stripe.example / dispute'), BP.normalize(profile), c1);
   s.pay(inv4.id); s.dispute(inv4.id);
-  await refused('a disputed payment is an accounting review', function () { return d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / dispute'), { stripeInvoiceId: inv4.id, stripeCustomerId: c1, totalCents: 70000 })); }, /disputed/);
+  await refused('a disputed payment is an accounting review while the dispute is open', function () { return d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / dispute'), { stripeInvoiceId: inv4.id, stripeCustomerId: c1, totalCents: 70000 })); }, /disputed/);
+  var dp4 = Object.keys(s.disputes_)[0]; s.settleDispute(dp4, 'lost');
+  r = await d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / dispute'), { stripeInvoiceId: inv4.id, stripeCustomerId: c1, totalCents: 70000 }));
+  ok('a dispute LOST: the money went back, the invoice reads reversed (never paid access on a chargeback)', r.reversed === true && r.satisfied === false, r);
+  var inv8 = await d.invoice(plan('OMEGA subscription stripe.example / dispute-won'), BP.normalize(profile), c1); s.pay(inv8.id); s.settleDispute(s.dispute(inv8.id), 'won');
+  r = await d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / dispute-won'), { stripeInvoiceId: inv8.id, stripeCustomerId: c1, totalCents: 70000 }));
+  ok('a dispute WON: still paid, and nothing left for a person', r.satisfied === true && r.reversed === false && !r.review, r);
   await refused('an invoice is never read against another customer', function () { return d.reconcile(Object.assign({}, record, { stripeCustomerId: other })); }, /customer mismatch/);
   var inv5 = await d.invoice(plan('OMEGA subscription stripe.example / credit'), BP.normalize(profile), c1);
   s.credit(inv5.id, 30000); r = await d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / credit'), { stripeInvoiceId: inv5.id, stripeCustomerId: c1, totalCents: 70000 }));

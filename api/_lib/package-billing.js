@@ -35,21 +35,25 @@ var live = Mode.live;
 /* `rail` names the provider when the caller knows it (a legacy plan's
    add-ons bill through QuickBooks: api/_lib/addons.js); else the
    workspace's own (billing-driver.providerOf). */
-function guard(c, rail) {
+/* reading (reconcile): an invoice issued under an earlier price book is
+   still read back after the next book is released; only ISSUING needs the
+   current version. Without this every existing workspace's payment would be
+   refused (and a webhook acknowledged) the day VERSION is renamed. */
+function guard(c, rail, reading) {
   if (process.env.PACKAGING_BILLING_ENABLED !== 'true') fail('Packaging billing is disabled');
-  var provider = rail || D.providerOf(c.billing);
+  var provider = rail || D.providerOf(c.billing), current = reading || c.book.version === B.VERSION;
   if (Mode.live(provider)) {
     if (provider === 'stripe') {
-      if (!c.book.enabled || c.book.version !== B.VERSION || /-proposed$/.test(c.book.version)) fail('An enabled release price book is required to bill live through Stripe');
+      if (!c.book.enabled || !current || /-proposed$/.test(c.book.version)) fail('An enabled release price book is required to bill live through Stripe');
       return;
     }
-    if (!c.book.enabled || c.book.version !== B.VERSION || c.book.qbo.env !== 'production' || !c.book.qbo.realmId) fail('An enabled price book synced to the production QuickBooks company is required');
+    if (!c.book.enabled || !current || c.book.qbo.env !== 'production' || !c.book.qbo.realmId) fail('An enabled price book synced to the production QuickBooks company is required');
     return;
   }
   if (!Mode.sandbox(provider)) fail(provider === 'stripe' ? 'Packaging billing through Stripe needs a Stripe test key (or PACKAGING_LIVE=true with a live key)' : 'Packaging billing requires QBO_ENV=sandbox (or PACKAGING_LIVE=true with QBO_ENV=production)');
   if (c.org.packagingSandbox !== true) fail('An explicitly marked sandbox tenant is required');
-  if (provider === 'stripe') { if (!c.book.enabled || c.book.version !== B.VERSION) fail('An enabled price book is required'); return; }
-  if (!c.book.enabled || c.book.version !== B.VERSION || c.book.qbo.env !== 'sandbox') fail('An enabled proposed sandbox price book is required');
+  if (provider === 'stripe') { if (!c.book.enabled || !current) fail('An enabled price book is required'); return; }
+  if (!c.book.enabled || !current || c.book.qbo.env !== 'sandbox') fail('An enabled proposed sandbox price book is required');
 }
 function canApply(c) { try { guard(c); return true; } catch (e) { return false; } }
 function prepare(c, input, now) {
@@ -331,7 +335,7 @@ async function reconcile(db, orgId, now, deps, options) {
   /* a plan billed outside the engine is reconciled only for its add-ons
      (api/_lib/addons.js, QuickBooks' rail); its own tier, amount due and
      pay link are never this function's to write */
-  guard(c, legacy ? 'quickbooks' : undefined);
+  guard(c, legacy ? 'quickbooks' : undefined, true);
   if (legacy && !c.billing.addOns) return { skipped: true };
   var current = c.root.collection('billing').doc('current'), collection = current.collection('invoices');
   /* the runner's bounded read pages by document id, which is unique: paged by

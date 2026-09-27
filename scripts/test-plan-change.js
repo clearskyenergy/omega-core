@@ -359,6 +359,16 @@ async function run() {
   for (var pg = 0; pg < 3; pg++) await S.reconcile(db, orgId, now, {}, { limit: 2 });
   equal(['aaa', 'bbb', 'bbc'].map(function (k) { return db.data.get(root + '/billing/current/invoices/change-' + k).state; }), ['paid', 'paid', 'paid'], 'three changes of one date across page edges: all read by the runner');
   equal(bill().reconcileCursor, null, 'and the cursor comes back to the start');
+  /* the next price book released: invoices issued under this one are still read back (only issuing needs the current book) */
+  seed(ev, 'field'); receipts = {};
+  db.seed(root + '/billing/current/invoices/change-old', changeRow('change-old', ['siteintel'], 'unpaid'));
+  receipts['I-change-old'] = { satisfied: true, reversed: false, paidCents: 1000, payUrl: null };
+  var bookNow = B.VERSION; B.VERSION = bookNow + '-next';
+  try {
+    await S.reconcile(db, orgId, now, {});
+    equal(db.data.get(root + '/billing/current/invoices/change-old').state, 'paid', 'a payment on an invoice from the earlier book is still applied');
+    await refused(function () { return S.issue(db, orgId, Date.parse(bill().nextInvoiceOn + 'T12:00:00Z'), {}); }, /price book/);
+  } finally { B.VERSION = bookNow; }
   /* a stale verdict never overwrites a newer one: another reconcile paid it while this one failed on its side */
   seed(ev, 'field'); receipts = {}; failures = {};
   db.seed(root + '/billing/current/invoices/change-ccc', changeRow('change-ccc', ['siteintel'], 'unpaid'));

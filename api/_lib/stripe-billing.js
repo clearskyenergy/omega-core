@@ -186,14 +186,22 @@ function driver(book, supplied) {
        counting card money alone read it unpaid for ever. */
     var credited = (inv.starting_balance < 0 && inv.ending_balance != null ? Math.max(0, inv.ending_balance - inv.starting_balance) : 0) + (inv.pre_payment_credit_notes_amount || 0);
     /* money that came back: a refund on the charge, or a credit note issued after payment */
+    var lostDispute = false, openDispute = false;
     if (paid > 0 && inv.charge) {
       var charge = typeof inv.charge === 'string' ? await S.charges.retrieve(inv.charge) : inv.charge;
       if (charge && charge.amount_refunded) refunded = Math.max(refunded, charge.amount_refunded);
-      /* a chargeback: `disputed` is the Charge's own flag (there is no `dispute` field in this API version) */
-      if (charge && charge.disputed) fail('The payment on ' + inv.id + ' is disputed; accounting review required');
+      /* a chargeback, decided by the dispute's own outcome (listed by charge,
+         which every API version has): lost, the money went back; won, it
+         stays paid; still open, a person looks */
+      if (charge && charge.disputed) {
+        var disputes = ((await S.disputes.list({ charge: charge.id, limit: 10 })) || {}).data || [];
+        lostDispute = disputes.some(function (d) { return d.status === 'lost'; });
+        openDispute = !lostDispute && (!disputes.length || disputes.some(function (d) { return ['won', 'warning_closed'].indexOf(d.status) < 0; }));
+      }
     }
     var covered = paid + credited;
-    if (inv.status === 'paid' && covered > 0 && refunded >= covered) return { satisfied: false, reversed: true, paidCents: 0, payUrl: null };
+    if (lostDispute || (inv.status === 'paid' && covered > 0 && refunded >= covered)) return { satisfied: false, reversed: true, paidCents: 0, payUrl: null };
+    if (openDispute) fail('The payment on ' + inv.id + ' is disputed; accounting review required');
     var net = Math.max(0, covered - refunded);
     /* paid, with PART of it given back (a goodwill refund, a partial credit
        note): a concession somebody made. It stays paid and a person is told;
