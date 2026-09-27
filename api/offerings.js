@@ -12,7 +12,7 @@ async function book(db) {
   try { return { book: await B.load(db, B.VERSION), source: 'seeded' }; } catch (e) { return { book: B.proposed(), source: 'proposed' }; }
 }
 function view(b, source) {
-  var rows = P.catalog(b), modules = rows.map(function (m) { return { key: m.key, name: m.name, category: m.category, shelf: m.shelf, blurb: m.blurb || '', monthlyDisplay: m.priceDisplay, priceDisplay: m.priceDisplay, usageDisplay: m.usageDisplay || '', features: m.features || [], requires: m.requires || [], tools: m.tools }; });
+  var rows = P.catalog(b), modules = rows.map(function (m) { return { key: m.key, name: m.name, category: m.category, shelf: m.shelf, blurb: m.blurb || '', monthlyDisplay: m.priceDisplay, priceDisplay: m.priceDisplay, usageDisplay: m.usageDisplay || '', features: m.features || [], requires: m.requires || [], tools: m.tools, legacyGates: m.legacyGates || [] }; });
   var plans = Object.keys(b.plans).map(function (k) { var p = b.plans[k]; return { key: k, name: p.name, monthlyDisplay: P.money(p.priceCents) + '/month', capDisplay: 'À la carte up to ' + P.money(p.capCents) + ' of modules', serviceFeeDisplay: b.serviceFees[k] ? P.money(b.serviceFees[k]) + '/year' : 'Included' }; });
   return { pricebookVersion: b.version, source: source, currency: b.currency, floorDisplay: P.money(b.floorCents) + '/month',
     lite: { name: 'Lite', monthlyDisplay: P.money(b.modules.lite.priceCents) + '/month', serviceFeeDisplay: b.serviceFees.lite ? P.money(b.serviceFees.lite) + '/year' : 'Included' },

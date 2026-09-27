@@ -223,6 +223,7 @@ body.refused #refused{display:block}body.refused #content{display:none}
 <script src="/omega-tools.js?v=9"></script>
 <script src="/omega-newproject.js"></script>
 <script src="/omega-hexhub.js"></script>
+<script src="/omega-caps.js"></script>
 <script src="/omega-workspace-hub.js"></script>
 <script src="/omega-workspace-today.js"></script>
 <script src="/omega-workspace-shell.js"></script>
@@ -408,7 +409,9 @@ function prefs() { var p = {}; Object.keys(PREFS_DEFAULT).forEach(function (k) {
 /* ── what this person may open: ONE rule, the catalog's ─────────────────── */
 function tool(key) { return T.byKey(key); }
 function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, WS); }
-function hubCtx() { var pa = WS.packageAccess; return { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], hideMarketplace: !!WS.hideMarketplace, packaged: !!(pa && pa.packaged), tierLevel: WS.tierLevel }; }
+function hubCtx() { var pa = WS.packageAccess, packaged = !!(pa && pa.packaged); return { canOpen: function (k) { return open(tool(k)); }, tool: tool, modules: WS.modules || [], addons: WS.addons || [], hideMarketplace: !!WS.hideMarketplace, packaged: packaged, tierLevel: WS.tierLevel,
+  /* a legacy module is also measured by what the editor opens of it, on the editor's own ladder */
+  canCap: packaged ? null : HUB.capsFor(WS.billing || (window.OmegaTenant && OmegaTenant.billing), WS.orgId) }; }
 function href(t) { return T.hrefFor(t, WS); }
 function launch(t) {
   if (!t) return;

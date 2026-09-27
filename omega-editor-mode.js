@@ -168,6 +168,13 @@
     if (m === DEFAULT_MODE) return m;
     apply(m);
     watch();
+    /* A package lands after boot (an API call after sign-in) and shows
+       exactly what was bought: give the hidden pages back the moment it
+       does, not at the next tick of the watch. */
+    if (global.document && global.document.addEventListener) {
+      global.document.addEventListener('omega:package', function () { apply(); });
+      global.document.addEventListener('omega:plan-changed', function () { apply(); });
+    }
     return m;
   }
 

@@ -61,6 +61,7 @@ function fixture(tier) {
   window.firebase = { apps:[app], initializeApp:function () { return app; }, app:function () { return app; }, firestore:firestore, auth:authentication };
   window.CLEARSKY_CONFIG = { firebase:{}, adminDomains:['clearsky-usa.com'], tenant:{ orgId:'packaging.example', name:'Packaging preview', tier:tier, status:'active' } };
   window.alert = function (message) { window.__fixtureAlert = message; };
+  try { localStorage.setItem('omega.ui.mode', 'designer'); } catch (e) {}
   
 }
 
@@ -103,11 +104,30 @@ async function run() {
       // Let the actual delayed ribbon injectors and shelf initialize.
       await page.waitForTimeout(3000);
       ok(await page.evaluate(function () { return window.__fixtureReads < 100; }), 'empty recent-project result settles');
+      /* bought = visible (2026-09-27): a package is in neither mode; a saved Designer choice from before hides nothing */
+      ok(await page.evaluate(function () {
+        var s = document.getElementById('omg-switch'), b = document.getElementById('rb-omega-mode');
+        return OmegaMode.get() === 'pro' && !document.body.classList.contains('omg-designer') && (!s || getComputedStyle(s).display === 'none') && (!b || getComputedStyle(b).display === 'none');
+      }), 'under a package the editor is the full owned ribbon: no Designer/Pro switch, a saved Designer choice not applied');
+      ok(await page.evaluate(function () { OmegaMode.set('designer'); return OmegaMode.get() === 'pro' && localStorage.getItem('omega.ui.mode') === 'designer'; }), 'asking for Designer under a package keeps the full ribbon and writes nothing');
+      ok(await page.evaluate(async function () {
+        var v = OmegaCaps.packageAccess(), wait = function () { return new Promise(function (r) { setTimeout(r, 60); }); };
+        OmegaCaps.setPackage(null); OmegaCaps.apply('standard'); await wait();
+        var back = OmegaMode.get() === 'designer' && getComputedStyle(document.getElementById('omg-switch')).display !== 'none';
+        OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); await wait();
+        return back && OmegaMode.get() === 'pro' && getComputedStyle(document.getElementById('omg-switch')).display === 'none';
+      }), 'a package going away gives a legacy account its saved Designer choice and the switch back; the package taking over ends it again');
+      ok(await page.evaluate(function () { return !document.getElementById('omega-workspace-controls'); }), 'a customer has no workspace bar above the ribbon (it only carried All tools)');
+      ok(await page.evaluate(function () {
+        var rr = document.getElementById('rr'), body = document.querySelector('#rr .rr-body'); if (!rr || !body) return true;
+        OmegaWorkspaces.results(); rr.classList.add('rr-collapsed'); var shut = getComputedStyle(body).display === 'none';
+        rr.classList.remove('rr-collapsed'); return shut;
+      }), 'the Results rail still collapses under a package (its layout is a rule, not an inline display)');
       for (var name of Object.keys(packages)) {
         view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: packages[name] }, { status: 'active' }, { role: 'owner' });
         await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
         for (var workspace of ['l2', 'dcfc', 'bess', 'solarstorage', 'microgrid', 'compute', 'building']) {
-          await page.evaluate(function (key) { OmegaWorkspaces.setAll(false); OmegaWorkspaces.setProject(key, null, true); }, workspace);
+          await page.evaluate(function (key) { OmegaWorkspaces.setProject(key, null, true); }, workspace);
           if (name === 'lite') ok(await page.evaluate(function () {
             return ['analyze','estimate','compute'].every(function (key) { return getComputedStyle(document.querySelector('#ribbon-tabs [data-page="' + key + '"]')).display === 'none'; });
           }), 'Lite omits paid-only tabs');
@@ -137,10 +157,13 @@ async function run() {
           });
           if (state.length) await page.screenshot({path:'/tmp/omega-phase-3-matrix-failure.png'});
           ok(!state.length, name + '/' + workspace + '/' + theme + ': ' + state.join('; '));
-          await page.evaluate(function () { OmegaWorkspaces.setAll(true); rbTab('home'); });
-          var unreachable = await page.evaluate(function () {
+          /* no toggle: every owned tool shows whatever the project type, and the build leads */
+          await page.evaluate(function () { rbTab('home'); });
+          var unreachable = await page.evaluate(function (key) {
             var failures = [];
             if (document.querySelectorAll('#ribbon [data-workspace-hidden]').length) failures.push('workspace hidden');
+            var guide = OmegaWorkspaces.presets[key].guide, lead = Array.prototype.filter.call(document.querySelectorAll('#ribbon .rbtn'), function (b) { return b.getAttribute('onclick') === guide && OmegaCaps.allowedElement(b); })[0];
+            if (lead && (lead.parentNode.classList.contains('rbtn-wrap') ? lead.parentNode : lead).style.order !== '-2') failures.push('guided build not first');
             var buttons = document.querySelectorAll('#ribbon .rbtn,#ribbon .rsbtn');
             for (var b = 0; b < buttons.length; b++) {
               var el = buttons[b];
@@ -150,9 +173,9 @@ async function run() {
               if (tab && getComputedStyle(tab).display === 'none') failures.push('tab ' + page.getAttribute('data-page') + ' for ' + el.id + ':' + el.textContent.trim());
             }
             return failures;
-          });
-          ok(!unreachable.length, name + '/' + workspace + ': All tools: ' + unreachable.join('; '));
-          await page.evaluate(function () { OmegaWorkspaces.setAll(false); rbTab('home'); OmegaCaps.apply('standard'); });
+          }, workspace);
+          ok(!unreachable.length, name + '/' + workspace + ': every owned tool shows, no toggle: ' + unreachable.join('; '));
+          await page.evaluate(function () { rbTab('home'); OmegaCaps.apply('standard'); });
           await page.screenshot({ path: path.join(output, name + '-' + workspace + '-' + theme + '.png') });
         }
       }
@@ -160,7 +183,7 @@ async function run() {
       await page.setViewportSize({ width: 1024, height: 768 });
       for (var tabletName of Object.keys(packages)) {
         view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: packages[tabletName] }, { status: 'active' }, { role: 'owner' });
-        await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaWorkspaces.setProject('l2', null, true); OmegaWorkspaces.setAll(true); }, view);
+        await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaWorkspaces.setProject('l2', null, true); }, view);
         var tabletFit = await page.evaluate(function () {
           var failures = [], tabs = document.querySelectorAll('#ribbon-tabs .rtab[data-page]');
           for (var t = 0; t < tabs.length; t++) {
@@ -171,8 +194,8 @@ async function run() {
             if (pg && pg.scrollWidth > document.getElementById('ribbon').clientWidth + 2) failures.push(key);
           }
           var bar = document.getElementById('omega-workspace-controls');
-          if (bar.scrollWidth > window.innerWidth + 2) failures.push('workspace header');
-          rbTab('home'); OmegaWorkspaces.setAll(false);
+          if (bar && bar.scrollWidth > window.innerWidth + 2) failures.push('workspace header');
+          rbTab('home');
           return failures;
         });
         ok(!tabletFit.length, tabletName + '/' + theme + ' tablet fit: ' + tabletFit.join(', '));
@@ -325,6 +348,7 @@ async function run() {
       await page.getByLabel('Viewing as package').selectOption('lite');
       await page.waitForFunction(function () { return OmegaCaps.packageAccess().preview === true; });
       ok(await page.evaluate(function () { return !OmegaCaps.packageAccess().staff && OmegaCaps.packageAccess().modules.join() === 'lite'; }), 'staff preview is customer-shaped');
+      ok(await page.evaluate(function () { return OmegaMode.get() === 'pro' && !!document.getElementById('omega-package-preview'); }), 'the preview shows the full owned ribbon and keeps the Viewing as bar');
       await page.screenshot({ path: path.join(output, 'staff-preview-lite-' + theme + '.png') });
       await page.getByLabel('Viewing as package').selectOption('staff');
       await page.waitForFunction(function () { return OmegaCaps.packageAccess().staff === true; });

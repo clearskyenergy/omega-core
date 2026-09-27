@@ -161,11 +161,8 @@
   function showMe(key) {
     var hit = where(key); if (!hit) return false;
     close();
-    var tab = document.querySelector('#ribbon-tabs .rtab[data-page="' + hit.page + '"]');
-    /* Designer mode and a project's focus both hide tools the plan allows;
-       asking to see one is asking for them back. */
-    if (global.OmegaMode && global.OmegaMode.get() === 'designer' && (tab.classList.contains('omg-hide') || !hit.el.classList.contains('omg-keep'))) global.OmegaMode.set('pro');
-    if (hit.el.hasAttribute('data-workspace-hidden') && global.OmegaWorkspaces) global.OmegaWorkspaces.setAll(true);
+    /* Under a package nothing but the package hides a tool (no Designer
+       mode, no project filter), so the tab is always there to open. */
     if (typeof global.rbTab === 'function') global.rbTab(hit.page);
     hit.el.setAttribute('data-opm-spot', '1');
     if (hit.el.scrollIntoView) hit.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });

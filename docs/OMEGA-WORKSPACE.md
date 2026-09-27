@@ -109,9 +109,12 @@ decided 2026-09-26.
   (Tommy, 2026-09-27). `OmegaWorkspaceHub.moduleState` is the ONE rule,
   shared with the marketplace store and pinned by `tworkspacehub.js`: a
   packaged workspace holds what its projection lists; a legacy one holds a
-  module when every tool it carries is open on its tier (Omega Logic by the
-  `omega-logic` add-on; a capabilities-only module on Enterprise), is
-  Partly on it with the count, else asks. A packaged workspace's prices
+  module when everything it carries is open on its plan: its standalone
+  tools AND its commands in the editor (catalog `legacyGates`, asked of the
+  editor's own ladder, `OmegaCaps.canWith`; "the store tells the truth",
+  2026-09-27). Omega Logic by the `omega-logic` add-on; a module with
+  neither tools nor editor commands on Enterprise. Partly on it with the
+  count, else asks. A packaged workspace's prices
   are `/api/package-catalog`'s (asked once) and + Add opens the ONE menu
   (`omega-package-menu.js`) on that module; a legacy workspace's are the
   public price list's (`/api/offerings`, asked once) and Ask is the store
@@ -188,8 +191,8 @@ and tools.
   an owner or admin manages; a member is told to ask.
 - Any other workspace reads the public price list and is judged against
   its legacy tier: a module reads "On your plan" when every tool it
-  carries is open (Omega Logic when the `omega-logic` addon is held; a
-  capabilities-only module on Enterprise), "Partly on your plan" with the
+  carries AND every editor command it has is open (the same rule as the
+  Modules page; Omega Logic when the `omega-logic` addon is held), "Partly on your plan" with the
   count, else "Ask ClearSky to add it", an email to the upgrade address
   naming the module and its price. Nothing is charged here; ClearSky
   switches a legacy tenant on.

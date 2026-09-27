@@ -75,6 +75,13 @@ global.CLEARSKY_CONFIG = { tenant: { editorMode: 'nonsense' } };
 ok('resolve() still fails open on a bad value in the record', M.resolve() === 'full');
 global.CLEARSKY_CONFIG = { tenant: {} };
 ok('a tenant record with no editorMode is the full platform', M.resolve() === 'full');
+/* A package shows exactly what was bought: a tenant layout never subtracts
+   from it, whatever the tenant record says (2026-09-27, "bought = visible"). */
+global.CLEARSKY_CONFIG = { tenant: { editorMode: 'bess-lite' } };
+global.OmegaCaps = { packageAccess: function () { return { packaged: true, modules: ['lite', 'compute'] }; } };
+ok('under a package, resolve() is the full platform even for a bess-lite tenant', M.resolve() === 'full');
+delete global.OmegaCaps;
+ok('  and without one the tenant layout applies again', M.resolve() === 'bess-lite');
 delete global.CLEARSKY_CONFIG;
 
 /* ── apply() without a DOM must not throw ───────────────────────────────── */

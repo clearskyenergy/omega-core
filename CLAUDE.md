@@ -229,8 +229,22 @@ whose version ends in `-proposed` is never production; sign-off is renaming
 (the live runner's query). The card button on a QuickBooks invoice is
 QuickBooks Payments, not Stripe: `docs/PAYMENTS-BROWSER-SETUP.md`.
 
-Packaged editor presentation uses the server catalog through OmegaCaps;
-OmegaWorkspaces only focuses owned tools. All tools is per signed-in user.
+Packaged editor presentation uses the server catalog through OmegaCaps.
+**Bought = visible** (2026-09-27): under a package the package is the only
+thing that hides a tool. The project type (OmegaWorkspaces) puts its tools
+and guided build first and hides nothing; "All tools" and the per-user
+toggle are retired; Designer/Pro and the retired Compute mode do not apply
+(the editor is always the full owned ribbon, a saved Designer choice is not
+applied, and the legacy choice comes back if the package goes). The plan is
+re-read in place (`OmegaCaps.refresh`) when the window regains focus, every
+ten minutes and at `accessUntil`, so what is paid for opens and what lapses
+closes without a reload; The Ladder has "I've paid" (reconcile-now) and
+Show me, and the editor shows the server's billing notice. A LEGACY
+workspace's store tells the truth: `OmegaWorkspaceHub.moduleState` measures
+a module by its standalone tools AND what the editor opens of it
+(`api/_lib/modules.js` `legacyGates`, read off the real editor by
+`scripts/render-legacy-gates.js`, asked of the editor's own ladder through
+`OmegaCaps.canWith` / `capsFor`); no legacy access changes.
 The shared omega-package-menu.js renders catalog features and server-formatted
 prices. Staff package previews are read-only server projections, never tenant
 impersonation or billing edits. Legacy layout modes apply to unpackaged records.

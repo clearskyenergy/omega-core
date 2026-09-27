@@ -99,7 +99,7 @@ and show it. About 90 of the editor's functions. Full list in Appendix A.
 | Group | Inside |
 |---|---|
 | Site setup and map | Site Setup (calibrated satellite backdrop), address search, satellite / aerial / street views, Upload Image + B&W stencil trace, Lock Map, Calibrate Scale, Set Plot, GPS Place, Native Layer, Compass, Layers, Coordinates, Recenter, Dock |
-| Draw and annotate | Select/Move, Line, Polyline, Rectangle, Circle, EV and ADA stencils, Colour, Text Note, Callout Arrow, Dimension, Zone Box, Labels, Duplicate, Undo/Redo, command search (Ctrl+K), Designer/Pro modes |
+| Draw and annotate | Select/Move, Line, Polyline, Rectangle, Circle, EV and ADA stencils, Colour, Text Note, Callout Arrow, Dimension, Zone Box, Labels, Duplicate, Undo/Redo, command search (Ctrl+K) (Designer/Pro modes are for unpackaged plans only; a package shows everything it owns) |
 | Equipment | BESS cabinet and pad, PCS/inverter, transformer, UPS, generator, solar, wind, fuel cell, panelboard, AC disconnect, meter, junction box, EV chargers (L2 + DCFC catalog), utility pole, Source/POI, concrete pad, fence, bollard, hydrant, camera, parking stall array, custom equipment |
 | **Guided builds** | BESS Build, DER Build, Auto Layout, Full Topology, Level 2 Build, DCFC Build, Solar + Storage, BESS Config, Move System, Cluster tools, Fence & Tie, charger pads **(decide: in Lite, as the reason Lite is worth $500)** |
 | Conduit and trench | Conduit runs, MV trench, home-run auto-routing, conduit schedule, BESS run checklist, re-anchor and diagnose |

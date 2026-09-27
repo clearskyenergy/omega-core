@@ -16,15 +16,18 @@ customer acceptance is still outstanding; the captures below are offline fixture
 - One server catalog supplies module ownership, feature triplets and the
   browser MODULE_GRANTS projection. Late commands receive data-module too.
 - Empty ribbon groups/tabs disappear; numbered captions close their gaps.
-  The ribbon wraps at 1280px. Legacy Designer hiding cannot remove core draw
-  commands or defeat All tools. Shared commands are rehomed from paid-only
-  containers using catalog metadata; All tools checks their actual reachability.
+  The ribbon wraps at 1280px. Shared commands are rehomed from paid-only
+  containers using catalog metadata. (2026-09-27: under a package there is no
+  Designer mode and no All tools; the render suite checks every owned tool is
+  reachable in every project type with no toggle.)
   Fleet O&M and O&M Lifecycle belong to Operations in the sole catalog.
-- Seven workspaces focus related commands. Mixed siteScopes take their union;
+- Seven workspaces put related commands first (2026-09-27: they reorder and
+  never hide). Mixed siteScopes take their union;
   the existing der + bess representation becomes Solar + Storage. Unknown
   historical types retain all owned tools rather than guessing a replacement.
-- All tools is remembered by Firebase uid. Package access always wins.
-  Engineering and Plan Sets default to Pro; an explicit mode choice wins.
+- ~~All tools is remembered by Firebase uid.~~ Retired 2026-09-27 with the
+  hiding it undid. Package access always wins, and a package is in neither
+  Designer nor Pro: the editor is the full owned ribbon.
 - Existing results are reordered by project type without recalculating them.
   Empty project results offer the owned guided build or Site Setup.
 - The single `omega-package-menu.js` gallery renders one card per unowned

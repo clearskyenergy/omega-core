@@ -107626,6 +107626,17 @@ button[style*="linear-gradient"][aria-disabled="true"]{
   var TAG = '[OmegaMode]';
   var KEY = 'omega.ui.mode';
 
+  /* ── A PACKAGE IS NOT IN EITHER MODE (Tommy, 2026-09-27) ─────────────
+     "Bought = visible." A packaged workspace's ribbon is already exactly
+     what it bought, so Designer mode could only hide tools somebody paid
+     for, and the switch was one more thing between a purchase and its
+     buttons. Under a package the editor is always the full owned ribbon:
+     no switch, no first-run note, nothing persisted, and a saved
+     'designer' from before is not applied. A legacy workspace keeps the
+     switch exactly as it was, and gets its saved choice back if a package
+     goes away mid-session. */
+  function packaged() { return !!(window.OmegaCaps && OmegaCaps.packageAccess && OmegaCaps.packageAccess()); }
+
   /* ------------------------------------------------------------------ *
    *  1. THE DESIGNER SET                                               *
    *  Matched against each button's onclick text. Regexes rather than   *
@@ -107811,6 +107822,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
         window.OmegaComputeMode.off();
       }
     } catch (e) {}
+    if (packaged()) { m = 'pro'; ephemeral = true; }
     mode = (m === 'designer') ? 'designer' : 'pro';
     document.body.classList.toggle('omg-designer', mode === 'designer');
     tagAll();
@@ -107824,7 +107836,6 @@ button[style*="linear-gradient"][aria-disabled="true"]{
        never apply again, on any machine that had opened the editor once. */
     if (!ephemeral) {
       try { localStorage.setItem(KEY, mode); } catch (e) {}
-      if (window.OmegaCaps && OmegaCaps.packageAccess() && window.OmegaWorkspaces) OmegaWorkspaces.setAll(mode === 'pro');
     }
     if (!quiet && window.console) console.info(TAG + ' ' + mode + ' mode');
     return mode;
@@ -107841,7 +107852,12 @@ button[style*="linear-gradient"][aria-disabled="true"]{
    *  5. THE SWITCH                                                     *
    * ------------------------------------------------------------------ */
   function paintSwitch() {
-    var s = document.getElementById('omg-switch');
+    var s = document.getElementById('omg-switch'), held = packaged();
+    if (s) s.style.display = held ? 'none' : '';
+    var own = document.getElementById('rb-omega-mode');
+    /* retired, the way packaging retires a button: the ribbon rule hides it
+       and the owned-command checks skip it */
+    if (own) { own.toggleAttribute('data-packaging-retired', held); own.hidden = held; }
     if (s) {
       s.querySelectorAll('[data-mode]').forEach(function (b) {
         b.classList.toggle('on', b.getAttribute('data-mode') === mode);
@@ -107936,7 +107952,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
   function defaultMode() {
     var C = window.OmegaCaps;
     var pack = C && C.packageAccess();
-    if (pack) return pack.staff || pack.modules.indexOf('engineering') >= 0 || pack.modules.indexOf('plansets') >= 0 ? 'pro' : 'designer';
+    if (pack) return 'pro';
     var t = '';
     try { t = document.body.getAttribute('data-tier') || ''; } catch (e) {}
     if (t && C && C.can) {
@@ -107945,9 +107961,40 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     return 'designer';
   }
 
+  /* The package lands late (an API call after sign-in), can change while
+     the editor is open (OmegaCaps.refresh) and can go away. Whichever way,
+     the mode follows: packaged → the full ribbon, and back to the legacy
+     choice (saved, else the tier's default) when the package goes. */
+  var heldByPackage = false;
+  function sync() {
+    if (packaged()) {
+      heldByPackage = true;
+      var hint = document.getElementById('omg-firstrun'); if (hint) hint.remove();
+      if (mode !== 'pro') set('pro', true, true); else paintSwitch();
+      return;
+    }
+    if (!heldByPackage) return;
+    heldByPackage = false;
+    var saved = null;
+    try { saved = localStorage.getItem(KEY); } catch (e) {}
+    set(saved === 'designer' || saved === 'pro' ? saved : defaultMode(), true, true);
+  }
+  document.addEventListener('omega:package', sync);
+  document.addEventListener('omega:tier', sync);
+  document.addEventListener('omega:plan-changed', sync);
+  /* No event marks a package going away at sign-in (resolve() →
+     setPackage(null) on the same tier): the body attribute OmegaCaps sets
+     and clears is the signal that covers it. sync() is O(1) when nothing
+     moved, and the attribute is re-set on every packaged pass. */
+  function watchPackage() {
+    if (!window.MutationObserver || !document.body) return;
+    new MutationObserver(sync).observe(document.body, { attributes: true, attributeFilter: ['data-packaged-editor'] });
+  }
+
   function boot() {
     var saved = null;
     try { saved = localStorage.getItem(KEY); } catch (e) {}
+    if (packaged()) saved = null;
     addSwitch();
     if (saved) {
       set(saved === 'pro' ? 'pro' : 'designer', true);
@@ -107974,9 +108021,13 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       document.addEventListener('omega:tier', revisitMode);
       document.addEventListener('omega:package', revisitMode);
       /* The note offers "switch to Pro", so it only belongs in front of
-         somebody who is actually in Designer. */
-      if (defaultMode() === 'designer' && !(window.OmegaCaps && OmegaCaps.packageAccess())) firstRunNote();
+         somebody who is actually in Designer, and that is known once the
+         plan is: at boot it is still the trial-shaped guess, and a package
+         (in neither mode) usually lands a moment later. */
+      document.addEventListener('omega:tier', function () { if (!packaged() && mode === 'designer') firstRunNote(); });
     }
+    watchPackage();
+    sync();
 
     /* Patch scripts add ribbon buttons on timers well after load, so the
        keep-flags are re-applied for a while and then on any ribbon change. */
@@ -166021,9 +166072,6 @@ if (root.console && console.info) {
   }
 
   function enable() {
-    if (root.OmegaCaps && root.OmegaCaps.packageAccess() && root.OmegaWorkspaces) {
-      root.OmegaWorkspaces.setProject('compute', null, true); return true;
-    }
     if (on) return true;
     prevReportTab = root.reportTab;
     root.reportTab = function (tab) {
@@ -166991,6 +167039,9 @@ if (root.console && console.info) {
   function enable() {
     if (on) return true;
     if (!document.getElementById('ribbon')) return false;
+    /* Retired, and never under a package: it hides tabs and panels and
+       moves tools, and a packaged ribbon shows exactly what was bought. */
+    if (root.OmegaCaps && root.OmegaCaps.packageAccess && root.OmegaCaps.packageAccess()) return false;
 
     /* Designer hides Analyze, which is where this mode lives. Set the
        mode BEFORE `on` is true, so Patch 117's guard in OmegaMode.set

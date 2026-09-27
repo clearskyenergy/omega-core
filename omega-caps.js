@@ -190,6 +190,7 @@
         old[n].removeAttribute('data-package-empty'); old[n].removeAttribute('data-workspace-hidden');
       }
       if (global.document.body && global.document.body.removeAttribute) global.document.body.removeAttribute('data-packaged-editor');
+      if (global.OmegaWorkspaces && global.OmegaWorkspaces.reset) global.OmegaWorkspaces.reset();
       ['omega-workspace-controls', 'omega-package-tab', 'omega-plan-notice'].forEach(function (id) { var el = global.document.getElementById && global.document.getElementById(id); if (el) el.remove(); });
       if (global.OmegaPackageMenu) global.OmegaPackageMenu.close();
       _packageSignature = null;
@@ -295,18 +296,18 @@
         'body[data-packaged-editor="1"][data-packaged-editor] #ribbon{height:auto;max-height:42vh;overflow:auto}' +
         'body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs{min-width:0;flex-wrap:wrap;flex:1 0 100%;height:32px;min-height:32px}' +
         'body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs .rtab{padding:0 9px;font-size:11px;height:32px}' +
-        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rbtn:not([data-package-hidden]):not([data-workspace-hidden]):not([data-omega-retired]):not([data-packaging-retired]):not([data-shelf-dupe]):not(.omega-gated-hidden),' +
-        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rsbtn:not([data-package-hidden]):not([data-workspace-hidden]):not([data-omega-retired]):not([data-packaging-retired]):not([data-shelf-dupe]):not(.omega-gated-hidden){display:flex!important}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rbtn:not([data-package-hidden]):not([data-omega-retired]):not([data-packaging-retired]):not([data-shelf-dupe]):not(.omega-gated-hidden),' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rsbtn:not([data-package-hidden]):not([data-omega-retired]):not([data-packaging-retired]):not([data-shelf-dupe]):not(.omega-gated-hidden){display:flex!important}' +
         'body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rbtn-wrap:not([data-package-empty]),body[data-packaged-editor="1"][data-packaged-editor] #ribbon .rpanel:not([data-package-empty]){display:flex!important}' +
         'body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs .rtab:not([data-package-empty]):not([data-package-hidden]){display:flex!important}' +
-        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon [data-workspace-hidden],body[data-packaged-editor="1"][data-packaged-editor] #ribbon [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tab-menu [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] [data-package-hidden]{display:none!important}' +
+        'body[data-packaged-editor="1"][data-packaged-editor] #ribbon [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tabs [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] #ribbon-tab-menu [data-package-empty],body[data-packaged-editor="1"][data-packaged-editor] [data-package-hidden]{display:none!important}' +
         'body[data-packaged-editor="1"][data-packaged-editor] #omega-package-tab{order:999}' +
         '#omega-workspace-controls{display:flex;align-items:center;gap:8px;padding:4px 12px;font:11px system-ui;color:var(--sub);background:var(--navy)}' +
         '#omega-workspace-controls button{font:inherit;color:var(--text);border:1px solid var(--border);background:transparent;border-radius:4px;padding:4px 8px;cursor:pointer}';
       (doc.head || doc.body).appendChild(style);
     }
     function usable(el) {
-      return !el.hasAttribute('data-package-hidden') && !el.hasAttribute('data-workspace-hidden') && !el.hasAttribute('data-omega-retired') && !el.hasAttribute('data-packaging-retired') && !el.classList.contains('omega-gated-hidden') && !el.hasAttribute('data-shelf-dupe');
+      return !el.hasAttribute('data-package-hidden') && !el.hasAttribute('data-omega-retired') && !el.hasAttribute('data-packaging-retired') && !el.classList.contains('omega-gated-hidden') && !el.hasAttribute('data-shelf-dupe');
     }
     function hasControls(el) {
       var controls = el.querySelectorAll('.rbtn,.rsbtn,input,select,.home-recent-item');
@@ -342,15 +343,17 @@
       var next = doc.querySelector('#ribbon-tabs .rtab:not([data-package-empty]):not([data-package-hidden]):not([data-page="__file"])');
       if (next && typeof global.rbTab === 'function') global.rbTab(next.getAttribute('data-page'));
     }
-    if (global.OmegaWorkspaces && !doc.getElementById('omega-workspace-controls')) {
+    /* The bar above the ribbon used to carry the project's name and an "All
+       tools" toggle for what the project type had hidden. The project type
+       now hides nothing (omega-workspaces.js), so the bar is only the staff
+       "Viewing as" preview, and a customer's ribbon starts one row higher. */
+    var controls = doc.getElementById('omega-workspace-controls');
+    if (!_package.canPreview && controls) controls.remove();
+    else if (_package.canPreview && !controls) {
       var ribbon = doc.getElementById('ribbon');
       if (ribbon && ribbon.parentNode) {
         var bar = doc.createElement('div'); bar.id = 'omega-workspace-controls';
-        var label = doc.createElement('span'); label.id = 'omega-workspace-label'; bar.appendChild(label);
-        var toggle = doc.createElement('button'); toggle.id = 'omega-workspace-all'; toggle.type = 'button';
-        toggle.onclick = function () { global.OmegaWorkspaces.setAll(!global.OmegaWorkspaces.all()); };
-        bar.appendChild(toggle); ribbon.parentNode.insertBefore(bar, ribbon);
-        global.OmegaWorkspaces.apply(scope);
+        ribbon.parentNode.insertBefore(bar, ribbon);
       }
     }
     if (global.OmegaPackageMenu) { global.OmegaPackageMenu.tab(); global.OmegaPackageMenu.staffPreview(); if (global.OmegaPackageMenu.notice) global.OmegaPackageMenu.notice(); }
@@ -399,12 +402,17 @@
     if (el && !allowedElement(el)) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
 
-  function setFor(tier) {
-    var t = normalise(tier), out = {}, i, j, g;
-    if (_package) {
-      (_package.readOnly ? ['view'] : _package.caps).forEach(function (k) { out[k] = 1; });
-      return out;
-    }
+  /* ── WHAT A LEGACY PLAN GRANTS, AS A PURE FUNCTION ─────────────────────
+     setFor() answers for the signed-in account (module state set by
+     resolve()); grants() answers for any workspace a page names, so the
+     store, the Modules page and the master console can say what a legacy
+     plan opens in the editor by asking this ladder instead of keeping a
+     second one. options: { addons: [], org: 'domain', capTier: 'tier' }.
+     The same widening rules: the tier (under its capTier), then the JV
+     carve-out, then add-ons, which only ever add. */
+  function grants(tier, options) {
+    options = options || {};
+    var t = options.capTier ? effectiveTier(tier, options.capTier) : normalise(tier), out = {}, i, j, g;
     if (UNGATED[t]) { out.all = 1; return out; }
     var top = LADDER.indexOf(t);
     for (i = 0; i <= top; i++) {
@@ -413,11 +421,28 @@
     }
     /* Added last and never removing anything, so a carve-out or a purchased
        add-on can only ever widen what a tier already grants. */
-    g = orgExtras();
+    g = JV_ORGS.indexOf(orgOf('x@' + (options.org || ''))) >= 0 ? JV_GRANTS : [];
     for (j = 0; j < g.length; j++) out[g[j]] = 1;
-    g = addonExtras();
-    for (j = 0; j < g.length; j++) out[g[j]] = 1;
+    (options.addons || []).forEach(function (a) { (ADDON_GRANTS[addonKey(a)] || []).forEach(function (k) { out[k] = 1; }); });
     return out;
+  }
+  function capIn(s, cap) {
+    if (s.all || s[cap]) return true;
+    /* A dotted capability falls back to its parent, so data-cap="export.dxf"
+       is covered by the deluxe "export" grant without listing every format —
+       and standard's two named exports stay exactly two. */
+    var dot = String(cap || '').indexOf('.');
+    return dot > 0 ? !!s[String(cap).slice(0, dot)] : false;
+  }
+  function canWith(tier, cap, options) { return capIn(grants(tier, options), cap); }
+
+  function setFor(tier) {
+    var out = {};
+    if (_package) {
+      (_package.readOnly ? ['view'] : _package.caps).forEach(function (k) { out[k] = 1; });
+      return out;
+    }
+    return grants(tier, { org: _org, addons: _addons });
   }
 
   function can(tier, cap) {
@@ -738,6 +763,6 @@
     effectiveTier: effectiveTier, setPackage: setPackage, packageAccess: function () { return _package; },
     MODULE_GRANTS: MODULE_GRANTS, owners: owners, commandPage: commandPage, layout: layout,
     guardLaunchers: guardLaunchers, pendingPackage: pendingPackage, fetchPackage: fetchPackage, allowedElement: allowedElement, allowedCommand: allowedCommand, commandSelector: COMMANDS,
-    refresh: refresh, watchPlan: watchPlan, tier: function () { return _tier; }
+    refresh: refresh, watchPlan: watchPlan, tier: function () { return _tier; }, grants: grants, canWith: canWith
   };
 })(typeof window !== 'undefined' ? window : this);

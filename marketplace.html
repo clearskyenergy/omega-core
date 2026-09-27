@@ -921,6 +921,7 @@ window._omegaReady = function(){
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-tools.js?v=9"></script>
 <!-- the ONE rule for whether a workspace holds a module (the Modules page reads it too) -->
+<script src="/omega-caps.js"></script>
 <script src="/omega-workspace-hub.js"></script>
 <!-- The shared subscribe control (Phase 5): server catalog, server quotes,
      posts to /api/plan-change. The package store below is built on it. -->
@@ -1385,7 +1386,9 @@ function storeOwned(key){ return STORE.owned.indexOf(key) >= 0; }
    Modules page; only 'pending' (an invoice waiting) is this page's own */
 function moduleCtx(){
   var ws = WORKSPACE || {};
-  return { packaged: STORE.packaged, modules: STORE.packaged ? STORE.owned : (ws.modules || []), addons: ws.addons || [], tierLevel: ws.tierLevel, canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && isUnlockedHere(t); }, tool: function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; } };
+  return { packaged: STORE.packaged, modules: STORE.packaged ? STORE.owned : (ws.modules || []), addons: ws.addons || [], tierLevel: ws.tierLevel, canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && isUnlockedHere(t); }, tool: function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; },
+    /* what the editor opens of a legacy module, on the editor's own ladder (the store tells the truth) */
+    canCap: STORE.packaged ? null : OmegaWorkspaceHub.capsFor(ws.billing || (window.OmegaTenant && OmegaTenant.billing), ws.orgId) };
 }
 function moduleTools(m){ return (m.tools||[]).map(function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; }).filter(function(t){ return !!t; }); }
 function moduleState(m){
