@@ -25217,6 +25217,49 @@ function updateSummaryPanel() {
 
 
 
+/* ── WHAT KIND OF PROJECT (the Projects list and Home → Recent) ─────────
+   A row used to wear the BESS wizard's market, BTM or FOM, which every save
+   writes and which defaults to BTM, so a Level 2 job read "BTM" (Tommy,
+   2026-09-27: "we dont need BTM or FOM just show all the projects … but
+   they should tell what kind of project they are i.e bess L2 DCFC").
+   A row now names its kinds in OmegaProjectTypes' keys and short labels:
+     1. what it was declared — `type`, the type the editor opens it as; the
+        New Project dialog's siteScopes while they still include that type
+        (a BESS start the editor has since re-typed Level 2 is not a BESS
+        project); the EV wizard's own modes, 'L2' and 'EVSE' (its DCFC build);
+     2. what is on its plan, read by the editor's own collectors —
+        _findBessPads (or a configured bessList), evChargerTotals and
+        derTotals — so a charger is Level 2 here exactly when Results counts
+        it as Level 2.
+   Nothing declared and nothing placed is no label, never a guess. */
+function _projKinds(p){
+  var out=[], PT=window.OmegaProjectTypes;
+  if(!p) return out;
+  function norm(k){ return (PT && typeof PT.norm==='function') ? PT.norm(k) : null; }
+  function atoms(k){ return k==='solarbess' ? ['solar','bess'] : (k ? [k] : []); }
+  function add(k){ atoms(k).forEach(function(a){ if(out.indexOf(a)<0) out.push(a); }); }
+  var declared=norm(p.type);
+  add(declared);
+  /* A scope named 'der' is the dialog's DER / Solar (omega-newproject.js
+     files it under the legacy type 'solar'); the editor's 'der' is a mixed
+     microgrid. */
+  var scopes=(Array.isArray(p.siteScopes) ? p.siteScopes : []).map(function(s){
+    return String(s||'').toLowerCase()==='der' ? 'solar' : norm(s);
+  });
+  if(!declared || atoms(declared).some(function(a){ return scopes.indexOf(a)>=0; })) scopes.forEach(add);
+  add(p.wizMode==='L2' ? 'evl2' : p.wizMode==='EVSE' ? 'ev' : null);
+  try{ if(_findBessPads(p).length || (p.bessList||[]).length) add('bess'); }catch(e){}
+  try{ var ev=window.evChargerTotals(p); if(ev.dcfcUnits) add('ev'); if(ev.l2Units) add('evl2'); }catch(e){}
+  try{ var der=derTotals(p); if(der.solarUnits) add('solar'); if(der.dcUnits) add('datacenter'); }catch(e){}
+  return out;
+}
+function _projKindLabels(p){
+  var PT=window.OmegaProjectTypes;
+  if(!PT || typeof PT.short!=='function') return [];
+  return _projKinds(p).map(function(k){ return PT.short(k); }).filter(Boolean);
+}
+window._projKindLabels=_projKindLabels;
+
 function renderProjectsList(projects) {
   const list = document.getElementById('proj-list');
   if(!projects.length) {
@@ -25226,17 +25269,14 @@ function renderProjectsList(projects) {
   list.innerHTML = projects.map(p => {
     const date = p.updatedAt ? new Date(p.updatedAt.seconds*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '--';
     const isActive = p.id === _projectId;
-    const bess = (p.bessList||[]).map(b=>b.name).join(', ') || '--';
-    const mode = p.wizMode || 'BTM';
-    const modeBadge = `<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:6px;
-      background:${mode==='FOM'?'rgba(245,158,11,.15)':'rgba(96,165,250,.12)'};
-      color:${mode==='FOM'?'#F59E0B':'#60A5FA'}">${mode}</span>`;
+    const bess = (p.bessList||[]).map(b=>b.name).filter(Boolean).join(', ');
+    const kindChips = _projKindLabels(p).map(k => `<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;background:var(--hl-dim);color:var(--accent-2);white-space:nowrap">${k}</span>`).join('');
     const vstat = p.validationStatus || (p.validation&&p.validation.status) || '';
     const vId = (p.validation&&p.validation.validationId) || p.validationId || '';
     let valBadge = '';
-    if(vstat==='sent') valBadge = `<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:6px;background:rgba(245,158,11,.15);color:var(--warn)" title="${vId}">✒ VALIDATING</span>`;
-    else if(vstat==='received') valBadge = `<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:6px;background:rgba(74,222,128,.15);color:var(--green)" title="${vId}">✓ STAMPED</span>`;
-    const offt = p.offtaker ? ` · ${p.offtaker}` : '';
+    if(vstat==='sent') valBadge = `<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;background:rgba(245,158,11,.15);color:var(--warn);white-space:nowrap" title="${vId}">✒ VALIDATING</span>`;
+    else if(vstat==='received') valBadge = `<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;background:rgba(74,222,128,.15);color:var(--green);white-space:nowrap" title="${vId}">✓ STAMPED</span>`;
+    const sub = [p.address||'No address', bess, p.offtaker].filter(Boolean).join(' · ');
     return `<div onclick="openProject('${p.id}')" style="
       padding:12px 16px;margin:4px 0;border-radius:8px;cursor:pointer;
       background:${isActive ? 'rgba(0,212,255,.1)' : 'rgba(255,255,255,.03)'};
@@ -25245,11 +25285,12 @@ function renderProjectsList(projects) {
     " onmouseover="this.style.background='rgba(0,212,255,.07)'" onmouseout="this.style.background='${isActive ? 'rgba(0,212,255,.1)' : 'rgba(255,255,255,.03)'}'">
       <div style="display:flex;align-items:center;gap:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            ${isActive ? '  ' : ''}${p.name||'Untitled'}${modeBadge}${valBadge}
+          <div style="display:flex;align-items:center;gap:6px;min-width:0">
+            <div style="min-width:0;font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isActive ? '  ' : ''}${p.name||'Untitled'}</div>
+            <div style="display:flex;align-items:center;gap:4px;flex:none">${kindChips}${valBadge}</div>
           </div>
           <div style="font-size:10px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            ${p.address||'No address'} . ${bess}${offt}
+            ${sub}
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -25266,36 +25307,19 @@ function renderProjectsList(projects) {
   }).join('');
 }
 
-var _projTab = 'all';
-
-function setProjTab(tab) {
-  _projTab = tab;
-  ['all','btm','fom'].forEach(t => {
-    const btn = document.getElementById('proj-tab-' + t);
-    if(!btn) return;
-    const active = t === tab;
-    btn.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
-    btn.style.color = active ? 'var(--text)' : 'var(--sub)';
-  });
-  filterProjects();
-}
-
 function filterProjects() {
   const q = (document.getElementById('proj-search') || {}).value?.toLowerCase() || '';
   const sort = (document.getElementById('proj-sort') || {}).value || 'date';
   let projects = _allProjects.slice();
 
-  // Filter by search
+  // Every project is listed (the BTM/FOM tabs are gone); search also finds a kind — "L2", "DCFC", "BESS"
   if(q) projects = projects.filter(p =>
     (p.name||'').toLowerCase().includes(q) ||
     (p.address||'').toLowerCase().includes(q) ||
     (p.customer||'').toLowerCase().includes(q) ||
-    (p.offtaker||'').toLowerCase().includes(q)
+    (p.offtaker||'').toLowerCase().includes(q) ||
+    _projKindLabels(p).join(' ').toLowerCase().includes(q)
   );
-
-  // Filter by BTM/FOM tab
-  if(_projTab === 'btm') projects = projects.filter(p => !p.wizMode || p.wizMode === 'BTM');
-  else if(_projTab === 'fom') projects = projects.filter(p => p.wizMode === 'FOM');
 
   // Sort
   if(sort === 'date') projects.sort((a,b) => (b.updatedAt?.seconds||0) - (a.updatedAt?.seconds||0));
@@ -25367,7 +25391,7 @@ async function createNewProject() {
       uid: _currentUser.uid,
       orgId: (typeof _projOrgId==='function') ? _projOrgId() : 'clearsky.com',
       name, address, customer,
-      wizMode: market,          // BTM / FOM — drives the project-list tab filter
+      wizMode: market,          // BTM / FOM — the BESS wizard's market (restored on load)
       offtaker: offtaker || null,
       elements:[], conduits:[], bessList:[],
       wizDone:[], pxPerFt:null, unitLabel:'ft',
@@ -49299,13 +49323,7 @@ async function exportPermitPDF() {
       </div>
       <button onclick="document.getElementById('proj-modal').style.display='none'" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;padding:4px 8px;line-height:1">×</button>
     </div>
-    <!-- Mode filter tabs -->
-    <div style="display:flex;gap:0;padding:0 20px;border-bottom:1px solid var(--border)">
-      <button id="proj-tab-all" onclick="setProjTab('all')" style="padding:10px 16px;background:none;border:none;border-bottom:2px solid var(--accent);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s">All</button>
-      <button id="proj-tab-btm" onclick="setProjTab('btm')" style="padding:10px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s">BTM</button>
-      <button id="proj-tab-fom" onclick="setProjTab('fom')" style="padding:10px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s">FOM</button>
-    </div>
-    <!-- Search + Sort + New -->
+    <!-- Search + Sort + New (every project is listed; each row names its kind) -->
     <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px">
       <input id="proj-search" type="text" placeholder="Search projects..." oninput="filterProjects()" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 12px;font-size:12px;font-family:inherit">
       <select id="proj-sort" onchange="filterProjects()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:12px;font-family:inherit;cursor:pointer">
@@ -55373,12 +55391,15 @@ function _derRenderSolar(g, sh){
 }
 
 /* ---- DER TOTALS (read from placed shapes) --------------------------- */
-function derTotals(){
+/* st: a saved project record to read instead of the live drawing (the
+   Projects list labels each row this way); absent means S. */
+function derTotals(st){
   var t={ solarKwDc:0, solarSqft:0, windKw:0, windUnits:0, altKw:0, altUnits:0,
           dcLoadKw:0, dcUnits:0, solarUnits:0 };
-  if(typeof S==='undefined' || !S.shapes) return t;
-  for(var i=0;i<S.shapes.length;i++){
-    var s=S.shapes[i];
+  if(!st){ if(typeof S==='undefined') return t; st=S; }
+  if(!st.shapes) return t;
+  for(var i=0;i<st.shapes.length;i++){
+    var s=st.shapes[i];
     /* omegaDer() counts 'dersolar' AND 'solar'; this counted only the first,
        so an array drawn as a custom polyline showed up in the Results rail
        and was missing from the legend — two different totals for one site. */
@@ -55388,9 +55409,9 @@ function derTotals(){
     else if(s.kind==='derdc'){ t.dcLoadKw+=(s.kw||0); t.dcUnits++; }
   }
   /* also count DC nodes placed as palette equipment (eq elements) */
-  if(S.elements){
-    for(var j=0;j<S.elements.length;j++){
-      var el=S.elements[j];
+  if(st.elements){
+    for(var j=0;j<st.elements.length;j++){
+      var el=st.elements[j];
       var _r=(typeof _eqRole==='function')?_eqRole(el):(el.type==='eq'?el.eqId:null);
       if(_r && DERC_DC[_r]){ t.dcLoadKw+=DERC_DC[_r].kw; t.dcUnits++; }
     }
@@ -56729,17 +56750,19 @@ function _findEmsNode(){
 /* Every BESS on the drawing, however it got there: guided-build elements,
    hand-drawn assemblies, and BESS pads from Draw > BESS Pad. The wiring
    routine used to read S.elements for type==='bess-asm' alone, so a pad
-   drawn by hand was "no BESS assemblies placed yet". */
-function _findBessPads(){
+   drawn by hand was "no BESS assemblies placed yet".
+   st: a saved project record instead of the live drawing (see derTotals). */
+function _findBessPads(st){
   var out=[];
   try{
-    (S.elements||[]).forEach(function(e){
+    st=st||S;
+    (st.elements||[]).forEach(function(e){
       if(!e) return;
       var q=(typeof _eqRole==='function' && _eqRole(e)) || e.eqId
             || (e.type==='evgear' ? (e.evKind||e.bgbRole||e.evRole) : e.type);
       if(e.type==='bess-asm' || q==='bess') out.push(e);
     });
-    (S.shapes||[]).forEach(function(sh){
+    (st.shapes||[]).forEach(function(sh){
       if(!sh) return;
       if(sh.kind==='assembly' || sh.kind==='bespad'
          || (sh.kind==='utility' && sh.utype==='bessctr')) out.push(sh);
@@ -69979,10 +70002,12 @@ function evChargerCosts(){
   return out;
 }
 
-function evChargerTotals(){
+/* st: a saved project record instead of the live drawing (the Projects
+   list calls Level 2 and DCFC by this same rule); absent means S. */
+function evChargerTotals(st){
   var t={ dcfcKw:0, dcfcUnits:0, l2Kw:0, l2Units:0, ports:0,
           futureUnits:0, futureKw:0, futurePorts:0 };
-  if(typeof S==='undefined') return t;
+  if(!st){ if(typeof S==='undefined') return t; st=S; }
   /* Future stalls are deliberately kept OUT of the connected-load figures.
      They draw nothing until the units are bought, and counting them now
      inflates the service sizing and the interconnection screen against
@@ -69992,16 +70017,16 @@ function evChargerTotals(){
     try { return !!(window.OmegaEVFuture && OmegaEVFuture.isFuture(o)); } catch(e){ return false; }
   }
   var i,s;
-  for(i=0;S.shapes&&i<S.shapes.length;i++){
-    s=S.shapes[i];
+  for(i=0;st.shapes&&i<st.shapes.length;i++){
+    s=st.shapes[i];
     var _k=s.kind;
     if(_k!=='evpost' && _k!=='evunit' && _k!=='evl2') continue;
     if(_fut(s)){ t.futureUnits++; t.futureKw+=(s.kw||0); t.futurePorts+=(s.ports||1); continue; }
     if(_k==='evpost'||_k==='evunit'){ t.dcfcKw+=(s.kw||0); t.dcfcUnits++; t.ports+=(s.ports||1); }
     else { t.l2Kw+=(s.kw||0); t.l2Units++; t.ports+=(s.ports||1); }
   }
-  for(i=0;S.elements&&i<S.elements.length;i++){
-    var e=S.elements[i];
+  for(i=0;st.elements&&i<st.elements.length;i++){
+    var e=st.elements[i];
     if(e.type==='evgear' && e.evKind==='charger' && _fut(e)){ t.futureUnits++; t.futureKw+=(e.kw||0); t.futurePorts+=(e.ports||1); }
     else if(e.type==='evgear' && e.evKind==='charger'){
       var _n=(e.units>1)?e.units:1;
@@ -73024,7 +73049,8 @@ function homeLoadRecent(){
 
   host.innerHTML = top.map(function(p){
     var name = _hEsc(p.name || 'Untitled');
-    var mode = _hEsc((p.wizMode||'').toUpperCase());
+    /* what kind of project — the Projects list's one rule (_projKinds), not the BTM/FOM market */
+    var mode = _hEsc((typeof _projKindLabels==='function') ? _projKindLabels(p).join(' · ') : '');
     var sub  = _hEsc(p.customer || p.address || '');
     var cur  = (window._projectId && p.id===window._projectId);
     return '<button class="home-recent-item" onclick="homeOpenProject(\''+_hEsc(p.id)+'\')" '
@@ -77602,10 +77628,11 @@ window._crmToastModal=_crmToastModal;
 </style>
 <script>
 (function(){
-  /* Each type is data. Adding one later is a table entry, not a branch. */
+  /* Each type is data. Adding one later is a table entry, not a branch.
+     `short` is the type's name on a chip (the Projects list, Home → Recent). */
   var TYPES = {
     bess: {
-      label:'BESS \u2014 Battery Energy Storage',
+      label:'BESS \u2014 Battery Energy Storage', short:'BESS',
       noun:'BESS', assembly:'bess',
       sheets:{ e0:1,e10:1,e1:1,e12:0,e20:1,e30:1,e40:0,e50:1,s11:1,s12:1,s20:1,s30:1 },
       names:{ s11:'S1.1 \u2014 BESS Pad Detail (structural)',
@@ -77617,7 +77644,7 @@ window._crmToastModal=_crmToastModal;
       hint:'NFPA 855 separation and signage sheets are included by default.'
     },
     ev: {
-      label:'EV Charging \u2014 DCFC (fast charge)',
+      label:'EV Charging \u2014 DCFC (fast charge)', short:'DCFC',
       noun:'DC fast charging', assembly:'charger',
       sheets:{ e0:1,e10:1,e1:1,e12:0,e20:1,e30:1,e40:1,e50:1,s11:1,s12:1,s20:1,s30:0 },
       names:{ s11:'S1.1 \u2014 Charger Pad Detail (structural)',
@@ -77632,7 +77659,7 @@ window._crmToastModal=_crmToastModal;
        almost never needs its own transformer or MV coordination, so the
        gear-pad sheet defaulting ON produced a page with nothing to draw. */
     evl2: {
-      label:'EV Charging \u2014 Level 2',
+      label:'EV Charging \u2014 Level 2', short:'L2',
       noun:'Level 2 EV charging', assembly:'charger',
       sheets:{ e0:1,e10:1,e1:1,e12:0,e20:1,e30:1,e40:1,e50:1,s11:1,s12:0,s20:1,s30:0 },
       names:{ s11:'S1.1 \u2014 Charger Mounting Detail (structural)',
@@ -77644,7 +77671,7 @@ window._crmToastModal=_crmToastModal;
       hint:'Level 2 typically feeds off existing service \u2014 the gear/transformer pad sheet is off by default. Turn it on if this site adds a dedicated transformer.'
     },
     solar: {
-      label:'Solar PV',
+      label:'Solar PV', short:'Solar',
       noun:'solar array', assembly:'solar',
       sheets:{ e0:1,e10:1,e1:1,e12:0,e20:1,e30:1,e40:0,e50:1,s11:1,s12:0,s20:1,s30:0 },
       names:{ s11:'S1.1 \u2014 Array Racking Detail (structural)',
@@ -77656,7 +77683,7 @@ window._crmToastModal=_crmToastModal;
       hint:'NEC 690 rapid-shutdown and array signage apply to PV.'
     },
     der: {
-      label:'DER \u2014 mixed / microgrid',
+      label:'DER \u2014 mixed / microgrid', short:'DER',
       noun:'DER system', assembly:null,
       sheets:{ e0:1,e10:1,e1:1,e12:0,e20:1,e30:1,e40:0,e50:1,s11:1,s12:1,s20:1,s30:1 },
       names:{ s11:'S1.1 \u2014 Equipment Pad Detail (structural)',
@@ -77668,7 +77695,7 @@ window._crmToastModal=_crmToastModal;
       hint:'Mixed-asset sites: every structural and signage sheet is on by default.'
     },
     solarbess: {
-      label:'Solar + BESS \u2014 Combined System',
+      label:'Solar + BESS \u2014 Combined System', short:'Solar + BESS',
       noun:'solar + BESS system', assembly:'bess',
       sheets:{ e0:1,e10:1,e1:1,e12:0,e20:1,e30:1,e40:0,e50:1,s11:1,s12:1,s20:1,s30:1 },
       names:{ s11:'S1.1 \u2014 Array Racking + BESS Pad Detail (structural)',
@@ -77680,7 +77707,7 @@ window._crmToastModal=_crmToastModal;
       hint:'Both PV rapid-shutdown/array signage and NFPA 855 battery signage are included \u2014 this is the CSE non-export solar + storage combo.'
     },
     building: {
-      label:'Building / Net-Zero', noun:'building', assembly:null,
+      label:'Building / Net-Zero', short:'Building', noun:'building', assembly:null,
       sheets:{ e0:1,e10:1,e1:1,e12:0,e20:1,e30:1,e40:0,e50:1,s11:0,s12:0,s20:0,s30:0 },
       names:{ e20:'E2.0 — Building Electrical One-Line', e30:'E3.0 — Signage' },
       cover:{ model:'Building system', mfr:'Manufacturer' },
@@ -77688,7 +77715,7 @@ window._crmToastModal=_crmToastModal;
       hint:'Begin with the building and its loads; add rooftop generation and storage as needed.'
     },
     datacenter: {
-      label:'Data Center / Compute Load',
+      label:'Data Center / Compute Load', short:'Data center',
       noun:'compute load facility', assembly:null,
       sheets:{ e0:1,e10:1,e1:1,e12:0,e20:1,e30:1,e40:0,e50:1,s11:1,s12:1,s20:1,s30:1 },
       names:{ s11:'S1.1 \u2014 Compute Pod / Container Pad Detail (structural)',
@@ -77822,7 +77849,10 @@ window._crmToastModal=_crmToastModal;
 
   window.OmegaProjectTypes = {
     list:function(){ return Object.keys(TYPES).map(function(k){
-      return { key:k, label:TYPES[k].label, noun:TYPES[k].noun }; }); },
+      return { key:k, label:TYPES[k].label, short:TYPES[k].short, noun:TYPES[k].noun }; }); },
+    /* Any spelling a record or link carries → this table's key, or null. */
+    norm:function(k){ return normKey(k); },
+    short:function(k){ var t=TYPES[normKey(k)]; return t ? t.short : ''; },
     get:function(){ return current(); },
     set:function(k){ setType(k); var s=document.getElementById('pp-ptype'); if(s) s.value=k; return current(); },
     /* What the AI should be told it is describing. */
