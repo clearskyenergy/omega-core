@@ -25798,7 +25798,11 @@ async function saveProject(){
       payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       const ref = await _db.collection('projects').add(payload);
       _projectId = ref.id;
-      try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: 'bess',
+      /* vertical: the type this project is saved with (payload.type is set only
+         when one was chosen), else null, as every other creator sends; never
+         'bess' by default. */
+      try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id,
+        vertical: payload.type ? String(payload.type).toLowerCase() : null,
         market: payload.wizMode || null, source: (window.__omegaAutopilot && window.__omegaAutopilot.step !== 'idle') ? 'autopilot' : 'editor-save' }); } catch (e) {}
       history.replaceState(null,'',window.location.pathname+'?project='+_projectId);
       // First save: _projectId didn't exist when images were written above.
@@ -49326,9 +49330,11 @@ async function exportPermitPDF() {
       </div>
       <button onclick="document.getElementById('proj-modal').style.display='none'" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;padding:4px 8px;line-height:1">×</button>
     </div>
-    <!-- Search + Sort + New (every project is listed; each row names its kind) -->
-    <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px">
-      <input id="proj-search" type="text" placeholder="Search projects..." oninput="filterProjects()" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 12px;font-size:12px;font-family:inherit">
+    <!-- Search + Sort + New (every project is listed; each row names its kind).
+         Wraps on a phone: the search box keeps the first line and Sort + New
+         Project move under it, instead of New Project running off the edge. -->
+    <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:8px">
+      <input id="proj-search" type="text" placeholder="Search projects..." oninput="filterProjects()" style="flex:1 1 240px;min-width:0;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 12px;font-size:12px;font-family:inherit">
       <select id="proj-sort" onchange="filterProjects()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:12px;font-family:inherit;cursor:pointer">
         <option value="date">Newest</option>
         <option value="name">Name A→Z</option>
