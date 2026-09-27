@@ -764,7 +764,8 @@ menu and a QuickBooks invoice for a packaged workspace, the request that
 moves a legacy one onto a package (`plan-change` `opt-in`: priced from the
 book, recorded on `billing/current.optIns` with history and audit, ClearSky
 mailed; the admin Package tab opens preselected on what the tenant holds
-plus that request; nothing is charged). In flight is
+plus that request; nothing is charged; `withdraw-opt-in` takes it back;
+Omega Design never carries one). In flight is
 `OmegaWorkspaceToday.board` (what needs something, then what was touched
 last, never online, a finance-marketplace deal riding on its project) and
 Assign merges only the owner fields onto `projects/{id}`. Plan & billing
@@ -778,8 +779,17 @@ handles itself never raises the mark. Optional held modules offer **Opt out** th
 same shared menu. Packaged opt-outs preview the server's dependency set,
 then queue for the existing quarterly review (no immediate access, charge
 or refund change); Keep module withdraws the request. Lite is mandatory.
-Legacy opt-outs prepare a ClearSky email request under the existing
-agreement. The page never changes billing or grants. Opt-in panels live on
+Legacy opt-outs are recorded the same way (Tommy, 2026-09-27: "i want it
+to opt in and out, this needs to work"): `request-removal` /
+`withdraw-removal` on a legacy record write `billing/current.optOuts` with
+history, audit and a mail, ClearSky confirms the date under the agreement,
+and the Package tab preselects without them. A request grants and charges
+nothing, so an owner or administrator files one on the ROLE alone (that
+role is only ever written by ClearSky or the workspace's owner, and the
+record says whether the email was verified); pricing, paying, switching on
+and the summary still need a verified email. A legacy plan ClearSky
+invoices reads "Invoiced by ClearSky" on Plan & billing, never "No billing
+account yet". The page never changes billing or grants. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
@@ -792,8 +802,11 @@ its `#main`; the markup stays for the classic home and the tests that
 read it). A PACKAGED workspace prices from `api/package-catalog` and opts
 in through the shared `omega-package-menu.js` control and `plan-change`;
 any other workspace reads the PUBLIC price list `GET /api/offerings`,
-each module judged against its tier (On your plan · Partly · Ask
-ClearSky, an email), and never pays here. `/marketplace.html#<module>`
+each module judged against its tier (On your plan · Partly · Opt in), opts
+in and out through the same shared control by the recorded requests
+above, and never pays here. Enterprise is "Contact for pricing": the
+public list publishes no Enterprise figure (the book keeps it for the
+contract). `/marketplace.html#<module>`
 lands on that module. A tenant on the classic home keeps the tool
 catalogue and pinning. Design, launch order and the honest list of what
 is not built: `docs/OMEGA-WORKSPACE.md`.

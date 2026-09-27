@@ -72,12 +72,16 @@ decided 2026-09-26.
   open invoices for a Stripe-billed plan); *Payment method* (a Stripe plan
   opens the Stripe Customer Portal through `POST /api/stripe-portal` for
   the card and autopay; a QuickBooks plan saves the card on QuickBooks'
-  own invoice payment page with Autopay; card details are never entered
-  on our pages); *Billing history* (the engine's invoices from
-  `GET /api/plan-change`, which every verified member may read; a Stripe
-  plan's from `POST /api/stripe-invoices`). Additions waiting (a legacy
-  opt-in with its price, a packaged change waiting for payment) are listed
-  between them.
+  own invoice payment page with Autopay; a legacy plan ClearSky invoices
+  itself (a paid tier or payments on record: Concord, whose admin was told
+  "No billing account yet") reads *Invoiced by ClearSky*, paid as the
+  agreement sets out; card details are never entered on our pages);
+  *Billing history* (the engine's invoices from `GET /api/plan-change`,
+  which every verified member may read; a Stripe plan's from
+  `POST /api/stripe-invoices`). *Requested changes* (a legacy opt-in with
+  its price and a legacy opt-out, each with Withdraw or Keep for an owner
+  or administrator; a packaged change waiting for payment) sit between
+  them. A *Next invoice* date already past is not shown as next.
 - **Opt in, never Ask.** Every module not held carries **Opt in**. A
   packaged workspace opts in on the one menu (`omega-package-menu.js`): a
   server quote, "Subscribe and pay", a QuickBooks invoice with the card
@@ -90,7 +94,24 @@ decided 2026-09-26.
   rows) and mails ClearSky, who moves the workspace onto a package from
   the admin Package tab; the card then reads *Requested* with its price.
   Nothing is charged until the first invoice is confirmed. Self-serve
-  conversion of a legacy plan is NOT built (below).
+  conversion of a legacy plan is NOT built (below). Omega Design is never
+  an Opt in (it is always included; the server refuses one).
+- **Opt out, and taking a request back** (Tommy, 2026-09-27: "i want it to
+  opt in and out, this needs to work"). A legacy workspace's **Opt out**
+  opens the one menu, which previews what goes with it from the server
+  (Office takes the Logic departments that need it) and **Confirm** records
+  it: `request-removal` on a legacy record writes
+  `billing/current.optOuts[key]` with who and when, history and
+  `admin_audit` rows, and mails ClearSky, who confirms the date and any
+  change to the invoice under the agreement. Access and charges stay until
+  then. **Keep module** (`withdraw-removal`) takes an opt-out back and
+  **Withdraw** (`withdraw-opt-in`) an opt-in, on the Modules page, in the
+  store and in Plan & billing's *Requested changes*. The admin Package tab
+  lists both and preselects without the opt-outs. A request grants and
+  charges nothing, so an owner or administrator files one on the role
+  alone, verified email or not (the record and the mail say which);
+  quoting, paying, switching on and the summary still need a verified
+  email. A member is told who files them.
 - **The module cards live on Modules, not the home** (Tommy, 2026-09-27:
   "i love the way the modules are but i dont want them to be taking up so
   much dashboard space"). The home is the hub, Today, In flight and Around
@@ -290,11 +311,13 @@ to the page, the shell or the runtime they load.
   the package engine cannot pay for a module by card until it is on a
   subscription package. Its Opt in is RECORDED with the server's price
   (`billing/current.optIns`, history, `admin_audit`, a mail to ClearSky)
-  and the admin Package tab opens preselected on what it holds plus the
-  request; ClearSky activates, and the addition lands on the monthly
-  invoice. A one-click "move me onto a package and invoice the first
-  month" needs the engine to accept a legacy record as the start of a
-  quote.
+  and so is its Opt out (`billing/current.optOuts`, no figure: the price
+  is the agreement's); the admin Package tab opens preselected on what it
+  holds plus the opt-ins, less the opt-outs; ClearSky activates, and the
+  addition lands on the monthly invoice. Neither request changes access
+  or a charge by itself. A one-click "move me onto a package and invoice
+  the first month" needs the engine to accept a legacy record as the
+  start of a quote.
 - **A saved card shown by brand and last four.** The page says where the
   card lives (Stripe's portal, QuickBooks' payment page) and never holds
   one; reading the brand and last four back from Stripe or QuickBooks

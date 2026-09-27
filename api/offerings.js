@@ -16,7 +16,11 @@ function view(b, source) {
   var plans = Object.keys(b.plans).map(function (k) { var p = b.plans[k]; return { key: k, name: p.name, monthlyDisplay: P.money(p.priceCents) + '/month', capDisplay: 'À la carte up to ' + P.money(p.capCents) + ' of modules', serviceFeeDisplay: b.serviceFees[k] ? P.money(b.serviceFees[k]) + '/year' : 'Included' }; });
   return { pricebookVersion: b.version, source: source, currency: b.currency, floorDisplay: P.money(b.floorCents) + '/month',
     lite: { name: 'Lite', monthlyDisplay: P.money(b.modules.lite.priceCents) + '/month', serviceFeeDisplay: b.serviceFees.lite ? P.money(b.serviceFees.lite) + '/year' : 'Included' },
-    plans: plans, enterprise: { annualFloorDisplay: P.money(b.enterprise.floorAnnualCents) + '/year', setupDisplay: P.money(b.enterprise.setupCents), devHoursMonthly: b.enterprise.devHoursMonthly, serviceFeeDisplay: P.money(b.serviceFees.enterprise) + '/year' },
+    /* Enterprise is a contract priced with ClearSky (Tommy, 2026-09-27:
+       "enterprise should be like 'contact for pricing'"): the public list
+       says so and publishes no figure. The book keeps the floor, the setup
+       and the hours for the contract and the proposal. */
+    plans: plans, enterprise: { name: 'Enterprise', priceDisplay: 'Contact for pricing', summary: 'Every module, on a contract', note: 'Setup, development hours and support sized to your company.' },
     modules: modules, starters: M.starters(), starterLabels: M.starterLabels(),
     logins: { builders: b.logins.builders, viewers: b.logins.viewers, builderDisplay: P.money(b.logins.builderCents) + '/month', viewerDisplay: P.money(b.logins.viewerCents) + '/month' },
     trial: { days: Math.min(b.policy.trialDays, 14), note: 'One trial per company, at most 14 days, starting when ClearSky approves the request. Or pay now and start today.' },

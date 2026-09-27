@@ -542,7 +542,7 @@ function renderModules() {
   cat.forEach(function (m) { var on = HUB.moduleState(m, ctx) === 'held'; if (on) heldN++; (on || bought.indexOf(m.key) >= 0 ? mine : rest).push(m); });
   function card(m) {
     var full = byKey[m.key] || m, st = HUB.moduleState(m, ctx), on = st === 'held', paid = !on && bought.indexOf(m.key) >= 0, price = (MOD_PRICES && MOD_PRICES[m.key]) || m.priceDisplay || '';
-    var req = !packaged && !on && bl.optIns && bl.optIns[m.key] && bl.optIns[m.key].status !== 'declined' && bl.optIns[m.key].status !== 'activated' ? bl.optIns[m.key] : null;
+    var req = !packaged && !on ? requestOn(bl.optIns, m.key) : null, out = !packaged && (on || st === 'part') ? requestOn(bl.optOuts, m.key) : null;
     var name = m.name;
     /* only the tools this workspace can see, the ones the badge counted */
     var tools = (m.tools || []).map(function (k) { return tool(k); }).filter(function (t) { return !!t && T.isVisible(t, WS); });
@@ -555,10 +555,11 @@ function renderModules() {
     }
     /* "Partly" explained from both halves it weighs (tools and Site Map), never "4 of 4 of its tools" under a Partly badge */
     var mt = st === 'part' ? HUB.moduleNote(m, ctx) : null;
-    var note = on ? '' : paid ? 'Opens when the first invoice is paid' : req ? 'Requested ' + (day(req.requestedAt) || '') + '; joins your monthly fee once ClearSky moves you onto a package' : WS.pendingApproval ? 'Opens once ClearSky approves the workspace' : mt ? mt : packaged ? 'Pay by card; on when the payment clears' : 'Added to your monthly fee';
-    var action = on || paid || WS.pendingApproval ? '' : packaged ? '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">Opt in</button>' : '<button type="button" class="ows-pill' + (req ? '' : ' primary') + '" data-ask-module="' + esc(m.key) + '" data-price="' + esc(price || '') + '" data-name="' + esc(name) + '">' + (req ? 'Requested' : 'Opt in') + '</button>';
-    action += moduleOptOut(m, on || paid || st === 'part');
-    return '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : req ? 'requested' : st === 'part' ? 'part' : '0') + '">'
+    var note = out ? 'Opt-out requested ' + (day(out.requestedAt) || '') + '; ClearSky confirms the date under your agreement, access stays until then' : on ? '' : paid ? 'Opens when the first invoice is paid' : req ? 'Requested ' + (day(req.requestedAt) || '') + '; joins your monthly fee once ClearSky moves you onto a package' : WS.pendingApproval ? 'Opens once ClearSky approves the workspace' : mt ? mt : packaged ? 'Pay by card; on when the payment clears' : 'Added to your monthly fee';
+    /* Omega Design is always included: never an Opt in (the server refuses one), whatever part of it a legacy tier opens */
+    var action = on || paid || WS.pendingApproval || m.key === 'lite' || out ? '' : packaged ? '<button type="button" class="ows-pill primary" data-add-module="' + esc(m.key) + '">Opt in</button>' : '<button type="button" class="ows-pill' + (req ? '' : ' primary') + '" data-ask-module="' + esc(m.key) + '" data-price="' + esc(price || '') + '" data-name="' + esc(name) + '">' + (req ? 'Requested' : 'Opt in') + '</button>';
+    action += moduleOptOut(m, on || paid || st === 'part', !!out);
+    return '<div class="mod' + (on ? '' : ' off') + '" data-module="' + esc(m.key) + '" data-held="' + (on ? '1' : paid ? 'bought' : req ? 'requested' : st === 'part' ? 'part' : '0') + '"' + (out ? ' data-optout="requested"' : '') + '>'
       + '<div class="cv" style="background:' + (MOD_COVER[m.shelf] || MOD_COVER.floor) + '"><span class="ltr">' + esc(m.mark || full.mark || m.name.slice(0, 1)) + '</span>' + state + '</div>'
       + '<div class="bd"><div class="nm"><b>' + esc(name) + '</b><span class="price">' + esc(on ? (m.shelfLabel || full.shelfLabel || '') : (price || 'Price on the menu')) + '</span></div>'
       + '<ul class="feat">' + (m.features || full.features || []).slice(0, 3).map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>'
@@ -578,17 +579,50 @@ function renderModules() {
   Array.prototype.forEach.call(b.querySelectorAll('[data-ask-module]'), function (btn) { btn.addEventListener('click', function () { optInLegacy(btn.getAttribute('data-ask-module'), btn.getAttribute('data-name'), btn.getAttribute('data-price')); }); });
   wireModuleOptOut(b, cat, ctx, packaged);
 }
-function moduleOptOut(m, held) {
+function moduleOptOut(m, held, requested) {
   if (!held || m.key === 'lite' || WS.pendingApproval) return '';
-  return '<button type="button" class="ows-pill" data-remove-module="' + esc(m.key) + '">Opt out</button>';
+  return '<button type="button" class="ows-pill" data-remove-module="' + esc(m.key) + '">' + (requested ? 'Keep module' : 'Opt out') + '</button>';
 }
+/* A legacy opt-out opens the ONE menu on that module (omega-package-menu.js):
+   its preview names what goes with it, Confirm records the request
+   (plan-change request-removal on billing/current.optOuts), Keep module
+   withdraws it; the answer repaints this page. Owners and administrators
+   file them; a member is told who does. */
 function wireModuleOptOut(root, cat, ctx, packaged) {
   Array.prototype.forEach.call(root.querySelectorAll('[data-remove-module]'), function (btn) { btn.addEventListener('click', function () {
     var key = btn.getAttribute('data-remove-module');
     if (packaged) { addModule(key); return; }
     var held = cat.filter(function (m) { var st = HUB.moduleState(m, ctx); return st === 'held' || st === 'part'; }).map(function (m) { return m.key; });
-    OmegaPackageMenu.open(key, { view: { modules: held, catalog: cat }, legacy: { company: WS.clientName || WS.orgId, email: OmegaBrand.upgradeEmail() } });
+    OmegaPackageMenu.open(key, { view: { modules: held, catalog: cat }, onChanged: requestsChanged,
+      legacy: { company: WS.clientName || WS.orgId, email: OmegaBrand.upgradeEmail(), optOuts: bill().optOuts || {}, canManage: isAdminHere() } });
   }); });
+}
+/* ── A request on a legacy plan, and taking it back ──────────────────────
+   An opt-in (optIns) or an opt-out (optOuts) is only a request on the
+   workspace's billing record until ClearSky acts on it, so either can be
+   withdrawn here, by the owner or administrator who files them. The
+   server's answer carries the whole map and this page repaints from it. */
+function requestOn(map, key) { var r = map && map[key]; return r && r.status === 'requested' ? r : null; }
+function requestsChanged(r) {
+  var bl = bill();
+  ['optIns', 'optOuts'].forEach(function (k) { if (r && r[k]) bl[k] = Object.assign({}, bl[k] || {}, r[k]); });
+  WS.billing = bl;
+  if (window.OmegaTenant && OmegaTenant.billing && OmegaTenant.billing !== bl) { try { OmegaTenant.billing.optIns = bl.optIns; OmegaTenant.billing.optOuts = bl.optOuts; } catch (e) {} }
+  renderModules(); BILL.asked = false; if (byId('content').getAttribute('data-view') === 'billing') renderBilling();
+}
+function withdrawOptIn(key, name, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Withdrawing…'; }
+  return OmegaPackageMenu.api('/api/plan-change', { action: 'withdraw-opt-in', add: [key] }).then(function (r) {
+    S.toast('Withdrew ' + (r.names || [name]).join(', ') + '. Nothing was charged.'); requestsChanged(r); return r;
+  }, function (e) { if (btn) { btn.disabled = false; btn.textContent = 'Withdraw'; } S.toast(e.message); throw e; });
+}
+function keepModule(key, name, btn) {
+  var body = { action: 'withdraw-removal', remove: [key] };
+  if (btn) { btn.disabled = true; btn.textContent = 'Keeping…'; }
+  return OmegaPackageMenu.api('/api/plan-change', Object.assign({ dryRun: true }, body)).then(function (q) {
+    return OmegaPackageMenu.api('/api/plan-change', Object.assign({ previewId: q.previewId }, body));
+  }).then(function (r) { S.toast('Kept ' + (r.names || [name]).join(', ') + '. Nothing about your plan changed.'); requestsChanged(r); return r; },
+    function (e) { if (btn) { btn.disabled = false; btn.textContent = 'Keep'; } S.toast(e.message); throw e; });
 }
 /* A workspace on a legacy plan (billed outside the package engine) opts in
    here too, and is told the truth: the engine takes a card payment only on
@@ -606,13 +640,18 @@ function wireModuleOptOut(root, cat, ctx, packaged) {
    subscription package, where the addition lands on the monthly invoice.
    Nothing is charged until the first invoice is confirmed. ── */
 function optInLegacy(key, name, price) {
-  var to = OmegaBrand.upgradeEmail(), co = WS.clientName || WS.orgId, bl = bill(), req = bl.optIns && bl.optIns[key] && bl.optIns[key].status !== 'declined' ? bl.optIns[key] : null;
+  var to = OmegaBrand.upgradeEmail(), co = WS.clientName || WS.orgId, bl = bill(), req = requestOn(bl.optIns, key), admin = isAdminHere();
   var subject = 'Opt in: ' + name + ' for ' + co, body = co + ' opts in to ' + name + (price ? ' (' + price + ')' : '') + '. Please move the workspace onto a subscription package so it can pay by card, and switch the module on.';
   var html = '<div class="ows-note">' + (req
-    ? '<b>Requested ' + esc(day(req.requestedAt) || '') + '</b>' + (req.requestedBy ? ' by ' + esc(req.requestedBy) : '') + ' at <b>' + esc(req.display || price || '') + '</b>. ClearSky moves <b>' + esc(co) + '</b> onto a subscription package and switches it on; the price joins your monthly invoice and nothing is charged until you confirm the first one.'
-    : '<b>' + esc(name) + '</b> is <b>' + esc(price || 'priced on the menu') + '</b>, added to your monthly fee. ' + esc(co) + ' is on the ' + esc(planName()) + ' plan, billed outside the package engine, so the request is recorded on your plan with its price and ClearSky moves the workspace onto a subscription package with card payments within one business day. Nothing is charged until you confirm the first invoice.') + '</div><div id="optin-msg" class="ows-note" hidden></div>';
+    ? '<b>Requested ' + esc(day(req.requestedAt) || '') + '</b>' + (req.requestedBy ? ' by ' + esc(req.requestedBy) : '') + ' at <b>' + esc(req.display || price || '') + '</b>. ClearSky moves <b>' + esc(co) + '</b> onto a subscription package and switches it on; the price joins your monthly invoice and nothing is charged until you confirm the first one. Until then the request can be withdrawn.'
+    : '<b>' + esc(name) + '</b> is <b>' + esc(price || 'priced on the menu') + '</b>, added to your monthly fee. ' + esc(co) + ' is on the ' + esc(planName()) + ' plan, billed outside the package engine, so the request is recorded on your plan with its price and ClearSky moves the workspace onto a subscription package with card payments within one business day. Nothing is charged until you confirm the first invoice.')
+    + (admin ? '' : ' An owner or administrator of ' + esc(co) + ' files and withdraws requests.') + '</div><div id="optin-msg" class="ows-note" hidden></div>';
   var rows = [];
-  if (!req) rows.push({ key: 'go', name: 'Add to my monthly fee', sub: (price ? price + ' · ' : '') + 'recorded on your plan and sent to ClearSky', icon: S.ICON.billing, cta: 'Add', onClick: function () { optInRequest(key, name, price); } });
+  if (!req && admin) rows.push({ key: 'go', name: 'Add to my monthly fee', sub: (price ? price + ' · ' : '') + 'recorded on your plan and sent to ClearSky', icon: S.ICON.billing, cta: 'Add', onClick: function () { optInRequest(key, name, price); } });
+  if (req && admin) rows.push({ key: 'withdraw', name: 'Withdraw the request', sub: 'Before ClearSky switches it on; nothing was charged', icon: S.ICON.billing, cta: 'Withdraw', onClick: function () {
+    var msg = byId('optin-msg'); if (msg) { msg.hidden = false; msg.textContent = 'Withdrawing…'; }
+    withdrawOptIn(key, name).then(function () { S.closeDrawer(); }, function (e) { if (msg) { msg.hidden = false; msg.innerHTML = '<b>Not withdrawn:</b> ' + esc(e.message) + '. Email ClearSky below instead.'; } });
+  } });
   rows.push({ key: 'bill', name: 'Plan & billing', sub: 'Your subscription, what you owe, your invoices', icon: S.ICON.billing, onClick: function () { S.closeDrawer(); openBilling(); } });
   rows.push({ key: 'store', name: 'See it in the store', sub: 'What it adds, what it costs, the plans', href: '/marketplace.html#' + key, icon: S.ICON.marketplace });
   rows.push({ key: 'mail', name: 'Email ClearSky instead', sub: to, href: 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body), icon: S.ICON.feed, cta: 'Email' });
@@ -622,12 +661,9 @@ function optInRequest(key, name, price) {
   var msg = byId('optin-msg'); if (msg) { msg.hidden = false; msg.textContent = 'Recording…'; }
   if (!window.OmegaPackageMenu) { if (msg) msg.textContent = 'Email ClearSky below instead.'; return; }
   OmegaPackageMenu.api('/api/plan-change', { action: 'opt-in', add: [key] }).then(function (r) {
-    var bl = bill(); bl.optIns = bl.optIns || {};
-    Object.keys(r.optIns || {}).forEach(function (k) { bl.optIns[k] = r.optIns[k]; });
-    if (!r.optIns) bl.optIns[key] = { key: key, name: name, display: r.display || price || '', requestedAt: new Date().toISOString(), requestedBy: ME, status: 'requested' };
-    WS.billing = bl; if (window.OmegaTenant && OmegaTenant.billing) { try { OmegaTenant.billing.optIns = bl.optIns; } catch (e) {} }
+    if (!r.optIns) { r.optIns = {}; r.optIns[key] = { key: key, name: name, display: r.display || price || '', requestedAt: new Date().toISOString(), requestedBy: ME, status: 'requested' }; }
     S.closeDrawer(); S.toast('Added ' + name + (r.display ? ' at ' + r.display : '') + ' to your monthly fee, pending ClearSky');
-    renderModules(); BILL.asked = false; if (byId('content').getAttribute('data-view') === 'billing') renderBilling();
+    requestsChanged(r);
   }, function (e) { if (msg) { msg.hidden = false; msg.innerHTML = '<b>Not recorded:</b> ' + esc(e.message) + '. Email ClearSky below instead.'; } });
 }
 function addModule(key) {
@@ -834,6 +870,11 @@ function renderBilling() {
   /* the rail: the engine's word for a package, else the record's (a legacy Stripe tier, a QuickBooks customer) */
   var prov = packaged && sm && sm.provider ? sm.provider : (bl.billingProvider === 'stripe' || bl.paymentProvider === 'stripe' || (!packaged && bl.stripeCustomerId)) ? 'stripe' : (bl.qboCustomerId || bl.paymentProvider === 'quickbooks' || bl.billingProvider === 'quickbooks') ? 'quickbooks' : null;
   var stripe = prov === 'stripe', qb = prov === 'quickbooks' || (packaged && !prov), payWith = stripe ? 'Stripe' : qb ? 'QuickBooks' : '';
+  /* a legacy plan ClearSky invoices itself (a paid tier, or payments on
+     record): it HAS a billing account, the agreement (Concord, 2026-09-27:
+     "No billing account yet" was false). A trial with nothing billed yet
+     (paymentProvider 'manual' too, from signup) still has none. */
+  var byClearSky = !packaged && !prov && (!!bl.lastPaidAt || Number(bl.amountDue) > 0 || !!bl.subscriptionDue || /^(standard|deluxe|enterprise)$/i.test(String(bl.tier || '')));
   if (!BILL.asked && window.OmegaPackageMenu) { BILL.asked = true; OmegaPackageMenu.api('/api/plan-change').then(function (j) { BILL.summary = j; renderBilling(); }, function () { BILL.failed = true; renderBilling(); }); }
   if (stripe && !packaged && !BILL.stripeAsked && window.OmegaPackageMenu) { BILL.stripeAsked = true; OmegaPackageMenu.api('/api/stripe-invoices', { orgId: WS.orgId, limit: 24 }).then(function (j) { BILL.stripe = j; renderBilling(); }, function () { BILL.stripe = { connected: false, failed: true }; renderBilling(); }); }
   function kv(rows) { return '<div class="kv">' + rows.filter(function (r) { return r[1] !== '' && r[1] != null; }).map(function (r) { return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</div>'; }
@@ -842,7 +883,8 @@ function renderBilling() {
   var stripeOpen = stripe && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'open'; }) : [];
   var invoices = sm && Array.isArray(sm.invoices) ? sm.invoices : [], unpaid = invoices.filter(function (x) { return x.state === 'unpaid'; });
   var pending = sm && Array.isArray(sm.pending) ? sm.pending : [];
-  var optIns = bl.optIns && typeof bl.optIns === 'object' ? Object.keys(bl.optIns).map(function (k) { var o = bl.optIns[k] || {}; o.key = k; return o; }).filter(function (o) { return o.status !== 'declined' && o.status !== 'activated'; }) : [];
+  function asked(map) { return map && typeof map === 'object' ? Object.keys(map).filter(function (k) { return !!requestOn(map, k); }).map(function (k) { return Object.assign({ key: k }, map[k]); }) : []; }
+  var optIns = packaged ? [] : asked(bl.optIns), optOuts = packaged ? [] : asked(bl.optOuts);
   var payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || (stripeOpen.length && stripeOpen[0].hostedUrl) || bl.paymentLink || null;
   var h = '<div class="bill">';
 
@@ -856,7 +898,7 @@ function renderBilling() {
   h += kv([['Workspace', WS.clientName || WS.orgId], ['Plan', packaged ? ((sm && sm.planDisplay) || planName()) : planName()],
     ['Modules', packaged ? (mods.join(', ') || (sm || BILL.failed ? '—' : 'Loading…')) : ''], ['Add-ons', packaged ? '' : ((WS.addons || []).join(', ') || 'None')],
     ['Tools on this plan', !packaged && Array.isArray(WS.toolAccess) ? String(WS.toolAccess.length) : ''],
-    ['Billing', packaged && sm ? (sm.interval === 'annual' ? 'Annual prepay' : 'Monthly, on the ' + (sm.billingDay ? sm.billingDay + (sm.billingDay === 1 || sm.billingDay === 21 || sm.billingDay === 31 ? 'st' : sm.billingDay === 2 || sm.billingDay === 22 ? 'nd' : sm.billingDay === 3 || sm.billingDay === 23 ? 'rd' : 'th') : 'signup day')) : (bl.interval === 'annual' ? 'Annual prepay' : stripe ? 'By card through Stripe' : bl.paymentProvider === 'quickbooks' ? 'By invoice through QuickBooks' : bl.paymentProvider === 'manual' ? 'Invoiced by ClearSky' : '')],
+    ['Billing', packaged && sm ? (sm.interval === 'annual' ? 'Annual prepay' : 'Monthly, on the ' + (sm.billingDay ? sm.billingDay + (sm.billingDay === 1 || sm.billingDay === 21 || sm.billingDay === 31 ? 'st' : sm.billingDay === 2 || sm.billingDay === 22 ? 'nd' : sm.billingDay === 3 || sm.billingDay === 23 ? 'rd' : 'th') : 'signup day')) : (bl.interval === 'annual' ? 'Annual prepay' : stripe ? 'By card through Stripe' : bl.paymentProvider === 'quickbooks' ? 'By invoice through QuickBooks' : byClearSky || bl.paymentProvider === 'manual' ? 'Invoiced by ClearSky' : '')],
     ['Since', day(bl.subscription && bl.subscription.since) || day(bl.subscriptionStartedAt) || day(bl.createdAt)], ['Access through', packaged ? day((sm && sm.accessUntil) || (pa && pa.accessUntil)) : ''], ['Trial ends', trialEnd() ? day(trialEnd()) : ''], ['Your role', WS.role || 'member']]);
   if (notOn.length) h += '<p><b>Bought, not on yet:</b> ' + esc(notOn.join(', ')) + '. They switch on when the invoice for them is paid.</p>';
   if (pa && pa.readOnly) h += '<p><b>Read-only</b> until the current invoice is paid.</p>';
@@ -875,6 +917,7 @@ function renderBilling() {
   else if (oweD > 0) h += '<div class="big">' + esc(usd(oweD)) + (bl.subscriptionDue ? '<small>due ' + esc(day(bl.subscriptionDue)) + '</small>' : '') + '</div>';
   else h += '<div class="big">$0<small>nothing is owed</small></div>';
   var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (packaged ? '' : bl.subscriptionDue);
+  if (!packaged && nextOn && ms(nextOn) && ms(nextOn) < new Date().setHours(0, 0, 0, 0)) nextOn = '';
   h += kv([['Next invoice', nextOn ? (day(nextOn) || nextOn) : ''], ['Paid through', sm && sm.paidThrough ? (day(sm.paidThrough) || sm.paidThrough) : ''], ['Last payment', !packaged && bl.lastPaidAt ? day(bl.lastPaidAt) : '']]);
   if (packaged) h += stripe ? '<p>Each invoice arrives by email on your billing day with its pay link: pay it by card on Stripe’s secure page, and your workspace follows the payment within seconds.</p>' : '<p>Each invoice arrives by email on your billing day with its pay link. A card saved on QuickBooks’ page pays the next one in one click.</p>';
   h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Pay now</a>' : '') + (packaged ? '<button class="ows-pill" type="button" id="bill-paid"' + (admin ? '' : ' disabled title="An owner or administrator checks the payment"') + '>I’ve paid</button>' : '') + '</div></div>';
@@ -890,16 +933,24 @@ function renderBilling() {
     h += kv([['Provider', 'QuickBooks Payments'], ['Card on file', bl.autopay === true ? 'Saved · autopay on' : bl.autopay === false ? 'Not saved yet' : 'Saved on your invoice page']]);
     h += '<p>Your card is entered on <b>QuickBooks’ secure payment page</b>, never on this site. When you pay an invoice there, tick <b>Save this card</b> and turn on <b>Autopay</b>: every later invoice is charged on its date, and you can change the card from any invoice.</p>';
     h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Open the payment page</a>' : '<span class="ows-chip">Your next invoice brings the link</span>') + '</div>';
+  } else if (byClearSky) {
+    var trialing = trialEnd() > Date.now() && !bl.lastPaidAt;
+    h += kv([['Provider', 'Invoiced by ClearSky'], ['How you pay', 'As your agreement sets out']]);
+    h += '<p>ClearSky bills <b>' + esc(WS.clientName || WS.orgId) + '</b> directly' + (trialing ? ': the first invoice follows your trial and nothing is charged before then.' : ': each invoice arrives by email and is paid the way your agreement sets out.') + ' No card is entered or kept on this site.</p>';
+    h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Open the payment page</a>' : '') + '<a class="ows-pill" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Billing for ' + (WS.clientName || WS.orgId)) + '">Ask ClearSky</a></div>';
   } else {
     h += '<p><b>No billing account yet.</b> Your first invoice sets it up: it arrives by email with a secure payment page where a card can be saved. Nothing is charged until then.</p>';
     h += '<div class="acts"><a class="ows-pill" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Billing for ' + (WS.clientName || WS.orgId)) + '">Ask ClearSky</a></div>';
   }
   h += '</div>';
 
-  /* 4 · requested additions / changes waiting for payment */
-  if (optIns.length || pending.length) {
-    h += '<div class="bcard" id="bill-req"><h3>Additions</h3>';
-    h += optIns.map(function (o) { return '<div class="inv"><div><b>' + esc(o.name || o.key) + '</b><small>Requested ' + esc(day(o.requestedAt) || '') + (o.requestedBy ? ' by ' + esc(o.requestedBy) : '') + ' · ClearSky moves the workspace onto a package and switches it on; nothing is charged until you confirm the first invoice</small></div><div><span class="amt">' + esc(o.display || '') + '</span><span class="st">Requested</span></div></div>'; }).join('');
+  /* 4 · requested changes: opt-ins and opt-outs on a plan billed outside
+     the engine (each withdrawable by an owner or administrator until
+     ClearSky acts), and packaged changes waiting for payment */
+  if (optIns.length || optOuts.length || pending.length) {
+    h += '<div class="bcard" id="bill-req"><h3>Requested changes</h3>';
+    h += optIns.map(function (o) { return '<div class="inv" data-request="in:' + esc(o.key) + '"><div><b>Opt in · ' + esc(o.name || o.key) + '</b><small>Requested ' + esc(day(o.requestedAt) || '') + (o.requestedBy ? ' by ' + esc(o.requestedBy) : '') + ' · ClearSky moves the workspace onto a package and switches it on; nothing is charged until you confirm the first invoice</small></div><div><span class="amt">' + esc(o.display || '') + '</span>' + (admin ? '<button class="ows-pill sm" type="button" data-withdraw-in="' + esc(o.key) + '" data-name="' + esc(o.name || o.key) + '">Withdraw</button>' : '<span class="st">Requested</span>') + '</div></div>'; }).join('');
+    h += optOuts.map(function (o) { return '<div class="inv" data-request="out:' + esc(o.key) + '"><div><b>Opt out · ' + esc(o.name || o.key) + '</b><small>Requested ' + esc(day(o.requestedAt) || '') + (o.requestedBy ? ' by ' + esc(o.requestedBy) : '') + ' · ClearSky confirms the date it ends and any change to your invoice under your agreement; access stays until then</small></div><div>' + (admin ? '<button class="ows-pill sm" type="button" data-keep="' + esc(o.key) + '" data-name="' + esc(o.name || o.key) + '">Keep</button>' : '<span class="st">Requested</span>') + '</div></div>'; }).join('');
     h += pending.map(function (x) { return '<div class="inv"><div><b>' + esc((x.names || []).join(', ')) + '</b><small>Pay before ' + esc(x.expiresOn || '') + ' · on when the payment clears</small></div><div><span class="amt">' + esc(x.display || '') + '</span>' + (x.paymentLink ? '<a class="ows-pill sm primary" href="' + esc(x.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : '') + '</div></div>'; }).join('');
     h += '</div>';
   }
@@ -924,6 +975,8 @@ function renderBilling() {
   b.innerHTML = h;
   var cm = b.querySelector('[data-bill="modules"]'); if (cm) cm.addEventListener('click', function () { go('modules'); });
   var paid = byId('bill-paid'); if (paid && admin) paid.addEventListener('click', function () { paid.disabled = true; paid.textContent = 'Checking…'; OmegaPackageMenu.api('/api/plan-change', { action: 'reconcile-now' }).then(function (j) { S.toast('Checked with ' + ((j && j.payWith) || payWith || 'the payment provider')); BILL.asked = false; if (OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderBilling(); }, function (e) { paid.disabled = false; paid.textContent = 'I’ve paid'; S.toast(e.message); }); });
+  Array.prototype.forEach.call(b.querySelectorAll('[data-withdraw-in]'), function (x) { x.addEventListener('click', function () { withdrawOptIn(x.getAttribute('data-withdraw-in'), x.getAttribute('data-name'), x)['catch'](function () {}); }); });
+  Array.prototype.forEach.call(b.querySelectorAll('[data-keep]'), function (x) { x.addEventListener('click', function () { keepModule(x.getAttribute('data-keep'), x.getAttribute('data-name'), x)['catch'](function () {}); }); });
   var portal = byId('bill-portal'); if (portal && admin) portal.addEventListener('click', function () { portal.disabled = true; portal.textContent = 'Opening Stripe…'; OmegaPackageMenu.api('/api/stripe-portal', { orgId: WS.orgId }).then(function (j) { portal.disabled = false; portal.textContent = packaged ? 'Manage card and invoices' : 'Manage card and autopay'; if (j && j.url) window.open(j.url, '_blank', 'noopener'); else S.toast('Stripe did not return a portal link'); }, function (e) { portal.disabled = false; portal.textContent = packaged ? 'Manage card and invoices' : 'Manage card and autopay'; S.toast(e.message); }); });
 }
 function billingDrawer() { openBilling(); }

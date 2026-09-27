@@ -1360,7 +1360,7 @@ function _priceBookStrip(){
   var parts = [];
   if (o.lite && o.lite.monthlyDisplay) parts.push('<b>Lite</b> ' + esc(o.lite.monthlyDisplay));
   (o.plans || []).forEach(function(pl){ parts.push('<b>' + esc(pl.name) + '</b> ' + esc(pl.monthlyDisplay || '')); });
-  if (o.enterprise && o.enterprise.annualFloorDisplay) parts.push('<b>Enterprise</b> from ' + esc(o.enterprise.annualFloorDisplay));
+  if (o.enterprise) parts.push('<b>Enterprise</b> ' + esc(o.enterprise.priceDisplay || 'contact for pricing'));
   if (o.logins && o.logins.builderDisplay) parts.push('logins ' + esc(o.logins.builderDisplay) + ' / ' + esc(o.logins.viewerDisplay || ''));
   var mods = (o.modules || []).map(function(m){ return esc(m.name) + ' ' + esc(m.monthlyDisplay || ''); }).join(' \u00b7 ');
   return '<div id="cl-pricebook-strip" class="sub-txt" style="margin:6px 0 12px;line-height:1.7">'
