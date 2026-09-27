@@ -249,27 +249,29 @@ async function run() {
     now = at('2026-10-27T12:00:00Z'); await AO.issue(db, ORG, now);
     equal(record('addon-renewal-2026-10-27').lines.map(function (l) { return l.itemKey + ':' + l.amountCents; }), ['logic-bundle:250000'], 'the renewal bills the bundle');
 
-    /* ══ 4. A Standard plan buys only what it can switch on EXACTLY ══
-       (Tommy's decision, 2026-09-27). A legacy editor opens Site Map a whole
-       tab at a time; the quote simulates the grants on the pages' own rule
-       (tools, and the editor's ladder from omega-caps.js) and sells a module
-       only when it comes on in full and nothing else comes on with it. */
+    /* ══ 4. A Standard plan buys any editor module, EXACTLY ══
+       (Tommy's decision, 2026-09-27: sold only where it switches on in full
+       and nothing else comes on with it). A legacy editor opens Site Map a
+       whole tab at a time, so a legacy key would open every module on the
+       tab; the editor opens a live add-on's OWN commands instead (omega-caps,
+       by the catalog's ribbon), the quote simulates exactly that on the
+       pages' own rule, and the editor's Opt in is a purchase on every plan. */
     now = at('2026-09-27T15:00:00Z');
     seed({ tier: 'standard', addons: [], toolOverrides: { sitefinder: false, conductorsizing: true }, paymentProvider: 'manual' });
-    var sq = await quote(['storage']);
-    equal([sq.canBuy, sq.request], [false, true], 'Storage\'s Analyze-tab commands stay shut on Standard: not sold here');
-    ok(/^Omega Storage cannot be added to your plan on its own: on your plan Site Map opens its commands a whole tab at a time, so it would be only partly on\. ClearSky can include it/.test(sq.reason), sq.reason);
-    var pq = await quote(['plansets']);
-    ok(!pq.canBuy && pq.request && /would also switch on part of Omega Capital\./.test(pq.reason), 'Plan Sets\' export key would open Capital\'s exports too: ' + pq.reason);
+    ['gridatlas', 'storage', 'estimate', 'plansets', 'siteintel', 'engineering', 'finance', 'compute', 'ops'].forEach(function (k) {
+      var x = AO.exact(ORG, bill(), [k], now);
+      ok(x.exact && !x.partial.length && !x.spill.length, k + ' switches on exactly on Standard, nothing else with it: ' + JSON.stringify(x));
+    });
+    var cq = await quote(['compute']);
+    equal([cq.canBuy, cq.request, cq.add], [true, false, ['compute']], 'Omega Compute is sold on Standard: Intel\'s and Engineer\'s commands on its tab stay shut');
     var wq = await quote(['whitelabel']);
     ok(!wq.canBuy && wq.request && /^Omega Storefront is set up with ClearSky, so it cannot be added here on its own\./.test(wq.reason), wq.reason);
-    ok(!AO.exact(ORG, bill(), ['engineering'], now).exact && AO.exact(ORG, bill(), ['engineering'], now).spill.indexOf('storage') >= 0, 'Engineering\'s key would open Storage\'s commands too');
-    await refused(function () { return buy(['storage']); }, /whole tab at a time/);
+    await refused(function () { return buy(['whitelabel']); }, /set up with ClearSky/);
     equal(issued.length, 0, 'nothing not exact is ever invoiced');
     equal(AO.exact(ORG, bill(), ['logic-office', 'logic-plant'], now).exact, true, 'an Omega Logic part is exact on every plan');
-    /* the recorded request instead: priced, on record for ClearSky, nothing charged */
-    var rq = await req('POST', { action: 'opt-in', add: ['storage'], orgId: ORG });
-    equal([rq.requested, bill().optIns.storage.status, issued.length], [true, 'requested', 0], 'the request is recorded; nothing is invoiced');
+    /* the recorded request, for what is still not exact: priced, on record for ClearSky, nothing charged */
+    var rq = await req('POST', { action: 'opt-in', add: ['whitelabel'], orgId: ORG });
+    equal([rq.requested, bill().optIns.whitelabel.status, issued.length], [true, 'requested', 0], 'the request is recorded; nothing is invoiced');
     /* Omega Sites is its tools alone: exact, sold, its tools written and taken back */
     equal(AO.held(ORG, bill(), 'sitefinder', now), false);
     var sf = await quote(['sitefinder']); equal([sf.canBuy, sf.request], [true, false]);
@@ -289,14 +291,33 @@ async function run() {
     equal(AO.held(ORG, bill(), 'storage', now), true, 'the engineering key opens Analyze: Standard holds Storage');
     await refused(function () { return quote(['storage']); }, /Already on your plan/);
     equal((await quote(['ops'])).canBuy, true, 'Operations comes on in full where Analyze is open');
-    /* the legacy editor keys, written and taken back exactly (grant() is the
-       one writer; no purchase on today's ladder is exact with one) */
+    /* the grants (grant() is the one writer): a module's tools, and a legacy
+       key only where another reader honours it (the storefront); never an
+       editor key, which would open a whole tab. A key an earlier grant wrote
+       is taken back exactly, and a staff key is never ours. */
     var g1 = AO.grant({ addons: ['engineering'], toolOverrides: { conductorsizing: false } }, ['engineering', 'plansets']);
-    equal(g1.addons, ['engineering', 'schematics', 'exports'], 'the editor\'s capabilities by the legacy add-on keys');
-    equal(g1.granted.addons, ['schematics', 'exports'], 'engineering was staff\'s already');
+    equal(g1.addons, ['engineering'], 'no editor key is written: the editor opens the modules themselves');
+    equal(g1.granted.addons, [], 'engineering was staff\'s already');
     equal(g1.granted.toolOverrides, { conductorsizing: false, powerflow: null, siteoptimizer: null });
     var g2 = AO.grant({ addons: g1.addons, toolOverrides: g1.toolOverrides, addOns: { granted: g1.granted } }, []);
     equal([g2.addons, g2.toolOverrides, g2.granted], [['engineering'], { conductorsizing: false }, { toolOverrides: {}, toolAccess: [], addons: [] }], 'switched off: exactly what was written is taken back');
+    var g3 = AO.grant({ addons: ['schematics', 'exports'], addOns: { granted: { toolOverrides: {}, toolAccess: [], addons: ['schematics', 'exports'] } } }, ['plansets']);
+    equal([g3.addons, g3.granted.addons], [[], []], 'a whole-tab key an earlier grant wrote is taken back: the module opens itself now');
+    var g4 = AO.grant({ addons: [] }, ['whitelabel']);
+    equal([g4.addons, g4.granted.addons], [['whitelabel'], ['whitelabel']], 'the storefront keeps the key its reader honours');
+
+    /* ── Omega Storage bought on Standard: paid, on, its tools written and no
+       editor key; the editor opens its own Analyze and Estimate commands,
+       and Engineer, whose commands share the Analyze tab, stays for sale ── */
+    now = at('2026-09-27T15:00:00Z');
+    seed({ tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'manual' });
+    var stb = await buy(['storage']); equal(stb.state, 'awaiting_payment', 'an invoice, on when paid');
+    paid(record(stb.addOnId)); now += 60000; await reconcile(now);
+    equal(bill().addOns.live, ['storage']);
+    equal(bill().addons, [], 'no legacy editor key: it would open every module on the Analyze tab');
+    ok(M.get('storage').tools.every(function (t) { return bill().toolOverrides[t] === true; }), 'the module\'s tools are switched on');
+    equal(AO.held(ORG, bill(), 'storage', now), true, 'held now, so never sold twice');
+    equal([AO.held(ORG, bill(), 'engineering', now), AO.exact(ORG, bill(), ['engineering'], now).exact], [false, true], 'Engineer is not held, and is still sold exactly beside it');
 
     /* ── a product defined by an allowlist grows by what it buys ── */
     now = at('2026-09-27T15:00:00Z');
@@ -373,15 +394,18 @@ async function run() {
     Object.keys(AO.LEGACY).forEach(function (k) {
       ok(!!M.get(k) && M.get(k).shelf !== 'platform', k + ' is a sold module of tools or capabilities');
       /* 'whitelabel' opens the embed storefront (api/_lib/embed.js), not an editor capability */
-      AO.LEGACY[k].forEach(function (x) { ok(x === 'whitelabel' || Object.prototype.hasOwnProperty.call(GRANTS, x), x + ' is a legacy add-on key omega-caps reads'); });
+      AO.LEGACY[k].forEach(function (x) { ok(x === 'whitelabel' && !(GRANTS[x] || []).length, x + ' is a key another reader honours, never one that opens the editor'); });
     });
+    /* what the legacy editor gates of a module, the module itself opens (omega-caps
+       addOnOpens): its commands by the catalog's ribbon, a side section by its caps */
     M.catalog().forEach(function (m) {
       if (m.key === 'lite' || m.shelf === 'platform') return;
-      var granted = []; (AO.LEGACY[m.key] || []).forEach(function (x) { (GRANTS[x] || []).forEach(function (cap) { granted.push(cap); }); });
+      ok((AO.LEGACY[m.key] || []).every(function (x) { return !(GRANTS[x] || []).length; }), m.key + ': buying it writes no key that opens a whole Site Map tab');
       m.caps.filter(function (cap) { return gated[cap] || gated[cap.split('.')[0]]; }).forEach(function (cap) {
-        ok(granted.indexOf(cap) >= 0 || granted.indexOf(cap.split('.')[0]) >= 0, m.key + ': the legacy editor gates ' + cap + ', and buying the module switches it on');
+        ok(m.ribbon.length > 0 || cap === m.key, m.key + ': the legacy editor gates ' + cap + ', and the module owns the commands that open it');
       });
     });
+    ok(/function addOnOpens\(el\)/.test(fs.readFileSync(path.join(__dirname, '..', 'omega-caps.js'), 'utf8')), 'the editor opens a live add-on by the module (omega-caps addOnOpens)');
     equal(AO.LOGIC, M.catalog().filter(function (m) { return m.shelf === 'platform'; }).map(function (m) { return m.key; }), 'the Omega Logic parts are the catalog\'s');
   } finally { Date.now = realNow; }
   console.log('Add to plan on a legacy workspace: ' + count + ' passed; QuickBooks mocked, no network.');

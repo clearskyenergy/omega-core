@@ -18,7 +18,9 @@ module.exports = async function (req, res) {
       preview.canPreview = true; preview.preview = true; preview.starters = M.starters();
       return res.status(200).json(preview);
     }
-    if (!ctx.billing || ctx.billing.packaged !== true) return res.status(200).json({ packaged: false });
+    /* a legacy plan: its add-ons on now and the catalog, so the editor opens
+       exactly what was bought and says Opt in where the plan stops */
+    if (!ctx.billing || ctx.billing.packaged !== true) return res.status(200).json(X.legacy(ctx.billing, Date.now()));
     var token = String(req.headers.authorization || '').replace(/^Bearer /, '');
     var root = 'omega_orgs/' + encodeURIComponent(caller.orgId);
     var rows = await Promise.all([V.readAsCaller(token, root), V.readAsCaller(token, root + '/members/' + encodeURIComponent(caller.uid))]);
