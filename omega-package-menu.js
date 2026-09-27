@@ -75,6 +75,8 @@
     if (pendingChange) {
       host.appendChild(node('p', 'Waiting for payment · ' + pendingChange.display + ' · expires ' + pendingChange.expiresOn, 'opm-wait'));
       if (pendingChange.paymentLink) host.appendChild(link(pendingChange.paymentLink, 'Pay in QuickBooks'));
+      var check = paidCheck(function () { return !control.pending[m.key]; }, function () { changed({ state: 'active', add: [m.key] }); });
+      host.appendChild(check.button); host.appendChild(check.note);
       host.appendChild(button('Cancel request', function () {
         host.textContent = 'Cancelling…';
         api('/api/plan-change', { action: 'cancel', changeId: pendingChange.id }).then(function (r) { if (state.onChanged) state.onChanged(r); }, function (e) { host.textContent = e.message; });
@@ -110,6 +112,148 @@
     }
     host.appendChild(button('Subscribe', function () { quote(null); }, 'opm-primary'));
   }
+  /* ── "I'VE PAID" ────────────────────────────────────────────────────────
+     Paying happens on QuickBooks' page, in another tab; the module switches
+     on when the platform sees the payment, which the hourly runner does on
+     its own. This asks it to look now (plan-change reconcile-now, one look
+     per workspace every eight seconds) and then asks the editor's plan
+     again, so the person who just paid sees the tools without a reload.
+     The browser decides nothing: `cleared()` reads the server's answer. */
+  function paidCheck(cleared, onCleared) {
+    var note = node('p', '', 'opm-note'); note.setAttribute('role', 'status');
+    var b = button("I've paid", function () {
+      b.disabled = true; b.textContent = 'Checking QuickBooks…'; note.textContent = '';
+      var said = null;
+      api('/api/plan-change', { action: 'reconcile-now' }).then(function (r) { said = r; }, function (e) { said = { error: e.message }; })
+        .then(loadControl).then(function (fresh) {
+          if (fresh.canManage && cleared()) { onCleared(); return; }
+          b.disabled = false; b.textContent = "I've paid";
+          note.textContent = !fresh.canManage ? 'The payment could not be checked right now. Try again in a moment.' : said && said.throttled ? 'Checked a moment ago. Try again in a few seconds.' :
+            said && said.error ? said.error : 'QuickBooks does not show this payment yet. A card payment usually shows within a minute.';
+        });
+    });
+    return { button: b, note: note };
+  }
+  /* ── WHERE A MODULE LIVES IN THE EDITOR ─────────────────────────────────
+     Read off the ribbon as it stands, by the same owners() rule that gates
+     it, so there is no second list of which tab a module is on. Prefers the
+     catalog's editorPage when the module has one. */
+  function usable(el) {
+    return !el.hasAttribute('data-packaging-retired') && !el.hasAttribute('data-omega-retired') && !el.hasAttribute('data-shelf-dupe') && !el.classList.contains('omega-gated-hidden');
+  }
+  function places() {
+    var caps = global.OmegaCaps, out = {}; if (!caps || !caps.packageAccess() || !document.getElementById('ribbon')) return out;
+    var els = document.querySelectorAll('#ribbon .ribbon-page .rbtn,#ribbon .ribbon-page .rsbtn');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i]; if (!usable(el) || el.hasAttribute('data-package-hidden') || el.hasAttribute('data-cap-blocked')) continue;
+      var own = caps.owners(el.id || '', el.getAttribute('onclick') || ''); if (!own.length) continue;
+      var page = el.closest('.ribbon-page').getAttribute('data-page'), tab = document.querySelector('#ribbon-tabs .rtab[data-page="' + page + '"]');
+      if (!tab) continue;
+      own.forEach(function (key) {
+        var grant = caps.MODULE_GRANTS[key] || {}, held = out[key];
+        if (held && (held.page === grant.editorPage || page !== grant.editorPage)) return;
+        out[key] = { el: el, page: page, tab: tab.textContent.replace(/\s+/g, ' ').trim() };
+      });
+    }
+    return out;
+  }
+  function where(key) { return places()[key] || null; }
+  function showMe(key) {
+    var hit = where(key); if (!hit) return false;
+    close();
+    var tab = document.querySelector('#ribbon-tabs .rtab[data-page="' + hit.page + '"]');
+    /* Designer mode and a project's focus both hide tools the plan allows;
+       asking to see one is asking for them back. */
+    if (global.OmegaMode && global.OmegaMode.get() === 'designer' && (tab.classList.contains('omg-hide') || !hit.el.classList.contains('omg-keep'))) global.OmegaMode.set('pro');
+    if (hit.el.hasAttribute('data-workspace-hidden') && global.OmegaWorkspaces) global.OmegaWorkspaces.setAll(true);
+    if (typeof global.rbTab === 'function') global.rbTab(hit.page);
+    hit.el.setAttribute('data-opm-spot', '1');
+    if (hit.el.scrollIntoView) hit.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    setTimeout(function () { hit.el.removeAttribute('data-opm-spot'); }, 2600);
+    return true;
+  }
+  function nameOf(key) { var g = global.OmegaCaps && global.OmegaCaps.MODULE_GRANTS[key]; return g ? g.name : key; }
+  function sentence(list) { return list.length < 2 ? list.join('') : list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1]; }
+  /* ── SAY WHAT CHANGED ───────────────────────────────────────────────────
+     OmegaCaps.refresh() announces a plan that moved while the editor was
+     open. Without a word the ribbon just rearranges itself: a tab appears
+     that nobody asked where to find, or the tools someone was using vanish.
+     One line, what moved, where it is, and a way to it. */
+  var toastTimer = null;
+  function toast(text, action) {
+    styles();
+    var old = document.getElementById('omega-plan-toast'); if (old) old.remove();
+    if (toastTimer) clearTimeout(toastTimer);
+    var t = node('div', '', 'opm-toast'); t.id = 'omega-plan-toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite');
+    t.appendChild(node('span', text));
+    if (action) t.appendChild(action);
+    t.appendChild(button('Dismiss', function () { t.remove(); }, 'opm-x'));
+    document.body.appendChild(t);
+    function later() { toastTimer = setTimeout(function () { if (t.matches(':hover') || t.contains(document.activeElement)) return later(); t.remove(); }, 12000); }
+    later();
+    return t;
+  }
+  function planChanged(e) {
+    var d = e.detail || {};
+    notice();
+    /* With The Ladder open the card itself says it ("On your plan · Show
+       me"); a toast over the dialog would only cover it. */
+    if (body) { loadControl().then(function () { if (body) render(lastRows, null); }); return; }
+    if (!document.getElementById('ribbon')) return;
+    var added = (d.packaged ? d.added : []).filter(function (k) { return k !== 'lite'; }), removed = d.packaged ? d.removed : [];
+    if (d.readOnly && !d.wasReadOnly) return toast('This workspace is read-only now. Saved projects stay available; pay to keep creating and exporting.', link('/workspace#billing', 'Plan & billing'));
+    if (d.recovered) return toast('Your plan is loaded. Your tools are back.');
+    if (added.length) {
+      var map = places(), hit = null, i;
+      for (i = 0; i < added.length && !hit; i++) hit = map[added[i]] ? added[i] : null;
+      var place = hit ? map[hit] : null, text = sentence(added.map(nameOf)) + (added.length > 1 ? ' are' : ' is') + ' on.';
+      if (place) return toast(text + ' ' + (added.length > 1 ? nameOf(hit) + ' is' : 'Find it') + ' on the ' + place.tab + ' tab.', button('Show me', function () { var t = document.getElementById('omega-plan-toast'); if (t) t.remove(); showMe(hit); }, 'opm-primary'));
+      return toast(text + ' Open it from your workspace.', link('/workspace', 'Workspace'));
+    }
+    if (!d.readOnly && d.wasReadOnly) return toast('Your workspace is open again. Your tools are back.');
+    if (removed.length) return toast(sentence(removed.map(nameOf)) + (removed.length > 1 ? ' are' : ' is') + ' no longer on your plan. Saved work stays available.', link('/workspace#billing', 'Plan & billing'));
+    if (d.packaged !== d.wasPackaged || !d.packaged) return toast('Your plan changed. The ribbon now shows what it includes.');
+  }
+  /* ── THE PLAN'S STATE, IN THE EDITOR ────────────────────────────────────
+     The dashboard has always said "your trial ends on …" and "this
+     workspace is read-only, pay to continue"; the editor, where the tools
+     actually disappear, said nothing, and a read-only workspace opened on a
+     near-empty ribbon with no reason given. The same server notice
+     (package-access billingNotice), the same pay link, and "I've paid". */
+  function notice() {
+    var caps = global.OmegaCaps, view = caps && caps.packageAccess(), ribbon = document.getElementById('ribbon'), bar = document.getElementById('omega-plan-notice');
+    /* signed in to the editor itself: never the sign-in screen's locked
+       placeholder, never the customer's Editor Lite frame (its own access) */
+    var user = global.firebase && global.firebase.auth && global.firebase.auth().currentUser, own = !!user && !/[?&]customerEngine=1(&|$)/.test(global.location.search);
+    var n = own && view && !view.staff && !view.preview && (view.billingNotice || (view.pending ? { text: 'Your plan could not be checked. Saved projects stay available; your tools come back when the connection does.', retry: true } : null));
+    if (!n || !ribbon || host.view) { if (bar) bar.remove(); return; }
+    var key = [n.text, n.payUrl || '', view.readOnly ? 1 : 0].join('|');
+    if (bar && bar.getAttribute('data-notice') === key) return;
+    styles();
+    if (!bar) { bar = node('div'); bar.id = 'omega-plan-notice'; bar.setAttribute('role', 'status'); }
+    var anchor = document.getElementById('omega-workspace-controls') || ribbon;
+    if (bar.nextSibling !== anchor) anchor.parentNode.insertBefore(bar, anchor);
+    bar.textContent = ''; bar.setAttribute('data-notice', key); bar.className = 'opm-notice' + (view.readOnly ? ' opm-bad' : '');
+    bar.appendChild(node('span', n.text));
+    if (n.payUrl) bar.appendChild(link(n.payUrl, 'Pay in QuickBooks'));
+    if (n.retry) bar.appendChild(button('Try again', function () { if (caps.refresh) caps.refresh(); }));
+    else if (n.payUrl || view.readOnly) {
+      var note = node('p', '', 'opm-note'); note.setAttribute('role', 'status');
+      var paid = button("I've paid", function () {
+        paid.disabled = true; paid.textContent = 'Checking…'; note.textContent = '';
+        /* a member may not ask QuickBooks to look (an owner's action), so a
+           refusal only skips that step; re-reading the plan is theirs too */
+        api('/api/plan-change', { action: 'reconcile-now' }).then(null, function () {}).then(function () { return caps.refresh ? caps.refresh() : null; }).then(function (r) {
+          paid.disabled = false; paid.textContent = "I've paid";
+          if (!r || !r.changed) note.textContent = 'Not showing as paid yet. A card payment usually shows within a minute.';
+        });
+      });
+      bar.appendChild(paid); bar.appendChild(link('/workspace#billing', 'Plan & billing')); bar.appendChild(note);
+      return;
+    }
+    bar.appendChild(link('/workspace#billing', 'Plan & billing'));
+  }
+  if (global.document && global.document.addEventListener) global.document.addEventListener('omega:plan-changed', planChanged);
   function loadControl() {
     return api('/api/plan-change').then(function (summary) {
       var pending = {}; (summary.pending || []).forEach(function (p) { (p.add || []).forEach(function (k) { pending[k] = p; }); });
@@ -122,27 +266,35 @@
     var el = node('section', '', 'opm-card'); el.setAttribute('data-module-card', m.key);
     el.appendChild(node('span', m.name.slice(0, 1), 'opm-icon'));
     el.appendChild(node('h3', m.name));
+    var view = packageView(), owned = view && (view.modules || []).indexOf(m.key) >= 0;
+    if (owned && !host.legacy) {
+      var on = node('p', '', 'opm-on'); on.appendChild(node('span', m.key === 'lite' ? 'Always on' : 'On your plan'));
+      if (m.key !== 'lite' && !host.view && (spots || {})[m.key]) on.appendChild(button('Show me', function () { showMe(m.key); }, 'opm-link'));
+      el.appendChild(on);
+    }
     var list = node('ul'); (m.features || []).forEach(function (f) { list.appendChild(node('li', f)); }); el.appendChild(list);
     el.appendChild(node('p', price || 'Pricing unavailable', 'opm-price'));
     if (m.beta && m.beta.length) el.appendChild(node('p', 'BETA: ' + m.beta.join(', '), 'opm-note'));
     if (m.coverage) el.appendChild(node('p', m.coverage, 'opm-note'));
     if (m.agreement) el.appendChild(node('p', m.agreement, 'opm-note'));
     // The control posts to the server; listing never changes modules[].
-    var view = packageView();
-    subscribeControl(el.appendChild(node('div')), m, { canManage: control.canManage, pending: control.pending, summary: control.summary, owned: view && (view.modules || []).indexOf(m.key) >= 0, legacy: host.legacy, catalog: view && view.catalog, ownedModules: view && view.modules, onChanged: changed });
+    subscribeControl(el.appendChild(node('div')), m, { canManage: control.canManage, pending: control.pending, summary: control.summary, owned: owned, legacy: host.legacy, catalog: view && view.catalog, ownedModules: view && view.modules, onChanged: changed });
     if (m.key === focus) { el.tabIndex = -1; el.setAttribute('data-selected', '1'); }
     return el;
   }
   var lastRows = [];
   function changed(result) {
-    var user = global.firebase && global.firebase.auth().currentUser, caps = global.OmegaCaps;
-    var refresh = result && result.state === 'active' && caps && caps.fetchPackage && user && !host.view ? caps.fetchPackage(user).then(function () { caps.apply('standard'); }, function () {}) : Promise.resolve();
+    var caps = global.OmegaCaps;
+    /* Re-read in place (OmegaCaps.refresh): the tools appear, the toast says
+       where, and the ribbon never blinks through the locked state. */
+    var refresh = result && result.state === 'active' && caps && caps.refresh && !host.view ? caps.refresh().then(null, function () {}) : Promise.resolve();
     if (host.onChanged) { try { host.onChanged(result); } catch (e) {} }
     refresh.then(loadControl).then(function () { if (body) render(lastRows, null); });
   }
+  var spots = null;
   function render(rows, focus) {
     if (!body) return; lastRows = rows;
-    body.textContent = '';
+    body.textContent = ''; spots = host.view ? {} : places();
     rows.forEach(function (m) { body.appendChild(card(m, m.priceDisplay, focus)); });
     if (!body.children.length) body.appendChild(node('p', 'Your package includes every module in this catalog.'));
     var selected = body.querySelector('[data-selected]'); if (selected) { selected.scrollIntoView({ block: 'nearest' }); selected.focus(); }
@@ -213,7 +365,18 @@
       '.opm-icon{display:inline-flex;width:30px;height:30px;border-radius:7px;align-items:center;justify-content:center;background:var(--opm-sunk);color:var(--opm-blue);font-weight:700}' +
       '.opm-act{margin-top:10px;display:grid;gap:6px}.opm-act p{margin:0}.opm-quote{font-weight:600}.opm-wait{font-weight:600;color:var(--opm-blue)}.opm-reason{color:#B45F06;font-size:12px}' +
       '.opm-row{display:flex;flex-wrap:wrap;gap:6px}.opm-act button{font:500 13px system-ui;padding:7px 12px;border:1px solid var(--opm-border);border-radius:6px;background:var(--opm-surface);color:var(--opm-text);cursor:pointer}' +
-      '.opm-act .opm-primary{background:var(--opm-blue);color:#fff;border-color:var(--opm-blue)}.opm-act a{color:var(--opm-blue)}';
+      '.opm-act .opm-primary{background:var(--opm-blue);color:#fff;border-color:var(--opm-blue)}.opm-act a{color:var(--opm-blue)}' +
+      '.opm-on{display:flex;align-items:center;gap:10px;margin:-4px 0 4px;font-size:12px;font-weight:600;color:var(--opm-green,#2E7D4F)}' +
+      '@media(prefers-color-scheme:dark){html:not([data-omega-theme="light"]) .opm-on{--opm-green:#6FBB84}}html[data-omega-theme="dark"] .opm-on{--opm-green:#6FBB84}' +
+      '.opm-dialog .opm-on .opm-link{padding:2px 8px;font:600 12px system-ui;background:transparent;color:var(--opm-blue)}' +
+      /* the strip and the toast sit in the editor's own chrome: its tokens, both themes */
+      '.opm-notice{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:7px 14px;font:12.5px/1.45 system-ui;background:var(--panel,#16202B);color:var(--text,#E6EBF0);border-bottom:1px solid var(--border,#26323E);border-left:3px solid var(--accent,#4A8FD8)}' +
+      '.opm-notice.opm-bad{border-left-color:var(--warn,#C9A24E)}.opm-notice span{flex:1 1 320px}.opm-notice a{color:var(--accent,#4A8FD8);font-weight:600}.opm-notice p{margin:0;flex-basis:100%;color:var(--sub,#94A1AE)}.opm-notice p:empty{display:none}' +
+      '.opm-notice button,.opm-toast button{font:600 12px system-ui;padding:5px 11px;border-radius:6px;border:1px solid var(--border,#26323E);background:transparent;color:var(--text,#E6EBF0);cursor:pointer}' +
+      '.opm-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:1000000;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;max-width:min(620px,calc(100vw - 32px));padding:12px 14px 12px 16px;border-radius:10px;border:1px solid var(--border,#26323E);background:var(--panel,#16202B);color:var(--text,#E6EBF0);font:13px/1.45 system-ui;box-shadow:0 10px 32px #0006}' +
+      '.opm-toast span{flex:1 1 260px}.opm-toast a{color:var(--accent,#4A8FD8);font-weight:600}.opm-toast .opm-primary{background:var(--accent,#4A8FD8);border-color:var(--accent,#4A8FD8);color:var(--on-accent,#fff)}.opm-toast .opm-x{border-color:transparent;color:var(--sub,#94A1AE)}' +
+      '[data-opm-spot]{outline:2px solid var(--accent,#4A8FD8)!important;outline-offset:2px;border-radius:6px;animation:opm-spot 1.3s ease-in-out 2}' +
+      '@keyframes opm-spot{50%{outline-color:transparent}}@media(prefers-reduced-motion:reduce){[data-opm-spot]{animation:none}}';
     document.head.appendChild(style);
   }
   function tab() {
@@ -295,5 +458,6 @@
     }
     draw(); return { value: function () { return selected.slice(); }, set: function (keys) { selected = keys.slice(); draw(); if (options.onChange) options.onChange(selected.slice()); } };
   }
-  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker, card: card, subscribeControl: subscribeControl, loadControl: loadControl, api: api, styles: styles };
+  global.OmegaPackageMenu = { open: open, close: close, tab: tab, staffPreview: staffPreview, picker: picker, card: card, subscribeControl: subscribeControl, loadControl: loadControl, api: api, styles: styles,
+    notice: notice, where: where, places: places, showMe: showMe };
 })(typeof window !== 'undefined' ? window : this);

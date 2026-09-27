@@ -12,8 +12,8 @@ var output5 = process.env.WORKSPACE_SHOTS || path.join(ROOT, 'docs/screenshots/p
  * the REAL handlers over an in-memory Firestore seeded with a paid tenant;
  * QuickBooks is a stand-in that counts invoices. The mock must be installed
  * before the handler is required. */
-var LIVE_ORG = 'packaging.example', db = null, caller = null, live = false, sandboxInvoices = 0;
-H.mockAdmin(function () { return db; }, function () { return caller; }); H.mockQbo(function () { sandboxInvoices++; });
+var LIVE_ORG = 'packaging.example', db = null, caller = null, live = false, sandboxInvoices = 0, qbo = { paid: false };
+H.mockAdmin(function () { return db; }, function () { return caller; }); H.mockQbo(function () { sandboxInvoices++; }, qbo);
 process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
 var planChange = require('../api/plan-change');
 async function liveProjection() { var snap = await db.doc('omega_orgs/' + LIVE_ORG + '/billing/current').get(); return X.project({ emailVerified: true }, snap.data(), { status: 'active' }, { role: 'owner' }); }
@@ -253,6 +253,72 @@ async function run() {
       await page.evaluate(function () { rbTab('analyze'); });
       await page.screenshot({ path: path.join(output5, 'editor-after-subscribe-' + theme + '.png') });
       await page.evaluate(function () { rbTab('home'); });
+      /* Opt in, pay, come back: the module switches on in the OPEN editor.
+         QuickBooks is the stand-in; `qbo.paid` is the card payment landing.
+         Nothing reloads the page between the purchase and the tools. */
+      var BILLING = 'omega_orgs/' + LIVE_ORG + '/billing/current';
+      async function billing(patch) { var cur = (await db.doc(BILLING).get()).data(); db.seed(BILLING, Object.assign({}, cur, patch)); }
+      db = new F.DB(); db.serial = true; qbo.paid = false; sandboxInvoices = 0;
+      H.seedPaidTenant(db, { org: LIVE_ORG, name: 'Packaging preview', keys: M.starters().ev, plan: 'field', profile: H.profile(LIVE_ORG, 'Packaging preview'), member: 'fixture-user' });
+      await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, await liveProjection());
+      var intelAllowed = function () { return OmegaCaps.allowedCommand('', 'openScorePanel()') && OmegaCaps.allowedCommand('rb-parcel-screen', ''); };
+      ok(await page.evaluate(intelAllowed) === false, 'Site Intelligence is gated before it is paid for');
+      await page.locator('#omega-package-tab').click();
+      await siteintel.getByRole('button', { name: 'Subscribe', exact: true }).waitFor();
+      await siteintel.getByRole('button', { name: 'Subscribe', exact: true }).click();
+      await siteintel.getByRole('button', { name: 'Subscribe and pay' }).click();
+      await siteintel.getByRole('button', { name: "I've paid", exact: true }).waitFor();
+      await siteintel.getByRole('button', { name: "I've paid", exact: true }).click();
+      await page.waitForFunction(function () { return /does not show this payment yet/.test(document.querySelector('[data-subscribe="siteintel"]').textContent); });
+      ok(await page.evaluate(intelAllowed) === false, "\"I've paid\" before QuickBooks has the payment unlocks nothing");
+      await siteintel.getByRole('button', { name: "I've paid", exact: true }).click();
+      await page.waitForFunction(function () { return /Checked a moment ago/.test(document.querySelector('[data-subscribe="siteintel"]').textContent); });
+      ok(true, 'asking again inside eight seconds is told so, not silently ignored');
+      qbo.paid = true; await billing({ paymentCheckedAt: 0 });
+      await siteintel.getByRole('button', { name: "I've paid", exact: true }).click();
+      await page.waitForFunction(function () { return OmegaCaps.packageAccess().modules.indexOf('siteintel') >= 0; });
+      var intelCard = page.locator('[data-module-card="siteintel"]');
+      await intelCard.getByRole('button', { name: 'Show me', exact: true }).waitFor();
+      ok(await page.evaluate(intelAllowed) === true, 'paid in QuickBooks, "I\'ve paid": Site Intelligence opens in the open editor, no reload');
+      ok((await intelCard.textContent()).indexOf('On your plan') >= 0, 'the card says it is on');
+      ok(await page.locator('#omega-plan-toast').count() === 0, 'no toast over The Ladder: the card says it');
+      await page.screenshot({ path: path.join(output5, 'editor-paid-on-' + theme + '.png') });
+      await intelCard.getByRole('button', { name: 'Show me', exact: true }).click();
+      await page.waitForFunction(function () { return !document.getElementById('omega-package-menu') && document.querySelector('[data-opm-spot]'); });
+      var shown = await page.evaluate(function () {
+        var el = document.querySelector('[data-opm-spot]'), pg = el.closest('.ribbon-page').getAttribute('data-page'), tab = document.querySelector('#ribbon-tabs .rtab.active');
+        return { page: pg, active: tab && tab.getAttribute('data-page'), visible: getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0, owners: OmegaCaps.owners(el.id || '', el.getAttribute('onclick') || '') };
+      });
+      ok(shown.page === 'analyze' && shown.active === 'analyze' && shown.visible && shown.owners.indexOf('siteintel') >= 0, 'Show me opens the tab and points at a Site Intelligence tool: ' + JSON.stringify(shown));
+      await page.screenshot({ path: path.join(output5, 'editor-show-me-' + theme + '.png') });
+      /* A change made elsewhere (an administrator on the dashboard) arrives
+         when the window comes back into focus, and is said out loud. */
+      var withStorage = M.normalize(M.starters().ev.concat(['siteintel', 'storage']));
+      await billing(Object.assign({ subscription: Object.assign({}, (await db.doc(BILLING).get()).data().subscription, { modules: withStorage }) }, M.resolve(withStorage)));
+      await page.evaluate(function () { rbTab('home'); window.dispatchEvent(new Event('focus')); });
+      await page.waitForFunction(function () { var t = document.getElementById('omega-plan-toast'); return t && /Storage Sizing & Revenue is on/.test(t.textContent); });
+      ok(await page.evaluate(storageAllowed) === true, 'a module added elsewhere opens when the editor window comes back');
+      ok(/on the .+ tab/.test(await page.locator('#omega-plan-toast').textContent()), 'the toast says where it is');
+      await page.screenshot({ path: path.join(output5, 'editor-focus-toast-' + theme + '.png') });
+      await page.locator('#omega-plan-toast').getByRole('button', { name: 'Show me', exact: true }).click();
+      ok(await page.evaluate(function () { var el = document.querySelector('[data-opm-spot]'); return !!el && OmegaCaps.owners(el.id || '', el.getAttribute('onclick') || '').indexOf('storage') >= 0 && !document.getElementById('omega-plan-toast'); }), 'the toast\'s Show me points at a Storage tool');
+      /* The access deadline passes with the editor open: the tools close on
+         the clock, the strip says why and how to pay, and paying opens them. */
+      await billing({ accessUntil: Date.now() + 2500, paymentLink: 'https://connect.intuit.com/pay/fixture' });
+      await page.evaluate(function () { return OmegaCaps.refresh(); });
+      ok(await page.evaluate(storageAllowed) === true, 'before the deadline the tools stay open');
+      await page.waitForFunction(function () { return OmegaCaps.packageAccess().readOnly === true; }, null, { timeout: 8000 });
+      await page.waitForFunction(function () { var n = document.getElementById('omega-plan-notice'); return n && /read-only/.test(n.textContent); });
+      ok(await page.evaluate(storageAllowed) === false && await page.evaluate(intelAllowed) === false, 'at the deadline the open editor stops producing');
+      ok(await page.locator('#omega-plan-notice').getByRole('link', { name: 'Pay in QuickBooks' }).count() === 1, 'the strip carries the QuickBooks pay link');
+      ok(/read-only now/.test(await page.locator('#omega-plan-toast').textContent()), 'and the toast says the workspace went read-only');
+      await page.screenshot({ path: path.join(output5, 'editor-read-only-' + theme + '.png') });
+      await billing({ accessUntil: Date.now() + 30 * 86400000, paymentCheckedAt: 0 });
+      await page.locator('#omega-plan-notice').getByRole('button', { name: "I've paid", exact: true }).click();
+      await page.waitForFunction(function () { return OmegaCaps.packageAccess().readOnly === false && !document.getElementById('omega-plan-notice'); });
+      ok(await page.evaluate(storageAllowed) === true, 'paid: the strip goes and the tools come back');
+      ok(/open again/.test(await page.locator('#omega-plan-toast').textContent()), 'and the toast says so');
+      await page.evaluate(function () { var t = document.getElementById('omega-plan-toast'); if (t) t.remove(); rbTab('home'); });
       live = false; db = null; caller = null;
       view = X.project({ staff: true }, { packaged: true }, null, null);
       await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
@@ -266,7 +332,7 @@ async function run() {
       ok(!errors.length, 'no full-editor JS errors: ' + errors.join('; '));
       await context.close();
     }
-    console.log('Full editor workspaces: ' + count + ' passed; 84 screenshots at 1280px and 1024px; offline service adapters. Phase 5 subscribe: 8 captures, real /api/plan-change over an in-memory Firestore, QuickBooks stand-in.');
+    console.log('Full editor workspaces: ' + count + ' passed; 84 screenshots at 1280px and 1024px; offline service adapters. Phase 5 subscribe: 8 captures, real /api/plan-change over an in-memory Firestore, QuickBooks stand-in; opt in, pay, unlock without a reload: 8 captures.');
   } finally { await browser.close(); server.close(); }
 }
 run().catch(function (e) { console.error(e); server.close(); process.exitCode = 1; });

@@ -132,7 +132,120 @@ async function resolverChecks() {
   var editor = fs.readFileSync(path.join(__dirname, '..', 'editor.html'), 'utf8');
   ok(/OmegaCaps\.resolve\(firebase\.firestore\(\), u\.email, u\.emailVerified\)/.test(editor), 'editor passes verification from the same Firebase user as the email');
 }
-resolverChecks().then(function () {
+/* ── THE PLAN CHANGES WHILE THE EDITOR IS OPEN ────────────────────────
+   Opting in has to unlock without a reload, and a lapse has to lock without
+   one. refresh() asks the same question sign-in asks; these rows hold what it
+   may and may not do with the answer. */
+function fakeButton(cap, display) {
+  var attrs = { 'data-cap': cap };
+  return { style: { display: display || '' }, attrs: attrs,
+    getAttribute: function (k) { return Object.prototype.hasOwnProperty.call(attrs, k) ? attrs[k] : null; },
+    setAttribute: function (k, v) { attrs[k] = String(v); }, removeAttribute: function (k) { delete attrs[k]; },
+    hasAttribute: function (k) { return Object.prototype.hasOwnProperty.call(attrs, k); } };
+}
+async function liveChecks() {
+  console.log('\nLive plan\n');
+  var X = require('../api/_lib/package-access');
+  C.setPackage(null); C.setAddons([]);
+  var plot = fakeButton('export.plotplan', 'flex'), draw = fakeButton('design');
+  var scope = { querySelectorAll: function (sel) {
+    var all = [plot, draw];
+    return sel === '[data-cap]' ? all : sel === '[data-cap-blocked]' ? all.filter(function (n) { return n.hasAttribute('data-cap-blocked'); }) : [];
+  } };
+  C.apply('standard', scope);
+  ok(plot.style.display === 'none' && plot.hasAttribute('data-cap-blocked'), 'Core hides the plot plan export');
+  C.apply('deluxe', scope);
+  ok(plot.style.display === 'flex' && !plot.hasAttribute('data-cap-blocked'),
+     'a wider plan brings a hidden button back, with the display it had',
+     'the legacy pass only ever hid: an upgrade in the same tab stayed hidden until a reload');
+  C.apply('standard', scope); C.apply('standard', scope); C.apply('enterprise', scope);
+  ok(plot.style.display === 'flex', 'hiding twice still restores the original display, not "none"');
+
+  var events = [], attrs = {};
+  function announced() { return events.filter(function (e) { return e.type === 'omega:plan-changed'; }); }
+  global.CustomEvent = function (type, init) { this.type = type; this.detail = init && init.detail; };
+  global.document.dispatchEvent = function (e) { events.push(e); };
+  global.document.body.getAttribute = function (k) { return attrs[k] == null ? null : attrs[k]; };
+  global.document.body.setAttribute = function (k, v) { attrs[k] = String(v); };
+  global.document.getElementById = function () { return null; };
+  global.document.querySelector = function () { return null; };
+  global.document.createElement = function () { return {}; };
+  global.document.head = { appendChild: function () {} };
+  var user = { email: 'designer@tenant.example', emailVerified: true, getIdToken: function () { return Promise.resolve('token'); } };
+  global.firebase = { auth: function () { return { currentUser: user }; } };
+  var db = new DB(), billing = 'omega_orgs/tenant.example/billing/current';
+  db.seed(billing, { tier: 'standard' });
+  ok(await C.resolve(db, user.email, true) === 'standard', 'signed in on Core');
+  C.apply('standard');
+  db.seed(billing, { tier: 'deluxe' });
+  var r = await C.refresh(db, user);
+  ok(r.changed && !r.packaged && r.added.indexOf('engineering') >= 0 && C.tier() === 'deluxe',
+     'ClearSky moves a legacy workspace up a tier: the editor follows without a reload', JSON.stringify(r));
+  ok(announced().length === 1, 'and says so (omega:plan-changed)');
+  events.length = 0;
+  r = await C.refresh(db, user);
+  ok(!r.changed && !announced().length, 'nothing moved: nothing is announced');
+  db.seed(billing, { tier: 'deluxe', optIns: { compute: { status: 'requested' } } });
+  r = await C.refresh(db, user);
+  ok(!r.changed && !C.can(C.tier(), 'compute'),
+     'an opt-in REQUEST unlocks nothing: it is priced and recorded, not paid');
+  db.seed(billing, { tier: 'deluxe', addons: ['compute'] });
+  r = await C.refresh(db, user);
+  ok(r.changed && C.can(C.tier(), 'compute'), 'the add-on ClearSky switches on after the purchase unlocks it');
+
+  function view(modules, extra) {
+    return X.project({ emailVerified: true }, Object.assign({ packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: modules }, extra || {}),
+      { status: 'active' }, { role: 'owner', status: 'active' }, Date.now());
+  }
+  var answer = { status: 200, body: view(['lite']) }, asked = 0;
+  global.fetch = function () { asked++; return Promise.resolve({ ok: answer.status === 200, status: answer.status, json: function () { return Promise.resolve(answer.body); } }); };
+  db.seed(billing, { packaged: true });
+  r = await C.refresh(db, user);
+  ok(r.changed && r.packaged && !r.wasPackaged && C.packageAccess().modules.join() === 'lite',
+     'ClearSky moves the workspace onto a package: the editor switches to the projection');
+  answer.body = view(['lite', 'storage']);
+  var pendingRefresh = C.refresh(db, user);
+  ok(C.packageAccess().modules.join() === 'lite' && !C.packageAccess().pending,
+     'a re-check keeps the current answer on screen while it waits',
+     'fetchPackage empties the view while it waits; a ribbon that blinks empty on every focus is worse than the bug');
+  r = await pendingRefresh;
+  ok(r.changed && r.added.join() === 'storage' && !r.removed.length && C.packageAccess().modules.indexOf('storage') >= 0,
+     'a module paid for while the editor is open switches on without a reload');
+  answer.status = 503;
+  r = await C.refresh(db, user);
+  ok(!r.changed && r.unavailable && C.packageAccess().modules.indexOf('storage') >= 0,
+     'an unreachable server keeps what is on screen (the API still refuses production on its own)');
+  answer.status = 403;
+  r = await C.refresh(db, user);
+  ok(r.changed && r.readOnly && C.packageAccess().readOnly && !C.packageAccess().modules.length,
+     'a 403 is the server saying no: the editor locks');
+  answer.status = 200; answer.body = view(['lite', 'storage']);
+  r = await C.refresh(db, user);
+  ok(r.recovered && !r.added.length && !r.readOnly, 'coming back from the lock is "recovered", not a list of new purchases');
+  answer.body = view(['lite', 'storage'], { packagingState: 'suspended' });
+  r = await C.refresh(db, user);
+  ok(r.changed && r.readOnly && !r.wasReadOnly && C.packageAccess().billingNotice && C.packageAccess().billingNotice.payUrl !== undefined,
+     'a lapsed payment turns the open editor read-only, with the server\'s notice');
+  answer.body = view(['lite']);
+  r = await C.refresh(db, user);
+  ok(r.removed.join() === 'storage' && !r.readOnly, 'a module that is no longer paid for goes away');
+
+  var staffView = X.project({ staff: true }, { packaged: true }, null, null);
+  staffView.preview = true; C.setPackage(staffView); asked = 0;
+  r = await C.refresh(db, user);
+  ok(r.skipped === 'staff' && asked === 0 && C.packageAccess().preview === true, 'a staff preview is never re-checked away');
+
+  /* The deadline closes the tools on the clock, before the network answers. */
+  answer.body = view(['lite', 'storage'], { accessUntil: Date.now() - 1 });
+  C.setPackage(view(['lite', 'storage'], { accessUntil: Date.now() + 40 })); C.apply('standard'); events.length = 0;
+  C.watchPlan(function () { return db; });
+  await new Promise(function (done) { setTimeout(done, 1250); });
+  ok(C.packageAccess().readOnly === true, 'at accessUntil the open editor turns read-only by itself');
+  ok(announced().some(function (e) { return e.detail.readOnly && !e.detail.wasReadOnly; }), 'and says so');
+  delete global.fetch; delete global.firebase;
+}
+
+resolverChecks().then(liveChecks).then(function () {
   console.log('\n' + (fails ? fails + ' of ' + checks + ' FAILED' : 'all ' + checks + ' checks passed') + '\n');
   process.exit(fails ? 1 : 0);
 }).catch(function (e) { console.error(e); process.exit(1); });

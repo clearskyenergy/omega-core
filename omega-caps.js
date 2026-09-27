@@ -173,9 +173,9 @@
 
   /* Packaged state is a server projection of the sole catalog. Never derive
      it from tiers, addons, query strings or a second browser module table. */
-  var _package = null, _packageRequest = 0, MODULE_GRANTS = {}, _packageSignature = null;
+  var _package = null, _packageRequest = 0, MODULE_GRANTS = {}, _packageSignature = null, _tier = null;
   var COMMANDS = '.rbtn,.rsbtn,.rb-fly-item,#app-menu .menu-item,[data-module],[data-cap]';
-  function pendingPackage() { return { packaged: true, readOnly: true, modules: [], caps: [], toolAccess: [], catalog: [], notSold: [] }; }
+  function pendingPackage() { return { packaged: true, pending: true, readOnly: true, modules: [], caps: [], toolAccess: [], catalog: [], notSold: [] }; }
   function setPackage(view) {
     var previous = _package;
     _package = view && view.packaged === true ? view : null;
@@ -190,7 +190,7 @@
         old[n].removeAttribute('data-package-empty'); old[n].removeAttribute('data-workspace-hidden');
       }
       if (global.document.body && global.document.body.removeAttribute) global.document.body.removeAttribute('data-packaged-editor');
-      ['omega-workspace-controls', 'omega-package-tab'].forEach(function (id) { var el = global.document.getElementById && global.document.getElementById(id); if (el) el.remove(); });
+      ['omega-workspace-controls', 'omega-package-tab', 'omega-plan-notice'].forEach(function (id) { var el = global.document.getElementById && global.document.getElementById(id); if (el) el.remove(); });
       if (global.OmegaPackageMenu) global.OmegaPackageMenu.close();
       _packageSignature = null;
     }
@@ -353,7 +353,7 @@
         global.OmegaWorkspaces.apply(scope);
       }
     }
-    if (global.OmegaPackageMenu) { global.OmegaPackageMenu.tab(); global.OmegaPackageMenu.staffPreview(); }
+    if (global.OmegaPackageMenu) { global.OmegaPackageMenu.tab(); global.OmegaPackageMenu.staffPreview(); if (global.OmegaPackageMenu.notice) global.OmegaPackageMenu.notice(); }
   }
   function guardLaunchers() {
     if (!_package) return;
@@ -375,14 +375,21 @@
       });
     });
   }
-  function fetchPackage(user) {
-    var request = ++_packageRequest;
-    setPackage(pendingPackage());
+  /* The server's projection for this user, read without touching what is on
+     screen. A refusal carries its status: 403 is the server saying no (the
+     workspace or the membership lost access), anything else is a connection
+     that did not answer. */
+  function projection(user) {
     if (!user || !user.getIdToken || !global.fetch) return Promise.reject(new Error('Package access unavailable'));
     return user.getIdToken().then(function (token) {
       return global.fetch('/api/package-access', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
-    }).then(function (r) { if (!r.ok) throw new Error('Package access unavailable'); return r.json(); })
-      .then(function (v) { if (request !== _packageRequest || (global.firebase && global.firebase.auth().currentUser !== user)) throw new Error('Account changed'); if (!v || v.packaged !== true) throw new Error('Package access changed; reload'); setPackage(v); return v; });
+    }).then(function (r) { if (!r.ok) { var e = new Error('Package access unavailable'); e.status = r.status; throw e; } return r.json(); })
+      .then(function (v) { if (global.firebase && global.firebase.auth().currentUser !== user) throw new Error('Account changed'); if (!v || v.packaged !== true) throw new Error('Package access changed; reload'); return v; });
+  }
+  function fetchPackage(user) {
+    var request = ++_packageRequest;
+    setPackage(pendingPackage());
+    return projection(user).then(function (v) { if (request !== _packageRequest) throw new Error('Account changed'); setPackage(v); return v; });
   }
   /* Capture covers keyboard-generated clicks and programmatic .click() on
      a hidden button. The API still checks every producing request. */
@@ -429,10 +436,26 @@
      tab that says "Compute" is an advert inside a tool they are working in,
      and it invites a support ticket every time. Upgrade lives on the account
      page, once, not scattered through the ribbon. */
+  /* ── A HIDDEN BUTTON COMES BACK WHEN THE PLAN SAYS SO ─────────────────
+     The legacy pass only ever hid: a button removed on one answer stayed
+     removed after a wider one, so a plan upgraded while the editor was open,
+     an account switched in the same tab, or a workspace ClearSky moved onto
+     a package (the legacy opt-in path) kept a ribbon narrower than what was
+     bought. Each block records the display it replaced and gives it back. */
+  function unblock(el) {
+    if (!el.hasAttribute('data-cap-blocked')) return;
+    el.style.display = el.getAttribute('data-cap-display') || '';
+    el.removeAttribute('data-cap-blocked'); el.removeAttribute('data-cap-display');
+  }
   function apply(tier, root) {
     var scope = root || global.document;
+    _tier = normalise(tier);
     if (!scope || !scope.querySelectorAll) return { tier: normalise(tier), removed: 0 };
     if (_package) {
+      /* Legacy tier blocks mean nothing under a package; the projection
+         decides every command, so none of them may linger. */
+      var stale = scope.querySelectorAll('[data-cap-blocked]');
+      for (var s = 0; s < stale.length; s++) unblock(stale[s]);
       if (global.OmegaComputeTab && global.OmegaComputeTab.place) global.OmegaComputeTab.place();
       rehome(scope);
       var hidden = applyPackage(scope);
@@ -452,7 +475,8 @@
     for (i = 0; i < nodes.length; i++) {
       el = nodes[i];
       cap = el.getAttribute('data-cap');
-      if (can(tier, cap)) continue;
+      if (can(tier, cap)) { unblock(el); continue; }
+      if (!el.hasAttribute('data-cap-blocked')) el.setAttribute('data-cap-display', el.style.display || '');
       el.setAttribute('data-cap-blocked', '1');
       el.style.display = 'none';
       removed++;
@@ -546,44 +570,160 @@
      real billing doc for testing, that is what applies. */
   var INTERNAL_DOMAINS = ['clearsky-usa.com'];
 
+  /* ── ONE READ OF THE PLAN, TWO CALLERS ──────────────────────────────────
+     read() answers "what may this account do in the editor" and changes
+     nothing: { tier, addons, view } where view is the package projection or
+     null for a legacy record. resolve() (sign-in) and refresh() (the plan
+     changed while the editor was open) both ask it, so there is one set of
+     rules for both and a re-check can never reach a different answer than
+     signing in again would.
+
+     They differ only in what a failure means. At sign-in every failure is
+     the locked answer: a read that fails must not hand out the engineering
+     suite. A refresh that cannot reach the server keeps what is on screen
+     (`transient`), because a dropped connection is not a lapsed payment and
+     the server still refuses every producing request on its own. A 403 from
+     the projection is the server saying no, and it locks either way. */
+  function read(db, email, emailVerified, refreshing) {
+    var d = orgOf(email), internal = emailVerified === true && INTERNAL_DOMAINS.indexOf(d) >= 0;
+    function locked() { return { tier: internal ? 'internal' : 'trial', addons: [], view: internal ? null : pendingPackage() }; }
+    if (internal && !db) return Promise.resolve({ tier: 'internal', addons: [], view: null });
+    if (!d || !db) return Promise.resolve({ tier: 'trial', addons: [], view: null });
+    return db.collection('omega_orgs').doc(d).collection('billing').doc('current').get().then(function (s) {
+      var b = s.exists ? (s.data() || {}) : {};
+      if (!s.exists && internal) return { tier: 'internal', addons: [], view: null };
+      if (b.packaged === true) {
+        var user = global.firebase && global.firebase.auth().currentUser;
+        if (!user || user.email !== email) return { tier: 'trial', addons: [], view: pendingPackage() };
+        return projection(user).then(function (view) { return { tier: view.tier || 'standard', addons: [], view: view }; }, function (e) {
+          if (refreshing && e.status !== 403) return { transient: true };
+          return { tier: 'trial', addons: [], view: pendingPackage() };
+        });
+      }
+      var eff = effectiveTier(b.tier || 'trial', b.capTier);
+      if (!refreshing && b.capTier && eff !== normalise(b.tier || 'trial') && global.console) {
+        console.info('[caps] billed ' + b.tier + ', editor capped to ' + eff +
+                     ' by capTier on billing/current');
+      }
+      return { tier: eff, addons: b.addons || [], view: null };
+    }, function () { return refreshing ? { transient: true } : locked(); });
+  }
+  function commit(plan) { setAddons(plan.addons || []); setPackage(plan.view); }
+
   function resolve(db, email, emailVerified) {
     return new Promise(function (done) {
       try {
-        var d = setOrg(email);
-        var internal = emailVerified === true && INTERNAL_DOMAINS.indexOf(d) >= 0;
+        setOrg(email);
         setAddons([]);
         var resolution = ++_packageRequest;
         setPackage(null);
-        if (internal && !db) return done('internal');
-        if (!d || !db) return done('trial');
-        db.collection('omega_orgs').doc(d).collection('billing').doc('current').get()
-          .then(function (s) {
-            if (resolution !== _packageRequest) return done('trial');
-            var b = s.exists ? (s.data() || {}) : {};
-            if (!s.exists && internal) return done('internal');
-            if (b.packaged === true) {
-              setPackage(pendingPackage());
-              var user = global.firebase && global.firebase.auth().currentUser;
-              if (!user || user.email !== email) return done('trial');
-              return fetchPackage(user).then(function (view) { done(view.tier || 'standard'); }, function () { done('trial'); });
-            }
-            setAddons(b.addons || []);
-            var eff = effectiveTier(b.tier || 'trial', b.capTier);
-            if (b.capTier && eff !== normalise(b.tier || 'trial') && global.console) {
-              console.info('[caps] billed ' + b.tier + ', editor capped to ' + eff +
-                           ' by capTier on billing/current');
-            }
-            done(eff);
-          })
-          .catch(function () {
-            if (resolution !== _packageRequest) return done('trial');
-            /* A failed read must not hand out the engineering suite to a
-               customer — but it must not lock ClearSky out either. */
-            if (!internal) setPackage(pendingPackage());
-            done(internal ? 'internal' : 'trial');
-          });
+        read(db, email, emailVerified, false).then(function (plan) {
+          if (resolution !== _packageRequest) return done('trial');
+          commit(plan); done(plan.tier);
+        }, function () { done('trial'); });
       } catch (e) { done('trial'); }
     });
+  }
+
+  /* ── THE PLAN CAN CHANGE WHILE THE EDITOR IS OPEN ──────────────────────
+     Somebody opens The Ladder, subscribes, pays in QuickBooks in another tab
+     and comes back: the module switched on at the server and the editor,
+     which only asked at sign-in, still hid it until a reload. The reverse
+     too: a trial that ended or a payment that lapsed while the editor was
+     open left every tool on screen. refresh() asks the same question again
+     and puts the answer on screen when it differs.
+
+     IT NEVER PASSES THROUGH THE LOCKED STATE. fetchPackage() empties the
+     view while it waits, which is right at sign-in and wrong here: a
+     ribbon that blinks empty every time the window regains focus is worse
+     than the bug. The old answer stays until the new one has arrived.
+
+     `omega:plan-changed` says what moved ({ added, removed, readOnly,
+     wasReadOnly, packaged }), only when something did and only after the
+     first answer, so the page can say "Plan Sets is on — it's on Output"
+     instead of rearranging the ribbon silently. A staff session and a staff
+     preview are never refreshed: staff are not billed, and a re-check would
+     throw away the package somebody chose to preview. */
+  function standing() {
+    if (_package) {
+      var editor = _package.staff || (_package.toolAccess || []).indexOf('editor') >= 0;
+      return { packaged: true, pending: _package.pending === true, staff: _package.staff === true, readOnly: _package.readOnly === true, editor: editor, modules: editor ? (_package.modules || []).slice() : [] };
+    }
+    return { packaged: false, tier: _tier || 'trial', caps: Object.keys(setFor(_tier || 'trial')).sort() };
+  }
+  var _refreshing = null, _watch = null;
+  function refresh(db, user) {
+    if (_refreshing) return _refreshing;
+    if (_package && (_package.staff || _package.preview)) return Promise.resolve({ changed: false, skipped: 'staff' });
+    db = db || (_watch && _watch.db && _watch.db());
+    user = user || (global.firebase && global.firebase.auth && global.firebase.auth().currentUser);
+    if (!user || !user.email) return Promise.resolve({ changed: false, skipped: 'signed out' });
+    var request = _packageRequest, before = standing();
+    _refreshing = Promise.resolve().then(function () { return read(db, user.email, user.emailVerified, true); }).then(function (plan) {
+      _refreshing = null;
+      if (request !== _packageRequest || (global.firebase && global.firebase.auth().currentUser !== user)) return { changed: false, skipped: 'account changed' };
+      if (plan.transient) return { changed: false, unavailable: true };
+      commit(plan); apply(plan.tier);
+      schedule();
+      return settle(before);
+    }, function () { _refreshing = null; return { changed: false, unavailable: true }; });
+    return _refreshing;
+  }
+  /* What moved between two answers, announced when anything did. A first
+     load that failed and has now come through is `recovered`, not a list of
+     new purchases: those modules were always the workspace's. */
+  function settle(before) {
+    var after = standing(), diff = { changed: JSON.stringify(before) !== JSON.stringify(after), packaged: after.packaged, wasPackaged: before.packaged, recovered: before.pending === true && !after.pending,
+      readOnly: after.packaged ? after.readOnly || !after.editor : false, wasReadOnly: before.packaged ? before.readOnly || !before.editor : false, added: [], removed: [] };
+    if (after.packaged && !diff.recovered) {
+      var was = before.packaged ? before.modules : [];
+      diff.added = after.modules.filter(function (k) { return was.indexOf(k) < 0; });
+      diff.removed = was.filter(function (k) { return after.modules.indexOf(k) < 0; });
+    } else if (!after.packaged && !before.packaged) {
+      diff.added = after.caps.filter(function (k) { return before.caps.indexOf(k) < 0; });
+      diff.removed = before.caps.filter(function (k) { return after.caps.indexOf(k) < 0; });
+    }
+    if (diff.changed && global.document && global.document.dispatchEvent) {
+      try { global.document.dispatchEvent(new global.CustomEvent('omega:plan-changed', { detail: diff })); } catch (e) {}
+    }
+    return diff;
+  }
+
+  /* ── WHEN TO ASK AGAIN ─────────────────────────────────────────────────
+     When the window comes back (the person was paying in QuickBooks, or
+     away long enough for something to change), every ten minutes while it
+     is in front of them, and at the recorded access deadline. At the
+     deadline the tools close at once, before the network answers — the same
+     rule omega-tenant.js follows on the dashboard; the API and the rules
+     enforce the deadline on their own. */
+  var FOCUS_GAP = 15000, EVERY = 600000, _lastAsk = 0, _deadline = null;
+  function ask(force) {
+    var now = Date.now();
+    if (!force && now - _lastAsk < FOCUS_GAP) return Promise.resolve({ changed: false, skipped: 'recent' });
+    _lastAsk = now; return refresh();
+  }
+  function schedule() {
+    if (_deadline) { clearTimeout(_deadline); _deadline = null; }
+    if (!_watch || !_package || _package.staff || _package.preview || _package.readOnly || !_package.accessUntil) return;
+    var wait = _package.accessUntil - Date.now();
+    if (!(wait < 2147483647)) return;
+    _deadline = setTimeout(function () {
+      _deadline = null;
+      if (!_package || _package.staff || _package.preview) return;
+      if (_package.accessUntil && Date.now() >= _package.accessUntil) {
+        var before = standing();
+        setPackage(Object.assign({}, _package, { readOnly: true })); apply(_tier || 'standard'); settle(before);
+      }
+      ask(true);
+    }, Math.max(0, wait) + 1000);
+  }
+  function watchPlan(getDb) {
+    if (_watch) { _watch.db = getDb; schedule(); return; }
+    _watch = { db: getDb }; _lastAsk = Date.now(); schedule();
+    if (!global.document || !global.addEventListener) return;
+    global.addEventListener('focus', function () { ask(false); });
+    global.document.addEventListener('visibilitychange', function () { if (global.document.visibilityState === 'visible') ask(false); });
+    setInterval(function () { if (global.document.visibilityState !== 'hidden') ask(true); }, EVERY);
   }
 
   global.OmegaCaps = {
@@ -597,6 +737,7 @@
     setOrg: setOrg, orgOf: orgOf, org: function () { return _org; },
     effectiveTier: effectiveTier, setPackage: setPackage, packageAccess: function () { return _package; },
     MODULE_GRANTS: MODULE_GRANTS, owners: owners, commandPage: commandPage, layout: layout,
-    guardLaunchers: guardLaunchers, pendingPackage: pendingPackage, fetchPackage: fetchPackage, allowedElement: allowedElement, allowedCommand: allowedCommand, commandSelector: COMMANDS
+    guardLaunchers: guardLaunchers, pendingPackage: pendingPackage, fetchPackage: fetchPackage, allowedElement: allowedElement, allowedCommand: allowedCommand, commandSelector: COMMANDS,
+    refresh: refresh, watchPlan: watchPlan, tier: function () { return _tier; }
   };
 })(typeof window !== 'undefined' ? window : this);
