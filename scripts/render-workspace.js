@@ -668,6 +668,68 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   await scenario('sweep lite', FX.lite(HOST), { steps: async function (p) { return sweepAll(p, 'sweep lite'); } });
   await scenario('sweep pending', FX.pending(HOST), { steps: async function (p) { return sweepAll(p, 'sweep pending'); } });
 
+  /* the same sweep on the two pages the workspace sends people to that
+     wear its chrome: Projects and the store (Marketplace), as a Standard
+     tenant on a desktop and a phone and a packaged Lite tenant */
+  async function sweepPage(page, fx, name, phone, lagPageAuth) {
+    if (ONLY && !ONLY.test(name)) return;
+    PACKAGE_VIEW = fx.packageView || null; CURRENT_FX = fx;
+    var errs = [], ctx = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!phone, isMobile: !!phone });
+    await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) {
+      var url = r.request().url();
+      if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' });
+      if (/Chart\.js/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.Chart=function(){};window.Chart.register=function(){};' });
+      if (/fonts\.(googleapis|gstatic)\.com/.test(url)) return r.fulfill({ status: 200, contentType: 'text/css', body: '' });
+      external.push(name + ': ' + url.slice(0, 120)); return r.abort();
+    });
+    await ctx.addInitScript(DOUBLE_SRC);
+    await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: fx.user, docs: fx.docs, latency: 8, authDomain: HOST });
+    /* THE RACE, forced: the page's own sign-in answer (registered from the
+       page, not from the runtime) arrives well after the entitlements */
+    if (lagPageAuth) await ctx.addInitScript(function (lag) {
+      var iv = setInterval(function () {
+        if (!window.firebase || !firebase.auth) return; clearInterval(iv);
+        var a = firebase.auth(), orig = a.onAuthStateChanged.bind(a);
+        a.onAuthStateChanged = function (cb) { var fromPage = /\.html/.test(String(new Error().stack).split('\n').slice(2, 3).join('')); return orig(fromPage ? function (u) { setTimeout(function () { cb(u); }, lag); } : cb); };
+      }, 1);
+    }, lagPageAuth);
+    var p = await ctx.newPage();
+    p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.message); });
+    p.on('console', function (m) { var t = m.text(); if (m.type() === 'error' && !/^Failed to load resource|duplicate-app/.test(t)) errs.push('console: ' + t.slice(0, 240)); });
+    await p.goto(base + page + '?home=workspace', { waitUntil: 'domcontentloaded' }); await wait(2500);
+    /* the store paints in two answers (the price list, then the plan): sweep what a person sees once both are in */
+    if (page === '/marketplace.html') await p.waitForFunction(function () { var mods = document.querySelectorAll('#mkt-shelves .mkt-mod'); return mods.length > 5 && document.querySelectorAll('.mkt-planc').length >= 3 && Array.prototype.every.call(mods, function (m) { var a = m.querySelector('.mkt-actions'); return a && a.textContent.trim(); }); }, null, { timeout: 8000 }).catch(function () {});
+    await wait(600);
+    if (page === '/marketplace.html' && !fx.packageView) {
+      var judged = await p.evaluate(function () { var w = window.OMEGA_WORKSPACE || {}; return { tier: w.tierLevel, add: Array.prototype.filter.call(document.querySelectorAll('#mkt-shelves .mkt-mod'), function (m) { return /Add to plan/.test(m.textContent); }).length }; });
+      ok(name + ': the store judges every module against the workspace\'s plan (the bound workspace, never the email stand-in) and offers Add to plan', typeof judged.tier === 'number' && judged.add > 0, judged);
+    }
+    ok(name + ': the page is up (its loading screen gone) and carries the workspace rail', await p.evaluate(function () { var b = document.getElementById('omega-boot'); return (!b || b.classList.contains('hide')) && !!document.querySelector('#side-nav a[data-sn="dashboard"][href="/workspace"]'); }));
+    var r = await SWEEP.run(p, {
+      views: [{ name: page.replace(/^\/|\.html$/g, ''), enter: async function (pg) { await pg.evaluate(function () { window.scrollTo(0, 0); }); } }],
+      scope: '#main', chrome: '#side-nav, #topbar, .ows-tabs',
+      skip: '#ows-signout, [onclick*="signOut"]', inner: '.ows-row',
+      overlays: '#ows-overlay, #new-proj-modal.on, #ows-menu, #omega-package-menu, #ot-modal, #upgrade-modal, .tb-nav.open, body.ows-rail-open',
+      reveal: phone ? [{ within: '#side-nav', open: async function (pg) { if (!(await pg.evaluate(function () { return document.body.classList.contains('ows-rail-open'); }))) await pg.click('#ows-burger'); } }] : [],
+      forceClose: function (pg) { return pg.evaluate(function () { ['ows-overlay', 'ows-menu', 'omega-package-menu', 'upgrade-modal'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); }); var m = document.getElementById('new-proj-modal'); if (m) m.classList.remove('on'); var n = document.querySelector('.tb-nav'); if (n) n.classList.remove('open'); document.documentElement.classList.remove('omega-np-open'); document.body.classList.remove('ows-rail-open'); }); },
+      served: SERVED
+    });
+    var gone = r.hidden.length + r.skipped.length;
+    ok(name + ': every control still on the page when its turn came was clicked or read (' + r.clicks + ' clicked, ' + r.read.length + ' read, ' + gone + ' taken away by an earlier click, of ' + r.controls + ')', r.controls > 8 && r.clicks + r.read.length + gone >= r.controls && gone <= Math.max(6, Math.ceil(r.controls / 5)), r.hidden.concat(r.skipped));
+    var kinds = {}; r.problems.forEach(function (x) { (kinds[x.kind] = kinds[x.kind] || []).push(x.control + ' — ' + x.detail); });
+    ['error', 'flow', 'offscreen', 'sideways', 'reload', 'escape', 'link', 'click'].forEach(function (k) { ok(name + ': no ' + k + ' problem from any click', !kinds[k], (kinds[k] || []).slice(0, 10)); });
+    ok(name + ': no uncaught or console errors', !errs.length, errs.slice(0, 6));
+    console.log(JSON.stringify({ scenario: name, controls: r.controls, clicked: r.clicks, read: r.read.length, leaves: r.held.length, tabs: r.tabs.length, problems: r.problems.length, changedByAnEarlierClick: r.hidden.concat(r.skipped) }));
+    await ctx.close();
+  }
+  await sweepPage('/projects.html', FX.northstar(HOST), 'sweep projects northstar');
+  await sweepPage('/projects.html', FX.northstar(HOST), 'sweep projects northstar-phone', true);
+  await sweepPage('/marketplace.html', FX.northstar(HOST), 'sweep marketplace northstar');
+  await sweepPage('/marketplace.html', FX.northstar(HOST), 'sweep marketplace northstar-phone', true);
+  await sweepPage('/marketplace.html', FX.lite(HOST), 'sweep marketplace lite');
+  await sweepPage('/marketplace.html', FX.northstar(HOST), 'sweep marketplace northstar (sign-in answers after the entitlements)', false, 1500);
+  PACKAGE_VIEW = null;
+
   /* ══ 6. THE PACKAGE STORE — Lite Labs on the marketplace ══
      A packaged workspace sees its plan and every module on its shelf with
      the server's price; Lite is Included; Grid Atlas can be subscribed:
