@@ -5,7 +5,7 @@
 'use strict';
 var B = require('./pricebook'), P = require('./subscription-pricing'), Policy = require('./package-billing-policy');
 var Mode = require('./packaging-mode');
-var BP = require('./billing-profile'), Q = require('./qbo-billing'), M = require('./modules'), R = require('./proration'), U = require('./usage');
+var BP = require('./billing-profile'), Q = require('./qbo-billing'), M = require('./modules'), R = require('./proration'), U = require('./usage'), AO = require('./addons');
 function fail(message, status) { var e = new Error(message); e.status = status || 409; throw e; }
 function clean(b) { var out = Object.assign({}, b); delete out.activationLock; return out; }
 function basis(c) { return Q.key(B.stable({ org: c.org, billing: clean(c.billing), profile: c.profile, book: c.book })); }
@@ -216,7 +216,9 @@ async function issue(db, orgId, now, deps) {
  * (Phase 5) only ever moves modules into or out of the subscription when
  * QuickBooks shows it paid or reversed; a late payer drops to Lite for a
  * while but never loses the package they bought. */
-function kindOf(r) { return r.kind === 'change' ? 'change' : r.kind === 'pack' ? 'pack' : 'subscription'; }
+/* an add-on on a plan billed outside the engine (api/_lib/addons.js) is never
+   a subscription invoice: it neither opens a package nor counts against one */
+function kindOf(r) { return r.kind === 'change' ? 'change' : r.kind === 'pack' ? 'pack' : r.kind === 'addon' ? 'addon' : 'subscription'; }
 /* a failure that is ours, not the invoice's: no answer, a 5xx, QuickBooks refusing our connection, or the guard */
 function clearskySide(e) { return !e || !e.status || e.status >= 500 || e.status === 401 || e.status === 403 || e.status === 429 || e.clearsky === true; }
 function bought(billing, last) {
@@ -281,7 +283,11 @@ function displayAfter(patch, billing, book, now) {
 }
 async function reconcile(db, orgId, now, deps, options) {
   var c = await context(db, orgId); guard(c);
-  if (!c.billing.packaged) return { skipped: true };
+  /* a plan billed outside the engine is reconciled only for its add-ons
+     (api/_lib/addons.js); its own tier, amount due and pay link are never
+     this function's to write */
+  var legacy = c.billing.packaged !== true;
+  if (legacy && !c.billing.addOns) return { skipped: true };
   var current = c.root.collection('billing').doc('current'), collection = current.collection('invoices');
   var query = collection.orderBy('date'), bounded = options && options.limit;
   if (bounded) {
@@ -300,7 +306,7 @@ async function reconcile(db, orgId, now, deps, options) {
     var state = error || transient ? record.state : receipt.reversed ? 'reversed' : receipt.satisfied ? 'paid' : 'unpaid', review = error;
     await db.runTransaction(async function (tx) {
       var invoices = await tx.get(collection.orderBy('date')), old = await tx.get(doc.ref), live = await tx.get(current);
-      var snapshot = old.data(), billing = live.data(), subUpdate = null;
+      var snapshot = old.data(), billing = live.data(), subUpdate = null, addOnMove = null, outside = billing.packaged !== true;
       if (snapshot.qboInvoiceId !== record.qboInvoiceId) fail('Invoice binding changed');
       var retries = transient ? (snapshot.reconcileRetries || 0) + 1 : 0;
       if (transient && retries >= 3) { error = true; review = true; }
@@ -319,6 +325,17 @@ async function reconcile(db, orgId, now, deps, options) {
         if (state === 'paid' && snapshot.state !== 'paid' && (rolled || snapshot.state === 'cancelled' || snapshot.state === 'expired')) review = true;
         subUpdate = subscriptionAfterChange(Object.assign({}, billing, { __book: c.book }), snapshot, snapshot.state, state, subs);
       }
+      /* an add-on purchase (api/_lib/addons.js) waits like a change: unpaid
+         past the period it would cover, it expires; paid late, it is still
+         honoured and a person looks. A renewal is simply owed. */
+      if (kindOf(snapshot) === 'addon' && !error && !transient) {
+        if (snapshot.purpose !== 'renewal') {
+          var passed = !!(snapshot.cycle && snapshot.cycle.end && R.iso(now) >= snapshot.cycle.end);
+          if (state === 'unpaid') state = snapshot.state === 'cancelled' ? 'cancelled' : (passed || snapshot.state === 'expired') ? 'expired' : 'unpaid';
+          if (state === 'paid' && snapshot.state !== 'paid' && (passed || snapshot.state === 'cancelled' || snapshot.state === 'expired')) review = true;
+        }
+        addOnMove = AO.boughtAfter(billing, snapshot, snapshot.state, state);
+      }
       var update = { state: state, reconcileError: error, reconcileRetries: retries, reconciledAt: now, reviewRequired: review, reconcileNote: error || transient ? note : null };
       if (!error && !transient) { update.paymentLink = receipt.payUrl || null; update.paidCents = receipt.paidCents; }
       /* money landed on a subscription invoice: the tenant hears (the first one opens the workspace), and so does ClearSky */
@@ -329,18 +346,36 @@ async function reconcile(db, orgId, now, deps, options) {
         tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-paid-' + orgId + '-' + record.qboInvoiceId), { kind: 'payment', read: false, createdAt: now, orgId: orgId, staffMail: 'paidAlert', mailState: 'pending',
           text: 'Payment received: ' + (c.org.name || orgId) + ' ' + P.money(snapshot.totalCents) + (first ? ' (first invoice: the workspace is open)' : ''), amountDisplay: P.money(snapshot.totalCents), invoiceId: record.qboInvoiceId, first: first });
       }
+      /* money landed on an add-on: the tenant hears what switched on, ClearSky hears the money */
+      if (kindOf(snapshot) === 'addon' && state === 'paid' && snapshot.state !== 'paid') {
+        var what = (snapshot.purpose === 'renewal' ? snapshot.modules : snapshot.add) || [], label = what.map(function (k) { var m = M.get(k); return m ? (m.shelf === 'platform' ? 'Omega Logic · ' : '') + m.name : k; }).join(', ');
+        tx.set(c.root.collection('notifications').doc('addon-paid-' + snapshot.id), { kind: 'billing', read: false, createdAt: now, packageMail: 'paid', mailState: 'pending', first: false,
+          text: 'Payment received: ' + P.money(snapshot.totalCents) + '. ' + label + (snapshot.purpose === 'renewal' ? (what.length > 1 ? ' are' : ' is') + ' renewed.' : (what.length > 1 ? ' are' : ' is') + ' on.'), amountDisplay: P.money(snapshot.totalCents), date: snapshot.date, invoiceId: record.qboInvoiceId });
+        tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-paid-' + orgId + '-' + record.qboInvoiceId), { kind: 'payment', read: false, createdAt: now, orgId: orgId, staffMail: 'paidAlert', mailState: 'pending',
+          text: 'Payment received: ' + (c.org.name || orgId) + ' ' + P.money(snapshot.totalCents) + ' (add-on' + (snapshot.purpose === 'renewal' ? ' renewal' : '') + ': ' + label + ')', amountDisplay: P.money(snapshot.totalCents), invoiceId: record.qboInvoiceId, first: false });
+      }
       /* a person has to look: once per invoice, in ClearSky's own inbox and by mail */
       if (review && !snapshot.reviewRequired) {
         tx.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc('billing-review-' + orgId + '-' + record.qboInvoiceId), { kind: 'billing-review', read: false, createdAt: now, orgId: orgId, staffMail: 'billingAlert', mailState: 'pending',
           text: 'Accounting review: invoice ' + record.qboInvoiceId + ' for ' + (c.org.name || orgId) + (note ? ' (' + note + ')' : '') + '. Access is unchanged until you decide.', invoiceId: record.qboInvoiceId });
       }
       var all = invoices.docs.map(function (d) { return d.id === doc.id ? Object.assign({}, d.data(), update) : d.data(); });
-      var afterBilling = subUpdate ? Object.assign({}, billing, { subscription: subUpdate }) : billing;
-      var patch = displayAfter(accessAfterInvoices(afterBilling, all, c.book, now), afterBilling, c.book, now);
-      if (subUpdate) patch.subscription = subUpdate;
-      if (state === 'paid' && snapshot.state !== 'paid') patch.lastPaidAt = now;
+      var patch;
+      if (outside) {
+        /* only the add-ons and the grants they wrote; the plan's own fields stay the plan's */
+        patch = AO.settle(addOnMove ? Object.assign({}, billing, { addOns: Object.assign({}, billing.addOns || {}, addOnMove) }) : billing, all, c.book, now);
+      } else {
+        var afterBilling = subUpdate ? Object.assign({}, billing, { subscription: subUpdate }) : billing;
+        patch = displayAfter(accessAfterInvoices(afterBilling, all, c.book, now), afterBilling, c.book, now);
+        if (subUpdate) patch.subscription = subUpdate;
+        if (state === 'paid' && snapshot.state !== 'paid') patch.lastPaidAt = now;
+      }
       tx.update(doc.ref, update); tx.update(current, patch);
-      if (snapshot.state !== state || !!snapshot.reconcileError !== error || billing.packagingState !== patch.packagingState) {
+      if (outside && (snapshot.state !== state || !!snapshot.reconcileError !== error)) {
+        var added = { at: now, by: 'quickbooks-reconciliation', action: 'addon-' + state, invoiceId: record.qboInvoiceId, reviewRequired: review,
+          was: { state: snapshot.state || null, live: (billing.addOns && billing.addOns.live) || [] }, changed: { state: state, live: patch.addOns.live, addOnState: patch.addOns.state } };
+        tx.set(current.collection('history').doc(), added); tx.set(c.root.collection('admin_audit').doc(), added);
+      } else if (!outside && (snapshot.state !== state || !!snapshot.reconcileError !== error || billing.packagingState !== patch.packagingState)) {
         var event = { at: now, by: 'quickbooks-reconciliation', action: (kindOf(snapshot) === 'change' ? 'change-' : kindOf(snapshot) === 'pack' ? 'pack-' : 'invoice-') + state, invoiceId: record.qboInvoiceId, reviewRequired: review,
           was: { state: snapshot.state, packagingState: billing.packagingState }, changed: { state: state, packagingState: patch.packagingState, modules: patch.modules || billing.modules } };
         tx.set(current.collection('history').doc(), event); tx.set(c.root.collection('admin_audit').doc(), event);

@@ -225,7 +225,9 @@
     } else {
       var tiers = { trial: 0, standard: 1, deluxe: 2, enterprise: 3 }, lvl = tiers[String(b.tier || '').toLowerCase()], T = global.OMEGATools, H = global.OmegaWorkspaceHub;
       var wsLike = { tierLevel: typeof lvl === 'number' ? lvl : 1, toolAccess: Array.isArray(b.toolAccess) ? b.toolAccess : null, toolOverrides: b.toolOverrides || null, unlockedTools: b.unlockedTools || null, requiredTools: b.requiredTools || null };
-      var ctx = { packaged: false, modules: [], addons: b.addons || [], tierLevel: wsLike.tierLevel, tool: function (k) { return !!(T && T.byKey(k)); }, canOpen: function (k) { var t = T && T.byKey(k); return !!t && T.isUnlocked(t, wsLike); } };
+      /* add-ons it bought on Add to plan and has on now (api/_lib/addons.js) are held too */
+      var ao = b.addOns || null, liveAdd = ao && Array.isArray(ao.live) && typeof ao.accessUntil === 'number' && Date.now() < ao.accessUntil ? ao.live : [];
+      var ctx = { packaged: false, modules: [], addons: b.addons || [], addOns: liveAdd, tierLevel: wsLike.tierLevel, tool: function (k) { return !!(T && T.byKey(k)); }, canOpen: function (k) { var t = T && T.byKey(k); return !!t && T.isUnlocked(t, wsLike); } };
       (data.modules || []).forEach(function (m) { if (H && T && H.moduleState(m, ctx) === 'held') out.held.push(m.key); });
       out.preselect = out.held.slice(); out.requested.forEach(function (o) { if (out.preselect.indexOf(o.key) < 0) out.preselect.push(o.key); });
       if (out.preselect.indexOf('lite') < 0) out.preselect.unshift('lite');
@@ -233,6 +235,7 @@
       out.lines.push('Holds ' + names(out.held) + ' (what its Modules page shows as Live)');
       var pay = []; if (b.amountDue != null) pay.push('$' + Number(b.amountDue || 0).toLocaleString() + ' due'); if (b.subscriptionDue) pay.push('next ' + dayOf(b.subscriptionDue)); if (b.lastPaidAt) pay.push('last paid ' + dayOf(b.lastPaidAt)); if (b.paymentProvider) pay.push('by ' + b.paymentProvider);
       out.lines.push(pay.length ? 'Pays ' + pay.join(' · ') : 'No payment on record');
+      if (ao && Array.isArray(ao.modules) && ao.modules.length) out.lines.push('Add-ons in QuickBooks: ' + names(ao.modules) + (ao.monthlyDisplay ? ' · ' + ao.monthlyDisplay : '') + ' · ' + String(ao.state || 'none').replace(/_/g, ' ') + (ao.nextInvoiceOn ? ' · next invoice ' + dayOf(ao.nextInvoiceOn) : ''));
     }
     if (out.requested.length) out.lines.push('Requested: ' + out.requested.map(function (o) { return (o.name || o.key) + (o.display ? ' (' + o.display + ')' : '') + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : ''); }).join('; '));
     return out;

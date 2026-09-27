@@ -17,7 +17,8 @@
 
    ctx = { canOpen(toolKey) → bool, tool(toolKey) → catalog entry | null,
            modules[] (a packaged workspace's), addons[] (a legacy one's),
-           hideMarketplace }
+           addOns[] (the modules a legacy one bought as add-ons and has on
+           now: billing.addOns.live, api/_lib/addons.js), hideMarketplace }
 
    Showing a cell is never access: every tool page and endpoint still checks.
    Projects and Team are always in the ring (a workspace with no projects
@@ -47,8 +48,9 @@
   function byKey(key) { for (var i = 0; i < AREAS.length; i++) if (AREAS[i].key === key) return AREAS[i]; return null; }
   function has(list, k) { return Array.isArray(list) && list.indexOf(k) >= 0; }
   /* does this workspace hold an Omega Logic part: a packaged one by module,
-     a legacy one by the omega-logic add-on (which holds every part) */
-  function holdsLogic(ctx, part) { return has(ctx.modules, part) || has(ctx.addons, 'omega-logic'); }
+     a legacy one by the omega-logic add-on (which holds every part) or by
+     the part bought as an add-on to its plan */
+  function holdsLogic(ctx, part) { ctx = ctx || {}; return has(ctx.modules, part) || has(ctx.addons, 'omega-logic') || has(ctx.addOns, part); }
   function openTools(area, ctx) {
     var out = [];
     (area.tools || []).forEach(function (k) { if (ctx.canOpen && ctx.canOpen(k)) out.push(k); });
@@ -90,14 +92,16 @@
      marked by whether it is used or given). ctx as compose() takes it,
      plus packaged (bool) and tierLevel (the legacy tier).
        packaged   held when the server's projection lists it, else open
-       legacy     an Omega Logic part: held by the omega-logic add-on;
+       legacy     bought as an add-on and on now (ctx.addOns): held;
+                  an Omega Logic part: held by the omega-logic add-on;
                   a module of tools: held when every tool it carries is
                   open on the tier, part when some are, else ask;
                   a module of editor capabilities alone (plan sets, site
                   intelligence, the storefront): held on Enterprise, the
                   legacy tier that carries every capability, else ask.
      Answers 'held' | 'part' | 'ask' | 'open'. Showing a state is never
-     access: the tools and the editor check the same plan. */
+     access: the tools and the editor check the same plan. The server asks
+     this same rule before it sells an add-on (api/_lib/addons.js held()). */
   function moduleTools(m, ctx) {
     ctx = ctx || {};
     var total = 0, open = 0;
@@ -110,12 +114,13 @@
   function moduleState(m, ctx) {
     ctx = ctx || {}; if (!m) return 'ask';
     if (ctx.packaged) return has(ctx.modules, m.key) ? 'held' : 'open';
+    if (has(ctx.addOns, m.key)) return 'held';
     if (/^logic-/.test(m.key)) return holdsLogic(ctx, m.key) ? 'held' : 'ask';
     var t = moduleTools(m, ctx);
     if (!t.total) return (ctx.tierLevel >= 3) ? 'held' : 'ask';
     return t.open === t.total ? 'held' : t.open ? 'part' : 'ask';
   }
-  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, RING_MAX: RING_MAX };
+  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, holdsLogic: holdsLogic, RING_MAX: RING_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceHub = API;
 })(typeof window !== 'undefined' ? window : null);

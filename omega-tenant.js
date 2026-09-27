@@ -436,12 +436,20 @@
     } else if (orgAccess || memAccess) {
       ws.toolAccess = (orgAccess || memAccess).slice();
     }
+    /* ── ADD-ONS ON A PLAN BILLED OUTSIDE THE ENGINE ─────────────────────
+       What a legacy workspace bought on Add to plan and has switched on now
+       (billing.addOns.live, written only by the server: api/_lib/addons.js),
+       while its paid period lasts. Their tools arrive as toolOverrides the
+       server wrote; this list is what the hub, the Modules page and the
+       Omega Logic rail read (OmegaWorkspaceHub.holdsLogic, moduleState). */
+    var ao = b.addOns;
+    ws.addOns = ao && Array.isArray(ao.live) && typeof ao.accessUntil === 'number' && Date.now() < ao.accessUntil ? ao.live.slice() : [];
     ws.packaged = b.packaged === true || !!(T.packageAccess && T.packageAccess.packaged);
     if (ws.packaged) {
       ws.packageAccess = T.packageAccess || { packaged: true, modules: [], caps: [], toolAccess: [], readOnly: true };
       ws.modules = ws.packageAccess.modules.slice();
       ws.toolAccess = ws.packageAccess.toolAccess.slice();
-      ws.toolOverrides = {}; ws.addons = [];
+      ws.toolOverrides = {}; ws.addons = []; ws.addOns = [];
     }
     ws.role = T.role;
     ws.orgStatus = T.status;
@@ -1067,6 +1075,19 @@
           if (firebase.auth().currentUser !== user || !fresh.packaged || !Array.isArray(fresh.toolAccess)) return null;
           T.packageAccess = fresh; ws.packageAccess = fresh; fireEntitlements(mergeEntitlements(ws)); return fresh;
         });
+    },
+    /* After an add-on on a plan billed OUTSIDE the engine switches on (Add to
+       plan, "I've paid": api/_lib/addons.js): read the workspace's billing
+       record again (a member may) and re-fire the entitlements, so the tiles
+       (the toolOverrides the server wrote), the Modules page and the Omega
+       Logic rail follow without a reload. Resolves to the record, or null. */
+    refreshBilling: function () {
+      var ws = T._ws, d = db(), org = ws && ws.orgId;
+      if (!org || !d || ws.packaged) return Promise.resolve(null);
+      return d.collection('omega_orgs').doc(org).collection('billing').doc('current').get().then(function (s) {
+        if (!s.exists) return null;
+        T.billing = s.data(); fireEntitlements(mergeEntitlements(ws)); return T.billing;
+      });
     }
   };
 
