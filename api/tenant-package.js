@@ -7,8 +7,9 @@ module.exports = A.handler(async function (req, res) {
   var caller = await A.authenticate(req), input = req.method === 'GET' ? req.query || {} : req.body || {};
   var orgId = A.safeOrg(input.orgId || caller.orgId);
   if (!orgId) throw A.httpError(400, 'Valid organization required');
-  /* an owner or administrator needs no email link (api/_lib/roles.js): the role is the server's */
-  if (!caller.staff && !(await A.isTenantAdmin(caller, orgId))) throw A.httpError(403, 'Tenant administrator required');
+  /* a tenant administrator: with a verified email, or an owner or administrator of an active client without one (admin.clientAdmin) */
+  var verified = !!(caller.claims && caller.claims.email_verified === true);
+  if (!caller.staff && !(verified ? await A.isTenantAdmin(caller, orgId) : await A.clientAdmin(caller, orgId))) throw A.httpError(403, 'Tenant administrator required');
   if (req.method === 'POST') {
     if (!caller.staff) throw A.httpError(403, 'Staff only');
     var fields = ['orgId', 'modules', 'pricebookVersion', 'plan', 'credit', 'builders', 'viewers', 'serviceFee', 'interval', 'action', 'dryRun', 'previewId', 'effectiveAt'];
@@ -26,7 +27,7 @@ module.exports = A.handler(async function (req, res) {
     // The tenant sees their plan, never staff-internal reasons, realms or
     // the before/after patches that carry staff emails.
     var keep = ['packaged', 'packagingState', 'modules', 'plan', 'interval', 'billingDay', 'nextInvoiceOn', 'paidThrough', 'accessUntil', 'trialEndsAt',
-      'amountDue', 'paymentLink', 'monthlyDisplay', 'builders', 'viewers', 'toolAccess', 'removalRequests', 'subscription', 'pricebookVersion', 'optIns', 'tier', 'addons', 'capTier', 'toolOverrides'];
+      'amountDue', 'paymentLink', 'monthlyDisplay', 'builders', 'viewers', 'toolAccess', 'removalRequests', 'subscription', 'pricebookVersion', 'optIns', 'optOuts', 'tier', 'addons', 'capTier', 'toolOverrides'];
     var shown = {}; keep.forEach(function (k) { if (billing[k] !== undefined) shown[k] = billing[k]; });
     if (billing.serviceFee) shown.serviceFee = { mode: billing.serviceFee.mode, display: billing.serviceFee.display || null, appliesTo: billing.serviceFee.appliesTo || null };
     billing = shown;

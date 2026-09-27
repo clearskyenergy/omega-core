@@ -2,14 +2,15 @@
  * Authorized read-only projection and quote. Never changes a subscription.
  */
 'use strict';
-var A = require('./_lib/admin'), R = require('./_lib/roles'), B = require('./_lib/pricebook'), M = require('./_lib/modules'), P = require('./_lib/subscription-pricing'), Policy = require('./_lib/package-billing-policy');
+var A = require('./_lib/admin'), B = require('./_lib/pricebook'), M = require('./_lib/modules'), P = require('./_lib/subscription-pricing'), Policy = require('./_lib/package-billing-policy');
 module.exports = A.handler(async function (req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') throw A.httpError(405, 'GET or POST required');
   res.setHeader('Cache-Control', 'private, no-store');
   var caller = await A.authenticate(req), body = req.method === 'POST' ? (req.body || {}) : (req.query || {});
   var org = A.safeOrg(body.orgId || caller.orgId);
   if (!org || (!caller.staff && org !== caller.orgId)) throw A.httpError(403, 'Own organization required');
-  if (!caller.staff && !(await R.settled(caller, org, A.isTenantAdmin))) throw A.httpError(403, 'Verified email required');
+  /* a verified email, or an owner or administrator of an active client (admin.clientAdmin): the priced menu of their own plan */
+  if (!caller.staff && (!caller.claims || caller.claims.email_verified !== true) && !(await A.clientAdmin(caller, org))) throw A.httpError(403, 'Verified email required');
   var db = A.db(), billing = await A.billingOf(org);
   var tenant = await db.doc('omega_orgs/' + org).get();
   if (!caller.staff) {

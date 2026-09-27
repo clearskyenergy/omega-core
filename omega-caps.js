@@ -175,6 +175,28 @@
      it from tiers, addons, query strings or a second browser module table. */
   var _package = null, _packageRequest = 0, MODULE_GRANTS = {}, _packageSignature = null, _tier = null;
   var COMMANDS = '.rbtn,.rsbtn,.rb-fly-item,#app-menu .menu-item,[data-module],[data-cap]';
+  /* ── A LEGACY PLAN'S ADD-ONS, AND THE CATALOG ─────────────────────────
+     A plan billed outside the engine (a tier) buys a module beside it (Add
+     to plan, api/_lib/addons.js). The server's legacy answer
+     (/api/package-access: package-access.legacy()) is the add-ons on now
+     and the catalog whose ribbon says which module owns each command:
+     { addOns: [key], catalog: [...], notSold: [...] }, null until it came.
+     The tier still gates by data-cap; this only adds (see addOnOpens). */
+  var _legacy = null;
+  function ribbonRows() {
+    var src = _package || _legacy;
+    return src ? (src.catalog || []).concat(src.notSold || []) : [];
+  }
+  function reindex() {
+    Object.keys(MODULE_GRANTS).forEach(function (k) { delete MODULE_GRANTS[k]; });
+    ((_package && _package.catalog) || (_legacy && _legacy.catalog) || []).forEach(function (m) { MODULE_GRANTS[m.key] = m; });
+  }
+  function setLegacy(view) {
+    _legacy = view && view.packaged === false && Array.isArray(view.catalog) && Array.isArray(view.addOns)
+      ? { addOns: view.addOns.slice(), catalog: view.catalog, notSold: Array.isArray(view.notSold) ? view.notSold : [] } : null;
+    reindex();
+    return _legacy;
+  }
   /* The locked projection: signed out, a read that failed, a 403, or (with
      `loading`) the moment between sign-in and the answer. Nothing else may
      read a pending view as "this workspace has a package". */
@@ -183,8 +205,7 @@
     var previous = _package;
     _package = view && view.packaged === true ? view : null;
     if (_package && (!Array.isArray(view.modules) || !Array.isArray(view.caps) || !Array.isArray(view.catalog) || !Array.isArray(view.toolAccess))) _package = pendingPackage();
-    Object.keys(MODULE_GRANTS).forEach(function (k) { delete MODULE_GRANTS[k]; });
-    if (_package) _package.catalog.forEach(function (m) { MODULE_GRANTS[m.key] = m; });
+    reindex();
     if (previous && !_package && global.document && global.document.querySelectorAll) {
       var old = global.document.querySelectorAll('[data-package-hidden],[data-package-empty],[data-workspace-hidden]');
       for (var n = 0; n < old.length; n++) {
@@ -207,8 +228,8 @@
     return new RegExp('(^|[^a-zA-Z0-9_$])' + selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=[^a-zA-Z0-9_$]|$)').test(compact);
   }
   function owners(id, handler) {
-    if (!_package) return [];
-    var rows = (_package.catalog || []).concat(_package.notSold || []), exact = [], out = [];
+    var rows = ribbonRows(), exact = [], out = [];
+    if (!rows.length) return [];
     rows.forEach(function (m) { (m.ribbon || []).forEach(function (s) {
       if (matches(s, id, handler)) {
         if (s.charAt(0) === '#') { if (exact.indexOf(m.key) < 0) exact.push(m.key); }
@@ -237,11 +258,162 @@
      same ladder, so a command injected since the last pass is judged too.
      Before the plan is read that is trial's answer, as everywhere else. */
   function legacyOpen(el) {
+    if (addOnOpens(el)) return true;
     for (var n = el; n && n.getAttribute; n = n.parentElement) {
       var cap = n.getAttribute('data-cap');
       if (cap && !can(_tier || 'trial', cap)) return false;
     }
     return true;
+  }
+  /* ── AN ADD-ON OPENS ITS OWN MODULE, EXACTLY ───────────────────────────
+     A legacy tier opens Site Map a whole tab at a time (data-cap on the
+     tab), so a legacy key for a bought module would open every module's
+     commands on its tab (the Compute tab carries Intel's and Engineer's
+     too) or leave part of the bought one shut. That is why Add to plan
+     used to sell almost none of them. A live add-on (the server's legacy
+     answer) opens what a package would instead: its own commands wherever
+     they sit, by the catalog's ribbon (owners()), and its caps on anything
+     that is not a ribbon tab or command (a side section). A tab the tier
+     shuts is shown for them, and every other command on it stays shut
+     (addOnLayout). The tier is never narrowed. */
+  var RIBBON_COMMAND = '.rbtn,.rsbtn,.rb-fly-item,#app-menu .menu-item';
+  function addOnKeys() { return _legacy && !_package ? _legacy.addOns : []; }
+  function addOnOwned(el) {
+    var keys = addOnKeys();
+    if (!keys.length || !el || !el.getAttribute) return false;
+    return owners(el.id || '', el.getAttribute('onclick') || '').some(function (k) { return keys.indexOf(k) >= 0; });
+  }
+  function isRibbonTab(el) { return !!(el.matches && el.matches('#ribbon-tabs .rtab,#ribbon .ribbon-page')); }
+  function addOnOpens(el) {
+    var keys = addOnKeys(), doc = global.document;
+    if (!keys.length || !el || !el.getAttribute) return false;
+    if (isRibbonTab(el)) {
+      var page = el.classList.contains('ribbon-page') ? el : doc.querySelector('#ribbon .ribbon-page[data-page="' + el.getAttribute('data-page') + '"]');
+      var cmds = page ? page.querySelectorAll('.rbtn,.rsbtn,.rb-fly-item') : [];
+      for (var i = 0; i < cmds.length; i++) if (addOnOwned(cmds[i])) return true;
+      return false;
+    }
+    if (el.matches && el.matches(RIBBON_COMMAND)) return addOnOwned(el);
+    var cap = String(el.getAttribute('data-cap') || ''), dot = cap.indexOf('.');
+    return !!cap && keys.some(function (k) {
+      var caps = (MODULE_GRANTS[k] && MODULE_GRANTS[k].caps) || [];
+      return caps.indexOf(cap) >= 0 || (dot > 0 && caps.indexOf(cap.slice(0, dot)) >= 0);
+    });
+  }
+  function flag(el, name, on) {
+    if (el.hasAttribute(name) === on) return;
+    if (on) el.setAttribute(name, '1'); else el.removeAttribute(name);
+  }
+  function retired(el) {
+    return el.hasAttribute('data-packaging-retired') || el.hasAttribute('data-omega-retired') || el.hasAttribute('data-shelf-dupe') || !!(el.classList && el.classList.contains('omega-gated-hidden'));
+  }
+  /* On a tab the tier shuts and an add-on opened, only the add-ons' own
+     commands show, and a group left with none of them goes too. */
+  function addOnLayout(tier) {
+    var doc = global.document;
+    if (!doc || !doc.querySelectorAll) return;
+    var pages = doc.querySelectorAll('#ribbon .ribbon-page[data-cap]'), only = [], p, c, g;
+    for (p = 0; p < pages.length; p++) if (!can(tier, pages[p].getAttribute('data-cap')) && addOnOpens(pages[p])) only.push(pages[p]);
+    /* a mark anywhere else is stale: an add-on that lapsed, or a command
+       the editor's movers carried to another tab (Omega Design's drawing
+       tools pass through Compute on their way to Draw) */
+    var marked = doc.querySelectorAll('[data-addon-hidden],[data-addon-empty]');
+    for (c = 0; c < marked.length; c++) {
+      if (only.indexOf(marked[c].closest ? marked[c].closest('.ribbon-page') : null) >= 0) continue;
+      marked[c].removeAttribute('data-addon-hidden'); marked[c].removeAttribute('data-addon-empty');
+    }
+    for (p = 0; p < only.length; p++) {
+      var cmds = only[p].querySelectorAll('.rbtn,.rsbtn,.rb-fly-item');
+      for (c = 0; c < cmds.length; c++) flag(cmds[c], 'data-addon-hidden', !addOnOwned(cmds[c]));
+      var groups = only[p].querySelectorAll('.rbtn-wrap,.rpanel');
+      for (g = 0; g < groups.length; g++) {
+        var shows = false, inner = groups[g].querySelectorAll('.rbtn,.rsbtn');
+        for (c = 0; c < inner.length && !shows; c++) shows = !inner[c].hasAttribute('data-addon-hidden') && !retired(inner[c]) && inner[c].style.display !== 'none';
+        flag(groups[g], 'data-addon-empty', !shows);
+      }
+    }
+  }
+
+  /* ── WHERE THE PLAN STOPS, IT SAYS OPT IN ──────────────────────────────
+     Tommy, 2026-09-27: "if there is something that they don't have, it
+     shouldn't be blank on the panel. It should say opt in and then allow
+     them to add that as a purchase". A tab the plan opens nothing on used
+     to be removed on a desktop and, on a phone, still listed in the tab
+     menu, where it opened an empty ribbon. Now a tab where a module for
+     sale has commands stays in the strip and the phone menu marked
+     data-optin="<modules>" (the page's own module first, then by how much
+     of it is theirs), and OmegaPackageMenu.optIn() shows those modules and
+     Opt in in place of the empty ribbon. Its commands stay shut: the mark
+     is an offer, never access (tabOpen and allowedElement still refuse).
+     A tab the plan shuts where nothing is for sale leaves the phone menu
+     too (data-tab-shut). Offering is the same owners() rule that hides. */
+  function sellers(page) {
+    var rows = _package ? _package.catalog : _legacy && _legacy.catalog;
+    if (!rows || !page || !page.querySelectorAll) return null;
+    var held = _package ? (_package.modules || []) : addOnKeys(), order = [], count = {};
+    rows.forEach(function (m) { if (m.key !== 'lite' && held.indexOf(m.key) < 0) order.push(m.key); });
+    var cmds = page.querySelectorAll('.rbtn,.rsbtn,.rb-fly-item');
+    for (var i = 0; i < cmds.length; i++) {
+      if (retired(cmds[i])) continue;
+      owners(cmds[i].id || '', cmds[i].getAttribute('onclick') || '').forEach(function (k) { if (order.indexOf(k) >= 0) count[k] = (count[k] || 0) + 1; });
+    }
+    var first = page.getAttribute('data-module');
+    return order.filter(function (k) { return count[k]; }).sort(function (a, b) {
+      return ((b === first) - (a === first)) || (count[b] - count[a]) || (order.indexOf(a) - order.indexOf(b));
+    });
+  }
+  function optInMark(el, modules) {
+    var want = modules ? modules.join(' ') : null;
+    if (el.getAttribute('data-optin') === want) return;
+    if (want === null) el.removeAttribute('data-optin'); else el.setAttribute('data-optin', want);
+  }
+  function optInStyle(doc) {
+    if (!doc.getElementById || !doc.createElement || doc.getElementById('omega-optin-style')) return;
+    var style = doc.createElement('style'); style.id = 'omega-optin-style';
+    style.textContent =
+      /* a shut tab is shut whatever re-shows it (a ribbon repair, a sweep),
+         unless it is an Opt in; product modes (data-omega-mode-hidden) and
+         Designer (.omg-hide) still win over an Opt in */
+      '#ribbon-tabs .rtab[data-cap-blocked]:not([data-optin]),#ribbon .ribbon-page[data-cap-blocked],#ribbon-tab-menu [data-tab-shut],#ribbon [data-addon-hidden],#ribbon [data-addon-empty]{display:none!important}' +
+      '#ribbon-tabs .rtab[data-optin]:not([data-omega-mode-hidden]){display:flex!important}' +
+      '#ribbon-tabs .rtab[data-optin]:not(.active){color:var(--sub)}' +
+      '#ribbon-tabs .rtab[data-optin]::after{content:"+";display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;margin-left:6px;border:1px solid currentColor;border-radius:50%;font:700 10px/1 system-ui,sans-serif;color:var(--accent,#4A8FD8)}' +
+      '#ribbon-tab-menu .rtm-item[data-optin]::after{content:"Opt in";float:right;margin-left:12px;font:700 10px/20px system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--accent,#4A8FD8)}';
+    (doc.head || doc.body).appendChild(style);
+  }
+  function menuItem(doc, key) { return doc.querySelector('#ribbon-tab-menu [onclick="rbHamburgerPick(\'' + key + '\')"]'); }
+  /* the legacy half (a package marks in layout()) */
+  function markTabs() {
+    var doc = global.document;
+    if (!doc || !doc.querySelector || !doc.querySelectorAll) return;
+    var tabs = doc.querySelectorAll('#ribbon-tabs .rtab[data-page]');
+    if (tabs.length) optInStyle(doc);
+    for (var i = 0; i < tabs.length; i++) {
+      var tab = tabs[i], key = tab.getAttribute('data-page');
+      if (key === '__file') continue;
+      var page = doc.querySelector('#ribbon .ribbon-page[data-page="' + key + '"]'), menu = menuItem(doc, key);
+      var shut = tab.hasAttribute('data-cap-blocked'), product = tab.hasAttribute('data-omega-mode-hidden');
+      /* null: no catalog to ask (the server did not answer), so the offer
+         is the plain one; []: nothing on it is sold */
+      var sold = shut && !product && page ? sellers(page) : [], lock = sold === null || sold.length > 0;
+      optInMark(tab, lock ? sold || [] : null);
+      if (menu) { optInMark(menu, lock ? sold || [] : null); flag(menu, 'data-tab-shut', (shut || product) && !lock); }
+    }
+    /* the tab on screen shut with nothing on it for sale: Build, never an empty ribbon */
+    var active = doc.querySelector('#ribbon-tabs .rtab.active');
+    if (active && active.hasAttribute('data-cap-blocked') && !active.hasAttribute('data-optin') && typeof global.rbTab === 'function') global.rbTab('home');
+    if (global.OmegaPackageMenu && global.OmegaPackageMenu.optIn) global.OmegaPackageMenu.optIn();
+  }
+  /* What the Opt in panel offers: the tabs marked above, with their modules. */
+  function lockedTabs() {
+    var doc = global.document, out = [];
+    if (!doc || !doc.querySelectorAll) return out;
+    var tabs = doc.querySelectorAll('#ribbon-tabs .rtab[data-optin]');
+    for (var i = 0; i < tabs.length; i++) {
+      var list = tabs[i].getAttribute('data-optin');
+      out.push({ page: tabs[i].getAttribute('data-page'), label: String(tabs[i].textContent || '').replace(/\s+/g, ' ').trim(), modules: list ? list.split(' ') : [] });
+    }
+    return out;
   }
   function allowedElement(el) {
     if (!_package) return legacyOpen(el);
@@ -342,6 +514,11 @@
         '#omega-workspace-controls button{font:inherit;color:var(--text);border:1px solid var(--border);background:transparent;border-radius:4px;padding:4px 8px;cursor:pointer}';
       (doc.head || doc.body).appendChild(style);
     }
+    optInStyle(doc);
+    /* what is for sale is offered where the plan stops, except while the
+       plan loads, on a read-only workspace (its notice says pay first), to
+       staff (who hold everything) and to someone with no editor at all */
+    var offers = !_package.pending && !_package.readOnly && !_package.staff && (_package.toolAccess || []).indexOf('editor') >= 0;
     function usable(el) {
       return !el.hasAttribute('data-package-hidden') && !el.hasAttribute('data-omega-retired') && !el.hasAttribute('data-packaging-retired') && !el.classList.contains('omega-gated-hidden') && !el.hasAttribute('data-shelf-dupe');
     }
@@ -369,10 +546,17 @@
       }
       if (!groups.length) any = hasControls(pages[p]);
       var key = pages[p].getAttribute('data-page'), tab = doc.querySelector('#ribbon-tabs .rtab[data-page="' + key + '"]');
+      /* nothing on it this package opens, and a module for sale has commands
+         on it: an Opt in (markTabs), never a tab that vanishes or opens empty */
+      var sold = !any && tab && offers ? sellers(pages[p]) : null, lock = !!(sold && sold.length);
       pages[p].toggleAttribute('data-package-empty', !any);
-      if (tab) tab.toggleAttribute('data-package-empty', !any);
-      var mobile = doc.querySelector('#ribbon-tab-menu [onclick="rbHamburgerPick(\'' + key + '\')"]');
-      if (mobile) mobile.toggleAttribute('data-package-empty', !any);
+      if (tab) {
+        tab.toggleAttribute('data-package-empty', !any && !lock); optInMark(tab, lock ? sold : null);
+        /* applyPackage hid the tab itself (its data-module is not held) */
+        if (lock && tab.hasAttribute('data-package-hidden')) { tab.style.display = tab.getAttribute('data-package-display') || ''; tab.removeAttribute('data-package-hidden'); tab.removeAttribute('data-package-display'); }
+      }
+      var mobile = menuItem(doc, key);
+      if (mobile) { mobile.toggleAttribute('data-package-empty', !any && !lock); optInMark(mobile, lock ? sold : null); }
     }
     var active = doc.querySelector('#ribbon-tabs .rtab.active');
     if (active && (active.hasAttribute('data-package-empty') || active.hasAttribute('data-package-hidden'))) {
@@ -392,7 +576,7 @@
         ribbon.parentNode.insertBefore(bar, ribbon);
       }
     }
-    if (global.OmegaPackageMenu) { global.OmegaPackageMenu.tab(); global.OmegaPackageMenu.staffPreview(); if (global.OmegaPackageMenu.notice) global.OmegaPackageMenu.notice(); }
+    if (global.OmegaPackageMenu) { global.OmegaPackageMenu.tab(); global.OmegaPackageMenu.staffPreview(); if (global.OmegaPackageMenu.notice) global.OmegaPackageMenu.notice(); if (global.OmegaPackageMenu.optIn) global.OmegaPackageMenu.optIn(); }
   }
   function guardLaunchers() {
     if (!_package) return;
@@ -442,7 +626,8 @@
   if (global.document && global.document.addEventListener) global.document.addEventListener('click', function (e) {
     if (!_package || !e.target || !e.target.closest) return;
     var el = e.target.closest(COMMANDS);
-    if (el && !allowedElement(el)) { e.preventDefault(); e.stopImmediatePropagation(); }
+    /* an Opt in tab opens its offer, never its commands (they stay refused) */
+    if (el && !allowedElement(el) && !(el.hasAttribute('data-optin') && el.matches('#ribbon-tabs .rtab'))) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
 
   /* ── WHAT A LEGACY PLAN GRANTS, AS A PURE FUNCTION ─────────────────────
@@ -500,10 +685,12 @@
   }
 
   /* Walks [data-cap] and removes what the tier does not include.
-     REMOVED, NOT DISABLED, for anything the customer has not bought: a greyed
-     tab that says "Compute" is an advert inside a tool they are working in,
-     and it invites a support ticket every time. Upgrade lives on the account
-     page, once, not scattered through the ribbon. */
+     REMOVED, NOT DISABLED, for any command the customer has not bought. The
+     TAB it sat on is the one exception (Tommy, 2026-09-27: "it shouldn't be
+     blank on the panel. It should say opt in and then allow them to add
+     that as a purchase"): markTabs() keeps a tab where a module is for
+     sale, as an Opt in that names the module and buys it where the person
+     is working, and removes the rest, from the phone's tab menu too. */
   /* ── A HIDDEN BUTTON COMES BACK WHEN THE PLAN SAYS SO ─────────────────
      The legacy pass only ever hid: a button removed on one answer stayed
      removed after a wider one, so a plan upgraded while the editor was open,
@@ -524,6 +711,9 @@
          decides every command, so none of them may linger. */
       var stale = scope.querySelectorAll('[data-cap-blocked]');
       for (var s = 0; s < stale.length; s++) unblock(stale[s]);
+      /* nor a legacy add-on's marks (layout() marks the Opt in tabs anew) */
+      var marks = scope.querySelectorAll('[data-addon-hidden],[data-addon-empty],[data-tab-shut]');
+      for (var a = 0; a < marks.length; a++) { marks[a].removeAttribute('data-addon-hidden'); marks[a].removeAttribute('data-addon-empty'); marks[a].removeAttribute('data-tab-shut'); }
       if (global.OmegaComputeTab && global.OmegaComputeTab.place) global.OmegaComputeTab.place();
       rehome(scope);
       var hidden = applyPackage(scope);
@@ -543,12 +733,15 @@
     for (i = 0; i < nodes.length; i++) {
       el = nodes[i];
       cap = el.getAttribute('data-cap');
-      if (can(tier, cap)) { unblock(el); continue; }
+      /* the tier, or an add-on opening its own module (addOnOpens) */
+      if (can(tier, cap) || addOnOpens(el)) { unblock(el); continue; }
       if (!el.hasAttribute('data-cap-blocked')) el.setAttribute('data-cap-display', el.style.display || '');
       el.setAttribute('data-cap-blocked', '1');
       el.style.display = 'none';
       removed++;
     }
+    addOnLayout(tier);
+    markTabs();
     if (global.document && global.document.body) {
       /* ── THE EVENT ANNOUNCES A CHANGE, NOT A PASS ────────────────────
          This fired on every call. apply() is re-run by a DOM observer in
@@ -678,16 +871,39 @@
         console.info('[caps] billed ' + b.tier + ', editor capped to ' + eff +
                      ' by capTier on billing/current');
       }
-      return { tier: eff, addons: b.addons || [], view: null };
+      var plan = { tier: eff, addons: b.addons || [], view: null };
+      /* its add-ons and the catalog, from the server: never asked for a
+         plan that opens everything */
+      if (UNGATED[eff]) return plan;
+      return legacyView(email, refreshing).then(function (lv) { plan.legacy = lv; return plan; });
     }, function () { return refreshing ? { transient: true } : locked(); });
   }
-  function commit(plan) { setAddons(plan.addons || []); setPackage(plan.view); }
+  /* A legacy plan's add-ons on now and the catalog (package-access.legacy()).
+     A slow or failed answer never holds the plan up: the tier is on screen
+     without it (nothing bought as an add-on opens until it comes, and the
+     Opt in is the plain one), and a refresh keeps what it had (KEEP). */
+  var KEEP = { keep: true };
+  function legacyView(email, refreshing) {
+    var miss = refreshing ? KEEP : null, user = null;
+    try { user = global.firebase && global.firebase.auth && global.firebase.auth().currentUser; } catch (e) { user = null; }
+    if (!user || user.email !== email || !user.getIdToken || !global.fetch) return Promise.resolve(miss);
+    return new Promise(function (done) {
+      var timer = setTimeout(function () { done(miss); }, 4000);
+      user.getIdToken().then(function (token) {
+        return global.fetch('/api/package-access', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+      }).then(function (r) { return r.ok ? r.json() : null; }).then(function (v) {
+        clearTimeout(timer); done(v && v.packaged === false && Array.isArray(v.catalog) && Array.isArray(v.addOns) ? v : miss);
+      }, function () { clearTimeout(timer); done(miss); });
+    });
+  }
+  function commit(plan) { setAddons(plan.addons || []); if (plan.legacy !== KEEP) setLegacy(plan.view ? null : plan.legacy); setPackage(plan.view); }
 
   function resolve(db, email, emailVerified) {
     return new Promise(function (done) {
       try {
         setOrg(email);
         setAddons([]);
+        setLegacy(null);
         var resolution = ++_packageRequest;
         /* LOCKED while the answer is on its way, never open: the previous
            account's package must not linger, and a packaged workspace must
@@ -726,7 +942,7 @@
       var editor = _package.staff || (_package.toolAccess || []).indexOf('editor') >= 0;
       return { packaged: true, pending: _package.pending === true, refused: _package.refused || null, staff: _package.staff === true, readOnly: _package.readOnly === true, editor: editor, modules: editor ? (_package.modules || []).slice() : [] };
     }
-    return { packaged: false, tier: _tier || 'trial', caps: Object.keys(setFor(_tier || 'trial')).sort() };
+    return { packaged: false, tier: _tier || 'trial', caps: Object.keys(setFor(_tier || 'trial')).sort(), addOns: addOnKeys().slice() };
   }
   var _refreshing = null, _watch = null;
   function refresh(db, user) {
@@ -761,6 +977,9 @@
     } else if (!after.packaged && !before.packaged) {
       diff.added = after.caps.filter(function (k) { return before.caps.indexOf(k) < 0; });
       diff.removed = before.caps.filter(function (k) { return after.caps.indexOf(k) < 0; });
+      /* and a legacy plan's add-ons, module by module (Add to plan) */
+      diff.addOnsAdded = after.addOns.filter(function (k) { return before.addOns.indexOf(k) < 0; });
+      diff.addOnsRemoved = before.addOns.filter(function (k) { return after.addOns.indexOf(k) < 0; });
     }
     if (diff.changed && global.document && global.document.dispatchEvent) {
       try { global.document.dispatchEvent(new global.CustomEvent('omega:plan-changed', { detail: diff })); } catch (e) {}
@@ -828,6 +1047,8 @@
     effectiveTier: effectiveTier, setPackage: setPackage, packageAccess: function () { return _package; },
     MODULE_GRANTS: MODULE_GRANTS, owners: owners, commandPage: commandPage, layout: layout,
     guardLaunchers: guardLaunchers, pendingPackage: pendingPackage, fetchPackage: fetchPackage, allowedElement: allowedElement, allowedCommand: allowedCommand, tabOpen: tabOpen, commandSelector: COMMANDS,
-    refresh: refresh, watchPlan: watchPlan, tier: function () { return _tier; }, grants: grants, canWith: canWith
+    refresh: refresh, watchPlan: watchPlan, tier: function () { return _tier; }, grants: grants, canWith: canWith,
+    /* a legacy plan's add-ons (the server's legacy answer) and where the plan stops (Opt in) */
+    setLegacy: setLegacy, legacyView: function () { return _legacy; }, addOnsOn: function () { return addOnKeys().slice(); }, lockedTabs: lockedTabs
   };
 })(typeof window !== 'undefined' ? window : this);

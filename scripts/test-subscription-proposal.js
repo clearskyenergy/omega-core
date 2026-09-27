@@ -156,7 +156,7 @@ async function run() {
   await refused(function () { return post({ action: 'accept', id: ws.id, key: wkey }, wm); }, /workspace administrator/, 'a member cannot accept');
   await refused(function () { return post({ action: 'accept', id: ws.id, key: wkey }, Object.assign({}, wm, { claims: { email_verified: false } })); }, /Verified email required/, 'a member who has not confirmed their address is asked for the link');
   await refused(function () { return post({ action: 'accept', id: ws.id, key: wkey }, { uid: 'x', staff: false, email: 'x@other.example', orgId: 'other.example', role: 'owner', claims: { email_verified: true } }); }, /Own organization/, 'another organization cannot accept');
-  /* the owner accepts without having clicked the email link (api/_lib/roles.js) */
+  /* the owner of an active client accepts without having clicked the email link (admin.clientAdmin) */
   var outcome = await post({ action: 'accept', id: ws.id, key: wkey }, Object.assign({}, owner, { claims: { email_verified: false } }));
   check(outcome.path === 'plan-change' && outcome.state === 'awaiting_payment' && qbo.invoices === 1 && /^change-/.test(outcome.changeId), 'a paid tenant’s acceptance is a pay-first change invoice');
   var wb = db.data.get('omega_orgs/walters.example/billing/current');

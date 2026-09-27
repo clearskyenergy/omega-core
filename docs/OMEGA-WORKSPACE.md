@@ -69,14 +69,31 @@ decided 2026-09-26.
   figure, the billing day, since, access through); *What you owe* (unpaid
   invoices with their QuickBooks pay links, the next invoice, paid
   through, *I've paid* = reconcile-now for an owner or admin; Stripe's
-  open invoices for a Stripe-billed plan); *Payment method* (a Stripe plan
-  opens the Stripe Customer Portal through `POST /api/stripe-portal` for
-  the card and autopay; a QuickBooks plan saves the card on QuickBooks'
-  own invoice payment page with Autopay; card details are never entered
-  on our pages); *Billing history* (the engine's invoices from
+  open invoices for a Stripe-billed plan); *Payment method* (**linked to
+  Stripe**, Tommy 2026-09-27: "This payment method should be linked to the
+  stripe payment system we built with quickbooks. Stripe collects and takes
+  the payment and sends it to quickbooks which is our account". Every plan
+  billed outside the package engine that ClearSky does not invoice through
+  QuickBooks, and a package on the Stripe rail, has its card with Stripe:
+  `POST /api/stripe-customer` on `api/_lib/stripe-customer.js` reads the
+  card on file back from Stripe (brand, last four, expiry; never stored),
+  **Add a card with Stripe** links the workspace's one Stripe customer the
+  first time and opens the portal's add-a-payment-method flow (the card
+  becomes the default for invoices), and **Invoices and receipts** is the
+  portal; each is Stripe's own page in this tab, back to
+  `/workspace#billing`. What you owe offers **Pay $X with Stripe** for the
+  amount ClearSky set as due: one Stripe invoice per due date and amount,
+  paid on Stripe's hosted page with the card on file or a new one, then
+  its page and **I've paid** until the webhook or the check records it
+  once. A QuickBooks plan saves the card on QuickBooks' own invoice
+  payment page with Autopay; card details are never entered on our pages.
+  The books: Stripe's payments reach ClearSky's QuickBooks through the
+  Connect to Stripe app, never through OMEGA; `docs/PAYMENTS-STRIPE.md`);
+  *Billing history* (the engine's invoices from
   `GET /api/plan-change`, which every verified member may read; a Stripe
-  plan's from `POST /api/stripe-invoices`). Additions waiting (a legacy
-  opt-in with its price, a packaged change waiting for payment) are listed
+  plan's from `POST /api/stripe-invoices`). *Requested changes* (a recorded
+  opt-in with its price and a legacy opt-out, each with Withdraw or Keep
+  for an owner or administrator; a packaged change waiting for payment) sit
   between them.
 - **Opt in, never Ask.** Every module not held carries a way to buy it,
   never an email. A packaged workspace opts in on the one menu
@@ -99,8 +116,27 @@ decided 2026-09-26.
   new card, or the card saved there. The card waits with the pay link,
   **I've paid** (`reconcile-now`) and Cancel; the moment QuickBooks shows
   it paid, it is Live. `api/_lib/addons.js` is the one engine; see *Add to
-  plan* below. Old recorded requests (`billing/current.optIns`) still show
-  on Plan & billing.
+  plan* below. A module the plan cannot switch on exactly is asked for
+  instead (`opt-in`, recorded on `billing/current.optIns`); its card then
+  reads *Requested* and **Withdraw the request** (`withdraw-opt-in`) takes
+  it back. Omega Design never carries Add to plan (it is always included;
+  the server refuses it).
+- **Opt out, and taking a request back** (Tommy, 2026-09-27: "i want it to
+  opt in and out, this needs to work"). A legacy workspace's **Opt out**
+  opens the one menu, which previews what goes with it from the server
+  (Office takes the Logic departments that need it, bought as add-ons or
+  not) and **Confirm** records it: `request-removal` on a legacy record
+  writes `billing/current.optOuts[key]` with who and when, history and
+  `admin_audit` rows, and mails ClearSky, who confirms the date and any
+  change to the invoice under the agreement. Access and charges stay until
+  then. **Keep module** (`withdraw-removal`) takes an opt-out back, on the
+  Modules page, in the store and in Plan & billing's *Requested changes*.
+  The admin Package tab lists both kinds of request and preselects without
+  the opt-outs. A request grants and charges nothing, so an owner or
+  administrator files one on the role alone, verified email or not (the
+  record and the mail say which); quoting, paying, switching on and the
+  summary need a verified email, or an owner or administrator of an active
+  client (`admin.clientAdmin`, below). A member is told who files them.
 - **The module cards live on Modules, not the home** (Tommy, 2026-09-27:
   "i love the way the modules are but i dont want them to be taking up so
   much dashboard space"). The home is the hub, Today, In flight and Around
@@ -232,7 +268,15 @@ click, the waiting card, I've paid, Office Live and Omega Logic on the rail.
 ## Add to plan (a legacy plan's add-ons)
 
 `api/_lib/addons.js`, through `plan-change` (owner, administrator or
-verified ClearSky staff; a member reads). One engine, the package
+verified ClearSky staff; a member reads). An owner or administrator of an
+ACTIVE client needs no verified email, here, on `billing-profile` and on
+the Stripe card door `stripe-customer`
+(`admin.clientAdmin`, Tommy, 2026-09-27: "to opt in, we shouldn't need to
+verify email... they are already a client and customer"): the role on
+`members/{uid}` vouches, because only a person grants it, and a Team
+invitation makes its account unverified. A plain member still reads only
+with a verified email; a pending or suspended workspace, or one with no
+record, still needs one; staff are unchanged. One engine, the package
 engine's own parts: the book, the synced QuickBooks items (`module:<key>`,
 `logic-bundle`), the QuickBooks driver, `package-billing.reconcile` and the
 hourly runner; the engine's guard decides whether a card can be taken at
@@ -250,30 +294,43 @@ yet", and staff see why).
   through `logic-access` (`parts()`, so the office, the apps, the
   customer portal and the bench doors follow); a module's tools as
   `toolOverrides[tool] = true` (and the `toolAccess` allowlist when there
-  is one), what ClearSky used to do by hand; the editor's capabilities by
-  the legacy add-on keys `omega-caps.js` reads (`addons.LEGACY`, the same
-  map as the Package tab prototype; `test-addons.js` pins it to the
-  catalog). `addOns.granted` remembers what was written so switching off
-  takes back exactly that, never a value staff set.
+  is one), what ClearSky used to do by hand; its Site Map commands by the
+  module itself: the editor opens exactly a live add-on's own commands,
+  wherever they sit (`omega-caps.js` `addOnOpens`, from the legacy answer of
+  `GET /api/package-access`: the add-ons on and the catalog's ribbon), and
+  a legacy key only where another reader honours one (`addons.LEGACY`: the
+  storefront's; never an editor key, which opens a whole tab).
+  `addOns.granted` remembers what was written so switching off takes back
+  exactly that, never a value staff set.
 - **Never sold twice**: the server asks the pages' own rule
   (`OmegaWorkspaceHub.moduleState` on the tools catalog and the editor's
   own ladder, `omega-caps.js`, with the same `canCap` and `visible` the
   pages pass) before it prices, and live add-ons count as held there.
 - **Sold only when it switches on exactly** (Tommy's decision, 2026-09-27):
-  a legacy editor opens Site Map a whole tab at a time (`data-cap`), so an
-  add-on key can leave part of a module off (Omega Storage on Standard: its
-  tools, not its Analyze-tab commands) or switch on part of another (Omega
-  Engineer's key opens Grid's and Storage's commands too). `addons.exact()`
-  simulates the grants and judges them by the pages' rule without the
-  add-on shortcut: every module bought must be held after, and no other
-  module (Omega Design aside) may gain anything. What is not exact is not
-  sold here: the quote says why (`request: true`) and the control offers
-  **Ask ClearSky to include it**, the recorded request (`plan-change`
-  `opt-in`: priced, on record, ClearSky told, nothing charged). Every Omega
-  Logic department is exact on every plan (`logic-access` reads
-  `addOns.live` itself); on today's ladder Omega Sites is exact on
-  Standard and Omega Capital on Deluxe, and Enterprise already holds
-  every editor module.
+  a legacy editor opens Site Map a whole tab at a time (`data-cap`), so a
+  legacy key would open every module on the tab (the Compute tab carries
+  Intel's and Engineer's commands) or leave part of the bought one shut.
+  The editor opens a live add-on's OWN commands instead and nothing else on
+  their tab (`addOnLayout` hides the rest), and `addons.exact()` simulates
+  exactly that on the pages' rule (`moduleEditor` with `editorModules`):
+  every module bought must be held after, and no other module (Omega Design
+  aside) may gain anything. So every editor module is exact on every legacy
+  plan. What is still not exact (the storefront: nothing to switch on beside
+  the plan, a reseller addendum) is not sold here: the quote says why
+  (`request: true`) and the control offers **Ask ClearSky to include it**,
+  the recorded request (`plan-change` `opt-in`: priced, on record, ClearSky
+  told, nothing charged). Every Omega Logic department is exact on every
+  plan (`logic-access` reads `addOns.live` itself).
+- **Opt in in the editor** (Tommy, 2026-09-27: "it shouldn't be blank on
+  the panel. It should say opt in and then allow them to add that as a
+  purchase"): a ribbon tab the plan opens nothing on, where a module for
+  sale has commands, is an Opt in in the strip and the phone's tab menu
+  (`data-optin`); opening it shows those modules with the price and Opt in
+  (`OmegaPackageMenu.optIn`), never an empty ribbon. On a legacy plan Opt in
+  opens this purchase for the module (`addOnDialog` → `addOnControl`); on a
+  package it opens The Ladder on it. Paid, the plan is re-read and the tab
+  fills (`OmegaCaps.refresh`); a member is told who to ask (`canManage` on
+  `GET /api/plan-change`).
 - **The rail is QuickBooks** (`addons.RAIL`), whatever the package rail:
   under `PACKAGING_PROVIDER=stripe` a packaged workspace bills through
   Stripe (`billing-driver`), but a legacy plan's add-ons are still
@@ -291,10 +348,9 @@ yet", and staff see why).
 - **Not here**: a legacy plan with no `omega_orgs` record or no billing
   record cannot be billed (the quote says so); a packaged workspace uses
   the Ladder; moving the whole workspace onto a package stays ClearSky's
-  (the admin Package tab, which now also lists the add-ons). **Not built:**
+  (the admin Package tab, which now also lists the add-ons). Built since:
   opening exactly one bought module's Site Map commands on a legacy plan
-  (the editor's legacy gate by command ownership, as a package's is), which
-  would make every editor module exact on every plan.
+  (above), which made every editor module exact on every plan.
 
 ## The journey, mapped
 
@@ -318,7 +374,9 @@ ground, one home; the session travels same-origin on every hop.
 | rail, any page | Team · Feed | `/workspace#team`, the Around you page alone |
 | rail, any page | Plan & billing | `/workspace#billing`, the Plan & billing page |
 | rail, any page | Settings | the side panel on `/workspace` (`#settings`) |
-| Plan & billing | Manage card and autopay (Stripe) | the Stripe Customer Portal in a new tab |
+| Plan & billing | Add a card with Stripe · Change card | Stripe's add-a-payment-method page (the customer portal's flow), in this tab, back to `/workspace#billing`; the first time it links the workspace's Stripe customer |
+| Plan & billing | Invoices and receipts · Manage card and invoices (Stripe) | the Stripe Customer Portal, in this tab, back to `/workspace#billing` |
+| Plan & billing | Pay $X with Stripe | Stripe's hosted invoice page for the amount ClearSky set as due, in this tab; then its page and *I've paid* |
 | Plan & billing | Pay · Open the payment page (QuickBooks) | the invoice's QuickBooks payment page, where the card is saved and Autopay turned on |
 | In flight | Assign · Reassign | the side panel of the workspace's people; a pick writes the project's owner |
 | tools grid | a Live tile | the tool, scoped to the org |
@@ -370,7 +428,13 @@ to the page, the shell or the runtime they load.
 - **Self-serve conversion of a legacy plan onto a package.** A legacy
   plan buys modules as add-ons beside its plan (Add to plan, above);
   moving the whole workspace onto a subscription package (re-pricing what
-  its tier holds today) stays ClearSky's, from the admin Package tab.
+  its tier holds today) stays ClearSky's, from the admin Package tab,
+  which opens preselected on what it holds plus its recorded opt-ins, less
+  its opt-outs (`billing/current.optOuts`, no figure: a legacy price is
+  the agreement's). Neither request changes access or a charge by itself.
+- **Self-serve opt-out of a paid add-on.** An add-on stops when a renewal
+  stays unpaid past the grace; turning one off from the workspace is the
+  recorded opt-out ClearSky confirms, not an immediate cancel.
 - **One-click charge of a saved card from the workspace.** The card is
   charged on QuickBooks' own page (a saved card there pays in one click;
   Autopay pays renewals). Charging it from our server needs the QuickBooks

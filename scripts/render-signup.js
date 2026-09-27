@@ -144,7 +144,9 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
         if (!u) return u;
         var minted = sessionStorage.getItem('dbl-minted') === '1';
         if (minted) u.emailVerified = true;
-        u.reload = function () { if (localStorage.getItem('dbl-clicked') === '1') u.emailVerified = true; return Promise.resolve(); };
+        u.reload = function () { window.__reloads = (window.__reloads || 0) + 1; if (localStorage.getItem('dbl-clicked') === '1') u.emailVerified = true; return Promise.resolve(); };
+        /* what a verification link was sent with: its continue address (Firebase's Continue button) */
+        u.sendEmailVerification = function (o) { (window.__verifySends = window.__verifySends || []).push(o && o.url ? o.url : null); return Promise.resolve(); };
         u.getIdToken = function (force) {
           if (force && u.emailVerified) { minted = true; sessionStorage.setItem('dbl-minted', '1'); }
           return Promise.resolve('tok|' + u.email + '|' + (minted || (u.emailVerified && !u.__unverifiedAtStart) ? 1 : 0) + '|' + u.uid);
@@ -207,8 +209,23 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   await p.reload({ waitUntil: 'domcontentloaded' });
   await p.waitForSelector('#step-verify:not(.hide)', { timeout: 8000 }).catch(function () {});
   ok('a reload (the link opens the page again) resumes at the email step with the system kept', await p.evaluate(function () { return !document.getElementById('step-verify').classList.contains('hide') && document.querySelector('#signup-steps li.on').getAttribute('data-step') === 'verify'; }));
-  /* the person clicks the link in their email: the page moves on by itself */
+  /* Send it again: a new link whose Continue button brings them back to the signup */
+  await p.click('#verify-resend'); await wait(250);
+  var resent = await p.evaluate(function () { return { status: document.getElementById('verify-status-text').textContent, sends: window.__verifySends || [] }; });
+  ok('Send it again sends a new link that brings them back to the signup', /^Sent again to kim@newco\.example/.test(resent.status) && resent.sends.length === 1 && /^http:\/\/127\.0\.0\.1:\d+\/start\.html$/.test(resent.sends[0] || ''), resent);
+  /* "I've clicked it" before the click: said plainly, nothing made */
+  await p.click('#verify-check'); await wait(300);
+  var early = await p.evaluate(function () { return document.getElementById('verify-status-text').textContent; });
+  ok('"I\'ve clicked it" before the click says it is not confirmed yet and makes nothing', /^Not yet/.test(early) && !posts.some(function (x) { return /tenant-signup/.test(x); }), { status: early, posts: posts });
+  /* away in the mail app: the tab is hidden and asks nobody; the click happens there */
+  await p.evaluate(function () { window.__hidden = true; Object.defineProperty(document, 'hidden', { configurable: true, get: function () { return window.__hidden === true; } }); window.__reloads = 0; });
   await p.evaluate(function () { localStorage.setItem('dbl-clicked', '1'); });
+  await wait(5600);
+  var away = await p.evaluate(function () { return { reloads: window.__reloads, verify: !document.getElementById('step-verify').classList.contains('hide') }; });
+  ok('while the tab is hidden it asks Firebase nothing and makes nothing', away.reloads === 0 && away.verify && !posts.some(function (x) { return /tenant-signup/.test(x); }), { away: away, posts: posts });
+  /* back on the tab: it looks at once (not at the next tick) and the page moves on by itself */
+  var back = await p.evaluate(function () { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); return window.__reloads; });
+  ok('coming back to the tab asks Firebase at once', back === 1, back);
   await p.waitForSelector('#step-billing:not(.hide)', { timeout: 9000 }).catch(function () {});
   var bl = await p.evaluate(function () { return { billing: !document.getElementById('step-billing').classList.contains('hide'), verifyDone: document.querySelector('#signup-steps li[data-step="verify"]').className, legal: document.querySelector('[data-profile-field="legalName"]').value, email: document.querySelector('[data-profile-field="email"]').value, more: document.querySelector('#signup-billing-profile details.obp-more').open, vertical: document.querySelector('[data-profile-field="vertical"]').value, shown: Array.prototype.filter.call(document.querySelectorAll('#signup-billing-profile [data-profile-field]'), function (e) { return !e.closest('details:not([open])'); }).length, lines: document.querySelectorAll('#summary-lines li').length, price: document.getElementById('summary-price').textContent, pay: document.getElementById('billing-pay').textContent.trim() }; });
   ok('the click carries the page on by itself to billing, the email step ticked', bl.billing && bl.verifyDone === 'done', bl);

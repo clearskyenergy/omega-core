@@ -29,9 +29,11 @@ async function notice(db, orgId, now) {
   });
 }
 async function deliver(db, orgId, now, mailer) {
-  var root = db.doc('omega_orgs/' + orgId), org = (await root.get()).data();
-  var billing = (await root.collection('billing').doc('current').get()).data();
-  var profile = (await root.collection('billing').doc('profile').get()).data();
+  /* a plan billed outside the engine may have no billing profile: its
+     receipt row names its own address (stripe-customer.js settle) */
+  var root = db.doc('omega_orgs/' + orgId), org = (await root.get()).data() || {};
+  var billing = (await root.collection('billing').doc('current').get()).data() || {};
+  var profile = (await root.collection('billing').doc('profile').get()).data() || {};
   var rows = await root.collection('notifications').where('mailState', '==', 'pending').limit(3).get();
   for (var i = 0; i < rows.docs.length; i++) {
     var row = rows.docs[i], data = row.data();
@@ -43,7 +45,7 @@ async function deliver(db, orgId, now, mailer) {
       tx.update(row.ref, { mailState: 'sending', mailAttemptedAt: now }); return true;
     });
     if (!claimed) continue;
-    var payload = Object.assign({}, data, { email: data.packageMail === 'approved' && org.signup && org.signup.email || profile.email, company: org.name || orgId, orgId: orgId,
+    var payload = Object.assign({}, data, { email: data.packageMail === 'approved' && org.signup && org.signup.email || profile.email || data.email, company: org.name || orgId, orgId: orgId,
       host: K.home(org, { wildcard: process.env.TENANT_WILDCARD_LIVE === 'true' }), trialEndsAt: billing.trialEndsAt });
     try {
       var result = await mailer.templates[data.packageMail](payload);

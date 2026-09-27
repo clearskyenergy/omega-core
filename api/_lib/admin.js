@@ -111,6 +111,23 @@ function isTenantAdmin(caller, orgId) {
   });
 }
 
+/* An owner or administrator of an ACTIVE client acts on its own plan and
+   billing without a verified email (Tommy, 2026-09-27: "to opt in, we
+   shouldn't need to verify email... they are already a client and
+   customer"). What vouches for them is the role on members/{uid}, which only
+   a person grants (Team, the admin console, set-role; a browser may join
+   only as a member), and a Team invitation makes its account unverified, so
+   the email gate stopped every invited administrator. Never staff (a
+   verified ClearSky domain, caller.staff), never a plain member, never a
+   workspace that is pending, suspended or has no record. */
+function clientAdmin(caller, orgId) {
+  if (caller.staff) return Promise.resolve(true);
+  return isTenantAdmin(caller, orgId).then(function (admin) {
+    if (!admin) return false;
+    return db().collection('omega_orgs').doc(orgId).get().then(function (s) { return s.exists && (s.data() || {}).status === 'active'; });
+  });
+}
+
 function billingOf(orgId) {
   return db().collection('omega_orgs').doc(orgId).collection('billing').doc('current').get()
     .then(function (s) { return s.exists ? s.data() : { tier: 'standard', addons: [], toolOverrides: {} }; });
@@ -159,5 +176,5 @@ function cors(req, res) {
 }
 
 module.exports = { admin: admin, init: init, db: db, isDegraded: isDegraded, degradedReason: degradedReason, orgOf: orgOf, safeOrg: safeOrg, isStaffEmail: isStaffEmail, authenticate: authenticate,
-  canActInOrg: canActInOrg, isTenantAdmin: isTenantAdmin, billingOf: billingOf, httpError: httpError, handler: handler,
+  canActInOrg: canActInOrg, isTenantAdmin: isTenantAdmin, clientAdmin: clientAdmin, billingOf: billingOf, httpError: httpError, handler: handler,
   FieldValue: function () { return init().firestore.FieldValue; } };
