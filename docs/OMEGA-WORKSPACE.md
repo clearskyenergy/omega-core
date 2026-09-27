@@ -57,6 +57,14 @@ decided 2026-09-26.
   Change plan on the plan strip opens it for a packaged workspace; a legacy
   plan (no packaged record) sees every module of the server's catalog Live
   and nothing to add.
+- **View as a customer** (staff): `/workspace?viewas=lite` (a starter key
+  or a comma list of module keys) paints the signed-in workspace as a
+  packaged customer holding those modules, through the same server
+  projection the editor's staff preview uses (`POST /api/package-access`
+  `previewModules`, refused to anyone but verified ClearSky staff). Paint,
+  never scope: the org stays your own, nothing is billed, a quote is
+  refused, a banner says so and Exit is the plain address. `check:workspace`
+  scenario `viewas`.
 - **All tools** is the catalog by category, each tile Live, Locked or Soon by
   the one rule (`OMEGATools.isUnlocked` on the merged workspace; nothing opens
   while approval is pending). Locked tiles fold under "N more on other

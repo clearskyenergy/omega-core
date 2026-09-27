@@ -61,6 +61,7 @@ function storeRoute(u, method, body) {
   if (body.action === 'cancel') { STORE.pending = []; return { state: 'cancelled', changeId: body.changeId }; }
   return { error: 'render-workspace does not answer ' + body.action };
 }
+var STAFF_CALLER = false;
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], post = req.method === 'POST';
   function json(o, status) { res.writeHead(status || 200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); }
@@ -68,6 +69,16 @@ var srv = http.createServer(function (req, res) {
     apiCalls.push(req.method + ' ' + u);
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
     if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
+    if (u === '/api/package-access' && post) {
+      /* the staff preview, as api/package-access.js projects it (the real projection, staff only) */
+      var pc = []; req.on('data', function (c) { pc.push(c); }); req.on('end', function () {
+        var pb = {}; try { pb = JSON.parse(Buffer.concat(pc).toString()); } catch (e) {}
+        if (!STAFF_CALLER) return json({ error: 'Staff preview only' }, 403);
+        var X = require('../api/_lib/package-access'), mods = M.normalize(pb.previewModules);
+        var pv = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: mods }, { status: 'active' }, { role: 'owner' }, Date.now());
+        pv.canPreview = true; pv.preview = true; pv.starters = M.starters(); json(pv);
+      }); return;
+    }
     if (u === '/api/package-catalog' || u === '/api/plan-change') {
       var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {} json(storeRoute(u, req.method, body)); }); return;
     }
@@ -103,7 +114,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     p.on('pageerror', function (e) { if (!muted) errs.push(name + ': ' + e.message); });
     p.on('console', function (m) { if (muted) return; var t = m.text(); if (m.type() === 'error' && !/^Failed to load resource/.test(t)) errs.push(name + ' console: ' + t.slice(0, 240)); });
     var t0 = Date.now();
-    await p.goto(base + '/workspace', { waitUntil: 'domcontentloaded' });
+    await p.goto(base + (opts.url || '/workspace'), { waitUntil: 'domcontentloaded' });
     var ready = await p.waitForFunction(function () { return document.body.classList.contains('ready') || !!document.getElementById('ot-modal'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
     var out = { scenario: name, tenant: fx.org, readyMs: Date.now() - t0 };
     ok(name + ': the page answered within 8s', ready, out.readyMs);
@@ -290,6 +301,23 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar-phone: the hub draws at phone width', hubW.w > 280 && hubW.h > 200, hubW);
     return out;
   } });
+
+  /* ══ 3b. VIEW AS A CUSTOMER — a staff member paints the workspace as a Lite customer ══ */
+  STAFF_CALLER = true;
+  await scenario('viewas', ns, { url: '/workspace?viewas=lite', steps: async function (p) {
+    await p.waitForFunction(function () { return window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.viewAs; }, null, { timeout: 6000 }).catch(function () {});
+    var va = await p.evaluate(function () { var w = window.OMEGA_WORKSPACE; return { viewAs: w.viewAs, packaged: w.packaged, modules: w.modules, orgId: w.orgId, notice: (document.getElementById('ows-notice') || {}).textContent || '', plan: document.getElementById('plan').textContent.replace(/\s+/g, ' ') }; });
+    ok('viewas: the workspace paints as a packaged Lite customer, scope unchanged', va.viewAs === 'lite' && va.packaged && va.modules.join() === 'lite' && va.orgId === ns.org, va);
+    ok('viewas: a banner says it is a staff preview with an Exit', /Viewing as a customer/.test(va.notice) && /Exit/.test(va.notice), va.notice.slice(0, 80));
+    ok('viewas: the plan strip reads Lite with fewer tools open', /Lite/.test(va.plan) && /\d+ of \d+ tools open/.test(va.plan), va.plan);
+    ok('viewas: Site Investment Analysis is locked as it is for a Lite customer', await p.$('#tools-body .tool.locked[data-tool="investment"]') !== null);
+    await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(400);
+    var vm = await p.evaluate(function () { return { cards: document.querySelectorAll('#modules-body .mod').length, add: document.querySelectorAll('#modules-body [data-add-module]').length, live: document.querySelectorAll('#modules-body .mod[data-held="1"]').length }; });
+    ok('viewas: the Modules page shows the customer\'s view: Lite Live, the rest to add', vm.cards === M.catalog().length && vm.live === 1 && vm.add === vm.cards - 1, vm);
+    ok('viewas: nothing was written', !(await p.evaluate(function () { return window.__firebaseDouble.store.log.some(function (w) { return /^omega_orgs\//.test(w.path); }); })));
+    return {};
+  } });
+  STAFF_CALLER = false;
 
   /* ══ 4. PENDING — not yet approved ══ */
   var pend = FX.pending(HOST);

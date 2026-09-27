@@ -205,6 +205,29 @@ var STAGE_KEYS = ['candidate', 'package', 'submitted', 'interconnect', 'permitti
 var STAGE_LABEL = { candidate: 'Candidate', package: 'Site package', submitted: 'Submitted to utility', interconnect: 'Interconnection', permitting: 'Permitting', finance: 'Finance ready', construction: 'Construction', online: 'Online' };
 var DAY = 86400000;
 
+/* ── View as a customer (staff, 2026-09-27) ─────────────────────────────
+   ?viewas=lite (a starter key or a comma list of module keys) paints this
+   workspace as a PACKAGED customer holding those modules: the same server
+   projection the editor's staff preview uses (POST /api/package-access
+   {previewModules}, refused to anyone but verified ClearSky staff), copied
+   over the entitlements. It changes the paint and never the scope: nothing
+   is billed, plan-change refuses a workspace that is not packaged, and the
+   URL is the only memory of it. */
+var VIEWAS = (function () { var m = /[?&]viewas=([^&#]+)/.exec(window.location.search); return m ? decodeURIComponent(m[1]).toLowerCase() : null; })();
+var VIEWAS_VIEW = null, VIEWAS_ASKED = false;
+function askViewAs() {
+  if (!VIEWAS || VIEWAS_ASKED || !window.OmegaPackageMenu) return; VIEWAS_ASKED = true;
+  var keys = VIEWAS.split(',').map(function (k) { return k.trim(); }).filter(Boolean);
+  OmegaPackageMenu.api('/api/package-access', { previewModules: keys }).then(function (v) {
+    if (v && v.starters && v.starters[VIEWAS] && keys.length === 1) return OmegaPackageMenu.api('/api/package-access', { previewModules: v.starters[VIEWAS] });
+    return v;
+  }).then(function (v) { if (v && v.preview) { VIEWAS_VIEW = v; WS = applyViewAs(WS); window.OMEGA_WORKSPACE = WS; render(); } }, function () { VIEWAS = null; });
+}
+function applyViewAs(ws) {
+  if (!ws || !VIEWAS_VIEW) return ws;
+  ws.packaged = true; ws.packageAccess = VIEWAS_VIEW; ws.modules = (VIEWAS_VIEW.modules || []).slice(); ws.toolAccess = (VIEWAS_VIEW.toolAccess || []).slice(); ws.toolOverrides = {}; ws.addons = []; ws.viewAs = VIEWAS;
+  return ws;
+}
 /* ── the chrome, before anyone is known ─────────────────────────────────── */
 S.mount({ current: 'home', tabs: true, search: search, onNav: function (key) {
   if (key === 'home') { go('home'); return true; }
@@ -256,8 +279,8 @@ window.showApp = function (user) {
   OmegaNewProject.configure({ db: db, auth: auth, orgId: function () { return WS.orgId; }, ownerName: function () { return who(); }, afterCreate: openProject });
   render();
   load();
-  OmegaTenant.onEntitlements(function (ws) { if (ws) { WS = ws; window.OMEGA_WORKSPACE = ws; } S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() }); render(); logicSection(); });
-  window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = e.detail; window.OMEGA_WORKSPACE = WS; render(); } });
+  OmegaTenant.onEntitlements(function (ws) { if (ws) { WS = applyViewAs(ws); window.OMEGA_WORKSPACE = WS; askViewAs(); } S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() }); render(); logicSection(); });
+  window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; render(); } });
   route();
 };
 /* ClearSky staff: the two consoles. A VERIFIED clearsky-usa.com address,
@@ -364,6 +387,7 @@ function render() {
 function renderNotice() {
   var n = byId('ows-notice'), pa = WS.packageAccess, h = '';
   if (WS.pendingApproval) h = '<div class="notice"><b>Awaiting approval</b><span>' + esc(WS.clientName || WS.orgId) + ' is with the ClearSky team. Tools stay locked until it is approved, usually one business day.</span></div>';
+  if (WS.viewAs) h += '<div class="notice"><b>Viewing as a customer</b><span>' + esc(WS.clientName || WS.orgId) + ' painted as a packaged workspace holding ' + esc((WS.modules || []).join(', ') || 'nothing') + '. Staff preview: nothing is billed and a quote is refused.</span><a class="ows-pill" href="/workspace">Exit</a></div>';
   else if (pa && pa.readOnly && pa.billingNotice) h = '<div class="notice bad"><b>Read-only</b><span>' + esc(pa.billingNotice.text) + '</span>' + (pa.billingNotice.payUrl ? '<a class="ows-pill primary sm" href="' + esc(pa.billingNotice.payUrl) + '" target="_blank" rel="noopener">Pay now</a>' : '') + '</div>';
   n.innerHTML = h; n.hidden = !h;
 }
@@ -376,7 +400,7 @@ function renderHub() {
   var held = heldChips(), hb = byId('hub').querySelector('.hexhub');
   if (hb && held) { var d = document.createElement('div'); d.className = 'held'; d.innerHTML = held; hb.appendChild(d); }
 }
-function planName() { var pa = WS.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {}; if (pa && pa.packaged) return b.plan || 'Packaged'; return WS.accountTier || (WS.tierLevel >= 3 ? 'Enterprise' : WS.tierLevel === 2 ? 'Deluxe' : WS.tierLevel === 1 ? 'Standard' : 'Plan'); }
+function planName() { var pa = WS.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {}; if (WS.viewAs) return (WS.modules || []).indexOf('lite') >= 0 && (WS.modules || []).length === 1 ? 'Lite' : 'Lite + modules'; if (pa && pa.packaged) return b.plan || 'Packaged'; return WS.accountTier || (WS.tierLevel >= 3 ? 'Enterprise' : WS.tierLevel === 2 ? 'Deluxe' : WS.tierLevel === 1 ? 'Standard' : 'Plan'); }
 function heldChips() {
   var out = ['<span class="ows-chip on">' + esc(planName()) + (trialEnd() && trialEnd() > Date.now() ? ' · trial' : '') + '</span>'];
   if (WS.packageAccess && WS.packageAccess.packaged && Array.isArray(WS.packageAccess.catalog)) {
