@@ -711,11 +711,20 @@ unsized. Never a second copy of those rules in a page. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
-For a PACKAGED workspace `marketplace.html` is also the package store:
-modules on their shelves with `api/package-catalog`'s prices, opting in
-through the shared `omega-package-menu.js` control and `plan-change`; a
-legacy tenant sees the catalogue as before. Design, launch order and the
-honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
+Once the workspace is home, `marketplace.html` is THE STORE, not a tool
+catalogue (every tool is All tools on the workspace): the plans and the
+modules on their shelves, wearing the whole workspace chrome
+(`OmegaWorkspaceShell.wear()` takes a legacy page's own sidebar and topbar
+off and mounts the rail, the switcher topbar and the phone tab bar around
+its `#main`; the markup stays for the classic home and the tests that
+read it). A PACKAGED workspace prices from `api/package-catalog` and opts
+in through the shared `omega-package-menu.js` control and `plan-change`;
+any other workspace reads the PUBLIC price list `GET /api/offerings`,
+each module judged against its tier (On your plan · Partly · Ask
+ClearSky, an email), and never pays here. `/marketplace.html#<module>`
+lands on that module. A tenant on the classic home keeps the tool
+catalogue and pinning. Design, launch order and the honest list of what
+is not built: `docs/OMEGA-WORKSPACE.md`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
