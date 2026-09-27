@@ -861,8 +861,9 @@ function renderBilling() {
   var h = '<div class="bill">';
 
   /* 1 · the subscription */
-  var mods = packaged ? (sm ? sm.subscriptionNames : (pa && pa.catalog ? pa.catalog.filter(function (m) { return WS.modules.indexOf(m.key) >= 0; }).map(function (m) { return m.name; }) : [])) : [];
-  var onNames = packaged && sm ? sm.moduleNames : null, notOn = onNames ? (sm.subscriptionNames || []).filter(function (n) { return onNames.indexOf(n) < 0; }) : [];
+  var heldNames = pa && Array.isArray(pa.catalog) ? pa.catalog.filter(function (m) { return (WS.modules || []).indexOf(m.key) >= 0; }).map(function (m) { return m.name; }) : [];
+  var mods = packaged ? ((sm && Array.isArray(sm.subscriptionNames) && sm.subscriptionNames.length) ? sm.subscriptionNames : heldNames) : [];
+  var onNames = packaged && sm && Array.isArray(sm.moduleNames) ? sm.moduleNames : null, notOn = onNames && Array.isArray(sm.subscriptionNames) ? sm.subscriptionNames.filter(function (n) { return onNames.indexOf(n) < 0; }) : [];
   h += '<div class="bcard" id="bill-sub"><h3>Your subscription<span class="ows-chip on">' + esc(planName()) + '</span></h3>';
   var monthly = (sm && sm.monthlyDisplay) || bl.monthlyDisplay || '';
   h += monthly ? '<div class="big">' + esc(String(monthly).replace(/\/month$/, '')) + '<small>' + (sm && sm.interval === 'annual' ? 'billed yearly' : 'per month') + '</small></div>' : '<div class="big">' + esc(planName()) + '<small>plan</small></div>';
