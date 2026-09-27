@@ -1006,10 +1006,25 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       ok(name + ': the catalogue judges every tool against the workspace\'s plan (the bound workspace, never the email stand-in) and names the module that carries a locked tool', typeof judged.tier === 'number' && judged.named > 0, judged);
     }
     ok(name + ': the page is up (its loading screen gone) and carries the workspace rail', await p.evaluate(function () { var b = document.getElementById('omega-boot'); return (!b || b.classList.contains('hide')) && !!document.querySelector('#side-nav a[data-sn="dashboard"][href="/workspace"]'); }));
+    /* the catalogue's category bar narrows the grid (that is its job), so
+       it is swept on its own first: each filter shows its own tools and the
+       count it names, and All brings every card back; the cards are then
+       swept whole */
+    if (page === '/marketplace.html') {
+      var chips = await p.$$eval('#mkt-filters button', function (b) { return b.map(function (x) { return x.textContent; }); });
+      var filt = [];
+      for (var ci = 1; ci < chips.length; ci++) {
+        await p.click('#mkt-filters button >> nth=' + ci); await wait(120);
+        filt.push(await p.evaluate(function (i) { var b = document.querySelectorAll('#mkt-filters button')[i], want = +((b.querySelector('.cnt') || {}).textContent || -1); return { chip: b.textContent, on: b.classList.contains('on'), sections: document.querySelectorAll('#market-grid .mkt-section').length, cards: document.querySelectorAll('#market-grid .mkt-card').length, want: want }; }, ci));
+      }
+      await p.click('#mkt-filters button >> nth=0'); await wait(150);
+      var all = await p.evaluate(function () { return { cards: document.querySelectorAll('#market-grid .mkt-card').length, want: +((document.querySelector('#mkt-filters button .cnt') || {}).textContent || -1) }; });
+      ok(name + ': each category filter shows exactly its own tools, and All brings every card back', chips.length > 2 && filt.every(function (f) { return f.on && f.sections === 1 && f.cards === f.want; }) && all.cards === all.want, { filt: filt.filter(function (f) { return !(f.on && f.sections === 1 && f.cards === f.want); }), all: all });
+    }
     var r = await SWEEP.run(p, {
       views: [{ name: page.replace(/^\/|\.html$/g, ''), enter: async function (pg) { await pg.evaluate(function () { window.scrollTo(0, 0); }); } }],
       scope: '#main', chrome: '#side-nav, #topbar, .ows-tabs',
-      skip: '#ows-signout, [onclick*="signOut"]', inner: '.ows-row',
+      skip: '#ows-signout, [onclick*="signOut"], #mkt-filters button', inner: '.ows-row',
       overlays: '#ows-overlay, #new-proj-modal.on, #ows-menu, #omega-package-menu, #ot-modal, #upgrade-modal, .tb-nav.open, body.ows-rail-open',
       reveal: phone ? [{ within: '#side-nav', open: async function (pg) { if (!(await pg.evaluate(function () { return document.body.classList.contains('ows-rail-open'); }))) await pg.click('#ows-burger'); } }] : [],
       forceClose: function (pg) { return pg.evaluate(function () { ['ows-overlay', 'ows-menu', 'omega-package-menu', 'upgrade-modal'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); }); var m = document.getElementById('new-proj-modal'); if (m) m.classList.remove('on'); var n = document.querySelector('.tb-nav'); if (n) n.classList.remove('open'); document.documentElement.classList.remove('omega-np-open'); document.body.classList.remove('ows-rail-open'); }); },
@@ -1166,7 +1181,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   await scenario('clearsky-own', cso, { url: '/workspace#modules', steps: async function (p) {
     await p.waitForFunction(function () { return document.querySelectorAll('#modules-body .mod').length > 5; }, null, { timeout: 8000 }).catch(function () {});
     var own = await p.evaluate(function () { var o = {}; Array.prototype.forEach.call(document.querySelectorAll('#modules-body .mod'), function (m) { o[m.getAttribute('data-module')] = m.getAttribute('data-state'); }); return { org: window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.orgId, states: o }; });
-    ok('clearsky-own: a verified ClearSky address with no billing record sees Plan Sets, Site Intelligence, Permitting and White Label Live, as Site Map runs them', own.org === 'clearsky-usa.com' && ['plansets', 'siteintel', 'permitting', 'whitelabel', 'engineering'].every(function (k) { return own.states[k] === 'live'; }) && own.states['logic-office'] !== 'live', own);
+    ok('clearsky-own: a verified ClearSky address with no billing record sees Plan Sets, Site Intelligence, Permitting and Engineering Live, as Site Map runs them; the storefront is on only where its own gate opens it', own.org === 'clearsky-usa.com' && ['plansets', 'siteintel', 'permitting', 'engineering'].every(function (k) { return own.states[k] === 'live'; }) && own.states.whitelabel === 'available' && own.states['logic-office'] !== 'live', own);
     return {};
   } });
 

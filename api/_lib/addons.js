@@ -128,6 +128,7 @@ function held(orgId, b, key, now) {
    exact on every plan: logic-access reads addOns.live itself. What is not
    exact is not sold here; the quote says why and offers the recorded
    request (plan-change opt-in). */
+var SETUP_ONLY = ['whitelabel'];
 function exact(orgId, b, keys, now) {
   var mine = order(keys).filter(function (k) { return !isLogic(k); });
   if (!mine.length) return { exact: true, partial: [], spill: [], shut: [] };
@@ -139,7 +140,10 @@ function exact(orgId, b, keys, now) {
     return out;
   }
   var was = measure(b), will = measure(after);
-  var partial = mine.filter(function (k) { return will[k].state !== 'held'; });
+  /* the storefront is a contract line item ClearSky sets up (the tenant
+     record's whiteLabel, staff-written: CLAUDE.md, White label), never
+     switched on by a card, even where the add-on key alone would open it */
+  var partial = mine.filter(function (k) { return SETUP_ONLY.indexOf(k) >= 0 || will[k].state !== 'held'; });
   var spill = M.catalog().map(function (m) { return m.key; }).filter(function (k) { return k !== 'lite' && keys.indexOf(k) < 0 && will[k].open > was[k].open; });
   return { exact: !partial.length && !spill.length, partial: partial, spill: spill, shut: partial.filter(function (k) { return will[k].shut; }) };
 }

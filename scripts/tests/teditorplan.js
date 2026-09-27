@@ -194,7 +194,10 @@ ok('Standard holds Omega Design, Omega EV and Omega Permits (the one rule, on th
    legacy trial Enterprise for a module with nothing to count */
 var trialHeld = legacy('trial', { tier: 'trial' });
 ok('a legacy trial does not hold White Label: Site Map runs trial, not Enterprise (editorCtx)', keys(trialHeld.elsewhere).indexOf('whitelabel') < 0 && HUB.moduleState(CAT.filter(function (m) { return m.key === 'whitelabel'; })[0], legacyCtx('trial', { tier: 'trial' })) === 'ask', keys(trialHeld.elsewhere));
-ok('Enterprise still holds White Label', keys(legacy('enterprise', { tier: 'enterprise' }).elsewhere).indexOf('whitelabel') >= 0);
+/* the storefront is on where its own gate opens it, never on the tier
+   (OmegaWorkspaceHub.storefront): Enterprise alone does not hold it, the
+   whitelabel add-on does */
+ok('Enterprise alone does not hold White Label; the whitelabel add-on does', keys(legacy('enterprise', { tier: 'enterprise' }).elsewhere).indexOf('whitelabel') < 0 && keys(legacy('enterprise', { tier: 'enterprise', addons: ['whitelabel'] }).elsewhere).indexOf('whitelabel') >= 0);
 var cappedChip = legacy('standard', { tier: 'enterprise', capTier: 'standard' });
 ok('capTier through editorCtx: billed Enterprise, capped Standard does not hold Omega Plans', heldRows(cappedChip).indexOf('plansets') < 0 && partRows(cappedChip).indexOf('plansets') >= 0, [heldRows(cappedChip), partRows(cappedChip)]);
 CAPS.setAddons(['permitting']); var addonsBefore = CAPS.addons().join(), orgBefore = CAPS.org();

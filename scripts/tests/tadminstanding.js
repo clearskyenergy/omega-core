@@ -95,7 +95,7 @@ ok(std.held.join() === 'lite,evrebates,permitting', 'Standard holds Omega Design
 ok(['gridatlas', 'storage', 'compute'].every(function (k) { return std.partly.indexOf(k) >= 0; }), 'and Omega Grid, Omega Storage and Omega Compute are only partly on it (Site Map keeps some of their commands closed on Standard): ' + std.partly.join());
 var deluxe = legacyReads({ tier: 'deluxe', addons: [] });
 ok(deluxe.held.indexOf('plansets') >= 0 && deluxe.held.indexOf('siteintel') < 0 && deluxe.partly.indexOf('siteintel') >= 0 && deluxe.partly.indexOf('compute') >= 0, 'Deluxe holds Omega Plans (Site Map prints them) and only partly Omega Intel and Omega Compute: ' + JSON.stringify(deluxe));
-ok(legacyHolds({ tier: 'trial', addons: [] }).indexOf('whitelabel') < 0 && legacyHolds({ tier: 'enterprise', addons: [] }).indexOf('whitelabel') >= 0, 'a trial is not Enterprise for the Storefront; Enterprise holds it');
+ok(legacyHolds({ tier: 'trial', addons: [] }).indexOf('whitelabel') < 0 && legacyHolds({ tier: 'enterprise', addons: [] }).indexOf('whitelabel') < 0 && legacyHolds({ tier: 'standard', addons: ['whitelabel'] }).indexOf('whitelabel') >= 0, 'the Storefront is held where its own gate opens it (the add-on), never on the tier: not on a trial, not on Enterprise alone');
 var capped = legacyReads({ tier: 'deluxe', capTier: 'standard', addons: [] });
 ok(capped.held.indexOf('plansets') < 0 && capped.partly.indexOf('plansets') >= 0, 'capTier scopes Site Map below the billed tier, as the editor does: ' + JSON.stringify(capped));
 var LIVE = { modules: ['logic-office'], live: ['logic-office'], state: 'paid', accessUntil: Date.now() + 10 * DAY, nextInvoiceOn: '2026-10-27' };
