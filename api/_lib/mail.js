@@ -186,11 +186,14 @@ var T = {
   },
   /* A packaged tenant queued an opt-out for the quarterly review
      (plan-change request-removal). Access and charges stay as they are until
-     that review; the mail carries the date and the fee it moves to. */
+     that review; the mail carries the date and the fee it moves to, which is
+     the fee once every opt-out queued for that review goes (alsoLeaving
+     names the ones queued before this one). */
   removalAlert: function (o) {
     return send(staffTo(), '[OMEGA] Opting out at review: ' + o.names.join(', ') + ' for ' + o.company,
       layout('An opt-out is queued for the review', '<p>' + esc(o.company) + ' asked to opt out of <b>' + esc(o.names.join(', ')) + '</b> at its quarterly review' + (o.reviewOn ? ' on <b>' + esc(o.reviewOn) + '</b>' : '') + '. Nothing changes before then: it keeps the modules and keeps paying for them, and no refund is due for time already billed.</p>'
         + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + row('Modules', o.names.join(', ')) + row('Review', o.reviewOn || 'next quarterly review')
+        + (o.alsoLeaving && o.alsoLeaving.length ? row('Also leaving at that review', o.alsoLeaving.join(', ')) : '')
         + row('Monthly fee', o.beforeDisplay && o.afterDisplay ? o.beforeDisplay + ' → ' + o.afterDisplay : '—') + row('Reason', o.reason || '—') + '</table>'
         + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
   },

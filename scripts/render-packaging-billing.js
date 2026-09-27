@@ -39,7 +39,7 @@ var server = http.createServer(async function (req, res) {
     if (url.pathname === '/api/tenant-systems') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ name: 'Clean Cell · fixture', surfaces: [] })); }
     if (url.pathname === '/config.js') return res.end('window.CLEARSKY_CONFIG={firebase:{}};');
     if (['/omega-brand.js', '/omega-tenant.js', '/omega-whitelabel.js'].includes(url.pathname)) return res.end('');
-    if (!['/admin/tenant.html', '/start.html', '/offerings.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html', '/omega-tools.js', '/omega-workspace-hub.js'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
+    if (!['/admin/tenant.html', '/start.html', '/offerings.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html', '/omega-tools.js', '/omega-workspace-hub.js', '/omega-caps.js'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
     res.setHeader('Content-Type', url.pathname.endsWith('.css') ? 'text/css' : url.pathname.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(fs.readFileSync(path.join(root, url.pathname)));
   } catch (e) { res.statusCode = e.status || 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: e.message })); }
 });
@@ -109,14 +109,29 @@ async function run() {
     var lp = await legacyContext.newPage(), legacyErrors = []; lp.on('pageerror', function (e) { legacyErrors.push(e.message); });
     await lp.goto(base + '/admin/tenant.html?org=' + org); await lp.locator('#pp-standing').waitFor();
     var standing = (await lp.locator('#pp-standing').textContent()).replace(/\s+/g, ' ');
-    check(/Today: Standard tier/.test(standing) && /Holds Lite, Grid Atlas, Storage Sizing & Revenue, Compute & Data Center/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing)
+    /* Standard runs Site Map at Standard, which does not grant Compute's
+       capability: Compute is only Partly on the tenant's Modules page, so the
+       Package tab does not hold it either (review finding 24) */
+    check(/Today: Standard tier/.test(standing) && /Holds Lite, Grid Atlas, Storage Sizing & Revenue \(/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing)
       && /Opt-out requested: Compute & Data Center 2026-09-27 by owner@fixture\.example \("Moving compute in-house"\)/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and both requests: ' + standing);
     var picked = await lp.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('[data-pp-pane="pkg"] [data-module-card]'), function (c) { var i = c.querySelector('input'); return i && i.checked; }).map(function (c) { return c.getAttribute('data-module-card'); }).sort(); });
     check(picked.join() === 'gridatlas,lite,siteintel,storage', 'the picker starts from what the tier holds, plus the opt-in, less the opt-out: ' + picked.join());
     check((await lp.locator('[data-pp-pane="pkg"] [data-request="compute"]').textContent()) === 'Opt-out requested' && (await lp.locator('[data-pp-pane="pkg"] [data-request="siteintel"]').textContent()) === 'Opt-in requested', 'each request is labelled on its module so staff see why the box is or is not ticked');
     await lp.locator('#pp-review:not([disabled])').waitFor();
     check(/\$/.test(await lp.locator('#pp-monthly').textContent()), 'the rail prices the preselection on the server');
-    await capture(lp, 'legacy-standing'); check(legacyErrors.length === 0, legacyErrors.join('\n')); await legacyContext.close();
+    await capture(lp, 'legacy-standing');
+    /* ClearSky answers each request beside it, without moving the tenant
+       onto a package (review finding 3): the real plan-change, staff only */
+    check(await lp.locator('#pp-answers [data-answer]').count() === 2 && await lp.locator('[data-answer="optOuts:compute"] button[data-status="done"]').textContent() === 'Mark done' && await lp.locator('[data-answer="optIns:siteintel"] button[data-status="activated"]').textContent() === 'Mark activated', 'each open request carries its answer buttons');
+    await lp.locator('[data-answer="optOuts:compute"] button[data-status="done"]').click();
+    await lp.waitForFunction(function () { var n = document.getElementById('pp-standing'); return n && /Answered: Compute & Data Center opt-out done/.test(n.textContent); });
+    var answeredOut = db.data.get('omega_orgs/' + org + '/billing/current').optOuts.compute;
+    check(answeredOut.status === 'done' && answeredOut.resolvedBy === 'fixture@clearsky-usa.com' && answeredOut.reason === 'Moving compute in-house' && !/Opt-out requested/.test(await lp.locator('#pp-standing').textContent()), 'Mark done records the answer and the strip no longer lists the request');
+    await lp.locator('[data-answer="optIns:siteintel"] button[data-status="declined"]').click();
+    await lp.waitForFunction(function () { var n = document.getElementById('pp-standing'); return n && /Site Intelligence opt-in declined/.test(n.textContent) && !document.getElementById('pp-answers'); });
+    var repicked = await lp.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('[data-pp-pane="pkg"] [data-module-card]'), function (c) { var i = c.querySelector('input'); return i && i.checked; }).map(function (c) { return c.getAttribute('data-module-card'); }).sort(); });
+    check(db.data.get('omega_orgs/' + org + '/billing/current').optIns.siteintel.status === 'declined' && repicked.join() === 'gridatlas,lite,storage' && db.data.get('omega_orgs/' + org + '/billing/current').tier === 'standard', 'Decline records it, the picker drops the request, and the tier is untouched: ' + repicked.join());
+    check(legacyErrors.length === 0, legacyErrors.join('\n')); await legacyContext.close();
     /* The one menu on a plan billed outside the engine (2026-09-27): the
        tenant's owner opts in and out by REQUEST, each step states the money
        before it writes, and Cancel request is the undo. Real plan-change. */

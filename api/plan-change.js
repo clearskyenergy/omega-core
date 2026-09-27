@@ -4,7 +4,9 @@
  * Members are refused a change and may read the summary; ClearSky staff may
  * act for a tenant. `opt-in` records a priced request on a plan billed
  * outside the engine (nothing charged) and `opt-out` its mirror (nothing
- * removed); both have a dry run for the confirm panel and a withdraw.
+ * removed); both have a dry run for the confirm panel and a withdraw (which
+ * has one too). `resolve-opt-in` / `resolve-opt-out` are ClearSky's answer
+ * to such a request (staff only; the library refuses anyone else).
  * Sandbox only.
  */
 'use strict';
@@ -24,7 +26,7 @@ module.exports = A.handler(async function (req, res) {
     if (req.method !== 'GET' && !(await A.isTenantAdmin(caller, orgId))) throw A.httpError(403, 'Ask your workspace administrator to change the plan');
   }
   if (req.method === 'GET') return C.summary(A.db(), orgId);
-  var fields = ['orgId', 'action', 'add', 'plan', 'previewId', 'effectiveAt', 'changeId', 'remove', 'reason', 'meter', 'enabled', 'dryRun'];
+  var fields = ['orgId', 'action', 'add', 'plan', 'previewId', 'effectiveAt', 'changeId', 'remove', 'reason', 'meter', 'enabled', 'dryRun', 'status'];
   if (Object.keys(input).some(function (k) { return fields.indexOf(k) < 0; })) throw A.httpError(400, 'Unsupported field');
   var now = Date.now();
   switch (input.action) {
@@ -41,6 +43,8 @@ module.exports = A.handler(async function (req, res) {
     case 'withdraw-opt-in': return C.withdraw(A.db(), orgId, input, caller, now, 'optIns');
     case 'opt-out': return C.optOut(A.db(), orgId, input, caller, now);
     case 'withdraw-opt-out': return C.withdraw(A.db(), orgId, input, caller, now, 'optOuts');
-    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy, auto-topup, reconcile-now, opt-in, withdraw-opt-in, opt-out or withdraw-opt-out');
+    case 'resolve-opt-in': return C.resolve(A.db(), orgId, input, caller, now, 'optIns');
+    case 'resolve-opt-out': return C.resolve(A.db(), orgId, input, caller, now, 'optOuts');
+    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy, auto-topup, reconcile-now, opt-in, withdraw-opt-in, opt-out, withdraw-opt-out, resolve-opt-in or resolve-opt-out');
   }
 });

@@ -331,6 +331,45 @@ async function run() {
   var qWd = await req('POST', { action: 'withdraw-removal', remove: ['storage'], dryRun: true }); equal(qWd.reviewOn, undefined, 'withdrawing prices nothing');
   delete bill().subscription.since; equal((await req('POST', { action: 'request-removal', remove: ['storage'], dryRun: true })).reviewOn, null, 'no start on record: no invented date');
   equal((await req('GET', { orgId: orgId })).nextReviewOn, null);
+  /* a second opt-out: what leaves at that review is everything queued for
+     it, so "from then" is the fee on what is left after all of them, in the
+     panel and in ClearSky's mail alike (review finding 0/26) */
+  var ala = function (keys, extra) { return P.quote(keys, bookNow, Object.assign({ plan: 'alacarte', builders: 3, viewers: 10 }, extra || {})).display.monthly; };
+  seed(['lite', 'storage', 'estimate', 'evrebates'], 'alacarte'); sentMail = [];
+  await removal(['storage']);
+  var qSecond = await req('POST', { action: 'request-removal', remove: ['estimate'], dryRun: true });
+  equal([qSecond.beforeDisplay, qSecond.afterDisplay], [ala(['lite', 'storage', 'estimate', 'evrebates']), ala(['lite', 'evrebates'])], 'the fee after the review leaves out the opt-out already queued for it');
+  equal([qSecond.modules, qSecond.alsoLeaving], [['estimate'], [M.get('storage').name]], 'and names what else leaves at that review');
+  await req('POST', { action: 'request-removal', remove: ['estimate'], previewId: qSecond.previewId });
+  equal(sentMail.map(function (m) { return [m.o.beforeDisplay, m.o.afterDisplay, m.o.alsoLeaving]; }),
+    [[ala(['lite', 'storage', 'estimate', 'evrebates']), ala(['lite', 'estimate', 'evrebates']), []], [ala(['lite', 'storage', 'estimate', 'evrebates']), ala(['lite', 'evrebates']), [M.get('storage').name]]], 'ClearSky\'s mail carries the same after-review fee');
+  var qStale = await req('POST', { action: 'request-removal', remove: ['evrebates'], dryRun: true });
+  await removal(['storage'], true);
+  await refused(function () { return req('POST', { action: 'request-removal', remove: ['evrebates'], previewId: qStale.previewId }); }, /review the opt-out/, 'a queue that changed since the preview needs a new preview');
+  sentMail = [];
+  /* the fee "from then" is priced ON the review day, so a credit counts only
+     if it still runs then (review finding 1). Credit active today, over
+     before the review: list price after the review. */
+  var subSince = function (since) { return { modules: ['lite', 'storage', 'estimate', 'evrebates'], plan: 'alacarte', interval: 'monthly', builders: 3, viewers: 10, since: Date.parse(since) }; };
+  var creditEnds = { pct: 40, startsAt: '2026-06-15T00:00:00Z', endsAt: '2026-09-13T00:00:00Z' };
+  seed(['lite', 'storage', 'estimate', 'evrebates'], 'alacarte', { credit: creditEnds, subscription: subSince('2026-06-01T12:00:00Z') }); now = Date.parse('2026-09-09T12:00:00Z');
+  var qEnds = await req('POST', { action: 'request-removal', remove: ['storage'], dryRun: true });
+  equal(qEnds.reviewOn, '2026-11-28');
+  ok(ala(['lite', 'estimate', 'evrebates'], { credit: creditEnds, now: now }) !== ala(['lite', 'estimate', 'evrebates']), 'the credit is active today');
+  equal([qEnds.beforeDisplay, qEnds.afterDisplay], [ala(['lite', 'storage', 'estimate', 'evrebates']), ala(['lite', 'estimate', 'evrebates'])], 'a credit that ends before the review is not in the fee from then');
+  /* a trial whose credit starts at trial end and covers the review: credited */
+  var creditCovers = { pct: 40, startsAt: '2026-10-01T00:00:00Z', endsAt: '2026-12-29T00:00:00Z' }, atReview = Date.parse('2026-11-18T23:59:59.999Z');
+  seed(['lite', 'storage', 'estimate', 'evrebates'], 'alacarte', { credit: creditCovers }); now = Date.parse('2026-09-26T12:00:00Z');
+  var qCovers = await req('POST', { action: 'request-removal', remove: ['storage'], dryRun: true });
+  equal(qCovers.reviewOn, '2026-11-18');
+  equal([qCovers.beforeDisplay, qCovers.afterDisplay], [ala(['lite', 'storage', 'estimate', 'evrebates'], { credit: creditCovers, now: atReview }), ala(['lite', 'estimate', 'evrebates'], { credit: creditCovers, now: atReview })], 'a credit that runs on the review day is in the fee from then');
+  ok(qCovers.afterDisplay !== ala(['lite', 'estimate', 'evrebates']), 'and differs from list');
+  /* paid activation: the credit starts at the activation instant and ends
+     ninety days later, on the review day itself, part-way through it */
+  var creditActivation = { pct: 40, startsAt: '2026-08-20T12:00:00.000Z', endsAt: '2026-11-18T12:00:00.000Z' };
+  seed(['lite', 'storage', 'estimate', 'evrebates'], 'alacarte', { credit: creditActivation });
+  var qAct = await req('POST', { action: 'request-removal', remove: ['storage'], dryRun: true });
+  equal([qAct.reviewOn, qAct.beforeDisplay, qAct.afterDisplay], ['2026-11-18', ala(['lite', 'storage', 'estimate', 'evrebates']), ala(['lite', 'estimate', 'evrebates'])], 'a credit that ends on the review day is over by the end of it');
   /* the review date: whole periods from the start, on or after today */
   var day = function (s) { return Date.parse(s + 'T12:00:00Z'); }, sub = function (since) { return { subscription: { since: since } }; }, book30 = { policy: { reviewDays: 30 } };
   equal(C.reviewOn(sub(day('2026-09-26')), bookNow, day('2026-09-26')), '2026-12-25', 'started today: the first review is a period out, never today');
@@ -401,6 +440,32 @@ async function run() {
   equal(bill().optIns.siteintel.status, 'requested', 'and changes nothing');
   equal((await req('POST', { action: 'opt-in', add: ['logic-plant'] })).add.slice().sort(), ['logic-office', 'logic-plant'], 'a withdrawn request can be made again');
   equal(bill().tier, 'standard'); equal(bill().toolAccess, ['editor', 'gridatlas'], 'the plan itself is untouched throughout');
+  /* Cancel request on what was ASKED for takes back what it pulled in, once
+     nothing still open needs it (review finding 2): Plant brought Office */
+  legacy();
+  var pulled = await req('POST', { action: 'opt-in', add: ['logic-plant'] });
+  equal([pulled.optIns['logic-plant'].asked, pulled.optIns['logic-office'].asked], [true, false], 'each entry records whether it was asked for or pulled in');
+  var s3 = snapshot(), wDry = await req('POST', { action: 'withdraw-opt-in', add: ['logic-plant'], dryRun: true });
+  equal(snapshot(), s3, 'a withdraw dry run writes nothing');
+  equal([wDry.dryRun, wDry.withdrawn.slice().sort(), wDry.names.length], [true, ['logic-office', 'logic-plant'], 2], 'and names everything the cancel takes back');
+  var wPlant = await req('POST', { action: 'withdraw-opt-in', add: ['logic-plant'] });
+  equal(wPlant.withdrawn.slice().sort(), ['logic-office', 'logic-plant'], 'cancelling Plant cancels the Office it brought');
+  equal([bill().optIns['logic-office'].status, bill().optIns['logic-plant'].status], ['withdrawn', 'withdrawn']);
+  /* Office asked for on its own first stays when Plant is cancelled */
+  legacy();
+  await req('POST', { action: 'opt-in', add: ['logic-office'] });
+  equal((await req('POST', { action: 'opt-in', add: ['logic-plant'] })).add, ['logic-plant'], 'Office is already requested');
+  equal((await req('POST', { action: 'withdraw-opt-in', add: ['logic-plant'] })).withdrawn, ['logic-plant'], 'an Office asked for on its own is never cancelled with Plant');
+  equal(bill().optIns['logic-office'].status, 'requested');
+  /* Office brought by Plant stays while Materials still needs it, and goes with the last one */
+  legacy();
+  await req('POST', { action: 'opt-in', add: ['logic-plant'] });
+  equal((await req('POST', { action: 'opt-in', add: ['logic-materials'] })).add, ['logic-materials']);
+  equal((await req('POST', { action: 'withdraw-opt-in', add: ['logic-plant'] })).withdrawn, ['logic-plant'], 'Office stays while Materials needs it');
+  equal((await req('POST', { action: 'withdraw-opt-in', add: ['logic-materials'] })).withdrawn.slice().sort(), ['logic-materials', 'logic-office'], 'and goes with the last request that needed it');
+  /* an entry written before `asked` existed is kept, never guessed away */
+  legacy({ optIns: { 'logic-office': { key: 'logic-office', status: 'requested', requestedAt: '2026-09-20' }, 'logic-plant': { key: 'logic-plant', status: 'requested', requestedAt: '2026-09-20' } } });
+  equal((await req('POST', { action: 'withdraw-opt-in', add: ['logic-plant'] })).withdrawn, ['logic-plant'], 'an older entry without `asked` stays');
 
   /* Opt out: a request under the agreement, never a change to the plan */
   legacy({ addons: ['omega-logic'], optIns: { siteintel: { key: 'siteintel', status: 'requested', requestedAt: '2026-09-25' } } });
@@ -449,6 +514,44 @@ async function run() {
   await refused(function () { return req('POST', { action: 'opt-out', remove: ['plansets'] }); }, /subscription package/);
   equal(snapshot(), s2, 'a packaged workspace is refused before anything is written');
   var packagedSummary = await req('GET', { orgId: orgId }); equal([packagedSummary.optIns, packagedSummary.optOuts], [{}, {}]);
+  /* a workspace awaiting approval (or suspended) files no opt-out, as it
+     files no opt-in: it holds nothing to leave yet (review finding 9) */
+  legacy({ tier: 'trial' }); db.data.get(root).status = 'pending'; var s4 = snapshot();
+  await refused(function () { return req('POST', { action: 'opt-out', remove: ['whitelabel'], dryRun: true }); }, /Your workspace is not active\./);
+  await refused(function () { return req('POST', { action: 'opt-out', remove: ['whitelabel'] }); }, /not active/);
+  await refused(function () { return req('POST', { action: 'opt-in', add: ['whitelabel'], dryRun: true }); }, /not active/, 'the same answer as an opt-in');
+  equal([snapshot(), sentMail], [s4, []], 'nothing written, nobody mailed');
+  db.data.get(root).status = 'suspended';
+  await refused(function () { return req('POST', { action: 'opt-out', remove: ['gridatlas'] }); }, /not active/);
+
+  /* ── ClearSky answers a legacy request without a package (finding 3) ─ */
+  legacy({ optIns: { siteintel: { key: 'siteintel', status: 'requested', requestedAt: '2026-09-25' }, estimate: { key: 'estimate', status: 'requested', requestedAt: '2026-09-25' } },
+    optOuts: { compute: { key: 'compute', status: 'requested', requestedAt: '2026-09-25', reason: 'In-house' }, plansets: { key: 'plansets', status: 'requested', requestedAt: '2026-09-25' } } });
+  var s5 = snapshot();
+  await refused(function () { return req('POST', { action: 'resolve-opt-out', remove: ['compute'], status: 'done' }); }, /Only ClearSky answers a request/);
+  await refused(function () { return req('POST', { action: 'resolve-opt-in', add: ['siteintel'], status: 'activated' }, member); }, /workspace administrator/);
+  await refused(function () { return req('POST', { action: 'resolve-opt-out', orgId: orgId, remove: ['compute'], status: 'activated' }, staff); }, /Status must be done or declined/);
+  await refused(function () { return req('POST', { action: 'resolve-opt-in', orgId: orgId, add: ['siteintel'], status: 'done' }, staff); }, /Status must be activated or declined/);
+  await refused(function () { return req('POST', { action: 'resolve-opt-out', orgId: orgId, remove: ['compute', 'gridatlas'], status: 'done' }, staff); }, /No open request for Grid Atlas/, 'one closed module refuses the whole answer');
+  equal(snapshot(), s5, 'a refused answer writes nothing');
+  var done = await req('POST', { action: 'resolve-opt-out', orgId: orgId, remove: ['compute'], status: 'done', reason: '  Off from Oct 1 by letter  ' }, staff);
+  equal([done.ok, done.resolved, done.status, done.optOuts.plansets.status], [true, ['compute'], 'done', 'requested']);
+  equal(bill().optOuts.compute, { key: 'compute', status: 'done', requestedAt: '2026-09-25', reason: 'In-house', resolvedAt: '2026-09-26', resolvedBy: staff.email, resolution: 'Off from Oct 1 by letter' }, 'the request keeps what the tenant asked and records the answer');
+  equal([rows(root + '/billing/current/history/optout-done-').length, rows(root + '/admin_audit/optout-done-').length], [1, 1], 'history and audit');
+  equal(Array.from(db.data.entries()).filter(function (e) { return e[0].indexOf(root + '/admin_audit/optout-done-') === 0; })[0][1].action, 'opt-out-done');
+  equal([bill().tier, bill().addons, bill().toolAccess], ['standard', [], ['editor', 'gridatlas']], 'an answer records; the plan is changed where it always was');
+  equal((await req('POST', { action: 'opt-out', remove: ['compute'], dryRun: true })).remove, ['compute'], 'an answered opt-out is no longer open, so it can be asked again');
+  await refused(function () { return req('POST', { action: 'withdraw-opt-out', remove: ['compute'] }); }, /No request to withdraw/, 'and is never recorded as withdrawn after the fact');
+  var declined = await req('POST', { action: 'resolve-opt-out', orgId: orgId, remove: ['plansets'], status: 'declined' }, staff);
+  equal([declined.optOuts.plansets.status, declined.optOuts.plansets.resolvedBy], ['declined', staff.email]);
+  var act = await req('POST', { action: 'resolve-opt-in', orgId: orgId, add: ['siteintel'], status: 'activated' }, staff);
+  equal([act.resolved, act.optIns.siteintel.status, act.optIns.estimate.status], [['siteintel'], 'activated', 'requested']);
+  await req('POST', { action: 'resolve-opt-in', orgId: orgId, add: ['estimate'], status: 'declined' }, staff);
+  var answered = await req('GET', { orgId: orgId }, member);
+  equal([answered.optIns.siteintel.status, answered.optIns.estimate.status, answered.optOuts.compute.status, answered.optOuts.plansets.status], ['activated', 'declined', 'done', 'declined'], 'every card reads the answer from the one summary');
+  await refused(function () { return req('POST', { action: 'resolve-opt-in', orgId: orgId, add: ['siteintel'], status: 'declined' }, staff); }, /No open request for Site Intelligence/, 'an answer is given once');
+  seed(ev, 'field'); bill().optOuts = { plansets: { key: 'plansets', status: 'requested' } };
+  await refused(function () { return req('POST', { action: 'resolve-opt-out', orgId: orgId, remove: ['plansets'], status: 'done' }, staff); }, /A packaged workspace is answered by activation or the review/);
 
   Date.now = realNow;
   console.log('Plan change: ' + count + ' passed; sandbox mock, no network.');
