@@ -71,7 +71,10 @@ var srv = http.createServer(function (req, res) {
   if (u.indexOf('/api/') === 0) {
     apiCalls.push(req.method + ' ' + u);
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
-    if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
+    /* the package answer arrives LATE on purpose (2026-09-27): the grid is
+       first drawn before it, so this holds the page to redrawing on the
+       entitlements every time instead of on a lucky ordering */
+    if (u === '/api/package-access' && !post) { var pv = PACKAGE_VIEW || { packaged: false }; return setTimeout(function () { json(pv); }, PACKAGE_VIEW ? 1500 : 0); }
     /* a legacy tenant's Account panel asks Stripe for its invoices; none is connected here */
     if (u === '/api/stripe-invoices') return json({ connected: false, invoices: [] });
     if (u === '/api/package-catalog' && !post) { var bk = B.proposed(); return json({ orgId: PACKAGE_VIEW ? 'fixture' : null, pricebookVersion: bk.version, modules: P.catalog(bk), starters: M.starters(), canManage: true }); }
