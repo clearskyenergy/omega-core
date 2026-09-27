@@ -414,16 +414,20 @@ function renderToday() {
    module; a change re-asks the server. Prices come from /api/package-catalog
    once, formatted there; nothing here is a second list or a price. */
 var MOD_SHELF = { floor: 'Included in every plan', addon: 'Add-ons', standard: 'Standard shelf', premium: 'Premium shelf', deliverable: 'Deliverables', platform: 'Omega Logic' }, MOD_ORDER = ['floor', 'addon', 'standard', 'premium', 'deliverable', 'platform'];
-var MOD_PRICES = null, MOD_ASKED = false;
+var MOD_PRICES = null, MOD_CATALOG = null, MOD_ASKED = false;
 function renderModules() {
-  var b = byId('modules-body'), pa = WS.packageAccess;
-  if (!pa || !pa.packaged || !Array.isArray(pa.catalog) || !pa.catalog.length) {
-    b.innerHTML = '<div class="empty">' + esc(planName()) + ' holds everything on it. Modules are how a packaged plan grows; the Marketplace has the catalog.</div>'; return;
+  var b = byId('modules-body'), pa = WS.packageAccess, packaged = !!(pa && pa.packaged && Array.isArray(pa.catalog) && pa.catalog.length);
+  if (!MOD_ASKED) { MOD_ASKED = true; (window.OmegaPackageMenu ? OmegaPackageMenu.api('/api/package-catalog') : Promise.reject(new Error('no menu'))).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay; }); renderModules(); }, function () { MOD_CATALOG = []; renderModules(); }); }
+  /* a legacy plan (no packaged record) holds everything: every module of the
+     server's catalog is Live on it, and there is nothing to add */
+  if (!packaged) {
+    if (!MOD_CATALOG) { b.innerHTML = '<div class="empty">Loading the catalog…</div>'; return; }
+    if (!MOD_CATALOG.length) { b.innerHTML = '<div class="empty">' + esc(planName()) + ' holds everything on it. Modules are how a packaged plan grows; the Marketplace has the catalog.</div>'; return; }
+    var sub = byId('modules-sub'); if (sub) sub.textContent = planName() + ' holds every module. Each one is Live for ' + (WS.clientName || 'your workspace') + '.';
   }
-  if (!MOD_ASKED) { MOD_ASKED = true; (window.OmegaPackageMenu ? OmegaPackageMenu.api('/api/package-catalog') : Promise.reject(new Error('no menu'))).then(function (j) { MOD_PRICES = {}; (j.modules || []).forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay; }); renderModules(); }, function () {}); }
-  var held = pa.modules || WS.modules || [], bl = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {};
+  var held = packaged ? (pa.modules || WS.modules || []) : MOD_CATALOG.map(function (m) { return m.key; }), bl = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {};
   var bought = bl.subscription && Array.isArray(bl.subscription.modules) ? bl.subscription.modules : [];
-  var cat = pa.catalog.slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), h = '', shelf = '';
+  var cat = (packaged ? pa.catalog : MOD_CATALOG).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), h = '', shelf = '';
   cat.forEach(function (m) {
     if (m.shelf !== shelf) { shelf = m.shelf; h += '<h3>' + esc(MOD_SHELF[shelf] || shelf) + '</h3>'; }
     var on = held.indexOf(m.key) >= 0, paid = !on && bought.indexOf(m.key) >= 0, price = MOD_PRICES && MOD_PRICES[m.key];

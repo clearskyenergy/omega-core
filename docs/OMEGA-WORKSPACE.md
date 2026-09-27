@@ -55,7 +55,8 @@ decided 2026-09-26.
   (`/api/package-catalog`, asked once) and + Add, which opens the ONE menu
   (`omega-package-menu.js`) on that module; a change re-asks the server.
   Change plan on the plan strip opens it for a packaged workspace; a legacy
-  plan reads that it holds everything and is sent to the Marketplace.
+  plan (no packaged record) sees every module of the server's catalog Live
+  and nothing to add.
 - **All tools** is the catalog by category, each tile Live, Locked or Soon by
   the one rule (`OMEGATools.isUnlocked` on the merged workspace; nothing opens
   while approval is pending). Locked tiles fold under "N more on other
