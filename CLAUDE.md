@@ -729,7 +729,11 @@ real catalogs. Every tool tile is Live, Locked or Soon by that same rule;
 a locked tile explains, never hides. Today is `omega-workspace-today.js`
 (pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
 both ends of the Quote Desk, the referral inbox, projects ready, stalled or
-unsized. Never a second copy of those rules in a page. The home is the BOARD: the hub and Today, then In flight and Around you
+unsized. Never a second copy of those rules in a page. A late bill on a
+legacy plan is `OmegaWorkspaceToday.pastDue` (the sales board's past-due
+rule, held equal to `api/_lib/growth.js` by the test): a red banner on
+every view, the top of Today and a count on Plan & billing for an owner or
+admin, and What you owe for anyone. The home is the BOARD: the hub and Today, then In flight and Around you
 (feed, People, the Omega pulse, Partners); only All tools and Modules are
 their own pages (`data-view`). The Omega pulse is `GET /api/pulse`
 (`api/_lib/pulse.js`, pure, `tpulse.js`): platform-wide COUNTS ONLY from

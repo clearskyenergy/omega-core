@@ -9,6 +9,9 @@
    input (every list optional):
      now, me (email, lower), orgId
      pendingApproval, readOnly, billingNotice {text, payUrl}, trialEndsAt (ms)
+     billing         billing/current, for whoever pays it (owner, admin): a
+                     late bill on a plan billed outside the package engine
+                     is a row (pastDue below)
      projects[]      projects the workspace may read (stage, capex, bessKwh,
                      nextAction, updatedAt, createdAt, ownerEmail)
      todos[]         team_todos (text, assignee, due, done, createdBy)
@@ -26,7 +29,8 @@
    act is what the page does when there is no address: { kind: 'billing' |
    'team' | 'project' | 'tool', id }. The rules and their ranks:
 
-     100 read-only (unpaid)        90 awaiting approval
+     100 read-only (unpaid)        95 a bill past due (pastDue)
+      90 awaiting approval
       88 trial ends in ≤3 days     85 a to-do of mine is overdue
       80 trial ends in ≤14 days    78 a billing notice
       76 a request for quote waiting for MY price (I am the vendor)
@@ -47,6 +51,20 @@
    Six rows at most, highest first, ties by the older record first; `more`
    says how many were left off. Nothing here is a permission: every address
    leads to a page that checks for itself.
+
+     OmegaWorkspaceToday.pastDue(billing, now) → null | { reason, amount,
+       amountDisplay, dueAt, failedAt, days, payUrl, cls, title, text }
+
+   A late bill (Tommy, 2026-09-27: "they are behind on their september 2nd
+   bill so that should notify them that they need to pay"). The rule the
+   sales board already reads (api/_lib/growth.js lifecycleOf 'past-due';
+   the master console's 'overdue' is its date half): the billing status is
+   past_due, a card payment failed, or on a paying plan an amount is owed
+   after its due date. tworkspacetoday.js holds the two to one answer. A
+   PACKAGED workspace is never judged here: its state machine speaks
+   through billingNotice and readOnly. `days` counts whole days since the
+   date that made it late, so the due day itself reads "due today". The
+   workspace's banner, its Today row and Plan & billing all say this.
 
      OmegaWorkspaceToday.board(input) → [≤ max cards]
 
@@ -69,6 +87,27 @@
   function plural(k, one, many) { return k + ' ' + (k === 1 ? one : many); }
   function days(ms, now) { return Math.round((now - ms) / DAY); }
   function dateOf(ms) { return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+  function fullDate(ms) { return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
+  /* a bill is exact: $1,299, never $1k */
+  function usd(v) { v = n(v); return '$' + v.toLocaleString('en-US', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 }); }
+  function pastDue(billing, now) {
+    var b = billing || {};
+    now = now || Date.now();
+    if (b.packaged === true) return null;
+    var amount = n(b.amountDue), due = at(b.subscriptionDue), failed = at(b.paymentFailedAt), marked = low(b.status) === 'past_due';
+    var paying = low(b.tier || 'trial') !== 'trial' || !!at(b.lastPaidAt);
+    var late = paying && amount > 0 && due > 0 && due < now;
+    if (!late && !failed && !marked) return null;
+    var reason = late ? 'late' : failed ? 'failed' : 'marked', since = late ? due : failed, d = since ? Math.max(0, Math.floor((now - since) / DAY)) : 0;
+    var shown = amount > 0 ? usd(amount) : '', title, text;
+    if (reason === 'late') { title = d ? 'Payment overdue' : 'Payment due today'; text = d ? shown + ' was due ' + fullDate(due) + ', ' + plural(d, 'day', 'days') + ' ago.' : shown + ' is due today.'; }
+    else if (reason === 'failed') { title = 'Payment failed'; text = 'The card payment' + (shown ? ' of ' + shown : '') + ' failed on ' + fullDate(failed) + '.'; }
+    else { title = 'Payment overdue'; text = shown ? shown + ' is past due.' : 'Your plan is past due.'; }
+    /* only a real https page is a pay link: the console refuses anything else, and this is an address on the page */
+    var link = String(b.paymentLink || '');
+    return { reason: reason, amount: amount, amountDisplay: shown, dueAt: due, failedAt: failed, days: d, payUrl: /^https:\/\/[^\s"'<>]+$/.test(link) ? link : null,
+      cls: reason === 'late' && !d ? 'warn' : 'hot', title: title, text: text };
+  }
   function inFlight(p) { var i = STAGES.indexOf(p.stage); return i >= 1 && i < 7; }
   function name(p) { return p.name || p.title || 'Untitled'; }
   function needsSize(p) { return (!p.stage || p.stage === 'candidate') && !n(p.bessKwh) && !n(p.capex); }
@@ -109,6 +148,9 @@
     /* the account */
     if (input.readOnly) push({ key: 'readonly', cls: 'hot', score: 100, when: 0, t: 'This workspace is read-only', s: (input.billingNotice && input.billingNotice.text) || 'Pay to continue creating and exporting. Saved work stays available.', cta: input.billingNotice && input.billingNotice.payUrl ? 'Pay' : 'Plan', href: input.billingNotice && input.billingNotice.payUrl || null, act: { kind: 'billing' } });
     else if (input.billingNotice && input.billingNotice.text) push({ key: 'billing', cls: 'warn', score: 78, when: 0, t: 'A note on your plan', s: input.billingNotice.text, cta: input.billingNotice.payUrl ? 'Pay' : 'Plan', href: input.billingNotice.payUrl || null, act: { kind: 'billing' } });
+    var owed = pastDue(input.billing, now);
+    if (owed) push({ key: 'pastdue', cls: owed.cls, score: 95, when: 0, t: owed.reason === 'late' ? 'Your ' + owed.amountDisplay + ' payment is ' + (owed.days ? plural(owed.days, 'day', 'days') + ' overdue' : 'due today') : owed.reason === 'failed' ? 'A card payment failed' : 'Your plan is past due',
+      s: (owed.reason === 'late' ? 'Due ' + fullDate(owed.dueAt) + '.' : owed.text) + (owed.payUrl ? ' Pay it now.' : ' Pay it from Plan & billing.'), cta: owed.payUrl ? 'Pay' : 'Plan', href: owed.payUrl, act: { kind: 'billing' } });
     if (input.pendingApproval) push({ key: 'approval', cls: 'warn', score: 90, when: 0, t: 'Your workspace is awaiting approval', s: 'Tools stay locked until ClearSky approves it, usually one business day.', cta: 'Plan', act: { kind: 'billing' } });
     var trialEnd = at(input.trialEndsAt);
     if (trialEnd) {
@@ -216,7 +258,7 @@
     cards.sort(function (a, b) { return (b.rank > 20 ? 1 : 0) - (a.rank > 20 ? 1 : 0) || (b.rank > 20 && a.rank > 20 ? b.rank - a.rank : 0) || (b.touched || 0) - (a.touched || 0) || String(a.name).localeCompare(String(b.name)); });
     return cards.slice(0, max);
   }
-  var API = { build: build, board: board, STAGES: STAGES, STAGE_LABEL: STAGE_LABEL, MAX: MAX, at: at, money: money };
+  var API = { build: build, board: board, pastDue: pastDue, STAGES: STAGES, STAGE_LABEL: STAGE_LABEL, MAX: MAX, at: at, money: money };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceToday = API;
 })(typeof window !== 'undefined' ? window : null);

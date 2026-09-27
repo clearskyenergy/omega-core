@@ -78,6 +78,26 @@ decided 2026-09-26.
   plan's from `POST /api/stripe-invoices`). Additions waiting (a legacy
   opt-in with its price, a packaged change waiting for payment) are listed
   between them.
+- **A late bill is told to whoever pays it** (2026-09-27: "they are behind
+  on their september 2nd bill so that should notify them that they need
+  to pay"). ONE rule, `OmegaWorkspaceToday.pastDue`, the sales board's
+  (`api/_lib/growth.js` 'past-due'; the console's 'overdue' is its date
+  half) and `tworkspacetoday.js` holds the two to one answer: on a plan
+  billed outside the package engine, the billing status is `past_due`, a
+  card payment failed (`paymentFailedAt`), or a paying plan owes
+  `amountDue` after `subscriptionDue`. An owner or administrator (and
+  ClearSky staff) gets a red *Payment overdue* banner on every view (Pay
+  now when the record carries an https `paymentLink`, else Plan &
+  billing), the top row of Needs you, and a count on Plan & billing; the
+  due day itself reads *due today*, in amber. A member sees none of that
+  and What you owe tells anyone who opens it: marked overdue, "was due",
+  how many days, *Ask for the invoice* (a mail to ClearSky naming the
+  amount and date) when there is no link, and never a passed date as the
+  *Next invoice*. A plan ClearSky invoices by hand is *Invoiced by
+  ClearSky* under Payment method, not "No billing account yet". A
+  packaged workspace is never judged by it: its own state machine speaks
+  (`billingNotice`, read-only). `check:workspace` renders it as an owner
+  and as a member.
 - **Opt in, never Ask.** Every module not held carries **Opt in**. A
   packaged workspace opts in on the one menu (`omega-package-menu.js`): a
   server quote, "Subscribe and pay", a QuickBooks invoice with the card
@@ -295,6 +315,10 @@ to the page, the shell or the runtime they load.
   invoice. A one-click "move me onto a package and invoice the first
   month" needs the engine to accept a legacy record as the start of a
   quote.
+- **A late-bill reminder outside the workspace.** A late legacy bill is
+  said in the workspace (above) and on the staff console; nothing emails
+  the tenant about it, and the classic dashboard (`index.html`, a tenant
+  on `shell: 'classic'`) does not carry the banner.
 - **A saved card shown by brand and last four.** The page says where the
   card lives (Stripe's portal, QuickBooks' payment page) and never holds
   one; reading the brand and last four back from Stripe or QuickBooks

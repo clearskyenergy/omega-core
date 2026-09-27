@@ -105,5 +105,37 @@ ok('a deal rides on its project\'s card with its state, and a deal with no proje
 ok('every card says why it is there', board.every(function (c) { return c.why && typeof c.whyCls === 'string'; }), board.map(function (c) { return c.why; }));
 ok('the board is capped', T.board({ now: NOW, max: 2, projects: [{ id: 'x', name: 'X' }, { id: 'y', name: 'Y' }, { id: 'z', name: 'Z' }] }).length === 2);
 
+/* 10 · a late bill (2026-09-27: "they are behind on their september 2nd bill
+   so that should notify them that they need to pay"): a Standard plan
+   invoiced by ClearSky, $1,299 due Sep 2, last paid Aug 2 */
+var LATE = { tier: 'standard', addons: ['engineering', 'schematics', 'exports', 'permitting'], paymentProvider: 'manual', amountDue: 1299, amountPaid: 1299, subscriptionDue: '2026-09-02T12:00:00Z', lastPaidAt: '2026-08-02T12:00:00Z' };
+function late(extra) { var o = {}; Object.keys(LATE).forEach(function (k) { o[k] = LATE[k]; }); Object.keys(extra || {}).forEach(function (k) { o[k] = extra[k]; }); return o; }
+var pd = T.pastDue(LATE, NOW);
+ok('$1,299 owed since Sep 2 is overdue by 24 whole days, in exact dollars, with no pay link on the record', pd && pd.reason === 'late' && pd.days === 24 && pd.amountDisplay === '$1,299' && pd.title === 'Payment overdue' && pd.cls === 'hot' && pd.text === '$1,299 was due Sep 2, 2026, 24 days ago.' && pd.payUrl === null, pd);
+var lr = b({ billing: LATE });
+ok('the late bill is a hot row that says how late and opens Plan & billing', lr.needs.length === 1 && lr.needs[0].key === 'pastdue' && lr.needs[0].cls === 'hot' && lr.needs[0].t === 'Your $1,299 payment is 24 days overdue' && lr.needs[0].s === 'Due Sep 2, 2026. Pay it from Plan & billing.' && lr.needs[0].cta === 'Plan' && lr.needs[0].href === null && lr.needs[0].act.kind === 'billing', lr.needs[0]);
+var linked = b({ billing: late({ paymentLink: 'https://pay.example/inv-0902' }) });
+ok('with a pay link on the record the row pays through it', !!linked.needs[0] && linked.needs[0].cta === 'Pay' && linked.needs[0].href === 'https://pay.example/inv-0902' && / Pay it now\.$/.test(linked.needs[0].s), linked.needs[0]);
+ok('a link that is not a plain https page is never an address', ['javascript:alert(1)', 'http://pay.example/x', 'https://pay.example/a" onclick="x', ''].every(function (l) { return (T.pastDue(late({ paymentLink: l }), NOW) || {}).payUrl === null; }));
+ok('only read-only outranks it; it leads approval, a trial in its last days and an overdue to-do', keys(b({ billing: LATE, pendingApproval: true, trialEndsAt: NOW + 2 * DAY, todos: [{ text: 'late', assignee: ME, due: NOW - DAY }] })).join() === 'pastdue,approval,trial,todo' && keys(b({ billing: LATE, readOnly: true })).join() === 'readonly,pastdue');
+var dueToday = late({ subscriptionDue: new Date(NOW - 3 * 3600e3).toISOString() }), dt = T.pastDue(dueToday, NOW);
+ok('on the due day itself it is due today, a warning and not yet overdue', !!dt && dt.reason === 'late' && dt.days === 0 && dt.title === 'Payment due today' && dt.cls === 'warn' && dt.text === '$1,299 is due today.' && (b({ billing: dueToday }).needs[0] || {}).t === 'Your $1,299 payment is due today', dt);
+ok('one day late is singular', / 1 day ago\.$/.test((T.pastDue(late({ subscriptionDue: new Date(NOW - 30 * 3600e3).toISOString() }), NOW) || {}).text));
+ok('nothing owed, a due date still ahead, or no due date is not late', T.pastDue(late({ amountDue: 0 }), NOW) === null && T.pastDue(late({ subscriptionDue: '2026-10-02T12:00:00Z' }), NOW) === null && T.pastDue(late({ subscriptionDue: null }), NOW) === null && T.pastDue(null, NOW) === null && T.pastDue({}, NOW) === null);
+ok('a trial that never paid is not judged by a date (its trial row speaks)', T.pastDue({ tier: 'trial', amountDue: 1299, subscriptionDue: '2026-09-02T12:00:00Z' }, NOW) === null && T.pastDue({ amountDue: 1299, subscriptionDue: '2026-09-02T12:00:00Z' }, NOW) === null);
+ok('a PACKAGED workspace is never judged here: its own notice and read-only speak', T.pastDue(late({ packaged: true, packagingState: 'past_due_lite' }), NOW) === null);
+var failed = T.pastDue({ tier: 'standard', paymentProvider: 'stripe', amountDue: 1250, paymentFailedAt: '2026-09-23T12:00:00Z', subscriptionDue: '2026-10-20T12:00:00Z', lastPaidAt: '2026-08-20T12:00:00Z' }, NOW);
+ok('a failed card payment is named with its amount and day, though the next period is ahead', !!failed && failed.reason === 'failed' && failed.title === 'Payment failed' && failed.text === 'The card payment of $1,250 failed on Sep 23, 2026.' && failed.cls === 'hot' && (b({ billing: { tier: 'standard', paymentFailedAt: '2026-09-23T12:00:00Z' } }).needs[0] || {}).t === 'A card payment failed', failed);
+var marked = T.pastDue({ tier: 'standard', status: 'past_due', amountDue: 0 }, NOW);
+ok('a plan ClearSky marked past due says so', !!marked && marked.reason === 'marked' && marked.title === 'Payment overdue' && marked.text === 'Your plan is past due.' && (T.pastDue({ tier: 'standard', status: 'past_due', amountDue: 500 }, NOW) || {}).text === '$500 is past due.', marked);
+/* ONE rule: the workspace tells a tenant it is late exactly when the sales
+   board (api/_lib/growth.js) calls it past due */
+var G = require('../../api/_lib/growth.js');
+var table = [LATE, late({ amountDue: 0 }), late({ subscriptionDue: '2026-10-02T12:00:00Z' }), late({ subscriptionDue: null }), late({ lastPaidAt: null }), late({ tier: 'trial' }), late({ tier: 'trial', lastPaidAt: null }),
+  late({ subscriptionDue: new Date(NOW - 3600e3).toISOString() }), { tier: 'trial', amountDue: 50, subscriptionDue: '2026-09-02' }, { amountDue: 50, subscriptionDue: '2026-09-02' }, { tier: 'deluxe', amountDue: 50, subscriptionDue: '2026-09-02' },
+  { tier: 'standard', status: 'past_due' }, { tier: 'standard', status: 'active', amountDue: 10, subscriptionDue: '2026-09-30' }, { tier: 'enterprise', paymentFailedAt: '2026-09-20T00:00:00Z', amountDue: 99 }, { tier: 'standard', paymentFailedAt: null, amountDue: 0 }, {}];
+var disagree = table.filter(function (bl) { return !!T.pastDue(bl, NOW) !== (G.lifecycleOf({ status: 'active', billing: bl }, NOW) === 'past-due'); });
+ok('the workspace and the sales board agree on every legacy record (' + table.length + ')', !disagree.length, disagree);
+
 console.log('tworkspacetoday: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

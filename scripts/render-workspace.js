@@ -415,6 +415,48 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     return out;
   } });
 
+  /* ══ 4b. A LATE BILL — the Standard tenant, invoiced by ClearSky, $1,299
+     due 25 days ago (2026-09-27: "they are behind on their september 2nd
+     bill so that should notify them that they need to pay"). Whoever pays
+     it (the owner) gets the banner on every view, the top of Needs you and
+     a count on Plan & billing; a member does not, and What you owe tells
+     anyone who opens it. ══ */
+  function lateBill(fx) {
+    fx.docs['omega_orgs/' + fx.org + '/billing/current'] = { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'manual', trialEndsAt: null,
+      subscriptionDue: new Date(Date.now() - 25 * 86400e3).toISOString(), amountDue: 1299, amountPaid: 1299, lastPaidAt: new Date(Date.now() - 55 * 86400e3).toISOString() };
+    return fx;
+  }
+  var owes = lateBill(FX.northstar(HOST));
+  await scenario('pastdue', owes, { steps: async function (p) {
+    var out = await common(p, owes, 'pastdue');
+    var banner = await p.evaluate(function () { var n = document.getElementById('ows-pastdue'), b = n && n.querySelector('[data-notice="billing"]'); return n ? { text: n.textContent.replace(/\s+/g, ' '), bad: n.classList.contains('bad'), shown: !document.getElementById('ows-notice').hidden, button: b ? b.textContent : '', pay: !!n.querySelector('a[href]') } : null; });
+    ok('pastdue: the owner sees a red Payment overdue banner naming the amount, the due date and how late, with Plan & billing', !!banner && banner.shown && banner.bad && /^Payment overdue\$1,299 was due .+, 25 days ago\./.test(banner.text) && banner.button === 'Plan & billing' && !banner.pay, banner);
+    var needs = await p.$$eval('#today .next .row', function (r) { return r.map(function (x) { return x.getAttribute('data-key') + '|' + x.className + '|' + x.querySelector('b').textContent + '|' + x.querySelector('small').textContent; }); });
+    ok('pastdue: Needs you leads with the late bill, hot, and says how to pay', /^pastdue\|row hot\|Your \$1,299 payment is 25 days overdue\|Due .+\. Pay it from Plan & billing\.$/.test(needs[0] || ''), needs.slice(0, 2));
+    var count = await p.$eval('#ows-count-billing', function (e) { return e.textContent; }).catch(function () { return null; });
+    ok('pastdue: the rail counts it on Plan & billing', count === '1', count);
+    /* the banner's own button opens Plan & billing; there it stays as the notice and the button steps aside */
+    await p.click('#ows-pastdue [data-notice="billing"]'); await wait(500);
+    var bill = await p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }, ask = document.getElementById('bill-ask-invoice'), nb = document.querySelector('#ows-pastdue [data-notice="billing"]'); return { view: document.getElementById('content').getAttribute('data-view'), banner: !document.getElementById('ows-notice').hidden && !!document.getElementById('ows-pastdue'), button: nb ? getComputedStyle(nb).display : '', owe: t('bill-owe'), card: t('bill-card'), late: document.getElementById('bill-owe').classList.contains('late'), chip: (document.querySelector('#bill-owe h3 .ows-chip.bad') || {}).textContent || '', ask: ask ? decodeURIComponent(ask.getAttribute('href')) : '', inputs: document.querySelectorAll('#billing-body input').length }; });
+    ok('pastdue: the banner opens Plan & billing and keeps the notice there, without its own button', bill.view === 'billing' && bill.banner && bill.button === 'none', bill);
+    ok('pastdue: What you owe is marked Payment overdue: $1,299 was due, 25 days overdue, the invoice ClearSky sent, the last payment, and no Next invoice on a date that has passed', bill.late && bill.chip === 'Payment overdue' && /\$1,299was due /.test(bill.owe) && /25 days overdue\. Pay the invoice ClearSky sent you, or ask for a copy\./.test(bill.owe) && /Last payment/.test(bill.owe) && !/Next invoice/.test(bill.owe), bill.owe);
+    ok('pastdue: Ask for the invoice writes to ClearSky naming the workspace, the amount and the due date', /^mailto:[^?]+@[^?]+\?subject=Invoice for Northstar Development: \$1,299 due .+\d{4}$/.test(bill.ask), bill.ask);
+    ok('pastdue: a plan ClearSky invoices is not told it has no billing account, and no card field is on the page', /Invoiced by ClearSky/.test(bill.card) && !/No billing account yet/.test(bill.card) && bill.inputs === 0, bill.card);
+    return out;
+  } });
+  /* a member of the same workspace: nothing to act on, so no banner and no row; the page still tells the truth */
+  var owesRaj = lateBill(FX.northstar(HOST));
+  owesRaj.user = { uid: 'uid-northstar-raj', email: 'raj@northstar.example', displayName: 'Raj Patel', emailVerified: true };
+  owesRaj.docs['termsAcceptances/uid-northstar-raj'] = { uid: 'uid-northstar-raj', email: 'raj@northstar.example', orgId: owesRaj.org, version: FX.TERMS_VERSION, acceptedAt: FD.ts(new Date(Date.now() - 30 * 86400e3)) };
+  await scenario('pastdue-member', owesRaj, { steps: async function (p) {
+    var seen = await p.evaluate(function () { return { role: (window.OMEGA_WORKSPACE || {}).role, banner: !!document.getElementById('ows-pastdue'), row: !!document.querySelector('#today .next .row[data-key="pastdue"]'), count: (document.getElementById('ows-count-billing') || {}).textContent || '' }; });
+    ok('pastdue-member: a member gets no banner, no Needs-you row and no count', seen.role === 'member' && !seen.banner && !seen.row && seen.count === '', seen);
+    await p.evaluate(function () { window.location.hash = '#billing'; }); await wait(500);
+    var owe = await p.$eval('#bill-owe', function (e) { return { text: e.textContent.replace(/\s+/g, ' '), chip: (e.querySelector('h3 .ows-chip') || {}).textContent || '' }; });
+    ok('pastdue-member: What you owe still says the bill is overdue', owe.chip === 'Payment overdue' && /25 days overdue/.test(owe.text), owe);
+    return {};
+  } });
+
   /* ══ 5. LITE LABS — packaged, Lite alone ══ */
   var lt = FX.lite(HOST);
   await scenario('lite', lt, { steps: async function (p) {

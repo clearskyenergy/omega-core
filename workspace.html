@@ -82,6 +82,8 @@ body.refused #refused{display:block}body.refused #content{display:none}
 /* notices: approval, trial, read-only */
 .notice{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:10px;font-size:13px;background:var(--ows-amber-soft);color:var(--ows-ink);border:1px solid transparent}
 .notice b{color:var(--ows-amber)}.notice .ows-pill{margin-left:auto}.notice.bad{background:#FDECEC}.notice.bad b{color:#C0392B}
+/* a late bill's banner points at Plan & billing, except on that page */
+#content[data-view="billing"] #ows-notice [data-notice="billing"]{display:none}
 /* hero */
 .hero{display:grid;grid-template-columns:minmax(0,460px) minmax(0,1fr);gap:20px;align-items:stretch}
 #hub .hexhub{margin:0;padding:16px 14px 10px;height:100%;display:flex;flex-direction:column}#hub .hexhub h2{text-align:left;margin:0 6px 2px;font-size:20px}#hub .hexhub .hh-cap{text-align:left;margin:0 6px 4px}
@@ -135,6 +137,7 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .bcard .big{font:500 26px "DM Mono",monospace;letter-spacing:-.01em;line-height:1.1}.bcard .big small{font:400 12px "DM Sans",sans-serif;color:var(--ows-ink2);margin-left:8px}
 .bcard p{margin:0;font-size:12.5px;color:var(--ows-ink2);line-height:1.5}.bcard p b{color:var(--ows-ink)}.bcard .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:6px}
 .inv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:8px 0;border-bottom:1px solid var(--ows-line);font-size:13px;align-items:center}.inv:last-child{border-bottom:0}.inv b{font-weight:600}.inv small{display:block;color:var(--ows-ink3);font-size:11.5px}
+.bcard.late{border-color:#F0B7B1}.bcard h3 .ows-chip.bad{background:#FDECEC;border-color:transparent;color:#C0392B}.bcard h3 .ows-chip.due{background:var(--ows-amber-soft);border-color:transparent;color:var(--ows-amber)}.bcard.late p.late,.bcard.late p.late b{color:#C0392B}
 .inv .amt{font:500 14px "DM Mono",monospace;text-align:right;white-space:nowrap}.inv .st{display:block;font-size:11px;color:var(--ows-ink2);text-align:right}.inv .st.paid{color:var(--ows-green)}.inv .st.unpaid{color:var(--ows-amber)}.inv .ows-pill{justify-self:end}
 .empty{color:var(--ows-ink2);font-size:13px;background:var(--ows-paper);border:1px dashed var(--ows-line2);border-radius:12px;padding:16px 18px;line-height:1.5}.empty b{color:var(--ows-ink)}
 /* around you */
@@ -426,6 +429,7 @@ function today() {
   if (TODAY_CACHE) return TODAY_CACHE;
   var pa = WS.packageAccess;
   TODAY_CACHE = TODAY.build({ now: Date.now(), me: ME, orgId: WS.orgId, pendingApproval: !!WS.pendingApproval, readOnly: !!(pa && pa.packaged && pa.readOnly), billingNotice: pa && pa.billingNotice || null, trialEndsAt: trialEnd(),
+    billing: isAdminHere() && !WS.viewAs ? bill() : null,
     projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived, referrals: DATA.referrals, finance: DATA.finance, canOpen: function (k) { return open(tool(k)); } });
   return TODAY_CACHE;
 }
@@ -448,13 +452,16 @@ function render() {
   renderNotice(); renderHub(); renderToday(); renderTools(); renderModules(); renderFlight(); renderAround();
   if (byId('content').getAttribute('data-view') === 'billing') renderBilling();
   S.badge('home', needs().length);
+  S.badge('billing', isAdminHere() && owed() ? 1 : 0);
 }
 function renderNotice() {
-  var n = byId('ows-notice'), pa = WS.packageAccess, h = '';
+  var n = byId('ows-notice'), pa = WS.packageAccess, h = '', late = isAdminHere() ? owed() : null;
   if (WS.pendingApproval) h = '<div class="notice"><b>Awaiting approval</b><span>' + esc(WS.clientName || WS.orgId) + ' is with the ClearSky team. Tools stay locked until it is approved, usually one business day.</span></div>';
   if (WS.viewAs) h += '<div class="notice"><b>Viewing as a customer</b><span>' + esc(WS.clientName || WS.orgId) + ' painted as a packaged workspace holding ' + esc((WS.modules || []).join(', ') || 'nothing') + '. Staff preview: nothing is billed and a quote is refused.</span><a class="ows-pill" href="/workspace">Exit</a></div>';
   else if (pa && pa.readOnly && pa.billingNotice) h = '<div class="notice bad"><b>Read-only</b><span>' + esc(pa.billingNotice.text) + '</span>' + (pa.billingNotice.payUrl ? '<a class="ows-pill primary sm" href="' + esc(pa.billingNotice.payUrl) + '" target="_blank" rel="noopener">Pay now</a>' : '') + '</div>';
+  else if (late) h += '<div class="notice' + (late.cls === 'hot' ? ' bad' : '') + '" id="ows-pastdue" role="status"><b>' + esc(late.title) + '</b><span>' + esc(late.text) + '</span>' + (late.payUrl ? '<a class="ows-pill primary sm" href="' + esc(late.payUrl) + '" target="_blank" rel="noopener">Pay now</a>' : '<button class="ows-pill primary sm" type="button" data-notice="billing">Plan &amp; billing</button>') + '</div>';
   n.innerHTML = h; n.hidden = !h;
+  var nb = n.querySelector('[data-notice="billing"]'); if (nb) nb.addEventListener('click', openBilling);
 }
 function renderHub() {
   var c = HUB.compose(hubCtx()), n = needs().length, myTodos = DATA.todos.filter(function (x) { return !x.done && String(x.assignee || '').toLowerCase() === ME; }).length;
@@ -824,6 +831,14 @@ function lockedDrawer(t) {
 var BILL = { summary: null, asked: false, failed: false, stripe: null, stripeAsked: false };
 function openBilling() { go('billing'); renderBilling(); }
 function bill() { return WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}; }
+/* A LATE BILL (Tommy, 2026-09-27: "they are behind on their september 2nd
+   bill so that should notify them that they need to pay"). ONE rule,
+   OmegaWorkspaceToday.pastDue: the sales board's and the console's reading,
+   never a second copy here. The banner, the Today row and the rail count go
+   to whoever pays it (an owner or administrator, or ClearSky staff); What
+   you owe tells anyone who opens it. A staff preview (?viewas) paints a
+   packaged customer and is never judged by the real record. */
+function owed() { return WS && !WS.viewAs ? TODAY.pastDue(bill(), Date.now()) : null; }
 function day(v) { var t = ms(v); return t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''; }
 function isAdminHere() { return WS.role === 'owner' || WS.role === 'admin' || !!WS.staff; }
 function renderBilling() {
@@ -858,8 +873,9 @@ function renderBilling() {
   if (pa && pa.readOnly) h += '<p><b>Read-only</b> until the current invoice is paid.</p>';
   h += '<div class="acts"><button class="ows-pill primary" type="button" data-bill="modules">Change modules</button><a class="ows-pill" href="/marketplace.html">Plans and the store</a></div></div>';
 
-  /* 2 · what you owe */
-  h += '<div class="bcard" id="bill-owe"><h3>What you owe</h3>';
+  /* 2 · what you owe, and a late bill named as late */
+  var late = owed();
+  h += '<div class="bcard' + (late && late.cls === 'hot' ? ' late' : '') + '" id="bill-owe"><h3>What you owe' + (late ? '<span class="ows-chip ' + (late.cls === 'hot' ? 'bad' : 'due') + '">' + esc(late.title) + '</span>' : '') + '</h3>';
   var oweC = unpaid.reduce(function (t, x) { return t + (Number(x.totalCents) || 0); }, 0), oweD = bl.amountDue != null ? Number(bl.amountDue) || 0 : 0;
   if (unpaid.length) {
     h += '<div class="big">' + esc(moneyC(oweC)) + '<small>' + unpaid.length + (unpaid.length === 1 ? ' invoice open' : ' invoices open') + '</small></div>';
@@ -868,12 +884,15 @@ function renderBilling() {
     h += '<div class="big">' + esc(usd(stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0))) + '<small>' + stripeOpen.length + (stripeOpen.length === 1 ? ' invoice open' : ' invoices open') + '</small></div>';
     h += stripeOpen.map(function (x) { return '<div class="inv"><div><b>' + esc(x.number || 'Invoice') + '</b><small>Issued ' + esc(x.created ? new Date(x.created).toLocaleDateString() : '') + '</small></div><div><span class="amt">' + esc(usd(x.amountDue)) + '</span>' + (x.hostedUrl ? '<a class="ows-pill sm primary" href="' + esc(x.hostedUrl) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st unpaid">Open</span>') + '</div></div>'; }).join('');
   } else if (packaged && !sm && !BILL.failed) h += '<p>Loading your invoices…</p>';
-  else if (oweD > 0) h += '<div class="big">' + esc(usd(oweD)) + (bl.subscriptionDue ? '<small>due ' + esc(day(bl.subscriptionDue)) + '</small>' : '') + '</div>';
+  else if (oweD > 0) h += '<div class="big">' + esc(usd(oweD)) + (bl.subscriptionDue ? '<small>' + (late && late.reason === 'late' && late.days ? 'was due ' : 'due ') + esc(day(bl.subscriptionDue)) + '</small>' : '') + '</div>';
   else h += '<div class="big">$0<small>nothing is owed</small></div>';
-  var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (packaged ? '' : bl.subscriptionDue);
+  if (late) h += '<p class="late"><b>' + esc(late.reason !== 'late' ? late.text : late.days ? late.days + (late.days === 1 ? ' day' : ' days') + ' overdue.' : 'Due today.') + '</b> ' + esc(payLink ? 'Pay now to settle it.' : stripe ? 'Pay the open invoice, or change the card with Manage card and autopay.' : 'Pay the invoice ClearSky sent you, or ask for a copy.') + '</p>';
+  /* a date that has passed is never the NEXT invoice: on a legacy plan it is the bill that is late */
+  var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (!packaged && ms(bl.subscriptionDue) > Date.now() ? bl.subscriptionDue : '');
   h += kv([['Next invoice', nextOn ? (day(nextOn) || nextOn) : ''], ['Paid through', sm && sm.paidThrough ? (day(sm.paidThrough) || sm.paidThrough) : ''], ['Last payment', !packaged && bl.lastPaidAt ? day(bl.lastPaidAt) : '']]);
   if (packaged) h += '<p>Each invoice arrives by email on your billing day with its pay link. A card saved on QuickBooks’ page pays the next one in one click.</p>';
-  h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Pay now</a>' : '') + (packaged ? '<button class="ows-pill" type="button" id="bill-paid"' + (admin ? '' : ' disabled title="An owner or administrator checks with QuickBooks"') + '>I’ve paid</button>' : '') + '</div></div>';
+  var askInvoice = late && !payLink && !stripe && !packaged ? 'mailto:' + encodeURIComponent(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Invoice for ' + (WS.clientName || WS.orgId) + (late.amountDisplay ? ': ' + late.amountDisplay : '') + (late.dueAt ? ' due ' + day(late.dueAt) : '')) : '';
+  h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Pay now</a>' : '') + (askInvoice ? '<a class="ows-pill primary" id="bill-ask-invoice" href="' + esc(askInvoice) + '">Ask for the invoice</a>' : '') + (packaged ? '<button class="ows-pill" type="button" id="bill-paid"' + (admin ? '' : ' disabled title="An owner or administrator checks with QuickBooks"') + '>I’ve paid</button>' : '') + '</div></div>';
 
   /* 3 · the payment method */
   h += '<div class="bcard" id="bill-card"><h3>Payment method</h3>';
@@ -886,6 +905,10 @@ function renderBilling() {
     h += kv([['Provider', 'QuickBooks Payments'], ['Card on file', bl.autopay === true ? 'Saved · autopay on' : bl.autopay === false ? 'Not saved yet' : 'Saved on your invoice page']]);
     h += '<p>Your card is entered on <b>QuickBooks’ secure payment page</b>, never on this site. When you pay an invoice there, tick <b>Save this card</b> and turn on <b>Autopay</b>: every later invoice is charged on its date, and you can change the card from any invoice.</p>';
     h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Open the payment page</a>' : '<span class="ows-chip">Your next invoice brings the link</span>') + '</div>';
+  } else if (bl.lastPaidAt || oweD > 0 || bl.paymentLink) {
+    /* a plan ClearSky invoices by hand has an account already: it was billed, or is */
+    h += '<p><b>Invoiced by ClearSky.</b> Each invoice arrives by email with its own secure payment page; pay it there. Card details are never entered on this site.</p>';
+    h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Open the payment page</a>' : '') + '<a class="ows-pill" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Billing for ' + (WS.clientName || WS.orgId)) + '">Ask ClearSky</a></div>';
   } else {
     h += '<p><b>No billing account yet.</b> Your first invoice sets it up: it arrives by email with a secure payment page where a card can be saved. Nothing is charged until then.</p>';
     h += '<div class="acts"><a class="ows-pill" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Billing for ' + (WS.clientName || WS.orgId)) + '">Ask ClearSky</a></div>';
