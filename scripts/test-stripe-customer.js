@@ -309,11 +309,99 @@ async function guards() {
     && SC.returnUrl('evil.example/x') === 'https://silmarillion.clearskyomega.com/workspace#billing' && SC.returnUrl('') === 'https://silmarillion.clearskyomega.com/workspace#billing', 'a host that is not a host is the open front door');
 }
 
+/* the cases an adversarial review found: a stale invoice must never become a second payment */
+async function reviewed() {
+  var now = Date.parse('2026-09-27T15:00:00Z'), s, a, cur, v;
+  function setDue(amount, date) { cur = bill(); cur.amountDue = amount; if (date !== undefined) cur.subscriptionDue = date; db.seed(CUR, cur); }
+
+  console.log('\na payment for a figure ClearSky has since changed holds the next one');
+  fixture(); s = new SD({ livemode: true });
+  a = await call(owner, { action: 'pay' }, s);
+  setDue(2598, '2026-10-02');
+  s.pay(a.invoiceId);
+  var st = await SC.settle(db, ORG, a.invoiceId, s, now, 'stripe');
+  ok(st.recorded && st.matches === false && bill().stripeDueHold && bill().stripeDueHold.invoiceId === a.invoiceId && bill().amountDue === 2598, 'the earlier invoice, paid from Stripe\'s email, is recorded, and the new figure is held', bill());
+  await refused('...so Pay takes nothing more until ClearSky has looked', function () { return call(owner, { action: 'pay' }, s); }, /reviews the account before the next payment/);
+  v = await call(owner, { action: 'view' }, s);
+  ok(v.canPay === false && /reviews the account/.test(v.payReason) && s.all('invoices').length === 1, '...the page says why, and no second invoice was made', v.payReason);
+  setDue(1299);
+  var rest = await call(owner, { action: 'pay' }, s);
+  ok(rest.state === 'open' && s.invoices_[rest.invoiceId].total === 129900, 'once ClearSky sets the figure again (what is left), it is paid as before', rest);
+
+  fixture(); s = new SD({ livemode: true }); MAILED = [];
+  a = await call(owner, { action: 'pay' }, s);
+  setDue(2598, '2026-10-02');
+  s.pay(a.invoiceId);
+  await refused('with no webhook, Pay records the earlier payment first and holds the new figure', function () { return call(owner, { action: 'pay' }, s); }, /reviews the account/);
+  ok(!!db.data.get(CUR + '/history/stripe-paid-' + a.invoiceId) && s.all('invoices').length === 1 && MAILED.some(function (m) { return m.template === 'paid'; }), '...recorded once, with its receipt, and nothing new billed', MAILED.map(function (m) { return m.template; }));
+
+  console.log('\na stale invoice is withdrawn wherever the workspace\'s Stripe is touched');
+  fixture(); s = new SD({ livemode: true });
+  a = await call(owner, { action: 'pay' }, s);
+  setDue(0);
+  v = await call(owner, { action: 'view' }, s);
+  ok(s.invoices_[a.invoiceId].status === 'void' && bill().stripeDue.state === 'void' && v.due === null, 'ClearSky zeroed the figure (a cheque): opening Plan & billing voids the invoice Stripe emailed', { stripe: s.invoices_[a.invoiceId].status, rec: bill().stripeDue });
+  fixture(); s = new SD({ livemode: true });
+  a = await call(owner, { action: 'pay' }, s);
+  setDue(999);
+  await call(owner, { action: 'portal' }, s);
+  ok(s.invoices_[a.invoiceId].status === 'void' && bill().stripeDue.state === 'void', '...and so does opening the portal, which would list it with a Pay button');
+
+  console.log('\na late event never overwrites a newer invoice');
+  fixture(); s = new SD({ livemode: true });
+  a = await call(owner, { action: 'pay' }, s);
+  setDue(2598);
+  var b = await call(owner, { action: 'pay' }, s);
+  await SC.settle(db, ORG, a.invoiceId, s, now, 'stripe');
+  ok(s.invoices_[a.invoiceId].status === 'void' && bill().stripeDue.invoiceId === b.invoiceId && bill().stripeDue.state === 'open', 'the voided invoice\'s event, arriving after Pay made the new one, leaves the new one on the record', bill().stripeDue);
+
+  console.log('\nthe same figure and date billed again after a payment');
+  fixture(); s = new SD({ livemode: true });
+  a = await call(owner, { action: 'pay' }, s); s.pay(a.invoiceId);
+  await SC.settle(db, ORG, a.invoiceId, s, now, 'stripe');
+  setDue(1299);
+  var again = await call(owner, { action: 'pay' }, s);
+  ok(again.state === 'open' && again.invoiceId !== a.invoiceId && s.all('invoices').length === 2 && bill().stripeDueSeq === 1, 'is a new invoice, never "already paid" with money still owed', { again: again, seq: bill().stripeDueSeq });
+
+  console.log('\nPay finding its invoice already paid');
+  fixture(); s = new SD({ livemode: true }); MAILED = [];
+  a = await call(owner, { action: 'pay' }, s); s.pay(a.invoiceId);
+  var p4 = await call(owner, { action: 'pay' }, s);
+  ok(p4.state === 'paid' && p4.recorded && bill().amountDue === 0 && MAILED.some(function (m) { return m.template === 'paid'; }) && MAILED.some(function (m) { return m.template === 'paidAlert'; }), 'records it and sends the receipt and ClearSky\'s alert', { p4: p4, mailed: MAILED.map(function (m) { return m.template; }) });
+
+  console.log('\na balance on the Stripe account');
+  fixture(); s = new SD({ livemode: true });
+  await call(owner, { action: 'card' }, s);
+  var cid = bill().stripeCustomerId;
+  s.customers_[cid].balance = 5000;
+  await refused('a balance owed would be added to the card\'s charge: ClearSky settles it first', function () { return call(owner, { action: 'pay' }, s); }, /balance owed of \$50/);
+  s.customers_[cid].balance = -129900;
+  await refused('...and a credit would pay it without the card', function () { return call(owner, { action: 'pay' }, s); }, /credit of \$1,299/);
+  ok(s.all('invoices').length === 0, '...nothing was invoiced');
+  s.customers_[cid].balance = 0;
+  var fin = s.invoices.finalizeInvoice;
+  s.invoices.finalizeInvoice = async function (iid, p, o) { var r = await fin(iid, p, o); s.invoices_[iid].amount_due = 139900; r.amount_due = 139900; return r; };
+  await refused('a balance that lands between the check and the invoice withdraws it', function () { return call(owner, { action: 'pay' }, s); }, /Stripe would charge \$1,399/);
+  ok(s.all('invoices').length === 1 && s.all('invoices')[0].status === 'void', '...voided, never left to charge the wrong figure');
+  s.invoices.finalizeInvoice = fin;
+
+  console.log('\nStripe\'s own 4xx on a webhook invoice');
+  var Hook = require('../api/stripe-webhook');
+  fixture(); s = new SD({ livemode: true });
+  await call(owner, { action: 'card' }, s);
+  var gone = await Hook.dueEvent(ORG, 'in_000999', s, { mail: mailer });
+  ok(/gone from Stripe/.test(gone.ignored || ''), 'an invoice deleted in the dashboard is acknowledged, not retried for days', gone);
+  s.invoices.retrieve = async function () { var e = new Error('Invalid invoice'); e.type = 'StripeInvalidRequestError'; e.statusCode = 400; throw e; };
+  var bad = await Hook.dueEvent(ORG, 'in_000998', s, { mail: mailer });
+  ok(/Invalid invoice/.test(bad.ignored || ''), '...and so is any 4xx Stripe itself answers', bad);
+}
+
 (async function () {
   await door();
   await card();
   await paying();
   await webhook();
   await guards();
+  await reviewed();
   console.log('\nstripe customer: ' + count + ' passed, 0 failed');
 })().catch(function (e) { console.error(e); process.exit(1); });

@@ -49,7 +49,9 @@ function dueEvent(org, invoiceId, stripe, deps) {
     if (!r.recorded) return { orgId: org, state: r.state };
     return StripeCustomer.deliver(db, org, now, deps && deps.mail).then(function () { return { orgId: org, state: r.state, recorded: true }; });
   }, function (e) {
-    if (e && e.status && e.status < 500) return { orgId: org, ignored: String(e.message || e).slice(0, 200) };
+    /* ours (e.status) or Stripe's own (e.statusCode, e.g. a draft deleted in the dashboard): a 4xx is acknowledged, never retried for days */
+    var code = e && (e.status || e.statusCode);
+    if (code && code < 500) return { orgId: org, ignored: String(e.message || e).slice(0, 200) };
     throw e;
   });
 }

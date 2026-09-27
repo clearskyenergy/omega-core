@@ -78,7 +78,10 @@ function StripeDouble(options) {
       return once('invoices.finalizeInvoice', { id: iid, p: p }, o, function () {
         var inv = self.invoices_[iid]; if (!inv) missing('invoice: ' + iid);
         if (inv.status !== 'draft') fail('This invoice is already finalized');
-        invoiceView(inv); inv.status = inv.total === 0 ? 'paid' : 'open'; inv.number = 'OMEGA-' + iid.slice(-4);
+        /* the customer's balance is applied at finalizing, as Stripe does: a debt added to amount_due, a credit taken off it */
+        invoiceView(inv); var cust = self.customers_[inv.customer] || {}, bal = Number(cust.balance) || 0;
+        inv.amount_due = Math.max(0, inv.total + bal); if (bal) cust.balance = bal > 0 ? 0 : Math.min(0, inv.total + bal);
+        inv.status = inv.total === 0 || inv.amount_due === 0 ? 'paid' : 'open'; inv.number = 'OMEGA-' + iid.slice(-4);
         inv.hosted_invoice_url = options.noLink ? null : 'https://invoice.stripe.com/i/acct_double/' + iid; return invoiceView(inv);
       });
     },
@@ -118,7 +121,7 @@ function StripeDouble(options) {
   this.pay = function (iid) {
     var inv = self.invoices_[iid]; if (!inv || inv.status !== 'open') throw new Error('not payable: ' + iid);
     var ch = { id: id('ch'), object: 'charge', amount: inv.total, amount_refunded: 0, refunded: false, disputed: false, dispute: null, livemode: self.livemode };
-    self.charges_[ch.id] = ch; inv.status = 'paid'; inv.amount_paid = inv.total; inv.charge = ch.id; inv.status_transitions = { paid_at: 1790000000 }; return inv;
+    self.charges_[ch.id] = ch; inv.status = 'paid'; inv.amount_paid = inv.amount_due != null ? inv.amount_due : inv.total; inv.charge = ch.id; inv.status_transitions = { paid_at: 1790000000 }; return inv;
   };
   /* the customer adds a card on Stripe's page (the portal's payment_method_update flow): it becomes the default for invoices */
   this.saveCard = function (cid, card) {

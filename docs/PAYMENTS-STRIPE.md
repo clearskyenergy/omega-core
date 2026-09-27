@@ -92,11 +92,19 @@ same `STRIPE_SECRET_KEY` as `stripe-create.js` and the portal.
    `subscriptionDue` stays as ClearSky set it: roll the next due date and
    amount in the master console as before.
 
-What keeps it honest: a figure ClearSky changes voids the stale open invoice
-at the next Pay; a payment for a figure that has since changed is recorded
-but leaves `amountDue`, and ClearSky gets a `billingAlert`; an invoice
-ClearSky already has open in Stripe (the dashboard, a tier subscription) is
-the way to pay and is never doubled; a `paymentLink` ClearSky set wins. A
+What keeps it honest: a figure ClearSky changes (the master console writes
+the record directly) voids the stale open invoice the next time the
+workspace's Stripe is touched: opening Plan & billing, the portal, or Pay.
+A payment for a figure that has since changed (paid from Stripe's email
+first) is recorded but leaves `amountDue`, ClearSky gets a `billingAlert`,
+and nothing more is taken from the page (`stripeDueHold`) until ClearSky sets
+the figure again; Pay records any such payment nothing had recorded before
+it bills. The same figure and date billed again after a payment is a new
+invoice (`stripeDueSeq`). A balance on the Stripe customer (Stripe applies
+it to the next invoice) is ClearSky's to settle before a card payment here.
+An invoice ClearSky already has open in Stripe (the dashboard, a tier
+subscription) is the way to pay and is never doubled; a `paymentLink`
+ClearSky set wins. A
 **test key** links only a workspace marked `packagingSandbox` (the one
 database is production's, so a preview deployment never binds a real
 tenant); a binding made in the other mode is refused and never overwritten.

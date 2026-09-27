@@ -108,16 +108,26 @@ function refusal(c) {
 }
 
 /* ── the amount due: ClearSky's number, read, never made ── */
+/* The marker is the due's identity: the date, the amount, and how many dues
+   Stripe has already settled (stripeDueSeq, counted by settle), so the same
+   figure billed again after a payment is a new invoice, never "already paid". */
 function dueOf(orgId, b) {
   var n = Number(b && b.amountDue);
   if (!(n > 0) || !isFinite(n)) return null;
-  var cents = Math.round(n * 100), date = ymd(b.subscriptionDue);
-  return { cents: cents, date: date, display: money(cents), marker: orgId + '/' + (date || 'now') + '/' + cents };
+  var cents = Math.round(n * 100), date = ymd(b.subscriptionDue), seq = Number(b.stripeDueSeq) || 0;
+  return { cents: cents, date: date, display: money(cents), marker: orgId + '/' + (date || 'now') + '/' + cents + (seq ? '#' + seq : '') };
 }
 function centsRefusal(cents) {
   if (cents < MIN_CENTS) return 'The amount due is below Stripe’s minimum card payment; ClearSky settles it.';
   if (cents > MAX_CENTS) return 'The amount due is more than one card payment can take; ClearSky arranges it.';
   return null;
+}
+/* a payment arrived for a figure ClearSky has since changed: nothing more is
+   taken from here until ClearSky has looked and set the figure again */
+function holdRefusal(orgId, b) {
+  var h = b && b.stripeDueHold, owed = dueOf(orgId, b);
+  if (!h || !owed || h.marker !== owed.marker) return null;
+  return 'A payment of ' + money(Number(h.cents) || 0) + ' reached Stripe for an earlier amount due; ClearSky reviews the account before the next payment here.';
 }
 /* what the page shows: the figure, and the Stripe invoice already open for it */
 function dueView(c) {
@@ -242,36 +252,92 @@ async function portal(db, c, caller, stripe, now, host, card) {
   if (c.billing.stripeCustomerId) {
     if (railOf(c.billing) !== 'stripe') fail(QUICKBOOKS);
     cus = await bound(c, stripe);
+    /* the portal lists open invoices with a Pay button: never one for a figure ClearSky has since changed */
+    await closeStale(db, c, stripe, cus.id, now);
   } else if (card) cus = await link(db, c, caller, stripe, now);
   else fail(c.billing.packaged === true ? 'Your first Stripe invoice links the card: pay it under What you owe, and the portal opens after.' : 'Add a card first: the Stripe portal opens once the workspace has one.');
   return { url: await session(stripe, cus.id, returnUrl(host), card) };
 }
 
+/* ── stale invoices ── */
+/* Our invoices still open for a figure ClearSky has since changed (the master
+   console writes the record directly, so nothing here hears the change) are
+   voided in Stripe the next time the workspace's Stripe is touched: nobody
+   pays a stale figure from the page, the portal or Stripe's own email. One
+   that was paid meanwhile cannot be voided; settle records it and holds the
+   next payment for ClearSky. */
+async function voidStale(stripe, orgId, rows, marker) {
+  var gone = [];
+  for (var i = 0; i < rows.length; i++) {
+    var md = rows[i].metadata || {};
+    if (rows[i].status !== 'open' || !md.omegaDue || md.omegaOrg !== orgId || md.omegaDue === marker) continue;
+    try { await stripe.invoices.voidInvoice(rows[i].id, {}, { idempotencyKey: key('omega-due-void:' + rows[i].id) }); gone.push(String(rows[i].id)); } catch (e) {}
+  }
+  return gone;
+}
+/* the record's open invoice, when its figure has since changed: voided, and the record stops offering it */
+async function closeStale(db, c, stripe, customerId, now) {
+  var sd = c.billing.stripeDue, owed = dueOf(c.orgId, c.billing);
+  if (!sd || sd.state !== 'open' || (owed && sd.marker === owed.marker)) return;
+  var rows = ((await stripe.invoices.list({ customer: customerId, limit: 100 })) || {}).data || [];
+  var gone = await voidStale(stripe, c.orgId, rows, owed ? owed.marker : null), mine = rows.filter(function (r) { return String(r.id) === String(sd.invoiceId); })[0];
+  var state = gone.indexOf(String(sd.invoiceId)) >= 0 ? 'void' : mine && (mine.status === 'void' || mine.status === 'uncollectible') ? mine.status : null;
+  if (!state) return;
+  await db.runTransaction(async function (tx) {
+    var s = await tx.get(c.current), d = s.exists ? s.data() : {};
+    if (d.stripeDue && d.stripeDue.invoiceId === sd.invoiceId && d.stripeDue.state === 'open') tx.update(c.current, { stripeDue: Object.assign({}, d.stripeDue, { state: state, closedAt: now }) });
+  });
+  c.billing.stripeDue = Object.assign({}, sd, { state: state, closedAt: now });
+}
+
 /* ── paying the amount due ── */
-async function pay(db, c, caller, stripe, now) {
+async function pay(db, c, caller, stripe, now, mailer) {
   var why = refusal(c); if (why) fail(why);
-  var b = c.billing;
+  var b = c.billing, by = (caller && caller.email) || null;
   if (b.paymentLink) fail('Pay with the payment link ClearSky set for this workspace, under What you owe.');
   var due = dueOf(c.orgId, b); if (!due) fail('Nothing is owed right now.');
-  var cr = centsRefusal(due.cents); if (cr) fail(cr);
+  var cr = centsRefusal(due.cents) || holdRefusal(c.orgId, b); if (cr) fail(cr);
   var cus = await link(db, c, caller, stripe, now), m = mode();
   /* Stripe sends an invoice only to a customer with an address: one made by
      hand in the dashboard may have none, so it gets the billing contact's */
   if (!cus.email) { var who = contact(c, caller); cus = await stripe.customers.update(cus.id, { email: who.email }, { idempotencyKey: key('omega-plan-email:' + cus.id + ':' + who.email) }); }
+  /* a balance on the Stripe customer is applied to the next invoice (a debt
+     added, a credit taken off), so the card would not be charged the figure
+     shown: ClearSky settles it first */
+  if (typeof cus.balance === 'number' && cus.balance !== 0) fail('The workspace’s Stripe account carries ' + (cus.balance > 0 ? 'a balance owed' : 'a credit') + ' of ' + money(Math.abs(cus.balance)) + '; ClearSky settles it before a card payment here.');
   var rows = ((await stripe.invoices.list({ customer: cus.id, limit: 100 })) || {}).data || [];
   /* an invoice ClearSky already has open for this customer (the dashboard, a tier subscription) is the way to pay: never a second one beside it */
   var foreign = rows.filter(function (i) { return i.status === 'open' && !(i.metadata || {}).omegaDue; });
   if (foreign.length) fail('Stripe already has an open invoice for this workspace (' + (foreign[0].number || foreign[0].id) + '): pay that one, under What you owe.');
   var ours = rows.filter(function (i) { var md = i.metadata || {}; return md.omegaDue && md.omegaOrg === c.orgId; });
+  /* a payment Stripe took for an earlier figure that nothing has recorded yet
+     (no webhook, nobody pressed I've paid): recorded before anything new is
+     billed, which holds this one for ClearSky */
+  var recorded = false;
+  for (var j = 0; j < ours.length; j++) {
+    if (ours[j].status !== 'paid' || ours[j].metadata.omegaDue === due.marker) continue;
+    if ((await c.current.collection('history').doc('stripe-paid-' + ours[j].id).get()).exists) continue;
+    if ((await settle(db, c.orgId, String(ours[j].id), stripe, now, by)).recorded) recorded = true;
+  }
+  if (recorded) {
+    await deliver(db, c.orgId, now, mailer);
+    var fresh = (await context(db, c.orgId)).billing, owedNow = dueOf(c.orgId, fresh), held = holdRefusal(c.orgId, fresh);
+    if (held || !owedNow) fail(held || 'Nothing is owed right now.');
+    if (owedNow.marker !== due.marker) fail('The amount due changed while Stripe was checked; open Plan & billing again.');
+  }
   var same = ours.filter(function (i) { return i.metadata.omegaDue === due.marker && i.status !== 'void'; });
   if (same.length > 1) fail('More than one Stripe invoice is open for this amount; ClearSky reviews it.');
   var inv = same[0] || null, created = false;
-  if (inv && inv.status === 'paid') return Object.assign(await settle(db, c.orgId, inv.id, stripe, now, caller && caller.email), { display: due.display });
+  /* paid already (the webhook has not run): recorded now, with its receipt */
+  async function paidNow(id) {
+    var r = await settle(db, c.orgId, String(id), stripe, now, by);
+    if (r.recorded) await deliver(db, c.orgId, now, mailer);
+    return Object.assign(r, { display: due.display });
+  }
+  if (inv && inv.status === 'paid') return paidNow(inv.id);
   if (inv && inv.status === 'uncollectible') fail('ClearSky marked this amount uncollectible in Stripe; ask ClearSky.');
   /* an invoice still open for an amount or date that has since changed: voided, so nobody pays a stale figure */
-  for (var i = 0; i < ours.length; i++) {
-    if (ours[i].status === 'open' && ours[i].metadata.omegaDue !== due.marker) await stripe.invoices.voidInvoice(ours[i].id, {}, { idempotencyKey: key('omega-due-void:' + ours[i].id) });
-  }
+  await voidStale(stripe, c.orgId, ours, due.marker);
   if (!inv) {
     /* a voided one for the same marker leaves its key behind: the next is a fresh request, never its replay */
     var tries = ours.filter(function (x) { return x.metadata.omegaDue === due.marker; }).length;
@@ -289,7 +355,13 @@ async function pay(db, c, caller, stripe, now) {
   if (!inv || String(inv.customer) !== String(cus.id) || inv.livemode !== (m === 'live') || String(inv.currency || '').toLowerCase() !== 'usd' || (inv.metadata || {}).omegaDue !== due.marker || inv.total !== due.cents) {
     fail('The Stripe invoice does not match the amount due; ClearSky reviews it.');
   }
-  if (inv.status === 'paid') return Object.assign(await settle(db, c.orgId, inv.id, stripe, now, caller && caller.email), { display: due.display });
+  /* what the card is charged is amount_due: a balance applied at finalizing
+     makes it something else, so an open one is withdrawn and ClearSky looks */
+  if (inv.amount_due !== due.cents) {
+    if (inv.status === 'open') { try { await stripe.invoices.voidInvoice(inv.id, {}, { idempotencyKey: key('omega-due-void:' + inv.id) }); } catch (e) {} }
+    fail('Stripe would charge ' + money(Number(inv.amount_due) || 0) + ' for this ' + due.display + ' (a balance on the Stripe account); ClearSky reviews it.');
+  }
+  if (inv.status === 'paid') return paidNow(inv.id);
   /* Stripe emails the invoice once, when it is made here: the accountant's copy */
   if (created) { try { await stripe.invoices.sendInvoice(inv.id, {}, { idempotencyKey: key('omega-due-send:' + inv.id) }); } catch (e) {} }
   var url = payLink(inv.hosted_invoice_url);
@@ -309,14 +381,22 @@ async function settle(db, orgId, invoiceId, stripe, now, by) {
   var c = await context(db, orgId), b = c.billing;
   if (!c.billingExists || !b.stripeCustomerId) fail('This workspace has no Stripe customer', 404);
   if (!/^in_[A-Za-z0-9_]+$/.test(String(invoiceId || ''))) fail('Not a Stripe invoice', 400);
-  var inv = await stripe.invoices.retrieve(invoiceId), md = (inv && inv.metadata) || {};
+  var inv;
+  try { inv = await stripe.invoices.retrieve(invoiceId); }
+  catch (e) { if (e && (e.statusCode === 404 || e.status === 404 || e.code === 'resource_missing')) fail('That invoice is gone from Stripe', 404); throw e; }
+  var md = (inv && inv.metadata) || {};
   if (!inv || inv.id !== invoiceId || !md.omegaDue || md.omegaOrg !== orgId) fail('That invoice is not this workspace’s amount due', 404);
   if (String(inv.customer) !== String(b.stripeCustomerId)) fail('The invoice is on another Stripe customer; ClearSky reviews it.');
   if (inv.livemode !== (mode() === 'live')) fail('The invoice is in Stripe’s other mode.');
   if (!(inv.status === 'paid' && inv.amount_paid > 0)) {
-    /* voided or written off in Stripe: the page stops offering its link */
-    if ((inv.status === 'void' || inv.status === 'uncollectible') && b.stripeDue && b.stripeDue.invoiceId === inv.id && b.stripeDue.state !== inv.status) {
-      await c.current.update({ stripeDue: Object.assign({}, b.stripeDue, { state: inv.status, closedAt: now }) });
+    /* voided or written off in Stripe: the page stops offering its link. Read
+       again inside the write: pay() may have moved the record on to a newer
+       invoice since this began, and that one must not be overwritten */
+    if (inv.status === 'void' || inv.status === 'uncollectible') {
+      await db.runTransaction(async function (tx) {
+        var s = await tx.get(c.current), d = s.exists ? s.data() : {};
+        if (d.stripeDue && d.stripeDue.invoiceId === inv.id && d.stripeDue.state !== inv.status) tx.update(c.current, { stripeDue: Object.assign({}, d.stripeDue, { state: inv.status, closedAt: now }) });
+      });
     }
     return { state: inv.status, invoiceId: inv.id, url: inv.status === 'open' ? payLink(inv.hosted_invoice_url) : null, recorded: false };
   }
@@ -326,9 +406,15 @@ async function settle(db, orgId, invoiceId, stripe, now, by) {
     if (h.exists) return;
     var d = s.exists ? s.data() : {}, owed = dueOf(orgId, d), matches = !!owed && owed.marker === md.omegaDue, disp = money(cents), name = (c.org && c.org.name) || orgId;
     var changed = { lastPaidAt: new Date(at).toISOString(), amountPaid: Math.round((Number(d.amountPaid) || 0) * 100 + cents) / 100, paymentFailedAt: null };
-    /* the figure is zeroed only while it is still the one this invoice billed; a changed one is ClearSky's to look at */
+    /* the figure is zeroed only while it is still the one this invoice billed,
+       and the next due, even the same figure and date, is then a new invoice
+       (stripeDueSeq). A payment for a figure that has since changed is
+       ClearSky's to look at: nothing more is taken from here until ClearSky
+       has set the figure again (stripeDueHold) */
     if (matches) changed.amountDue = 0;
     var patch = Object.assign({}, changed, { updatedAt: now, updatedBy: by || 'stripe' });
+    if (matches) { patch.stripeDueSeq = (Number(d.stripeDueSeq) || 0) + 1; patch.stripeDueHold = null; }
+    else if (owed) patch.stripeDueHold = { invoiceId: String(inv.id), marker: owed.marker, cents: cents, at: now };
     if (d.stripeDue && d.stripeDue.invoiceId === inv.id) patch.stripeDue = Object.assign({}, d.stripeDue, { state: 'paid', paidAt: at, paidCents: cents });
     tx.update(c.current, patch);
     tx.set(hist, { at: now, by: by || 'stripe', action: 'stripe-payment', invoice: inv.id, amountCents: cents, changed: changed,
@@ -366,7 +452,7 @@ async function check(db, c, caller, stripe, now, mailer) {
 }
 
 /* ── what Plan & billing reads (an owner or administrator) ── */
-async function view(c, stripe) {
+async function view(db, c, stripe, now) {
   var b = c.billing, rail = c.billingExists ? railOf(b) : null;
   var out = { orgId: c.orgId, rail: rail, packaged: b.packaged === true, linked: !!b.stripeCustomerId, mode: mode(), card: null, canLink: false, reason: null, due: null, canPay: false, payReason: null };
   if (rail !== 'stripe') { out.reason = rail === 'quickbooks' ? QUICKBOOKS : 'ClearSky sets up billing for this workspace first.'; return out; }
@@ -375,13 +461,17 @@ async function view(c, stripe) {
     if (bm) out.reason = bm;
     else if (!stripe) out.reason = 'Stripe is not set up on this deployment yet.';
     else {
-      try { out.card = await cardOf(stripe, await bound(c, stripe)); out.canLink = true; }
-      catch (e) { out.reason = e.status && e.status < 500 ? e.message : 'Stripe could not be reached just now.'; }
+      try {
+        var cus = await bound(c, stripe);
+        out.card = await cardOf(stripe, cus); out.canLink = true;
+        /* a figure ClearSky changed since its invoice was made: that invoice is withdrawn before the page offers anything */
+        if (b.packaged !== true && !refusal(c)) { try { await closeStale(db, c, stripe, cus.id, now); } catch (e) { console.warn('[stripe-customer] stale invoice:', e && e.message); } }
+      } catch (e) { out.reason = e.status && e.status < 500 ? e.message : 'Stripe could not be reached just now.'; }
     }
   } else { out.reason = refusal(c); out.canLink = !out.reason; }
   if (b.packaged !== true) {
     out.due = dueView(c);
-    out.payReason = refusal(c) || (b.paymentLink ? 'Pay with the payment link ClearSky set for this workspace.' : null) || (out.due ? centsRefusal(out.due.cents) : 'Nothing is owed right now.');
+    out.payReason = refusal(c) || (b.paymentLink ? 'Pay with the payment link ClearSky set for this workspace.' : null) || (out.due ? centsRefusal(out.due.cents) || holdRefusal(c.orgId, b) : 'Nothing is owed right now.');
     out.canPay = !out.payReason;
   }
   return out;
@@ -392,10 +482,10 @@ async function run(db, orgId, action, caller, o) {
   o = o || {};
   var c = await context(db, orgId), now = o.now || Date.now(), stripe = o.stripe || null;
   try {
-    if (action === 'view') return await view(c, stripe);
+    if (action === 'view') return await view(db, c, stripe, now);
     if (!stripe) fail('Stripe is not set up on this deployment yet.', 503);
     if (action === 'card' || action === 'portal') return await portal(db, c, caller, stripe, now, o.host, action === 'card');
-    if (action === 'pay') return await pay(db, c, caller, stripe, now);
+    if (action === 'pay') return await pay(db, c, caller, stripe, now, o.mail);
     if (action === 'check') return await check(db, c, caller, stripe, now, o.mail);
     fail('Action must be view, card, portal, pay or check', 400);
   } catch (e) {
