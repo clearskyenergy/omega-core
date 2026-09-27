@@ -33,6 +33,25 @@ function guard(c) {
   if (!c.book.enabled || c.book.version !== B.VERSION || c.book.qbo.env !== 'sandbox') fail('An enabled proposed sandbox price book is required');
 }
 function canApply(c) { try { guard(c); return true; } catch (e) { return false; } }
+/* Moving a plan onto a package ANSWERS what it asked for while billed
+   outside the engine (plan-change opt-in / opt-out): an opt-in is activated
+   when the package carries the module and declined when it does not, and an
+   opt-out is done, because the package is the new plan either way. Staff see
+   the answer in the preview's billing patch; the whole map is written so an
+   older answered request is kept as it was. */
+function answered(billing, modules, at) {
+  var out = {}, when = R.iso(at);
+  [['optIns', function (k) { return modules.indexOf(k) >= 0 ? 'activated' : 'declined'; }], ['optOuts', function () { return 'done'; }]].forEach(function (pair) {
+    var map = billing[pair[0]], next = {}, touched = false;
+    if (!map || typeof map !== 'object') return;
+    Object.keys(map).forEach(function (k) {
+      var entry = map[k]; next[k] = entry;
+      if (entry && entry.status === 'requested') { next[k] = Object.assign({}, entry, { status: pair[1](k), resolvedAt: when }); touched = true; }
+    });
+    if (touched) out[pair[0]] = next;
+  });
+  return out;
+}
 function prepare(c, input, now) {
   if (c.profile && c.profile.syncLock && c.profile.syncLock.until > now) fail('Billing profile update is running; refresh shortly');
   var at = input.effectiveAt == null ? Math.floor(now / 60000) * 60000 : input.effectiveAt;
@@ -61,6 +80,7 @@ function prepare(c, input, now) {
       proposedPackage: selected, billingDay: new Date(signup).getUTCDate(), nextInvoiceOn: R.iso(at), subscriptionStartedAt: at,
       accessUntil: at, status: 'active' });
   } else fail('Action must be approve or activate', 400);
+  Object.assign(patch, answered(c.billing, patch.subscription.modules, at));
   var plan = action === 'activate' ? Policy.invoice(Object.assign({}, patch, selected), c.book, patch.nextInvoiceOn) : null;
   if (plan) plan.marker = 'OMEGA subscription ' + c.root.id + ' / ' + plan.date;
   var source = basis(c), id = Q.key(B.stable({ source: source, action: action, patch: patch, plan: plan }));

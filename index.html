@@ -4654,10 +4654,11 @@ function checkPackagePayment(btn){
     btn.disabled = false; btn.textContent = "I've paid";
   }).catch(function(e){ msg.textContent = 'Could not check — ' + (e.message || e); btn.disabled = false; btn.textContent = "I've paid"; });
 }
-/* the one package menu, handed this page's package view; a change refreshes the view so the tiles and the panel follow */
-function openPackageMenu(moduleKey){
+/* the one package menu, handed this page's package view; a change refreshes the view so the tiles and the panel follow.
+   `how` opens it on one module and one step ({ single:true, intent:'remove' } is a card's Opt out) */
+function openPackageMenu(moduleKey, how){
   var ws = window.OMEGA_WORKSPACE; if (!ws || !ws.packaged || !window.OmegaPackageMenu) return false;
-  return OmegaPackageMenu.open(moduleKey || undefined, { view: ws.packageAccess, onChanged: function(){
+  return OmegaPackageMenu.open(moduleKey || undefined, { view: ws.packageAccess, single: !!(how && how.single), intent: how && how.intent, onChanged: function(){
     (window.OmegaTenant && OmegaTenant.refreshPackage ? OmegaTenant.refreshPackage() : Promise.resolve()).then(function(){ try { loadBilling(); } catch(e){} try { if (window.renderApps) renderApps(); } catch(e){} });
   } });
 }
@@ -4698,7 +4699,7 @@ function _moduleCard(m, state){
   h += held ? '<span class="mod-live">Live</span>' : bought ? '<span class="mod-soon">Paid for</span>' : '<button type="button" class="mod-add" data-add-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-add-module\'))">+ Add</button>';
   h += '<div class="mod-head"><div class="mod-ico">'+ico+'</div><div style="min-width:0"><div class="mod-name">'+esc(logic ? 'Omega Logic \u00B7 '+m.name : m.name)+'</div><div class="mod-shelf">'+esc(line)+'</div></div></div>';
   h += '<ul class="mod-feat">'+(m.features||[]).slice(0,3).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')+'</ul>';
-  if ((held || bought) && m.key !== 'lite') h += '<button type="button" class="ows-pill" data-remove-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-remove-module\'))">Opt out</button>';
+  if ((held || bought) && m.key !== 'lite') h += '<button type="button" class="ows-pill" data-remove-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-remove-module\'), { single: true, intent: \'remove\' })">Opt out</button>';
   var shown = tools.slice(0, held ? 4 : 3);
   h += '<div class="mod-tools">'+shown.map(function(n){ return '<span class="mod-chip">'+esc(n)+'</span>'; }).join('')+(tools.length>shown.length?'<span class="mod-chip">+'+(tools.length-shown.length)+'</span>':'')+'</div></div>';
   return h;

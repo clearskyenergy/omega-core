@@ -100,12 +100,12 @@
     pane.appendChild(el('h3', 'In your package'));
     global.OmegaPackageMenu.picker(pane.appendChild(el('div')), { catalog: data.modules, modules: owned, readOnly: true });
     var removals = el('div', '', 'pp-removals'); pane.appendChild(removals);
-    pane.appendChild(el('h3', 'Add to your package'));
+    pane.appendChild(el('h3', 'Opt in to more'));
     var cards = el('div', '', 'pp-cards'); pane.appendChild(cards);
     function draw(summary) {
       headline(summary);
       var pending = {}; (summary.pending || []).forEach(function (p) { (p.add || []).forEach(function (k) { pending[k] = p; }); });
-      var state = { canManage: true, pending: pending, summary: summary, orgId: orgId, onChanged: function () { setTimeout(function () { reload('cust'); }, 400); } };
+      var state = { canManage: true, pending: pending, summary: summary, orgId: orgId, company: data.name, catalog: data.modules, onChanged: function () { setTimeout(function () { reload('cust'); }, 400); } };
       pendingHost.textContent = '';
       if (summary.pending && summary.pending.length) {
         pendingHost.appendChild(el('h3', 'Waiting for payment'));
@@ -123,7 +123,7 @@
         global.OmegaPackageMenu.subscribeControl(card.querySelector('.opm-act'), m, state);
         cards.appendChild(card);
       });
-      if (!cards.children.length) cards.appendChild(el('p', 'Your package includes every module in the catalog.', 'pp-note'));
+      if (!cards.children.length && data.modules.length) cards.appendChild(el('p', 'Your package includes every module in the catalog.', 'pp-note'));
       removals.textContent = '';
       var list = el('div', '', 'pp-row');
       (summary.subscription || owned).filter(function (k) { return k !== 'lite'; }).forEach(function (k) {
@@ -133,7 +133,7 @@
         global.OmegaPackageMenu.subscribeControl(wrap.appendChild(el('span')), m, state);
         list.appendChild(wrap);
       });
-      if (list.children.length) { removals.appendChild(el('p', 'Removals take effect at the quarterly review; your access is unchanged until then.', 'pp-note')); removals.appendChild(list); }
+      if (list.children.length) { removals.appendChild(el('p', 'Opt out of a module here. It stays on, and billed, until the quarterly review' + (summary.nextReviewOn ? ' (' + summary.nextReviewOn + ')' : '') + '; no refund for time already billed.', 'pp-note')); removals.appendChild(list); }
     }
     function refresh() {
       var ticket = ++sequence;
@@ -206,14 +206,19 @@
      switched on (modules). A legacy tenant: the modules its tier, add-ons and
      allowlist open — the SAME rule the tenant's own Modules page shows as Live
      (OmegaWorkspaceHub.moduleState on the real tool catalog) — plus anything it
-     opted in to with a price on record (billing.optIns, plan-change opt-in).
-     The picker starts from that; staff change it and Review activation. */
+     opted in to with a price on record (billing.optIns, plan-change opt-in),
+     less anything it asked to opt OUT of (billing.optOuts, plan-change
+     opt-out; a packaged tenant's removalRequests). The picker starts from
+     that and labels each request so staff see why a box is or is not
+     ticked; staff change it and Review activation, which answers them. */
   function dayOf(v) { if (!v) return ''; if (typeof v === 'string') return v.slice(0, 10); var sec = v._seconds || v.seconds; if (sec) return new Date(sec * 1000).toISOString().slice(0, 10); return ''; }
   function standing(data) {
-    var b = data.billing || {}, byKey = {}, out = { packaged: b.packaged === true, held: [], bought: [], on: [], requested: [], preselect: ['lite'], lines: [] };
+    var b = data.billing || {}, byKey = {}, out = { packaged: b.packaged === true, held: [], bought: [], on: [], requested: [], optingOut: [], notes: {}, preselect: ['lite'], lines: [] };
     (data.modules || []).forEach(function (m) { byKey[m.key] = m; });
     function names(keys) { return keys.map(function (k) { return byKey[k] ? byKey[k].name : k; }).join(', ') || 'nothing'; }
     Object.keys(b.optIns || {}).forEach(function (k) { var o = b.optIns[k]; if (o && o.status === 'requested') out.requested.push(Object.assign({ key: k }, o)); });
+    Object.keys(b.optOuts || {}).forEach(function (k) { var o = b.optOuts[k]; if (o && o.status === 'requested') out.optingOut.push(Object.assign({ key: k }, o)); });
+    if (out.packaged) (b.removalRequests || []).forEach(function (r) { if (r && r.module) out.optingOut.push({ key: r.module, name: byKey[r.module] ? byKey[r.module].name : r.module, requestedAt: r.requestedAt, requestedBy: r.by, reason: r.reason, review: true }); });
     if (out.packaged) {
       out.bought = (b.subscription && Array.isArray(b.subscription.modules) && b.subscription.modules.length ? b.subscription.modules : b.modules) || ['lite']; out.on = b.modules || [];
       out.preselect = out.bought.slice();
@@ -235,6 +240,11 @@
       out.lines.push(pay.length ? 'Pays ' + pay.join(' · ') : 'No payment on record');
     }
     if (out.requested.length) out.lines.push('Requested: ' + out.requested.map(function (o) { return (o.name || o.key) + (o.display ? ' (' + o.display + ')' : '') + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : ''); }).join('; '));
+    if (out.optingOut.length) out.lines.push((out.packaged ? 'Opting out at review: ' : 'Opt-out requested: ') + out.optingOut.map(function (o) { return (o.name || o.key) + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : '') + (o.reason ? ' ("' + o.reason + '")' : ''); }).join('; '));
+    /* what the tenant asked to leave is not preselected: activation is the
+       answer to the request, so the picker starts from the plan they want */
+    out.optingOut.forEach(function (o) { if (o.key !== 'lite') out.preselect = out.preselect.filter(function (k) { return k !== o.key; }); out.notes[o.key] = o.review ? 'Opting out at review' : 'Opt-out requested'; });
+    out.requested.forEach(function (o) { out.notes[o.key] = 'Opt-in requested'; });
     return out;
   }
   function render(data, profile) {
@@ -255,12 +265,12 @@
       var strip = el('div', '', 'pp-standing'); strip.id = 'pp-standing';
       strip.appendChild(el('b', stand.packaged ? 'Today: on a subscription package' : 'Today: ' + stand.lines[0]));
       stand.lines.slice(stand.packaged ? 0 : 1).forEach(function (l) { strip.appendChild(el('div', l)); });
-      strip.appendChild(el('div', data.billing.proposedPackage ? 'Preselected from the proposal on file.' : stand.packaged ? 'Preselected from what it subscribes to; change it and Review activation.' : 'Preselected from what the tier opens today plus any opt-in request; change it and Review activation moves the tenant onto a package, where additions land on the monthly invoice.', 'pp-note'));
+      strip.appendChild(el('div', data.billing.proposedPackage ? 'Preselected from the proposal on file.' : stand.packaged ? 'Preselected from what it subscribes to, less any opt-out at review; change it and Review activation.' : 'Preselected from what the tier opens today, plus any opt-in request and less any opt-out request; change it and Review activation moves the tenant onto a package, where additions land on the monthly invoice, and answers each request.', 'pp-note'));
       left.appendChild(strip);
       var row = el('div', '', 'pp-row'); row.appendChild(el('span', 'Customer type', 'pp-note'));
       row.appendChild(choice('starter', Object.keys(data.starters).map(function (k) { return [k, (data.starterLabels || {})[k] || k]; }), Object.keys(data.starters)[0]));
       row.appendChild(button('Apply starter pack', function () { picker.set(data.starters[$('starter').value]); })); left.appendChild(row);
-      var menu = el('div'); left.appendChild(menu); picker = global.OmegaPackageMenu.picker(menu, { catalog: data.modules, modules: selected.modules || ['lite'], onChange: function (keys) { proposalHref(); refreshQuote(keys); } });
+      var menu = el('div'); left.appendChild(menu); picker = global.OmegaPackageMenu.picker(menu, { catalog: data.modules, modules: selected.modules || ['lite'], notes: stand.notes, onChange: function (keys) { proposalHref(); refreshQuote(keys); } });
       rail.appendChild(el('div', 'Menu value (list)', 'pp-k')); var list = el('div', 'Loading…', 'pp-big'); list.id = 'pp-list'; rail.appendChild(list);
       [['fits', 'Plan that fits'], ['monthly', 'Monthly charge'], ['first', 'During credit window'], ['fee', 'Service fee / year']].forEach(function (p) { var r = el('div', '', 'pp-stat'); r.appendChild(el('span', p[1])); var v = el('span', '—'); v.id = 'pp-' + p[0]; r.appendChild(v); rail.appendChild(r); });
       rail.appendChild(choice('plan', [['auto', 'Lowest monthly price'], ['alacarte', 'Lite + modules'], ['field', 'Field'], ['pro', 'Pro']], selected.plan || 'auto'));
