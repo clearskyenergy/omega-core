@@ -113,7 +113,7 @@
     var trialEnd = at(input.trialEndsAt);
     if (trialEnd) {
       var left = Math.ceil((trialEnd - now) / DAY);
-      if (left <= 14) push({ key: 'trial', cls: left <= 3 ? 'hot' : 'warn', score: left <= 3 ? 88 : 80, when: 0, t: left > 0 ? 'Your trial ends in ' + plural(left, 'day', 'days') : 'Your trial has ended', s: 'Keep what you use, or pick a smaller plan.', cta: 'See plans', href: '/marketplace.html' });
+      if (left <= 14) push({ key: 'trial', cls: left <= 3 ? 'hot' : 'warn', score: left <= 3 ? 88 : 80, when: 0, t: left > 0 ? 'Your trial ends in ' + plural(left, 'day', 'days') : 'Your trial has ended', s: 'Keep what you use, or pick a smaller plan.', cta: 'See plans', href: '/workspace#plans' });
     }
 
     /* my to-dos */

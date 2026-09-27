@@ -130,14 +130,103 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .pc .why{font-size:12px;color:var(--ows-ink2);line-height:1.35}.pc .why.good{color:var(--ows-green)}.pc .why.warn{color:var(--ows-amber)}.pc .why.hot{color:var(--ows-coral)}
 .pc .fin{font:500 11px "DM Mono",monospace;color:var(--ows-teal-d);background:var(--ows-teal-soft);border-radius:6px;padding:3px 7px;align-self:flex-start}
 .next .row{cursor:pointer;transition:box-shadow .12s}.next .row:hover{box-shadow:var(--ows-shadow)}
-/* plan & billing */
-.bill{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}.bill .full{grid-column:1/-1}
-.bcard{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
-.bcard h3{margin:0;font:600 14px "DM Sans",sans-serif;display:flex;align-items:center;gap:8px}.bcard h3 .ows-chip{margin-left:auto}
-.bcard .big{font:500 26px "DM Mono",monospace;letter-spacing:-.01em;line-height:1.1}.bcard .big small{font:400 12px "DM Sans",sans-serif;color:var(--ows-ink2);margin-left:8px}
-.bcard p{margin:0;font-size:12.5px;color:var(--ows-ink2);line-height:1.5}.bcard p b{color:var(--ows-ink)}.bcard .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:6px}
-.inv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:8px 0;border-bottom:1px solid var(--ows-line);font-size:13px;align-items:center}.inv:last-child{border-bottom:0}.inv b{font-weight:600}.inv small{display:block;color:var(--ows-ink3);font-size:11.5px}
-.inv .amt{font:500 14px "DM Mono",monospace;text-align:right;white-space:nowrap}.inv .st{display:block;font-size:11px;color:var(--ows-ink2);text-align:right}.inv .st.paid{color:var(--ows-green)}.inv .st.unpaid{color:var(--ows-amber)}.inv .ows-pill{justify-self:end}
+/* the card a link lands on (#module-<key>) and the plans shelf (#plans), moved here from the marketplace */
+.mod{scroll-margin-top:84px}.mod[data-selected]{border-color:var(--ows-teal-d);box-shadow:0 0 0 2px var(--ows-teal-d),0 10px 28px rgba(42,140,163,.18)}
+#modules-plans{display:flex;flex-direction:column;gap:12px;scroll-margin-top:72px}#modules-plans:empty{display:none}
+#modules-plans h3{margin:14px 0 0;font:600 15px Poppins,"DM Sans",sans-serif;display:flex;flex-direction:column;gap:2px}#modules-plans h3 small{font:400 12.5px "DM Sans",sans-serif;color:var(--ows-ink2)}
+.plans-note{margin:0;padding:10px 14px;border-radius:12px;background:var(--ows-sunk);border:1px solid var(--ows-line);font-size:13px;color:var(--ows-ink2);line-height:1.5}.plans-note b{color:var(--ows-ink)}
+.plans{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.planc{position:relative;display:flex;flex-direction:column;gap:8px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:0 16px 16px;overflow:hidden;min-width:0}
+.planc .band{height:6px;margin:0 -16px 8px}.planc.on{border-color:var(--ows-teal-d);box-shadow:inset 0 0 0 1px var(--ows-teal-d)}
+.planc .nm{display:flex;align-items:center;justify-content:space-between;gap:8px;font:600 16px Poppins,"DM Sans",sans-serif}
+.planc .pr{font:500 24px/1.1 "DM Mono",ui-monospace,monospace;letter-spacing:-.02em;font-variant-numeric:tabular-nums}.planc .pr span{font:500 13px "DM Sans",sans-serif;color:var(--ows-ink2);letter-spacing:0;margin-left:3px}
+.planc ul{margin:0;padding-left:16px;font-size:12.5px;line-height:1.55}.planc .fee{margin-top:auto;padding-top:8px;border-top:1px solid var(--ows-line);font-size:12px;color:var(--ows-ink2)}
+.starters{display:flex;gap:8px;flex-wrap:wrap}.starter{display:inline-flex;flex-direction:column;gap:1px;padding:7px 11px;border-radius:10px;background:var(--ows-paper);border:1px solid var(--ows-line);font-size:12px;color:var(--ows-ink2);min-width:0;max-width:100%}.starter b{color:var(--ows-ink);font-weight:600}
+@media (max-width:560px){.plans{grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:82%;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;-webkit-overflow-scrolling:touch}.planc{scroll-snap-align:start}
+  .starters{flex-wrap:nowrap;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;-webkit-overflow-scrolling:touch}.starter{flex:0 0 72%;scroll-snap-align:start}}
+/* PLAN & BILLING (Tommy, 2026-09-27: "it needs to look amazing"). Phone
+   first: one column at 390px, owe and payment side by side from 761px. The
+   subscription wears the hub's night sky, the payment method looks like the
+   card it stands for, and every date on the page is one style. */
+#billing .hd h2{font:600 24px/1.15 Poppins,"DM Sans",sans-serif;letter-spacing:-.015em}
+.bill{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:761px){.bill{grid-template-columns:repeat(2,minmax(0,1fr))}.bill .full{grid-column:1/-1}}
+.bcard{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:18px 20px;display:flex;flex-direction:column;gap:12px;min-width:0;box-shadow:var(--ows-shadow)}
+.bcard>h3{margin:0;display:flex;align-items:center;gap:8px;min-height:22px;font:500 11px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
+.bcard .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.bcard .fine{margin:0;font-size:12.5px;color:var(--ows-ink2);line-height:1.5}.bcard .fine b{color:var(--ows-ink)}
+.bcard .fine.lock{display:flex;gap:8px;align-items:flex-start}.bcard .fine.lock svg{width:14px;height:14px;flex:none;margin-top:2px;color:var(--ows-green)}
+.bcard .warnline{margin:0;padding:8px 12px;border-radius:10px;background:var(--ows-amber-soft);color:var(--ows-ink);font-size:12.5px}.bcard .warnline b{color:var(--ows-amber)}
+.bcard .failed{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0;padding:12px 14px;border-radius:12px;border:1px dashed var(--ows-line2);color:var(--ows-ink2);font-size:13px}.bcard .failed .ows-pill{margin-left:auto}
+.linkbtn{align-self:flex-start;padding:2px 0;font:600 12.5px "DM Sans",sans-serif;color:var(--ows-brand-ink);text-decoration:underline;text-underline-offset:3px}.linkbtn[disabled]{opacity:.55;cursor:default}
+/* the subscription: the hub's night sky */
+.bhero{position:relative;overflow:hidden;border:0;border-radius:22px;padding:22px 24px;gap:16px;color:#EAF7FB;background:radial-gradient(120% 140% at 85% 0%,#17293A 0%,#0C1824 55%,#050A11 100%);box-shadow:0 10px 30px rgba(5,10,17,.28)}
+.bhero::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(47,227,200,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(47,227,200,.06) 1px,transparent 1px);background-size:32px 32px;-webkit-mask-image:linear-gradient(180deg,#000,transparent 85%);mask-image:linear-gradient(180deg,#000,transparent 85%)}
+.bhero>*{position:relative}.bhero>h3{color:#8FB3C2}
+.bh-state{margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font:600 11.5px "DM Sans",sans-serif;letter-spacing:0;text-transform:none;background:rgba(47,227,200,.14);color:#2FE3C8;white-space:nowrap}
+.bh-state::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}.bh-state.warn{background:rgba(255,196,94,.16);color:#FFC45E}.bh-state.bad{background:rgba(238,90,79,.2);color:#FF8A80}
+.bh-main{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.bh-plan{min-width:0}.bh-plan b{display:block;font:700 30px/1.08 Poppins,"DM Sans",sans-serif;color:#fff;letter-spacing:-.02em;text-wrap:balance}.bh-plan small{display:block;margin-top:6px;font-size:13px;color:#8FB3C2}
+.bh-price{text-align:right}.bh-price b{font:500 42px/1 "DM Mono",ui-monospace,monospace;color:#fff;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.bh-price span{font:500 14px "DM Sans",sans-serif;color:#8FB3C2;margin-left:4px}.bh-price small{display:block;margin-top:5px;font-size:12px;color:#8FB3C2}
+.bh-price.words b{font:600 16px/1.3 "DM Sans",sans-serif;letter-spacing:0}
+.bh-mods{display:flex;gap:6px;flex-wrap:wrap}
+.bh-mod{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:5px 11px 5px 6px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#EAF7FB;font:600 12.5px "DM Sans",sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.ows a.bh-mod{color:#EAF7FB}a.bh-mod:hover{background:rgba(255,255,255,.12)}
+.bh-mod{padding-left:10px}.bh-mod i{width:8px;height:8px;border-radius:50%;flex:none;background:#2FE3C8;box-shadow:0 0 8px rgba(47,227,200,.65)}.bh-mod em{font-style:normal;font-weight:500;font-size:11px;color:#8FB3C2}
+.bh-mod.soon{background:transparent;border-style:dashed}.bh-mod.soon i{background:#FFC45E;box-shadow:none}.bh-mod.soon em{color:#FFC45E}.bh-mod.leaving i{background:#FF8A80;box-shadow:none}.bh-mod.leaving em{color:#FF8A80}
+.bh-mod.add,body.ows a.bh-mod.add{background:transparent;border:1px dashed rgba(47,227,200,.55);color:#2FE3C8;padding-left:11px}
+.bh-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.bh-fact{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:10px 12px;min-width:0}
+.bh-fact .l{font:500 10.5px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:#7F97AA}
+.bh-fact .v{margin-top:3px;font:600 14px/1.3 "DM Sans",sans-serif;color:#fff;overflow-wrap:anywhere}
+.bh-editor{margin:0;display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.5;color:#8FB3C2}.bh-editor svg{width:15px;height:15px;flex:none;margin-top:2px;color:#2FE3C8}
+.bhero .ows-pill{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff;padding:7px 14px}.bhero .ows-pill.primary{background:#2FE3C8;border-color:#2FE3C8;color:#05202A}
+/* what you owe */
+.owe-amt{display:flex;align-items:center;gap:14px}
+.owe-amt .ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;flex:none;background:var(--ows-sunk);color:var(--ows-ink3);font:700 19px "DM Sans",sans-serif}.owe-amt .ic svg{width:22px;height:22px}
+.owe-amt.ok .ic{background:var(--ows-green-soft);color:var(--ows-green)}.owe-amt.due .ic{background:var(--ows-amber-soft);color:var(--ows-amber)}
+.owe-amt b{display:block;font:500 34px/1 "DM Mono",ui-monospace,monospace;letter-spacing:-.02em;font-variant-numeric:tabular-nums}.owe-amt small{display:block;margin-top:5px;font-size:13px;color:var(--ows-ink2)}
+.paybtn{align-self:flex-start;justify-content:center;padding:10px 22px;font-size:14px;border-radius:12px}
+.owe-when{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.owe-when>div{background:var(--ows-sunk);border:1px solid var(--ows-line);border-radius:12px;padding:10px 12px;min-width:0}
+.owe-when .l{display:block;font:500 10.5px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}.owe-when .v{display:block;margin-top:3px;font-weight:600;overflow-wrap:anywhere}
+.owe .linkbtn{margin-top:auto}
+/* the payment method: a card that looks like a card (never its digits: we do not hold them) */
+.pmc{position:relative;overflow:hidden;isolation:isolate;width:100%;max-width:340px;aspect-ratio:1.586/1;border-radius:16px;padding:16px 18px;color:#fff;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 12px 28px rgba(11,42,61,.22)}
+.pmc.qb{background:linear-gradient(135deg,#053A45 0%,#2A8CA3 100%)}.pmc.stripe{background:linear-gradient(135deg,#0B2F52 0%,#2B5FA8 100%)}.pmc.manual{background:linear-gradient(135deg,#17293A 0%,#0C1824 100%)}
+.pmc.none{background:var(--ows-sunk);color:var(--ows-ink2);border:1.5px dashed var(--ows-line2);box-shadow:none}
+.pmc::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.16),transparent 70%);z-index:-1}.pmc.none::after{display:none}
+.pmc-top,.pmc-foot{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.pmc .sub{font:500 10.5px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;opacity:.78}
+.pmc .chip{width:36px;height:27px;border-radius:6px;background:linear-gradient(135deg,#E8D9A8,#B89A4E);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}.pmc.none .chip{display:none}
+.pmc .prov{font:700 20px/1.15 Poppins,"DM Sans",sans-serif}.pmc .prov small{display:block;margin-top:3px;font:500 12px "DM Sans",sans-serif;opacity:.8}
+.pmc-foot{font-size:12px;min-width:0}.pmc-foot>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.9}.pmc .auto{flex:none;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.18);font-weight:600;white-space:nowrap}
+.pm-body{display:flex;flex-direction:column;gap:12px;min-width:0}.pm-side{display:flex;flex-direction:column;gap:10px;min-width:0}
+@media (min-width:1180px){.pm-body{display:grid;grid-template-columns:minmax(0,270px) minmax(0,1fr);gap:18px;align-items:center}}
+.how summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ows-brand-ink)}.how ol{margin:8px 0 0;padding-left:18px;font-size:12.5px;line-height:1.6}
+/* changes in progress: one row per module on its way in or out */
+.chg-row{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px 0;border-bottom:1px solid var(--ows-line)}.chg-row:first-of-type{padding-top:0}.chg-row:last-of-type{border-bottom:0;padding-bottom:0}
+.chg-row .dot{width:18px;height:18px;border-radius:50%;margin-top:2px}.chg-row .ds{min-width:0}.chg-row .ds b{font-weight:600}.chg-row .ds small{display:block;margin-top:2px;color:var(--ows-ink2);font-size:12.5px;line-height:1.45}
+.chg-row .act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.bpill{display:inline-flex;align-items:center;gap:5px;margin-left:6px;padding:2px 8px;border-radius:999px;font:600 11px "DM Sans",sans-serif;background:var(--ows-sunk);color:var(--ows-ink2);white-space:nowrap;vertical-align:1px}.bpill.warn{background:var(--ows-amber-soft);color:var(--ows-amber)}.bpill.out{background:#FDECEC;color:#C0392B}.bpill.in{background:var(--ows-brand-soft);color:var(--ows-brand-ink)}
+.steps{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 0;padding:0;list-style:none}
+.steps li{font-size:11.5px;padding:2px 9px;border-radius:999px;background:var(--ows-sunk);color:var(--ows-ink3)}.steps li.done{background:var(--ows-green-soft);color:var(--ows-green)}.steps li.done::before{content:"\2713  "}.steps li.now{background:var(--ows-brand-soft);color:var(--ows-brand-ink);font-weight:600}
+/* billing history */
+.irow{display:grid;grid-template-columns:118px minmax(0,1fr) auto 150px;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid var(--ows-line);font-size:13px}.irow:last-child{border-bottom:0;padding-bottom:0}
+.irow.head{padding:0 0 8px;font:500 10.5px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}.irow.head span:nth-child(3){text-align:right}.irow.head span:last-child{text-align:right}
+.irow .dt{font:500 12.5px "DM Mono",ui-monospace,monospace;color:var(--ows-ink2);white-space:nowrap}
+.irow .ds{min-width:0}.irow .ds b{display:block;font-weight:600}.irow .ds small{display:block;color:var(--ows-ink3);font-size:11.5px}
+.irow .amt{font:500 14px "DM Mono",ui-monospace,monospace;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.irow .st{display:flex;gap:8px;justify-content:flex-end;align-items:center}.irow .view{font-size:12.5px;font-weight:600;color:var(--ows-brand-ink)}
+.spill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font:600 11.5px "DM Sans",sans-serif;background:var(--ows-sunk);color:var(--ows-ink2);white-space:nowrap}.spill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.spill.paid{background:var(--ows-green-soft);color:var(--ows-green)}.spill.open{background:var(--ows-amber-soft);color:var(--ows-amber)}.spill.overdue{background:#FDECEC;color:#C0392B}.spill.void{background:var(--ows-sunk);color:var(--ows-ink3)}
+.owe .irow{grid-template-columns:minmax(0,1fr) auto auto;padding:8px 0}.bill .empty{background:transparent}
+@media (max-width:760px){.bh-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){#billing .hd h2{font-size:22px}.bcard{padding:16px}.bhero{padding:18px 16px;border-radius:18px}.bh-main{flex-direction:column;align-items:flex-start;gap:10px}.bh-price{text-align:left}.bh-price b{font-size:36px}.bh-plan b{font-size:26px}
+  .bcard .acts>.ows-pill{flex:1 1 auto;justify-content:center;padding:9px 14px}.pmc{max-width:none}.paybtn{align-self:stretch}
+  .chg-row{grid-template-columns:18px minmax(0,1fr)}.chg-row .act{grid-column:2;justify-content:flex-start}
+  .irow{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px}.irow.head{display:none}.irow .ds{grid-area:1/1}.irow .amt{grid-area:1/2}.irow .dt{grid-area:2/1;font-size:11.5px}.irow .st{grid-area:2/2}.owe .irow{grid-template-columns:minmax(0,1fr) auto auto}.owe .irow>*{grid-area:auto}
+  .owe-when{grid-template-columns:repeat(2,minmax(0,1fr))}.owe-when>div:last-child:nth-child(odd){grid-column:1/-1}}
 .empty{color:var(--ows-ink2);font-size:13px;background:var(--ows-paper);border:1px dashed var(--ows-line2);border-radius:12px;padding:16px 18px;line-height:1.5}.empty b{color:var(--ows-ink)}
 /* around you */
 .community{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
@@ -180,15 +269,16 @@ body.refused #refused{display:block}body.refused #content{display:none}
         </section>
         <section class="sec" id="tools">
           <a class="back" href="/workspace">‹ Home</a>
-          <div class="hd"><div><h2>All tools</h2><div class="sub" id="tools-sub">Every tool in the catalog. Live ones open; locked ones say what plan carries them.</div></div><a class="ows-pill ghost" href="/marketplace.html">Marketplace ›</a></div>
+          <div class="hd"><div><h2>All tools</h2><div class="sub" id="tools-sub">Every tool in the catalog. Live ones open; locked ones say what plan carries them.</div></div><a class="ows-pill ghost" data-sn="marketplace" href="/marketplace.html">Tools catalogue ›</a></div>
           <div class="plan" id="plan"></div>
           <div id="tools-body"></div>
         </section>
         <section class="sec" id="modules">
           <a class="back" href="/workspace">‹ Home</a>
-          <div class="hd"><div><h2>Modules</h2><div class="sub" id="modules-sub">Build your own experience and pay for what you need. What you hold is Live; anything else is one click to add.</div></div><a class="ows-pill ghost" data-sn="marketplace" href="/marketplace.html">Marketplace ›</a></div>
+          <div class="hd"><div><h2>Modules</h2><div class="sub" id="modules-sub">Build your own experience and pay for what you need. What you hold is Live; anything else is one click to add.</div></div><a class="ows-pill ghost" href="/workspace#billing">Plan &amp; billing ›</a></div>
           <div id="modules-plan"></div>
           <div id="modules-body"></div>
+          <div id="modules-plans"></div>
         </section>
         <section class="sec" id="flight">
           <a class="back" href="/workspace">‹ Home</a>
@@ -202,7 +292,7 @@ body.refused #refused{display:block}body.refused #content{display:none}
         </section>
         <section class="sec" id="billing">
           <a class="back" href="/workspace">‹ Home</a>
-          <div class="hd"><div><h2>Plan &amp; billing</h2><div class="sub" id="billing-sub">What you hold, what you pay, what you owe and when, and your invoices.</div></div><a class="ows-pill ghost" href="/workspace#modules">Modules ›</a></div>
+          <div class="hd"><div><div class="eyebrow">Account</div><h2>Plan &amp; billing</h2><div class="sub" id="billing-sub">Your plan, your modules, what is due and your invoices.</div></div></div>
           <div id="billing-body"></div>
         </section>
       </div>
@@ -277,15 +367,38 @@ S.mount({ current: 'home', tabs: true, search: search, onNav: function (key) {
   return false;
 } });
 var VIEWS = { home: 'home', tools: 'tools', modules: 'modules', flight: 'flight', team: 'team', feed: 'team', around: 'team', billing: 'billing' };
-function go(key) {
+/* where a #module-<key> or #plans link landed on the Modules page; kept
+   across re-renders (the catalog and the prices arrive after the page) and
+   dropped the moment the person goes anywhere else */
+var MOD_FOCUS = null, MOD_FOCUS_DONE = false, PLAN_FOCUS = false;
+function view() { return byId('content').getAttribute('data-view'); }
+function go(key, keepFocus) {
   var v = VIEWS[key] || 'home';
+  if (!keepFocus) { MOD_FOCUS = null; PLAN_FOCUS = false; markFocus(); }
   byId('content').setAttribute('data-view', v);
   var mark = v === 'home' ? 'home' : v === 'flight' ? 'projects' : v;
   Array.prototype.forEach.call(document.querySelectorAll('#side-nav .sn-item'), function (a) { a.classList.toggle('active', a.getAttribute('data-key') === mark); });
-  Array.prototype.forEach.call(document.querySelectorAll('.ows-tabs a'), function (a) { a.classList.toggle('active', a.getAttribute('data-tab') === mark); });
+  /* the phone has no Plan & billing tab: it lives under Me, so Me is lit */
+  Array.prototype.forEach.call(document.querySelectorAll('.ows-tabs a'), function (a) { a.classList.toggle('active', a.getAttribute('data-tab') === (mark === 'billing' ? 'me' : mark)); });
   if (v === 'home' && window.location.hash) { try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (e) {} }
   window.scrollTo({ top: 0, behavior: 'auto' });
 }
+/* A link to /workspace#<somewhere> is a place on THIS page: route to it
+   without a reload (which would also drop ?home= and the scroll). Heard on
+   the document, before omega-splash.js hears it on the window, so the mark
+   never rises over a page that is not leaving. */
+function nav(href) {
+  var m = /^\/workspace(#.*)?$/.exec(String(href || ''));
+  if (!m) { window.location.href = href; return; }
+  if (!m[1] || m[1] === '#') { go('home'); return; }
+  if (window.location.hash === m[1]) route(); else window.location.hash = m[1];
+}
+document.addEventListener('click', function (e) {
+  if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || !WS) return;
+  var a = e.target && e.target.closest ? e.target.closest('a[href^="/workspace#"]') : null;
+  if (!a || a.getAttribute('target')) return;
+  e.preventDefault(); S.closeDrawer(); nav(a.getAttribute('href'));
+});
 
 /* ── sign-in: the same chain as every signed-in page ────────────────────── */
 var nullSeen = 0, tries = 0;
@@ -501,7 +614,7 @@ function renderToday() {
   Array.prototype.forEach.call(byId('today').querySelectorAll('.next .row[data-row]'), function (row) { row.addEventListener('click', function (e) {
     if (e.target && e.target.closest && e.target.closest('a,button')) return;
     var r = needs()[Number(row.getAttribute('data-row'))]; if (!r) return;
-    if (r.href) { if (/^https?:/.test(r.href)) window.open(r.href, '_blank', 'noopener'); else window.location.href = r.href; } else act(r);
+    if (r.href) { if (/^https?:/.test(r.href)) window.open(r.href, '_blank', 'noopener'); else nav(r.href); } else act(r);
   }); });
 }
 /* ── Modules: the Ladder as a page (Tommy, 2026-09-27) ──────────────────
@@ -512,21 +625,33 @@ function renderToday() {
    (/api/package-catalog, once) and + Add, which opens the ONE menu
    (omega-package-menu.js) on that module; a change re-asks the server.
    A legacy workspace reads the PUBLIC price list (/api/offerings, once)
-   and every module is judged by OmegaWorkspaceHub.moduleState, the rule
-   the marketplace store shares: Live when the tier holds it, Partly with
-   the count, else the price and Ask, which is the store on that module.
-   Nothing here is a second list or a price. */
+   and every module is judged by OmegaWorkspaceHub.moduleState: Live when
+   the tier holds it, Partly with the count, else the price and Opt in.
+   The plans shelf closes the page (#plans), and #module-<key> lands on one
+   card. Nothing here is a second list or a price. */
 var MOD_SHELF = { floor: 'Included in every plan', addon: 'Add-ons', standard: 'Standard shelf', premium: 'Premium shelf', deliverable: 'Deliverables', platform: 'Omega Logic' }, MOD_ORDER = ['floor', 'addon', 'standard', 'premium', 'deliverable', 'platform'];
 var MOD_SHELF_SUB = { floor: 'The floor every package stands on.', addon: 'Small and specific: one thing, added to any plan.', standard: 'The working tools of a site: sizing, estimating, rebates. Metered where they produce a deliverable.', premium: 'The deeper work: plan sets, intelligence, engineering, finance, compute, operations, your own storefront.', deliverable: 'Work product you order by the piece: a matrix, a site study.', platform: 'Omega Logic by department. Each part is its own opt-in and needs Office.' };
 var MOD_COVER = { floor: 'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)', addon: 'linear-gradient(135deg,#053A45 0%,#2A8CA3 100%)', standard: 'linear-gradient(135deg,#0B2F52 0%,#1B4F8A 100%)', premium: 'linear-gradient(135deg,#243B53 0%,#3E6E8E 100%)', deliverable: 'linear-gradient(135deg,#16202B 0%,#00807C 100%)', platform: 'linear-gradient(135deg,#17293A 0%,#0C1824 100%)' };
 var MOD_PRICES = null, MOD_CATALOG = null, MOD_ASKED = false, MOD_STARTERS = null, MOD_LABELS = null;
-function askModules(packaged) {
-  if (packaged) return (window.OmegaPackageMenu ? OmegaPackageMenu.api('/api/package-catalog') : Promise.reject(new Error('no menu')));
-  return new Promise(function (res, rej) {
+/* the PUBLIC price list, asked once: a legacy workspace's modules and every
+   workspace's plans shelf read it (the prices are the server's) */
+var OFFER = null, OFFER_P = null;
+function askOffer() {
+  if (OFFER_P) return OFFER_P;
+  OFFER_P = new Promise(function (res, rej) {
     try { var x = new XMLHttpRequest(); x.open('GET', '/api/offerings'); x.onload = function () { try { var j = JSON.parse(x.responseText); if (x.status === 200 && j && Array.isArray(j.modules)) res(j); else rej(new Error('unavailable')); } catch (e) { rej(e); } }; x.onerror = function () { rej(new Error('unavailable')); }; x.send(); }
     catch (e) { rej(e); }
   });
+  OFFER_P.then(function (j) { OFFER = j; renderPlans(); }, function () { OFFER = { failed: true }; renderPlans(); });
+  return OFFER_P;
 }
+function askModules(packaged) {
+  askOffer();
+  if (packaged) return (window.OmegaPackageMenu ? OmegaPackageMenu.api('/api/package-catalog') : Promise.reject(new Error('no menu')));
+  return askOffer();
+}
+/* try the price list again after it failed */
+function retryModules() { OFFER_P = null; OFFER = null; MOD_ASKED = false; MOD_CATALOG = null; renderModules(); }
 /* which starter packages carry a module: "Popular with EV installers" */
 function popularWith(key) {
   if (!MOD_STARTERS || !MOD_LABELS) return [];
@@ -534,10 +659,12 @@ function popularWith(key) {
 }
 function renderModules() {
   var b = byId('modules-body'), strip = byId('modules-plan'), pa = WS.packageAccess, packaged = !!(pa && pa.packaged && Array.isArray(pa.catalog) && pa.catalog.length);
-  if (!MOD_ASKED) { MOD_ASKED = true; askModules(packaged).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay || m.monthlyDisplay; }); MOD_STARTERS = j.starters || null; MOD_LABELS = j.starterLabels || null; renderModules(); }, function () { MOD_CATALOG = []; renderModules(); }); }
+  /* Plan & billing names the modules from the same catalog, so it repaints when it lands */
+  if (!MOD_ASKED) { MOD_ASKED = true; askModules(packaged).then(function (j) { MOD_PRICES = {}; MOD_CATALOG = j.modules || []; MOD_CATALOG.forEach(function (m) { MOD_PRICES[m.key] = m.priceDisplay || m.monthlyDisplay; }); MOD_STARTERS = j.starters || null; MOD_LABELS = j.starterLabels || null; renderModules(); if (view() === 'billing') renderBilling(); }, function () { MOD_CATALOG = []; renderModules(); if (view() === 'billing') renderBilling(); }); }
+  renderPlans();
   if (!packaged) {
     if (!MOD_CATALOG) { b.innerHTML = '<div class="empty">Loading the catalog…</div>'; return; }
-    if (!MOD_CATALOG.length) { b.innerHTML = '<div class="empty">The price list is unavailable right now. The <a href="/marketplace.html">Marketplace</a> has every module; try again later.</div>'; return; }
+    if (!MOD_CATALOG.length) { b.innerHTML = '<div class="empty" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">The price list could not be loaded right now, so the modules cannot be shown.<button class="ows-pill" type="button" id="modules-retry" style="margin-left:auto">Retry</button></div>'; byId('modules-retry').addEventListener('click', retryModules); return; }
   }
   var ctx = hubCtx(), bl = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}, byKey = {};
   var bought = bl.subscription && Array.isArray(bl.subscription.modules) ? bl.subscription.modules : [];
@@ -565,8 +692,7 @@ function renderModules() {
     if (m.blurb || full.blurb) h += '<p class="blurb">' + esc(m.blurb || full.blurb) + '</p>';
     var feats = m.features || full.features || [];
     if (feats.length) h += '<ul class="feat">' + feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>';
-    if (tools.length) h += '<div class="inside"><b>Inside:</b> ' + tools.map(function (t) { return esc(t.name); }).join(' · ') + '</div>';
-    else if (m.shelf !== 'platform') h += '<div class="inside"><b>Inside:</b> capabilities of Site Map, the editor</div>';
+    h += '<div class="inside">' + insideLine(m, full, tools) + '</div>';
     if (chips) h += '<div class="meta">' + chips + '</div>';
     var mt = st === 'part' ? HUB.moduleTools(m, ctx) : null;
     var note = on ? 'On your plan' : paid ? 'Opens when the first invoice is paid' : req ? 'Requested ' + (day(req.requestedAt) || '') + ' at ' + (req.display || price || '') + '; joins your monthly fee once ClearSky moves you onto a package' : mt ? mt.open + ' of ' + mt.total + ' of its tools are on your plan' : packaged ? 'Pay by card; on when the payment clears' : 'Opt in: ' + (price ? price + ' added to your monthly fee' : 'added to your monthly fee');
@@ -576,13 +702,72 @@ function renderModules() {
     h += '</div></div>';
   });
   b.innerHTML = '<div class="mods">' + h + '</div>';
-  if (strip) strip.innerHTML = '<span class="ows-chip on">' + esc(planName()) + '</span><span class="num" style="color:var(--ows-ink2)">' + heldN + ' of ' + cat.length + ' modules Live</span>' + (packaged ? '<span style="color:var(--ows-ink2)">Monthly prices. Nothing new is charged for what your plan already covers.</span>' : '<span style="color:var(--ows-ink2)">Monthly prices from the price list.</span>') + '<a class="ows-pill" data-sn="marketplace" href="/marketplace.html">Plans and the store ›</a>';
+  if (strip) strip.innerHTML = '<span class="ows-chip on">' + esc(planName()) + '</span><span class="num" style="color:var(--ows-ink2)">' + heldN + ' of ' + cat.length + ' modules Live</span>' + (packaged ? '<span style="color:var(--ows-ink2)">Monthly prices. Nothing new is charged for what your plan already covers.</span>' : '<span style="color:var(--ows-ink2)">Monthly prices from the price list.</span>') + '<a class="ows-pill" href="/workspace#plans">Plans ›</a>';
   var sub = byId('modules-sub');
   if (sub) sub.textContent = packaged ? 'Build your own experience. Opt in to add modules or request an opt-out at the quarterly review. Lite is always included.' : planName() + ' holds ' + heldN + ' of ' + cat.length + ' modules for ' + (WS.clientName || 'your workspace') + '. Request opt-ins or opt-outs through ClearSky. Lite is always included.';
   Array.prototype.forEach.call(b.querySelectorAll('[data-add-module]'), function (btn) { btn.addEventListener('click', function () { addModule(btn.getAttribute('data-add-module')); }); });
   Array.prototype.forEach.call(b.querySelectorAll('[data-ask-module]'), function (btn) { btn.addEventListener('click', function () { optInLegacy(btn.getAttribute('data-ask-module'), btn.getAttribute('data-name'), btn.getAttribute('data-price')); }); });
   wireModuleOptOut(b, cat, ctx, packaged);
+  markFocus();
   renderHomeModules(cat, ctx, packaged, bought);
+}
+/* WHERE a module lives (Tommy, 2026-09-27: "the modules are paid services
+   tied directly to the editor"). Most are services inside Site Map, the
+   editor; the price list says which (offerings' editor flag, else the
+   module's own ribbon and capability words). The rest live somewhere else
+   and say where, never "capabilities of Site Map". */
+var MOD_WHERE = { whitelabel: 'your own website: a branded storefront your customers use, set up with ClearSky', sitefinder: 'Site Finder and Site Discovery, their own pages beside Site Map',
+  'logic-office': 'Omega Logic: the office on a computer and the Omega Logic app on a phone', 'logic-plant': 'Omega Logic: the plant board and the Plant app at every bench',
+  'logic-materials': 'Omega Logic: materials planning and purchase orders in the office', 'logic-logistics': 'Omega Logic: shipping, receiving and custody in the office', 'logic-customer': 'the customer app your own customers sign in to, run from Omega Logic' };
+function inEditor(m, full) {
+  if (typeof m.editor === 'boolean') return m.editor;
+  if (full && typeof full.editor === 'boolean') return full.editor;
+  var x = full || m;
+  return (x.ribbon || []).length > 0 || (x.caps || []).some(function (c) { return /^(design|view|export)/.test(c); });
+}
+function insideLine(m, full, tools) {
+  var names = tools.filter(function (t) { return t.key !== 'editor'; }).map(function (t) { return esc(t.name); });
+  if (inEditor(m, full)) return '<b>Inside Site Map, the editor</b>' + (names.length ? ' · with ' + names.join(' · ') : '');
+  return '<b>Lives in</b> ' + esc(MOD_WHERE[m.key] || (m.shelf === 'platform' ? 'Omega Logic, outside Site Map' : 'its own pages, outside Site Map')) + (names.length && m.key !== 'sitefinder' ? ' · ' + names.join(' · ') : '');
+}
+/* ── The plans shelf (moved here from the marketplace, 2026-09-27): the
+   price list's plans, Lite first and Enterprise last, each with what it
+   carries and costs, this workspace's own marked. Choosing modules one at a
+   time is the other way to buy; nothing here is priced by the page. ── */
+var PLAN_BAND = { lite: MOD_COVER.floor, field: MOD_COVER.standard, pro: MOD_COVER.premium, enterprise: MOD_COVER.platform };
+function currentPlanKey() {
+  var pa = WS && WS.packageAccess; if (!(pa && pa.packaged)) return '';
+  var bl = bill(), sm = BILL.summary, k = String((sm && sm.plan) || (bl.subscription && bl.subscription.plan) || bl.plan || '').toLowerCase();
+  return k === 'alacarte' || k === 'auto' || k === 'lite + modules' ? 'lite' : k;
+}
+function renderPlans() {
+  var el = byId('modules-plans'); if (!el || !WS) return;
+  var o = OFFER;
+  if (!o) { el.innerHTML = ''; return; }
+  if (o.failed) { el.innerHTML = '<h3>Plans</h3><div class="empty" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">The plans could not be loaded right now.<button class="ows-pill" type="button" id="plans-retry" style="margin-left:auto">Retry</button></div>'; byId('plans-retry').addEventListener('click', function () { OFFER_P = null; OFFER = null; askOffer(); }); return; }
+  var byKey = {}; (o.modules || []).forEach(function (m) { byKey[m.key] = m; });
+  var plans = (o.lite ? [{ key: 'lite', name: o.lite.name || 'Lite', monthlyDisplay: o.lite.monthlyDisplay, lines: (byKey.lite && byKey.lite.features || []).concat(['Opt in to any module on top']), fee: o.lite.serviceFeeDisplay }] : [])
+    .concat((o.plans || []).map(function (p) { return { key: p.key, name: p.name, monthlyDisplay: p.monthlyDisplay, lines: ['Lite and ' + String(p.capDisplay || '').replace(/^À la carte /, '') + ', one price'], fee: p.serviceFeeDisplay }; }));
+  if (o.enterprise && !plans.some(function (p) { return p.key === 'enterprise'; })) plans.push({ key: 'enterprise', name: 'Enterprise', monthlyDisplay: o.enterprise.annualFloorDisplay, lines: ['Every module, on a contract', 'Setup ' + o.enterprise.setupDisplay, o.enterprise.devHoursMonthly + ' development hours a month'], fee: o.enterprise.serviceFeeDisplay });
+  var cur = currentPlanKey(), pa = WS.packageAccess, co = WS.clientName || 'This workspace';
+  var h = '<h3>Plans<small>A plan bundles modules at one monthly price. Lite with modules opted in one at a time is the other way; either is billed monthly, or yearly at ten months of twelve.</small></h3>';
+  if (!(pa && pa.packaged)) h += '<p class="plans-note"><b>' + esc(co) + '</b> is on the ' + esc(planName()) + ' plan, priced by your agreement. These are the plans a workspace moves onto: opting in to a module starts that move, and ClearSky confirms it with you.</p>';
+  h += '<div class="plans">' + plans.map(function (p) {
+    var on = !!cur && cur === String(p.key).toLowerCase(), pr = String(p.monthlyDisplay || ''), cut = pr.lastIndexOf('/');
+    return '<div class="planc' + (on ? ' on' : '') + '" data-plan-card="' + esc(p.key) + '"><div class="band" style="background:' + (PLAN_BAND[p.key] || MOD_COVER.floor) + '"></div>'
+      + '<div class="nm">' + esc(p.name) + (on ? '<span class="ows-chip on">Your plan</span>' : '') + '</div>'
+      + '<div class="pr">' + (cut > 0 ? esc(pr.slice(0, cut)) + '<span>' + esc(pr.slice(cut)) + '</span>' : esc(pr)) + '</div>'
+      + '<ul>' + p.lines.filter(Boolean).map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>'
+      + (p.fee ? '<div class="fee">Service fee ' + esc(p.fee) + '</div>' : '') + '</div>';
+  }).join('') + '</div>';
+  var starters = o.starters ? Object.keys(o.starters).map(function (k) { return '<span class="starter"><b>' + esc((o.starterLabels || {})[k] || k) + '</b>' + esc(o.starters[k].map(function (x) { return byKey[x] ? byKey[x].name : x; }).join(' · ')) + '</span>'; }).join('') : '';
+  if (starters) h += '<div class="eyebrow">Starter packages, by what you do</div><div class="starters">' + starters + '</div>';
+  var notes = [];
+  if (o.annual && o.annual.note) notes.push(o.annual.note);
+  if (o.logins) notes.push('Extra logins: builders ' + o.logins.builderDisplay + ', viewers ' + o.logins.viewerDisplay + ' (' + o.logins.builders + ' builders and ' + o.logins.viewers + ' viewers included).');
+  if (notes.length) h += '<p class="plans-note">' + esc(notes.join(' ')) + '</p>';
+  el.innerHTML = h;
+  if (PLAN_FOCUS && view() === 'modules') { PLAN_FOCUS = false; el.scrollIntoView({ block: 'start', behavior: 'auto' }); }
 }
 /* ── Your modules, on the home (the demo's row): held ones Live in shelf
    order, then up to three not held with Opt in; the same cards as the
@@ -648,7 +833,7 @@ function optInLegacy(key, name, price) {
   var rows = [];
   if (!req) rows.push({ key: 'go', name: 'Add to my monthly fee', sub: (price ? price + ' · ' : '') + 'recorded on your plan and sent to ClearSky', icon: S.ICON.billing, cta: 'Add', onClick: function () { optInRequest(key, name, price); } });
   rows.push({ key: 'bill', name: 'Plan & billing', sub: 'Your subscription, what you owe, your invoices', icon: S.ICON.billing, onClick: function () { S.closeDrawer(); openBilling(); } });
-  rows.push({ key: 'store', name: 'See it in the store', sub: 'What it adds, what it costs, the plans', href: '/marketplace.html#' + key, icon: S.ICON.marketplace });
+  rows.push({ key: 'plans', name: 'Compare the plans', sub: 'What each plan carries and what it costs', href: '/workspace#plans', icon: S.ICON.modules });
   rows.push({ key: 'mail', name: 'Email ClearSky instead', sub: to, href: 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body), icon: S.ICON.feed, cta: 'Email' });
   S.drawer({ eyebrow: 'Opt in', title: name, sub: price ? price + ', added to your monthly fee' : '', html: html, rows: rows });
 }
@@ -665,7 +850,7 @@ function optInRequest(key, name, price) {
   }, function (e) { if (msg) { msg.hidden = false; msg.innerHTML = '<b>Not recorded:</b> ' + esc(e.message) + '. Email ClearSky below instead.'; } });
 }
 function addModule(key) {
-  if (!window.OmegaPackageMenu) { window.location.href = '/marketplace.html'; return; }
+  if (!window.OmegaPackageMenu) { nav('/workspace#module-' + key); return; }
   OmegaPackageMenu.open(key, { view: WS.packageAccess, onChanged: function () { MOD_ASKED = false; if (window.OmegaTenant && OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderModules(); } });
 }
 function renderTools() {
@@ -679,7 +864,7 @@ function renderTools() {
   if (pa && pa.packaged && Array.isArray(pa.catalog)) p += pa.catalog.filter(function (m) { return WS.modules.indexOf(m.key) >= 0 && m.name !== planName(); }).map(function (m) { return '<span class="ows-chip">' + esc(m.name) + '</span>'; }).join('');
   else if (Array.isArray(WS.addons)) p += WS.addons.map(function (a) { return '<span class="ows-chip">' + esc(a) + '</span>'; }).join('');
   p += '<span class="num" style="color:var(--ows-ink2)">' + openN + ' of ' + total + ' tools open</span>';
-  p += WS.pendingApproval ? '<span class="ows-pill ghost">Locked until approval</span>' : '<a class="ows-pill" href="' + (pa && pa.packaged ? '/workspace#modules' : '/marketplace.html') + '">Change plan</a>';
+  p += WS.pendingApproval ? '<span class="ows-pill ghost">Locked until approval</span>' : '<a class="ows-pill" href="/workspace#modules">Change plan</a>';
   byId('plan').innerHTML = p;
   var h = '';
   function tile(t) {
@@ -834,132 +1019,323 @@ function todayDrawer() {
   var rows = needs().map(function (r, i) { return { key: 'need:' + i, name: r.t, sub: r.s, href: r.href || null, newTab: !!(r.href && /^https?:/.test(r.href)), icon: S.ICON.home, onClick: r.href ? null : function () { S.closeDrawer(); act(r); } }; });
   S.drawer({ eyebrow: WS.clientName || WS.orgId, title: '◷ Today', sub: 'what needs you', rows: rows, html: rows.length ? '' : '<div class="ows-note">Nothing needs you right now.</div>', note: 'The same list as the Today card, ranked highest first.' });
 }
+/* A locked tile explains, then offers the module that carries it right here:
+   Opt in (the same door as its card on the Modules page), the card itself,
+   or an email. Showing it is never access: the server prices and grants. */
 function lockedDrawer(t) {
   if (!t) return;
-  var pa = WS.packageAccess, mods = pa && Array.isArray(pa.catalog) ? pa.catalog.filter(function (m) { return (m.tools || []).indexOf(t.key) >= 0; }) : [];
+  var pa = WS.packageAccess, packaged = !!(pa && pa.packaged), ctx = hubCtx(), co = WS.clientName || 'This workspace';
+  var cat = packaged && Array.isArray(pa.catalog) ? pa.catalog : (MOD_CATALOG || []);
+  var mods = cat.filter(function (m) { return (m.tools || []).indexOf(t.key) >= 0 && HUB.moduleState(m, ctx) !== 'held'; }), m = mods[0] || null;
+  var price = m ? ((MOD_PRICES && MOD_PRICES[m.key]) || m.priceDisplay || '') : '';
   var tierName = ['everyone', 'Standard', 'Deluxe', 'Enterprise'][typeof t.tier === 'number' ? t.tier : 1] || 'a higher plan';
-  var html = '<div class="ows-note">' + (WS.pendingApproval ? '<b>' + esc(t.name) + '</b> opens once your workspace is approved.' : mods.length ? '<b>' + esc(t.name) + '</b> is part of ' + mods.map(function (m) { return '<b>' + esc(m.name) + '</b>'; }).join(' and ') + ', which ' + esc(WS.clientName || 'this workspace') + ' does not hold yet.' : '<b>' + esc(t.name) + '</b> is on the ' + esc(tierName) + ' plan and above. ' + esc(WS.clientName || 'This workspace') + ' is on ' + esc(planName()) + '.') + '</div>';
-  var rows = WS.pendingApproval ? [] : [{ key: 'plan', name: mods.length ? 'Add ' + mods[0].name + ' in the Marketplace' : 'See plans in the Marketplace', sub: 'What each plan and module carries, and what it costs', href: '/marketplace.html' + (mods.length ? '#' + mods[0].key : ''), icon: S.ICON.marketplace }, { key: 'ask', name: 'Ask ClearSky to switch it on', sub: OmegaBrand.upgradeEmail(), href: 'mailto:' + encodeURIComponent(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Unlock ' + t.name + ' for ' + (WS.clientName || WS.orgId)), icon: S.ICON.feed, cta: 'Email' }];
-  S.drawer({ eyebrow: 'Not on your plan', title: t.name, sub: t.desc || '', html: html, rows: rows });
+  var html = '<div class="ows-note">' + (WS.pendingApproval ? '<b>' + esc(t.name) + '</b> opens once your workspace is approved.'
+    : m ? '<b>' + esc(t.name) + '</b> is part of <b>' + esc(m.name) + '</b>' + (price ? ' (' + esc(price) + ')' : '') + (packaged ? ', which ' + esc(co) + ' does not hold yet.' : ', and comes with the ' + esc(tierName) + ' plan. ' + esc(co) + ' is on ' + esc(planName()) + '.')
+    : '<b>' + esc(t.name) + '</b> is on the ' + esc(tierName) + ' plan and above. ' + esc(co) + ' is on ' + esc(planName()) + '.') + '</div>';
+  var rows = [];
+  if (!WS.pendingApproval) {
+    if (m && isAdminHere()) rows.push({ key: 'optin', name: 'Opt in to ' + m.name, sub: (price ? price + ' · ' : '') + (packaged ? 'on when the payment clears' : 'joins your monthly fee once ClearSky moves you to monthly billing'), icon: S.ICON.modules, cta: 'Opt in', onClick: function () { S.closeDrawer(); optInFor(m.key); } });
+    if (m) rows.push({ key: 'see', name: m.name + ' on Modules', sub: 'What it adds and what is inside', href: '/workspace#module-' + m.key, icon: S.ICON.modules, cta: 'See it' });
+    else rows.push({ key: 'plans', name: 'Compare the plans', sub: 'What each plan carries and what it costs', href: '/workspace#plans', icon: S.ICON.modules });
+    rows.push({ key: 'mail', name: 'Email ClearSky', sub: OmegaBrand.upgradeEmail(), href: 'mailto:' + encodeURIComponent(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Unlock ' + t.name + ' for ' + (WS.clientName || WS.orgId)), icon: S.ICON.feed, cta: 'Email' });
+  }
+  S.drawer({ eyebrow: 'Not on your plan', title: t.name, sub: t.desc || '', html: html, rows: rows, note: m && !isAdminHere() && !WS.pendingApproval ? 'An owner or administrator of ' + esc(co) + ' opts in to modules.' : '' });
 }
-/* ── Plan & billing, as a page (Tommy, 2026-09-27): what the workspace holds
-   and pays for, what it owes and when, a secure way to keep a card, and the
-   invoices. Four sources, none of them priced here:
-     · billing/current (the tenant's own record; every member may read it)
-     · GET /api/plan-change (the engine's summary: subscription vs switched on,
-       the monthly figure, every invoice with its QuickBooks pay link)
-     · POST /api/stripe-invoices and /api/stripe-portal for a workspace billed
-       through Stripe: Stripe hosts the card page, we never touch card data
-     · a QuickBooks-billed workspace keeps its card on QuickBooks' payment
-       page (Save this card + Autopay on the invoice), never on this site.
-   Requested additions on a plan billed outside the engine (optIns) are
-   listed with their price until ClearSky moves the workspace onto a
-   package. ── */
+/* Opt in to one module from anywhere on the page: a packaged workspace
+   through the one menu, a legacy plan through its recorded request. */
+function optInFor(key) {
+  var pa = WS.packageAccess;
+  if (pa && pa.packaged) { moduleMenu(key, 'add'); return; }
+  var m = null; (MOD_CATALOG || []).forEach(function (x) { if (x.key === key) m = x; });
+  if (!m) { nav('/workspace#module-' + key); return; }
+  optInLegacy(key, m.shelf === 'platform' ? 'Omega Logic · ' + m.name : m.name, (MOD_PRICES && MOD_PRICES[key]) || m.priceDisplay || '');
+}
+/* THE ONE MENU on one module (omega-package-menu.js): single shows only
+   that module's card, intent goes straight to its add / remove / cancel
+   step, legacy carries what a plan billed outside the engine holds. */
+function moduleMenu(key, intent) {
+  if (!window.OmegaPackageMenu) { nav('/workspace#module-' + key); return; }
+  var pa = WS.packageAccess, opts = { single: true, intent: intent, admin: isAdminHere(), onChanged: billingChanged };
+  if (pa && pa.packaged) opts.view = pa;
+  else {
+    var cat = MOD_CATALOG || [], ctx = hubCtx(), states = {};
+    cat.forEach(function (m) { states[m.key] = HUB.moduleState(m, ctx); });
+    opts.view = { modules: cat.filter(function (m) { return states[m.key] === 'held' || states[m.key] === 'part'; }).map(function (m) { return m.key; }), catalog: cat };
+    opts.legacy = { company: WS.clientName || WS.orgId, email: OmegaBrand.upgradeEmail(), billing: bill(), states: states };
+  }
+  OmegaPackageMenu.open(key, opts);
+}
+/* after any change the menu made: the server is asked again, never guessed */
+function billingChanged(r) {
+  var bl = bill();
+  function merge(field) { if (!r || !r[field] || typeof r[field] !== 'object') return; var to = {}, was = bl[field] || {}; Object.keys(was).forEach(function (k) { to[k] = was[k]; }); Object.keys(r[field]).forEach(function (k) { to[k] = r[field][k]; }); try { bl[field] = to; } catch (e) {} }
+  merge('optIns'); merge('optOuts');
+  if (r && Array.isArray(r.removalRequests)) { try { bl.removalRequests = r.removalRequests; } catch (e) {} }
+  BILL.asked = false; MOD_ASKED = false;
+  if (window.OmegaTenant && OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} }
+  renderModules(); if (view() === 'billing') renderBilling();
+}
+/* ── PLAN & BILLING, as a page (Tommy, 2026-09-27: "it needs to look
+   amazing … make sure the editor is linked to how a tenant pays and what
+   their modules are"). One column on a phone, owe and payment side by side
+   on a desktop:
+     · the subscription: the plan, the monthly figure, the modules as chips
+       (each one a link to its card), the facts, and Site Map, the editor
+     · what is owed and when, with the invoice's own pay button
+     · the payment method as a card: QuickBooks, Stripe, paid by ACH or check
+       under an agreement, or none yet
+     · changes in progress: every module on its way in or out, with its steps
+     · the invoices, each with one status: Paid, Open, Overdue or Void
+   Four sources, none of them priced here: billing/current (every member may
+   read it), GET /api/plan-change (the engine's summary; any verified member
+   may read it, a change stays with an owner or administrator), and Stripe's
+   own invoice list and portal for a Stripe-billed plan. A card is only ever
+   entered on QuickBooks' or Stripe's own page. A figure that could not be
+   loaded says so, with Retry; it never reads as "nothing". ── */
 var BILL = { summary: null, asked: false, failed: false, stripe: null, stripeAsked: false };
 function openBilling() { go('billing'); renderBilling(); }
 function bill() { return WS.billing || (window.OmegaTenant && OmegaTenant.billing) || {}; }
-function day(v) { var t = ms(v); return t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''; }
+/* ONE date style. A bare 'YYYY-MM-DD' is a calendar day, not UTC midnight:
+   read as UTC it printed the day before in every US time zone. */
+function when(v) {
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) { var p = v.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  var t = ms(v); return t ? new Date(t) : null;
+}
+function day(v) { var d = when(v); return d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''; }
+function isoDay(v) { var d = when(v); return d ? d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) : ''; }
+function span(a, b) {
+  var x = when(a), y = when(b); if (!x || !y) return day(a) || day(b);
+  return (x.getFullYear() === y.getFullYear() ? x.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : day(a)) + ' – ' + day(b);
+}
+function nth(d) { var s = ['th', 'st', 'nd', 'rd'], v = d % 100; return d + (s[(v - 20) % 10] || s[v] || s[0]); }
+function usd(n) { n = Number(n) || 0; return '$' + n.toLocaleString(undefined, { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }); }
+function cents(c) { return usd(Math.round(Number(c) || 0) / 100); }
+function cap1(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
 function isAdminHere() { return WS.role === 'owner' || WS.role === 'admin' || !!WS.staff; }
+var BICON = {
+  ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  due: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>'
+};
+/* everything the page draws, read once per paint */
+function billCtx() {
+  var bl = bill(), pa = WS.packageAccess, sm = BILL.summary, now = Date.now();
+  var packaged = !!(bl.packaged === true || (pa && pa.packaged));
+  var stripe = !!(bl.stripeCustomerId || bl.paymentProvider === 'stripe');
+  var qb = !stripe && (packaged || bl.paymentProvider === 'quickbooks' || !!bl.qboCustomerId);
+  var trial = !packaged && (bl.tier === 'trial' || trialEnd() > now);
+  var manual = !stripe && !qb && !trial && (bl.paymentProvider === 'manual' || !!bl.lastPaidAt || !!bl.amountPaid);
+  var cat = (packaged && pa && Array.isArray(pa.catalog) && pa.catalog.length ? pa.catalog : (MOD_CATALOG || [])).slice().sort(function (x, y) { return MOD_ORDER.indexOf(x.shelf) - MOD_ORDER.indexOf(y.shelf); }), byKey = {};
+  cat.forEach(function (m) { byKey[m.key] = m; });
+  var invoices = sm && Array.isArray(sm.invoices) ? sm.invoices : [], unpaid = invoices.filter(function (x) { return x.state === 'unpaid'; });
+  var pending = packaged && sm && Array.isArray(sm.pending) ? sm.pending : [];
+  var stripeOpen = stripe && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'open'; }) : [];
+  var c = { bl: bl, pa: pa, sm: sm, now: now, packaged: packaged, stripe: stripe, qb: qb, trial: trial, manual: manual, admin: isAdminHere(), cat: cat, byKey: byKey, invoices: invoices, unpaid: unpaid, pending: pending, stripeOpen: stripeOpen,
+    state: (sm && sm.packagingState) || bl.packagingState || null, co: WS.clientName || WS.orgId };
+  c.payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || (stripeOpen.length && stripeOpen[0].hostedUrl) || (sm && sm.paymentLink) || bl.paymentLink || null;
+  /* the modules: Live, on their way in, on their way out */
+  c.live = []; c.coming = {}; c.leaving = {}; c.requested = {};
+  if (packaged) {
+    var on = (sm && Array.isArray(sm.modules) ? sm.modules : WS.modules) || [];
+    var bought = sm && Array.isArray(sm.subscription) ? sm.subscription : (bl.subscription && Array.isArray(bl.subscription.modules) ? bl.subscription.modules : on);
+    c.live = cat.filter(function (m) { return on.indexOf(m.key) >= 0; });
+    pending.forEach(function (x) { (x.add || []).forEach(function (k) { c.coming[k] = { pill: 'Waiting for payment', change: x }; }); });
+    bought.forEach(function (k) { if (on.indexOf(k) < 0 && !c.coming[k]) c.coming[k] = { pill: 'Bought · not on yet' }; });
+    ((sm && sm.removalRequests) || bl.removalRequests || []).forEach(function (r) { if (r && r.module) c.leaving[r.module] = r; });
+  } else {
+    var hc = hubCtx();
+    c.live = cat.filter(function (m) { return HUB.moduleState(m, hc) === 'held'; });
+    var ins = bl.optIns || (sm && sm.optIns) || {}, outs = bl.optOuts || (sm && sm.optOuts) || {};
+    Object.keys(ins).forEach(function (k) { if (ins[k] && ins[k].status === 'requested') c.requested[k] = ins[k]; });
+    Object.keys(outs).forEach(function (k) { if (outs[k] && outs[k].status === 'requested') c.leaving[k] = outs[k]; });
+  }
+  c.reviewOn = (sm && sm.nextReviewOn) || null;
+  return c;
+}
+function modName(c, k, o) { var m = c.byKey[k]; return (m && m.name) || (o && o.name) || k; }
+function cover(c, k) { var m = c.byKey[k]; return MOD_COVER[m && m.shelf] || MOD_COVER.floor; }
+function fact(l, v) { return '<div class="bh-fact"><div class="l">' + esc(l) + '</div><div class="v" title="' + esc(v) + '">' + esc(v) + '</div></div>'; }
+
+/* 1 · the subscription, in the hub's night sky */
+function heroHtml(c) {
+  var bl = c.bl, sm = c.sm, pa = c.pa, st = ['', 'Active'];
+  if (WS.pendingApproval) st = ['warn', 'Awaiting approval'];
+  else if (c.packaged && pa && pa.readOnly) st = ['bad', 'Read-only until paid'];
+  else if (c.packaged && c.state === 'awaiting_payment') st = ['warn', 'Awaiting first payment'];
+  else if (c.packaged && c.state === 'trial') st = ['warn', 'Trial' + (pa && pa.accessUntil ? ' · ends ' + day(pa.accessUntil) : '')];
+  else if (c.trial) st = ['warn', 'Trial' + (trialEnd() > c.now ? ' · ends ' + day(trialEnd()) : '')];
+  var plan = c.packaged ? ((sm && sm.planDisplay) || planName()) : planName() + (/plan$/i.test(planName()) ? '' : ' plan');
+  var since = day(bl.subscription && bl.subscription.since) || day(bl.subscriptionStartedAt) || day(bl.approvedAt) || day(bl.createdAt);
+  var monthly = (sm && sm.monthlyDisplay) || bl.monthlyDisplay || '', annual = ((sm && sm.interval) || bl.interval) === 'annual';
+  var h = '<section class="bcard bhero full" id="bill-sub"><h3>Your subscription<span class="bh-state ' + st[0] + '">' + esc(st[1]) + '</span></h3>';
+  h += '<div class="bh-main"><div class="bh-plan"><b>' + esc(plan) + '</b><small>' + esc(c.co) + (since ? ' · since ' + esc(since) : '') + '</small></div>';
+  if (monthly) { var cut = String(monthly).lastIndexOf('/'); h += '<div class="bh-price"><b>' + esc(cut > 0 ? monthly.slice(0, cut) : monthly) + '</b><span>' + esc(cut > 0 ? monthly.slice(cut) : '') + '</span><small>' + (annual ? 'Billed yearly: ten months of twelve' : 'Billed monthly') + '</small></div>'; }
+  else if (c.packaged && !sm && !BILL.failed) h += '<div class="bh-price words"><b>…</b><small>Reading your price</small></div>';
+  else h += '<div class="bh-price words"><b>' + esc(c.trial ? 'No charge during your trial' : c.packaged ? 'Price not available right now' : c.stripe ? 'Billed through Stripe' : 'Priced by your agreement') + '</b>' + (c.packaged && BILL.failed ? '<small>Retry below</small>' : '') + '</div>';
+  h += '</div>';
+  /* the modules as chips: each one a link to its card on the Modules page */
+  var chips = [], shown = 0, MAX = 6;
+  c.live.forEach(function (m) {
+    if (shown >= MAX) return; shown++;
+    var out = c.leaving[m.key];
+    chips.push('<a class="bh-mod' + (out ? ' leaving' : '') + '" href="/workspace#module-' + esc(m.key) + '" title="' + esc(m.name) + '"><i></i>' + esc(m.name) + (out ? ' <em>Opting out</em>' : m.key === 'lite' ? ' <em>always included</em>' : '') + '</a>');
+  });
+  if (c.live.length > MAX) chips.push('<a class="bh-mod" href="/workspace#modules">+' + (c.live.length - MAX) + ' more</a>');
+  Object.keys(c.coming).forEach(function (k) { chips.push('<a class="bh-mod soon" href="/workspace#module-' + esc(k) + '"><i></i>' + esc(modName(c, k)) + ' <em>' + esc(c.coming[k].pill) + '</em></a>'); });
+  Object.keys(c.requested).forEach(function (k) { chips.push('<a class="bh-mod soon" href="/workspace#module-' + esc(k) + '"><i></i>' + esc(modName(c, k, c.requested[k])) + ' <em>Opt-in requested</em></a>'); });
+  if (!WS.pendingApproval && c.cat.length && c.live.length < c.cat.length) chips.push('<a class="bh-mod add" href="/workspace#modules">+ Opt in to a module</a>');
+  if (chips.length) h += '<div class="bh-mods">' + chips.join('') + '</div>';
+  else if (!c.cat.length && MOD_CATALOG === null) h += '<div class="bh-mods"><span class="bh-mod soon"><i></i>Reading your modules…</span></div>';
+  var cadence = c.packaged ? (annual ? 'Yearly, prepaid' : 'Monthly' + ((sm && sm.billingDay) || bl.billingDay ? ', on the ' + nth((sm && sm.billingDay) || bl.billingDay) : ''))
+    : annual ? 'Yearly' : c.trial ? 'Trial' : c.stripe ? 'By card, Stripe' : c.qb ? 'By invoice' : c.manual ? 'Invoiced by ClearSky' : 'Not set up yet';
+  var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (c.packaged ? '' : bl.subscriptionDue);
+  h += '<div class="bh-facts">' + fact('Billing', cadence) + fact('Next invoice', day(nextOn) || 'None scheduled') + fact('Modules', c.cat.length ? c.live.length + ' of ' + c.cat.length + ' Live' : MOD_CATALOG === null ? 'Loading…' : 'Unavailable') + fact('Your role', WS.staff && !WS.role ? 'ClearSky staff' : cap1(WS.role || 'member')) + '</div>';
+  h += '<p class="bh-editor">' + BICON.map + '<span>Your modules are services inside Site Map, the editor, and Omega Logic: what this plan holds is what they open, the day it is paid.</span></p>';
+  h += '<div class="acts"><button class="ows-pill primary" type="button" data-bill="modules">Change modules</button>' + (WS.pendingApproval ? '' : '<a class="ows-pill" href="/editor">Open the editor ›</a>') + '<a class="ows-pill" href="/workspace#plans">Compare plans</a></div>';
+  return h + '</section>';
+}
+/* 2 · what is owed and when */
+function oweHtml(c) {
+  var bl = c.bl, sm = c.sm, pa = c.pa, amount = null, list = [], dueOn = '', unknown = false, loading = false;
+  if (c.packaged && sm) {
+    amount = c.unpaid.reduce(function (t, x) { return t + (Number(x.totalCents) || 0); }, 0) / 100; list = c.unpaid.map(function (x) { return { name: invName(x), display: x.display, link: x.paymentLink, date: x.date }; }); dueOn = c.unpaid.length ? c.unpaid[0].date : '';
+    /* an amount the record says is due that no invoice row carries yet (the first invoice on its way) is still owed */
+    var ad = sm.amountDue != null ? sm.amountDue : bl.amountDue; if (!c.unpaid.length && Number(ad) > 0) amount = Number(ad);
+  }
+  else if (c.stripeOpen.length) { amount = c.stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0); list = c.stripeOpen.map(function (x) { return { name: x.number || 'Invoice', display: usd(x.amountDue), link: x.hostedUrl, date: x.created }; }); }
+  else if (c.packaged && !sm && !BILL.failed) loading = true;
+  else if (c.packaged && BILL.failed) { if (bl.amountDue != null) amount = Number(bl.amountDue) || 0; else unknown = true; }
+  else { amount = bl.amountDue != null ? Number(bl.amountDue) || 0 : 0; dueOn = bl.subscriptionDue || ''; }
+  var due = amount > 0, n = list.length;
+  var h = '<section class="bcard owe" id="bill-owe"><h3>What you owe</h3>';
+  if (loading) h += '<div class="owe-amt"><span class="ic">…</span><div><b>…</b><small>Reading what is due</small></div></div>';
+  else if (unknown) h += '<div class="owe-amt"><span class="ic">?</span><div><b>—</b><small>The figures could not be loaded right now.</small></div></div>';
+  else h += '<div class="owe-amt ' + (due ? 'due' : 'ok') + '"><span class="ic">' + (due ? BICON.due : BICON.ok) + '</span><div><b>' + esc(usd(amount)) + '</b><small>'
+    + (due ? (n ? n + (n === 1 ? ' invoice open' : ' invoices open') : 'Due') + (dueOn ? ' · issued ' + esc(day(dueOn)) : '') : 'All paid up · nothing is owed') + '</small></div></div>';
+  if (c.packaged && BILL.failed) h += '<p class="failed">' + (unknown ? 'The invoice list could not be loaded.' : 'From your billing record; the invoice list could not be loaded.') + '<button class="ows-pill sm" type="button" data-bill="retry">Retry</button></p>';
+  if (due && c.payLink) h += '<a class="ows-pill primary paybtn" id="bill-pay" href="' + esc(c.payLink) + '" target="_blank" rel="noopener">Pay ' + esc(n === 1 ? list[0].display : usd(amount)) + ' now</a>';
+  else if (due) h += '<p class="fine">The invoice arrives by email with its own pay link.</p>';
+  if (n > 1) h += '<div>' + list.map(function (x) { return '<div class="irow"><div class="ds"><b>' + esc(x.name) + '</b><small>Issued ' + esc(day(x.date)) + '</small></div><span class="amt">' + esc(x.display || '') + '</span><span class="st">' + (x.link ? '<a class="ows-pill sm primary" href="' + esc(x.link) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="spill open">Open</span>') + '</span></div>'; }).join('') + '</div>';
+  if (c.packaged && (pa && pa.readOnly || c.state === 'awaiting_payment')) {
+    var until = (sm && sm.accessUntil) || (pa && pa.accessUntil);
+    h += '<p class="warnline">' + (pa && pa.readOnly ? '<b>Read-only</b> until the invoice is paid: saved work stays open to read.' : until && ms(until) > c.now ? '<b>Access until ' + esc(day(until)) + ':</b> pay before then.' : '<b>Pay the first invoice</b> to open the modules you chose.') + '</p>';
+  }
+  var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (c.packaged ? '' : bl.subscriptionDue);
+  var paidLast = c.invoices.filter(function (x) { return x.state === 'paid'; })[0], stripePaid = c.stripe && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'paid'; })[0] : null;
+  var last = paidLast ? paidLast.display + ' · ' + day(paidLast.paidAt || paidLast.date) : stripePaid ? usd(stripePaid.amountDue) + ' · ' + day(stripePaid.created) : bl.lastPaidAt ? (bl.amountPaid ? usd(bl.amountPaid) + ' · ' : '') + day(bl.lastPaidAt) : '';
+  var cells = [['Next invoice', day(nextOn) || 'None scheduled']];
+  if (c.packaged) cells.push(['Paid through', day((sm && sm.paidThrough) || bl.paidThrough) || 'Not yet']); else if (c.trial) cells.push(['Trial ends', trialEnd() ? day(trialEnd()) : 'Not set']);
+  if (last || !(c.packaged && BILL.failed)) cells.push(['Last payment', last || 'None yet']);
+  h += '<div class="owe-when">' + cells.map(function (x) { return '<div><span class="l">' + esc(x[0]) + '</span><span class="v" title="' + esc(x[1]) + '">' + esc(x[1]) + '</span></div>'; }).join('') + '</div>';
+  var bday = (sm && sm.billingDay) || bl.billingDay;
+  h += '<p class="fine">' + esc(c.packaged ? 'Each invoice arrives by email' + (bday ? ' on the ' + nth(bday) : '') + ' with its own pay link.' : c.stripe ? 'Stripe charges the card on file on each invoice date.' : c.trial ? 'Nothing is charged during your trial.' : c.manual ? 'ClearSky invoices this plan under your agreement.' : 'Your first invoice arrives by email with its own pay link.') + '</p>';
+  if (c.packaged && c.admin && !WS.viewAs) h += '<button class="linkbtn" type="button" id="bill-paid">Just paid? Check with QuickBooks</button>';
+  return h + '</section>';
+}
+function invName(x) { return x.kind === 'change' ? 'Opt in: ' + ((x.names || []).join(', ') || 'modules') : x.kind === 'pack' ? 'Pack' : 'Subscription'; }
+/* 3 · the payment method: a card, never its digits (we do not hold them) */
+function payHtml(c) {
+  var bl = c.bl, kind = c.stripe ? 'stripe' : c.qb ? 'qb' : c.manual ? 'manual' : 'none', h = '<section class="bcard pm" id="bill-card"><h3>Payment method</h3>';
+  var card = { stripe: ['Stripe', 'Kept by Stripe', 'Autopay in portal'], qb: ['QuickBooks Payments', bl.autopay === true ? 'Card saved' : 'Kept by QuickBooks', bl.autopay === true ? 'Autopay on' : 'Autopay not set'],
+    manual: ['Invoiced by ClearSky', bl.lastPaidAt ? 'Paid ' + day(bl.lastPaidAt) : 'Under your agreement', 'ACH or check'], none: ['No payment method yet', c.trial ? 'Not needed during your trial' : 'Your first invoice sets it up', ''] }[kind];
+  h += '<div class="pm-body"><div class="pmc ' + kind + '"><div class="pmc-top"><span class="sub">' + (kind === 'none' ? 'Nothing on file' : 'Pays your invoices') + '</span><span class="chip" aria-hidden="true"></span></div>'
+    + '<div class="prov">' + esc(card[0]) + (kind === 'manual' && bl.note ? '<small>' + esc(bl.note) + '</small>' : '') + '</div>'
+    + '<div class="pmc-foot"><span>' + esc(card[1]) + '</span>' + (card[2] ? '<span class="auto">' + esc(card[2]) + '</span>' : '') + '</div></div>';
+  var line = { stripe: 'Entered on Stripe’s own page, never on this site. The portal changes the card, turns autopay on or off and downloads any invoice.', qb: 'Entered on QuickBooks’ secure payment page, never on this site.',
+    manual: 'Paid by ACH or check under your agreement. Nothing is kept on file here.', none: 'Nothing is charged until then. A card is only ever entered on the payment provider’s own page, never on this site.' }[kind];
+  h += '<div class="pm-side"><p class="fine lock">' + BICON.lock + '<span>' + esc(line) + '</span></p>';
+  if (kind === 'qb') h += '<details class="how"><summary>Save a card and turn on autopay</summary><ol><li>Open any invoice’s payment page.</li><li>Tick <b>Save this card</b> as you pay.</li><li>Turn on <b>Autopay</b>: every later invoice is charged on its date.</li></ol></details>';
+  if (kind === 'stripe') h += '<div class="acts"><button class="ows-pill primary" type="button" id="bill-portal"' + (c.admin ? '' : ' disabled title="An owner or administrator manages the card"') + '>Manage card and autopay</button></div>' + (c.admin ? '' : '<p class="fine">An owner or administrator of ' + esc(c.co) + ' opens the portal.</p>');
+  else if (kind === 'qb') h += c.payLink ? '<div class="acts"><a class="ows-pill" href="' + esc(c.payLink) + '" target="_blank" rel="noopener">Open the payment page</a></div>' : '<p class="fine">Your next invoice brings the payment page.</p>';
+  else if (kind === 'manual') h += '<div class="acts"><a class="ows-pill" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Statement for ' + c.co) + '">Email for a statement</a></div>';
+  return h + '</div></div></section>';
+}
+/* 4 · changes in progress: one row per module on its way in or out, with
+   the steps it goes through, in the words the Modules page uses */
+function changeRows(c) {
+  var rows = [], review = c.reviewOn ? day(c.reviewOn) : '';
+  Object.keys(c.coming).forEach(function (k) {
+    var x = c.coming[k], ch = x.change;
+    if (ch) rows.push({ key: k, pill: 'Waiting for payment', tone: 'warn', line: (ch.display || '') + ' invoice · pay by ' + (day(ch.expiresOn) || 'the end of the cycle') + ' · switches on when paid', steps: [['Chosen', 'done'], ['Pay by ' + (day(ch.expiresOn) || 'cycle end'), 'now'], ['On', '']], pay: ch.paymentLink, cancel: true });
+    else rows.push({ key: k, pill: 'Bought · not on yet', tone: 'warn', line: 'Switches on when your open invoice is paid.', steps: [['Bought', 'done'], ['Invoice paid', 'now'], ['On', '']], pay: c.payLink, cancel: false });
+  });
+  Object.keys(c.requested).forEach(function (k) {
+    var o = c.requested[k], price = o.display ? o.display + (/\//.test(o.display) ? '' : '/month') : '';
+    rows.push({ key: k, name: o.name, pill: 'Opt-in requested', tone: 'in', line: 'Requested ' + (day(o.requestedAt) || '') + (price ? ' at ' + price : '') + '. It joins your monthly invoice once ClearSky moves you to monthly billing; nothing is charged before you approve that invoice.', steps: [['Requested', 'done'], ['ClearSky sets up monthly billing', 'now'], ['First invoice', ''], ['On', '']], cancel: true });
+  });
+  Object.keys(c.leaving).forEach(function (k) {
+    var r = c.leaving[k];
+    if (c.packaged) rows.push({ key: k, pill: 'Opting out', tone: 'out', line: 'Stays on, and billed, until ' + (review ? 'your review on ' + review : 'the quarterly review') + '. No refund for time already billed.', steps: [['Requested ' + (day(r.requestedAt) || ''), 'done'], [review ? 'Review on ' + review : 'Quarterly review', 'now'], ['Off', '']], cancel: true });
+    else rows.push({ key: k, name: r.name, pill: 'Opting out', tone: 'out', line: 'Requested ' + (day(r.requestedAt) || '') + '. ClearSky confirms the date and any price change in writing; access is unchanged until then.', steps: [['Requested', 'done'], ['ClearSky confirms in writing', 'now'], ['Off', '']], cancel: true });
+  });
+  return rows;
+}
+function changesHtml(c, rows) {
+  var h = '<section class="bcard full chg" id="bill-req"><h3>Changes in progress</h3>';
+  h += rows.map(function (r) {
+    var act = (r.pay ? '<a class="ows-pill sm primary" href="' + esc(r.pay) + '" target="_blank" rel="noopener">Pay</a>' : '') + (r.cancel && c.admin && !WS.viewAs ? '<button class="ows-pill sm" type="button" data-cancel="' + esc(r.key) + '">Cancel request</button>' : '');
+    return '<div class="chg-row" data-change="' + esc(r.key) + '"><i class="dot" style="background:' + cover(c, r.key) + '"></i><div class="ds"><b>' + esc(modName(c, r.key, r)) + '</b><span class="bpill ' + r.tone + '">' + esc(r.pill) + '</span><small>' + esc(r.line) + '</small>'
+      + '<ol class="steps">' + r.steps.map(function (s) { return '<li' + (s[1] ? ' class="' + s[1] + '"' : '') + '>' + esc(s[0]) + '</li>'; }).join('') + '</ol></div>' + (act ? '<div class="act">' + act + '</div>' : '') + '</div>';
+  }).join('');
+  if (!c.admin) h += '<p class="fine">An owner or administrator of ' + esc(c.co) + ' changes modules.</p>';
+  return h + '</section>';
+}
+/* 5 · the invoices: one status each */
+function histRow(o) {
+  return '<div class="irow" data-state="' + esc(o.state) + '"><time class="dt" datetime="' + esc(isoDay(o.date)) + '">' + esc(day(o.date)) + '</time><div class="ds"><b>' + esc(o.name) + '</b>' + (o.sub ? '<small>' + esc(o.sub) + '</small>' : '') + '</div><span class="amt">' + esc(o.amount || '') + '</span>'
+    + '<span class="st"><span class="spill ' + esc(o.state) + '">' + esc(cap1(o.state)) + '</span>' + (o.link ? '<a class="' + (o.state === 'open' || o.state === 'overdue' ? 'ows-pill sm primary' : 'view') + '" href="' + esc(o.link) + '" target="_blank" rel="noopener">' + (o.state === 'open' || o.state === 'overdue' ? 'Pay' : 'View ›') + '</a>' : '') + '</span></div>';
+}
+function histHtml(c) {
+  var bl = c.bl, sm = c.sm, rows = [], today0 = isoDay(c.now), empty = '', failed = '';
+  if (c.packaged || c.invoices.length) {
+    rows = c.invoices.map(function (x) {
+      var state = x.state === 'paid' ? 'paid' : x.state === 'unpaid' ? (x.kind !== 'change' && isoDay(x.date) < today0 ? 'overdue' : 'open') : 'void';
+      return { date: x.date, name: invName(x), sub: [x.period ? span(x.period.start, x.period.end) : '', x.paidAt ? 'paid ' + day(x.paidAt) : '', state === 'void' && x.state ? x.state : ''].filter(Boolean).join(' · '), amount: x.display, state: state, link: state === 'open' || state === 'overdue' ? x.paymentLink : null };
+    });
+    if (!rows.length) { if (!sm && !BILL.failed) empty = 'Reading your invoices…'; else if (BILL.failed) failed = 'Your invoices could not be loaded right now.'; else empty = 'No invoices yet. The first one arrives by email with its own pay link.'; }
+  } else if (c.stripe) {
+    var st = BILL.stripe;
+    if (!st) empty = 'Reading your invoices from Stripe…';
+    else if (st.failed) failed = 'The invoice list could not be loaded from Stripe right now.';
+    else if (!st.connected) empty = 'No invoices yet: Stripe billing has not been set up for this workspace.';
+    else rows = (st.invoices || []).map(function (inv) {
+      var state = inv.status === 'paid' ? 'paid' : inv.status === 'open' || inv.status === 'draft' ? 'open' : inv.status === 'uncollectible' ? 'overdue' : 'void';
+      return { date: inv.created, name: inv.number || 'Invoice', sub: inv.periodEnd ? 'Period to ' + day(inv.periodEnd) : 'Card through Stripe', amount: inv.amountDue == null ? '' : usd(inv.amountDue), state: state, link: inv.hostedUrl || inv.pdfUrl || null };
+    });
+    if (st && st.connected && !rows.length && !failed) empty = 'No invoices issued yet.';
+  } else if (bl.lastPaidAt) rows = [{ date: bl.lastPaidAt, name: 'Payment', sub: bl.note || 'Under your agreement', amount: bl.amountPaid ? usd(bl.amountPaid) : '', state: 'paid', link: null }];
+  else empty = c.trial ? 'No invoices yet. Nothing is charged during your trial.' : 'No invoices on file here. This plan is billed by ClearSky outside the workspace; write to ' + OmegaBrand.upgradeEmail() + ' for a statement.';
+  var h = '<section class="bcard full" id="bill-hist"><h3>Billing history</h3>';
+  if (rows.length) h += '<div class="itab"><div class="irow head"><span>Date</span><span>Description</span><span>Amount</span><span>Status</span></div>' + rows.map(histRow).join('') + '</div>';
+  else if (failed) h += '<p class="failed">' + esc(failed) + '<button class="ows-pill sm" type="button" data-bill="retry">Retry</button></p>';
+  else h += '<p class="fine">' + esc(empty) + '</p>';
+  return h + '</section>';
+}
 function renderBilling() {
   var b = byId('billing-body'); if (!b || !WS) return;
-  var bl = bill(), pa = WS.packageAccess, packaged = !!(bl.packaged === true || (pa && pa.packaged)), sm = BILL.summary, admin = isAdminHere();
-  var stripe = !!(bl.stripeCustomerId || bl.paymentProvider === 'stripe'), qb = packaged || bl.paymentProvider === 'quickbooks' || !!bl.qboCustomerId;
-  if (!BILL.asked && window.OmegaPackageMenu) { BILL.asked = true; OmegaPackageMenu.api('/api/plan-change').then(function (j) { BILL.summary = j; renderBilling(); }, function () { BILL.failed = true; renderBilling(); }); }
-  if (stripe && !BILL.stripeAsked && window.OmegaPackageMenu) { BILL.stripeAsked = true; OmegaPackageMenu.api('/api/stripe-invoices', { orgId: WS.orgId, limit: 24 }).then(function (j) { BILL.stripe = j; renderBilling(); }, function () { BILL.stripe = { connected: false, failed: true }; renderBilling(); }); }
-  function kv(rows) { return '<div class="kv">' + rows.filter(function (r) { return r[1] !== '' && r[1] != null; }).map(function (r) { return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</div>'; }
-  function usd(n) { n = Number(n) || 0; return '$' + n.toLocaleString(undefined, { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }); }
-  function moneyC(c) { return usd(Math.round(c) / 100); }
-  var stripeOpen = stripe && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'open'; }) : [];
-  var invoices = sm && Array.isArray(sm.invoices) ? sm.invoices : [], unpaid = invoices.filter(function (x) { return x.state === 'unpaid'; });
-  var pending = sm && Array.isArray(sm.pending) ? sm.pending : [];
-  var optIns = bl.optIns && typeof bl.optIns === 'object' ? Object.keys(bl.optIns).map(function (k) { var o = bl.optIns[k] || {}; o.key = k; return o; }).filter(function (o) { return o.status !== 'declined' && o.status !== 'activated'; }) : [];
-  var payLink = (unpaid.length && unpaid[0].paymentLink) || (pending.length && pending[0].paymentLink) || (stripeOpen.length && stripeOpen[0].hostedUrl) || bl.paymentLink || null;
-  var h = '<div class="bill">';
-
-  /* 1 · the subscription */
-  var heldNames = pa && Array.isArray(pa.catalog) ? pa.catalog.filter(function (m) { return (WS.modules || []).indexOf(m.key) >= 0; }).map(function (m) { return m.name; }) : [];
-  var mods = packaged ? ((sm && Array.isArray(sm.subscriptionNames) && sm.subscriptionNames.length) ? sm.subscriptionNames : heldNames) : [];
-  var onNames = packaged && sm && Array.isArray(sm.moduleNames) ? sm.moduleNames : null, notOn = onNames && Array.isArray(sm.subscriptionNames) ? sm.subscriptionNames.filter(function (n) { return onNames.indexOf(n) < 0; }) : [];
-  h += '<div class="bcard" id="bill-sub"><h3>Your subscription<span class="ows-chip on">' + esc(planName()) + '</span></h3>';
-  var monthly = (sm && sm.monthlyDisplay) || bl.monthlyDisplay || '';
-  h += monthly ? '<div class="big">' + esc(String(monthly).replace(/\/month$/, '')) + '<small>' + (sm && sm.interval === 'annual' ? 'billed yearly' : 'per month') + '</small></div>' : '<div class="big">' + esc(planName()) + '<small>plan</small></div>';
-  h += kv([['Workspace', WS.clientName || WS.orgId], ['Plan', packaged ? ((sm && sm.planDisplay) || planName()) : planName()],
-    ['Modules', packaged ? (mods.join(', ') || (sm || BILL.failed ? '—' : 'Loading…')) : ''], ['Add-ons', packaged ? '' : ((WS.addons || []).join(', ') || 'None')],
-    ['Tools on this plan', !packaged && Array.isArray(WS.toolAccess) ? String(WS.toolAccess.length) : ''],
-    ['Billing', packaged && sm ? (sm.interval === 'annual' ? 'Annual prepay' : 'Monthly, on the ' + (sm.billingDay ? sm.billingDay + (sm.billingDay === 1 || sm.billingDay === 21 || sm.billingDay === 31 ? 'st' : sm.billingDay === 2 || sm.billingDay === 22 ? 'nd' : sm.billingDay === 3 || sm.billingDay === 23 ? 'rd' : 'th') : 'signup day')) : (bl.interval === 'annual' ? 'Annual prepay' : stripe ? 'By card through Stripe' : bl.paymentProvider === 'quickbooks' ? 'By invoice through QuickBooks' : bl.paymentProvider === 'manual' ? 'Invoiced by ClearSky' : '')],
-    ['Since', day(bl.subscription && bl.subscription.since) || day(bl.subscriptionStartedAt) || day(bl.createdAt)], ['Access through', packaged ? day((sm && sm.accessUntil) || (pa && pa.accessUntil)) : ''], ['Trial ends', trialEnd() ? day(trialEnd()) : ''], ['Your role', WS.role || 'member']]);
-  if (notOn.length) h += '<p><b>Bought, not on yet:</b> ' + esc(notOn.join(', ')) + '. They switch on when the invoice for them is paid.</p>';
-  if (pa && pa.readOnly) h += '<p><b>Read-only</b> until the current invoice is paid.</p>';
-  h += '<div class="acts"><button class="ows-pill primary" type="button" data-bill="modules">Change modules</button><a class="ows-pill" href="/marketplace.html">Plans and the store</a></div></div>';
-
-  /* 2 · what you owe */
-  h += '<div class="bcard" id="bill-owe"><h3>What you owe</h3>';
-  var oweC = unpaid.reduce(function (t, x) { return t + (Number(x.totalCents) || 0); }, 0), oweD = bl.amountDue != null ? Number(bl.amountDue) || 0 : 0;
-  if (unpaid.length) {
-    h += '<div class="big">' + esc(moneyC(oweC)) + '<small>' + unpaid.length + (unpaid.length === 1 ? ' invoice open' : ' invoices open') + '</small></div>';
-    h += unpaid.map(function (x) { return '<div class="inv"><div><b>' + esc(x.kind === 'change' ? 'Change: ' + (x.names || []).join(', ') : x.kind === 'pack' ? 'Pack' : 'Subscription') + '</b><small>Issued ' + esc(x.date || '') + (x.period ? ' · ' + esc(x.period.start) + ' to ' + esc(x.period.end) : '') + '</small></div><div><span class="amt">' + esc(x.display || '') + '</span>' + (x.paymentLink ? '<a class="ows-pill sm primary" href="' + esc(x.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st unpaid">Unpaid</span>') + '</div></div>'; }).join('');
-  } else if (stripeOpen.length) {
-    h += '<div class="big">' + esc(usd(stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0))) + '<small>' + stripeOpen.length + (stripeOpen.length === 1 ? ' invoice open' : ' invoices open') + '</small></div>';
-    h += stripeOpen.map(function (x) { return '<div class="inv"><div><b>' + esc(x.number || 'Invoice') + '</b><small>Issued ' + esc(x.created ? new Date(x.created).toLocaleDateString() : '') + '</small></div><div><span class="amt">' + esc(usd(x.amountDue)) + '</span>' + (x.hostedUrl ? '<a class="ows-pill sm primary" href="' + esc(x.hostedUrl) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st unpaid">Open</span>') + '</div></div>'; }).join('');
-  } else if (packaged && !sm && !BILL.failed) h += '<p>Loading your invoices…</p>';
-  else if (oweD > 0) h += '<div class="big">' + esc(usd(oweD)) + (bl.subscriptionDue ? '<small>due ' + esc(day(bl.subscriptionDue)) + '</small>' : '') + '</div>';
-  else h += '<div class="big">$0<small>nothing is owed</small></div>';
-  var nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (packaged ? '' : bl.subscriptionDue);
-  h += kv([['Next invoice', nextOn ? (day(nextOn) || nextOn) : ''], ['Paid through', sm && sm.paidThrough ? (day(sm.paidThrough) || sm.paidThrough) : ''], ['Last payment', !packaged && bl.lastPaidAt ? day(bl.lastPaidAt) : '']]);
-  if (packaged) h += '<p>Each invoice arrives by email on your billing day with its pay link. A card saved on QuickBooks’ page pays the next one in one click.</p>';
-  h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Pay now</a>' : '') + (packaged ? '<button class="ows-pill" type="button" id="bill-paid"' + (admin ? '' : ' disabled title="An owner or administrator checks with QuickBooks"') + '>I’ve paid</button>' : '') + '</div></div>';
-
-  /* 3 · the payment method */
-  h += '<div class="bcard" id="bill-card"><h3>Payment method</h3>';
-  if (stripe) {
-    h += kv([['Provider', 'Stripe'], ['Card on file', 'Managed in the Stripe portal']]);
-    h += '<p>Your card is entered and stored with <b>Stripe</b>, on Stripe’s own page. Nothing about it is kept on this site. The portal also turns autopay on or off and downloads any invoice.</p>';
-    h += '<div class="acts"><button class="ows-pill primary" type="button" id="bill-portal"' + (admin ? '' : ' disabled title="An owner or administrator manages the card"') + '>Manage card and autopay</button></div>';
-    if (!admin) h += '<p>An owner or administrator of ' + esc(WS.clientName || 'this workspace') + ' opens the portal.</p>';
-  } else if (qb) {
-    h += kv([['Provider', 'QuickBooks Payments'], ['Card on file', bl.autopay === true ? 'Saved · autopay on' : bl.autopay === false ? 'Not saved yet' : 'Saved on your invoice page']]);
-    h += '<p>Your card is entered on <b>QuickBooks’ secure payment page</b>, never on this site. When you pay an invoice there, tick <b>Save this card</b> and turn on <b>Autopay</b>: every later invoice is charged on its date, and you can change the card from any invoice.</p>';
-    h += '<div class="acts">' + (payLink ? '<a class="ows-pill primary" href="' + esc(payLink) + '" target="_blank" rel="noopener">Open the payment page</a>' : '<span class="ows-chip">Your next invoice brings the link</span>') + '</div>';
-  } else {
-    h += '<p><b>No billing account yet.</b> Your first invoice sets it up: it arrives by email with a secure payment page where a card can be saved. Nothing is charged until then.</p>';
-    h += '<div class="acts"><a class="ows-pill" href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '?subject=' + encodeURIComponent('Billing for ' + (WS.clientName || WS.orgId)) + '">Ask ClearSky</a></div>';
-  }
-  h += '</div>';
-
-  /* 4 · requested additions / changes waiting for payment */
-  if (optIns.length || pending.length) {
-    h += '<div class="bcard" id="bill-req"><h3>Additions</h3>';
-    h += optIns.map(function (o) { return '<div class="inv"><div><b>' + esc(o.name || o.key) + '</b><small>Requested ' + esc(day(o.requestedAt) || '') + (o.requestedBy ? ' by ' + esc(o.requestedBy) : '') + ' · ClearSky moves the workspace onto a package and switches it on; nothing is charged until you confirm the first invoice</small></div><div><span class="amt">' + esc(o.display || '') + '</span><span class="st">Requested</span></div></div>'; }).join('');
-    h += pending.map(function (x) { return '<div class="inv"><div><b>' + esc((x.names || []).join(', ')) + '</b><small>Pay before ' + esc(x.expiresOn || '') + ' · on when the payment clears</small></div><div><span class="amt">' + esc(x.display || '') + '</span>' + (x.paymentLink ? '<a class="ows-pill sm primary" href="' + esc(x.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : '') + '</div></div>'; }).join('');
-    h += '</div>';
-  }
-
-  /* 5 · billing history */
-  h += '<div class="bcard full" id="bill-hist"><h3>Billing history</h3>';
-  if (packaged || invoices.length) {
-    if (invoices.length) h += invoices.map(function (x) { return '<div class="inv"><div><b>' + esc(x.kind === 'change' ? 'Change: ' + (x.names || []).join(', ') : x.kind === 'pack' ? 'Pack' : 'Subscription') + '</b><small>' + esc(x.date || '') + (x.period ? ' · ' + esc(x.period.start) + ' to ' + esc(x.period.end) : '') + (x.paidAt ? ' · paid ' + esc(day(x.paidAt) || x.paidAt) : '') + '</small></div><div><span class="amt">' + esc(x.display || '') + '</span>' + (x.state === 'unpaid' && x.paymentLink ? '<a class="ows-pill sm primary" href="' + esc(x.paymentLink) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="st ' + esc(x.state || '') + '">' + esc(x.state || '') + '</span>') + '</div></div>'; }).join('');
-    else if (!sm && !BILL.failed) h += '<p>Loading your invoices…</p>';
-    else if (BILL.failed && !admin) h += '<p>An owner or administrator sees the invoices here. Yours arrive by email.</p>';
-    else h += '<p>No invoices yet.</p>';
-  } else if (stripe) {
-    var st = BILL.stripe;
-    if (!st) h += '<p>Loading your invoices…</p>';
-    else if (!st.connected) h += '<p>' + (st.failed ? 'The invoice list is unavailable right now.' : 'No invoices yet; billing has not been set up for this workspace.') + '</p>';
-    else if (!(st.invoices || []).length) h += '<p>No invoices issued yet.</p>';
-    else h += st.invoices.map(function (inv) { var link = inv.hostedUrl || inv.pdfUrl; return '<div class="inv"><div><b>' + esc(inv.number || 'Invoice') + '</b><small>' + esc(inv.created ? new Date(inv.created).toLocaleDateString() : '') + '</small></div><div><span class="amt">' + esc(inv.amountDue == null ? '' : usd(inv.amountDue)) + '</span>' + (link ? '<a class="ows-pill sm" href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(inv.status || 'Open') + '</a>' : '<span class="st ' + esc(inv.status || '') + '">' + esc(inv.status || '') + '</span>') + '</div></div>'; }).join('');
-  } else if (bl.lastPaidAt) h += '<div class="inv"><div><b>Last payment</b><small>' + esc(day(bl.lastPaidAt)) + '</small></div><div><span class="amt">' + esc(bl.amountPaid ? usd(bl.amountPaid) : '') + '</span><span class="st paid">paid</span></div></div>';
-  else h += '<p>No invoices on file here. This plan is billed by ClearSky outside the workspace; write to <a href="mailto:' + esc(OmegaBrand.upgradeEmail()) + '">' + esc(OmegaBrand.upgradeEmail()) + '</a> for a statement.</p>';
-  h += '</div></div>';
-  h += '<div class="ows-note" style="margin-top:14px">Prices and changes are always the server’s: nothing here is priced in the browser. Card details are entered only on the payment provider’s own page.</div>';
-  b.innerHTML = h;
-  var cm = b.querySelector('[data-bill="modules"]'); if (cm) cm.addEventListener('click', function () { go('modules'); });
-  var paid = byId('bill-paid'); if (paid && admin) paid.addEventListener('click', function () { paid.disabled = true; paid.textContent = 'Checking…'; OmegaPackageMenu.api('/api/plan-change', { action: 'reconcile-now' }).then(function () { S.toast('Checked with QuickBooks'); BILL.asked = false; if (OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderBilling(); }, function (e) { paid.disabled = false; paid.textContent = 'I’ve paid'; S.toast(e.message); }); });
-  var portal = byId('bill-portal'); if (portal && admin) portal.addEventListener('click', function () { portal.disabled = true; portal.textContent = 'Opening Stripe…'; OmegaPackageMenu.api('/api/stripe-portal', { orgId: WS.orgId }).then(function (j) { portal.disabled = false; portal.textContent = 'Manage card and autopay'; if (j && j.url) window.open(j.url, '_blank', 'noopener'); else S.toast('Stripe did not return a portal link'); }, function (e) { portal.disabled = false; portal.textContent = 'Manage card and autopay'; S.toast(e.message); }); });
+  var bl = bill();
+  if (!BILL.asked && window.OmegaPackageMenu) { BILL.asked = true; BILL.failed = false; OmegaPackageMenu.api('/api/plan-change').then(function (j) { BILL.summary = j; BILL.failed = false; renderBilling(); renderPlans(); }, function () { BILL.failed = true; renderBilling(); }); }
+  if (!!(bl.stripeCustomerId || bl.paymentProvider === 'stripe') && !BILL.stripeAsked && window.OmegaPackageMenu) { BILL.stripeAsked = true; OmegaPackageMenu.api('/api/stripe-invoices', { orgId: WS.orgId, limit: 24 }).then(function (j) { BILL.stripe = j; renderBilling(); }, function () { BILL.stripe = { connected: false, failed: true }; renderBilling(); }); }
+  var c = billCtx(), changes = changeRows(c);
+  b.innerHTML = '<div class="bill">' + heroHtml(c) + oweHtml(c) + payHtml(c) + (changes.length ? changesHtml(c, changes) : '') + histHtml(c) + '</div>';
+  var cm = b.querySelector('[data-bill="modules"]'); if (cm) cm.addEventListener('click', function () { nav('/workspace#modules'); });
+  Array.prototype.forEach.call(b.querySelectorAll('[data-bill="retry"]'), function (x) { x.addEventListener('click', function () {
+    BILL.asked = false; BILL.failed = false; BILL.summary = null;
+    if (BILL.stripe && BILL.stripe.failed) { BILL.stripe = null; BILL.stripeAsked = false; }
+    renderBilling();
+  }); });
+  Array.prototype.forEach.call(b.querySelectorAll('[data-cancel]'), function (x) { x.addEventListener('click', function () { moduleMenu(x.getAttribute('data-cancel'), 'cancel'); }); });
+  var paid = byId('bill-paid'), paidLabel = 'Just paid? Check with QuickBooks';
+  if (paid) paid.addEventListener('click', function () { paid.disabled = true; paid.textContent = 'Checking with QuickBooks…'; OmegaPackageMenu.api('/api/plan-change', { action: 'reconcile-now' }).then(function () { S.toast('Checked with QuickBooks'); BILL.asked = false; if (OmegaTenant.refreshPackage) { try { OmegaTenant.refreshPackage(); } catch (e) {} } renderBilling(); }, function (e) { paid.disabled = false; paid.textContent = paidLabel; S.toast(e.message); }); });
+  var portal = byId('bill-portal'); if (portal && c.admin) portal.addEventListener('click', function () { portal.disabled = true; portal.textContent = 'Opening Stripe…'; OmegaPackageMenu.api('/api/stripe-portal', { orgId: WS.orgId }).then(function (j) { portal.disabled = false; portal.textContent = 'Manage card and autopay'; if (j && j.url) window.open(j.url, '_blank', 'noopener'); else S.toast('Stripe did not return a portal link'); }, function (e) { portal.disabled = false; portal.textContent = 'Manage card and autopay'; S.toast(e.message); }); });
 }
 function billingDrawer() { openBilling(); }
 function settingsDrawer() {
   var html = '<div class="field"><label for="set-name">Display name</label><input id="set-name" value="' + esc(who()) + '" maxlength="60"></div><div class="kv"><div><span>Email</span><span>' + esc(ME) + '</span></div><div><span>Workspace</span><span>' + esc(WS.orgId) + '</span></div><div><span>Role</span><span>' + esc(WS.role || 'member') + '</span></div></div>';
-  var rows = [{ key: 'save', name: 'Save name', sub: 'Shown to your team and on projects you own', icon: S.ICON.me, cta: 'Save', onClick: saveName }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'out', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];
+  var rows = [{ key: 'save', name: 'Save name', sub: 'Shown to your team and on projects you own', icon: S.ICON.me, cta: 'Save', onClick: saveName },
+    /* on a phone, Me is where Plan & billing lives (the tab bar has no room for it) */
+    { key: 'billing', name: 'Plan & billing', sub: planName() + ' · what is due and your invoices', icon: S.ICON.billing, cta: 'Open', onClick: function () { S.closeDrawer(); openBilling(); } }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'out', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];
   S.drawer({ eyebrow: 'Account', title: 'Settings', html: html, rows: rows });
 }
 function saveName() {
@@ -996,7 +1372,26 @@ function route() {
   if (!h) { go('home'); return; }
   if (h === 'billing') openBilling(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer();
   else if (h.indexOf('area-') === 0) areaDrawer(h.slice(5));
+  else if (h.indexOf('module-') === 0) focusModule(h.slice(7));
+  else if (h === 'plans') focusPlans();
   else go(h);
+}
+/* #module-<key>: the Modules page, that module's card marked and in view
+   (every link to one module lands here, the marketplace's included) */
+function focusModule(key) {
+  go('modules', true);
+  MOD_FOCUS = String(key || '').toLowerCase().replace(/[^a-z0-9-]/g, '') || null; MOD_FOCUS_DONE = false;
+  renderModules();
+}
+/* #plans: the Modules page, scrolled to the plans shelf */
+function focusPlans() { go('modules'); PLAN_FOCUS = true; renderPlans(); }
+function markFocus() {
+  var b = byId('modules-body'); if (!b) return;
+  Array.prototype.forEach.call(b.querySelectorAll('.mod[data-selected]'), function (x) { x.removeAttribute('data-selected'); });
+  if (!MOD_FOCUS) return;
+  var c = b.querySelector('.mod[data-module="' + MOD_FOCUS + '"]'); if (!c) return;
+  c.setAttribute('data-selected', '1');
+  if (!MOD_FOCUS_DONE && view() === 'modules') { MOD_FOCUS_DONE = true; c.scrollIntoView({ block: 'center', behavior: 'auto' }); }
 }
 window.addEventListener('hashchange', function () { if (WS) route(); });
 Array.prototype.forEach.call(document.querySelectorAll('#content .sec .back'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); go('home'); }); });
