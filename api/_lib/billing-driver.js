@@ -26,7 +26,10 @@ function providerOf(billing) {
   return Mode.provider();
 }
 function name(provider) { return NAMES[provider] || NAMES[Mode.provider()]; }
-function customerId(billing, provider) { var b = billing || {}; return (provider === 'stripe' ? b.stripeCustomerId : b.qboCustomerId) || null; }
+/* a package binds only its OWN Stripe customer: a legacy tier's
+   stripeCustomerId (stripe-create) carries that tier's subscription, and a
+   package issued on it would bill beside a tier that keeps charging */
+function customerId(billing, provider) { var b = billing || {}; return (provider === 'stripe' ? (b.packaged === true && b.billingProvider === 'stripe' ? b.stripeCustomerId : null) : b.qboCustomerId) || null; }
 /* the customer binding still names this deployment's account: the same
    Stripe mode, or the same QuickBooks company */
 function bound(billing, provider, book) {

@@ -89,7 +89,11 @@ module.exports = function (req, res) {
        Stripe retries for days. No customer id, no lookup: acknowledged. */
     var cus = typeof obj.customer === 'string' && obj.customer ? obj.customer : '';
     var byCustomer = orgId ? Promise.resolve(orgId) : !cus ? Promise.resolve(null)
-      : db.collectionGroup('billing').where('stripeCustomerId', '==', cus).limit(1).get().then(function (q) { return q.empty ? null : q.docs[0].ref.parent.parent.id; });
+      : db.collectionGroup('billing').where('stripeCustomerId', '==', cus).limit(1).get().then(function (q) {
+        if (!q.empty) return q.docs[0].ref.parent.parent.id;
+        /* a tier customer a workspace moved off (package-billing keeps it) */
+        return db.collectionGroup('billing').where('legacyStripeCustomerId', '==', cus).limit(1).get().then(function (l) { return l.empty ? null : l.docs[0].ref.parent.parent.id; });
+      });
     return byCustomer.then(function (org) {
       if (!org) return { ignored: cus ? 'no org for ' + cus : 'no customer on ' + evt.type };
       /* a PACKAGED workspace is billed by the engine alone (its package

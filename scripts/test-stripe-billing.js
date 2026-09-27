@@ -194,6 +194,10 @@ async function engineChecks() {
   var paid = await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
   bill = db.data.get(root + '/billing/current');
   ok('invoice.paid: the webhook reconciles at once and the package is on', bill.packagingState === 'paid' && bill.modules.join() === 'lite,storage' && bill.toolAccess.indexOf('batterysizer') >= 0 && bill.amountDue === 0, { state: bill.packagingState, modules: bill.modules });
+  var PA = require('../api/_lib/package-access');
+  ok('a paid test-mode grant is live where the live switch is off (the sandbox)', PA.live(bill, bill.modules, NOW) === true);
+  env({ PACKAGING_LIVE: 'true' }); var underSwitch = PA.live(bill, bill.modules, NOW); env({ PACKAGING_LIVE: null });
+  ok('...and never honoured under the live switch (a Preview writing to the same Firestore)', underSwitch === false);
   ok('the invoice record reads paid, the history says who read it', db.data.get(invoices[0]).state === 'paid' && Array.from(db.data.keys()).some(function (k) { return k.indexOf(root + '/billing/current/history/') === 0 && db.data.get(k).by === 'stripe-reconciliation'; }));
   ok('the tenant\'s receipt and ClearSky\'s alert went out, naming Stripe', MAILED.some(function (m) { return m.template === 'paid'; }) && MAILED.some(function (m) { return m.template === 'paidAlert' && m.payWith === 'Stripe'; }), MAILED);
   var summary = await C.summary(db, orgId);
@@ -254,11 +258,14 @@ async function engineChecks() {
 
   console.log('\na tenant moving off an old Stripe subscription onto a package');
   var ldb = fixture(), lstripe = new SD(), lb = ldb.data.get(root + '/billing/current');
-  Object.assign(lb, { packaged: false, packagingSignup: false, packagingState: null, billingProvider: null, tier: 'standard', stripeSubscriptionId: 'sub_oldtier' });
+  Object.assign(lb, { packaged: false, packagingSignup: false, packagingState: null, billingProvider: null, tier: 'standard', stripeSubscriptionId: 'sub_oldtier', stripeCustomerId: 'cus_oldtier' });
   var lv = await S.preview(ldb, orgId, input, NOW);
   await S.apply(ldb, orgId, Object.assign({}, input, { previewId: lv.previewId, effectiveAt: lv.effectiveAt }), Object.assign({}, CALLER, { staff: true, email: 'ops@clearsky-usa.com' }), NOW, { stripe: lstripe });
   var legacyNote = ldb.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-legacy-sub-' + orgId);
   ok('ClearSky is told to cancel the old subscription so the card is not charged twice', legacyNote && /sub_oldtier/.test(legacyNote.text) && legacyNote.staffMail === 'billingAlert', legacyNote);
+  var moved = ldb.data.get(root + '/billing/current');
+  ok('the package gets its OWN Stripe customer, never the tier\'s (which carries the tier subscription)', /^cus_/.test(moved.stripeCustomerId) && moved.stripeCustomerId !== 'cus_oldtier' && lstripe.customers_[moved.stripeCustomerId].metadata.omegaOrg === orgId, moved);
+  ok('...and the tier customer is kept so its events still find the workspace', moved.legacyStripeCustomerId === 'cus_oldtier');
 
   console.log('\na customer from the other Stripe mode is never billed');
   var mdb = fixture(); var live = new SD({ livemode: true });
@@ -318,6 +325,9 @@ async function webhookChecks() {
     var tier = await call(tierEvt, 'signed');
     ok('a non-package invoice on a packaged workspace\'s customer: answered once, nothing written', tier.code === 200 && /packaged workspace/.test(tier.body.ignored || '') && JSON.stringify([db.data.get(root), db.data.get(root + '/billing/current')]) === beforeTier, tier.body);
     ok('...and ClearSky is told an old subscription may still be charging it', /cancel it in Stripe/.test((db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-legacy-evt_oldtier') || {}).text || ''));
+    db.data.get(root + '/billing/current').legacyStripeCustomerId = 'cus_movedoff';
+    var movedOff = await call({ id: 'evt_movedoff', type: 'invoice.paid', created: 1790000000, data: { object: { id: 'in_movedoff', object: 'invoice', customer: 'cus_movedoff', metadata: {} } } }, 'signed');
+    ok('an event on the tier customer a workspace moved off still finds it, and is flagged, never applied', movedOff.code === 200 && /packaged workspace/.test(movedOff.body.ignored || '') && !!db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-legacy-evt_movedoff'), movedOff.body);
     var nobody = await call({ id: 'evt_nobody', type: 'invoice.paid', created: 1790000000, data: { object: { id: 'in_x', object: 'invoice', customer: 'cus_nobody', metadata: {} } } }, 'signed');
     ok('an event for no workspace is answered once', nobody.code === 200 && /no org/.test(nobody.body.ignored || ''));
     delete db.collectionGroup;

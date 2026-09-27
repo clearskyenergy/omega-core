@@ -15,6 +15,9 @@ function instant(v) {
 function live(billing, modules, now) {
   billing = billing || {}; now = now == null ? Date.now() : now;
   var state = billing.packagingState, ok = state === 'paid';
+  /* under the live switch a Stripe TEST-mode grant is never honoured (a
+     Preview writing to the same Firestore, a flip made before the live key) */
+  if (billing.billingProvider === 'stripe' && billing.stripeLivemode !== true && process.env.PACKAGING_LIVE === 'true') return false;
   if (state === 'trial') {
     var start = instant(billing.trialStartedAt), end = instant(billing.trialEndsAt);
     ok = isFinite(start) && isFinite(end) && end > start && end - start <= 14 * 86400000 && now >= start && now < end;

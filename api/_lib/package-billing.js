@@ -159,10 +159,13 @@ async function apply(db, orgId, input, caller, now, deps) {
       /* a workspace moving onto a Stripe package while it still has an old
          Stripe tier subscription: that subscription keeps charging the card
          unless someone cancels it. ClearSky is told, once, at the move. */
-      if (provider === 'stripe' && fresh.billing.stripeSubscriptionId && fresh.billing.packaged !== true) {
+      /* whichever rail the package bills on, an old Stripe tier subscription keeps charging the card */
+      if (fresh.billing.stripeSubscriptionId && fresh.billing.packaged !== true) {
         tx.set(db.doc('omega_orgs/clearsky-usa.com/notifications/billing-review-legacy-sub-' + orgId), { kind: 'billing-review', read: false, createdAt: now, orgId: orgId, staffMail: 'billingAlert', mailState: 'pending',
-          text: (c.org.name || orgId) + ' moved onto a Stripe package while its old Stripe subscription ' + fresh.billing.stripeSubscriptionId + ' is on record. Cancel that subscription in Stripe so the card is not charged twice.' });
+          text: (c.org.name || orgId) + ' moved onto a package (' + D.name(provider) + ') while its old Stripe subscription ' + fresh.billing.stripeSubscriptionId + ' is on record. Cancel that subscription in Stripe so the card is not charged twice.' });
       }
+      /* the tier's own customer, kept so its events still find this workspace (and are flagged, never applied) */
+      if (provider === 'stripe' && fresh.billing.stripeCustomerId && fresh.billing.stripeCustomerId !== customer) tx.set(current, { legacyStripeCustomerId: fresh.billing.stripeCustomerId }, { merge: true });
       /* the organization record says it is packaged, and in which company:
          the live runner finds its tenants by packagedLive (a sandbox signup
          is also `packaged`, and the production runner must never poll it),

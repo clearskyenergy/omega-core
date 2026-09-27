@@ -180,7 +180,7 @@
           <div class="hint" id="signup-interval-note">Pay for the year and you pay for ten months of twelve, invoiced once.</div>
         </div>
         <button class="btn" id="billing-pay" onclick="submitWorkspace(true, false, true)">Subscribe</button>
-        <div class="secure" id="signup-secure">Secure card checkout. Cancel or change modules any time.</div>
+        <div class="secure" id="signup-secure">Secure card checkout. Add modules any time; optional ones can be opted out at the quarterly review, and Omega Design is always included.</div>
         <button class="btn ghost" id="billing-submit" onclick="submitWorkspace(true)">Request a 14-day trial instead</button>
         <button class="btn ghost" onclick="backToBilling()">Back to billing profile</button>
         <div class="err" id="build-err"></div>
@@ -364,7 +364,7 @@
     var start = proposal ? proposal.view.proposal.selection.modules : (wantedModules() || (recommended ? recommended.recommendation.modules : ['lite']));
     if (!signupPicker) signupPicker = OmegaPackageMenu.picker($('signup-package-menu'), { catalog: signupOptions.modules, modules: start, readOnly: !!proposal, onChange: function () { markSuggested(); quoteSelection(); } });
     if (!proposal && !wantedModules()) { if (recommended) markSuggested(); else suggestQuietly(); }
-    $('billing-pay').style.display = signupOptions.payNow ? '' : 'none';
+    $('billing-pay').style.display = $('signup-secure').style.display = signupOptions.payNow ? '' : 'none';
     if (proposal) { setInterval_(proposal.view.proposal.selection.interval || 'monthly', true); $('signup-package-note').textContent = 'The package your proposal priced. To change it, ask for a new proposal.'; }
     quoteSelection(); show('step-build');
   };
