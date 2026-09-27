@@ -245,7 +245,7 @@
       /* the ONE legacy ctx (OmegaWorkspaceHub.legacyCtx), for the workspace
          with no person; OmegaCaps is passed by name: without it the hub
          finds none outside a browser window */
-      var ctx = H && H.legacyCtx && T ? H.legacyCtx({ tools: T, ws: wsLike, billing: data.billing || null, caps: global.OmegaCaps, who: { orgId: org } }) : null;
+      var ctx = H && H.legacyCtx && T ? H.legacyCtx({ tools: T, ws: wsLike, billing: data.billing || null, whiteLabel: data.whiteLabel || null, caps: global.OmegaCaps, who: { orgId: org } }) : null;
       out.partly = [];
       (data.modules || []).forEach(function (m) { var st = ctx ? H.moduleState(m, ctx) : 'ask'; if (st === 'held') out.held.push(m.key); else if (st === 'part') out.partly.push(m.key); });
       /* a package drawn from what they hold OR partly use: moving a legacy

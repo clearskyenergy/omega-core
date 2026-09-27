@@ -1761,7 +1761,7 @@ window._omegaReady = function(){
   <div id="app-body">
   <!-- TOPBAR (UNCHANGED — logo, user, sign out) -->
   <div id="topbar">
-    <a href="/" class="tb-logo">
+    <a href="/" class="tb-logo" onclick="tbHome(event)">
       <!-- Platform identity stays ClearSky-OMEGA (like Salesforce shows Salesforce) -->
       <!-- Platform mark. Hide on 404 rather than showing a broken-image icon;
            the adjacent tb-logo-txt already carries the wordmark. -->
@@ -5585,6 +5585,10 @@ function showUpgradeModal(toolName){
       '<button onclick="document.getElementById(\'upgrade-modal\').remove()" style="background:none;border:none;color:#5B6672;font-size:13px;cursor:pointer;font-family:inherit">Maybe later</button>'+
     '</div>';
   m.addEventListener('click', function(e){ if(e.target===m) m.remove(); });
+  /* a dialog: named as one, and Escape closes it like every other panel here */
+  var box = m.firstChild; if (box && box.setAttribute){ box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); }
+  function onKey(e){ if (!document.body.contains(m)) { document.removeEventListener('keydown', onKey); return; } if (e.key==='Escape'){ m.remove(); document.removeEventListener('keydown', onKey); } }
+  document.addEventListener('keydown', onKey);
   document.body.appendChild(m);
 }
 
@@ -5723,8 +5727,11 @@ function _catLabel(key){
 // Dashboard holds at most this many apps. Required tools (e.g. Site Editor)
 // are placed first and always count toward — and fit within — this cap.
 var DASH_MAX = 6;
+/* the starter set on show (Pass 3 below): what a first pin change starts from */
+var _STARTER = [];
 function _paintDash(){
   var el = document.getElementById('dash-grid'); if(!el) return;
+  _STARTER = [];
   el.className = 'pm-grid';
   var tools = _qualifying(), html = '', renderedKeys = {}, count = 0;
   // Pass 1: required tools always render first.
@@ -5768,7 +5775,7 @@ function _paintDash(){
       var st = tools[s];
       if (renderedKeys[st.key] || st.soon) continue;
       if (typeof OMEGATools.isUnlocked === 'function' && !OMEGATools.isUnlocked(st, _PORTAL_WS)) continue;
-      html += _tile(st, true); renderedKeys[st.key]=true; count++; starter = true;
+      html += _tile(st, true); renderedKeys[st.key]=true; count++; starter = true; _STARTER.push(st.key);
     }
     if (starter) html = '<div class="pm-starter-note" style="grid-column:1/-1;font-size:12.5px;color:var(--cs-sub);padding:2px 2px 6px">A starter set for your plan. Keep what you use, and <a data-sn="marketplace" href="/marketplace.html" style="color:var(--cs-accent);font-weight:600">browse the Marketplace</a> for the rest.</div>' + html;
   }
@@ -5869,6 +5876,24 @@ function togglePin(ev, key){
   var orgId = _PORTAL_WS && _PORTAL_WS.orgId;
   if (!orgId || typeof db==='undefined' || !db) return;
   var adding = !_pinned(key);
+  /* THE STARTER SET IS WHAT A FIRST CHANGE STARTS FROM. It shows while
+     nothing is pinned, and its tiles carry Remove; but a starter tool is not
+     pinned, so Remove used to PIN it — and one pin ends the starter set: the
+     dashboard kept the tile you removed and dropped the other five. Add to
+     dashboard did the same to the five. Now the starter set becomes the
+     pins: Remove keeps the others, Add adds beside them (the cap still
+     holds). check:dashboard's click sweep found it. */
+  if (!_PINNED.length && _STARTER.length){
+    var removing = !!(ev && ev.currentTarget && /\bremove\b/.test(ev.currentTarget.className || ''));
+    var next = [];
+    for (var si=0; si<_STARTER.length; si++) if (!(removing && _STARTER[si]===key)) next.push(_STARTER[si]);
+    if (!removing && next.indexOf(key) < 0){
+      if (next.length >= DASH_MAX){ _dashCapMsg('Your dashboard is full (' + DASH_MAX + ' apps). Remove one to add another.'); return; }
+      next.push(key);
+    }
+    OMEGATools.savePinned(db, firebase, orgId, next).then(function(){ _PINNED = next; _paintDash(); _paintMarket(); });
+    return;
+  }
   // Enforce the dashboard cap: required tools + pinned tools may not exceed DASH_MAX.
   if (adding){
     var used = _dashCount();
@@ -6281,8 +6306,18 @@ function closeWorkspace(){
   // restore Dashboard highlight
   _snHighlight('dashboard');
 }
-// Close the drawer on Escape.
-document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeWorkspace(); } });
+// Close the drawer, and the Account panel, on Escape.
+document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeWorkspace(); var ao=document.getElementById('acct-overlay'); if (ao && ao.classList.contains('show')) closeAccount(); } });
+/* The logo is Home. On the dashboard itself that is the top of this page,
+   not a reload of it (the loading screen and a second boot for nothing).
+   Anywhere else it is still the link to "/". check:dashboard's click sweep
+   holds it. */
+function tbHome(ev){
+  if (location.pathname !== '/' && location.pathname !== '/index.html') return;
+  if (ev && ev.preventDefault) ev.preventDefault();
+  closeWorkspace(); if (typeof closeNav === 'function') closeNav();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 function snGo(ev, which){
   if (ev && ev.preventDefault) ev.preventDefault();
   // highlight

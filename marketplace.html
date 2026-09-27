@@ -1024,7 +1024,7 @@ function resolveWorkspace(email){
            accountTier:'Account', allowedDomain:d, derived:true };
 }
 
-var CFG, auth, db, currentUser=null, currentOrg=null, WORKSPACE=null;
+var CFG, auth, db, currentUser=null, currentOrg=null, WORKSPACE=null, BOUND=null;
 var _PINNED=[];
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -1077,16 +1077,13 @@ function onAuth(user, tries){
     el('auth-screen').style.display='flex'; el('app').style.display='none';
     return;
   }
-  /* ── THE ENTITLEMENTS MAY HAVE LANDED FIRST ────────────────────────────
-     omega-tenant.js listens for the sign-in before this page does, and on a
-     host that pins a tenant it merges the billing, the package and the
-     allowlist onto config's tenant the moment they are read. When that
-     beats this handler, catalogueMode() has already adopted the merged
-     object; replacing it with the bare one resolveWorkspace() builds left
-     every card judged by no plan at all (every tool Open, no module named)
-     while the page still believed it was packaged. Keep the one object the
-     runtime merged (OmegaTenant.workspace is null until it has). */
-  var merged = window.OmegaTenant && OmegaTenant.workspace;
+  /* THE BOUND WORKSPACE WINS. resolveWorkspace() is a stand-in built from
+     the email (no plan, no modules); the entitlements are the workspace.
+     When they landed first (omega-tenant.js merges them onto config's
+     tenant on a pinned host), keep that object: replacing it with the
+     stand-in judged every card by no plan at all (every tool Open, no
+     module named). OmegaTenant.workspace is null until it has merged. */
+  var merged = BOUND || (window.OmegaTenant && OmegaTenant.workspace);
   if (merged && merged.orgId === ws.orgId) ws = merged;
   currentUser = user; WORKSPACE = ws; currentOrg = ws.orgId;
   window.OMEGA_WORKSPACE = ws; window.CS_BRAND = ws.clientName;
@@ -1561,6 +1558,8 @@ function forward(){
 }
 window.addEventListener('hashchange', function(){ CAT.opened = ''; forward(); });
 if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(function(ws){
+  /* the entitlements are the workspace from here on, whichever answer came first */
+  if (ws) { BOUND = ws; WORKSPACE = ws; window.OMEGA_WORKSPACE = ws; }
   ws = ws || window.OMEGA_WORKSPACE;
   try { wearChrome(ws); } catch(e){ console.warn('workspace chrome', e); }
   try { catalogueMode(ws); } catch(e){ console.warn('marketplace catalogue', e); }

@@ -17,7 +17,12 @@
  *   - a module's commands sit behind a gate the table does not list, or the
  *     table lists one the editor no longer has (drift either way);
  *   - for any tier, the table and OmegaCaps.canWith predict a command to be
- *     open or closed and the editor disagrees.
+ *     open or closed and the editor disagrees;
+ *   - Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move
+ *     System) are not on Draw, shown and runnable, on every plan;
+ *   - Search tools (Ctrl+K) or Ask Jarvis lists or runs a command on a tab
+ *     the plan hides, or Jarvis is told of or opens such a tab. They run a
+ *     command by clicking it, so they reached what the ribbon did not show.
  * `node scripts/render-legacy-gates.js --print` prints the table to paste.
  */
 'use strict';
@@ -114,6 +119,63 @@ async function boot(browser, base, tier, addons) {
   var shownBlockedTabs = await page.evaluate(function () {
     return Array.prototype.filter.call(document.querySelectorAll('#ribbon-tabs .rtab[data-cap-blocked]'), function (t) { return getComputedStyle(t).display !== 'none'; }).map(function (t) { return t.getAttribute('data-page'); });
   });
+  /* Run by name: Search tools (Ctrl+K) and Ask Jarvis click a command, so
+     they reach what the ribbon hides. Nothing on a tab the plan hides may
+     be listed or run, and Jarvis may not name or open such a tab. */
+  rows.byName = await page.evaluate(function () {
+    function label(el) {
+      var lbl = el.querySelector('.rb-lbl'), d = document.createElement('div');
+      d.innerHTML = (lbl ? lbl.innerHTML.replace(/<br\s*\/?>/gi, ' ') : el.innerHTML).replace(/<span class="rb-ico"[\s\S]*?<\/span>/i, '');
+      return (d.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+    var hidden = [], open = [], nodes = document.querySelectorAll('#ribbon .ribbon-page .rbtn,#ribbon .ribbon-page .rsbtn,#app-menu .menu-item,.rb-fly-item');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i], name = label(el);
+      if (!name || el.hasAttribute('data-omega-retired') || el.hasAttribute('data-packaging-retired')) continue;
+      (el.closest('[data-cap-blocked]') ? hidden : open).push(name);
+    }
+    var listed = OmegaCommands.list().map(function (c) { return c.name; });
+    var leaked = hidden.filter(function (n, k) { return hidden.indexOf(n) === k && open.indexOf(n) < 0 && listed.indexOf(n) >= 0; });
+    var blockedTabs = Array.prototype.map.call(document.querySelectorAll('#ribbon-tabs .rtab[data-cap-blocked]'), function (t) { return t.getAttribute('data-page'); });
+    var jarvisTabs = OmegaJarvisHelp.situation().page.tabs.map(function (t) { return t.id; });
+    return { leaked: leaked, listed: listed.length, blockedTabs: blockedTabs, jarvisTabs: jarvisTabs, named: hidden.length };
+  });
+  rows.ran = {};
+  for (var id of ['rb-valuestack', 'rb-compute-cost', 'rb-trace-boundary']) {
+    var before = await page.evaluate(function (id) {
+      var el = document.getElementById(id); if (!el) return null;
+      window.__ran = false; el.addEventListener('click', function () { window.__ran = true; }, { capture: true, once: true });
+      var lbl = el.querySelector('.rb-lbl'), d = document.createElement('div');
+      d.innerHTML = (lbl ? lbl.innerHTML.replace(/<br\s*\/?>/gi, ' ') : el.textContent); var name = (d.textContent || '').replace(/\s+/g, ' ').trim();
+      OmegaCommands.run(name);
+      return name;
+    }, id);
+    await page.waitForTimeout(250);
+    rows.ran[id] = before == null ? null : await page.evaluate(function () { return window.__ran; });
+  }
+  rows.jarvisTab = {};
+  for (var tab of ['analyze', 'compute']) {
+    rows.jarvisTab[tab] = await page.evaluate(function (tab) {
+      window.rbTab('home');
+      var opened = OmegaJarvisHelp.apply({ kind: 'tab', page: tab });
+      var active = document.querySelector('#ribbon-tabs .rtab.active');
+      return { opened: opened, active: active ? active.getAttribute('data-page') : null };
+    }, tab);
+  }
+  /* Omega Design's drawing tools live on Draw on every plan, where a
+     package puts them, not on the Compute tab a legacy tier below
+     Enterprise hides. Draw is a Pro tab, so Pro is where they are seen. */
+  rows.lite = await page.evaluate(function () {
+    if (window.OmegaMode) OmegaMode.set('pro');
+    window.rbTab('draw');
+    var names = OmegaCommands.list().map(function (c) { return c.name; });
+    return ['rb-trace-boundary', 'rb-fence-tie', 'rb-move-system'].map(function (id) {
+      var el = document.getElementById(id), page = el && el.closest('.ribbon-page'), lbl = el && el.querySelector('.rb-lbl');
+      var name = lbl ? lbl.innerHTML.replace(/<br\s*\/?>/gi, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim() : '';
+      return { id: id, page: page ? page.getAttribute('data-page') : null, shown: !!(el && el.offsetParent && el.getBoundingClientRect().width > 0),
+        open: !!el && OmegaCaps.allowedElement(el), listed: names.indexOf(name) >= 0 };
+    });
+  });
   await context.close();
   rows.shownBlockedTabs = shownBlockedTabs;
   return { rows: rows, errors: errors };
@@ -165,6 +227,22 @@ async function run() {
       var missing = full.rows.filter(function (r) { return r.gate === '' && owners(r.id, r.onclick).length && !seen[tier].rows.some(function (x) { return x.id === r.id && x.onclick === r.onclick; }); });
       ok(!missing.length, tier + ': no ungated command is missing from this tier\'s editor' + (missing.length ? ': ' + missing.slice(0, 8).map(function (r) { return r.id || r.onclick.slice(0, 40); }).join('; ') : ''));
       ok(!seen[tier].rows.shownBlockedTabs.length, tier + ': a tab its plan does not open is not shown: ' + seen[tier].rows.shownBlockedTabs.join(', '));
+      /* run by name: Search tools (Ctrl+K) and Ask Jarvis */
+      var b = seen[tier].rows.byName, ran = seen[tier].rows.ran, jt = seen[tier].rows.jarvisTab;
+      ok(b.listed > 0 && !b.leaked.length, tier + ': Search tools lists nothing from a tab the plan hides (' + b.named + ' hidden)' + (b.leaked.length ? ': ' + b.leaked.slice(0, 8).join('; ') : ''));
+      [['rb-valuestack', 'engineering'], ['rb-compute-cost', 'compute'], ['rb-trace-boundary', '']].forEach(function (c) {
+        var open = !c[1] || C.canWith(plan.tier, c[1], { addons: plan.addons });
+        ok(ran[c[0]] === open, tier + ': ' + c[0] + ' (behind ' + c[1] + ') ' + (open ? 'runs' : 'does not run') + ' by name (Search tools, Jarvis): ran=' + ran[c[0]]);
+      });
+      ok(!b.blockedTabs.some(function (t) { return b.jarvisTabs.indexOf(t) >= 0; }) && b.jarvisTabs.indexOf('home') >= 0,
+         tier + ': Jarvis is told only the tabs the plan opens: ' + b.jarvisTabs.join(','));
+      var misplaced = seen[tier].rows.lite.filter(function (l) { return !(l.page === 'draw' && l.shown && l.open && l.listed); });
+      ok(!misplaced.length, tier + ': Trace Boundary, Fence & Tie and Move System sit on Draw, shown in Pro, open and in Search tools' + (misplaced.length ? ': ' + JSON.stringify(misplaced) : ''));
+      ['analyze', 'compute'].forEach(function (tab) {
+        var open = C.canWith(plan.tier, tab === 'compute' ? 'compute' : 'engineering', { addons: plan.addons });
+        ok(jt[tab].opened === open && jt[tab].active === (open ? tab : 'home'),
+           tier + ': Jarvis ' + (open ? 'opens' : 'refuses to open') + ' the ' + tab + ' tab (and leaves the ribbon where it was): ' + JSON.stringify(jt[tab]));
+      });
     });
     console.log('Legacy editor gates: ' + count + ' checks; ' + tiers.length + ' legacy tiers and Core with the Compute add-on booted in the full editor, offline.');
   } finally { await browser.close(); server.close(); }

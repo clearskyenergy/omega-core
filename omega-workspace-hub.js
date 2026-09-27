@@ -158,13 +158,28 @@
     if (m.key === 'lite') return 'held';
     if (has(ctx.addOns, m.key)) return 'held';
     if (/^logic-/.test(m.key)) return holdsLogic(ctx, m.key) ? 'held' : 'ask';
+    /* the storefront opens nothing in the editor and has no tools: it is on
+       exactly where the public storefront's own gate opens it (a staff flag
+       on the tenant record or the add-on, never the tier), so the page hands
+       over the billing record and the tenant's whiteLabel block */
+    if (m.key === 'whitelabel' && ctx.billing !== undefined) return storefront(ctx.billing, ctx.whiteLabel) ? 'held' : 'ask';
     var t = moduleTools(m, ctx), e = moduleEditor(m, ctx), total = t.total + e.total, open = t.open + e.open;
-    /* nothing to measure (the storefront): held where the plan opens
+    /* nothing to measure: held where the plan opens
        everything, asked of the editor's own tier when the page has it (a
        trial's tool level is Enterprise's, but its plan is not), else by the
        tool level */
     if (!total) return (typeof ctx.ungated === 'boolean' ? ctx.ungated : typeof ctx.canCap === 'function' ? ctx.canCap('all') === true : ctx.tierLevel >= 3) ? 'held' : 'ask';
     return open === total ? 'held' : open ? 'part' : 'ask';
+  }
+  /* Whether the public storefront is on for a legacy workspace: the twin of
+     api/_lib/storefront.js storefrontEntitled (a toolOverrides switch either way,
+     else the 'whitelabel' add-on or whiteLabel.enabled on the tenant record;
+     never the tier). scripts/tests/tworkspacehub.js runs both over every case. */
+  function storefront(billing, whiteLabel) {
+    var b = billing || {}, overrides = b.toolOverrides || {}, addons = b.addons || [], wl = whiteLabel || {};
+    return overrides.whitelabel === true
+      || (overrides.whitelabel !== false
+          && (addons.indexOf('whitelabel') >= 0 || wl.enabled === true));
   }
   /* What "Partly" means, in one line, from the same two halves moduleState
      weighs: never "4 of 4 of its tools" under a Partly badge because the
@@ -249,6 +264,10 @@
     if (!who.orgId && ws.orgId) who = { email: who.email, emailVerified: who.emailVerified, orgId: ws.orgId };
     var c = { packaged: false, modules: [], addons: ws.addons || (bl && bl.addons) || [], tierLevel: ws.tierLevel, hideMarketplace: !!ws.hideMarketplace,
       addOns: o.addOns || ws.addOns || liveAddOns(bl, o.now),
+      /* the storefront is on where its own gate opens it (moduleState asks
+         storefront() with these): the record's switch or add-on, or the
+         tenant record's staff-written whiteLabel, never the tier */
+      billing: bl, whiteLabel: o.whiteLabel || ws.whiteLabel || null,
       tool: tool,
       canOpen: o.canOpen || function (k) { var t = tool(k); return !!t && !!T.isUnlocked && T.isUnlocked(t, ws); },
       visible: function (k) { var t = tool(k); return !!t && (!T.isVisible || T.isVisible(t, ws)); } };
@@ -436,7 +455,7 @@
     return card;
   }
   var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleNote: moduleNote, moduleCard: moduleCard,
-    editorCtx: editorCtx, capsFor: capsFor, legacyCtx: legacyCtx, liveAddOns: liveAddOns, holdsLogic: holdsLogic, shortDay: shortDay, RING_MAX: RING_MAX };
+    editorCtx: editorCtx, capsFor: capsFor, legacyCtx: legacyCtx, liveAddOns: liveAddOns, storefront: storefront, holdsLogic: holdsLogic, shortDay: shortDay, RING_MAX: RING_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceHub = API;
 })(typeof window !== 'undefined' ? window : null);

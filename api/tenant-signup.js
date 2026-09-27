@@ -179,9 +179,15 @@ module.exports = A.handler(function (req) {
     var domain = A.orgOf(email);
     if (!domain || domain.indexOf('.') < 0) throw A.httpError(400, 'sign in with an email address first');
     if (PUBLIC.indexOf(domain) >= 0) throw A.httpError(403, 'ClearSky-OMEGA workspaces are created with a work email address. ' + domain + ' is a personal email provider. Ask your workspace owner to invite ' + email + ', or sign in with your company address.');
-    if ((!caller.claims || caller.claims.email_verified !== true) && !caller.staff) throw A.httpError(403, 'verify your email address first, then try again');
-
-    if (req.method === 'GET') return signupOptions(A.db());
+    var verified = (caller.claims && caller.claims.email_verified === true) || !!caller.staff;
+    /* The options (the questions, the modules and their list prices, all
+       public on /api/offerings) open to a signed-in person before the link
+       in their email is clicked, so a new account walks straight into the
+       signup. Creating the workspace, the one thing that claims a company's
+       domain, still needs the verified address, and the page is told which
+       it is (2026-09-27). */
+    if (req.method === 'GET') return signupOptions(A.db()).then(function (o) { return Object.assign(o, { emailVerified: verified }); });
+    if (!verified) throw A.httpError(403, 'verify your email address first, then try again');
 
     var db = A.db(), FV = A.FieldValue();
     var orgRef = db.collection('omega_orgs').doc(domain);

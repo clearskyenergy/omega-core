@@ -7,7 +7,7 @@ function words(s) { return s ? s.split(' ') : []; }
 /* The ONE set of shelf words a customer reads (Tommy, 2026-09-27: the
    Omega-branded names). Every card, menu, store and proposal takes
    `shelfLabel` off the record; no page keeps its own copy. */
-var SHELF_LABELS = { floor: 'Core', addon: 'Add-on', standard: 'Pro', premium: 'Advanced', deliverable: 'By the piece', platform: 'Omega Logic' };
+var SHELF_LABELS = { floor: 'Core', addon: 'Add-on', standard: 'Plus', premium: 'Advanced', deliverable: 'By the piece', platform: 'Omega Logic' };
 function record(key, name, shelf, tools, caps, ribbon, meter, requires) {
   /* the card's letter: the word after the family name (Omega Design is D, Logic Plant is P) */
   return { key: key, name: name, mark: name.replace(/^(Omega|Logic)\s+/, '').charAt(0), shelf: shelf, shelfLabel: SHELF_LABELS[shelf], tools: words(tools), caps: words(caps),
@@ -154,7 +154,7 @@ CATALOG.forEach(function (m) { m.features = FEATURES[m.key]; m.blurb = BLURBS[m.
  * which fails when this drifts from it; never a price, never a grant: a
  * package is judged by modules[] alone. */
 var LEGACY_GATES = {
-  lite: ['', 'compute', 'export.blueprint'], gridatlas: ['engineering'], storage: ['', 'engineering'],
+  lite: ['', 'export.blueprint'], gridatlas: ['engineering'], storage: ['', 'engineering'],
   estimate: ['', 'engineering'], evrebates: [''], plansets: ['', 'export.oneline', 'export.plotplan'],
   siteintel: ['', 'compute', 'engineering', 'engineering+parcelscreen'], engineering: ['', 'compute', 'engineering'],
   finance: ['', 'export'], compute: ['', 'compute'], ops: ['engineering'], permitting: ['']
