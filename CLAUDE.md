@@ -216,10 +216,19 @@ public price list; signup's pay-now runs the engine's own `activate` with the
 caller marked `selfServe` (recorded in history and audit); "I've paid" is
 `plan-change.reconcileNow` (one look per eight seconds), from the signup
 page (`check-payment`) and the billing bar (`reconcile-now`) alike. The
-flow as sold: account (login.html) → verified email (start.html holds an
-unverified address) → billing profile → *Build your system* (the one
-menu, priced live by the server; Monthly, or Yearly at ten months of
-twelve) → pay. Annual prepay is `annualPaidMonths` = 10 in the book.
+flow as sold: account (login.html) → *How you work today* → billing
+profile → *Build your system* (the one menu, priced live by the server;
+Monthly, or Yearly at ten months of twelve) → pay. Create account goes
+straight into that signup on `/start.html` with the company carried over
+(making the account signs it in, so login's auth listener stands aside
+while the form routes it); the signup options and quotes open before the
+email link is clicked, and only creating the workspace (Subscribe or the
+trial) needs the verified address, which the page waits for and then
+carries on by itself. A signed-in person with no `omega_orgs` record,
+grant or access request, not a named tenant, and without both accepted
+terms and a project under the company, is sent there too instead of a
+derived workspace; `scripts/render-signup.js` (in `check:pages`) holds it.
+Annual prepay is `annualPaidMonths` = 10 in the book.
 `api/_lib/packaging-mode.js` is the ONE rule for where packaging bills:
 SANDBOX (`QBO_ENV=sandbox`) or LIVE (`PACKAGING_LIVE=true` AND
 `QBO_ENV=production`, both literal), and neither is refused everywhere; the
@@ -256,7 +265,7 @@ Runbook and what is not built (autopay, instant refund events, tax):
 
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
-`name`, `shelfLabel` (Core · Add-on · Pro · Advanced · By the piece · Omega
+`name`, `shelfLabel` (Core · Add-on · Plus · Advanced · By the piece · Omega
 Logic) and `mark` (the card letter) live ONLY in `api/_lib/modules.js`, and
 every page reads them off the record — never a page's own shelf map. Keys and
 plan names (Lite + modules, Field, Pro) are unchanged; the table is in
@@ -277,7 +286,22 @@ workspace's store tells the truth: `OmegaWorkspaceHub.moduleState` measures
 a module by its standalone tools AND what the editor opens of it
 (`api/_lib/modules.js` `legacyGates`, read off the real editor by
 `scripts/render-legacy-gates.js`, asked of the editor's own ladder through
-`OmegaCaps.canWith` / `capsFor`); no legacy access changes.
+`OmegaCaps.canWith` / `capsFor`); no legacy access changes. One legacy
+narrowing, the owner's call (2026-09-27): Search tools (Ctrl+K) and Ask
+Jarvis run only what `OmegaCaps.allowedElement` allows, which on a legacy
+plan is every `data-cap` from the tab in to the command (a tier gates whole
+tabs), and Jarvis names and opens only `OmegaCaps.tabOpen` tabs
+(`render-legacy-gates.js`). So nothing is stranded behind a hidden tab,
+Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move System) live
+on Draw on every plan, where a package puts them: `LITE` in the Compute
+tab's mover, held to the catalog by `scripts/tests/tlegacygates.js`.
+Omega Storefront (`whitelabel`, no tools, no editor commands) is held where
+the public storefront's own gate opens it, never on the tier:
+`api/_lib/storefront.js` `storefrontEntitled`, which `api/_lib/embed.js`
+asks (a `toolOverrides` switch either
+way, else the `whitelabel` add-on or the staff-written `whiteLabel.enabled`
+on the tenant record); `OmegaWorkspaceHub.storefront` is its twin, run case
+for case against it by `scripts/tests/tworkspacehub.js`.
 The shared omega-package-menu.js renders catalog features and server-formatted
 prices. Staff package previews are read-only server projections, never tenant
 impersonation or billing edits. Legacy layout modes apply to unpackaged records.
@@ -807,6 +831,18 @@ agreement. The page never changes billing or grants. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
+It CLICKS EVERY CONTROL on every view (`scripts/_lib/click-sweep.js`, one
+level into each drawer), and on Projects and the store, and fails on an
+error, a dialog put into the page flow instead of over it, a reload in
+disguise, an overlay Escape leaves open, a link, new tab or held page the
+site does not serve, or a control something covers (`--only sweep` runs
+just those; `check:dashboard` sweeps index.html the same way). A rail or
+tab link to the page you are on scrolls to its top (the shell's
+`stayHere`, for pages that do not route their own links), and the store
+judges modules against the BOUND workspace, never `resolveWorkspace()`'s
+email stand-in, whichever answer lands first. `omega-newproject.js` owns its overlay (it once borrowed
+`.modal-bg` from index.html and landed at the foot of the workspace), and
+a `/workspace#view` link is a view change, never a reload.
 Once the workspace is home, `marketplace.html` is THE STORE, not a tool
 catalogue (every tool is All tools on the workspace): the plans and the
 modules on their shelves, wearing the whole workspace chrome
@@ -988,7 +1024,12 @@ tenant. Treat it that way.
   `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
   tile. `check:pages` does not cover the dashboard; run this after any
   change to `index.html` or the runtime it loads. The double's own test is
-  `scripts/tests/tfirebasedouble.js`.
+  `scripts/tests/tfirebasedouble.js`; like the real SDK it hands back the
+  existing app for a second `initializeApp` with the same options (it used
+  to throw, which killed projects.html in every render check). The
+  dashboard's click sweep clicks every control as four tenants, and
+  `starter-remove` holds that Remove on a starter tile keeps the rest (the
+  first pin change starts from the starter set, `_STARTER`).
 - The sales agent's board is `GET /api/growth` (staff only, read-only;
   `api/_lib/growth.js` is the pure judgement, `scripts/tests/tgrowth.js`
   pins it). It knows stages and next actions, never prices or modules: the

@@ -114,5 +114,13 @@ var create = fn('createNewProject');
 ok(SRC.indexOf('id="np-market"') < 0 && create.indexOf('np-market') < 0 && !/\bwizMode\s*:/.test(create) && !/\bmarket\s*:/.test(create),
   'New Project has no BTM/FOM market field and creates a project without one');
 ok(SRC.indexOf('id="np-offtaker"') > 0 && create.indexOf('np-offtaker') > 0, 'New Project still takes the off-taker');
+/* and it is not a BESS dialog: its title, example and default name say Project, and its event claims no vertical */
+ok(SRC.indexOf('New BESS Project') < 0 && SRC.indexOf('e.g. BESS Project') < 0 && /'New Project'/.test(create), 'the New Project dialog is not a BESS dialog');
+ok(!/vertical:\s*'bess'/.test(create), 'a project from the dialog claims no vertical before its type is chosen');
+/* nor does the editor's first save: its event carries the type saved, else null */
+var save = fn('saveProject');
+ok(!/vertical:\s*'bess'/.test(SRC) && /vertical:\s*payload\.type\s*\?/.test(save), 'no project.created in the editor says BESS by default');
+/* on a phone the search row wraps, so + New Project stays on screen (measured in Chromium at 390px) */
+ok(/display:flex;flex-wrap:wrap;gap:8px">\s*<input id="proj-search"[^>]*style="flex:1 1 240px;min-width:0;/.test(SRC), 'the Projects search row wraps instead of pushing New Project off a phone');
 
 console.log('project kinds: ' + count + ' checks passed.');

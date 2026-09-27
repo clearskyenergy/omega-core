@@ -47,13 +47,16 @@ const opCoords = node('op-o2-coords', 'op-panel', [coords]);
 const tlKey = node('tl-key');
 const opTl = node('op-tl-key', 'op-panel', [tlKey]);
 const compass = node('omega-compass');
+const viewcube = node('viewcube');
+const navBar = node('nav-bar');
 const legend = node('lgd');
 const ruler = node('ruler');
 const toast = node('', 'omega-toast');
 const csvg = node('csvg');
 const els = node('els', '', cels);
-const sc = node('sc', '', [els, csvg, opCoords, opTl, compass, legend, ruler, toast]);
+const sc = node('sc', '', [els, csvg, opCoords, opTl, compass, viewcube, navBar, legend, ruler, toast]);
 const root = node('', '', [sc]);
+const CHROME = [opCoords, opTl, compass, viewcube, navBar, legend, ruler, toast];
 
 const document = {
   readyState: 'complete',
@@ -76,7 +79,7 @@ function snapshot() {
   s.cel = cels.map(c => c.style.display);
   s.evgear = evgear.style.display;
   s.csvg = csvg.style.display;
-  s.chrome = [opCoords, opTl, compass, legend, ruler, toast].map(c => c.style.display);
+  s.chrome = CHROME.map(c => c.style.display);
   return s;
 }
 let mode = 'ok';
@@ -112,11 +115,11 @@ chk("the CHROME_CLASSES source never names '.cel'", !/CHROME_CLASSES\s*=\s*\[[^\
   chk('every placed element was visible when the picture was taken', s.cel.every(d => d === ''), JSON.stringify(s.cel));
   chk('  and so was its guided-build icon', s.evgear === '', s.evgear);
   chk('  and the conduit / trench layer', s.csvg === '', s.csvg);
-  chk('the COORDINATES and TERRAIN KEY frames, the compass, legend, ruler and toast were not',
+  chk('the COORDINATES and TERRAIN KEY frames, the compass, view cube, zoom buttons, legend, ruler and toast were not',
       s.chrome.every(d => d === 'none'), JSON.stringify(s.chrome));
   chk('the chrome comes back after the capture',
-      [opCoords, opTl, compass, legend, ruler, toast].every(c => c.style.display === ''),
-      JSON.stringify([opCoords, opTl, compass, legend, ruler, toast].map(c => c.style.display)));
+      CHROME.every(c => c.style.display === ''),
+      JSON.stringify(CHROME.map(c => c.style.display)));
   chk('  and the equipment was never touched', cels.every(c => c.style.display === ''));
 
   /* A panel the user closed stays closed: hidden before, hidden after. */
@@ -131,7 +134,7 @@ chk("the CHROME_CLASSES source never names '.cel'", !/CHROME_CLASSES\s*=\s*\[[^\
   try { await win._captureFullCanvas(); } catch (e) { threw = true; }
   chk('a failed capture rethrows', threw);
   chk('  and still restores the chrome',
-      [opCoords, opTl, compass, legend, ruler, toast].every(c => c.style.display === ''));
+      CHROME.every(c => c.style.display === ''));
 
   console.log(all ? '\nall passed\n' : '\nFAILED\n');
   process.exit(all ? 0 : 1);

@@ -47,6 +47,7 @@
   .pick input{width:auto;margin:3px 0 0}
   .pick small{display:block;color:var(--sub);font-size:12px;margin-top:2px}
   .verify{margin-top:14px}
+  #verify-note{margin:0 0 18px}
   @media(max-width:480px){.pick-row{grid-template-columns:1fr}}
 .sq{padding:10px 0;border-bottom:1px solid var(--line,#E2E8F0)}.sq-opts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:4px;font-size:13px}.sq-opts label,.sq-more{display:inline-flex;align-items:center;gap:4px;font-weight:400;font-size:13px;margin:4px 12px 0 0;white-space:nowrap;width:auto}.sq-opts input,.sq-more input[type=checkbox]{width:auto;margin:0}
 
@@ -93,6 +94,11 @@
 <body>
 <div class="card">
   <div class="eyebrow">CLEARSKY-OMEGA</div>
+  <!-- A new account walks straight into the signup; the link in its email is
+       needed only to subscribe (the server creates nothing for an unverified
+       address). This says so above every step until the link is clicked. -->
+  <div id="verify-note" class="ok verify"><div style="font-weight:700;margin-bottom:6px" id="verify-title">Confirm your email</div><div style="color:var(--sub);font-size:14px" id="verify-body">We sent a link to <b id="verify-email" style="color:var(--txt)"></b>. Keep going: build your system now. We need that click before you subscribe.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn ghost" style="margin:0;width:auto;padding:9px 14px" onclick="resendVerification()">Resend the link</button><button class="btn ghost" style="margin:0;width:auto;padding:9px 14px" onclick="verifiedContinue()">I've clicked it</button></div></div>
 
   <!-- STEP 1: sign in -->
   <div id="step-auth">
@@ -128,9 +134,7 @@
          door, and promising a hostname that does not resolve would be a lie. -->
     <label>Phone <span style="font-weight:400">(optional)</span></label><input id="f-phone" type="tel" autocomplete="tel">
     <label>What are you working on? <span style="font-weight:400">(optional)</span></label><textarea id="f-note" rows="2" placeholder="e.g. 3 BESS sites in ComEd territory, need interconnection screening"></textarea>
-    <div id="verify-note" class="ok verify"><div style="font-weight:700;margin-bottom:6px">Verify your email first</div><div style="color:var(--sub);font-size:14px">We sent a link to <b id="verify-email" style="color:var(--txt)"></b>. Click it, then come back here and press Continue.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn ghost" style="margin:0;width:auto;padding:9px 14px" onclick="resendVerification()">Resend the link</button><button class="btn" style="margin:0;width:auto;padding:9px 14px" onclick="verifiedContinue()">I've verified — continue</button></div></div>
-    <button class="btn" id="f-submit" onclick="submitWorkspace()">Request my workspace</button>
+    <button class="btn" id="f-submit" onclick="submitWorkspace()">Continue</button>
     <div class="hint" id="form-hint">Workspaces are reviewed by the ClearSky team, usually within one business day. Any new trial is capped at 14 days. Payment is required to continue afterward.</div>
     <div class="err" id="form-err"></div>
   </div>
@@ -258,10 +262,34 @@
     $('billing-pay').textContent = v === 'annual' ? 'Subscribe yearly' : 'Subscribe';
   };
   function setInterval_(v, locked){ var rs = document.querySelectorAll('input[name="signup-interval"]'); for (var i = 0; i < rs.length; i++) { rs[i].checked = rs[i].value === v; rs[i].disabled = !!locked; } intervalChanged(); }
-  /* a password account is not verified until its link is clicked, and the server refuses an unverified one: hold here, say so, and offer the link again */
-  function holdForVerification(u){ $('verify-note').style.display = 'block'; $('verify-email').textContent = u.email; $('f-submit').disabled = true; $('form-hint').style.display = 'none'; }
-  window.resendVerification = function(){ var u = auth.currentUser; if (!u) return; u.sendEmailVerification().then(function(){ $('verify-note').querySelector('div').textContent = 'Sent again'; }, function(e){ err('form-err', e.message); }); };
-  window.verifiedContinue = function(){ var u = auth.currentUser; if (!u) return; u.reload().then(function(){ location.reload(); }); };
+  /* THE EMAIL LINK. A new account walks straight into the signup; the link
+     in its email is needed only to subscribe or ask for the trial, because
+     the server makes no workspace for an unverified address (the workspace
+     is the email's domain, and nobody may claim a company they cannot read
+     the mail of). Until it is clicked a banner says so above every step, and
+     a press of Subscribe waits for it and then carries on by itself. The
+     server reads "verified" off the ID token, and a token minted before the
+     click still says no for up to an hour, reload or not: Firebase is asked,
+     and a fresh token minted once it says yes. */
+  var emailOk = true, pendingSubmit = null, verifyTimer = null, skipForm = false, DRAFT = 'omega:signup-draft';
+  function forgetDraft(){ try { localStorage.removeItem(DRAFT); } catch (e) {} }
+  function verifiedNow(u){ return u.reload().then(function () { return u.emailVerified === true ? u.getIdToken(true).then(function () { return true; }) : false; }); }
+  function confirmed(u){
+    emailOk = true; if (verifyTimer) { clearInterval(verifyTimer); verifyTimer = null; } $('verify-note').style.display = 'none';
+    if (!signupOptions) { loadOptions(u, true); return; }   /* a server from before 2026-09-27 held the options back until now */
+    if (pendingSubmit) { var a = pendingSubmit; pendingSubmit = null; window.submitWorkspace.apply(null, a); }
+  }
+  function watchVerification(u){
+    emailOk = false; $('verify-email').textContent = u.email; $('verify-note').style.display = 'block';
+    if (verifyTimer) return;
+    verifyTimer = setInterval(function () {
+      if (document.hidden || auth.currentUser !== u) return;
+      verifiedNow(u).then(function (ok) { if (ok && verifyTimer) confirmed(u); }, function () {});
+    }, 5000);
+  }
+  function checkVerified(u){ verifiedNow(u).then(function (ok) { if (ok) confirmed(u); else watchVerification(u); }, function () { watchVerification(u); }); }
+  window.resendVerification = function(){ var u = auth.currentUser; if (!u) return; u.sendEmailVerification().then(function(){ $('verify-title').textContent = 'Link sent again'; }, function(e){ $('verify-title').textContent = e.message; }); };
+  window.verifiedContinue = function(){ var u = auth.currentUser; if (!u) return; verifiedNow(u).then(function (ok) { if (ok) confirmed(u); else $('verify-title').textContent = 'Not confirmed yet: click the link in the email, then press this again'; }, function (e) { $('verify-title').textContent = e.message; }); };
   function domainOf(email){ return String(email||'').toLowerCase().split('@')[1]||''; }
   function slugOf(d){ return String(d||'').split('.')[0].replace(/[^a-z0-9-]/g,''); }
 
@@ -278,32 +306,50 @@
       err('auth-err', e.message);
     });
   };
-  window.signOut = function(){ auth.signOut().then(function(){ location.reload(); }); };
+  window.signOut = function(){ forgetDraft(); auth.signOut().then(function(){ location.reload(); }); };
 
   window.addEventListener('omega:hub', function(ev){
     var d = ev.detail || {};
     if (d.exists) return;                               /* omega-tenant.js opens the workspace */
     var u = auth.currentUser; if(!u) return;
     $('who-email').textContent = u.email; $('who-domain').textContent = domainOf(u.email);
-    /* the login page left the company in THIS browser (omega:signup-draft), never in a link; it is used once, for this address, and forgotten */
+    /* the login page left the company in THIS browser (omega:signup-draft), never
+       in a link. It is for this address only, and kept until the workspace is
+       made, because the link in the verification email opens this page again. */
     try {
-      var draft = JSON.parse(localStorage.getItem('omega:signup-draft') || 'null');
-      if (draft && draft.email === String(u.email || '').toLowerCase()) {
+      var draft = JSON.parse(localStorage.getItem(DRAFT) || 'null');
+      if (draft && draft.email === String(u.email || '').toLowerCase() && Date.now() - (+draft.at || 0) < 30 * 86400000) {
         if (draft.company && !$('f-name').value.trim()) $('f-name').value = String(draft.company).slice(0, 80);
         if (['developer', 'epc', 'installer', 'oem'].indexOf(draft.vertical) >= 0) $('f-vertical').value = draft.vertical;
-      }
-      localStorage.removeItem('omega:signup-draft');
+        if (draft.note && !$('f-note').value.trim()) $('f-note').value = String(draft.note).slice(0, 500);
+      } else if (draft) forgetDraft();
     } catch (e) {}
-    show('step-form'); $('f-submit').disabled = true;
-    u.getIdToken().then(function (token) { return fetch('/api/tenant-signup', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
+    /* Create account already asked for the company: the page goes straight into
+       the signup rather than back to a form that asks again. A proposal link
+       keeps the company step, where the proposal's own company is shown. */
+    skipForm = $('f-name').value.trim().length >= 2 && !qp('proposal');
+    if (!skipForm) show('step-form');
+    else ['step-auth','step-form'].forEach(function (s) { $(s).className = 'hide'; });
+    $('f-submit').disabled = true;
+    loadOptions(u, false);
+  });
+  function loadOptions(u, fresh){
+    u.getIdToken(!!fresh).then(function (token) { return fetch('/api/tenant-signup', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Signup unavailable'); return j; }); })
       .then(function (j) { if (auth.currentUser !== u) return; signupOptions = j; $('f-submit').disabled = false; $('f-submit').textContent = j.packaging ? 'Continue' : 'Request my workspace';
           /* the switch is on but the price book is not seeded or enabled yet: say so, take nobody's details */
-          if (j.notReady) { $('f-submit').disabled = true; $('form-hint').textContent = j.notReady + '.'; return; }
+          if (j.notReady) { $('f-submit').disabled = true; $('form-hint').textContent = j.notReady + '.'; show('step-form'); return; }
           if (j.packaging) $('form-hint').textContent = j.payNow ? 'Next: your billing profile, then build your system and pay your first invoice by card. Your workspace opens the moment it is paid.' : 'Next: your billing profile and your package. A 14-day trial starts when ClearSky approves it.';
-          loadProposal(); },
-        function (e) { if (/verify your email/i.test(e.message || '')) { holdForVerification(u); return; } err('form-err', e.message); });
-  });
+          if (j.emailVerified === false) checkVerified(u);
+          loadProposal();
+          if (skipForm) { skipForm = false; if (j.packaging) window.submitWorkspace(); else show('step-form'); } },
+        function (e) {
+          if (skipForm) { skipForm = false; show('step-form'); }
+          /* a server from before 2026-09-27 held the options until the link was clicked */
+          if (/verify your email/i.test(e.message || '')) { if (fresh) watchVerification(u); else checkVerified(u); return; }
+          err('form-err', e.message);
+        });
+  }
   auth.onAuthStateChanged(function(u){ if(!u) show('step-auth'); });
 
   window.backToCompany = function () { show('step-form'); };
@@ -406,7 +452,7 @@
         intervalChanged();
       }, function () { $('signup-package-price').textContent = '—'; $('signup-package-fit').textContent = ''; });
   }
-  window.submitWorkspace = function(fromBilling, fromDiscovery, payNow){
+  window.submitWorkspace = function(fromBilling, fromDiscovery, payNow, retried){
     var u = auth.currentUser; if(!u) return;
     var name=$('f-name').value.trim(); if(name.length<2){ err('form-err','Company name is required.'); return; }
     if (!signupOptions) { err('form-err', 'Wait for signup options to load.'); return; }
@@ -429,18 +475,29 @@
       if (!proposal && wantedPlan()) payload.plan = wantedPlan();
       if (payNow) payload.payNow = true;
     }
+    if (!emailOk) {
+      pendingSubmit = [fromBilling, fromDiscovery, payNow, retried];
+      err(errorId, 'Confirm your email to ' + (payNow ? 'subscribe' : 'send this') + ': click the link we sent to ' + u.email + '. This page carries on by itself the moment you do.');
+      checkVerified(u); return;
+    }
     var btn=$(signupOptions.packaging ? (payNow ? 'billing-pay' : 'billing-submit') : 'f-submit'), label = btn.textContent; btn.disabled=true; btn.textContent = payNow ? 'Issuing your first invoice…' : 'Creating…'; err(errorId,'');
     u.getIdToken().then(function(tok){
       return fetch('/api/tenant-signup',{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
         body: JSON.stringify(payload) });
     }).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j; }); })
     .then(function(j){
+      forgetDraft();
       if (j.payNow) { showPay(j, name); return; }
       if (j.exists && j.payNow === undefined && j.host && j.status==='active'){ location.href='https://'+j.host+'/'; return; }
       $('done-name').textContent = name; $('done-host').textContent = j.host; $('done-email').textContent = u.email;
       if (j.payNowError) { var note = document.createElement('p'); note.className = 'hint'; note.textContent = j.payNowError + '.'; $('step-done').appendChild(note); }
       show('step-done');
-    })['catch'](function(e){ err(errorId, e.message); btn.disabled=false; btn.textContent=label; });
+    })['catch'](function(e){
+      btn.disabled=false; btn.textContent=label;
+      /* the token said "not verified" although Firebase may say yes by now: once, ask again and carry on */
+      if (/verify your email/i.test(e.message || '') && !retried) { emailOk = false; window.submitWorkspace(fromBilling, fromDiscovery, payNow, true); return; }
+      err(errorId, e.message);
+    });
   };
 })();
 </script>

@@ -245,9 +245,30 @@
         if (typeof opts.onNav === 'function' && opts.onNav(key, a, e) === true) { e.preventDefault(); closeRail(); }
       });
     });
+    if (typeof opts.onNav !== 'function') {
+      rail.addEventListener('click', stayHere);
+      var tabsEl = doc.querySelector('.ows-tabs'); if (tabsEl) tabsEl.addEventListener('click', stayHere);
+    }
     var q = byId('ows-q');
     if (q && typeof opts.search === 'function') q.addEventListener('input', function () { opts.search(q.value); });
     return { rail: rail, top: top, main: main };
+  }
+  /* A RAIL OR TAB LINK TO THE PAGE YOU ARE ON is not a reload of it (the
+     loading screen and a second boot to land where you stood): the top of
+     the page instead. Only for a page that does not route its own links
+     (the workspace passes onNav and answers /workspace#view itself); a link
+     with a view (#…) or a different query is left alone. check:workspace's
+     click sweep holds it on Projects and the store. */
+  function samePage(a) {
+    var u; try { u = new URL(a.href, global.location.href); } catch (e) { return false; }
+    function norm(p) { return String(p || '/').replace(/\.html$/, '').replace(/\/index$/, '/').replace(/(.)\/$/, '$1'); }
+    return u.origin === global.location.origin && norm(u.pathname) === norm(global.location.pathname) && (!u.hash || u.hash === '#') && (!u.search || u.search === global.location.search);
+  }
+  function stayHere(e) {
+    if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a || a.target === '_blank' || !samePage(a)) return;
+    e.preventDefault(); closeRail(); global.scrollTo(0, 0);
   }
   function openRail() { doc.body.classList.add('ows-rail-open'); var b = byId('ows-burger'); if (b) b.setAttribute('aria-expanded', 'true'); }
   function closeRail() { doc.body.classList.remove('ows-rail-open'); var b = byId('ows-burger'); if (b) b.setAttribute('aria-expanded', 'false'); }
@@ -409,6 +430,7 @@
     var rail = byId('side-nav'); if (adopted || !rail || rail.classList.contains('ows-rail')) return false;
     var r = remember();
     rail.innerHTML = headHtml('ows-head') + '<div class="sn-scroll">' + railHtml({ current: currentKey(), head: false, me: false }) + '</div>';
+    rail.addEventListener('click', stayHere);
     restore(r);
     adopted = true; return true;
   }

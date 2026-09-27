@@ -2349,3 +2349,24 @@ a project created anywhere else. `wizMode` is still saved by the editor and
 still restores the BESS wizard's market. Tests:
 `scripts/tests/tprojectkinds.js` (npm test); `teditortheme.js` records the
 three tab ids and `np-market` as retired.
+
+## New Project dialog — September 27, 2026
+
+`editor.html`: the editor's own New Project dialog is no longer a BESS
+dialog. Its title reads New Project (was New BESS Project), the name example
+is neutral, a blank name saves as "New Project", and its `project.created`
+event sends `vertical: null` until a type is chosen (as `omega-newproject.js`
+and `omega-intake.js` do) instead of `'bess'`. Pinned in
+`scripts/tests/tprojectkinds.js`.
+
+## Projects list on a phone; first save's vertical — September 27, 2026
+
+`editor.html`: the Projects window's search row (search, Sort, New Project)
+now wraps (`flex-wrap`, the search box `flex:1 1 240px; min-width:0`): on a
+390 px phone the search box keeps the first line and Sort + New Project sit
+under it, where New Project used to end 150 px past the window's edge. On a
+desktop it is one line as before. The editor's first save of a new project
+(`saveProject`, no `_projectId` yet) now sends `project.created` with the
+type it is saved with (`payload.type`, set only when one was chosen), else
+`null`, instead of `'bess'`; no project.created in the editor says BESS by
+default. Pinned in `scripts/tests/tprojectkinds.js`.
