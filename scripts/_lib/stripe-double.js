@@ -9,9 +9,12 @@
  *
  * And what api/_lib/stripe-customer.js adds: the customer portal
  * (billingPortal.sessions, its payment_method_update flow; `portalRefuses`
- * plays a portal nobody switched on), payment methods read back through
- * expand, voidInvoice, and saveCard(), the customer adding a card on
- * Stripe's page, which becomes the default for invoices as the flow does.
+ * plays a portal whose settings nobody saved, which refuses a session that
+ * names no configuration), portal configurations made through the API
+ * (`configRefuses` plays a key that may not make one), payment methods read
+ * back through expand, voidInvoice, and saveCard(), the customer adding a
+ * card on Stripe's page, which becomes the default for invoices as the
+ * flow does.
  */
 'use strict';
 function copy(x) { return JSON.parse(JSON.stringify(x)); }
@@ -19,7 +22,7 @@ function StripeDouble(options) {
   options = options || {};
   var self = this, seq = 0, keys = {};
   this.livemode = options.livemode === true;
-  this.customers_ = {}; this.invoices_ = {}; this.items_ = {}; this.charges_ = {}; this.methods_ = {};
+  this.customers_ = {}; this.invoices_ = {}; this.items_ = {}; this.charges_ = {}; this.methods_ = {}; this.configs_ = {};
   this.calls = []; this.sent = []; this.sessions = [];
   function id(prefix) { seq++; return prefix + '_' + ('000000' + seq).slice(-6); }
   function fail(message, type) { var e = new Error(message); e.type = type || 'StripeInvalidRequestError'; e.statusCode = 400; throw e; }
@@ -98,12 +101,29 @@ function StripeDouble(options) {
   };
   this.billingPortal = { sessions: { create: async function (p) {
     self.calls.push('billingPortal.sessions.create');
-    if (options.portalRefuses) fail('No configuration provided and your ' + (self.livemode ? 'live' : 'test') + ' mode default configuration has not been created.');
+    var cfg = null;
+    if (p.configuration) {
+      cfg = self.configs_[p.configuration]; if (!cfg || !cfg.active) missing('configuration: ' + p.configuration);
+      if (p.flow_data && p.flow_data.type === 'payment_method_update' && !(cfg.features.payment_method_update && cfg.features.payment_method_update.enabled)) fail('The payment method update flow is not enabled in this configuration.');
+    } else if (options.portalRefuses) fail('No configuration provided and your ' + (self.livemode ? 'live' : 'test') + ' mode default configuration has not been created.');
     if (!self.customers_[p.customer]) missing('customer: ' + p.customer);
     if (!/^https?:\/\//.test(p.return_url || '')) fail('Not a valid URL');
-    var s = { id: id('bps'), object: 'billing_portal.session', customer: p.customer, livemode: self.livemode, return_url: p.return_url, flow: p.flow_data ? copy(p.flow_data) : null, url: 'https://billing.stripe.com/p/session/test_' + seq };
+    var s = { id: id('bps'), object: 'billing_portal.session', customer: p.customer, livemode: self.livemode, return_url: p.return_url, configuration: p.configuration || null, flow: p.flow_data ? copy(p.flow_data) : null, url: 'https://billing.stripe.com/p/session/test_' + seq };
     self.sessions.push(copy(s)); return copy(s);
-  } } };
+  } },
+  /* portal settings made through the API (the 2024-06-20 shape: business_profile and features required); configRefuses plays a key that may not make them */
+  configurations: {
+    list: async function (p) { self.calls.push('billingPortal.configurations.list'); return { data: Object.keys(self.configs_).map(function (k) { return self.configs_[k]; }).filter(function (c) { return !p || p.active == null || c.active === p.active; }).map(copy), has_more: false }; },
+    create: async function (p, o) {
+      return once('billingPortal.configurations.create', p, o, function () {
+        if (options.configRefuses) { var e = new Error('The provided key does not have the required permissions for this endpoint.'); e.type = 'StripePermissionError'; e.statusCode = 403; throw e; }
+        if (!p.business_profile || typeof p.business_profile !== 'object') fail('Missing required param: business_profile.');
+        if (!p.features || typeof p.features !== 'object') fail('Missing required param: features.');
+        var c = { id: id('bpc'), object: 'billing_portal.configuration', active: true, is_default: false, livemode: self.livemode, business_profile: copy(p.business_profile), features: copy(p.features), metadata: copy(p.metadata || {}) };
+        self.configs_[c.id] = c; return c;
+      });
+    }
+  } };
   this.invoiceItems = {
     create: async function (p, o) {
       return once('invoiceItems.create', p, o, function () {

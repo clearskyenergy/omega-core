@@ -105,6 +105,7 @@ async function card() {
   ok(/^https:\/\/billing\.stripe\.com\//.test(r.url) && s.sessions.length === 1, 'Add a card answers with Stripe\'s own page', r);
   ok(sess.flow && sess.flow.type === 'payment_method_update' && sess.flow.after_completion.type === 'redirect' && sess.flow.after_completion.redirect.return_url === 'https://' + HOST + '/workspace#billing' && sess.return_url === 'https://' + HOST + '/workspace#billing',
     'it is the add-a-payment-method flow (the card becomes the default for invoices) and it comes back to Plan & billing on the same host', sess);
+  ok(sess.configuration === null && s.all('configs').length === 0, 'Stripe\'s own portal settings are used whenever they take the card: nothing of OMEGA\'s is made', sess);
   ok(/^cus_/.test(b.stripeCustomerId) && b.stripeLivemode === true && b.paymentProvider === 'stripe' && b.stripeLinkedBy === owner.email && b.stripeLinkLock === null, 'the workspace is bound to its Stripe customer, in live mode, and now pays by card through Stripe', b);
   ok(cus.email === owner.email && cus.name === 'Concord Energy' && cus.metadata.orgId === ORG && cus.metadata.omegaOrg === ORG, 'the customer is the workspace (its name, the owner\'s address with no billing contact saved, both marks the webhook and the engine read)', cus);
   var hist = db.data.get(CUR + '/history/stripe-linked-' + b.stripeCustomerId);
@@ -134,9 +135,17 @@ async function card() {
   var again = await call(admin2, { action: 'card' }, s4);
   ok(!!again.url && s4.all('customers').length === 1, '...and a retry opens the page for the same one');
 
-  console.log('\nStripe\'s side can refuse: said plainly');
+  console.log('\nStripe\'s portal settings never saved: OMEGA\'s own, the card and the invoices only');
   fixture(); var s5 = new SD({ livemode: true, portalRefuses: true });
-  await refused('a customer portal nobody switched on is ClearSky\'s to switch on, said in words', function () { return call(owner, { action: 'card' }, s5); }, /customer portal is not switched on/, 409);
+  var r5 = await call(owner, { action: 'card' }, s5), cfg5 = s5.all('configs');
+  ok(!!r5.url && cfg5.length === 1 && s5.sessions.length === 1 && s5.sessions[0].configuration === cfg5[0].id && s5.sessions[0].flow.type === 'payment_method_update', 'a portal whose settings nobody saved in Stripe still takes the card, through OMEGA\'s own portal settings', { r: r5, configs: cfg5, sessions: s5.sessions });
+  var f5 = cfg5[0].features;
+  ok(cfg5[0].metadata.omega === 'workspace-billing' && cfg5[0].livemode === true && f5.payment_method_update.enabled === true && f5.invoice_history.enabled === true && Object.keys(f5).sort().join() === 'invoice_history,payment_method_update', '...which offer the card and the invoice history and nothing else: no cancelling, no plan changes', cfg5[0]);
+  await call(admin2, { action: 'card' }, s5); await call(owner, { action: 'portal' }, s5);
+  ok(s5.all('configs').length === 1 && s5.sessions[1].configuration === cfg5[0].id && s5.sessions[2].configuration === cfg5[0].id && s5.calls.filter(function (c) { return c === 'billingPortal.configurations.create'; }).length === 1, '...made once and found again by its mark (another administrator, the invoice portal)', s5.sessions);
+  console.log('\nStripe\'s side can refuse: said plainly');
+  fixture(); var s5b = new SD({ livemode: true, portalRefuses: true, configRefuses: true });
+  await refused('a key that may not make portal settings either: ClearSky\'s to switch on in Stripe, said in words', function () { return call(owner, { action: 'card' }, s5b); }, /customer portal is not switched on/, 409);
   fixture(Object.assign({}, bill(), { stripeCustomerId: 'cus_other', stripeLivemode: true })); var s6 = new SD({ livemode: true });
   s6.customers_.cus_other = { id: 'cus_other', object: 'customer', livemode: true, email: 'x@other.example', metadata: { orgId: 'other.example' } };
   await refused('a customer on the record marked for another workspace is never used', function () { return call(owner, { action: 'card' }, s6); }, /another workspace/);

@@ -116,13 +116,19 @@ opens, its invoices stay the engine's. A plan ClearSky invoices through
 QuickBooks (`paymentProvider: 'quickbooks'`) keeps its card on QuickBooks'
 page, and Add to plan add-ons still bill through QuickBooks.
 
-**Stripe dashboard, once (test, then live):** Settings → Billing → Customer
-portal → turn on **Payment methods** (customers may add and update them)
-and **Invoice history**, then **Save**; Stripe refuses every portal session
-until the live configuration has been saved, and Add a card then says the
-portal is not switched on yet. The webhook's `invoice.*` events above
-already carry the amount-due invoices; without the webhook, *I've paid*
-still records the payment.
+**The customer portal needs no dashboard step.** Stripe refuses every
+portal session until someone has saved the portal settings in the
+dashboard, and refuses Add a card while those settings leave cards out.
+When it does, OMEGA uses its own portal settings instead. Those are a
+configuration made once through the API, found again by
+`metadata.omega = 'workspace-billing'`, that offers the card and the
+invoice history and nothing else: no cancelling, no plan changes, no
+address edits. Stripe's own settings (Settings → Billing → Customer
+portal) are used whenever they can take the card. Only a restricted key
+without the portal-configuration permission still needs the dashboard
+switch: Add a card then says the portal is not switched on yet. The
+webhook's `invoice.*` events above already carry the amount-due invoices;
+without the webhook, *I've paid* still records the payment.
 
 **Records.** A Stripe-billed workspace's `billing/current` carries
 `billingProvider: 'stripe'`, `stripeCustomerId` and `stripeLivemode`. Its

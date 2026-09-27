@@ -234,17 +234,40 @@ function returnUrl(host) {
   if (!local && !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d{1,5})?$/.test(h)) h = HOME;
   return (local ? 'http://' : 'https://') + h + '/workspace#billing';
 }
+/* Stripe refuses every portal session until its portal settings have been
+   saved in the dashboard, and the add-a-card flow while those settings leave
+   cards out. OMEGA's own configuration is then used instead: the card and the
+   invoice history only (no cancelling, no plan changes, no address edits),
+   marked metadata.omega, found again by that mark and made once. */
+var PORTAL_MARK = 'workspace-billing';
+function portalRefused(e) { return !!e && (e.type === 'StripeInvalidRequestError' || e.statusCode === 400); }
+async function portalConfig(stripe) {
+  var live = mode() === 'live', rows = ((await stripe.billingPortal.configurations.list({ active: true, limit: 100 })) || {}).data || [];
+  var mine = rows.filter(function (x) { var f = (x && x.features) || {}; return x.active !== false && x.livemode === live && (x.metadata || {}).omega === PORTAL_MARK && f.payment_method_update && f.payment_method_update.enabled === true; })[0];
+  if (!mine) mine = await stripe.billingPortal.configurations.create({
+    business_profile: { headline: 'ClearSky OMEGA · your card and invoices' },
+    features: { payment_method_update: { enabled: true }, invoice_history: { enabled: true } },
+    metadata: { omega: PORTAL_MARK }
+  }, { idempotencyKey: key('omega-portal-config:v1:' + mode()) });
+  if (!mine || typeof mine.id !== 'string' || !mine.id) fail('Stripe did not confirm the portal settings; try again.');
+  return mine.id;
+}
 async function session(stripe, customerId, back, card) {
   var body = { customer: customerId, return_url: back }, s;
   /* the "add a payment method" flow: the new card becomes the customer's default for invoices */
   if (card) body.flow_data = { type: 'payment_method_update', after_completion: { type: 'redirect', redirect: { return_url: back } } };
   try { s = await stripe.billingPortal.sessions.create(body); }
   catch (e) {
-    if (e && (e.type === 'StripeInvalidRequestError' || e.statusCode === 400)) {
-      console.warn('[stripe-customer] portal refused:', e.message);
-      fail('Stripe’s customer portal is not switched on for card changes yet. ClearSky turns it on in Stripe (Settings › Billing › Customer portal › Payment methods).');
+    if (!portalRefused(e)) throw e;
+    console.warn('[stripe-customer] default portal refused, using OMEGA’s portal settings:', e.message);
+    try { body.configuration = await portalConfig(stripe); s = await stripe.billingPortal.sessions.create(body); }
+    catch (x) {
+      if (portalRefused(x) || (x && x.type === 'StripePermissionError')) {
+        console.warn('[stripe-customer] portal refused:', x.message);
+        fail('Stripe’s customer portal is not switched on for card changes yet. ClearSky turns it on in Stripe (Settings › Billing › Customer portal › Payment methods).');
+      }
+      throw x;
     }
-    throw e;
   }
   if (!s || typeof s.url !== 'string' || !/^https:\/\//.test(s.url)) fail('Stripe did not return its page; try again.');
   return s.url;
