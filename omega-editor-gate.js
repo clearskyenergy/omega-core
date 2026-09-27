@@ -35,7 +35,8 @@
 
    The same trap is here and the same answer applies. A signed-in user whose
    org has no record yet gets in; only an EXPLICIT 'pending', 'suspended' or
-   'cancelled', or an explicit toolOverrides.editor === false, refuses. Get
+   'cancelled', an explicit toolOverrides.editor === false, or a present
+   billing.toolAccess allowlist that leaves the designer out, refuses. Get
    this backwards and the first thing this file does in production is lock out
    every paying customer.
 
@@ -139,6 +140,15 @@
       title = 'This workspace is not active';
       body = detail ? esc(detail) : 'Please get in touch and we will sort it out.';
       cta = '';
+    } else if (kind === 'plan' && detail) {
+      /* A check that could not run is not a refusal. This read "The
+         designer is not on this plan" for every network blip, telling a
+         paying workspace it had not bought the designer; the detail says
+         what happened and Retry asks again. */
+      kind = 'unchecked';
+      title = 'We could not check your access';
+      body = esc(detail);
+      cta = 'Retry';
     } else {
       title = 'The designer is not on this plan';
       body = 'The site designer is part of a paid ' + esc(who) + ' account. '
@@ -147,18 +157,32 @@
     }
 
     var mail = b.support || 'dev@clearsky-usa.com';
+    var button = function (id, text) {
+      return '<button id="' + id + '" style="background:' + esc(b.accent) + ';color:#fff;border:0;'
+        + 'border-radius:9px;padding:12px 24px;font:700 15px inherit;cursor:pointer">' + esc(text) + '</button>';
+    };
     d.innerHTML =
       '<div style="max-width:520px;text-align:center">'
       + '<div style="font-size:23px;font-weight:800;margin-bottom:12px">' + title + '</div>'
       + '<div style="font-size:15px;color:#8BA3C4;margin-bottom:22px">' + body + '</div>'
-      + (kind === 'signed-out'
-          ? '<button id="omega-gate-in" style="background:' + esc(b.accent) + ';color:#fff;border:0;'
-            + 'border-radius:9px;padding:12px 24px;font:700 15px inherit;cursor:pointer">' + esc(cta) + '</button>'
+      + (kind === 'signed-out' ? button('omega-gate-in', cta) : kind === 'unchecked' ? button('omega-gate-retry', cta) : '')
+      /* the refusal is a plan matter, and the workspace's Modules page is
+         where a plan changes (opened in a new tab: this page stays put) */
+      + (kind === 'plan'
+          ? '<div style="margin-top:4px;font-size:15px"><a href="/workspace#modules" target="_blank" rel="noopener" style="color:#9FC5FF;font-weight:700">See modules ›</a></div>'
           : '')
       + '<div style="margin-top:20px;font-size:13px;color:#8BA3C4">'
       +   '<a href="mailto:' + esc(mail) + '?subject=' + encodeURIComponent('Designer access')
       +   '" style="color:' + esc(b.accent) + '">Ask about an account</a>'
       + '</div></div>';
+
+    var again = document.getElementById('omega-gate-retry');
+    if (again) again.onclick = function () {
+      d.innerHTML = '<div style="opacity:.6;font-size:14px">Checking your access…</div>';
+      var u = null;
+      try { u = global.firebase && global.firebase.auth().currentUser; } catch (e) {}
+      if (u) decide(u); else refuse('signed-out');
+    };
 
     var btn = document.getElementById('omega-gate-in');
     if (btn) btn.onclick = function () {
@@ -233,6 +257,11 @@
          plan, and treating the two the same locks out real customers. */
       var ov = (bill && bill.toolOverrides) || {};
       if (ov.editor === false) return refuse('plan');
+      /* The org's allowlist wins over the tier, the add-ons and the
+         overrides (CLAUDE.md: the two-tool product). Absent is "whatever the
+         plan includes"; a present list without the designer, at any length,
+         is a plan that does not include it. */
+      if (bill && Array.isArray(bill.toolAccess) && bill.toolAccess.indexOf('editor') < 0) return refuse('plan');
 
       // Lite tenants land in the small shell even from an old full-editor link.
       // The embedded engine is still the same file; no second editor is copied.
