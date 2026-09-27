@@ -211,25 +211,49 @@ async function cancel(db, orgId, changeId, caller, now) {
     return { ok: true, changeId: changeId, state: 'cancelled' };
   });
 }
-/* Removals never change access today; they queue for the quarterly review. */
+/* The catalog owns every dependency. Removing a prerequisite includes its
+ * dependents; keeping a dependent also keeps its prerequisites. Lite stays.
+ * This is a review request, never an immediate grant or invoice change. */
+function removalSelection(billing, wanted, withdraw) {
+  if (billing.packaged !== true) fail('This workspace is not on a subscription package');
+  var owned = M.normalize(billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription.modules : billing.modules), selected = wanted.slice();
+  wanted.forEach(function (k) { if (owned.indexOf(k) < 0) fail(M.get(k).name + ' is not in your package', 400); });
+  var changed = true;
+  while (changed) {
+    changed = false;
+    owned.forEach(function (k) {
+      if (withdraw && selected.indexOf(k) >= 0) M.get(k).requires.forEach(function (r) {
+        if (r !== 'lite' && selected.indexOf(r) < 0) { selected.push(r); changed = true; }
+      });
+      if (!withdraw && selected.indexOf(k) < 0 && M.get(k).requires.some(function (r) { return selected.indexOf(r) >= 0; })) { selected.push(k); changed = true; }
+    });
+  }
+  return { owned: owned, modules: owned.filter(function (k) { return selected.indexOf(k) >= 0; }) };
+}
+/* Removals never change access today; they queue for the quarterly review.
+ * Dry run and apply read the same current subscription inside a transaction;
+ * a changed dependency set requires the owner to review it again. */
 async function removal(db, orgId, input, caller, now, withdraw) {
-  var c = await S.context(db, orgId), b = c.billing;
-  if (b.packaged !== true) fail('This workspace is not on a subscription package');
-  var wanted = keys(input.remove, 'remove'), owned = M.normalize(b.subscription && b.subscription.modules ? b.subscription.modules : b.modules);
+  var c = await S.context(db, orgId), wanted = keys(input.remove, 'remove');
   var current = c.root.collection('billing').doc('current');
   return db.runTransaction(async function (tx) {
     var live = await tx.get(current), fresh = live.data() || {}, list = (fresh.removalRequests || []).slice();
-    wanted.forEach(function (k) {
-      if (owned.indexOf(k) < 0) fail(M.get(k).name + ' is not in your package', 400);
+    var selection = removalSelection(fresh, wanted, withdraw), remove = selection.modules;
+    var previewId = Q.key(B.stable({ orgId: orgId, owned: selection.owned, modules: remove, withdraw: !!withdraw }));
+    var note = withdraw ? 'The opt-out request is withdrawn for these modules. Access and billing are unchanged.' : 'Queued for the quarterly review with ClearSky. Access and charges stay unchanged until that review; this does not issue a refund.';
+    if (input.dryRun === true) return { previewId: previewId, modules: remove, names: names(remove), withdraw: !!withdraw,
+      note: withdraw ? 'Confirming will withdraw the opt-out request for these modules. Access and billing will stay unchanged.' : 'Confirming queues these modules for the quarterly review with ClearSky. Access and charges stay unchanged until that review; this does not issue a refund.' };
+    if (input.previewId !== previewId) fail('Your package changed; review the opt-out request again');
+    remove.forEach(function (k) {
       var i = -1; list.forEach(function (r, n) { if (r.module === k) i = n; });
       if (withdraw) { if (i >= 0) list.splice(i, 1); }
       else if (i < 0) list.push({ module: k, requestedAt: now, by: caller.email, reason: typeof input.reason === 'string' ? input.reason.slice(0, 300) : '' });
     });
     tx.update(current, { removalRequests: list, updatedAt: now, updatedBy: caller.email });
     var id = 'removal-' + Q.key(B.stable({ w: wanted, withdraw: !!withdraw, at: now }));
-    var event = { at: now, by: caller.email, action: withdraw ? 'removal-withdrawn' : 'removal-requested', changed: { modules: wanted, removalRequests: list, note: 'Takes effect at the quarterly review; access is unchanged.' } };
+    var event = { at: now, by: caller.email, action: withdraw ? 'removal-withdrawn' : 'removal-requested', changed: { modules: remove, removalRequests: list, note: note } };
     tx.set(current.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
-    return { ok: true, removalRequests: list };
+    return { ok: true, removalRequests: list, modules: remove, names: names(remove), note: note };
   });
 }
 async function summary(db, orgId) {
@@ -254,6 +278,44 @@ async function summary(db, orgId) {
     amountDueDisplay: b.amountDue == null ? null : P.money(Math.round(b.amountDue * 100)), paymentLink: b.paymentLink || null, invoices: invoices,
     gate: state(c, Date.now()), pending: pending(rows), removalRequests: b.removalRequests || [],
     recent: rows.filter(function (r) { return S.kindOf(r) === 'change' && r.state !== 'unpaid'; }).slice(-5).map(function (r) { return { id: r.id, add: r.add, names: names(r.add), state: r.state, date: r.date, display: P.money(r.totalCents || 0) }; }) };
+}
+/* ── Opt in on a plan billed OUTSIDE the engine (Tommy, 2026-09-27: "when
+   I click opt in it should be using the pricing and adding this to my
+   monthly subscription fee"). A legacy tenant (billing.packaged !== true)
+   holds a tier, not a package, and its invoices are Stripe's or ClearSky's
+   paper, so this engine cannot quote or charge it. What it can do is take
+   the opt-in WITH THE PRICE ON RECORD: the module and what it requires,
+   priced from the book, written to billing/current.optIns[key] with who
+   and when, a history row, an admin_audit row, and a note to ClearSky —
+   who moves the workspace onto a subscription package from /admin/tenant
+   (its Package tab preselects what is held and requested), where the
+   addition lands on the monthly invoice. Nothing is charged here. A
+   packaged workspace is refused and sent to quote/apply. */
+async function optIn(db, orgId, input, caller, now) {
+  var c = await S.context(db, orgId), b = c.billing;
+  if (b.packaged === true) fail('This workspace is on a subscription package: add modules through the menu, which prices and invoices them.', 409);
+  if (c.org.status !== 'active') fail('Your workspace is not active.', 409);
+  var add = keys(input.add, 'add'), byKey = {};
+  P.catalog(c.book).forEach(function (m) { byKey[m.key] = m; });
+  var have = Object.keys(b.optIns || {}).filter(function (k) { return b.optIns[k] && b.optIns[k].status === 'requested'; });
+  var logic = (b.addons || []).indexOf('omega-logic') >= 0 ? ['logic-office', 'logic-plant', 'logic-materials', 'logic-logistics', 'logic-customer'] : [];
+  var wanted = closure(['lite'].concat(logic, have), add);
+  if (!wanted.length) fail('Already requested', 409);
+  var at = iso(now), entries = {}, cents = 0;
+  wanted.forEach(function (k) { var m = byKey[k]; cents += m.priceCents; entries[k] = { key: k, name: m.name, monthlyCents: m.priceCents, display: m.priceDisplay, requestedBy: caller.email, requestedAt: at, status: 'requested', pricebookVersion: c.book.version }; });
+  var current = c.root.collection('billing').doc('current'), id = 'optin-' + Q.key(B.stable({ w: wanted, at: now }));
+  var event = { at: now, by: caller.email, action: 'opt-in-requested', changeId: id, was: { tier: b.tier || null, addons: b.addons || [], optIns: have },
+    changed: { add: wanted, names: names(wanted), monthlyCents: cents, note: 'Recorded with its price; ClearSky moves the workspace onto a package. Nothing charged.' } };
+  await db.runTransaction(async function (tx) {
+    var live = await tx.get(current), fresh = live.data() || {};
+    /* never make a billing record out of a request: a record holding only
+       optIns would read as a plan with no tier to every gate that reads it */
+    if (!live.exists) fail('Billing is not set up for this workspace yet. Email ClearSky and the module is added when it is.', 409);
+    tx.set(current, { optIns: Object.assign({}, fresh.optIns || {}, entries), updatedAt: now, updatedBy: caller.email }, { merge: true });
+    tx.set(current.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
+  });
+  try { await require('./mail').templates.optInAlert({ company: c.org.name || orgId, orgId: orgId, names: names(wanted), display: P.money(cents) + '/month', by: caller.email, tier: b.tier || null }); } catch (e) { console.warn('[plan-change] opt-in mail skipped:', e && e.message); }
+  return { ok: true, requested: true, add: wanted, names: names(wanted), monthlyCents: cents, display: P.money(cents) + '/month', optIns: entries, requestedAt: at };
 }
 /* ── Phase 7: buy more, like credits. A pack is paid first and lasts to the
    end of the current cycle; reconciliation adds it when QuickBooks shows it
@@ -334,5 +396,5 @@ async function reconcileNow(db, orgId, caller, now, deps) {
   var after = await current.get();
   return out(after.exists ? after.data() : {});
 }
-module.exports = { reconcileNow: reconcileNow, quote: quote, preview: preview, apply: apply, cancel: cancel, removal: removal, summary: summary, closure: closure, deltaLines: deltaLines, state: state,
+module.exports = { reconcileNow: reconcileNow, quote: quote, preview: preview, apply: apply, cancel: cancel, removal: removal, optIn: optIn, summary: summary, closure: closure, deltaLines: deltaLines, state: state,
   packQuote: packQuote, packBuy: packBuy, autoTopup: autoTopup };

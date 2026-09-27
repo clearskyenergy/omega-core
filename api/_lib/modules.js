@@ -12,7 +12,7 @@ function record(key, name, shelf, tools, caps, ribbon, meter, requires) {
 var CATALOG = [
   record('lite', 'Lite', 'floor', 'editor sandbox sales intake opportunity financing signal',
     'design view export.blueprint',
-    'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
+    'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
   record('gridatlas', 'Grid Atlas', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
     'openComedPreQual OmegaSubstation.open'),
   record('storage', 'Storage Sizing & Revenue', 'standard', 'batterysizer proforma valuestack isocalc', 'storage',
@@ -112,9 +112,33 @@ var FEATURES = {
   'logic-logistics': ['Freight coordination', 'Delivery tracking', 'Warranty workflow'],
   'logic-customer': ['Customer order status', 'Customer documents', 'Delivery updates']
 };
-CATALOG.forEach(function (m) { m.features = FEATURES[m.key]; });
+/* What each module is FOR, in one sentence: the menu people buy from
+   (the Modules page, the marketplace store, the offerings) reads it. Says
+   only what the module's tools and features do; never a price. */
+var BLURBS = {
+  lite: 'The floor every package stands on: draw a site on live satellite, place the equipment, run a guided build, and hand a customer a blueprint and a proposal.',
+  gridatlas: 'Where the grid has room: substations, lines and hosting capacity around a site, an interconnection pre-screen and ComEd capacity.',
+  storage: 'Size a battery to the load and the tariff, model the revenue stack and the ISO programs, and print the investor pro forma.',
+  estimate: 'Turn a design into an electrical estimate, a bill of materials and a request for quote to the vendors on it.',
+  evrebates: 'The EV cost workbook, the rebate application and the Level 2 project closeout, counted per application.',
+  plansets: 'Plot plans, one-lines, schematics and permit sheets from the design, exported for CAD and the AHJ, with AI renders.',
+  siteintel: 'Score a site before you drive there: parcel, terrain and network proximity, the screens a developer runs first.',
+  engineering: 'Conductor and transformer sizing, multi-node power flow and the site optimizer, with design validation.',
+  finance: 'Site investment analysis, DCFC and fleet models, financing applications and publishing to the marketplace.',
+  compute: 'Data center and compute campus design: cluster layout, power and load screening, land lease proposals.',
+  ops: 'Run what you built: site lifecycle, the O&M console, SLA intelligence, field service, owner reporting and fleet command.',
+  whitelabel: 'Your own branded storefront and customer experience on your site, powered by the platform, for resellers.',
+  permitting: 'The permitting matrix and jurisdiction checklist for a site, counted per matrix; coverage is shown where it is verified.',
+  sitefinder: 'Find sites: parcel discovery and screening across a territory, counted per site study.',
+  'logic-office': 'Omega Logic\'s office: orders, customers, pricing, acceptance and fulfilment tracking, on the desktop and the phone app.',
+  'logic-plant': 'The plant: the production board, work instructions at every bench, scans, tests and release.',
+  'logic-materials': 'Materials planning, purchasing and kit tracking, netted against what the plant is building.',
+  'logic-logistics': 'Freight coordination, delivery tracking, custody of every shipped unit and the warranty that binds to its site.',
+  'logic-customer': 'The customer app: order status, documents, deliveries and sites, in your customers\' hands under your brand.'
+};
+CATALOG.forEach(function (m) { m.features = FEATURES[m.key]; m.blurb = BLURBS[m.key] || ''; });
 /* Viewing/navigation survives an expired trial; producing commands do not. */
-var READ_ONLY_RIBBON = words('openProjectsModal rbNav rbTab omegaLoadMap toggleLayersPanel toggleCompassPanel toggleSitePanel toggleMeterPanel toggleDockLeft toggleDiagPanel opToggleCoords')
+var READ_ONLY_RIBBON = words('openProjectsModal rbNav rbTab omegaThemePick omegaLoadMap toggleLayersPanel toggleCompassPanel toggleSitePanel toggleMeterPanel toggleDockLeft toggleDiagPanel opToggleCoords')
   .concat(["openRpPanel('summary')", "rpTab('summary')"]);
 var STARTERS = {
   ev: ['lite', 'evrebates', 'estimate', 'gridatlas', 'plansets'],

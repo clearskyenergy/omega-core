@@ -163,6 +163,10 @@
     dockleft: 'M3 4h18v16H3zM9 4v16', dockcenter: 'M3 4h18v16H3zM3 10h18',
     designermode: 'M3 21l6-1 11-11-5-5L4 15zM13 6l5 5M3 21l1-6', architecturemode: 'M12 3v4M12 7l-6 14M12 7l6 14M8 17h8',
     /* ── Settings ── */
+    /* Settings › Appearance (2026-09-27): the sun, the moon, and a half-lit disc for "follow the system" */
+    light: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+    dark: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
+    auto: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 3v18M12 7h4M12 11h6M12 15h5',
     aikeys: 'M8 14a4 4 0 1 1 0-8 4 4 0 0 1 0 8zM11 11l9 9M17 17l2-2M14 20l2-2', nrelkey: 'M8 14a4 4 0 1 1 0-8 4 4 0 0 1 0 8zM11 11l9 9M17 17l2-2', mapskey: MAP + 'M13 11l4 4M16 12l2 2',
     fleetom: 'M3 6h11v9H3zM14 9h4l3 3v3h-7M6 18a1.5 1.5 0 1 0 0 .01M17 18a1.5 1.5 0 1 0 0 .01', omlifecycle: 'M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5M18 3v4h-4M6 21v-4h4'
   };

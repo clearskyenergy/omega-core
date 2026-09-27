@@ -67,8 +67,28 @@ ok('Office alone earns Orders and not Plant or Deliver', officeOnly.ring.some(fu
 var rows = HUB.items('money', ctxFor({ orgId: 'x', tierLevel: 1 }));
 ok('Money lists the Standard sizers open and the Deluxe models locked, open first', rows.length > 3 && !rows[0].locked && rows.some(function (r) { return r.locked; }) && rows.filter(function (r) { return r.locked; }).every(function (r, i, arr) { return rows.indexOf(r) >= rows.length - arr.length; }), rows.map(function (r) { return r.key + (r.locked ? ':locked' : ''); }));
 ok('a row carries the catalog\'s name', rows.every(function (r) { return r.name && TOOLS.byKey(r.key).name === r.name; }));
-ok('Projects panel names its page', HUB.items('projects', ctxFor({ orgId: 'x' }))[0].href === '/projects.html');
+ok('Projects panel names In flight and its page', (function (r) { return r[0].href === '#flight' && r[1].href === '/projects.html'; })(HUB.items('projects', ctxFor({ orgId: 'x' }))));
 ok('an unknown area is empty', HUB.items('nope', ctxFor({})).length === 0);
+
+/* 4 · does a workspace hold a module: the one rule the Modules page and
+   the marketplace store share */
+var MODS = {}; M.catalog().forEach(function (m) { MODS[m.key] = m; });
+var ent3 = ctxFor({ orgId: 'x', tierLevel: 3 }, { tierLevel: 3, packaged: false });
+ok('Enterprise holds a module whose tools are all open', HUB.moduleState(MODS.storage, ent3) === 'held', HUB.moduleState(MODS.storage, ent3));
+ok('Enterprise holds a capabilities-only module (plan sets)', HUB.moduleState(MODS.plansets, ent3) === 'held');
+ok('Enterprise without the add-on does not hold Omega Logic', HUB.moduleState(MODS['logic-office'], ent3) === 'ask');
+var entLogic = ctxFor({ orgId: 'x', tierLevel: 3, addons: ['omega-logic'] }, { tierLevel: 3, packaged: false });
+ok('the omega-logic add-on holds every Logic part', ['logic-office', 'logic-plant', 'logic-customer'].every(function (k) { return HUB.moduleState(MODS[k], entLogic) === 'held'; }));
+var std1 = ctxFor({ orgId: 'x', tierLevel: 1 }, { tierLevel: 1, packaged: false });
+ok('Standard does not hold a capabilities-only module', HUB.moduleState(MODS.plansets, std1) === 'ask');
+var stdStates = M.catalog().map(function (m) { return HUB.moduleState(m, std1); });
+ok('Standard holds some modules, is partly on others and asks for the rest', stdStates.indexOf('held') >= 0 && stdStates.indexOf('ask') >= 0, stdStates);
+var partly = M.catalog().filter(function (m) { return HUB.moduleState(m, std1) === 'part'; })[0];
+if (partly) { var pt = HUB.moduleTools(partly, std1); ok('a partly held module counts its open tools honestly', pt.open > 0 && pt.open < pt.total, pt); }
+var pk = ctxFor({ orgId: 'x', tierLevel: 1, modules: ['lite'], packaged: true, toolAccess: ['editor'] }, { packaged: true, modules: ['lite'] });
+ok('a packaged workspace holds exactly what its projection lists', HUB.moduleState(MODS.lite, pk) === 'held' && HUB.moduleState(MODS.gridatlas, pk) === 'open');
+ok('an unknown module is asked for', HUB.moduleState(null, ent3) === 'ask');
+M.catalog().forEach(function (m) { ok('module ' + m.key + ' says what it is for, in one sentence, with no price in it', typeof m.blurb === 'string' && m.blurb.length > 40 && !/\$\d/.test(m.blurb), m.blurb); });
 
 console.log('tworkspacehub: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

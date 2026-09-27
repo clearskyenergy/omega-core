@@ -105,7 +105,7 @@
     function draw(summary) {
       headline(summary);
       var pending = {}; (summary.pending || []).forEach(function (p) { (p.add || []).forEach(function (k) { pending[k] = p; }); });
-      var state = { canManage: true, pending: pending, onChanged: function () { setTimeout(function () { reload('cust'); }, 400); } };
+      var state = { canManage: true, pending: pending, summary: summary, orgId: orgId, onChanged: function () { setTimeout(function () { reload('cust'); }, 400); } };
       pendingHost.textContent = '';
       if (summary.pending && summary.pending.length) {
         pendingHost.appendChild(el('h3', 'Waiting for payment'));
@@ -118,24 +118,20 @@
       }
       if (summary.gate && !summary.gate.canApply) pendingHost.appendChild(el('p', summary.gate.reason, 'pp-note'));
       cards.textContent = '';
-      data.modules.filter(function (m) { return owned.indexOf(m.key) < 0; }).forEach(function (m) {
+      data.modules.filter(function (m) { return (summary.subscription || owned).indexOf(m.key) < 0; }).forEach(function (m) {
         var card = global.OmegaPackageMenu.card(m, m.priceDisplay);
         global.OmegaPackageMenu.subscribeControl(card.querySelector('.opm-act'), m, state);
         cards.appendChild(card);
       });
       if (!cards.children.length) cards.appendChild(el('p', 'Your package includes every module in the catalog.', 'pp-note'));
       removals.textContent = '';
-      var requested = {}; (summary.removalRequests || []).forEach(function (r) { requested[r.module] = r; });
       var list = el('div', '', 'pp-row');
-      owned.filter(function (k) { return k !== 'lite'; }).forEach(function (k) {
+      (summary.subscription || owned).filter(function (k) { return k !== 'lite'; }).forEach(function (k) {
         var m = data.modules.filter(function (x) { return x.key === k; })[0]; if (!m) return;
         var wrap = el('span', '', 'pkm-tag');
         wrap.appendChild(document.createTextNode(m.name + ' '));
-        var b2 = button(requested[k] ? 'Withdraw removal request' : 'Remove at next review', function () {
-          b2.disabled = true;
-          global.OmegaPackageMenu.api('/api/plan-change', { action: requested[k] ? 'withdraw-removal' : 'request-removal', remove: [k] }).then(function () { refresh(); }, function (e) { message(e.message, true); b2.disabled = false; });
-        });
-        wrap.appendChild(b2); list.appendChild(wrap);
+        global.OmegaPackageMenu.subscribeControl(wrap.appendChild(el('span')), m, state);
+        list.appendChild(wrap);
       });
       if (list.children.length) { removals.appendChild(el('p', 'Removals take effect at the quarterly review; your access is unchanged until then.', 'pp-note')); removals.appendChild(list); }
     }
@@ -204,8 +200,47 @@
     try { var t = terms(); href += '&modules=' + t.modules.map(encodeURIComponent).join(',') + '&plan=' + encodeURIComponent(t.plan) + '&interval=' + encodeURIComponent(t.interval) + (t.credit ? '&credit=1' : ''); } catch (e) { /* the rail is still being built */ }
     link.href = href;
   }
+  /* What the tenant HOLDS and PAYS today (Tommy, 2026-09-27: "it should have
+     selected what they have … and show what they have and are paying for and
+     subscribed for"). A packaged tenant: bought (subscription.modules) vs
+     switched on (modules). A legacy tenant: the modules its tier, add-ons and
+     allowlist open — the SAME rule the tenant's own Modules page shows as Live
+     (OmegaWorkspaceHub.moduleState on the real tool catalog) — plus anything it
+     opted in to with a price on record (billing.optIns, plan-change opt-in).
+     The picker starts from that; staff change it and Review activation. */
+  function dayOf(v) { if (!v) return ''; if (typeof v === 'string') return v.slice(0, 10); var sec = v._seconds || v.seconds; if (sec) return new Date(sec * 1000).toISOString().slice(0, 10); return ''; }
+  function standing(data) {
+    var b = data.billing || {}, byKey = {}, out = { packaged: b.packaged === true, held: [], bought: [], on: [], requested: [], preselect: ['lite'], lines: [] };
+    (data.modules || []).forEach(function (m) { byKey[m.key] = m; });
+    function names(keys) { return keys.map(function (k) { return byKey[k] ? byKey[k].name : k; }).join(', ') || 'nothing'; }
+    Object.keys(b.optIns || {}).forEach(function (k) { var o = b.optIns[k]; if (o && o.status === 'requested') out.requested.push(Object.assign({ key: k }, o)); });
+    if (out.packaged) {
+      out.bought = (b.subscription && Array.isArray(b.subscription.modules) && b.subscription.modules.length ? b.subscription.modules : b.modules) || ['lite']; out.on = b.modules || [];
+      out.preselect = out.bought.slice();
+      var pst = b.packagingState || 'pending';
+      out.lines.push((pst === 'paid' ? 'Subscribed to ' : pst === 'trial' ? 'On trial with ' : 'On record (' + pst + '): ') + names(out.bought) + (b.plan ? ' · ' + b.plan + ' plan' : '') + (b.interval ? ' · ' + b.interval : ''));
+      if (out.on.slice().sort().join() !== out.bought.slice().sort().join()) out.lines.push('Switched on: ' + names(out.on));
+      var pays = []; if (b.monthlyDisplay) pays.push(String(b.monthlyDisplay)); if (b.nextInvoiceOn) pays.push('next invoice ' + dayOf(b.nextInvoiceOn)); if (b.paidThrough) pays.push('paid through ' + dayOf(b.paidThrough)); if (b.packagingState) pays.push(b.packagingState);
+      if (pays.length) out.lines.push('Pays ' + pays.join(' · '));
+    } else {
+      var tiers = { trial: 0, standard: 1, deluxe: 2, enterprise: 3 }, lvl = tiers[String(b.tier || '').toLowerCase()], T = global.OMEGATools, H = global.OmegaWorkspaceHub;
+      var wsLike = { tierLevel: typeof lvl === 'number' ? lvl : 1, toolAccess: Array.isArray(b.toolAccess) ? b.toolAccess : null, toolOverrides: b.toolOverrides || null, unlockedTools: b.unlockedTools || null, requiredTools: b.requiredTools || null };
+      var ctx = { packaged: false, modules: [], addons: b.addons || [], tierLevel: wsLike.tierLevel, tool: function (k) { return !!(T && T.byKey(k)); }, canOpen: function (k) { var t = T && T.byKey(k); return !!t && T.isUnlocked(t, wsLike); } };
+      (data.modules || []).forEach(function (m) { if (H && T && H.moduleState(m, ctx) === 'held') out.held.push(m.key); });
+      out.preselect = out.held.slice(); out.requested.forEach(function (o) { if (out.preselect.indexOf(o.key) < 0) out.preselect.push(o.key); });
+      if (out.preselect.indexOf('lite') < 0) out.preselect.unshift('lite');
+      out.lines.push((b.tier ? b.tier.charAt(0).toUpperCase() + b.tier.slice(1) : 'No') + ' tier' + ((b.addons || []).length ? ' · add-ons: ' + b.addons.join(', ') : '') + (Array.isArray(b.toolAccess) ? ' · ' + b.toolAccess.length + ' tools allowlisted' : ''));
+      out.lines.push('Holds ' + names(out.held) + ' (what its Modules page shows as Live)');
+      var pay = []; if (b.amountDue != null) pay.push('$' + Number(b.amountDue || 0).toLocaleString() + ' due'); if (b.subscriptionDue) pay.push('next ' + dayOf(b.subscriptionDue)); if (b.lastPaidAt) pay.push('last paid ' + dayOf(b.lastPaidAt)); if (b.paymentProvider) pay.push('by ' + b.paymentProvider);
+      out.lines.push(pay.length ? 'Pays ' + pay.join(' · ') : 'No payment on record');
+    }
+    if (out.requested.length) out.lines.push('Requested: ' + out.requested.map(function (o) { return (o.name || o.key) + (o.display ? ' (' + o.display + ')' : '') + (o.requestedAt ? ' ' + dayOf(o.requestedAt) : '') + (o.requestedBy ? ' by ' + o.requestedBy : ''); }).join('; '));
+    return out;
+  }
   function render(data, profile) {
-    record = data; selected = data.billing.proposedPackage || data.billing; host.textContent = '';
+    record = data; host.textContent = '';
+    var stand = standing(data);
+    selected = data.billing.proposedPackage || Object.assign({}, data.billing, { modules: stand.preselect });
     var heading = el('div', '', 'pp-head'), title = el('div'); title.appendChild(el('h2', data.name)); title.appendChild(el('div', orgId + ' · ' + data.pricebookVersion, 'pp-sub')); heading.appendChild(title); heading.appendChild(el('span', data.billing.packagingState || data.status, 'pp-pill')); host.appendChild(heading);
     var tabs = el('div', '', 'pp-tabs'); tabs.setAttribute('role', 'tablist'); host.appendChild(tabs);
     var panes = {};
@@ -217,6 +252,11 @@
     var msg = el('div', '', 'pp-message'); msg.id = 'pp-message'; msg.setAttribute('role', 'status'); host.appendChild(msg);
     if (data.canManagePackage) {
       var grid = el('div', '', 'pp-grid'), left = el('div'), rail = el('aside', '', 'pp-summary'); panes.pkg.appendChild(grid); grid.appendChild(left); grid.appendChild(rail);
+      var strip = el('div', '', 'pp-standing'); strip.id = 'pp-standing';
+      strip.appendChild(el('b', stand.packaged ? 'Today: on a subscription package' : 'Today: ' + stand.lines[0]));
+      stand.lines.slice(stand.packaged ? 0 : 1).forEach(function (l) { strip.appendChild(el('div', l)); });
+      strip.appendChild(el('div', data.billing.proposedPackage ? 'Preselected from the proposal on file.' : stand.packaged ? 'Preselected from what it subscribes to; change it and Review activation.' : 'Preselected from what the tier opens today plus any opt-in request; change it and Review activation moves the tenant onto a package, where additions land on the monthly invoice.', 'pp-note'));
+      left.appendChild(strip);
       var row = el('div', '', 'pp-row'); row.appendChild(el('span', 'Customer type', 'pp-note'));
       row.appendChild(choice('starter', Object.keys(data.starters).map(function (k) { return [k, (data.starterLabels || {})[k] || k]; }), Object.keys(data.starters)[0]));
       row.appendChild(button('Apply starter pack', function () { picker.set(data.starters[$('starter').value]); })); left.appendChild(row);

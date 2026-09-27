@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terms of Service &amp; Privacy · ClearSky OMEGA</title>
+  <style>
+    * { box-sizing: border-box; }
+    html { background: #f5f6f8; color: #26333f; font: 16px/1.65 system-ui, sans-serif; }
+    body { margin: 0; }
+    header { background: #0a1628; padding: 20px 24px; }
+    header a { color: #fff; font-weight: 700; text-decoration: none; }
+    main { max-width: 800px; margin: 36px auto; padding: 36px; background: #fff; border: 1px solid #e2e7eb; border-radius: 12px; }
+    h1 { color: #12212e; font-size: 2rem; line-height: 1.2; margin: 0 0 10px; }
+    h2 { color: #12212e; font-size: 1.15rem; line-height: 1.4; margin: 0 0 8px; }
+    p { margin: 0; }
+    a { color: #096b60; text-underline-offset: 3px; }
+    a:focus-visible { outline: 3px solid #00a994; outline-offset: 4px; }
+    nav { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 18px 0 30px; }
+    section { margin-top: 28px; scroll-margin-top: 24px; }
+    #version { color: #5c6b7a; font-size: .9rem; }
+    #terms-error { padding: 16px; background: #fff2ed; color: #872d18; }
+    @media (max-width: 600px) { main { margin: 16px; padding: 24px 20px; } h1 { font-size: 1.7rem; } }
+    @media print { html { background: #fff; } header, nav { display: none; } main { max-width: none; margin: 0; padding: 0; border: 0; } section { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <header><a href="/">ClearSky OMEGA</a></header>
+  <main id="terms">
+    <h1>Terms of Service</h1>
+    <p id="version"></p>
+    <nav aria-label="Legal information"><a href="#terms">Terms of Service</a><a href="#privacy">Privacy, retention and sub-processors</a></nav>
+    <noscript><p>Enable JavaScript to read the current terms. For a copy, email <a href="mailto:dev@clearsky-usa.com">dev@clearsky-usa.com</a>.</p></noscript>
+    <p id="terms-error" role="alert" hidden>The terms could not be loaded. Please reload this page or email dev@clearsky-usa.com for a copy.</p>
+    <div id="sections"></div>
+  </main>
+  <script src="/omega-terms.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      var terms = window.OmegaTerms;
+      if (!terms || typeof terms.sections !== 'function') {
+        document.getElementById('terms-error').hidden = false;
+        return;
+      }
+      document.getElementById('version').textContent = 'ClearSky-OMEGA · Version ' + terms.VERSION;
+      var rows = terms.sections('');
+      var container = document.getElementById('sections');
+      for (var i = 0; i < rows.length; i++) {
+        var section = document.createElement('section');
+        var heading = document.createElement('h2');
+        var paragraph = document.createElement('p');
+        if (/^4b\./.test(rows[i][0])) section.id = 'privacy';
+        heading.textContent = rows[i][0];
+        paragraph.textContent = rows[i][1];
+        section.appendChild(heading);
+        section.appendChild(paragraph);
+        container.appendChild(section);
+      }
+      if (window.location.hash === '#privacy') {
+        var privacy = document.getElementById('privacy');
+        if (privacy) privacy.scrollIntoView();
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -21,7 +21,7 @@ module.exports = A.handler(async function (req, res) {
   var book = await B.load(db, version);
   if (!caller.staff && !book.enabled) throw A.httpError(403, 'Packaging is not enabled');
   var rows = P.catalog(book);
-  var result = { orgId: org, pricebookVersion: version, modules: rows, starters: M.starters(), canManage: await A.isTenantAdmin(caller, org) };
+  var result = { orgId: org, pricebookVersion: version, modules: rows, starters: M.starters(), starterLabels: M.starterLabels(), canManage: await A.isTenantAdmin(caller, org) };
   if (req.method === 'POST') {
     var allowed = ['orgId', 'modules', 'plan', 'builders', 'viewers', 'interval'];
     if (caller.staff) allowed = allowed.concat(['pricebookVersion', 'credit', 'serviceFee']);

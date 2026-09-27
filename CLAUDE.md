@@ -707,15 +707,50 @@ real catalogs. Every tool tile is Live, Locked or Soon by that same rule;
 a locked tile explains, never hides. Today is `omega-workspace-today.js`
 (pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
 both ends of the Quote Desk, the referral inbox, projects ready, stalled or
-unsized. Never a second copy of those rules in a page. Opt-in panels live on
+unsized. Never a second copy of those rules in a page. The home is the BOARD: the hub and Today, then In flight and Around you
+(feed, People, the Omega pulse, Partners); only All tools and Modules are
+their own pages (`data-view`). The Omega pulse is `GET /api/pulse`
+(`api/_lib/pulse.js`, pure, `tpulse.js`): platform-wide COUNTS ONLY from
+the most recent rows, never a name. The Modules page lists every module
+for every workspace (`OmegaWorkspaceHub.moduleState`, the ONE held/partly/
+ask rule shared with the store); a module not held carries Opt in: the one
+menu and a QuickBooks invoice for a packaged workspace, the request that
+moves a legacy one onto a package (`plan-change` `opt-in`: priced from the
+book, recorded on `billing/current.optIns` with history and audit, ClearSky
+mailed; the admin Package tab opens preselected on what the tenant holds
+plus that request; nothing is charged). In flight is
+`OmegaWorkspaceToday.board` (what needs something, then what was touched
+last, never online, a finance-marketplace deal riding on its project) and
+Assign merges only the owner fields onto `projects/{id}`. Plan & billing
+is a page (`#billing`): subscription, what is owed and when, the payment
+method (the Stripe portal or QuickBooks' own payment page; a card is never
+entered on our pages) and the history; `GET /api/plan-change` is readable
+by any verified member, changes stay with an owner or admin. The shell's
+button reset is `:where()` (zero specificity) so a styled button keeps its
+face, and `omega-splash.js` hears link clicks last, so a link the page
+handles itself never raises the mark. Optional held modules offer **Opt out** through the
+same shared menu. Packaged opt-outs preview the server's dependency set,
+then queue for the existing quarterly review (no immediate access, charge
+or refund change); Keep module withdraws the request. Lite is mandatory.
+Legacy opt-outs prepare a ClearSky email request under the existing
+agreement. The page never changes billing or grants. Opt-in panels live on
 `dashboard_layouts/{org}__{uid}.workspace`. `npm run check:workspace`
 renders it as four tenants on the Firebase double; run it and
 `check:dashboard` after any change to the page, the shell or the runtime.
-For a PACKAGED workspace `marketplace.html` is also the package store:
-modules on their shelves with `api/package-catalog`'s prices, opting in
-through the shared `omega-package-menu.js` control and `plan-change`; a
-legacy tenant sees the catalogue as before. Design, launch order and the
-honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
+Once the workspace is home, `marketplace.html` is THE STORE, not a tool
+catalogue (every tool is All tools on the workspace): the plans and the
+modules on their shelves, wearing the whole workspace chrome
+(`OmegaWorkspaceShell.wear()` takes a legacy page's own sidebar and topbar
+off and mounts the rail, the switcher topbar and the phone tab bar around
+its `#main`; the markup stays for the classic home and the tests that
+read it). A PACKAGED workspace prices from `api/package-catalog` and opts
+in through the shared `omega-package-menu.js` control and `plan-change`;
+any other workspace reads the PUBLIC price list `GET /api/offerings`,
+each module judged against its tier (On your plan · Partly · Ask
+ClearSky, an email), and never pays here. `/marketplace.html#<module>`
+lands on that module. A tenant on the classic home keeps the tool
+catalogue and pinning. Design, launch order and the honest list of what
+is not built: `docs/OMEGA-WORKSPACE.md`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 

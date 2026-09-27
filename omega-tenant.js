@@ -723,6 +723,24 @@
      reads, so an empty list draws every tool in the state the UI already has
      for "not on your plan" — no second locked-out design to build or keep in
      step. */
+  /* ── WAIT FOR THE OBJECT THESE FLAGS HAVE TO LAND ON ──────────────────
+     index.html sets window.OMEGA_WORKSPACE inside ITS auth handler, and two
+     handlers on the same event have no defined order. Lose that race and ws
+     is null, mergeEntitlements returns null, and everything just read off
+     the org record — the name, the tier, toolAccess, hideMarketplace, the
+     shell that says where home is — is dropped on the floor with no error
+     anywhere. So wait for it. A couple of seconds is far longer than the gap
+     between two callbacks on the same event, and if it never arrives we fire
+     with whatever config had, which is the old behaviour. Every branch of
+     loadEntitlements that fires a real answer goes through here. */
+  function fireWhenBound(org, user, tries) {
+    var ws = global.OMEGA_WORKSPACE || cfg().tenant || null;
+    if (!ws && (tries || 0) < 20) {
+      setTimeout(function () { fireWhenBound(org, user, (tries || 0) + 1); }, 100);
+      return;
+    }
+    fireEntitlements(mergeEntitlements(ws || baseWorkspace(org, user)));
+  }
   function lockedEntitlements() {
     var ws = mergeEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || {}) || {};
     ws.unlockedTools = []; ws.toolAccess = [];
@@ -883,9 +901,15 @@
             lockedEntitlements();
             return;
           }
-          fireEntitlements(mergeEntitlements(baseWorkspace(org, user)));
+          /* The SAME wait as the record branch below. This fired at once
+             onto an object of its own, and a dashboard whose auth handler
+             was still resolving the workspace then published a fresh one
+             with no shell on it and a listener the event had already
+             passed — so a derived workspace (ClearSky's own, on the open
+             host) never left the classic page. */
+          fireWhenBound(org, user);
         })['catch'](function () {
-          fireEntitlements(mergeEntitlements(baseWorkspace(org, user)));
+          fireWhenBound(org, user);
         });
       }
 
@@ -932,24 +956,7 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         })['catch'](function () {});
       }
-      /* ── WAIT FOR THE OBJECT THESE FLAGS HAVE TO LAND ON ────────────────
-         index.html sets window.OMEGA_WORKSPACE inside ITS auth handler, and
-         two handlers on the same event have no defined order. Lose that race
-         and ws is null, mergeEntitlements returns null, and everything just
-         read off the org record — the name, the tier, toolAccess,
-         hideMarketplace — is dropped on the floor with no error anywhere.
-
-         So wait for it. A couple of seconds is far longer than the gap
-         between two callbacks on the same event, and if it never arrives we
-         fire with whatever config had, which is the old behaviour. */
-      (function applyWhenReady(tries) {
-        var ws = global.OMEGA_WORKSPACE || cfg().tenant || null;
-        if (!ws && (tries || 0) < 20) {
-          setTimeout(function () { applyWhenReady((tries || 0) + 1); }, 100);
-          return;
-        }
-        fireEntitlements(mergeEntitlements(ws || baseWorkspace(org, user)));
-      })(0);
+      fireWhenBound(org, user);
     })['catch'](function (err) {
       log('entitlements unavailable; tools remain closed', err && err.message);
       lockedEntitlements();
@@ -1030,6 +1037,9 @@
     get member() { return T.member; },
     get role() { return T.role; },
     get status() { return T.status; },
+    /* The workspace the entitlements were merged onto, or null before they
+       land: the one object that carries the org record's shell. */
+    get workspace() { return T._ent ? (T._ws || null) : null; },
     get refused() { return T.refused || null; },
     get hub() { return !!T.hub; },
     /* Did this TAB have a signed-in user? Pages use it to tell a slow restore

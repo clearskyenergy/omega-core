@@ -43,7 +43,13 @@
     /* the ground: the website\'s blueprint grid, fixed so content scrolls over it */
     'body.ows{margin:0;background-color:var(--ows-page);background-image:linear-gradient(var(--ows-grid-major) 1px,transparent 1px),linear-gradient(90deg,var(--ows-grid-major) 1px,transparent 1px),linear-gradient(var(--ows-grid-minor) 1px,transparent 1px),linear-gradient(90deg,var(--ows-grid-minor) 1px,transparent 1px);background-size:120px 120px,120px 120px,24px 24px,24px 24px;background-attachment:fixed;color:var(--ows-ink);font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}',
     'body.ows *,body.ows *::before,body.ows *::after{box-sizing:border-box}',
-    'body.ows button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}body.ows a{color:inherit;text-decoration:none}',
+    /* the button reset sits at ZERO specificity (:where), so any styled button
+       (.ows-pill, a page's .pc card or .tool tile, the package menu's own
+       buttons) keeps its background and border. As `body.ows button` it
+       outranked every single-class rule and stripped them all: project cards
+       with no ground and a Needs-you button that read as bare text (Tommy,
+       2026-09-27). Unclassed buttons still get the reset. */
+    ':where(body.ows button){font:inherit;color:inherit;background:none;border:0;cursor:pointer}body.ows a{color:inherit;text-decoration:none}',
     'body.ows :focus-visible{outline:2px solid var(--ows-teal);outline-offset:2px}',
     '.ows-app{display:grid;grid-template-columns:224px minmax(0,1fr);min-height:100vh}',
     /* the rail */
@@ -105,6 +111,14 @@
     '.ows-top{padding:0 14px;gap:8px}.ows-search{display:none}.ows-switch>button{max-width:200px}.ows-content{padding:16px 16px 32px}}',
     '@media (max-width:700px){.ows-tabs.on{display:grid}body.ows-has-tabs .ows-content{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))}}',
     '@media (prefers-reduced-motion:reduce){.ows-rail{transition:none}}',
+    /* a legacy page WEARING the whole chrome (wear): its own #side-nav,
+       #topbar and #main id rules outrank the shell's classes, so the few
+       that matter are restated at higher specificity */
+    'body.ows-worn #side-nav{width:auto;height:100vh;overflow:auto;z-index:auto;display:flex;flex:none}',
+    'body.ows-worn #app-body #topbar{height:56px;padding:0 20px;gap:12px;border-bottom:1px solid var(--ows-line);background:rgba(255,255,255,.92);z-index:30}',
+    'body.ows-worn #app-body #main{max-width:1240px;padding:22px 24px 40px}',
+    '@media (max-width:900px){body.ows-worn #app-body{flex-direction:column}body.ows-worn #side-nav{display:flex;position:fixed;top:0;bottom:0;left:0;width:min(280px,86vw);z-index:65}body.ows-worn #app-body #topbar{height:54px;padding:0 14px;gap:8px}body.ows-worn #app-body #main{padding:16px 16px 32px}}',
+    '@media (max-width:700px){body.ows-worn.ows-has-tabs #app-body #main{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))}}',
     /* legacy pages: the ground only */
     'body.ows-theme{background-color:#F5F4F0;background-image:linear-gradient(rgba(43,95,168,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(43,95,168,.09) 1px,transparent 1px),linear-gradient(rgba(43,95,168,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(43,95,168,.04) 1px,transparent 1px);background-size:120px 120px,120px 120px,24px 24px,24px 24px;background-attachment:fixed}',
     'body.ows-theme #side-nav{background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);background-size:44px 44px}',
@@ -119,6 +133,7 @@
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',
     projects: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
     tools: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>',
+    modules: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>',
     marketplace: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>',
     team: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>',
     feed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
@@ -141,6 +156,7 @@
     { key: 'home', label: 'Home', icon: 'home', href: '/workspace', sn: 'dashboard' },
     { key: 'projects', label: 'Projects', icon: 'projects', href: '/projects.html', sn: 'projects' },
     { key: 'tools', label: 'All tools', icon: 'tools', href: '/workspace#tools', sn: 'apps' },
+    { key: 'modules', label: 'Modules', icon: 'modules', href: '/workspace#modules', sn: 'modules' },
     { key: 'marketplace', label: 'Marketplace', icon: 'marketplace', href: '/marketplace.html', sn: 'marketplace' },
     { key: 'quotes', label: 'Quote Desk', icon: 'quotes', href: '/rfq.html', sn: 'rfq' },
     { key: 'team', label: 'Team', icon: 'team', href: '/workspace#team', sn: 'team' },
@@ -343,6 +359,10 @@
   }
   function shellOf(ws) {
     if (ws && ws.shell) return ws.shell;
+    /* The object a page holds may not be the one the entitlements were
+       merged onto (index.html publishes its own after resolving); the
+       runtime's is the one that carries the org record's answer. */
+    try { var m = global.OmegaTenant && OmegaTenant.workspace; if (m && m.shell) return m.shell; } catch (e) {}
     try { var t = global.CLEARSKY_CONFIG && global.CLEARSKY_CONFIG.tenant; if (t && t.shell) return t.shell; } catch (e) {}
     return null;
   }
@@ -372,17 +392,46 @@
      and the same element ids, so omega-jd-nav.js reveals Joint development
      and the Deal Room here exactly as it does everywhere else. What an
      earlier reveal already showed stays shown. Runs once. */
-  var adopted = false;
+  var adopted = false, worn = false;
+  var REVEALED = ['sn-jv-divider', 'sn-jv-label', 'sn-osa', 'sn-design', 'sn-jda', 'sn-dealroom', 'sn-adm-divider', 'sn-adm-label', 'sn-admin', 'sn-ops'];
+  function remember() {
+    var shown = {};
+    REVEALED.forEach(function (id) { var el = byId(id); if (el && el.style.display !== 'none') shown[id] = true; });
+    var label = byId('sn-design-label'), count = byId('sn-design-n');
+    return { shown: shown, designText: label ? label.textContent : '', countText: count ? count.textContent : '' };
+  }
+  function restore(r) {
+    Object.keys(r.shown).forEach(function (id) { var el = byId(id); if (el) el.style.display = ''; });
+    if (r.designText && byId('sn-design-label')) byId('sn-design-label').textContent = r.designText;
+    if (r.countText && byId('sn-design-n')) byId('sn-design-n').textContent = r.countText;
+  }
   function adopt() {
     var rail = byId('side-nav'); if (adopted || !rail || rail.classList.contains('ows-rail')) return false;
-    var shown = {};
-    ['sn-jv-divider', 'sn-jv-label', 'sn-osa', 'sn-design', 'sn-jda', 'sn-dealroom', 'sn-adm-divider', 'sn-adm-label', 'sn-admin', 'sn-ops'].forEach(function (id) { var el = byId(id); if (el && el.style.display !== 'none') shown[id] = true; });
-    var label = byId('sn-design-label'), designText = label ? label.textContent : '', count = byId('sn-design-n'), countText = count ? count.textContent : '';
+    var r = remember();
     rail.innerHTML = headHtml('ows-head') + '<div class="sn-scroll">' + railHtml({ current: currentKey(), head: false, me: false }) + '</div>';
-    Object.keys(shown).forEach(function (id) { var el = byId(id); if (el) el.style.display = ''; });
-    if (designText && byId('sn-design-label')) byId('sn-design-label').textContent = designText;
-    if (countText && byId('sn-design-n')) byId('sn-design-n').textContent = countText;
+    restore(r);
     adopted = true; return true;
+  }
+  /* THE WHOLE CHROME on a legacy page (the marketplace, the store): once
+     the workspace is home, the page's own sidebar and topbar come off and
+     the shell mounts the rail, the topbar with the company switcher, the
+     phone tab bar and the side panel around the page's #main. The page
+     keeps its markup (the tests that compare the three sidebars read the
+     FILE) and its own sign-in. What omega-jd-nav.js revealed on the old
+     rail stays revealed. Runs once; answers whether it ran. */
+  function wear(opts) {
+    if (worn) return true;
+    if (!wantsWorkspace()) return false;
+    var rail = byId('side-nav'), top = byId('topbar'), main = byId('main');
+    if (!rail || !top || !main) return false;
+    var r = remember();
+    rail.parentNode.removeChild(rail); top.parentNode.removeChild(top);
+    doc.body.classList.add('ows-worn'); main.classList.add('ows-content');
+    var o = { current: currentKey(), tabs: true, search: false };
+    if (opts) for (var k in opts) if (Object.prototype.hasOwnProperty.call(opts, k)) o[k] = opts[k];
+    mount(o);
+    restore(r);
+    worn = adopted = true; return true;
   }
   /* a legacy page (projects, marketplace): the same ground, the same rail
      and the same home once the workspace is home */
@@ -399,5 +448,5 @@
     both(); global.addEventListener('omega:entitlements', both); setTimeout(both, 1500);
   }
 
-  global.OmegaWorkspaceShell = { mount: mount, adopt: adopt, currentKey: currentKey, homeOf: homeOf, paint: paint, badge: badge, section: section, workspaces: workspaces, drawer: drawer, closeDrawer: closeDrawer, toast: toast, signOut: signOut, theme: theme, homeHref: homeHref, wantsWorkspace: wantsWorkspace, closeRail: closeRail, ICON: ICON, PRODUCT: PRODUCT, esc: esc, initials: initials };
+  global.OmegaWorkspaceShell = { mount: mount, adopt: adopt, wear: wear, currentKey: currentKey, homeOf: homeOf, paint: paint, badge: badge, section: section, workspaces: workspaces, drawer: drawer, closeDrawer: closeDrawer, toast: toast, signOut: signOut, theme: theme, homeHref: homeHref, wantsWorkspace: wantsWorkspace, closeRail: closeRail, ICON: ICON, PRODUCT: PRODUCT, esc: esc, initials: initials };
 })(window);

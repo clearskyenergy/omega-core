@@ -470,6 +470,9 @@
     sections:    sections,
     hasAccepted: hasAccepted,
     record:      record,
+    /* a page that defines showApp after this file loaded calls wire() at once,
+       so a fast sign-in cannot reach the bare function before the poll does */
+    wire:        wire,
     show:        function () { return openModal({ blocking: false }); }
   };
 
