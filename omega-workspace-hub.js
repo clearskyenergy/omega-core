@@ -85,7 +85,37 @@
     });
     return out.concat(open, locked);
   }
-  var API = { AREAS: AREAS, compose: compose, items: items, RING_MAX: RING_MAX };
+  /* ── DOES THIS WORKSPACE HOLD A MODULE? One rule for the Modules page
+     and the marketplace store (Tommy, 2026-09-27: every module listed,
+     marked by whether it is used or given). ctx as compose() takes it,
+     plus packaged (bool) and tierLevel (the legacy tier).
+       packaged   held when the server's projection lists it, else open
+       legacy     an Omega Logic part: held by the omega-logic add-on;
+                  a module of tools: held when every tool it carries is
+                  open on the tier, part when some are, else ask;
+                  a module of editor capabilities alone (plan sets, site
+                  intelligence, the storefront): held on Enterprise, the
+                  legacy tier that carries every capability, else ask.
+     Answers 'held' | 'part' | 'ask' | 'open'. Showing a state is never
+     access: the tools and the editor check the same plan. */
+  function moduleTools(m, ctx) {
+    ctx = ctx || {};
+    var total = 0, open = 0;
+    ((m && m.tools) || []).forEach(function (k) {
+      if (ctx.tool && !ctx.tool(k)) return;
+      total++; if (ctx.canOpen && ctx.canOpen(k)) open++;
+    });
+    return { open: open, total: total };
+  }
+  function moduleState(m, ctx) {
+    ctx = ctx || {}; if (!m) return 'ask';
+    if (ctx.packaged) return has(ctx.modules, m.key) ? 'held' : 'open';
+    if (/^logic-/.test(m.key)) return holdsLogic(ctx, m.key) ? 'held' : 'ask';
+    var t = moduleTools(m, ctx);
+    if (!t.total) return (ctx.tierLevel >= 3) ? 'held' : 'ask';
+    return t.open === t.total ? 'held' : t.open ? 'part' : 'ask';
+  }
+  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, RING_MAX: RING_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceHub = API;
 })(typeof window !== 'undefined' ? window : null);

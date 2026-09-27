@@ -49,14 +49,19 @@ decided 2026-09-26.
   by `data-view` on the content and reached from the rail, the phone tabs,
   the hub or a hash; a "‹ Home" link and the Home tab come back. Nothing
   scrolls to a section any more; `check:workspace` asserts each view.
-- **Modules** (`#modules`) is the Ladder as a page of the workspace: one
-  card per module of the package view's catalog in shelf order, held ones
-  Live, bought-not-on ones named, the rest with the server's price
-  (`/api/package-catalog`, asked once) and + Add, which opens the ONE menu
-  (`omega-package-menu.js`) on that module; a change re-asks the server.
-  Change plan on the plan strip opens it for a packaged workspace; a legacy
-  plan (no packaged record) sees every module of the server's catalog Live
-  and nothing to add.
+- **Modules** (`#modules`) lists EVERY module of the catalog in shelf
+  order, for every workspace, marked by whether it is used or given
+  (Tommy, 2026-09-27). `OmegaWorkspaceHub.moduleState` is the ONE rule,
+  shared with the marketplace store and pinned by `tworkspacehub.js`: a
+  packaged workspace holds what its projection lists; a legacy one holds a
+  module when every tool it carries is open on its tier (Omega Logic by the
+  `omega-logic` add-on; a capabilities-only module on Enterprise), is
+  Partly on it with the count, else asks. A packaged workspace's prices
+  are `/api/package-catalog`'s (asked once) and + Add opens the ONE menu
+  (`omega-package-menu.js`) on that module; a legacy workspace's are the
+  public price list's (`/api/offerings`, asked once) and Ask is the store
+  on that module (`/marketplace.html#<module>`), where ClearSky is asked to
+  switch it on. Change plan on a packaged plan strip opens the page.
 - **View as a customer** (staff): `/workspace?viewas=lite` (a starter key
   or a comma list of module keys) paints the signed-in workspace as a
   packaged customer holding those modules, through the same server
