@@ -12,7 +12,7 @@ function record(key, name, shelf, tools, caps, ribbon, meter, requires) {
 var CATALOG = [
   record('lite', 'Lite', 'floor', 'editor sandbox sales intake opportunity financing signal',
     'design view export.blueprint',
-    'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
+    'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
   record('gridatlas', 'Grid Atlas', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
     'openComedPreQual OmegaSubstation.open'),
   record('storage', 'Storage Sizing & Revenue', 'standard', 'batterysizer proforma valuestack isocalc', 'storage',
@@ -138,7 +138,7 @@ var BLURBS = {
 };
 CATALOG.forEach(function (m) { m.features = FEATURES[m.key]; m.blurb = BLURBS[m.key] || ''; });
 /* Viewing/navigation survives an expired trial; producing commands do not. */
-var READ_ONLY_RIBBON = words('openProjectsModal rbNav rbTab omegaLoadMap toggleLayersPanel toggleCompassPanel toggleSitePanel toggleMeterPanel toggleDockLeft toggleDiagPanel opToggleCoords')
+var READ_ONLY_RIBBON = words('openProjectsModal rbNav rbTab omegaThemePick omegaLoadMap toggleLayersPanel toggleCompassPanel toggleSitePanel toggleMeterPanel toggleDockLeft toggleDiagPanel opToggleCoords')
   .concat(["openRpPanel('summary')", "rpTab('summary')"]);
 var STARTERS = {
   ev: ['lite', 'evrebates', 'estimate', 'gridatlas', 'plansets'],

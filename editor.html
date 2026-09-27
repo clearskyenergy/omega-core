@@ -2375,8 +2375,33 @@ window.onerror = function(msg, src, line, col, err) {
       </div>
       <div class="rpanel-cap">AI Tokens</div>
     </div>
+    <div class="rpanel" id="rp-appearance">
+      <div class="rpanel-body">
+        <button class="rbtn" type="button" data-theme-pick="light" onclick="omegaThemePick('light')" title="Light chrome: white top, grey ground, easier in a bright room"><span class="rb-ico">&#9788;</span><span class="rb-lbl">Light</span></button>
+        <button class="rbtn" type="button" data-theme-pick="dark" onclick="omegaThemePick('dark')" title="Dark chrome (graphite)"><span class="rb-ico">&#9790;</span><span class="rb-lbl">Dark</span></button>
+        <button class="rbtn" type="button" data-theme-pick="auto" onclick="omegaThemePick('auto')" title="Follow the operating system's colour scheme"><span class="rb-ico">&#9680;</span><span class="rb-lbl">Auto</span></button>
+      </div>
+      <div class="rpanel-cap">Appearance</div>
+    </div>
   </div>
 </div>
+<script>
+/* Appearance (Settings tab, 2026-09-27): Light / Dark / Auto. OmegaUI.theme()
+   (the command palette's own switch, further down) pins data-omega-theme on
+   <html> and remembers it in localStorage 'omega.ui.theme'; this only calls
+   it and marks the choice in force. */
+function omegaThemeMark(){
+  var t = 'auto';
+  try{ t = localStorage.getItem('omega.ui.theme') || 'auto'; }catch(e){}
+  var bs = document.querySelectorAll('[data-theme-pick]');
+  for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('on', bs[i].getAttribute('data-theme-pick') === t);
+}
+function omegaThemePick(name){
+  try{ if (window.OmegaUI && OmegaUI.theme) OmegaUI.theme(name); else { if (name === 'auto') document.documentElement.removeAttribute('data-omega-theme'); else document.documentElement.setAttribute('data-omega-theme', name); localStorage.setItem('omega.ui.theme', name); } }catch(e){}
+  omegaThemeMark();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', omegaThemeMark); else omegaThemeMark();
+</script>
 
 <script>
 /* ---- AutoCAD-style ribbon controller (ES5-safe, v4.26 Phase-4) ------
@@ -104755,6 +104780,11 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
   --th:32px; --ribbon-h:78px;
   --radius-sm:2px; --radius-md:4px;
   --ink:#14171A;
+
+  /* -- ribbon buttons (2026-09-27): a face, an edge and a label colour, so
+        the light chrome can give each button a visible face on the white
+        ribbon and its label full ink; the dark chrome keeps the flat look */
+  --rbtn-face:transparent; --rbtn-edge:transparent; --rbtn-label:var(--sub);
 }
 
 /* ---------------------------------------------------------------------- *
@@ -104767,9 +104797,9 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
  * ---------------------------------------------------------------------- */
 @media (prefers-color-scheme: light){
   html:not([data-omega-theme="dark"]){
-    --navy:#FFFFFF; --blue:#E6EEF9; --bg:#F5F4F0; --panel:#FFFFFF;
-    --surface:#EEF1F3; --border:#D7DFE6; --text:#16202B; --sub:#526273;
-    --icon:#526273;
+    --navy:#FFFFFF; --blue:#E6EEF9; --bg:#E9ECEF; --panel:#FFFFFF;
+    --surface:#EEF1F3; --border:#CBD3DB; --text:#16202B; --sub:#4A5B6C;
+    --icon:#2C3E50;
     --accent:#2B5FA8; --accent-2:#33629F; --on-accent:#FFFFFF;
     --sky:#2B5FA8; --hl:#2B5FA8; --hl-dim:#E6EEF9;
     --green:#2E7D4F; --amber:#9A6B00; --red:#B3382E; --purple:#5E57A8;
@@ -104785,12 +104815,13 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
     --gb-green:#2E7D4F; --gb-amber:#9A6B00;
     --gb-card:#FFFFFF; --gb-head1:#EEF1F3; --gb-head2:#F5F4F0; --gb-line:#D7DFE6;
     --gb-ink:#16202B; --gb-sub:#526273;
+    --rbtn-face:#F3F5F7; --rbtn-edge:#DCE2E8; --rbtn-label:#16202B; --rbtn-hover:#E6EEF9;
   }
 }
 html[data-omega-theme="light"]{
-  --navy:#FFFFFF; --blue:#E6EEF9; --bg:#F5F4F0; --panel:#FFFFFF;
-  --surface:#EEF1F3; --border:#D7DFE6; --text:#16202B; --sub:#526273;
-  --icon:#526273;
+  --navy:#FFFFFF; --blue:#E6EEF9; --bg:#E9ECEF; --panel:#FFFFFF;
+  --surface:#EEF1F3; --border:#CBD3DB; --text:#16202B; --sub:#4A5B6C;
+  --icon:#2C3E50;
   --accent:#2B5FA8; --accent-2:#33629F; --on-accent:#FFFFFF;
   --sky:#2B5FA8; --hl:#2B5FA8; --hl-dim:#E6EEF9;
   --green:#2E7D4F; --amber:#9A6B00; --red:#B3382E; --purple:#5E57A8;
@@ -104806,7 +104837,10 @@ html[data-omega-theme="light"]{
   --gb-green:#2E7D4F; --gb-amber:#9A6B00;
   --gb-card:#FFFFFF; --gb-head1:#EEF1F3; --gb-head2:#F5F4F0; --gb-line:#D7DFE6;
   --gb-ink:#16202B; --gb-sub:#526273;
+  --rbtn-face:#F3F5F7; --rbtn-edge:#DCE2E8; --rbtn-label:#16202B; --rbtn-hover:#E6EEF9;
 }
+/* the Appearance picker on the Settings tab marks the theme in force */
+.rbtn[data-theme-pick].on{ background:var(--hl-dim); border-color:var(--hl); box-shadow:inset 0 -2px 0 var(--accent); }
 
 
 /* Accent variants. Placed AFTER the light blocks so a chosen accent wins
@@ -104876,15 +104910,16 @@ body{ -webkit-font-smoothing:antialiased; }
 .rbtn{
   min-width:48px; max-width:66px; padding:5px 5px 3px; gap:3px;
   border-radius:var(--radius-md);
+  background:var(--rbtn-face); border-color:var(--rbtn-edge);
 }
-.rbtn:hover{ background:var(--hover); border-color:var(--border); }
+.rbtn:hover{ background:var(--rbtn-hover, var(--hover)); border-color:var(--border); }
 .rbtn:active{ background:var(--inset); }
 .rbtn.active-tool{
   background:var(--hl-dim); border-color:var(--hl);
   box-shadow:inset 0 -2px 0 var(--accent);
 }
 .rbtn .rb-ico{ font-size:16px; height:18px; color:var(--icon); }
-.rbtn .rb-lbl{ font-size:9px; line-height:1.15; color:var(--sub); }
+.rbtn .rb-lbl{ font-size:9px; line-height:1.15; color:var(--rbtn-label); }
 .rbtn:hover .rb-lbl,.rbtn.active-tool .rb-lbl{ color:var(--text); }
 
 /* THE NEON KILLER.

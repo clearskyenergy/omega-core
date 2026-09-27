@@ -47,7 +47,7 @@ var OFFERINGS = require('../api/offerings'), BOOK = require('../api/_lib/pricebo
 var DOUBLE_SRC = FD.source();
 var HOST = '127.0.0.1';
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.pdf': 'application/pdf' };
-var apiCalls = [], missing = [], external = [], PACKAGE_VIEW = null;
+var apiCalls = [], missing = [], external = [], PACKAGE_VIEW = null, CURRENT_FX = null;
 /* THE PACKAGE STORE'S ROUTES. The price list is the real one
    (api/_lib/subscription-pricing on the proposed book, as the packaging
    render checks answer it). plan-change is answered in the SHAPES the real
@@ -58,7 +58,10 @@ var STORE = { posts: [], pending: [] };
 function storeRoute(u, method, body) {
   var B = require('../api/_lib/pricebook'), P = require('../api/_lib/subscription-pricing'), book = B.proposed();
   if (u === '/api/package-catalog') return { orgId: 'litelabs.example', pricebookVersion: book.version, modules: P.catalog(book), starters: M.starters(), canManage: true };
-  if (method === 'GET') return { orgId: 'litelabs.example', packaged: true, packagingState: 'paid', plan: 'lite', planDisplay: 'Lite', modules: ['lite'], subscription: ['lite'], interval: 'monthly', billingDay: 20, nextInvoiceOn: '2026-10-20', monthlyDisplay: '$149/month', gate: { canApply: true }, pending: STORE.pending, removalRequests: [], recent: [] };
+  if (method === 'GET' && !PACKAGE_VIEW && CURRENT_FX) { var lb = (CURRENT_FX.docs['omega_orgs/' + CURRENT_FX.org + '/billing/current'] || {}); return { orgId: CURRENT_FX.org, packaged: false, packagingState: null, plan: null, planDisplay: null, modules: ['lite'], subscription: ['lite'], moduleNames: ['Lite'], subscriptionNames: ['Lite'], interval: 'monthly', billingDay: null, nextInvoiceOn: null, monthlyDisplay: null, accessUntil: null, paidThrough: null, amountDue: lb.amountDue == null ? null : lb.amountDue, paymentLink: null, invoices: [], gate: { canApply: false, reason: 'This workspace is not on a subscription package.' }, pending: [], removalRequests: [], recent: [] }; }
+  if (method === 'GET') return { orgId: 'litelabs.example', packaged: true, packagingState: 'paid', plan: 'lite', planDisplay: 'Lite', modules: ['lite'], subscription: ['lite'], moduleNames: ['Lite'], subscriptionNames: ['Lite'], paidThrough: '2026-10-20', accessUntil: null, amountDue: null,
+    invoices: [{ id: '2026-09-20', kind: 'subscription', state: 'paid', date: '2026-09-20', period: { start: '2026-09-20', end: '2026-10-20' }, totalCents: 50000, display: '$500', paymentLink: null, names: null, paidAt: '2026-09-21' }].concat(STORE.pending.map(function (x) { return { id: x.id, kind: 'change', state: 'unpaid', date: '2026-09-27', period: null, totalCents: 20000, display: x.display, paymentLink: x.paymentLink, names: (x.add || []).map(function (k) { return M.get(k).name; }), paidAt: null }; })),
+    interval: 'monthly', billingDay: 20, nextInvoiceOn: '2026-10-20', monthlyDisplay: '$149/month', gate: { canApply: true }, pending: STORE.pending, removalRequests: [], recent: [] };
   STORE.posts.push(body);
   if (body.action === 'quote') return { orgId: 'litelabs.example', previewId: 'a'.repeat(48), effectiveAt: Date.now(), add: body.add, addNames: body.add.map(function (k) { return M.get(k).name; }), modules: ['lite'].concat(body.add), plan: 'lite', included: false, canApply: true, reason: null, pending: [], steer: null, serviceFeeNote: null,
     display: { today: 'Pay $200 today (prorated to Oct 20)', then: 'Then $250/month more from Oct 20', activation: 'Switches on when the payment clears' } };
@@ -86,6 +89,10 @@ var srv = http.createServer(function (req, res) {
         pv.canPreview = true; pv.preview = true; pv.starters = M.starters(); json(pv);
       }); return;
     }
+    if (u === '/api/stripe-invoices' && post) return json({ connected: true, orgId: CURRENT_FX && CURRENT_FX.org, invoices: [
+      { id: 'in_2', number: 'NS-0002', status: 'paid', amountDue: 1250, created: Date.now() - 10 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_2', pdfUrl: null },
+      { id: 'in_1', number: 'NS-0001', status: 'paid', amountDue: 1250, created: Date.now() - 40 * 86400e3, hostedUrl: 'https://invoice.stripe.com/i/test_1', pdfUrl: null } ] });
+    if (u === '/api/stripe-portal' && post) return json({ url: 'https://billing.stripe.com/p/session/test_northstar' });
     if (u === '/api/package-catalog' || u === '/api/plan-change') {
       var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {} json(storeRoute(u, req.method, body)); }); return;
     }
@@ -107,7 +114,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   var browser = await chromium.launch({ executablePath: CHROME });
 
   async function scenario(name, fx, opts) {
-    opts = opts || {}; PACKAGE_VIEW = fx.packageView || null;
+    opts = opts || {}; PACKAGE_VIEW = fx.packageView || null; CURRENT_FX = fx;
     var errs = [], muted = false, ctx = await browser.newContext({ viewport: opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!opts.phone, isMobile: !!opts.phone });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) {
       var url = r.request().url();
@@ -142,8 +149,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     }
     if (opts.after) { await p.setViewportSize(opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }); await wait(250); Object.assign(out, await opts.after(p, ctx, function () { muted = true; })); }
     out.writes = await p.evaluate(function () { return (window.__firebaseDouble ? window.__firebaseDouble.store.log : []).map(function (w) { return w.op + ' ' + w.path; }); }).catch(function () { return ['(page navigated away)']; });
-    var strayW = out.writes.filter(function (x) { return !/^(set|update|add) (team_members\/|termsAcceptances\/|dashboard_layouts\/|team_messages\/|omega_orgs\/[^/]+\/members\/)/.test(x) && x !== '(page navigated away)'; });
-    ok(name + ': a visit writes only presence, acceptance, the person\'s own layout, a posted message or self-registration', !strayW.length, strayW);
+    var strayW = out.writes.filter(function (x) { return !/^(set|update|add) (team_members\/|termsAcceptances\/|dashboard_layouts\/|team_messages\/|projects\/|omega_orgs\/[^/]+\/members\/)/.test(x) && x !== '(page navigated away)'; });
+    ok(name + ': a visit writes only presence, acceptance, the person\'s own layout, a posted message, an assignment or self-registration', !strayW.length, strayW);
     ok(name + ': no uncaught or console errors', !errs.length, errs);
     console.log(JSON.stringify(out));
     await ctx.close();
@@ -253,13 +260,26 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var legacyOut = await p.locator('#omega-package-menu').textContent();
     ok('northstar: legacy opt-out discloses existing billing and makes an email request without pretending to cancel', /billed outside the package engine/.test(legacyOut) && /does not change access, cancel charges or issue a refund/.test(legacyOut) && /^mailto:/.test(await p.locator('#omega-package-menu a').getAttribute('href')));
     await p.keyboard.press('Escape');
-    var cards = await p.$$eval('#flight-body .pc', function (r) { return r.map(function (x) { return x.querySelector('b').textContent; }); });
-    ok('northstar: In flight lists the four projects', cards.length === 4, cards);
+    await p.evaluate(function () { window.location.hash = ''; }); await wait(250);
+    var cards = await p.$$eval('#flight-body .pc', function (r) { return r.map(function (x) { return x.querySelector('b').textContent + '|' + (x.querySelector('.why') ? x.querySelector('.why').textContent : '') + '|' + (x.querySelector('.who .nm') ? x.querySelector('.who .nm').textContent : '') + '|' + (x.querySelector('.fin') ? x.querySelector('.fin').textContent : ''); }); });
+    ok('northstar: In flight is the board: the three projects with a next action (Maple carrying its deal in review at ClearSky), then Quarry Road untouched and unassigned; Old Mill, online, is off it',
+      cards.length === 4 && cards.slice(0, 3).every(function (c) { return /\|Next: Review\|/.test(c) || /in review for 9 days\|/.test(c); }) && /^Maple Yard Storage\|.*\|Finance marketplace · In review at ClearSky$/.test(cards.filter(function (c) { return /^Maple/.test(c); })[0]) && /^Quarry Road\|No battery size yet\|Unassigned\|$/.test(cards[3]), cards);
+    var cardFace = await p.evaluate(function () { var c = document.querySelector('#flight-body .pc'), cs = getComputedStyle(c), pill = document.querySelector('#flight-body .pc[data-proj="p-quarry"] .who .ows-pill'), ps = getComputedStyle(pill); return { bg: cs.backgroundColor, border: cs.borderTopWidth, pillBg: ps.backgroundColor, pillBorder: ps.borderTopWidth, pillText: pill.textContent }; });
+    ok('northstar: a project card has a ground and a border, and its Assign pill is a visible button (the shell reset no longer strips them)', cardFace.bg !== 'rgba(0, 0, 0, 0)' && cardFace.border !== '0px' && cardFace.pillBg !== 'rgba(0, 0, 0, 0)' && cardFace.pillBorder !== '0px', cardFace);
+    /* Assign: Quarry Road to Raj, one merge on the project, the card follows */
+    await p.click('#flight-body .pc[data-proj="p-quarry"] [data-assign]'); await wait(250);
+    var assignRows = await p.$$eval('.ows-drawer .ows-row', function (r) { return r.map(function (x) { return x.querySelector('b').textContent; }); });
+    ok('northstar: Assign lists the workspace\'s people', assignRows.length === 2 && /Ann Lee \(you\)/.test(assignRows.join('|')) && /Raj Patel/.test(assignRows.join('|')), assignRows);
+    await p.click('.ows-drawer .ows-row[data-row="to:raj@northstar.example"]'); await wait(400);
+    var assigned = await p.evaluate(function () { var w = window.__firebaseDouble.store.log.filter(function (x) { return /^projects\//.test(x.path); }); var c = document.querySelector('#flight-body .pc[data-proj="p-quarry"] .who .nm'); return { writes: w.map(function (x) { return x.op + ' ' + x.path + ' ' + Object.keys(x.data).sort().join(','); }), card: c ? c.textContent : '' }; });
+    ok('northstar: assigning writes one merge of the owner fields onto the project and the card names Raj', assigned.writes.length === 1 && /^set projects\/p-quarry assignedAt,assignedBy,ownerEmail,ownerName,updatedAt$/.test(assigned.writes[0]) && assigned.card === 'Raj Patel', assigned);
     var kpi = await p.$$eval('#today .kpi .v', function (r) { return r.map(function (x) { return x.textContent; }); });
     var labels = await p.$$eval('#today .kpi', function (r) { return r.map(function (x) { return x.querySelector('.l').textContent + '=' + x.querySelector('.v').textContent + (x.querySelector('.d') ? ' (' + x.querySelector('.d').textContent + ')' : ''); }); });
     ok('northstar: the numbers are 3 in flight (package through construction), the pipeline capex with the online site apart, and 1 quote back of 2 sent', kpi[0] === '3' && /\$\d/.test(kpi[2]) && /online/.test(labels[2]) && labels[3] === 'Quotes back=1 (of 2 sent)', labels);
     var needs = await p.$$eval('#today .next .row', function (r) { return r.map(function (x) { return x.getAttribute('data-key').split(':')[0] + ':' + x.querySelector('b').textContent; }); });
-    ok('northstar: Needs you leads with the vendor who answered Riverside (a decision waiting), then Ann\'s to-do due in three days, then the projects with a next action', /^quotes:1 vendor answered your Riverside BESS request/.test(needs[0]) && /^todo:Send the Riverside one-line/.test(needs[1]) && needs.slice(2).every(function (x) { return /^next:/.test(x); }), needs);
+    ok('northstar: Needs you leads with the vendor who answered Riverside (a decision waiting), then Ann\'s to-do due in three days, then the projects with a next action, then the deal in review at ClearSky for nine days', /^quotes:1 vendor answered your Riverside BESS request/.test(needs[0]) && /^todo:Send the Riverside one-line/.test(needs[1]) && needs.slice(2, 5).every(function (n) { return /^next:/.test(n); }) && /^review:Maple Yard Storage has been in review for 9 days/.test(needs[5]), needs);
+    var rowAct = await p.evaluate(function () { var r = document.querySelector('#today .next .row[data-key^="review:"]'); return { cursor: getComputedStyle(r).cursor, pill: r.querySelector('a.ows-pill, button.ows-pill') ? getComputedStyle(r.querySelector('a.ows-pill, button.ows-pill')).backgroundColor : '' }; });
+    ok('northstar: a Needs-you row is a target (pointer) and its pill is painted', rowAct.cursor === 'pointer' && rowAct.pill !== 'rgba(0, 0, 0, 0)', rowAct);
     out.needs = needs;
     var people = await p.evaluate(function () { var panels = document.querySelectorAll('#around .panel'); for (var i = 0; i < panels.length; i++) { var h = panels[i].querySelector('h3'); if (h && h.textContent === 'People') return panels[i].querySelectorAll('.people .pr').length; } return 0; });
     var feed = await p.$eval('#feed', function (e) { return e.textContent; });
@@ -285,11 +305,19 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var why = await p.$eval('.ows-drawer', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });
     ok('northstar: a locked tile says which plan carries it and offers the Marketplace', /Enterprise/.test(why) && /Marketplace/.test(why), why.slice(0, 160));
     await p.keyboard.press('Escape'); await wait(150);
-    /* Plan & billing from the rail */
-    await p.click('#side-nav .sn-item[data-key="billing"]'); await wait(250);
-    var bill = await p.$eval('.ows-drawer', function (e) { return e.textContent.replace(/\s+/g, ' '); }).catch(function () { return ''; });
-    ok('northstar: Plan & billing shows the plan and the next payment', /Plan/.test(bill) && /Next payment/.test(bill), bill.slice(0, 160));
-    await p.keyboard.press('Escape'); await wait(150);
+    /* Plan & billing from the rail: a page with the subscription, what is owed and when, the card, the history */
+    await p.click('#side-nav .sn-item[data-key="billing"]'); await wait(600);
+    await p.waitForFunction(function () { return /NS-0001/.test((document.getElementById('billing-body') || {}).textContent || ''); }, null, { timeout: 4000 }).catch(function () {});
+    var bill = await p.evaluate(function () { var v = document.getElementById('content').getAttribute('data-view'), t = document.getElementById('billing-body').textContent.replace(/\s+/g, ' '); return { view: v, text: t, cards: Array.prototype.map.call(document.querySelectorAll('#billing-body .bcard h3'), function (h) { return h.firstChild.textContent; }), portal: !!document.getElementById('bill-portal'), stripeLinks: document.querySelectorAll('#bill-hist a[href^="https://invoice.stripe.com/"]').length, cardInputs: document.querySelectorAll('#billing-body input').length }; });
+    ok('northstar: Plan & billing is a page: the subscription, what you owe, the payment method and the history', bill.view === 'billing' && bill.cards.join('|') === 'Your subscription|What you owe|Payment method|Billing history', bill.cards);
+    ok('northstar: a Stripe-billed plan says the card lives with Stripe, offers the portal, and says nothing is owed with the next payment date', bill.portal && /Stripe/.test(bill.text) && /nothing is owed/.test(bill.text) && /Next invoice/.test(bill.text) && /Standard/.test(bill.text), bill.text.slice(0, 300));
+    ok('northstar: the billing history lists what Stripe billed, each with its invoice page', /NS-0002/.test(bill.text) && /NS-0001/.test(bill.text) && bill.stripeLinks === 2, { links: bill.stripeLinks, text: bill.text.slice(-200) });
+    /* the portal: an owner opens Stripe's own page in a new tab; no card field is ever on this page */
+    await p.evaluate(function () { window.__opened = []; window.open = function (u) { window.__opened.push(String(u)); return null; }; });
+    await p.click('#bill-portal'); await wait(400);
+    var opened = await p.evaluate(function () { return window.__opened; });
+    ok('northstar: Manage card and autopay opens the Stripe portal (Stripe\'s own page) in a new tab, and the page itself has no card field', opened.length === 1 && /^https:\/\/billing\.stripe\.com\//.test(opened[0]) && bill.cardInputs === 0, { opened: opened, inputs: bill.cardInputs });
+    await p.evaluate(function () { window.location.hash = ''; }); await wait(200);
     /* post a message */
     await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
     ok('northstar: #team opens Around you as its own page', await p.evaluate(function () { return document.getElementById('content').getAttribute('data-view') === 'team' && getComputedStyle(document.getElementById('team')).display !== 'none'; }));
@@ -355,6 +383,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   /* ══ 5. LITE LABS — packaged, Lite alone ══ */
   var lt = FX.lite(HOST);
   await scenario('lite', lt, { steps: async function (p) {
+    await p.evaluate(function () { window.location.hash = '#billing'; });
+    await p.waitForFunction(function () { return /2026-09-20/.test((document.getElementById('bill-hist') || {}).textContent || ''); }, null, { timeout: 5000 }).catch(function () {});
+    var lb = await p.evaluate(function () { var t = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; return { sub: t('bill-sub'), owe: t('bill-owe'), card: t('bill-card'), hist: t('bill-hist'), inputs: document.querySelectorAll('#billing-body input').length, paid: !!document.getElementById('bill-paid') }; });
+    ok('lite: Plan & billing shows the package (Lite, $149 a month, billed on the 20th), nothing owed with the next invoice, the card on QuickBooks\' own page, the paid invoice, and no card field', /Lite/.test(lb.sub) && /\$149/.test(lb.sub) && /20th/.test(lb.sub) && /nothing is owed/.test(lb.owe) && /Next invoice/.test(lb.owe) && lb.paid && /QuickBooks Payments/.test(lb.card) && /Save this card/.test(lb.card) && /2026-09-20/.test(lb.hist) && /\$500/.test(lb.hist) && lb.inputs === 0, lb);
+    await p.evaluate(function () { window.location.hash = ''; }); await wait(300);
     var out = await common(p, lt, 'lite');
     var tiles = await p.$$eval('#tools-body .tool', function (r) { return r.map(function (x) { return { tool: x.getAttribute('data-tool'), locked: x.classList.contains('locked'), soon: x.classList.contains('soon') }; }); });
     var wrong = tiles.filter(function (t) { return !t.soon && (lt.liteTools.indexOf(t.tool) >= 0) === t.locked; });

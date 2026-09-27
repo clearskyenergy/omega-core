@@ -39,7 +39,7 @@ var server = http.createServer(async function (req, res) {
     if (url.pathname === '/api/tenant-systems') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ name: 'Clean Cell · fixture', surfaces: [] })); }
     if (url.pathname === '/config.js') return res.end('window.CLEARSKY_CONFIG={firebase:{}};');
     if (['/omega-brand.js', '/omega-tenant.js', '/omega-whitelabel.js'].includes(url.pathname)) return res.end('');
-    if (!['/admin/tenant.html', '/start.html', '/offerings.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
+    if (!['/admin/tenant.html', '/start.html', '/offerings.html', '/admin/package-panel.js', '/admin/package-panel.css', '/omega-package-menu.js', '/omega-billing-profile.js', '/omega-usage.js', '/ev-closeout.html', '/omega-tools.js', '/omega-workspace-hub.js'].includes(url.pathname)) { res.statusCode = 404; return res.end(); }
     res.setHeader('Content-Type', url.pathname.endsWith('.css') ? 'text/css' : url.pathname.endsWith('.js') ? 'text/javascript' : 'text/html'); res.end(fs.readFileSync(path.join(root, url.pathname)));
   } catch (e) { res.statusCode = e.status || 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: e.message })); }
 });
@@ -95,6 +95,25 @@ async function run() {
       check(db.data.get('omega_orgs/' + org + '/billing/current').interval === 'annual', 'reviewed annual activation persisted'); check(invoices === 0, 'no invoice before trial end');
       check(errors.length === 0, errors.join('\n')); await context.close();
     }
+    /* A LEGACY tenant (a tier billed through Stripe, no package yet) opens on
+       what it holds and pays today (Tommy, 2026-09-27: "it should have selected
+       what they have … what they are paying for and subscribed for"): the
+       modules its tier opens — the same rule the tenant's Modules page shows as
+       Live — plus its opt-in request, and the strip says so. */
+    seed(['lite']);
+    db.seed('omega_orgs/' + org, { name: 'Clean Cell · fixture', status: 'active', domains: ['fixture.example'] });
+    db.seed('omega_orgs/' + org + '/billing/current', { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'stripe', amountDue: 0, subscriptionDue: '2026-10-17T00:00:00Z', lastPaidAt: '2026-09-17T00:00:00Z',
+      optIns: { siteintel: { key: 'siteintel', name: 'Site Intelligence', monthlyCents: 50000, display: '$500/month', requestedBy: 'owner@fixture.example', requestedAt: '2026-09-27T12:00:00Z', status: 'requested' } } });
+    var legacyContext = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(legacyContext, base);
+    var lp = await legacyContext.newPage(), legacyErrors = []; lp.on('pageerror', function (e) { legacyErrors.push(e.message); });
+    await lp.goto(base + '/admin/tenant.html?org=' + org); await lp.locator('#pp-standing').waitFor();
+    var standing = (await lp.locator('#pp-standing').textContent()).replace(/\s+/g, ' ');
+    check(/Today: Standard tier/.test(standing) && /Holds Lite, Grid Atlas, Storage Sizing & Revenue, Compute & Data Center/.test(standing) && /Pays \$0 due · next 2026-10-17 · last paid 2026-09-17 · by stripe/.test(standing) && /Requested: Site Intelligence \(\$500\/month\) 2026-09-27 by owner@fixture\.example/.test(standing), 'the legacy standing names the tier, what it holds, what it pays and the request: ' + standing);
+    var picked = await lp.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('[data-pp-pane="pkg"] [data-module-card]'), function (c) { var i = c.querySelector('input'); return i && i.checked; }).map(function (c) { return c.getAttribute('data-module-card'); }).sort(); });
+    check(picked.join() === 'compute,gridatlas,lite,siteintel,storage', 'the picker starts from what the tier holds plus the request: ' + picked.join());
+    await lp.locator('#pp-review:not([disabled])').waitFor();
+    check(/\$/.test(await lp.locator('#pp-monthly').textContent()), 'the rail prices the preselection on the server');
+    await capture(lp, 'legacy-standing'); check(legacyErrors.length === 0, legacyErrors.join('\n')); await legacyContext.close();
     seed(['lite'], false); var tenantContext = await browser.newContext(); await init(tenantContext, base); var tenantPage = await tenantContext.newPage(); await tenantPage.goto(base + '/admin/tenant.html?org=' + org); await tenantPage.locator('[data-pp-tab="cust"]').waitFor();
     check(await tenantPage.locator('[data-pp-tab]').count() === 2, 'tenant admin only sees plan and history'); check(await tenantPage.locator('#pp-apply').count() === 0, 'tenant cannot activate'); await tenantContext.close();
     for (var width of [1024, 768]) {

@@ -1,7 +1,9 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
  * A tenant's owner or administrator changes their own package: quote,
  * subscribe (pay first), cancel a pending change, request a removal.
- * Members are refused; ClearSky staff may act for a tenant. Sandbox only.
+ * Members are refused a change and may read the summary; ClearSky staff may
+ * act for a tenant. `opt-in` records a priced request on a plan billed
+ * outside the engine (nothing charged). Sandbox only.
  */
 'use strict';
 var A = require('./_lib/admin'), C = require('./_lib/plan-change');
@@ -14,7 +16,10 @@ module.exports = A.handler(async function (req, res) {
   if (!caller.staff) {
     if (!caller.claims || caller.claims.email_verified !== true) throw A.httpError(403, 'Verified email required');
     if (orgId !== caller.orgId) throw A.httpError(403, 'Own organization required');
-    if (!(await A.isTenantAdmin(caller, orgId))) throw A.httpError(403, 'Ask your workspace administrator to change the plan');
+    /* the summary (GET) is the workspace's own billing, which every verified
+       member of the org may read (the rules let a member read billing/current;
+       Plan & billing shows it); a CHANGE stays with an owner or administrator */
+    if (req.method !== 'GET' && !(await A.isTenantAdmin(caller, orgId))) throw A.httpError(403, 'Ask your workspace administrator to change the plan');
   }
   if (req.method === 'GET') return C.summary(A.db(), orgId);
   var fields = ['orgId', 'action', 'add', 'plan', 'previewId', 'effectiveAt', 'changeId', 'remove', 'reason', 'meter', 'enabled', 'dryRun'];
@@ -30,6 +35,7 @@ module.exports = A.handler(async function (req, res) {
     case 'pack-buy': return C.packBuy(A.db(), orgId, input, caller, now);
     case 'auto-topup': return C.autoTopup(A.db(), orgId, input.enabled, caller, now);
     case 'reconcile-now': return C.reconcileNow(A.db(), orgId, caller, now);
-    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy, auto-topup or reconcile-now');
+    case 'opt-in': return C.optIn(A.db(), orgId, input, caller, now);
+    default: throw A.httpError(400, 'Action must be quote, apply, cancel, request-removal, withdraw-removal, pack-quote, pack-buy, auto-topup, reconcile-now or opt-in');
   }
 });

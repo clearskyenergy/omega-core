@@ -52,6 +52,8 @@ var COLOUR = function () {
 var count = 0;
 function ok(v, label) { assert(v, label); count++; }
 var PANELS = [
+  /* the ribbon itself (2026-09-27): in light it sits on the grey ground with each button's label in ink */
+  { name: 'ribbon', panel: '#ribbon', open: function () {}, text: '#ribbon .ribbon-page.active .rb-lbl, #ribbon .ribbon-page.active .rpanel-cap, #ribbon .ribbon-page.active .rsbtn' },
   { name: 'file-menu', panel: '#app-menu', open: function () { var m = document.getElementById('app-menu'); m.classList.add('open'); m.style.display = 'block'; }, text: '#app-menu .menu-item' },
   { name: 'left-panel', panel: '#lp', open: function () { var p = document.getElementById('lp'); p.classList.add('lp-open'); p.style.transition = 'none'; p.style.display = 'flex'; p.style.transform = 'none'; p.style.opacity = '1'; }, text: '#lp .sec-h, #lp label, #lp .lbl, #lp h3, #lp div' },
   { name: 'right-panel', panel: '#rp', open: function () { var p = document.getElementById('rp'); p.classList.add('rp-open'); p.style.transition = 'none'; p.style.display = 'flex'; p.style.transform = 'none'; p.style.opacity = '1'; }, text: '#rp .sec-h, #rp label, #rp h3, #rp div' },
@@ -72,6 +74,9 @@ async function run() {
       /* the token set answers the scheme */
       var panelBg = await page.evaluate(function () { return getComputedStyle(document.documentElement).getPropertyValue('--panel').trim(); });
       ok(scheme === 'light' ? /^#FFFFFF$/i.test(panelBg) : /^#25282B$/i.test(panelBg), scheme + ': --panel is ' + panelBg);
+      /* the title bar stays white in light while the ground under it is grey; a ribbon button has a face */
+      var top = await page.evaluate(function () { var tb = getComputedStyle(document.getElementById('tb')).backgroundColor, bg = getComputedStyle(document.body).backgroundColor, rb = document.querySelector('#ribbon .ribbon-page.active .rbtn'); return { tb: tb, body: bg, face: rb ? getComputedStyle(rb).backgroundColor : '' }; });
+      ok(scheme === 'light' ? (top.tb === 'rgb(255, 255, 255)' && top.body === 'rgb(233, 236, 239)' && top.face !== 'rgba(0, 0, 0, 0)') : (top.body === 'rgb(44, 47, 51)'), scheme + ': title bar ' + top.tb + ', ground ' + top.body + ', button face ' + top.face);
       for (var p of PANELS) {
         await page.evaluate(function (fn) { (new Function('return (' + fn + ')'))()(); }, p.open.toString());
         var r = await page.evaluate(function (spec) {

@@ -715,7 +715,20 @@ the most recent rows, never a name. The Modules page lists every module
 for every workspace (`OmegaWorkspaceHub.moduleState`, the ONE held/partly/
 ask rule shared with the store); a module not held carries Opt in: the one
 menu and a QuickBooks invoice for a packaged workspace, the request that
-moves a legacy one onto a package. Optional held modules offer **Opt out** through the
+moves a legacy one onto a package (`plan-change` `opt-in`: priced from the
+book, recorded on `billing/current.optIns` with history and audit, ClearSky
+mailed; the admin Package tab opens preselected on what the tenant holds
+plus that request; nothing is charged). In flight is
+`OmegaWorkspaceToday.board` (what needs something, then what was touched
+last, never online, a finance-marketplace deal riding on its project) and
+Assign merges only the owner fields onto `projects/{id}`. Plan & billing
+is a page (`#billing`): subscription, what is owed and when, the payment
+method (the Stripe portal or QuickBooks' own payment page; a card is never
+entered on our pages) and the history; `GET /api/plan-change` is readable
+by any verified member, changes stay with an owner or admin. The shell's
+button reset is `:where()` (zero specificity) so a styled button keeps its
+face, and `omega-splash.js` hears link clicks last, so a link the page
+handles itself never raises the mark. Optional held modules offer **Opt out** through the
 same shared menu. Packaged opt-outs preview the server's dependency set,
 then queue for the existing quarterly review (no immediate access, charge
 or refund change); Keep module withdraws the request. Lite is mandatory.

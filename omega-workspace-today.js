@@ -16,6 +16,10 @@
                      recipients[] (vendorOrgId, status sent|quoted|accepted|rejected)
      rfqsReceived[]  recipients where vendorOrgId is this org (status, projectName)
      referrals[]     referrals where toOrgId is this org (status new|reviewing|…)
+     finance[]       fin_projects this person sent to the finance marketplace
+                     (status draft|review|open|exclusive|awarded|closed,
+                     sourceProjectId, firstLookUntil, room{state}, updatedAt,
+                     offers[] each {status submitted|accepted|declined|withdrawn})
      canOpen(toolKey)
 
    A row is { key, cls (hot|warn|good|''), score, t, s, cta, href?, act? }.
@@ -29,15 +33,31 @@
       74 new quote requests in the referral inbox
       72 vendors answered MY request (compare, accept, reveal)
       70 a to-do of mine due within 3 days      60 any other open to-do of mine
+      75 offers on a deal I sent to the finance marketplace, waiting for me
       58 a project carrying a nextAction
+      56 a deal in ClearSky's review for over a week (follow up)
       55 a project whose site package is complete (ready to submit)
+      54 a deal awarded on the marketplace whose room is not done
       50 a project in flight that has not moved in 14 days
-      45 a candidate with no battery size, when Battery Sizer is open
+      47 a draft on the finance marketplace, never published
+      45 candidates with no battery size, when Battery Sizer is open (ONE row)
+      42 a deal open on the marketplace with no offer in 10 days
       40 a request I sent that nobody has answered in 5 days
 
    Six rows at most, highest first, ties by the older record first; `more`
    says how many were left off. Nothing here is a permission: every address
-   leads to a page that checks for itself. ES5. */
+   leads to a page that checks for itself.
+
+     OmegaWorkspaceToday.board(input) → [≤ max cards]
+
+   The In flight board (Tommy, 2026-09-27: "a combo of anything that was
+   done last, any undone projects, or anything we have sent to the finance
+   marketplace and need to follow up"): every project that is not online,
+   the ones that need something first (a next action, a package to submit,
+   offers or a stall on the marketplace, a stall), then the most recently
+   touched; a deal on the marketplace rides on its project's card (`finance`)
+   or, with no project behind it, is a card of its own. Each card says why
+   it is there (`why`, `whyCls`). ES5. */
 (function (root) {
   'use strict';
   var DAY = 86400000, MAX = 6, STAGES = ['candidate', 'package', 'submitted', 'interconnect', 'permitting', 'finance', 'construction', 'online'];
@@ -51,11 +71,38 @@
   function dateOf(ms) { return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
   function inFlight(p) { var i = STAGES.indexOf(p.stage); return i >= 1 && i < 7; }
   function name(p) { return p.name || p.title || 'Untitled'; }
+  function needsSize(p) { return (!p.stage || p.stage === 'candidate') && !n(p.bessKwh) && !n(p.capex); }
+  var PORTAL = '/portals/finance/';
+  /* offers on a deal that are still the sponsor's to answer */
+  function openOffers(f) { return (f.offers || []).filter(function (o) { return !o.status || o.status === 'submitted' || o.status === 'active'; }); }
+  function roomDone(f) { var st = f.room && f.room.state; return st === 'delivered' || st === 'closed' || st === 'done'; }
+  /* what a deal on the finance marketplace needs from its sponsor now, or null */
+  function financeRow(f, now) {
+    var fn = name(f), upd = at(f.updatedAt) || at(f.createdAt), id = f.id || fn, st = f.status || 'draft', open = openOffers(f);
+    if (st === 'closed') return null;
+    if (open.length) return { key: 'offers:' + id, cls: 'good', score: 75, when: upd, t: plural(open.length, 'offer', 'offers') + ' on ' + fn + ' waiting for your answer', s: 'Capital partners priced it on the finance marketplace. Accept one or decline.', cta: 'Compare', href: PORTAL, finance: id };
+    if (st === 'awarded') return roomDone(f) ? null : { key: 'award:' + id, cls: 'good', score: 54, when: upd, t: fn + ' is awarded: finish the deal room', s: 'The partner is waiting on the data room.', cta: 'Open', href: PORTAL, finance: id };
+    if (st === 'review') return upd && now - upd >= 7 * DAY ? { key: 'review:' + id, cls: 'warn', score: 56, when: upd, t: fn + ' has been in review for ' + plural(days(upd, now), 'day', 'days'), s: 'Sent to the finance marketplace; ClearSky has not published it yet. Follow up.', cta: 'Follow up', href: PORTAL, finance: id } : null;
+    if (st === 'draft') return { key: 'draft:' + id, cls: '', score: 47, when: upd, t: fn + ' is still a draft on the finance marketplace', s: 'Finish it and send it for review.', cta: 'Open', href: PORTAL, finance: id };
+    if (st === 'open' && upd && now - upd >= 10 * DAY) return { key: 'nooffer:' + id, cls: '', score: 42, when: upd, t: 'No offer on ' + fn + ' in ' + plural(days(upd, now), 'day', 'days'), s: 'Open on the finance marketplace. Ask ClearSky to field it.', cta: 'Follow up', href: PORTAL, finance: id };
+    return null;
+  }
+  /* the one-line state of a deal, for a card */
+  function financeNote(f, now) {
+    var st = f.status || 'draft', open = openOffers(f);
+    if (open.length) return plural(open.length, 'offer', 'offers') + ' waiting';
+    if (st === 'awarded') return 'Awarded';
+    if (st === 'exclusive') return f.firstLookUntil && at(f.firstLookUntil) > now ? 'First look until ' + dateOf(at(f.firstLookUntil)) : 'On first look';
+    if (st === 'open') return 'Open to capital partners';
+    if (st === 'review') return 'In review at ClearSky';
+    if (st === 'closed') return 'Closed';
+    return 'Draft';
+  }
 
   function build(input) {
     input = input || {};
     var now = input.now || Date.now(), me = low(input.me), rows = [];
-    var projects = input.projects || [], todos = input.todos || [], sent = input.rfqsSent || [], received = input.rfqsReceived || [], referrals = input.referrals || [];
+    var projects = input.projects || [], todos = input.todos || [], sent = input.rfqsSent || [], received = input.rfqsReceived || [], referrals = input.referrals || [], finance = input.finance || [];
     var canOpen = typeof input.canOpen === 'function' ? input.canOpen : function () { return false; };
     function push(r) { rows.push(r); }
 
@@ -98,14 +145,27 @@
       push({ key: 'referrals', cls: 'warn', score: 74, when: oldestRef, t: plural(newRefs.length, 'new quote request', 'new quote requests') + ' in your inbox', s: 'A developer or installer sent a site for you to price.', cta: 'Open inbox', href: '/index.html?stay=classic' });
     }
 
+    /* the finance marketplace: what I sent there and what it needs now */
+    finance.forEach(function (f) {
+      var fr = financeRow(f, now); if (fr) push(fr);
+    });
+
     /* projects */
+    var unsized = [];
     projects.forEach(function (p) {
       var pn = name(p), upd = at(p.updatedAt) || at(p.createdAt), id = p.id;
       if (p.nextAction && p.stage !== 'online') push({ key: 'next:' + id, cls: 'good', score: 58, when: upd, t: pn + ': ' + p.nextAction, s: (STAGE_LABEL[p.stage] || 'Candidate') + (upd ? ' · updated ' + plural(days(upd, now), 'day', 'days') + ' ago' : ''), cta: 'Open', act: { kind: 'project', id: id } });
       else if (p.stage === 'package') push({ key: 'submit:' + id, cls: 'good', score: 55, when: upd, t: pn + ' is ready to submit to the utility', s: 'Site package complete' + (upd ? ' · ' + plural(days(upd, now), 'day', 'days') + ' ago' : ''), cta: 'Open', act: { kind: 'project', id: id } });
       else if (inFlight(p) && upd && now - upd >= 14 * DAY) push({ key: 'stalled:' + id, cls: '', score: 50, when: upd, t: pn + ' has not moved in ' + plural(days(upd, now), 'day', 'days'), s: STAGE_LABEL[p.stage] || p.stage, cta: 'Open', act: { kind: 'project', id: id } });
-      else if ((!p.stage || p.stage === 'candidate') && !n(p.bessKwh) && !n(p.capex) && canOpen('batterysizer')) push({ key: 'size:' + id, cls: '', score: 45, when: upd, t: 'Size ' + pn, s: 'No battery size yet. Battery Sizer is open on your plan.', cta: 'Size', act: { kind: 'tool', id: 'batterysizer' } });
+      else if (needsSize(p) && canOpen('batterysizer')) unsized.push(p);
     });
+    /* ONE row for the candidates with no size, however many (2026-09-27):
+       six of them used to fill the whole list and hide a to-do */
+    if (unsized.length === 1) push({ key: 'size:' + unsized[0].id, cls: '', score: 45, when: at(unsized[0].updatedAt) || at(unsized[0].createdAt), t: 'Size ' + name(unsized[0]), s: 'No battery size yet. Battery Sizer is open on your plan.', cta: 'Size', act: { kind: 'tool', id: 'batterysizer' }, project: unsized[0].id });
+    else if (unsized.length > 1) {
+      var oldestU = unsized.reduce(function (m, p) { var a = at(p.updatedAt) || at(p.createdAt); return a && (!m || a < m) ? a : m; }, 0), namedU = unsized.slice(0, 3).map(name);
+      push({ key: 'size', cls: '', score: 45, when: oldestU, t: plural(unsized.length, 'candidate has', 'candidates have') + ' no battery size', s: namedU.join(', ') + (unsized.length > 3 ? ' and ' + (unsized.length - 3) + ' more' : '') + '. Battery Sizer is open on your plan.', cta: 'Size', act: { kind: 'tool', id: 'batterysizer' }, projects: unsized.map(function (p) { return p.id; }) });
+    }
 
     rows.sort(function (a, b) { return b.score - a.score || (a.when || Infinity) - (b.when || Infinity) || String(a.key).localeCompare(String(b.key)); });
     var needs = rows.slice(0, MAX), more = rows.length - needs.length;
@@ -122,10 +182,41 @@
     if (sent.length) kpis.push({ key: 'quotes', value: String(quotedBack), label: 'Quotes back', delta: 'of ' + totalRecipients + ' sent', tone: quotedBack ? 'up' : '' });
     else if (received.length) kpis.push({ key: 'price', value: String(toPrice.length), label: 'Requests to price', delta: (received.length - toPrice.length) + ' quoted', tone: toPrice.length ? 'warn' : '' });
     else if (referrals.length) kpis.push({ key: 'inbox', value: String(newRefs.length), label: 'New quote requests', delta: openRefs.length + ' open', tone: newRefs.length ? 'warn' : '' });
+    else if (finance.length) { var offersWaiting = finance.reduce(function (t, f) { return t + (f.status === 'closed' ? 0 : openOffers(f).length); }, 0), live = finance.filter(function (f) { return f.status !== 'closed' && f.status !== 'draft'; }).length; kpis.push({ key: 'finance', value: String(offersWaiting), label: 'Offers waiting', delta: plural(live, 'deal', 'deals') + ' on the marketplace', tone: offersWaiting ? 'up' : '' }); }
     else kpis.push({ key: 'online', value: String(online.length), label: 'Sites online', delta: '', tone: '' });
     return { kpis: kpis, needs: needs, more: more };
   }
-  var API = { build: build, STAGES: STAGES, STAGE_LABEL: STAGE_LABEL, MAX: MAX, at: at, money: money };
+  /* the In flight board: what needs something first, then what was touched
+     last; never a site that is online; a deal on the marketplace rides on
+     its project or stands alone */
+  function board(input) {
+    input = input || {};
+    var now = input.now || Date.now(), max = input.max || 8, projects = input.projects || [], finance = input.finance || [], cards = [], byProject = {};
+    finance.forEach(function (f) { var pid = f.sourceProjectId || f.projectId || f.linkedProjectId; if (pid && !byProject[pid]) byProject[pid] = f; });
+    projects.forEach(function (p) {
+      if (p.stage === 'online') return;
+      var upd = at(p.updatedAt) || at(p.createdAt), f = byProject[p.id] || null, why, cls = '', rank;
+      var fr = f ? financeRow(f, now) : null;
+      if (fr) { why = fr.t; cls = fr.cls || 'good'; rank = fr.score; }
+      else if (p.nextAction) { why = 'Next: ' + p.nextAction; cls = 'good'; rank = 58; }
+      else if (p.stage === 'package') { why = 'Ready to submit to the utility'; cls = 'good'; rank = 55; }
+      else if (inFlight(p) && upd && now - upd >= 14 * DAY) { why = 'Not moved in ' + plural(days(upd, now), 'day', 'days'); cls = 'warn'; rank = 50; }
+      else if (needsSize(p)) { why = 'No battery size yet'; cls = ''; rank = 30; }
+      else { why = upd ? 'Touched ' + (now - upd < DAY ? 'today' : plural(days(upd, now), 'day', 'days') + ' ago') : 'New'; cls = ''; rank = 10; }
+      cards.push({ kind: 'project', id: p.id, name: name(p), stage: p.stage || 'candidate', touched: upd, why: why, whyCls: cls, rank: rank,
+        finance: f ? { id: f.id || null, status: f.status || 'draft', note: financeNote(f, now), offers: openOffers(f).length } : null });
+    });
+    finance.forEach(function (f) {
+      var pid = f.sourceProjectId || f.projectId || f.linkedProjectId; if (pid && byProject[pid] === f && projects.some(function (p) { return p.id === pid; })) return;
+      if (f.status === 'closed') return;
+      var upd = at(f.updatedAt) || at(f.createdAt), fr = financeRow(f, now);
+      cards.push({ kind: 'finance', id: f.id || name(f), name: name(f), stage: 'finance', touched: upd, why: fr ? fr.t : financeNote(f, now), whyCls: fr ? (fr.cls || 'good') : '', rank: fr ? fr.score : 20,
+        finance: { id: f.id || null, status: f.status || 'draft', note: financeNote(f, now), offers: openOffers(f).length } });
+    });
+    cards.sort(function (a, b) { return (b.rank > 20 ? 1 : 0) - (a.rank > 20 ? 1 : 0) || (b.rank > 20 && a.rank > 20 ? b.rank - a.rank : 0) || (b.touched || 0) - (a.touched || 0) || String(a.name).localeCompare(String(b.name)); });
+    return cards.slice(0, max);
+  }
+  var API = { build: build, board: board, STAGES: STAGES, STAGE_LABEL: STAGE_LABEL, MAX: MAX, at: at, money: money };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceToday = API;
 })(typeof window !== 'undefined' ? window : null);
