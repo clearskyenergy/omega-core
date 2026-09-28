@@ -1613,6 +1613,12 @@ var FORM_ES_MA_L2 = {
   classes:['l2'],
   sheet:'Cost Matrix ESMA',
   writer:'eversource-ma',
+  /* Design & engineering is ONE flat figure on this form, not $1,000 a port
+     (2026-09-28, the day a customer filed: "for CT Eversource we were
+     charging 2k flat rate not dependant on plugs" — ten ports had put
+     $10,000 on the sheet). designRate() reads it; Rate settings › Design &
+     engineering — flat per site changes the amount. */
+  designFlat:2000,
   banners:{ site:'Site Information / System Details', costs:'Estimate' },
   headers:{ type:'Description', desc:'Detail/Notes', mat:'Material Total',
             lab:'Labor Total', tot:'Total Cost' },
@@ -3136,6 +3142,22 @@ var RATE_CARD = {
   fpConduit: { mat:1.95, lab:2.50 }   /* same pipe, same ditch, dug once */
 };
 
+/* Design & engineering: a FLAT figure on a form that says so (Eversource MA,
+   `designFlat`), $1,000/port everywhere else — the rate the four reference
+   jobs fit. Pure, so the export prices it for the form being written and
+   scripts/tests/tesma.js pins it. `card` is RATE_CARD; its `_designFlat` and
+   `_designPerPort` are the Rate settings overrides. */
+function designRate(form, ports, card){
+  card=card||{};
+  var flat = (form && form.designFlat) ? (num(card._designFlat) || num(form.designFlat)) : 0;
+  if(flat) return { qty:1, unit:'LS', mat:0, lab:r2(flat),
+                    note:'flat per site \u2014 '+(form.short||form.utility||'this program') };
+  ports=num(ports);
+  return ports>0 ? { qty:ports, unit:'EA', mat:0,
+                     lab:(num(card._designPerPort)||1000)*ports,
+                     note:ports+' ports \u00d7 design & engineering' } : null;
+}
+
 function standardRate(row, bucket){
   /* The future-proofing block reuses the SAME row keys as make-ready
      ('conduit', 'panel'), so the bucket is what distinguishes a spare run
@@ -3165,10 +3187,8 @@ function standardRate(row, bucket){
   var MA   =String(DATA.city||DATA.state||'').toUpperCase().indexOf('MA')>=0;
 
   switch(row){
-    /* Design lands on $1,000/port in all four reference jobs. */
-    case 'design':     return ports>0 ? { qty:ports, unit:'EA', mat:0,
-                                lab:(num(RATE_CARD._designPerPort)||1000)*ports,
-                                note:ports+' ports \u00d7 design & engineering' } : null;
+    /* $1,000/port in all four reference jobs; flat where the form says so. */
+    case 'design':     return designRate(FORM, ports, RATE_CARD);
     /* Permitting runs ~3% of project cost; exact on 75 Avon. */
     case 'permit':     return { qty:1, unit:'LS', mat:0, lab:permitFromSubtotal(subtotalExcluding('permit')),
                                 note:'3% of project cost' };
@@ -3417,6 +3437,24 @@ function syncPermit(){
     if(r2(num(l.lab))!==r2(v)){ l.lab=r2(v); l.note='3% of project cost'; }
   }
 }
+/* Design follows the form on screen — flat on Eversource MA, per port
+   elsewhere — so a line priced under one program never carries that figure
+   onto another's sheet. Re-read on every render unless the rep typed over
+   it (pinned) or it came in from an estimate. Runs before syncPermit:
+   permitting is a percentage of everything else, design included. */
+function syncDesign(){
+  var i, l, rate;
+  for(i=0;i<LINES.length;i++){
+    l=LINES[i];
+    if(l.row!=='design' || l.pinned) continue;
+    if(l.src!=='standard' && !l.baseline) continue;
+    rate=standardRate('design', l.bucket);
+    if(!rate) continue;
+    if(r2(num(l.lab))!==r2(rate.lab) || r2(num(l.mat))!==r2(rate.mat) || num(l.qty)!==num(rate.qty)){
+      l.mat=r2(rate.mat); l.lab=r2(rate.lab); l.qty=rate.qty; l.unit=rate.unit; l.note=rate.note||'';
+    }
+  }
+}
 
 /* Explicit, and named for what it does. Prices the measured civil rows from
    the takeoff — only the ones with footage behind them, only where no line
@@ -3555,7 +3593,7 @@ function setLine(id, field, v){
     if(field==='mat'||field==='lab'||field==='fp'){
       LINES[i][field]=num(v);
       /* typed over: stop recomputing it */
-      if(LINES[i].row==='permit' && (field==='mat'||field==='lab')) LINES[i].pinned=true;
+      if((LINES[i].row==='permit'||LINES[i].row==='design') && (field==='mat'||field==='lab')) LINES[i].pinned=true;
     }
     else if(field==='bucket'){
       LINES[i].bucket=v; LINES[i].orphan=false;
@@ -3900,6 +3938,13 @@ function buildModel(form, noFloor){
     if(panelHeldOut(l)) continue;
     if(civilHeldOut(l)) continue;
     mm=num(l.mat)*mk; ll=num(l.lab)*mk;
+    /* Design is priced for the form being WRITTEN, not the one on screen:
+       a flat-rate form gets its flat figure even when another program's
+       sheet is exported in the same run. */
+    if(form.designFlat && l.row==='design' && !l.pinned && (l.src==='standard' || l.baseline)){
+      var _dr=designRate(form, DATA.plugs, RATE_CARD);
+      if(_dr){ mm=r2(_dr.mat)*mk; ll=r2(_dr.lab)*mk; }
+    }
     fp=Math.max(0, Math.min(100, num(l.fp)))/100;
     if(fp>0 && l.bucket!=='fp' && grid.fp){
       mirror=FP_MIRROR[l.row]||'other';
@@ -4090,6 +4135,10 @@ var RATE_FIELDS = [
   { sec:'Job-level' },
   { k:'_design',        label:'Design & engineering', unit:'per port', labOnly:true,
     why:'Within $15 of the filed figure on two of three National Grid jobs.' },
+  { k:'_designFlat',    label:'Design & engineering \u2014 flat per site', unit:'per site', labOnly:true,
+    why:'Eversource MA books design as one flat figure, not per port '
+       +'(2026-09-28: ten ports had put $10,000 on a sheet). Only a form that '
+       +'says flat uses it.' },
   { k:'_freightBase',   label:'Freight \u2014 mobilisation', unit:'per site', labOnly:true,
     why:'Freight = mobilisation + per port. Exact at 4, 6 and 10 ports on the '
        +'filed jobs ($650 / $850 / $1,250).' },
@@ -4108,6 +4157,7 @@ function rateGet(k, which){
     case '_agPerFt':     return o.conduitCableAG.labPerFt;
     case '_fpStall':     return o.fpStallWidthFt;
     case '_design':      return 1000;
+    case '_designFlat':  return 2000;
     case '_freightBase': return 250;
     case '_freightPort': return 100;
     case '_permitPct':   return PERMIT_PCT*100;
@@ -4122,6 +4172,7 @@ function rateSet(k, which, v){
     case '_agPerFt':     o.conduitCableAG.labPerFt=v; return;
     case '_fpStall':     o.fpStallWidthFt=v; return;
     case '_design':      RATE_CARD._designPerPort=v; return;
+    case '_designFlat':  RATE_CARD._designFlat=v; return;
     case '_freightBase': RATE_CARD._freightBase=v; return;
     case '_freightPort': RATE_CARD._freightPort=v; return;
     case '_permitPct':   PERMIT_PCT=v/100; return;
@@ -4630,7 +4681,7 @@ function fieldHTML(f, tight){
 function shortLabel(l){ return String(l).replace(/^#\s*of\s*/i,'# ').replace(/^Total Feet of\s*/i,'Feet — '); }
 
 /* ── 12. RENDER — mapping + previews ──────────────────────────────── */
-function render(){ syncCivil(); syncPermit();
+function render(){ syncCivil(); syncDesign(); syncPermit();
   var _rm=document.getElementById('rateModal');
   if(_rm && _rm.style.display!=='none') renderRateSettings(); renderMap(); renderOutputs(); }
 
@@ -6946,9 +6997,14 @@ function ngWorkbookFromTemplate(m, form){
    autofilter), and a load/save round trip would drop the data-validation
    extension anyway. So the file is filled at the XML level with JSZip: only
    the cells we write change; every formula, style, table, image and
-   validation list is Eversource's own, byte for byte. Cached formula results
-   are stripped and fullCalcOnLoad is set, so Excel recomputes Material
-   Total (qty x unit price) and the four eligible totals on open. */
+   validation list is Eversource's own, byte for byte - except the FORMULAS,
+   which the template writes against its Excel table
+   (SimpleInvoice[[#This Row],[Material Total]]+...). Excel reads those;
+   Google Sheets shows #ERROR! in every total, and Numbers, Quick Look and a
+   mail preview show nothing at all (2026-09-28, the day a customer filed).
+   So the filled sheet carries the SAME arithmetic as plain references
+   (G13+H13, E13*F13; the SUMs were plain already) with the result cached in
+   each cell, and fullCalcOnLoad still has Excel recompute on open. */
 var ESMA_TEMPLATE_URL = '/assets/utility-templates/eversource-ma-ev-estimate-2026-03.xlsx';
 var ESMA_SHEET = 'xl/worksheets/sheet1.xml';   /* "Cost Matrix ESMA" */
 /* Rows whose Material Total is a typed value, not qty x price. */
@@ -7008,7 +7064,259 @@ function esmaSetCell(xml, ref, value){
   return xml.replace(rowRe, rm[1]+cells.slice(0,at)+cell+cells.slice(at)+rm[3]);
 }
 
-function esmaFillXml(xml, m){
+function _xmlUnesc(v){
+  return String(v).replace(/&#x([0-9a-fA-F]+);/g, function(a,h){ return String.fromCharCode(parseInt(h,16)); })
+                  .replace(/&#(\d+);/g, function(a,n){ return String.fromCharCode(+n); })
+                  .replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+}
+function _colLetter(n){
+  var s='';
+  while(n>0){ s=String.fromCharCode(65+((n-1)%26))+s; n=Math.floor((n-1)/26); }
+  return s;
+}
+
+/* -- Their formulas, in plain references ---------------------------------
+   The table part behind the sheet: its name, where it sits and its columns
+   in order, which is everything a structured reference names. */
+function esmaTable(tableXml){
+  var head=(tableXml.match(/<table\b[^>]*>/)||[''])[0];
+  var ref=/\sref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/.exec(head);
+  var name=/\sdisplayName="([^"]+)"/.exec(head) || /\sname="([^"]+)"/.exec(head);
+  if(!ref || !name) return null;
+  var tm=/\stotalsRowCount="(\d+)"/.exec(head), hm=/\sheaderRowCount="(\d+)"/.exec(head);
+  var totals=tm?+tm[1]:0, headers=hm?+hm[1]:1;
+  var T={ name:_xmlUnesc(name[1]), cols:{}, firstCol:ref[1], lastCol:ref[3],
+          head:+ref[2], first:+ref[2]+headers, lastData:+ref[4]-totals, last:+ref[4] };
+  var re=/<tableColumn\b[^>]*\sname="([^"]*)"/g, m, c=_colNum(ref[1]);
+  while((m=re.exec(tableXml))){ T.cols[esmaColName(m[1])]=_colLetter(c++); }
+  return T;
+}
+/* A column name is stored with Excel's _x000a_ escapes for what XML cannot. */
+function esmaColName(v){
+  return _xmlUnesc(v).replace(/_x([0-9A-Fa-f]{4})_/g, function(a,h){ return String.fromCharCode(parseInt(h,16)); });
+}
+
+/* One formula: every Table[...] reference becomes the cells it names, for
+   the row the formula sits on. [#This Row] is relative (G13); an area is
+   absolute ($G$9:$G$62) - as Excel itself converts them. Anything this
+   cannot name THROWS: a silent miss would put #ERROR! back on the sheet,
+   and scripts/tests/tesma.js runs it over every formula the shipped
+   template carries. */
+function esmaA1(formula, row, T){
+  var name=T.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  var re=new RegExp(name+'\\[((?:\\[[^\\]]*\\]|[^\\[\\]])*)\\]','g');
+  function colOf(n){
+    n=n.replace(/'(.)/g,'$1').replace(/^\s+|\s+$/g,'');
+    if(!T.cols.hasOwnProperty(n)) throw new Error('no column "'+n+'" in table '+T.name);
+    return T.cols[n];
+  }
+  return formula.replace(re, function(all, inner){
+    var toks=[], k=0, j, ch;
+    while(k<inner.length){
+      ch=inner.charAt(k);
+      if(ch===' '){ k++; continue; }
+      if(ch==='['){
+        j=inner.indexOf(']',k); if(j<0) throw new Error('cannot read '+all);
+        toks.push({t:'item', v:inner.slice(k+1,j)}); k=j+1; continue;
+      }
+      if(ch==='@'||ch===','||ch===':'){ toks.push({t:ch}); k++; continue; }
+      j=k; while(j<inner.length && ',:[]'.indexOf(inner.charAt(j))<0) j++;
+      toks.push({t:'item', v:inner.slice(k,j)}); k=j;
+    }
+    var thisRow=false, areas=[], cols=[], i, v;
+    for(i=0;i<toks.length;i++){
+      if(toks[i].t==='@'){ thisRow=true; continue; }
+      if(toks[i].t!=='item') continue;
+      v=toks[i].v.replace(/^\s+|\s+$/g,'');
+      if(!v) continue;
+      if(v.charAt(0)==='#'){
+        v=v.toLowerCase();
+        if(v==='#this row') thisRow=true;
+        else if(v==='#headers'||v==='#data'||v==='#all'||v==='#totals') areas.push(v);
+        else throw new Error('cannot read '+all);
+      } else cols.push(colOf(v));
+    }
+    var c1=cols.length ? cols[0] : T.firstCol, c2=cols.length ? cols[cols.length-1] : T.lastCol;
+    if(thisRow) return (c1===c2) ? c1+row : c1+row+':'+c2+row;
+    var r1=T.first, rN=T.lastData;
+    if(areas.length){
+      r1=1e9; rN=0;
+      for(i=0;i<areas.length;i++){
+        if(areas[i]==='#headers'){ r1=Math.min(r1,T.head); rN=Math.max(rN,T.first-1); }
+        else if(areas[i]==='#data'){ r1=Math.min(r1,T.first); rN=Math.max(rN,T.lastData); }
+        else if(areas[i]==='#all'){ r1=Math.min(r1,T.head); rN=Math.max(rN,T.last); }
+        else {
+          if(T.last===T.lastData) throw new Error('no totals row in table '+T.name);
+          r1=Math.min(r1,T.lastData+1); rN=Math.max(rN,T.last);
+        }
+      }
+    }
+    if(r1>rN) throw new Error('cannot read '+all);
+    return (c1===c2 && r1===rN) ? '$'+c1+'$'+r1 : '$'+c1+'$'+r1+':$'+c2+'$'+rN;
+  });
+}
+
+/* Every formula on the sheet, converted for the row it sits on. */
+function esmaFormulasToA1(xml, tables){
+  if(!tables || !tables.length) return xml;
+  return xml.replace(/<c r="([A-Z]+)(\d+)"([^>]*)><f([^>]*)>([^<]*)<\/f>/g, function(all, col, row, attrs, fa, f){
+    var a1=_xmlUnesc(f), i;
+    for(i=0;i<tables.length;i++) if(tables[i]) a1=esmaA1(a1, +row, tables[i]);
+    return '<c r="'+col+row+'"'+attrs+'><f'+fa+'>'+_xmlEsc(a1)+'</f>';
+  });
+}
+
+/* The sheet's cells, enough to work a formula out: the formula and the
+   numeric value (text and shared strings count as no number). */
+function esmaCells(xml){
+  var cells={}, re=/<c r="([A-Z]+\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g, m, attrs, body, t, f, v;
+  while((m=re.exec(xml))){
+    attrs=m[2]||''; body=m[3]||'';
+    t=(/\st="([^"]*)"/.exec(attrs)||[])[1]||'';
+    f=/<f[^>]*>([^<]*)<\/f>/.exec(body);
+    v=/<v>([^<]*)<\/v>/.exec(body);
+    cells[m[1]]={ f: f ? _xmlUnesc(f[1]) : null,
+                  v: ((t===''||t==='n') && v && v[1]!=='' && isFinite(+v[1])) ? +v[1] : null };
+  }
+  return cells;
+}
+
+/* Works one cell out the way Excel will, as far as this template needs:
+   + - * / ^, parentheses, cell references, SUM / MIN / MAX / ROUND over
+   ranges. Anything else throws and the caller leaves that cell to Excel. */
+function esmaEval(cells, ref, memo){
+  memo=memo||{};
+  function cellVal(r){
+    r=r.replace(/\$/g,'');
+    if(memo.hasOwnProperty(r)) return memo[r];
+    var c=cells[r];
+    if(!c) return 0;
+    if(c.f==null) return (c.v!=null) ? c.v : 0;
+    memo[r]=0;                              /* a cycle reads 0, never loops */
+    var v=run(c.f);
+    memo[r]=v;
+    return v;
+  }
+  function split(a){ var m=/^\$?([A-Z]+)\$?(\d+)$/.exec(a); return { c:_colNum(m[1]), r:+m[2] }; }
+  function rangeVals(a, b){
+    var p=split(a), q=split(b), out=[], c, r, k;
+    for(r=Math.min(p.r,q.r); r<=Math.max(p.r,q.r); r++)
+      for(c=Math.min(p.c,q.c); c<=Math.max(p.c,q.c); c++){
+        k=_colLetter(c)+r;
+        if(cells[k] && (cells[k].f!=null || cells[k].v!=null)) out.push(cellVal(k));
+      }
+    return out;
+  }
+  function run(src){
+    var toks=[], i=0, s=src.replace(/^=/,''), m, rest;
+    while(i<s.length){
+      rest=s.slice(i);
+      if(rest.charAt(0)===' '){ i++; continue; }
+      if((m=/^\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?(?![A-Za-z0-9_(])/.exec(rest))){
+        toks.push({ t: m[0].indexOf(':')>0 ? 'range' : 'ref', v:m[0] }); i+=m[0].length; continue;
+      }
+      if((m=/^(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/.exec(rest))){ toks.push({t:'num', v:parseFloat(m[0])}); i+=m[0].length; continue; }
+      if((m=/^[A-Za-z_][A-Za-z0-9_.]*(?=\()/.exec(rest))){ toks.push({t:'fn', v:m[0].toUpperCase()}); i+=m[0].length; continue; }
+      if('+-*/^(),'.indexOf(rest.charAt(0))>=0){ toks.push({t:rest.charAt(0)}); i++; continue; }
+      throw new Error('cannot evaluate '+src);
+    }
+    var p=0;
+    function peek(){ return toks[p]; }
+    function take(t){ var k=toks[p]; if(!k || (t && k.t!==t)) throw new Error('cannot evaluate '+src); p++; return k; }
+    function expr(){ var v=term(), k, w; while((k=peek()) && (k.t==='+'||k.t==='-')){ p++; w=term(); v = (k.t==='+') ? v+w : v-w; } return v; }
+    function term(){ var v=power(), k, w; while((k=peek()) && (k.t==='*'||k.t==='/')){ p++; w=power(); v = (k.t==='*') ? v*w : v/w; } return v; }
+    function power(){ var v=unary(), k; while((k=peek()) && k.t==='^'){ p++; v=Math.pow(v, unary()); } return v; }
+    function unary(){ var k=peek(); if(k && k.t==='-'){ p++; return -unary(); } if(k && k.t==='+'){ p++; return unary(); } return atom(); }
+    function atom(){
+      var k=take(), vals, a, v, j, out, pw;
+      if(k.t==='num') return k.v;
+      if(k.t==='ref') return cellVal(k.v);
+      if(k.t==='('){ v=expr(); take(')'); return v; }
+      if(k.t==='fn'){
+        take('('); vals=[];
+        if(peek() && peek().t!==')'){
+          for(;;){
+            a=peek();
+            if(a && a.t==='range'){ p++; vals=vals.concat(rangeVals(a.v.split(':')[0], a.v.split(':')[1])); }
+            else vals.push(expr());
+            if(peek() && peek().t===','){ p++; continue; }
+            break;
+          }
+        }
+        take(')');
+        if(k.v==='SUM'){ out=0; for(j=0;j<vals.length;j++) out+=vals[j]; return out; }
+        if(k.v==='MIN'||k.v==='MAX'){ return vals.length ? Math[k.v.toLowerCase()].apply(null, vals) : 0; }
+        if(k.v==='ROUND'){ pw=Math.pow(10, vals[1]||0); return Math.round(vals[0]*pw)/pw; }
+      }
+      throw new Error('cannot evaluate '+src);
+    }
+    var v=expr();
+    if(p!==toks.length) throw new Error('cannot evaluate '+src);
+    return v;
+  }
+  return cellVal(ref);
+}
+
+/* Every formula cell carries its result, so the totals read in a viewer
+   that does not recalculate. One that cannot be worked out here keeps no
+   stale 0 either: it is left blank for Excel to fill on open. */
+function esmaCacheResults(xml){
+  var cells=esmaCells(xml), memo={};
+  return xml.replace(/(<c r="([A-Z]+\d+)"[^>]*><f[^>]*>[^<]*<\/f>)(?:<v>[^<]*<\/v>)?/g, function(all, head, ref){
+    var v;
+    try{ v=esmaEval(cells, ref, memo); }catch(e){ v=null; }
+    if(typeof v!=='number' || !isFinite(v)) return head;
+    head=head.replace(/^(<c r="[A-Z]+\d+"[^>]*?)\st="[^"]*"/, '$1');
+    return head+'<v>'+(Math.round(v*1e6)/1e6)+'</v>';
+  });
+}
+
+/* The table part keeps a column formula against which Excel checks every
+   cell; the cells now carry their own arithmetic, so it goes. */
+function esmaTableXmlPlain(tx){
+  return tx.replace(/<calculatedColumnFormula>[^<]*<\/calculatedColumnFormula>/g, '');
+}
+/* workbook.xml: recompute on open, and a defined name written against the
+   table reads the same way as the cells now do. */
+function esmaWorkbookXml(wbx, tables, sheetName){
+  wbx = /<calcPr\b/.test(wbx)
+    ? wbx.replace(/<calcPr\b([^>]*?)\s*\/>/, function(all, a){
+        return '<calcPr'+a.replace(/\s+fullCalcOnLoad="[^"]*"/,'')+' fullCalcOnLoad="1"/>'; })
+    : wbx.replace('</workbook>','<calcPr fullCalcOnLoad="1"/></workbook>');
+  return wbx.replace(/(<definedName\b[^>]*>)([^<]*)(<\/definedName>)/g, function(all, a, f, z){
+    var was=_xmlUnesc(f), v=was, i;
+    try{ for(i=0;i<(tables||[]).length;i++) if(tables[i]) v=esmaA1(v, tables[i].head, tables[i]); }
+    catch(e){ return all; }
+    if(v===was) return all;
+    if(sheetName && v.indexOf('!')<0) v="'"+sheetName.replace(/'/g,"''")+"'!"+v;
+    return a+_xmlEsc(v)+z;
+  });
+}
+/* The sheet's name, for that defined name: workbook.xml.rels maps the part
+   to an r:id and the <sheet> element carries the name. */
+function esmaSheetName(wbx, wrels, sheetPath){
+  var part=sheetPath.replace(/^xl\//,''), rid=null, re=/<Relationship\b[^>]*\/>/g, re2=/<sheet\b[^>]*\/>/g, r, m;
+  while((r=re.exec(wrels))){
+    m=/\sTarget="\/?(?:xl\/)?([^"]*)"/.exec(r[0]);
+    if(m && m[1]===part) rid=(/\sId="([^"]*)"/.exec(r[0])||[])[1];
+  }
+  if(!rid) return '';
+  while((r=re2.exec(wbx))){
+    m=/\sr:id="([^"]*)"/.exec(r[0]);
+    if(m && m[1]===rid) return _xmlUnesc((/\sname="([^"]*)"/.exec(r[0])||[])[1]||'');
+  }
+  return '';
+}
+/* A relationship target, relative to the part that holds it. */
+function esmaResolve(base, target){
+  if(target.charAt(0)==='/') return target.slice(1);
+  var segs=base.split('/'), t=target.split('/'), i;
+  segs.pop();
+  for(i=0;i<t.length;i++){ if(t[i]==='..') segs.pop(); else if(t[i]!=='.' && t[i]!=='') segs.push(t[i]); }
+  return segs.join('/');
+}
+
+function esmaFillXml(xml, m, tables){
   function put(ref, v){ if(v!==undefined && v!==null && v!=='') xml=esmaSetCell(xml, ref, v); }
   put('B4', d('esmaProjNo'));
   put('B6', new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}));
@@ -7037,7 +7345,8 @@ function esmaFillXml(xml, m){
     var notes=uniqJoin(g.notes,' · ');
     if(notes) put('C'+rr, notes);
     if(ESMA_MAT_DIRECT[rr]){
-      put('G'+rr, mat);
+      /* design and permitting are labour here; a written 0 read ".00" */
+      if(mat) put('G'+rr, mat);
     } else if(mat){
       /* Material Total is their formula, qty x unit price. The unit price is
          what makes it equal the material we priced; a row with money and no
@@ -7050,8 +7359,10 @@ function esmaFillXml(xml, m){
     if(r2(g.lab) && +rr!==37) put('H'+rr, r2(g.lab));
     if(+rr!==37 && +rr!==56 && +rr!==49) put('I'+rr, sub);
   }
-  /* Drop cached results so no stale 0 shows before Excel recalculates. */
-  xml = xml.replace(/(<f>[^<]*<\/f>)<v>[^<]*<\/v>/g, '$1');
+  /* Their arithmetic as plain references, each with its result cached, so
+     the totals read in every viewer. */
+  xml = esmaFormulasToA1(xml, tables||[]);
+  xml = esmaCacheResults(xml);
   return xml;
 }
 
@@ -7063,23 +7374,39 @@ function esmaWorkbookFromTemplate(m){
     return r.arrayBuffer();
   }).then(function(buf){ return JSZip.loadAsync(buf); })
   .then(function(zip){
-    return zip.file(ESMA_SHEET).async('string').then(function(xml){
-      zip.file(ESMA_SHEET, esmaFillXml(xml, m));
-      return zip.file('xl/workbook.xml').async('string');
-    }).then(function(wbx){
-      wbx = /<calcPr\b/.test(wbx)
-        ? wbx.replace(/<calcPr\b([^>]*?)\s*\/>/, function(all, a){
-            return '<calcPr'+a.replace(/\s+fullCalcOnLoad="[^"]*"/,'')+' fullCalcOnLoad="1"/>'; })
-        : wbx.replace('</workbook>','<calcPr fullCalcOnLoad="1"/></workbook>');
-      zip.file('xl/workbook.xml', wbx);
+    function text(p){ var f=zip.file(p); return f ? f.async('string') : Promise.resolve(''); }
+    var relsPath=ESMA_SHEET.replace(/([^\/]+)$/, '_rels/$1.rels'), parts=[], tabs=[], tables=[];
+    /* the table parts behind the sheet: the names its formulas use */
+    return text(relsPath).then(function(rels){
+      var re=/<Relationship\b[^>]*\/>/g, r, ty, tg;
+      while((r=re.exec(rels))){
+        ty=(/\sType="([^"]*)"/.exec(r[0])||[])[1]||'';
+        tg=(/\sTarget="([^"]*)"/.exec(r[0])||[])[1]||'';
+        if(/\/table$/.test(ty) && tg) parts.push(esmaResolve(ESMA_SHEET, tg));
+      }
+      return Promise.all(parts.map(function(p){ return text(p); }));
+    }).then(function(xmls){
+      var i;
+      for(i=0;i<parts.length;i++){
+        if(!xmls[i]) continue;
+        tabs.push({ path:parts[i], xml:xmls[i] });
+        tables.push(esmaTable(xmls[i]));
+      }
+      return text(ESMA_SHEET);
+    }).then(function(xml){
+      var i;
+      zip.file(ESMA_SHEET, esmaFillXml(xml, m, tables));
+      for(i=0;i<tabs.length;i++) zip.file(tabs[i].path, esmaTableXmlPlain(tabs[i].xml));
+      return Promise.all([text('xl/workbook.xml'), text('xl/_rels/workbook.xml.rels')]);
+    }).then(function(a){
+      zip.file('xl/workbook.xml', esmaWorkbookXml(a[0], tables, esmaSheetName(a[0], a[1], ESMA_SHEET)));
       /* calcChain lists cells by cached state; Excel rebuilds it. */
       if(zip.file('xl/calcChain.xml')){
         zip.remove('xl/calcChain.xml');
-        return Promise.all([zip.file('[Content_Types].xml').async('string'),
-                            zip.file('xl/_rels/workbook.xml.rels').async('string')])
-          .then(function(a){
-            zip.file('[Content_Types].xml', a[0].replace(/<Override[^>]*calcChain[^>]*\/>/,''));
-            zip.file('xl/_rels/workbook.xml.rels', a[1].replace(/<Relationship[^>]*calcChain[^>]*\/>/,''));
+        return Promise.all([text('[Content_Types].xml'), text('xl/_rels/workbook.xml.rels')])
+          .then(function(b){
+            zip.file('[Content_Types].xml', b[0].replace(/<Override[^>]*calcChain[^>]*\/>/,''));
+            zip.file('xl/_rels/workbook.xml.rels', b[1].replace(/<Relationship[^>]*calcChain[^>]*\/>/,''));
             return zip;
           });
       }

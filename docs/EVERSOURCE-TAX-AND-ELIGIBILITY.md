@@ -50,6 +50,30 @@ programme and not the other, because the programmes genuinely differ. Nagging
 a rep to move a line the utility wants where it is would train them to ignore
 the warnings.
 
+## Eversource MA (2026-09-28)
+
+Two things a customer found on the day they filed the March 2026 template:
+
+- **The totals read `#ERROR!` outside Excel.** Eversource's sheet writes its
+  arithmetic against its Excel table (`SimpleInvoice[[#This Row],[Material
+  Total]]+…`). Excel reads that; Google Sheets shows `#ERROR!` in every total,
+  and Numbers, Quick Look and a mail preview showed nothing because the
+  export stripped the cached results and left the recalculation to Excel.
+  The export now writes the SAME arithmetic as plain references (`G13+H13`,
+  `E13*F13`; the `SUM`s were plain already) with the result cached in each
+  cell, drops the table's column formula (the cells carry their own), and
+  still asks Excel to recompute on open. `scripts/tests/tesma.js` runs the
+  converter over every formula the shipped template carries and pins the
+  totals of a ten-port job, so a new template revision with a shape it
+  cannot name fails there, not on a reviewer's screen.
+- **Design & engineering is a flat $2,000 on Eversource MA**, not $1,000 a
+  port ("for CT Eversource we were charging 2k flat rate not dependant on
+  plugs"; ten ports had put $10,000 on the sheet). `designFlat` on the form
+  is the rule, `designRate()` reads it, Rate settings › *Design & engineering
+  — flat per site* changes the amount, and a typed-over figure is pinned as
+  permitting's is. Every other form keeps the per-port rate the four
+  reference jobs fit; permitting stays 3% of everything else.
+
 ## Still worth one manual check
 
 I derived all of this from your submitted sheets, not from Eversource's
