@@ -171,7 +171,13 @@ to Stripe; only `billingProvider: 'stripe'` on a packaged record does.
      endpoint (`customer.subscription.*`).
    - Copy nothing out of the dashboard by hand into a chat. The signing
      secret goes straight into Vercel.
-4. **Branding** (Settings → Branding): logo and colours for the hosted
+4. **Settings → Billing → Customer portal.** Switch on *Payment methods:
+   allow customers to update* and *Invoice history*, then **Save** — once,
+   in each mode. Stripe refuses every portal session until the portal
+   settings have been saved, and Plan & billing's *Add a card with Stripe*
+   is a portal session (`stripe-customer.js` falls back to a configuration
+   of its own, but only after that refusal).
+5. **Branding** (Settings → Branding): logo and colours for the hosted
    page.
 
 **Vercel environment.** Set Preview first; Production last.
@@ -190,6 +196,53 @@ The price book must be **seeded and enabled** (`scripts/seed-pricebook.js`)
 under a release version: live refuses a `-proposed` book. The Stripe rail
 needs **no item sync**. `scripts/qbo-sync-items.js` is the QuickBooks
 rail's alone.
+
+## Going live, and reading where a deployment stands from outside
+
+Production was read on 2026-09-28 without a dashboard, from what the
+deployment answers the public. `npm run check:production`
+(`scripts/check-production.js`; no credentials, writes nothing) does the
+same for any host and says, row by row:
+
+- **the rail**: `/api/offerings` → `signup.payWith` is `Stripe` under
+  `PACKAGING_PROVIDER=stripe`, else `QuickBooks`; `--expect-stripe` makes
+  anything but Stripe a failure (the go-live check);
+- **the book**: `pricebookVersion` must be this tree's `VERSION` and
+  `source` must be `seeded`, or live issuing refuses;
+- **the switches**: `signup.packaged` and `signup.payNow` are
+  `PACKAGING_SIGNUP_ENABLED` and `PACKAGING_BILLING_ENABLED`;
+- **the routes**: `/api/stripe-webhook` answers a stranger 400 (the
+  signature check; a 404 means the route is not deployed), `/api/billing-run`
+  and `/api/plan-change` answer 401, `/api/auth-check` says Google has the
+  host's sign-in handler;
+- **parity**: the billing runtime and the pages it draws hash to this tree's.
+
+What it cannot see is the key's mode and `PACKAGING_LIVE`. Plan & billing
+shows the first (*This deployment uses Stripe's test mode…* on a workspace
+that is not `packagingSandbox`); the runner's hourly mail and the master
+console show the second.
+
+**The flip, in order** (Stripe in live mode, then Vercel's Production
+environment only — Preview keeps its test key):
+
+1. Stripe: the account activated for live payments; the live secret key
+   into `STRIPE_SECRET_KEY`; the live endpoint at
+   `https://silmarillion.clearskyomega.com/api/stripe-webhook` with the
+   events above, its signing secret into `STRIPE_WEBHOOK_SECRET`; the
+   Customer portal saved with payment-method updates on; Card on for
+   invoices. Nothing is copied into a chat or a note on the way.
+2. Vercel: `PACKAGING_PROVIDER=stripe`; `PACKAGING_LIVE=true`,
+   `PACKAGING_BILLING_ENABLED=true`, `PACKAGING_SIGNUP_ENABLED=true` and
+   `CRON_SECRET`, already there for the QuickBooks rail, stay; **Redeploy**
+   the latest Production deployment of `main` (a variable change does not
+   redeploy by itself).
+3. `npm run check:production -- --expect-stripe` passes. Then, signed in
+   on a legacy workspace, Plan & billing offers *Add a card with Stripe*
+   (a live `billing.stripe.com` page) and Modules → Opt in says Stripe
+   with no billing form; a purchase not meant is withdrawn with *Cancel
+   request*, which voids the invoice at Stripe. A workspace already
+   invoiced through QuickBooks (`paymentProvider: 'quickbooks'`, or a
+   QuickBooks add-on customer) stays on QuickBooks by design.
 
 ## Testing it in test mode
 

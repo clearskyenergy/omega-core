@@ -284,7 +284,12 @@ engine's own reconcile, so paid means open within seconds; the runner and
 `PACKAGING_PROVIDER=quickbooks`; the Stripe rail is
 `scripts/test-stripe-billing.js` on `scripts/_lib/stripe-double.js`.
 Runbook and what is not built (autopay, instant refund events, tax):
-`docs/PAYMENTS-STRIPE.md`.
+`docs/PAYMENTS-STRIPE.md`. Where a deployment stands is read from OUTSIDE,
+with no credentials: `npm run check:production` (`scripts/check-production.js`,
+`scripts/tests/tcheckproduction.js`) reads the rail off `/api/offerings`
+(`signup.payWith`), the seeded book against the code's `VERSION`, that the
+billing routes are deployed and guarded, and that the billing pages served
+hash to the tree; `--expect-stripe` is the go-live check (2026-09-28).
 
 Billing review rules (2026-09-27, adversarial review of both rails; each is
 pinned by a test that fails without it): a reversed cycle is superseded by
