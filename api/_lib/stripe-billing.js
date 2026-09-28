@@ -134,20 +134,40 @@ function driver(book, supplied) {
     if (mine.length > 1) fail('Duplicate subscription invoice for ' + plan.marker + '; review');
     return mine[0] || null;
   }
-  async function invoice(plan, profile, customerId) {
-    guard();
+  /* the card on file, when the caller asks for it: the customer's default
+     payment method for invoices, the one Plan & billing's card door saves
+     (the portal's payment_method_update flow). A legacy plan's add-ons
+     charge it (Tommy, 2026-09-27: "charge their credit card or saved payment
+     method"); a package keeps send_invoice while the book's
+     policy.savedCardEnabled is off. Named by stripe-customer's describe():
+     the one card label. */
+  function cardOnFile(owner) {
+    var pm = owner && owner.invoice_settings && owner.invoice_settings.default_payment_method;
+    if (!pm || typeof pm !== 'object' || !pm.id || !pm.type) return null;
+    var d = require('./stripe-customer').describe(pm);
+    return { id: String(pm.id), label: (d && d.label) || 'the card on file' };
+  }
+  /* what the tenant is told when the card on file did not pay: Stripe's card
+     messages are written for the cardholder; anything else stays in the log */
+  function refusalWords(e) { return e && e.type === 'StripeCardError' && e.message ? String(e.message).slice(0, 200) : 'Stripe could not charge the card on file' + (e && e.code ? ' (' + e.code + ')' : ''); }
+  async function invoice(plan, profile, customerId, opts) {
+    guard(); opts = opts || {};
     if (!expected(plan).length) fail('Invoice must contain a paid subscription');
     /* the workspace is the customer's mark: the invoice carries it, so the webhook knows whose it is */
-    var owner = await S.customers.retrieve(customerId);
+    var owner = await S.customers.retrieve(customerId, opts.charge === true ? { expand: ['invoice_settings.default_payment_method'] } : undefined);
     if (!owner || owner.deleted) fail('Stripe customer ' + customerId + ' needs review');
     same(owner, 'customer');
     var org = (owner.metadata || {}).omegaOrg;
     if (!org) fail('Stripe customer ' + customerId + ' is not an OMEGA workspace; review');
+    var card = opts.charge === true ? cardOnFile(owner) : null;
     var inv = await find(plan, customerId), created = false;
     if (!inv) {
+      /* with a card on file the invoice is charge_automatically (no due date:
+         it is paid below, now); else send_invoice with its hosted page */
       var body = { customer: customerId, collection_method: 'send_invoice', days_until_due: 1, currency: 'usd', auto_advance: false,
         pending_invoice_items_behavior: 'exclude', description: memo(plan, profile),
         metadata: { omegaPackage: 'true', omegaOrg: org, omegaMarker: plan.marker, omegaKind: plan.kind || 'subscription', omegaDate: plan.date } };
+      if (card) { body.collection_method = 'charge_automatically'; delete body.days_until_due; body.metadata.omegaCharge = 'card'; }
       if (profile.poRequired && profile.poNumber) body.custom_fields = [{ name: 'PO', value: String(profile.poNumber).slice(0, 30) }];
       inv = await S.invoices.create(body, { idempotencyKey: key('omega-invoice:' + (livemode ? 'live' : 'test') + ':' + plan.marker) });
       created = true;
@@ -164,12 +184,29 @@ function driver(book, supplied) {
       inv = await S.invoices.finalizeInvoice(inv.id, { auto_advance: false }, { idempotencyKey: key('omega-finalize:' + inv.id) });
     }
     await validate(inv, plan, customerId);
+    /* the card on file pays this invoice now (a retry of an invoice left open
+       by an earlier refusal tries again). A refusal — a decline, a card that
+       needs its bank's confirmation — leaves the invoice open on its hosted
+       page with the tenant told why; a charge that went through but was not
+       answered is read back by reconcile like any other payment. Never a key
+       on the attempt: Stripe replays a keyed refusal, and a paid invoice
+       cannot be paid twice. */
+    var charged = inv.status === 'paid', declined = null;
+    if (card && inv.status === 'open') {
+      try { var paid = await S.invoices.pay(inv.id, { payment_method: card.id }); if (paid && paid.status === 'paid') { inv = paid; charged = true; } }
+      catch (e) {
+        /* refused, or paid meanwhile (Stripe's own attempt, a retry that raced): the invoice decides */
+        try { var again = await S.invoices.retrieve(inv.id); if (again && again.status === 'paid') { inv = again; charged = true; } } catch (x) {}
+        if (!charged) { declined = refusalWords(e); console.warn('[stripe-billing] the card on file did not pay ' + inv.id + ':', e && e.message); }
+      }
+    }
     /* Stripe emails its own invoice with the Pay button to the billing
-       address, once, when the invoice was made here; OMEGA's own mail
-       carries the link too. Best effort: a refusal changes nothing. */
-    if (created) { try { await S.invoices.sendInvoice(inv.id, {}, { idempotencyKey: key('omega-send:' + inv.id) }); } catch (e) {} }
+       address, once, when the invoice was made here and not paid on the
+       spot; OMEGA's own mail carries the link too. Best effort: a refusal
+       changes nothing. */
+    if (created && !charged) { try { await S.invoices.sendInvoice(inv.id, {}, { idempotencyKey: key('omega-send:' + inv.id) }); } catch (e) {} }
     var url = payLink(inv.hosted_invoice_url);
-    return { id: String(inv.id), totalCents: inv.total, payUrl: url, payLinkMissing: !url };
+    return { id: String(inv.id), totalCents: inv.total, payUrl: charged ? null : url, payLinkMissing: !charged && !url, charged: charged, card: card ? card.label : null, declined: declined };
   }
   async function reconcile(record) {
     guard();

@@ -93,6 +93,9 @@ async function driverChecks() {
   ok('Stripe emails the invoice once', s.sent.length === 1 && s.sent[0] === inv.id);
   var again = await d.invoice(p, BP.normalize(profile), c1);
   ok('a retry finds the same invoice: nothing new issued, nothing re-sent', again.id === inv.id && s.all('invoices').length === 1 && s.sent.length === 1);
+  /* a package keeps send_invoice while the book's policy.savedCardEnabled is off: a card on file is never charged for a subscription (only a legacy plan's add-ons ask for it) */
+  s.saveCard(c1); var withCard = await d.invoice(plan('OMEGA subscription stripe.example / card'), BP.normalize(profile), c1), wc = s.invoices_[withCard.id];
+  ok('a package invoice is never charged to the card on file', wc.collection_method === 'send_invoice' && wc.status === 'open' && withCard.charged === false && withCard.payUrl && s.calls.indexOf('invoices.pay') < 0, { inv: wc, out: withCard });
   /* a crash between the draft and its lines: the retry adds only what is missing */
   var p2 = plan('OMEGA subscription stripe.example / 2026-10-27');
   var draft = await s.invoices.create({ customer: c1, collection_method: 'send_invoice', days_until_due: 1, currency: 'usd', auto_advance: false, pending_invoice_items_behavior: 'exclude', description: 'x', metadata: { omegaPackage: 'true', omegaOrg: 'stripe.example', omegaMarker: p2.marker, omegaKind: 'subscription', omegaDate: p2.date } });

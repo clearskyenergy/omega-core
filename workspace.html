@@ -1188,6 +1188,8 @@ function span(a, b) {
   var x = when(a), y = when(b); if (!x || !y) return day(a) || day(b);
   return (x.getFullYear() === y.getFullYear() ? x.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : day(a)) + ' – ' + day(b);
 }
+/* the provider's page, possessive: Stripe’s, QuickBooks’ */
+function poss(name) { return name + (/s$/.test(name) ? '’' : '’s'); }
 function nth(d) { var s = ['th', 'st', 'nd', 'rd'], v = d % 100; return d + (s[(v - 20) % 10] || s[v] || s[0]); }
 function usd(n) { n = Number(n) || 0; return '$' + n.toLocaleString(undefined, { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }); }
 function cents(c) { return usd(Math.round(Number(c) || 0) / 100); }
@@ -1395,8 +1397,8 @@ function oweHtml(c) {
   if (last || !(c.packaged && BILL.failed)) cells.push(['Last payment', last || 'None yet']);
   h += '<div class="owe-when">' + cells.map(function (x) { return '<div><span class="l">' + esc(x[0]) + '</span><span class="v" title="' + esc(x[1]) + '">' + esc(x[1]) + '</span></div>'; }).join('') + '</div>';
   var bday = (sm && sm.billingDay) || bl.billingDay;
-  h += '<p class="fine">' + esc(c.packaged ? 'Each invoice arrives by email' + (bday ? ' on the ' + nth(bday) : '') + ' with its own pay link' + (c.payWith ? ' to ' + c.payWith + '’s secure page' : '') + '.' + (c.stripe ? ' Your workspace follows the payment within seconds.' : '')
-    : c.addOnOwed ? 'Each add-on invoice arrives by email with its own pay link to QuickBooks’ secure page. Your plan itself is billed as before.'
+  h += '<p class="fine">' + esc(c.packaged ? 'Each invoice arrives by email' + (bday ? ' on the ' + nth(bday) : '') + ' with its own pay link' + (c.payWith ? ' to ' + poss(c.payWith) + ' secure page' : '') + '.' + (c.stripe ? ' Your workspace follows the payment within seconds.' : '')
+    : c.addOnOwed ? 'Each add-on invoice arrives by email with its own pay link to ' + poss((c.ao && c.ao.payWith) || 'QuickBooks') + ' secure page. Your plan itself is billed as before.'
     : c.stripeBilled ? 'Stripe charges the card on file on each invoice date.' : c.trial ? 'Nothing is charged during your trial.' : c.manual ? 'ClearSky invoices this plan under your agreement.' : 'Your first invoice arrives by email with its own pay link.') + '</p>';
   /* "I've paid": the platform looks now instead of the hourly run (a
      package's rail, or QuickBooks for a legacy plan's add-on invoice) */
@@ -1471,7 +1473,10 @@ function payHtml(c) {
     if (!c.admin) h += '<p class="fine">An owner or administrator of ' + esc(c.co) + (c.linked || c.packaged ? ' manages the card.' : ' adds the card.') + '</p>';
     else if (cv && cv.reason && !cv.canLink) h += '<p class="fine">' + esc(cv.reason) + '</p>';
   }
-  if (c.ao && kind !== 'qb') h += '<p class="fine">Modules added to your plan by card are invoiced in <b>QuickBooks</b>: pay each on QuickBooks’ own page, where a card can be saved with Autopay.</p>';
+  /* a legacy plan's add-ons bill on the workspace's rail (api/_lib/addons.js rail()): on Stripe the card on file is charged, else each invoice has its page */
+  if (c.ao && kind !== 'qb') h += '<p class="fine">' + ((c.ao.payWith || 'QuickBooks') === 'Stripe'
+    ? 'Modules you opt into are invoiced through <b>Stripe</b> beside your plan: the card on file is charged when you opt in and on each renewal date; without one, each invoice is paid on Stripe’s own page.'
+    : 'Modules added to your plan by card are invoiced in <b>QuickBooks</b>: pay each on QuickBooks’ own page, where a card can be saved with Autopay.') + '</p>';
   return h + '</div></div></section>';
 }
 /* the Stripe portal: a package's card and invoices, a legacy plan's invoices and receipts */

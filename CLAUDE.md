@@ -962,7 +962,17 @@ the package's. Stripe's hosted page needs no billing form (the customer
 carries the payer's email and the workspace's name), so Opt in on Stripe
 never asks for one first; QuickBooks still does, prefilled from what is
 known (the workspace, the person, the company type on record).
-`scripts/test-addons.js` §6d holds it on the Stripe double.
+`scripts/test-addons.js` §6d holds it on the Stripe double. **With a card
+on file it is charged** (2026-09-28; Tommy: "charge their credit card or
+saved payment method"): the customer's default payment method for invoices,
+the one *Add a card with Stripe* saves, pays an opt-in the moment *Opt in
+and pay* is pressed and each renewal on its date —
+`stripe-billing.invoice(…, { charge })`, asked for ONLY by `addons.js` (a
+package never asks while the book's `policy.savedCardEnabled` is off); the
+purchase runs the same reconcile at once and answers on, a refusal leaves
+the invoice on Stripe's page with Stripe's own words for the cardholder,
+and a paid invoice is never mailed as unpaid. §6e holds it, each piece
+failing its test when removed.
 `OmegaPackageMenu.addOnControl` is the same legacy path for a page's own
 control; `scripts/test-addons.js` and `check:workspace` (legacy-add) hold
 it. A workspace with no `omega_orgs` or billing record cannot be billed and

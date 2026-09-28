@@ -523,6 +523,47 @@ async function run() {
       equal(await AO.issue(db, ORG, now, sdeps), { skipped: true }, 'once');
       stripe.pay(rr.stripeInvoiceId); await S.reconcile(db, ORG, now + 60000, sdeps);
       equal([bill().addOns.state, bill().addOns.live, bill().addOns.nextInvoiceOn], ['paid', ['logic-office'], '2026-11-27'], 'the renewal paid on Stripe keeps it on');
+      /* ══ 6e. The card on file (Tommy, 2026-09-27: "charge their credit card
+         or saved payment method"): a card saved through Plan & billing's door
+         is charged when a module is opted into and on each renewal date, and
+         the purchase answers on at once; a refusal leaves the invoice on
+         Stripe's page with the reason; a paid invoice is never mailed as
+         unpaid ══ */
+      stripe.saveCard(bill().stripeCustomerId); now += 60000;
+      var qc = await quote(['logic-plant']);
+      ok(/card on file with Stripe is charged now/.test(qc.display.activation), qc.display.activation);
+      var rc1 = await AO.buy(db, ORG, { add: ['logic-plant'], previewId: qc.previewId, effectiveAt: qc.effectiveAt }, owner, now, sdeps);
+      var cinv = stripe.invoices_[record(rc1.addOnId).stripeInvoiceId];
+      equal([rc1.state, rc1.charged, rc1.card, rc1.paymentLink, rc1.declined], ['active', true, 'Visa ending 4242', null, null], 'paid with the card on file: on at once');
+      equal([cinv.collection_method, cinv.days_until_due, cinv.status, cinv.metadata.omegaCharge, stripe.sent.indexOf(cinv.id) >= 0], ['charge_automatically', undefined, 'paid', 'card', false], 'a charge_automatically invoice, paid, never emailed as unpaid');
+      ok(stripe.calls.indexOf('invoices.pay') >= 0, 'Stripe charged it');
+      equal([record(rc1.addOnId).state, !!record(rc1.addOnId).chargedAt, record(rc1.addOnId).card], ['paid', true, 'Visa ending 4242'], 'the record read back as paid, with the card');
+      ok(bill().addOns.live.indexOf('logic-plant') >= 0 && bill().addOns.state === 'paid', 'Plant is on');
+      ok(!db.data.get(ROOT + '/notifications/addon-invoice-' + rc1.addOnId) && db.data.get(ROOT + '/notifications/addon-paid-' + rc1.addOnId), 'no "pay this" mail; the receipt says what is on');
+      var rcAgain = await AO.buy(db, ORG, { add: ['logic-plant'], previewId: qc.previewId, effectiveAt: qc.effectiveAt }, owner, now, sdeps);
+      equal([rcAgain.state, rcAgain.addOnId, rcAgain.charged], ['active', rc1.addOnId, true], 'the replay says on');
+      /* the card is refused: the invoice waits on Stripe's page, the reason told; paid there, it opens */
+      stripe.saveCard(bill().stripeCustomerId, { declines: true, last4: '0002' }); now += 60000;
+      var qd = await quote(['logic-materials']);
+      var rd = await AO.buy(db, ORG, { add: ['logic-materials'], previewId: qd.previewId, effectiveAt: qd.effectiveAt }, owner, now, sdeps);
+      var dinv = stripe.invoices_[record(rd.addOnId).stripeInvoiceId];
+      equal([rd.state, rd.charged, rd.declined, rd.card, dinv.status, dinv.collection_method], ['awaiting_payment', false, 'Your card was declined.', 'Visa ending 0002', 'open', 'charge_automatically'], 'refused: waiting on its page, the reason told');
+      ok(/^https:\/\/invoice\.stripe\.com\//.test(rd.paymentLink), 'the hosted page: ' + rd.paymentLink);
+      var dmail = db.data.get(ROOT + '/notifications/addon-invoice-' + rd.addOnId);
+      ok(dmail && /not charged \(Your card was declined\.\)/.test(dmail.text) && /change the card in Plan & billing/.test(dmail.text) && dmail.paymentLink === rd.paymentLink, dmail && dmail.text);
+      ok(stripe.sent.indexOf(dinv.id) >= 0, 'Stripe emails the unpaid invoice');
+      equal(bill().addOns.live.indexOf('logic-materials'), -1, 'not on until paid');
+      stripe.pay(dinv.id); await S.reconcile(db, ORG, now + 1000, sdeps);
+      ok(bill().addOns.live.indexOf('logic-materials') >= 0, 'paid on the page: on');
+      /* the renewal on the billing day: the card on file pays it, and nothing asks them to */
+      stripe.saveCard(bill().stripeCustomerId);
+      now = at('2026-11-27T01:00:00Z');
+      var ren2 = await AO.issue(db, ORG, now, sdeps), rr2 = record('addon-renewal-2026-11-27');
+      equal([ren2.issued, ren2.charged, ren2.paymentLink, stripe.invoices_[rr2.stripeInvoiceId].status, stripe.invoices_[rr2.stripeInvoiceId].collection_method], [true, true, null, 'paid', 'charge_automatically'], 'the renewal charged the card on file');
+      ok(!db.data.get(ROOT + '/notifications/addon-invoice-addon-renewal-2026-11-27'), 'no "pay this" mail for a paid renewal');
+      await S.reconcile(db, ORG, now + 60000, sdeps);
+      equal([bill().addOns.state, bill().addOns.nextInvoiceOn, bill().addOns.live.slice().sort()], ['paid', '2026-12-27', ['logic-materials', 'logic-office', 'logic-plant']], 'read back paid: on for another month');
+      ok(db.data.get(ROOT + '/notifications/addon-paid-addon-renewal-2026-11-27'), 'the receipt is the mail');
       /* no billing profile saved: Stripe's page needs none, so Opt in never asks for the form first; the customer carries the payer's email */
       seed(Object.assign({}, ENTERPRISE), { noProfile: true }); now = at('2026-09-27T15:00:00Z'); stripe = new SD(); sdeps = { stripe: stripe };
       var qnp = await quote(['logic-office']); equal([qnp.canBuy, qnp.needsProfile], [true, false], 'no form on Stripe');
