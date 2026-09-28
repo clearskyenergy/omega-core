@@ -2489,3 +2489,28 @@ desktop it is one line as before. The editor's first save of a new project
 type it is saved with (`payload.type`, set only when one was chosen), else
 `null`, instead of `'bess'`; no project.created in the editor says BESS by
 default. Pinned in `scripts/tests/tprojectkinds.js`.
+
+## Level 2 trenches both ways from the panel — September 28, 2026
+
+"Did we figure out any way to trench two different directions without
+overlapping?" (Menachem, 2026-09-28, for a Level 2 job). The guided build
+already spurs: a charger clicked off the trench runs a straight spur from
+the nearest point (2026-09-16). What it could not do was bend before the
+first stall, and a panel snapped mid-run started the branch at the run's
+far end.
+
+- **Draw another trench (T)** in the charger step of the Level 2 and DCFC
+  builds (`_dcfcDrawAnother` in `editor.html`): the first click lands on
+  the trench already drawn (`_dcfcTapOn`, the panel or anywhere along it,
+  a ring showing where), further clicks route it, Enter files it as a spur
+  of the run it tapped (`spurOf`, `spurSeg`, `spurTapFt`), Esc or *Back to
+  chargers* drops the draft with nothing written (`_dcfcDrawBack`). The
+  chargers' run stays the root (`_dcfcFamily`), so a charger lands on
+  whichever trench is nearest, its conduit walks that trench back to the
+  panel, and `trenchTotals` digs each trench once, the parent as far as
+  the tap. The surface toggle during that draft leaves the first trench's
+  surface alone.
+- The next run leaves the node just placed (`placeDcfcAt`, node step),
+  not the far end of the run it was placed on.
+- `scripts/tests/ttrenchkeep.js` holds both; `api/jarvis-help.js` tells
+  Jarvis.
