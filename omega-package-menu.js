@@ -31,6 +31,8 @@
      PACKAGING_PROVIDER=stripe); the server names it (payWith) on every quote,
      purchase and pending record, so this is only the word before an answer */
   var ADDON_RAIL = 'QuickBooks';
+  /* what a cancel leaves behind: a Stripe invoice is voided (addons.cancel), QuickBooks' stays open for staff */
+  function cancelWords(payWith) { return payWith === 'Stripe' ? 'The Stripe invoice is voided.' : 'The ' + (payWith || ADDON_RAIL) + ' invoice stays open until ClearSky voids it; if it is paid anyway, ClearSky reviews it.'; }
   function packageView() { return host.view || (global.OmegaCaps && global.OmegaCaps.packageAccess()); }
   function api(path, payload) {
     var user = global.firebase && global.firebase.auth().currentUser;
@@ -218,7 +220,7 @@
       row(el, [button('Cancel request', go, 'opm-primary'), button('Not now', again)]);
     }
     function cancelChange() {
-      cancelPanel('Cancel the ' + names(p.names || [m.name]) + ' request?', 'Nothing is switched on and nothing is charged. ' + (p.payWith ? 'The ' + p.payWith + ' invoice' : 'The invoice') + ' stays open until ClearSky voids it; if it is paid anyway, ClearSky reviews it.', null, function () {
+      cancelPanel('Cancel the ' + names(p.names || [m.name]) + ' request?', 'Nothing is switched on and nothing is charged. ' + cancelWords(p.payWith), null, function () {
         busy('Cancelling…');
         api('/api/plan-change', withOrg(state, { action: 'cancel', changeId: p.id })).then(function (r) { done(r, 'Cancelled. Nothing is charged.'); }, function (e) { failed(e); });
       });
@@ -254,7 +256,7 @@
     /* an add-on purchase still waiting for payment (plan-change addon-cancel
        with its id): nothing is switched on and nothing is charged */
     function addOnCancel() {
-      cancelPanel('Cancel the ' + names(ap.names || [m.name]) + ' request?', 'Nothing is switched on and nothing is charged. The ' + (ap.payWith || ADDON_RAIL) + ' invoice stays open until ClearSky voids it; if it is paid anyway, ClearSky reviews it.', null, function () {
+      cancelPanel('Cancel the ' + names(ap.names || [m.name]) + ' request?', 'Nothing is switched on and nothing is charged. ' + cancelWords(ap.payWith), null, function () {
         busy('Cancelling…');
         api('/api/plan-change', withOrg(state, { action: 'addon-cancel', addOnId: ap.id })).then(function (r) { remember(state, r); done(r, 'Cancelled. Nothing is charged.'); }, function (e) { failed(e); });
       });
@@ -458,12 +460,12 @@
       }
       busy(q.included ? 'Turning it on…' : 'Creating your invoice…');
       api('/api/plan-change', withOrg(state, { action: 'addon-buy', add: [m.key], previewId: q.previewId, effectiveAt: q.effectiveAt })).then(function (r) {
-        if (r.state === 'active') { if (tab) { try { tab.close(); } catch (e) {} } remember(state, r); done(r, 'On. ' + names(r.addNames || [m.name]) + ((r.addNames || []).length > 1 ? ' are' : ' is') + ' on now.'); return; }
+        if (r.state === 'active') { if (tab) { try { tab.close(); } catch (e) {} } remember(state, r); done(r, (r.charged && r.card ? 'Paid with ' + r.card + '. ' : 'On. ') + names(r.addNames || [m.name]) + ((r.addNames || []).length > 1 ? ' are' : ' is') + ' on now.'); return; }
         var opened = false;
         if (tab && r.paymentLink) { try { tab.location.replace(r.paymentLink); opened = true; } catch (e) {} }
         if (tab && !opened) { try { tab.close(); } catch (e) {} }
         remember(state, extend({}, r, { opened: opened }));
-        done(r, 'Invoice created: ' + r.display + '. It switches on when the payment clears.');
+        done(r, (r.declined ? 'Your card on file was declined (' + r.declined + '). ' : '') + 'Invoice created: ' + r.display + '. It switches on when the payment clears.');
       }, function (e) { if (tab) { try { tab.close(); } catch (x) {} } failed(e); });
     }
     var add = state.legacy ? legacyAdd : function () { quote(null); };

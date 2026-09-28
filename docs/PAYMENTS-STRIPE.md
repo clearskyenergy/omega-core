@@ -257,13 +257,23 @@ opens within seconds of the webhook. Try these too:
 
 ## What is not built
 
-- **Autopay.** Invoices are `send_invoice`: each is paid from its link. The
-  Stripe portal keeps a card on file and downloads invoices, but nothing
-  charges it automatically yet (the book's `policy.savedCardEnabled` is
-  `false`). The same holds for a plan billed outside the engine: its saved
-  card is offered on each hosted invoice page and is the default for any
-  invoice ClearSky raises in the Stripe dashboard with *Charge customer
-  automatically*, but OMEGA never charges it on a date by itself.
+- **Autopay on a package, and on the plan's amount due.** Package invoices
+  are `send_invoice`: each is paid from its link (the book's
+  `policy.savedCardEnabled` is `false`), and so is *Pay $X with Stripe*. The
+  saved card is offered on each hosted invoice page and is the default for
+  any invoice ClearSky raises in the Stripe dashboard with *Charge customer
+  automatically*, but OMEGA never charges it for those on a date by itself.
+  A legacy plan's **add-ons are the exception** (2026-09-28, Tommy: "charge
+  their credit card or saved payment method"): with a card on file — the
+  customer's default payment method for invoices, saved through *Add a card
+  with Stripe* — an opt-in is charged the moment *Opt in and pay* is pressed
+  (`stripe-billing.invoice(…, { charge })`, a `charge_automatically` invoice
+  paid on the spot; the purchase runs the same reconcile and answers *on*)
+  and each renewal is charged on its date by the runner. A refusal (a
+  decline, a card that needs its bank) leaves that invoice open on its
+  hosted page, with Stripe's own words in the mail and the menu, and *change
+  the card in Plan & billing* is the way back. Without a card, add-ons pay
+  from their link as before. `scripts/test-addons.js` §6e holds it.
 - **Refunds of a plan's amount due.** A refund in Stripe does not put the
   amount back on `amountDue`; ClearSky sets it in the master console.
 - **Instant refund events.** A refund is a *charge* event with no

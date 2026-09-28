@@ -312,7 +312,8 @@ function quote(c, rows, input, now, staff) {
       amount: P.money(total),
       today: included ? 'Nothing to pay today: it is covered by the add-ons you already pay for.' : P.money(total) + ' today, for ' + (inCycle ? cycle.remainingDays + ' of ' + cycle.days + ' days until your add-on billing date, ' + cycle.end : today + ' to ' + cycle.end),
       then: 'then ' + then,
-      activation: included ? 'It switches on now.' : 'Pay by card on ' + pageOf(railName(b)) + '; a card you saved there pays in one click. It switches on the moment the payment clears.',
+      activation: included ? 'It switches on now.' : rail(b) === 'stripe' ? 'The card on file with Stripe is charged now; without one, pay by card on ' + pageOf('Stripe') + '. It switches on the moment the payment clears.'
+        : 'Pay by card on ' + pageOf(railName(b)) + '; a card you saved there pays in one click. It switches on the moment the payment clears.',
       plan: 'Your plan and its billing stay exactly as they are.' } };
   if (staff && g.detail) out.detail = g.detail;
   return out;
@@ -412,6 +413,20 @@ function boughtAfter(billing, record, from, to, rows) {
 }
 
 /* ── Buy: issue the invoice (or switch on at once when nothing is owed) ── */
+/* The card on file paid the invoice at Stripe a moment ago: the SAME
+   reconcile the webhook and the runner run reads it back and switches the
+   modules on, so the purchase answers on, not waiting, and its replay says
+   the same. A reconcile that cannot read Stripe right now leaves the answer
+   as issued: the money moved, and the webhook or the runner settles it. */
+async function settleCharged(db, c, orgId, op, result, invoiceId, now, deps) {
+  try { await require('./package-billing').reconcile(db, orgId, now, deps, { only: invoiceId }); }
+  catch (e) { console.warn('[addons] charged, not yet read back for ' + orgId + ':', e && e.message); return result; }
+  var b = (await current(c).get()).data() || {}, live = (b.addOns && b.addOns.live) || [];
+  var on = (result.add || []).every(function (k) { return live.indexOf(k) >= 0; });
+  var final = Object.assign({}, result, { state: on ? 'active' : result.state, live: live.slice(), paymentLink: on ? null : result.paymentLink });
+  await op.set({ result: final }, { merge: true });
+  return final;
+}
 async function buy(db, orgId, input, caller, now, deps) {
   var c = await context(db, orgId);
   if (typeof input.previewId !== 'string' || !/^[a-f0-9]{48}$/.test(input.previewId)) fail('The price changed; review it again before paying');
@@ -457,12 +472,14 @@ async function buy(db, orgId, input, caller, now, deps) {
       var SC = require('./stripe-customer'), sc = await SC.context(db, orgId);
       customer = String((await SC.link(db, sc, caller, (deps && deps.stripe) || SC.client(), now)).id);
     } else customer = await driver.customer(orgId, profile, c.billing.qboCustomerId || null);
-    var issued = q.todayCents > 0 ? await driver.invoice(record, profile, customer) : null;
-    return await db.runTransaction(async function (tx) {
+    /* on Stripe the card on file pays now (stripe-billing invoice, charge);
+       without one, or refused, the invoice waits on its hosted page */
+    var issued = q.todayCents > 0 ? await driver.invoice(record, profile, customer, { charge: provider === 'stripe' }) : null;
+    var answer = await db.runTransaction(async function (tx) {
       var live1 = await tx.get(cur), invoices = await tx.get(cur.collection('invoices').orderBy('date')), bookRef = db.doc('pricebook/' + c.book.version), bookSnap = await tx.get(bookRef);
       var fresh = live1.data() || {};
       if (!fresh.addOnLock || fresh.addOnLock.id !== id) fail('The purchase moved; retry');
-      var stored = Object.assign({}, record, issued ? Object.assign({ state: 'unpaid', totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now }, D.invoiceFields(provider, issued.id, customer))
+      var stored = Object.assign({}, record, issued ? Object.assign({ state: 'unpaid', totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now, chargedAt: issued.charged ? now : null, card: issued.card || null }, D.invoiceFields(provider, issued.id, customer))
         : Object.assign({ state: 'paid', provider: provider, paidCents: 0, paymentLink: null, paidAt: now }, provider === 'stripe' ? { stripeCustomerId: customer } : { qboInvoiceId: null, qboCustomerId: customer }));
       tx.set(cur.collection('invoices').doc(id), stored);
       var base = fresh, moved = issued ? null : boughtAfter(fresh, stored, 'unpaid', 'paid');
@@ -475,17 +492,21 @@ async function buy(db, orgId, input, caller, now, deps) {
       /* the runner renews and reconciles it: packagedLive is what the live
          runner's query reads (the sandbox runner reads packagingSandbox) */
       if (Mode.live(provider)) tx.set(c.root, { packagedLive: true, updatedAt: now }, { merge: true });
-      if (issued) tx.set(c.root.collection('notifications').doc('addon-invoice-' + id), { kind: 'billing', read: false, createdAt: now,
-        text: 'Your invoice to add ' + q.addNames.join(', ') + ' is ready: ' + P.money(issued.totalCents) + '. Pay it by card on ' + pageOf(payWith) + ' and it switches on as soon as the payment clears.',
+      /* paid by the card on file, the reconcile below tells them what is on; else the invoice and its page, and why the card did not pay */
+      if (issued && !issued.charged) tx.set(c.root.collection('notifications').doc('addon-invoice-' + id), { kind: 'billing', read: false, createdAt: now,
+        text: (issued.declined ? 'Your card on file was not charged (' + issued.declined + '). ' : '') + 'Your invoice to add ' + q.addNames.join(', ') + ' is ready: ' + P.money(issued.totalCents) + '. Pay it by card on ' + pageOf(payWith) + (issued.declined ? ', or change the card in Plan & billing,' : '') + ' and it switches on as soon as the payment clears.',
         packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents), payWith: payWith });
       var result = { ok: true, addOnId: id, state: issued ? 'awaiting_payment' : 'active', add: q.add, addNames: q.addNames, todayCents: stored.totalCents, display: P.money(stored.totalCents),
-        paymentLink: stored.paymentLink || null, payWith: payWith, payLinkMissing: !!(issued && !issued.payUrl), expiresOn: q.cycle.end, monthlyDisplay: q.monthlyDisplay, live: patch.addOns.live };
+        paymentLink: stored.paymentLink || null, payWith: payWith, payLinkMissing: !!(issued && !issued.payUrl && !issued.charged), expiresOn: q.cycle.end, monthlyDisplay: q.monthlyDisplay, live: patch.addOns.live,
+        charged: !!(issued && issued.charged), card: (issued && issued.card) || null, declined: (issued && issued.declined) || null };
       tx.set(op, { state: 'done', result: result, completedAt: now }, { merge: true });
       var event = { at: now, by: caller.email, action: issued ? 'addon-requested' : 'addon-included', changeId: id,
-        was: { addOns: (fresh.addOns && fresh.addOns.modules) || [], tier: fresh.tier || null }, changed: { add: q.add, totalCents: stored.totalCents, monthlyCents: q.monthlyCents, state: stored.state, live: patch.addOns.live } };
+        was: { addOns: (fresh.addOns && fresh.addOns.modules) || [], tier: fresh.tier || null }, changed: { add: q.add, totalCents: stored.totalCents, monthlyCents: q.monthlyCents, state: stored.state, live: patch.addOns.live, charged: !!(issued && issued.charged) } };
       tx.set(cur.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
       return result;
     });
+    if (issued && issued.charged) answer = await settleCharged(db, c, orgId, op, answer, issued.id, now, deps);
+    return answer;
   } catch (e) {
     await db.runTransaction(async function (tx) {
       var live2 = await tx.get(cur), old = await tx.get(op), fresh = live2.data() || {};
@@ -636,21 +657,23 @@ async function issue(db, orgId, now, deps) {
   if (!plan) return { skipped: true, alreadyIssued: true };
   if (plan.ended) return { ended: plan.ended };
   try {
-    var issued = await D.driver(c.book, provider, deps).invoice(plan, profileFor(c, provider), customerId);
+    /* on Stripe the card on file pays the renewal now; the runner's reconcile reads it back and keeps the add-ons on */
+    var issued = await D.driver(c.book, provider, deps).invoice(plan, profileFor(c, provider), customerId, { charge: provider === 'stripe' });
     return await db.runTransaction(async function (tx) {
       var live1 = await tx.get(cur), inv = await tx.get(ref), invoices = await tx.get(cur.collection('invoices').orderBy('date')), fresh = live1.data() || {};
       if (D.issued(inv.data())) return { alreadyIssued: true };
       if (!fresh.addOnInvoiceLock || fresh.addOnInvoiceLock.date !== plan.date) fail('Add-on renewal reservation changed; retry');
-      var stored = Object.assign({}, inv.data(), { state: 'unpaid', totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now }, D.invoiceFields(provider, issued.id, customerId));
+      var stored = Object.assign({}, inv.data(), { state: 'unpaid', totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now, chargedAt: issued.charged ? now : null, card: issued.card || null }, D.invoiceFields(provider, issued.id, customerId));
       tx.set(ref, stored);
       var all = invoices.docs.map(function (d) { return d.id === id ? stored : d.data(); });
       var patch = settle(fresh, all, c.book, now); patch.addOnInvoiceLock = null;
       tx.update(cur, patch);
-      tx.set(cur.collection('history').doc('addon-renewal-' + on), { at: now, by: 'billing-run', action: 'addon-invoice-issued', invoiceId: issued.id, provider: provider, date: on, amountCents: issued.totalCents });
-      tx.set(c.root.collection('notifications').doc('addon-invoice-' + id), { kind: 'billing', read: false, createdAt: now,
-        text: 'Your add-on invoice is ready: ' + P.money(issued.totalCents) + ' for ' + names(plan.modules).join(', ') + ', ' + plan.period.start + ' to ' + plan.period.end + '. Pay it by card on ' + pageOf(payWith) + ', or with the card saved there.',
+      tx.set(cur.collection('history').doc('addon-renewal-' + on), { at: now, by: 'billing-run', action: 'addon-invoice-issued', invoiceId: issued.id, provider: provider, date: on, amountCents: issued.totalCents, charged: !!issued.charged });
+      /* paid by the card on file, the reconcile's receipt is the mail; else the invoice and its page, and why the card did not pay */
+      if (!issued.charged) tx.set(c.root.collection('notifications').doc('addon-invoice-' + id), { kind: 'billing', read: false, createdAt: now,
+        text: (issued.declined ? 'Your card on file was not charged (' + issued.declined + '). ' : '') + 'Your add-on invoice is ready: ' + P.money(issued.totalCents) + ' for ' + names(plan.modules).join(', ') + ', ' + plan.period.start + ' to ' + plan.period.end + '. Pay it by card on ' + pageOf(payWith) + (issued.declined ? ', or change the card in Plan & billing' : ', or with the card saved there') + '.',
         packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents), payWith: payWith });
-      return { issued: true, date: on, invoiceId: issued.id, paymentLink: issued.payUrl };
+      return { issued: true, date: on, invoiceId: issued.id, paymentLink: issued.payUrl, charged: !!issued.charged };
     });
   } catch (e) {
     await db.runTransaction(async function (tx) { var s = await tx.get(cur), lock = (s.data() || {}).addOnInvoiceLock; if (lock && lock.date === plan.date) tx.update(cur, { addOnInvoiceLock: null }); });

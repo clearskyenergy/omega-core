@@ -14,7 +14,9 @@
  * (`configRefuses` plays a key that may not make one), payment methods read
  * back through expand, voidInvoice, and saveCard(), the customer adding a
  * card on Stripe's page, which becomes the default for invoices as the
- * flow does.
+ * flow does. invoices.pay charges that card, as api/_lib/stripe-billing.js
+ * does for an add-on when one is on file (a card saved with `declines`
+ * refuses, as a declined card does).
  */
 'use strict';
 function copy(x) { return JSON.parse(JSON.stringify(x)); }
@@ -64,7 +66,8 @@ function StripeDouble(options) {
     create: async function (p, o) {
       return once('invoices.create', p, o, function () {
         if (!self.customers_[p.customer]) missing('customer: ' + p.customer);
-        if (p.collection_method !== 'send_invoice' || !(p.days_until_due >= 1)) fail('A send_invoice invoice needs days_until_due');
+        if (p.collection_method === 'charge_automatically') { if (p.days_until_due != null) fail('days_until_due is only valid for invoices where collection_method=send_invoice'); }
+        else if (p.collection_method !== 'send_invoice' || !(p.days_until_due >= 1)) fail('A send_invoice invoice needs days_until_due');
         if (!self.customers_[p.customer].email) fail('Missing email. In order to create invoices that are sent to the customer, the customer must have a valid email.');
         var inv = Object.assign({ id: id('in'), object: 'invoice', livemode: self.livemode, status: 'draft', amount_paid: 0, post_payment_credit_notes_amount: 0, charge: null, hosted_invoice_url: null, total: 0,
           customer_email: self.customers_[p.customer].email, status_transitions: { paid_at: null } }, copy(p));
@@ -89,6 +92,18 @@ function StripeDouble(options) {
         inv.status = inv.total === 0 || inv.amount_due === 0 ? 'paid' : 'open'; inv.number = 'OMEGA-' + iid.slice(-4);
         inv.hosted_invoice_url = options.noLink ? null : 'https://invoice.stripe.com/i/acct_double/' + iid; return invoiceView(inv);
       });
+    },
+    /* pay an open invoice with the customer's default payment method: a charge as the customer's own payment makes, or Stripe's refusal */
+    pay: async function (iid, p, o) {
+      self.calls.push('invoices.pay');
+      var inv = self.invoices_[iid]; if (!inv) missing('invoice: ' + iid);
+      if (inv.status === 'draft') fail('This invoice can\'t be paid because it is still a draft.');
+      if (inv.status === 'paid') fail('Invoice ' + iid + ' is already paid.');
+      if (inv.status !== 'open') fail('This invoice cannot be paid: it is ' + inv.status + '.');
+      var cust = self.customers_[inv.customer] || {}, pmId = (p && p.payment_method) || (cust.invoice_settings && cust.invoice_settings.default_payment_method), pm = pmId && self.methods_[pmId];
+      if (!pm) fail('This customer has no attached payment source or default payment method. Please consider adding a default payment method.');
+      if (pm.declines) { var e = new Error('Your card was declined.'); e.type = 'StripeCardError'; e.code = 'card_declined'; e.decline_code = 'generic_decline'; e.statusCode = 402; throw e; }
+      var paid = self.pay(iid); self.charges_[paid.charge].payment_method = pm.id; return copy(invoiceView(paid));
     },
     sendInvoice: async function (iid, p, o) { return once('invoices.sendInvoice', { id: iid }, o, function () { self.sent.push(iid); return invoiceView(self.invoices_[iid]); }); },
     voidInvoice: async function (iid, p, o) {
@@ -150,7 +165,9 @@ function StripeDouble(options) {
   };
   /* the customer adds a card on Stripe's page (the portal's payment_method_update flow): it becomes the default for invoices */
   this.saveCard = function (cid, card) {
-    var pm = { id: id('pm'), object: 'payment_method', type: 'card', customer: cid, livemode: self.livemode, card: Object.assign({ brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2030 }, card || {}) };
+    var c = Object.assign({ brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2030 }, card || {}), declines = c.declines === true; delete c.declines;
+    var pm = { id: id('pm'), object: 'payment_method', type: 'card', customer: cid, livemode: self.livemode, card: c };
+    if (declines) pm.declines = true;
     self.methods_[pm.id] = pm; self.customers_[cid].invoice_settings = { default_payment_method: pm.id }; return pm.id;
   };
   this.refund = function (iid, cents) { var inv = self.invoices_[iid], ch = self.charges_[inv.charge]; ch.amount_refunded = cents == null ? ch.amount : cents; ch.refunded = ch.amount_refunded >= ch.amount; };
