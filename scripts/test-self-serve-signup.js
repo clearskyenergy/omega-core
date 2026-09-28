@@ -259,7 +259,7 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     assert.match(lg, /creatingAccount = true;/); assert.match(lg, /if \(user && !creatingAccount\) route\(/); assert.match(lg, /return toSignup\(\);/); assert.match(lg, /if \(found\.signup && await packagedSignup\) return toSignup\(\);/);
     assert.match(st, /u\.getIdToken\(true\)/); assert.match(st, /watchVerification\(u\)/);
     /* the signup opens before the email link; Subscribe waits for it (render-signup.js drives it) */
-    assert.match(st, /if \(!emailOk\) \{/); assert.match(st, /skipForm = \$\('f-name'\)\.value\.trim\(\)\.length >= 2 && !qp\('proposal'\);/); assert.match(st, /id="f-submit" onclick="companyContinue\(\)">Continue</);
+    assert.match(st, /if \(!emailOk\) \{/); assert.match(st, /skipForm = !qp\('proposal'\);/); assert.match(st, /if \(name\.length < 2\) name = String\(payload\.billingProfile\.legalName \|\| ''\)\.trim\(\);/); assert.match(st, /id="f-submit" onclick="companyContinue\(\)">Continue</);
     assert.match(lg, /id="suPackaged"/); assert.match(lg, /fetch\('\/api\/offerings'/); assert.match(lg, /href="\/offerings\.html"/);
     assert.match(of, /XMLHttpRequest\(\); x\.open\('GET', '\/api\/offerings'\)/); assert.ok(!/firebase|omega-tenant\.js/.test(of), 'the price list is a public page: no sign-in, no tenant runtime');
     assert.ok(!/=>|\blet\s|\bconst\s|`/.test(of.replace(/<!--[\s\S]*?-->/g, '')), 'ES5');

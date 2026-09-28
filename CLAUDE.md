@@ -235,7 +235,11 @@ fee named as the server priced it) → *Confirm email*, only while the
 address is unconfirmed → *Billing & pay* (the short form,
 `OmegaBillingProfile.render(…, { compact: true })`: the optional fields
 folded under More billing options) → pay. A package named by the offerings
-page (`?modules=`, `?plan=`) or a proposal skips the question screen.
+page (`?modules=`, `?plan=`) or a proposal skips the question screen. There
+is no company screen (2026-09-28, Tommy: "i want whats in the slide show"):
+a signed-in visit goes straight into the run, and the workspace is named
+after the billing form's Legal company name unless Create account carried
+one; only a proposal link and a server without packaging keep that form.
 Create account goes straight into that signup on `/start.html` with the
 company carried over (making the account signs it in, so login's auth
 listener stands aside while the form routes it); the options and quotes
