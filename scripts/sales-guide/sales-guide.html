@@ -1,0 +1,362 @@
+<!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     scripts/sales-guide/sales-guide.html — THE SALES GUIDE (docs/OMEGA-Sales-Guide.pdf).
+     Build: node scripts/sales-guide/build.js
+
+     Internal: for ClearSky's sales team. It is NOT served (docs/ is not) and
+     it is not one of the customer guides in scripts/guides/.
+
+     Every price, module name, plan rule, starter pack, meter and discovery
+     question is a %%TOKEN%% that build.js fills from the ONE catalog
+     (api/_lib/modules.js), the ONE price book (api/_lib/pricebook.js), the
+     pricing engine (api/_lib/subscription-pricing.js) and the discovery
+     questions (api/_lib/subscription-proposal.js). Nothing priced is typed
+     here, so the guide cannot drift from what the platform sells.
+
+     Printed as fixed Letter SHEETS, like the office guide: each .sheet is
+     one page, draws its own band and footer, and build.js refuses a sheet
+     whose content runs past its page. -->
+<html lang="en"><head><meta charset="utf-8"><title>Selling OMEGA · the sales guide</title>
+<style>
+@page{size:Letter;margin:0}
+html,body{margin:0}
+body{--navy:#0f2e3f;--ink:#1d2b33;--teal:#0e7c8b;--muted:#5a7280;--wash:#eaf4f7;--line:#cfdde3;--tap:#f26b3a;--gold:#f5b43a;
+  --neon:linear-gradient(90deg,#9BE870 0%,#2FE3C8 32%,#35C6F4 68%,#3D9DF5 100%);
+  counter-reset:pg;font:10.6pt/1.4 "Liberation Sans",Arial,Helvetica,sans-serif;color:var(--ink);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+*{box-sizing:border-box}
+@media screen{body{background:#d9e2e6;padding:.3in 0}.sheet{margin:0 auto .3in;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.18)}}
+.sheet{position:relative;overflow:hidden;width:8.5in;height:11in;background:#fff;counter-increment:pg;break-after:page;page-break-after:always}
+.sheet:last-of-type{break-after:auto;page-break-after:auto}
+.body{position:absolute;top:1.05in;left:.55in;width:7.4in;height:9.3in;overflow:hidden}
+.band{position:absolute;top:0;left:0;right:0;height:.8in;background:var(--navy);color:#fff;display:flex;align-items:center;gap:14px;padding:0 .55in}
+.band img{height:34px;width:auto;display:block}
+.band .t{font-size:17pt;font-weight:700;letter-spacing:-.2px;line-height:1.1}
+.band .s{font-size:8.8pt;color:#b9d3dc;margin-top:3px}
+.band:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--neon)}
+.foot{position:absolute;left:.55in;right:.55in;bottom:.28in;display:flex;justify-content:space-between;font-size:7.8pt;color:var(--muted);border-top:1px solid var(--line);padding-top:5px}
+.foot .pg:after{content:"page " counter(pg)}
+
+/* type */
+.kick{font-size:8.4pt;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin:0 0 3px}
+h1{font-size:26pt;line-height:1.06;color:var(--navy);margin:0 0 8px;letter-spacing:-.5px;font-weight:700}
+h2{font-size:15pt;line-height:1.2;color:var(--navy);margin:0 0 6px;letter-spacing:-.2px;font-weight:700}
+h3{font-size:11pt;line-height:1.25;color:var(--navy);margin:0 0 4px;font-weight:700}
+p{margin:0 0 7px}
+ul,ol{margin:0 0 7px;padding-left:16px}
+li{margin:0 0 3px}
+b{color:var(--navy)}
+.lead{font-size:11.6pt;line-height:1.4;color:#34505e;margin:0 0 10px}
+.small{font-size:8.8pt;color:var(--muted);line-height:1.35}
+.k{display:inline;font-weight:700;color:var(--navy);background:#eef5f7;border:1px solid #cbdce2;border-radius:4px;padding:0 4px;white-space:nowrap}
+.say{border-left:3px solid var(--tap);background:#fff7f3;padding:6px 10px;margin:0 0 8px;font-style:italic;color:#3a2c26}
+.say b{font-style:normal;color:var(--tap)}
+.p2 .step p,.p2 p{font-size:10.1pt;line-height:1.36}
+.p2 .who td{padding:3px 5px;font-size:8.9pt}
+.p2 h2{margin-bottom:4px}
+.rules{font-size:9.5pt;line-height:1.35}
+.rules li{margin:0 0 2px}
+.note{background:var(--wash);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin:0 0 8px;font-size:9.4pt}
+
+/* grids */
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.tile{border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:#fff}
+.tile .n{font-size:19pt;font-weight:700;color:var(--navy);letter-spacing:-.4px;line-height:1.05}
+.tile .l{font-size:8.6pt;color:var(--muted);margin-top:3px}
+.step{display:grid;grid-template-columns:24px 1fr;gap:8px;margin:0 0 5px}
+.step .d{width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-weight:700;font-size:9.5pt;display:flex;align-items:center;justify-content:center}
+.step p{margin:0}
+
+/* tables */
+table{width:100%;border-collapse:collapse;margin:0 0 8px}
+th,td{text-align:left;vertical-align:top;padding:4px 6px;border-bottom:1px solid var(--line)}
+th{font-size:8.2pt;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;border-bottom:2px solid var(--navy)}
+td{font-size:9.2pt;line-height:1.3}
+.menu td{font-size:8.9pt;line-height:1.28;padding:4px 5px}
+td.price,th.price{text-align:right;white-space:nowrap;font-weight:700;color:var(--navy)}
+tr.shelf td{background:var(--wash);font-weight:700;color:var(--navy);font-size:8.6pt;letter-spacing:.06em;text-transform:uppercase;padding:3px 6px}
+.mark{display:inline-flex;width:17px;height:17px;border-radius:4px;background:var(--navy);color:#fff;font-weight:700;font-size:8.5pt;align-items:center;justify-content:center;margin-right:5px;vertical-align:-3px}
+.mark.pf{background:var(--teal)}
+.dim{color:var(--muted)}
+.tight td{padding:3px 6px}
+
+/* ladder graphic */
+.ladder{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:4px 0 8px}
+.rung{border:1px solid var(--line);border-radius:8px;padding:6px 7px;background:#fff;position:relative}
+.rung:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;border-radius:8px 8px 0 0;background:var(--neon)}
+.rung .r{font-size:7.6pt;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);font-weight:700}
+.rung .n{font-size:10.4pt;font-weight:700;color:var(--navy);margin:2px 0 1px;line-height:1.15}
+.rung .p{font-size:9.4pt;font-weight:700;color:var(--tap)}
+.rung .w{font-size:8pt;color:var(--muted);margin-top:3px;line-height:1.3}
+
+/* cover */
+.cover .hero{position:absolute;top:0;left:0;right:0;height:4.7in;background:var(--navy);color:#fff;padding:.7in .65in 0}
+.cover .hero:after{content:"";position:absolute;left:0;right:0;bottom:0;height:5px;background:var(--neon)}
+.cover .hero img.lock{height:74px;width:auto;display:block;margin:0 0 .45in}
+.cover .hero img.cs{position:absolute;right:.6in;top:.55in;height:66px;width:auto}
+.cover .hero .h{font-size:38pt;font-weight:700;letter-spacing:-1px;line-height:1.02;margin:0 0 10px}
+.cover .hero .sub{font-size:13.5pt;color:#b9d3dc;line-height:1.4;max-width:6.4in}
+.cover .below{position:absolute;top:5.05in;left:.65in;right:.65in;bottom:.7in}
+.cover .foot{border-top:0}
+</style></head>
+<body>
+
+<!-- ─────────────────────────────── 1 · cover ─────────────────────────────── -->
+<section class="sheet cover">
+  <div class="hero">
+    <img class="lock" src="%%LOCKUP_WHITE%%" alt="ClearSky-OMEGA">
+    <img class="cs" src="%%CLEARSKY_LOGO%%" alt="ClearSky">
+    <div class="h">Selling OMEGA</div>
+    <div class="sub">The sales leader's guide: what we sell, what it costs, how a customer opts in to the parts they need, and the words that close it.</div>
+  </div>
+  <div class="below">
+    <p class="lead"><b>One platform for developing energy projects.</b> A customer screens a site, designs it on live satellite, prices it, draws the permit set, models the money and, if they build product, runs the orders, the plant and the shipping. They start at <b>Omega Design</b> for <b>%%LITE_PRICE%%</b> a month and opt in to the rest module by module, in their own workspace, paying only for what they switch on.</p>
+    <div class="cols3">
+      <div class="tile"><div class="n">%%LITE_PRICE%%</div><div class="l">a month to start: Omega Design, the floor every package stands on</div></div>
+      <div class="tile"><div class="n">%%MODULE_COUNT%% modules</div><div class="l">on one menu, one list price each, added any time from inside the workspace</div></div>
+      <div class="tile"><div class="n">%%TRIAL_DAYS%% days</div><div class="l">of trial from approval, or pay now and start today</div></div>
+    </div>
+    <div class="cols" style="margin-top:12px">
+      <div>
+        <div class="kick">What is in this guide</div>
+        <ol>
+          <li>The pitch and the rules of the ladder</li>
+          <li>The menu: every module, its price, what it replaces</li>
+          <li>Plans, the money and the meters</li>
+          <li>Discovery: twelve tiles that pick the package</li>
+          <li>How a customer opts in, and the rep's four moves</li>
+          <li>Say it straight: objections and honest limits</li>
+        </ol>
+      </div>
+      <div>
+        <div class="kick">Where to point people</div>
+        <p><b>The price list:</b> <span class="k">%%OFFERINGS_URL%%</span><br>
+        <b>Sign up and pay:</b> <span class="k">%%START_URL%%</span><br>
+        <b>Support:</b> <span class="k">%%SUPPORT_EMAIL%%</span></p>
+        <p class="small">Prices are the platform's price book <b>%%BOOK_VERSION%%</b>, read at build time on %%BUILT_ON%%. The price list page is always current; when the two disagree, the page wins.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>ClearSky Energy Solutions · internal, for the sales team</span><span class="pg"></span></div>
+</section>
+
+<!-- ─────────────────────────────── 2 · the pitch ─────────────────────────────── -->
+<section class="sheet p2">
+  <div class="band"><img src="%%LOCKUP_WHITE%%" alt=""><div><div class="t">The pitch</div><div class="s">Thirty seconds, then the rules of the ladder</div></div></div>
+  <div class="body">
+    <div class="say"><b>Say:</b> "Everything you pay separate people and separate tools for today, from screening a site to getting it built, in one workspace. Start at %%LITE_PRICE%% a month. Add only the parts you actually use, when you use them. Nothing is per seat: one person designs, twenty can look."</div>
+    <div class="cols">
+      <div>
+        <h2>What they do in the first week</h2>
+        <div class="step"><div class="d">1</div><p><b>Screen a site.</b> Type an address. Omega Grid shows the substations, lines and hosting capacity around it; Omega Intel scores the parcel, terrain and network before anyone drives there.</p></div>
+        <div class="step"><div class="d">2</div><p><b>Design it.</b> Omega Design draws the site on live satellite: equipment, conduit, a guided build for BESS, solar, EV or a microgrid, and a blueprint and proposal for the customer the same day.</p></div>
+        <div class="step"><div class="d">3</div><p><b>Price it and prove it.</b> Omega Estimate turns the design into an electrical estimate, a bill of materials and a request for quote; Omega Storage sizes the battery and prints the pro forma.</p></div>
+        <div class="step"><div class="d">4</div><p><b>Keep going.</b> Plan sets for the utility and the AHJ, the permitting matrix, financing, then operations, and Omega Logic when they build and ship product of their own.</p></div>
+      </div>
+      <div>
+        <h2>Why it saves on project development</h2>
+        <p>Every module replaces something the customer buys today: a data subscription, a CAD seat, an estimating seat, a modelling tool, consultant or drafting hours. The menu on the next page names the typical figure beside each module so the rep can put the customer's own number next to ours.</p>
+        <p>The other saving is time. A site that used to take a week of handoffs between the screener, the designer and the estimator is one person's afternoon, and the proposal goes out while the customer is still interested.</p>
+        <h3>Who buys</h3>
+        <table class="tight who">
+          <tr><td><b>Installers</b> (EV, solar, storage)</td><td>design, estimate, rebates, plan sets</td></tr>
+          <tr><td><b>Developers and owners</b></td><td>screening, grid, storage, capital</td></tr>
+          <tr><td><b>EPCs and engineers</b></td><td>plan sets, engineering, permits</td></tr>
+          <tr><td><b>OEMs and distributors</b></td><td>storefront, estimate, Omega Logic</td></tr>
+          <tr><td><b>Compute and data-centre teams</b></td><td>compute, grid, site intelligence</td></tr>
+        </table>
+      </div>
+    </div>
+    <h2>The rules of the ladder</h2>
+    <div class="ladder">%%LADDER%%</div>
+    <div class="cols rules">
+      <ul>
+        <li><b>Start at the floor.</b> Every package includes Omega Design at %%LITE_PRICE%%; no package is under it.</li>
+        <li><b>Nothing is free.</b> One trial per company, %%TRIAL_DAYS%% days at most, from the day ClearSky approves the signup. Or they pay now and start today.</li>
+        <li><b>One list price per module, for everybody.</b> The price book is versioned; a signed package keeps the prices it was sold on.</li>
+      </ul>
+      <ul>
+        <li><b>Per workspace, not per seat.</b> %%BUILDERS%% builder and %%VIEWERS%% viewer logins included; extra builders %%BUILDER_PRICE%%, viewers %%VIEWER_PRICE%%.</li>
+        <li><b>Opt in any time, opt out at the review.</b> An addition is paid up front, prorated to their billing day, and is on the moment it is paid. A removal waits for the quarterly right-size.</li>
+        <li><b>Pay for the year, pay for %%ANNUAL_MONTHS%% months of twelve.</b> %%ANNUAL_FREE%% months free, invoiced once.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>ClearSky Energy Solutions · internal, for the sales team · price book %%BOOK_VERSION%%</span><span class="pg"></span></div>
+</section>
+
+<!-- ─────────────────────────────── 3 · the menu, Site Map modules ─────────────────────────────── -->
+<section class="sheet">
+  <div class="band"><img src="%%LOCKUP_WHITE%%" alt=""><div><div class="t">The menu · Site Map modules</div><div class="s">Every module, its list price, and what the customer pays for today instead</div></div></div>
+  <div class="body">
+    <table class="tight menu">
+      <thead><tr><th style="width:1.35in">Module</th><th>What it does</th><th style="width:1.55in">Replaces (typical, confirm on the call)</th><th class="price" style="width:.8in">A month</th></tr></thead>
+      <tbody>%%MODULE_ROWS_EDITOR%%</tbody>
+    </table>
+    <p class="small">Omega Design is required by every other module. "Replaces" figures are typical market prices for the tool, data or hours the module stands in for; the Subscription Proposal lets the rep type the customer's own numbers over them. Never quote a figure the customer did not confirm.</p>
+  </div>
+  <div class="foot"><span>ClearSky Energy Solutions · internal, for the sales team · price book %%BOOK_VERSION%%</span><span class="pg"></span></div>
+</section>
+
+<!-- ─────────────────────────────── 4 · the menu, by the piece and Omega Logic ─────────────────────────────── -->
+<section class="sheet">
+  <div class="band"><img src="%%LOCKUP_WHITE%%" alt=""><div><div class="t">The menu · By the piece and Omega Logic</div><div class="s">Metered deliverables, and the platform for companies that build and ship product</div></div></div>
+  <div class="body">
+    <table class="tight menu">
+      <thead><tr><th style="width:1.35in">Module</th><th>What it does</th><th style="width:1.55in">Replaces (typical, confirm on the call)</th><th class="price" style="width:.8in">A month</th></tr></thead>
+      <tbody>%%MODULE_ROWS_PIECE%%</tbody>
+    </table>
+    <div class="cols">
+      <div>
+        <h2>Metered modules</h2>
+        <p>Three modules count what they produce. The allowance is included in the price; past it the customer buys a pack up front or is billed the overage on the next invoice.</p>
+        <table class="tight">
+          <thead><tr><th>Meter</th><th>Included</th><th>Over</th><th>Pack</th></tr></thead>
+          <tbody>%%USAGE_ROWS%%</tbody>
+        </table>
+        <h2>Logins</h2>
+        <p>Every workspace includes <b>%%BUILDERS%% builders</b> (people who design and produce) and <b>%%VIEWERS%% viewers</b>. Extra builders are %%BUILDER_PRICE%%, extra viewers %%VIEWER_PRICE%%. Sell the workspace, not the seat.</p>
+      </div>
+      <div>
+        <h2>Omega Logic</h2>
+        <p>For a customer who takes orders, builds and ships product under their own name: the office, the plant, purchasing, logistics and an app their customers use under the customer's brand. It is ClearSky's product and the customer is a workspace in it, like a company in QuickBooks; they sign in to Omega Logic, then open their company, on the desktop or the phone app.</p>
+        <p>Five parts, each its own opt-in, Logic Office first: %%LOGIC_PARTS%%. All five together are <b>%%LOGIC_BUNDLE%%</b> a month instead of %%LOGIC_ALACARTE%% one by one. Omega Logic is an add-on to any plan.</p>
+        <div class="note"><b>The customer app is the second sale inside the first.</b> Every unit the customer ships lands in their own customers' hands with order status, documents, deliveries, sites and the warranty bound to each site, wearing the customer's name.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>ClearSky Energy Solutions · internal, for the sales team · price book %%BOOK_VERSION%%</span><span class="pg"></span></div>
+</section>
+
+<!-- ─────────────────────────────── 5 · plans and money ─────────────────────────────── -->
+<section class="sheet">
+  <div class="band"><img src="%%LOCKUP_WHITE%%" alt=""><div><div class="t">Plans and the money</div><div class="s">Two ways to buy from one menu: à la carte, or a plan when it is cheaper</div></div></div>
+  <div class="body">
+    <h2>The plans</h2>
+    <table>
+      <thead><tr><th style="width:1.3in">Plan</th><th>Rule</th><th class="price" style="width:1.4in">A month</th></tr></thead>
+      <tbody>%%PLAN_ROWS%%</tbody>
+    </table>
+    <p class="small">A plan is a discounted amount of the menu, so the menu and the plans always agree. The platform quotes whichever is cheaper for the modules chosen and says so on the price page. Below Field, the customer pays à la carte. Omega Logic, extra logins, the service fee and any credit come on top of any plan.</p>
+    <div class="cols">
+      <div>
+        <h2>The service fee</h2>
+        <p>An annual service fee covers onboarding in year one and support after: %%FEE_ROWS%%. It is a separate line on the first invoice, never folded into a module price. A proposal may waive or set it, with a reason recorded.</p>
+        <h2>The transformation credit</h2>
+        <p>The proposal can offer <b>%%CREDIT_PCT%%% off for the first %%CREDIT_DAYS%% days</b>, shown as its own line, never as a lower list price, and never below the %%LITE_PRICE%% floor. Monthly billing only; annual prepay already carries its %%ANNUAL_FREE%% free months.</p>
+      </div>
+      <div>
+        <h2>How they pay</h2>
+        <p>The first invoice is paid by card on the invoice's own page (Stripe or QuickBooks, whichever the signup page names); the workspace opens when it is paid, within minutes. Every addition is the same: quote, pay, on. A card on file is charged for opt-ins and renewals.</p>
+        <p><b>Pay for the year, pay for %%ANNUAL_MONTHS%% months of twelve:</b> one invoice, %%ANNUAL_FREE%% months free. Monthly is billed on the day of the month they signed up; an addition is prorated to that day.</p>
+      </div>
+    </div>
+    <h2>Worked examples</h2>
+    <table class="tight menu">
+      <thead><tr><th style="width:1.25in">Customer</th><th>Starting package (Omega Design first)</th><th class="price" style="width:.65in">List</th><th class="price" style="width:.65in">Pays</th><th style="width:1.9in">Fit</th></tr></thead>
+      <tbody>%%STARTER_ROWS%%</tbody>
+    </table>
+    <p class="small">Each line is the platform's own quote for that starter package on price book %%BOOK_VERSION%%: the list total of the modules one by one, and what the customer pays when a plan is cheaper. The price page shows the same starters. A starter is a place to begin the conversation, not a quote.</p>
+  </div>
+  <div class="foot"><span>ClearSky Energy Solutions · internal, for the sales team · price book %%BOOK_VERSION%%</span><span class="pg"></span></div>
+</section>
+
+<!-- ─────────────────────────────── 6 · discovery ─────────────────────────────── -->
+<section class="sheet">
+  <div class="band"><img src="%%LOCKUP_WHITE%%" alt=""><div><div class="t">Discovery</div><div class="s">Twelve tiles that pick the package, on the call or on the signup page</div></div></div>
+  <div class="body">
+    <p class="lead">The signup page asks <i>What does your team do?</i> as one screen of tiles; the Subscription Proposal asks the same twelve. A tile tapped means <b>this quarter</b>, and that module goes in the starting package; <b>within the year</b> puts it on the next-rung list. The answer is always at least Omega Design.</p>
+    <table class="tight menu">
+      <thead><tr><th style="width:.28in">#</th><th style="width:2in">Tile</th><th>The question</th><th style="width:2.3in">This quarter adds</th></tr></thead>
+      <tbody>%%QUESTION_ROWS%%</tbody>
+    </table>
+    <div class="cols">
+      <div>
+        <h3>Then one money question</h3>
+        <p>"What do you pay today for each of these: tools, data, consultants, drafting?" Those numbers go on the proposal's value page beside the module prices. Ask it; do not guess it.</p>
+      </div>
+      <div>
+        <h3>How to run it</h3>
+        <ul>
+          <li>Open the price list page and tap the tiles with them; the dock shows the recommended package, priced, as you go.</li>
+          <li>Ask for volumes where a module is metered: EV applications a month, matrices, site studies.</li>
+          <li>Name the next rung out loud: "when you start submitting your own drawings, Omega Plans is one click from inside the workspace."</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>ClearSky Energy Solutions · internal, for the sales team · price book %%BOOK_VERSION%%</span><span class="pg"></span></div>
+</section>
+
+<!-- ─────────────────────────────── 7 · opting in ─────────────────────────────── -->
+<section class="sheet">
+  <div class="band"><img src="%%LOCKUP_WHITE%%" alt=""><div><div class="t">How a customer opts in</div><div class="s">The guided signup, the Modules page inside the workspace, and the rep's four moves</div></div></div>
+  <div class="body">
+    <div class="cols">
+      <div>
+        <h2>Signing up: a guided run</h2>
+        <div class="step"><div class="d">1</div><p><b>Account.</b> Work email only (a public address is refused); Google or a password. Create account lands straight in the run.</p></div>
+        <div class="step"><div class="d">2</div><p><b>What does your team do?</b> The twelve tiles, or Skip. The dock prices the recommendation as they tap.</p></div>
+        <div class="step"><div class="d">3</div><p><b>Your system.</b> The one menu, priced live: monthly, or yearly at %%ANNUAL_MONTHS%% months of twelve, with the first-year service fee named.</p></div>
+        <div class="step"><div class="d">4</div><p><b>Confirm email</b> (only while unconfirmed), then <b>Billing &amp; pay</b>: the short billing form, then the invoice's card page.</p></div>
+        <div class="step"><div class="d">5</div><p><b>In.</b> Paid means open, within minutes. Or they take the trial: %%TRIAL_DAYS%% days from ClearSky's approval, running the package they chose, then they pay.</p></div>
+        <p class="small">A link from the price list carries the package (<span class="k">?modules=</span> or <span class="k">?plan=</span>) and skips the question screen; so does a proposal link. The draft is kept in their browser, so the email link reopening the page resumes where they were.</p>
+      </div>
+      <div>
+        <h2>Inside the workspace: the Modules page</h2>
+        <p>Every module is listed for every workspace, each card with one status and at most one action:</p>
+        <ul>
+          <li><b>Live</b>, or <b>Live, always included</b> (Omega Design).</li>
+          <li><b>Not on your plan</b> with <b>Opt in</b>: the menu states the money first, then <b>Opt in and pay</b> (or <b>Turn it on</b> for a $0 addition inside a plan's cap). Paid, the plan re-reads itself and the tools open without a reload.</li>
+          <li><b>Waiting for payment</b> with Pay, <b>I've paid</b> and Cancel request.</li>
+          <li><b>Opt out</b> queues the removal for the quarterly review and states the fee before and after; <b>Cancel request</b> withdraws it.</li>
+        </ul>
+        <p><b>Bought is visible.</b> Inside Site Map, a ribbon tab the plan stops at is never blank: it reads <b>Opt in</b> with the module and the price, and a locked tool tile names the module that carries it. A member who cannot buy is told who to ask. Showing it is never access: the commands stay shut until it is paid.</p>
+        <div class="note"><b>Legacy workspaces</b> (billed by ClearSky outside the engine) opt in the same way: by card as an add-on beside their plan where the module switches on exactly, else as a recorded request ClearSky activates.</div>
+      </div>
+    </div>
+    <h2>The rep's four moves</h2>
+    <div class="cols">
+      <div class="step"><div class="d">1</div><p><b>Demo from the price list.</b> Screen an address, draw it, price it, in front of them. Twenty minutes. Then tap the tiles together.</p></div>
+      <div class="step"><div class="d">2</div><p><b>Send the Subscription Proposal.</b> From the discovery, branded for their company, the value page with their numbers, the order form. Accepting it prices nothing; signup does.</p></div>
+      <div class="step"><div class="d">3</div><p><b>Follow the trial.</b> Approved but never signed in, signed in but nothing built, trial ending: the growth board flags each, with the next action. Day eleven is the call.</p></div>
+      <div class="step"><div class="d">4</div><p><b>Flip them up.</b> When they hit a tab that says Opt in, that is the next sale, and they can make it themselves. Watch what they build; propose the module that finishes it.</p></div>
+    </div>
+  </div>
+  <div class="foot"><span>ClearSky Energy Solutions · internal, for the sales team · price book %%BOOK_VERSION%%</span><span class="pg"></span></div>
+</section>
+
+<!-- ─────────────────────────────── 8 · say it straight ─────────────────────────────── -->
+<section class="sheet">
+  <div class="band"><img src="%%LOCKUP_WHITE%%" alt=""><div><div class="t">Say it straight</div><div class="s">Objections, and the limits an honest rep names before the customer finds them</div></div></div>
+  <div class="body">
+    <div class="cols">
+      <div>
+        <h2>Objections</h2>
+        <p><b>"That's a lot per month."</b> Compared with what? Put their spend on tools, data and hours next to the modules they picked; the proposal does it line by line. Start smaller: Omega Design alone is %%LITE_PRICE%%, and every module is one click later.</p>
+        <p><b>"We already have CAD / a modelling tool / a GIS person."</b> Keep them. Buy the modules that replace what you do not have, and skip the ones that duplicate what you do. Nothing forces a bundle.</p>
+        <p><b>"How many licences do we need?"</b> None. A workspace comes with %%BUILDERS%% builders and %%VIEWERS%% viewers, and the whole company works in it.</p>
+        <p><b>"Can we try it first?"</b> %%TRIAL_DAYS%% days on the package you would buy, once ClearSky approves the signup. One trial per company. Or pay now and start today.</p>
+        <p><b>"What if we stop needing a module?"</b> Opt out from the Modules page; it comes off at the quarterly review and the price of what stays is stated before you confirm.</p>
+        <p><b>"Is our data safe?"</b> Every workspace is its own tenant; access is enforced on the server, not hidden in the page. Pricing, sizing and scoring run on our servers, never in the browser.</p>
+        <p><b>"Can it wear our brand?"</b> Omega Storefront: your name on the platform, sizing on your own website, leads and orders into your queue. It needs the reseller addendum.</p>
+      </div>
+      <div>
+        <h2>Limits to name up front</h2>
+        <table class="tight"><tbody>%%LIMIT_ROWS%%</tbody></table>
+        <h3>Marked BETA (sell only with the beta clause)</h3>
+        <table class="tight"><tbody>%%BETA_ROWS%%</tbody></table>
+        <h3>Not sold, or not yet</h3>
+        <p class="small">%%NOT_SOLD%% Enterprise is <b>contact for pricing</b>: every module, several workspaces, pooled usage and development hours on a contract; the price list publishes no figure. Never sell a hidden or "soon" feature as included.</p>
+        <div class="note"><b>Two things a rep never does.</b> Never quote a price the price page does not show; the book is versioned and the server prices every quote. Never promise access by a link: what is paid for opens, and nothing else does.</div>
+      </div>
+    </div>
+    <div style="position:absolute;bottom:.05in;left:0;right:0;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:8px">
+      <img src="%%LOCKUP_NAVY%%" alt="ClearSky-OMEGA" style="height:40px;width:auto">
+      <div class="small" style="text-align:right">Price list <b>%%OFFERINGS_URL%%</b> · Sign up <b>%%START_URL%%</b><br>Support <b>%%SUPPORT_EMAIL%%</b> · price book %%BOOK_VERSION%%, built %%BUILT_ON%%</div>
+    </div>
+  </div>
+  <div class="foot"><span>ClearSky Energy Solutions · internal, for the sales team · price book %%BOOK_VERSION%%</span><span class="pg"></span></div>
+</section>
+
+</body></html>
