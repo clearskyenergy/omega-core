@@ -100,7 +100,7 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .next .row .bar{width:4px;min-height:30px;height:100%;border-radius:2px;background:var(--ows-brand)}.next .row.warn .bar{background:var(--ows-amber)}.next .row.good .bar{background:var(--ows-green)}.next .row.hot .bar{background:var(--ows-coral)}
 .next .row b{font-weight:600;display:block}.next .row small{color:var(--ows-ink2);font-size:12px}
 .presence{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ows-ink2);padding-top:10px;border-top:1px solid var(--ows-line)}
-.avs{display:flex}.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:10.5px;font-weight:700;background:var(--ows-brand);flex:none;overflow:hidden}.av img{width:100%;height:100%;object-fit:cover}.avs .av{border:2px solid var(--ows-paper);margin-left:-6px}.avs .av:first-child{margin-left:0}.av.me{background:var(--ows-teal-d)}.av.partner{background:var(--ows-teal-d)}.av.sys{background:var(--ows-ink3)}
+.avs{display:flex}.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:10.5px;font-weight:700;background:var(--ows-brand);flex:none;overflow:hidden}.av img{width:100%;height:100%;object-fit:cover}.avs .av{border:2px solid var(--ows-paper);margin-left:-6px}.avs .av:first-child{margin-left:0}.av.me{background:var(--ows-teal-d)}.av.partner{background:var(--ows-teal-d)}.av.sys{background:var(--ows-ink3)}.av.proj{background:var(--ows-ink3);font-size:12px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ows-green);display:inline-block}.dot.away{background:var(--ows-amber)}.dot.off{background:var(--ows-ink3)}
 /* tools */
 .plan{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;font-size:13px}
@@ -592,7 +592,15 @@ function trialEnd() {
   try { var t = OmegaBrand.trial(WS); if (t && t.endsAt) return t.endsAt.getTime(); } catch (e) {}
   return 0;
 }
-function presence(m) { var s = (Date.now() - ms(m.lastSeen)) / 60000; return s < 15 ? 'on' : s < 1440 ? 'away' : 'off'; }
+/* when a person was last here: their last visit (team_members.lastSeen) or
+   the last message they posted, whichever is later; a project save does not
+   say who made it, so it cannot count */
+function seenAt(m) {
+  var e = String(m.email || '').toLowerCase(), t = ms(m.lastSeen);
+  (DATA.messages || []).forEach(function (x) { if (String(x.authorEmail || '').toLowerCase() === e) t = Math.max(t, ms(x.createdAt)); });
+  return t;
+}
+function presence(m) { var s = (Date.now() - seenAt(m)) / 60000; return s < 15 ? 'on' : s < 1440 ? 'away' : 'off'; }
 
 /* ── render ─────────────────────────────────────────────────────────────── */
 function render() {
@@ -615,15 +623,26 @@ function renderHub() {
     return { key: a.key, label: a.label, icon: a.icon, hint: a.hint, badge: a.key === 'team' && myTodos ? myTodos : (a.key === 'projects' && DATA.projects.length ? DATA.projects.length : '') };
   }));
   OmegaHexHub.render(byId('hub'), { items: items, title: 'Where to?', caption: (WS.clientName || WS.orgId) + ' · ' + first(), onPick: function (key) { if (key === 'today') { todayDrawer(); return; } areaDrawer(key); } });
-  var held = heldChips(), hb = byId('hub').querySelector('.hexhub');
-  if (hb && held) { var d = document.createElement('div'); d.className = 'held'; d.innerHTML = held; hb.appendChild(d); }
+  paintHeld();
+}
+/* the plan's chips under the hub; painted again when the module catalog or
+   the engine's summary lands, since those decide which modules are Live */
+function paintHeld() {
+  var hb = byId('hub').querySelector('.hexhub'); if (!hb) return;
+  var d = hb.querySelector('.held'), held = heldChips();
+  if (!d) { d = document.createElement('div'); d.className = 'held'; hb.appendChild(d); }
+  d.innerHTML = held;
 }
 function planName() { var pa = WS.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {}; if (WS.viewAs) return (WS.modules || []).indexOf('lite') >= 0 && (WS.modules || []).length === 1 ? 'Lite' : 'Lite + modules'; if (pa && pa.packaged) return b.plan || 'Packaged'; return WS.accountTier || (WS.tierLevel >= 3 ? 'Enterprise' : WS.tierLevel === 2 ? 'Deluxe' : WS.tierLevel === 1 ? 'Standard' : 'Plan'); }
 function heldChips() {
   var out = ['<span class="ows-chip on">' + esc(planName()) + (trialEnd() && trialEnd() > Date.now() ? ' · trial' : '') + '</span>'];
   if (WS.packageAccess && WS.packageAccess.packaged && Array.isArray(WS.packageAccess.catalog)) {
     WS.packageAccess.catalog.filter(function (m) { return WS.modules.indexOf(m.key) >= 0 && m.name !== planName(); }).slice(0, 5).forEach(function (m) { out.push('<span class="ows-chip">' + esc(m.name) + '</span>'); });
-  } else if (Array.isArray(WS.addons) && WS.addons.length) WS.addons.slice(0, 5).forEach(function (a) { out.push('<span class="ows-chip">' + esc(a) + '</span>'); });
+  } else if (MOD_CATALOG && MOD_CATALOG.length) {
+    var ctxH = hubCtx(), live = MOD_CATALOG.filter(function (m) { return m.key !== 'lite' && cardOf(m, ctxH).held; });
+    live.slice(0, 4).forEach(function (m) { out.push('<span class="ows-chip">' + esc(m.name) + '</span>'); });
+    if (live.length > 4) out.push('<span class="ows-chip">+' + (live.length - 4) + ' modules</span>');
+  }
   var n = T.catalog().filter(function (t) { return !t.soon && open(t) && T.isVisible(t, WS); }).length;
   out.push('<span class="ows-chip">' + n + ' tools open</span>');
   return out.join('');
@@ -642,7 +661,7 @@ function renderToday() {
     var others = DATA.members.filter(function (m) { return String(m.email || '').toLowerCase() !== ME; }), on = others.filter(function (m) { return presence(m) === 'on'; });
     h += '<div class="presence"><span class="avs"><span class="av me">' + esc(ini(who())) + '</span>' + on.slice(0, 4).map(function (m) { return '<span class="av">' + esc(ini(m.name || m.email)) + '</span>'; }).join('') + '</span>';
     if (!others.length) h += '<span>Just you here. Anyone with an <b>@' + esc(WS.orgId) + '</b> address signs in and joins this workspace.</span>';
-    else if (!on.length) h += '<span>' + others.length + ' teammate' + (others.length === 1 ? '' : 's') + ' on this workspace. Nobody else is in right now.</span>';
+    else if (!on.length) h += '<span>You and ' + others.length + ' teammate' + (others.length === 1 ? '' : 's') + ' on this workspace. Nobody else is in right now.</span>';
     else h += '<span>You and ' + on.map(function (m) { return '<b>' + esc(String(m.name || m.email).split(' ')[0]) + '</b>'; }).join(', ') + ' are in the workspace now.</span>';
     h += '</div>';
   }
@@ -703,7 +722,7 @@ function renderModules() {
      payment, the purchase gate and the review date, and a legacy plan's
      card add-ons as the server sees them (what waits, what ends) where
      billing/current does not carry them yet */
-  renderPlans(); askSummary();
+  renderPlans(); askSummary(); paintHeld();
   if (!packaged) {
     if (!MOD_CATALOG) { b.innerHTML = '<div class="empty">Loading the catalog…</div>'; return; }
     if (!MOD_CATALOG.length) { b.innerHTML = '<div class="empty" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">The price list could not be loaded right now, so the modules cannot be shown.<button class="ows-pill" type="button" id="modules-retry" style="margin-left:auto">Retry</button></div>'; byId('modules-retry').addEventListener('click', retryModules); return; }
@@ -911,24 +930,37 @@ function assignDrawer(id) {
 function assign(p, email, name) {
   var FV = firebase.firestore.FieldValue, patch = { ownerEmail: email, ownerName: name, assignedBy: ME, assignedAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() };
   db.collection('projects').doc(p.id).set(patch, { merge: true }).then(function () {
-    p.ownerEmail = email; p.ownerName = name; p.updatedAt = new Date();
-    S.closeDrawer(); TODAY_CACHE = null; renderFlight(); renderToday(); S.toast(email ? 'Assigned to ' + name : 'Unassigned');
+    p.ownerEmail = email; p.ownerName = name; p.updatedAt = p.assignedAt = new Date(); p.assignedBy = ME;
+    S.closeDrawer(); TODAY_CACHE = null; renderFlight(); renderToday(); renderAround(); S.toast(email ? 'Assigned to ' + name : 'Unassigned');
   }, function (err) { S.toast('Could not assign: ' + (err && err.message)); });
 }
 function feedItems() {
   var out = DATA.messages.map(function (m) { return { at: ms(m.createdAt), who: m.authorName || String(m.authorEmail || '').split('@')[0], text: m.text || '', me: String(m.authorEmail || '').toLowerCase() === ME }; });
-  DATA.projects.forEach(function (p) { var owner = p.ownerName || String(p.ownerEmail || '').split('@')[0] || 'Someone'; out.push({ at: ms(p.updatedAt || p.createdAt), who: owner, text: (p.stage ? 'moved ' : 'saved ') + (p.name || 'a project') + (p.stage ? ' to ' + (STAGE_LABEL[p.stage] || p.stage) : ''), me: String(p.ownerEmail || '').toLowerCase() === ME }); });
+  /* a project save records WHEN, and who only where the writer said so
+     (updatedBy): never the owner standing in for whoever saved it, and never
+     "moved to" a stage nobody is recorded as changing */
+  DATA.projects.forEach(function (p) {
+    var at = ms(p.updatedAt || p.createdAt), stage = STAGE_LABEL[p.stage] || p.stage || '';
+    /* an Assign here records who (assignedBy) with the same save */
+    var asg = String(p.assignedBy || '').toLowerCase();
+    if (/@/.test(asg) && Math.abs(ms(p.assignedAt) - at) < 60000) {
+      out.push({ at: at, who: asg === ME ? who() : asg.split('@')[0], text: p.ownerEmail ? 'assigned ' + (p.name || 'a project') + ' to ' + (p.ownerName || String(p.ownerEmail).split('@')[0]) : 'unassigned ' + (p.name || 'a project'), me: asg === ME });
+      return;
+    }
+    var by = String(p.updatedBy || p.updatedByEmail || '').toLowerCase(); if (!/@/.test(by)) by = '';
+    out.push({ at: at, who: by ? (p.updatedByName || by.split('@')[0]) : '', project: !by, text: (by ? 'saved ' : '') + (p.name || 'a project') + (by ? '' : ' was saved') + (stage ? ' · ' + stage : ''), me: !!by && by === ME });
+  });
   return out.filter(function (x) { return x.at > 0; }).sort(function (a, b) { return b.at - a.at; }).slice(0, 8);
 }
 function renderAround() {
   var P = prefs(), h = '', a = byId('around');
   if (P.feed) {
     var items = feedItems();
-    h += '<div class="panel" id="feed"><div class="hd"><h3>Workspace feed</h3><span class="ows-chip">Team</span></div><div class="feed">' + (items.length ? items.map(function (e) { return '<div class="ev"><span class="av' + (e.me ? ' me' : '') + '">' + esc(ini(e.who)) + '</span><div><b>' + esc(e.me ? 'You' : e.who) + '</b> <span class="t">' + esc(e.text) + '</span></div><span class="when">' + esc(ago(e.at)) + '</span></div>'; }).join('') : '<div class="empty">Nothing yet. A saved project or a message to the team lands here.</div>') + '</div><form class="post" id="post"><input id="post-text" placeholder="Post a message to your team…" maxlength="500" aria-label="Message"><button class="ows-pill primary" type="submit">Post</button></form></div>';
+    h += '<div class="panel" id="feed"><div class="hd"><h3>Workspace feed</h3><span class="ows-chip">Team</span></div><div class="feed">' + (items.length ? items.map(function (e) { return '<div class="ev"><span class="av' + (e.me ? ' me' : '') + (e.project ? ' proj' : '') + '">' + (e.project ? '&#9637;' : esc(ini(e.who))) + '</span><div>' + (e.project ? '' : '<b>' + esc(e.me ? 'You' : e.who) + '</b> ') + '<span class="t">' + esc(e.text) + '</span></div><span class="when">' + esc(ago(e.at)) + '</span></div>'; }).join('') : '<div class="empty">Nothing yet. A saved project or a message to the team lands here.</div>') + '</div><form class="post" id="post"><input id="post-text" placeholder="Post a message to your team…" maxlength="500" aria-label="Message"><button class="ows-pill primary" type="submit">Post</button></form></div>';
   }
   if (P.presence) {
     var list = DATA.members.slice().sort(function (x, y) { var o = { on: 0, away: 1, off: 2 }; return o[presence(x)] - o[presence(y)] || String(x.name || '').localeCompare(String(y.name || '')); });
-    h += '<div class="panel"><div class="hd"><h3>People</h3><span class="ows-chip">' + (list.length || 1) + ' in workspace</span></div><div class="people">' + (list.length ? list.map(function (m) { var me = String(m.email || '').toLowerCase() === ME, st = presence(m); return '<div class="pr"><span class="av' + (me ? ' me' : '') + '">' + esc(ini(m.name || m.email)) + '</span><div>' + esc(m.name || String(m.email || '').split('@')[0]) + (me ? ' <small>You · ' + esc(WS.role || 'member') + '</small>' : '<small><span class="dot ' + (st === 'on' ? '' : st) + '"></span> ' + (st === 'on' ? 'In the workspace' : st === 'away' ? 'Seen ' + ago(m.lastSeen) + ' ago' : 'Last seen ' + ago(m.lastSeen) + ' ago') + '</small>') + '</div></div>'; }).join('') : '<div class="empty"><b>You are the whole team here.</b> Anyone with an @' + esc(WS.orgId) + ' address signs in and joins as a member.</div>') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ows-pill" type="button" id="invite">+ Invite</button><a class="ows-pill" href="/projects.html">Share a project</a></div></div>';
+    h += '<div class="panel"><div class="hd"><h3>People</h3><span class="ows-chip">' + (list.length || 1) + ' in workspace</span></div><div class="people">' + (list.length ? list.map(function (m) { var me = String(m.email || '').toLowerCase() === ME, st = presence(m); return '<div class="pr"><span class="av' + (me ? ' me' : '') + '">' + esc(ini(m.name || m.email)) + '</span><div>' + esc(m.name || String(m.email || '').split('@')[0]) + (me ? ' <small>You · ' + esc(WS.role || 'member') + '</small>' : '<small><span class="dot ' + (st === 'on' ? '' : st) + '"></span> ' + (st === 'on' ? 'In the workspace' : st === 'away' ? 'Seen ' + ago(seenAt(m)) + ' ago' : 'Last seen ' + ago(seenAt(m)) + ' ago') + '</small>') + '</div></div>'; }).join('') : '<div class="empty"><b>You are the whole team here.</b> Anyone with an @' + esc(WS.orgId) + ' address signs in and joins as a member.</div>') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ows-pill" type="button" id="invite">+ Invite</button><a class="ows-pill" href="/projects.html">Share a project</a></div></div>';
   }
   if (P.pulse) h += pulsePanel();
   if (P.partners) {

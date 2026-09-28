@@ -608,7 +608,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: assigning writes one merge of the owner fields onto the project and the card names Raj', assigned.writes.length === 1 && /^set projects\/p-quarry assignedAt,assignedBy,ownerEmail,ownerName,updatedAt$/.test(assigned.writes[0]) && assigned.card === 'Raj Patel', assigned);
     var kpi = await p.$$eval('#today .kpi .v', function (r) { return r.map(function (x) { return x.textContent; }); });
     var labels = await p.$$eval('#today .kpi', function (r) { return r.map(function (x) { return x.querySelector('.l').textContent + '=' + x.querySelector('.v').textContent + (x.querySelector('.d') ? ' (' + x.querySelector('.d').textContent + ')' : ''); }); });
-    ok('northstar: the numbers are 3 in flight (package through construction), the pipeline capex with the online site apart, and 1 quote back of 2 sent', kpi[0] === '3' && /\$\d/.test(kpi[2]) && /online/.test(labels[2]) && labels[3] === 'Quotes back=1 (of 2 sent)', labels);
+    ok('northstar: the numbers are the board\'s (4 in flight, the candidate included, 3 new this week), the capex people entered with the unpriced candidate counted, and 1 quote back of 2 sent', kpi[0] === '4' && labels[0] === 'Projects in flight=4 (+3 this week)' && labels[2] === 'Pipeline capex=$11M (1 project not priced yet)' && labels[3] === 'Quotes back=1 (of 2 sent)', labels);
     var needs = await p.$$eval('#today .next .row', function (r) { return r.map(function (x) { return x.getAttribute('data-key').split(':')[0] + ':' + x.querySelector('b').textContent; }); });
     ok('northstar: Needs you leads with the vendor who answered Riverside (a decision waiting), then Ann\'s to-do due in three days, then the projects with a next action, then the deal in review at ClearSky for nine days', /^quotes:1 vendor answered your Riverside BESS request/.test(needs[0]) && /^todo:Send the Riverside one-line/.test(needs[1]) && needs.slice(2, 5).every(function (n) { return /^next:/.test(n); }) && /^review:Maple Yard Storage has been in review for 9 days/.test(needs[5]), needs);
     var rowAct = await p.evaluate(function () { var r = document.querySelector('#today .next .row[data-key^="review:"]'); return { cursor: getComputedStyle(r).cursor, pill: r.querySelector('a.ows-pill, button.ows-pill') ? getComputedStyle(r.querySelector('a.ows-pill, button.ows-pill')).backgroundColor : '' }; });
@@ -617,6 +617,19 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var people = await p.evaluate(function () { var panels = document.querySelectorAll('#around .panel'); for (var i = 0; i < panels.length; i++) { var h = panels[i].querySelector('h3'); if (h && h.textContent === 'People') return panels[i].querySelectorAll('.people .pr').length; } return 0; });
     var feed = await p.$eval('#feed', function (e) { return e.textContent; });
     ok('northstar: People lists both teammates and the feed carries Raj\'s message', people === 2 && /interconnection study came back clean/.test(feed), { people: people });
+    /* the feed and People agree (Tommy, 2026-09-27: "last login versus when
+       they did"): a project save records when, not who, so it is the
+       project's line and never its owner "moving" it; Raj was last seen when
+       he posted, not at his older visit */
+    var agree = await p.evaluate(function () {
+      var evs = Array.prototype.map.call(document.querySelectorAll('#feed .ev'), function (e) { return { av: e.querySelector('.av').className, b: e.querySelector('b') ? e.querySelector('b').textContent : '', t: e.querySelector('.t').textContent }; });
+      var raj = Array.prototype.filter.call(document.querySelectorAll('.people .pr'), function (r) { return /Raj/.test(r.textContent); })[0];
+      return { evs: evs, raj: raj ? raj.querySelector('small').textContent.trim() : '' };
+    });
+    var projEv = agree.evs.filter(function (e) { return /Riverside BESS/.test(e.t) && !/study/.test(e.t); })[0];
+    ok('northstar: a project save is the project\'s own line (was saved · stage), credited to nobody', projEv && /proj/.test(projEv.av) && !projEv.b && /^Riverside BESS was saved · /.test(projEv.t) && !agree.evs.some(function (e) { return /^moved /.test(e.t); }), agree.evs);
+    ok('northstar: People dates Raj by his message this morning, not his visit two days ago', /^(Seen \d+h ago|In the workspace)/.test(agree.raj), agree.raj);
+    ok('northstar: the Assign just made is in the feed, credited to the person who made it', agree.evs.some(function (e) { return e.b === 'You' && e.t === 'assigned Quarry Road to Raj Patel'; }), agree.evs);
     /* the side panel from a hub cell */
     await p.evaluate(function () { window.location.hash = ''; }); await wait(150);
     await p.click('#hub .hx[data-hub="design"]'); await wait(300);

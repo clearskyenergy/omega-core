@@ -38,8 +38,11 @@ decided 2026-09-26.
   next action, a site package ready to submit, a project in flight that has
   not moved in 14 days, a candidate with no size when Battery Sizer is open,
   a request nobody answered in five days. Six rows, highest first. The four
-  numbers are projects in flight (with new this week), awaiting your review,
-  pipeline capex (online sites apart), and a fourth that fits the workspace:
+  numbers are projects in flight (the board's own set, every project not yet
+  online; new this week, else how many are past candidate), awaiting your
+  review, pipeline capex (the capex people entered, online sites apart; a
+  project nobody priced is counted as "not priced yet", never as $0, and a
+  pipeline with nothing priced reads "—"), and a fourth that fits the workspace:
   quotes back of sent, requests to price, new quote requests, or sites
   online. The referral inbox itself stays on the classic dashboard;
   `?stay=classic` visits it once without changing the browser's home.
@@ -192,11 +195,20 @@ decided 2026-09-26.
   answer, a review at ClearSky older than a week, an awarded room not
   finished, a draft, an open deal with no offer in ten days) and folds
   every unsized candidate into ONE row. The whole row is the target.
-- **Around you**: the workspace feed (messages and project saves), People
-  (`team_members` presence: in the workspace under 15 minutes, seen within a
-  day, else last seen), Partners on your projects (the other orgs on
+- **Around you**: the workspace feed (messages, project saves and
+  assignments), People (presence from the later of `team_members.lastSeen`
+  and the person's last message: in the workspace under 15 minutes, seen
+  within a day, else last seen), Partners on your projects (the other orgs on
   `orgsInvolved`), Guides. Each is an opt-in kept on
-  `dashboard_layouts/{org}__{uid}.workspace`.
+  `dashboard_layouts/{org}__{uid}.workspace`. The feed names a person only
+  where the record says who (2026-09-27: the feed said "js moved Sunnyside
+  to Candidate 11d ago" while People said js was last seen 27d ago). A
+  project save records when, not who (no project writer sets `updatedBy`),
+  so it is the project's own line ("Sunnyside was saved · Candidate"),
+  never its owner "moving" it; an Assign made here records `assignedBy`
+  and is credited ("You assigned Quarry Road to Raj Patel"). The plan's
+  chips under the hub name the modules the one card rule calls Live, never
+  raw add-on keys.
 - **Settings** is a side panel reading the person's `team_members`
   profile (display name is editable there) and the classic-home switch.
 

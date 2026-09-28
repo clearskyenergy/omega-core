@@ -61,8 +61,17 @@ var pr = b({ canOpen: function (k) { return k === 'batterysizer'; }, projects: [
 ok('projects: a next action, then a package ready to submit, then a stalled one, then a candidate to size; online and sized candidates are quiet', keys(pr).join() === 'next,submit,stalled,size' && /Riverside: Review the study/.test(pr.needs[0].t) && /Maple is ready to submit/.test(pr.needs[1].t) && /Harbor has not moved in 20 days/.test(pr.needs[2].t) && /Size New site/.test(pr.needs[3].t), pr.needs);
 ok('a project row opens the project; the size row opens the tool', pr.needs[0].act.kind === 'project' && pr.needs[0].act.id === 'p1' && pr.needs[3].act.kind === 'tool' && pr.needs[3].act.id === 'batterysizer');
 ok('the candidate is not offered a sizer the plan does not open', b({ projects: [{ id: 'x', name: 'X', stage: 'candidate' }] }).needs.length === 0);
-ok('in flight counts package through construction, not candidates or online; created this week is the delta', pr.kpis[0].value === '3' && pr.kpis[0].delta === '+2 this week', pr.kpis[0]);
-ok('pipeline capex leaves online sites out and says what is online', pr.kpis[2].value === '$11M' && pr.kpis[2].delta === '$900k online', pr.kpis[2]);
+ok('in flight is the board: every project not yet online, candidates included; created this week is the delta', pr.kpis[0].value === '5' && pr.kpis[0].delta === '+2 this week', pr.kpis[0]);
+ok('pipeline capex sums what was priced, leaves online sites out, and counts the projects nobody priced', pr.kpis[2].value === '$11M' && pr.kpis[2].delta === '2 projects not priced yet', pr.kpis[2]);
+var old = b({ projects: [
+  { id: 'a', name: 'A', stage: 'interconnect', capex: 2000000, createdAt: NOW - 30 * DAY },
+  { id: 'b', name: 'B', stage: 'candidate', capex: 500000, createdAt: NOW - 30 * DAY },
+  { id: 'c', name: 'C', stage: 'online', capex: 900000, createdAt: NOW - 300 * DAY } ] });
+ok('nothing new this week: in flight says how many are past candidate; every project priced, the capex names what is online', old.kpis[0].value === '2' && old.kpis[0].delta === '1 past candidate' && old.kpis[2].value === '$2.5M' && old.kpis[2].delta === '$900k online', [old.kpis[0], old.kpis[2]]);
+var unsized = b({ projects: [1, 2, 3].map(function (i) { return { id: 'u' + i, name: 'U' + i, stage: 'candidate', createdAt: NOW - 20 * DAY }; }) });
+ok('candidates nobody priced are not a $0 pipeline: the capex is a dash and says how many are unpriced', unsized.kpis[0].value === '3' && unsized.kpis[0].delta === 'all candidates' && unsized.kpis[2].value === '—' && unsized.kpis[2].delta === '3 projects not priced yet', [unsized.kpis[0], unsized.kpis[2]]);
+var none = b({ projects: [] });
+ok('no projects: nothing in flight and a $0 pipeline, with no invented delta', none.kpis[0].value === '0' && !none.kpis[0].delta && none.kpis[2].value === '$0' && !none.kpis[2].delta, [none.kpis[0], none.kpis[2]]);
 
 /* 6 · the cap */
 var many = b({ todos: [1, 2, 3, 4, 5, 6, 7, 8].map(function (i) { return { id: 't' + i, text: 'T' + i, assignee: ME, due: NOW - i * DAY }; }) });
