@@ -12,8 +12,8 @@
    formula the shipped template carries (a new revision with a shape it
    cannot name fails here, not on a reviewer's screen), fills the real
    template with a ten-port job and pins the totals, and pins the design
-   rule that job exposed: Eversource MA books design as one flat figure,
-   not $1,000 a port.
+   rule that job exposed: Eversource (CT and MA) books design as one flat
+   figure, not $1,000 a port.
 
    No zip library in this repo's node, so the template is read with a
    twenty-line central-directory reader. */
@@ -168,10 +168,12 @@ ok(/Type="[^"]*\/table" Target="\.\.\/tables\/table1\.xml"/.test(SRELS), 'sheet1
 
 /* ── 4. design: flat on Eversource MA, per port elsewhere ─────────────── */
 console.log('4. design & engineering');
-const esma = /var FORM_ES_MA_L2 = \{[\s\S]*?designFlat:(\d+)[\s\S]*?\n\};/.exec(html);
-ok(esma && esma[1] === '2000', 'FORM_ES_MA_L2 carries designFlat:2000');
-ok((html.match(/designFlat:\d+/g) || []).length === 1, 'and it is the only form that does');
-const MA = { designFlat:2000, short:'Eversource MA — L2' }, CT = { short:'Eversource CT — L2' };
+function formBlock(name){ const i = html.indexOf('var ' + name + ' = {'); return html.slice(i, html.indexOf('\n};', i)); }
+ok(/designFlat:2000,/.test(formBlock('FORM_ES_MA_L2')), 'FORM_ES_MA_L2 carries designFlat:2000');
+ok(/designFlat:2000,/.test(formBlock('FORM_ES_CT_L2')), 'FORM_ES_CT_L2 carries it too (2026-09-28: every Eversource form is flat)');
+ok(!/designFlat/.test(formBlock('FORM_UI_L2')) && !/designFlat/.test(formBlock('FORM_NG_MA')), 'United Illuminating and National Grid stay per port');
+ok((html.match(/designFlat:\d+/g) || []).length === 2, 'and nothing else says flat');
+const MA = { designFlat:2000, short:'Eversource MA — L2' }, CT = { short:'United Illuminating — L2' };
 let r = P.designRate(MA, 10, {});
 ok(r && r.lab === 2000 && r.qty === 1 && r.unit === 'LS', 'Eversource MA, ten ports: $2,000 flat, not $10,000');
 r = P.designRate(MA, 2, {});
@@ -180,6 +182,8 @@ r = P.designRate(MA, 10, { _designFlat:2500 });
 ok(r && r.lab === 2500, 'Rate settings can move the flat figure');
 r = P.designRate(CT, 10, {});
 ok(r && r.lab === 10000 && r.qty === 10, 'a form without the rule keeps $1,000 a port');
+r = P.designRate({ designFlat:2000, short:'Eversource CT — L2' }, 4, {});
+ok(r && r.lab === 2000 && r.qty === 1, 'Eversource CT, four ports: $2,000 flat, not $4,000');
 r = P.designRate(CT, 4, { _designPerPort:1200 });
 ok(r && r.lab === 4800, 'the per-port override still applies there');
 ok(P.designRate(CT, 0, {}) === null, 'no ports, no per-port design line');

@@ -66,13 +66,15 @@ Two things a customer found on the day they filed the March 2026 template:
   converter over every formula the shipped template carries and pins the
   totals of a ten-port job, so a new template revision with a shape it
   cannot name fails there, not on a reviewer's screen.
-- **Design & engineering is a flat $2,000 on Eversource MA**, not $1,000 a
-  port ("for CT Eversource we were charging 2k flat rate not dependant on
-  plugs"; ten ports had put $10,000 on the sheet). `designFlat` on the form
-  is the rule, `designRate()` reads it, Rate settings › *Design & engineering
-  — flat per site* changes the amount, and a typed-over figure is pinned as
-  permitting's is. Every other form keeps the per-port rate the four
-  reference jobs fit; permitting stays 3% of everything else.
+- **Design & engineering is a flat $2,000 on every Eversource form, CT and
+  MA**, not $1,000 a port ("for CT Eversource we were charging 2k flat rate
+  not dependant on plugs"; ten ports had put $10,000 on the MA sheet; Tommy:
+  "do the flat fee for all eversource, both ct and ma, the customer is always
+  right"). `designFlat` on the form is the rule, `designRate()` reads it,
+  Rate settings › *Design & engineering — flat per site* changes the amount,
+  and a typed-over figure is pinned as permitting's is. United Illuminating
+  and National Grid keep the per-port rate; permitting stays 3% of
+  everything else.
 
 ## Still worth one manual check
 

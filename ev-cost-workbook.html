@@ -1051,6 +1051,11 @@ var FORM_ES_CT_L2 = {
   classes:['l2'],
   sheet:'ES Matrix ({site})',
   writer:'eversource',
+  /* Design & engineering is ONE flat figure on every Eversource form
+     (2026-09-28, Tommy: "do the flat fee for all eversource … both ct and
+     ma"; Menachem: "for CT Eversource we were charging 2k flat rate not
+     dependant on plugs"). designRate() reads it. */
+  designFlat:2000,
   banners:{ site:'Project Details', costs:'Cost Estimate Matrix' },
   headers:{ type:'Cost Item', desc:'Detail/Notes',
             mat:'Material Total', lab:'Labor Total', tot:'Total Cost' },
@@ -1613,11 +1618,11 @@ var FORM_ES_MA_L2 = {
   classes:['l2'],
   sheet:'Cost Matrix ESMA',
   writer:'eversource-ma',
-  /* Design & engineering is ONE flat figure on this form, not $1,000 a port
-     (2026-09-28, the day a customer filed: "for CT Eversource we were
-     charging 2k flat rate not dependant on plugs" — ten ports had put
-     $10,000 on the sheet). designRate() reads it; Rate settings › Design &
-     engineering — flat per site changes the amount. */
+  /* Design & engineering is ONE flat figure on every Eversource form, not
+     $1,000 a port (2026-09-28, the day a customer filed: ten ports had put
+     $10,000 on this sheet; "the customer is always right"). designRate()
+     reads it; Rate settings › Design & engineering — flat per site
+     changes the amount. */
   designFlat:2000,
   banners:{ site:'Site Information / System Details', costs:'Estimate' },
   headers:{ type:'Description', desc:'Detail/Notes', mat:'Material Total',
@@ -3142,9 +3147,9 @@ var RATE_CARD = {
   fpConduit: { mat:1.95, lab:2.50 }   /* same pipe, same ditch, dug once */
 };
 
-/* Design & engineering: a FLAT figure on a form that says so (Eversource MA,
-   `designFlat`), $1,000/port everywhere else — the rate the four reference
-   jobs fit. Pure, so the export prices it for the form being written and
+/* Design & engineering: a FLAT figure on a form that says so (both
+   Eversource forms, `designFlat`), $1,000/port everywhere else — the rate
+   the National Grid jobs fit. Pure, so the export prices it for the form being written and
    scripts/tests/tesma.js pins it. `card` is RATE_CARD; its `_designFlat` and
    `_designPerPort` are the Rate settings overrides. */
 function designRate(form, ports, card){
@@ -3437,7 +3442,7 @@ function syncPermit(){
     if(r2(num(l.lab))!==r2(v)){ l.lab=r2(v); l.note='3% of project cost'; }
   }
 }
-/* Design follows the form on screen — flat on Eversource MA, per port
+/* Design follows the form on screen — flat on Eversource, per port
    elsewhere — so a line priced under one program never carries that figure
    onto another's sheet. Re-read on every render unless the rep typed over
    it (pinned) or it came in from an estimate. Runs before syncPermit:
@@ -4136,9 +4141,9 @@ var RATE_FIELDS = [
   { k:'_design',        label:'Design & engineering', unit:'per port', labOnly:true,
     why:'Within $15 of the filed figure on two of three National Grid jobs.' },
   { k:'_designFlat',    label:'Design & engineering \u2014 flat per site', unit:'per site', labOnly:true,
-    why:'Eversource MA books design as one flat figure, not per port '
-       +'(2026-09-28: ten ports had put $10,000 on a sheet). Only a form that '
-       +'says flat uses it.' },
+    why:'Eversource (CT and MA) books design as one flat figure, not per '
+       +'port (2026-09-28: ten ports had put $10,000 on a sheet). Only a form '
+       +'that says flat uses it.' },
   { k:'_freightBase',   label:'Freight \u2014 mobilisation', unit:'per site', labOnly:true,
     why:'Freight = mobilisation + per port. Exact at 4, 6 and 10 ports on the '
        +'filed jobs ($650 / $850 / $1,250).' },
