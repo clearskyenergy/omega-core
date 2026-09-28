@@ -71,6 +71,8 @@ function rail(b) {
   return require('./stripe-customer').railOf(b) === 'stripe' ? 'stripe' : 'quickbooks';
 }
 function railName(b) { return D.name(rail(b)); }
+/* the billing profile an invoice carries: QuickBooks needs the whole one; on Stripe a saved one adds the PO, none is fine */
+function profileFor(c, provider) { return provider === 'stripe' && !(c.profile && c.profile.legalName) ? {} : BP.stored(c.profile); }
 /* the rail's own page: QuickBooks' page, Stripe's page */
 function pageOf(name) { return name + (/s$/.test(name) ? '\'' : '\'s') + ' secure page'; }
 /* The legacy add-on keys a module's OTHER readers honour. Never an editor
@@ -284,7 +286,10 @@ function quote(c, rows, input, now, staff) {
   var lines = inCycle ? deltaLines(before, after, add, book, cycle.remainingDays, cycle.days) : after.lines.map(function (l) { return Object.assign({}, l); });
   var total = sum(lines);
   if (total < 0) { lines = []; total = 0; }
-  var included = total === 0, needsProfile = !(c.profile && c.profile.legalName);
+  /* QuickBooks invoices a customer with a billing address (billing-profile
+     customer); Stripe's hosted page needs only the workspace and the payer's
+     email (stripe-customer contact), so it never asks for the form first */
+  var included = total === 0, needsProfile = rail(b) === 'quickbooks' && !(c.profile && c.profile.legalName);
   var g = renewalDue ? { canBuy: false, reason: 'Your add-on renewal is being issued today. Add modules once it has gone through; that usually takes under an hour.' } : gate(c, rows, now, exact(orgId, b, add, now), add);
   var basis = { org: orgId, book: book.version, have: inCycle ? have : [], add: add, fresh: !inCycle, day: day, cycle: cycle, lines: lines, total: total };
   /* a purchase whose invoice is dead (voided or refunded: 'reversed') makes
@@ -445,7 +450,7 @@ async function buy(db, orgId, input, caller, now, deps) {
   });
   if (replay) return replay;
   try {
-    var driver = D.driver(c.book, provider, deps), profile = BP.stored(c.profile), customer;
+    var driver = D.driver(c.book, provider, deps), profile = profileFor(c, provider), customer;
     if (provider === 'stripe') {
       /* the workspace's own Stripe customer, through the one door that links
          it (Plan & billing's card): its mode, its mark and its card checked */
@@ -631,7 +636,7 @@ async function issue(db, orgId, now, deps) {
   if (!plan) return { skipped: true, alreadyIssued: true };
   if (plan.ended) return { ended: plan.ended };
   try {
-    var issued = await D.driver(c.book, provider, deps).invoice(plan, BP.stored(c.profile), customerId);
+    var issued = await D.driver(c.book, provider, deps).invoice(plan, profileFor(c, provider), customerId);
     return await db.runTransaction(async function (tx) {
       var live1 = await tx.get(cur), inv = await tx.get(ref), invoices = await tx.get(cur.collection('invoices').orderBy('date')), fresh = live1.data() || {};
       if (D.issued(inv.data())) return { alreadyIssued: true };

@@ -400,7 +400,7 @@ async function summary(db, orgId) {
       paymentLink: r.state === 'unpaid' ? (r.paymentLink || null) : null, payWith: D.name(D.recordProvider(r)), names: r.add ? names(r.add) : S.kindOf(r) === 'addon' && r.modules ? names(r.modules) : null,
       purpose: r.purpose || null, paidAt: r.paidAt || null };
   });
-  return { orgId: orgId, packaged: b.packaged === true, packagingState: b.packagingState || null, plan: sub.plan || null, planDisplay: planDisplay, modules: b.modules || ['lite'], subscription: sub.modules || ['lite'],
+  return { orgId: orgId, company: c.org.name || null, vertical: c.org.vertical || null, packaged: b.packaged === true, packagingState: b.packagingState || null, plan: sub.plan || null, planDisplay: planDisplay, modules: b.modules || ['lite'], subscription: sub.modules || ['lite'],
     moduleNames: names(b.modules || ['lite']), subscriptionNames: names(sub.modules || ['lite']),
     interval: b.interval || 'monthly', billingDay: b.billingDay || null, nextInvoiceOn: b.nextInvoiceOn || null, monthlyDisplay: monthly,
     accessUntil: b.accessUntil == null ? null : b.accessUntil, paidThrough: b.paidThrough || null, amountDue: b.amountDue == null ? null : b.amountDue,

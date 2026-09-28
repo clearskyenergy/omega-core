@@ -949,7 +949,11 @@ the plan, reconciled by the same `package-billing.reconcile` the webhook and
 the runner run; the renewal is issued there too; a cancel voids the Stripe
 invoice (QuickBooks' stays open for staff); `package-billing.guard(c,
 rail)` is the gate; an add-on's Pay reads the add-on's own `payWith`, never
-the package's. `scripts/test-addons.js` §6d holds it on the Stripe double.
+the package's. Stripe's hosted page needs no billing form (the customer
+carries the payer's email and the workspace's name), so Opt in on Stripe
+never asks for one first; QuickBooks still does, prefilled from what is
+known (the workspace, the person, the company type on record).
+`scripts/test-addons.js` §6d holds it on the Stripe double.
 `OmegaPackageMenu.addOnControl` is the same legacy path for a page's own
 control; `scripts/test-addons.js` and `check:workspace` (legacy-add) hold
 it. A workspace with no `omega_orgs` or billing record cannot be billed and

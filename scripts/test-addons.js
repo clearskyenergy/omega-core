@@ -523,6 +523,12 @@ async function run() {
       equal(await AO.issue(db, ORG, now, sdeps), { skipped: true }, 'once');
       stripe.pay(rr.stripeInvoiceId); await S.reconcile(db, ORG, now + 60000, sdeps);
       equal([bill().addOns.state, bill().addOns.live, bill().addOns.nextInvoiceOn], ['paid', ['logic-office'], '2026-11-27'], 'the renewal paid on Stripe keeps it on');
+      /* no billing profile saved: Stripe's page needs none, so Opt in never asks for the form first; the customer carries the payer's email */
+      seed(Object.assign({}, ENTERPRISE), { noProfile: true }); now = at('2026-09-27T15:00:00Z'); stripe = new SD(); sdeps = { stripe: stripe };
+      var qnp = await quote(['logic-office']); equal([qnp.canBuy, qnp.needsProfile], [true, false], 'no form on Stripe');
+      var rnp = await AO.buy(db, ORG, { add: ['logic-office'], previewId: qnp.previewId, effectiveAt: qnp.effectiveAt }, owner, now, sdeps);
+      var cusNp = stripe.customers_[bill().stripeCustomerId];
+      equal([rnp.state, cusNp.email, cusNp.name], ['awaiting_payment', owner.email, 'Legacy Example'], 'invoiced to the owner, in the workspace\'s name');
       /* a test key and a workspace that is not a marked sandbox: nothing is sold by card here */
       seed(Object.assign({}, ENTERPRISE), { org: { packagingSandbox: false } });
       var qn = await quote(['logic-office']); equal([qn.canBuy, qn.request], [false, true], 'not open: the recorded request instead');
