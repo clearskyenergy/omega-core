@@ -662,8 +662,11 @@ service cloud.firestore {
                     && request.resource.data.email.lower() == request.auth.token.email.lower()
                     && request.resource.data.version is string
                     && request.resource.data.version.size() > 0
-                    && request.resource.data.version != resource.data.version
+                    && request.resource.data.version != resource.data.get('version', '')
                     && request.resource.data.acceptedAt == request.time;
+      /* .get('version', ''): a record written without a version (an older
+         client) is not an acceptance of anything; a bare reference errored
+         and refused the re-accept forever. */
       allow delete: if false;
     }
 

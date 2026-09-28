@@ -23,8 +23,8 @@
    WHAT MAKES IT COUNT
    Acceptance is written to Firestore at termsAcceptances/{uid} with the user,
    the org, the version accepted and a server timestamp. A checkbox that isn't
-   recorded is close to worthless in a dispute — the record is the point. See
-   the REQUIRED FIRESTORE RULE at the foot of this file; without it the write
+   recorded is close to worthless in a dispute — the record is the point. The
+   rule is `termsAcceptances` in firestore.rules; without it deployed the write
    is denied and the gate fails closed (nobody gets in), which is the safe
    direction but will look like an outage.
 
@@ -50,6 +50,7 @@
 
   var PLATFORM = 'ClearSky-OMEGA';
   var COMPANY  = 'ClearSky Energy Solutions LLC';
+  var CONTACT  = 'dev@clearsky-usa.com';   /* section 15, and where a refused acceptance is reported */
 
   /* ── The terms ─────────────────────────────────────────────────────────
      Kept as data so the same text serves the modal, the printable view, and
@@ -180,7 +181,7 @@
        + 'updated terms. Material changes will be identified as such.'],
 
       ['15. Contact',        /* REVIEW: replace with the formal notice address. */
-       'Questions about these terms: dev@clearsky-usa.com']
+       'Questions about these terms: ' + CONTACT]
     ];
   }
 
@@ -233,10 +234,19 @@
 
   /* ── The modal ─────────────────────────────────────────────────────────
      `blocking` = post-auth gate: no dismissing it, Decline signs you out.
-     Non-blocking = the "read the terms" link on the sign-up form. */
+     Non-blocking = the "read the terms" link on the sign-up form.
+     ONE blocking modal per page: a second request while one is open waits on
+     it and gets the same answer. Two stacked modals meant the second Accept
+     re-wrote a version already recorded, which the append-only rule refuses. */
+  var BLOCKING = null;
   function openModal(opts) {
+    if (opts.blocking && BLOCKING) { BLOCKING.waiting.push(opts); return BLOCKING.handle; }
     injectStyles();
     var blocking = !!opts.blocking;
+    var waiting = [opts];
+    function settle(kind) {
+      for (var w = 0; w < waiting.length; w++) if (waiting[w][kind]) waiting[w][kind]();
+    }
     var wrap = el('div', { id: 'ot-modal' });
     var card = el('div', { id: 'ot-card' });
 
@@ -287,24 +297,21 @@
         accept.setAttribute('disabled', 'disabled');
         accept.textContent = 'Recording\u2026';
         err.textContent = '';
-        record(opts.user).then(function () {
+        confirmRecord(opts.user).then(function () {
           /* omega-events.js may have cached "not accepted" for this tab. */
           try { sessionStorage.removeItem('omega-ev-cfg'); } catch (e) {}
           close();
-          if (opts.onAccept) opts.onAccept();
+          settle('onAccept');
         })['catch'](function (e) {
           accept.removeAttribute('disabled');
           accept.textContent = 'Accept';
-          err.textContent = 'Could not record your acceptance. ' +
-            ((e && e.code === 'permission-denied')
-              ? 'The termsAcceptances rule is missing in Firestore.'
-              : 'Check your connection and try again.');
+          err.textContent = refusal(e, opts.user);
           if (global.console) console.error('[omega-terms] write failed', e);
         });
       };
       decline.onclick = function () {
         close();
-        if (opts.onDecline) opts.onDecline();
+        settle('onDecline');
       };
       foot.appendChild(decline);
       foot.appendChild(accept);
@@ -319,8 +326,22 @@
     wrap.appendChild(card);
     document.body.appendChild(wrap);
 
-    function close() { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }
-    return { close: close };
+    function close() {
+      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      if (blocking && BLOCKING && BLOCKING.handle === handle) BLOCKING = null;
+    }
+    var handle = { close: close };
+    if (blocking) BLOCKING = { handle: handle, waiting: waiting };
+    return handle;
+  }
+
+  /* What the person reads when the record is refused. It names what they can
+     do; it never guesses at the cause (it used to say the rule was missing,
+     which was wrong whenever the record already existed). */
+  function refusal(e, user) {
+    if (user && !user.email) return 'Could not record your acceptance: this account has no email address. Sign out and sign in with your work email.';
+    if (e && e.code === 'permission-denied') return 'Could not record your acceptance: it was refused. Sign out, sign in again and accept. If it is refused again, email ' + CONTACT + '.';
+    return 'Could not record your acceptance. Check your connection and try again.';
   }
 
   /* ── Firestore read/write ──────────────────────────────────────────────── */
@@ -357,6 +378,23 @@
            Failing open would let someone through ungated, which isn't. */
         return false;
       });
+  }
+
+  /* Record the acceptance, and make sure a refusal really is one. The record
+     is append-only: an Accept for the version ALREADY recorded (a second tab,
+     a modal left open while another page accepted, a read that failed at
+     load) is an update that changes nothing, and the rules refuse it. So a
+     refused write reads the record back, and a record holding this version
+     IS the acceptance. A refusal that stands is tried once more on a fresh
+     ID token (one minted before the account's email settled), then reported. */
+  function confirmRecord(user) {
+    function orAccepted(e) { return hasAccepted(user).then(function (ok) { if (!ok) throw e; }); }
+    return record(user)['catch'](function (e) {
+      return orAccepted(e)['catch'](function (e1) {
+        if (!e1 || e1.code !== 'permission-denied' || !user || typeof user.getIdToken !== 'function') throw e1;
+        return user.getIdToken(true).then(function () { return record(user); })['catch'](orAccepted);
+      });
+    });
   }
 
   /* ── Layer 1: consent checkbox on the sign-up form ─────────────────────── */
@@ -480,37 +518,10 @@
 
 
 /* ══════════════════════════════════════════════════════════════════════════
-   REQUIRED FIRESTORE RULE — add to firestore.rules and DEPLOY.
-   Without this the acceptance write is denied, the gate fails closed, and
-   nobody can get past the modal.
-
-     match /termsAcceptances/{uid} {
-       // A user may read only their own acceptance.
-       allow read: if request.auth != null && request.auth.uid == uid;
-
-       // A user may write only their own, only with their own uid and email,
-       // and only with a server timestamp. Records are append-only: once a
-       // version is accepted that document is immutable, so acceptance can't
-       // be backdated or rewritten after the fact. A new version writes a new
-       // document under termsAcceptances/{uid}/history/{version} if you want
-       // full history; the top-level doc always holds the current version.
-       allow create: if request.auth != null
-                     && request.auth.uid == uid
-                     && request.resource.data.uid == uid
-                     && request.resource.data.email == request.auth.token.email
-                     && request.resource.data.version is string
-                     && request.resource.data.acceptedAt == request.time;
-
-       // Updates permitted ONLY to move to a newer version string.
-       allow update: if request.auth != null
-                     && request.auth.uid == uid
-                     && request.resource.data.uid == uid
-                     && request.resource.data.version != resource.data.version
-                     && request.resource.data.acceptedAt == request.time;
-
-       allow delete: if false;
-     }
-
-   Note: the client uses .set(), which is a create on first acceptance and an
-   update on a version bump — both are covered above.
+   THE FIRESTORE RULE lives in firestore.rules (match /termsAcceptances/{uid}),
+   with its reasoning; this file no longer carries a copy of it. The client
+   uses .set(): a create on first acceptance, an update on a version bump.
+   The rule refuses an update that leaves the version as it was, so a refused
+   Accept is not proof the rule is missing: confirmRecord() reads the record
+   back first. scripts/tests/tterms.js holds it.
    ══════════════════════════════════════════════════════════════════════════ */
