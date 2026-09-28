@@ -9,13 +9,20 @@ var BP = require('./billing-profile'), Q = require('./qbo-billing'), D = require
 function fail(message, status) { var e = new Error(message); e.status = status || 409; throw e; }
 function clean(b) { var out = Object.assign({}, b); delete out.activationLock; return out; }
 function basis(c) { return Q.key(B.stable({ org: c.org, billing: clean(c.billing), profile: c.profile, book: c.book })); }
-async function context(db, orgId, version) {
-  var root = db.doc('omega_orgs/' + orgId);
+async function context(db, orgId, version, options) {
+  var root = db.doc('omega_orgs/' + orgId), lenient = !!(options && options.lenient);
   var rows = await Promise.all([root.get(), root.collection('billing').doc('current').get(), root.collection('billing').doc('profile').get()]);
-  if (!rows[0].exists) fail('Organization not found', 404);
+  if (!rows[0].exists && !lenient) fail('Organization not found', 404);
   var billing = rows[1].exists ? rows[1].data() : {};
-  var book = await B.load(db, version || billing.pricebookVersion || B.VERSION);
-  return { root: root, org: rows[0].data(), billing: billing, profile: rows[2].exists ? rows[2].data() : null, book: book };
+  /* lenient (a request that moves no money: a legacy opt-in, the summary):
+     a legacy tenant with no omega_orgs record yet reads as active, exactly
+     as every gate fails OPEN on a missing record; an unseeded book reads as
+     the code's own, exactly as the public price list (api/offerings) does.
+     Every write that moves money still runs guard(), which refuses both. */
+  var book;
+  try { book = await B.load(db, version || billing.pricebookVersion || B.VERSION); }
+  catch (e) { if (!lenient || !/not seeded/i.test(String(e && e.message))) throw e; book = B.proposed(); }
+  return { root: root, org: rows[0].exists ? rows[0].data() : { status: 'active', missingRecord: true }, billing: billing, profile: rows[2].exists ? rows[2].data() : null, book: book };
 }
 /* Two modes, both explicit (api/_lib/packaging-mode.js), judged for the
    provider this workspace bills through (billing-driver.providerOf).
@@ -28,21 +35,25 @@ var live = Mode.live;
 /* `rail` names the provider when the caller knows it (a legacy plan's
    add-ons bill through QuickBooks: api/_lib/addons.js); else the
    workspace's own (billing-driver.providerOf). */
-function guard(c, rail) {
+/* reading (reconcile): an invoice issued under an earlier price book is
+   still read back after the next book is released; only ISSUING needs the
+   current version. Without this every existing workspace's payment would be
+   refused (and a webhook acknowledged) the day VERSION is renamed. */
+function guard(c, rail, reading) {
   if (process.env.PACKAGING_BILLING_ENABLED !== 'true') fail('Packaging billing is disabled');
-  var provider = rail || D.providerOf(c.billing);
+  var provider = rail || D.providerOf(c.billing), current = reading || c.book.version === B.VERSION;
   if (Mode.live(provider)) {
     if (provider === 'stripe') {
-      if (!c.book.enabled || c.book.version !== B.VERSION || /-proposed$/.test(c.book.version)) fail('An enabled release price book is required to bill live through Stripe');
+      if (!c.book.enabled || !current || /-proposed$/.test(c.book.version)) fail('An enabled release price book is required to bill live through Stripe');
       return;
     }
-    if (!c.book.enabled || c.book.version !== B.VERSION || c.book.qbo.env !== 'production' || !c.book.qbo.realmId) fail('An enabled price book synced to the production QuickBooks company is required');
+    if (!c.book.enabled || !current || c.book.qbo.env !== 'production' || !c.book.qbo.realmId) fail('An enabled price book synced to the production QuickBooks company is required');
     return;
   }
   if (!Mode.sandbox(provider)) fail(provider === 'stripe' ? 'Packaging billing through Stripe needs a Stripe test key (or PACKAGING_LIVE=true with a live key)' : 'Packaging billing requires QBO_ENV=sandbox (or PACKAGING_LIVE=true with QBO_ENV=production)');
   if (c.org.packagingSandbox !== true) fail('An explicitly marked sandbox tenant is required');
-  if (provider === 'stripe') { if (!c.book.enabled || c.book.version !== B.VERSION) fail('An enabled price book is required'); return; }
-  if (!c.book.enabled || c.book.version !== B.VERSION || c.book.qbo.env !== 'sandbox') fail('An enabled proposed sandbox price book is required');
+  if (provider === 'stripe') { if (!c.book.enabled || !current) fail('An enabled price book is required'); return; }
+  if (!c.book.enabled || !current || c.book.qbo.env !== 'sandbox') fail('An enabled proposed sandbox price book is required');
 }
 function canApply(c) { try { guard(c); return true; } catch (e) { return false; } }
 /* Moving a plan onto a package ANSWERS what it asked for while billed
@@ -169,13 +180,23 @@ async function apply(db, orgId, input, caller, now, deps) {
       }
       B.freeze(tx, db.doc('pricebook/' + c.book.version), fresh.book, now);
       tx.set(current, patch, { merge: true });
+      /* a workspace moving onto a Stripe package while it still has an old
+         Stripe tier subscription: that subscription keeps charging the card
+         unless someone cancels it. ClearSky is told, once, at the move. */
+      /* whichever rail the package bills on, an old Stripe tier subscription keeps charging the card */
+      if (fresh.billing.stripeSubscriptionId && fresh.billing.packaged !== true) {
+        tx.set(db.doc('omega_orgs/clearsky-usa.com/notifications/billing-review-legacy-sub-' + orgId), { kind: 'billing-review', read: false, createdAt: now, orgId: orgId, staffMail: 'billingAlert', mailState: 'pending',
+          text: (c.org.name || orgId) + ' moved onto a package (' + D.name(provider) + ') while its old Stripe subscription ' + fresh.billing.stripeSubscriptionId + ' is on record. Cancel that subscription in Stripe so the card is not charged twice.' });
+      }
+      /* the tier's own customer, kept so its events still find this workspace (and are flagged, never applied) */
+      if (provider === 'stripe' && fresh.billing.stripeCustomerId && fresh.billing.stripeCustomerId !== customer) tx.set(current, { legacyStripeCustomerId: fresh.billing.stripeCustomerId }, { merge: true });
       /* the organization record says it is packaged, and in which company:
          the live runner finds its tenants by packagedLive (a sandbox signup
          is also `packaged`, and the production runner must never poll it),
          the sandbox runner by packagingSandbox */
-      if (p.action !== 'approve') tx.set(c.root, { packaged: true, packagedLive: Mode.live(), updatedAt: now }, { merge: true });
+      if (p.action !== 'approve') tx.set(c.root, { packaged: true, packagedLive: Mode.live(provider), updatedAt: now }, { merge: true });
       if (p.action === 'approve') {
-        tx.update(c.root, { status: 'active', approvedAt: now, approvedBy: caller.email, packagingTrialUsedAt: now, packaged: true, packagedLive: Mode.live() });
+        tx.update(c.root, { status: 'active', approvedAt: now, approvedBy: caller.email, packagingTrialUsedAt: now, packaged: true, packagedLive: Mode.live(provider) });
         (c.org.domains || []).forEach(function (host) { tx.set(db.doc('tenant_public/' + host), { status: 'active', tier: patch.tier }, { merge: true }); });
         tx.set(c.root.collection('notifications').doc('package-approved'), { kind: 'account', read: false, createdAt: now,
           text: 'Your workspace is approved. Your trial ends on ' + R.iso(patch.trialEndsAt) + '.', packageMail: 'approved', mailState: 'pending' });
@@ -265,7 +286,12 @@ function bought(billing, last) {
 function accessAfterInvoices(billing, records, book, now) {
   var subs = records.filter(function (r) { return kindOf(r) === 'subscription' && D.issued(r); }).sort(function (a, b) { return a.date.localeCompare(b.date); });
   var changes = records.filter(function (r) { return kindOf(r) === 'change'; });
-  var paid = subs.filter(function (r) { return r.state === 'paid'; }), unpaid = subs.filter(function (r) { return r.state !== 'paid'; });
+  var paid = subs.filter(function (r) { return r.state === 'paid'; }), lastPaid = paid.length ? paid[paid.length - 1].date : '';
+  /* a reversed cycle (refunded, voided) is superseded by a LATER cycle paid
+     in full: the tenant has paid since, and a person was told when it was
+     reversed. Without this one refund locked the workspace for good while
+     its renewals kept being billed and paid. */
+  var unpaid = subs.filter(function (r) { return r.state !== 'paid' && !(r.state === 'reversed' && r.date < lastPaid); });
   var openChanges = changes.filter(function (r) { return r.state === 'unpaid' && D.issued(r); }).sort(function (a, b) { return a.date.localeCompare(b.date); });
   var openPacks = records.filter(function (r) { return kindOf(r) === 'pack' && r.state === 'unpaid' && D.issued(r); });
   var owing = unpaid.concat(openChanges, openPacks);
@@ -281,7 +307,7 @@ function accessAfterInvoices(billing, records, book, now) {
   if (!subs.length) return patch;
   /* the first invoice voided before anything was paid: nothing to pay against; a person re-issues or closes */
   if (!paid.length && subs.some(function (r) { return r.state === 'reversed'; })) return Object.assign(patch, { packagingState: 'awaiting_payment', accessUntil: now, reissueRequired: true });
-  if (subs.some(function (r) { return r.state === 'reversed'; })) return Object.assign(patch, { packagingState: 'unpaid', accessUntil: now });
+  if (unpaid.some(function (r) { return r.state === 'reversed'; })) return Object.assign(patch, { packagingState: 'unpaid', accessUntil: now });
   if (!paid.length) return Object.assign(patch, { packagingState: 'awaiting_payment', accessUntil: now });
   var last = paid[paid.length - 1], own = bought(billing, last);
   patch.paidThrough = last.period.end;
@@ -298,14 +324,20 @@ function accessAfterInvoices(billing, records, book, now) {
 /* A change record moving to paid or reversed edits the subscription. Paid
  * after its cycle rolled (or after a cancel) is still honoured — the
  * customer paid — and flagged so a person can invoice the gap or refund. */
-function subscriptionAfterChange(billing, record, from, to, subs) {
+function subscriptionAfterChange(billing, record, from, to, subs, changes) {
   var sub = billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription : null;
   if (!sub) return null;
   var modules = sub.modules.slice(), plan = sub.plan;
   if (to === 'paid' && from !== 'paid') { (record.add || []).forEach(function (k) { if (modules.indexOf(k) < 0) modules.push(k); }); if (record.plan) plan = record.plan; }
   else if (to === 'reversed' && from === 'paid') {
-    var coveredLater = subs.some(function (r) { return r.state === 'paid' && r.date >= (record.cycle ? record.cycle.end : '9999') && (r.modules || []).some(function (k) { return (record.add || []).indexOf(k) >= 0; }); });
-    if (!coveredLater) { modules = modules.filter(function (k) { return (record.add || []).indexOf(k) < 0; }); plan = record.planBefore || plan; }
+    /* a module stays when something else still paid for it: a later cycle
+       that billed it, or another change that added it and is paid */
+    var covered = function (k) {
+      return subs.some(function (r) { return r.state === 'paid' && r.date >= (record.cycle ? record.cycle.end : '9999') && (r.modules || []).indexOf(k) >= 0; })
+        || (changes || []).some(function (r) { return r.id !== record.id && r.state === 'paid' && (r.add || []).indexOf(k) >= 0; });
+    };
+    var lost = (record.add || []).filter(function (k) { return !covered(k); });
+    if (lost.length) { modules = modules.filter(function (k) { return lost.indexOf(k) < 0; }); if (lost.length === (record.add || []).length) plan = record.planBefore || plan; }
   } else return null;
   modules = M.normalize(modules);
   try { P.quote(modules, billing.__book, { plan: plan }); } catch (e) { plan = P.quote(modules, billing.__book, { plan: 'auto' }).plan; }
@@ -321,21 +353,25 @@ function displayAfter(patch, billing, book, now) {
 async function reconcile(db, orgId, now, deps, options) {
   var c = await context(db, orgId), legacy = c.billing.packaged !== true;
   /* a plan billed outside the engine is reconciled only for its add-ons
-     (api/_lib/addons.js, QuickBooks' rail); its own tier, amount due and
-     pay link are never this function's to write */
-  guard(c, legacy ? 'quickbooks' : undefined);
+     (api/_lib/addons.js, on the add-ons' own rail); its own tier, amount
+     due and pay link are never this function's to write */
+  guard(c, legacy ? AO.rail(c.billing) : undefined, true);
   if (legacy && !c.billing.addOns) return { skipped: true };
   var current = c.root.collection('billing').doc('current'), collection = current.collection('invoices');
-  var query = collection.orderBy('date'), bounded = options && options.limit;
+  /* the runner's bounded read pages by document id, which is unique: paged by
+     date, every record sharing a date across a page edge was never read */
+  var bounded = options && options.limit ? Math.min(10, Math.max(1, options.limit)) : 0, query = bounded ? collection.orderBy('__name__') : collection.orderBy('date');
   if (bounded) {
     if (c.billing.reconcileCursor) query = query.startAfter(c.billing.reconcileCursor);
-    query = query.limit(Math.min(10, Math.max(1, bounded)));
+    query = query.limit(bounded);
   }
   var rows = await query.get(), results = [], drivers = {};
   /* each invoice is read back from the provider it was issued on */
   function driverFor(record) { var p = D.recordProvider(record); return drivers[p] || (drivers[p] = D.driver(c.book, p, deps)); }
   for (var i = 0; i < rows.docs.length; i++) {
     var doc = rows.docs[i], record = doc.data(); if (!D.issued(record)) continue;
+    /* a Stripe event is about ONE invoice: that record alone is read back (the access rule below still reads them all) */
+    if (options && options.only && D.invoiceId(record) !== String(options.only)) continue;
     var invoiceId = D.invoiceId(record), providerName = D.name(D.recordProvider(record));
     var receipt, error = false, transient = false, note = null;
     // A failure on ClearSky's side (no status, 5xx, or QuickBooks refusing
@@ -344,10 +380,17 @@ async function reconcile(db, orgId, now, deps, options) {
     // row, marks the record for review. Neither cuts the tenant's access.
     try { receipt = await driverFor(record).reconcile(record); } catch (e) { note = String(e.message || e).slice(0, 200); if (clearskySide(e)) transient = true; else error = true; }
     var state = error || transient ? record.state : receipt.reversed ? 'reversed' : receipt.satisfied ? 'paid' : 'unpaid', review = error;
+    /* the provider may read paid and still want a person (part of it refunded) */
+    if (!error && !transient && receipt.review) { review = true; note = String(receipt.review).slice(0, 200); }
     await db.runTransaction(async function (tx) {
       var invoices = await tx.get(collection.orderBy('date')), old = await tx.get(doc.ref), live = await tx.get(current);
       var snapshot = old.data(), billing = live.data(), subUpdate = null, addOnMove = null, outside = billing.packaged !== true;
       if (D.invoiceId(snapshot) !== invoiceId) fail('Invoice binding changed');
+      /* another reconcile (or a cancel) moved this record after it was read:
+         its verdict is newer than this one, which is dropped */
+      if (snapshot.state !== record.state) { state = snapshot.state; return; }
+      /* money that was received went back: a person looks, once */
+      if ((kindOf(snapshot) === 'subscription' || kindOf(snapshot) === 'addon') && state === 'reversed' && snapshot.state === 'paid' && !error && !transient) { review = true; note = note || 'a paid invoice was refunded or voided'; }
       var retries = transient ? (snapshot.reconcileRetries || 0) + 1 : 0;
       if (transient && retries >= 3) { error = true; review = true; }
       var subs = invoices.docs.map(function (d) { return d.data(); }).filter(function (r) { return kindOf(r) === 'subscription' && D.issued(r); });
@@ -363,7 +406,8 @@ async function reconcile(db, orgId, now, deps, options) {
         var rolled = subs.some(function (r) { return snapshot.cycle && snapshot.cycle.end && r.date >= snapshot.cycle.end; });
         if (state === 'unpaid') state = snapshot.state === 'cancelled' ? 'cancelled' : (rolled || snapshot.state === 'expired') ? 'expired' : 'unpaid';
         if (state === 'paid' && snapshot.state !== 'paid' && (rolled || snapshot.state === 'cancelled' || snapshot.state === 'expired')) review = true;
-        subUpdate = subscriptionAfterChange(Object.assign({}, billing, { __book: c.book }), snapshot, snapshot.state, state, subs);
+        subUpdate = subscriptionAfterChange(Object.assign({}, billing, { __book: c.book }), snapshot, snapshot.state, state, subs,
+          invoices.docs.map(function (d) { return d.data(); }).filter(function (r) { return kindOf(r) === 'change'; }));
       }
       /* an add-on purchase (api/_lib/addons.js) waits like a change: unpaid
          past the period it would cover, it expires; paid late, it is still
@@ -374,7 +418,7 @@ async function reconcile(db, orgId, now, deps, options) {
           if (state === 'unpaid') state = snapshot.state === 'cancelled' ? 'cancelled' : (passed || snapshot.state === 'expired') ? 'expired' : 'unpaid';
           if (state === 'paid' && snapshot.state !== 'paid' && (passed || snapshot.state === 'cancelled' || snapshot.state === 'expired')) review = true;
         }
-        addOnMove = AO.boughtAfter(billing, snapshot, snapshot.state, state);
+        addOnMove = AO.boughtAfter(billing, snapshot, snapshot.state, state, invoices.docs.map(function (d) { return d.data(); }));
       }
       /* an add-on paid after the workspace moved onto a package opens nothing (the package decides): a person looks */
       if (!outside && kindOf(snapshot) === 'addon' && !error && !transient && state === 'paid' && snapshot.state !== 'paid') review = true;
@@ -425,7 +469,7 @@ async function reconcile(db, orgId, now, deps, options) {
     });
     results.push({ invoiceId: invoiceId, kind: kindOf(record), state: state, was: record.state, changed: record.state !== state, reviewRequired: review });
   }
-  if (bounded) await current.update({ reconcileCursor: rows.docs.length === bounded ? rows.docs[rows.docs.length - 1].data().date : null });
+  if (bounded) await current.update({ reconcileCursor: rows.docs.length === bounded ? rows.docs[rows.docs.length - 1].id : null });
   return { invoices: results };
 }
 module.exports = { context: context, guard: guard, live: live, canApply: canApply, prepare: prepare, display: display, preview: preview, apply: apply,

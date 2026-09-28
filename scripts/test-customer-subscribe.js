@@ -264,7 +264,8 @@ async function checkoutDone(again) {
       var other = await deliver(evt('evt_xinv', 'invoice.paid', { id: 'in_x', customer: 'cus_NOBODY', lines: { data: [] } }));
       assert.equal(other.code, 200); assert.match(String(other.body.ignored), /no org for cus_NOBODY/, 'a customer id still gets its lookup');
     } finally { delete db.collectionGroup; }
-    assert.deepEqual(lookups, ['cus_NOBODY'], 'no billing lookup by an undefined customer');
+    /* by the customer, then by the tier customer a workspace moved off (legacyStripeCustomerId): never by an undefined one */
+    assert.deepEqual(lookups, ['cus_NOBODY', 'cus_NOBODY'], 'no billing lookup by an undefined customer');
     assert.equal(JSON.stringify(db.data.get(O + '/billing/current')), tenantBefore, 'the supplier\'s billing/current is not touched');
   });
   await test('the tenant\'s own Stripe events still run the original branches, and a bad signature is refused', async function () {

@@ -193,7 +193,8 @@ async function run() {
     equal(bill().addOns.state, 'past_due', 'a renewal is owed'); equal(bill().addOns.live, ['logic-office', 'logic-plant'], 'and the add-ons stay on through the grace');
     equal(bill().addOns.nextInvoiceOn, '2026-11-27');
     equal(await AO.issue(db, ORG, now), { skipped: true }, 'once');
-    ok(/Autopay/.test(db.data.get(ROOT + '/notifications/addon-invoice-addon-renewal-2026-10-27').text), 'the renewal mail says Autopay charges the saved card');
+    var renewNote = db.data.get(ROOT + '/notifications/addon-invoice-addon-renewal-2026-10-27');
+    ok(/QuickBooks' secure page, or with the card saved there/.test(renewNote.text) && renewNote.payWith === 'QuickBooks', 'the renewal mail names the rail\'s page and the card saved there');
     var q4 = await quote(['logic-materials']); equal(q4.canBuy, false); ok(/renewal is waiting for payment/.test(q4.reason), 'pay the renewal first');
     paid(ren1); now = at('2026-10-28T12:00:00Z'); await reconcile(now);
     equal([bill().addOns.state, bill().addOns.paidThrough, bill().addOns.accessUntil], ['paid', '2026-11-27', untilOf('2026-11-27')]);
@@ -209,6 +210,14 @@ async function run() {
     equal(await AO.issue(db, ORG, at('2026-12-27T12:00:00Z')), { skipped: true }, 'no new renewal piles up on a lapsed one');
     paid(record('addon-renewal-2026-11-27')); now = at('2026-12-14T12:00:00Z'); await reconcile(now);
     equal([bill().addOns.state, bill().addOns.live, bill().addOns.paidThrough], ['paid', ['logic-office', 'logic-plant'], '2026-12-27'], 'paid late, it comes back on');
+
+    /* ══ 1b. All of Omega Logic on the contract after Logic add-ons: the renewal stops billing those parts ══ */
+    seed(Object.assign({}, ENTERPRISE)); now = at('2026-09-27T15:00:00Z');
+    var wl = await buy(['logic-plant']); paid(record(wl.addOnId)); now += 60000; await reconcile(now);
+    equal(bill().addOns.live, ['logic-office', 'logic-plant']);
+    db.seed(CUR, Object.assign({}, bill(), { addons: ['omega-logic'], omegaLogic: true }));
+    var wlBefore = calls.invoice; now = at('2026-10-27T12:00:00Z'); await AO.issue(db, ORG, now);
+    equal([calls.invoice - wlBefore, record('addon-renewal-2026-10-27')], [0, undefined], 'no add-on renewal for Logic parts the contract already holds');
 
     /* ══ 2. Cancel, expiry and a payment after either ══ */
     now = at('2026-09-27T15:00:00Z'); seed(Object.assign({}, ENTERPRISE));
@@ -226,6 +235,30 @@ async function run() {
     var e1 = await buy(['logic-office']); now = at('2026-10-27T01:00:00Z'); await reconcile(now);
     equal(record(e1.addOnId).state, 'expired', 'unpaid past the period it would cover'); equal(bill().addOns.pending, []);
     equal((await quote(['logic-office'])).fresh, true, 'a new purchase starts a new cycle');
+    /* ── a cancel never leads to a second invoice for the same module ── */
+    now = at('2026-09-27T15:00:00Z'); seed(Object.assign({}, ENTERPRISE));
+    var k1 = await buy(['logic-office']); await req('POST', { action: 'addon-cancel', addOnId: k1.addOnId });
+    var k1b = await buy(['logic-office']);
+    equal([k1b.addOnId, k1b.state, k1b.reopened, calls.invoice, record(k1.addOnId).state], [k1.addOnId, 'awaiting_payment', true, 1, 'unpaid'], 'the same day: revived on its own invoice, never a second');
+    await req('POST', { action: 'addon-cancel', addOnId: k1.addOnId }); now = at('2026-09-28T15:00:00Z');
+    var kq = await quote(['logic-office']);
+    equal(kq.canBuy, false, 'the next day: refused while the cancelled invoice is still open in QuickBooks'); ok(/still has an open QuickBooks invoice/.test(kq.reason), kq.reason);
+    await refused(function () { return buy(['logic-office', 'logic-plant']); }, /open QuickBooks invoice/);
+    reversed(record(k1.addOnId)); await reconcile(now); equal(record(k1.addOnId).state, 'reversed');
+    var k2 = await buy(['logic-office']); ok(k2.addOnId !== k1.addOnId && calls.invoice === 2, 'once ClearSky voids it, a new purchase with its own invoice');
+    /* the same day, once ClearSky has voided the cancelled invoice: a new purchase (a dead invoice is never revived) */
+    now = at('2026-09-27T15:00:00Z'); seed(Object.assign({}, ENTERPRISE));
+    var j1 = await buy(['logic-office']); await req('POST', { action: 'addon-cancel', addOnId: j1.addOnId });
+    reversed(record(j1.addOnId)); await reconcile(now); equal(record(j1.addOnId).state, 'reversed');
+    var j2 = await buy(['logic-office']); ok(j2.addOnId !== j1.addOnId && j2.state === 'awaiting_payment' && calls.invoice === 2, 'the same day after a void: its own new invoice');
+    /* ── a cancelled fresh purchase paid after a later one is on: it adds, never replaces ── */
+    seed({ tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'manual' }); now = at('2026-09-27T15:00:00Z');
+    var f1 = await buy(['sitefinder']); await req('POST', { action: 'addon-cancel', addOnId: f1.addOnId });
+    now = at('2026-09-28T15:00:00Z'); var f2 = await buy(['logic-office']); paid(record(f2.addOnId)); now += 60000; await reconcile(now);
+    equal(bill().addOns.modules, ['logic-office']);
+    paid(record(f1.addOnId)); now = at('2026-10-05T15:00:00Z'); await reconcile(now);
+    equal([record(f1.addOnId).state, record(f1.addOnId).reviewRequired], ['paid', true]);
+    equal(bill().addOns.live.slice().sort(), ['logic-office', 'sitefinder'], 'a late payment never switches off what a later paid purchase bought');
 
     /* ── a reversed payment takes the module back ── */
     seed(Object.assign({}, ENTERPRISE)); now = at('2026-09-27T15:00:00Z');
@@ -233,6 +266,19 @@ async function run() {
     equal(bill().addOns.live, ['logic-office']);
     reversed(record(v1.addOnId)); now += 60000; await reconcile(now);
     equal([record(v1.addOnId).state, bill().addOns.modules, bill().addOns.live], ['reversed', [], []], 'voided in QuickBooks: off');
+    /* ── a void of an older paid purchase leaves what a later paid renewal covers; a part never outlives Office ── */
+    seed(Object.assign({}, ENTERPRISE)); now = at('2026-09-27T15:00:00Z');
+    var w1 = await buy(['logic-office']); paid(record(w1.addOnId)); now += 60000; await reconcile(now);
+    now = at('2026-10-07T15:00:00Z'); var w2 = await buy(['logic-plant']); paid(record(w2.addOnId)); now += 60000; await reconcile(now);
+    now = at('2026-10-27T12:00:00Z'); await AO.issue(db, ORG, now); paid(record('addon-renewal-2026-10-27')); now = at('2026-10-28T12:00:00Z'); await reconcile(now);
+    reversed(record(w1.addOnId)); now = at('2026-11-02T12:00:00Z'); await reconcile(now);
+    equal([bill().addOns.modules, bill().addOns.live, bill().addOns.state], [['logic-office', 'logic-plant'], ['logic-office', 'logic-plant'], 'paid'], 'the October renewal still pays for Office');
+    ok(record(w1.addOnId).reviewRequired === true, 'and a person is told a paid add-on was voided');
+    seed(Object.assign({}, ENTERPRISE)); now = at('2026-09-27T15:00:00Z');
+    var x1 = await buy(['logic-office']); paid(record(x1.addOnId)); now += 60000; await reconcile(now);
+    now = at('2026-10-07T15:00:00Z'); var x2 = await buy(['logic-plant']); paid(record(x2.addOnId)); now += 60000; await reconcile(now);
+    reversed(record(x1.addOnId)); now += 60000; await reconcile(now);
+    equal(bill().addOns.modules, [], 'Office voided with nothing later covering it: Plant, which needs it, goes with it');
 
     /* ══ 3. The fifth department completes the bundle ══ */
     seed(Object.assign({}, ENTERPRISE)); now = at('2026-09-27T15:00:00Z');
@@ -248,6 +294,18 @@ async function run() {
     ctx = await X.context(ORG); equal(X.parts(ctx, now), ['plant', 'materials', 'logistics', 'customer']);
     now = at('2026-10-27T12:00:00Z'); await AO.issue(db, ORG, now);
     equal(record('addon-renewal-2026-10-27').lines.map(function (l) { return l.itemKey + ':' + l.amountCents; }), ['logic-bundle:250000'], 'the renewal bills the bundle');
+
+    /* ── a purchase on the add-on billing day, before the runner has issued the renewal, would skip the renewal: refused ── */
+    seed(Object.assign({}, ENTERPRISE)); now = at('2026-09-27T15:00:00Z');
+    var bd = await buy(['logic-office']); paid(record(bd.addOnId)); now += 60000; await reconcile(now);
+    now = at('2026-10-27T00:30:00Z');
+    var bdq = await quote(['logic-plant']);
+    equal(bdq.canBuy, false, 'the renewal is due and not issued yet: nothing is added until it is'); ok(/renewal is being issued today/.test(bdq.reason), bdq.reason);
+    await refused(function () { return buy(['logic-plant']); }, /renewal/);
+    equal(bill().addOns.nextInvoiceOn, '2026-10-27', 'the billing date is not moved past the renewal');
+    equal((await AO.issue(db, ORG, now)).issued, true, 'the runner issues the renewal');
+    paid(record('addon-renewal-2026-10-27')); now = at('2026-10-27T01:30:00Z'); await reconcile(now);
+    equal((await quote(['logic-plant'])).canBuy, true, 'once the renewal has gone through, the purchase opens');
 
     /* ══ 4. A Standard plan buys any editor module, EXACTLY ══
        (Tommy's decision, 2026-09-27: sold only where it switches on in full
@@ -334,6 +392,14 @@ async function run() {
     await refused(function () { return quote(['logic-plant']); }, /Already on your plan/);
     ctx = await X.context(ORG); equal(X.parts(ctx, now), ['plant', 'materials', 'logistics', 'customer'], 'the omega-logic add-on still holds every part');
     equal(await X.requirePartIfPackaged(ORG, 'plant'), null, 'and its doors keep their own rule');
+    seed(Object.assign({}, ENTERPRISE, { addons: [], omegaLogic: true }));
+    await refused(function () { return quote(['logic-plant']); }, /Already on your plan/);
+    equal(calls.invoice, 0, 'the older omegaLogic flag holds every part: never sold one again');
+    /* ClearSky's own workspace is never sold an add-on */
+    db.seed('omega_orgs/clearsky-usa.com', { name: 'ClearSky', status: 'active', packagingSandbox: true });
+    db.seed('omega_orgs/clearsky-usa.com/billing/current', { tier: 'internal', addons: [], toolOverrides: {} });
+    await refused(function () { return req('POST', { action: 'addon-quote', add: ['logic-office'], orgId: 'clearsky-usa.com' }, staff); }, /ClearSky's own workspace/, 409);
+    await refused(function () { return req('POST', { action: 'addon-buy', add: ['logic-office'], orgId: 'clearsky-usa.com', previewId: 'a'.repeat(48), effectiveAt: now }, staff); }, /ClearSky's own workspace/, 409);
     seed({ packaged: true, packagingState: 'paid', modules: ['lite'] });
     await refused(function () { return quote(['gridatlas']); }, /subscription package: add modules on the Ladder/, 409);
     await refused(function () { return req('POST', { action: 'addon-buy', add: ['gridatlas'], orgId: ORG, previewId: 'a'.repeat(48), effectiveAt: now }); }, /subscription package/, 409);
@@ -372,19 +438,101 @@ async function run() {
     now = at('2026-10-27T13:00:00Z'); tick = await Runner.tick(db, now, { limit: 5, mail: mailer });
     equal(tick.results.filter(function (x) { return x.orgId === ORG; })[0].invoice.date, '2026-10-27', 'and issues the renewal on the billing day');
 
-    /* ══ 6b. The rail: a legacy plan's add-ons are QuickBooks', whatever the
-       package rail (billing-driver.providerOf would send a workspace with no
-       QuickBooks customer to Stripe under PACKAGING_PROVIDER=stripe) ══ */
+    /* ── a renewal QuickBooks refuses never holds the tools on past the grace: the runner still reconciles ── */
+    now = at('2026-09-27T15:00:00Z'); seed({ tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'manual' });
+    var sr = await buy(['sitefinder']); paid(record(sr.addOnId)); now += 60000; await reconcile(now);
+    equal(bill().toolOverrides, { sitefinder: true, sitediscovery: true });
+    var drv = Q.driver;
+    Q.driver = function () { var d = drv.apply(this, arguments); return Object.assign({}, d, { invoice: async function (plan) { if (plan.purpose === 'renewal') { var e = new Error('Customer is inactive'); e.status = 400; throw e; } return d.invoice.apply(d, arguments); } }); };
+    try {
+      var ticks = ['2026-10-27T13:00:00Z', '2026-11-19T13:00:00Z', '2026-11-20T13:00:00Z'];
+      for (var ti = 0; ti < ticks.length; ti++) { db.seed('integrations/packaging-billing', {}); now = at(ticks[ti]); await Runner.tick(db, now, { limit: 5, mail: mailer }); }
+    } finally { Q.driver = drv; }
+    equal([bill().addOns.live, bill().toolOverrides.sitefinder], [[], undefined], 'past the paid period and its grace, the grants are taken back');
+
+    /* ══ 6b. The rail: a workspace whose add-ons are already invoiced through
+       QuickBooks stays there under PACKAGING_PROVIDER=stripe (its customer
+       record decides), and so does a plan ClearSky invoices through QuickBooks ══ */
     process.env.PACKAGING_PROVIDER = 'stripe';
     try {
-      now = at('2026-09-27T15:00:00Z'); seed(Object.assign({}, ENTERPRISE, { paymentProvider: 'stripe', stripeCustomerId: 'cus_legacy_plan' }));
-      equal((await quote(['logic-office'])).canBuy, true, 'Stripe as the package rail does not move a legacy plan\'s add-ons: QuickBooks\' guard answers');
+      now = at('2026-09-27T15:00:00Z'); seed(Object.assign({}, ENTERPRISE, { paymentProvider: 'stripe', stripeCustomerId: 'cus_legacy_plan', qboCustomerId: 'C7', qboRealmId: '123' }));
+      var qq = await quote(['logic-office']); equal([qq.canBuy, qq.payment, qq.payWith], [true, 'quickbooks', 'QuickBooks'], 'add-ons already on QuickBooks stay there');
       var rs = await buy(['logic-office']);
       equal([record(rs.addOnId).provider, calls.invoice, !!record(rs.addOnId).qboInvoiceId], ['quickbooks', 1, true], 'invoiced in QuickBooks, and the record names its rail');
       equal([bill().stripeCustomerId, bill().paymentProvider], ['cus_legacy_plan', 'stripe'], 'the plan\'s own Stripe customer and payment provider are never touched');
       paid(record(rs.addOnId)); now += 60000; await reconcile(now);
       equal(bill().addOns.live, ['logic-office'], 'reconciled from QuickBooks, the rail it was issued on');
+      seed(Object.assign({}, ENTERPRISE, { paymentProvider: 'quickbooks' }));
+      equal((await quote(['logic-office'])).payWith, 'QuickBooks', 'a plan ClearSky invoices through QuickBooks keeps its add-ons there');
     } finally { delete process.env.PACKAGING_PROVIDER; }
+
+    /* ══ 6d. Add-ons on the Stripe rail (Tommy, 2026-09-28: "integrated with
+       stripe so people can buy and opt into new products"): under
+       PACKAGING_PROVIDER=stripe a legacy plan with no QuickBooks add-on
+       customer buys on its OWN Stripe customer, the one Plan & billing's
+       card door links (stripe-customer link), on a send_invoice invoice
+       beside the plan; reconcile reads it back from Stripe; the renewal is
+       issued there too; a cancel voids the invoice; QuickBooks is never
+       touched ══ */
+    process.env.PACKAGING_PROVIDER = 'stripe'; process.env.STRIPE_SECRET_KEY = 'sk_test_double';
+    try {
+      var SD = require('./_lib/stripe-double').StripeDouble, stripe = new SD(), sdeps = { stripe: stripe };
+      now = at('2026-09-27T15:00:00Z'); seed(Object.assign({}, ENTERPRISE));
+      var qs = await quote(['logic-office']);
+      equal([qs.canBuy, qs.payment, qs.payWith, qs.todayCents], [true, 'stripe', 'Stripe', 150000], 'priced for Stripe');
+      ok(/Stripe's secure page/.test(qs.display.activation), qs.display.activation);
+      var rs1 = await AO.buy(db, ORG, { add: ['logic-office'], previewId: qs.previewId, effectiveAt: qs.effectiveAt }, owner, now, sdeps);
+      equal([rs1.state, rs1.payWith, rs1.display], ['awaiting_payment', 'Stripe', '$1,500']);
+      ok(/^https:\/\/invoice\.stripe\.com\//.test(rs1.paymentLink), 'Stripe\'s hosted invoice page: ' + rs1.paymentLink);
+      var rec1 = record(rs1.addOnId);
+      equal([rec1.provider, !!rec1.stripeInvoiceId, rec1.qboInvoiceId, rec1.qboCustomerId], ['stripe', true, undefined, undefined], 'the record names Stripe and no QuickBooks id');
+      equal(calls, { customer: 0, invoice: 0 }, 'QuickBooks is never touched');
+      ok(bill().stripeCustomerId && bill().stripeLivemode === false && bill().stripeLinkedBy === owner.email && bill().qboCustomerId === undefined, 'the plan\'s own Stripe customer, linked once through the card door; no QuickBooks binding');
+      equal(rec1.stripeCustomerId, bill().stripeCustomerId, 'the invoice is on that customer');
+      var sinv = stripe.invoices_[rec1.stripeInvoiceId];
+      equal([sinv.customer, sinv.metadata.omegaOrg, sinv.metadata.omegaPackage, sinv.metadata.omegaKind, sinv.total, sinv.status], [bill().stripeCustomerId, ORG, 'true', 'addon', 150000, 'open'], 'a send_invoice invoice the webhook can place');
+      ok(/OMEGA add-on 2026-09-27 to 2026-10-27/.test(sinv.description), sinv.description);
+      equal(bill().addOns.state, 'awaiting_payment'); equal(bill().addOns.live, []);
+      equal(db.data.get(ROOT + '/notifications/addon-invoice-' + rs1.addOnId).payWith, 'Stripe', 'the mail names Stripe');
+      /* the same request again waits on the same invoice (never a second one) */
+      var rsAgain = await AO.buy(db, ORG, { add: ['logic-office'], previewId: qs.previewId, effectiveAt: qs.effectiveAt }, owner, now, sdeps);
+      equal([rsAgain.addOnId, Object.keys(stripe.invoices_).length], [rs1.addOnId, 1], 'replayed, one invoice');
+      /* cancel voids the Stripe invoice: nothing payable is left beside the plan */
+      var cx = await AO.cancel(db, ORG, rs1.addOnId, owner, now + 1000, sdeps);
+      equal([cx.state, stripe.invoices_[rec1.stripeInvoiceId].status, record(rs1.addOnId).voided, record(rs1.addOnId).paymentLink], ['cancelled', 'void', true, null], 'voided on Stripe, the link gone');
+      equal(bill().addOns.state, 'none', 'nothing waits');
+      /* asked for again: a new purchase with its own invoice (a voided one is never revived) */
+      now += 60000; var qs2 = await quote(['logic-office']);
+      ok(qs2.canBuy && qs2.previewId !== qs.previewId, 'a new id after the void');
+      var rs2 = await AO.buy(db, ORG, { add: ['logic-office'], previewId: qs2.previewId, effectiveAt: qs2.effectiveAt }, owner, now, sdeps);
+      ok(rs2.addOnId !== rs1.addOnId && record(rs2.addOnId).stripeInvoiceId !== rec1.stripeInvoiceId, 'its own invoice');
+      equal(Object.keys(stripe.customers_).length, 1, 'still the one customer');
+      /* paid on Stripe: reconcile (the webhook, I've paid and the runner run the same one) opens it */
+      stripe.pay(record(rs2.addOnId).stripeInvoiceId); now += 60000;
+      var rc = await S.reconcile(db, ORG, now, sdeps);
+      equal(rc.invoices.filter(function (r) { return r.changed; }).map(function (r) { return r.state; }).sort(), ['paid', 'reversed'], 'read back from Stripe: the voided one is dead, the new one paid');
+      equal(record(rs1.addOnId).state, 'reversed');
+      equal([bill().addOns.state, bill().addOns.live, bill().addOns.modules, bill().addOns.nextInvoiceOn], ['paid', ['logic-office'], ['logic-office'], '2026-10-27']);
+      var sctx = await X.context(ORG); equal([X.subscribed(sctx, now), X.parts(sctx, now)], [true, []], 'Office is on through logic-access, paid on Stripe');
+      /* the renewal, on Stripe */
+      now = at('2026-10-27T01:00:00Z');
+      var ren = await AO.issue(db, ORG, now, sdeps);
+      var rr = record('addon-renewal-2026-10-27');
+      equal([ren.issued, rr.provider, !!rr.stripeInvoiceId, rr.stripeCustomerId, rr.totalCents, calls.invoice], [true, 'stripe', true, bill().stripeCustomerId, 150000, 0], 'renewed on Stripe, never QuickBooks');
+      equal(db.data.get(ROOT + '/notifications/addon-invoice-addon-renewal-2026-10-27').payWith, 'Stripe');
+      equal(await AO.issue(db, ORG, now, sdeps), { skipped: true }, 'once');
+      stripe.pay(rr.stripeInvoiceId); await S.reconcile(db, ORG, now + 60000, sdeps);
+      equal([bill().addOns.state, bill().addOns.live, bill().addOns.nextInvoiceOn], ['paid', ['logic-office'], '2026-11-27'], 'the renewal paid on Stripe keeps it on');
+      /* no billing profile saved: Stripe's page needs none, so Opt in never asks for the form first; the customer carries the payer's email */
+      seed(Object.assign({}, ENTERPRISE), { noProfile: true }); now = at('2026-09-27T15:00:00Z'); stripe = new SD(); sdeps = { stripe: stripe };
+      var qnp = await quote(['logic-office']); equal([qnp.canBuy, qnp.needsProfile], [true, false], 'no form on Stripe');
+      var rnp = await AO.buy(db, ORG, { add: ['logic-office'], previewId: qnp.previewId, effectiveAt: qnp.effectiveAt }, owner, now, sdeps);
+      var cusNp = stripe.customers_[bill().stripeCustomerId];
+      equal([rnp.state, cusNp.email, cusNp.name], ['awaiting_payment', owner.email, 'Legacy Example'], 'invoiced to the owner, in the workspace\'s name');
+      /* a test key and a workspace that is not a marked sandbox: nothing is sold by card here */
+      seed(Object.assign({}, ENTERPRISE), { org: { packagingSandbox: false } });
+      var qn = await quote(['logic-office']); equal([qn.canBuy, qn.request], [false, true], 'not open: the recorded request instead');
+    } finally { delete process.env.PACKAGING_PROVIDER; delete process.env.STRIPE_SECRET_KEY; }
 
     /* ══ 6c. Opt out of an add-on on by card (addon-cancel with `remove`):
        it stays on until the end of the month paid for and is not renewed;

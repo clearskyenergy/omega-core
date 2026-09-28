@@ -26,8 +26,10 @@
      moment a Cancel request redraws the card. */
   var intent = null;
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  /* an add-on on a plan billed outside the engine is always a QuickBooks
-     invoice (api/_lib/addons.js RAIL), whatever rail a package would use */
+  /* an add-on on a plan billed outside the engine bills on the workspace's
+     rail (api/_lib/addons.js rail(): QuickBooks, or Stripe under
+     PACKAGING_PROVIDER=stripe); the server names it (payWith) on every quote,
+     purchase and pending record, so this is only the word before an answer */
   var ADDON_RAIL = 'QuickBooks';
   function packageView() { return host.view || (global.OmegaCaps && global.OmegaCaps.packageAccess()); }
   function api(path, payload) {
@@ -433,9 +435,12 @@
        through /api/billing-profile; then the price again */
     function profile() {
       var P = global.OmegaBillingProfile;
-      el.appendChild(node('p', 'First, who the invoice goes to. It is saved once and used for every invoice.', 'opm-note'));
+      el.appendChild(node('p', 'First, who QuickBooks invoices. Saved once and used for every invoice; most of it is filled in already.', 'opm-note'));
       if (!P) { el.appendChild(node('p', 'Add your billing contact on Plan & billing, then come back.', 'opm-reason')); row(el, [button('Not now', again)]); return; }
-      var form = node('div', '', 'opm-profile'), fields = P.render(form, {}); el.appendChild(form);
+      /* what is already known fills the form: the workspace's name, the signed-in person, the company type on record */
+      var user = global.firebase && global.firebase.auth().currentUser, sm = state.summary || {};
+      var seed = { legalName: host.company || sm.company || '', contactName: (user && user.displayName) || '', email: (user && user.email) || '', vertical: sm.vertical || '' };
+      var form = node('div', '', 'opm-profile'), fields = P.render(form, seed, { compact: true }); el.appendChild(form);
       var save = button('Save and continue', function () {
         if (!fields.valid()) return;
         save.disabled = true; save.textContent = 'Saving…';

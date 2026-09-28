@@ -115,7 +115,20 @@ tenant); a binding made in the other mode is refused and never overwritten.
 A **package** keeps the engine's rules: its card is read back and its portal
 opens, its invoices stay the engine's. A plan ClearSky invoices through
 QuickBooks (`paymentProvider: 'quickbooks'`) keeps its card on QuickBooks'
-page, and Add to plan add-ons still bill through QuickBooks.
+page, and its Opt-in add-ons bill through QuickBooks too.
+
+**Opt in on a legacy plan buys on Stripe** (2026-09-28). Under
+`PACKAGING_PROVIDER=stripe`, a plan billed outside the engine that has no
+QuickBooks add-on customer buys a module (`plan-change` `addon-quote` /
+`addon-buy`, `api/_lib/addons.js` `rail()`) on its OWN Stripe customer, the
+one the card door above links, on a `send_invoice` invoice beside the plan
+(metadata `omegaPackage`, `omegaKind: 'addon'`, so the webhook answers it
+first and the engine's reconcile opens the module when it is paid); the
+monthly renewal is issued there too, and a cancel voids the invoice. A
+workspace whose add-ons already have a QuickBooks customer stays on
+QuickBooks. The same guard applies: a test key sells only to a
+`packagingSandbox` workspace; live needs `PACKAGING_LIVE=true` and a live
+key. `scripts/test-addons.js` §6d.
 
 **The customer portal needs no dashboard step.** Stripe refuses every
 portal session until someone has saved the portal settings in the

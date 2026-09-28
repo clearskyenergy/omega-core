@@ -98,6 +98,20 @@ async function run() {
   await Runner.tick(db, ending, opts); await Runner.tick(db, ending, opts);
   equal(Array.from(db.data.keys()).filter(function (k) { return /\/invoices\//.test(k); }).length, 1);
   equal(mailed, 2);
+  /* the runner judges BOTH providers: a QuickBooks-live deployment that moves new signups to Stripe (PACKAGING_PROVIDER=stripe)
+     keeps renewing its QuickBooks tenants before, and after, the Stripe key is live */
+  var keep = { p: process.env.PACKAGING_PROVIDER, q: process.env.QBO_ENV, l: process.env.PACKAGING_LIVE, k: process.env.STRIPE_SECRET_KEY };
+  process.env.PACKAGING_PROVIDER = 'stripe'; process.env.QBO_ENV = 'production'; process.env.PACKAGING_LIVE = 'true'; delete process.env.STRIPE_SECRET_KEY;
+  equal(Runner.scope(), { open: true, field: 'packagedLive' });
+  db.seed('omega_orgs/zlive.example', { name: 'Live Co', status: 'active', packaged: true, packagedLive: true });
+  db.seed('omega_orgs/zlive.example/billing/current', { packaged: true, packagingState: 'paid', modules: ['lite'], billingProvider: 'quickbooks', qboCustomerId: 'C9', pricebookVersion: B.VERSION });
+  db.data.get('integrations/packaging-billing').cursor = null; db.data.get('integrations/packaging-billing').lock = null;
+  var liveTick = await Runner.tick(db, ending, Object.assign({}, opts, { limit: 5 }));
+  equal(liveTick.results.some(function (r) { return r.orgId === 'zlive.example'; }), true);
+  process.env.QBO_ENV = 'sandbox'; delete process.env.PACKAGING_LIVE;
+  equal(Runner.scope(), { open: true, field: 'packagingSandbox' });
+  delete process.env.QBO_ENV; equal(Runner.scope().open, false);
+  process.env.PACKAGING_PROVIDER = keep.p; process.env.QBO_ENV = keep.q; if (keep.l === undefined) delete process.env.PACKAGING_LIVE; else process.env.PACKAGING_LIVE = keep.l; if (keep.k === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = keep.k;
   var enable = require('./enable-packaging-sandbox'), book = B.proposed(), enableDb = new F.DB(); book.qbo.realmId = '123';
   require('../api/_lib/qbo-items').items(book).forEach(function (item, i) { book.qbo.items[item.key] = String(i + 1); });
   enableDb.seed('pricebook/' + book.version, book);

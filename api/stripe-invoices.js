@@ -27,11 +27,21 @@ module.exports = A.handler(function (req) {
     if (!caller.staff && orgId !== String(caller.orgId || '').toLowerCase()) {
       throw A.httpError(403, 'not your organisation');
     }
+    /* an email/password account can be opened on any address: invoices (with
+       the billing contact, address and PDFs) need a VERIFIED one, or an owner
+       or administrator of an active client (admin.clientAdmin, as on
+       plan-change and the card door) */
+    var verified = caller.staff || (caller.claims && caller.claims.email_verified === true);
+    return (verified ? Promise.resolve(true) : A.clientAdmin(caller, orgId)).then(function (ok) {
+    if (!ok) throw A.httpError(403, 'Verified email required');
 
     return A.db().collection('omega_orgs').doc(orgId)
       .collection('billing').doc('current').get()
       .then(function (snap) {
         var bill = snap.exists ? snap.data() : {};
+        /* a PACKAGED workspace's invoices are the engine's (Plan & billing,
+           GET /api/plan-change, owners and admins): never this legacy list */
+        if (bill.packaged === true && !caller.staff) return { connected: false, orgId: orgId, invoices: [], note: 'Subscription invoices are listed in Plan & billing.' };
         var cust = bill.stripeCustomerId;
         if (!cust) return { connected: false, orgId: orgId, invoices: [],
                             note: 'No Stripe customer for this organisation yet.' };
@@ -65,5 +75,6 @@ module.exports = A.handler(function (req) {
           return { connected: true, orgId: orgId, customer: cust, invoices: rows };
         });
       });
+    });
   });
 });

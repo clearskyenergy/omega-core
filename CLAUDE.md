@@ -286,6 +286,26 @@ engine's own reconcile, so paid means open within seconds; the runner and
 Runbook and what is not built (autopay, instant refund events, tax):
 `docs/PAYMENTS-STRIPE.md`.
 
+Billing review rules (2026-09-27, adversarial review of both rails; each is
+pinned by a test that fails without it): a reversed cycle is superseded by
+a LATER cycle paid in full, and any paid invoice (cycle or add-on) that is
+reversed tells a person once; reconcile READS an invoice issued under an
+earlier price book (only issuing needs the current `VERSION`), pages the
+runner by document id, and keeps a newer verdict over a stale read; the
+runner (`scope()`) bills when either provider is open and live when either
+is live, and `packagedLive` follows the workspace's own provider; under
+`PACKAGING_LIVE=true` a test key is closed, never a sandbox, and a Stripe
+test-mode grant is never honoured. A cancel never leaves a second payable
+invoice beside the first: on Stripe it voids the invoice; on QuickBooks the
+same request the same day revives the cancelled change or add-on on its
+invoice and another id is refused while that invoice is open. A paid
+change or add-on on the billing day waits for the renewal. A package binds
+only its OWN Stripe customer (`legacyStripeCustomerId` keeps the tier's),
+the webhook's tier path never writes to a packaged workspace (it flags an
+old subscription still charging), and a paid package invoice with no OMEGA
+record is answered 500 and flagged, never absorbed. A partial refund stays
+paid with a review; a dispute is decided by its outcome (lost reverses).
+
 Plan & billing's Payment method is **linked to Stripe** (2026-09-27, Tommy:
 "This payment method should be linked to the stripe payment system we built
 with quickbooks. Stripe collects and takes the payment"): `POST
@@ -922,10 +942,22 @@ wherever they sit, and nothing else on their tab (`omega-caps`
 and `exact()` simulates exactly that (`moduleEditor` `editorModules`): every
 editor module is exact on every legacy plan, and a tab the plan stops at says
 Opt in and buys the module there. Every Omega Logic department is exact on
-every plan. Add-ons bill through QuickBooks whatever the package rail
-(`addons.RAIL`; `package-billing.guard(c, rail)`), so an add-on's Pay reads
-the add-on's own `payWith`, never the package's; a legacy Stripe tier's own
-customer is never rebound; add-ons on Stripe are not built.
+every plan. Add-ons bill on the WORKSPACE'S rail (`addons.rail()`, 2026-09-28,
+Tommy: "integrated with stripe so people can buy and opt into new
+products"): QuickBooks where its add-ons already have a QuickBooks customer
+or ClearSky invoices the plan there, else the deployment's rail, so under
+`PACKAGING_PROVIDER=stripe` a legacy plan buys on its OWN Stripe customer —
+the one Plan & billing's card door links (`stripe-customer.link`, the one
+writer of it), never a second customer — on a `send_invoice` invoice beside
+the plan, reconciled by the same `package-billing.reconcile` the webhook and
+the runner run; the renewal is issued there too; a cancel voids the Stripe
+invoice (QuickBooks' stays open for staff); `package-billing.guard(c,
+rail)` is the gate; an add-on's Pay reads the add-on's own `payWith`, never
+the package's. Stripe's hosted page needs no billing form (the customer
+carries the payer's email and the workspace's name), so Opt in on Stripe
+never asks for one first; QuickBooks still does, prefilled from what is
+known (the workspace, the person, the company type on record).
+`scripts/test-addons.js` §6d holds it on the Stripe double.
 `OmegaPackageMenu.addOnControl` is the same legacy path for a page's own
 control; `scripts/test-addons.js` and `check:workspace` (legacy-add) hold
 it. A workspace with no `omega_orgs` or billing record cannot be billed and

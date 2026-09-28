@@ -150,7 +150,9 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
       if (!result.paymentLink) { result.payLinkMissing = true; await M.templates.billingAlert({ orgId: domain, company: name, text: 'The first invoice for ' + name + ' was issued without a pay link (' + result.payWith + '). The customer was told the invoice is in their email. ' + (result.provider === 'stripe' ? 'Check the invoice in the Stripe dashboard.' : 'QuickBooks Payments may be off: check Settings → Payments in the production company.') }); }
     } catch (e) {
       var raw = String(e.message || e).slice(0, 200);
-      await ref.update({ status: 'pending', approvedAt: null, approvedBy: null, selfServe: null, payNowError: raw, updatedAt: now });
+      /* the org record is readable by any account at the domain: it says THAT
+         pay-now failed; WHY (the provider's words) goes to ClearSky only */
+      await ref.update({ status: 'pending', approvedAt: null, approvedBy: null, selfServe: null, payNowError: true, payNowFailedAt: now, updatedAt: now });
       await publicRef2.set({ status: 'pending', updatedAt: now }, { merge: true });
       /* the engine's words are for staff (they name environments, books and
          realms); the customer hears what happens next, and ClearSky hears why */

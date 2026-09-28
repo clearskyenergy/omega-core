@@ -13,10 +13,12 @@
  * A legacy workspace (billing.packaged !== true: a tier on Stripe's or
  * ClearSky's own paper, often a signed contract) keeps its plan, its price
  * and its billing exactly as they are. What it buys here is an ADD-ON: the
- * module at the book's list price, on its own QuickBooks invoice, paid first
- * by card on QuickBooks' secure page (a card saved there pays in one click,
- * and Autopay pays each renewal). Nothing switches on before QuickBooks shows
- * the invoice paid; then the module is on, renewed monthly on the day of the
+ * module at the book's list price, on its own invoice beside the plan — on
+ * the workspace's rail (rail(): QuickBooks, or Stripe under
+ * PACKAGING_PROVIDER=stripe on the plan's own Stripe customer) — paid first
+ * by card on that rail's secure page (a card saved there pays in one click).
+ * Nothing switches on before the rail shows the invoice paid
+ * (package-billing.reconcile); then the module is on, renewed monthly on the day of the
  * first purchase, and switched off again only when a renewal stays unpaid
  * past the book's grace. The plan underneath is never touched; moving the
  * whole workspace onto a package stays ClearSky's (the admin Package tab).
@@ -51,14 +53,28 @@
  */
 'use strict';
 var M = require('./modules'), P = require('./subscription-pricing'), B = require('./pricebook'), R = require('./proration');
-var Q = require('./qbo-billing'), BP = require('./billing-profile'), Mode = require('./packaging-mode');
+var Q = require('./qbo-billing'), BP = require('./billing-profile'), Mode = require('./packaging-mode'), D = require('./billing-driver');
 var LOGIC = ['logic-office', 'logic-plant', 'logic-materials', 'logic-logistics', 'logic-customer'];
-/* The rail an add-on bills through: QuickBooks, whatever the deployment's
-   package rail (billing-driver.providerOf moves a PACKAGED workspace to
-   Stripe under PACKAGING_PROVIDER=stripe). A legacy plan may be a Stripe
-   tier whose own customer and paymentProvider are the plan's, never ours
-   to rebind; add-ons on Stripe need a binding of their own (not built). */
-var RAIL = 'quickbooks';
+/* The rail an add-on bills through. A workspace whose add-ons are already
+   invoiced through QuickBooks stays there (its customer record decides, as
+   billing-driver.providerOf decides a package's); otherwise the
+   deployment's rail (PACKAGING_PROVIDER), and on Stripe the workspace's OWN
+   customer — the one Plan & billing's card door links (stripe-customer
+   link, the ONE writer of a legacy plan's stripeCustomerId) — with the
+   add-on on its own send_invoice invoice beside the plan, never a second
+   customer. A plan ClearSky invoices through QuickBooks (stripe-customer
+   railOf) keeps its add-ons on QuickBooks too. */
+function rail(b) {
+  b = b || {};
+  if (b.qboCustomerId) return 'quickbooks';
+  if (Mode.provider() !== 'stripe') return 'quickbooks';
+  return require('./stripe-customer').railOf(b) === 'stripe' ? 'stripe' : 'quickbooks';
+}
+function railName(b) { return D.name(rail(b)); }
+/* the billing profile an invoice carries: QuickBooks needs the whole one; on Stripe a saved one adds the PO, none is fine */
+function profileFor(c, provider) { return provider === 'stripe' && !(c.profile && c.profile.legalName) ? {} : BP.stored(c.profile); }
+/* the rail's own page: QuickBooks' page, Stripe's page */
+function pageOf(name) { return name + (/s$/.test(name) ? '\'' : '\'s') + ' secure page'; }
 /* The legacy add-on keys a module's OTHER readers honour. Never an editor
    key: the keys omega-caps reads (ADDON_GRANTS: compute, engineering,
    schematics, exports …) open a whole Site Map tab (data-cap), every
@@ -78,6 +94,8 @@ function order(keys) {
 function label(k) { var m = M.get(k); return m ? m.name : k; }
 function names(keys) { return order(keys).map(label); }
 function sum(lines) { return lines.reduce(function (n, l) { return n + l.amountCents; }, 0); }
+/* a purchase whose invoice is gone: refunded or voided (reversed), or cancelled and voided on Stripe */
+function dead(r) { return r.state === 'reversed' || (r.state === 'cancelled' && r.voided === true); }
 function isAddon(r) { return !!r && r.kind === 'addon'; }
 function instant(v) { return typeof v === 'number' ? v : v && typeof v.toMillis === 'function' ? v.toMillis() : Date.parse(v); }
 
@@ -94,7 +112,9 @@ function live(billing, now) {
 /* The legacy workspace as the tools catalog judges it: the org's own grant
    fields (omega-tenant.js mergeEntitlements, without a member's list). */
 function workspace(orgId, b) {
-  var ws = { orgId: orgId, toolOverrides: b.toolOverrides || {}, addons: b.addons || [] };
+  /* the older billing.omegaLogic flag holds all of Omega Logic, as logic-access wholeLogic() reads it: judged, never written */
+  var addons = (b.addons || []).slice(); if (b.omegaLogic === true && addons.indexOf('omega-logic') < 0) addons.push('omega-logic');
+  var ws = { orgId: orgId, toolOverrides: b.toolOverrides || {}, addons: addons };
   if (b.tier && TIER_LEVEL[b.tier] != null) ws.tierLevel = TIER_LEVEL[b.tier];
   if (Array.isArray(b.toolAccess)) ws.toolAccess = b.toolAccess.slice();
   return ws;
@@ -218,11 +238,11 @@ function closure(has, add) {
   return order(out);
 }
 function pending(rows) {
-  return (rows || []).filter(function (r) { return isAddon(r) && r.state === 'unpaid' && r.qboInvoiceId; })
+  return (rows || []).filter(function (r) { return isAddon(r) && r.state === 'unpaid' && D.issued(r); })
     .sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); })
     .map(function (r) { var keys = r.purpose === 'renewal' ? r.modules : r.add;
       return { id: r.id, purpose: r.purpose || 'purchase', add: order(keys), names: names(keys), totalCents: r.totalCents, display: P.money(r.totalCents || 0),
-        paymentLink: r.paymentLink || null, payWith: 'QuickBooks', date: r.date, expiresOn: r.purpose === 'renewal' ? null : (r.cycle && r.cycle.end) || null }; });
+        paymentLink: r.paymentLink || null, payWith: D.name(D.recordProvider(r)), date: r.date, expiresOn: r.purpose === 'renewal' ? null : (r.cycle && r.cycle.end) || null }; });
 }
 function ordinal(d) { var s = ['th', 'st', 'nd', 'rd'], v = d % 100; return d + (s[(v - 20) % 10] || s[v] || s[0]); }
 function current(c) { return c.root.collection('billing').doc('current'); }
@@ -231,7 +251,7 @@ async function records(c) { return (await current(c).collection('invoices').orde
    the billing flag, and the sandbox or the live company). The engine's words
    name flags and realms; a customer hears only that it is not open yet. */
 function payable(c) {
-  try { require('./package-billing').guard(c, RAIL); return { ok: true }; }
+  try { require('./package-billing').guard(c, rail(c.billing)); return { ok: true }; }
   catch (e) { return { ok: false, detail: e.message }; }
 }
 function gate(c, rows, now, x, add) {
@@ -256,6 +276,9 @@ function quote(c, rows, input, now, staff) {
   /* a package is judged by its own projection, never by the legacy rule below */
   if (b.packaged === true) fail('This workspace is on a subscription package: add modules on the Ladder, which prices and invoices them.', 409);
   var have = live(b, now), inCycle = !!a.billingDay && a.state === 'paid' && have.length > 0;
+  /* the add-on renewal is due and not issued yet: a purchase now would start
+     the next cycle and the renewal would be skipped (a free month) */
+  var renewalDue = inCycle && !!a.nextInvoiceOn && a.nextInvoiceOn <= today;
   var add = closure(function (k) { return held(orgId, b, k, now); }, wanted(input.add));
   if (!add.length) fail('Already on your plan', 409);
   var day = inCycle ? a.billingDay : new Date(now).getUTCDate(), cycle = R.cycle(today, day);
@@ -263,18 +286,33 @@ function quote(c, rows, input, now, staff) {
   var lines = inCycle ? deltaLines(before, after, add, book, cycle.remainingDays, cycle.days) : after.lines.map(function (l) { return Object.assign({}, l); });
   var total = sum(lines);
   if (total < 0) { lines = []; total = 0; }
-  var included = total === 0, g = gate(c, rows, now, exact(orgId, b, add, now), add), needsProfile = !(c.profile && c.profile.legalName);
-  var previewId = Q.key(B.stable({ org: orgId, book: book.version, have: inCycle ? have : [], add: add, fresh: !inCycle, day: day, cycle: cycle, lines: lines, total: total }));
+  /* QuickBooks invoices a customer with a billing address (billing-profile
+     customer); Stripe's hosted page needs only the workspace and the payer's
+     email (stripe-customer contact), so it never asks for the form first */
+  var included = total === 0, needsProfile = rail(b) === 'quickbooks' && !(c.profile && c.profile.legalName);
+  var g = renewalDue ? { canBuy: false, reason: 'Your add-on renewal is being issued today. Add modules once it has gone through; that usually takes under an hour.' } : gate(c, rows, now, exact(orgId, b, add, now), add);
+  var basis = { org: orgId, book: book.version, have: inCycle ? have : [], add: add, fresh: !inCycle, day: day, cycle: cycle, lines: lines, total: total };
+  /* a purchase whose invoice is dead (voided or refunded: 'reversed') makes
+     the next request of this cycle a new purchase, with its own invoice */
+  var reissued = (rows || []).filter(function (r) { return isAddon(r) && r.purpose !== 'renewal' && dead(r) && r.cycle && r.cycle.start === cycle.start; }).length;
+  if (reissued) basis.reissued = reissued;
+  var previewId = Q.key(B.stable(basis));
+  /* cancel voids a Stripe invoice but never a QuickBooks one: a cancelled
+     purchase of any of these modules whose invoice is still open, asked for
+     again with another id (another day, another set), is never a second
+     invoice beside it; the same request the same day revives it (buy) */
+  var stillOpen = (rows || []).filter(function (r) { return isAddon(r) && r.purpose !== 'renewal' && r.state === 'cancelled' && !dead(r) && D.issued(r) && r.id !== 'addon-' + previewId && (r.add || []).some(function (k) { return add.indexOf(k) >= 0; }); })[0];
+  if (g.canBuy && stillOpen) g = { canBuy: false, reason: 'Your cancelled request for ' + names(stillOpen.add).join(', ') + ' still has an open ' + D.name(D.recordProvider(stillOpen)) + ' invoice' + (stillOpen.paymentLink ? ' (' + stillOpen.paymentLink + ')' : '') + '. Pay that invoice to switch it on, or ask ClearSky to void it and add it again.' };
   var then = after.display + ' on the ' + ordinal(day) + ', on its own invoice beside your plan' + (inCycle ? ' (add-ons were ' + before.display + ')' : '');
   var out = { orgId: orgId, previewId: previewId, effectiveAt: now, add: add, addNames: names(add), requested: order(wanted(input.add)), lines: lines, todayCents: total,
     monthlyCents: after.monthlyCents, monthlyBeforeCents: before.monthlyCents, monthlyDisplay: after.display, billingDay: day, fresh: !inCycle, included: included,
     cycle: { start: cycle.start, end: cycle.end, days: cycle.days, remainingDays: cycle.remainingDays }, activation: included ? 'immediate' : 'on-payment',
-    canBuy: g.canBuy, reason: g.reason || null, request: g.request === true, needsProfile: needsProfile, pending: pending(rows), payment: 'quickbooks', payWith: 'QuickBooks',
+    canBuy: g.canBuy, reason: g.reason || null, request: g.request === true, needsProfile: needsProfile, pending: pending(rows), payment: rail(b), payWith: railName(b),
     display: {
       amount: P.money(total),
       today: included ? 'Nothing to pay today: it is covered by the add-ons you already pay for.' : P.money(total) + ' today, for ' + (inCycle ? cycle.remainingDays + ' of ' + cycle.days + ' days until your add-on billing date, ' + cycle.end : today + ' to ' + cycle.end),
       then: 'then ' + then,
-      activation: included ? 'It switches on now.' : 'Pay by card on QuickBooks\' secure page; a card you saved there pays in one click. It switches on the moment the payment clears.',
+      activation: included ? 'It switches on now.' : 'Pay by card on ' + pageOf(railName(b)) + '; a card you saved there pays in one click. It switches on the moment the payment clears.',
       plan: 'Your plan and its billing stay exactly as they are.' } };
   if (staff && g.detail) out.detail = g.detail;
   return out;
@@ -332,9 +370,9 @@ function settle(billing, rows, book, now) {
   var through = paid.reduce(function (d, r) { return !d || r.period.end > d ? r.period.end : d; }, null);
   var until = through ? R.date(R.addDays(R.businessDays(through, book.policy.failedPaymentGraceBusinessDays), 1)) : null;
   var on = !!until && now < until && bought.length > 0;
-  var openRenewal = mine.some(function (r) { return r.purpose === 'renewal' && r.state === 'unpaid' && r.qboInvoiceId; });
-  var waiting = mine.some(function (r) { return r.purpose !== 'renewal' && r.state === 'unpaid' && r.qboInvoiceId; });
-  var issued = mine.filter(function (r) { return (r.qboInvoiceId || r.state === 'paid') && r.period && r.period.end && ['cancelled', 'expired', 'reversed'].indexOf(r.state) < 0; });
+  var openRenewal = mine.some(function (r) { return r.purpose === 'renewal' && r.state === 'unpaid' && D.issued(r); });
+  var waiting = mine.some(function (r) { return r.purpose !== 'renewal' && r.state === 'unpaid' && D.issued(r); });
+  var issued = mine.filter(function (r) { return (D.issued(r) || r.state === 'paid') && r.period && r.period.end && ['cancelled', 'expired', 'reversed'].indexOf(r.state) < 0; });
   var next = issued.reduce(function (d, r) { return !d || r.period.end > d ? r.period.end : d; }, null);
   var p = price(bought, book), liveMods = on ? bought : [];
   a.modules = bought; a.live = liveMods;
@@ -350,14 +388,26 @@ function settle(billing, rows, book, now) {
 /* A purchase moving to paid or reversed changes what was bought. Paid after
    a cancel or after its period passed is still honoured (the customer paid)
    and the caller flags it for a person. */
-function boughtAfter(billing, record, from, to) {
+function boughtAfter(billing, record, from, to, rows) {
   var a = billing.addOns || {}, bought = order(a.modules || []);
   if (record.purpose === 'renewal') return null;
   if (to === 'paid' && from !== 'paid') {
-    var next = record.fresh ? order(record.add) : order(bought.concat(record.add || []));
-    return { modules: next, billingDay: record.fresh || !a.billingDay ? record.billingDay : a.billingDay };
+    /* a fresh purchase replaces what was bought only while nothing is on: a
+       late payment of a cancelled or expired one, landing after a later
+       purchase is paid, adds to it and never switches that off */
+    var replace = record.fresh && ['paid', 'past_due'].indexOf(a.state) < 0;
+    var next = replace ? order(record.add) : order(bought.concat(record.add || []));
+    return { modules: next, billingDay: replace || !a.billingDay ? record.billingDay : a.billingDay };
   }
-  if (to === 'reversed' && from === 'paid') return { modules: bought.filter(function (k) { return (record.add || []).indexOf(k) < 0; }), billingDay: a.billingDay || null };
+  if (to === 'reversed' && from === 'paid') {
+    /* a module stays while a LATER paid add-on invoice still covers it (the
+       renewal that billed it, a purchase after it); a part never outlives
+       what it requires */
+    var covered = function (k) { return (rows || []).some(function (r) { return isAddon(r) && r.id !== record.id && r.state === 'paid' && r.period && record.period && r.period.end > record.period.end && ((r.purpose === 'renewal' ? r.modules : r.add) || []).indexOf(k) >= 0; }); };
+    var keep = bought.filter(function (k) { return (record.add || []).indexOf(k) < 0 || covered(k); });
+    keep = keep.filter(function (k) { return M.get(k).requires.every(function (q) { return q === 'lite' || keep.indexOf(q) >= 0; }); });
+    return { modules: keep, billingDay: a.billingDay || null };
+  }
   return null;
 }
 
@@ -370,6 +420,9 @@ async function buy(db, orgId, input, caller, now, deps) {
   var done = await op.get();
   if (done.exists && done.data().state === 'done') {
     if (done.data().requestFingerprint !== fingerprint) fail('A purchase id cannot be reused with different inputs');
+    var mine = cur.collection('invoices').doc('addon-' + input.previewId), had = await mine.get();
+    if (had.exists && had.data().state === 'reversed') fail('The price changed; review it again before paying');
+    if (had.exists && had.data().state === 'cancelled') return revive(db, c, mine, input, done.data().result, caller, now);
     return done.data().result;
   }
   var rows = await records(c), q = quote(c, rows, input, now, caller.staff);
@@ -377,8 +430,9 @@ async function buy(db, orgId, input, caller, now, deps) {
   var at = input.effectiveAt;
   if (!Number.isSafeInteger(at) || at > now || now - at > 10 * 60000) fail('Refresh the price');
   if (!q.canBuy) fail(q.reason);
-  if (q.needsProfile) fail('Add your billing contact first: it is who QuickBooks invoices.', 409, 'billing-profile');
-  require('./package-billing').guard(c, RAIL);
+  var provider = rail(c.billing), payWith = D.name(provider);
+  if (q.needsProfile) fail('Add your billing contact first: it is who ' + payWith + ' invoices.', 409, 'billing-profile');
+  require('./package-billing').guard(c, provider);
   var today = R.iso(now), id = 'addon-' + q.previewId;
   var record = { kind: 'addon', purpose: 'purchase', id: id, date: today, fresh: q.fresh, billingDay: q.billingDay, cycle: { start: q.cycle.start, end: q.cycle.end },
     period: { start: today, end: q.cycle.end }, add: q.add, lines: q.lines, subtotalCents: q.todayCents, totalCents: q.todayCents, monthlyCents: q.monthlyCents,
@@ -396,30 +450,36 @@ async function buy(db, orgId, input, caller, now, deps) {
   });
   if (replay) return replay;
   try {
-    var driver = Q.driver(c.book, deps), profile = BP.stored(c.profile);
-    var customer = await driver.customer(orgId, profile, c.billing.qboCustomerId || null);
+    var driver = D.driver(c.book, provider, deps), profile = profileFor(c, provider), customer;
+    if (provider === 'stripe') {
+      /* the workspace's own Stripe customer, through the one door that links
+         it (Plan & billing's card): its mode, its mark and its card checked */
+      var SC = require('./stripe-customer'), sc = await SC.context(db, orgId);
+      customer = String((await SC.link(db, sc, caller, (deps && deps.stripe) || SC.client(), now)).id);
+    } else customer = await driver.customer(orgId, profile, c.billing.qboCustomerId || null);
     var issued = q.todayCents > 0 ? await driver.invoice(record, profile, customer) : null;
     return await db.runTransaction(async function (tx) {
       var live1 = await tx.get(cur), invoices = await tx.get(cur.collection('invoices').orderBy('date')), bookRef = db.doc('pricebook/' + c.book.version), bookSnap = await tx.get(bookRef);
       var fresh = live1.data() || {};
       if (!fresh.addOnLock || fresh.addOnLock.id !== id) fail('The purchase moved; retry');
-      var stored = Object.assign({}, record, issued ? { state: 'unpaid', provider: RAIL, qboInvoiceId: issued.id, qboCustomerId: customer, totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now }
-        : { state: 'paid', provider: RAIL, qboInvoiceId: null, qboCustomerId: customer, paidCents: 0, paymentLink: null, paidAt: now });
+      var stored = Object.assign({}, record, issued ? Object.assign({ state: 'unpaid', totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now }, D.invoiceFields(provider, issued.id, customer))
+        : Object.assign({ state: 'paid', provider: provider, paidCents: 0, paymentLink: null, paidAt: now }, provider === 'stripe' ? { stripeCustomerId: customer } : { qboInvoiceId: null, qboCustomerId: customer }));
       tx.set(cur.collection('invoices').doc(id), stored);
       var base = fresh, moved = issued ? null : boughtAfter(fresh, stored, 'unpaid', 'paid');
       if (moved) base = Object.assign({}, fresh, { addOns: Object.assign({}, fresh.addOns || {}, moved) });
       var patch = settle(base, invoices.docs.map(function (d) { return d.data(); }).concat([stored]), c.book, now);
-      patch.qboCustomerId = customer; patch.qboRealmId = c.book.qbo.realmId; patch.addOnLock = null; patch.updatedAt = now; patch.updatedBy = caller.email;
+      if (provider === 'quickbooks') { patch.qboCustomerId = customer; patch.qboRealmId = c.book.qbo.realmId; }
+      patch.addOnLock = null; patch.updatedAt = now; patch.updatedBy = caller.email;
       tx.update(cur, patch);
       if (bookSnap.exists) B.freeze(tx, bookRef, bookSnap.data(), now);
       /* the runner renews and reconciles it: packagedLive is what the live
          runner's query reads (the sandbox runner reads packagingSandbox) */
-      if (Mode.live()) tx.set(c.root, { packagedLive: true, updatedAt: now }, { merge: true });
+      if (Mode.live(provider)) tx.set(c.root, { packagedLive: true, updatedAt: now }, { merge: true });
       if (issued) tx.set(c.root.collection('notifications').doc('addon-invoice-' + id), { kind: 'billing', read: false, createdAt: now,
-        text: 'Your invoice to add ' + q.addNames.join(', ') + ' is ready: ' + P.money(issued.totalCents) + '. Pay it by card in QuickBooks and it switches on as soon as the payment clears.',
-        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents) });
+        text: 'Your invoice to add ' + q.addNames.join(', ') + ' is ready: ' + P.money(issued.totalCents) + '. Pay it by card on ' + pageOf(payWith) + ' and it switches on as soon as the payment clears.',
+        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents), payWith: payWith });
       var result = { ok: true, addOnId: id, state: issued ? 'awaiting_payment' : 'active', add: q.add, addNames: q.addNames, todayCents: stored.totalCents, display: P.money(stored.totalCents),
-        paymentLink: stored.paymentLink || null, payWith: 'QuickBooks', payLinkMissing: !!(issued && !issued.payUrl), expiresOn: q.cycle.end, monthlyDisplay: q.monthlyDisplay, live: patch.addOns.live };
+        paymentLink: stored.paymentLink || null, payWith: payWith, payLinkMissing: !!(issued && !issued.payUrl), expiresOn: q.cycle.end, monthlyDisplay: q.monthlyDisplay, live: patch.addOns.live };
       tx.set(op, { state: 'done', result: result, completedAt: now }, { merge: true });
       var event = { at: now, by: caller.email, action: issued ? 'addon-requested' : 'addon-included', changeId: id,
         was: { addOns: (fresh.addOns && fresh.addOns.modules) || [], tier: fresh.tier || null }, changed: { add: q.add, totalCents: stored.totalCents, monthlyCents: q.monthlyCents, state: stored.state, live: patch.addOns.live } };
@@ -436,22 +496,52 @@ async function buy(db, orgId, input, caller, now, deps) {
     throw e;
   }
 }
+/* The same purchase asked for again after its cancel, while its QuickBooks
+   invoice is still open: it waits for payment again on that invoice, never
+   a second one. Re-checked as a request (same price, nothing else waiting). */
+async function revive(db, c, ref, input, result, caller, now) {
+  var cur = current(c);
+  return db.runTransaction(async function (tx) {
+    var snap = await tx.get(ref), live0 = await tx.get(cur), invoices = await tx.get(cur.collection('invoices').orderBy('date')), fresh = live0.data() || {};
+    var rows = invoices.docs.map(function (d) { return d.data(); }), r = snap.data();
+    if (!r || r.state !== 'cancelled' || dead(r)) fail('Your plan changed; review the price again');
+    var again = quote(Object.assign({}, c, { billing: fresh }), rows, input, now);
+    if (again.previewId !== input.previewId) fail('Your plan changed; review the price again');
+    if (!again.canBuy) fail(again.reason);
+    tx.update(ref, { state: 'unpaid', cancelledAt: null, cancelledBy: null, reopenedAt: now, reopenedBy: caller.email });
+    var all = rows.map(function (d) { return d.id === r.id ? Object.assign({}, d, { state: 'unpaid' }) : d; });
+    var patch = settle(fresh, all, c.book, now); patch.updatedAt = now; patch.updatedBy = caller.email;
+    tx.update(cur, patch);
+    var event = { at: now, by: caller.email, action: 'addon-reopened', changeId: r.id, invoiceId: D.invoiceId(r),
+      was: { state: 'cancelled' }, changed: { state: 'unpaid', note: 'Asked for again after its cancel: it waits on the same ' + D.name(D.recordProvider(r)) + ' invoice, never a second one.' } };
+    tx.set(cur.collection('history').doc(r.id + '-reopen-' + now), event); tx.set(c.root.collection('admin_audit').doc(r.id + '-reopen-' + now), event);
+    return Object.assign({}, result, { state: 'awaiting_payment', paymentLink: r.paymentLink || result.paymentLink || null, reopened: true });
+  });
+}
 /* Cancel a purchase still waiting for payment. The QuickBooks invoice stays
    open until staff void it; a payment after this is honoured and flagged. */
-async function cancel(db, orgId, addOnId, caller, now) {
+async function cancel(db, orgId, addOnId, caller, now, deps) {
   var c = await context(db, orgId);
   if (typeof addOnId !== 'string' || !/^addon-[a-f0-9]{48}$/.test(addOnId)) fail('Invalid add-on id', 400);
-  var cur = current(c), ref = cur.collection('invoices').doc(addOnId);
+  var cur = current(c), ref = cur.collection('invoices').doc(addOnId), before = await ref.get(), voided = false;
+  if (!before.exists || !isAddon(before.data()) || before.data().purpose !== 'purchase') fail('No such add-on purchase', 404);
+  if (before.data().state !== 'unpaid') fail('Only a purchase waiting for payment can be cancelled');
+  /* on Stripe the open invoice is voided first, so nothing payable is left
+     beside the plan (a paid one is refused there); QuickBooks' stays open
+     until staff void it, as before */
+  if (D.recordProvider(before.data()) === 'stripe' && D.issued(before.data())) { await D.driver(c.book, 'stripe', deps).voidOpen(before.data()); voided = true; }
   return db.runTransaction(async function (tx) {
     var snap = await tx.get(ref), live0 = await tx.get(cur), invoices = await tx.get(cur.collection('invoices').orderBy('date')), fresh = live0.data() || {};
     if (!snap.exists || !isAddon(snap.data()) || snap.data().purpose !== 'purchase') fail('No such add-on purchase', 404);
     var r = snap.data(); if (r.state !== 'unpaid') fail('Only a purchase waiting for payment can be cancelled');
-    tx.update(ref, { state: 'cancelled', cancelledAt: now, cancelledBy: caller.email });
-    var all = invoices.docs.map(function (d) { return d.id === addOnId ? Object.assign({}, d.data(), { state: 'cancelled' }) : d.data(); });
+    var mark = { state: 'cancelled', cancelledAt: now, cancelledBy: caller.email };
+    if (voided) { mark.voided = true; mark.paymentLink = null; }
+    tx.update(ref, mark);
+    var all = invoices.docs.map(function (d) { return d.id === addOnId ? Object.assign({}, d.data(), mark) : d.data(); });
     var patch = settle(fresh, all, c.book, now); patch.updatedAt = now; patch.updatedBy = caller.email;
     tx.update(cur, patch);
-    var event = { at: now, by: caller.email, action: 'addon-cancelled', changeId: addOnId, invoiceId: r.qboInvoiceId,
-      was: { state: r.state }, changed: { state: 'cancelled', note: 'The QuickBooks invoice stays open until staff void it; a payment after this is flagged for review.' } };
+    var event = { at: now, by: caller.email, action: 'addon-cancelled', changeId: addOnId, invoiceId: D.invoiceId(r),
+      was: { state: r.state }, changed: { state: 'cancelled', voided: voided, note: voided ? 'The Stripe invoice was voided; nothing is left to pay.' : 'The ' + D.name(D.recordProvider(r)) + ' invoice stays open until staff void it; a payment after this is flagged for review.' } };
     tx.set(cur.collection('history').doc(addOnId + '-cancel'), event); tx.set(c.root.collection('admin_audit').doc(addOnId + '-cancel'), event);
     return { ok: true, addOnId: addOnId, state: 'cancelled' };
   });
@@ -504,30 +594,37 @@ async function stop(db, orgId, input, caller, now, withdraw) {
 }
 /* ── The monthly renewal, on the add-on billing day (the hourly runner) ── */
 async function issue(db, orgId, now, deps) {
-  var S = require('./package-billing'), c = await context(db, orgId); S.guard(c, RAIL);
+  var S = require('./package-billing'), c = await context(db, orgId), provider = rail(c.billing), payWith = D.name(provider); S.guard(c, provider);
   var b = c.billing, a = b.addOns || {}, today = R.iso(now), bought = order(a.modules || []);
   if (b.packaged === true || !bought.length || !a.nextInvoiceOn || a.nextInvoiceOn > today || a.state !== 'paid' || !a.billingDay) return { skipped: true };
   if (c.org.status !== 'active') return { skipped: true };
-  if (!b.qboCustomerId || b.qboRealmId !== c.book.qbo.realmId) fail('QuickBooks customer binding is required');
+  if (!D.bound(b, provider, c.book)) fail(payWith + ' customer binding is required');
+  var customerId = provider === 'stripe' ? b.stripeCustomerId : b.qboCustomerId;
   var on = a.nextInvoiceOn, id = 'addon-renewal-' + on, cur = current(c), ref = cur.collection('invoices').doc(id);
   var plan = await db.runTransaction(async function (tx) {
     var existing = await tx.get(ref), live0 = await tx.get(cur), fresh = live0.data() || {};
-    if (existing.exists && existing.data().qboInvoiceId) return null;
+    if (existing.exists && D.issued(existing.data())) return null;
     var fa = fresh.addOns || {};
     if (fa.nextInvoiceOn !== on || fa.state !== 'paid') fail('Add-on billing date changed; retry');
     if (fresh.addOnInvoiceLock && fresh.addOnInvoiceLock.until > now) fail('The add-on renewal is already being issued');
-    var ending = endingKeys(fa), mods = order(fa.modules || []).filter(function (k) { return ending.indexOf(k) < 0; });
+    /* the month paid for is over for what was stopped (endingKeys); and with
+       all of Omega Logic on the contract (logic-access wholeLogic), its parts
+       are no longer billed here */
+    var whole = (fresh.addons || []).indexOf('omega-logic') >= 0 || fresh.omegaLogic === true;
+    var ending = endingKeys(fa), kept = order(fa.modules || []).filter(function (k) { return ending.indexOf(k) < 0; });
+    var mods = kept.filter(function (k) { return !(whole && isLogic(k)); });
     if (ending.length && !existing.exists) {
       /* the month paid for is over: what was stopped leaves now, and its
          grants with it (settle), before the renewal is priced on the rest */
       var rows0 = (await tx.get(cur.collection('invoices').orderBy('date'))).docs.map(function (d) { return d.data(); }), endMap = Object.assign({}, fa.ending || {});
       ending.forEach(function (k) { endMap[k] = Object.assign({}, endMap[k], { status: 'done', endedAt: now }); });
-      var gone = settle(Object.assign({}, fresh, { addOns: Object.assign({}, fa, { modules: mods, ending: endMap }) }), rows0, c.book, now);
+      var gone = settle(Object.assign({}, fresh, { addOns: Object.assign({}, fa, { modules: kept, ending: endMap }) }), rows0, c.book, now);
       tx.update(cur, gone);
       var endEvent = { at: now, by: 'billing-run', action: 'addon-ended', changed: { ended: ending, names: names(ending), live: gone.addOns.live } };
       tx.set(cur.collection('history').doc('addon-ended-' + on), endEvent); tx.set(c.root.collection('admin_audit').doc('addon-ended-' + on), endEvent);
       if (!mods.length) return { ended: ending };
     }
+    if (!mods.length) return null;
     var p = price(mods, c.book), cycle = R.cycle(on, fa.billingDay);
     var prepared = existing.exists ? existing.data() : { kind: 'addon', purpose: 'renewal', id: id, date: on, period: { start: on, end: cycle.end }, modules: mods, lines: p.lines,
       subtotalCents: p.monthlyCents, totalCents: p.monthlyCents, monthlyCents: p.monthlyCents, pricebookVersion: c.book.version,
@@ -539,20 +636,20 @@ async function issue(db, orgId, now, deps) {
   if (!plan) return { skipped: true, alreadyIssued: true };
   if (plan.ended) return { ended: plan.ended };
   try {
-    var issued = await Q.driver(c.book, deps).invoice(plan, BP.stored(c.profile), b.qboCustomerId);
+    var issued = await D.driver(c.book, provider, deps).invoice(plan, profileFor(c, provider), customerId);
     return await db.runTransaction(async function (tx) {
       var live1 = await tx.get(cur), inv = await tx.get(ref), invoices = await tx.get(cur.collection('invoices').orderBy('date')), fresh = live1.data() || {};
-      if (inv.data().qboInvoiceId) return { alreadyIssued: true };
+      if (D.issued(inv.data())) return { alreadyIssued: true };
       if (!fresh.addOnInvoiceLock || fresh.addOnInvoiceLock.date !== plan.date) fail('Add-on renewal reservation changed; retry');
-      var stored = Object.assign({}, inv.data(), { state: 'unpaid', provider: RAIL, qboInvoiceId: issued.id, qboCustomerId: b.qboCustomerId, totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now });
+      var stored = Object.assign({}, inv.data(), { state: 'unpaid', totalCents: issued.totalCents, paymentLink: issued.payUrl, issuedAt: now }, D.invoiceFields(provider, issued.id, customerId));
       tx.set(ref, stored);
       var all = invoices.docs.map(function (d) { return d.id === id ? stored : d.data(); });
       var patch = settle(fresh, all, c.book, now); patch.addOnInvoiceLock = null;
       tx.update(cur, patch);
-      tx.set(cur.collection('history').doc('addon-renewal-' + on), { at: now, by: 'billing-run', action: 'addon-invoice-issued', qboInvoiceId: issued.id, date: on, amountCents: issued.totalCents });
+      tx.set(cur.collection('history').doc('addon-renewal-' + on), { at: now, by: 'billing-run', action: 'addon-invoice-issued', invoiceId: issued.id, provider: provider, date: on, amountCents: issued.totalCents });
       tx.set(c.root.collection('notifications').doc('addon-invoice-' + id), { kind: 'billing', read: false, createdAt: now,
-        text: 'Your add-on invoice is ready: ' + P.money(issued.totalCents) + ' for ' + names(plan.modules).join(', ') + ', ' + plan.period.start + ' to ' + plan.period.end + '. With Autopay on in QuickBooks it is charged to your saved card.',
-        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents) });
+        text: 'Your add-on invoice is ready: ' + P.money(issued.totalCents) + ' for ' + names(plan.modules).join(', ') + ', ' + plan.period.start + ' to ' + plan.period.end + '. Pay it by card on ' + pageOf(payWith) + ', or with the card saved there.',
+        packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents), payWith: payWith });
       return { issued: true, date: on, invoiceId: issued.id, paymentLink: issued.payUrl };
     });
   } catch (e) {
@@ -570,7 +667,7 @@ function view(billing, rows, now) {
   return { modules: order(a.modules), names: names(a.modules), live: on, liveNames: names(on), state: a.state || 'none', monthlyCents: a.monthlyCents || 0,
     monthlyDisplay: a.monthlyDisplay || null, billingDay: a.billingDay || null, nextInvoiceOn: a.nextInvoiceOn || null, paidThrough: a.paidThrough || null,
     accessUntil: a.accessUntil == null ? null : a.accessUntil, pending: rows ? pending(rows) : (a.pending || []),
-    ending: endingKeys(a).map(function (k) { return { key: k, name: label(k), endsOn: a.ending[k].endsOn || a.nextInvoiceOn || null, requestedAt: a.ending[k].requestedAt || null }; }), payWith: 'QuickBooks' };
+    ending: endingKeys(a).map(function (k) { return { key: k, name: label(k), endsOn: a.ending[k].endsOn || a.nextInvoiceOn || null, requestedAt: a.ending[k].requestedAt || null }; }), payWith: railName(billing) };
 }
-module.exports = { LOGIC: LOGIC, LEGACY: LEGACY, TIER_LEVEL: TIER_LEVEL, live: live, held: held, price: price, quote: quote, preview: preview, buy: buy, cancel: cancel, stop: stop, endingKeys: endingKeys,
+module.exports = { LOGIC: LOGIC, LEGACY: LEGACY, TIER_LEVEL: TIER_LEVEL, rail: rail, live: live, held: held, price: price, quote: quote, preview: preview, buy: buy, cancel: cancel, stop: stop, endingKeys: endingKeys,
   issue: issue, settle: settle, grant: grant, exact: exact, boughtAfter: boughtAfter, pending: pending, view: view, context: context, records: records, isAddon: isAddon };

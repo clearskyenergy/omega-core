@@ -84,6 +84,8 @@ function StripeDouble(options) {
         /* the customer's balance is applied at finalizing, as Stripe does: a debt added to amount_due, a credit taken off it */
         invoiceView(inv); var cust = self.customers_[inv.customer] || {}, bal = Number(cust.balance) || 0;
         inv.amount_due = Math.max(0, inv.total + bal); if (bal) cust.balance = bal > 0 ? 0 : Math.min(0, inv.total + bal);
+        /* and recorded on the invoice, as Stripe does: what the balance was, and what it is after */
+        if (bal) { inv.starting_balance = bal; inv.ending_balance = cust.balance; }
         inv.status = inv.total === 0 || inv.amount_due === 0 ? 'paid' : 'open'; inv.number = 'OMEGA-' + iid.slice(-4);
         inv.hosted_invoice_url = options.noLink ? null : 'https://invoice.stripe.com/i/acct_double/' + iid; return invoiceView(inv);
       });
@@ -134,6 +136,9 @@ function StripeDouble(options) {
       });
     }
   };
+  this.disputes = {
+    list: async function (p) { self.calls.push('disputes.list'); return { data: Object.keys(self.disputes_).map(function (k) { return self.disputes_[k]; }).filter(function (d) { return !p || !p.charge || d.charge === p.charge; }).map(copy), has_more: false }; }
+  };
   this.charges = {
     retrieve: async function (cid) { self.calls.push('charges.retrieve'); var c = self.charges_[cid]; if (!c) missing('charge: ' + cid); return copy(c); }
   };
@@ -149,7 +154,12 @@ function StripeDouble(options) {
     self.methods_[pm.id] = pm; self.customers_[cid].invoice_settings = { default_payment_method: pm.id }; return pm.id;
   };
   this.refund = function (iid, cents) { var inv = self.invoices_[iid], ch = self.charges_[inv.charge]; ch.amount_refunded = cents == null ? ch.amount : cents; ch.refunded = ch.amount_refunded >= ch.amount; };
-  this.dispute = function (iid) { var inv = self.invoices_[iid], ch = self.charges_[inv.charge]; ch.disputed = true; ch.dispute = 'dp_double'; };
+  /* a chargeback: the Charge carries `disputed`; the dispute itself (and its outcome) is listed by charge */
+  this.disputes_ = {};
+  this.dispute = function (iid, status) { var inv = self.invoices_[iid], ch = self.charges_[inv.charge]; ch.disputed = true; var d = { id: id('dp'), object: 'dispute', charge: ch.id, amount: ch.amount, status: status || 'needs_response' }; self.disputes_[d.id] = d; return d.id; };
+  this.settleDispute = function (did, status) { self.disputes_[did].status = status; };
+  /* the customer's credit balance (a negative balance) applied when the invoice is finalized */
+  this.credit = function (iid, cents) { var inv = self.invoices_[iid]; inv.starting_balance = -cents; inv.ending_balance = 0; inv.amount_paid = inv.total - cents; inv.status = 'paid'; };
   this.voidInvoice = function (iid) { self.invoices_[iid].status = 'void'; };
   this.uncollectible = function (iid) { self.invoices_[iid].status = 'uncollectible'; };
   /* someone edits an open invoice's line in the dashboard */

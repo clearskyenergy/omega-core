@@ -54,6 +54,8 @@ async function driverChecks() {
   ok('a live key under PACKAGING_LIVE=true is live', Mode.live() && Mode.env() === 'production');
   var testObjects = new SD({ livemode: false });
   await refused('live mode never bills a test-mode customer', function () { return ST.driver(book(), { stripe: testObjects }).customer('stripe.example', profile); }, /live mode/);
+  env({ STRIPE_SECRET_KEY: 'sk_test_double' });
+  ok('under the live switch a test key is closed, never a sandbox: no test-card payment opens anything in production', !Mode.open('stripe') && !Mode.sandbox('stripe') && !Mode.live('stripe'));
   env({ PACKAGING_LIVE: null, STRIPE_SECRET_KEY: 'rk_test_double' });
   ok('a restricted test key is the sandbox too', Mode.sandbox());
   env({ STRIPE_SECRET_KEY: 'sk_test_double', PACKAGING_PROVIDER: 'quickbooks', QBO_ENV: 'sandbox' });
@@ -112,7 +114,7 @@ async function driverChecks() {
   s.pay(inv.id); r = await d.reconcile(record);
   ok('paid by card: satisfied, the whole amount', r.satisfied === true && r.reversed === false && r.paidCents === 70000 && r.payUrl === null, r);
   s.refund(inv.id, 20000); r = await d.reconcile(record);
-  ok('a partial refund: no longer satisfied, what is left counted', r.satisfied === false && r.reversed === false && r.paidCents === 50000, r);
+  ok('a partial refund: still paid (a concession somebody made), what is left counted, and a person is told', r.satisfied === true && r.reversed === false && r.paidCents === 50000 && /part of the payment was refunded/.test(r.review || ''), r);
   s.refund(inv.id); r = await d.reconcile(record);
   ok('a full refund: reversed', r.reversed === true && r.satisfied === false, r);
   var inv2 = await d.invoice(plan('OMEGA subscription stripe.example / void'), BP.normalize(profile), c1);
@@ -124,8 +126,27 @@ async function driverChecks() {
   await refused('a line edited on Stripe\'s side is an accounting review, never a silent change', function () { return d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / edit'), { stripeInvoiceId: inv3.id, stripeCustomerId: c1, totalCents: 70000 })); }, /lines changed|total changed/);
   var inv4 = await d.invoice(plan('OMEGA subscription stripe.example / dispute'), BP.normalize(profile), c1);
   s.pay(inv4.id); s.dispute(inv4.id);
-  await refused('a disputed payment is an accounting review', function () { return d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / dispute'), { stripeInvoiceId: inv4.id, stripeCustomerId: c1, totalCents: 70000 })); }, /disputed/);
+  await refused('a disputed payment is an accounting review while the dispute is open', function () { return d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / dispute'), { stripeInvoiceId: inv4.id, stripeCustomerId: c1, totalCents: 70000 })); }, /disputed/);
+  var dp4 = Object.keys(s.disputes_)[0]; s.settleDispute(dp4, 'lost');
+  r = await d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / dispute'), { stripeInvoiceId: inv4.id, stripeCustomerId: c1, totalCents: 70000 }));
+  ok('a dispute LOST: the money went back, the invoice reads reversed (never paid access on a chargeback)', r.reversed === true && r.satisfied === false, r);
+  var inv8 = await d.invoice(plan('OMEGA subscription stripe.example / dispute-won'), BP.normalize(profile), c1); s.pay(inv8.id); s.settleDispute(s.dispute(inv8.id), 'won');
+  r = await d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / dispute-won'), { stripeInvoiceId: inv8.id, stripeCustomerId: c1, totalCents: 70000 }));
+  ok('a dispute WON: still paid, and nothing left for a person', r.satisfied === true && r.reversed === false && !r.review, r);
   await refused('an invoice is never read against another customer', function () { return d.reconcile(Object.assign({}, record, { stripeCustomerId: other })); }, /customer mismatch/);
+  var inv5 = await d.invoice(plan('OMEGA subscription stripe.example / credit'), BP.normalize(profile), c1);
+  s.credit(inv5.id, 30000); r = await d.reconcile(Object.assign({}, plan('OMEGA subscription stripe.example / credit'), { stripeInvoiceId: inv5.id, stripeCustomerId: c1, totalCents: 70000 }));
+  ok('paid partly from the customer\'s credit balance: paid in full, never read unpaid for ever', r.satisfied === true && r.paidCents === 70000 && !r.review, r);
+  var inv6 = await d.invoice(plan('OMEGA subscription stripe.example / void-cancel'), BP.normalize(profile), c1), rec6 = Object.assign({}, plan('OMEGA subscription stripe.example / void-cancel'), { stripeInvoiceId: inv6.id, stripeCustomerId: c1, totalCents: 70000 });
+  ok('a cancelled change\'s open invoice is voided at Stripe, so it cannot be paid', (await d.voidOpen(rec6)).voided === true && s.invoices_[inv6.id].status === 'void');
+  ok('...and voiding again is harmless', (await d.voidOpen(rec6)).voided === true);
+  var inv7 = await d.invoice(plan('OMEGA subscription stripe.example / paid-cancel'), BP.normalize(profile), c1); s.pay(inv7.id);
+  await refused('a paid invoice is never voided: the change is switching on', function () { return d.voidOpen(Object.assign({}, rec6, { stripeInvoiceId: inv7.id })); }, /already paid/);
+  /* Stripe's own words (key fragments, account ids) never reach a tenant */
+  var loud = new SD(), dl = ST.driver(book(), { stripe: loud }), cl = await dl.customer('stripe.example', profile);
+  loud.invoices.list = async function () { var e = new Error('Invalid API Key provided: sk_live_****abcd on account acct_123'); e.type = 'StripeAuthenticationError'; e.statusCode = 401; throw e; };
+  var quiet = await refused('a Stripe error reads as a plain refusal', function () { return dl.invoice(plan('OMEGA subscription stripe.example / loud'), BP.normalize(profile), cl); }, /Stripe refused the request/);
+  ok('...with no key, account or mode in it, and it is ClearSky\'s side (retried)', !/sk_|acct_|Invalid API Key/.test(quiet.message) && quiet.clearsky === true && quiet.status === 502, quiet.message);
 
   console.log('\nwhich events are an OMEGA package invoice');
   ok('a package invoice event names its workspace', ST.eventOrg(s.event('invoice.paid', inv.id)) === 'stripe.example');
@@ -140,6 +161,8 @@ var DBREF = { db: null }, CALLER = { staff: false, uid: 'uid-owner', email: 'own
 F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, authenticate: async function () { return CALLER; }, db: function () { return DBREF.db; },
   safeOrg: function (x) { return /^[a-z0-9.-]+\.[a-z]+$/.test(x || '') ? x : null; }, orgOf: function (x) { return x.split('@')[1]; },
   isTenantAdmin: async function (c, o) { return c.staff || c.orgId === o && c.role === 'owner'; },
+  /* the real rule (admin.js): staff, or an owner/admin of a workspace whose record is active */
+  clientAdmin: async function (c, o) { if (c.staff) return true; if (!(c.orgId === o && c.role === 'owner')) return false; var r = await DBREF.db.doc('omega_orgs/' + o).get(); return r.exists && r.data().status === 'active'; },
   billingOf: async function (o) { var r = await DBREF.db.doc('omega_orgs/' + o + '/billing/current').get(); return r.exists ? r.data() : {}; },
   httpError: function (status, message) { var e = new Error(message); e.status = status; return e; },
   FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; },
@@ -179,6 +202,10 @@ async function engineChecks() {
   var paid = await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
   bill = db.data.get(root + '/billing/current');
   ok('invoice.paid: the webhook reconciles at once and the package is on', bill.packagingState === 'paid' && bill.modules.join() === 'lite,storage' && bill.toolAccess.indexOf('batterysizer') >= 0 && bill.amountDue === 0, { state: bill.packagingState, modules: bill.modules });
+  var PA = require('../api/_lib/package-access');
+  ok('a paid test-mode grant is live where the live switch is off (the sandbox)', PA.live(bill, bill.modules, NOW) === true);
+  env({ PACKAGING_LIVE: 'true' }); var underSwitch = PA.live(bill, bill.modules, NOW); env({ PACKAGING_LIVE: null });
+  ok('...and never honoured under the live switch (a Preview writing to the same Firestore)', underSwitch === false);
   ok('the invoice record reads paid, the history says who read it', db.data.get(invoices[0]).state === 'paid' && Array.from(db.data.keys()).some(function (k) { return k.indexOf(root + '/billing/current/history/') === 0 && db.data.get(k).by === 'stripe-reconciliation'; }));
   ok('the tenant\'s receipt and ClearSky\'s alert went out, naming Stripe', MAILED.some(function (m) { return m.template === 'paid'; }) && MAILED.some(function (m) { return m.template === 'paidAlert' && m.payWith === 'Stripe'; }), MAILED);
   var summary = await C.summary(db, orgId);
@@ -200,6 +227,22 @@ async function engineChecks() {
   ok('...and Omega Grid is not on until it is paid', db.data.get(root + '/billing/current').modules.indexOf('gridatlas') < 0);
   stripe.pay(changeRec.stripeInvoiceId); await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
   ok('paid: Omega Grid joins the subscription and is on', db.data.get(root + '/billing/current').modules.indexOf('gridatlas') >= 0 && db.data.get(root + '/billing/current').subscription.modules.indexOf('gridatlas') >= 0);
+  var q2 = await C.preview(db, orgId, { add: ['estimate'] }, dueAt + 3000);
+  var ch2 = await C.apply(db, orgId, { add: ['estimate'], previewId: q2.previewId, effectiveAt: dueAt + 3000 }, CALLER, dueAt + 3000, deps), rec2 = db.data.get(root + '/billing/current/invoices/' + ch2.changeId);
+  await C.cancel(db, orgId, ch2.changeId, CALLER, dueAt + 4000, deps);
+  var cancelled2 = db.data.get(root + '/billing/current/invoices/' + ch2.changeId);
+  ok('a cancelled Stripe change is voided at Stripe: it cannot be paid after the tenant said no', stripe.invoices_[rec2.stripeInvoiceId].status === 'void' && cancelled2.state === 'cancelled' && cancelled2.voided === true && cancelled2.paymentLink === null, cancelled2);
+  var q3 = await C.preview(db, orgId, { add: ['estimate'] }, dueAt + 5000);
+  ok('asked again, it is a new change with its own invoice (a voided one is never revived)', q3.canApply === true && q3.previewId !== q2.previewId, q3);
+  var ch3 = await C.apply(db, orgId, { add: ['estimate'], previewId: q3.previewId, effectiveAt: dueAt + 5000 }, CALLER, dueAt + 5000, deps), rec3 = db.data.get(root + '/billing/current/invoices/' + ch3.changeId);
+  stripe.pay(rec3.stripeInvoiceId);
+  await refused('a change already paid at Stripe cannot be cancelled: it is switching on', function () { return C.cancel(db, orgId, ch3.changeId, CALLER, dueAt + 6000, deps); }, /already paid/);
+  ok('...and stays waiting for the reconcile that switches it on', db.data.get(root + '/billing/current/invoices/' + ch3.changeId).state === 'unpaid');
+  await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
+  stripe.refund(first.stripeInvoiceId, 10000); await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
+  var firstNow = db.data.get(invoices[0]);
+  ok('a goodwill refund on a paid cycle: still paid, the workspace stays open, and a person is told once', firstNow.state === 'paid' && firstNow.reviewRequired === true && db.data.get(root + '/billing/current').packagingState === 'paid'
+    && !!db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-' + orgId + '-' + first.stripeInvoiceId), firstNow);
   stripe.refund(next.stripeInvoiceId); await Hook.packageEvent(orgId, { billing: deps, mail: mailer });
   ok('a refunded cycle is reversed: access is cut to what was paid for', db.data.get(root + '/billing/current/invoices/' + issued.date).state === 'reversed' && db.data.get(root + '/billing/current').packagingState === 'unpaid');
 
@@ -220,6 +263,17 @@ async function engineChecks() {
     && D.providerOf({ packaged: false, billingProvider: 'stripe', stripeCustomerId: 'cus_x' }) === 'quickbooks' && D.providerOf({ stripeCustomerId: 'cus_x' }) === 'quickbooks'
     && D.providerOf({ packaged: true, billingProvider: 'quickbooks', stripeCustomerId: 'cus_x', qboCustomerId: 'C9' }) === 'quickbooks');
   env({ PACKAGING_PROVIDER: 'stripe' });
+
+  console.log('\na tenant moving off an old Stripe subscription onto a package');
+  var ldb = fixture(), lstripe = new SD(), lb = ldb.data.get(root + '/billing/current');
+  Object.assign(lb, { packaged: false, packagingSignup: false, packagingState: null, billingProvider: null, tier: 'standard', stripeSubscriptionId: 'sub_oldtier', stripeCustomerId: 'cus_oldtier' });
+  var lv = await S.preview(ldb, orgId, input, NOW);
+  await S.apply(ldb, orgId, Object.assign({}, input, { previewId: lv.previewId, effectiveAt: lv.effectiveAt }), Object.assign({}, CALLER, { staff: true, email: 'ops@clearsky-usa.com' }), NOW, { stripe: lstripe });
+  var legacyNote = ldb.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-legacy-sub-' + orgId);
+  ok('ClearSky is told to cancel the old subscription so the card is not charged twice', legacyNote && /sub_oldtier/.test(legacyNote.text) && legacyNote.staffMail === 'billingAlert', legacyNote);
+  var moved = ldb.data.get(root + '/billing/current');
+  ok('the package gets its OWN Stripe customer, never the tier\'s (which carries the tier subscription)', /^cus_/.test(moved.stripeCustomerId) && moved.stripeCustomerId !== 'cus_oldtier' && lstripe.customers_[moved.stripeCustomerId].metadata.omegaOrg === orgId, moved);
+  ok('...and the tier customer is kept so its events still find the workspace', moved.legacyStripeCustomerId === 'cus_oldtier');
 
   console.log('\na customer from the other Stripe mode is never billed');
   var mdb = fixture(); var live = new SD({ livemode: true });
@@ -259,6 +313,43 @@ async function webhookChecks() {
     var bill = db.data.get(root + '/billing/current');
     ok('a signed invoice.paid opens exactly what was bought', good.code === 200 && good.body.package && bill.packagingState === 'paid' && bill.modules.join() === 'lite,storage', good.body);
     ok('...and the legacy tier path never ran: no tier, no lastStripeEvent, status untouched', bill.lastStripeEvent === undefined && bill.tier !== 'trial' && db.data.get(root).status === 'active');
+    /* an event is about ONE invoice: the handler reads that one back, never the whole history first */
+    var cyc = await S.issue(db, orgId, Date.parse(bill.nextInvoiceOn + 'T12:00:00Z'), deps);
+    var newer = Array.from(db.data.keys()).filter(function (k) { return k.indexOf(root + '/billing/current/invoices/') === 0; }).map(function (k) { return db.data.get(k); })
+      .filter(function (r) { return r.stripeInvoiceId && r.stripeInvoiceId !== inv.stripeInvoiceId; })[0];
+    stripe.pay(newer.stripeInvoiceId);
+    var reads0 = stripe.calls.filter(function (c) { return c === 'invoices.retrieve'; }).length;
+    var one = await call(stripe.event('invoice.paid', newer.stripeInvoiceId), 'signed');
+    var reads = stripe.calls.filter(function (c) { return c === 'invoices.retrieve'; }).length - reads0, seen = one.body.package.reconciled.invoices;
+    ok('a package invoice.paid reconciles only the invoice it is about (a long history never delays it)', !!cyc && one.code === 200 && seen.length === 1
+      && seen[0].invoiceId === newer.stripeInvoiceId && seen[0].state === 'paid' && reads === 1 && db.data.get(root + '/billing/current').packagingState === 'paid', { seen: seen, reads: reads });
+    bill = db.data.get(root + '/billing/current');
+    /* a paid package invoice no OMEGA record holds: a person is told, and Stripe is asked back (never absorbed with a 200) */
+    var loose = await ST.driver(book(), deps).invoice(plan('OMEGA subscription stripe.example / orphan'), BP.normalize(profile), bill.stripeCustomerId);
+    stripe.pay(loose.id);
+    var orphan = await call(stripe.event('invoice.paid', loose.id), 'signed');
+    var orphanNote = db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-orphan-' + loose.id);
+    ok('a paid invoice with no OMEGA record: 500 so Stripe retries, and ClearSky is told', orphan.code === 500 && orphan.body.orphan === true && orphanNote && orphanNote.staffMail === 'billingAlert' && /no OMEGA invoice record/.test(orphanNote.text), orphan.body);
+    await call(stripe.event('invoice.paid', loose.id), 'signed');
+    ok('...once, however often Stripe comes back', Array.from(db.data.keys()).filter(function (k) { return k.indexOf('/notifications/billing-orphan-') >= 0; }).length === 1);
+    /* the tier path never writes to a packaged workspace; an old subscription still charging it is flagged */
+    db.collectionGroup = function (name) {
+      return { where: function (field, op, value) { return { limit: function () { return { get: async function () {
+        var docs = []; db.data.forEach(function (v, p) { var parts = p.split('/'); if (parts[parts.length - 2] === name && v[field] === value) docs.push({ ref: { parent: { parent: { id: parts[parts.length - 3] } } } }); });
+        return { empty: !docs.length, docs: docs };
+      } }; } }; } };
+    };
+    var beforeTier = JSON.stringify([db.data.get(root), db.data.get(root + '/billing/current')]);
+    var tierEvt = { id: 'evt_oldtier', type: 'invoice.paid', created: 1790000000, data: { object: { id: 'in_oldtier', object: 'invoice', customer: bill.stripeCustomerId, metadata: {}, amount_paid: 9900, lines: { data: [{ period: { end: 1792600000 } }] } } } };
+    var tier = await call(tierEvt, 'signed');
+    ok('a non-package invoice on a packaged workspace\'s customer: answered once, nothing written', tier.code === 200 && /packaged workspace/.test(tier.body.ignored || '') && JSON.stringify([db.data.get(root), db.data.get(root + '/billing/current')]) === beforeTier, tier.body);
+    ok('...and ClearSky is told an old subscription may still be charging it', /cancel it in Stripe/.test((db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-legacy-evt_oldtier') || {}).text || ''));
+    db.data.get(root + '/billing/current').legacyStripeCustomerId = 'cus_movedoff';
+    var movedOff = await call({ id: 'evt_movedoff', type: 'invoice.paid', created: 1790000000, data: { object: { id: 'in_movedoff', object: 'invoice', customer: 'cus_movedoff', metadata: {} } } }, 'signed');
+    ok('an event on the tier customer a workspace moved off still finds it, and is flagged, never applied', movedOff.code === 200 && /packaged workspace/.test(movedOff.body.ignored || '') && !!db.data.get('omega_orgs/clearsky-usa.com/notifications/billing-review-legacy-evt_movedoff'), movedOff.body);
+    var nobody = await call({ id: 'evt_nobody', type: 'invoice.paid', created: 1790000000, data: { object: { id: 'in_x', object: 'invoice', customer: 'cus_nobody', metadata: {} } } }, 'signed');
+    ok('an event for no workspace is answered once', nobody.code === 200 && /no org/.test(nobody.body.ignored || ''));
+    delete db.collectionGroup;
     env({ PACKAGING_BILLING_ENABLED: 'false' });
     var off = await call(stripe.event('invoice.paid', inv.stripeInvoiceId), 'signed');
     env({ PACKAGING_BILLING_ENABLED: 'true' });
@@ -266,6 +357,25 @@ async function webhookChecks() {
   } finally { Module._load = load; Hook && (Hook.deps = null); }
 }
 
+async function legacyEndpointChecks() {
+  console.log('\nthe legacy invoice list and portal: verified people only, and never a package\'s invoices');
+  var db = fixture(); db.data.get(root + '/billing/current').stripeCustomerId = 'cus_pkg'; db.data.get(root + '/billing/current').packaged = true;
+  var invoicesApi = require('../api/stripe-invoices'), portalApi = require('../api/stripe-portal');
+  function post(api, body) { return new Promise(function (resolve) { var res = { code: 200, setHeader: function () {}, status: function (c) { res.code = c; return res; }, json: function (b) { resolve({ code: res.code, body: b }); }, end: function () { resolve({ code: res.code }); } };
+    Promise.resolve(api({ method: 'POST', body: body || {}, headers: {} }, res)).then(function (out) { if (out !== undefined) resolve({ code: 200, body: out }); }, function (e) { resolve({ code: e.status || 500, body: { error: e.message } }); }); }); }
+  var saved = CALLER.claims, role = CALLER.role; CALLER.claims = {}; CALLER.role = 'member';
+  var r1 = await post(invoicesApi); ok('an unverified member at the domain gets no invoices', r1.code === 403 && /Verified email/.test(r1.body.error), r1);
+  var r2 = await post(portalApi); ok('...and no billing portal', r2.code === 403, r2);
+  /* an owner of an ACTIVE client needs no verified email (admin.clientAdmin, #200): a Team invitation leaves it unverified */
+  CALLER.role = 'owner';
+  var r1b = await post(invoicesApi); ok('an unverified owner of an active client reads its invoice list (#200)', r1b.code === 200, r1b);
+  db.data.get(root).status = 'pending';
+  var r2b = await post(portalApi); ok('...but not while the workspace is pending', r2b.code === 403 && /Verified email/.test(r2b.body.error), r2b);
+  db.data.get(root).status = 'active'; CALLER.role = role;
+  CALLER.claims = { email_verified: true };
+  var r3 = await post(invoicesApi); ok('a packaged workspace\'s invoices are Plan & billing\'s, never this list', r3.code === 200 && r3.body.connected === false && r3.body.invoices.length === 0, r3);
+  CALLER.claims = saved;
+}
 async function pricebookChecks() {
   console.log('\nthe price book turns on for the Stripe rail without QuickBooks items');
   var PE = require('../api/_lib/pricebook-enable'), db = new DB(); db.serial = true;
@@ -289,6 +399,7 @@ async function pricebookChecks() {
   await driverChecks();
   await engineChecks();
   await webhookChecks();
+  await legacyEndpointChecks();
   await pricebookChecks();
   console.log('\nstripe billing: ' + count + ' passed, 0 failed');
 })().catch(function (e) { console.error(e); process.exit(1); });

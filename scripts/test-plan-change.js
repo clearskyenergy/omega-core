@@ -7,7 +7,7 @@ process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBo
 var assert = require('assert'), F = require('./_lib/firestore-double');
 var B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules'), S = require('../api/_lib/package-billing');
 var Q = require('../api/_lib/qbo-billing'), R = require('../api/_lib/proration');
-var count = 0, calls = 0, receipts = {}, db, failures = {}, originalDriver = Q.driver;
+var count = 0, calls = 0, receipts = {}, db, failures = {}, midflight = {}, invoiceFail = 0, originalDriver = Q.driver;
 var orgId = 'plan.example', root = 'omega_orgs/' + orgId, ev = M.starters().ev;
 var staff = { staff: true, uid: 'staff', email: 'staff@clearsky-usa.com', claims: { email_verified: true } };
 var owner = { staff: false, uid: 'owner', email: 'owner@' + orgId, orgId: orgId, role: 'owner', claims: { email_verified: true } };
@@ -64,8 +64,8 @@ async function run() {
   process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
   var now = Date.parse('2026-09-26T12:00:00Z'), realNow = Date.now; Date.now = function () { return now; };
   Q.driver = function () { return { customer: async function () { calls++; return 'C1'; },
-    invoice: async function (plan) { calls++; var id = plan.kind === 'change' ? 'I-' + plan.marker.slice(-12) : 'I-' + plan.date; return { id: id, totalCents: plan.subtotalCents, payUrl: 'https://connect.intuit.com/pay/' + id }; },
-    reconcile: async function (record) { if (failures[record.qboInvoiceId]) { var e = new Error('QuickBooks request failed (503)'); e.status = failures[record.qboInvoiceId]; throw e; } return receipts[record.qboInvoiceId] || (record.state === 'paid' ? { satisfied: true, reversed: false, paidCents: record.totalCents, payUrl: null } : { satisfied: false, reversed: false, paidCents: 0, payUrl: 'https://connect.intuit.com/pay/x' }); } }; };
+    invoice: async function (plan) { calls++; if (invoiceFail > 0) { invoiceFail--; var down = new Error('QuickBooks request failed (503)'); down.status = 503; throw down; } var id = plan.kind === 'change' ? 'I-' + plan.marker.slice(-12) : 'I-' + plan.date; return { id: id, totalCents: plan.subtotalCents, payUrl: 'https://connect.intuit.com/pay/' + id }; },
+    reconcile: async function (record) { if (midflight[record.qboInvoiceId]) { var hook = midflight[record.qboInvoiceId]; delete midflight[record.qboInvoiceId]; hook(); } if (failures[record.qboInvoiceId]) { var e = new Error('QuickBooks request failed (503)'); e.status = failures[record.qboInvoiceId]; throw e; } return receipts[record.qboInvoiceId] || (record.state === 'paid' ? { satisfied: true, reversed: false, paidCents: record.totalCents, payUrl: null } : { satisfied: false, reversed: false, paidCents: 0, payUrl: 'https://connect.intuit.com/pay/x' }); } }; };
 
   /* ── Money math ─────────────────────────────────────────────────── */
   seed(ev, 'field');
@@ -219,6 +219,38 @@ async function run() {
   var paidCancelled = await S.reconcile(db, orgId, now + 60000, {});
   equal(db.data.get(root + '/billing/current/invoices/' + r6.changeId).state, 'paid', 'paying a cancelled change is honoured');
   equal(paidCancelled.invoices[paidCancelled.invoices.length - 1].reviewRequired, true, 'and flagged for a person'); equal(bill().modules.indexOf('siteintel') >= 0, true);
+  /* the same addition asked for again after a cancel: its invoice is still open at the provider, so the change waits on it again, never a second invoice */
+  var e1 = await apply(['engineering']); await req('POST', { action: 'cancel', changeId: e1.changeId }); var invoicesBefore = calls;
+  var e2 = await apply(['engineering']);
+  equal([e2.changeId, e2.state, e2.reopened, e2.paymentLink], [e1.changeId, 'awaiting_payment', true, e1.paymentLink], 'a re-request after a cancel revives the same change on the same invoice');
+  equal([calls, db.data.get(root + '/billing/current/invoices/' + e1.changeId).state, bill().amountDue > 0, bill().paymentLink], [invoicesBefore, 'unpaid', true, e1.paymentLink], 'no second invoice; it is owed and offered again');
+  ok(Array.from(db.data.keys()).some(function (k) { return k.indexOf(root + '/admin_audit/' + e1.changeId + '-reopen-') === 0; }), 'and audited');
+  equal((await quote(['engineering'])).canApply, false, 'while it waits, the same addition is not offered twice');
+  /* on another day the price differs (another id): never a second invoice beside the still-open cancelled one */
+  await req('POST', { action: 'cancel', changeId: e1.changeId });
+  var nextDay = await C.preview(db, orgId, { add: ['engineering'] }, now + 86400000);
+  ok(nextDay.previewId !== e1.changeId.slice(7), 'another day, another price'); equal(nextDay.canApply, false); ok(/still has an open QuickBooks invoice/.test(nextDay.reason), nextDay.reason);
+  await req('POST', { action: 'apply', add: ['engineering'], orgId: orgId, previewId: e1.changeId.slice(7), effectiveAt: now }).then(function (r) { equal(r.changeId, e1.changeId, 'the same day it revives again'); });
+  /* once that invoice is dead (staff voided it), the next request is a new change with its own invoice */
+  await req('POST', { action: 'cancel', changeId: e1.changeId });
+  receipts[db.data.get(root + '/billing/current/invoices/' + e1.changeId).qboInvoiceId] = { satisfied: false, reversed: true, paidCents: 0, payUrl: null };
+  await S.reconcile(db, orgId, now + 180000, {}); equal(db.data.get(root + '/billing/current/invoices/' + e1.changeId).state, 'reversed');
+  var e3 = await apply(['engineering']); ok(e3.changeId !== e1.changeId, 'after a void, a re-request is a new change'); equal([e3.state, calls], ['awaiting_payment', invoicesBefore + 1]);
+  equal(db.data.get(root + '/billing/current/invoices/' + e3.changeId).state, 'unpaid', 'the new change waits for its own payment');
+  /* a revive is still a request: never beside another change waiting for payment */
+  seed(ev, 'field'); var f1 = await apply(['engineering']); await req('POST', { action: 'cancel', changeId: f1.changeId });
+  await apply(['siteintel']); var fq = await quote(['engineering']); equal(fq.previewId, f1.changeId.slice(7));
+  await refused(function () { return req('POST', { action: 'apply', add: ['engineering'], orgId: orgId, previewId: fq.previewId, effectiveAt: fq.effectiveAt }); }, /waiting for payment/);
+  equal(db.data.get(root + '/billing/current/invoices/' + f1.changeId).state, 'cancelled', 'and it stays cancelled');
+  /* the billing day, before the renewal is issued: no PAID additions (the change would bill the whole new cycle, and the renewal again) */
+  seed(ev, 'field'); var dueDay = bill().nextInvoiceOn, dueAt = Date.parse(dueDay + 'T01:00:00Z');
+  var early = await C.preview(db, orgId, { add: ['siteintel'] }, dueAt);
+  equal(early.canApply, false); ok(/renewal is being issued today/.test(early.reason), early.reason);
+  equal((await C.preview(db, orgId, { add: ['siteintel'] }, dueAt - 86400000)).canApply, true, 'the day before, additions are open');
+  equal(C.packQuote(await S.context(db, orgId), 'evApplications', dueAt).canApply, true, 'a pack bills nothing twice: open on the billing day');
+  seed(['lite', 'evrebates', 'estimate'], 'field'); dueDay = bill().nextInvoiceOn;
+  var free = await C.preview(db, orgId, { add: ['storage'] }, Date.parse(dueDay + 'T01:00:00Z'));
+  equal([free.included, free.canApply], [true, true], 'a $0 addition inside the tier bills nothing twice: open on the billing day');
 
   /* ── Concurrency and stale previews ────────────────────────────── */
   seed(ev, 'field'); before = calls; var q12 = await quote(['siteintel']);
@@ -394,6 +426,54 @@ async function run() {
   equal(C.reviewOn({}, bookNow, day('2026-09-26')), null); equal(C.reviewOn(sub(null), bookNow, day('2026-09-26')), null);
 
 
+  /* ── The engine's reconcile, every rail ────────────────────────── */
+  function changeRow(id, add, state, extra) {
+    return Object.assign({ kind: 'change', id: id, date: '2026-09-26', cycle: { start: '2026-09-20', end: '2026-10-20' }, period: { start: '2026-09-26', end: '2026-10-20' },
+      add: add, modules: ev.concat(add), plan: 'alacarte', planBefore: 'field', lines: [], subtotalCents: 1000, totalCents: 1000, state: state, qboInvoiceId: 'I-' + id, qboCustomerId: 'C1' }, extra || {});
+  }
+  /* the runner pages by document id: records sharing a date across a page edge are all read */
+  seed(ev, 'field'); receipts = {};
+  db.seed(root + '/billing/current/invoices/change-aaa', changeRow('change-aaa', ['siteintel'], 'unpaid'));
+  db.seed(root + '/billing/current/invoices/change-bbb', changeRow('change-bbb', ['engineering'], 'unpaid'));
+  db.seed(root + '/billing/current/invoices/change-bbc', changeRow('change-bbc', ['gridatlas'], 'unpaid'));
+  receipts['I-change-aaa'] = receipts['I-change-bbb'] = receipts['I-change-bbc'] = { satisfied: true, reversed: false, paidCents: 1000, payUrl: null };
+  for (var pg = 0; pg < 3; pg++) await S.reconcile(db, orgId, now, {}, { limit: 2 });
+  equal(['aaa', 'bbb', 'bbc'].map(function (k) { return db.data.get(root + '/billing/current/invoices/change-' + k).state; }), ['paid', 'paid', 'paid'], 'three changes of one date across page edges: all read by the runner');
+  equal(bill().reconcileCursor, null, 'and the cursor comes back to the start');
+  /* the next price book released: invoices issued under this one are still read back (only issuing needs the current book) */
+  seed(ev, 'field'); receipts = {};
+  db.seed(root + '/billing/current/invoices/change-old', changeRow('change-old', ['siteintel'], 'unpaid'));
+  receipts['I-change-old'] = { satisfied: true, reversed: false, paidCents: 1000, payUrl: null };
+  var bookNow = B.VERSION; B.VERSION = bookNow + '-next';
+  try {
+    await S.reconcile(db, orgId, now, {});
+    equal(db.data.get(root + '/billing/current/invoices/change-old').state, 'paid', 'a payment on an invoice from the earlier book is still applied');
+    await refused(function () { return S.issue(db, orgId, Date.parse(bill().nextInvoiceOn + 'T12:00:00Z'), {}); }, /price book/);
+  } finally { B.VERSION = bookNow; }
+  /* a stale verdict never overwrites a newer one: another reconcile paid it while this one failed on its side */
+  seed(ev, 'field'); receipts = {}; failures = {};
+  db.seed(root + '/billing/current/invoices/change-ccc', changeRow('change-ccc', ['siteintel'], 'unpaid'));
+  midflight['I-change-ccc'] = function () { db.data.get(root + '/billing/current/invoices/change-ccc').state = 'paid'; };
+  failures['I-change-ccc'] = 503;
+  await S.reconcile(db, orgId, now, {}); failures = {};
+  equal(db.data.get(root + '/billing/current/invoices/change-ccc').state, 'paid', 'the newer paid stays paid');
+  /* a refunded change keeps a module another paid change also bought */
+  seed(ev.concat(['siteintel']), 'alacarte'); receipts = {};
+  db.seed(root + '/billing/current/invoices/change-ddd', changeRow('change-ddd', ['siteintel'], 'paid'));
+  db.seed(root + '/billing/current/invoices/change-eee', changeRow('change-eee', ['siteintel'], 'paid', { date: '2026-09-27' }));
+  receipts['I-change-ddd'] = { satisfied: false, reversed: true, paidCents: 0, payUrl: null };
+  receipts['I-change-eee'] = { satisfied: true, reversed: false, paidCents: 1000, payUrl: null };
+  await S.reconcile(db, orgId, now, {});
+  equal([db.data.get(root + '/billing/current/invoices/change-ddd').state, bill().subscription.modules.indexOf('siteintel') >= 0], ['reversed', true], 'the other paid change still covers it');
+
+  /* a pack purchase that failed is resumed by asking again, never refused for ever (the same marker: no second invoice) */
+  seed(ev, 'field'); invoiceFail = 1; var pq = C.packQuote(await S.context(db, orgId), 'evApplications', now);
+  await refused(function () { return C.packBuy(db, orgId, { meter: 'evApplications', previewId: pq.previewId, effectiveAt: now }, owner, now); }, /503/);
+  var pb = await C.packBuy(db, orgId, { meter: 'evApplications', previewId: pq.previewId, effectiveAt: now }, owner, now);
+  equal(pb.state, 'awaiting_payment', 'the same purchase asked again after it failed resumes it');
+  var before2 = calls; equal((await C.packBuy(db, orgId, { meter: 'evApplications', previewId: pq.previewId, effectiveAt: now }, owner, now)).packId, pb.packId, 'and once done, asking again returns the same purchase');
+  equal(calls, before2, 'without asking QuickBooks again');
+
   /* ── Opt in on a plan billed outside the engine (2026-09-27) ────── */
   db = new F.DB(); db.serial = true;
   var legacyBook = B.proposed(); legacyBook.enabled = true; db.seed('pricebook/' + legacyBook.version, legacyBook);
@@ -520,12 +600,14 @@ async function run() {
   equal(['logic-office', 'logic-plant', 'logic-materials', 'plansets'].map(function (k) { return wo.optOuts[k].status; }), ['withdrawn', 'withdrawn', 'requested', 'requested']);
   equal([rows(root + '/billing/current/history/optout-withdrawn-').length, rows(root + '/admin_audit/optout-withdrawn-').length], [2, 2], 'the Site Intelligence cancel above and this one');
   /* no price book seeded yet: an opt-out prices nothing, so it still works,
-     and so does the summary; an opt-in (which records a price) says why not */
+     and so does the summary; an opt-in prices from the code's own book, the
+     same list /api/offerings shows (#184), and charges nothing */
   db.data.delete('pricebook/' + B.VERSION);
   equal((await req('POST', { action: 'opt-out', remove: ['gridatlas'] })).remove, ['gridatlas'], 'an opt-out needs no price book');
   equal((await req('GET', { orgId: orgId })).optOuts.gridatlas.status, 'requested', 'nor does the summary');
   equal((await req('POST', { action: 'withdraw-opt-out', remove: ['gridatlas'] })).withdrawn, ['gridatlas']);
-  await refused(function () { return req('POST', { action: 'opt-in', add: ['estimate'], dryRun: true }); }, /Price book not seeded/);
+  var unseeded = await req('POST', { action: 'opt-in', add: ['estimate'], dryRun: true });
+  ok(unseeded.dryRun === true && unseeded.add.indexOf('estimate') >= 0 && unseeded.monthlyCents > 0, 'an opt-in with no book seeded is priced from the code\'s book, as the public list is');
   /* refusals that need their own record */
   legacy(); db.data.delete(root + '/billing/current');
   await refused(function () { return req('POST', { action: 'opt-out', remove: ['gridatlas'], dryRun: true }); }, /Billing is not set up for this workspace yet/);
@@ -587,6 +669,17 @@ async function run() {
   ok(sum.addOns && sum.optIns && sum.optOuts && 'nextReviewOn' in sum, 'the summary carries add-ons and the requests');
   legacy({ addOns: { modules: ['logic-office'], live: ['logic-office'], accessUntil: Date.now() - 1000, state: 'lapsed' } });
   equal((await req('POST', { action: 'opt-out', remove: ['logic-office'], dryRun: true })).remove, ['logic-office'], 'a lapsed add-on is not on: the recorded opt-out is open');
+
+  /* a legacy workspace with no omega_orgs record yet (every gate fails open on one): opt-in and the summary work, never "Organization not found" */
+  db = new F.DB(); db.serial = true;
+  db.seed(root + '/billing/current', { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'stripe' });
+  var noRecord = await req('GET', { orgId: orgId }); equal([noRecord.packaged, noRecord.invoices], [false, []], 'the summary reads a workspace with no record, and an unseeded book as the code\'s');
+  var oiNo = await req('POST', { action: 'opt-in', add: ['siteintel'] });
+  equal([oiNo.requested, oiNo.display, bill().optIns.siteintel.status], [true, '$500/month', 'requested'], 'the opt-in is recorded with its price');
+  ok(!db.data.has(root), 'and no organization record is made');
+  await refused(function () { return C.apply(db, orgId, { add: ['siteintel'], previewId: 'a'.repeat(48), effectiveAt: now }, owner, now); }, /Organization not found/);
+  /* ClearSky's own workspace holds every module already: it is told so, never "Organization not found" */
+  await refused(function () { return C.optIn(db, 'clearsky-usa.com', { add: ['siteintel'] }, staff, now); }, /ClearSky's own workspace/);
 
   /* ── "Opt in and out, this needs to work" (2026-09-27) ──────────────
      A legacy workspace invoiced by ClearSky (Concord's shape: manual, a
