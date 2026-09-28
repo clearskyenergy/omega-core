@@ -66937,22 +66937,36 @@ function _dcfcReanchorRun(run){
    it twice (Thomas, 2026-09-16): the spur is dug once, its parent is dug
    once as far as the tap, and the totals count it that way. Spurs join the
    build's family of runs, so the next click near a spur lands on it. */
-function _dcfcSnapOrExtend(run, p, st){
-  if(!run || !run.pts || run.pts.length<2) return null;
-  var ppf=(typeof S!=='undefined' && S.pxPerFt>0) ? S.pxPerFt : 6;
-  var tol=Math.max(8, ppf*2);
+/* The trench family: a run and every spur hanging off it, or off those. */
+function _dcfcFamily(run){
   var all=(typeof S!=='undefined' && S._trenches) ? S._trenches : [];
-  /* the trench family: this run and every spur hanging off it, or off those */
   var fam=[run], ids={}; ids[run.id]=1;
   for(var pass=0; pass<8; pass++){
     var grew=false;
     all.forEach(function(t){ if(t && t.pts && t.pts.length>1 && !ids[t.id] && t.spurOf && ids[t.spurOf]){ ids[t.id]=1; fam.push(t); grew=true; } });
     if(!grew) break;
   }
+  return fam;
+}
+/* The nearest point on the family to p: _dcfcNearestOnPoly's answer plus
+   the run it sits on and how far along that run it is, in feet (what a
+   spur tapping there records as spurTapFt). */
+function _dcfcTapOn(run, p){
+  if(!run || !run.pts || run.pts.length<2) return null;
   var best=null, on=null;
-  fam.forEach(function(t){ var sn=_dcfcNearestOnPoly(t.pts, p); if(sn && (!best || sn.dist<best.dist)){ best=sn; on=t; } });
+  _dcfcFamily(run).forEach(function(t){ var sn=_dcfcNearestOnPoly(t.pts, p); if(sn && (!best || sn.dist<best.dist)){ best=sn; on=t; } });
   if(!best) return null;
   best.run=on;
+  var ppf=(typeof S!=='undefined' && S.pxPerFt>0) ? S.pxPerFt : 6;
+  best.tapFt=+(_polyLen(on.pts.slice(0,best.seg).concat([{ x:best.x, y:best.y }]))/ppf).toFixed(1);
+  return best;
+}
+try{ window._dcfcFamily=_dcfcFamily; window._dcfcTapOn=_dcfcTapOn; }catch(e){}
+function _dcfcSnapOrExtend(run, p, st){
+  var best=_dcfcTapOn(run, p); if(!best) return null;
+  var on=best.run;
+  var ppf=(typeof S!=='undefined' && S.pxPerFt>0) ? S.pxPerFt : 6;
+  var tol=Math.max(8, ppf*2);
   if(best.dist<=tol) return best;                       /* on the trench */
   var last=on.pts[on.pts.length-1];
   var onEnd = best.seg===on.pts.length-1 && Math.hypot(best.x-last.x, best.y-last.y)<0.5;
@@ -66965,9 +66979,8 @@ function _dcfcSnapOrExtend(run, p, st){
     return { x:p.x, y:p.y, dist:0, nx:-dy/L, ny:dx/L, seg:on.pts.length-1, run:on, extended:true };
   }
   /* off the trench: a spur from the nearest point to the click */
-  var tapFt=+(_polyLen(on.pts.slice(0,best.seg).concat([{ x:best.x, y:best.y }]))/ppf).toFixed(1);
   var spur={ id:uid(), pts:[{ x:best.x, y:best.y },{ x:p.x, y:p.y }], in:on.in||'soil', leg:'branch',
-             build:on.build||(st&&st._buildId)||null, spurOf:on.id, spurSeg:best.seg, spurTapFt:tapFt };
+             build:on.build||(st&&st._buildId)||null, spurOf:on.id, spurSeg:best.seg, spurTapFt:best.tapFt };
   if(typeof S!=='undefined'){ if(!S._trenches) S._trenches=[]; S._trenches.push(spur); }
   try{ _dcfcRenderTrenches(); }catch(e){}
   var sx=p.x-best.x, sy=p.y-best.y, SL=Math.hypot(sx,sy)||1;
@@ -67027,6 +67040,12 @@ function _dcfcRenderTrenches(){
       c.setAttribute('r','3.5'); c.setAttribute('fill','#16202B'); c.setAttribute('stroke',col);
       c.setAttribute('stroke-width','2'); g.appendChild(c);
     }
+  } else if(_dcfcDraw && _dcfcDraw.another && _dcfcDraw.tapPreview){
+    /* another trench: the ring is where its first click will land */
+    var ring=document.createElementNS(NS,'circle');
+    ring.setAttribute('cx',_dcfcDraw.tapPreview.x); ring.setAttribute('cy',_dcfcDraw.tapPreview.y);
+    ring.setAttribute('r','13'); ring.setAttribute('fill','none'); ring.setAttribute('stroke',legColor(_dcfcDraw.leg));
+    ring.setAttribute('stroke-width','2.5'); ring.setAttribute('opacity','.9'); g.appendChild(ring);
   }
   svg.insertBefore(g, svg.firstChild);
 }
@@ -67156,17 +67175,62 @@ function _dcfcConduitAlongRun(el, run, snap, condType, label){
 
 function _dcfcDrawClick(p){
   if(!_dcfcDraw){ _dcfcDraw={ pts:[], preview:null, leg:_dcfcLegOf(_dcfcCurKind()) }; }
+  /* Another trench off the one already drawn starts ON that trench (the
+     panel, or anywhere along it), never beside it. */
+  if(_dcfcDraw.another && !_dcfcDraw.pts.length){
+    var tap=_dcfcTapOn(DCFC._activeRun, p);
+    if(!tap){ _evBanner('\u26a0 Draw the first trench before adding another.'); return; }
+    _dcfcDraw.tap=tap; _dcfcDraw.tapPreview=null;
+    _dcfcDraw.pts.push({ x:tap.x, y:tap.y });
+    _dcfcRenderTrenches(); _dcfcGuideRender();
+    return;
+  }
   _dcfcDraw.pts.push({x:p.x,y:p.y});
   _dcfcRenderTrenches(); _dcfcGuideRender();
 }
 function _dcfcDrawMove(p){
-  if(!_dcfcDraw||!_dcfcDraw.pts.length) return;
+  if(!_dcfcDraw) return;
+  if(_dcfcDraw.another && !_dcfcDraw.pts.length){
+    /* show where the first click will land */
+    _dcfcDraw.tapPreview=_dcfcTapOn(DCFC._activeRun, p); _dcfcRenderTrenches(); return;
+  }
+  if(!_dcfcDraw.pts.length) return;
   _dcfcDraw.preview={x:p.x,y:p.y}; _dcfcRenderTrenches();
 }
 function _dcfcDrawUndoPt(){
-  if(_dcfcDraw&&_dcfcDraw.pts.length){ _dcfcDraw.pts.pop(); _dcfcRenderTrenches(); _dcfcGuideRender(); }
+  if(_dcfcDraw&&_dcfcDraw.pts.length){
+    _dcfcDraw.pts.pop();
+    if(!_dcfcDraw.pts.length) _dcfcDraw.tap=null;     /* the tap went with its point */
+    _dcfcRenderTrenches(); _dcfcGuideRender();
+  }
 }
 window._dcfcDrawUndoPt=_dcfcDrawUndoPt;
+
+/* ── ANOTHER TRENCH OFF THE ONE DRAWN ────────────────────────────────
+   A panel feeding stalls both ways along a wall, or a second row behind
+   the first, needs a trench that leaves the first one and BENDS before its
+   first stall. The spur a charger click makes (_dcfcSnapOrExtend) is a
+   straight line to that click, so this draws the run point by point
+   instead: the first click lands on the trench already drawn (the panel,
+   or anywhere along it), Enter files it as a spur of the run it tapped,
+   and the chargers' run stays the root — so a charger then lands on
+   whichever trench is nearest, every leg walks its trench back to the
+   panel, and the totals dig each trench once, the parent as far as the tap
+   ("trench two different directions without overlapping" — Menachem,
+   2026-09-28, a Level 2 job). Esc drops the draft and goes back to the
+   chargers with nothing written. */
+function _dcfcDrawAnother(){
+  if(!DCFC.active || DCFC.phase!=='placeon' || !DCFC._activeRun) return;
+  DCFC.phase='drawtrench';
+  _dcfcDraw={ pts:[], preview:null, leg:_dcfcLegOf(_dcfcCurKind()), another:true, tap:null, tapPreview:null };
+  _dcfcRenderTrenches(); _dcfcGuideRender(); _dcfcPrompt();
+}
+function _dcfcDrawBack(){
+  if(!_dcfcDraw || !_dcfcDraw.another) return;
+  _dcfcDraw=null; DCFC.phase='placeon';
+  _dcfcRenderTrenches(); _dcfcGuideRender(); _dcfcPrompt();
+}
+window._dcfcDrawAnother=_dcfcDrawAnother; window._dcfcDrawBack=_dcfcDrawBack;
 /* This block is wrapped, so DCFC, the run being drawn and the trench helpers
    are invisible to any later block: typeof DCFC === 'undefined' from the
    core's undo guard and from the reconnect module. Read-only accessors and
@@ -67182,6 +67246,19 @@ function _dcfcFinishRun(){
   if(!_dcfcDraw || _dcfcDraw.pts.length<2){ _evBanner('\u26a0 Click at least two points, then press Enter to finish the trench run.'); return; }
   var run={ id:uid(), pts:_dcfcDraw.pts.slice(), in:(DCFC._surface||'soil'), leg:_dcfcDraw.leg, build:DCFC._buildId||null };
   if(!S._trenches) S._trenches=[];
+  if(_dcfcDraw.another && _dcfcDraw.tap && _dcfcDraw.tap.run){
+    /* Another trench (_dcfcDrawAnother): a spur of the run it tapped. The
+       chargers' run stays the root and the chain is untouched. */
+    var tap=_dcfcDraw.tap;
+    run.spurOf=tap.run.id; run.spurSeg=tap.seg; run.spurTapFt=tap.tapFt;
+    S._trenches.push(run);
+    _dcfcDraw=null; DCFC.phase='placeon';
+    try{ if(typeof _geoStampAll==='function') _geoStampAll(); }catch(e){}
+    _dcfcRenderTrenches(); _dcfcGuideRender(); _dcfcPrompt();
+    if(typeof pushHist==='function') pushHist();
+    _evBanner('\u2713 Trench added \u2014 click on either trench to drop the chargers.');
+    return;
+  }
   S._trenches.push(run);
   DCFC._activeRun=run;
   DCFC._lastEnd={ x:run.pts[run.pts.length-1].x, y:run.pts[run.pts.length-1].y }; // chain next run from here
@@ -67195,7 +67272,7 @@ window._dcfcFinishRun=_dcfcFinishRun;
 
 function _dcfcToggleSurface2(){
   DCFC._surface = (DCFC._surface==='concrete')?'soil':'concrete';
-  if(DCFC._activeRun) DCFC._activeRun.in=DCFC._surface;
+  if(DCFC._activeRun && !(_dcfcDraw && _dcfcDraw.another)) DCFC._activeRun.in=DCFC._surface;
   _dcfcRenderTrenches(); _dcfcGuideRender();
 }
 window._dcfcToggleSurface2=_dcfcToggleSurface2;
@@ -67272,9 +67349,13 @@ placeDcfcAt=function(p){
       if(typeof _reRenderEl==='function') _reRenderEl(el.id);
       DCFC.stepIx++;
       DCFC.phase='drawtrench'; DCFC._activeRun=null;
-      // Chain: start the next run from where the last one ended (continuous trench).
-      if(DCFC._lastEnd){ _dcfcDraw={ pts:[{x:DCFC._lastEnd.x, y:DCFC._lastEnd.y}], preview:null, leg:_dcfcLegOf(_dcfcCurKind()) }; }
-      else { _dcfcDraw=null; }
+      /* Chain: the next run leaves the node just placed. It used to leave
+         the END of the run the node was placed on — the same point when
+         the node sits at the end, the usual click, but a panel snapped
+         mid-run started the branch trench, and every charger's conduit,
+         at the run's far end instead of at the panel. */
+      DCFC._lastEnd={ x:snap.x, y:snap.y };
+      _dcfcDraw={ pts:[{x:snap.x, y:snap.y}], preview:null, leg:_dcfcLegOf(_dcfcCurKind()) };
       _dcfcRenderTrenches(); _dcfcGuideRender(); _dcfcPrompt();
       if(typeof updateSummaryPanel==='function') updateSummaryPanel();
       return;
@@ -67340,9 +67421,12 @@ document.addEventListener('keydown', function(e){
   if(DCFC.phase==='drawtrench'){
     if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); _dcfcFinishRun(); return; }
     if(e.key==='Backspace'){ e.preventDefault(); e.stopPropagation(); _dcfcDrawUndoPt(); return; }
+    /* Esc while drawing ANOTHER trench backs out of that draft only */
+    if(e.key==='Escape' && _dcfcDraw && _dcfcDraw.another){ e.preventDefault(); e.stopPropagation(); _dcfcDrawBack(); return; }
   }
-  if(DCFC.phase==='placeon' && _dcfcCurKind()==='charger' && DCFC.chargerEls.length>0){
-    if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); _dcfcFinish(); return; }
+  if(DCFC.phase==='placeon' && _dcfcCurKind()==='charger'){
+    if((e.key==='t'||e.key==='T') && !e.ctrlKey && !e.metaKey && !e.altKey){ e.preventDefault(); e.stopPropagation(); _dcfcDrawAnother(); return; }
+    if(e.key==='Enter' && DCFC.chargerEls.length>0){ e.preventDefault(); e.stopPropagation(); _dcfcFinish(); return; }
   }
 }, true);
 
@@ -67398,13 +67482,17 @@ _dcfcGuideRender=function(){
     hint='Click the map to drop the <strong style="color:var(--amber)">Utility Service (POI)</strong>. Then you\u2019ll draw the first trench.';
   } else if(phase==='drawtrench'){
     var np=_dcfcDraw?_dcfcDraw.pts.length:0;
-    hint='<strong style="color:'+legCol+'">Draw the '+legName+' trench:</strong> click points across the map to route it ('+np+' pt'+(np===1?'':'s')+'), then press <strong>Enter</strong> to finish. <strong>Backspace</strong> removes the last point.';
+    var _another=!!(_dcfcDraw && _dcfcDraw.another);
+    hint=_another
+      ? '<strong style="color:'+legCol+'">Draw another '+legName+' trench:</strong> your first click lands <strong>on the trench already drawn</strong> \u2014 at the panel, or anywhere along it \u2014 then click points to route it ('+np+' pt'+(np===1?'':'s')+') and press <strong>Enter</strong>. <strong>Backspace</strong> removes the last point; <strong>Esc</strong> goes back to the chargers.'
+      : '<strong style="color:'+legCol+'">Draw the '+legName+' trench:</strong> click points across the map to route it ('+np+' pt'+(np===1?'':'s')+'), then press <strong>Enter</strong> to finish. <strong>Backspace</strong> removes the last point.';
     actions='<button onclick="_dcfcFinishRun()" style="width:100%;padding:9px;background:'+legCol+';color:var(--ink);font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">\u2713 Finish Run (Enter)</button>'
       +'<button onclick="_dcfcDrawUndoPt()" style="width:100%;padding:6px;background:var(--hover);border:1px solid var(--border);color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:6px">\u232b Undo Point (Backspace)</button>'
       +'<button onclick="_dcfcToggleSurface2()" style="width:100%;padding:6px;background:var(--hover);border:1px solid var(--border);color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Surface: '+((DCFC._surface==='concrete')?'sawcut concrete':'in-ground')+'</button>';
+    if(_another) actions+='<button onclick="_dcfcDrawBack()" style="width:100%;padding:6px;background:var(--hover);border:1px solid var(--border);color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px">\u2190 Back to chargers (Esc)</button>';
   } else if(phase==='placeon'){
     if(kind==='charger'){
-      hint='Click <strong>anywhere on the '+legName+' trench</strong> to drop a charger \u2014 it snaps to the line. Click <strong>past its end</strong> and the trench extends to that stall; click <strong>off it</strong> and a spur runs there from the nearest point. <strong style="color:#00FFFF">'+(DCFC.chargers-placedCh)+'</strong> left. Press <strong>Enter</strong> to finish.';
+      hint='Click <strong>anywhere on the '+legName+' trench</strong> to drop a charger \u2014 it snaps to the line. Click <strong>past its end</strong> and the trench extends to that stall; click <strong>off it</strong> and a spur runs there from the nearest point. Going the other way, or around something? <strong>Draw another trench (T)</strong> from the panel or anywhere on the run. <strong style="color:#00FFFF">'+(DCFC.chargers-placedCh)+'</strong> left. Press <strong>Enter</strong> to finish.';
     } else {
       hint='Click <strong>anywhere on the '+legName+' trench</strong> to place the <strong style="color:'+legCol+'">'+(nodeLabels[kind]||kind)+'</strong>. It snaps to the line; the '+legName.toLowerCase()+' conduit routes through the trench.';
     }
@@ -67412,6 +67500,9 @@ _dcfcGuideRender=function(){
       +'<button onclick="_dcfcFlipLast()" title="Flip last part (F)" style="flex:1;padding:7px;background:var(--hover);border:1px solid var(--border);color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">\u21c4 Flip (F)</button>'
       +'<button onclick="_dcfcRotateLast()" title="Rotate last part (R)" style="flex:1;padding:7px;background:var(--hover);border:1px solid var(--border);color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">\u21bb Rotate (R)</button>'
       +'</div>';
+    if(kind==='charger'){
+      actions+='<button onclick="_dcfcDrawAnother()" title="Draw another trench off this one, point by point (T)" style="width:100%;padding:7px;background:var(--hover);border:1px solid '+legCol+';color:'+legCol+';border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:6px">+ Draw another trench (T)</button>';
+    }
     if(kind==='charger' && placedCh>0){
       actions+='<button onclick="_dcfcFinish()" style="width:100%;padding:9px;background:#22C55E;color:var(--ink);font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">\u2713 Finish Build (Enter)</button>';
     }
@@ -67439,9 +67530,11 @@ window._dcfcGuideRender=_dcfcGuideRender;
 
 _dcfcPrompt=function(){
   if(DCFC.phase==='poi'){ _evBanner('\u2b1c Click the map to place the '+(DCFC.level2?_l2Svc().node:'Utility Service (POI)')+'.'); }
-  else if(DCFC.phase==='drawtrench'){ var k=_dcfcCurKind(); var nm=(k==='xfmr'?'MAIN':k==='panel'?'FEEDER':'BRANCH'); _evBanner('\u270f\ufe0f Draw the '+nm+' trench: click points to route it, then Enter. Backspace undoes a point.'); }
+  else if(DCFC.phase==='drawtrench'){ var k=_dcfcCurKind(); var nm=(k==='xfmr'?'MAIN':k==='panel'?'FEEDER':'BRANCH');
+    if(_dcfcDraw && _dcfcDraw.another) _evBanner('\u270f\ufe0f Draw another '+nm+' trench: the first click lands on the trench you drew, then points to route it. Enter finishes, Esc goes back.');
+    else _evBanner('\u270f\ufe0f Draw the '+nm+' trench: click points to route it, then Enter. Backspace undoes a point.'); }
   else if(DCFC.phase==='placeon'){ var k2=_dcfcCurKind();
-    if(k2==='charger'){ _evBanner('\u2b1c Click on the branch trench to drop each charger ('+DCFC.chargersLeft+' left) \u2014 click past its end to extend it. Enter finishes.'); }
+    if(k2==='charger'){ _evBanner('\u2b1c Click on the branch trench to drop each charger ('+DCFC.chargersLeft+' left) \u2014 click past its end to extend it, T draws another trench. Enter finishes.'); }
     else { var n=DCFC_NODES[k2]; _evBanner('\u2b1c Click on the trench to place '+(n?n.label:k2)+' \u2014 snaps to the line. F=flip, R=rotate.'); }
   }
 };
@@ -67453,8 +67546,11 @@ _dcfcFinish=function(){
   DCFC.active=false; _dcfcGuideHide();
   if(typeof renderLegend==='function') renderLegend();
   if(typeof pushHist==='function') pushHist();
-  var totalKW=DCFC.model?DCFC.model.kw*DCFC.chargers:0;
-  _evBanner('\u2713 EV site built: '+DCFC.chargers+' \u00d7 '+(DCFC.model?DCFC.model.label:'DCFC')+' ('+totalKW+' kW) \u2014 user-trenched. Drag any part.');
+  /* A Level 2 job has no DCFC model: name its own unit, or it read
+     '4 x DCFC (0 kW)' on a 4-EVSE Level 2 site. */
+  var _mm=DCFC.level2 ? ((typeof _l2Model==='function' && _l2Model())||null) : DCFC.model;
+  var totalKW=_mm?(+_mm.kw||0)*DCFC.chargers:0;
+  _evBanner('\u2713 EV site built: '+DCFC.chargers+' \u00d7 '+(_mm?_mm.label:(DCFC.level2?'Level 2':'DCFC'))+' ('+totalKW+' kW) \u2014 user-trenched. Drag any part.');
   if(typeof updateSummaryPanel==='function') updateSummaryPanel();
   if(typeof updateRightPanel==='function') updateRightPanel();
 };

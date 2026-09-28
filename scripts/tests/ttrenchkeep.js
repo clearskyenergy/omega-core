@@ -63,7 +63,17 @@ global._dcfcDraw = null;
 (0, eval)(grabFn('_polyLen'));
 (0, eval)(grabFn('_dcfcPathBack'));
 (0, eval)(grabFn('_dcfcReanchorRun'));
+(0, eval)(grabFn('_dcfcFamily'));
+(0, eval)(grabFn('_dcfcTapOn'));
 (0, eval)(grabFn('_dcfcSnapOrExtend'));
+(0, eval)(grabFn('_dcfcDrawClick'));
+(0, eval)(grabFn('_dcfcDrawMove'));
+(0, eval)(grabFn('_dcfcDrawUndoPt'));
+(0, eval)(grabFn('_dcfcDrawAnother'));
+(0, eval)(grabFn('_dcfcDrawBack'));
+(0, eval)(grabFn('_dcfcToggleSurface2'));
+(0, eval)(grabFn('_dcfcCurKind'));
+(0, eval)(grabFn('_dcfcLegOf'));
 (0, eval)(grabFn('trenchTotals'));
 (0, eval)('var _dcfcStartPlacing; ' + grabAssign('_dcfcStartPlacing'));
 (0, eval)('var _dcfcCancel; ' + grabAssign('_dcfcCancel'));
@@ -171,6 +181,87 @@ console.log('\nmoving a charger leaves its trench where it was drawn');
   global.getCenter = () => ({ x: 7, y: 7 });
   updateAttached('e2');
   chk('a run with no drawn trench still just follows its endpoint', plain.pts.length === 2 && plain.pts[0].x === 7);
+}
+
+console.log('\nthe next run leaves the node just placed');
+{
+  global.DCFC_NODES = { xfmr: { label: 'Transformer' }, panel: { label: 'Switchgear' } };
+  global._dcfcNodeLabel = k => k;
+  global._l2Fp = () => null;
+  global._legCond = () => 'EV-FEEDER';
+  global._legName = () => 'Feeder';
+  global._dcfcConduitAlongRun = () => null;
+  global._reRenderEl = () => {};
+  global.updateSummaryPanel = () => {};
+  global.omegaHistBatch = fn => fn();
+  const els = [];
+  global._evAdd = (kind, x, y, label) => { const el = { id: 'n' + els.length, kind, x, y, label }; els.push(el); return el; };
+  (0, eval)('var placeDcfcAt; ' + grabAssign('placeDcfcAt'));
+  const feeder = { id: 'f', pts: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 80 }] };
+  S._trenches = [feeder]; S.pxPerFt = 6; S.conduits = [];
+  Object.assign(DCFC, { active: true, phase: 'placeon', level2: false, model: null, seq: ['service', 'xfmr', 'panel'], stepIx: 1,
+                        placed: {}, chargerEls: [], chargers: 2, chargersLeft: 2, _activeRun: feeder,
+                        _lastEnd: { x: 100, y: 80 }, _surface: 'soil', _buildId: 'b3' });
+  global._dcfcDraw = null;
+  placeDcfcAt({ x: 50, y: 4 });                        /* the panel, snapped mid-run */
+  chk('the panel snapped onto the run', els.length === 1 && near(els[0].x, 50) && near(els[0].y, 0), JSON.stringify(els));
+  chk('the next run starts at the panel, not the run\'s far end',
+      DCFC._lastEnd.x === 50 && DCFC._lastEnd.y === 0 && _dcfcDraw && _dcfcDraw.pts.length === 1
+      && _dcfcDraw.pts[0].x === 50 && _dcfcDraw.pts[0].y === 0, JSON.stringify(_dcfcDraw));
+  chk('the build moved on to the branch', DCFC.phase === 'drawtrench' && DCFC.stepIx === 2 && _dcfcCurKind() === 'charger');
+}
+
+console.log('\nanother trench off the one drawn (a Level 2 panel feeding both ways)');
+{
+  const root = { id: 'root', pts: [{ x: 0, y: 0 }, { x: 100, y: 0 }] };
+  S._trenches = [root]; S.pxPerFt = 6; S.conduits = [];
+  Object.assign(DCFC, { active: true, phase: 'placeon', seq: ['service', 'xfmr', 'panel'], stepIx: 2, _activeRun: root,
+                        _lastEnd: { x: 100, y: 0 }, _surface: 'soil', _buildId: 'b4', chargerEls: [] });
+  global._dcfcDraw = null;
+  calls.prompt = 0;
+  _dcfcDrawAnother();
+  chk('T opens a draw for another trench', DCFC.phase === 'drawtrench' && _dcfcDraw && _dcfcDraw.another === true && _dcfcDraw.pts.length === 0 && calls.prompt === 1);
+  _dcfcDrawMove({ x: -6, y: -9 });
+  chk('the ring shows where the first click will land', _dcfcDraw.tapPreview && near(_dcfcDraw.tapPreview.x, 0) && near(_dcfcDraw.tapPreview.y, 0));
+  _dcfcDrawClick({ x: -6, y: -9 });
+  chk('the first click lands on the trench (the panel end), not beside it',
+      _dcfcDraw.pts.length === 1 && near(_dcfcDraw.pts[0].x, 0) && near(_dcfcDraw.pts[0].y, 0)
+      && _dcfcDraw.tap && _dcfcDraw.tap.run === root && _dcfcDraw.tap.tapFt === 0, JSON.stringify(_dcfcDraw.pts));
+  _dcfcDrawClick({ x: -40, y: -30 }); _dcfcDrawClick({ x: -90, y: -30 });
+  _dcfcDrawUndoPt(); _dcfcDrawClick({ x: -95, y: -30 });
+  chk('points route it and Backspace takes the last one back', _dcfcDraw.pts.length === 3 && _dcfcDraw.pts[2].x === -95);
+  _dcfcToggleSurface2();
+  chk('the surface toggle during the draft leaves the first trench alone', DCFC._surface === 'concrete' && root.in === undefined);
+  _dcfcToggleSurface2();
+  _dcfcFinishRun();
+  const extra = S._trenches[1];
+  chk('Enter files it as a spur of the run it tapped',
+      S._trenches.length === 2 && extra && extra.spurOf === 'root' && extra.spurSeg === 1 && extra.spurTapFt === 0
+      && extra.leg === 'branch' && extra.build === 'b4' && extra.pts.length === 3 && extra.in === 'soil', JSON.stringify(extra));
+  chk('the chargers\' run stays the root and the build is back on the chargers',
+      DCFC._activeRun === root && DCFC.phase === 'placeon' && _dcfcDraw === null && DCFC._lastEnd.x === 100);
+  const west = _dcfcSnapOrExtend(root, { x: -60, y: -27 }, DCFC);
+  chk('a charger clicked by the new trench lands on it',
+      west && west.run === extra && !west.spur && !west.extended && near(west.x, -60) && near(west.y, -30), JSON.stringify(west));
+  const back = _dcfcPathBack(extra, west.seg).map(p => p.x + ',' + p.y).join(' ');
+  chk('its conduit walks the new trench back to the panel', back === '-40,-30 0,0 0,0', back);
+  const east = _dcfcSnapOrExtend(root, { x: 60, y: 4 }, DCFC);
+  chk('a charger on the first trench still lands there', east && east.run === root && !east.spur && near(east.x, 60) && near(east.y, 0));
+  const far = _dcfcSnapOrExtend(root, { x: -160, y: -30 }, DCFC);
+  chk('a click past the new trench\'s end extends it, and the chain stays',
+      far && far.extended && far.run === extra && extra.pts.length === 4 && DCFC._lastEnd.x === 100);
+  S.conduits = [
+    { id: 'w1', route: 'trench', evRun: extra.id, ftLen: 30, evRunFt: 26 },
+    { id: 'e1', route: 'trench', evRun: 'root', ftLen: 10, evRunFt: 10 },
+  ];
+  const tt = trenchTotals();
+  chk('nothing is dug twice: each trench once, the parent only to the tap', near(tt.ft, 36) && tt.corridors === 0, JSON.stringify(tt));
+  /* Esc during a draft */
+  _dcfcDrawAnother(); _dcfcDrawClick({ x: 50, y: 3 }); _dcfcDrawClick({ x: 50, y: 70 });
+  _dcfcDrawBack();
+  chk('Esc drops the draft and goes back to the chargers, nothing written', DCFC.phase === 'placeon' && _dcfcDraw === null && S._trenches.length === 2);
+  DCFC._activeRun = null; _dcfcDrawAnother();
+  chk('with no trench yet there is nothing to draw another off', DCFC.phase === 'placeon' && _dcfcDraw === null);
 }
 
 console.log(all ? '\nALL PASS' : '\nFAILURES');
