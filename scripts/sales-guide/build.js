@@ -143,7 +143,7 @@ var notSold = 'Not sold: ' + M.notSold().filter(function (n) { return !/enterpri
 
 var tokens = {
   LOCKUP_WHITE: dataUri('site-assets/clearsky-omega-white.png'), LOCKUP_NAVY: dataUri('assets/clearsky-omega-dark.png'), CLEARSKY_LOGO: dataUri('site-assets/clearsky-logo-light.png'),
-  LITE_PRICE: money(book.modules.lite.priceCents), MODULE_COUNT: String(catalog.length), TRIAL_DAYS: String(Math.min(book.policy.trialDays, 14)),
+  LITE_PRICE: money(book.modules.lite.priceCents), MODULE_COUNT: String(catalog.length),
   OFFERINGS_URL: HOST + '/offerings', START_URL: HOST + '/start', SUPPORT_EMAIL: SUPPORT, BOOK_VERSION: book.version,
   BUILT_ON: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
   LADDER: ladder, MODULE_ROWS_EDITOR: menuRows(['floor', 'addon', 'standard', 'premium']), MODULE_ROWS_PIECE: menuRows(['deliverable', 'platform']), LOGIC_BUNDLE: money(book.logicBundle.priceCents), LOGIC_ALACARTE: money(logicAlacarte), LOGIC_PARTS: logicPartsText,
