@@ -7,7 +7,9 @@ code (not a run of the app) for the DividendVPP conversation. It records how
 the editor values a battery today and proposes five integration points,
 D1–D5. The partner-facing chart is `docs/design/value-stack-funnel.html`,
 published privately as a claude.ai artifact
-(https://claude.ai/artifact/YNLSbK9EarAQv6UjrXRsDR). Keep the two in step.
+(https://claude.ai/artifact/YNLSbK9EarAQv6UjrXRsDR), and printed as
+`docs/design/value-stack-funnel.pdf` (three 11 × 17 in landscape sheets, from
+the page's own print rules). Keep all three in step.
 The chart deliberately leaves out the defects listed below.
 
 DividendVPP is Molecule Systems' VPP product; AERA is Molecule's device
