@@ -110,58 +110,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 .mkt-chip.on .cnt{background:#E1F0EF;color:var(--cs-blue)}
 
 /* ── Category section ── */
-/* ── THE PACKAGE STORE (packaged tenants) ── module cards on the shelves,
-   the subscribe control inside each; the tool cards below point at them. */
-#mkt-store{max-width:1180px;margin:26px auto 0;padding:0 28px}
-#mkt-store[hidden]{display:none}
-.mkt-plan{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;background:#fff;border:1px solid var(--cs-border);border-radius:12px;font-size:13px;color:var(--cs-sub)}
-.mkt-plan b{color:var(--cs-navy)}.mkt-plan .mkt-chip{font-size:12px;padding:3px 9px;border-radius:999px;background:#E2F4F8;color:#2A8CA3;font-weight:600}
-.mkt-plan .mkt-note{margin-left:auto;font-size:12px}
-.mkt-shelf{padding-top:26px}
-.mkt-shelf .mkt-cat-head{margin-bottom:14px}
-.mkt-mod .mkt-cover{height:78px}
-.mkt-mod .mkt-mod-letter{font:700 26px 'DM Sans',sans-serif;color:#fff;opacity:.9}
-.mkt-mod .mkt-card-cat b{color:var(--cs-navy)}
-.mkt-mod .mkt-blurb{margin:8px 0 0;font-size:12.5px;color:var(--cs-sub);line-height:1.45}
-.mkt-mod ul{margin:8px 0 0;padding-left:16px;color:var(--cs-text);font-size:13px;line-height:1.55}
-.mkt-mod .mkt-mod-tools{margin-top:8px;font-size:12px;color:var(--cs-sub);line-height:1.5}
-.mkt-mod .mkt-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-.mkt-mod .mkt-tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#F1FAFC;border:1px solid #DCECF1;color:var(--cs-sub)}
-.mkt-mod .mkt-tag.beta{background:#FFF6E5;border-color:#F0E0B8;color:#8A6D1F}
-.mkt-mod .mkt-actions{margin-top:auto;padding-top:12px}
-.mkt-mod .opm-act{width:100%}.mkt-mod .opm-act .opm-primary{width:100%;padding:10px 12px;border-radius:9px;font:600 13px 'DM Sans',sans-serif}
-.mkt-mod .opm-act button{font-family:'DM Sans',sans-serif;border-radius:9px}
-.mkt-mod[data-selected]{outline:2px solid var(--cs-accent);outline-offset:2px}
-.mkt-mod.owned .mkt-cover{opacity:.85}
-.mkt-store-note{font-size:12.5px;color:var(--cs-sub);margin:14px 0 0;line-height:1.5}
-/* ── the store as the whole page (the workspace is home): the shell's
-   chrome (body.ows-worn), a compact head instead of the gradient hero,
-   the plans first, and no tool catalogue — every tool is on All tools ── */
-body.ows-worn .mkt-banner{background:#fff;border:1px solid #E4E8EC;border-radius:14px;padding:18px 20px;box-shadow:none}
-body.ows-worn .mkt-banner::before,body.ows-worn .mkt-banner::after{display:none}
-body.ows-worn .mkt-banner-inner{text-align:left;max-width:none}
-body.ows-worn .mkt-banner h1{font:600 20px Poppins,'DM Sans',sans-serif;color:#14171A;letter-spacing:0;line-height:1.2}
-body.ows-worn .mkt-banner p{color:#556B82;margin:6px 0 0;max-width:none;font-size:13px;line-height:1.5}
-body.ows-worn .mkt-banner p a{color:#1E4A8C;font-weight:600;text-decoration:none}
-body.ows-worn .mkt-search-wrap{max-width:440px;margin:12px 0 0}
-body.ows-worn #mkt-store{max-width:none;margin:0;padding:0}
-body.ows-worn .mkt-tabbar,body.ows-worn #market-grid,body.ows-worn .footer{display:none}
-body.ows-worn #main-inner{max-width:none;padding:0}
-body.ows-worn .mkt-shelf:first-child{padding-top:0}
-.mkt-shelf-plans .mkt-cat-sub{margin:16px 0 8px;font:600 13px 'DM Sans',sans-serif;color:#556B82}
-.mkt-plans{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
-.mkt-planc{position:relative;background:#fff;border:1px solid #E4E8EC;border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
-.mkt-planc.on{border-color:#2A8CA3;box-shadow:inset 0 0 0 1px #2A8CA3}
-.mkt-planc b{font:600 15px 'DM Sans',sans-serif;color:#14171A;padding-right:70px}.mkt-planc .pr{font:500 18px 'DM Mono',ui-monospace,monospace;color:#14171A}
-.mkt-planc small{color:#556B82;font-size:12px;line-height:1.45}
-.mkt-planc .mkt-pill{position:absolute;top:12px;right:12px}
-.mkt-planc .mkt-contact{margin-top:auto;align-self:flex-start;flex:0 0 auto}
-.mkt-starters{display:flex;flex-wrap:wrap;gap:8px}
-.mkt-starter{font-size:12px;padding:6px 10px;border-radius:10px;background:#fff;border:1px solid #E4E8EC;color:#556B82;line-height:1.4}
-.mkt-starter b{color:#14171A;display:block;font-size:12.5px}
-.mkt-mod .mkt-actions{flex-wrap:wrap}.mkt-mod .mkt-state{flex-basis:100%;font-size:12px;color:#556B82;margin:0 0 4px}.mkt-mod .mkt-act.ask{flex:1}
-.mkt-mod .mkt-act.ask{display:block;text-align:center;text-decoration:none}
-@media (max-width:600px){.mkt-plans{grid-template-columns:1fr}}
 .mkt-section{padding-top:34px}
 .mkt-cat-head{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700;color:var(--cs-navy);letter-spacing:-.2px;margin:0 0 18px}
 .mkt-cat-head .cnt{color:var(--cs-sub);font-weight:600;font-size:14px}
@@ -199,6 +147,87 @@ body.ows-worn .mkt-shelf:first-child{padding-top:0}
 .mkt-pill.soon{color:#8A6D1F;background:rgba(251,246,230,.92);border-color:#E6D9AE}
 .mkt-empty{padding:60px 24px;text-align:center;color:var(--cs-sub);font-size:14px}
 .mkt-loading{padding:60px 24px;text-align:center;color:var(--cs-sub)}
+/* ── A LOCKED TOOL NAMES ITS MODULE ── the card stays in the catalogue (a
+   tenant cannot ask for what it cannot see), dashed and greyed, and its one
+   action is the module that carries it: the workspace's Modules page, or on
+   the classic home the one menu, in place. The name and the link are the
+   server's catalogue; nothing on the card is priced or granted here. */
+.mkt-card.locked{border-style:dashed;background:rgba(255,255,255,.8)}
+.mkt-card.locked:hover{transform:none;box-shadow:0 6px 18px rgba(8,56,79,.07)}
+.mkt-card.locked .mkt-cover>svg{opacity:.85}
+.mkt-card.locked .mkt-card-name{color:#3A4654}
+.mkt-pill.lock{display:inline-flex;align-items:center;gap:5px;color:#1E4A8C;background:rgba(238,243,251,.95);border-color:#C8D6EC;text-transform:none;letter-spacing:0;font-size:10.5px;font-weight:700}
+.mkt-cover .mkt-pill svg{width:11px;height:11px;flex:none;filter:none;z-index:auto}
+.mkt-card-meta.mkt-in{justify-content:flex-start;gap:7px;font-size:12px;color:#1E4A8C;line-height:1.35}
+.mkt-card-meta.mkt-in svg{width:13px;height:13px;flex:none}
+.mkt-card-meta.mkt-in b{color:#1E4A8C;font-weight:700}
+.mkt-act.mod{background:#EEF3FB;border-color:#D3DFF1;color:#1E4A8C}
+.mkt-act.mod:hover{background:#E3EBF8;border-color:#2B5FA8}
+.mkt-act.pin{flex:0 0 auto;background:#fff;border-color:var(--cs-border);color:var(--cs-sub)}
+.mkt-act.pin:hover{border-color:var(--cs-blue);color:var(--cs-blue)}
+.mkt-act.pin.on:hover{border-color:var(--cs-red);color:#B71C1C}
+/* ── IN THE WORKSPACE'S CHROME (body.ows-worn: the workspace is home) ──
+   OmegaWorkspaceShell.wear() puts the rail, the switcher topbar and the
+   phone tab bar around this page's #main. The catalogue is the page: a
+   compact head instead of the gradient hero, the category bar sticking
+   under the shell's 56px topbar (54px on a phone), the cards on the
+   workspace's own paper and lines. */
+body.ows-worn .mkt-banner{background:#fff;border:1px solid #E4E8EC;border-radius:14px;padding:18px 20px;box-shadow:none}
+body.ows-worn .mkt-banner::before,body.ows-worn .mkt-banner::after{display:none}
+body.ows-worn .mkt-banner-inner{text-align:left;max-width:none}
+body.ows-worn .mkt-banner h1{font:600 20px Poppins,'DM Sans',sans-serif;color:#14171A;letter-spacing:0;line-height:1.2}
+body.ows-worn .mkt-banner p{color:#556B82;margin:6px 0 0;max-width:none;font-size:13px;line-height:1.5}
+body.ows-worn .mkt-banner p a{color:#1E4A8C;font-weight:600;text-decoration:none;white-space:nowrap}
+body.ows-worn .mkt-search-wrap{max-width:440px;margin:12px 0 0}
+body.ows-worn #mkt-search{padding:11px 48px 11px 44px;font-size:14px;border:1px solid #E4E8EC;box-shadow:none;background:#F7F9FB}
+body.ows-worn #mkt-search:focus{border-color:#2B5FA8;background:#fff}
+body.ows-worn .mkt-search-ico{left:16px}
+body.ows-worn .mkt-search-go{width:32px;height:32px;right:6px}
+body.ows-worn .footer{display:none}
+body.ows-worn #main-inner{max-width:none;padding:0}
+body.ows-worn .mkt-tabbar{top:56px;z-index:20;background:rgba(255,255,255,.94);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border:1px solid #E4E8EC;border-radius:12px}
+body.ows-worn .mkt-tabbar-inner{max-width:none;padding:0 28px 0 6px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
+body.ows-worn .mkt-tabbar-inner::-webkit-scrollbar{display:none}
+body.ows-worn .mkt-chip{padding:13px 10px 11px;font-size:12.5px}
+body.ows-worn .mkt-chip .cnt{margin-left:5px;padding:1px 6px;font-size:10.5px}
+body.ows-worn .mkt-chip.on::after{left:8px;right:8px}
+body.ows-worn .mkt-section{padding-top:0}
+body.ows-worn .mkt-section+.mkt-section{padding-top:28px}
+body.ows-worn .mkt-cat-head{font:600 15px Poppins,'DM Sans',sans-serif;color:#14171A;letter-spacing:0;margin:0 0 12px}
+body.ows-worn .mkt-cat-head .cnt{font:400 12px 'DM Mono',ui-monospace,monospace;color:#86A0A9}
+body.ows-worn .mkt-cat-head .rule{background:#E4E8EC}
+body.ows-worn .mkt-grid{grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:14px}
+body.ows-worn .mkt-card{border-color:#E4E8EC;box-shadow:0 1px 2px rgba(20,23,26,.04)}
+body.ows-worn .mkt-card:hover{border-color:#CFD7E0;box-shadow:0 1px 2px rgba(20,23,26,.05),0 10px 26px rgba(20,23,26,.08)}
+body.ows-worn .mkt-card.locked{background:rgba(255,255,255,.72)}
+body.ows-worn .mkt-card.locked:hover{box-shadow:none;border-color:#CFD7E0}
+body.ows-worn .mkt-cover{height:84px;justify-content:flex-start;padding-left:20px}
+body.ows-worn .mkt-cover>svg{width:38px;height:38px}
+body.ows-worn .mkt-card-cat{color:#2A8CA3}
+body.ows-worn .mkt-card-name{font-size:15.5px}
+@media (max-width:900px){body.ows-worn .mkt-tabbar{top:54px}body.ows-worn .mkt-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}}
+/* a phone: one card is one row, the cover a square at its left, so the
+   whole catalogue reads in a few screens (as All tools does) */
+@media (max-width:600px){
+  body.ows-worn .mkt-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+  body.ows-worn .mkt-card{flex-direction:row;position:relative}
+  body.ows-worn .mkt-cover{position:static;width:58px;height:auto;flex:none}
+  body.ows-worn .mkt-cover::after{display:none}
+  body.ows-worn .mkt-cover>svg{width:24px;height:24px}
+  body.ows-worn .mkt-cover-badge{top:10px;right:10px}
+  body.ows-worn .mkt-card-body{padding:11px 12px 12px;min-width:0}
+  body.ows-worn .mkt-card-cat{padding-right:112px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  body.ows-worn .mkt-card-desc{margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  body.ows-worn .mkt-card-meta{display:none}
+  body.ows-worn .mkt-card-meta.mkt-in{display:flex;margin-top:8px;padding-top:0;border-top:0}
+  body.ows-worn .mkt-card.locked .mkt-cover-badge{display:none}
+  body.ows-worn .mkt-actions{margin-top:10px}
+  body.ows-worn .mkt-act{padding:9px 10px}
+  body.ows-worn .mkt-card-meta.mkt-in+.mkt-actions{margin-top:8px}
+  body.ows-worn .mkt-act.mod{padding:7px 10px;font-size:12.5px}
+  body.ows-worn .mkt-banner{padding:14px 16px}
+  body.ows-worn .mkt-search-wrap{max-width:none}
+}
 .spin{display:inline-block;width:22px;height:22px;border:3px solid var(--cs-border);border-top-color:var(--cs-sky);border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:8px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--cs-navy);color:#fff;padding:12px 22px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 10px 30px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:all .25s;z-index:80}
@@ -520,6 +549,8 @@ body{overflow-x:hidden}
     z-index:100000 !important;overflow-y:auto;-webkit-overflow-scrolling:touch;
   }
   body > .tb-nav.open{transform:translateX(0)}
+  /* closed, the drawer sits just off the right edge: its shadow must not show there */
+  body > .tb-nav:not(.open){box-shadow:none}
   body > .tb-scrim{z-index:99999}
   /* Opaque fill painted inside the drawer, behind its own content.
      Immune to whatever was making the element background composite oddly. */
@@ -870,21 +901,6 @@ window._omegaReady = function(){
       </div>
     </div>
 
-    <!-- THE STORE. Shown to every workspace whose home is the Omega
-         Workspace, and to every PACKAGED workspace (billing.packaged): the
-         plans and the modules, what this workspace holds, what each adds
-         and what it costs. A packaged workspace's prices are
-         /api/package-catalog's and it opts in through /api/plan-change
-         (pay first, prorated; a $0 addition inside a paid tier switches on
-         at once); any other workspace reads the public price list and asks
-         ClearSky. A classic-home tenant keeps the catalogue below. Nothing
-         here grants access: the tools appear when the server says so. -->
-    <section id="mkt-store" class="opm-host" hidden aria-label="Plans and modules">
-      <div class="mkt-plan" id="mkt-plan"></div>
-      <div id="mkt-shelves"></div>
-      <p class="mkt-store-note" id="mkt-store-note"></p>
-    </section>
-
     <!-- Sticky category tab bar -->
     <div class="mkt-tabbar">
       <div class="mkt-tabbar-inner" id="mkt-filters"></div>
@@ -921,23 +937,32 @@ window._omegaReady = function(){
 <script>if (window.OmegaWorkspaceShell) OmegaWorkspaceShell.theme();</script>
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-tools.js?v=9"></script>
-<!-- the ONE rule for whether a workspace holds a module (the Modules page reads it too) -->
+<!-- Site Map's capability ladder, as a LIBRARY: a legacy plan holds a module
+     only when its tools open AND the Site Map commands it carries are open
+     on the tier the editor runs: the catalogue's legacyGates (read off the
+     real editor), each asked of OmegaWorkspaceHub.editorCtx, the one mirror
+     of OmegaCaps.resolve, exactly as the Modules page, Site Map's plan chip
+     and the admin Package tab judge it. Nothing applies it to this page:
+     the runtime hands OmegaCaps a package only where Site Map's #ribbon is. -->
 <script src="/omega-caps.js"></script>
+<!-- The ONE rule for whether a workspace holds a module (the Modules page
+     reads it too), and the ONE menu. On the classic home, which has no
+     Modules page, a locked tool opens that menu on its module in place; a
+     module a legacy plan can buy by card asks for the billing profile first
+     (omega-billing-profile.js, the menu's own form). -->
 <script src="/omega-workspace-hub.js"></script>
-<!-- The shared subscribe control (Phase 5): server catalog, server quotes,
-     posts to /api/plan-change. The package store below is built on it. -->
 <script src="/omega-package-menu.js"></script>
 <script src="/omega-billing-profile.js"></script>
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    ClearSky-OMEGA — standalone App Marketplace (ES5, no build step).
-   Once the workspace is home it is THE STORE (see #mkt-store): the plans
-   and the modules on their shelves with the server's prices, in the
-   workspace's own chrome; a PACKAGED workspace opts in through
-   /api/plan-change, any other asks ClearSky. The tool catalogue below is
-   the classic home's (a tenant on shell: 'classic'): every tool is on the
-   workspace's All tools.
+   The tool catalogue, for every workspace: every tool, its category, a
+   search, and pinning. Once the workspace is home it wears the workspace's
+   own chrome. Modules and plans are NOT sold here: they are bought on the
+   workspace's Modules page (/workspace#modules), and a locked tool names
+   the module that carries it and links there (see THE CATALOGUE AND THE
+   MODULES below).
    Same catalog (OMEGATools), same workspace resolution, same Firebase as the
    portal. This page renders ONLY the marketplace — nothing else can appear.
    ══════════════════════════════════════════════════════════════════════ */
@@ -1053,13 +1078,13 @@ function onAuth(user, tries){
     return;
   }
   /* THE BOUND WORKSPACE WINS. resolveWorkspace() is a stand-in built from
-     the email (no plan, no modules); omega-tenant.js's entitlements are the
-     workspace. When they landed first, this used to overwrite them with the
-     stand-in, and the store (switched on once, from the entitlements) drew
-     every module against a plan with no tier: no Add to plan anywhere,
-     modules marked held that are not (check:workspace's click sweep caught
-     it, one visit in six). */
-  if (BOUND && BOUND.orgId === ws.orgId) ws = BOUND;
+     the email (no plan, no modules); the entitlements are the workspace.
+     When they landed first (omega-tenant.js merges them onto config's
+     tenant on a pinned host), keep that object: replacing it with the
+     stand-in judged every card by no plan at all (every tool Open, no
+     module named). OmegaTenant.workspace is null until it has merged. */
+  var merged = BOUND || (window.OmegaTenant && OmegaTenant.workspace);
+  if (merged && merged.orgId === ws.orgId) ws = merged;
   currentUser = user; WORKSPACE = ws; currentOrg = ws.orgId;
   window.OMEGA_WORKSPACE = ws; window.CS_BRAND = ws.clientName;
   el('auth-screen').style.display='none'; el('app').style.display='flex';
@@ -1074,7 +1099,7 @@ function applyChrome(ws, user){
   // Show displayName/email immediately, then upgrade to the saved profile name.
   setText('tb-name', (user.displayName||user.email||''));
   var av = el('tb-avatar'); if(av) av.textContent = (user.email||'?').charAt(0).toUpperCase();
-  if (!STORE.on) setText('mkt-sub', 'Browse the ClearSky-OMEGA catalog and add tools to your '+(ws.clientName||'')+' dashboard.');
+  paintHead(ws);
   _resolveDisplayName(ws, user);
   _upgradeDerivedName(ws);
   paintChrome(ws);
@@ -1101,7 +1126,7 @@ function _upgradeDerivedName(ws){
         ws.clientName = d.name;
         var chip = el('tb-client-chip');
         if (chip) chip.innerHTML = '<span class="tb-client-txt">'+esc(d.name)+'</span>';
-        if (!STORE.on) setText('mkt-sub','Browse the ClearSky-OMEGA catalog and add tools to your '+d.name+' dashboard.');
+        paintHead(ws);
         paintChrome(ws);
       }
     })['catch'](function(){ /* the derived name is already on screen */ });
@@ -1120,7 +1145,7 @@ function _resolveDisplayName(ws, user){
       if (!nm) nm = user.displayName || user.email || '';
       setText('tb-name', nm);
       var av = el('tb-avatar'); if (av && nm) av.textContent = nm.charAt(0).toUpperCase();
-      STORE.who = nm; paintChrome(ws);
+      CAT.who = nm; paintChrome(ws);
     })['catch'](function(){ /* keep the email fallback */ });
   } catch(e){ /* ignore */ }
 }
@@ -1131,7 +1156,7 @@ function loadCatalog(ws){
   (function wait(){
     if (typeof OMEGATools==='undefined'){ if(++tries<60){ setTimeout(wait,100); } else { setHTML('market-grid','<div class="mkt-empty">Catalog unavailable. Check omega-tools.js.</div>'); } return; }
     var afterHydrate = function(){
-      loadPins(ws.orgId, function(keys){ _PINNED = keys||[]; paintFilters(); paintMarket(); });
+      loadPins(ws.orgId, function(keys){ _PINNED = keys||[]; CAT.pins = true; paintFilters(); paintMarket(); });
     };
     if (typeof OMEGATools.hydrate==='function'){ OMEGATools.hydrate(db, afterHydrate); }
     else { afterHydrate(); }
@@ -1154,11 +1179,12 @@ function qualifying(){
     var t = all[i];
     /* A PACKAGED workspace browses the whole catalogue: isVisible() reads
        the package's allowlist as visibility and would hide every tool the
-       plan does not carry — the tools the store exists to sell. Only a tool
-       restricted to other orgs, the staff queue and what is not sold at all
-       are left out; whether a tool opens stays isUnlocked()'s answer. */
-    if (STORE.on){
-      if (t.key === 'intake_admin' || STORE.notSold[t.key]) continue;
+       plan does not carry — the locked ones, each naming the module that
+       carries it. Only a tool restricted to other orgs, the staff queue and
+       what is not sold at all are left out; whether a tool opens stays
+       isUnlocked()'s answer. */
+    if (CAT.packaged){
+      if (t.key === 'intake_admin' || CAT.notSold[t.key]) continue;
       if (t.orgs && t.orgs.length && !(WORKSPACE && WORKSPACE.orgId && t.orgs.indexOf(WORKSPACE.orgId) >= 0)) continue;
       out.push(t); continue;
     }
@@ -1222,9 +1248,11 @@ function setCat(c){ MKT_CAT=c; paintFilters(); paintMarket(); }
 
 /* ── Render the marketplace (Autodesk-style product cards) ── */
 function paintMarket(){
-  if (STORE.on) filterStore();
   var grid=el('market-grid'); if(!grid) return;
   var tools=qualifying();
+  /* what a plan billed outside the engine holds, once per paint: a locked
+     card names a module only when holding it would open the tool (lockOf) */
+  CAT.states = CAT.packaged ? null : moduleStates();
   var q=''; var sb=el('mkt-search'); if(sb&&sb.value) q=sb.value.toLowerCase();
   function match(t){ if(!q) return true;
     return (t.name&&t.name.toLowerCase().indexOf(q)>=0) || (t.desc&&t.desc.toLowerCase().indexOf(q)>=0) || (catLabel(t.category).toLowerCase().indexOf(q)>=0); }
@@ -1254,46 +1282,78 @@ function coverGradient(cat){
   };
   return g[cat] || 'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)';
 }
+/* A tool card. A LOCKED one names the module that carries it (CAT.byTool,
+   the server's catalogue): "In <module>", then its one action, See module,
+   which is that module's card on the workspace's Modules page, or on the
+   classic home the one menu in place (moduleAction) — unless the lock is
+   not a module's (lockOf), when it says why instead. A live tool opens,
+   and pins to the dashboard (classic) or to All tools (the workspace). */
+var LOCK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+/* WHY A TOOL IS LOCKED, said once. A module is named only when holding it
+   would open the tool: never while the workspace waits on approval (every
+   tool is locked until ClearSky approves it), never Omega Design (lite,
+   always held) and never a module the workspace already holds (on its
+   plan, or bought by card as an add-on), where the lock is the
+   workspace's product (an allowlist such as Site Map + Grid Atlas) and a
+   link to a module the Modules page calls Live would explain nothing.
+   Answers { mod } or { why: 'pending' | 'product' | 'notsold' | 'plan' }. */
+function moduleHeld(m){
+  var ws = WORKSPACE || {}, pa = ws.packageAccess;
+  if (!m || m.key === 'lite') return true;
+  if (CAT.packaged) return (((pa && pa.modules) || ws.modules || []).indexOf(m.key) >= 0);
+  return !!(CAT.states && CAT.states[m.key] === 'held');
+}
+function lockOf(t){
+  var ws = WORKSPACE || {}, m = CAT.byTool[t.key] || null;
+  if (ws.pendingApproval) return { why:'pending' };
+  if (m && !moduleHeld(m)) return { mod:m };
+  if (m || (!CAT.packaged && Array.isArray(ws.toolAccess))) return { why:'product' };
+  return { why: CAT.packaged ? 'notsold' : 'plan' };
+}
 function card(t){
-  var req=isRequired(t), pinned=isPinned(t.key);
+  var ws=WORKSPACE||{}, req=isRequired(t), pinned=isPinned(t.key), home=workspaceHome(WORKSPACE);
   var open;
   if (t.soon) open='onclick="pmSoon(&quot;'+esc(t.name)+'&quot;)"';
-  else if (t.action) open='href="/"';   // action tools live on the portal
+  /* an action tool (Site Map, the Sandbox) starts a new project, and the
+     home owns that flow: on the workspace its own launch (#launch-<key>,
+     the same gate, then the new-project dialog); on the classic home the
+     dashboard at "/", where it always ran */
+  else if (t.action) open = home ? 'href="/workspace#launch-'+esc(encodeURIComponent(t.key))+'"' : 'href="/"';
   else open='href="'+esc(hrefFor(t))+'"';
 
   var locked = !t.soon && !isUnlockedHere(t);
-  var mod = locked && STORE.on ? STORE.byTool[t.key] : null;
+  var lock = locked ? lockOf(t) : {}, mod = lock.mod || null, why = lock.why || '';
   var pill='';
   if (t.soon) pill='<span class="mkt-pill soon">Soon</span>';
-  else if (locked && STORE.on) pill='<span class="mkt-pill soon">'+esc(mod ? mod.name : 'Not sold')+'</span>';
-  else if (locked) pill='<span class="mkt-pill soon">'+esc(planLabel(t))+' plan</span>';
+  else if (mod) pill='<span class="mkt-pill lock">'+LOCK_ICON+esc(mod.name)+'</span>';
+  else if (locked) pill='<span class="mkt-pill soon">'+esc(why === 'pending' ? 'Awaiting approval' : why === 'product' ? 'Not in your workspace' : why === 'notsold' ? 'Not sold' : planLabel(t)+' plan')+'</span>';
   else if (req) pill='<span class="mkt-pill inc">Included</span>';
-  else if (pinned) pill='<span class="mkt-pill added">Added</span>';
+  else if (pinned) pill='<span class="mkt-pill added">'+(home ? 'Pinned' : 'Added')+'</span>';
   else if (t.badge==='invest') pill='<span class="mkt-pill invest">Investors</span>';
   else if (t.badge==='new') pill='<span class="mkt-pill new">New</span>';
 
   var action;
-  if (t.soon){ action='<div class="mkt-actions"><div class="mkt-act disabled">Coming soon</div></div>'; }
-  else if (locked && STORE.on){
-    action = mod
-      ? '<div class="mkt-actions"><button class="mkt-act primary" onclick="storeFocus(&quot;'+esc(mod.key)+'&quot;)">Add '+esc(mod.name)+' to plan</button></div>'
-      : '<div class="mkt-actions"><div class="mkt-act disabled" title="Not part of any package">Not sold separately</div></div>';
-  }
-  else if (locked){ action='<div class="mkt-actions"><div class="mkt-act disabled" title="Ask ClearSky to add this to your plan">Included with '+esc(planLabel(t))+'</div></div>'; }
-  else if (req || pinned){
-    var openBtn='<a class="mkt-act primary" '+open+'>Open</a>';
-    var rm = req ? '' : '<button class="mkt-act ghost" onclick="toggle(&quot;'+esc(t.key)+'&quot;)">Remove</button>';
-    action='<div class="mkt-actions">'+openBtn+rm+'</div>';
-  } else {
-    action='<div class="mkt-actions"><button class="mkt-act primary" onclick="toggle(&quot;'+esc(t.key)+'&quot;)">+ Add to dashboard</button></div>';
+  if (t.soon){ action='<div class="mkt-act disabled">Coming soon</div>'; }
+  else if (mod){ action=moduleAction(mod); }
+  else if (locked){ action = why === 'pending' ? '<div class="mkt-act disabled">Opens when ClearSky approves '+esc(ws.clientName || 'your workspace')+'</div>'
+      : why === 'product' ? '<div class="mkt-act disabled">Not part of this workspace\'s product</div>'
+      : why === 'notsold' ? '<div class="mkt-act disabled" title="Not part of any module">Not sold separately</div>'
+      : '<div class="mkt-act disabled">Included with '+esc(planLabel(t))+'</div>'; }
+  else {
+    var pinWord = pinned ? (home ? 'Unpin' : 'Remove') : (home ? 'Pin' : '+ Add');
+    var pinTip = pinned ? (home ? 'Take it off All tools · Pinned' : 'Take it off your dashboard') : (home ? 'Pin it to All tools' : 'Add it to your dashboard');
+    action='<a class="mkt-act primary" '+open+'>Open</a>'
+      + (req ? '' : '<button class="mkt-act pin'+(pinned?' on':'')+'" title="'+esc(pinTip)+'" onclick="toggle(&quot;'+esc(t.key)+'&quot;)">'+esc(pinWord)+'</button>');
   }
 
   var stroke = t.soon ? 'rgba(255,255,255,.55)' : '#ffffff';
-  var cover = t.soon ? 'linear-gradient(135deg,#5B6672 0%,#8A93A0 100%)' : coverGradient(t.category);
+  var cover = t.soon ? 'linear-gradient(135deg,#5B6672 0%,#8A93A0 100%)' : locked ? 'linear-gradient(135deg,#4A5D78 0%,#93A6BD 100%)' : coverGradient(t.category);
   var ver = t.version || '1.0.0';
-  var status = req ? 'Included' : (pinned ? 'On dashboard' : (locked && STORE.on ? (mod ? 'In ' + mod.name : 'Not sold') : 'Available'));
+  var status = t.soon ? 'Soon' : locked ? (why === 'pending' ? 'Awaiting approval' : why === 'notsold' ? 'Not sold' : 'Locked') : req ? 'Included' : pinned ? (home ? 'Pinned' : 'On dashboard') : 'Available';
+  var meta = mod ? '<div class="mkt-card-meta mkt-in">'+LOCK_ICON+'<span>In <b>'+esc(mod.name)+'</b></span></div>'
+    : '<div class="mkt-card-meta"><span>Version: <b>'+esc(ver)+'</b></span><span>'+esc(status)+'</span></div>';
 
-  return '<div class="mkt-card">'
+  return '<div class="mkt-card'+(locked?' locked':'')+'" data-tool="'+esc(t.key)+'"'+(mod?' data-module="'+esc(mod.key)+'"':'')+'>'
     + '<div class="mkt-cover" style="background:'+cover+'">'
     +   (pill?'<span class="mkt-cover-badge">'+pill+'</span>':'')
     +   '<svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="'+t.icon+'"/></svg>'
@@ -1302,36 +1362,34 @@ function card(t){
     +   '<div class="mkt-card-cat">'+esc(catLabel(t.category))+'</div>'
     +   '<div class="mkt-card-name">'+esc(t.name)+'</div>'
     +   '<div class="mkt-card-desc">'+esc(t.desc||'')+'</div>'
-    +   '<div class="mkt-card-meta"><span>Version: <b>'+esc(ver)+'</b></span><span>'+esc(status)+'</span></div>'
-    +   action
+    +   meta
+    +   '<div class="mkt-actions">'+action+'</div>'
     + '</div></div>';
 }
 
 function pmSoon(name){ toast('<b>'+esc(name)+'</b> is coming online soon.'); }
 
 /* ═════════════════════════════════════════════════════════════════
-   THE STORE — plans and modules, for every workspace whose home is the
-   Omega Workspace, and for every PACKAGED workspace wherever its home is.
-   (Tommy, 2026-09-27: "the marketplace is different than the modules and
-   packages they can buy to upgrade their systems" — the tool catalogue is
-   All tools on the workspace; this page is what is for sale.)
+   THE CATALOGUE AND THE MODULES (Tommy, 2026-09-27: "the marketplace
+   should be the old tools that we had ... but the modules are paid
+   services tied directly to the editor"). This page is every OMEGA tool,
+   for every workspace. Modules and plans are bought on the workspace's
+   Modules page (/workspace#modules, #module-<key>, #plans), where Opt in
+   and Opt out live; nothing here subscribes, opts in or out, or prices.
 
-   STORE.rows are the modules with the server's prices: /api/package-catalog
-   for a packaged workspace (its projection says what it holds, the shared
-   OmegaPackageMenu.subscribeControl opts in through /api/plan-change), and
-   the PUBLIC price list /api/offerings for a workspace that is not
-   packaged — whose modules read "On your plan" when every tool they carry
-   is open on the legacy tier (or it was added to the plan), "Partly" when
-   some are, and otherwise carry Add to plan: the server's price, a
-   QuickBooks invoice paid by card on QuickBooks' page, on the moment the
-   payment clears (OmegaPackageMenu.addOnControl, api/_lib/addons.js). The
-   Plans shelf, the starter packages, the logins, the annual and trial
-   notes are the price list's for both. Every price and every change is the
-   server's; nothing here grants access. ES5.
+   A locked tool names the module that carries it. Which module is the
+   server's catalogue: the package projection's for a PACKAGED workspace,
+   the PUBLIC price list (GET /api/offerings, modules[].tools) for any
+   other. On the workspace home the card links to that module's card on
+   the Modules page; on the classic home, which has no Modules page, it
+   opens the one menu (omega-package-menu.js) on that module in place.
+   Old store links (/marketplace.html#<module>, #plans) are forwarded to
+   the Modules page. Showing a module is never access: the tools open when
+   the server says so. ES5.
    ═════════════════════════════════════════════════════════════════ */
-var STORE = { on:false, packaged:false, rows:[], owned:[], notSold:{}, byTool:{}, control:{ canManage:false, pending:{}, loaded:false }, summary:null, offer:null, focused:false, who:'' };
-var SHELF_ORDER = ['floor','addon','standard','premium','deliverable','platform'];
-var SHELF_COVER = { floor:'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)', addon:'linear-gradient(135deg,#053A45 0%,#2A8CA3 100%)', standard:'linear-gradient(135deg,#0B2F52 0%,#1B4F8A 100%)', premium:'linear-gradient(135deg,#243B53 0%,#3E6E8E 100%)', deliverable:'linear-gradient(135deg,#16202B 0%,#00807C 100%)', platform:'linear-gradient(135deg,#17293A 0%,#0C1824 100%)' };
+/* states: what a legacy plan holds, per paint (moduleStates); pins: the
+   pin store has answered, so the cards are painted with the pins */
+var CAT = { packaged:false, notSold:{}, modules:[], byKey:{}, byTool:{}, asked:false, opened:'', who:'', states:null, pins:false };
 function workspaceHome(ws){ return !!(window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace && OmegaWorkspaceShell.wantsWorkspace(ws)); }
 function planNameOf(ws){
   ws = ws || WORKSPACE || {}; var pa = ws.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {};
@@ -1349,36 +1407,25 @@ function wearChrome(ws){
 }
 function paintChrome(ws){
   var S = window.OmegaWorkspaceShell; if (!S || !document.body.classList.contains('ows-worn')) return;
-  S.paint({ ws: ws || WORKSPACE || {}, user: currentUser || {}, displayName: STORE.who || '', plan: planNameOf(ws) });
+  S.paint({ ws: ws || WORKSPACE || {}, user: currentUser || {}, displayName: CAT.who || '', plan: planNameOf(ws) });
 }
-function storeMode(ws){
-  if (!ws || STORE.on) return;
-  var pa = ws.packageAccess, packaged = !!(ws.packaged && pa);
-  if (!packaged && !workspaceHome(ws)) return;
-  if (!WORKSPACE) WORKSPACE = ws;
-  STORE.on = true; STORE.packaged = packaged; STORE.owned = packaged ? (pa.modules || []).slice() : [];
-  if (packaged) (pa.notSold || []).forEach(function(n){ (n.tools||[]).forEach(function(k){ STORE.notSold[k] = n.reason || 'Not sold'; }); });
-  if (packaged) storeIndex(pa.catalog || []);
-  if (window.OmegaPackageMenu && OmegaPackageMenu.styles) OmegaPackageMenu.styles();
-  var name = ws.clientName || ws.orgId || 'your workspace';
-  var h1 = document.querySelector('.mkt-banner h1'); if (h1) h1.textContent = 'Marketplace';
-  var sub = el('mkt-sub'); if (sub) sub.innerHTML = (packaged ? 'The Ladder: build your own experience and pay for what you need to run your business. ' : 'Plans and modules. ') + 'What ' + esc(name) + ' holds, what each adds and what it costs. Every tool, live or locked, is on <a href="/workspace#tools">All tools ›</a>';
-  var sb = el('mkt-search'); if (sb) sb.placeholder = 'Search plans and modules…';
-  document.body.classList.add('mkt-store-on');
-  el('mkt-store').hidden = false;
-  paintStore(); paintMarket();
-  /* the public price list: the plans, the starters, the logins — and, for
-     a workspace that is not packaged, the modules and their prices */
-  fetchOffer().then(function(o){
-    if (!o || !Array.isArray(o.modules) || !o.modules.length) { setText('mkt-store-note', 'The price list is unavailable right now. Try again later.'); if (!packaged) { var e = el('mkt-shelves'); if (e) e.innerHTML = '<div class="mkt-empty">The price list is unavailable right now. Try again later.</div>'; } return; }
-    STORE.offer = o; if (!packaged) storeIndex(o.modules); paintStore();
-  });
-  if (!packaged) return;
-  /* the packaged price list, then (for an owner or admin) the pending changes */
-  OmegaPackageMenu.api('/api/package-catalog').then(function(r){
-    storeIndex(r.modules || []); STORE.control.canManage = !!r.canManage; paintStore(); paintMarket();
-    if (r.canManage) return OmegaPackageMenu.loadControl().then(function(c){ STORE.control = c; STORE.summary = c.summary || null; paintStore(); });
-  })['catch'](function(){ setText('mkt-store-note', 'Current pricing is unavailable right now. What you hold is shown; try again later to add a module.'); });
+/* the head says where the modules are, in the words of the home it is on */
+function paintHead(ws){
+  ws = ws || WORKSPACE || {};
+  var h1 = document.querySelector('.mkt-banner h1'), sub = el('mkt-sub');
+  if (workspaceHome(ws)){
+    if (h1) h1.textContent = 'Marketplace';
+    if (sub) sub.innerHTML = 'Every OMEGA tool in one place. Live ones open; a locked one names the module that carries it. Modules and plans are on <a href="/workspace#modules">Modules ›</a>';
+    return;
+  }
+  if (sub) sub.textContent = 'Browse the ClearSky-OMEGA catalog and add tools to your ' + (ws.clientName||'') + ' dashboard. A locked tool names the module that carries it.';
+}
+/* the module that carries each tool: the first one in catalogue order */
+function moduleOf(key){ return Object.prototype.hasOwnProperty.call(CAT.byKey, key) ? CAT.byKey[key] : null; }
+function indexModules(rows){
+  if (!rows || !rows.length) return;
+  CAT.modules = rows; CAT.byKey = {}; CAT.byTool = {};
+  rows.forEach(function(m){ CAT.byKey[m.key] = m; (m.tools||[]).forEach(function(k){ if (!CAT.byTool[k]) CAT.byTool[k] = m; }); });
 }
 function fetchOffer(){
   return new Promise(function(res){
@@ -1386,203 +1433,140 @@ function fetchOffer(){
     catch(e){ res(null); }
   });
 }
-function storeIndex(rows){
-  if (!rows.length) return;
-  STORE.rows = rows; STORE.byTool = {};
-  rows.forEach(function(m){ (m.tools||[]).forEach(function(k){ if (!STORE.byTool[k]) STORE.byTool[k] = m; }); });
-}
-function storeOwned(key){ return STORE.owned.indexOf(key) >= 0; }
-/* held · pending · part · ask (· open, a packaged module to subscribe to):
-   OmegaWorkspaceHub.moduleState is the rule, shared with the workspace's
-   Modules page; only 'pending' (an invoice waiting) is this page's own */
-function moduleCtx(){
-  var ws = WORKSPACE || {};
-  return { packaged: STORE.packaged, modules: STORE.packaged ? STORE.owned : (ws.modules || []), addons: ws.addons || [], addOns: STORE.packaged ? [] : (ws.addOns || []), tierLevel: ws.tierLevel, canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && isUnlockedHere(t); }, tool: function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; },
-    /* what the editor opens of a legacy module, on the editor's own ladder (the store tells the truth) */
-    canCap: STORE.packaged ? null : OmegaWorkspaceHub.capsFor(ws.billing || (window.OmegaTenant && OmegaTenant.billing), ws.orgId),
-    /* the storefront is on where its own gate opens it (the tenant record's whiteLabel, the add-on) */
-    billing: ws.billing || (window.OmegaTenant && OmegaTenant.billing) || null, whiteLabel: ws.whiteLabel || null,
-    visible: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && OMEGATools.isVisible(t, ws); } };
-}
-function moduleTools(m){ return (m.tools||[]).map(function(k){ return OMEGATools.byKey ? OMEGATools.byKey(k) : null; }).filter(function(t){ return !!t && OMEGATools.isVisible(t, WORKSPACE || {}); }); }
-function moduleState(m){
-  if (STORE.packaged && !storeOwned(m.key) && STORE.control.pending && STORE.control.pending[m.key]) return 'pending';
-  return OmegaWorkspaceHub.moduleState(m, moduleCtx());
-}
-function contactHref(plan){
-  var ws = WORKSPACE || {}, to = (window.OmegaBrand && OmegaBrand.upgradeEmail) ? OmegaBrand.upgradeEmail() : 'dev@clearsky-usa.com', who = ws.clientName || ws.orgId || 'our workspace';
-  return 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(plan + ' pricing for ' + who) + '&body=' + encodeURIComponent('Please contact us about ' + plan + ' pricing for ' + who + '.');
-}
-/* who may add to a plan billed outside the engine: its owner or an
-   administrator, or verified ClearSky staff (plan-change is the gate) */
-function legacyManage(){
-  var ws = WORKSPACE || {}, u = currentUser || {}, d = String(u.email || '').toLowerCase().split('@')[1] || '';
-  return ws.role === 'owner' || ws.role === 'admin' || (d === 'clearsky-usa.com' && u.emailVerified === true);
-}
-/* the add-on purchase waiting for payment that adds this module, if any */
-function addOnWaiting(key){
-  var a = ((window.OmegaTenant && OmegaTenant.billing) || {}).addOns, list = a && Array.isArray(a.pending) ? a.pending : [];
-  for (var i = 0; i < list.length; i++) if ((list[i].add || []).indexOf(key) >= 0) return list[i];
-  return null;
-}
-/* after a purchase, a payment or a cancel: the billing record again, then
-   the shelves. A request's answer (an opt-out, Keep, a withdrawn opt-in)
-   carries its whole map, so the shelves paint from it at once. */
-function legacyChanged(r){
-  var b = window.OmegaTenant && OmegaTenant.billing;
-  if (b && r) ['optIns', 'optOuts'].forEach(function(k){ if (r[k]) b[k] = Object.assign({}, b[k] || {}, r[k]); });
-  if (r && (r.optIns || r.optOuts)) { if (r.note) toast(esc(r.note)); paintStore(); return; }
-  if (r && r.state === 'active') toast('Added. It is on now.');
-  var done = function(){ paintStore(); paintMarket(); };
-  if (window.OmegaTenant && OmegaTenant.refreshBilling) OmegaTenant.refreshBilling().then(done, done); else done();
-}
-function paintStore(){
-  var plan = el('mkt-plan'), shelves = el('mkt-shelves'); if (!plan || !shelves) return;
-  var ws = WORKSPACE || {}, sm = STORE.summary, o = STORE.offer, note;
-  var held = STORE.rows.filter(function(m){ return moduleState(m) === 'held'; });
-  var h = '<span class="mkt-chip">'+esc(planNameOf(ws))+'</span>';
-  if (STORE.rows.length) h += '<span><b>'+held.length+'</b> of '+STORE.rows.length+' modules</span>';
-  if (STORE.packaged){
-    if (sm && sm.monthlyDisplay) h += '<span><b>'+esc(sm.monthlyDisplay)+'</b></span>';
-    if (sm && sm.nextInvoiceOn) h += '<span>next invoice '+esc(sm.nextInvoiceOn)+'</span>';
-    if (sm && sm.pending && sm.pending.length) h += '<span class="mkt-chip" style="background:#FFF6E5;color:#8A6D1F">'+sm.pending.length+' waiting for payment</span>';
-    note = STORE.control.canManage ? 'Monthly prices. Nothing new is charged for what your plan already covers.' : 'Your workspace owner or an administrator climbs the Ladder. Ask them to add what you need.';
-  } else {
-    var tools = qualifying(), openN = tools.filter(function(t){ return !t.soon && isUnlockedHere(t); }).length, total = tools.filter(function(t){ return !t.soon; }).length;
-    h += '<span><b>'+openN+'</b> of '+total+' tools open</span>';
-    note = 'Monthly prices from the price list. Add a module to your plan and pay by card on QuickBooks\u2019 secure page (or with the card saved there): it switches on the moment the payment clears. An opt-out is a request ClearSky confirms under your agreement. Your plan and its billing stay as they are; moving up a plan stays with ClearSky.';
+/* Runs whenever the entitlements land (and again after a package change):
+   which catalogue this workspace browses, which module carries each tool,
+   the head, the cards, and an old store link sent on. */
+function catalogueMode(ws){
+  ws = ws || window.OMEGA_WORKSPACE; if (!ws) return;
+  if (!WORKSPACE) WORKSPACE = ws;
+  var pa = ws.packageAccess;
+  CAT.packaged = !!(ws.packaged && pa); CAT.notSold = {};
+  if (CAT.packaged) (pa.notSold || []).forEach(function(n){ (n.tools||[]).forEach(function(k){ CAT.notSold[k] = n.reason || 'Not sold'; }); });
+  /* the package's own catalogue when its projection carries one, else the price list */
+  if (CAT.packaged && pa.catalog && pa.catalog.length) indexModules(pa.catalog);
+  else if (!CAT.asked){
+    CAT.asked = true;
+    fetchOffer().then(function(o){ if (o && Array.isArray(o.modules)) indexModules(o.modules); paintMarket(); forward(); });
   }
-  h += '<span class="mkt-note">'+note+'</span>';
-  plan.innerHTML = h;
-  shelves.innerHTML = '';
-  if (o) shelves.appendChild(plansShelf(o));
-  if (!STORE.rows.length){ var e = document.createElement('div'); e.className = 'mkt-empty'; e.textContent = STORE.packaged ? 'Your package is loading…' : 'The price list is loading…'; shelves.appendChild(e); return; }
-  SHELF_ORDER.forEach(function(sh){
-    var rows = STORE.rows.filter(function(m){ return m.shelf === sh; }); if (!rows.length) return;
-    var sec = document.createElement('div'); sec.className = 'mkt-shelf';
-    sec.innerHTML = '<div class="mkt-cat-head">'+esc(rows[0].shelfLabel||sh)+'<span class="cnt">('+rows.filter(function(m){ return moduleState(m) === 'held'; }).length+' of '+rows.length+')</span><span class="rule"></span></div><div class="mkt-grid"></div>';
-    var grid = sec.querySelector('.mkt-grid');
-    rows.forEach(function(m){ grid.appendChild(moduleCard(m)); });
-    shelves.appendChild(sec);
-  });
-  filterStore(); focusHash();
-  /* a later paint (the prices, the pending changes) rebuilds the cards: keep the mark */
-  if (STORE.focused){ var fc = document.querySelector('[data-module-card="'+STORE.focused+'"]'); if (fc) fc.setAttribute('data-selected', '1'); }
+  paintHead(ws); paintFilters(); paintMarket(); forward();
 }
-/* the price list's plans and starter packages, first on the page */
-function plansShelf(o){
-  var sec = document.createElement('div'); sec.className = 'mkt-shelf mkt-shelf-plans';
-  var byKey = {}; (o.modules||[]).forEach(function(m){ byKey[m.key] = m; });
-  var cur = STORE.packaged ? String(((window.OmegaTenant && OmegaTenant.billing) || {}).plan || '').toLowerCase() : '';
-  var plans = (o.lite ? [{ key:'lite', name:o.lite.name || 'Lite', monthlyDisplay:o.lite.monthlyDisplay, capDisplay:(byKey.lite && byKey.lite.features ? byKey.lite.features.join(' · ') : 'The floor every package stands on'), serviceFeeDisplay:o.lite.serviceFeeDisplay }] : []).concat(o.plans || []);
-  /* Enterprise is a contract, listed apart from the plans in the book */
-  /* Enterprise is a contract priced with ClearSky (Tommy, 2026-09-27: "contact for pricing"): the price list says so and names no figure */
-  if (o.enterprise && !plans.some(function(p){ return String(p.key).toLowerCase() === 'enterprise'; })) plans.push({ key:'enterprise', name:o.enterprise.name || 'Enterprise', monthlyDisplay:o.enterprise.priceDisplay || 'Contact for pricing', capDisplay:o.enterprise.summary || 'Every module, on a contract', note:o.enterprise.note || '', contact:true });
-  var cards = '';
-  plans.forEach(function(p){
-    var on = !!cur && cur === String(p.key).toLowerCase();
-    cards += '<div class="mkt-planc'+(on?' on':'')+'" data-plan-card="'+esc(p.key)+'">'+(on?'<span class="mkt-pill inc">Your plan</span>':'')+'<b>'+esc(p.name)+'</b><span class="pr">'+esc(p.monthlyDisplay||'')+'</span><small>'+esc(p.capDisplay||'')+'</small>'
-      + (p.serviceFeeDisplay ? '<small>Service fee: '+esc(p.serviceFeeDisplay)+'</small>' : '')
-      + (p.note ? '<small>'+esc(p.note)+'</small>' : '')
-      + (p.contact ? '<a class="mkt-act ghost mkt-contact" href="'+contactHref(p.name)+'">Contact ClearSky</a>' : '')
-      + '</div>';
-  });
-  var starters = '';
-  if (o.starters) Object.keys(o.starters).forEach(function(k){ starters += '<span class="mkt-starter"><b>'+esc((o.starterLabels||{})[k]||k)+'</b>'+esc(o.starters[k].map(function(x){ return byKey[x] ? byKey[x].name : x; }).join(' · '))+'</span>'; });
-  var notes = [];
-  if (o.logins) notes.push('Extra logins: builders '+o.logins.builderDisplay+', viewers '+o.logins.viewerDisplay+' ('+o.logins.builders+' builders and '+o.logins.viewers+' viewers included).');
-  if (o.annual && o.annual.note) notes.push(o.annual.note);
-  if (o.trial && o.trial.note) notes.push(o.trial.note);
-  sec.innerHTML = '<div class="mkt-cat-head">Plans<span class="cnt">('+plans.length+')</span><span class="rule"></span></div><div class="mkt-plans">'+cards+'</div>'
-    + (starters ? '<div class="mkt-cat-sub">Starter packages, by what you do</div><div class="mkt-starters">'+starters+'</div>' : '')
-    + (notes.length ? '<p class="mkt-store-note">'+esc(notes.join(' '))+'</p>' : '');
-  return sec;
+/* THE ONE ACTION OF A LOCKED CARD. The workspace home: the module's card on
+   the Modules page, where it is opted in to. The classic home: the one menu
+   on that module alone, in place; without the menu, to reload. */
+function moduleAction(m){
+  var tip = ' title="'+esc(m.name)+': what it adds and how to opt in" aria-label="See '+esc(m.name)+'"';
+  if (workspaceHome(WORKSPACE)) return '<a class="mkt-act mod" href="/workspace#module-'+encodeURIComponent(m.key)+'"'+tip+'>See module ›</a>';
+  if (window.OmegaPackageMenu && OmegaPackageMenu.open) return '<button type="button" class="mkt-act mod" onclick="openModule(&quot;'+esc(m.key)+'&quot;)"'+tip+'>See module ›</button>';
+  return '<div class="mkt-act disabled">Reload to see the module</div>';
 }
-function moduleCard(m){
-  var st = moduleState(m), owned = st === 'held', pending = st === 'pending';
-  var card = document.createElement('div'); card.className = 'mkt-card mkt-mod' + (owned ? ' owned' : ''); card.setAttribute('data-module-card', m.key); card.setAttribute('data-state', st);
-  var tools = moduleTools(m).map(function(t){ return t.name; });
-  var tags = '';
-  if (m.usageDisplay) tags += '<span class="mkt-tag">'+esc(m.usageDisplay)+'</span>';
-  if (m.key === 'lite') tags += '<span class="mkt-tag">Always included</span>';
-  if (m.beta && m.beta.length) tags += '<span class="mkt-tag beta">Beta: '+esc(m.beta.join(', '))+'</span>';
-  if ((m.requires||[]).indexOf('logic-office') >= 0) tags += '<span class="mkt-tag">Needs Office</span>';
-  if (m.coverage) tags += '<span class="mkt-tag">'+esc(m.coverage)+'</span>';
-  if (m.agreement) tags += '<span class="mkt-tag">'+esc(m.agreement)+'</span>';
-  var pill = owned ? '<span class="mkt-pill inc">'+(STORE.packaged ? 'Included' : 'On your plan')+'</span>' : pending ? '<span class="mkt-pill soon">Waiting for payment</span>' : st === 'part' ? '<span class="mkt-pill soon">Partly on your plan</span>' : '';
-  card.innerHTML = '<div class="mkt-cover" style="background:'+(SHELF_COVER[m.shelf]||SHELF_COVER.floor)+'">'+(pill?'<span class="mkt-cover-badge">'+pill+'</span>':'')+'<span class="mkt-mod-letter">'+esc(m.mark||m.name.slice(0,1))+'</span></div>'
-    + '<div class="mkt-card-body"><div class="mkt-card-cat">'+esc(m.shelfLabel||m.shelf||'')+' · <b>'+esc(m.priceDisplay || m.monthlyDisplay || 'Pricing unavailable')+'</b></div>'
-    + '<div class="mkt-card-name">'+esc(m.name)+'</div>'
-    + (m.blurb ? '<p class="mkt-blurb">'+esc(m.blurb)+'</p>' : '')
-    + '<ul>'+(m.features||[]).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')+'</ul>'
-    + (tools.length ? '<div class="mkt-mod-tools">Tools: '+esc(tools.join(' · '))+'</div>' : '')
-    + (tags ? '<div class="mkt-tags">'+tags+'</div>' : '')
-    + '<div class="mkt-actions"></div></div>';
-  var act = card.querySelector('.mkt-actions');
-  /* a plan billed outside the engine: Add to plan (the one control,
-     OmegaPackageMenu.addOnControl: the server's price, QuickBooks' card
-     page, on the moment the payment clears) for what it does not hold, and
-     the recorded opt-out request for what it does (Keep module takes it
-     back). Omega Design is always included: never an Add to plan. */
-  if (!STORE.packaged){
-    if (st === 'part') act.innerHTML = '<div class="mkt-state">'+esc(OmegaWorkspaceHub.moduleNote(m, moduleCtx()))+'.</div>';
-    var lb = (window.OmegaTenant && OmegaTenant.billing) || {}, leaving = !!(lb.optOuts && lb.optOuts[m.key] && lb.optOuts[m.key].status === 'requested');
-    if (!owned && !leaving && m.key !== 'lite') { var addHost = document.createElement('div'); act.appendChild(addHost); OmegaPackageMenu.addOnControl(addHost, m, { canManage: legacyManage(), pending: addOnWaiting(m.key), onChanged: legacyChanged }); }
-    if (owned || st === 'part' || leaving) {
-      var legacyHost = document.createElement('div'); act.appendChild(legacyHost);
-      OmegaPackageMenu.subscribeControl(legacyHost, m, { canManage: legacyManage(), owned: true, onChanged: legacyChanged,
-        legacy: { company: (WORKSPACE || {}).clientName || (WORKSPACE || {}).orgId || 'our workspace', email: OmegaBrand.upgradeEmail(), optOuts: lb.optOuts || {} } });
-    }
-    return card;
+/* what each module is to a plan billed outside the engine (held · part ·
+   ask), by the ONE rule the Modules page, Site Map's plan chip and the
+   admin Package tab read (OmegaWorkspaceHub.moduleState on the ONE legacy
+   ctx, OmegaWorkspaceHub.legacyCtx): its tools open (only the tools this
+   org can see count) AND the Site Map commands it carries are open on the
+   tier the editor runs (the catalogue's legacyGates, read off the real
+   editor, each asked of editorCtx, the one mirror of OmegaCaps.resolve:
+   billed tier capped by capTier, add-on and JV grants, a verified ClearSky
+   address with no record runs 'internal'). A module bought by card as an
+   add-on (billing.addOns.live while the month paid for lasts,
+   api/_lib/addons.js) is held. So Omega Compute is Partly included on
+   Standard here as it is on the Modules page and in Site Map. The page's
+   own rule is only that nothing opens while ClearSky has not approved the
+   workspace. */
+function moduleStates(){
+  var ws = WORKSPACE || {}, H = window.OmegaWorkspaceHub, out = {};
+  var bl = (window.OmegaTenant && OmegaTenant.billing) || null;   // billing/current, or null when there is no record
+  var ctx = H && H.legacyCtx ? H.legacyCtx({ tools: OMEGATools, ws: ws, billing: bl, caps: window.OmegaCaps,
+    who: { email: (currentUser && currentUser.email) || '', emailVerified: !!(currentUser && currentUser.emailVerified === true), orgId: ws.orgId },
+    canOpen: function(k){ var t = OMEGATools.byKey ? OMEGATools.byKey(k) : null; return !!t && !ws.pendingApproval && isUnlockedHere(t); } }) : null;
+  CAT.modules.forEach(function(m){ out[m.key] = ctx && H.moduleState ? H.moduleState(m, ctx) : 'ask'; });
+  return out;
+}
+/* who may change modules: the workspace's owner or an administrator, or
+   verified ClearSky staff (POST /api/plan-change is the gate either way;
+   the menu shows everybody else who changes them). Undefined when the
+   runtime cannot say, and the menu asks the server. */
+function mayChange(){
+  var u = currentUser || {}, d = String(u.email || '').toLowerCase().split('@')[1] || '';
+  if (d === 'clearsky-usa.com' && u.emailVerified === true) return true;
+  return (window.OmegaTenant && OmegaTenant.isAdmin) ? !!OmegaTenant.isAdmin() : undefined;
+}
+/* the classic home: the one menu, on this module alone. A packaged
+   workspace hands over its own package view; any other goes in the menu's
+   legacy mode with the public catalogue, what its plan holds and its
+   billing record (the requests on it, and the add-ons it bought by card:
+   billing.addOns, which the menu reads when it is handed no summary). */
+function openModule(key){
+  var ws = WORKSPACE || {}, M = window.OmegaPackageMenu;
+  if (!M || !M.open || !moduleOf(key)){ toast('The module menu did not load. Reload the page.'); return; }
+  var opts = { single: true, onChanged: moduleChanged }, admin = mayChange();
+  if (typeof admin === 'boolean') opts.admin = admin;
+  if (CAT.packaged) opts.view = ws.packageAccess;
+  else {
+    var states = moduleStates();
+    opts.view = { catalog: CAT.modules, modules: CAT.modules.filter(function(m){ return states[m.key] === 'held'; }).map(function(m){ return m.key; }) };
+    opts.legacy = { company: ws.clientName || ws.orgId || 'our workspace', email: (window.OmegaBrand && OmegaBrand.upgradeEmail) ? OmegaBrand.upgradeEmail() : '',
+      billing: (window.OmegaTenant && OmegaTenant.billing) || {}, states: states };
   }
-  if (!STORE.rows.length || !m.priceDisplay){ act.innerHTML = '<div class="mkt-act disabled">Pricing unavailable</div>'; return card; }
-  var host = document.createElement('div'); act.appendChild(host);
-  OmegaPackageMenu.subscribeControl(host, m, { canManage: STORE.control.canManage, pending: STORE.control.pending, summary: STORE.summary, owned: owned, onChanged: storeChanged });
-  return card;
+  if (M.open(key, opts) === false) toast('The module menu did not load. Reload the page.');
 }
-/* the search box narrows the shelves in place: nothing is rebuilt, so a
-   quote in progress on a card stays where it is */
-function filterStore(){
-  var q = ''; var sb = el('mkt-search'); if (sb && sb.value) q = sb.value.toLowerCase();
-  Array.prototype.forEach.call(document.querySelectorAll('#mkt-shelves .mkt-shelf'), function(sec){
-    var any = false;
-    Array.prototype.forEach.call(sec.querySelectorAll('.mkt-mod, .mkt-planc'), function(c){ var on = !q || c.textContent.toLowerCase().indexOf(q) >= 0; c.style.display = on ? '' : 'none'; if (on) any = true; });
-    sec.style.display = any ? '' : 'none';
+/* after a change in the menu: a packaged workspace asks the server for its
+   package again (the entitlements re-fire and repaint the cards). A legacy
+   request switches nothing on, so the cards stay as they are, but the
+   request itself is the page's plan now: the server answers with the
+   requests as stored and they are merged onto the billing record the menu
+   is handed (as the workspace's billingChanged does), so the next open,
+   and See every module, read Opt-in requested or Opting out with Cancel
+   request instead of offering again what the server would refuse.
+   A module bought by card (an add-on, api/_lib/addons.js: bought, paid,
+   its purchase cancelled, or opted out of at the end of the month paid
+   for) is the billing record's own: it is read again, which re-fires the
+   entitlements, so a tool the server switched on opens here without a
+   reload and the next open reads Waiting for payment or Opting out. */
+function moduleChanged(r){
+  if (CAT.packaged){ if (window.OmegaTenant && OmegaTenant.refreshPackage){ try { OmegaTenant.refreshPackage(); } catch(e){} } return; }
+  if (!r) return;
+  var bl = window.OmegaTenant && OmegaTenant.billing;
+  if (bl && typeof bl === 'object') ['optIns', 'optOuts'].forEach(function(f){
+    if (!r[f] || typeof r[f] !== 'object') return;
+    var to = {}, was = bl[f] || {};
+    Object.keys(was).forEach(function(k){ to[k] = was[k]; });
+    Object.keys(r[f]).forEach(function(k){ to[k] = r[f][k]; });
+    try { bl[f] = to; } catch(e){}
   });
+  if (r.addOnId || r.addOns || Array.isArray(r.live) || r.ending || r.endsOn || r.state === 'active'){
+    if (r.state === 'active') toast('Opted in. It is on now.');
+    var repaint = function(){ paintMarket(); };
+    if (window.OmegaTenant && OmegaTenant.refreshBilling){ try { OmegaTenant.refreshBilling().then(repaint, repaint); } catch(e){ repaint(); } }
+    else repaint();
+  }
 }
-/* after a quote is applied: an addition inside a paid tier is on at once
-   (reload so the server's projection repaints every tile); an invoice is
-   waiting for payment (repaint with the pending state) */
-function storeChanged(r){
-  var fresh = (r && r.state === 'active' && window.OmegaTenant && OmegaTenant.refreshPackage) ? OmegaTenant.refreshPackage() : Promise.resolve(null);
-  fresh.then(function(view){
-    if (view && Array.isArray(view.modules)){ STORE.owned = view.modules.slice(); toast('Added. Your tools are updating…'); paintMarket(); }
-    return OmegaPackageMenu.loadControl();
-  }).then(function(c){ STORE.control = c; STORE.summary = c.summary || STORE.summary; paintStore(); })['catch'](function(){ paintStore(); });
+/* OLD STORE LINKS. /marketplace.html#<module> and #plans were the store's;
+   they live on the Modules page now. The classic home has no Modules page,
+   so there a module link opens the menu on it, once. */
+function forward(){
+  var k = '', ws = WORKSPACE || window.OMEGA_WORKSPACE;
+  try { k = decodeURIComponent((window.location.hash || '').slice(1)); } catch(e){ return; }
+  if (!k || !ws) return;
+  if (workspaceHome(ws)){
+    if (k === 'plans') { window.location.replace('/workspace' + window.location.search + '#plans'); return; }
+    if (moduleOf(k)) window.location.replace('/workspace' + window.location.search + '#module-' + encodeURIComponent(k));
+    return;
+  }
+  var S = window.OmegaWorkspaceShell;
+  if (moduleOf(k) && CAT.opened !== k && S && S.homeOf && S.homeOf(ws) === 'classic'){ CAT.opened = k; openModule(k); }
 }
-function storeFocus(key){
-  var card = document.querySelector('[data-module-card="'+key+'"]'); if (!card) return;
-  var prev = document.querySelector('.mkt-mod[data-selected]'); if (prev) prev.removeAttribute('data-selected');
-  card.setAttribute('data-selected', '1'); card.scrollIntoView({ behavior:'smooth', block:'center' });
-  var btn = card.querySelector('.opm-act button'); if (btn) btn.focus();
-}
-/* /marketplace.html#<module>: a locked tile on the workspace lands on its module */
-function focusHash(){
-  if (STORE.focused) return; var k = (window.location.hash || '').slice(1); if (!k) return;
-  if (document.querySelector('[data-module-card="'+k+'"]')){ STORE.focused = k; setTimeout(function(){ storeFocus(k); }, 60); }
-}
-window.addEventListener('hashchange', function(){ STORE.focused = ''; focusHash(); });
+window.addEventListener('hashchange', function(){ CAT.opened = ''; forward(); });
 if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(function(ws){
   /* the entitlements are the workspace from here on, whichever answer came first */
   if (ws) { BOUND = ws; WORKSPACE = ws; window.OMEGA_WORKSPACE = ws; }
   ws = ws || window.OMEGA_WORKSPACE;
   try { wearChrome(ws); } catch(e){ console.warn('workspace chrome', e); }
-  var wasOn = STORE.on;
-  try { storeMode(ws); } catch(e){ console.warn('package store', e); }
-  if (wasOn) { try { paintStore(); paintMarket(); } catch(e){ console.warn('package store', e); } }
+  try { catalogueMode(ws); } catch(e){ console.warn('marketplace catalogue', e); }
 });
 
-/* ── Add / remove from dashboard (shared pin store) ── */
+/* ── Pin / unpin (the shared pin store: the dashboard's My Applications on
+   the classic home, All tools · Pinned on the workspace) ── */
 function toggle(key){
   if (!currentOrg || !db){ toast('Sign in first.'); return; }
   var op;
@@ -1591,7 +1575,8 @@ function toggle(key){
   } else {
     op = (OMEGATools.pinTool) ? OMEGATools.pinTool(db, firebase, currentOrg, key) : Promise.resolve(_PINNED.concat([key]));
   }
-  op.then(function(keys){ _PINNED = keys||_PINNED; paintMarket(); toast(isPinned(key)?'Added to your dashboard':'Removed from dashboard'); })
+  var home = workspaceHome(WORKSPACE);
+  op.then(function(keys){ _PINNED = keys||_PINNED; paintMarket(); toast(isPinned(key) ? (home ? 'Pinned to All tools' : 'Added to your dashboard') : (home ? 'Unpinned from All tools' : 'Removed from dashboard')); })
     ['catch'](function(){ toast('Could not update. Try again.'); });
 }
 

@@ -56,6 +56,25 @@ function guard(c, rail, reading) {
   if (!c.book.enabled || !current || c.book.qbo.env !== 'sandbox') fail('An enabled proposed sandbox price book is required');
 }
 function canApply(c) { try { guard(c); return true; } catch (e) { return false; } }
+/* Moving a plan onto a package ANSWERS what it asked for while billed
+   outside the engine (plan-change opt-in / opt-out): an opt-in is activated
+   when the package carries the module and declined when it does not, and an
+   opt-out is done, because the package is the new plan either way. Staff see
+   the answer in the preview's billing patch; the whole map is written so an
+   older answered request is kept as it was. */
+function answered(billing, modules, at) {
+  var out = {}, when = R.iso(at);
+  [['optIns', function (k) { return modules.indexOf(k) >= 0 ? 'activated' : 'declined'; }], ['optOuts', function () { return 'done'; }]].forEach(function (pair) {
+    var map = billing[pair[0]], next = {}, touched = false;
+    if (!map || typeof map !== 'object') return;
+    Object.keys(map).forEach(function (k) {
+      var entry = map[k]; next[k] = entry;
+      if (entry && entry.status === 'requested') { next[k] = Object.assign({}, entry, { status: pair[1](k), resolvedAt: when }); touched = true; }
+    });
+    if (touched) out[pair[0]] = next;
+  });
+  return out;
+}
 function prepare(c, input, now) {
   if (c.profile && c.profile.syncLock && c.profile.syncLock.until > now) fail('Billing profile update is running; refresh shortly');
   var at = input.effectiveAt == null ? Math.floor(now / 60000) * 60000 : input.effectiveAt;
@@ -83,6 +102,7 @@ function prepare(c, input, now) {
       proposedPackage: selected, billingDay: new Date(signup).getUTCDate(), nextInvoiceOn: R.iso(at), subscriptionStartedAt: at,
       accessUntil: at, status: 'active' });
   } else fail('Action must be approve or activate', 400);
+  Object.assign(patch, answered(c.billing, patch.subscription.modules, at));
   /* the rail this workspace bills through, named on the record from the first step */
   var provider = D.providerOf(c.billing);
   patch = Object.assign({}, patch, { billingProvider: provider, paymentProvider: provider });
@@ -400,6 +420,8 @@ async function reconcile(db, orgId, now, deps, options) {
         }
         addOnMove = AO.boughtAfter(billing, snapshot, snapshot.state, state, invoices.docs.map(function (d) { return d.data(); }));
       }
+      /* an add-on paid after the workspace moved onto a package opens nothing (the package decides): a person looks */
+      if (!outside && kindOf(snapshot) === 'addon' && !error && !transient && state === 'paid' && snapshot.state !== 'paid') review = true;
       var update = { state: state, reconcileError: error, reconcileRetries: retries, reconciledAt: now, reviewRequired: review, reconcileNote: error || transient ? note : null };
       if (!error && !transient) { update.paymentLink = receipt.payUrl || null; update.paidCents = receipt.paidCents; }
       /* money landed on a subscription invoice: the tenant hears (the first one opens the workspace), and so does ClearSky */

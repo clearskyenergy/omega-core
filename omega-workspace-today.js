@@ -113,7 +113,7 @@
     var trialEnd = at(input.trialEndsAt);
     if (trialEnd) {
       var left = Math.ceil((trialEnd - now) / DAY);
-      if (left <= 14) push({ key: 'trial', cls: left <= 3 ? 'hot' : 'warn', score: left <= 3 ? 88 : 80, when: 0, t: left > 0 ? 'Your trial ends in ' + plural(left, 'day', 'days') : 'Your trial has ended', s: 'Keep what you use, or pick a smaller plan.', cta: 'See plans', href: '/marketplace.html' });
+      if (left <= 14) push({ key: 'trial', cls: left <= 3 ? 'hot' : 'warn', score: left <= 3 ? 88 : 80, when: 0, t: left > 0 ? 'Your trial ends in ' + plural(left, 'day', 'days') : 'Your trial has ended', s: 'Keep what you use, or pick a smaller plan.', cta: 'See plans', href: '/workspace#plans' });
     }
 
     /* my to-dos */
@@ -171,13 +171,20 @@
     var needs = rows.slice(0, MAX), more = rows.length - needs.length;
 
     /* the numbers */
-    var flight = projects.filter(inFlight).length, fresh = projects.filter(function (p) { var c = at(p.createdAt); return c && now - c <= 7 * DAY; }).length;
-    var online = projects.filter(function (p) { return p.stage === 'online'; }), pipeline = projects.filter(function (p) { return p.stage !== 'online'; }).reduce(function (s, p) { return s + n(p.capex); }, 0), onlineCapex = online.reduce(function (s, p) { return s + n(p.capex); }, 0);
+    /* In flight is the board's own set (every project not yet online), so
+       the number above the board is the count of what the board holds;
+       how many are past candidate is said beside it. Pipeline capex is the
+       capex people entered: a project with none is counted as not priced,
+       never as $0 (fifteen unsized candidates are not a $0 pipeline). */
+    var active = projects.filter(function (p) { return p.stage !== 'online'; }), flight = active.length, developing = projects.filter(inFlight).length;
+    var fresh = projects.filter(function (p) { var c = at(p.createdAt); return c && now - c <= 7 * DAY; }).length;
+    var online = projects.filter(function (p) { return p.stage === 'online'; }), pipeline = active.reduce(function (s, p) { return s + n(p.capex); }, 0), onlineCapex = online.reduce(function (s, p) { return s + n(p.capex); }, 0);
+    var unpriced = active.filter(function (p) { return !(n(p.capex) > 0); }).length;
     var review = overdue + soon + rows.filter(function (r) { return r.key === 'price' || r.key === 'referrals' || /^quotes:/.test(r.key); }).length;
     var kpis = [
-      { key: 'flight', value: String(flight), label: 'Projects in flight', delta: fresh ? '+' + fresh + ' this week' : (projects.length ? projects.length + ' total' : ''), tone: fresh ? 'up' : '' },
+      { key: 'flight', value: String(flight), label: 'Projects in flight', delta: fresh ? '+' + fresh + ' this week' : flight ? (developing ? developing + ' past candidate' : 'all candidates') : (online.length ? plural(online.length, 'online', 'online') : ''), tone: fresh ? 'up' : '' },
       { key: 'review', value: String(review), label: 'Awaiting your review', delta: overdue ? plural(overdue, 'overdue', 'overdue') : '', tone: overdue ? 'warn' : '' },
-      { key: 'capex', value: money(pipeline), label: 'Pipeline capex', delta: online.length ? money(onlineCapex) + ' online' : '', tone: '' }
+      { key: 'capex', value: pipeline > 0 || !flight ? money(pipeline) : '—', label: 'Pipeline capex', delta: unpriced ? plural(unpriced, 'project not priced yet', 'projects not priced yet') : online.length ? money(onlineCapex) + ' online' : '', tone: '' }
     ];
     if (sent.length) kpis.push({ key: 'quotes', value: String(quotedBack), label: 'Quotes back', delta: 'of ' + totalRecipients + ' sent', tone: quotedBack ? 'up' : '' });
     else if (received.length) kpis.push({ key: 'price', value: String(toPrice.length), label: 'Requests to price', delta: (received.length - toPrice.length) + ' quoted', tone: toPrice.length ? 'warn' : '' });

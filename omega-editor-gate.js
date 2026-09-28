@@ -35,9 +35,13 @@
 
    The same trap is here and the same answer applies. A signed-in user whose
    org has no record yet gets in; only an EXPLICIT 'pending', 'suspended' or
-   'cancelled', or an explicit toolOverrides.editor === false, refuses. Get
-   this backwards and the first thing this file does in production is lock out
-   every paying customer.
+   'cancelled', an explicit toolOverrides.editor === false, or a present
+   billing.toolAccess allowlist that leaves the designer out, refuses — and,
+   for a packaged workspace, /api/package-access: a package without the
+   designer, or its 403 for this person (said in the server's words; a check
+   that could not run is never dressed up as one). Get this backwards and
+   the first thing this file does in production is lock out every paying
+   customer.
 
    ── IT IS NOT THE SECURITY BOUNDARY ─────────────────────────────────────
    firestore.rules is. Every project read and write is already scoped by
@@ -139,6 +143,25 @@
       title = 'This workspace is not active';
       body = detail ? esc(detail) : 'Please get in touch and we will sort it out.';
       cta = '';
+    } else if (kind === 'denied') {
+      /* the package check answered, and not for this person: a member the
+         workspace has disabled or given no role, or an email not yet
+         verified. Not a plan to change and not a connection to retry. */
+      title = 'This account cannot open the designer';
+      /* an unverified email is fixed by the person, not an administrator */
+      body = /verified email/i.test(detail || '')
+           ? 'Verify your email address (the link we sent when you signed up), then sign in again.'
+           : (detail ? esc(detail.replace(/\.?$/, '.')) + ' ' : '') + 'An owner or administrator of your workspace can check your access.';
+      cta = '';
+    } else if (kind === 'plan' && detail) {
+      /* A check that could not run is not a refusal. This read "The
+         designer is not on this plan" for every network blip, telling a
+         paying workspace it had not bought the designer; the detail says
+         what happened and Retry asks again. */
+      kind = 'unchecked';
+      title = 'We could not check your access';
+      body = esc(detail);
+      cta = 'Retry';
     } else {
       title = 'The designer is not on this plan';
       body = 'The site designer is part of a paid ' + esc(who) + ' account. '
@@ -147,18 +170,32 @@
     }
 
     var mail = b.support || 'dev@clearsky-usa.com';
+    var button = function (id, text) {
+      return '<button id="' + id + '" style="background:' + esc(b.accent) + ';color:#fff;border:0;'
+        + 'border-radius:9px;padding:12px 24px;font:700 15px inherit;cursor:pointer">' + esc(text) + '</button>';
+    };
     d.innerHTML =
       '<div style="max-width:520px;text-align:center">'
       + '<div style="font-size:23px;font-weight:800;margin-bottom:12px">' + title + '</div>'
       + '<div style="font-size:15px;color:#8BA3C4;margin-bottom:22px">' + body + '</div>'
-      + (kind === 'signed-out'
-          ? '<button id="omega-gate-in" style="background:' + esc(b.accent) + ';color:#fff;border:0;'
-            + 'border-radius:9px;padding:12px 24px;font:700 15px inherit;cursor:pointer">' + esc(cta) + '</button>'
+      + (kind === 'signed-out' ? button('omega-gate-in', cta) : kind === 'unchecked' ? button('omega-gate-retry', cta) : '')
+      /* the refusal is a plan matter, and the workspace's Modules page is
+         where a plan changes (opened in a new tab: this page stays put) */
+      + (kind === 'plan'
+          ? '<div style="margin-top:4px;font-size:15px"><a href="/workspace#modules" target="_blank" rel="noopener" style="color:#9FC5FF;font-weight:700">See modules ›</a></div>'
           : '')
       + '<div style="margin-top:20px;font-size:13px;color:#8BA3C4">'
       +   '<a href="mailto:' + esc(mail) + '?subject=' + encodeURIComponent('Designer access')
       +   '" style="color:' + esc(b.accent) + '">Ask about an account</a>'
       + '</div></div>';
+
+    var again = document.getElementById('omega-gate-retry');
+    if (again) again.onclick = function () {
+      d.innerHTML = '<div style="opacity:.6;font-size:14px">Checking your access…</div>';
+      var u = null;
+      try { u = global.firebase && global.firebase.auth().currentUser; } catch (e) {}
+      if (u) decide(u); else refuse('signed-out');
+    };
 
     var btn = document.getElementById('omega-gate-in');
     if (btn) btn.onclick = function () {
@@ -208,31 +245,53 @@
       var o = exists ? (r[0].data() || {}) : null;
       var bill = (r[1] && r[1].exists) ? (r[1].data() || {}) : null;
 
+      /* The workspace's own status first, packaged or not: a self-serve
+         signup is packaged AND pending until ClearSky approves it, and the
+         package check below refuses it with a 403 that would otherwise be
+         the only thing said. */
+      if (exists) {
+        var status = String(o.status || 'active');
+        if (BLOCKED_STATUS.indexOf(status) >= 0) {
+          return refuse(status === 'pending' ? 'pending' : 'suspended', o.statusNote || '');
+        }
+      }
+
       if (bill && bill.packaged === true) {
         return user.getIdToken().then(function (token) {
           return global.fetch('/api/package-access', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
         }).then(function (response) {
+          /* 403 is the server's answer, not a failed check: this person may
+             not open the workspace's package (a disabled or roleless member,
+             an unverified email). Retry would only hear it again. */
+          if (response.status === 403) {
+            return response.json().then(null, function () { return {}; }).then(function (j) {
+              var denied = new Error('refused'); denied.refused = String((j && j.error) || ''); throw denied;
+            });
+          }
           if (!response.ok) throw new Error('Package access unavailable');
           return response.json();
         }).then(function (view) {
           if (view.packaged !== true || !Array.isArray(view.toolAccess) || view.toolAccess.indexOf('editor') < 0) return refuse('plan');
           return allow({ org: org, packaged: true, readOnly: view.readOnly, reason: 'package' });
-        }).catch(function () { return refuse('plan', 'Package access could not be checked. Retry when connected.'); });
+        }).catch(function (e) {
+          if (e && typeof e.refused === 'string') return refuse('denied', e.refused);
+          return refuse('plan', 'Package access could not be checked. Retry when connected.');
+        });
       }
 
       /* ABSENT COUNTS AS ACTIVE — see the header. */
       if (!exists) return allow({ org: org, reason: 'no-record' });
-
-      var status = String(o.status || 'active');
-      if (BLOCKED_STATUS.indexOf(status) >= 0) {
-        return refuse(status === 'pending' ? 'pending' : 'suspended', o.statusNote || '');
-      }
 
       /* An explicit switch-off is the only entitlement refusal. A missing
          billing record is a tenant nobody has seeded, not a tenant on no
          plan, and treating the two the same locks out real customers. */
       var ov = (bill && bill.toolOverrides) || {};
       if (ov.editor === false) return refuse('plan');
+      /* The org's allowlist wins over the tier, the add-ons and the
+         overrides (CLAUDE.md: the two-tool product). Absent is "whatever the
+         plan includes"; a present list without the designer, at any length,
+         is a plan that does not include it. */
+      if (bill && Array.isArray(bill.toolAccess) && bill.toolAccess.indexOf('editor') < 0) return refuse('plan');
 
       // Lite tenants land in the small shell even from an old full-editor link.
       // The embedded engine is still the same file; no second editor is copied.

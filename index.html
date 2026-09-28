@@ -4662,10 +4662,11 @@ function checkPackagePayment(btn){
     btn.disabled = false; btn.textContent = "I've paid";
   }).catch(function(e){ msg.textContent = 'Could not check — ' + (e.message || e); btn.disabled = false; btn.textContent = "I've paid"; });
 }
-/* the one package menu, handed this page's package view; a change refreshes the view so the tiles and the panel follow */
-function openPackageMenu(moduleKey){
+/* the one package menu, handed this page's package view; a change refreshes the view so the tiles and the panel follow.
+   `how` opens it on one module and one step ({ single:true, intent:'remove' } is a card's Opt out) */
+function openPackageMenu(moduleKey, how){
   var ws = window.OMEGA_WORKSPACE; if (!ws || !ws.packaged || !window.OmegaPackageMenu) return false;
-  return OmegaPackageMenu.open(moduleKey || undefined, { view: ws.packageAccess, onChanged: function(){
+  return OmegaPackageMenu.open(moduleKey || undefined, { view: ws.packageAccess, single: !!(how && how.single), intent: how && how.intent, onChanged: function(){
     (window.OmegaTenant && OmegaTenant.refreshPackage ? OmegaTenant.refreshPackage() : Promise.resolve()).then(function(){ try { loadBilling(); } catch(e){} try { if (window.renderApps) renderApps(); } catch(e){} });
   } });
 }
@@ -4705,7 +4706,7 @@ function _moduleCard(m, state){
   h += held ? '<span class="mod-live">Live</span>' : bought ? '<span class="mod-soon">Paid for</span>' : '<button type="button" class="mod-add" data-add-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-add-module\'))">+ Add</button>';
   h += '<div class="mod-head"><div class="mod-ico">'+ico+'</div><div style="min-width:0"><div class="mod-name">'+esc(m.name)+'</div><div class="mod-shelf">'+esc(line)+'</div></div></div>';
   h += '<ul class="mod-feat">'+(m.features||[]).slice(0,3).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')+'</ul>';
-  if ((held || bought) && m.key !== 'lite') h += '<button type="button" class="ows-pill" data-remove-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-remove-module\'))">Opt out</button>';
+  if ((held || bought) && m.key !== 'lite') h += '<button type="button" class="ows-pill" data-remove-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-remove-module\'), { single: true, intent: \'remove\' })">Opt out</button>';
   var shown = tools.slice(0, held ? 4 : 3);
   h += '<div class="mod-tools">'+shown.map(function(n){ return '<span class="mod-chip">'+esc(n)+'</span>'; }).join('')+(tools.length>shown.length?'<span class="mod-chip">+'+(tools.length-shown.length)+'</span>':'')+'</div></div>';
   return h;
@@ -6224,6 +6225,61 @@ var _SW_TITLES = { todos:'To-Dos', team:'Team', feed:'Company Feed', msgs:'Messa
       return;
     }
     snWork(null, MAP[h]);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fromHash);
+  else fromHash();
+  window.addEventListener('hashchange', fromHash);
+})();
+/* Site Map's plan chip and the editor gate link /workspace#billing,
+   #modules and #module-<key>; a workspace whose home is this page is
+   bounced here with the hash kept (workspace.html classicBounce), and each
+   opens its twin on this page once the entitlements say what the plan is:
+     #billing          the Account panel, at Billing & plan
+     #modules          Your modules (a packaged plan), else Billing & plan
+     #module-<key>     the ONE menu on that module (a packaged plan); a
+                       plan billed outside the engine opens it where the
+                       classic home keeps it, the marketplace, which judges
+                       the module and opens the menu in its legacy mode
+   Nothing here decides access: the menu and the server do. */
+(function(){
+  var asked = '';
+  function billingSection(){
+    var t = [].filter.call(document.querySelectorAll('#acct-overlay .acct-sec-title'), function(e){ return /^Billing/.test(e.textContent); })[0];
+    if (t && t.scrollIntoView) t.scrollIntoView({ block:'start' });
+  }
+  function openBillingPanel(){ if (typeof openAccount !== 'function') return; openAccount(); billingSection(); }
+  function fromHash(){
+    var h = String(location.hash || '').replace('#',''), mk = /^module-([a-z0-9-]+)$/i.exec(h);
+    if (h !== 'billing' && h !== 'modules' && !mk){ asked = ''; return; }
+    if (asked === h) return;
+    asked = h;
+    var run = function(w){
+      if (asked !== h) return;
+      asked = h + ':done';
+      /* after every other listener of these entitlements has painted (Your modules among them) */
+      setTimeout(function(){
+        w = w || window.OMEGA_WORKSPACE;
+        /* a workspace whose home is the workspace is on its way there */
+        if (window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace && OmegaWorkspaceShell.wantsWorkspace(w)) return;
+        var packaged = !!(w && w.packaged && w.packageAccess && Array.isArray(w.packageAccess.catalog));
+        if (h === 'billing') { openBillingPanel(); return; }
+        if (h === 'modules'){
+          var dm = document.getElementById('dash-modules');
+          if (packaged && dm && !dm.classList.contains('mod-none') && dm.scrollIntoView) dm.scrollIntoView({ block:'start' });
+          else openBillingPanel();
+          return;
+        }
+        var key = mk[1].toLowerCase();
+        if (packaged){ if (typeof openPackageMenu === 'function' && openPackageMenu(key, { single: true }) !== false) return; openBillingPanel(); return; }
+        /* a tenant whose record hides the marketplace is never sent through it
+           (paintMarketplaceNav: no door that is not theirs): Billing & plan */
+        if (w && w.hideMarketplace) { openBillingPanel(); return; }
+        window.location.replace('/marketplace.html' + (window.location.search || '') + '#' + encodeURIComponent(key));
+      }, 0);
+    };
+    /* after sign-in and the plan: the entitlements answer now if they are known */
+    if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(run);
+    else window.addEventListener('omega:entitlements', function(e){ run(e.detail); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fromHash);
   else fromHash();

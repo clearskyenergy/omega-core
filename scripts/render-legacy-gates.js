@@ -293,8 +293,8 @@ async function phone(browser, base) {
   api.canManage = true;
   await page.evaluate(function () { OmegaPackageMenu.close(); });
   await page.click('#omega-optin [data-optin-module="compute"] .oin-go');
-  await page.locator('#omega-package-menu [data-addon="compute"] button', { hasText: 'Add to plan' }).click();
-  await page.locator('#omega-package-menu [data-addon="compute"] button', { hasText: 'Pay $500.00 now' }).click();
+  await page.locator('#omega-package-menu [data-addon="compute"] button', { hasText: 'Opt in' }).first().click();
+  await page.locator('#omega-package-menu [data-addon="compute"] button', { hasText: 'Opt in and pay' }).click();
   await page.locator('#omega-package-menu [data-addon="compute"] button', { hasText: "I've paid" }).waitFor();
   out.waiting = await page.evaluate(function () { var h = document.querySelector('#omega-package-menu [data-addon="compute"]'), a = h.querySelector('a.opm-paylink'); return { text: h.textContent, pay: a ? a.getAttribute('href') : null }; });
   var live = { modules: ['compute'], live: ['compute'], accessUntil: Date.now() + 20 * 86400000 };
@@ -414,9 +414,9 @@ async function run() {
     ok(onPhone.menu.shown && /^compute\b/.test(onPhone.menu.optin || '') && onPhone.menu.says === '"Opt in"', 'phone: the tab menu lists Compute as an Opt in: ' + JSON.stringify(onPhone.menu));
     ok(onPhone.panel.label === 'Compute' && onPhone.panel.shown && onPhone.panel.first === 'compute' && onPhone.panel.inView && onPhone.panel.leadInView && onPhone.panel.said === 'Compute is not on your plan' && /Omega Compute/.test(onPhone.panel.text) && /\$[\d,]+\/month/.test(onPhone.panel.text),
        'phone: picking it shows Omega Compute with its price and Opt in on screen, not an empty ribbon: ' + JSON.stringify(onPhone.panel));
-    ok(onPhone.dialog.title === 'Opt in: Omega Compute' && onPhone.dialog.button === 'Add to plan', 'phone: Opt in opens the purchase for that module: ' + JSON.stringify(onPhone.dialog));
-    ok(onPhone.quote === 'Pay $500.00 now' && onPhone.posted.some(function (b) { return b.action === 'addon-quote' && JSON.stringify(b.add) === '["compute"]'; }), 'phone: Add to plan asks plan-change for the server\'s price and offers to pay it: ' + onPhone.quote);
-    ok(/Ask your workspace owner or an administrator to add it\./.test(onPhone.member) && onPhone.posted.filter(function (b) { return b.action === 'addon-quote'; }).length === 1, 'phone: a member is told who to ask, and nothing is priced for them');
+    ok(onPhone.dialog.title === 'Opt in: Omega Compute' && onPhone.dialog.button === 'Opt in', 'phone: Opt in opens the purchase for that module: ' + JSON.stringify(onPhone.dialog));
+    ok(onPhone.quote === 'Opt in and pay' && onPhone.posted.some(function (b) { return b.action === 'addon-quote' && JSON.stringify(b.add) === '["compute"]'; }), 'phone: Opt in asks plan-change for the server\'s price and offers Opt in and pay: ' + onPhone.quote);
+    ok(/An owner or administrator of .+ changes modules\./.test(onPhone.member) && onPhone.posted.filter(function (b) { return b.action === 'addon-quote'; }).length === 1, 'phone: a member is told who to ask, and nothing is priced for them');
     ok(/Waiting for payment · \$500\.00/.test(onPhone.waiting.text) && onPhone.waiting.pay === PAY_URL, 'phone: Pay issues the invoice and hands over QuickBooks\' page; it waits for the payment: ' + JSON.stringify(onPhone.waiting));
     ok(onPhone.after.label === 'Compute' && onPhone.after.shown >= 5 && !onPhone.after.offer && onPhone.after.menu === null && onPhone.after.open,
        'phone: paid, the plan is read again and the Compute tab opens with Omega Compute\'s commands, no Opt in left: ' + JSON.stringify(onPhone.after));

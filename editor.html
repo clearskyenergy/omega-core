@@ -129,6 +129,12 @@ function openFinancingApply(){
 <script src="/omega-caps.js"></script>
 <script src="/omega-workspaces.js"></script>
 <script src="/omega-package-menu.js"></script>
+<!-- The plan chip in the title bar: what this workspace pays for, which
+     modules it holds (in Site Map and elsewhere), a read-only notice with
+     the pay link and "I've paid", and links to Plan & billing and Modules.
+     Presentation only; it paints on the omega:package / omega:tier events
+     omega-caps.js already sends. -->
+<script src="/omega-editor-plan.js"></script>
 <script src="/omega-bess-products.js"></script>
 <script src="/omega-storefront-handoff.js"></script>
 <script src="omega-equipment-visuals.js"></script>
@@ -1744,6 +1750,8 @@ window.onerror = function(msg, src, line, col, err) {
   <a href="/" class="pn-back"><- Portal</a>
   <span class="pn-title" id="pn-title">New Project</span>
   <span class="pn-saved" id="pn-saved"></span>
+  <!-- omega-editor-plan.js paints the plan chip here once the plan is known -->
+  <span id="omega-plan" hidden></span>
   <!-- Auth is handled by the host platform; sign-in UI hidden. Elements kept
        (display:none) so existing auth/save JS references resolve safely. -->
   <div style="display:none">

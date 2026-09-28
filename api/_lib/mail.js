@@ -179,14 +179,31 @@ var T = {
         + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + row('Monthly', o.display || '—') + '</table>'
         + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
   },
-  /* the other half of "opt in and out" on a legacy plan: nothing has changed
-     yet; ClearSky confirms the date and the invoice under the agreement */
+  /* The mirror: that tenant asked to opt OUT (plan-change opt-out). Its
+     price is set by its agreement, so nothing changed: ClearSky confirms the
+     effective date and any new price in writing, then moves the plan. A
+     request taken back (withdraw-opt-out) is heard the same way: keep it on. */
   optOutAlert: function (o) {
-    return send(staffTo(), '[OMEGA] Opt-out' + (o.withdrawn ? ' withdrawn' : '') + ': ' + o.names.join(', ') + ' for ' + o.company,
-      layout(o.withdrawn ? 'An opt-out was withdrawn' : 'A workspace asked to opt out', '<p>' + (o.withdrawn
-        ? esc(o.company) + ' withdrew its opt-out of <b>' + esc(o.names.join(', ')) + '</b>: keep them on.'
-        : esc(o.company) + ' asked to opt out of <b>' + esc(o.names.join(', ')) + '</b>. It is on the ' + esc(o.tier || 'legacy') + ' plan, billed outside the package engine: confirm the date it ends and any change to its invoice under the agreement. Nothing has changed yet.') + '</p>'
-        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row(o.withdrawn ? 'Withdrawn by' : 'Requested by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + '</table>'
+    if (o.withdrawn) return send(staffTo(), '[OMEGA] Opt-out withdrawn: ' + o.names.join(', ') + ' for ' + o.company,
+      layout('An opt-out was withdrawn', '<p>' + esc(o.company) + ' withdrew its opt-out of <b>' + esc(o.names.join(', ')) + '</b>: keep them on. Nothing about the bill changes.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Withdrawn by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + '</table>'
+        + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
+    return send(staffTo(), '[OMEGA] Opt-out: ' + o.names.join(', ') + ' for ' + o.company,
+      layout('A workspace asked to opt out', '<p>' + esc(o.company) + ' asked to opt out of <b>' + esc(o.names.join(', ')) + '</b>. It is on the ' + esc(o.tier || 'legacy') + ' plan, billed outside the package engine under its agreement: nothing has changed. Confirm the effective date and any new price with them in writing; they keep access until then.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + row('Reason', o.reason || '—') + '</table>'
+        + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
+  },
+  /* A packaged tenant queued an opt-out for the quarterly review
+     (plan-change request-removal). Access and charges stay as they are until
+     that review; the mail carries the date and the fee it moves to, which is
+     the fee once every opt-out queued for that review goes (alsoLeaving
+     names the ones queued before this one). */
+  removalAlert: function (o) {
+    return send(staffTo(), '[OMEGA] Opting out at review: ' + o.names.join(', ') + ' for ' + o.company,
+      layout('An opt-out is queued for the review', '<p>' + esc(o.company) + ' asked to opt out of <b>' + esc(o.names.join(', ')) + '</b> at its quarterly review' + (o.reviewOn ? ' on <b>' + esc(o.reviewOn) + '</b>' : '') + '. Nothing changes before then: it keeps the modules and keeps paying for them, and no refund is due for time already billed.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + row('Review', o.reviewOn || 'next quarterly review')
+        + (o.alsoLeaving && o.alsoLeaving.length ? row('Also leaving at that review', o.alsoLeaving.join(', ')) : '')
+        + row('Monthly fee', o.beforeDisplay && o.afterDisplay ? o.beforeDisplay + ' → ' + o.afterDisplay : '—') + row('Reason', o.reason || '—') + '</table>'
         + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
   },
   billingAlert: function (o) {

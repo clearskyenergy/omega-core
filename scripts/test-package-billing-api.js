@@ -28,6 +28,12 @@ async function denied(fn, status) { await assert.rejects(fn, function (e) { retu
 async function run() {
   process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox'; seed();
   equal((await packageApi(req('GET', { orgId: 'package.example' }, owner), res)).canManagePackage, false);
+  /* a tenant admin reads its own opt-in and opt-out requests (Your plan lists them) */
+  var requests = { optIns: { storage: { key: 'storage', status: 'requested' } }, optOuts: { plansets: { key: 'plansets', status: 'requested' } } };
+  Object.assign(db.data.get(root + '/billing/current'), requests);
+  var own = (await packageApi(req('GET', { orgId: 'package.example' }, owner), res)).billing;
+  equal([own.optIns, own.optOuts], [requests.optIns, requests.optOuts]);
+  delete db.data.get(root + '/billing/current').optIns; delete db.data.get(root + '/billing/current').optOuts;
   await denied(function () { return packageApi(req('POST', { modules: ['lite'] }, owner), res); }, 403);
   await denied(function () { return packageApi(req('GET', { orgId: 'other.example' }, owner), res); }, 403);
   await denied(function () { return profileApi(req('GET', {}, Object.assign({}, owner, { role: 'member' })), res); }, 403);

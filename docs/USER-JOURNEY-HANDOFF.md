@@ -14,31 +14,36 @@ security boundary; every price and every grant is the server's. A signed-in
 person lands on the **Omega Workspace** (`/workspace`): a hex hub of where
 to go, a ranked **Today**, the board (In flight, Around you), and two
 catalogue pages, **All tools** and **Modules**. The **Marketplace**
-(`/marketplace.html`) is the store: plans and modules with the server's
-prices. Packaged tenants buy there and on the Modules page by card through
-QuickBooks; legacy tenants are billed outside the package engine.
+(`/marketplace.html`) is the tools catalogue again (kept for now); modules
+are the editor's paid services and are bought on the **Modules** page:
+packaged tenants by card on the invoice's own page (Stripe or QuickBooks),
+legacy tenants by card as an add-on where their plan switches the module
+on exactly (on its own QuickBooks invoice), else as a recorded request
+ClearSky confirms. Site Map shows the plan and modules in a chip with links
+to Plan & billing and Modules.
 
 ## 2. The journey today
 
 | Step | Where | What happens | Rule that decides it |
 |---|---|---|---|
 | Sign in | `login.html` → `/workspace` | Firebase Auth; the gateway lands on the workspace; the workspace sends a classic choice to the classic dashboard | `OmegaWorkspaceShell.homeOf()` (workspace unless `omega_orgs/{org}.shell = 'classic'`, a partner-type workspace, or `?home=classic` on this browser) |
-| Home | `/workspace` | Hex hub (Today in the centre, six cells composed from what the person may open), Today (four numbers, "Needs you" ranked), In flight (project cards), Around you (feed, People, Omega pulse, Partners) | `omega-workspace-hub.js` composes the hub; `omega-workspace-today.js` ranks Today; `GET /api/pulse` for the pulse |
-| All tools | `/workspace#tools` | Every tool by category, Live / Locked / Soon; a locked tile explains which plan or module carries it and links the Marketplace on that module | `OMEGATools.isUnlocked()` |
-| Modules | `/workspace#modules` | Every module as a compact card: **Your modules** (Live, or paid for) first, then **Add to your plan**, each in shelf order (features, the tools inside, allowance, needs, price); Live where held, Partly with the count, else **Opt in** (a package) or **Add to plan** (a legacy plan) | `OmegaWorkspaceHub.moduleState()` (the ONE held/partly/ask rule, shared with the store) |
-| Opt in, packaged | Modules page or store | The one menu: server quote → Subscribe and pay → QuickBooks invoice with the card button; on when paid | `POST /api/plan-change` (quote, apply, cancel, reconcile-now) |
-| Add to plan, legacy | Modules page, store, a locked tile | The module joins the plan as its own monthly line: the server's quote (the module and what it needs), the billing contact once, **Pay now** opens QuickBooks' page (a new card or the saved one), the card waits with the pay link and *I've paid*, Live the moment QuickBooks shows it paid; renewed monthly, off after an unpaid renewal's grace; the plan underneath is untouched. Sold only where it switches on exactly (every Omega Logic department; an editor module whose Site Map tab the plan cannot open alone says why and offers **Ask ClearSky to include it**, the recorded request) | `POST /api/plan-change` `addon-quote`, `addon-buy`, `addon-cancel`, `reconcile-now`, `opt-in` (owner or admin; `api/_lib/addons.js` `exact()`) |
-| Marketplace | `/marketplace.html` | The store in the workspace chrome: plan strip, Plans shelf (Lite, Field, Pro, Enterprise, starters, logins, annual, trial), every module priced; `#<module>` lands on one | `GET /api/offerings` (public) or `api/package-catalog` (packaged) |
-| Plan & billing | rail → `/workspace#billing` | A page: your subscription (plan, modules bought and on, monthly, billing day), what you owe and when (unpaid invoices with pay links, next invoice, *I've paid*), the payment method (linked to Stripe: the card on file read back, Add a card with Stripe, the portal, and Pay $X with Stripe for the amount ClearSky set as due; or QuickBooks' own payment page for a QuickBooks plan), additions waiting, billing history | `GET /api/plan-change` (any verified member), `POST /api/stripe-invoices`, `POST /api/stripe-customer` (owner or admin) |
+| Home | `/workspace` | Hex hub (Today in the centre, six cells composed from what the person may open), Today (four numbers, "Needs you" ranked), In flight (project cards), Around you (feed, People, Omega pulse, Partners); the module cards live on Modules, never on the home | `omega-workspace-hub.js` composes the hub; `omega-workspace-today.js` ranks Today; `GET /api/pulse` for the pulse |
+| All tools | `/workspace#tools` | Every tool by category, Live / Locked / Soon; a locked tile explains which module carries it and offers Opt in (the one menu) or its card on Modules | `OMEGATools.isUnlocked()` |
+| Modules | `/workspace#modules` | Every module as a card (what it does, the tools inside, allowance, needs, price), one status and one action each: Live · Opt out, Waiting for payment · Pay, Opting out / Opt-in requested · Cancel request, Partly included / Not on your plan · Opt in; the plans shelf closes it (`#plans`; Enterprise reads *Contact for pricing* with Contact ClearSky, never a figure) | `OmegaWorkspaceHub.moduleCard()` on `moduleState()`, the ONE rule (a legacy plan's modules counted by what its tools AND Site Map open: the catalog's `legacyGates` asked of the tier `editorCtx` names) |
+| Opt in / out, packaged | Modules page | The one menu on that module: server quote → Opt in and pay → an invoice paid on its own page (Stripe or QuickBooks, as `payWith` says), on when paid; Opt out queues for the quarterly review (fee before → after, the review date) | `POST /api/plan-change` (quote, apply, cancel, request-removal, withdraw-removal, reconcile-now) |
+| Opt in / out, legacy, by card | Modules page, a locked tile | Where the plan can switch the module on exactly (every Omega Logic department; `addons.exact()`): Opt in → the server's quote (the module and what it needs) → the billing contact once → **Opt in and pay** opens QuickBooks' page (a new card or the saved one); the card reads *Waiting for payment* with Pay, *I've paid* and Cancel request, and is Live the moment QuickBooks shows it paid; renewed monthly, off after an unpaid renewal's grace; the plan underneath is untouched. **Opt out** stops it at the end of the month paid for (not renewed, no refund); Cancel request keeps it | `POST /api/plan-change` `addon-quote`, `addon-buy`, `addon-cancel` (`addOnId`: an unpaid purchase; `remove`: a paid add-on), `withdraw-addon-cancel`, `reconcile-now` (owner or admin with a verified email, or of an active client, `admin.clientAdmin`; `api/_lib/addons.js`) |
+| Opt in / out, legacy, by request | Modules page | Everything a card cannot switch on exactly (an editor module whose Site Map tab the plan cannot open alone; the quote says why), and everything while card payments are not open: the price first (dry run), then *Request opt-in* / *Send opt-out request*, filed by an owner or administrator on the role alone, recorded on the plan (who, when, whether the email was verified, history, audit) and mailed to ClearSky; the card reads *Opt-in requested* / *Opting out* with Cancel request. Nothing is charged or switched off until ClearSky confirms | `POST /api/plan-change` `opt-in` / `opt-out` / `withdraw-*` (owner or admin on the role alone, no verified email needed: a request grants and charges nothing; refuses a packaged workspace, and an opt-out of a card add-on) |
+| Marketplace | `/marketplace.html` | The tools catalogue in the workspace chrome: every tool, categories, search, pin; a locked tool names its module and links to its card on Modules; `#<module>` and `#plans` forward there | `GET /api/offerings` (public) or the package's catalog; the same `moduleState` |
+| Plan & billing | rail → `/workspace#billing` | A page: your subscription (plan, modules bought and on, monthly, billing day), what you owe and when (unpaid invoices with pay links, next invoice, *I've paid*), the payment method (linked to Stripe: the card on file read back, Add a card with Stripe, the portal, and Pay $X with Stripe for the amount ClearSky set as due, each on Stripe's own page in this tab; or QuickBooks' own payment page for a QuickBooks plan; a workspace with a billing record never reads "No billing account yet"), additions waiting, billing history | `GET /api/plan-change` (any verified member, or an active client's owner/admin), `POST /api/stripe-invoices`, `POST /api/stripe-customer` (owner or admin) |
 | Projects | `/projects.html` | Legacy page wearing the workspace rail (own topbar still) | `OmegaWorkspaceShell.theme()` |
 | In flight | home board | What needs something first (offers on a finance-marketplace deal, a next action, a package to submit, a stall), then what was touched last; never online; each card says why and who has it, with **Assign** | `OmegaWorkspaceToday.board`; `projects/{id}` owner merge |
-| Admin Package tab | `/admin/tenant?org=` (staff) | Opens on what the tenant holds and pays today (a legacy tier's Live modules by the shared rule, plus any opt-in request); staff change it and Review activation | `admin/package-panel.js` `standing()`, `OmegaWorkspaceHub.moduleState` |
+| Admin Package tab | `/admin/tenant?org=` (staff) | Opens on what the tenant holds and pays today (a legacy tier's Live and Partly modules by the one rule, its card add-ons, plus any opt-in request, less what is opting out or ending; a trial opens on Omega Design plus its requests); staff answer a recorded request, change the picker and Review activation | `admin/package-panel.js` `standing()`, `OmegaWorkspaceHub.moduleState` / `editorCtx` |
 | Site Map (editor) | Settings tab › Appearance | Light (white top, grey ground, buttons with faces), Dark, or Auto | `OmegaUI.theme()`, `omega.ui.theme` in the browser |
 | Classic home | `/?home=classic` | The old dashboard; "Open Omega Workspace" and Account settings › Home flip back with `/?home=workspace` | `homeOf()` |
 
 ## 3. What is built and verified
 
-- `npm run check:workspace` renders the workspace, the store and the flow
+- `npm run check:workspace` renders the workspace, the marketplace and the flow
   as several tenants on the Firebase double (desktop and 390px phone);
   `npm run check:dashboard` renders the classic dashboard; `npm test` runs
   every pure-rule test (`tworkspacehub`, `tworkspacetoday`, `tpulse`, …).
@@ -56,10 +61,18 @@ QuickBooks; legacy tenants are billed outside the package engine.
    (the storefront aside), and a tab the plan stops at says Opt in and buys
    the module there (`docs/OMEGA-WORKSPACE.md`, *Opt in in the editor*).
 2. **Moving a legacy plan onto a package, self-serve.** A legacy plan buys
-   modules today as add-ons beside its plan (Add to plan,
-   `api/_lib/addons.js`); re-pricing the whole plan as a package stays
-   ClearSky's, from the admin Package tab, which lists the add-ons.
-3. **Plan changes from a plan card.** The store's plan cards are facts;
+   exact modules as add-ons beside its plan (`api/_lib/addons.js`) and
+   records a request for the rest (`billing/current.optIns`); re-pricing
+   the whole plan as a package stays ClearSky's, from the admin Package
+   tab, which opens preselected on what it holds and partly uses (its
+   add-ons included) plus its requests. Build: `plan-change` accepts a
+   legacy record as the starting point of a quote (Omega Design + the module,
+   prorated), creates the packaged record and the first invoice on the
+   rail `billing-driver` names, and the module opens when paid. Needs the
+   packaging flags live (`api/_lib/packaging-mode.js`) and the engine
+   guard; see `api/_lib/plan-change.js state()` and
+   `api/_lib/package-billing.js`.
+3. **Plan changes from a plan card.** The plans shelf's cards are facts;
    moving a packaged workspace to another plan (`plan-change` with `plan`)
    is only reachable through a module quote's steer.
 4. **The projects page in the full chrome.** `wear()` is built and used by

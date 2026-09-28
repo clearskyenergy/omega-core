@@ -1,8 +1,14 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
- * Add to plan, for a workspace billed OUTSIDE the package engine (Tommy,
+ * Opt in by card, for a workspace billed OUTSIDE the package engine (Tommy,
  * 2026-09-27: "these should allow me to buy them immediately and not email
  * clearsky it should allow them to add to plan and then charge their credit
- * card or saved payment method").
+ * card or saved payment method"). On every module surface it is the one
+ * card's Opt in (OmegaWorkspaceHub.moduleCard, the one menu in
+ * omega-package-menu.js): the menu asks addon-quote first, and a module
+ * that switches on exactly is bought here ("Opt in and pay", or "Turn it
+ * on" for $0); anything else is the recorded request (plan-change opt-in).
+ * Opt out of a paid add-on is stop(): it stays on until the end of the
+ * month paid for and is not renewed; Cancel request withdraws that.
  *
  * A legacy workspace (billing.packaged !== true: a tier on Stripe's or
  * ClearSky's own paper, often a signed contract) keeps its plan, its price
@@ -95,17 +101,19 @@ function workspace(orgId, b) {
   if (Array.isArray(b.toolAccess)) ws.toolAccess = b.toolAccess.slice();
   return ws;
 }
-/* The pages' own judge of a legacy module (workspace.html hubCtx,
-   marketplace.html moduleCtx): its tools on the tools catalog and its Site
-   Map commands on the editor's own ladder (omega-caps.js, the file the
-   editor runs: it loads here as a module, its browser parts untouched).
-   `editorOn`: the add-ons whose own commands the editor opens (addOns.live,
-   or what a purchase would leave on). */
+/* The pages' own judge of a legacy module: the ONE legacy ctx
+   (OmegaWorkspaceHub.legacyCtx, which workspace.html, marketplace.html, the
+   editor's plan chip and the admin Package tab build too): its tools on the
+   tools catalog and its Site Map commands on the editor's own ladder
+   (omega-caps.js, the file the editor runs: it loads here as a module, its
+   browser parts untouched), for the workspace with no person. `editorOn`:
+   the add-ons whose own commands the editor opens (addOns.live, or what a
+   purchase would leave on). */
 function judge(orgId, b, editorOn) {
-  var T = require('../../omega-tools.js'), HUB = require('../../omega-workspace-hub.js'), CAPS = require('../../omega-caps.js').OmegaCaps, ws = workspace(orgId, b);
-  return { HUB: HUB, ctx: { packaged: false, modules: [], addons: ws.addons, addOns: [], tierLevel: ws.tierLevel, editorModules: editorOn || [],
-    canOpen: function (k) { var t = T.byKey(k); return !!t && T.isUnlocked(t, ws); }, tool: function (k) { return T.byKey(k); },
-    visible: function (k) { var t = T.byKey(k); return !!t && T.isVisible(t, ws); }, canCap: HUB.capsFor(b, orgId, CAPS) } };
+  var T = require('../../omega-tools.js'), HUB = require('../../omega-workspace-hub.js'), CAPS = require('../../omega-caps.js').OmegaCaps;
+  var ctx = HUB.legacyCtx({ tools: T, ws: workspace(orgId, b), billing: b, caps: CAPS, who: { orgId: orgId }, addOns: [] });
+  ctx.editorModules = editorOn || [];
+  return { HUB: HUB, ctx: ctx };
 }
 /* Does the plan (with its live add-ons) already hold this module? The
    Modules page and the store ask OmegaWorkspaceHub.moduleState; so does
@@ -134,6 +142,7 @@ function held(orgId, b, key, now) {
    no commands to switch on beside the plan: the storefront, set up with
    ClearSky) is not sold here; the quote says why and offers the recorded
    request (plan-change opt-in). */
+var SETUP_ONLY = ['whitelabel'];
 function exact(orgId, b, keys, now) {
   var mine = order(keys).filter(function (k) { return !isLogic(k); });
   if (!mine.length) return { exact: true, partial: [], spill: [], shut: [] };
@@ -145,7 +154,10 @@ function exact(orgId, b, keys, now) {
     return out;
   }
   var was = measure(b, have), will = measure(after, on);
-  var partial = mine.filter(function (k) { return will[k].state !== 'held'; });
+  /* the storefront is a contract line item ClearSky sets up (the tenant
+     record's whiteLabel, staff-written: CLAUDE.md, White label), never
+     switched on by a card, even where the add-on key alone would open it */
+  var partial = mine.filter(function (k) { return SETUP_ONLY.indexOf(k) >= 0 || will[k].state !== 'held'; });
   var spill = M.catalog().map(function (m) { return m.key; }).filter(function (k) { return k !== 'lite' && keys.indexOf(k) < 0 && will[k].open > was[k].open; });
   return { exact: !partial.length && !spill.length, partial: partial, spill: spill, shut: partial.filter(function (k) { return will[k].shut; }) };
 }
@@ -212,7 +224,7 @@ function pending(rows) {
     .sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); })
     .map(function (r) { var keys = r.purpose === 'renewal' ? r.modules : r.add;
       return { id: r.id, purpose: r.purpose || 'purchase', add: order(keys), names: names(keys), totalCents: r.totalCents, display: P.money(r.totalCents || 0),
-        paymentLink: r.paymentLink || null, date: r.date, expiresOn: r.purpose === 'renewal' ? null : (r.cycle && r.cycle.end) || null }; });
+        paymentLink: r.paymentLink || null, payWith: 'QuickBooks', date: r.date, expiresOn: r.purpose === 'renewal' ? null : (r.cycle && r.cycle.end) || null }; });
 }
 function ordinal(d) { var s = ['th', 'st', 'nd', 'rd'], v = d % 100; return d + (s[(v - 20) % 10] || s[v] || s[0]); }
 function current(c) { return c.root.collection('billing').doc('current'); }
@@ -227,14 +239,16 @@ function payable(c) {
 function gate(c, rows, now, x, add) {
   var b = c.billing;
   if (b.packaged === true) return { canBuy: false, reason: 'This workspace is on a subscription package: add modules on the Ladder, which prices and invoices them.' };
-  if (!c.billingExists) return { canBuy: false, reason: 'Your workspace has no plan on record yet, so nothing can be added to it. ClearSky sets the plan up once; then Add to plan works here.' };
+  /* no plan to add to: never sold here; Opt in records the request instead
+     (the menu then says billing is not set up, with the email to ClearSky) */
+  if (!c.billingExists) return { canBuy: false, reason: 'Your workspace has no plan on record yet, so nothing can be added to it by card. ClearSky sets the plan up once; then Opt in works here.', request: true };
   if (c.org.status !== 'active') return { canBuy: false, reason: 'Your workspace is not active.' };
   /* not exact on this plan: never sold here; the recorded request instead */
   if (x && !x.exact) return { canBuy: false, reason: why(x, add), request: true };
   var open = pending(rows);
   if (open.length) return { canBuy: false, reason: (open[0].purpose === 'renewal' ? 'Your add-on renewal is waiting for payment' : 'An add-on is waiting for payment: ' + open[0].names.join(', ')) + '. Pay it' + (open[0].purpose === 'renewal' ? '' : ' or cancel it') + ' first.' };
   var pay = payable(c);
-  if (!pay.ok) return { canBuy: false, reason: 'Card payments are not open for this workspace yet.', detail: pay.detail };
+  if (!pay.ok) return { canBuy: false, reason: 'Card payments are not open for this workspace yet.', detail: pay.detail, request: true };
   return { canBuy: true };
 }
 
@@ -272,7 +286,7 @@ function quote(c, rows, input, now, staff) {
   var out = { orgId: orgId, previewId: previewId, effectiveAt: now, add: add, addNames: names(add), requested: order(wanted(input.add)), lines: lines, todayCents: total,
     monthlyCents: after.monthlyCents, monthlyBeforeCents: before.monthlyCents, monthlyDisplay: after.display, billingDay: day, fresh: !inCycle, included: included,
     cycle: { start: cycle.start, end: cycle.end, days: cycle.days, remainingDays: cycle.remainingDays }, activation: included ? 'immediate' : 'on-payment',
-    canBuy: g.canBuy, reason: g.reason || null, request: g.request === true, needsProfile: needsProfile, pending: pending(rows), payment: 'quickbooks',
+    canBuy: g.canBuy, reason: g.reason || null, request: g.request === true, needsProfile: needsProfile, pending: pending(rows), payment: 'quickbooks', payWith: 'QuickBooks',
     display: {
       amount: P.money(total),
       today: included ? 'Nothing to pay today: it is covered by the add-ons you already pay for.' : P.money(total) + ' today, for ' + (inCycle ? cycle.remainingDays + ' of ' + cycle.days + ' days until your add-on billing date, ' + cycle.end : today + ' to ' + cycle.end),
@@ -285,7 +299,7 @@ function quote(c, rows, input, now, staff) {
 async function context(db, orgId) {
   var root = db.doc('omega_orgs/' + orgId);
   var rows = await Promise.all([root.get(), root.collection('billing').doc('current').get(), root.collection('billing').doc('profile').get()]);
-  if (!rows[0].exists) fail('This workspace has no account record yet, so it cannot be billed. ClearSky sets it up once; then Add to plan works here.', 404);
+  if (!rows[0].exists) fail('This workspace has no account record yet, so it cannot be billed. ClearSky sets it up once; then Opt in works here.', 404);
   var billing = rows[1].exists ? rows[1].data() : {};
   var book = await B.load(db, billing.packaged === true ? billing.pricebookVersion || B.VERSION : B.VERSION);
   return { root: root, org: rows[0].data(), billing: billing, billingExists: rows[1].exists, profile: rows[2].exists ? rows[2].data() : null, book: book };
@@ -400,7 +414,7 @@ async function buy(db, orgId, input, caller, now, deps) {
   var today = R.iso(now), id = 'addon-' + q.previewId;
   var record = { kind: 'addon', purpose: 'purchase', id: id, date: today, fresh: q.fresh, billingDay: q.billingDay, cycle: { start: q.cycle.start, end: q.cycle.end },
     period: { start: today, end: q.cycle.end }, add: q.add, lines: q.lines, subtotalCents: q.todayCents, totalCents: q.todayCents, monthlyCents: q.monthlyCents,
-    pricebookVersion: c.book.version, marker: 'OMEGA add-on ' + orgId + ' / ' + today + ' / ' + q.previewId.slice(0, 12), memo: 'Add to plan: ' + q.addNames.join(', '),
+    pricebookVersion: c.book.version, marker: 'OMEGA add-on ' + orgId + ' / ' + today + ' / ' + q.previewId.slice(0, 12), memo: 'Add-on: ' + q.addNames.join(', '),
     by: caller.email, createdAt: now };
   var replay = await db.runTransaction(async function (tx) {
     var old = await tx.get(op), live0 = await tx.get(cur), invoices = await tx.get(cur.collection('invoices').orderBy('date'));
@@ -437,7 +451,7 @@ async function buy(db, orgId, input, caller, now, deps) {
         text: 'Your invoice to add ' + q.addNames.join(', ') + ' is ready: ' + P.money(issued.totalCents) + '. Pay it by card in QuickBooks and it switches on as soon as the payment clears.',
         packageMail: 'packageInvoice', mailState: 'pending', paymentLink: issued.payUrl, amountDisplay: P.money(issued.totalCents) });
       var result = { ok: true, addOnId: id, state: issued ? 'awaiting_payment' : 'active', add: q.add, addNames: q.addNames, todayCents: stored.totalCents, display: P.money(stored.totalCents),
-        paymentLink: stored.paymentLink || null, payLinkMissing: !!(issued && !issued.payUrl), expiresOn: q.cycle.end, monthlyDisplay: q.monthlyDisplay, live: patch.addOns.live };
+        paymentLink: stored.paymentLink || null, payWith: 'QuickBooks', payLinkMissing: !!(issued && !issued.payUrl), expiresOn: q.cycle.end, monthlyDisplay: q.monthlyDisplay, live: patch.addOns.live };
       tx.set(op, { state: 'done', result: result, completedAt: now }, { merge: true });
       var event = { at: now, by: caller.email, action: issued ? 'addon-requested' : 'addon-included', changeId: id,
         was: { addOns: (fresh.addOns && fresh.addOns.modules) || [], tier: fresh.tier || null }, changed: { add: q.add, totalCents: stored.totalCents, monthlyCents: q.monthlyCents, state: stored.state, live: patch.addOns.live } };
@@ -496,6 +510,52 @@ async function cancel(db, orgId, addOnId, caller, now) {
     return { ok: true, addOnId: addOnId, state: 'cancelled' };
   });
 }
+
+/* ── Opt out of a paid add-on: it stops at the end of the month paid for ──
+   (the one card's Opt out on a module the plan holds through an add-on; its
+   Cancel request is `withdraw`). Recorded on addOns.ending[key]; the renewal
+   on nextInvoiceOn is priced without it and it switches off that day
+   (issue()). Nothing is refunded and nothing changes before then. Stopping
+   a part stops what needs it (Office takes the departments bought on it);
+   keeping one keeps what it needs. */
+function endingKeys(a) { var e = (a && a.ending) || {}; return order(Object.keys(e).filter(function (k) { return e[k] && e[k].status === 'requested'; })); }
+function needsOf(k) { return (M.get(k) || { requires: [] }).requires; }
+async function stop(db, orgId, input, caller, now, withdraw) {
+  var c = await context(db, orgId), b = c.billing, a = b.addOns || {}, cur = current(c);
+  if (b.packaged === true) fail('This workspace is on a subscription package: opt out through the menu, which queues it for the quarterly review.', 409);
+  if (!c.billingExists) fail('This workspace has no add-ons to stop.', 409);
+  var want = wanted(input.remove), bought = order(a.modules || []), ending = endingKeys(a);
+  function plan(bill) {
+    var fa = bill.addOns || {}, have = order(fa.modules || []), end = endingKeys(fa), out = [];
+    want.forEach(function (k) {
+      if (have.indexOf(k) < 0) fail(label(k) + ' is not an add-on on your plan.', 409);
+      if (withdraw ? end.indexOf(k) < 0 : end.indexOf(k) >= 0) fail(withdraw ? 'No request to withdraw' : 'Already requested', 409);
+    });
+    if (!withdraw && fa.state !== 'paid') fail('Your add-on renewal is waiting for payment: pay it first, or leave it unpaid and the add-ons switch off after the grace period.', 409);
+    function take(k) {
+      if (out.indexOf(k) >= 0) return; out.push(k);
+      if (!withdraw) have.forEach(function (o) { if (end.indexOf(o) < 0 && needsOf(o).indexOf(k) >= 0) take(o); });
+      else needsOf(k).forEach(function (r) { if (end.indexOf(r) >= 0) take(r); });
+    }
+    want.forEach(take);
+    var after = withdraw ? end.filter(function (k) { return out.indexOf(k) < 0; }) : end.concat(out);
+    return { keys: order(out), endsOn: fa.nextInvoiceOn || null, before: price(have.filter(function (k) { return end.indexOf(k) < 0; }), c.book), after: price(have.filter(function (k) { return after.indexOf(k) < 0; }), c.book) };
+  }
+  var p = plan(b), day = p.endsOn ? p.endsOn : 'the end of the month you paid for';
+  var note = withdraw ? listed(p.keys) + (p.keys.length > 1 ? ' stay' : ' stays') + ' on and renew' + (p.keys.length > 1 ? '' : 's') + ' on ' + day + ': your add-ons stay ' + p.after.display + '.'
+    : listed(p.keys) + (p.keys.length > 1 ? ' stay' : ' stays') + ' on until ' + day + ', the end of the month you paid for, and ' + (p.keys.length > 1 ? 'are' : 'is') + ' not renewed. ' + (p.after.monthlyCents ? 'Your add-ons then cost ' + p.after.display + ' (now ' + p.before.display + ').' : 'Nothing is billed for add-ons after that.') + ' No refund for time already paid. Your plan and its billing stay exactly as they are.';
+  if (input.dryRun === true) return { dryRun: true, remove: p.keys, names: names(p.keys), endsOn: p.endsOn, beforeDisplay: p.before.display, afterDisplay: p.after.display, withdraw: !!withdraw, note: note };
+  return db.runTransaction(async function (tx) {
+    var live0 = await tx.get(cur), fresh = live0.data() || {}, q = plan(fresh), fa = fresh.addOns || {}, map = Object.assign({}, fa.ending || {}), at = R.iso(now);
+    if (q.keys.join() !== p.keys.join()) fail('Your add-ons changed; review it again');
+    q.keys.forEach(function (k) { map[k] = withdraw ? Object.assign({}, map[k], { status: 'withdrawn', withdrawnAt: at, withdrawnBy: caller.email }) : { key: k, name: label(k), endsOn: q.endsOn, requestedAt: at, requestedBy: caller.email, status: 'requested' }; });
+    tx.update(cur, { addOns: Object.assign({}, fa, { ending: map }), updatedAt: now, updatedBy: caller.email });
+    var id = (withdraw ? 'addon-stop-withdrawn-' : 'addon-stop-') + Q.key(B.stable({ k: q.keys, at: now }));
+    var event = { at: now, by: caller.email, action: withdraw ? 'addon-stop-withdrawn' : 'addon-stop-requested', changeId: id, changed: { modules: q.keys, names: names(q.keys), endsOn: q.endsOn, monthlyAfter: q.after.display, note: note } };
+    tx.set(cur.collection('history').doc(id), event); tx.set(c.root.collection('admin_audit').doc(id), event);
+    return { ok: true, withdrawn: !!withdraw, remove: q.keys, names: names(q.keys), endsOn: q.endsOn, afterDisplay: q.after.display, ending: map, note: note };
+  });
+}
 /* ── The monthly renewal, on the add-on billing day (the hourly runner) ── */
 async function issue(db, orgId, now, deps) {
   var S = require('./package-billing'), c = await context(db, orgId); S.guard(c, RAIL);
@@ -510,9 +570,23 @@ async function issue(db, orgId, now, deps) {
     var fa = fresh.addOns || {};
     if (fa.nextInvoiceOn !== on || fa.state !== 'paid') fail('Add-on billing date changed; retry');
     if (fresh.addOnInvoiceLock && fresh.addOnInvoiceLock.until > now) fail('The add-on renewal is already being issued');
-    /* all of Omega Logic on the contract (logic-access wholeLogic): its parts are no longer billed here */
+    /* the month paid for is over for what was stopped (endingKeys); and with
+       all of Omega Logic on the contract (logic-access wholeLogic), its parts
+       are no longer billed here */
     var whole = (fresh.addons || []).indexOf('omega-logic') >= 0 || fresh.omegaLogic === true;
-    var mods = order(fa.modules || []).filter(function (k) { return !(whole && isLogic(k)); });
+    var ending = endingKeys(fa), kept = order(fa.modules || []).filter(function (k) { return ending.indexOf(k) < 0; });
+    var mods = kept.filter(function (k) { return !(whole && isLogic(k)); });
+    if (ending.length && !existing.exists) {
+      /* the month paid for is over: what was stopped leaves now, and its
+         grants with it (settle), before the renewal is priced on the rest */
+      var rows0 = (await tx.get(cur.collection('invoices').orderBy('date'))).docs.map(function (d) { return d.data(); }), endMap = Object.assign({}, fa.ending || {});
+      ending.forEach(function (k) { endMap[k] = Object.assign({}, endMap[k], { status: 'done', endedAt: now }); });
+      var gone = settle(Object.assign({}, fresh, { addOns: Object.assign({}, fa, { modules: kept, ending: endMap }) }), rows0, c.book, now);
+      tx.update(cur, gone);
+      var endEvent = { at: now, by: 'billing-run', action: 'addon-ended', changed: { ended: ending, names: names(ending), live: gone.addOns.live } };
+      tx.set(cur.collection('history').doc('addon-ended-' + on), endEvent); tx.set(c.root.collection('admin_audit').doc('addon-ended-' + on), endEvent);
+      if (!mods.length) return { ended: ending };
+    }
     if (!mods.length) return null;
     var p = price(mods, c.book), cycle = R.cycle(on, fa.billingDay);
     var prepared = existing.exists ? existing.data() : { kind: 'addon', purpose: 'renewal', id: id, date: on, period: { start: on, end: cycle.end }, modules: mods, lines: p.lines,
@@ -523,6 +597,7 @@ async function issue(db, orgId, now, deps) {
     return prepared;
   });
   if (!plan) return { skipped: true, alreadyIssued: true };
+  if (plan.ended) return { ended: plan.ended };
   try {
     var issued = await Q.driver(c.book, deps).invoice(plan, BP.stored(c.profile), b.qboCustomerId);
     return await db.runTransaction(async function (tx) {
@@ -554,7 +629,8 @@ function view(billing, rows, now) {
   var on = live(billing, now);
   return { modules: order(a.modules), names: names(a.modules), live: on, liveNames: names(on), state: a.state || 'none', monthlyCents: a.monthlyCents || 0,
     monthlyDisplay: a.monthlyDisplay || null, billingDay: a.billingDay || null, nextInvoiceOn: a.nextInvoiceOn || null, paidThrough: a.paidThrough || null,
-    accessUntil: a.accessUntil == null ? null : a.accessUntil, pending: rows ? pending(rows) : (a.pending || []) };
+    accessUntil: a.accessUntil == null ? null : a.accessUntil, pending: rows ? pending(rows) : (a.pending || []),
+    ending: endingKeys(a).map(function (k) { return { key: k, name: label(k), endsOn: a.ending[k].endsOn || a.nextInvoiceOn || null, requestedAt: a.ending[k].requestedAt || null }; }), payWith: 'QuickBooks' };
 }
-module.exports = { LOGIC: LOGIC, LEGACY: LEGACY, TIER_LEVEL: TIER_LEVEL, live: live, held: held, price: price, quote: quote, preview: preview, buy: buy, cancel: cancel,
+module.exports = { LOGIC: LOGIC, LEGACY: LEGACY, TIER_LEVEL: TIER_LEVEL, live: live, held: held, price: price, quote: quote, preview: preview, buy: buy, cancel: cancel, stop: stop, endingKeys: endingKeys,
   issue: issue, settle: settle, grant: grant, exact: exact, boughtAfter: boughtAfter, pending: pending, view: view, context: context, records: records, isAddon: isAddon };

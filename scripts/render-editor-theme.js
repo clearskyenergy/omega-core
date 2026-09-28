@@ -6,7 +6,9 @@
  * panel, the guided build modal and the export modal it asserts that the
  * panel's computed background is light (luminance > 0.8) under
  * prefers-color-scheme: light and dark under dark, and that the text on it
- * reads at 4.5:1 or better. Screenshots land in docs/screenshots/editor-theme.
+ * reads at 4.5:1 or better. The plan chip's panel (omega-editor-plan.js) is
+ * drawn from a real read-only server projection with the server's figures.
+ * Screenshots land in docs/screenshots/editor-theme.
  * No Maps, no Firebase, no /api/: nothing here is a functional acceptance run.
  */
 'use strict';
@@ -24,10 +26,22 @@ function div(id) {
 }
 /* the real stylesheets, in page order; the theme switch's own script so OmegaUI.theme() is exercised */
 var styles = (markup.match(/<style\b[^>]*>[\s\S]*?<\/style>/gi) || []).join('\n');
+/* the plan chip's own script, inline: it paints into the title bar's mount */
+var plan = fs.readFileSync(path.join(ROOT, 'omega-editor-plan.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
 var fixture = '<!doctype html><html><head><meta charset="utf-8"><title>Editor chrome</title>' + styles + '</head><body>' +
-  div('tb') + div('ribbon') + div('lp') + div('rp') + div('bess-modal') + div('export-modal') +
-  '<script>window.OmegaUI={};</script>' +
+  div('portal-nav') + div('tb') + div('ribbon') + div('lp') + div('rp') + div('bess-modal') + div('export-modal') +
+  '<script>window.OmegaUI={};</script><script>' + plan + '</script>' +
   '</body></html>';
+/* a read-only package with every part of the panel: the notice and its pay
+   link, the server's figures, In Site Map, Elsewhere and a change waiting
+   for payment. Real projection (api/_lib/package-access.js). */
+var X = require('../api/_lib/package-access'), PAY = 'https://app.qbo.intuit.com/app/customer/pay/theme';
+var planInput = {
+  view: X.project({ emailVerified: true }, { packaged: true, packagingState: 'trial', trialStartedAt: Date.now() - 20 * 86400000, trialEndsAt: Date.now() - 6 * 86400000,
+    accessUntil: Date.now() - 6 * 86400000, paymentLink: PAY, modules: ['lite', 'gridatlas', 'storage', 'whitelabel'] }, { status: 'active' }, { role: 'owner', status: 'active' }),
+  figures: { planDisplay: 'Field', monthlyDisplay: '$1,480.00/month', nextInvoiceOn: '2026-10-01', amountDue: 1480, amountDueDisplay: '$1,480.00',
+    pending: [{ add: ['estimate'], paymentLink: PAY }], invoices: [] }
+};
 var server = http.createServer(function (req, res) {
   if (req.url.split('?')[0] === '/__theme') { res.setHeader('Content-Type', 'text/html'); return res.end(fixture); }
   res.writeHead(404); res.end();
@@ -58,7 +72,9 @@ var PANELS = [
   { name: 'left-panel', panel: '#lp', open: function () { var p = document.getElementById('lp'); p.classList.add('lp-open'); p.style.transition = 'none'; p.style.display = 'flex'; p.style.transform = 'none'; p.style.opacity = '1'; }, text: '#lp .sec-h, #lp label, #lp .lbl, #lp h3, #lp div' },
   { name: 'right-panel', panel: '#rp', open: function () { var p = document.getElementById('rp'); p.classList.add('rp-open'); p.style.transition = 'none'; p.style.display = 'flex'; p.style.transform = 'none'; p.style.opacity = '1'; }, text: '#rp .sec-h, #rp label, #rp h3, #rp div' },
   { name: 'guided-build', panel: '#bess-modal .modal', open: function () { var m = document.getElementById('bess-modal'); m.classList.add('on'); m.style.display = 'flex'; }, text: '#bm-title, #bess-modal label, #bess-modal div' },
-  { name: 'export-modal', panel: '#export-modal > div', open: function () { var m = document.getElementById('export-modal'); m.style.display = 'flex'; }, text: '#export-modal div' }
+  { name: 'export-modal', panel: '#export-modal > div', open: function () { var m = document.getElementById('export-modal'); m.style.display = 'flex'; }, text: '#export-modal div' },
+  /* the plan chip's panel (2026-09-27): what the workspace pays for and holds */
+  { name: 'plan-popover', panel: '#omega-plan-pop', open: function () { OmegaEditorPlan.show(window.__planInput); }, text: '#omega-plan-pop .oep-eyebrow, #omega-plan-pop .oep-name, #omega-plan-pop .oep-pill, #omega-plan-pop p, #omega-plan-pop b, #omega-plan-pop span, #omega-plan-pop a, #omega-plan-pop button, #omega-plan-pop h4, #omega-plan-pop i' }
 ];
 async function run() {
   await new Promise(function (resolve) { server.listen(0, '127.0.0.1', resolve); });
@@ -71,6 +87,7 @@ async function run() {
       await page.emulateMedia({ colorScheme: scheme });
       await page.goto(base + '/__theme');
       await page.evaluate(function (src) { window.C = (new Function('return (' + src + ')()'))(); }, COLOUR.toString());
+      await page.evaluate(function (input) { window.__planInput = input; }, planInput);
       /* the token set answers the scheme */
       var panelBg = await page.evaluate(function () { return getComputedStyle(document.documentElement).getPropertyValue('--panel').trim(); });
       ok(scheme === 'light' ? /^#FFFFFF$/i.test(panelBg) : /^#25282B$/i.test(panelBg), scheme + ': --panel is ' + panelBg);
