@@ -437,7 +437,7 @@
       ws.toolAccess = (orgAccess || memAccess).slice();
     }
     /* ── ADD-ONS ON A PLAN BILLED OUTSIDE THE ENGINE ─────────────────────
-       What a legacy workspace bought on Add to plan and has switched on now
+       What a legacy workspace bought by card (Opt in) and has switched on now
        (billing.addOns.live, written only by the server: api/_lib/addons.js),
        while its paid period lasts. Their tools arrive as toolOverrides the
        server wrote; this list is what the hub, the Modules page and the
@@ -652,8 +652,11 @@
       // refresh can wait on a network. API and rules enforce it independently.
       if (view.accessUntil && Date.now() >= view.accessUntil) {
         view.readOnly = true;
-        /* the editor's command gate, on the editor only: the store pages load
-           omega-caps.js for its legacy ladder (capsFor) and have no ribbon */
+        /* the editor's command gate, on the editor only (a page with Site
+           Map's ribbon): the workspace and the store pages load omega-caps.js
+           as a library (the legacy ladder: editorCtx / capsFor) and have no
+           ribbon, and their module cards carry data-module, which the ribbon
+           guard would hide and swallow clicks on */
         if (global.OmegaCaps && global.document.getElementById('ribbon')) { global.OmegaCaps.setPackage(view); global.OmegaCaps.apply('trial'); }
       }
       user.getIdToken().then(function (token) { return global.fetch('/api/package-access', { cache: 'no-store', headers: { Authorization: 'Bearer ' + token } }); })

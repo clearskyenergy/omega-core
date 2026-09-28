@@ -155,7 +155,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       if (m.type() === 'warning') warns.push(t.slice(0, 160));
     });
     var t0 = Date.now();
-    await p.goto(base + '/', { waitUntil: 'domcontentloaded' });
+    await p.goto(base + '/' + (opts.hash || ''), { waitUntil: 'domcontentloaded' });
     /* the splash comes down when auth has answered; the app is the side of it a signed-in user gets */
     var ready = await p.waitForFunction(function () { return document.body.classList.contains('auth-ready'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
     var tReady = Date.now() - t0;
@@ -406,11 +406,11 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.click('#acct-package-add'); await p.waitForSelector('#omega-package-menu [data-module-card]');
     await p.waitForFunction(function () { return document.querySelectorAll('#omega-package-menu [data-subscribe] button').length > 0; }, null, { timeout: 8000 });
     var menu = await p.evaluate(function () { return { title: document.getElementById('opm-title').textContent, cards: document.querySelectorAll('#omega-package-menu [data-module-card]').length, lite: !!document.querySelector('#omega-package-menu [data-module-card="lite"]'), subscribe: document.querySelectorAll('#omega-package-menu [data-subscribe] button').length }; });
-    ok('lite-ladder: the Ladder includes mandatory Lite and Subscribe on each optional rung', menu.title === 'The Ladder' && menu.cards === M.catalog().length && menu.lite && menu.subscribe === menu.cards - 1, menu);
+    ok('lite-ladder: the Ladder includes mandatory Lite and Opt in on each optional rung', menu.title === 'The Ladder' && menu.cards === M.catalog().length && menu.lite && menu.subscribe === menu.cards - 1, menu);
     await p.click('#omega-package-menu [data-module-card="gridatlas"] [data-subscribe] button');
     await p.waitForFunction(function () { return !!document.querySelector('#omega-package-menu [data-module-card="gridatlas"] .opm-quote, #omega-package-menu [data-module-card="gridatlas"] .opm-reason'); }, null, { timeout: 8000 });
     var quote = await p.$eval('#omega-package-menu [data-module-card="gridatlas"] .opm-act', function (e) { return e.textContent; });
-    ok('lite-ladder: Subscribe brings the server\'s quote for the rest of the cycle', /today/.test(quote) && /\$/.test(quote), quote);
+    ok('lite-ladder: Opt in brings the server\'s quote for the rest of the cycle', /today/.test(quote) && /\$/.test(quote), quote);
     await shot10b(p, 'ladder-menu');
     await p.evaluate(function () { OmegaPackageMenu.close(); }); await p.waitForSelector('#omega-package-menu', { state: 'detached' });
     await p.evaluate(function () { closeAccount(); });
@@ -473,6 +473,53 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var legacyMods = await p.evaluate(function () { var b = document.getElementById('dash-modules'); return b ? getComputedStyle(b).display : 'missing'; });
     ok('legacy-enterprise: no Your modules block (a legacy plan is left alone)', legacyMods === 'none', legacyMods);
     return out;
+  } });
+  /* ══ 9. THE WORKSPACE'S PLACES ON THE CLASSIC HOME (review #27) — Site
+     Map's plan chip and the editor gate link /workspace#billing, #modules
+     and #module-<key>; a classic home is sent here with the hash kept
+     (workspace.html classicBounce), and each opens its twin once the
+     entitlements say what the plan is. ══ */
+  function acctAt(p) { return p.evaluate(function () { var o = document.getElementById('acct-overlay'), t = Array.prototype.filter.call(document.querySelectorAll('#acct-overlay .acct-sec-title'), function (e) { return /^Billing/.test(e.textContent); })[0], r = t && t.getBoundingClientRect(); return { open: !!o && o.classList.contains('show'), billingInView: !!(r && r.height > 0 && r.top >= 0 && r.top < window.innerHeight) }; }); }
+  var nh = FX.northstar(HOST);
+  await scenario('northstar-hash', nh, { hash: '#billing', steps: async function (p, shown, ctx) {
+    await p.waitForSelector('#acct-overlay.show', { timeout: 8000 }).catch(function () {});
+    var a = await acctAt(p);
+    ok('northstar-hash: /#billing opens the Account panel at Billing & plan', a.open && a.billingInView, a);
+    await p.evaluate(function () { closeAccount(); window.location.hash = '#modules'; }); await wait(400);
+    a = await acctAt(p);
+    ok('northstar-hash: /#modules on a legacy plan (no Your modules block) opens Billing & plan', a.open && a.billingInView, a);
+    await p.evaluate(function () { closeAccount(); });
+    /* a legacy plan's module: the marketplace, where the classic home opens the one menu on it (stood in here; render-workspace.js follows it through) */
+    await ctx.route(/\/marketplace\.html/, function (r) { return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>marketplace</title><main id="main">marketplace</main>' }); });
+    await p.evaluate(function () { window.location.hash = '#module-finance'; });
+    var went = await p.waitForFunction(function () { return location.pathname === '/marketplace.html'; }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
+    var at = await p.evaluate(function () { return location.pathname + location.hash; });
+    ok('northstar-hash: /#module-finance on a legacy plan goes to /marketplace.html#finance, where the one menu opens on it', went && at === '/marketplace.html#finance', at);
+    return {};
+  } });
+  var lh = FX.lite(HOST);
+  await scenario('lite-hash', lh, { hash: '#modules', steps: async function (p) {
+    function dmNow() { return p.evaluate(function () { var b = document.getElementById('dash-modules'), r = b && b.getBoundingClientRect(); return { shown: !!b && !b.classList.contains('mod-none'), top: r ? Math.round(r.top) : null, h: window.innerHeight, acct: document.getElementById('acct-overlay').classList.contains('show') }; }); }
+    /* arriving on /#modules (the bounce from /workspace#modules): Your modules, never the fallback */
+    await p.waitForFunction(function () { var b = document.getElementById('dash-modules'); return !!b && !b.classList.contains('mod-none'); }, null, { timeout: 8000 }).catch(function () {});
+    await wait(400);
+    var first = await dmNow();
+    ok('lite-hash: arriving on /#modules on a packaged plan shows Your modules, not the Account panel', first.shown && !first.acct && first.top !== null && first.top >= -2 && first.top < first.h, first);
+    /* scrolled away first (the last block to the top), so arriving is the route's doing */
+    await p.evaluate(function () { window.location.hash = ''; var all = Array.prototype.filter.call(document.querySelectorAll('.dash-block'), function (b) { return b.offsetHeight > 0; }), last = all[all.length - 1]; if (last) last.scrollIntoView({ block: 'start' }); }); await wait(300);
+    var away = await p.evaluate(function () { return Math.round(document.getElementById('dash-modules').getBoundingClientRect().top); });
+    await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(500);
+    var dm = await dmNow(); dm.away = away;
+    ok('lite-hash: /#modules on a packaged plan scrolls Your modules into view', dm.shown && away < -20 && dm.top !== null && dm.top >= -2 && dm.top < dm.h / 2 && !dm.acct, dm);
+    await p.evaluate(function () { window.location.hash = '#module-gridatlas'; });
+    var menu = await p.waitForSelector('#omega-package-menu [data-module-card="gridatlas"]', { timeout: 8000 }).then(function () { return true; }, function () { return false; });
+    var cards = await p.evaluate(function () { return document.querySelectorAll('#omega-package-menu [data-module-card]').length; });
+    ok('lite-hash: /#module-gridatlas opens the one menu on Grid Atlas alone', menu && cards === 1, { menu: menu, cards: cards });
+    await p.evaluate(function () { OmegaPackageMenu.close(); window.location.hash = '#billing'; }); await wait(400);
+    var a = await acctAt(p);
+    ok('lite-hash: /#billing opens the Account panel at Billing & plan', a.open && a.billingInView, a);
+    await p.evaluate(function () { closeAccount(); });
+    return {};
   } });
   PACKAGE_VIEW = null;
 

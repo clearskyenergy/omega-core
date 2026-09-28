@@ -201,6 +201,37 @@
      `loading`) the moment between sign-in and the answer. Nothing else may
      read a pending view as "this workspace has a package". */
   function pendingPackage(loading) { return { packaged: true, pending: true, loading: loading === true, readOnly: true, modules: [], caps: [], toolAccess: [], catalog: [], notSold: [] }; }
+  /* ── WHEN THE PLAN COULD NOT BE CHECKED ──────────────────────────────
+     A billing read or a package fetch that FAILED is not a package with
+     nothing in it. pendingPackage(true) is the short wait while the answer
+     is on its way and withholds every command; left in place after a
+     failure it emptied the whole ribbon, tabs and all, and the Ladder then
+     said "your package includes every module". Nobody knows yet whether
+     this workspace is legacy or packaged, so nothing that produces is shown
+     (hide, don't grey: docs/PACKAGING-ROADMAP.md §3.1) — but opening,
+     viewing and moving between projects stays, the same commands an unpaid
+     packaged workspace keeps. It is still `pending` (never "this workspace
+     has a package": the editor mode, the workspace presets and standing()
+     read it as none) and not `loading`, so the menu's plan strip says the
+     plan could not be checked and offers Try again. The list is the
+     server's M.readOnlyRibbon(), which cannot be fetched when the fetching
+     is what failed; scripts/tests/teditorplan.js fails if the two drift. */
+  var UNVERIFIED_READ_ONLY = ['openProjectsModal', 'rbNav', 'rbTab', 'omegaThemePick', 'omegaLoadMap', 'toggleLayersPanel', 'toggleCompassPanel',
+    'toggleSitePanel', 'toggleMeterPanel', 'toggleDockLeft', 'toggleDiagPanel', 'opToggleCoords', "openRpPanel('summary')", "rpTab('summary')"];
+  function unverifiedPackage() {
+    var v = pendingPackage(false);
+    v.unverified = true; v.readOnlyRibbon = UNVERIFIED_READ_ONLY.slice();
+    return v;
+  }
+  /* What a failed answer leaves on screen: a 403 is the server saying no to
+     THIS person (unverified email, not a member yet, disabled), so locked
+     and said as that, never as a connection problem or a bill to pay;
+     anything else is a connection that did not answer, so the plan is
+     unchecked. */
+  function failedView(e) {
+    if (e && e.status === 403) { var v = pendingPackage(); v.refused = e.reason || 'Your access to this workspace\'s tools was refused.'; return v; }
+    return unverifiedPackage();
+  }
   function setPackage(view) {
     var previous = _package;
     _package = view && view.packaged === true ? view : null;
@@ -240,11 +271,20 @@
   }
   function allowedCommand(id, handler) {
     if (!_package || _package.staff) return true;
+    if (_package.unverified) return (_package.readOnlyRibbon || []).some(function (s) { return matches(s, id, handler); });
     if (_package.toolAccess.indexOf('editor') < 0) return false;
     var own = owners(id, handler);
     if (!own.some(function (k) { return _package.modules.indexOf(k) >= 0; })) return false;
     if (!_package.readOnly) return true;
     return (_package.readOnlyRibbon || []).some(function (s) { return matches(s, id, handler); });
+  }
+  function isTab(el) { return !!(el.classList && (el.classList.contains('rtab') || el.classList.contains('ribbon-page'))); }
+  /* a tab (or its page) stays while one of its buttons is allowed */
+  function tabHolds(el) {
+    var page = el.classList.contains('ribbon-page') ? el : global.document.querySelector('.ribbon-page[data-page="' + el.getAttribute('data-page') + '"]');
+    var children = page ? page.querySelectorAll('.rbtn,.rsbtn') : [];
+    for (var c = 0; c < children.length; c++) if (allowedElement(children[c])) return true;
+    return false;
   }
   /* ── A COMMAND ON A TAB THE PLAN HID IS NOT RUN BY NAME ──────────────
      Search tools (Ctrl+K) and Ask Jarvis run a ribbon command by clicking
@@ -419,17 +459,15 @@
     if (!_package) return legacyOpen(el);
     if (_package.staff) return true;
     if (!el || !el.getAttribute) return false;
+    /* unchecked plan: judged by what the command does, never by a module
+       mark an earlier package left on the button */
+    if (_package.unverified) return isTab(el) ? tabHolds(el) : allowedCommand(el.id || '', el.getAttribute('onclick') || '');
     var module = el.getAttribute('data-module'), cap = el.getAttribute('data-cap');
     if (module && !_package.modules.some(function (k) { return module.split(/\s+/).indexOf(k) >= 0; })) return false;
     var handler = el.getAttribute('onclick') || '', own = owners(el.id || '', handler);
     if (own.length) return allowedCommand(el.id || '', handler);
     if (module) return !_package.readOnly;
-    if (cap && el.classList && (el.classList.contains('rtab') || el.classList.contains('ribbon-page'))) {
-      var page = el.classList.contains('ribbon-page') ? el : global.document.querySelector('.ribbon-page[data-page="' + el.getAttribute('data-page') + '"]');
-      var children = page ? page.querySelectorAll('.rbtn,.rsbtn') : [];
-      for (var c = 0; c < children.length; c++) if (allowedElement(children[c])) return true;
-      return false;
-    }
+    if (cap && isTab(el)) return tabHolds(el);
     if (cap) {
       if (_package.readOnly && cap !== 'view') return false;
       /* Container caps may group specific owned exports. Ownership of one
@@ -576,7 +614,25 @@
         ribbon.parentNode.insertBefore(bar, ribbon);
       }
     }
-    if (global.OmegaPackageMenu) { global.OmegaPackageMenu.tab(); global.OmegaPackageMenu.staffPreview(); if (global.OmegaPackageMenu.notice) global.OmegaPackageMenu.notice(); if (global.OmegaPackageMenu.optIn) global.OmegaPackageMenu.optIn(); }
+    if (global.OmegaPackageMenu) { global.OmegaPackageMenu.tab(); global.OmegaPackageMenu.staffPreview(); if (global.OmegaPackageMenu.notice) global.OmegaPackageMenu.notice(); if (global.OmegaPackageMenu.optIn) global.OmegaPackageMenu.optIn(); ladderTab(doc); }
+  }
+  /* An unchecked plan has no catalog, so the Ladder would open on "your
+     package includes every module", which is false. While the plan is
+     unchecked the tab opens the plan chip's panel instead, which says the
+     plan and its pricing could not be loaded and offers Retry
+     (omega-editor-plan.js); once a real answer lands the menu comes back. */
+  function ladderTab(doc) {
+    var tab = doc.getElementById('omega-package-tab');
+    if (!tab) return;
+    if (!tab.hasOwnProperty('_omegaMenu')) { tab._omegaMenu = tab.onclick; tab._omegaTitle = tab.title; }
+    if (_package && _package.unverified) {
+      tab.onclick = function () { if (global.OmegaEditorPlan && global.OmegaEditorPlan.open) global.OmegaEditorPlan.open(); };
+      tab.title = 'Module pricing could not be loaded: your plan could not be checked. Open to retry.';
+      tab.setAttribute('data-plan-unverified', '1');
+    } else {
+      tab.onclick = tab._omegaMenu; tab.title = tab._omegaTitle;
+      tab.removeAttribute('data-plan-unverified');
+    }
   }
   function guardLaunchers() {
     if (!_package) return;
@@ -618,8 +674,12 @@
   }
   function fetchPackage(user) {
     var request = ++_packageRequest;
-    setPackage(pendingPackage());
-    return projection(user).then(function (v) { if (request !== _packageRequest) throw new Error('Account changed'); setPackage(v); return v; });
+    var waiting = setPackage(pendingPackage());
+    /* a fetch that fails leaves the plan UNCHECKED (or refused, on a 403),
+       not empty (see failedView); only while this is still the latest
+       request and nothing else has answered in the meantime */
+    return projection(user).then(function (v) { if (request !== _packageRequest) throw new Error('Account changed'); setPackage(v); return v; },
+      function (e) { if (request === _packageRequest && _package === waiting) setPackage(failedView(e)); throw e; });
   }
   /* Capture covers keyboard-generated clicks and programmatic .click() on
      a hidden button. The API still checks every producing request. */
@@ -673,6 +733,31 @@
     return grants(tier, { org: _org, addons: _addons });
   }
 
+  /* Does the LEGACY tier ladder decide this capability at all? A package's
+     module capabilities ('storage', 'estimate', 'gridatlas' …) are not on the
+     ladder, so a legacy editor never checks them; the ladder's own words
+     (design, view, export.*, schematic, riser, engineering, parcelscreen,
+     compute, permitting) are. The workspace Modules page asks this so that
+     "what you hold" there is what Site Map opens (2026-09-27). */
+  var GOVERNED = null;
+  function governs(cap) {
+    if (!GOVERNED) {
+      GOVERNED = {};
+      var k, i;
+      for (k in GRANTS) if (Object.prototype.hasOwnProperty.call(GRANTS, k)) for (i = 0; i < GRANTS[k].length; i++) GOVERNED[GRANTS[k][i]] = 1;
+      for (k in ADDON_GRANTS) if (Object.prototype.hasOwnProperty.call(ADDON_GRANTS, k)) for (i = 0; i < ADDON_GRANTS[k].length; i++) GOVERNED[ADDON_GRANTS[k][i]] = 1;
+      for (i = 0; i < JV_GRANTS.length; i++) GOVERNED[JV_GRANTS[i]] = 1;
+      delete GOVERNED.all;
+    }
+    var c = String(cap || ''), dot = c.indexOf('.');
+    return !!(GOVERNED[c] || (dot > 0 && GOVERNED[c.slice(0, dot)]));
+  }
+  /* true/false for a capability the ladder decides, null for one it does not.
+     Judged on the ladder alone (canWith, with the account's JV org and
+     add-ons), never on a live package: a legacy question has a legacy
+     answer whatever the editor on screen holds. */
+  function editorCan(tier, cap) { return governs(cap) ? canWith(tier, cap, { org: _org, addons: _addons }) : null; }
+
   function can(tier, cap) {
     var s = setFor(tier);
     if (s.all) return true;
@@ -719,7 +804,7 @@
       var hidden = applyPackage(scope);
       if (global.document && global.document.body) {
         global.document.body.setAttribute('data-packaged-editor', '1');
-        var signature = JSON.stringify([_package.modules, _package.staff, _package.readOnly]);
+        var signature = JSON.stringify([_package.modules, _package.staff, _package.readOnly, !!_package.unverified]);
         if (_packageSignature !== signature) {
           _packageSignature = signature;
           try { global.document.dispatchEvent(new global.CustomEvent('omega:package', { detail: _package })); } catch (e) {}
@@ -841,13 +926,17 @@
 
      They differ only in what a failure means. At sign-in every failure is
      the locked answer: a read that fails must not hand out the engineering
-     suite. A refresh that cannot reach the server keeps what is on screen
-     (`transient`), because a dropped connection is not a lapsed payment and
-     the server still refuses every producing request on its own. A 403 from
-     the projection is the server saying no, and it locks either way. */
+     suite (and must not lock ClearSky out either: internal stays internal).
+     A failure leaves the plan UNCHECKED (unverifiedPackage): viewing stays,
+     producing waits, and Retry (retry(), the plan chip) or Try again
+     (refresh(), the plan strip) asks again without a reload. A refresh that
+     cannot reach the server keeps what is on screen (`transient`), because
+     a dropped connection is not a lapsed payment and the server still
+     refuses every producing request on its own. A 403 from the projection
+     is the server saying no, and it locks either way (failedView). */
   function read(db, email, emailVerified, refreshing) {
     var d = orgOf(email), internal = emailVerified === true && INTERNAL_DOMAINS.indexOf(d) >= 0;
-    function locked() { return { tier: internal ? 'internal' : 'trial', addons: [], view: internal ? null : pendingPackage() }; }
+    function locked() { return { tier: internal ? 'internal' : 'trial', addons: [], view: internal ? null : unverifiedPackage() }; }
     if (internal && !db) return Promise.resolve({ tier: 'internal', addons: [], view: null });
     if (!d || !db) return Promise.resolve({ tier: 'trial', addons: [], view: null });
     return db.collection('omega_orgs').doc(d).collection('billing').doc('current').get().then(function (s) {
@@ -858,12 +947,9 @@
         if (!user || user.email !== email) return { tier: 'trial', addons: [], view: pendingPackage() };
         return projection(user).then(function (view) { return { tier: view.tier || 'standard', addons: [], view: view }; }, function (e) {
           if (refreshing && e.status !== 403) return { transient: true };
-          /* a 403 is the server saying no to THIS person (unverified, not a
-             member yet, disabled): locked, and said as that, never as a
-             connection problem or a bill to pay */
-          var locked = pendingPackage();
-          if (e.status === 403) locked.refused = e.reason || 'Your access to this workspace\'s tools was refused.';
-          return { tier: 'trial', addons: [], view: locked };
+          /* a 403 locks, said as a refusal; anything else leaves the plan
+             unchecked: viewing stays, producing waits (failedView) */
+          return { tier: 'trial', addons: [], view: failedView(e) };
         });
       }
       var eff = effectiveTier(b.tier || 'trial', b.capTier);
@@ -1035,6 +1121,28 @@
     setInterval(function () { if (global.document.visibilityState !== 'hidden') ask(true); }, EVERY);
   }
 
+  /* ── RETRY WITHOUT A RELOAD ────────────────────────────────────────────
+     The plan chip's Retry after an unchecked plan: ask again for the same
+     person and apply the answer, so a drawing on screen is never lost to a
+     page reload. It is read() as a re-check (the same rules as signing in):
+     while the read is out the unchecked plan stays exactly as it was, so
+     Retry never shows a producing command before the answer does, and a
+     connection that still does not answer leaves it unchecked. The editor's
+     gating block re-applies OmegaCaps.tier() — the tier last applied, which
+     is this answer once it lands — so the next injected button cannot take
+     the plan away again. A new resolve() (another sign-in) supersedes it.
+     Resolves to the tier applied ('trial' while still unchecked). */
+  function retry(db, email, emailVerified) {
+    if (_package && (_package.staff || _package.preview)) return Promise.resolve(_tier || 'standard');
+    var request = _packageRequest, before = standing();
+    return read(db, email, emailVerified, true).then(function (plan) {
+      if (request !== _packageRequest) return _tier || 'trial';
+      if (plan.transient) return 'trial';
+      commit(plan); apply(plan.tier); schedule(); settle(before);
+      return plan.tier;
+    }, function () { return 'trial'; });
+  }
+
   global.OmegaCaps = {
     /* Exported so a caller that never goes through resolve() — a preview, a
        test, the master console showing what an add-on would unlock — can be
@@ -1042,7 +1150,8 @@
     ADDON_GRANTS: ADDON_GRANTS, setAddons: setAddons, addons: function () { return _addons.slice(); },
     LADDER: LADDER, GRANTS: GRANTS,
     JV_ORGS: JV_ORGS, JV_GRANTS: JV_GRANTS, INTERNAL_DOMAINS: INTERNAL_DOMAINS,
-    normalise: normalise, setFor: setFor, can: can, apply: apply, resolve: resolve,
+    normalise: normalise, setFor: setFor, can: can, governs: governs, editorCan: editorCan, apply: apply, resolve: resolve, retry: retry,
+    unverifiedPackage: unverifiedPackage, unchecked: function () { return !!(_package && _package.unverified); },
     setOrg: setOrg, orgOf: orgOf, org: function () { return _org; },
     effectiveTier: effectiveTier, setPackage: setPackage, packageAccess: function () { return _package; },
     MODULE_GRANTS: MODULE_GRANTS, owners: owners, commandPage: commandPage, layout: layout,
