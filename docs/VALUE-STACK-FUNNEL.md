@@ -3,15 +3,22 @@
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
 Status: **design note, nothing built.** Written 2026-09-28 from a read of the
-code (not a run of the app) for the DividendVPP and Lightsmith conversation;
-rev B follows internal review ("make the two flows clearer; confirm
-Lightsmith's inputs, outputs, where its VPP role begins and who checks that
-revenue streams can be combined; walk one sample site"). The partner-facing
-chart is `docs/design/value-stack-funnel.html`, published privately as a
-claude.ai artifact (https://claude.ai/artifact/YNLSbK9EarAQv6UjrXRsDR), and
-printed as `docs/design/value-stack-funnel.pdf` (five 11 × 17 in landscape
-sheets, from the page's own print rules). Keep all three in step. The chart
-deliberately leaves out the defects listed below.
+code (not a run of the app) for the DividendVPP and Lightsmith conversation.
+Two partner-facing documents come from it; docs/ is not deployed.
+
+- **Value Stack Funnel**, the one sent first: `docs/design/value-stack-funnel.html`
+  and `.pdf` (three 11 × 17 in landscape sheets), published privately at
+  https://claude.ai/artifact/YNLSbK9EarAQv6UjrXRsDR. The value stack as six
+  gates, the D1–D5 points, the editor's click path, the market table, the
+  rules and where things stand. Leave it as sent.
+- **Value Stack Walkthrough**, its companion, written after internal review
+  ("make the two flows clearer; confirm Lightsmith's inputs, outputs, where its
+  VPP role begins and who checks that revenue streams can be combined; walk one
+  sample site"): `docs/design/value-stack-walkthrough.html` and `.pdf` (three
+  sheets), published privately at
+  https://claude.ai/artifact/FeYjwf5VBnjocFn21Uhncr.
+
+Neither document carries the defects listed below.
 
 ## Two flows
 
@@ -38,14 +45,14 @@ customer today (Cost & ROI, then the results rail and the exports).
 | D Dispatch assumptions | double-booked hours and cycles; streams that can't combine | `OmegaValueStack.allocate` (from 141299); the hourly `dispatch.verifyShave` (127778), used only by the Bill Analysis workbook (139299). No program's combination rules are held anywhere | no: `run`, `allocate` and `lifecycle` have no callers; only `irr` and `readSite` are used |
 | E Portfolio reporting | — | `updateROI` (36664): payback, year-1 cash-on-cash, 10-year NPV at 8%, 3% revenue growth, no fade; nothing saved (defect 2). `owner-reporting.html` (`siteVariance` 370) and `om-console.html` report expected against actual energy and availability, not revenue by stream | no |
 
-The "verified" step of rev A is now part of D and E: the `_certified` badge
+The funnel's "verified" gate is part of D and E here: the `_certified` badge
 (29632) is never set true, and the "certified by our aggregator partners"
 footnotes (21344, 30421-30424) are labels, not checks.
 
 ## Partner roles on record
 
 What the repo says, which is all the chart claims. Everything else on the
-chart's partner sheet is a question for the meeting.
+walkthrough's partner sheet is a question for the meeting.
 
 - **Lightsmith Energy**, "Dispatch optimization layer" (`admin/admin-console.js:261`,
   signed partner, tooling). `apartment-bess.html:554` has Molecule run
@@ -84,7 +91,7 @@ node -e 'var V=require("./api/_lib/value-stack.js");console.log(JSON.stringify(V
 
 If the same 1 MW can't earn PJM capacity and the VPP program at once, the
 stack is $246,000–$318,000 (keep the VPP) or $165,989–$237,989 (keep
-capacity). Nothing in OMEGA checks this today; the chart proposes that the
+capacity). Nothing in OMEGA checks this today; the walkthrough proposes that the
 market participant of record owns the rules, Lightsmith's optimizer enforces
 them in dispatch, and OMEGA applies them in the stack.
 
