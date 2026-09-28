@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Source of the partner-facing chart described in docs/VALUE-STACK-FUNNEL.md.
+     Published privately as a claude.ai artifact; docs/ is not deployed. -->
+<title>OMEGA Value Stack Funnel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+:root{
+  --page:#F5F4F0; --paper:#FFFFFF; --ink:#14171A; --ink-2:#48545F; --ink-3:#66727E;
+  --line:rgba(20,23,26,.13); --line-2:rgba(20,23,26,.34);
+  --omega:#2B5FA8; --omega-soft:#E6EEF9;
+  --dvpp:#6250C4; --dvpp-soft:#F1EEFB;
+  --est:#8F5E0E; --est-soft:#FBF0DA;
+  --no:#6F7B86; --no-soft:#EDEFF1;
+  --grid-a:rgba(43,95,168,.075); --grid-b:rgba(43,95,168,.03);
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --page:#0E151D; --paper:#15202B; --ink:#E6ECF2; --ink-2:#B0BCC8; --ink-3:#8E9BA8;
+    --line:rgba(230,236,242,.13); --line-2:rgba(230,236,242,.36);
+    --omega:#8DB3EC; --omega-soft:rgba(141,179,236,.14);
+    --dvpp:#B6ABF7; --dvpp-soft:rgba(182,171,247,.10);
+    --est:#E9B45E; --est-soft:rgba(233,180,94,.13);
+    --no:#9AA6B2; --no-soft:rgba(154,166,178,.12);
+    --grid-a:rgba(141,179,236,.06); --grid-b:rgba(141,179,236,.025);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --page:#0E151D; --paper:#15202B; --ink:#E6ECF2; --ink-2:#B0BCC8; --ink-3:#8E9BA8;
+  --line:rgba(230,236,242,.13); --line-2:rgba(230,236,242,.36);
+  --omega:#8DB3EC; --omega-soft:rgba(141,179,236,.14);
+  --dvpp:#B6ABF7; --dvpp-soft:rgba(182,171,247,.10);
+  --est:#E9B45E; --est-soft:rgba(233,180,94,.13);
+  --no:#9AA6B2; --no-soft:rgba(154,166,178,.12);
+  --grid-a:rgba(141,179,236,.06); --grid-b:rgba(141,179,236,.025);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0; color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.55;
+  background-color:var(--page);
+  background-image:
+    linear-gradient(var(--grid-a) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid-a) 1px,transparent 1px),
+    linear-gradient(var(--grid-b) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid-b) 1px,transparent 1px);
+  background-size:120px 120px,120px 120px,24px 24px,24px 24px;
+}
+.sheet{max-width:1180px; margin-inline:auto; padding-inline:16px; padding-block:28px 64px; display:grid; gap:44px}
+@media (min-width:720px){ .sheet{padding-inline:28px} }
+
+h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0; color:var(--ink)}
+h1{font-size:clamp(30px,5vw,46px); font-weight:800; letter-spacing:-.015em; line-height:1.04}
+h2{font-size:clamp(21px,2.6vw,26px); font-weight:700; letter-spacing:-.01em; line-height:1.15}
+h3{font-size:16px; font-weight:700; line-height:1.25}
+p{margin:0}
+.eyebrow,.label{font-family:var(--mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3)}
+code{font-family:var(--mono); font-size:.92em}
+
+/* ── title block, drawn like the one on a drawing sheet ─────────────── */
+.titleblock{display:grid; grid-template-columns:minmax(0,1fr); border:1.5px solid var(--ink); background:var(--paper)}
+@media (min-width:860px){ .titleblock{grid-template-columns:minmax(0,1fr) 300px} }
+.tb-main{padding:26px 24px 24px; display:grid; gap:12px; align-content:start}
+.tb-main .lede{font-size:17px; line-height:1.5; color:var(--ink-2); max-width:62ch}
+.tb-meta{margin:0; display:grid; grid-template-columns:1fr 1fr; border-top:1px solid var(--line-2)}
+@media (min-width:860px){ .tb-meta{grid-template-columns:1fr; border-top:0; border-left:1px solid var(--line-2)} }
+.tb-meta div{padding:11px 16px; border-bottom:1px solid var(--line); display:grid; gap:2px}
+.tb-meta div:nth-child(odd){border-right:1px solid var(--line)}
+.tb-meta div:nth-last-child(-n+2){border-bottom:0}
+@media (min-width:860px){
+  .tb-meta div:nth-child(odd){border-right:0}
+  .tb-meta div:nth-last-child(-n+2){border-bottom:1px solid var(--line)}
+  .tb-meta div:last-child{border-bottom:0}
+}
+.tb-meta dt{font-family:var(--mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3)}
+.tb-meta dd{margin:0; font-size:14px; font-weight:600}
+
+.thesis{display:grid; gap:12px; max-width:70ch}
+.thesis p{font-size:16px; color:var(--ink-2)}
+.thesis strong{color:var(--ink); font-weight:600}
+
+section{display:grid; gap:18px}
+.section-head{display:grid; gap:6px; max-width:72ch}
+.section-head p{color:var(--ink-2)}
+
+/* ── figure ─────────────────────────────────────────────────────────── */
+figure{margin:0; display:grid; gap:12px}
+.fig-frame{background:var(--paper); border:1px solid var(--line-2); overflow-x:auto; -webkit-overflow-scrolling:touch}
+.fig-frame svg{display:block; width:100%; min-width:900px; height:auto}
+figcaption{font-size:13.5px; color:var(--ink-2); max-width:84ch}
+figcaption b{color:var(--ink); font-weight:600}
+.scroll-hint{display:none; font-family:var(--mono); font-size:11px; color:var(--ink-3)}
+@media (max-width:940px){ .scroll-hint{display:block} }
+
+.legend{display:flex; flex-wrap:wrap; gap:10px 22px; font-size:13px; color:var(--ink-2); align-items:center}
+.legend > span{display:inline-flex; align-items:center; gap:8px}
+.sw{display:inline-block; width:26px; height:14px; flex:none}
+.sw.applied{border:1.5px solid var(--omega); background:var(--omega-soft)}
+.sw.open{border:1.5px dashed var(--line-2); background:var(--paper)}
+.sw.dv{border:1.5px dashed var(--dvpp); background:var(--dvpp-soft)}
+.legend .t{font-family:var(--mono); font-size:11.5px; color:var(--ink-3)}
+
+/* SVG parts, styled from the page so both themes work */
+.f-applied{fill:var(--omega-soft); stroke:var(--omega); stroke-width:1.5}
+.f-open{fill:var(--paper); stroke:var(--line-2); stroke-width:1.4; stroke-dasharray:7 5}
+.f-in{fill:var(--omega-soft); stroke:var(--omega); stroke-width:1.4}
+.f-out{fill:var(--paper); stroke:var(--omega); stroke-width:1.4}
+.f-lane{fill:var(--dvpp-soft); stroke:var(--dvpp); stroke-width:1.2; stroke-dasharray:6 5}
+.f-dv{fill:var(--paper); stroke:var(--dvpp); stroke-width:1.4; stroke-dasharray:6 4}
+.ln-o{stroke:var(--omega); stroke-width:1.6; fill:none}
+.ln-d{stroke:var(--dvpp); stroke-width:1.6; fill:none; stroke-dasharray:6 4}
+.ah-o{fill:var(--omega)} .ah-d{fill:var(--dvpp)}
+.t-col{font-family:var(--mono); font-size:11px; letter-spacing:.09em; fill:var(--ink-3)}
+.t-col.dv{fill:var(--dvpp)}
+.t-gate{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; fill:var(--omega); font-weight:600}
+.t-gate.dv{fill:var(--dvpp)}
+.t-title{font-family:var(--display); font-size:16px; font-weight:700; fill:var(--ink)}
+.t-title.sm{font-size:14.5px}
+.t-title.dv{fill:var(--dvpp)}
+.t-desc{font-family:var(--body); font-size:12.5px; fill:var(--ink-2)}
+.t-small{font-family:var(--body); font-size:12px; fill:var(--ink-2)}
+.t-today{font-family:var(--mono); font-size:11px; fill:var(--ink-3)}
+.t-rm{font-family:var(--mono); font-size:11px; fill:var(--ink-2)}
+.t-arrow{font-family:var(--mono); font-size:11px; fill:var(--omega)}
+.t-arrow.dv{fill:var(--dvpp)}
+.t-note{font-family:var(--mono); font-size:11px; fill:var(--ink-3)}
+
+/* ── the path, step by step ─────────────────────────────────────────── */
+.steps{list-style:none; margin:0; padding:0; display:grid; gap:14px; grid-template-columns:minmax(0,1fr)}
+@media (min-width:640px){ .steps{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (min-width:1000px){ .steps{grid-template-columns:repeat(3,minmax(0,1fr))} }
+.step{background:var(--paper); border:1px solid var(--line-2); padding:16px 16px 18px; display:grid; gap:9px; align-content:start}
+.step-n{font-family:var(--mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--omega); font-weight:600}
+.step-n em{font-style:normal; color:var(--ink-3); font-weight:500}
+.step .where{font-family:var(--mono); font-size:12px; color:var(--ink); background:var(--omega-soft); padding:6px 8px; line-height:1.45}
+.step p{font-size:14px; color:var(--ink-2)}
+.step .feeds{font-family:var(--mono); font-size:11.5px; color:var(--ink-3)}
+
+/* ── tables ─────────────────────────────────────────────────────────── */
+.table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; background:var(--paper); border:1px solid var(--line-2)}
+table{border-collapse:collapse; width:100%; font-size:13.5px; font-variant-numeric:tabular-nums}
+th,td{text-align:left; vertical-align:top; padding:10px 12px; border-bottom:1px solid var(--line)}
+thead th{font-family:var(--mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:500; border-bottom:1px solid var(--line-2)}
+tbody tr:last-child th,tbody tr:last-child td{border-bottom:0}
+tbody th{font-family:var(--display); font-size:14.5px; font-weight:700}
+tbody th small{display:block; font-family:var(--body); font-weight:400; font-size:12px; color:var(--ink-3)}
+td.sharpen{color:var(--ink-2); min-width:250px}
+.markets{min-width:1000px}
+.markets tbody th{white-space:nowrap}
+.contract{min-width:900px}
+.contract td:first-child{white-space:nowrap; font-weight:600}
+.dv-id{font-family:var(--mono); font-weight:600; color:var(--dvpp); margin-right:6px}
+
+.chip{display:inline-block; font-family:var(--mono); font-size:11px; font-weight:500; font-style:normal; padding:2px 7px; border:1px solid transparent; white-space:nowrap}
+.chip.est{color:var(--est); background:var(--est-soft); border-color:var(--est)}
+.chip.typed{color:var(--omega); background:var(--omega-soft); border-color:var(--omega)}
+.chip.nv{color:var(--ink-2); background:transparent; border-color:var(--line-2)}
+.chip.soon{color:var(--dvpp); background:transparent; border-color:var(--dvpp); border-style:dashed}
+.chip.none{color:var(--no); background:var(--no-soft)}
+.cell-note{display:block; margin-top:5px; font-size:12px; color:var(--ink-3); line-height:1.4}
+.chip-key{display:flex; flex-wrap:wrap; gap:8px 18px; font-size:13px; color:var(--ink-2)}
+.chip-key span{display:inline-flex; gap:7px; align-items:center}
+.notes{display:grid; gap:8px; max-width:84ch}
+.notes p{font-size:13.5px; color:var(--ink-2)}
+
+/* ── rules and status ───────────────────────────────────────────────── */
+.rules{margin:0; padding:0; list-style:none; display:grid; background:var(--paper); border:1px solid var(--line-2)}
+.rules li{padding:12px 16px; border-bottom:1px solid var(--line); font-size:14.5px; color:var(--ink-2)}
+.rules li:last-child{border-bottom:0}
+.rules li b{color:var(--ink); font-weight:600}
+
+.status{display:grid; gap:14px; grid-template-columns:minmax(0,1fr)}
+@media (min-width:820px){ .status{grid-template-columns:repeat(3,minmax(0,1fr))} }
+.status > div{background:var(--paper); border:1px solid var(--line-2); padding:16px; display:grid; gap:10px; align-content:start}
+.status > div.proposed{border:1.5px dashed var(--dvpp); background:var(--dvpp-soft)}
+.status ul{margin:0; padding-left:18px; display:grid; gap:7px; font-size:14px; color:var(--ink-2)}
+.status .label{color:var(--omega)}
+.status .proposed .label{color:var(--dvpp)}
+
+footer{border-top:1.5px solid var(--ink); padding-top:14px; display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between; font-size:12.5px; color:var(--ink-3)}
+footer .mono{font-family:var(--mono); font-size:11.5px}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="titleblock">
+    <div class="tb-main">
+      <p class="eyebrow">ClearSky OMEGA · Site Map editor</p>
+      <h1>Value Stack Funnel</h1>
+      <p class="lede">How the editor turns a battery on a site map into a value stack, gate by gate, and the five points where DividendVPP data would make that stack accurate in each market.</p>
+    </div>
+    <dl class="tb-meta">
+      <div><dt>Prepared for</dt><dd>DividendVPP · Molecule Systems</dd></div>
+      <div><dt>Prepared by</dt><dd>ClearSky Energy Solutions</dd></div>
+      <div><dt>Status</dt><dd>Discussion draft</dd></div>
+      <div><dt>Date</dt><dd>28 September 2026</dd></div>
+    </dl>
+  </header>
+
+  <div class="thesis">
+    <p>Every revenue stream a market offers goes in at the top. Each gate then takes out value that <strong>this battery, in this market, through this route to market</strong> cannot actually earn, so what leaves the bottom is a number someone can sign for.</p>
+    <p>Today the number a customer sees passes through two of the six gates: a first-pass estimate and a ten-year cash flow. The other four exist in places but are not yet applied to it. DividendVPP can supply market data, terms, an hourly dispatch and verification at five points, marked <strong>D1 to D5</strong>.</p>
+  </div>
+
+  <!-- ═══ FIGURE 1 — THE FUNNEL ═══ -->
+  <figure id="funnel">
+    <div class="fig-frame">
+      <svg viewBox="0 0 1160 1000" role="img" aria-label="Funnel diagram. Three inputs, site and market, the system on the map, and the customer's bill, feed six narrowing gates: gross stack, reachable, kept, deliverable, lifetime and verified. Gates 1 and 5 are applied to the customer-facing number today; gates 2, 3, 4 and 6 are not yet. A DividendVPP lane on the right receives an anonymous asset and load profile and returns rates and forecasts to gate 1, coverage to gate 2, terms to gate 3, an hourly schedule to gate 4 and a verified figure to gate 6. Today only reports receive the estimate; the verified stack would also travel to the pro forma and the financing marketplace, and enrolment follows once the customer accepts.">
+        <defs>
+          <marker id="ah-o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-o"/></marker>
+          <marker id="ah-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-d"/></marker>
+        </defs>
+
+        <!-- column labels -->
+        <text x="43" y="22" class="t-col">WHAT THE USER BRINGS</text>
+        <text x="876" y="22" class="t-col dv">DIVIDENDVPP · PROPOSED</text>
+
+        <!-- DividendVPP lane, drawn first so the arrows sit on top -->
+        <rect x="860" y="30" width="286" height="958" rx="3" class="f-lane"/>
+
+        <!-- inputs -->
+        <rect x="43" y="40" width="228" height="96" class="f-in"/>
+        <text x="59" y="67" class="t-title sm">Site &amp; market</text>
+        <text x="59" y="91" class="t-small">address → ZIP → ISO / RTO</text>
+        <text x="59" y="110" class="t-small">behind / in front of the meter</text>
+
+        <rect x="289" y="40" width="228" height="96" class="f-in"/>
+        <text x="305" y="67" class="t-title sm">System on the map</text>
+        <text x="305" y="91" class="t-small">the battery as drawn: kW, kWh</text>
+        <text x="305" y="110" class="t-small">duration, plus any solar</text>
+
+        <rect x="535" y="40" width="228" height="96" class="f-in"/>
+        <text x="551" y="67" class="t-title sm">The customer's bill</text>
+        <text x="551" y="91" class="t-small">monthly bill, facility type</text>
+        <text x="551" y="110" class="t-small">utility rates found by ZIP</text>
+
+        <path d="M157,136 V208" class="ln-o" marker-end="url(#ah-o)"/>
+        <path d="M403,136 V208" class="ln-o" marker-end="url(#ah-o)"/>
+        <path d="M649,136 V208" class="ln-o" marker-end="url(#ah-o)"/>
+        <text x="413" y="180" class="t-arrow">kW · kWh · market · tariff</text>
+
+        <!-- request to DividendVPP: anonymous -->
+        <path d="M763,88 H872" class="ln-d" marker-end="url(#ah-d)"/>
+        <text x="768" y="79" class="t-arrow dv">asset + load</text>
+        <text x="768" y="105" class="t-arrow dv">no identity</text>
+
+        <rect x="876" y="40" width="254" height="96" class="f-dv"/>
+        <text x="892" y="64" class="t-title sm dv">DividendVPP API</text>
+        <text x="892" y="85" class="t-small">receives asset, 8,760-hour load,</text>
+        <text x="892" y="102" class="t-small">tariff, node; never a name</text>
+        <text x="892" y="124" class="t-today">today · not connected</text>
+
+        <!-- what each gate removes -->
+        <text x="16" y="197" class="t-col">EACH GATE REMOVES</text>
+        <text x="76" y="266" text-anchor="end" class="t-rm">Σ streams</text>
+        <text x="105" y="370" text-anchor="end" class="t-rm">− unreachable</text>
+        <text x="134" y="474" text-anchor="end" class="t-rm">− operator share</text>
+        <text x="162" y="578" text-anchor="end" class="t-rm">− double-booked hours</text>
+        <text x="191" y="682" text-anchor="end" class="t-rm">− fade, O&amp;M, augmentation</text>
+        <text x="220" y="786" text-anchor="end" class="t-rm">− value nobody signs for</text>
+
+        <!-- gates: solid = applied to the customer-facing number today, dashed = not yet -->
+        <polygon points="73,216 733,216 707.4,308 98.6,308" class="f-applied"/>
+        <text x="403" y="235" text-anchor="middle" class="t-gate">GATE 1</text>
+        <text x="403" y="256" text-anchor="middle" class="t-title">Gross stack</text>
+        <text x="403" y="276" text-anchor="middle" class="t-desc">every stream the market offers, each valued on its own</text>
+        <text x="403" y="295" text-anchor="middle" class="t-today">today · estimator from ZIP, monthly bill and regional rates; VPP typed in</text>
+
+        <polygon points="101.9,320 704.1,320 678.6,412 127.4,412" class="f-open"/>
+        <text x="403" y="339" text-anchor="middle" class="t-gate">GATE 2</text>
+        <text x="403" y="360" text-anchor="middle" class="t-title">Reachable</text>
+        <text x="403" y="380" text-anchor="middle" class="t-desc">only what the chosen route to market can reach</text>
+        <text x="403" y="399" text-anchor="middle" class="t-today">today · in the screening panel only (Analyze › Value Stack)</text>
+
+        <polygon points="130.8,424 675.2,424 649.7,516 156.3,516" class="f-open"/>
+        <text x="403" y="443" text-anchor="middle" class="t-gate">GATE 3</text>
+        <text x="403" y="464" text-anchor="middle" class="t-title">Kept</text>
+        <text x="403" y="484" text-anchor="middle" class="t-desc">what stays with the owner after the operator's share</text>
+        <text x="403" y="503" text-anchor="middle" class="t-today">today · screening panel only; shares are our assumptions</text>
+
+        <polygon points="159.7,528 646.3,528 620.8,620 185.2,620" class="f-open"/>
+        <text x="403" y="547" text-anchor="middle" class="t-gate">GATE 4</text>
+        <text x="403" y="568" text-anchor="middle" class="t-title">Deliverable</text>
+        <text x="403" y="588" text-anchor="middle" class="t-desc">what one battery can do in 8,760 hours</text>
+        <text x="403" y="607" text-anchor="middle" class="t-today">today · streams are added, not allocated by the hour</text>
+
+        <polygon points="188.6,632 617.4,632 591.9,724 214.1,724" class="f-applied"/>
+        <text x="403" y="651" text-anchor="middle" class="t-gate">GATE 5</text>
+        <text x="403" y="672" text-anchor="middle" class="t-title">Lifetime</text>
+        <text x="403" y="692" text-anchor="middle" class="t-desc">each year of the asset's life: fade, O&amp;M, incentives</text>
+        <text x="403" y="711" text-anchor="middle" class="t-today">today · 10-year cash flow with escalation; no fade yet</text>
+
+        <polygon points="217.4,736 588.6,736 563,828 243,828" class="f-open"/>
+        <text x="403" y="755" text-anchor="middle" class="t-gate">GATE 6</text>
+        <text x="403" y="776" text-anchor="middle" class="t-title">Verified</text>
+        <text x="403" y="796" text-anchor="middle" class="t-desc">an operator stands behind the number</text>
+        <text x="403" y="815" text-anchor="middle" class="t-today">today · an "~ Estimate" badge, no check</text>
+
+        <!-- DividendVPP points -->
+        <rect x="876" y="216" width="254" height="92" class="f-dv"/>
+        <text x="892" y="240" class="t-title sm"><tspan class="t-gate dv">D1</tspan>  Rates &amp; forecasts</text>
+        <text x="892" y="260" class="t-small">programme rates by utility,</text>
+        <text x="892" y="277" class="t-small">hourly price curves by node</text>
+        <text x="892" y="297" class="t-today">today · VPP typed in; deck tag only</text>
+        <path d="M876,262 H728" class="ln-d" marker-end="url(#ah-d)"/>
+        <text x="852" y="255" text-anchor="end" class="t-arrow dv">rates + curves</text>
+
+        <rect x="876" y="320" width="254" height="92" class="f-dv"/>
+        <text x="892" y="344" class="t-title sm"><tspan class="t-gate dv">D2</tspan>  Coverage</text>
+        <text x="892" y="364" class="t-small">markets, utilities, programmes;</text>
+        <text x="892" y="381" class="t-small">BTM / FTM eligibility, min. size</text>
+        <text x="892" y="401" class="t-today">today · listed as market-agnostic</text>
+        <path d="M876,366 H699" class="ln-d" marker-end="url(#ah-d)"/>
+        <text x="852" y="359" text-anchor="end" class="t-arrow dv">coverage</text>
+
+        <rect x="876" y="424" width="254" height="92" class="f-dv"/>
+        <text x="892" y="448" class="t-title sm"><tspan class="t-gate dv">D3</tspan>  Terms</text>
+        <text x="892" y="468" class="t-small">platform fee or revenue share,</text>
+        <text x="892" y="485" class="t-small">by market and programme</text>
+        <text x="892" y="505" class="t-today">today · our assumption, not yours</text>
+        <path d="M876,470 H670" class="ln-d" marker-end="url(#ah-d)"/>
+        <text x="852" y="463" text-anchor="end" class="t-arrow dv">fee / share</text>
+
+        <rect x="876" y="528" width="254" height="92" class="f-dv"/>
+        <text x="892" y="552" class="t-title sm"><tspan class="t-gate dv">D4</tspan>  Co-optimised dispatch</text>
+        <text x="892" y="572" class="t-small">hourly schedule on one state</text>
+        <text x="892" y="589" class="t-small">of charge, all streams at once</text>
+        <text x="892" y="609" class="t-today">today · not connected</text>
+        <path d="M876,574 H642" class="ln-d" marker-end="url(#ah-d)"/>
+        <text x="852" y="567" text-anchor="end" class="t-arrow dv">hourly schedule</text>
+
+        <text x="1003" y="672" text-anchor="middle" class="t-note">gate 5 stays on</text>
+        <text x="1003" y="689" text-anchor="middle" class="t-note">OMEGA's lifecycle model</text>
+
+        <rect x="876" y="736" width="254" height="92" class="f-dv"/>
+        <text x="892" y="760" class="t-title sm"><tspan class="t-gate dv">D5</tspan>  Verification</text>
+        <text x="892" y="780" class="t-small">verified stack: ID, date, basis,</text>
+        <text x="892" y="797" class="t-small">carried with the project</text>
+        <text x="892" y="817" class="t-today">today · not connected</text>
+        <path d="M876,782 H584" class="ln-d" marker-end="url(#ah-d)"/>
+        <text x="852" y="775" text-anchor="end" class="t-arrow dv">verified figure</text>
+
+        <!-- outlet: solid = carries the stack today, dashed = proposed -->
+        <path d="M300,828 L157,884" class="ln-o" marker-end="url(#ah-o)"/>
+        <text x="210" y="850" text-anchor="end" class="t-arrow">today: the estimate</text>
+        <path d="M403,828 V884" class="ln-d" marker-end="url(#ah-d)"/>
+        <path d="M506,828 L649,884" class="ln-d" marker-end="url(#ah-d)"/>
+        <text x="600" y="846" class="t-arrow dv">proposed: the verified stack</text>
+
+        <rect x="43" y="888" width="228" height="84" class="f-out"/>
+        <text x="59" y="912" class="t-title sm">Reports &amp; exports</text>
+        <text x="59" y="932" class="t-small">Year-1 value stack in the export</text>
+        <text x="59" y="956" class="t-today">today · marked preliminary</text>
+
+        <rect x="289" y="888" width="228" height="84" class="f-out"/>
+        <text x="305" y="912" class="t-title sm">Pro forma</text>
+        <text x="305" y="932" class="t-small">the owner's investment case</text>
+        <text x="305" y="956" class="t-today">today · grid revenue typed in</text>
+
+        <rect x="535" y="888" width="228" height="84" class="f-out"/>
+        <text x="551" y="912" class="t-title sm">Financing marketplace</text>
+        <text x="551" y="932" class="t-small">the listing lenders read</text>
+        <text x="551" y="956" class="t-today">today · size and asking price</text>
+
+        <path d="M1003,828 V884" class="ln-d" marker-end="url(#ah-d)"/>
+        <text x="1013" y="860" class="t-arrow dv">on acceptance</text>
+        <rect x="876" y="888" width="254" height="92" class="f-dv"/>
+        <text x="892" y="912" class="t-title sm dv">Enrolment</text>
+        <text x="892" y="932" class="t-small">anonymous until the customer</text>
+        <text x="892" y="949" class="t-small">accepts; enrolled after build</text>
+        <text x="892" y="969" class="t-today">today · not connected</text>
+      </svg>
+    </div>
+    <p class="scroll-hint">Scroll sideways for the DividendVPP lane →</p>
+    <div class="legend" aria-hidden="true">
+      <span><i class="sw applied"></i>applied to the number a customer sees today</span>
+      <span><i class="sw open"></i>not yet applied to that number</span>
+      <span><i class="sw dv"></i>DividendVPP would supply it (proposed)</span>
+      <span><span class="t">today ·</span>how the editor does it now</span>
+    </div>
+    <figcaption><b>Figure 1.</b> The six gates a value stack should pass through, and the five points where DividendVPP would feed them. Every violet exchange would run server to server, between OMEGA's <code>/api</code> and DividendVPP's API, so no DividendVPP credential reaches a browser and no customer identity leaves OMEGA before the customer accepts.</figcaption>
+  </figure>
+
+  <!-- ═══ THE PATH, CLICK BY CLICK ═══ -->
+  <section id="path" aria-labelledby="path-h">
+    <div class="section-head">
+      <h2 id="path-h">How a user moves through it</h2>
+      <p>The same funnel as the screens a developer, installer or OEM opens in the editor, in the order they open them.</p>
+    </div>
+    <ol class="steps">
+      <li class="step">
+        <span class="step-n">Step 1</span>
+        <h3>Put the battery on the map</h3>
+        <p class="where">Build › BESS Build · BESS Sizer · Solar + Storage</p>
+        <p>The value stack reads kW and kWh off the placed fleet, then the configured list. No battery drawn, no stack.</p>
+        <p class="feeds">feeds: system on the map</p>
+      </li>
+      <li class="step">
+        <span class="step-n">Step 2 <em>· optional</em></span>
+        <h3>Screen the market</h3>
+        <p class="where">Analyze › Screening › Value Stack</p>
+        <p>ZIP to market, behind or in front of the meter, and who monetises it: self, a utility programme, an aggregator or Molecule Systems. A screening view; its figures stay in the panel.</p>
+        <p class="feeds">gates 1–3, screening only</p>
+      </li>
+      <li class="step">
+        <span class="step-n">Step 3</span>
+        <h3>Estimate the streams</h3>
+        <p class="where">Estimate › Cost &amp; ROI › Construction Cost › Revenue</p>
+        <p>ZIP (prefilled), the customer's monthly bill and facility type, plus a regulation price in PJM, then Estimate Value Stack. A front-of-meter project is turned away here.</p>
+        <p class="feeds">gate 1</p>
+      </li>
+      <li class="step">
+        <span class="step-n">Step 4</span>
+        <h3>Apply and fill the gaps</h3>
+        <p class="where">Revenue › Apply to Revenue Streams</p>
+        <p>Arbitrage, peak demand, demand response and PJM regulation fill in with an "~ Estimate" badge. Virtual power plant, capacity and resilience are typed in by hand.</p>
+        <p class="feeds">gate 1</p>
+      </li>
+      <li class="step">
+        <span class="step-n">Step 5</span>
+        <h3>Read the return</h3>
+        <p class="where">Cost &amp; ROI › ROI · results rail</p>
+        <p>Payback, year-one return, and a ten-year NPV and IRR, with revenue escalated at a fixed rate.</p>
+        <p class="feeds">gate 5</p>
+      </li>
+      <li class="step">
+        <span class="step-n">Step 6</span>
+        <h3>Present and hand off</h3>
+        <p class="where">Export Analysis · Output › Marketplace</p>
+        <p>The analysis export prints an Estimated Year-1 Value Stack marked preliminary. Push to Marketplace carries the size and asking price, and Apply for Financing the project itself; neither carries the stack.</p>
+        <p class="feeds">outlets</p>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ═══ MARKET BY MARKET ═══ -->
+  <section id="markets" aria-labelledby="markets-h">
+    <div class="section-head">
+      <h2 id="markets-h">Market by market</h2>
+      <p>What a battery can be paid for in each market, and how the number that reaches the customer is valued today. Each amber, blue or outlined cell is a place DividendVPP data would change the answer.</p>
+    </div>
+    <div class="chip-key" aria-label="Key">
+      <span><i class="chip est">Estimate</i>regional planning figure</span>
+      <span><i class="chip typed">Typed in</i>no rate on file; the user enters one</span>
+      <span><i class="chip nv">Not valued</i>the market pays for it; the model doesn't count it</span>
+      <span><i class="chip soon">Coming</i>built, not open yet</span>
+      <span><i class="chip none">No market</i>nothing to earn here</span>
+    </div>
+    <div class="table-wrap">
+      <table class="markets">
+        <thead>
+          <tr><th scope="col">Market</th><th scope="col">Capacity &amp; demand response</th><th scope="col">Ancillary services</th><th scope="col">VPP programme</th><th scope="col">Energy arbitrage</th><th scope="col">What DividendVPP data would sharpen</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">PJM<small>Mid-Atlantic, Ohio Valley, ComEd</small></th>
+            <td><span class="chip est">Estimate</span><span class="cell-note">one band per kW-year</span></td>
+            <td><span class="chip est">Estimate</span><span class="cell-note">regulation at an editable clearing price</span></td>
+            <td><span class="chip typed">Typed in</span></td>
+            <td><span class="chip est">Estimate</span><span class="cell-note">retail time-of-use spread</span></td>
+            <td class="sharpen">Rates for the utility VPP and demand-response programmes you enrol into; node energy and regulation forecasts</td>
+          </tr>
+          <tr>
+            <th scope="row">ERCOT<small>Texas, energy-only</small></th>
+            <td><span class="chip none">No market</span></td>
+            <td><span class="chip nv">Not valued</span> <span class="chip soon">Coming</span><span class="cell-note">the ERCOT price deck takes all five services</span></td>
+            <td><span class="chip typed">Typed in</span></td>
+            <td><span class="chip est">Estimate</span> <span class="chip soon">Coming</span><span class="cell-note">retail spread today; nodal via the price deck</span></td>
+            <td class="sharpen">Hourly DA, RT, Reg-Up, Reg-Down, RRS, ECRS and Non-Spin at the settlement point: the seven series the price deck already takes</td>
+          </tr>
+          <tr>
+            <th scope="row">CAISO<small>California</small></th>
+            <td><span class="chip est">Estimate</span><span class="cell-note">resource adequacy is bilateral</span></td>
+            <td><span class="chip nv">Not valued</span></td>
+            <td><span class="chip typed">Typed in</span></td>
+            <td><span class="chip est">Estimate</span></td>
+            <td class="sharpen">Programme rates by utility; RA values; ancillary forecasts</td>
+          </tr>
+          <tr>
+            <th scope="row">NYISO<small>New York</small></th>
+            <td><span class="chip est">Estimate</span><span class="cell-note">ICAP varies by zone</span></td>
+            <td><span class="chip nv">Not valued</span></td>
+            <td><span class="chip typed">Typed in</span></td>
+            <td><span class="chip est">Estimate</span></td>
+            <td class="sharpen">ICAP by zone; VDER and programme rates; ancillary forecasts</td>
+          </tr>
+          <tr>
+            <th scope="row">ISO-NE<small>New England</small></th>
+            <td><span class="chip est">Estimate</span></td>
+            <td><span class="chip nv">Not valued</span></td>
+            <td><span class="chip typed">Typed in</span></td>
+            <td><span class="chip est">Estimate</span></td>
+            <td class="sharpen">Programme rates by state and utility, with event history; ancillary forecasts</td>
+          </tr>
+          <tr>
+            <th scope="row">MISO<small>Central US</small></th>
+            <td><span class="chip est">Estimate</span></td>
+            <td><span class="chip nv">Not valued</span></td>
+            <td><span class="chip typed">Typed in</span><span class="cell-note">aggregated DR opening state by state</span></td>
+            <td><span class="chip est">Estimate</span></td>
+            <td class="sharpen">Which utilities allow aggregated demand response, and what it pays</td>
+          </tr>
+          <tr>
+            <th scope="row">SPP<small>Southern Plains</small></th>
+            <td><span class="chip est">Estimate</span><span class="cell-note">a default band</span></td>
+            <td><span class="chip nv">Not valued</span></td>
+            <td><span class="chip typed">Typed in</span></td>
+            <td><span class="chip est">Estimate</span></td>
+            <td class="sharpen">Programme availability; ancillary forecasts</td>
+          </tr>
+          <tr>
+            <th scope="row">Outside an ISO<small>Southeast, West</small></th>
+            <td><span class="chip est">Estimate</span><span class="cell-note">a default band</span></td>
+            <td><span class="chip none">No market</span></td>
+            <td><span class="chip typed">Typed in</span></td>
+            <td><span class="chip est">Estimate</span><span class="cell-note">utility time-of-use spread</span></td>
+            <td class="sharpen">Utility programmes you enrol assets into</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="notes">
+      <p>Bill-side value, demand charges and time-of-use savings, comes from the customer's own monthly bill in every market.</p>
+      <p>The screening panel (Analyze › Value Stack) goes further in places: PJM capacity at the published auction price, ancillary services for front-of-meter assets, and named programmes such as ConnectedSolutions, SGIP and NYSERDA. Its figures stay in that panel today.</p>
+      <p>The market is resolved from the site's state. Where a state straddles two markets (Illinois, Indiana, Michigan, Kentucky, North Carolina), the utility territory or pricing node should decide, which is part of what D2 coverage settles.</p>
+    </div>
+  </section>
+
+  <!-- ═══ THE CONTRACT ═══ -->
+  <section id="contract" aria-labelledby="contract-h">
+    <div class="section-head">
+      <h2 id="contract-h">What DividendVPP would send, and in what shape</h2>
+      <p>Each point lands on one gate. The shapes follow rules the editor already applies to any price data it takes in.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="contract">
+        <thead>
+          <tr><th scope="col">Point</th><th scope="col">What</th><th scope="col">Shape OMEGA needs</th><th scope="col">Where it lands</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="dv-id">D1</span>Rates &amp; forecasts</td>
+            <td>Rates for the programmes you enrol assets in; hourly price forecasts</td>
+            <td>Rate, unit (per kW-year, per kW-summer, per event), programme, utility, source and effective date. Forecasts as 8,760 hourly rows per product per settlement point, unit declared ($/MWh or $/MW-h), negative prices kept, a vintage label.</td>
+            <td>Gate 1. Fills the VPP line, typed in today, and the programme and capacity rates, each with its source. A forecast becomes a price deck locked to its vintage.</td>
+          </tr>
+          <tr>
+            <td><span class="dv-id">D2</span>Coverage</td>
+            <td>Markets, utilities and programmes you can enrol into</td>
+            <td>Per programme: market, utility territory, behind or in front of the meter, minimum kW, telemetry, season.</td>
+            <td>Gate 2. Which streams the DividendVPP route reaches, resolved by utility territory rather than by state.</td>
+          </tr>
+          <tr>
+            <td><span class="dv-id">D3</span>Terms</td>
+            <td>Platform fee or revenue share</td>
+            <td>Per market and programme, with any minimums.</td>
+            <td>Gate 3. What stays with the owner on the DividendVPP route.</td>
+          </tr>
+          <tr>
+            <td><span class="dv-id">D4</span>Dispatch</td>
+            <td>A co-optimised hourly schedule</td>
+            <td>Request: kW, kWh, round-trip efficiency, warranty cycles, 8,760-hour load, tariff, node, and no customer name or address. Response: hourly charge, discharge and state of charge; revenue per stream; value forgone.</td>
+            <td>Gate 4. An hourly run on one state of charge instead of streams added together: the number a lender funds.</td>
+          </tr>
+          <tr>
+            <td><span class="dv-id">D5</span>Verification</td>
+            <td>A figure you stand behind</td>
+            <td>Verification ID, date, the assumptions behind it, and how long it holds.</td>
+            <td>Gate 6. Replaces the "~ Estimate" badge, and travels with the project to reports, the pro forma and the financing listing.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="notes">
+      <p>Enrolment would follow the partner route OMEGA already runs for equipment vendors. The vendor sees an anonymous opportunity (state, utility, size, stage), and the customer's identity is released only when the customer accepts.</p>
+    </div>
+  </section>
+
+  <!-- ═══ RULES ═══ -->
+  <section id="rules" aria-labelledby="rules-h">
+    <div class="section-head">
+      <h2 id="rules-h">Rules the editor already holds itself to</h2>
+      <p>Anything DividendVPP sends would be held to the same rules.</p>
+    </div>
+    <ul class="rules">
+      <li><b>The stack sizes off the drawing.</b> kW and kWh come from the battery on the site map or its configured list, never from a number typed into the revenue form. No battery, no stack.</li>
+      <li><b>A missing rate is shown, not hidden.</b> A stream the market doesn't have is marked n/a, one with no rate on file stays at zero until someone enters it, and a utility the rate table doesn't know is flagged "default, verify".</li>
+      <li><b>Estimates say so.</b> Every applied stream carries an "~ Estimate" badge, every figure in the screening panel shows its arithmetic, and exports call the stack preliminary until it is verified.</li>
+      <li><b>Price imports ask for units.</b> $/MWh and $/kWh differ by a thousand, so the price-deck importer asks instead of guessing, keeps negative prices (the hours a battery earns by charging) and locks a deck to its vintage so a case already sent cannot re-baseline.</li>
+      <li><b>A merchant asset is not given a retail answer.</b> The retail estimator turns away a front-of-meter project instead of valuing it with retail rates it will never see.</li>
+    </ul>
+  </section>
+
+  <!-- ═══ STATUS ═══ -->
+  <section id="status" aria-labelledby="status-h">
+    <div class="section-head">
+      <h2 id="status-h">Where things stand</h2>
+    </div>
+    <div class="status">
+      <div>
+        <p class="label">In use today</p>
+        <ul>
+          <li>Estimate › Cost &amp; ROI › Revenue: the estimator, applied to revenue streams, the ROI and the results rail</li>
+          <li>Analyze › Value Stack: a screening view by market and route to market, with Molecule Systems as one route</li>
+          <li>An analysis export with an Estimated Year-1 Value Stack, marked preliminary</li>
+        </ul>
+      </div>
+      <div>
+        <p class="label">Built, not open yet</p>
+        <ul>
+          <li>Price Decks: nodal energy and ancillary series by settlement point, with a "DividendVPP forecast" provider tag</li>
+          <li>An allocation engine that spends 8,760 hours and the warranty's cycles across streams, and a lifecycle model with fade and augmentation</li>
+        </ul>
+      </div>
+      <div class="proposed">
+        <p class="label">Proposed here</p>
+        <ul>
+          <li>D1 to D5, server to server between OMEGA's /api and DividendVPP's API</li>
+          <li>The verified stack carried to reports, the pro forma and the financing marketplace</li>
+          <li>To start, from DividendVPP: a sample forecast export, the coverage list, terms by market, and dispatch API documentation</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>ClearSky Energy Solutions · Discussion draft for DividendVPP. Editor figures are planning grade until verified.</span>
+    <span class="mono">© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.</span>
+  </footer>
+</main>
+</body>
+</html>
