@@ -135,7 +135,8 @@ async function accept(db, caller, input, bk, now) {
   if (caller.staff) fail(403, 'A customer accepts their own proposal; staff activate from the Package tab');
   var orgId = record.prospect.domain;
   if (!orgId || !(await db.doc('omega_orgs/' + orgId).get()).exists) fail(409, 'Sign up with this proposal to accept it');
-  if (!caller.claims || caller.claims.email_verified !== true) fail(403, 'Verified email required');
+  /* a verified email, or the owner or an administrator of an active client (admin.clientAdmin) */
+  if ((!caller.claims || caller.claims.email_verified !== true) && !(await A.clientAdmin(caller, orgId))) fail(403, 'Verified email required');
   if (caller.orgId !== orgId) fail(403, 'Own organization required');
   if (!(await A.isTenantAdmin(caller, orgId))) fail(403, 'Ask your workspace administrator to accept');
   var c = await S.context(db, orgId), result;
@@ -173,7 +174,14 @@ module.exports = A.handler(async function (req, res) {
   if (Object.keys(input).some(function (k) { return FIELDS.indexOf(k) < 0; })) fail(400, 'Unsupported field');
   if (ACTIONS.indexOf(input.action) < 0) fail(400, 'Action must be one of ' + ACTIONS.join(', '));
   if (STAFF_ONLY.indexOf(input.action) >= 0 && !caller.staff) fail(403, 'Staff only');
-  if (!caller.staff && (!caller.claims || caller.claims.email_verified !== true)) fail(403, 'Verified email required');
+  /* recommend and price are arithmetic on the price book (public on
+     /api/offerings): a new account is quoted on the signup page before its
+     email link is clicked. Everything that writes, sends or names a sender
+     still needs the verified address; accepting is the workspace owner's or an
+     administrator's, who need no link (admin.clientAdmin). */
+  var quoteOnly = (input.action === 'recommend' || input.action === 'price') && input.prospect == null;
+  /* accept asks its own question below: the owner or an administrator of an active client needs no link */
+  if (!caller.staff && !quoteOnly && input.action !== 'accept' && (!caller.claims || caller.claims.email_verified !== true)) fail(403, 'Verified email required');
   var bk = await B.load(db, caller.staff && input.pricebookVersion ? input.pricebookVersion : B.VERSION);
   switch (input.action) {
     case 'context': return context(db, caller, input, bk);

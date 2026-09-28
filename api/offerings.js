@@ -12,16 +12,20 @@ async function book(db) {
   try { return { book: await B.load(db, B.VERSION), source: 'seeded' }; } catch (e) { return { book: B.proposed(), source: 'proposed' }; }
 }
 function view(b, source) {
-  var rows = P.catalog(b), modules = rows.map(function (m) { return { key: m.key, name: m.name, category: m.category, shelf: m.shelf, blurb: m.blurb || '', monthlyDisplay: m.priceDisplay, priceDisplay: m.priceDisplay, usageDisplay: m.usageDisplay || '', features: m.features || [], requires: m.requires || [], tools: m.tools }; });
+  var rows = P.catalog(b), modules = rows.map(function (m) { return { key: m.key, name: m.name, category: m.category, shelf: m.shelf, shelfLabel: m.shelfLabel, mark: m.mark, blurb: m.blurb || '', monthlyDisplay: m.priceDisplay, priceDisplay: m.priceDisplay, usageDisplay: m.usageDisplay || '', features: m.features || [], requires: m.requires || [], tools: m.tools, caps: m.caps || [], editor: (m.ribbon || []).length > 0 || (m.caps || []).some(function (c) { return /^(design|view|export)/.test(c); }), legacyGates: m.legacyGates || [] }; });
   var plans = Object.keys(b.plans).map(function (k) { var p = b.plans[k]; return { key: k, name: p.name, monthlyDisplay: P.money(p.priceCents) + '/month', capDisplay: 'À la carte up to ' + P.money(p.capCents) + ' of modules', serviceFeeDisplay: b.serviceFees[k] ? P.money(b.serviceFees[k]) + '/year' : 'Included' }; });
   return { pricebookVersion: b.version, source: source, currency: b.currency, floorDisplay: P.money(b.floorCents) + '/month',
     lite: { name: 'Lite', monthlyDisplay: P.money(b.modules.lite.priceCents) + '/month', serviceFeeDisplay: b.serviceFees.lite ? P.money(b.serviceFees.lite) + '/year' : 'Included' },
-    plans: plans, enterprise: { annualFloorDisplay: P.money(b.enterprise.floorAnnualCents) + '/year', setupDisplay: P.money(b.enterprise.setupCents), devHoursMonthly: b.enterprise.devHoursMonthly, serviceFeeDisplay: P.money(b.serviceFees.enterprise) + '/year' },
+    /* Enterprise is a contract priced with ClearSky (Tommy, 2026-09-27:
+       "enterprise should be like 'contact for pricing'"): the public list
+       says so and publishes no figure. The book keeps the floor, the setup
+       and the hours for the contract and the proposal. */
+    plans: plans, enterprise: { name: 'Enterprise', priceDisplay: 'Contact for pricing', summary: 'Every module, on a contract', note: 'Setup, development hours and support sized to your company.' },
     modules: modules, starters: M.starters(), starterLabels: M.starterLabels(),
     logins: { builders: b.logins.builders, viewers: b.logins.viewers, builderDisplay: P.money(b.logins.builderCents) + '/month', viewerDisplay: P.money(b.logins.viewerCents) + '/month' },
     trial: { days: Math.min(b.policy.trialDays, 14), note: 'One trial per company, at most 14 days, starting when ClearSky approves the request. Or pay now and start today.' },
     annual: { paidMonths: b.annualPaidMonths, freeMonths: 12 - b.annualPaidMonths, note: 'Pay for the year and you pay for ' + b.annualPaidMonths + ' months of twelve, invoiced once: ' + (12 - b.annualPaidMonths) + ' months free.' },
-    signup: { packaged: process.env.PACKAGING_SIGNUP_ENABLED === 'true', payNow: process.env.PACKAGING_SIGNUP_ENABLED === 'true' && process.env.PACKAGING_BILLING_ENABLED === 'true', start: '/start.html' } };
+    signup: { packaged: process.env.PACKAGING_SIGNUP_ENABLED === 'true', payNow: process.env.PACKAGING_SIGNUP_ENABLED === 'true' && process.env.PACKAGING_BILLING_ENABLED === 'true', payWith: require('./_lib/billing-driver').name(), start: '/start.html' } };
 }
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'public, max-age=300');

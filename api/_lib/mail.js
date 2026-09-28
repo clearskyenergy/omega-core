@@ -151,8 +151,8 @@ function send(to, subject, html, text, opts) {
 function greeting(name) { return name ? 'Thanks, ' + esc(name) + '.' : 'Thanks.'; }
 function staffTo() { return process.env.MAIL_NOTIFY || 'dev@clearsky-usa.com'; }
 var T = {
-  /* A subscription invoice paid (the runner or "I've paid" saw it in
-     QuickBooks). The first one opens the workspace; later ones are receipts. */
+  /* A subscription invoice paid (the runner, the Stripe webhook or "I've
+     paid" saw it on the provider's invoice). The first one opens the workspace; later ones are receipts. */
   paid: function (o) {
     return send(o.email, o.first ? 'Your ClearSky-OMEGA workspace is open' : 'Payment received, thank you',
       layout(o.first ? esc(o.company) + ' is open' : 'Payment received', '<p>' + esc(o.text) + '</p>'
@@ -163,16 +163,47 @@ var T = {
      person has to look at. Both go to MAIL_NOTIFY. */
   paidAlert: function (o) {
     return send(staffTo(), '[OMEGA] Payment received: ' + o.company + (o.amountDisplay ? ' (' + o.amountDisplay + ')' : ''),
-      layout('Payment received', '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Amount', o.amountDisplay || '—') + row('Invoice', o.invoiceId || '—') + row('What', o.first ? 'First invoice: the workspace is open' : 'Recurring invoice') + '</table>'
+      layout('Payment received', '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Amount', o.amountDisplay || '—') + row('Invoice', (o.payWith ? o.payWith + ' ' : '') + (o.invoiceId || '—')) + row('What', o.first ? 'First invoice: the workspace is open' : 'Recurring invoice') + '</table>'
         + button(o.consoleUrl || 'https://silmarillion.clearskyomega.com/admin', 'Open the master console')));
   },
   /* A tenant on a plan billed outside the package engine opted in to a module
      with its price on record (plan-change opt-in). ClearSky moves the
      workspace onto a package from the admin tenant page. */
   optInAlert: function (o) {
+    if (o.withdrawn) return send(staffTo(), '[OMEGA] Opt-in withdrawn: ' + o.names.join(', ') + ' for ' + o.company,
+      layout('An opt-in was withdrawn', '<p>' + esc(o.company) + ' withdrew its request for <b>' + esc(o.names.join(', ')) + '</b>. Do not switch it on; nothing was charged.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Withdrawn by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + '</table>'
+        + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
     return send(staffTo(), '[OMEGA] Opt-in: ' + o.names.join(', ') + ' for ' + o.company + (o.display ? ' (' + o.display + ')' : ''),
       layout('A workspace opted in', '<p>' + esc(o.company) + ' asked for <b>' + esc(o.names.join(', ')) + '</b> at <b>' + esc(o.display || '') + '</b>, added to its monthly fee. It is on the ' + esc(o.tier || 'legacy') + ' plan, billed outside the package engine: move it onto a subscription package and switch the module on. Nothing has been charged.</p>'
-        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + row('Modules', o.names.join(', ')) + row('Monthly', o.display || '—') + '</table>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + row('Monthly', o.display || '—') + '</table>'
+        + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
+  },
+  /* The mirror: that tenant asked to opt OUT (plan-change opt-out). Its
+     price is set by its agreement, so nothing changed: ClearSky confirms the
+     effective date and any new price in writing, then moves the plan. A
+     request taken back (withdraw-opt-out) is heard the same way: keep it on. */
+  optOutAlert: function (o) {
+    if (o.withdrawn) return send(staffTo(), '[OMEGA] Opt-out withdrawn: ' + o.names.join(', ') + ' for ' + o.company,
+      layout('An opt-out was withdrawn', '<p>' + esc(o.company) + ' withdrew its opt-out of <b>' + esc(o.names.join(', ')) + '</b>: keep them on. Nothing about the bill changes.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Withdrawn by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + '</table>'
+        + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
+    return send(staffTo(), '[OMEGA] Opt-out: ' + o.names.join(', ') + ' for ' + o.company,
+      layout('A workspace asked to opt out', '<p>' + esc(o.company) + ' asked to opt out of <b>' + esc(o.names.join(', ')) + '</b>. It is on the ' + esc(o.tier || 'legacy') + ' plan, billed outside the package engine under its agreement: nothing has changed. Confirm the effective date and any new price with them in writing; they keep access until then.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + row('Reason', o.reason || '—') + '</table>'
+        + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
+  },
+  /* A packaged tenant queued an opt-out for the quarterly review
+     (plan-change request-removal). Access and charges stay as they are until
+     that review; the mail carries the date and the fee it moves to, which is
+     the fee once every opt-out queued for that review goes (alsoLeaving
+     names the ones queued before this one). */
+  removalAlert: function (o) {
+    return send(staffTo(), '[OMEGA] Opting out at review: ' + o.names.join(', ') + ' for ' + o.company,
+      layout('An opt-out is queued for the review', '<p>' + esc(o.company) + ' asked to opt out of <b>' + esc(o.names.join(', ')) + '</b> at its quarterly review' + (o.reviewOn ? ' on <b>' + esc(o.reviewOn) + '</b>' : '') + '. Nothing changes before then: it keeps the modules and keeps paying for them, and no refund is due for time already billed.</p>'
+        + '<table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.by || '—') + verifiedRow(o) + row('Modules', o.names.join(', ')) + row('Review', o.reviewOn || 'next quarterly review')
+        + (o.alsoLeaving && o.alsoLeaving.length ? row('Also leaving at that review', o.alsoLeaving.join(', ')) : '')
+        + row('Monthly fee', o.beforeDisplay && o.afterDisplay ? o.beforeDisplay + ' → ' + o.afterDisplay : '—') + row('Reason', o.reason || '—') + '</table>'
         + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
   },
   /* "Request a demo" on www.clearskyomega.com (api/demo-request.js). To
@@ -197,8 +228,8 @@ var T = {
   signupReceived: function (o) {
     if (o.payNow) return send(o.email, 'Your ClearSky-OMEGA workspace opens when your first invoice is paid',
       layout('Pay your first invoice to open your workspace', '<p>' + greeting(o.name) + ' Your workspace for <b>' + esc(o.company) + '</b> is set up at <b>' + esc(o.host) + '</b>.</p>'
-        + '<p>Your first invoice' + (o.amountDueDisplay ? ' (' + esc(o.amountDueDisplay) + ')' : '') + ' is ready in QuickBooks. Pay it by card on the invoice page and your workspace opens the moment the payment lands; no approval step, no waiting.</p>'
-        + (o.paymentLink ? button(o.paymentLink, 'Pay the invoice') : '') + '<p>Already paid? Open your workspace and press <b>I\'ve paid</b>; it checks QuickBooks right away.</p>'));
+        + '<p>Your first invoice' + (o.amountDueDisplay ? ' (' + esc(o.amountDueDisplay) + ')' : '') + ' is ready' + (o.payWith ? ' in ' + esc(o.payWith) : '') + '. Pay it by card on the invoice page and your workspace opens the moment the payment lands; no approval step, no waiting.</p>'
+        + (o.paymentLink ? button(o.paymentLink, 'Pay the invoice') : '') + '<p>Already paid? Open your workspace and press <b>I\'ve paid</b>; it checks your payment right away.</p>'));
     return send(o.email, 'We received your ClearSky-OMEGA workspace request',
       layout('Request received', '<p>' + greeting(o.name) + ' We\'re setting up a workspace for <b>' + esc(o.company) + '</b> at <b>' + esc(o.host) + '</b>.</p>'
         + '<p>The ClearSky team reviews every new workspace — usually within one business day. You\'ll get another email the moment it\'s live.</p>'
@@ -225,12 +256,12 @@ var T = {
   },
   trialEnding: function (o) {
     return send(o.email, 'Your OMEGA trial ends on ' + new Date(o.trialEndsAt).toISOString().slice(0, 10),
-      layout('Your trial is ending', '<p>' + esc(o.text) + '</p><p>We will issue your first QuickBooks invoice at trial end. Payment is required to keep creating and exporting.</p>'
+      layout('Your trial is ending', '<p>' + esc(o.text) + '</p><p>We will issue your first invoice at trial end. Payment is required to keep creating and exporting.</p>'
         + button('https://' + o.host + '/account-settings.html', 'View your plan')));
   },
   packageInvoice: function (o) {
     return send(o.email, 'Your OMEGA subscription invoice is ready',
-      layout('Pay to continue', '<p>' + esc(o.text) + '</p>' + (o.paymentLink ? button(o.paymentLink, 'Pay in QuickBooks') : '<p>Open your plan for invoice details.</p>')));
+      layout('Pay to continue', '<p>' + esc(o.text) + '</p>' + (o.paymentLink ? button(o.paymentLink, o.payWith ? 'Pay in ' + o.payWith : 'Pay the invoice') : '<p>Open your plan for invoice details.</p>')));
   },
   /* The Subscription Proposal (Phase 6): the link carries the key that opens
      the customer's view; the reply goes to the rep who prepared it. */
@@ -279,6 +310,8 @@ var T = {
   }
 };
 function row(k, v) { return '<tr><td style="padding:4px 12px 4px 0;color:#8BA3C4;white-space:nowrap;vertical-align:top">' + esc(k) + '</td><td style="padding:4px 0">' + esc(v) + '</td></tr>'; }
+/* a plan request filed by an owner or administrator on the role alone says so */
+function verifiedRow(o) { return o.verified === false ? row('Email verified', 'No (an owner or administrator by role)') : ''; }
 
 module.exports = { send: send, templates: T, layout: layout, wlLayout: wlLayout, button: button, esc: esc, row: row,
   configured: function (p) { return !!tx(p); } };

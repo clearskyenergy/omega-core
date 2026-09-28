@@ -5,6 +5,7 @@
  * prove the screens, not hosted acceptance.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture'), M = require('../api/_lib/modules');
 var db, caller, mails = [], sandboxInvoices = 0, checks = 0, shots = 0;
@@ -101,14 +102,15 @@ async function run() {
     await sp2.goto(base + '/start.html?proposal=' + sentId + '&key=' + sentKey); await sp2.evaluate(function () { window.dispatchEvent(new CustomEvent('omega:hub', { detail: {} })); });
     await sp2.locator('#f-submit:not([disabled])').waitFor(); await sp2.waitForFunction(function () { return document.getElementById('signup-proposal').textContent.indexOf('Proposal from') >= 0; });
     check((await sp2.locator('#f-name').inputValue()) === 'Green Wolf Strategies', 'the company name is prefilled from the proposal');
-    await sp2.locator('#f-submit').click(); await sp2.locator('#step-billing').waitFor({ state: 'visible' });
-    check((await sp2.locator('#signup-proposal').textContent()).indexOf('Field at $1,299/month') >= 0, 'the proposal banner names the package and price');
-    for (var f2 of [['phone', '555-0111'], ['teamSize', '4'], ['address.line1', '9 Wolf Way'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await sp2.locator('[data-profile-field="' + f2[0] + '"]').fill(f2[1]);
-    await capture(sp2, 'signup-proposal');
-    await sp2.locator('#billing-continue').click(); await sp2.locator('#step-build').waitFor({ state: 'visible' });
+    /* a proposal skips the question screen: the package it priced, read-only, then billing */
+    await sp2.locator('#f-submit').click(); await sp2.locator('#step-build').waitFor({ state: 'visible' });
     check(await sp2.locator('#signup-package-menu [data-module-card] input:disabled').count() === M.catalog().length && await sp2.locator('#signup-package-menu [data-module-card] input:checked').count() === 5, 'the priced package is shown read-only');
     check(await sp2.locator('input[name="signup-interval"]:disabled').count() === 2, 'and so is its billing frequency');
     await sp2.waitForFunction(function () { return document.getElementById('signup-package-price').textContent.indexOf('$1,299/month') >= 0; }); check(true, 'the server price is shown');
+    await sp2.locator('#build-continue').click(); await sp2.locator('#step-billing').waitFor({ state: 'visible' });
+    check((await sp2.locator('#signup-proposal').textContent()).indexOf('Field at $1,299/month') >= 0, 'the proposal banner names the package and price');
+    for (var f2 of [['contactName', 'Dana Wolf'], ['phone', '555-0111'], ['teamSize', '4'], ['address.line1', '9 Wolf Way'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await sp2.locator('[data-profile-field="' + f2[0] + '"]').fill(f2[1]);
+    await capture(sp2, 'signup-proposal');
     await sp2.locator('#billing-submit').click(); await sp2.locator('#step-done').waitFor({ state: 'visible' });
     var gw = db.data.get('omega_orgs/greenwolf.example/billing/current');
     check(gw && gw.proposalId === sentId && gw.proposedPackage.modules.length === 5 && gw.proposedPackage.credit && db.data.get('subscription_proposals/' + sentId).status === 'accepted', 'the workspace proposes the proposal’s package and the proposal is accepted');
@@ -117,22 +119,21 @@ async function run() {
     caller = KIM; var kctx = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(kctx, base, KIM); var kp = await kctx.newPage();
     await kp.goto(base + '/start.html'); await kp.evaluate(function () { window.dispatchEvent(new CustomEvent('omega:hub', { detail: {} })); });
     await kp.locator('#f-submit:not([disabled])').waitFor(); await kp.locator('#f-name').fill('Lattice Energy'); await kp.locator('#f-submit').click(); await kp.locator('#step-discovery').waitFor({ state: 'visible' });
-    check(await kp.locator('#signup-questions .sq').count() === 12, 'signup asks the twelve questions');
-    for (var q of ['design', 'sites', 'storage', 'finance']) await kp.locator('input[name="q-' + q + '"][value="quarter"]').check();
-    await kp.locator('#spend-tools').fill('800'); await kp.locator('#spend-consultants').fill('2000');
-    await kp.locator('#discovery-recommend').click(); await kp.waitForFunction(function () { return document.getElementById('signup-recommended').textContent.indexOf('Recommended: Field at $1,299/month') >= 0; });
-    check((await kp.locator('#signup-recommended').textContent()).indexOf('$1,501/month less than today') >= 0, 'the recommendation shows the difference in their numbers');
+    check(await kp.locator('#signup-questions .sq-tile').count() === 12, 'signup asks the twelve questions, one tile each');
+    /* a tapped tile is "this quarter"; the dock is the server's own recommendation as they tap (the rep's page still asks the money question; the signup does not) */
+    for (var q of ['design', 'sites', 'storage', 'finance']) await kp.locator('.sq-tile[data-q="' + q + '"]').click();
+    await kp.waitForFunction(function () { return document.getElementById('signup-live').textContent.indexOf('$1,299/month') >= 0; }); check(true, 'the dock shows the recommendation at the Field price as they tap');
     await capture(kp, 'signup-discovery');
-    await kp.locator('#discovery-continue').click(); await kp.locator('#step-billing').waitFor({ state: 'visible' });
-    for (var f3 of [['phone', '555-0122'], ['teamSize', '6'], ['address.line1', '1 Lattice Ln'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60602']]) await kp.locator('[data-profile-field="' + f3[0] + '"]').fill(f3[1]);
-    await capture(kp, 'signup-recommended');
-    await kp.locator('#billing-continue').click(); await kp.locator('#step-build').waitFor({ state: 'visible' });
+    await kp.locator('#discovery-continue').click(); await kp.locator('#step-build').waitFor({ state: 'visible' });
     check(await kp.locator('#signup-package-menu [data-module-card] input:checked').count() === 4, 'the build step starts from the recommendation');
     await kp.waitForFunction(function () { return document.getElementById('signup-package-price').textContent.indexOf('$1,299/month') >= 0; }); check(true, 'the live price follows the picker');
     check(/save \$/.test(await kp.locator('#interval-annual-price').textContent()), 'and the yearly card shows the two months saved');
+    await capture(kp, 'signup-recommended');
+    await kp.locator('#build-continue').click(); await kp.locator('#step-billing').waitFor({ state: 'visible' });
+    for (var f3 of [['contactName', 'Kim Lattice'], ['phone', '555-0122'], ['teamSize', '6'], ['address.line1', '1 Lattice Ln'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60602']]) await kp.locator('[data-profile-field="' + f3[0] + '"]').fill(f3[1]);
     await kp.locator('#billing-submit').click(); await kp.locator('#step-done').waitFor({ state: 'visible' });
     var lt = db.data.get('omega_orgs/lattice.example/billing/current');
-    check(lt && lt.signupDiscovery && lt.signupDiscovery.recommendation.modules.join() === 'lite,gridatlas,storage,finance' && lt.proposedPackage.modules.join() === 'lite,gridatlas,storage,finance' && lt.signupDiscovery.discovery.spend.consultants === 200000, 'the answers and the chosen package are stored for approval');
+    check(lt && lt.signupDiscovery && lt.signupDiscovery.recommendation.modules.join() === 'lite,gridatlas,storage,finance' && lt.proposedPackage.modules.join() === 'lite,gridatlas,storage,finance' && lt.signupDiscovery.discovery.answers.finance === 'quarter' && lt.signupDiscovery.discovery.answers.ops === 'no', 'the answers and the chosen package are stored for approval');
     await kctx.close();
     check(sandboxInvoices === 0, 'nothing was invoiced: proposals never price or charge');
     console.log('Subscription proposal UI: ' + checks + ' checks, ' + shots + ' screenshots; real handlers over an in-memory Firestore, mail and QuickBooks stand-ins.');

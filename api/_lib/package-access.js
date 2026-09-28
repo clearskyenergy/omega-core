@@ -27,7 +27,7 @@ function live(billing, modules, now) {
 function project(caller, billing, org, member, now) {
   billing = billing || {};
   if (billing.packaged !== true) return { packaged: false };
-  if (caller.staff) return { packaged: true, staff: true, canPreview: true, starters: M.starters(), readOnly: false, modules: M.catalog().map(function (m) { return m.key; }),
+  if (caller.staff) return { packaged: true, staff: true, canPreview: true, starters: M.starters(), live: true, readOnly: false, modules: M.catalog().map(function (m) { return m.key; }),
     caps: ['all'], toolAccess: M.catalog().reduce(function (out, m) { return out.concat(m.tools); }, []), catalog: M.catalog(), notSold: M.notSold(), readOnlyRibbon: M.readOnlyRibbon() };
   if (!(caller.emailVerified === true || caller.claims && caller.claims.email_verified === true)) deny('Verified email required');
   if (!org || org.status !== 'active' || !member || (member.status && member.status !== 'active')) deny('Active organization membership required');
@@ -40,11 +40,24 @@ function project(caller, billing, org, member, now) {
   var notice = null;
   if (state === 'trial' && canWork && now >= instant(billing.trialStartedAt) + 10 * 86400000) {
     notice = { text: 'Your trial ends on ' + new Date(instant(billing.trialEndsAt)).toISOString().slice(0, 10) + '. Your plan: ' + (billing.plan || 'Lite + modules') + (billing.monthlyDisplay ? ', ' + billing.monthlyDisplay : '') + '.', payUrl: null };
-  } else if (!canWork) notice = { text: 'This workspace is read-only. Your saved projects remain available. Pay to continue creating and exporting.', payUrl: require('./logic-policy').paymentLink(billing.paymentLink) };
-  else if (state === 'past_due_lite') notice = { text: 'Payment is overdue. Your workspace has returned to Lite. Your saved work remains available.', payUrl: require('./logic-policy').paymentLink(billing.paymentLink) };
-  return { packaged: true, staff: false, readOnly: !canWork || member.role === 'viewer', modules: grants.modules,
+  } else if (!canWork) notice = { text: 'This workspace is read-only. Your saved projects remain available. Pay to continue creating and exporting.', payUrl: require('./billing-driver').payLink(billing.paymentLink), payWith: require('./billing-driver').name(require('./billing-driver').providerOf(billing)) };
+  else if (state === 'past_due_lite') notice = { text: 'Payment is overdue. Your workspace has returned to Omega Design. Your saved work remains available.', payUrl: require('./billing-driver').payLink(billing.paymentLink), payWith: require('./billing-driver').name(require('./billing-driver').providerOf(billing)) };
+  /* live: whether the PLAN is paid up (readOnly also covers a viewer's own
+     role), so the editor's chip tells a viewer on a live plan "view only"
+     and never "read-only until paid" with an I've paid button */
+  return { packaged: true, staff: false, live: canWork, readOnly: !canWork || member.role === 'viewer', modules: grants.modules,
     accessUntil: billing.accessUntil == null ? null : instant(billing.accessUntil), billingNotice: notice,
     tier: grants.tier, addons: grants.addons, caps: grants.caps, toolAccess: grants.toolAccess, catalog: M.catalog(), notSold: M.notSold(), readOnlyRibbon: M.readOnlyRibbon() };
+}
+/* A plan billed OUTSIDE the engine (a legacy tier): what the editor needs to
+ * open exactly the modules it bought as add-ons (Add to plan,
+ * api/_lib/addons.js) and to offer the rest where the plan stops (Opt in):
+ * the add-ons on now, by the add-on engine's own rule, and the catalog whose
+ * ribbon says which module owns each command. Presentation only: the tier
+ * still gates the ribbon, every producer checks the record on its own, and
+ * nothing here is a grant or a price. */
+function legacy(billing, now) {
+  return { packaged: false, addOns: require('./addons').live(billing || {}, now == null ? Date.now() : now), catalog: M.catalog(), notSold: M.notSold() };
 }
 function requireModule(view, key, options) {
   options = options || {};
@@ -89,4 +102,4 @@ function customerDrawing(active) {
   v.catalog = M.catalog(); v.notSold = M.notSold(); v.readOnlyRibbon = M.readOnlyRibbon();
   return v;
 }
-module.exports = { customerDrawing: customerDrawing, project: project, requireModule: requireModule, withToken: withToken, withCaller: withCaller, live: live };
+module.exports = { customerDrawing: customerDrawing, project: project, legacy: legacy, requireModule: requireModule, withToken: withToken, withCaller: withCaller, live: live };

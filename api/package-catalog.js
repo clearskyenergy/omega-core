@@ -9,7 +9,8 @@ module.exports = A.handler(async function (req, res) {
   var caller = await A.authenticate(req), body = req.method === 'POST' ? (req.body || {}) : (req.query || {});
   var org = A.safeOrg(body.orgId || caller.orgId);
   if (!org || (!caller.staff && org !== caller.orgId)) throw A.httpError(403, 'Own organization required');
-  if (!caller.staff && (!caller.claims || caller.claims.email_verified !== true)) throw A.httpError(403, 'Verified email required');
+  /* a verified email, or an owner or administrator of an active client (admin.clientAdmin): the priced menu of their own plan */
+  if (!caller.staff && (!caller.claims || caller.claims.email_verified !== true) && !(await A.clientAdmin(caller, org))) throw A.httpError(403, 'Verified email required');
   var db = A.db(), billing = await A.billingOf(org);
   var tenant = await db.doc('omega_orgs/' + org).get();
   if (!caller.staff) {

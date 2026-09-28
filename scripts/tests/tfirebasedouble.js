@@ -135,9 +135,14 @@ var fb = g.firebase, db = fb.firestore(), auth = fb.auth();
   ok('password sign-in refuses a wrong password with the SDK\'s code and admits the right one', bad === 'auth/wrong-password' && good === 'pw@northstar.example');
   ok('EmailAuthProvider.credential and the Persistence constants exist for the sign-in card', typeof fb.auth.EmailAuthProvider.credential === 'function' && fb.auth.Auth.Persistence.LOCAL === 'local');
   /* ── app ── */
-  fb.initializeApp({ projectId: 'x' });
-  var dup = null; try { fb.initializeApp({ projectId: 'x' }); } catch (e) { dup = e.message; }
-  ok('initializeApp twice throws the "already exists" the pages test for', /already exists/.test(dup) && fb.apps.length === 1);
+  var first = fb.initializeApp({ projectId: 'x' });
+  /* the real SDK (v9 compat): the same options again hand back the app that
+     exists (projects.html initializes after omega-tenant.js does); only
+     different options throw the "already exists" the pages test for */
+  var same = null, sameErr = null; try { same = fb.initializeApp({ projectId: 'x' }); } catch (e) { sameErr = e.message; }
+  ok('initializeApp again with the same options returns the existing app, as the SDK does', same === first && !sameErr && fb.apps.length === 1);
+  var dup = null; try { fb.initializeApp({ projectId: 'y' }); } catch (e) { dup = e.message; }
+  ok('initializeApp with different options throws the "already exists" the pages test for', /already exists/.test(dup) && fb.apps.length === 1);
   ok('storage() refuses without throwing at construction', typeof fb.storage().ref('x/y').put === 'function');
   console.log((fails ? fails + ' of ' : 'all ') + n + ' firebase-double checks ' + (fails ? 'FAILED' : 'passed'));
   process.exit(fails ? 1 : 0);

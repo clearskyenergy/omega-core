@@ -13,8 +13,10 @@ equal(W.normalize('solar', ['der', 'bess']), ['solarstorage'], 'existing solar +
 equal(W.normalize('legacy-unknown'), [], 'unknown is not guessed');
 equal(W.normalize('evl2'), ['l2'], 'saved editor alias');
 equal(W.normalize('datacenter'), ['compute'], 'compute alias');
-W.setIdentity('alice'); W.setAll(true); W.setIdentity('bob'); check(!W.all(), 'new user never inherits all preference');
-W.setAll(false); W.setIdentity('alice'); check(W.all(), 'preference remembered for user'); W.setIdentity(null); check(!W.all(), 'signed out reset');
+/* What they own is what they see (2026-09-27): a project type reorders and
+   never hides, and "All tools" is retired with the hiding it undid. */
+W.setIdentity('alice'); check(W.setAll(false) === true && W.all() === true, 'All tools is always on: setAll hides and remembers nothing');
+check(Object.keys(memory).length === 0, 'no per-user tool preference is stored');
 var packages = [['lite'], M.starters().ev, M.starters().developer, M.starters().epc, M.catalog().map(function (m) { return m.key; })];
 var core = ['rbMode(\'select\')', 'rbMode(\'line\')', 'rbMode(\'polyline\')', 'rbMode(\'rect\')', 'rbMode(\'circle\')', 'addTextBox()', 'undoLast()', 'startCal()', 'toggle3D()', 'toggleLayersPanel()', 'openConduitMenu()', 'openMvCableDialog()'];
 packages.forEach(function (keys) {
@@ -26,7 +28,19 @@ packages.forEach(function (keys) {
     check(C.allowedCommand('ov-airender', 'OmegaAIRender.open()') === (keys.indexOf('plansets') >= 0), 'workspace cannot grant AI Render');
   });
 });
-W.setProject('l2'); check(W.relevance('openBessSizer()', '', 'analyze') < 0, 'L2 focuses out storage');
+W.setProject('l2'); check(W.relevance('openBessSizer()', '', 'analyze') < 0, 'L2 puts storage after its own tools');
+function fakeButton(onclick, page, attrs) {
+  attrs = Object.assign({ onclick: onclick }, attrs || {});
+  return { id: '', style: { order: '' }, parentNode: { classList: { contains: function () { return false; } } },
+    getAttribute: function (k) { return attrs[k] == null ? null : attrs[k]; }, setAttribute: function (k, v) { attrs[k] = String(v); },
+    removeAttribute: function (k) { delete attrs[k]; }, hasAttribute: function (k) { return k in attrs; },
+    toggleAttribute: function (k, on) { if (on) attrs[k] = ''; else delete attrs[k]; }, closest: function () { return { getAttribute: function () { return page; } }; } };
+}
+C.setPackage(X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: M.catalog().map(function (m) { return m.key; }) }, { status: 'active' }, { role: 'owner' }));
+var guide = fakeButton("_guidedPick('l2')", 'home'), charger = fakeButton('openEvChargerDialog()', 'insert'), sizer = fakeButton('openBessSizer()', 'analyze', { 'data-workspace-hidden': '' });
+W.setProject('l2'); W.apply({ querySelectorAll: function () { return [guide, charger, sizer]; } });
+check(![guide, charger, sizer].some(function (b) { return b.hasAttribute('data-workspace-hidden'); }), 'an L2 project hides no owned tool (and clears a stale hide)');
+check(guide.style.order === '-2' && charger.style.order === '-1' && sizer.style.order === '', 'the guided build first, then the project\'s tools, then the rest in place');
 W.setProject('l2', ['l2','bess']); check(W.relevance('openBessSizer()', '', 'analyze') > 0, 'mixed project restores storage');
 W.setProject('compute'); check(W.relevance('openDcClusterDialog()', '', 'compute') > 0, 'compute workspace');
 C.setPackage(X.customerDrawing(true)); check(Object.keys(C.MODULE_GRANTS).length === M.catalog().length, 'one projected catalog');

@@ -9,8 +9,11 @@
    SDK and fonts, the chart CDN and every /api/ call are answered here.
 
      node scripts/render-dashboard.js              # a JSON line per scenario
-     node scripts/render-dashboard.js --shots DIR  # plus screenshots
-     npm run check:dashboard
+     node scripts/render-dashboard.js --shots DIR  # plus screenshots, all in DIR
+     node scripts/render-dashboard.js --evidence   # rewrite the committed phase 10B
+                                                   # screenshots (docs/screenshots/)
+     node scripts/render-dashboard.js --only sweep  # scenarios whose name matches
+     npm run check:dashboard                       # writes nothing into the repo
 
    It is the check that a signed-in visit paints, for the three first-run
    shapes the product has (a brand-new trial workspace behind the terms
@@ -20,7 +23,9 @@
    answer, a request that would have left the machine, sideways scroll, and
    on each product assertion below (splash gone, greeting, the tenant's name,
    the tiles, a locked tile's overlay INSIDE its tile, the counts, the terms
-   gate recording an acceptance, no stray writes, sign-out).
+   gate recording an acceptance, no stray writes, sign-out), and on EVERY
+   CLICK: scripts/_lib/click-sweep.js clicks every control on the page as
+   four tenants (see the sweep scenarios at the end).
 
    Why a double and not the emulator: the emulator answers the SDK's network
    protocol and needs Java and the SDK's own transport; the double answers
@@ -39,6 +44,8 @@ var SANDBOX_CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 var CHROME = process.env.CHROME || (fs.existsSync(SANDBOX_CHROME) ? SANDBOX_CHROME : chromium.executablePath());
 if (!fs.existsSync(CHROME)) { console.log('render-dashboard: Chromium not found (' + CHROME + '); skipped'); process.exit(0); }
 var shotsAt = (function () { var i = process.argv.indexOf('--shots'); return i >= 0 ? (process.argv[i + 1] || os.tmpdir()) : null; })();
+/* --only <regex>: run the scenarios whose name matches (the sweeps take a while) */
+var ONLY = (function () { var i = process.argv.indexOf('--only'); return i >= 0 && process.argv[i + 1] ? new RegExp(process.argv[i + 1]) : null; })();
 if (shotsAt && !fs.existsSync(shotsAt)) fs.mkdirSync(shotsAt, { recursive: true });
 
 var FD = require('./_lib/firebase-double'), FX = require('./_lib/dashboard-fixtures');
@@ -77,6 +84,10 @@ var srv = http.createServer(function (req, res) {
     if (u === '/api/package-access' && !post) { var pv = PACKAGE_VIEW || { packaged: false }; return setTimeout(function () { json(pv); }, PACKAGE_VIEW ? 1500 : 0); }
     /* a legacy tenant's Account panel asks Stripe for its invoices; none is connected here */
     if (u === '/api/stripe-invoices') return json({ connected: false, invoices: [] });
+    /* ...and a tenant linked to Stripe (Northstar) has Manage billing &
+       receipts, which the sweep clicks: the portal session api/stripe-portal.js
+       returns. The sweep's own window.open stub keeps it on this machine. */
+    if (u === '/api/stripe-portal' && post) return json({ url: 'https://billing.stripe.com/p/session/test_fixture' });
     if (u === '/api/package-catalog' && !post) { var bk = B.proposed(); return json({ orgId: PACKAGE_VIEW ? 'fixture' : null, pricebookVersion: bk.version, modules: P.catalog(bk), starters: M.starters(), canManage: true }); }
     if (u === '/api/plan-change' && PACKAGE_VIEW) {
       var org = Object.keys(SCENARIO_DOCS || {}).map(function (k) { var m = /^omega_orgs\/([^/]+)\/billing\/current$/.exec(k); return m && m[1]; }).filter(Boolean)[0];
@@ -99,8 +110,16 @@ var srv = http.createServer(function (req, res) {
 });
 
 var fails = 0, lines = [];
-var SHOTS10B = path.join(ROOT, 'docs/screenshots/packaging-phase-10b'); fs.mkdirSync(SHOTS10B, { recursive: true });
-function shot10b(p, name) { return p.screenshot({ path: path.join(SHOTS10B, name + '.png') }).catch(function () {}); }
+/* The five phase 10B screenshots are COMMITTED evidence
+   (docs/PACKAGING-PHASE-10B-VALIDATION.md). They were rewritten on every
+   run, so a plain check:dashboard left five modified PNGs in the working
+   tree for somebody's next `git add -A` to commit. Now: --evidence rewrites
+   them in place, --shots DIR puts them in DIR with the rest, and neither
+   writes nothing. Each capture is followed by an explicit wait or by reads
+   of state that had already settled, so skipping it changes no assertion. */
+var SHOTS10B = process.argv.indexOf('--evidence') >= 0 ? path.join(ROOT, 'docs/screenshots/packaging-phase-10b') : shotsAt;
+if (SHOTS10B) fs.mkdirSync(SHOTS10B, { recursive: true });
+function shot10b(p, name) { return SHOTS10B ? p.screenshot({ path: path.join(SHOTS10B, name + '.png') }).catch(function () {}) : Promise.resolve(); }
 function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + name + (detail !== undefined ? ' ' + JSON.stringify(detail) : '')); } }
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 /* a body of visible text carries none of the words a bug prints */
@@ -114,6 +133,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   /* One scenario: a fresh browser context (its own storage and double),
      the tenant's fixture installed before any page script runs. */
   async function scenario(name, fx, opts) {
+    if (ONLY && !ONLY.test(name)) return {};
     opts = opts || {};
     PACKAGE_VIEW = fx.packageView || null; SCENARIO_DOCS = fx.docs || null;
     var errs = [], warns = [], muted = false, ctx = await browser.newContext({ viewport: opts.phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!opts.phone, isMobile: !!opts.phone });
@@ -135,7 +155,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       if (m.type() === 'warning') warns.push(t.slice(0, 160));
     });
     var t0 = Date.now();
-    await p.goto(base + '/', { waitUntil: 'domcontentloaded' });
+    await p.goto(base + '/' + (opts.hash || ''), { waitUntil: 'domcontentloaded' });
     /* the splash comes down when auth has answered; the app is the side of it a signed-in user gets */
     var ready = await p.waitForFunction(function () { return document.body.classList.contains('auth-ready'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
     var tReady = Date.now() - t0;
@@ -379,18 +399,18 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.click('button.btn-signout[onclick="openAccount()"]'); await p.waitForSelector('#acct-overlay.show');
     await p.waitForFunction(function () { var e = document.getElementById('acct-pk-monthly'); return e && /^\$/.test(e.textContent); }, null, { timeout: 8000 });
     var rows = await p.evaluate(function () { function t(id) { var e = document.getElementById(id); return e ? e.textContent : null; } return { pkg: t('acct-pk-package'), status: t('acct-pk-status'), monthly: t('acct-pk-monthly'), next: t('acct-pk-next'), legacy: getComputedStyle(document.getElementById('acct-legacy-billing')).display, ladder: t('acct-package-ladder'), invoices: t('acct-package-invoices'), add: getComputedStyle(document.getElementById('acct-package-add')).display }; });
-    ok('lite-ladder: the Account panel shows the package, not the legacy rows', rows.legacy === 'none' && rows.pkg === 'Lite' && rows.status === 'Active' && rows.monthly === '$500/month' && /\d{4}/.test(rows.next), rows);
-    ok('lite-ladder: the Ladder is named and says what it is for', /Build your own experience/.test(rows.ladder) && /Office, Plant/.test(rows.ladder) && rows.add !== 'none', rows.ladder);
+    ok('lite-ladder: the Account panel shows the package, not the legacy rows', rows.legacy === 'none' && rows.pkg === 'Omega Design' && rows.status === 'Active' && rows.monthly === '$500/month' && /\d{4}/.test(rows.next), rows);
+    ok('lite-ladder: the Ladder is named and says what it is for', /Build your own experience/.test(rows.ladder) && M.catalog().filter(function (m) { return m.shelf === 'platform'; }).every(function (m) { return rows.ladder.indexOf(m.name) >= 0; }) && !/Materials & Purchasing|Logistics & Warranty/.test(rows.ladder) && rows.add !== 'none', rows.ladder);
     ok('lite-ladder: no invoices yet reads as a sentence', /No invoices issued yet/.test(rows.invoices), rows.invoices);
     await p.evaluate(function () { var s = document.querySelector('#acct-package'); if (s) s.scrollIntoView(); }); await shot10b(p, 'account-ladder');
     await p.click('#acct-package-add'); await p.waitForSelector('#omega-package-menu [data-module-card]');
     await p.waitForFunction(function () { return document.querySelectorAll('#omega-package-menu [data-subscribe] button').length > 0; }, null, { timeout: 8000 });
     var menu = await p.evaluate(function () { return { title: document.getElementById('opm-title').textContent, cards: document.querySelectorAll('#omega-package-menu [data-module-card]').length, lite: !!document.querySelector('#omega-package-menu [data-module-card="lite"]'), subscribe: document.querySelectorAll('#omega-package-menu [data-subscribe] button').length }; });
-    ok('lite-ladder: the Ladder includes mandatory Lite and Subscribe on each optional rung', menu.title === 'The Ladder' && menu.cards === M.catalog().length && menu.lite && menu.subscribe === menu.cards - 1, menu);
+    ok('lite-ladder: the Ladder includes mandatory Lite and Opt in on each optional rung', menu.title === 'The Ladder' && menu.cards === M.catalog().length && menu.lite && menu.subscribe === menu.cards - 1, menu);
     await p.click('#omega-package-menu [data-module-card="gridatlas"] [data-subscribe] button');
     await p.waitForFunction(function () { return !!document.querySelector('#omega-package-menu [data-module-card="gridatlas"] .opm-quote, #omega-package-menu [data-module-card="gridatlas"] .opm-reason'); }, null, { timeout: 8000 });
     var quote = await p.$eval('#omega-package-menu [data-module-card="gridatlas"] .opm-act', function (e) { return e.textContent; });
-    ok('lite-ladder: Subscribe brings the server\'s quote for the rest of the cycle', /today/.test(quote) && /\$/.test(quote), quote);
+    ok('lite-ladder: Opt in brings the server\'s quote for the rest of the cycle', /today/.test(quote) && /\$/.test(quote), quote);
     await shot10b(p, 'ladder-menu');
     await p.evaluate(function () { OmegaPackageMenu.close(); }); await p.waitForSelector('#omega-package-menu', { state: 'detached' });
     await p.evaluate(function () { closeAccount(); });
@@ -412,7 +432,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
         priced: cards.filter(function (c) { return c.getAttribute('data-held') === '0' && /\$[\d,]+\/month/.test(c.querySelector('.mod-shelf').textContent); }).length,
         names: cards.map(function (c) { return c.querySelector('.mod-name').textContent; }) };
     });
-    ok('lite-ladder: Your modules shows Lite live, in the words of the catalog, and three dashed rungs priced by the server', !!mods && mods.held.join() === 'lite' && mods.off.length === 3 && mods.live === 1 && mods.adds === 3 && mods.feats.every(function (n) { return n === 3; }) && mods.chips[0] >= 3 && mods.priced === 3 && /holds on Lite\./.test(mods.sub) && mods.names[0] === 'Lite', mods);
+    ok('lite-ladder: Your modules shows Lite live, in the words of the catalog, and three dashed rungs priced by the server', !!mods && mods.held.join() === 'lite' && mods.off.length === 3 && mods.live === 1 && mods.adds === 3 && mods.feats.every(function (n) { return n === 3; }) && mods.chips[0] >= 3 && mods.priced === 3 && /holds on Lite\./.test(mods.sub) && mods.names[0] === 'Omega Design', mods);
     await p.evaluate(function () { document.getElementById('dash-modules').scrollIntoView(); }); await shot10b(p, 'modules');
     await p.click('#modules-grid .mod-card.off .mod-add'); await p.waitForSelector('#omega-package-menu [data-selected]');
     var selMod = await p.$eval('#omega-package-menu [data-selected]', function (e) { return e.getAttribute('data-module-card'); });
@@ -431,7 +451,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('awaiting: Lite is on and the rest is locked until the first invoice is paid', tiles.length > 0 && !wrong.length, wrong);
     await p.click('button.btn-signout[onclick="openAccount()"]'); await p.waitForSelector('#acct-overlay.show'); await p.waitForSelector('#acct-pk-paid-btn');
     var rows = await p.evaluate(function () { function t(id) { var e = document.getElementById(id); return e ? e.textContent : null; } return { status: t('acct-pk-status'), on: t('acct-pk-on'), pkg: t('acct-pk-package'), due: t('acct-pk-due'), pay: (document.getElementById('acct-pk-pay') || {}).href, plan: t('acct-package-plan') }; });
-    ok('awaiting: the panel says awaiting the first payment, what was bought and what is on, the amount and the QuickBooks link', /Awaiting your first payment/.test(rows.status) && /Grid Atlas/.test(rows.pkg) && /Lite/.test(rows.on) && /2,250/.test(rows.due) && /intuit/.test(rows.pay || ''), rows);
+    ok('awaiting: the panel says awaiting the first payment, what was bought and what is on, the amount and the QuickBooks link', /Awaiting your first payment/.test(rows.status) && /Omega Grid/.test(rows.pkg) && /Omega Design/.test(rows.on) && /2,250/.test(rows.due) && /intuit/.test(rows.pay || ''), rows);
     await p.evaluate(function () { var s = document.querySelector('#acct-package'); if (s) s.scrollIntoView(); }); await shot10b(p, 'account-awaiting');
     var awMods = await p.evaluate(function () { return { bought: [].slice.call(document.querySelectorAll('#modules-grid [data-held="bought"]')).map(function (c) { return c.getAttribute('data-module') + ':' + c.querySelector('.mod-shelf').textContent; }), live: document.querySelectorAll('#modules-grid .mod-live').length }; });
     ok('awaiting: a module bought but not yet on says so on its card, with no Add', awMods.live === 1 && awMods.bought.length === 1 && /^gridatlas:Yours/.test(awMods.bought[0]) && /first invoice is paid/.test(awMods.bought[0]), awMods);
@@ -454,6 +474,113 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('legacy-enterprise: no Your modules block (a legacy plan is left alone)', legacyMods === 'none', legacyMods);
     return out;
   } });
+  /* ══ 9. THE WORKSPACE'S PLACES ON THE CLASSIC HOME (review #27) — Site
+     Map's plan chip and the editor gate link /workspace#billing, #modules
+     and #module-<key>; a classic home is sent here with the hash kept
+     (workspace.html classicBounce), and each opens its twin once the
+     entitlements say what the plan is. ══ */
+  function acctAt(p) { return p.evaluate(function () { var o = document.getElementById('acct-overlay'), t = Array.prototype.filter.call(document.querySelectorAll('#acct-overlay .acct-sec-title'), function (e) { return /^Billing/.test(e.textContent); })[0], r = t && t.getBoundingClientRect(); return { open: !!o && o.classList.contains('show'), billingInView: !!(r && r.height > 0 && r.top >= 0 && r.top < window.innerHeight) }; }); }
+  var nh = FX.northstar(HOST);
+  await scenario('northstar-hash', nh, { hash: '#billing', steps: async function (p, shown, ctx) {
+    await p.waitForSelector('#acct-overlay.show', { timeout: 8000 }).catch(function () {});
+    var a = await acctAt(p);
+    ok('northstar-hash: /#billing opens the Account panel at Billing & plan', a.open && a.billingInView, a);
+    await p.evaluate(function () { closeAccount(); window.location.hash = '#modules'; }); await wait(400);
+    a = await acctAt(p);
+    ok('northstar-hash: /#modules on a legacy plan (no Your modules block) opens Billing & plan', a.open && a.billingInView, a);
+    await p.evaluate(function () { closeAccount(); });
+    /* a legacy plan's module: the marketplace, where the classic home opens the one menu on it (stood in here; render-workspace.js follows it through) */
+    await ctx.route(/\/marketplace\.html/, function (r) { return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>marketplace</title><main id="main">marketplace</main>' }); });
+    await p.evaluate(function () { window.location.hash = '#module-finance'; });
+    var went = await p.waitForFunction(function () { return location.pathname === '/marketplace.html'; }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
+    var at = await p.evaluate(function () { return location.pathname + location.hash; });
+    ok('northstar-hash: /#module-finance on a legacy plan goes to /marketplace.html#finance, where the one menu opens on it', went && at === '/marketplace.html#finance', at);
+    return {};
+  } });
+  var lh = FX.lite(HOST);
+  await scenario('lite-hash', lh, { hash: '#modules', steps: async function (p) {
+    function dmNow() { return p.evaluate(function () { var b = document.getElementById('dash-modules'), r = b && b.getBoundingClientRect(); return { shown: !!b && !b.classList.contains('mod-none'), top: r ? Math.round(r.top) : null, h: window.innerHeight, acct: document.getElementById('acct-overlay').classList.contains('show') }; }); }
+    /* arriving on /#modules (the bounce from /workspace#modules): Your modules, never the fallback */
+    await p.waitForFunction(function () { var b = document.getElementById('dash-modules'); return !!b && !b.classList.contains('mod-none'); }, null, { timeout: 8000 }).catch(function () {});
+    await wait(400);
+    var first = await dmNow();
+    ok('lite-hash: arriving on /#modules on a packaged plan shows Your modules, not the Account panel', first.shown && !first.acct && first.top !== null && first.top >= -2 && first.top < first.h, first);
+    /* scrolled away first (the last block to the top), so arriving is the route's doing */
+    await p.evaluate(function () { window.location.hash = ''; var all = Array.prototype.filter.call(document.querySelectorAll('.dash-block'), function (b) { return b.offsetHeight > 0; }), last = all[all.length - 1]; if (last) last.scrollIntoView({ block: 'start' }); }); await wait(300);
+    var away = await p.evaluate(function () { return Math.round(document.getElementById('dash-modules').getBoundingClientRect().top); });
+    await p.evaluate(function () { window.location.hash = '#modules'; }); await wait(500);
+    var dm = await dmNow(); dm.away = away;
+    ok('lite-hash: /#modules on a packaged plan scrolls Your modules into view', dm.shown && away < -20 && dm.top !== null && dm.top >= -2 && dm.top < dm.h / 2 && !dm.acct, dm);
+    await p.evaluate(function () { window.location.hash = '#module-gridatlas'; });
+    var menu = await p.waitForSelector('#omega-package-menu [data-module-card="gridatlas"]', { timeout: 8000 }).then(function () { return true; }, function () { return false; });
+    var cards = await p.evaluate(function () { return document.querySelectorAll('#omega-package-menu [data-module-card]').length; });
+    ok('lite-hash: /#module-gridatlas opens the one menu on Grid Atlas alone', menu && cards === 1, { menu: menu, cards: cards });
+    await p.evaluate(function () { OmegaPackageMenu.close(); window.location.hash = '#billing'; }); await wait(400);
+    var a = await acctAt(p);
+    ok('lite-hash: /#billing opens the Account panel at Billing & plan', a.open && a.billingInView, a);
+    await p.evaluate(function () { closeAccount(); });
+    return {};
+  } });
+  PACKAGE_VIEW = null;
+
+  /* ══ EVERY CLICK (Tommy, 2026-09-27: "we need to make sure every click
+     every link doesnt bug") ══
+     scripts/_lib/click-sweep.js clicks every visible control on the
+     dashboard — the sidebar, the topbar, every widget, the tool tiles, the
+     Account panel's own buttons one level in — as a Standard tenant on a
+     desktop and a phone, a packaged Lite tenant and a legacy Enterprise
+     one. A click that would leave is held at the door and its address
+     checked against what the site serves; a new tab or a mail link is read.
+     It fails on an error, anything put into the page flow instead of over
+     it, a panel off the screen, sideways scroll, a reload in disguise, an
+     overlay Escape leaves open, a link the site does not serve, and a
+     control that cannot be clicked. Sign out is left to its own check. */
+  /* REMOVE ON A STARTER TILE keeps the rest (the sweep found it pinning the
+     removed tool instead: the dashboard kept that one tile and dropped the
+     other five) */
+  await scenario('starter-remove', FX.lite(HOST), { steps: async function (p) {
+    var before = await p.$$eval('#dash-grid .pm-tile[data-tool]', function (r) { return r.map(function (t) { return t.getAttribute('data-tool'); }); });
+    var gone = before[1];
+    await p.locator('#dash-grid .pm-tile[data-tool="' + gone + '"] .pin-btn.remove').click(); await wait(900);
+    var after = await p.$$eval('#dash-grid .pm-tile[data-tool]', function (r) { return r.map(function (t) { return t.getAttribute('data-tool'); }); });
+    var saved = await p.evaluate(function () { var w = window.__firebaseDouble.store.log.filter(function (x) { return /prefs\/pinned$/.test(x.path); }).pop(); return w ? w.data.keys : null; });
+    var want = before.filter(function (k) { return k !== gone; });
+    ok('starter-remove: Remove on a starter tile takes that tile away and keeps the other ' + want.length, before.length >= 2 && after.join() === want.join(), { before: before, removed: gone, after: after });
+    ok('starter-remove: the starter set, less the removed tool, is saved as the pins', !!saved && saved.join() === want.join(), saved);
+    return { starter: before, after: after };
+  } });
+
+  var SWEEP = require('./_lib/click-sweep'), SERVED = SWEEP.servedBy(ROOT);
+  var DASH_OVERLAYS = '#new-proj-modal.on, #claim-modal.on, #video-modal.on, #acct-overlay.show, #convo-modal.show, #sw.sw-open, .tb-nav.open, #upgrade-modal, #omega-package-menu, #ot-modal, #ows-overlay';
+  async function sweepDash(p, name, phone) {
+    var r = await SWEEP.run(p, {
+      views: [{ name: 'dashboard', enter: async function (pg) { await pg.evaluate(function () { window.scrollTo(0, 0); }); } }],
+      scope: '#app',
+      skip: '[onclick*="signOut"], #ows-signout',
+      inner: '.acct-overlay.show button, #sw.sw-open button',
+      last: '.pin-btn.remove, .db-remove, #acct-av-remove',
+      overlays: DASH_OVERLAYS,
+      reveal: phone ? [{ within: '.tb-nav', open: async function (pg) { if (!(await pg.evaluate(function () { var n = document.querySelector('.tb-nav'); return !!(n && n.classList.contains('open')); }))) await pg.click('#tb-burger'); } }] : [],
+      forceClose: function (pg) { return pg.evaluate(function () {
+        [['new-proj-modal', 'on'], ['claim-modal', 'on'], ['video-modal', 'on'], ['acct-overlay', 'show'], ['convo-modal', 'show'], ['sw', 'sw-open']].forEach(function (x) { var e = document.getElementById(x[0]); if (e) e.classList.remove(x[1]); });
+        var n = document.querySelector('.tb-nav'); if (n) n.classList.remove('open');
+        ['omega-package-menu', 'ows-overlay', 'upgrade-modal'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); });
+        document.documentElement.classList.remove('omega-np-open'); document.body.style.overflow = '';
+      }); },
+      served: SERVED
+    });
+    /* a pinned tile's Remove takes its tile (and the next Remove's place) off the page: those are named, not failed */
+    var gone = r.hidden.length + r.skipped.length;
+    ok(name + ': every control still on the page when its turn came was clicked or read (' + r.clicks + ' clicked, ' + r.read.length + ' read, ' + gone + ' taken away by an earlier click, of ' + r.controls + ')', r.controls > 20 && r.clicks + r.read.length + gone >= r.controls && gone <= Math.max(6, Math.ceil(r.controls / 5)), r.hidden.concat(r.skipped));
+    var kinds = {}; r.problems.forEach(function (x) { (kinds[x.kind] = kinds[x.kind] || []).push(x.control + ' — ' + x.detail); });
+    var WHAT = { error: 'no click throws or logs an error', flow: 'no click puts anything into the page flow (a dialog, a panel) instead of over it', offscreen: 'every panel a click opens is inside the screen', sideways: 'no click makes the page scroll sideways', reload: 'a click that stays on the page never reloads it or raises the loading screen', escape: 'Escape closes whatever a click opened', link: 'every link and every page a click goes to is one the site serves', click: 'every control can be clicked (nothing covers it)' };
+    Object.keys(WHAT).forEach(function (k) { ok(name + ': ' + WHAT[k], !kinds[k], (kinds[k] || []).slice(0, 10)); });
+    return { controls: r.controls, clicked: r.clicks, read: r.read.length, leaves: r.held.length, problems: r.problems.length, changedByAnEarlierClick: r.hidden.concat(r.skipped), tabs: r.tabs, frames: r.frames };
+  }
+  await scenario('sweep northstar', FX.northstar(HOST), { steps: async function (p) { return sweepDash(p, 'sweep northstar'); } });
+  await scenario('sweep northstar-phone', FX.northstar(HOST), { phone: true, steps: async function (p) { return sweepDash(p, 'sweep northstar-phone', true); } });
+  await scenario('sweep lite', FX.lite(HOST), { steps: async function (p) { return sweepDash(p, 'sweep lite'); } });
+  await scenario('sweep legacy-enterprise', FX.legacyEnterprise(HOST), { steps: async function (p) { return sweepDash(p, 'sweep legacy-enterprise'); } });
   PACKAGE_VIEW = null;
 
   ok('no /api/ route was called that this check does not answer', !missing.length, missing);

@@ -3,6 +3,7 @@
  * Maps and producing APIs use offline adapters; no live reads/writes/charges.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var M = require('../api/_lib/modules'), X = require('../api/_lib/package-access');
 var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture');
@@ -12,19 +13,36 @@ var output5 = process.env.WORKSPACE_SHOTS || path.join(ROOT, 'docs/screenshots/p
  * the REAL handlers over an in-memory Firestore seeded with a paid tenant;
  * QuickBooks is a stand-in that counts invoices. The mock must be installed
  * before the handler is required. */
-var LIVE_ORG = 'packaging.example', db = null, caller = null, live = false, sandboxInvoices = 0;
-H.mockAdmin(function () { return db; }, function () { return caller; }); H.mockQbo(function () { sandboxInvoices++; });
+var LIVE_ORG = 'packaging.example', db = null, caller = null, live = false, sandboxInvoices = 0, qbo = { paid: false };
+/* every plan-change POST the menu made, 'action' or 'action:dry': a step
+   nobody clicked shows up here */
+var posted = [];
+H.mockAdmin(function () { return db; }, function () { return caller; }); H.mockQbo(function () { sandboxInvoices++; }, qbo);
 process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
 var planChange = require('../api/plan-change');
 async function liveProjection() { var snap = await db.doc('omega_orgs/' + LIVE_ORG + '/billing/current').get(); return X.project({ emailVerified: true }, snap.data(), { status: 'active' }, { role: 'owner' }); }
 function json(route, status, body) { return route.fulfill({ status: status, contentType: 'application/json', body: JSON.stringify(body) }); }
 async function liveChange(route) {
   var req = route.request(), url = new URL(req.url()), body = req.method() === 'POST' ? req.postDataJSON() : {};
+  if (body && body.action) posted.push(body.action + (body.dryRun ? ':dry' : ''));
   try { return json(route, 200, await planChange({ method: req.method(), headers: {}, query: Object.fromEntries(url.searchParams), body: body }, { setHeader: function () {} })); }
   catch (e) { return json(route, e.status || 500, { error: e.message }); }
 }
 var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium, count = 0;
 function ok(value, label) { assert(value, label); count++; }
+/* where a module's card in the menu settles after a write redraws it: at
+   rest on its one button ('rest'), or on a confirm panel ('confirm') */
+async function settled(page, key, label) {
+  var handle = await page.waitForFunction(function (a) {
+    var c = document.querySelector('#omega-package-menu [data-subscribe="' + a.key + '"]'), found = null; if (!c) return null;
+    Array.prototype.forEach.call(c.querySelectorAll('button'), function (b) {
+      if (['Opt in and pay', 'Turn it on', 'Request opt-out'].indexOf(b.textContent) >= 0) found = 'confirm';
+      else if (!found && b.textContent === a.label) found = 'rest';
+    });
+    return found;
+  }, { key: key, label: label }, { timeout: 15000 });
+  return handle.jsonValue();
+}
 var server = http.createServer(function (req, res) {
   var pathname = new URL(req.url, 'http://localhost').pathname, file = path.resolve(ROOT, '.' + pathname);
   if (!file.startsWith(ROOT + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
@@ -61,6 +79,7 @@ function fixture(tier) {
   window.firebase = { apps:[app], initializeApp:function () { return app; }, app:function () { return app; }, firestore:firestore, auth:authentication };
   window.CLEARSKY_CONFIG = { firebase:{}, adminDomains:['clearsky-usa.com'], tenant:{ orgId:'packaging.example', name:'Packaging preview', tier:tier, status:'active' } };
   window.alert = function (message) { window.__fixtureAlert = message; };
+  try { localStorage.setItem('omega.ui.mode', 'designer'); } catch (e) {}
   
 }
 
@@ -103,19 +122,48 @@ async function run() {
       // Let the actual delayed ribbon injectors and shelf initialize.
       await page.waitForTimeout(3000);
       ok(await page.evaluate(function () { return window.__fixtureReads < 100; }), 'empty recent-project result settles');
+      /* bought = visible (2026-09-27): a package is in neither mode; a saved Designer choice from before hides nothing */
+      ok(await page.evaluate(function () {
+        var s = document.getElementById('omg-switch'), b = document.getElementById('rb-omega-mode');
+        return OmegaMode.get() === 'pro' && !document.body.classList.contains('omg-designer') && (!s || getComputedStyle(s).display === 'none') && (!b || getComputedStyle(b).display === 'none');
+      }), 'under a package the editor is the full owned ribbon: no Designer/Pro switch, a saved Designer choice not applied');
+      ok(await page.evaluate(function () { OmegaMode.set('designer'); return OmegaMode.get() === 'pro' && localStorage.getItem('omega.ui.mode') === 'designer'; }), 'asking for Designer under a package keeps the full ribbon and writes nothing');
+      ok(await page.evaluate(async function () {
+        var v = OmegaCaps.packageAccess(), wait = function () { return new Promise(function (r) { setTimeout(r, 60); }); };
+        OmegaCaps.setPackage(null); OmegaCaps.apply('standard'); await wait();
+        var back = OmegaMode.get() === 'designer' && getComputedStyle(document.getElementById('omg-switch')).display !== 'none';
+        OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); await wait();
+        var held = OmegaMode.get() === 'pro' && getComputedStyle(document.getElementById('omg-switch')).display === 'none';
+        /* again, on the same tier: no omega:tier this time, only the body attribute says the package went */
+        OmegaCaps.setPackage(null); OmegaCaps.apply('standard'); await wait();
+        var again = OmegaMode.get() === 'designer';
+        OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); await wait();
+        return back && held && again && OmegaMode.get() === 'pro';
+      }), 'a package going away gives a legacy account its saved Designer choice and the switch back; the package taking over ends it again');
+      ok(await page.evaluate(function () { return !document.getElementById('omega-workspace-controls'); }), 'a customer has no workspace bar above the ribbon (it only carried All tools)');
+      ok(await page.evaluate(function () {
+        var rr = document.getElementById('rr'), body = document.querySelector('#rr .rr-body'); if (!rr || !body) return true;
+        OmegaWorkspaces.results(); rr.classList.add('rr-collapsed'); var shut = getComputedStyle(body).display === 'none';
+        rr.classList.remove('rr-collapsed'); return shut;
+      }), 'the Results rail still collapses under a package (its layout is a rule, not an inline display)');
       for (var name of Object.keys(packages)) {
         view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: packages[name] }, { status: 'active' }, { role: 'owner' });
         await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
         for (var workspace of ['l2', 'dcfc', 'bess', 'solarstorage', 'microgrid', 'compute', 'building']) {
-          await page.evaluate(function (key) { OmegaWorkspaces.setAll(false); OmegaWorkspaces.setProject(key, null, true); }, workspace);
+          await page.evaluate(function (key) { OmegaWorkspaces.setProject(key, null, true); }, workspace);
+          /* a paid-only tab is an Opt in under Lite (Tommy, 2026-09-27: never a
+             blank panel), shown with its modules and none of its commands */
           if (name === 'lite') ok(await page.evaluate(function () {
-            return ['analyze','estimate','compute'].every(function (key) { return getComputedStyle(document.querySelector('#ribbon-tabs [data-page="' + key + '"]')).display === 'none'; });
-          }), 'Lite omits paid-only tabs');
+            return ['analyze','estimate','compute'].every(function (key) { var t = document.querySelector('#ribbon-tabs [data-page="' + key + '"]'), pg = document.querySelector('#ribbon .ribbon-page[data-page="' + key + '"]');
+              return getComputedStyle(t).display !== 'none' && !!t.getAttribute('data-optin') && !OmegaCaps.tabOpen(key) && !Array.prototype.some.call(pg.querySelectorAll('.rbtn,.rsbtn'), function (b) { return OmegaCaps.allowedElement(b); }); });
+          }), 'Lite shows its paid-only tabs only as Opt in, their commands shut');
           var state = await page.evaluate(function () {
             var C = OmegaCaps, tabs = document.querySelectorAll('#ribbon-tabs .rtab[data-page]'), failures = [];
             function visible(el) { return getComputedStyle(el).display !== 'none' && !el.hidden; }
             for (var i = 0; i < tabs.length; i++) {
               var key = tabs[i].getAttribute('data-page'); if (key === '__file' || !visible(tabs[i])) continue;
+              /* an Opt in tab holds nothing this package opens: its offer is checked below */
+              if (tabs[i].hasAttribute('data-optin')) { if (!C.lockedTabs().some(function (l) { return l.page === key && l.modules.length; })) failures.push('offer without modules ' + key); continue; }
               rbTab(key); C.apply('standard');
               var pg = document.querySelector('#ribbon .ribbon-page[data-page="' + key + '"]');
               if (!pg || !visible(pg)) { failures.push('empty tab ' + key); continue; }
@@ -137,10 +185,13 @@ async function run() {
           });
           if (state.length) await page.screenshot({path:'/tmp/omega-phase-3-matrix-failure.png'});
           ok(!state.length, name + '/' + workspace + '/' + theme + ': ' + state.join('; '));
-          await page.evaluate(function () { OmegaWorkspaces.setAll(true); rbTab('home'); });
-          var unreachable = await page.evaluate(function () {
+          /* no toggle: every owned tool shows whatever the project type, and the build leads */
+          await page.evaluate(function () { rbTab('home'); });
+          var unreachable = await page.evaluate(function (key) {
             var failures = [];
             if (document.querySelectorAll('#ribbon [data-workspace-hidden]').length) failures.push('workspace hidden');
+            var guide = OmegaWorkspaces.presets[key].guide, lead = Array.prototype.filter.call(document.querySelectorAll('#ribbon .rbtn'), function (b) { return b.getAttribute('onclick') === guide && OmegaCaps.allowedElement(b); })[0];
+            if (lead && (lead.parentNode.classList.contains('rbtn-wrap') ? lead.parentNode : lead).style.order !== '-2') failures.push('guided build not first');
             var buttons = document.querySelectorAll('#ribbon .rbtn,#ribbon .rsbtn');
             for (var b = 0; b < buttons.length; b++) {
               var el = buttons[b];
@@ -150,9 +201,25 @@ async function run() {
               if (tab && getComputedStyle(tab).display === 'none') failures.push('tab ' + page.getAttribute('data-page') + ' for ' + el.id + ':' + el.textContent.trim());
             }
             return failures;
-          });
-          ok(!unreachable.length, name + '/' + workspace + ': All tools: ' + unreachable.join('; '));
-          await page.evaluate(function () { OmegaWorkspaces.setAll(false); rbTab('home'); OmegaCaps.apply('standard'); });
+          }, workspace);
+          ok(!unreachable.length, name + '/' + workspace + ': every owned tool shows, no toggle: ' + unreachable.join('; '));
+          if (name === 'lite' && workspace === 'l2') {
+            /* the offer where the plan stops, and Opt in on it: The Ladder on that module */
+            var offer = await page.evaluate(async function () {
+              rbTab('compute'); await new Promise(function (r) { setTimeout(r, 40); });
+              var p = document.getElementById('omega-optin'), out = { shown: !!(p && p.offsetParent), offered: p ? Array.prototype.map.call(p.querySelectorAll('[data-optin-module]'), function (m) { return m.getAttribute('data-optin-module'); }) : [],
+                fits: !!p && p.scrollWidth <= document.getElementById('ribbon').clientWidth + 2 };
+              p.querySelector('[data-optin-module="compute"] .oin-go').click();
+              await new Promise(function (r) { setTimeout(r, 40); });
+              out.ladder = !!document.querySelector('#omega-package-menu [data-module-card="compute"][data-selected]');
+              OmegaPackageMenu.close(); rbTab('home'); await new Promise(function (r) { setTimeout(r, 40); });
+              out.closed = !p.offsetParent;
+              return out;
+            });
+            ok(offer.shown && offer.offered.join() === 'compute' && offer.fits && offer.ladder && offer.closed,
+               'Lite: the Compute tab offers Omega Compute with Opt in, which opens The Ladder on it: ' + JSON.stringify(offer));
+          }
+          await page.evaluate(function () { rbTab('home'); OmegaCaps.apply('standard'); });
           await page.screenshot({ path: path.join(output, name + '-' + workspace + '-' + theme + '.png') });
         }
       }
@@ -160,7 +227,7 @@ async function run() {
       await page.setViewportSize({ width: 1024, height: 768 });
       for (var tabletName of Object.keys(packages)) {
         view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: packages[tabletName] }, { status: 'active' }, { role: 'owner' });
-        await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaWorkspaces.setProject('l2', null, true); OmegaWorkspaces.setAll(true); }, view);
+        await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaWorkspaces.setProject('l2', null, true); }, view);
         var tabletFit = await page.evaluate(function () {
           var failures = [], tabs = document.querySelectorAll('#ribbon-tabs .rtab[data-page]');
           for (var t = 0; t < tabs.length; t++) {
@@ -169,10 +236,13 @@ async function run() {
             rbTab(key); OmegaCaps.apply('standard');
             var pg = document.querySelector('#ribbon .ribbon-page[data-page="' + key + '"]');
             if (pg && pg.scrollWidth > document.getElementById('ribbon').clientWidth + 2) failures.push(key);
+            /* an Opt in wraps inside the ribbon too (drawn on the next tick; checked when present) */
+            var offer = tabs[t].hasAttribute('data-optin') && document.getElementById('omega-optin');
+            if (offer && offer.offsetParent && offer.scrollWidth > document.getElementById('ribbon').clientWidth + 2) failures.push('offer ' + key);
           }
           var bar = document.getElementById('omega-workspace-controls');
-          if (bar.scrollWidth > window.innerWidth + 2) failures.push('workspace header');
-          rbTab('home'); OmegaWorkspaces.setAll(false);
+          if (bar && bar.scrollWidth > window.innerWidth + 2) failures.push('workspace header');
+          rbTab('home');
           return failures;
         });
         ok(!tabletFit.length, tabletName + '/' + theme + ' tablet fit: ' + tabletFit.join(', '));
@@ -182,14 +252,18 @@ async function run() {
       view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: ['lite'] }, { status: 'active' }, { role: 'owner' });
       await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
       await page.locator('#omega-package-tab').click();
-      await page.waitForFunction(function () { return document.querySelector('#omega-package-menu .opm-price').textContent.indexOf('/month') >= 0; });
+      /* what is held reads "In your plan", never its list price; the rest are priced by the server */
+      await page.waitForFunction(function () { return Array.prototype.some.call(document.querySelectorAll('#omega-package-menu .opm-price'), function (n) { return n.textContent.indexOf('/month') >= 0; }); });
       ok(await page.locator('[data-module-card]').count() === M.catalog().length, 'one card per catalog module, including the mandatory baseline');
       ok(await page.locator('[data-module-card="lite"] button').count() === 0, 'Lite never offers opt-out');
+      ok(await page.locator('[data-module-card="lite"] .opm-badge').textContent() === '● On your plan' && await page.locator('[data-module-card="lite"] .opm-price').textContent() === 'In your plan', 'a held card says so, with no price');
+      ok((await page.locator('#omega-package-menu').textContent()).indexOf('Build your own experience') >= 0, 'the Ladder opened on nothing tells what Omega Logic departments are');
       ok(await page.locator('[data-module-card="plansets"]').textContent().then(function (t) { return t.indexOf('AI Render') >= 0; }), 'AI Render belongs only to Plan Sets');
       await page.screenshot({ path: path.join(output, 'lite-modules-' + theme + '.png') });
       await page.locator('#omega-package-menu').getByRole('button', { name: 'Close', exact: true }).click();
       await page.evaluate(function () { var item = OmegaCommands.list().filter(function (it) { return it.module === 'plansets' && /plot/i.test(it.name); })[0]; if (!item) throw new Error('Missing Plan Sets discovery'); OmegaCommands.run(item.name); });
       ok(await page.locator('[data-module-card="plansets"]').count() === 1, 'Ctrl+K/Jarvis unowned command opens module card');
+      ok((await page.locator('#omega-package-menu').textContent()).indexOf('Build your own experience') < 0, 'opened on a Site Map module, the Omega Logic sentence is not said');
       await page.evaluate(function () { OmegaPackageMenu.close(); });
       ok(await page.evaluate(function () { return OmegaCaps.packageAccess().modules.join() === 'lite'; }), 'discovery never grants access');
       // Phase 5: the workspace OWNER on a paid Field package subscribes from the
@@ -203,20 +277,36 @@ async function run() {
       ok(await page.evaluate(storageAllowed) === false, 'Storage tools are gated before it is bought');
       await page.locator('#omega-package-tab').click();
       var siteintel = page.locator('[data-subscribe="siteintel"]'), storage = page.locator('[data-subscribe="storage"]');
-      await siteintel.getByRole('button', { name: 'Subscribe', exact: true }).waitFor();
-      ok(await page.locator('[data-subscribe] .opm-primary').count() === M.catalog().length - owned.length, 'an owner sees Subscribe on every unowned card');
-      await siteintel.getByRole('button', { name: 'Subscribe', exact: true }).click();
+      await siteintel.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
+      ok(await page.locator('[data-subscribe] .opm-primary').count() === M.catalog().length - owned.length, 'an owner sees Opt in on every unowned card');
+      ok(await page.locator('[data-subscribe]').getByRole('button', { name: 'Opt out', exact: true }).count() === owned.length - 1, 'and Opt out on every held one but Lite');
+      ok(!/Subscribe|Keep module|\bAsk\b/.test(await page.locator('#omega-package-menu').textContent()), 'none of the retired words');
+      await siteintel.getByRole('button', { name: 'Opt in', exact: true }).click();
       await siteintel.locator('.opm-quote').waitFor();
       ok(/^\$[\d,]+\.\d{2} today \(\d+ of \d+ days left until your billing date, \d{4}-\d{2}-\d{2}\)$/.test(await siteintel.locator('.opm-quote').textContent()), 'the quote is server-priced and prorated to the billing date');
       await page.screenshot({ path: path.join(output5, 'editor-subscribe-quote-' + theme + '.png') });
-      await siteintel.getByRole('button', { name: 'Subscribe and pay' }).click();
+      await siteintel.getByRole('button', { name: 'Opt in and pay' }).click();
       await siteintel.getByRole('button', { name: 'Cancel request' }).waitFor();
       ok(sandboxInvoices === 1, 'one sandbox change invoice is issued');
       ok(await page.evaluate(function () { return OmegaCaps.packageAccess().modules.indexOf('siteintel') < 0; }), 'nothing switches on before the payment clears');
       ok((await siteintel.textContent()).indexOf('Waiting for payment') >= 0 && await siteintel.getByRole('link', { name: 'Pay in QuickBooks' }).count() === 1, 'the card waits for payment with the QuickBooks pay link');
       await page.screenshot({ path: path.join(output5, 'editor-subscribe-waiting-' + theme + '.png') });
+      /* the change expires on the billing date it was priced to (the renewal
+         is issued that day), so the card says pay BEFORE it, as the quote did */
+      var waiting = await siteintel.innerText();
+      ok(/Waiting for payment · \$[\d,.]+ · pay before [A-Z][a-z]{2} \d{1,2}, \d{4}/.test(waiting) && /Unpaid, the request expires on [A-Z][a-z]{2} \d{1,2}, \d{4}\./.test(waiting) && !/pay by/i.test(waiting), 'the waiting card says to pay before the day an unpaid request expires: ' + waiting);
+      /* an intent the card cannot take is spent, never kept: opened to Opt in
+         on a module already waiting for payment, the card offers Cancel
+         request, and cancelling lands on a plain Opt in, not a fresh quote */
+      await page.evaluate(function () { OmegaPackageMenu.open('siteintel', { single: true, intent: 'add' }); });
+      await siteintel.getByRole('button', { name: 'Cancel request' }).waitFor();
+      /* Cancel request states what it does before it does it */
       await siteintel.getByRole('button', { name: 'Cancel request' }).click();
-      await siteintel.getByRole('button', { name: 'Subscribe', exact: true }).waitFor();
+      ok(/Nothing is switched on and nothing is charged/.test(await siteintel.textContent()) && await siteintel.getByRole('button', { name: 'Not now' }).count() === 1, 'the cancel panel says what it costs: nothing');
+      var mark = posted.length;
+      await siteintel.getByRole('button', { name: 'Cancel request' }).click();
+      var afterCancel = await settled(page, 'siteintel', 'Opt in');
+      ok(afterCancel === 'rest' && posted.slice(mark).indexOf('quote') < 0, 'cancelled, the card rests on Opt in and quotes nothing nobody asked for: ' + afterCancel + ' after ' + posted.slice(mark).join());
       var changes = (await db.collection('omega_orgs').doc(LIVE_ORG).collection('billing').doc('current').collection('invoices').get()).docs.map(function (d) { return d.data(); }).filter(function (r) { return r.kind === 'change'; });
       ok(changes.length === 1 && changes[0].state === 'cancelled', 'a cancelled change stays on record, marked cancelled');
       await page.locator('#omega-package-menu').getByRole('button', { name: 'Close', exact: true }).first().click();
@@ -226,8 +316,8 @@ async function run() {
       await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, await liveProjection());
       ok(await page.evaluate(storageAllowed) === false, 'Storage tools are still gated on the smaller package');
       await page.locator('#omega-package-tab').click();
-      await storage.getByRole('button', { name: 'Subscribe', exact: true }).waitFor();
-      await storage.getByRole('button', { name: 'Subscribe', exact: true }).click();
+      await storage.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
+      await storage.getByRole('button', { name: 'Opt in', exact: true }).click();
       await storage.locator('.opm-quote').waitFor();
       ok((await storage.locator('.opm-quote').textContent()).indexOf('no charge today') >= 0, 'a module inside the paid tier costs nothing today');
       await storage.getByRole('button', { name: 'Turn it on' }).click();
@@ -236,29 +326,162 @@ async function run() {
       ok(sandboxInvoices === 1, 'nothing is invoiced for an included module');
       ok(await page.evaluate(storageAllowed) === true, 'Storage tools appear without staff');
       await storage.getByRole('button', { name: 'Opt out', exact: true }).click();
-      await storage.getByRole('button', { name: 'Confirm opt-out request', exact: true }).waitFor();
-      ok(/quarterly review/.test(await storage.textContent()) && /charges stay unchanged/.test(await storage.textContent()), 'opt-out confirms review timing before applying');
+      await storage.getByRole('button', { name: 'Request opt-out', exact: true }).waitFor();
+      /* the money, before anything is written: kept and paid until the review, then the fee (Field covers it: it stays) */
+      ok(/You keep Omega Storage, and keep paying for it, until your review on [A-Z][a-z]{2} \d{1,2}, \d{4}\. Your monthly fee stays \$[\d,]+\. No refund for time already billed\./.test(await storage.textContent()), 'opt-out states the review date and the fee before applying: ' + await storage.textContent());
       ok(!(await db.doc('omega_orgs/' + LIVE_ORG + '/billing/current').get()).data().removalRequests, 'reviewing does not queue the request');
-      await storage.getByRole('button', { name: 'Confirm opt-out request', exact: true }).click();
-      await storage.getByRole('button', { name: 'Keep module', exact: true }).waitFor();
+      await storage.getByRole('button', { name: 'Request opt-out', exact: true }).click();
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
+      ok((await page.locator('[data-module-card="storage"] .opm-badge').textContent()) === 'Opting out' && /Opting out · review on [A-Z][a-z]{2} \d{1,2}, \d{4}/.test(await storage.textContent()) && /stays on, and billed, until your review/.test(await storage.textContent()), 'the card says it is opting out, and until when');
       var requested = (await db.doc('omega_orgs/' + LIVE_ORG + '/billing/current').get()).data();
       ok(requested.removalRequests.length === 1 && requested.removalRequests[0].module === 'storage', 'confirmed opt-out records the module');
       ok(await page.evaluate(storageAllowed) === true && sandboxInvoices === 1, 'review request changes neither access nor invoice count');
-      await storage.getByRole('button', { name: 'Keep module', exact: true }).click();
-      await storage.getByRole('button', { name: 'Confirm keep modules', exact: true }).click();
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).click();
+      await storage.getByRole('button', { name: 'Not now', exact: true }).waitFor();
+      ok(/Nothing about your bill changes/.test(await storage.textContent()), 'cancelling an opt-out changes nothing on the bill');
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).click();
       await storage.getByRole('button', { name: 'Opt out', exact: true }).waitFor();
       ok((await db.doc('omega_orgs/' + LIVE_ORG + '/billing/current').get()).data().removalRequests.length === 0, 'the owner can withdraw the opt-out request');
+      /* one module, one step: a card's Opt out opens the Ladder on that module
+         alone and goes straight to its confirm panel */
+      await page.locator('#omega-package-menu').getByRole('button', { name: 'Close', exact: true }).first().click();
+      await page.evaluate(function () { OmegaPackageMenu.open('storage', { single: true, intent: 'remove' }); });
+      await page.locator('#omega-package-menu [data-subscribe="storage"]').getByRole('button', { name: 'Request opt-out', exact: true }).waitFor();
+      ok(await page.locator('#omega-package-menu [data-module-card]').count() === 1 && await page.locator('#opm-every').count() === 1, 'single: that module alone, with See every module');
+      ok((await page.locator('#omega-package-menu').textContent()).indexOf('Build your own experience') < 0, 'no Omega Logic sentence on a Site Map module');
+      await page.locator('#omega-package-menu').getByRole('button', { name: 'Not now', exact: true }).click();
+      await page.locator('#opm-every').click();
+      await page.waitForFunction(function () { return document.querySelectorAll('#omega-package-menu [data-module-card]').length > 1; });
+      ok(await page.locator('#omega-package-menu [data-module-card]').count() === M.catalog().length, 'See every module opens the whole Ladder');
+      /* the same for Opt out: queued, then opened to Opt out again, the card
+         says Opting out; Cancel request lands on a plain Opt out, never on an
+         opt-out panel nobody asked for */
+      await storage.getByRole('button', { name: 'Opt out', exact: true }).click();
+      await storage.getByRole('button', { name: 'Request opt-out', exact: true }).click();
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
+      await page.evaluate(function () { OmegaPackageMenu.open('storage', { single: true, intent: 'remove' }); });
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
+      ok(/Opting out · review on/.test(await storage.textContent()) && await storage.getByRole('button', { name: 'Request opt-out', exact: true }).count() === 0, 'opened to Opt out on a module already opting out, the card says so and offers Cancel request');
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).click();
+      await storage.getByRole('button', { name: 'Not now', exact: true }).waitFor();
+      mark = posted.length;
+      await storage.getByRole('button', { name: 'Cancel request', exact: true }).click();
+      var afterKeep = await settled(page, 'storage', 'Opt out');
+      ok(afterKeep === 'rest' && posted.slice(mark).indexOf('request-removal:dry') < 0 && (await db.doc('omega_orgs/' + LIVE_ORG + '/billing/current').get()).data().removalRequests.length === 0, 'kept, the card rests on Opt out and prices no opt-out nobody asked for: ' + afterKeep + ' after ' + posted.slice(mark).join());
+      /* a department on its own names what it needs: once, on the card at
+         rest, and once in the quote (the server's line), never both */
+      var plant = page.locator('#omega-package-menu [data-module-card="logic-plant"]'), needsOffice = function (t) { return (t.match(/Also adds Logic Office, which Logic Plant needs\./g) || []).length; };
+      await page.evaluate(function () { OmegaPackageMenu.open('logic-plant', { single: true, intent: 'add' }); });
+      await plant.locator('.opm-quote').waitFor();
+      ok(needsOffice(await plant.innerText()) === 1, 'the quote names what Plant needs, once: ' + await plant.innerText());
+      ok((await page.locator('#omega-package-menu').textContent()).indexOf('Build your own experience') >= 0, 'opened on a department, the Omega Logic sentence is said');
+      await plant.getByRole('button', { name: 'Not now', exact: true }).click();
+      await plant.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
+      ok(needsOffice(await plant.innerText()) === 1, 'at rest, a department names what it needs before the price');
+      /* Plant and Office wait on one invoice: opened on Plant's Cancel request,
+         the card never says it "also adds" what that invoice already carries */
+      await plant.getByRole('button', { name: 'Opt in', exact: true }).click();
+      await plant.getByRole('button', { name: 'Opt in and pay', exact: true }).click();
+      await plant.getByRole('button', { name: 'Cancel request', exact: true }).waitFor();
+      await page.evaluate(function () { OmegaPackageMenu.open('logic-plant', { single: true, intent: 'cancel' }); });
+      await plant.getByRole('button', { name: 'Not now', exact: true }).waitFor();
+      var plantCancel = await plant.innerText();
+      ok(/Cancel the Logic Office and Logic Plant request\?/.test(plantCancel) && needsOffice(plantCancel) === 0, 'waiting on one invoice with Office, Plant adds nothing more: ' + plantCancel);
+      await plant.getByRole('button', { name: 'Cancel request', exact: true }).click();
+      ok(await settled(page, 'logic-plant', 'Opt in') === 'rest' && needsOffice(await plant.innerText()) === 1, 'cancelled, the card at rest names what Plant needs again');
+      await page.evaluate(function () { OmegaPackageMenu.open('storage', { admin: false }); });
+      await page.waitForFunction(function () { var c = document.querySelector('#omega-package-menu [data-subscribe="storage"]'); return c && /changes modules/.test(c.textContent); });
+      ok(await page.locator('#omega-package-menu [data-subscribe] button').count() === 0 && /An owner or administrator of your workspace changes modules\./.test(await page.locator('#omega-package-menu [data-subscribe="storage"]').textContent()), 'admin:false shows who changes modules, and no buttons');
+      await page.evaluate(function () { OmegaPackageMenu.close(); }); await page.locator('#omega-package-tab').click();
+      await storage.getByRole('button', { name: 'Opt out', exact: true }).waitFor();
       await page.screenshot({ path: path.join(output5, 'editor-subscribe-added-' + theme + '.png') });
       await page.locator('#omega-package-menu').getByRole('button', { name: 'Close', exact: true }).first().click();
       await page.evaluate(function () { rbTab('analyze'); });
       await page.screenshot({ path: path.join(output5, 'editor-after-subscribe-' + theme + '.png') });
       await page.evaluate(function () { rbTab('home'); });
+      /* Opt in, pay, come back: the module switches on in the OPEN editor.
+         QuickBooks is the stand-in; `qbo.paid` is the card payment landing.
+         Nothing reloads the page between the purchase and the tools. */
+      var BILLING = 'omega_orgs/' + LIVE_ORG + '/billing/current';
+      async function billing(patch) { var cur = (await db.doc(BILLING).get()).data(); db.seed(BILLING, Object.assign({}, cur, patch)); }
+      db = new F.DB(); db.serial = true; qbo.paid = false; sandboxInvoices = 0;
+      H.seedPaidTenant(db, { org: LIVE_ORG, name: 'Packaging preview', keys: M.starters().ev, plan: 'field', profile: H.profile(LIVE_ORG, 'Packaging preview'), member: 'fixture-user' });
+      await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, await liveProjection());
+      var intelAllowed = function () { return OmegaCaps.allowedCommand('', 'openScorePanel()') && OmegaCaps.allowedCommand('rb-parcel-screen', ''); };
+      ok(await page.evaluate(intelAllowed) === false, 'Omega Intel is gated before it is paid for');
+      await page.locator('#omega-package-tab').click();
+      await siteintel.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
+      await siteintel.getByRole('button', { name: 'Opt in', exact: true }).click();
+      await siteintel.getByRole('button', { name: 'Opt in and pay' }).click();
+      await siteintel.getByRole('button', { name: "I've paid", exact: true }).waitFor();
+      await siteintel.getByRole('button', { name: "I've paid", exact: true }).click();
+      await page.waitForFunction(function () { return /does not show this payment yet/.test(document.querySelector('[data-subscribe="siteintel"]').textContent); });
+      ok(await page.evaluate(intelAllowed) === false, "\"I've paid\" before QuickBooks has the payment unlocks nothing");
+      await siteintel.getByRole('button', { name: "I've paid", exact: true }).click();
+      await page.waitForFunction(function () { return /Checked a moment ago/.test(document.querySelector('[data-subscribe="siteintel"]').textContent); });
+      ok(true, 'asking again inside eight seconds is told so, not silently ignored');
+      qbo.paid = true; await billing({ paymentCheckedAt: 0 });
+      await siteintel.getByRole('button', { name: "I've paid", exact: true }).click();
+      await page.waitForFunction(function () { return OmegaCaps.packageAccess().modules.indexOf('siteintel') >= 0; });
+      var intelCard = page.locator('[data-module-card="siteintel"]');
+      await intelCard.getByRole('button', { name: 'Show me', exact: true }).waitFor();
+      ok(await page.evaluate(intelAllowed) === true, 'paid in QuickBooks, "I\'ve paid": Omega Intel opens in the open editor, no reload');
+      ok((await intelCard.textContent()).indexOf('On your plan') >= 0, 'the card says it is on');
+      ok(await page.locator('#omega-plan-toast').count() === 0, 'no toast over The Ladder: the card says it');
+      await page.screenshot({ path: path.join(output5, 'editor-paid-on-' + theme + '.png') });
+      await intelCard.getByRole('button', { name: 'Show me', exact: true }).click();
+      await page.waitForFunction(function () { return !document.getElementById('omega-package-menu') && document.querySelector('[data-opm-spot]'); });
+      var shown = await page.evaluate(function () {
+        var el = document.querySelector('[data-opm-spot]'), pg = el.closest('.ribbon-page').getAttribute('data-page'), tab = document.querySelector('#ribbon-tabs .rtab.active');
+        return { page: pg, active: tab && tab.getAttribute('data-page'), visible: getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0, owners: OmegaCaps.owners(el.id || '', el.getAttribute('onclick') || '') };
+      });
+      ok(shown.page === 'analyze' && shown.active === 'analyze' && shown.visible && shown.owners.indexOf('siteintel') >= 0, 'Show me opens the tab and points at an Omega Intel tool: ' + JSON.stringify(shown));
+      await page.screenshot({ path: path.join(output5, 'editor-show-me-' + theme + '.png') });
+      /* A change made elsewhere (an administrator on the dashboard) arrives
+         when the window comes back into focus, and is said out loud. */
+      var withStorage = M.normalize(M.starters().ev.concat(['siteintel', 'storage']));
+      await billing(Object.assign({ subscription: Object.assign({}, (await db.doc(BILLING).get()).data().subscription, { modules: withStorage }) }, M.resolve(withStorage)));
+      await page.evaluate(function () { rbTab('home'); window.dispatchEvent(new Event('focus')); });
+      await page.waitForFunction(function () { var t = document.getElementById('omega-plan-toast'); return t && /Omega Storage is on/.test(t.textContent); });
+      ok(await page.evaluate(storageAllowed) === true, 'a module added elsewhere opens when the editor window comes back');
+      ok(/on the .+ tab/.test(await page.locator('#omega-plan-toast').textContent()), 'the toast says where it is');
+      await page.screenshot({ path: path.join(output5, 'editor-focus-toast-' + theme + '.png') });
+      await page.locator('#omega-plan-toast').getByRole('button', { name: 'Show me', exact: true }).click();
+      ok(await page.evaluate(function () { var el = document.querySelector('[data-opm-spot]'); return !!el && OmegaCaps.owners(el.id || '', el.getAttribute('onclick') || '').indexOf('storage') >= 0 && !document.getElementById('omega-plan-toast'); }), 'the toast\'s Show me points at a Storage tool');
+      ok(await page.evaluate(function () { var el = document.querySelector('[data-opm-spot]'); return !!el && document.activeElement === el; }), 'and keyboard focus lands on it');
+      ok(await page.evaluate(function () { var live = document.getElementById('omega-plan-live'); return !!live && live.getAttribute('aria-live') === 'polite' && /Omega Storage is on/.test(live.textContent); }), 'the toast is announced through the one live region');
+      await page.setViewportSize({ width: 390, height: 844 });
+      var narrow = await page.evaluate(function () {
+        document.dispatchEvent(new CustomEvent('omega:plan-changed', { detail: { changed: true, packaged: true, wasPackaged: true, added: ['storage'], removed: [], readOnly: false, wasReadOnly: false } }));
+        var r = document.getElementById('omega-plan-toast').getBoundingClientRect(); document.getElementById('omega-plan-toast').remove();
+        return { width: Math.round(r.width), left: Math.round(r.left), right: Math.round(r.right) };
+      });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      ok(narrow.width >= 340 && narrow.left >= 0 && narrow.right <= 390, 'on a 390px phone the toast spans the screen: ' + JSON.stringify(narrow));
+      /* The access deadline passes with the editor open: the tools close on
+         the clock, the strip says why and how to pay, and paying opens them. */
+      await billing({ accessUntil: Date.now() + 2500, paymentLink: 'https://connect.intuit.com/pay/fixture' });
+      await page.evaluate(function () { return OmegaCaps.refresh(); });
+      ok(await page.evaluate(storageAllowed) === true, 'before the deadline the tools stay open');
+      await page.waitForFunction(function () { return OmegaCaps.packageAccess().readOnly === true; }, null, { timeout: 8000 });
+      await page.waitForFunction(function () { var n = document.getElementById('omega-plan-notice'); return n && /read-only/.test(n.textContent); });
+      ok(await page.evaluate(storageAllowed) === false && await page.evaluate(intelAllowed) === false, 'at the deadline the open editor stops producing');
+      ok(await page.locator('#omega-plan-notice').getByRole('link', { name: 'Pay in QuickBooks' }).count() === 1, 'the strip carries the QuickBooks pay link');
+      ok(/read-only now/.test(await page.locator('#omega-plan-toast').textContent()), 'and the toast says the workspace went read-only');
+      await page.screenshot({ path: path.join(output5, 'editor-read-only-' + theme + '.png') });
+      await billing({ accessUntil: Date.now() + 30 * 86400000, paymentCheckedAt: 0 });
+      await page.locator('#omega-plan-notice').getByRole('button', { name: "I've paid", exact: true }).click();
+      await page.waitForFunction(function () { return OmegaCaps.packageAccess().readOnly === false && !document.getElementById('omega-plan-notice'); });
+      ok(await page.evaluate(storageAllowed) === true, 'paid: the strip goes and the tools come back');
+      ok(/open again/.test(await page.locator('#omega-plan-toast').textContent()), 'and the toast says so');
+      await page.evaluate(function () { var t = document.getElementById('omega-plan-toast'); if (t) t.remove(); rbTab('home'); });
       live = false; db = null; caller = null;
       view = X.project({ staff: true }, { packaged: true }, null, null);
       await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
       await page.getByLabel('Viewing as package').selectOption('lite');
       await page.waitForFunction(function () { return OmegaCaps.packageAccess().preview === true; });
       ok(await page.evaluate(function () { return !OmegaCaps.packageAccess().staff && OmegaCaps.packageAccess().modules.join() === 'lite'; }), 'staff preview is customer-shaped');
+      ok(await page.evaluate(function () { return OmegaMode.get() === 'pro' && !!document.getElementById('omega-package-preview'); }), 'the preview shows the full owned ribbon and keeps the Viewing as bar');
       await page.screenshot({ path: path.join(output, 'staff-preview-lite-' + theme + '.png') });
       await page.getByLabel('Viewing as package').selectOption('staff');
       await page.waitForFunction(function () { return OmegaCaps.packageAccess().staff === true; });
@@ -266,7 +489,7 @@ async function run() {
       ok(!errors.length, 'no full-editor JS errors: ' + errors.join('; '));
       await context.close();
     }
-    console.log('Full editor workspaces: ' + count + ' passed; 84 screenshots at 1280px and 1024px; offline service adapters. Phase 5 subscribe: 8 captures, real /api/plan-change over an in-memory Firestore, QuickBooks stand-in.');
+    console.log('Full editor workspaces: ' + count + ' passed; 84 screenshots at 1280px and 1024px; offline service adapters. Phase 5 subscribe: 8 captures, real /api/plan-change over an in-memory Firestore, QuickBooks stand-in; opt in, pay, unlock without a reload: 8 captures.');
   } finally { await browser.close(); server.close(); }
 }
 run().catch(function (e) { console.error(e); server.close(); process.exitCode = 1; });

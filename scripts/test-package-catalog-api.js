@@ -7,6 +7,8 @@ D.mock('../api/_lib/admin', {
   safeOrg: function (v) { return /^[a-z0-9.-]+\.[a-z]+$/.test(v) ? v : ''; }, db: function () { return db; },
   billingOf: async function (org) { return (await db.doc('omega_orgs/' + org + '/billing/current').get()).data() || {}; },
   isTenantAdmin: async function () { return caller.staff || caller.uid === 'owner'; },
+  /* admin.clientAdmin: an owner or admin of an ACTIVE client */
+  clientAdmin: async function (c, o) { if (c.staff) return true; var t = await db.doc('omega_orgs/' + o).get(); return c.uid === 'owner' && t.exists && t.data().status === 'active'; },
   httpError: function (s, m) { return Object.assign(new Error(m), { status: s }); }
 });
 var api = require('../api/package-catalog');
@@ -28,7 +30,9 @@ async function main() {
   await denied('POST', { modules: ['lite'], serviceFee: { mode: 'waived', reason: 'Forged' } }, 400);
   await denied('POST', { modules: ['lite'], credit: { pct: 100 } }, 400);
   await denied('DELETE', {}, 405);
-  caller.claims.email_verified = false; await denied('GET', {}, 403); caller.claims.email_verified = true;
+  /* the email link: the owner of an active client reads the priced menu without it; anyone else is asked (admin.clientAdmin) */
+  caller.claims.email_verified = false; out = await req(); assert.equal(out.quote.monthlyCents, 50000); count++;
+  caller.uid = 'm1'; db.seed('omega_orgs/example.com/members/m1', { role: 'member', status: 'active' }); await denied('GET', {}, 403); caller.uid = 'owner'; caller.claims.email_verified = true;
   db.seed('omega_orgs/example.com/members/owner', { status: 'disabled' }); await denied('GET', {}, 403);
   caller.staff = true; out = await req(); assert.equal(out.quote.monthlyCents, 50000); count++;
   assert.equal(db.data.has('omega_orgs/example.com/billing/current'), false); count++;

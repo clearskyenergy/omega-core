@@ -7,7 +7,9 @@ module.exports = A.handler(async function (req, res) {
   var caller = await A.authenticate(req), input = req.method === 'GET' ? req.query || {} : req.body || {};
   var orgId = A.safeOrg(input.orgId || caller.orgId);
   if (!orgId) throw A.httpError(400, 'Valid organization required');
-  if (!caller.staff && (!caller.claims || caller.claims.email_verified !== true || !(await A.isTenantAdmin(caller, orgId)))) throw A.httpError(403, 'Tenant administrator required');
+  /* a tenant administrator: with a verified email, or an owner or administrator of an active client without one (admin.clientAdmin) */
+  var verified = !!(caller.claims && caller.claims.email_verified === true);
+  if (!caller.staff && !(verified ? await A.isTenantAdmin(caller, orgId) : await A.clientAdmin(caller, orgId))) throw A.httpError(403, 'Tenant administrator required');
   if (req.method === 'POST') {
     if (!caller.staff) throw A.httpError(403, 'Staff only');
     var fields = ['orgId', 'modules', 'pricebookVersion', 'plan', 'credit', 'builders', 'viewers', 'serviceFee', 'interval', 'action', 'dryRun', 'previewId', 'effectiveAt'];
@@ -16,7 +18,7 @@ module.exports = A.handler(async function (req, res) {
     return S.apply(A.db(), orgId, input, caller, Date.now());
   }
   var c = await S.context(A.db(), orgId), billing = Object.assign({}, c.billing);
-  billing.paymentLink = require('./_lib/logic-policy').paymentLink(billing.paymentLink);
+  billing.paymentLink = require('./_lib/billing-driver').payLink(billing.paymentLink);
   delete billing.activationLock; delete billing.invoiceLock; delete billing.changeLock;
   var history = await c.root.collection('billing').doc('current').collection('history').orderBy('at', 'desc').limit(100).get();
   var audit = caller.staff ? await c.root.collection('admin_audit').orderBy('at', 'desc').limit(100).get() : { docs: [] };
@@ -25,13 +27,17 @@ module.exports = A.handler(async function (req, res) {
     // The tenant sees their plan, never staff-internal reasons, realms or
     // the before/after patches that carry staff emails.
     var keep = ['packaged', 'packagingState', 'modules', 'plan', 'interval', 'billingDay', 'nextInvoiceOn', 'paidThrough', 'accessUntil', 'trialEndsAt',
-      'amountDue', 'paymentLink', 'monthlyDisplay', 'builders', 'viewers', 'toolAccess', 'removalRequests', 'subscription', 'pricebookVersion', 'optIns', 'tier', 'addons'];
+      'amountDue', 'paymentLink', 'monthlyDisplay', 'builders', 'viewers', 'toolAccess', 'removalRequests', 'subscription', 'pricebookVersion', 'optIns', 'optOuts', 'tier', 'addons', 'capTier', 'toolOverrides'];
     var shown = {}; keep.forEach(function (k) { if (billing[k] !== undefined) shown[k] = billing[k]; });
     if (billing.serviceFee) shown.serviceFee = { mode: billing.serviceFee.mode, display: billing.serviceFee.display || null, appliesTo: billing.serviceFee.appliesTo || null };
     billing = shown;
     rows = rows.map(function (r) { return { at: r.at, action: r.action, changed: r.changed ? { modules: r.changed.modules, plan: r.changed.plan, state: r.changed.state, add: r.changed.add, totalCents: r.changed.totalCents, packagingState: r.changed.packagingState } : null }; });
   }
-  return { orgId: orgId, name: c.org.name || orgId, status: c.org.status, canManagePackage: caller.staff, billing: billing,
+  /* whether its storefront is switched on (the flag the storefront's gate reads), so the
+     console judges Omega Storefront by the same gate; nothing else of the
+     white label crosses here */
+  var wl = c.org.whiteLabel && typeof c.org.whiteLabel === 'object' ? { enabled: c.org.whiteLabel.enabled === true } : null;
+  return { orgId: orgId, name: c.org.name || orgId, status: c.org.status, canManagePackage: caller.staff, billing: billing, whiteLabel: wl,
     pricebookVersion: c.book.version, enabled: c.book.enabled, defaults: { credit: c.book.credit, builders: c.book.logins.builders,
       viewers: c.book.logins.viewers, annualPaidMonths: c.book.annualPaidMonths, annualTransformationCredit: c.book.policy.annualTransformationCredit === true },
     modules: P.catalog(c.book), starters: M.starters(), starterLabels: M.starterLabels(),

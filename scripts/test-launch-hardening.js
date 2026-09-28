@@ -13,6 +13,7 @@
      · a legacy tenant (no signedUpAt) can be activated from the Package tab
    No network. */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('node:assert/strict');
 var F = require('./_lib/firestore-double'), DB = F.DB, H = require('./_lib/packaging-billing-fixture');
 var K = require('../api/_lib/kit'), B = require('../api/_lib/pricebook'), Q = require('../api/_lib/qbo-billing');

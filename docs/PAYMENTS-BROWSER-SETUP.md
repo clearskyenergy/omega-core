@@ -2,6 +2,14 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
+> **2026-09-27: Stripe is the rail Tommy chose for packaged billing**
+> (`docs/PAYMENTS-STRIPE.md`), switched on with `PACKAGING_PROVIDER=stripe`:
+> the first invoice, every cycle, additions and packs are then Stripe
+> invoices, and a paid card opens the workspace through the Stripe
+> webhook. This runbook stays for the QuickBooks rail (until that switch,
+> and for any workspace already billed in QuickBooks) and for Part 3, the
+> bookkeeping import that brings Stripe payments into QuickBooks.
+
 Paste everything below the line into Claude in Chrome, on the Chrome
 profile that is signed in to QuickBooks Online (the ClearSky company) and
 to the Stripe dashboard. Tommy stays at the keyboard: Claude fills and

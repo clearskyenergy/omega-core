@@ -30,7 +30,7 @@ function dependencies() { return { Q: require('./qbo'), request: require('./qbo-
    QBO_ENV=production, and then the production company, with the current
    book, the process's QuickBooks host and the stored connection all agreeing. */
 async function guard(book, realm, deps) {
-  var want = Mode.env(), base = want === 'sandbox' ? 'https://sandbox-quickbooks.api.intuit.com' : 'https://quickbooks.api.intuit.com';
+  var want = Mode.env('quickbooks'), base = want === 'sandbox' ? 'https://sandbox-quickbooks.api.intuit.com' : 'https://quickbooks.api.intuit.com';
   if (book.version !== B.VERSION || book.qbo.env !== want || deps.Q.ENV !== want || deps.Q.IS_SANDBOX !== (want === 'sandbox') || deps.Q.API_BASE !== base) {
     fail(want === 'sandbox' ? 'Packaging item sync is sandbox-only until PACKAGING_LIVE=true with QBO_ENV=production' : 'Live packaging needs the current book synced to the production company and the process on the production host');
   }
@@ -61,6 +61,7 @@ async function sync(db, book, options, deps) {
     var found = ((await call('query?query=' + encodeURIComponent(sql))).QueryResponse || {}).Item || [];
     if (found.length > 1) fail('Ambiguous QuickBooks item name: ' + p.name);
     var item = found[0];
+    if (!item && options.noCreate) fail('No QuickBooks item named ' + p.name + ' (bind never creates; rename or create it in QuickBooks first)');
     if (!item) {
       item = (await call('item', { Name: p.name, Type: 'Service', IncomeAccountRef: { value: options.incomeAccountId },
         UnitPrice: p.priceCents / 100, Taxable: options.taxable }, requestId(options.realmId, p.name))).Item;
@@ -78,7 +79,7 @@ async function sync(db, book, options, deps) {
     Object.keys(modulePrices).forEach(function (k) { modulePrices[k].qboItemId = bindings['module:' + k]; });
     var plans = JSON.parse(JSON.stringify(book.plans));
     Object.keys(plans).forEach(function (k) { plans[k].qboItemId = bindings['plan:' + k]; });
-    tx.update(ref, { modules: modulePrices, plans: plans, qbo: { env: Mode.env(), realmId: options.realmId, items: bindings } });
+    tx.update(ref, { modules: modulePrices, plans: plans, qbo: { env: Mode.env('quickbooks'), realmId: options.realmId, items: bindings } });
   });
   return { version: book.version, dryRun: false, realmId: options.realmId, items: bindings };
 }

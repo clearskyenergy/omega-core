@@ -93,6 +93,112 @@ ok(C.can('deluxe', 'engineering'),
    'adding an add-on takes nothing away from the plan');
 C.setAddons([]);
 
+/* ── RUN BY NAME: SEARCH TOOLS (Ctrl+K) AND ASK JARVIS ─────────────────
+   Both run a command by clicking it, so they reach commands the ribbon
+   does not show. A legacy tier puts the gate on the TAB (Analyze needs
+   engineering, Compute needs compute), not on each command inside it, and
+   allowedElement() used to say yes to everything on a legacy plan. */
+console.log('\nRun by name\n');
+function node(attrs, parent) {
+  return { parentElement: parent || null, attrs: attrs || {},
+    getAttribute: function (k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null; },
+    hasAttribute: function (k) { return Object.prototype.hasOwnProperty.call(this.attrs, k); },
+    classList: { contains: function () { return false; } } };
+}
+var ribbon = node({}), tabRow = node({});
+var analyzeTab = node({ 'data-page': 'analyze', 'data-cap': 'engineering' }, tabRow);
+var analyzePage = node({ 'data-page': 'analyze', 'data-cap': 'engineering' }, ribbon);
+var computePage = node({ 'data-page': 'compute', 'data-module': 'compute', 'data-cap': 'compute' }, ribbon);
+var homePage = node({ 'data-page': 'home' }, ribbon);
+var valueStack = node({ id: 'rb-valuestack' }, node({}, analyzePage));
+var parcel = node({ id: 'rb-parcel-screen', 'data-cap': 'parcelscreen' }, analyzePage);
+var computeCost = node({ id: 'rb-compute-cost' }, computePage);
+var siteSetup = node({}, homePage);
+var tabDom = { 'analyze': [analyzeTab, analyzePage], compute: [null, computePage], home: [null, homePage] };
+var savedQuery = global.document.querySelector;
+global.document.querySelector = function (sel) {
+  var m = /data-page="([^"]+)"/.exec(sel); var pair = m && tabDom[m[1]];
+  return pair ? (sel.indexOf('.rtab') >= 0 ? pair[0] : pair[1]) : null;
+};
+var empty = { querySelectorAll: function () { return []; } };
+ok(!C.allowedElement(valueStack) && C.allowedElement(siteSetup),
+   'before the plan is read, a command on a gated tab is closed and an ungated one is open (trial\'s answer)');
+C.apply('standard', empty);
+ok(!C.allowedElement(valueStack),
+   'Core: Search tools and Jarvis cannot run Value Stack, which sits on the Analyze tab Core does not have',
+   'the gate is on the tab, not the command; the palette used to check only the command');
+ok(!C.allowedElement(computeCost), 'Core: nor anything on the Compute tab');
+ok(C.allowedElement(siteSetup), 'Core: an ungated Build command still runs by name');
+ok(!C.tabOpen('analyze') && !C.tabOpen('compute') && C.tabOpen('home') && C.tabOpen('nowhere'),
+   'Core: Jarvis may not open the Analyze or Compute tab; Build, and a tab no gate touches, are open');
+C.apply('deluxe', empty);
+ok(C.allowedElement(valueStack) && C.allowedElement(parcel) && C.tabOpen('analyze'),
+   'Performance: the Analyze tab and everything on it run by name');
+ok(!C.allowedElement(computeCost) && !C.tabOpen('compute'), 'Performance: the Compute tab does not');
+C.setAddons(['compute']); C.apply('standard', empty);
+ok(!C.allowedElement(parcel),
+   'Core with the Compute add-on: Parcel Screen is granted, but it sits on Analyze, which is not: both gates must pass');
+ok(C.allowedElement(computeCost) && C.tabOpen('compute'), 'Core with the Compute add-on: the Compute tab runs by name');
+C.setAddons([]); C.apply('enterprise', empty);
+ok(C.allowedElement(valueStack) && C.allowedElement(parcel) && C.allowedElement(computeCost) && C.tabOpen('analyze') && C.tabOpen('compute'),
+   'Enterprise: every command and tab runs by name');
+C.apply('standard', empty);
+ok(C.allowedElement(null), 'no element is not a gated element (unchanged)');
+C.setPackage({ packaged: true, staff: true, modules: [], caps: [], toolAccess: [], catalog: [] });
+ok(C.allowedElement(valueStack), 'a staff package preview is not narrowed by the legacy tier underneath it');
+C.setPackage(C.pendingPackage(true));
+ok(!C.allowedElement(valueStack) && !C.tabOpen('analyze'), 'the sign-in lock still refuses a gated command and tab');
+C.setPackage(null); C.apply('trial', empty);
+
+/* ── A LEGACY ADD-ON OPENS ITS OWN MODULE, EXACTLY ─────────────────────
+   Add to plan sells a module beside a legacy tier. A key would open the
+   whole tab (the Compute tab carries Intel's and Engineer's commands too),
+   so the editor opens the add-on's OWN commands, by the catalog's ribbon,
+   from the server's legacy answer (package-access.legacy()). */
+console.log('\nAdd-ons by module\n');
+var CAT = require('../api/_lib/modules');
+function el(kind, attrs, parent) {
+  var n = node(attrs, parent), kids = [];
+  n.kind = kind; n.kids = kids; n.id = (attrs && attrs.id) || ''; if (parent && parent.kids) parent.kids.push(n);
+  n.classList = { contains: function (c) { return (kind === 'page' && c === 'ribbon-page') || (kind === 'tab' && c === 'rtab'); } };
+  n.matches = function (sel) { return kind === 'tab' ? sel.indexOf('.rtab') >= 0 : kind === 'page' ? sel.indexOf('.ribbon-page') >= 0 : kind === 'command' ? sel.indexOf('.rbtn') >= 0 : false; };
+  n.querySelectorAll = function () { var out = []; (function walk(x) { x.kids.forEach(function (k) { if (k.kind === 'command') out.push(k); walk(k); }); })(n); return out; };
+  return n;
+}
+var cTab = el('tab', { 'data-page': 'compute', 'data-module': 'compute', 'data-cap': 'compute' }, tabRow);
+var cPage = el('page', { 'data-page': 'compute', 'data-module': 'compute', 'data-cap': 'compute' }, ribbon);
+var aPage = el('page', { 'data-page': 'analyze', 'data-cap': 'engineering' }, ribbon);
+var cGroup = el('group', {}, cPage);
+var cCost = el('command', { id: 'rb-compute-cost', onclick: 'rbRun(estimateComputeCost)' }, cGroup);
+var cBuildable = el('command', { id: 'rb-buildable' }, cGroup);
+var aValue = el('command', { id: 'rb-valuestack' }, aPage);
+var schematicSide = el('section', { id: 'schematic-sec', 'data-cap': 'schematic' }, null);
+tabDom.compute = [cTab, cPage]; tabDom.analyze = [analyzeTab, aPage];
+function legacyAnswer(addOns) { return { packaged: false, addOns: addOns, catalog: CAT.catalog(), notSold: CAT.notSold() }; }
+C.setLegacy(legacyAnswer([])); C.apply('standard', empty);
+ok(!C.allowedElement(cCost) && !C.tabOpen('compute'), 'Core with nothing bought: the Compute tab and its commands stay shut');
+C.setLegacy(legacyAnswer(['compute'])); C.apply('standard', empty);
+ok(C.allowedElement(cCost) && C.tabOpen('compute'), 'Core with Omega Compute bought: its own commands run, and the tab opens for them');
+ok(!C.allowedElement(cBuildable), '...but Omega Intel\'s Buildable Area, on the same tab, stays shut: the add-on is exactly its own module');
+ok(!C.allowedElement(aValue) && !C.tabOpen('analyze'), '...and nothing on a tab the add-on has no command on');
+ok(!C.can('standard', 'compute'), 'the tier is untouched: the add-on is not a whole-tab key');
+ok(!C.allowedElement(schematicSide), 'a side section follows the module\'s caps: not Compute\'s');
+C.setLegacy(legacyAnswer(['plansets'])); C.apply('standard', empty);
+ok(C.allowedElement(schematicSide) && !C.allowedElement(cCost), 'Omega Plans opens the schematic section by its caps, and nothing of Compute');
+C.setLegacy({ packaged: true, addOns: ['compute'], catalog: CAT.catalog() });
+ok(C.legacyView() === null && !C.allowedElement(cCost), 'a packaged answer is never read as a legacy one');
+C.setLegacy(legacyAnswer(['compute'])); C.setPackage({ packaged: true, modules: ['lite'], caps: ['design'], toolAccess: ['editor'], catalog: CAT.catalog(), notSold: CAT.notSold() });
+ok(C.addOnsOn().length === 0 && !C.allowedElement(cCost), 'under a package the package alone decides: a legacy add-on list means nothing');
+C.setPackage(null); C.setLegacy(null); C.apply('trial', empty);
+global.document.querySelector = savedQuery;
+var palette = require('fs').readFileSync(path.join(__dirname, '..', 'editor.html'), 'utf8');
+ok(/if \(caps && !caps\.allowedElement\(el\)\) \{\s*if \(!view \|\|/.test(palette) &&
+   /if \(it\.el && window\.OmegaCaps && !OmegaCaps\.allowedElement\(it\.el\)\) return false;/.test(palette),
+   'the palette indexes and runs only what allowedElement() allows, so Jarvis (the same index and run) does too');
+var jarvis = require('fs').readFileSync(path.join(__dirname, '..', 'omega-jarvis-help.js'), 'utf8');
+ok(/OmegaCaps\.tabOpen\(page\)/.test(jarvis) && /\.filter\(function \(t\) \{ return tabOpen\(/.test(jarvis),
+   'Ask Jarvis lists and opens only the tabs the plan opens');
+
 /* Exercise the asynchronous resolver, not a copy of its domain check. */
 var DB = require('./_lib/firestore-double').DB;
 var fs = require('fs');
@@ -132,7 +238,193 @@ async function resolverChecks() {
   var editor = fs.readFileSync(path.join(__dirname, '..', 'editor.html'), 'utf8');
   ok(/OmegaCaps\.resolve\(firebase\.firestore\(\), u\.email, u\.emailVerified\)/.test(editor), 'editor passes verification from the same Firebase user as the email');
 }
-resolverChecks().then(function () {
+/* ── THE PLAN CHANGES WHILE THE EDITOR IS OPEN ────────────────────────
+   Opting in has to unlock without a reload, and a lapse has to lock without
+   one. refresh() asks the same question sign-in asks; these rows hold what it
+   may and may not do with the answer. */
+function fakeButton(cap, display) {
+  var attrs = { 'data-cap': cap };
+  return { style: { display: display || '' }, attrs: attrs,
+    getAttribute: function (k) { return Object.prototype.hasOwnProperty.call(attrs, k) ? attrs[k] : null; },
+    setAttribute: function (k, v) { attrs[k] = String(v); }, removeAttribute: function (k) { delete attrs[k]; },
+    hasAttribute: function (k) { return Object.prototype.hasOwnProperty.call(attrs, k); } };
+}
+async function liveChecks() {
+  console.log('\nLive plan\n');
+  var X = require('../api/_lib/package-access');
+  C.setPackage(null); C.setAddons([]);
+  var plot = fakeButton('export.plotplan', 'flex'), draw = fakeButton('design');
+  var scope = { querySelectorAll: function (sel) {
+    var all = [plot, draw];
+    return sel === '[data-cap]' ? all : sel === '[data-cap-blocked]' ? all.filter(function (n) { return n.hasAttribute('data-cap-blocked'); }) : [];
+  } };
+  C.apply('standard', scope);
+  ok(plot.style.display === 'none' && plot.hasAttribute('data-cap-blocked'), 'Core hides the plot plan export');
+  C.apply('deluxe', scope);
+  ok(plot.style.display === 'flex' && !plot.hasAttribute('data-cap-blocked'),
+     'a wider plan brings a hidden button back, with the display it had',
+     'the legacy pass only ever hid: an upgrade in the same tab stayed hidden until a reload');
+  C.apply('standard', scope); C.apply('standard', scope); C.apply('enterprise', scope);
+  ok(plot.style.display === 'flex', 'hiding twice still restores the original display, not "none"');
+
+  var events = [], attrs = {};
+  function announced() { return events.filter(function (e) { return e.type === 'omega:plan-changed'; }); }
+  global.CustomEvent = function (type, init) { this.type = type; this.detail = init && init.detail; };
+  global.document.dispatchEvent = function (e) { events.push(e); };
+  global.document.body.getAttribute = function (k) { return attrs[k] == null ? null : attrs[k]; };
+  global.document.body.setAttribute = function (k, v) { attrs[k] = String(v); };
+  global.document.getElementById = function () { return null; };
+  global.document.querySelector = function () { return null; };
+  global.document.createElement = function () { return {}; };
+  global.document.head = { appendChild: function () {} };
+  var user = { email: 'designer@tenant.example', emailVerified: true, getIdToken: function () { return Promise.resolve('token'); } };
+  global.firebase = { auth: function () { return { currentUser: user }; } };
+  var db = new DB(), billing = 'omega_orgs/tenant.example/billing/current';
+  db.seed(billing, { tier: 'standard' });
+  ok(await C.resolve(db, user.email, true) === 'standard', 'signed in on Core');
+  C.apply('standard');
+  db.seed(billing, { tier: 'deluxe' });
+  var r = await C.refresh(db, user);
+  ok(r.changed && !r.packaged && r.added.indexOf('engineering') >= 0 && C.tier() === 'deluxe',
+     'ClearSky moves a legacy workspace up a tier: the editor follows without a reload', JSON.stringify(r));
+  ok(announced().length === 1, 'and says so (omega:plan-changed)');
+  events.length = 0;
+  r = await C.refresh(db, user);
+  ok(!r.changed && !announced().length, 'nothing moved: nothing is announced');
+  db.seed(billing, { tier: 'deluxe', optIns: { compute: { status: 'requested' } } });
+  r = await C.refresh(db, user);
+  ok(!r.changed && !C.can(C.tier(), 'compute'),
+     'an opt-in REQUEST unlocks nothing: it is priced and recorded, not paid');
+  db.seed(billing, { tier: 'deluxe', addons: ['compute'] });
+  r = await C.refresh(db, user);
+  ok(r.changed && C.can(C.tier(), 'compute'), 'the add-on ClearSky switches on after the purchase unlocks it');
+
+  /* Add to plan: a legacy plan's add-ons come with the catalog from the
+     server (package-access.legacy()); a dropped connection keeps what is on
+     screen, and a module that switched on is announced by name */
+  var CAT = require('../api/_lib/modules'), legacyAsked = 0, legacyNow = { status: 200, body: { packaged: false, addOns: ['compute'], catalog: CAT.catalog(), notSold: CAT.notSold() } };
+  global.fetch = function (url) { legacyAsked++; ok(url === '/api/package-access', 'asked of the one projection'); return Promise.resolve({ ok: legacyNow.status === 200, status: legacyNow.status, json: function () { return Promise.resolve(legacyNow.body); } }); };
+  db.seed(billing, { tier: 'standard' });
+  ok(await C.resolve(db, user.email, true) === 'standard' && C.addOnsOn().join() === 'compute' && C.legacyView() && legacyAsked === 1,
+     'signing in on Core reads its add-ons and the catalog from the server');
+  C.apply('standard'); events.length = 0;
+  legacyNow.body = { packaged: false, addOns: ['storage', 'compute'], catalog: CAT.catalog(), notSold: CAT.notSold() };
+  r = await C.refresh(db, user);
+  ok(r.changed && r.addOnsAdded.join() === 'storage' && !r.addOnsRemoved.length && announced().length === 1,
+     'a module paid for as an add-on while the editor is open switches on, and is announced by name', JSON.stringify(r));
+  legacyNow.status = 503; events.length = 0;
+  r = await C.refresh(db, user);
+  ok(!r.changed && !announced().length && C.addOnsOn().join() === 'storage,compute', 'a dropped connection keeps the add-ons on screen');
+  legacyNow.status = 200; legacyNow.body = { packaged: true, modules: ['lite'], caps: [], toolAccess: [], catalog: [] };
+  r = await C.refresh(db, user);
+  ok(!r.changed && C.addOnsOn().join() === 'storage,compute', 'an answer that is not a legacy one is never read as one');
+  legacyNow.body = { packaged: false, addOns: [], catalog: CAT.catalog(), notSold: CAT.notSold() };
+  r = await C.refresh(db, user);
+  ok(r.changed && r.addOnsRemoved.join() === 'storage,compute' && !C.addOnsOn().length, 'add-ons that lapsed go away, and are named');
+  db.seed(billing, { tier: 'enterprise' }); legacyAsked = 0;
+  r = await C.refresh(db, user);
+  ok(legacyAsked === 0 && C.legacyView() === null, 'a plan that opens everything never asks');
+  db.seed(billing, { tier: 'deluxe', addons: ['compute'] }); await C.refresh(db, user);
+  delete global.fetch;
+
+  function view(modules, extra) {
+    return X.project({ emailVerified: true }, Object.assign({ packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: modules }, extra || {}),
+      { status: 'active' }, { role: 'owner', status: 'active' }, Date.now());
+  }
+  var answer = { status: 200, body: view(['lite']) }, asked = 0;
+  global.fetch = function () { asked++; return Promise.resolve({ ok: answer.status === 200, status: answer.status, json: function () { return Promise.resolve(answer.status === 200 ? answer.body : { error: answer.error || 'Package access is unavailable' }); } }); };
+  db.seed(billing, { packaged: true });
+  r = await C.refresh(db, user);
+  ok(r.changed && r.packaged && !r.wasPackaged && C.packageAccess().modules.join() === 'lite',
+     'ClearSky moves the workspace onto a package: the editor switches to the projection');
+  answer.body = view(['lite', 'storage']);
+  var pendingRefresh = C.refresh(db, user);
+  ok(C.packageAccess().modules.join() === 'lite' && !C.packageAccess().pending,
+     'a re-check keeps the current answer on screen while it waits',
+     'fetchPackage empties the view while it waits; a ribbon that blinks empty on every focus is worse than the bug');
+  r = await pendingRefresh;
+  ok(r.changed && r.added.join() === 'storage' && !r.removed.length && C.packageAccess().modules.indexOf('storage') >= 0,
+     'a module paid for while the editor is open switches on without a reload');
+  answer.status = 503;
+  r = await C.refresh(db, user);
+  ok(!r.changed && r.unavailable && C.packageAccess().modules.indexOf('storage') >= 0,
+     'an unreachable server keeps what is on screen (the API still refuses production on its own)');
+  answer.status = 403; answer.error = 'Active organization membership required';
+  r = await C.refresh(db, user);
+  ok(r.changed && r.readOnly && C.packageAccess().readOnly && !C.packageAccess().modules.length,
+     'a 403 is the server saying no: the editor locks');
+  ok(r.refused === 'Active organization membership required' && C.packageAccess().refused === r.refused,
+     'and says why, in the server\'s words: a refusal is not a connection problem and not a bill to pay');
+  answer.status = 200; answer.body = view(['lite', 'storage']);
+  r = await C.refresh(db, user);
+  ok(r.recovered && !r.added.length && !r.readOnly, 'coming back from the lock is "recovered", not a list of new purchases');
+  answer.body = view(['lite', 'storage'], { packagingState: 'suspended' });
+  r = await C.refresh(db, user);
+  ok(r.changed && r.readOnly && !r.wasReadOnly && C.packageAccess().billingNotice && C.packageAccess().billingNotice.payUrl !== undefined,
+     'a lapsed payment turns the open editor read-only, with the server\'s notice');
+  answer.body = view(['lite']);
+  r = await C.refresh(db, user);
+  ok(r.removed.join() === 'storage' && !r.readOnly, 'a module that is no longer paid for goes away');
+
+  var staffView = X.project({ staff: true }, { packaged: true }, null, null);
+  staffView.preview = true; C.setPackage(staffView); asked = 0;
+  r = await C.refresh(db, user);
+  ok(r.skipped === 'staff' && asked === 0 && C.packageAccess().preview === true, 'a staff preview is never re-checked away');
+
+  /* At the deadline the server decides; the editor's own clock only when the server cannot answer. */
+  answer.body = view(['lite', 'storage'], { accessUntil: Date.now() - 1 });
+  C.setPackage(view(['lite', 'storage'], { accessUntil: Date.now() + 40 })); C.apply('standard'); events.length = 0;
+  C.watchPlan(function () { return db; });
+  await new Promise(function (done) { setTimeout(done, 1250); });
+  ok(C.packageAccess().readOnly === true, 'at accessUntil the open editor turns read-only by itself');
+  ok(announced().some(function (e) { return e.detail.readOnly && !e.detail.wasReadOnly; }), 'and says so');
+  answer.status = 503;
+  C.setPackage(view(['lite', 'storage'], { accessUntil: Date.now() + 40 })); C.apply('standard'); events.length = 0;
+  C.watchPlan(function () { return db; });
+  await new Promise(function (done) { setTimeout(done, 1250); });
+  ok(C.packageAccess().readOnly === true && C.packageAccess().modules.indexOf('storage') >= 0,
+     'with the server out of reach at the deadline, the editor closes on its own clock');
+  answer.status = 200; answer.body = view(['lite', 'storage']);
+  C.setPackage(view(['lite', 'storage'], { accessUntil: Date.now() + 40 })); C.apply('standard'); events.length = 0;
+  C.watchPlan(function () { return db; });
+  await new Promise(function (done) { setTimeout(done, 1250); });
+  ok(C.packageAccess().readOnly === false && !announced().length,
+     'a clock that crosses the deadline ahead of the server\'s closes nothing and says nothing: the server still says open');
+  /* sign-in: locked while the answer is on its way, never open */
+  var release, slowDb = { collection: function () { return { doc: function () { return { collection: function () { return { doc: function () { return {
+    get: function () { return new Promise(function (r) { release = r; }); } }; } }; } }; } }; } };
+  var signing = C.resolve(slowDb, user.email, true);
+  ok(C.packageAccess() && C.packageAccess().pending === true && C.packageAccess().loading === true && C.packageAccess().readOnly === true,
+     'while sign-in reads the plan the editor is locked (marked loading, not failed), not open',
+     'the read()/commit() split had left it open (and clickable) while /api/package-access loaded');
+  release({ exists: true, data: function () { return { tier: 'standard' }; } });
+  ok(await signing === 'standard' && C.packageAccess() === null, 'and opens what the answer says');
+
+  /* a re-check asked for while another is on its way reads again after it */
+  db.seed(billing, { packaged: true }); answer.status = 200; answer.body = view(['lite']); asked = 0;
+  await C.refresh(db, user); asked = 0;
+  var gate, slowFetch = global.fetch;
+  global.fetch = function () { asked++; var body = answer.body; return new Promise(function (r) { gate = function () { r({ ok: true, status: 200, json: function () { return Promise.resolve(body); } }); }; }); };
+  var first = C.refresh(db, user);
+  await new Promise(function (r) { setTimeout(r, 20); });
+  answer.body = view(['lite', 'storage']);
+  var second = C.refresh(db, user);
+  gate(); await first; await new Promise(function (r) { setTimeout(r, 20); }); gate(); r = await second;
+  ok(asked === 2 && C.packageAccess().modules.indexOf('storage') >= 0,
+     'a refresh asked for mid-read reads again, so a purchase made meanwhile is not missed', 'asked ' + asked);
+  global.fetch = slowFetch;
+
+  /* a clock ahead of the server's: past accessUntil here, still open there */
+  var skewed = view(['lite', 'storage']); skewed.accessUntil = Date.now() - 5000;
+  answer.body = skewed; events.length = 0;
+  await C.refresh(db, user);
+  await new Promise(function (d) { setTimeout(d, 1300); });
+  ok(C.packageAccess().readOnly === false && !announced().some(function (e) { return e.detail.readOnly; }),
+     'a clock ahead of the server does not lock and unlock the editor every second: the server decides');
+  delete global.fetch; delete global.firebase;
+}
+
+resolverChecks().then(liveChecks).then(function () {
   console.log('\n' + (fails ? fails + ' of ' + checks + ' FAILED' : 'all ' + checks + ' checks passed') + '\n');
   process.exit(fails ? 1 : 0);
 }).catch(function (e) { console.error(e); process.exit(1); });

@@ -1761,7 +1761,7 @@ window._omegaReady = function(){
   <div id="app-body">
   <!-- TOPBAR (UNCHANGED — logo, user, sign out) -->
   <div id="topbar">
-    <a href="/" class="tb-logo">
+    <a href="/" class="tb-logo" onclick="tbHome(event)">
       <!-- Platform identity stays ClearSky-OMEGA (like Salesforce shows Salesforce) -->
       <!-- Platform mark. Hide on 404 rather than showing a broken-image icon;
            the adjacent tb-logo-txt already carries the wordmark. -->
@@ -2645,7 +2645,7 @@ window._omegaReady = function(){
         <div id="acct-package-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px"></div>
         <div class="acct-msg" id="acct-package-msg"></div>
         <div class="acct-sec-title" style="font-size:12px;opacity:.8">The Ladder</div>
-        <div class="acct-note" id="acct-package-ladder">Build your own experience and pay for what you need to run your business. Every module is an opt-in, and Omega Logic is by department: Office, Plant, Materials &amp; Purchasing, Logistics &amp; Warranty and the Customer App each stand on their own rung.</div>
+        <div class="acct-note" id="acct-package-ladder">Build your own experience and pay for what you need to run your business. Every module is an opt-in, and each Omega Logic department stands on its own rung.</div>
         <div class="acct-note" id="acct-package-plan" style="margin-top:8px">—</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           <button class="acct-av-btn" id="acct-package-add" onclick="openPackageMenu(null)">Open the Ladder</button>
@@ -4590,13 +4590,18 @@ function _moduleNames(keys){
 }
 function _stateLabel(b, view){
   var s = b.packagingState;
-  var text = { awaiting_payment: 'Awaiting your first payment', paid: 'Active', trial: 'Trial', past_due: 'Payment overdue', past_due_lite: 'Overdue · Lite only', pending: 'Awaiting approval' }[s] || (s ? String(s).replace(/_/g, ' ') : '—');
+  var text = { awaiting_payment: 'Awaiting your first payment', paid: 'Active', trial: 'Trial', past_due: 'Payment overdue', past_due_lite: 'Overdue · Omega Design only', pending: 'Awaiting approval' }[s] || (s ? String(s).replace(/_/g, ' ') : '—');
   if (view && view.readOnly && s !== 'awaiting_payment' && s !== 'pending') text += ' · read-only until paid';
   return text;
 }
 function _row(k, v, id){ return '<div class="acct-row"><span class="k">' + escHtml(k) + '</span><span class="v"' + (id ? ' id="' + id + '"' : '') + '>' + escHtml(v == null || v === '' ? '—' : String(v)) + '</span></div>'; }
+/* the rail this package bills through (Stripe under PACKAGING_PROVIDER=stripe since 2026-09-27; QuickBooks for a workspace billed there) */
+var _pkPayWith = 'QuickBooks';
 function renderPackagedBilling(b){
   var ws = window.OMEGA_WORKSPACE || {}, view = ws.packageAccess || {};
+  _pkPayWith = (b.billingProvider === 'stripe' || b.paymentProvider === 'stripe') ? 'Stripe' : 'QuickBooks';
+  var autopay = document.getElementById('acct-package-autopay');
+  if (autopay) autopay.textContent = _pkPayWith === 'Stripe' ? 'Each invoice arrives by email on your billing day with its pay link: pay it by card on Stripe\u2019s secure page, and your workspace follows the payment within seconds.' : 'Each invoice arrives by email on your billing day with its pay link. A card saved on QuickBooks\' page pays the next one in one click.';
   var bought = (b.subscription && Array.isArray(b.subscription.modules)) ? b.subscription.modules : (b.modules || ['lite']);
   var on = b.modules || ['lite'];
   var rows = _row('Package', _moduleNames(bought).join(', '), 'acct-pk-package');
@@ -4608,9 +4613,12 @@ function renderPackagedBilling(b){
   if (b.paidThrough) rows += _row('Paid through', _acctDay(b.paidThrough), 'acct-pk-paid');
   rows += _row('Amount due', b.amountDue == null ? '—' : (b.amountDue > 0 ? _money(b.amountDue) : 'Nothing due'), 'acct-pk-due');
   document.getElementById('acct-package-rows').innerHTML = rows;
+  /* the Ladder names Omega Logic's departments from the catalog, never a list of this page's own */
+  var depts = (view.catalog || []).filter(function(m){ return m.shelf === 'platform'; }).map(function(m){ return m.name; }), ladder = document.getElementById('acct-package-ladder');
+  if (ladder && depts.length) ladder.textContent = 'Build your own experience and pay for what you need to run your business. Every module is an opt-in, and Omega Logic is by department: ' + (depts.length > 1 ? depts.slice(0, -1).join(', ') + ' and ' + depts[depts.length - 1] + ' each stand on their own rung.' : depts[0] + ' stands on its own rung.');
   var acts = document.getElementById('acct-package-actions'); acts.innerHTML = '';
   if (b.paymentLink && b.amountDue > 0){
-    var pay = document.createElement('a'); pay.id = 'acct-pk-pay'; pay.className = 'acct-btn'; pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.cssText = 'text-decoration:none;text-align:center;width:auto;flex:1'; pay.textContent = 'Pay in QuickBooks'; acts.appendChild(pay);
+    var pay = document.createElement('a'); pay.id = 'acct-pk-pay'; pay.className = 'acct-btn'; pay.href = b.paymentLink; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.cssText = 'text-decoration:none;text-align:center;width:auto;flex:1'; pay.textContent = 'Pay in ' + _pkPayWith; acts.appendChild(pay);
     var paid = document.createElement('button'); paid.id = 'acct-pk-paid-btn'; paid.className = 'acct-btn'; paid.style.cssText = 'width:auto;flex:1;background:#fff;color:var(--cs-navy);border:1.5px solid var(--cs-border)'; paid.textContent = "I've paid"; paid.onclick = function(){ checkPackagePayment(paid); }; acts.appendChild(paid);
   }
   var admin = !!(window.OmegaTenant && OmegaTenant.isAdmin && OmegaTenant.isAdmin());
@@ -4623,7 +4631,7 @@ function renderPackagedBilling(b){
     return;
   }
   add.style.display = '';
-  plan.textContent = b.packagingState === 'paid' ? 'Add a rung any time: it is priced for the rest of this cycle, invoiced in QuickBooks, and on the moment the payment clears.' : 'The Ladder opens once your current invoice is paid.';
+  plan.textContent = b.packagingState === 'paid' ? 'Add a rung any time: it is priced for the rest of this cycle, invoiced ' + (_pkPayWith === 'Stripe' ? 'through Stripe' : 'in QuickBooks') + ', and on the moment the payment clears.' : 'The Ladder opens once your current invoice is paid.';
   var u = currentUser || (auth && auth.currentUser); if (!u) return;
   u.getIdToken().then(function(tok){
     return fetch('/api/plan-change', { cache:'no-store', headers:{ 'Authorization':'Bearer ' + tok } }).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||r.status); return j; }); });
@@ -4635,29 +4643,30 @@ function renderPackagedBilling(b){
     host.innerHTML = s.invoices.map(function(inv){
       var kind = inv.kind === 'change' ? 'Change' + (inv.names ? ' · ' + inv.names.join(', ') : '') : inv.kind === 'pack' ? 'Usage pack' : 'Subscription';
       var label = escHtml(_acctDay(inv.date)) + ' — ' + escHtml(inv.display) + ' · ' + escHtml(kind) + ' · ' + escHtml(inv.state);
-      return '<div data-invoice-state="' + escHtml(inv.state) + '">' + label + (inv.paymentLink ? ' · <a href="' + escHtml(inv.paymentLink) + '" target="_blank" rel="noopener">Pay in QuickBooks</a>' : '') + '</div>';
+      return '<div data-invoice-state="' + escHtml(inv.state) + '">' + label + (inv.paymentLink ? ' · <a href="' + escHtml(inv.paymentLink) + '" target="_blank" rel="noopener">Pay in ' + escHtml(inv.payWith || _pkPayWith) + '</a>' : '') + '</div>';
     }).join('');
   }).catch(function(e){
     setText('acct-pk-monthly', '—');
     document.getElementById('acct-package-invoices').textContent = 'Invoices unavailable — ' + (e.message || e);
   });
 }
-/* "I've paid": one look at QuickBooks now; paid, the package view is refreshed and the panel repainted. */
+/* "I've paid": one look at the invoice now (Stripe or QuickBooks); paid, the package view is refreshed and the panel repainted. */
 function checkPackagePayment(btn){
   var u = currentUser || (auth && auth.currentUser); if (!u) return;
-  var msg = document.getElementById('acct-package-msg'); btn.disabled = true; btn.textContent = 'Checking QuickBooks…'; msg.textContent = '';
+  var msg = document.getElementById('acct-package-msg'); btn.disabled = true; btn.textContent = 'Checking your payment…'; msg.textContent = '';
   u.getIdToken().then(function(tok){
     return fetch('/api/plan-change', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tok }, body: JSON.stringify({ action:'reconcile-now' }) }).then(function(r){ return r.json(); });
   }).then(function(j){
     if (j && j.paid){ msg.textContent = 'Paid. Your workspace is opening…'; msg.className = 'acct-msg ok'; return (window.OmegaTenant && OmegaTenant.refreshPackage ? OmegaTenant.refreshPackage() : Promise.resolve()).then(function(){ loadBilling(); }); }
-    msg.textContent = (j && j.error) ? j.error : j && j.throttled ? 'QuickBooks was checked a moment ago: not paid yet. Try again in a few seconds.' : 'Not paid yet as far as QuickBooks knows. A card payment shows within a minute; try again then.';
+    msg.textContent = (j && j.error) ? j.error : j && j.throttled ? 'Your payment was checked a moment ago: not paid yet. Try again in a few seconds.' : 'Not paid yet as far as ' + ((j && j.payWith) || _pkPayWith) + ' shows. A card payment shows within a minute; try again then.';
     btn.disabled = false; btn.textContent = "I've paid";
   }).catch(function(e){ msg.textContent = 'Could not check — ' + (e.message || e); btn.disabled = false; btn.textContent = "I've paid"; });
 }
-/* the one package menu, handed this page's package view; a change refreshes the view so the tiles and the panel follow */
-function openPackageMenu(moduleKey){
+/* the one package menu, handed this page's package view; a change refreshes the view so the tiles and the panel follow.
+   `how` opens it on one module and one step ({ single:true, intent:'remove' } is a card's Opt out) */
+function openPackageMenu(moduleKey, how){
   var ws = window.OMEGA_WORKSPACE; if (!ws || !ws.packaged || !window.OmegaPackageMenu) return false;
-  return OmegaPackageMenu.open(moduleKey || undefined, { view: ws.packageAccess, onChanged: function(){
+  return OmegaPackageMenu.open(moduleKey || undefined, { view: ws.packageAccess, single: !!(how && how.single), intent: how && how.intent, onChanged: function(){
     (window.OmegaTenant && OmegaTenant.refreshPackage ? OmegaTenant.refreshPackage() : Promise.resolve()).then(function(){ try { loadBilling(); } catch(e){} try { if (window.renderApps) renderApps(); } catch(e){} });
   } });
 }
@@ -4683,7 +4692,6 @@ function _fetchModulePrices(){
    three rungs it does not hold, dashed, with + Add opening the Ladder on that
    module. Everything is the package view's own catalog and the server's
    prices; there is no second list. A legacy plan shows nothing here. */
-var MOD_SHELF_LABEL = { floor:'Included in every plan', addon:'Add-on', standard:'Standard shelf', premium:'Premium shelf', deliverable:'Deliverable', platform:'Omega Logic' };
 var MOD_SHELF_ORDER = ['floor','addon','standard','premium','deliverable','platform'];
 var MOD_GLYPH = { lite:'\u25C8', gridatlas:'\u2317', storage:'\u25AE', estimate:'\u25A4', evrebates:'\u26A1', plansets:'\u25A7', siteintel:'\u25CE', engineering:'\u2699', finance:'$', compute:'\u25A6', ops:'\u25C9', whitelabel:'\u25EB', permitting:'\u2713', sitefinder:'\u25CE', 'logic-office':'\u25F7', 'logic-plant':'\u2699', 'logic-materials':'\u25A6', 'logic-logistics':'\u279C', 'logic-customer':'\u25CD' };
 function _toolByKey(key){ var all = (window.OMEGATools && OMEGATools.all) ? OMEGATools.all() : []; for (var i=0;i<all.length;i++) if (all[i].key===key) return all[i]; return null; }
@@ -4693,12 +4701,12 @@ function _moduleCard(m, state){
   var first = (m.tools||[]).map(_toolByKey).filter(function(t){ return t && t.icon; })[0];
   var ico = first ? '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="'+esc(first.icon)+'"/></svg>' : esc(MOD_GLYPH[m.key]||'\u25C8');
   var price = !held && _modulePrices && _modulePrices[m.key] ? _modulePrices[m.key] : '';
-  var line = held ? (MOD_SHELF_LABEL[m.shelf]||m.shelf) : bought ? 'Yours \u00B7 opens when the first invoice is paid' : 'Not in your plan' + (price ? ' \u00B7 ' + price : '');
+  var line = held ? (m.shelfLabel||m.shelf) : bought ? 'Yours \u00B7 opens when the first invoice is paid' : 'Not in your plan' + (price ? ' \u00B7 ' + price : '');
   var h = '<div class="mod-card'+(held?'':' off')+(logic?' logic':'')+'" data-module="'+esc(m.key)+'" data-held="'+(held?'1':bought?'bought':'0')+'">';
   h += held ? '<span class="mod-live">Live</span>' : bought ? '<span class="mod-soon">Paid for</span>' : '<button type="button" class="mod-add" data-add-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-add-module\'))">+ Add</button>';
-  h += '<div class="mod-head"><div class="mod-ico">'+ico+'</div><div style="min-width:0"><div class="mod-name">'+esc(logic ? 'Omega Logic \u00B7 '+m.name : m.name)+'</div><div class="mod-shelf">'+esc(line)+'</div></div></div>';
+  h += '<div class="mod-head"><div class="mod-ico">'+ico+'</div><div style="min-width:0"><div class="mod-name">'+esc(m.name)+'</div><div class="mod-shelf">'+esc(line)+'</div></div></div>';
   h += '<ul class="mod-feat">'+(m.features||[]).slice(0,3).map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')+'</ul>';
-  if ((held || bought) && m.key !== 'lite') h += '<button type="button" class="ows-pill" data-remove-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-remove-module\'))">Opt out</button>';
+  if ((held || bought) && m.key !== 'lite') h += '<button type="button" class="ows-pill" data-remove-module="'+esc(m.key)+'" onclick="openPackageMenu(this.getAttribute(\'data-remove-module\'), { single: true, intent: \'remove\' })">Opt out</button>';
   var shown = tools.slice(0, held ? 4 : 3);
   h += '<div class="mod-tools">'+shown.map(function(n){ return '<span class="mod-chip">'+esc(n)+'</span>'; }).join('')+(tools.length>shown.length?'<span class="mod-chip">+'+(tools.length-shown.length)+'</span>':'')+'</div></div>';
   return h;
@@ -5577,6 +5585,10 @@ function showUpgradeModal(toolName){
       '<button onclick="document.getElementById(\'upgrade-modal\').remove()" style="background:none;border:none;color:#5B6672;font-size:13px;cursor:pointer;font-family:inherit">Maybe later</button>'+
     '</div>';
   m.addEventListener('click', function(e){ if(e.target===m) m.remove(); });
+  /* a dialog: named as one, and Escape closes it like every other panel here */
+  var box = m.firstChild; if (box && box.setAttribute){ box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); }
+  function onKey(e){ if (!document.body.contains(m)) { document.removeEventListener('keydown', onKey); return; } if (e.key==='Escape'){ m.remove(); document.removeEventListener('keydown', onKey); } }
+  document.addEventListener('keydown', onKey);
   document.body.appendChild(m);
 }
 
@@ -5715,8 +5727,11 @@ function _catLabel(key){
 // Dashboard holds at most this many apps. Required tools (e.g. Site Editor)
 // are placed first and always count toward — and fit within — this cap.
 var DASH_MAX = 6;
+/* the starter set on show (Pass 3 below): what a first pin change starts from */
+var _STARTER = [];
 function _paintDash(){
   var el = document.getElementById('dash-grid'); if(!el) return;
+  _STARTER = [];
   el.className = 'pm-grid';
   var tools = _qualifying(), html = '', renderedKeys = {}, count = 0;
   // Pass 1: required tools always render first.
@@ -5760,7 +5775,7 @@ function _paintDash(){
       var st = tools[s];
       if (renderedKeys[st.key] || st.soon) continue;
       if (typeof OMEGATools.isUnlocked === 'function' && !OMEGATools.isUnlocked(st, _PORTAL_WS)) continue;
-      html += _tile(st, true); renderedKeys[st.key]=true; count++; starter = true;
+      html += _tile(st, true); renderedKeys[st.key]=true; count++; starter = true; _STARTER.push(st.key);
     }
     if (starter) html = '<div class="pm-starter-note" style="grid-column:1/-1;font-size:12.5px;color:var(--cs-sub);padding:2px 2px 6px">A starter set for your plan. Keep what you use, and <a data-sn="marketplace" href="/marketplace.html" style="color:var(--cs-accent);font-weight:600">browse the Marketplace</a> for the rest.</div>' + html;
   }
@@ -5861,6 +5876,24 @@ function togglePin(ev, key){
   var orgId = _PORTAL_WS && _PORTAL_WS.orgId;
   if (!orgId || typeof db==='undefined' || !db) return;
   var adding = !_pinned(key);
+  /* THE STARTER SET IS WHAT A FIRST CHANGE STARTS FROM. It shows while
+     nothing is pinned, and its tiles carry Remove; but a starter tool is not
+     pinned, so Remove used to PIN it — and one pin ends the starter set: the
+     dashboard kept the tile you removed and dropped the other five. Add to
+     dashboard did the same to the five. Now the starter set becomes the
+     pins: Remove keeps the others, Add adds beside them (the cap still
+     holds). check:dashboard's click sweep found it. */
+  if (!_PINNED.length && _STARTER.length){
+    var removing = !!(ev && ev.currentTarget && /\bremove\b/.test(ev.currentTarget.className || ''));
+    var next = [];
+    for (var si=0; si<_STARTER.length; si++) if (!(removing && _STARTER[si]===key)) next.push(_STARTER[si]);
+    if (!removing && next.indexOf(key) < 0){
+      if (next.length >= DASH_MAX){ _dashCapMsg('Your dashboard is full (' + DASH_MAX + ' apps). Remove one to add another.'); return; }
+      next.push(key);
+    }
+    OMEGATools.savePinned(db, firebase, orgId, next).then(function(){ _PINNED = next; _paintDash(); _paintMarket(); });
+    return;
+  }
   // Enforce the dashboard cap: required tools + pinned tools may not exceed DASH_MAX.
   if (adding){
     var used = _dashCount();
@@ -6197,6 +6230,61 @@ var _SW_TITLES = { todos:'To-Dos', team:'Team', feed:'Company Feed', msgs:'Messa
   else fromHash();
   window.addEventListener('hashchange', fromHash);
 })();
+/* Site Map's plan chip and the editor gate link /workspace#billing,
+   #modules and #module-<key>; a workspace whose home is this page is
+   bounced here with the hash kept (workspace.html classicBounce), and each
+   opens its twin on this page once the entitlements say what the plan is:
+     #billing          the Account panel, at Billing & plan
+     #modules          Your modules (a packaged plan), else Billing & plan
+     #module-<key>     the ONE menu on that module (a packaged plan); a
+                       plan billed outside the engine opens it where the
+                       classic home keeps it, the marketplace, which judges
+                       the module and opens the menu in its legacy mode
+   Nothing here decides access: the menu and the server do. */
+(function(){
+  var asked = '';
+  function billingSection(){
+    var t = [].filter.call(document.querySelectorAll('#acct-overlay .acct-sec-title'), function(e){ return /^Billing/.test(e.textContent); })[0];
+    if (t && t.scrollIntoView) t.scrollIntoView({ block:'start' });
+  }
+  function openBillingPanel(){ if (typeof openAccount !== 'function') return; openAccount(); billingSection(); }
+  function fromHash(){
+    var h = String(location.hash || '').replace('#',''), mk = /^module-([a-z0-9-]+)$/i.exec(h);
+    if (h !== 'billing' && h !== 'modules' && !mk){ asked = ''; return; }
+    if (asked === h) return;
+    asked = h;
+    var run = function(w){
+      if (asked !== h) return;
+      asked = h + ':done';
+      /* after every other listener of these entitlements has painted (Your modules among them) */
+      setTimeout(function(){
+        w = w || window.OMEGA_WORKSPACE;
+        /* a workspace whose home is the workspace is on its way there */
+        if (window.OmegaWorkspaceShell && OmegaWorkspaceShell.wantsWorkspace && OmegaWorkspaceShell.wantsWorkspace(w)) return;
+        var packaged = !!(w && w.packaged && w.packageAccess && Array.isArray(w.packageAccess.catalog));
+        if (h === 'billing') { openBillingPanel(); return; }
+        if (h === 'modules'){
+          var dm = document.getElementById('dash-modules');
+          if (packaged && dm && !dm.classList.contains('mod-none') && dm.scrollIntoView) dm.scrollIntoView({ block:'start' });
+          else openBillingPanel();
+          return;
+        }
+        var key = mk[1].toLowerCase();
+        if (packaged){ if (typeof openPackageMenu === 'function' && openPackageMenu(key, { single: true }) !== false) return; openBillingPanel(); return; }
+        /* a tenant whose record hides the marketplace is never sent through it
+           (paintMarketplaceNav: no door that is not theirs): Billing & plan */
+        if (w && w.hideMarketplace) { openBillingPanel(); return; }
+        window.location.replace('/marketplace.html' + (window.location.search || '') + '#' + encodeURIComponent(key));
+      }, 0);
+    };
+    /* after sign-in and the plan: the entitlements answer now if they are known */
+    if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(run);
+    else window.addEventListener('omega:entitlements', function(e){ run(e.detail); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fromHash);
+  else fromHash();
+  window.addEventListener('hashchange', fromHash);
+})();
 
 function snWork(ev, view){
   if (ev && ev.preventDefault) ev.preventDefault();
@@ -6218,8 +6306,18 @@ function closeWorkspace(){
   // restore Dashboard highlight
   _snHighlight('dashboard');
 }
-// Close the drawer on Escape.
-document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeWorkspace(); } });
+// Close the drawer, and the Account panel, on Escape.
+document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeWorkspace(); var ao=document.getElementById('acct-overlay'); if (ao && ao.classList.contains('show')) closeAccount(); } });
+/* The logo is Home. On the dashboard itself that is the top of this page,
+   not a reload of it (the loading screen and a second boot for nothing).
+   Anywhere else it is still the link to "/". check:dashboard's click sweep
+   holds it. */
+function tbHome(ev){
+  if (location.pathname !== '/' && location.pathname !== '/index.html') return;
+  if (ev && ev.preventDefault) ev.preventDefault();
+  closeWorkspace(); if (typeof closeNav === 'function') closeNav();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 function snGo(ev, which){
   if (ev && ev.preventDefault) ev.preventDefault();
   // highlight

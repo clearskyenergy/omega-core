@@ -1309,7 +1309,7 @@ function _standing(bill, org){
       return { key: 'current', chip: 'good', label: 'Active' };
     }
     if (ps === 'trial') return { key: 'trialend', chip: 'warn', label: 'Trial ends ' + new Date(bill.trialEndsAt).toLocaleDateString() };
-    if (ps === 'past_due_lite') return { key: 'overdue', chip: 'bad', label: 'Past due · Lite only' };
+    if (ps === 'past_due_lite') return { key: 'overdue', chip: 'bad', label: 'Past due · Omega Design only' };
     if (ps === 'unpaid') return { key: 'overdue', chip: 'bad', label: 'Unpaid' };
     if (ps === 'awaiting_payment') return { key: 'awaiting', chip: 'warn', label: 'Awaiting first payment' };
     if (ps === 'pending' || (org && (org.status || '') === 'pending')) return { key: 'pending', chip: 'warn', label: 'Package proposed' };
@@ -1360,7 +1360,7 @@ function _priceBookStrip(){
   var parts = [];
   if (o.lite && o.lite.monthlyDisplay) parts.push('<b>Lite</b> ' + esc(o.lite.monthlyDisplay));
   (o.plans || []).forEach(function(pl){ parts.push('<b>' + esc(pl.name) + '</b> ' + esc(pl.monthlyDisplay || '')); });
-  if (o.enterprise && o.enterprise.annualFloorDisplay) parts.push('<b>Enterprise</b> from ' + esc(o.enterprise.annualFloorDisplay));
+  if (o.enterprise) parts.push('<b>Enterprise</b> ' + esc(o.enterprise.priceDisplay || 'contact for pricing'));
   if (o.logins && o.logins.builderDisplay) parts.push('logins ' + esc(o.logins.builderDisplay) + ' / ' + esc(o.logins.viewerDisplay || ''));
   var mods = (o.modules || []).map(function(m){ return esc(m.name) + ' ' + esc(m.monthlyDisplay || ''); }).join(' \u00b7 ');
   return '<div id="cl-pricebook-strip" class="sub-txt" style="margin:6px 0 12px;line-height:1.7">'
@@ -2432,7 +2432,7 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
      + '<div>Package: '+esc(_pkgModuleNames(bought).join(', ') || '\u2014')+(bought.join() !== onNow.join() && onNow.length ? ' (on now: '+esc(_pkgModuleNames(onNow).join(', '))+')' : '')+'</div>'
      + '<div>Standing: <span class="chip '+sdp.chip+'">'+esc(sdp.label)+'</span></div>'
      + (bill.nextInvoiceOn ? '<div>Next invoice: '+esc(bill.nextInvoiceOn)+(bill.paidThrough ? ' \u00b7 paid through '+esc(bill.paidThrough) : '')+'</div>' : '')
-     + (Number(bill.amountDue||0) > 0 ? '<div>Amount due: $'+Number(bill.amountDue).toLocaleString()+(bill.paymentLink ? ' \u00b7 <a href="'+esc(bill.paymentLink)+'" target="_blank" rel="noopener">QuickBooks pay link</a>' : '')+'</div>' : '')
+     + (Number(bill.amountDue||0) > 0 ? '<div>Amount due: $'+Number(bill.amountDue).toLocaleString()+(bill.paymentLink ? ' \u00b7 <a href="'+esc(bill.paymentLink)+'" target="_blank" rel="noopener">'+(bill.billingProvider === 'stripe' ? 'Stripe' : 'QuickBooks')+' pay link</a>' : '')+'</div>' : '')
      + (bill.reconcileNote ? '<div>Review: '+esc(bill.reconcileNote)+'</div>' : '')
      + '</div>'
      + '<p style="margin:10px 0 4px"><button onclick="location.href=&quot;/admin/tenant.html?org='+encodeURIComponent(orgId)+'&quot;">Open the Package tab</button></p>'
@@ -2810,6 +2810,11 @@ function saveTenantBilling(orgId){
   ref.get().then(function(snap){
     var before=snap.exists?snap.data():{};
     if (before.packaged === true) throw new Error('Use the Package panel for this subscription.');
+    /* A Stripe payment for an earlier figure holds Plan & billing's Pay
+       (stripeDueHold, api/_lib/stripe-customer.js) until ClearSky has looked:
+       saving the amount due here, the same figure included, is that look,
+       and the history row keeps the hold it released. */
+    if (before.stripeDueHold && patch.amountDue !== undefined) patch.stripeDueHold = null;
     var write=Object.assign({}, patch, {
       updatedAt: FV.serverTimestamp(),
       updatedBy: (currentUser && currentUser.email) || 'console'

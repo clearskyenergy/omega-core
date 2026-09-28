@@ -11,6 +11,8 @@ function mockAdmin(getDb, getCaller) {
   F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, authenticate: async function () { return getCaller(); }, db: function () { return getDb(); },
     safeOrg: function (s) { return /^[a-z0-9.-]+\.[a-z]+$/.test(s || '') ? s : null; }, orgOf: function (s) { return s.split('@')[1]; },
     isTenantAdmin: async function (c, o) { return c.staff || c.orgId === o && c.role === 'owner'; },
+    /* admin.clientAdmin: staff, or a tenant admin of an ACTIVE client */
+    clientAdmin: async function (c, o) { if (c.staff) return true; if (!(c.orgId === o && c.role === 'owner')) return false; var s = await getDb().doc('omega_orgs/' + o).get(); return s.exists && (s.data() || {}).status === 'active'; },
     billingOf: async function (o) { var r = await getDb().doc('omega_orgs/' + o + '/billing/current').get(); return r.exists ? r.data() : {}; },
     httpError: function (status, message) { var e = new Error(message); e.status = status; return e; },
     FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; },

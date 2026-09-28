@@ -23,7 +23,7 @@ var A = require('./_lib/admin');
 var M = require('./_lib/mail');
 var PUBLIC = require('./_lib/public-domains');
 var BP = require('./_lib/billing-profile'), PB = require('./_lib/pricebook'), MOD = require('./_lib/modules'), PR = require('./_lib/subscription-pricing'), POLICY = require('./_lib/package-billing-policy'), S = require('./_lib/package-billing'), Mode = require('./_lib/packaging-mode');
-var SP = require('./_lib/subscription-proposal'), K = require('./_lib/kit');
+var SP = require('./_lib/subscription-proposal'), K = require('./_lib/kit'), D = require('./_lib/billing-driver');
 var BASE_HOST = process.env.TENANT_BASE_HOST || 'clearskyomega.com';
 var TRIAL_DAYS = Number(process.env.TRIAL_DAYS || 14);
 /* Labels a workspace may not take under clearskyomega.com: the hosts the
@@ -46,7 +46,7 @@ function hostFacts() { return { homeHost: homeOf(null), wildcard: process.env.TE
 async function signupOptions(db) {
   var facts = hostFacts();
   if (process.env.PACKAGING_SIGNUP_ENABLED !== 'true') return Object.assign({ packaging: false, maxTrialDays: 14, payNow: false }, facts);
-  if (!Mode.open()) throw A.httpError(409, 'Packaged signup is sandbox-only until PACKAGING_LIVE=true with QBO_ENV=production');
+  if (!Mode.open()) throw A.httpError(409, Mode.provider() === 'stripe' ? 'Packaged signup needs a Stripe test key, or PACKAGING_LIVE=true with a live key' : 'Packaged signup is sandbox-only until PACKAGING_LIVE=true with QBO_ENV=production');
   /* the switch turned on before the seed ran (or before the book was
      enabled): the page is told plainly and takes nobody's details; never a
      500, never a half-made record */
@@ -54,6 +54,8 @@ async function signupOptions(db) {
   try { book = await PB.load(db, PB.VERSION); } catch (e) { if (e.status === 409 || /not seeded/i.test(String(e.message || ''))) return Object.assign({ packaging: false, maxTrialDays: 14, payNow: false, notReady: 'Signup is opening shortly: the price book ' + PB.VERSION + ' is not seeded for this company yet' }, facts); throw e; }
   if (!book.enabled) return Object.assign({ packaging: false, maxTrialDays: 14, payNow: false, notReady: 'Signup is opening shortly: the price book ' + book.version + ' is not enabled yet' }, facts);
   return Object.assign(facts, { packaging: true, maxTrialDays: Math.min(book.policy.trialDays, 14), pricebookVersion: book.version,
+    /* where the card is entered: the rail a new workspace bills through */
+    provider: Mode.provider(), payWith: D.name(Mode.provider()),
     /* pay at the end is offered only where the engine can issue an invoice (the billing flag; the engine's guard has the last word) */
     payNow: process.env.PACKAGING_BILLING_ENABLED === 'true' && book.enabled === true,
     modules: PR.catalog(book), starters: MOD.starters(), starterLabels: MOD.starterLabels(),
@@ -103,7 +105,7 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
     tx.create(ref.collection('billing').doc('current'), { packaged: true, packagingSignup: true, packagingState: 'pending',
       modules: ['lite'], proposedPackage: selected, pricebookVersion: book.version, trialDurationDays: duration,
       proposalId: proposal ? proposal.id : null, signupDiscovery: discovery ? { discovery: discovery, recommendation: recommendation, at: now } : null,
-      billingProvider: 'quickbooks', qboEnv: book.qbo.env, createdAt: now });
+      billingProvider: Mode.provider(), qboEnv: Mode.provider() === 'quickbooks' ? book.qbo.env : null, createdAt: now });
     if (proposalSnap) {
       if (!proposalSnap.exists || proposalSnap.data().status !== 'sent') throw A.httpError(409, 'This proposal is no longer open');
       tx.update(proposalRef, { status: 'accepted', updatedAt: now, updatedBy: caller.email,
@@ -119,10 +121,11 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
   });
   if (!result.created) return result;
   await A.init().auth().setCustomUserClaims(caller.uid, { orgId: domain, role: 'owner' });
-  /* Pay at the end (2026-09-26, Tommy: one system, QuickBooks). The
-     workspace is opened by its owner's payment, nobody's approval: the
-     engine's own activation issues the first invoice now, with QuickBooks'
-     card-payment page on it, and the workspace stays read-only until that
+  /* Pay at the end (2026-09-26; Stripe under PACKAGING_PROVIDER=stripe since 2026-09-27, Tommy:
+     "they add billing and that's all done through Stripe"). The workspace
+     is opened by its owner's payment, nobody's approval: the engine's own
+     activation issues the first invoice now, with the provider's
+     card-payment page on it (Stripe's hosted invoice, or QuickBooks'), and the workspace stays read-only until that
      invoice reconciles as paid (reconcile-now from the signup page or the
      workspace, or the daily runner). If the invoice cannot be issued, the
      request falls back to the approval path and says so. */
@@ -140,10 +143,11 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
       Object.assign(result, { status: 'active', payNow: true, packagingState: applied.packagingState, paymentLink: applied.paymentLink || after.paymentLink || null,
         amountDue: after.amountDue == null ? null : after.amountDue, amountDueDisplay: after.amountDue == null ? null : PR.money(Math.round(after.amountDue * 100)),
         invoiceDate: applied.nextInvoiceOn ? previewed.invoice && previewed.invoice.date : null, monthlyDisplay: selected.monthlyDisplay || null, billingEmail: profile.email || caller.email });
-      /* an invoice without QuickBooks' pay page (Payments off, or the link not
-         returned) is not a dead end: the invoice itself was emailed by
-         QuickBooks, the page says so, and ClearSky hears at once */
-      if (!result.paymentLink) { result.payLinkMissing = true; await M.templates.billingAlert({ orgId: domain, company: name, text: 'The first invoice for ' + name + ' was issued without a pay link. QuickBooks Payments may be off; the customer was told the invoice is in their email. Check Settings → Payments in the production company.' }); }
+      /* an invoice without the provider's pay page (QuickBooks Payments off,
+         or the link not returned) is not a dead end: the invoice itself was
+         emailed by the provider, the page says so, and ClearSky hears at once */
+      result.provider = D.providerOf(after); result.payWith = D.name(result.provider);
+      if (!result.paymentLink) { result.payLinkMissing = true; await M.templates.billingAlert({ orgId: domain, company: name, text: 'The first invoice for ' + name + ' was issued without a pay link (' + result.payWith + '). The customer was told the invoice is in their email. ' + (result.provider === 'stripe' ? 'Check the invoice in the Stripe dashboard.' : 'QuickBooks Payments may be off: check Settings → Payments in the production company.') }); }
     } catch (e) {
       var raw = String(e.message || e).slice(0, 200);
       await ref.update({ status: 'pending', approvedAt: null, approvedBy: null, selfServe: null, payNowError: raw, updatedAt: now });
@@ -155,7 +159,7 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
     }
   }
   var first = (caller.claims.name || caller.email.split('@')[0]).split(' ')[0];
-  await Promise.all([M.templates.signupReceived({ email: caller.email, name: first, company: name, host: result.host, packaging: true, payNow: result.payNow === true, paymentLink: result.paymentLink || null, amountDueDisplay: result.amountDueDisplay || null }),
+  await Promise.all([M.templates.signupReceived({ email: caller.email, name: first, company: name, host: result.host, packaging: true, payNow: result.payNow === true, paymentLink: result.paymentLink || null, payWith: result.payWith || null, amountDueDisplay: result.amountDueDisplay || null }),
     M.templates.signupAlert({ company: name, orgId: domain, email: caller.email, vertical: profile.vertical, host: result.host, reserved: host, phone: b.phone, note: b.note, payNow: result.payNow === true })]);
   return result;
 }
@@ -175,14 +179,20 @@ module.exports = A.handler(function (req) {
     var domain = A.orgOf(email);
     if (!domain || domain.indexOf('.') < 0) throw A.httpError(400, 'sign in with an email address first');
     if (PUBLIC.indexOf(domain) >= 0) throw A.httpError(403, 'ClearSky-OMEGA workspaces are created with a work email address. ' + domain + ' is a personal email provider. Ask your workspace owner to invite ' + email + ', or sign in with your company address.');
-    if ((!caller.claims || caller.claims.email_verified !== true) && !caller.staff) throw A.httpError(403, 'verify your email address first, then try again');
-
-    if (req.method === 'GET') return signupOptions(A.db());
+    var verified = (caller.claims && caller.claims.email_verified === true) || !!caller.staff;
+    /* The options (the questions, the modules and their list prices, all
+       public on /api/offerings) open to a signed-in person before the link
+       in their email is clicked, so a new account walks straight into the
+       signup. Creating the workspace, the one thing that claims a company's
+       domain, still needs the verified address, and the page is told which
+       it is (2026-09-27). */
+    if (req.method === 'GET') return signupOptions(A.db()).then(function (o) { return Object.assign(o, { emailVerified: verified }); });
+    if (!verified) throw A.httpError(403, 'verify your email address first, then try again');
 
     var db = A.db(), FV = A.FieldValue();
     var orgRef = db.collection('omega_orgs').doc(domain);
     /* "I've paid" from the signup page: the owner asks for a look at
-       QuickBooks now (plan-change reconcileNow, throttled) and gets the
+       the invoice now (plan-change reconcileNow, throttled) and gets the
        billing state back with the host to open when it is paid. */
     if (b.action === 'check-payment') return checkPayment(db, caller, domain, orgRef);
     return orgRef.get().then(function (s) {

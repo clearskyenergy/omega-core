@@ -212,11 +212,10 @@ team counts for any tenant.
   `csebuilders.com`**, retired as a staff domain. The dashboard's "Request
   access" mails that address. Whether the mailbox is read is a question
   for Tommy; the sales agent design asks it (`docs/SALES-AGENT.md` §10).
-- **PR #126** (`claude/sweet-albattani-a5ylek`): its dashboard fix is
-  superseded by this branch; its Tremco cleanup is not (delete
-  `tenants/tremco/tremco-patches.js`, its loader block in
-  `tenants/tremco/config.js`, and the `MERGE.md` row). Cherry-pick that
-  part or merge #126 first and take this branch's CSS.
+- **PR #126** (`claude/sweet-albattani-a5ylek`) is closed. Its dashboard
+  fix reached main through this branch (#145), and its Tremco cleanup
+  (the patch file, its loader block in `tenants/tremco/config.js` and the
+  `MERGE.md` row) was redone on current main in its own PR.
 - `applyToolLocks`, `lockTile`, `openUpgrade`, `showUpgradeModal` and
   `esc2` are declared inside `if (document.readyState === 'loading') { … }`
   in `index.html` (block-scoped function declarations). It works because

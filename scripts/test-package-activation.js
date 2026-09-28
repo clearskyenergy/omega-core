@@ -1,5 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('assert'), DB = require('./_lib/firestore-double').DB;
 var B = require('../api/_lib/pricebook'), S = require('../api/_lib/package-billing'), Q = require('../api/_lib/qbo-billing');
 var count = 0, original = Q.driver, calls = 0, receipts = {};
@@ -66,6 +67,24 @@ async function run() {
   await S.reconcile(db, orgId, now, {});
   equal(db.data.get(root + '/billing/current').modules, ['lite', 'storage']);
   equal(db.data.get(root + '/billing/current').packagingState, 'paid');
+  /* Moving a legacy plan onto a package answers what it asked for: the
+     opt-in the package carries is activated, the one it does not is
+     declined, an opt-out is done, and an answered request stays as it was. */
+  db = fixture(); db.data.get(root).status = 'active';
+  var asked = { requestedBy: 'owner@packaging.example', requestedAt: '2026-09-25' };
+  Object.assign(db.data.get(root + '/billing/current'), { tier: 'standard',
+    optIns: { storage: Object.assign({ key: 'storage', status: 'requested', display: '$250/month' }, asked), siteintel: Object.assign({ key: 'siteintel', status: 'requested' }, asked), gridatlas: { key: 'gridatlas', status: 'withdrawn', withdrawnAt: '2026-09-24' } },
+    optOuts: { plansets: Object.assign({ key: 'plansets', status: 'requested', reason: 'Not using it' }, asked) } });
+  body = await request(db, Object.assign({}, input, { action: 'activate' }));
+  var answered = await S.preview(db, orgId, body, now);
+  equal([answered.billingPatch.optIns.storage.status, answered.billingPatch.optIns.siteintel.status, answered.billingPatch.optOuts.plansets.status], ['activated', 'declined', 'done']);
+  equal(answered.billingPatch.optIns.gridatlas, { key: 'gridatlas', status: 'withdrawn', withdrawnAt: '2026-09-24' });
+  equal(answered.billingPatch.optIns.storage.resolvedAt, '2026-09-26'); equal(answered.billingPatch.optIns.storage.display, '$250/month');
+  await S.apply(db, orgId, body, staff, now);
+  var settled = db.data.get(root + '/billing/current');
+  equal([settled.optIns.storage.status, settled.optIns.siteintel.status, settled.optIns.gridatlas.status, settled.optOuts.plansets.status, settled.optOuts.plansets.reason], ['activated', 'declined', 'withdrawn', 'done', 'Not using it']);
+  db = fixture(); body = await request(db, input);
+  equal((await S.preview(db, orgId, body, now)).billingPatch.optIns, undefined, 'nothing asked, nothing answered');
   db = fixture(); body = await request(db, input); await S.apply(db, orgId, body, staff, now);
   var ending = now + 14 * 86400000, beforeIssue = calls;
   equal(await S.issue(db, orgId, ending - 1), { skipped: true });

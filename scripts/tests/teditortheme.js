@@ -91,8 +91,15 @@ var base = null;
 ['origin/main', 'main'].some(function (ref) {
   try { base = cp.execSync('git show ' + ref + ':editor.html', { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); return true; } catch (e) { return false; }
 });
+/* ids removed on purpose, each with its reason; any other missing id was lost */
+var RETIRED = {
+  'proj-tab-all': 'Projects list: the BTM/FOM tabs are gone, every project is listed with its kind (2026-09-27)',
+  'proj-tab-btm': 'Projects list: the BTM/FOM tabs are gone, every project is listed with its kind (2026-09-27)',
+  'proj-tab-fom': 'Projects list: the BTM/FOM tabs are gone, every project is listed with its kind (2026-09-27)',
+  'np-market': 'New Project: no BTM/FOM market field; the BESS wizard asks when it runs (2026-09-27)'
+};
 if (base) {
-  var before = ids(base), after = ids(src), lost = before.filter(function (i) { return after.indexOf(i) < 0; });
+  var before = ids(base), after = ids(src), lost = before.filter(function (i) { return after.indexOf(i) < 0 && !RETIRED[i]; });
   assert.deepEqual(lost, [], 'ids lost against main: ' + lost.join(', ')); count++;
 } else {
   console.log('  (main not available here; the id comparison was skipped)');

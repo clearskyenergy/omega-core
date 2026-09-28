@@ -1,5 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('assert'), F = require('./_lib/firestore-double'), B = require('../api/_lib/pricebook');
 var db, calls = 0, count = 0, sent = 0, now = Date.now(), root = 'omega_orgs/package.example';
 var profile = { legalName: 'Test Company', contactName: 'Test Owner', email: 'owner@package.example', phone: '555-0100',
@@ -9,6 +10,8 @@ var owner = { staff: false, uid: 'owner', email: profile.email, orgId: 'package.
 F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, authenticate: async function (req) { return req.caller; }, db: function () { return db; },
   httpError: function (status, text) { var e = new Error(text); e.status = status; return e; }, safeOrg: function (s) { return /^[a-z0-9.-]+\.[a-z]+$/.test(s || '') ? s : null; },
   isTenantAdmin: async function (c, o) { return c.orgId === o && ['owner', 'admin'].indexOf(c.role) >= 0; },
+  /* admin.clientAdmin's meaning on this double (the real one: scripts/tests/tclientadmin.js) */
+  clientAdmin: async function (c, o) { if (c.staff) return true; if (c.orgId !== o || ['owner', 'admin'].indexOf(c.role) < 0) return false; var s = await db.doc('omega_orgs/' + o).get(); return s.exists && s.data().status === 'active'; },
   init: function () { return { storage: function () { return { bucket: function () { return { file: function () { return { getMetadata: async function () { return [{ size: '10', contentType: 'application/pdf' }]; } }; } }; } }; } }; },
   FieldValue: function () { return { serverTimestamp: function () { return now; } }; } });
 F.mock('../api/_lib/mail', { templates: { approved: async function () { sent++; return { ok: true }; } } });
@@ -25,10 +28,21 @@ async function denied(fn, status) { await assert.rejects(fn, function (e) { retu
 async function run() {
   process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox'; seed();
   equal((await packageApi(req('GET', { orgId: 'package.example' }, owner), res)).canManagePackage, false);
+  /* a tenant admin reads its own opt-in and opt-out requests (Your plan lists them) */
+  var requests = { optIns: { storage: { key: 'storage', status: 'requested' } }, optOuts: { plansets: { key: 'plansets', status: 'requested' } } };
+  Object.assign(db.data.get(root + '/billing/current'), requests);
+  var own = (await packageApi(req('GET', { orgId: 'package.example' }, owner), res)).billing;
+  equal([own.optIns, own.optOuts], [requests.optIns, requests.optOuts]);
+  delete db.data.get(root + '/billing/current').optIns; delete db.data.get(root + '/billing/current').optOuts;
   await denied(function () { return packageApi(req('POST', { modules: ['lite'] }, owner), res); }, 403);
   await denied(function () { return packageApi(req('GET', { orgId: 'other.example' }, owner), res); }, 403);
   await denied(function () { return profileApi(req('GET', {}, Object.assign({}, owner, { role: 'member' })), res); }, 403);
   await denied(function () { return profileApi(req('GET', {}, Object.assign({}, owner, { claims: { email_verified: 'true' } })), res); }, 403);
+  /* the same unverified owner once the workspace is an active client: the role vouches (admin.clientAdmin) */
+  db.data.get(root).status = 'active';
+  equal((await profileApi(req('GET', {}, Object.assign({}, owner, { claims: { email_verified: false } })), res)).profile.email, owner.email);
+  await denied(function () { return profileApi(req('GET', {}, Object.assign({}, owner, { role: 'member', claims: { email_verified: false } })), res); }, 403);
+  db.data.get(root).status = 'pending';
   equal((await profileApi(req('GET', {}, owner), res)).profile.email, owner.email);
   await denied(function () { return legacyBilling(req('POST', { orgId: 'package.example', trialEndsAt: '2099-01-01' })); }, 409);
   await denied(function () { return legacyBilling(req('POST', { orgId: 'package.example', tier: 'enterprise' })); }, 409);

@@ -4,6 +4,7 @@
  * Mail and QuickBooks are stand-ins; no network, no live writes.
  */
 'use strict';
+process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBooks rail; the Stripe rail is scripts/test-stripe-billing.js */
 var assert = require('assert'), F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture');
 var db, caller, mails = [], qbo = { invoices: 0 }, count = 0;
 H.mockAdmin(function () { return db; }, function () { return caller; });
@@ -78,6 +79,11 @@ async function run() {
   equal(open.pricing.display.recurring, '$1,299/month', '… and sees its price');
   var priced = await post({ action: 'price', selection: { modules: ['lite', 'storage'] }, discovery: EV }, member);
   equal([priced.pricing.plan, priced.pricing.recurringCents, priced.value.spendTodayCents], ['alacarte', 75000, 280000], 'a selection is priced à la carte when that is cheaper');
+  /* 2026-09-27: a new account is quoted on the signup page before its email link is clicked; nothing that writes, sends or names a sender opens to it (accepting is the workspace owner's: below) */
+  var newcomer = Object.assign({}, member, { email: 'new@fresh.example', orgId: 'fresh.example', claims: { email_verified: false } });
+  equal((await post({ action: 'recommend', discovery: EV }, newcomer)).recommendation.modules, rec.modules, 'an unverified signup is recommended its package');
+  equal((await post({ action: 'price', selection: { modules: ['lite', 'storage'] } }, newcomer)).pricing.recurringCents, 75000, '… and priced');
+  await refused(function () { return post({ action: 'price', selection: { modules: ['lite'] }, prospect: PROSPECT }, newcomer); }, /Verified email required/, 'a priced proposal preview (it names the sender) still needs the verified address');
   var saved = await post({ action: 'save', prospect: PROSPECT, discovery: EV, selection: { modules: rec.modules, credit: true }, notes: 'Met at the ComEd event.' });
   check(/^sp-[a-f0-9]{16}$/.test(saved.id) && saved.proposal.status === 'draft', 'save creates a draft with an id');
   equal(saved.proposal.pricing.recurringCents, 129900, 'the saved record carries the server price');
@@ -148,8 +154,10 @@ async function run() {
   var owner = { uid: 'w1', staff: false, email: 'wes@walters.example', orgId: 'walters.example', role: 'owner', claims: { email_verified: true } };
   var wm = { uid: 'w2', staff: false, email: 'someone@walters.example', orgId: 'walters.example', role: 'member', claims: { email_verified: true } };
   await refused(function () { return post({ action: 'accept', id: ws.id, key: wkey }, wm); }, /workspace administrator/, 'a member cannot accept');
+  await refused(function () { return post({ action: 'accept', id: ws.id, key: wkey }, Object.assign({}, wm, { claims: { email_verified: false } })); }, /Verified email required/, 'a member who has not confirmed their address is asked for the link');
   await refused(function () { return post({ action: 'accept', id: ws.id, key: wkey }, { uid: 'x', staff: false, email: 'x@other.example', orgId: 'other.example', role: 'owner', claims: { email_verified: true } }); }, /Own organization/, 'another organization cannot accept');
-  var outcome = await post({ action: 'accept', id: ws.id, key: wkey }, owner);
+  /* the owner of an active client accepts without having clicked the email link (admin.clientAdmin) */
+  var outcome = await post({ action: 'accept', id: ws.id, key: wkey }, Object.assign({}, owner, { claims: { email_verified: false } }));
   check(outcome.path === 'plan-change' && outcome.state === 'awaiting_payment' && qbo.invoices === 1 && /^change-/.test(outcome.changeId), 'a paid tenant’s acceptance is a pay-first change invoice');
   var wb = db.data.get('omega_orgs/walters.example/billing/current');
   equal(wb.modules, ['lite', 'estimate', 'whitelabel'], 'nothing switches on before the change invoice is paid (catalog order)');
