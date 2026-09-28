@@ -172567,7 +172567,38 @@ if (root.console && console.info) {
     return true;
   }
 
+  /* ── THE RIBBON HAS TO BE VISIBLE BEFORE ANYTHING IN IT IS JUDGED ────
+     omega-splash.js holds the whole page visibility:hidden until the page
+     is known, and this module's first pass ran inside that: every button
+     on Build read as hidden, so Site, Build and Size & Configure were put
+     away as empty before anyone had seen them. Chromium showed them again
+     on the next pass; Safari did not (below). A ribbon nobody can see has
+     nothing to judge. */
+  function ribbonShown() {
+    try {
+      var c = root.getComputedStyle(RB || document.getElementById('ribbon'));
+      return !!c && c.display !== 'none' && c.visibility !== 'hidden';
+    } catch (e) { return true; }
+  }
+  /* ── WEBKIT FREEZES THE STYLE OF WHAT IT IS NOT DRAWING ──────────────
+     Safari does not resolve style under a display:none element: a button
+     inside a panel this module hid keeps whatever getComputedStyle
+     answered when the panel went, so a panel hidden while its buttons were
+     invisible read as empty on every later pass and never came back — the
+     guided builds on Build, in Safari only (Tommy, 2026-09-28). A hidden
+     panel is judged shown: the inline display is lifted for the check,
+     synchronously, so nothing paints, and put back if it is still empty.
+     The observer is off across the sweep's own writes (sweepQuiet). */
+  function anyVisible(p, btns) {
+    var lift = p.style.display === 'none' && !!p.getAttribute(FLAG), any = false, j;
+    if (lift) p.style.display = '';
+    for (j = 0; j < btns.length; j++) if (visible(btns[j])) { any = true; break; }
+    if (lift && !any) p.style.display = 'none';
+    return any;
+  }
+
   function sweep() {
+    if (!ribbonShown()) return { hidden: 0, restored: 0 };
     var panels = document.querySelectorAll('#ribbon .rpanel');
     var hid = 0, shown = 0;
     for (var i = 0; i < panels.length; i++) {
@@ -172575,10 +172606,7 @@ if (root.console && console.info) {
       var body = p.querySelector('.rpanel-body');
       if (!body) continue;
       var btns = body.querySelectorAll('.rbtn, .rbtn-wrap, input, select, label');
-      var any = false;
-      for (var j = 0; j < btns.length; j++) {
-        if (visible(btns[j])) { any = true; break; }
-      }
+      var any = anyVisible(p, btns);
       /* Some panels are legitimately just a readout with no controls —
          only ones that HELD buttons and now hold none are hidden.
 
@@ -173280,9 +173308,13 @@ if (root.console && console.info) {
       for (var i = 0; i < pnls.length; i++) {
         var p = pnls[i];
         if (p.style.display !== 'none') continue;
+        /* Safari keeps the computed style of a display:none subtree frozen
+           (the ribbon sweep's note), so the panel is lifted for the check
+           and put back if nothing in it is live. Synchronous: no paint. */
+        p.style.display = '';
         var bs = p.querySelectorAll('.rbtn'), live = 0;
         for (var j = 0; j < bs.length; j++) if (liveBtn(bs[j])) { live++; break; }
-        if (live) { p.style.display = ''; p.removeAttribute('data-omega-empty'); fixed++; }
+        if (live) { p.removeAttribute('data-omega-empty'); fixed++; } else p.style.display = 'none';
       }
       var pages = document.querySelectorAll('#ribbon .ribbon-page');
       for (var k = 0; k < pages.length; k++) {
