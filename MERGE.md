@@ -2514,3 +2514,12 @@ far end.
   not the far end of the run it was placed on.
 - `scripts/tests/ttrenchkeep.js` holds both; `api/jarvis-help.js` tells
   Jarvis.
+- The guide with screenshots is `docs/guides/Site-Map-Level-2-Two-Trenches.pdf`,
+  made by `scripts/guides/site-map-level-2.js`: it runs the real Level 2
+  build in Chromium on the offline harness (clicks and keys, the state
+  asserted after each step) and prints the pages, so it can never show a
+  screen the editor does not draw. Not in `build.js` (whose guides are the
+  Omega Logic apps); rerun the script after a change to the build. The
+  finish banner names the Level 2 unit now ("4 × Autel AC Pro (76.8 kW)",
+  not "4 × DCFC (0 kW)"), and the ring marking where a second trench will
+  start clears the panel icon.

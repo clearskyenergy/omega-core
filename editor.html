@@ -67044,8 +67044,8 @@ function _dcfcRenderTrenches(){
     /* another trench: the ring is where its first click will land */
     var ring=document.createElementNS(NS,'circle');
     ring.setAttribute('cx',_dcfcDraw.tapPreview.x); ring.setAttribute('cy',_dcfcDraw.tapPreview.y);
-    ring.setAttribute('r','7'); ring.setAttribute('fill','none'); ring.setAttribute('stroke',legColor(_dcfcDraw.leg));
-    ring.setAttribute('stroke-width','2'); ring.setAttribute('opacity','.9'); g.appendChild(ring);
+    ring.setAttribute('r','13'); ring.setAttribute('fill','none'); ring.setAttribute('stroke',legColor(_dcfcDraw.leg));
+    ring.setAttribute('stroke-width','2.5'); ring.setAttribute('opacity','.9'); g.appendChild(ring);
   }
   svg.insertBefore(g, svg.firstChild);
 }
@@ -67546,8 +67546,11 @@ _dcfcFinish=function(){
   DCFC.active=false; _dcfcGuideHide();
   if(typeof renderLegend==='function') renderLegend();
   if(typeof pushHist==='function') pushHist();
-  var totalKW=DCFC.model?DCFC.model.kw*DCFC.chargers:0;
-  _evBanner('\u2713 EV site built: '+DCFC.chargers+' \u00d7 '+(DCFC.model?DCFC.model.label:'DCFC')+' ('+totalKW+' kW) \u2014 user-trenched. Drag any part.');
+  /* A Level 2 job has no DCFC model: name its own unit, or it read
+     '4 x DCFC (0 kW)' on a 4-EVSE Level 2 site. */
+  var _mm=DCFC.level2 ? ((typeof _l2Model==='function' && _l2Model())||null) : DCFC.model;
+  var totalKW=_mm?(+_mm.kw||0)*DCFC.chargers:0;
+  _evBanner('\u2713 EV site built: '+DCFC.chargers+' \u00d7 '+(_mm?_mm.label:(DCFC.level2?'Level 2':'DCFC'))+' ('+totalKW+' kW) \u2014 user-trenched. Drag any part.');
   if(typeof updateSummaryPanel==='function') updateSummaryPanel();
   if(typeof updateRightPanel==='function') updateRightPanel();
 };
