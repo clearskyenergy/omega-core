@@ -74,7 +74,7 @@ function describe(l) {
     + (l.quantity > 1 ? ' × ' + l.quantity : '')).slice(0, 500);
 }
 function memo(plan, profile) {
-  return ((plan.kind === 'change' ? 'OMEGA subscription change ' : plan.kind === 'pack' ? 'OMEGA usage pack ' : 'OMEGA subscription ') + plan.period.start + ' to ' + plan.period.end
+  return ((plan.kind === 'change' ? 'OMEGA subscription change ' : plan.kind === 'pack' ? 'OMEGA usage pack ' : plan.kind === 'addon' ? 'OMEGA add-on ' : 'OMEGA subscription ') + plan.period.start + ' to ' + plan.period.end
     + (profile.poRequired ? ' · PO ' + profile.poNumber : '') + (plan.memo ? ' · ' + plan.memo : '')).slice(0, 500);
 }
 function driver(book, supplied) {

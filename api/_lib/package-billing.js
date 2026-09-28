@@ -353,9 +353,9 @@ function displayAfter(patch, billing, book, now) {
 async function reconcile(db, orgId, now, deps, options) {
   var c = await context(db, orgId), legacy = c.billing.packaged !== true;
   /* a plan billed outside the engine is reconciled only for its add-ons
-     (api/_lib/addons.js, QuickBooks' rail); its own tier, amount due and
-     pay link are never this function's to write */
-  guard(c, legacy ? 'quickbooks' : undefined, true);
+     (api/_lib/addons.js, on the add-ons' own rail); its own tier, amount
+     due and pay link are never this function's to write */
+  guard(c, legacy ? AO.rail(c.billing) : undefined, true);
   if (legacy && !c.billing.addOns) return { skipped: true };
   var current = c.root.collection('billing').doc('current'), collection = current.collection('invoices');
   /* the runner's bounded read pages by document id, which is unique: paged by

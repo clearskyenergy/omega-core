@@ -26,8 +26,10 @@
      moment a Cancel request redraws the card. */
   var intent = null;
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  /* an add-on on a plan billed outside the engine is always a QuickBooks
-     invoice (api/_lib/addons.js RAIL), whatever rail a package would use */
+  /* an add-on on a plan billed outside the engine bills on the workspace's
+     rail (api/_lib/addons.js rail(): QuickBooks, or Stripe under
+     PACKAGING_PROVIDER=stripe); the server names it (payWith) on every quote,
+     purchase and pending record, so this is only the word before an answer */
   var ADDON_RAIL = 'QuickBooks';
   function packageView() { return host.view || (global.OmegaCaps && global.OmegaCaps.packageAccess()); }
   function api(path, payload) {

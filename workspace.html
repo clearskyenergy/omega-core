@@ -1395,7 +1395,7 @@ function oweHtml(c) {
 }
 /* what an invoice row is called: a package's subscription, a change or a pack, or a module a legacy plan opted in to by card (and its monthly renewal) */
 function invName(x) { return x.kind === 'change' ? 'Opt in: ' + ((x.names || []).join(', ') || 'modules') : x.kind === 'pack' ? 'Pack' : x.kind === 'addon' ? (x.purpose === 'renewal' ? 'Add-ons: ' : 'Opt in: ') + ((x.names || []).join(', ') || 'modules') : 'Subscription'; }
-function paidLabel(c) { return 'Just paid? Check with ' + (c.packaged ? (c.payWith || 'the payment page') : 'QuickBooks'); }
+function paidLabel(c) { return 'Just paid? Check with ' + (c.packaged ? (c.payWith || 'the payment page') : ((c.ao && c.ao.payWith) || 'QuickBooks')); }
 /* a fresh object from two (ES5: no Object.assign on the kiosk browsers) */
 function extend1(a, b) { var o = {}, k; for (k in a) if (Object.prototype.hasOwnProperty.call(a, k)) o[k] = a[k]; for (k in b) if (Object.prototype.hasOwnProperty.call(b, k)) o[k] = b[k]; return o; }
 /* 1b · modules a legacy plan opted in to by card (api/_lib/addons.js):

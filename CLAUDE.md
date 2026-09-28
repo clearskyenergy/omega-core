@@ -916,10 +916,18 @@ wherever they sit, and nothing else on their tab (`omega-caps`
 and `exact()` simulates exactly that (`moduleEditor` `editorModules`): every
 editor module is exact on every legacy plan, and a tab the plan stops at says
 Opt in and buys the module there. Every Omega Logic department is exact on
-every plan. Add-ons bill through QuickBooks whatever the package rail
-(`addons.RAIL`; `package-billing.guard(c, rail)`), so an add-on's Pay reads
-the add-on's own `payWith`, never the package's; a legacy Stripe tier's own
-customer is never rebound; add-ons on Stripe are not built.
+every plan. Add-ons bill on the WORKSPACE'S rail (`addons.rail()`, 2026-09-28,
+Tommy: "integrated with stripe so people can buy and opt into new
+products"): QuickBooks where its add-ons already have a QuickBooks customer
+or ClearSky invoices the plan there, else the deployment's rail, so under
+`PACKAGING_PROVIDER=stripe` a legacy plan buys on its OWN Stripe customer —
+the one Plan & billing's card door links (`stripe-customer.link`, the one
+writer of it), never a second customer — on a `send_invoice` invoice beside
+the plan, reconciled by the same `package-billing.reconcile` the webhook and
+the runner run; the renewal is issued there too; a cancel voids the Stripe
+invoice (QuickBooks' stays open for staff); `package-billing.guard(c,
+rail)` is the gate; an add-on's Pay reads the add-on's own `payWith`, never
+the package's. `scripts/test-addons.js` §6d holds it on the Stripe double.
 `OmegaPackageMenu.addOnControl` is the same legacy path for a page's own
 control; `scripts/test-addons.js` and `check:workspace` (legacy-add) hold
 it. A workspace with no `omega_orgs` or billing record cannot be billed and
