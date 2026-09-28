@@ -69,7 +69,7 @@ var IDS = {
   plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks',
   siteintel: 'rb-noise-model rb-buildable rb-trace-exclusion rb-gis-layers rb-parcel-screen',
   engineering: 'rb-optimizer rb-optimise rb-elec rb-circuit omega-terr-btn',
-  compute: 'rb-sub-envelope rb-feas-csv rb-place-sub rb-gas-tie rb-fiber-tie rb-max-fit rb-site-build rb-max-load rb-load-screen rb-compute-cost rb-supply-link rb-intercon rb-compute-lease rb-design-site rb-ladder-toggle rb-compute-site-setup',
+  compute: 'rb-sub-envelope rb-feas-csv rb-place-sub rb-gas-tie rb-fiber-tie rb-max-fit rb-site-build rb-max-load rb-load-screen rb-compute-cost rb-supply-link rb-intercon rb-compute-lease rb-design-site rb-ladder-toggle rb-compute-site-setup rb-compute-trace-boundary',
   ops: 'rb-omlife rb-fom',
   permitting: 'omega-btn-permit-matrix'
 };

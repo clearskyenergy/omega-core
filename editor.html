@@ -173148,7 +173148,7 @@ if (root.console && console.info) {
      left here is what has no other home: the compute-campus site work,
      the design tools and the sizing and cost tools. */
   var PLAN = {
-    site:   ['@site-setup', 'rb-trace-boundary', 'rb-trace-exclusion', 'rb-intercon', 'rb-place-sub', 'rb-gas-tie', 'rb-max-fit'],
+    site:   ['@site-setup', '@trace-boundary', 'rb-trace-boundary', 'rb-trace-exclusion', 'rb-intercon', 'rb-place-sub', 'rb-gas-tie', 'rb-max-fit'],
     design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', 'rb-supply-link', 'rb-move-system', 'rb-feas-csv'],
     size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-optimise', 'rb-compute-cost', 'rb-compute-lease']
   };
@@ -173164,7 +173164,30 @@ if (root.console && console.info) {
   function panel(key) {
     return document.querySelector('#ribbon .ribbon-page[data-page="compute"] .rpanel[data-ct="' + key + '"] .rpanel-body');
   }
+  /* ── DRAW THE SITE AREA FROM THE COMPUTE TAB TOO ─────────────────────
+     Trace Boundary is Omega Design's and lives on Draw (above), so a plan
+     that cannot open this tab still reaches it. But the site area is the
+     first thing a compute campus needs: it is what Design Site and the
+     auto-layout fill, and with it gone this tab had Add Exclusion and no
+     way to draw the area it is excluded from (Tommy, 2026-09-28: "where
+     is the auto set up?? bring that back"). So the tab carries its own
+     button beside Site Setup, a Compute command in api/_lib/modules.js,
+     that arms the SAME tool. The Draw button stays where it is. */
+  function traceButton() {
+    var ex = document.getElementById('rb-compute-trace-boundary');
+    if (ex) return ex;
+    if (!document.getElementById('rb-trace-boundary')) return null;
+    var b = document.createElement('button');
+    b.className = 'rbtn'; b.id = 'rb-compute-trace-boundary';
+    b.setAttribute('onclick', 'OmegaSiteRoles.traceBoundary()');
+    b.title = 'Draw Site Area \u2014 click each corner of the parcel. Sets the buildable '
+      + 'area that Design Site and the auto-layout fill.';
+    b.innerHTML = '<span class="rb-ico" style="color:#4ADE80">\u2b1f</span>'
+      + '<span class="rb-lbl">Draw Site<br>Area</span>';
+    return b;
+  }
   function find(id) {
+    if (id === '@trace-boundary') return traceButton();
     if (id === '@site-setup') {
       var ex = document.getElementById('rb-compute-site-setup');
       if (ex) return ex;
@@ -173278,7 +173301,7 @@ if (root.console && console.info) {
   function keepInDesigner() {
     try {
       if (root.OmegaMode && root.OmegaMode.tabs) root.OmegaMode.tabs.compute = 1;
-      if (root.OmegaMode && root.OmegaMode.keep) root.OmegaMode.keep(/rb-compute-site-setup|rb-dccluster/);
+      if (root.OmegaMode && root.OmegaMode.keep) root.OmegaMode.keep(/rb-compute-site-setup|rb-compute-trace-boundary|rb-dccluster/);
       if (root.OmegaMode && root.OmegaMode.retag) root.OmegaMode.retag();
     } catch (e) {}
   }
