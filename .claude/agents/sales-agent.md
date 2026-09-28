@@ -79,9 +79,11 @@ with the rest.
      Gmail draft to the sender with subject
      `LinkedIn post · <date> · <campaign>`. The body is the post exactly as
      it should be pasted.
-   - **`scheduler`:** queue it as a draft in the connected scheduler
-     (Typefully, Metricool or Buffer) on the company page, for approval.
-     Never publish.
+   - **`scheduler`:** a DRAFT in Typefully (its `create_draft` tool) on
+     the ClearSky company page, for Tommy to schedule. Never schedule or
+     publish it yourself. A scheduler whose tools can only schedule (such
+     as Metricool's `createScheduledPost`) would publish without his
+     approval, so do not use it: fall back to Gmail drafts and say so.
    - **`manual`:** put the post in your reply.
 
    Log it as `linkedin-drafted`, with `ref` set to the campaign, `campaign`
