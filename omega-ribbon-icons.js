@@ -86,6 +86,8 @@
     sourcepoi: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9 8v3a3 3 0 0 0 6 0V8M12 14v3',
     meter: 'M4 17a8 8 0 0 1 16 0zM12 17l3-6M12 17h.01', meters: 'M3 15a5 5 0 0 1 10 0zM8 15l2-3M12 15a5 5 0 0 1 10 0h-10M17 15l2-3',
     acdisconnect: 'M3 12h5M8 12l6-4M14 12h7M14 9v6',
+    /* a service pedestal: the meter over its main, standing on a base, the lateral coming up */
+    servicepedestal: 'M9 3h6v12H9zM10.5 7.5a1.5 1.5 0 0 0 3 0a1.5 1.5 0 0 0-3 0M10.5 12h3M6 15h12v3H6zM12 18v3',
     panelboard: 'M5 3h14v18H5zM8 7h3M13 7h3M8 11h3M13 11h3M8 15h3M13 15h3',
     junctionbox: 'M4 6h16v12H4zM8 12h.01M12 12h.01M16 12h.01',
     utilitypole: 'M12 3v18M6 6h12M6 6l2 3M18 6l-2 3M8 9h8',

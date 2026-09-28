@@ -2523,3 +2523,38 @@ far end.
   finish banner names the Level 2 unit now ("4 × Autel AC Pro (76.8 kW)",
   not "4 × DCFC (0 kW)"), and the ring marking where a second trench will
   start clears the panel icon.
+
+## Service pedestal: a new utility service on the site map — September 28, 2026
+
+"I'm doing a job where I'm putting 2 new pedestal services. Any way I can
+show that in the site map?" (Menachem, 431-437 Sunderland St, Worcester,
+2026-09-28). A pedestal service is a freestanding meter socket and main
+breaker on its own base, fed by an underground lateral: a NEW utility
+service out by the stalls. There was nothing to place for it, and the
+counts the editor hands the EV Cost Workbook were every one zero.
+
+- **Insert › Service Pedestal** (`rbInsert('svcped')`, `EQ`,
+  `EQ_FOOTPRINT_FT` 3 × 2 ft, `ICONS.svcped`, the ribbon glyph in
+  `omega-ribbon-icons.js`, an electrical note in `_deviceElecNote`). It is
+  in the legend as Service Pedestal ×n.
+- **Level 2 › Start from › New service pedestal** (`L2_SERVICE.pedestal`):
+  the build places the service node as a flagged pedestal (`svcPedestal`)
+  wearing the pedestal symbol, and the node's spec now follows the choice
+  (it read "existing, verify available capacity" under every option). Two
+  pedestal services are two builds.
+- **The counts reach the workbook** (`_evCountsFromCanvas`): it read the
+  element's `type` first, which is `eq` or `evgear` for everything ever
+  placed, so no kind matched and bollards, pads, handholes, the meter,
+  dual pedestals and future positions all went across as zero; it reads
+  `eqId`, then `evKind`, now. New: `servicePedestal` (Insert or the
+  build) and `newService`.
+- **`ev-cost-workbook.html`**: `counts.servicePedestal` → `nServicePedestal`;
+  a pedestal (or a service node the build named new) answers the service
+  question as New service once an existing meter bank has had its say; a
+  standard row on the metering line, priced per pedestal by its own rate
+  (`STANDARD` fifth field → `case 'svcPedestal'`): the filed metering
+  socket and labour, plus `STANDARD_ITEMS.l2.servicePedestal`, a pedestal
+  hardware ALLOWANCE that the row's note says to confirm against the
+  utility spec. Nothing appears without a pedestal on the drawing.
+- `scripts/tests/tsvcped.js` holds all of it; `api/jarvis-help.js` tells
+  Jarvis.
