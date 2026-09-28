@@ -1920,6 +1920,7 @@ window.onerror = function(msg, src, line, col, err) {
         <button class="rbtn" onclick="rbInsert('panel')"><span class="rb-ico">▤</span><span class="rb-lbl">Panel-<br>board</span></button>
         <button class="rbtn" onclick="rbInsert('disco')"><span class="rb-ico">⎏</span><span class="rb-lbl">AC Dis-<br>connect</span></button>
         <button class="rbtn" onclick="rbInsert('meter')"><span class="rb-ico">◷</span><span class="rb-lbl">Meter</span></button>
+        <button class="rbtn" onclick="rbInsert('svcped')" title="Service pedestal &mdash; a NEW utility service on a freestanding pedestal: meter socket and main breaker on a base, fed by an underground lateral. Each one reaches the EV Cost Workbook as a new service."><span class="rb-ico">⌸</span><span class="rb-lbl">Service<br>Pedestal</span></button>
         <button class="rbtn" onclick="rbInsert('jbox')"><span class="rb-ico">▢</span><span class="rb-lbl">Junction<br>Box</span></button>
         <button class="rbtn" onclick="rbInsert('charger')"><span class="rb-ico">⌁</span><span class="rb-lbl">EV<br>Charger</span></button>
         <button class="rbtn" onclick="rbInsert('pole')"><span class="rb-ico">╪</span><span class="rb-lbl">Utility<br>Pole</span></button>
@@ -5801,6 +5802,22 @@ const ICONS={
     <text x="28" y="47" font-size="4" fill="#3498DB" text-anchor="middle" font-family="monospace">METER</text>
   </svg>`,
 
+  // Service pedestal -- a NEW utility service on a freestanding pedestal:
+  // the meter socket over its main breaker, on its own base, fed by an
+  // underground lateral. Not the meter can on a wall (meter): this IS the
+  // service, so the workbook counts one as a new service ("2 new pedestal
+  // services", Menachem, 431-437 Sunderland St, 2026-09-28).
+  svcped:(s=60)=>`<svg width="${s}" height="${s}" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="28" cy="28" r="28" fill="#003A5C"/>
+    <rect x="14" y="40" width="28" height="6" rx="1.5" fill="#1F3A4D" stroke="#3498DB" stroke-width="1.2"/>
+    <rect x="18" y="8" width="20" height="32" rx="2.5" fill="#005580" stroke="#3498DB" stroke-width="1.5"/>
+    <circle cx="28" cy="18" r="6" fill="#003A5C" stroke="#00D4FF" stroke-width="1.5"/>
+    <path d="M25 19l3-4 3 4" fill="none" stroke="#00D4FF" stroke-width="1.4" stroke-linecap="round"/>
+    <rect x="22" y="28" width="12" height="7" rx="1" fill="#003A5C" stroke="#2980B9" stroke-width="1"/>
+    <rect x="26.5" y="29.5" width="3" height="4" rx=".6" fill="#F59E0B"/>
+    <path d="M28 46v6" fill="none" stroke="#3498DB" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="2 2"/>
+  </svg>`,
+
   // Facility / Customer Load -- building the BESS feeds (system load).
   building:(s=60)=>`<svg width="${s}" height="${s}" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
     <circle cx="28" cy="28" r="28" fill="#3A2F0A"/>
@@ -6216,6 +6233,7 @@ const EQ=[
   {id:'disco',   label:'AC Disconnect'},
   {id:'panel',   label:'Panelboard'},
   {id:'meter',   label:'Meter'},
+  {id:'svcped',  label:'Service Pedestal'},
   {id:'building',label:'Facility Load'},
   {id:'hydrant', label:'Fire Hydrant'},
   {id:'genset',  label:'Generator'},
@@ -6518,6 +6536,7 @@ var EQ_FOOTPRINT_FT = {
   disco:    { lf:3.0,  wf:2.5 },   // AC disconnect enclosure
   panel:    { lf:2.0,  wf:1.5 },   // wall-mount panelboard
   meter:    { lf:1.5,  wf:1.0 },   // meter can
+  svcped:   { lf:3.0,  wf:2.0 },   // service pedestal: meter socket + main on its base
   building: { lf:3.0,  wf:3.0 },   // facility-load tie-in marker (not to-scale)
   hydrant:  { lf:1.5,  wf:1.5 },   // fire hydrant
   genset:   { lf:12.0, wf:6.0 },   // diesel/gas generator skid
@@ -9304,7 +9323,9 @@ function renderEl(el){
     } else {
       var _visuals=window.OmegaEquipmentVisuals;
       var _gearKind=el.evKind==='service'?'meter':el.evKind;
-      if(_visuals && (_gearKind==='meter' || (_gearKind==='panel' && _visuals.resolve(el,'panel'))))
+      if(el.evKind==='service' && el.svcPedestal && ICONS.svcped)
+        _gearHtml=ICONS.svcped(Math.min(gw,gh||gw));   /* a service pedestal wears its own symbol */
+      else if(_visuals && (_gearKind==='meter' || (_gearKind==='panel' && _visuals.resolve(el,'panel'))))
         _gearHtml=_visuals.symbol(_gearKind,gw,gh);
       else _gearHtml=rf(gw,gh);
     }
@@ -24710,6 +24731,13 @@ function _deviceElecNote(eqId, wizMode){
            'BESS backfeed breaker '+ocpd+'A @ opposite end\n'+
            'NEC 705.12(B) 120% rule verified by engineer',
       color:'#1ABC9C' };
+    case 'svcped': return {
+      label:'SERVICE PEDESTAL -- ELEC NOTE',
+      spec:'New utility service on a freestanding pedestal\n'+
+           'Meter socket + main breaker . NEMA 3R . on its base\n'+
+           'UG lateral from utility xfmr / handhole . utility coordination\n'+
+           'Dedicated EVSE account . separate EV rate where offered',
+      color:'#3498DB' };
     case 'meter': return {
       label:'REVENUE METER -- ELEC NOTE',
       spec:'Bidirectional . ANSI C12.20 Class 0.2\n'+
@@ -66687,7 +66715,15 @@ var L2_SERVICE = {
               spec:'New service — dedicated EVSE meter and account',
               note:'A dedicated service for the chargers. The building’s existing load does not '
                  + 'constrain the sizing, and the chargers get their own account — which is what '
-                 + 'makes a separate EV rate possible.' }
+                 + 'makes a separate EV rate possible.' },
+  pedestal: { key:'pedestal', label:'New service pedestal \u2014 freestanding meter + main, fed from the utility',
+              node:'New Service Pedestal',
+              spec:'New service \u2014 meter socket + main breaker on a pedestal, UG lateral from the utility',
+              note:'A new utility service on its own pedestal, out by the stalls: the meter socket and '
+                 + 'main breaker stand on a base, fed by an underground lateral from the utility '
+                 + 'transformer or handhole, so nothing is tapped in the building. Two rows can have '
+                 + 'two pedestals: run the build once per pedestal. The estimate carries each pedestal, '
+                 + 'the lateral and the utility coordination as a new service.' }
 };
 function _l2Svc(){ return L2_SERVICE[DCFC.l2Service] || L2_SERVICE.existing; }
 window._l2Svc=_l2Svc;
@@ -66744,7 +66780,7 @@ function openLevel2Build(){
       +'<div style="margin-bottom:12px">'
         +'<label style="display:block;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--sub);margin-bottom:6px">Start from</label>'
         +'<select id="l2-svc" onchange="_l2TieNote()" style="width:100%;padding:9px;background:var(--bg);border:1px solid var(--hairline);border-radius:6px;color:var(--text);font-size:12px">'
-        + ['existing','upgrade','new'].map(function(k){
+        + ['existing','upgrade','new','pedestal'].map(function(k){
             return '<option value="'+k+'"'+(DCFC.l2Service===k?' selected':'')+'>'+L2_SERVICE[k].label+'</option>';
           }).join('')
         +'</select></div>'
@@ -67316,9 +67352,14 @@ placeDcfcAt=function(p){
   if(DCFC.phase==='poi'){
     var poi=_evAdd('service', p.x, p.y,
       DCFC.level2 ? _l2Svc().node : 'Utility Service (POI)',
-      DCFC.level2 ? '240/120V 1\u00D8 3-wire \u2014 existing, verify available capacity'
+      /* the spec follows the Start from choice: it read 'existing, verify
+         available capacity' under a new meter and a service pedestal alike */
+      DCFC.level2 ? _l2Svc().spec
                   : 'Existing service / point of interconnection');
     DCFC.placed.service=poi;
+    /* started from a service pedestal: the node IS a new service, and the
+       counts handoff and the symbol both read the flag */
+    if(DCFC.level2 && DCFC.l2Service==='pedestal') poi.svcPedestal=true;
     DCFC.phase='drawtrench';
     _dcfcDraw={ pts:[{x:p.x,y:p.y}], preview:null, leg:_dcfcLegOf(_dcfcCurKind()) };
     _dcfcRenderTrenches(); _dcfcGuideRender(); _dcfcPrompt();
@@ -72736,7 +72777,13 @@ function _evCountsFromCanvas(){
           charger:0, fpPositions:0, pedestal:0 };
   var i, t;
   for(i=0;i<els.length;i++){
-    t=String((els[i]&&(els[i].type||els[i].eqId))||'').toLowerCase();
+    /* WHAT it is, not which palette placed it. This read `type` first,
+       and every placed thing is type 'eq' (the Insert palette) or 'evgear'
+       (a guided build), so no substring below ever matched: the workbook
+       received every count as zero and fell back to guessing bollards,
+       pads and pedestals from the port count, on every job. The kind is
+       eqId for a palette item and evKind for a guided-build one. */
+    t=String((els[i]&&(els[i].eqId||els[i].evKind||els[i].type))||'').toLowerCase();
     if(!t) continue;
     if(t.indexOf('bollard')>=0)                       c.bollard++;
     else if(t.indexOf('jbox')>=0||t.indexOf('handhole')>=0||t.indexOf('pull')>=0) c.handhole++;
@@ -72753,15 +72800,27 @@ function _evCountsFromCanvas(){
     }
   }
   /* Whether the service is new is a drawing fact too: an existing meter bank
-     on the map means the service is there already. */
-  var existing=false;
+     on the map means the service is there already. A SERVICE PEDESTAL is
+     the opposite fact: a freestanding meter socket + main on its own base
+     is a new utility service, and two of them are two services, whether
+     placed from Insert (eq 'svcped') or by a Level 2 build started from
+     one (evgear 'service' flagged svcPedestal). Counted so the workbook
+     prices each pedestal and files the job as a new service. */
+  var existing=false, pedestals=0, newSvc=false;
   for(i=0;i<els.length;i++){
-    var lbl=String((els[i]&&(els[i].label||els[i].name))||'').toLowerCase();
+    var el=els[i]||{};
+    var lbl=String(el.label||el.name||'').toLowerCase();
     if(lbl.indexOf('existing')>=0 && (lbl.indexOf('meter')>=0||lbl.indexOf('service')>=0)) existing=true;
+    if(el.eqId==='svcped' || (el.type==='evgear' && el.evKind==='service' && el.svcPedestal)){ pedestals++; newSvc=true; }
+    else if(el.type==='evgear' && el.evKind==='service' && lbl.indexOf('new')>=0) newSvc=true;
   }
   c.existingService = existing;
+  c.servicePedestal = pedestals;
+  c.newService = newSvc;
   return c;
 }
+/* on window for the render checks (scripts/tests/tsvcped.js drives the real page) */
+try{ window._evCountsFromCanvas=_evCountsFromCanvas; }catch(e){}
 
 /* Pack whatever is on the canvas right now into one workbook payload. */
 function _evPackSite(name){

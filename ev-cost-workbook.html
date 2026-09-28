@@ -563,6 +563,16 @@ var STANDARD_ITEMS = {
        pedestalUnit:{mat:450, lab:0, per:'unit', label:'Charger pedestals'},
        bollard:{mat:250, lab:300, per:'pedestal', label:'Protective bollards'},
        metering:{mat:210, lab:2000, per:'site', label:'Metering equipment'},
+       /* ── A SERVICE PEDESTAL DRAWN ON THE SITE MAP ─────────────────────
+          A freestanding meter socket + main breaker on its own base, fed
+          by an underground lateral: a NEW utility service out by the
+          stalls ("2 new pedestal services", 431-437 Sunderland St,
+          2026-09-28). The editor counts them (counts.servicePedestal) and
+          the Utility metering row is priced per pedestal: the filed
+          metering rate for the socket and its labour, plus this pedestal
+          hardware. The hardware figure is an ALLOWANCE, not a filed rate;
+          the row says so and the rep confirms it against the utility spec. */
+       servicePedestal:{mat:1450, lab:0, per:'pedestal', label:'Service pedestal (meter socket + main, freestanding)'},
        housePanel:{mat:0, lab:1250, per:'site', label:'House panel upgrade'},
        xfmrPad:{mat:1200, lab:1300, per:'site', label:'Utility transformer pad'} },
   dcfc:{ activation:{mat:4000, lab:0, per:'unit', label:'Activation fee'},
@@ -2567,9 +2577,15 @@ function loadPayload(pay){
     if(num(EDITOR_COUNTS.meter)>0)    DATA.nMeter    = num(EDITOR_COUNTS.meter);
     /* dual pedestals placed on the drawing: one pedestal per placement */
     if(num(EDITOR_COUNTS.pedestal)>0) DATA.nPedestal = num(EDITOR_COUNTS.pedestal);
-    /* an existing meter bank on the drawing answers the service question */
+    /* service pedestals drawn on the site map: each is a new utility service */
+    if(num(EDITOR_COUNTS.servicePedestal)>0) DATA.nServicePedestal = num(EDITOR_COUNTS.servicePedestal);
+    /* an existing meter bank on the drawing answers the service question;
+       a service pedestal, or a service node the build named new, answers
+       it the other way */
     if(!d('serviceScenario') && EDITOR_COUNTS.existingService)
       DATA.serviceScenario = SERVICE_SCENARIOS[0];
+    else if(!d('serviceScenario') && (num(EDITOR_COUNTS.servicePedestal)>0 || EDITOR_COUNTS.newService))
+      DATA.serviceScenario = SERVICE_SCENARIOS[2];
   }
   if(pay.chargers) applyChargerCosts(pay.chargers);
   if(pay.contractor) applyContractor(pay.contractor);
@@ -2965,6 +2981,11 @@ var STANDARD=[
      scenario rather than assumed, and standardRate returns nothing unless a
      new service is selected. */
   ['Concrete Work \u2014 Utility Transformer Pad','mr','xfmrpad',true],
+  /* Service pedestals placed on the drawing: the metering row, priced per
+     pedestal (a fifth field names the rate, because the row key is the
+     form's and 'meter' alone is the opt-in metering allowance). Nothing
+     appears unless the drawing has one. */
+  ['Utility metering \u2014 service pedestal(s)','mr','meter',true,'svcPedestal'],
   /* future proofing, from the positions drawn on the map */
   ['Trenching \u2014 future proofing','fp','trench',true],
   ['Spare conduit & conductors \u2014 future proofing','fp','conduit',true],
@@ -3287,6 +3308,14 @@ function standardRate(row, bucket){
     case 'mount':      return { qty:ports, unit:'EA', mat:ST.wallMount.mat*ports,
                                 lab:ST.wallMount.lab*ports, note:ports+' \u00d7 wall-mount kits' };
     case 'housePanel': return { qty:1, unit:'LS', mat:0, lab:ST.housePanel.lab, note:'' };
+    /* service pedestals counted off the drawing: the metering socket and its
+       labour per pedestal, plus the pedestal hardware allowance */
+    case 'svcPedestal': var _nsp=num(DATA.nServicePedestal)||0;
+                       if(!(_nsp>0)) return null;
+                       return { qty:_nsp, unit:'EA',
+                                mat:(ST.metering.mat+ST.servicePedestal.mat)*_nsp,
+                                lab:ST.metering.lab*_nsp,
+                                note:_nsp+' service pedestal'+(_nsp===1?'':'s')+' on the site map \u2014 meter socket + main on a freestanding pedestal, a new utility service; pedestal hardware is an allowance, confirm against the utility spec' };
     case 'xfmrpad':    return isNewService() ? { qty:1, unit:'EA',
                                 mat:RATE_CARD.xfmrPad.mat, lab:RATE_CARD.xfmrPad.lab,
                                 note:scopeNote('xfmrpad', 1) } : null;
@@ -3544,7 +3573,7 @@ function addStandardRows(opts){
       }
       if(have) continue;      /* sibling has it — nothing to add or fill */
     }
-    rate=standardRate(row, bucket);
+    rate=standardRate(STANDARD[i][4]||row, bucket);
     /* nothing measured to price it with — leave the row out rather than
        adding a $0 line that looks like a decision */
     if(!rate && STANDARD[i][3]) continue;

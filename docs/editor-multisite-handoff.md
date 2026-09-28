@@ -56,3 +56,13 @@ The workbook accepts many spellings (`trenchFt`, `conduitLf`, `conduitUG`,
 uses something else, the workbook will fall back to inferring from the line
 items and will label it as inferred rather than measured — send the schedule
 totals under any of those names and it reads as measured.
+
+## 4. Equipment counts
+
+`payload.counts` is what stands on the drawing, by what it is (`eqId` for an
+Insert item, `evKind` for a guided-build one): bollards, pads, the
+transformer pad, handholes, meters, panels, disconnects, chargers, dual
+pedestals, future positions, `existingService`, and since 2026-09-28
+`servicePedestal` (Service Pedestals from Insert or a Level 2 build started
+from one) and `newService`. A pedestal count prices the metering row per
+pedestal and files the job as a new service.
