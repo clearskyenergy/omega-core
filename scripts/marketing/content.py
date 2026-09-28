@@ -56,15 +56,13 @@ PAGE = {
 POSTS = [
  dict(day=1, pillar='drop', fmt='Image', title='Launch: Drop a Site',
   visual="The card. Answer each entry within 24 hours with results only (nearest substations and lines, published hosting capacity), never how the screen works. A Grid Atlas screenshot is fine with the coordinates cropped.",
-  text="""We built ClearSky OMEGA so a developer can screen, design and build an energy site in one place instead of eight tools.
+  text="""Drop an address in the comments. We'll screen the grid around it.
 
-Talk is cheap. Let's play.
+That's the game, every Monday from today. The first 10 commercial or industrial sites get a reply with what we find: the nearest substations and lines, and the hosting capacity where the utility publishes it.
 
-Drop an address or a ZIP code in the comments. We'll screen the grid around the first 10 and reply with what we find: the nearest substations and lines, and the hosting capacity where the utility publishes it.
+Why? We built ClearSky OMEGA so a developer can screen, lay out and estimate an energy site in one place instead of eight tools. Talk is cheap. Let's play.
 
-Commercial and industrial sites only. No sign-up, no catch.
-
-Every Monday from here on. Drop a site.
+No sign-up, no catch. Drop a site.
 
 #EnergyStorage #Interconnection #BESS""",
   comment="Want your whole pipeline screened, not one site? Comment BUILD or send us a message and we'll set up a live build.",
