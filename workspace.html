@@ -503,10 +503,15 @@ function load() {
   var org = WS.orgId; if (!org) return;
   function q2(coll, field) { return db.collection(coll).where(field, '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }); }
   function q(coll) { return db.collection(coll).where('orgId', '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }); }
+  /* Presence: the classic dashboard stamped team_members.lastSeen on every
+     visit; the workspace is home now, so it stamps it here or People reads a
+     month-old date for everyone who signs in. Merge, lastSeen only. */
+  var touch = ME ? db.collection('team_members').doc(org + '__' + ME)
+    .set({ orgId: org, email: ME, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {}) : Promise.resolve();
   Promise.all([
     q('projects'),
     db.collection('projects').where('orgsInvolved', 'array-contains', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }),
-    q('team_todos'), q('team_messages'), q('team_members'),
+    q('team_todos'), q('team_messages'), touch.then(function () { return q('team_members'); }),
     T.loadPinned(db, org),
     USER ? db.collection('dashboard_layouts').doc(org + '__' + USER.uid).get().then(function (d) { return d.exists ? (d.data() || {}).workspace || null : null; })['catch'](function () { return null; }) : Promise.resolve(null),
     db.collection('team_members').doc(org + '__' + ME).get().then(function (d) { return d.exists ? d.data() : null; })['catch'](function () { return null; }),
