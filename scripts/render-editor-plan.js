@@ -96,7 +96,17 @@ function chipContrast() {
   function parse(c) { var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/.exec(c || ''); return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null; }
   function lin(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
   function lum(c) { return 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b); }
-  var chip = document.getElementById('omega-plan-chip'), bg = parse(getComputedStyle(chip).backgroundColor), worst = 99;
+  /* the colour actually painted behind the text: a translucent background
+     (the chip's hover is rgba(…, .1)) is laid over its ancestors' paint,
+     down to the first opaque one (white when none is) */
+  function paint(el) {
+    var layers = [];
+    for (var n = el; n && n.nodeType === 1; n = n.parentElement) { var c = parse(getComputedStyle(n).backgroundColor); if (c && c.a > 0) { layers.push(c); if (c.a >= 1) break; } }
+    var out = { r: 255, g: 255, b: 255 };
+    for (var i = layers.length - 1; i >= 0; i--) { var l = layers[i]; out = { r: l.a * l.r + (1 - l.a) * out.r, g: l.a * l.g + (1 - l.a) * out.g, b: l.a * l.b + (1 - l.a) * out.b }; }
+    return out;
+  }
+  var chip = document.getElementById('omega-plan-chip'), bg = paint(chip), worst = 99;
   ['.oep-v', '.oep-s', '.oep-k'].forEach(function (s) {
     var el = chip.querySelector(s); if (!el || !el.textContent.trim() || getComputedStyle(el).display === 'none') return;
     var fg = parse(getComputedStyle(el).color), a = lum(fg), b = lum(bg), c = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
@@ -287,6 +297,7 @@ async function run() {
         return { nav: nav.scrollWidth - nav.clientWidth, chipRight: chip.right, width: window.innerWidth, page: document.documentElement.scrollWidth - window.innerWidth };
       });
       ok(fit.nav <= 1 && fit.chipRight <= fit.width && fit.page <= 1, theme + ': 390px: the chip fits the title bar, no sideways scroll ' + JSON.stringify(fit));
+      await page.mouse.move(1, 843); await page.waitForTimeout(150);
       ok(await page.evaluate(chipContrast) >= 4.5, theme + ': chip text reads at 4.5:1 or better');
       await page.screenshot({ path: path.join(output, theme + '-phone-chip.png') });
       await openPanel();
@@ -296,7 +307,13 @@ async function run() {
       await page.screenshot({ path: path.join(output, theme + '-phone-panel.png') });
       await closePanel();
       await page.setViewportSize({ width: 1280, height: 900 });
+      /* measured at rest and under the pointer on purpose: where the pointer
+         was left after the phone steps is not the state under test */
+      await page.mouse.move(1, 899); await page.waitForTimeout(150);
       ok(await page.evaluate(chipContrast) >= 4.5, theme + ': desktop chip text reads at 4.5:1 or better');
+      await page.hover('#omega-plan-chip'); await page.waitForTimeout(150);
+      ok(await page.evaluate(function () { return document.getElementById('omega-plan-chip').matches(':hover'); }) && await page.evaluate(chipContrast) >= 4.5, theme + ': desktop chip text reads at 4.5:1 or better under the pointer');
+      await page.mouse.move(1, 899);
 
       ok(!errors.length, theme + ': no editor errors: ' + errors.join('; '));
       await context.close();

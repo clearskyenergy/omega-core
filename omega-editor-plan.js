@@ -453,6 +453,8 @@
       '#omega-plan{display:flex;align-items:center;min-width:0;flex:0 1 auto}#omega-plan[hidden]{display:none}' +
       '.oep-chip{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:min(360px,48vw);height:24px;margin:0;padding:0 9px 0 8px;border:1px solid var(--border,#CBD3DB);border-radius:999px;background:var(--panel,#fff);color:var(--text,#16202B);font:600 11px/1 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;cursor:pointer;white-space:nowrap;text-shadow:none}' +
       '.oep-chip:hover,.oep-chip[aria-expanded="true"]{background:var(--hover-strong,rgba(22,32,43,.1))}' +
+      /* the grey label and caret sit on the hover fill at under 4.5:1 in the dark theme; they take the text colour there */
+      '.oep-chip:hover .oep-k,.oep-chip[aria-expanded="true"] .oep-k,.oep-chip:hover .oep-caret,.oep-chip[aria-expanded="true"] .oep-caret{color:var(--text,#16202B)}' +
       '.oep-chip:focus-visible,#omega-plan-pop :focus-visible{outline:2px solid var(--accent,#2B5FA8);outline-offset:2px}' +
       '.oep-dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--sub,#4A5B6C)}' +
       '[data-tone="ok"]>.oep-dot{background:var(--ok,#2E7D4F)}[data-tone="warn"]>.oep-dot{background:var(--warn,#9A6B00)}[data-tone="bad"]>.oep-dot{background:var(--bad,#B3382E)}' +
