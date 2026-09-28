@@ -2350,6 +2350,125 @@ still restores the BESS wizard's market. Tests:
 `scripts/tests/tprojectkinds.js` (npm test); `teditortheme.js` records the
 three tab ids and `np-market` as retired.
 
+## Site Map shows how the workspace pays — September 27, 2026
+
+"You need to make sure the editor is linked to how a tenant pays and what
+their modules are" (Tommy). `editor.html` gains one script include
+(`/omega-editor-plan.js`, after `/omega-package-menu.js`) and one mount,
+`<span id="omega-plan" hidden>` in `#portal-nav`. No other editor edit.
+`omega-editor-plan.js` paints a plan chip on the `omega:package` /
+`omega:tier` events `omega-caps.js` already sends: the plan (· Read-only or
+· Payment due), a popover with the modules in Site Map and elsewhere (the
+`/api/offerings` `editor` flag), the monthly figure and next invoice from
+`GET /api/plan-change` (any failure shows the plan without figures),
+changes in progress, the read-only notice with its pay link and *I've paid*
+(reconcile-now, then the package is re-fetched and re-applied), and links
+to `/workspace#billing` and `#modules` in a new tab. A legacy plan's modules
+are `OmegaWorkspaceHub.moduleState` on the tier `OmegaWorkspaceHub.editorCtx`
+names (the one legacy rule the workspace's Modules page reads; see the
+merge below); `omega-tools.js` and
+`omega-workspace-hub.js` load only when the popover first opens.
+`omega-tenant.js` is still never loaded. The tier names and the read-only
+command list are copies of `omega-tenant.js` and `M.readOnlyRibbon()`;
+`scripts/tests/teditorplan.js` fails if either drifts.
+
+`omega-caps.js`: a failed billing read or package fetch leaves the plan
+"unchecked" — navigation and read-only commands stay, producing controls
+are hidden (never greyed), the Ladder tab opens the chip's popover with
+Retry, and `OmegaCaps.retry()` re-checks without a reload. The
+`GOVERNED`/`governs`/`editorCan` block is unchanged by this (since the
+merge below it is compatibility only: the Modules page asks
+`OmegaCaps.canWith` through `editorCtx`).
+
+`omega-editor-gate.js`: a failed check shows its own message with Retry
+instead of "not on this plan"; the real refusal keeps "not on this plan"
+and adds "See modules ›". A legacy `billing.toolAccess` array without
+`editor` now refuses (absent = whatever the plan includes); a missing
+`omega_orgs` record still fails open. Not built: the chip in Editor Lite
+(it hides `#portal-nav`). Tests: `scripts/tests/teditorplan.js` (npm test),
+`scripts/render-editor-plan.js` (check:pages).
+
+## Merging main (#172–#188) into the modules batch (#190) — September 27, 2026
+
+Main's editor plan re-read, legacy "Add to plan", renamed modules, Stripe
+rail, price book page, signup shop and new-project panel met this batch's
+one card, one menu and tools marketplace. Every feature of both is kept;
+where they overlapped:
+
+- **Marketplace: the tools catalogue** (Tommy's later ask). Main's store
+  paragraphs and its legacy "Add to plan" in the store are not ported;
+  shared-library work main did for other pages stays. A locked tool
+  names its module and links to `/workspace#module-<key>`.
+- **Module surfaces keep this batch's words and its one card rule**
+  (`OmegaWorkspaceHub.moduleCard`); main's legacy purchase is a STATE and
+  a PATH inside it. A legacy module not held says **Opt in**; the one menu
+  asks `plan-change` `addon-quote` and either sells it by card ("Opt in
+  and pay", or "Turn it on"; `addon-buy`, its own QuickBooks invoice) or,
+  where it is not exact or card payments are not open, records the request
+  ("Request opt-in"; `addons.gate` now answers `request: true` for a closed
+  engine too, so a legacy Opt in never dead-ends with the flags off). A
+  purchase waiting reads *Waiting for payment* with Pay and Cancel request
+  (`addon-cancel {addOnId}`); a card add-on on reads Live with **Opt out**,
+  which is NEW server code: `addon-cancel {remove}` (`addons.stop`, dry run
+  first) stops it at the end of the month paid for through
+  `addOns.ending`, the billing day leaves it out of the renewal and takes
+  its grants back, and `withdraw-addon-cancel` keeps it. The recorded
+  opt-out refuses a card add-on; the recorded opt-in counts live add-ons
+  as held. Main's `addOnControl` is the same legacy path. Never "Add to
+  plan", "Ask ClearSky to include it", "Pay $X now" or "Subscribe" on a
+  module surface.
+- **ONE legacy editor rule.** Main's `legacyGates` measurement (read off
+  the real editor, `render-legacy-gates.js`, `tlegacygates.js`) is the
+  judge (`moduleEditor` asks `ctx.canCap`); this batch's `editorCtx` is the
+  ONE mirror of the tier Site Map runs that feeds it, made pure over
+  `OmegaCaps.canWith` and returning `canCap`; `capsFor` is its no-person
+  alias and `legacyCtx` builds the whole legacy ctx once. The m.caps /
+  `editorCan` counting is retired as the judge (`editorCan` stays for
+  compatibility). Omega Design stays always held. The workspace, the
+  marketplace, the editor's plan chip, the admin Package tab and the
+  server's add-on check all ask it; the tests were re-baselined to it
+  (Standard holds Omega Design, Omega EV and Omega Permits and is Partly on
+  nine), not bent back to the old rule.
+- **Billing rail words follow `payWith`** (`billing-driver`: Stripe or
+  QuickBooks) wherever this batch had written QuickBooks as the pay page;
+  an add-on's pay button reads the add-on's own `payWith`, always
+  QuickBooks (`addons.RAIL`), never the package's.
+- **Module names follow main's catalog** (Omega Design, Omega Grid, Omega
+  Intel, Logic Office, …) in this batch's copy, tests and fixtures ("Omega
+  Design stays.", "Omega Design is always included"); keys are unchanged
+  and a stored request keeps the name it was written with.
+- **The module cards live on the Modules page, not the home** (main,
+  Tommy's ask); the page groups them as main does (Your modules, then the
+  rest) with this batch's card rule on each.
+- **`omega-caps.js`**: main's read / commit / refresh / watchPlan and
+  `pendingPackage(loading)` carry this batch's unchecked view
+  (`unverifiedPackage`: pending, not loading, viewing stays and producing
+  waits) and `retry()` rebuilt on `read()`; one `failedView` tells a 403
+  refusal from an unchecked plan. After a retry the editor's gating block
+  re-applies `OmegaCaps.tier()` (the answer), which replaces this batch's
+  `_retried` pin.
+- **The plan chip rides on main's re-check**: *I've paid* re-reads the
+  plan through `OmegaCaps.refresh` (never through the locked state), and
+  the access deadline has ONE clock, `OmegaCaps.watchPlan` (the server is
+  asked first; the editor closes on its own clock only when the server
+  cannot answer): the chip only arms it for the package on screen. A 403
+  reads "No access · Refused" in the server's words. Its pay links read
+  "Pay in " + the rail the server names (`payWith`). The chip, the admin
+  Package tab and the server's add-on check (`addons.judge`) build their
+  legacy ctx with `OmegaWorkspaceHub.legacyCtx`, as the workspace and the
+  marketplace do; `admin/tenant.html` loads `omega-caps.js` once.
+- **Admin Package tab**: preselects what the tenant holds and partly uses
+  (main) plus its requests, a trial only Omega Design plus its requests
+  (this batch); card add-ons ending are listed and not preselected.
+  `package-billing.reconcile` flags an add-on invoice paid after the
+  workspace moved onto a package for a person to review.
+- **Kept untouched from main**: the new-project panel and click sweep, the
+  price book page, the signup shop ("Subscribe" is the SIGNUP's word, not
+  a module surface's), the Stripe rail and its tests, the project-kind
+  labels and the report chrome. `package.json` runs both sides' checks
+  (`render-legacy-gates.js` and `render-editor-plan.js`; `teditorplan`,
+  `tprojectkinds`, `tlegacygates`, `treportchrome`).
+
 ## New Project dialog — September 27, 2026
 
 `editor.html`: the editor's own New Project dialog is no longer a BESS

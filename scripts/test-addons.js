@@ -338,6 +338,8 @@ async function run() {
     await refused(function () { return quote(['gridatlas']); }, /subscription package: add modules on the Ladder/, 409);
     await refused(function () { return req('POST', { action: 'addon-buy', add: ['gridatlas'], orgId: ORG, previewId: 'a'.repeat(48), effectiveAt: now }); }, /subscription package/, 409);
     seed(null); var nq = await quote(['logic-office']); equal(nq.canBuy, false); ok(/no plan on record/.test(nq.reason), 'no billing record: nothing to add to');
+    equal(nq.request, true, 'and Opt in falls back to the recorded request, which says billing is not set up');
+    ok(!/Add to plan/.test(nq.reason), 'in the one card\'s words: ' + nq.reason);
     seed(Object.assign({}, ENTERPRISE), { noOrg: true });
     await refused(function () { return quote(['logic-office']); }, /no account record yet/, 404);
     seed(Object.assign({}, ENTERPRISE), { org: { status: 'suspended' } }); ok(/not active/.test((await quote(['logic-office'])).reason), 'a suspended workspace buys nothing');
@@ -383,6 +385,43 @@ async function run() {
       paid(record(rs.addOnId)); now += 60000; await reconcile(now);
       equal(bill().addOns.live, ['logic-office'], 'reconciled from QuickBooks, the rail it was issued on');
     } finally { delete process.env.PACKAGING_PROVIDER; }
+
+    /* ══ 6c. Opt out of an add-on on by card (addon-cancel with `remove`):
+       it stays on until the end of the month paid for and is not renewed;
+       Cancel request (withdraw-addon-cancel) keeps it. Stopping a part
+       stops what needs it; the renewal is priced without it and it goes
+       off that day ══ */
+    now = at('2026-09-27T15:00:00Z'); seed(Object.assign({}, ENTERPRISE));
+    var st1 = await buy(['logic-plant']); equal(st1.add, ['logic-office', 'logic-plant']); paid(record(st1.addOnId)); now += 60000; await reconcile(now);
+    equal(bill().addOns.live, ['logic-office', 'logic-plant']);
+    var st0 = JSON.stringify(bill()), sd = await req('POST', { action: 'addon-cancel', remove: ['logic-office'], dryRun: true, orgId: ORG });
+    equal(JSON.stringify(bill()), st0, 'the dry run writes nothing');
+    equal([sd.dryRun, sd.remove, sd.endsOn], [true, ['logic-office', 'logic-plant'], bill().addOns.nextInvoiceOn], 'stopping Office stops Plant, which needs it, on the renewal day');
+    ok(/stay on until \d{4}-\d{2}-\d{2}, the end of the month you paid for, and are not renewed\. /.test(sd.note) && /No refund for time already paid\./.test(sd.note), sd.note);
+    await refused(function () { return req('POST', { action: 'addon-cancel', remove: ['logic-office'], addOnId: 'x', orgId: ORG }); }, /not both/);
+    await refused(function () { return req('POST', { action: 'addon-cancel', remove: ['storage'], orgId: ORG }); }, /not an add-on on your plan/);
+    await refused(function () { return req('POST', { action: 'addon-cancel', remove: ['logic-plant'], orgId: ORG }, member); }, /administrator/);
+    await refused(function () { return req('POST', { action: 'withdraw-addon-cancel', remove: ['logic-plant'], orgId: ORG }); }, /No request to withdraw/);
+    var st2 = await req('POST', { action: 'addon-cancel', remove: ['logic-plant'], orgId: ORG });
+    equal([st2.ok, st2.remove, bill().addOns.ending['logic-plant'].status], [true, ['logic-plant'], 'requested'], 'Opt out records the stop on the add-on');
+    equal(bill().addOns.live, ['logic-office', 'logic-plant'], 'and it stays on until then');
+    ok(!bill().optOuts, 'never the recorded opt-out to ClearSky');
+    var sv = (await req('GET', { orgId: ORG }, member)).addOns;
+    equal([sv.ending.map(function (e) { return e.key; }), sv.payWith], [['logic-plant'], 'QuickBooks'], 'the summary names what is ending, and its rail');
+    await refused(function () { return req('POST', { action: 'addon-cancel', remove: ['logic-plant'], orgId: ORG }); }, /Already requested/);
+    var sw = await req('POST', { action: 'withdraw-addon-cancel', remove: ['logic-plant'], orgId: ORG });
+    equal([sw.withdrawn, sw.remove, bill().addOns.ending['logic-plant'].status], [true, ['logic-plant'], 'withdrawn'], 'Cancel request keeps it');
+    await req('POST', { action: 'addon-cancel', remove: ['logic-plant'], orgId: ORG });
+    now = at('2026-10-27T12:00:00Z'); await AO.issue(db, ORG, now);
+    equal(record('addon-renewal-2026-10-27').modules, ['logic-office'], 'the renewal is priced without what stopped');
+    equal([bill().addOns.modules, bill().addOns.live, bill().addOns.ending['logic-plant'].status], [['logic-office'], ['logic-office'], 'done'], 'and it goes off on the renewal day');
+    await refused(function () { return req('POST', { action: 'addon-cancel', remove: ['logic-office'], orgId: ORG }); }, /waiting for payment/);
+    paid(record('addon-renewal-2026-10-27')); now += 60000; await reconcile(now);
+    await req('POST', { action: 'addon-cancel', remove: ['logic-office'], orgId: ORG });
+    now = at('2026-11-27T12:00:00Z'); await AO.issue(db, ORG, now);
+    equal([bill().addOns.modules, bill().addOns.live, !!db.data.get(CUR + '/invoices/addon-renewal-2026-11-27')], [[], [], false], 'everything stopped: no renewal, nothing on');
+    seed({ packaged: true, packagingState: 'paid', modules: ['lite'] });
+    await refused(function () { return req('POST', { action: 'addon-cancel', remove: ['logic-office'], orgId: ORG }); }, /subscription package/);
 
     /* ══ 7. Pins: one rule, one map ══ */
     var tenantSrc = fs.readFileSync(path.join(__dirname, '..', 'omega-tenant.js'), 'utf8');
