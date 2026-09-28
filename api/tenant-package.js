@@ -7,7 +7,9 @@ module.exports = A.handler(async function (req, res) {
   var caller = await A.authenticate(req), input = req.method === 'GET' ? req.query || {} : req.body || {};
   var orgId = A.safeOrg(input.orgId || caller.orgId);
   if (!orgId) throw A.httpError(400, 'Valid organization required');
-  if (!caller.staff && (!caller.claims || caller.claims.email_verified !== true || !(await A.isTenantAdmin(caller, orgId)))) throw A.httpError(403, 'Tenant administrator required');
+  /* a tenant administrator: with a verified email, or an owner or administrator of an active client without one (admin.clientAdmin) */
+  var verified = !!(caller.claims && caller.claims.email_verified === true);
+  if (!caller.staff && !(verified ? await A.isTenantAdmin(caller, orgId) : await A.clientAdmin(caller, orgId))) throw A.httpError(403, 'Tenant administrator required');
   if (req.method === 'POST') {
     if (!caller.staff) throw A.httpError(403, 'Staff only');
     var fields = ['orgId', 'modules', 'pricebookVersion', 'plan', 'credit', 'builders', 'viewers', 'serviceFee', 'interval', 'action', 'dryRun', 'previewId', 'effectiveAt'];

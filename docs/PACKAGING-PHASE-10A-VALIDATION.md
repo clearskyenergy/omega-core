@@ -116,6 +116,41 @@ Renders: the trial and pay-now drives in `render-packaging-billing.js` and
 the proposal and self-serve drives in `render-subscription-proposal.js`
 walk the new steps; `signup-build.png` is the build step.
 
+## The guided run (2026-09-27)
+
+Tommy: *"make this look better and have less questions and be something
+that maybe is a guided system or that they can skip, and then have them
+verify email and it then lets them doing the payment and billing … the
+create an account needs to be flawless … and fun not lame and
+encumbersome."* `start.html` is now four steps on a stepper:
+
+1. **What does your team do?** The twelve questions of the proposal as one
+   screen of tiles (`short`/`hint` on each in
+   `api/_lib/subscription-proposal.js`, still ONE list); a tapped tile is
+   "this quarter", a tile with more to say opens its chips, and a dock
+   under the tiles shows the server's own recommendation, priced, as they
+   tap. *Skip* sends no answers. The money question stays on the rep's
+   proposal page. A package named by the offerings page or a proposal
+   skips this screen.
+2. **Your system.** The one menu, starting from the recommendation (marked
+   Suggested), priced by the server; Monthly or Yearly; the first-year
+   service fee named as the server priced it, so the first invoice is not
+   a surprise.
+3. **Confirm email**, only while the address is unconfirmed: creating the
+   workspace still needs it. It moves on by itself (checked every few
+   seconds and whenever the tab is looked at again), and the draft keeps
+   the taps, the system and the step, so the link reopening the page
+   resumes there.
+4. **Billing & pay.** The short billing form
+   (`OmegaBillingProfile.render(…, { compact: true })`: nine fields, the
+   optional ones under *More billing options*), the summary, *Subscribe* or
+   the trial.
+
+`scripts/render-signup.js` drives it from Create account to the first
+invoice (and a reload at the email step, and Skip on a phone); the
+screenshots under `docs/screenshots/packaging-phase-*/signup-*.png` are the
+new steps.
+
 ## Verified
 
 - `node scripts/test-self-serve-signup.js` — 12 checks on the Firestore

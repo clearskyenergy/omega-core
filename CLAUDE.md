@@ -173,7 +173,14 @@ server-priced sandbox invoices and paid reconciliation. New trials start at
 approval, once per organization and at most 14 days. Annual prepay uses the
 10-month price (two months free) without transformation credit. Packaged billing/profile writes
 are Admin SDK only. API and rules enforce the recorded access deadline;
-legacy tier edits cannot modify a packaged subscription. Staff authentication
+legacy tier edits cannot modify a packaged subscription. An owner or
+administrator of an ACTIVE client manages its own plan and billing without
+the email link (`admin.clientAdmin`, 2026-09-27, Tommy: "this verified email
+thing makes no sense"): plan-change, billing-profile, the Stripe card door,
+package-catalog (the priced menu), tenant-package and a proposal's accept.
+Everything else still asks for the link: creating a workspace (it claims a
+domain), a member, the packaged tools (`package-access`), Omega Logic,
+`tenantReader()`, a buyer's portal, staff. Staff authentication
 requires a literal verified ClearSky domain even with an old role claim.
 Flags remain off by default; see docs/PACKAGING-PHASE-4-VALIDATION.md before
 any sandbox enablement or release.
@@ -216,15 +223,27 @@ public price list; signup's pay-now runs the engine's own `activate` with the
 caller marked `selfServe` (recorded in history and audit); "I've paid" is
 `plan-change.reconcileNow` (one look per eight seconds), from the signup
 page (`check-payment`) and the billing bar (`reconcile-now`) alike. The
-flow as sold: account (login.html) → *How you work today* → billing
-profile → *Build your system* (the one menu, priced live by the server;
-Monthly, or Yearly at ten months of twelve) → pay. Create account goes
-straight into that signup on `/start.html` with the company carried over
-(making the account signs it in, so login's auth listener stands aside
-while the form routes it); the signup options and quotes open before the
-email link is clicked, and only creating the workspace (Subscribe or the
-trial) needs the verified address, which the page waits for and then
-carries on by itself. A signed-in person with no `omega_orgs` record,
+flow as sold is a GUIDED RUN on a stepper (2026-09-27, Tommy: "less
+questions … a guided system or that they can skip … flawless … fun"):
+account (login.html) → *What does your team do?* (the twelve questions as
+one screen of tiles, `short`/`hint` on each question in
+`api/_lib/subscription-proposal.js`; a tapped tile is "this quarter"; a
+dock shows the server's own recommendation, priced, as they tap; or Skip,
+which sends no answers) → *Your system* (the one menu, priced live by the
+server; Monthly, or Yearly at ten months of twelve; the first-year service
+fee named as the server priced it) → *Confirm email*, only while the
+address is unconfirmed → *Billing & pay* (the short form,
+`OmegaBillingProfile.render(…, { compact: true })`: the optional fields
+folded under More billing options) → pay. A package named by the offerings
+page (`?modules=`, `?plan=`) or a proposal skips the question screen.
+Create account goes straight into that signup on `/start.html` with the
+company carried over (making the account signs it in, so login's auth
+listener stands aside while the form routes it); the options and quotes
+open before the email link is clicked, and only creating the workspace
+(Subscribe or the trial) needs the verified address: its step moves on by
+itself, and the draft (`omega:signup-draft`, this browser only) keeps the
+taps, the system and the step, so the link reopening the page resumes
+there. A signed-in person with no `omega_orgs` record,
 grant or access request, not a named tenant, and without both accepted
 terms and a project under the company, is sent there too instead of a
 derived workspace; `scripts/render-signup.js` (in `check:pages`) holds it.
@@ -819,8 +838,11 @@ a locked tile explains, never hides. Today is `omega-workspace-today.js`
 (pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
 both ends of the Quote Desk, the referral inbox, projects ready, stalled or
 unsized. Never a second copy of those rules in a page. The home is the BOARD: the hub and Today, then In flight and Around you
-(feed, People, the Omega pulse, Partners); only All tools and Modules are
-their own pages (`data-view`). The Omega pulse is `GET /api/pulse`
+(feed, People, the Omega pulse, Partners, what Customize keeps on); All
+tools, Modules, Team (People and Partners) and Feed (the feed and the
+pulse) are their own pages (`data-view`; Tommy, 2026-09-27: "feed and team
+do nothing" when both opened the same Around you), each page showing its
+panels whatever the board keeps. The Omega pulse is `GET /api/pulse`
 (`api/_lib/pulse.js`, pure, `tpulse.js`): platform-wide COUNTS ONLY from
 the most recent rows, never a name. **Modules are paid services of the editor** (Tommy, 2026-09-27). The
 Modules page (`#modules`; `#module-<key>` lands on one card, `#plans` on the
@@ -1090,6 +1112,12 @@ tenant. Treat it that way.
   canonical, what still has to be ported, and the decisions pending.
 - `omega-tenant.js` MUST load directly after `omega-brand.js` on every page
   that signs users in. It wraps OmegaBrand.resolve.
+- `omega-terms.js` opens ONE blocking modal per page (a second request
+  waits on it), and a refused Accept reads `termsAcceptances/{uid}` back
+  before it says so: the version already recorded (a second tab, a modal
+  left open) IS the acceptance; a refusal that stands is tried once on a
+  fresh token and then named plainly, never as a missing rule
+  (`scripts/tests/tterms.js`).
 - `omega-splash.js` loads FIRST in `<head>` on every page that signs users
   in (`scripts/tests/tsplash.js`): the OMEGA mark until the page is known
   (`omega:auth` signed out, `omega:entitlements`, `OmegaSplash.done()`, or

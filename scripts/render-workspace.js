@@ -490,8 +490,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.evaluate(function () { window.location.hash = '#flight'; }); await wait(150);
     ok('newco: #flight opens In flight as its own page', await p.evaluate(function () { return document.getElementById('content').getAttribute('data-view') === 'flight'; }));
     await newProjectPanel(p, 'newco');
-    /* Customize: a toggle saves to the person's own layout record only */
-    await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
+    /* Customize: a toggle saves to the person's own layout record only (Customize is the home board's: Team and Feed are pages) */
+    await p.evaluate(function () { window.location.hash = ''; }); await wait(150);
     await p.click('#customize'); await wait(250);
     await p.click('.tg[data-opt="guides"]'); await wait(900);
     var saved = await p.evaluate(function () { return window.__firebaseDouble.store.log.filter(function (w) { return /^dashboard_layouts\//.test(w.path); }).map(function (w) { return { path: w.path, guides: w.data.workspace && w.data.workspace.guides }; }); });
@@ -675,9 +675,20 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.evaluate(function () { if (window.OmegaSplash) window.OmegaSplash.done(); });
     ok('northstar: Invoices and receipts opens the Stripe portal (Stripe\'s own page) in this tab, and the page itself has no card field', went.length === 1 && /^https:\/\/billing\.stripe\.com\//.test(went[0]) && CARD.posts.indexOf('portal') >= 0 && bill.cardInputs === 0, { went: went, posts: CARD.posts, inputs: bill.cardInputs });
     await p.evaluate(function () { window.location.hash = ''; }); await wait(200);
-    /* post a message */
-    await p.evaluate(function () { window.location.hash = '#team'; }); await wait(150);
-    ok('northstar: #team opens Around you as its own page', await p.evaluate(function () { return document.getElementById('content').getAttribute('data-view') === 'team' && getComputedStyle(document.getElementById('team')).display !== 'none'; }));
+    /* TEAM AND FEED ARE TWO PAGES (2026-09-27, Tommy: "feed and team do nothing": both opened the same Around you, feed first, and Feed lit Team) */
+    function aroundView() { function vis(e) { return !!e && getComputedStyle(e).display !== 'none'; } return { view: document.getElementById('content').getAttribute('data-view'), title: document.getElementById('around-title').textContent, heads: Array.prototype.filter.call(document.querySelectorAll('#around .panel'), vis).map(function (x) { return x.querySelector('h3').textContent; }), rail: (document.querySelector('#side-nav .sn-item.active') || { getAttribute: function () { return ''; } }).getAttribute('data-key'), customize: vis(document.getElementById('customize')) }; }
+    await p.click('#side-nav .sn-item[data-key="team"]'); await wait(200);
+    var teamView = await p.evaluate(aroundView);
+    ok('northstar: the rail\'s Team opens the Team page: the people and the partners on your projects, Team marked', teamView.view === 'team' && teamView.title === 'Team' && teamView.heads.join('|') === 'People|Partners on your projects' && teamView.rail === 'team' && !teamView.customize, teamView);
+    await p.click('#side-nav .sn-item[data-key="feed"]'); await wait(200);
+    var feedView = await p.evaluate(aroundView);
+    ok('northstar: the rail\'s Feed opens the Feed page: what changed and the pulse, Feed marked (not Team)', feedView.view === 'feed' && feedView.title === 'Feed' && feedView.heads.join('|') === 'Workspace feed|Omega pulse' && feedView.rail === 'feed', feedView);
+    await p.click('#side-nav .sn-item[data-key="home"]'); await wait(200);
+    var boardView = await p.evaluate(aroundView);
+    ok('northstar: the home board keeps Around you with what Customize keeps on', boardView.view === 'home' && boardView.title === 'Around you' && boardView.heads.join('|') === 'Workspace feed|People|Omega pulse|Partners on your projects' && boardView.customize, boardView);
+    /* post a message, from the Feed page */
+    await p.evaluate(function () { window.location.hash = '#feed'; }); await wait(150);
+    ok('northstar: #feed opens the Feed page', await p.evaluate(function () { return document.getElementById('content').getAttribute('data-view') === 'feed' && getComputedStyle(document.getElementById('team')).display !== 'none' && getComputedStyle(document.getElementById('feed')).display !== 'none'; }));
     await p.fill('#post-text', 'Geotech booked for Maple Yard'); await p.click('#post button[type="submit"]'); await wait(500);
     var posted = await p.evaluate(function () { return window.__firebaseDouble.store.log.filter(function (w) { return /^team_messages\//.test(w.path); }).map(function (w) { return w.data.authorEmail + ':' + w.data.text; }); });
     ok('northstar: a post writes one team_messages document as the signed-in person', posted.length === 1 && posted[0] === ns.user.email + ':Geotech booked for Maple Yard', posted);
@@ -1094,7 +1105,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
      every link doesnt bug") ══
      scripts/_lib/click-sweep.js clicks every visible control on every view
      of the workspace (the home, All tools with every fold open, Modules, In
-     flight, Around you, Plan & billing) and in the chrome around it (rail,
+     flight, Team, Feed, Plan & billing) and in the chrome around it (rail,
      topbar, switcher, the phone's tab bar and its rail drawer), one at a
      time, as four tenants on a desktop and a phone. A click that would leave
      is held at the door and its address checked against what the site
@@ -1107,7 +1118,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
      ?tenant=…&via=… does on a real host), which is what turned every
      /workspace#view link into a full reload. */
   var SWEEP = require('./_lib/click-sweep'), SERVED = SWEEP.servedBy(ROOT);
-  var SWEEP_VIEWS = ['home', 'tools', 'modules', 'flight', 'team', 'billing'].map(function (v) {
+  var SWEEP_VIEWS = ['home', 'tools', 'modules', 'flight', 'team', 'feed', 'billing'].map(function (v) {
     return { name: v, enter: async function (p) {
       /* back to the view (and nothing else) only when a click moved it: billing paints itself on entry */
       var moved = await p.evaluate(function (v) {
