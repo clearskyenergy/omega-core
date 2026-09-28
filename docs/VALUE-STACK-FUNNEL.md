@@ -1,40 +1,94 @@
-# The value stack funnel, and where DividendVPP plugs in
+# The value stack funnel: two flows, and where DividendVPP and Lightsmith plug in
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
 Status: **design note, nothing built.** Written 2026-09-28 from a read of the
-code (not a run of the app) for the DividendVPP conversation. It records how
-the editor values a battery today and proposes five integration points,
-D1–D5. The partner-facing chart is `docs/design/value-stack-funnel.html`,
-published privately as a claude.ai artifact
-(https://claude.ai/artifact/YNLSbK9EarAQv6UjrXRsDR), and printed as
-`docs/design/value-stack-funnel.pdf` (three 11 × 17 in landscape sheets, from
-the page's own print rules). Keep all three in step.
-The chart deliberately leaves out the defects listed below.
+code (not a run of the app) for the DividendVPP and Lightsmith conversation;
+rev B follows internal review ("make the two flows clearer; confirm
+Lightsmith's inputs, outputs, where its VPP role begins and who checks that
+revenue streams can be combined; walk one sample site"). The partner-facing
+chart is `docs/design/value-stack-funnel.html`, published privately as a
+claude.ai artifact (https://claude.ai/artifact/YNLSbK9EarAQv6UjrXRsDR), and
+printed as `docs/design/value-stack-funnel.pdf` (five 11 × 17 in landscape
+sheets, from the page's own print rules). Keep all three in step. The chart
+deliberately leaves out the defects listed below.
 
-DividendVPP is Molecule Systems' VPP product; AERA is Molecule's device
-integration surface (`fleet-simulator-3d.html:250-251`). The editor already
-names Molecule as a route to market (`editor.html:93485`, "Molecule Systems
-(EMS + VPP)") and DividendVPP as a price-deck provider tag
-(`editor.html:119847-119853`, no adapter).
+## Two flows
 
-## The six gates
+**Flow 1, our business process**, is how a project moves through ClearSky.
+**Flow 2, the value stacking process**, is its step 4 in detail.
 
-A value stack should narrow through six gates. Each removes value that this
-battery, in this market, through this route to market, cannot earn.
-"Applied" means the gate shapes the number that reaches the customer today
-(Cost & ROI, then the results rail and the exports).
+| Flow 1 step | Where it lives |
+|---|---|
+| 1 Site intake | `intake.html` → `intake_projects`, worked by the ops console (`docs/INTAKE-README.md`); `opportunity-intake.html` |
+| 2 Screening | `clearsky-sitefinder.html` on `/api/price-site`; the editor's Analyze › Screening (Grid Pre-Qualify, Site Score) |
+| 3 Design | the Site Map editor: Build › BESS Build, BESS Sizer, Solar + Storage |
+| 4 Value stack | flow 2, below |
+| 5 Customer proposal | Output › Reports › Proposal (`buildProposalHTML` 28331), `proforma.html`, `sales-proposal.html` |
+| 6 Handoff | Output › Marketplace (Push to Marketplace → `fin_projects`; Apply for Financing); `rfq.html` (Quote Desk); VPP enrollment is not built |
 
-| Gate | Removes | Where it lives today (`editor.html`) | Applied |
+In flow 2, "applied" means the step shapes the number that reaches the
+customer today (Cost & ROI, then the results rail and the exports).
+
+| Flow 2 step | Removes | Where it lives today (`editor.html` unless named) | Applied |
 |---|---|---|---|
-| 1 Gross stack | nothing; every stream on its own | Estimate › Cost & ROI › Construction Cost › Revenue: `runValueStackEstimate` (30291) writes `_VS_ESTIMATE` (30393); `applyValueStackEstimate` (30450) fills `arbitrage`, `demand`, `dr`, `reg_pjm` in `_revStreams` (`REV_CATALOG` 28911). `vpp`, `capacity` and `resilience` are typed in. | yes |
-| 2 Reachable | streams the route cannot reach | Analyze › Screening › Value Stack (`OmegaValue`, Patch 41, from 93343): `PARTNERS[k].streams` (93464) | no: the panel only has a close button and nothing reads `OmegaValue.*` |
-| 3 Kept | the operator's share | same panel: `PARTNERS[k].keep` | no |
-| 4 Deliverable | double-booked hours and cycles | `OmegaValueStack.allocate` (from 141299); the hourly `dispatch.verifyShave` (127778), used only by the Bill Analysis workbook (139299) | no: `run`, `allocate` and `lifecycle` have no callers; only `irr` and `readSite` are used |
-| 5 Lifetime | fade, O&M, augmentation | `updateROI` (36664): payback, year-1 cash-on-cash, 10-year NPV at 8%, 3% revenue growth; results-rail IRR through `OmegaValueStack.irr` (36461) | partly: no degradation (the lifecycle with fade and augmentation, 141458, is unused) |
-| 6 Verified | value nobody signs for | the `_certified` badge (29632), never set true; the "certified by our aggregator partners" footnotes (21344, 30421-30424) | no: a label |
+| A Site & utility inputs | — | the placed fleet (`_vsFleetSize` 29695); ZIP → state → market (`_isoForState` 29739; `OmegaValue`'s `MARKET` 93405); utility rates by ZIP (`_fomGetUtility` 20039); the monthly bill typed into `vs-bill` | yes |
+| B Eligible programs | what the site or route can't enter; the operator's share | Analyze › Screening › Value Stack (`OmegaValue`, Patch 41, from 93343): programs per market (`TYPICAL` 93431), route to market and share (`PARTNERS` 93464); incentive conditions on the server path (`V.incentives`, `api/_lib/value-stack.js`) | no: the panel only has a close button and nothing reads `OmegaValue.*` |
+| C Forecast | — | Estimate › Cost & ROI › Revenue: `runValueStackEstimate` (30291) writes `_VS_ESTIMATE` (30393); `applyValueStackEstimate` (30450) fills `arbitrage`, `demand`, `dr`, `reg_pjm` in `_revStreams` (`REV_CATALOG` 28911); `vpp`, `capacity` and `resilience` are typed in. Price Decks (119400ff) are gated SOON (152152) | yes, at regional rates |
+| D Dispatch assumptions | double-booked hours and cycles; streams that can't combine | `OmegaValueStack.allocate` (from 141299); the hourly `dispatch.verifyShave` (127778), used only by the Bill Analysis workbook (139299). No program's combination rules are held anywhere | no: `run`, `allocate` and `lifecycle` have no callers; only `irr` and `readSite` are used |
+| E Portfolio reporting | — | `updateROI` (36664): payback, year-1 cash-on-cash, 10-year NPV at 8%, 3% revenue growth, no fade; nothing saved (defect 2). `owner-reporting.html` (`siteVariance` 370) and `om-console.html` report expected against actual energy and availability, not revenue by stream | no |
 
-## The live path
+The "verified" step of rev A is now part of D and E: the `_certified` badge
+(29632) is never set true, and the "certified by our aggregator partners"
+footnotes (21344, 30421-30424) are labels, not checks.
+
+## Partner roles on record
+
+What the repo says, which is all the chart claims. Everything else on the
+chart's partner sheet is a question for the meeting.
+
+- **Lightsmith Energy**, "Dispatch optimization layer" (`admin/admin-console.js:261`,
+  signed partner, tooling). `apartment-bess.html:554` has Molecule run
+  "cross-program optimization (Lightsmith) so each site is always in the
+  best-paying program available that hour".
+- **Molecule Systems**, "VPP software stack integration" (`admin/admin-console.js:260`).
+  DividendVPP is its VPP product and AERA its device integration surface
+  (`fleet-simulator-3d.html:250-251`). `apartment-bess.html:554`: it "sits
+  between the utility VPP dispatch signal and your battery portfolio,
+  guaranteeing each dispatch event is executed and telemetry-verified".
+  `editor.html:93485-93489`: "Not a curtailment provider — a control and
+  optimisation layer … you still need a route to market underneath it."
+- Both are set up as operators of the **VDC Exchange**
+  (`firestore.rules:361` `isVdcOperatorDomain`, `:370` `vdcOperatorOrg`; the
+  `vdc_*` rules from 1513). The exchange is `comingSoon` in `login.html:668`
+  and no `vdc.html` exists in this repo.
+
+## The sample site
+
+Illustrative: a C&I building in Chicago, ComEd, PJM (ComEd zone), behind the
+meter, 1,000 kW / 4,000 kWh. The figures are what the server model returns
+under the ComEd/PJM screening scenario `/api/price-site` uses; reproduce them
+with
+
+```
+node -e 'var V=require("./api/_lib/value-stack.js");console.log(JSON.stringify(V.stack({kw:1000,hours:4,demandLoPerKwMonth:8,demandHiPerKwMonth:14,vppPerKwYear:150}),null,1))'
+```
+
+| Stream | Year 1 | Tier |
+|---|---|---|
+| PJM capacity: 590 kW accredited (4-hour class, 59%) × $325/MW-day | $69,989 | published |
+| Demand charges avoided: $8–14/kW-month band | $96,000–$168,000 | planning |
+| Utility VPP: $150/kW-year | $150,000 | planning |
+| **Added** | **$315,989–$387,989** | |
+| One-time: ComEd storage rebate, $250/kWh (paired DG + Rate BESH) | $1,000,000 | published |
+
+If the same 1 MW can't earn PJM capacity and the VPP program at once, the
+stack is $246,000–$318,000 (keep the VPP) or $165,989–$237,989 (keep
+capacity). Nothing in OMEGA checks this today; the chart proposes that the
+market participant of record owns the rules, Lightsmith's optimizer enforces
+them in dispatch, and OMEGA applies them in the stack.
+
+## Inside the editor, the live path
 
 1. **Build › BESS Build, BESS Sizer or Solar + Storage.** The estimator reads
    the placed fleet (`_vsFleetSize` 29695), then `S.bessList`.
@@ -106,20 +160,23 @@ None is fixed by this note.
     `ct-incentives` and `ct-revenue`; the buttons are `ct-inc` and `ct-rev`
     (3664-3665).
 
-## DividendVPP integration points (proposed)
+## Integration points (proposed)
 
-Server to server only. A DividendVPP credential lives in Vercel environment
+Server to server only. A partner credential lives in Vercel environment
 variables, every call goes through an authenticated `/api/` function
 (`A.authenticate`, `canActInOrg`, the module gate), and no customer name or
 address leaves OMEGA before the customer accepts.
 
-| Point | Gate | Where it would land |
-|---|---|---|
-| D1 Rates & forecasts | 1 | Programme rates: `V.stack({ vppPerKwYear, vppRef })` already marks the VPP stream `published` when a reference is supplied (`api/_lib/value-stack.js`). Key a rate table by market, utility and programme on the server and let the estimator's streams, including the typed-in `vpp` line, come from it. Forecasts: Price Decks (`PRICE_PRODUCTS` 119462). Add a named adapter once a sample export is in hand (the comment at 119847 says why there is none). `PRICE_PRODUCTS` holds ERCOT's seven series; other markets need their own lists. |
-| D2 Coverage | 2 | Replace `PARTNERS.molecule.markets: 'market-agnostic'`, and resolve the market by utility territory or node instead of by state. |
-| D3 Terms | 3 | One server-held figure per market and programme, replacing the three assumptions in defect 6. |
-| D4 Dispatch | 4 | A new authenticated endpoint: send kW, kWh, round-trip efficiency, warranty cycles, the 8,760-hour load, tariff and node, with no identity. Receive the hourly schedule, revenue per stream and value forgone. Compare it with `OmegaValueStack.allocate`. |
-| D5 Verification | 6 | A verification id, date and basis that sets `_certified` and, once defect 2 is fixed, is saved on the project and carried to the exports, `/api/proforma` (`revenue.dr.*`, `proforma.html:989-1001`) and `fin_projects`. Enrolment rides the existing partner route, `api/opportunity.js`: an anonymous `public{}` until the customer's `reveal`. |
+| Point | From (to confirm) | Step | Where it would land |
+|---|---|---|---|
+| D1 Rates & forecasts | DividendVPP or Lightsmith | C | Program rates: `V.stack({ vppPerKwYear, vppRef })` already marks the VPP stream `published` when a reference is supplied (`api/_lib/value-stack.js`). Key a rate table by market, utility and program on the server and let the estimator's streams, including the typed-in `vpp` line, come from it. Forecasts: Price Decks (`PRICE_PRODUCTS` 119462). Add a named adapter once a sample export is in hand (the comment at 119847 says why there is none). `PRICE_PRODUCTS` holds ERCOT's seven series; other markets need their own lists. |
+| D2 Coverage | DividendVPP, with the route to market | B | Replace `PARTNERS.molecule.markets: 'market-agnostic'`, and resolve the market by utility territory or node instead of by state. |
+| D3 Terms | DividendVPP, with the route to market | B | One server-held figure per market and program, replacing the three assumptions in defect 6. |
+| D4 Dispatch | Lightsmith | D | A new authenticated endpoint: send kW, kWh, round-trip efficiency, warranty cycles, the 8,760-hour load, tariff and node, with no identity. Receive the hourly schedule, revenue per stream and value forgone. Compare it with `OmegaValueStack.allocate`. |
+| D5 Verification | Molecule (telemetry) | D, E | A verification id, date and basis that sets `_certified` and, once defect 2 is fixed, is saved on the project and carried to the exports, `/api/proforma` (`revenue.dr.*`, `proforma.html:989-1001`) and `fin_projects`; verified events feed E once the asset runs. Enrollment rides the existing partner route, `api/opportunity.js`: an anonymous `public{}` until the customer's `reveal`. |
 
-To start, from DividendVPP: a sample forecast export, the coverage list, terms
-by market, and dispatch API documentation.
+The combination check needs one rules table that both the stack (step D in
+OMEGA) and the dispatch (Lightsmith) read, and a named owner.
+
+To start: a sample forecast export, the coverage list, terms by market,
+Lightsmith's input and output spec, and dispatch API documentation.
