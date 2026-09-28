@@ -206,6 +206,20 @@ var T = {
         + row('Monthly fee', o.beforeDisplay && o.afterDisplay ? o.beforeDisplay + ' → ' + o.afterDisplay : '—') + row('Reason', o.reason || '—') + '</table>'
         + button('https://silmarillion.clearskyomega.com/admin/tenant?org=' + encodeURIComponent(o.orgId), 'Open the tenant\'s Package tab')));
   },
+  /* "Request a demo" on www.clearskyomega.com (api/demo-request.js). To
+     ClearSky only, Reply-To the visitor so answering is one click; the lead
+     is already on the sales board. The visitor gets no mail from us: an open
+     form that mails whatever address is typed into it is a spam relay. */
+  demoRequestAlert: function (o) {
+    var src = o.source || {};
+    var where = o.sourceWord + (src.utm_campaign ? ' · ' + src.utm_campaign : '') + (src.landing ? ' · landed on ' + src.landing : '');
+    return send(staffTo(), '[OMEGA] Demo request: ' + o.name + (o.company ? ' (' + o.company + ')' : ''),
+      layout('Demo request', '<table style="font-size:14px;border-collapse:collapse">' + row('Name', o.name) + row('Company', o.company || '—') + row('Email', o.email)
+        + row('Business', o.vertical || '—') + row('Interest', o.interest || '—') + row('Came from', where) + '</table>'
+        + (o.message ? '<p style="white-space:pre-wrap;margin-top:16px">' + esc(o.message) + '</p>' : '')
+        + '<p>Reply to this email to answer them. The site promised a reply within one business day.</p>'),
+      null, { replyTo: o.email });
+  },
   billingAlert: function (o) {
     return send(staffTo(), '[OMEGA] Billing needs a look: ' + o.company,
       layout('Billing needs a look', '<p>' + esc(o.text) + '</p><table style="font-size:14px;border-collapse:collapse">' + row('Company', o.company) + row('Domain', o.orgId) + (o.invoiceId ? row('Invoice', o.invoiceId) : '') + '</table>'

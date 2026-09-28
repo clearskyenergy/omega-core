@@ -13,7 +13,11 @@
                  compares in orgsInvolved[] (ogisolar.com, not "OGI")
      label       who holds it ("CFA/OGI JV GPT"), for the audit line
      scopes      ['sites:read', 'sites:write']  — read is listing and KMZ;
-                 write is creating and updating site records
+                 write is creating and updating site records.
+                 ['growth:read', 'sales:read', 'sales:write'] — the sales
+                 agent and JARVIS: the growth board and ClearSky's own
+                 sales database (api/sales.js). These are ClearSky's data,
+                 so they are honoured ONLY on an admin key (staffOrAgent).
      admin       true only for a ClearSky-held key; sees every deal
      active      false revokes it without deleting the audit trail
      expiresAt   ISO, optional
@@ -40,7 +44,9 @@ var A = require('./admin');
 
 var KEY_PREFIX = 'omega_ak_';
 var KEY_RE = /^omega_ak_[0-9a-f]{48}$/;
-var SCOPES = ['sites:read', 'sites:write'];
+var SCOPES = ['sites:read', 'sites:write', 'growth:read', 'sales:read', 'sales:write'];
+/* scopes that read or write ClearSky's own book, never a tenant's */
+var STAFF_SCOPES = ['growth:read', 'sales:read', 'sales:write'];
 var LINK_TTL_MS = 7 * 86400000;
 
 function sha256hex(s) { return crypto.createHash('sha256').update(String(s)).digest('hex'); }
@@ -101,6 +107,32 @@ function requireScope(caller, scope) {
   return caller;
 }
 
+/* A ClearSky person OR ClearSky's machine, for the endpoints that serve the
+   sales agent (api/growth.js, api/sales.js). One rule, so the two doors
+   cannot drift:
+     - a bearer that looks like an agent key is ONLY ever a key: it must be
+       admin (ClearSky-held; a tenant's key never reads ClearSky's book) and
+       carry `scope`. A key that fails is refused; it never falls through to
+       the person path.
+     - anything else is a Firebase ID token and must be caller.staff (a
+       VERIFIED @clearsky-usa.com address, admin.js).
+   Resolves { staff, agent, by, email, scopes, label }. */
+function staffOrAgent(req, scope) {
+  var h = (req.headers && req.headers.authorization) || '';
+  var m = /^Bearer\s+(.+)$/i.exec(String(h).trim());
+  if (m && looksLikeKey(m[1].trim())) {
+    return authenticate(req).then(function (k) {
+      if (STAFF_SCOPES.indexOf(scope) >= 0 && !k.admin) throw A.httpError(403, 'this agent key is not a ClearSky key');
+      requireScope(k, scope);
+      return { staff: false, agent: true, by: 'agent:' + (k.label || k.keyId.slice(0, 8)), email: null, scopes: k.scopes, label: k.label, keyId: k.keyId };
+    });
+  }
+  return A.authenticate(req).then(function (c) {
+    if (!c.staff) throw A.httpError(403, 'staff only');
+    return { staff: true, agent: false, by: c.email, email: c.email, scopes: STAFF_SCOPES.slice(), label: '', uid: c.uid };
+  });
+}
+
 /* ── signed download links ──────────────────────────────────────────────── */
 var _linkSecret = null;
 function linkSecret() {
@@ -143,7 +175,7 @@ function baseUrl(req) {
 module.exports = {
   KEY_PREFIX: KEY_PREFIX, SCOPES: SCOPES, LINK_TTL_MS: LINK_TTL_MS,
   mintKey: mintKey, keyIdOf: keyIdOf, looksLikeKey: looksLikeKey, normScopes: normScopes,
-  authenticate: authenticate, requireScope: requireScope,
+  authenticate: authenticate, requireScope: requireScope, staffOrAgent: staffOrAgent, STAFF_SCOPES: STAFF_SCOPES,
   signLink: signLink, verifyLink: verifyLink, linkSecret: linkSecret, baseUrl: baseUrl,
   _setLinkSecretForTests: function (s) { _linkSecret = s; }
 };

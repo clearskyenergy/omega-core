@@ -1018,6 +1018,27 @@ Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by
 - Bumping `TERMS_VERSION` again means bumping it in `api/_lib/events.js` too,
   or every event is refused.
 
+## Sales agent and the sales database (2026-09-27)
+
+Design, setup and the not-built list: `docs/SALES-AGENT.md` (§11).
+ClearSky's own book is `sales_*` in Firestore (prospects by work domain,
+harvested candidates, one activity log, suppressions, config, counters),
+Admin SDK only, closed explicitly in `firestore.rules`. `api/_lib/sales.js`
+is the ONE rule (pure, `scripts/tests/tsales.js`); `api/sales.js` the one
+door (a verified ClearSky person, or ClearSky's ADMIN machine key with
+`sales:*` through `agent-auth.staffOrAgent`, which `api/growth.js` shares
+for `growth:read`); `api/_lib/growth-board.js` the one join both boards
+read. `POST /api/demo-request` is the website's public form (honeypot, rate
+limits, stored before "Received", mailed to dev@clearsky-usa.com). The
+server, not the agent, refuses: a stage moved backwards or to won/lost by
+the key, a draft to the off-limits floor or a suppressed address, a cold
+draft before `sales_config` has a clearsky-usa.com sender and a postal
+address (warmth is READ from the records), a price in a LinkedIn post
+(`lintPost`: the website may show the price list; LinkedIn may not). The
+agent is `.claude/agents/sales-agent.md` + `/sales`; it drafts in Gmail and
+never sends, posts or approves. JARVIS runs the same agent and draws the
+same data (mission.html › Sales, `npm run check:sales`).
+
 ## Silmarillion 2.0 — joint development
 
 The OMEGA operating system is named **Silmarillion 2.0**. Today it is an

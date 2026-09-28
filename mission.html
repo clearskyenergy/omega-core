@@ -343,6 +343,52 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .logicNote{font-size:12px;color:var(--dim);line-height:1.55;padding:10px 0;overflow-wrap:anywhere}
 .logicNote b{color:var(--ink);font-weight:400}
 @media (max-width:1100px){ .logicGrid{grid-template-columns:minmax(0,1fr)} }
+/* ── SALES ──────────────────────────────────────────────────────────────
+   ClearSky's own funnel (/api/sales): tiles on top, then three columns —
+   what needs him today, where the leads come from, what happened. The
+   tiles are the Omega Logic view's, so the two boards read alike. */
+.salesWrap{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
+.salesGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;flex:1;min-height:0}
+/* a column scrolls as a whole when the log form and the settings are open,
+   rather than squeezing the lists above them to nothing */
+.salesGrid .col{display:flex;flex-direction:column;gap:12px;min-height:0;overflow-y:auto;padding-bottom:2px}
+.lTile.warnT .v{color:var(--warn)}
+.lTile[data-go]{cursor:pointer}
+.lTile .s{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.sFun{display:flex;flex-direction:column;gap:5px}
+.sFun .fr{display:grid;grid-template-columns:88px 1fr 40px;gap:8px;align-items:center}
+.sFun .fl{font-family:var(--mono);font-size:9px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase}
+.sFun .fb{height:9px;background:rgba(0,243,255,.08);border-radius:2px;overflow:hidden}
+.sFun .fb i{display:block;height:100%;background:var(--glow-cyan);opacity:.7}
+.sFun .fn{font-family:var(--mono);font-size:12px;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+.sFun .gap{height:6px}
+.sItem{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.sItem:last-child{border-bottom:none}
+.sItem .pr{flex:none;font-family:var(--mono);font-size:9px;letter-spacing:1px;padding:1px 6px;border-radius:3px;
+           border:1px solid rgba(0,243,255,.3);color:var(--glow-cyan);text-transform:uppercase}
+.sItem .pr.p3{border-color:var(--warn);color:var(--warn)}
+.sItem .wh{flex:1;min-width:0;font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
+.sItem .wh small{display:block;color:var(--dim);font-size:11px;margin-top:2px}
+.sItem a{flex:none;color:var(--glow-cyan);text-decoration:none;font-family:var(--mono);font-size:10px;letter-spacing:1px}
+.sItem a:hover{text-decoration:underline}
+.sSug{font-size:12.5px;line-height:1.5;padding:6px 0 6px 10px;margin-bottom:6px;border-left:2px solid rgba(0,243,255,.3);color:var(--ink)}
+.sSug.act{border-left-color:var(--warn)}
+.sSug.ok{border-left-color:var(--good);color:var(--dim)}
+.sForm{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sForm .full{grid-column:1/-1}
+.sForm label{font-family:var(--mono);font-size:8.5px;letter-spacing:1.4px;color:var(--dim);text-transform:uppercase;
+             display:flex;flex-direction:column;gap:3px;min-width:0}
+.sForm input,.sForm select,.sForm textarea{width:100%;background:rgba(0,0,0,.35);color:var(--ink);font:13px var(--ui);
+             border:1px solid rgba(0,243,255,.22);border-radius:5px;padding:7px 8px;min-height:34px;letter-spacing:0;text-transform:none}
+.sForm textarea{min-height:52px;resize:vertical}
+.sForm input:focus,.sForm select:focus,.sForm textarea:focus{outline:none;border-color:var(--glow-cyan)}
+.sForm .acts{grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* not .note: that is the whiteboard's sticky note, absolutely positioned */
+.sForm .acts .sMsg{font-size:11.5px;color:var(--dim);flex:1;min-width:0}
+.sForm [hidden]{display:none!important}
+details.sSet summary{cursor:pointer;font-family:var(--mono);font-size:10px;letter-spacing:1.6px;color:var(--glow-cyan);
+             text-transform:uppercase;padding:2px 0 8px}
+@media (max-width:1100px){ .salesGrid{grid-template-columns:minmax(0,1fr)} }
 
 .askBox{width:100%;min-height:92px;background:rgba(0,0,0,.25);border:var(--edge);border-radius:6px;
         color:var(--ink);font-family:var(--ui);font-size:13px;padding:9px 11px;resize:vertical}
@@ -1537,7 +1583,7 @@ body.arranging .scroll{pointer-events:none}
 
   /* ONE COLUMN, WHATEVER THE MARKUP SAYS. Several views set their columns
      inline (1fr 320px, 1fr 330px); only !important reaches past that. */
-  .cmdGrid,.platGrid,.logicGrid,.brainGrid,.msgGrid{grid-template-columns:minmax(0,1fr)!important}
+  .cmdGrid,.platGrid,.logicGrid,.brainGrid,.msgGrid,.salesGrid{grid-template-columns:minmax(0,1fr)!important}
   /* Panels sized for a fixed desktop grid (height:132px, max-height:34%) get
      their natural height in a scrolling column; a list still caps at .scroll. */
   .view .panel{height:auto!important;max-height:none!important;flex:none!important}
@@ -1619,6 +1665,7 @@ body.arranging .scroll{pointer-events:none}
       <button class="navItem" data-view="calendar">▦  Calendar<span class="pill" id="nCal"></span></button>
       <button class="navItem" data-view="routines">⟳  Routines<span class="pill" id="nRout"></span></button>
       <button class="navItem" data-view="clients">◈  Clients<span class="pill" id="nClients"></span></button>
+      <button class="navItem" data-view="sales">◆  Sales<span class="pill" id="nSales"></span></button>
       <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
       <button class="navItem" data-view="logic">⬢  Omega Logic<span class="pill" id="nLogic"></span></button>
       <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
@@ -1682,6 +1729,10 @@ body.arranging .scroll{pointer-events:none}
           <div class="panel" data-widget="overview" style="flex:none">
             <div class="ptitle">Overview</div>
             <div id="overview"></div>
+          </div>
+          <div class="panel" data-widget="sales" style="flex:none">
+            <div class="ptitle">Sales<span class="live" id="ccSalesAt"></span></div>
+            <div id="ccSales"><div class="row"><span class="k" style="color:var(--dim)">reading the sales board…</span></div></div>
           </div>
           <div class="panel" data-widget="schedule" style="flex:1;min-height:0">
             <div class="ptitle">Mission timeline — today</div>
@@ -2036,6 +2087,96 @@ body.arranging .scroll{pointer-events:none}
           <div class="panel" style="flex:1;min-height:0">
             <div class="ptitle" id="logicDetailTitle">Order</div>
             <div id="logicDetail" class="scroll"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== SALES ==========
+         ClearSky's own funnel and sales activity: GET /api/sales, the same
+         database the Claude Code sales agent (.claude/agents/sales-agent.md)
+         works from and writes to through its own key. Read when the view
+         opens and every half hour after; logging something or saving the
+         settings reads it again. Approving a signup stays on the master
+         console, where a packaged signup's package is reviewed; the rows
+         here link to it. Nothing on this view sends mail or posts. -->
+    <section class="view" data-view="sales">
+      <div class="salesWrap">
+        <div class="logicNote" id="salesNote">Reading the sales board…</div>
+        <div class="tileRow" id="salesTiles"></div>
+        <div class="salesGrid">
+          <div class="col">
+            <div class="panel" style="flex:1;min-height:0">
+              <div class="ptitle">Today<span class="live" id="salesTodayN"></span></div>
+              <div id="salesToday" class="scroll"></div>
+            </div>
+            <div class="panel" style="flex:none;max-height:42%">
+              <div class="ptitle">What to change</div>
+              <div id="salesSug" class="scroll"></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="panel" style="flex:none">
+              <div class="ptitle">Funnel<span class="live" id="salesFunN"></span></div>
+              <div id="salesFunnel" class="sFun"></div>
+            </div>
+            <div class="panel" style="flex:1;min-height:0">
+              <div class="ptitle">Where leads come from · 30 days</div>
+              <div id="salesSources" class="scroll"></div>
+            </div>
+            <div class="panel" style="flex:1;min-height:0">
+              <div class="ptitle">LinkedIn<span class="live" id="salesLiN"></span></div>
+              <div id="salesLinkedin" class="scroll"></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="panel" style="flex:none;height:300px">
+              <div class="ptitle">Activity<span class="live" id="salesActN"></span></div>
+              <div id="salesActivity" class="scroll"></div>
+            </div>
+            <div class="panel" style="flex:none">
+              <div class="ptitle">Log it</div>
+              <form class="sForm" id="salesLog" autocomplete="off">
+                <label>What
+                  <select id="slKind">
+                    <option value="reply">They replied</option>
+                    <option value="email-sent">I sent an email</option>
+                    <option value="call">Call</option>
+                    <option value="meeting">Meeting or demo held</option>
+                    <option value="proposal-sent">Proposal sent</option>
+                    <option value="linkedin-published">LinkedIn post went up</option>
+                    <option value="linkedin-stats">LinkedIn post numbers</option>
+                    <option value="note">Note</option>
+                  </select></label>
+                <label id="slWhoL">Who (email or company domain)<input id="slWho" placeholder="name@company.com"></label>
+                <label id="slRefL" hidden>Post (campaign)<input id="slRef" placeholder="2026-w40-grid"></label>
+                <label id="slUrlL" class="full" hidden>Post link<input id="slUrl" placeholder="https://www.linkedin.com/feed/update/…"></label>
+                <label id="slImpL" hidden>Impressions<input id="slImp" inputmode="numeric"></label>
+                <label id="slReaL" hidden>Reactions<input id="slRea" inputmode="numeric"></label>
+                <label id="slComL" hidden>Comments<input id="slCom" inputmode="numeric"></label>
+                <label id="slCliL" hidden>Clicks<input id="slCli" inputmode="numeric"></label>
+                <label class="full">Note<textarea id="slSum" maxlength="300" placeholder="One line: what happened"></textarea></label>
+                <div class="acts"><button type="submit" id="slGo">LOG</button><span class="sMsg" id="slNote"></span></div>
+              </form>
+            </div>
+            <div class="panel" style="flex:none;max-height:40%">
+              <div class="ptitle">Top prospects<span class="live" id="salesTopN"></span></div>
+              <div id="salesTop" class="scroll"></div>
+            </div>
+            <div class="panel" style="flex:none">
+              <details class="sSet" id="salesSet"><summary>Agent settings</summary>
+                <form class="sForm" id="salesCfg" autocomplete="off">
+                  <label>Agent<select id="scOn"><option value="on">On: drafts</option><option value="off">Off: reports only</option></select></label>
+                  <label>Draft cap a day<input id="scCap" inputmode="numeric" placeholder="25"></label>
+                  <label>Sender mailbox<input id="scSender" placeholder="dev@clearsky-usa.com"></label>
+                  <label>Sender name<input id="scName" placeholder="Tommy Gilmer"></label>
+                  <label class="full">Postal address (every cold email carries it)<input id="scAddr" placeholder="Street, City, ST ZIP"></label>
+                  <label>Demo booking link<input id="scDemo" placeholder="https://…"></label>
+                  <label>LinkedIn posts go to<select id="scLi"><option value="gmail-drafts">Gmail drafts</option><option value="scheduler">A scheduler</option><option value="manual">The agent's reply</option></select></label>
+                  <div class="acts"><button type="submit" id="scGo">SAVE</button><span class="sMsg" id="scNote">Cold email waits for a clearsky-usa.com sender and a postal address.</span></div>
+                </form>
+              </details>
+            </div>
           </div>
         </div>
       </div>
@@ -6011,6 +6152,7 @@ function showView(name){
      and a refetch on every visit would poll Firestore for free. The panel
      header carries asOf; a reload of the page is the refresh. */
   if(name==='logic'){ loadLogic(false); }
+  if(name==='sales'){ wireSales(); loadSales(false); }
   if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
@@ -6219,17 +6361,25 @@ function renderNeeds(s){
   (s.draftList||[]).forEach(d=>{ if(!d.to) out.push(['warn', d.subject||'(no subject)', 'needs a recipient', d.id?d:null]); });
   (s.todos||[]).forEach(t=>{ if(t.status==='blocked') out.push(['bad', t.title||'(untitled)', 'blocked']); });
   if((s.counts||{}).queued) out.push(['info', (s.counts.queued)+' meetings waiting to be analysed','queued']);
+  /* The sales board's two things only he can do: approve a signup (on the
+     console) and answer a demo request a business day old. 5th slot: where
+     the click goes. */
+  if(salesData){
+    ((salesData.approvals||{}).pending||[]).forEach(p=>out.push(['warn','Approve '+(p.name||p.orgId), (p.waitingDays>=1?Math.round(p.waitingDays)+'d':'new')+' · signup', null, ()=>showView('sales')]));
+    ((salesData.inbound||{}).unanswered||[]).filter(u=>u.businessDays>=1).forEach(u=>out.push(['warn','Answer '+(u.name||u.email), 'demo request', null, ()=>showView('sales')]));
+  }
 
   /* A draft row is not clamped: its click means "open", not "expand". */
-  listInto('needs', out, r=>({left:r[1], right:r[2], cls:r[0]==='bad'?'bad':r[0]==='warn'?'warn':'', clamp:!r[3]}),
+  listInto('needs', out, r=>({left:r[1], right:r[2], cls:r[0]==='bad'?'bad':r[0]==='warn'?'warn':'', clamp:!r[3]&&!r[4]}),
            'nothing is waiting on you');
   const n=el('needsN'); if(n) n.textContent = out.length ? out.length+' WAITING' : '';
   /* Bound after render, the way People does: listInto draws a list and does
      not know what a draft is. */
   const rowsEl=[...document.querySelectorAll('#needs .row')];
   out.forEach((r,i)=>{
-    if(!r[3]) return;
     const row=rowsEl[i]; if(!row) return;
+    if(r[4]){ row.classList.add('rowClick'); row.addEventListener('click', r[4]); return; }
+    if(!r[3]) return;
     row.classList.add('rowClick');
     row.addEventListener('click',()=>showDraft({id:r[3].id, label:r[1], to:r[3].to||null}, row));
   });
@@ -7775,6 +7925,273 @@ async function loadBook(force){
     bookLoaded=false;
     listInto('clients', [], ()=>({}), 'could not read the book: '+e.message);
   }
+}
+
+/* ── SALES ───────────────────────────────────────────────────────────────
+   GET /api/sales with his staff token: the funnel, the signups waiting, the
+   demo requests, what the agent drafted, LinkedIn, and the lines the numbers
+   say to change (api/_lib/sales.js suggestions — the server's judgement, not
+   this page's). The Claude Code sales agent writes the same database through
+   its own key; this is where he sees what it did and does the parts that are
+   his: approve (on the console), log a reply or a post's numbers, set the
+   sender and the postal address.
+
+   Read on sign-in and when the view opens, at most every half hour after
+   that: the board joins every workspace (api/_lib/growth-board.js), and a
+   page left open all day should not pay for it every minute. */
+let salesData=null, salesBusy=false, salesAt=0, salesWired=false;
+const SALES_EVERY=30*60*1000;
+const SALES_KIND={'demo-request':'demo request','email-drafted':'draft','email-sent':'sent','reply':'reply','call':'call',
+  'meeting':'meeting','proposal-sent':'proposal','linkedin-drafted':'LinkedIn draft','linkedin-published':'LinkedIn post',
+  'linkedin-stats':'LinkedIn numbers','approval-nudge':'approval nudge','research':'research','stage':'stage',
+  'suppressed':'do not contact','note':'note','agent-run':'agent run','signup':'signup'};
+
+async function salesFetch(opts){
+  const u=auth.currentUser; if(!u) throw Object.assign(new Error('not signed in'),{status:401});
+  const t=await u.getIdToken();
+  const r=await fetch('/api/sales',Object.assign({headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'}},opts||{}));
+  let j=null; try{ j=await r.json(); }catch(_){}
+  if(!r.ok) throw Object.assign(new Error((j&&j.error)||('HTTP '+r.status)),{status:r.status});
+  return j;
+}
+async function loadSales(force){
+  if(salesBusy) return;
+  if(salesData && !force && Date.now()-salesAt<SALES_EVERY){ renderSales(); return; }
+  salesBusy=true;
+  try{
+    salesData=await salesFetch(); salesAt=Date.now();
+    renderSales(); renderSalesSummary();
+    try{ renderNeeds(lastStatus||{}); }catch(_){}
+  }catch(e){
+    const who=(auth.currentUser||{}).email||'?';
+    const msg = e.status===403 ? 'Signed in as '+who+', which is not a verified ClearSky staff address. The sales board is ClearSky’s own book; sign in with the work account.'
+      : 'Could not reach /api/sales — '+e.message+'. Nothing is shown rather than an empty board.';
+    const note=el('salesNote'); if(note) note.textContent=msg;
+    const cc=el('ccSales'); if(cc){ cc.textContent=''; const d=document.createElement('div'); d.className='row';
+      const k=document.createElement('span'); k.className='k'; k.style.color='var(--dim)'; k.textContent=e.status===403?'not a ClearSky staff sign-in':'could not read /api/sales';
+      d.appendChild(k); cc.appendChild(d); }
+  }finally{ salesBusy=false; }
+}
+const sDays=d=>d==null?dash:(d<1?'<1d':Math.round(d)+'d');
+const sHrs=h=>h==null?dash:(h<48?Math.round(h)+'h':Math.round(h/24)+'d');
+const sPct=p=>p==null?dash:p+'%';
+function sStamp(iso){ const d=new Date(iso); if(isNaN(d)) return dash;
+  return d.toLocaleDateString([],{month:'short',day:'numeric'})+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+
+function renderSalesSummary(){
+  const d=salesData; if(!d) return;
+  const ap=d.approvals||{}, pend=ap.pending||[], inb=d.inbound||{}, un=inb.unanswered||[], li=d.linkedin||{}, fu=d.funnel||{}, cand=d.candidates||{};
+  const oldest=pend.length?pend[0].waitingDays:null;
+  rows(el('ccSales'), [
+    ['SIGNUPS WAITING', pend.length ? pend.length+' · oldest '+sDays(oldest) : 'none', pend.length?(oldest>=1?'bad':'warn'):'good'],
+    ['DEMO REQUESTS', un.length ? un.length+' unanswered' : num(inb.demoRequests7)+' this week', un.some(u=>u.businessDays>=1)?'bad':(un.length?'warn':'')],
+    ['DRAFTS TO SEND', num((d.outreach||{}).awaitingSend), ((d.outreach||{}).awaitingSend||0)?'warn':''],
+    ['LINKEDIN · 30D', num(li.published30)+' posts · '+num(li.leads30)+' leads'],
+    ['PROSPECTS OPEN', num(fu.openProspects)+(cand.new?' · '+cand.new+' to research':''), 'cy']
+  ]);
+  [...el('ccSales').querySelectorAll('.row')].forEach(r=>{
+    r.classList.add('rowClick'); r.setAttribute('role','link'); r.tabIndex=0;
+    r.addEventListener('click',()=>{ showView('sales'); window.scrollTo(0,0); });
+  });
+  const at=el('ccSalesAt'); if(at) at.textContent=clock(d.asOf);
+  const n=el('nSales'); if(n){ const waiting=pend.length+un.filter(u=>u.businessDays>=1).length; n.textContent=waiting||''; n.classList.toggle('warn',!!waiting); }
+}
+
+function sItem(host, pri, label, why, link){
+  const r=document.createElement('div'); r.className='sItem';
+  const b=document.createElement('span'); b.className='pr'+(pri===3?' p3':''); b.textContent=pri===3?'today':'soon';
+  const w=document.createElement('span'); w.className='wh'; w.textContent=label;
+  if(why){ const sm=document.createElement('small'); sm.textContent=why; w.appendChild(sm); }
+  r.appendChild(b); r.appendChild(w);
+  if(link){ const a=document.createElement('a'); a.href=link.href; a.target='_blank'; a.rel='noopener'; a.textContent=link.text; r.appendChild(a); }
+  host.appendChild(r);
+}
+function sEmpty(host, text){ const d=document.createElement('div'); d.className='logicNote'; d.textContent=text; host.appendChild(d); }
+
+function renderSales(){
+  const d=salesData; if(!d) return;
+  const cfg=d.config||{}, ap=d.approvals||{}, pend=ap.pending||[], inb=d.inbound||{}, out=d.outreach||{}, o30=out.d30||{},
+        li=d.linkedin||{}, fu=d.funnel||{}, cand=d.candidates||{};
+  const note=el('salesNote');
+  if(note){
+    note.textContent='';
+    const b=document.createElement('b'); b.textContent='As of '+sStamp(d.asOf)+'. ';
+    note.appendChild(b);
+    note.appendChild(document.createTextNode('The agent is '+(cfg.enabled?'on':'off (it reports, it drafts nothing)')+'. '
+      +'Sender: '+(cfg.sender||'not set')+'. Postal address: '+(cfg.postalAddressSet?'on file':'not set')+'. '
+      +(cfg.sender&&cfg.postalAddressSet?'':'Cold email waits for both; replies to people who wrote to us and customers do not. ')
+      +'Run it from Claude Code: /sales.'));
+  }
+
+  /* tiles: each one a number the process is judged by */
+  const tiles=el('salesTiles');
+  if(tiles){
+    tiles.textContent='';
+    const oldest=pend.length?pend[0].waitingDays:null;
+    [
+      ['Signups waiting', num(pend.length), pend.length?'oldest '+sDays(oldest):'none waiting', oldest>=1?'alarm':(pend.length?'warnT':'')],
+      ['Time to approve', sHrs(ap.medianHours30), ap.approved30?(ap.sameDay30+' of '+ap.approved30+' same day'):'no approvals in 30 days', ap.medianHours30>24?'warnT':''],
+      ['Demo requests', num(inb.demoRequests30), (inb.unanswered||[]).length+' unanswered · 30d', (inb.unanswered||[]).some(u=>u.businessDays>=1)?'alarm':''],
+      ['Time to answer', sHrs(inb.medianResponseHours30), 'median, business hours', inb.medianResponseHours30>24?'warnT':''],
+      ['Drafts to send', num(out.awaitingSend), 'sent '+num(o30.sent)+' of '+num(o30.drafted)+' · 30d', (out.awaitingSend||0)>5?'warnT':''],
+      ['Replies', num(o30.replies), 'reply rate '+sPct(o30.replyRate)+' · 30d', ''],
+      ['LinkedIn posts', num(li.published30), num(li.leads30)+' leads · '+num(li.waiting)+' drafts waiting', ''],
+      ['Prospects open', num(fu.openProspects), (cand.new==null?dash:cand.new)+' names to research', '']
+    ].forEach(t=>{
+      const x=document.createElement('div'); x.className='lTile'+(t[3]?' '+t[3]:'');
+      const a=document.createElement('div'); a.className='t'; a.textContent=t[0];
+      const v=document.createElement('div'); v.className='v'; v.textContent=t[1];
+      const s2=document.createElement('div'); s2.className='s'; s2.textContent=t[2];
+      x.appendChild(a); x.appendChild(v); x.appendChild(s2); tiles.appendChild(x);
+    });
+  }
+
+  /* today: the server's one list, most urgent first */
+  const td=el('salesToday');
+  if(td){
+    td.textContent='';
+    (d.today||[]).forEach(t=>{
+      let link=null;
+      if(t.url) link={href:t.url, text:t.kind==='approve'?'REVIEW ↗':'OPEN ↗'};
+      else if(t.who) link={href:'https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+t.who+' OR from:'+t.who+' OR in:drafts '+t.who), text:'GMAIL ↗'};
+      sItem(td, t.priority, t.label, t.why+(t.who?' · '+t.who:''), link);
+    });
+    if(!(d.today||[]).length) sEmpty(td,'Nothing waits on you: no signup to approve, no request unanswered, no account due.');
+    const n=el('salesTodayN'); if(n) n.textContent=(d.today||[]).length?(d.today.length+' ITEMS'):'';
+  }
+
+  const sg=el('salesSug');
+  if(sg){
+    sg.textContent='';
+    (d.suggestions||[]).forEach(x=>{ const p=document.createElement('div'); p.className='sSug '+(x.level||''); p.textContent=x.text; sg.appendChild(p); });
+  }
+
+  /* the funnel: people who came to us, then companies we are working */
+  const fn=el('salesFunnel');
+  if(fn){
+    fn.textContent='';
+    const ps=fu.prospects||{};
+    const groups=[
+      [['Signups · 30d',fu.signups30],['Waiting',fu.pending],['On trial',fu.trial],['Paying',fu.paying],['Past due',fu.pastDue]],
+      [['Target',ps.target],['Contacted',ps.contacted],['Demo',ps.demo],['Trial',ps.trial],['Proposal',ps.proposal],['Won',ps.won],['Lost',ps.lost]]
+    ];
+    groups.forEach((g,gi)=>{
+      const peak=Math.max(1,...g.map(r=>r[1]||0));
+      if(gi){ const gap=document.createElement('div'); gap.className='gap'; fn.appendChild(gap); }
+      g.forEach(r=>{
+        const row=document.createElement('div'); row.className='fr';
+        const l=document.createElement('span'); l.className='fl'; l.textContent=r[0];
+        const bar=document.createElement('span'); bar.className='fb'; const i=document.createElement('i'); i.style.width=Math.round(((r[1]||0)/peak)*100)+'%'; bar.appendChild(i);
+        const v=document.createElement('span'); v.className='fn'; v.textContent=num(r[1]==null?null:r[1]);
+        row.appendChild(l); row.appendChild(bar); row.appendChild(v); fn.appendChild(row);
+      });
+    });
+    const n=el('salesFunN'); if(n) n.textContent=num(fu.totalProspects)+' COMPANIES';
+  }
+
+  /* where leads come from: the utm tags the posts carry, and who is waiting */
+  const src=el('salesSources');
+  if(src){
+    const list=[];
+    (inb.bySource30||[]).forEach(x=>list.push({left:x.key, right:x.count+' request'+(x.count===1?'':'s'), cls:x.key==='linkedin'?'cy':''}));
+    (inb.byCampaign30||[]).forEach(x=>list.push({left:'   campaign '+x.key, right:String(x.count)}));
+    (inb.unanswered||[]).forEach(u=>list.push({left:'waiting: '+(u.name||u.email)+(u.company?' ('+u.company+')':'')+(u.interest?' · '+u.interest:''), right:sDays(u.businessDays)+' · '+u.source, cls:u.businessDays>=1?'bad':'warn'}));
+    listInto('salesSources', list, r=>r, 'No demo request in 30 days. The form on www.clearskyomega.com/contact.html files them here.');
+  }
+
+  const lk=el('salesLinkedin');
+  if(lk){
+    listInto('salesLinkedin', li.posts||[], p=>{
+      const st=p.stats||{}, bits=[];
+      if(st.impressions!=null) bits.push(st.impressions+' views');
+      if(st.reactions!=null) bits.push(st.reactions+' reactions');
+      if(st.comments!=null) bits.push(st.comments+' comments');
+      if(st.clicks!=null) bits.push(st.clicks+' clicks');
+      /* the numbers ride in the text, not the badge: a badge never wraps,
+         and a long one squeezed the post's name to a letter a line */
+      return { left:(p.summary||p.ref)+(p.campaign?'  ·  '+p.campaign:'')+(bits.length?'  ·  '+bits.join(' · '):''),
+        right:p.publishedAt?'up '+String(p.publishedAt).slice(5,10):'draft, not posted',
+        cls:p.publishedAt?'good':'warn' };
+    }, 'No LinkedIn post drafted yet. The agent drafts one when none is waiting; log it here when it goes up.');
+    const n=el('salesLiN'); if(n) n.textContent=num(li.drafted30)+' DRAFTED · '+num(li.published30)+' UP';
+  }
+
+  const ac=el('salesActivity');
+  if(ac){
+    const acts=d.activity||[];
+    listInto('salesActivity', acts, a=>({ time:sStamp(a.at), left:(SALES_KIND[a.kind]||a.kind)+(a.summary?': '+a.summary:'')+(a.prospectId?'  ·  '+a.prospectId:''),
+      right:a.by?(String(a.by).indexOf('agent:')===0?'agent':String(a.by).split('@')[0]):'', clamp:true }), 'Nothing logged yet.');
+    const n=el('salesActN'); if(n) n.textContent=acts.length?acts.length+' LATEST':'';
+  }
+
+  const tp=el('salesTop');
+  if(tp){
+    const top=((d.prospects||{}).top)||[];
+    listInto('salesTop', top, p=>({ left:p.company+'  ·  '+p.stage+(p.next&&p.next.action?'  →  '+p.next.action:''), right:'score '+p.score, cls:p.score>=50?'cy':'' }),
+      'No prospects yet. The agent researches harvested names into them (scripts/harvest-prospects.js).');
+    const n=el('salesTopN'); if(n) n.textContent=((d.prospects||{}).due||0)?(d.prospects.due+' DUE'):'';
+  }
+
+  /* the settings form shows what is on record */
+  const f=el('salesCfg');
+  if(f && !f.dataset.dirty){
+    el('scOn').value=cfg.enabled?'on':'off';
+    el('scCap').value=cfg.dailyDraftCap||'';
+    el('scSender').value=cfg.sender||'';
+    el('scName').value=cfg.senderName||'';
+    el('scAddr').value=cfg.postalAddress||'';
+    el('scDemo').value=cfg.demoLink||'';
+    el('scLi').value=cfg.linkedinChannel||'gmail-drafts';
+  }
+}
+
+function wireSales(){
+  if(salesWired) return; salesWired=true;
+  const kind=el('slKind');
+  const show=()=>{
+    const k=kind.value, isLi=k.indexOf('linkedin')===0;
+    el('slWhoL').hidden=isLi; el('slRefL').hidden=!isLi; el('slUrlL').hidden=k!=='linkedin-published';
+    ['slImpL','slReaL','slComL','slCliL'].forEach(id=>{ el(id).hidden=k!=='linkedin-stats'; });
+  };
+  kind.addEventListener('change',show); show();
+  el('salesLog').addEventListener('submit', async ev=>{
+    ev.preventDefault();
+    const k=kind.value, who=el('slWho').value.trim(), note=el('slNote'), go=el('slGo');
+    const e={kind:k, summary:el('slSum').value.trim()};
+    if(k.indexOf('linkedin')===0){
+      e.ref=el('slRef').value.trim(); e.campaign=e.ref;
+      if(!e.ref){ note.textContent='Name the post: the campaign the agent gave it.'; return; }
+      if(k==='linkedin-published') e.url=el('slUrl').value.trim();
+      if(k==='linkedin-stats') e.stats={impressions:el('slImp').value, reactions:el('slRea').value, comments:el('slCom').value, clicks:el('slCli').value};
+    } else if(who){
+      if(who.indexOf('@')>0) e.to=who; else e.domain=who;
+    } else if(k!=='note'){ note.textContent='Who was it? An email or the company’s domain.'; return; }
+    go.disabled=true; note.textContent='logging…';
+    try{
+      const r=await salesFetch({method:'POST', body:JSON.stringify({action:'log', entries:[e]})});
+      const res=(r.results||[])[0]||{};
+      if(!res.ok) throw new Error(res.error||'refused');
+      note.textContent='Logged.'; el('slSum').value=''; ['slWho','slUrl','slImp','slRea','slCom','slCli'].forEach(id=>{ el(id).value=''; });
+      await loadSales(true);
+    }catch(err){ note.textContent='Not logged: '+err.message; }
+    finally{ go.disabled=false; }
+  });
+  const cf=el('salesCfg');
+  cf.addEventListener('input',()=>{ cf.dataset.dirty='1'; });
+  cf.addEventListener('submit', async ev=>{
+    ev.preventDefault();
+    const note=el('scNote'), go=el('scGo');
+    const body={action:'config', enabled:el('scOn').value==='on', sender:el('scSender').value.trim(), senderName:el('scName').value.trim(),
+      postalAddress:el('scAddr').value.trim(), demoLink:el('scDemo').value.trim(), linkedinChannel:el('scLi').value};
+    const cap=el('scCap').value.trim(); if(cap) body.dailyDraftCap=Number(cap);
+    go.disabled=true; note.textContent='saving…';
+    try{
+      await salesFetch({method:'POST', body:JSON.stringify(body)});
+      delete cf.dataset.dirty; note.textContent='Saved.';
+      await loadSales(true);
+    }catch(err){ note.textContent='Not saved: '+err.message; }
+    finally{ go.disabled=false; }
+  });
 }
 
 /* ── the platform ────────────────────────────────────────────────────────
@@ -10545,7 +10962,8 @@ authMod.onAuthStateChanged(auth,u=>{
      otherwise the last view on this browser. */
   if(u){ try{ const want=logicParams.get('view'); showView(want&&document.querySelector('.view[data-view="'+want.replace(/[^a-z]/g,'')+'"]')?want:(localStorage.getItem('jarvisView')||'command')); }catch(_){ showView('command'); }
          try{ renderPhone(); }catch(_){}
-         load(); loadThread(); setInterval(load,30000); }
+         load(); loadThread(); setInterval(load,30000);
+         loadSales(false); setInterval(()=>{ if(document.visibilityState==='visible') loadSales(false); }, 60000); }
 });
 
 /* ── THE GLASS BOARD, FROM HIS PHONE ──────────────────────────────────────
