@@ -244,6 +244,7 @@
       <button class="btn" id="discovery-continue" onclick="discoveryContinue()">Build my system</button>
     </div>
     <div class="skipline"><button class="link" id="discovery-skip" onclick="discoverySkip()">Skip: I'll pick my modules myself</button></div>
+    <div class="who" style="margin:14px 0 0;padding:0;border:0">Signed in as <b id="discovery-who"></b><a onclick="signOut()">Not you?</a></div>
     <div class="err" id="discovery-err"></div>
   </div>
 
@@ -497,7 +498,7 @@
     var d = ev.detail || {};
     if (d.exists) return;                               /* omega-tenant.js opens the workspace */
     var u = auth.currentUser; if(!u) return;
-    $('who-email').textContent = u.email; $('who-domain').textContent = domainOf(u.email); $('verify-email').textContent = u.email;
+    $('who-email').textContent = u.email; $('discovery-who').textContent = u.email; $('who-domain').textContent = domainOf(u.email); $('verify-email').textContent = u.email;
     try {
       var saved = JSON.parse(localStorage.getItem(DRAFT) || 'null');
       if (saved && saved.email === String(u.email || '').toLowerCase() && Date.now() - (+saved.at || 0) < 30 * 86400000) {
@@ -508,10 +509,13 @@
       } else if (saved) forgetDraft();
     } catch (e) {}
     if (!draft) draft = { email: String(u.email || '').toLowerCase(), at: Date.now() };
-    /* Create account already asked for the company: the page goes straight into
-       the signup rather than back to a form that asks again. A proposal link
-       keeps the company step, where the proposal's own company is shown. */
-    skipForm = $('f-name').value.trim().length >= 2 && !qp('proposal');
+    /* The signup goes straight into the guided run, whether or not Create
+       account carried the company over (Tommy, 2026-09-28: "i want whats in
+       the slide show"): the company is the Legal company name that Billing &
+       pay asks for anyway. A proposal link keeps the company step, where the
+       proposal's own company is shown; a server without packaging (the
+       reviewed request) has only this form, and loadOptions shows it. */
+    skipForm = !qp('proposal');
     if (!skipForm) show('step-form');
     else ['step-auth','step-form'].forEach(function (s) { $(s).className = 'hide'; });
     $('f-submit').disabled = true;
@@ -706,19 +710,23 @@
   }
   window.submitWorkspace = function(payNow, retried){
     var u = auth.currentUser; if(!u) return;
-    var name=$('f-name').value.trim(); if(name.length<2){ err('form-err','Company name is required.'); show('step-form'); return; }
     if (!signupOptions) { err('form-err', 'Wait for signup options to load.'); return; }
     var packaged = !!signupOptions.packaging, errorId = packaged ? 'billing-err' : 'form-err';
-    var payload = { companyName:name, vertical:$('f-vertical').value, phone:$('f-phone').value.trim(), note:$('f-note').value.trim() };
+    var name = $('f-name').value.trim();
+    var payload = { vertical:$('f-vertical').value, phone:$('f-phone').value.trim(), note:$('f-note').value.trim() };
     if (packaged) {
       if (!billingForm || !billingForm.valid()) { if (!billingForm) toBilling(); return; }
       if (!signupPicker) { toBuild(); return; }
       payload.billingProfile = billingForm.value(); payload.vertical = payload.billingProfile.vertical;
+      /* no company step: the workspace is named after the legal company name billing asked for */
+      if (name.length < 2) name = String(payload.billingProfile.legalName || '').trim();
       payload.modules = signupPicker.value(); payload.interval = intervalValue();
       if (proposal) { payload.proposalId = proposal.id; payload.proposalKey = proposal.key; } else if (answered && discoveryBuilt) payload.discovery = discoveryValue();
       if (!proposal && wantedPlan()) payload.plan = wantedPlan();
       if (payNow) payload.payNow = true;
     }
+    if (name.length < 2) { err(errorId, 'Company name is required.'); if (!packaged) show('step-form'); return; }
+    payload.companyName = name;
     /* the address is confirmed first; the page carries on by itself once it is */
     if (!emailOk) { pendingSubmit = [payNow, retried]; toVerify(); return; }
     var btn=$(packaged ? (payNow ? 'billing-pay' : 'billing-submit') : 'f-submit'), label = btn.textContent; btn.disabled=true; btn.textContent = payNow ? 'Issuing your first invoice…' : 'Creating…'; err(errorId,'');

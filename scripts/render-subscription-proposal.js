@@ -118,7 +118,7 @@ async function run() {
     /* Self-serve: a company with no proposal walks the same discovery and gets the same recommendation. */
     caller = KIM; var kctx = await browser.newContext({ viewport: { width: 1280, height: 960 } }); await init(kctx, base, KIM); var kp = await kctx.newPage();
     await kp.goto(base + '/start.html'); await kp.evaluate(function () { window.dispatchEvent(new CustomEvent('omega:hub', { detail: {} })); });
-    await kp.locator('#f-submit:not([disabled])').waitFor(); await kp.locator('#f-name').fill('Lattice Energy'); await kp.locator('#f-submit').click(); await kp.locator('#step-discovery').waitFor({ state: 'visible' });
+    await kp.locator('#step-discovery').waitFor({ state: 'visible' }); check(!(await kp.locator('#step-form').isVisible()), 'self-serve goes straight to the questions: no company form');
     check(await kp.locator('#signup-questions .sq-tile').count() === 12, 'signup asks the twelve questions, one tile each');
     /* a tapped tile is "this quarter"; the dock is the server's own recommendation as they tap (the rep's page still asks the money question; the signup does not) */
     for (var q of ['design', 'sites', 'storage', 'finance']) await kp.locator('.sq-tile[data-q="' + q + '"]').click();
@@ -130,9 +130,10 @@ async function run() {
     check(/save \$/.test(await kp.locator('#interval-annual-price').textContent()), 'and the yearly card shows the two months saved');
     await capture(kp, 'signup-recommended');
     await kp.locator('#build-continue').click(); await kp.locator('#step-billing').waitFor({ state: 'visible' });
-    for (var f3 of [['contactName', 'Kim Lattice'], ['phone', '555-0122'], ['teamSize', '6'], ['address.line1', '1 Lattice Ln'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60602']]) await kp.locator('[data-profile-field="' + f3[0] + '"]').fill(f3[1]);
+    for (var f3 of [['legalName', 'Lattice Energy'], ['contactName', 'Kim Lattice'], ['phone', '555-0122'], ['teamSize', '6'], ['address.line1', '1 Lattice Ln'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60602']]) await kp.locator('[data-profile-field="' + f3[0] + '"]').fill(f3[1]);
     await kp.locator('#billing-submit').click(); await kp.locator('#step-done').waitFor({ state: 'visible' });
     var lt = db.data.get('omega_orgs/lattice.example/billing/current');
+    check((db.data.get('omega_orgs/lattice.example') || {}).name === 'Lattice Energy', 'the workspace is named after the legal company name on the billing form');
     check(lt && lt.signupDiscovery && lt.signupDiscovery.recommendation.modules.join() === 'lite,gridatlas,storage,finance' && lt.proposedPackage.modules.join() === 'lite,gridatlas,storage,finance' && lt.signupDiscovery.discovery.answers.finance === 'quarter' && lt.signupDiscovery.discovery.answers.ops === 'no', 'the answers and the chosen package are stored for approval');
     await kctx.close();
     check(sandboxInvoices === 0, 'nothing was invoiced: proposals never price or charge');
