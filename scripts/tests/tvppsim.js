@@ -341,22 +341,100 @@ var req = P.request({}, caRes);
 ok('the outbound request names no person or address', JSON.stringify(req).indexOf('@') < 0 && req.site.zip === '94110' && !req.load.text);
 ok('readQuote maps a tolerant answer', P.readQuote({ annualEarnings: 812.4, streams: [{ name: 'ELRP', usd: 300 }] }).annualUsd === 812);
 ok('readQuote refuses an answer with no total', P.readQuote({ streams: [] }) === null);
+/* Number() reads null, '', false and [] as 0 and true as 1: none of them is a figure */
+[['{total:null}', { total: null }], ['{annualEarnings:null, annual_usd:null, total:null}', { annualEarnings: null, annual_usd: null, total: null, error: 'ZIP not served' }],
+ ['{annualEarnings:""}', { annualEarnings: '' }], ['{annualEarnings:"  "}', { annualEarnings: '  ' }], ['{annualEarnings:false}', { annualEarnings: false }],
+ ['{annualEarnings:true}', { annualEarnings: true }], ['{annualEarnings:[]}', { annualEarnings: [] }], ['{annualEarnings:[5]}', { annualEarnings: [5] }],
+ ['{annualEarnings:"$812"}', { annualEarnings: '$812' }], ['{annualEarnings:"", total:500} (the first field present decides)', { annualEarnings: '', total: 500 }],
+ ['an array answer', [900]]].forEach(function (c) {
+  ok('readQuote refuses ' + c[0] + ' (no $0 or $1 quote)', P.readQuote(c[1]) === null, P.readQuote(c[1]));
+});
+ok('readQuote keeps a real $0 quote', (P.readQuote({ annualEarnings: 0 }) || {}).annualUsd === 0);
+ok('readQuote reads a numeric string', (P.readQuote({ annual_usd: ' 812.6 ' }) || {}).annualUsd === 813);
+ok('readQuote skips a null field for the next one', (P.readQuote({ annualEarnings: null, total: 500 }) || {}).annualUsd === 500);
+var rqs = P.readQuote({ total: 1000, streams: [{ name: 'A', usd: null }, { name: 'B', usd: '' }, { name: 'C', usd: true }, { name: 'D', usd: '300' }, null, { name: 'E', usd: 0 }] });
+ok('a stream without a real figure is left out, never $0 or $1', rqs && rqs.streams.length === 2 && rqs.streams[0].name === 'D' && rqs.streams[0].usd === 300 && rqs.streams[1].name === 'E' && rqs.streams[1].usd === 0, rqs && rqs.streams);
 later(function () {
   process.env.DIVIDENDVPP_API_URL = 'https://example.invalid/estimate';
   process.env.DIVIDENDVPP_API_KEY = 'k';
-  var saved = global.fetch;
+  var saved = global.fetch, savedAC = global.AbortController, savedErr = console.error, logged = [];
+  function restore() {
+    global.fetch = saved; global.AbortController = savedAC; console.error = savedErr;
+    delete process.env.DIVIDENDVPP_API_URL; delete process.env.DIVIDENDVPP_API_KEY;
+  }
+  function answer(body) { return function () { return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(body); } }); }; }
+  function named(name, message) { var e = new Error(message); e.name = name; return e; }
+  var EST_IN = { zip: '94110', segment: 'residential' };
+  console.error = function () { logged.push([].slice.call(arguments).join(' ')); };
   global.fetch = function (u, o) {
     ok('the key goes in the header, never the body', o.headers.Authorization === 'Bearer k' && o.body.indexOf('"k"') < 0);
     return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ annualEarnings: 900, id: 'q1' }); } });
   };
-  return P.estimate({ zip: '94110', segment: 'residential' }).then(function (r) {
+  return P.estimate(EST_IN).then(function (r) {
     ok('a live quote rides BESIDE the simulation', r.ok && r.provider === 'simulated' && r.providerQuote.ok && r.providerQuote.quote.annualUsd === 900);
-    global.fetch = function () { return Promise.reject(new Error('down')); };
-    return P.estimate({ zip: '94110', segment: 'residential' });
+    global.fetch = answer({ annualEarnings: null, annual_usd: null, total: null, error: 'ZIP not served' });
+    return P.estimate(EST_IN);
   }).then(function (r) {
-    ok('a provider failure never fails the estimate', r.ok && r.providerQuote.ok === false && /did not answer/.test(r.providerQuote.error));
-    global.fetch = saved; delete process.env.DIVIDENDVPP_API_URL; delete process.env.DIVIDENDVPP_API_KEY;
-  });
+    ok('a 200 with no figure is "could not be read", never a $0 quote', r.ok && r.providerQuote.ok === false && /could not be read/.test(r.providerQuote.error), r.providerQuote);
+    global.fetch = function () { return Promise.reject(named('AbortError', 'This operation was aborted')); };
+    return P.estimate(EST_IN);
+  }).then(function (r) {
+    ok('a provider failure never fails the estimate', r.ok && r.providerQuote.ok === false);
+    ok('OUR timeout (an abort) reads "did not answer in time"', /did not answer in time/.test(r.providerQuote.error), r.providerQuote.error);
+    logged = [];
+    global.fetch = function () { return Promise.reject(new Error('down')); };
+    return P.estimate(EST_IN);
+  }).then(function (r) {
+    ok('any other failure reads "could not be reached", not a timeout', r.ok && /could not be reached/.test(r.providerQuote.error) && !/in time/.test(r.providerQuote.error), r.providerQuote.error);
+    ok('and it is logged with the error\'s name and message', logged.length === 1 && /\[vpp-provider\]/.test(logged[0]) && /Error/.test(logged[0]) && /down/.test(logged[0]), logged);
+    global.fetch = function () { throw new TypeError('Failed to parse URL from api.dividendvpp.com/estimate'); };
+    return P.estimate(EST_IN);
+  }).then(function (r) {
+    ok('a fetch that THROWS (bad URL) still answers the simulation, "could not be reached"', r.ok && r.providerQuote.ok === false && /could not be reached/.test(r.providerQuote.error), r.providerQuote);
+    /* Node's fetch quotes a bad header VALUE, key and all, in its message */
+    process.env.DIVIDENDVPP_API_KEY = 'partner-key-SECRET\nx';
+    logged = [];
+    global.fetch = function (u, o) { return Promise.reject(new TypeError('Headers.append: "' + o.headers.Authorization + '" is an invalid header value.')); };
+    return P.estimate(EST_IN);
+  }).then(function (r) {
+    ok('a key with a stray newline reads "could not be reached"', /could not be reached/.test(r.providerQuote.error), r.providerQuote.error);
+    ok('the log names the failure but never carries the key', logged.length === 1 && /invalid header value/.test(logged[0]) && logged[0].indexOf('SECRET') < 0 && logged[0].indexOf('partner-key') < 0, logged);
+    /* the key quoted with no "Bearer" before it: the literal key is cut */
+    logged = [];
+    global.fetch = function () { var e = new Error('credential rejected: partner-key-SECRET\nx'); e.cause = { code: 'EKEY partner-key-SECRET\nx' }; return Promise.reject(e); };
+    return P.estimate(EST_IN);
+  }).then(function () {
+    ok('a key quoted without "Bearer" is cut from the message and the cause', logged.length === 1 && logged[0].indexOf('SECRET') < 0 && /\[key\]/.test(logged[0]), logged);
+    /* the runtime printed the key altered (a control character as a space): everything after "Bearer" is cut */
+    logged = [];
+    global.fetch = function () { return Promise.reject(new TypeError('Headers.append: "Bearer partner-key-SECRET x" is an invalid header value.')); };
+    return P.estimate(EST_IN);
+  }).then(function () {
+    ok('a key the runtime altered is still cut after "Bearer"', logged.length === 1 && logged[0].indexOf('SECRET') < 0 && /Bearer \[key\]/.test(logged[0]), logged);
+    /* the same two faults through the REAL fetch, where the runtime has one: both fail before any network */
+    if (typeof saved !== 'function') return null;
+    global.fetch = saved; logged = [];
+    process.env.DIVIDENDVPP_API_KEY = 'partner-key-SECRET\u0000x';
+    return P.estimate(EST_IN).then(function (r2) {
+      ok('real fetch, a NUL in the key: "could not be reached", key not logged', /could not be reached/.test(r2.providerQuote.error) && logged.join(' ').indexOf('SECRET') < 0, [r2.providerQuote.error, logged]);
+      process.env.DIVIDENDVPP_API_KEY = 'k'; process.env.DIVIDENDVPP_API_URL = 'api.dividendvpp.com/estimate'; logged = [];
+      return P.estimate(EST_IN);
+    }).then(function (r3) {
+      ok('real fetch, a URL without a scheme: "could not be reached", and the log says why', /could not be reached/.test(r3.providerQuote.error) && /URL/.test(logged.join(' ')), [r3.providerQuote.error, logged]);
+      process.env.DIVIDENDVPP_API_URL = 'https://example.invalid/estimate';
+    });
+  }).then(function () {
+    /* our clock runs out while the body is still arriving */
+    var made = null;
+    global.AbortController = function () { var sig = { aborted: false }; this.signal = sig; this.abort = function () { sig.aborted = true; }; made = this; };
+    global.fetch = function () {
+      return Promise.resolve({ ok: true, status: 200, json: function () { made.abort(); return Promise.reject(named('AbortError', 'aborted')); } });
+    };
+    return P.estimate(EST_IN);
+  }).then(function (r) {
+    ok('a timeout during the body reads "did not answer in time", not "could not be read"', /did not answer in time/.test(r.providerQuote.error), r.providerQuote.error);
+    restore();
+  }, function (e) { restore(); throw e; });
 });
 
 /* ── the gate ─────────────────────────────────────────────────────────── */
