@@ -19,7 +19,7 @@
     "osa:invite": "node scripts/provision-osa-member.js",
     "osa:invite:apply": "node scripts/provision-osa-member.js --apply",
     "rules:check": "node scripts/check-rules.js",
-    "check:pages": "node scripts/render-logic-pages.js && node scripts/render-packaging-phase-0.js && node scripts/render-packaging-phase-a.js && node scripts/render-packaging-catalog.js && node scripts/render-packaging-access.js && node scripts/render-packaging-workspaces.js && node scripts/render-legacy-gates.js && node scripts/render-packaging-billing.js && node scripts/render-subscription-proposal.js && node scripts/render-editor-theme.js && node scripts/render-signup.js && node scripts/render-admin-account.js && node scripts/render-editor-plan.js",
+    "check:pages": "node scripts/render-logic-pages.js && node scripts/render-packaging-phase-0.js && node scripts/render-packaging-phase-a.js && node scripts/render-packaging-catalog.js && node scripts/render-packaging-access.js && node scripts/render-packaging-workspaces.js && node scripts/render-legacy-gates.js && node scripts/render-packaging-billing.js && node scripts/render-subscription-proposal.js && node scripts/render-editor-theme.js && node scripts/render-signup.js && node scripts/render-admin-account.js && node scripts/render-editor-plan.js && node scripts/render-blueprint-upload.js",
     "check:dashboard": "node scripts/render-dashboard.js",
     "check:workspace": "node scripts/render-workspace.js",
     "check:production": "node scripts/check-production.js",

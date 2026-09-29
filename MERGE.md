@@ -2681,3 +2681,55 @@ candidate without a size for a battery, whatever kind of job it was.
   table, the percent, the phrases, the row, the card order);
   `tcostrollup.js` now hands the workspace a Level 2 site the run priced
   and reads "Designed and run" at 100%.
+
+## The Blueprint / PDF carries the uploaded site plan — September 29, 2026
+
+Concord uploaded a surveyor's preliminary site plan over 2 Vaughan Ave
+(Upload Image), traced the chargers, trench and pedestal on it, and the
+Blueprint / PDF did not carry it (Tommy: "if we upload a picture and go to
+download the blueprint it needs to export with that image"). Two defects
+and a third beside them, each held by `scripts/render-blueprint-upload.js`
+(in `check:pages`, the real editor in Chromium with html2canvas served
+offline from `scripts/_lib/`):
+
+- **Opening an export replaced the plan with the satellite.** With a live
+  map under the plan (the site was geocoded first), `omegaCaptureMapForExport`
+  — wrapped around Blueprint / PDF, Print, the proposal and the permit
+  hand-off — fetched a Static Maps image and wrote it over `#backdrop`
+  and `_frozenMapImg`, so the screen and the sheet lost the plan the
+  moment the export dialog opened. It now stands down while an uploaded
+  plan is on screen; the map-export patch's own layer (`omega-export-map`,
+  under the plan, never written into the backdrop of an upload) is the
+  satellite for the capture.
+- **Every export stretched the plan.** html2canvas 1.4.1, which every
+  export captures `#sc` through, has no `object-fit`; the plan is
+  `object-fit:cover` on screen (scaled to cover the canvas, cropped,
+  never stretched) and the equipment sits on that crop, so the sheet
+  carried the edges the screen had cropped away and everything drawn on it
+  sat off its mark. `_preCaptureNormalize` (the one path every capture
+  runs) now stands a `<canvas>` in for each cover / contain image, drawn by
+  the pure `_objectFitBox` rule in the image's own box, transform (the
+  plan's pan / zoom / rotate), stacking and opacity, and puts the image
+  back after — the way the SVG layers were already rasterised in place. A
+  cross-origin image with no CORS is left to html2canvas as before.
+- **A reload lost the plan.** `_loadProject` restored the live map first
+  whenever the project had coordinates and returned before the
+  uploaded-photo branch, so a plan uploaded over a geocoded site was gone
+  on every reopen. The upload branch now wins when the save recorded the
+  plan on screen; and `mapState.isUpload` records exactly that
+  (`_uploadOnScreen`: `#backdrop` or `#frozen-map-img` showing, or hidden
+  only by the Hide toggle), so a project that moved on to the live map
+  (which hides the backdrop and leaves `_isUploadedPhoto` set) still comes
+  back on the map. The auto-map poller (which opens the live map for any
+  project with an address and no map, half a second after load) stands
+  down over an uploaded plan on screen; Go still opens the map on purpose.
+- **The plot plan preferred the satellite grab.** `_ppMapLayer` put the
+  export-only satellite raster (`_ppTempMapImg`, installed for every
+  capture while a live map exists) above the uploaded backdrop, so E0 /
+  E1.1 showed the satellite under a design traced on the plan; the plan
+  now comes first and is placed as the screen places it (`xMidYMid
+  slice`, the frozen and export rasters keep `none`).
+
+Not done here: the plot plan's map layer still ignores the plan's own
+pan / zoom / rotate (`BG`); the Blueprint / PDF, which captures the screen,
+carries it.

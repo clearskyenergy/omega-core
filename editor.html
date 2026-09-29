@@ -7663,6 +7663,25 @@ function loadBg(e){const f=e.target.files[0];if(!f)return;const r=new FileReader
     }};r.readAsDataURL(f);}
 function dropBg(e){e.preventDefault();const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('image/'))loadBg({target:{files:[f]}});}
 
+/* Is the uploaded site image what the canvas shows right now? Upload Image
+   paints it as #backdrop; a tab restore or the stencil paint it as
+   #frozen-map-img; entering an address afterwards puts the live map in its
+   place (_initGMap hides #backdrop and leaves _isUploadedPhoto set). The save
+   records THIS (mapState.isUpload), so a reload brings back what was showing,
+   not what was once uploaded. The Hide toggle is a view, not a change of
+   backdrop. Held by scripts/render-blueprint-upload.js. */
+function _uploadOnScreen(){
+  if(!window._isUploadedPhoto) return false;
+  if(window._mapHidden) return true;
+  var ids=['backdrop','frozen-map-img'];
+  for(var i=0;i<ids.length;i++){
+    var n=document.getElementById(ids[i]);
+    if(n && n.getAttribute('src') && getComputedStyle(n).display!=='none') return true;
+  }
+  return false;
+}
+window._uploadOnScreen=_uploadOnScreen;
+
 // == MAP MODE ================================================
 let mapMode='google'; // 'google' | 'upload'
 
@@ -25734,7 +25753,10 @@ async function saveProject(){
     mapState.hasFrozen  = !!_frozen;
     mapState.hasStencil = !!_stencil;
     mapState.stencilOn  = !!window._stencilOn;
-    mapState.isUpload   = !!window._isUploadedPhoto;   // uploaded photo vs. google map
+    /* uploaded photo vs. google map -- and only while the photo is ON SCREEN
+       (_uploadOnScreen): a project that moved on to the live map comes back
+       on the map, one that shows its uploaded plan comes back on the plan */
+    mapState.isUpload   = (typeof _uploadOnScreen==='function') ? _uploadOnScreen() : !!window._isUploadedPhoto;
     if (_frozen && _projectId) {
       _lsSetImage('cs_frozen_map_' + _projectId, _frozen, 0.72, 1400, 'Frozen map');
       // Durable cross-device copy in Firebase Storage; URL saved in mapState.
@@ -26452,7 +26474,14 @@ async function _loadProject(id){
     // the EXACT saved lat/lng/zoom, come back UNLOCKED, and PIN the view to the
     // saved coordinates so it can't drift even if bumped -- until the user
     // clicks Lock (or deliberately pans). Deterministic, no race.
-    if (ms.lat && ms.lng && _CFG && _CFG.googleMapsKey) {
+    /* An uploaded site plan that was on screen when the project was saved
+       comes back as the backdrop, address or no address. This live-map
+       restore ran first whenever the project had coordinates and returned
+       before the upload branch below, so a plan uploaded over a geocoded
+       site vanished on every reload (Concord, 2 Vaughan Ave, 2026-09-29) and
+       no export could carry it. Held by scripts/render-blueprint-upload.js. */
+    var _uploadSaved = !!(frozenImg && ms.isUpload);
+    if (!_uploadSaved && ms.lat && ms.lng && _CFG && _CFG.googleMapsKey) {
       // Remember the saved view so the pin + the user's Lock use exact values.
       window._restoreView = { lat: ms.lat, lng: ms.lng, zoom: ms.zoom || 18 };
       window._viewPinned = true;          // pin ON until user interacts / locks
@@ -27707,6 +27736,80 @@ function generateSimpleBESSCaptureSVG(cfg, w, h) {
     + '</svg>';
 }
 
+/* ── OBJECT-FIT FOR THE CAPTURE ──────────────────────────────────────────
+   html2canvas 1.4.1 has no object-fit: every <img> is drawn stretched to
+   its box. The uploaded site plan / survey (#backdrop, Upload Image) and a
+   set plot (#plot-layer) are object-fit:cover on screen -- scaled to COVER
+   the canvas and cropped, never stretched -- and the equipment and conduit
+   are placed over THAT crop. Stretched onto the sheet, the edges the screen
+   cropped away come back: a portrait survey over a landscape canvas gains
+   its top and bottom, and everything drawn on it lands off its mark
+   (Concord, 2 Vaughan Ave, 2026-09-29: the Blueprint / PDF has to carry
+   the uploaded plan the design was traced over, as the screen shows it).
+
+   _objectFitBox is the pure rule (where the browser puts a nw x nh image in
+   a bw x bh box; object-position 50% 50%, the default). _coverImageForCapture
+   draws exactly that into a <canvas> of the same box, carrying the element's
+   own transform (the upload's pan / zoom / rotate), stacking and opacity, so
+   the canvas can stand in for the image while html2canvas runs -- the way
+   the SVG layers below are rasterised in place. An image whose pixels
+   cannot be read without tainting (a cross-origin URL with no CORS) is left
+   to html2canvas as before: stretched, never lost.
+   Held by scripts/render-blueprint-upload.js (check:pages). */
+function _objectFitBox(fit, bw, bh, nw, nh){
+  var r = (fit === 'contain') ? Math.min(bw / nw, bh / nh) : Math.max(bw / nw, bh / nh);
+  var w = nw * r, h = nh * r;
+  return { x: (bw - w) / 2, y: (bh - h) / 2, w: w, h: h, scale: r };
+}
+window._objectFitBox = _objectFitBox;
+
+async function _coverImageForCapture(img){
+  var cs = getComputedStyle(img), fit = cs.objectFit;
+  if (fit !== 'cover' && fit !== 'contain') return null;           /* fill: html2canvas draws it right */
+  if (cs.display === 'none' || cs.visibility === 'hidden') return null;
+  if (!img.complete || !img.naturalWidth || !img.naturalHeight) return null;
+  var bw = img.offsetWidth, bh = img.offsetHeight;
+  if (bw < 2 || bh < 2) return null;
+  var nw = img.naturalWidth, nh = img.naturalHeight;
+  var box = _objectFitBox(fit, bw, bh, nw, nh);
+  if (Math.abs(box.w - bw) < 1 && Math.abs(box.h - bh) < 1) return null;   /* fits its box exactly */
+  /* the source's own resolution, never more; capped so a large scan cannot
+     exhaust the canvas */
+  var k = Math.min(4, Math.max(1, nw / box.w));
+  if (bw * bh * k * k > 16e6) k = Math.sqrt(16e6 / (bw * bh));
+  var src = img, url = img.currentSrc || img.src || '';
+  if (!/^(data:|blob:)/i.test(url) && url.indexOf(location.origin + '/') !== 0) {
+    /* a remote image has to be fetched with CORS to be drawable without taint */
+    src = await new Promise(function(resolve){
+      var im = new Image(); im.crossOrigin = 'anonymous';
+      var t = setTimeout(function(){ resolve(null); }, 8000);
+      im.onload = function(){ clearTimeout(t); resolve(im); };
+      im.onerror = function(){ clearTimeout(t); resolve(null); };
+      im.src = url;
+    });
+    if (!src) return null;
+  }
+  var cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(bw * k)); cv.height = Math.max(1, Math.round(bh * k));
+  var g = cv.getContext('2d');
+  try { g.imageSmoothingQuality = 'high'; } catch(e){}
+  g.scale(cv.width / bw, cv.height / bh);
+  g.drawImage(src, box.x, box.y, box.w, box.h);
+  try { g.getImageData(0, 0, 1, 1); } catch(e){ return null; }          /* tainted: leave the <img> as it was */
+  var pos = cs.position;
+  var at = (pos === 'absolute' || pos === 'fixed')
+    ? 'left:' + img.offsetLeft + 'px;top:' + img.offsetTop + 'px;'
+    : 'left:' + cs.left + ';top:' + cs.top + ';';
+  cv.setAttribute('data-capture-fit', fit);
+  if (img.id) cv.setAttribute('data-capture-for', img.id);
+  cv.style.cssText = 'display:block;position:' + pos + ';' + at
+    + 'width:' + bw + 'px;height:' + bh + 'px;margin:0;padding:0;border:0;'
+    + 'z-index:' + cs.zIndex + ';transform:' + cs.transform + ';transform-origin:' + cs.transformOrigin + ';'
+    + 'opacity:' + cs.opacity + ';pointer-events:none';
+  return cv;
+}
+window._coverImageForCapture = _coverImageForCapture;
+
 async function _preCaptureNormalize(el) {
   var restores = [];
 
@@ -27720,6 +27823,28 @@ async function _preCaptureNormalize(el) {
       el.style.transform = savedTransform;
       el.style.transformOrigin = savedOrigin;
     });
+  }
+
+  // ── 0b. Draw object-fit images as the screen shows them ───────────────
+  // See _coverImageForCapture: html2canvas would stretch the uploaded site
+  // plan (#backdrop) to the canvas box. Its stand-in canvas goes in its
+  // place and the image is hidden for the capture; both are undone after.
+  var fitImgs = el.querySelectorAll('img');
+  for (var fi = 0; fi < fitImgs.length; fi++) {
+    var fitImg = fitImgs[fi];
+    try {
+      var fitRep = await _coverImageForCapture(fitImg);
+      if (!fitRep) continue;
+      fitImg.parentNode.insertBefore(fitRep, fitImg);
+      var fitDisplay = fitImg.style.display;
+      fitImg.style.display = 'none';
+      restores.push((function(_img, _rep, _disp){
+        return function(){
+          _img.style.display = _disp;
+          if (_rep.parentNode) _rep.parentNode.removeChild(_rep);
+        };
+      })(fitImg, fitRep, fitDisplay));
+    } catch(fitErr) { console.warn('object-fit capture:', fitErr && fitErr.message); }
   }
 
   // ── 1. Rasterize every bess-asm SVG → canvas in-place ─────────────────
@@ -41107,8 +41232,18 @@ function _ppMapLayer(W, H, xform){
   if(!cb || !cb.checked) return '';
   /* Source priority: active stencil -> frozen snapshot -> uploaded backdrop.
      This covers Google-map lock (frozen static image) and uploaded photos. */
-  var src='';
+  var src='', fitAR='none';
   if(window._stencilOn && window._frozenMapStencil) src=window._frozenMapStencil;
+  /* An uploaded site plan is what the sheet carries: on screen it covers the
+     live map and the equipment was placed on it, yet the export-only
+     satellite grab (next) used to outrank it. The plan is object-fit:cover
+     on screen, so it is placed the same way here (slice, centred, clipped);
+     the frozen and export rasters are made to the canvas's own aspect and
+     keep 'none'. Held by scripts/render-blueprint-upload.js. */
+  if(!src && window._isUploadedPhoto){
+    var _ub=document.getElementById('backdrop'), _us=_ub && _ub.getAttribute('src');
+    if(_us && _us.indexOf('data:')===0){ src=_us; fitAR='xMidYMid slice'; }
+  }
   /* Export-only snapshot captured for an unlocked/live map. Highest priority so
      the sheet shows the map without permanently freezing the live editor. */
   if(!src && window._ppTempMapImg && window._ppTempMapImg.indexOf('data:')===0) src=window._ppTempMapImg;
@@ -41151,7 +41286,7 @@ function _ppMapLayer(W, H, xform){
     var clipId = 'ppmapclip_'+Math.floor(Math.random()*1e9);
     return '<defs><clipPath id="'+clipId+'"><rect x="'+sx+'" y="'+sy+'" width="'+sw+'" height="'+sh+'"/></clipPath></defs>'
          + '<g clip-path="url(#'+clipId+')">'
-         + '<image href="'+src+'" x="'+sx+'" y="'+sy+'" width="'+sw+'" height="'+sh+'" preserveAspectRatio="none" opacity="'+op.toFixed(2)+'"/>'
+         + '<image href="'+src+'" x="'+sx+'" y="'+sy+'" width="'+sw+'" height="'+sh+'" preserveAspectRatio="'+fitAR+'" opacity="'+op.toFixed(2)+'"/>'
          + '<rect class="omega-map-scrim" x="'+sx+'" y="'+sy+'" width="'+sw+'" height="'+sh+'" fill="#FFFFFF" opacity="'+scrim.toFixed(2)+'"/>'
          + '</g>';
   }
@@ -77879,6 +78014,11 @@ window._crmToastModal=_crmToastModal;
     if(!addr) return;
     done=true; clearInterval(iv);
     fillField(addr);
+    /* An uploaded site plan on screen is the backdrop the project was
+       saved with; opening the live map here would hide it (_initGMap)
+       half a second after the reload brought it back. The address stays
+       in the field; Go opens the map on purpose. */
+    if(typeof _uploadOnScreen==='function' && _uploadOnScreen()) return;
     try{
       if(typeof _initGMap==='function' && typeof _loadMapsAPI==='function'){
         _loadMapsAPI().then(function(){
@@ -81279,6 +81419,16 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
   var MAXD=1280;   /* Static Maps hard limit per side before scale */
 
   window.omegaCaptureMapForExport=async function(){
+    /* An uploaded site plan on screen IS the backdrop. The raster fetched
+       here was written over it (#backdrop and _frozenMapImg), so the
+       moment an export was opened the screen and the Blueprint / PDF lost
+       the plan the design had been traced on (Concord, 2 Vaughan Ave,
+       2026-09-29). The map-export patch installs its own satellite layer
+       under the plan for the capture; nothing here is needed then.
+       Held by scripts/render-blueprint-upload.js. */
+    if(typeof _uploadOnScreen==='function' ? _uploadOnScreen() : window._isUploadedPhoto){
+      return {ok:true, skipped:'an uploaded site plan is the backdrop'};
+    }
     var m=MAP();
     if(!m||!m.getCenter){ return {ok:false, why:'no live map'}; }
     var k=key();
