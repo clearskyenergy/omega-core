@@ -5,7 +5,10 @@
 
    GET  → deployed? which simulation, is a live provider connected. No auth,
           no numbers.
-   POST { action:'options' }            → site types, markets, default split
+   POST { action:'options' }            → site types, markets, default split,
+          and orgId: the caller's org as the server resolved it (aliases
+          folded, fenecon.de → fenecon.com, as the rules fold them), which
+          is the org whose toolData the page may read and write
    POST { action:'estimate', site:{…} } → api/_lib/vpp-provider.js: the
           simulation (api/_lib/vpp-sim.js), plus a DividendVPP quote beside
           it once their API is connected
@@ -103,12 +106,12 @@ module.exports = function (req, res) {
     return res.status(405).json({ ok: false, error: 'GET or POST.' });
   }
   var action = '';
-  return gate(req).then(function () {
+  return gate(req).then(function (g) {
     var body = bodyOf(req);
     if (!body) throw auth.httpError(400, 'Send a JSON object with an action.');
     action = typeof body.action === 'string' ? body.action : '';
     if (ACTIONS.indexOf(action) < 0) throw auth.httpError(400, 'action must be one of: ' + ACTIONS.join(', ') + '.');
-    if (action === 'options') return res.status(200).json({ ok: true, options: SIM.options(), provider: provider.describe() });
+    if (action === 'options') return res.status(200).json({ ok: true, orgId: g.caller.orgId, options: SIM.options(), provider: provider.describe() });
     return provider.estimate(body.site).then(function (out) {
       if (!out || out.ok === false) {
         return res.status(400).json({ ok: false, errors: (out && out.errors) || [] });
