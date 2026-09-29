@@ -1,7 +1,8 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ═══════════════════════════════════════════════════════════════════════════
-   api/vpp-estimate.js — VPP earnings, one door (the VPP Earnings Simulator,
-   and the editor's Analyze › VPP Earnings, read it)
+   api/vpp-estimate.js — VPP earnings, one door (the VPP Earnings Simulator
+   reads it; an editor panel would post the same 'estimate' action — not
+   built yet, see docs/VPP-SIMULATOR.md)
 
    GET  → deployed? which simulation, is a live provider connected. No auth,
           no numbers.

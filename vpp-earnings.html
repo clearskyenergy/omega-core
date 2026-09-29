@@ -397,7 +397,7 @@ function readFile(f, done) {
     var text = String(r.result || '');
     if (text.length > MAX_TEXT) { $('fileinfo').textContent = TOO_BIG; return settle(); }
     INTERVAL = text;
-    var n = INTERVAL.split(/\r?\n/).filter(function (l) { return /\d/.test(l); }).length;
+    var n = INTERVAL.split(/\r\n|\r|\n/).filter(function (l) { return /\d/.test(l); }).length;
     $('fileinfo').textContent = f.name + ' · about ' + n.toLocaleString('en-US') + ' rows with numbers';
     settle();
   };

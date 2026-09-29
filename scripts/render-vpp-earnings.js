@@ -473,7 +473,10 @@ function installDouble(cfg) {
     sent = lastLoad();
     ok('R15: an undated file run after it posts no date the person did not give, and is read from 1 January', !!sent && sent.type === 'interval' && !('startDate' in sent) && /read as starting on 1 January/.test(await text(p, '#out')), sent);
 
-    /* the page's file check is the server's cap (vpp-sim MAX_TEXT), in the server's measure: characters */
+    /* the page's file check is the server's cap (vpp-sim MAX_TEXT), in the server's measure: characters.
+       The two numbers are read off the sources, so a change to one without the other fails here. */
+    var pageCap = /\nvar MAX_TEXT = (\d+);/.exec(fs.readFileSync(path.join(ROOT, 'vpp-earnings.html'), 'utf8'));
+    ok('size: the page\'s cap is the engine\'s cap (vpp-sim MAX_TEXT)', !!pageCap && +pageCap[1] === require(path.join(ROOT, 'api', '_lib', 'vpp-sim')).MAX_TEXT, pageCap && pageCap[1]);
     await p.setInputFiles('#file', { name: 'at-cap.csv', mimeType: 'text/csv', buffer: Buffer.from(sizedCsv(4300000)) });
     var readAtCap = await rowsRead();
     ok('size: a file of 4,300,000 characters, the server\'s cap, is read and not refused', !!readAtCap, await text(p, '#fileinfo'));
