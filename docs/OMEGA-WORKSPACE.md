@@ -110,7 +110,16 @@ decided 2026-09-26.
   (ClearSky's `amountDue`, or the invoice Stripe already holds open for
   it) beside the MODULES it bought by card (the engine's unpaid add-on
   records); an engine-made invoice left open on Stripe never stands in for
-  the tier (Concord, 2026-09-28). *Changes in progress* (a
+  the tier (Concord, 2026-09-28). The plan's own Stripe invoice is dated
+  the day it was due (`dueOn`), never the day Stripe made it, and while
+  that payment is owed the next invoice is the following month's. A legacy
+  plan more than fifteen days past due with the figure still owed is
+  `OmegaTenant.pastDue`, the one rule: the runtime's bar on every
+  signed-in page, the home's notice and Today's first row after
+  read-only all read its answer (`scripts/tests/tpastdue.js`; the
+  `concord-past-due` and `concord-ten-days` scenarios). A legacy tier
+  wears the price book's plan word: standard reads Field, deluxe and pro
+  read Pro (`OmegaTenant.tierLabels`). *Changes in progress* (a
   packaged change waiting for payment or queued for the review, a legacy
   add-on waiting for payment or ending, a recorded opt-in or opt-out, each
   with when and by whom it was asked) are listed between them, read from

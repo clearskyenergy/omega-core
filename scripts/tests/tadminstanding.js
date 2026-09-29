@@ -8,17 +8,24 @@
 'use strict';
 var assert = require('node:assert/strict'), fs = require('fs'), path = require('path');
 var SRC = fs.readFileSync(path.join(__dirname, '../../admin/admin-console.js'), 'utf8');
+/* 2026-09-28: the rules both the console and the account page read live in admin/admin-shared.js (standing, the book's words, the status chip, the signup in progress); the console keeps the inventory strip and the boot */
+var SHARED = fs.readFileSync(path.join(__dirname, '../../admin/admin-shared.js'), 'utf8');
+var ACCOUNT = fs.readFileSync(path.join(__dirname, '../../admin/account.js'), 'utf8');
 var HTML = fs.readFileSync(path.join(__dirname, '../../admin/index.html'), 'utf8');
-function grab(name) {
-  var needle = 'function ' + name + '(', i = SRC.indexOf(needle);
+var ACCOUNT_HTML = fs.readFileSync(path.join(__dirname, '../../admin/account.html'), 'utf8');
+function grabIn(src, name) {
+  var needle = 'function ' + name + '(', i = src.indexOf(needle);
   if (i < 0) throw new Error('not found: ' + name);
-  var k = SRC.indexOf('{', i), d = 0;
-  for (;; k++) { if (SRC[k] === '{') d++; else if (SRC[k] === '}') { d--; if (!d) break; } }
-  return SRC.slice(i, k + 1);
+  var k = src.indexOf('{', i), d = 0;
+  for (;; k++) { if (src[k] === '{') d++; else if (src[k] === '}') { d--; if (!d) break; } }
+  return src.slice(i, k + 1);
 }
+function grab(name) { return grabIn(SRC, name); }
+function grabShared(name) { return grabIn(SHARED, name); }
 var STATE = { priceBook: null };
-var fns = new Function('STATE', 'esc', [grab('_standing'), grab('_pkgPlanName'), grab('_pkgModules'), grab('_pkgModuleNames'), grab('_priceBookStrip'),
-  'return { standing: _standing, plan: _pkgPlanName, modules: _pkgModules, names: _pkgModuleNames, strip: _priceBookStrip };'].join('\n'))(STATE, function (s) { return String(s == null ? '' : s); });
+var fns = new Function('STATE', 'esc', [grabShared('_standing'), grabShared('_pkgPlanName'), grabShared('_pkgModules'), grabShared('_pkgModuleNames'), grab('_priceBookStrip'),
+  /var SIGNUP_STAGES = \{[^;]*\};/.exec(SHARED)[0], grabShared('_isSignup'), grabShared('_reqSignupLine'), grabShared('_accountHref'),
+  'return { standing: _standing, plan: _pkgPlanName, modules: _pkgModules, names: _pkgModuleNames, strip: _priceBookStrip, signupLine: _reqSignupLine, isSignup: _isSignup, href: _accountHref };'].join('\n'))(STATE, function (s) { return String(s == null ? '' : s); });
 var n = 0; function ok(c, m) { assert.ok(c, m); n++; }
 var DAY = 86400000, soon = new Date(Date.now() + 5 * DAY).toISOString().slice(0, 10), later = new Date(Date.now() + 40 * DAY).toISOString().slice(0, 10);
 function pk(b) { return fns.standing(Object.assign({ packaged: true }, b), { status: 'active' }); }
@@ -52,7 +59,29 @@ ok(/Price book 2026-10/.test(strip) && /Field<\/b> \$1,299\/month/.test(strip) &
 ok(!/1299|2499|150000/.test(grab('_priceBookStrip')), 'and carries no price of its own');
 ok(/fetch\('\/api\/offerings'/.test(grab('loadPriceBook')) && /loadPriceBook\(\);\n  loadTenants\(\);/.test(SRC), 'the book is fetched at boot, before the tenants');
 ok(/id="cl-pricebook"/.test(HTML), 'Client Inventory has the strip');
-ok(/Open the Package tab/.test(SRC) && /Move this workspace to a package/.test(SRC), 'a packaged workspace is sent to the Package tab; a legacy one may move');
+ok(/Open the Package panel/.test(ACCOUNT) && /Move this workspace to a package/.test(ACCOUNT), 'on the account page a packaged workspace is sent to its Package panel; a legacy one may move');
+
+/* ── ONE PAGE PER ACCOUNT (2026-09-28): every list on the console opens /admin/account.html, the drawer is gone, and both pages load the shared rules ── */
+ok(fns.href('Acme.Example') === '/admin/account.html?org=acme.example', 'the account page address, lower-cased');
+ok(/onclick="openAccount\(event,&quot;'\+esc\(r\._id\)\+'&quot;\)"/.test(SRC) && /href="'\+_accountHref\(r\._id\)\+'">'\+esc\(r\.name\|\|r\._id\)/.test(SRC), 'a tenant row opens its account page');
+ok(!/openTenantDetail|_tnDetailHtml|tn-users-/.test(SRC), 'the inline Manage drawer is gone from the console');
+ok(/<script src="\/admin\/admin-shared\.js"><\/script>\s*<script src="\/admin\/admin-console\.js"><\/script>/.test(HTML), 'the console loads the shared rules first');
+ok(/<script src="\/admin\/admin-shared\.js"><\/script>\s*<script src="\/admin\/account\.js"><\/script>/.test(ACCOUNT_HTML) && /admin\/package-panel\.js/.test(ACCOUNT_HTML), 'and so does the account page, with the Package panel');
+ok(!/function _standing\(|function _pkgPlanName\(|function accessFor\(/.test(SRC) && !/function _standing\(|function accessFor\(/.test(ACCOUNT), 'neither page keeps a copy of a shared rule');
+ok(/function _tnDetailHtml\(/.test(ACCOUNT) && /function saveTenantBilling\(/.test(ACCOUNT) && /function userAdmin\(/.test(ACCOUNT) && /function saveTenantRelationship\(/.test(ACCOUNT), 'the controls moved to the account page');
+ok(/reconcile-now/.test(ACCOUNT) && /action: 'reject'/.test(ACCOUNT) && /nothing is deleted/i.test(ACCOUNT), 'the account page looks at the payment through plan-change and cancels through tenant-approve, never a delete');
+ok(/\.chip\.good\{/.test(HTML) && /\.chip\.bad\{/.test(HTML) && /\.chip\.good\{/.test(ACCOUNT_HTML), 'standing chips have their colours on both pages');
+
+/* ── THE SIGNUP IN PROGRESS: one row in the queue from the account on, in words ── */
+STATE.priceBook = null;
+ok(fns.isSignup({ source: 'signup' }) && !fns.isSignup({ source: 'clearsky' }) && !fns.isSignup({}), 'a signup row is known by its source');
+ok(fns.signupLine({ source: 'signup', signup: { stage: 'account' } }) === 'Creating the account · No system chosen yet', 'the account just made');
+ok(fns.signupLine({ source: 'signup', signup: { stage: 'system', modules: ['lite', 'gridatlas'], priceDisplay: '$750/month', interval: 'monthly', emailVerified: false, updatedAt: '2026-09-28T19:00:00.000Z' } }, fns.names) === 'Building their system · System: lite, gridatlas · $750/month · email not confirmed · last step 2026-09-28', 'the system, the server\'s price, the unconfirmed address and the last step; keys before the book loads');
+STATE.priceBook = { modules: [{ key: 'lite', name: 'Omega Design' }, { key: 'gridatlas', name: 'Omega Grid' }] };
+ok(fns.signupLine({ source: 'signup', signup: { stage: 'billing', modules: ['lite', 'gridatlas'], priceDisplay: '$7,500/year', interval: 'annual' } }, fns.names) === 'Entering billing · System: Omega Design, Omega Grid · $7,500/year (yearly)', 'the book\'s words once it loads, and a yearly figure says so');
+ok(/Signing up · No system chosen yet/.test(fns.signupLine({ source: 'signup', signup: { stage: 'bogus' } })) && /Workspace made/.test(fns.signupLine({ signup: { stage: 'done' } })), 'an unknown stage reads plainly; done says the workspace was made');
+ok(/_reqSignupLine\(r, _pkgModuleNames\)/.test(SRC) && /'in signup'/.test(SRC) && /_reqSignupLine\(r, _pkgModuleNames\)/.test(ACCOUNT), 'the request card and the account page print that line');
+ok(/_setupWanted\(\)/.test(SRC) && /setUpFromRequest\(at\)/.test(SRC) && /\/admin\/\?setup=/.test(ACCOUNT), 'Set up the workspace from the account page lands on the console\'s New tenant form, filled in');
 
 /* ── The Package tab (admin/package-panel.js) reads a LEGACY tenant the way
    the tenant's own Modules page does (review finding 24): the ONE legacy

@@ -525,15 +525,17 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var live = legacyMods.rows.filter(function (r) { return r.state === 'live'; }), part = legacyMods.rows.filter(function (r) { return r.state === 'part'; }), avail = legacyMods.rows.filter(function (r) { return r.state === 'available'; });
     var PILLS = ['● Live', '● Live · always included', 'Opting out', 'Waiting for payment', 'Bought · not on yet', 'Opt-in requested', 'Partly included', 'Not on your plan'];
     ok('northstar: a legacy plan\'s Modules page lists every module, each with one contract pill and at most one action', legacyMods.cards === M.catalog().length && legacyMods.rows.every(function (r) { return PILLS.indexOf(r.pill) >= 0 && r.acts.length <= 1; }) && /holds \d+ of \d+ modules/.test(legacyMods.sub) && !/Subscribe|Keep module|\bAsk\b/.test(legacyMods.text), legacyMods.rows.filter(function (r) { return PILLS.indexOf(r.pill) < 0 || r.acts.length > 1; }));
-    ok('northstar: Omega Design is always included with no action; every other Live module offers Opt out and reads Included in Standard', byK.lite.state === 'included' && !byK.lite.acts.length && live.length > 0 && live.every(function (r) { return r.acts[0] === 'remove:Opt out' && r.price === 'Included in Standard'; }), live);
+    /* the legacy tier wears the price book's word: standard reads Field (Tommy, 2026-09-28) */
+    ok('northstar: Omega Design is always included with no action; every other Live module offers Opt out and reads Included in Field', byK.lite.state === 'included' && !byK.lite.acts.length && live.length > 0 && live.every(function (r) { return r.acts[0] === 'remove:Opt out' && r.price === 'Included in Field'; }), live);
     ok('northstar: a partly included module says how much and offers Opt in for the rest, never Opt out', part.length > 0 && part.every(function (r) { return /^add:Opt in/.test(r.acts[0]) && /adds the rest/.test(r.note); }), part);
     ok('northstar: a module not on the plan is priced and offers Opt in with that price, and says the billing is shown before anything is charged', avail.length > 0 && avail.every(function (r) { return /\$\d/.test(r.price) && r.acts[0] === 'add:Opt in' && r.note.indexOf(r.price) >= 0 && /Opting in shows how it is billed before anything is charged/.test(r.note); }), avail.slice(0, 3));
     /* the ONE legacy rule on Standard (the editor's gates, read off the real editor): Omega Design, Omega EV and Omega Permits are held; nine are partly on */
     ok('northstar: Standard holds Omega Design, Omega EV and Omega Permits and is partly on nine modules, as Site Map opens them', legacyMods.rows.filter(function (r) { return r.held === '1'; }).map(function (r) { return r.key; }).sort().join() === 'evrebates,lite,permitting' && part.length === 9, legacyMods.rows.map(function (r) { return r.key + ':' + r.state; }));
     ok('northstar: the Modules page agrees with Site Map: Plan Sets is not held on Standard although no tool of its is locked', byK.plansets && byK.plansets.state !== 'live', byK.plansets);
     await p.evaluate(function () { window.location.hash = '#plans'; }); await wait(400);
-    var lplans = await p.evaluate(function () { var sh = document.getElementById('modules-plans'); return { n: sh.querySelectorAll('.planc').length, on: sh.querySelectorAll('.planc.on').length, note: (sh.querySelector('.plans-note') || {}).textContent || '' }; });
-    ok('northstar: a legacy plan\'s plans shelf says its price is the agreement\'s and marks no book plan as its own', lplans.n === 4 && lplans.on === 0 && /Northstar Development/.test(lplans.note) && /Standard plan, priced by your agreement/.test(lplans.note), lplans);
+    var lplans = await p.evaluate(function () { var sh = document.getElementById('modules-plans'), own = sh.querySelector('.planc.on'); return { n: sh.querySelectorAll('.planc').length, on: sh.querySelectorAll('.planc.on').length, own: own ? own.getAttribute('data-plan-card') : null, strip: (document.querySelector('#modules-plan .ows-chip.on') || {}).textContent || '', note: (sh.querySelector('.plans-note') || {}).textContent || '' }; });
+    /* the labels match: the strip, the note and the shelf's own-plan mark all say Field for the standard tier (Tommy, 2026-09-28) */
+    ok('northstar: a legacy plan\'s plans shelf says its price is the agreement\'s and marks the tier\'s book plan, Field, as its own; the strip says the same', lplans.n === 4 && lplans.on === 1 && lplans.own === 'field' && lplans.strip === 'Field' && /Northstar Development/.test(lplans.note) && /Field plan, priced by your agreement/.test(lplans.note), lplans);
     /* Enterprise is a contract (2026-09-27: "contact for pricing"): no figure, a way to reach ClearSky */
     var ent = await p.evaluate(function () { var c = document.querySelector('#modules-plans .planc[data-plan-card="enterprise"]'), a = c && c.querySelector('a[href^="mailto:"]'); return c ? { text: c.textContent.replace(/\s+/g, ' '), contact: a ? a.getAttribute('href') : '' } : null; });
     ok('northstar: Enterprise on the plans shelf reads Contact for pricing, names no figure and offers Contact ClearSky', !!ent && /Contact for pricing/.test(ent.text) && !/\$/.test(ent.text) && /^mailto:/.test(ent.contact) && /Contact ClearSky/.test(ent.text), ent);
@@ -658,7 +660,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.waitForFunction(function () { return /NS-0001/.test((document.getElementById('billing-body') || {}).textContent || ''); }, null, { timeout: 4000 }).catch(function () {});
     var bill = await p.evaluate(function () { var v = document.getElementById('content').getAttribute('data-view'), t = document.getElementById('billing-body').textContent.replace(/\s+/g, ' '); return { view: v, text: t, cards: Array.prototype.map.call(document.querySelectorAll('#billing-body .bcard h3'), function (h) { return h.firstChild.textContent; }), portal: !!document.getElementById('bill-portal'), stripeLinks: document.querySelectorAll('#bill-hist a[href^="https://invoice.stripe.com/"]').length, cardInputs: document.querySelectorAll('#billing-body input').length }; });
     ok('northstar: Plan & billing is a page: the subscription, what you owe, the payment method and the history', bill.view === 'billing' && bill.cards.join('|') === 'Your subscription|What you owe|Payment method|Billing history', bill.cards);
-    ok('northstar: a Stripe-billed plan says the card lives with Stripe, offers the portal, and says nothing is owed with the next payment date', bill.portal && /Stripe/.test(bill.text) && /nothing is owed/.test(bill.text) && /Next invoice/.test(bill.text) && /Standard/.test(bill.text), bill.text.slice(0, 300));
+    ok('northstar: a Stripe-billed plan says the card lives with Stripe, offers the portal, and says nothing is owed with the next payment date', bill.portal && /Stripe/.test(bill.text) && /nothing is owed/.test(bill.text) && /Next invoice/.test(bill.text) && /Field/.test(bill.text), bill.text.slice(0, 300));
     ok('northstar: the billing history lists what Stripe billed, each with its invoice page', /NS-0002/.test(bill.text) && /NS-0001/.test(bill.text) && bill.stripeLinks === 2, { links: bill.stripeLinks, text: bill.text.slice(-200) });
     var hist = await p.evaluate(function () { return { paid: document.querySelectorAll('#bill-hist .spill.paid').length, statusButtons: Array.prototype.filter.call(document.querySelectorAll('#bill-hist a.ows-pill'), function (a) { return /^paid$/i.test(a.textContent.trim()); }).length, times: Array.prototype.map.call(document.querySelectorAll('#bill-hist time'), function (t) { return t.textContent; }), pm: (document.querySelector('#bill-card .pmc') || {}).className, members: /An owner or administrator sees the invoices/.test(document.getElementById('billing-body').textContent), stale: /Marketplace|Plans and the store/.test(document.getElementById('billing-body').textContent) }; });
     ok('northstar: each invoice carries one status pill (Paid), never a button that says paid, dated in the one style, the card drawn as Stripe\'s, and no link to the store', hist.paid === 2 && hist.statusButtons === 0 && hist.times.every(function (t) { return /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/.test(t); }) && /\bstripe\b/.test(hist.pm) && !hist.stale, hist);
@@ -1130,6 +1132,52 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     return {};
   } });
   STORE.legacyInvoices = []; CARD.invoices = null;
+  /* ══ 5c⁗. MORE THAN FIFTEEN DAYS PAST DUE SAYS SO (Tommy, 2026-09-28: "if
+     someone is over 15 days past due it says that on the dashboard to pay
+     their account"), and the plan's invoice is dated the day it was DUE ("it
+     was issued sept 3rd not 28th"). Concord's record: $1,299 due 25 days
+     ago, unpaid, with the invoice Pay with Stripe made for it open on Stripe
+     today. The home carries the notice with the figure and the invoice to
+     pay, Today lists it first, the runtime's bar says it on the page, and
+     Plan & billing dates the invoice to the due date. Ten days past due says
+     nothing yet. OmegaTenant.pastDue is the one rule (tpastdue.js). ══ */
+  var cpd = concordFx(), cpdDue = cpd.docs[cpd.billPath].subscriptionDue, cpdUrl = 'https://invoice.stripe.com/i/acct_fixture/in_due25';
+  cpd.docs[cpd.billPath] = Object.assign({}, cpd.docs[cpd.billPath], { paymentProvider: 'stripe', stripeCustomerId: 'cus_concord_fixture', stripeLivemode: true,
+    stripeDue: { invoiceId: 'in_due25', marker: cpd.org + '/' + cpdDue + '/129900', amountCents: 129900, dueDate: cpdDue, number: 'CS-0002', hostedUrl: cpdUrl, state: 'open', issuedAt: Date.now(), issuedBy: cpd.user.email } });
+  CARD.dueOpen = { invoiceId: 'in_due25', url: cpdUrl, number: 'CS-0002' };
+  CARD.invoices = [{ id: 'in_due25', number: 'CS-0002', status: 'open', amountDue: 1299, created: Date.now(), hostedUrl: cpdUrl, pdfUrl: null, omega: 'due', dueOn: cpdDue }];
+  await scenario('concord-past-due', cpd, { url: '/workspace', steps: async function (p) {
+    await p.waitForFunction(function () { return !!document.querySelector('#ows-notice [data-past-due]') && !!document.getElementById('omega-billing-status'); }, null, { timeout: 6000 }).catch(function () {});
+    var d = await p.evaluate(function () {
+      var n = document.querySelector('#ows-notice [data-past-due]'), bar = document.getElementById('omega-billing-status'), row = document.querySelector('#today .row[data-row="0"]'), chip = document.querySelector('.ows-chip.on');
+      return { notice: n ? n.textContent.replace(/\s+/g, ' ') : '', days: n ? n.getAttribute('data-past-due') : null, pay: n && n.querySelector('a') ? n.querySelector('a').getAttribute('href') : null,
+        bar: bar ? bar.textContent.replace(/\s+/g, ' ') : '', barDays: bar ? bar.getAttribute('data-past-due') : null, barPay: bar && bar.querySelector('a') ? bar.querySelector('a').getAttribute('href') : null,
+        first: row ? { key: row.getAttribute('data-key'), cls: row.className, t: row.textContent.replace(/\s+/g, ' '), href: row.querySelector('a') ? row.querySelector('a').getAttribute('href') : null } : null, plan: chip ? chip.textContent.trim() : null };
+    }).catch(function (e) { return { error: String(e) }; });
+    ok('concord past due: the home says 25 days past due, names the $1,299 and pays on the Stripe invoice', d.days === '25' && /25 days past due/.test(d.notice) && /\$1,299/.test(d.notice) && d.pay === cpdUrl, d);
+    ok('concord past due: Today lists it first, hot, paying on the same invoice', !!d.first && d.first.key === 'pastdue' && /\bhot\b/.test(d.first.cls) && /25 days past due/.test(d.first.t) && d.first.href === cpdUrl, d.first);
+    ok('concord past due: the runtime\'s bar says it on the page with the same Pay', d.barDays === '25' && /25 days past due/.test(d.bar) && /\$1,299/.test(d.bar) && d.barPay === cpdUrl, d);
+    ok('concord: the $1,299 tier wears the price book\'s word, Field, never Standard (Tommy, 2026-09-28)', d.plan === 'Field', d.plan);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'concord-past-due-home.png'), fullPage: true });
+    await p.evaluate(function () { location.hash = '#billing'; }); await wait(600);
+    await p.waitForFunction(function (due) { return !!document.querySelector('#bill-hist time[datetime="' + due + '"]'); }, cpdDue, { timeout: 6000 }).catch(function () {});
+    var b = await p.evaluate(function () { var g = function (id) { var e = document.getElementById(id); return e ? e.textContent.replace(/\s+/g, ' ') : ''; }; var t = document.querySelector('#bill-hist .irow[data-state] time'); return { owe: g('bill-owe'), when: t ? t.getAttribute('datetime') : null, rows: document.querySelectorAll('#bill-hist .irow[data-state]').length, hist: g('bill-hist'), sub: g('bill-sub') }; });
+    ok('concord past due: Plan & billing dates the plan\'s invoice to the day it was due, never the day Stripe made it', b.when === cpdDue && /1 invoice open · due /.test(b.owe) && !/issued/.test(b.owe) && b.rows === 1 && /Your plan/.test(b.hist) && /CS-0002/.test(b.hist), b);
+    ok('concord: Plan & billing names the Field plan', /Field plan/.test(b.sub) && !/Standard/.test(b.sub), b.sub);
+    /* the payment owed is the due date's own invoice, so the NEXT invoice is the following month's, never the same date again */
+    var nxd = new Date(+cpdDue.slice(0, 4), +cpdDue.slice(5, 7), +cpdDue.slice(8, 10)), nxs = nxd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), dus = new Date(+cpdDue.slice(0, 4), +cpdDue.slice(5, 7) - 1, +cpdDue.slice(8, 10)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    ok('concord past due: Next invoice is the month after the payment owed (' + nxs + '), on the owe card and the subscription card alike', new RegExp('Next invoice\\s*' + nxs.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(b.owe) && new RegExp('Next invoice\\s*' + nxs.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(b.sub) && new RegExp('due ' + dus.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(b.owe), { owe: b.owe, sub: b.sub, want: nxs });
+    return {};
+  } });
+  CARD.dueOpen = null; CARD.invoices = null;
+  var cten = concordFx();
+  cten.docs[cten.billPath] = Object.assign({}, cten.docs[cten.billPath], { subscriptionDue: new Date(Date.now() - 10 * 86400e3).toISOString().slice(0, 10) });
+  await scenario('concord-ten-days', cten, { url: '/workspace', steps: async function (p) {
+    await wait(800);
+    var q = await p.evaluate(function () { var first = typeof needs === 'function' ? needs()[0] : null; return { notice: !!document.querySelector('#ows-notice [data-past-due]'), bar: !!document.getElementById('omega-billing-status'), first: first ? first.key : null }; }).catch(function (e) { return { error: String(e) }; });
+    ok('ten days past due says nothing yet: no notice, no bar, nothing on Today', !q.notice && !q.bar && q.first !== 'pastdue', q);
+    return {};
+  } });
   /* ══ 5c″. EVERY CLICK (Tommy, 2026-09-27: "we need to make sure every click
      every link doesnt bug") ══
      scripts/_lib/click-sweep.js clicks every visible control on every view

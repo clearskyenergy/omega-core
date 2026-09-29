@@ -48,7 +48,7 @@ function reviewOn(billing, book, now) {
    cannot price it. Used for the before → after a removal shows. */
 function monthlyFor(b, book, modules, now) {
   var sub = b.subscription && Array.isArray(b.subscription.modules) ? b.subscription : { modules: b.modules, plan: b.plan };
-  var opts = { plan: sub.plan || 'auto', builders: b.builders, viewers: b.viewers, serviceFee: b.serviceFee, credit: b.credit, interval: b.interval, now: now };
+  var opts = { plan: sub.plan || 'auto', builders: b.builders, viewers: b.viewers, serviceFee: b.serviceFee, credit: b.credit, interval: b.interval, priceOverride: b.priceOverride || null, now: now };
   if (!book) return null;
   try { return P.quote(M.normalize(modules), book, opts).display.monthly; }
   catch (e) { try { return P.quote(M.normalize(modules), book, Object.assign({}, opts, { plan: 'auto' })).display.monthly; } catch (e2) { return null; } }
@@ -138,7 +138,7 @@ function quote(c, rows, input, now) {
   var owned = M.normalize(sub.modules), add = closure(owned, keys(input.add, 'add'));
   if (!add.length) fail('Those modules are already in your package', 400);
   var target = M.normalize(owned.concat(add));
-  var opts = { builders: b.builders, viewers: b.viewers, serviceFee: b.serviceFee, credit: b.credit, interval: b.interval, now: now };
+  var opts = { builders: b.builders, viewers: b.viewers, serviceFee: b.serviceFee, credit: b.credit, interval: b.interval, priceOverride: b.priceOverride || null, now: now };
   var before;
   try { before = P.quote(owned, book, Object.assign({ plan: sub.plan || 'auto' }, opts)); }
   catch (e) { before = P.quote(owned, book, Object.assign({ plan: 'auto' }, opts)); }
@@ -165,7 +165,7 @@ function quote(c, rows, input, now) {
      whole new cycle, and the renewal would bill it again once the change is
      in the subscription (a $0 addition or a pack bills nothing twice) */
   if (blocked.canApply && totalCents > 0 && b.nextInvoiceOn && b.nextInvoiceOn <= today) blocked = { canApply: false, reason: 'Your renewal is being issued today. Add modules once it has gone through; that usually takes under an hour.' };
-  var basis = { org: c.root.id, book: book.version, owned: owned, add: add, plan: after.plan, cycle: cycle, lines: lines, total: totalCents, billing: { plan: sub.plan, credit: b.credit, builders: b.builders, viewers: b.viewers, interval: b.interval, serviceFee: b.serviceFee } };
+  var basis = { org: c.root.id, book: book.version, owned: owned, add: add, plan: after.plan, cycle: cycle, lines: lines, total: totalCents, billing: { plan: sub.plan, credit: b.credit, builders: b.builders, viewers: b.viewers, interval: b.interval, serviceFee: b.serviceFee, priceOverride: b.priceOverride || null } };
   /* The same addition asked for again in this cycle has the same id as the
      one asked for before. Cancelled, its invoice is still open at the
      provider (cancel never voids it), so apply REVIVES that change on that
@@ -389,7 +389,7 @@ async function summary(db, orgId) {
   var sub = b.subscription && Array.isArray(b.subscription.modules) ? b.subscription : { modules: b.modules, plan: b.plan };
   if (b.packaged === true) {
     try {
-      var q = P.quote(M.normalize(sub.modules), c.book, { plan: sub.plan || 'auto', builders: b.builders, viewers: b.viewers, serviceFee: b.serviceFee, credit: b.credit, interval: b.interval, now: now });
+      var q = P.quote(M.normalize(sub.modules), c.book, { plan: sub.plan || 'auto', builders: b.builders, viewers: b.viewers, serviceFee: b.serviceFee, credit: b.credit, interval: b.interval, priceOverride: b.priceOverride || null, now: now });
       monthly = q.display.monthly; planDisplay = q.display.plan;
     } catch (e) { monthly = b.monthlyDisplay || null; }
   }

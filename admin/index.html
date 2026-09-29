@@ -189,6 +189,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 .chip.partner{background:rgba(29,185,84,.13);color:#137A38}
 .chip.gray{background:rgba(107,122,141,.12);color:#556}
 .chip.neutral{background:var(--cs-bg);color:var(--cs-sub);border:1px solid var(--cs-border)}
+/* standing (admin-shared.js _standing, _tnStatusChip): good / warn / bad had no colour of their own, so every standing read alike */
+.chip.good{background:rgba(46,125,91,.13);color:#1F6B47}
+.chip.warn{background:rgba(217,119,6,.14);color:#8A4B00}
+.chip.bad{background:rgba(217,72,43,.13);color:#A3321C}
 .chip.red2{background:rgba(229,57,53,.12);color:#B71C1C}
 .chip.blue2{background:rgba(46,134,193,.13);color:#1B5E88}
 .chip.gold2{background:rgba(201,168,76,.18);color:#8A6D1F}
@@ -1122,7 +1126,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 <script src="/config.js"></script>
 
 <script src="/omega-auth-errors.js?v=1"></script>
-<script src="/omega-dashboard-profiles.js?v=1"></script>
 <script src="/omega-tools.js"></script>
 <!-- The capability layer, so the add-on field can print the real
      vocabulary the editor honours instead of a copy that drifts. -->
@@ -1130,6 +1133,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 <!-- /admin/, not /. The file lives beside this page; loaded from the root it
      404s, admin-console.js never executes, and the console sits on "Checking
      your session" forever with every button inert because none of them exist. -->
+<!-- what the console and the account page share (2026-09-28): the gate, standing, the price book's words, tenantAction, the signup in progress -->
+<script src="/admin/admin-shared.js"></script>
 <script src="/admin/admin-console.js"></script>
 
 <!-- ══════════════ CONTRACTS & PRICING ENGINE (self-contained, ES5) ══════════════ -->

@@ -16,14 +16,22 @@ function terms(input, book, now) {
   var credit = null;
   if (input.credit === true) credit = { pct: book.credit.pct, startsAt: new Date(now).toISOString(), endsAt: new Date(now + book.credit.days * R.DAY).toISOString() };
   else if (input.credit && typeof input.credit === 'object') credit = input.credit;
-  var quote = P.quote(input.modules, book, { plan: input.plan, builders: input.builders, viewers: input.viewers, serviceFee: serviceFee, credit: credit, now: now });
+  /* a negotiated tier price (staff, with a reason): dollars from the panel or cents from the record; the tier it is for is the plan named, so a later re-quote applies it only there */
+  var priceOverride = null;
+  if (input.priceOverride && typeof input.priceOverride === 'object') {
+    var po = input.priceOverride;
+    priceOverride = { plan: po.plan || (input.plan && input.plan !== 'auto' ? input.plan : undefined), reason: po.reason,
+      amountCents: po.amountDollars !== undefined ? P.dollarsToCents(po.amountDollars, 'Negotiated monthly price') : po.amountCents };
+  }
+  var quote = P.quote(input.modules, book, { plan: input.plan, builders: input.builders, viewers: input.viewers, serviceFee: serviceFee, credit: credit, priceOverride: priceOverride, now: now });
   var interval = input.interval || 'monthly';
   if (['monthly', 'annual'].indexOf(interval) < 0) fail('Invalid billing interval');
   // Tommy's decision, 2026-09-26: annual prepay uses the 10-month price (two months free)
   // without transformation credit. Keep the policy explicit in the book.
   if (interval === 'annual' && credit && book.policy.annualTransformationCredit !== true) fail('Annual prepay excludes the transformation credit');
   return { modules: quote.modules, monthlyCents: quote.monthlyCents, monthlyDisplay: quote.display.monthly, plan: quote.plan, pricebookVersion: book.version, builders: input.builders == null ? book.logins.builders : input.builders,
-    viewers: input.viewers == null ? book.logins.viewers : input.viewers, serviceFee: quote.serviceFee, credit: credit, interval: interval };
+    viewers: input.viewers == null ? book.logins.viewers : input.viewers, serviceFee: quote.serviceFee, credit: credit, interval: interval,
+    priceOverride: quote.priceOverride ? { plan: quote.priceOverride.plan, amountCents: quote.priceOverride.amountCents, listCents: quote.priceOverride.listCents, reason: quote.priceOverride.reason } : null };
 }
 function approve(org, billing, selected, book, now, configuredTrialDays) {
   if (org.status !== 'pending') fail('Only a pending organization can start its trial');
@@ -68,7 +76,7 @@ function invoice(billing, book, on, usage) {
   var year = new Date(R.date(on)).getUTCFullYear() - new Date(R.date(feeStart)).getUTCFullYear() + 1;
   if (on < R.addYears(feeStart, year - 1) && year > 1) year--;
   var quote = P.quote(selected, book, { plan: billing.plan, builders: billing.builders, viewers: billing.viewers,
-    serviceFee: billing.serviceFee, now: R.date(on), year: year });
+    serviceFee: billing.serviceFee, priceOverride: billing.priceOverride || null, now: R.date(on), year: year });
   var c = R.cycle(on, billing.billingDay), partial = first && c.start !== on;
   var end = c.end, numerator = partial ? c.remainingDays : c.days, denominator = c.days;
   var interval = billing.interval || 'monthly';

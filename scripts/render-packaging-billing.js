@@ -71,6 +71,20 @@ async function run() {
       check((await page.locator('#pp-monthly').textContent()).includes(pack === 'lite' ? '$500' : '$1,299'), 'server monthly price');
       check(await page.locator('[data-pp-pane="pkg"] [data-module-card]').count() === M.catalog().length, 'one catalog');
       check(/^\/subscription-proposal\.html\?org=[^&]+&modules=[a-z,-]+&plan=/.test(await page.locator('#pp-proposal').getAttribute('href')), 'Send as proposal opens the tool on this tenant with the rail\u2019s terms');
+      /* a negotiated tier price (2026-09-28): the rail's own control, live only on a tier, quoted by the server */
+      if (pack === 'field' && theme === 'light') {
+        await page.locator('#pp-plan').selectOption('field'); await page.locator('#pp-plan').dispatchEvent('change');
+        await page.waitForFunction(function () { return !document.getElementById('pp-override').disabled; }, null, { timeout: 8000 });
+        check(await page.locator('#pp-override').isDisabled() === false && await page.locator('#pp-override-reason').isDisabled() === false, 'on Field the negotiated price can be entered');
+        await page.locator('#pp-override').fill('999'); await page.locator('#pp-override-reason').fill('Launch partner'); await page.locator('#pp-override').dispatchEvent('change');
+        await page.waitForFunction(function () { return /^Negotiated:/.test(document.getElementById('pp-negotiated').textContent); }, null, { timeout: 8000 });
+        check((await page.locator('#pp-monthly').textContent()).includes('$999') && (await page.locator('#pp-negotiated').textContent()).includes('Negotiated: $999/month for Field (list $1,299/month). Launch partner'), 'the server quotes the negotiated Field price and says so');
+        await page.locator('#pp-plan').selectOption('alacarte'); await page.locator('#pp-plan').dispatchEvent('change');
+        await page.waitForFunction(function () { return document.getElementById('pp-override').disabled; }, null, { timeout: 8000 });
+        check(/pays for what it adds/.test(await page.locator('#pp-negotiated').textContent()), 'Lite + modules cannot be negotiated: it pays for what it adds');
+        await page.locator('#pp-plan').selectOption('field'); await page.locator('#pp-override').fill(''); await page.locator('#pp-plan').dispatchEvent('change');
+        await page.waitForFunction(function () { return /List price/.test(document.getElementById('pp-negotiated').textContent); }, null, { timeout: 8000 });
+      }
       await capture(page, pack + '-' + theme + '-package');
       if (pack === 'field' && theme === 'light') {
         var scope = page.locator('[data-pp-pane="pkg"]');

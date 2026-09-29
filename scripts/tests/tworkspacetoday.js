@@ -23,6 +23,12 @@ ok('a trial with ten days left is a warning naming the days', trial.needs[0].cls
 ok('a trial with a month left is not on the list', b({ trialEndsAt: NOW + 30 * DAY }).needs.length === 0);
 var notice = b({ billingNotice: { text: 'Your trial ends on 2026-10-05.' } });
 ok('a billing notice without read-only is a warning that opens the plan', notice.needs[0].key === 'billing' && notice.needs[0].act.kind === 'billing');
+/* a legacy plan past due (Tommy, 2026-09-28): the rule is OmegaTenant.pastDue; here only its rank and words */
+var late = b({ pastDue: { days: 25, display: '$1,299', payUrl: 'https://invoice.stripe.com/i/x' }, pendingApproval: true, readOnly: true, billingNotice: { text: 'Pay to continue.', payUrl: 'https://pay.example/1' } });
+ok('past due sits first after read-only, before approval, hot, naming the days and the figure, paying on its link', keys(late).join() === 'readonly,pastdue,approval' && late.needs[1].cls === 'hot' && /25 days past due/.test(late.needs[1].t) && /\$1,299/.test(late.needs[1].s) && late.needs[1].cta === 'Pay' && late.needs[1].href === 'https://invoice.stripe.com/i/x', late.needs);
+var lateNoLink = b({ pastDue: { days: 16, display: '$500', payUrl: null } });
+ok('with nothing to pay on, past due opens Plan & billing', lateNoLink.needs[0].key === 'pastdue' && lateNoLink.needs[0].cta === 'Plan' && lateNoLink.needs[0].href === null && lateNoLink.needs[0].act.kind === 'billing', lateNoLink.needs[0]);
+ok('fifteen days or fewer is not on the list (the rule\'s threshold is the runtime\'s; Today never widens it)', b({ pastDue: { days: 15, display: '$500', payUrl: null } }).needs.length === 0);
 
 /* 3 · my to-dos, not the team's */
 var td = b({ todos: [

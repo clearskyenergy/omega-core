@@ -150,7 +150,14 @@
      'pro' is kept as an alias at the same level: it is what some older
      records say, and dropping it would break them the way deluxe was broken. */
   var TIER_LEVEL = { trial: 3, standard: 1, pro: 2, deluxe: 2, enterprise: 3, internal: 3, partner: 2 };
-  var TIER_LABEL = { trial: 'Trial', standard: 'Standard', pro: 'Pro', deluxe: 'Performance', enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
+  /* A legacy tier wears the PRICE BOOK's plan word (Tommy, 2026-09-28: "the
+     tier needs to match … it should be Field according to the other
+     wording"): tier 1 (standard, $1,299 a month) is Field, tier 2 (deluxe,
+     pro) is Pro, as docs/VALUE-LADDER-PACKAGING.md lays the ladder out; the
+     record's KEYS never change. omega-editor-plan.js carries the same map
+     for the editor, which cannot load this file (teditorplan.js fails if
+     the copies drift); every other page reads OmegaTenant.tierLabels. */
+  var TIER_LABEL = { trial: 'Trial', standard: 'Field', pro: 'Pro', deluxe: 'Pro', enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
 
   function cfg() { return global.CLEARSKY_CONFIG || (global.CLEARSKY_CONFIG = {}); }
   function host() { return String(global.location && global.location.hostname || '').toLowerCase(); }
@@ -223,7 +230,7 @@
       type:           pub.type || 'developer',
       orgId:          primary,
       clientName:     pub.name || primary,
-      accountTier:    TIER_LABEL[pub.tier || 'standard'] || 'Standard',
+      accountTier:    TIER_LABEL[pub.tier || 'standard'] || 'Field',
       tierLevel:      TIER_LEVEL[pub.tier || 'standard'] != null ? TIER_LEVEL[pub.tier || 'standard'] : 1,
       allowedDomain:  primary,
       allowedDomains: extra,
@@ -617,12 +624,55 @@
     (document.head || document.documentElement).appendChild(st);
   }
 
+  /* ── PAST DUE: the ONE rule (Tommy, 2026-09-28: "if someone is over 15
+     days past due it says that on the dashboard to pay their account").
+     A plan billed OUTSIDE the engine (a legacy tier: Concord's $1,299 a
+     month) carries ClearSky's figure on billing/current: amountDue, due on
+     subscriptionDue (the master console's "Next payment"). More than fifteen
+     days past that date with the figure still owed, every signed-in page
+     says so (the bar below, the same one a package's notice uses), the
+     home's Today lists it first after read-only (workspace.html hands THIS
+     result to omega-workspace-today.js, never a second reading) and the
+     home carries the notice. The link is the invoice Stripe holds open for
+     it (Pay with Stripe's, stripeDue), else ClearSky's payment link, else
+     Plan & billing. A PACKAGED workspace is the engine's: past due inside
+     its grace reads pastDueSince and after it the server's own notice
+     (past_due_lite or read-only, api/_lib/package-access.js), so it is not
+     judged here. Pure; scripts/tests/tpastdue.js pins it off this source
+     between the markers. */
+  /* ▶ pastDueOf */
+  function pastDueOf(b, now) {
+    if (!b || b.packaged === true) return null;
+    var amount = Number(b.amountDue); if (!(amount > 0) || !isFinite(amount)) return null;
+    var due = b.subscriptionDue, ms = 0;
+    if (due && typeof due === 'object') { if (typeof due.toDate === 'function') ms = due.toDate().getTime(); else if (due.seconds != null) ms = due.seconds * 1000; }
+    else if (typeof due === 'number') ms = due;
+    else if (due) { var s = String(due); ms = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + 'T00:00:00Z' : s); }
+    if (!ms || !isFinite(ms)) return null;
+    var days = Math.floor(((now || Date.now()) - ms) / 86400000);
+    if (days <= 15) return null;
+    var whole = Math.round(amount * 100) / 100, display = '$' + (whole % 1 ? whole.toFixed(2) : String(whole)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    var sd = b.stripeDue, payUrl = sd && sd.state === 'open' && sd.hostedUrl ? String(sd.hostedUrl) : (b.paymentLink ? String(b.paymentLink) : null);
+    return { days: days, amount: amount, display: display, dueOn: ms, payUrl: payUrl, text: 'Your account is ' + days + ' days past due: pay ' + display + ' to keep it open.' };
+  }
+  /* ◀ pastDueOf */
+  /* the bar for a legacy plan past due: the same element and look as a package's notice */
+  function legacyDueChrome() {
+    var pd = pastDueOf(T.billing, Date.now()); if (!pd || !document.body) return;
+    var bar = document.createElement('aside'); bar.id = 'omega-billing-status'; bar.setAttribute('role', 'status'); bar.setAttribute('data-past-due', String(pd.days));
+    bar.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;z-index:99998;padding:12px 18px;border:1px solid #e0946e;border-radius:8px;background:#2b1a16;color:#f6eeec;font:13px/1.5 system-ui;display:flex;flex-wrap:wrap;gap:10px;box-shadow:0 4px 20px #0004';
+    var text = document.createElement('span'); text.textContent = pd.text; bar.appendChild(text);
+    if (pd.payUrl) { var pay = document.createElement('a'); pay.textContent = 'Pay now'; pay.href = pd.payUrl; pay.target = '_blank'; pay.rel = 'noopener'; pay.style.color = '#ffc7a8'; bar.appendChild(pay); }
+    var plan = document.createElement('a'); plan.textContent = 'Plan & billing'; plan.href = '/workspace#billing'; plan.style.color = '#ffc7a8'; bar.appendChild(plan);
+    document.body.appendChild(bar);
+  }
   var packageRefreshTimer = null;
   function packageBillingChrome(ws) {
     if (packageRefreshTimer) clearTimeout(packageRefreshTimer);
     packageRefreshTimer = null;
     var old = document.getElementById('omega-billing-status'); if (old) old.remove();
     var view = ws && ws.packageAccess;
+    if (ws && (!view || !view.packaged)) { try { legacyDueChrome(); } catch (e) {} return; }
     if (!view || !view.packaged || view.staff || view.preview) return;
     if (view.billingNotice && document.body) {
       var bar = document.createElement('aside'); bar.id = 'omega-billing-status'; bar.setAttribute('role', 'status');
@@ -769,20 +819,30 @@
     if (document.getElementById('omega-pending')) return;
     var esc = function (x) { return String(x == null ? '' : x).replace(/</g, '&lt;'); };
     var who = (org && org.name) || (req && req.company) || 'Your workspace';
+    /* a signup started on /start.html and not finished (the account made,
+       the workspace not yet): the way back to it, not a wait on ClearSky */
+    var inSignup = !org && !!(req && req.source === 'signup');
     var d = document.createElement('div');
     d.id = 'omega-pending';
     d.setAttribute('style', 'position:sticky;top:0;z-index:9998;background:#7C4A00;color:#FFF3E0;'
       + 'font:600 13px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:10px 16px;'
       + 'display:flex;gap:12px;align-items:center;flex-wrap:wrap');
     d.innerHTML = '<span style="font-size:11px;letter-spacing:.14em;background:rgba(255,255,255,.16);'
-      + 'padding:3px 8px;border-radius:999px">AWAITING APPROVAL</span>'
+      + 'padding:3px 8px;border-radius:999px">' + (inSignup ? 'FINISH YOUR SIGNUP' : 'AWAITING APPROVAL') + '</span>'
       + '<span style="flex:1;min-width:240px;font-weight:500">'
-      + esc(who) + ' is with the ClearSky team. Tools stay locked until it is approved \u2014 '
-      + 'usually one business day. We will email '
-      + '<b>' + esc(user && user.email) + '</b> the moment it is live.</span>'
-      + '<button id="omega-upgrade" style="background:rgba(255,255,255,.16);border:1px solid '
-      + 'rgba(255,255,255,.35);color:#FFF3E0;font:inherit;font-weight:700;padding:5px 12px;'
-      + 'border-radius:7px;cursor:pointer">Upgrade</button>'
+      + (inSignup
+          ? 'Your signup is not finished: pick your system and pay your first invoice, and the workspace opens the moment it is paid. Tools stay locked until then.'
+          : esc(who) + ' is with the ClearSky team. Tools stay locked until it is approved \u2014 '
+            + 'usually one business day. We will email '
+            + '<b>' + esc(user && user.email) + '</b> the moment it is live.')
+      + '</span>'
+      + (inSignup
+          ? '<a id="omega-continue-signup" href="/start.html" style="background:rgba(255,255,255,.16);border:1px solid '
+            + 'rgba(255,255,255,.35);color:#FFF3E0;font:inherit;font-weight:700;padding:5px 12px;'
+            + 'border-radius:7px;text-decoration:none">Continue signup</a>'
+          : '<button id="omega-upgrade" style="background:rgba(255,255,255,.16);border:1px solid '
+            + 'rgba(255,255,255,.35);color:#FFF3E0;font:inherit;font-weight:700;padding:5px 12px;'
+            + 'border-radius:7px;cursor:pointer">Upgrade</button>')
       + '<span id="omega-upgrade-msg" style="font-weight:500"></span>';
     function attach() {
       if (!document.body) return;
@@ -1047,9 +1107,15 @@
     get tenant() { return T.tenant; },
     get org() { return T.org; },
     get billing() { return T.billing; },
+    /* a legacy plan more than fifteen days past due (pastDueOf, the one
+       rule): { days, amount, display, payUrl, text } or null. The record
+       given, else this workspace's own. */
+    pastDue: function (billing, now) { return pastDueOf(billing || T.billing, now); },
     /* the legacy tier → tool level every page reads (the master console's
        package panel included), so the tenant and ClearSky see one answer */
     get tierLevels() { var out = {}; for (var k in TIER_LEVEL) out[k] = TIER_LEVEL[k]; return out; },
+    /* the legacy tier → the price book's plan word (TIER_LABEL): one answer on every page */
+    get tierLabels() { var out = {}; for (var k in TIER_LABEL) out[k] = TIER_LABEL[k]; return out; },
     get member() { return T.member; },
     get role() { return T.role; },
     get status() { return T.status; },

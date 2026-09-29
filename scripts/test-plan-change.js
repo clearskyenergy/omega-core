@@ -764,6 +764,15 @@ async function run() {
   var packagedOut = await req('POST', { action: 'request-removal', remove: ['gridatlas'], dryRun: true }, Object.assign({}, owner, { uid: 'owner', claims: { email_verified: false } }));
   ok(!packagedOut.legacy && packagedOut.modules.indexOf('gridatlas') >= 0, 'a packaged workspace keeps the quarterly-review removal (a request too)');
 
+  /* A NEGOTIATED TIER PRICE (2026-09-28) is read off the RECORD by every quote here, never from a body: the tier line stays at the negotiated price, and what they add is priced at list on top */
+  seed(ev, 'field'); bill().priceOverride = { plan: 'field', amountCents: 99900, reason: 'Launch partner', by: staff.email, at: Date.now() };
+  var negotiatedBook = B.proposed(), negotiatedOpts = { plan: 'field', builders: 3, viewers: 10, priceOverride: { plan: 'field', amountCents: 99900, reason: 'Launch partner' } };
+  var qNeg = await quote(['logic-office'], owner);
+  equal([qNeg.before.display, qNeg.after.display], [P.quote(ev, negotiatedBook, negotiatedOpts).display.monthly, P.quote(ev.concat(['logic-office']), negotiatedBook, negotiatedOpts).display.monthly], 'before and after both carry the negotiated tier price; the addition is list');
+  equal([qNeg.before.display, qNeg.after.display, qNeg.monthlyDeltaCents], ['$999/month', '$2,499/month', 150000]);
+  await refused(function () { return req('POST', { action: 'quote', add: ['logic-office'], priceOverride: { plan: 'field', amountCents: 1, reason: 'Forged' } }, owner); }, /Unsupported field/, 'a body never names a negotiated price');
+  equal((await req('GET', { orgId: orgId })).monthlyDisplay, '$999/month', 'the summary shows what they pay');
+
   Date.now = realNow;
   console.log('Plan change: ' + count + ' passed; sandbox mock, no network.');
 }

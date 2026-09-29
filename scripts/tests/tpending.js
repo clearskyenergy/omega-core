@@ -67,6 +67,24 @@ const banners = t => t.body.children.filter(n => n.id === 'omega-pending').lengt
   ok(/position:sticky/.test(bn._style) && !/inset:0/.test(bn._style),
      'a strip at the top, not a screen over the page');
 
+  /* ── 1b · a signup started on /start.html and not finished (2026-09-28):
+     locked the same, but the strip is the way back to the signup, never
+     "with the ClearSky team" and never an Upgrade to request ──────────── */
+  console.log('signup in progress');
+  t = run({ 'access_requests/u9': { status: 'pending', source: 'signup', email: 'admin@roamenergy.co',
+                                    signup: { stage: 'system', modules: ['lite', 'gridatlas'] } } });
+  got = null;
+  t.G.OmegaTenant.onEntitlements(ws => { got = ws; });
+  t.signIn(USER);
+  await wait();
+  ok(!!got && got.unlockedTools.length === 0 && got.pendingApproval === true, 'nothing is unlocked while the signup is unfinished');
+  ok(banners(t) === 1, 'one strip');
+  const sb = t.body.children.filter(n => n.id === 'omega-pending')[0];
+  ok(/FINISH YOUR SIGNUP/.test(sb.innerHTML) && /href="\/start\.html"/.test(sb.innerHTML) && /Continue signup/.test(sb.innerHTML),
+     'the strip says the signup is not finished and links back to it');
+  ok(!/ClearSky team/.test(sb.innerHTML) && !/id="omega-upgrade"/.test(sb.innerHTML),
+     'not a wait on ClearSky, and nothing to request');
+
   /* ── 2 · a legacy tenant with no omega_orgs doc still works ──────────── */
   console.log('legacy tenant, never seeded');
   t = run({});
