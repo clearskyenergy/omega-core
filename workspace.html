@@ -1235,11 +1235,20 @@ function billCtx() {
   cat.forEach(function (m) { byKey[m.key] = m; });
   var invoices = sm && Array.isArray(sm.invoices) ? sm.invoices : [], unpaid = invoices.filter(function (x) { return x.state === 'unpaid'; });
   var pending = packaged && sm && Array.isArray(sm.pending) ? sm.pending : [];
-  var stripeOpen = stripeBilled && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'open'; }) : [];
+  /* Stripe's list is the PLAN's own history (stripeOwn): an invoice made by
+     hand in the dashboard (a tier ClearSky invoices there) or the plan's
+     amount due paid by card here. One the ENGINE made on the same customer
+     (an add-on bought by card, a package; /api/stripe-invoices marks it) is
+     judged by its own record in `invoices`, never by Stripe's status: a
+     withdrawn add-on's invoice left open on Stripe is not owed and never
+     stands in for the tier (Concord, 2026-09-28: a $500 opt-in read as what
+     was owed and the $1,299 plan vanished) */
+  var stripeRows = stripeBilled && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(stripeOwn) : [];
+  var stripeOpen = stripeRows.filter(function (x) { return x.status === 'open'; });
   /* a legacy plan's modules added by card (api/_lib/addons.js): the
      summary's view, else the record's own block */
   var ao = packaged ? null : (sm && sm.addOns) || (bl.addOns && typeof bl.addOns === 'object' ? bl.addOns : null);
-  var c = { bl: bl, pa: pa, sm: sm, now: now, packaged: packaged, hasBill: hasBill, rail: rail, stripe: stripe, stripeBilled: stripeBilled, qb: qb, trial: trial, manual: manual, admin: isAdminHere(), cat: cat, byKey: byKey, invoices: invoices, unpaid: unpaid, pending: pending, stripeOpen: stripeOpen,
+  var c = { bl: bl, pa: pa, sm: sm, now: now, packaged: packaged, hasBill: hasBill, rail: rail, stripe: stripe, stripeBilled: stripeBilled, qb: qb, trial: trial, manual: manual, admin: isAdminHere(), cat: cat, byKey: byKey, invoices: invoices, unpaid: unpaid, pending: pending, stripeOpen: stripeOpen, stripeRows: stripeRows,
     state: (sm && sm.packagingState) || bl.packagingState || null, co: WS.clientName || WS.orgId, ao: ao,
     payWith: (packaged && sm && sm.payWith) || (stripe ? 'Stripe' : qb ? 'QuickBooks' : ''), addOnOwed: !packaged && unpaid.some(function (x) { return x.kind === 'addon'; }) };
   /* the card through Stripe (POST /api/stripe-customer 'view'): the card on
@@ -1350,17 +1359,27 @@ function oweHtml(c) {
     /* an amount the record says is due that no invoice row carries yet (the first invoice on its way) is still owed */
     var ad = sm.amountDue != null ? sm.amountDue : bl.amountDue; if (!c.unpaid.length && Number(ad) > 0) amount = Number(ad);
   }
-  else if (!c.packaged && c.unpaid.length) {
-    /* a legacy plan's add-on invoices (QuickBooks), and its own plan's amount due beside them */
-    list = c.unpaid.map(function (x) { return { name: invName(x), display: x.display, link: x.paymentLink, date: x.date }; });
-    amount = c.unpaid.reduce(function (t, x) { return t + (Number(x.totalCents) || 0); }, 0) / 100;
-    if (Number(bl.amountDue) > 0) { amount += Number(bl.amountDue); list.push({ name: 'Your plan', display: usd(bl.amountDue), link: bl.paymentLink || (c.dueOpen && c.dueOpen.url) || null, date: bl.subscriptionDue || '' }); }
-    dueOn = c.unpaid[0].date;
-  }
-  else if (c.stripeOpen.length) { amount = c.stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0); list = c.stripeOpen.map(function (x) { return { name: x.number || 'Invoice', display: usd(x.amountDue), link: x.hostedUrl, date: x.created }; }); }
   else if (c.packaged && !sm && !BILL.failed) loading = true;
   else if (c.packaged && BILL.failed) { if (bl.amountDue != null) amount = Number(bl.amountDue) || 0; else unknown = true; }
-  else { amount = bl.amountDue != null ? Number(bl.amountDue) || 0 : 0; dueOn = bl.subscriptionDue || ''; dueWord = 'due'; }
+  else {
+    /* a legacy plan owes two things, each from its own record (Tommy,
+       2026-09-28: some customers owe only the modules they opted into, some
+       legacy accounts owe a tier, and a tier can be sold to any account):
+       the MODULES it added by card (the engine's unpaid add-on invoices, on
+       QuickBooks or Stripe) and its TIER — ClearSky's amount due on
+       billing/current, or the invoice Stripe already holds open for it (one
+       made by hand in the dashboard, or the one Pay with Stripe made), which
+       is the way to pay and is never doubled with the figure. An invoice the
+       engine made is never in c.stripeOpen (billCtx), so a withdrawn
+       add-on's invoice left open on Stripe neither counts nor hides the tier */
+    list = c.unpaid.map(function (x) { return { name: invName(x), display: x.display, link: x.paymentLink, date: x.date }; })
+      .concat(c.stripeOpen.map(function (x) { return { name: x.number || 'Invoice', display: usd(x.amountDue), link: x.hostedUrl, date: x.created }; }));
+    amount = c.unpaid.reduce(function (t, x) { return t + (Number(x.totalCents) || 0); }, 0) / 100 + c.stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0);
+    var tier = !c.stripeOpen.length && Number(bl.amountDue) > 0 ? Number(bl.amountDue) : 0;
+    amount += tier;
+    if (tier && list.length) list.push({ name: 'Your plan', display: usd(tier), link: bl.paymentLink || (c.dueOpen && c.dueOpen.url) || null, date: bl.subscriptionDue || '' });
+    if (list.length) dueOn = list[0].date; else { dueOn = bl.subscriptionDue || ''; dueWord = 'due'; }
+  }
   var due = amount > 0, n = list.length;
   var h = '<section class="bcard owe" id="bill-owe"><h3>What you owe</h3>';
   if (loading) h += '<div class="owe-amt"><span class="ic">…</span><div><b>…</b><small>Reading what is due</small></div></div>';
@@ -1389,7 +1408,7 @@ function oweHtml(c) {
     h += '<p class="warnline">' + (pa && pa.readOnly ? '<b>Read-only</b> until the invoice is paid: saved work stays open to read.' : until && ms(until) > c.now ? '<b>Access until ' + esc(day(until)) + ':</b> pay before then.' : '<b>Pay the first invoice</b> to open the modules you chose.') + '</p>';
   }
   var nextOn = nextInvoice(c);
-  var paidLast = c.invoices.filter(function (x) { return x.state === 'paid'; })[0], stripePaid = c.stripeBilled && BILL.stripe && BILL.stripe.connected ? (BILL.stripe.invoices || []).filter(function (x) { return x.status === 'paid'; })[0] : null;
+  var paidLast = c.invoices.filter(function (x) { return x.state === 'paid'; })[0], stripePaid = c.stripeRows.filter(function (x) { return x.status === 'paid'; })[0] || null;
   var last = paidLast ? paidLast.display + ' · ' + day(paidLast.paidAt || paidLast.date) : stripePaid ? usd(stripePaid.amountDue) + ' · ' + day(stripePaid.created) : bl.lastPaidAt ? (bl.amountPaid ? usd(bl.amountPaid) + ' · ' : '') + day(bl.lastPaidAt) : '';
   /* a plan billed outside the engine with no next invoice on file names none (a past due date paid is history) */
   var cells = nextOn || c.packaged ? [['Next invoice', day(nextOn) || 'None scheduled']] : [];
@@ -1408,6 +1427,20 @@ function oweHtml(c) {
 /* what an invoice row is called: a package's subscription, a change or a pack, or a module a legacy plan opted in to by card (and its monthly renewal) */
 function invName(x) { return x.kind === 'change' ? 'Opt in: ' + ((x.names || []).join(', ') || 'modules') : x.kind === 'pack' ? 'Pack' : x.kind === 'addon' ? (x.purpose === 'renewal' ? 'Add-ons: ' : 'Opt in: ') + ((x.names || []).join(', ') || 'modules') : 'Subscription'; }
 function paidLabel(c) { return 'Just paid? Check with ' + (c.packaged ? (c.payWith || 'the payment page') : ((c.ao && c.ao.payWith) || 'QuickBooks')); }
+/* an invoice on Stripe's list that is the PLAN's own: made by hand in the
+   dashboard (no OMEGA mark), or the plan's amount due paid by card here
+   ('due'). One the engine made there (an add-on bought by card, a package:
+   /api/stripe-invoices `omega` names its kind) is judged by its own record
+   in the summary's invoices, never by Stripe's status */
+function stripeOwn(inv) { return !inv.omega || inv.omega === 'due'; }
+/* a purchase withdrawn before anything was paid — an opt-in cancelled and its
+   invoice voided or reversed, a pack that expired, a change never paid —
+   billed nothing and is not history (Tommy, 2026-09-28: "just remove these,
+   they were tests"); a paid invoice reversed later (a refund, a lost dispute)
+   is history, as Void */
+function withdrawn(x) { var purchase = x.kind === 'change' || x.kind === 'pack' || (x.kind === 'addon' && x.purpose !== 'renewal'); return purchase && x.state !== 'paid' && x.state !== 'unpaid' && !x.paidAt; }
+/* the last payment ClearSky recorded on the plan, where nothing was invoiced through the page */
+function lastPaidRow(bl) { return { date: bl.lastPaidAt, name: 'Last payment', sub: bl.note || 'Under your agreement', amount: bl.amountPaid ? usd(bl.amountPaid) : '', state: 'paid', link: null }; }
 /* a fresh object from two (ES5: no Object.assign on the kiosk browsers) */
 function extend1(a, b) { var o = {}, k; for (k in a) if (Object.prototype.hasOwnProperty.call(a, k)) o[k] = a[k]; for (k in b) if (Object.prototype.hasOwnProperty.call(b, k)) o[k] = b[k]; return o; }
 /* 1b · modules a legacy plan opted in to by card (api/_lib/addons.js):
@@ -1521,7 +1554,7 @@ function histRow(o) {
 function histHtml(c) {
   var bl = c.bl, sm = c.sm, rows = [], today0 = isoDay(c.now), empty = '', failed = '';
   if (c.packaged || c.invoices.length) {
-    rows = c.invoices.map(function (x) {
+    rows = c.invoices.filter(function (x) { return !withdrawn(x); }).map(function (x) {
       var expires = x.kind === 'change' || (x.kind === 'addon' && x.purpose !== 'renewal');
       var state = x.state === 'paid' ? 'paid' : x.state === 'unpaid' ? (!expires && isoDay(x.date) < today0 ? 'overdue' : 'open') : 'void';
       return { date: x.date, name: invName(x), sub: [x.period ? span(x.period.start, x.period.end) : '', x.paidAt ? 'paid ' + day(x.paidAt) : '', state === 'void' && x.state ? x.state : ''].filter(Boolean).join(' · '), amount: x.display, state: state, link: state === 'open' || state === 'overdue' ? x.paymentLink : null };
@@ -1536,14 +1569,17 @@ function histHtml(c) {
     if (!st) empty = 'Reading your invoices from Stripe…';
     else if (st.failed) failed = 'The invoice list could not be loaded from Stripe right now.';
     else if (!st.connected) empty = 'No invoices yet: Stripe billing has not been set up for this workspace.';
-    else rows = rows.concat((st.invoices || []).map(function (inv) {
+    /* the plan's own Stripe invoices (stripeOwn): one the engine made is the
+       engine's row above, from its record, never a second row with Stripe's
+       status beside it */
+    else rows = rows.concat((st.invoices || []).filter(stripeOwn).map(function (inv) {
       var state = inv.status === 'paid' ? 'paid' : inv.status === 'open' || inv.status === 'draft' ? 'open' : inv.status === 'uncollectible' ? 'overdue' : 'void';
       return { date: inv.created, name: inv.number || 'Invoice', sub: inv.periodEnd ? 'Period to ' + day(inv.periodEnd) : 'Card through Stripe', amount: inv.amountDue == null ? '' : usd(inv.amountDue), state: state, link: inv.hostedUrl || inv.pdfUrl || null };
     }));
     if (rows.length) { empty = ''; failed = ''; }
-    if (st && st.connected && !rows.length && !failed) empty = 'No invoices issued yet.';
+    if (st && st.connected && !rows.length && !failed) { if (bl.lastPaidAt) rows = [lastPaidRow(bl)]; else empty = 'No invoices issued yet.'; }
   } else if (c.packaged || c.invoices.length) { /* the engine's list above */ }
-  else if (bl.lastPaidAt) rows = [{ date: bl.lastPaidAt, name: 'Last payment', sub: bl.note || 'Under your agreement', amount: bl.amountPaid ? usd(bl.amountPaid) : '', state: 'paid', link: null }];
+  else if (bl.lastPaidAt) rows = [lastPaidRow(bl)];
   else empty = c.trial ? 'No invoices yet. Nothing is charged during your trial.' : 'No invoices on file here. This plan is billed by ClearSky outside the workspace; write to ' + OmegaBrand.upgradeEmail() + ' for a statement.';
   var h = '<section class="bcard full" id="bill-hist"><h3>Billing history</h3>';
   if (rows.length) h += '<div class="itab"><div class="irow head"><span>Date</span><span>Description</span><span>Amount</span><span>Status</span></div>' + rows.map(histRow).join('') + '</div>';

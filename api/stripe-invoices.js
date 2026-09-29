@@ -10,9 +10,29 @@
    RETURNS connected:false RATHER THAN AN ERROR when the tenant has no Stripe
    customer. That is the normal state for an account nobody has set up billing
    for yet, and a red failure on a customer's own account page for the
-   non-event of "we have not invoiced you" is noise. */
+   non-event of "we have not invoiced you" is noise.
+
+   EACH ROW SAYS WHO MADE IT (`omega`, from Stripe's own metadata): 'due' is
+   the plan's amount due paid by card from Plan & billing
+   (api/_lib/stripe-customer.js); an invoice the ENGINE made on the same
+   customer (api/_lib/stripe-billing.js: an add-on bought by card, a package)
+   names its kind — 'addon', 'subscription', 'change', 'pack' …; null is one
+   made by hand in the dashboard (a tier ClearSky invoices there). The pages
+   judge an engine-made invoice by its OWN record under
+   billing/current/invoices, never by this list's status: a withdrawn add-on's
+   invoice still open on Stripe (the purchase issues before it records; a
+   void that has not landed) is not owed, is not listed twice, and never
+   stands in for the plan's own amount due (Concord, 2026-09-28: a $500
+   opt-in read as what was owed and the $1,299 plan vanished). */
 'use strict';
 var A = require('./_lib/admin');
+
+function madeBy(inv) {
+  var md = (inv && inv.metadata) || {};
+  if (md.omegaDue) return 'due';
+  if (md.omegaPackage === 'true' || md.omegaMarker) return String(md.omegaKind || 'package');
+  return null;
+}
 
 module.exports = A.handler(function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
@@ -69,7 +89,9 @@ module.exports = A.handler(function (req) {
               amountDue: typeof inv.amount_due === 'number' ? inv.amount_due / 100 : null,
               amountPaid: typeof inv.amount_paid === 'number' ? inv.amount_paid / 100 : null,
               hostedUrl: inv.hosted_invoice_url || null,
-              pdfUrl: inv.invoice_pdf || null
+              pdfUrl: inv.invoice_pdf || null,
+              /* who made it (madeBy, above): an engine-made one is its record's */
+              omega: madeBy(inv)
             };
           });
           return { connected: true, orgId: orgId, customer: cust, invoices: rows };
@@ -78,3 +100,4 @@ module.exports = A.handler(function (req) {
     });
   });
 });
+module.exports.madeBy = madeBy;
