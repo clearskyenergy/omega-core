@@ -2558,3 +2558,43 @@ counts the editor hands the EV Cost Workbook were every one zero.
   utility spec. Nothing appears without a pedestal on the drawing.
 - `scripts/tests/tsvcped.js` holds all of it; `api/jarvis-help.js` tells
   Jarvis.
+
+## The trench is the thing you drag — September 29, 2026
+
+Two chargers clicked off the trench made a straight spur across the
+building at 431 Sunderland Rd; dragging one charger's conduit moved that
+one leg while the spur's band and the other leg stayed on the straight
+line — "this weird ghost line ... it should only be one trench for the
+right side" (Thomas, 2026-09-28).
+
+- A click on any conduit the guided build laid in a drawn run opens the
+  RUN's handles (`_trShow`, `#trench-verts`), not that one conduit's: a
+  vertex drags, a faint midpoint becomes a bend, a double-click removes a
+  point, Esc puts them away. A root run's first point is where it leaves
+  the equipment and stays put; a spur's first point slides along its
+  parent. Shift-click still selects the one conduit; Alt-click still adds
+  a vertex to it alone.
+- A trench taken apart by hand is put back together on opening. Site Map
+  4 at the same address had every leg dragged off its trench one by one
+  (all an earlier build let you do): twelve lines where there should be
+  one — "a trench only happens once and then the run is on that"
+  (Thomas, 2026-09-28). A fresh open of a trench (a click on a leg, not
+  the redraw after a bend is born or a drag ends) re-lays every leg on
+  it and, only when one actually moved (`_trSamePts`: as many points,
+  none a pixel off; the build's tap on the run's own vertex sits a
+  fraction of a pixel from the charger's whole-pixel centre and is not a
+  change), writes ONE undo step and says so in the banner
+  (`_trShow.relaid`). A trench whose legs already ride it writes nothing.
+- `_dcfcRelayRun` re-lays every conduit laid in the run from its device,
+  through the run as it is now, back to the run's start, then every spur
+  off the run (whose tap slides to the nearest point on the new line) and
+  their conduits; per frame during the drag, with anchors re-cut on
+  release. `_trMoveVertex` / `_trInsertVertex` / `_trRemoveVertex` are the
+  pure geometry; `scripts/tests/ttrenchedit.js` holds them.
+- The drawn runs now travel with undo: both history cores (`pushHist` /
+  `undoLast`, and the FIX 6 replacements that run at boot) snapshot and
+  restore `S._trenches`, so an undo after a re-route or an extension puts
+  the run and its legs back together instead of the legs on the old line
+  under a run that kept the bend. `tundoleg.js` still passes.
+- The Level 2 guide (`scripts/guides/site-map-level-2.js`) gains step 7,
+  *Move a trench after it is drawn*, with two screenshots; Jarvis knows.

@@ -94,7 +94,7 @@ function guideHtml(img) {
     + '</style></head><body>'
     + '<h1>Trench both ways from the panel</h1>'
     + '<p class="lead">A Level 2 panel on a wall often feeds stalls to its left <em>and</em> its right, or a second row behind the first. The build now draws a second trench off the first one, point by point, so the two go their own way from the panel. Each trench is dug once and nothing overlaps; every charger’s conduit follows its own trench back to the panel, and the trench total counts each excavation once.</p>'
-    + '<p>This guide runs one job from the Build tab to the finished drawing. Keys: <kbd>Enter</kbd> finishes a trench, <kbd>Backspace</kbd> removes its last point, <kbd>T</kbd> starts another trench, <kbd>Esc</kbd> backs out of that second trench.</p>'
+    + '<p>This guide runs one job from the Build tab to the finished drawing. Keys: <kbd>Enter</kbd> finishes a trench, <kbd>Backspace</kbd> removes its last point, <kbd>T</kbd> starts another trench, <kbd>Esc</kbd> backs out of that second trench. A click on any conduit shows the trench it rides, with points to drag.</p>'
 
     + '<div class="step"><div class="n">1</div><h2>Start the Level 2 build</h2></div>'
     + '<p>Build tab › <strong>Level 2</strong>. Choose the charger model, how many, and where the service starts, then <strong>Start Placing</strong>. This job has four chargers.</p>'
@@ -125,7 +125,12 @@ function guideHtml(img) {
     + fig('done', 'Four chargers on two trenches leaving the same panel. Nothing overlaps, nothing is dug twice.')
 
     + '<div class="break"></div>'
-    + '<div class="step"><div class="n">7</div><h2>What the totals say</h2></div>'
+    + '<div class="step"><div class="n">7</div><h2>Move a trench after it is drawn</h2></div>'
+    + '<p>Clicked the chargers first and the trench went the wrong way? Click any conduit on that trench: the trench\u2019s own points appear. Drag a point, or drag a faint midpoint to add a bend, and every conduit laid in that trench follows. Double-click a point to remove it, <kbd>Esc</kbd> to finish, undo takes it back.</p>'
+    + fig('handles', 'A click on a conduit shows the trench it rides: its points, and a faint midpoint on each segment.')
+    + fig('dragged', 'The midpoint dragged into a bend. Both chargers\u2019 conduits moved with the trench: one line, no ghost. Open a trench whose conduits were dragged apart one by one and they are laid back on it.')
+    + '<div class="break"></div>'
+    + '<div class="step"><div class="n">8</div><h2>What the totals say</h2></div>'
     + '<p>The legend counts the trench as excavation: each drawn trench once, the first trench only as far as the second one taps it, and the conduit inside them separately. The conduit schedule and the BOM read the same numbers.</p>'
     + fig('legend', 'The legend after the build: the branch conduit runs, and the trench dug once.')
 
@@ -134,7 +139,8 @@ function guideHtml(img) {
     + '<li>The second trench can start anywhere on the first one, not only at the panel: a tee off the middle of a row works the same way.</li>'
     + '<li>The surface button (in-ground or sawcut concrete) applies to the trench being drawn.</li>'
     + '<li><kbd>Esc</kbd> while drawing the <em>second</em> trench goes back to the chargers; while drawing the first trench it cancels the build, keeping what was placed.</li>'
-    + '<li>The same control is in the DCFC build.</li></ul></div>'
+    + '<li>A charger clicked across the building makes a straight spur. Click that conduit and drag the trench\u2019s points round the building; both chargers\u2019 conduits follow, and there is only ever one trench for that side.</li>'
+    + '<li>The same controls are in the DCFC build.</li></ul></div>'
     + '</body></html>';
 }
 
@@ -245,14 +251,14 @@ async function run() {
     await click(panel.x - 9, panel.y + 12);
     await expect('the first point landed on the trench', function (s) { return s.draw && s.draw.another && s.draw.n === 1; });
     var tap = await page.evaluate(function () { var p = _dcfcDrawState().pts[0]; return { x: Math.round(p.x), y: Math.round(p.y) }; });
-    await click(panel.x, 590);
-    await click(200, 590);
+    await click(panel.x, 660);
+    await click(200, 660);
     await expect('three points, still a draft', function (s) { return s.draw && s.draw.another && s.draw.n === 3 && s.runs === 2; });
     await page.mouse.move(1150, 760); await page.waitForTimeout(200); await crosshair(false);
     var draftPts = await page.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('#dcfc-trenches polyline'), function (p) { return p.getAttribute('points'); }); });
     console.log('draft polylines: ' + JSON.stringify(draftPts));
     files.draft = await snap('5-draft');
-    files.draftClose = await snap('5-draft-close', { x: 150, y: 380, width: 700, height: 260 });
+    files.draftClose = await snap('5-draft-close', { x: 150, y: 380, width: 700, height: 330 });
     await crosshair(true);
     await page.keyboard.press('Enter'); await page.waitForTimeout(250);
     await expect('Enter files the second trench and goes back to the chargers', function (s) { return s.phase === 'placeon' && s.runs === 3 && s.left === 2; });
@@ -260,8 +266,8 @@ async function run() {
     assert(spur.spurOf && spur.pts === 3, 'the second trench is a spur of the first: ' + JSON.stringify(spur));
 
     /* 6. the last two chargers on the new trench; the build finishes itself */
-    await click(400, 590);
-    await click(240, 590);
+    await click(400, 660);
+    await click(240, 660);
     await page.waitForTimeout(400);
     await expect('four chargers, the build is done', function (s) { return !s.active && s.left === 0 && s.runs === 3 && s.mode === 'select'; });
     var legs = await page.evaluate(function () {
@@ -275,7 +281,32 @@ async function run() {
     var totals = await page.evaluate(function () { return { trench: trenchTotals(), legend: (document.getElementById('legend') || document.querySelector('.legend, #legend-box') || {}).textContent || '' }; });
     assert(totals.trench.ft > 0, 'the trench total is dug: ' + JSON.stringify(totals.trench));
 
-    /* 7. the legend, close up */
+    /* 7. move a trench after it is drawn: click a leg on it, drag a point */
+    var secondRun = await page.evaluate(function () { var t = S._trenches[S._trenches.length - 1]; return { id: t.id, pts: t.pts.length }; });
+    /* on the stretch below the panel's label, where the legs of both chargers run */
+    await page.mouse.click(panel.x, 590); await page.waitForTimeout(300);
+    var trLayer = await page.evaluate(function () { var l = document.getElementById('trench-verts'); return l ? { forRun: l.getAttribute('data-for'), handles: l.querySelectorAll('[data-trv]').length } : null; });
+    assert(trLayer && trLayer.forRun === secondRun.id && trLayer.handles === secondRun.pts, 'a click on a leg opens the trench handles: ' + JSON.stringify(trLayer));
+    var histBefore = await page.evaluate(function () { return S.history.length; });
+    await crosshair(false);
+    files.handles = await snap('7-handles', { x: 150, y: 380, width: 700, height: 360 });
+    /* the faint midpoint of the stretch from the panel, pulled east: the trench bends, the chargers stay */
+    var ghost = await page.evaluate(function () { var gh = document.querySelector('#trench-verts [data-trmid="0"]'); return { x: +gh.getAttribute('cx'), y: +gh.getAttribute('cy') }; });
+    var gx = ghost.x + sc.x, gy = ghost.y + sc.y;
+    var sc7 = await page.locator('#sc').boundingBox();                /* the sheet's offset now: the ribbon moved it since the build began */
+    var gx = ghost.x + sc7.x, gy = ghost.y + sc7.y;
+    await page.mouse.move(gx, gy); await page.mouse.down(); await page.waitForTimeout(80);
+    for (var gi = 1; gi <= 8; gi++) { await page.mouse.move(gx + 70 * gi / 8, gy); await page.waitForTimeout(40); }
+    await page.mouse.up(); await page.waitForTimeout(400);
+    var bent = await page.evaluate(function (id) { var t = S._trenches.filter(function (r) { return r.id === id; })[0]; var legs = S.conduits.filter(function (c) { return c.evRun === id; }); return { pts: t.pts.length, legs: legs.length, hist: S.history.length, through: legs.every(function (c) { return c.pts.some(function (q) { return Math.abs(q.x - t.pts[1].x) < 2 && Math.abs(q.y - t.pts[1].y) < 2; }); }) }; }, secondRun.id);
+    assert(bent.pts === secondRun.pts + 1 && bent.legs === 2 && bent.through, 'the bend took both legs with it: ' + JSON.stringify(bent));
+    assert(bent.hist === histBefore + 1, 'opening the trench wrote no undo step (its legs were on it); the drag wrote one: ' + histBefore + ' -> ' + bent.hist);
+    await page.mouse.move(1150, 760); await page.waitForTimeout(250);
+    files.dragged = await snap('7-dragged', { x: 150, y: 380, width: 700, height: 360 });
+    await crosshair(true);
+    await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+
+    /* 8. the legend, close up */
     await page.evaluate(function () { if (typeof hideBanner === 'function') hideBanner(); }); await page.waitForTimeout(150);
     var lb = await page.locator('#lgd').boundingBox(), legend = lb ? { x: lb.x, y: lb.y, w: lb.width, h: lb.height } : null;
     if (legend) {
