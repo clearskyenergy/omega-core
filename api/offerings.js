@@ -13,9 +13,13 @@ async function book(db) {
 }
 function view(b, source) {
   var rows = P.catalog(b), modules = rows.map(function (m) { return { key: m.key, name: m.name, category: m.category, shelf: m.shelf, shelfLabel: m.shelfLabel, mark: m.mark, blurb: m.blurb || '', monthlyDisplay: m.priceDisplay, priceDisplay: m.priceDisplay, usageDisplay: m.usageDisplay || '', features: m.features || [], requires: m.requires || [], tools: m.tools, caps: m.caps || [], editor: (m.ribbon || []).length > 0 || (m.caps || []).some(function (c) { return /^(design|view|export)/.test(c); }), legacyGates: m.legacyGates || [] }; });
-  var plans = Object.keys(b.plans).map(function (k) { var p = b.plans[k]; return { key: k, name: p.name, monthlyDisplay: P.money(p.priceCents) + '/month', capDisplay: 'À la carte up to ' + P.money(p.capCents) + ' of modules', serviceFeeDisplay: b.serviceFees[k] ? P.money(b.serviceFees[k]) + '/year' : 'Included' }; });
+  /* the service fee as subscription-pricing prices it (the one rule: a plan
+     fee; Omega Design alone has none), null when there is none so a page
+     says so in its own words instead of printing a placeholder */
+  function feeOf(plan) { var f = P.serviceFee(b, plan); return f.amountCents ? f.display : null; }
+  var plans = Object.keys(b.plans).map(function (k) { var p = b.plans[k]; return { key: k, name: p.name, monthlyDisplay: P.money(p.priceCents) + '/month', capDisplay: 'À la carte up to ' + P.money(p.capCents) + ' of modules', serviceFeeDisplay: feeOf(k) }; });
   return { pricebookVersion: b.version, source: source, currency: b.currency, floorDisplay: P.money(b.floorCents) + '/month',
-    lite: { name: 'Lite', monthlyDisplay: P.money(b.modules.lite.priceCents) + '/month', serviceFeeDisplay: b.serviceFees.lite ? P.money(b.serviceFees.lite) + '/year' : 'Included' },
+    lite: { name: 'Lite', monthlyDisplay: P.money(b.modules.lite.priceCents) + '/month', serviceFeeDisplay: feeOf('alacarte') },
     /* Enterprise is a contract priced with ClearSky (Tommy, 2026-09-27:
        "enterprise should be like 'contact for pricing'"): the public list
        says so and publishes no figure. The book keeps the floor, the setup

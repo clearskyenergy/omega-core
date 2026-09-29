@@ -231,7 +231,8 @@ one screen of tiles, `short`/`hint` on each question in
 dock shows the server's own recommendation, priced, as they tap; or Skip,
 which sends no answers) → *Your system* (the one menu, priced live by the
 server; Monthly, or Yearly at ten months of twelve; the first-year service
-fee named as the server priced it) → *Confirm email*, only while the
+fee named as the server priced it: a PLAN fee, Field and Pro; Omega Design
+alone carries none, `subscription-pricing.fee()`, 2026-09-29) → *Confirm email*, only while the
 address is unconfirmed → *Billing & pay* (the short form,
 `OmegaBillingProfile.render(…, { compact: true })`: the optional fields
 folded under More billing options) → pay. A package named by the offerings
