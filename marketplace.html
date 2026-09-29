@@ -1199,7 +1199,9 @@ function isUnlockedHere(t){
 }
 function planLabel(t){
   var n = (typeof t.tier==='number') ? t.tier : 1;
-  return ({0:'every plan',1:'Standard',2:'Deluxe',3:'Enterprise'})[n] || 'a higher plan';
+  /* the legacy tier's word is the price book's (omega-tenant.js TIER_LABEL): Field, Pro, Enterprise */
+  var L = (window.OmegaTenant && OmegaTenant.tierLabels) || {};
+  return ({0:'every plan',1:L.standard || 'Field',2:L.deluxe || 'Pro',3:L.enterprise || 'Enterprise'})[n] || 'a higher plan';
 }
 function isPinned(k){ return _PINNED.indexOf(k)>=0; }
 function isRequired(t){
@@ -1394,7 +1396,7 @@ function workspaceHome(ws){ return !!(window.OmegaWorkspaceShell && OmegaWorkspa
 function planNameOf(ws){
   ws = ws || WORKSPACE || {}; var pa = ws.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {};
   if (pa && pa.packaged) return b.plan || 'Packaged';
-  return ws.accountTier || (ws.tierLevel >= 3 ? 'Enterprise' : ws.tierLevel === 2 ? 'Deluxe' : ws.tierLevel === 1 ? 'Standard' : 'Plan');
+  return ws.accountTier || (ws.tierLevel >= 3 ? 'Enterprise' : ws.tierLevel === 2 ? 'Pro' : ws.tierLevel === 1 ? 'Field' : 'Plan');
 }
 /* THE CHROME. Once the workspace is home this page wears the whole of it
    (OmegaWorkspaceShell.wear: the rail, the topbar with the switcher, the

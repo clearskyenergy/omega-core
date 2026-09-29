@@ -257,7 +257,7 @@ async function run() {
       ok(after.unchecked && after.line === 'none' && after.sizers === 0 && after.ran === 0, theme + ': a Retry that fails again leaves it unchecked and says so ' + JSON.stringify(after));
       /* Retry lands the plan */
       await pop.locator('#omega-plan-retry').click();
-      await page.waitForFunction(function () { return document.querySelector('#omega-plan-chip .oep-v').textContent === 'Performance'; });
+      await page.waitForFunction(function () { return document.querySelector('#omega-plan-chip .oep-v').textContent === 'Pro'; });
       ok(await page.evaluate(function () { return OmegaCaps.packageAccess() === null && document.body.getAttribute('data-tier') === 'deluxe'; }), theme + ': Retry resolves the legacy plan without a reload');
       await closePanel();
       /* review #21: the same blip refused the gate too. Its own Retry lets
@@ -270,7 +270,7 @@ async function run() {
       ok(/could not check your access/i.test(await page.locator('#omega-editor-gate').textContent()), theme + ': the gate says the check could not run, with Retry');
       await page.evaluate(function () { window.__failBilling = false; });
       await page.locator('#omega-gate-retry').click();
-      await page.waitForFunction(function () { return !document.getElementById('omega-editor-gate') && document.querySelector('#omega-plan-chip .oep-v').textContent === 'Performance'; }, null, { timeout: 8000 });
+      await page.waitForFunction(function () { return !document.getElementById('omega-editor-gate') && document.querySelector('#omega-plan-chip .oep-v').textContent === 'Pro'; }, null, { timeout: 8000 });
       ok(await page.evaluate(function () { return OmegaCaps.packageAccess() === null && !OmegaCaps.unchecked() && document.body.getAttribute('data-tier') === 'deluxe' && document.querySelector('#omega-plan-chip').getAttribute('data-state') === 'legacy'; }), theme + ': the gate\'s Retry lets them in and lands the plan with it');
       await openPanel();
       await page.waitForFunction(function () { return document.querySelectorAll('#omega-plan-pop .oep-insite .oep-mod').length > 1; });

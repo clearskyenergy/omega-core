@@ -387,6 +387,12 @@ async function legacyEndpointChecks() {
     && made({ metadata: { omegaPackage: 'true', omegaOrg: 'x', omegaKind: 'subscription' } }) === 'subscription'
     && made({ metadata: { omegaPackage: 'true', omegaOrg: 'x' } }) === 'package'
     && made({ metadata: {} }) === null && made({}) === null);
+  /* when it was due: the plan's invoice is dated the day it was due (Tommy, 2026-09-28: "issued sept 3rd not 28th") */
+  var dueOn = invoicesApi.dueOnOf;
+  ok('the list says when the plan\'s invoice was due: the card door\'s stamp first, Stripe\'s own due date next, else nothing',
+    dueOn({ metadata: { omegaDue: 'x/2026-09-03/129900', omegaDueDate: '2026-09-03' }, due_date: 1790640000 }) === '2026-09-03'
+    && dueOn({ metadata: {}, due_date: 1790640000 }) === 1790640000000
+    && dueOn({ metadata: { omegaDueDate: '' } }) === null && dueOn({}) === null);
 }
 async function pricebookChecks() {
   console.log('\nthe price book turns on for the Stripe rail without QuickBooks items');

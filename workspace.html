@@ -588,11 +588,16 @@ var TODAY_CACHE = null;
 function today() {
   if (TODAY_CACHE) return TODAY_CACHE;
   var pa = WS.packageAccess;
-  TODAY_CACHE = TODAY.build({ now: Date.now(), me: ME, orgId: WS.orgId, pendingApproval: !!WS.pendingApproval, readOnly: !!(pa && pa.packaged && pa.readOnly), billingNotice: pa && pa.billingNotice || null, trialEndsAt: trialEnd(),
+  TODAY_CACHE = TODAY.build({ now: Date.now(), me: ME, orgId: WS.orgId, pendingApproval: !!WS.pendingApproval, readOnly: !!(pa && pa.packaged && pa.readOnly), billingNotice: pa && pa.billingNotice || null, trialEndsAt: trialEnd(), pastDue: pastDue(),
     projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived, referrals: DATA.referrals, finance: DATA.finance, canOpen: function (k) { return open(tool(k)); } });
   return TODAY_CACHE;
 }
 function needs() { return today().needs; }
+/* a legacy plan more than fifteen days past due: OmegaTenant.pastDue is the
+   ONE rule (omega-tenant.js), read off this workspace's billing record;
+   Today ranks it, the home carries the notice, the runtime's bar says it on
+   every page (Tommy, 2026-09-28) */
+function pastDue() { try { return window.OmegaTenant && OmegaTenant.pastDue && !WS.viewAs ? OmegaTenant.pastDue(bill(), Date.now()) : null; } catch (e) { return null; } }
 function act(r) {
   if (!r || !r.act) return;
   if (r.act.kind === 'billing') openBilling(); else if (r.act.kind === 'team') go('team'); else if (r.act.kind === 'project') openProject(r.act.id); else if (r.act.kind === 'tool') launch(tool(r.act.id));
@@ -625,6 +630,11 @@ function renderNotice() {
   if (WS.pendingApproval) h = '<div class="notice"><b>Awaiting approval</b><span>' + esc(WS.clientName || WS.orgId) + ' is with the ClearSky team. Tools stay locked until it is approved, usually one business day.</span></div>';
   if (WS.viewAs) h += '<div class="notice"><b>Viewing as a customer</b><span>' + esc(WS.clientName || WS.orgId) + ' painted as a packaged workspace holding ' + esc((WS.modules || []).join(', ') || 'nothing') + '. Staff preview: nothing is billed and a quote is refused.</span><a class="ows-pill" href="/workspace" data-leave>Exit</a></div>';
   else if (pa && pa.readOnly && pa.billingNotice) h = '<div class="notice bad"><b>Read-only</b><span>' + esc(pa.billingNotice.text) + '</span>' + (pa.billingNotice.payUrl ? '<a class="ows-pill primary sm" href="' + esc(pa.billingNotice.payUrl) + '" target="_blank" rel="noopener">Pay now</a>' : '') + '</div>';
+  else {
+    /* a legacy plan more than fifteen days past due says so on the home (pastDue, the one rule) */
+    var pd = pastDue();
+    if (pd) h += '<div class="notice bad" data-past-due="' + esc(String(pd.days)) + '"><b>' + esc(pd.days + ' days past due') + '</b><span>Pay ' + esc(pd.display) + ' to keep your account open.</span>' + (pd.payUrl ? '<a class="ows-pill primary sm" href="' + esc(pd.payUrl) + '" target="_blank" rel="noopener">Pay now</a>' : '<a class="ows-pill primary sm" href="/workspace#billing">Plan &amp; billing</a>') + '</div>';
+  }
   n.innerHTML = h; n.hidden = !h;
 }
 function renderHub() {
@@ -643,7 +653,7 @@ function paintHeld() {
   if (!d) { d = document.createElement('div'); d.className = 'held'; hb.appendChild(d); }
   d.innerHTML = held;
 }
-function planName() { var pa = WS.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {}; if (WS.viewAs) return (WS.modules || []).indexOf('lite') >= 0 && (WS.modules || []).length === 1 ? 'Lite' : 'Lite + modules'; if (pa && pa.packaged) return b.plan || 'Packaged'; return WS.accountTier || (WS.tierLevel >= 3 ? 'Enterprise' : WS.tierLevel === 2 ? 'Deluxe' : WS.tierLevel === 1 ? 'Standard' : 'Plan'); }
+function planName() { var pa = WS.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {}; if (WS.viewAs) return (WS.modules || []).indexOf('lite') >= 0 && (WS.modules || []).length === 1 ? 'Lite' : 'Lite + modules'; if (pa && pa.packaged) return b.plan || 'Packaged'; return WS.accountTier || (WS.tierLevel >= 3 ? 'Enterprise' : WS.tierLevel === 2 ? 'Pro' : WS.tierLevel === 1 ? 'Field' : 'Plan'); }
 function heldChips() {
   var out = ['<span class="ows-chip on">' + esc(planName()) + (trialEnd() && trialEnd() > Date.now() ? ' · trial' : '') + '</span>'];
   if (WS.packageAccess && WS.packageAccess.packaged && Array.isArray(WS.packageAccess.catalog)) {
@@ -1058,7 +1068,9 @@ function lockedDrawer(t) {
   var cat = packaged && Array.isArray(pa.catalog) ? pa.catalog : (MOD_CATALOG || []);
   var mods = cat.filter(function (m) { return (m.tools || []).indexOf(t.key) >= 0 && HUB.moduleState(m, ctx) !== 'held'; }), m = mods[0] || null;
   var price = m ? ((MOD_PRICES && MOD_PRICES[m.key]) || m.priceDisplay || '') : '';
-  var tierName = ['everyone', 'Standard', 'Deluxe', 'Enterprise'][typeof t.tier === 'number' ? t.tier : 1] || 'a higher plan';
+  /* the legacy tier's word is the price book's (omega-tenant.js TIER_LABEL): Field, Pro, Enterprise */
+  var TL = (window.OmegaTenant && OmegaTenant.tierLabels) || {};
+  var tierName = ['everyone', TL.standard || 'Field', TL.deluxe || 'Pro', TL.enterprise || 'Enterprise'][typeof t.tier === 'number' ? t.tier : 1] || 'a higher plan';
   var html = '<div class="ows-note">' + (WS.pendingApproval ? '<b>' + esc(t.name) + '</b> opens once your workspace is approved.'
     : m ? '<b>' + esc(t.name) + '</b> is part of <b>' + esc(m.name) + '</b>' + (price ? ' (' + esc(price) + ')' : '') + (packaged ? ', which ' + esc(co) + ' does not hold yet.' : ', and comes with the ' + esc(tierName) + ' plan. ' + esc(co) + ' is on ' + esc(planName()) + '.')
     : '<b>' + esc(t.name) + '</b> is on the ' + esc(tierName) + ' plan and above. ' + esc(co) + ' is on ' + esc(planName()) + '.') + '</div>';
@@ -1307,8 +1319,20 @@ function fact(l, v) { return '<div class="bh-fact"><div class="l">' + esc(l) + '
    next invoice */
 function nextInvoice(c) {
   var bl = c.bl, sm = c.sm, nextOn = (sm && sm.nextInvoiceOn) || bl.nextInvoiceOn || (c.packaged ? '' : bl.subscriptionDue);
+  /* a legacy plan whose payment for subscriptionDue is still owed: THAT is
+     the invoice open under What you owe, so the NEXT one is the following
+     month's (a legacy tier bills monthly; Tommy, 2026-09-28: the Sep 3
+     payment owed, the next invoice is not Sep 3 again) */
+  if (!c.packaged && Number(bl.amountDue) > 0 && !bl.nextInvoiceOn && !(sm && sm.nextInvoiceOn) && bl.subscriptionDue && ms(bl.subscriptionDue)) nextOn = monthAfter(bl.subscriptionDue);
   if (!c.packaged && !(Number(bl.amountDue) > 0) && nextOn && ms(nextOn) && ms(nextOn) < Date.now() - 86400000) nextOn = '';
   return nextOn || '';
+}
+/* the same day one month on, as YYYY-MM-DD (the 31st runs to the month's last day) */
+function monthAfter(v) {
+  var d = when(v); if (!d) return '';
+  var y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate(), last = new Date(y, m + 1, 0).getDate();
+  var n = new Date(y, m, Math.min(day, last));
+  return n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2) + '-' + ('0' + n.getDate()).slice(-2);
 }
 /* 1 · the subscription, in the hub's night sky */
 function heroHtml(c) {
@@ -1372,13 +1396,16 @@ function oweHtml(c) {
        is the way to pay and is never doubled with the figure. An invoice the
        engine made is never in c.stripeOpen (billCtx), so a withdrawn
        add-on's invoice left open on Stripe neither counts nor hides the tier */
-    list = c.unpaid.map(function (x) { return { name: invName(x), display: x.display, link: x.paymentLink, date: x.date }; })
-      .concat(c.stripeOpen.map(function (x) { return { name: x.number || 'Invoice', display: usd(x.amountDue), link: x.hostedUrl, date: x.created }; }));
+    /* the plan's own Stripe invoice is dated the day it was DUE (dueOn, the
+       due date the card door stamped on it), never the day Stripe made it
+       (Tommy, 2026-09-28: "it was issued sept 3rd not 28th") */
+    list = c.unpaid.map(function (x) { return { name: invName(x), display: x.display, link: x.paymentLink, date: x.date, word: 'issued' }; })
+      .concat(c.stripeOpen.map(function (x) { return { name: x.number || 'Invoice', display: usd(x.amountDue), link: x.hostedUrl, date: x.dueOn || x.created, word: x.dueOn ? 'due' : 'issued' }; }));
     amount = c.unpaid.reduce(function (t, x) { return t + (Number(x.totalCents) || 0); }, 0) / 100 + c.stripeOpen.reduce(function (t, x) { return t + (Number(x.amountDue) || 0); }, 0);
     var tier = !c.stripeOpen.length && Number(bl.amountDue) > 0 ? Number(bl.amountDue) : 0;
     amount += tier;
-    if (tier && list.length) list.push({ name: 'Your plan', display: usd(tier), link: bl.paymentLink || (c.dueOpen && c.dueOpen.url) || null, date: bl.subscriptionDue || '' });
-    if (list.length) dueOn = list[0].date; else { dueOn = bl.subscriptionDue || ''; dueWord = 'due'; }
+    if (tier && list.length) list.push({ name: 'Your plan', display: usd(tier), link: bl.paymentLink || (c.dueOpen && c.dueOpen.url) || null, date: bl.subscriptionDue || '', word: 'due' });
+    if (list.length) { dueOn = list[0].date; dueWord = list[0].word || 'issued'; } else { dueOn = bl.subscriptionDue || ''; dueWord = 'due'; }
   }
   var due = amount > 0, n = list.length;
   var h = '<section class="bcard owe" id="bill-owe"><h3>What you owe</h3>';
@@ -1402,7 +1429,7 @@ function oweHtml(c) {
     else if (cv && cv.payReason) h += '<p class="fine">' + esc(cv.payReason) + '</p>';
     if (dueActs) h += '<div class="acts">' + dueActs + '</div>';
   }
-  if (n > 1) h += '<div>' + list.map(function (x) { return '<div class="irow"><div class="ds"><b>' + esc(x.name) + '</b><small>Issued ' + esc(day(x.date)) + '</small></div><span class="amt">' + esc(x.display || '') + '</span><span class="st">' + (x.link ? '<a class="ows-pill sm primary" href="' + esc(x.link) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="spill open">Open</span>') + '</span></div>'; }).join('') + '</div>';
+  if (n > 1) h += '<div>' + list.map(function (x) { return '<div class="irow"><div class="ds"><b>' + esc(x.name) + '</b><small>' + (x.word === 'due' ? 'Due ' : 'Issued ') + esc(day(x.date)) + '</small></div><span class="amt">' + esc(x.display || '') + '</span><span class="st">' + (x.link ? '<a class="ows-pill sm primary" href="' + esc(x.link) + '" target="_blank" rel="noopener">Pay</a>' : '<span class="spill open">Open</span>') + '</span></div>'; }).join('') + '</div>';
   if (c.packaged && (pa && pa.readOnly || c.state === 'awaiting_payment')) {
     var until = (sm && sm.accessUntil) || (pa && pa.accessUntil);
     h += '<p class="warnline">' + (pa && pa.readOnly ? '<b>Read-only</b> until the invoice is paid: saved work stays open to read.' : until && ms(until) > c.now ? '<b>Access until ' + esc(day(until)) + ':</b> pay before then.' : '<b>Pay the first invoice</b> to open the modules you chose.') + '</p>';
@@ -1574,7 +1601,9 @@ function histHtml(c) {
        status beside it */
     else rows = rows.concat((st.invoices || []).filter(stripeOwn).map(function (inv) {
       var state = inv.status === 'paid' ? 'paid' : inv.status === 'open' || inv.status === 'draft' ? 'open' : inv.status === 'uncollectible' ? 'overdue' : 'void';
-      return { date: inv.created, name: inv.number || 'Invoice', sub: inv.periodEnd ? 'Period to ' + day(inv.periodEnd) : 'Card through Stripe', amount: inv.amountDue == null ? '' : usd(inv.amountDue), state: state, link: inv.hostedUrl || inv.pdfUrl || null };
+      /* the plan's own invoice (Pay with Stripe's) is dated the day it was due, never the day Stripe made it */
+      var due = inv.omega === 'due' && inv.dueOn ? inv.dueOn : null;
+      return { date: due || inv.created, name: inv.number || 'Invoice', sub: due ? 'Your plan · card through Stripe' : inv.periodEnd ? 'Period to ' + day(inv.periodEnd) : 'Card through Stripe', amount: inv.amountDue == null ? '' : usd(inv.amountDue), state: state, link: inv.hostedUrl || inv.pdfUrl || null };
     }));
     if (rows.length) { empty = ''; failed = ''; }
     if (st && st.connected && !rows.length && !failed) { if (bl.lastPaidAt) rows = [lastPaidRow(bl)]; else empty = 'No invoices issued yet.'; }
