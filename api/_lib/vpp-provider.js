@@ -47,39 +47,85 @@ function request(input, sim) {
   };
 }
 
+/* A figure in their answer: a finite number, or a string that is one number
+   and nothing else. Number() alone reads null, '', '  ', false and [] as 0
+   and true as 1: a $0 "quote" for an answer that carried no figure. */
+var FIGURE = /^\s*-?(\d+(\.\d*)?|\.\d+)\s*$/;
+function figure(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : NaN;
+  if (typeof v === 'string' && FIGURE.test(v)) return Number(v);
+  return NaN;
+}
+/* the first of the named fields that is present (not null or undefined) */
+function firstOf(o, keys) {
+  for (var i = 0; i < keys.length; i++) if (o[keys[i]] != null) return o[keys[i]];
+  return undefined;
+}
+
 /* Their answer → { annualUsd, streams[{name, usd}], raw note }. Tolerant
-   on purpose until the contract is fixed; anything unreadable is refused. */
+   on purpose until the contract is fixed; anything unreadable is refused:
+   the first total field present must be a real figure or there is no quote
+   (never a $0 one), and a stream without a real figure is left out. */
 function readQuote(j) {
-  if (!j || typeof j !== 'object') return null;
-  var total = Number(j.annualEarnings != null ? j.annualEarnings : (j.annual_usd != null ? j.annual_usd : j.total));
+  if (!j || typeof j !== 'object' || Array.isArray(j)) return null;
+  var total = figure(firstOf(j, ['annualEarnings', 'annual_usd', 'total']));
   if (!isFinite(total)) return null;
   var streams = [];
   var list = Array.isArray(j.streams) ? j.streams : (Array.isArray(j.programs) ? j.programs : []);
   for (var i = 0; i < list.length && i < 40; i++) {
-    var s = list[i] || {}, usd = Number(s.usd != null ? s.usd : s.annualEarnings);
+    var s = list[i] && typeof list[i] === 'object' ? list[i] : {}, usd = figure(firstOf(s, ['usd', 'annualEarnings']));
     if (isFinite(usd)) streams.push({ name: String(s.name || s.program || 'Stream').slice(0, 120), usd: Math.round(usd) });
   }
   return { annualUsd: Math.round(total), streams: streams, id: j.id ? String(j.id).slice(0, 80) : null };
+}
+
+/* Why a call failed, for the function log only: the error's name, message
+   and cause. Never the request, its headers or the key — and Node's fetch
+   quotes a bad header VALUE in its message ('"Bearer <key>" is an invalid
+   header value'), so the key, and anything after "Bearer", are cut out
+   before the line is written. */
+function logFailure(e, timedOut) {
+  var key = process.env.DIVIDENDVPP_API_KEY || '';
+  function clean(v) {
+    var t = String(v == null ? '' : v);
+    if (key) t = t.split(key).join('[key]');
+    return t.replace(/Bearer[^"]*/g, 'Bearer [key]').slice(0, 200);
+  }
+  var cause = e && e.cause ? (e.cause.code || e.cause.message || '') : '';
+  console.error('[vpp-provider] quote failed' + (timedOut ? ' (timed out)' : '') + ':',
+    clean((e && e.name) || 'Error'), clean(e && e.message), clean(cause));
 }
 
 function liveQuote(input, sim) {
   if (!configured() || typeof fetch !== 'function') return Promise.resolve(null);
   var ctl = typeof AbortController === 'function' ? new AbortController() : null;
   var timer = ctl ? setTimeout(function () { ctl.abort(); }, TIMEOUT_MS) : null;
-  return fetch(process.env.DIVIDENDVPP_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.DIVIDENDVPP_API_KEY },
-    body: JSON.stringify(request(input, sim)),
-    signal: ctl ? ctl.signal : undefined
+  function aborted() { return !!(ctl && ctl.signal && ctl.signal.aborted); }
+  /* a fetch that throws instead of rejecting (a bad URL or header value in
+     some runtimes) takes the same road as one that rejects */
+  return new Promise(function (resolve) {
+    resolve(fetch(process.env.DIVIDENDVPP_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.DIVIDENDVPP_API_KEY },
+      body: JSON.stringify(request(input, sim)),
+      signal: ctl ? ctl.signal : undefined
+    }));
   }).then(function (r) {
     return r.json().then(null, function () { return null; }).then(function (j) {
       if (!r.ok) return { provider: 'dividendvpp', ok: false, error: 'DividendVPP answered ' + r.status + '.' };
       var q = readQuote(j);
-      return q ? { provider: 'dividendvpp', ok: true, quote: q }
-               : { provider: 'dividendvpp', ok: false, error: 'DividendVPP\'s answer could not be read.' };
+      if (q) return { provider: 'dividendvpp', ok: true, quote: q };
+      /* our clock ran out while the body was still arriving */
+      if (j === null && aborted()) return { provider: 'dividendvpp', ok: false, error: 'DividendVPP did not answer in time.' };
+      return { provider: 'dividendvpp', ok: false, error: 'DividendVPP\'s answer could not be read.' };
     });
-  }, function () {
-    return { provider: 'dividendvpp', ok: false, error: 'DividendVPP did not answer in time.' };
+  }, function (e) {
+    /* only OUR clock is "in time"; a bad URL, a refused connection, DNS or
+       TLS is "could not be reached", and the reason goes to the log */
+    var timedOut = aborted() || !!(e && e.name === 'AbortError');
+    logFailure(e, timedOut);
+    return { provider: 'dividendvpp', ok: false,
+             error: timedOut ? 'DividendVPP did not answer in time.' : 'DividendVPP could not be reached.' };
   }).then(function (out) { if (timer) clearTimeout(timer); return out; });
 }
 
