@@ -38,7 +38,7 @@ Clean Cell's two tools) still wins: absent is not empty.
 | Battery kW / kWh | no | blank = 5 kW / 13.5 kWh home battery, or ¼ of peak for 2 h |
 | Solar kW-dc | no | modelled from a state yield; unlocks Clean Peak where it applies |
 | Load | no | **8760 / 15-minute interval CSV** (best), **12–24 months of bills** (kWh, peak kW, $), or nothing (a typical load, labelled) |
-| Start date | no | only for a bare list of readings with no dates (`load.startDate`, YYYY-MM-DD); a CSV's own date column wins |
+| Start date | no | only for a bare list of readings with no dates (`load.startDate`, YYYY-MM-DD); a CSV's own date column wins, and the result says so when they differ |
 | Tariff | no | own on/off-peak and demand rates, or an OpenEI URDB record; else a regional planning rate calibrated to the bills' dollars |
 | Split | no | defaults to DividendVPP's 70/20/10 |
 
@@ -129,16 +129,35 @@ Clean Cell's two tools) still wins: absent is not empty.
     City (Zone J) the NYC SCR price, and Long Island (the rest of 110,
     115–119: PSEG Long Island, Zone K) the upstate planning rates under its
     own label. A market override that changes the market drops the area.
-  - **Interval files.** Quote-aware CSV; a currency cell is never a
-    reading; the load column is picked by its header (usage / kWh / kW /
-    demand, never cost or export), two load columns the chosen unit cannot
-    tell apart are refused, and a headerless file with more than one
-    numeric column is refused. The first row's date lays the year on the
-    calendar (29 Feb removed, wrapped by date, moved up to three days so
-    weekdays line up); with no date the readings are read as starting
-    1 January, said so, and the load is `medium` quality, not `high`.
-    Cells longer than 32 characters are never tested and the number test
-    is linear; the text cap is 3 MB.
+  - **Interval files.** Lines end in CRLF, LF or a lone CR; the delimiter
+    is the one most sampled lines carry (a stray tab in a title never
+    decides). Quote-aware CSV; a currency cell is never a reading; in a tab
+    or semicolon file a comma in a number is read the way the file shows it
+    (decimal commas "0,25" / "1.234,5", or a thousands "1,250.0"), and a
+    reading that could be either ("1,250"), or that carries digits but is
+    not a number, is refused with its row — never read as zero. The load
+    column is picked by its header (usage / kWh / kW / demand, money words
+    as whole words, never cost, export, power factor, kVA, kVAR, volts,
+    amps, or a column whose last word is a time part such as "Usage Hour");
+    two load columns are narrowed by the unit (an explicit kWh / kW first),
+    still two is refused, and a headerless file with more than one numeric
+    column is refused. Once the readings carry a date or time, an unstamped
+    row is a note or a footer ("Total") and a stamped row with a blank or
+    "N/A" reading is a gap (zero within 2%, said so). The date column is
+    read on every row: its day/month order is settled across the file
+    (month names, 20250605 and two-digit years too), a newest-first file is
+    read oldest-first, and dates that do not span the readings are said and
+    drop the load to `medium`. The first date lays the year on the calendar
+    (29 Feb removed, wrapped by date, then moved by the shift of up to
+    three days that lands the most weekends on weekends over the whole
+    year, with how many days still differ); a file's own date wins over a
+    given start date, and says so; with no date the readings are read as
+    starting 1 January, said so, and the load is `medium` quality, not
+    `high`. Cells longer than 32 characters are never tested and the
+    number test is linear; the text cap is 4,300,000 characters
+    (`MAX_TEXT`, also `options().maxTextChars`, the page's number: a year
+    of 15-minute Smart Meter Texas rows is ~3.1 MB, and Vercel takes
+    4.5 MB), refused as a size.
   - **Bills.** A month with no kWh (no bill, or dollars only) is filled
     from the climate curve and never calibrates the rate; the calibration
     takes the customer charge out of both sides, so the calibrated bill is

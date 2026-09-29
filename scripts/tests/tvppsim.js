@@ -359,7 +359,140 @@ ok('a 1 MB digit run is refused in well under a second (no quadratic regex)', bi
 var cells = []; for (qi = 0; qi < 10; qi++) cells.push(new Array(20001).join('9') + 'x');
 t0 = Date.now(); var dos = S.simulate({ zip: '60601', load: { type: 'interval', text: cells.join(',') } }); ms = Date.now() - t0;
 ok('ten 20,000-digit cells cost milliseconds, not seconds', dos.ok === false && ms < 1000, ms + ' ms');
-ok('the text cap is what a year of readings needs (3 MB)', S.simulate({ zip: '60601', load: { type: 'interval', text: new Array(3000002).join('1') } }).errors[0].field === 'load.text');
+/* R5: the cap admits a real year of 15-minute readings (a Smart Meter
+   Texas export: a 22-digit ESIID and a revision stamp on every row, CRLF,
+   ~3.1 MB) and is one number with the page's (4,300,000 characters, under
+   Vercel's 4.5 MB body); past it the refusal names a size, not a count. */
+function smt() {
+  var rows = ['ESIID,USAGE_DATE,REVISION_DATE,USAGE_START_TIME,USAGE_END_TIME,USAGE_KWH,ESTIMATED_ACTUAL,CONSUMPTION_SURPLUSGENERATION'];
+  function p2(x) { return (x < 10 ? '0' : '') + x; }
+  for (var i = 0; i < 35040; i++) {
+    var t = dayAt(2025, 1, 1, Math.floor(i / 96)), q = i % 96, e = (q + 1) % 96;
+    rows.push('1008901023800000000000,' + p2(t[1]) + '/' + p2(t[2]) + '/' + t[0] + ',01/02/2025 06:25:14, ' + p2(Math.floor(q / 4)) + ':' + p2(q % 4 * 15) +
+              ', ' + p2(Math.floor(e / 4)) + ':' + p2(e % 4 * 15) + ',0.198,A,Consumption');
+  }
+  return rows.join('\r\n');
+}
+var smtText = smt(), smtRun = S.simulate({ zip: '77002', segment: 'commercial', load: { type: 'interval', text: smtText, unit: 'kwh' } });
+ok('a one-year 15-minute Smart Meter Texas export (' + (smtText.length / 1e6).toFixed(2) + ' M characters) is simulated, not refused as "larger than a year"',
+   smtText.length > 3000000 && smtText.length < S.MAX_TEXT && smtRun.ok && Math.abs(smtRun.load.annualKwh - 0.198 * 35040) < 1, smtRun.errors || smtRun.load);
+ok('…and its CONSUMPTION_SURPLUSGENERATION flag (words, not readings) is not called an export column', smtRun.ok && !smtRun.load.notes.some(function (n) { return /export column/.test(n); }), smtRun.load && smtRun.load.notes);
+var capErr = S.simulate({ zip: '60601', load: { type: 'interval', text: new Array(S.MAX_TEXT + 2).join('1') } }).errors[0];
+ok('the text cap is 4,300,000 characters — the page\'s number — and its refusal names a size', S.MAX_TEXT === 4300000 && S.options().maxTextChars === 4300000 &&
+   capErr.field === 'load.text' && /4\.3 million characters/.test(capErr.message) && !/one year of readings\.$/.test(capErr.message), capErr);
+ok('a file at the cap is not refused for its size', !S.validate({ zip: '60601', load: { type: 'interval', text: new Array(S.MAX_TEXT + 1).join('1') } }).some(function (e) { return e.field === 'load.text'; }));
+
+section('Interval files: the load column (R2, R8)');
+function rowsOf(head, f) { var out = [head]; for (var i = 0; i < 8760; i++) { var t = dayAt(2025, 1, 1, Math.floor(i / 24)); out.push(f(iso(t[0], t[1], t[2]) + ' ' + (i % 24 < 10 ? '0' : '') + (i % 24) + ':00', i)); } return out.join('\n'); }
+[['Date,Usage (kWh),Power Factor', '60.0,0.90', 'kw', 60, true], ['Interval End,Usage,Apparent Power (kVA)', '48,55', 'kw', 48, false],
+ ['Interval Start,Usage (kWh),Reactive Power (kVAR)', '60.0,11', 'kw', 60, true], ['Date,Demand (kW),Power Factor', '42,0.95', 'kw', 42, false],
+ ['Date,Usage (kWh),Voltage (V),Current (Amps)', '60.0,480,72', 'kwh', 60, false]].forEach(function (c) {
+  var p = S.parseInterval(rowsOf(c[0], function (ts) { return ts + ',' + c[1]; }), c[2]);
+  ok('"' + c[0] + '" read as ' + c[2] + ': the load is the usage/demand column, never power factor, kVA, kVAR, volts or amps' + (c[4] ? ', with the kWh note' : ''),
+     p.ok && p.kw[0] === c[3] && (!c[4] || p.notes.some(function (n) { return /looks like kWh per interval/.test(n); })), p.ok ? [p.kw[0], p.notes] : p);
+});
+var integ = S.parseInterval(rowsOf('Date,Integrated Demand (kW),kVAR', function (ts) { return ts + ',50,11'; }), 'kw');
+ok('"Integrated Demand (kW)" is a load column, not a rate (money words match whole)', integ.ok && integ.kw[0] === 50, integ);
+var uhour = S.parseInterval(rowsOf('Usage Date,Usage Hour,Usage (kWh)', function (ts, i) { return ts.slice(0, 10) + ',' + (i % 24 + 1) + ',6.5'; }), 'kwh');
+ok('"Usage Hour" (a time part) is never a second load column: "Usage (kWh)" is read', uhour.ok && uhour.kw[0] === 6.5 && uhour.kw[5] === 6.5, uhour);
+[['Usage Date,Usage Hour,Usage (kWh)', 'kw'], ['Usage Date,Usage Hour,Usage', 'kwh'], ['Usage Date,Usage Hour,Usage', 'kw']].forEach(function (c) {
+  var p = S.parseInterval(rowsOf(c[0], function (ts, i) { return ts.slice(0, 10) + ',' + (i % 24 + 1) + ',6.5'; }), c[1]);
+  ok('"' + c[0] + '" read as ' + c[1] + ': the hour column is never the load, in either unit', p.ok && p.kw[0] === 6.5 && p.kw[23] === 6.5, p.ok ? p.kw.slice(0, 3) : p.error);
+});
+var twoKwh = S.parseInterval(rowsOf('Date,Usage,Demand (kW),Power Factor', function (ts) { return ts + ',5,20,0.9'; }), 'kw');
+ok('with kW chosen, an explicit "kW" column wins over a bare "Usage"', twoKwh.ok && twoKwh.kw[0] === 20, twoKwh);
+
+section('Interval files: rows, footers and gaps (R6, S2)');
+function dated(head, f, extra) { var out = [head]; for (var i = 0; i < 8760; i++) { var t = dayAt(2025, 1, 1, Math.floor(i / 24)); out.push(f(iso(t[0], t[1], t[2]), (i % 24 < 10 ? '0' : '') + (i % 24), i)); } return out.concat(extra || []).join('\n'); }
+['Total,,,438000.0', 'Total,,,"438,000.0"', ',,,438000'].forEach(function (foot) {
+  var p = S.parseInterval(dated('Date,Start Time,End Time,Usage (kWh)', function (d, hh) { return d + ',' + hh + ':00,' + hh + ':59,50.0'; }, [foot]), 'kwh');
+  ok('a footer "' + foot + '" is not a reading (8,760, not 8,761)', p.ok && p.readings === 8760, p.ok ? p.readings : p.error);
+});
+var gaps = S.parseInterval(dated('Date,Time,Usage (kWh)', function (d, hh, i) { return d + ',' + hh + ':00,' + (i >= 100 && i < 103 ? 'N/A' : (i === 200 ? '' : '50.0')); }), 'kwh');
+ok('a dated row whose reading is "N/A" or blank is a gap, counted and said (not dropped as a footer)', gaps.ok && gaps.readings === 8760 && gaps.kw[100] === 0 && gaps.kw[200] === 0 &&
+   gaps.notes.some(function (n) { return /^4 unreadable readings were read as zero/.test(n); }), gaps.ok ? gaps.notes : gaps.error);
+var notes0 = S.parseInterval(dated('Date,Time,kW', function (d, hh) { return d + ',' + hh + ':00,40'; }, ['', 'Report generated by the utility portal', 'Grand total,,350400']), 'kw');
+ok('trailing notes and a "Grand total" row are skipped', notes0.ok && notes0.readings === 8760, notes0.ok ? notes0.readings : notes0.error);
+var bare = []; for (var bi = 0; bi < 8760; bi++) bare.push(String(5 + bi % 3)); bare.push('Total,52560');
+var bareP = S.parseInterval('kW\n' + bare.join('\n'), 'kw');
+ok('an undated list ending in "Total,…" is still one year', bareP.ok && bareP.readings === 8760, bareP.ok ? bareP.readings : bareP.error);
+function tsv(head, val) {
+  var rows = [head];
+  for (var i = 0; i < 8760; i++) {
+    var dd = Math.floor(i / 24), t = dayAt(2025, 1, 1, dd), hr = i % 24, dow = (3 + dd) % 7, pk = (t[1] === 7 || t[1] === 8) && dow > 0 && dow < 6 && hr >= 14 && hr < 17;
+    rows.push(iso(t[0], t[1], t[2]) + '\t' + (head.split('\t').length === 3 ? hr + '\t' : '') + (pk ? val : '600.0'));
+  }
+  return rows.join('\n');
+}
+[['Date\tHour\tDemand (kW)'], ['Date\tDemand (kW)']].forEach(function (c) {
+  var p = S.parseInterval(tsv(c[0], '1,250.0'), 'kw');
+  ok('a tab file\'s unquoted "1,250.0" is 1,250 kW (' + c[0].split('\t').length + ' columns), not a zeroed or dropped peak', p.ok && Math.max.apply(null, p.kw) === 1250 && p.readings === 8760 &&
+     !p.notes.some(function (n) { return /unreadable/.test(n); }), p.ok ? [Math.max.apply(null, p.kw), p.notes] : p.error);
+});
+var amb2 = S.parseInterval(tsv('Date\tHour\tDemand (kW)', '1,250'), 'kw');
+ok('a tab file\'s "1,250" (a thousands comma or a decimal comma?) is refused with its row, never zeroed', !amb2.ok && /^Row [\d,]+: the reading "1,250"/.test(amb2.error) && /thousands separator or a decimal point/.test(amb2.error), amb2.error);
+var junk = S.parseInterval(dated('Date,Time,kW', function (d, hh, i) { return d + ',' + hh + ':00,' + (i === 5000 ? '12.5 kW' : '40'); }), 'kw');
+ok('a reading with digits that is not a number ("12.5 kW") is refused with its row, not read as zero', !junk.ok && /^Row 5,002: the reading "12\.5 kW"/.test(junk.error), junk.error);
+
+section('Interval files: delimiters and line endings (R9)');
+var base9 = rowsOf('Timestamp,kW', function (ts) { return ts + ',50'; });
+var tabTitle = S.parseInterval('Interval data report\t(generated 2025-10-01)\n' + base9, 'kw');
+ok('one tab in a title line does not make a comma file tab-separated', tabTitle.ok && tabTitle.kw[0] === 50, tabTitle.ok ? tabTitle.kw[0] : tabTitle.error);
+var crOnly = S.parseInterval(base9.split('\n').join('\r'), 'kw');
+ok('CR-only line endings (Excel for Mac "CSV (Macintosh)") are lines', crOnly.ok && crOnly.readings === 8760 && crOnly.kw[0] === 50, crOnly.ok ? crOnly.readings : crOnly.error);
+var semi = S.parseInterval(rowsOf('Datum;Verbrauch kWh', function (ts) { return ts + ';0,25'; }), 'kwh');
+ok('a semicolon file with decimal commas ("0,25") reads 0.25', semi.ok && Math.abs(semi.kw[0] - 0.25) < 1e-9, semi.ok ? semi.kw[0] : semi.error);
+var semiEu = S.parseInterval(rowsOf('Datum;Leistung kW', function (ts, i) { return ts + ';' + (i % 2 ? '1.234,5' : '12,5'); }), 'kw');
+ok('…and "1.234,5" there is 1,234.5', semiEu.ok && semiEu.kw[0] === 12.5 && semiEu.kw[1] === 1234.5, semiEu.ok ? semiEu.kw.slice(0, 2) : semiEu.error);
+
+section('Interval files: dates (R3, R4, R7)');
+/* a real office: weekdays busy, weekends quiet, by the file's OWN calendar */
+function office(y, m, d, days, order) {
+  var rows = ['Date,Time,kW'];
+  for (var k = 0; k < days; k++) {
+    var t = dayAt(y, m, d, k), w = new Date(Date.UTC(t[0], t[1] - 1, t[2])).getUTCDay(), we = w === 0 || w === 6;
+    for (var hr = 0; hr < 24; hr++) rows.push((order ? order(t) : iso(t[0], t[1], t[2])) + ',' + (hr < 10 ? '0' : '') + hr + ':00,' + (we ? 50 : (hr >= 8 && hr < 18 ? 150 + (t[1] >= 6 && t[1] <= 9 ? 100 : 0) : 60)));
+  }
+  return rows;
+}
+function weekendMisses(kw) {
+  var miss = 0;
+  for (var d = 0; d < 365; d++) {
+    var mx = 0; for (var h = d * 24; h < d * 24 + 24; h++) mx = Math.max(mx, kw[h]);
+    var simWe = (3 + d) % 7 === 0 || (3 + d) % 7 === 6;
+    if ((mx < 100) !== simWe) miss++;
+  }
+  return miss;
+}
+/* the best any shift in −3…+3 can do (26, 16, 35, counted by brute force) — the first-day rule gave 78, 88 and 173 */
+[[2025, 10, 1, 365, 26], [2024, 1, 1, 366, 16], [2023, 12, 1, 366, 35]].forEach(function (c) {
+  var p = S.parseInterval(office(c[0], c[1], c[2], c[3]).join('\n'), 'kw'), miss = p.ok ? weekendMisses(p.kw) : null;
+  ok('a file from ' + iso(c[0], c[1], c[2]) + ': weekends land on the calendar\'s weekends on all but ' + c[4] + ' days (the whole year counted, not the first day)',
+     p.ok && miss === c[4] && p.notes.some(function (n) { return new RegExp('all but ' + c[4] + ' of 365 days').test(n); }), p.ok ? [miss, p.notes] : p.error);
+});
+var asc = office(2025, 1, 1, 365), desc = [asc[0]].concat(asc.slice(1).reverse());
+var ascR = S.simulate({ zip: '60601', segment: 'commercial', battery: { kw: 200, kwh: 400 }, load: { type: 'interval', text: asc.join('\n') } });
+var descR = S.simulate({ zip: '60601', segment: 'commercial', battery: { kw: 200, kwh: 400 }, load: { type: 'interval', text: desc.join('\n') } });
+ok('a newest-first file is read oldest-first: the same answer as the same file ascending, and said', ascR.ok && descR.ok && descR.totals.gross === ascR.totals.gross &&
+   descR.monthly[6].peakKw === ascR.monthly[6].peakKw && descR.load.notes.some(function (n) { return /newest reading first/.test(n) && /1 Jan 2025/.test(n); }) && descR.load.quality === 'high',
+   [ascR.totals && ascR.totals.gross, descR.totals && descR.totals.gross, descR.load && descR.load.notes]);
+function p2d(x) { return (x < 10 ? '0' : '') + x; }
+var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+var june = S.parseInterval(office(2025, 6, 5, 365).join('\n'), 'kw');
+[['DD/MM/YYYY', function (t) { return p2d(t[2]) + '/' + p2d(t[1]) + '/' + t[0]; }], ['DD-Mon-YYYY', function (t) { return p2d(t[2]) + '-' + MON[t[1] - 1] + '-' + t[0]; }],
+ ['"Mon D, YYYY"', function (t) { return '"' + MON[t[1] - 1] + ' ' + t[2] + ', ' + t[0] + '"'; }], ['YYYYMMDD', function (t) { return '' + t[0] + p2d(t[1]) + p2d(t[2]); }],
+ ['YY-MM-DD', function (t) { return p2d(t[0] % 100) + '-' + p2d(t[1]) + '-' + p2d(t[2]); }], ['MM/DD/YY', function (t) { return p2d(t[1]) + '/' + p2d(t[2]) + '/' + p2d(t[0] % 100); }]].forEach(function (c) {
+  var p = S.parseInterval(office(2025, 6, 5, 365, c[1]).join('\n'), 'kw');
+  ok('a file from 5 Jun 2025 dated ' + c[0] + ' starts on 5 Jun 2025 and lands exactly as the ISO file does', p.ok && p.notes.some(function (n) { return /start on 5 Jun 2025/.test(n); }) &&
+     p.kw.join() === june.kw.join(), p.ok ? p.notes : p.error);
+});
+var conflict = S.parseInterval(office(2025, 1, 1, 365, function (t) { return t[1] === 3 ? p2d(t[1]) + '/' + p2d(t[2]) + '/' + t[0] : p2d(t[2]) + '/' + p2d(t[1]) + '/' + t[0]; }).join('\n'), 'kw');
+ok('a date column that mixes D/M and M/D is not guessed: read from 1 January and said so', conflict.ok && conflict.notes.some(function (n) { return /mixes day-first and month-first/.test(n); }), conflict.ok ? conflict.notes : conflict.error);
+var gibberish = S.parseInterval(office(2025, 6, 5, 365, function (t) { return 'Day' + t[2] + 'of' + t[1]; }).join('\n'), 'kw');
+ok('a date column the parser cannot read says so, instead of asking for a date column the file has', gibberish.ok && gibberish.notes.some(function (n) { return /date column \("Date"\) could not be read/.test(n); }) &&
+   !gibberish.notes.some(function (n) { return /include the date column/.test(n); }), gibberish.ok ? gibberish.notes : gibberish.error);
+var overrode = S.parseInterval(office(2025, 6, 5, 365).join('\n'), 'kw', '2025-01-01');
+ok('a file\'s own date wins over a start date given with it, and the note says so', overrode.ok && overrode.notes.some(function (n) { return /own dates were used/.test(n) && /1 Jan 2025/.test(n) && /5 Jun 2025/.test(n); }), overrode.ok ? overrode.notes : overrode.error);
 
 section('Bills and the calibration (c4, c10)');
 function billRows(f) { var b = []; for (var m = 1; m <= 12; m++) b.push(f(m, '2025-' + (m < 10 ? '0' : '') + m)); return b; }

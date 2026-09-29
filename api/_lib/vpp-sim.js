@@ -308,34 +308,71 @@ function fitMonth(raw, kwh, peakKw) {
 
 /* One interval file → hourly kW on the simulated calendar.
 
-   Reading a CSV. Cells are split with double quotes honoured (a quoted
-   "1,234.5" is one reading, not two), and a cell carrying a currency sign
-   is never a reading, so a cost column cannot be taken for the load. When
-   a header row names the columns, the load is the column headed usage /
-   kWh / kW / demand / load (never cost, price or charge); two such columns
-   are narrowed by the unit the caller chose, and still two is refused
-   rather than guessed. Without a header, one numeric column is the load
-   and more than one is refused. A cell longer than any real reading is
-   skipped before it is tested, and the number test runs in linear time,
-   so a hostile cell cannot pin the function.
+   Reading a CSV. Lines end in CRLF, LF or a lone CR (Excel for Mac). The
+   delimiter is the one the most sampled lines carry (from the top and the
+   middle of the file), so a stray tab in a title line never decides it.
+   Cells are split with double quotes honoured (a quoted "1,234.5" is one
+   reading, not two), and a cell carrying a currency sign is never a
+   reading. In a tab or semicolon file a comma inside a number is read the
+   way the file itself shows it: decimal commas ("0,25", "1.234,5") where
+   only a decimal comma fits, a thousands separator ("1,250.0") where only
+   that fits — and a reading whose comma could be either ("1,250") is
+   refused with its row, never guessed. A reading that carries digits but
+   is not a number is refused the same way, never read as zero.
+
+   The load column. When a header row names the columns, the load is the
+   column headed usage / kWh / kW / demand / load (money words match as
+   whole words: cost, price, rate, charge — "Integrated Demand" is not a
+   rate). A column that measures something else — power factor, kVA,
+   kVAR, volts, amps — is never the load, and neither is one whose last
+   word is a time part ("Usage Hour", "Usage Date") unless it names kW or
+   kWh. Two load columns are narrowed by the unit the caller chose (an
+   explicit kWh or kW first, then the looser words: usage / energy, or
+   demand / load), and still two is refused rather than guessed. Without a
+   header, one numeric column is the load and more than one is refused. A
+   cell longer than any real reading is skipped before it is tested, and
+   the number test runs in linear time, so a hostile cell cannot pin the
+   function.
+
+   Rows. Once the first reading carries a date or a clock time, a row
+   without one is a note or a footer (a "Total" line) and is skipped, and a
+   stamped row whose reading is blank or "N/A" is a gap: counted, read as
+   zero within 2%, and said so. In a file with no stamps, a row that starts
+   with Total / Sum / Average / Max is a footer.
 
    The calendar. The simulation runs on 2025 (1 Jan a Wednesday), and
-   billing, TOU windows and summer events are laid on it by hour. A file's
-   first date (the first data row's date cell, or `startDate` for a bare
-   list) places it: 29 Feb is removed, a year that runs past 365 days loses
-   its last day, a 364-day remainder repeats its last day, and the series
-   is wrapped so each reading lands on its own calendar date — moved up to
-   three days so its weekdays fall on the calendar's weekdays. With no date
-   anywhere the readings are READ AS STARTING 1 JANUARY, and the result says
-   so. 8760/8784 hourly, 17520/17568 half-hourly or 35040/35136
-   quarter-hourly; kWh-per-interval is converted when the caller says so. */
+   billing, TOU windows and summer events are laid on it by hour. The date
+   column is read on every row: its day/month order is settled across the
+   whole file (a first part over 12 anywhere is a day, a second part over
+   12 anywhere is a day; a two-digit year is the part that holds still),
+   month names and 20250605 are read too, and a file that runs newest-first
+   is read oldest-first. Its first date places it — or `startDate` for a
+   bare list; a file's own date wins over a `startDate` and the note says
+   so: 29 Feb is removed, a year that runs past 365 days loses its last
+   day, a 364-day remainder repeats its last day, and the series is wrapped
+   so each reading lands on its own calendar date, then moved by the shift
+   of up to three days that lands the most of its weekends on the
+   calendar's weekends, counted over every day (a year that crosses New
+   Year or 29 Feb cannot line up everywhere; the note says how many days
+   differ). With no date anywhere the readings are READ AS STARTING 1
+   JANUARY, and the result says so. 8760/8784 hourly, 17520/17568
+   half-hourly or 35040/35136 quarter-hourly; kWh-per-interval is converted
+   when the caller says so. */
 var NUM_RE = /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:e-?\d+)?$/i;   /* linear: no two quantifiers compete for a digit */
 var MAX_CELL = 32;                                         /* no reading is longer; a longer cell is never tested */
 var LOAD_HEAD = /(usage|consumption|kwh|\bkw\b|demand|load|value|reading|import|delivered|energy|power)/i;
-var MONEY_HEAD = /(cost|\$|€|£|price|amount|charge|usd|dollar|rate)/i;
+var MONEY_HEAD = /(\bcost|\$|€|£|\bprice|\bamount|\bcharges?\b|\busd\b|dollar|\brates?\b)/i;
 var EXPORT_HEAD = /(export|generat|solar|\bpv\b|received)/i;   /* what left the site is not its load */
+var NOT_LOAD_HEAD = /(factor|\bpf\b|kvar|\bkvah?\b|reactive|apparent|volt|\bamps?\b|ampere|frequency|\bhz\b|temperature|\btemp\b)/i;
+var TIME_TAIL = /\b(?:hour|hr|he|time|date|day|interval|period|start|end|ending|beginning|month|year)\s*(?:\([^)]*\))?\s*$/i;
+var UNIT_TOKEN = /\bkwh?\b/i;
+var FOOTER = /^\s*(?:grand\s+)?(?:total|totals|sum|average|mean|avg|min|minimum|max|maximum)\b/i;
+var CLOCK = /^\s*\d{1,2}:\d{2}/;
 var CURRENCY = /[$€£¥]/;
 var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+var MONTH_FULL = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+var SHIFTS = [0, 1, -1, 2, -2, 3, -3];                     /* ties go to the smaller move */
+var MAX_TEXT = 4300000;   /* characters: a year of 15-minute rows with an account id and a revision stamp on each is ~3.2 MB; under Vercel's 4.5 MB body */
 
 function splitCells(line, delim) {
   var out = [], i;
@@ -357,24 +394,51 @@ function splitCells(line, delim) {
   out.push({ s: cur, q: quoted });
   return out;
 }
-function cellNumber(c) {
+/* How a tab or semicolon file writes a comma inside a number, read off the
+   file: 'comma' where some cell can only be a decimal comma, 'group' where
+   some cell can only be a thousands separator, null where neither (or
+   both) shows — then a comma reading is refused, not guessed. */
+function commaIsDecimal(s) {
+  return (/^-?\d+,\d+$/.test(s) && !/^-?[1-9]\d{0,2}(?:,\d{3})+$/.test(s)) || /^-?\d{1,3}(?:\.\d{3})+,\d+$/.test(s);
+}
+function commaIsGroup(s) { return /^-?[1-9]\d{0,2}(?:,\d{3})+\.\d+$/.test(s) || /^-?[1-9]\d{0,2}(?:,\d{3}){2,}$/.test(s); }
+function numberFormat(rows, delim) {
+  if (delim === ',') return null;                          /* a comma inside a cell there is quoted: "1,234.5" */
+  var dec = 0, grp = 0;
+  for (var i = 0; i < rows.length; i++) for (var j = 0; j < rows[i].length; j++) {
+    var s = rows[i][j].s.trim();
+    if (s.length > MAX_CELL || s.indexOf(',') < 0) continue;
+    if (commaIsDecimal(s)) dec++; else if (commaIsGroup(s)) grp++;
+  }
+  return dec && !grp ? 'comma' : (grp && !dec ? 'group' : null);
+}
+function cellNumber(c, dec) {
   if (!c) return null;
   var s = c.s.trim();
   if (!s || s.length > MAX_CELL || CURRENCY.test(s)) return null;
-  if (c.q && /^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(s)) s = s.replace(/,/g, '');   /* "1,234.5" */
+  if (dec === 'comma') {
+    if (/^-?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');   /* 1.234,5 */
+    else if (/^-?\d+,\d+$/.test(s)) s = s.replace(',', '.');                                     /* 0,25 */
+  } else if ((dec === 'group' || c.q) && /^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(s)) s = s.replace(/,/g, '');   /* "1,234.5" */
+  else if (/^\d{8}$/.test(s) && parseDate(s)) return null;                                      /* 20250605 is a date */
   return NUM_RE.test(s) ? parseFloat(s) : null;
 }
+/* The delimiter the most sampled lines carry (then the most of it); ties
+   go tab, then semicolon, then comma. Quoted text is not counted. */
 function pickDelimiter(lines) {
-  var counts = { ',': 0, '\t': 0, ';': 0 }, seen = 0, i, j;
-  for (i = 0; i < lines.length && seen < 5; i++) {
-    var l = lines[i];
-    if (!l.trim()) continue;
-    seen++;
+  var ds = ['\t', ';', ','], lines1 = { '\t': 0, ';': 0, ',': 0 }, count = { '\t': 0, ';': 0, ',': 0 }, i, k, seen;
+  function look(l) {
     l = l.replace(/"[^"]*"/g, '');
-    for (j = 0; j < l.length; j++) { var ch = l.charAt(j); if (has(counts, ch)) counts[ch]++; }
+    for (k = 0; k < 3; k++) { var n = l.split(ds[k]).length - 1; if (n) { lines1[ds[k]]++; count[ds[k]] += n; } }
   }
-  if (counts['\t'] > 0) return '\t';
-  return counts[';'] > counts[','] ? ';' : ',';
+  for (i = 0, seen = 0; i < lines.length && seen < 25; i++) if (lines[i].trim()) { look(lines[i]); seen++; }
+  for (i = Math.floor(lines.length / 2), seen = 0; i < lines.length && seen < 25; i++) if (lines[i].trim()) { look(lines[i]); seen++; }
+  var best = ds[0];
+  for (k = 1; k < 3; k++) {
+    var d = ds[k];
+    if (lines1[d] > lines1[best] || (lines1[d] === lines1[best] && count[d] > count[best])) best = d;
+  }
+  return best;
 }
 
 function daysIn(y, m) { return m === 2 ? ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28) : DAYS[m - 1]; }
@@ -382,39 +446,103 @@ function mkDate(y, m, d) {
   if (!(y >= 1900 && y <= 2100) || !(m >= 1 && m <= 12) || !(d >= 1 && d <= daysIn(y, m))) return null;
   return { y: y, m: m, d: d };
 }
-/* A date at the start of a cell: 2025-07-02, 2025/07/02 or (US) 7/2/2025,
-   07-02-25 — day first only when the first number cannot be a month. */
-function parseDate(s) {
+function monthWord(w) {
+  w = String(w).toLowerCase();
+  if (w === 'sept') return 9;
+  for (var i = 0; i < 12; i++) if (w.length >= 3 && MONTH_FULL[i].indexOf(w) === 0) return i + 1;
+  return 0;
+}
+function yr(y) { return y < 100 ? y + 2000 : y; }
+var NUMERIC_DATE = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})(?:$|[T\s,])/;
+/* A date at the start of a cell: 2025-07-02, 2025/07/02, 20250702,
+   2-Jul-2025, 2 July 2025, Jul 2, 2025, or a numeric 7/2/2025 or 07-02-25.
+   `order` ('mdy' | 'dmy' | 'ymd') is the column's, settled across the file
+   by dateOrder(); a lone date (a `startDate`) reads day first only when
+   the first number cannot be a month. */
+function parseDate(s, order) {
   s = String(s == null ? '' : s).trim();
   if (s.length > 40) return null;
   var m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?:$|[T\s,])/.exec(s);
   if (m) return mkDate(+m[1], +m[2], +m[3]);
-  m = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})(?:$|[T\s,])/.exec(s);
+  m = /^(\d{4})(\d{2})(\d{2})(?:$|[T\s])/.exec(s);
+  if (m) return mkDate(+m[1], +m[2], +m[3]);
+  m = /^(\d{1,2})[-\s\/.]([A-Za-z]{3,9})\.?[-\s\/.,]+(\d{4}|\d{2})(?:$|[T\s,])/.exec(s);
+  if (m) return monthWord(m[2]) ? mkDate(yr(+m[3]), monthWord(m[2]), +m[1]) : null;
+  m = /^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})(?:$|[T\s,])/.exec(s);
+  if (m) return monthWord(m[1]) ? mkDate(+m[3], monthWord(m[1]), +m[2]) : null;
+  m = NUMERIC_DATE.exec(s);
   if (!m) return null;
-  var a = +m[1], b = +m[2], y = +m[3];
-  if (y < 100) y += 2000;
+  var a = +m[1], b = +m[2];
+  if (order === 'ymd') return m[3].length === 2 ? mkDate(yr(a), b, +m[3]) : null;
+  var y = yr(+m[3]);
+  if (order === 'dmy') return mkDate(y, b, a);
+  if (order === 'mdy') return mkDate(y, a, b);
   return a > 12 && b <= 12 ? mkDate(y, b, a) : mkDate(y, a, b);
+}
+/* The order of a column of numeric dates, read across all of it: a first
+   part over 12 anywhere is a day (D/M), a second part over 12 anywhere is
+   a day (M/D), both is a conflict; with two-digit years, a first part that
+   holds still while the last one runs over a month is the year (YY-MM-DD).
+   No evidence at all (it cannot happen across a year) is the US order,
+   marked assumed. A column of ISO or month-name dates needs no order. */
+function dateOrder(cells) {
+  var maxA = 0, maxB = 0, two = true, any = false, aSeen = {}, cSeen = {}, nA = 0, nC = 0;
+  for (var i = 0; i < cells.length; i++) {
+    var m = NUMERIC_DATE.exec(String(cells[i] == null ? '' : cells[i]).trim());
+    if (!m) continue;
+    any = true;
+    if (+m[1] > maxA) maxA = +m[1];
+    if (+m[2] > maxB) maxB = +m[2];
+    if (m[3].length !== 2) two = false;
+    if (!has(aSeen, m[1])) { aSeen[m[1]] = 1; nA++; }
+    if (!has(cSeen, m[3])) { cSeen[m[3]] = 1; nC++; }
+  }
+  if (!any) return { order: null };
+  if (two && nA <= 2 && nC > 2 && maxB <= 12) return { order: 'ymd' };
+  if (maxA > 12 && maxB > 12) return { order: null, conflict: true };
+  if (maxA > 12) return { order: 'dmy' };
+  if (maxB > 12) return { order: 'mdy' };
+  return { order: 'mdy', assumed: true };
 }
 function addDays(dt, k) {
   var x = new Date(Date.UTC(dt.y, dt.m - 1, dt.d + k));
   return { y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate() };
 }
+function dayNumber(dt) { return Math.round(Date.UTC(dt.y, dt.m - 1, dt.d) / 86400000); }
 function weekdayOf(dt) { return new Date(Date.UTC(dt.y, dt.m - 1, dt.d)).getUTCDay(); }
 function calDay(dt) { return MONTH_START[dt.m - 1] / 24 + dt.d - 1; }   /* 0–364 on the 365-day calendar */
 function showDate(dt) { return dt.d + ' ' + MONTH_NAMES[dt.m - 1] + ' ' + dt.y; }
+function perOf(n) { return n === 8760 || n === 8784 ? 1 : (n === 17520 || n === 17568 ? 2 : (n === 35040 || n === 35136 ? 4 : 0)); }
 
 function parseInterval(text, unit, startDate) {
-  var lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/), i, j;
-  var delim = pickDelimiter(lines), rows = [];
+  var lines = String(text || '').replace(/^﻿/, '').split(/\r\n|\r|\n/), i, j;
+  var delim = pickDelimiter(lines), rows = [], lineNo = [];
   for (i = 0; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
-    rows.push(splitCells(lines[i], delim));
+    rows.push(splitCells(lines[i], delim)); lineNo.push(i + 1);
   }
-  function numericCount(r) { var k = 0; for (var q = 0; q < r.length; q++) if (cellNumber(r[q]) != null) k++; return k; }
+  var dec = numberFormat(rows, delim);
+  function numOf(c) { return cellNumber(c, dec); }
+  function numericCount(r) { var k = 0; for (var q = 0; q < r.length; q++) if (numOf(r[q]) != null) k++; return k; }
   function colIsNumeric(from, col) {
     var seen = 0, good = 0;
-    for (var q = from; q < rows.length && seen < 20; q++) { seen++; if (cellNumber(rows[q][col]) != null) good++; }
+    for (var q = from; q < rows.length && seen < 20; q++) { seen++; if (numOf(rows[q][col]) != null) good++; }
     return seen > 0 && good >= Math.ceil(seen * 0.9);
+  }
+  /* a row stamped with a date or a clock time in a cell other than the load */
+  function stampedRow(r, skip) {
+    for (var q = 0; q < r.length; q++) if (q !== skip && (CLOCK.test(r[q].s) || parseDate(r[q].s))) return true;
+    return false;
+  }
+  function footerRow(r) { for (var q = 0; q < r.length; q++) { var t = r[q].s.trim(); if (t) return FOOTER.test(t); } return false; }
+  /* a reading that carries digits but is not a number is a format problem,
+     refused with its row — never read as zero */
+  function unreadable(i2, c) {
+    var t = c ? c.s.trim() : '';
+    if (!/\d/.test(t)) return null;
+    return 'Row ' + fmt(lineNo[i2]) + ': the reading "' + (t.length > 24 ? t.slice(0, 24) + '…' : t) + '" is not a number this simulator can read' +
+           (t.indexOf(',') >= 0 ? ' (its comma could be a thousands separator or a decimal point, and the file does not show which)' : '') +
+           '. Export the readings as plain numbers, or fix that cell.';
   }
 
   /* The header: the first row with no number in it that names a load
@@ -426,18 +554,22 @@ function parseInterval(text, unit, startDate) {
     var cand = [];
     for (j = 0; j < r.length; j++) {
       var name = r[j].s.trim();
-      if (name.length <= 60 && LOAD_HEAD.test(name) && !MONEY_HEAD.test(name) && !EXPORT_HEAD.test(name) && colIsNumeric(i + 1, j)) cand.push(j);
+      if (name.length > 60 || !LOAD_HEAD.test(name) || MONEY_HEAD.test(name) || EXPORT_HEAD.test(name) || NOT_LOAD_HEAD.test(name)) continue;
+      if (TIME_TAIL.test(name) && !UNIT_TOKEN.test(name)) continue;
+      if (colIsNumeric(i + 1, j)) cand.push(j);
     }
     if (!cand.length) continue;
     if (cand.length > 1) {
-      var want = unit === 'kwh' ? /kwh|usage|consumption|energy/i : /\bkw\b|demand|power/i, narrow = [];
-      for (j = 0; j < cand.length; j++) {
-        var nm = r[cand[j]].s;
-        if (want.test(nm) && !(unit !== 'kwh' && /kwh/i.test(nm))) narrow.push(cand[j]);
+      var kwhUnit = unit === 'kwh', narrow = [];
+      for (j = 0; j < cand.length; j++) if (kwhUnit ? /\bkwh\b/i.test(r[cand[j]].s) : /\bkw\b/i.test(r[cand[j]].s)) narrow.push(cand[j]);
+      if (!narrow.length) {
+        var loose = kwhUnit ? /usage|consumption|energy/i : /demand|\bload\b/i;
+        for (j = 0; j < cand.length; j++) if (loose.test(r[cand[j]].s) && (kwhUnit || !/kwh/i.test(r[cand[j]].s))) narrow.push(cand[j]);
       }
       if (narrow.length !== 1) {
         var names = []; for (j = 0; j < cand.length; j++) names.push('"' + r[cand[j]].s.trim() + '"');
-        err = 'The file has more than one load column (' + names.join(', ') + '); keep one, or head the load column "Usage".';
+        err = 'The file has more than one load column (' + names.join(', ') + ') and the unit chosen (' + (kwhUnit ? 'kWh' : 'kW') +
+              ') does not tell them apart; keep one column of readings.';
         break;
       }
       cand = narrow;
@@ -446,35 +578,92 @@ function parseInterval(text, unit, startDate) {
   }
   if (err) return { ok: false, error: err };
 
-  var vals = [], first = -1;
+  var vals = [], dataRows = [], stamps = null, v, why;
   if (head >= 0) {
     for (i = head + 1; i < rows.length; i++) {
-      var v = cellNumber(rows[i][col]);
-      if (v == null && numericCount(rows[i]) === 0) continue;       /* a blank, note or footer row */
-      if (first < 0) first = i;
-      vals.push(v == null ? NaN : v);                               /* counted unreadable below */
+      var row = rows[i], st = stampedRow(row, col);
+      v = numOf(row[col]);
+      if (stamps === null) {
+        if (v == null && !st) continue;                               /* a units line or a note before the readings */
+        stamps = st;
+      } else if (stamps ? !st : (v == null && numericCount(row) === 0)) continue;   /* a note, a blank or a footer */
+      if (!st && footerRow(row)) continue;                            /* "Total,…" in a file with no stamps */
+      if (v == null && (why = unreadable(i, row[col]))) return { ok: false, error: why };
+      vals.push(v == null ? NaN : v);                                 /* a gap: counted unreadable below */
+      dataRows.push(i);
     }
   } else {
     for (i = 0; i < rows.length; i++) {
       var k = numericCount(rows[i]);
-      if (!k) continue;                                             /* a title or header without a load name */
+      if (!k) {
+        /* a stamped row with no reading, once the readings are stamped: a gap */
+        if (stamps === true && stampedRow(rows[i], col)) {
+          if ((why = unreadable(i, rows[i][col]))) return { ok: false, error: why };
+          vals.push(NaN); dataRows.push(i);
+        }
+        continue;                                                     /* a title or a header without a load name */
+      }
+      if (stamps === true && !stampedRow(rows[i], col)) continue;      /* a footer in a stamped file */
+      if (stamps !== true && footerRow(rows[i])) continue;
       if (k > 1) return { ok: false, error: 'More than one column holds numbers and no header names the load; add a header row (for example "Date,kW") or keep one column of readings.' };
-      for (j = 0; j < rows[i].length; j++) { var x = cellNumber(rows[i][j]); if (x != null) { vals.push(x); break; } }
-      if (first < 0) { first = i; col = j; }
+      for (j = 0; j < rows[i].length; j++) { var x = numOf(rows[i][j]); if (x != null) { vals.push(x); break; } }
+      if (stamps === null) { col = j; stamps = stampedRow(rows[i], col); }
+      dataRows.push(i);
     }
   }
 
-  /* The first reading's date, from any other cell on its row. */
-  var start = null;
-  if (first >= 0) for (j = 0; j < rows[first].length && !start; j++) if (j !== col) start = parseDate(rows[first][j].s);
-  var notes = [];
-  if (!start && startDate) start = parseDate(startDate);
+  /* The dates: the first data row's date cell names the column, its order
+     is settled across every row, and the first and last dates say which
+     way the file runs. */
+  var notes = [], start = null, dateCol = -1, dated = false, datesOff = false, undatedWhy = null, n = vals.length;
+  if (dataRows.length) {
+    var r0 = rows[dataRows[0]];
+    for (j = 0; j < r0.length && dateCol < 0; j++) if (j !== col && parseDate(r0[j].s)) dateCol = j;
+  }
+  if (dateCol >= 0) {
+    var dcells = []; for (i = 0; i < dataRows.length; i++) dcells.push(rows[dataRows[i]][dateCol] ? rows[dataRows[i]][dateCol].s : '');
+    var ord = dateOrder(dcells);
+    if (ord.conflict) {
+      undatedWhy = 'The date column mixes day-first and month-first dates, so it could not be read; the readings were read as starting on 1 January. Give the first reading\'s date to place them.';
+    } else {
+      var firstD = null, lastD = null;
+      for (i = 0; i < dcells.length && i < 50 && !firstD; i++) firstD = parseDate(dcells[i], ord.order);
+      for (i = dcells.length - 1; i >= 0 && i >= dcells.length - 50 && !lastD; i--) lastD = parseDate(dcells[i], ord.order);
+      if (firstD && lastD) {
+        var span = dayNumber(lastD) - dayNumber(firstD);
+        if (span < 0) {
+          vals.reverse(); start = lastD; span = -span;
+          notes.push('The file lists its newest reading first; it was read oldest first, from ' + showDate(lastD) + '.');
+        } else start = firstD;
+        var per0 = perOf(n), endD = start === firstD ? lastD : firstD;
+        if (per0 && Math.abs(span - (n / (24 * per0) - 1)) > 1) {
+          datesOff = true;
+          notes.push('The dates run from ' + showDate(start) + ' to ' + showDate(endD) + ' (' + fmt(span + 1) + ' days) but the readings cover ' +
+                     fmt(n / (24 * per0)) + ' days; they were laid in file order from ' + showDate(start) + '.');
+        }
+        if (ord.assumed) notes.push('Every date in the file could be read day-first or month-first; they were read month-first (US), so the first reading is ' + showDate(start) + '.');
+      }
+    }
+  } else if (head >= 0) {
+    for (j = 0; j < rows[head].length; j++) if (j !== col && /date|time|stamp|period|\bday\b|start/i.test(rows[head][j].s)) {
+      undatedWhy = 'The file\'s date column ("' + rows[head][j].s.trim().slice(0, 40) + '") could not be read, so the readings were read as starting on 1 January. A file that starts on another date shifts every month, event and weekday — give the first reading\'s date.';
+      break;
+    }
+  }
+  var given = startDate ? parseDate(startDate) : null;
+  if (start) {
+    dated = true;
+    if (given && dayNumber(given) !== dayNumber(start))
+      notes.push('The file\'s own dates were used (first reading ' + showDate(start) + '); the start date given (' + showDate(given) + ') was not.');
+  } else if (given) { start = given; dated = true; }
+
   if (headName) {
     var hint = /kwh/i.test(headName) ? 'kwh' : (/\bkw\b|demand/i.test(headName) ? 'kw' : null);
-    if (!hint && first >= 0) for (j = 0; j < rows[head].length; j++) {
-      if (/^\s*units?\s*$/i.test(rows[head][j].s) && rows[first][j] && /^\s*kwh\s*$/i.test(rows[first][j].s)) hint = 'kwh';
+    if (!hint && dataRows.length) for (j = 0; j < rows[head].length; j++) {
+      var u0 = rows[dataRows[0]][j];
+      if (/^\s*units?\s*$/i.test(rows[head][j].s) && u0 && /^\s*kwh\s*$/i.test(u0.s)) hint = 'kwh';
     }
-    for (j = 0; j < rows[head].length; j++) if (j !== col && EXPORT_HEAD.test(rows[head][j].s) && rows[head][j].s.trim().length <= 60) {
+    for (j = 0; j < rows[head].length; j++) if (j !== col && EXPORT_HEAD.test(rows[head][j].s) && rows[head][j].s.trim().length <= 60 && colIsNumeric(head + 1, j)) {
       notes.push('The file also has an export column ("' + rows[head][j].s.trim() + '"); only "' + headName + '" was read as the load. If the site has solar, those readings are already net of it — leave Solar blank.');
       break;
     }
@@ -482,18 +671,15 @@ function parseInterval(text, unit, startDate) {
       notes.push('The load column ("' + headName + '") looks like ' + (hint === 'kwh' ? 'kWh per interval' : 'kW') +
                  ', but it was read as ' + (unit === 'kwh' ? 'kWh per interval' : 'kW') + ' as chosen; change the unit if that is wrong.');
   }
-  var out = intervalToHourly(vals, unit, start);
-  if (out.ok) out.notes = notes.concat(out.notes);
+  var out = intervalToHourly(vals, unit, dated ? start : null, { undatedWhy: undatedWhy });
+  if (out.ok) { out.notes = notes.concat(out.notes); if (datesOff) out.datesOff = true; }
   return out;
 }
 
-function intervalToHourly(vals, unit, start) {
+function intervalToHourly(vals, unit, start, opts) {
   if (!Array.isArray(vals)) return { ok: false, error: 'The interval data is not a list of readings.' };
-  var n = vals.length, per;
-  if (n === 8760 || n === 8784) per = 1;
-  else if (n === 35040 || n === 35136) per = 4;
-  else if (n === 17520 || n === 17568) per = 2;
-  else return { ok: false, error: 'An interval file must be one year: 8,760 hourly or 35,040 fifteen-minute readings (' + fmt(n) + ' found).' };
+  var n = vals.length, per = perOf(n);
+  if (!per) return { ok: false, error: 'An interval file must be one year: 8,760 hourly or 35,040 fifteen-minute readings (' + fmt(n) + ' found).' };
   var nDays = n / (24 * per), keep = [], notes = [], d, dt, leapGone = null, lastDropped = false;
   if (start) {
     for (d = 0; d < nDays; d++) {
@@ -526,11 +712,19 @@ function intervalToHourly(vals, unit, start) {
 
   var out = hourly, aligned = false;
   if (start) {
-    /* Wrap onto the calendar by date, then move by up to three days so the
-       file's weekdays fall on the calendar's weekdays. */
-    var first = addDays(start, keep[0]), c0 = calDay(first);
-    var shift = ((weekdayOf(first) - dayOfWeek(c0)) % 7 + 7) % 7;
-    if (shift > 3) shift -= 7;
+    /* Wrap onto the calendar by date, then move by the shift of up to three
+       days that puts the most of the file's weekends on the calendar's,
+       counted over every placed day — not the first day alone: a year that
+       crosses New Year (365 ≡ 1 mod 7) or loses 29 Feb slips a weekday
+       part-way through, and no single shift lines up every day. */
+    var first = addDays(start, keep[0]), c0 = calDay(first), wd0 = weekdayOf(start), fileWE = new Uint8Array(365);
+    for (kd = 0; kd < 365; kd++) { var w = (wd0 + keep[kd]) % 7; fileWE[kd] = w === 0 || w === 6 ? 1 : 0; }
+    var shift = 0, miss = Infinity;
+    for (var si = 0; si < SHIFTS.length; si++) {
+      var o = ((c0 + SHIFTS[si]) % 365 + 365) % 365, mm = 0;
+      for (kd = 0; kd < 365; kd++) if (fileWE[kd] !== (isWeekend((kd + o) % 365) ? 1 : 0)) mm++;
+      if (mm < miss) { miss = mm; shift = SHIFTS[si]; }
+    }
     var off = ((c0 + shift) % 365 + 365) % 365;
     if (off) {
       out = new Array(HOURS_YEAR);
@@ -538,17 +732,20 @@ function intervalToHourly(vals, unit, start) {
       for (var h = 0; h < HOURS_YEAR; h++) out[(h + oh) % HOURS_YEAR] = hourly[h];
     }
     aligned = true;
-    if (off || first.y !== 2025) {
+    if (off || first.y !== 2025 || miss) {
       notes.push('Your readings start on ' + showDate(first) + '; each was laid on its own calendar date of the simulated year' +
-                 (shift ? ' (moved ' + Math.abs(shift) + ' day' + (Math.abs(shift) === 1 ? '' : 's') + ' ' + (shift > 0 ? 'later' : 'earlier') + ' so weekdays line up)' : '') + '.');
+                 (shift ? ', moved ' + Math.abs(shift) + ' day' + (Math.abs(shift) === 1 ? '' : 's') + ' ' + (shift > 0 ? 'later' : 'earlier') : '') +
+                 (miss ? ' — weekends line up on all but ' + miss + ' of 365 days (a year that crosses New Year or 29 Feb cannot line up on every day)'
+                       : (shift ? ' so weekends line up' : '')) + '.');
     }
     if (leapGone) notes.push('29 Feb ' + leapGone.y + ' was removed to fit the 365-day calendar.');
     if (lastDropped) notes.push('The file runs past a year; its last day was dropped.');
     if (padded) notes.push('The file covers ' + (365 - padded) + ' days once 29 Feb is removed; its last day was repeated to close the year.');
   } else {
-    notes.push('No dates were found with the readings, so they were read as starting on 1 January' +
-               (nDays === 366 ? ' of a leap year (29 Feb, the 60th day, was removed)' : '') +
-               '. A file that starts on another date shifts every month, event and weekday — include the date column, or give the start date.');
+    notes.push((opts && opts.undatedWhy) ||
+               ('No dates were found with the readings, so they were read as starting on 1 January' +
+                (nDays === 366 ? ' of a leap year (29 Feb, the 60th day, was removed)' : '') +
+                '. A file that starts on another date shifts every month, event and weekday — include the date column, or give the start date.'));
   }
   if (bad) notes.push(fmt(bad) + ' unreadable readings were read as zero.');
   return { ok: true, kw: out, notes: notes, readings: n, dated: aligned };
@@ -593,8 +790,9 @@ function buildLoad(input, loc, segment) {
                                           : parseInterval(intake.text, intake.unit, intake.startDate);
     if (!p.ok) return p;
     /* Undated readings are placed on the calendar by assumption, which moves
-       every summer event and weekday if the assumption is wrong. */
-    return { ok: true, kw: p.kw, source: 'interval', quality: p.dated ? 'high' : 'medium', notes: p.notes,
+       every summer event and weekday if the assumption is wrong; so are
+       dated ones whose dates do not span the readings. */
+    return { ok: true, kw: p.kw, source: 'interval', quality: p.dated && !p.datesOff ? 'high' : 'medium', notes: p.notes,
              label: 'Your interval data (' + fmt(p.readings) + ' readings)' };
   }
   if (intake.type === 'bills') {
@@ -1170,7 +1368,6 @@ function programs(ctx) {
 }
 
 /* ── THE RUN ─────────────────────────────────────────────────────────── */
-var MAX_TEXT = 3000000;   /* a year of 15-minute rows with timestamps is ~2 MB */
 var TOO_LONG = 'More than twelve hours of storage is outside what this simulator models.';
 function validate(input) {
   var errs = [];
@@ -1185,7 +1382,7 @@ function validate(input) {
   var l = input.load || {};
   if (l.type && ['interval', 'bills', 'profile'].indexOf(l.type) < 0) errs.push({ field: 'load.type', message: 'Load is interval, bills or profile.' });
   if (l.type === 'interval' && typeof l.text !== 'string' && !Array.isArray(l.values)) errs.push({ field: 'load.text', message: 'Attach the interval file.' });
-  if (l.type === 'interval' && typeof l.text === 'string' && l.text.length > MAX_TEXT) errs.push({ field: 'load.text', message: 'The interval file is larger than one year of readings.' });
+  if (l.type === 'interval' && typeof l.text === 'string' && l.text.length > MAX_TEXT) errs.push({ field: 'load.text', message: 'The interval file is larger than this simulator takes (' + (MAX_TEXT / 1e6).toFixed(1) + ' million characters); export one year of hourly or 15-minute readings, without extra columns.' });
   if (l.type === 'interval' && l.startDate != null && !parseDate(l.startDate)) errs.push({ field: 'load.startDate', message: 'The start date is YYYY-MM-DD.' });
   if (l.type === 'bills' && !Array.isArray(l.bills)) errs.push({ field: 'load.bills', message: 'Enter at least one month of bills.' });
   var s = input.split;
@@ -1372,13 +1569,14 @@ function simulate(input) {
 }
 
 module.exports = {
-  VERSION: VERSION, SPLIT: SPLIT, MARKETS: MARKETS, PROGRAMS: PROGRAMS, RATE_BOOK: RATE_BOOK,
+  VERSION: VERSION, SPLIT: SPLIT, MARKETS: MARKETS, PROGRAMS: PROGRAMS, RATE_BOOK: RATE_BOOK, MAX_TEXT: MAX_TEXT,
   locate: locate, parseInterval: parseInterval, intervalToHourly: intervalToHourly, parseDate: parseDate,
   billsToMonths: billsToMonths, fitMonth: fitMonth,
   validate: validate, simulate: simulate,
   /* for the page: what may be chosen, no rates */
   options: function () {
     var m = []; for (var k in MARKETS) if (has(MARKETS, k)) m.push({ key: k, name: MARKETS[k] });
-    return { segments: SEGMENTS, markets: m, split: { owner: SPLIT.owner, platform: SPLIT.platform, installer: SPLIT.installer, ref: SPLIT.ref } };
+    return { segments: SEGMENTS, markets: m, maxTextChars: MAX_TEXT,
+             split: { owner: SPLIT.owner, platform: SPLIT.platform, installer: SPLIT.installer, ref: SPLIT.ref } };
   }
 };
