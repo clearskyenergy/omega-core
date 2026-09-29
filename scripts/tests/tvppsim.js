@@ -194,17 +194,29 @@ later(function () {
   }).then(function (r) {
     ok('a fetch that THROWS (bad URL) still answers the simulation, "could not be reached"', r.ok && r.providerQuote.ok === false && /could not be reached/.test(r.providerQuote.error), r.providerQuote);
     /* Node's fetch quotes a bad header VALUE, key and all, in its message */
-    process.env.DIVIDENDVPP_API_KEY = 'sk_live_SECRET\nx';
+    process.env.DIVIDENDVPP_API_KEY = 'partner-key-SECRET\nx';
     logged = [];
     global.fetch = function (u, o) { return Promise.reject(new TypeError('Headers.append: "' + o.headers.Authorization + '" is an invalid header value.')); };
     return P.estimate(EST_IN);
   }).then(function (r) {
     ok('a key with a stray newline reads "could not be reached"', /could not be reached/.test(r.providerQuote.error), r.providerQuote.error);
-    ok('the log names the failure but never carries the key', logged.length === 1 && /invalid header value/.test(logged[0]) && logged[0].indexOf('SECRET') < 0 && logged[0].indexOf('sk_live') < 0, logged);
+    ok('the log names the failure but never carries the key', logged.length === 1 && /invalid header value/.test(logged[0]) && logged[0].indexOf('SECRET') < 0 && logged[0].indexOf('partner-key') < 0, logged);
+    /* the key quoted with no "Bearer" before it: the literal key is cut */
+    logged = [];
+    global.fetch = function () { var e = new Error('credential rejected: partner-key-SECRET\nx'); e.cause = { code: 'EKEY partner-key-SECRET\nx' }; return Promise.reject(e); };
+    return P.estimate(EST_IN);
+  }).then(function () {
+    ok('a key quoted without "Bearer" is cut from the message and the cause', logged.length === 1 && logged[0].indexOf('SECRET') < 0 && /\[key\]/.test(logged[0]), logged);
+    /* the runtime printed the key altered (a control character as a space): everything after "Bearer" is cut */
+    logged = [];
+    global.fetch = function () { return Promise.reject(new TypeError('Headers.append: "Bearer partner-key-SECRET x" is an invalid header value.')); };
+    return P.estimate(EST_IN);
+  }).then(function () {
+    ok('a key the runtime altered is still cut after "Bearer"', logged.length === 1 && logged[0].indexOf('SECRET') < 0 && /Bearer \[key\]/.test(logged[0]), logged);
     /* the same two faults through the REAL fetch, where the runtime has one: both fail before any network */
     if (typeof saved !== 'function') return null;
     global.fetch = saved; logged = [];
-    process.env.DIVIDENDVPP_API_KEY = 'sk_live_SECRET\u0000x';
+    process.env.DIVIDENDVPP_API_KEY = 'partner-key-SECRET\u0000x';
     return P.estimate(EST_IN).then(function (r2) {
       ok('real fetch, a NUL in the key: "could not be reached", key not logged', /could not be reached/.test(r2.providerQuote.error) && logged.join(' ').indexOf('SECRET') < 0, [r2.providerQuote.error, logged]);
       process.env.DIVIDENDVPP_API_KEY = 'k'; process.env.DIVIDENDVPP_API_URL = 'api.dividendvpp.com/estimate'; logged = [];
