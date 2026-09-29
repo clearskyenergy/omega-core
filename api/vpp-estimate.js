@@ -20,8 +20,13 @@
    explicit pending/suspended/cancelled refuses; billing.toolAccess and
    member.toolAccess are allowlists that intersect, absent ≠ empty;
    toolOverrides.vppsim false refuses, true lifts the tier; a packaged
-   workspace needs the Storage module (package-access.requireModule); a read
+   workspace needs Omega Design (lite), which every package holds; a read
    that throws is 503, never a pass.
+
+   INCLUDED WITH EVERY ACCOUNT (2026-09-29, Tommy: "this tool should be at
+   the base function included with every account as we can upsell this"):
+   every tier from trial up, and the Omega Design module on a package. It is
+   the taste; the page's "Take it further" card sells Omega Storage.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var auth = require('./_lib/verify-token');
@@ -74,7 +79,7 @@ function gate(req) {
       }
       var access = require('./_lib/package-access');
       var projection = access.project(caller, r[1], org, r[2], Date.now());
-      access.requireModule(projection, 'storage', { tools: [TOOL_KEY] });
+      access.requireModule(projection, 'lite', { tools: [TOOL_KEY] });
       var why = projection.packaged ? null : refusal(r[1], r[2]);
       if (why) throw auth.httpError(403, why);
       return { caller: caller };

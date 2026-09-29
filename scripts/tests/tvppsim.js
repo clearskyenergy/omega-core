@@ -126,6 +126,16 @@ ok('more than 12 hours of storage is refused', S.simulate({ zip: '94110', batter
 ok('a zero-kWh load is refused', S.simulate({ zip: '94110', load: { type: 'interval', values: new Array(8760).fill(0) } }).ok === false);
 ok('options expose no rates', JSON.stringify(S.options()).indexOf('perKw') < 0 && JSON.stringify(S.options()).indexOf('0.55') < 0);
 
+/* ── included with every account ─────────────────────────────────────── */
+section('Base: included with every account');
+var MODS = require(path.join(ROOT, 'api', '_lib', 'modules'));
+var owners = MODS.catalog().filter(function (m) { return m.tools.indexOf('vppsim') >= 0; }).map(function (m) { return m.key; });
+ok('Omega Design (lite), the module every package holds, carries it — and only it', owners.length === 1 && owners[0] === 'lite', owners);
+var toolsSrc = fs.readFileSync(path.join(ROOT, 'omega-tools.js'), 'utf8');
+ok('the catalog opens it on every tier (TIER.ALL)', /key:'vppsim'[\s\S]{0,400}?tier:TIER\.ALL/.test(toolsSrc));
+var page = fs.readFileSync(path.join(ROOT, 'vpp-earnings.html'), 'utf8');
+ok('the page sells the next step through the Omega Storage module card', page.indexOf('/workspace#module-storage') >= 0);
+
 /* ── provider seam ────────────────────────────────────────────────────── */
 section('Provider');
 ok('without env the provider is the simulation only', P.configured() === false && P.describe().live === null);
@@ -202,6 +212,10 @@ later(function () { section('Gate'); });
   ['a toolAccess allowlist without it refuses', docs({ status: 'active' }, { tier: 'enterprise', toolAccess: ['editor'] }), EST, null, function (r) { return r.status === 403; }],
   ['a toolAccess allowlist with it passes', docs({ status: 'active' }, { tier: 'enterprise', toolAccess: ['vppsim'] }), EST, null, function (r) { return r.status === 200; }],
   ['a member list narrows it', docs({ status: 'active' }, { tier: 'standard' }, { status: 'active', toolAccess: ['proforma'] }), EST, null, function (r) { return r.status === 403; }],
+  ['EVERY account: a trial workspace runs it', docs({ status: 'active' }, { tier: 'trial' }), EST, null, function (r) { return r.status === 200; }],
+  ['EVERY account: no billing record at all runs it (a trial by default)', docs({ status: 'active' }), EST, null, function (r) { return r.status === 200; }],
+  ['EVERY account: a package holding only Omega Design runs it', docs({ status: 'active' }, { packaged: true, packagingState: 'paid', accessUntil: 4102444800000, modules: ['lite'] }, { role: 'member', status: 'active' }), EST, null, function (r) { return r.status === 200; }],
+  ['a read-only (unpaid) package does not', docs({ status: 'active' }, { packaged: true, packagingState: 'paid', accessUntil: 1000, modules: ['lite'] }, { role: 'member', status: 'active' }), EST, null, function (r) { return r.status === 403; }],
   ['an unknown tier refuses', docs({ status: 'active' }, { tier: 'free' }), EST, null, function (r) { return r.status === 403; }],
   ['an override lifts an unknown tier', docs({ status: 'active' }, { tier: 'free', toolOverrides: { vppsim: true } }), EST, null, function (r) { return r.status === 200; }],
   ['a billing read that throws is 503, never a pass', docs({ status: 'active' }, { __throws: 502 }), EST, null, function (r) { return r.status === 503; }],

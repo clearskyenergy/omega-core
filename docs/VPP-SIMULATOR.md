@@ -4,8 +4,9 @@
 
 ## What it is
 
-A tool in the workspace's **Finance** cell (`vppsim`, `/vpp-earnings.html`,
-Omega Storage module) that answers: *if this site's battery were enrolled in
+A tool in the workspace's **Finance** cell (`vppsim`, `/vpp-earnings.html`)
+**included with every account** — the Omega Design (base) module, every tier
+from trial up — that answers: *if this site's battery were enrolled in
 a managed virtual power plant — the DividendVPP model (Molecule Systems
 execution + Lightsmith optimisation) — what would it earn a year, stream by
 stream, and who keeps what?*
@@ -17,6 +18,16 @@ resource adequacy, utility VPP and BYOD programmes), with their published
 split — **70% asset owner / 20% platform / 10% installer** on programme
 earnings, no upfront fee. It is **not** their number: Molecule has not
 published an estimator API (their developer portal says "coming soon").
+
+## Why it is in the base
+
+Tommy, 2026-09-29: "this tool should be at the base function included with
+every account as we can upsell this." It is the taste: every workspace can
+screen a site's VPP earnings, and the results end with **Take it further**,
+which sends them to the Omega Storage module card (Battery Sizer, Value
+Stack, Pro Forma) — Live if they hold it, Opt in (priced by the server) if
+they do not. A `billing.toolAccess` allowlist (a white-label product such as
+Clean Cell's two tools) still wins: absent is not empty.
 
 ## Intake
 
@@ -48,8 +59,8 @@ published an estimator API (their developer portal says "coming soon").
   file. `readQuote()` is the one function to finish once their contract is
   known. A provider failure never fails the estimate.
 - `api/vpp-estimate.js` — the gate (proforma's: verify-token, absent ≠ empty
-  allowlists, `toolOverrides.vppsim`, the Storage module on a packaged
-  workspace, 503 on a failed read) and two actions, `options` and `estimate`.
+  allowlists, `toolOverrides.vppsim`, Omega Design on a packaged workspace,
+  every tier from trial, 503 on a failed read) and two actions, `options` and `estimate`.
 - `vpp-earnings.html` — collects, reads the CSV as text, posts, draws.
   Scenarios save to `toolData/{org}/tools/vppsim` (inputs only; an interval
   file is not stored).
@@ -64,7 +75,7 @@ rate; its `ref` says what replaces it).
 so Site Map (or a project) can hand a site over today. A native editor panel
 would POST the same `estimate` action with the placed fleet and the bill
 import's months; that button is not built yet (it needs a `ribbon` entry on
-the Storage module and a `render-legacy-gates.js` pass).
+a module and a `render-legacy-gates.js` pass).
 
 ## Not built
 

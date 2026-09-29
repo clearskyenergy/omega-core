@@ -13,6 +13,10 @@
   a ZIP, the site type, the battery, and whatever load data exists — an 8760
   interval file, 12–24 months of bills, or nothing (a typical load, labelled).
 
+  INCLUDED WITH EVERY ACCOUNT (Omega Design, every tier from trial up): it is
+  the taste. The "Take it further" card sells the next step, Omega Storage,
+  through the module's own card (Live, or Opt in priced by the server).
+
   WHERE THE LOGIC LIVES.  Not here.  Every figure comes back from
   POST /api/vpp-estimate (api/_lib/vpp-sim.js behind api/_lib/vpp-provider.js,
   which will also carry DividendVPP's own quote once their API is connected).
@@ -142,6 +146,8 @@ svg text{font:11px Inter,system-ui,sans-serif;fill:#526071}
 @media (max-width:1100px){.charts{grid-template-columns:1fr}}
 .foot{max-width:1320px;margin:0 auto;padding:4px 20px 28px;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px}
 .saved{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.upsell{background:linear-gradient(135deg,#EEF4FF,#FFFFFF);border-color:#C7D7FE}
+.upsell-acts{display:flex;gap:8px;flex-wrap:wrap}
 .saved select{flex:1 1 180px;min-width:0}
 .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -478,6 +484,15 @@ function render(R) {
       ? '<p class="lede">DividendVPP estimates <b>' + money(q.quote.annualUsd) + ' / yr</b> for this site' + (q.quote.id ? ' (ref ' + esc(q.quote.id) + ')' : '') + ', beside this simulation\'s ' + money(T.gross) + '.</p>'
       : '<p class="lede">' + esc(q.error) + ' The simulation above still stands.</p>') + '</div>';
   }
+
+  /* The taste, then the next sale: every account has this simulator; sizing
+     it on the real load and modelling the investment is Omega Storage. The
+     module's own card says Live or offers Opt in, priced by the server. */
+  h += '<div class="card upsell"><h3>Take it further</h3>' +
+    '<p class="lede">This is a screening estimate. To turn it into a project: size the battery on the site\'s real load with the <b>Battery Sizer</b>, ' +
+    'see every revenue stream in the <b>Value Stack</b>, and build the investor case in the <b>BESS Pro Forma</b> — all part of <b>Omega Storage</b>.</p>' +
+    '<div class="upsell-acts"><a class="btn btn-p" href="/workspace#module-storage">See Omega Storage</a>' +
+    '<a class="btn btn-s" href="/workspace#modules">All modules</a></div></div>';
 
   h += '<div class="card"><h3>Assumptions and what is not counted</h3>' +
     '<p class="lede" style="margin-bottom:6px"><b>Tariff:</b> ' + esc(R.tariff.label) + (R.tariff.calibration ? ' ' + esc(R.tariff.calibration.note) : '') + '</p>' +

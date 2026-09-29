@@ -54,7 +54,9 @@ ok('the two-tool product earns Design and Grid and nothing else of the tools', t
 
 var liteTools = M.get('lite').tools.slice();
 var lite = HUB.compose(ctxFor({ orgId: 'x', packaged: true, packageAccess: { packaged: true, toolAccess: liteTools, modules: ['lite'] }, modules: ['lite'] }));
-ok('a packaged Lite workspace opens Design, Sales, Market and Permits (intake) from Lite\'s tools alone', lite.ring.map(function (a) { return a.key; }).join() === 'projects,design,sales,market,permits,team', lite.ring.map(function (a) { return a.key; }));
+/* the VPP Earnings Simulator is in the base (2026-09-29, Tommy: "included with every account as we can upsell this"),
+   so every workspace earns Finance, which outranks Permits for the sixth cell; intake stays under All tools */
+ok('a packaged Lite workspace opens Design, Finance (the VPP simulator), Sales and Market from Lite\'s tools alone', lite.ring.map(function (a) { return a.key; }).join() === 'projects,design,money,sales,market,team', lite.ring.map(function (a) { return a.key; }));
 
 var logic = HUB.compose(ctxFor({ orgId: 'x', tierLevel: 3, packaged: false, modules: ['lite', 'logic-office', 'logic-plant', 'logic-logistics'] }));
 ok('a workspace holding Omega Logic leads with Orders, Plant and Deliver', logic.ring.map(function (a) { return a.key; }).slice(0, 4).join() === 'projects,orders,plant,deliver', logic.ring.map(function (a) { return a.key; }));
@@ -133,7 +135,7 @@ ok('capTier narrows what the store says, as it narrows the editor', st('plansets
 ok('the Permitting matrix opens at every legacy tier (its old gate is on a retired button): held', ['trial', 'standard', 'deluxe'].every(function (t) { return st('permitting', legacy(t)) === 'held'; }));
 ok('Enterprise holds every editor module', ['lite', 'gridatlas', 'storage', 'estimate', 'plansets', 'siteintel', 'engineering', 'finance', 'compute', 'ops', 'permitting'].every(function (k) { return st(k, ent) === 'held'; }), ['lite', 'plansets', 'siteintel'].map(function (k) { return k + ':' + st(k, ent); }));
 ok('a tool this org can never see (ClearSky\'s own EV workbook) never keeps EV Rebates partly on', st('evrebates', ent) === 'held' && st('evrebates', core) === 'held', [st('evrebates', ent), st('evrebates', core)]);
-ok('the note under Partly names both halves, never "5 of 5 of its tools" alone', HUB.moduleNote(MODS.storage, core) === '5 of 5 of its tools and some of its commands in Site Map are on your plan', HUB.moduleNote(MODS.storage, core));
+ok('the note under Partly names both halves, never "4 of 4 of its tools" alone', HUB.moduleNote(MODS.storage, core) === '4 of 4 of its tools and some of its commands in Site Map are on your plan', HUB.moduleNote(MODS.storage, core));
 ok('a module with only editor commands says so', HUB.moduleNote(MODS.plansets, core) === 'some of its commands in Site Map are on your plan', HUB.moduleNote(MODS.plansets, core));
 ok('one open tool reads "is"', HUB.moduleNote(MODS.sitefinder, core) === '1 of 2 of its tools is on your plan', HUB.moduleNote(MODS.sitefinder, core));
 ok('ClearSky\'s own workspace with no tier on record reads as the editor opens it (internal)', HUB.capsFor({}, 'clearsky-usa.com', CAPS)('compute') === true && HUB.capsFor({}, 'clearsky-usa.com', CAPS)('export.plotplan') === true);

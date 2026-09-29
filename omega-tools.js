@@ -115,7 +115,7 @@
 
     { key:'vppsim', name:'VPP Earnings Simulator', category:'finance',
       desc:'What a managed VPP (DividendVPP model) could stack at a site — ZIP, 8760 or bills in, programmes and bill savings out.',
-      file:'/vpp-earnings.html', badge:'new', tier:TIER.STANDARD, savesData:true,
+      file:'/vpp-earnings.html', badge:'new', tier:TIER.ALL, savesData:true,
       icon:'M13 2L4 14h7l-1 8 9-12h-7z' },
 
     { key:'isocalc', name:'BESS ISO Calculator', category:'finance',
