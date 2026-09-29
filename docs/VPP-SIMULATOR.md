@@ -132,12 +132,27 @@ Clean Cell's two tools) still wins: absent is not empty.
   every tier from trial, 503 on a failed read) and two actions, `options` and `estimate`.
   `options` also returns the server-resolved `orgId` (alias-folded, e.g.
   fenecon.de → fenecon.com), which is the org the page saves under.
-- `vpp-earnings.html` — collects, reads the CSV as text, posts, draws.
-  Scenarios save to `toolData/{org}/tools/vppsim` as `{ v:1, scenarios:[…] }`:
-  inputs only. An interval file is not stored (its unit and first-reading
-  date are), and a URDB tariff is stored as text (`tariff.urdbJson`) because
-  Firestore refuses nested arrays. The page reloads when the signed-in
-  account changes, so one person's scenarios never reach another's org.
+- `vpp-earnings.html` — collects, reads the CSV as text, posts, draws. An
+  interval file over the server's cap (4,300,000 characters, measured as the
+  server measures it: characters of text) is refused on the page, with the
+  limit named, before anything is posted.
+  Scenarios save to `toolData/{org}/tools/vppsim` as `{ v:1, scenarios:[…] }`,
+  at most 30, newest first. Each is `{ name, site, gross, owner, market, at }`:
+  the inputs (`site`) and the run's headline — `gross` labels the saved list;
+  `owner`, the resolved `market` and the save time are kept beside it —
+  never the streams, rates or anything else of the result. An interval file
+  is not stored (its unit and first-reading date are), and a URDB tariff is
+  stored as text (`tariff.urdbJson`) because Firestore refuses nested arrays.
+  Loading a scenario sets the unit, first-reading date and file for every
+  scenario (a profile or bills one blanks them), so a date left by an
+  earlier scenario is never posted with a file it was not given for.
+  A save writes the whole list, so Save waits until the stored list has been
+  read in this session (a missing document counts as read): while it is
+  loading, or after a read that failed (Save reads it again), and while
+  another save is on its way, Save refuses and says why instead of writing
+  one record over the stored list. A refused read is said on the page, never
+  drawn as an empty list. The page reloads when the signed-in account
+  changes, so one person's scenarios never reach another's org.
 
 **A deploy that adds a tool to a module runs the backfill.** A packaged
 workspace's `billing/current.toolAccess` is a copy saved when its plan was
