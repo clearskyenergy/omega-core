@@ -36,7 +36,7 @@ pins the instructions' five reference jobs (§14) and the line level of
 | 18 | New 200A three-phase service | lump | $8,910 (= 6,600 × 1.35) | $12,550 |
 | 19 | Other — materials + install labor | P | $1,200 flat | $2,360 × P |
 | 27 | Autel AC Elite 50A dual-port (12 kW) | P | $2,000 × P | blacked out |
-| 27 | Autel MaxiCharger AC Pro 80A (19.2 kW) | P | **ask** (the old $6,100/station is not confirmed) | blacked out |
+| 27 | Autel MaxiCharger AC Pro 80A (19.2 kW) | P | $3,050 × P (= $6,100 per station) | blacked out |
 | 28 | Pedestal & mounting | S | $1,150 × S | blacked out |
 | 29 | Freight | P | $50 × P | blacked out |
 | 32 (or 45) | Networking (Green Joulez) | P | $480 × P | blacked out |
@@ -45,6 +45,12 @@ pins the instructions' five reference jobs (§14) and the line level of
 
 P = ports (C6). S = stations = P ÷ 2 (every station is dual-port; an odd P
 rounds up and is flagged). C7 is written as S.
+
+## Change log
+
+| Date | Change | Basis |
+|---|---|---|
+| 2026-09-29 | AC Pro 80A confirmed at **$3,050 a plug** ($6,100 a dual-port station); AC Elite 50A stays $2,000 a plug. | Tommy, 2026-09-29: "50 amp $2k/plug, 80 amp $3,050/plug. use that pricing." The $3,050 is the figure Concord's filed sheets carried. For the record, Autel's April 2026 list (*LHE_Autel Charger Product Price*, Drive) has the AC Pro 80A at $1,599 MSRP / $1,119.30 Lionheart and the AC Elite 50A at $1,066 / $799.50, so the 80 A sells at 2.7× its Lionheart cost against the 50 A's 2.5×. |
 
 ## What the page asks instead of guessing
 
@@ -55,8 +61,9 @@ An **ask** is a hard stop the rep answers on the form:
   is chosen the sheet carries the standard package and the flag states the
   dollar impact of each option. "A new meter is being added" still needs
   the phase.
-- **The 80 A unit** — *Program details › Autel AC Pro 80A price per port*.
-  Ports on 80 A units are $0 until it is entered.
+- **The 80 A unit** is priced at the book's $3,050 a plug, confirmed, and
+  not flagged. *Program details › Autel AC Pro 80A price per port* overrides
+  it for one job.
 - **Unpaved trench, handholes** — no rate; $0 until the rep types the
   material and labor over the line (a typed figure is pinned and used).
 

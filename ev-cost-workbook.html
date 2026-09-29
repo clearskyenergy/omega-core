@@ -1230,7 +1230,16 @@ var NG_PRICE = {
     three:   { key:'three',    mat:8910,    lab:12550, qty:1, label:'New 200A three-phase service' }  /* 6,600 x 1.35 */
   },
   other:{ mat:1200, labPerPort:2360 },           /* row 19: materials flat, install labour x P */
-  hardware:{ a50:2000, a80:null },               /* row 27: x P; the 80 A unit has NO confirmed rate */
+  /* row 27: x P. Both CONFIRMED (Tommy, 2026-09-29: "50 amp $2k/plug,
+     80 amp $3,050/plug. use that pricing"): the AC Elite 50A at $2,000 a
+     plug ($4,000 a dual-port station) and the AC Pro 80A at $3,050 a plug
+     ($6,100 a station), the figure Concord's filed sheets carried. For the
+     record, Autel's April 2026 list (LHE_Autel Charger Product Price,
+     Drive) has the AC Pro at $1,599 MSRP / $1,119.30 Lionheart and the
+     Elite at $1,066 / $799.50, so the 80 A sells at 2.7x its Lionheart cost
+     against the 50 A's 2.5x. A per-job figure under Program details
+     overrides the 80 A; null puts the ask back. */
+  hardware:{ a50:2000, a80:3050 },
   kw80:15,                                       /* kW at or above this is an 80 A (19.2 kW) unit */
   pedestal:1150,                                 /* row 28: x S            */
   freightPerPort:50,                             /* row 29: x P            */
@@ -1371,15 +1380,15 @@ function ngPriceBook(Q){
       P, 'ports', B.other.mat, B.other.labPerPort*P,
       'materials $'+B.other.mat+' flat; install labour '+P+' × $'+B.other.labPerPort);
   /* row 27 */
-  var p80=Math.min(P, Math.round(num(Q.ports80))), p50=P-p80, hw80=num(Q.hw80PerPort);
+  var p80=Math.min(P, Math.round(num(Q.ports80))), p50=P-p80, hw80=num(Q.hw80PerPort)||num(B.hardware.a80);
   add('evse','charger',
       p80 ? 'Level 2 charging hardware — '+p50+' × 50 A and '+p80+' × 80 A ports'
           : 'Level 2 charging hardware — Autel AC Elite 50A dual-port (12 kW)',
       P, 'ports', B.hardware.a50*p50 + (hw80 ? hw80*p80 : 0), 0,
       p50+' × $'+B.hardware.a50+(p80 ? ' + '+p80+' × '+(hw80 ? '$'+hw80 : 'no rate') : ''));
   if(p80 && !hw80)
-    ask(p80+' port'+(p80>1?'s are':' is')+' on an 80 A (19.2 kW) unit, which has no confirmed price — the old '
-        +'$6,100 a station is not confirmed. Those ports are on the sheet at $0 until a price per port is entered under Program details.');
+    ask(p80+' port'+(p80>1?'s are':' is')+' on an 80 A (19.2 kW) unit and the book has no rate for it. '
+        +'Those ports are on the sheet at $0 until a price per port is entered under Program details.');
   /* row 28 */
   add('evse','pedestal','Pedestals and mounting hardware', S, 'ea', B.pedestal*S, 0, S+' × $'+B.pedestal);
   /* row 29 */
@@ -1758,7 +1767,7 @@ var FORM_NG_MA = {
       options:NG_EJC_OPTIONS },
     { type:'stack', label:'Service scope (row 18) — ask, never assume', k:'ngService',
       type2:'select', options:NG_SERVICE_OPTIONS },
-    { type:'stack', label:'Autel AC Pro 80A — price per port (no book rate; ask)', k:'ng80PerPort',
+    { type:'stack', label:'Autel AC Pro 80A — price per port (blank = the book\u2019s $3,050)', k:'ng80PerPort',
       type2:'number', fmt:'#,##0' },
     { type:'stack', label:'Total Feet of Trenching', k:'ftTrench',  type2:'number', fmt:'#,##0' },
     { type:'stack', label:'Total Feet of Conduit',   k:'ftConduit', type2:'number', fmt:'#,##0' },

@@ -105,9 +105,14 @@ ok(R.flags.some(f => f.ask && /2 service pedestals/.test(f.text) && /phase is no
 R = P.ngPriceBook(job({ ports:4, paved:38, conduit:184, service:'standard', servicePedestals:1 }));
 ok(R.flags.some(f => !f.ask && /standard package, but the drawing has 1 service pedestal/.test(f.text)), 'the standard package against a drawn service pedestal is flagged');
 R = P.ngPriceBook(job({ ports:4, paved:38, conduit:184, service:'standard', ports80:2 }));
-ok(R.flags.some(f => f.ask && /80 A/.test(f.text)) && near(totals(R.lines).by[27].mat, 4000), 'two 80 A ports with no price: asks, those ports at $0, the 50 A ones at $2,000');
-R = P.ngPriceBook(job({ ports:4, paved:38, conduit:184, service:'standard', ports80:2, hw80PerPort:3050 }));
-ok(!R.flags.some(f => /80 A/.test(f.text)) && near(totals(R.lines).by[27].mat, 10100), 'an entered 80 A price is used: 2 x 2,000 + 2 x 3,050');
+ok(P.NG_PRICE.hardware.a50 === 2000 && P.NG_PRICE.hardware.a80 === 3050, 'the book: 50 A $2,000 a plug, 80 A $3,050 a plug (Tommy, 2026-09-29)');
+ok(near(totals(R.lines).by[27].mat, 2 * 2000 + 2 * 3050) && !R.flags.some(f => /80 A/.test(f.text)), 'two 80 A ports price at $3,050 each beside two 50 A at $2,000, with nothing flagged (' + totals(R.lines).by[27].mat + ')');
+R = P.ngPriceBook(job({ ports:4, paved:38, conduit:184, service:'standard', ports80:2, hw80PerPort:2800 }));
+ok(!R.flags.some(f => /80 A/.test(f.text)) && near(totals(R.lines).by[27].mat, 9600), 'a typed 80 A price for one job wins: 2 x 2,000 + 2 x 2,800');
+const savedA80 = P.NG_PRICE.hardware.a80; P.NG_PRICE.hardware.a80 = null;
+R = P.ngPriceBook(job({ ports:4, paved:38, conduit:184, service:'standard', ports80:2 }));
+ok(R.flags.some(f => f.ask && /80 A/.test(f.text)) && near(totals(R.lines).by[27].mat, 4000), 'with no book rate at all the ask comes back and those ports are $0');
+P.NG_PRICE.hardware.a80 = savedA80;
 R = P.ngPriceBook(job({ ports:4, paved:0, unpaved:60, conduit:184, service:'standard' }));
 ok(R.flags.some(f => f.ask && /unpaved/.test(f.text)) && near(totals(R.lines).by[13].mat, 0), 'unpaved trench: no rate, on the sheet at $0, asked');
 R = P.ngPriceBook(job({ ports:4, paved:0, unpaved:60, conduit:184, service:'standard', unpavedTyped:{ mat:600, lab:3300 } }));
