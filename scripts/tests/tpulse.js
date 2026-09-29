@@ -31,5 +31,15 @@ ok('mine: a 2.5 hour design sits in the band, 6 above, 1 below', P.mine(p, 2.5) 
 ok('nothing names a company, a person or a project', !/example|@/.test(JSON.stringify(p)));
 var empty = P.build({}, NOW);
 ok('an empty week is zeros and says there is no trend to call', empty.stats.projects === 0 && empty.medianHours === null && /Not enough/.test(empty.insight) && P.mine(empty, 2) === null, empty);
+var fp = P.build({ deals: [
+  { status: 'open', mw: 4, approvedAt: ago(1), name: 'Joliet BESS', orgKey: 'secret.example' },
+  { status: 'open', sizeMw: 12.5, approvedAt: ago(10) },
+  { status: 'open', mw: 'n/a', createdAt: { seconds: Math.floor(ago(3) / 1000) } },
+  { status: 'exclusive', mw: 50, approvedAt: ago(1) }
+], filed: [{ createdAt: ago(0.2) }, { createdAt: ago(5) }, { createdAt: ago(12) }] }, NOW, { deals: 500 });
+ok('financing: three open (a held deal is not open), 16.5 MW, two opened this week, two filed', fp.finance.open === 3 && fp.finance.openMw === 16.5 && fp.finance.openedThisWeek === 2 && fp.finance.filedThisWeek === 2 && fp.caps.deals === 500, fp.finance);
+ok('the financing counts name no deal, place or company', !/Joliet|secret|example/.test(JSON.stringify(fp)));
+ok('an empty marketplace is zeros', empty.finance.open === 0 && empty.finance.openMw === 0 && empty.finance.openedThisWeek === 0 && empty.finance.filedThisWeek === 0, empty.finance);
+
 console.log('tpulse: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

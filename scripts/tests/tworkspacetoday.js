@@ -99,7 +99,7 @@ var fin = b({ finance: [
   { id: 'f7', name: 'Recent', status: 'review', updatedAt: NOW - 2 * DAY },
   { id: 'f8', name: 'Gone', status: 'closed', updatedAt: NOW - 50 * DAY, offers: [{ status: 'submitted' }] } ] });
 ok('offers waiting lead, then a review over a week old, an awarded room to finish, a draft, then a deal with no offer in 10 days; a fresh open deal, a fresh review and a closed one are quiet', keys(fin).join() === 'offers,review,award,draft,nooffer' && /2 offers on Riverside waiting for your answer/.test(fin.needs[0].t) && /Maple has been in review for 9 days/.test(fin.needs[1].t) && /Harbor is awarded/.test(fin.needs[2].t) && /Mill is still a draft/.test(fin.needs[3].t) && /No offer on Quiet in 12 days/.test(fin.needs[4].t), fin.needs.map(function (r) { return r.key + ' ' + r.t; }));
-ok('every finance row goes to the finance portal and carries the deal', fin.needs.every(function (r) { return r.href === '/portals/finance/' && r.finance; }));
+ok('every finance row opens the finance portal ON its deal and carries the deal', fin.needs.every(function (r) { return r.href === '/finance#deal=' + encodeURIComponent(r.finance) && r.finance; }), fin.needs.map(function (r) { return r.href; }));
 ok('the fourth number is the offers waiting across the deals on the marketplace', fin.kpis[3].key === 'finance' && fin.kpis[3].value === '2' && /6 deals on the marketplace/.test(fin.kpis[3].delta), fin.kpis[3]);
 ok('an awarded deal whose room is delivered needs nothing', b({ finance: [{ id: 'd', name: 'D', status: 'awarded', room: { state: 'delivered' } }] }).needs.length === 0);
 ok('offers outrank a project\'s next action, as a quote back does', b({ finance: [{ id: 'f', name: 'F', status: 'open', offers: [{ status: 'submitted' }] }], projects: [{ id: 'p', name: 'P', stage: 'interconnect', nextAction: 'Call' }] }).needs.map(function (r) { return r.key.split(':')[0]; }).join() === 'offers,next');
@@ -136,6 +136,37 @@ var sizedNotDrawn = T.board({ now: NOW, projects: [{ id: 's', name: 'Sized', sta
 ok('a battery candidate sized but not drawn keeps its place by touch and says so', sizedNotDrawn.why === 'Nothing on the site map yet · Touched today' && sizedNotDrawn.rank === 10, sizedNotDrawn);
 var many = b({ projects: [1, 2, 3, 4].map(function (i) { return { id: 'j' + i, name: 'Job ' + i, type: 'l2', stage: 'candidate', createdAt: NOW - i * DAY }; }) });
 ok('many undesigned jobs are ONE row naming three, opening the oldest', many.needs.length === 1 && many.needs[0].key === 'design' && /4 projects have nothing on the site map yet/.test(many.needs[0].t) && /Job 1, Job 2, Job 3 and 1 more/.test(many.needs[0].s) && many.needs[0].act.kind === 'project' && many.needs[0].act.id === 'j4' && many.needs[0].projects.length === 4, many.needs);
+
+/* 11 · the capital-partner side (Tommy, 2026-09-29: Helios "likes to find these sites … in the good morning … click on them and it takes them into the opportunities and deal room") */
+var UID = 'u-helios', HELIOS = { uid: UID, orgId: 'HeliosNrgy.com', offers: { 'd-bid': { status: 'submitted' }, 'd-gone': { status: 'withdrawn' } }, deals: [
+  { id: 'd-held', name: 'Joliet BESS', status: 'exclusive', mw: 4, tech: 'BESS', city: 'Joliet', state: 'IL', firstLookUids: [UID], firstLookUntil: NOW + 1.5 * DAY, firstLookStartedAt: NOW - 3 * DAY },
+  { id: 'd-sent', name: 'Aurora Solar', status: 'open', mw: 12.4, state: 'IL', room: { forOrgId: 'heliosnrgy.com', deliveredAt: NOW - DAY } },
+  { id: 'd-bid', name: 'Elgin BESS', status: 'exclusive', firstLookUids: [UID], firstLookUntil: NOW + DAY },
+  { id: 'd-won', name: 'Peoria Microgrid', status: 'awarded', awardedTo: UID, room: { state: 'open' } },
+  { id: 'd-new', name: 'Rockford DCFC', status: 'open', mw: 2, state: 'IL', approvedAt: NOW - 2 * DAY },
+  { id: 'd-gone', name: 'Naperville', status: 'open', approvedAt: NOW - DAY },
+  { id: 'd-old', name: 'Old deal', status: 'open', approvedAt: NOW - 30 * DAY },
+  { id: 'd-other', name: 'Someone else\'s hold', status: 'exclusive', firstLookUids: ['u-rival'], firstLookUntil: NOW + 5 * DAY },
+  { id: 'd-closed', name: 'Closed', status: 'closed', room: { forOrgId: 'heliosnrgy.com' } }
+] };
+var cap = b({ capital: HELIOS });
+ok('the partner\'s morning: a first look ending first, the award, the room deal waiting, then what is new on the marketplace', keys(cap).join() === 'first,room,won,market', cap.needs.map(function (r) { return r.key; }));
+ok('a first look ending within two days is hot, says so and opens the room on that deal', cap.needs[0].key === 'first:d-held' && cap.needs[0].cls === 'hot' && /ends in 2 days/.test(cap.needs[0].t) && /4 MW · BESS · Joliet, IL/.test(cap.needs[0].s) && cap.needs[0].href === '/finance#deal=d-held&tab=room', cap.needs[0]);
+ok('a deal delivered to the firm (org id matched lower-cased) is in the room with no offer yet', cap.needs[1].key === 'room:d-sent' && /Aurora Solar is in your deal room/.test(cap.needs[1].t) && /12 MW/.test(cap.needs[1].s) && cap.needs[1].href === '/finance#deal=d-sent&tab=room', cap.needs[1]);
+ok('a deal awarded to me asks for the deal room', cap.needs[2].key === 'won:d-won' && /Peoria Microgrid is yours/.test(cap.needs[2].t) && cap.needs[2].href === '/finance#deal=d-won&tab=room', cap.needs[2]);
+ok('new on the marketplace is ONE row of what opened this week, a withdrawn offer counted as none, never someone else\'s hold or an old deal', cap.needs[3].key === 'market' && /2 new financing opportunities/.test(cap.needs[3].t) && /Naperville, Rockford DCFC \(2 MW\)/.test(cap.needs[3].s) && cap.needs[3].href === '/finance#market', cap.needs[3]);
+ok('a deal I already offered on needs nothing from me', !cap.needs.some(function (r) { return /d-bid/.test(r.key); }));
+ok('the fourth number is the deal room, what waits for my offer and the marketplace, linking into the room', cap.kpis[3].key === 'dealroom' && cap.kpis[3].value === '4' && /2 need an offer · 3 on the market/.test(cap.kpis[3].delta) && cap.kpis[3].href === '/finance#room', cap.kpis[3]);
+var oneNew = b({ capital: { uid: UID, orgId: 'heliosnrgy.com', deals: [{ id: 'x1', name: 'Solo', status: 'open', mw: 3, approvedAt: NOW - DAY }] } });
+ok('one new opportunity is named and opens on that deal in the marketplace', oneNew.needs[0].key === 'market:x1' && /New on the marketplace: Solo/.test(oneNew.needs[0].t) && oneNew.needs[0].href === '/finance#deal=x1&tab=market', oneNew.needs[0]);
+var crowd = b({ capital: { uid: UID, orgId: 'heliosnrgy.com', deals: [1, 2, 3, 4].map(function (i) { return { id: 'r' + i, name: 'Room ' + i, status: 'open', room: { forOrgId: 'heliosnrgy.com', deliveredAt: NOW - i * DAY } }; }) } });
+ok('three or more waiting in the room are ONE row into the room', crowd.needs.length === 1 && crowd.needs[0].key === 'room' && /4 deals are in your deal room/.test(crowd.needs[0].t) && /Room 1, Room 2, Room 3 and 1 more/.test(crowd.needs[0].s) && crowd.needs[0].href === '/finance#room', crowd.needs[0]);
+ok('an indefinite hold is never counted down', b({ capital: { uid: UID, deals: [{ id: 'f', name: 'F', status: 'exclusive', firstLookUids: [UID], firstLookUntil: NOW + DAY, firstLookIndefinite: true }] } }).needs[0].key === 'room:f');
+ok('a workspace with no capital side keeps its own fourth number', b({ capital: { uid: UID, deals: [] } }).kpis[3].key === 'online');
+var capBoard = T.board({ now: NOW, capital: HELIOS });
+ok('In flight carries the room as cards into the room on each deal, the rival\'s hold and the closed deal left out', capBoard.map(function (c) { return c.kind + ':' + c.id; }).sort().join() === 'capital:d-bid,capital:d-held,capital:d-sent,capital:d-won' && capBoard.every(function (c) { return c.href === '/finance#deal=' + c.id + '&tab=room'; }), capBoard);
+ok('the card ranks by what it needs and says it: the ending first look first, my offer in last', capBoard[0].id === 'd-held' && capBoard[capBoard.length - 1].id === 'd-bid' && capBoard[capBoard.length - 1].finance.note === 'Your offer is in', capBoard.map(function (c) { return c.id + ':' + c.finance.note; }));
+ok('dealHref is the ONE address: a deal, a tab, or the portal', T.dealHref('a b') === '/finance#deal=a%20b' && T.dealHref('x', 'room') === '/finance#deal=x&tab=room' && T.dealHref(null, 'market') === '/finance#market' && T.dealHref() === '/finance');
 
 console.log('tworkspacetoday: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

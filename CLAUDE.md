@@ -1082,7 +1082,25 @@ ONE type table (workspace.html loads it; its ribbon hooks are no-ops
 there): a battery belongs only on a kind whose focus carries storage or on
 a record with no kind, so a Level 2, compute or building job is never
 asked for a battery size, it is asked for a design (ONE Today row,
-`design`, opening the oldest). `tworkspacetoday.js` §10 holds it. Plan & billing is
+`design`, opening the oldest). `tworkspacetoday.js` §10 holds it.
+**A capital partner's home is the finance marketplace** (2026-09-29, Tommy,
+of Helios: "in the good morning and in the omega pulse information about
+the financing opportunities and they can then click on them and it takes
+them into the opportunities and deal room"): a person whose own
+`fin_profiles/{uid}` is an approved `partner` has the workspace read
+`fin_projects` the four ways the rules grant a partner (open, firstLookUids,
+awardedTo, `room.forOrgId` = the profile's `orgId`) plus their own
+`offers/{uid}`; `OmegaWorkspaceToday` `capital` ranks it (a first look ending
+in two days, a room deal with no offer, an award, what opened this week as
+ONE row), puts the room on In flight and the fourth number, and
+`/api/pulse` `finance` adds the platform's open deals and megawatts (counts
+only). Every row, card and pulse link is `OmegaWorkspaceToday.dealHref`
+(`/finance#deal=<id>&tab=room|market`, `#room`, `#market`) — the ONE
+address, which the portal's `readLink()` reads once, clears and opens in the
+drawer when the listeners return the deal (a deal the account cannot read is
+said once, never guessed). The sponsor's rows use it too. Held by
+`tworkspacetoday.js` §11, `tfinancelink.js` (the portal's reader cut from the
+page, against the producer), `tpulse.js` and `check:workspace` `capital`. Plan & billing is
 a page (`#billing`), phone first: the subscription, what is owed and when
 with the invoice's own Pay, the payment method as a card (linked to Stripe
 for a plan billed outside the engine: the card read back, Add a card with

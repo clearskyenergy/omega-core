@@ -26,6 +26,11 @@
                      (status draft|review|open|exclusive|awarded|closed,
                      sourceProjectId, firstLookUntil, room{state}, updatedAt,
                      offers[] each {status submitted|accepted|declined|withdrawn})
+     capital         the capital-partner side, for a person with a financing
+                     profile as a partner (a financing firm): { uid, orgId,
+                     deals[] (fin_projects the rules let them read: open,
+                     held for them, delivered to their firm, awarded to them),
+                     offers{} (dealId → their own offer) }
      canOpen(toolKey)
 
    A row is { key, cls (hot|warn|good|''), score, t, s, cta, href?, act? }.
@@ -41,6 +46,10 @@
       72 vendors answered MY request (compare, accept, reveal)
       70 a to-do of mine due within 3 days      60 any other open to-do of mine
       75 offers on a deal I sent to the finance marketplace, waiting for me
+      84 a first look held for my firm ends within two days (capital partner)
+      77 a deal in my firm's deal room with no offer from me yet
+      73 a deal awarded to me whose room is not done
+      62 new financing opportunities opened on the marketplace this week
       58 a project carrying a nextAction
       56 a deal in ClearSky's review for over a week (follow up)
       55 a project whose site package is complete (ready to submit)
@@ -52,7 +61,11 @@
       42 a deal open on the marketplace with no offer in 10 days
       40 a request I sent that nobody has answered in 5 days
 
-   Six rows at most, highest first, ties by the older record first; `more`
+   A capital partner's rows and cards link into the finance portal ON the
+  deal (`dealHref`: /finance#deal=<id>, #room, #market), which the portal
+  opens in its drawer once the deal is read; the portal checks for itself.
+
+  Six rows at most, highest first, ties by the older record first; `more`
    says how many were left off. Nothing here is a permission: every address
    leads to a page that checks for itself.
 
@@ -141,7 +154,6 @@
      job with nothing on the site map asks for a design */
   function needsSize(p) { return candidate(p) && !n(p.bessKwh) && !n(p.capex) && wantsBattery(p); }
   function needsDesign(p) { return candidate(p) && !wantsBattery(p) && !progress(p).designed; }
-  var PORTAL = '/portals/finance/';
   /* offers on a deal that are still the sponsor's to answer */
   function openOffers(f) { return (f.offers || []).filter(function (o) { return !o.status || o.status === 'submitted' || o.status === 'active'; }); }
   function roomDone(f) { var st = f.room && f.room.state; return st === 'delivered' || st === 'closed' || st === 'done'; }
@@ -149,13 +161,87 @@
   function financeRow(f, now) {
     var fn = name(f), upd = at(f.updatedAt) || at(f.createdAt), id = f.id || fn, st = f.status || 'draft', open = openOffers(f);
     if (st === 'closed') return null;
-    if (open.length) return { key: 'offers:' + id, cls: 'good', score: 75, when: upd, t: plural(open.length, 'offer', 'offers') + ' on ' + fn + ' waiting for your answer', s: 'Capital partners priced it on the finance marketplace. Accept one or decline.', cta: 'Compare', href: PORTAL, finance: id };
-    if (st === 'awarded') return roomDone(f) ? null : { key: 'award:' + id, cls: 'good', score: 54, when: upd, t: fn + ' is awarded: finish the deal room', s: 'The partner is waiting on the data room.', cta: 'Open', href: PORTAL, finance: id };
-    if (st === 'review') return upd && now - upd >= 7 * DAY ? { key: 'review:' + id, cls: 'warn', score: 56, when: upd, t: fn + ' has been in review for ' + plural(days(upd, now), 'day', 'days'), s: 'Sent to the finance marketplace; ClearSky has not published it yet. Follow up.', cta: 'Follow up', href: PORTAL, finance: id } : null;
-    if (st === 'draft') return { key: 'draft:' + id, cls: '', score: 47, when: upd, t: fn + ' is still a draft on the finance marketplace', s: 'Finish it and send it for review.', cta: 'Open', href: PORTAL, finance: id };
-    if (st === 'open' && upd && now - upd >= 10 * DAY) return { key: 'nooffer:' + id, cls: '', score: 42, when: upd, t: 'No offer on ' + fn + ' in ' + plural(days(upd, now), 'day', 'days'), s: 'Open on the finance marketplace. Ask ClearSky to field it.', cta: 'Follow up', href: PORTAL, finance: id };
+    if (open.length) return { key: 'offers:' + id, cls: 'good', score: 75, when: upd, t: plural(open.length, 'offer', 'offers') + ' on ' + fn + ' waiting for your answer', s: 'Capital partners priced it on the finance marketplace. Accept one or decline.', cta: 'Compare', href: dealHref(id), finance: id };
+    if (st === 'awarded') return roomDone(f) ? null : { key: 'award:' + id, cls: 'good', score: 54, when: upd, t: fn + ' is awarded: finish the deal room', s: 'The partner is waiting on the data room.', cta: 'Open', href: dealHref(id), finance: id };
+    if (st === 'review') return upd && now - upd >= 7 * DAY ? { key: 'review:' + id, cls: 'warn', score: 56, when: upd, t: fn + ' has been in review for ' + plural(days(upd, now), 'day', 'days'), s: 'Sent to the finance marketplace; ClearSky has not published it yet. Follow up.', cta: 'Follow up', href: dealHref(id), finance: id } : null;
+    if (st === 'draft') return { key: 'draft:' + id, cls: '', score: 47, when: upd, t: fn + ' is still a draft on the finance marketplace', s: 'Finish it and send it for review.', cta: 'Open', href: dealHref(id), finance: id };
+    if (st === 'open' && upd && now - upd >= 10 * DAY) return { key: 'nooffer:' + id, cls: '', score: 42, when: upd, t: 'No offer on ' + fn + ' in ' + plural(days(upd, now), 'day', 'days'), s: 'Open on the finance marketplace. Ask ClearSky to field it.', cta: 'Follow up', href: dealHref(id), finance: id };
     return null;
   }
+  /* ── the capital-partner side (Tommy, 2026-09-29, of a financing firm: "… likes to find
+     these sites … in the good morning and in the omega pulse … click on them
+     and it takes them into the opportunities and deal room") ── */
+  var FINANCE = '/finance';
+  /* the ONE address of a deal, the deal room or the marketplace in the
+     portal; portals/finance/index.html readLink() is the reader */
+  function dealHref(id, tab) {
+    if (id) return FINANCE + '#deal=' + encodeURIComponent(id) + (tab ? '&tab=' + encodeURIComponent(tab) : '');
+    return FINANCE + (tab ? '#' + tab : '');
+  }
+  function mw(d) { var v = n(d.mw != null ? d.mw : d.sizeMw); return v > 0 ? (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10) + ' MW' : ''; }
+  function teaser(d) { return [mw(d), d.tech, [d.city, d.state].filter(Boolean).join(', ')].filter(Boolean).join(' · '); }
+  /* is this deal in my firm's deal room: held for me on first look,
+     delivered to my organisation, or awarded to me (the portal's roomDeals) */
+  function inRoom(d, cap) {
+    var uid = cap.uid || '', org = low(cap.orgId);
+    return !!((uid && (d.firstLookUids || []).indexOf(uid) >= 0)
+      || (org && d.room && low(d.room.forOrgId) === org)
+      || (uid && d.awardedTo === uid));
+  }
+  function holdLive(d, now) { return at(d.firstLookUntil) > now; }
+  /* the capital side, classified: room (not closed), market (open, not in
+     my room), and what I have offered on */
+  function capitalSide(cap, now) {
+    cap = cap || {};
+    var deals = cap.deals || [], offers = cap.offers || {}, room = [], market = [], seen = {};
+    deals.forEach(function (d) {
+      var id = d.id || d.docId; if (!id || seen[id]) return; seen[id] = 1;
+      if (d.status === 'closed' || d.status === 'draft' || d.status === 'review') return;
+      var mine = offers[id] || null, live = mine && mine.status !== 'withdrawn' && mine.status !== 'declined' ? mine : null;
+      var x = { d: d, id: id, offer: live, awarded: !!(cap.uid && d.awardedTo === cap.uid) };
+      if (inRoom(d, cap)) room.push(x); else if (d.status === 'open') market.push(x);
+    });
+    return { room: room, market: market };
+  }
+  /* what one room deal needs from me now, or null */
+  function roomRow(x, now) {
+    var d = x.d, dn = name(d), upd = at(d.room && d.room.deliveredAt) || at(d.firstLookStartedAt) || at(d.approvedAt) || at(d.updatedAt) || at(d.createdAt);
+    if (x.awarded) return roomDone(d) ? null : { key: 'won:' + x.id, cls: 'good', score: 73, when: upd, t: dn + ' is yours: finish diligence in the deal room', s: teaser(d) || 'Awarded to you on the finance marketplace.', cta: 'Open', href: dealHref(x.id, 'room'), finance: x.id };
+    if (x.offer) return null;
+    var until = at(d.firstLookUntil), left = until ? Math.ceil((until - now) / DAY) : null, held = holdLive(d, now) && !d.firstLookIndefinite;
+    if (held && left <= 2) return { key: 'first:' + x.id, cls: 'hot', score: 84, when: until, t: 'Your first look on ' + dn + ' ends ' + (left <= 1 ? 'within a day' : 'in ' + plural(left, 'day', 'days')), s: (teaser(d) ? teaser(d) + '. ' : '') + 'Make an offer or pass before it goes to the marketplace.', cta: 'Review', href: dealHref(x.id, 'room'), finance: x.id };
+    return { key: 'room:' + x.id, cls: 'good', score: 77, when: upd, t: dn + ' is in your deal room', s: (teaser(d) ? teaser(d) + '. ' : '') + (held ? 'Held for you until ' + dateOf(until) + '.' : 'Routed to your firm by ClearSky.') + ' No offer from you yet.', cta: 'Review', href: dealHref(x.id, 'room'), finance: x.id };
+  }
+  /* when a deal opened on the marketplace */
+  function openedAt(d) { return at(d.approvedAt) || at(d.publishedAt) || at(d.createdAt); }
+  function capitalRows(cap, now) {
+    var side = capitalSide(cap, now), rows = [], waiting = [];
+    side.room.forEach(function (x) { var r = roomRow(x, now); if (!r) return; if (r.score === 77) waiting.push(r); else rows.push(r); });
+    /* three or more waiting in the room are ONE row, as the unsized candidates are */
+    if (waiting.length > 2) {
+      var oldest = waiting.reduce(function (m, r) { return r.when && (!m || r.when < m) ? r.when : m; }, 0);
+      rows.push({ key: 'room', cls: 'good', score: 77, when: oldest, t: plural(waiting.length, 'deal is', 'deals are') + ' in your deal room waiting for your offer', s: waiting.slice(0, 3).map(function (r) { return r.t.replace(/ is in your deal room$/, ''); }).join(', ') + (waiting.length > 3 ? ' and ' + (waiting.length - 3) + ' more' : '') + '.', cta: 'Deal room', href: dealHref(null, 'room') });
+    } else rows = rows.concat(waiting);
+    var fresh = side.market.filter(function (x) { var t = openedAt(x.d); return !x.offer && t && now - t <= 7 * DAY; });
+    if (fresh.length) {
+      fresh.sort(function (a, b) { return openedAt(b.d) - openedAt(a.d); });
+      var one = fresh.length === 1;
+      rows.push({ key: one ? 'market:' + fresh[0].id : 'market', cls: '', score: 62, when: openedAt(fresh[fresh.length - 1].d),
+        t: one ? 'New on the marketplace: ' + name(fresh[0].d) : plural(fresh.length, 'new financing opportunity', 'new financing opportunities') + ' on the marketplace this week',
+        s: one ? (teaser(fresh[0].d) || 'Open to capital partners.') + ' Open to every capital partner.' : fresh.slice(0, 2).map(function (x) { return name(x.d) + (mw(x.d) ? ' (' + mw(x.d) + ')' : ''); }).join(', ') + (fresh.length > 2 ? ' and ' + (fresh.length - 2) + ' more' : '') + '.',
+        cta: one ? 'Open' : 'Browse', href: one ? dealHref(fresh[0].id, 'market') : dealHref(null, 'market'), finance: one ? fresh[0].id : undefined });
+    }
+    return rows;
+  }
+  /* the one-line state of a room deal, for a card */
+  function capitalNote(x, now) {
+    var d = x.d;
+    if (x.awarded) return roomDone(d) ? 'Awarded to you · room done' : 'Awarded to you';
+    if (x.offer) return 'Your offer is in' + (x.offer.status && x.offer.status !== 'submitted' ? ' (' + x.offer.status + ')' : '');
+    if (holdLive(d, now) && !d.firstLookIndefinite) return 'First look until ' + dateOf(at(d.firstLookUntil));
+    return 'In your deal room';
+  }
+
   /* the one-line state of a deal, for a card */
   function financeNote(f, now) {
     var st = f.status || 'draft', open = openOffers(f);
@@ -224,6 +310,10 @@
       var fr = financeRow(f, now); if (fr) push(fr);
     });
 
+    /* the capital-partner side: my firm's deal room and what is new on the marketplace */
+    var cap = input.capital || null, capSide = cap ? capitalSide(cap, now) : null;
+    if (cap) capitalRows(cap, now).forEach(push);
+
     /* projects */
     var unsized = [], undesigned = [];
     projects.forEach(function (p) {
@@ -269,7 +359,8 @@
       { key: 'review', value: String(review), label: 'Awaiting your review', delta: overdue ? plural(overdue, 'overdue', 'overdue') : '', tone: overdue ? 'warn' : '' },
       { key: 'capex', value: pipeline > 0 || !flight ? money(pipeline) : '—', label: 'Pipeline capex', delta: unpriced ? plural(unpriced, 'project not priced yet', 'projects not priced yet') : online.length ? money(onlineCapex) + ' online' : '', tone: '' }
     ];
-    if (sent.length) kpis.push({ key: 'quotes', value: String(quotedBack), label: 'Quotes back', delta: 'of ' + totalRecipients + ' sent', tone: quotedBack ? 'up' : '' });
+    if (capSide && (capSide.room.length || capSide.market.length)) { var owe = capSide.room.filter(function (x) { return !x.offer && !x.awarded; }).length; kpis.push({ key: 'dealroom', value: String(capSide.room.length), label: 'In your deal room', delta: (owe ? owe + ' need an offer · ' : '') + capSide.market.length + ' on the market', tone: owe ? 'up' : '', href: dealHref(null, capSide.room.length ? 'room' : 'market') }); }
+    else if (sent.length) kpis.push({ key: 'quotes', value: String(quotedBack), label: 'Quotes back', delta: 'of ' + totalRecipients + ' sent', tone: quotedBack ? 'up' : '' });
     else if (received.length) kpis.push({ key: 'price', value: String(toPrice.length), label: 'Requests to price', delta: (received.length - toPrice.length) + ' quoted', tone: toPrice.length ? 'warn' : '' });
     else if (referrals.length) kpis.push({ key: 'inbox', value: String(newRefs.length), label: 'New quote requests', delta: openRefs.length + ' open', tone: newRefs.length ? 'warn' : '' });
     else if (finance.length) { var offersWaiting = finance.reduce(function (t, f) { return t + (f.status === 'closed' ? 0 : openOffers(f).length); }, 0), live = finance.filter(function (f) { return f.status !== 'closed' && f.status !== 'draft'; }).length; kpis.push({ key: 'finance', value: String(offersWaiting), label: 'Offers waiting', delta: plural(live, 'deal', 'deals') + ' on the marketplace', tone: offersWaiting ? 'up' : '' }); }
@@ -310,10 +401,18 @@
       cards.push({ kind: 'finance', id: f.id || name(f), name: name(f), stage: 'finance', touched: upd, why: fr ? fr.t : financeNote(f, now), whyCls: fr ? (fr.cls || 'good') : '', rank: fr ? fr.score : 20,
         finance: { id: f.id || null, status: f.status || 'draft', note: financeNote(f, now), offers: openOffers(f).length } });
     });
+    /* a capital partner's deal room rides the same board: one card per deal
+       held, delivered or awarded, linking into the room on that deal */
+    if (input.capital) capitalSide(input.capital, now).room.forEach(function (x) {
+      if (x.awarded && roomDone(x.d)) return;
+      var r = roomRow(x, now), upd = at(x.d.updatedAt) || at(x.d.approvedAt) || at(x.d.createdAt);
+      cards.push({ kind: 'capital', id: x.id, name: name(x.d), stage: 'finance', touched: upd, why: r ? r.t : capitalNote(x, now), whyCls: r ? (r.cls || 'good') : '', rank: r ? r.score : 22, href: dealHref(x.id, 'room'),
+        finance: { id: x.id, status: x.d.status || 'open', note: capitalNote(x, now), teaser: teaser(x.d), offers: 0 } });
+    });
     cards.sort(function (a, b) { return (b.rank > 20 ? 1 : 0) - (a.rank > 20 ? 1 : 0) || (b.rank > 20 && a.rank > 20 ? b.rank - a.rank : 0) || (b.touched || 0) - (a.touched || 0) || String(a.name).localeCompare(String(b.name)); });
     return cards.slice(0, max);
   }
-  var API = { build: build, board: board, progress: progress, kinds: kinds, kindLabels: kindLabels, wantsBattery: wantsBattery, STAGES: STAGES, STAGE_LABEL: STAGE_LABEL, MAX: MAX, at: at, money: money };
+  var API = { build: build, board: board, dealHref: dealHref, capitalSide: capitalSide, progress: progress, kinds: kinds, kindLabels: kindLabels, wantsBattery: wantsBattery, STAGES: STAGES, STAGE_LABEL: STAGE_LABEL, MAX: MAX, at: at, money: money };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceToday = API;
 })(typeof window !== 'undefined' ? window : null);
