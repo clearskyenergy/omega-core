@@ -639,6 +639,12 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: a hub cell opens the side panel with the area\'s tools, Deluxe ones locked', drawer && /Design/.test(drawer.title) && drawer.rows >= 4 && drawer.locked >= 1, drawer);
     await p.keyboard.press('Escape'); await wait(200);
     ok('northstar: Escape closes it', (await p.$('.ows-drawer')) === null);
+    /* the Finance hex lists the VPP Earnings Simulator beside the Value Stack (2026-09-29, Tommy: "i want it in the finance tab") */
+    await p.click('#hub .hx[data-hub="money"]'); await wait(300);
+    var fin = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, keys: Array.prototype.map.call(e.querySelectorAll('.ows-row'), function (r) { return r.getAttribute('data-row') + (r.classList.contains('locked') ? ':locked' : ''); }) }; }).catch(function () { return null; });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'workspace-finance-panel.png') });
+    ok('northstar: the Finance panel lists the VPP Earnings Simulator, open, right after the Value Stack', fin && /Finance/.test(fin.title) && fin.keys.indexOf('vppsim') === fin.keys.indexOf('valuestack') + 1 && fin.keys.indexOf('valuestack') >= 0, fin);
+    await p.keyboard.press('Escape'); await wait(200);
     /* every hex opens the side panel, never a spot on the page (2026-09-27) */
     for (var hx of [['today', /Today/], ['projects', /Projects/], ['team', /Team/]]) {
       await p.click('#hub .hx[data-hub="' + hx[0] + '"]'); await wait(300);
