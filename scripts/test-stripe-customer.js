@@ -218,6 +218,16 @@ async function paying() {
   await refused('the dashboard\'s open invoice is the way to pay', function () { return call(owner, { action: 'pay' }, s); }, /already has an open invoice/);
   ok(s.all('invoices').length === 1, '...and no second invoice was made');
 
+  console.log('\nan add-on the engine invoiced on the same customer sits beside the plan, never in its way (Concord, 2026-09-28)');
+  fixture(); s = new SD({ livemode: true });
+  await call(owner, { action: 'card' }, s);
+  var addon = await s.invoices.create({ customer: bill().stripeCustomerId, collection_method: 'send_invoice', days_until_due: 1, currency: 'usd', metadata: { omegaPackage: 'true', omegaOrg: ORG, omegaKind: 'addon', omegaMarker: 'OMEGA add-on ' + ORG + ' / 2026-09-28 / abc' } });
+  await s.invoiceItems.create({ customer: bill().stripeCustomerId, invoice: addon.id, amount: 50000, currency: 'usd', description: 'Add-on: Omega Compute' });
+  await s.invoices.finalizeInvoice(addon.id, {});
+  var beside = await call(owner, { action: 'pay' }, s);
+  ok(beside.state === 'open' && beside.invoiceId !== addon.id && s.invoices_[beside.invoiceId].total === 129900 && s.invoices_[addon.id].status === 'open',
+    'the plan\'s $1,299 gets its own invoice; the open $500 add-on invoice is neither paid here nor voided (its record decides)', { beside: beside, addon: s.invoices_[addon.id].status });
+
   console.log('\na customer ClearSky made by hand, and Stripe saying no');
   fixture(Object.assign({}, bill(), { stripeCustomerId: 'cus_byhand', stripeLivemode: true }));
   s = new SD({ livemode: true }); s.customers_.cus_byhand = { id: 'cus_byhand', object: 'customer', livemode: true, metadata: { orgId: ORG } };

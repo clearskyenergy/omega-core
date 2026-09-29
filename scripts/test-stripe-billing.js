@@ -378,6 +378,15 @@ async function legacyEndpointChecks() {
   CALLER.claims = { email_verified: true };
   var r3 = await post(invoicesApi); ok('a packaged workspace\'s invoices are Plan & billing\'s, never this list', r3.code === 200 && r3.body.connected === false && r3.body.invoices.length === 0, r3);
   CALLER.claims = saved;
+  /* who made each invoice, off Stripe's own metadata: the pages judge an
+     engine-made one by its record, never by Stripe's status (Concord, 2026-09-28) */
+  var made = invoicesApi.madeBy;
+  ok('the list says who made an invoice: the plan\'s amount due, an engine add-on, a package cycle, and one made by hand',
+    made({ metadata: { omegaDue: 'x/2026-09-03/129900', omegaOrg: 'x' } }) === 'due'
+    && made({ metadata: { omegaPackage: 'true', omegaOrg: 'x', omegaKind: 'addon', omegaMarker: 'OMEGA add-on x / 2026-09-28 / abc' } }) === 'addon'
+    && made({ metadata: { omegaPackage: 'true', omegaOrg: 'x', omegaKind: 'subscription' } }) === 'subscription'
+    && made({ metadata: { omegaPackage: 'true', omegaOrg: 'x' } }) === 'package'
+    && made({ metadata: {} }) === null && made({}) === null);
 }
 async function pricebookChecks() {
   console.log('\nthe price book turns on for the Stripe rail without QuickBooks items');

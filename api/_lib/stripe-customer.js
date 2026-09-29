@@ -331,8 +331,13 @@ async function pay(db, c, caller, stripe, now, mailer) {
      shown: ClearSky settles it first */
   if (typeof cus.balance === 'number' && cus.balance !== 0) fail('The workspace’s Stripe account carries ' + (cus.balance > 0 ? 'a balance owed' : 'a credit') + ' of ' + money(Math.abs(cus.balance)) + '; ClearSky settles it before a card payment here.');
   var rows = ((await stripe.invoices.list({ customer: cus.id, limit: 100 })) || {}).data || [];
-  /* an invoice ClearSky already has open for this customer (the dashboard, a tier subscription) is the way to pay: never a second one beside it */
-  var foreign = rows.filter(function (i) { return i.status === 'open' && !(i.metadata || {}).omegaDue; });
+  /* an invoice ClearSky already has open for this customer (the dashboard, a
+     tier subscription) is the way to pay: never a second one beside it. One
+     the ENGINE made on this customer (metadata omegaPackage: an add-on bought
+     by card, api/_lib/addons.js) bills its own thing BESIDE the plan and is
+     judged by its own record; it never stands in for the plan's due, whether
+     it waits for payment or was withdrawn and left open (Concord, 2026-09-28) */
+  var foreign = rows.filter(function (i) { var md = i.metadata || {}; return i.status === 'open' && !md.omegaDue && md.omegaPackage !== 'true'; });
   if (foreign.length) fail('Stripe already has an open invoice for this workspace (' + (foreign[0].number || foreign[0].id) + '): pay that one, under What you owe.');
   var ours = rows.filter(function (i) { var md = i.metadata || {}; return md.omegaDue && md.omegaOrg === c.orgId; });
   /* a payment Stripe took for an earlier figure that nothing has recorded yet

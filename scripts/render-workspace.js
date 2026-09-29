@@ -75,7 +75,7 @@ var apiCalls = [], missing = [], external = [], PACKAGE_VIEW = null, CURRENT_FX 
    requests, as billing/current keeps them. The monthly figure is the price
    book's own quote (Lite is $500/month), never a number typed here. A reply
    carrying __status is answered with that status. */
-var STORE = { posts: [], pending: [], pkg: null, optIns: {}, optOuts: {}, failSummary: false };
+var STORE = { posts: [], pending: [], pkg: null, optIns: {}, optOuts: {}, failSummary: false, legacyInvoices: [] };
 function pkgDefault() { return { modules: ['lite'], subscription: ['lite'], removals: [] }; }
 STORE.pkg = pkgDefault();
 /* the rail the packaged stub bills through: null is QuickBooks (the fixtures), 'stripe' the rail Tommy chose on 2026-09-27 */
@@ -91,7 +91,7 @@ function storeRoute(u, method, body) {
   function legacyOuts() { var o = {}; Object.keys(lb.optOuts || {}).forEach(function (k) { o[k] = lb.optOuts[k]; }); Object.keys(STORE.optOuts).forEach(function (k) { o[k] = STORE.optOuts[k]; }); return o; }
   if (u === '/api/package-catalog') return { orgId: 'litelabs.example', pricebookVersion: book.version, modules: P.catalog(book), starters: M.starters(), canManage: true };
   if (method === 'GET' && STORE.failSummary) return { __status: 500, error: 'Price book not seeded' };
-  if (method === 'GET' && !PACKAGE_VIEW && CURRENT_FX) { return { orgId: CURRENT_FX.org, packaged: false, packagingState: null, plan: null, planDisplay: null, modules: ['lite'], subscription: ['lite'], moduleNames: [M.get('lite').name], subscriptionNames: [M.get('lite').name], interval: 'monthly', billingDay: null, nextInvoiceOn: null, monthlyDisplay: null, accessUntil: null, paidThrough: null, amountDue: lb.amountDue == null ? null : lb.amountDue, paymentLink: null, invoices: [], gate: { canApply: false, reason: 'This workspace is not on a subscription package.' }, pending: [], removalRequests: [], recent: [], optIns: legacyIns(), optOuts: legacyOuts(), nextReviewOn: null, addOns: addOnView(lb) }; }
+  if (method === 'GET' && !PACKAGE_VIEW && CURRENT_FX) { return { orgId: CURRENT_FX.org, packaged: false, packagingState: null, plan: null, planDisplay: null, modules: ['lite'], subscription: ['lite'], moduleNames: [M.get('lite').name], subscriptionNames: [M.get('lite').name], interval: 'monthly', billingDay: null, nextInvoiceOn: null, monthlyDisplay: null, accessUntil: null, paidThrough: null, amountDue: lb.amountDue == null ? null : lb.amountDue, paymentLink: null, invoices: STORE.legacyInvoices.slice(), gate: { canApply: false, reason: 'This workspace is not on a subscription package.' }, pending: [], removalRequests: [], recent: [], optIns: legacyIns(), optOuts: legacyOuts(), nextReviewOn: null, addOns: addOnView(lb) }; }
   if (method === 'GET') { var q = quote(STORE.pkg.subscription); return { orgId: 'litelabs.example', packaged: true, packagingState: 'paid', plan: 'lite', planDisplay: q.plan, modules: STORE.pkg.modules, subscription: STORE.pkg.subscription, moduleNames: names(STORE.pkg.modules), subscriptionNames: names(STORE.pkg.subscription), paidThrough: '2026-10-20', accessUntil: null, amountDue: null,
     provider: STUB_PROVIDER || 'quickbooks', payWith: STUB_PROVIDER === 'stripe' ? 'Stripe' : 'QuickBooks',
     invoices: (STUB_PROVIDER === 'stripe' ? [{ id: '2026-10-20', kind: 'subscription', state: 'unpaid', date: '2026-10-20', period: { start: '2026-10-20', end: '2026-11-20' }, totalCents: 50000, display: '$500', paymentLink: 'https://invoice.stripe.com/i/acct_fixture/in_fixture', payWith: 'Stripe', names: null, paidAt: null }] : []).concat([{ id: '2026-09-20', kind: 'subscription', state: 'paid', date: '2026-09-20', period: { start: '2026-09-20', end: '2026-10-20' }, totalCents: 50000, display: '$500', paymentLink: null, names: null, paidAt: '2026-09-21' }]).concat(STORE.pending.map(function (x) { return { id: x.id, kind: 'change', state: 'unpaid', date: '2026-09-27', period: null, totalCents: 20000, display: x.display, paymentLink: x.paymentLink, names: names(x.add), paidAt: null }; })),
@@ -1037,7 +1037,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     fx.docs[fx.billPath] = { tier: 'standard', addons: [], toolOverrides: {}, paymentProvider: 'manual', trialEndsAt: null, subscriptionDue: new Date(Date.now() - 25 * dayMs).toISOString().slice(0, 10),
       amountDue: 1299, amountPaid: 1299, lastPaidAt: new Date(Date.now() - 56 * dayMs).toISOString().slice(0, 10), createdAt: fx.docs[fx.billPath].createdAt };
     if (role) fx.docs[orgPath + '/members/' + fx.user.uid].role = role;
-    CARD.posts = []; CARD.dueOpen = null; CARD.paid = false; CARD.invoices = null;
+    CARD.posts = []; CARD.dueOpen = null; CARD.paid = false; CARD.invoices = null; STORE.legacyInvoices = [];
     return fx;
   }
   function billText(p) {
@@ -1101,6 +1101,35 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('concord member: sees what is owed and that an owner or administrator pays it and adds the card through Stripe; no buttons, and the page never asks the server for the card', /\$1,299/.test(m.owe) && /pays it by card through Stripe/.test(m.owe) && /adds the card/.test(m.card) && !m.add && !m.pay && !m.check && CARD.posts.length === 0 && m.inputs === 0, { m: m, posts: CARD.posts });
     return {};
   } });
+  /* ══ 5c‴. A TEST OPT-IN, WITHDRAWN, NEVER STANDS IN FOR THE TIER (Concord,
+     2026-09-28: a $500 Omega Compute opt-in, cancelled, its Stripe invoice
+     still open, was read as what was owed and the $1,299 plan vanished; then
+     "just remove these, they were tests"). The engine's record says reversed
+     and nothing was paid; Stripe's list still carries the invoice. What is
+     owed is the tier's own figure; the withdrawn purchase is neither owed,
+     offered nor history; an opt-in paid and reversed later stays, as Void;
+     the plan's own Stripe invoice stays. Each from its own record: some
+     customers owe only the modules they opted into, some legacy accounts a
+     tier, and a tier can be sold to any account (Tommy, 2026-09-28). ══ */
+  var cs = concordFx(), csDay = 86400e3, csToday = new Date().toISOString().slice(0, 10), csEnd = new Date(Date.now() + 30 * csDay).toISOString().slice(0, 10), csAgo = new Date(Date.now() - 20 * csDay).toISOString();
+  cs.docs[cs.billPath] = Object.assign({}, cs.docs[cs.billPath], { paymentProvider: 'stripe', stripeCustomerId: 'cus_concord_fixture', stripeLivemode: true });
+  STORE.legacyInvoices = [
+    { id: 'addon-test', kind: 'addon', purpose: 'purchase', state: 'reversed', date: csToday, period: { start: csToday, end: csEnd }, totalCents: 50000, display: '$500', paymentLink: null, payWith: 'Stripe', names: [M.get('compute').name], paidAt: null },
+    { id: 'addon-refunded', kind: 'addon', purpose: 'purchase', state: 'reversed', date: csAgo.slice(0, 10), period: { start: csAgo.slice(0, 10), end: csEnd }, totalCents: 25000, display: '$250', paymentLink: null, payWith: 'Stripe', names: ['Omega Plans'], paidAt: csAgo } ];
+  CARD.invoices = [
+    { id: 'in_test', number: 'CS-0007', status: 'open', amountDue: 500, created: Date.now(), hostedUrl: 'https://invoice.stripe.com/i/acct_fixture/in_test', pdfUrl: null, omega: 'addon' },
+    { id: 'in_aug', number: 'CS-0006', status: 'paid', amountDue: 1299, created: Date.now() - 56 * csDay, hostedUrl: 'https://invoice.stripe.com/i/acct_fixture/in_aug', pdfUrl: null, omega: null } ];
+  await scenario('concord-test-optin', cs, { url: '/workspace#billing', steps: async function (p) {
+    await p.waitForSelector('#bill-stripe-pay', { timeout: 6000 }).catch(function () {});
+    await p.waitForFunction(function () { return /CS-0006/.test((document.getElementById('bill-hist') || {}).textContent || ''); }, null, { timeout: 6000 }).catch(function () {});
+    var a = await billText(p), h = await p.evaluate(function () { return { test: document.querySelectorAll('a[href*="in_test"]').length, rows: Array.prototype.map.call(document.querySelectorAll('#bill-hist .irow[data-state]'), function (r) { return r.querySelector('.ds b').textContent + ':' + r.getAttribute('data-state'); }) }; });
+    ok('concord test opt-in: What you owe is the tier\'s $1,299, due, with Pay $1,299 with Stripe; the $500 invoice Stripe still holds open is neither owed nor offered', /\$1,299\s*Due\b/.test(a.owe) && !/\$500|invoice open/.test(a.owe) && a.pay === 'Pay $1,299 with Stripe' && h.test === 0, { owe: a.owe, pay: a.pay, h: h });
+    ok('concord test opt-in: the history keeps the plan\'s own Stripe invoice and the opt-in that was paid and reversed (Void), and drops the withdrawn one and Stripe\'s copy of it', h.rows.join(',') === 'Opt in: Omega Plans:void,CS-0006:paid', h.rows);
+    ok('concord test opt-in: the last payment is the plan\'s $1,299', /Last payment\s*\$1,299/.test(a.owe), a.owe);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'concord-billing-test-optin.png'), fullPage: true });
+    return {};
+  } });
+  STORE.legacyInvoices = []; CARD.invoices = null;
   /* ══ 5c″. EVERY CLICK (Tommy, 2026-09-27: "we need to make sure every click
      every link doesnt bug") ══
      scripts/_lib/click-sweep.js clicks every visible control on every view
