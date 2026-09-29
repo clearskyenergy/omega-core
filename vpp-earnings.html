@@ -217,8 +217,12 @@ svg text{font:11px Inter,system-ui,sans-serif;fill:#526071}
       </div>
       <div id="m-interval" hidden>
         <div class="f"><label for="file">Interval file (CSV)</label><input type="file" id="file" accept=".csv,.txt,text/csv,text/plain">
-          <span class="hint">One year: 8,760 hourly or 35,040 fifteen-minute readings. The last number on each row is read as the load.</span></div>
-        <div class="f"><label for="iunit">Readings are</label><select id="iunit"><option value="kw">kW (demand)</option><option value="kwh">kWh per interval</option></select></div>
+          <span class="hint">One year: 8,760 hourly or 35,040 fifteen-minute readings. The load column is picked by its header (usage, kWh, kW), never a cost column; a date column places the year on the calendar.</span></div>
+        <div class="row">
+          <div class="f"><label for="iunit">Readings are</label><select id="iunit"><option value="kw">kW (demand)</option><option value="kwh">kWh per interval</option></select></div>
+          <div class="f"><label for="istart">First reading (if undated)</label><input type="text" id="istart" maxlength="10" placeholder="YYYY-MM-DD"></div>
+        </div>
+        <span class="hint" style="display:block;margin:-6px 0 8px;font-size:12px;color:var(--muted)">A file with no dates is read as starting 1 January unless you give its first day.</span>
         <div id="fileinfo" class="hint" style="font-size:12px;color:var(--sub)"></div>
       </div>
       <details class="more"><summary>Tariff (optional)</summary>
@@ -387,7 +391,11 @@ function collect() {
   if (kw != null || kwh != null) { site.battery = {}; if (kw != null) site.battery.kw = kw; if (kwh != null) site.battery.kwh = kwh; }
   if (pv != null) site.solarKw = pv;
   if (MODE === 'bills') site.load = { type: 'bills', bills: readBills() };
-  else if (MODE === 'interval') site.load = { type: 'interval', text: INTERVAL, unit: $('iunit').value };
+  else if (MODE === 'interval') {
+    site.load = { type: 'interval', text: INTERVAL, unit: $('iunit').value };
+    var isd = $('istart').value.trim();
+    if (isd) { if (!/^\d{4}-\d{2}-\d{2}$/.test(isd)) return { error: 'The first reading date is YYYY-MM-DD.' }; site.load.startDate = isd; }
+  }
   else site.load = { type: 'profile', annualKwh: numOrNull('akwh') };
   var t = {}, any = false;
   ['ron:onPeakRate', 'roff:offPeakRate', 'rdem:demandCharge', 'rps:peakStart', 'rpe:peakEnd'].forEach(function (p) {
@@ -485,12 +493,12 @@ function render(R) {
   var T = R.totals, h = '';
   h += '<div class="card"><h2>' + esc(LAST && LAST.name ? LAST.name : ('ZIP ' + R.site.zip)) + '</h2>';
   h += '<p class="lede">' + esc(R.site.marketName) + (R.site.area ? ' · ' + esc(R.site.area) : '') + ' · ' + esc(R.site.state) + ' · ' + esc(R.site.segment) +
-       ' · ' + R.battery.kw.toLocaleString('en-US') + ' kW / ' + R.battery.kwh.toLocaleString('en-US') + ' kWh' + (R.battery.assumed ? ' (suggested)' : '') +
+       ' · ' + R.battery.kw.toLocaleString('en-US') + ' kW' + (suggested(R.battery, 'kw') ? ' (suggested)' : '') + ' / ' + R.battery.kwh.toLocaleString('en-US') + ' kWh' + (suggested(R.battery, 'kwh') ? ' (suggested)' : '') +
        (R.solar ? ' · ' + R.solar.kwdc.toLocaleString('en-US') + ' kW-dc solar' : '') + '</p>';
   h += '<div class="kpis">' +
     kpi('Stacked earnings / yr', money(T.gross), money(T.perKw) + ' per kW', true) +
     kpi('Owner keeps / yr', money(T.owner), 'bill savings + ' + Math.round(R.split.owner * 100) + '% of programmes') +
-    kpi('Bill savings / yr', money(T.billSavings), money(R.bill.before) + ' → ' + money(R.bill.after)) +
+    kpi('Bill savings / yr', money(T.billSavings), money(R.bill.before) + ' → ' + money(R.bill.after) + (T.tagSavings ? ' · plus ' + money(T.tagSavings) + ' capacity/transmission tag' : '')) +
     kpi('Grid programmes / yr', money(T.gridEarnings), T.stackUplift ? T.stackUplift + '× the best single stream' : '') + '</div>';
   h += '<div class="chips"><span class="chip ' + esc(R.confidence) + '">Confidence: ' + esc(R.confidence) + '</span>' +
        '<span class="chip">Load: ' + esc(R.load.label) + '</span>' +
@@ -548,6 +556,8 @@ function render(R) {
     '<p class="lede" style="margin:10px 0 0">' + esc(R.disclaimer) + '</p></div>';
   $('out').innerHTML = h;
 }
+/* which battery figures the server suggested (assumedFields; older answers: assumed = both) */
+function suggested(b, k) { return Array.isArray(b.assumedFields) ? b.assumedFields.indexOf(k) >= 0 : !!b.assumed; }
 function pct(a, b) { return b > 0 ? Math.max(0, Math.min(100, a / b * 100)).toFixed(2) : 0; }
 
 function dayChart(hours) {
@@ -604,7 +614,7 @@ var MAX_DOC_CHARS = 900000; /* under Firestore's 1 MiB document limit */
 function save() {
   if (!LAST || !DB || !ORG) return;
   var site = JSON.parse(JSON.stringify(LAST.site));
-  if (site.load && site.load.type === 'interval') { site.load = { type: 'interval', unit: site.load.unit }; }
+  if (site.load && site.load.type === 'interval') { site.load = { type: 'interval', unit: site.load.unit, startDate: site.load.startDate || null }; }
   if (site.tariff && site.tariff.urdb) { site.tariff.urdbJson = JSON.stringify(site.tariff.urdb); delete site.tariff.urdb; }
   var rec = { name: LAST.name || ('ZIP ' + site.zip), site: site, gross: LAST.result.totals.gross, owner: LAST.result.totals.owner,
               market: LAST.result.site.market, at: new Date().toISOString() };
@@ -637,7 +647,7 @@ function loadScenario(i) {
     /* the file is never stored: clear the picker so choosing the same file
        again fires 'change', and put back the unit the readings were in
        (kWh per 15-minute interval is four times the kW it reads as) */
-    INTERVAL = null; $('file').value = ''; $('iunit').value = L.unit === 'kwh' ? 'kwh' : 'kw';
+    INTERVAL = null; $('file').value = ''; $('iunit').value = L.unit === 'kwh' ? 'kwh' : 'kw'; $('istart').value = L.startDate || '';
     $('fileinfo').textContent = 'Attach the interval file again to re-run this scenario.';
   }
   var t = site.tariff || {};

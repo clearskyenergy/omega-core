@@ -130,9 +130,26 @@ Clean Cell's two tools) still wins: absent is not empty.
 - `api/vpp-estimate.js` — the gate (proforma's: verify-token, absent ≠ empty
   allowlists, `toolOverrides.vppsim`, Omega Design on a packaged workspace,
   every tier from trial, 503 on a failed read) and two actions, `options` and `estimate`.
+  `options` also returns the server-resolved `orgId` (alias-folded, e.g.
+  fenecon.de → fenecon.com), which is the org the page saves under.
 - `vpp-earnings.html` — collects, reads the CSV as text, posts, draws.
-  Scenarios save to `toolData/{org}/tools/vppsim` (inputs only; an interval
-  file is not stored).
+  Scenarios save to `toolData/{org}/tools/vppsim` as `{ v:1, scenarios:[…] }`:
+  inputs only. An interval file is not stored (its unit and first-reading
+  date are), and a URDB tariff is stored as text (`tariff.urdbJson`) because
+  Firestore refuses nested arrays. The page reloads when the signed-in
+  account changes, so one person's scenarios never reach another's org.
+
+**A deploy that adds a tool to a module runs the backfill.** A packaged
+workspace's `billing/current.toolAccess` is a copy saved when its plan was
+activated, and `firestore.rules` (`packageWrite`) reads that copy for a
+tool's `toolData` write. So after this tool joined Omega Design, a package
+activated earlier runs the estimate (the API projects from `modules[]`) but
+cannot save a scenario until the copy is refreshed:
+`node scripts/backfill-packaged-toolaccess.js` (dry run, a per-org report),
+then `--apply` (adds only, never removes, one `admin_audit` row per change;
+needs Admin SDK credentials). `scripts/tests/tpackagedtoolaccess.js` holds
+it. The lasting fix, reconcile re-deriving a live trial's grants when it has
+no invoices yet, is a separate billing change.
 
 Every stream carries a tier: **computed** (from this site's load and
 tariff), **published** (a dated public figure), **planning** (a screening
@@ -170,4 +187,6 @@ a module and a `render-legacy-gates.js` pass).
   and resilience value are listed as not counted.
 - Weather is a climate curve by state, not a TMY year.
 
-Tests: `scripts/tests/tvppsim.js` (in `npm test`).
+Tests: `scripts/tests/tvppsim.js` and `scripts/tests/tpackagedtoolaccess.js`
+(in `npm test`); `scripts/render-vpp-earnings.js` renders the real page on
+the Firebase double against the real engine (in `check:pages`).

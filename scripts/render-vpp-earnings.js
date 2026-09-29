@@ -341,11 +341,12 @@ function installDouble(cfg) {
     var saved = {}; saved[ANA_DOC] = { data: { v: 1, scenarios: [
       scenario('Interval kWh', { zip: '60601', segment: 'commercial', battery: { kw: 100, kwh: 400 }, load: { type: 'interval', unit: 'kwh' }, split: { owner: 0.5, platform: 0.4, installer: 0.1 } }, want.totals.gross),
       scenario('Plain site', { zip: '19103', segment: 'commercial', load: { type: 'profile', annualKwh: null } }),
-      scenario('URDB stored', { zip: '60601', segment: 'commercial', load: { type: 'profile', annualKwh: null }, tariff: { urdbJson: JSON.stringify(URDB) } })
+      scenario('URDB stored', { zip: '60601', segment: 'commercial', load: { type: 'profile', annualKwh: null }, tariff: { urdbJson: JSON.stringify(URDB) } }),
+      scenario('Dated interval', { zip: '60601', segment: 'commercial', load: { type: 'interval', unit: 'kw', startDate: '2025-07-02' } })
     ] } };
     var t = await use({ user: userOf('u-ana'), docs: withDocs(saved) }), p = t.page;
     await p.goto(base + '/vpp-earnings.html', { waitUntil: 'load' });
-    await until(function () { return scenNames(p).then(function (n) { return n.length === 4; }); });
+    await until(function () { return scenNames(p).then(function (n) { return n.length === 5; }); });
     /* the form holds something else first: another split, another unit, a file in the picker */
     await openDetails(p, 'Revenue split');
     await p.fill('#sown', '60'); await p.fill('#splat', '30'); await p.fill('#sins', '10');
@@ -373,6 +374,11 @@ function installDouble(cfg) {
     ok('c12: a URDB tariff stored as text comes back into the form', parses(await val(p, '#urdb'), function (o) { return o.energyratestructure[0][0].rate === 0.12; }), (await val(p, '#urdb')).slice(0, 60));
     await simulate(p);
     ok('c12: and drives the re-run', /Your tariff: Render URDB/.test(await text(p, '#out')));
+    /* an undated file's first day (engine c3): saved with the scenario, put back on load, cleared by one without it */
+    await pick(p, 'Dated interval');
+    ok('c3: loading an interval scenario restores the first-reading date of an undated file', (await val(p, '#istart')) === '2025-07-02', await val(p, '#istart'));
+    await pick(p, 'Interval kWh');
+    ok('c3: a scenario without one clears it, so it is never sent by mistake', (await val(p, '#istart')) === '', await val(p, '#istart'));
   });
 
   /* ── c15: bills pasted with US dates ─────────────────────────────────── */
