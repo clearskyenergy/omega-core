@@ -36,7 +36,7 @@ pins the instructions' five reference jobs (§14) and the line level of
 | 18 | New 200A three-phase service | lump | $8,910 (= 6,600 × 1.35) | $12,550 |
 | 19 | Other — materials + install labor | P | $1,200 flat | $2,360 × P |
 | 27 | Autel AC Elite 50A dual-port (12 kW) | P | $2,000 × P | blacked out |
-| 27 | Autel MaxiCharger AC Pro 80A (19.2 kW) | P | **ask** (the old $6,100/station is not confirmed) | blacked out |
+| 27 | Autel MaxiCharger AC Pro 80A (19.2 kW) | P | $2,800 × P, **derived** (see change log) | blacked out |
 | 28 | Pedestal & mounting | S | $1,150 × S | blacked out |
 | 29 | Freight | P | $50 × P | blacked out |
 | 32 (or 45) | Networking (Green Joulez) | P | $480 × P | blacked out |
@@ -45,6 +45,12 @@ pins the instructions' five reference jobs (§14) and the line level of
 
 P = ports (C6). S = stations = P ÷ 2 (every station is dual-port; an odd P
 rounds up and is flagged). C7 is written as S.
+
+## Change log
+
+| Date | Change | Basis |
+|---|---|---|
+| 2026-09-29 | AC Pro 80A priced at **$2,800 a port** ($5,600 a dual-port station). | Autel's April 2026 list (*LHE_Autel Charger Product Price*, Drive): AC Pro 80A Commercial UW19L002 at $1,599 MSRP / $1,119.30 Lionheart; the AC Elite 50A the book sells at $2,000 a port is $1,066 MSRP / $799.50 Lionheart, a 2.50× sell over the Lionheart cost. The same multiple on the AC Pro is $2,798, rounded. On the MSRP basis (1.68×) it would be $2,687; the previously filed $6,100 a station ($3,050 a port) was never confirmed. Not yet confirmed by Autel or Concord as a sell price: the sheet's flag says so. Tommy, 2026-09-29: "if we have a price from Autel, price the 80A automatically." |
 
 ## What the page asks instead of guessing
 
@@ -55,8 +61,9 @@ An **ask** is a hard stop the rep answers on the form:
   is chosen the sheet carries the standard package and the flag states the
   dollar impact of each option. "A new meter is being added" still needs
   the phase.
-- **The 80 A unit** — *Program details › Autel AC Pro 80A price per port*.
-  Ports on 80 A units are $0 until it is entered.
+- **The 80 A unit** — priced at the book's derived $2,800 a port and
+  *flagged as derived*, not asked. *Program details › Autel AC Pro 80A price
+  per port* overrides it for a job.
 - **Unpaved trench, handholes** — no rate; $0 until the rep types the
   material and labor over the line (a typed figure is pinned and used).
 
