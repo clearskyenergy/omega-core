@@ -134,15 +134,13 @@ First comment: Want your whole pipeline screened, not one site? Comment BUILD or
 *Build Tuesday · Video.* Visual: Best with a 30–60 s sandbox recording of exactly these steps (the card is its cover). Without a recording, post the card. Graphic: `day02.png` (stopwatch).
 
 ```text
-Build Tuesday.
+Type an address. Pick BESS Build. Watch the site lay itself out.
 
-Type an address. Pick BESS Build. Watch it lay out.
-
-Pads, PCS, transformer, fence, conduit and trench home runs, placed for you, with NFPA 855 and IFC 1207 separations checked while it draws. Then the one-line and the bill of materials, from the same model.
+The battery, transformer, switchgear and meter snap into place along the trench runs to the point of interconnection, with NFPA 855 and IFC 1207 separations checked while it draws. Then the one-line and the bill of materials, from the same model.
 
 No re-keying. No waiting on a drafter for the concept.
 
-What should we build next Tuesday: an EV hub, solar + storage, or a data center? Vote in the comments.
+That's Build Tuesday. What should we build next week: an EV hub, solar + storage, or a data center? Vote in the comments.
 
 #BESS #EnergyStorage #SiteDesign
 ```
