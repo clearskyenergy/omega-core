@@ -791,10 +791,16 @@ function dispatch(load, solar, bat, t, events, evHours) {
     return gridCharge[hr] ? Math.min(P, Math.max(0, line - x)) : 0;
   }
 
-  var target = new Float64Array(12), m;
+  var eventSet = {}; for (var e = 0; e < events.length; e++) eventSet[events[e]] = true;
+  var evCap = Math.min(P, Eout / Math.max(1, evHours || 4));   /* the event spread over its hours */
+  var monthAt = new Uint8Array(n), mm0;
+  for (mm0 = 0; mm0 < 12; mm0++) for (h = MONTH_START[mm0]; h < MONTH_START[mm0] + DAYS[mm0] * 24; h++) monthAt[h] = mm0;
+
+  var target = new Float64Array(12), peakM = new Float64Array(12), m;
   for (m = 0; m < 12; m++) {
     var a = MONTH_START[m], b = a + DAYS[m] * 24, peak = 0;
     for (h = a; h < b; h++) if (net0[h] > peak) peak = net0[h];
+    peakM[m] = peak;
     if (!demandBilled || peak <= 0) { target[m] = Infinity; continue; }
     var lo = Math.max(0, peak - P), hi = peak;
     for (var it = 0; it < 30; it++) {
@@ -814,13 +820,45 @@ function dispatch(load, solar, bat, t, events, evHours) {
     target[m] = hi;
   }
 
-  var eventSet = {}; for (var e = 0; e < events.length; e++) eventSet[events[e]] = true;
-  var evCap = Math.min(P, Eout / Math.max(1, evHours || 4));   /* the event spread over its hours */
+  /* The day-by-day test cannot see an over-target stretch that runs past
+     midnight (or past a month's end) with no charging hour between: that
+     is ONE discharge, and the store may not hold it. So the targets are
+     checked the way the dispatch runs — the store each hour must keep for
+     the over-target hours still to come, less what the charging hours
+     between put back (the same reserve the dispatch keeps below), and it
+     may never need more than the battery holds. Month by month, in order,
+     a month whose target breaks that is raised to the lowest one that
+     holds: the dispatch serves the earlier hours first, so the later month
+     is the one that would miss. `upTo` checks hours [0, upTo) with every
+     later month unconstrained. */
+  function reserveHolds(tg, upTo) {
+    var r = 0;
+    for (var hh = upTo - 1; hh >= 0; hh--) {
+      var Tt = tg[monthAt[hh]], xx = net0[hh], nP = xx > Tt ? Math.min(P, xx - Tt) : 0;
+      if (nP > 0) r += nP / sr;
+      else if (!(eventSet[hh] && xx > 0)) r = Math.max(0, r - canBuy(hh, Tt) * sr);
+      if (r > E * (1 + 1e-9) + 1e-9) return false;
+    }
+    return true;
+  }
+  var tgt = new Float64Array(12);
+  for (m = 0; m < 12; m++) tgt[m] = Infinity;
+  for (m = 0; m < 12; m++) {
+    tgt[m] = target[m];
+    var upTo = MONTH_START[m] + DAYS[m] * 24;
+    if (!isFinite(target[m]) || reserveHolds(tgt, upTo)) continue;
+    var lo2 = target[m], hi2 = peakM[m];            /* at its own peak the month asks nothing */
+    for (var it2 = 0; it2 < 30; it2++) {
+      tgt[m] = (lo2 + hi2) / 2;
+      if (reserveHolds(tgt, upTo)) hi2 = tgt[m]; else lo2 = tgt[m];
+    }
+    tgt[m] = target[m] = hi2;
+  }
   /* The store (kWh) to keep at the start of each hour: `resPeak` for the
      over-target hours to come, `resAll` for those and the events. */
   var resPeak = new Float64Array(n + 1), resAll = new Float64Array(n + 1);
   for (h = n - 1; h >= 0; h--) {
-    var T = target[monthOfHour(h)], x0 = net0[h];
+    var T = target[monthAt[h]], x0 = net0[h];
     var needP = x0 > T ? Math.min(P, x0 - T) : 0, needA = needP;
     if (eventSet[h]) needA = Math.max(needA, Math.min(evCap, Math.max(0, x0)));
     var credit = needA > 0 ? 0 : canBuy(h, T) * sr;
@@ -831,7 +869,7 @@ function dispatch(load, solar, bat, t, events, evHours) {
   var net = new Float64Array(n), soc = E, dis = 0, chg = 0, eventKwh = 0, shaveHours = 0;
   for (h = 0; h < n; h++) {
     day = Math.floor(h / 24);
-    var T0 = target[monthOfHour(h)], x = net0[h], d = 0, c = 0, avail = soc * sr;
+    var T0 = target[monthAt[h]], x = net0[h], d = 0, c = 0, avail = soc * sr;
     if (x > T0) d = Math.min(P, x - T0, avail);
     if (eventSet[h]) {
       /* the event takes only what no later over-target hour needs */
@@ -849,7 +887,11 @@ function dispatch(load, solar, bat, t, events, evHours) {
     }
     var room = (E - soc) / sr;
     if (x < 0) c = Math.min(P, -x, room);                       /* solar surplus */
-    else if (gridCharge[h]) c = Math.min(P, room, Math.max(0, T0 - x));
+    /* never from the grid inside a called event: what it buys there comes
+       off the reduction the event pays for, and the next charging hour
+       buys it at the same price (the reserve above already gives an event
+       hour no charging credit) */
+    else if (gridCharge[h] && !eventSet[h]) c = Math.min(P, room, Math.max(0, T0 - x));
     c = Math.max(0, c);
     soc += c * sr; chg += c;
     net[h] = x + c;

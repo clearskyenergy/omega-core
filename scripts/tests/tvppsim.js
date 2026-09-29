@@ -198,6 +198,23 @@ section('Losses (c1)');
   ok('the demand target the bisection sets is one the dispatch holds, losses included: ' + c.zip + ' ' + c.battery.kw + '/' + c.battery.kwh,
      r.ok && r.monthly.every(function (m) { return m.targetKw == null || m.peakAfterKw <= m.targetKw + 0.01; }), r.monthly.map(function (m) { return [m.peakAfterKw, m.targetKw]; }));
 });
+/* S1: an over-target stretch that runs past midnight (or past a month's
+   end) with no charging hour between is ONE discharge; the day-by-day test
+   cannot see it, so the targets are re-checked with the dispatch's own
+   reserve across day and month boundaries. */
+[{ zip: '96813', segment: 'commercial', battery: { kw: 100, kwh: 200 }, solarKw: 300 },
+ { zip: '94110', segment: 'commercial', battery: { kw: 100, kwh: 200 }, solarKw: 300 }].forEach(function (c) {
+  var r = S.simulate(c);
+  ok('a target held across the 30 Apr → 1 May night (solar site): ' + c.zip,
+     r.ok && r.monthly.every(function (m) { return m.targetKw == null || m.peakAfterKw <= m.targetKw + 0.01; }), r.monthly.map(function (m) { return [m.month, m.peakAfterKw, m.targetKw]; }));
+});
+(function () {
+  var nv = []; for (var h = 0; h < 8760; h++) { var dd = Math.floor(h / 24), hh = h % 24; nv.push((dd === 160 && hh >= 20) || (dd === 161 && hh < 4) ? 150 : 50); }
+  var r = S.simulate({ zip: '60601', segment: 'commercial', battery: { kw: 100, kwh: 200 }, tariff: { demandCharge: 20, onPeakRate: 0.1, offPeakRate: 0.1 }, load: { type: 'interval', values: nv } });
+  var jun = r.monthly[5];
+  ok('an over-target night that crosses midnight: June holds its target and the battery lowers June\'s bill',
+     r.ok && jun.peakAfterKw <= jun.targetKw + 0.01 && jun.billAfter < jun.billBefore && stream(r, 'bill.demand').usd > 0, [jun, stream(r, 'bill.demand').usd]);
+})();
 
 section('Events (c2, c7, c28)');
 function hasEvent(r) { return r.sampleDay.hours.some(function (x) { return x.event; }); }
@@ -211,6 +228,13 @@ ok('where ELRP is counted, the bill streams are the dispatch WITH the events', e
 ok('an event takes only what no later over-target hour needs: every month holds its demand target', ev2.monthly.every(function (m) { return m.targetKw == null || m.peakAfterKw <= m.targetKw + 0.01; }),
    ev2.monthly.map(function (m) { return [m.peakAfterKw, m.targetKw]; }));
 ok('where ELRP is not counted, no event is drawn', !el1.counted && !hasEvent(ev1));
+/* R1: on a day with no price spread every hour is a charging hour, so a
+   dispatch free to buy inside a called event would buy there and have it
+   taken off the reduction ELRP pays for. */
+var evFlat = S.simulate({ zip: '94110', segment: 'industrial', battery: { kw: 100, kwh: 200 }, tariff: { demandCharge: 15, onPeakRate: 0.3, offPeakRate: 0.3 } });
+var evFlatHours = evFlat.sampleDay.hours.filter(function (x) { return x.event; });
+ok('the battery never charges from the grid inside a called ELRP event (flat energy price)', stream(evFlat, 'ca.elrp').counted && evFlatHours.length > 0 &&
+   evFlatHours.every(function (x) { return x.battery >= -1e-9 || x.load - x.solar < 0; }), evFlatHours);
 ok('a home battery\'s ELRP events are 3 h (sub-group A.4), a business\'s 4 h (A.2)', /× 3 h/.test(el2.how) && /× 4 h/.test(el1.how) && /A\.4/.test(el2.ref) && /A\.2/.test(el2.ref) && !/A\.6/.test(el2.ref));
 /* d3: CBP/DRAM and ELRP are not mutually exclusive (ELRP Group B), only
    the top-up is not modelled. */
